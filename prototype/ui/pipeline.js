@@ -2169,7 +2169,7 @@ function openBackgroundReferenceModal() {
         commonPromptOf(st),
         l.description || l.name,
         'Empty location background plate of this place. Wide establishing view of the environment ONLY — no characters, no people, no creatures, nothing held by anyone. Clean background for compositing.',
-        'IMPORTANT: render strictly in the SAME art style/medium described in the style/mood/background lines above (e.g. 3D animation, simple stylized shapes). Do NOT render photorealistically — it must match this episode\'s look.'
+        'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood/background lines above. Do not invent or change the art style — match the rest of this episode.'
       ].filter(Boolean).join('\n');
       var json = await NK.api.imagen({
         prompt: prompt,
@@ -2201,7 +2201,7 @@ function openBackgroundReferenceModal() {
         commonPromptOf(st),
         l.description || l.name,
         'This is the SAME location as the reference image (' + (l.name || 'this place') + '). Show the "' + v.label + '" view/angle of this same place — keep the exact same architecture, materials, colors and lighting as the reference. Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
-        'IMPORTANT: render strictly in the SAME art style/medium described in the style/mood/background lines above (3D animation, stylized shapes). Do NOT render photorealistically — match this episode\'s look and the reference image.'
+        'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood/background lines above and the reference image. Do not invent or change the art style.'
       ].filter(Boolean).join('\n');
       var json = await NK.api.imagen({
         prompt: prompt,
