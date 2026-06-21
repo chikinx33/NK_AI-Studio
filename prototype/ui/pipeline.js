@@ -394,6 +394,24 @@
     });
     var chosenId = String(selectedId || '');
 
+    // 이 에피소드의 "공간 배경 플레이트"(배경 레퍼런스 모달에서 생성한 것)도 레퍼런스로 고를 수 있게
+    // 목록에 추가한다. 컷이 이전 컷 통짜를 베끼는 대신 깨끗한 배경만 참조 → 배경 일관·구도 자유.
+    // 선택 시 cutRefId 는 "loc:<locationId>" 형태로 저장된다.
+    var locPlates = [];
+    try {
+      var _stx = (ctx && ctx.getState) ? ctx.getState() : null;
+      var _eps = (_stx && _stx.payload && Array.isArray(_stx.payload.episodeLocations)) ? _stx.payload.episodeLocations : [];
+      _eps.forEach(function (l) {
+        if (l && l.refObjectName) {
+          locPlates.push({
+            locId: String(l.id || l.name || ''),
+            name: String(l.name || '장소'),
+            url: (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : ''
+          });
+        }
+      });
+    } catch (_) {}
+
     // 저장소에서 삭제된 이미지의 죽은 참조(예: 502 나는 /api/media/proxy URL)가 컷에 남아 있으면
     // 컷 선택 모달에 뜨고, 그걸 레퍼런스로 생성하면 OpenAI edits(지역 차단 취약) 경로로 빠져
     // 무한로딩처럼 보인다. 썸네일 로드 실패를 감지하면 해당 컷의 죽은 이미지 필드와, 그 컷을
@@ -426,7 +444,8 @@
     }
 
     function render() {
-      var hasItems = candidates.length > 0;
+      var hasCuts = candidates.length > 0;
+      var hasPlates = locPlates.length > 0;
       var list = candidates.map(function (s) {
         var url = toPlayableMediaUrl(s.imageDataUrl);
         var lbl = esc(s.displayLabel || ('cut ' + s.id));
@@ -438,11 +457,21 @@
           '</div>'
         );
       }).join('');
+      var plateList = locPlates.map(function (p) {
+        var id = 'loc:' + p.locId;
+        var active = String(id) === chosenId;
+        return (
+          '<div class="lib-item cut-ref-pick-item' + (active ? ' lib-selected selected' : '') + '" data-id="' + esc(id) + '" data-loc="1" title="' + esc(p.name) + ' (공간 배경)">' +
+          '<img class="lib-thumb" src="' + esc(p.url) + '" alt="" />' +
+          '<span class="cut-ref-pick-thumb-label">📍 ' + esc(p.name) + '</span>' +
+          '</div>'
+        );
+      }).join('');
 
       box.innerHTML = '' +
         '<div class="lib-header">' +
         '<span class="lib-title">컷 기반 레퍼런스 선택</span>' +
-        '<span class="muted">' + (hasItems ? '일관성 기준이 될 컷의 이미지를 고르세요' : '') + '</span>' +
+        '<span class="muted">' + ((hasPlates || hasCuts) ? '배경 일관성 기준이 될 공간/컷을 고르세요' : '') + '</span>' +
         '<div class="lib-header-spacer"></div>' +
         '<div class="lib-toolbar">' +
         '<button class="btn-primary" id="cutref-use-btn"' + (chosenId ? '' : ' disabled') + '>사용</button>' +
@@ -450,30 +479,35 @@
         '<button class="btn-secondary lib-close-btn" id="cutref-close">닫기</button>' +
         '</div>' +
         '</div>' +
-        (hasItems
-          ? '<div class="lib-grid">' + list + '</div>'
-          : '<div class="lib-empty"><p class="muted">레퍼런스로 쓸 이미지가 있는 다른 컷이 없습니다. 먼저 다른 컷의 이미지를 생성하세요.</p></div>');
+        (hasPlates ? '<div class="cutref-subhead">공간 배경 (이 에피소드)</div><div class="lib-grid">' + plateList + '</div>' : '') +
+        (hasCuts ? '<div class="cutref-subhead">다른 컷 이미지</div><div class="lib-grid">' + list + '</div>' : '') +
+        ((!hasPlates && !hasCuts)
+          ? '<div class="lib-empty"><p class="muted">참조할 공간 배경이나 다른 컷 이미지가 없어요. 상단 “배경 레퍼런스”에서 배경을 생성하거나, 다른 컷의 이미지를 먼저 만들어 주세요.</p></div>'
+          : '');
 
       box.querySelectorAll('.cut-ref-pick-item').forEach(function (el) {
         var itemSceneId = String(el.dataset.id || '');
+        var isLoc = el.dataset.loc === '1';
         var thumb = el.querySelector('img.lib-thumb');
         if (thumb) {
           thumb.onerror = function () {
-            // 삭제된(로드 실패) 이미지: 선택 불가 처리 + 죽은 참조 self-heal.
+            // 삭제된(로드 실패) 이미지: 선택 불가 처리.
             el.classList.add('cut-ref-pick-broken');
             el.onclick = null;
             el.ondblclick = null;
             var lbl2 = el.querySelector('.cut-ref-pick-thumb-label');
-            if (lbl2) lbl2.textContent = '삭제됨';
-            el.title = '삭제된 이미지 — 선택할 수 없어요';
+            if (lbl2) lbl2.textContent = '없음';
+            el.title = '이미지를 불러올 수 없어요 — 선택할 수 없어요';
             if (chosenId === itemSceneId) {
               chosenId = '';
               var ub = box.querySelector('#cutref-use-btn');
               if (ub) ub.disabled = true;
             }
-            // 이후 재렌더에서 다시 나타나지 않도록 후보에서 제거.
-            candidates = candidates.filter(function (s) { return String(s.id) !== itemSceneId; });
-            clearDeadCut(itemSceneId);
+            // 공간 배경 플레이트는 씬이 아니므로 죽은-컷 self-heal 대상이 아니다(컷만 정리).
+            if (!isLoc) {
+              candidates = candidates.filter(function (s) { return String(s.id) !== itemSceneId; });
+              clearDeadCut(itemSceneId);
+            }
           };
         }
         el.onclick = function () {
@@ -1989,19 +2023,21 @@ function openBackgroundReferenceModal() {
 
   function render() {
     var inStyle = 'width:100%;padding:5px 7px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:4px;';
+    // 버튼 높이 통일용 공통 스타일
+    var btnH = 'height:30px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;line-height:1;';
     var rows = locs.map(function (l, i) {
       var turl = thumbUrl(l.refObjectName) || (l._dataUrl || '');
       return (
         '<div class="bgref-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
-          '<div style="width:120px;height:72px;flex:0 0 120px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
-            (turl ? '<img src="' + esc(turl) + '" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:11px;">배경 없음</span>') +
+          '<div style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
+            (turl ? '<img class="bgref-thumb-img" src="' + esc(turl) + '" data-full="' + esc(turl) + '" alt="" title="클릭하면 크게 보기" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:11px;">배경 없음</span>') +
           '</div>' +
           '<div style="flex:1;min-width:0;">' +
             '<input class="bgref-name" type="text" value="' + esc(l.name) + '" placeholder="장소 이름 (예: 수영장)" style="' + inStyle + 'margin-bottom:6px;"/>' +
-            '<textarea class="bgref-desc" rows="3" placeholder="배경 플레이트 묘사 (캐릭터·동작 없이 공간만)" style="' + inStyle + 'resize:vertical;">' + esc(l.description) + '</textarea>' +
+            '<textarea class="bgref-desc" placeholder="배경 플레이트 묘사 (캐릭터·동작 없이 공간만)" style="' + inStyle + 'resize:none;overflow:hidden;min-height:64px;">' + esc(l.description) + '</textarea>' +
             '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">' +
-              '<button type="button" class="btn-secondary compact bgref-gen"' + (l._busy ? ' disabled' : '') + '>' + (l._busy ? '생성 중...' : (l.refObjectName ? '배경 재생성' : '배경 생성')) + '</button>' +
-              '<button type="button" class="btn-ghost compact bgref-del">삭제</button>' +
+              '<button type="button" class="btn-secondary compact bgref-gen" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + (l._busy ? '생성 중...' : (l.refObjectName ? '배경 재생성' : '배경 생성')) + '</button>' +
+              '<button type="button" class="btn-ghost compact bgref-del" style="' + btnH + '">삭제</button>' +
               '<span class="muted" style="font-size:11px;">씬 ' + (l.sceneIds ? l.sceneIds.length : 0) + '개</span>' +
             '</div>' +
           '</div>' +
@@ -2009,7 +2045,7 @@ function openBackgroundReferenceModal() {
       );
     }).join('');
     overlay.innerHTML =
-      '<div class="cpbm-box" style="max-width:680px;width:90vw;max-height:84vh;display:flex;flex-direction:column;">' +
+      '<div class="cpbm-box" style="max-width:820px;width:92vw;max-height:88vh;display:flex;flex-direction:column;">' +
         '<h3 class="cpbm-title">배경 레퍼런스 (공간)</h3>' +
         '<p class="cpbm-help">이 에피소드의 공간 목록이에요. 각 공간의 <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)를 생성해 두면, 컷 생성 시 그 컷의 장소 배경을 참조해 <strong>배경은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (브랜드 세계관 배경과 별개의 에피소드 전용입니다.)</p>' +
         '<div style="overflow-y:auto;flex:1;min-height:80px;">' + (rows || '<p class="muted" style="text-align:center;padding:20px;">추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.</p>') + '</div>' +
@@ -2025,6 +2061,23 @@ function openBackgroundReferenceModal() {
     bind();
   }
 
+  // 묘사 텍스트영역 자동 높이(스크롤 없이 전체 내용이 보이도록).
+  function autoGrow(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
+  }
+
+  // 썸네일 클릭 라이트박스(원본 크기 보기).
+  function openLightbox(url) {
+    if (!url) return;
+    var lb = document.createElement('div');
+    lb.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    lb.innerHTML = '<img src="' + esc(url) + '" alt="" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5);"/>';
+    lb.addEventListener('click', function () { try { lb.remove(); } catch (_) {} });
+    document.body.appendChild(lb);
+  }
+
   function bind() {
     overlay.querySelectorAll('.bgref-item').forEach(function (el) {
       var i = Number(el.getAttribute('data-idx'));
@@ -2032,6 +2085,10 @@ function openBackgroundReferenceModal() {
       if (del) del.onclick = function () { syncFromInputs(); locs.splice(i, 1); render(); };
       var gen = el.querySelector('.bgref-gen');
       if (gen) gen.onclick = function () { syncFromInputs(); generatePlate(i); };
+      var ta = el.querySelector('.bgref-desc');
+      if (ta) { autoGrow(ta); ta.addEventListener('input', function () { autoGrow(ta); }); }
+      var thumb = el.querySelector('.bgref-thumb-img');
+      if (thumb) thumb.onclick = function () { openLightbox(thumb.getAttribute('data-full')); };
     });
     var addBtn = overlay.querySelector('#bgref-add');
     if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', sceneIds: [], _busy: false }); render(); };

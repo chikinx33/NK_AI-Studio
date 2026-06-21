@@ -992,21 +992,45 @@
     } catch (_) { }
     if (scene.cutRefEnabled && scene.cutRefId) {
       var stCutRef = ctx.getState();
-      var refCutIdx = stCutRef.scenes.findIndex(function (s) { return String(s && s.id) === String(scene.cutRefId); });
-      var refCutImg = refCutIdx >= 0 ? String(stCutRef.scenes[refCutIdx].imageDataUrl || '') : '';
-      if (refCutImg) {
+      var cutRefIdStr = String(scene.cutRefId);
+      var cutRefImageObj = null;
+      if (cutRefIdStr.indexOf('loc:') === 0) {
+        // 공간 배경 플레이트 참조: 그 장소의 "빈 배경"을 environment 레퍼런스로 붙인다.
+        // → 배경(레이아웃·재질·색·조명)은 일관, 구도·카메라는 이 컷의 프롬프트가 결정.
+        var locId = cutRefIdStr.slice(4);
+        var eps = (stCutRef.payload && Array.isArray(stCutRef.payload.episodeLocations)) ? stCutRef.payload.episodeLocations : [];
+        var loc = null;
+        for (var li = 0; li < eps.length; li++) {
+          if (eps[li] && String(eps[li].id || eps[li].name) === locId) { loc = eps[li]; break; }
+        }
+        var plateUrl = (loc && loc.refObjectName && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(loc.refObjectName) : '';
+        if (plateUrl) {
+          cutRefImageObj = {
+            referenceType: 'REFERENCE_TYPE_STYLE',
+            referenceKind: 'environment',
+            imageDataUrl: plateUrl,
+            subjectDescription: (loc.name || 'this location') + ' — the empty background plate of this place. Keep its layout, structure, materials, colors and lighting; do not copy any framing.',
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          };
+        }
+      } else {
+        // 기존: 다른 컷 이미지 참조(continuity) — 룩만 잇고 카메라/구도는 이 컷 프롬프트를 따름.
+        var refCutIdx = stCutRef.scenes.findIndex(function (s) { return String(s && s.id) === cutRefIdStr; });
+        var refCutImg = refCutIdx >= 0 ? String(stCutRef.scenes[refCutIdx].imageDataUrl || '') : '';
+        if (refCutImg) {
+          cutRefImageObj = {
+            referenceType: 'REFERENCE_TYPE_STYLE',
+            referenceKind: 'continuity',
+            imageDataUrl: refCutImg,
+            subjectDescription: 'the previous cut in this sequence',
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          };
+        }
+      }
+      if (cutRefImageObj) {
         var baseRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [];
-        baseRefs.push({
-          referenceId: baseRefs.length + 1,
-          referenceType: 'REFERENCE_TYPE_STYLE',
-          // 연속성 전용 레퍼런스: 캐릭터/색/재질/월드/조명 일관성만 가져오고, 카메라·구도는
-          // 이 컷의 프롬프트를 따라야 한다. 'environment'를 "유지"로 지시하면 구도까지 복제되어
-          // 컷1과 똑같은 앵글이 나오는 문제가 있어 referenceKind 를 'continuity'로 명시한다.
-          referenceKind: 'continuity',
-          imageDataUrl: refCutImg,
-          subjectDescription: 'the previous cut in this sequence',
-          subjectType: 'SUBJECT_TYPE_DEFAULT'
-        });
+        cutRefImageObj.referenceId = baseRefs.length + 1;
+        baseRefs.push(cutRefImageObj);
         referencePayload = referencePayload
           ? Object.assign({}, referencePayload, { referenceImages: baseRefs })
           : { referenceImages: baseRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };

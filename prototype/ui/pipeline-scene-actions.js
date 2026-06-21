@@ -634,7 +634,7 @@
           var srMod = NK.uiPipelineSceneRow;
           var txtC = btnC.querySelector('.cut-ref-pick-text');
           if (enabled && txtC && srMod && srMod.buildCutRefButtonLabel) {
-            txtC.innerHTML = srMod.buildCutRefButtonLabel(stC.scenes, chkId, stC.scenes[cidx].cutRefId);
+            txtC.innerHTML = srMod.buildCutRefButtonLabel(stC.scenes, chkId, stC.scenes[cidx].cutRefId, stC.payload && stC.payload.episodeLocations);
           }
         }
         if (ctxC.persistPipeline) ctxC.persistPipeline();

@@ -313,11 +313,22 @@
 
   // 컷 기반 레퍼런스 선택 버튼에 표시할 라벨(이미 escape 된 텍스트 반환).
   // 선택된 컷이 없거나 그 컷에 이미지가 없으면 기본 안내 문구를 보여준다.
-  function buildCutRefButtonLabel(allScenes, currentId, selectedId) {
+  // selectedId 가 "loc:<id>" 면 에피소드 공간 배경 플레이트 참조 → 장소 이름을 보여준다.
+  function buildCutRefButtonLabel(allScenes, currentId, selectedId, locations) {
     if (!selectedId) return '컷 선택';
+    var sid = String(selectedId);
+    if (sid.indexOf('loc:') === 0) {
+      var locId = sid.slice(4);
+      var loc = null;
+      (Array.isArray(locations) ? locations : []).forEach(function (l) {
+        if (!loc && l && String(l.id || l.name) === locId) loc = l;
+      });
+      if (!loc || !loc.refObjectName) return '컷 선택';
+      return '📍 ' + escapeText(loc.name || '장소');
+    }
     var found = null;
     (allScenes || []).forEach(function (s) {
-      if (!found && s && String(s.id) === String(selectedId)) found = s;
+      if (!found && s && String(s.id) === sid) found = s;
     });
     if (!found || !found.imageDataUrl || String(found.id) === String(currentId)) return '컷 선택';
     return escapeText(found.displayLabel || ('cut ' + found.id));
@@ -438,7 +449,7 @@
       ' 컷 기반 생성' +
       '</label>' +
       '<button type="button" class="btn-secondary compact cut-ref-pick-btn" data-action="pick-cut-ref" data-id="' + scene.id + '"' + (!scene.cutRefEnabled ? ' disabled' : '') + ' title="레퍼런스로 쓸 컷을 썸네일에서 선택">' +
-      '<span class="cut-ref-pick-text">' + buildCutRefButtonLabel(allScenes, scene.id, scene.cutRefId) + '</span>' +
+      '<span class="cut-ref-pick-text">' + buildCutRefButtonLabel(allScenes, scene.id, scene.cutRefId, statePayload.episodeLocations) + '</span>' +
       '</button>' +
       '</div>' +
       '<div class="action-buttons grid video-actions">' +

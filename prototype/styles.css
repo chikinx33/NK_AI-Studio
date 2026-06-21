@@ -6134,6 +6134,16 @@ button.cut-ref-pick-btn {
   cursor: pointer;
 }
 
+/* 컷 선택 모달의 섹션 구분 헤더(공간 배경 / 다른 컷) */
+.cutref-subhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #aaa);
+  margin: 10px 2px 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
 /* 삭제된(로드 실패) 컷: 선택 불가 표시 */
 .cut-ref-pick-item.cut-ref-pick-broken {
   opacity: 0.35;
