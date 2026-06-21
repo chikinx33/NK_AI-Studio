@@ -337,7 +337,7 @@
       } else if (!loc.refObjectName) {
         return '컷 선택';
       }
-      return '📍 ' + escapeText(label);
+      return escapeText(label);
     }
     var found = null;
     (allScenes || []).forEach(function (s) {
