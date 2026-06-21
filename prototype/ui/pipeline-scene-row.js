@@ -433,7 +433,10 @@
       // 프롬프트도 더빙처럼 인라인 편집: 별도 편집/저장/취소 버튼 없이 클릭→타이핑→Enter 적용.
       '<div class="scene-cell prompt">' +
       '<p class="eyebrow">Common</p>' +
-      '<p class="prompt-common is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true" spellcheck="false" title="클릭해 수정 · Enter로 적용 (Shift+Enter 줄바꿈)">' + header + '</p>' +
+      // COMMON 은 모든 컷이 공유하는 공통 프롬프트(state.header)다. 컷마다 인라인으로 고치면
+      // 전체가 함께 바뀌어 혼란스러우므로 여기서는 "읽기 전용 표시"만 하고, 편집은 상단 메뉴의
+      // "공통 프롬프트" 버튼에서만 한다(거기서 고치면 모든 컷에 공통 적용). 컷별 편집은 화면/행동/Duration.
+      '<p class="prompt-common" data-id="' + scene.id + '" title="공통 프롬프트는 상단 \'공통 프롬프트\' 버튼에서 편집해요 (모든 컷 공통 적용)">' + header + '</p>' +
       // composition/action 이 있으면 화면/행동을 별도 라인으로 (Visual 라인은 숨김 — 중복 방지).
       // 둘 다 없으면 기존 Visual 사용.
       ((scene.composition || scene.action)
