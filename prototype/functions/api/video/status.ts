@@ -150,6 +150,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
       const status = (json?.status || '').toLowerCase();
       const playback = json?.video?.url || json?.data?.[0]?.url || json?.url || null;
+      // 실패 상태 감지: 없으면 폴링이 무한정 'processing'으로 돌다 8분 후에야 timeout 됨.
+      const failed = status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled' || status === 'expired' || status === 'rejected';
+      if (failed) {
+        const rawMsg = json?.error?.message || json?.error || json?.message || json?.video?.error || 'Grok 영상 생성에 실패했습니다.';
+        const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
+        return corsJson({ ok: true, job_id: jobId, done: true, error: { code: 'grok_failed', message: msg }, response: json, rawOperation: json, playback: null, playbackUrl: null, status: 'error' }, 200);
+      }
       const doneByStatus = status === 'completed' || status === 'done' || status === 'succeeded' || status === 'success' || status === 'ready';
       const doneByPlaybackHint = !status && !!playback;
       const done = doneByStatus || doneByPlaybackHint;
