@@ -318,13 +318,26 @@
     if (!selectedId) return '컷 선택';
     var sid = String(selectedId);
     if (sid.indexOf('loc:') === 0) {
-      var locId = sid.slice(4);
+      var rest = sid.slice(4);
+      var hashIdx = rest.indexOf('#');
+      var locId = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest;
+      var variantId = hashIdx >= 0 ? rest.slice(hashIdx + 1) : '';
       var loc = null;
       (Array.isArray(locations) ? locations : []).forEach(function (l) {
         if (!loc && l && String(l.id || l.name) === locId) loc = l;
       });
-      if (!loc || !loc.refObjectName) return '컷 선택';
-      return '📍 ' + escapeText(loc.name || '장소');
+      if (!loc) return '컷 선택';
+      var label = loc.name || '장소';
+      if (variantId) {
+        var vlabel = '';
+        (Array.isArray(loc.variants) ? loc.variants : []).forEach(function (v) {
+          if (!vlabel && v && String(v.id || v.label) === variantId) vlabel = v.label || '';
+        });
+        if (vlabel) label = label + ' — ' + vlabel;
+      } else if (!loc.refObjectName) {
+        return '컷 선택';
+      }
+      return '📍 ' + escapeText(label);
     }
     var found = null;
     (allScenes || []).forEach(function (s) {

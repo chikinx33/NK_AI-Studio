@@ -401,14 +401,18 @@
     try {
       var _stx = (ctx && ctx.getState) ? ctx.getState() : null;
       var _eps = (_stx && _stx.payload && Array.isArray(_stx.payload.episodeLocations)) ? _stx.payload.episodeLocations : [];
+      var _proxy = function (o) { return (o && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(o) : ''; };
       _eps.forEach(function (l) {
-        if (l && l.refObjectName) {
-          locPlates.push({
-            locId: String(l.id || l.name || ''),
-            name: String(l.name || '장소'),
-            url: (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : ''
-          });
+        if (!l) return;
+        var lid = String(l.id || l.name || '');
+        if (l.refObjectName) {
+          locPlates.push({ id: 'loc:' + lid, name: String(l.name || '장소'), url: _proxy(l.refObjectName) });
         }
+        (Array.isArray(l.variants) ? l.variants : []).forEach(function (v) {
+          if (v && v.refObjectName) {
+            locPlates.push({ id: 'loc:' + lid + '#' + String(v.id || v.label || ''), name: String(l.name || '장소') + ' — ' + String(v.label || '세부'), url: _proxy(v.refObjectName) });
+          }
+        });
       });
     } catch (_) {}
 
@@ -458,7 +462,7 @@
         );
       }).join('');
       var plateList = locPlates.map(function (p) {
-        var id = 'loc:' + p.locId;
+        var id = p.id;
         var active = String(id) === chosenId;
         return (
           '<div class="lib-item cut-ref-pick-item' + (active ? ' lib-selected selected' : '') + '" data-id="' + esc(id) + '" data-loc="1" title="' + esc(p.name) + ' (공간 배경)">' +
@@ -1999,7 +2003,15 @@ function openBackgroundReferenceModal() {
   // 작업용 복사본
   var locs = (st0.payload && Array.isArray(st0.payload.episodeLocations))
     ? st0.payload.episodeLocations.map(function (l) {
-        return { id: l.id || '', name: l.name || '', description: l.description || '', refObjectName: l.refObjectName || '', sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false };
+        return {
+          id: l.id || '', name: l.name || '', description: l.description || '',
+          refObjectName: l.refObjectName || '',
+          // 세부 배경(같은 공간의 다른 뷰: 바닥/수면 등). 기본 플레이트를 참조해 일관성 유지.
+          variants: Array.isArray(l.variants) ? l.variants.map(function (v) {
+            return { id: v.id || '', label: v.label || '', refObjectName: v.refObjectName || '', _busy: false };
+          }) : [],
+          sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false
+        };
       })
     : [];
 
@@ -2018,6 +2030,12 @@ function openBackgroundReferenceModal() {
       if (!locs[i]) return;
       var nm = el.querySelector('.bgref-name'); if (nm) locs[i].name = nm.value;
       var ds = el.querySelector('.bgref-desc'); if (ds) locs[i].description = ds.value;
+      el.querySelectorAll('.bgref-variant').forEach(function (vel) {
+        var vi = Number(vel.getAttribute('data-vi'));
+        if (locs[i].variants && locs[i].variants[vi]) {
+          var vl = vel.querySelector('.bgref-vlabel'); if (vl) locs[i].variants[vi].label = vl.value;
+        }
+      });
     });
   }
 
@@ -2039,6 +2057,25 @@ function openBackgroundReferenceModal() {
               '<button type="button" class="btn-secondary compact bgref-gen" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + (l._busy ? '생성 중...' : (l.refObjectName ? '배경 재생성' : '배경 생성')) + '</button>' +
               '<button type="button" class="btn-ghost compact bgref-del" style="' + btnH + '">삭제</button>' +
               '<span class="muted" style="font-size:11px;">씬 ' + (l.sceneIds ? l.sceneIds.length : 0) + '개</span>' +
+            '</div>' +
+            // 세부 배경(같은 공간의 다른 뷰). 기본 배경이 있어야 추가 가능(그걸 참조해 일관성 유지).
+            '<div class="bgref-variants" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">' +
+              (l.refObjectName
+                ? (l.variants || []).map(function (v, vi) {
+                    var vurl = thumbUrl(v.refObjectName) || (v._dataUrl || '');
+                    return '<div class="bgref-variant" data-vi="' + vi + '" style="width:104px;border:1px solid var(--border);border-radius:6px;padding:4px;">' +
+                      '<div style="width:100%;height:56px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
+                        (vurl ? '<img class="bgref-vthumb" src="' + esc(vurl) + '" data-full="' + esc(vurl) + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:10px;">' + (v._busy ? '생성중' : '없음') + '</span>') +
+                      '</div>' +
+                      '<input class="bgref-vlabel" type="text" value="' + esc(v.label) + '" placeholder="예: 바닥" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;"/>' +
+                      '<div style="display:flex;gap:3px;margin-top:3px;">' +
+                        '<button type="button" class="btn-secondary compact bgref-vgen" style="font-size:10px;padding:3px 5px;flex:1;"' + (v._busy ? ' disabled' : '') + '>' + (v._busy ? '...' : (v.refObjectName ? '재생성' : '생성')) + '</button>' +
+                        '<button type="button" class="btn-ghost compact bgref-vdel" style="font-size:11px;padding:3px 6px;">×</button>' +
+                      '</div>' +
+                    '</div>';
+                  }).join('') +
+                  '<button type="button" class="btn-secondary compact bgref-vadd" style="height:56px;align-self:flex-start;">+ 세부 배경</button>'
+                : '<span class="muted" style="font-size:11px;">기본 배경을 먼저 생성하면, 같은 공간의 세부 배경(바닥·수면 등)을 추가할 수 있어요.</span>') +
             '</div>' +
           '</div>' +
         '</div>'
@@ -2089,9 +2126,21 @@ function openBackgroundReferenceModal() {
       if (ta) { autoGrow(ta); ta.addEventListener('input', function () { autoGrow(ta); }); }
       var thumb = el.querySelector('.bgref-thumb-img');
       if (thumb) thumb.onclick = function () { openLightbox(thumb.getAttribute('data-full')); };
+      // 세부 배경(variants)
+      el.querySelectorAll('.bgref-variant').forEach(function (vel) {
+        var vi = Number(vel.getAttribute('data-vi'));
+        var vgen = vel.querySelector('.bgref-vgen');
+        if (vgen) vgen.onclick = function () { syncFromInputs(); generateVariant(i, vi); };
+        var vdel = vel.querySelector('.bgref-vdel');
+        if (vdel) vdel.onclick = function () { syncFromInputs(); if (locs[i] && locs[i].variants) { locs[i].variants.splice(vi, 1); render(); } };
+        var vth = vel.querySelector('.bgref-vthumb');
+        if (vth) vth.onclick = function () { openLightbox(vth.getAttribute('data-full')); };
+      });
+      var vadd = el.querySelector('.bgref-vadd');
+      if (vadd) vadd.onclick = function () { syncFromInputs(); if (locs[i]) { locs[i].variants = locs[i].variants || []; locs[i].variants.push({ id: '', label: '', refObjectName: '', _busy: false }); render(); } };
     });
     var addBtn = overlay.querySelector('#bgref-add');
-    if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', sceneIds: [], _busy: false }); render(); };
+    if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', variants: [], sceneIds: [], _busy: false }); render(); };
     var reBtn = overlay.querySelector('#bgref-reextract');
     if (reBtn) reBtn.onclick = reextract;
     var cancel = overlay.querySelector('#bgref-cancel'); if (cancel) cancel.onclick = close;
@@ -2123,6 +2172,43 @@ function openBackgroundReferenceModal() {
     }
   }
 
+  // 세부 배경(같은 공간의 다른 뷰) 생성 — 기본 플레이트를 environment 레퍼런스로 참조해 일관성 유지.
+  async function generateVariant(i, vi) {
+    var l = locs[i]; if (!l || !l.variants || !l.variants[vi]) return;
+    var v = l.variants[vi];
+    if (!l.refObjectName) { alert('먼저 이 장소의 기본 배경을 생성하세요.'); return; }
+    if (!String(v.label || '').trim()) { alert('세부 배경 이름을 입력하세요 (예: 바닥, 수면 위).'); return; }
+    v._busy = true; render();
+    try {
+      var st = ctxRef.getState();
+      var primaryUrl = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : '';
+      var prompt = [st.header || '', l.description || l.name,
+        'This is the SAME location as the reference image (' + (l.name || 'this place') + '). Show the "' + v.label + '" view/angle of this same place — keep the exact same architecture, materials, colors and lighting as the reference. Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.'
+      ].filter(Boolean).join('\n');
+      var json = await NK.api.imagen({
+        prompt: prompt,
+        aspectRatio: st.aspectRatio || '16:9',
+        projectId: st.draftId || '',
+        generationMode: 'text-to-image',
+        referenceImages: primaryUrl ? [{
+          referenceId: 1,
+          referenceType: 'REFERENCE_TYPE_STYLE',
+          referenceKind: 'environment',
+          imageDataUrl: primaryUrl,
+          subjectDescription: (l.name || 'this location') + ' base background plate; keep its materials, colors and lighting.',
+          subjectType: 'SUBJECT_TYPE_DEFAULT'
+        }] : []
+      });
+      v.refObjectName = String(json.objectName || '').trim() || v.refObjectName;
+      if (!v.refObjectName && json.dataUrl) v._dataUrl = json.dataUrl;
+      if (!v.id) v.id = 'v-' + slug(v.label);
+      v._busy = false; render();
+    } catch (e) {
+      v._busy = false; render();
+      alert('세부 배경 생성 실패: ' + (e && e.message ? e.message : e));
+    }
+  }
+
   async function reextract() {
     var st = ctxRef.getState();
     if (!NK.api || !NK.api.scenarioLocations) { alert('추출 API를 사용할 수 없습니다.'); return; }
@@ -2136,7 +2222,12 @@ function openBackgroundReferenceModal() {
         locs.forEach(function (p) { if (p.name) prevByName[String(p.name).trim().toLowerCase()] = p; });
         locs = r.locations.map(function (nl) {
           var prev = prevByName[String(nl.name || '').trim().toLowerCase()];
-          return { id: nl.id || '', name: nl.name || '', description: nl.description || '', refObjectName: (prev && prev.refObjectName) || nl.refObjectName || '', sceneIds: nl.sceneIds || [], _busy: false };
+          return {
+            id: nl.id || '', name: nl.name || '', description: nl.description || '',
+            refObjectName: (prev && prev.refObjectName) || nl.refObjectName || '',
+            variants: (prev && Array.isArray(prev.variants)) ? prev.variants.map(function (v) { return { id: v.id || '', label: v.label || '', refObjectName: v.refObjectName || '', _busy: false }; }) : [],
+            sceneIds: nl.sceneIds || [], _busy: false
+          };
         });
         render();
       }
@@ -2151,7 +2242,10 @@ function openBackgroundReferenceModal() {
     var cleaned = locs
       .filter(function (l) { return String(l.name || '').trim() || String(l.description || '').trim(); })
       .map(function (l) {
-        return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
+        var variants = (Array.isArray(l.variants) ? l.variants : [])
+          .filter(function (v) { return v && v.refObjectName; })
+          .map(function (v) { return { id: v.id || ('v-' + slug(v.label)), label: String(v.label || '').trim(), refObjectName: v.refObjectName }; });
+        return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', variants: variants, sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
       });
     var st = ctxRef.getState();
     st.payload = Object.assign({}, st.payload, { episodeLocations: cleaned });

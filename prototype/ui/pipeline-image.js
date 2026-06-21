@@ -997,19 +997,35 @@
       if (cutRefIdStr.indexOf('loc:') === 0) {
         // 공간 배경 플레이트 참조: 그 장소의 "빈 배경"을 environment 레퍼런스로 붙인다.
         // → 배경(레이아웃·재질·색·조명)은 일관, 구도·카메라는 이 컷의 프롬프트가 결정.
-        var locId = cutRefIdStr.slice(4);
+        // "loc:<locId>" = 기본 배경, "loc:<locId>#<variantId>" = 세부 배경(바닥/수면 등).
+        var rest = cutRefIdStr.slice(4);
+        var hashIdx = rest.indexOf('#');
+        var locId = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest;
+        var variantId = hashIdx >= 0 ? rest.slice(hashIdx + 1) : '';
         var eps = (stCutRef.payload && Array.isArray(stCutRef.payload.episodeLocations)) ? stCutRef.payload.episodeLocations : [];
         var loc = null;
         for (var li = 0; li < eps.length; li++) {
           if (eps[li] && String(eps[li].id || eps[li].name) === locId) { loc = eps[li]; break; }
         }
-        var plateUrl = (loc && loc.refObjectName && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(loc.refObjectName) : '';
+        var plateObj = loc ? loc.refObjectName : '';
+        var plateName = loc ? (loc.name || 'this location') : 'this location';
+        if (loc && variantId) {
+          var vs = Array.isArray(loc.variants) ? loc.variants : [];
+          for (var vj = 0; vj < vs.length; vj++) {
+            if (vs[vj] && String(vs[vj].id || vs[vj].label) === variantId) {
+              plateObj = vs[vj].refObjectName || plateObj;
+              plateName = (loc.name || 'this location') + ' (' + (vs[vj].label || '') + ')';
+              break;
+            }
+          }
+        }
+        var plateUrl = (plateObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(plateObj) : '';
         if (plateUrl) {
           cutRefImageObj = {
             referenceType: 'REFERENCE_TYPE_STYLE',
             referenceKind: 'environment',
             imageDataUrl: plateUrl,
-            subjectDescription: (loc.name || 'this location') + ' — the empty background plate of this place. Keep its layout, structure, materials, colors and lighting; do not copy any framing.',
+            subjectDescription: plateName + ' — the empty background plate of this place. Keep its layout, structure, materials, colors and lighting; do not copy any framing.',
             subjectType: 'SUBJECT_TYPE_DEFAULT'
           };
         }
