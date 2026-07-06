@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatConvDate } from "./Chat";
+import { formatConvDate, formatChatTime } from "./Chat";
 import Markdown from "./Markdown";
 import type { Turn } from "./Chat";
 import type { AgentInfo } from "../lib/api";
@@ -206,9 +206,55 @@ function PauseIcon({ className }: { className?: string }) {
   );
 }
 
+// lucide: scroll-text — 대화 기록 토글용
+function ScrollTextIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M15 12h-5" />
+      <path d="M15 8h-5" />
+      <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+      <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
+    </svg>
+  );
+}
+
+// 대화 기록(로그)용 작은 원형 아바타 — 아바타 png 실패 시 이모지 폴백
+function LogAvatar({ turn }: { turn: Turn }) {
+  const [failed, setFailed] = useState(false);
+  const isReal = turn.agentId && !turn.agentId.startsWith("_");
+  if (isReal && !failed) {
+    return (
+      <img
+        src={`${import.meta.env.BASE_URL}avatars/${turn.agentId}.png`}
+        alt={turn.name}
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+  return <span className="text-sm">{turn.emoji ?? "🤖"}</span>;
+}
+
 export default function VisualNovel({
   turns, busy, streaming, onStop, draft, setDraft, onSend, agents, onToggleMode, focusAgent, onClearFocus, convDate,
 }: Props) {
+  // 대화 기록 오버레이 표시 여부 — 켜면 이 대화의 전체 주고받기(내 메시지+직원 메시지)를 스크롤로 본다.
+  const [showLog, setShowLog] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showLog) logEndRef.current?.scrollIntoView({ block: "end" });
+  }, [turns, showLog]);
   function submit() {
     const t = draft.trim();
     if (!t || busy) return;
@@ -282,6 +328,15 @@ export default function VisualNovel({
             </span>
           )}
           <button
+            onClick={() => setShowLog((v) => !v)}
+            className={`text-xs px-2.5 py-1 rounded-lg min-w-[64px] ${showLog ? "bg-violet-700 text-white" : "bg-violet-800/60 hover:bg-violet-700 text-violet-100"}`}
+            title={showLog ? "무대로 돌아가기" : "이 대화의 전체 기록 보기"}
+          >
+            <span className="inline-flex items-center gap-1">
+              <ScrollTextIcon className="h-4 w-4" /> {showLog ? "무대" : "기록"}
+            </span>
+          </button>
+          <button
             onClick={onToggleMode}
             className="text-xs px-2.5 py-1 rounded-lg bg-violet-800/60 hover:bg-violet-700 text-violet-100"
             title="일반 채팅으로 전환"
@@ -293,6 +348,54 @@ export default function VisualNovel({
         </div>
       </div>
 
+      {showLog ? (
+        /* 대화 기록 오버레이 — 이 대화의 전체 주고받기(내 메시지 + 직원 메시지)를 스크롤로 표시 */
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
+          {turns.length === 0 ? (
+            <div className="h-full grid place-items-center text-sm text-gray-500">아직 나눈 대화가 없어요.</div>
+          ) : (
+            turns.map((t, i) => (
+              <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
+                {t.role === "agent" ? (
+                  <div className="flex max-w-[82%] gap-2">
+                    <div
+                      className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-ink"
+                      style={{ boxShadow: `0 0 0 1.5px ${accentOf(t.agentId)}66` }}
+                    >
+                      <LogAvatar turn={t} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="mb-0.5 text-[11px] font-semibold" style={{ color: accentOf(t.agentId) }}>
+                        {displayName(t)}
+                      </div>
+                      <div className="rounded-2xl rounded-bl-sm border border-edge bg-panel px-3 py-2 text-sm leading-relaxed text-gray-200">
+                        {t.streaming ? (
+                          <span className="whitespace-pre-wrap">{t.text}<span className="vn-caret">▋</span></span>
+                        ) : t.text ? (
+                          <Markdown text={t.text} />
+                        ) : (
+                          <span className="text-gray-500">…</span>
+                        )}
+                      </div>
+                      {formatChatTime(t.ts) && <div className="mt-0.5 text-[10px] text-gray-500">{formatChatTime(t.ts)}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="max-w-[82%]">
+                    <div className="rounded-2xl rounded-br-sm bg-emerald-700/80 px-3 py-2 text-sm leading-relaxed text-white">
+                      {t.imagePreview && <img src={t.imagePreview} alt="첨부" className="mb-1.5 max-h-40 rounded-lg" />}
+                      <span className="whitespace-pre-wrap">{t.text}</span>
+                    </div>
+                    {formatChatTime(t.ts) && <div className="mt-0.5 text-right text-[10px] text-gray-500">{formatChatTime(t.ts)}</div>}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+          <div ref={logEndRef} />
+        </div>
+      ) : (
+        <>
       {/* 무대 */}
       <div className="flex-1 relative flex items-end justify-center min-h-0">
         {lastUserMsg && (
@@ -390,6 +493,8 @@ export default function VisualNovel({
           </div>
         </div>
       ) : null}
+        </>
+      )}
 
       {/* 입력창 */}
       <div className="px-4 pb-4 pt-1">
