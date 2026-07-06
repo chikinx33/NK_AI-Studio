@@ -1228,6 +1228,75 @@ async function runWebSearchTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 웹 페이지 열람(크롤링): URL을 실제로 열어 본문 텍스트를 읽어온다. web_search(검색)와 달리 '이 주소를 열어봐'용.
+ *  1단계 Tavily Extract(빠름·저렴, 정적 위주) → 내용이 빈약하면 2단계 Cloudflare Browser Rendering(헤드리스 크롬).
+ *  2단계는 JS를 실제로 실행해 최종 화면을 마크다운으로 뽑으므로 SPA·게임 사이트(예: elidus.org)도 껍데기가 아니라 실제 내용을 읽는다.
+ *  키: TAVILY_API_KEY(1단계) / CLOUDFLARE_ACCOUNT_ID + CF_BROWSER_TOKEN(2단계, 선택). synthesize로 결과를 모델에 재투입해 답 합성. */
+async function runWebFetchTool(input: any, ctx: ToolContext): Promise<any> {
+  const url = String(input?.url || input?.link || input?.href || "").trim();
+  if (!url) throw new Error("읽을 페이지 주소(url)가 필요해요. (예: https://example.com)");
+  if (!/^https?:\/\//i.test(url)) throw new Error("url은 http:// 또는 https:// 로 시작해야 해요.");
+
+  const MIN = 200; // 본문이 이 길이 미만이면 '껍데기'로 보고 렌더링 폴백.
+  let text = "";
+  let via = "";
+  const notes: string[] = [];
+
+  // 1단계: Tavily Extract — 빠르고 저렴. 정적·가벼운 페이지엔 충분.
+  const tavKey = String(ctx.env?.TAVILY_API_KEY || ctx.env?.TAVILY_KEY || "").trim();
+  if (tavKey) {
+    try {
+      const r = await fetch("https://api.tavily.com/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: tavKey, urls: [url] }),
+      });
+      const d: any = await r.json().catch(() => ({}));
+      const raw = String(d?.results?.[0]?.raw_content || "").trim();
+      if (raw) { text = raw; via = "tavily"; }
+      if (raw && raw.length < MIN) notes.push("Tavily 결과가 빈약해 렌더링 폴백 시도");
+    } catch (e: any) { notes.push(`Tavily 실패: ${String(e?.message || e)}`); }
+  } else {
+    notes.push("TAVILY_API_KEY 미설정 — 1단계 건너뜀");
+  }
+
+  // 2단계: Cloudflare Browser Rendering — 헤드리스 크롬으로 JS까지 실행해 마크다운 추출. 1단계가 부족할 때만.
+  if (text.length < MIN) {
+    const acct = String(ctx.env?.CLOUDFLARE_ACCOUNT_ID || ctx.env?.CF_ACCOUNT_ID || "").trim();
+    const cfToken = String(ctx.env?.CF_BROWSER_TOKEN || ctx.env?.CLOUDFLARE_API_TOKEN || "").trim();
+    if (acct && cfToken) {
+      try {
+        const r = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${acct}/browser-rendering/markdown`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfToken}` },
+            body: JSON.stringify({ url }),
+          }
+        );
+        const d: any = await r.json().catch(() => ({}));
+        const md = typeof d?.result === "string" ? d.result.trim() : "";
+        if (r.ok && md.length > text.length) { text = md; via = "browser"; }
+        else if (!r.ok) notes.push(`Browser Rendering 실패(${r.status}): ${d?.errors?.[0]?.message || d?.messages?.[0]?.message || ""}`.trim());
+      } catch (e: any) { notes.push(`Browser Rendering 실패: ${String(e?.message || e)}`); }
+    } else if (via !== "tavily") {
+      notes.push("Browser Rendering 미설정(CLOUDFLARE_ACCOUNT_ID·CF_BROWSER_TOKEN 필요) — JS 렌더링 폴백 불가");
+    }
+  }
+
+  if (!text) {
+    throw new Error(
+      "페이지 내용을 읽지 못했어요. " +
+      (notes.length ? notes.join(" / ") : "TAVILY_API_KEY 또는 Cloudflare Browser Rendering 키(CLOUDFLARE_ACCOUNT_ID·CF_BROWSER_TOKEN)를 확인해주세요.")
+    );
+  }
+
+  // 모델 재투입 비용 절감 위해 과도한 길이는 컷.
+  const MAX = 12000;
+  const clipped = text.length > MAX ? `${text.slice(0, MAX)}\n…(이하 ${text.length - MAX}자 생략)` : text;
+  return { kind: "web_fetch", url, via: via || "unknown", chars: text.length, content: clipped, notes };
+}
+
 /** 엣지(전략) Google Sheets 읽기: 매출·지표 시트를 읽어 분석 근거로. 싱크 구글 OAuth 토큰 재사용(시트 권한 필요). */
 async function runSheetsReadTool(input: any, ctx: ToolContext): Promise<any> {
   const access = await syncGoogleAccess(ctx);
@@ -1436,6 +1505,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   reminder_set: { agentId: "sync", kind: "read", run: runReminderSetTool },
   // 웹 검색: 날씨·뉴스·최신 정보·일반 검색. 레이더 주담당 + 엣지·마키·엔지 공유(조사 업무 공통).
   web_search: { agentId: "radar", agentIds: ["edge", "maki", "engi"], kind: "read", synthesize: true, run: runWebSearchTool },
+  // 웹 페이지 열람(크롤링): 특정 URL을 실제로 열어 본문을 읽음. JS 사이트는 크롬 렌더링 폴백. 조사 공통 도구.
+  web_fetch: { agentId: "radar", agentIds: ["edge", "maki", "engi"], kind: "read", synthesize: true, run: runWebFetchTool },
   // 엣지(전략): Google Sheets 읽기 → 매출·지표 분석. 결과를 모델에 재투입해 분석 답 합성.
   sheets_read: { agentId: "edge", kind: "read", synthesize: true, run: runSheetsReadTool },
   // 싱크(비서): Google Drive 보기 → 파일 목록·검색·내용 읽기.

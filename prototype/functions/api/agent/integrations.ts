@@ -14,6 +14,11 @@ const TOOL_KEYS: Record<string, { key: string; label: string; alt?: string[]; op
   sound: [{ key: "ELEVENLABS_API_KEY", label: "사운드 생성 키 (ElevenLabs)" }],
   video: [{ key: "ATLASCLOUD_API_KEY", label: "영상 생성 키 (AtlasCloud/xAI)", alt: ["XAI_API_KEY"] }],
   web_search: [{ key: "TAVILY_API_KEY", label: "웹 검색 키 (Tavily)", alt: ["TAVILY_KEY"] }],
+  web_fetch: [
+    { key: "TAVILY_API_KEY", label: "웹 열람 1단계 (Tavily Extract)", alt: ["TAVILY_KEY"] },
+    { key: "CLOUDFLARE_ACCOUNT_ID", label: "웹 열람 2단계 계정 ID (Cloudflare)", alt: ["CF_ACCOUNT_ID"], optional: true },
+    { key: "CF_BROWSER_TOKEN", label: "웹 열람 2단계 토큰 (Cloudflare Browser Rendering)", alt: ["CLOUDFLARE_API_TOKEN"], optional: true },
+  ],
   naver_datalab: [
     { key: "NAVER_CLIENT_ID", label: "네이버 데이터랩 Client ID" },
     { key: "NAVER_CLIENT_SECRET", label: "네이버 데이터랩 Secret" },

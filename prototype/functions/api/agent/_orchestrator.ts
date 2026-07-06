@@ -176,6 +176,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
     reminder_set: `[[RUN: reminder_set | {"at": "2026-06-20T00:40:00-05:00", "text": "40분 알람"}]]  → 그 시각에 앱에서 울리는 알람 설정(브라우저 알림+소리). at은 위 '현재 시각'의 날짜·오프셋 기준 ISO8601. "5분 뒤/40분에 알람" 같은 단순 알람은 캘린더 말고 이걸 쓴다(승인 불필요·즉시 설정). 구글 연결 불필요.`,
     web_search: `[[RUN: web_search | {"query": "검색어"}]]  → 실시간 웹 검색(날씨·뉴스·최신 정보·일반 지식). 모델이 모르거나 최신/실시간 정보가 필요하면 반드시 이 도구로 검색한 뒤 결과를 근거로 답한다. (날씨는 "서울 오늘 날씨"처럼 지역+오늘 포함)`,
+    web_fetch: `[[RUN: web_fetch | {"url": "https://…"}]]  → 특정 웹페이지를 실제로 열어 본문을 읽어온다(크롤링). 검색이 아니라 "이 주소 열어서 분석해줘"용. JS로 그려지는 SPA·게임 사이트도 헤드리스 크롬으로 렌더링해 실제 내용을 읽는다. 사용자가 URL을 주며 "이 사이트 분석/요약/확인해줘"라고 하면 이 도구를 쓴다.`,
     sheets_read: `[[RUN: sheets_read | {"url": "구글시트 URL 또는 ID", "range": "Sheet1!A1:F50(선택)"}]]  → Google Sheets에서 매출·지표 데이터를 읽어 분석 근거로. URL이 없으면 사용자에게 시트 링크를 물어본다. (싱크의 구글 연결 + 시트 권한 필요)`,
     drive: `[[RUN: drive | {"query": "파일명 검색어(선택)", "fileId": "특정 파일 내용 읽기(선택)"}]]  → Google Drive 파일 목록·검색(query) 또는 특정 파일 내용 읽기(fileId). "내 드라이브/파일 찾아줘"에 사용. (구글 연결 + 드라이브 권한 필요)`,
     github: `[[RUN: github | {"repo": "owner/name", "path": "파일경로(선택)", "query": "레포검색어(repo 없을 때)"}]]  → GitHub 레포 정보·열린 이슈·파일 내용·레포 검색 조회. 공개 레포는 토큰 없이도 됨.`,
@@ -185,7 +186,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
-    gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
+    gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)", web_fetch: "웹페이지 열람(URL 크롤링·JS 렌더링)",
     sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)", drive: "Google Drive 파일 보기",
   };
   const toolsByAgent: Record<string, string[]> = {};
