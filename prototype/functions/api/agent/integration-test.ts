@@ -88,6 +88,30 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send(await testGoogle(env, auth.userId, tool), 200, origin);
   }
 
+  // 웹 열람(크롤링): 1단계 Tavily 키 + 2단계 Cloudflare Browser Rendering. 2단계는 실제 호출로 토큰 유효성까지 라이브 검증.
+  if (tool === "web_fetch") {
+    const t1 = has(env, "TAVILY_API_KEY", ["TAVILY_KEY"]);
+    const acct = String(env?.CLOUDFLARE_ACCOUNT_ID || env?.CF_ACCOUNT_ID || "").trim();
+    const cfToken = String(env?.CF_BROWSER_TOKEN || env?.CLOUDFLARE_API_TOKEN || "").trim();
+    if (!t1 && !(acct && cfToken)) {
+      return send({ ok: false, message: "웹 열람 키가 아직 없어요. TAVILY_API_KEY 또는 Cloudflare(CLOUDFLARE_ACCOUNT_ID·CF_BROWSER_TOKEN)를 설정해주세요." }, 200, origin);
+    }
+    let t2msg = "2단계 미설정(JS 렌더링 폴백 없음)";
+    if (acct && cfToken) {
+      try {
+        const r = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${acct}/browser-rendering/markdown`,
+          { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfToken}` }, body: JSON.stringify({ url: "https://example.com" }) }
+        );
+        const d: any = await r.json().catch(() => ({}));
+        if (r.ok && typeof d?.result === "string" && d.result.trim()) t2msg = "2단계 Browser Rendering ✓ (JS 렌더링 실제 확인)";
+        else t2msg = `2단계 실패(${r.status}): ${d?.errors?.[0]?.message || d?.messages?.[0]?.message || "토큰·권한을 확인해주세요"}`;
+      } catch (e: any) { t2msg = `2단계 호출 오류: ${String(e?.message || e)}`; }
+    }
+    const okOverall = t1 || /✓/.test(t2msg);
+    return send({ ok: okOverall, message: `${okOverall ? "✅" : "⚠️"} 웹 열람 — ${t1 ? "1단계 Tavily ✓" : "1단계 미설정"} · ${t2msg}` }, 200, origin);
+  }
+
   const keys = TOOL_KEYS[tool];
   if (!keys) return send({ ok: false, message: `알 수 없는 도구: ${tool}` }, 200, origin);
   if (tool === "github") {
