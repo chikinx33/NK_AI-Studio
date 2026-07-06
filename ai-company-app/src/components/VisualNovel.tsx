@@ -246,6 +246,17 @@ function LogAvatar({ turn }: { turn: Turn }) {
   return <span className="text-sm">{turn.emoji ?? "🤖"}</span>;
 }
 
+// 응답 대기 중 "입력 중" 점 애니메이션 — 일반 채팅과 동일한 느낌
+function TypingDots() {
+  return (
+    <span className="inline-flex gap-1 py-1 align-middle">
+      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
+    </span>
+  );
+}
+
 export default function VisualNovel({
   turns, busy, streaming, onStop, draft, setDraft, onSend, agents, onToggleMode, focusAgent, onClearFocus, convDate,
 }: Props) {
@@ -300,6 +311,12 @@ export default function VisualNovel({
   const accent = accentOf(speaker?.agentId);
   // 전용 대화 대상이 정해지면, 그 직원이 아직 말하기 전이라도 무대에 바로 세운다
   const focusedStanding = !!focusAgent && (!speaker || speaker.agentId !== focusAgent.id);
+  // 응답 대기 중(첫 토큰 전) 무대에 세울 직원 — 전용 대상 > 마지막 발언자 > 코어
+  const lastAgentTurn = [...turns].reverse().find((t) => t.role === "agent" && !!t.agentId);
+  const pendingId = focusAgent?.id ?? lastAgentTurn?.agentId ?? "core";
+  const pendingName = agents.find((a) => a.id === pendingId)?.name ?? lastAgentTurn?.name ?? "코어";
+  // 대기 중 표시: 실제 생성 진행 중(streaming)인데 아직 이번 답의 텍스트가 없을 때
+  const waiting = !!streaming && !speaker?.text;
 
   return (
     <div className="flex-1 flex flex-col h-full relative overflow-hidden">
@@ -436,6 +453,16 @@ export default function VisualNovel({
           <div key={speakerKey} className="vn-in h-[40vh] flex items-end justify-center pb-1">
             <Avatar turn={speaker} accent={accent} />
           </div>
+        ) : waiting ? (
+          <div key={`pending-${pendingId}`} className="vn-in h-[40vh] flex items-end justify-center pb-1">
+            <img
+              src={`${import.meta.env.BASE_URL}avatars/${pendingId}.png`}
+              alt={pendingName}
+              className="max-h-full max-w-full object-contain drop-shadow-2xl"
+              style={{ filter: `drop-shadow(0 0 28px ${accentOf(pendingId)}55)` }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+            />
+          </div>
         ) : (
           <div className="m-auto flex flex-col items-center text-center text-gray-500">
             <Share2Icon className="mb-3 h-12 w-12 text-gray-600" />
@@ -459,7 +486,7 @@ export default function VisualNovel({
               <span className="text-[11px] text-gray-500">{roleOf(focusAgent!.id)}</span>
             </div>
             <div className="text-sm leading-relaxed text-gray-300 min-h-[3.2rem] max-h-[34vh] overflow-y-auto pr-1">
-              {GREETING[focusAgent!.id] ?? `안녕하세요, ${focusAgent!.name}예요. 무엇을 도와드릴까요?`}
+              {waiting ? <TypingDots /> : (GREETING[focusAgent!.id] ?? `안녕하세요, ${focusAgent!.name}예요. 무엇을 도와드릴까요?`)}
             </div>
           </div>
         </div>
@@ -486,9 +513,28 @@ export default function VisualNovel({
                 ) : (
                   <Markdown text={speaker.text} />
                 )
+              ) : waiting ? (
+                <TypingDots />
               ) : (
                 <span className="text-gray-500">…</span>
               )}
+            </div>
+          </div>
+        </div>
+      ) : waiting ? (
+        <div className="px-5 pb-2">
+          <div
+            className="rounded-2xl border bg-panel/95 backdrop-blur px-5 py-4 shadow-xl"
+            style={{ borderColor: accentOf(pendingId) + "88" }}
+          >
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-base font-bold" style={{ color: accentOf(pendingId) }}>
+                {displayName({ role: "agent", agentId: pendingId, name: pendingName, text: "" })}
+              </span>
+              <span className="text-[11px] text-gray-500">{roleOf(pendingId)}</span>
+            </div>
+            <div className="text-sm leading-relaxed min-h-[3.2rem] pr-1">
+              <TypingDots />
             </div>
           </div>
         </div>
