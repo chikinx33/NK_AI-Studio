@@ -190,6 +190,20 @@
 
 ---
 
+## 5.5 구현 상태 노트 (코드 반영 — 2026-07-07)
+> 실제 코드 구현/배포 현황. `prototype/functions/api/agent/_shared.ts`(run+레지스트리) · `_orchestrator.ts`(설명·라벨·formatReadResult).
+
+- **STEP 0/P1 (배포됨)**: brand_get/save/asset·imagen_describe·upscale·lipsync·image/video/ip_library·narration·hashtags·publish(scheduledAt) — 등록 완료.
+- **STEP 1/P0 (배포됨, v3.1290)**: `project_create`·`project_list`·`project_get`·`project_save`·`scenario_to_project`·`scene_still`·`scene_video`. 소유 데이터 쓰기는 전부 `gate:true`. 씬 이미지/영상은 `gs://` 영속 경로로 부착(save가 `data:`는 버리고 gs/https만 보존).
+- **STEP 2/P2 (배포됨)**: `render_final`·`asset_download`·`voice_generate`·`voices_list`·`sound_assets`·`scene_shots`·`scene_locations`·`story_structure`·`scene_upsert`·`video_delete`.
+  - `render_final`: POST `/api/postprod/transcode` → GET `/api/postprod/transcode/status?jobName=&outputObjectName=` 폴링(최대 ~4분) → `signedUrl`. **소스가 이미 1개 합본 영상이라는 전제**(concat 단계 미확인 → §6-2).
+  - `asset_download`: `signedUrl` 있으면 그대로, 없으면 `objectName`→`/api/media/proxy?objectName=…&token=…` 다운로드 링크.
+  - **`scene_shots`는 ext(비게이트)** — 분해 결과를 검수 패널로 반환하되 프로젝트에 자동 저장하지 않음(저장은 `scene_upsert`/`project_save`).
+- **보류(코드가 의도적으로 미구현)**:
+  - `image_edit`: 인페인트/마스크 편집 엔드포인트 미확인(§6-1) → 확정 시 P2에 추가.
+  - `video_upload`: `/api/video/upload`가 **multipart 파일 전용**이라 URL 기반 에이전트가 쓸 수 없음. URL-ingest 변형 API가 생기면 도구화(현재 제외).
+- **게이트 장시간 폴링 리스크**: `scene_video`·`render_final`은 승인 시 `review.ts` POST 안에서 폴링(3~4분) → CF 응답 한계 초과 가능. 기존 `video` 도구와 동일 제약. 타임아웃 상습 시 비동기 잡(워커) 방식 전환 필요.
+
 ## 6. 미해결·확인 필요 (코드/사용자 결정)
 1. **image_edit 엔드포인트**: 인페인트/마스크 편집이 어느 API인지(imagen edit? 별도 nano-banana?) 확인 필요.
 2. **포스트프로덕션**: ✅**결정됨** — 디테일 편집설정 보류, **`render_final`(최종 렌더)+`asset_download`(다운로드)만 도구화**. 확인 필요: 씬 클립이 여러 개일 때 `transcode` 입력 전 **concat(이어붙이기) 단계가 별도로 존재하는지**(없다면 소스가 이미 1개 합본이라는 전제) — 코드가 파이프라인 확인.

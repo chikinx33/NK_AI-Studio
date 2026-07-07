@@ -1871,6 +1871,201 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", saved: true, promptEcho: prompt };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// STEP 2 (P2) — 렌더링·다운로드 + 사운드/편집 확장.
+// 디테일 편집설정은 보류(기본값). 최종 렌더·다운로드는 반드시 가능하도록.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** 최종 렌더링: /api/postprod/transcode 제출 → /api/postprod/transcode/status 폴링 → final-render.mp4.
+ *  입력 {projectId, sourceObjectName(씬 세팅 완료된 소스 영상), aspectRatio(기본 16:9), sourceDurationSec}. */
+async function runRenderFinalTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  const sourceObjectName = String(input?.sourceObjectName || input?.source || "").trim();
+  if (!projectId || !sourceObjectName) throw new Error("projectId 와 sourceObjectName(소스 영상 objectName)이 필요해요.");
+  const sub = await callInternalJson(ctx, "/api/postprod/transcode", {
+    body: {
+      projectId,
+      sourceObjectName,
+      aspectRatio: String(input?.aspectRatio || "16:9"),
+      sourceDurationSec: Number(input?.sourceDurationSec || 0),
+    },
+  });
+  const jobName = String(sub?.jobName || "").trim();
+  const outputObjectName = String(sub?.outputObjectName || "").trim();
+  if (!jobName || !outputObjectName) throw new Error("트랜스코드 잡 생성 응답이 올바르지 않아요.");
+  // 폴링(최대 약 4분). 짧은 클립은 대개 1분 내 완료.
+  const qs = `jobName=${encodeURIComponent(jobName)}&outputObjectName=${encodeURIComponent(outputObjectName)}`;
+  for (let i = 0; i < 48; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const st = await fetch(internalUrl(ctx.request, `/api/postprod/transcode/status?${qs}`), {
+      headers: { Authorization: ctx.authHeader },
+    });
+    const stData: any = await st.json().catch(() => ({}));
+    if (String(stData?.status || "").toUpperCase() === "FAILED") {
+      throw new Error(stData?.error || "렌더링 실패(FAILED)");
+    }
+    if (stData?.done) {
+      return {
+        kind: "render_final", projectId,
+        outputObjectName: stData.outputObjectName || outputObjectName,
+        signedUrl: stData.signedUrl || "", proxyUrl: stData.proxyUrl || "",
+      };
+    }
+  }
+  throw new Error("렌더링 시간 초과(잠시 후 asset_download로 결과를 확인해 주세요).");
+}
+
+/** 다운로드 링크 제공: 라이브러리 signedUrl 재사용 또는 objectName→미디어 프록시 URL(+token). read. */
+async function runAssetDownloadTool(input: any, ctx: ToolContext): Promise<any> {
+  const signedUrl = String(input?.signedUrl || input?.url || "").trim();
+  const objectName = String(input?.objectName || "").trim();
+  if (/^https?:\/\//i.test(signedUrl)) {
+    return { kind: "asset_download", downloadUrl: signedUrl, via: "signedUrl", objectName: objectName || undefined };
+  }
+  if (!objectName) throw new Error("objectName 또는 signedUrl 중 하나가 필요해요.");
+  const token = ctx.authHeader.replace(/^Bearer\s+/i, "").trim();
+  const base = new URL(ctx.request.url).origin;
+  const downloadUrl = `${base}/api/media/proxy?objectName=${encodeURIComponent(objectName)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+  return { kind: "asset_download", downloadUrl, via: "proxy", objectName };
+}
+
+/** 캐릭터별 더빙/음성: /api/sound/voice-generate (ElevenLabs 세그먼트). segments 또는 text 단일. external. */
+async function runVoiceGenerateTool(input: any, ctx: ToolContext): Promise<any> {
+  let segments: any[] = Array.isArray(input?.segments) ? input.segments : [];
+  if (!segments.length) {
+    const text = String(input?.text || input?.script || input?.prompt || "").trim();
+    if (text) segments = [{ text, voiceId: input?.voiceId, providerVoiceId: input?.providerVoiceId, speaker: input?.speaker }];
+  }
+  segments = segments
+    .map((s) => ({
+      text: String(s?.text || "").trim(),
+      voiceId: String(s?.voiceId || "").trim() || undefined,
+      providerVoiceId: String(s?.providerVoiceId || "").trim() || undefined,
+      speaker: String(s?.speaker || "").trim() || undefined,
+    }))
+    .filter((s) => s.text);
+  if (!segments.length) throw new Error("더빙할 대사(segments 또는 text)가 필요해요.");
+  const data = await callInternalJson(ctx, "/api/sound/voice-generate", {
+    body: {
+      segments,
+      mode: input?.mode === "project" ? "project" : "instance",
+      brandId: input?.brandId ? String(input.brandId) : undefined,
+      episodeId: input?.episodeId ? String(input.episodeId) : undefined,
+      sessionId: String(input?.sessionId || "ai-company"),
+      model: input?.model ? String(input.model) : undefined,
+      format: input?.format ? String(input.format) : undefined,
+    },
+  });
+  return { kind: "audio", audioUrl: data?.outputUrl || "", assetId: data?.assetId || "", creditsUsed: data?.creditsUsed, model: "elevenlabs", segments: segments.length };
+}
+
+/** 사용 가능한 목소리 목록: /api/voices(ElevenLabs) 또는 /api/tts/voices(Google). read. */
+async function runVoicesListTool(input: any, ctx: ToolContext): Promise<any> {
+  const src = String(input?.source || "").trim().toLowerCase();
+  const google = src === "tts" || src === "google";
+  const path = google ? "/api/tts/voices" : "/api/voices";
+  const qs: string[] = [];
+  if (input?.gender) qs.push(`gender=${encodeURIComponent(String(input.gender))}`);
+  if (input?.q) qs.push(`q=${encodeURIComponent(String(input.q))}`);
+  if (input?.brandId) qs.push(`brandId=${encodeURIComponent(String(input.brandId))}`);
+  const data = await callInternalJson(ctx, `${path}${qs.length ? `?${qs.join("&")}` : ""}`);
+  const voices = (Array.isArray(data?.voices) ? data.voices : []).slice(0, 60);
+  return { kind: "voices_list", source: google ? "google-tts" : "elevenlabs", count: voices.length, voices };
+}
+
+/** 사운드 자산 목록: /api/sound/assets. read. */
+async function runSoundAssetsTool(input: any, ctx: ToolContext): Promise<any> {
+  const qs: string[] = [];
+  for (const k of ["scope", "brandId", "episodeId", "sessionId", "type"]) {
+    if (input?.[k]) qs.push(`${k}=${encodeURIComponent(String(input[k]))}`);
+  }
+  const data = await callInternalJson(ctx, `/api/sound/assets${qs.length ? `?${qs.join("&")}` : ""}`);
+  const assets = (Array.isArray(data?.assets) ? data.assets : []).slice(0, 40);
+  return { kind: "sound_assets", count: assets.length, assets };
+}
+
+/** 씬 → 샷 분해: /api/scenario-shots. projectId(씬 로드) 또는 scenes 직접. external(검수 패널). */
+async function runSceneShotsTool(input: any, ctx: ToolContext): Promise<any> {
+  let scenes: any[] = Array.isArray(input?.scenes) ? input.scenes : [];
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!scenes.length && projectId) {
+    const cur = await runProjectGetTool({ projectId }, ctx);
+    scenes = Array.isArray(cur.scenes) ? cur.scenes : [];
+  }
+  if (!scenes.length) throw new Error("샷으로 분해할 씬이 없어요(projectId 또는 scenes 필요).");
+  const data = await callInternalJson(ctx, "/api/scenario-shots", { body: { scenes, language: input?.language === "en" ? "en" : "ko" } });
+  const out = Array.isArray(data?.scenes) ? data.scenes : [];
+  return { kind: "scene_shots", projectId: projectId || undefined, sceneCount: out.length, scenes: out, meta: data?.meta };
+}
+
+/** 씬 장소 추출: /api/scenario/locations. read+synthesize. */
+async function runSceneLocationsTool(input: any, ctx: ToolContext): Promise<any> {
+  let scenes: any[] = Array.isArray(input?.scenes) ? input.scenes : [];
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!scenes.length && projectId) {
+    const cur = await runProjectGetTool({ projectId }, ctx);
+    scenes = Array.isArray(cur.scenes) ? cur.scenes : [];
+  }
+  if (!scenes.length) throw new Error("장소를 뽑을 씬이 없어요(projectId 또는 scenes 필요).");
+  const data = await callInternalJson(ctx, "/api/scenario/locations", { body: { scenes, language: input?.language === "en" ? "en" : "ko" } });
+  return { kind: "scene_locations", locations: Array.isArray(data?.locations) ? data.locations : [] };
+}
+
+/** 스토리 구조 생성: /api/story-structure. read+synthesize. */
+async function runStoryStructureTool(input: any, ctx: ToolContext): Promise<any> {
+  const topic = String(input?.topic || input?.story || input?.prompt || "").trim();
+  if (!topic) throw new Error("스토리 구조를 짤 주제(topic)가 필요해요.");
+  const data = await callInternalJson(ctx, "/api/story-structure", {
+    body: {
+      topic, story: String(input?.story || topic), duration: String(input?.duration || "60"),
+      target: input?.target || input?.targetAudience,
+      tones: Array.isArray(input?.tones) ? input.tones : (input?.tones ? [input.tones] : []),
+      styles: Array.isArray(input?.styles) ? input.styles : (input?.styles ? [input.styles] : []),
+      characters: Array.isArray(input?.characters) ? input.characters : [],
+    },
+  });
+  return { kind: "story_structure", story: data?.story || "", beats: Array.isArray(data?.beats) ? data.beats : [] };
+}
+
+/** 씬 수정/추가: project_get → 해당 씬 병합 수정(없으면 추가) → project_save. 쓰기 → 승인 게이트. */
+async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes.slice() : [];
+  const patch: Record<string, any> = (input?.scene && typeof input.scene === "object") ? { ...input.scene } : {};
+  const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec"];
+  for (const f of FIELDS) if (input?.[f] !== undefined && patch[f] === undefined) patch[f] = input[f];
+  delete patch.id; // id는 매칭·부여 전용, 병합 대상 아님
+  const ref = input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex;
+  const idx = findSceneIndex(scenes, ref);
+  let targetId: any;
+  let mode: string;
+  if (idx >= 0) {
+    scenes[idx] = { ...scenes[idx], ...patch };
+    targetId = scenes[idx].id;
+    mode = "update";
+  } else {
+    if (Object.keys(patch).length === 0) throw new Error("씬을 찾지 못했고, 추가할 내용도 없어요.");
+    const newId = scenes.length ? Math.max(...scenes.map((s) => Number(s?.id) || 0)) + 1 : 1;
+    scenes.push({ id: newId, ...patch });
+    targetId = newId;
+    mode = "add";
+  }
+  const saved = await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
+  return { kind: "scene_upsert", projectId, sceneId: targetId, mode, sceneCount: scenes.length, saved: true, objectName: saved?.objectName || "" };
+}
+
+/** 영상 삭제: /api/video/delete (confirm=yes). 되돌리기 어려움 → 승인 게이트. */
+async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const single = String(input?.objectName || input?.object || "").trim();
+  const list = Array.isArray(input?.objectNames) ? input.objectNames.map((v: any) => String(v || "").trim()).filter(Boolean) : [];
+  const targets = list.length ? list : (single ? [single] : []);
+  if (!targets.length) throw new Error("삭제할 영상의 objectName이 필요해요.");
+  const data = await callInternalJson(ctx, "/api/video/delete", { body: { objectNames: targets, confirm: "yes" } });
+  return { kind: "video_delete", requested: Number(data?.requestedCount ?? targets.length), deleted: Number(data?.deletedCount ?? 0), failed: data?.failed || [] };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -1932,6 +2127,21 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scenario_to_project: { agentId: "plot", kind: "external", gate: true, run: runScenarioToProjectTool },
   scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
   scene_video: { agentId: "pixel", kind: "external", gate: true, run: runSceneVideoTool },
+
+  // ── STEP 2 (P2): 렌더·다운로드 + 사운드/편집 확장 ──
+  // 픽셀(디자인): 최종 렌더(생성물) · 다운로드 링크(조회) · 영상 삭제(비가역 → 게이트).
+  render_final: { agentId: "pixel", kind: "external", run: runRenderFinalTool },
+  asset_download: { agentId: "pixel", agentIds: ["sync"], kind: "read", run: runAssetDownloadTool },
+  video_delete: { agentId: "pixel", kind: "external", gate: true, run: runVideoDeleteTool },
+  // 비트(사운드): 캐릭터 더빙(생성물) · 목소리/사운드 자산 목록(조회).
+  voice_generate: { agentId: "beat", kind: "external", run: runVoiceGenerateTool },
+  voices_list: { agentId: "beat", kind: "read", run: runVoicesListTool },
+  sound_assets: { agentId: "beat", kind: "read", run: runSoundAssetsTool },
+  // 플롯(기획): 샷 분해(생성물) · 장소/스토리구조(조회·합성) · 씬 수정(쓰기 → 게이트).
+  scene_shots: { agentId: "plot", kind: "external", run: runSceneShotsTool },
+  scene_locations: { agentId: "plot", kind: "read", synthesize: true, run: runSceneLocationsTool },
+  story_structure: { agentId: "plot", kind: "read", synthesize: true, run: runStoryStructureTool },
+  scene_upsert: { agentId: "plot", kind: "external", gate: true, run: runSceneUpsertTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

@@ -199,6 +199,16 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "elidus-ep1", "topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오를 생성하고 그 씬들을 곧바로 그 프로젝트에 저장. "생성한 시나리오를 ep1 씬으로 저장"·"ep1 시나리오 만들어 저장"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_still: `[[RUN: scene_still | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_video: `[[RUN: scene_video | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    render_final: `[[RUN: render_final | {"projectId": "elidus-ep1", "sourceObjectName": "씬 세팅 완료된 소스 영상 objectName", "aspectRatio": "16:9", "sourceDurationSec": 60}]]  → 최종 렌더링(final-render.mp4) 생성. sourceObjectName은 이미 합쳐진 1개 소스 영상. 완료 시 다운로드용 signedUrl 반환(수분 소요). 세부 편집설정은 기본값.`,
+    asset_download: `[[RUN: asset_download | {"objectName": "GCS objectName"}]]  또는 {"signedUrl": "이미 있는 서명URL"}  → 최종렌더/이미지/영상/오디오의 다운로드 링크를 사람에게 제공. "완성본 다운로드 링크 줘"에 사용.`,
+    video_delete: `[[RUN: video_delete | {"objectName": "삭제할 영상 objectName"}]]  또는 {"objectNames": ["...","..."]}  → 영상 자산 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
+    voice_generate: `[[RUN: voice_generate | {"segments": [{"text": "대사", "voiceId": "목소리ID(voices_list에서)", "speaker": "화자(선택)"}]}]]  또는 단일 {"text": "대사", "voiceId": "…"}  → 캐릭터별 더빙 음성 생성(ElevenLabs). voiceId는 voices_list로 먼저 확인.`,
+    voices_list: `[[RUN: voices_list | {"source": "elevenlabs(기본) 또는 tts", "gender": "female(선택)", "q": "검색(선택)"}]]  → 더빙에 쓸 수 있는 목소리 목록(id 포함)을 조회. voice_generate 전에 사용.`,
+    sound_assets: `[[RUN: sound_assets | {"brandId": "(선택)", "type": "voice|bgm|sfx(선택)"}]]  → 생성해 둔 사운드 자산(더빙·BGM·효과음) 목록 조회.`,
+    scene_shots: `[[RUN: scene_shots | {"projectId": "elidus-ep1"}]]  또는 {"scenes": [...]}  → 프로젝트 씬들을 샷(컷) 단위로 분해. "씬을 샷으로 나눠"에 사용.`,
+    scene_locations: `[[RUN: scene_locations | {"projectId": "elidus-ep1"}]]  또는 {"scenes": [...]}  → 씬들에서 장소(로케이션) 목록을 뽑아준다.`,
+    story_structure: `[[RUN: story_structure | {"topic": "이야기 주제", "duration": 60, "tones": ["감동"]}]]  → 스토리 구조(스토리라인 + 비트/긴장도)를 짜준다. 시나리오 생성 전 뼈대 잡기에 사용.`,
+    scene_upsert: `[[RUN: scene_upsert | {"projectId": "elidus-ep1", "sceneId": 3, "scene": {"title": "새 제목", "narration": "바뀐 나레이션", "dialogue": [{"speaker": "A", "line": "대사"}]}}]]  → 그 씬의 내용을 수정(sceneId 없거나 못 찾으면 새 씬 추가). "씬3 대사 바꿔"·"씬 추가"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -212,6 +222,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     narration: "나레이션(TTS) 생성", hashtags: "해시태그 생성",
     project_create: "프로젝트(에피소드) 생성", project_list: "프로젝트 목록 조회", project_get: "프로젝트 상태 조회",
     project_save: "프로젝트 저장", scenario_to_project: "시나리오→씬 저장", scene_still: "씬 스틸컷 생성·부착", scene_video: "씬 영상 생성·부착",
+    render_final: "최종 렌더링", asset_download: "다운로드 링크 제공", video_delete: "영상 삭제",
+    voice_generate: "캐릭터 더빙(음성)", voices_list: "목소리 목록", sound_assets: "사운드 자산 목록",
+    scene_shots: "씬→샷 분해", scene_locations: "장소 추출", story_structure: "스토리 구조 생성", scene_upsert: "씬 수정/추가",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -725,6 +738,30 @@ export function formatReadResult(toolName: string, out: any): string {
       return `${i + 1}. **${ev.summary || "(제목 없음)"}**\n   - ${ev.start || "?"}${where}`;
     });
     return `📅 앞으로 ${days}일 일정 ${events.length}개예요.\n\n${lines.join("\n")}`;
+  }
+  if (toolName === "asset_download") {
+    const u = String(out?.downloadUrl || "");
+    return u ? `⬇️ 다운로드 링크예요:\n${u}` : "다운로드할 링크를 만들지 못했어요(objectName 또는 signedUrl 확인).";
+  }
+  if (toolName === "voices_list") {
+    const voices: any[] = Array.isArray(out?.voices) ? out.voices : [];
+    const srcLabel = out?.source === "google-tts" ? "Google TTS" : "ElevenLabs";
+    if (!voices.length) return `🎙️ ${srcLabel}에서 쓸 수 있는 목소리를 찾지 못했어요.`;
+    const lines = voices.slice(0, 15).map((v, i) => {
+      const name = v?.name || v?.displayName || v?.voiceName || "(이름 없음)";
+      const id = v?.id || v?.voiceId || v?.providerVoiceId || v?.name || "";
+      const g = v?.gender ? ` · ${v.gender}` : "";
+      return `${i + 1}. ${name}${g}${id ? ` — \`${id}\`` : ""}`;
+    });
+    const more = voices.length > 15 ? `\n…외 ${voices.length - 15}개` : "";
+    return `🎙️ ${srcLabel} 목소리 ${voices.length}개예요. (더빙 시 voiceId로 지정)\n${lines.join("\n")}${more}`;
+  }
+  if (toolName === "sound_assets") {
+    const assets: any[] = Array.isArray(out?.assets) ? out.assets : [];
+    if (!assets.length) return "🎧 등록된 사운드 자산이 아직 없어요.";
+    const lines = assets.slice(0, 15).map((a, i) => `${i + 1}. ${a?.type ? `[${a.type}] ` : ""}${a?.name || a?.title || a?.id || "(무제)"}`);
+    const more = assets.length > 15 ? `\n…외 ${assets.length - 15}개` : "";
+    return `🎧 사운드 자산 ${assets.length}개예요.\n${lines.join("\n")}${more}`;
   }
   if (toolName === "project_list") {
     const ids: string[] = Array.isArray(out?.ids) ? out.ids : [];
