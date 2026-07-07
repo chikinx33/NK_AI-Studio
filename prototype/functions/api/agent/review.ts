@@ -144,6 +144,10 @@ function approvalDoneText(type: string, output: any, input: any): string {
     const name = o.title || inp.title || inp.name || "";
     return name ? `✅ 승인 확인! 프로젝트 이름을 '${name}'(으)로 바꿨어요.` : "✅ 승인 확인! 프로젝트 이름을 바꿨어요.";
   }
+  if (type === "project_delete") {
+    const name = o.projectId || inp.projectId || "프로젝트";
+    return `✅ 승인 확인! '${name}' 프로젝트를 삭제했어요(폴더·하위 파일 전체).`;
+  }
   return "✅ 승인 확인! 요청하신 작업을 실행했어요.";
 }
 
