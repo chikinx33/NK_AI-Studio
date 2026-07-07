@@ -218,6 +218,10 @@
       if (refs.ok) refs.ok.textContent = String(opts.okText || '확인');
       if (refs.cancel) refs.cancel.textContent = String(opts.cancelText || '취소');
 
+      // 단순 알림(버튼 1개, 복사/취소 없음)은 좁게·가운데·큰 버튼으로 표시
+      var simple = mode === 'alert' && !opts.copy;
+      refs.root.classList.toggle('is-simple', simple);
+
       refs.root.classList.add('is-open');
       refs.root.setAttribute('aria-hidden', 'false');
       if (useInput && refs.input && refs.input.focus) refs.input.focus();
