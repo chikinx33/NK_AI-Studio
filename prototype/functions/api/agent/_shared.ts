@@ -723,6 +723,9 @@ export interface ToolDef {
   gate?: boolean;
   // true면 도구 결과를 모델에 다시 먹여 답을 합성(툴콜→결과→재추론). 웹 검색 등 read 도구용.
   synthesize?: boolean;
+  // true면 실행이 오래 걸리는(수분) 도구 — 승인(review.ts) 시 응답을 블로킹하지 않고 waitUntil 백그라운드로 실행.
+  // Results 패널(4초 폴링)이 완결을 반영한다. (예: scene_video)
+  longRunning?: boolean;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -1876,43 +1879,39 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
 // 디테일 편집설정은 보류(기본값). 최종 렌더·다운로드는 반드시 가능하도록.
 // ────────────────────────────────────────────────────────────────────────────
 
-/** 최종 렌더링: /api/postprod/transcode 제출 → /api/postprod/transcode/status 폴링 → final-render.mp4.
- *  입력 {projectId, sourceObjectName(씬 세팅 완료된 소스 영상), aspectRatio(기본 16:9), sourceDurationSec}. */
+/** 최종 렌더링(제출-only): /api/postprod/transcode 에 제출하고 즉시 반환(폴링하지 않음 — 게이트/CF 응답 블로킹 방지).
+ *  다중 씬 concat: sources[](또는 sourceObjectNames[]) 여러 개면 순서대로 이어붙여 렌더. 단일 sourceObjectName 도 허용.
+ *  완료는 status 폴링(statusUrl) 또는 렌더가 끝나면 유효해지는 downloadUrl(프록시)로 확인. */
 async function runRenderFinalTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
-  const sourceObjectName = String(input?.sourceObjectName || input?.source || "").trim();
-  if (!projectId || !sourceObjectName) throw new Error("projectId 와 sourceObjectName(소스 영상 objectName)이 필요해요.");
-  const sub = await callInternalJson(ctx, "/api/postprod/transcode", {
-    body: {
-      projectId,
-      sourceObjectName,
-      aspectRatio: String(input?.aspectRatio || "16:9"),
-      sourceDurationSec: Number(input?.sourceDurationSec || 0),
-    },
-  });
+  const multi: any[] = Array.isArray(input?.sources) ? input.sources
+    : (Array.isArray(input?.sourceObjectNames) ? input.sourceObjectNames : []);
+  const sourceObjectNames = multi.map((v) => String(v || "").trim()).filter(Boolean);
+  const single = String(input?.sourceObjectName || input?.source || "").trim();
+  if (!projectId || (!sourceObjectNames.length && !single)) {
+    throw new Error("projectId 와 소스 영상(sources[] 또는 sourceObjectName)이 필요해요.");
+  }
+  const body: any = {
+    projectId,
+    aspectRatio: String(input?.aspectRatio || "16:9"),
+    sourceDurationSec: Number(input?.sourceDurationSec || 0),
+  };
+  if (sourceObjectNames.length) body.sourceObjectNames = sourceObjectNames;
+  else body.sourceObjectName = single;
+  const sub = await callInternalJson(ctx, "/api/postprod/transcode", { body });
   const jobName = String(sub?.jobName || "").trim();
   const outputObjectName = String(sub?.outputObjectName || "").trim();
   if (!jobName || !outputObjectName) throw new Error("트랜스코드 잡 생성 응답이 올바르지 않아요.");
-  // 폴링(최대 약 4분). 짧은 클립은 대개 1분 내 완료.
-  const qs = `jobName=${encodeURIComponent(jobName)}&outputObjectName=${encodeURIComponent(outputObjectName)}`;
-  for (let i = 0; i < 48; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
-    const st = await fetch(internalUrl(ctx.request, `/api/postprod/transcode/status?${qs}`), {
-      headers: { Authorization: ctx.authHeader },
-    });
-    const stData: any = await st.json().catch(() => ({}));
-    if (String(stData?.status || "").toUpperCase() === "FAILED") {
-      throw new Error(stData?.error || "렌더링 실패(FAILED)");
-    }
-    if (stData?.done) {
-      return {
-        kind: "render_final", projectId,
-        outputObjectName: stData.outputObjectName || outputObjectName,
-        signedUrl: stData.signedUrl || "", proxyUrl: stData.proxyUrl || "",
-      };
-    }
-  }
-  throw new Error("렌더링 시간 초과(잠시 후 asset_download로 결과를 확인해 주세요).");
+  const token = ctx.authHeader.replace(/^Bearer\s+/i, "").trim();
+  const base = new URL(ctx.request.url).origin;
+  const downloadUrl = `${base}/api/media/proxy?objectName=${encodeURIComponent(outputObjectName)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+  const statusUrl = `${base}/api/postprod/transcode/status?jobName=${encodeURIComponent(jobName)}&outputObjectName=${encodeURIComponent(outputObjectName)}`;
+  return {
+    kind: "render_final", projectId, status: "processing",
+    sourceCount: sourceObjectNames.length || 1,
+    jobName, outputObjectName, downloadUrl, statusUrl,
+    note: "렌더링을 시작했어요(수분 소요). 완료되면 위 다운로드 링크가 유효해져요.",
+  };
 }
 
 /** 다운로드 링크 제공: 라이브러리 signedUrl 재사용 또는 objectName→미디어 프록시 URL(+token). read. */
@@ -2195,6 +2194,48 @@ async function runSubscriptionGetTool(_input: any, ctx: ToolContext): Promise<an
   return { kind: "subscription_get", subscription: data?.data ?? data ?? null };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// 후속 마무리 (2026-07-07, 보류 확정 반영) — image_edit · reminders_list.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** 이미지 채팅형 수정: /api/imagen (provider gemini · image-to-image · referenceImages). external.
+ *  ※ 마스크 없는 '채팅형 수정'만 노출. 정밀 인페인트(maskDataUrl)는 사용자가 마스크를 그려야 해 UI/사람 전용. */
+async function runImageEditTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.instruction || "").trim();
+  if (!prompt) throw new Error("수정 지시(prompt)가 필요해요. 예: '배경만 노을로 바꿔줘'");
+  const refs = Array.isArray(input?.referenceImages) ? input.referenceImages.map((v: any) => String(v || "").trim()).filter(Boolean) : [];
+  const single = String(input?.imageUrl || input?.image || input?.sourceImage || "").trim();
+  const referenceImages = refs.length ? refs : (single ? [single] : []);
+  if (!referenceImages.length) throw new Error("수정할 원본 이미지(imageUrl 또는 referenceImages)가 필요해요.");
+  const data = await callInternalJson(ctx, "/api/imagen", {
+    body: {
+      prompt,
+      provider: "gemini",
+      generationMode: "image-to-image",
+      referenceImages,
+      projectId: String(input?.projectId || "ai-company").trim() || "ai-company",
+      storageService: String(input?.storageService || "ai-image").trim(),
+      aspectRatio: input?.aspectRatio || undefined,
+    },
+  });
+  return {
+    signedUrl: data.signedUrl || "", objectName: data.objectName || "",
+    dataUrl: data.signedUrl ? "" : (data.dataUrl || ""),
+    kind: "image", model: data.model || "", provider: data.provider || "gemini-api",
+    promptEcho: prompt, edited: true,
+  };
+}
+
+/** 다가올 알람(예약) 목록: 기존 agent_reminders 조회 재사용. read.
+ *  ※ ai-company의 ⏰'예약' 패널 = 알람(reminders). /api/agent/reminders GET은 due를 pop(삭제)하므로
+ *    부작용 없는 listUpcomingReminders 헬퍼를 직접 사용한다. */
+async function runRemindersListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const sql = getSql(ctx.env);
+  await ensureAgentSchema(sql);
+  const upcoming = await listUpcomingReminders(sql, ctx.userId);
+  return { kind: "reminders_list", count: upcoming.length, reminders: upcoming };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -2255,7 +2296,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 시나리오→씬 저장(합성) · 씬 자산 부착 — 쓰기라 전부 승인 게이트.
   scenario_to_project: { agentId: "plot", kind: "external", gate: true, run: runScenarioToProjectTool },
   scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
-  scene_video: { agentId: "pixel", kind: "external", gate: true, run: runSceneVideoTool },
+  // scene_video: 영상 생성이 수분 걸림 → longRunning(승인 시 review.ts가 백그라운드로 실행, POST 논블로킹).
+  scene_video: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSceneVideoTool },
 
   // ── STEP 2 (P2): 렌더·다운로드 + 사운드/편집 확장 ──
   // 픽셀(디자인): 최종 렌더(생성물) · 다운로드 링크(조회) · 영상 삭제(비가역 → 게이트).
@@ -2293,6 +2335,10 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   sns_prefs_get: { agentId: "reach", agentIds: ["maki"], kind: "read", run: runSnsPrefsGetTool },
   sns_prefs_save: { agentId: "reach", kind: "external", gate: true, run: runSnsPrefsSaveTool },
   subscription_get: { agentId: "sync", kind: "read", run: runSubscriptionGetTool },
+
+  // ── 후속 마무리: 이미지 채팅형 수정 · 다가올 알람(예약) 목록 ──
+  image_edit: { agentId: "pixel", kind: "external", run: runImageEditTool },
+  reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

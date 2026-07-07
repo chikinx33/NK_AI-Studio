@@ -52,9 +52,31 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     let updated;
     let executedOutput: any = job.output;
     if (decision === "approved" && tool?.gate && !job.output) {
+      const authHeader = String(request.headers.get("Authorization") || "");
+      const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
+      // 오래 걸리는 도구(예: scene_video, 수분)는 POST를 블로킹하지 않고 waitUntil 백그라운드로 실행.
+      // Results 패널이 4초마다 잡 목록을 폴링하므로 완결 시 자동 반영된다(CF 응답 한계 초과 방지).
+      if (tool.longRunning) {
+        await setJobStatus(sql, id, auth.userId, { status: "working", reviewStatus: "approved", reviewNote: note });
+        waitUntil((async () => {
+          try {
+            const out = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
+            await setJobStatus(sql, id, auth.userId, { status: "approved", output: out, reviewStatus: "approved" });
+          } catch (e: any) {
+            await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
+          }
+        })());
+        const bgMeta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+        return send({
+          ok: true,
+          job: await getJob(sql, id, auth.userId),
+          message: {
+            role: "agent", agentId: job.agent_id, name: bgMeta.name,
+            text: "✅ 승인 확인! 백그라운드에서 실행 중이에요. 완료되면 검수 패널에 결과가 떠요(수분 소요).",
+          },
+        }, 200, origin);
+      }
       try {
-        const authHeader = String(request.headers.get("Authorization") || "");
-        const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
         executedOutput = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
         updated = await setJobStatus(sql, id, auth.userId, {
           status: "approved", output: executedOutput, reviewStatus: "approved", reviewNote: note,

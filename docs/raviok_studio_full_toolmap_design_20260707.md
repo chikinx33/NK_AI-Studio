@@ -203,18 +203,24 @@
   - `sns_channels_status`: 상태 조회 소스로 `/api/agent/integrations` 사용(`/api/sns/token-test`은 OAuth 디버그 플로우라 미사용).
   - `subscription_get`: 엔드포인트는 `/api/userdata/subscription/get`(서브폴더).
   - userdata 변경(profile/favorites/sns_prefs save)은 전부 `gate:true`. `sns_prefs_save`는 서버가 read-modify-write 머지.
-- **보류(코드가 의도적으로 미구현)**:
-  - `image_edit`: 인페인트/마스크 편집 엔드포인트 미확인(§6-1) → 확정 시 P2에 추가.
-  - `video_upload`: `/api/video/upload`가 **multipart 파일 전용**이라 URL 기반 에이전트가 쓸 수 없음. URL-ingest 변형 API가 생기면 도구화(현재 제외).
-  - `reservations_list`(예약큐 경로 미확인 §6-4)·`analytics`(집계 소스 미확인 §6-3) → 소스 확정 후 도구화.
-- **게이트 장시간 폴링 리스크**: `scene_video`·`render_final`은 승인 시 `review.ts` POST 안에서 폴링(3~4분) → CF 응답 한계 초과 가능. 기존 `video` 도구와 동일 제약. 타임아웃 상습 시 비동기 잡(워커) 방식 전환 필요.
+- **후속 마무리 (배포됨, §6 조사 확정 반영)**:
+  - `image_edit` [pixel, ext]: `/api/imagen`(provider gemini · generationMode image-to-image · referenceImages)로 **채팅형 수정**만 노출. 마스크 인페인트(`maskDataUrl`)는 사람이 UI에서 그려야 해 제외.
+  - `reminders_list` [sync, read]: `agent_reminders` 다가올 알람 조회(`listUpcomingReminders` 헬퍼 직접 사용 — `/api/agent/reminders` GET은 due를 pop해서 부작용 있음). ⏰'예약' 패널=알람 재해석(§6-4).
+  - `render_final` **다중 씬 concat**: `transcode.ts`가 `sourceObjectNames[]`를 받으면 `inputs:[input0,input1,…]`+`editList` 순차 atom으로 네이티브 concat(단일 소스 하위호환). 도구는 `sources[]` 지원.
+  - **게이트 장시간 폴링 제거**: `render_final`은 **제출-only**(폴링 없이 즉시 다운로드 링크 반환). `scene_video`는 `longRunning:true` → 승인 시 `review.ts`가 **waitUntil 백그라운드**로 실행(POST 논블로킹). Results 패널 4초 폴링이 완결 반영.
+- **여전히 제외(범위 밖)**:
+  - `video_upload`: `/api/video/upload`가 multipart 파일 전용 → URL-ingest 변형 API 생기기 전까지 제외.
+  - `analytics`: 서버 집계 API 자체가 없음(클라 전용) → 신규 기능이라 별도 기획 전까지 보류(§6-3).
+  - 마스크 인페인트: 사람이 마스크를 그리는 UI 전용(§6-1).
 
-## 6. 미해결·확인 필요 (코드/사용자 결정)
-1. **image_edit 엔드포인트**: 인페인트/마스크 편집이 어느 API인지(imagen edit? 별도 nano-banana?) 확인 필요.
-2. **포스트프로덕션**: ✅**결정됨** — 디테일 편집설정 보류, **`render_final`(최종 렌더)+`asset_download`(다운로드)만 도구화**. 확인 필요: 씬 클립이 여러 개일 때 `transcode` 입력 전 **concat(이어붙이기) 단계가 별도로 존재하는지**(없다면 소스가 이미 1개 합본이라는 전제) — 코드가 파이프라인 확인.
-3. **분석(analytics) 데이터 소스**: 발행 성과·조회수를 어디서 집계하는지(SNS API 회수? 시트?) 확정 후 도구화.
-4. **예약 큐 스토리지**: reservations(⏰) 목록을 읽는 경로 확인.
-5. **개인설정·크레딧(userdata)**: ✅**결정됨(2026-07-07, 업데이트)** — 나 전용 회사이므로 **전면 노출**: 조회(profile/favorites/sns_prefs/subscription)는 즉시, **변경(profile/favorites/sns_prefs save)은 승인 게이트**. 단 SNS OAuth 연결 개설/해제만 사람 직접(본인 인증).
+## 6. 미해결 항목 — 설계 조사 완료 (2026-07-07, 기획설계 담당 직접 확인)
+1. **image_edit 엔드포인트**: ✅**구현됨** — `/api/imagen`(gemini·image-to-image·referenceImages)로 `image_edit` [pixel, ext] 도구화. 마스크 인페인트는 UI/사람 전용(제외).
+2. **포스트프로덕션 concat**: ✅**구현됨** — `transcode.ts`가 `sourceObjectNames[]`(복수)를 받아 `inputs:[input0,…]`+`editList` 순차 atom으로 네이티브 concat(단일 소스 하위호환). `render_final` 도구가 `sources[]` 지원.
+3. **분석(analytics)**: ⚠️**미구현 기능(범위 밖 유지)** — `analytics.html`은 클라 전용(`js/service/analytics.js`)만 있고 서버 집계 API 없음. 플랫폼별 insights 연동은 신규 기능 → 별도 기획 전까지 도구화 보류.
+4. **예약 큐(reservations)**: ✅**구현됨** — ⏰"예약"=알람 재해석. `reminders_list` [sync, read]로 `agent_reminders` 다가올 알람 조회. 예약발행 중앙목록은 저장소 자체가 없어 미제공이 정상.
+5. **개인설정·크레딧(userdata)**: ✅**구현됨** (STEP 3) — 조회 즉시, 변경 승인 게이트. SNS OAuth 연결 개설/해제만 사람 직접.
+6. **video_upload**: ⚠️ `/api/video/upload`는 **multipart 파일 전용** — URL만 가진 에이전트는 못 씀. URL-ingest 변형 API가 생기면 도구화(현재 제외 유지).
+7. **게이트 장시간 폴링**: ✅**해결** — `render_final`은 제출-only(폴링 제거, 즉시 다운로드 링크 반환). `scene_video`는 `longRunning:true`로 표시 → `review.ts`가 waitUntil 백그라운드로 실행(POST 논블로킹). Results 패널(4초 폴링)이 완결 반영.
 
 ---
 

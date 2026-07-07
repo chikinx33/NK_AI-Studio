@@ -23,13 +23,18 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body?.projectId || "").trim();
     const userId = auth.userId;
+    // 다중 씬 concat: sourceObjectNames(복수)를 우선 사용. 없으면 단일 sourceObjectName(하위호환).
+    const rawSources: string[] = Array.isArray(body?.sourceObjectNames)
+      ? body.sourceObjectNames.map((v: any) => String(v || "").trim()).filter(Boolean)
+      : [];
     const sourceObjectName = String(body?.sourceObjectName || "").trim();
+    const sourceList = rawSources.length ? rawSources : (sourceObjectName ? [sourceObjectName] : []);
     const aspectRatio = String(body?.aspectRatio || "16:9").trim();
     const sourceDurationSec = Number(body?.sourceDurationSec || 0);
     const location = String(env.TRANSCODER_LOCATION || "us-central1").trim();
 
-    if (!projectId || !sourceObjectName) {
-      return send({ error: "projectId and sourceObjectName are required" }, 400, origin);
+    if (!projectId || !sourceList.length) {
+      return send({ error: "projectId and sourceObjectName(s) are required" }, 400, origin);
     }
 
     const googleProjectId = env.GOOGLE_PROJECT_ID as string | undefined;
@@ -45,17 +50,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const userRoot = buildUserRoot(basePrefix, userId);
 
-    const source = normalizeSource(sourceObjectName, outParsed.bucket);
-    if (!source) return send({ error: "Invalid sourceObjectName" }, 400, origin);
-    if (!source.object.startsWith(`${userRoot}/`)) {
-      return send({ error: "sourceObjectName is outside user scope" }, 403, origin);
+    // 모든 소스를 정규화 + 사용자 스코프 검증(경로 이탈 차단).
+    const sources: GcsPath[] = [];
+    for (const raw of sourceList) {
+      const s = normalizeSource(raw, outParsed.bucket);
+      if (!s) return send({ error: `Invalid sourceObjectName: ${raw}` }, 400, origin);
+      if (!s.object.startsWith(`${userRoot}/`)) {
+        return send({ error: "sourceObjectName is outside user scope", offending: raw }, 403, origin);
+      }
+      sources.push(s);
     }
 
     const stamp = Date.now();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const outputPrefix = `${projectPrefix}/postprod/final/${stamp}`;
     const outputObjectName = `${outputPrefix}/final-render.mp4`;
-    const inputUri = `gs://${source.bucket}/${source.object}`;
     const outputUri = `gs://${outParsed.bucket}/${outputPrefix}/`;
     const size = getSizeByAspectRatio(aspectRatio);
 
@@ -67,27 +76,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const url = `https://transcoder.googleapis.com/v1/projects/${encodeURIComponent(googleProjectId)}/locations/${encodeURIComponent(location)}/jobs`;
     const editEnd = normalizeDurationSec(sourceDurationSec);
+    // 입력들: 소스별 inputN.
+    const inputs = sources.map((s, i) => ({ key: `input${i}`, uri: `gs://${s.bucket}/${s.object}` }));
+    // editList(atom): 순서대로 이어붙임(concat). 각 atom이 순차 input을 통째 참조.
+    //  - 단일 소스 + sourceDurationSec 지정 시에는 기존처럼 그 길이로 트림(하위호환).
+    //  - 다중 소스는 각 atom을 풀 클립으로 두고 순서 concat(트림 없음).
+    let editList: any[] | undefined;
+    if (sources.length > 1) {
+      editList = sources.map((_s, i) => ({ key: `atom${i}`, inputs: [`input${i}`] }));
+    } else if (editEnd > 0) {
+      editList = [{ key: "atom0", inputs: ["input0"], startTimeOffset: "0s", endTimeOffset: `${editEnd}s` }];
+    }
     const payload: any = {
       outputUri,
       config: {
-        inputs: [
-          {
-            key: "input0",
-            uri: inputUri,
-          },
-        ],
-        ...(editEnd > 0
-          ? {
-              editList: [
-                {
-                  key: "atom0",
-                  inputs: ["input0"],
-                  startTimeOffset: "0s",
-                  endTimeOffset: `${editEnd}s`,
-                },
-              ],
-            }
-          : {}),
+        inputs,
+        ...(editList ? { editList } : {}),
         elementaryStreams: [
           {
             key: "video-stream0",

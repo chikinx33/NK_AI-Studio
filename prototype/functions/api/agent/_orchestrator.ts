@@ -199,7 +199,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "elidus-ep1", "topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오를 생성하고 그 씬들을 곧바로 그 프로젝트에 저장. "생성한 시나리오를 ep1 씬으로 저장"·"ep1 시나리오 만들어 저장"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_still: `[[RUN: scene_still | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_video: `[[RUN: scene_video | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    render_final: `[[RUN: render_final | {"projectId": "elidus-ep1", "sourceObjectName": "씬 세팅 완료된 소스 영상 objectName", "aspectRatio": "16:9", "sourceDurationSec": 60}]]  → 최종 렌더링(final-render.mp4) 생성. sourceObjectName은 이미 합쳐진 1개 소스 영상. 완료 시 다운로드용 signedUrl 반환(수분 소요). 세부 편집설정은 기본값.`,
+    render_final: `[[RUN: render_final | {"projectId": "elidus-ep1", "sources": ["씬1 영상 objectName", "씬2 영상 objectName", …]}]]  또는 단일 {"sourceObjectName": "합본 영상 objectName", "sourceDurationSec": 60}  → 최종 렌더링(final-render.mp4). sources[] 여러 개면 순서대로 이어붙여(concat) 렌더. 제출 즉시 다운로드 링크(완료되면 유효)를 반환하고 백그라운드에서 렌더(수분). 세부 편집설정은 기본값.`,
     asset_download: `[[RUN: asset_download | {"objectName": "GCS objectName"}]]  또는 {"signedUrl": "이미 있는 서명URL"}  → 최종렌더/이미지/영상/오디오의 다운로드 링크를 사람에게 제공. "완성본 다운로드 링크 줘"에 사용.`,
     video_delete: `[[RUN: video_delete | {"objectName": "삭제할 영상 objectName"}]]  또는 {"objectNames": ["...","..."]}  → 영상 자산 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     voice_generate: `[[RUN: voice_generate | {"segments": [{"text": "대사", "voiceId": "목소리ID(voices_list에서)", "speaker": "화자(선택)"}]}]]  또는 단일 {"text": "대사", "voiceId": "…"}  → 캐릭터별 더빙 음성 생성(ElevenLabs). voiceId는 voices_list로 먼저 확인.`,
@@ -224,6 +224,8 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     sns_prefs_get: `[[RUN: sns_prefs_get | {}]]  → SNS 발행 기본값·채널 선호(환경설정) 조회. (OAuth 연결 상태와는 별개)`,
     sns_prefs_save: `[[RUN: sns_prefs_save | {"deployDefaults": {…}}]]  → SNS 발행 기본값·채널 선호를 저장(머지). ⚠️ 사람 승인 후 반영. (OAuth 연결 개설/해제는 사람 직접)`,
     subscription_get: `[[RUN: subscription_get | {}]]  → 구독·크레딧 잔량 조회. "크레딧 얼마 남았어?"에 사용.`,
+    image_edit: `[[RUN: image_edit | {"imageUrl": "원본 이미지URL", "prompt": "수정 지시(예: 배경만 노을로 바꿔줘)"}]]  → 기존 이미지를 채팅형으로 수정(image-to-image, Gemini). "이 이미지 배경 바꿔"에 사용. ※ 마스크로 특정 영역만 정밀 수정하는 인페인트는 사용자가 UI에서 마스크를 그려야 해요(도구 아님).`,
+    reminders_list: `[[RUN: reminders_list | {}]]  → 다가올 알람(예약) 목록 조회. "예약/알람 뭐 있어?"에 사용. (예약발행 목록이 아니라 앱 알람)`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -244,6 +246,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     knowledge_search: "지식 검색(RAG)", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
     profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
+    image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -731,6 +734,17 @@ export function formatReadResult(toolName: string, out: any): string {
     const m = /T(\d{2}:\d{2})/.exec(at);
     const when = m ? m[1] : at;
     return `⏰ 알람을 맞췄어요 — ${when}에 "${out?.text || "알람"}" 울려드릴게요. (앱이 열려 있어야 알림이 떠요)`;
+  }
+  if (toolName === "reminders_list") {
+    const rem: any[] = Array.isArray(out?.reminders) ? out.reminders : [];
+    if (!rem.length) return "⏰ 예정된 알람(예약)이 없어요.";
+    const lines = rem.map((r, i) => {
+      const at = String(r?.fire_at || "");
+      const m = /(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(at);
+      const when = m ? `${m[1]} ${m[2]}` : at;
+      return `${i + 1}. ${when} — ${r?.text || "알람"}`;
+    });
+    return `⏰ 예정된 알람 ${rem.length}개예요.\n${lines.join("\n")}`;
   }
   if (toolName === "gmail_read") {
     const emails: any[] = out?.emails || [];
