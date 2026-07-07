@@ -842,24 +842,54 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
   throw new Error("video 생성 시간 초과");
 }
 
+/** 배열 정규화: 문자열 하나로 와도 배열로. (톤·스타일·시청목적·세부장르 공통) */
+function toStrArray(v: any): string[] {
+  if (Array.isArray(v)) return v.filter(Boolean).map(String);
+  return v ? [String(v)] : [];
+}
+
+/**
+ * 프리프로덕션 폼(주제·이야기·장르·세부장르·시청타겟·시청목적·길이·비율·톤·스타일·음성모드·캐릭터)
+ * 전체를 /api/scenario body 로 매핑. 이 앱 매핑: 장르=purposeCategory, 세부장르=purposeTags, 시청목적=needs.
+ * runScenarioTool·runScenarioToProjectTool 공용.
+ */
+function buildScenarioRequestBody(input: any): any {
+  const topic = String(input?.topic || input?.subject || input?.prompt || "").trim();
+  // 음성 모드: voiceMode("none"|"narration"|"dubbing") 또는 개별 플래그 둘 다 허용.
+  const voiceMode = String(input?.voiceMode || "").trim().toLowerCase();
+  const narrationEnabled = input?.narrationEnabled != null ? !!input.narrationEnabled : voiceMode === "narration";
+  const dubbingEnabled = input?.dubbingEnabled != null ? !!input.dubbingEnabled : voiceMode === "dubbing";
+  return {
+    topic,
+    // 이야기(서사)를 따로 주면 그걸, 없으면 주제를 story 로.
+    story: String(input?.story || topic),
+    duration: String(input?.duration || "60"),
+    // 장르 = purposeCategory
+    purposeCategory: String(input?.purposeCategory || input?.genre || "스토리 · 서사"),
+    // 세부 장르 = purposeTags
+    purposeTags: toStrArray(input?.purposeTags ?? input?.subGenre ?? input?.subgenre),
+    // 시청 타겟
+    target: String(input?.target || input?.audience || ""),
+    // 시청 목적 = needs
+    needs: toStrArray(input?.needs ?? input?.purpose),
+    tones: toStrArray(input?.tones ?? input?.tone),
+    styles: toStrArray(input?.styles ?? input?.style),
+    // 화면 비율
+    aspectRatio: String(input?.aspectRatio || ""),
+    manualDirectives: String(input?.manualDirectives || input?.extraNotes || ""),
+    language: input?.language === "en" ? "en" : "ko",
+    // 음성 모드
+    narrationEnabled,
+    dubbingEnabled,
+    characters: input?.characters || [],
+    storyBeats: Array.isArray(input?.storyBeats) ? input.storyBeats : [],
+  };
+}
+
 /** 플롯 시나리오 도구: /api/scenario 호출 어댑터. (씬 분해·대사·카메라 지시 생성) */
 async function runScenarioTool(input: any, ctx: ToolContext): Promise<any> {
-  const topic = String(input?.topic || input?.subject || input?.prompt || "").trim();
-  if (!topic) throw new Error("topic is required");
-  const body: any = {
-    topic,
-    story: topic,
-    duration: String(input?.duration || "60"),
-    purposeCategory: String(input?.purposeCategory || "스토리 · 서사"),
-    purposeTags: Array.isArray(input?.purposeTags) ? input.purposeTags : [],
-    tones: Array.isArray(input?.tones) ? input.tones : (input?.tones ? [input.tones] : []),
-    styles: Array.isArray(input?.styles) ? input.styles : (input?.styles ? [input.styles] : []),
-    needs: [],
-    narrationEnabled: false,
-    dubbingEnabled: false,
-    characters: input?.characters || [],
-    storyBeats: [],
-  };
+  const body = buildScenarioRequestBody(input);
+  if (!body.topic) throw new Error("topic is required");
   const res = await fetch(internalUrl(ctx.request, "/api/scenario"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
@@ -873,8 +903,12 @@ async function runScenarioTool(input: any, ctx: ToolContext): Promise<any> {
   return {
     scenes,
     sceneCount: scenes.length,
-    topic,
+    topic: body.topic,
     kind: "scenario",
+    aspectRatio: body.aspectRatio,
+    narrationEnabled: body.narrationEnabled,
+    dubbingEnabled: body.dubbingEnabled,
+    settings: body,
     summary: scenes.slice(0, 3).map((s: any) => s.title || s.beat || "").filter(Boolean).join(" → "),
   };
 }
@@ -1814,6 +1848,23 @@ async function runScenarioToProjectTool(input: any, ctx: ToolContext): Promise<a
   const saveBody: any = { projectId, scenes };
   const title = String(input?.title || scenario.topic || "").trim();
   if (title) saveBody.title = title;
+  // 프리프로덕션 설정(장르·세부장르·타겟·목적·톤·스타일·길이·음성모드)을 payload 로 저장 →
+  // 사이드바/대시보드 카드 메타(장르·타겟·길이)와 음성모드가 폼과 동일하게 반영된다.
+  const s = scenario.settings || {};
+  saveBody.payload = {
+    story: s.story || "",
+    purposeCategory: s.purposeCategory || "",
+    purposeTags: s.purposeTags || [],
+    target: s.target || "",
+    needs: s.needs || [],
+    tones: s.tones || [],
+    styles: s.styles || [],
+    duration: s.duration || "",
+    aspectRatio: s.aspectRatio || "",
+    narrationEnabled: !!s.narrationEnabled,
+    dubbingEnabled: !!s.dubbingEnabled,
+  };
+  if (s.aspectRatio) saveBody.aspectRatio = s.aspectRatio;
   const saved = await callInternalJson(ctx, "/api/project/save", { body: saveBody });
   return {
     kind: "scenario_to_project", projectId,
