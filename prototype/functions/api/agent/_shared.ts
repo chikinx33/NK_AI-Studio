@@ -1781,12 +1781,38 @@ async function runProjectCreateTool(input: any, ctx: ToolContext): Promise<any> 
   if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
   if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("projectId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
   const data = await callInternalJson(ctx, "/api/project/init", { body: { projectId } });
-  // 표시용 이름(title)이 주어지면 init 직후 저장해 카드에 반영. 없으면 카드가 기본 "프로젝트"로 뜬다.
-  const title = String(input?.title || input?.name || "").trim();
-  if (title) {
-    try { await callInternalJson(ctx, "/api/project/save", { body: { projectId, title } }); } catch (_) {}
+  // '프로젝트 생성' 폼 필드: 프로젝트 이름(seriesTitle)·에피소드 이름(episodeTitle)·
+  // 프로젝트 유형(projectType)·브랜드 요약(brandSummary)·핵심 메시지(coreMessage).
+  const seriesTitle = String(input?.seriesTitle || input?.projectName || "").trim();
+  const episodeTitle = String(input?.episodeTitle || "").trim();
+  const projectType = String(input?.projectType || input?.type || "").trim();
+  const brandSummary = String(input?.brandSummary || input?.summary || "").trim();
+  const coreMessage = String(input?.coreMessage || input?.message || "").trim();
+  const seriesId = String(input?.seriesId || "").trim();
+  // 카드 표시 이름(title): 에피소드 이름 > 일반 title/name > 프로젝트 이름.
+  const displayTitle = episodeTitle || String(input?.title || input?.name || "").trim() || seriesTitle;
+
+  const payload: any = {};
+  if (seriesTitle) { payload.seriesTitle = seriesTitle; payload.brandTitle = seriesTitle; }
+  if (episodeTitle) payload.episodeTitle = episodeTitle;
+  if (projectType) payload.projectType = projectType;
+  if (brandSummary) payload.brandSummary = brandSummary;
+  if (coreMessage) payload.coreMessage = coreMessage;
+  if (seriesId) { payload.seriesId = seriesId; payload.brandId = seriesId; }
+
+  if (displayTitle || Object.keys(payload).length) {
+    try {
+      const saveBody: any = { projectId };
+      if (displayTitle) saveBody.title = displayTitle;
+      if (Object.keys(payload).length) saveBody.payload = payload;
+      await callInternalJson(ctx, "/api/project/save", { body: saveBody });
+    } catch (_) {}
   }
-  return { kind: "project_create", projectId, title, initialized: Number(data?.initialized ?? 0) };
+  return {
+    kind: "project_create", projectId, title: displayTitle,
+    seriesTitle, episodeTitle, projectType, brandSummary, coreMessage,
+    initialized: Number(data?.initialized ?? 0),
+  };
 }
 
 /** 프로젝트 표시 이름(title) 변경: /api/project/save 에 title만 저장(payload·scenes 보존). 쓰기 → 승인 게이트. */

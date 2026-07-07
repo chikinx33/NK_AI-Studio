@@ -137,8 +137,11 @@ function approvalDoneText(type: string, output: any, input: any): string {
   }
   if (type === "publish") return "✅ 승인 확인! 발행을 진행했어요.";
   if (type === "project_create") {
-    const name = o.title || inp.title || inp.name || o.projectId || inp.projectId || "프로젝트";
-    return `✅ 승인 확인! '${name}' 프로젝트를 만들었어요.`;
+    const series = o.seriesTitle || inp.seriesTitle || inp.projectName || "";
+    const ep = o.episodeTitle || inp.episodeTitle || "";
+    const name = o.title || ep || series || o.projectId || inp.projectId || "프로젝트";
+    const suffix = (series && ep && series !== ep) ? ` (프로젝트: ${series} · 에피소드: ${ep})` : "";
+    return `✅ 승인 확인! '${name}' 프로젝트를 만들었어요.${suffix}`;
   }
   if (type === "project_rename") {
     const name = o.title || inp.title || inp.name || "";
