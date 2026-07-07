@@ -143,6 +143,11 @@ function approvalDoneText(type: string, output: any, input: any): string {
     const suffix = (series && ep && series !== ep) ? ` (프로젝트: ${series} · 에피소드: ${ep})` : "";
     return `✅ 승인 확인! '${name}' 프로젝트를 만들었어요.${suffix}`;
   }
+  if (type === "project_add_episode") {
+    const ep = o.episodeTitle || inp.episodeTitle || o.title || "새 에피소드";
+    const series = o.seriesTitle || "";
+    return `✅ 승인 확인! ${series ? `'${series}'에 ` : ""}에피소드 '${ep}'를 추가했어요.`;
+  }
   if (type === "project_rename") {
     const name = o.title || inp.title || inp.name || "";
     return name ? `✅ 승인 확인! 프로젝트 이름을 '${name}'(으)로 바꿨어요.` : "✅ 승인 확인! 프로젝트 이름을 바꿨어요.";

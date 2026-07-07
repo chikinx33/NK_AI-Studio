@@ -1815,6 +1815,67 @@ async function runProjectCreateTool(input: any, ctx: ToolContext): Promise<any> 
   };
 }
 
+// 새 에피소드가 부모(시리즈)에서 상속하는 브랜드/시리즈 컨텍스트 필드.
+// (에피소드별 콘텐츠 topic/story/purposeCategory/tones/... 는 상속하지 않아 빈 개요로 시작)
+const EPISODE_INHERIT_FIELDS = [
+  "target", "targetAudience", "aspectRatio", "projectType", "brandSummary", "coreMessage",
+  "brandKeywords", "connectedChannels", "brandVoice", "brandTone", "brandStory", "brandCharacter",
+  "brandRules", "bannedExpressions", "referenceContents", "successCases", "worldSetting",
+  "knowledgeWorld", "knowledgeCharacters", "environmentAssets", "knowledgeHub",
+];
+
+/**
+ * 기존 프로젝트(시리즈)에 새 에피소드 추가: 부모의 시리즈·브랜드 컨텍스트를 상속해
+ * 새 projectId 로 생성. '프로젝트 생성' 폼의 '에피소드' 탭에 대응. 쓰기 → 승인 게이트.
+ */
+async function runProjectAddEpisodeTool(input: any, ctx: ToolContext): Promise<any> {
+  const parentProjectId = String(input?.parentProjectId || input?.sourceProjectId || input?.fromProjectId || "").trim();
+  if (!parentProjectId) throw new Error("기준이 될 기존 프로젝트(parentProjectId)가 필요해요. project_list로 확인하세요.");
+  const episodeTitle = String(input?.episodeTitle || input?.title || "").trim();
+
+  // 부모 프로젝트 페이로드에서 시리즈·브랜드 컨텍스트 상속.
+  const parent = await runProjectGetTool({ projectId: parentProjectId }, ctx);
+  const pp: any = (parent && parent.payload && typeof parent.payload === "object") ? parent.payload : {};
+  const seriesId = String(input?.seriesId || pp.seriesId || parentProjectId).trim();
+  const seriesTitle = String(input?.seriesTitle || pp.seriesTitle || pp.brandTitle || parent.title || "").trim();
+
+  // 새 에피소드 projectId: 지정 없으면 부모 id 의 -epN 다음 번호(또는 -ep2)로 자동 부여.
+  let projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) {
+    const m = parentProjectId.match(/^(.*?)-ep(\d+)$/i);
+    const base = m ? m[1] : parentProjectId;
+    const nextN = m ? (Number(m[2]) + 1) : 2;
+    projectId = `${base}-ep${nextN}`;
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("projectId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
+
+  await callInternalJson(ctx, "/api/project/init", { body: { projectId } });
+
+  const displayTitle = episodeTitle || `${seriesTitle || "새"} 새 에피소드`;
+  const payload: any = {
+    seriesId, seriesTitle,
+    brandId: pp.brandId || seriesId,
+    brandTitle: pp.brandTitle || seriesTitle,
+    episodeTitle: displayTitle,
+    parentProjectId, parentProjectTitle: String(parent.title || seriesTitle || ""),
+    sourceProjectId: parentProjectId, sourceProjectTitle: String(parent.title || seriesTitle || ""),
+  };
+  for (const f of EPISODE_INHERIT_FIELDS) { if (pp[f] !== undefined) payload[f] = pp[f]; }
+  // 사용자가 명시한 값은 상속을 덮어씀.
+  if (input?.projectType != null) payload.projectType = String(input.projectType);
+  if (input?.brandSummary != null) payload.brandSummary = String(input.brandSummary);
+  if (input?.coreMessage != null) payload.coreMessage = String(input.coreMessage);
+
+  const saveBody: any = { projectId, title: displayTitle, payload };
+  if (pp.aspectRatio) saveBody.aspectRatio = pp.aspectRatio;
+  await callInternalJson(ctx, "/api/project/save", { body: saveBody });
+
+  return {
+    kind: "project_add_episode", projectId, parentProjectId, seriesId, seriesTitle,
+    episodeTitle: displayTitle, title: displayTitle,
+  };
+}
+
 /** 프로젝트 표시 이름(title) 변경: /api/project/save 에 title만 저장(payload·scenes 보존). 쓰기 → 승인 게이트. */
 async function runProjectRenameTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
@@ -2381,6 +2442,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // ── STEP 1 (P0): 프로젝트/에피소드 + 시나리오→씬 + 씬 자산 부착 (엔드투엔드 뼈대) ──
   // 프로젝트(에피소드) 관리 — 코어 총괄. 생성/저장은 소유 데이터 쓰기 → 승인 게이트.
   project_create: { agentId: "core", kind: "external", gate: true, run: runProjectCreateTool },
+  project_add_episode: { agentId: "core", kind: "external", gate: true, run: runProjectAddEpisodeTool },
   project_rename: { agentId: "core", kind: "external", gate: true, run: runProjectRenameTool },
   project_list: { agentId: "core", kind: "read", run: runProjectListTool },
   // 조회는 기획(플롯)이 상태를 파악하는 근거 + 코어 공유. read+synthesize.
