@@ -1005,6 +1005,14 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     mediaUrl: String(input?.mediaUrl || input?.imageUrl || input?.videoUrl || "").trim(),
     hashtags: Array.isArray(input?.hashtags) ? input.hashtags : [],
   };
+  // 예약 발행: scheduledAt(ISO8601) 주면 예약. (YouTube 등은 백엔드가 privacyStatus=scheduled+publishAt 으로 처리)
+  const scheduledAt = String(input?.scheduledAt || input?.publishAt || "").trim();
+  if (scheduledAt) {
+    const ms = Date.parse(scheduledAt);
+    if (Number.isNaN(ms)) throw new Error("scheduledAt 형식이 올바르지 않아요(ISO8601 필요).");
+    body.publishAt = new Date(ms).toISOString();
+    body.privacyStatus = "scheduled";
+  }
   const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
@@ -1014,7 +1022,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(data?.error || `publish 호출 실패 (${res.status})`);
-  return { published: data.published || [], kind: "publish", platforms, caption };
+  return { published: data.published || [], kind: "publish", platforms, caption, scheduledAt: scheduledAt || undefined };
 }
 
 // ── 싱크(비서) 구글 도구 — 사용자별 refresh_token(Neon)으로 access token 갱신 후 API 호출 ──
@@ -1484,6 +1492,385 @@ async function runReminderSetTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "reminder_set", at: r.fire_at, text: r.text, id: r.id };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// AI 스튜디오 확장 도구 — 브랜드 허브 · 이미지/영상 자산 · 나레이션 · 해시태그.
+// 모두 내부 NK API를 ctx.authHeader 로 서브리퀘스트(멀티테넌시: 동일 userId 검증).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** JSON 서브리퀘스트 헬퍼 — 내부 API 호출 + 파싱 + 에러 표준화. */
+async function callInternalJson(
+  ctx: ToolContext,
+  path: string,
+  init: { method?: string; body?: any } = {}
+): Promise<any> {
+  const method = init.method || (init.body !== undefined ? "POST" : "GET");
+  const headers: Record<string, string> = { Authorization: ctx.authHeader };
+  if (init.body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(internalUrl(ctx.request, path), {
+    method,
+    headers,
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || data?.message || `${path} 호출 실패 (${res.status})`);
+  return data;
+}
+
+/** GCS 버킷 이름 — env.VIDEO_OUTPUT_GCS_URI(gs://bucket/…)에서 추출. */
+function studioBucket(ctx: ToolContext): string {
+  const m = String(ctx.env?.VIDEO_OUTPUT_GCS_URI || "").match(/^gs:\/\/([^/]+)\//);
+  return m ? m[1] : "";
+}
+
+/** 브랜드 조회: /api/brand/get. 브랜드 정의(보이스·톤·스토리·캐릭터·키워드 등)를 온브랜드 작업 근거로 읽는다. */
+async function runBrandGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.brand || input?.slug || "").trim();
+  if (!brandId) throw new Error("brandId is required");
+  const data = await callInternalJson(ctx, `/api/brand/get?brandId=${encodeURIComponent(brandId)}`);
+  const brand = data?.data?.brand ?? data?.data ?? null;
+  if (!brand || typeof brand !== "object") return { brandId, exists: false, note: "아직 정의되지 않은 브랜드예요." };
+  return { brandId, exists: true, brand };
+}
+
+/** 브랜드 생성/수정: /api/brand/save. 쓰기 → 승인 게이트. input.brand 에 필드 객체. 기본은 기존 정의에 병합(부분수정 안전). */
+async function runBrandSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.slug || "").trim();
+  if (!brandId) throw new Error("brandId is required");
+  if (!/^[a-zA-Z0-9._-]+$/.test(brandId)) throw new Error("brandId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
+  const incoming = (input?.brand && typeof input.brand === "object") ? input.brand : {};
+  let brand: Record<string, any> = incoming;
+  if (input?.merge !== false) {
+    try {
+      const cur = await runBrandGetTool({ brandId }, ctx);
+      if (cur?.exists && cur.brand && typeof cur.brand === "object") brand = { ...cur.brand, ...incoming };
+    } catch { /* 신규 브랜드면 병합 대상 없음 — 그대로 진행 */ }
+  }
+  const data = await callInternalJson(ctx, "/api/brand/save", { body: { brandId, brand } });
+  return { kind: "brand_save", brandId, saved: true, brand: data?.brand || brand };
+}
+
+/** 캐릭터/환경 자산 등록: 브랜드를 읽어 characterSheets(또는 environmentAssets)에 이미지 항목 추가 후 저장. 쓰기 → 승인 게이트.
+ *  imageUrl(서명/https/data URL) 또는 objectName(gs 경로로 변환·영속 권장) 중 하나로 이미지를 지정. */
+async function runBrandAssetTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.slug || "").trim();
+  if (!brandId) throw new Error("brandId is required");
+  const displayName = String(input?.name || input?.displayName || input?.token || "").replace(/[<>]/g, "").trim();
+  if (!displayName) throw new Error("name is required (자산 이름, 예: 전략가)");
+  const objectName = String(input?.objectName || "").trim();
+  let imageRef = String(input?.imageUrl || input?.imageDataUrl || input?.url || "").trim();
+  if (objectName) {
+    const bucket = studioBucket(ctx);
+    if (bucket) imageRef = `gs://${bucket}/${objectName}`; // gs 경로 = 서명 URL 만료 걱정 없이 영속 저장
+  }
+  if (!imageRef) throw new Error("imageUrl 또는 objectName 중 하나가 필요해요(등록할 이미지).");
+
+  const kindRaw = String(input?.kind || "character").toLowerCase();
+  const isEnv = kindRaw === "environment" || kindRaw === "env" || kindRaw === "background" || kindRaw === "prop";
+  const token = "@" + displayName.replace(/^@+/, "").replace(/\s+/g, "");
+  const item = { imageDataUrl: imageRef, isPrimary: input?.isPrimary === true };
+
+  const cur = await runBrandGetTool({ brandId }, ctx).catch(() => ({ exists: false, brand: {} as any }));
+  const brand: any = (cur?.exists && cur.brand && typeof cur.brand === "object")
+    ? JSON.parse(JSON.stringify(cur.brand)) : {};
+
+  if (isEnv) {
+    const list: any[] = Array.isArray(brand.environmentAssets) ? brand.environmentAssets : [];
+    const found = list.find((a) => (a?.token || "") === token || (a?.displayName || "") === displayName);
+    if (found) found.items = (Array.isArray(found.items) ? found.items : []).concat(item);
+    else list.push({ displayName, token, kind: kindRaw === "prop" ? "prop" : "background", items: [item] });
+    brand.environmentAssets = list;
+  } else {
+    const list: any[] = Array.isArray(brand.characterSheets) ? brand.characterSheets : [];
+    const found = list.find((c) => (c?.token || "") === token || (c?.displayName || "") === displayName);
+    if (found) found.items = (Array.isArray(found.items) ? found.items : []).concat(item);
+    else list.push({ displayName, token, items: [item] });
+    brand.characterSheets = list;
+  }
+  const saved = await runBrandSaveTool({ brandId, brand, merge: false }, ctx);
+  return {
+    kind: "brand_asset", brandId, saved: true,
+    assetName: displayName, assetToken: token,
+    assetKind: isEnv ? "environment" : "character",
+    brand: saved.brand,
+  };
+}
+
+/** 이미지 역분석: /api/imagen-describe. 이미지 URL → 재현용 프롬프트/설명. read+synthesize. */
+async function runImagenDescribeTool(input: any, ctx: ToolContext): Promise<any> {
+  const imageUrl = String(input?.imageUrl || input?.url || input?.image || "").trim();
+  if (!imageUrl) throw new Error("imageUrl is required");
+  const data = await callInternalJson(ctx, "/api/imagen-describe", {
+    body: { imageUrl, lang: input?.lang === "en" ? "en" : "ko" },
+  });
+  return { prompt: data.prompt || "", model: data.model || "", lang: data.lang || "" };
+}
+
+/** 이미지 업스케일: /api/upscale (Vertex Imagen 2X). external(즉시 실행·검수 패널). */
+async function runUpscaleTool(input: any, ctx: ToolContext): Promise<any> {
+  const imageUrl = String(input?.imageUrl || input?.url || "").trim();
+  const objectName = String(input?.objectName || "").trim();
+  if (!imageUrl && !objectName) throw new Error("imageUrl 또는 objectName 필요");
+  const data = await callInternalJson(ctx, "/api/upscale", {
+    body: {
+      imageUrl: imageUrl || undefined,
+      objectName: objectName || undefined,
+      sessionId: String(input?.sessionId || "ai-company").trim() || "ai-company",
+      storageService: String(input?.storageService || "ai-image").trim(),
+    },
+  });
+  return {
+    signedUrl: data.signedUrl || "", objectName: data.objectName || "",
+    kind: "image", model: data.model || "imagen-3.0-capability-001",
+    promptEcho: "업스케일 2X", imageSizeApplied: data.imageSizeApplied || "2X",
+  };
+}
+
+/** 립싱크 영상: /api/video/lipsync 제출(비동기) → /api/video/status 폴링 → 재생 URL. external. */
+async function runLipsyncTool(input: any, ctx: ToolContext): Promise<any> {
+  const videoId = String(input?.videoId || "").trim();
+  const videoUrl = String(input?.videoUrl || "").trim();
+  if (!videoId && !videoUrl) throw new Error("videoId 또는 videoUrl 필요");
+  const mode = String(input?.mode || (input?.audioUrl ? "audio2video" : "text2video")).trim();
+  const body: any = { mode, videoId: videoId || undefined, videoUrl: videoUrl || undefined };
+  if (mode === "text2video") {
+    body.text = String(input?.text || "").trim();
+    if (!body.text) throw new Error("text required for text2video (대사, 최대 120자)");
+    body.voiceId = String(input?.voiceId || "");
+    body.voiceLanguage = String(input?.voiceLanguage || "ko");
+    body.voiceSpeed = Number(input?.voiceSpeed || 1.0);
+  } else {
+    body.audioUrl = String(input?.audioUrl || "").trim() || undefined;
+    body.audioDataUrl = String(input?.audioDataUrl || "").trim() || undefined;
+    if (!body.audioUrl && !body.audioDataUrl) throw new Error("audio required for audio2video (audioUrl)");
+  }
+  const sub = await callInternalJson(ctx, "/api/video/lipsync", { body });
+  const jobId = sub.job_id;
+  if (!jobId) throw new Error("lipsync job_id 없음");
+  for (let i = 0; i < 36; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const st = await fetch(internalUrl(ctx.request, `/api/video/status?job_id=${encodeURIComponent(jobId)}`), {
+      headers: { Authorization: ctx.authHeader },
+    });
+    const stData: any = await st.json().catch(() => ({}));
+    if (stData.status === "error" || (stData.done && stData.error)) {
+      throw new Error(stData.error?.message || "lipsync 생성 실패");
+    }
+    if (stData.done) {
+      return { videoUrl: stData.playback || stData.playbackUrl || "", kind: "video", model: "kling-lipsync", promptEcho: body.text || "audio2video" };
+    }
+  }
+  throw new Error("lipsync 생성 시간 초과");
+}
+
+/** 이미지 자산 목록: /api/image/library?projectId=. read+synthesize. */
+async function runImageLibraryTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || "ai-company").trim() || "ai-company";
+  const data = await callInternalJson(ctx, `/api/image/library?projectId=${encodeURIComponent(projectId)}`);
+  const items = (Array.isArray(data.items) ? data.items : []).slice(0, 40);
+  return { kind: "image_library", projectId, count: items.length, items };
+}
+
+/** 영상 자산 목록: /api/video/library?projectId=. read+synthesize. */
+async function runVideoLibraryTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || "ai-company").trim() || "ai-company";
+  const data = await callInternalJson(ctx, `/api/video/library?projectId=${encodeURIComponent(projectId)}`);
+  const items = (Array.isArray(data.items) ? data.items : []).slice(0, 40);
+  return { kind: "video_library", projectId, count: items.length, items };
+}
+
+/** 브랜드 캐릭터/IP 자산 목록: /api/ip/library?brandId=. read+synthesize. */
+async function runIpLibraryTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.slug || "").trim();
+  const projectId = String(input?.projectId || "").trim();
+  if (!brandId && !projectId) throw new Error("brandId 또는 projectId 필요");
+  const qs = brandId ? `brandId=${encodeURIComponent(brandId)}` : `projectId=${encodeURIComponent(projectId)}`;
+  const data = await callInternalJson(ctx, `/api/ip/library?${qs}`);
+  const items = (Array.isArray(data.items) ? data.items : []).slice(0, 40);
+  return { kind: "ip_library", brandId: brandId || undefined, projectId: projectId || undefined, count: items.length, items };
+}
+
+/** 나레이션/음성 생성: /api/tts (Google TTS). external(즉시 실행·검수 패널). */
+async function runNarrationTool(input: any, ctx: ToolContext): Promise<any> {
+  const script = String(input?.script || input?.text || input?.prompt || "").trim();
+  if (!script) throw new Error("script is required (읽을 대본)");
+  const data = await callInternalJson(ctx, "/api/tts", {
+    body: {
+      projectId: String(input?.projectId || "ai-company").trim() || "ai-company",
+      sceneId: String(input?.sceneId || `narration_${Date.now()}`).trim(),
+      script,
+      voiceId: String(input?.voiceId || "kr_female_narration").trim(),
+      speakingRate: Number(input?.speakingRate || 1.05),
+      pitch: Number(input?.pitch ?? 2),
+      voiceName: String(input?.voiceName || "").trim() || undefined,
+    },
+  });
+  return { audioUrl: data.voiceUrl || "", objectName: data.objectName || "", format: data.format || "", kind: "audio", model: "google-tts", promptEcho: script.slice(0, 80) };
+}
+
+/** 해시태그 생성: /api/hashtags. 브랜드 정보 기반 SNS 해시태그. read+synthesize. */
+async function runHashtagsTool(input: any, ctx: ToolContext): Promise<any> {
+  const knowledgeHub: Record<string, any> = {
+    brandVoice: input?.brandVoice, brandStory: input?.brandStory,
+    brandCharacter: input?.brandCharacter, worldSetting: input?.worldSetting,
+    brandRules: input?.brandRules, bannedExpressions: input?.bannedExpressions,
+  };
+  const data = await callInternalJson(ctx, "/api/hashtags", {
+    body: {
+      language: input?.language === "en" ? "en" : "ko",
+      brandTitle: String(input?.brandTitle || "").trim(),
+      brandSummary: String(input?.brandSummary || "").trim(),
+      coreMessage: String(input?.coreMessage || "").trim(),
+      targetAudience: String(input?.targetAudience || "").trim(),
+      contentType: String(input?.contentType || "").trim(),
+      brandKeywords: Array.isArray(input?.brandKeywords) ? input.brandKeywords : [],
+      sourceTexts: Array.isArray(input?.sourceTexts) ? input.sourceTexts : (input?.caption ? [String(input.caption)] : []),
+      knowledgeHub,
+    },
+  });
+  return { kind: "hashtags", hashtags: data.hashtags || [], text: data.text || "" };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// STEP 1 (P0) — 프로덕션 엔드투엔드 뼈대: 프로젝트/에피소드 + 시나리오→씬 + 씬 자산 부착.
+// "에피소드 = 별도 projectId"(예: elidus-ep1). 기존 GCS 데이터 모델(project/get·save의
+// {payload, scenes[]}) 그대로 사용. 소유 데이터 쓰기는 전부 gate:true(승인 후 review.ts가 실행).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** 프로젝트(에피소드) 생성: /api/project/init. GCS 폴더·빈 data.json 초기화. 쓰기 → 승인 게이트. */
+async function runProjectCreateTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
+  if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("projectId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
+  const data = await callInternalJson(ctx, "/api/project/init", { body: { projectId } });
+  return { kind: "project_create", projectId, initialized: Number(data?.initialized ?? 0) };
+}
+
+/** 프로젝트 목록: /api/project/list. 내 프로젝트 id + 공유받은 프로젝트. read. */
+async function runProjectListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/project/list");
+  const ids = Array.isArray(data?.ids) ? data.ids : [];
+  const shared = Array.isArray(data?.shared) ? data.shared : [];
+  return { kind: "project_list", count: ids.length, ids, shared };
+}
+
+/** 프로젝트 상태 조회: /api/project/get?projectId=. {payload, scenes[]} 반환. read+synthesize. */
+async function runProjectGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const data = await callInternalJson(ctx, `/api/project/get?projectId=${encodeURIComponent(projectId)}`);
+  // get은 정상이면 {ok, data:{payload, scenes, title...}}, 최초(빈)면 {payload:null, scenes:[], source:"empty"}.
+  const d = (data && typeof data.data === "object" && data.data) ? data.data : data;
+  const scenes = Array.isArray(d?.scenes) ? d.scenes : [];
+  return {
+    kind: "project_get", projectId,
+    title: d?.title || "", payload: d?.payload ?? null,
+    scenes, sceneCount: scenes.length,
+  };
+}
+
+/** 프로젝트 저장: /api/project/save. payload는 병합, scenes[]는 통째 대체. 쓰기 → 승인 게이트. */
+async function runProjectSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const body: any = { projectId };
+  if (input?.payload && typeof input.payload === "object") body.payload = input.payload;
+  if (Array.isArray(input?.scenes)) body.scenes = input.scenes;
+  if (input?.title) body.title = String(input.title);
+  if (input?.aspectRatio) body.aspectRatio = String(input.aspectRatio);
+  if (body.payload === undefined && body.scenes === undefined && body.title === undefined) {
+    throw new Error("저장할 payload 또는 scenes가 필요해요.");
+  }
+  const data = await callInternalJson(ctx, "/api/project/save", { body });
+  return { kind: "project_save", projectId, saved: true, objectName: data?.objectName || "", merged: !!data?.merged };
+}
+
+/** 시나리오 생성 → 그 씬들을 프로젝트에 저장(합성). 엔드투엔드 연결 고리. 쓰기 → 승인 게이트. */
+async function runScenarioToProjectTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
+  const scenario = await runScenarioTool(input, ctx);
+  const scenes = Array.isArray(scenario?.scenes) ? scenario.scenes : [];
+  if (!scenes.length) throw new Error("시나리오에서 씬이 생성되지 않았어요.");
+  const saveBody: any = { projectId, scenes };
+  const title = String(input?.title || scenario.topic || "").trim();
+  if (title) saveBody.title = title;
+  const saved = await callInternalJson(ctx, "/api/project/save", { body: saveBody });
+  return {
+    kind: "scenario_to_project", projectId,
+    sceneCount: scenes.length, topic: scenario.topic, summary: scenario.summary,
+    saved: true, objectName: saved?.objectName || "",
+  };
+}
+
+/** scenes[] 에서 대상 씬 인덱스 찾기 — scene.id 일치 → 숫자 id 일치 → 1-based 순번. 미지정이면 첫 씬. */
+function findSceneIndex(scenes: any[], ref: any): number {
+  if (ref === undefined || ref === null || String(ref).trim() === "") return scenes.length ? 0 : -1;
+  const s = String(ref).trim();
+  let idx = scenes.findIndex((sc) => String(sc?.id) === s);
+  if (idx >= 0) return idx;
+  const num = Number(s.replace(/[^0-9]/g, ""));
+  if (Number.isFinite(num) && num > 0) {
+    idx = scenes.findIndex((sc) => Number(sc?.id) === num);
+    if (idx >= 0) return idx;
+    if (num <= scenes.length) return num - 1; // 1-based 순번 폴백
+  }
+  return -1;
+}
+
+/** 씬 스틸컷: image 생성 → 해당 scene.imageDataUrl 에 부착 후 project_save. 쓰기 → 승인 게이트.
+ *  이미지는 gs:// 영속 경로로 부착(save가 data: URL은 버리고 gs/https만 보존). */
+async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
+  if (!scenes.length) throw new Error("프로젝트에 씬이 없어요. 먼저 scenario_to_project로 씬을 저장하세요.");
+  const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
+  if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
+  const scene = scenes[idx];
+  const prompt = String(input?.prompt || scene?.visual || scene?.shot || scene?.title || "").trim();
+  if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 visual 필요).");
+  const img = await runImagenTool({ prompt, aspectRatio: input?.aspectRatio || "16:9", projectId }, ctx);
+  const bucket = studioBucket(ctx);
+  const ref = (img.objectName && bucket) ? `gs://${bucket}/${img.objectName}` : (img.signedUrl || "");
+  if (!ref) throw new Error("이미지 생성 결과에 저장할 URL이 없어요.");
+  scenes[idx] = { ...scene, imageDataUrl: ref };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
+  return {
+    kind: "scene_still", projectId, sceneId: scene?.id,
+    signedUrl: img.signedUrl || "", objectName: img.objectName || "",
+    saved: true, promptEcho: prompt,
+  };
+}
+
+/** 씬 영상: video 생성 → 해당 scene.videoUrl 에 부착 후 project_save. 쓰기 → 승인 게이트.
+ *  입력 imageUrl(http)이 있으면 image-to-video로 사용(저장된 gs 경로는 서명 불가라 미사용). */
+async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
+  if (!scenes.length) throw new Error("프로젝트에 씬이 없어요. 먼저 scenario_to_project로 씬을 저장하세요.");
+  const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
+  if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
+  const scene = scenes[idx];
+  const prompt = String(input?.prompt || scene?.videoSpeechPrompt || scene?.visual || scene?.shot || scene?.title || "").trim();
+  if (!prompt) throw new Error("영상 프롬프트가 없어요(prompt 또는 씬 visual 필요).");
+  const imageUrl = String(input?.imageUrl || "").trim();
+  const vid = await runVideoTool({
+    prompt,
+    imageUrl: /^https?:\/\//i.test(imageUrl) ? imageUrl : undefined,
+    aspectRatio: input?.aspectRatio || "16:9",
+  }, ctx);
+  const ref = String(vid.videoUrl || "").trim();
+  if (!ref) throw new Error("영상 생성 결과 URL이 없어요.");
+  scenes[idx] = { ...scene, videoUrl: ref };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
+  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", saved: true, promptEcho: prompt };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -1515,6 +1902,36 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   github: { agentId: "engi", kind: "read", synthesize: true, run: runGithubTool },
   // 마키(마케팅): 네이버 데이터랩 검색어 트렌드.
   naver_datalab: { agentId: "maki", kind: "read", synthesize: true, run: runNaverDatalabTool },
+
+  // ── AI 스튜디오 확장 도구 ──────────────────────────────────────────────
+  // 브랜드 허브(코어 총괄 · 조회는 온브랜드 작업하는 여러 직무가 공유):
+  brand_get: { agentId: "core", agentIds: ["pixel", "plot", "ink", "maki", "edge", "reach"], kind: "read", synthesize: true, run: runBrandGetTool },
+  brand_save: { agentId: "core", kind: "external", gate: true, run: runBrandSaveTool },      // 쓰기 → 승인 게이트
+  // 캐릭터/환경 자산 등록: 픽셀(디자인) 주담당 + 코어 공유. 쓰기 → 승인 게이트.
+  brand_asset: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runBrandAssetTool },
+  // 픽셀(디자인): 이미지 역분석·업스케일·립싱크·자산 라이브러리.
+  imagen_describe: { agentId: "pixel", kind: "read", synthesize: true, run: runImagenDescribeTool },
+  upscale: { agentId: "pixel", kind: "external", run: runUpscaleTool },
+  lipsync: { agentId: "pixel", kind: "external", run: runLipsyncTool },
+  image_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runImageLibraryTool },
+  video_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runVideoLibraryTool },
+  ip_library: { agentId: "pixel", agentIds: ["core", "plot"], kind: "read", synthesize: true, run: runIpLibraryTool },
+  // 비트(사운드): 나레이션(TTS).
+  narration: { agentId: "beat", kind: "external", run: runNarrationTool },
+  // 마키(마케팅): 해시태그 생성. 리치(배포)도 공유.
+  hashtags: { agentId: "maki", agentIds: ["reach"], kind: "read", synthesize: true, run: runHashtagsTool },
+
+  // ── STEP 1 (P0): 프로젝트/에피소드 + 시나리오→씬 + 씬 자산 부착 (엔드투엔드 뼈대) ──
+  // 프로젝트(에피소드) 관리 — 코어 총괄. 생성/저장은 소유 데이터 쓰기 → 승인 게이트.
+  project_create: { agentId: "core", kind: "external", gate: true, run: runProjectCreateTool },
+  project_list: { agentId: "core", kind: "read", run: runProjectListTool },
+  // 조회는 기획(플롯)이 상태를 파악하는 근거 + 코어 공유. read+synthesize.
+  project_get: { agentId: "plot", agentIds: ["core"], kind: "read", synthesize: true, run: runProjectGetTool },
+  project_save: { agentId: "plot", kind: "external", gate: true, run: runProjectSaveTool },
+  // 시나리오→씬 저장(합성) · 씬 자산 부착 — 쓰기라 전부 승인 게이트.
+  scenario_to_project: { agentId: "plot", kind: "external", gate: true, run: runScenarioToProjectTool },
+  scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
+  scene_video: { agentId: "pixel", kind: "external", gate: true, run: runSceneVideoTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

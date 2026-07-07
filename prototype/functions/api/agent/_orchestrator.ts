@@ -165,7 +165,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
     scenario: `[[RUN: scenario | {"topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오 생성 (씬분해·대사·카메라 지시)`,
     music: `[[RUN: music | {"topic": "음악 컨셉·분위기", "genre": "ambient", "duration": 60}]]  → BGM 생성 (ElevenLabs)`,
-    publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL"}]]  → SNS 발행 ⚠️ 항상 사람 승인 필요`,
+    publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL", "scheduledAt": "2026-07-10T19:00:00+09:00(선택·예약발행)"}]]  → 소유 SNS 채널에 발행. scheduledAt(ISO8601)을 주면 그 시각 예약발행. ⚠️ 항상 사람 승인 필요`,
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
     gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
@@ -181,6 +181,24 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     drive: `[[RUN: drive | {"query": "파일명 검색어(선택)", "fileId": "특정 파일 내용 읽기(선택)"}]]  → Google Drive 파일 목록·검색(query) 또는 특정 파일 내용 읽기(fileId). "내 드라이브/파일 찾아줘"에 사용. (구글 연결 + 드라이브 권한 필요)`,
     github: `[[RUN: github | {"repo": "owner/name", "path": "파일경로(선택)", "query": "레포검색어(repo 없을 때)"}]]  → GitHub 레포 정보·열린 이슈·파일 내용·레포 검색 조회. 공개 레포는 토큰 없이도 됨.`,
     naver_datalab: `[[RUN: naver_datalab | {"keywords": ["키워드1","키워드2"], "timeUnit": "month(선택)"}]]  → 네이버 검색어 트렌드(상대 검색량 추이). 마케팅 키워드·관심도 비교에 사용. (NAVER 키 필요)`,
+    brand_get: `[[RUN: brand_get | {"brandId": "elidus"}]]  → 브랜드 허브에서 그 브랜드 정의(보이스·톤·스토리·캐릭터·키워드·금지표현 등)를 읽어온다. 온브랜드 콘텐츠·카피를 만들기 전에 먼저 조회해 근거로 삼는다.`,
+    brand_save: `[[RUN: brand_save | {"brandId": "elidus", "brand": {"brandTitle": "ELIDUS", "brandVoice": "…", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"]}}]]  → 브랜드 허브에 브랜드를 생성/수정. brand 객체에 채울 필드만 넣으면 기존 정의에 병합된다(부분 수정 안전). ⚠️ 쓰기라 사람 승인 후 반영(승인 패널). "엘리더스를 브랜드 허브에 생성해줘"에 사용.`,
+    brand_asset: `[[RUN: brand_asset | {"brandId": "elidus", "name": "전략가", "kind": "character", "objectName": "생성이미지의 objectName(권장)"}]]  또는 {"imageUrl": "이미지URL"}  → 방금 생성한 이미지를 그 브랜드의 캐릭터(kind:character) 또는 환경(kind:environment) 자산으로 등록. objectName을 주면 영속 저장(권장). ⚠️ 쓰기라 사람 승인 후 반영. "이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
+    imagen_describe: `[[RUN: imagen_describe | {"imageUrl": "이미지URL", "lang": "ko"}]]  → 이미지를 분석해 재현용 프롬프트/설명을 역생성. 레퍼런스 이미지의 스타일을 프롬프트로 옮길 때 사용.`,
+    upscale: `[[RUN: upscale | {"imageUrl": "이미지URL"}]]  또는 {"objectName": "GCS objectName"}  → 이미지를 2배 고해상도로 업스케일. 발행/썸네일 전 품질 향상에 사용.`,
+    lipsync: `[[RUN: lipsync | {"videoUrl": "영상URL", "mode": "text2video", "text": "대사(최대 120자)", "voiceLanguage": "ko"}]]  → 기존 영상 인물의 입모양을 대사/오디오에 맞춰 립싱크(수분 소요). audio2video면 {"mode":"audio2video","audioUrl":"오디오URL"}.`,
+    image_library: `[[RUN: image_library | {"projectId": "ai-company"}]]  → 그 프로젝트에 생성해 둔 이미지 자산 목록을 조회. 기존 자산 재사용·확인에 사용.`,
+    video_library: `[[RUN: video_library | {"projectId": "ai-company"}]]  → 그 프로젝트에 생성해 둔 영상 자산 목록을 조회.`,
+    ip_library: `[[RUN: ip_library | {"brandId": "elidus"}]]  → 브랜드에 등록된 캐릭터/IP 자산(캐릭터 시트) 목록을 조회. 등록 여부 확인·재사용에 사용.`,
+    narration: `[[RUN: narration | {"script": "읽어줄 대본 전체", "voiceId": "kr_female_narration"}]]  → 대본을 음성(나레이션)으로 생성(Google TTS). 숏폼 내레이션·더빙에 사용.`,
+    hashtags: `[[RUN: hashtags | {"brandTitle": "ELIDUS", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"], "caption": "게시글(선택)"}]]  → 브랜드 정보 기반 SNS 해시태그 5~8개 생성. brand_get 결과를 넣으면 더 온브랜드.`,
+    project_create: `[[RUN: project_create | {"projectId": "elidus-ep1"}]]  → 새 프로젝트(에피소드) 생성(GCS 폴더·빈 데이터 초기화). 에피소드는 별도 projectId로 취급(예: elidus-ep1, elidus-ep2). ⚠️ 쓰기라 사람 승인 후 생성.`,
+    project_list: `[[RUN: project_list | {}]]  → 내 프로젝트(에피소드) id 목록과 공유받은 프로젝트를 조회. "내 프로젝트 뭐 있어?"에 사용.`,
+    project_get: `[[RUN: project_get | {"projectId": "elidus-ep1"}]]  → 프로젝트의 현재 상태(payload·씬 목록)를 조회. "ep1 지금 상태 보여줘"·씬 수/제목 확인에 사용.`,
+    project_save: `[[RUN: project_save | {"projectId": "elidus-ep1", "payload": {…선택}, "scenes": [{…선택}], "title": "제목(선택)"}]]  → 프로젝트에 payload(병합)·scenes(통째 대체)를 저장. 보통은 scenario_to_project·scene_still·scene_video가 대신 저장하므로 직접 쓸 일은 드묾. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "elidus-ep1", "topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오를 생성하고 그 씬들을 곧바로 그 프로젝트에 저장. "생성한 시나리오를 ep1 씬으로 저장"·"ep1 시나리오 만들어 저장"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_still: `[[RUN: scene_still | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_video: `[[RUN: scene_video | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -188,6 +206,12 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
     gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)", web_fetch: "웹페이지 열람(URL 크롤링·JS 렌더링)",
     sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)", drive: "Google Drive 파일 보기",
+    brand_get: "브랜드 허브 조회", brand_save: "브랜드 생성/수정", brand_asset: "캐릭터/환경 자산 등록",
+    imagen_describe: "이미지 역분석(프롬프트화)", upscale: "이미지 업스케일(2X)", lipsync: "립싱크 영상",
+    image_library: "이미지 자산 목록", video_library: "영상 자산 목록", ip_library: "캐릭터/IP 자산 목록",
+    narration: "나레이션(TTS) 생성", hashtags: "해시태그 생성",
+    project_create: "프로젝트(에피소드) 생성", project_list: "프로젝트 목록 조회", project_get: "프로젝트 상태 조회",
+    project_save: "프로젝트 저장", scenario_to_project: "시나리오→씬 저장", scene_still: "씬 스틸컷 생성·부착", scene_video: "씬 영상 생성·부착",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -701,6 +725,19 @@ export function formatReadResult(toolName: string, out: any): string {
       return `${i + 1}. **${ev.summary || "(제목 없음)"}**\n   - ${ev.start || "?"}${where}`;
     });
     return `📅 앞으로 ${days}일 일정 ${events.length}개예요.\n\n${lines.join("\n")}`;
+  }
+  if (toolName === "project_list") {
+    const ids: string[] = Array.isArray(out?.ids) ? out.ids : [];
+    const shared: any[] = Array.isArray(out?.shared) ? out.shared : [];
+    if (!ids.length && !shared.length) return "📁 아직 만든 프로젝트가 없어요. 새 에피소드를 만들려면 프로젝트를 생성하면 돼요.";
+    const mine = ids.length ? `📁 내 프로젝트 ${ids.length}개예요.\n${ids.map((id, i) => `${i + 1}. ${id}`).join("\n")}` : "📁 내가 만든 프로젝트는 아직 없어요.";
+    const sh = shared.length ? `\n\n🤝 공유받은 프로젝트 ${shared.length}개:\n${shared.map((s, i) => `${i + 1}. ${s.projectId}${s.title ? ` (${s.title})` : ""} · ${s.role || "viewer"}`).join("\n")}` : "";
+    return `${mine}${sh}`;
+  }
+  if (toolName === "image_library" || toolName === "video_library" || toolName === "ip_library") {
+    const n = Number(out?.count ?? (Array.isArray(out?.items) ? out.items.length : 0)) || 0;
+    const label = toolName === "video_library" ? "영상" : toolName === "ip_library" ? "캐릭터/IP" : "이미지";
+    return n ? `🗂️ ${label} 자산 ${n}개를 찾았어요.` : `🗂️ 등록된 ${label} 자산이 아직 없어요.`;
   }
   return "조회를 완료했어요.";
 }
