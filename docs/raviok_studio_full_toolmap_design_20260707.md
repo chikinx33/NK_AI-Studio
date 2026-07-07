@@ -199,9 +199,14 @@
   - `render_final`: POST `/api/postprod/transcode` → GET `/api/postprod/transcode/status?jobName=&outputObjectName=` 폴링(최대 ~4분) → `signedUrl`. **소스가 이미 1개 합본 영상이라는 전제**(concat 단계 미확인 → §6-2).
   - `asset_download`: `signedUrl` 있으면 그대로, 없으면 `objectName`→`/api/media/proxy?objectName=…&token=…` 다운로드 링크.
   - **`scene_shots`는 ext(비게이트)** — 분해 결과를 검수 패널로 반환하되 프로젝트에 자동 저장하지 않음(저장은 `scene_upsert`/`project_save`).
+- **STEP 3/P3 (배포됨)**: `brand_list`(★신규 API `/api/brand/list` 생성)·`brand_delete`·`project_delete`·`project_share`·`knowledge_search`·`knowledge_stats`·`sns_channels_status`·`media_library`(image+video 통합)·`profile_get/save`·`favorites_get/save`·`sns_prefs_get/save`·`subscription_get`.
+  - `sns_channels_status`: 상태 조회 소스로 `/api/agent/integrations` 사용(`/api/sns/token-test`은 OAuth 디버그 플로우라 미사용).
+  - `subscription_get`: 엔드포인트는 `/api/userdata/subscription/get`(서브폴더).
+  - userdata 변경(profile/favorites/sns_prefs save)은 전부 `gate:true`. `sns_prefs_save`는 서버가 read-modify-write 머지.
 - **보류(코드가 의도적으로 미구현)**:
   - `image_edit`: 인페인트/마스크 편집 엔드포인트 미확인(§6-1) → 확정 시 P2에 추가.
   - `video_upload`: `/api/video/upload`가 **multipart 파일 전용**이라 URL 기반 에이전트가 쓸 수 없음. URL-ingest 변형 API가 생기면 도구화(현재 제외).
+  - `reservations_list`(예약큐 경로 미확인 §6-4)·`analytics`(집계 소스 미확인 §6-3) → 소스 확정 후 도구화.
 - **게이트 장시간 폴링 리스크**: `scene_video`·`render_final`은 승인 시 `review.ts` POST 안에서 폴링(3~4분) → CF 응답 한계 초과 가능. 기존 `video` 도구와 동일 제약. 타임아웃 상습 시 비동기 잡(워커) 방식 전환 필요.
 
 ## 6. 미해결·확인 필요 (코드/사용자 결정)

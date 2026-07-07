@@ -209,6 +209,21 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     scene_locations: `[[RUN: scene_locations | {"projectId": "elidus-ep1"}]]  또는 {"scenes": [...]}  → 씬들에서 장소(로케이션) 목록을 뽑아준다.`,
     story_structure: `[[RUN: story_structure | {"topic": "이야기 주제", "duration": 60, "tones": ["감동"]}]]  → 스토리 구조(스토리라인 + 비트/긴장도)를 짜준다. 시나리오 생성 전 뼈대 잡기에 사용.`,
     scene_upsert: `[[RUN: scene_upsert | {"projectId": "elidus-ep1", "sceneId": 3, "scene": {"title": "새 제목", "narration": "바뀐 나레이션", "dialogue": [{"speaker": "A", "line": "대사"}]}}]]  → 그 씬의 내용을 수정(sceneId 없거나 못 찾으면 새 씬 추가). "씬3 대사 바꿔"·"씬 추가"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    brand_list: `[[RUN: brand_list | {}]]  → 브랜드 허브에 등록된 내 브랜드 id 목록 조회. "브랜드 뭐뭐 있어?"에 사용.`,
+    brand_delete: `[[RUN: brand_delete | {"brandId": "elidus"}]]  → 브랜드를 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
+    project_delete: `[[RUN: project_delete | {"projectId": "elidus-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
+    project_share: `[[RUN: project_share | {"projectId": "elidus-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
+    knowledge_search: `[[RUN: knowledge_search | {"query": "찾을 내용"}]]  → 지식 허브(RAG)에서 관련 문서 조각을 검색해 근거로 답한다. "우리 자료에서 ~ 찾아줘"에 사용.`,
+    knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
+    sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
+    media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
+    profile_get: `[[RUN: profile_get | {}]]  → 내(사용자) 프로필을 조회해 개인화(톤·우선순위)의 근거로 삼는다.`,
+    profile_save: `[[RUN: profile_save | {"profile": {"key": "value"}}]]  → 내 프로필을 저장/수정. ⚠️ 계정 정보라 사람 승인 후 반영.`,
+    favorites_get: `[[RUN: favorites_get | {}]]  → 내 즐겨찾기(선호) 목록 조회.`,
+    favorites_save: `[[RUN: favorites_save | {"items": [ … 전체 목록 ]}]]  → 즐겨찾기를 저장(전체 대체). ⚠️ 사람 승인 후 반영.`,
+    sns_prefs_get: `[[RUN: sns_prefs_get | {}]]  → SNS 발행 기본값·채널 선호(환경설정) 조회. (OAuth 연결 상태와는 별개)`,
+    sns_prefs_save: `[[RUN: sns_prefs_save | {"deployDefaults": {…}}]]  → SNS 발행 기본값·채널 선호를 저장(머지). ⚠️ 사람 승인 후 반영. (OAuth 연결 개설/해제는 사람 직접)`,
+    subscription_get: `[[RUN: subscription_get | {}]]  → 구독·크레딧 잔량 조회. "크레딧 얼마 남았어?"에 사용.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -225,6 +240,10 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     render_final: "최종 렌더링", asset_download: "다운로드 링크 제공", video_delete: "영상 삭제",
     voice_generate: "캐릭터 더빙(음성)", voices_list: "목소리 목록", sound_assets: "사운드 자산 목록",
     scene_shots: "씬→샷 분해", scene_locations: "장소 추출", story_structure: "스토리 구조 생성", scene_upsert: "씬 수정/추가",
+    brand_list: "브랜드 목록", brand_delete: "브랜드 삭제", project_delete: "프로젝트 삭제", project_share: "프로젝트 공유",
+    knowledge_search: "지식 검색(RAG)", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
+    profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
+    sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -762,6 +781,44 @@ export function formatReadResult(toolName: string, out: any): string {
     const lines = assets.slice(0, 15).map((a, i) => `${i + 1}. ${a?.type ? `[${a.type}] ` : ""}${a?.name || a?.title || a?.id || "(무제)"}`);
     const more = assets.length > 15 ? `\n…외 ${assets.length - 15}개` : "";
     return `🎧 사운드 자산 ${assets.length}개예요.\n${lines.join("\n")}${more}`;
+  }
+  if (toolName === "brand_list") {
+    const ids: string[] = Array.isArray(out?.ids) ? out.ids : [];
+    if (!ids.length) return "🏷️ 브랜드 허브에 등록된 브랜드가 아직 없어요.";
+    return `🏷️ 브랜드 ${ids.length}개예요.\n${ids.map((id, i) => `${i + 1}. ${id}`).join("\n")}`;
+  }
+  if (toolName === "knowledge_stats") {
+    if (!out?.configured) return "📚 지식 허브(RAG)가 아직 설정되지 않았어요.";
+    return `📚 지식 허브 — 문서 ${Number(out?.documents || 0)}개, 조각 ${Number(out?.chunks || 0)}개.`;
+  }
+  if (toolName === "sns_channels_status") {
+    const channels: any[] = Array.isArray(out?.channels) ? out.channels : [];
+    if (!channels.length) return "📡 연결된 SNS 채널 정보가 없어요.";
+    const lines = channels.slice(0, 12).map((c, i) => {
+      const name = c?.name || c?.platform || c?.id || "채널";
+      const connected = c?.connected ?? c?.active ?? c?.status;
+      const mark = connected === true ? "✅ 연결됨" : connected === false ? "⚪ 미연결" : (connected ? `· ${connected}` : "");
+      return `${i + 1}. ${name} ${mark}`.trim();
+    });
+    return `📡 SNS 채널 상태 ${channels.length}개예요.\n${lines.join("\n")}`;
+  }
+  if (toolName === "favorites_get") {
+    const items: any[] = Array.isArray(out?.items) ? out.items : [];
+    return items.length ? `⭐ 즐겨찾기 ${items.length}개예요.` : "⭐ 저장된 즐겨찾기가 아직 없어요.";
+  }
+  if (toolName === "sns_prefs_get") {
+    if (out?.missing || !out?.settings) return "⚙️ 저장된 SNS 발행 선호(환경설정)가 아직 없어요.";
+    const dd = out?.settings?.deployDefaults;
+    return dd && Object.keys(dd).length ? `⚙️ SNS 발행 기본값이 설정돼 있어요.` : "⚙️ SNS 선호를 불러왔어요(발행 기본값은 비어 있어요).";
+  }
+  if (toolName === "subscription_get") {
+    const s = out?.subscription || {};
+    const plan = s?.plan || s?.tier || s?.planName || "";
+    const credits = s?.credits ?? s?.creditsRemaining ?? s?.balance;
+    const parts: string[] = [];
+    if (plan) parts.push(`플랜: ${plan}`);
+    if (credits !== undefined && credits !== null) parts.push(`크레딧: ${credits}`);
+    return parts.length ? `💳 ${parts.join(" · ")}` : "💳 구독·크레딧 정보를 불러왔어요.";
   }
   if (toolName === "project_list") {
     const ids: string[] = Array.isArray(out?.ids) ? out.ids : [];

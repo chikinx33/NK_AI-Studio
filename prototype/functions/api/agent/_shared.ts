@@ -2066,6 +2066,135 @@ async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "video_delete", requested: Number(data?.requestedCount ?? targets.length), deleted: Number(data?.deletedCount ?? 0), failed: data?.failed || [] };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// STEP 3 (P3) — 운영·조회·개인화. 조회는 즉시, 소유 데이터/계정 변경은 승인 게이트.
+// ※ SNS OAuth 연결 개설/해제(/api/sns/connect/*)는 본인 인증 필요 → 도구화 제외.
+// ※ /api/admin/* 는 에이전트 비노출. reservations_list·analytics 는 소스 미확인 → 보류.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** 브랜드 목록: /api/brand/list(신규 API). 내 브랜드 id 목록. read. */
+async function runBrandListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/brand/list");
+  const ids = Array.isArray(data?.ids) ? data.ids : [];
+  return { kind: "brand_list", count: ids.length, ids };
+}
+
+/** 브랜드 삭제: /api/brand/delete (confirm=yes). 비가역 → 승인 게이트. */
+async function runBrandDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.slug || "").trim();
+  if (!brandId) throw new Error("brandId is required");
+  const data = await callInternalJson(ctx, "/api/brand/delete", { body: { brandId, confirm: "yes" } });
+  return { kind: "brand_delete", brandId, deleted: true, deletedCount: Number(data?.deletedCount ?? 0) };
+}
+
+/** 프로젝트 삭제: /api/project/delete (confirm=yes). 비가역 → 승인 게이트. */
+async function runProjectDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  await callInternalJson(ctx, "/api/project/delete", { body: { projectId, confirm: "yes" } });
+  return { kind: "project_delete", projectId, deleted: true };
+}
+
+/** 프로젝트 공유: /api/project/share. 다른 사용자에게 뷰어/에디터 권한 부여. 외부 영향 → 승인 게이트. */
+async function runProjectShareTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  const targetUserId = String(input?.targetUserId || input?.target || input?.userId || "").trim();
+  if (!projectId || !targetUserId) throw new Error("projectId 와 공유 대상(targetUserId)이 필요해요.");
+  const role = String(input?.role || "viewer").toLowerCase() === "editor" ? "editor" : "viewer";
+  await callInternalJson(ctx, "/api/project/share", { body: { projectId, targetUserId, role } });
+  return { kind: "project_share", projectId, targetUserId, role, shared: true };
+}
+
+/** 지식 검색(RAG): /api/knowledge/search. read+synthesize. */
+async function runKnowledgeSearchTool(input: any, ctx: ToolContext): Promise<any> {
+  const query = String(input?.query || input?.q || input?.prompt || "").trim();
+  if (!query) throw new Error("검색어(query)가 필요해요.");
+  const data = await callInternalJson(ctx, "/api/knowledge/search", { body: { query, limit: Number(input?.limit) || 8 } });
+  return { kind: "knowledge_search", query, configured: !!data?.configured, chunks: Array.isArray(data?.chunks) ? data.chunks : [], reason: data?.reason };
+}
+
+/** 지식 허브 통계: /api/knowledge/stats. read. */
+async function runKnowledgeStatsTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/knowledge/stats");
+  return { kind: "knowledge_stats", configured: !!data?.configured, documents: Number(data?.documents || 0), chunks: Number(data?.chunks || 0) };
+}
+
+/** SNS 채널 연결 상태: /api/agent/integrations. read. (연결 개설/해제는 사람 직접) */
+async function runSnsChannelsStatusTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/agent/integrations");
+  const channels = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+  return { kind: "sns_channels_status", count: channels.length, channels };
+}
+
+/** 미디어 라이브러리 통합 조회: image_library + video_library 합산. read+synthesize. */
+async function runMediaLibraryTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || "ai-company").trim() || "ai-company";
+  const [img, vid] = await Promise.all([
+    runImageLibraryTool({ projectId }, ctx).catch(() => ({ items: [] as any[] })),
+    runVideoLibraryTool({ projectId }, ctx).catch(() => ({ items: [] as any[] })),
+  ]);
+  const images = Array.isArray(img.items) ? img.items : [];
+  const videos = Array.isArray(vid.items) ? vid.items : [];
+  return { kind: "media_library", projectId, imageCount: images.length, videoCount: videos.length, images: images.slice(0, 30), videos: videos.slice(0, 30) };
+}
+
+// ── userdata (개인화·나 파악) — 조회 즉시 / 변경 승인 게이트 ──
+/** 내 프로필 조회: /api/userdata/profile/get. read+synthesize(개인화 근거). */
+async function runProfileGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/userdata/profile/get");
+  return { kind: "profile_get", profile: data?.data?.profile ?? data?.profile ?? {} };
+}
+
+/** 내 프로필 저장: /api/userdata/profile/save. 변경 → 승인 게이트. */
+async function runProfileSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const profile = (input?.profile && typeof input.profile === "object") ? input.profile : null;
+  if (!profile) throw new Error("저장할 profile 객체가 필요해요.");
+  const data = await callInternalJson(ctx, "/api/userdata/profile/save", { body: { profile } });
+  return { kind: "profile_save", saved: true, objectName: data?.objectName || "" };
+}
+
+/** 즐겨찾기 조회: /api/userdata/favorites/get. read. */
+async function runFavoritesGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/userdata/favorites/get");
+  const d = data?.data ?? {};
+  return { kind: "favorites_get", items: Array.isArray(d.items) ? d.items : [], categoryNames: d.categoryNames, themePresets: d.themePresets };
+}
+
+/** 즐겨찾기 저장: /api/userdata/favorites/save. 변경 → 승인 게이트. (전체 대체이므로 items 필수) */
+async function runFavoritesSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  if (!Array.isArray(input?.items)) throw new Error("저장할 favorites items 배열이 필요해요.");
+  const body: any = { items: input.items };
+  if (input?.categoryNames !== undefined) body.categoryNames = input.categoryNames;
+  if (input?.themePresets !== undefined) body.themePresets = input.themePresets;
+  const data = await callInternalJson(ctx, "/api/userdata/favorites/save", { body });
+  return { kind: "favorites_save", saved: true, count: Number(data?.count ?? input.items.length) };
+}
+
+/** SNS 발행 선호(환경설정) 조회: /api/userdata/sns/get. read. */
+async function runSnsPrefsGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/userdata/sns/get");
+  return { kind: "sns_prefs_get", settings: data?.settings ?? data?.data ?? null, missing: !!data?.missing };
+}
+
+/** SNS 발행 선호 저장: /api/userdata/sns/save (read-modify-write 머지). 변경 → 승인 게이트.
+ *  ※ OAuth 연결 자체가 아니라 '기본 채널·발행 기본값' 환경설정만. */
+async function runSnsPrefsSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const body: any = {};
+  if (input?.deployDefaults && typeof input.deployDefaults === "object") body.deployDefaults = input.deployDefaults;
+  if (input?.sns && typeof input.sns === "object") body.sns = input.sns;
+  if (body.deployDefaults === undefined && body.sns === undefined) {
+    throw new Error("저장할 deployDefaults(발행 기본값) 또는 sns(채널 선호)가 필요해요.");
+  }
+  const data = await callInternalJson(ctx, "/api/userdata/sns/save", { body });
+  return { kind: "sns_prefs_save", saved: true, settings: data?.settings ?? null };
+}
+
+/** 구독·크레딧 잔량 조회: /api/userdata/subscription/get. read. */
+async function runSubscriptionGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/userdata/subscription/get");
+  return { kind: "subscription_get", subscription: data?.data ?? data ?? null };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -2142,6 +2271,28 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_locations: { agentId: "plot", kind: "read", synthesize: true, run: runSceneLocationsTool },
   story_structure: { agentId: "plot", kind: "read", synthesize: true, run: runStoryStructureTool },
   scene_upsert: { agentId: "plot", kind: "external", gate: true, run: runSceneUpsertTool },
+
+  // ── STEP 3 (P3): 운영·조회·개인화 ──
+  // 코어(총괄): 브랜드/프로젝트 목록·삭제·공유.
+  brand_list: { agentId: "core", kind: "read", run: runBrandListTool },
+  brand_delete: { agentId: "core", kind: "external", gate: true, run: runBrandDeleteTool },
+  project_delete: { agentId: "core", kind: "external", gate: true, run: runProjectDeleteTool },
+  project_share: { agentId: "core", kind: "external", gate: true, run: runProjectShareTool },
+  // 레이더(리서치): 지식 허브 검색·통계.
+  knowledge_search: { agentId: "radar", kind: "read", synthesize: true, run: runKnowledgeSearchTool },
+  knowledge_stats: { agentId: "radar", kind: "read", run: runKnowledgeStatsTool },
+  // 리치(배포): SNS 채널 연결 상태 조회(연결 개설/해제는 사람 직접).
+  sns_channels_status: { agentId: "reach", kind: "read", run: runSnsChannelsStatusTool },
+  // 픽셀(디자인): 미디어 라이브러리 통합 조회.
+  media_library: { agentId: "pixel", kind: "read", synthesize: true, run: runMediaLibraryTool },
+  // 싱크(비서) 중심 userdata — 조회는 즉시(개인화 근거), 변경은 승인 게이트.
+  profile_get: { agentId: "sync", agentIds: ["core", "edge", "maki"], kind: "read", synthesize: true, run: runProfileGetTool },
+  profile_save: { agentId: "sync", kind: "external", gate: true, run: runProfileSaveTool },
+  favorites_get: { agentId: "sync", agentIds: ["pixel", "plot"], kind: "read", run: runFavoritesGetTool },
+  favorites_save: { agentId: "sync", kind: "external", gate: true, run: runFavoritesSaveTool },
+  sns_prefs_get: { agentId: "reach", agentIds: ["maki"], kind: "read", run: runSnsPrefsGetTool },
+  sns_prefs_save: { agentId: "reach", kind: "external", gate: true, run: runSnsPrefsSaveTool },
+  subscription_get: { agentId: "sync", kind: "read", run: runSubscriptionGetTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
