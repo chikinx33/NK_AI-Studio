@@ -1747,7 +1747,22 @@ async function runProjectCreateTool(input: any, ctx: ToolContext): Promise<any> 
   if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
   if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("projectId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
   const data = await callInternalJson(ctx, "/api/project/init", { body: { projectId } });
-  return { kind: "project_create", projectId, initialized: Number(data?.initialized ?? 0) };
+  // 표시용 이름(title)이 주어지면 init 직후 저장해 카드에 반영. 없으면 카드가 기본 "프로젝트"로 뜬다.
+  const title = String(input?.title || input?.name || "").trim();
+  if (title) {
+    try { await callInternalJson(ctx, "/api/project/save", { body: { projectId, title } }); } catch (_) {}
+  }
+  return { kind: "project_create", projectId, title, initialized: Number(data?.initialized ?? 0) };
+}
+
+/** 프로젝트 표시 이름(title) 변경: /api/project/save 에 title만 저장(payload·scenes 보존). 쓰기 → 승인 게이트. */
+async function runProjectRenameTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const title = String(input?.title || input?.name || input?.newName || "").trim();
+  if (!title) throw new Error("새 이름(title)이 필요해요.");
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, title } });
+  return { kind: "project_rename", projectId, title, renamed: true };
 }
 
 /** 프로젝트 목록: /api/project/list. 내 프로젝트 id + 공유받은 프로젝트. read. */
@@ -2289,6 +2304,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // ── STEP 1 (P0): 프로젝트/에피소드 + 시나리오→씬 + 씬 자산 부착 (엔드투엔드 뼈대) ──
   // 프로젝트(에피소드) 관리 — 코어 총괄. 생성/저장은 소유 데이터 쓰기 → 승인 게이트.
   project_create: { agentId: "core", kind: "external", gate: true, run: runProjectCreateTool },
+  project_rename: { agentId: "core", kind: "external", gate: true, run: runProjectRenameTool },
   project_list: { agentId: "core", kind: "read", run: runProjectListTool },
   // 조회는 기획(플롯)이 상태를 파악하는 근거 + 코어 공유. read+synthesize.
   project_get: { agentId: "plot", agentIds: ["core"], kind: "read", synthesize: true, run: runProjectGetTool },

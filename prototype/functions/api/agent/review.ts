@@ -136,6 +136,14 @@ function approvalDoneText(type: string, output: any, input: any): string {
     return `✅ 승인 확인! ${to ? `'${to}'에게 ` : ""}메일을 발송했어요${o.subject || inp.subject ? ` — 제목: "${o.subject || inp.subject}"` : ""}.`;
   }
   if (type === "publish") return "✅ 승인 확인! 발행을 진행했어요.";
+  if (type === "project_create") {
+    const name = o.title || inp.title || inp.name || o.projectId || inp.projectId || "프로젝트";
+    return `✅ 승인 확인! '${name}' 프로젝트를 만들었어요.`;
+  }
+  if (type === "project_rename") {
+    const name = o.title || inp.title || inp.name || "";
+    return name ? `✅ 승인 확인! 프로젝트 이름을 '${name}'(으)로 바꿨어요.` : "✅ 승인 확인! 프로젝트 이름을 바꿨어요.";
+  }
   return "✅ 승인 확인! 요청하신 작업을 실행했어요.";
 }
 
