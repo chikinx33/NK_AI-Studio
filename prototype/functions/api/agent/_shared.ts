@@ -2271,6 +2271,53 @@ async function runKnowledgeStatsTool(_input: any, ctx: ToolContext): Promise<any
   return { kind: "knowledge_stats", configured: !!data?.configured, documents: Number(data?.documents || 0), chunks: Number(data?.chunks || 0) };
 }
 
+/**
+ * 회사 지식 감사(정리 근거 수집): 축적된 회사 지식 전체 + '현재 능력 카탈로그'(도구·담당·쓰기여부)를
+ * 함께 돌려줘, 코어가 "기능이 생겨/바뀌어 낡은 지식"·중복·모순을 스스로 찾아내게 한다.
+ * 능력 카탈로그가 핵심 — 이게 없으면 "싱크는 드라이브 권한 없음" 같은 '기능 추가로 거짓이 된' 지식을 못 잡는다.
+ * read+synthesize. 실제 삭제·수정은 코어가 보고→사람 승인 후 KNOW del/edit 마커로 반영.
+ */
+async function runKnowledgeAuditTool(_input: any, ctx: ToolContext): Promise<any> {
+  const sql = getSql(ctx.env);
+  let knowledge: { n: number; type: string; source: string; date: string; text: string }[] = [];
+  let exactDuplicates: { text: string; count: number }[] = [];
+  if (sql) {
+    try {
+      const rows = await sql(
+        "SELECT text, type, source, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC",
+        [ctx.userId]
+      ) as any[];
+      knowledge = rows.map((r, i) => ({
+        n: i + 1,
+        type: r.type || "사실",
+        source: r.source || "",
+        date: r.created_at ? String(r.created_at).slice(0, 10) : "",
+        text: String(r.text || ""),
+      }));
+      const seen = new Map<string, number>();
+      for (const k of knowledge) seen.set(k.text, (seen.get(k.text) || 0) + 1);
+      exactDuplicates = [...seen.entries()].filter(([, c]) => c > 1).map(([text, count]) => ({ text, count }));
+    } catch (_) { knowledge = []; }
+  }
+  // 현재 능력 카탈로그 — 도구명(담당 직원, 쓰기여부). 지식이 이 능력과 모순되면 낡은 것.
+  const capabilities = Object.entries(AGENT_TOOLS).map(([tool, def]: [string, any]) => {
+    const agents = [def.agentId, ...((def.agentIds as string[]) || [])].filter(Boolean);
+    return `${tool} — 담당:${agents.join("/")}${def.gate ? " (쓰기·승인)" : ""}`;
+  });
+  // 지식이 아주 많으면 출력이 잘릴 수 있어 상한을 두고 신호를 남긴다(배치 감사로 확장 여지).
+  const CAP = 120;
+  const truncated = knowledge.length > CAP;
+  return {
+    kind: "knowledge_audit",
+    knowledgeCount: knowledge.length,
+    knowledge: knowledge.slice(0, CAP),
+    truncated,
+    exactDuplicates,
+    capabilityCount: capabilities.length,
+    capabilities,
+  };
+}
+
 /** SNS 채널 연결 상태: /api/agent/integrations. read. (연결 개설/해제는 사람 직접) */
 async function runSnsChannelsStatusTool(_input: any, ctx: ToolContext): Promise<any> {
   const data = await callInternalJson(ctx, "/api/agent/integrations");
@@ -2477,6 +2524,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   project_share: { agentId: "core", kind: "external", gate: true, run: runProjectShareTool },
   // 레이더(리서치): 지식 허브 검색·통계.
   knowledge_search: { agentId: "radar", kind: "read", synthesize: true, run: runKnowledgeSearchTool },
+  knowledge_audit: { agentId: "core", kind: "read", synthesize: true, run: runKnowledgeAuditTool },
   knowledge_stats: { agentId: "radar", kind: "read", run: runKnowledgeStatsTool },
   // 리치(배포): SNS 채널 연결 상태 조회(연결 개설/해제는 사람 직접).
   sns_channels_status: { agentId: "reach", kind: "read", run: runSnsChannelsStatusTool },

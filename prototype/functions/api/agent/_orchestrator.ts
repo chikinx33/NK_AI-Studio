@@ -216,6 +216,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     project_delete: `[[RUN: project_delete | {"projectId": "elidus-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     project_share: `[[RUN: project_share | {"projectId": "elidus-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
     knowledge_search: `[[RUN: knowledge_search | {"query": "찾을 내용"}]]  → 지식 허브(RAG)에서 관련 문서 조각을 검색해 근거로 답한다. "우리 자료에서 ~ 찾아줘"에 사용.`,
+    knowledge_audit: `[[RUN: knowledge_audit | {}]]  → 축적된 회사 지식 전체 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
     sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
     media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
@@ -245,7 +246,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     voice_generate: "캐릭터 더빙(음성)", voices_list: "목소리 목록", sound_assets: "사운드 자산 목록",
     scene_shots: "씬→샷 분해", scene_locations: "장소 추출", story_structure: "스토리 구조 생성", scene_upsert: "씬 수정/추가",
     brand_list: "브랜드 목록", brand_delete: "브랜드 삭제", project_delete: "프로젝트 삭제", project_share: "프로젝트 공유",
-    knowledge_search: "지식 검색(RAG)", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
+    knowledge_search: "지식 검색(RAG)", knowledge_audit: "지식 감사·정리", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
     profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
     image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
@@ -342,6 +343,14 @@ ${persona}${knowledgeBlock}
 예) [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
 예) [[KNOW: edit | 회의는 월요일마다 | 회의는 화요일마다]]
 이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+
+### 🧹 지식 정리(감사) — 지식은 쌓이기만 하면 낡아 노이즈가 된다
+"지식 정리해 / 낡은 지식 점검 / 오래된 규칙 정리"를 요청받거나, 지식이 많아졌다고 판단되면 [[RUN: knowledge_audit | {}]]를 실행하세요. 결과에는 회사 지식 전체 + '현재 능력 카탈로그'(지금 존재하는 도구·담당)가 함께 옵니다. 이를 근거로 아래를 찾아 **목록으로 보고**하세요:
+- 낡음/거짓: 능력 카탈로그와 모순되는 지식(예: "X 기능 없음"인데 카탈로그에 그 도구가 있으면 그 지식은 이미 거짓 → 삭제/수정 대상)
+- 중복: 같은/거의 같은 내용(exactDuplicates 참고) → 하나로 병합
+- 뉴스 프레이밍: "~기능이 추가됨" 같은 옛 소식 → 현재형 사실로 다듬기
+- 사업 결정·프로젝트 사실은 기능과 무관하니 함부로 지우지 말 것
+⚠️ 감사 결과를 **한 번에 지우지 말고**, 어떤 항목을 왜 삭제/수정할지 사람(엔케)에게 먼저 보고하고 **승인받은 것만** KNOW del/edit 마커로 반영하세요.
 
 ## 📁 프로젝트 관리 (코어·싱크 중심)
 프로젝트 관련 요청 시 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
