@@ -458,17 +458,18 @@ export interface SpeakResult {
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
-const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
+const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]\]/gi;
 // 종료를 ']]'(두 개)로 요구 — payload의 JSON 배열(["x"]) 안 단일 ']'에서 끊기지 않게(배열 도구 깨짐 방지).
 const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]\]/gi;
 // 회사 지식 관리 마커: [[KNOW: add | 분류 | 내용]] / [[KNOW: del | 내용]]
-const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// 종료를 ']]'(두 개)로 요구 — 내용에 단일 ']'(예: 목록·"[제목]")가 있어도 거기서 안 끊기게(내용 잘림 방지).
+const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]\]/gi;
 // 프로젝트 생성 마커: [[PROJECT: create | 이름 | 목표 | 단계1, 단계2, ...]]
-const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]{1,2}/gi;
+const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]\]/gi;
 // 스킬(절차적 기억) 마커: [[SKILL: create | 이름 | 분류 | 한줄설명 | 상세절차]] / [[SKILL: patch | 이름 | 기존 | 새내용]] / [[SKILL: delete | 이름]]
-const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]{1,2}/gi;
+const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]\]/gi;
 // 직원 개인 지식 마커: [[SELF_KNOW: add | 분류 | 내용]] / [[SELF_KNOW: del | 내용]]
-const SELF_KNOW_RE = /\[{1,2}\s*SELF_KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
+const SELF_KNOW_RE = /\[{1,2}\s*SELF_KNOW\s*:\s*([\s\S]+?)\]\]/gi;
 // 작업 취소 마커: [[CANCEL: 작업ID]] 또는 [[CANCEL: 작업유형(ppt/pdf/...)]]
 const CANCEL_RE = /\[{1,2}\s*CANCEL\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
