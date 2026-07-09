@@ -101,11 +101,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } catch (_) {}
     }
     if ((!audioInfo || !audioInfo.data) && strictCloudGeminiTts) {
+      const cloudErrorText = String(cloudTtsError && cloudTtsError.message ? cloudTtsError.message : cloudTtsError);
       return send({
         error: "cloud_gemini_tts_failed",
+        category: classifyCloudGeminiTtsError(cloudTtsError),
         hint: explainCloudGeminiTtsError(cloudTtsError),
-        cloud_error: String(cloudTtsError && cloudTtsError.message ? cloudTtsError.message : cloudTtsError),
-      }, 502, origin);
+        cloud_error: sanitizeCloudGeminiTtsError(cloudErrorText),
+      }, 200, origin);
     }
 
     if (!audioInfo || !audioInfo.data) {
@@ -337,6 +339,19 @@ function explainCloudGeminiTtsError(err: any): string {
     return "Google Cloud 인증 정보를 확인해 주세요.";
   }
   return "Cloud Gemini-TTS 호출에 실패했습니다. 서버 로그의 cloud_gemini_tts_failed 상세 오류를 확인해 주세요.";
+}
+function classifyCloudGeminiTtsError(err: any): string {
+  const msg = String(err && err.message ? err.message : err || "");
+  if (/aiplatform\.endpoints\.predict|permission|PERMISSION_DENIED|403/i.test(msg)) return "permission";
+  if (/billing|quota|RESOURCE_EXHAUSTED|429/i.test(msg)) return "billing_or_quota";
+  if (/modelName|model_name|Unknown name|model|not found|INVALID_ARGUMENT|400/i.test(msg)) return "request_or_model";
+  if (/UNAUTHENTICATED|401|access token|credential/i.test(msg)) return "authentication";
+  return "unknown";
+}
+function sanitizeCloudGeminiTtsError(msg: string): string {
+  const raw = String(msg || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  return raw.slice(0, 900);
 }
 async function synthesizeViaCloudGeminiTts(opts: {
   token: string;
