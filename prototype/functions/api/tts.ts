@@ -49,6 +49,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const finalPrompt = promptRaw || derivePromptFromVoice(voiceNameRaw || voiceId);
     const strictCloudGeminiTts = body.strictCloudGeminiTts === true;
 
+    const clientEmailSource = env.TTS_GOOGLE_CLIENT_EMAIL ? "TTS_GOOGLE_CLIENT_EMAIL" : "GOOGLE_CLIENT_EMAIL";
     const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
     const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
     const baseOutput = (env.AUDIO_OUTPUT_GCS_URI as string | undefined) || (env.VIDEO_OUTPUT_GCS_URI as string | undefined);
@@ -97,7 +98,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     } catch (e: any) {
       cloudTtsError = e;
       try {
-        console.warn("cloud_gemini_tts_failed", String(e && e.message ? e.message : e));
+        console.warn("cloud_gemini_tts_failed", {
+          clientEmailSource,
+          clientEmail,
+          userProject,
+          error: String(e && e.message ? e.message : e),
+        });
       } catch (_) {}
     }
     if ((!audioInfo || !audioInfo.data) && strictCloudGeminiTts) {
