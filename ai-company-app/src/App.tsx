@@ -29,8 +29,10 @@ import {
   autonomousStep,
   type StatusInfo,
   type AgentInfo,
-  type HistoryTurn,
+type HistoryTurn,
 } from "./lib/api";
+
+const MAX_TTS_SENTENCES = 5;
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -186,10 +188,32 @@ export default function App() {
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
       .replace(/https?:\/\/\S+/g, "")
       .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*[-+]\s+/gm, "")
       .replace(/[*_~>|]/g, "")
+      .replace(/\r?\n+/g, ". ")
+      .replace(/([.!?。！？…])(?:\s*[.!?。！？…])+/g, "$1")
       .replace(/\s{2,}/g, " ")
       .trim()
-      .slice(0, 1600);
+  }
+
+  function limitSpeechSentences(text: string, maxSentences = MAX_TTS_SENTENCES) {
+    const sentences: string[] = [];
+    let current = "";
+    for (const char of Array.from(text)) {
+      current += char;
+      if (/[.!?。！？…]/.test(char)) {
+        const sentence = current.trim();
+        if (sentence) sentences.push(sentence);
+        current = "";
+        if (sentences.length >= maxSentences) break;
+      }
+    }
+    if (sentences.length < maxSentences && current.trim()) sentences.push(current.trim());
+    return sentences.slice(0, maxSentences).join(" ").replace(/\s{2,}/g, " ").trim().slice(0, 1600);
+  }
+
+  function buildSpeechText(text: string) {
+    return limitSpeechSentences(cleanSpeechText(text));
   }
 
   function makeTurnId(agentId?: string) {
@@ -224,7 +248,7 @@ export default function App() {
   }
 
   async function revealAgentTurn(turnId: string, agentId: string | undefined, fullText: string) {
-    const speechText = cleanSpeechText(fullText);
+    const speechText = buildSpeechText(fullText);
     if (!voiceEnabledRef.current || !speechText) {
       typeTurnText(turnId, fullText);
       return;
