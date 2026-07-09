@@ -9,11 +9,23 @@
 /
   Cache-Control: no-cache, must-revalidate
 
+/ai-company/
+  Cache-Control: no-cache, must-revalidate
+
+/ai-company/*.html
+  Cache-Control: no-cache, must-revalidate
+
 # JS/CSS: 항상 서버에서 최신 확인 (잦은 배포 시 stale JS/CSS 방지)
 /*.js
   Cache-Control: no-cache, must-revalidate
 
 /*.css
+  Cache-Control: no-cache, must-revalidate
+
+/ai-company/assets/*.js
+  Cache-Control: no-cache, must-revalidate
+
+/ai-company/assets/*.css
   Cache-Control: no-cache, must-revalidate
 
 # 이미지·폰트 등 정적 자산은 길게 캐시 가능 (해시 없는 경로지만 거의 안 바뀜)

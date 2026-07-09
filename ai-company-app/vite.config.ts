@@ -7,7 +7,7 @@ export default defineConfig({
   base: "/ai-company/",
   build: {
     outDir: "../prototype/ai-company",
-    emptyOutDir: true,
+    emptyOutDir: false,
   },
   server: {
     port: 5173,
