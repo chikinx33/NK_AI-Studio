@@ -17,6 +17,13 @@ const VOICE_MAP: Record<string, { languageCode: string; name: string }> = {
   kr_female_narration: { languageCode: "ko-KR", name: "ko-KR-Neural2-A" },
   kr_male_narration: { languageCode: "ko-KR", name: "ko-KR-Neural2-B" }
 };
+const GEMINI_TTS_VOICES = new Set([
+  "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+  "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+  "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+  "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+  "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+]);
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
@@ -38,6 +45,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const pitchNum = Number(body.pitch || 2);
     const promptRaw = String(body.prompt || "").trim();
     const voiceNameRaw = String(body.voiceName || "").trim();
+    const geminiVoiceName = pickGeminiVoiceName(String(body.geminiVoiceName || body.geminiVoice || "").trim());
     const finalPrompt = promptRaw || derivePromptFromVoice(voiceNameRaw || voiceId);
 
     const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
@@ -75,7 +83,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: {
-              voiceName: "Kore"
+              voiceName: geminiVoiceName
             }
           }
         }
@@ -224,6 +232,12 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 };
 
 function safeJson(text: string) { try { return JSON.parse(text); } catch { return text; } }
+function pickGeminiVoiceName(v: string): string {
+  const raw = String(v || "").trim();
+  if (!raw) return "Kore";
+  const hit = Array.from(GEMINI_TTS_VOICES).find((name) => name.toLowerCase() === raw.toLowerCase());
+  return hit || "Kore";
+}
 function extractGeminiAudio(json: any): { data: string; mime: string } | null {
   try {
     const cands = json?.candidates || [];

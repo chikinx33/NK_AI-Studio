@@ -5,6 +5,12 @@ import {
   addAgentKnowledge,
   deleteAgentKnowledge,
   saveAgentPersona,
+  synthesizeAgentSpeech,
+  AGENT_VOICE_PRESETS,
+  AGENT_VOICE_TEST_LINES,
+  getAgentVoiceKey,
+  setAgentVoiceKey,
+  getAgentVoicePreset,
   type AgentInfo,
   type AgentBrain,
   type KnowledgeItem,
@@ -34,6 +40,25 @@ function UsersIcon({ className }: { className?: string }) {
   );
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+    </svg>
+  );
+}
+
 // 유형 배지 (회사 지식 패널과 동일 색)
 const TYPE_BADGE: Record<string, { t: string; c: string }> = {
   원칙: { t: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
@@ -48,6 +73,9 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   const [persona, setPersona] = useState("");
   const [personaDirty, setPersonaDirty] = useState(false);
   const [savingPersona, setSavingPersona] = useState(false);
+  const [voiceKey, setVoiceKey] = useState("");
+  const [previewingVoice, setPreviewingVoice] = useState(false);
+  const [previewLine, setPreviewLine] = useState("");
   const [newRule, setNewRule] = useState("");
   const [newType, setNewType] = useState<KnowledgeType>("원칙");
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null);
@@ -65,6 +93,8 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       setBrain(b);
       setItems(k);
       setPersona(b.prompt ?? "");
+      setVoiceKey(getAgentVoiceKey(agentId));
+      setPreviewLine("");
       setPersonaDirty(false);
     })();
     return () => {
@@ -95,10 +125,34 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     setSavingPersona(false);
     setPersonaDirty(false);
   }
+  function changeVoice(nextKey: string) {
+    if (!agentId) return;
+    setVoiceKey(nextKey);
+    setAgentVoiceKey(agentId, nextKey);
+  }
+  async function previewVoice() {
+    if (!agentId || previewingVoice) return;
+    const line = AGENT_VOICE_TEST_LINES[Math.floor(Math.random() * AGENT_VOICE_TEST_LINES.length)];
+    setPreviewLine(line);
+    setPreviewingVoice(true);
+    try {
+      const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(speech.voiceUrl);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        const p = audio.play();
+        if (p && typeof p.catch === "function") p.catch(() => resolve());
+      });
+    } finally {
+      setPreviewingVoice(false);
+    }
+  }
 
   const sel = agents.find((a) => a.id === agentId) ?? null;
   const rules = items.filter((i) => (i.type ?? "사실") === "원칙");
   const others = items.filter((i) => (i.type ?? "사실") !== "원칙");
+  const selectedVoice = getAgentVoicePreset(agentId || undefined, voiceKey);
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
@@ -153,6 +207,45 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
               />
               {brain?.goal && (
                 <p className="mt-1.5 text-xs text-gray-500">미션: {brain.goal.replace(/\s+/g, " ").slice(0, 160)}</p>
+              )}
+            </section>
+
+            {/* 보이스 */}
+            <section>
+              <div className="mb-1.5 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
+                <span className="text-[11px] text-gray-600">Gemini TTS · {selectedVoice.geminiVoiceName}</span>
+              </div>
+              <div className="flex gap-1.5">
+                <select
+                  value={voiceKey}
+                  onChange={(e) => changeVoice(e.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                >
+                  {AGENT_VOICE_PRESETS.map((v) => (
+                    <option key={v.key} value={v.key}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={previewVoice}
+                  disabled={previewingVoice}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-700/50 bg-emerald-900/30 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-900/50 disabled:opacity-40"
+                  title="선택한 보이스 미리듣기"
+                >
+                  <PlayIcon className="h-4 w-4" />
+                  {previewingVoice ? "재생 중…" : "미리듣기"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500">
+                선택한 보이스는 이 직원이 채팅에서 답할 때 바로 적용됩니다.
+              </p>
+              {previewLine && (
+                <p className="mt-1 rounded-lg border border-edge bg-panel/60 px-2.5 py-1.5 text-xs text-gray-500">
+                  테스트 멘트: {previewLine}
+                </p>
               )}
             </section>
 

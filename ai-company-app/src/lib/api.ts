@@ -60,13 +60,107 @@ export async function getAgents(): Promise<AgentInfo[]> {
   return (await fetch("/api/agent/agents")).json();
 }
 
+export interface AgentVoicePreset {
+  key: string;
+  label: string;
+  geminiVoiceName: string;
+  voiceId: "kr_female_narration" | "kr_male_narration";
+  pitch: number;
+  speakingRate: number;
+  prompt: string;
+}
+
+export const AGENT_VOICE_PRESETS: AgentVoicePreset[] = [
+  { key: "core-director", label: "코어형 · 차분한 총괄", geminiVoiceName: "Kore", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.02, prompt: "Speak as a calm Korean executive orchestrator. Warm, precise, and not robotic." },
+  { key: "edge-strategy", label: "엣지형 · 낮고 단단한 전략가", geminiVoiceName: "Charon", voiceId: "kr_male_narration", pitch: -3, speakingRate: 1.0, prompt: "Speak as a confident Korean business strategist. Low, dry, practical, and human." },
+  { key: "radar-analyst", label: "레이더형 · 또렷한 분석가", geminiVoiceName: "Orus", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.04, prompt: "Speak as a precise Korean research analyst. Clear, factual, and lightly brisk." },
+  { key: "maki-bright", label: "마키형 · 밝은 마케터", geminiVoiceName: "Aoede", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.08, prompt: "Speak as a bright Korean marketer. Friendly, energetic, and conversational." },
+  { key: "plot-story", label: "플롯형 · 부드러운 기획자", geminiVoiceName: "Puck", voiceId: "kr_male_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a playful Korean story planner. Expressive, warm, and imaginative." },
+  { key: "ink-writer", label: "잉크형 · 담백한 작가", geminiVoiceName: "Leda", voiceId: "kr_female_narration", pitch: 0, speakingRate: 0.98, prompt: "Speak as a thoughtful Korean writer. Soft, articulate, and restrained." },
+  { key: "pixel-designer", label: "픽셀형 · 생기 있는 디자이너", geminiVoiceName: "Zephyr", voiceId: "kr_male_narration", pitch: 2, speakingRate: 1.07, prompt: "Speak as a lively Korean designer. Visual, upbeat, and natural." },
+  { key: "beat-sound", label: "비트형 · 리듬감 있는 사운드", geminiVoiceName: "Callirrhoe", voiceId: "kr_female_narration", pitch: 2, speakingRate: 1.05, prompt: "Speak as a Korean sound producer. Smooth, rhythmic, and relaxed." },
+  { key: "engi-builder", label: "엔지형 · 침착한 엔지니어", geminiVoiceName: "Fenrir", voiceId: "kr_male_narration", pitch: -2, speakingRate: 1.01, prompt: "Speak as a calm Korean software engineer. Practical, concise, and steady." },
+  { key: "reach-social", label: "리치형 · 활발한 홍보 담당", geminiVoiceName: "Autonoe", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.09, prompt: "Speak as a lively Korean PR lead. Social, quick, and encouraging." },
+  { key: "sync-assistant", label: "싱크형 · 친절한 일정 매니저", geminiVoiceName: "Despina", voiceId: "kr_female_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a kind Korean operations assistant. Organized, gentle, and clear." },
+  { key: "warm-guide", label: "따뜻한 안내자", geminiVoiceName: "Achernar", voiceId: "kr_female_narration", pitch: 1, speakingRate: 0.98, prompt: "Speak in warm natural Korean. Gentle, close, and reassuring." },
+  { key: "crisp-host", label: "선명한 진행자", geminiVoiceName: "Alnilam", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1.08, prompt: "Speak as a crisp Korean host. Clear, modern, and easy to follow." },
+  { key: "soft-narrator", label: "부드러운 내레이터", geminiVoiceName: "Vindemiatrix", voiceId: "kr_female_narration", pitch: -1, speakingRate: 0.96, prompt: "Speak as a soft Korean narrator. Natural, calm, and expressive." },
+];
+
+export const DEFAULT_AGENT_VOICE: Record<string, string> = {
+  core: "core-director",
+  edge: "edge-strategy",
+  radar: "radar-analyst",
+  maki: "maki-bright",
+  plot: "plot-story",
+  ink: "ink-writer",
+  pixel: "pixel-designer",
+  beat: "beat-sound",
+  engi: "engi-builder",
+  reach: "reach-social",
+  sync: "sync-assistant",
+};
+
+export const AGENT_VOICE_TEST_LINES = [
+  "좋습니다. 지금부터 핵심만 차분히 정리해 드릴게요.",
+  "잠깐만요, 이 부분은 숫자보다 맥락을 먼저 봐야 합니다.",
+  "아이디어는 좋아요. 이제 실행 순서를 세 단계로 나눠볼게요.",
+  "이 문장은 조금 딱딱하니까, 사람 말처럼 부드럽게 풀어보겠습니다.",
+  "자료를 확인해 보니, 지금 가장 중요한 신호는 방향성입니다.",
+  "오늘 할 일은 많지만, 우선순위를 잡으면 충분히 끝낼 수 있어요.",
+  "브랜드 톤은 유지하면서도, 첫 문장은 더 강하게 가보죠.",
+  "사용자님, 이건 급하게 고치기보다 원인을 먼저 보는 게 맞습니다.",
+  "좋아요. 화면 구성은 단순하게, 행동 버튼은 더 분명하게 잡겠습니다.",
+  "이 장면은 소리의 여백이 중요해요. 말보다 분위기가 먼저 와야 합니다.",
+  "마감 전에 필요한 건 완벽함보다 테스트 가능한 상태입니다.",
+  "지금 흐름이면, 홍보 문구는 짧고 기억하기 쉬운 쪽이 낫습니다.",
+  "회의록은 제가 정리해 둘게요. 결정 사항만 따로 표시하겠습니다.",
+  "잠시만 기다려 주세요. 가능한 선택지를 비교해서 가져오겠습니다.",
+  "이 표현은 좋지만, 마지막 한 줄에서 감정이 더 살아나면 좋겠어요.",
+  "문제는 기능 자체보다 사용자가 어디서 멈추는지에 있습니다.",
+  "이제 충분히 괜찮습니다. 다음 단계로 넘겨도 되는 상태예요.",
+  "조금 더 선명하게 말하면, 지금 필요한 건 확장보다 정리입니다.",
+  "콘텐츠의 첫 3초는 설명이 아니라 호기심으로 열어야 합니다.",
+  "알겠습니다. 제가 조용히 이어받아서 마무리해 보겠습니다.",
+];
+
+const AGENT_VOICE_STORAGE_KEY = "agentVoiceSelections";
+
+export function getAgentVoiceKey(agentId?: string): string {
+  const id = String(agentId || "");
+  try {
+    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_STORAGE_KEY) || "{}");
+    if (saved && typeof saved[id] === "string") return saved[id];
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_AGENT_VOICE[id] || "core-director";
+}
+
+export function setAgentVoiceKey(agentId: string, voiceKey: string) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_STORAGE_KEY) || "{}");
+    saved[agentId] = voiceKey;
+    localStorage.setItem(AGENT_VOICE_STORAGE_KEY, JSON.stringify(saved));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getAgentVoicePreset(agentId?: string, voiceKey?: string): AgentVoicePreset {
+  const key = voiceKey || getAgentVoiceKey(agentId);
+  return AGENT_VOICE_PRESETS.find((v) => v.key === key) || AGENT_VOICE_PRESETS[0];
+}
+
 export async function synthesizeAgentSpeech(input: {
   agentId?: string;
   text: string;
+  voiceKey?: string;
 }): Promise<{ voiceUrl: string; format?: string; objectName?: string }> {
   const script = String(input.text || "").trim();
   if (!script) throw new Error("script is required");
   const sceneId = `chat_${String(input.agentId || "agent").replace(/[^a-z0-9_-]/gi, "_")}_${Date.now()}`;
+  const voice = getAgentVoicePreset(input.agentId, input.voiceKey);
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -74,10 +168,11 @@ export async function synthesizeAgentSpeech(input: {
       projectId: "ai-company-chat",
       sceneId,
       script,
-      voiceId: resolveAgentVoiceId(input.agentId),
-      speakingRate: 1.06,
-      pitch: resolveAgentPitch(input.agentId),
-      voiceName: resolveAgentVoicePrompt(input.agentId),
+      voiceId: voice.voiceId,
+      speakingRate: voice.speakingRate,
+      pitch: voice.pitch,
+      voiceName: voice.prompt,
+      geminiVoiceName: voice.geminiVoiceName,
     }),
   });
   const data = await res.json().catch(() => ({} as any));
@@ -85,46 +180,6 @@ export async function synthesizeAgentSpeech(input: {
     throw new Error(data?.error || `tts_failed_${res.status}`);
   }
   return { voiceUrl: data.voiceUrl, format: data.format, objectName: data.objectName };
-}
-
-function resolveAgentVoiceId(agentId?: string): string {
-  return agentId === "edge" || agentId === "engi" || agentId === "radar"
-    ? "kr_male_narration"
-    : "kr_female_narration";
-}
-
-function resolveAgentPitch(agentId?: string): number {
-  const pitchByAgent: Record<string, number> = {
-    core: 1,
-    edge: -1,
-    radar: 0,
-    maki: 3,
-    plot: 1,
-    ink: 0,
-    pixel: 3,
-    beat: 2,
-    engi: -2,
-    reach: 2,
-    sync: 1,
-  };
-  return pitchByAgent[agentId || ""] ?? 1;
-}
-
-function resolveAgentVoicePrompt(agentId?: string): string {
-  const promptByAgent: Record<string, string> = {
-    core: "preset:char:robot:calm",
-    edge: "preset:char:magician:confident",
-    radar: "preset:char:robot:precise",
-    maki: "preset:char:cute:bright",
-    plot: "preset:char:magician:storyteller",
-    ink: "preset:char:magician:writer",
-    pixel: "preset:char:cute:designer",
-    beat: "preset:char:cute:rhythmic",
-    engi: "preset:char:robot:engineer",
-    reach: "preset:char:trick:social",
-    sync: "preset:char:robot:assistant",
-  };
-  return promptByAgent[agentId || ""] || "preset:char:robot:assistant";
 }
 
 // 직원 상세(페르소나) + 개인 지식·규칙 관리
