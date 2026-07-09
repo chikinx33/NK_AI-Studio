@@ -4,12 +4,16 @@ import Markdown from "./Markdown";
 import SoundToggle from "./SoundToggle";
 
 export interface Turn {
+  id?: string;
   role: "user" | "agent";
   agentId?: string;
   name?: string;
   emoji?: string;
   text: string;
+  displayText?: string;
   streaming?: boolean;
+  typing?: boolean;
+  voicePreparing?: boolean;
   imagePreview?: string; // 첨부 이미지 data URL (사용자 메시지 버블에 표시)
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
 }
@@ -43,6 +47,10 @@ interface Props {
 /** YYYY-MM-DD → YYYY.MM.DD (날짜 형식이 아니면 빈 문자열) */
 export function formatConvDate(d?: string): string {
   return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.replace(/-/g, ".") : "";
+}
+
+export function visibleTurnText(t: Turn): string {
+  return typeof t.displayText === "string" ? t.displayText : t.text;
 }
 
 function MessagesSquareIcon({ className }: { className?: string }) {
@@ -442,7 +450,10 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                 </div>
               </div>
             </div>
-          ) : (
+          ) : (() => {
+            const shownText = visibleTurnText(t);
+            const revealing = !!(t.streaming || t.typing || t.voicePreparing);
+            return (
             <div key={i} className="flex items-start justify-start gap-2">
               <ChatAvatar turn={t} />
               <div className="max-w-[78%]">
@@ -456,14 +467,14 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                       <ListTodoIcon className="h-4 w-4 shrink-0 translate-y-0.5 text-amber-300" />
                       {t.text.replace(/^🔐\s*/, "")}
                     </span>
-                  ) : t.text ? (
+                  ) : shownText ? (
                     (() => {
                       // 코드 블록(```)이 있는 메시지는 자르지 않는다 — 중간에 잘리면 코드가 깨지고
                       // 다운로드도 잘린 코드만 받게 된다. (코드는 블록 안에서 스크롤됨)
-                      const hasCode = t.text.includes("```");
-                      const isLong = !t.streaming && !hasCode && t.text.length > LONG_CHARS;
+                      const hasCode = shownText.includes("```");
+                      const isLong = !revealing && !hasCode && shownText.length > LONG_CHARS;
                       const isOpen = expandedMsgs.has(i);
-                      const shown = isLong && !isOpen ? t.text.slice(0, LONG_CHARS) : t.text;
+                      const shown = isLong && !isOpen ? shownText.slice(0, LONG_CHARS) : shownText;
                       return (
                         <>
                           <Markdown text={shown} />
@@ -502,8 +513,8 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                       </div>
                     );
                   })()}
-                  {t.streaming && <span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-400 animate-pulse align-middle" />}
-                  {!t.streaming && t.text && t.agentId && !t.agentId.startsWith("_") && (
+                  {revealing && <span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-400 animate-pulse align-middle" />}
+                  {!revealing && t.text && t.agentId && !t.agentId.startsWith("_") && (
                     <div className="absolute bottom-1 right-1 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                       <button
                         onClick={() => injectKnowledge(i, t.text)}
@@ -524,7 +535,8 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                 </div>
               </div>
             </div>
-          )
+            );
+          })()
         )}
         {busy && !turns[turns.length - 1]?.streaming && (() => {
           // 사이드바 하이라이트(activeIds)와 반드시 일치시킨다 — 같은 출처를 우선으로 본다.

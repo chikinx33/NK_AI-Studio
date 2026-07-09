@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatConvDate, formatChatTime } from "./Chat";
+import { formatConvDate, formatChatTime, visibleTurnText } from "./Chat";
 import Markdown from "./Markdown";
 import SoundToggle from "./SoundToggle";
 import type { Turn } from "./Chat";
@@ -303,6 +303,7 @@ export default function VisualNovel({
   const lastUserMsg = lastUserIdx >= 0 ? turns[lastUserIdx].text : "";
   const batch = turns.slice(lastUserIdx + 1).filter((t) => t.role === "agent");
   const speaker = batch.length ? batch[batch.length - 1] : null;
+  const speakerText = speaker ? visibleTurnText(speaker) : "";
   const speakerKey = lastUserIdx + 1 + Math.max(0, batch.length - 1);
   const roleOf = (id?: string) =>
     (agents.find((a) => a.id === id)?.role ?? "").replace(/—/g, "/");
@@ -320,7 +321,7 @@ export default function VisualNovel({
   const pendingId = focusAgent?.id ?? lastAgentTurn?.agentId ?? "core";
   const pendingName = agents.find((a) => a.id === pendingId)?.name ?? lastAgentTurn?.name ?? "코어";
   // 대기 중 표시: 실제 생성 진행 중(streaming)인데 아직 이번 답의 텍스트가 없을 때
-  const waiting = !!streaming && !speaker?.text;
+  const waiting = !!streaming && !speakerText;
 
   return (
     <div className="flex-1 flex flex-col h-full relative overflow-hidden">
@@ -391,13 +392,17 @@ export default function VisualNovel({
                         {displayName(t)}
                       </div>
                       <div className="rounded-2xl rounded-bl-sm border border-edge bg-panel px-3 py-2 text-sm leading-relaxed text-gray-200">
-                        {t.streaming ? (
-                          <span className="whitespace-pre-wrap">{t.text}<span className="vn-caret">▋</span></span>
-                        ) : t.text ? (
-                          <Markdown text={t.text} />
-                        ) : (
-                          <span className="text-gray-500">…</span>
-                        )}
+                        {(() => {
+                          const shownText = visibleTurnText(t);
+                          const revealing = !!(t.streaming || t.typing || t.voicePreparing);
+                          return revealing ? (
+                            <span className="whitespace-pre-wrap">{shownText}<span className="vn-caret">▋</span></span>
+                          ) : shownText ? (
+                            <Markdown text={shownText} />
+                          ) : (
+                            <span className="text-gray-500">…</span>
+                          );
+                        })()}
                       </div>
                       {formatChatTime(t.ts) && <div className="mt-0.5 text-[10px] text-gray-500">{formatChatTime(t.ts)}</div>}
                     </div>
@@ -508,15 +513,15 @@ export default function VisualNovel({
               <span className="text-[11px] text-gray-500">{roleOf(speaker.agentId)}</span>
             </div>
             <div className="text-sm leading-relaxed min-h-[3.2rem] max-h-[34vh] overflow-y-auto pr-1">
-              {speaker.text ? (
+              {speakerText ? (
                 // 스트리밍 중엔 타자기 느낌 유지(원본+커서), 끝나면 마크다운으로 깔끔하게 렌더
-                speaker.streaming ? (
+                (speaker.streaming || speaker.typing || speaker.voicePreparing) ? (
                   <span className="whitespace-pre-wrap">
-                    {speaker.text}
+                    {speakerText}
                     <span className="vn-caret">▋</span>
                   </span>
                 ) : (
-                  <Markdown text={speaker.text} />
+                  <Markdown text={speakerText} />
                 )
               ) : waiting ? (
                 <TypingDots />

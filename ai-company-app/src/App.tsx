@@ -121,10 +121,9 @@ export default function App() {
   const lastSeqRef = useRef<number>(-1);
   const abortRef = useRef<AbortController | null>(null);
   const spokenTurnKeysRef = useRef<Set<string>>(new Set());
-  const speechQueueRef = useRef<{ key: string; agentId?: string; text: string }[]>([]);
-  const speechPlayingRef = useRef(false);
   const speechAudioRef = useRef<HTMLAudioElement | null>(null);
   const voiceEnabledRef = useRef(voiceEnabled);
+  const revealRunsRef = useRef<Record<string, number>>({});
   // 활성 대화(스레드) — 기본값 오늘(로컬 날짜). 전환 시 그 대화 메시지를 불러온다.
   const localToday = () => {
     const d = new Date();
@@ -152,16 +151,15 @@ export default function App() {
   function toggleVoice() {
     setVoiceEnabled((v) => {
       const next = !v;
+      voiceEnabledRef.current = next;
       localStorage.setItem("agentVoiceEnabled", next ? "1" : "0");
       if (!next) {
-        speechQueueRef.current = [];
         const audio = speechAudioRef.current;
         if (audio) {
           audio.pause();
           audio.src = "";
         }
         speechAudioRef.current = null;
-        speechPlayingRef.current = false;
       }
       return next;
     });
@@ -194,6 +192,61 @@ export default function App() {
       .slice(0, 1600);
   }
 
+  function makeTurnId(agentId?: string) {
+    return `${agentId || "agent"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function patchTurn(turnId: string, patch: Partial<Turn>) {
+    const next = turnsRef.current.map((t) => (t.id === turnId ? { ...t, ...patch } : t));
+    commit(next);
+  }
+
+  function typeTurnText(turnId: string, fullText: string) {
+    const chars = Array.from(fullText);
+    const run = (revealRunsRef.current[turnId] || 0) + 1;
+    revealRunsRef.current[turnId] = run;
+    const step = chars.length > 900 ? 7 : chars.length > 450 ? 5 : chars.length > 180 ? 3 : 2;
+    const delay = chars.length > 450 ? 13 : 18;
+    let index = 0;
+
+    patchTurn(turnId, { displayText: "", typing: true, voicePreparing: false });
+    const tick = () => {
+      if (revealRunsRef.current[turnId] !== run) return;
+      index = Math.min(chars.length, index + step);
+      patchTurn(turnId, {
+        displayText: chars.slice(0, index).join(""),
+        typing: index < chars.length,
+        voicePreparing: false,
+      });
+      if (index < chars.length) window.setTimeout(tick, delay);
+    };
+    window.setTimeout(tick, delay);
+  }
+
+  async function revealAgentTurn(turnId: string, agentId: string | undefined, fullText: string) {
+    const speechText = cleanSpeechText(fullText);
+    if (!voiceEnabledRef.current || !speechText) {
+      typeTurnText(turnId, fullText);
+      return;
+    }
+
+    patchTurn(turnId, { displayText: "", typing: false, voicePreparing: true });
+    try {
+      const speech = await synthesizeAgentSpeech({ agentId, text: speechText });
+      if (!voiceEnabledRef.current) {
+        typeTurnText(turnId, fullText);
+        return;
+      }
+      patchTurn(turnId, { voicePreparing: false });
+      const playPromise = playSpeechUrl(speech.voiceUrl, getAgentVoiceSpeed(agentId));
+      typeTurnText(turnId, fullText);
+      await playPromise;
+    } catch {
+      // TTS가 실패해도 답변은 게임 대사처럼 자연스럽게 노출한다.
+      typeTurnText(turnId, fullText);
+    }
+  }
+
   async function playSpeechUrl(url: string, speed = 1) {
     await new Promise<void>((resolve) => {
       const audio = new Audio(url);
@@ -208,27 +261,6 @@ export default function App() {
       if (started && typeof started.catch === "function") started.catch(() => resolve());
     });
     if (speechAudioRef.current?.src === url) speechAudioRef.current = null;
-  }
-
-  async function drainSpeechQueue() {
-    if (speechPlayingRef.current) return;
-    speechPlayingRef.current = true;
-    try {
-      while (voiceEnabledRef.current && speechQueueRef.current.length) {
-        const item = speechQueueRef.current.shift();
-        if (!item) continue;
-        const text = cleanSpeechText(item.text);
-        if (!text) continue;
-        const speech = await synthesizeAgentSpeech({ agentId: item.agentId, text });
-        if (!voiceEnabledRef.current) break;
-        await playSpeechUrl(speech.voiceUrl, getAgentVoiceSpeed(item.agentId));
-      }
-    } catch {
-      // TTS는 보조 기능이므로 실패해도 채팅 흐름은 막지 않는다.
-    } finally {
-      speechPlayingRef.current = false;
-      if (voiceEnabledRef.current && speechQueueRef.current.length) void drainSpeechQueue();
-    }
   }
 
   // 사이드바 말풍선 버튼 → 해당 아바타 전용 대화. 어느 페이지에서든 즉시 대화창으로 전환.
@@ -286,29 +318,13 @@ export default function App() {
     voiceEnabledRef.current = voiceEnabled;
     if (!voiceEnabled) {
       markSpoken(turns);
-      speechQueueRef.current = [];
       const audio = speechAudioRef.current;
       if (audio) {
         audio.pause();
         audio.src = "";
       }
       speechAudioRef.current = null;
-      speechPlayingRef.current = false;
-      return;
     }
-
-    const queued: { key: string; agentId?: string; text: string }[] = [];
-    turns.forEach((t, i) => {
-      if (!isSpeakableTurn(t)) return;
-      const key = turnSpeechKey(t, i);
-      if (spokenTurnKeysRef.current.has(key)) return;
-      spokenTurnKeysRef.current.add(key);
-      queued.push({ key, agentId: t.agentId, text: t.text });
-    });
-    if (!queued.length) return;
-    speechQueueRef.current.push(...queued);
-    void drainSpeechQueue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns, voiceEnabled]);
 
   // 하트비트: 브라우저가 열려 있는 동안 서버에 생존 신호 전송
@@ -369,11 +385,13 @@ export default function App() {
               commit([
                 ...turnsRef.current,
                 {
+                  id: makeTurnId(data.agentId),
                   role: "agent",
                   agentId: data.agentId,
                   name: data.name,
                   emoji: data.emoji,
                   text: "",
+                  displayText: "",
                   streaming: true,
                   ts: Date.now(),
                 },
@@ -392,17 +410,25 @@ export default function App() {
             }
             case "turn_end": {
               const next = [...turnsRef.current];
+              let reveal: { id: string; agentId?: string; text: string } | null = null;
               for (let i = next.length - 1; i >= 0; i--) {
                 if (next[i].agentId === data.agentId && next[i].streaming) {
+                  const finalText = data.text ?? next[i].text;
+                  const id = next[i].id || makeTurnId(data.agentId);
                   next[i] = {
                     ...next[i],
+                    id,
                     streaming: false,
-                    text: data.text ?? next[i].text,
+                    text: finalText,
+                    displayText: "",
+                    voicePreparing: voiceEnabledRef.current,
                   };
+                  reveal = { id, agentId: next[i].agentId, text: finalText };
                   break;
                 }
               }
               commit(next);
+              if (reveal) void revealAgentTurn(reveal.id, reveal.agentId, reveal.text);
               // 발언이 끝나도 working을 지우지 않는다 — 다음 발언자의 turn_start가 교체하거나
               // 스트림 종료(아래 finally)에서 일괄 정리. 이래야 '현재 응답자' 하이라이트가 사이드바·
               // 타이핑 버블에서 유지돼 실제 답하는 아바타가 그대로 표시된다.
@@ -441,8 +467,12 @@ export default function App() {
     }
 
     abortRef.current = null;
-    // 스트리밍 플래그 정리 (중지 시 진행 중이던 답변은 그대로 남김)
-    commit(turnsRef.current.map((t) => ({ ...t, streaming: false })));
+    // 스트리밍 플래그 정리. 중지/오류처럼 turn_end가 오지 않은 답변은 현재까지 받은 문장을 노출한다.
+    commit(turnsRef.current.map((t) => (
+      t.streaming
+        ? { ...t, streaming: false, displayText: t.displayText || t.text, typing: false, voicePreparing: false }
+        : t
+    )));
     setWorkingIds(new Set()); // 누락된 busy=false 대비 안전 정리
     setBusy(false);
     setResultsRefreshKey((k) => k + 1); // 스트림 종료 시에도 결과 패널 갱신
@@ -591,6 +621,7 @@ export default function App() {
   // 업무 중 = 발언(스트리밍) 중이거나 실제 업무(agent_busy/백그라운드 작업) 중
   const activeIds = new Set<string>([
     ...turns.filter((t) => t.streaming).map((t) => t.agentId!).filter(Boolean),
+    ...turns.filter((t) => t.typing || t.voicePreparing).map((t) => t.agentId!).filter(Boolean),
     ...workingIds,
     ...serverWorking,
   ]);
