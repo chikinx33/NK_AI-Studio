@@ -22,6 +22,8 @@ import {
   getReminders,
   deleteReminder,
   synthesizeAgentSpeech,
+  applyAudioPlaybackRate,
+  getAgentVoiceSpeed,
   type DueReminder,
   autonomousStep,
   type StatusInfo,
@@ -185,9 +187,10 @@ export default function App() {
       .slice(0, 1600);
   }
 
-  async function playSpeechUrl(url: string) {
+  async function playSpeechUrl(url: string, speed = 1) {
     await new Promise<void>((resolve) => {
       const audio = new Audio(url);
+      applyAudioPlaybackRate(audio, speed);
       speechAudioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => resolve();
@@ -211,7 +214,7 @@ export default function App() {
         if (!text) continue;
         const speech = await synthesizeAgentSpeech({ agentId: item.agentId, text });
         if (!voiceEnabledRef.current) break;
-        await playSpeechUrl(speech.voiceUrl);
+        await playSpeechUrl(speech.voiceUrl, getAgentVoiceSpeed(item.agentId));
       }
     } catch {
       // TTS는 보조 기능이므로 실패해도 채팅 흐름은 막지 않는다.

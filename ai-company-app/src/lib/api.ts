@@ -135,6 +135,9 @@ export const AGENT_VOICE_TEST_LINES = [
 ];
 
 const AGENT_VOICE_STORAGE_KEY = "agentVoiceSelections";
+const AGENT_VOICE_SPEED_STORAGE_KEY = "agentVoiceSpeeds";
+export const AGENT_VOICE_SPEEDS = [0.5, 1, 1.5, 2] as const;
+export type AgentVoiceSpeed = typeof AGENT_VOICE_SPEEDS[number];
 
 export function getAgentVoiceKey(agentId?: string): string {
   const id = String(agentId || "");
@@ -155,6 +158,41 @@ export function setAgentVoiceKey(agentId: string, voiceKey: string) {
   } catch {
     /* ignore */
   }
+}
+
+export function getAgentVoiceSpeed(agentId?: string): AgentVoiceSpeed {
+  const id = String(agentId || "");
+  try {
+    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_SPEED_STORAGE_KEY) || "{}");
+    const n = Number(saved?.[id]);
+    if (AGENT_VOICE_SPEEDS.includes(n as AgentVoiceSpeed)) return n as AgentVoiceSpeed;
+  } catch {
+    /* ignore */
+  }
+  return 1;
+}
+
+export function setAgentVoiceSpeed(agentId: string, speed: AgentVoiceSpeed) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_SPEED_STORAGE_KEY) || "{}");
+    saved[agentId] = speed;
+    localStorage.setItem(AGENT_VOICE_SPEED_STORAGE_KEY, JSON.stringify(saved));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function nextAgentVoiceSpeed(current: number): AgentVoiceSpeed {
+  const idx = AGENT_VOICE_SPEEDS.findIndex((s) => s === current);
+  return AGENT_VOICE_SPEEDS[(idx + 1) % AGENT_VOICE_SPEEDS.length];
+}
+
+export function applyAudioPlaybackRate(audio: HTMLAudioElement, speed: number) {
+  const rate = AGENT_VOICE_SPEEDS.includes(speed as AgentVoiceSpeed) ? speed : 1;
+  audio.playbackRate = rate;
+  (audio as any).preservesPitch = true;
+  (audio as any).mozPreservesPitch = true;
+  (audio as any).webkitPreservesPitch = true;
 }
 
 export function getAgentVoicePreset(agentId?: string, voiceKey?: string): AgentVoicePreset {

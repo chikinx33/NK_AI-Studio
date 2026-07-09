@@ -8,9 +8,14 @@ import {
   synthesizeAgentSpeech,
   AGENT_VOICE_PRESETS,
   AGENT_VOICE_TEST_LINES,
+  applyAudioPlaybackRate,
   getAgentVoiceKey,
+  getAgentVoiceSpeed,
+  nextAgentVoiceSpeed,
   setAgentVoiceKey,
+  setAgentVoiceSpeed,
   getAgentVoicePreset,
+  type AgentVoiceSpeed,
   type AgentInfo,
   type AgentBrain,
   type KnowledgeItem,
@@ -74,6 +79,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   const [personaDirty, setPersonaDirty] = useState(false);
   const [savingPersona, setSavingPersona] = useState(false);
   const [voiceKey, setVoiceKey] = useState("");
+  const [voiceSpeed, setVoiceSpeed] = useState<AgentVoiceSpeed>(1);
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const [previewLine, setPreviewLine] = useState("");
   const [previewError, setPreviewError] = useState("");
@@ -95,6 +101,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       setItems(k);
       setPersona(b.prompt ?? "");
       setVoiceKey(getAgentVoiceKey(agentId));
+      setVoiceSpeed(getAgentVoiceSpeed(agentId));
       setPreviewLine("");
       setPreviewError("");
       setPersonaDirty(false);
@@ -133,6 +140,12 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     setPreviewError("");
     setAgentVoiceKey(agentId, nextKey);
   }
+  function cycleVoiceSpeed() {
+    if (!agentId) return;
+    const next = nextAgentVoiceSpeed(voiceSpeed);
+    setVoiceSpeed(next);
+    setAgentVoiceSpeed(agentId, next);
+  }
   function explainPreviewError(err: unknown) {
     const msg = String(err instanceof Error ? err.message : err || "");
     if (/ELEVENLABS_API_KEY|not configured/i.test(msg)) {
@@ -159,6 +172,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
       await new Promise<void>((resolve) => {
         const audio = new Audio(speech.voiceUrl);
+        applyAudioPlaybackRate(audio, voiceSpeed);
         audio.onended = () => resolve();
         audio.onerror = () => resolve();
         const p = audio.play();
@@ -252,6 +266,14 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={cycleVoiceSpeed}
+                  className="inline-flex h-[38px] w-14 shrink-0 items-center justify-center rounded-lg border border-edge bg-panel text-sm font-medium text-gray-200 transition hover:border-emerald-700/60 hover:bg-edge"
+                  title="보이스 재생 속도"
+                >
+                  x{voiceSpeed}
+                </button>
                 <button
                   type="button"
                   onClick={previewVoice}
