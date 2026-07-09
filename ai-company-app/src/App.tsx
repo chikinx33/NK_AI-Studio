@@ -181,8 +181,15 @@ export default function App() {
     });
   }
 
-  function cleanSpeechText(text: string) {
+  function removeSpeechEmoji(text: string) {
     return text
+      .replace(/[0-9#*]\uFE0F?\u20E3/g, "")
+      .replace(/\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?)*/gu, "")
+      .replace(/[\uFE0E\uFE0F\u200D]/g, "");
+  }
+
+  function cleanSpeechText(text: string) {
+    return removeSpeechEmoji(text)
       .replace(/```[\s\S]*?```/g, "코드 블록은 화면에서 확인해 주세요.")
       .replace(/`([^`]+)`/g, "$1")
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
