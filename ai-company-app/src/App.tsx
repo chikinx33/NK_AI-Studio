@@ -21,6 +21,7 @@ import {
   getApprovals,
   getReminders,
   deleteReminder,
+  synthesizeAgentSpeech,
   type DueReminder,
   autonomousStep,
   type StatusInfo,
@@ -91,6 +92,7 @@ export default function App() {
     });
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") !== "0");
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
@@ -115,6 +117,11 @@ export default function App() {
   const turnsRef = useRef<Turn[]>([]);
   const lastSeqRef = useRef<number>(-1);
   const abortRef = useRef<AbortController | null>(null);
+  const spokenTurnKeysRef = useRef<Set<string>>(new Set());
+  const speechQueueRef = useRef<{ key: string; agentId?: string; text: string }[]>([]);
+  const speechPlayingRef = useRef(false);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceEnabledRef = useRef(voiceEnabled);
   // 활성 대화(스레드) — 기본값 오늘(로컬 날짜). 전환 시 그 대화 메시지를 불러온다.
   const localToday = () => {
     const d = new Date();
@@ -131,6 +138,87 @@ export default function App() {
       if (!next) setFocusAgentId(null); // 일반 채팅으로 나가면 포커스 해제
       return next;
     });
+  }
+
+  function toggleVoice() {
+    setVoiceEnabled((v) => {
+      const next = !v;
+      localStorage.setItem("agentVoiceEnabled", next ? "1" : "0");
+      if (!next) {
+        speechQueueRef.current = [];
+        const audio = speechAudioRef.current;
+        if (audio) {
+          audio.pause();
+          audio.src = "";
+        }
+        speechAudioRef.current = null;
+        speechPlayingRef.current = false;
+      }
+      return next;
+    });
+  }
+
+  function turnSpeechKey(t: Turn, index: number) {
+    return [index, t.ts || 0, t.agentId || "", t.text].join("|");
+  }
+
+  function isSpeakableTurn(t: Turn) {
+    return t.role === "agent" && !!t.agentId && !t.agentId.startsWith("_") && !t.streaming && !!t.text.trim();
+  }
+
+  function markSpoken(turnList: Turn[]) {
+    turnList.forEach((t, i) => {
+      if (isSpeakableTurn(t)) spokenTurnKeysRef.current.add(turnSpeechKey(t, i));
+    });
+  }
+
+  function cleanSpeechText(text: string) {
+    return text
+      .replace(/```[\s\S]*?```/g, "코드 블록은 화면에서 확인해 주세요.")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/[*_~>|]/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+      .slice(0, 1600);
+  }
+
+  async function playSpeechUrl(url: string) {
+    await new Promise<void>((resolve) => {
+      const audio = new Audio(url);
+      speechAudioRef.current = audio;
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.onpause = () => {
+        if (!voiceEnabledRef.current) resolve();
+      };
+      const started = audio.play();
+      if (started && typeof started.catch === "function") started.catch(() => resolve());
+    });
+    if (speechAudioRef.current?.src === url) speechAudioRef.current = null;
+  }
+
+  async function drainSpeechQueue() {
+    if (speechPlayingRef.current) return;
+    speechPlayingRef.current = true;
+    try {
+      while (voiceEnabledRef.current && speechQueueRef.current.length) {
+        const item = speechQueueRef.current.shift();
+        if (!item) continue;
+        const text = cleanSpeechText(item.text);
+        if (!text) continue;
+        const speech = await synthesizeAgentSpeech({ agentId: item.agentId, text });
+        if (!voiceEnabledRef.current) break;
+        await playSpeechUrl(speech.voiceUrl);
+      }
+    } catch {
+      // TTS는 보조 기능이므로 실패해도 채팅 흐름은 막지 않는다.
+    } finally {
+      speechPlayingRef.current = false;
+      if (voiceEnabledRef.current && speechQueueRef.current.length) void drainSpeechQueue();
+    }
   }
 
   // 사이드바 말풍선 버튼 → 해당 아바타 전용 대화. 어느 페이지에서든 즉시 대화창으로 전환.
@@ -175,14 +263,43 @@ export default function App() {
   // 활성 대화가 바뀌면 그 대화의 메시지를 불러온다 (전환·복원)
   useEffect(() => {
     getConversationMessages(activeConvId)
-      .then((h) =>
-        commit(
-          h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, ts: t.ts }))
-        )
-      )
+      .then((h) => {
+        const loaded = h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, ts: t.ts }));
+        markSpoken(loaded);
+        commit(loaded);
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConvId]);
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+    if (!voiceEnabled) {
+      markSpoken(turns);
+      speechQueueRef.current = [];
+      const audio = speechAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+      speechAudioRef.current = null;
+      speechPlayingRef.current = false;
+      return;
+    }
+
+    const queued: { key: string; agentId?: string; text: string }[] = [];
+    turns.forEach((t, i) => {
+      if (!isSpeakableTurn(t)) return;
+      const key = turnSpeechKey(t, i);
+      if (spokenTurnKeysRef.current.has(key)) return;
+      spokenTurnKeysRef.current.add(key);
+      queued.push({ key, agentId: t.agentId, text: t.text });
+    });
+    if (!queued.length) return;
+    speechQueueRef.current.push(...queued);
+    void drainSpeechQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns, voiceEnabled]);
 
   // 하트비트: 브라우저가 열려 있는 동안 서버에 생존 신호 전송
   // (백그라운드 런처로 켰을 때, 브라우저를 닫으면 서버가 스스로 종료됨)
@@ -559,6 +676,8 @@ export default function App() {
             focusAgent={agents.find((a) => a.id === focusAgentId) ?? null}
             onClearFocus={clearFocus}
             convDate={activeConvId}
+            voiceEnabled={voiceEnabled}
+            onToggleVoice={toggleVoice}
           />
         ) : (
           <Chat
@@ -573,6 +692,8 @@ export default function App() {
             agents={agents}
             convDate={activeConvId}
             activeIds={activeIds}
+            voiceEnabled={voiceEnabled}
+            onToggleVoice={toggleVoice}
           />
         )}
         </ErrorBoundary>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { addKnowledge } from "../lib/api";
 import Markdown from "./Markdown";
+import SoundToggle from "./SoundToggle";
 
 export interface Turn {
   role: "user" | "agent";
@@ -35,6 +36,8 @@ interface Props {
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
   activeIds?: Set<string>; // 현재 활성(작업 중) 에이전트 ID 집합 — 입력 중 아바타 결정용
+  voiceEnabled: boolean;
+  onToggleVoice: () => void;
 }
 
 /** YYYY-MM-DD → YYYY.MM.DD (날짜 형식이 아니면 빈 문자열) */
@@ -269,7 +272,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds }: Props) {
+export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -391,6 +394,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
               </span>
             </button>
           )}
+          <SoundToggle enabled={voiceEnabled} onToggle={onToggleVoice} />
         </div>
       </div>
 

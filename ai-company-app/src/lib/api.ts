@@ -60,6 +60,73 @@ export async function getAgents(): Promise<AgentInfo[]> {
   return (await fetch("/api/agent/agents")).json();
 }
 
+export async function synthesizeAgentSpeech(input: {
+  agentId?: string;
+  text: string;
+}): Promise<{ voiceUrl: string; format?: string; objectName?: string }> {
+  const script = String(input.text || "").trim();
+  if (!script) throw new Error("script is required");
+  const sceneId = `chat_${String(input.agentId || "agent").replace(/[^a-z0-9_-]/gi, "_")}_${Date.now()}`;
+  const res = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: "ai-company-chat",
+      sceneId,
+      script,
+      voiceId: resolveAgentVoiceId(input.agentId),
+      speakingRate: 1.06,
+      pitch: resolveAgentPitch(input.agentId),
+      voiceName: resolveAgentVoicePrompt(input.agentId),
+    }),
+  });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.error || !data?.voiceUrl) {
+    throw new Error(data?.error || `tts_failed_${res.status}`);
+  }
+  return { voiceUrl: data.voiceUrl, format: data.format, objectName: data.objectName };
+}
+
+function resolveAgentVoiceId(agentId?: string): string {
+  return agentId === "edge" || agentId === "engi" || agentId === "radar"
+    ? "kr_male_narration"
+    : "kr_female_narration";
+}
+
+function resolveAgentPitch(agentId?: string): number {
+  const pitchByAgent: Record<string, number> = {
+    core: 1,
+    edge: -1,
+    radar: 0,
+    maki: 3,
+    plot: 1,
+    ink: 0,
+    pixel: 3,
+    beat: 2,
+    engi: -2,
+    reach: 2,
+    sync: 1,
+  };
+  return pitchByAgent[agentId || ""] ?? 1;
+}
+
+function resolveAgentVoicePrompt(agentId?: string): string {
+  const promptByAgent: Record<string, string> = {
+    core: "preset:char:robot:calm",
+    edge: "preset:char:magician:confident",
+    radar: "preset:char:robot:precise",
+    maki: "preset:char:cute:bright",
+    plot: "preset:char:magician:storyteller",
+    ink: "preset:char:magician:writer",
+    pixel: "preset:char:cute:designer",
+    beat: "preset:char:cute:rhythmic",
+    engi: "preset:char:robot:engineer",
+    reach: "preset:char:trick:social",
+    sync: "preset:char:robot:assistant",
+  };
+  return promptByAgent[agentId || ""] || "preset:char:robot:assistant";
+}
+
 // 직원 상세(페르소나) + 개인 지식·규칙 관리
 export interface AgentBrain {
   meta: AgentInfo;

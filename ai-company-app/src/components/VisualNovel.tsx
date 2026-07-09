@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatConvDate, formatChatTime } from "./Chat";
 import Markdown from "./Markdown";
+import SoundToggle from "./SoundToggle";
 import type { Turn } from "./Chat";
 import type { AgentInfo } from "../lib/api";
 
@@ -17,6 +18,8 @@ interface Props {
   focusAgent?: AgentInfo | null;
   onClearFocus: () => void;
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD)
+  voiceEnabled: boolean;
+  onToggleVoice: () => void;
 }
 
 // 직원별 액센트 컬러 (UI용)
@@ -259,6 +262,7 @@ function TypingDots() {
 
 export default function VisualNovel({
   turns, busy, streaming, onStop, draft, setDraft, onSend, agents, onToggleMode, focusAgent, onClearFocus, convDate,
+  voiceEnabled, onToggleVoice,
 }: Props) {
   // 대화 기록 오버레이 표시 여부 — 켜면 이 대화의 전체 주고받기(내 메시지+직원 메시지)를 스크롤로 본다.
   const [showLog, setShowLog] = useState(false);
@@ -362,6 +366,7 @@ export default function VisualNovel({
               <UsersRoundIcon className="h-4 w-4" /> VN 모드
             </span>
           </button>
+          <SoundToggle enabled={voiceEnabled} onToggle={onToggleVoice} />
         </div>
       </div>
 
