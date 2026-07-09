@@ -127,52 +127,134 @@ export const AGENT_VOICE_TEST_LINES = [
   "알겠습니다. 제가 조용히 이어받아서 마무리해 보겠습니다.",
 ];
 
-const AGENT_VOICE_STORAGE_KEY = "agentVoiceSelections";
-const AGENT_VOICE_SPEED_STORAGE_KEY = "agentVoiceSpeeds";
+const LEGACY_AGENT_VOICE_STORAGE_KEY = "agentVoiceSelections";
+const LEGACY_AGENT_VOICE_SPEED_STORAGE_KEY = "agentVoiceSpeeds";
 export const AGENT_VOICE_SPEEDS = [0.5, 1, 1.2, 1.5] as const;
 export type AgentVoiceSpeed = typeof AGENT_VOICE_SPEEDS[number];
 
-export function getAgentVoiceKey(agentId?: string): string {
-  const id = String(agentId || "");
+type AgentVoiceSettings = {
+  selections: Record<string, string>;
+  speeds: Record<string, AgentVoiceSpeed>;
+};
+
+const agentVoiceSettings: AgentVoiceSettings = { selections: {}, speeds: {} };
+let agentVoiceSettingsLoaded = false;
+let agentVoiceSettingsLoading: Promise<void> | null = null;
+
+function sanitizeVoiceSelections(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const allowed = new Set(AGENT_VOICE_PRESETS.map((v) => v.key));
+  const out: Record<string, string> = {};
+  for (const [id, key] of Object.entries(raw as Record<string, unknown>)) {
+    const value = String(key || "");
+    if (allowed.has(value)) out[id] = value;
+  }
+  return out;
+}
+
+function sanitizeVoiceSpeeds(raw: unknown): Record<string, AgentVoiceSpeed> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, AgentVoiceSpeed> = {};
+  for (const [id, speed] of Object.entries(raw as Record<string, unknown>)) {
+    const value = Number(speed);
+    if (AGENT_VOICE_SPEEDS.includes(value as AgentVoiceSpeed)) out[id] = value as AgentVoiceSpeed;
+  }
+  return out;
+}
+
+function readLegacyAgentVoiceSettings(): AgentVoiceSettings {
   try {
-    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_STORAGE_KEY) || "{}");
-    if (saved && typeof saved[id] === "string" && AGENT_VOICE_PRESETS.some((v) => v.key === saved[id])) return saved[id];
+    return {
+      selections: sanitizeVoiceSelections(JSON.parse(localStorage.getItem(LEGACY_AGENT_VOICE_STORAGE_KEY) || "{}")),
+      speeds: sanitizeVoiceSpeeds(JSON.parse(localStorage.getItem(LEGACY_AGENT_VOICE_SPEED_STORAGE_KEY) || "{}")),
+    };
+  } catch {
+    return { selections: {}, speeds: {} };
+  }
+}
+
+function clearLegacyAgentVoiceSettings() {
+  try {
+    localStorage.removeItem(LEGACY_AGENT_VOICE_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_AGENT_VOICE_SPEED_STORAGE_KEY);
   } catch {
     /* ignore */
   }
+}
+
+function applyAgentVoiceSettings(settings: Partial<AgentVoiceSettings>) {
+  agentVoiceSettings.selections = sanitizeVoiceSelections(settings.selections || {});
+  agentVoiceSettings.speeds = sanitizeVoiceSpeeds(settings.speeds || {});
+}
+
+function hasVoiceSettings(settings: AgentVoiceSettings) {
+  return Object.keys(settings.selections).length > 0 || Object.keys(settings.speeds).length > 0;
+}
+
+export async function loadAgentVoiceSettings(force = false) {
+  if (!force && agentVoiceSettingsLoaded) return;
+  if (!force && agentVoiceSettingsLoading) return agentVoiceSettingsLoading;
+  agentVoiceSettingsLoading = (async () => {
+    const settings = await getSettings();
+    const serverSettings = {
+      selections: sanitizeVoiceSelections(settings?.agentVoice?.selections || {}),
+      speeds: sanitizeVoiceSpeeds(settings?.agentVoice?.speeds || {}),
+    };
+    const legacySettings = readLegacyAgentVoiceSettings();
+    if (!hasVoiceSettings(serverSettings) && hasVoiceSettings(legacySettings)) {
+      applyAgentVoiceSettings(legacySettings);
+      await saveAgentVoiceSettings();
+      clearLegacyAgentVoiceSettings();
+    } else {
+      applyAgentVoiceSettings(serverSettings);
+      if (hasVoiceSettings(legacySettings)) clearLegacyAgentVoiceSettings();
+    }
+    agentVoiceSettingsLoaded = true;
+  })().finally(() => {
+    agentVoiceSettingsLoading = null;
+  });
+  return agentVoiceSettingsLoading;
+}
+
+async function saveAgentVoiceSettings() {
+  const res = await fetch("/api/agent/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "agentVoice",
+      voiceSelections: agentVoiceSettings.selections,
+      voiceSpeeds: agentVoiceSettings.speeds,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error || "agent_voice_save_failed");
+  return data;
+}
+
+export function getAgentVoiceKey(agentId?: string): string {
+  const id = String(agentId || "");
+  const saved = agentVoiceSettings.selections[id];
+  if (saved && AGENT_VOICE_PRESETS.some((v) => v.key === saved)) return saved;
   return DEFAULT_AGENT_VOICE[id] || "voice-01";
 }
 
-export function setAgentVoiceKey(agentId: string, voiceKey: string) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_STORAGE_KEY) || "{}");
-    saved[agentId] = voiceKey;
-    localStorage.setItem(AGENT_VOICE_STORAGE_KEY, JSON.stringify(saved));
-  } catch {
-    /* ignore */
-  }
+export async function setAgentVoiceKey(agentId: string, voiceKey: string) {
+  if (!AGENT_VOICE_PRESETS.some((v) => v.key === voiceKey)) return;
+  agentVoiceSettings.selections[agentId] = voiceKey;
+  await saveAgentVoiceSettings();
 }
 
 export function getAgentVoiceSpeed(agentId?: string): AgentVoiceSpeed {
   const id = String(agentId || "");
-  try {
-    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_SPEED_STORAGE_KEY) || "{}");
-    const n = Number(saved?.[id]);
-    if (AGENT_VOICE_SPEEDS.includes(n as AgentVoiceSpeed)) return n as AgentVoiceSpeed;
-  } catch {
-    /* ignore */
-  }
+  const saved = Number(agentVoiceSettings.speeds[id]);
+  if (AGENT_VOICE_SPEEDS.includes(saved as AgentVoiceSpeed)) return saved as AgentVoiceSpeed;
   return 1;
 }
 
-export function setAgentVoiceSpeed(agentId: string, speed: AgentVoiceSpeed) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_SPEED_STORAGE_KEY) || "{}");
-    saved[agentId] = speed;
-    localStorage.setItem(AGENT_VOICE_SPEED_STORAGE_KEY, JSON.stringify(saved));
-  } catch {
-    /* ignore */
-  }
+export async function setAgentVoiceSpeed(agentId: string, speed: AgentVoiceSpeed) {
+  if (!AGENT_VOICE_SPEEDS.includes(speed)) return;
+  agentVoiceSettings.speeds[agentId] = speed;
+  await saveAgentVoiceSettings();
 }
 
 export function nextAgentVoiceSpeed(current: number): AgentVoiceSpeed {
@@ -200,6 +282,7 @@ export async function synthesizeAgentSpeech(input: {
 }): Promise<{ voiceUrl: string; format?: string; objectName?: string }> {
   const script = String(input.text || "").trim();
   if (!script) throw new Error("script is required");
+  await loadAgentVoiceSettings();
   const sceneId = `chat_${String(input.agentId || "agent").replace(/[^a-z0-9_-]/gi, "_")}_${Date.now()}`;
   const voice = getAgentVoicePreset(input.agentId, input.voiceKey);
   const res = await fetch("/api/tts", {

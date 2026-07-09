@@ -24,6 +24,7 @@ import {
   synthesizeAgentSpeech,
   applyAudioPlaybackRate,
   getAgentVoiceSpeed,
+  loadAgentVoiceSettings,
   type DueReminder,
   autonomousStep,
   type StatusInfo,
@@ -132,6 +133,12 @@ export default function App() {
   const [activeConvId, setActiveConvId] = useState<string>(localToday);
   const activeConvRef = useRef<string>(activeConvId);
   activeConvRef.current = activeConvId;
+
+  useEffect(() => {
+    loadAgentVoiceSettings().catch(() => {
+      /* 보이스 설정 로딩 실패는 채팅 사용을 막지 않는다. */
+    });
+  }, []);
 
   function toggleVn() {
     setVnMode((v) => {

@@ -6,7 +6,7 @@
 // 비밀값(토큰/키)은 Neon에 저장하되 응답엔 절대 노출하지 않음(oauthSet/apiKeySet boolean만).
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql } from "./_shared";
-import { authStatus, authDiagnose, getSettingsRow, saveClaudeAuth, saveLlmMode } from "../_shared/claude-auth.js";
+import { authStatus, authDiagnose, getSettingsRow, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode } from "../_shared/claude-auth.js";
 import { CLOUD_MODELS } from "../_shared/cloud-models.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -32,6 +32,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       },
       cloudModels: CLOUD_MODELS,
       claudeAuth,
+      agentVoice: {
+        selections: (row && row.agent_voice_selections) || {},
+        speeds: (row && row.agent_voice_speeds) || {},
+      },
     },
     200,
     origin
@@ -56,6 +60,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ ok: true, diag }, 200, origin);
   }
 
+  if (body?.kind === "agentVoice") {
+    await saveAgentVoiceSettings(sql, auth.userId, {
+      voiceSelections: sanitizeStringMap(body.voiceSelections),
+      voiceSpeeds: sanitizeSpeedMap(body.voiceSpeeds),
+    });
+    return send({ ok: true }, 200, origin);
+  }
+
   // 기본: Claude 인증 저장
   await saveClaudeAuth(sql, auth.userId, {
     authMode: body?.authMode === "api_key" ? "api_key" : "subscription",
@@ -65,3 +77,26 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const status = await authStatus(sql, auth.userId, env);
   return send({ ok: true, status }, 200, origin);
 };
+
+function sanitizeStringMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const id = String(key || "").trim();
+    const value = String(val || "").trim();
+    if (/^[a-z0-9_-]{1,32}$/i.test(id) && /^[a-z0-9_-]{1,32}$/i.test(value)) out[id] = value;
+  }
+  return out;
+}
+
+function sanitizeSpeedMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const allowed = new Set([0.5, 1, 1.2, 1.5]);
+  const out: Record<string, number> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const id = String(key || "").trim();
+    const value = Number(val);
+    if (/^[a-z0-9_-]{1,32}$/i.test(id) && allowed.has(value)) out[id] = value;
+  }
+  return out;
+}

@@ -11,6 +11,7 @@ import {
   applyAudioPlaybackRate,
   getAgentVoiceKey,
   getAgentVoiceSpeed,
+  loadAgentVoiceSettings,
   nextAgentVoiceSpeed,
   setAgentVoiceKey,
   setAgentVoiceSpeed,
@@ -95,7 +96,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       return;
     }
     (async () => {
-      const [b, k] = await Promise.all([getAgentDetail(agentId), getAgentKnowledge(agentId)]);
+      const [b, k] = await Promise.all([getAgentDetail(agentId), getAgentKnowledge(agentId), loadAgentVoiceSettings()]);
       if (!on) return;
       setBrain(b);
       setItems(k);
@@ -134,17 +135,25 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     setSavingPersona(false);
     setPersonaDirty(false);
   }
-  function changeVoice(nextKey: string) {
+  async function changeVoice(nextKey: string) {
     if (!agentId) return;
     setVoiceKey(nextKey);
     setPreviewError("");
-    setAgentVoiceKey(agentId, nextKey);
+    try {
+      await setAgentVoiceKey(agentId, nextKey);
+    } catch {
+      setPreviewError("보이스 설정을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
   }
-  function cycleVoiceSpeed() {
+  async function cycleVoiceSpeed() {
     if (!agentId) return;
     const next = nextAgentVoiceSpeed(voiceSpeed);
     setVoiceSpeed(next);
-    setAgentVoiceSpeed(agentId, next);
+    try {
+      await setAgentVoiceSpeed(agentId, next);
+    } catch {
+      setPreviewError("보이스 속도 설정을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
   }
   function explainPreviewError(err: unknown) {
     const msg = String(err instanceof Error ? err.message : err || "");

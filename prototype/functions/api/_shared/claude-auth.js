@@ -17,10 +17,14 @@ export async function ensureSettingsSchema(sql) {
       claude_auth_mode text NOT NULL DEFAULT 'subscription',
       claude_oauth_token text,
       claude_api_key text,
+      agent_voice_selections jsonb NOT NULL DEFAULT '{}'::jsonb,
+      agent_voice_speeds jsonb NOT NULL DEFAULT '{}'::jsonb,
       log_retention_days integer NOT NULL DEFAULT 0,
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_voice_selections jsonb NOT NULL DEFAULT '{}'::jsonb`);
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_voice_speeds jsonb NOT NULL DEFAULT '{}'::jsonb`);
   settingsSchemaReady = true;
 }
 
@@ -54,6 +58,28 @@ export async function saveLlmMode(sql, userId, llmMode) {
      VALUES ($1, $2, $3)
      ON CONFLICT (user_id) DO UPDATE SET llm_mode = $2, updated_at = now()`,
     [userId, String(llmMode || "cloud"), cur.claude_auth_mode || "subscription"]
+  );
+}
+
+export async function saveAgentVoiceSettings(sql, userId, patch) {
+  await ensureSettingsSchema(sql);
+  const cur = (await getSettingsRow(sql, userId)) || {};
+  const voiceSelections =
+    patch && patch.voiceSelections && typeof patch.voiceSelections === "object"
+      ? patch.voiceSelections
+      : cur.agent_voice_selections || {};
+  const voiceSpeeds =
+    patch && patch.voiceSpeeds && typeof patch.voiceSpeeds === "object"
+      ? patch.voiceSpeeds
+      : cur.agent_voice_speeds || {};
+  await sql(
+    `INSERT INTO app_settings (user_id, agent_voice_selections, agent_voice_speeds)
+     VALUES ($1, $2::jsonb, $3::jsonb)
+     ON CONFLICT (user_id) DO UPDATE SET
+       agent_voice_selections = $2::jsonb,
+       agent_voice_speeds = $3::jsonb,
+       updated_at = now()`,
+    [userId, JSON.stringify(voiceSelections || {}), JSON.stringify(voiceSpeeds || {})]
   );
 }
 
