@@ -214,7 +214,9 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
             <section>
               <div className="mb-1.5 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
-                <span className="text-[11px] text-gray-600">Gemini TTS · {selectedVoice.geminiVoiceName}</span>
+                <span className="text-[11px] text-gray-600">
+                  {selectedVoice.provider === "elevenlabs" ? "ElevenLabs v3" : `Gemini TTS · ${selectedVoice.geminiVoiceName}`}
+                </span>
               </div>
               <div className="flex gap-1.5">
                 <select

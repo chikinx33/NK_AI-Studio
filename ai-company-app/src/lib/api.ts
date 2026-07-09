@@ -63,7 +63,9 @@ export async function getAgents(): Promise<AgentInfo[]> {
 export interface AgentVoicePreset {
   key: string;
   label: string;
-  geminiVoiceName: string;
+  provider: "elevenlabs" | "gemini";
+  geminiVoiceName?: string;
+  providerVoiceId?: string;
   voiceId: "kr_female_narration" | "kr_male_narration";
   pitch: number;
   speakingRate: number;
@@ -71,34 +73,42 @@ export interface AgentVoicePreset {
 }
 
 export const AGENT_VOICE_PRESETS: AgentVoicePreset[] = [
-  { key: "core-director", label: "코어형 · 차분한 총괄", geminiVoiceName: "Kore", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.02, prompt: "Speak as a calm Korean executive orchestrator. Warm, precise, and not robotic." },
-  { key: "edge-strategy", label: "엣지형 · 낮고 단단한 전략가", geminiVoiceName: "Charon", voiceId: "kr_male_narration", pitch: -3, speakingRate: 1.0, prompt: "Speak as a confident Korean business strategist. Low, dry, practical, and human." },
-  { key: "radar-analyst", label: "레이더형 · 또렷한 분석가", geminiVoiceName: "Orus", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.04, prompt: "Speak as a precise Korean research analyst. Clear, factual, and lightly brisk." },
-  { key: "maki-bright", label: "마키형 · 밝은 마케터", geminiVoiceName: "Aoede", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.08, prompt: "Speak as a bright Korean marketer. Friendly, energetic, and conversational." },
-  { key: "plot-story", label: "플롯형 · 부드러운 기획자", geminiVoiceName: "Puck", voiceId: "kr_male_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a playful Korean story planner. Expressive, warm, and imaginative." },
-  { key: "ink-writer", label: "잉크형 · 담백한 작가", geminiVoiceName: "Leda", voiceId: "kr_female_narration", pitch: 0, speakingRate: 0.98, prompt: "Speak as a thoughtful Korean writer. Soft, articulate, and restrained." },
-  { key: "pixel-designer", label: "픽셀형 · 생기 있는 디자이너", geminiVoiceName: "Zephyr", voiceId: "kr_male_narration", pitch: 2, speakingRate: 1.07, prompt: "Speak as a lively Korean designer. Visual, upbeat, and natural." },
-  { key: "beat-sound", label: "비트형 · 리듬감 있는 사운드", geminiVoiceName: "Callirrhoe", voiceId: "kr_female_narration", pitch: 2, speakingRate: 1.05, prompt: "Speak as a Korean sound producer. Smooth, rhythmic, and relaxed." },
-  { key: "engi-builder", label: "엔지형 · 침착한 엔지니어", geminiVoiceName: "Fenrir", voiceId: "kr_male_narration", pitch: -2, speakingRate: 1.01, prompt: "Speak as a calm Korean software engineer. Practical, concise, and steady." },
-  { key: "reach-social", label: "리치형 · 활발한 홍보 담당", geminiVoiceName: "Autonoe", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.09, prompt: "Speak as a lively Korean PR lead. Social, quick, and encouraging." },
-  { key: "sync-assistant", label: "싱크형 · 친절한 일정 매니저", geminiVoiceName: "Despina", voiceId: "kr_female_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a kind Korean operations assistant. Organized, gentle, and clear." },
-  { key: "warm-guide", label: "따뜻한 안내자", geminiVoiceName: "Achernar", voiceId: "kr_female_narration", pitch: 1, speakingRate: 0.98, prompt: "Speak in warm natural Korean. Gentle, close, and reassuring." },
-  { key: "crisp-host", label: "선명한 진행자", geminiVoiceName: "Alnilam", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1.08, prompt: "Speak as a crisp Korean host. Clear, modern, and easy to follow." },
-  { key: "soft-narrator", label: "부드러운 내레이터", geminiVoiceName: "Vindemiatrix", voiceId: "kr_female_narration", pitch: -1, speakingRate: 0.96, prompt: "Speak as a soft Korean narrator. Natural, calm, and expressive." },
+  { key: "voice-01", label: "보이스 01", provider: "elevenlabs", providerVoiceId: "EXAVITQu4vr4xnSDxMaL", voiceId: "kr_female_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 01" },
+  { key: "voice-02", label: "보이스 02", provider: "elevenlabs", providerVoiceId: "pNInz6obpgDQGcFmaJgB", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 02" },
+  { key: "voice-03", label: "보이스 03", provider: "elevenlabs", providerVoiceId: "21m00Tcm4TlvDq8ikWAM", voiceId: "kr_female_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 03" },
+  { key: "voice-04", label: "보이스 04", provider: "elevenlabs", providerVoiceId: "TxGEqnHWrfWFTfGW9XjX", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 04" },
+  { key: "voice-05", label: "보이스 05", provider: "elevenlabs", providerVoiceId: "MF3mGyEYCl7XYWbV9V6O", voiceId: "kr_female_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 05" },
+  { key: "voice-06", label: "보이스 06", provider: "elevenlabs", providerVoiceId: "ErXwobaYiN019PkySvjV", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 06" },
+  { key: "voice-07", label: "보이스 07", provider: "elevenlabs", providerVoiceId: "AZnzlk1XvdvUeBnXmlld", voiceId: "kr_female_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 07" },
+  { key: "voice-08", label: "보이스 08", provider: "elevenlabs", providerVoiceId: "yoZ06aMxZJJ28mfd3POQ", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1, prompt: "ElevenLabs voice 08" },
+  { key: "voice-09", label: "보이스 09", provider: "gemini", geminiVoiceName: "Kore", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.02, prompt: "Speak as a calm Korean executive orchestrator. Warm, precise, and not robotic." },
+  { key: "voice-10", label: "보이스 10", provider: "gemini", geminiVoiceName: "Charon", voiceId: "kr_male_narration", pitch: -3, speakingRate: 1.0, prompt: "Speak as a confident Korean business strategist. Low, dry, practical, and human." },
+  { key: "voice-11", label: "보이스 11", provider: "gemini", geminiVoiceName: "Orus", voiceId: "kr_male_narration", pitch: -1, speakingRate: 1.04, prompt: "Speak as a precise Korean research analyst. Clear, factual, and lightly brisk." },
+  { key: "voice-12", label: "보이스 12", provider: "gemini", geminiVoiceName: "Aoede", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.08, prompt: "Speak as a bright Korean marketer. Friendly, energetic, and conversational." },
+  { key: "voice-13", label: "보이스 13", provider: "gemini", geminiVoiceName: "Puck", voiceId: "kr_male_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a playful Korean story planner. Expressive, warm, and imaginative." },
+  { key: "voice-14", label: "보이스 14", provider: "gemini", geminiVoiceName: "Leda", voiceId: "kr_female_narration", pitch: 0, speakingRate: 0.98, prompt: "Speak as a thoughtful Korean writer. Soft, articulate, and restrained." },
+  { key: "voice-15", label: "보이스 15", provider: "gemini", geminiVoiceName: "Zephyr", voiceId: "kr_male_narration", pitch: 2, speakingRate: 1.07, prompt: "Speak as a lively Korean designer. Visual, upbeat, and natural." },
+  { key: "voice-16", label: "보이스 16", provider: "gemini", geminiVoiceName: "Callirrhoe", voiceId: "kr_female_narration", pitch: 2, speakingRate: 1.05, prompt: "Speak as a Korean sound producer. Smooth, rhythmic, and relaxed." },
+  { key: "voice-17", label: "보이스 17", provider: "gemini", geminiVoiceName: "Fenrir", voiceId: "kr_male_narration", pitch: -2, speakingRate: 1.01, prompt: "Speak as a calm Korean software engineer. Practical, concise, and steady." },
+  { key: "voice-18", label: "보이스 18", provider: "gemini", geminiVoiceName: "Autonoe", voiceId: "kr_female_narration", pitch: 3, speakingRate: 1.09, prompt: "Speak as a lively Korean PR lead. Social, quick, and encouraging." },
+  { key: "voice-19", label: "보이스 19", provider: "gemini", geminiVoiceName: "Despina", voiceId: "kr_female_narration", pitch: 1, speakingRate: 1.03, prompt: "Speak as a kind Korean operations assistant. Organized, gentle, and clear." },
+  { key: "voice-20", label: "보이스 20", provider: "gemini", geminiVoiceName: "Achernar", voiceId: "kr_female_narration", pitch: 1, speakingRate: 0.98, prompt: "Speak in warm natural Korean. Gentle, close, and reassuring." },
+  { key: "voice-21", label: "보이스 21", provider: "gemini", geminiVoiceName: "Alnilam", voiceId: "kr_male_narration", pitch: 0, speakingRate: 1.08, prompt: "Speak as a crisp Korean host. Clear, modern, and easy to follow." },
+  { key: "voice-22", label: "보이스 22", provider: "gemini", geminiVoiceName: "Vindemiatrix", voiceId: "kr_female_narration", pitch: -1, speakingRate: 0.96, prompt: "Speak as a soft Korean narrator. Natural, calm, and expressive." },
 ];
 
 export const DEFAULT_AGENT_VOICE: Record<string, string> = {
-  core: "core-director",
-  edge: "edge-strategy",
-  radar: "radar-analyst",
-  maki: "maki-bright",
-  plot: "plot-story",
-  ink: "ink-writer",
-  pixel: "pixel-designer",
-  beat: "beat-sound",
-  engi: "engi-builder",
-  reach: "reach-social",
-  sync: "sync-assistant",
+  core: "voice-02",
+  edge: "voice-04",
+  radar: "voice-06",
+  maki: "voice-05",
+  plot: "voice-08",
+  ink: "voice-07",
+  pixel: "voice-01",
+  beat: "voice-03",
+  engi: "voice-04",
+  reach: "voice-05",
+  sync: "voice-07",
 };
 
 export const AGENT_VOICE_TEST_LINES = [
@@ -130,11 +140,11 @@ export function getAgentVoiceKey(agentId?: string): string {
   const id = String(agentId || "");
   try {
     const saved = JSON.parse(localStorage.getItem(AGENT_VOICE_STORAGE_KEY) || "{}");
-    if (saved && typeof saved[id] === "string") return saved[id];
+    if (saved && typeof saved[id] === "string" && AGENT_VOICE_PRESETS.some((v) => v.key === saved[id])) return saved[id];
   } catch {
     /* ignore */
   }
-  return DEFAULT_AGENT_VOICE[id] || "core-director";
+  return DEFAULT_AGENT_VOICE[id] || "voice-02";
 }
 
 export function setAgentVoiceKey(agentId: string, voiceKey: string) {
@@ -161,6 +171,25 @@ export async function synthesizeAgentSpeech(input: {
   if (!script) throw new Error("script is required");
   const sceneId = `chat_${String(input.agentId || "agent").replace(/[^a-z0-9_-]/gi, "_")}_${Date.now()}`;
   const voice = getAgentVoicePreset(input.agentId, input.voiceKey);
+  if (voice.provider === "elevenlabs") {
+    const res = await fetch("/api/sound/voice-generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preview: true,
+        mode: "instance",
+        model: "eleven_v3",
+        format: "mp3_44100_128",
+        stability: 0.5,
+        segments: [{ providerVoiceId: voice.providerVoiceId, text: script }],
+      }),
+    });
+    const data = await res.json().catch(() => ({} as any));
+    if (!res.ok || data?.error || !data?.outputUrl) {
+      throw new Error(data?.error || `elevenlabs_tts_failed_${res.status}`);
+    }
+    return { voiceUrl: data.outputUrl, format: "mp3" };
+  }
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -172,7 +201,7 @@ export async function synthesizeAgentSpeech(input: {
       speakingRate: voice.speakingRate,
       pitch: voice.pitch,
       voiceName: voice.prompt,
-      geminiVoiceName: voice.geminiVoiceName,
+      geminiVoiceName: voice.geminiVoiceName || "Kore",
     }),
   });
   const data = await res.json().catch(() => ({} as any));
