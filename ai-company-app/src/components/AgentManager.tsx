@@ -76,6 +76,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   const [voiceKey, setVoiceKey] = useState("");
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const [previewLine, setPreviewLine] = useState("");
+  const [previewError, setPreviewError] = useState("");
   const [newRule, setNewRule] = useState("");
   const [newType, setNewType] = useState<KnowledgeType>("원칙");
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null);
@@ -95,6 +96,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       setPersona(b.prompt ?? "");
       setVoiceKey(getAgentVoiceKey(agentId));
       setPreviewLine("");
+      setPreviewError("");
       setPersonaDirty(false);
     })();
     return () => {
@@ -128,12 +130,30 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   function changeVoice(nextKey: string) {
     if (!agentId) return;
     setVoiceKey(nextKey);
+    setPreviewError("");
     setAgentVoiceKey(agentId, nextKey);
+  }
+  function explainPreviewError(err: unknown) {
+    const msg = String(err instanceof Error ? err.message : err || "");
+    if (/ELEVENLABS_API_KEY|not configured/i.test(msg)) {
+      return "ElevenLabs API 키가 서버에 설정되어 있지 않습니다.";
+    }
+    if (/401|unauthorized|invalid[_ -]?api/i.test(msg)) {
+      return "ElevenLabs API 키가 유효하지 않거나 권한이 없습니다.";
+    }
+    if (/quota|limit|credits|429/i.test(msg)) {
+      return "ElevenLabs 무료 한도 또는 호출 제한을 초과했습니다.";
+    }
+    if (/voice|404/i.test(msg)) {
+      return "선택한 ElevenLabs 보이스 ID를 계정에서 사용할 수 없습니다.";
+    }
+    return "보이스 미리듣기에 실패했습니다. 잠시 후 다시 시도해 주세요.";
   }
   async function previewVoice() {
     if (!agentId || previewingVoice) return;
     const line = AGENT_VOICE_TEST_LINES[Math.floor(Math.random() * AGENT_VOICE_TEST_LINES.length)];
     setPreviewLine(line);
+    setPreviewError("");
     setPreviewingVoice(true);
     try {
       const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
@@ -144,6 +164,8 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
         const p = audio.play();
         if (p && typeof p.catch === "function") p.catch(() => resolve());
       });
+    } catch (err) {
+      setPreviewError(explainPreviewError(err));
     } finally {
       setPreviewingVoice(false);
     }
@@ -247,6 +269,11 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
               {previewLine && (
                 <p className="mt-1 rounded-lg border border-edge bg-panel/60 px-2.5 py-1.5 text-xs text-gray-500">
                   테스트 멘트: {previewLine}
+                </p>
+              )}
+              {previewError && (
+                <p className="mt-1 rounded-lg border border-red-800/60 bg-red-950/30 px-2.5 py-1.5 text-xs text-red-300">
+                  {previewError}
                 </p>
               )}
             </section>
