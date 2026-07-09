@@ -47,6 +47,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const voiceNameRaw = String(body.voiceName || "").trim();
     const geminiVoiceName = pickGeminiVoiceName(String(body.geminiVoiceName || body.geminiVoice || "").trim());
     const finalPrompt = promptRaw || derivePromptFromVoice(voiceNameRaw || voiceId);
+    const strictCloudGeminiTts = body.strictCloudGeminiTts === true;
 
     const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
     const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
@@ -98,6 +99,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       try {
         console.warn("cloud_gemini_tts_failed", String(e && e.message ? e.message : e));
       } catch (_) {}
+    }
+    if ((!audioInfo || !audioInfo.data) && strictCloudGeminiTts) {
+      return send({
+        error: "cloud_gemini_tts_failed",
+        hint: explainCloudGeminiTtsError(cloudTtsError),
+        cloud_error: String(cloudTtsError && cloudTtsError.message ? cloudTtsError.message : cloudTtsError),
+      }, 502, origin);
     }
 
     if (!audioInfo || !audioInfo.data) {
@@ -314,6 +322,22 @@ function normalizeCloudGeminiTtsModel(model: string): string {
   if (raw === "gemini-2.5-flash-lite-tts") return "gemini-2.5-flash-lite-preview-tts";
   return raw;
 }
+function explainCloudGeminiTtsError(err: any): string {
+  const msg = String(err && err.message ? err.message : err || "");
+  if (/aiplatform\.endpoints\.predict|permission|PERMISSION_DENIED|403/i.test(msg)) {
+    return "Cloud Gemini-TTS 권한이 없습니다. 서비스 계정에 aiplatform.endpoints.predict 권한이 포함된 roles/aiplatform.user 권한을 부여해 주세요.";
+  }
+  if (/billing|quota|RESOURCE_EXHAUSTED|429/i.test(msg)) {
+    return "Cloud Gemini-TTS 결제, 할당량 또는 호출 제한을 확인해 주세요.";
+  }
+  if (/modelName|model_name|model|not found|INVALID_ARGUMENT|400/i.test(msg)) {
+    return "Cloud Gemini-TTS 모델명 또는 보이스명을 확인해 주세요. 모델은 gemini-2.5-flash-tts, 보이스는 Algenib 같은 Gemini-TTS 보이스 이름이어야 합니다.";
+  }
+  if (/UNAUTHENTICATED|401|access token|credential/i.test(msg)) {
+    return "Google Cloud 인증 정보를 확인해 주세요.";
+  }
+  return "Cloud Gemini-TTS 호출에 실패했습니다. 서버 로그의 cloud_gemini_tts_failed 상세 오류를 확인해 주세요.";
+}
 async function synthesizeViaCloudGeminiTts(opts: {
   token: string;
   text: string;
@@ -340,7 +364,7 @@ async function synthesizeViaCloudGeminiTts(opts: {
       voice: {
         languageCode: opts.languageCode,
         name: opts.voiceName,
-        model_name: opts.modelName,
+        modelName: opts.modelName,
       },
       audioConfig: {
         audioEncoding: "MP3",

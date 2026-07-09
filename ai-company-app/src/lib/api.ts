@@ -214,11 +214,13 @@ export async function synthesizeAgentSpeech(input: {
       pitch: voice.pitch,
       prompt: voice.prompt,
       geminiVoiceName: voice.geminiVoiceName,
+      strictCloudGeminiTts: true,
     }),
   });
   const data = await res.json().catch(() => ({} as any));
   if (!res.ok || data?.error || !data?.voiceUrl) {
-    throw new Error(data?.error || `tts_failed_${res.status}`);
+    const detail = data?.hint || data?.cloud_error || data?.detail?.error?.message || data?.detail?.message || data?.error;
+    throw new Error(detail || `tts_failed_${res.status}`);
   }
   return { voiceUrl: data.voiceUrl, format: data.format, objectName: data.objectName };
 }

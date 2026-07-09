@@ -148,6 +148,12 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   }
   function explainPreviewError(err: unknown) {
     const msg = String(err instanceof Error ? err.message : err || "");
+    if (/aiplatform\.endpoints\.predict|roles\/aiplatform\.user|Cloud Gemini-TTS 권한|PERMISSION_DENIED/i.test(msg)) {
+      return "Cloud Gemini-TTS 권한이 없습니다. 서비스 계정에 roles/aiplatform.user 권한을 추가해야 합니다.";
+    }
+    if (/cloud_gemini_tts_failed|Cloud Gemini-TTS 호출/i.test(msg)) {
+      return msg;
+    }
     if (/GOOGLE_API_KEY|TTS_GOOGLE|GOOGLE_CLIENT|missing|not configured/i.test(msg)) {
       return "Gemini TTS 또는 Google TTS 서버 키가 설정되어 있지 않습니다.";
     }
