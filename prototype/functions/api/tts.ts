@@ -61,65 +61,122 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
     const baseObjectName = `${projectPrefix}/sfx/voice-${sceneId}`;
+    const userProjectRaw =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      "";
+    const userProject = String(userProjectRaw || "").trim();
+    const validProjectId = /^[a-z][a-z0-9-]{4,61}[a-z0-9]$/; // GCP project ID 형식
+    const validProjectNum = /^[0-9]{6,20}$/; // project number 형식
+    if (userProject && !(validProjectId.test(userProject) || validProjectNum.test(userProject))) {
+      return send({ error: "invalid_user_project", hint: "Set GCS_BILLING_PROJECT_ID to a valid project ID or number" }, 500, origin);
+    }
 
     const token = await getGoogleAccessToken({
       clientEmail: clientEmail as string,
       privateKeyPem: privateKeyRaw as string,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
-    const apiKey = String(env.GOOGLE_API_KEY || "").trim();
-    const promptPlusScript = (finalPrompt || "Speak like an epic fantasy narrator.") + "\n" + script;
-    const reqBody = {
-      contents: [
-        {
-          parts: [
-            { text: promptPlusScript }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: geminiVoiceName
+    let audioInfo = null as null | { data: string; mime: string };
+    let cloudTtsError: any = null;
+    const wantDebug = !!body.debug;
+
+    try {
+      const cloudModel = normalizeCloudGeminiTtsModel(String(env.GEMINI_TTS_MODEL || "").trim());
+      const cloud = await synthesizeViaCloudGeminiTts({
+        token,
+        text: script,
+        prompt: finalPrompt || "Say the following in a natural Korean voice.",
+        languageCode: "ko-KR",
+        voiceName: geminiVoiceName,
+        modelName: cloudModel,
+        userProject,
+      });
+      audioInfo = { data: cloud.base64, mime: cloud.mime };
+    } catch (e: any) {
+      cloudTtsError = e;
+      try {
+        console.warn("cloud_gemini_tts_failed", String(e && e.message ? e.message : e));
+      } catch (_) {}
+    }
+
+    if (!audioInfo || !audioInfo.data) {
+      const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+      const promptPlusScript = (finalPrompt || "Say the following in a natural Korean voice.") + "\n" + script;
+      const reqBody = {
+        contents: [
+          {
+            parts: [
+              { text: promptPlusScript }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: geminiVoiceName
+              }
             }
           }
         }
+      };
+      if (!apiKey) {
+        return send({ error: "GOOGLE_API_KEY missing", cloud_error: String(cloudTtsError && cloudTtsError.message ? cloudTtsError.message : cloudTtsError) }, 500, origin);
       }
-    };
-    if (!apiKey) return send({ error: "GOOGLE_API_KEY missing" }, 500, origin);
-    const preferModel = String(env.GEMINI_TTS_MODEL || "").trim() || "gemini-2.5-flash-preview-tts";
-    const chosenModel = await resolveTtsModel(apiKey, preferModel);
-    let audioInfo = null as null | { data: string; mime: string };
-    const glBase = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent`;
-    const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
-    const glHeaders: any = { "Content-Type": "application/json" };
-    console.log("TTS request model: " + chosenModel);
-    console.log("TTS headers", glHeaders);
-    if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
-    let synthRes = await fetch(glUrl, {
-      method: "POST",
-      headers: glHeaders,
-      body: JSON.stringify(reqBody),
-    });
-    let synthText = await synthRes.text();
-    const wantDebug = !!body.debug;
-    if (wantDebug) {
-      try {
-        console.log("TTS raw response status", synthRes.status);
-        console.log("TTS raw response length", synthText.length);
-        console.log("TTS raw response preview", synthText.slice(0, 2048));
-      } catch (_) {}
+      const preferModel = String(env.GEMINI_TTS_MODEL || "").trim() || "gemini-2.5-flash-preview-tts";
+      const chosenModel = await resolveTtsModel(apiKey, preferModel);
+      const glBase = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent`;
+      const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
+      const glHeaders: any = { "Content-Type": "application/json" };
+      console.log("TTS request model: " + chosenModel);
+      console.log("TTS headers", glHeaders);
+      if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
+      let synthRes = await fetch(glUrl, {
+        method: "POST",
+        headers: glHeaders,
+        body: JSON.stringify(reqBody),
+      });
+      let synthText = await synthRes.text();
+      if (wantDebug) {
+        try {
+          console.log("TTS raw response status", synthRes.status);
+          console.log("TTS raw response length", synthText.length);
+          console.log("TTS raw response preview", synthText.slice(0, 2048));
+        } catch (_) {}
+      }
+      if (synthRes.ok) {
+        const synthJson = safeJson(synthText) || {};
+        audioInfo = extractGeminiAudio(synthJson);
+      }
+      if (!synthRes.ok || !audioInfo || !audioInfo.data) {
+        const status = synthRes?.status || 502;
+        const detail = synthText ? safeJson(synthText) : undefined;
+        try {
+          const vmap = VOICE_MAP[voiceId] || { languageCode: "ko-KR", name: "ko-KR-Neural2-A" };
+          const v1 = await synthesizeViaGoogleTts({
+            token,
+            text: script,
+            languageCode: vmap.languageCode,
+            voiceName: vmap.name,
+            speakingRate: rateNum,
+            pitch: pitchNum
+          });
+          audioInfo = { data: v1.base64, mime: v1.mime };
+        } catch (fallbackErr: any) {
+          return send({
+            error: "tts_failed",
+            status,
+            detail,
+            cloud_error: String(cloudTtsError && cloudTtsError.message ? cloudTtsError.message : cloudTtsError),
+            fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr)
+          }, status, origin);
+        }
+      }
     }
-    if (synthRes.ok) {
-      const synthJson = safeJson(synthText) || {};
-      audioInfo = extractGeminiAudio(synthJson);
-    }
-    if (!synthRes.ok || !audioInfo || !audioInfo.data) {
-      const status = synthRes?.status || 502;
-      const detail = synthText ? safeJson(synthText) : undefined;
+    if (!audioInfo || !audioInfo.data) {
       try {
         const vmap = VOICE_MAP[voiceId] || { languageCode: "ko-KR", name: "ko-KR-Neural2-A" };
         const v1 = await synthesizeViaGoogleTts({
@@ -132,7 +189,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         });
         audioInfo = { data: v1.base64, mime: v1.mime };
       } catch (fallbackErr: any) {
-        return send({ error: "tts_failed", status, detail, fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, status, origin);
+        return send({ error: "tts_failed", fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, 502, origin);
       }
     }
     const audioContent = audioInfo.data;
@@ -157,16 +214,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const objNameFinal = `${baseObjectName}.${chosenExt}`;
     const contentTypeFinal = chosenExt === "mp3" ? "audio/mpeg" : "audio/wav";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
-    const userProjectRaw =
-      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
-      (env.GOOGLE_PROJECT_ID as string | undefined) ||
-      "";
-    const userProject = String(userProjectRaw || "").trim();
-    const validProjectId = /^[a-z][a-z0-9-]{4,61}[a-z0-9]$/; // GCP project ID 형식
-    const validProjectNum = /^[0-9]{6,20}$/; // project number 형식
-    if (userProject && !(validProjectId.test(userProject) || validProjectNum.test(userProject))) {
-      return send({ error: "invalid_user_project", hint: "Set GCS_BILLING_PROJECT_ID to a valid project ID or number" }, 500, origin);
-    }
     const upRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {
@@ -259,6 +306,55 @@ function extractGeminiAudio(json: any): { data: string; mime: string } | null {
   } catch (_) {}
   return null;
 }
+function normalizeCloudGeminiTtsModel(model: string): string {
+  const raw = String(model || "").trim();
+  if (!raw) return "gemini-2.5-flash-tts";
+  if (raw === "gemini-2.5-flash-preview-tts") return "gemini-2.5-flash-tts";
+  if (raw === "gemini-2.5-pro-preview-tts") return "gemini-2.5-pro-tts";
+  if (raw === "gemini-2.5-flash-lite-tts") return "gemini-2.5-flash-lite-preview-tts";
+  return raw;
+}
+async function synthesizeViaCloudGeminiTts(opts: {
+  token: string;
+  text: string;
+  prompt: string;
+  languageCode: string;
+  voiceName: string;
+  modelName: string;
+  userProject?: string;
+}) {
+  const url = "https://texttospeech.googleapis.com/v1/text:synthesize";
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${opts.token}`,
+    "Content-Type": "application/json",
+  };
+  if (opts.userProject) headers["X-Goog-User-Project"] = opts.userProject;
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      input: {
+        text: opts.text,
+        prompt: opts.prompt || "Say the following in a natural Korean voice.",
+      },
+      voice: {
+        languageCode: opts.languageCode,
+        name: opts.voiceName,
+        model_name: opts.modelName,
+      },
+      audioConfig: {
+        audioEncoding: "MP3",
+      },
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || "cloud_gemini_tts_failed");
+  const json = safeJson(text) || {};
+  const b64 = String(json?.audioContent || "");
+  if (!b64) throw new Error("cloud_gemini_tts_no_audio");
+  const bytes = base64ToBytes(b64);
+  return { base64: b64, bytes, mime: "audio/mpeg" };
+}
 async function synthesizeViaGoogleTts(opts: { token: string; text: string; languageCode: string; voiceName: string; speakingRate: number; pitch: number; }) {
   const url = "https://texttospeech.googleapis.com/v1/text:synthesize";
   const res = await fetch(url, {
@@ -283,14 +379,14 @@ async function synthesizeViaGoogleTts(opts: { token: string; text: string; langu
 }
 function derivePromptFromVoice(v: string): string {
   const raw = String(v || "").trim();
-  if (!raw) return "Speak like an epic fantasy narrator.";
+  if (!raw) return "Say the following in a natural Korean voice.";
   if (raw.indexOf("preset:child:female:") === 0) return "Speak like an excited young child.";
   if (raw.indexOf("preset:child:male:") === 0) return "Speak like an excited young child.";
   if (raw.indexOf("preset:char:cute:") === 0) return "Speak like a cheerful cartoon character.";
   if (raw.indexOf("preset:char:robot:") === 0) return "Speak like a robotic AI assistant.";
   if (raw.indexOf("preset:char:magician:") === 0) return "Speak like an old wizard.";
   if (raw.indexOf("preset:char:trick:") === 0) return "Speak like a playful trickster.";
-  return "Speak like an epic fantasy narrator.";
+  return "Say the following in a natural Korean voice.";
 }
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
