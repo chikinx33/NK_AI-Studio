@@ -136,7 +136,7 @@ export const AGENT_VOICE_TEST_LINES = [
 
 const AGENT_VOICE_STORAGE_KEY = "agentVoiceSelections";
 const AGENT_VOICE_SPEED_STORAGE_KEY = "agentVoiceSpeeds";
-export const AGENT_VOICE_SPEEDS = [0.5, 1, 1.5, 2] as const;
+export const AGENT_VOICE_SPEEDS = [0.5, 1, 1.2, 1.5] as const;
 export type AgentVoiceSpeed = typeof AGENT_VOICE_SPEEDS[number];
 
 export function getAgentVoiceKey(agentId?: string): string {
