@@ -148,17 +148,17 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   }
   function explainPreviewError(err: unknown) {
     const msg = String(err instanceof Error ? err.message : err || "");
-    if (/ELEVENLABS_API_KEY|not configured/i.test(msg)) {
-      return "ElevenLabs API 키가 서버에 설정되어 있지 않습니다.";
+    if (/GOOGLE_API_KEY|TTS_GOOGLE|GOOGLE_CLIENT|missing|not configured/i.test(msg)) {
+      return "Gemini TTS 또는 Google TTS 서버 키가 설정되어 있지 않습니다.";
     }
-    if (/401|unauthorized|invalid[_ -]?api/i.test(msg)) {
-      return "ElevenLabs API 키가 유효하지 않거나 권한이 없습니다.";
+    if (/401|403|unauthorized|permission|invalid[_ -]?api/i.test(msg)) {
+      return "Gemini TTS 또는 Google TTS 권한을 확인해 주세요.";
     }
     if (/quota|limit|credits|429/i.test(msg)) {
-      return "ElevenLabs 무료 한도 또는 호출 제한을 초과했습니다.";
+      return "Gemini TTS 호출 한도 또는 제한을 초과했습니다.";
     }
     if (/voice|404/i.test(msg)) {
-      return "선택한 ElevenLabs 보이스 ID를 계정에서 사용할 수 없습니다.";
+      return "선택한 Gemini TTS 보이스를 사용할 수 없습니다.";
     }
     return "보이스 미리듣기에 실패했습니다. 잠시 후 다시 시도해 주세요.";
   }
@@ -251,7 +251,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
               <div className="mb-1.5 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
                 <span className="text-[11px] text-gray-600">
-                  {selectedVoice.provider === "elevenlabs" ? "ElevenLabs v3" : `Gemini TTS · ${selectedVoice.geminiVoiceName}`}
+                  Gemini TTS · {selectedVoice.geminiVoiceName}
                 </span>
               </div>
               <div className="flex gap-1.5">
