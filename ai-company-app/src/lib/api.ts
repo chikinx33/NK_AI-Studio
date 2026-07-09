@@ -217,9 +217,15 @@ export async function synthesizeAgentSpeech(input: {
       strictCloudGeminiTts: true,
     }),
   });
-  const data = await res.json().catch(() => ({} as any));
+  const raw = await res.text().catch(() => "");
+  let data: any = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = { raw };
+  }
   if (!res.ok || data?.error || !data?.voiceUrl) {
-    const detail = data?.hint || data?.cloud_error || data?.detail?.error?.message || data?.detail?.message || data?.error;
+    const detail = data?.hint || data?.cloud_error || data?.detail?.error?.message || data?.detail?.message || data?.error || data?.raw;
     throw new Error(detail || `tts_failed_${res.status}`);
   }
   return { voiceUrl: data.voiceUrl, format: data.format, objectName: data.objectName };

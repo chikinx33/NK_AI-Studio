@@ -347,12 +347,39 @@ async function synthesizeViaCloudGeminiTts(opts: {
   modelName: string;
   userProject?: string;
 }) {
+  try {
+    return await synthesizeViaCloudGeminiTtsRequest(opts, "model_name");
+  } catch (firstError: any) {
+    const msg = String(firstError && firstError.message ? firstError.message : firstError || "");
+    if (!/modelName|model_name|Unknown name|INVALID_ARGUMENT|400/i.test(msg)) throw firstError;
+    try {
+      return await synthesizeViaCloudGeminiTtsRequest(opts, "modelName");
+    } catch (secondError: any) {
+      const secondMsg = String(secondError && secondError.message ? secondError.message : secondError || "");
+      throw new Error(`${msg} | retry_modelName_failed: ${secondMsg}`);
+    }
+  }
+}
+async function synthesizeViaCloudGeminiTtsRequest(opts: {
+  token: string;
+  text: string;
+  prompt: string;
+  languageCode: string;
+  voiceName: string;
+  modelName: string;
+  userProject?: string;
+}, modelField: "model_name" | "modelName") {
   const url = "https://texttospeech.googleapis.com/v1/text:synthesize";
   const headers: Record<string, string> = {
     Authorization: `Bearer ${opts.token}`,
     "Content-Type": "application/json",
   };
   if (opts.userProject) headers["X-Goog-User-Project"] = opts.userProject;
+  const voice: Record<string, any> = {
+    languageCode: opts.languageCode,
+    name: opts.voiceName,
+  };
+  voice[modelField] = opts.modelName;
   const res = await fetch(url, {
     method: "POST",
     headers,
@@ -361,11 +388,7 @@ async function synthesizeViaCloudGeminiTts(opts: {
         text: opts.text,
         prompt: opts.prompt || "Say the following in a natural Korean voice.",
       },
-      voice: {
-        languageCode: opts.languageCode,
-        name: opts.voiceName,
-        modelName: opts.modelName,
-      },
+      voice,
       audioConfig: {
         audioEncoding: "MP3",
       },

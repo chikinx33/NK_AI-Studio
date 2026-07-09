@@ -163,6 +163,15 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     if (/quota|limit|credits|429/i.test(msg)) {
       return "Gemini TTS 호출 한도 또는 제한을 초과했습니다.";
     }
+    if (/billing|결제|RESOURCE_EXHAUSTED/i.test(msg)) {
+      return "Cloud Gemini-TTS 결제 또는 사용량 한도를 확인해 주세요.";
+    }
+    if (/tts_failed_502|502|Bad Gateway/i.test(msg)) {
+      return "Cloud Gemini-TTS 서버 호출에 실패했습니다. 권한, 결제/쿼터, 모델 설정 중 하나를 확인해야 합니다.";
+    }
+    if (/modelName|model_name|INVALID_ARGUMENT|400/i.test(msg)) {
+      return "Cloud Gemini-TTS 요청 형식 또는 모델 설정을 확인해 주세요.";
+    }
     if (/voice|404/i.test(msg)) {
       return "선택한 Gemini TTS 보이스를 사용할 수 없습니다.";
     }
