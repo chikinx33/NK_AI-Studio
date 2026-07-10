@@ -128,7 +128,7 @@
     previewBusyId: '',     // 미리듣기 생성 중인 voice id
     segments: [],          // [{ id, voiceId, voiceName, voiceInitial, text }]
     defaultVoice: null,    // { id, name, ... }
-    model: 'eleven_v3',
+    model: 'gemini_tts',   // 기본값: 별도 구독 없이 Google 자격증명으로 동작하는 Gemini TTS
     stability: 0.5,
     format: 'mp3_44100_128',
     speed: 1,              // 미리듣기·자산 재생 속도 (playbackRate)
@@ -907,6 +907,32 @@
     return card;
   }
 
+  // 프로바이더 원문 오류를 사용자가 조치할 수 있는 문장으로 바꾼다.
+  function explainError(err) {
+    var msg = String((err && err.message) || err || 'error');
+    var en = state.lang === 'en';
+    if (/payment_issue|payment_required/i.test(msg)) {
+      return en
+        ? 'The ElevenLabs subscription has an unpaid invoice, so its API is blocked. Settle the invoice, or switch the model to Gemini TTS.'
+        : 'ElevenLabs 구독에 미결제 인보이스가 있어 API가 막혀 있어요. 결제를 완료하거나, 모델을 Gemini TTS로 바꿔서 생성해주세요.';
+    }
+    if (/elevenlabs_tts_failed::429|quota|rate.?limit/i.test(msg)) {
+      return en ? 'ElevenLabs quota or rate limit exceeded. Try again later or switch to Gemini TTS.'
+                : 'ElevenLabs 사용량·호출 제한에 걸렸어요. 잠시 후 다시 시도하거나 Gemini TTS로 바꿔주세요.';
+    }
+    if (/ELEVENLABS_API_KEY not configured/i.test(msg)) {
+      return en ? 'ELEVENLABS_API_KEY is not configured on the server.' : '서버에 ELEVENLABS_API_KEY가 설정되어 있지 않아요.';
+    }
+    if (/TTS_GOOGLE_CLIENT_EMAIL|TTS_GOOGLE_PRIVATE_KEY/i.test(msg)) {
+      return en ? 'Google TTS credentials are not configured on the server.' : '서버에 Google TTS 자격증명이 설정되어 있지 않아요.';
+    }
+    if (/gemini_tts_failed::40[13]|PERMISSION_DENIED/i.test(msg)) {
+      return en ? 'Gemini TTS permission denied. Grant the service account roles/aiplatform.user.'
+                : 'Gemini TTS 권한이 없어요. 서비스 계정에 roles/aiplatform.user 권한을 부여해주세요.';
+    }
+    return msg.slice(0, 300);
+  }
+
   // 속도를 바꿔도 음정이 흔들리지 않도록 preservesPitch를 켠다.
   function applyPlaybackRate(audio) {
     try {
@@ -967,7 +993,7 @@
       state.previewBusyId = '';
       renderPreviewControls();
       refreshModalIfOpen();
-      alert((state.lang === 'en' ? 'Preview failed: ' : '미리듣기 실패: ') + ((err && err.message) || 'error'));
+      alert((state.lang === 'en' ? 'Preview failed: ' : '미리듣기 실패: ') + explainError(err));
     });
   }
   // 설정 패널의 미리듣기 버튼·멘트만 다시 그린다(전체 render는 모달을 닫으므로 사용 안 함).
@@ -1072,7 +1098,7 @@
       state.generating = false;
       state.assets = state.assets.filter(function (a) { return a.id !== localId; });
       render();
-      alert((state.lang === 'en' ? 'Generation failed: ' : '생성 실패: ') + ((err && err.message) || 'error'));
+      alert((state.lang === 'en' ? 'Generation failed: ' : '생성 실패: ') + explainError(err));
     });
   }
 
@@ -1110,7 +1136,7 @@
       state.generating = false;
       state.assets = state.assets.filter(function (a) { return a.id !== localId; });
       render();
-      alert((state.lang === 'en' ? 'Generation failed: ' : '생성 실패: ') + ((err && err.message) || 'error'));
+      alert((state.lang === 'en' ? 'Generation failed: ' : '생성 실패: ') + explainError(err));
     });
   }
 
