@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
-import Chat, { type Turn } from "./components/Chat";
+import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
 import Results from "./components/Results";
 import Settings from "./components/Settings";
@@ -383,8 +383,16 @@ export default function App() {
     abortRef.current?.abort();
   }
 
-  async function send(text: string, image?: { base64: string; mimeType: string; name: string; preview: string }) {
-    const userTurn: Turn = { role: "user", text: text || (image ? "[이미지 첨부됨]" : ""), imagePreview: image?.preview, ts: Date.now() };
+  async function send(text: string, attachments?: Attachment[]) {
+    const atts = attachments ?? [];
+    const previews = atts.map((a) => a.preview).filter(Boolean);
+    const userTurn: Turn = {
+      role: "user",
+      text: text || (atts.length ? "[이미지 첨부됨]" : ""),
+      imagePreview: previews[0],
+      imagePreviews: previews.length ? previews : undefined,
+      ts: Date.now(),
+    };
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
     // 보내는 즉시 수신자를 '활동 중'으로 — 텍스트에서 가장 먼저 등장하는 이름이 수신자
@@ -488,7 +496,7 @@ export default function App() {
             }
           }
         },
-        { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal, imageBase64: image?.base64, imageMimeType: image?.mimeType }
+        { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })) }
       );
     } catch (e) {
       commit([

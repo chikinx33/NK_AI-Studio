@@ -14,6 +14,13 @@ body {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2b3340; border-radius: 6px; }
 
+/* 스크롤은 되지만 스크롤바 표시는 감추는 유틸 (채팅 입력칸 등) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* 드래그로 파일을 채팅 영역에 올렸을 때 하이라이트 */
+.chat-dropzone-active { outline: 2px dashed #10b981; outline-offset: -6px; background: rgba(16,185,129,0.04); }
+
 /* VN(비주얼노벨) 모드 애니메이션 */
 @keyframes vnIn {
   from { opacity: 0; transform: translateY(16px) scale(0.97); }

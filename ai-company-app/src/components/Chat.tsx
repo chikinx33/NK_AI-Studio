@@ -14,9 +14,19 @@ export interface Turn {
   streaming?: boolean;
   typing?: boolean;
   voicePreparing?: boolean;
-  imagePreview?: string; // 첨부 이미지 data URL (사용자 메시지 버블에 표시)
+  imagePreview?: string; // (레거시) 단일 첨부 미리보기 data URL
+  imagePreviews?: string[]; // 첨부 이미지 data URL 목록 (사용자 메시지 버블에 표시)
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
 }
+
+export interface Attachment {
+  base64: string;
+  mimeType: string;
+  name: string;
+  preview: string; // 이미지면 data URL, 그 외(PDF 등)는 ""
+}
+
+export const MAX_ATTACHMENTS = 10;
 
 /** 시각(ms) → "오후 3:05" 형식 (시:분만, 날짜 없음) */
 export function formatChatTime(ts?: number): string {
@@ -35,7 +45,7 @@ interface Props {
   onStop?: () => void;
   draft: string;
   setDraft: (s: string) => void;
-  onSend: (text: string, image?: { base64: string; mimeType: string; name: string; preview: string }) => void;
+  onSend: (text: string, attachments?: Attachment[]) => void;
   onToggleMode?: () => void;
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
@@ -293,23 +303,40 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const didInitScroll = useRef(false);
 
-  // 이미지/파일 첨부 state
-  const [imageAttachment, setImageAttachment] = useState<{
-    base64: string; mimeType: string; name: string; preview: string;
-  } | null>(null);
+  // 이미지/파일 첨부 state — 여러 개 동시 첨부 지원
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0); // 자식 요소 진입/이탈로 인한 깜빡임 방지용 카운터
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!ALLOWED_MIME.includes(file.type)) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
-      const preview = file.type.startsWith("image/") ? dataUrl : "";
-      setImageAttachment({ base64, mimeType: file.type, name: file.name, preview });
-    };
-    reader.readAsDataURL(file);
+  const readFile = useCallback((file: File): Promise<Attachment | null> => {
+    return new Promise((resolve) => {
+      if (!ALLOWED_MIME.includes(file.type)) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1] || "";
+        const preview = file.type.startsWith("image/") ? dataUrl : "";
+        resolve({ base64, mimeType: file.type, name: file.name, preview });
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  // 여러 파일을 한 번에 첨부(최대 MAX_ATTACHMENTS). 허용 형식만 통과.
+  const addFiles = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    const read = await Promise.all(list.map(readFile));
+    const valid = read.filter((a): a is Attachment => !!a);
+    if (!valid.length) return;
+    setAttachments((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
+  }, [readFile]);
+
+  const removeAttachment = useCallback((i: number) => {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== i));
   }, []);
 
   // 입력칸 자동 높이 — 줄 수만큼 세로로 확장(최대치 넘으면 스크롤)
@@ -363,23 +390,56 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
 
   function submit() {
     const t = draft.trim();
-    if ((!t && !imageAttachment) || busy) return;
-    onSend(t, imageAttachment ?? undefined);
+    if ((!t && !attachments.length) || busy) return;
+    onSend(t, attachments.length ? attachments : undefined);
     setDraft("");
-    setImageAttachment(null);
+    setAttachments([]);
   }
 
   async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const items = Array.from(e.clipboardData.items);
-    const imgItem = items.find((item) => item.type.startsWith("image/"));
-    if (imgItem) {
-      const file = imgItem.getAsFile();
-      if (file) { e.preventDefault(); await handleFile(file); }
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => !!f);
+    if (files.length) { e.preventDefault(); await addFiles(files); }
+  }
+
+  // ── 드래그 앤 드롭: 채팅 영역 어디에 놓아도 첨부 ──
+  function onDropZoneDragEnter(e: React.DragEvent) {
+    if (isExpired || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragOver(true);
+  }
+  function onDropZoneDragOver(e: React.DragEvent) {
+    if (isExpired || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+  function onDropZoneDragLeave(e: React.DragEvent) {
+    if (isExpired) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragOver(false);
+  }
+  async function onDropZoneDrop(e: React.DragEvent) {
+    if (isExpired) return;
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragOver(false);
+      await addFiles(files);
     }
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0">
+    <div
+      className={`flex-1 flex flex-col h-full min-h-0 ${dragOver ? "chat-dropzone-active" : ""}`}
+      onDragEnter={onDropZoneDragEnter}
+      onDragOver={onDropZoneDragOver}
+      onDragLeave={onDropZoneDragLeave}
+      onDrop={onDropZoneDrop}
+    >
       {/* 아이콘 전용 행 — 대시보드·그래프·설정과 동일한 방식 */}
       <div className="flex justify-center pt-3 pb-1 text-gray-400">
         <MessagesSquareIcon className="h-10 w-10" />
@@ -442,12 +502,22 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
               </div>
               <div className="flex max-w-[78%] flex-col items-end">
                 {t.ts && <div className="mb-0.5 mr-1 text-[10px] text-gray-600">{formatChatTime(t.ts)}</div>}
-                <div className="rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
-                  {t.imagePreview && (
-                    <img src={t.imagePreview} alt="첨부 이미지" className="mb-2 max-h-48 w-auto rounded-lg object-contain" />
-                  )}
-                  {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !t.imagePreview ? t.text : null}
-                </div>
+                {(() => {
+                  const previews = t.imagePreviews?.length ? t.imagePreviews : (t.imagePreview ? [t.imagePreview] : []);
+                  const hasAttachment = previews.length > 0;
+                  return (
+                    <div className="rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
+                      {hasAttachment && (
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                          {previews.map((src, i) => (
+                            <img key={i} src={src} alt="첨부 이미지" className="max-h-48 w-auto rounded-lg object-contain" />
+                          ))}
+                        </div>
+                      )}
+                      {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !hasAttachment ? t.text : null}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ) : (() => {
@@ -590,38 +660,44 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         </div>
       ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
-        {/* 첨부 이미지 미리보기 */}
-        {imageAttachment && (
-          <div className="mb-2 flex items-center gap-2">
-            {imageAttachment.preview ? (
-              <img src={imageAttachment.preview} alt="첨부 이미지" className="h-16 w-16 rounded-lg object-cover border border-edge" />
-            ) : (
-              <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-gray-400">
-                📄 {imageAttachment.name}
+        {/* 첨부 미리보기 — 여러 개를 가로로 나열 */}
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {attachments.map((a, i) => (
+              <div key={i} className="relative">
+                {a.preview ? (
+                  <img src={a.preview} alt={a.name} className="h-16 w-16 rounded-lg object-cover border border-edge" />
+                ) : (
+                  <div className="flex h-16 items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-gray-400">
+                    📄 <span className="max-w-[120px] truncate">{a.name}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-gray-800 text-gray-300 text-[10px] leading-none ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  title="첨부 제거"
+                >✕</button>
               </div>
-            )}
-            <button
-              onClick={() => setImageAttachment(null)}
-              className="text-gray-500 hover:text-gray-300 text-xs leading-none"
-              title="첨부 제거"
-            >✕</button>
+            ))}
+            <span className="text-[11px] text-gray-500">{attachments.length}/{MAX_ATTACHMENTS}</span>
           </div>
         )}
         <div className="flex items-end gap-2">
-          {/* 숨김 파일 입력 */}
+          {/* 숨김 파일 입력 — 다중 선택 허용 */}
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
             className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+            onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }}
           />
           {/* 파일 첨부 버튼 */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-            title="이미지/파일 첨부"
-            className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${imageAttachment ? "border-emerald-600 bg-emerald-900/40 text-emerald-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
+            disabled={busy || attachments.length >= MAX_ATTACHMENTS}
+            title={attachments.length >= MAX_ATTACHMENTS ? `최대 ${MAX_ATTACHMENTS}개까지 첨부할 수 있어요` : "이미지/파일 첨부 (여러 개 가능)"}
+            className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${attachments.length ? "border-emerald-600 bg-emerald-900/40 text-emerald-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
           >
             <PaperclipIcon className="h-4 w-4" />
           </button>
@@ -639,7 +715,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             onPaste={handlePaste}
             rows={1}
             placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈) · @이름으로 직원 지목"
-            className="flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
+            className="no-scrollbar flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
           />
           {streaming ? (
             <button

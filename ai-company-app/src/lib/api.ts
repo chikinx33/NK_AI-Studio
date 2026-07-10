@@ -968,9 +968,15 @@ export async function streamChat(
     signal?: AbortSignal;
     imageBase64?: string;
     imageMimeType?: string;
+    images?: { base64: string; mimeType: string }[];
   } = {}
 ): Promise<void> {
   const convId = opts.conversationId || "main";
+
+  // 다중 첨부(images)를 우선 사용하되, 단일 레거시 필드(imageBase64)도 함께 채워 하위호환 유지.
+  const images = (opts.images && opts.images.length)
+    ? opts.images
+    : (opts.imageBase64 ? [{ base64: opts.imageBase64, mimeType: opts.imageMimeType || "image/jpeg" }] : []);
 
   onEvent("status", { backend: "cloud", reason: "NK Claude" });
 
@@ -981,8 +987,10 @@ export async function streamChat(
       message,
       conversationId: convId,
       focusAgent: opts.focusAgent,
-      imageBase64: opts.imageBase64,
-      imageMimeType: opts.imageMimeType,
+      images,
+      // 하위호환: 서버가 아직 단일 필드만 읽어도 첫 첨부는 전달되도록 유지
+      imageBase64: images[0]?.base64,
+      imageMimeType: images[0]?.mimeType,
       clientNow: localNowISO(), // 브라우저 로컬 현재시각(시간대 오프셋 포함) → 에이전트가 "오늘"을 정확히 알게
     }),
     signal: opts.signal,

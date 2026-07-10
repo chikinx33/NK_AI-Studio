@@ -48,12 +48,22 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const message = String(body?.message || "").trim();
     const conversationId = String(body?.conversationId || "main").trim() || "main";
     const focusAgent = String(body?.focusAgent || "").trim(); // 1:1 단독 대화 모드
-    const imageBase64 = typeof body?.imageBase64 === "string" && body.imageBase64 ? body.imageBase64 : undefined;
-    const imageMimeType = typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg";
+    // 다중 첨부(images) 우선 파싱, 없으면 단일 레거시 필드(imageBase64)를 배열로 승격.
+    const rawImages = Array.isArray(body?.images) ? body.images : [];
+    let images = rawImages
+      .map((im: any) => ({
+        base64: typeof im?.base64 === "string" ? im.base64 : "",
+        mimeType: typeof im?.mimeType === "string" && im.mimeType ? im.mimeType : "image/jpeg",
+      }))
+      .filter((im: { base64: string }) => !!im.base64)
+      .slice(0, 10);
+    if (!images.length && typeof body?.imageBase64 === "string" && body.imageBase64) {
+      images = [{ base64: body.imageBase64, mimeType: typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg" }];
+    }
     const clientNow = typeof body?.clientNow === "string" && body.clientNow ? body.clientNow : undefined; // 브라우저 로컬 현재시각(시간대 포함)
-    if (!message && !imageBase64) return send({ error: "message is required" }, 400, origin);
+    if (!message && !images.length) return send({ error: "message is required" }, 400, origin);
 
-    const displayText = message + (imageBase64 ? (message ? "\n" : "") + "[이미지 첨부됨]" : "");
+    const displayText = message + (images.length ? (message ? "\n" : "") + "[이미지 첨부됨]" : "");
     const userMsg = await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: displayText,
     });
@@ -87,7 +97,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       try {
         await runGroupChat(env, {
           sql, userId: auth.userId, conversationId, toolCtx,
-          firstMessage: displayText, focusAgent: focusAgent || undefined, imageBase64, imageMimeType, clientNow,
+          firstMessage: displayText, focusAgent: focusAgent || undefined, images, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: () => sse({ type: "job_ready" }),
         });

@@ -408,20 +408,23 @@ export async function callClaude(
   env: any,
   system: string,
   messages: ClaudeMsg[],
-  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; resolvedAuth?: any } = {}
+  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; images?: { base64: string; mimeType: string }[]; resolvedAuth?: any } = {}
 ): Promise<string> {
   // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
   const auth = opts.resolvedAuth || (opts.sql && opts.userId
     ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
     : claudeAuthHeaders(env));
-  // 이미지/파일 첨부 시 마지막 user 메시지를 멀티모달 content block으로 변환.
+  // 이미지/파일 첨부 시 마지막 user 메시지를 멀티모달 content block으로 변환(여러 개 지원).
+  const images = (opts.images || []).filter((im) => im && im.base64);
   const builtMessages = messages.map((m, idx) => {
-    if (idx === messages.length - 1 && m.role === "user" && opts.imageBase64) {
-      const mtype = opts.imageMimeType || "image/jpeg";
-      const imageBlock = mtype === "application/pdf"
-        ? { type: "document", source: { type: "base64", media_type: mtype, data: opts.imageBase64 } }
-        : { type: "image", source: { type: "base64", media_type: mtype, data: opts.imageBase64 } };
-      return { role: m.role, content: [imageBlock, { type: "text", text: m.content }] };
+    if (idx === messages.length - 1 && m.role === "user" && images.length) {
+      const blocks = images.map((im) => {
+        const mtype = im.mimeType || "image/jpeg";
+        return mtype === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: mtype, data: im.base64 } }
+          : { type: "image", source: { type: "base64", media_type: mtype, data: im.base64 } };
+      });
+      return { role: m.role, content: [...blocks, { type: "text", text: m.content }] };
     }
     return m;
   });
@@ -627,7 +630,7 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; model?: string; maxTokens?: number; resolvedAuth?: any } = {}
+  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; images?: { base64: string; mimeType: string }[]; model?: string; maxTokens?: number; resolvedAuth?: any } = {}
 ): Promise<SpeakResult> {
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
@@ -659,7 +662,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType, resolvedAuth: opts.resolvedAuth });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
   if (opts.sql && opts.userId) {
     SELF_KNOW_RE.lastIndex = 0;
@@ -960,8 +963,7 @@ export interface OrchestratorDeps {
   toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
   firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
   focusAgent?: string;   // 1:1 단독 대화 모드 — 이 직원만 응답, 위임·통솔·다른 직원 개입 전면 차단
-  imageBase64?: string;  // 첨부 이미지 base64 (첫 번째 에이전트에게만 전달)
-  imageMimeType?: string;
+  images?: { base64: string; mimeType: string }[];  // 첨부(이미지·PDF) — 첫 번째 에이전트에게만 전달
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
   onJobReady?: () => void; // SSE 콜백: 도구 잡 완료 시 Results 패널 즉시 갱신
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
@@ -1175,7 +1177,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType, model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: deps.images, model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
