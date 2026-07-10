@@ -3,7 +3,6 @@ import {
   getProjects,
   setProjectStage,
   getConversations,
-  renameConversation,
   type Project,
   type StageStatus,
   type Conversation,
@@ -59,8 +58,6 @@ function ConversationList({
   onOpenConversation?: (id: string) => void;
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
   const _now = new Date();
   const [vy, setVy] = useState(_now.getFullYear());
   const [vm, setVm] = useState(_now.getMonth()); // 0-11
@@ -86,19 +83,10 @@ function ConversationList({
     return () => clearInterval(t);
   }, []);
 
-  async function commitRename(id: string) {
-    const t = editText.trim();
-    setEditing(null);
-    if (t) {
-      await renameConversation(id, t);
-      load();
-    }
-  }
-
   return (
     <div className="rounded-2xl border border-edge bg-panel p-3">
-      {/* 인라인 캘린더: 항상 표시. 대화가 있는 날(+오늘) 클릭 → 그 날 대화 열기 */}
-      <div className="mb-2 rounded-lg border border-edge bg-ink/40 p-2">
+      {/* 인라인 캘린더: 대화가 있는 날(+오늘) 클릭 → 그 날 대화 열기 */}
+      <div className="rounded-lg border border-edge bg-ink/40 p-2">
         <div className="mb-1 flex items-center justify-between px-0.5">
           <button onClick={() => shiftMonth(-1)} className="grid h-5 w-5 place-items-center rounded text-gray-400 hover:bg-edge hover:text-white">‹</button>
           <span className="text-[11px] font-medium text-gray-200">{vy}년 {vm + 1}월</span>
@@ -148,54 +136,6 @@ function ConversationList({
             )
           )}
         </div>
-      </div>
-      <div className="space-y-1">
-        {convs.map((c) => {
-          const active = c.id === activeConvId;
-          // 아랫줄에 항상 표시할 '날짜': conversation_id가 날짜면 그대로, 아니면(main 등) 첫 메시지 날짜.
-          const isDateId = /^\d{4}-\d{2}-\d{2}$/.test(c.id);
-          const dateLabel = isDateId ? c.id : (c.createdAt || "").slice(0, 10);
-          // 윗줄 '제목': 커스텀 제목이 있으면 그것, 없으면 기본값=날짜. (서버는 커스텀 없으면 title=conversation_id 반환)
-          const displayTitle = c.title && c.title !== dateLabel ? c.title : dateLabel;
-          return (
-            <div
-              key={c.id}
-              className={`group flex items-center gap-1 rounded-lg border px-2 py-1.5 transition ${
-                active ? "border-emerald-700/60 bg-emerald-900/20" : "border-edge hover:bg-edge/40"
-              }`}
-            >
-              {editing === c.id ? (
-                <input
-                  autoFocus
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  onBlur={() => commitRename(c.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename(c.id);
-                    if (e.key === "Escape") setEditing(null);
-                  }}
-                  className="min-w-0 flex-1 rounded bg-ink px-1.5 py-0.5 text-xs text-gray-100 outline-none"
-                />
-              ) : (
-                <button onClick={() => onOpenConversation?.(c.id)} className="min-w-0 flex-1 text-left">
-                  <div className={`truncate text-xs ${active ? "text-emerald-200" : "text-gray-200"}`}>{displayTitle}</div>
-                  <div className="truncate text-[10px] text-gray-500">{dateLabel}</div>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setEditing(c.id);
-                  setEditText(displayTitle);
-                }}
-                title="제목 변경"
-                className="shrink-0 text-gray-600 opacity-0 transition hover:text-gray-300 group-hover:opacity-100"
-              >
-                ✏️
-              </button>
-            </div>
-          );
-        })}
-        {convs.length === 0 && <div className="text-[11px] text-gray-500">대화가 없습니다.</div>}
       </div>
     </div>
   );
