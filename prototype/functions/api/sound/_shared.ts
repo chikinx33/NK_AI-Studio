@@ -347,6 +347,102 @@ export async function elevenLabsSfx(opts: {
   return new Uint8Array(buf);
 }
 
+// ─── Gemini TTS (Cloud Text-to-Speech, tts.ts와 동일 경로) ─────────────────
+// AI 기업 에이전트 페이지(/api/tts)에서 검증된 Cloud Gemini-TTS 호출을 사운드 스튜디오에서도 재사용한다.
+export const GEMINI_TTS_VOICES = [
+  "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+  "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+  "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+  "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+  "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+];
+
+export function pickGeminiVoiceName(raw: string): string {
+  const v = String(raw || "").trim();
+  if (!v) return "Kore";
+  return GEMINI_TTS_VOICES.find((n) => n.toLowerCase() === v.toLowerCase()) || "Kore";
+}
+
+export function normalizeGeminiTtsModel(model: string): string {
+  const raw = String(model || "").trim();
+  if (!raw) return "gemini-2.5-flash-tts";
+  if (raw === "gemini-2.5-flash-preview-tts") return "gemini-2.5-flash-tts";
+  if (raw === "gemini-2.5-pro-preview-tts") return "gemini-2.5-pro-tts";
+  if (raw === "gemini-2.5-flash-lite-tts") return "gemini-2.5-flash-lite-preview-tts";
+  return raw;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(String(b64 || ""));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function geminiTtsRequest(opts: {
+  token: string; text: string; prompt: string; voiceName: string; modelName: string; userProject?: string;
+}, modelField: "model_name" | "modelName"): Promise<Uint8Array> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${opts.token}`,
+    "Content-Type": "application/json",
+  };
+  if (opts.userProject) headers["X-Goog-User-Project"] = opts.userProject;
+  const voice: Record<string, any> = { languageCode: "ko-KR", name: opts.voiceName };
+  voice[modelField] = opts.modelName;
+  const res = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      input: { text: opts.text, prompt: opts.prompt || "Say the following in a natural Korean voice." },
+      voice,
+      audioConfig: { audioEncoding: "MP3" },
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`gemini_tts_failed::${res.status}::${text.slice(0, 300)}`);
+  let json: any = {};
+  try { json = JSON.parse(text); } catch { throw new Error("gemini_tts_bad_response"); }
+  const audio = String(json.audioContent || "");
+  if (!audio) throw new Error("gemini_tts_empty_audio");
+  return base64ToBytes(audio);
+}
+
+// model_name 필드가 거부되면 modelName으로 1회 재시도 (tts.ts와 동일 폴백).
+export async function geminiTts(opts: {
+  clientEmail: string; privateKeyPem: string; userProject?: string;
+  text: string; prompt: string; voiceName: string; modelName: string;
+}): Promise<Uint8Array> {
+  const token = await getGoogleAccessToken({
+    clientEmail: opts.clientEmail,
+    privateKeyPem: opts.privateKeyPem,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+  });
+  const req = { token, text: opts.text, prompt: opts.prompt, voiceName: opts.voiceName, modelName: opts.modelName, userProject: opts.userProject };
+  try {
+    return await geminiTtsRequest(req, "model_name");
+  } catch (firstError: any) {
+    const msg = String(firstError?.message || firstError || "");
+    if (!/modelName|model_name|Unknown name|INVALID_ARGUMENT|400/i.test(msg)) throw firstError;
+    return await geminiTtsRequest(req, "modelName");
+  }
+}
+
+// [calm] [warmly] 형태의 감정 태그를 본문에서 떼어 Gemini 스타일 프롬프트로 변환.
+export function splitEmotionTags(text: string): { clean: string; tags: string[] } {
+  const tags: string[] = [];
+  const clean = String(text || "").replace(/\[([a-zA-Z가-힣 _-]{1,24})\]/g, (_m, tag) => {
+    tags.push(String(tag).trim());
+    return "";
+  }).replace(/\s{2,}/g, " ").trim();
+  return { clean: clean || String(text || "").trim(), tags };
+}
+
+export function buildGeminiPrompt(tags: string[]): string {
+  const base = "Say the following in a natural Korean voice.";
+  if (!tags.length) return base;
+  return `${base} Speak in a ${tags.join(", ")} tone.`;
+}
+
 // MP3 바이트 단순 이어붙이기 (방식 ① — 세그먼트별 합성 후 병합)
 export function concatMp3(parts: Uint8Array[]): Uint8Array {
   const total = parts.reduce((n, p) => n + p.byteLength, 0);

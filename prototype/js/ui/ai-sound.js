@@ -5,7 +5,46 @@
   // ─── Constants ────────────────────────────────────────────
   var MODELS = [
     { id: 'eleven_v3',             ko: 'ElevenLabs v3 (표현력)',        en: 'ElevenLabs v3' },
-    { id: 'eleven_multilingual_v2', ko: 'Multilingual v2 (음색 일관성)', en: 'Multilingual v2' }
+    { id: 'eleven_multilingual_v2', ko: 'Multilingual v2 (음색 일관성)', en: 'Multilingual v2' },
+    { id: 'gemini_tts',            ko: 'Gemini TTS (자연스러운 한국어)', en: 'Gemini TTS' }
+  ];
+
+  // Gemini TTS 프리셋 보이스 — AI 기업 에이전트 페이지와 동일한 16종.
+  // providerVoiceId = Cloud Text-to-Speech의 Gemini 보이스 이름.
+  var GEMINI_VOICES = [
+    { n: 'Achird',       g: 'male',   d: '친근하고 편안한 톤' },
+    { n: 'Algenib',      g: 'male',   d: '거칠고 묵직한 저음' },
+    { n: 'Algieba',      g: 'male',   d: '부드럽고 매끄러운 음색' },
+    { n: 'Alnilam',      g: 'male',   d: '단단하고 확고한 전달' },
+    { n: 'Enceladus',    g: 'male',   d: '숨결이 섞인 나직한 음색' },
+    { n: 'Fenrir',       g: 'male',   d: '활기차고 힘 있는 톤' },
+    { n: 'Orus',         g: 'male',   d: '단호하고 또렷한 진행' },
+    { n: 'Sadachbia',    g: 'male',   d: '생동감 있고 경쾌한 톤' },
+    { n: 'Achernar',     g: 'female', d: '부드럽고 섬세한 음색' },
+    { n: 'Aoede',        g: 'female', d: '가볍고 산뜻한 톤' },
+    { n: 'Autonoe',      g: 'female', d: '밝고 또렷한 내레이션' },
+    { n: 'Callirrhoe',   g: 'female', d: '여유롭고 차분한 톤' },
+    { n: 'Gacrux',       g: 'female', d: '성숙하고 안정적인 음색' },
+    { n: 'Kore',         g: 'female', d: '확신에 찬 명료한 전달' },
+    { n: 'Vindemiatrix', g: 'female', d: '온화하고 다정한 톤' },
+    { n: 'Zephyr',       g: 'female', d: '맑고 경쾌한 캐릭터 보이스' }
+  ].map(function (v) {
+    return {
+      id: 'gemini-' + v.n, name: v.n, gender: v.g, language: 'ko',
+      description: v.d, styleTags: [], scope: 'global',
+      provider: 'gemini', providerVoiceId: v.n, previewUrl: ''
+    };
+  });
+
+  var VOICE_SPEEDS = [0.5, 1, 1.2, 1.5];
+  // 톤을 비교해 들어볼 수 있도록 감정 폭이 다른 멘트를 준비 — 미리듣기마다 순환한다.
+  var PREVIEW_LINES = [
+    '안녕하세요, 오늘은 이 목소리로 이야기를 들려드릴게요.',
+    '조용한 새벽, 창밖에는 비가 조금씩 내리고 있었어요.',
+    '자, 그럼 지금부터 핵심만 차분하게 정리해 볼게요.',
+    '정말요? 그건 생각도 못 했는데, 완전 신기하네요!',
+    '괜찮아요. 천천히 해도 늦지 않으니까, 한 걸음씩 가요.',
+    '경고합니다. 지금 멈추지 않으면 되돌릴 수 없습니다.'
   ];
   var FORMATS = [
     { id: 'mp3_44100_128', label: 'MP3 44.1kHz 128kbps' },
@@ -35,6 +74,7 @@
       scene_import: '씬 대사 불러오기',
       settings_title: '설정', voice_label: '보이스', voice_pick: '보이스 선택', voice_none: '보이스를 선택하세요',
       model_label: '모델', stability_label: 'Stability', creative: 'Creative', robust: 'Robust',
+      speed_label: '재생 속도', preview_line: '테스트 멘트', preview_pick_first: '먼저 보이스를 선택해주세요.',
       format_label: '출력 포맷', generate_voice: '음성 생성', generating: '생성 중…',
       sfx_title: '효과음', sfx_placeholder: '효과음 프롬프트 입력…  (예: heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: '영향도', generate_sfx: '효과음 생성',
@@ -62,6 +102,7 @@
       scene_import: 'Import scene lines',
       settings_title: 'Settings', voice_label: 'Voice', voice_pick: 'Select voice', voice_none: 'Please select a voice',
       model_label: 'Model', stability_label: 'Stability', creative: 'Creative', robust: 'Robust',
+      speed_label: 'Playback speed', preview_line: 'Test line', preview_pick_first: 'Select a voice first.',
       format_label: 'Output format', generate_voice: 'Generate voice', generating: 'Generating…',
       sfx_title: 'Sound Effects', sfx_placeholder: 'Enter SFX prompt…  (e.g. heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: 'Influence', generate_sfx: 'Generate SFX',
@@ -90,6 +131,9 @@
     model: 'eleven_v3',
     stability: 0.5,
     format: 'mp3_44100_128',
+    speed: 1,              // 미리듣기·자산 재생 속도 (playbackRate)
+    previewLine: '',       // 마지막으로 미리듣기한 멘트
+    previewLineIdx: 0,
     sfxPrompt: '',
     sfxDuration: 2,
     sfxLooping: false,
@@ -187,16 +231,30 @@
     if (isProjectMode() && brandId()) q.brandId = brandId();
     NK.api.voicesList(q).then(function (data) {
       state.voices = (data && data.voices) || [];
-      if (!state.defaultVoice && state.voices.length) {
-        var firstGlobal = state.voices.find(function (v) { return v.scope === 'global'; }) || state.voices[0];
-        state.defaultVoice = firstGlobal;
-        // assign default voice to any segment missing one
-        state.segments.forEach(function (s) { if (!s.voiceId && firstGlobal) assignVoiceToSegment(s, firstGlobal); });
-      }
+      reconcileVoicesWithModel();
       render();
     }).catch(function () { render(); });
   }
-  function voiceById(id) { return state.voices.find(function (v) { return String(v.id) === String(id); }) || null; }
+  function voiceById(id) { return availableVoices().find(function (v) { return String(v.id) === String(id); }) || null; }
+
+  // 선택한 모델에 맞는 보이스 목록. Gemini TTS는 서버 voices 테이블이 아닌 프리셋을 쓴다.
+  function isGeminiModel() { return String(state.model || '').indexOf('gemini') === 0; }
+  function availableVoices() { return isGeminiModel() ? GEMINI_VOICES : state.voices; }
+  function voiceMatchesModel(v) { return !!v && (v.provider === 'gemini') === isGeminiModel(); }
+
+  // 모델을 바꾸면 다른 프로바이더의 보이스가 남지 않도록 기본 보이스·세그먼트를 재배정.
+  function reconcileVoicesWithModel() {
+    var list = availableVoices();
+    if (!list.length) return;
+    if (!voiceMatchesModel(state.defaultVoice)) {
+      state.defaultVoice = list.find(function (v) { return v.scope === 'global'; }) || list[0];
+    }
+    state.segments.forEach(function (s) {
+      var cur = voiceById(s.voiceId);
+      if (!cur) assignVoiceToSegment(s, state.defaultVoice);
+    });
+    saveSegments();
+  }
 
   function assignVoiceToSegment(seg, voice) {
     seg.voiceId = voice.id;
@@ -457,12 +515,8 @@
     m.querySelector('[data-meter-credits]').textContent = chars + ' ' + t('credit_unit');
   }
 
-  // ── Voice settings panel (VOICE right) ──
-  function renderVoiceSettingsPanel() {
-    var panel = el('div', 'snd-gen-panel');
-    panel.appendChild(el('div', 'snd-panel-title', { textContent: t('settings_title') }));
-
-    // voice pick (default)
+  // ── Voice field: 보이스 선택 + 속도 + 미리듣기 (설정 패널 최상단) ──
+  function renderVoiceField() {
     var vf = el('div', 'snd-field');
     vf.appendChild(el('span', 'snd-label', { textContent: t('voice_label') }));
     var pick = el('button', 'snd-voice-pick', { type: 'button' });
@@ -475,7 +529,45 @@
     pick.appendChild(el('span', 'snd-voice-pick-arrow', { innerHTML: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' }));
     pick.addEventListener('click', function () { openVoiceModal(null); });
     vf.appendChild(pick);
-    panel.appendChild(vf);
+
+    // 속도 + 미리듣기 (AI 기업 에이전트 페이지와 동일 구성)
+    var prow = el('div', 'snd-preview-row');
+    var spd = el('button', 'snd-speed-btn', { type: 'button', title: t('speed_label'), textContent: 'x' + state.speed });
+    spd.addEventListener('click', function () {
+      var i = VOICE_SPEEDS.indexOf(state.speed);
+      state.speed = VOICE_SPEEDS[(i + 1) % VOICE_SPEEDS.length];
+      spd.textContent = 'x' + state.speed;
+      if (state._previewAudio) applyPlaybackRate(state._previewAudio);
+      applyRateToAssetAudios();
+    });
+    prow.appendChild(spd);
+
+    var busy = !!state.defaultVoice && state.previewBusyId === String(state.defaultVoice.id);
+    var pv = el('button', 'snd-preview-btn', { type: 'button' });
+    if (busy) {
+      pv.appendChild(el('span', 'snd-spinner'));
+      pv.appendChild(document.createTextNode(state.lang === 'en' ? 'Loading' : '생성 중'));
+      pv.disabled = true;
+    } else {
+      pv.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+      pv.appendChild(document.createTextNode(t('preview')));
+      pv.addEventListener('click', function () {
+        if (!state.defaultVoice) { alert(t('preview_pick_first')); return; }
+        previewVoice(state.defaultVoice);
+      });
+    }
+    prow.appendChild(pv);
+    vf.appendChild(prow);
+
+    if (state.previewLine) vf.appendChild(el('div', 'snd-preview-line', { textContent: t('preview_line') + ': ' + state.previewLine }));
+    return vf;
+  }
+
+  // ── Voice settings panel (VOICE right) ──
+  function renderVoiceSettingsPanel() {
+    var panel = el('div', 'snd-gen-panel');
+    panel.appendChild(el('div', 'snd-panel-title', { textContent: t('settings_title') }));
+    panel.appendChild(renderVoiceField());
 
     // model
     var mf = el('div', 'snd-field');
@@ -486,21 +578,28 @@
       if (m.id === state.model) o.selected = true;
       msel.appendChild(o);
     });
-    msel.addEventListener('change', function () { state.model = msel.value; });
+    msel.addEventListener('change', function () {
+      state.model = msel.value;
+      stopPreview();
+      reconcileVoicesWithModel();
+      render();
+    });
     mf.appendChild(msel);
     panel.appendChild(mf);
 
-    // stability slider
-    var sf = el('div', 'snd-field');
-    sf.appendChild(el('span', 'snd-label', { textContent: t('stability_label') }));
-    var srow = el('div', 'snd-slider-row');
-    srow.appendChild(el('span', 'snd-slider-ends', { textContent: t('creative') }));
-    var slider = el('input', '', { type: 'range', min: '0', max: '1', step: '0.05', value: String(state.stability) });
-    slider.addEventListener('input', function () { state.stability = Number(slider.value); });
-    srow.appendChild(slider);
-    srow.appendChild(el('span', 'snd-slider-ends', { textContent: t('robust') }));
-    sf.appendChild(srow);
-    panel.appendChild(sf);
+    // stability slider — ElevenLabs 전용 파라미터라 Gemini TTS에서는 숨긴다.
+    if (!isGeminiModel()) {
+      var sf = el('div', 'snd-field');
+      sf.appendChild(el('span', 'snd-label', { textContent: t('stability_label') }));
+      var srow = el('div', 'snd-slider-row');
+      srow.appendChild(el('span', 'snd-slider-ends', { textContent: t('creative') }));
+      var slider = el('input', '', { type: 'range', min: '0', max: '1', step: '0.05', value: String(state.stability) });
+      slider.addEventListener('input', function () { state.stability = Number(slider.value); });
+      srow.appendChild(slider);
+      srow.appendChild(el('span', 'snd-slider-ends', { textContent: t('robust') }));
+      sf.appendChild(srow);
+      panel.appendChild(sf);
+    }
 
     // format
     var ff = el('div', 'snd-field');
@@ -644,6 +743,8 @@
 
     if (a.outputUrl && a.status !== 'processing') {
       var audio = el('audio', '', { controls: '1', preload: 'none', src: a.outputUrl });
+      applyPlaybackRate(audio);
+      audio.addEventListener('loadedmetadata', function () { applyPlaybackRate(audio); });
       card.appendChild(audio);
       var actions = el('div', 'snd-asset-actions');
       var dl = el('a', 'snd-mini-btn', { href: a.outputUrl, download: (a.title || 'sound') + '.mp3', target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
@@ -683,7 +784,7 @@
     var titleBox = el('div');
     titleBox.appendChild(el('span', 'snd-modal-title', { textContent: t('lib_title') }));
     head.appendChild(titleBox);
-    head.appendChild(el('span', 'snd-modal-count', { textContent: '(' + list.length + '/' + state.voices.length + ')' }));
+    head.appendChild(el('span', 'snd-modal-count', { textContent: '(' + list.length + '/' + availableVoices().length + ')' }));
     var close = el('button', 'snd-modal-close', { type: 'button', innerHTML: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' });
     close.addEventListener('click', closeVoiceModal);
     head.appendChild(close);
@@ -734,7 +835,7 @@
   }
   function filteredModalVoices() {
     var q = state.modalSearch.trim().toLowerCase();
-    return state.voices.filter(function (v) {
+    return availableVoices().filter(function (v) {
       if (state.modalTab === 'brand' && v.scope !== 'brand') return false;
       if (state.modalTab === 'user' && v.scope !== 'user') return false;
       if (state.modalTab === 'all' && v.scope === 'brand' && !isProjectMode()) return false;
@@ -752,7 +853,7 @@
     body.innerHTML = '';
     var list = filteredModalVoices();
     var countEl = modal.querySelector('.snd-modal-count');
-    if (countEl) countEl.textContent = '(' + list.length + '/' + state.voices.length + ')';
+    if (countEl) countEl.textContent = '(' + list.length + '/' + availableVoices().length + ')';
     if (!list.length) {
       body.appendChild(el('div', 'snd-modal-empty', { textContent: state.lang === 'en' ? 'No voices found.' : '보이스가 없습니다.' }));
       return;
@@ -806,38 +907,77 @@
     return card;
   }
 
+  // 속도를 바꿔도 음정이 흔들리지 않도록 preservesPitch를 켠다.
+  function applyPlaybackRate(audio) {
+    try {
+      audio.playbackRate = state.speed;
+      audio.preservesPitch = true;
+      audio.mozPreservesPitch = true;
+      audio.webkitPreservesPitch = true;
+    } catch (_) {}
+  }
+  function applyRateToAssetAudios() {
+    if (!root) return;
+    root.querySelectorAll('.snd-asset audio').forEach(applyPlaybackRate);
+  }
   function playPreview(url) {
     stopPreview();
-    try { var a = new Audio(url); state._previewAudio = a; a.play(); } catch (_) {}
+    try {
+      var a = new Audio(url);
+      state._previewAudio = a;
+      applyPlaybackRate(a);
+      a.play();
+    } catch (_) {}
   }
 
-  var PREVIEW_SAMPLE = '안녕하세요, 반가워요. 이 목소리로 들려드릴게요.';
-  // 보이스 미리듣기: previewUrl 우선, 없으면 짧은 샘플을 ElevenLabs TTS로 즉석 생성·캐시 후 재생.
+  // 미리듣기할 때마다 다음 멘트로 순환 — 톤별로 여러 문장을 비교해 들을 수 있다.
+  function nextPreviewLine() {
+    var line = PREVIEW_LINES[state.previewLineIdx % PREVIEW_LINES.length];
+    state.previewLineIdx = (state.previewLineIdx + 1) % PREVIEW_LINES.length;
+    return line;
+  }
+  // 보이스 미리듣기: 선택한 멘트를 현재 모델(ElevenLabs / Gemini TTS)로 즉석 합성·캐시 후 재생.
   function previewVoice(v) {
     if (!v) return;
-    if (v.previewUrl) { playPreview(v.previewUrl); return; }
-    if (v._previewUrl) { playPreview(v._previewUrl); return; }
     if (state.previewBusyId) return; // 동시 1건만
     if (!NK.api || !NK.api.soundVoiceGenerate) return;
+
+    var line = nextPreviewLine();
+    state.previewLine = line;
+    var cache = v._previewCache || (v._previewCache = {});
+    if (cache[line]) { playPreview(cache[line]); renderPreviewControls(); return; }
+
     state.previewBusyId = String(v.id);
+    renderPreviewControls();
     refreshModalIfOpen();
     NK.api.soundVoiceGenerate({
       mode: 'instance',
       sessionId: state.sessionId,
       preview: true,
-      model: 'eleven_multilingual_v2',
+      model: isGeminiModel() ? 'gemini_tts' : 'eleven_multilingual_v2',
       format: 'mp3_44100_128',
       stability: 0.5,
-      segments: [{ voiceId: (String(v.id).indexOf('seed-') === 0 ? '' : v.id), providerVoiceId: v.providerVoiceId || '', text: PREVIEW_SAMPLE }]
+      segments: [{ voiceId: (String(v.id).indexOf('seed-') === 0 || isGeminiModel() ? '' : v.id), providerVoiceId: v.providerVoiceId || '', text: line }]
     }).then(function (res) {
       state.previewBusyId = '';
-      if (res && res.outputUrl) { v._previewUrl = res.outputUrl; playPreview(res.outputUrl); }
+      if (res && res.outputUrl) { cache[line] = res.outputUrl; playPreview(res.outputUrl); }
+      renderPreviewControls();
       refreshModalIfOpen();
     }).catch(function (err) {
       state.previewBusyId = '';
+      renderPreviewControls();
       refreshModalIfOpen();
       alert((state.lang === 'en' ? 'Preview failed: ' : '미리듣기 실패: ') + ((err && err.message) || 'error'));
     });
+  }
+  // 설정 패널의 미리듣기 버튼·멘트만 다시 그린다(전체 render는 모달을 닫으므로 사용 안 함).
+  function renderPreviewControls() {
+    if (!root || state.modalOpen || state.tab !== 'voice') return;
+    var panel = root.querySelector('.snd-gen-panel');
+    if (!panel) return;
+    var oldField = panel.querySelector('.snd-field');
+    if (!oldField) return;
+    panel.replaceChild(renderVoiceField(), oldField);
   }
   // 모달이 열려 있으면 보이스 그리드만 다시 그린다(전체 render는 모달을 닫으므로 사용 안 함).
   function refreshModalIfOpen() {
