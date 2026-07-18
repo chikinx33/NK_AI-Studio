@@ -1,0 +1,97 @@
+# AI 회사 Phase 0 공통 Skill 플랫폼 기술 설계
+
+> 문서 버전: 0.1
+> 기준일: 2026-07-19
+> 상위 기준: `docs/ai-company-skills-master-plan.md`
+> 상태: 구현 착수
+
+## 1. 목적
+
+마스터 플랜의 첫 실행 항목인 `공통 Skill 정의와 SkillJob 데이터 모델 확정`을 구현 가능한 계약으로 분리합니다. 이 문서는 기존 인포그래픽 기능을 중단하지 않으면서 공통 업무 엔진으로 이전하기 위한 Phase 0 기술 기준입니다.
+
+## 2. 현재 구조와 분리 원칙
+
+기존 `agent_jobs`는 단일 에이전트 도구 실행과 검수 이력을 위한 모델입니다. 새 `SkillJob`은 다음 책임이 추가되므로 기존 테이블에 상태와 JSON 필드를 계속 덧붙이지 않습니다.
+
+- 채팅과 직접 UI의 동일한 정규화 입력
+- 페이지 이동과 재시작 후 서버 상태 복원
+- 중복 실행 방지
+- 다중 에이전트 업무 보고
+- 비용 예상과 실제 사용량
+- 품질 게이트와 자동 수정
+- 승인 상태
+- 산출물 종류와 버전 계보
+- 회사 업무 탐색기 항목과 연결
+
+따라서 `company_skill_jobs`와 `company_skill_artifacts`를 공통 Skill 전용 모델로 추가하고, 기존 인포그래픽 API는 어댑터를 통해 단계적으로 연결합니다. 기존 `agent_jobs`는 현재 에이전트 실행 기능의 호환성을 위해 유지합니다.
+
+## 3. Skill 정의 계약
+
+`companySkills.ts`의 Skill 정의는 표시 정보와 실행 계약을 구분합니다. `available` 상태는 다음 실행 메타데이터를 반드시 가져야 하며, `coming-soon`은 구현 진행 중 일부만 가질 수 있습니다.
+
+- `categoryId`
+- `inputSchema`
+- `executorId`
+- `previewType`
+- `artifactTypes`
+- `requiredCapabilities`
+- `permissionPolicy`
+- `costPolicy`
+- `qualityGateIds`
+
+이 구분으로 실행 계약이 없는 Skill을 실수로 `available`로 전환하면 TypeScript 빌드에서 실패합니다.
+
+첫 입력 스키마 ID는 `company-skill/infographic/v1`입니다. 공통 입력 봉투는 `invocationMode`, `request`, `conversationId`, `companyId`, `references`, `idempotencyKey`를 사용하고 Skill별 값은 `options`에 둡니다.
+
+## 4. SkillJob 상태 계약
+
+정상 상태 흐름은 다음과 같습니다.
+
+```text
+draft → validating → planning → running → reviewing → completed
+                                         ↘ revision ↗
+```
+
+실행 중 상태에서는 `failed` 또는 `cancelled`로 이동할 수 있습니다. `revision`은 수정 범위에 따라 `running` 또는 `reviewing`으로 돌아갑니다. `failed` 재시도는 저장된 실패 단계에 맞춰 검증·계획·실행·검수 단계로 돌아갈 수 있습니다. `completed`와 `cancelled`는 종결 상태입니다.
+
+상태 전이는 `SKILL_JOB_TRANSITIONS`와 `COMPANY_SKILL_JOB_TRANSITIONS`를 기준으로 검사합니다. 임의 문자열 상태 변경은 허용하지 않습니다.
+
+## 5. 영속 모델
+
+### 5.1 `company_skill_jobs`
+
+핵심 식별자는 `user_id`, `category_id`, `skill_id`, `invocation_mode`입니다. 입력, 해석된 브리프, 실행 계획, 보고, 비용, 품질, 승인, 오류는 서로 독립된 JSON 필드로 저장합니다. `progress`는 0~100, `version`은 1 이상으로 제한합니다.
+
+`idempotency_key`는 사용자 단위 부분 고유 인덱스를 사용합니다. 같은 사용자의 동일 실행 키는 업무를 두 번 생성하지 않으며, 다른 사용자의 키와는 충돌하지 않습니다.
+
+완료 후 `work_item_id`로 `company_work_items`에 연결합니다. `parent_work_id`, `version`, `lineage`는 재작업과 파생 관계를 보존합니다.
+
+### 5.2 `company_skill_artifacts`
+
+산출물은 SkillJob과 1:N 관계이며 `source`, `preview`, `final`, `manifest`, `report`를 구분합니다. 모든 행에 `user_id`를 중복 저장해 조회 시 사용자 격리를 쿼리 조건으로 강제할 수 있게 합니다.
+
+논리 저장 경로는 상위 문서 기준을 그대로 사용합니다.
+
+```text
+users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
+```
+
+## 6. 이번 착수 범위
+
+- 공통 Skill 정의 타입과 `available` 실행 계약 강제
+- 인포그래픽 실행 메타데이터 등록
+- 인포그래픽 v1 입력 스키마 등록
+- 클라이언트 `SkillJob`, 보고, 비용, 승인, 품질, 산출물 타입 정의
+- 서버 `company_skill_jobs`, `company_skill_artifacts` 스키마 정의
+- 사용자 단위 상태 조회 인덱스와 중복 실행 방지 인덱스 정의
+- 상태 전이 계약 정의
+
+## 7. 다음 구현 순서
+
+1. 공통 SkillJob 생성·조회 저장소와 상태 전이 함수를 구현합니다.
+2. `POST /api/agent/skills/{skillId}/jobs`와 `GET /api/agent/skill-jobs/{jobId}`를 먼저 연결합니다.
+3. 취소·재시도·승인·산출물 조회 API를 추가합니다.
+4. 기존 인포그래픽 직접 UI와 채팅 도구를 공통 생성 API 어댑터로 연결합니다.
+5. 새로고침 복원과 중복 실행 방지를 통합 테스트합니다.
+
+인포그래픽 어댑터 연결이 완료되기 전까지 새 테이블은 기반 계약으로만 존재하며 기존 실행 경로는 변경하지 않습니다.

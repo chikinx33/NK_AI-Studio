@@ -6,6 +6,7 @@
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { refreshAccessToken } from "./_google";
+import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 
 export { getSql };
 export type { SqlFn };
@@ -240,6 +241,7 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   try { await sql("CREATE INDEX IF NOT EXISTS agent_reminders_due_idx ON agent_reminders (user_id, fired_at, fire_at)"); } catch (_) {}
+  await ensureCompanySkillJobSchema(sql);
   agentSchemaReady = true;
 }
 

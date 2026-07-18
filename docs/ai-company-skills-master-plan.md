@@ -821,6 +821,8 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 
 ## 18. 다음 실행 항목
 
+> 2026-07-19 착수 기록: 1번의 공통 Skill 실행 계약, 인포그래픽 v1 입력 스키마, `SkillJob` 상태·영속 모델 구현을 시작했다. 공통 API와 기존 인포그래픽 어댑터 연결 전이므로 Phase 0은 아직 진행 중이다. 세부 기술 기준은 `ai-company-phase0-skill-platform-design.md`에서 관리한다.
+
 1. Phase 0 공통 Skill 정의와 `SkillJob` 데이터 모델 확정
 2. 기존 인포그래픽 실행을 공통 업무 엔진 어댑터로 연결
 3. 첫 신규 Skill인 `이미지 제작`의 상세 PRD·와이어프레임·입력 스키마 작성
