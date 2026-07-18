@@ -145,6 +145,9 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         audience,
         tone,
         style,
+        skillCategoryId: "design-content",
+        skillId: "infographic",
+        invocationMode: "manual",
       });
       const nextSpec = normalizeAgentVideoSpec(result.spec);
       if (result.work) {

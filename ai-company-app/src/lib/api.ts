@@ -28,6 +28,9 @@ export interface CreateAgentVideoInput {
   audience: string;
   tone: string;
   style: string;
+  skillCategoryId?: string;
+  skillId?: string;
+  invocationMode?: "agent" | "manual";
 }
 
 export interface CreateAgentVideoResult {
@@ -45,7 +48,13 @@ export interface CompanyWorkItem {
   status: "working" | "completed" | "error";
   request_text: string;
   result_summary: string;
-  metadata: { input?: CreateAgentVideoInput; spec?: AgentVideoSpec; contributions?: AgentVideoContribution[]; [key: string]: unknown };
+  metadata: {
+    input?: CreateAgentVideoInput;
+    spec?: AgentVideoSpec;
+    contributions?: AgentVideoContribution[];
+    skill?: { categoryId: string; skillId: string; invocationMode: "agent" | "manual" };
+    [key: string]: unknown;
+  };
   created_at: string;
   completed_at?: string | null;
   updated_at: string;

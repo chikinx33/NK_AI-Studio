@@ -45,7 +45,7 @@ function koreaDate(value?: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
-export default function AgentVideoWorkspace({ onClose }: { onClose: () => void }) {
+export default function AgentVideoWorkspace({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const {
     prompt,
     setPrompt,
@@ -84,7 +84,7 @@ export default function AgentVideoWorkspace({ onClose }: { onClose: () => void }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
-      <header className="shrink-0 border-b border-edge bg-panel/70 px-5 py-4 backdrop-blur">
+      {!embedded ? <header className="shrink-0 border-b border-edge bg-panel/70 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-400">Raviok × Remotion</div>
@@ -100,7 +100,15 @@ export default function AgentVideoWorkspace({ onClose }: { onClose: () => void }
             </button>
           </div>
         </div>
-      </header>
+      </header> : (
+        <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-panel/45 px-4 py-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">인포그래픽 제작 워크스페이스</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-sky-950/40 px-3 py-1.5 text-[10px] font-bold text-sky-300 transition hover:bg-sky-900/50">☁ 저장소</button>
+            <span className="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-3 py-1.5 text-[10px] text-emerald-300">로컬 Remotion 렌더</span>
+          </div>
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[360px_minmax(0,1fr)_320px] xl:overflow-hidden">
         <aside className="border-b border-edge p-4 xl:overflow-y-auto xl:border-b-0 xl:border-r">

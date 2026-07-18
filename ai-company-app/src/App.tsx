@@ -11,6 +11,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import KnowledgeWorkspace from "./components/KnowledgeWorkspace";
 import AgentManager from "./components/AgentManager";
 import RightMenu from "./components/RightMenu";
+import SkillBox from "./components/SkillBox";
 import {
   getStatus,
   getAgents,
@@ -38,6 +39,7 @@ import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
+const SkillWorkspace = lazy(() => import("./components/SkillWorkspace"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -95,7 +97,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">("chat");
+  const [skillCategoryId, setSkillCategoryId] = useState("design-content");
   const [workRevision, setWorkRevision] = useState(0);
   const [workFolderDate, setWorkFolderDate] = useState("");
 
@@ -107,6 +110,11 @@ export default function App() {
       return;
     }
     setCenterView("works");
+  }
+
+  function openSkillCategory(categoryId: string) {
+    setSkillCategoryId(categoryId);
+    setCenterView("skills");
   }
 
   useEffect(() => {
@@ -784,6 +792,10 @@ export default function App() {
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
             <AgentVideoWorkspace onClose={() => setCenterView("works")} />
           </Suspense>
+        ) : centerView === "skills" ? (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 스킬을 불러오는 중…</div>}>
+            <SkillWorkspace categoryId={skillCategoryId} onClose={() => setCenterView("chat")} />
+          </Suspense>
         ) : centerView === "settings" ? (
           <Settings
             status={status}
@@ -866,6 +878,12 @@ export default function App() {
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
+          </div>
+          <div className="shrink-0 pt-2">
+            <SkillBox
+              activeCategoryId={centerView === "skills" ? skillCategoryId : undefined}
+              onOpenCategory={openSkillCategory}
+            />
           </div>
           <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">
             {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}

@@ -1613,6 +1613,9 @@ async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
       tone: String(input?.tone || "명료하고 신뢰감 있게"),
       style: String(input?.style || "시네마틱 모션 인포그래픽"),
       conversationId: ctx.conversationId || "main",
+      skillCategoryId: "design-content",
+      skillId: "infographic",
+      invocationMode: "agent",
     },
   });
   return { kind: "infographic", work: data?.work || null, spec: data?.spec, contributions: data?.contributions || [] };

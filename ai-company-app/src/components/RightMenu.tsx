@@ -101,7 +101,7 @@ function IconBtn({
 }
 
 interface Props {
-  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video";
+  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills";
   onHome: () => void;
   onChat: () => void;
   onKnowledge: () => void;

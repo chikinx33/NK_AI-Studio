@@ -297,6 +297,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       tone: cleanText(body?.tone, "명료하고 신뢰감 있게", 100),
       style: cleanText(body?.style, "시네마틱 모션 그래픽", 100),
     };
+    const skill = {
+      categoryId: cleanText(body?.skillCategoryId, "design-content", 80),
+      skillId: cleanText(body?.skillId, "infographic", 80),
+      invocationMode: body?.invocationMode === "manual" ? "manual" : "agent",
+    };
 
     const sql = getSql(env);
     if (sql) await ensureAgentSchema(sql).catch(() => {});
@@ -452,7 +457,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         workTitle,
         input.prompt,
         `${spec.scenes.length}개 씬 · ${input.durationSec}초 ${input.aspectRatio} Remotion 제작 명세`,
-        JSON.stringify({ input, spec, contributions }),
+        JSON.stringify({ input, spec, contributions, skill }),
       ]);
       work = rows[0] || null;
     }
