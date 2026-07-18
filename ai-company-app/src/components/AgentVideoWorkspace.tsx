@@ -78,6 +78,9 @@ export default function AgentVideoWorkspace() {
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
   const durationInFrames = Math.max(1, Math.round(videoDurationSec * spec.fps));
+  const isPortraitPreview = dimensions.height > dimensions.width;
+  const previewRatio = dimensions.width / dimensions.height;
+  const previewWidth = `min(100%, max(240px, calc(${(previewRatio * 100).toFixed(4)}dvh - ${(previewRatio * 190).toFixed(2)}px)))`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
@@ -177,22 +180,31 @@ export default function AgentVideoWorkspace() {
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.aspectRatio}</span>
               <span className="ml-auto text-[11px] text-gray-500">{spec.title}</span>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-edge bg-black shadow-2xl shadow-black/40">
-              <Player
-                key={`${spec.createdAt}-${spec.aspectRatio}-${spec.scenes.length}`}
-                component={AgentVideo}
-                inputProps={{ spec }}
-                durationInFrames={durationInFrames}
-                compositionWidth={dimensions.width}
-                compositionHeight={dimensions.height}
-                fps={spec.fps}
-                controls
-                loop
-                style={{ width: "100%", aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
-              />
-            </div>
+            <div className={isPortraitPreview ? "grid min-h-0 gap-4 sm:grid-cols-[minmax(0,1fr)_220px]" : ""}>
+              <div className="flex min-w-0 justify-center sm:justify-start">
+                <div
+                  className="overflow-hidden rounded-2xl border border-edge bg-black shadow-2xl shadow-black/40"
+                  style={{ width: previewWidth }}
+                >
+                  <Player
+                    key={`${spec.createdAt}-${spec.aspectRatio}-${spec.scenes.length}`}
+                    component={AgentVideo}
+                    inputProps={{ spec }}
+                    durationInFrames={durationInFrames}
+                    compositionWidth={dimensions.width}
+                    compositionHeight={dimensions.height}
+                    fps={spec.fps}
+                    controls
+                    loop
+                    style={{ width: "100%", aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
+                  />
+                </div>
+              </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className={isPortraitPreview
+                ? "mt-4 grid max-h-[calc(100dvh-190px)] auto-rows-min gap-3 overflow-y-auto pr-1 sm:mt-0"
+                : "mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              }>
               {spec.scenes.map((scene, index) => (
                 <article key={scene.id} className="rounded-xl border border-edge bg-panel p-3">
                   <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
@@ -207,6 +219,7 @@ export default function AgentVideoWorkspace() {
                   </div>
                 </article>
               ))}
+              </div>
             </div>
           </div>
         </main>

@@ -32,6 +32,15 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
   assert.match(server, /render-agent-video\.mjs/);
 });
 
+test("Agent Video 세로형 프리뷰는 화면 높이에 맞고 장면 카드는 우측 레일에 배치된다", async () => {
+  const workspace = await read("ai-company-app/src/components/AgentVideoWorkspace.tsx");
+  assert.match(workspace, /isPortraitPreview = dimensions\.height > dimensions\.width/);
+  assert.match(workspace, /previewWidth = `min\(100%, max\(240px, calc\(/);
+  assert.match(workspace, /sm:grid-cols-\[minmax\(0,1fr\)_220px\]/);
+  assert.match(workspace, /max-h-\[calc\(100dvh-190px\)\]/);
+  assert.match(workspace, /style=\{\{ width: previewWidth \}\}/);
+});
+
 test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 차단한다", async () => {
   const [workspace, workspaceContext, main] = await Promise.all([
     read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
