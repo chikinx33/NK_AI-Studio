@@ -754,6 +754,11 @@ export function formatReadResult(toolName: string, out: any): string {
   if (toolName === "infographic") {
     const work = out?.work;
     const title = String(work?.title || out?.spec?.title || "인포그래픽 제작");
+    if (out?.renderMode === "server" && out?.job?.status !== "completed") {
+      return work?.id
+        ? `요청하신 **${title}** 제작 명세를 완성했고 서버에서 최종 MP4를 렌더링하고 있습니다. 완료되면 회사 업무에 자동 등록됩니다.\n\n[확인](#raviok-work-${work.id})`
+        : `요청하신 **${title}** 인포그래픽을 서버에서 렌더링하고 있습니다.`;
+    }
     return work?.id
       ? `요청하신 **${title}** 업무를 완료했습니다.\n\n[확인](#raviok-work-${work.id})`
       : `요청하신 **${title}** 인포그래픽 제작을 완료했습니다.`;
@@ -1087,7 +1092,7 @@ export async function runGroupChat(
               text: formatReadResult(r.tool, output),
             });
             if (r.tool === "infographic") {
-              try { deps.onJobReady?.({ kind: "company_work", work: output?.work, spec: output?.spec, contributions: output?.contributions }); } catch {}
+              try { deps.onJobReady?.({ kind: "company_work", work: output?.work, spec: output?.spec, contributions: output?.contributions, renderMode: output?.renderMode }); } catch {}
             }
           }
         } catch (e: any) {

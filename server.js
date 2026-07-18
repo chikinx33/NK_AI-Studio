@@ -5,7 +5,7 @@ const url = require('url');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const PORT = 14000;
+const PORT = Number(process.env.PORT) || 14000;
 const ROOT = path.join(__dirname, 'prototype');
 const AGENT_VIDEO_ROOT = path.join(__dirname, 'tmp', 'agent-video');
 const agentVideoJobs = new Map();
@@ -108,7 +108,34 @@ function readJsonBody(req, limit = 2 * 1024 * 1024) {
   });
 }
 
-function startAgentVideoRender(jobId, spec, res) {
+async function postCompanySkillRenderCallback(job, status) {
+  if (!job.callbackUrl || job.callbackDelivered) return;
+  const token = String(process.env.COMPANY_SKILL_RENDERER_TOKEN || '').trim();
+  if (!token) {
+    job.error = 'COMPANY_SKILL_RENDERER_TOKEN 미설정';
+    return;
+  }
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'X-Company-Skill-Render-Status': status
+  };
+  let body;
+  if (status === 'completed') {
+    headers['Content-Type'] = 'video/mp4';
+    body = await fs.promises.readFile(job.outputPath);
+  } else {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({ error: job.error || 'Remotion 렌더 실패' });
+  }
+  const response = await fetch(job.callbackUrl, { method: 'POST', headers, body });
+  if (!response.ok) {
+    const message = await response.text().catch(() => '');
+    throw new Error(message || `렌더 콜백 실패 (HTTP ${response.status})`);
+  }
+  job.callbackDelivered = true;
+}
+
+function startAgentVideoRender(jobId, spec, res, callbackUrl = '') {
   const jobDirectory = path.join(AGENT_VIDEO_ROOT, jobId);
   const propsPath = path.join(jobDirectory, 'props.json');
   const outputPath = path.join(jobDirectory, 'raviok-agent-video.mp4');
@@ -122,7 +149,9 @@ function startAgentVideoRender(jobId, spec, res) {
         progress: 1,
         outputPath,
         error: '',
-        log: []
+        log: [],
+        callbackUrl,
+        callbackDelivered: false
       };
       agentVideoJobs.set(jobId, job);
       const script = path.join(__dirname, 'ai-company-app', 'scripts', 'render-agent-video.mjs');
@@ -145,15 +174,25 @@ function startAgentVideoRender(jobId, spec, res) {
       child.on('error', (error) => {
         job.status = 'error';
         job.error = error.message;
+        void postCompanySkillRenderCallback(job, 'failed').catch((callbackError) => {
+          job.log.push(String(callbackError.message || callbackError));
+        });
       });
       child.on('exit', (code) => {
         fs.stat(outputPath, (statError, stat) => {
           if (code === 0 && !statError && stat.isFile() && stat.size > 0) {
             job.status = 'done';
             job.progress = 100;
+            void postCompanySkillRenderCallback(job, 'completed').catch((callbackError) => {
+              job.error = String(callbackError.message || callbackError);
+              job.log.push(job.error);
+            });
           } else {
             job.status = 'error';
             job.error = job.log.slice(-8).join('\n') || `Remotion 렌더 실패(exit=${code})`;
+            void postCompanySkillRenderCallback(job, 'failed').catch((callbackError) => {
+              job.log.push(String(callbackError.message || callbackError));
+            });
           }
         });
       });
@@ -166,6 +205,41 @@ const server = http.createServer((req, res) => {
   try {
     const parsed = url.parse(req.url);
     let pathname = decodeURIComponent(parsed.pathname || '/');
+    if (pathname === '/company-skill-render' && req.method === 'POST') {
+      const expected = String(process.env.COMPANY_SKILL_RENDERER_TOKEN || '').trim();
+      const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+      if (!expected) return sendJson(res, { error: 'COMPANY_SKILL_RENDERER_TOKEN 미설정' }, 503);
+      const expectedHash = crypto.createHash('sha256').update(expected).digest();
+      const suppliedHash = crypto.createHash('sha256').update(supplied).digest();
+      if (!supplied || !crypto.timingSafeEqual(expectedHash, suppliedHash)) {
+        return sendJson(res, { error: 'renderer_unauthorized' }, 401);
+      }
+      return readJsonBody(req)
+        .then((body) => {
+          const jobId = String(body?.jobId || '');
+          const callbackUrl = String(body?.callbackUrl || '');
+          if (!/^[0-9a-f-]{36}$/i.test(jobId) || !body?.spec || !Array.isArray(body.spec.scenes)) {
+            return sendJson(res, { error: '유효한 SkillJob과 Agent Video 명세가 필요합니다.' }, 400);
+          }
+          let parsedCallback;
+          try { parsedCallback = new URL(callbackUrl); } catch (_) { return sendJson(res, { error: '유효한 콜백 URL이 필요합니다.' }, 400); }
+          if (!['https:', 'http:'].includes(parsedCallback.protocol)) {
+            return sendJson(res, { error: 'HTTP(S) 콜백 URL만 사용할 수 있습니다.' }, 400);
+          }
+          const existing = agentVideoJobs.get(jobId);
+          if (existing) {
+            if (existing.status === 'done' && !existing.callbackDelivered) {
+              existing.callbackUrl = callbackUrl;
+              void postCompanySkillRenderCallback(existing, 'completed').catch((error) => {
+                existing.error = String(error.message || error);
+              });
+            }
+            return sendJson(res, { jobId, status: existing.status, accepted: true }, 202);
+          }
+          startAgentVideoRender(jobId, body.spec, res, callbackUrl);
+        })
+        .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
+    }
     if (pathname === '/local-agent-video/render' && req.method === 'POST') {
       return readJsonBody(req)
         .then((body) => {

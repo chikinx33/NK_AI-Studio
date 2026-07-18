@@ -1,6 +1,7 @@
 import type { SqlFn } from "../knowledge/_shared";
 import { SERVER_COMPANY_SKILLS } from "./_company-skill-registry";
 import { buildActualCompanySkillCost, estimateCompanySkillJobCost, hasMatchingCostApproval } from "./_company-skill-costs";
+import { dispatchCompanySkillRender, resolveCompanySkillRenderer } from "./_company-skill-renderer";
 import {
   appendCompanySkillJobEvent,
   claimCompanySkillJobExecution,
@@ -217,7 +218,12 @@ export async function runCompanySkillJob(
         qualityResults: result.qualityResults,
         workItemId: result.workItemId,
         actualCost: buildActualCompanySkillCost(job.cost_estimate as any),
-        providerUsage: { provider: "anthropic", plannedCalls: 5, actualUsageAvailable: false },
+        providerUsage: {
+          provider: "anthropic",
+          plannedCalls: 5,
+          actualUsageAvailable: false,
+          renderMode: resolveCompanySkillRenderer(context.env) ? "server" : "browser",
+        },
         expectedExecutionToken: executionToken,
       }) as CompanySkillJobRow;
       for (const [index, report] of result.agentReports.entries()) {
@@ -245,6 +251,26 @@ export async function runCompanySkillJob(
 
     if (job.status === "reviewing") {
       if (!job.work_item_id) throw new Error("검수할 회사 업무 결과가 연결되지 않았습니다.");
+      if (job.skill_id === "infographic" && resolveCompanySkillRenderer(context.env)) {
+        await dispatchCompanySkillRender({ request: context.request, env: context.env, sql: context.sql, job });
+        job = await transitionCompanySkillJob(context.sql, context.userId, job.id, "reviewing", {
+          progress: 90,
+          currentStage: "rendering",
+          resetExecutionLease: true,
+          expectedExecutionToken: executionToken,
+        }) as CompanySkillJobRow;
+        await appendCompanySkillJobEvent(context.sql, {
+          jobId: job.id,
+          userId: context.userId,
+          eventType: "stage",
+          stage: "rendering",
+          status: "queued",
+          summary: "서버 Remotion 렌더 큐에 등록했으며 최종 산출물 콜백을 기다립니다.",
+          details: { workItemId: job.work_item_id, renderMode: "server" },
+          eventKey: `server-render:${job.version}:queued`,
+        });
+        return job;
+      }
       job = await transitionCompanySkillJob(context.sql, context.userId, job.id, "completed", {
         progress: 100,
         resetExecutionLease: true,

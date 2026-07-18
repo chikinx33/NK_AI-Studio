@@ -317,6 +317,15 @@ export async function getCompanySkillJob(
   return (rows[0] as CompanySkillJobRow) || null;
 }
 
+/** 인증된 서버 렌더 콜백 전용 조회. 호출부가 반드시 렌더러 공유 토큰을 먼저 검증해야 한다. */
+export async function getCompanySkillJobById(
+  sql: SqlFn,
+  jobId: string,
+): Promise<CompanySkillJobRow | null> {
+  const rows = await sql("SELECT * FROM company_skill_jobs WHERE id = $1 LIMIT 1", [jobId]);
+  return (rows[0] as CompanySkillJobRow) || null;
+}
+
 export async function listCompanySkillJobs(
   sql: SqlFn,
   userId: string,
@@ -383,7 +392,8 @@ export async function transitionCompanySkillJob(
   }
   if (patch.resetExecutionLease) sets.push("execution_token = NULL", "execution_started_at = NULL");
   if (nextStatus === "completed") {
-    sets.push("progress = 100", "completed_at = COALESCE(completed_at, now())");
+    if (patch.progress === undefined) sets.push("progress = 100");
+    sets.push("completed_at = COALESCE(completed_at, now())");
   } else if (nextStatus !== "completed" && current.status === "completed") {
     sets.push("completed_at = NULL");
   }
@@ -431,8 +441,9 @@ export async function retryCompanySkillJob(
   const current = await getCompanySkillJob(sql, userId, jobId);
   if (!current) return null;
   if (current.status !== "failed") throw new CompanySkillJobTransitionError(current.status, "validating");
-  const retryStage = (["validating", "planning", "running", "reviewing"] as const).includes(current.current_stage as any)
-    ? current.current_stage as "validating" | "planning" | "running" | "reviewing"
+  const normalizedCurrentStage = current.current_stage === "rendering" ? "reviewing" : current.current_stage;
+  const retryStage = (["validating", "planning", "running", "reviewing"] as const).includes(normalizedCurrentStage as any)
+    ? normalizedCurrentStage as "validating" | "planning" | "running" | "reviewing"
     : "validating";
   return transitionCompanySkillJob(sql, userId, jobId, retryStage, {
     progress: retryStage === "validating" ? 5 : current.progress,

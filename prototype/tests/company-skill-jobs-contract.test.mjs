@@ -241,3 +241,39 @@ test("SkillJob 실제 PostgreSQL 통합 검증은 격리 컨테이너에서 핵�
   assert.match(integration, /listCompanySkillJobEvents/);
   assert.match(integration, /docker", \["rm", "--force", containerName\]/);
 });
+
+test("채팅과 직접 실행의 서버 렌더는 인증 큐·콜백·최종 산출물 완료 계약을 공유한다", async () => {
+  const [renderer, executor, callback, storage, server, shared, orchestrator, app, workspace] = await Promise.all([
+    read("prototype/functions/api/agent/_company-skill-renderer.ts"),
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/render-output.ts"),
+    read("prototype/functions/api/agent/_company-skill-artifact-storage.ts"),
+    read("server.js"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("ai-company-app/src/App.tsx"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+  ]);
+
+  assert.match(renderer, /COMPANY_SKILL_RENDERER_URL/);
+  assert.match(renderer, /COMPANY_SKILL_RENDERER_TOKEN/);
+  assert.match(renderer, /Idempotency-Key/);
+  assert.match(renderer, /render-output/);
+  assert.match(executor, /dispatchCompanySkillRender/);
+  assert.match(executor, /currentStage: "rendering"/);
+  assert.match(executor, /renderMode: resolveCompanySkillRenderer/);
+  assert.match(callback, /matchesCompanySkillRendererToken/);
+  assert.match(callback, /"final"/);
+  assert.match(callback, /"source"/);
+  assert.match(callback, /"report"/);
+  assert.match(callback, /"manifest"/);
+  assert.match(callback, /transitionCompanySkillJob\(sql, job\.user_id, job\.id, "completed"/);
+  assert.match(storage, /buildAiVideoProjectPrefix\(ctx\.basePrefix, args\.userId, "ai-company"\)/);
+  assert.match(server, /\/company-skill-render/);
+  assert.match(server, /postCompanySkillRenderCallback/);
+  assert.match(server, /crypto\.timingSafeEqual/);
+  assert.match(shared, /renderMode: job\?\.providerUsage\?\.renderMode/);
+  assert.match(orchestrator, /renderMode: output\?\.renderMode/);
+  assert.match(app, /data\.payload\.renderMode !== "server"/);
+  assert.match(workspace, /job\.providerUsage\?\.renderMode !== "server"/);
+});

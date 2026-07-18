@@ -155,7 +155,52 @@ async function main() {
   assert.equal(restored.status, "planning");
   assert.equal(restored.events.length, 1);
 
-  console.log("SkillJob PostgreSQL integration: PASS (user isolation, idempotency, lease, failure/retry, cancel, restore)");
+  const renderJobResult = await store.createCompanySkillJob(sql, {
+    ...base,
+    userId: "integration-user-a",
+    idempotencyKey: "integration-server-render",
+    title: "서버 렌더 통합 테스트",
+  });
+  const renderJobId = renderJobResult.job.id;
+  const renderWorkId = "11111111-1111-4111-8111-111111111111";
+  await store.transitionCompanySkillJob(sql, "integration-user-a", renderJobId, "planning");
+  await store.transitionCompanySkillJob(sql, "integration-user-a", renderJobId, "running");
+  await store.transitionCompanySkillJob(sql, "integration-user-a", renderJobId, "reviewing", {
+    currentStage: "rendering",
+    progress: 90,
+    workItemId: renderWorkId,
+  });
+  await store.transitionCompanySkillJob(sql, "integration-user-a", renderJobId, "failed", {
+    currentStage: "rendering",
+    error: { code: "SERVER_RENDER_FAILED", message: "의도한 렌더 실패", retryable: true, stage: "rendering" },
+  });
+  const renderRetry = await store.retryCompanySkillJob(sql, "integration-user-a", renderJobId);
+  assert.equal(renderRetry.status, "reviewing");
+  assert.equal(renderRetry.current_stage, "reviewing");
+  for (const kind of ["final", "source", "report", "manifest"]) {
+    const artifact = await store.registerCompanySkillArtifact(sql, {
+      jobId: renderJobId,
+      userId: "integration-user-a",
+      workItemId: renderWorkId,
+      kind,
+      fileName: `${kind}.test`,
+      objectPath: `users/integration-user-a/ai-company/${renderWorkId}/${kind}.test`,
+      mimeType: kind === "final" ? "video/mp4" : "application/json",
+      sizeBytes: 1,
+      checksum: `${kind}-checksum`,
+      version: 1,
+    });
+    assert.equal(artifact.kind, kind);
+  }
+  const completedRender = await store.transitionCompanySkillJob(sql, "integration-user-a", renderJobId, "completed", {
+    currentStage: "completed",
+    progress: 100,
+  });
+  assert.equal(completedRender.status, "completed");
+  assert.equal((await store.listCompanySkillArtifacts(sql, "integration-user-a", renderJobId)).length, 4);
+  assert.equal((await store.getCompanySkillJobById(sql, renderJobId)).user_id, "integration-user-a");
+
+  console.log("SkillJob PostgreSQL integration: PASS (isolation, idempotency, lease, recovery, render artifacts, restore)");
 }
 
 try {

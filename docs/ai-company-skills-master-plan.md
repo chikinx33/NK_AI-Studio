@@ -851,16 +851,18 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 - [x] 공통 3열 레이아웃 슬롯 분리
 - [x] 기존 인포그래픽 API를 공통 실행기 어댑터로 연결
 - [x] Phase 0 통합·사용자 격리·중복 실행·복원 테스트 통과
-- [ ] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
+- [x] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
+- [ ] 배포 환경 렌더 워커·공유 토큰·GCS 자격증명 구성 및 실제 MP4 E2E 검증
 
 ### 18.3 현재 이어서 작업할 위치
 
-- 현재 단계: `Phase 0 — 채팅 호출 서버 렌더·최종 산출물 등록 공통화`
-- 마지막 완료 단위: 격리된 실제 PostgreSQL 16 컨테이너에서 사용자 A/B 데이터 격리, 사용자별 멱등 중복 방지, 실행 임대 중복 차단, 실패 단계 재시도, 취소, 멱등 이벤트 복원을 실제 스키마와 쿼리로 검증하는 `npm run test:skill-db` 통합 테스트
+- 현재 단계: `Phase 0 — 서버 렌더 배포 E2E 대기 / Phase 1 이미지 제작 PRD 착수`
+- 마지막 완료 단위: 채팅·직접 UI 공통 실행기가 인증된 Node Remotion 워커에 멱등 렌더 요청을 보내고, 콜백 API가 MP4·source·report·manifest를 GCS/SkillJob artifact로 등록한 뒤에만 완료 처리하는 서버 렌더 경로
 - 비용 설정 계약: API 키 단가는 `COMPANY_SKILL_ANTHROPIC_INPUT_USD_PER_MTOK`, `COMPANY_SKILL_ANTHROPIC_OUTPUT_USD_PER_MTOK` 환경 변수로 주입하며, 입력의 `costControl.maxAmountUsd`가 자동 실행 상한이다. 단가가 없으면 금액을 꾸며내지 않고 `unavailable`로 기록해 승인을 요구한다.
 - 실제 비용 기록 한계: 현재 Claude 어댑터가 실제 토큰 사용량을 반환하지 않아 API 키 실행의 `actualCost`는 `unavailable`로 명시한다. 구독 인증만 실제 추가 비용 0으로 기록한다.
-- 검증 결과: 루트 `npm test` 294개 통과, `npm run test:skill-db` 실제 PostgreSQL 통합 테스트 통과, 임시 컨테이너 자동 제거 확인
-- 바로 다음 일감: 브라우저 로컬 렌더에 묶인 인포그래픽 MP4 생성·GCS 업로드·artifact/manifest 등록을 서버 실행 어댑터로 이동할 수 있는 렌더 큐 계약과 런타임 경계 확정
-- 그다음 일감: Phase 0 완료 기준 재검토 후 첫 신규 Skill `이미지 제작` 상세 PRD·와이어프레임·입력 스키마 작성
-- 주의: 현재 최종 MP4와 네 종류 산출물 등록은 브라우저에서 업무를 열어 로컬 Remotion 렌더가 완료될 때 수행된다. 채팅 지시만 하고 결과 업무를 열지 않은 경우 서버 명세는 완료되지만 최종 MP4 artifact는 아직 생성되지 않는다. Phase 0 실DB 실패 복구 검증도 남아 있다.
+- 서버 렌더 설정 계약: 함수와 워커에 `COMPANY_SKILL_RENDERER_TOKEN`, 함수에 전체 엔드포인트 `COMPANY_SKILL_RENDERER_URL`을 설정한다. 서버 모드에서는 Job이 `reviewing/rendering`에 머물고 4종 산출물 콜백 성공 후 `completed`가 된다. 미설정 환경은 기존 브라우저 로컬 렌더와 호환된다.
+- 검증 결과: 루트 `npm test` 295개 통과, 앱 TypeScript/Vite 빌드 통과, 서버 함수 esbuild 통과, `npm run test:skill-db`에서 렌더 실패→검수 단계 재시도→4종 artifact 등록→완료 전환 실DB 검증 통과
+- 바로 다음 일감: 첫 신규 Skill `이미지 제작` 상세 PRD·와이어프레임·입력 스키마 작성
+- 병행 운영 일감: 배포 환경 렌더 워커 URL·공유 토큰·GCS 자격증명을 설정한 뒤 채팅 지시만으로 실제 MP4가 등록되는 E2E 검증
+- 주의: 현재 작업 셸에는 위 렌더/GCS 환경 변수가 없어 실제 배포 MP4 E2E는 실행하지 못했다. 앱이 열린 미설정 환경의 채팅은 이미 `job_ready`에서 화면 이동 없이 로컬 렌더를 시작하며, 서버 렌더 설정 시에는 클라이언트 중복 렌더를 생략한다.
 - 세부 기술 기준: `ai-company-phase0-skill-platform-design.md`

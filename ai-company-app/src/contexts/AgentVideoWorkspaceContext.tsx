@@ -215,7 +215,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     if (!job.workItemId) throw new Error("완료된 인포그래픽의 회사 업무 결과를 찾지 못했습니다.");
     const work = await getCompanyWorkItem(job.workItemId);
     localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
-    await openWork(work, true);
+    await openWork(work, job.providerUsage?.renderMode !== "server");
   }
 
   async function decideCostApproval(decision: "approved" | "rejected") {

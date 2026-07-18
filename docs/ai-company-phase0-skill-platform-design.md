@@ -1,9 +1,9 @@
 # AI 회사 Phase 0 공통 Skill 플랫폼 기술 설계
 
-> 문서 버전: 0.1
+> 문서 버전: 0.2
 > 기준일: 2026-07-19
 > 상위 기준: `docs/ai-company-skills-master-plan.md`
-> 상태: 구현 착수
+> 상태: 공통 구현 완료, 배포 E2E 대기
 
 ## 1. 목적
 
@@ -76,6 +76,19 @@ draft → validating → planning → running → reviewing → completed
 users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
 ```
 
+### 5.3 서버 렌더 큐와 완료 경계
+
+서버 렌더가 설정된 인포그래픽은 명세 생성만으로 `completed`가 되지 않습니다. 공통 실행기는 업무 명세를 인증된 렌더 워커에 멱등 키로 제출하고 `reviewing / rendering` 상태에서 콜백을 기다립니다. 워커가 MP4를 콜백하면 서버가 `final`, `source`, `report`, `manifest`를 GCS에 저장하고 SkillJob artifact로 등록한 뒤에만 `completed`로 전환합니다.
+
+- Pages/함수 환경: `COMPANY_SKILL_RENDERER_URL`, `COMPANY_SKILL_RENDERER_TOKEN`
+- Node 렌더 워커 환경: 동일한 `COMPANY_SKILL_RENDERER_TOKEN`, 선택적 `PORT`
+- 렌더 요청: `company-skill/render-request/v1`, SkillJob ID를 `Idempotency-Key`로 사용
+- 결과 콜백: `/api/agent/skill-jobs/{jobId}/render-output`
+- 실패 콜백: `X-Company-Skill-Render-Status: failed`, 재시도 시 `rendering`을 `reviewing`으로 복원해 다시 큐잉
+- 보안: 렌더 요청과 콜백 모두 공유 토큰을 검증하고, 콜백은 토큰 검증 후에만 사용자 없는 Job ID 조회를 허용
+
+두 환경 변수가 모두 없으면 기존 브라우저 로컬 렌더를 호환 경로로 사용합니다. 둘 중 하나만 설정된 불완전 구성은 조용히 폴백하지 않고 실행 오류로 처리합니다.
+
 ## 6. 구현 체크리스트
 
 - [x] 공통 Skill 정의 타입과 `available` 실행 계약 강제
@@ -99,21 +112,22 @@ users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
 - [x] 구독 포함·API 키 예상 비용·사용자 상한·승인 대기·승인 재개·거절 취소 공통 게이트
 - [x] 공통 3열 골격과 여섯 개 UI 슬롯 및 인포그래픽 슬롯 어댑터
 - [x] 실제 PostgreSQL 사용자 격리·멱등·실행 임대·실패 재시도·취소·복원 통합 테스트
-- [ ] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
+- [x] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
+- [ ] 배포 환경 렌더 워커 URL·공유 토큰·GCS 자격증명 구성 및 실제 MP4 E2E 검증
 
 ## 7. 다음 구현 순서
 
-1. 채팅 지시만으로도 서버 렌더 큐가 최종 MP4를 생성·등록하도록 렌더 실행 위치를 공통화합니다.
+1. 배포 환경에 렌더 워커와 공유 토큰을 설정하고 실제 MP4 콜백 E2E를 검증합니다.
 2. Phase 0 완료 정의를 다시 점검하고 Phase 1 이미지 제작 PRD로 넘어갑니다.
 
 ## 8. 세션 인수인계 상태
 
 - 마지막 갱신일: 2026-07-19
-- 현재 단계: 실제 PostgreSQL 통합·실패 복구 테스트 완료, 채팅 호출 서버 렌더 공통화 착수 전
-- 마지막 완료 파일: `prototype/tests/company-skill-jobs-db.integration.mjs`, `package.json`
-- 다음 시작 파일: `prototype/functions/api/agent/_company-skill-executors.ts`의 인포그래픽 실행 완료 이후 렌더 큐 연결과 `ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx`의 브라우저 전용 보관 경계
-- 연결 대상: 채팅과 직접 UI 모두 명세 완료 후 서버 렌더 큐에 동일하게 등록하고, 최종 MP4·source·report·manifest를 SkillJob artifact로 보존
+- 현재 단계: 채팅·직접 UI 공통 서버 렌더 큐와 최종 산출물 콜백 구현 완료, 배포 환경 E2E 대기
+- 마지막 완료 파일: `prototype/functions/api/agent/_company-skill-renderer.ts`, `prototype/functions/api/agent/skill-jobs/[jobId]/render-output.ts`, `prototype/functions/api/agent/_company-skill-artifact-storage.ts`, `server.js`
+- 다음 시작 파일: 배포 환경의 `COMPANY_SKILL_RENDERER_URL`, `COMPANY_SKILL_RENDERER_TOKEN`, GCS 자격증명 설정 후 실제 채팅 요청 E2E 검증; 자격증명이 없는 세션은 `docs/ai-company-image-skill-prd.md` 작성으로 진행
+- 연결 상태: 서버 렌더 모드는 명세 완료 후 `reviewing/rendering`에 머물고, 최종 MP4·source·report·manifest 등록 콜백이 성공한 뒤에만 `completed`가 됩니다.
 - 비용 계약: 구독 인증은 플랜 포함 비용 0, API 키는 배포 환경 토큰 단가로 예측한다. 단가 미설정 또는 `costControl.maxAmountUsd` 초과는 승인 전 실행하지 않는다.
-- 검증 상태: 루트 `npm test` 294개, `npm run test:skill-db` 실제 PostgreSQL 16 통합 테스트 통과, 임시 컨테이너 자동 정리 확인
-- 미완료 사실: 채팅 지시 후 업무를 브라우저에서 열지 않으면 로컬 Remotion 렌더와 최종 MP4 artifact 등록이 아직 시작되지 않습니다.
-- 호환 상태: 직접 UI와 채팅 도구 모두 공통 SkillJob 생성 API를 사용하고, 공통 어댑터 내부에서 기존 `/api/agent/agent-video` 제작 구현을 재사용합니다.
+- 검증 상태: 루트 `npm test` 295개, 앱 TypeScript/Vite 빌드, 서버 함수 esbuild, 실제 PostgreSQL 16의 렌더 실패 복구·4종 artifact·완료 전환 통합 테스트 통과
+- 미완료 사실: 현재 셸에는 렌더 워커 URL·공유 토큰·GCS 자격증명이 없어 실제 배포 환경 MP4 콜백 E2E는 실행하지 못했습니다.
+- 호환 상태: AI 회사 앱이 열린 기존 환경에서는 채팅 `job_ready`가 이미 화면 이동 없이 로컬 렌더를 시작합니다. 서버 렌더 설정이 있으면 클라이언트 중복 렌더를 생략하고 서버 artifact를 사용합니다.

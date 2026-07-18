@@ -524,7 +524,7 @@ export default function App() {
               if (data?.payload?.kind === "company_work" && data.payload.work) {
                 setWorkRevision((value) => value + 1);
                 // 채팅 화면은 유지하되 로컬 렌더·GCS 보관은 백그라운드에서 즉시 시작한다.
-                void openWork(data.payload.work, true);
+                void openWork(data.payload.work, data.payload.renderMode !== "server");
               }
               break;
             case "agent_busy": {

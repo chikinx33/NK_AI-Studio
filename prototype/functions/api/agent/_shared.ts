@@ -1624,7 +1624,7 @@ async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const job = created?.job || null;
   if (!job) throw new Error("인포그래픽 SkillJob을 만들지 못했습니다.");
   if (job.status === "failed") throw new Error(job?.error?.message || "인포그래픽 제작에 실패했습니다.");
-  if (job.status !== "completed" || !job.workItemId) {
+  if (!job.workItemId) {
     return { kind: "infographic", job, work: null, spec: null, contributions: [] };
   }
   const workData = await callInternalJson(ctx, `/api/agent/work-items?id=${encodeURIComponent(job.workItemId)}`);
@@ -1633,6 +1633,7 @@ async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
     kind: "infographic",
     job,
     work,
+    renderMode: job?.providerUsage?.renderMode === "server" ? "server" : "browser",
     spec: work?.metadata?.spec || null,
     contributions: Array.isArray(work?.metadata?.contributions) ? work.metadata.contributions : [],
   };
