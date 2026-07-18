@@ -77,6 +77,8 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(rightMenu, /FolderIcon/);
   assert.doesNotMatch(rightMenu, /VideoIcon/);
   assert.match(explorer, /onDoubleClick/);
+  assert.match(explorer, /WorkLibraryIcon className="h-10 w-10"/);
+  assert.doesNotMatch(explorer, /Company Work Library/);
   assert.match(explorer, /소스 보기/);
   assert.match(explorer, /다운로드/);
   assert.match(explorer, /삭제/);

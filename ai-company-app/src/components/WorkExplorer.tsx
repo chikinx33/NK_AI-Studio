@@ -26,6 +26,17 @@ function FolderIcon({ open = false }: { open?: boolean }) {
   return <span className="text-5xl drop-shadow">{open ? "📂" : "📁"}</span>;
 }
 
+// 우측 사이드바의 회사 업무 아이콘과 동일한 SVG.
+function WorkLibraryIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M3 10h18" />
+    </svg>
+  );
+}
+
 export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: number; onOpenWork: (work: CompanyWorkItem) => void }) {
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [date, setDate] = useState("");
@@ -111,12 +122,9 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#090d13]">
-      <header className="shrink-0 border-b border-edge bg-panel/70 px-5 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🗂️</span>
-          <div><div className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-400">Company Work Library</div><h1 className="mt-1 text-xl font-bold text-white">회사 업무 탐색기</h1></div>
-          <button onClick={() => void refresh()} disabled={loading || !!busy} className="ml-auto rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>
-        </div>
+      {/* 아이콘 전용 행 — 프로젝트·대화·지식 화면과 동일한 규격 */}
+      <header className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-gray-400">
+        <WorkLibraryIcon className="h-10 w-10" />
       </header>
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-[#0b1018] px-5 py-2.5">
         <button onClick={back} disabled={!date} className="rounded-md border border-edge px-2.5 py-1.5 text-xs text-gray-300 disabled:opacity-30">← 뒤로</button>
@@ -125,6 +133,7 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
         {sourceWork && <><span className="text-gray-700">›</span><span className="max-w-64 truncate text-xs text-gray-300">{sourceWork.title}</span><span className="text-gray-700">›</span><span className="text-xs text-gray-500">소스</span></>}
         {!sourceWork && selectedItem && <div className="ml-auto flex gap-2"><button onClick={() => onOpenWork(selectedItem)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void openSources(selectedItem)} className="rounded-lg border border-sky-800 px-3 py-1.5 text-xs text-sky-300">소스 보기</button><button onClick={() => void removeWork(selectedItem)} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300">삭제</button></div>}
         {sourceWork && <div className="ml-auto flex gap-2"><button onClick={() => onOpenWork(sourceWork)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void downloadSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-200 disabled:opacity-30">다운로드</button><button onClick={() => void removeSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300 disabled:opacity-30">삭제</button></div>}
+        {!selectedItem && !sourceWork && <button onClick={() => void refresh()} disabled={loading || !!busy} className="ml-auto rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>}
       </div>
       {error && <div className="mx-5 mt-4 rounded-xl border border-red-900 bg-red-950/30 p-3 text-xs text-red-300">{error}</div>}
       <main className="min-h-0 flex-1 overflow-y-auto p-5">
