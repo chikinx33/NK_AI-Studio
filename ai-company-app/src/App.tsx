@@ -81,6 +81,12 @@ function notifyAlarm(text: string) {
   } catch { /* ignore */ }
 }
 
+function companyWorkDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
 export default function App() {
   const { openWork } = useAgentVideoWorkspace();
   const [status, setStatus] = useState<StatusInfo | null>(null);
@@ -91,9 +97,11 @@ export default function App() {
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video">("chat");
   const [workRevision, setWorkRevision] = useState(0);
+  const [workFolderDate, setWorkFolderDate] = useState("");
 
   async function openCompanyWork(work: CompanyWorkItem, autoRender = false) {
     if (work.work_type === "infographic") {
+      setWorkFolderDate(companyWorkDate(work.created_at));
       await openWork(work, autoRender);
       setCenterView("video");
       return;
@@ -770,11 +778,11 @@ export default function App() {
           <AgentManager agentId={agentMgrId} agents={agents} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
-            <WorkExplorer revision={workRevision} onOpenWork={(work) => void openCompanyWork(work)} />
+            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} />
           </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
-            <AgentVideoWorkspace />
+            <AgentVideoWorkspace onClose={() => setCenterView("works")} />
           </Suspense>
         ) : centerView === "settings" ? (
           <Settings

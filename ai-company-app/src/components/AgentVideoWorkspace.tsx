@@ -45,7 +45,7 @@ function koreaDate(value?: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
-export default function AgentVideoWorkspace() {
+export default function AgentVideoWorkspace({ onClose }: { onClose: () => void }) {
   const {
     prompt,
     setPrompt,
@@ -94,8 +94,10 @@ export default function AgentVideoWorkspace() {
             <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-sky-950/40 px-3 py-1.5 font-bold text-sky-300 transition hover:bg-sky-900/50">
               ☁ 저장소
             </button>
-            <span className="rounded-full border border-edge bg-[#0b1018] px-3 py-1.5">AI Cinema와 분리된 독립 제작</span>
             <span className="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-3 py-1.5 text-emerald-300">로컬 Remotion 렌더</span>
+            <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border border-edge bg-[#0b1018] text-gray-400 transition hover:border-gray-600 hover:bg-edge hover:text-white" title="업무 폴더로 돌아가기" aria-label="업무 폴더로 돌아가기">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m5 5 10 10M15 5 5 15" /></svg>
+            </button>
           </div>
         </div>
       </header>

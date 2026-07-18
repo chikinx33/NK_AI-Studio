@@ -14,6 +14,8 @@ import {
 } from "../lib/api";
 
 type ViewMode = "cards" | "list";
+type SearchScope = "title" | "content" | "all";
+type SortMode = "newest" | "oldest" | "name-asc" | "name-desc";
 
 function koreaDate(value: string) {
   const date = new Date(value);
@@ -26,6 +28,19 @@ function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   const index = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
   return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
+}
+
+function normalized(value: unknown) {
+  return String(value || "").toLocaleLowerCase("ko-KR");
+}
+
+function workMatches(work: CompanyWorkItem, term: string, scope: SearchScope) {
+  if (!term) return true;
+  const title = normalized(work.title);
+  const content = normalized(`${work.request_text} ${work.result_summary} ${JSON.stringify(work.metadata || {})}`);
+  if (scope === "title") return title.includes(term);
+  if (scope === "content") return content.includes(term);
+  return title.includes(term) || content.includes(term);
 }
 
 function FolderIcon({ open = false, className = "h-12 w-12" }: { open?: boolean; className?: string }) {
@@ -44,6 +59,16 @@ function DocumentIcon({ className = "h-10 w-10" }: { className?: string }) {
       <path d="M11 5h18l9 9v27a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z" fill="#172554" stroke="#60a5fa" strokeWidth="2" />
       <path d="M29 5v9h9" fill="#1d4ed8" stroke="#60a5fa" strokeWidth="2" strokeLinejoin="round" />
       <path d="M15 23h16M15 29h16M15 35h11" stroke="#93c5fd" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function VideoWorkIcon({ className = "h-10 w-10" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" className={className} aria-hidden="true">
+      <rect x="5" y="10" width="38" height="28" rx="5" fill="#172554" stroke="#60a5fa" strokeWidth="2" />
+      <path d="m21 18 11 6-11 6V18Z" fill="#93c5fd" />
+      <path d="M11 10v28M37 10v28M6 17h5M6 24h5M6 31h5M37 17h5M37 24h5M37 31h5" stroke="#3b82f6" strokeWidth="1.6" />
     </svg>
   );
 }
@@ -87,14 +112,20 @@ async function inChunks<T>(items: T[], size: number, task: (chunk: T[]) => Promi
   for (let index = 0; index < items.length; index += size) await task(items.slice(index, index + size));
 }
 
-export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: number; onOpenWork: (work: CompanyWorkItem) => void }) {
+export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void }) {
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(initialDate);
   const [sourceWork, setSourceWork] = useState<CompanyWorkItem | null>(null);
   const [sources, setSources] = useState<AgentVideoStorageItem[]>([]);
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>(() => window.localStorage.getItem("company-work-view") === "list" ? "list" : "cards");
+  const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = window.localStorage.getItem("company-work-sort");
+    return saved === "oldest" || saved === "name-asc" || saved === "name-desc" ? saved : "newest";
+  });
   const [folderMenu, setFolderMenu] = useState("");
   const [documentMenu, setDocumentMenu] = useState("");
   const [renameTarget, setRenameTarget] = useState<{ kind: "folder" | "document"; key: string; title: string } | null>(null);
@@ -115,7 +146,9 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
   }
 
   useEffect(() => { void refresh(); }, [revision]);
+  useEffect(() => { if (initialDate) setDate(initialDate); }, [initialDate]);
   useEffect(() => { window.localStorage.setItem("company-work-view", viewMode); }, [viewMode]);
+  useEffect(() => { window.localStorage.setItem("company-work-sort", sortMode); }, [sortMode]);
   useEffect(() => {
     if (!folderMenu && !documentMenu) return;
     const close = (event: PointerEvent) => {
@@ -128,12 +161,39 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
     return () => window.removeEventListener("pointerdown", close);
   }, [folderMenu, documentMenu]);
 
+  const searchTerm = normalized(searchQuery.trim());
   const dates = useMemo(() => {
-    const grouped = new Map<string, number>();
-    for (const item of items) grouped.set(koreaDate(item.created_at), (grouped.get(koreaDate(item.created_at)) || 0) + 1);
-    return [...grouped.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [items]);
+    const grouped = new Map<string, CompanyWorkItem[]>();
+    for (const item of items) {
+      const dateKey = koreaDate(item.created_at);
+      grouped.set(dateKey, [...(grouped.get(dateKey) || []), item]);
+    }
+    const rows: Array<[string, number]> = [];
+    for (const [dateKey, works] of grouped) {
+      const folderTitleMatches = searchScope !== "content" && normalized(`${folderTitles.get(dateKey) || dateKey} ${dateKey}`).includes(searchTerm);
+      const matchingWorks = searchTerm ? works.filter((work) => workMatches(work, searchTerm, searchScope)) : works;
+      if (!searchTerm || folderTitleMatches || matchingWorks.length) rows.push([dateKey, folderTitleMatches ? works.length : matchingWorks.length]);
+    }
+    return rows.sort(([dateA], [dateB]) => {
+      if (sortMode === "newest") return dateB.localeCompare(dateA);
+      if (sortMode === "oldest") return dateA.localeCompare(dateB);
+      const titleA = folderTitles.get(dateA) || dateA;
+      const titleB = folderTitles.get(dateB) || dateB;
+      return sortMode === "name-asc" ? titleA.localeCompare(titleB, "ko") : titleB.localeCompare(titleA, "ko");
+    });
+  }, [folderTitles, items, searchScope, searchTerm, sortMode]);
   const datedItems = useMemo(() => items.filter((item) => koreaDate(item.created_at) === date), [date, items]);
+  const currentFolderMatches = searchScope !== "content" && normalized(`${folderTitles.get(date) || date} ${date}`).includes(searchTerm);
+  const visibleDatedItems = useMemo(() => (currentFolderMatches ? datedItems : datedItems.filter((work) => workMatches(work, searchTerm, searchScope))).sort((a, b) => {
+    if (sortMode === "newest") return b.created_at.localeCompare(a.created_at);
+    if (sortMode === "oldest") return a.created_at.localeCompare(b.created_at);
+    return sortMode === "name-asc" ? a.title.localeCompare(b.title, "ko") : b.title.localeCompare(a.title, "ko");
+  }), [currentFolderMatches, datedItems, searchScope, searchTerm, sortMode]);
+  const visibleSources = useMemo(() => sources.filter((source) => !searchTerm || normalized(source.fileName).includes(searchTerm)).sort((a, b) => {
+    if (sortMode === "newest") return b.updatedAt.localeCompare(a.updatedAt);
+    if (sortMode === "oldest") return a.updatedAt.localeCompare(b.updatedAt);
+    return sortMode === "name-asc" ? a.fileName.localeCompare(b.fileName, "ko") : b.fileName.localeCompare(a.fileName, "ko");
+  }), [searchTerm, sortMode, sources]);
   function openDateFolder(dateKey: string) {
     setDate(dateKey);
     setFolderMenu("");
@@ -191,7 +251,7 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
     setBusy("sources"); setError("");
     try {
       const result = await listAgentVideoStorage({ date: koreaDate(work.created_at), workId: work.id });
-      setSources(result.items); setSourceWork(work); setSelectedSources(new Set());
+      setSources(result.items); setSourceWork(work); setSelectedSources(new Set()); setSearchQuery("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "업무 소스를 불러오지 못했습니다."); }
     finally { setBusy(""); }
   }
@@ -261,6 +321,22 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
         {date && <><span className="text-gray-700">›</span><button onClick={() => setSourceWork(null)} className="max-w-48 truncate text-xs text-gray-300">{folderTitles.get(date) || date}</button></>}
         {sourceWork && <><span className="text-gray-700">›</span><span className="max-w-64 truncate text-xs text-gray-300">{sourceWork.title}</span><span className="text-gray-700">›</span><span className="text-xs text-gray-500">소스</span></>}
         <div className="ml-auto flex items-center gap-2">
+          <div className="flex h-9 items-center overflow-hidden rounded-lg border border-edge bg-[#090d13] focus-within:border-emerald-800">
+            <select value={searchScope} onChange={(event) => setSearchScope(event.target.value as SearchScope)} className="h-full border-r border-edge bg-transparent px-2 text-[11px] text-gray-300 outline-none" aria-label="검색 범위">
+              <option value="title" className="bg-[#111722]">제목</option>
+              <option value="content" className="bg-[#111722]">내용</option>
+              <option value="all" className="bg-[#111722]">제목+내용</option>
+            </select>
+            <svg viewBox="0 0 20 20" className="ml-2 h-4 w-4 shrink-0 text-gray-600" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5" /><path d="m12.3 12.3 4.2 4.2" /></svg>
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={searchScope === "title" ? "제목 검색" : searchScope === "content" ? "내용 검색" : "제목·내용 검색"} className="h-full w-36 bg-transparent px-2 text-xs text-gray-200 outline-none placeholder:text-gray-600" aria-label="업무 검색" />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery("")} className="grid h-full w-8 place-items-center text-gray-600 hover:text-gray-200" title="검색어 지우기" aria-label="검색어 지우기">×</button>}
+          </div>
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="h-9 rounded-lg border border-edge bg-[#090d13] px-2 text-[11px] text-gray-300 outline-none hover:border-gray-600" aria-label="정렬 방식">
+            <option value="newest" className="bg-[#111722]">최신순</option>
+            <option value="oldest" className="bg-[#111722]">오래된순</option>
+            <option value="name-asc" className="bg-[#111722]">이름순 A–Z</option>
+            <option value="name-desc" className="bg-[#111722]">이름순 Z–A</option>
+          </select>
           <ViewModeControl value={viewMode} onChange={setViewMode} />
           {sourceWork && <><button onClick={() => onOpenWork(sourceWork)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void downloadSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-200 disabled:opacity-30">다운로드</button><button onClick={() => void removeSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300 disabled:opacity-30">삭제</button></>}
           {!sourceWork && <button onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>}
@@ -269,29 +345,29 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
       {error && <div className="mx-5 mt-4 rounded-xl border border-red-900 bg-red-950/30 p-3 text-xs text-red-300">{error}</div>}
       <main className="min-h-0 flex-1 overflow-y-auto p-5">
         {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">업무 폴더를 불러오는 중...</div> : sourceWork ? (
-          sources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{sources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{sources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">이 업무에 저장된 소스가 없습니다.</div>
+          visibleSources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleSources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleSources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 업무에 저장된 소스가 없습니다."}</div>
         ) : date ? (
-          datedItems.length ? <div className={folderGridClass}>{datedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => onOpenWork(work)} onKeyDown={(event) => { if (event.key === "Enter") onOpenWork(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
-            <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
+          visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => onOpenWork(work)} onKeyDown={(event) => { if (event.key === "Enter") onOpenWork(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
+            {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} /> : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
             <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
               {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
             </div>
-          </div>)}</div> : <div className="text-sm text-gray-500">이 날짜에 등록된 업무가 없습니다.</div>
+          </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>
         ) : dates.length ? (
           <div className={folderGridClass}>{dates.map(([folderDate, count]) => {
             const title = folderTitles.get(folderDate) || folderDate;
             return <div key={folderDate} role="button" tabIndex={0} onClick={() => openDateFolder(folderDate)} onKeyDown={(event) => { if (event.key === "Enter") openDateFolder(folderDate); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-5" : "flex items-center gap-4 px-4 py-3"}`}>
               <FolderIcon className={viewMode === "cards" ? "h-12 w-12" : "h-10 w-10 shrink-0"} />
-              <div className={viewMode === "cards" ? "mt-3 min-w-0 pr-7" : "min-w-0 flex-1"}><h2 className="truncate text-sm font-bold text-gray-100" title={title}>{title}</h2>{title !== folderDate && <p className="mt-0.5 text-[10px] text-gray-600">{folderDate}</p>}<p className="mt-1 text-xs text-gray-500">업무 {count}개</p></div>
+              <div className={viewMode === "cards" ? "mt-3 min-w-0 pr-7" : "min-w-0 flex-1"}><div className="flex min-w-0 items-baseline gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={title}>{title}</h2><span className="shrink-0 text-[10px] font-normal text-gray-600">생성일 {folderDate}</span></div><p className="mt-1 text-xs text-gray-500">업무 {count}개</p></div>
               <div className="absolute right-3 top-3" data-item-menu>
                 <button type="button" onClick={(event) => { event.stopPropagation(); setFolderMenu((current) => current === folderDate ? "" : folderDate); setDocumentMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="폴더 메뉴" aria-label={`${title} 폴더 메뉴`} aria-expanded={folderMenu === folderDate}>•••</button>
                 {folderMenu === folderDate && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameFolder(folderDate); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); void removeDateFolder(folderDate); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
               </div>
             </div>;
           })}</div>
-        ) : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">아직 완료된 회사 업무가 없습니다.<br />채팅에서 코어에게 업무를 지시하면 날짜별로 자동 정리됩니다.</div>}
+        ) : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{searchTerm ? "검색 결과가 없습니다." : <>아직 완료된 회사 업무가 없습니다.<br />채팅에서 코어에게 업무를 지시하면 날짜별로 자동 정리됩니다.</>}</div>}
       </main>
       {renameTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRenameTarget(null); }}><form onSubmit={(event) => { event.preventDefault(); void saveName(); }} className="w-full max-w-sm rounded-2xl border border-edge bg-[#111722] p-5 shadow-2xl"><h2 className="text-sm font-bold text-gray-100">{renameTarget.kind === "folder" ? "폴더" : "문서"} 이름 변경</h2>{renameTarget.kind === "folder" && <p className="mt-1 text-xs text-gray-500">원래 날짜: {renameTarget.key}</p>}<input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} maxLength={60} className="mt-4 w-full rounded-lg border border-edge bg-[#090d13] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-emerald-600" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setRenameTarget(null)} disabled={!!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-40">취소</button><button type="submit" disabled={!renameValue.trim() || !!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{busy === "rename-item" ? "저장 중..." : "저장"}</button></div></form></div>}
     </div>
