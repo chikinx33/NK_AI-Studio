@@ -8,6 +8,7 @@ import {
   listCompanyWorkFolders,
   listCompanyWorkItems,
   renameCompanyWorkFolder,
+  renameCompanyWorkItem,
   type AgentVideoStorageItem,
   type CompanyWorkItem,
 } from "../lib/api";
@@ -92,12 +93,11 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
   const [date, setDate] = useState("");
   const [sourceWork, setSourceWork] = useState<CompanyWorkItem | null>(null);
   const [sources, setSources] = useState<AgentVideoStorageItem[]>([]);
-  const [selectedWork, setSelectedWork] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>(() => window.localStorage.getItem("company-work-view") === "list" ? "list" : "cards");
   const [folderMenu, setFolderMenu] = useState("");
-  const [renameFolder, setRenameFolder] = useState<{ dateKey: string; title: string } | null>(null);
+  const [documentMenu, setDocumentMenu] = useState("");
+  const [renameTarget, setRenameTarget] = useState<{ kind: "folder" | "document"; key: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -117,13 +117,16 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
   useEffect(() => { void refresh(); }, [revision]);
   useEffect(() => { window.localStorage.setItem("company-work-view", viewMode); }, [viewMode]);
   useEffect(() => {
-    if (!folderMenu) return;
+    if (!folderMenu && !documentMenu) return;
     const close = (event: PointerEvent) => {
-      if (!(event.target as Element | null)?.closest("[data-folder-menu]")) setFolderMenu("");
+      if (!(event.target as Element | null)?.closest("[data-item-menu]")) {
+        setFolderMenu("");
+        setDocumentMenu("");
+      }
     };
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
-  }, [folderMenu]);
+  }, [folderMenu, documentMenu]);
 
   const dates = useMemo(() => {
     const grouped = new Map<string, number>();
@@ -131,30 +134,39 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
     return [...grouped.entries()].sort(([a], [b]) => b.localeCompare(a));
   }, [items]);
   const datedItems = useMemo(() => items.filter((item) => koreaDate(item.created_at) === date), [date, items]);
-  const selectedItem = datedItems.find((item) => item.id === selectedWork) || null;
-
   function openDateFolder(dateKey: string) {
     setDate(dateKey);
-    setSelectedDate("");
     setFolderMenu("");
   }
 
   function beginRenameFolder(dateKey: string) {
     const title = folderTitles.get(dateKey) || dateKey;
-    setRenameFolder({ dateKey, title });
+    setRenameTarget({ kind: "folder", key: dateKey, title });
     setRenameValue(title);
     setFolderMenu("");
   }
 
-  async function saveFolderName() {
-    if (!renameFolder || !renameValue.trim()) return;
-    setBusy("rename-folder"); setError("");
+  function beginRenameDocument(work: CompanyWorkItem) {
+    setRenameTarget({ kind: "document", key: work.id, title: work.title });
+    setRenameValue(work.title);
+    setDocumentMenu("");
+  }
+
+  async function saveName() {
+    if (!renameTarget || !renameValue.trim()) return;
+    setBusy("rename-item"); setError("");
     try {
       const title = renameValue.replace(/\s+/g, " ").trim().slice(0, 60);
-      await renameCompanyWorkFolder(renameFolder.dateKey, title);
-      setFolderTitles((current) => new Map(current).set(renameFolder.dateKey, title));
-      setRenameFolder(null);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "폴더 이름 변경에 실패했습니다."); }
+      if (renameTarget.kind === "folder") {
+        await renameCompanyWorkFolder(renameTarget.key, title);
+        setFolderTitles((current) => new Map(current).set(renameTarget.key, title));
+      } else {
+        const updated = await renameCompanyWorkItem(renameTarget.key, title);
+        setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+        if (sourceWork?.id === updated.id) setSourceWork(updated);
+      }
+      setRenameTarget(null);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "이름 변경에 실패했습니다."); }
     finally { setBusy(""); }
   }
 
@@ -169,8 +181,7 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
       await inChunks(objectNames, 100, (chunk) => deleteAgentVideoStorageFiles(chunk));
       await inChunks(works.map((work) => work.id), 100, (chunk) => deleteCompanyWorkItems(chunk));
       await deleteCompanyWorkFolderMeta(dateKey);
-      if (date === dateKey) { setDate(""); setSelectedWork(""); }
-      setSelectedDate("");
+      if (date === dateKey) setDate("");
       await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "폴더 삭제에 실패했습니다."); }
     finally { setBusy(""); }
@@ -192,7 +203,7 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
       const stored = await listAgentVideoStorage({ date: koreaDate(work.created_at), workId: work.id });
       await inChunks(stored.items.map((item) => item.objectName), 100, (chunk) => deleteAgentVideoStorageFiles(chunk));
       await deleteCompanyWorkItems([work.id]);
-      setSelectedWork(""); await refresh();
+      setDocumentMenu(""); await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "업무 삭제에 실패했습니다."); }
     finally { setBusy(""); }
   }
@@ -234,7 +245,7 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
 
   function back() {
     if (sourceWork) { setSourceWork(null); setSources([]); return; }
-    if (date) { setDate(""); setSelectedWork(""); }
+    if (date) setDate("");
   }
 
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";
@@ -251,9 +262,8 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
         {sourceWork && <><span className="text-gray-700">›</span><span className="max-w-64 truncate text-xs text-gray-300">{sourceWork.title}</span><span className="text-gray-700">›</span><span className="text-xs text-gray-500">소스</span></>}
         <div className="ml-auto flex items-center gap-2">
           <ViewModeControl value={viewMode} onChange={setViewMode} />
-          {!sourceWork && selectedItem && <><button onClick={() => onOpenWork(selectedItem)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void openSources(selectedItem)} className="rounded-lg border border-sky-800 px-3 py-1.5 text-xs text-sky-300">소스 보기</button><button onClick={() => void removeWork(selectedItem)} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300">삭제</button></>}
           {sourceWork && <><button onClick={() => onOpenWork(sourceWork)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void downloadSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-200 disabled:opacity-30">다운로드</button><button onClick={() => void removeSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300 disabled:opacity-30">삭제</button></>}
-          {!selectedItem && !sourceWork && <button onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>}
+          {!sourceWork && <button onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>}
         </div>
       </div>
       {error && <div className="mx-5 mt-4 rounded-xl border border-red-900 bg-red-950/30 p-3 text-xs text-red-300">{error}</div>}
@@ -261,23 +271,29 @@ export default function WorkExplorer({ revision = 0, onOpenWork }: { revision?: 
         {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">업무 폴더를 불러오는 중...</div> : sourceWork ? (
           sources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{sources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{sources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">이 업무에 저장된 소스가 없습니다.</div>
         ) : date ? (
-          datedItems.length ? <div className={folderGridClass}>{datedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => setSelectedWork(work.id)} onDoubleClick={() => onOpenWork(work)} onKeyDown={(event) => { if (event.key === "Enter") onOpenWork(work); }} className={`cursor-pointer rounded-2xl border text-left transition ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"} ${selectedWork === work.id ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel hover:border-gray-600"}`}><DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} /><div className={`min-w-0 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p><span className={`${viewMode === "cards" ? "mt-2" : "shrink-0"} inline-flex rounded-full bg-emerald-950 px-2 py-1 text-[9px] text-emerald-300`}>{work.status === "completed" ? "완료" : work.status}</span></div></div>)}</div> : <div className="text-sm text-gray-500">이 날짜에 등록된 업무가 없습니다.</div>
+          datedItems.length ? <div className={folderGridClass}>{datedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => onOpenWork(work)} onKeyDown={(event) => { if (event.key === "Enter") onOpenWork(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
+            <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
+            <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
+            <div className="absolute right-3 top-3" data-item-menu>
+              <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
+              {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
+            </div>
+          </div>)}</div> : <div className="text-sm text-gray-500">이 날짜에 등록된 업무가 없습니다.</div>
         ) : dates.length ? (
           <div className={folderGridClass}>{dates.map(([folderDate, count]) => {
-            const selected = selectedDate === folderDate;
             const title = folderTitles.get(folderDate) || folderDate;
-            return <div key={folderDate} role="button" tabIndex={0} onDoubleClick={() => openDateFolder(folderDate)} onClick={() => setSelectedDate(folderDate)} onKeyDown={(event) => { if (event.key === "Enter") openDateFolder(folderDate); }} className={`relative cursor-pointer rounded-2xl border text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-5" : "flex items-center gap-4 px-4 py-3"} ${selected ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}>
-              <FolderIcon open={selected} className={viewMode === "cards" ? "h-12 w-12" : "h-10 w-10 shrink-0"} />
+            return <div key={folderDate} role="button" tabIndex={0} onClick={() => openDateFolder(folderDate)} onKeyDown={(event) => { if (event.key === "Enter") openDateFolder(folderDate); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-5" : "flex items-center gap-4 px-4 py-3"}`}>
+              <FolderIcon className={viewMode === "cards" ? "h-12 w-12" : "h-10 w-10 shrink-0"} />
               <div className={viewMode === "cards" ? "mt-3 min-w-0 pr-7" : "min-w-0 flex-1"}><h2 className="truncate text-sm font-bold text-gray-100" title={title}>{title}</h2>{title !== folderDate && <p className="mt-0.5 text-[10px] text-gray-600">{folderDate}</p>}<p className="mt-1 text-xs text-gray-500">업무 {count}개</p></div>
-              <div className="absolute right-3 top-3" data-folder-menu>
-                <button type="button" onClick={(event) => { event.stopPropagation(); setFolderMenu((current) => current === folderDate ? "" : folderDate); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="폴더 메뉴" aria-label={`${title} 폴더 메뉴`} aria-expanded={folderMenu === folderDate}>•••</button>
+              <div className="absolute right-3 top-3" data-item-menu>
+                <button type="button" onClick={(event) => { event.stopPropagation(); setFolderMenu((current) => current === folderDate ? "" : folderDate); setDocumentMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="폴더 메뉴" aria-label={`${title} 폴더 메뉴`} aria-expanded={folderMenu === folderDate}>•••</button>
                 {folderMenu === folderDate && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameFolder(folderDate); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); void removeDateFolder(folderDate); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
               </div>
             </div>;
           })}</div>
         ) : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">아직 완료된 회사 업무가 없습니다.<br />채팅에서 코어에게 업무를 지시하면 날짜별로 자동 정리됩니다.</div>}
       </main>
-      {renameFolder && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRenameFolder(null); }}><form onSubmit={(event) => { event.preventDefault(); void saveFolderName(); }} className="w-full max-w-sm rounded-2xl border border-edge bg-[#111722] p-5 shadow-2xl"><h2 className="text-sm font-bold text-gray-100">폴더 이름 변경</h2><p className="mt-1 text-xs text-gray-500">원래 날짜: {renameFolder.dateKey}</p><input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} maxLength={60} className="mt-4 w-full rounded-lg border border-edge bg-[#090d13] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-emerald-600" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setRenameFolder(null)} disabled={!!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-40">취소</button><button type="submit" disabled={!renameValue.trim() || !!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{busy === "rename-folder" ? "저장 중..." : "저장"}</button></div></form></div>}
+      {renameTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRenameTarget(null); }}><form onSubmit={(event) => { event.preventDefault(); void saveName(); }} className="w-full max-w-sm rounded-2xl border border-edge bg-[#111722] p-5 shadow-2xl"><h2 className="text-sm font-bold text-gray-100">{renameTarget.kind === "folder" ? "폴더" : "문서"} 이름 변경</h2>{renameTarget.kind === "folder" && <p className="mt-1 text-xs text-gray-500">원래 날짜: {renameTarget.key}</p>}<input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} maxLength={60} className="mt-4 w-full rounded-lg border border-edge bg-[#090d13] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-emerald-600" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setRenameTarget(null)} disabled={!!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-40">취소</button><button type="submit" disabled={!renameValue.trim() || !!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{busy === "rename-item" ? "저장 중..." : "저장"}</button></div></form></div>}
     </div>
   );
 }

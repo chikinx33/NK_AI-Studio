@@ -65,6 +65,17 @@ export async function deleteCompanyWorkItems(ids: string[]): Promise<number> {
   return Number(data?.deletedCount || 0);
 }
 
+export async function renameCompanyWorkItem(id: string, title: string): Promise<CompanyWorkItem> {
+  const res = await fetch("/api/agent/work-items", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, title }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 이름을 변경하지 못했어요.");
+  return data.item as CompanyWorkItem;
+}
+
 export interface CompanyWorkFolder {
   date_key: string;
   title: string;

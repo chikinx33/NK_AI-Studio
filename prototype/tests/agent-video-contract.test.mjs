@@ -87,7 +87,9 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(rightMenu, /회사 업무 탐색기/);
   assert.match(rightMenu, /FolderIcon/);
   assert.doesNotMatch(rightMenu, /VideoIcon/);
-  assert.match(explorer, /onDoubleClick/);
+  assert.doesNotMatch(explorer, /onDoubleClick/);
+  assert.match(explorer, /onClick=\{\(\) => openDateFolder\(folderDate\)\}/);
+  assert.match(explorer, /onClick=\{\(\) => onOpenWork\(work\)\}/);
   assert.match(explorer, /WorkLibraryIcon className="h-10 w-10"/);
   assert.doesNotMatch(explorer, /Company Work Library/);
   assert.match(explorer, /소스 보기/);
@@ -98,7 +100,10 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(explorer, /목록 보기/);
   assert.match(explorer, /카드 보기/);
   assert.match(explorer, /DocumentIcon/);
-  assert.match(explorer, /data-folder-menu/);
+  assert.match(explorer, /data-item-menu/);
+  assert.match(explorer, /documentMenu/);
+  assert.match(explorer, /beginRenameDocument/);
+  assert.doesNotMatch(explorer, /status === "completed" \? "완료"/);
   assert.match(explorer, /이름 변경/);
   assert.match(explorer, /removeDateFolder/);
   assert.match(markdown, /raviok-open-work/);
@@ -106,9 +111,11 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(shared, /infographic: \{ agentId: "core"/);
   assert.match(shared, /company_work_folders/);
   assert.match(workApi, /company_work_items/);
+  assert.match(workApi, /onRequestPatch/);
   assert.match(folderApi, /onRequestPatch/);
   assert.match(folderApi, /date_key/);
   assert.match(clientApi, /renameCompanyWorkFolder/);
+  assert.match(clientApi, /renameCompanyWorkItem/);
   assert.match(clientApi, /deleteCompanyWorkFolderMeta/);
 });
 

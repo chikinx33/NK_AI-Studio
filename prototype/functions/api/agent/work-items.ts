@@ -25,6 +25,29 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   }
 };
 
+export const onRequestPatch: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
+  try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+    const body: any = await request.json().catch(() => ({}));
+    const id = String(body?.id || "").trim();
+    const title = String(body?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !title) return send({ error: "업무와 새 이름을 확인해 주세요." }, 400, origin);
+    const sql = getSql(env);
+    if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
+    await ensureAgentSchema(sql);
+    const rows = await sql(
+      "UPDATE company_work_items SET title = $3, updated_at = now() WHERE user_id = $1 AND id = $2 RETURNING *",
+      [auth.userId, id, title],
+    );
+    if (!rows.length) return send({ error: "업무 문서를 찾지 못했습니다." }, 404, origin);
+    return send({ item: rows[0] }, 200, origin);
+  } catch (error: any) {
+    return send({ error: String(error?.message || error || "업무 이름 변경 실패") }, 500, origin);
+  }
+};
+
 export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
