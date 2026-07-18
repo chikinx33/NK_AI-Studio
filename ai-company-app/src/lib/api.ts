@@ -53,7 +53,7 @@ export interface CompanyWorkItem {
     input?: CreateAgentVideoInput;
     spec?: AgentVideoSpec;
     contributions?: AgentVideoContribution[];
-    skill?: { categoryId: string; skillId: string; invocationMode: "agent" | "manual" };
+    skill?: { categoryId: string; skillId: string; invocationMode: "agent" | "manual"; skillJobId?: string | null };
     [key: string]: unknown;
   };
   created_at: string;
@@ -86,6 +86,32 @@ export async function getCompanySkillJob(jobId: string): Promise<SkillJob> {
   const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}`);
   const data = await readSkillJobResponse(res, "회사 Skill 업무 상태를 불러오지 못했어요.");
   return data.job as SkillJob;
+}
+
+export async function waitForCompanySkillJob(
+  jobId: string,
+  options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<SkillJob> {
+  const intervalMs = Math.max(500, options.intervalMs || 1_500);
+  const timeoutMs = Math.max(intervalMs, options.timeoutMs || 10 * 60 * 1_000);
+  const startedAt = Date.now();
+  while (true) {
+    if (options.signal?.aborted) throw new DOMException("SkillJob polling aborted", "AbortError");
+    const job = await getCompanySkillJob(jobId);
+    if (["completed", "failed", "cancelled"].includes(job.status)) return job;
+    if (Date.now() - startedAt >= timeoutMs) throw new Error("회사 Skill 업무가 제한 시간 안에 완료되지 않았어요.");
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("SkillJob polling aborted", "AbortError"));
+      };
+      const timer = window.setTimeout(() => {
+        options.signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, intervalMs);
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
 }
 
 export async function cancelCompanySkillJob(jobId: string): Promise<SkillJob> {
@@ -125,6 +151,15 @@ export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "회사 업무 목록을 불러오지 못했어요.");
   return Array.isArray(data?.items) ? data.items : [];
+}
+
+export async function getCompanyWorkItem(id: string): Promise<CompanyWorkItem> {
+  const res = await fetch(`/api/agent/work-items?id=${encodeURIComponent(id)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무를 불러오지 못했어요.");
+  const item = Array.isArray(data?.items) ? data.items[0] : null;
+  if (!item) throw new Error("회사 업무 결과를 찾지 못했어요.");
+  return item as CompanyWorkItem;
 }
 
 export async function deleteCompanyWorkItems(ids: string[]): Promise<number> {

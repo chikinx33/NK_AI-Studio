@@ -1606,21 +1606,36 @@ async function callInternalJson(
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
   if (!prompt) throw new Error("제작할 인포그래픽 내용(prompt)이 필요해요.");
-  const data = await callInternalJson(ctx, "/api/agent/agent-video", {
+  const created = await callInternalJson(ctx, "/api/agent/skills/infographic/jobs?wait=1", {
     body: {
-      prompt,
-      durationSec: Math.min(60, Math.max(10, Number(input?.durationSec || input?.duration) || 30)),
-      aspectRatio: ["16:9", "9:16", "1:1"].includes(String(input?.aspectRatio)) ? input.aspectRatio : "16:9",
-      audience: String(input?.audience || "일반 시청자"),
-      tone: String(input?.tone || "명료하고 신뢰감 있게"),
-      style: String(input?.style || "시네마틱 모션 인포그래픽"),
+      request: prompt,
       conversationId: ctx.conversationId || "main",
-      skillCategoryId: "design-content",
-      skillId: "infographic",
       invocationMode: "agent",
+      idempotencyKey: `agent-${crypto.randomUUID()}`,
+      options: {
+        durationSec: Math.min(60, Math.max(10, Number(input?.durationSec || input?.duration) || 30)),
+        aspectRatio: ["16:9", "9:16", "1:1"].includes(String(input?.aspectRatio)) ? input.aspectRatio : "16:9",
+        audience: String(input?.audience || "일반 시청자"),
+        tone: String(input?.tone || "명료하고 신뢰감 있게"),
+        style: String(input?.style || "시네마틱 모션 인포그래픽"),
+      },
     },
   });
-  return { kind: "infographic", work: data?.work || null, spec: data?.spec, contributions: data?.contributions || [] };
+  const job = created?.job || null;
+  if (!job) throw new Error("인포그래픽 SkillJob을 만들지 못했습니다.");
+  if (job.status === "failed") throw new Error(job?.error?.message || "인포그래픽 제작에 실패했습니다.");
+  if (job.status !== "completed" || !job.workItemId) {
+    return { kind: "infographic", job, work: null, spec: null, contributions: [] };
+  }
+  const workData = await callInternalJson(ctx, `/api/agent/work-items?id=${encodeURIComponent(job.workItemId)}`);
+  const work = Array.isArray(workData?.items) ? workData.items[0] || null : null;
+  return {
+    kind: "infographic",
+    job,
+    work,
+    spec: work?.metadata?.spec || null,
+    contributions: Array.isArray(work?.metadata?.contributions) ? work.metadata.contributions : [],
+  };
 }
 
 /** GCS 버킷 이름 — env.VIDEO_OUTPUT_GCS_URI(gs://bucket/…)에서 추출. */

@@ -56,8 +56,11 @@ test("공통 SkillJob 저장소는 사용자 격리와 원자적 상태 전이�
 
   assert.match(store, /ON CONFLICT \(user_id, idempotency_key\)[\s\S]*DO NOTHING/);
   assert.match(store, /WHERE id = \$1 AND user_id = \$2 LIMIT 1/);
-  assert.match(store, /WHERE id = \$\$\{jobIdIndex\} AND user_id = \$\$\{userIdIndex\} AND status = \$\$\{currentStatusIndex\}/);
+  assert.match(store, /let where = `id = \$\$\{jobIdIndex\} AND user_id = \$\$\{userIdIndex\} AND status = \$\$\{currentStatusIndex\}`/);
   assert.match(store, /CompanySkillJobTransitionError/);
+  assert.match(store, /expectedExecutionToken/);
+  assert.match(store, /execution_token = \$3[\s\S]*execution_started_at = now\(\)/);
+  assert.match(store, /execution_started_at < now\(\) - interval '30 minutes'/);
   assert.match(store, /FOREIGN KEY \(job_id, user_id\)/);
   assert.match(store, /toCompanySkillJobDto/);
 });
@@ -90,4 +93,45 @@ test("공통 SkillJob API는 생성·복원·취소·재시도·승인·산출�
   assert.match(client, /retryCompanySkillJob/);
   assert.match(client, /approveCompanySkillJob/);
   assert.match(client, /listCompanySkillJobArtifacts/);
+});
+
+test("공통 실행기는 인포그래픽 어댑터를 통해 상태·보고·품질 결과를 완결한다", async () => {
+  const [executor, create, retry] = await Promise.all([
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
+    read("prototype/functions/api/agent/skills/[skillId]/jobs.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/retry.ts"),
+  ]);
+
+  assert.match(executor, /id: "infographic-adapter-v1"/);
+  assert.match(executor, /"\/api\/agent\/agent-video"/);
+  assert.match(executor, /claimCompanySkillJobExecution/);
+  for (const status of ["planning", "running", "reviewing", "completed", "failed"]) {
+    assert.match(executor, new RegExp(`transitionCompanySkillJob\\([\\s\\S]*?"${status}"`));
+  }
+  assert.match(executor, /agentReports: result\.agentReports/);
+  assert.match(executor, /qualityResults: result\.qualityResults/);
+  assert.match(executor, /workItemId: result\.workItemId/);
+  assert.match(create, /runCompanySkillJob/);
+  assert.match(create, /waitUntil\(execution\.then/);
+  assert.match(create, /searchParams\.get\("wait"\) === "1"/);
+  assert.match(retry, /waitUntil\(runCompanySkillJob/);
+});
+
+test("채팅과 직접 실행은 공통 SkillJob API를 사용하고 진행 중 업무를 복원한다", async () => {
+  const [shared, workspace, client, legacyEndpoint] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("prototype/functions/api/agent/agent-video.ts"),
+  ]);
+
+  assert.match(shared, /\/api\/agent\/skills\/infographic\/jobs\?wait=1/);
+  assert.match(shared, /invocationMode: "agent"/);
+  assert.match(workspace, /createCompanySkillJob\("infographic"/);
+  assert.match(workspace, /invocationMode: "manual"/);
+  assert.match(workspace, /SKILL_JOB_STORAGE_KEY/);
+  assert.match(workspace, /waitForCompanySkillJob/);
+  assert.match(workspace, /localStorage\.getItem\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(client, /export async function waitForCompanySkillJob/);
+  assert.match(legacyEndpoint, /skillJobId:[^\n]*body\?\.skillJobId/);
 });

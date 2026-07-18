@@ -1,18 +1,20 @@
 import { authorizeRequest } from "../../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
 import { buildCompanySkillJobTitle, normalizeCompanySkillJobInput, SERVER_COMPANY_SKILLS } from "../../_company-skill-registry";
+import { runCompanySkillJob } from "../../_company-skill-executors";
 import { createCompanySkillJob, toCompanySkillJobDto } from "../../_skill-jobs";
 
 type PagesFunction = (ctx: {
   request: Request;
   env: any;
   params: { skillId?: string };
+  waitUntil: (promise: Promise<unknown>) => void;
 }) => Promise<Response>;
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 
-export const onRequestPost: PagesFunction = async ({ request, env, params }) => {
+export const onRequestPost: PagesFunction = async ({ request, env, params, waitUntil }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env);
@@ -44,7 +46,22 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
       warnings: normalized.warnings,
       idempotencyKey: normalized.input.idempotencyKey,
     });
-    return send({ ok: true, created: result.created, job: toCompanySkillJobDto(result.job) }, result.created ? 201 : 200, origin);
+    let responseJob = result.job;
+    if (result.created) {
+      const execution = runCompanySkillJob({
+        request,
+        env,
+        authHeader: String(request.headers.get("Authorization") || ""),
+        userId: auth.userId,
+        sql,
+      }, result.job.id);
+      if (new URL(request.url).searchParams.get("wait") === "1") {
+        responseJob = await execution || result.job;
+      } else {
+        waitUntil(execution.then(() => undefined));
+      }
+    }
+    return send({ ok: true, created: result.created, job: toCompanySkillJobDto(responseJob) }, result.created ? 201 : 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "SkillJob 생성 실패") }, 500, origin);
   }

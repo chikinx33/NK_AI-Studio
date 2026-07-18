@@ -9,10 +9,12 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  createAgentVideo,
+  createCompanySkillJob,
+  getCompanyWorkItem,
   getLocalAgentVideoRenderStatus,
   startLocalAgentVideoRender,
   uploadAgentVideoStorageFile,
+  waitForCompanySkillJob,
   type AgentVideoStorageItem,
   type CompanyWorkItem,
   type LocalAgentVideoRenderStatus,
@@ -25,6 +27,7 @@ import {
 } from "../remotion/spec";
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
+const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 type MeetingStatus = "idle" | "running" | "done" | "error";
@@ -91,10 +94,32 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const renderSpecRef = useRef<AgentVideoSpec>(spec);
   const archivingJobRef = useRef("");
   const activeWorkRef = useRef<CompanyWorkItem | null>(null);
+  const skillJobPollingRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(spec)); } catch { /* 저장 실패는 프리뷰를 막지 않는다. */ }
   }, [spec]);
+
+  useEffect(() => {
+    const savedJobId = String(localStorage.getItem(SKILL_JOB_STORAGE_KEY) || "");
+    if (!savedJobId) return;
+    meetingLockedRef.current = true;
+    setMeetingStatus("running");
+    setError("");
+    const controller = new AbortController();
+    skillJobPollingRef.current = controller;
+    void restoreSkillJob(savedJobId, controller.signal)
+      .catch((caught) => {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        setError(caught instanceof Error ? caught.message : "진행 중인 인포그래픽 업무를 복원하지 못했습니다.");
+        setMeetingStatus("error");
+      })
+      .finally(() => {
+        if (skillJobPollingRef.current === controller) skillJobPollingRef.current = null;
+        meetingLockedRef.current = false;
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!render.jobId || (render.status !== "queued" && render.status !== "rendering")) return;
@@ -138,32 +163,41 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setRender({ status: "idle" });
     setArchive({ status: "idle" });
     try {
-      const result = await createAgentVideo({
-        prompt: prompt.trim(),
-        durationSec,
-        aspectRatio,
-        audience,
-        tone,
-        style,
-        skillCategoryId: "design-content",
-        skillId: "infographic",
+      skillJobPollingRef.current?.abort();
+      const controller = new AbortController();
+      skillJobPollingRef.current = controller;
+      const result = await createCompanySkillJob("infographic", {
         invocationMode: "manual",
+        request: prompt.trim(),
+        idempotencyKey: `manual-${crypto.randomUUID()}`,
+        options: { durationSec, aspectRatio, audience, tone, style },
       });
-      const nextSpec = normalizeAgentVideoSpec(result.spec);
-      if (result.work) {
-        activeWorkRef.current = result.work;
-        setActiveWork(result.work);
-      }
-      setSpec(nextSpec);
-      setContributions(result.contributions || []);
-      setMeetingStatus("done");
-      await beginRender(nextSpec);
+      localStorage.setItem(SKILL_JOB_STORAGE_KEY, result.job.id);
+      await restoreSkillJob(result.job.id, controller.signal);
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? caught.message : "에이전트 협업 중 오류가 발생했어요.");
       setMeetingStatus("error");
     } finally {
+      skillJobPollingRef.current = null;
       meetingLockedRef.current = false;
     }
+  }
+
+  async function restoreSkillJob(jobId: string, signal?: AbortSignal) {
+    const job = await waitForCompanySkillJob(jobId, { signal });
+    if (job.status === "failed") {
+      localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+      throw new Error(job.error?.message || "인포그래픽 제작에 실패했습니다.");
+    }
+    if (job.status === "cancelled") {
+      localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+      throw new Error("인포그래픽 제작이 취소되었습니다.");
+    }
+    if (!job.workItemId) throw new Error("완료된 인포그래픽의 회사 업무 결과를 찾지 못했습니다.");
+    const work = await getCompanyWorkItem(job.workItemId);
+    localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+    await openWork(work, true);
   }
 
   async function beginRender(targetSpec: AgentVideoSpec) {

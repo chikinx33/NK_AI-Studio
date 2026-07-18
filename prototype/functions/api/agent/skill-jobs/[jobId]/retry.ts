@@ -1,13 +1,14 @@
 import { authorizeRequest } from "../../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
+import { runCompanySkillJob } from "../../_company-skill-executors";
 import { CompanySkillJobTransitionError, isCompanySkillJobId, retryCompanySkillJob, toCompanySkillJobDto } from "../../_skill-jobs";
 
-type PagesFunction = (ctx: { request: Request; env: any; params: { jobId?: string } }) => Promise<Response>;
+type PagesFunction = (ctx: { request: Request; env: any; params: { jobId?: string }; waitUntil: (promise: Promise<unknown>) => void }) => Promise<Response>;
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 
-export const onRequestPost: PagesFunction = async ({ request, env, params }) => {
+export const onRequestPost: PagesFunction = async ({ request, env, params, waitUntil }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env);
@@ -19,6 +20,13 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
     await ensureAgentSchema(sql);
     const job = await retryCompanySkillJob(sql, auth.userId, jobId);
     if (!job) return send({ error: "not_found" }, 404, origin);
+    waitUntil(runCompanySkillJob({
+      request,
+      env,
+      authHeader: String(request.headers.get("Authorization") || ""),
+      userId: auth.userId,
+      sql,
+    }, jobId).then(() => undefined));
     return send({ ok: true, job: toCompanySkillJobDto(job) }, 200, origin);
   } catch (error: any) {
     if (error instanceof CompanySkillJobTransitionError) {

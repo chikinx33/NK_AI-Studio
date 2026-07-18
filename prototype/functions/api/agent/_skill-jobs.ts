@@ -67,6 +67,8 @@ export interface CompanySkillJobRow {
   version: number;
   lineage: unknown[];
   idempotency_key: string | null;
+  execution_token: string | null;
+  execution_started_at: string | null;
   work_item_id: string | null;
   created_at: string;
   updated_at: string;
@@ -121,6 +123,8 @@ export interface CompanySkillJobPatch {
   qualityResults?: unknown[];
   approvalState?: unknown | null;
   workItemId?: string | null;
+  resetExecutionLease?: boolean;
+  expectedExecutionToken?: string;
 }
 
 export function toCompanySkillJobDto(row: CompanySkillJobRow): Record<string, unknown> {
@@ -185,6 +189,13 @@ export class CompanySkillJobTransitionError extends Error {
     this.name = "CompanySkillJobTransitionError";
     this.currentStatus = currentStatus;
     this.requestedStatus = requestedStatus;
+  }
+}
+
+export class CompanySkillJobExecutionLeaseError extends Error {
+  constructor() {
+    super("SkillJob execution lease is no longer owned by this worker");
+    this.name = "CompanySkillJobExecutionLeaseError";
   }
 }
 
@@ -305,6 +316,7 @@ export async function transitionCompanySkillJob(
     values.push(patch.workItemId);
     sets.push(`work_item_id = $${values.length}`);
   }
+  if (patch.resetExecutionLease) sets.push("execution_token = NULL", "execution_started_at = NULL");
   if (nextStatus === "completed") {
     sets.push("progress = 100", "completed_at = COALESCE(completed_at, now())");
   } else if (nextStatus !== "completed" && current.status === "completed") {
@@ -315,15 +327,23 @@ export async function transitionCompanySkillJob(
   const jobIdIndex = values.length - 2;
   const userIdIndex = values.length - 1;
   const currentStatusIndex = values.length;
+  let where = `id = $${jobIdIndex} AND user_id = $${userIdIndex} AND status = $${currentStatusIndex}`;
+  if (patch.expectedExecutionToken) {
+    values.push(patch.expectedExecutionToken);
+    where += ` AND execution_token = $${values.length}`;
+  }
   const rows = await sql(
     `UPDATE company_skill_jobs SET ${sets.join(", ")}
-     WHERE id = $${jobIdIndex} AND user_id = $${userIdIndex} AND status = $${currentStatusIndex}
+     WHERE ${where}
      RETURNING *`,
     values,
   );
   if (rows[0]) return rows[0] as CompanySkillJobRow;
   const latest = await getCompanySkillJob(sql, userId, jobId);
   if (!latest) return null;
+  if (patch.expectedExecutionToken && latest.execution_token !== patch.expectedExecutionToken) {
+    throw new CompanySkillJobExecutionLeaseError();
+  }
   if (latest.status === nextStatus) return latest;
   throw new CompanySkillJobTransitionError(latest.status, nextStatus);
 }
@@ -335,7 +355,7 @@ export async function cancelCompanySkillJob(
 ): Promise<CompanySkillJobRow | null> {
   const current = await getCompanySkillJob(sql, userId, jobId);
   if (!current || current.status === "cancelled") return current;
-  return transitionCompanySkillJob(sql, userId, jobId, "cancelled");
+  return transitionCompanySkillJob(sql, userId, jobId, "cancelled", { resetExecutionLease: true });
 }
 
 export async function retryCompanySkillJob(
@@ -353,7 +373,26 @@ export async function retryCompanySkillJob(
     progress: retryStage === "validating" ? 5 : current.progress,
     currentStage: retryStage,
     error: null,
+    resetExecutionLease: true,
   });
+}
+
+export async function claimCompanySkillJobExecution(
+  sql: SqlFn,
+  userId: string,
+  jobId: string,
+  executionToken: string,
+): Promise<CompanySkillJobRow | null> {
+  const rows = await sql(
+    `UPDATE company_skill_jobs
+     SET execution_token = $3, execution_started_at = now(), updated_at = now()
+     WHERE id = $1 AND user_id = $2
+       AND status IN ('validating', 'planning', 'running', 'reviewing')
+       AND (execution_token IS NULL OR execution_started_at < now() - interval '30 minutes')
+     RETURNING *`,
+    [jobId, userId, executionToken],
+  );
+  return (rows[0] as CompanySkillJobRow) || null;
 }
 
 export async function setCompanySkillJobApproval(
@@ -417,6 +456,8 @@ export async function ensureCompanySkillJobSchema(sql: SqlFn): Promise<void> {
       version integer NOT NULL DEFAULT 1,
       lineage jsonb NOT NULL DEFAULT '[]'::jsonb,
       idempotency_key text,
+      execution_token text,
+      execution_started_at timestamptz,
       work_item_id uuid,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now(),
@@ -427,6 +468,8 @@ export async function ensureCompanySkillJobSchema(sql: SqlFn): Promise<void> {
       CONSTRAINT company_skill_jobs_invocation_mode CHECK (invocation_mode IN ('agent', 'manual'))
     )
   `);
+  await sql("ALTER TABLE company_skill_jobs ADD COLUMN IF NOT EXISTS execution_token text");
+  await sql("ALTER TABLE company_skill_jobs ADD COLUMN IF NOT EXISTS execution_started_at timestamptz");
   await sql(`
     CREATE TABLE IF NOT EXISTS company_skill_artifacts (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

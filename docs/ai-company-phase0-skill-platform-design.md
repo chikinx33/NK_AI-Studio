@@ -89,27 +89,29 @@ users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
 - [x] 허용 상태와 현재 상태를 함께 검사하는 원자적 상태 전이 구현
 - [x] 생성·조회·취소·재시도·승인·산출물 조회 API 구현
 - [x] 브라우저 클라이언트 API 계약 구현
-- [ ] 공통 실행기 레지스트리와 실행 수명주기 구현
-- [ ] 인포그래픽 공통 실행기 어댑터 구현
-- [ ] 직접 UI와 채팅 호출 경로 전환
+- [x] 공통 실행기 레지스트리와 실행 수명주기 구현
+- [x] 실행 임대 토큰과 만료 기반 중복 워커 방지 구현
+- [x] 인포그래픽 공통 실행기 어댑터 구현
+- [x] 직접 UI와 채팅 호출 경로 전환
 - [ ] 실제 산출물 레코드와 manifest 저장 연결
-- [ ] 브라우저 새로고침 상태 복원 연결
+- [x] 인포그래픽 브라우저 새로고침 상태 복원 연결
 - [ ] 통합 테스트와 실패 복구 테스트
 
 ## 7. 다음 구현 순서
 
-1. `executorId`를 실행 함수에 연결하는 공통 서버 실행기 레지스트리를 구현합니다.
-2. 생성 API가 `waitUntil`에서 실행기를 호출하고 단계별 상태·오류를 저장하도록 연결합니다.
-3. 기존 `/api/agent/agent-video`를 호출하는 인포그래픽 실행기 어댑터를 구현합니다.
-4. 인포그래픽 직접 UI와 채팅 도구를 공통 생성 API로 전환합니다.
-5. 산출물 레코드와 manifest를 등록하고 새로고침 복원·중복 실행을 통합 테스트합니다.
+1. 인포그래픽 실행 결과의 source·manifest·report를 `company_skill_artifacts`에 등록합니다.
+2. artifact `version`과 `lineage`를 업무 버전 정보에 연결합니다.
+3. 단계별 에이전트 업무 보고 이벤트 표준을 저장하고 클라이언트가 복원할 수 있게 합니다.
+4. 실DB에서 사용자 격리·중복 실행·취소·실패·재시도·복원을 통합 테스트합니다.
+5. 비용 예상·승인·상한 게이트와 공통 3열 UI 슬롯을 구현합니다.
 
 ## 8. 세션 인수인계 상태
 
 - 마지막 갱신일: 2026-07-19
-- 현재 단계: 공통 API 완료, 공통 실행기 착수 전
-- 다음 시작 파일: `prototype/functions/api/agent/_company-skill-executors.ts` 신규 작성
-- 연결 대상: `prototype/functions/api/agent/skills/[skillId]/jobs.ts`의 `waitUntil`
-- 재사용 대상: `prototype/functions/api/agent/_shared.ts`의 내부 API 호출 방식과 `agent-video.ts`
-- 미완료 사실: 공통 API로 생성한 업무는 현재 `validating`에 저장되며 자동 실행되지 않습니다.
-- 호환 상태: 기존 인포그래픽 직접 UI와 채팅 도구는 계속 `/api/agent/agent-video`를 사용합니다.
+- 현재 단계: 공통 실행기·인포그래픽 어댑터 완료, 실제 산출물 레코드 연결 착수 전
+- 마지막 완료 파일: `prototype/functions/api/agent/_company-skill-executors.ts`
+- 다음 시작 파일: `prototype/functions/api/agent/_skill-jobs.ts`의 산출물 등록 저장 함수
+- 연결 대상: 인포그래픽 실행기 결과의 `workItemId`, 장면 명세, 업무 보고를 `company_skill_artifacts` source·manifest·report로 저장
+- 검증 상태: 루트 `npm test` 289개, 앱 프로덕션 빌드, 관련 서버 함수 esbuild 번들 통과
+- 미완료 사실: `company_skill_artifacts` 조회 계약과 테이블만 존재하며 실제 인포그래픽 산출물 레코드는 아직 등록되지 않습니다.
+- 호환 상태: 직접 UI와 채팅 도구 모두 공통 SkillJob 생성 API를 사용하고, 공통 어댑터 내부에서 기존 `/api/agent/agent-video` 제작 구현을 재사용합니다.

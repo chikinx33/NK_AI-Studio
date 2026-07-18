@@ -24,7 +24,8 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
     read("server.js"),
   ]);
   assert.match(workspace, /<Player/);
-  assert.match(workspaceContext, /createAgentVideo/);
+  assert.match(workspaceContext, /createCompanySkillJob/);
+  assert.match(workspaceContext, /waitForCompanySkillJob/);
   assert.match(workspaceContext, /startLocalAgentVideoRender/);
   assert.match(main, /<AgentVideoWorkspaceProvider>/);
   assert.match(app, /centerView === "video"/);
@@ -63,6 +64,9 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
+  assert.match(workspaceContext, /localStorage\.setItem\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
+  assert.match(workspaceContext, /localStorage\.getItem\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(workspaceContext, /restoreSkillJob/);
 });
 
 test("Agent Video 업무 화면은 간결한 미리보기·업무 보고·다운로드 동작을 제공한다", async () => {

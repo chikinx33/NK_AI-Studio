@@ -301,6 +301,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       categoryId: cleanText(body?.skillCategoryId, "design-content", 80),
       skillId: cleanText(body?.skillId, "infographic", 80),
       invocationMode: body?.invocationMode === "manual" ? "manual" : "agent",
+      skillJobId: /^[0-9a-f-]{36}$/i.test(String(body?.skillJobId || "")) ? String(body.skillJobId) : null,
     };
 
     const sql = getSql(env);

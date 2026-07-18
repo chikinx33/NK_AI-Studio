@@ -45,17 +45,21 @@ test("스킬 페이지는 세부 스킬을 단일 선택하고 기존 인포그�
 });
 
 test("직접 실행과 에이전트 지시는 같은 업무 저장소에 출처만 구분해 기록한다", async () => {
-  const [workspaceContext, shared, endpoint] = await Promise.all([
+  const [workspaceContext, shared, endpoint, executor] = await Promise.all([
     read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
     read("prototype/functions/api/agent/_shared.ts"),
     read("prototype/functions/api/agent/agent-video.ts"),
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
   ]);
 
-  assert.match(workspaceContext, /skillCategoryId: "design-content"/);
-  assert.match(workspaceContext, /skillId: "infographic"/);
+  assert.match(workspaceContext, /createCompanySkillJob\("infographic"/);
   assert.match(workspaceContext, /invocationMode: "manual"/);
+  assert.match(shared, /\/api\/agent\/skills\/infographic\/jobs\?wait=1/);
   assert.match(shared, /invocationMode: "agent"/);
+  assert.match(executor, /"\/api\/agent\/agent-video"/);
+  assert.match(executor, /skillJobId: job\.id/);
   assert.match(endpoint, /invocationMode: body\?\.invocationMode === "manual" \? "manual" : "agent"/);
+  assert.match(endpoint, /skillJobId:[^\n]*body\?\.skillJobId/);
   assert.match(endpoint, /JSON\.stringify\(\{ input, spec, contributions, skill \}\)/);
   assert.match(endpoint, /INSERT INTO company_work_items/);
 });
