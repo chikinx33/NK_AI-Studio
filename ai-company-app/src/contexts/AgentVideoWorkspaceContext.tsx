@@ -12,6 +12,8 @@ import {
   createAgentVideo,
   getLocalAgentVideoRenderStatus,
   startLocalAgentVideoRender,
+  uploadAgentVideoStorageFile,
+  type AgentVideoStorageItem,
   type LocalAgentVideoRenderStatus,
 } from "../lib/api";
 import {
@@ -25,6 +27,12 @@ const STORAGE_KEY = "raviok_agent_video_project_v1";
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 type MeetingStatus = "idle" | "running" | "done" | "error";
+
+export interface AgentVideoArchiveStatus {
+  status: "idle" | "rendering" | "uploading" | "done" | "error";
+  items?: AgentVideoStorageItem[];
+  error?: string;
+}
 
 const loadSavedSpec = () => {
   try {
@@ -53,6 +61,8 @@ interface AgentVideoWorkspaceValue {
   meetingStatus: MeetingStatus;
   error: string;
   render: LocalAgentVideoRenderStatus;
+  archive: AgentVideoArchiveStatus;
+  storageRevision: number;
   startMeeting: () => Promise<void>;
   renderVideo: () => Promise<void>;
 }
@@ -71,7 +81,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [meetingStatus, setMeetingStatus] = useState<MeetingStatus>("idle");
   const [error, setError] = useState("");
   const [render, setRender] = useState<LocalAgentVideoRenderStatus>({ status: "idle" });
+  const [archive, setArchive] = useState<AgentVideoArchiveStatus>({ status: "idle" });
+  const [storageRevision, setStorageRevision] = useState(0);
   const meetingLockedRef = useRef(false);
+  const renderSpecRef = useRef<AgentVideoSpec>(spec);
+  const archivingJobRef = useRef("");
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(spec)); } catch { /* 저장 실패는 프리뷰를 막지 않는다. */ }
@@ -83,13 +97,21 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       try {
         const next = await getLocalAgentVideoRenderStatus(render.jobId!);
         setRender(next);
-        if (next.status === "done" || next.status === "error") window.clearInterval(timer);
+        if (next.status === "done") {
+          window.clearInterval(timer);
+          void archiveLocalRender(next, renderSpecRef.current);
+        } else if (next.status === "error") {
+          setArchive({ status: "error", error: next.error || "로컬 렌더링에 실패했습니다." });
+          window.clearInterval(timer);
+        }
       } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "렌더 상태 확인 실패";
         setRender((current) => ({
           ...current,
           status: "error",
-          error: caught instanceof Error ? caught.message : "렌더 상태 확인 실패",
+          error: message,
         }));
+        setArchive({ status: "error", error: message });
         window.clearInterval(timer);
       }
     }, 1500);
@@ -109,6 +131,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setError("");
     setContributions([]);
     setRender({ status: "idle" });
+    setArchive({ status: "idle" });
     try {
       const result = await createAgentVideo({
         prompt: prompt.trim(),
@@ -118,9 +141,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         tone,
         style,
       });
-      setSpec(normalizeAgentVideoSpec(result.spec));
+      const nextSpec = normalizeAgentVideoSpec(result.spec);
+      setSpec(nextSpec);
       setContributions(result.contributions || []);
       setMeetingStatus("done");
+      await beginRender(nextSpec);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "에이전트 협업 중 오류가 발생했어요.");
       setMeetingStatus("error");
@@ -129,14 +154,53 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     }
   }
 
-  async function renderVideo() {
+  async function beginRender(targetSpec: AgentVideoSpec) {
     setError("");
+    renderSpecRef.current = targetSpec;
+    archivingJobRef.current = "";
     setRender({ status: "queued", progress: 0 });
+    setArchive({ status: "rendering" });
     try {
-      setRender(await startLocalAgentVideoRender(spec));
+      setRender(await startLocalAgentVideoRender(targetSpec));
     } catch (caught) {
-      setRender({ status: "error", error: caught instanceof Error ? caught.message : "로컬 렌더 실패" });
+      const message = caught instanceof Error ? caught.message : "로컬 렌더 실패";
+      setRender({ status: "error", error: message });
+      setArchive({ status: "error", error: message });
     }
+  }
+
+  async function archiveLocalRender(renderResult: LocalAgentVideoRenderStatus, targetSpec: AgentVideoSpec) {
+    const jobId = String(renderResult.jobId || "");
+    if (!jobId || !renderResult.downloadUrl || archivingJobRef.current === jobId) return;
+    archivingJobRef.current = jobId;
+    setArchive({ status: "uploading" });
+    try {
+      const localResponse = await fetch(renderResult.downloadUrl);
+      if (!localResponse.ok) throw new Error(`로컬 MP4를 읽지 못했습니다. (HTTP ${localResponse.status})`);
+      const videoBlob = await localResponse.blob();
+      const videoItem = await uploadAgentVideoStorageFile(
+        new Blob([videoBlob], { type: videoBlob.type || "video/mp4" }),
+        "raviok-agent-video.mp4",
+      );
+      const manifest = {
+        version: "1.0",
+        archivedAt: new Date().toISOString(),
+        renderedVideoObjectName: videoItem.objectName,
+        spec: targetSpec,
+      };
+      const manifestItem = await uploadAgentVideoStorageFile(
+        new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
+        "raviok-agent-video-source.json",
+      );
+      setArchive({ status: "done", items: [videoItem, manifestItem] });
+      setStorageRevision((revision) => revision + 1);
+    } catch (caught) {
+      setArchive({ status: "error", error: caught instanceof Error ? caught.message : "클라우드 저장에 실패했습니다." });
+    }
+  }
+
+  async function renderVideo() {
+    await beginRender(spec);
   }
 
   return (
@@ -158,6 +222,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       meetingStatus,
       error,
       render,
+      archive,
+      storageRevision,
       startMeeting,
       renderVideo,
     }}>

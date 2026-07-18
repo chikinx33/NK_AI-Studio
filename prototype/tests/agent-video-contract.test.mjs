@@ -47,6 +47,38 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
 });
 
+test("Agent Video 프리뷰는 자동 렌더 후 사용자별 infographic 날짜 폴더에 보관된다", async () => {
+  const [workspaceContext, storageApi] = await Promise.all([
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("prototype/functions/api/agent/agent-video-storage.ts"),
+  ]);
+  assert.match(workspaceContext, /await beginRender\(nextSpec\)/);
+  assert.match(workspaceContext, /uploadAgentVideoStorageFile/);
+  assert.match(workspaceContext, /raviok-agent-video\.mp4/);
+  assert.match(workspaceContext, /raviok-agent-video-source\.json/);
+  assert.match(storageApi, /authorizeRequest\(request, env\)/);
+  assert.match(storageApi, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
+  assert.match(storageApi, /\/infographic\//);
+  assert.match(storageApi, /koreaDate\(\)/);
+  assert.match(storageApi, /name=\$\{encodeURIComponent\(objectName\)\}/);
+});
+
+test("Agent Video 저장소 모달은 소스 목록·선택 다운로드·삭제를 지원한다", async () => {
+  const [workspace, modal, api] = await Promise.all([
+    read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
+    read("ai-company-app/src/components/AgentVideoStorageModal.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+  ]);
+  assert.match(workspace, /AgentVideoStorageModal/);
+  assert.match(workspace, /☁ 저장소/);
+  assert.match(modal, /전체 선택/);
+  assert.match(modal, /선택 다운로드/);
+  assert.match(modal, /선택 삭제/);
+  assert.match(api, /listAgentVideoStorage/);
+  assert.match(api, /downloadAgentVideoStorageFile/);
+  assert.match(api, /deleteAgentVideoStorageFiles/);
+});
+
 test("Remotion 렌더러는 동적 명세·효과음·Windows 안전 인코딩을 지원한다", async () => {
   const [component, root, script] = await Promise.all([
     read("ai-company-app/src/remotion/AgentVideo.tsx"),

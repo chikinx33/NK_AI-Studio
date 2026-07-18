@@ -73,6 +73,65 @@ export async function getLocalAgentVideoRenderStatus(jobId: string): Promise<Loc
   return data as LocalAgentVideoRenderStatus;
 }
 
+export type AgentVideoStorageItemType = "video" | "image" | "audio" | "manifest" | "file";
+
+export interface AgentVideoStorageItem {
+  objectName: string;
+  fileName: string;
+  dateFolder: string;
+  contentType: string;
+  type: AgentVideoStorageItemType;
+  size: number;
+  createdAt: string;
+  updatedAt: string;
+  signedUrl?: string;
+}
+
+export async function listAgentVideoStorage(): Promise<{ prefix: string; storageUri: string; items: AgentVideoStorageItem[] }> {
+  const res = await fetch("/api/agent/agent-video-storage");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Agent Video 저장소를 불러오지 못했어요.");
+  return {
+    prefix: String(data?.prefix || ""),
+    storageUri: String(data?.storageUri || ""),
+    items: Array.isArray(data?.items) ? data.items : [],
+  };
+}
+
+export async function uploadAgentVideoStorageFile(file: Blob, filename: string): Promise<AgentVideoStorageItem> {
+  const query = new URLSearchParams({ filename });
+  const res = await fetch(`/api/agent/agent-video-storage?${query.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Agent Video 소스를 저장하지 못했어요.");
+  return data.item as AgentVideoStorageItem;
+}
+
+export async function downloadAgentVideoStorageFile(item: AgentVideoStorageItem): Promise<Blob> {
+  const query = new URLSearchParams({ objectName: item.objectName });
+  const res = await fetch(`/api/agent/agent-video-storage?${query.toString()}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "저장소 파일을 다운로드하지 못했어요.");
+  }
+  return res.blob();
+}
+
+export async function deleteAgentVideoStorageFiles(objectNames: string[]): Promise<{ deletedCount: number }> {
+  const res = await fetch("/api/agent/agent-video-storage", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ objectNames }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 207) throw new Error(data?.error || "저장소 파일을 삭제하지 못했어요.");
+  if (Array.isArray(data?.failed) && data.failed.length) throw new Error(`${data.failed.length}개 파일을 삭제하지 못했어요.`);
+  return { deletedCount: Number(data?.deletedCount || 0) };
+}
+
 export interface AgentInfo {
   id: string;
   emoji: string;

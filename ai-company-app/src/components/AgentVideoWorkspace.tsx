@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
+import AgentVideoStorageModal from "./AgentVideoStorageModal";
 import {
   getAgentVideoDimensions,
   getAgentVideoDurationSec,
@@ -56,10 +57,15 @@ export default function AgentVideoWorkspace() {
     meetingStatus,
     error,
     render,
+    archive,
+    storageRevision,
     startMeeting,
     renderVideo,
   } = useAgentVideoWorkspace();
+  const [storageOpen, setStorageOpen] = useState(false);
   const meetingInProgress = meetingStatus === "running";
+  const renderInProgress = render.status === "queued" || render.status === "rendering";
+  const archiveInProgress = archive.status === "uploading";
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
@@ -74,6 +80,9 @@ export default function AgentVideoWorkspace() {
             <h1 className="mt-1 text-xl font-bold text-white">Agent Video</h1>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
+            <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-sky-950/40 px-3 py-1.5 font-bold text-sky-300 transition hover:bg-sky-900/50">
+              ☁ 저장소
+            </button>
             <span className="rounded-full border border-edge bg-[#0b1018] px-3 py-1.5">AI Cinema와 분리된 독립 제작</span>
             <span className="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-3 py-1.5 text-emerald-300">로컬 Remotion 렌더</span>
           </div>
@@ -209,26 +218,42 @@ export default function AgentVideoWorkspace() {
             <div className="flex items-center gap-2">
               <span className="text-lg">🎬</span>
               <div>
-                <h3 className="text-sm font-bold text-gray-100">데스크톱 최종 렌더</h3>
-                <p className="text-[10px] text-gray-500">Remotion CLI · H.264 MP4</p>
+                <h3 className="text-sm font-bold text-gray-100">자동 렌더·클라우드 저장</h3>
+                <p className="text-[10px] text-gray-500">Remotion MP4 · GCS 소스 보관</p>
               </div>
             </div>
             <button
               type="button"
               onClick={renderVideo}
-              disabled={render.status === "queued" || render.status === "rendering"}
+              disabled={renderInProgress || archiveInProgress}
               className="mt-4 w-full rounded-xl border border-orange-700/70 bg-orange-950/40 px-4 py-2.5 text-sm font-bold text-orange-200 transition hover:bg-orange-900/50 disabled:cursor-wait disabled:opacity-60"
             >
-              {render.status === "queued" || render.status === "rendering" ? `렌더링 ${Math.round(render.progress || 0)}%` : "로컬 MP4 렌더"}
+              {renderInProgress
+                ? `자동 렌더링 ${Math.round(render.progress || 0)}%`
+                : archiveInProgress
+                  ? "클라우드 저장 중..."
+                  : archive.status === "done"
+                    ? "다시 렌더 및 저장"
+                    : "MP4 렌더 및 저장"}
             </button>
-            {(render.status === "queued" || render.status === "rendering") && (
+            {renderInProgress && (
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#0b1018]">
                 <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(2, render.progress || 0)}%` }} />
               </div>
             )}
+            {archive.status === "uploading" && (
+              <div className="mt-3 rounded-xl border border-sky-900/70 bg-sky-950/30 p-3 text-xs leading-5 text-sky-200">
+                완성된 MP4와 제작 명세를 사용자 계정의 infographic 날짜별 폴더에 저장하고 있습니다.
+              </div>
+            )}
+            {archive.status === "done" && (
+              <button type="button" onClick={() => setStorageOpen(true)} className="mt-3 w-full rounded-xl border border-emerald-800 bg-emerald-950/35 px-3 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-950/60">
+                저장 완료 · 저장소에서 확인
+              </button>
+            )}
             {render.status === "done" && render.downloadUrl && (
               <a href={render.downloadUrl} className="mt-3 block w-full rounded-xl bg-orange-600 px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-orange-500">
-                MP4 다운로드
+                로컬 MP4 다운로드
               </a>
             )}
             {render.status === "error" && (
@@ -236,10 +261,16 @@ export default function AgentVideoWorkspace() {
                 {render.error || "렌더링에 실패했습니다."}<br />로컬에서 <code className="text-red-200">npm start</code>가 실행 중인지 확인해 주세요.
               </div>
             )}
-            <p className="mt-3 text-[10px] leading-4 text-gray-600">영상은 클라우드 렌더 서비스가 아니라 이 프로젝트가 실행 중인 PC에서 생성됩니다.</p>
+            {archive.status === "error" && render.status !== "error" && (
+              <div className="mt-3 rounded-xl border border-red-900/70 bg-red-950/35 p-3 text-xs leading-5 text-red-300">
+                {archive.error || "클라우드 저장에 실패했습니다."}
+              </div>
+            )}
+            <p className="mt-3 text-[10px] leading-4 text-gray-600">프리뷰 명세가 생성되면 이 PC에서 MP4를 자동 렌더하고, 사용자별 GCS 저장소에 MP4와 JSON 명세를 보관합니다.</p>
           </div>
         </aside>
       </div>
+      <AgentVideoStorageModal open={storageOpen} onClose={() => setStorageOpen(false)} revision={storageRevision} />
     </div>
   );
 }
