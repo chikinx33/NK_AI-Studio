@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test("회사 스킬은 대분류만 우측 하단에 표시하고 구현된 분류만 연다", async () => {
+test("회사 스킬은 상단 메뉴 아래에 대분류 아이콘만 표시하고 구현된 분류만 연다", async () => {
   const [registry, skillBox, app] = await Promise.all([
     read("ai-company-app/src/lib/companySkills.ts"),
     read("ai-company-app/src/components/SkillBox.tsx"),
@@ -17,10 +17,14 @@ test("회사 스킬은 대분류만 우측 하단에 표시하고 구현된 분�
   assert.match(registry, /id: "development-automation"/);
   assert.match(skillBox, /COMPANY_SKILL_CATEGORIES\.map/);
   assert.match(skillBox, /disabled=\{!available\}/);
-  assert.match(skillBox, /grid-cols-4/);
+  assert.match(skillBox, />Skill<\/h2>/);
+  assert.match(skillBox, /flex items-center gap-1/);
+  assert.match(skillBox, /text-orange-400/);
+  assert.doesNotMatch(skillBox, /개 사용 가능|BETA|grid-cols-4/);
   assert.match(app, /<SkillBox/);
   assert.match(app, /onOpenCategory=\{openSkillCategory\}/);
   assert.match(app, /centerView === "skills"/);
+  assert.match(app, /<RightMenu[\s\S]*<SkillBox[\s\S]*<Approvals/);
 });
 
 test("스킬 페이지는 세부 스킬을 단일 선택하고 기존 인포그래픽 워크스페이스를 재사용한다", async () => {

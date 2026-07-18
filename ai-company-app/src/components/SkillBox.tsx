@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AVAILABLE_COMPANY_SKILL_COUNT, COMPANY_SKILL_CATEGORIES } from "../lib/companySkills";
+import { COMPANY_SKILL_CATEGORIES } from "../lib/companySkills";
 
 type IconProps = { className?: string };
 const SVG = ({ className, children }: IconProps & { children: ReactNode }) => (
@@ -18,15 +18,9 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
 
 export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeCategoryId?: string; onOpenCategory: (categoryId: string) => void }) {
   return (
-    <section className="rounded-2xl border border-edge bg-panel p-3" aria-label="회사 스킬">
-      <div className="mb-3 flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-xs font-bold text-gray-200">스킬</h2>
-          <p className="mt-0.5 text-[10px] text-gray-500">{AVAILABLE_COMPANY_SKILL_COUNT}개 사용 가능</p>
-        </div>
-        <span className="rounded-full border border-emerald-900/70 bg-emerald-950/40 px-2 py-0.5 text-[9px] font-bold text-emerald-300">BETA</span>
-      </div>
-      <div className="grid grid-cols-4 gap-2">
+    <section className="mb-3 px-1" aria-label="회사 스킬">
+      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Skill</h2>
+      <div className="flex items-center gap-1">
         {COMPANY_SKILL_CATEGORIES.map((category) => {
           const available = category.status === "available";
           const active = activeCategoryId === category.id;
@@ -39,22 +33,18 @@ export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeC
               aria-label={title}
               disabled={!available}
               onClick={() => available && onOpenCategory(category.id)}
-              className={`group relative grid aspect-square place-items-center rounded-xl border transition ${active
-                ? "border-emerald-600 bg-emerald-950/70 text-emerald-300 shadow-[0_0_18px_rgba(16,185,129,0.12)]"
+              className={`grid h-8 w-8 shrink-0 place-items-center transition ${active
+                ? "text-orange-300 drop-shadow-[0_0_7px_rgba(251,146,60,0.55)]"
                 : available
-                  ? "border-edge bg-[#0b1018] text-gray-300 hover:border-emerald-800 hover:bg-emerald-950/30 hover:text-emerald-300"
-                  : "cursor-not-allowed border-edge/70 bg-[#0b1018]/55 text-gray-700"
+                  ? "text-orange-400 hover:text-orange-200"
+                  : "cursor-not-allowed text-orange-950"
               }`}
             >
               <CategoryIcon name={category.icon} className="h-5 w-5" />
-              {!available && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-gray-700" />}
             </button>
           );
         })}
       </div>
-      <p className="mt-2 truncate text-center text-[9px] text-gray-600">
-        {activeCategoryId ? COMPANY_SKILL_CATEGORIES.find((item) => item.id === activeCategoryId)?.label : "아이콘을 눌러 업무 시작"}
-      </p>
     </section>
   );
 }

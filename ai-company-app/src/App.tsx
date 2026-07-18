@@ -853,6 +853,10 @@ export default function App() {
               onWorks={() => setCenterView("works")}
               onSettings={() => setCenterView("settings")}
             />
+            <SkillBox
+              activeCategoryId={centerView === "skills" ? skillCategoryId : undefined}
+              onOpenCategory={openSkillCategory}
+            />
             <Approvals
               onPickCategory={openKnowledgeCategory}
               onAgentSay={(m) => {
@@ -878,12 +882,6 @@ export default function App() {
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
-          </div>
-          <div className="shrink-0 pt-2">
-            <SkillBox
-              activeCategoryId={centerView === "skills" ? skillCategoryId : undefined}
-              onOpenCategory={openSkillCategory}
-            />
           </div>
           <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">
             {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}
