@@ -9,3 +9,4 @@ Raviok AI/
 .env.local
 .env.*.local
 ai-company-app/node_modules/
+ai-company-app/out/

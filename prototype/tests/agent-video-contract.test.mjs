@@ -211,3 +211,19 @@ test("Agent Video 품질 엔진은 화면비·텍스트 실측·색상 대비를
   assert.match(endpoint, /compactCopy/);
   assert.match(endpoint, /1:1은 상·하 정보 계층과 중앙 집중 구성/);
 });
+
+test("수동 제작 어린이 안전 교육 영상은 30초·9:16 전용 장면과 효과음을 제공한다", async () => {
+  const [root, video] = await Promise.all([
+    read("ai-company-app/src/remotion/Root.tsx"),
+    read("ai-company-app/src/remotion/ChildSafetyVertical.tsx"),
+  ]);
+  assert.match(root, /id="ChildSafetyVertical"/);
+  assert.match(video, /width: 1080, height: 1920, fps: FPS, durationInFrames: TOTAL_FRAMES/);
+  assert.match(video, /SCENE_FRAMES = \[120, 180, 180, 180, 150, 90\]/);
+  assert.match(video, /횡단보도 안전/);
+  assert.match(video, /화재 대피/);
+  assert.match(video, /낯선 사람 대처/);
+  assert.match(video, /긴급 신고/);
+  assert.match(video, /@remotion\/sfx/);
+  assert.match(video, /<Audio src=\{sounds\[index\]\}/);
+});

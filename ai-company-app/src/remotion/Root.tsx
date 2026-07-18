@@ -1,5 +1,6 @@
 import { Composition, type CalculateMetadataFunction } from "remotion";
 import { AgentVideo } from "./AgentVideo";
+import { CHILD_SAFETY_VERTICAL_CONFIG, ChildSafetyVertical } from "./ChildSafetyVertical";
 import {
   defaultAgentVideoSpec,
   getAgentVideoDimensions,
@@ -29,15 +30,22 @@ const calculateMetadata: CalculateMetadataFunction<AgentVideoCompositionProps> =
 export function AgentVideoRoot() {
   const dimensions = getAgentVideoDimensions(defaultAgentVideoSpec.aspectRatio);
   return (
-    <Composition
-      id="AgentVideo"
-      component={AgentVideo}
-      width={dimensions.width}
-      height={dimensions.height}
-      fps={defaultAgentVideoSpec.fps}
-      durationInFrames={Math.round(getAgentVideoDurationSec(defaultAgentVideoSpec) * defaultAgentVideoSpec.fps)}
-      defaultProps={{ spec: defaultAgentVideoSpec }}
-      calculateMetadata={calculateMetadata}
-    />
+    <>
+      <Composition
+        id="AgentVideo"
+        component={AgentVideo}
+        width={dimensions.width}
+        height={dimensions.height}
+        fps={defaultAgentVideoSpec.fps}
+        durationInFrames={Math.round(getAgentVideoDurationSec(defaultAgentVideoSpec) * defaultAgentVideoSpec.fps)}
+        defaultProps={{ spec: defaultAgentVideoSpec }}
+        calculateMetadata={calculateMetadata}
+      />
+      <Composition
+        id="ChildSafetyVertical"
+        component={ChildSafetyVertical}
+        {...CHILD_SAFETY_VERTICAL_CONFIG}
+      />
+    </>
   );
 }
