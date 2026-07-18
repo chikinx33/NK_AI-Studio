@@ -13,7 +13,7 @@ export type { SqlFn };
 // ── 공통 응답 헬퍼 (다른 라우트와 동일한 CORS 정책) ──────────────────────────
 export const corsHeaders = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "86400",
   "Access-Control-Allow-Origin": origin || "*",
@@ -41,6 +41,21 @@ export interface AgentJob {
   parent_job_id: string | null;
   error: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyWorkItem {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  title: string;
+  work_type: string;
+  status: "working" | "completed" | "error";
+  request_text: string;
+  result_summary: string;
+  metadata: any;
+  created_at: string;
+  completed_at: string | null;
   updated_at: string;
 }
 
@@ -136,6 +151,24 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       PRIMARY KEY (user_id, id)
     )
   `);
+  // 회사 업무 라이브러리: 영상에 한정하지 않고 모든 에이전트 산출물을 업무 단위로 보관한다.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_work_items (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      conversation_id text NOT NULL DEFAULT 'main',
+      title text NOT NULL,
+      work_type text NOT NULL,
+      status text NOT NULL DEFAULT 'working',
+      request_text text NOT NULL DEFAULT '',
+      result_summary text NOT NULL DEFAULT '',
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      completed_at timestamptz,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try { await sql("CREATE INDEX IF NOT EXISTS company_work_items_user_created_idx ON company_work_items (user_id, created_at DESC)"); } catch (_) {}
   // 런타임 상태: 출근(work_mode)·자율(autonomous). 사용자별.
   await sql(`
     CREATE TABLE IF NOT EXISTS company_runtime (
@@ -712,6 +745,7 @@ export interface ToolContext {
   env: any;
   authHeader: string;
   userId: string;
+  conversationId?: string;
 }
 
 export interface ToolDef {
@@ -1553,6 +1587,24 @@ async function callInternalJson(
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(data?.error || data?.message || `${path} 호출 실패 (${res.status})`);
   return data;
+}
+
+/** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
+async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
+  if (!prompt) throw new Error("제작할 인포그래픽 내용(prompt)이 필요해요.");
+  const data = await callInternalJson(ctx, "/api/agent/agent-video", {
+    body: {
+      prompt,
+      durationSec: Math.min(60, Math.max(10, Number(input?.durationSec || input?.duration) || 30)),
+      aspectRatio: ["16:9", "9:16", "1:1"].includes(String(input?.aspectRatio)) ? input.aspectRatio : "16:9",
+      audience: String(input?.audience || "일반 시청자"),
+      tone: String(input?.tone || "명료하고 신뢰감 있게"),
+      style: String(input?.style || "시네마틱 모션 인포그래픽"),
+      conversationId: ctx.conversationId || "main",
+    },
+  });
+  return { kind: "infographic", work: data?.work || null, spec: data?.spec, contributions: data?.contributions || [] };
 }
 
 /** GCS 버킷 이름 — env.VIDEO_OUTPUT_GCS_URI(gs://bucket/…)에서 추출. */
@@ -2437,6 +2489,8 @@ async function runRemindersListTool(_input: any, ctx: ToolContext): Promise<any>
 }
 
 export const AGENT_TOOLS: Record<string, ToolDef> = {
+  // 코어가 대화만으로 에이전트 협업→Remotion 명세→업무 등록까지 완료한다.
+  infographic: { agentId: "core", kind: "read", run: runInfographicTool },
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
   video: { agentId: "pixel", kind: "external", run: runVideoTool },

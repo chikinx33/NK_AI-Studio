@@ -82,7 +82,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     }
 
     const authHeader = String(request.headers.get("Authorization") || "");
-    const toolCtx = { request, env, authHeader, userId: auth.userId };
+    const toolCtx = { request, env, authHeader, userId: auth.userId, conversationId };
 
     // TransformStream: SSE 이벤트를 writer에 쓰고 readable을 Response body로 반환.
     // 에이전트가 발언을 완료할 때마다 onMessage 콜백 → SSE 즉시 전송 → 실시간 순차 대화.
@@ -99,7 +99,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
           sql, userId: auth.userId, conversationId, toolCtx,
           firstMessage: displayText, focusAgent: focusAgent || undefined, images, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
-          onJobReady: () => sse({ type: "job_ready" }),
+          onJobReady: (payload?: any) => sse({ type: "job_ready", payload }),
         });
         await sse({ type: "done", conversationId, userMessageId: userMsg.id });
       } catch (e: any) {

@@ -29,11 +29,15 @@ import {
   autonomousStep,
   type StatusInfo,
   type AgentInfo,
-type HistoryTurn,
+  type HistoryTurn,
+  listCompanyWorkItems,
+  type CompanyWorkItem,
 } from "./lib/api";
+import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 
 const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
+const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -78,13 +82,37 @@ function notifyAlarm(text: string) {
 }
 
 export default function App() {
+  const { openWork } = useAgentVideoWorkspace();
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "video">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video">("chat");
+  const [workRevision, setWorkRevision] = useState(0);
+
+  async function openCompanyWork(work: CompanyWorkItem, autoRender = false) {
+    if (work.work_type === "infographic") {
+      await openWork(work, autoRender);
+      setCenterView("video");
+      return;
+    }
+    setCenterView("works");
+  }
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const id = String((event as CustomEvent)?.detail?.id || "");
+      if (!id) return;
+      void listCompanyWorkItems().then((items) => {
+        const work = items.find((item) => item.id === id);
+        if (work) void openCompanyWork(work, false);
+      });
+    };
+    window.addEventListener("raviok-open-work", handler);
+    return () => window.removeEventListener("raviok-open-work", handler);
+  }, []);
   // 사이드바에서 숨길 에이전트 (코어 제외, localStorage 영속)
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem("hiddenAgents") || "[]")); } catch { return new Set(); }
@@ -477,6 +505,11 @@ export default function App() {
             case "job_ready":
               // 도구 잡 완료 → Results 패널 즉시 갱신 (4초 폴링 대기 불필요)
               setResultsRefreshKey((k) => k + 1);
+              if (data?.payload?.kind === "company_work" && data.payload.work) {
+                setWorkRevision((value) => value + 1);
+                // 채팅 화면은 유지하되 로컬 렌더·GCS 보관은 백그라운드에서 즉시 시작한다.
+                void openWork(data.payload.work, true);
+              }
               break;
             case "agent_busy": {
               // 발언이 아닌 실제 업무(도구 실행 등) 구간에도 '업무 중' 표시 유지
@@ -713,7 +746,7 @@ export default function App() {
               onChat={() => setCenterView("chat")}
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
-              onVideo={() => setCenterView("video")}
+              onWorks={() => setCenterView("works")}
               onSettings={() => setCenterView("settings")}
             />
           </div>
@@ -735,6 +768,10 @@ export default function App() {
           <KnowledgeWorkspace filter={knowFilter} filterNonce={knowFilterNonce} />
         ) : centerView === "agents" ? (
           <AgentManager agentId={agentMgrId} agents={agents} />
+        ) : centerView === "works" ? (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
+            <WorkExplorer revision={workRevision} onOpenWork={(work) => void openCompanyWork(work)} />
+          </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
             <AgentVideoWorkspace />
@@ -793,7 +830,7 @@ export default function App() {
               onChat={() => setCenterView("chat")}
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
-              onVideo={() => setCenterView("video")}
+              onWorks={() => setCenterView("works")}
               onSettings={() => setCenterView("settings")}
             />
             <Approvals

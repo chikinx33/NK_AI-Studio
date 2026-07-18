@@ -160,6 +160,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
 
   // 이 에이전트가 실행 가능한 도구 목록 (AGENT_TOOLS 기준)
   const MY_TOOL_DESCRIPTIONS: Record<string, string> = {
+    infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
     image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9"}]]  → 이미지 생성 (Gemini/GPT-4o)`,
     sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
     video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
@@ -750,6 +751,13 @@ export function parseMentions(message: string): string[] {
 
 /** 읽기 도구(gmail_read·calendar_list) 결과를 채팅용 한국어 요약 텍스트로. */
 export function formatReadResult(toolName: string, out: any): string {
+  if (toolName === "infographic") {
+    const work = out?.work;
+    const title = String(work?.title || out?.spec?.title || "인포그래픽 제작");
+    return work?.id
+      ? `요청하신 **${title}** 업무를 완료했습니다.\n\n[확인](#raviok-work-${work.id})`
+      : `요청하신 **${title}** 인포그래픽 제작을 완료했습니다.`;
+  }
   if (toolName === "reminder_set") {
     const at = String(out?.at || "");
     const m = /T(\d{2}:\d{2})/.exec(at);
@@ -965,7 +973,7 @@ export interface OrchestratorDeps {
   focusAgent?: string;   // 1:1 단독 대화 모드 — 이 직원만 응답, 위임·통솔·다른 직원 개입 전면 차단
   images?: { base64: string; mimeType: string }[];  // 첨부(이미지·PDF) — 첫 번째 에이전트에게만 전달
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
-  onJobReady?: () => void; // SSE 콜백: 도구 잡 완료 시 Results 패널 즉시 갱신
+  onJobReady?: (payload?: any) => void; // SSE 콜백: 도구/업무 완료 즉시 갱신
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
 }
 
@@ -1078,6 +1086,9 @@ export async function runGroupChat(
               userId, conversationId, role: "agent", agentId, name: meta.name,
               text: formatReadResult(r.tool, output),
             });
+            if (r.tool === "infographic") {
+              try { deps.onJobReady?.({ kind: "company_work", work: output?.work, spec: output?.spec, contributions: output?.contributions }); } catch {}
+            }
           }
         } catch (e: any) {
           await emit({

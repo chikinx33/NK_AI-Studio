@@ -169,6 +169,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
 반드시 아래 스키마의 JSON만 출력하고 마크다운·설명은 금지합니다.
 {
+  "workTitle": "20자 이내 업무 이름",
   "title": "영상 제목",
   "objective": "영상 목적",
   "audience": "시청 대상",
@@ -228,7 +229,27 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       { agentId: "core", agentName: "코어", emoji: "🧭", summary: `${spec.scenes.length}개 씬, ${input.durationSec}초 ${input.aspectRatio} Remotion 명세로 통합하고 렌더 계약을 검증했습니다.` },
     ];
 
-    return send({ spec, contributions }, 200, origin);
+    // 결과물을 영상 파일이 아닌 '회사 업무' 단위로 등록한다. 이후 파일은 이 업무 ID 아래에 귀속된다.
+    let work: any = null;
+    if (sql) {
+      const workTitle = cleanText(parseJsonObject(rawSpec)?.workTitle, spec.title || "인포그래픽 제작", 20);
+      const rows = await sql(`
+        INSERT INTO company_work_items
+          (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
+        VALUES ($1, $2, $3, 'infographic', 'completed', $4, $5, $6::jsonb, now())
+        RETURNING *
+      `, [
+        auth.userId,
+        cleanText(body?.conversationId, "main", 120),
+        workTitle,
+        input.prompt,
+        `${spec.scenes.length}개 씬 · ${input.durationSec}초 ${input.aspectRatio} Remotion 제작 명세`,
+        JSON.stringify({ input, spec, contributions }),
+      ]);
+      work = rows[0] || null;
+    }
+
+    return send({ spec, contributions, work }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "Agent Video 제작에 실패했어요.") }, 500, origin);
   }

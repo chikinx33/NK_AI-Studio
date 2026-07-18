@@ -33,6 +33,36 @@ export interface CreateAgentVideoInput {
 export interface CreateAgentVideoResult {
   spec: AgentVideoSpec;
   contributions: AgentVideoContribution[];
+  work: CompanyWorkItem | null;
+}
+
+export interface CompanyWorkItem {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  title: string;
+  work_type: string;
+  status: "working" | "completed" | "error";
+  request_text: string;
+  result_summary: string;
+  metadata: { input?: CreateAgentVideoInput; spec?: AgentVideoSpec; contributions?: AgentVideoContribution[]; [key: string]: unknown };
+  created_at: string;
+  completed_at?: string | null;
+  updated_at: string;
+}
+
+export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {
+  const res = await fetch("/api/agent/work-items");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 목록을 불러오지 못했어요.");
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+export async function deleteCompanyWorkItems(ids: string[]): Promise<number> {
+  const res = await fetch("/api/agent/work-items", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무를 삭제하지 못했어요.");
+  return Number(data?.deletedCount || 0);
 }
 
 export async function createAgentVideo(input: CreateAgentVideoInput): Promise<CreateAgentVideoResult> {
@@ -79,6 +109,7 @@ export interface AgentVideoStorageItem {
   objectName: string;
   fileName: string;
   dateFolder: string;
+  workId: string;
   contentType: string;
   type: AgentVideoStorageItemType;
   size: number;
@@ -87,8 +118,11 @@ export interface AgentVideoStorageItem {
   signedUrl?: string;
 }
 
-export async function listAgentVideoStorage(): Promise<{ prefix: string; storageUri: string; items: AgentVideoStorageItem[] }> {
-  const res = await fetch("/api/agent/agent-video-storage");
+export async function listAgentVideoStorage(filter: { date?: string; workId?: string } = {}): Promise<{ prefix: string; storageUri: string; items: AgentVideoStorageItem[] }> {
+  const query = new URLSearchParams();
+  if (filter.date) query.set("date", filter.date);
+  if (filter.workId) query.set("workId", filter.workId);
+  const res = await fetch(`/api/agent/agent-video-storage${query.size ? `?${query.toString()}` : ""}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "Agent Video 저장소를 불러오지 못했어요.");
   return {
@@ -98,8 +132,8 @@ export async function listAgentVideoStorage(): Promise<{ prefix: string; storage
   };
 }
 
-export async function uploadAgentVideoStorageFile(file: Blob, filename: string): Promise<AgentVideoStorageItem> {
-  const query = new URLSearchParams({ filename });
+export async function uploadAgentVideoStorageFile(file: Blob, filename: string, workId: string): Promise<AgentVideoStorageItem> {
+  const query = new URLSearchParams({ filename, workId });
   const res = await fetch(`/api/agent/agent-video-storage?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -1154,7 +1188,7 @@ export async function streamChat(
           onEvent("turn_end", { agentId: m.agent_id, text: m.text });
           agentEmitted++;
         } else if (event.type === "job_ready") {
-          onEvent("job_ready", {});
+          onEvent("job_ready", { payload: event.payload });
         } else if (event.type === "done") {
           break outer;
         }

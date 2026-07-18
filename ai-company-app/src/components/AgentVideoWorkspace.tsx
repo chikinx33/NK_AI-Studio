@@ -38,6 +38,13 @@ function ContributionCard({ item }: { item: AgentVideoContribution }) {
   );
 }
 
+function koreaDate(value?: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
 export default function AgentVideoWorkspace() {
   const {
     prompt,
@@ -59,6 +66,7 @@ export default function AgentVideoWorkspace() {
     render,
     archive,
     storageRevision,
+    activeWork,
     startMeeting,
     renderVideo,
   } = useAgentVideoWorkspace();
@@ -77,7 +85,7 @@ export default function AgentVideoWorkspace() {
         <div className="flex flex-wrap items-center gap-3">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-400">Raviok × Remotion</div>
-            <h1 className="mt-1 text-xl font-bold text-white">Agent Video</h1>
+            <h1 className="mt-1 max-w-xl truncate text-xl font-bold text-white" title={activeWork?.title || "Agent Video"}>{activeWork?.title || "Agent Video"}</h1>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
             <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-sky-950/40 px-3 py-1.5 font-bold text-sky-300 transition hover:bg-sky-900/50">
@@ -243,7 +251,7 @@ export default function AgentVideoWorkspace() {
             )}
             {archive.status === "uploading" && (
               <div className="mt-3 rounded-xl border border-sky-900/70 bg-sky-950/30 p-3 text-xs leading-5 text-sky-200">
-                완성된 MP4와 제작 명세를 사용자 계정의 infographic 날짜별 폴더에 저장하고 있습니다.
+                완성된 MP4와 제작 명세를 이 회사 업무의 날짜별 폴더에 저장하고 있습니다.
               </div>
             )}
             {archive.status === "done" && (
@@ -270,7 +278,13 @@ export default function AgentVideoWorkspace() {
           </div>
         </aside>
       </div>
-      <AgentVideoStorageModal open={storageOpen} onClose={() => setStorageOpen(false)} revision={storageRevision} />
+      <AgentVideoStorageModal
+        open={storageOpen}
+        onClose={() => setStorageOpen(false)}
+        revision={storageRevision}
+        workId={activeWork?.id}
+        date={koreaDate(activeWork?.created_at)}
+      />
     </div>
   );
 }

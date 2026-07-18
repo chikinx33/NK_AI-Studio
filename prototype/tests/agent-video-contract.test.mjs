@@ -47,7 +47,7 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
 });
 
-test("Agent Video 프리뷰는 자동 렌더 후 사용자별 infographic 날짜 폴더에 보관된다", async () => {
+test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴더에 보관된다", async () => {
   const [workspaceContext, storageApi] = await Promise.all([
     read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
     read("prototype/functions/api/agent/agent-video-storage.ts"),
@@ -58,9 +58,32 @@ test("Agent Video 프리뷰는 자동 렌더 후 사용자별 infographic 날짜
   assert.match(workspaceContext, /raviok-agent-video-source\.json/);
   assert.match(storageApi, /authorizeRequest\(request, env\)/);
   assert.match(storageApi, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
-  assert.match(storageApi, /\/infographic\//);
+  assert.match(storageApi, /\/work-library\//);
+  assert.match(storageApi, /\$\{dateFolder\}\/\$\{workId\}\//);
   assert.match(storageApi, /koreaDate\(\)/);
   assert.match(storageApi, /name=\$\{encodeURIComponent\(objectName\)\}/);
+});
+
+test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크를 제공한다", async () => {
+  const [explorer, rightMenu, markdown, orchestrator, shared, workApi] = await Promise.all([
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("ai-company-app/src/components/RightMenu.tsx"),
+    read("ai-company-app/src/components/Markdown.tsx"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/work-items.ts"),
+  ]);
+  assert.match(rightMenu, /회사 업무 탐색기/);
+  assert.match(rightMenu, /FolderIcon/);
+  assert.doesNotMatch(rightMenu, /VideoIcon/);
+  assert.match(explorer, /onDoubleClick/);
+  assert.match(explorer, /소스 보기/);
+  assert.match(explorer, /다운로드/);
+  assert.match(explorer, /삭제/);
+  assert.match(markdown, /raviok-open-work/);
+  assert.match(orchestrator, /\[확인\]\(#raviok-work-/);
+  assert.match(shared, /infographic: \{ agentId: "core"/);
+  assert.match(workApi, /company_work_items/);
 });
 
 test("Agent Video 저장소 모달은 소스 목록·선택 다운로드·삭제를 지원한다", async () => {

@@ -36,10 +36,14 @@ export default function AgentVideoStorageModal({
   open,
   onClose,
   revision,
+  workId,
+  date,
 }: {
   open: boolean;
   onClose: () => void;
   revision: number;
+  workId?: string;
+  date?: string;
 }) {
   const [items, setItems] = useState<AgentVideoStorageItem[]>([]);
   const [prefix, setPrefix] = useState("");
@@ -53,7 +57,7 @@ export default function AgentVideoStorageModal({
     setLoading(true);
     setError("");
     try {
-      const result = await listAgentVideoStorage();
+      const result = await listAgentVideoStorage({ workId, date });
       setItems(result.items);
       setPrefix(result.prefix);
       setStorageUri(result.storageUri);
@@ -70,7 +74,7 @@ export default function AgentVideoStorageModal({
     void refresh();
     // 저장 완료 revision이 바뀌면 열린 모달도 즉시 갱신한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, revision]);
+  }, [open, revision, workId, date]);
 
   useEffect(() => {
     if (!open) return;
@@ -151,7 +155,7 @@ export default function AgentVideoStorageModal({
             <button type="button" onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 hover:bg-edge disabled:opacity-50">새로고침</button>
             <button type="button" onClick={onClose} disabled={!!busy} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-lg text-gray-400 hover:bg-edge disabled:opacity-50" aria-label="저장소 닫기">×</button>
           </div>
-          <p className="w-full break-all rounded-lg bg-[#090d13] px-3 py-2 font-mono text-[10px] text-gray-500">{storageUri || `gs://{bucket}/${prefix || "users/{계정}/ai-video/projectsai-company/infographic/"}`}</p>
+          <p className="w-full break-all rounded-lg bg-[#090d13] px-3 py-2 font-mono text-[10px] text-gray-500">{storageUri || `gs://{bucket}/${prefix || "users/{계정}/ai-video/projectsai-company/work-library/"}`}</p>
         </header>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0a0f17] px-5 py-3">

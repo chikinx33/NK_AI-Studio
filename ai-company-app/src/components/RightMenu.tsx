@@ -57,12 +57,10 @@ const MessagesSquareIcon = (p: IconProps) => (
     <path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" />
   </SVG>
 );
-const VideoIcon = (p: IconProps) => (
+const FolderIcon = (p: IconProps) => (
   <SVG {...p}>
-    <path d="m16 13 5.2 3.2a.5.5 0 0 0 .8-.4V8.2a.5.5 0 0 0-.8-.4L16 11" />
-    <rect x="2" y="5" width="14" height="14" rx="2" />
-    <path d="M7 2v3" />
-    <path d="M11 2v3" />
+    <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M3 10h18" />
   </SVG>
 );
 const PowerIcon = (p: IconProps) => (
@@ -103,12 +101,12 @@ function IconBtn({
 }
 
 interface Props {
-  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "video";
+  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video";
   onHome: () => void;
   onChat: () => void;
   onKnowledge: () => void;
   onAgents: () => void;
-  onVideo: () => void;
+  onWorks: () => void;
   onSettings: () => void;
 }
 
@@ -118,7 +116,7 @@ export default function RightMenu({
   onChat,
   onKnowledge,
   onAgents,
-  onVideo,
+  onWorks,
   onSettings,
 }: Props) {
   return (
@@ -135,8 +133,8 @@ export default function RightMenu({
       <IconBtn active={centerView === "agents"} title="직원 관리 (페르소나·규칙)" onClick={onAgents}>
         <UsersIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "video"} title="Agent Video (Remotion 영상 제작)" onClick={onVideo}>
-        <VideoIcon className="h-4 w-4" />
+      <IconBtn active={centerView === "works" || centerView === "video"} title="회사 업무 탐색기" onClick={onWorks}>
+        <FolderIcon className="h-4 w-4" />
       </IconBtn>
       <div className="ml-auto" />
       <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>

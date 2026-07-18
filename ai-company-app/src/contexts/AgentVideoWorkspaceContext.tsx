@@ -14,6 +14,7 @@ import {
   startLocalAgentVideoRender,
   uploadAgentVideoStorageFile,
   type AgentVideoStorageItem,
+  type CompanyWorkItem,
   type LocalAgentVideoRenderStatus,
 } from "../lib/api";
 import {
@@ -63,6 +64,8 @@ interface AgentVideoWorkspaceValue {
   render: LocalAgentVideoRenderStatus;
   archive: AgentVideoArchiveStatus;
   storageRevision: number;
+  activeWork: CompanyWorkItem | null;
+  openWork: (work: CompanyWorkItem, autoRender?: boolean) => Promise<void>;
   startMeeting: () => Promise<void>;
   renderVideo: () => Promise<void>;
 }
@@ -83,9 +86,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [render, setRender] = useState<LocalAgentVideoRenderStatus>({ status: "idle" });
   const [archive, setArchive] = useState<AgentVideoArchiveStatus>({ status: "idle" });
   const [storageRevision, setStorageRevision] = useState(0);
+  const [activeWork, setActiveWork] = useState<CompanyWorkItem | null>(null);
   const meetingLockedRef = useRef(false);
   const renderSpecRef = useRef<AgentVideoSpec>(spec);
   const archivingJobRef = useRef("");
+  const activeWorkRef = useRef<CompanyWorkItem | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(spec)); } catch { /* 저장 실패는 프리뷰를 막지 않는다. */ }
@@ -142,6 +147,10 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         style,
       });
       const nextSpec = normalizeAgentVideoSpec(result.spec);
+      if (result.work) {
+        activeWorkRef.current = result.work;
+        setActiveWork(result.work);
+      }
       setSpec(nextSpec);
       setContributions(result.contributions || []);
       setMeetingStatus("done");
@@ -181,6 +190,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const videoItem = await uploadAgentVideoStorageFile(
         new Blob([videoBlob], { type: videoBlob.type || "video/mp4" }),
         "raviok-agent-video.mp4",
+        activeWorkRef.current?.id || "",
       );
       const manifest = {
         version: "1.0",
@@ -191,6 +201,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const manifestItem = await uploadAgentVideoStorageFile(
         new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
         "raviok-agent-video-source.json",
+        activeWorkRef.current?.id || "",
       );
       setArchive({ status: "done", items: [videoItem, manifestItem] });
       setStorageRevision((revision) => revision + 1);
@@ -201,6 +212,28 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
 
   async function renderVideo() {
     await beginRender(spec);
+  }
+
+  async function openWork(work: CompanyWorkItem, autoRender = false) {
+    const nextSpec = normalizeAgentVideoSpec(work?.metadata?.spec || defaultAgentVideoSpec);
+    const input = work?.metadata?.input;
+    activeWorkRef.current = work;
+    setActiveWork(work);
+    setSpec(nextSpec);
+    setContributions(Array.isArray(work?.metadata?.contributions) ? work.metadata.contributions : []);
+    setPrompt(String(input?.prompt || work.request_text || ""));
+    setDurationSec(Number(input?.durationSec || getDuration(nextSpec)));
+    setAspectRatio((input?.aspectRatio || nextSpec.aspectRatio) as AspectRatio);
+    setAudience(String(input?.audience || nextSpec.audience || "일반 시청자"));
+    setTone(String(input?.tone || nextSpec.tone || ""));
+    setStyle(String(input?.style || nextSpec.style || ""));
+    setMeetingStatus("done");
+    setError("");
+    if (autoRender) await beginRender(nextSpec);
+  }
+
+  function getDuration(target: AgentVideoSpec) {
+    return Math.round(target.scenes.reduce((sum, scene) => sum + Number(scene.durationSec || 0), 0));
   }
 
   return (
@@ -224,6 +257,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       render,
       archive,
       storageRevision,
+      activeWork,
+      openWork,
       startMeeting,
       renderVideo,
     }}>

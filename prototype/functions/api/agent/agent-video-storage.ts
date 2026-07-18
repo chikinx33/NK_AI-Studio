@@ -1,5 +1,5 @@
 // Agent Video 저장소
-// users/{userId}/ai-video/projectsai-company/infographic/YYYY-MM-DD/
+// users/{userId}/ai-video/projectsai-company/work-library/YYYY-MM-DD/{workId}/
 import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
@@ -27,7 +27,12 @@ export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 
 function storagePrefix(basePrefix: string, userId: string) {
-  return `${buildAiVideoProjectPrefix(basePrefix, userId, "ai-company")}/infographic/`;
+  return `${buildAiVideoProjectPrefix(basePrefix, userId, "ai-company")}/work-library/`;
+}
+
+function safeWorkId(value: string) {
+  const id = String(value || "").trim();
+  return /^[0-9a-f-]{36}$/i.test(id) ? id : "";
 }
 
 function koreaDate(now = new Date()) {
@@ -93,6 +98,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const allowedPrefix = storagePrefix(ctx.basePrefix, auth.userId);
     const url = new URL(request.url);
     const requestedObject = String(url.searchParams.get("objectName") || "").trim();
+    const filterDate = /^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get("date") || "")) ? String(url.searchParams.get("date")) : "";
+    const filterWorkId = safeWorkId(String(url.searchParams.get("workId") || ""));
 
     if (requestedObject) {
       if (!requestedObject.startsWith(allowedPrefix)) return send({ error: "허용되지 않은 저장소 경로입니다." }, 400, origin);
@@ -112,11 +119,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return new Response(response.body, { status: 200, headers });
     }
 
+    const listPrefix = `${allowedPrefix}${filterDate ? `${filterDate}/` : ""}${filterDate && filterWorkId ? `${filterWorkId}/` : ""}`;
     const items: any[] = [];
     let pageToken = "";
     do {
       const response = await gcsFetchWithBilling(ctx, (useBilling) => {
-        const params = new URLSearchParams({ prefix: allowedPrefix, maxResults: "500" });
+        const params = new URLSearchParams({ prefix: listPrefix, maxResults: "500" });
         if (pageToken) params.set("pageToken", pageToken);
         if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
         return fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o?${params.toString()}`, {
@@ -129,12 +137,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         const name = String(item?.name || "");
         if (!name.startsWith(allowedPrefix)) continue;
         const relative = name.slice(allowedPrefix.length);
-        const dateFolder = relative.split("/")[0] || "";
+        const [dateFolder = "", workId = ""] = relative.split("/");
         const contentType = String(item?.contentType || "application/octet-stream");
         items.push({
           objectName: name,
           fileName: fileNameFromObject(name),
           dateFolder,
+          workId,
           contentType,
           type: sourceType(contentType, name),
           size: Number(item?.size || 0),
@@ -175,9 +184,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const url = new URL(request.url);
     const originalName = safeFileName(String(url.searchParams.get("filename") || "source.bin"));
     const dateFolder = koreaDate();
+    const workId = safeWorkId(String(url.searchParams.get("workId") || ""));
+    if (!workId) return send({ error: "파일을 귀속할 업무 ID가 필요합니다." }, 400, origin);
     const unique = crypto.randomUUID().slice(0, 8);
     const fileName = `${koreaTimestamp()}-${unique}-${originalName}`;
-    const objectName = `${storagePrefix(ctx.basePrefix, auth.userId)}${dateFolder}/${fileName}`;
+    const objectName = `${storagePrefix(ctx.basePrefix, auth.userId)}${dateFolder}/${workId}/${fileName}`;
     const contentType = request.headers.get("Content-Type") || "application/octet-stream";
 
     const response = await gcsFetchWithBilling(ctx, (useBilling) => {
@@ -204,6 +215,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         objectName,
         fileName,
         dateFolder,
+        workId,
         contentType,
         type: sourceType(contentType, objectName),
         size: bytes.byteLength,

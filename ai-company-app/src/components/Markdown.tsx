@@ -89,7 +89,17 @@ export default function Markdown({ text }: { text: string }) {
           strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="text-emerald-400 underline underline-offset-2">
+            <a
+              href={href}
+              target={href?.startsWith("#raviok-work-") ? undefined : "_blank"}
+              rel="noreferrer"
+              onClick={(event) => {
+                if (!href?.startsWith("#raviok-work-")) return;
+                event.preventDefault();
+                window.dispatchEvent(new CustomEvent("raviok-open-work", { detail: { id: href.slice("#raviok-work-".length) } }));
+              }}
+              className={href?.startsWith("#raviok-work-") ? "inline-flex rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white no-underline hover:bg-emerald-500" : "text-emerald-400 underline underline-offset-2"}
+            >
               {children}
             </a>
           ),
