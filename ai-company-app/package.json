@@ -11,6 +11,7 @@
     "render:agent-video": "node scripts/render-agent-video.mjs"
   },
   "dependencies": {
+    "@remotion/layout-utils": "4.0.490",
     "@remotion/media": "^4.0.490",
     "@remotion/player": "^4.0.490",
     "@remotion/sfx": "^4.0.490",

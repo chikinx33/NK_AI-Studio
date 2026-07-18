@@ -57,6 +57,20 @@ const THEME_VISUALS: Record<string, string[]> = {
   abstract: ["orbit", "grid", "bars", "timeline", "spotlight", "network", "donut"],
 };
 
+const FORMAT_LAYOUTS: Record<AspectRatio, string[]> = {
+  "16:9": ["split", "dashboard", "reverse", "visual-first"],
+  "1:1": ["visual-first", "dashboard", "split", "visual-first"],
+  "9:16": ["visual-first", "split", "dashboard", "visual-first"],
+};
+
+function compactCopy(value: any, fallback: string, max: number) {
+  const source = cleanText(value, fallback, max * 2).replace(/[ \t]+/g, " ");
+  if (source.length <= max) return source;
+  const clipped = source.slice(0, max + 1);
+  const boundary = Math.max(clipped.lastIndexOf(" "), clipped.lastIndexOf("\n"));
+  return `${clipped.slice(0, boundary > max * 0.65 ? boundary : max).trim()}…`;
+}
+
 function promptHash(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index++) hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
@@ -132,17 +146,23 @@ function normalizeSpec(raw: any, request: {
     }
     usedVisuals.add(chosenVisual);
     const sfx = String(scene?.sfx || "none");
+    const requestedLayout = String(scene?.layout || "");
+    const formatLayouts = FORMAT_LAYOUTS[request.aspectRatio];
+    const previousLayout = index > 0 ? String(sourceScenes[index - 1]?.layout || "") : "";
+    const layout = ALLOWED_LAYOUT.has(requestedLayout) && requestedLayout !== previousLayout
+      ? requestedLayout
+      : formatLayouts[index % formatLayouts.length];
     return {
       id: cleanText(scene?.id, `scene-${index + 1}`, 40),
       kind: ALLOWED_KIND.has(kind) ? kind : "statement",
       durationSec,
-      eyebrow: cleanText(scene?.eyebrow, `SCENE ${index + 1}`, 80),
-      title: cleanText(scene?.title, `핵심 장면 ${index + 1}`, 120),
-      body: cleanText(scene?.body, request.prompt, 280),
+      eyebrow: compactCopy(scene?.eyebrow, `SCENE ${index + 1}`, 36),
+      title: compactCopy(scene?.title, `핵심 장면 ${index + 1}`, request.aspectRatio === "16:9" ? 54 : 46),
+      body: compactCopy(scene?.body, request.prompt, request.aspectRatio === "16:9" ? 150 : 120),
       accent: HEX.test(String(scene?.accent || "")) ? String(scene.accent) : palette[index % palette.length],
       visual: chosenVisual,
       sfx: ALLOWED_SFX.has(sfx) ? sfx : "none",
-      layout: ALLOWED_LAYOUT.has(String(scene?.layout || "")) ? String(scene.layout) : (["visual-first", "split", "dashboard", "reverse"][index % 4]),
+      layout,
       transition: ALLOWED_TRANSITION.has(String(scene?.transition || "")) ? String(scene.transition) : (["zoom", "slide", "rise", "wipe", "reveal"][index % 5]),
       visualData: normalizeVisualData(scene?.visualData, scene, index),
     };
@@ -312,6 +332,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 - 주제와 무관한 범용 테크 그래픽을 반복하지 않습니다. 환경은 유기적 생태 구조, AI는 연결·데이터 구조처럼 시각 문법 자체가 달라야 합니다.
 - 한 영상 안에서 같은 visual과 layout 조합을 반복하지 않습니다.
 - visualData가 실제 그래프·도표의 형태를 결정하므로 모든 씬에 의미 있는 값과 라벨을 제공합니다.
+- 16:9, 1:1, 9:16은 같은 레이아웃을 크기만 바꾼 결과가 아니어야 합니다. 1:1은 상·하 정보 계층과 중앙 집중 구성을, 9:16은 세로 흐름과 짧은 카피를, 16:9는 가로 정보 흐름을 사용하세요.
+- 제목은 두 줄 안에서 읽혀야 하며 도표·라벨과 겹치지 않아야 합니다. 긴 문장을 억지로 넣지 말고 핵심어 중심으로 축약하세요.
+- 밝은 배경에는 어두운 전경색, 어두운 배경에는 밝은 전경색이 필요한 팔레트를 설계하고 장식보다 가독성을 우선하세요.
 - JSON 문자열 안의 실제 줄바꿈은 반드시 \\n으로 이스케이프합니다.`;
 
     const synthesisInput = [

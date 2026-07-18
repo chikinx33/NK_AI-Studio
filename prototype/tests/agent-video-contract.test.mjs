@@ -148,3 +148,24 @@ test("Agent Video는 주제별 아트 디렉션·데이터 차트·최근 결과
   assert.match(endpoint, /rotateDuplicateVisuals/);
   assert.match(endpoint, /recentSignatures\.has\(visualSignature\(spec\)\)/);
 });
+
+test("Agent Video 품질 엔진은 화면비·텍스트 실측·색상 대비를 렌더 단계에서 강제한다", async () => {
+  const [component, endpoint, packageJson] = await Promise.all([
+    read("ai-company-app/src/remotion/AgentVideo.tsx"),
+    read("prototype/functions/api/agent/agent-video.ts"),
+    read("ai-company-app/package.json"),
+  ]);
+  assert.match(packageJson, /"@remotion\/layout-utils"/);
+  assert.match(component, /import \{ fitText \} from "@remotion\/layout-utils"/);
+  assert.match(component, /fitMultilineText/);
+  assert.match(component, /contrastRatio/);
+  assert.match(component, /accessibleAccent/);
+  assert.match(component, /const vertical = portrait \|\| square/);
+  assert.match(component, /square[\s\S]*minmax\(0, \.84fr\) minmax\(0, 1\.16fr\)/);
+  assert.match(component, /maxHeight: titleSize \* 2\.15/);
+  assert.match(component, /wordBreak: "keep-all"/);
+  assert.match(component, /background: tokens\.surface/);
+  assert.match(endpoint, /FORMAT_LAYOUTS/);
+  assert.match(endpoint, /compactCopy/);
+  assert.match(endpoint, /1:1은 상·하 정보 계층과 중앙 집중 구성/);
+});
