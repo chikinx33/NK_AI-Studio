@@ -1,6 +1,6 @@
 import { authorizeRequest } from "../../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
-import { cancelCompanySkillJob, CompanySkillJobTransitionError, isCompanySkillJobId, toCompanySkillJobDto } from "../../_skill-jobs";
+import { appendCompanySkillJobEvent, cancelCompanySkillJob, CompanySkillJobTransitionError, isCompanySkillJobId, toCompanySkillJobDto } from "../../_skill-jobs";
 
 type PagesFunction = (ctx: { request: Request; env: any; params: { jobId?: string } }) => Promise<Response>;
 
@@ -19,6 +19,10 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
     await ensureAgentSchema(sql);
     const job = await cancelCompanySkillJob(sql, auth.userId, jobId);
     if (!job) return send({ error: "not_found" }, 404, origin);
+    await appendCompanySkillJobEvent(sql, {
+      jobId, userId: auth.userId, eventType: "stage", stage: "cancelled", status: "cancelled",
+      summary: "사용자가 SkillJob 실행을 취소했습니다.", eventKey: `cancelled:${job.updated_at}`,
+    });
     return send({ ok: true, job: toCompanySkillJobDto(job) }, 200, origin);
   } catch (error: any) {
     if (error instanceof CompanySkillJobTransitionError) {

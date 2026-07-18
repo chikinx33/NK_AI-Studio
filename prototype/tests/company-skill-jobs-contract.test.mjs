@@ -43,12 +43,43 @@ test("SkillJob 영속 모델은 사용자 격리, 중복 방지, 산출물 계�
 
   assert.match(schema, /CREATE TABLE IF NOT EXISTS company_skill_jobs/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS company_skill_artifacts/);
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS company_skill_job_events/);
   assert.match(schema, /user_id text NOT NULL/);
   assert.match(schema, /company_skill_jobs_user_status_idx[\s\S]*\(user_id, status, updated_at DESC\)/);
   assert.match(schema, /company_skill_jobs_user_idempotency_idx[\s\S]*\(user_id, idempotency_key\)/);
   assert.match(schema, /FOREIGN KEY \(job_id, user_id\) REFERENCES company_skill_jobs\(id, user_id\) ON DELETE CASCADE/);
+  assert.match(schema, /company_skill_job_events_job_user_fk/);
   assert.match(schema, /kind IN \('source', 'preview', 'final', 'manifest', 'report'\)/);
   assert.match(shared, /await ensureCompanySkillJobSchema\(sql\)/);
+});
+
+test("에이전트 업무 보고는 단계·판단·품질·오류·산출물 이벤트로 누적되고 복원된다", async () => {
+  const [store, executor, get, artifacts, approve, cancel, retry, client] = await Promise.all([
+    read("prototype/functions/api/agent/_skill-jobs.ts"),
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId].ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/artifacts.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/approve.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/cancel.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/retry.ts"),
+    read("ai-company-app/src/lib/skillJobs.ts"),
+  ]);
+
+  assert.match(store, /export async function appendCompanySkillJobEvent/);
+  assert.match(store, /ON CONFLICT \(job_id, event_key\)[\s\S]*DO NOTHING/);
+  assert.match(store, /export async function listCompanySkillJobEvents/);
+  assert.match(store, /ORDER BY event\.created_at ASC, event\.id ASC/);
+  for (const eventType of ["stage", "agent-report", "quality", "error"]) {
+    assert.match(executor, new RegExp(`eventType: "${eventType}"`));
+  }
+  assert.match(get, /listCompanySkillJobEvents/);
+  assert.match(get, /toCompanySkillJobDto\(job, events\)/);
+  assert.match(artifacts, /eventType: "artifact"/);
+  assert.match(approve, /eventType: "approval"/);
+  assert.match(cancel, /stage: "cancelled"/);
+  assert.match(retry, /실패한 SkillJob을 다시 시작했습니다/);
+  assert.match(client, /export interface SkillJobEvent/);
+  assert.match(client, /events: SkillJobEvent\[\]/);
 });
 
 test("공통 SkillJob 저장소는 사용자 격리와 원자적 상태 전이를 강제한다", async () => {

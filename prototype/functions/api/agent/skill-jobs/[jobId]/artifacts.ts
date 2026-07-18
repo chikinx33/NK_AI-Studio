@@ -4,6 +4,7 @@ import { buildAiVideoProjectPrefix } from "../../../_shared/storage";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
 import {
   COMPANY_SKILL_ARTIFACT_KINDS,
+  appendCompanySkillJobEvent,
   getCompanySkillJob,
   isCompanySkillJobId,
   listCompanySkillArtifacts,
@@ -81,6 +82,16 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
       });
       if (!artifact) return send({ error: "SkillJob과 산출물의 업무 연결을 확인하지 못했습니다." }, 409, origin);
       artifacts.push(toCompanySkillArtifactDto(artifact));
+      await appendCompanySkillJobEvent(sql, {
+        jobId,
+        userId: auth.userId,
+        eventType: "artifact",
+        stage: job.current_stage,
+        status: "completed",
+        summary: `${artifact.kind} 산출물 ${artifact.file_name}을(를) 등록했습니다.`,
+        details: { artifactId: artifact.id, kind: artifact.kind, version: artifact.version },
+        eventKey: `artifact:${artifact.id}`,
+      });
     }
     return send({ ok: true, artifacts }, 201, origin);
   } catch (error: any) {

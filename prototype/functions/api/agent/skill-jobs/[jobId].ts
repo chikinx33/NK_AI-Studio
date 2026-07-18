@@ -1,6 +1,6 @@
 import { authorizeRequest } from "../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../_shared";
-import { getCompanySkillJob, isCompanySkillJobId, toCompanySkillJobDto } from "../_skill-jobs";
+import { getCompanySkillJob, isCompanySkillJobId, listCompanySkillJobEvents, toCompanySkillJobDto } from "../_skill-jobs";
 
 type PagesFunction = (ctx: {
   request: Request;
@@ -23,7 +23,8 @@ export const onRequestGet: PagesFunction = async ({ request, env, params }) => {
     await ensureAgentSchema(sql);
     const job = await getCompanySkillJob(sql, auth.userId, jobId);
     if (!job) return send({ error: "not_found" }, 404, origin);
-    return send({ ok: true, job: toCompanySkillJobDto(job) }, 200, origin);
+    const events = await listCompanySkillJobEvents(sql, auth.userId, jobId);
+    return send({ ok: true, job: toCompanySkillJobDto(job, events) }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "SkillJob 조회 실패") }, 500, origin);
   }

@@ -18,6 +18,7 @@ export type CompanySkillArtifactKind = "source" | "preview" | "final" | "manifes
 export const COMPANY_SKILL_ARTIFACT_KINDS: readonly CompanySkillArtifactKind[] = [
   "source", "preview", "final", "manifest", "report",
 ];
+export type CompanySkillJobEventType = "stage" | "agent-report" | "quality" | "warning" | "error" | "approval" | "artifact";
 
 export const COMPANY_SKILL_JOB_TRANSITIONS: Readonly<Record<CompanySkillJobStatus, readonly CompanySkillJobStatus[]>> = {
   draft: ["validating", "cancelled"],
@@ -109,6 +110,34 @@ export interface RegisterCompanySkillArtifactArgs {
   metadata?: unknown;
 }
 
+export interface CompanySkillJobEventRow {
+  id: string;
+  job_id: string;
+  user_id: string;
+  event_type: CompanySkillJobEventType;
+  stage: string;
+  agent_id: string | null;
+  agent_name: string | null;
+  status: string;
+  summary: string;
+  details: unknown;
+  event_key: string | null;
+  created_at: string;
+}
+
+export interface AppendCompanySkillJobEventArgs {
+  jobId: string;
+  userId: string;
+  eventType: CompanySkillJobEventType;
+  stage: string;
+  status: string;
+  summary: string;
+  agentId?: string | null;
+  agentName?: string | null;
+  details?: unknown;
+  eventKey?: string | null;
+}
+
 export interface CreateCompanySkillJobArgs {
   userId: string;
   conversationId: string;
@@ -144,7 +173,10 @@ export interface CompanySkillJobPatch {
   expectedExecutionToken?: string;
 }
 
-export function toCompanySkillJobDto(row: CompanySkillJobRow): Record<string, unknown> {
+export function toCompanySkillJobDto(
+  row: CompanySkillJobRow,
+  events: CompanySkillJobEventRow[] = [],
+): Record<string, unknown> {
   return {
     id: row.id,
     userId: row.user_id,
@@ -176,6 +208,22 @@ export function toCompanySkillJobDto(row: CompanySkillJobRow): Record<string, un
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
+    events: events.map(toCompanySkillJobEventDto),
+  };
+}
+
+export function toCompanySkillJobEventDto(row: CompanySkillJobEventRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    eventType: row.event_type,
+    stage: row.stage,
+    agentId: row.agent_id,
+    agentName: row.agent_name,
+    status: row.status,
+    summary: row.summary,
+    details: row.details,
+    createdAt: row.created_at,
   };
 }
 
@@ -485,6 +533,56 @@ export async function registerCompanySkillArtifact(
   return (rows[0] as CompanySkillArtifactRow) || null;
 }
 
+export async function appendCompanySkillJobEvent(
+  sql: SqlFn,
+  args: AppendCompanySkillJobEventArgs,
+): Promise<CompanySkillJobEventRow | null> {
+  const eventKey = String(args.eventKey || "").trim() || null;
+  const rows = await sql(
+    `INSERT INTO company_skill_job_events
+      (job_id, user_id, event_type, stage, agent_id, agent_name, status, summary, details, event_key)
+     SELECT job.id, job.user_id, $3, $4, $5, $6, $7, $8, $9::jsonb, $10
+     FROM company_skill_jobs job
+     WHERE job.id = $1 AND job.user_id = $2
+     ON CONFLICT (job_id, event_key) WHERE event_key IS NOT NULL DO NOTHING
+     RETURNING *`,
+    [
+      args.jobId,
+      args.userId,
+      args.eventType,
+      String(args.stage || "").slice(0, 80),
+      String(args.agentId || "").slice(0, 80) || null,
+      String(args.agentName || "").slice(0, 120) || null,
+      String(args.status || "").slice(0, 40),
+      String(args.summary || "").slice(0, 1000),
+      JSON.stringify(args.details ?? {}),
+      eventKey,
+    ],
+  );
+  if (rows[0]) return rows[0] as CompanySkillJobEventRow;
+  if (!eventKey) return null;
+  const existing = await sql(
+    "SELECT * FROM company_skill_job_events WHERE job_id = $1 AND user_id = $2 AND event_key = $3 LIMIT 1",
+    [args.jobId, args.userId, eventKey],
+  );
+  return (existing[0] as CompanySkillJobEventRow) || null;
+}
+
+export async function listCompanySkillJobEvents(
+  sql: SqlFn,
+  userId: string,
+  jobId: string,
+): Promise<CompanySkillJobEventRow[]> {
+  const rows = await sql(
+    `SELECT event.* FROM company_skill_job_events event
+     INNER JOIN company_skill_jobs job ON job.id = event.job_id AND job.user_id = event.user_id
+     WHERE event.user_id = $1 AND event.job_id = $2
+     ORDER BY event.created_at ASC, event.id ASC`,
+    [userId, jobId],
+  );
+  return rows as CompanySkillJobEventRow[];
+}
+
 export async function ensureCompanySkillJobSchema(sql: SqlFn): Promise<void> {
   await sql(`
     CREATE TABLE IF NOT EXISTS company_skill_jobs (
@@ -551,9 +649,30 @@ export async function ensureCompanySkillJobSchema(sql: SqlFn): Promise<void> {
       CONSTRAINT company_skill_artifacts_version_positive CHECK (version > 0)
     )
   `);
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_skill_job_events (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      job_id uuid NOT NULL,
+      user_id text NOT NULL,
+      event_type text NOT NULL,
+      stage text NOT NULL DEFAULT '',
+      agent_id text,
+      agent_name text,
+      status text NOT NULL DEFAULT '',
+      summary text NOT NULL DEFAULT '',
+      details jsonb NOT NULL DEFAULT '{}'::jsonb,
+      event_key text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT company_skill_job_events_job_user_fk
+        FOREIGN KEY (job_id, user_id) REFERENCES company_skill_jobs(id, user_id) ON DELETE CASCADE,
+      CONSTRAINT company_skill_job_events_type CHECK (event_type IN ('stage', 'agent-report', 'quality', 'warning', 'error', 'approval', 'artifact'))
+    )
+  `);
   await sql("CREATE INDEX IF NOT EXISTS company_skill_jobs_user_updated_idx ON company_skill_jobs (user_id, updated_at DESC)");
   await sql("CREATE INDEX IF NOT EXISTS company_skill_jobs_user_status_idx ON company_skill_jobs (user_id, status, updated_at DESC)");
   await sql("CREATE UNIQUE INDEX IF NOT EXISTS company_skill_jobs_user_idempotency_idx ON company_skill_jobs (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
   await sql("CREATE INDEX IF NOT EXISTS company_skill_artifacts_user_job_idx ON company_skill_artifacts (user_id, job_id, created_at)");
   await sql("CREATE UNIQUE INDEX IF NOT EXISTS company_skill_artifacts_job_path_idx ON company_skill_artifacts (job_id, object_path)");
+  await sql("CREATE INDEX IF NOT EXISTS company_skill_job_events_user_job_idx ON company_skill_job_events (user_id, job_id, created_at)");
+  await sql("CREATE UNIQUE INDEX IF NOT EXISTS company_skill_job_events_job_key_idx ON company_skill_job_events (job_id, event_key) WHERE event_key IS NOT NULL");
 }

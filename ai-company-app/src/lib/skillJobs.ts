@@ -49,6 +49,19 @@ export interface SkillJobQualityResult {
   checkedAt: string;
 }
 
+export interface SkillJobEvent {
+  id: string;
+  jobId: string;
+  eventType: "stage" | "agent-report" | "quality" | "warning" | "error" | "approval" | "artifact";
+  stage: string;
+  agentId: string | null;
+  agentName: string | null;
+  status: string;
+  summary: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface SkillJobCost {
   currency: string;
   amount: number;
@@ -103,6 +116,7 @@ export interface SkillJob {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  events: SkillJobEvent[];
 }
 
 export interface SkillArtifact {

@@ -1,6 +1,6 @@
 import { authorizeRequest } from "../../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
-import { getCompanySkillJob, isCompanySkillJobId, setCompanySkillJobApproval, toCompanySkillJobDto } from "../../_skill-jobs";
+import { appendCompanySkillJobEvent, getCompanySkillJob, isCompanySkillJobId, setCompanySkillJobApproval, toCompanySkillJobDto } from "../../_skill-jobs";
 
 type PagesFunction = (ctx: { request: Request; env: any; params: { jobId?: string } }) => Promise<Response>;
 
@@ -27,6 +27,16 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
       action: String(body?.action || "").trim().slice(0, 200),
       scope: body?.scope && typeof body.scope === "object" ? body.scope : {},
       decidedAt: new Date().toISOString(),
+    });
+    await appendCompanySkillJobEvent(sql, {
+      jobId,
+      userId: auth.userId,
+      eventType: "approval",
+      stage: current.current_stage,
+      status: decision,
+      summary: decision === "approved" ? "사용자가 외부 변경 작업을 승인했습니다." : "사용자가 외부 변경 작업을 거절했습니다.",
+      details: { action: String(body?.action || "").trim().slice(0, 200) },
+      eventKey: `approval:${decision}:${Date.now()}`,
     });
     return send({ ok: true, job: job ? toCompanySkillJobDto(job) : null }, 200, origin);
   } catch (error: any) {
