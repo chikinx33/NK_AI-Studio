@@ -118,3 +118,24 @@ test("Remotion 렌더러는 동적 명세·효과음·Windows 안전 인코딩�
   assert.match(script, /libx264/);
   assert.match(script, /amix=inputs=/);
 });
+
+test("Agent Video는 주제별 아트 디렉션·데이터 차트·최근 결과 중복 방지를 적용한다", async () => {
+  const [component, spec, endpoint] = await Promise.all([
+    read("ai-company-app/src/remotion/AgentVideo.tsx"),
+    read("ai-company-app/src/remotion/spec.ts"),
+    read("prototype/functions/api/agent/agent-video.ts"),
+  ]);
+  for (const visual of ["DonutVisual", "GaugeVisual", "ComparisonVisual", "FlowVisual", "EcosystemVisual", "CountersVisual", "AreaVisual"]) {
+    assert.match(component, new RegExp(`function ${visual}`));
+  }
+  assert.match(component, /scene\.visualData\.values/);
+  assert.match(component, /scene\.visualData\.labels/);
+  assert.match(component, /spec\.backgroundStyle === "organic"/);
+  assert.match(spec, /AgentVideoTheme/);
+  assert.match(spec, /AgentVideoLayout/);
+  assert.match(spec, /visualData: AgentVideoVisualData/);
+  assert.match(endpoint, /THEME_VISUALS/);
+  assert.match(endpoint, /inferTheme/);
+  assert.match(endpoint, /rotateDuplicateVisuals/);
+  assert.match(endpoint, /recentSignatures\.has\(visualSignature\(spec\)\)/);
+});

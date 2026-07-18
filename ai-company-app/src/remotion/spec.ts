@@ -1,7 +1,22 @@
 export type AgentVideoAspectRatio = "16:9" | "9:16" | "1:1";
 export type AgentVideoSceneKind = "hero" | "statement" | "metrics" | "process" | "quote" | "cta";
-export type AgentVideoVisualKind = "network" | "orbit" | "bars" | "timeline" | "spotlight" | "grid";
+export type AgentVideoVisualKind =
+  | "network" | "orbit" | "bars" | "timeline" | "spotlight" | "grid"
+  | "donut" | "gauge" | "comparison" | "flow" | "ecosystem" | "counters" | "area";
 export type AgentVideoSfx = "none" | "whoosh" | "ding" | "switch" | "click" | "whip";
+export type AgentVideoTheme = "technology" | "environment" | "business" | "education" | "health" | "social" | "abstract";
+export type AgentVideoLayout = "split" | "reverse" | "visual-first" | "dashboard";
+export type AgentVideoTransition = "slide" | "rise" | "zoom" | "wipe" | "reveal";
+
+export interface AgentVideoVisualData {
+  values: number[];
+  labels: string[];
+  unit: string;
+  primaryValue: number;
+  secondaryValue: number;
+  icon: string;
+  caption: string;
+}
 
 export interface AgentVideoScene {
   id: string;
@@ -13,6 +28,9 @@ export interface AgentVideoScene {
   accent: string;
   visual: AgentVideoVisualKind;
   sfx: AgentVideoSfx;
+  layout: AgentVideoLayout;
+  transition: AgentVideoTransition;
+  visualData: AgentVideoVisualData;
 }
 
 export interface AgentVideoSpec {
@@ -28,6 +46,9 @@ export interface AgentVideoSpec {
   palette: string[];
   scenes: AgentVideoScene[];
   narration: string;
+  theme: AgentVideoTheme;
+  motif: string;
+  backgroundStyle: "grid" | "organic" | "gradient" | "paper" | "dark";
   createdAt?: string;
 }
 
@@ -40,8 +61,11 @@ export interface AgentVideoContribution {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const sceneKinds = new Set<AgentVideoSceneKind>(["hero", "statement", "metrics", "process", "quote", "cta"]);
-const visualKinds = new Set<AgentVideoVisualKind>(["network", "orbit", "bars", "timeline", "spotlight", "grid"]);
+const visualKinds = new Set<AgentVideoVisualKind>(["network", "orbit", "bars", "timeline", "spotlight", "grid", "donut", "gauge", "comparison", "flow", "ecosystem", "counters", "area"]);
 const sfxKinds = new Set<AgentVideoSfx>(["none", "whoosh", "ding", "switch", "click", "whip"]);
+const themes = new Set<AgentVideoTheme>(["technology", "environment", "business", "education", "health", "social", "abstract"]);
+const layouts = new Set<AgentVideoLayout>(["split", "reverse", "visual-first", "dashboard"]);
+const transitions = new Set<AgentVideoTransition>(["slide", "rise", "zoom", "wipe", "reveal"]);
 
 export const defaultAgentVideoSpec: AgentVideoSpec = {
   version: "1.0",
@@ -55,6 +79,9 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
   background: "#061021",
   palette: ["#4d8dff", "#33dbd0", "#ff8a20", "#f35c9d"],
   narration: "라비오크의 에이전트들은 기획부터 디자인과 사운드까지 협업해 새로운 영상을 완성합니다.",
+  theme: "technology",
+  motif: "연결되는 지능형 에이전트 네트워크",
+  backgroundStyle: "grid",
   scenes: [
     {
       id: "scene-1",
@@ -66,6 +93,9 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       accent: "#4d8dff",
       visual: "orbit",
       sfx: "whoosh",
+      layout: "visual-first",
+      transition: "zoom",
+      visualData: { values: [82, 64, 91, 73], labels: ["기획", "카피", "디자인", "사운드"], unit: "%", primaryValue: 4, secondaryValue: 30, icon: "✦", caption: "전문 에이전트 협업" },
     },
     {
       id: "scene-2",
@@ -77,6 +107,9 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       accent: "#33dbd0",
       visual: "network",
       sfx: "switch",
+      layout: "split",
+      transition: "slide",
+      visualData: { values: [78, 86, 92, 88], labels: ["PLOT", "INK", "PIXEL", "BEAT"], unit: "%", primaryValue: 4, secondaryValue: 1, icon: "◎", caption: "하나의 제작 명세로 통합" },
     },
     {
       id: "scene-3",
@@ -88,6 +121,9 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       accent: "#ff8a20",
       visual: "spotlight",
       sfx: "ding",
+      layout: "dashboard",
+      transition: "rise",
+      visualData: { values: [25, 50, 75, 100], labels: ["요청", "협업", "검수", "렌더"], unit: "%", primaryValue: 100, secondaryValue: 30, icon: "↗", caption: "로컬 Remotion 렌더" },
     },
   ],
 };
@@ -120,6 +156,8 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
     .map((entry, index) => color(entry, defaultAgentVideoSpec.palette[index % defaultAgentVideoSpec.palette.length]))
     .slice(0, 6);
   while (palette.length < 4) palette.push(defaultAgentVideoSpec.palette[palette.length]);
+  const themeCandidate = String(raw.theme ?? "technology") as AgentVideoTheme;
+  const backgroundCandidate = String(raw.backgroundStyle ?? "grid") as AgentVideoSpec["backgroundStyle"];
 
   const rawScenes = Array.isArray(raw.scenes) ? raw.scenes.slice(0, 8) : [];
   const scenes = rawScenes.map((entry, index): AgentVideoScene => {
@@ -127,7 +165,16 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
     const kindCandidate = String(scene.kind ?? "statement") as AgentVideoSceneKind;
     const visualCandidate = String(scene.visual ?? "grid") as AgentVideoVisualKind;
     const sfxCandidate = String(scene.sfx ?? "none") as AgentVideoSfx;
+    const layoutCandidate = String(scene.layout ?? "split") as AgentVideoLayout;
+    const transitionCandidate = String(scene.transition ?? "slide") as AgentVideoTransition;
     const fallback = defaultAgentVideoSpec.scenes[index % defaultAgentVideoSpec.scenes.length];
+    const rawData = scene.visualData && typeof scene.visualData === "object" ? scene.visualData as Record<string, unknown> : {};
+    const values = (Array.isArray(rawData.values) ? rawData.values : fallback.visualData.values)
+      .map((value) => Math.min(100, Math.max(0, Number(value) || 0))).slice(0, 6);
+    while (values.length < 2) values.push(fallback.visualData.values[values.length] || 50);
+    const labels = (Array.isArray(rawData.labels) ? rawData.labels : fallback.visualData.labels)
+      .map((value) => text(value, "항목", 18)).slice(0, 6);
+    while (labels.length < values.length) labels.push(`항목 ${labels.length + 1}`);
     return {
       id: text(scene.id, `scene-${index + 1}`, 40),
       kind: sceneKinds.has(kindCandidate) ? kindCandidate : "statement",
@@ -138,6 +185,17 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
       accent: color(scene.accent, palette[index % palette.length]),
       visual: visualKinds.has(visualCandidate) ? visualCandidate : "grid",
       sfx: sfxKinds.has(sfxCandidate) ? sfxCandidate : "none",
+      layout: layouts.has(layoutCandidate) ? layoutCandidate : (["visual-first", "split", "dashboard", "reverse"][index % 4] as AgentVideoLayout),
+      transition: transitions.has(transitionCandidate) ? transitionCandidate : (["zoom", "slide", "rise", "wipe", "reveal"][index % 5] as AgentVideoTransition),
+      visualData: {
+        values,
+        labels,
+        unit: text(rawData.unit, fallback.visualData.unit, 12),
+        primaryValue: Math.max(0, Number(rawData.primaryValue) || fallback.visualData.primaryValue),
+        secondaryValue: Math.max(0, Number(rawData.secondaryValue) || fallback.visualData.secondaryValue),
+        icon: text(rawData.icon, fallback.visualData.icon, 8),
+        caption: text(rawData.caption, fallback.visualData.caption, 80),
+      },
     };
   });
 
@@ -154,6 +212,9 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
     palette,
     scenes: scenes.length >= 2 ? scenes : defaultAgentVideoSpec.scenes,
     narration: text(raw.narration, "", 2000),
+    theme: themes.has(themeCandidate) ? themeCandidate : "abstract",
+    motif: text(raw.motif, defaultAgentVideoSpec.motif, 120),
+    backgroundStyle: (["grid", "organic", "gradient", "paper", "dark"] as const).includes(backgroundCandidate) ? backgroundCandidate : "gradient",
     createdAt: text(raw.createdAt, new Date().toISOString(), 40),
   };
 }
