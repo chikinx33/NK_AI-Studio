@@ -1,4 +1,5 @@
 import type { AgentVideoContribution, AgentVideoSpec } from "../remotion/spec";
+import type { SkillArtifact, SkillJob, SkillJobInput } from "./skillJobs";
 
 export interface StatusInfo {
   forbidden?: boolean; // AI 회사 이용 권한 없음(403)
@@ -58,6 +59,65 @@ export interface CompanyWorkItem {
   created_at: string;
   completed_at?: string | null;
   updated_at: string;
+}
+
+async function readSkillJobResponse(res: Response, fallbackMessage: string): Promise<any> {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || fallbackMessage);
+  return data;
+}
+
+export async function createCompanySkillJob(
+  skillId: string,
+  input: SkillJobInput,
+): Promise<{ job: SkillJob; created: boolean }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (input.idempotencyKey) headers["Idempotency-Key"] = input.idempotencyKey;
+  const res = await fetch(`/api/agent/skills/${encodeURIComponent(skillId)}/jobs`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+  });
+  const data = await readSkillJobResponse(res, "회사 Skill 업무를 시작하지 못했어요.");
+  return { job: data.job as SkillJob, created: data.created !== false };
+}
+
+export async function getCompanySkillJob(jobId: string): Promise<SkillJob> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}`);
+  const data = await readSkillJobResponse(res, "회사 Skill 업무 상태를 불러오지 못했어요.");
+  return data.job as SkillJob;
+}
+
+export async function cancelCompanySkillJob(jobId: string): Promise<SkillJob> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  const data = await readSkillJobResponse(res, "회사 Skill 업무를 취소하지 못했어요.");
+  return data.job as SkillJob;
+}
+
+export async function retryCompanySkillJob(jobId: string): Promise<SkillJob> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
+  const data = await readSkillJobResponse(res, "회사 Skill 업무를 다시 시작하지 못했어요.");
+  return data.job as SkillJob;
+}
+
+export async function approveCompanySkillJob(
+  jobId: string,
+  decision: "approved" | "rejected",
+  detail: { action?: string; scope?: Record<string, unknown> } = {},
+): Promise<SkillJob> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, ...detail }),
+  });
+  const data = await readSkillJobResponse(res, "회사 Skill 업무 승인을 처리하지 못했어요.");
+  return data.job as SkillJob;
+}
+
+export async function listCompanySkillJobArtifacts(jobId: string): Promise<SkillArtifact[]> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/artifacts`);
+  const data = await readSkillJobResponse(res, "회사 Skill 산출물을 불러오지 못했어요.");
+  return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
 }
 
 export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {

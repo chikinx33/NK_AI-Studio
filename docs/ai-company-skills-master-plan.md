@@ -821,11 +821,40 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 
 ## 18. 다음 실행 항목
 
-> 2026-07-19 착수 기록: 1번의 공통 Skill 실행 계약, 인포그래픽 v1 입력 스키마, `SkillJob` 상태·영속 모델 구현을 시작했다. 공통 API와 기존 인포그래픽 어댑터 연결 전이므로 Phase 0은 아직 진행 중이다. 세부 기술 기준은 `ai-company-phase0-skill-platform-design.md`에서 관리한다.
+### 18.1 상위 일감 체크리스트
 
-1. Phase 0 공통 Skill 정의와 `SkillJob` 데이터 모델 확정
-2. 기존 인포그래픽 실행을 공통 업무 엔진 어댑터로 연결
-3. 첫 신규 Skill인 `이미지 제작`의 상세 PRD·와이어프레임·입력 스키마 작성
-4. 이미지 후보 생성·편집·비교·저장·시각 QA 구현
-5. 완료 정의를 통과한 뒤 `image`를 `available`로 전환
-6. 썸네일, 포스터·배너, 카드뉴스 순으로 공통 이미지 기반 확장
+- [x] Phase 0 공통 Skill 정의와 `SkillJob` 데이터 모델 확정
+- [ ] 기존 인포그래픽 실행을 공통 업무 엔진 어댑터로 연결
+- [ ] 첫 신규 Skill인 `이미지 제작`의 상세 PRD·와이어프레임·입력 스키마 작성
+- [ ] 이미지 후보 생성·편집·비교·저장·시각 QA 구현
+- [ ] 완료 정의를 통과한 뒤 `image`를 `available`로 전환
+- [ ] 썸네일, 포스터·배너, 카드뉴스 순으로 공통 이미지 기반 확장
+
+### 18.2 Phase 0 상세 체크리스트
+
+- [x] Skill 정의 타입과 `available` 실행 메타데이터 강제
+- [x] 인포그래픽 v1 입력 스키마와 서버 정규화 규칙 등록
+- [x] `SkillJob` 상태, 비용, 승인, 품질, 계보 타입 정의
+- [x] `company_skill_jobs`, `company_skill_artifacts` 영속 모델 정의
+- [x] 사용자별 멱등 키와 산출물 사용자 복합 외래키 적용
+- [x] 사용자 격리 CRUD와 원자적 상태 전이 저장소 구현
+- [x] 공통 생성·조회·취소·재시도·승인·산출물 조회 API 구현
+- [x] 클라이언트 공통 SkillJob API 계약 구현
+- [ ] 공통 실행기 인터페이스와 실행기 레지스트리 구현
+- [ ] 생성 API에서 실행기를 백그라운드 호출하고 실패 상태를 보존
+- [ ] 채팅 호출과 직접 UI 호출을 공통 생성 API로 통합
+- [ ] 에이전트 업무 보고 이벤트 표준 구현
+- [ ] 산출물 manifest, 버전, lineage 저장 함수 구현
+- [ ] 비용 예상·승인·상한 공통 게이트 구현
+- [ ] 새로고침·탭 전환·PC 재시작 상태 복원 UI 구현
+- [ ] 공통 3열 레이아웃 슬롯 분리
+- [ ] 기존 인포그래픽 API를 공통 실행기 어댑터로 연결
+- [ ] Phase 0 통합·사용자 격리·중복 실행·복원 테스트 통과
+
+### 18.3 현재 이어서 작업할 위치
+
+- 현재 단계: `Phase 0 — 공통 실행기와 인포그래픽 어댑터 연결`
+- 바로 다음 일감: `executorId`를 실제 실행 함수에 연결하는 서버 실행기 레지스트리와 `runCompanySkillJob` 구현
+- 그다음 일감: `POST /api/agent/skills/{skillId}/jobs`가 `waitUntil`로 실행기를 호출하고 상태를 `planning → running → reviewing → completed`로 갱신하도록 연결
+- 주의: 현재 공통 생성 API는 업무를 `validating` 상태로 안전하게 저장·복원하지만 실제 인포그래픽 제작은 아직 기존 `/api/agent/agent-video` 경로를 사용한다.
+- 세부 기술 기준: `ai-company-phase0-skill-platform-design.md`

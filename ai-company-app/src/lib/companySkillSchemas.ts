@@ -33,7 +33,7 @@ export const COMPANY_SKILL_INPUT_SCHEMAS: Record<string, CompanySkillJsonSchema>
     $id: "company-skill/infographic/v1",
     type: "object",
     additionalProperties: false,
-    required: ["invocationMode", "request", "options"],
+    required: ["invocationMode", "request"],
     properties: {
       ...commonProperties,
       options: {

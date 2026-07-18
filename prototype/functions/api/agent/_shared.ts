@@ -15,7 +15,7 @@ export type { SqlFn };
 export const corsHeaders = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Idempotency-Key",
   "Access-Control-Max-Age": "86400",
   "Access-Control-Allow-Origin": origin || "*",
   Vary: "Origin",
