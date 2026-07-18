@@ -93,25 +93,24 @@ users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
 - [x] 실행 임대 토큰과 만료 기반 중복 워커 방지 구현
 - [x] 인포그래픽 공통 실행기 어댑터 구현
 - [x] 직접 UI와 채팅 호출 경로 전환
-- [ ] 실제 산출물 레코드와 manifest 저장 연결
+- [x] 렌더 완료 인포그래픽 실제 산출물 레코드와 manifest 저장 연결
 - [x] 인포그래픽 브라우저 새로고침 상태 복원 연결
 - [ ] 통합 테스트와 실패 복구 테스트
 
 ## 7. 다음 구현 순서
 
-1. 인포그래픽 실행 결과의 source·manifest·report를 `company_skill_artifacts`에 등록합니다.
-2. artifact `version`과 `lineage`를 업무 버전 정보에 연결합니다.
-3. 단계별 에이전트 업무 보고 이벤트 표준을 저장하고 클라이언트가 복원할 수 있게 합니다.
-4. 실DB에서 사용자 격리·중복 실행·취소·실패·재시도·복원을 통합 테스트합니다.
-5. 비용 예상·승인·상한 게이트와 공통 3열 UI 슬롯을 구현합니다.
+1. 단계별 에이전트 업무 보고 이벤트 표준을 저장하고 클라이언트가 복원할 수 있게 합니다.
+2. 채팅 지시만으로도 서버 렌더 큐가 최종 MP4를 생성·등록하도록 렌더 실행 위치를 공통화합니다.
+3. 실DB에서 사용자 격리·중복 실행·취소·실패·재시도·복원을 통합 테스트합니다.
+4. 비용 예상·승인·상한 게이트와 공통 3열 UI 슬롯을 구현합니다.
 
 ## 8. 세션 인수인계 상태
 
 - 마지막 갱신일: 2026-07-19
-- 현재 단계: 공통 실행기·인포그래픽 어댑터 완료, 실제 산출물 레코드 연결 착수 전
-- 마지막 완료 파일: `prototype/functions/api/agent/_company-skill-executors.ts`
-- 다음 시작 파일: `prototype/functions/api/agent/_skill-jobs.ts`의 산출물 등록 저장 함수
-- 연결 대상: 인포그래픽 실행기 결과의 `workItemId`, 장면 명세, 업무 보고를 `company_skill_artifacts` source·manifest·report로 저장
-- 검증 상태: 루트 `npm test` 289개, 앱 프로덕션 빌드, 관련 서버 함수 esbuild 번들 통과
-- 미완료 사실: `company_skill_artifacts` 조회 계약과 테이블만 존재하며 실제 인포그래픽 산출물 레코드는 아직 등록되지 않습니다.
+- 현재 단계: 렌더 완료 산출물 등록 완료, 에이전트 업무 보고 이벤트 착수 전
+- 마지막 완료 파일: `prototype/functions/api/agent/skill-jobs/[jobId]/artifacts.ts`, `ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx`
+- 다음 시작 파일: `prototype/functions/api/agent/_skill-jobs.ts`의 업무 보고 이벤트 모델
+- 연결 대상: 실행 수명주기의 단계별 보고를 별도 이벤트로 추가하고 `GET /api/agent/skill-jobs/{jobId}` 복원 응답에 포함
+- 검증 상태: 루트 `npm test` 290개, 앱 프로덕션 빌드, 산출물 API 서버 함수 esbuild 번들 통과
+- 미완료 사실: 채팅 지시 후 업무를 브라우저에서 열지 않으면 로컬 Remotion 렌더와 최종 MP4 artifact 등록이 아직 시작되지 않습니다.
 - 호환 상태: 직접 UI와 채팅 도구 모두 공통 SkillJob 생성 API를 사용하고, 공통 어댑터 내부에서 기존 `/api/agent/agent-video` 제작 구현을 재사용합니다.

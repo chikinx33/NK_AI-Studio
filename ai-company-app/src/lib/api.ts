@@ -146,6 +146,28 @@ export async function listCompanySkillJobArtifacts(jobId: string): Promise<Skill
   return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
 }
 
+export async function registerCompanySkillJobArtifacts(
+  jobId: string,
+  artifacts: Array<{
+    kind: SkillArtifact["kind"];
+    fileName: string;
+    objectPath: string;
+    mimeType: string;
+    sizeBytes: number;
+    checksum: string;
+    version?: number;
+    metadata?: Record<string, unknown>;
+  }>,
+): Promise<SkillArtifact[]> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/artifacts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ artifacts }),
+  });
+  const data = await readSkillJobResponse(res, "회사 Skill 산출물을 등록하지 못했어요.");
+  return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
+}
+
 export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {
   const res = await fetch("/api/agent/work-items");
   const data = await res.json().catch(() => ({}));

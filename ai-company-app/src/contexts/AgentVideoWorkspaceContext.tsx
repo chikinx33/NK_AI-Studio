@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   createCompanySkillJob,
+  getCompanySkillJob,
   getCompanyWorkItem,
   getLocalAgentVideoRenderStatus,
+  registerCompanySkillJobArtifacts,
   startLocalAgentVideoRender,
   uploadAgentVideoStorageFile,
   waitForCompanySkillJob,
@@ -28,6 +30,11 @@ import {
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
 const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
+
+async function sha256Hex(blob: Blob) {
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 type MeetingStatus = "idle" | "running" | "done" | "error";
@@ -224,23 +231,64 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const localResponse = await fetch(renderResult.downloadUrl);
       if (!localResponse.ok) throw new Error(`로컬 MP4를 읽지 못했습니다. (HTTP ${localResponse.status})`);
       const videoBlob = await localResponse.blob();
+      const workId = activeWorkRef.current?.id || "";
+      const skillJobId = String(activeWorkRef.current?.metadata?.skill?.skillJobId || "");
+      const job = skillJobId ? await getCompanySkillJob(skillJobId) : null;
+      const videoChecksum = await sha256Hex(videoBlob);
       const videoItem = await uploadAgentVideoStorageFile(
         new Blob([videoBlob], { type: videoBlob.type || "video/mp4" }),
         "raviok-agent-video.mp4",
-        activeWorkRef.current?.id || "",
+        workId,
       );
-      const manifest = {
-        version: "1.0",
-        archivedAt: new Date().toISOString(),
-        renderedVideoObjectName: videoItem.objectName,
+      const sourceBlob = new Blob([JSON.stringify({
+        schema: "company-skill/infographic-source/v1",
+        jobId: skillJobId || null,
+        workItemId: workId,
         spec: targetSpec,
+      }, null, 2)], { type: "application/json" });
+      const sourceChecksum = await sha256Hex(sourceBlob);
+      const sourceItem = await uploadAgentVideoStorageFile(sourceBlob, "source.json", workId);
+      const reportBlob = new Blob([JSON.stringify({
+        schema: "company-skill/report/v1",
+        jobId: skillJobId || null,
+        workItemId: workId,
+        agentReports: job?.agentReports || [],
+        qualityResults: job?.qualityResults || [],
+        warnings: job?.warnings || [],
+        completedAt: job?.completedAt || null,
+      }, null, 2)], { type: "application/json" });
+      const reportChecksum = await sha256Hex(reportBlob);
+      const reportItem = await uploadAgentVideoStorageFile(reportBlob, "report.json", workId);
+      const manifest = {
+        schema: "company-skill/manifest/v1",
+        version: job?.version || 1,
+        lineage: job?.lineage || [],
+        jobId: skillJobId || null,
+        workItemId: workId,
+        archivedAt: new Date().toISOString(),
+        artifacts: [
+          { kind: "final", objectPath: videoItem.objectName, checksum: videoChecksum },
+          { kind: "source", objectPath: sourceItem.objectName, checksum: sourceChecksum },
+          { kind: "report", objectPath: reportItem.objectName, checksum: reportChecksum },
+        ],
       };
+      const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+      const manifestChecksum = await sha256Hex(manifestBlob);
       const manifestItem = await uploadAgentVideoStorageFile(
-        new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
-        "raviok-agent-video-source.json",
-        activeWorkRef.current?.id || "",
+        manifestBlob,
+        "manifest.json",
+        workId,
       );
-      setArchive({ status: "done", items: [videoItem, manifestItem] });
+      if (skillJobId) {
+        const version = job?.version || 1;
+        await registerCompanySkillJobArtifacts(skillJobId, [
+          { kind: "final", fileName: videoItem.fileName, objectPath: videoItem.objectName, mimeType: videoItem.contentType, sizeBytes: videoItem.size, checksum: videoChecksum, version },
+          { kind: "source", fileName: sourceItem.fileName, objectPath: sourceItem.objectName, mimeType: sourceItem.contentType, sizeBytes: sourceItem.size, checksum: sourceChecksum, version },
+          { kind: "report", fileName: reportItem.fileName, objectPath: reportItem.objectName, mimeType: reportItem.contentType, sizeBytes: reportItem.size, checksum: reportChecksum, version },
+          { kind: "manifest", fileName: manifestItem.fileName, objectPath: manifestItem.objectName, mimeType: manifestItem.contentType, sizeBytes: manifestItem.size, checksum: manifestChecksum, version, metadata: { lineage: job?.lineage || [] } },
+        ]);
+      }
+      setArchive({ status: "done", items: [videoItem, sourceItem, reportItem, manifestItem] });
       setStorageRevision((revision) => revision + 1);
     } catch (caught) {
       setArchive({ status: "error", error: caught instanceof Error ? caught.message : "클라우드 저장에 실패했습니다." });

@@ -88,7 +88,10 @@ test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴
   assert.match(workspaceContext, /await beginRender\(nextSpec\)/);
   assert.match(workspaceContext, /uploadAgentVideoStorageFile/);
   assert.match(workspaceContext, /raviok-agent-video\.mp4/);
-  assert.match(workspaceContext, /raviok-agent-video-source\.json/);
+  assert.match(workspaceContext, /"source\.json"/);
+  assert.match(workspaceContext, /"report\.json"/);
+  assert.match(workspaceContext, /"manifest\.json"/);
+  assert.match(workspaceContext, /registerCompanySkillJobArtifacts/);
   assert.match(storageApi, /authorizeRequest\(request, env\)/);
   assert.match(storageApi, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
   assert.match(storageApi, /\/work-library\//);

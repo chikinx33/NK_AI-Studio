@@ -15,6 +15,9 @@ export const COMPANY_SKILL_JOB_STATUSES = [
 export type CompanySkillJobStatus = (typeof COMPANY_SKILL_JOB_STATUSES)[number];
 export type CompanySkillInvocationMode = "agent" | "manual";
 export type CompanySkillArtifactKind = "source" | "preview" | "final" | "manifest" | "report";
+export const COMPANY_SKILL_ARTIFACT_KINDS: readonly CompanySkillArtifactKind[] = [
+  "source", "preview", "final", "manifest", "report",
+];
 
 export const COMPANY_SKILL_JOB_TRANSITIONS: Readonly<Record<CompanySkillJobStatus, readonly CompanySkillJobStatus[]>> = {
   draft: ["validating", "cancelled"],
@@ -90,6 +93,20 @@ export interface CompanySkillArtifactRow {
   metadata: unknown;
   created_at: string;
   updated_at: string;
+}
+
+export interface RegisterCompanySkillArtifactArgs {
+  jobId: string;
+  userId: string;
+  workItemId?: string | null;
+  kind: CompanySkillArtifactKind;
+  fileName: string;
+  objectPath: string;
+  mimeType?: string;
+  sizeBytes?: number | null;
+  checksum?: string;
+  version?: number;
+  metadata?: unknown;
 }
 
 export interface CreateCompanySkillJobArgs {
@@ -424,6 +441,48 @@ export async function listCompanySkillArtifacts(
     [userId, jobId],
   );
   return rows as CompanySkillArtifactRow[];
+}
+
+export async function registerCompanySkillArtifact(
+  sql: SqlFn,
+  args: RegisterCompanySkillArtifactArgs,
+): Promise<CompanySkillArtifactRow | null> {
+  const rows = await sql(
+    `INSERT INTO company_skill_artifacts
+      (job_id, user_id, work_item_id, kind, file_name, object_path, mime_type,
+       size_bytes, checksum, version, metadata)
+     SELECT job.id, job.user_id, COALESCE($3::uuid, job.work_item_id), $4, $5, $6, $7,
+       $8, $9, $10, $11::jsonb
+     FROM company_skill_jobs job
+     WHERE job.id = $1 AND job.user_id = $2
+       AND ($3::uuid IS NULL OR job.work_item_id = $3::uuid)
+     ON CONFLICT (job_id, object_path) DO UPDATE SET
+       work_item_id = EXCLUDED.work_item_id,
+       kind = EXCLUDED.kind,
+       file_name = EXCLUDED.file_name,
+       mime_type = EXCLUDED.mime_type,
+       size_bytes = EXCLUDED.size_bytes,
+       checksum = EXCLUDED.checksum,
+       version = EXCLUDED.version,
+       metadata = EXCLUDED.metadata,
+       updated_at = now()
+     WHERE company_skill_artifacts.user_id = EXCLUDED.user_id
+     RETURNING company_skill_artifacts.*`,
+    [
+      args.jobId,
+      args.userId,
+      args.workItemId || null,
+      args.kind,
+      String(args.fileName || "artifact").slice(0, 240),
+      String(args.objectPath || "").slice(0, 2048),
+      String(args.mimeType || "application/octet-stream").slice(0, 160),
+      args.sizeBytes == null ? null : Math.max(0, Math.round(Number(args.sizeBytes) || 0)),
+      String(args.checksum || "").slice(0, 256),
+      Math.max(1, Math.round(Number(args.version) || 1)),
+      JSON.stringify(args.metadata ?? {}),
+    ],
+  );
+  return (rows[0] as CompanySkillArtifactRow) || null;
 }
 
 export async function ensureCompanySkillJobSchema(sql: SqlFn): Promise<void> {

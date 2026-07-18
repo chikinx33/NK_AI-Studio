@@ -87,12 +87,37 @@ test("공통 SkillJob API는 생성·복원·취소·재시도·승인·산출�
   assert.match(retry, /retryCompanySkillJob/);
   assert.match(approve, /setCompanySkillJobApproval/);
   assert.match(artifacts, /listCompanySkillArtifacts/);
+  assert.match(artifacts, /onRequestPost/);
+  assert.match(artifacts, /registerCompanySkillArtifact/);
+  assert.match(artifacts, /allowedPrefix/);
+  assert.match(artifacts, /objectPath\.includes\(`\/\$\{workItemId\}\/`\)/);
   assert.match(client, /createCompanySkillJob/);
   assert.match(client, /getCompanySkillJob/);
   assert.match(client, /cancelCompanySkillJob/);
   assert.match(client, /retryCompanySkillJob/);
   assert.match(client, /approveCompanySkillJob/);
   assert.match(client, /listCompanySkillJobArtifacts/);
+  assert.match(client, /registerCompanySkillJobArtifacts/);
+});
+
+test("산출물 등록은 SkillJob 사용자·업무·경로에 묶이고 버전과 계보 manifest를 보존한다", async () => {
+  const [store, endpoint, workspace] = await Promise.all([
+    read("prototype/functions/api/agent/_skill-jobs.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/artifacts.ts"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+  ]);
+
+  assert.match(store, /export async function registerCompanySkillArtifact/);
+  assert.match(store, /WHERE job\.id = \$1 AND job\.user_id = \$2/);
+  assert.match(store, /job\.work_item_id = \$3::uuid/);
+  assert.match(store, /ON CONFLICT \(job_id, object_path\) DO UPDATE/);
+  assert.match(endpoint, /buildAiVideoProjectPrefix\(storage\.basePrefix, auth\.userId, "ai-company"\)/);
+  assert.match(workspace, /sha256Hex/);
+  assert.match(workspace, /"source\.json"/);
+  assert.match(workspace, /"report\.json"/);
+  assert.match(workspace, /"manifest\.json"/);
+  assert.match(workspace, /lineage: job\?\.lineage \|\| \[\]/);
+  assert.match(workspace, /registerCompanySkillJobArtifacts\(skillJobId/);
 });
 
 test("공통 실행기는 인포그래픽 어댑터를 통해 상태·보고·품질 결과를 완결한다", async () => {
