@@ -10,7 +10,7 @@ import {
 import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
 
 function FieldLabel({ children }: { children: string }) {
-  return <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">{children}</label>;
+  return <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{children}</label>;
 }
 
 function SelectField({ value, onChange, children }: { value: string; onChange: (value: string) => void; children: React.ReactNode }) {
@@ -18,7 +18,7 @@ function SelectField({ value, onChange, children }: { value: string; onChange: (
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-xl border border-edge bg-[#0b1018] px-3 py-2.5 text-sm text-gray-200 outline-none focus:border-emerald-700"
+      className="w-full rounded-lg border border-edge bg-[#0b1018] px-3 py-2 text-xs text-gray-200 outline-none focus:border-emerald-700"
     >
       {children}
     </select>
@@ -27,13 +27,13 @@ function SelectField({ value, onChange, children }: { value: string; onChange: (
 
 function ContributionCard({ item }: { item: AgentVideoContribution }) {
   return (
-    <article className="rounded-xl border border-edge bg-[#0b1018] p-3">
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{item.emoji}</span>
-        <strong className="text-sm text-gray-200">{item.agentName}</strong>
-        <span className="ml-auto rounded-full bg-emerald-950 px-2 py-0.5 text-[10px] text-emerald-300">완료</span>
+    <article className="min-h-0 rounded-lg border border-edge bg-[#0b1018] px-2.5 py-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm">{item.emoji}</span>
+        <strong className="text-xs text-gray-200">{item.agentName}</strong>
+        <span className="ml-auto rounded-full bg-emerald-950 px-1.5 py-0.5 text-[8px] text-emerald-300">완료</span>
       </div>
-      <p className="mt-2 line-clamp-4 text-xs leading-5 text-gray-400">{item.summary}</p>
+      <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-gray-500">{item.summary}</p>
     </article>
   );
 }
@@ -78,9 +78,11 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
   const durationInFrames = Math.max(1, Math.round(videoDurationSec * spec.fps));
-  const isPortraitPreview = dimensions.height > dimensions.width;
+  const isTallPreview = dimensions.height >= dimensions.width;
   const previewRatio = dimensions.width / dimensions.height;
-  const previewWidth = `min(100%, max(240px, calc(${(previewRatio * 100).toFixed(4)}dvh - ${(previewRatio * 190).toFixed(2)}px)))`;
+  const previewWidth = isTallPreview
+    ? `min(100%, max(210px, calc((100dvh - 300px) * ${previewRatio.toFixed(4)})))`
+    : "100%";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
@@ -101,7 +103,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           </div>
         </div>
       </header> : (
-        <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-panel/45 px-4 py-2">
+        <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-panel/45 px-4 py-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">인포그래픽 제작 워크스페이스</span>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-sky-950/40 px-3 py-1.5 text-[10px] font-bold text-sky-300 transition hover:bg-sky-900/50">☁ 저장소</button>
@@ -110,27 +112,27 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[360px_minmax(0,1fr)_320px] xl:overflow-hidden">
-        <aside className="border-b border-edge p-4 xl:overflow-y-auto xl:border-b-0 xl:border-r">
-          <div className="rounded-2xl border border-edge bg-panel p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-950 text-lg">🧭</span>
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[320px_minmax(0,1fr)_290px] xl:overflow-hidden">
+        <aside className="border-b border-edge p-3 xl:overflow-hidden xl:border-b-0 xl:border-r">
+          <div className="h-full rounded-xl border border-edge bg-panel p-3">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-950 text-sm">🧭</span>
               <div>
-                <h2 className="text-sm font-bold text-gray-100">코어에게 제작 의뢰</h2>
-                <p className="text-[11px] text-gray-500">전문 에이전트들이 각자의 파트를 설계합니다.</p>
+                <h2 className="text-sm font-bold text-gray-100">개요</h2>
+                <p className="text-[10px] text-gray-500">제작할 결과물의 기준을 입력합니다.</p>
               </div>
             </div>
             <FieldLabel>영상 요청</FieldLabel>
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              rows={6}
+              rows={4}
               maxLength={1600}
-              className="w-full resize-y rounded-xl border border-edge bg-[#0b1018] px-3 py-3 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-600 focus:border-emerald-700"
+              className="w-full resize-none rounded-lg border border-edge bg-[#0b1018] px-3 py-2 text-xs leading-5 text-gray-100 outline-none placeholder:text-gray-600 focus:border-emerald-700"
               placeholder="예: 신제품의 핵심 장점을 소개하는 20초 세로형 영상"
             />
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
               <div>
                 <FieldLabel>길이</FieldLabel>
                 <SelectField value={String(durationSec)} onChange={(value) => setDurationSec(Number(value))}>
@@ -150,17 +152,17 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               </div>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-2">
               <FieldLabel>시청 대상</FieldLabel>
-              <input value={audience} onChange={(event) => setAudience(event.target.value)} className="w-full rounded-xl border border-edge bg-[#0b1018] px-3 py-2.5 text-sm text-gray-200 outline-none focus:border-emerald-700" />
+              <input value={audience} onChange={(event) => setAudience(event.target.value)} className="w-full rounded-lg border border-edge bg-[#0b1018] px-3 py-2 text-xs text-gray-200 outline-none focus:border-emerald-700" />
             </div>
-            <div className="mt-3">
+            <div className="mt-2">
               <FieldLabel>톤</FieldLabel>
-              <input value={tone} onChange={(event) => setTone(event.target.value)} className="w-full rounded-xl border border-edge bg-[#0b1018] px-3 py-2.5 text-sm text-gray-200 outline-none focus:border-emerald-700" />
+              <input value={tone} onChange={(event) => setTone(event.target.value)} className="w-full rounded-lg border border-edge bg-[#0b1018] px-3 py-2 text-xs text-gray-200 outline-none focus:border-emerald-700" />
             </div>
-            <div className="mt-3">
+            <div className="mt-2">
               <FieldLabel>스타일</FieldLabel>
-              <input value={style} onChange={(event) => setStyle(event.target.value)} className="w-full rounded-xl border border-edge bg-[#0b1018] px-3 py-2.5 text-sm text-gray-200 outline-none focus:border-emerald-700" />
+              <input value={style} onChange={(event) => setStyle(event.target.value)} className="w-full rounded-lg border border-edge bg-[#0b1018] px-3 py-2 text-xs text-gray-200 outline-none focus:border-emerald-700" />
             </div>
 
             <button
@@ -168,33 +170,33 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               onClick={startMeeting}
               disabled={meetingInProgress}
               aria-busy={meetingInProgress}
-              className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+              className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
               {meetingInProgress ? "회의 중..." : "에이전트 제작 회의 시작"}
             </button>
             {meetingInProgress && (
-              <div className="mt-3 rounded-xl border border-emerald-950 bg-emerald-950/25 p-3 text-xs leading-5 text-emerald-200">
+              <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-emerald-950/25 p-2 text-[10px] leading-4 text-emerald-200">
                 플롯이 구성을 설계한 뒤 잉크·픽셀·비트가 대본, 비주얼, 사운드를 병렬로 제작하고 코어가 최종 명세를 통합합니다.
               </div>
             )}
-            {error && <div className="mt-3 rounded-xl border border-red-900/70 bg-red-950/35 p-3 text-xs leading-5 text-red-300">{error}</div>}
+            {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-red-950/35 p-2 text-[10px] leading-4 text-red-300">{error}</div>}
           </div>
         </aside>
 
-        <main className="min-w-0 p-4 xl:overflow-y-auto">
-          <div className="mx-auto max-w-5xl">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
+        <main className="min-w-0 p-3 xl:overflow-hidden">
+          <div className="mx-auto flex h-full max-w-5xl flex-col">
+            <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold text-gray-200">Remotion 프리뷰</h2>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.scenes.length}개 씬</span>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{videoDurationSec.toFixed(0)}초</span>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.aspectRatio}</span>
               <span className="ml-auto text-[11px] text-gray-500">{spec.title}</span>
             </div>
-            <div className={isPortraitPreview ? "grid min-h-0 gap-4 sm:grid-cols-[minmax(0,1fr)_220px]" : ""}>
-              <div className="flex min-w-0 justify-center sm:justify-start">
+            <div className={`min-h-0 flex-1 ${isTallPreview ? "grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]" : "flex flex-col"}`}>
+              <div className={`flex min-h-0 min-w-0 justify-center overflow-hidden ${isTallPreview ? "h-full items-center" : "shrink-0"}`}>
                 <div
-                  className="overflow-hidden rounded-2xl border border-edge bg-black shadow-2xl shadow-black/40"
-                  style={{ width: previewWidth }}
+                  className="max-h-full overflow-hidden rounded-xl border border-edge bg-black shadow-2xl shadow-black/40"
+                  style={{ width: previewWidth, aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
                 >
                   <Player
                     key={`${spec.createdAt}-${spec.aspectRatio}-${spec.scenes.length}`}
@@ -206,27 +208,27 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                     fps={spec.fps}
                     controls
                     loop
-                    style={{ width: "100%", aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
+                    style={{ width: "100%", height: "100%" }}
                   />
                 </div>
               </div>
 
-              <div className={isPortraitPreview
-                ? "mt-4 grid max-h-[calc(100dvh-190px)] auto-rows-min gap-3 overflow-y-auto pr-1 sm:mt-0"
-                : "mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-              }>
+              <div
+                className={isTallPreview ? "grid h-full min-h-0 gap-2" : "mt-2 grid min-h-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"}
+                style={isTallPreview ? { gridTemplateRows: `repeat(${Math.max(1, spec.scenes.length)}, minmax(0, 1fr))` } : undefined}
+              >
               {spec.scenes.map((scene, index) => (
-                <article key={scene.id} className="rounded-xl border border-edge bg-panel p-3">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+                <article key={scene.id} className="min-h-0 overflow-hidden rounded-lg border border-edge bg-panel p-2">
+                  <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-[0.12em] text-gray-500">
                     <span style={{ background: scene.accent }} className="h-2 w-2 rounded-full" />
                     Scene {String(index + 1).padStart(2, "0")} · {scene.durationSec}초
                   </div>
-                  <h3 className="mt-2 whitespace-pre-line text-sm font-bold leading-5 text-gray-100">{scene.title}</h3>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{scene.body}</p>
-                  <div className="mt-2 flex gap-1.5 text-[9px] text-gray-500">
+                  <h3 className="mt-1 line-clamp-2 whitespace-pre-line text-xs font-bold leading-4 text-gray-100">{scene.title}</h3>
+                  {!isTallPreview && <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-gray-500">{scene.body}</p>}
+                  {!isTallPreview && <div className="mt-1 flex gap-1 text-[8px] text-gray-500">
                     <span className="rounded bg-[#0b1018] px-1.5 py-1">{scene.visual}</span>
                     <span className="rounded bg-[#0b1018] px-1.5 py-1">SFX · {scene.sfx}</span>
-                  </div>
+                  </div>}
                 </article>
               ))}
               </div>
@@ -234,18 +236,18 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           </div>
         </main>
 
-        <aside className="border-t border-edge p-4 xl:overflow-y-auto xl:border-l xl:border-t-0">
+        <aside className="border-t border-edge p-3 xl:overflow-hidden xl:border-l xl:border-t-0">
           <h2 className="text-sm font-bold text-gray-200">협업 보고서</h2>
-          <p className="mt-1 text-xs leading-5 text-gray-500">각 에이전트의 판단을 코어가 하나의 Render Manifest로 통합합니다.</p>
-          <div className="mt-3 space-y-2">
+          <p className="mt-1 text-[10px] leading-4 text-gray-500">각 에이전트의 판단을 하나의 Render Manifest로 통합합니다.</p>
+          <div className="mt-2 grid gap-1.5">
             {contributions.length ? contributions.map((item) => <ContributionCard key={item.agentId} item={item} />) : (
-              <div className="rounded-xl border border-dashed border-edge p-4 text-center text-xs leading-5 text-gray-600">
+              <div className="rounded-lg border border-dashed border-edge p-3 text-center text-[10px] leading-4 text-gray-600">
                 제작 회의를 시작하면 플롯, 잉크, 픽셀, 비트, 코어의 작업 결과가 표시됩니다.
               </div>
             )}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-edge bg-panel p-4">
+          <div className="mt-3 rounded-xl border border-edge bg-panel p-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">🎬</span>
               <div>
@@ -257,7 +259,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               type="button"
               onClick={renderVideo}
               disabled={renderInProgress || archiveInProgress}
-              className="mt-4 w-full rounded-xl border border-orange-700/70 bg-orange-950/40 px-4 py-2.5 text-sm font-bold text-orange-200 transition hover:bg-orange-900/50 disabled:cursor-wait disabled:opacity-60"
+              className="mt-2.5 w-full rounded-lg border border-orange-700/70 bg-orange-950/40 px-3 py-2 text-xs font-bold text-orange-200 transition hover:bg-orange-900/50 disabled:cursor-wait disabled:opacity-60"
             >
               {renderInProgress
                 ? `자동 렌더링 ${Math.round(render.progress || 0)}%`
@@ -297,7 +299,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                 {archive.error || "클라우드 저장에 실패했습니다."}
               </div>
             )}
-            <p className="mt-3 text-[10px] leading-4 text-gray-600">프리뷰 명세가 생성되면 이 PC에서 MP4를 자동 렌더하고, 사용자별 GCS 저장소에 MP4와 JSON 명세를 보관합니다.</p>
+            <p className="mt-2 line-clamp-2 text-[9px] leading-4 text-gray-600">프리뷰 명세가 생성되면 이 PC에서 MP4를 자동 렌더하고, 사용자별 GCS 저장소에 MP4와 JSON 명세를 보관합니다.</p>
           </div>
         </aside>
       </div>

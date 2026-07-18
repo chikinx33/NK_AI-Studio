@@ -37,6 +37,8 @@ test("스킬 페이지는 세부 스킬을 단일 선택하고 기존 인포그�
   assert.match(workspace, /role="radio"/);
   assert.match(workspace, /aria-checked=\{selected\}/);
   assert.match(workspace, /setSelectedSkillId\(skill\.id\)/);
+  assert.match(workspace, /category\.label\.replace\("·", "\."\)/);
+  assert.doesNotMatch(workspace, /어떤 결과물을 만들까요|skill\.description|rounded-xl border px-3 py-2\.5/);
   assert.match(workspace, /selectedSkill\?\.id === "infographic"/);
   assert.match(workspace, /<AgentVideoWorkspace onClose=\{onClose\} embedded/);
   assert.match(videoWorkspace, /embedded = false/);
