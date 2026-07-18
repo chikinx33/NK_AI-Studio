@@ -825,7 +825,7 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 
 - [x] Phase 0 공통 Skill 정의와 `SkillJob` 데이터 모델 확정
 - [x] 기존 인포그래픽 실행을 공통 업무 엔진 어댑터로 연결
-- [ ] 첫 신규 Skill인 `이미지 제작`의 상세 PRD·와이어프레임·입력 스키마 작성
+- [x] 첫 신규 Skill인 `이미지 제작`의 상세 PRD·와이어프레임·입력 스키마 작성
 - [ ] 이미지 후보 생성·편집·비교·저장·시각 QA 구현
 - [ ] 완료 정의를 통과한 뒤 `image`를 `available`로 전환
 - [ ] 썸네일, 포스터·배너, 카드뉴스 순으로 공통 이미지 기반 확장
@@ -856,13 +856,14 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 
 ### 18.3 현재 이어서 작업할 위치
 
-- 현재 단계: `Phase 0 — 서버 렌더 배포 E2E 대기 / Phase 1 이미지 제작 PRD 착수`
-- 마지막 완료 단위: 채팅·직접 UI 공통 실행기가 인증된 Node Remotion 워커에 멱등 렌더 요청을 보내고, 콜백 API가 MP4·source·report·manifest를 GCS/SkillJob artifact로 등록한 뒤에만 완료 처리하는 서버 렌더 경로
+- 현재 단계: `Phase 1 — 이미지 제작 서버 정규화·실행기 구현`
+- 마지막 완료 단위: `docs/ai-company-image-skill-prd.md`의 상세 PRD·공통 3열 와이어프레임·완료 정의와 `company-skill/image/v1` 입력 스키마 및 예정 실행 메타데이터
 - 비용 설정 계약: API 키 단가는 `COMPANY_SKILL_ANTHROPIC_INPUT_USD_PER_MTOK`, `COMPANY_SKILL_ANTHROPIC_OUTPUT_USD_PER_MTOK` 환경 변수로 주입하며, 입력의 `costControl.maxAmountUsd`가 자동 실행 상한이다. 단가가 없으면 금액을 꾸며내지 않고 `unavailable`로 기록해 승인을 요구한다.
 - 실제 비용 기록 한계: 현재 Claude 어댑터가 실제 토큰 사용량을 반환하지 않아 API 키 실행의 `actualCost`는 `unavailable`로 명시한다. 구독 인증만 실제 추가 비용 0으로 기록한다.
 - 서버 렌더 설정 계약: 함수와 워커에 `COMPANY_SKILL_RENDERER_TOKEN`, 함수에 전체 엔드포인트 `COMPANY_SKILL_RENDERER_URL`을 설정한다. 서버 모드에서는 Job이 `reviewing/rendering`에 머물고 4종 산출물 콜백 성공 후 `completed`가 된다. 미설정 환경은 기존 브라우저 로컬 렌더와 호환된다.
 - 검증 결과: 루트 `npm test` 295개 통과, 앱 TypeScript/Vite 빌드 통과, 서버 함수 esbuild 통과, `npm run test:skill-db`에서 렌더 실패→검수 단계 재시도→4종 artifact 등록→완료 전환 실DB 검증 통과
-- 바로 다음 일감: 첫 신규 Skill `이미지 제작` 상세 PRD·와이어프레임·입력 스키마 작성
+- 바로 다음 일감: 서버 Skill 레지스트리에 이미지 정규화 계약을 추가하고 기존 `/api/imagen`을 재사용하는 `image-adapter-v1` 실행기 구현
 - 병행 운영 일감: 배포 환경 렌더 워커 URL·공유 토큰·GCS 자격증명을 설정한 뒤 채팅 지시만으로 실제 MP4가 등록되는 E2E 검증
 - 주의: 현재 작업 셸에는 위 렌더/GCS 환경 변수가 없어 실제 배포 MP4 E2E는 실행하지 못했다. 앱이 열린 미설정 환경의 채팅은 이미 `job_ready`에서 화면 이동 없이 로컬 렌더를 시작하며, 서버 렌더 설정 시에는 클라이언트 중복 렌더를 생략한다.
 - 세부 기술 기준: `ai-company-phase0-skill-platform-design.md`
+- 이미지 Skill 기준: `ai-company-image-skill-prd.md`

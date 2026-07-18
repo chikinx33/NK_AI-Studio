@@ -19,6 +19,22 @@ test("available 회사 Skill은 실행 계약과 입력 스키마를 가진다",
   assert.match(schemas, /idempotencyKey/);
 });
 
+test("이미지 제작 예정 Skill은 PRD·와이어프레임·v1 입력 계약을 가진다", async () => {
+  const [registry, schemas, prd] = await Promise.all([
+    read("ai-company-app/src/lib/companySkills.ts"),
+    read("ai-company-app/src/lib/companySkillSchemas.ts"),
+    read("docs/ai-company-image-skill-prd.md"),
+  ]);
+  assert.match(registry, /id: "image"[\s\S]*inputSchema: "company-skill\/image\/v1"/);
+  assert.match(registry, /executorId: "image-adapter-v1"/);
+  assert.match(schemas, /"company-skill\/image\/v1"/);
+  for (const mode of ["create", "edit", "variation", "background-remove", "background-replace", "resize-extend"]) assert.match(schemas, new RegExp(`"${mode}"`));
+  assert.match(schemas, /candidateCount:[\s\S]*minimum: 1, maximum: 4/);
+  assert.match(schemas, /role:[\s\S]*"source"[\s\S]*"mask"/);
+  assert.match(prd, /공통 3열 와이어프레임/);
+  assert.match(prd, /## 9\. 완료 정의/);
+});
+
 test("SkillJob 계약은 전체 상태와 허용 전이를 명시한다", async () => {
   const [client, server] = await Promise.all([
     read("ai-company-app/src/lib/skillJobs.ts"),
