@@ -74,13 +74,15 @@ test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴
 });
 
 test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크를 제공한다", async () => {
-  const [explorer, rightMenu, markdown, orchestrator, shared, workApi] = await Promise.all([
+  const [explorer, rightMenu, markdown, orchestrator, shared, workApi, folderApi, clientApi] = await Promise.all([
     read("ai-company-app/src/components/WorkExplorer.tsx"),
     read("ai-company-app/src/components/RightMenu.tsx"),
     read("ai-company-app/src/components/Markdown.tsx"),
     read("prototype/functions/api/agent/_orchestrator.ts"),
     read("prototype/functions/api/agent/_shared.ts"),
     read("prototype/functions/api/agent/work-items.ts"),
+    read("prototype/functions/api/agent/work-folders.ts"),
+    read("ai-company-app/src/lib/api.ts"),
   ]);
   assert.match(rightMenu, /회사 업무 탐색기/);
   assert.match(rightMenu, /FolderIcon/);
@@ -91,10 +93,23 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(explorer, /소스 보기/);
   assert.match(explorer, /다운로드/);
   assert.match(explorer, /삭제/);
+  assert.doesNotMatch(explorer, /더블클릭하여 열기/);
+  assert.match(explorer, /ViewModeControl/);
+  assert.match(explorer, /목록 보기/);
+  assert.match(explorer, /카드 보기/);
+  assert.match(explorer, /DocumentIcon/);
+  assert.match(explorer, /data-folder-menu/);
+  assert.match(explorer, /이름 변경/);
+  assert.match(explorer, /removeDateFolder/);
   assert.match(markdown, /raviok-open-work/);
   assert.match(orchestrator, /\[확인\]\(#raviok-work-/);
   assert.match(shared, /infographic: \{ agentId: "core"/);
+  assert.match(shared, /company_work_folders/);
   assert.match(workApi, /company_work_items/);
+  assert.match(folderApi, /onRequestPatch/);
+  assert.match(folderApi, /date_key/);
+  assert.match(clientApi, /renameCompanyWorkFolder/);
+  assert.match(clientApi, /deleteCompanyWorkFolderMeta/);
 });
 
 test("Agent Video 저장소 모달은 소스 목록·선택 다운로드·삭제를 지원한다", async () => {

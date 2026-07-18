@@ -169,6 +169,17 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   try { await sql("CREATE INDEX IF NOT EXISTS company_work_items_user_created_idx ON company_work_items (user_id, created_at DESC)"); } catch (_) {}
+  // 회사 업무 탐색기 날짜 폴더의 사용자 지정 표시 이름. date_key는 실제 저장 경로를
+  // 유지하는 안정적인 키이고 title만 바꿔 GCS 소스 경로와 업무 귀속이 끊기지 않게 한다.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_work_folders (
+      user_id text NOT NULL,
+      date_key text NOT NULL,
+      title text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, date_key)
+    )
+  `);
   // 런타임 상태: 출근(work_mode)·자율(autonomous). 사용자별.
   await sql(`
     CREATE TABLE IF NOT EXISTS company_runtime (

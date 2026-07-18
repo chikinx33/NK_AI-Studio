@@ -65,6 +65,39 @@ export async function deleteCompanyWorkItems(ids: string[]): Promise<number> {
   return Number(data?.deletedCount || 0);
 }
 
+export interface CompanyWorkFolder {
+  date_key: string;
+  title: string;
+  updated_at: string;
+}
+
+export async function listCompanyWorkFolders(): Promise<CompanyWorkFolder[]> {
+  const res = await fetch("/api/agent/work-folders");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 폴더를 불러오지 못했어요.");
+  return Array.isArray(data?.folders) ? data.folders : [];
+}
+
+export async function renameCompanyWorkFolder(dateKey: string, title: string): Promise<void> {
+  const res = await fetch("/api/agent/work-folders", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dateKey, title }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 폴더 이름을 변경하지 못했어요.");
+}
+
+export async function deleteCompanyWorkFolderMeta(dateKey: string): Promise<void> {
+  const res = await fetch("/api/agent/work-folders", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dateKey }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 폴더 정보를 삭제하지 못했어요.");
+}
+
 export async function createAgentVideo(input: CreateAgentVideoInput): Promise<CreateAgentVideoResult> {
   const res = await fetch("/api/agent/agent-video", {
     method: "POST",
