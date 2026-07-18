@@ -134,7 +134,7 @@ export default function App() {
     });
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
-  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") !== "0");
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") === "1");
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
