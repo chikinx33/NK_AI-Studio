@@ -222,3 +222,22 @@ test("공통 비용 게이트는 구독 포함·API 단가 예측·상한·승�
   assert.match(workspace, /actualCost: job\?\.actualCost/);
   assert.match(schema, /maxAmountUsd/);
 });
+
+test("SkillJob 실제 PostgreSQL 통합 검증은 격리 컨테이너에서 핵심 복구 계약을 실행한다", async () => {
+  const [integration, packageJson] = await Promise.all([
+    read("prototype/tests/company-skill-jobs-db.integration.mjs"),
+    read("package.json"),
+  ]);
+
+  assert.match(packageJson, /"test:skill-db": "node prototype\/tests\/company-skill-jobs-db\.integration\.mjs"/);
+  assert.match(integration, /postgres:16-alpine/);
+  assert.match(integration, /createCompanySkillJob/);
+  assert.match(integration, /integration-user-a/);
+  assert.match(integration, /integration-user-b/);
+  assert.match(integration, /duplicate\.created, false/);
+  assert.match(integration, /claimCompanySkillJobExecution/);
+  assert.match(integration, /retryCompanySkillJob/);
+  assert.match(integration, /cancelCompanySkillJob/);
+  assert.match(integration, /listCompanySkillJobEvents/);
+  assert.match(integration, /docker", \["rm", "--force", containerName\]/);
+});

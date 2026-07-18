@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test prototype/tests/*.test.mjs",
+    "test:skill-db": "node prototype/tests/company-skill-jobs-db.integration.mjs",
     "start": "node server.js"
   }
 }

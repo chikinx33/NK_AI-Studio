@@ -850,16 +850,17 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 - [x] 인포그래픽 새로고침·탭 전환·PC 재시작 상태 복원 UI 구현
 - [x] 공통 3열 레이아웃 슬롯 분리
 - [x] 기존 인포그래픽 API를 공통 실행기 어댑터로 연결
-- [ ] Phase 0 통합·사용자 격리·중복 실행·복원 테스트 통과
+- [x] Phase 0 통합·사용자 격리·중복 실행·복원 테스트 통과
+- [ ] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
 
 ### 18.3 현재 이어서 작업할 위치
 
-- 현재 단계: `Phase 0 — 통합·사용자 격리·중복 실행·복원 테스트`
-- 마지막 완료 단위: 결과 유형과 무관한 공통 3열 골격 `CompanySkillThreeColumnLayout`과 `OverviewFields`, `PreviewRenderer`, `PreviewToolbar`, `ReportRenderer`, `CompletionActions`, `ApprovalPanel` 슬롯을 정의하고 기존 인포그래픽 화면을 슬롯 어댑터로 전환
+- 현재 단계: `Phase 0 — 채팅 호출 서버 렌더·최종 산출물 등록 공통화`
+- 마지막 완료 단위: 격리된 실제 PostgreSQL 16 컨테이너에서 사용자 A/B 데이터 격리, 사용자별 멱등 중복 방지, 실행 임대 중복 차단, 실패 단계 재시도, 취소, 멱등 이벤트 복원을 실제 스키마와 쿼리로 검증하는 `npm run test:skill-db` 통합 테스트
 - 비용 설정 계약: API 키 단가는 `COMPANY_SKILL_ANTHROPIC_INPUT_USD_PER_MTOK`, `COMPANY_SKILL_ANTHROPIC_OUTPUT_USD_PER_MTOK` 환경 변수로 주입하며, 입력의 `costControl.maxAmountUsd`가 자동 실행 상한이다. 단가가 없으면 금액을 꾸며내지 않고 `unavailable`로 기록해 승인을 요구한다.
 - 실제 비용 기록 한계: 현재 Claude 어댑터가 실제 토큰 사용량을 반환하지 않아 API 키 실행의 `actualCost`는 `unavailable`로 명시한다. 구독 인증만 실제 추가 비용 0으로 기록한다.
-- 검증 결과: 루트 `npm test` 293개 통과, `ai-company-app` 프로덕션 빌드 통과, 공통 슬롯 계약과 인포그래픽 레이아웃 회귀 통과
-- 바로 다음 일감: 테스트용 PostgreSQL/Neon 연결 가능 여부를 확인하고 사용자 격리·멱등 중복 실행·취소·실패·재시도·복원을 실제 쿼리로 통합 검증
-- 그다음 일감: 채팅 지시만으로도 서버 렌더 큐가 최종 MP4와 산출물 manifest를 생성하도록 렌더 실행 위치 공통화
+- 검증 결과: 루트 `npm test` 294개 통과, `npm run test:skill-db` 실제 PostgreSQL 통합 테스트 통과, 임시 컨테이너 자동 제거 확인
+- 바로 다음 일감: 브라우저 로컬 렌더에 묶인 인포그래픽 MP4 생성·GCS 업로드·artifact/manifest 등록을 서버 실행 어댑터로 이동할 수 있는 렌더 큐 계약과 런타임 경계 확정
+- 그다음 일감: Phase 0 완료 기준 재검토 후 첫 신규 Skill `이미지 제작` 상세 PRD·와이어프레임·입력 스키마 작성
 - 주의: 현재 최종 MP4와 네 종류 산출물 등록은 브라우저에서 업무를 열어 로컬 Remotion 렌더가 완료될 때 수행된다. 채팅 지시만 하고 결과 업무를 열지 않은 경우 서버 명세는 완료되지만 최종 MP4 artifact는 아직 생성되지 않는다. Phase 0 실DB 실패 복구 검증도 남아 있다.
 - 세부 기술 기준: `ai-company-phase0-skill-platform-design.md`

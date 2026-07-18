@@ -98,21 +98,22 @@ users/{userId}/ai-company/work-library/{YYYY-MM-DD}/{workId}/
 - [x] 단계·에이전트·품질·오류·승인·산출물 업무 보고 이벤트 저장·복원
 - [x] 구독 포함·API 키 예상 비용·사용자 상한·승인 대기·승인 재개·거절 취소 공통 게이트
 - [x] 공통 3열 골격과 여섯 개 UI 슬롯 및 인포그래픽 슬롯 어댑터
-- [ ] 통합 테스트와 실패 복구 테스트
+- [x] 실제 PostgreSQL 사용자 격리·멱등·실행 임대·실패 재시도·취소·복원 통합 테스트
+- [ ] 채팅 호출의 서버 렌더와 최종 산출물 등록 공통화
 
 ## 7. 다음 구현 순서
 
-1. 실DB에서 사용자 격리·중복 실행·취소·실패·재시도·복원을 통합 테스트합니다.
-2. 채팅 지시만으로도 서버 렌더 큐가 최종 MP4를 생성·등록하도록 렌더 실행 위치를 공통화합니다.
+1. 채팅 지시만으로도 서버 렌더 큐가 최종 MP4를 생성·등록하도록 렌더 실행 위치를 공통화합니다.
+2. Phase 0 완료 정의를 다시 점검하고 Phase 1 이미지 제작 PRD로 넘어갑니다.
 
 ## 8. 세션 인수인계 상태
 
 - 마지막 갱신일: 2026-07-19
-- 현재 단계: 공통 3열 UI 슬롯 완료, 실DB 통합·실패 복구 테스트 착수 전
-- 마지막 완료 파일: `ai-company-app/src/components/CompanySkillThreeColumnLayout.tsx`, `ai-company-app/src/components/AgentVideoWorkspace.tsx`
-- 다음 시작 파일: `prototype/functions/api/agent/_skill-jobs.ts`를 대상으로 한 실제 DB 통합 테스트와 테스트 환경 구성
-- 연결 대상: 사용자 A/B 격리, 동일 멱등 키 중복 생성, 실행 임대, 취소, 실패 단계 재시도, 조회 복원
+- 현재 단계: 실제 PostgreSQL 통합·실패 복구 테스트 완료, 채팅 호출 서버 렌더 공통화 착수 전
+- 마지막 완료 파일: `prototype/tests/company-skill-jobs-db.integration.mjs`, `package.json`
+- 다음 시작 파일: `prototype/functions/api/agent/_company-skill-executors.ts`의 인포그래픽 실행 완료 이후 렌더 큐 연결과 `ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx`의 브라우저 전용 보관 경계
+- 연결 대상: 채팅과 직접 UI 모두 명세 완료 후 서버 렌더 큐에 동일하게 등록하고, 최종 MP4·source·report·manifest를 SkillJob artifact로 보존
 - 비용 계약: 구독 인증은 플랜 포함 비용 0, API 키는 배포 환경 토큰 단가로 예측한다. 단가 미설정 또는 `costControl.maxAmountUsd` 초과는 승인 전 실행하지 않는다.
-- 검증 상태: 루트 `npm test` 293개, 앱 프로덕션 빌드, 공통 3열 슬롯 계약과 기존 인포그래픽 레이아웃 회귀 통과
+- 검증 상태: 루트 `npm test` 294개, `npm run test:skill-db` 실제 PostgreSQL 16 통합 테스트 통과, 임시 컨테이너 자동 정리 확인
 - 미완료 사실: 채팅 지시 후 업무를 브라우저에서 열지 않으면 로컬 Remotion 렌더와 최종 MP4 artifact 등록이 아직 시작되지 않습니다.
 - 호환 상태: 직접 UI와 채팅 도구 모두 공통 SkillJob 생성 API를 사용하고, 공통 어댑터 내부에서 기존 `/api/agent/agent-video` 제작 구현을 재사용합니다.
