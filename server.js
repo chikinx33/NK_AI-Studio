@@ -3,9 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 const PORT = 14000;
 const ROOT = path.join(__dirname, 'prototype');
+const AGENT_VIDEO_ROOT = path.join(__dirname, 'tmp', 'agent-video');
+const agentVideoJobs = new Map();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -75,10 +78,124 @@ function sendFile(res, filePath, req) {
   });
 }
 
+function sendJson(res, data, status = 200) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.end(JSON.stringify(data));
+}
+
+function readJsonBody(req, limit = 2 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error('payload_too_large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); }
+      catch (_) { reject(new Error('invalid_json')); }
+    });
+    req.on('error', reject);
+  });
+}
+
+function startAgentVideoRender(jobId, spec, res) {
+  const jobDirectory = path.join(AGENT_VIDEO_ROOT, jobId);
+  const propsPath = path.join(jobDirectory, 'props.json');
+  const outputPath = path.join(jobDirectory, 'raviok-agent-video.mp4');
+  fs.mkdir(jobDirectory, { recursive: true }, (mkdirError) => {
+    if (mkdirError) return sendJson(res, { error: mkdirError.message }, 500);
+    fs.writeFile(propsPath, JSON.stringify({ spec }), 'utf8', (writeError) => {
+      if (writeError) return sendJson(res, { error: writeError.message }, 500);
+      const job = {
+        id: jobId,
+        status: 'rendering',
+        progress: 1,
+        outputPath,
+        error: '',
+        log: []
+      };
+      agentVideoJobs.set(jobId, job);
+      const script = path.join(__dirname, 'ai-company-app', 'scripts', 'render-agent-video.mjs');
+      const child = spawn(process.execPath, [script, propsPath, outputPath], {
+        cwd: path.join(__dirname, 'ai-company-app'),
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      const collect = (chunk) => {
+        const lines = String(chunk || '').split(/\r?\n/).filter(Boolean);
+        job.log.push(...lines);
+        if (job.log.length > 80) job.log.splice(0, job.log.length - 80);
+        for (const line of lines) {
+          const match = line.match(/Rendered\s+(\d+)\/(\d+)/i) || line.match(/Rendering frame\s+(\d+)\/(\d+)/i);
+          if (match) job.progress = Math.min(99, Math.max(job.progress, Math.round((Number(match[1]) / Number(match[2])) * 100)));
+        }
+      };
+      child.stdout.on('data', collect);
+      child.stderr.on('data', collect);
+      child.on('error', (error) => {
+        job.status = 'error';
+        job.error = error.message;
+      });
+      child.on('exit', (code) => {
+        fs.stat(outputPath, (statError, stat) => {
+          if (code === 0 && !statError && stat.isFile() && stat.size > 0) {
+            job.status = 'done';
+            job.progress = 100;
+          } else {
+            job.status = 'error';
+            job.error = job.log.slice(-8).join('\n') || `Remotion 렌더 실패(exit=${code})`;
+          }
+        });
+      });
+      sendJson(res, { jobId, status: 'rendering', progress: 1 });
+    });
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const parsed = url.parse(req.url);
     let pathname = decodeURIComponent(parsed.pathname || '/');
+    if (pathname === '/local-agent-video/render' && req.method === 'POST') {
+      return readJsonBody(req)
+        .then((body) => {
+          if (!body || typeof body.spec !== 'object' || !Array.isArray(body.spec.scenes)) {
+            return sendJson(res, { error: '유효한 Agent Video 명세가 필요합니다.' }, 400);
+          }
+          const jobId = crypto.randomUUID();
+          startAgentVideoRender(jobId, body.spec, res);
+        })
+        .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
+    }
+    if (pathname === '/local-agent-video/status' && req.method === 'GET') {
+      const jobId = String(new URL(req.url, 'http://localhost').searchParams.get('jobId') || '');
+      const job = agentVideoJobs.get(jobId);
+      if (!job) return sendJson(res, { error: '렌더 작업을 찾을 수 없습니다.' }, 404);
+      return sendJson(res, {
+        jobId,
+        status: job.status,
+        progress: job.progress,
+        error: job.error || undefined,
+        downloadUrl: job.status === 'done' ? `/local-agent-video/download?jobId=${encodeURIComponent(jobId)}` : undefined
+      });
+    }
+    if (pathname === '/local-agent-video/download' && req.method === 'GET') {
+      const jobId = String(new URL(req.url, 'http://localhost').searchParams.get('jobId') || '');
+      const job = agentVideoJobs.get(jobId);
+      if (!job || job.status !== 'done') return sendJson(res, { error: '완료된 렌더 파일을 찾을 수 없습니다.' }, 404);
+      res.setHeader('Content-Disposition', 'attachment; filename="raviok-agent-video.mp4"');
+      return sendFile(res, job.outputPath, req);
+    }
     if (pathname === '/' || pathname === '/index.html') {
       const file = safeJoin(ROOT, 'index.html');
       if (!file) throw new Error('bad_path');

@@ -1,3 +1,5 @@
+import type { AgentVideoContribution, AgentVideoSpec } from "../remotion/spec";
+
 export interface StatusInfo {
   forbidden?: boolean; // AI 회사 이용 권한 없음(403)
   company: string;
@@ -17,6 +19,58 @@ export interface StatusInfo {
   cloud: { configured: boolean };
   ceoModel: string;
   agentCount: number;
+}
+
+export interface CreateAgentVideoInput {
+  prompt: string;
+  durationSec: number;
+  aspectRatio: "16:9" | "9:16" | "1:1";
+  audience: string;
+  tone: string;
+  style: string;
+}
+
+export interface CreateAgentVideoResult {
+  spec: AgentVideoSpec;
+  contributions: AgentVideoContribution[];
+}
+
+export async function createAgentVideo(input: CreateAgentVideoInput): Promise<CreateAgentVideoResult> {
+  const res = await fetch("/api/agent/agent-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "Agent Video 기획에 실패했어요.");
+  return data as CreateAgentVideoResult;
+}
+
+export interface LocalAgentVideoRenderStatus {
+  available?: boolean;
+  jobId?: string;
+  status: "idle" | "queued" | "rendering" | "done" | "error";
+  progress?: number;
+  downloadUrl?: string;
+  error?: string;
+}
+
+export async function startLocalAgentVideoRender(spec: AgentVideoSpec): Promise<LocalAgentVideoRenderStatus> {
+  const res = await fetch("/local-agent-video/render", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spec }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "로컬 Remotion 렌더러를 시작하지 못했어요.");
+  return data as LocalAgentVideoRenderStatus;
+}
+
+export async function getLocalAgentVideoRenderStatus(jobId: string): Promise<LocalAgentVideoRenderStatus> {
+  const res = await fetch(`/local-agent-video/status?jobId=${encodeURIComponent(jobId)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "렌더 상태를 확인하지 못했어요.");
+  return data as LocalAgentVideoRenderStatus;
 }
 
 export interface AgentInfo {

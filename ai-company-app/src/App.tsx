@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
@@ -33,6 +33,7 @@ type HistoryTurn,
 } from "./lib/api";
 
 const MAX_TTS_SENTENCES = 5;
+const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -83,7 +84,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "video">("chat");
   // 사이드바에서 숨길 에이전트 (코어 제외, localStorage 영속)
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem("hiddenAgents") || "[]")); } catch { return new Set(); }
@@ -712,6 +713,7 @@ export default function App() {
               onChat={() => setCenterView("chat")}
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
+              onVideo={() => setCenterView("video")}
               onSettings={() => setCenterView("settings")}
             />
           </div>
@@ -733,6 +735,10 @@ export default function App() {
           <KnowledgeWorkspace filter={knowFilter} filterNonce={knowFilterNonce} />
         ) : centerView === "agents" ? (
           <AgentManager agentId={agentMgrId} agents={agents} />
+        ) : centerView === "video" ? (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
+            <AgentVideoWorkspace />
+          </Suspense>
         ) : centerView === "settings" ? (
           <Settings
             status={status}
@@ -787,6 +793,7 @@ export default function App() {
               onChat={() => setCenterView("chat")}
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
+              onVideo={() => setCenterView("video")}
               onSettings={() => setCenterView("settings")}
             />
             <Approvals

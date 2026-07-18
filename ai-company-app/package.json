@@ -6,16 +6,26 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "remotion:studio": "remotion studio src/remotion/index.ts",
+    "render:agent-video": "node scripts/render-agent-video.mjs"
   },
   "dependencies": {
+    "@remotion/media": "^4.0.490",
+    "@remotion/player": "^4.0.490",
+    "@remotion/sfx": "^4.0.490",
+    "@remotion/transitions": "^4.0.490",
     "pptxgenjs": "^3.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remotion": "^4.0.490"
   },
   "devDependencies": {
+    "@remotion/bundler": "^4.0.490",
+    "@remotion/cli": "^4.0.490",
+    "@remotion/renderer": "^4.0.490",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
