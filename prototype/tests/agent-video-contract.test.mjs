@@ -40,14 +40,17 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
 });
 
 test("Agent Video 작업 패널은 내부 스크롤 없이 화면 높이에 맞고 세로·정사각 프리뷰 카드를 우측에 배치한다", async () => {
-  const workspace = await read("ai-company-app/src/components/AgentVideoWorkspace.tsx");
+  const [workspace, commonLayout] = await Promise.all([
+    read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
+    read("ai-company-app/src/components/CompanySkillThreeColumnLayout.tsx"),
+  ]);
   assert.match(workspace, /isTallPreview = dimensions\.height >= dimensions\.width/);
   assert.match(workspace, /calc\(\(100dvh - 300px\)/);
   assert.match(workspace, /sm:grid-cols-\[minmax\(0,1fr\)_190px\]/);
   assert.match(workspace, /gridTemplateRows: `repeat\(/);
-  assert.match(workspace, /xl:grid-cols-\[320px_minmax\(0,1fr\)_290px\] xl:overflow-hidden/);
-  assert.match(workspace, /xl:overflow-hidden xl:border-b-0 xl:border-r/);
-  assert.doesNotMatch(workspace, /xl:overflow-y-auto/);
+  assert.match(commonLayout, /xl:grid-cols-\[320px_minmax\(0,1fr\)_290px\] xl:overflow-hidden/);
+  assert.match(commonLayout, /xl:overflow-hidden xl:border-b-0 xl:border-r/);
+  assert.doesNotMatch(commonLayout, /xl:overflow-y-auto/);
   assert.match(workspace, /style=\{\{ width: previewWidth, aspectRatio:/);
 });
 

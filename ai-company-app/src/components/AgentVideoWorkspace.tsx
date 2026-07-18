@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
+import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
   getAgentVideoDimensions,
   getAgentVideoDurationSec,
@@ -127,9 +128,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[320px_minmax(0,1fr)_290px] xl:overflow-hidden">
-        <aside className="border-b border-edge p-3 xl:overflow-hidden xl:border-b-0 xl:border-r">
-          <div className="h-full rounded-xl border border-edge bg-panel p-3">
+      <CompanySkillThreeColumnLayout slots={{
+        OverviewFields: <>
             <div className="mb-2.5 flex items-center gap-2">
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-950 text-sm">🧭</span>
               <div>
@@ -194,27 +194,24 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                 플롯이 구성을 설계한 뒤 잉크·픽셀·비트가 대본, 비주얼, 사운드를 병렬로 제작하고 코어가 최종 명세를 통합합니다.
               </div>
             )}
-            {pendingApproval && (
-              <div className="mt-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2.5 text-[10px] leading-4 text-amber-100">
-                <strong className="block text-xs">비용 승인 대기</strong>
-                <p className="mt-1 text-amber-200/80">{pendingApproval.approvalState?.action}</p>
-                <p className="mt-1 font-mono">
-                  {pendingApproval.costEstimate?.amount == null
-                    ? "예상 금액 산정 불가"
-                    : `예상 최대 비용 $${pendingApproval.costEstimate.amount.toFixed(6)} USD`}
-                </p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => void decideCostApproval("rejected")} className="rounded-md border border-gray-700 px-2 py-1.5 font-bold text-gray-300 hover:bg-gray-800">거절</button>
-                  <button type="button" onClick={() => void decideCostApproval("approved")} className="rounded-md bg-amber-600 px-2 py-1.5 font-bold text-white hover:bg-amber-500">승인 후 실행</button>
-                </div>
-              </div>
-            )}
             {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-red-950/35 p-2 text-[10px] leading-4 text-red-300">{error}</div>}
+        </>,
+        ApprovalPanel: pendingApproval ? (
+          <div className="mt-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2.5 text-[10px] leading-4 text-amber-100">
+            <strong className="block text-xs">비용 승인 대기</strong>
+            <p className="mt-1 text-amber-200/80">{pendingApproval.approvalState?.action}</p>
+            <p className="mt-1 font-mono">
+              {pendingApproval.costEstimate?.amount == null
+                ? "예상 금액 산정 불가"
+                : `예상 최대 비용 $${pendingApproval.costEstimate.amount.toFixed(6)} USD`}
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => void decideCostApproval("rejected")} className="rounded-md border border-gray-700 px-2 py-1.5 font-bold text-gray-300 hover:bg-gray-800">거절</button>
+              <button type="button" onClick={() => void decideCostApproval("approved")} className="rounded-md bg-amber-600 px-2 py-1.5 font-bold text-white hover:bg-amber-500">승인 후 실행</button>
+            </div>
           </div>
-        </aside>
-
-        <main className="min-w-0 p-3 xl:overflow-hidden">
-          <div className="mx-auto flex h-full max-w-5xl flex-col">
+        ) : null,
+        PreviewToolbar: (
             <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold text-gray-200">미리보기</h2>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.scenes.length}개 씬</span>
@@ -222,6 +219,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.aspectRatio}</span>
               <span className="ml-auto text-[11px] text-gray-500">{spec.title}</span>
             </div>
+        ),
+        PreviewRenderer: (
             <div className={`min-h-0 flex-1 ${isTallPreview ? "grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]" : "flex flex-col"}`}>
               <div className={`flex min-h-0 min-w-0 justify-center overflow-hidden ${isTallPreview ? "h-full items-center" : "shrink-0"}`}>
                 <div
@@ -263,10 +262,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               ))}
               </div>
             </div>
-          </div>
-        </main>
-
-        <aside className="flex flex-col border-t border-edge p-3 xl:overflow-hidden xl:border-l xl:border-t-0">
+        ),
+        ReportRenderer: <>
           <h2 className="text-sm font-bold text-gray-200">업무 보고</h2>
           <div className="mt-2 grid gap-1.5">
             {contributions.length ? contributions.map((item) => <ContributionCard key={item.agentId} item={item} />) : (
@@ -275,8 +272,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               </div>
             )}
           </div>
-
-          <div className="mt-auto pt-3">
+        </>,
+        CompletionActions: (
             <button
               type="button"
               onClick={downloadVideo}
@@ -287,9 +284,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
             >
               다운로드
             </button>
-          </div>
-        </aside>
-      </div>
+        ),
+      }} />
       <AgentVideoStorageModal
         open={storageOpen}
         onClose={() => setStorageOpen(false)}

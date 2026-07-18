@@ -44,6 +44,21 @@ test("스킬 페이지는 세부 스킬을 단일 선택하고 기존 인포그�
   assert.match(videoWorkspace, /embedded = false/);
 });
 
+test("공통 Skill 워크스페이스는 3열 골격과 여섯 개 결과 독립 슬롯을 제공한다", async () => {
+  const [layout, videoWorkspace] = await Promise.all([
+    read("ai-company-app/src/components/CompanySkillThreeColumnLayout.tsx"),
+    read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
+  ]);
+
+  for (const slot of ["OverviewFields", "PreviewRenderer", "PreviewToolbar", "ReportRenderer", "CompletionActions", "ApprovalPanel"]) {
+    assert.match(layout, new RegExp(`${slot}`));
+    assert.match(videoWorkspace, new RegExp(`${slot}:`));
+  }
+  assert.match(layout, /data-company-skill-layout="three-column"/);
+  assert.match(layout, /xl:grid-cols-\[320px_minmax\(0,1fr\)_290px\]/);
+  assert.match(videoWorkspace, /<CompanySkillThreeColumnLayout slots=/);
+});
+
 test("직접 실행과 에이전트 지시는 같은 업무 저장소에 출처만 구분해 기록한다", async () => {
   const [workspaceContext, shared, endpoint, executor] = await Promise.all([
     read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
