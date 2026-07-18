@@ -10,3 +10,4 @@ Raviok AI/
 .env.*.local
 ai-company-app/node_modules/
 ai-company-app/out/
+ai-company-app/quality-review/

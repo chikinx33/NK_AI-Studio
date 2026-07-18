@@ -12,9 +12,11 @@ type AspectRatio = "16:9" | "9:16" | "1:1";
 const ALLOWED_KIND = new Set(["hero", "statement", "metrics", "process", "quote", "cta"]);
 const ALLOWED_VISUAL = new Set(["network", "orbit", "bars", "timeline", "spotlight", "grid", "donut", "gauge", "comparison", "flow", "ecosystem", "counters", "area"]);
 const ALLOWED_SFX = new Set(["none", "whoosh", "ding", "switch", "click", "whip"]);
-const ALLOWED_LAYOUT = new Set(["split", "reverse", "visual-first", "dashboard"]);
+const ALLOWED_LAYOUT = new Set(["poster", "editorial", "stacked", "split", "reverse", "visual-first", "dashboard"]);
 const ALLOWED_TRANSITION = new Set(["slide", "rise", "zoom", "wipe", "reveal"]);
 const ALLOWED_BACKGROUND = new Set(["grid", "organic", "gradient", "paper", "dark"]);
+const ALLOWED_DATA_MODE = new Set(["qualitative", "sequence", "quantitative"]);
+const ALLOWED_SYMBOL = new Set(["spark", "shield", "traffic", "fire", "phone", "people", "leaf", "planet", "recycle", "chip", "chart", "heart", "book", "check", "arrow"]);
 const HEX = /^#[0-9a-f]{6}$/i;
 const FALLBACK_COLORS = ["#4d8dff", "#33dbd0", "#ff8a20", "#f35c9d"];
 const THEME_PALETTES: Record<string, string[]> = {
@@ -37,7 +39,7 @@ function cleanText(value: any, fallback = "", max = 300) {
 
 function inferTheme(prompt: string, requested: any) {
   if (/환경|지구|기후|탄소|재활용|친환경|생태|숲|바다|에너지/i.test(prompt)) return "environment";
-  if (/교육|학습|학교|강의|튜토리얼|학생/i.test(prompt)) return "education";
+  if (/교육|학습|학교|강의|튜토리얼|학생|어린이|아동|안전|수칙/i.test(prompt)) return "education";
   if (/건강|의료|병원|웰니스|운동|영양/i.test(prompt)) return "health";
   if (/AI|인공지능|에이전트|데이터|기술|테크|디지털|소프트웨어/i.test(prompt)) return "technology";
   if (/매출|사업|기업|회사|브랜드|시장|성과|투자/i.test(prompt)) return "business";
@@ -58,9 +60,9 @@ const THEME_VISUALS: Record<string, string[]> = {
 };
 
 const FORMAT_LAYOUTS: Record<AspectRatio, string[]> = {
-  "16:9": ["split", "dashboard", "reverse", "visual-first"],
-  "1:1": ["visual-first", "dashboard", "split", "visual-first"],
-  "9:16": ["visual-first", "split", "dashboard", "visual-first"],
+  "16:9": ["editorial", "split", "dashboard", "reverse"],
+  "1:1": ["poster", "stacked", "dashboard", "editorial"],
+  "9:16": ["poster", "stacked", "dashboard", "editorial"],
 };
 
 function compactCopy(value: any, fallback: string, max: number) {
@@ -77,7 +79,25 @@ function promptHash(value: string) {
   return Math.abs(hash);
 }
 
-function normalizeVisualData(raw: any, scene: any, index: number) {
+function inferSymbol(value: string, theme: string) {
+  if (/교통|횡단|신호|도로|차량|보행|traffic|road/i.test(value)) return "traffic";
+  if (/화재|불길|연기|대피|소방|fire|smoke/i.test(value)) return "fire";
+  if (/신고|전화|연락|112|119|phone|call/i.test(value)) return "phone";
+  if (/안전|보호|위험|보안|수칙|shield|safe/i.test(value)) return "shield";
+  if (/환경|나무|숲|친환경|생태|leaf|eco/i.test(value)) return "leaf";
+  if (/지구|기후|planet|earth/i.test(value)) return "planet";
+  if (/재활용|순환|recycle/i.test(value)) return "recycle";
+  if (/건강|심장|의료|병원|heart|health/i.test(value)) return "heart";
+  if (/교육|학습|학교|책|수업|learn|book/i.test(value)) return "book";
+  if (/사람|고객|팀|협업|친구|함께|people|team/i.test(value)) return "people";
+  if (/매출|성과|성장|차트|지표|chart|growth/i.test(value)) return "chart";
+  if (/AI|인공지능|데이터|기술|칩|디지털|chip|tech/i.test(value)) return "chip";
+  if (/완료|확인|약속|실천|check|done/i.test(value)) return "check";
+  if (/시작|이동|다음|전환|arrow|next/i.test(value)) return "arrow";
+  return ({ environment: "leaf", education: "book", health: "heart", business: "chart", technology: "chip", social: "people" } as Record<string, string>)[theme] || "spark";
+}
+
+function normalizeVisualData(raw: any, scene: any, index: number, theme: string) {
   const fallbackValues = [68 + (index * 7) % 22, 52 + (index * 11) % 35, 82 - (index * 5) % 24, 61 + (index * 13) % 28];
   const values = (Array.isArray(raw?.values) ? raw.values : fallbackValues)
     .map((value: any) => Math.min(100, Math.max(0, Number(value) || 0))).slice(0, 6);
@@ -94,6 +114,12 @@ function normalizeVisualData(raw: any, scene: any, index: number) {
     secondaryValue: Math.max(0, Number(raw?.secondaryValue) || values.length),
     icon: cleanText(raw?.icon, "✦", 8),
     caption: cleanText(raw?.caption, scene?.body || "핵심 인사이트", 80),
+    dataMode: ALLOWED_DATA_MODE.has(String(raw?.dataMode || ""))
+      ? String(raw.dataMode)
+      : scene?.kind === "metrics" ? "quantitative" : scene?.kind === "process" ? "sequence" : "qualitative",
+    symbol: ALLOWED_SYMBOL.has(String(raw?.symbol || ""))
+      ? String(raw.symbol)
+      : inferSymbol(`${scene?.eyebrow || ""} ${scene?.title || ""} ${scene?.body || ""} ${raw?.caption || ""}`, theme),
   };
 }
 
@@ -149,12 +175,18 @@ function normalizeSpec(raw: any, request: {
     const requestedLayout = String(scene?.layout || "");
     const formatLayouts = FORMAT_LAYOUTS[request.aspectRatio];
     const previousLayout = index > 0 ? String(sourceScenes[index - 1]?.layout || "") : "";
+    const kindValue = ALLOWED_KIND.has(kind) ? kind : "statement";
+    const semanticLayout = kindValue === "hero" || kindValue === "cta"
+      ? (request.aspectRatio === "16:9" ? "editorial" : "poster")
+      : kindValue === "process"
+        ? (request.aspectRatio === "16:9" ? "split" : "stacked")
+        : kindValue === "metrics" ? "dashboard" : formatLayouts[index % formatLayouts.length];
     const layout = ALLOWED_LAYOUT.has(requestedLayout) && requestedLayout !== previousLayout
       ? requestedLayout
-      : formatLayouts[index % formatLayouts.length];
+      : semanticLayout;
     return {
       id: cleanText(scene?.id, `scene-${index + 1}`, 40),
-      kind: ALLOWED_KIND.has(kind) ? kind : "statement",
+      kind: kindValue,
       durationSec,
       eyebrow: compactCopy(scene?.eyebrow, `SCENE ${index + 1}`, 36),
       title: compactCopy(scene?.title, `핵심 장면 ${index + 1}`, request.aspectRatio === "16:9" ? 54 : 46),
@@ -164,7 +196,7 @@ function normalizeSpec(raw: any, request: {
       sfx: ALLOWED_SFX.has(sfx) ? sfx : "none",
       layout,
       transition: ALLOWED_TRANSITION.has(String(scene?.transition || "")) ? String(scene.transition) : (["zoom", "slide", "rise", "wipe", "reveal"][index % 5]),
-      visualData: normalizeVisualData(scene?.visualData, scene, index),
+      visualData: normalizeVisualData(scene?.visualData, { ...scene, kind: kindValue }, index, theme),
     };
   });
 
@@ -192,6 +224,36 @@ function normalizeSpec(raw: any, request: {
       : theme === "environment" ? "organic" : theme === "education" ? "paper" : theme === "technology" ? "grid" : "gradient",
     createdAt: new Date().toISOString(),
   };
+}
+
+function enforceSpecQuality(spec: any, aspectRatio: AspectRatio) {
+  const seenTitles = new Set<string>();
+  spec.scenes = spec.scenes.map((scene: any, index: number) => {
+    const titleKey = String(scene.title || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (seenTitles.has(titleKey)) scene.title = `${scene.title}\n핵심 ${index + 1}`;
+    seenTitles.add(titleKey);
+    const semanticMode = scene.kind === "metrics" && scene.visualData.dataMode === "quantitative"
+      ? "quantitative"
+      : scene.kind === "process" ? "sequence" : "qualitative";
+    const semanticLayout = scene.kind === "hero" || scene.kind === "cta"
+      ? (aspectRatio === "16:9" ? "editorial" : "poster")
+      : scene.kind === "process"
+        ? (aspectRatio === "16:9" ? "split" : "stacked")
+        : scene.kind === "metrics" ? "dashboard" : scene.layout;
+    const labels = scene.visualData.labels.slice(0, aspectRatio === "16:9" ? 5 : 4);
+    while (labels.length < 2) labels.push(`핵심 ${labels.length + 1}`);
+    return {
+      ...scene,
+      layout: semanticLayout,
+      visualData: {
+        ...scene.visualData,
+        labels,
+        dataMode: semanticMode,
+        symbol: inferSymbol(`${scene.eyebrow} ${scene.title} ${scene.body} ${scene.visualData.caption}`, spec.theme),
+      },
+    };
+  });
+  return spec;
 }
 
 function visualSignature(spec: any) {
@@ -246,7 +308,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       `시청 대상: ${input.audience}`,
       `톤: ${input.tone}`,
       `스타일: ${input.style}`,
-      "제약: AI Cinema의 기존 프로젝트·클립은 사용하지 않는다. 외부 영상 생성 없이 Remotion 네이티브 텍스트·도형·SVG·애니메이션으로 새 영상을 만든다.",
+      "제약: AI Cinema의 기존 프로젝트·클립은 사용하지 않는다. Remotion 네이티브 타이포그래피·의미 기반 SVG·애니메이션으로 독립 영상을 만든다.",
     ].join("\n");
 
     const plotResult = await speak(
@@ -269,7 +331,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       speak(
         env,
         "pixel",
-        `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n최상급 정보디자인 스튜디오의 아트 디렉터로서 주제 고유의 시각 언어를 설계하세요. 씬마다 network, orbit, bars, timeline, spotlight, grid, donut, gauge, comparison, flow, ecosystem, counters, area 중 의미에 맞는 서로 다른 시각 구조를 고르세요. 실제 화면을 구성할 2~6개 값(0~100), 짧은 라벨, 핵심 수치·단위, 아이콘, 캡션을 제안하세요. 사실로 확인되지 않은 통계를 꾸며내지 말고 그런 경우 값은 정성적 비중·진행 단계로 표현하세요. 전체 팔레트, 배경 패턴, 화면 레이아웃과 전환 방식도 주제에 맞게 차별화하세요.`,
+        `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n최상급 정보디자인 스튜디오의 아트 디렉터로서 주제 고유의 시각 언어를 설계하세요. 씬마다 network, orbit, bars, timeline, spotlight, grid, donut, gauge, comparison, flow, ecosystem, counters, area 중 의미에 맞는 구조를 고르세요. 장면을 대표하는 symbol은 spark, shield, traffic, fire, phone, people, leaf, planet, recycle, chip, chart, heart, book, check, arrow 중 고르세요. 실제 수치가 있는 장면만 quantitative로 지정하고, 행동 순서는 sequence, 메시지·개념은 qualitative로 지정하세요. 사실로 확인되지 않은 숫자는 절대 꾸며내지 마세요. 9:16에서는 모바일 화면에서 읽히는 큰 글자와 2~4개의 큰 시각 요소만 사용하고, 전체 팔레트·배경·전환을 주제에 맞게 차별화하세요.`,
         "",
         shared,
       ),
@@ -308,7 +370,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     "body": "한두 문장 본문",
     "accent": "#RRGGBB",
     "visual": "network|orbit|bars|timeline|spotlight|grid|donut|gauge|comparison|flow|ecosystem|counters|area",
-    "layout": "split|reverse|visual-first|dashboard",
+    "layout": "poster|editorial|stacked|split|reverse|visual-first|dashboard",
     "transition": "slide|rise|zoom|wipe|reveal",
     "visualData": {
       "values": [0부터 100 사이 숫자 2~6개],
@@ -317,7 +379,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       "primaryValue": 72,
       "secondaryValue": 4,
       "icon": "주제 상징 한 글자 또는 기호",
-      "caption": "도표가 전달할 인사이트"
+      "caption": "도표가 전달할 인사이트",
+      "dataMode": "qualitative|sequence|quantitative",
+      "symbol": "spark|shield|traffic|fire|phone|people|leaf|planet|recycle|chip|chart|heart|book|check|arrow"
     },
     "sfx": "none|whoosh|ding|switch|click|whip"
   }]
@@ -332,6 +396,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 - 주제와 무관한 범용 테크 그래픽을 반복하지 않습니다. 환경은 유기적 생태 구조, AI는 연결·데이터 구조처럼 시각 문법 자체가 달라야 합니다.
 - 한 영상 안에서 같은 visual과 layout 조합을 반복하지 않습니다.
 - visualData가 실제 그래프·도표의 형태를 결정하므로 모든 씬에 의미 있는 값과 라벨을 제공합니다.
+- 확인되지 않은 수치를 지어내지 않습니다. 실제 통계가 없으면 dataMode를 qualitative 또는 sequence로 지정하고 숫자는 화면에 노출하지 않습니다.
+- symbol은 장면 내용과 직접 연결되어야 합니다. 단순 장식용 spark를 반복하지 않습니다.
 - 16:9, 1:1, 9:16은 같은 레이아웃을 크기만 바꾼 결과가 아니어야 합니다. 1:1은 상·하 정보 계층과 중앙 집중 구성을, 9:16은 세로 흐름과 짧은 카피를, 16:9는 가로 정보 흐름을 사용하세요.
 - 제목은 두 줄 안에서 읽혀야 하며 도표·라벨과 겹치지 않아야 합니다. 긴 문장을 억지로 넣지 말고 핵심어 중심으로 축약하세요.
 - 밝은 배경에는 어두운 전경색, 어두운 배경에는 밝은 전경색이 필요한 팔레트를 설계하고 장식보다 가독성을 우선하세요.
@@ -356,11 +422,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       model: "claude-sonnet-4-6",
       maxTokens: 4200,
     });
-    let spec = normalizeSpec(parseJsonObject(rawSpec), input);
+    let spec = enforceSpecQuality(normalizeSpec(parseJsonObject(rawSpec), input), input.aspectRatio);
     if (sql) {
       const recent = await sql("SELECT metadata FROM company_work_items WHERE user_id = $1 AND work_type = 'infographic' ORDER BY created_at DESC LIMIT 8", [auth.userId]).catch(() => []);
       const signatures = new Set(recent.map((row: any) => visualSignature(row?.metadata?.spec)).filter(Boolean));
-      spec = rotateDuplicateVisuals(spec, signatures);
+      spec = enforceSpecQuality(rotateDuplicateVisuals(spec, signatures), input.aspectRatio);
     }
 
     const contributions = [

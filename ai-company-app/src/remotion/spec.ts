@@ -5,8 +5,12 @@ export type AgentVideoVisualKind =
   | "donut" | "gauge" | "comparison" | "flow" | "ecosystem" | "counters" | "area";
 export type AgentVideoSfx = "none" | "whoosh" | "ding" | "switch" | "click" | "whip";
 export type AgentVideoTheme = "technology" | "environment" | "business" | "education" | "health" | "social" | "abstract";
-export type AgentVideoLayout = "split" | "reverse" | "visual-first" | "dashboard";
+export type AgentVideoLayout = "poster" | "editorial" | "stacked" | "split" | "reverse" | "visual-first" | "dashboard";
 export type AgentVideoTransition = "slide" | "rise" | "zoom" | "wipe" | "reveal";
+export type AgentVideoDataMode = "qualitative" | "sequence" | "quantitative";
+export type AgentVideoSymbol =
+  | "spark" | "shield" | "traffic" | "fire" | "phone" | "people" | "leaf"
+  | "planet" | "recycle" | "chip" | "chart" | "heart" | "book" | "check" | "arrow";
 
 export interface AgentVideoVisualData {
   values: number[];
@@ -16,6 +20,8 @@ export interface AgentVideoVisualData {
   secondaryValue: number;
   icon: string;
   caption: string;
+  dataMode: AgentVideoDataMode;
+  symbol: AgentVideoSymbol;
 }
 
 export interface AgentVideoScene {
@@ -64,8 +70,35 @@ const sceneKinds = new Set<AgentVideoSceneKind>(["hero", "statement", "metrics",
 const visualKinds = new Set<AgentVideoVisualKind>(["network", "orbit", "bars", "timeline", "spotlight", "grid", "donut", "gauge", "comparison", "flow", "ecosystem", "counters", "area"]);
 const sfxKinds = new Set<AgentVideoSfx>(["none", "whoosh", "ding", "switch", "click", "whip"]);
 const themes = new Set<AgentVideoTheme>(["technology", "environment", "business", "education", "health", "social", "abstract"]);
-const layouts = new Set<AgentVideoLayout>(["split", "reverse", "visual-first", "dashboard"]);
+const layouts = new Set<AgentVideoLayout>(["poster", "editorial", "stacked", "split", "reverse", "visual-first", "dashboard"]);
 const transitions = new Set<AgentVideoTransition>(["slide", "rise", "zoom", "wipe", "reveal"]);
+const dataModes = new Set<AgentVideoDataMode>(["qualitative", "sequence", "quantitative"]);
+const symbols = new Set<AgentVideoSymbol>(["spark", "shield", "traffic", "fire", "phone", "people", "leaf", "planet", "recycle", "chip", "chart", "heart", "book", "check", "arrow"]);
+
+export function inferAgentVideoSymbol(value: string, theme: AgentVideoTheme): AgentVideoSymbol {
+  const textValue = String(value || "");
+  if (/교통|횡단|신호|도로|차량|보행|traffic|road/i.test(textValue)) return "traffic";
+  if (/화재|불길|연기|대피|소방|fire|smoke/i.test(textValue)) return "fire";
+  if (/신고|전화|연락|112|119|phone|call/i.test(textValue)) return "phone";
+  if (/안전|보호|위험|보안|수칙|shield|safe/i.test(textValue)) return "shield";
+  if (/환경|나무|숲|친환경|생태|leaf|eco/i.test(textValue)) return "leaf";
+  if (/지구|기후|planet|earth/i.test(textValue)) return "planet";
+  if (/재활용|순환|recycle/i.test(textValue)) return "recycle";
+  if (/건강|심장|의료|병원|heart|health/i.test(textValue)) return "heart";
+  if (/교육|학습|학교|책|수업|learn|book/i.test(textValue)) return "book";
+  if (/사람|고객|팀|협업|친구|함께|people|team/i.test(textValue)) return "people";
+  if (/매출|성과|성장|차트|지표|chart|growth/i.test(textValue)) return "chart";
+  if (/AI|인공지능|데이터|기술|칩|디지털|chip|tech/i.test(textValue)) return "chip";
+  if (/완료|확인|약속|실천|check|done/i.test(textValue)) return "check";
+  if (/시작|이동|다음|전환|arrow|next/i.test(textValue)) return "arrow";
+  if (theme === "environment") return "leaf";
+  if (theme === "education") return "book";
+  if (theme === "health") return "heart";
+  if (theme === "business") return "chart";
+  if (theme === "technology") return "chip";
+  if (theme === "social") return "people";
+  return "spark";
+}
 
 export const defaultAgentVideoSpec: AgentVideoSpec = {
   version: "1.0",
@@ -95,7 +128,7 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       sfx: "whoosh",
       layout: "visual-first",
       transition: "zoom",
-      visualData: { values: [82, 64, 91, 73], labels: ["기획", "카피", "디자인", "사운드"], unit: "%", primaryValue: 4, secondaryValue: 30, icon: "✦", caption: "전문 에이전트 협업" },
+      visualData: { values: [82, 64, 91, 73], labels: ["기획", "카피", "디자인", "사운드"], unit: "%", primaryValue: 4, secondaryValue: 30, icon: "✦", caption: "전문 에이전트 협업", dataMode: "qualitative", symbol: "spark" },
     },
     {
       id: "scene-2",
@@ -109,7 +142,7 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       sfx: "switch",
       layout: "split",
       transition: "slide",
-      visualData: { values: [78, 86, 92, 88], labels: ["PLOT", "INK", "PIXEL", "BEAT"], unit: "%", primaryValue: 4, secondaryValue: 1, icon: "◎", caption: "하나의 제작 명세로 통합" },
+      visualData: { values: [78, 86, 92, 88], labels: ["PLOT", "INK", "PIXEL", "BEAT"], unit: "%", primaryValue: 4, secondaryValue: 1, icon: "◎", caption: "하나의 제작 명세로 통합", dataMode: "sequence", symbol: "people" },
     },
     {
       id: "scene-3",
@@ -123,7 +156,7 @@ export const defaultAgentVideoSpec: AgentVideoSpec = {
       sfx: "ding",
       layout: "dashboard",
       transition: "rise",
-      visualData: { values: [25, 50, 75, 100], labels: ["요청", "협업", "검수", "렌더"], unit: "%", primaryValue: 100, secondaryValue: 30, icon: "↗", caption: "로컬 Remotion 렌더" },
+      visualData: { values: [25, 50, 75, 100], labels: ["요청", "협업", "검수", "렌더"], unit: "%", primaryValue: 100, secondaryValue: 30, icon: "↗", caption: "로컬 Remotion 렌더", dataMode: "sequence", symbol: "arrow" },
     },
   ],
 };
@@ -157,6 +190,7 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
     .slice(0, 6);
   while (palette.length < 4) palette.push(defaultAgentVideoSpec.palette[palette.length]);
   const themeCandidate = String(raw.theme ?? "technology") as AgentVideoTheme;
+  const theme = themes.has(themeCandidate) ? themeCandidate : "abstract";
   const backgroundCandidate = String(raw.backgroundStyle ?? "grid") as AgentVideoSpec["backgroundStyle"];
 
   const rawScenes = Array.isArray(raw.scenes) ? raw.scenes.slice(0, 8) : [];
@@ -195,6 +229,12 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
         secondaryValue: Math.max(0, Number(rawData.secondaryValue) || fallback.visualData.secondaryValue),
         icon: text(rawData.icon, fallback.visualData.icon, 8),
         caption: text(rawData.caption, fallback.visualData.caption, 80),
+        dataMode: dataModes.has(String(rawData.dataMode) as AgentVideoDataMode)
+          ? String(rawData.dataMode) as AgentVideoDataMode
+          : kindCandidate === "metrics" ? "quantitative" : kindCandidate === "process" ? "sequence" : "qualitative",
+        symbol: symbols.has(String(rawData.symbol) as AgentVideoSymbol)
+          ? String(rawData.symbol) as AgentVideoSymbol
+          : inferAgentVideoSymbol(`${scene.eyebrow || ""} ${scene.title || ""} ${scene.body || ""} ${rawData.caption || ""}`, theme),
       },
     };
   });
@@ -212,7 +252,7 @@ export function normalizeAgentVideoSpec(input: unknown): AgentVideoSpec {
     palette,
     scenes: scenes.length >= 2 ? scenes : defaultAgentVideoSpec.scenes,
     narration: text(raw.narration, "", 2000),
-    theme: themes.has(themeCandidate) ? themeCandidate : "abstract",
+    theme,
     motif: text(raw.motif, defaultAgentVideoSpec.motif, 120),
     backgroundStyle: (["grid", "organic", "gradient", "paper", "dark"] as const).includes(backgroundCandidate) ? backgroundCandidate : "gradient",
     createdAt: text(raw.createdAt, new Date().toISOString(), 40),

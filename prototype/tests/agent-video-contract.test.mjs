@@ -176,7 +176,7 @@ test("Agent Video는 주제별 아트 디렉션·데이터 차트·최근 결과
     read("ai-company-app/src/remotion/spec.ts"),
     read("prototype/functions/api/agent/agent-video.ts"),
   ]);
-  for (const visual of ["DonutVisual", "GaugeVisual", "ComparisonVisual", "FlowVisual", "EcosystemVisual", "CountersVisual", "AreaVisual"]) {
+  for (const visual of ["SymbolIcon", "HeroArtwork", "StepArtwork", "JourneyArtwork", "MetricArtwork", "NetworkArtwork"]) {
     assert.match(component, new RegExp(`function ${visual}`));
   }
   assert.match(component, /scene\.visualData\.values/);
@@ -184,6 +184,8 @@ test("Agent Video는 주제별 아트 디렉션·데이터 차트·최근 결과
   assert.match(component, /spec\.backgroundStyle === "organic"/);
   assert.match(spec, /AgentVideoTheme/);
   assert.match(spec, /AgentVideoLayout/);
+  assert.match(spec, /AgentVideoSymbol/);
+  assert.match(spec, /inferAgentVideoSymbol/);
   assert.match(spec, /visualData: AgentVideoVisualData/);
   assert.match(endpoint, /THEME_VISUALS/);
   assert.match(endpoint, /inferTheme/);
@@ -199,16 +201,22 @@ test("Agent Video 품질 엔진은 화면비·텍스트 실측·색상 대비를
   ]);
   assert.match(packageJson, /"@remotion\/layout-utils"/);
   assert.match(component, /import \{ fitText \} from "@remotion\/layout-utils"/);
-  assert.match(component, /fitMultilineText/);
+  assert.match(component, /fitTitle/);
   assert.match(component, /contrastRatio/);
-  assert.match(component, /accessibleAccent/);
-  assert.match(component, /const vertical = portrait \|\| square/);
-  assert.match(component, /square[\s\S]*minmax\(0, \.84fr\) minmax\(0, 1\.16fr\)/);
-  assert.match(component, /maxHeight: titleSize \* 2\.15/);
+  assert.match(component, /ensureContrast/);
+  assert.match(component, /const format = height > width \? "portrait"/);
+  assert.match(component, /titleMin = format === "portrait" \? 66/);
+  assert.match(component, /fontSize: 38/);
   assert.match(component, /wordBreak: "keep-all"/);
   assert.match(component, /background: tokens\.surface/);
+  assert.doesNotMatch(component, /left: -47/);
+  assert.doesNotMatch(component, /spec\.motif/);
   assert.match(endpoint, /FORMAT_LAYOUTS/);
   assert.match(endpoint, /compactCopy/);
+  assert.match(endpoint, /enforceSpecQuality/);
+  assert.match(endpoint, /semanticLayout/);
+  assert.match(endpoint, /dataMode/);
+  assert.match(endpoint, /확인되지 않은 수치를 지어내지 않습니다/);
   assert.match(endpoint, /1:1은 상·하 정보 계층과 중앙 집중 구성/);
 });
 
