@@ -191,3 +191,34 @@ test("채팅과 직접 실행은 공통 SkillJob API를 사용하고 진행 중 
   assert.match(client, /export async function waitForCompanySkillJob/);
   assert.match(legacyEndpoint, /skillJobId:[^\n]*body\?\.skillJobId/);
 });
+
+test("공통 비용 게이트는 구독 포함·API 단가 예측·상한·승인 대기와 재개를 강제한다", async () => {
+  const [costs, executor, approve, client, workspace, schema] = await Promise.all([
+    read("prototype/functions/api/agent/_company-skill-costs.ts"),
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/approve.ts"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("ai-company-app/src/lib/companySkillSchemas.ts"),
+  ]);
+
+  assert.match(costs, /auth\.mode === "subscription"/);
+  assert.match(costs, /costPolicy === "no-external-cost"/);
+  assert.match(costs, /category: "included"/);
+  assert.match(costs, /COMPANY_SKILL_ANTHROPIC_INPUT_USD_PER_MTOK/);
+  assert.match(costs, /COMPANY_SKILL_ANTHROPIC_OUTPUT_USD_PER_MTOK/);
+  assert.match(costs, /amount == null \|\| amount > maxAmountUsd/);
+  assert.match(costs, /rateSource:[\s\S]*"not-configured"/);
+  assert.match(executor, /currentStage: "awaiting-approval"/);
+  assert.match(executor, /status: "pending"/);
+  assert.match(executor, /hasMatchingCostApproval/);
+  assert.match(executor, /actualCost: buildActualCompanySkillCost/);
+  assert.match(approve, /currentApproval\.status !== "pending"/);
+  assert.match(approve, /waitUntil\(runCompanySkillJob/);
+  assert.match(approve, /cancelCompanySkillJob/);
+  assert.match(client, /approvalState\?\.status === "pending"/);
+  assert.match(workspace, /pendingApproval/);
+  assert.match(workspace, /decideCostApproval/);
+  assert.match(workspace, /actualCost: job\?\.actualCost/);
+  assert.match(schema, /maxAmountUsd/);
+});

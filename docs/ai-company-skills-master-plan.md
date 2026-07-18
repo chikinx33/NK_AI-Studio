@@ -846,7 +846,7 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 - [x] 채팅 호출과 직접 UI 호출을 공통 생성 API로 통합
 - [x] 에이전트 업무 보고 이벤트 표준 구현
 - [x] 렌더 완료 인포그래픽 산출물 manifest, 버전, lineage 저장 함수 구현
-- [ ] 비용 예상·승인·상한 공통 게이트 구현
+- [x] 비용 예상·승인·상한 공통 게이트 구현
 - [x] 인포그래픽 새로고침·탭 전환·PC 재시작 상태 복원 UI 구현
 - [ ] 공통 3열 레이아웃 슬롯 분리
 - [x] 기존 인포그래픽 API를 공통 실행기 어댑터로 연결
@@ -854,10 +854,12 @@ GET    /api/agent/skill-jobs/{jobId}/artifacts
 
 ### 18.3 현재 이어서 작업할 위치
 
-- 현재 단계: `Phase 0 — 비용 예상·승인·상한 공통 게이트`
-- 마지막 완료 단위: 단계·에이전트 판단·품질·오류·승인·취소·재시도·산출물을 멱등 이벤트로 누적하고 SkillJob 조회에서 시간순 복원
-- 검증 결과: 루트 `npm test` 291개 통과, `ai-company-app` 프로덕션 빌드 통과, 실행기·조회·산출물·승인·취소·재시도 서버 함수 esbuild 번들 통과
-- 바로 다음 일감: Skill 정의의 `costPolicy`에 따른 실행 전 예상 비용 산정, 자동 실행 상한, 승인 대기 계약 구현
-- 그다음 일감: 공통 3열 레이아웃 슬롯 분리와 실DB 사용자 격리·실패 복구 통합 테스트
+- 현재 단계: `Phase 0 — 공통 3열 레이아웃 슬롯 분리`
+- 마지막 완료 단위: 구독 인증은 플랜 포함으로 자동 통과하고, API 키 인증은 배포 환경 단가와 사용자 상한으로 예상 비용을 계산해 상한 초과·산정 불가 시 승인 대기하며 승인 후 동일 SkillJob을 재개하고 거절 시 취소하는 공통 비용 게이트
+- 비용 설정 계약: API 키 단가는 `COMPANY_SKILL_ANTHROPIC_INPUT_USD_PER_MTOK`, `COMPANY_SKILL_ANTHROPIC_OUTPUT_USD_PER_MTOK` 환경 변수로 주입하며, 입력의 `costControl.maxAmountUsd`가 자동 실행 상한이다. 단가가 없으면 금액을 꾸며내지 않고 `unavailable`로 기록해 승인을 요구한다.
+- 실제 비용 기록 한계: 현재 Claude 어댑터가 실제 토큰 사용량을 반환하지 않아 API 키 실행의 `actualCost`는 `unavailable`로 명시한다. 구독 인증만 실제 추가 비용 0으로 기록한다.
+- 검증 결과: 루트 `npm test` 292개 통과, `ai-company-app` 프로덕션 빌드 통과, 생성·승인 재개 서버 함수 esbuild 번들 통과
+- 바로 다음 일감: 기존 인포그래픽 화면을 `OverviewFields`, `PreviewRenderer`, `PreviewToolbar`, `ReportRenderer`, `CompletionActions`, `ApprovalPanel` 공통 슬롯으로 분리
+- 그다음 일감: 실DB 사용자 격리·중복 실행·취소·실패·재시도·복원 통합 테스트
 - 주의: 현재 최종 MP4와 네 종류 산출물 등록은 브라우저에서 업무를 열어 로컬 Remotion 렌더가 완료될 때 수행된다. 채팅 지시만 하고 결과 업무를 열지 않은 경우 서버 명세는 완료되지만 최종 MP4 artifact는 아직 생성되지 않는다. Phase 0 실DB 실패 복구 검증도 남아 있다.
 - 세부 기술 기준: `ai-company-phase0-skill-platform-design.md`

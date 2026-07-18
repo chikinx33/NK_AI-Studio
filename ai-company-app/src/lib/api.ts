@@ -98,7 +98,7 @@ export async function waitForCompanySkillJob(
   while (true) {
     if (options.signal?.aborted) throw new DOMException("SkillJob polling aborted", "AbortError");
     const job = await getCompanySkillJob(jobId);
-    if (["completed", "failed", "cancelled"].includes(job.status)) return job;
+    if (["completed", "failed", "cancelled"].includes(job.status) || job.approvalState?.status === "pending") return job;
     if (Date.now() - startedAt >= timeoutMs) throw new Error("회사 Skill 업무가 제한 시간 안에 완료되지 않았어요.");
     await new Promise<void>((resolve, reject) => {
       const onAbort = () => {

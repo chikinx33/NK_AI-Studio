@@ -28,6 +28,7 @@ export interface SkillJobInput {
   }>;
   options?: Record<string, unknown>;
   idempotencyKey?: string;
+  costControl?: { maxAmountUsd?: number };
 }
 
 export interface SkillJobAgentReport {
@@ -63,10 +64,12 @@ export interface SkillJobEvent {
 }
 
 export interface SkillJobCost {
+  category: "none" | "estimated" | "included" | "unavailable";
   currency: string;
-  amount: number;
+  amount: number | null;
   isEstimate: boolean;
-  breakdown: Array<{ provider: string; operation: string; amount: number }>;
+  breakdown: Array<{ provider: string; operation: string; amount: number | null }>;
+  basis?: Record<string, unknown>;
 }
 
 export interface SkillJobApprovalState {

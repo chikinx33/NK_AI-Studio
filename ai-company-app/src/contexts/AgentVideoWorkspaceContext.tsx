@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import {
+  approveCompanySkillJob,
   createCompanySkillJob,
   getCompanySkillJob,
   getCompanyWorkItem,
@@ -27,6 +28,7 @@ import {
   type AgentVideoContribution,
   type AgentVideoSpec,
 } from "../remotion/spec";
+import type { SkillJob } from "../lib/skillJobs";
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
 const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
@@ -37,7 +39,7 @@ async function sha256Hex(blob: Blob) {
 }
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
-type MeetingStatus = "idle" | "running" | "done" | "error";
+type MeetingStatus = "idle" | "running" | "awaiting-approval" | "done" | "error";
 
 export interface AgentVideoArchiveStatus {
   status: "idle" | "rendering" | "uploading" | "done" | "error";
@@ -75,8 +77,10 @@ interface AgentVideoWorkspaceValue {
   archive: AgentVideoArchiveStatus;
   storageRevision: number;
   activeWork: CompanyWorkItem | null;
+  pendingApproval: SkillJob | null;
   openWork: (work: CompanyWorkItem, autoRender?: boolean) => Promise<void>;
   startMeeting: () => Promise<void>;
+  decideCostApproval: (decision: "approved" | "rejected") => Promise<void>;
   renderVideo: () => Promise<void>;
 }
 
@@ -97,6 +101,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [archive, setArchive] = useState<AgentVideoArchiveStatus>({ status: "idle" });
   const [storageRevision, setStorageRevision] = useState(0);
   const [activeWork, setActiveWork] = useState<CompanyWorkItem | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<SkillJob | null>(null);
   const meetingLockedRef = useRef(false);
   const renderSpecRef = useRef<AgentVideoSpec>(spec);
   const archivingJobRef = useRef("");
@@ -169,6 +174,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setContributions([]);
     setRender({ status: "idle" });
     setArchive({ status: "idle" });
+    setPendingApproval(null);
     try {
       skillJobPollingRef.current?.abort();
       const controller = new AbortController();
@@ -193,6 +199,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
 
   async function restoreSkillJob(jobId: string, signal?: AbortSignal) {
     const job = await waitForCompanySkillJob(jobId, { signal });
+    if (job.approvalState?.status === "pending") {
+      setPendingApproval(job);
+      setMeetingStatus("awaiting-approval");
+      return;
+    }
     if (job.status === "failed") {
       localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
       throw new Error(job.error?.message || "인포그래픽 제작에 실패했습니다.");
@@ -205,6 +216,31 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     const work = await getCompanyWorkItem(job.workItemId);
     localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
     await openWork(work, true);
+  }
+
+  async function decideCostApproval(decision: "approved" | "rejected") {
+    if (!pendingApproval || meetingLockedRef.current) return;
+    meetingLockedRef.current = true;
+    setError("");
+    try {
+      const job = await approveCompanySkillJob(pendingApproval.id, decision);
+      setPendingApproval(null);
+      if (decision === "rejected" || job.status === "cancelled") {
+        localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+        setMeetingStatus("idle");
+        return;
+      }
+      setMeetingStatus("running");
+      const controller = new AbortController();
+      skillJobPollingRef.current = controller;
+      await restoreSkillJob(job.id, controller.signal);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "비용 승인을 처리하지 못했습니다.");
+      setMeetingStatus("error");
+    } finally {
+      skillJobPollingRef.current = null;
+      meetingLockedRef.current = false;
+    }
   }
 
   async function beginRender(targetSpec: AgentVideoSpec) {
@@ -255,6 +291,9 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         agentReports: job?.agentReports || [],
         qualityResults: job?.qualityResults || [],
         warnings: job?.warnings || [],
+        costEstimate: job?.costEstimate || null,
+        actualCost: job?.actualCost || null,
+        providerUsage: job?.providerUsage || {},
         completedAt: job?.completedAt || null,
       }, null, 2)], { type: "application/json" });
       const reportChecksum = await sha256Hex(reportBlob);
@@ -266,6 +305,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         jobId: skillJobId || null,
         workItemId: workId,
         archivedAt: new Date().toISOString(),
+        cost: { estimate: job?.costEstimate || null, actual: job?.actualCost || null },
         artifacts: [
           { kind: "final", objectPath: videoItem.objectName, checksum: videoChecksum },
           { kind: "source", objectPath: sourceItem.objectName, checksum: sourceChecksum },
@@ -343,8 +383,10 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       archive,
       storageRevision,
       activeWork,
+      pendingApproval,
       openWork,
       startMeeting,
+      decideCostApproval,
       renderVideo,
     }}>
       {children}

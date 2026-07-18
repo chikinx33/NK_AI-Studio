@@ -66,11 +66,14 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     archive,
     storageRevision,
     activeWork,
+    pendingApproval,
     startMeeting,
+    decideCostApproval,
     renderVideo,
   } = useAgentVideoWorkspace();
   const [storageOpen, setStorageOpen] = useState(false);
   const meetingInProgress = meetingStatus === "running";
+  const meetingStartDisabled = meetingInProgress || meetingStatus === "awaiting-approval";
   const renderInProgress = render.status === "queued" || render.status === "rendering";
   const archiveInProgress = archive.status === "uploading";
 
@@ -180,7 +183,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
             <button
               type="button"
               onClick={startMeeting}
-              disabled={meetingInProgress}
+              disabled={meetingStartDisabled}
               aria-busy={meetingInProgress}
               className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
@@ -189,6 +192,21 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
             {meetingInProgress && (
               <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-emerald-950/25 p-2 text-[10px] leading-4 text-emerald-200">
                 플롯이 구성을 설계한 뒤 잉크·픽셀·비트가 대본, 비주얼, 사운드를 병렬로 제작하고 코어가 최종 명세를 통합합니다.
+              </div>
+            )}
+            {pendingApproval && (
+              <div className="mt-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2.5 text-[10px] leading-4 text-amber-100">
+                <strong className="block text-xs">비용 승인 대기</strong>
+                <p className="mt-1 text-amber-200/80">{pendingApproval.approvalState?.action}</p>
+                <p className="mt-1 font-mono">
+                  {pendingApproval.costEstimate?.amount == null
+                    ? "예상 금액 산정 불가"
+                    : `예상 최대 비용 $${pendingApproval.costEstimate.amount.toFixed(6)} USD`}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => void decideCostApproval("rejected")} className="rounded-md border border-gray-700 px-2 py-1.5 font-bold text-gray-300 hover:bg-gray-800">거절</button>
+                  <button type="button" onClick={() => void decideCostApproval("approved")} className="rounded-md bg-amber-600 px-2 py-1.5 font-bold text-white hover:bg-amber-500">승인 후 실행</button>
+                </div>
               </div>
             )}
             {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-red-950/35 p-2 text-[10px] leading-4 text-red-300">{error}</div>}

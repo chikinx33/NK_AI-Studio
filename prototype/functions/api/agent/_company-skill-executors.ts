@@ -1,5 +1,6 @@
 import type { SqlFn } from "../knowledge/_shared";
 import { SERVER_COMPANY_SKILLS } from "./_company-skill-registry";
+import { buildActualCompanySkillCost, estimateCompanySkillJobCost, hasMatchingCostApproval } from "./_company-skill-costs";
 import {
   appendCompanySkillJobEvent,
   claimCompanySkillJobExecution,
@@ -126,6 +127,41 @@ export async function runCompanySkillJob(
   context: CompanySkillExecutorContext,
   jobId: string,
 ): Promise<CompanySkillJobRow | null> {
+  let pendingJob = await getCompanySkillJob(context.sql, context.userId, jobId);
+  if (!pendingJob || ["completed", "failed", "cancelled"].includes(pendingJob.status)) return pendingJob;
+  const pendingDefinition = SERVER_COMPANY_SKILLS[pendingJob.skill_id];
+  const costGate = await estimateCompanySkillJobCost(
+    context.sql,
+    context.userId,
+    context.env,
+    pendingJob,
+    pendingDefinition?.costPolicy || "no-external-cost",
+  );
+  if (costGate.approvalRequired && !hasMatchingCostApproval(pendingJob, costGate)) {
+    const requestedAt = new Date().toISOString();
+    pendingJob = await transitionCompanySkillJob(context.sql, context.userId, jobId, pendingJob.status, {
+      currentStage: "awaiting-approval",
+      costEstimate: costGate.cost,
+      approvalState: { status: "pending", action: costGate.action, scope: costGate.scope, requestedAt },
+      resetExecutionLease: true,
+    }) as CompanySkillJobRow;
+    await appendCompanySkillJobEvent(context.sql, {
+      jobId, userId: context.userId, eventType: "approval", stage: "awaiting-approval", status: "pending",
+      summary: costGate.cost.amount == null
+        ? "제공자 단가가 설정되지 않아 비용을 산정할 수 없습니다. 실행 승인이 필요합니다."
+        : `예상 비용 $${costGate.cost.amount.toFixed(6)}이 자동 실행 상한을 넘어 승인이 필요합니다.`,
+      details: { costEstimate: costGate.cost, scope: costGate.scope },
+      eventKey: `cost-gate:${costGate.gateId}:pending`,
+    });
+    return pendingJob;
+  }
+  if (!costGate.approvalRequired) {
+    pendingJob = await transitionCompanySkillJob(context.sql, context.userId, jobId, pendingJob.status, {
+      currentStage: pendingJob.status,
+      costEstimate: costGate.cost,
+      approvalState: { status: "not-required", action: costGate.action, scope: costGate.scope },
+    }) as CompanySkillJobRow;
+  }
   const executionToken = crypto.randomUUID();
   let job = await claimCompanySkillJobExecution(context.sql, context.userId, jobId, executionToken);
   if (!job) return getCompanySkillJob(context.sql, context.userId, jobId);
@@ -180,6 +216,8 @@ export async function runCompanySkillJob(
         agentReports: result.agentReports,
         qualityResults: result.qualityResults,
         workItemId: result.workItemId,
+        actualCost: buildActualCompanySkillCost(job.cost_estimate as any),
+        providerUsage: { provider: "anthropic", plannedCalls: 5, actualUsageAvailable: false },
         expectedExecutionToken: executionToken,
       }) as CompanySkillJobRow;
       for (const [index, report] of result.agentReports.entries()) {

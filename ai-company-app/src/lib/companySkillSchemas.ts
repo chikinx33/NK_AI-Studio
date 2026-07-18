@@ -26,6 +26,13 @@ const commonProperties = {
       },
     },
   },
+  costControl: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      maxAmountUsd: { type: "number", minimum: 0 },
+    },
+  },
 } as const;
 
 export const COMPANY_SKILL_INPUT_SCHEMAS: Record<string, CompanySkillJsonSchema> = {

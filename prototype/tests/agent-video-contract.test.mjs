@@ -58,7 +58,8 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
     read("ai-company-app/src/main.tsx"),
   ]);
   assert.match(main, /<AgentVideoWorkspaceProvider>[\s\S]*<App \/>/);
-  assert.match(workspace, /disabled=\{meetingInProgress\}/);
+  assert.match(workspace, /meetingStartDisabled = meetingInProgress \|\| meetingStatus === "awaiting-approval"/);
+  assert.match(workspace, /disabled=\{meetingStartDisabled\}/);
   assert.match(workspace, /meetingInProgress \? "작업 중\.\.\." : "작업 시작"/);
   assert.match(workspaceContext, /if \(meetingLockedRef\.current\) return/);
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);

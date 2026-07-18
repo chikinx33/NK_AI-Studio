@@ -6,7 +6,7 @@ export interface ServerCompanySkillDefinition {
   inputSchema: string;
   executorId: string;
   permissionPolicy: string;
-  costPolicy: string;
+  costPolicy: "no-external-cost" | "estimate-before-paid-provider";
 }
 
 export interface NormalizedCompanySkillJobInput {
@@ -16,6 +16,7 @@ export interface NormalizedCompanySkillJobInput {
   companyId: string | null;
   references: Array<{ kind: "file" | "url" | "knowledge" | "work-artifact"; id?: string; value: string }>;
   options: Record<string, unknown>;
+  costControl: { maxAmountUsd: number };
   idempotencyKey: string | null;
 }
 
@@ -87,6 +88,7 @@ export function normalizeCompanySkillJobInput(
 
   if (skillId === "infographic") {
     const normalized = normalizeInfographicOptions(body.options);
+    const requestedMaxAmountUsd = Number((body.costControl as any)?.maxAmountUsd);
     return {
       ok: true,
       input: {
@@ -96,6 +98,9 @@ export function normalizeCompanySkillJobInput(
         companyId: cleanText(body.companyId, 120) || null,
         references: normalizeReferences(body.references),
         options: normalized.options,
+        costControl: {
+          maxAmountUsd: Number.isFinite(requestedMaxAmountUsd) ? Math.max(0, requestedMaxAmountUsd) : 0,
+        },
         idempotencyKey: rawIdempotencyKey || null,
       },
       warnings: normalized.warnings,
