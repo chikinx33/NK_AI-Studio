@@ -29,7 +29,6 @@ function ContributionCard({ item }: { item: AgentVideoContribution }) {
   return (
     <article className="min-h-0 rounded-lg border border-edge bg-[#0b1018] px-2.5 py-2">
       <div className="flex items-center gap-1.5">
-        <span className="text-sm">{item.emoji}</span>
         <strong className="text-xs text-gray-200">{item.agentName}</strong>
         <span className="ml-auto rounded-full bg-emerald-950 px-1.5 py-0.5 text-[8px] text-emerald-300">완료</span>
       </div>
@@ -83,6 +82,19 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   const previewWidth = isTallPreview
     ? `min(100%, max(210px, calc((100dvh - 300px) * ${previewRatio.toFixed(4)})))`
     : "100%";
+
+  async function downloadVideo() {
+    if (render.status === "done" && render.downloadUrl) {
+      const link = document.createElement("a");
+      link.href = render.downloadUrl;
+      link.download = "raviok-agent-video.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    await renderVideo();
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
@@ -172,7 +184,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               aria-busy={meetingInProgress}
               className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
-              {meetingInProgress ? "회의 중..." : "에이전트 제작 회의 시작"}
+              {meetingInProgress ? "작업 중..." : "작업 시작"}
             </button>
             {meetingInProgress && (
               <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-emerald-950/25 p-2 text-[10px] leading-4 text-emerald-200">
@@ -186,7 +198,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
         <main className="min-w-0 p-3 xl:overflow-hidden">
           <div className="mx-auto flex h-full max-w-5xl flex-col">
             <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
-              <h2 className="text-sm font-bold text-gray-200">Remotion 프리뷰</h2>
+              <h2 className="text-sm font-bold text-gray-200">미리보기</h2>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.scenes.length}개 씬</span>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{videoDurationSec.toFixed(0)}초</span>
               <span className="rounded-full bg-[#121a27] px-2.5 py-1 text-[10px] text-gray-400">{spec.aspectRatio}</span>
@@ -236,70 +248,27 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           </div>
         </main>
 
-        <aside className="border-t border-edge p-3 xl:overflow-hidden xl:border-l xl:border-t-0">
-          <h2 className="text-sm font-bold text-gray-200">협업 보고서</h2>
-          <p className="mt-1 text-[10px] leading-4 text-gray-500">각 에이전트의 판단을 하나의 Render Manifest로 통합합니다.</p>
+        <aside className="flex flex-col border-t border-edge p-3 xl:overflow-hidden xl:border-l xl:border-t-0">
+          <h2 className="text-sm font-bold text-gray-200">업무 보고</h2>
           <div className="mt-2 grid gap-1.5">
             {contributions.length ? contributions.map((item) => <ContributionCard key={item.agentId} item={item} />) : (
               <div className="rounded-lg border border-dashed border-edge p-3 text-center text-[10px] leading-4 text-gray-600">
-                제작 회의를 시작하면 플롯, 잉크, 픽셀, 비트, 코어의 작업 결과가 표시됩니다.
+                대기중
               </div>
             )}
           </div>
 
-          <div className="mt-3 rounded-xl border border-edge bg-panel p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🎬</span>
-              <div>
-                <h3 className="text-sm font-bold text-gray-100">자동 렌더·클라우드 저장</h3>
-                <p className="text-[10px] text-gray-500">Remotion MP4 · GCS 소스 보관</p>
-              </div>
-            </div>
+          <div className="mt-auto pt-3">
             <button
               type="button"
-              onClick={renderVideo}
+              onClick={downloadVideo}
               disabled={renderInProgress || archiveInProgress}
-              className="mt-2.5 w-full rounded-lg border border-orange-700/70 bg-orange-950/40 px-3 py-2 text-xs font-bold text-orange-200 transition hover:bg-orange-900/50 disabled:cursor-wait disabled:opacity-60"
+              aria-busy={renderInProgress || archiveInProgress}
+              title={renderInProgress ? `영상 준비 중 ${Math.round(render.progress || 0)}%` : archiveInProgress ? "저장 중" : "MP4 다운로드"}
+              className="w-full rounded-lg border border-orange-700/70 bg-orange-950/40 px-3 py-2.5 text-xs font-bold text-orange-200 transition hover:bg-orange-900/50 disabled:cursor-wait disabled:opacity-60"
             >
-              {renderInProgress
-                ? `자동 렌더링 ${Math.round(render.progress || 0)}%`
-                : archiveInProgress
-                  ? "클라우드 저장 중..."
-                  : archive.status === "done"
-                    ? "다시 렌더 및 저장"
-                    : "MP4 렌더 및 저장"}
+              다운로드
             </button>
-            {renderInProgress && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#0b1018]">
-                <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(2, render.progress || 0)}%` }} />
-              </div>
-            )}
-            {archive.status === "uploading" && (
-              <div className="mt-3 rounded-xl border border-sky-900/70 bg-sky-950/30 p-3 text-xs leading-5 text-sky-200">
-                완성된 MP4와 제작 명세를 이 회사 업무의 날짜별 폴더에 저장하고 있습니다.
-              </div>
-            )}
-            {archive.status === "done" && (
-              <button type="button" onClick={() => setStorageOpen(true)} className="mt-3 w-full rounded-xl border border-emerald-800 bg-emerald-950/35 px-3 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-950/60">
-                저장 완료 · 저장소에서 확인
-              </button>
-            )}
-            {render.status === "done" && render.downloadUrl && (
-              <a href={render.downloadUrl} className="mt-3 block w-full rounded-xl bg-orange-600 px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-orange-500">
-                로컬 MP4 다운로드
-              </a>
-            )}
-            {render.status === "error" && (
-              <div className="mt-3 rounded-xl border border-red-900/70 bg-red-950/35 p-3 text-xs leading-5 text-red-300">
-                {render.error || "렌더링에 실패했습니다."}<br />로컬에서 <code className="text-red-200">npm start</code>가 실행 중인지 확인해 주세요.
-              </div>
-            )}
-            {archive.status === "error" && render.status !== "error" && (
-              <div className="mt-3 rounded-xl border border-red-900/70 bg-red-950/35 p-3 text-xs leading-5 text-red-300">
-                {archive.error || "클라우드 저장에 실패했습니다."}
-              </div>
-            )}
-            <p className="mt-2 line-clamp-2 text-[9px] leading-4 text-gray-600">프리뷰 명세가 생성되면 이 PC에서 MP4를 자동 렌더하고, 사용자별 GCS 저장소에 MP4와 JSON 명세를 보관합니다.</p>
           </div>
         </aside>
       </div>

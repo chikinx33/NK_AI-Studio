@@ -58,11 +58,22 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   ]);
   assert.match(main, /<AgentVideoWorkspaceProvider>[\s\S]*<App \/>/);
   assert.match(workspace, /disabled=\{meetingInProgress\}/);
-  assert.match(workspace, /meetingInProgress \? "회의 중\.\.\."/);
+  assert.match(workspace, /meetingInProgress \? "작업 중\.\.\." : "작업 시작"/);
   assert.match(workspaceContext, /if \(meetingLockedRef\.current\) return/);
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
+});
+
+test("Agent Video 업무 화면은 간결한 미리보기·업무 보고·다운로드 동작을 제공한다", async () => {
+  const workspace = await read("ai-company-app/src/components/AgentVideoWorkspace.tsx");
+  assert.match(workspace, />미리보기<\/h2>/);
+  assert.match(workspace, />업무 보고<\/h2>/);
+  assert.match(workspace, />\s*대기중\s*</);
+  assert.match(workspace, /async function downloadVideo\(\)/);
+  assert.match(workspace, /link\.download = "raviok-agent-video\.mp4"/);
+  assert.match(workspace, />\s*다운로드\s*<\/button>/);
+  assert.doesNotMatch(workspace, /item\.emoji|협업 보고서|자동 렌더·클라우드 저장|Remotion MP4 · GCS 소스 보관|로컬 MP4 다운로드/);
 });
 
 test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴더에 보관된다", async () => {
