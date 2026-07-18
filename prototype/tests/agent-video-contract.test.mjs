@@ -16,17 +16,35 @@ test("Agent Video는 AI Cinema와 분리된 에이전트 협업 API를 제공한
 });
 
 test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다", async () => {
-  const [workspace, app, server] = await Promise.all([
+  const [workspace, workspaceContext, app, main, server] = await Promise.all([
     read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
     read("ai-company-app/src/App.tsx"),
+    read("ai-company-app/src/main.tsx"),
     read("server.js"),
   ]);
   assert.match(workspace, /<Player/);
-  assert.match(workspace, /createAgentVideo/);
-  assert.match(workspace, /startLocalAgentVideoRender/);
+  assert.match(workspaceContext, /createAgentVideo/);
+  assert.match(workspaceContext, /startLocalAgentVideoRender/);
+  assert.match(main, /<AgentVideoWorkspaceProvider>/);
   assert.match(app, /centerView === "video"/);
   assert.match(server, /\/local-agent-video\/render/);
   assert.match(server, /render-agent-video\.mjs/);
+});
+
+test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 차단한다", async () => {
+  const [workspace, workspaceContext, main] = await Promise.all([
+    read("ai-company-app/src/components/AgentVideoWorkspace.tsx"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("ai-company-app/src/main.tsx"),
+  ]);
+  assert.match(main, /<AgentVideoWorkspaceProvider>[\s\S]*<App \/>/);
+  assert.match(workspace, /disabled=\{meetingInProgress\}/);
+  assert.match(workspace, /meetingInProgress \? "회의 중\.\.\."/);
+  assert.match(workspaceContext, /if \(meetingLockedRef\.current\) return/);
+  assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
+  assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
+  assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
 });
 
 test("Remotion 렌더러는 동적 명세·효과음·Windows 안전 인코딩을 지원한다", async () => {

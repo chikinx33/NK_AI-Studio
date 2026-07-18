@@ -1,31 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
 import {
-  defaultAgentVideoSpec,
   getAgentVideoDimensions,
   getAgentVideoDurationSec,
-  normalizeAgentVideoSpec,
   type AgentVideoContribution,
-  type AgentVideoSpec,
 } from "../remotion/spec";
-import {
-  createAgentVideo,
-  getLocalAgentVideoRenderStatus,
-  startLocalAgentVideoRender,
-  type LocalAgentVideoRenderStatus,
-} from "../lib/api";
-
-const STORAGE_KEY = "raviok_agent_video_project_v1";
-
-const loadSavedSpec = () => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? normalizeAgentVideoSpec(JSON.parse(saved)) : defaultAgentVideoSpec;
-  } catch {
-    return defaultAgentVideoSpec;
-  }
-};
+import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
 
 function FieldLabel({ children }: { children: string }) {
   return <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">{children}</label>;
@@ -57,70 +38,32 @@ function ContributionCard({ item }: { item: AgentVideoContribution }) {
 }
 
 export default function AgentVideoWorkspace() {
-  const [prompt, setPrompt] = useState("라비오크의 AI 에이전트들이 협업해 아이디어를 영상으로 완성하는 과정을 소개하는 30초 브랜드 영상");
-  const [durationSec, setDurationSec] = useState(30);
-  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16" | "1:1">("16:9");
-  const [audience, setAudience] = useState("콘텐츠 제작자와 1인 기업");
-  const [tone, setTone] = useState("신뢰감 있고 미래지향적");
-  const [style, setStyle] = useState("시네마틱 테크 인포그래픽");
-  const [spec, setSpec] = useState<AgentVideoSpec>(loadSavedSpec);
-  const [contributions, setContributions] = useState<AgentVideoContribution[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-  const [render, setRender] = useState<LocalAgentVideoRenderStatus>({ status: "idle" });
+  const {
+    prompt,
+    setPrompt,
+    durationSec,
+    setDurationSec,
+    aspectRatio,
+    setAspectRatio,
+    audience,
+    setAudience,
+    tone,
+    setTone,
+    style,
+    setStyle,
+    spec,
+    contributions,
+    meetingStatus,
+    error,
+    render,
+    startMeeting,
+    renderVideo,
+  } = useAgentVideoWorkspace();
+  const meetingInProgress = meetingStatus === "running";
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
   const durationInFrames = Math.max(1, Math.round(videoDurationSec * spec.fps));
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(spec)); } catch { /* 저장 실패는 프리뷰를 막지 않는다. */ }
-  }, [spec]);
-
-  useEffect(() => {
-    if (!render.jobId || (render.status !== "queued" && render.status !== "rendering")) return;
-    const timer = window.setInterval(async () => {
-      try {
-        const next = await getLocalAgentVideoRenderStatus(render.jobId!);
-        setRender(next);
-        if (next.status === "done" || next.status === "error") window.clearInterval(timer);
-      } catch (caught) {
-        setRender({ ...render, status: "error", error: caught instanceof Error ? caught.message : "렌더 상태 확인 실패" });
-        window.clearInterval(timer);
-      }
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [render.jobId, render.status]);
-
-  async function createVideo() {
-    if (!prompt.trim()) {
-      setError("만들고 싶은 영상 내용을 입력해 주세요.");
-      return;
-    }
-    setCreating(true);
-    setError("");
-    setRender({ status: "idle" });
-    try {
-      const result = await createAgentVideo({ prompt: prompt.trim(), durationSec, aspectRatio, audience, tone, style });
-      setSpec(normalizeAgentVideoSpec(result.spec));
-      setContributions(result.contributions || []);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "에이전트 협업 중 오류가 발생했어요.");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function renderVideo() {
-    setError("");
-    setRender({ status: "queued", progress: 0 });
-    try {
-      const next = await startLocalAgentVideoRender(spec);
-      setRender(next);
-    } catch (caught) {
-      setRender({ status: "error", error: caught instanceof Error ? caught.message : "로컬 렌더 실패" });
-    }
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
@@ -192,13 +135,14 @@ export default function AgentVideoWorkspace() {
 
             <button
               type="button"
-              onClick={createVideo}
-              disabled={creating}
+              onClick={startMeeting}
+              disabled={meetingInProgress}
+              aria-busy={meetingInProgress}
               className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
-              {creating ? "에이전트 협업 제작 중…" : "에이전트 제작 회의 시작"}
+              {meetingInProgress ? "회의 중..." : "에이전트 제작 회의 시작"}
             </button>
-            {creating && (
+            {meetingInProgress && (
               <div className="mt-3 rounded-xl border border-emerald-950 bg-emerald-950/25 p-3 text-xs leading-5 text-emerald-200">
                 플롯이 구성을 설계한 뒤 잉크·픽셀·비트가 대본, 비주얼, 사운드를 병렬로 제작하고 코어가 최종 명세를 통합합니다.
               </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { AgentVideoWorkspaceProvider } from "./contexts/AgentVideoWorkspaceContext";
 import "./index.css";
 
 // ── NK 통합: 모든 /api 호출에 도메인(API_BASE)과 인증(Bearer) 자동 주입 ──
@@ -48,6 +49,8 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <AgentVideoWorkspaceProvider>
+      <App />
+    </AgentVideoWorkspaceProvider>
   </React.StrictMode>
 );
