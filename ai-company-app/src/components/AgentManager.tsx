@@ -16,12 +16,16 @@ import {
   setAgentVoiceKey,
   setAgentVoiceSpeed,
   getAgentVoicePreset,
+  getAgentBrowserVoiceURI,
+  setAgentBrowserVoiceURI,
+  getAgentBrowserVoiceParams,
   type AgentVoiceSpeed,
   type AgentInfo,
   type AgentBrain,
   type KnowledgeItem,
   type KnowledgeType,
 } from "../lib/api";
+import { listBrowserVoices, speakBrowserTts, browserTtsSupported, cancelBrowserTts, type BrowserVoiceInfo } from "../lib/browserTts";
 
 // 상단 아이콘 (RightMenu 직원 관리 아이콘과 동일 — 다른 페이지 헤더와 같은 스타일)
 function UsersIcon({ className }: { className?: string }) {
@@ -73,7 +77,7 @@ const TYPE_BADGE: Record<string, { t: string; c: string }> = {
 };
 
 // 직원 선택은 좌측 사이드바 아바타 클릭으로 (agentId 주입). 여기선 그 직원만 표시·관리.
-export default function AgentManager({ agentId, agents }: { agentId: string | null; agents: AgentInfo[] }) {
+export default function AgentManager({ agentId, agents, voiceMode = "browser" }: { agentId: string | null; agents: AgentInfo[]; voiceMode?: "browser" | "cloud" }) {
   const [brain, setBrain] = useState<AgentBrain | null>(null);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [persona, setPersona] = useState("");
@@ -81,7 +85,10 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
   const [savingPersona, setSavingPersona] = useState(false);
   const [voiceKey, setVoiceKey] = useState("");
   const [voiceSpeed, setVoiceSpeed] = useState<AgentVoiceSpeed>(1);
+  const [browserVoiceURI, setBrowserVoiceURI] = useState("");
+  const [browserVoices, setBrowserVoices] = useState<BrowserVoiceInfo[]>([]);
   const [previewingVoice, setPreviewingVoice] = useState(false);
+  const browserMode = voiceMode === "browser";
   const [previewLine, setPreviewLine] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [newRule, setNewRule] = useState("");
@@ -103,6 +110,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       setPersona(b.prompt ?? "");
       setVoiceKey(getAgentVoiceKey(agentId));
       setVoiceSpeed(getAgentVoiceSpeed(agentId));
+      setBrowserVoiceURI(getAgentBrowserVoiceURI(agentId));
       setPreviewLine("");
       setPreviewError("");
       setPersonaDirty(false);
@@ -111,6 +119,20 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
       on = false;
     };
   }, [agentId]);
+
+  // 무료 브라우저 모드일 때 실제 설치된 음성 목록을 불러온다.
+  useEffect(() => {
+    if (!browserMode || !browserTtsSupported()) {
+      setBrowserVoices([]);
+      return;
+    }
+    let on = true;
+    listBrowserVoices().then((v) => { if (on) setBrowserVoices(v); }).catch(() => {});
+    return () => { on = false; };
+  }, [browserMode]);
+
+  // 패널을 벗어나거나 직원을 바꾸면 미리듣기 낭독을 멈춘다.
+  useEffect(() => () => cancelBrowserTts(), [agentId]);
 
   async function refreshKnowledge() {
     if (agentId) setItems(await getAgentKnowledge(agentId));
@@ -144,6 +166,12 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     } catch {
       setPreviewError("보이스 설정을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     }
+  }
+  function changeBrowserVoice(nextURI: string) {
+    if (!agentId) return;
+    setBrowserVoiceURI(nextURI);
+    setPreviewError("");
+    setAgentBrowserVoiceURI(agentId, nextURI);
   }
   async function cycleVoiceSpeed() {
     if (!agentId) return;
@@ -193,15 +221,25 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
     setPreviewError("");
     setPreviewingVoice(true);
     try {
-      const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
-      await new Promise<void>((resolve) => {
-        const audio = new Audio(speech.voiceUrl);
-        applyAudioPlaybackRate(audio, voiceSpeed);
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        const p = audio.play();
-        if (p && typeof p.catch === "function") p.catch(() => resolve());
-      });
+      if (browserMode) {
+        // 무료 브라우저 읽기 미리듣기 — 서버 호출/과금 없음. 실제 채팅과 같은 음성으로.
+        if (!browserTtsSupported()) {
+          setPreviewError("이 브라우저는 무료 읽기(speechSynthesis)를 지원하지 않습니다.");
+          return;
+        }
+        const { lang, pitch } = getAgentBrowserVoiceParams(agentId);
+        await speakBrowserTts({ text: line, lang, voiceURI: browserVoiceURI, pitch, rate: voiceSpeed }).done;
+      } else {
+        const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
+        await new Promise<void>((resolve) => {
+          const audio = new Audio(speech.voiceUrl);
+          applyAudioPlaybackRate(audio, voiceSpeed);
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          const p = audio.play();
+          if (p && typeof p.catch === "function") p.catch(() => resolve());
+        });
+      }
     } catch (err) {
       setPreviewError(explainPreviewError(err));
     } finally {
@@ -275,21 +313,36 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
               <div className="mb-1.5 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
                 <span className="text-[11px] text-gray-600">
-                  {selectedVoice.label}
+                  {browserMode ? "무료 읽기 (브라우저)" : selectedVoice.label}
                 </span>
               </div>
               <div className="flex gap-1.5">
-                <select
-                  value={voiceKey}
-                  onChange={(e) => changeVoice(e.target.value)}
-                  className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
-                >
-                  {AGENT_VOICE_PRESETS.map((v) => (
-                    <option key={v.key} value={v.key}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
+                {browserMode ? (
+                  <select
+                    value={browserVoiceURI}
+                    onChange={(e) => changeBrowserVoice(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                  >
+                    <option value="">자동 (한국어 기본)</option>
+                    {browserVoices.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        {v.korean ? "🇰🇷 " : ""}{v.name} ({v.lang})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={voiceKey}
+                    onChange={(e) => changeVoice(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                  >
+                    {AGENT_VOICE_PRESETS.map((v) => (
+                      <option key={v.key} value={v.key}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={cycleVoiceSpeed}
@@ -310,7 +363,9 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-gray-500">
-                선택한 보이스는 이 직원이 채팅에서 답할 때 바로 적용됩니다.
+                {browserMode
+                  ? "무료 브라우저 읽기 모드입니다. 이 기기에 설치된 음성 중에서 선택돼요. (한국어 음성이 하나뿐인 브라우저가 많아 속도·톤으로 구분돼요.)"
+                  : "선택한 보이스는 이 직원이 채팅에서 답할 때 바로 적용됩니다."}
               </p>
               {previewLine && (
                 <p className="mt-1 rounded-lg border border-edge bg-panel/60 px-2.5 py-1.5 text-xs text-gray-500">

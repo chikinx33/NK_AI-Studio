@@ -592,10 +592,38 @@ export function getAgentVoicePreset(agentId?: string, voiceKey?: string): AgentV
   return AGENT_VOICE_PRESETS.find((v) => v.key === key) || AGENT_VOICE_PRESETS[0];
 }
 
-// 무료 브라우저 TTS(speechSynthesis)용 파라미터.
-// 시스템에 한국어 음성이 하나뿐인 경우가 많아, 성별·프리셋별로 pitch를 달리해
-// 에이전트마다 목소리를 구분한다. (male 낮게 / female 높게 + 프리셋별 미세 편차)
-export function getAgentBrowserVoiceParams(agentId?: string, voiceKey?: string): { lang: string; pitch: number } {
+// 무료 브라우저 TTS(speechSynthesis) 직원별 음성 선택.
+// 브라우저 음성은 기기마다 voiceURI가 달라서 서버가 아닌 localStorage(기기 단위)에 저장한다.
+const BROWSER_VOICE_LS_KEY = "agentBrowserVoices";
+
+function readBrowserVoiceMap(): Record<string, string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BROWSER_VOICE_LS_KEY) || "{}");
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(raw)) if (typeof v === "string") out[k] = v;
+      return out;
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+export function getAgentBrowserVoiceURI(agentId?: string): string {
+  return readBrowserVoiceMap()[String(agentId || "")] || "";
+}
+
+export function setAgentBrowserVoiceURI(agentId: string, voiceURI: string) {
+  const map = readBrowserVoiceMap();
+  if (voiceURI) map[agentId] = voiceURI;
+  else delete map[agentId];
+  try { localStorage.setItem(BROWSER_VOICE_LS_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
+// 무료 브라우저 TTS용 파라미터.
+// - voiceURI: 직원이 고른 브라우저 음성(없으면 lang으로 자동 선택)
+// - pitch: 시스템 한국어 음성이 하나뿐인 경우가 많아, 성별·프리셋별로 pitch를 달리해
+//   에이전트마다 목소리를 구분한다. (male 낮게 / female 높게 + 프리셋별 미세 편차)
+export function getAgentBrowserVoiceParams(agentId?: string, voiceKey?: string): { lang: string; pitch: number; voiceURI: string } {
   const preset = getAgentVoicePreset(agentId, voiceKey);
   const female = preset.voiceId === "kr_female_narration";
   const group = AGENT_VOICE_PRESETS.filter((v) => v.voiceId === preset.voiceId);
@@ -606,7 +634,7 @@ export function getAgentBrowserVoiceParams(agentId?: string, voiceKey?: string):
   const base = female ? 1.05 : 0.8;
   const range = female ? 0.4 : 0.35; // female 1.05~1.45, male 0.8~1.15
   const pitch = Math.min(2, Math.max(0.4, base + t * range));
-  return { lang: "ko-KR", pitch: Number(pitch.toFixed(2)) };
+  return { lang: "ko-KR", pitch: Number(pitch.toFixed(2)), voiceURI: getAgentBrowserVoiceURI(agentId) };
 }
 
 export async function synthesizeAgentSpeech(input: {

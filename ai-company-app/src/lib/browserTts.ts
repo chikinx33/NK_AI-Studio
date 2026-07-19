@@ -48,9 +48,34 @@ export async function hasKoreanVoice(): Promise<boolean> {
   return voices.some((v) => /^ko/i.test(v.lang));
 }
 
-function pickVoice(lang: string): SpeechSynthesisVoice | null {
-  const voices = cachedVoices.length ? cachedVoices : (browserTtsSupported() ? window.speechSynthesis.getVoices() : []);
+export interface BrowserVoiceInfo {
+  voiceURI: string;
+  name: string;
+  lang: string;
+  korean: boolean;
+}
+
+// 설정 드롭다운용 음성 목록. 한국어 음성을 앞에 두고 정렬한다.
+export async function listBrowserVoices(): Promise<BrowserVoiceInfo[]> {
+  const voices = await ensureVoicesLoaded();
+  return voices
+    .map((v) => ({ voiceURI: v.voiceURI, name: v.name, lang: v.lang, korean: /^ko/i.test(v.lang) }))
+    .sort((a, b) => (a.korean === b.korean ? a.name.localeCompare(b.name) : a.korean ? -1 : 1));
+}
+
+function currentVoices(): SpeechSynthesisVoice[] {
+  if (cachedVoices.length) return cachedVoices;
+  return browserTtsSupported() ? window.speechSynthesis.getVoices() : [];
+}
+
+// voiceURI 지정이 있으면 그 음성, 없으면 언어(lang) 기준으로 고른다.
+function pickVoice(lang: string, voiceURI?: string): SpeechSynthesisVoice | null {
+  const voices = currentVoices();
   if (!voices.length) return null;
+  if (voiceURI) {
+    const exact = voices.find((v) => v.voiceURI === voiceURI);
+    if (exact) return exact;
+  }
   const target = lang.toLowerCase();
   const short = target.split("-")[0];
   // 정확히 일치 → 언어코드 일치 → 첫 번째 순으로 폴백.
@@ -64,6 +89,7 @@ function pickVoice(lang: string): SpeechSynthesisVoice | null {
 export interface BrowserSpeakOptions {
   text: string;
   lang?: string;          // 기본 ko-KR
+  voiceURI?: string;      // 특정 브라우저 음성 지정(없으면 lang으로 자동 선택)
   rate?: number;          // 0.1~10 (기본 1)
   pitch?: number;         // 0~2 (기본 1)
   volume?: number;        // 0~1 (기본 1)
@@ -92,8 +118,11 @@ export function speakBrowserTts(opts: BrowserSpeakOptions): BrowserSpeakHandle {
   u.rate = clamp(opts.rate ?? 1, 0.1, 10);
   u.pitch = clamp(opts.pitch ?? 1, 0, 2);
   u.volume = clamp(opts.volume ?? 1, 0, 1);
-  const voice = pickVoice(u.lang);
-  if (voice) u.voice = voice;
+  const voice = pickVoice(u.lang, opts.voiceURI);
+  if (voice) {
+    u.voice = voice;
+    if (voice.lang) u.lang = voice.lang;
+  }
 
   let cancelled = false;
   let resolveDone: () => void = () => {};

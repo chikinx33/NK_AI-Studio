@@ -377,7 +377,7 @@ export default function App() {
     const chars = Array.from(fullText);
     const run = (revealRunsRef.current[turnId] || 0) + 1;
     revealRunsRef.current[turnId] = run;
-    const { lang, pitch } = getAgentBrowserVoiceParams(agentId);
+    const { lang, pitch, voiceURI } = getAgentBrowserVoiceParams(agentId);
     const rate = getAgentVoiceSpeed(agentId);
 
     patchTurn(turnId, { displayText: "", typing: true, voicePreparing: false });
@@ -406,6 +406,7 @@ export default function App() {
     const handle = speakBrowserTts({
       text: speechText,
       lang,
+      voiceURI,
       pitch,
       rate,
       onBoundary: (p) => revealTo(Math.ceil(p * chars.length)),
@@ -874,7 +875,7 @@ export default function App() {
         ) : centerView === "knowledge" ? (
           <KnowledgeWorkspace filter={knowFilter} filterNonce={knowFilterNonce} />
         ) : centerView === "agents" ? (
-          <AgentManager agentId={agentMgrId} agents={agents} />
+          <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
             <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} />
