@@ -1,7 +1,6 @@
 # MeloTTS 본체는 Dockerfile 에서 git 소스로 설치한다(PyPI 버전이 불안정).
-# 여기엔 서버/오디오 처리 의존성만 명시.
+# numpy/librosa 는 MeloTTS 가 자기 버전으로 가져오므로 여기서 고정하지 않는다(충돌 방지).
+# 여기엔 웹 서버 + wav 입출력만.
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 soundfile==0.12.1
-librosa==0.10.2.post1
-numpy==1.26.4

@@ -86,15 +86,19 @@ def _synth_wav(text: str, speed: float) -> tuple[bytes, int]:
 
 
 def _pitch_shift(data, sr: int, semitones: float):
-    """반음 단위 피치 시프트(템포 유지). 0 이면 원본 그대로."""
+    """반음 단위 피치 시프트(템포 유지). 0 이거나 실패하면 원본 그대로(비치명적)."""
     if not semitones:
         return data
-    import numpy as np
-    import librosa
-    y = data if isinstance(data, np.ndarray) else np.asarray(data)
-    if y.ndim > 1:
-        y = y.mean(axis=1)  # 모노로
-    return librosa.effects.pitch_shift(y.astype("float32"), sr=sr, n_steps=float(semitones))
+    try:
+        import numpy as np
+        import librosa
+        y = data if isinstance(data, np.ndarray) else np.asarray(data)
+        if y.ndim > 1:
+            y = y.mean(axis=1)  # 모노로
+        return librosa.effects.pitch_shift(y.astype("float32"), sr=sr, n_steps=float(semitones))
+    except Exception:
+        # 피치 처리 실패는 치명적이지 않음 — 원본 음성이라도 반환한다.
+        return data
 
 
 @app.post("/tts")

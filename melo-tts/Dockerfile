@@ -15,16 +15,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# CPU 전용 torch 를 먼저 설치(용량·시간 절약)
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.2.2
+# CPU 전용 torch/torchaudio 먼저 설치
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.2.2 torchaudio==2.2.2
 
 # 서버/오디오 의존성
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# MeloTTS 본체(오픈소스, MIT) + 한국어 처리 사전
+# MeloTTS 본체(오픈소스, MIT) + 한국어 처리 사전.
+# 주의: 이 설치가 torch 를 GPU(CUDA) 빌드로 바꿔치기하는 경우가 있음.
 RUN pip install git+https://github.com/myshell-ai/MeloTTS.git \
  && python -m unidic download || true
+
+# ★ CUDA 로 덮인 torch 를 CPU 전용으로 강제 되돌린다.
+#   (안 하면 실행 때 libcudart.so 를 찾다가 500 에러) --no-deps 로 nvidia-cuda-* 유입 차단.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps \
+    torch==2.2.2 torchaudio==2.2.2
 
 # 앱 코드
 COPY app.py .
