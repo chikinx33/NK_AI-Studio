@@ -68,24 +68,17 @@ def health():
     return {"ok": True}
 
 
-def _synth_wav(text: str, speed: float) -> tuple[bytes, int]:
-    """MeloTTS 로 wav 바이트 생성. (bytes, sample_rate) 반환."""
-    import soundfile as sf
+def _synth_wav(text: str, speed: float):
+    """MeloTTS 로 오디오 생성. (numpy audio, sample_rate) 반환.
+    output_path=None 이면 파일 없이 오디오 배열을 바로 돌려준다."""
     model, spk = _get_model()
     with _model_lock:
-        # tts_to_file 은 파일 경로를 요구하므로 임시 파일에 쓴 뒤 읽는다.
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
-            tmp_path = tf.name
-        try:
-            model.tts_to_file(text, spk, tmp_path, speed=max(0.5, min(2.0, speed)))
-            data, sr = sf.read(tmp_path, dtype="float32")
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-    return data, sr
+        audio = model.tts_to_file(
+            text, spk, output_path=None,
+            speed=max(0.5, min(2.0, speed)), quiet=True,
+        )
+    sr = int(model.hps.data.sampling_rate)
+    return audio, sr
 
 
 def _pitch_shift(data, sr: int, semitones: float):
