@@ -699,6 +699,7 @@ export async function synthesizeAgentSpeech(input: {
       prompt: voice.prompt,
       geminiVoiceName: voice.geminiVoiceName,
       strictCloudGeminiTts: true,
+      ephemeral: true, // 채팅 음성은 GCS에 저장하지 않고 즉시 반환(재생 후 소멸)
     }),
   });
   const raw = await res.text().catch(() => "");

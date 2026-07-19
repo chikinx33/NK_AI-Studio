@@ -229,6 +229,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const chosenExt = looksMp3 ? "mp3" : (looksWav ? "wav" : "wav");
     const objNameFinal = `${baseObjectName}.${chosenExt}`;
     const contentTypeFinal = chosenExt === "mp3" ? "audio/mpeg" : "audio/wav";
+    // 일회성(채팅) 음성: GCS에 저장하지 않고 data URI로 바로 반환한다.
+    // 재생 후 브라우저 메모리에서 사라지므로 버킷에 쌓이지 않는다.
+    if (body.ephemeral === true) {
+      const b64 = bytesToBase64(audioBytes);
+      return send({ voiceUrl: `data:${contentTypeFinal};base64,${b64}`, format: chosenExt, ephemeral: true }, 200, origin);
+    }
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const upRes = await fetch(uploadUrl, {
       method: "POST",
@@ -516,6 +522,14 @@ function base64ToBytes(b64: string) {
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+function bytesToBase64(bytes: Uint8Array) {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+  }
+  return btoa(bin);
 }
 function wrapPcmAsWav(pcmBytes: Uint8Array, sampleRate: number, channels: number) {
   const bitsPerSample = 16;
