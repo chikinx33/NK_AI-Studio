@@ -21,7 +21,7 @@ interface Props {
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD)
   voiceEnabled: boolean;
   onToggleVoice: () => void;
-  voiceMode?: "browser" | "cloud";
+  voiceMode?: "browser" | "server" | "cloud";
   onToggleVoiceMode?: () => void;
 }
 

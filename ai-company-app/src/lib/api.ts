@@ -637,6 +637,45 @@ export function getAgentBrowserVoiceParams(agentId?: string, voiceKey?: string):
   return { lang: "ko-KR", pitch: Number(pitch.toFixed(2)), voiceURI: getAgentBrowserVoiceURI(agentId) };
 }
 
+// 자체 호스팅 서버 TTS(MeloTTS)용 파라미터.
+// KR 화자가 1종이라, 속도 + 반음(semitones) 피치로 직원을 구분한다.
+// (male 낮게 −, female 높게 +, 프리셋 그룹 내 위치로 편차)
+export function getAgentServerVoiceParams(agentId?: string, voiceKey?: string): { speed: number; semitones: number } {
+  const preset = getAgentVoicePreset(agentId, voiceKey);
+  const female = preset.voiceId === "kr_female_narration";
+  const group = AGENT_VOICE_PRESETS.filter((v) => v.voiceId === preset.voiceId);
+  const idx = Math.max(0, group.findIndex((v) => v.key === preset.key));
+  const span = Math.max(1, group.length - 1);
+  const t = idx / span;
+  // female: +1 ~ +5 반음, male: −1 ~ −5 반음
+  const semitones = female ? 1 + t * 4 : -(1 + t * 4);
+  return { speed: getAgentVoiceSpeed(agentId), semitones: Number(semitones.toFixed(1)) };
+}
+
+// 자체 호스팅 MeloTTS 서버로 음성 생성(무료·과금 없음). /api/tts/melo → Cloud Run.
+export async function synthesizeAgentSpeechServer(input: {
+  agentId?: string;
+  text: string;
+}): Promise<{ voiceUrl: string; format?: string }> {
+  const script = String(input.text || "").trim();
+  if (!script) throw new Error("script is required");
+  await loadAgentVoiceSettings();
+  const { speed, semitones } = getAgentServerVoiceParams(input.agentId);
+  const res = await fetch("/api/tts/melo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ script, speed, semitones }),
+  });
+  const raw = await res.text().catch(() => "");
+  let data: any = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
+  if (!res.ok || data?.error || !data?.voiceUrl) {
+    const hint = data?.hint || data?.error || data?.raw;
+    throw new Error(hint || `melo_tts_failed_${res.status}`);
+  }
+  return { voiceUrl: data.voiceUrl, format: data.format };
+}
+
 export async function synthesizeAgentSpeech(input: {
   agentId?: string;
   text: string;

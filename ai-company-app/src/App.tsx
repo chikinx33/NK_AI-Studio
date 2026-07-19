@@ -23,6 +23,7 @@ import {
   getReminders,
   deleteReminder,
   synthesizeAgentSpeech,
+  synthesizeAgentSpeechServer,
   applyAudioPlaybackRate,
   getAgentVoiceSpeed,
   getAgentBrowserVoiceParams,
@@ -38,8 +39,8 @@ import {
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
 
-// 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / cloud=Gemini 고품질 생성
-type VoiceMode = "browser" | "cloud";
+// 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
+type VoiceMode = "browser" | "server" | "cloud";
 
 const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
@@ -148,8 +149,11 @@ export default function App() {
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") === "1");
-  // 음성 방식(무료 브라우저 읽기 / 고품질 생성). 기본값 = 무료 브라우저(비용 0·싱크 좋음)
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => (localStorage.getItem("agentVoiceMode") === "cloud" ? "cloud" : "browser"));
+  // 음성 방식(무료 브라우저 / 서버 MeloTTS / 고품질 Gemini). 기본값 = 무료 브라우저(비용 0·싱크 좋음)
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
+    const v = localStorage.getItem("agentVoiceMode");
+    return v === "cloud" || v === "server" ? v : "browser";
+  });
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
@@ -219,10 +223,11 @@ export default function App() {
     });
   }
 
-  // 음성 방식 전환: 무료 브라우저 읽기 ↔ 고품질 클라우드 생성.
+  // 음성 방식 순환 전환: 무료 브라우저 → 서버(MeloTTS) → 고품질(Gemini) → …
   function toggleVoiceMode() {
     setVoiceMode((m) => {
-      const next: VoiceMode = m === "browser" ? "cloud" : "browser";
+      const order: VoiceMode[] = ["browser", "server", "cloud"];
+      const next = order[(order.indexOf(m) + 1) % order.length];
       voiceModeRef.current = next;
       localStorage.setItem("agentVoiceMode", next);
       stopSpeech(); // 방식이 바뀌면 진행 중 낭독은 정리.
@@ -340,16 +345,25 @@ export default function App() {
       return;
     }
 
-    // 고품질 클라우드 생성(Gemini).
+    // 서버 생성(MeloTTS·자체 호스팅) 또는 고품질 클라우드(Gemini).
+    await revealViaCloudAudio(turnId, agentId, fullText, speechText, voiceModeRef.current);
+  }
+
+  // 서버/클라우드 TTS로 오디오를 생성해 재생하면서 자막을 타이핑한다.
+  async function revealViaCloudAudio(turnId: string, agentId: string | undefined, fullText: string, speechText: string, engine: VoiceMode) {
     patchTurn(turnId, { displayText: "", typing: false, voicePreparing: true });
     try {
-      const speech = await synthesizeAgentSpeech({ agentId, text: speechText });
+      const speech = engine === "server"
+        ? await synthesizeAgentSpeechServer({ agentId, text: speechText })
+        : await synthesizeAgentSpeech({ agentId, text: speechText });
       if (!voiceEnabledRef.current) {
         typeTurnText(turnId, fullText);
         return;
       }
       patchTurn(turnId, { voicePreparing: false });
-      const playPromise = playSpeechUrl(speech.voiceUrl, getAgentVoiceSpeed(agentId));
+      // 서버(MeloTTS)는 속도를 생성 단계에서 반영하므로 재생은 1배속.
+      const playRate = engine === "server" ? 1 : getAgentVoiceSpeed(agentId);
+      const playPromise = playSpeechUrl(speech.voiceUrl, playRate);
       typeTurnText(turnId, fullText);
       await playPromise;
     } catch {

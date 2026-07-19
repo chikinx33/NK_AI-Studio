@@ -6,6 +6,7 @@ import {
   deleteAgentKnowledge,
   saveAgentPersona,
   synthesizeAgentSpeech,
+  synthesizeAgentSpeechServer,
   AGENT_VOICE_PRESETS,
   AGENT_VOICE_TEST_LINES,
   applyAudioPlaybackRate,
@@ -77,7 +78,7 @@ const TYPE_BADGE: Record<string, { t: string; c: string }> = {
 };
 
 // 직원 선택은 좌측 사이드바 아바타 클릭으로 (agentId 주입). 여기선 그 직원만 표시·관리.
-export default function AgentManager({ agentId, agents, voiceMode = "browser" }: { agentId: string | null; agents: AgentInfo[]; voiceMode?: "browser" | "cloud" }) {
+export default function AgentManager({ agentId, agents, voiceMode = "browser" }: { agentId: string | null; agents: AgentInfo[]; voiceMode?: "browser" | "server" | "cloud" }) {
   const [brain, setBrain] = useState<AgentBrain | null>(null);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [persona, setPersona] = useState("");
@@ -89,6 +90,7 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
   const [browserVoices, setBrowserVoices] = useState<BrowserVoiceInfo[]>([]);
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const browserMode = voiceMode === "browser";
+  const serverMode = voiceMode === "server";
   const [previewLine, setPreviewLine] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [newRule, setNewRule] = useState("");
@@ -230,10 +232,13 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
         const { lang, pitch } = getAgentBrowserVoiceParams(agentId);
         await speakBrowserTts({ text: line, lang, voiceURI: browserVoiceURI, pitch, rate: voiceSpeed }).done;
       } else {
-        const speech = await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
+        // 서버(MeloTTS)는 속도를 생성 단계에서 반영 → 재생 1배속. 클라우드(Gemini)는 재생 배속.
+        const speech = serverMode
+          ? await synthesizeAgentSpeechServer({ agentId, text: line })
+          : await synthesizeAgentSpeech({ agentId, text: line, voiceKey });
         await new Promise<void>((resolve) => {
           const audio = new Audio(speech.voiceUrl);
-          applyAudioPlaybackRate(audio, voiceSpeed);
+          applyAudioPlaybackRate(audio, serverMode ? 1 : voiceSpeed);
           audio.onended = () => resolve();
           audio.onerror = () => resolve();
           const p = audio.play();
@@ -313,7 +318,7 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
               <div className="mb-1.5 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
                 <span className="text-[11px] text-gray-600">
-                  {browserMode ? "무료 읽기 (브라우저)" : selectedVoice.label}
+                  {browserMode ? "무료 읽기 (브라우저)" : serverMode ? "서버 음성 (MeloTTS)" : selectedVoice.label}
                 </span>
               </div>
               <div className="flex gap-1.5">
@@ -330,6 +335,10 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                       </option>
                     ))}
                   </select>
+                ) : serverMode ? (
+                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-400">
+                    한국어 화자 (성별·톤 자동)
+                  </div>
                 ) : (
                   <select
                     value={voiceKey}
@@ -365,6 +374,8 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
               <p className="mt-1.5 text-xs text-gray-500">
                 {browserMode
                   ? "무료 브라우저 읽기 모드입니다. 이 기기에 설치된 음성 중에서 선택돼요. (한국어 음성이 하나뿐인 브라우저가 많아 속도·톤으로 구분돼요.)"
+                  : serverMode
+                  ? "자체 호스팅 서버 음성(MeloTTS) 모드입니다. 모두에게 동일한 목소리로, 호출당 과금이 없어요. 화자는 1종이라 직원별로 속도·톤(성별)으로 구분돼요."
                   : "선택한 보이스는 이 직원이 채팅에서 답할 때 바로 적용됩니다."}
               </p>
               {previewLine && (

@@ -53,7 +53,7 @@ interface Props {
   activeIds?: Set<string>; // 현재 활성(작업 중) 에이전트 ID 집합 — 입력 중 아바타 결정용
   voiceEnabled: boolean;
   onToggleVoice: () => void;
-  voiceMode?: "browser" | "cloud";
+  voiceMode?: "browser" | "server" | "cloud";
   onToggleVoiceMode?: () => void;
 }
 
