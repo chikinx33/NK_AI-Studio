@@ -592,6 +592,23 @@ export function getAgentVoicePreset(agentId?: string, voiceKey?: string): AgentV
   return AGENT_VOICE_PRESETS.find((v) => v.key === key) || AGENT_VOICE_PRESETS[0];
 }
 
+// 무료 브라우저 TTS(speechSynthesis)용 파라미터.
+// 시스템에 한국어 음성이 하나뿐인 경우가 많아, 성별·프리셋별로 pitch를 달리해
+// 에이전트마다 목소리를 구분한다. (male 낮게 / female 높게 + 프리셋별 미세 편차)
+export function getAgentBrowserVoiceParams(agentId?: string, voiceKey?: string): { lang: string; pitch: number } {
+  const preset = getAgentVoicePreset(agentId, voiceKey);
+  const female = preset.voiceId === "kr_female_narration";
+  const group = AGENT_VOICE_PRESETS.filter((v) => v.voiceId === preset.voiceId);
+  const idx = Math.max(0, group.findIndex((v) => v.key === preset.key));
+  const span = Math.max(1, group.length - 1);
+  // 그룹 내 위치를 0~1로, 성별 기준 pitch 대역에 매핑.
+  const t = idx / span;
+  const base = female ? 1.05 : 0.8;
+  const range = female ? 0.4 : 0.35; // female 1.05~1.45, male 0.8~1.15
+  const pitch = Math.min(2, Math.max(0.4, base + t * range));
+  return { lang: "ko-KR", pitch: Number(pitch.toFixed(2)) };
+}
+
 export async function synthesizeAgentSpeech(input: {
   agentId?: string;
   text: string;

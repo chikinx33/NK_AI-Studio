@@ -25,6 +25,7 @@ import {
   synthesizeAgentSpeech,
   applyAudioPlaybackRate,
   getAgentVoiceSpeed,
+  getAgentBrowserVoiceParams,
   loadAgentVoiceSettings,
   type DueReminder,
   autonomousStep,
@@ -35,6 +36,10 @@ import {
   type CompanyWorkItem,
 } from "./lib/api";
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
+import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
+
+// 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / cloud=Gemini 고품질 생성
+type VoiceMode = "browser" | "cloud";
 
 const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
@@ -143,6 +148,8 @@ export default function App() {
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") === "1");
+  // 음성 방식(무료 브라우저 읽기 / 고품질 생성). 기본값 = 무료 브라우저(비용 0·싱크 좋음)
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => (localStorage.getItem("agentVoiceMode") === "cloud" ? "cloud" : "browser"));
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
@@ -169,7 +176,9 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const spokenTurnKeysRef = useRef<Set<string>>(new Set());
   const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const browserSpeechRef = useRef<BrowserSpeakHandle | null>(null);
   const voiceEnabledRef = useRef(voiceEnabled);
+  const voiceModeRef = useRef(voiceMode);
   const revealRunsRef = useRef<Record<string, number>>({});
   // 활성 대화(스레드) — 기본값 오늘(로컬 날짜). 전환 시 그 대화 메시지를 불러온다.
   const localToday = () => {
@@ -200,14 +209,24 @@ export default function App() {
       const next = !v;
       voiceEnabledRef.current = next;
       localStorage.setItem("agentVoiceEnabled", next ? "1" : "0");
-      if (!next) {
-        const audio = speechAudioRef.current;
-        if (audio) {
-          audio.pause();
-          audio.src = "";
-        }
-        speechAudioRef.current = null;
+      if (next) {
+        // 무료 브라우저 읽기라면 목소리 목록을 미리 로드(첫 발화 지연 방지).
+        if (voiceModeRef.current === "browser") ensureVoicesLoaded().catch(() => {});
+      } else {
+        stopSpeech();
       }
+      return next;
+    });
+  }
+
+  // 음성 방식 전환: 무료 브라우저 읽기 ↔ 고품질 클라우드 생성.
+  function toggleVoiceMode() {
+    setVoiceMode((m) => {
+      const next: VoiceMode = m === "browser" ? "cloud" : "browser";
+      voiceModeRef.current = next;
+      localStorage.setItem("agentVoiceMode", next);
+      stopSpeech(); // 방식이 바뀌면 진행 중 낭독은 정리.
+      if (next === "browser") ensureVoicesLoaded().catch(() => {});
       return next;
     });
   }
@@ -306,6 +325,22 @@ export default function App() {
       return;
     }
 
+    // 무료 브라우저 읽기: 생성 대기 없이 즉시 낭독 + 진행률 싱크.
+    if (voiceModeRef.current === "browser") {
+      if (browserTtsSupported()) {
+        try {
+          await revealViaBrowserSpeech(turnId, agentId, fullText, speechText);
+        } catch {
+          typeTurnText(turnId, fullText);
+        }
+        return;
+      }
+      // 브라우저가 speechSynthesis를 지원하지 않으면 자막만 노출.
+      typeTurnText(turnId, fullText);
+      return;
+    }
+
+    // 고품질 클라우드 생성(Gemini).
     patchTurn(turnId, { displayText: "", typing: false, voicePreparing: true });
     try {
       const speech = await synthesizeAgentSpeech({ agentId, text: speechText });
@@ -321,6 +356,66 @@ export default function App() {
       // TTS가 실패해도 답변은 게임 대사처럼 자연스럽게 노출한다.
       typeTurnText(turnId, fullText);
     }
+  }
+
+  // 재생 중인 모든 음성(클라우드 오디오 + 브라우저 읽기) 즉시 중단.
+  function stopSpeech() {
+    const audio = speechAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.src = "";
+    }
+    speechAudioRef.current = null;
+    browserSpeechRef.current?.cancel();
+    browserSpeechRef.current = null;
+    cancelBrowserTts();
+  }
+
+  // 무료 브라우저 TTS로 읽으면서, 읽기 진행률에 맞춰 자막을 드러낸다(싱크).
+  // 시간 기반 진행을 기본으로 하고(경계 이벤트 미지원 브라우저 대비), onboundary가 오면 그걸로 보정한다.
+  async function revealViaBrowserSpeech(turnId: string, agentId: string | undefined, fullText: string, speechText: string) {
+    const chars = Array.from(fullText);
+    const run = (revealRunsRef.current[turnId] || 0) + 1;
+    revealRunsRef.current[turnId] = run;
+    const { lang, pitch } = getAgentBrowserVoiceParams(agentId);
+    const rate = getAgentVoiceSpeed(agentId);
+
+    patchTurn(turnId, { displayText: "", typing: true, voicePreparing: false });
+    let shown = 0;
+    const revealTo = (count: number) => {
+      if (revealRunsRef.current[turnId] !== run) return;
+      const next = Math.min(chars.length, Math.max(shown, count));
+      if (next === shown) return;
+      shown = next;
+      patchTurn(turnId, { displayText: chars.slice(0, shown).join(""), typing: shown < chars.length, voicePreparing: false });
+    };
+
+    // 한국어 읽기 속도(대략 초당 7.5자 × 배속)로 낭독 시간 추정 → 자막 baseline.
+    const speechLen = Math.max(1, Array.from(speechText).length);
+    const estMs = Math.max(900, (speechLen / (7.5 * (rate || 1))) * 1000);
+    const start = performance.now();
+    let ended = false;
+    const tick = () => {
+      if (ended || revealRunsRef.current[turnId] !== run) return;
+      const p = Math.min(1, (performance.now() - start) / estMs);
+      revealTo(Math.ceil(p * chars.length));
+      if (shown < chars.length) window.setTimeout(tick, 40);
+    };
+    window.setTimeout(tick, 40);
+
+    const handle = speakBrowserTts({
+      text: speechText,
+      lang,
+      pitch,
+      rate,
+      onBoundary: (p) => revealTo(Math.ceil(p * chars.length)),
+    });
+    browserSpeechRef.current = handle;
+    await handle.done;
+    ended = true;
+    if (browserSpeechRef.current === handle) browserSpeechRef.current = null;
+    // 낭독이 끝나면 남은 자막을 마저 채운다.
+    if (revealRunsRef.current[turnId] === run) revealTo(chars.length);
   }
 
   async function playSpeechUrl(url: string, speed = 1) {
@@ -392,16 +487,12 @@ export default function App() {
 
   useEffect(() => {
     voiceEnabledRef.current = voiceEnabled;
+    voiceModeRef.current = voiceMode;
     if (!voiceEnabled) {
       markSpoken(turns);
-      const audio = speechAudioRef.current;
-      if (audio) {
-        audio.pause();
-        audio.src = "";
-      }
-      speechAudioRef.current = null;
+      stopSpeech();
     }
-  }, [turns, voiceEnabled]);
+  }, [turns, voiceEnabled, voiceMode]);
 
   // 하트비트: 브라우저가 열려 있는 동안 서버에 생존 신호 전송
   // (백그라운드 런처로 켰을 때, 브라우저를 닫으면 서버가 스스로 종료됨)
@@ -821,6 +912,8 @@ export default function App() {
             convDate={activeConvId}
             voiceEnabled={voiceEnabled}
             onToggleVoice={toggleVoice}
+            voiceMode={voiceMode}
+            onToggleVoiceMode={toggleVoiceMode}
           />
         ) : (
           <Chat
@@ -837,6 +930,8 @@ export default function App() {
             activeIds={activeIds}
             voiceEnabled={voiceEnabled}
             onToggleVoice={toggleVoice}
+            voiceMode={voiceMode}
+            onToggleVoiceMode={toggleVoiceMode}
           />
         )}
         </ErrorBoundary>
