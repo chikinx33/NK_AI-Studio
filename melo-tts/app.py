@@ -41,9 +41,12 @@ def _get_model():
         if _model is None:
             from melo.api import TTS  # 무거운 import 는 최초 로드 때만
             m = TTS(language=LANGUAGE, device=DEVICE)
+            # spk2id 는 MeloTTS 의 HParams 객체(.get 없음). 대괄호/values 로 접근.
             spk = m.hps.data.spk2id
-            # KR 모델은 화자가 하나(예: {'KR': 0}). 첫 화자를 기본으로.
-            _spk_id = spk.get(LANGUAGE, list(spk.values())[0])
+            if LANGUAGE in spk:
+                _spk_id = spk[LANGUAGE]
+            else:
+                _spk_id = list(spk.values())[0]
             _model = m
     return _model, _spk_id
 
