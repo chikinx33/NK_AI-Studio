@@ -590,7 +590,7 @@ export default function VisualNovel({
                 ? `${focusAgent.name}에게 말하기 (Enter 전송) · ${focusAgent.name} 전용`
                 : "대사를 입력하세요 (Enter 전송) · @이름으로 직원 지목"
             }
-            className="flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-500"
+            className="no-scrollbar flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-500"
           />
           <SpeechInputButton
             enabled={speechInput.enabled}

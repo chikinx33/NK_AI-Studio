@@ -67,3 +67,12 @@ test("마이크 모드는 화면 전환과 무관하게 유지되고 채팅 밖�
   assert.match(control, /return \(\) => \{\s+mountedRef\.current = false;/);
   assert.doesNotMatch(control, /return \(\) => \{[\s\S]{0,200}onEnabledChangeRef\.current\(false\)/);
 });
+
+test("VN 모드 사용자 입력창은 스크롤을 유지하면서 스크롤바 표시만 숨긴다", () => {
+  const visualNovel = read("ai-company-app/src/components/VisualNovel.tsx");
+  const css = read("ai-company-app/src/index.css");
+  assert.match(visualNovel, /<textarea[\s\S]*className="no-scrollbar flex-1 resize-none overflow-y-auto/);
+  assert.match(css, /\.no-scrollbar \{ scrollbar-width: none; -ms-overflow-style: none; \}/);
+  assert.match(css, /\.no-scrollbar::\-webkit-scrollbar \{ width: 0; height: 0; display: none; \}/);
+  assert.doesNotMatch(visualNovel, /vn-scrollbars-hidden/);
+});
