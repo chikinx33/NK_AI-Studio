@@ -114,6 +114,7 @@ export default function App() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [presentationActive, setPresentationActive] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">("chat");
@@ -485,6 +486,7 @@ export default function App() {
     const liveTurnIsVisible = turnsRef.current.some((turn) => !turn.queued && turn.streaming);
     if (presentationRunningRef.current || liveTurnIsVisible) return;
     presentationRunningRef.current = true;
+    setPresentationActive(true);
     const worker = ++presentationWorkerRef.current;
 
     try {
@@ -517,6 +519,7 @@ export default function App() {
       if (presentationWorkerRef.current === worker) {
         presentationRunningRef.current = false;
         if (presentationQueueRef.current.length > 0) void processPresentationQueue();
+        else setPresentationActive(false);
       }
     }
   }
@@ -550,6 +553,7 @@ export default function App() {
   function cancelAgentPresentations() {
     presentationQueueRef.current = [];
     presentationRunningRef.current = false;
+    setPresentationActive(false);
     presentationWorkerRef.current += 1;
     Object.keys(revealRunsRef.current).forEach((turnId) => {
       revealRunsRef.current[turnId] += 1;
@@ -1165,6 +1169,7 @@ export default function App() {
             turns={presentedTurns}
             busy={busy || status?.workMode === "off"}
             streaming={busy}
+            agentPresenting={presentationActive}
             onStop={stop}
             draft={draft}
             setDraft={setDraft}
