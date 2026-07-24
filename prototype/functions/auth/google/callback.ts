@@ -2,7 +2,7 @@
 // 구글 로그인 콜백: authorization code 를 교환하고 구글 이메일을 확인한 뒤,
 // '승인된(레지스트리 admin/users.json 에 같은 이메일로 등록된) 활성 회원'에 한해 NK 세션을 발급한다.
 // 결과는 팝업 창에서 opener 로 postMessage(platform: 'google_login') 하여 전달한다.
-import { issueSessionToken } from "../../api/_shared/auth.js";
+import { issueSessionToken, resolveSessionTtlSec } from "../../api/_shared/auth.js";
 import {
   loadRegistry,
   findUserByEmail,
@@ -19,6 +19,7 @@ interface LoginResult {
   permissions?: string[];
   role?: string;
   email?: string;
+  persistent?: boolean;
   error?: string;
 }
 
@@ -51,6 +52,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   if (!code || !stateRaw) return popupHtml({ ok: false, error: "Missing code or state" });
 
   // state 신선도 검증(10분). 실패해도 흐름을 막진 않되, 명백히 오래된/손상된 state 는 거부.
+  let rememberDevice = true;
   try {
     const decoded = JSON.parse(new TextDecoder().decode(
       Uint8Array.from(atob(stateRaw.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))
@@ -59,6 +61,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!Number.isFinite(ts) || Date.now() - ts > 10 * 60 * 1000) {
       return popupHtml({ ok: false, error: "state_expired" });
     }
+    rememberDevice = decoded.rememberDevice !== false;
   } catch {
     return popupHtml({ ok: false, error: "Invalid state" });
   }
@@ -119,7 +122,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const isPrimary = user.id === primaryAdminId(env);
     const role = isPrimary ? "master" : "member";
     const permissions = isPrimary ? [] : (user.permissions || []);
-    const session = await issueSessionToken(user.id, env);
+    const session = await issueSessionToken(
+      user.id,
+      env,
+      resolveSessionTtlSec(rememberDevice),
+      { persistent: rememberDevice },
+    );
 
     return popupHtml({
       ok: true,
@@ -129,6 +137,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       permissions,
       role,
       email,
+      persistent: rememberDevice,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

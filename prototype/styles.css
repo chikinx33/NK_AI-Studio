@@ -5654,6 +5654,33 @@ html.page-shell-image #sidebar-project-card {
   box-sizing: border-box;
 }
 
+#login-card .form-row.login-remember-row {
+  display: flex;
+  justify-content: flex-end;
+  width: 300px;
+  padding-left: 70px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+
+#login-card .login-remember-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#login-card .login-remember-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
 .favorite-file-picker {
   display: flex;
   align-items: center;

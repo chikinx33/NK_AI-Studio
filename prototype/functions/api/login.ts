@@ -2,7 +2,7 @@
 // Login endpoint: validates credentials and issues a signed session token.
 // 우선순위: (1) env 1차 관리자 → (2) GCS 회원 레지스트리(admin/users.json) →
 //          (3) 레거시 하드코딩 회원(최초 로그인 시 레지스트리로 자동 마이그레이션)
-import { issueSessionToken, sanitizeUserId } from "./_shared/auth.js";
+import { issueSessionToken, resolveSessionTtlSec, sanitizeUserId } from "./_shared/auth.js";
 import { verifyPassword } from "./_shared/password.js";
 import { loadRegistry, saveRegistry, findUser, createUserRecord } from "./_shared/admin-users";
 
@@ -38,7 +38,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await request.json().catch(() => ({}));
     const id = sanitizeUserId(body.id || "");
     const pw = String(body.pw || '').trim();
+    const rememberDevice = body.rememberDevice !== false;
     if (!id || !pw) return json({ error: 'ID and PW are required' }, 400, origin);
+
+    const issueLoginSession = () => issueSessionToken(
+      id,
+      env,
+      resolveSessionTtlSec(rememberDevice),
+      { persistent: rememberDevice },
+    );
 
     const envId = sanitizeUserId(env.AUTH_ID || LEGACY_AUTH_ID);
     const envPw = String(env.AUTH_PW || LEGACY_AUTH_PW).trim();
@@ -57,11 +65,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         if (!isPrimary && !user.active) return json({ error: 'account_disabled' }, 403, origin);
         const ok = await verifyPassword(pw, user.pwHash);
         if (ok) {
-          const session = await issueSessionToken(id, env);
+          const session = await issueLoginSession();
           // 마스터(1차 관리자)만 role="master". 그 외 회원은 항상 "member".
           const role = isPrimary ? "master" : "member";
           const permissions = isPrimary ? [] : (user.permissions || []);
-          return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role }, 200, origin);
+          return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role, persistent: rememberDevice }, 200, origin);
         }
         // 비밀번호 불일치: 일반 회원은 즉시 실패.
         // 최고 관리자는 잠금 방지를 위해 아래 env 부트스트랩(기본/AUTH_PW)으로 폴백한다.
@@ -76,8 +84,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     //     env AUTH_PW(미설정 시 하드코딩 기본값)로 인증. 항상 전체 권한 + admin.
     //     레지스트리에 limfactory를 등록하면 위 (1)이 우선하여 이 기본 비번은 더 이상 통하지 않는다.
     if (isPrimary && pw === envPw) {
-      const session = await issueSessionToken(id, env);
-      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "master" }, 200, origin);
+      const session = await issueLoginSession();
+      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "master", persistent: rememberDevice }, 200, origin);
     }
 
     // (3) 레거시 하드코딩 회원: 평문 비교 후 성공 시 레지스트리에 1회 이관.
@@ -101,8 +109,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           }
         } catch (_) { /* 이관 실패는 로그인 자체를 막지 않음 */ }
       }
-      const session = await issueSessionToken(id, env);
-      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: legacy.permissions, role: "member" }, 200, origin);
+      const session = await issueLoginSession();
+      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: legacy.permissions, role: "member", persistent: rememberDevice }, 200, origin);
     }
 
     return json({ error: 'Invalid credentials' }, 401, origin);

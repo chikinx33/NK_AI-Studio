@@ -1,15 +1,21 @@
 const AUTH_ALGO = { name: "HMAC", hash: "SHA-256" };
-const DEFAULT_TTL_SEC = 60 * 60 * 12;
+export const DEFAULT_SESSION_TTL_SEC = 60 * 60 * 12;
+export const PERSISTENT_SESSION_TTL_SEC = 60 * 60 * 24 * 90;
 
-export async function issueSessionToken(userId, env, ttlSec = DEFAULT_TTL_SEC) {
+export function resolveSessionTtlSec(rememberDevice) {
+  return rememberDevice === true ? PERSISTENT_SESSION_TTL_SEC : DEFAULT_SESSION_TTL_SEC;
+}
+
+export async function issueSessionToken(userId, env, ttlSec = DEFAULT_SESSION_TTL_SEC, options = {}) {
   const safeUserId = sanitizeUserId(userId);
   const secret = readSecret(env);
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    v: 1,
+    v: 2,
     sub: safeUserId,
     iat: now,
-    exp: now + Math.max(300, Number(ttlSec) || DEFAULT_TTL_SEC),
+    exp: now + Math.max(300, Number(ttlSec) || DEFAULT_SESSION_TTL_SEC),
+    persistent: options && options.persistent === true,
   };
   const encoded = base64url(JSON.stringify(payload));
   const sig = await sign(encoded, secret);

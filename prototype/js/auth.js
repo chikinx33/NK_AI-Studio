@@ -2,7 +2,9 @@
     var NK = window.NK || (window.NK = {});
     var auth = NK.auth || (NK.auth = {});
     const KEYS = NK.config.KEYS;
+    const REFRESH_BEFORE_SEC = 60 * 60 * 24 * 14;
     let lastError = '';
+    let refreshPromise = null;
 
     const decodeBase64Url = function (input) {
         const raw = String(input || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -27,6 +29,14 @@
         try { return localStorage.getItem(KEYS.AUTH_TOKEN) || ''; } catch (_) { return ''; }
     };
 
+    auth.getRememberDevice = function () {
+        try { return localStorage.getItem(KEYS.REMEMBER_DEVICE) !== 'false'; } catch (_) { return true; }
+    };
+
+    auth.setRememberDevice = function (rememberDevice) {
+        try { localStorage.setItem(KEYS.REMEMBER_DEVICE, rememberDevice === false ? 'false' : 'true'); } catch (_) { }
+    };
+
     auth.isAuthed = function () {
         try {
             if (localStorage.getItem(KEYS.AUTH) !== 'true') return false;
@@ -40,17 +50,21 @@
                 auth.setAuthed(false);
                 return false;
             }
+            if (auth.refreshSession) void auth.refreshSession(false);
             return true;
         } catch (_) { return false; }
     };
 
-    auth.setAuthed = function (val, user = '', token = '', permissions = [], role = '') {
+    auth.setAuthed = function (val, user = '', token = '', permissions = [], role = '', options = {}) {
         try {
             localStorage.setItem(KEYS.AUTH, val ? 'true' : 'false');
             localStorage.setItem(KEYS.USER, val ? user : '');
             localStorage.setItem(KEYS.AUTH_TOKEN, val ? String(token || '') : '');
             localStorage.setItem(KEYS.PERMISSIONS, val ? JSON.stringify(Array.isArray(permissions) ? permissions : []) : '[]');
             if (KEYS.ROLE) localStorage.setItem(KEYS.ROLE, val ? String(role || '') : '');
+            if (val && Object.prototype.hasOwnProperty.call(options, 'rememberDevice')) {
+                auth.setRememberDevice(options.rememberDevice !== false);
+            }
         } catch (_) { }
     };
 
@@ -97,12 +111,15 @@
         return String(lastError || '');
     };
 
-    auth.login = async function (id, pw) {
+    auth.login = async function (id, pw, rememberDevice = auth.getRememberDevice()) {
         try {
-            const res = await NK.api.login(id, pw);
+            auth.setRememberDevice(rememberDevice);
+            const res = await NK.api.login(id, pw, rememberDevice);
             if (res && res.ok && res.token) {
                 lastError = '';
-                auth.setAuthed(true, res.user || id, res.token, res.permissions || [], res.role || '');
+                auth.setAuthed(true, res.user || id, res.token, res.permissions || [], res.role || '', {
+                    rememberDevice: res.persistent !== false,
+                });
                 return true;
             }
             lastError = '로그인 응답이 올바르지 않습니다.';
@@ -112,9 +129,62 @@
         return false;
     };
 
+    auth.refreshSession = function (force) {
+        if (refreshPromise) return refreshPromise;
+        const token = auth.getToken();
+        const payload = parseTokenPayload(token);
+        if (!payload || !token || !NK.api || !NK.api.sessionRefresh) return Promise.resolve(false);
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = Number(payload.exp) - now;
+        const rememberDevice = auth.getRememberDevice();
+        const legacyPersistentMigration = Number(payload.v || 1) < 2 && rememberDevice;
+        const shouldRefresh = force === true
+            || legacyPersistentMigration
+            || (payload.persistent === true && remaining <= REFRESH_BEFORE_SEC);
+        if (!shouldRefresh || remaining <= 0) return Promise.resolve(true);
+
+        refreshPromise = NK.api.sessionRefresh(rememberDevice)
+            .then(function (res) {
+                if (!res || !res.ok || !res.token) return false;
+                auth.setAuthed(
+                    true,
+                    res.user || auth.getUser(),
+                    res.token,
+                    Array.isArray(res.permissions) ? res.permissions : auth.getPermissions(),
+                    res.role || auth.getRole(),
+                    { rememberDevice: res.persistent === true },
+                );
+                lastError = '';
+                return true;
+            })
+            .catch(function (err) {
+                // 네트워크·저장소 장애는 아직 유효한 세션을 지우지 않는다. 인증 거절만 로그아웃한다.
+                if (err && (err.status === 401 || err.status === 403)) {
+                    lastError = '로그인 상태를 갱신할 수 없습니다. 다시 로그인해 주세요.';
+                    auth.setAuthed(false);
+                }
+                return false;
+            })
+            .finally(function () { refreshPromise = null; });
+        return refreshPromise;
+    };
+
     auth.logout = function () {
         lastError = '';
         auth.setAuthed(false);
     };
+
+    const refreshWhenActive = function () {
+        try {
+            if (auth.isAuthed()) void auth.refreshSession(false);
+        } catch (_) { }
+    };
+    setTimeout(refreshWhenActive, 1000);
+    setInterval(refreshWhenActive, 60 * 60 * 1000);
+    if (typeof document !== 'undefined' && document.addEventListener) {
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') refreshWhenActive();
+        });
+    }
 
 })();

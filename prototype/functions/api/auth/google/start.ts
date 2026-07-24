@@ -25,6 +25,7 @@ function b64url(bytes: Uint8Array): string {
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
+  const rememberDevice = new URL(request.url).searchParams.get("rememberDevice") !== "0";
 
   const clientId = env.GOOGLE_LOGIN_CLIENT_ID || env.GOOGLE_CLIENT_ID;
   const redirectUri =
@@ -41,6 +42,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const state = b64url(new TextEncoder().encode(JSON.stringify({
     n: b64url(nonceBytes),
     ts: Date.now(),
+    rememberDevice,
   })));
 
   const params = new URLSearchParams({

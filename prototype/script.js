@@ -1095,6 +1095,7 @@
     const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
     const googleLoginBtn = document.getElementById('google-login-btn');
+    const rememberDeviceInput = document.getElementById('opt-remember-device');
     const optionActions = document.querySelector('#login-card .option-actions');
     const favoriteCard = document.getElementById('favorite-card');
     const dashboardCard = document.getElementById('user-dashboard-card');
@@ -1127,6 +1128,16 @@
     const profileUiEmailInput = document.getElementById('profile-ui-email');
     const profileUiTimezoneInput = document.getElementById('profile-ui-timezone');
     if (!idInput || !pwInput || !btn) return;
+
+    if (rememberDeviceInput) {
+      rememberDeviceInput.checked = !(NK.auth && NK.auth.getRememberDevice)
+        || NK.auth.getRememberDevice();
+      rememberDeviceInput.addEventListener('change', () => {
+        if (NK.auth && NK.auth.setRememberDevice) {
+          NK.auth.setRememberDevice(rememberDeviceInput.checked);
+        }
+      });
+    }
 
     let favoriteItems = [];
     let resizedIconDataUrl = '';
@@ -2193,7 +2204,9 @@
         nameEl.textContent = getLoginStatusText(loggedIn, user);
         nameEl.classList.toggle('hidden', !loggedIn);
       }
-      formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
+      formRows.forEach(r => {
+        r.style.display = loggedIn ? 'none' : (r.classList.contains('login-remember-row') ? 'flex' : 'grid');
+      });
       if (googleLoginBtn) googleLoginBtn.style.display = loggedIn ? 'none' : '';
       // 로그인 후에는 구글 버튼이 숨겨지므로, 입력칸 정렬용 들여쓰기를 풀고 로그아웃 버튼을 가운데 정렬한다.
       if (optionActions) optionActions.classList.toggle('is-authed', !!loggedIn);
@@ -2590,7 +2603,8 @@
       btn.disabled = true;
       btn.textContent = translateUiText('로그인 중...');
       try {
-        const ok = await NK.auth.login(idInput.value.trim(), pwInput.value.trim());
+        const rememberDevice = !rememberDeviceInput || rememberDeviceInput.checked;
+        const ok = await NK.auth.login(idInput.value.trim(), pwInput.value.trim(), rememberDevice);
         if (ok) {
           setUI(true, NK.auth.getUser());
           const requestedReturnTarget = readRequestedLoginReturnTarget(new URLSearchParams(window.location.search));
@@ -2660,7 +2674,9 @@
           try { if (popup && !popup.closed) popup.close(); } catch (_) {}
           const r = data.result || {};
           if (r.ok && r.token) {
-            NK.auth.setAuthed(true, r.user || '', r.token, r.permissions || [], r.role || '');
+            NK.auth.setAuthed(true, r.user || '', r.token, r.permissions || [], r.role || '', {
+              rememberDevice: r.persistent === true,
+            });
             setUI(true, NK.auth.getUser());
             const requestedReturnTarget = readRequestedLoginReturnTarget(new URLSearchParams(window.location.search));
             if (requestedReturnTarget) {
@@ -2676,7 +2692,9 @@
         window.addEventListener('message', onMsg);
 
         try {
-          const res = await NK.api.googleLoginStart();
+          const rememberDevice = !rememberDeviceInput || rememberDeviceInput.checked;
+          if (NK.auth && NK.auth.setRememberDevice) NK.auth.setRememberDevice(rememberDevice);
+          const res = await NK.api.googleLoginStart(rememberDevice);
           if (!res || !res.ok || !res.oauthUrl) throw new Error('start_failed');
           popup = window.open(res.oauthUrl, 'nk_google_login', 'width=480,height=640,menubar=no,toolbar=no');
           if (!popup) {

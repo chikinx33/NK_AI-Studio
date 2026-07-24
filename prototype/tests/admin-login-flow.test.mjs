@@ -56,7 +56,8 @@ test("auth.js stores role and exposes isAdmin/getRole", () => {
   assert.match(src, /auth\.isAdmin = function/);
   assert.match(src, /KEYS\.ROLE/);
   // 로그인 시 role 전달
-  assert.match(src, /auth\.setAuthed\(true, res\.user \|\| id, res\.token, res\.permissions \|\| \[\], res\.role \|\| ''\)/);
+  assert.match(src, /auth\.setAuthed\(true, res\.user \|\| id, res\.token, res\.permissions \|\| \[\], res\.role \|\| '', \{/);
+  assert.match(src, /rememberDevice: res\.persistent !== false/);
 });
 
 test("config.js defines ROLE storage key", () => {

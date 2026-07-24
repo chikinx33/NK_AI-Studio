@@ -1219,20 +1219,35 @@
     return j(text);
   };
 
-  api.login = async function (id, pw) {
+  api.login = async function (id, pw, rememberDevice) {
     var res = await fetch(withBase('/api/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, pw })
+      body: JSON.stringify({ id, pw, rememberDevice: rememberDevice !== false })
     });
     var text = await res.text();
     if (!res.ok) throw new Error(e(text) || 'login_error');
     return j(text);
   };
 
+  api.sessionRefresh = async function (rememberDevice) {
+    var res = await fetch(withBase('/api/session/refresh'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ rememberDevice: rememberDevice === true })
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'session_refresh_failed');
+      err.status = res.status;
+      throw err;
+    }
+    return j(text);
+  };
+
   // 구글 로그인 시작 — authorize URL 을 받아 팝업으로 연다(콜백이 세션을 postMessage 로 전달).
-  api.googleLoginStart = async function () {
-    var res = await fetch(withBase('/api/auth/google/start'), {
+  api.googleLoginStart = async function (rememberDevice) {
+    var res = await fetch(withBase('/api/auth/google/start?rememberDevice=' + (rememberDevice !== false ? '1' : '0')), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
