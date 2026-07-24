@@ -42,6 +42,13 @@ import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSuppor
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
 
+interface AgentPresentationItem {
+  turnId: string;
+  agentId?: string;
+  text: string;
+  waitBeforeReveal: boolean;
+}
+
 const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
@@ -184,6 +191,9 @@ export default function App() {
   const voiceEnabledRef = useRef(voiceEnabled);
   const voiceModeRef = useRef(voiceMode);
   const revealRunsRef = useRef<Record<string, number>>({});
+  const presentationQueueRef = useRef<AgentPresentationItem[]>([]);
+  const presentationRunningRef = useRef(false);
+  const presentationWorkerRef = useRef(0);
   // 활성 대화(스레드) — 기본값 오늘(로컬 날짜). 전환 시 그 대화 메시지를 불러온다.
   const localToday = () => {
     const d = new Date();
@@ -301,7 +311,7 @@ export default function App() {
     commit(next);
   }
 
-  function typeTurnText(turnId: string, fullText: string) {
+  function typeTurnText(turnId: string, fullText: string): Promise<void> {
     const chars = Array.from(fullText);
     const run = (revealRunsRef.current[turnId] || 0) + 1;
     revealRunsRef.current[turnId] = run;
@@ -309,24 +319,34 @@ export default function App() {
     const delay = chars.length > 450 ? 13 : 18;
     let index = 0;
 
-    patchTurn(turnId, { displayText: "", typing: true, voicePreparing: false });
-    const tick = () => {
-      if (revealRunsRef.current[turnId] !== run) return;
-      index = Math.min(chars.length, index + step);
-      patchTurn(turnId, {
-        displayText: chars.slice(0, index).join(""),
-        typing: index < chars.length,
-        voicePreparing: false,
-      });
-      if (index < chars.length) window.setTimeout(tick, delay);
-    };
-    window.setTimeout(tick, delay);
+    return new Promise((resolve) => {
+      patchTurn(turnId, { displayText: "", typing: chars.length > 0, voicePreparing: false });
+      if (chars.length === 0) {
+        resolve();
+        return;
+      }
+      const tick = () => {
+        if (revealRunsRef.current[turnId] !== run) {
+          resolve();
+          return;
+        }
+        index = Math.min(chars.length, index + step);
+        patchTurn(turnId, {
+          displayText: chars.slice(0, index).join(""),
+          typing: index < chars.length,
+          voicePreparing: false,
+        });
+        if (index < chars.length) window.setTimeout(tick, delay);
+        else resolve();
+      };
+      window.setTimeout(tick, delay);
+    });
   }
 
   async function revealAgentTurn(turnId: string, agentId: string | undefined, fullText: string) {
     const speechText = buildSpeechText(fullText);
     if (!voiceEnabledRef.current || !speechText) {
-      typeTurnText(turnId, fullText);
+      await typeTurnText(turnId, fullText);
       return;
     }
 
@@ -336,17 +356,109 @@ export default function App() {
         try {
           await revealViaBrowserSpeech(turnId, agentId, fullText, speechText);
         } catch {
-          typeTurnText(turnId, fullText);
+          await typeTurnText(turnId, fullText);
         }
         return;
       }
       // 브라우저가 speechSynthesis를 지원하지 않으면 자막만 노출.
-      typeTurnText(turnId, fullText);
+      await typeTurnText(turnId, fullText);
       return;
     }
 
     // 서버 생성(MeloTTS·자체 호스팅) 또는 고품질 클라우드(Gemini).
     await revealViaCloudAudio(turnId, agentId, fullText, speechText, voiceModeRef.current);
+  }
+
+  function presentationDelay(ms: number) {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function isPriorityPresentation(item: AgentPresentationItem) {
+    return item.agentId === "_tool" || /^\s*[🔐🔒⚠️]/u.test(item.text);
+  }
+
+  async function processPresentationQueue() {
+    const liveTurnIsVisible = turnsRef.current.some((turn) => !turn.queued && turn.streaming);
+    if (presentationRunningRef.current || liveTurnIsVisible) return;
+    presentationRunningRef.current = true;
+    const worker = ++presentationWorkerRef.current;
+
+    try {
+      while (presentationQueueRef.current.length > 0 && presentationWorkerRef.current === worker) {
+        const item = presentationQueueRef.current.shift()!;
+        const priority = isPriorityPresentation(item);
+        patchTurn(item.turnId, {
+          queued: false,
+          streaming: false,
+          displayText: "",
+          typing: true,
+          voicePreparing: false,
+          ts: Date.now(),
+        });
+
+        // 미리 완성된 다음 발언은 잠깐의 생각 표시 후 꺼내 대화 호흡을 만든다.
+        if (item.waitBeforeReveal) {
+          await presentationDelay(priority ? 180 : 420);
+          if (presentationWorkerRef.current !== worker) break;
+        }
+
+        await revealAgentTurn(item.turnId, item.agentId, item.text);
+        if (presentationWorkerRef.current !== worker) break;
+
+        // 다음 말풍선이 같은 순간에 붙지 않도록 문장 길이에 비례한 짧은 간격을 둔다.
+        const betweenTurns = priority ? 160 : Math.min(900, 360 + Array.from(item.text).length * 1.2);
+        await presentationDelay(betweenTurns);
+      }
+    } finally {
+      if (presentationWorkerRef.current === worker) {
+        presentationRunningRef.current = false;
+        if (presentationQueueRef.current.length > 0) void processPresentationQueue();
+      }
+    }
+  }
+
+  function enqueueAgentPresentation(item: AgentPresentationItem) {
+    // 화면에 먼저 등장한 실시간 발언은 그 사이 도착한 백그라운드 보고보다 항상 먼저 완성한다.
+    if (item.waitBeforeReveal) presentationQueueRef.current.push(item);
+    else presentationQueueRef.current.unshift(item);
+    void processPresentationQueue();
+  }
+
+  function presentCompletedAgentTurns(items: Turn[]) {
+    const prepared = items.map((item) => ({
+      ...item,
+      id: item.id || makeTurnId(item.agentId),
+      displayText: "",
+      streaming: false,
+      typing: false,
+      voicePreparing: false,
+      queued: true,
+    }));
+    commit([...turnsRef.current, ...prepared]);
+    prepared.forEach((item) => enqueueAgentPresentation({
+      turnId: item.id!,
+      agentId: item.agentId,
+      text: item.text,
+      waitBeforeReveal: true,
+    }));
+  }
+
+  function cancelAgentPresentations() {
+    presentationQueueRef.current = [];
+    presentationRunningRef.current = false;
+    presentationWorkerRef.current += 1;
+    Object.keys(revealRunsRef.current).forEach((turnId) => {
+      revealRunsRef.current[turnId] += 1;
+    });
+    stopSpeech();
+  }
+
+  function finishAgentPresentations() {
+    if (!presentationRunningRef.current && presentationQueueRef.current.length === 0) return;
+    cancelAgentPresentations();
+    commit(turnsRef.current.map((turn) => turn.role === "agent" && (turn.queued || turn.typing || turn.voicePreparing)
+      ? { ...turn, queued: false, streaming: false, displayText: turn.text, typing: false, voicePreparing: false }
+      : turn));
   }
 
   // 서버/클라우드 TTS로 오디오를 생성해 재생하면서 자막을 타이핑한다.
@@ -357,18 +469,18 @@ export default function App() {
         ? await synthesizeAgentSpeechServer({ agentId, text: speechText })
         : await synthesizeAgentSpeech({ agentId, text: speechText });
       if (!voiceEnabledRef.current) {
-        typeTurnText(turnId, fullText);
+        await typeTurnText(turnId, fullText);
         return;
       }
       patchTurn(turnId, { voicePreparing: false });
       // 서버(MeloTTS)는 속도를 생성 단계에서 반영하므로 재생은 1배속.
       const playRate = engine === "server" ? 1 : getAgentVoiceSpeed(agentId);
       const playPromise = playSpeechUrl(speech.voiceUrl, playRate);
-      typeTurnText(turnId, fullText);
-      await playPromise;
+      const typePromise = typeTurnText(turnId, fullText);
+      await Promise.all([playPromise, typePromise]);
     } catch {
       // TTS가 실패해도 답변은 게임 대사처럼 자연스럽게 노출한다.
-      typeTurnText(turnId, fullText);
+      await typeTurnText(turnId, fullText);
     }
   }
 
@@ -440,9 +552,7 @@ export default function App() {
       speechAudioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => resolve();
-      audio.onpause = () => {
-        if (!voiceEnabledRef.current) resolve();
-      };
+      audio.onpause = () => resolve();
       const started = audio.play();
       if (started && typeof started.catch === "function") started.catch(() => resolve());
     });
@@ -490,6 +600,7 @@ export default function App() {
 
   // 활성 대화가 바뀌면 그 대화의 메시지를 불러온다 (전환·복원)
   useEffect(() => {
+    cancelAgentPresentations();
     getConversationMessages(activeConvId)
       .then((h) => {
         const loaded = h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, ts: t.ts }));
@@ -535,6 +646,8 @@ export default function App() {
   }
 
   async function send(text: string, attachments?: Attachment[]) {
+    // 사용자가 새로 말하면 대기 중이던 발언은 즉시 완성해 대화 순서를 보존한다.
+    finishAgentPresentations();
     const atts = attachments ?? [];
     const previews = atts.map((a) => a.preview).filter(Boolean);
     const userTurn: Turn = {
@@ -572,20 +685,24 @@ export default function App() {
             case "turn_start":
               // 발언을 시작한 직원만 활동 중으로 교체 — 이전 직원(코어 등) 깜박임 즉시 해제
               setWorkingIds(new Set<string>(data.agentId ? [data.agentId] : []));
-              commit([
-                ...turnsRef.current,
-                {
-                  id: makeTurnId(data.agentId),
-                  role: "agent",
-                  agentId: data.agentId,
-                  name: data.name,
-                  emoji: data.emoji,
-                  text: "",
-                  displayText: "",
-                  streaming: true,
-                  ts: Date.now(),
-                },
-              ]);
+              {
+                const queued = presentationRunningRef.current || presentationQueueRef.current.length > 0;
+                commit([
+                  ...turnsRef.current,
+                  {
+                    id: makeTurnId(data.agentId),
+                    role: "agent",
+                    agentId: data.agentId,
+                    name: data.name,
+                    emoji: data.emoji,
+                    text: "",
+                    displayText: "",
+                    streaming: true,
+                    queued,
+                    ts: Date.now(),
+                  },
+                ]);
+              }
               break;
             case "turn_token": {
               const next = [...turnsRef.current];
@@ -600,25 +717,27 @@ export default function App() {
             }
             case "turn_end": {
               const next = [...turnsRef.current];
-              let reveal: { id: string; agentId?: string; text: string } | null = null;
+              let reveal: AgentPresentationItem | null = null;
               for (let i = next.length - 1; i >= 0; i--) {
                 if (next[i].agentId === data.agentId && next[i].streaming) {
                   const finalText = data.text ?? next[i].text;
                   const id = next[i].id || makeTurnId(data.agentId);
+                  const waitBeforeReveal = !!next[i].queued;
                   next[i] = {
                     ...next[i],
                     id,
                     streaming: false,
                     text: finalText,
                     displayText: "",
-                    voicePreparing: voiceEnabledRef.current,
+                    typing: false,
+                    voicePreparing: false,
                   };
-                  reveal = { id, agentId: next[i].agentId, text: finalText };
+                  reveal = { turnId: id, agentId: next[i].agentId, text: finalText, waitBeforeReveal };
                   break;
                 }
               }
               commit(next);
-              if (reveal) void revealAgentTurn(reveal.id, reveal.agentId, reveal.text);
+              if (reveal) enqueueAgentPresentation(reveal);
               // 발언이 끝나도 working을 지우지 않는다 — 다음 발언자의 turn_start가 교체하거나
               // 스트림 종료(아래 finally)에서 일괄 정리. 이래야 '현재 응답자' 하이라이트가 사이드바·
               // 타이핑 버블에서 유지돼 실제 답하는 아바타가 그대로 표시된다.
@@ -644,8 +763,7 @@ export default function App() {
               break;
             }
             case "error": {
-              commit([
-                ...turnsRef.current,
+              presentCompletedAgentTurns([
                 { role: "agent", name: "시스템", emoji: "⚠️", text: data.message },
               ]);
               break;
@@ -655,19 +773,23 @@ export default function App() {
         { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })) }
       );
     } catch (e) {
-      commit([
-        ...turnsRef.current,
+      presentCompletedAgentTurns([
         { role: "agent", name: "시스템", emoji: "⚠️", text: `통신 오류: ${(e as Error).message}` },
       ]);
     }
 
     abortRef.current = null;
     // 스트리밍 플래그 정리. 중지/오류처럼 turn_end가 오지 않은 답변은 현재까지 받은 문장을 노출한다.
-    commit(turnsRef.current.map((t) => (
-      t.streaming
-        ? { ...t, streaming: false, displayText: t.displayText || t.text, typing: false, voicePreparing: false }
-        : t
-    )));
+    const unfinished: AgentPresentationItem[] = [];
+    const settledTurns = turnsRef.current.map((t) => {
+      if (!t.streaming) return t;
+      const id = t.id || makeTurnId(t.agentId);
+      if (t.text) unfinished.push({ turnId: id, agentId: t.agentId, text: t.text, waitBeforeReveal: !!t.queued });
+      return { ...t, id, queued: t.text ? t.queued : false, streaming: false, displayText: t.text ? "" : t.text, typing: false, voicePreparing: false };
+    });
+    commit(settledTurns);
+    unfinished.forEach(enqueueAgentPresentation);
+    void processPresentationQueue();
     setWorkingIds(new Set()); // 누락된 busy=false 대비 안전 정리
     setBusy(false);
     setResultsRefreshKey((k) => k + 1); // 스트림 종료 시에도 결과 패널 갱신
@@ -698,9 +820,9 @@ export default function App() {
               name: m.turn.name,
               emoji: m.turn.emoji,
               text: m.turn.text,
-              ts: Date.now(),
+              ts: m.turn.ts || Date.now(),
             }));
-            commit([...turnsRef.current, ...add]);
+            presentCompletedAgentTurns(add);
           }
           lastSeqRef.current = r.messages[r.messages.length - 1].seq;
         }
@@ -815,11 +937,12 @@ export default function App() {
 
   // 업무 중 = 발언(스트리밍) 중이거나 실제 업무(agent_busy/백그라운드 작업) 중
   const activeIds = new Set<string>([
-    ...turns.filter((t) => t.streaming).map((t) => t.agentId!).filter(Boolean),
-    ...turns.filter((t) => t.typing || t.voicePreparing).map((t) => t.agentId!).filter(Boolean),
+    ...turns.filter((t) => !t.queued && t.streaming).map((t) => t.agentId!).filter(Boolean),
+    ...turns.filter((t) => !t.queued && (t.typing || t.voicePreparing)).map((t) => t.agentId!).filter(Boolean),
     ...workingIds,
     ...serverWorking,
   ]);
+  const presentedTurns = turns.filter((turn) => !turn.queued);
 
   return (
     <div className="flex h-full">
@@ -913,7 +1036,7 @@ export default function App() {
           />
         ) : vnMode ? (
           <VisualNovel
-            turns={turns}
+            turns={presentedTurns}
             busy={busy || status?.workMode === "off"}
             streaming={busy}
             onStop={stop}
@@ -932,7 +1055,7 @@ export default function App() {
           />
         ) : (
           <Chat
-            turns={turns}
+            turns={presentedTurns}
             busy={busy || status?.workMode === "off"}
             streaming={busy}
             onStop={stop}
@@ -970,8 +1093,7 @@ export default function App() {
             <Approvals
               onPickCategory={openKnowledgeCategory}
               onAgentSay={(m) => {
-                commit([
-                  ...turnsRef.current,
+                presentCompletedAgentTurns([
                   { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
                 ]);
                 setCenterView("chat");
@@ -983,8 +1105,7 @@ export default function App() {
             <Results
               refreshKey={resultsRefreshKey}
               onAgentSay={(m) => {
-                commit([
-                  ...turnsRef.current,
+                presentCompletedAgentTurns([
                   { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
                 ]);
                 setCenterView("chat");

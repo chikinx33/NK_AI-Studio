@@ -15,6 +15,7 @@ export interface Turn {
   streaming?: boolean;
   typing?: boolean;
   voicePreparing?: boolean;
+  queued?: boolean; // 앞선 에이전트 발언이 끝날 때까지 화면 노출을 보류
   imagePreview?: string; // (레거시) 단일 첨부 미리보기 data URL
   imagePreviews?: string[]; // 첨부 이미지 data URL 목록 (사용자 메시지 버블에 표시)
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
