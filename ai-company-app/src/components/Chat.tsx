@@ -268,9 +268,9 @@ function MicrophoneIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
       className={className}
     >
-      <rect width="8" height="13" x="8" y="2" rx="4" />
-      <path d="M18 10a6 6 0 0 1-12 0" />
       <path d="M12 19v3" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <rect x="9" y="2" width="6" height="13" rx="3" />
     </svg>
   );
 }
@@ -336,6 +336,9 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechDraftBaseRef = useRef("");
+  const attachmentsRef = useRef<Attachment[]>([]);
+  const busyRef = useRef(busy);
+  const onSendRef = useRef(onSend);
   const didInitScroll = useRef(false);
 
   // 이미지/파일 첨부 state — 여러 개 동시 첨부 지원
@@ -345,6 +348,9 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   const [speechError, setSpeechError] = useState("");
   const dragDepth = useRef(0); // 자식 요소 진입/이탈로 인한 깜빡임 방지용 카운터
   const speechSupported = !!getSpeechRecognitionConstructor();
+  attachmentsRef.current = attachments;
+  busyRef.current = busy;
+  onSendRef.current = onSend;
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
 
@@ -455,21 +461,36 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
     setSpeechError("");
     speechDraftBaseRef.current = draft;
     const recognition = new Recognition();
+    let recognizedMessage = "";
+    let hasRecognizedSpeech = false;
+    let recognitionFailed = false;
     recognition.lang = document.documentElement.lang?.startsWith("en") ? "en-US" : "ko-KR";
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.onresult = (event) => {
       const transcript = collectSpeechTranscript(event.results);
-      setDraft(mergeSpeechDraft(speechDraftBaseRef.current, transcript));
+      if (!transcript) return;
+      hasRecognizedSpeech = true;
+      recognizedMessage = mergeSpeechDraft(speechDraftBaseRef.current, transcript);
+      setDraft(recognizedMessage);
     };
     recognition.onerror = (event) => {
+      recognitionFailed = true;
       const message = speechRecognitionErrorMessage(event.error);
       if (message) setSpeechError(message);
     };
     recognition.onend = () => {
       if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
       setSpeechListening(false);
-      requestAnimationFrame(() => taRef.current?.focus());
+      const text = recognizedMessage.trim();
+      if (!recognitionFailed && hasRecognizedSpeech && text && !busyRef.current) {
+        const currentAttachments = attachmentsRef.current;
+        onSendRef.current(text, currentAttachments.length ? currentAttachments : undefined);
+        setDraft("");
+        setAttachments([]);
+      } else {
+        requestAnimationFrame(() => taRef.current?.focus());
+      }
     };
     speechRecognitionRef.current = recognition;
     setSpeechListening(true);
@@ -817,7 +838,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             disabled={!speechSupported || busy || streaming}
             aria-pressed={speechListening}
             aria-label={speechListening ? "음성 입력 중지" : "음성으로 입력"}
-            title={!speechSupported ? "이 브라우저는 음성 입력을 지원하지 않습니다" : speechListening ? "듣는 중 · 누르면 중지" : "음성으로 입력"}
+            title={!speechSupported ? "이 브라우저는 음성 입력을 지원하지 않습니다" : speechListening ? "듣는 중 · 누르면 중지 후 전송" : "음성으로 입력하고 자동 전송"}
             className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${speechListening ? "border-red-500 bg-red-950/70 text-red-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
           >
             {speechListening && <span className="absolute inset-1 animate-ping rounded-lg border border-red-400/60" />}
@@ -845,7 +866,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         {(speechListening || speechError) && (
           <div className="mt-1.5 min-h-4 px-1 text-xs" role="status" aria-live="polite">
             {speechListening ? (
-              <span className="text-red-300">● 듣고 있습니다. 말씀을 마치면 입력창에 자동으로 반영됩니다.</span>
+              <span className="text-red-300">● 듣고 있습니다. 말씀을 마치면 자동으로 전송됩니다.</span>
             ) : (
               <span className="text-amber-300">{speechError}</span>
             )}
