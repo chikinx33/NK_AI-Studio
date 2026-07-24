@@ -301,6 +301,7 @@ export async function setAutonomousMode(sql: SqlFn, userId: string, autonomous: 
 export interface BoardProject {
   id: string; name: string; summary?: string; status: string;
   goal?: string; stages: { title: string; status: string }[]; nextAction?: string; updatedAt: string;
+  collapsed: boolean; order: number;
 }
 // 단계 상태 어휘 통일 — 프런트(StageStatus: todo|doing|done)와 워커(in_progress 등)가 "진행 중"을
 // 다른 값으로 저장해 온 탓에 데이터가 섞여 있다. 어느 쪽이 썼든 읽을 때 canonical 값으로 정규화한다.
@@ -313,8 +314,21 @@ export function normalizeStageStatus(s: any): "todo" | "doing" | "done" {
 }
 export async function listProjects(sql: SqlFn, userId: string): Promise<BoardProject[]> {
   const rows = await sql("SELECT id, data, updated_at FROM company_projects WHERE user_id = $1 ORDER BY updated_at DESC", [userId]);
-  return rows.map((r: any) => {
-    const data = typeof r.data === "string" ? (() => { try { return JSON.parse(r.data); } catch { return {}; } })() : (r.data || {});
+  const prepared = rows.map((r: any) => {
+    const data = projectData(r);
+    const rawOrder = data?.ui?.order;
+    const explicitOrder = rawOrder === "" || rawOrder === null || rawOrder === undefined ? Number.NaN : Number(rawOrder);
+    return { row: r, data, explicitOrder };
+  });
+  let nextOrder = prepared.reduce((max: number, item: any) => Number.isFinite(item.explicitOrder) ? Math.max(max, item.explicitOrder) : max, -1) + 1;
+  // 과거 데이터와 새 프로젝트의 순서를 한 번만 명시값으로 승격한다. 이후 콘텐츠의 updated_at이
+  // 바뀌어도 카드 순서가 흔들리지 않고, 드래그·에이전트 명령이 같은 ui.order를 계속 사용한다.
+  for (const item of prepared) {
+    if (Number.isFinite(item.explicitOrder)) continue;
+    item.explicitOrder = nextOrder++;
+    await writeProjectUi(sql, userId, item.row.id, item.data, { order: item.explicitOrder });
+  }
+  return prepared.map(({ row: r, data, explicitOrder }: any) => {
     const stages = (Array.isArray(data.stages) ? data.stages : []).map((s: any) => ({
       title: s?.title ?? "", status: normalizeStageStatus(s?.status),
     }));
@@ -322,8 +336,70 @@ export async function listProjects(sql: SqlFn, userId: string): Promise<BoardPro
       id: r.id, name: data.name || r.id, summary: data.summary, status: data.status || "active",
       goal: data.goal, stages, nextAction: data.nextAction,
       updatedAt: r.updated_at,
+      // 기존 프로젝트에는 collapsed가 없으므로 접힘을 기본값으로 사용한다.
+      collapsed: data?.ui?.collapsed !== false,
+      order: explicitOrder,
     };
-  });
+  }).sort((a: BoardProject, b: BoardProject) => a.order - b.order);
+}
+
+function projectData(row: any): Record<string, any> {
+  if (typeof row?.data === "string") {
+    try { return JSON.parse(row.data); } catch { return {}; }
+  }
+  return row?.data || {};
+}
+
+async function writeProjectUi(sql: SqlFn, userId: string, id: string, data: Record<string, any>, ui: Record<string, unknown>): Promise<void> {
+  data.ui = { ...(data.ui && typeof data.ui === "object" ? data.ui : {}), ...ui };
+  // 접힘·순서 변경은 콘텐츠 수정이 아니므로 updated_at을 건드리지 않는다.
+  await sql("UPDATE company_projects SET data = $3::jsonb WHERE user_id = $1 AND id = $2", [userId, id, JSON.stringify(data)]);
+}
+
+export async function setProjectCollapsedById(sql: SqlFn, userId: string, projectId: string, collapsed: boolean): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND id = $2", [userId, projectId]);
+  if (!rows[0]) return false;
+  await writeProjectUi(sql, userId, rows[0].id, projectData(rows[0]), { collapsed: !!collapsed });
+  return true;
+}
+
+export async function setProjectCollapsedByName(sql: SqlFn, userId: string, projectName: string, collapsed: boolean): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows[0]) return false;
+  await writeProjectUi(sql, userId, rows[0].id, projectData(rows[0]), { collapsed: !!collapsed });
+  return true;
+}
+
+export async function setAllProjectsCollapsed(sql: SqlFn, userId: string, collapsed: boolean): Promise<number> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1", [userId]);
+  for (const row of rows) await writeProjectUi(sql, userId, row.id, projectData(row), { collapsed: !!collapsed });
+  return rows.length;
+}
+
+export async function reorderProjectsByIds(sql: SqlFn, userId: string, requestedIds: string[]): Promise<boolean> {
+  const rows = await sql("SELECT id, data, updated_at FROM company_projects WHERE user_id = $1 ORDER BY updated_at DESC", [userId]);
+  const byId = new Map(rows.map((row: any) => [String(row.id), row]));
+  const orderedIds = [...new Set((requestedIds || []).map(String))].filter((id) => byId.has(id));
+  for (const row of rows) if (!orderedIds.includes(String(row.id))) orderedIds.push(String(row.id));
+  if (!orderedIds.length) return false;
+  for (let order = 0; order < orderedIds.length; order += 1) {
+    const row: any = byId.get(orderedIds[order]);
+    await writeProjectUi(sql, userId, row.id, projectData(row), { order });
+  }
+  return true;
+}
+
+export async function reorderProjectsByNames(sql: SqlFn, userId: string, requestedNames: string[]): Promise<boolean> {
+  const projects = await listProjects(sql, userId);
+  const remaining = [...projects];
+  const ordered: BoardProject[] = [];
+  for (const rawName of requestedNames || []) {
+    const name = String(rawName).trim();
+    const index = remaining.findIndex((p) => p.name === name || p.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (index >= 0) ordered.push(...remaining.splice(index, 1));
+  }
+  ordered.push(...remaining);
+  return ordered.length > 0 && reorderProjectsByIds(sql, userId, ordered.map((p) => p.id));
 }
 export async function upsertProject(sql: SqlFn, userId: string, id: string, data: Record<string, unknown>): Promise<void> {
   await sql(

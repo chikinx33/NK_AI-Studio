@@ -30,6 +30,9 @@ import {
   updateProjectField,
   addProjectStage,
   removeProjectStage,
+  setProjectCollapsedByName,
+  setAllProjectsCollapsed,
+  reorderProjectsByNames,
   updateCompanyKnowledge,
   addAgentKnowledgeRow,
   removeAgentKnowledgeRow,
@@ -114,7 +117,7 @@ interface BuildSystemOpts {
   agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
   companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
-  companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[] }[]; // 현재 프로젝트 목록
+  companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[]; collapsed?: boolean; order?: number }[]; // 현재 프로젝트 목록
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
 }
@@ -154,7 +157,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
         const total = p.stages.length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const stageList = total > 0 ? ` | 단계: ${p.stages.map((s) => `${s.title}(${s.status === "done" ? "완료" : s.status === "doing" ? "진행" : "대기"})`).join(" → ")}` : "";
-        return `- **${p.name}** [${p.status === "active" ? "진행 중" : p.status === "done" ? "완료" : p.status}] ${total > 0 ? `${done}/${total}단계 (${pct}%)` : ""}${p.goal ? ` | 목표: ${p.goal}` : ""}${stageList}`;
+        return `- ${Number.isFinite(p.order) ? `${Number(p.order) + 1}. ` : ""}**${p.name}** [${p.status === "active" ? "진행 중" : p.status === "done" ? "완료" : p.status}] [카드 ${p.collapsed === false ? "펼침" : "접힘"}] ${total > 0 ? `${done}/${total}단계 (${pct}%)` : ""}${p.goal ? ` | 목표: ${p.goal}` : ""}${stageList}`;
       }).join("\n")
     : "- 등록된 프로젝트 없음. 사용자가 프로젝트를 시작하면 [[PROJECT: create ...]]로 만드세요.");
 
@@ -369,12 +372,17 @@ ${persona}${knowledgeBlock}
 - 단계 삭제: [[PROJECT: remove_stage | 프로젝트명 | 단계명]]
 - 프로젝트 상태 변경: [[PROJECT: status | 프로젝트명 | 상태]]  (상태: active=진행 중, done=완료, paused=보류)
 - 필드 수정: [[PROJECT: edit | 프로젝트명 | 필드 | 새값]]  (필드: goal=목표, summary=요약, nextAction=다음액션)
+- 카드 접기/펼치기: [[PROJECT: collapse | 프로젝트명]] / [[PROJECT: expand | 프로젝트명]]
+- 모든 카드 접기/펼치기: [[PROJECT: collapse_all]] / [[PROJECT: expand_all]]
+- 현재 프로젝트 카드 순서를 역순으로: [[PROJECT: reverse]]
+- 카드 순서 직접 지정: [[PROJECT: reorder | 프로젝트명1 > 프로젝트명2 > 프로젝트명3]]
 예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | in_progress]]
 예) [[PROJECT: status | '우울의 숲' 소설 단독판매 | done]]
 예) [[PROJECT: rename | '우울의 숲' 소설 PDF 판매 | '우울의 숲' 소설 PDF 판매전략]]
 예) [[PROJECT: edit | '우울의 숲' 소설 단독판매 | goal | 10월 완성, 11~12월 출시]]
 예) [[PROJECT: add_stage | '우울의 숲' 소설 단독판매 | 교정·퇴고]]
 이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "변경했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+접기·펼치기·순서 변경은 콘텐츠 제작이 아니라 이 페이지의 구조적 UI 제어입니다. 코어는 다른 직원에게 위임하거나 방법만 설명하지 말고 위 마커로 즉시 직접 실행하세요.
 
 ## 🛠️ 스킬 만들기·개선 (절차적 기억 — 일하며 똑똑해지기)
 복잡한 작업(여러 단계·도구)을 끝냈거나, 막힌 걸 해결했거나, 사용자가 방식을 교정했거나, 재사용할 워크플로를 알아냈으면 그 절차를 스킬로 저장하세요(다음에 같은 일을 더 빠르고 정확하게 하기 위함):
@@ -463,7 +471,7 @@ export async function callClaude(
 }
 
 export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
-export interface ProjectOp { action: "create" | "delete" | "rename" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; }
+export interface ProjectOp { action: "create" | "delete" | "rename" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage" | "collapse" | "expand" | "collapse_all" | "expand_all" | "reverse" | "reorder"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; names?: string[]; }
 export interface SkillOp { action: "create" | "patch" | "delete" | "pin" | "unpin" | "archive" | "restore"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface CancelOp { jobId?: string; jobType?: string; hint?: string; }
 export interface SpeakResult {
@@ -575,6 +583,19 @@ function extractMarkers(raw: string): SpeakResult {
       projects.push({ action: "add_stage", name: parts[1], stages: [], stageTitle: parts[2] });
     } else if (/^(remove_stage|단계삭제)$/.test(action) && parts[1] && parts[2]) {
       projects.push({ action: "remove_stage", name: parts[1], stages: [], stageTitle: parts[2] });
+    } else if (/^(collapse|접기|닫기)$/.test(action) && parts[1]) {
+      projects.push({ action: "collapse", name: parts[1], stages: [] });
+    } else if (/^(expand|펼치기|열기)$/.test(action) && parts[1]) {
+      projects.push({ action: "expand", name: parts[1], stages: [] });
+    } else if (/^(collapse_all|전체접기|모두접기)$/.test(action)) {
+      projects.push({ action: "collapse_all", name: "*", stages: [] });
+    } else if (/^(expand_all|전체펼치기|모두펼치기)$/.test(action)) {
+      projects.push({ action: "expand_all", name: "*", stages: [] });
+    } else if (/^(reverse|역순|순서뒤집기)$/.test(action)) {
+      projects.push({ action: "reverse", name: "*", stages: [] });
+    } else if (/^(reorder|order|순서|순서변경)$/.test(action) && parts[1]) {
+      const names = parts.slice(1).join(" | ").split(/\s*>\s*|\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+      projects.push({ action: "reorder", name: "*", names, stages: [] });
     }
   }
   SKILL_RE.lastIndex = 0;
@@ -936,6 +957,19 @@ export async function applyProjects(sql: SqlFn, userId: string, projects: Projec
         if (p.stageTitle) await addProjectStage(sql, userId, p.name, p.stageTitle);
       } else if (p.action === "remove_stage") {
         if (p.stageTitle) await removeProjectStage(sql, userId, p.name, p.stageTitle);
+      } else if (p.action === "collapse") {
+        await setProjectCollapsedByName(sql, userId, p.name, true);
+      } else if (p.action === "expand") {
+        await setProjectCollapsedByName(sql, userId, p.name, false);
+      } else if (p.action === "collapse_all") {
+        await setAllProjectsCollapsed(sql, userId, true);
+      } else if (p.action === "expand_all") {
+        await setAllProjectsCollapsed(sql, userId, false);
+      } else if (p.action === "reverse") {
+        const current = await listProjects(sql, userId);
+        await reorderProjectsByNames(sql, userId, current.map((project) => project.name).reverse());
+      } else if (p.action === "reorder") {
+        if (p.names?.length) await reorderProjectsByNames(sql, userId, p.names);
       } else {
         if (existingNames.has(p.name)) continue;
         const id = globalThis.crypto?.randomUUID?.() || `proj_${Math.random().toString(36).slice(2, 10)}`;

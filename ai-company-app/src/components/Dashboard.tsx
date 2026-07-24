@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   getProjects,
+  reorderProjectCards,
+  setProjectCollapsed,
   setProjectStage,
   getConversations,
   type Project,
@@ -149,7 +151,8 @@ export default function Dashboard({
   onOpenConversation?: (id: string) => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
+  const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
     try {
       const s = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
@@ -173,12 +176,35 @@ export default function Dashboard({
     return () => clearInterval(t);
   }, []);
 
-  const toggleCollapse = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggleCollapse = async (project: Project) => {
+    const collapsed = project.collapsed === false;
+    setProjects((prev) => prev?.map((p) => p.id === project.id ? { ...p, collapsed } : p) ?? prev);
+    try {
+      await setProjectCollapsed(project.id, collapsed);
+    } catch {
+      load();
+    }
+  };
+
+  const dropProject = async (targetId: string, placeAfter: boolean) => {
+    const sourceId = draggedProjectId;
+    setDraggedProjectId(null);
+    setDragOverProjectId(null);
+    if (!sourceId || sourceId === targetId || !projects) return;
+    const source = projects.find((p) => p.id === sourceId);
+    if (!source) return;
+    const next = projects.filter((p) => p.id !== sourceId);
+    const targetIndex = next.findIndex((p) => p.id === targetId);
+    if (targetIndex < 0) return;
+    next.splice(targetIndex + (placeAfter ? 1 : 0), 0, source);
+    const ordered = next.map((p, order) => ({ ...p, order }));
+    setProjects(ordered);
+    try {
+      await reorderProjectCards(ordered.map((p) => p.id));
+    } catch {
+      load();
+    }
+  };
 
   async function cycleStage(p: Project, idx: number) {
     const cur = p.stages[idx].status;
@@ -210,16 +236,53 @@ export default function Dashboard({
               const pct = p.stages.length ? Math.round((done / p.stages.length) * 100) : 0;
               const ps = PROJ_STATUS[p.status] ?? PROJ_STATUS.active;
               const { title, sub } = splitName(p.name);
-              const isOpen = !collapsed.has(p.id);
+              const isOpen = p.collapsed === false;
               return (
-                <div key={p.id} className="overflow-hidden rounded-2xl border border-edge bg-panel">
+                <div
+                  key={p.id}
+                  data-project-card-id={p.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedProjectId(p.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", p.id);
+                  }}
+                  onDragEnter={() => setDragOverProjectId(p.id)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setDragOverProjectId(p.id);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    void dropProject(p.id, e.clientY > rect.top + rect.height / 2);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedProjectId(null);
+                    setDragOverProjectId(null);
+                  }}
+                  className={`overflow-hidden rounded-2xl border bg-panel transition ${
+                    dragOverProjectId === p.id && draggedProjectId !== p.id
+                      ? "border-emerald-500 ring-1 ring-emerald-500/40"
+                      : "border-edge"
+                  } ${draggedProjectId === p.id ? "opacity-45" : "opacity-100"}`}
+                >
                   <div className="flex w-full items-center gap-3 px-4 py-3 transition hover:bg-edge/30">
+                    <span
+                      aria-label={`${p.name} 프로젝트 순서 변경`}
+                      title="드래그하여 프로젝트 순서 변경"
+                      className="shrink-0 cursor-grab select-none text-sm tracking-[-3px] text-gray-600 hover:text-gray-300 active:cursor-grabbing"
+                    >
+                      ⠿
+                    </span>
                     {/* 아코디언 토글 영역 (flex-1) */}
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => toggleCollapse(p.id)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleCollapse(p.id); }}
+                      aria-expanded={isOpen}
+                      onClick={() => void toggleCollapse(p)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void toggleCollapse(p); }}
                       className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                     >
                       <span className={`shrink-0 text-lg leading-none text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>

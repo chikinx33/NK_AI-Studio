@@ -1077,6 +1077,8 @@ export interface Project {
   stages: ProjectStage[];
   nextAction?: string;
   updatedAt: string;
+  collapsed: boolean;
+  order: number;
 }
 export async function getProjects(): Promise<Project[]> {
   // 인증·서버 오류 시 {error} 가 올 수 있어 항상 배열로 정규화(렌더 .map/.filter 크래시 방지).
@@ -1091,6 +1093,24 @@ export async function setProjectStage(projectId: string, index: number, status: 
       body: JSON.stringify({ projectId, index, status }),
     })
   ).json();
+}
+export async function setProjectCollapsed(projectId: string, collapsed: boolean) {
+  const response = await fetch("/api/agent/project-layout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "collapse", projectId, collapsed }),
+  });
+  if (!response.ok) throw new Error("project_collapse_failed");
+  return response.json();
+}
+export async function reorderProjectCards(projectIds: string[]) {
+  const response = await fetch("/api/agent/project-layout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "reorder", projectIds }),
+  });
+  if (!response.ok) throw new Error("project_reorder_failed");
+  return response.json();
 }
 
 // 결과(산출물) 리스트
