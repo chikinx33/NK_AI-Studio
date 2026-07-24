@@ -44,6 +44,7 @@ import {
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
 import { dispatchUiAction, type UiAction } from "./lib/uiActions";
+import { SpeechInputButton, SpeechInputStatus, useSpeechInput } from "./components/SpeechInputControl";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
@@ -163,6 +164,7 @@ export default function App() {
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") === "1");
+  const [speechModeEnabled, setSpeechModeEnabled] = useState(false);
   // 음성 방식(무료 브라우저 / 서버 MeloTTS / 고품질 Gemini). 기본값 = 무료 브라우저(비용 0·싱크 좋음)
   const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
     const v = localStorage.getItem("agentVoiceMode");
@@ -753,7 +755,7 @@ export default function App() {
     abortRef.current?.abort();
   }
 
-  async function send(text: string, attachments?: Attachment[]) {
+  async function send(text: string, attachments?: Attachment[], conversationId = activeConvId) {
     // 사용자가 새로 말하면 대기 중이던 발언은 즉시 완성해 대화 순서를 보존한다.
     finishAgentPresentations();
     const atts = attachments ?? [];
@@ -781,9 +783,11 @@ export default function App() {
     abortRef.current = controller;
 
     // 서버로 보낼 history (직전까지)
-    const history: HistoryTurn[] = turnsRef.current
-      .filter((t) => t.text)
-      .map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, text: t.text }));
+    const history: HistoryTurn[] = conversationId === activeConvRef.current
+      ? turnsRef.current
+        .filter((t) => t.text)
+        .map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, text: t.text }))
+      : [];
 
     try {
       await streamChat(
@@ -881,7 +885,7 @@ export default function App() {
             }
           }
         },
-        { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })) }
+        { history, focusAgent: focusAgentId ?? undefined, conversationId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })) }
       );
     } catch (e) {
       presentCompletedAgentTurns([
@@ -1025,6 +1029,25 @@ export default function App() {
     return () => { stopped = true; clearInterval(t); };
   }, [autonomousOn]);
 
+  // 마이크 모드는 특정 화면이 아니라 AI 기업 앱 전체에 귀속된다.
+  // 채팅 밖에서 말해도 오늘 대화로 명령을 보내고, UI_ACTION은 현재 화면에서 즉시 실행한다.
+  const speechInput = useSpeechInput({
+    enabled: speechModeEnabled,
+    onEnabledChange: setSpeechModeEnabled,
+    busy: busy || status?.workMode === "off",
+    streaming: busy,
+    agentPresenting: presentationActive,
+    isExpired: centerView === "chat" && activeConvId !== localToday(),
+    draft: centerView === "chat" ? draft : "",
+    setDraft,
+    onRecognized: (text) => {
+      const today = localToday();
+      if (activeConvRef.current !== today) setActiveConvId(today);
+      setDraft("");
+      void send(text, undefined, today);
+    },
+  });
+
   // AI 회사 이용 권한이 없는 계정(403) — 접근 안내 화면
   if (status?.forbidden) {
     return (
@@ -1060,6 +1083,30 @@ export default function App() {
       {/* 모바일 드로어 오버레이 — 탭하면 닫힘 */}
       {navOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={closeNav} aria-hidden="true" />
+      )}
+
+      {centerView !== "chat" && (
+        <div className="fixed bottom-4 right-4 z-[70] flex max-w-[min(28rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-edge bg-panel/95 p-2 shadow-2xl backdrop-blur lg:right-[19rem]">
+          <SpeechInputButton
+            enabled={speechInput.enabled}
+            listening={speechInput.listening}
+            supported={speechInput.supported}
+            isExpired={false}
+            onToggle={speechInput.toggle}
+          />
+          <div className="min-w-0">
+            <div className="px-1 text-xs font-medium text-gray-200">코어 전역 음성 명령</div>
+            <SpeechInputStatus
+              enabled={speechInput.enabled}
+              listening={speechInput.listening}
+              waiting={busy || presentationActive || status?.workMode === "off"}
+              error={speechInput.error}
+            />
+            {!speechInput.enabled && !speechInput.error && (
+              <div className="px-1 text-[11px] text-gray-500">어느 화면에서든 마이크로 UI를 제어할 수 있습니다.</div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 좌측 사이드바: 모바일에선 드로어(fixed, 슬라이드), 데스크톱(lg)에선 정적 배치 */}
@@ -1150,6 +1197,7 @@ export default function App() {
             turns={presentedTurns}
             busy={busy || status?.workMode === "off"}
             streaming={busy}
+            agentPresenting={presentationActive}
             onStop={stop}
             draft={draft}
             setDraft={setDraft}
@@ -1163,6 +1211,7 @@ export default function App() {
             onToggleVoice={toggleVoice}
             voiceMode={voiceMode}
             onToggleVoiceMode={toggleVoiceMode}
+            speechInput={speechInput}
           />
         ) : (
           <Chat
@@ -1182,6 +1231,7 @@ export default function App() {
             onToggleVoice={toggleVoice}
             voiceMode={voiceMode}
             onToggleVoiceMode={toggleVoiceMode}
+            speechInput={speechInput}
           />
         )}
         </ErrorBoundary>

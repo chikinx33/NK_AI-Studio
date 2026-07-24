@@ -14,34 +14,56 @@ test("AI 기업 채팅은 표준·webkit 음성 인식 API를 모두 지원한�
 });
 
 test("마이크 모드는 인식 문장을 즉시 전송하고 다음 발화를 계속 기다린다", () => {
-  const chat = read("ai-company-app/src/components/Chat.tsx");
-  assert.match(chat, /recognition\.continuous = false/);
-  assert.match(chat, /recognition\.interimResults = true/);
-  assert.match(chat, /recognizedMessage = mergeSpeechDraft\(speechDraftBaseRef\.current, transcript\)/);
-  assert.match(chat, /recognition\.onend = \(\) =>/);
-  assert.match(chat, /onSendRef\.current\(text, currentAttachments\.length \? currentAttachments : undefined\)/);
-  assert.match(chat, /!recognitionFailed && hasRecognizedSpeech && text && !busyRef\.current/);
-  assert.match(chat, /if \(shouldRestart && speechModeEnabledRef\.current\) scheduleSpeechRecognitionRestart\(restartDelay\)/);
-  assert.match(chat, /답변이 끝나면 자동으로 다시 듣습니다/);
-  assert.match(chat, /if \(speechModeEnabledRef\.current\) stopSpeechInput\(\)/);
-  assert.match(chat, /busyRef\.current \|\| streamingRef\.current \|\| agentPresentingRef\.current/);
+  const control = read("ai-company-app/src/components/SpeechInputControl.tsx");
+  assert.match(control, /recognition\.continuous = false/);
+  assert.match(control, /recognition\.interimResults = true/);
+  assert.match(control, /recognizedMessage = mergeSpeechDraft\(draftBaseRef\.current, transcript\)/);
+  assert.match(control, /recognition\.onend = \(\) =>/);
+  assert.match(control, /if \(!mountedRef\.current \|\| !isCurrentSession\) return/);
+  assert.match(control, /onRecognizedRef\.current\(text\)/);
+  assert.match(control, /!recognitionFailed && hasRecognizedSpeech && text && !busyRef\.current/);
+  assert.match(control, /if \(shouldRestart && enabledRef\.current\) scheduleRestart\(restartDelay\)/);
+  assert.match(control, /답변이 끝나면 자동으로 다시 듣습니다/);
+  assert.match(control, /busyRef\.current \|\| streamingRef\.current \|\| agentPresentingRef\.current/);
   const app = read("ai-company-app/src/App.tsx");
   assert.match(app, /const \[presentationActive, setPresentationActive\] = useState\(false\)/);
   assert.match(app, /presentationRunningRef\.current = true;\s+setPresentationActive\(true\)/);
   assert.match(app, /else setPresentationActive\(false\)/);
   assert.match(app, /agentPresenting=\{presentationActive\}/);
-  assert.doesNotMatch(chat, /음성.{0,20}확인/);
+  assert.doesNotMatch(control, /음성.{0,20}확인/);
 });
 
-test("마이크 UI는 녹음 상태·미지원·권한 오류를 사용자에게 안내한다", () => {
+test("일반 채팅과 VN 모드는 동일한 마이크 UI와 상태를 공유한다", () => {
   const chat = read("ai-company-app/src/components/Chat.tsx");
+  const visualNovel = read("ai-company-app/src/components/VisualNovel.tsx");
+  const control = read("ai-company-app/src/components/SpeechInputControl.tsx");
   const speech = read("ai-company-app/src/lib/speechRecognition.ts");
-  assert.match(chat, /aria-pressed=\{speechModeEnabled\}/);
-  assert.match(chat, /문장이 끝날 때마다 자동 전송하며 계속 듣습니다/);
-  assert.match(chat, /disabled=\{!speechSupported \|\| isExpired\}/);
-  assert.match(chat, /이 브라우저는 음성 입력을 지원하지 않습니다/);
-  assert.match(chat, /<path d="M19 10v2a7 7 0 0 1-14 0v-2"/);
-  assert.match(chat, /<rect x="9" y="2" width="6" height="13" rx="3"/);
+  assert.match(chat, /<SpeechInputButton/);
+  assert.match(chat, /<SpeechInputStatus/);
+  assert.match(visualNovel, /<SpeechInputButton/);
+  assert.match(visualNovel, /<SpeechInputStatus/);
+  assert.match(control, /aria-pressed=\{enabled\}/);
+  assert.match(control, /문장이 끝날 때마다 자동 전송하며 계속 듣습니다/);
+  assert.match(control, /disabled=\{!supported \|\| isExpired\}/);
+  assert.match(control, /이 브라우저는 음성 입력을 지원하지 않습니다/);
+  assert.match(control, /<path d="M19 10v2a7 7 0 0 1-14 0v-2"/);
+  assert.match(control, /<rect x="9" y="2" width="6" height="13" rx="3"/);
   assert.match(speech, /마이크 권한이 차단되었습니다/);
   assert.match(speech, /사용할 수 있는 마이크를 찾지 못했습니다/);
+});
+
+test("마이크 모드는 화면 전환과 무관하게 유지되고 채팅 밖에서도 코어 UI 명령을 보낸다", () => {
+  const app = read("ai-company-app/src/App.tsx");
+  const control = read("ai-company-app/src/components/SpeechInputControl.tsx");
+  assert.match(app, /const \[speechModeEnabled, setSpeechModeEnabled\] = useState\(false\)/);
+  assert.match(app, /const speechInput = useSpeechInput\(/);
+  assert.match(app, /draft: centerView === "chat" \? draft : ""/);
+  assert.match(app, /void send\(text, undefined, today\)/);
+  assert.match(app, /conversationId === activeConvRef\.current/);
+  assert.match(app, /conversationId, signal: controller\.signal/);
+  assert.match(app, /centerView !== "chat" && \(/);
+  assert.match(app, /코어 전역 음성 명령/);
+  assert.equal((app.match(/speechInput=\{speechInput\}/g) || []).length, 2);
+  assert.match(control, /return \(\) => \{\s+mountedRef\.current = false;/);
+  assert.doesNotMatch(control, /return \(\) => \{[\s\S]{0,200}onEnabledChangeRef\.current\(false\)/);
 });

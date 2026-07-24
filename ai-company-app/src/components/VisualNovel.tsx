@@ -6,11 +6,13 @@ import VoiceModeToggle from "./VoiceModeToggle";
 import type { Turn } from "./Chat";
 import type { AgentInfo } from "../lib/api";
 import { actionBoolean, useUiAction } from "../lib/uiActions";
+import { SpeechInputButton, SpeechInputStatus, type SpeechInputState } from "./SpeechInputControl";
 
 interface Props {
   turns: Turn[];
   busy: boolean;
   streaming?: boolean; // 실제 응답 진행 중 (중지 버튼 표시용)
+  agentPresenting?: boolean;
   onStop?: () => void;
   draft: string;
   setDraft: (s: string) => void;
@@ -24,6 +26,7 @@ interface Props {
   onToggleVoice: () => void;
   voiceMode?: "browser" | "server" | "cloud";
   onToggleVoiceMode?: () => void;
+  speechInput: SpeechInputState;
 }
 
 // 직원별 액센트 컬러 (UI용)
@@ -265,9 +268,15 @@ function TypingDots() {
 }
 
 export default function VisualNovel({
-  turns, busy, streaming, onStop, draft, setDraft, onSend, agents, onToggleMode, focusAgent, onClearFocus, convDate,
-  voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode,
+  turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, agents, onToggleMode, focusAgent, onClearFocus, convDate,
+  voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput,
 }: Props) {
+  const isExpired = (() => {
+    if (!convDate) return false;
+    const d = new Date();
+    const today = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return convDate !== today;
+  })();
   // 대화 기록 오버레이 표시 여부 — 켜면 이 대화의 전체 주고받기(내 메시지+직원 메시지)를 스크롤로 본다.
   const [showLog, setShowLog] = useState(false);
   useUiAction((action) => {
@@ -281,7 +290,7 @@ export default function VisualNovel({
   }, [turns, showLog]);
   function submit() {
     const t = draft.trim();
-    if (!t || busy) return;
+    if (!t || busy || speechInput.enabled) return;
     onSend(t);
     setDraft("");
   }
@@ -571,7 +580,7 @@ export default function VisualNovel({
             ref={taRef}
             spellCheck={false}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); if (speechInput.error) speechInput.clearError(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
             }}
@@ -582,6 +591,13 @@ export default function VisualNovel({
                 : "대사를 입력하세요 (Enter 전송) · @이름으로 직원 지목"
             }
             className="flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-500"
+          />
+          <SpeechInputButton
+            enabled={speechInput.enabled}
+            listening={speechInput.listening}
+            supported={speechInput.supported}
+            isExpired={isExpired}
+            onToggle={speechInput.toggle}
           />
           {streaming ? (
             <button
@@ -594,7 +610,7 @@ export default function VisualNovel({
           ) : (
             <button
               onClick={submit}
-              disabled={busy}
+              disabled={busy || speechInput.enabled}
               title="전송"
               className="grid h-[42px] place-items-center px-4 rounded-xl bg-violet-700 hover:bg-violet-600 disabled:opacity-40"
             >
@@ -602,6 +618,12 @@ export default function VisualNovel({
             </button>
           )}
         </div>
+        <SpeechInputStatus
+          enabled={speechInput.enabled}
+          listening={speechInput.listening}
+          waiting={busy || !!streaming || !!agentPresenting}
+          error={speechInput.error}
+        />
       </div>
     </div>
   );

@@ -5,12 +5,10 @@ import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
 import { actionString, useUiAction } from "../lib/uiActions";
 import {
-  collectSpeechTranscript,
-  getSpeechRecognitionConstructor,
-  mergeSpeechDraft,
-  speechRecognitionErrorMessage,
-  type SpeechRecognitionLike,
-} from "../lib/speechRecognition";
+  SpeechInputButton,
+  SpeechInputStatus,
+  type SpeechInputState,
+} from "./SpeechInputControl";
 
 export interface Turn {
   id?: string;
@@ -65,6 +63,7 @@ interface Props {
   onToggleVoice: () => void;
   voiceMode?: "browser" | "server" | "cloud";
   onToggleVoiceMode?: () => void;
+  speechInput: SpeechInputState;
 }
 
 /** YYYY-MM-DD → YYYY.MM.DD (날짜 형식이 아니면 빈 문자열) */
@@ -255,27 +254,6 @@ function PaperclipIcon({ className }: { className?: string }) {
   );
 }
 
-function MicrophoneIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M12 19v3" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <rect x="9" y="2" width="6" height="13" rx="3" />
-    </svg>
-  );
-}
-
 function PauseIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -324,7 +302,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode }: Props) {
+export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -335,34 +313,12 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const speechModeEnabledRef = useRef(false);
-  const speechRestartTimerRef = useRef<number | null>(null);
-  const speechDraftBaseRef = useRef("");
-  const draftRef = useRef(draft);
-  const attachmentsRef = useRef<Attachment[]>([]);
-  const busyRef = useRef(busy);
-  const streamingRef = useRef(!!streaming);
-  const agentPresentingRef = useRef(!!agentPresenting);
-  const isExpiredRef = useRef(isExpired);
-  const onSendRef = useRef(onSend);
   const didInitScroll = useRef(false);
 
   // 이미지/파일 첨부 state — 여러 개 동시 첨부 지원
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const [speechModeEnabled, setSpeechModeEnabled] = useState(false);
-  const [speechListening, setSpeechListening] = useState(false);
-  const [speechError, setSpeechError] = useState("");
   const dragDepth = useRef(0); // 자식 요소 진입/이탈로 인한 깜빡임 방지용 카운터
-  const speechSupported = !!getSpeechRecognitionConstructor();
-  draftRef.current = draft;
-  attachmentsRef.current = attachments;
-  busyRef.current = busy;
-  streamingRef.current = !!streaming;
-  agentPresentingRef.current = !!agentPresenting;
-  isExpiredRef.current = isExpired;
-  onSendRef.current = onSend;
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
 
@@ -403,27 +359,6 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [draft]);
 
-  useEffect(() => () => {
-    speechModeEnabledRef.current = false;
-    if (speechRestartTimerRef.current !== null) window.clearTimeout(speechRestartTimerRef.current);
-    speechRestartTimerRef.current = null;
-    speechRecognitionRef.current?.abort();
-    speechRecognitionRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!speechModeEnabled) return;
-    if (busy || streaming || agentPresenting || isExpired) {
-      if (speechRestartTimerRef.current !== null) window.clearTimeout(speechRestartTimerRef.current);
-      speechRestartTimerRef.current = null;
-      const recognition = speechRecognitionRef.current;
-      speechRecognitionRef.current = null;
-      recognition?.abort();
-      setSpeechListening(false);
-      return;
-    }
-    scheduleSpeechRecognitionRestart(150);
-  }, [busy, streaming, agentPresenting, isExpired, speechModeEnabled]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [injectedIdx, setInjectedIdx] = useState<number | null>(null);
   const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(new Set());
@@ -474,104 +409,10 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
 
   function submit() {
     const t = draft.trim();
-    if ((!t && !attachments.length) || busy || speechModeEnabled) return;
+    if ((!t && !attachments.length) || busy || speechInput.enabled) return;
     onSend(t, attachments.length ? attachments : undefined);
     setDraft("");
     setAttachments([]);
-  }
-
-  function scheduleSpeechRecognitionRestart(delay = 250) {
-    if (!speechModeEnabledRef.current || speechRecognitionRef.current) return;
-    if (speechRestartTimerRef.current !== null) window.clearTimeout(speechRestartTimerRef.current);
-    speechRestartTimerRef.current = window.setTimeout(() => {
-      speechRestartTimerRef.current = null;
-      if (!speechModeEnabledRef.current || busyRef.current || streamingRef.current || agentPresentingRef.current || isExpiredRef.current) return;
-      startSpeechRecognitionSession();
-    }, delay);
-  }
-
-  function stopSpeechInput() {
-    speechModeEnabledRef.current = false;
-    setSpeechModeEnabled(false);
-    if (speechRestartTimerRef.current !== null) window.clearTimeout(speechRestartTimerRef.current);
-    speechRestartTimerRef.current = null;
-    const recognition = speechRecognitionRef.current;
-    speechRecognitionRef.current = null;
-    recognition?.abort();
-    setSpeechListening(false);
-    setSpeechError("");
-    requestAnimationFrame(() => taRef.current?.focus());
-  }
-
-  function startSpeechRecognitionSession() {
-    const Recognition = getSpeechRecognitionConstructor();
-    if (!Recognition || !speechModeEnabledRef.current || speechRecognitionRef.current || busyRef.current || streamingRef.current || agentPresentingRef.current || isExpiredRef.current) return;
-    speechDraftBaseRef.current = draftRef.current;
-    const recognition = new Recognition();
-    let recognizedMessage = "";
-    let hasRecognizedSpeech = false;
-    let recognitionFailed = false;
-    let restartDelay = 250;
-    let shouldRestart = true;
-    recognition.lang = document.documentElement.lang?.startsWith("en") ? "en-US" : "ko-KR";
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.onresult = (event) => {
-      const transcript = collectSpeechTranscript(event.results);
-      if (!transcript) return;
-      hasRecognizedSpeech = true;
-      setSpeechError("");
-      recognizedMessage = mergeSpeechDraft(speechDraftBaseRef.current, transcript);
-      setDraft(recognizedMessage);
-    };
-    recognition.onerror = (event) => {
-      recognitionFailed = true;
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      const message = speechRecognitionErrorMessage(event.error);
-      if (message) setSpeechError(message);
-      if (event.error === "not-allowed" || event.error === "service-not-allowed" || event.error === "audio-capture") {
-        shouldRestart = false;
-        speechModeEnabledRef.current = false;
-        setSpeechModeEnabled(false);
-      } else {
-        restartDelay = event.error === "network" ? 2000 : 1000;
-      }
-    };
-    recognition.onend = () => {
-      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
-      setSpeechListening(false);
-      const text = recognizedMessage.trim();
-      if (!recognitionFailed && hasRecognizedSpeech && text && !busyRef.current) {
-        const currentAttachments = attachmentsRef.current;
-        onSendRef.current(text, currentAttachments.length ? currentAttachments : undefined);
-        setDraft("");
-        setAttachments([]);
-      }
-      if (shouldRestart && speechModeEnabledRef.current) scheduleSpeechRecognitionRestart(restartDelay);
-    };
-    speechRecognitionRef.current = recognition;
-    setSpeechListening(true);
-    try {
-      recognition.start();
-    } catch {
-      speechRecognitionRef.current = null;
-      setSpeechListening(false);
-      setSpeechError("마이크를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      if (speechModeEnabledRef.current) scheduleSpeechRecognitionRestart(1000);
-    }
-  }
-
-  function startSpeechInput() {
-    if (!speechSupported || isExpired) return;
-    setSpeechError("");
-    speechModeEnabledRef.current = true;
-    setSpeechModeEnabled(true);
-    if (!busy && !streaming && !agentPresenting) startSpeechRecognitionSession();
-  }
-
-  function toggleSpeechInput() {
-    if (speechModeEnabledRef.current) stopSpeechInput();
-    else startSpeechInput();
   }
 
   async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -886,7 +727,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             ref={taRef}
             spellCheck={false}
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); if (speechError) setSpeechError(""); }}
+            onChange={(e) => { setDraft(e.target.value); if (speechInput.error) speechInput.clearError(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -898,18 +739,13 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈) · @이름으로 직원 지목"
             className="no-scrollbar flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
           />
-          <button
-            type="button"
-            onClick={toggleSpeechInput}
-            disabled={!speechSupported || isExpired}
-            aria-pressed={speechModeEnabled}
-            aria-label={speechModeEnabled ? "마이크 모드 끄기" : "마이크 모드 켜기"}
-            title={!speechSupported ? "이 브라우저는 음성 입력을 지원하지 않습니다" : speechModeEnabled ? "마이크 모드 켜짐 · 누르면 끄기" : "마이크 모드 켜기 · 문장마다 자동 전송"}
-            className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${speechModeEnabled ? "border-red-500 bg-red-950/70 text-red-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
-          >
-            {speechListening && <span className="absolute inset-1 animate-ping rounded-lg border border-red-400/60" />}
-            <MicrophoneIcon className="relative h-4 w-4" />
-          </button>
+          <SpeechInputButton
+            enabled={speechInput.enabled}
+            listening={speechInput.listening}
+            supported={speechInput.supported}
+            isExpired={isExpired}
+            onToggle={speechInput.toggle}
+          />
           {streaming ? (
             <button
               onClick={onStop}
@@ -921,7 +757,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
           ) : (
             <button
               onClick={submit}
-              disabled={busy || speechModeEnabled}
+              disabled={busy || speechInput.enabled}
               title="전송"
               className="grid h-[42px] place-items-center px-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40"
             >
@@ -929,21 +765,12 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             </button>
           )}
         </div>
-        {(speechModeEnabled || speechError) && (
-          <div className="mt-1.5 min-h-4 px-1 text-xs" role="status" aria-live="polite">
-            {speechModeEnabled ? (
-              <span className="text-red-300">
-                {speechListening
-                  ? "● 마이크 모드 켜짐 · 문장이 끝날 때마다 자동 전송하며 계속 듣습니다."
-                  : busy || streaming || agentPresenting
-                    ? "● 마이크 모드 켜짐 · 답변이 끝나면 자동으로 다시 듣습니다."
-                    : "● 마이크 모드 켜짐 · 다음 발화를 준비하고 있습니다."}
-              </span>
-            ) : (
-              <span className="text-amber-300">{speechError}</span>
-            )}
-          </div>
-        )}
+        <SpeechInputStatus
+          enabled={speechInput.enabled}
+          listening={speechInput.listening}
+          waiting={busy || !!streaming || !!agentPresenting}
+          error={speechInput.error}
+        />
       </div>
       )}
     </div>
