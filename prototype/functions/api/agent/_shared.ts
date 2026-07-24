@@ -105,6 +105,17 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
   } catch (_) {}
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_ui_actions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      conversation_id text NOT NULL,
+      agent_id text NOT NULL,
+      action jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try { await sql("CREATE INDEX IF NOT EXISTS agent_ui_actions_user_created_idx ON agent_ui_actions (user_id, created_at DESC)"); } catch (_) {}
   // 직원 관리(Phase 3): 사용자별 페르소나 오버라이드 + 직원 개인 지식. 멀티테넌시.
   await sql(`
     CREATE TABLE IF NOT EXISTS agent_personas (
@@ -645,6 +656,18 @@ export async function addMessage(
     [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text]
   );
   return rows[0] as AgentMessage;
+}
+
+export async function recordUiAction(
+  sql: SqlFn,
+  input: { userId: string; conversationId: string; agentId: string; action: Record<string, unknown> }
+): Promise<void> {
+  await ensureAgentSchema(sql);
+  await sql(
+    `INSERT INTO agent_ui_actions (user_id, conversation_id, agent_id, action)
+     VALUES ($1, $2, $3, $4::jsonb)`,
+    [input.userId, input.conversationId, input.agentId, JSON.stringify(input.action)]
+  );
 }
 
 export async function listMessages(

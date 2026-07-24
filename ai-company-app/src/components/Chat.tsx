@@ -3,6 +3,7 @@ import { addKnowledge } from "../lib/api";
 import Markdown from "./Markdown";
 import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 export interface Turn {
   id?: string;
@@ -353,6 +354,12 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [injectedIdx, setInjectedIdx] = useState<number | null>(null);
   const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(new Set());
+  useUiAction((action) => {
+    if (action.action !== "chat.messages") return;
+    const operation = actionString(action, "operation");
+    if (operation === "expand_all") setExpandedMsgs(new Set(turns.map((_, index) => index)));
+    else if (operation === "collapse_all") setExpandedMsgs(new Set());
+  }, "chat");
   const toggleExpand = (i: number) =>
     setExpandedMsgs((prev) => {
       const next = new Set(prev);

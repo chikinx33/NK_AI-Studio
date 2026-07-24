@@ -9,6 +9,7 @@ import {
   type StageStatus,
   type Conversation,
 } from "../lib/api";
+import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 
 const SIDEBAR_HIDDEN_KEY = "nk_project_sidebar_hidden";
 
@@ -84,6 +85,19 @@ function ConversationList({
     const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, []);
+
+  useUiAction((action) => {
+    if (action.action !== "dashboard.calendar") return;
+    const date = actionString(action, "date");
+    const month = actionString(action, "month");
+    const value = date || (month ? `${month}-01` : "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return;
+    setVy(parsed.getFullYear());
+    setVm(parsed.getMonth());
+    if (date) onOpenConversation?.(date);
+  }, "dashboard.calendar");
 
   return (
     <div className="rounded-2xl border border-edge bg-panel p-3">
@@ -175,6 +189,20 @@ export default function Dashboard({
     const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, []);
+
+  useUiAction((action) => {
+    if (action.action !== "project.sidebar" || !projects) return;
+    const query = actionString(action, "project");
+    const visible = actionBoolean(action, "visible");
+    const target = projects.find((project) => project.id === query || project.name === query);
+    if (!target || visible === undefined) return;
+    setSidebarHidden((previous) => {
+      const next = new Set(previous);
+      visible ? next.delete(target.id) : next.add(target.id);
+      try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, "dashboard.projects");
 
   const toggleCollapse = async (project: Project) => {
     const collapsed = project.collapsed === false;

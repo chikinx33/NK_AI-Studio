@@ -100,6 +100,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
           firstMessage: displayText, focusAgent: focusAgent || undefined, images, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: (payload?: any) => sse({ type: "job_ready", payload }),
+          onUiAction: (action: any) => sse({ type: "ui_action", action }),
         });
         await sse({ type: "done", conversationId, userMessageId: userMsg.id });
       } catch (e: any) {

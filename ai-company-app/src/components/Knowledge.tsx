@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { SortAscIcon, SortDescIcon } from "./icons";
 import { SkillPopup } from "./Skills";
+import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 
 function BrainIcon({ className }: { className?: string }) {
   return (
@@ -74,6 +75,24 @@ export default function Knowledge({
   // 그래프에서 노드 클릭 시 해당 항목으로 스크롤·하이라이트 (행 ref 맵)
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [highlight, setHighlight] = useState<string | null>(null);
+
+  useUiAction((action) => {
+    if (action.action === "skill.view") {
+      const name = actionString(action, "name");
+      if (name) {
+        setFilter("스킬");
+        setOpenSkill(name);
+      }
+      return;
+    }
+    if (action.action !== "knowledge.view") return;
+    const nextFilter = actionString(action, "filter");
+    if (nextFilter === "원칙" || nextFilter === "사실" || nextFilter === "결정" || nextFilter === "스킬") setFilter(nextFilter);
+    else if (nextFilter === "all") setFilter(null);
+    const nextSort = actionString(action, "sort");
+    if (nextSort === "asc" || nextSort === "desc") setSortDir(nextSort);
+    if (actionBoolean(action, "dedupe") === true) void tidyDecisions();
+  }, "knowledge");
 
   async function tidyDecisions() {
     setTidying(true);

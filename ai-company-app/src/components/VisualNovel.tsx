@@ -5,6 +5,7 @@ import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
 import type { Turn } from "./Chat";
 import type { AgentInfo } from "../lib/api";
+import { actionBoolean, useUiAction } from "../lib/uiActions";
 
 interface Props {
   turns: Turn[];
@@ -269,6 +270,11 @@ export default function VisualNovel({
 }: Props) {
   // 대화 기록 오버레이 표시 여부 — 켜면 이 대화의 전체 주고받기(내 메시지+직원 메시지)를 스크롤로 본다.
   const [showLog, setShowLog] = useState(false);
+  useUiAction((action) => {
+    if (action.action !== "chat.log") return;
+    const open = actionBoolean(action, "open");
+    if (open !== undefined) setShowLog(open);
+  }, "visual_novel");
   const logEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (showLog) logEndRef.current?.scrollIntoView({ block: "end" });

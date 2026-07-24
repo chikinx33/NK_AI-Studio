@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 
 // 우측 사이드바 패널 공용 접기/펼침 카드.
 // header = 헤더 좌측(아이콘+제목+개수 등, 호출부가 스타일링), right = 헤더 우측 액션(선택).
@@ -30,6 +31,21 @@ export default function CollapsibleSection({
       try { localStorage.setItem(storageKey, n ? "1" : "0"); } catch { /* ignore */ }
       return n;
     });
+
+  useUiAction((action) => {
+    if (action.action !== "panel.set") return;
+    const panelByStorageKey: Record<string, string> = {
+      nk_collapse_projects: "projects",
+      nk_collapse_approvals: "approvals",
+      nk_collapse_results: "results",
+      nk_collapse_reservations: "reservations",
+    };
+    if (actionString(action, "panel") !== panelByStorageKey[storageKey]) return;
+    const next = actionBoolean(action, "open");
+    if (next === undefined) return;
+    setOpen(next);
+    try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch { /* ignore */ }
+  }, `panel:${storageKey}`);
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-3 mb-3">

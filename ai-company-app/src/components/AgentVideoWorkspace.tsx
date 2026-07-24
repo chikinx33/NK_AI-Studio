@@ -9,6 +9,7 @@ import {
   type AgentVideoContribution,
 } from "../remotion/spec";
 import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 function FieldLabel({ children }: { children: string }) {
   return <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{children}</label>;
@@ -99,6 +100,30 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     }
     await renderVideo();
   }
+
+  useUiAction((action) => {
+    if (action.action === "video.configure") {
+      if (typeof action.prompt === "string") setPrompt(action.prompt.slice(0, 2000));
+      if (typeof action.durationSec === "number" && action.durationSec >= 5 && action.durationSec <= 300) setDurationSec(action.durationSec);
+      if (action.aspectRatio === "16:9" || action.aspectRatio === "9:16" || action.aspectRatio === "1:1") setAspectRatio(action.aspectRatio);
+      if (typeof action.audience === "string") setAudience(action.audience.slice(0, 200));
+      if (typeof action.tone === "string") setTone(action.tone.slice(0, 200));
+      if (typeof action.style === "string") setStyle(action.style.slice(0, 200));
+    } else if (action.action === "video.run") {
+      if (!meetingStartDisabled) void startMeeting();
+    } else if (action.action === "video.approval" && pendingApproval) {
+      const decision = actionString(action, "decision");
+      if (decision !== "approve" && decision !== "reject") return;
+      const label = decision === "approve" ? "비용을 승인하고 실행" : "비용 요청을 거절";
+      if (window.confirm(`이 영상 작업의 ${label}할까요?`)) void decideCostApproval(decision === "approve" ? "approved" : "rejected");
+    } else if (action.action === "video.render") {
+      if (!renderInProgress && !archiveInProgress) void renderVideo();
+    } else if (action.action === "video.storage") {
+      const operation = actionString(action, "operation");
+      if (operation === "open") setStorageOpen(true);
+      else if (operation === "close") setStorageOpen(false);
+    }
+  }, "video");
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">

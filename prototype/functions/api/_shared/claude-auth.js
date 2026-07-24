@@ -61,6 +61,18 @@ export async function saveLlmMode(sql, userId, llmMode) {
   );
 }
 
+export async function saveLogRetention(sql, userId, days) {
+  await ensureSettingsSchema(sql);
+  const safeDays = [0, 7, 30, 90, 180, 365].includes(Number(days)) ? Number(days) : 0;
+  await sql(
+    `INSERT INTO app_settings (user_id, log_retention_days)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET log_retention_days = $2, updated_at = now()`,
+    [userId, safeDays]
+  );
+  return safeDays;
+}
+
 export async function saveAgentVoiceSettings(sql, userId, patch) {
   await ensureSettingsSchema(sql);
   const cur = (await getSettingsRow(sql, userId)) || {};

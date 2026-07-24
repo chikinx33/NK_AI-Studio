@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 import CollapsibleSection from "./CollapsibleSection";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -180,6 +181,22 @@ export default function Approvals({
     const t = setInterval(refresh, 4000);
     return () => clearInterval(t);
   }, []);
+
+  useUiAction((action) => {
+    if (action.action === "approval.decide") {
+      const id = actionString(action, "id");
+      const decision = actionString(action, "decision");
+      const target = pending.find((item) => item.id === id);
+      if (!target || (decision !== "approve" && decision !== "reject")) return;
+      const label = decision === "approve" ? "승인하고 실행" : "거절";
+      if (window.confirm(`${target.agentName || target.agentId}의 '${target.tool || target.command}' 작업을 ${label}할까요?`)) {
+        void act(id, decision);
+      }
+    } else if (action.action === "approval.clear") {
+      if (!pending.length || !window.confirm(`대기 중인 승인 ${pending.length}건을 모두 취소할까요?`)) return;
+      void clearApprovals().then(refresh);
+    }
+  }, "approvals");
 
   // 승인 패널은 빈 상태여도 항상 표시(원본과 동일). 회사 지식 카드만 데이터 있을 때 표시.
   return (

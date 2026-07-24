@@ -5,6 +5,7 @@ import {
   listAgentVideoStorage,
   type AgentVideoStorageItem,
 } from "../lib/api";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -138,6 +139,15 @@ export default function AgentVideoStorageModal({
       setBusy("");
     }
   }
+
+  useUiAction((action) => {
+    if (!open || action.action !== "video.storage") return;
+    const operation = actionString(action, "operation");
+    if (operation === "select_all") toggleAll();
+    else if (operation === "download") void downloadSelected();
+    else if (operation === "delete") void deleteSelected();
+    else if (operation === "refresh") void refresh();
+  }, "video.storage");
 
   if (!open) return null;
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "rea
 import { setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
+import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
 
 interface Props {
   status: StatusInfo | null;
@@ -404,6 +405,26 @@ export default function Sidebar({
     ? (order.map((id) => nonCore.find((a) => a.id === id)).filter(Boolean) as AgentInfo[])
     : nonCore
   ).filter((a) => !hiddenAgents.has(a.id));
+
+  useUiAction((action) => {
+    if (action.action === "agent.card") {
+      const agentId = actionString(action, "agentId");
+      const open = actionBoolean(action, "open");
+      setCardAgentId(open === false ? null : agents.some((agent) => agent.id === agentId) ? agentId : null);
+      return;
+    }
+    if (action.action !== "agent.order") return;
+    const requested = actionStrings(action, "agentIds");
+    if (!requested.length) return;
+    const valid = agents.filter((agent) => agent.id !== "core").map((agent) => agent.id);
+    const next = [
+      ...requested.filter((id, index) => valid.includes(id) && requested.indexOf(id) === index),
+      ...valid.filter((id) => !requested.includes(id)),
+    ];
+    if (!next.length) return;
+    setOrder(next);
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  }, "sidebar");
 
   // 드래그한 아바타와 드롭 대상 아바타의 자리를 맞바꿈
   function swapAgents(fromId: string, toId: string) {

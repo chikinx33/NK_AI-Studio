@@ -10,6 +10,7 @@ import {
   toolOwnedBy,
   parseToolInput,
   addMessage,
+  recordUiAction,
   listMessages,
   buildTranscript,
   createJob,
@@ -310,6 +311,35 @@ ${teamToolMap}
 ⚠️ 당신(코어)은 외부 도구 실행 권한이 없습니다. 특히 "달력/캘린더/일정/메일/Gmail 확인·조회·추가"는 전부 싱크(sync) 담당이에요. 사용자가 이런 걸 요청하면 "제가 직접 못 한다"거나 "시켜드릴까요?"라고 되묻지 말고, 곧바로 [[CALL: sync | 구체적 지시]]로 싱크를 호출해 처리하세요.`
     : "";
 
+  const uiControlBlock = agentId === "core" ? `
+
+## 🖥️ AI 회사 화면 직접 제어 (코어 전용)
+사용자가 이 페이지의 화면·표시·업무 항목을 바꾸라고 하면 설명만 하지 말고 답변 끝에 JSON 마커를 출력하세요. 마커는 사용자에게 보이지 않고 현재 브라우저에서 실행됩니다.
+형식: [[UI_ACTION: {"action":"명령", "필드":"값"}]]
+여러 동작이면 실행 순서대로 여러 줄 출력하세요. 사용자가 요청하지 않은 화면 조작은 하지 마세요.
+
+- 화면 이동: {"action":"navigate","view":"dashboard|chat|knowledge|agents|works|skills|settings"}
+- 우측 카드: {"action":"panel.set","panel":"projects|approvals|results|reservations","open":true}
+- 대화·채팅 표시: {"action":"conversation.open","date":"2026-07-25"} / {"action":"chat.mode","mode":"normal|vn"} / {"action":"chat.log","open":true} / {"action":"chat.messages","operation":"expand_all|collapse_all"}
+- 음성: {"action":"chat.voice","enabled":true,"mode":"browser|server|cloud"}
+- 직원: {"action":"agent.focus","agentId":"pixel"} / {"action":"agent.card","agentId":"pixel","open":true} / {"action":"agent.visibility","agentId":"edge","visible":false} / {"action":"agent.order","agentIds":["pixel","edge"]}
+- 근무: {"action":"work.mode","mode":"on|off"} / {"action":"work.autonomous","enabled":true}
+- 달력·프로젝트 표시: {"action":"dashboard.calendar","date":"2026-07-25"} / {"action":"project.sidebar","project":"프로젝트명","visible":false}
+- 지식 보기: {"action":"knowledge.view","filter":"원칙|사실|결정|스킬|all","sort":"asc|desc","dedupe":false}
+- 보유 스킬 상세: {"action":"skill.view","name":"스킬명"}
+- 업무 보기: {"action":"work_explorer.view","mode":"cards|list","sort":"newest|oldest|name-asc|name-desc","query":"검색어","scope":"all|title|content"}
+- 업무 열기·이름 변경: {"action":"work_explorer.open","title":"업무명"} / {"action":"work_explorer.rename","kind":"work|folder","title":"기존명","newTitle":"새 이름"}
+- 업무·폴더 삭제: {"action":"work_explorer.delete","kind":"work|folder","title":"이름"} (사람 확인 후 실행)
+- 직원 관리: {"action":"agent_manager.select","agentId":"pixel"} / {"action":"agent_manager.persona","agentId":"pixel","prompt":"새 페르소나"}
+- 영상: {"action":"video.configure","prompt":"내용","durationSec":30,"aspectRatio":"16:9","audience":"대상","tone":"톤","style":"스타일"} / {"action":"video.run"} / {"action":"video.approval","decision":"approve|reject"} / {"action":"video.render"} / {"action":"video.storage","operation":"open|close|download|delete"}
+- 승인: {"action":"approval.decide","id":"작업ID","decision":"approve|reject"} / {"action":"approval.clear"} (사람 확인 후 실행)
+- 결과: {"action":"result.open","id":"작업ID"} / {"action":"result.review","id":"작업ID","decision":"approve|revise","note":"수정 지시"} / {"action":"result.cancel","id":"작업ID"}
+- 예약 삭제: {"action":"reminder.delete","id":"예약ID"} (사람 확인 후 실행)
+- 설정: {"action":"settings.open","tab":"basic|agents|logs"} / {"action":"settings.mode","mode":"auto|local|cloud"} / {"action":"settings.auth_diag"} / {"action":"settings.log","operation":"retention|cleanup","days":30}
+- 연동: {"action":"integration.open","agentId":"sync","tool":"gmail"} / integration.test·connect·disconnect도 같은 필드 사용. 연결·해제는 사람 확인 후 실행하며 비밀 키 입력은 절대 대신하지 않습니다.
+
+삭제·승인·외부 연결은 사용자가 명시적으로 요청했을 때만 출력하세요. 자율 근무에서는 UI_ACTION을 절대 출력하지 마세요.` : "";
+
   return `${hardState}
 
 # 회사 공유 컨텍스트
@@ -398,7 +428,7 @@ ${persona}${knowledgeBlock}
 - 등록: [[SELF_KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
 - 삭제: [[SELF_KNOW: del | 기존에 등록된 정확한 내용]]
 예) 픽셀이 "이미지는 항상 16:9로"라는 지시를 받으면 → [[SELF_KNOW: add | 원칙 | 이미지 생성 시 기본 비율은 16:9]]
-이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.
+이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.${uiControlBlock}
 
 ## ❌ 작업 취소 (CANCEL 마커)
 사용자가 검수 대기 중인 작업을 "취소/철회/없애줘/지워줘"라고 요청하면, 위 "검수 대기 중인 작업" 목록에서 해당 항목을 찾아 답변 끝에 마커를 추가하세요(사용자껜 안 보임):
@@ -474,6 +504,7 @@ export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: s
 export interface ProjectOp { action: "create" | "delete" | "rename" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage" | "collapse" | "expand" | "collapse_all" | "expand_all" | "reverse" | "reorder"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; names?: string[]; }
 export interface SkillOp { action: "create" | "patch" | "delete" | "pin" | "unpin" | "archive" | "restore"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface CancelOp { jobId?: string; jobType?: string; hint?: string; }
+export interface UiAction { action: string; [key: string]: unknown; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
@@ -482,6 +513,7 @@ export interface SpeakResult {
   projects: ProjectOp[];
   skills: SkillOp[];
   cancels: CancelOp[];
+  uiActions: UiAction[];
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
@@ -499,6 +531,37 @@ const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]\]/gi;
 const SELF_KNOW_RE = /\[{1,2}\s*SELF_KNOW\s*:\s*([\s\S]+?)\]\]/gi;
 // 작업 취소 마커: [[CANCEL: 작업ID]] 또는 [[CANCEL: 작업유형(ppt/pdf/...)]]
 const CANCEL_RE = /\[{1,2}\s*CANCEL\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// AI 회사 화면 제어. JSON만 허용하고 서버 allowlist를 통과한 명령만 브라우저로 전달한다.
+const UI_ACTION_RE = /\[{1,2}\s*UI_ACTION\s*:\s*([\s\S]+?)\]\]/gi;
+const UI_ACTION_ALLOWLIST = new Set([
+  "navigate", "panel.set", "conversation.open", "chat.mode", "chat.voice", "chat.log", "chat.messages",
+  "agent.focus", "agent.card", "agent.visibility", "agent.order", "skill.view",
+  "work.mode", "work.autonomous", "dashboard.calendar", "project.sidebar", "knowledge.view",
+  "work_explorer.view", "work_explorer.open", "work_explorer.rename", "work_explorer.delete", "work_explorer.sources",
+  "agent_manager.select", "agent_manager.persona", "agent_manager.voice", "video.configure", "video.run",
+  "video.approval", "video.render", "video.storage", "approval.decide", "approval.clear", "result.open", "result.review",
+  "result.cancel", "reminder.delete", "settings.open", "settings.mode", "settings.auth_diag", "settings.log",
+  "integration.open", "integration.test", "integration.connect", "integration.disconnect",
+]);
+
+function parseUiAction(raw: string): UiAction | null {
+  try {
+    const parsed = JSON.parse(String(raw || "").trim());
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const action = String(parsed.action || "").trim();
+    if (!UI_ACTION_ALLOWLIST.has(action)) return null;
+    const clean: UiAction = { action };
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === "action" || key.length > 40) continue;
+      if (typeof value === "string") clean[key] = value.slice(0, 500);
+      else if (typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))) clean[key] = value;
+      else if (Array.isArray(value)) clean[key] = value.slice(0, 100).map((item) => String(item || "").slice(0, 100));
+    }
+    return clean;
+  } catch {
+    return null;
+  }
+}
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
 function normalizeKnowType(t: string): string {
@@ -516,6 +579,7 @@ function extractMarkers(raw: string): SpeakResult {
   const projects: ProjectOp[] = [];
   const skills: SkillOp[] = [];
   const cancels: CancelOp[] = [];
+  const uiActions: UiAction[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
@@ -630,8 +694,13 @@ function extractMarkers(raw: string): SpeakResult {
       cancels.push({ jobType: first.toLowerCase(), hint: parts[1] });
     }
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").replace(CANCEL_RE, "").trim();
-  return { text, calls, runs, knows, projects, skills, cancels };
+  UI_ACTION_RE.lastIndex = 0;
+  while ((m = UI_ACTION_RE.exec(raw))) {
+    const action = parseUiAction(m[1]);
+    if (action) uiActions.push(action);
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").replace(CANCEL_RE, "").replace(UI_ACTION_RE, "").trim();
+  return { text, calls, runs, knows, projects, skills, cancels, uiActions };
 }
 
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
@@ -713,7 +782,7 @@ export async function speak(
   //       한 번 더 강제로 받아 즉시 반영한다. (프롬프트 규칙만으론 불안정해 서버에서 보정)
   if (opts.sql && opts.userId) {
     const claimedChange = /(바꿨|바꿀게|바꾸겠|수정했|수정할게|수정하겠|변경했|변경할게|변경하겠|반영했|반영할게|반영하겠|등록했|등록할게|등록하겠|저장했|저장할게|저장하겠)/.test(result.text);
-    const hasDbMarker = result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0;
+    const hasDbMarker = result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0 || result.uiActions.length > 0;
     if (claimedChange && !hasDbMarker) {
       const fixRaw = await callClaude(
         env,
@@ -748,6 +817,7 @@ export async function speak(
         result.knows.push(...extra.knows);
         result.projects.push(...extra.projects);
         result.skills.push(...extra.skills);
+        result.uiActions.push(...extra.uiActions);
       }
     }
   }
@@ -1013,6 +1083,7 @@ export interface OrchestratorDeps {
   images?: { base64: string; mimeType: string }[];  // 첨부(이미지·PDF) — 첫 번째 에이전트에게만 전달
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
   onJobReady?: (payload?: any) => void; // SSE 콜백: 도구/업무 완료 즉시 갱신
+  onUiAction?: (action: UiAction) => Promise<void> | void; // 검증된 화면 제어 명령을 현재 브라우저로 전달
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
 }
 
@@ -1117,6 +1188,7 @@ export async function runGroupChat(
               `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, 4500)}`;
             const res2 = await speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
             await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res2.text });
+            await _emitUiActions(res2.uiActions, agentId);
             await _applyKnows(res2.knows, meta.name);
             await _applyProjects(res2.projects);
             await _applySkills(res2.skills);
@@ -1173,6 +1245,13 @@ export async function runGroupChat(
   const _applyKnows    = (knows: KnowOp[]    | undefined, who: string) => applyKnows   (sql, userId, knows,    who);
   const _applySkills   = (skills: SkillOp[]  | undefined)              => applySkills  (sql, userId, skills       );
   const _applyProjects = (projects: ProjectOp[]| undefined)            => applyProjects(sql, userId, projects    );
+  const _emitUiActions = async (actions: UiAction[] | undefined, agentId: string) => {
+    if (opts.autoTrigger || !actions?.length || !deps.onUiAction) return;
+    for (const action of actions.slice(0, 12)) {
+      try { await recordUiAction(sql, { userId, conversationId, agentId, action }); } catch {}
+      try { await deps.onUiAction(action); } catch {}
+    }
+  };
 
   // CANCEL 마커 적용 — 에이전트가 [[CANCEL: id|type]]를 쓰면 해당 잡을 DB에서 바로 취소
   const _applyCancel = async (cancels: CancelOp[] | undefined) => {
@@ -1205,6 +1284,7 @@ export async function runGroupChat(
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
     const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
+    await _emitUiActions(res.uiActions, workerId);
     await runTools(res.runs, workerId);
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
@@ -1235,6 +1315,7 @@ export async function runGroupChat(
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
     await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
+    await _emitUiActions(res.uiActions, agentId);
     await runTools(res.runs, agentId);
 
     if (canDelegate) {
@@ -1267,6 +1348,7 @@ export async function runGroupChat(
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
+    await _emitUiActions(wrap.uiActions, "core");
     await _applyKnows(wrap.knows, "코어");
     await _applyProjects(wrap.projects);
     await _applySkills(wrap.skills);

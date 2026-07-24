@@ -12,6 +12,7 @@ import {
   type AgentVideoStorageItem,
   type CompanyWorkItem,
 } from "../lib/api";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 type ViewMode = "cards" | "list";
 type SearchScope = "title" | "content" | "all";
@@ -307,6 +308,72 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     if (sourceWork) { setSourceWork(null); setSources([]); return; }
     if (date) setDate("");
   }
+
+  useUiAction((action) => {
+    if (action.action === "work_explorer.view") {
+      const mode = actionString(action, "mode");
+      const sort = actionString(action, "sort");
+      const scope = actionString(action, "scope");
+      if (mode === "cards" || mode === "list") setViewMode(mode);
+      if (sort === "newest" || sort === "oldest" || sort === "name-asc" || sort === "name-desc") setSortMode(sort);
+      if (scope === "all" || scope === "title" || scope === "content") setSearchScope(scope);
+      if (typeof action.query === "string") setSearchQuery(action.query.slice(0, 200));
+      return;
+    }
+
+    const query = actionString(action, "id") || actionString(action, "title");
+    if (action.action === "work_explorer.open") {
+      const requestedDate = actionString(action, "date");
+      if (requestedDate) { openDateFolder(requestedDate); return; }
+      const work = items.find((item) => item.id === query || item.title === query);
+      if (!work) return;
+      if (actionString(action, "kind") === "sources") void openSources(work);
+      else onOpenWork(work);
+      return;
+    }
+
+    if (action.action === "work_explorer.rename") {
+      const newTitle = actionString(action, "newTitle").replace(/\s+/g, " ").slice(0, 60);
+      if (!newTitle) return;
+      if (actionString(action, "kind") === "folder") {
+        const dateKey = [...folderTitles].find(([key, title]) => key === query || title === query)?.[0];
+        if (!dateKey) return;
+        void renameCompanyWorkFolder(dateKey, newTitle).then(() => setFolderTitles((current) => new Map(current).set(dateKey, newTitle))).catch(() => refresh());
+      } else {
+        const work = items.find((item) => item.id === query || item.title === query);
+        if (!work) return;
+        void renameCompanyWorkItem(work.id, newTitle).then((updated) => setItems((current) => current.map((item) => item.id === updated.id ? updated : item))).catch(() => refresh());
+      }
+      return;
+    }
+
+    if (action.action === "work_explorer.delete") {
+      if (actionString(action, "kind") === "folder") {
+        const dateKey = [...folderTitles].find(([key, title]) => key === query || title === query)?.[0];
+        if (dateKey) void removeDateFolder(dateKey);
+      } else {
+        const work = items.find((item) => item.id === query || item.title === query);
+        if (work) void removeWork(work);
+      }
+      return;
+    }
+
+    if (action.action === "work_explorer.sources") {
+      const operation = actionString(action, "operation");
+      if (operation === "open") {
+        const work = items.find((item) => item.id === query || item.title === query);
+        if (work) void openSources(work);
+      } else if (operation === "select_all") {
+        setSelectedSources(new Set(sources.map((item) => item.objectName)));
+      } else if (operation === "clear_selection") {
+        setSelectedSources(new Set());
+      } else if (operation === "download") {
+        void downloadSources();
+      } else if (operation === "delete") {
+        void removeSources();
+      }
+    }
+  }, "work_explorer");
 
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";
 

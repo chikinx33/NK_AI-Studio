@@ -827,13 +827,27 @@ export async function setMode(llmMode: string) {
 
 export interface LogStats { dates: number; oldest: string | null; newest: string | null }
 export async function getLogStats(): Promise<LogStats> {
-  return { dates: 0, oldest: null, newest: null };
+  const response = await fetch("/api/agent/settings?kind=logStats");
+  if (!response.ok) throw new Error("대화 로그 통계를 불러오지 못했습니다.");
+  return response.json();
 }
-export async function setLogRetention(_days: number) {
-  return { ok: true, deleted: 0 } as any;
+export async function setLogRetention(days: number) {
+  const response = await fetch("/api/agent/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "logRetention", days }),
+  });
+  if (!response.ok) throw new Error("대화 로그 보존 설정을 저장하지 못했습니다.");
+  return response.json();
 }
 export async function cleanupLogs() {
-  return { ok: true, deleted: 0 } as any;
+  const response = await fetch("/api/agent/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "cleanupLogs" }),
+  });
+  if (!response.ok) throw new Error("대화 로그를 정리하지 못했습니다.");
+  return response.json();
 }
 
 export interface IntegrationField {
@@ -883,8 +897,21 @@ export interface SkillReadiness {
   missing: { tool: string; keys: string[] }[];
 }
 export async function getSkillReadiness(): Promise<SkillReadiness[]> {
-  // NK: 라비오크식 스킬 파일이 없으므로 준비도 목록은 비움(연동 상태는 getIntegrations 로 표시).
-  return [];
+  const integrations = await getIntegrations();
+  return integrations.map((integration) => {
+    const missingKeys = integration.fields
+      .filter((field) => field.required && !field.hasValue && (field.value === undefined || field.value === ""))
+      .map((field) => field.key);
+    return {
+      agentId: integration.agentId,
+      agentName: integration.agentName,
+      skill: integration.tool,
+      file: `integration:${integration.tool}`,
+      requiredTools: [integration.tool],
+      status: integration.configured ? "ready" : "needs_config",
+      missing: missingKeys.length ? [{ tool: integration.tool, keys: missingKeys }] : [],
+    };
+  });
 }
 
 // ── 헤르메스 스킬(절차적 기억) — 에이전트가 축적한 재사용 절차 ──
@@ -1464,6 +1491,8 @@ export async function streamChat(
           agentEmitted++;
         } else if (event.type === "job_ready") {
           onEvent("job_ready", { payload: event.payload });
+        } else if (event.type === "ui_action") {
+          onEvent("ui_action", { action: event.action });
         } else if (event.type === "done") {
           break outer;
         }

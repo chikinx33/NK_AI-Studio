@@ -10,6 +10,7 @@ import {
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
 function ListTodoIcon({ className }: { className?: string }) {
@@ -363,6 +364,25 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
       setBusyAction(null);
     }
   }
+
+  useUiAction((action) => {
+    const id = actionString(action, "id");
+    const query = id || actionString(action, "title");
+    const item = items.find((candidate) => candidate.id === query || candidate.prompt === query);
+    if (!item) return;
+    if (action.action === "result.open") {
+      setOpenId(item.id);
+    } else if (action.action === "result.review") {
+      const decision = actionString(action, "decision");
+      if (decision !== "approve" && decision !== "revise") return;
+      const label = decision === "approve" ? "검토 승인" : "재수정 요청";
+      if (!window.confirm(`'${item.prompt || item.kind}' 결과를 ${label}할까요?`)) return;
+      const note = actionString(action, "note") || undefined;
+      void applyReview(item, decision, note);
+    } else if (action.action === "result.cancel") {
+      if (window.confirm(`'${item.prompt || item.kind}' 작업 지시를 취소할까요?`)) void cancelInline(item);
+    }
+  }, "results");
 
   // 검토 대기 = 박스 항목, 처리된 것(사용 확정/재검토) = 최근 처리 텍스트 리스트 (승인 대기와 동일 구조)
   const pending = items.filter((it) => it.reviewStatus === "pending");

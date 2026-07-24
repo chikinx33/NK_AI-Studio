@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getIntegrations, saveIntegration, testIntegration, type ToolIntegration } from "../lib/api";
 import { JOB } from "../lib/jobs";
 import { CircleIcon, LogInIcon, KeyRoundIcon, PlugIcon, StatusText, LabelText, stripEmoji } from "./icons";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 const inputCls =
   "mt-0.5 w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600";
@@ -110,6 +111,20 @@ export function ToolCard({
     }
     onSaved();
   }
+
+  useUiAction((action) => {
+    if (!action.action.startsWith("integration.")) return;
+    const agentId = actionString(action, "agentId");
+    const tool = actionString(action, "tool");
+    const googleAlias = it.oauth === "google" && ["google", "gmail", "calendar"].includes(tool);
+    if ((agentId && agentId !== it.agentId) || (tool && tool !== it.tool && !googleAlias)) return;
+    if (action.action === "integration.test") void runTest();
+    else if (action.action === "integration.connect" && it.oauth === "google") {
+      if (window.confirm(`${it.agentName}의 Google 계정 연결을 시작할까요? 로그인은 직접 완료해야 합니다.`)) void connectGoogle();
+    } else if (action.action === "integration.disconnect" && it.oauth === "google") {
+      if (window.confirm(`${it.agentName}의 Google 연결을 해제할까요?`)) void disconnectGoogle();
+    }
+  }, `integration:${it.agentId}:${it.tool}`);
 
   return (
     <div className="rounded-xl border border-edge bg-ink p-3">

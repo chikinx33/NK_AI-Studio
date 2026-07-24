@@ -35,6 +35,7 @@ import {
   MinusIcon,
   StatusText,
 } from "./icons";
+import { actionString, useUiAction } from "../lib/uiActions";
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -193,6 +194,44 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
   const allModels = status?.ollama.models ?? [];
   const chatModels = status?.ollama.chatModels ?? [];
   const embedModels = allModels.filter((m) => !chatModels.includes(m));
+
+  useUiAction((action) => {
+    if (action.action === "settings.open") {
+      const nextTab = actionString(action, "tab");
+      if (nextTab === "basic" || nextTab === "agents" || nextTab === "logs") setTab(nextTab);
+    } else if (action.action === "settings.mode") {
+      const nextMode = actionString(action, "mode");
+      if (nextMode !== "auto" && nextMode !== "local" && nextMode !== "cloud") return;
+      if (nextMode === "local" && !ollamaUp) {
+        setAuthMsg("⚠️ Ollama가 감지되지 않아 로컬 모드로 전환할 수 없습니다.");
+        setTab("basic");
+        return;
+      }
+      setModeState(nextMode);
+      void setMode(nextMode).then(onChanged);
+      setTab("basic");
+    } else if (action.action === "settings.auth_diag") {
+      setTab("basic");
+      void runDiag();
+    } else if (action.action === "settings.log") {
+      setTab("logs");
+      const operation = actionString(action, "operation");
+      if (operation === "retention") {
+        const days = Number(action.days);
+        if (![0, 7, 30, 90, 180, 365].includes(days)) return;
+        const warning = days > 0 ? `${days}일보다 오래된 대화 로그를 지금 정리하고 보존 정책을 적용할까요?` : "대화 로그 자동 정리를 끌까요?";
+        if (window.confirm(warning)) void changeRetention(days);
+      } else if (operation === "cleanup") {
+        if (window.confirm("현재 보존 정책보다 오래된 대화 로그를 지금 정리할까요?")) void doCleanup();
+      }
+    } else if (action.action === "integration.open") {
+      const agentId = actionString(action, "agentId");
+      if (agents.some((agent) => agent.id === agentId)) {
+        setTab("agents");
+        setExpandedAgent(agentId);
+      }
+    }
+  }, "settings");
   const modelLabel = (m: string) => m.replace(":latest", "");
 
   return (
@@ -252,12 +291,15 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               {MODES.map((m) => (
                 <button
                   key={m.id}
+                  disabled={m.id === "local" && !ollamaUp}
+                  title={m.id === "local" && !ollamaUp ? "Ollama가 감지되지 않아 로컬 모드를 사용할 수 없습니다." : undefined}
                   onClick={async () => {
+                    if (m.id === "local" && !ollamaUp) return;
                     setModeState(m.id);
                     await setMode(m.id);
                     onChanged();
                   }}
-                  className={`rounded-lg border py-2 text-sm font-medium transition ${
+                  className={`rounded-lg border py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-35 ${
                     mode === m.id
                       ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
                       : "border-edge text-gray-300 hover:bg-edge"

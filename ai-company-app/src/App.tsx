@@ -34,10 +34,16 @@ import {
   type AgentInfo,
   type HistoryTurn,
   listCompanyWorkItems,
+  setWork,
+  setAutonomous,
+  saveAgentPersona,
+  setAgentVoiceKey,
+  setAgentVoiceSpeed,
   type CompanyWorkItem,
 } from "./lib/api";
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
+import { dispatchUiAction, type UiAction } from "./lib/uiActions";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
@@ -202,6 +208,104 @@ export default function App() {
   const [activeConvId, setActiveConvId] = useState<string>(localToday);
   const activeConvRef = useRef<string>(activeConvId);
   activeConvRef.current = activeConvId;
+
+  function handleUiAction(action: UiAction) {
+    const name = String(action.action || "");
+    if (name.startsWith("work_explorer.")) setCenterView("works");
+    else if (name === "dashboard.calendar" || name === "project.sidebar") setCenterView("dashboard");
+    else if (name === "skill.view") openKnowledgeCategory("스킬");
+    else if (name === "chat.log") {
+      setVnMode(true);
+      localStorage.setItem("vnMode", "1");
+      setCenterView("chat");
+    }
+    else if (name.startsWith("video.")) {
+      setSkillCategoryId("design-content");
+      setCenterView("skills");
+    }
+    if (name === "navigate") {
+      const view = String(action.view || "");
+      const allowed = new Set(["chat", "dashboard", "settings", "knowledge", "agents", "works", "skills"]);
+      if (allowed.has(view)) {
+        if (view === "skills" && typeof action.categoryId === "string") setSkillCategoryId(action.categoryId);
+        setCenterView(view as typeof centerView);
+      }
+    } else if (name === "conversation.open") {
+      const date = String(action.date || action.id || "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        setActiveConvId(date);
+        setCenterView("chat");
+      }
+    } else if (name === "chat.mode") {
+      const next = action.mode === "vn";
+      setVnMode(next);
+      localStorage.setItem("vnMode", next ? "1" : "0");
+      if (!next) setFocusAgentId(null);
+      setCenterView("chat");
+    } else if (name === "chat.voice") {
+      if (typeof action.enabled === "boolean") {
+        setVoiceEnabled(action.enabled);
+        voiceEnabledRef.current = action.enabled;
+        localStorage.setItem("agentVoiceEnabled", action.enabled ? "1" : "0");
+        if (!action.enabled) stopSpeech();
+      }
+      if (action.mode === "browser" || action.mode === "server" || action.mode === "cloud") {
+        setVoiceMode(action.mode);
+        voiceModeRef.current = action.mode;
+        localStorage.setItem("agentVoiceMode", action.mode);
+      }
+    } else if (name === "agent.focus") {
+      const agentId = String(action.agentId || "");
+      if (agentId && agents.some((agent) => agent.id === agentId)) focusChat(agentId);
+      else clearFocus();
+    } else if (name === "agent.visibility") {
+      const agentId = String(action.agentId || "");
+      if (agentId && agentId !== "core" && typeof action.visible === "boolean") {
+        setHiddenAgents((previous) => {
+          const next = new Set(previous);
+          action.visible ? next.delete(agentId) : next.add(agentId);
+          localStorage.setItem("hiddenAgents", JSON.stringify([...next]));
+          return next;
+        });
+      }
+    } else if (name === "work.mode" && (action.mode === "on" || action.mode === "off")) {
+      void setWork(action.mode).then(refreshStatus);
+    } else if (name === "work.autonomous" && typeof action.enabled === "boolean") {
+      void setAutonomous(action.enabled).then(refreshStatus);
+    } else if (name === "knowledge.view") {
+      const filter = action.filter;
+      openKnowledgeCategory(filter === "원칙" || filter === "사실" || filter === "결정" || filter === "스킬" ? filter : null);
+    } else if (name === "agent_manager.select") {
+      const agentId = String(action.agentId || "");
+      if (agents.some((agent) => agent.id === agentId)) {
+        setAgentMgrId(agentId);
+        setCenterView("agents");
+      }
+    } else if (name === "agent_manager.persona") {
+      const agentId = String(action.agentId || "");
+      const prompt = String(action.prompt || "").trim();
+      if (prompt && agents.some((agent) => agent.id === agentId)) {
+        void saveAgentPersona(agentId, prompt);
+        setAgentMgrId(agentId);
+        setCenterView("agents");
+      }
+    } else if (name === "agent_manager.voice") {
+      const agentId = String(action.agentId || "");
+      if (agents.some((agent) => agent.id === agentId)) {
+        if (typeof action.voiceKey === "string") void setAgentVoiceKey(agentId, action.voiceKey);
+        if (action.speed === 0.5 || action.speed === 1 || action.speed === 1.2 || action.speed === 1.5) void setAgentVoiceSpeed(agentId, action.speed);
+        setAgentMgrId(agentId);
+        setCenterView("agents");
+      }
+    } else if (name === "settings.open") {
+      setCenterView("settings");
+    } else if (name === "reminder.delete") {
+      const id = String(action.id || "");
+      const target = reminders.find((reminder) => reminder.id === id || reminder.text === action.text);
+      if (target && window.confirm(`'${target.text || "알람"}' 예약을 삭제할까요?`)) void removeReminder(target.id);
+    }
+    window.setTimeout(() => dispatchUiAction(action), 0);
+  }
 
   useEffect(() => {
     loadAgentVoiceSettings().catch(() => {
@@ -751,6 +855,9 @@ export default function App() {
                 // 채팅 화면은 유지하되 로컬 렌더·GCS 보관은 백그라운드에서 즉시 시작한다.
                 void openWork(data.payload.work, data.payload.renderMode !== "server");
               }
+              break;
+            case "ui_action":
+              if (data?.action) handleUiAction(data.action);
               break;
             case "agent_busy": {
               // 발언이 아닌 실제 업무(도구 실행 등) 구간에도 '업무 중' 표시 유지
