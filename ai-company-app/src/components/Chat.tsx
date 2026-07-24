@@ -4,6 +4,13 @@ import Markdown from "./Markdown";
 import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
 import { actionString, useUiAction } from "../lib/uiActions";
+import {
+  collectSpeechTranscript,
+  getSpeechRecognitionConstructor,
+  mergeSpeechDraft,
+  speechRecognitionErrorMessage,
+  type SpeechRecognitionLike,
+} from "../lib/speechRecognition";
 
 export interface Turn {
   id?: string;
@@ -247,6 +254,27 @@ function PaperclipIcon({ className }: { className?: string }) {
   );
 }
 
+function MicrophoneIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="8" height="13" x="8" y="2" rx="4" />
+      <path d="M18 10a6 6 0 0 1-12 0" />
+      <path d="M12 19v3" />
+    </svg>
+  );
+}
+
 function PauseIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -306,12 +334,17 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechDraftBaseRef = useRef("");
   const didInitScroll = useRef(false);
 
   // 이미지/파일 첨부 state — 여러 개 동시 첨부 지원
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [speechListening, setSpeechListening] = useState(false);
+  const [speechError, setSpeechError] = useState("");
   const dragDepth = useRef(0); // 자식 요소 진입/이탈로 인한 깜빡임 방지용 카운터
+  const speechSupported = !!getSpeechRecognitionConstructor();
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
 
@@ -351,6 +384,11 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }, [draft]);
+
+  useEffect(() => () => {
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+  }, []);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [injectedIdx, setInjectedIdx] = useState<number | null>(null);
   const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(new Set());
@@ -401,10 +439,52 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
 
   function submit() {
     const t = draft.trim();
-    if ((!t && !attachments.length) || busy) return;
+    if ((!t && !attachments.length) || busy || speechListening) return;
     onSend(t, attachments.length ? attachments : undefined);
     setDraft("");
     setAttachments([]);
+  }
+
+  function stopSpeechInput() {
+    speechRecognitionRef.current?.stop();
+  }
+
+  function startSpeechInput() {
+    const Recognition = getSpeechRecognitionConstructor();
+    if (!Recognition || busy || streaming || isExpired) return;
+    setSpeechError("");
+    speechDraftBaseRef.current = draft;
+    const recognition = new Recognition();
+    recognition.lang = document.documentElement.lang?.startsWith("en") ? "en-US" : "ko-KR";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      const transcript = collectSpeechTranscript(event.results);
+      setDraft(mergeSpeechDraft(speechDraftBaseRef.current, transcript));
+    };
+    recognition.onerror = (event) => {
+      const message = speechRecognitionErrorMessage(event.error);
+      if (message) setSpeechError(message);
+    };
+    recognition.onend = () => {
+      if (speechRecognitionRef.current === recognition) speechRecognitionRef.current = null;
+      setSpeechListening(false);
+      requestAnimationFrame(() => taRef.current?.focus());
+    };
+    speechRecognitionRef.current = recognition;
+    setSpeechListening(true);
+    try {
+      recognition.start();
+    } catch {
+      speechRecognitionRef.current = null;
+      setSpeechListening(false);
+      setSpeechError("마이크를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  }
+
+  function toggleSpeechInput() {
+    if (speechListening) stopSpeechInput();
+    else startSpeechInput();
   }
 
   async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -719,7 +799,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             ref={taRef}
             spellCheck={false}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); if (speechError) setSpeechError(""); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -731,6 +811,18 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈) · @이름으로 직원 지목"
             className="no-scrollbar flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
           />
+          <button
+            type="button"
+            onClick={toggleSpeechInput}
+            disabled={!speechSupported || busy || streaming}
+            aria-pressed={speechListening}
+            aria-label={speechListening ? "음성 입력 중지" : "음성으로 입력"}
+            title={!speechSupported ? "이 브라우저는 음성 입력을 지원하지 않습니다" : speechListening ? "듣는 중 · 누르면 중지" : "음성으로 입력"}
+            className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${speechListening ? "border-red-500 bg-red-950/70 text-red-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
+          >
+            {speechListening && <span className="absolute inset-1 animate-ping rounded-lg border border-red-400/60" />}
+            <MicrophoneIcon className="relative h-4 w-4" />
+          </button>
           {streaming ? (
             <button
               onClick={onStop}
@@ -742,7 +834,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           ) : (
             <button
               onClick={submit}
-              disabled={busy}
+              disabled={busy || speechListening}
               title="전송"
               className="grid h-[42px] place-items-center px-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40"
             >
@@ -750,6 +842,15 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             </button>
           )}
         </div>
+        {(speechListening || speechError) && (
+          <div className="mt-1.5 min-h-4 px-1 text-xs" role="status" aria-live="polite">
+            {speechListening ? (
+              <span className="text-red-300">● 듣고 있습니다. 말씀을 마치면 입력창에 자동으로 반영됩니다.</span>
+            ) : (
+              <span className="text-amber-300">{speechError}</span>
+            )}
+          </div>
+        )}
       </div>
       )}
     </div>
