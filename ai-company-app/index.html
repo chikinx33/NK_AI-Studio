@@ -16,7 +16,27 @@
   <body>
     <!-- 버전 표시용 NK 설정 로드(window.NK.config.APP_VERSION) -->
     <script src="/js/config.js"></script>
-    <div id="root"></div>
+    <div id="root">
+      <div id="nk-ai-bootstrap" style="min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#d1d5db;font-family:system-ui,sans-serif">
+        <div style="max-width:420px;padding:32px;text-align:center">
+          <div id="nk-ai-bootstrap-title" style="font-size:15px;font-weight:700">AI 기업을 불러오는 중입니다…</div>
+          <div id="nk-ai-bootstrap-actions" style="display:none;margin-top:16px;gap:8px;justify-content:center">
+            <button type="button" onclick="location.reload()" style="cursor:pointer;border:1px solid #374151;border-radius:8px;background:#1f2937;color:#fff;padding:9px 14px">다시 불러오기</button>
+            <a href="/app" style="border:1px solid #374151;border-radius:8px;color:#9ca3af;padding:9px 14px;text-decoration:none">로그인 화면</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.setTimeout(function () {
+        var fallback = document.getElementById("nk-ai-bootstrap");
+        if (!fallback) return;
+        var title = document.getElementById("nk-ai-bootstrap-title");
+        var actions = document.getElementById("nk-ai-bootstrap-actions");
+        if (title) title.textContent = "AI 기업을 불러오지 못했습니다.";
+        if (actions) actions.style.display = "flex";
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

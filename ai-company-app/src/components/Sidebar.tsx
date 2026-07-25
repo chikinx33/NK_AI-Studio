@@ -391,7 +391,10 @@ export default function Sidebar({
     let stored: string[] = [];
     try {
       const raw = localStorage.getItem(ORDER_KEY);
-      if (raw) stored = JSON.parse(raw);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        stored = Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+      }
     } catch {
       stored = [];
     }

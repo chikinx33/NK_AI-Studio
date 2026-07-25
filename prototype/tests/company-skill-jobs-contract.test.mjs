@@ -203,7 +203,7 @@ test("채팅과 직접 실행은 공통 SkillJob API를 사용하고 진행 중 
   assert.match(workspace, /invocationMode: "manual"/);
   assert.match(workspace, /SKILL_JOB_STORAGE_KEY/);
   assert.match(workspace, /waitForCompanySkillJob/);
-  assert.match(workspace, /localStorage\.getItem\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(workspace, /readStorage\(SKILL_JOB_STORAGE_KEY\)/);
   assert.match(client, /export async function waitForCompanySkillJob/);
   assert.match(legacyEndpoint, /skillJobId:[^\n]*body\?\.skillJobId/);
 });

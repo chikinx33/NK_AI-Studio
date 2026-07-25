@@ -68,8 +68,8 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
-  assert.match(workspaceContext, /localStorage\.setItem\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
-  assert.match(workspaceContext, /localStorage\.getItem\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(workspaceContext, /writeStorage\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
+  assert.match(workspaceContext, /readStorage\(SKILL_JOB_STORAGE_KEY\)/);
   assert.match(workspaceContext, /restoreSkillJob/);
 });
 

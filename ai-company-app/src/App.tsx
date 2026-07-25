@@ -45,6 +45,7 @@ import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
 import { dispatchUiAction, type UiAction } from "./lib/uiActions";
 import { SpeechInputButton, useSpeechInput } from "./components/SpeechInputControl";
+import { readStorage, writeStorage } from "./lib/safeStorage";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
@@ -152,22 +153,22 @@ export default function App() {
   }, []);
   // 사이드바에서 숨길 에이전트 (코어 제외, localStorage 영속)
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(() => {
-    try { return new Set<string>(JSON.parse(localStorage.getItem("hiddenAgents") || "[]")); } catch { return new Set(); }
+    try { return new Set<string>(JSON.parse(readStorage("hiddenAgents", "[]"))); } catch { return new Set(); }
   });
   function toggleAgent(id: string) {
     setHiddenAgents((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      try { localStorage.setItem("hiddenAgents", JSON.stringify([...next])); } catch { /* ignore */ }
+      writeStorage("hiddenAgents", JSON.stringify([...next]));
       return next;
     });
   }
-  const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
-  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => localStorage.getItem("agentVoiceEnabled") === "1");
+  const [vnMode, setVnMode] = useState<boolean>(() => readStorage("vnMode") === "1");
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => readStorage("agentVoiceEnabled") === "1");
   const [speechModeEnabled, setSpeechModeEnabled] = useState(false);
   // 음성 방식(무료 브라우저 / 서버 MeloTTS / 고품질 Gemini). 기본값 = 무료 브라우저(비용 0·싱크 좋음)
   const [voiceMode, setVoiceMode] = useState<VoiceMode>(() => {
-    const v = localStorage.getItem("agentVoiceMode");
+    const v = readStorage("agentVoiceMode");
     return v === "cloud" || v === "server" ? v : "browser";
   });
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
@@ -219,7 +220,7 @@ export default function App() {
     else if (name === "skill.view") openKnowledgeCategory("스킬");
     else if (name === "chat.log") {
       setVnMode(true);
-      localStorage.setItem("vnMode", "1");
+      writeStorage("vnMode", "1");
       setCenterView("chat");
     }
     else if (name.startsWith("video.")) {
@@ -242,20 +243,20 @@ export default function App() {
     } else if (name === "chat.mode") {
       const next = action.mode === "vn";
       setVnMode(next);
-      localStorage.setItem("vnMode", next ? "1" : "0");
+      writeStorage("vnMode", next ? "1" : "0");
       if (!next) setFocusAgentId(null);
       setCenterView("chat");
     } else if (name === "chat.voice") {
       if (typeof action.enabled === "boolean") {
         setVoiceEnabled(action.enabled);
         voiceEnabledRef.current = action.enabled;
-        localStorage.setItem("agentVoiceEnabled", action.enabled ? "1" : "0");
+        writeStorage("agentVoiceEnabled", action.enabled ? "1" : "0");
         if (!action.enabled) stopSpeech();
       }
       if (action.mode === "browser" || action.mode === "server" || action.mode === "cloud") {
         setVoiceMode(action.mode);
         voiceModeRef.current = action.mode;
-        localStorage.setItem("agentVoiceMode", action.mode);
+        writeStorage("agentVoiceMode", action.mode);
       }
     } else if (name === "agent.focus") {
       const agentId = String(action.agentId || "");
@@ -267,7 +268,7 @@ export default function App() {
         setHiddenAgents((previous) => {
           const next = new Set(previous);
           action.visible ? next.delete(agentId) : next.add(agentId);
-          localStorage.setItem("hiddenAgents", JSON.stringify([...next]));
+          writeStorage("hiddenAgents", JSON.stringify([...next]));
           return next;
         });
       }
@@ -319,7 +320,7 @@ export default function App() {
   function toggleVn() {
     setVnMode((v) => {
       const next = !v;
-      localStorage.setItem("vnMode", next ? "1" : "0");
+      writeStorage("vnMode", next ? "1" : "0");
       if (!next) setFocusAgentId(null); // 일반 채팅으로 나가면 포커스 해제
       return next;
     });
@@ -329,7 +330,7 @@ export default function App() {
     setVoiceEnabled((v) => {
       const next = !v;
       voiceEnabledRef.current = next;
-      localStorage.setItem("agentVoiceEnabled", next ? "1" : "0");
+      writeStorage("agentVoiceEnabled", next ? "1" : "0");
       if (next) {
         // 무료 브라우저 읽기라면 목소리 목록을 미리 로드(첫 발화 지연 방지).
         if (voiceModeRef.current === "browser") ensureVoicesLoaded().catch(() => {});
@@ -346,7 +347,7 @@ export default function App() {
       const order: VoiceMode[] = ["browser", "server", "cloud"];
       const next = order[(order.indexOf(m) + 1) % order.length];
       voiceModeRef.current = next;
-      localStorage.setItem("agentVoiceMode", next);
+      writeStorage("agentVoiceMode", next);
       stopSpeech(); // 방식이 바뀌면 진행 중 낭독은 정리.
       if (next === "browser") ensureVoicesLoaded().catch(() => {});
       return next;
@@ -675,7 +676,7 @@ export default function App() {
   function clearFocus() {
     setFocusAgentId(null);
     setVnMode(false);
-    localStorage.setItem("vnMode", "0");
+    writeStorage("vnMode", "0");
     setCenterView("chat");
   }
 
@@ -686,7 +687,7 @@ export default function App() {
     }
     setFocusAgentId(agentId);
     setVnMode(true);
-    localStorage.setItem("vnMode", "1");
+    writeStorage("vnMode", "1");
     setCenterView("chat");
   }
 

@@ -29,6 +29,7 @@ import {
   type AgentVideoSpec,
 } from "../remotion/spec";
 import type { SkillJob } from "../lib/skillJobs";
+import { readStorage, removeStorage, writeStorage } from "../lib/safeStorage";
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
 const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
@@ -49,7 +50,7 @@ export interface AgentVideoArchiveStatus {
 
 const loadSavedSpec = () => {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = readStorage(STORAGE_KEY);
     return saved ? normalizeAgentVideoSpec(JSON.parse(saved)) : defaultAgentVideoSpec;
   } catch {
     return defaultAgentVideoSpec;
@@ -109,11 +110,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const skillJobPollingRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(spec)); } catch { /* 저장 실패는 프리뷰를 막지 않는다. */ }
+    writeStorage(STORAGE_KEY, JSON.stringify(spec));
   }, [spec]);
 
   useEffect(() => {
-    const savedJobId = String(localStorage.getItem(SKILL_JOB_STORAGE_KEY) || "");
+    const savedJobId = readStorage(SKILL_JOB_STORAGE_KEY);
     if (!savedJobId) return;
     meetingLockedRef.current = true;
     setMeetingStatus("running");
@@ -185,7 +186,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         idempotencyKey: `manual-${crypto.randomUUID()}`,
         options: { durationSec, aspectRatio, audience, tone, style },
       });
-      localStorage.setItem(SKILL_JOB_STORAGE_KEY, result.job.id);
+      writeStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
       await restoreSkillJob(result.job.id, controller.signal);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -205,16 +206,16 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       return;
     }
     if (job.status === "failed") {
-      localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+      removeStorage(SKILL_JOB_STORAGE_KEY);
       throw new Error(job.error?.message || "인포그래픽 제작에 실패했습니다.");
     }
     if (job.status === "cancelled") {
-      localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+      removeStorage(SKILL_JOB_STORAGE_KEY);
       throw new Error("인포그래픽 제작이 취소되었습니다.");
     }
     if (!job.workItemId) throw new Error("완료된 인포그래픽의 회사 업무 결과를 찾지 못했습니다.");
     const work = await getCompanyWorkItem(job.workItemId);
-    localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+    removeStorage(SKILL_JOB_STORAGE_KEY);
     await openWork(work, job.providerUsage?.renderMode !== "server");
   }
 
@@ -226,7 +227,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const job = await approveCompanySkillJob(pendingApproval.id, decision);
       setPendingApproval(null);
       if (decision === "rejected" || job.status === "cancelled") {
-        localStorage.removeItem(SKILL_JOB_STORAGE_KEY);
+        removeStorage(SKILL_JOB_STORAGE_KEY);
         setMeetingStatus("idle");
         return;
       }
