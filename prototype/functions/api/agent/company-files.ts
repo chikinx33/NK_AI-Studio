@@ -256,9 +256,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const action = String(body.action || "").trim();
     if (action === "mkdir") {
       const path = normalizePath(body.path, false);
-      await ensureDestinationAvailable(ctx, rootPrefix, path);
+      const existing = await resolveObjects(ctx, rootPrefix, path);
+      if (existing) {
+        if (existing.kind === "folder" && body.existOk === true) {
+          return send({ ok: true, created: false, entry: { kind: "folder", name: baseName(path), path } }, 200, origin);
+        }
+        return send({ error: `'${path}' 경로에 이미 파일 또는 폴더가 있습니다.` }, 409, origin);
+      }
       await uploadObject(ctx, `${rootPrefix}${path}/${FOLDER_MARKER}`, new ArrayBuffer(0), "application/x-directory");
-      return send({ ok: true, entry: { kind: "folder", name: baseName(path), path } }, 201, origin);
+      return send({ ok: true, created: true, entry: { kind: "folder", name: baseName(path), path } }, 201, origin);
     }
     if (action === "write") {
       const path = normalizePath(body.path, false);

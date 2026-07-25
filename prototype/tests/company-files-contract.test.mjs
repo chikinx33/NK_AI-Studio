@@ -24,6 +24,8 @@ test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제�
   assert.match(source, /copyObject/);
   assert.match(source, /export const onRequestDelete/);
   assert.match(source, /폴더를 자기 하위 경로로 복사하거나 이동할 수 없습니다/);
+  assert.match(source, /existing\.kind === "folder" && body\.existOk === true/);
+  assert.match(source, /created: false/);
 });
 
 test("내 파일 화면은 업로드·복사·이동·이름 변경·삭제와 경로 탐색을 제공한다", async () => {
@@ -47,7 +49,7 @@ test("내 파일 화면은 업로드·복사·이동·이름 변경·삭제와 �
   assert.match(api, /moveCompanyFile/);
 });
 
-test("모든 에이전트는 회사 파일 조회 도구를 공유하고 변경은 승인 게이트를 거친다", async () => {
+test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉시 검증하며 위험 변경은 승인받는다", async () => {
   const [shared, orchestrator, app, approvals] = await Promise.all([
     read("prototype/functions/api/agent/_shared.ts"),
     read("prototype/functions/api/agent/_orchestrator.ts"),
@@ -56,10 +58,16 @@ test("모든 에이전트는 회사 파일 조회 도구를 공유하고 변경�
   ]);
   assert.match(shared, /company_files_list:[^\n]+kind: "read"/);
   assert.match(shared, /company_files_read:[^\n]+kind: "read"/);
-  for (const tool of ["company_files_write", "company_files_mkdir", "company_files_copy", "company_files_move", "company_files_delete"]) {
+  assert.match(shared, /company_files_mkdir:[^\n]+kind: "local"/);
+  assert.match(shared, /runCompanyFilesMkdirTool[\s\S]+existOk: true[\s\S]+verified: true/);
+  for (const tool of ["company_files_write", "company_files_copy", "company_files_move", "company_files_delete"]) {
     assert.match(shared, new RegExp(`${tool}:[^\\n]+kind: "external", gate: true`));
     assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`));
   }
+  assert.match(orchestrator, /\[\[RUN: company_files_mkdir/);
+  assert.match(orchestrator, /inferCompanyFolderCreateRun/);
+  assert.match(orchestrator, /result\.runs\.push\(inferred\)/);
+  assert.match(orchestrator, /company_files\.view[\s\S]+output\?\.parentPath/);
   assert.match(orchestrator, /"company_files\.view", "company_files\.refresh"/);
   assert.match(app, /name\.startsWith\("company_files\."\)/);
   assert.match(approvals, /dispatchUiAction\(\{ action: "company_files\.refresh" \}\)/);

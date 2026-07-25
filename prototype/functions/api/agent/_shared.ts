@@ -1733,7 +1733,12 @@ async function runCompanyFilesWriteTool(input: any, ctx: ToolContext): Promise<a
 async function runCompanyFilesMkdirTool(input: any, ctx: ToolContext): Promise<any> {
   const path = String(input?.path || input?.folder || "").trim();
   if (!path) throw new Error("만들 회사 폴더 경로(path)가 필요해요.");
-  return { kind: "company_files_mkdir", ...(await callInternalJson(ctx, "/api/agent/company-files", { body: { action: "mkdir", path } })) };
+  const created = await callInternalJson(ctx, "/api/agent/company-files", { body: { action: "mkdir", path, existOk: true } });
+  const parent = path.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+  const listed = await callInternalJson(ctx, `/api/agent/company-files${parent ? `?path=${encodeURIComponent(parent)}` : ""}`);
+  const verified = Array.isArray(listed?.entries) && listed.entries.some((entry: any) => entry?.kind === "folder" && entry?.path === created?.entry?.path);
+  if (!verified) throw new Error(`'${path}' 폴더를 생성했지만 목록에서 확인하지 못했습니다.`);
+  return { kind: "company_files_mkdir", ...created, verified: true, parentPath: parent };
 }
 
 async function runCompanyFilesTransferTool(action: "copy" | "move", input: any, ctx: ToolContext): Promise<any> {
@@ -2674,7 +2679,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   company_files_list: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesListTool },
   company_files_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesReadTool },
   company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesWriteTool },
-  company_files_mkdir: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesMkdirTool },
+  company_files_mkdir: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "local", run: runCompanyFilesMkdirTool },
   company_files_copy: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("copy", input, ctx) },
   company_files_move: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("move", input, ctx) },
   company_files_delete: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesDeleteTool },

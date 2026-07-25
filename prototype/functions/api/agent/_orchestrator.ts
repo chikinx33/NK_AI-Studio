@@ -168,7 +168,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → AI 회사 '내 파일' 폴더와 파일 목록 조회. 파일 위치를 모르면 먼저 실행.`,
     company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 내 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽음(1MB 이하). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
     company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 내 파일에 텍스트 파일을 생성하거나 덮어씀. 사람 승인 후 실행.`,
-    company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 내 파일에 폴더 생성. 사람 승인 후 실행.`,
+    company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 내 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
     company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
@@ -317,7 +317,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 
 ## 🛠️ 직원별 실행 도구 (이 작업이 오면 반드시 그 직원에게 [[CALL]] 위임)
 ${teamToolMap}
-⚠️ 당신(코어)은 외부 도구 실행 권한이 없습니다. 특히 "달력/캘린더/일정/메일/Gmail 확인·조회·추가"는 전부 싱크(sync) 담당이에요. 사용자가 이런 걸 요청하면 "제가 직접 못 한다"거나 "시켜드릴까요?"라고 되묻지 말고, 곧바로 [[CALL: sync | 구체적 지시]]로 싱크를 호출해 처리하세요.`
+⚠️ 위 담당표에서 코어에게도 공유된 도구(특히 company_files_* 회사 파일 도구)는 코어가 직접 실행합니다. 그 밖의 외부 도구는 담당 직원에게 위임합니다. 특히 "달력/캘린더/일정/메일/Gmail 확인·조회·추가"는 전부 싱크(sync) 담당이에요. 사용자가 이런 걸 요청하면 "제가 직접 못 한다"거나 "시켜드릴까요?"라고 되묻지 말고, 곧바로 [[CALL: sync | 구체적 지시]]로 싱크를 호출해 처리하세요.`
     : "";
 
   const uiControlBlock = agentId === "core" ? `
@@ -714,6 +714,26 @@ function extractMarkers(raw: string): SpeakResult {
   return { text, calls, runs, knows, projects, skills, cancels, uiActions };
 }
 
+function hasCompanyFileMutationIntent(text: string): boolean {
+  return /(내\s*파일|회사\s*파일|업무\s*(?:페이지|탐색기)|파일|폴더)/.test(text)
+    && /(만들|생성|작성|저장|복사|이동|옮기|이름\s*변경|삭제|지우)/.test(text);
+}
+
+/** 명시적인 따옴표 폴더명은 모델이 RUN 마커를 빠뜨려도 안전하게 복구한다. */
+function inferCompanyFolderCreateRun(text: string): { tool: string; reason: string } | null {
+  if (!/(폴더)/.test(text) || !/(만들|생성|추가)/.test(text) || /(삭제|지우|복사|이동|옮기)/.test(text)) return null;
+  const patterns = [
+    /["“'‘]([^"”'’\r\n]{1,120})["”'’]\s*(?:이름(?:으)?로|라는\s*(?:이름(?:으)?로)?)/g,
+    /["“'‘]([^"”'’\r\n]{1,120})["”'’]\s*폴더/g,
+  ];
+  for (const pattern of patterns) {
+    const matches = [...text.matchAll(pattern)];
+    const path = String(matches.at(-1)?.[1] || "").trim();
+    if (path) return { tool: "company_files_mkdir", reason: JSON.stringify({ path }) };
+  }
+  return null;
+}
+
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
 export function resolveAgentId(raw: string): string | undefined {
   if (!raw) return undefined;
@@ -786,6 +806,35 @@ export async function speak(
   }
   const result = extractMarkers(raw);
 
+  // 회사 파일 변경은 말뿐인 완료 보고가 되면 안 된다. 특히 따옴표로 폴더명을 준 생성 명령은
+  // 모델이 RUN 마커를 빠뜨려도 서버가 같은 턴에 결정적으로 복구한다.
+  const companyFileMutationIntent = hasCompanyFileMutationIntent(`${instruction}\n${result.text}`);
+  if (companyFileMutationIntent && !result.runs.some((run) => run.tool.startsWith("company_files_"))) {
+    const inferred = inferCompanyFolderCreateRun(instruction);
+    const inferredTool = inferred ? AGENT_TOOLS[inferred.tool] : null;
+    if (inferred && inferredTool && toolOwnedBy(inferredTool, agentId)) result.runs.push(inferred);
+  }
+
+  // 따옴표 없이 지시했거나 복사·이동·삭제·작성인 경우에는 임의로 경로를 추론하지 않고,
+  // 같은 모델에게 실제 회사 파일 RUN 마커만 한 번 더 요구한다.
+  if (companyFileMutationIntent && !result.runs.some((run) => run.tool.startsWith("company_files_"))) {
+    const fixRaw = await callClaude(
+      env,
+      system,
+      [
+        { role: "user", content: userContent },
+        { role: "assistant", content: raw },
+        { role: "user", content: "회사 파일·폴더 변경을 완료한다고 말했지만 실제 실행 RUN 마커가 빠졌어요. 원래 지시를 실행할 company_files_write/company_files_mkdir/company_files_copy/company_files_move/company_files_delete 중 정확한 RUN 마커 한 줄만 출력하세요. 경로를 확정할 수 없으면 빈 줄로 답하세요. 설명이나 완료 보고는 쓰지 마세요." },
+      ],
+      { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: 300, resolvedAuth: opts.resolvedAuth }
+    ).catch(() => "");
+    const extra = extractMarkers(fixRaw);
+    for (const run of extra.runs) {
+      const tool = AGENT_TOOLS[run.tool];
+      if (run.tool.startsWith("company_files_") && tool && toolOwnedBy(tool, agentId)) result.runs.push(run);
+    }
+  }
+
   // ── 한 번에 실행 보정 ─────────────────────────────────────────────────────────
   // 문제: 모델이 "바꿀게요/반영할게요"처럼 변경을 말로만 하고 마커를 빠뜨리면 그 턴이 헛돈다
   //       (사용자가 "바꿨어?"라고 다시 물어야 그제서야 마커를 출력 → 한 번에 안 됨).
@@ -794,7 +843,7 @@ export async function speak(
   if (opts.sql && opts.userId) {
     const claimedChange = /(바꿨|바꿀게|바꾸겠|수정했|수정할게|수정하겠|변경했|변경할게|변경하겠|반영했|반영할게|반영하겠|등록했|등록할게|등록하겠|저장했|저장할게|저장하겠)/.test(result.text);
     const hasDbMarker = result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0 || result.uiActions.length > 0;
-    if (claimedChange && !hasDbMarker) {
+    if (claimedChange && !hasDbMarker && !companyFileMutationIntent) {
       const fixRaw = await callClaude(
         env,
         system,
@@ -853,6 +902,11 @@ export function parseMentions(message: string): string[] {
 
 /** 읽기 도구(gmail_read·calendar_list) 결과를 채팅용 한국어 요약 텍스트로. */
 export function formatReadResult(toolName: string, out: any): string {
+  if (toolName === "company_files_mkdir") {
+    const path = String(out?.entry?.path || "폴더");
+    const state = out?.created === false ? "이미 있어 그대로 확인했어요" : "만들었어요";
+    return `📁 **${path}** 폴더를 ${state}. 실제 목록 확인도 완료했습니다. 업무 페이지의 **내 파일**에서 확인하실 수 있어요.`;
+  }
   if (toolName === "infographic") {
     const work = out?.work;
     const title = String(work?.title || out?.spec?.title || "인포그래픽 제작");
@@ -1184,10 +1238,10 @@ export async function runGroupChat(
 
       // 읽기 전용 조회: 검수 없이 즉시 실행. synthesize 도구(웹 검색 등)는 결과를 모델에 다시 먹여
       // 자연스러운 답을 만들고(툴콜→결과→재추론), 그 외엔 결과를 채팅에 요약 출력.
-      if (tool.kind === "read") {
+      if (tool.kind === "read" || tool.kind === "local") {
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
-          text: `🔎 ${r.tool} 조회 중이에요…`,
+          text: tool.kind === "read" ? `🔎 ${r.tool} 조회 중이에요…` : `🛠️ ${r.tool} 실행 중이에요…`,
         });
         try {
           const output = await tool.run(parsedInput, toolCtx);
@@ -1209,6 +1263,9 @@ export async function runGroupChat(
               userId, conversationId, role: "agent", agentId, name: meta.name,
               text: formatReadResult(r.tool, output),
             });
+            if (r.tool === "company_files_mkdir") {
+              await _emitUiActions([{ action: "company_files.view", path: String(output?.parentPath || "") }], agentId);
+            }
             if (r.tool === "infographic") {
               try { deps.onJobReady?.({ kind: "company_work", work: output?.work, spec: output?.spec, contributions: output?.contributions, renderMode: output?.renderMode }); } catch {}
             }
