@@ -191,15 +191,25 @@ async function deleteObject(ctx: any, objectName: string) {
 }
 
 async function copyObject(ctx: any, source: string, destination: string) {
-  const response = await gcsFetch(ctx, (useBilling) => {
-    const query = useBilling && ctx.userProject ? `?userProject=${encodeURIComponent(ctx.userProject)}` : "";
-    return fetch(
-      `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(source)}/rewriteTo/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(destination)}${query}`,
-      { method: "POST", headers: billingHeaders(ctx, useBilling) },
-    );
-  });
-  const payload: any = await response.json().catch(() => ({}));
-  if (!response.ok || payload.done === false) throw new Error(payload?.error?.message || "파일 복사에 실패했습니다.");
+  let rewriteToken = "";
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const response = await gcsFetch(ctx, (useBilling) => {
+      const params = new URLSearchParams();
+      if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
+      if (rewriteToken) params.set("rewriteToken", rewriteToken);
+      const query = params.size ? `?${params}` : "";
+      return fetch(
+        `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(source)}/rewriteTo/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(destination)}${query}`,
+        { method: "POST", headers: billingHeaders(ctx, useBilling) },
+      );
+    });
+    const payload: any = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.message || "파일 복사에 실패했습니다.");
+    if (payload.done === true) return;
+    rewriteToken = String(payload.rewriteToken || "");
+    if (!rewriteToken) throw new Error("파일 복사 진행 정보를 받지 못했습니다.");
+  }
+  throw new Error("파일 복사 단계가 허용 횟수를 초과했습니다.");
 }
 
 async function resolveObjects(ctx: any, rootPrefix: string, relativePath: string) {

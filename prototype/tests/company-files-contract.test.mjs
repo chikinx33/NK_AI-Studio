@@ -31,6 +31,8 @@ test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제�
   assert.match(source, /action === "write"/);
   assert.match(source, /action === "copy" \|\| action === "move"/);
   assert.match(source, /copyObject/);
+  assert.match(source, /rewriteToken/);
+  assert.match(source, /payload\.done === true/);
   assert.match(source, /export const onRequestDelete/);
   assert.match(source, /폴더를 자기 하위 경로로 복사하거나 이동할 수 없습니다/);
   assert.match(source, /existing\.kind === "folder" && body\.existOk === true/);
@@ -53,6 +55,11 @@ test("통합 업무 파일 화면은 생성 업무와 일반 파일을 한 루�
   assert.match(explorer, />파일 추가<\/button>/);
   assert.match(explorer, /transfer\("copy"\)/);
   assert.match(explorer, /transfer\("move"\)/);
+  assert.match(explorer, /function SelectionCheckbox/);
+  assert.match(explorer, /className="peer sr-only"/);
+  assert.match(explorer, /function duplicateSelected/);
+  assert.match(explorer, /nextDuplicateDestination/);
+  assert.match(explorer, />복제<\/button>/);
   assert.match(explorer, /renameSelected/);
   assert.match(explorer, /deleteCompanyFiles/);
   assert.match(api, /listCompanyFiles/);
