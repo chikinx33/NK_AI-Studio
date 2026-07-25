@@ -1037,6 +1037,7 @@ export interface KnowledgeItem {
   text: string;
   source: string;
   type?: KnowledgeType;
+  createdAt?: string;
 }
 
 export async function getKnowledge(): Promise<KnowledgeItem[]> {

@@ -508,9 +508,14 @@ export async function setProjectStageDb(sql: SqlFn, userId: string, projectId: s
 }
 
 // ── 회사 지식 (전부 user_id 격리) ────────────────────────────────────────────
-export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<{ text: string; source: string; type: string }[]> {
-  const rows = await sql("SELECT text, source, type FROM company_knowledge WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
-  return rows as { text: string; source: string; type: string }[];
+export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<{ text: string; source: string; type: string; createdAt: string }[]> {
+  const rows = await sql("SELECT text, source, type, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
+  return rows.map((row) => ({
+    text: String(row.text || ""),
+    source: String(row.source || ""),
+    type: String(row.type || "사실"),
+    createdAt: row.created_at ? String(row.created_at) : "",
+  }));
 }
 export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<void> {
   // 같은 내용이 이미 있으면 추가하지 않는다(중복 방지).

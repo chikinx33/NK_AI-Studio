@@ -65,7 +65,7 @@ export default function Knowledge({
   const [input, setInput] = useState("");
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null);
   const [filter, setFilter] = useState<TypeKey | null>(null);
-  // 저장 순서(=학습 시간순) 기준 정렬. desc=최신 순(기본), asc=오래된 순
+  // 생성 시각(=학습 시간) 기준 정렬. desc=최신 순(기본), asc=오래된 순
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   // 인라인 편집: 편집 중인 항목의 원본 텍스트 + 편집 버퍼
   const [editing, setEditing] = useState<string | null>(null);
@@ -185,7 +185,16 @@ export default function Knowledge({
   const learned = items.filter((i) => i.source !== "기반");
   // 지식 항목: 전체(null)·규칙·사실·결정에서 표시. "스킬"은 지식 type이 아니므로 자동 제외.
   const visible = items.filter((it) => filter === null || filter === "스킬" ? filter === null : (it.type ?? "사실") === filter);
-  const ordered = sortDir === "desc" ? [...visible].reverse() : visible;
+  // API 반환 순서에 기대지 않고 생성 시각을 직접 비교한다. 구형 데이터처럼 시각이 없거나 같으면
+  // 서버의 최신순 원본 순서를 보조 기준으로 사용해 정렬 토글도 예측 가능하게 유지한다.
+  const ordered = visible
+    .map((item, index) => ({ item, index, createdAt: Date.parse(item.createdAt ?? "") || 0 }))
+    .sort((a, b) => {
+      const timeDelta = sortDir === "desc" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt;
+      if (timeDelta !== 0) return timeDelta;
+      return sortDir === "desc" ? a.index - b.index : b.index - a.index;
+    })
+    .map(({ item }) => item);
   // 스킬 목록을 함께 보일지: 전체(null) 또는 스킬 분류
   const showSkills = filter === null || filter === "스킬";
 
