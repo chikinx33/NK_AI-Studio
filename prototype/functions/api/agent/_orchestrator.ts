@@ -165,6 +165,13 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   // 이 에이전트가 실행 가능한 도구 목록 (AGENT_TOOLS 기준)
   const MY_TOOL_DESCRIPTIONS: Record<string, string> = {
     infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
+    company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → AI 회사 '내 파일' 폴더와 파일 목록 조회. 파일 위치를 모르면 먼저 실행.`,
+    company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 내 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽음(1MB 이하). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
+    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 내 파일에 텍스트 파일을 생성하거나 덮어씀. 사람 승인 후 실행.`,
+    company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 내 파일에 폴더 생성. 사람 승인 후 실행.`,
+    company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
+    company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
+    company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
     image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9"}]]  → 이미지 생성 (Gemini/GPT-4o)`,
     sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
     video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
@@ -237,6 +244,8 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
+    company_files_list: "회사 파일·폴더 목록", company_files_read: "회사 파일 읽기", company_files_write: "회사 파일 작성",
+    company_files_mkdir: "회사 폴더 생성", company_files_copy: "회사 파일·폴더 복사", company_files_move: "회사 파일·폴더 이동", company_files_delete: "회사 파일·폴더 삭제",
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
     gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)", web_fetch: "웹페이지 열람(URL 크롤링·JS 렌더링)",
@@ -330,6 +339,7 @@ ${teamToolMap}
 - 업무 보기: {"action":"work_explorer.view","mode":"cards|list","sort":"newest|oldest|name-asc|name-desc","query":"검색어","scope":"all|title|content"}
 - 업무 열기·이름 변경: {"action":"work_explorer.open","title":"업무명"} / {"action":"work_explorer.rename","kind":"work|folder","title":"기존명","newTitle":"새 이름"}
 - 업무·폴더 삭제: {"action":"work_explorer.delete","kind":"work|folder","title":"이름"} (사람 확인 후 실행)
+- 내 파일 열기·갱신: {"action":"company_files.view","path":"폴더/경로"} / {"action":"company_files.refresh"}. 파일 도구로 변경한 뒤 해당 폴더를 열어 결과를 보여주세요.
 - 직원 관리: {"action":"agent_manager.select","agentId":"pixel"} / {"action":"agent_manager.persona","agentId":"pixel","prompt":"새 페르소나"}
 - 영상: {"action":"video.configure","prompt":"내용","durationSec":30,"aspectRatio":"16:9","audience":"대상","tone":"톤","style":"스타일"} / {"action":"video.run"} / {"action":"video.approval","decision":"approve|reject"} / {"action":"video.render"} / {"action":"video.storage","operation":"open|close|download|delete"}
 - 승인: {"action":"approval.decide","id":"작업ID","decision":"approve|reject"} / {"action":"approval.clear"} (사람 확인 후 실행)
@@ -538,6 +548,7 @@ const UI_ACTION_ALLOWLIST = new Set([
   "agent.focus", "agent.card", "agent.visibility", "agent.order", "skill.view",
   "work.mode", "work.autonomous", "dashboard.calendar", "project.sidebar", "knowledge.view",
   "work_explorer.view", "work_explorer.open", "work_explorer.rename", "work_explorer.delete", "work_explorer.sources",
+  "company_files.view", "company_files.refresh",
   "agent_manager.select", "agent_manager.persona", "agent_manager.voice", "video.configure", "video.run",
   "video.approval", "video.render", "video.storage", "approval.decide", "approval.clear", "result.open", "result.review",
   "result.cancel", "reminder.delete", "settings.open", "settings.mode", "settings.auth_diag", "settings.log",
@@ -1182,10 +1193,11 @@ export async function runGroupChat(
           const output = await tool.run(parsedInput, toolCtx);
           if (tool.synthesize) {
             const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+            const toolResultLimit = r.tool === "company_files_read" ? 20000 : 4500;
             const synth =
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
               `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
-              `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, 4500)}`;
+              `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, toolResultLimit)}`;
             const res2 = await speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
             await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res2.text });
             await _emitUiActions(res2.uiActions, agentId);

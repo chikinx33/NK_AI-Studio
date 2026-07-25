@@ -15,6 +15,7 @@ import {
   getCompanyWorkItem,
   getLocalAgentVideoRenderStatus,
   registerCompanySkillJobArtifacts,
+  setCompanyWorkItemStatus,
   startLocalAgentVideoRender,
   uploadAgentVideoStorageFile,
   waitForCompanySkillJob,
@@ -145,6 +146,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
           void archiveLocalRender(next, renderSpecRef.current);
         } else if (next.status === "error") {
           setArchive({ status: "error", error: next.error || "로컬 렌더링에 실패했습니다." });
+          void updateActiveWorkStatus("error");
           window.clearInterval(timer);
         }
       } catch (caught) {
@@ -155,6 +157,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
           error: message,
         }));
         setArchive({ status: "error", error: message });
+        void updateActiveWorkStatus("error");
         window.clearInterval(timer);
       }
     }, 1500);
@@ -251,11 +254,13 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setRender({ status: "queued", progress: 0 });
     setArchive({ status: "rendering" });
     try {
+      await updateActiveWorkStatus("working");
       setRender(await startLocalAgentVideoRender(targetSpec));
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "로컬 렌더 실패";
       setRender({ status: "error", error: message });
       setArchive({ status: "error", error: message });
+      await updateActiveWorkStatus("error").catch(() => undefined);
     }
   }
 
@@ -329,11 +334,22 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
           { kind: "manifest", fileName: manifestItem.fileName, objectPath: manifestItem.objectName, mimeType: manifestItem.contentType, sizeBytes: manifestItem.size, checksum: manifestChecksum, version, metadata: { lineage: job?.lineage || [] } },
         ]);
       }
+      await updateActiveWorkStatus("completed");
       setArchive({ status: "done", items: [videoItem, sourceItem, reportItem, manifestItem] });
       setStorageRevision((revision) => revision + 1);
     } catch (caught) {
       setArchive({ status: "error", error: caught instanceof Error ? caught.message : "클라우드 저장에 실패했습니다." });
+      await updateActiveWorkStatus("error").catch(() => undefined);
     }
+  }
+
+  async function updateActiveWorkStatus(status: CompanyWorkItem["status"]) {
+    const work = activeWorkRef.current;
+    if (!work?.id || work.status === status) return work;
+    const updated = await setCompanyWorkItemStatus(work.id, status);
+    activeWorkRef.current = updated;
+    setActiveWork(updated);
+    return updated;
   }
 
   async function renderVideo() {

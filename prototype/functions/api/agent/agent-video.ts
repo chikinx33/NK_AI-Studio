@@ -450,7 +450,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const rows = await sql(`
         INSERT INTO company_work_items
           (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
-        VALUES ($1, $2, $3, 'infographic', 'completed', $4, $5, $6::jsonb, now())
+        VALUES ($1, $2, $3, 'infographic', 'working', $4, $5, $6::jsonb, NULL)
         RETURNING *
       `, [
         auth.userId,

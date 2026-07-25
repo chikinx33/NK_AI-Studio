@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 import CollapsibleSection from "./CollapsibleSection";
-import { actionString, useUiAction } from "../lib/uiActions";
+import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -116,8 +116,10 @@ export default function Approvals({
     if (acting[id]) return; // 이미 처리 중이면 무시
     setActing((m) => ({ ...m, [id]: action }));
     try {
+      const target = pending.find((item) => item.id === id);
       const r: any = await (action === "approve" ? approveItem(id) : rejectItem(id));
       await refresh();
+      if (action === "approve" && target?.tool?.startsWith("company_files_")) dispatchUiAction({ action: "company_files.refresh" });
       // alert 팝업 대신 담당 직원(예: 싱크)이 채팅으로 결과를 답하게 한다.
       const raw = r?.message;
       if (raw && onAgentSay) {

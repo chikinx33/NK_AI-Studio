@@ -1706,6 +1706,49 @@ async function callInternalJson(
   return data;
 }
 
+/** AI 회사 공용 파일 공간. 사용자와 모든 직원이 같은 상대 경로를 본다. */
+async function runCompanyFilesListTool(input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || "").trim();
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return { kind: "company_files_list", ...(await callInternalJson(ctx, `/api/agent/company-files${query}`)) };
+}
+
+async function runCompanyFilesReadTool(input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || input?.file || "").trim();
+  if (!path) throw new Error("읽을 회사 파일 경로(path)가 필요해요.");
+  const offset = Math.max(0, Number(input?.offset || 0) || 0);
+  const limit = Math.min(16000, Math.max(1000, Number(input?.limit || 12000) || 12000));
+  return { kind: "company_files_read", ...(await callInternalJson(ctx, `/api/agent/company-files?path=${encodeURIComponent(path)}&read=1&offset=${offset}&limit=${limit}`)) };
+}
+
+async function runCompanyFilesWriteTool(input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || input?.file || "").trim();
+  if (!path) throw new Error("작성할 회사 파일 경로(path)가 필요해요.");
+  if (input?.content === undefined || input?.content === null) throw new Error("파일에 작성할 내용(content)이 필요해요.");
+  return { kind: "company_files_write", ...(await callInternalJson(ctx, "/api/agent/company-files", {
+    body: { action: "write", path, content: String(input.content), contentType: String(input?.contentType || "text/plain; charset=utf-8") },
+  })) };
+}
+
+async function runCompanyFilesMkdirTool(input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || input?.folder || "").trim();
+  if (!path) throw new Error("만들 회사 폴더 경로(path)가 필요해요.");
+  return { kind: "company_files_mkdir", ...(await callInternalJson(ctx, "/api/agent/company-files", { body: { action: "mkdir", path } })) };
+}
+
+async function runCompanyFilesTransferTool(action: "copy" | "move", input: any, ctx: ToolContext): Promise<any> {
+  const source = String(input?.source || "").trim();
+  const destination = String(input?.destination || "").trim();
+  if (!source || !destination) throw new Error("원본(source)과 대상(destination) 경로가 필요해요.");
+  return { kind: `company_files_${action}`, ...(await callInternalJson(ctx, "/api/agent/company-files", { body: { action, source, destination } })) };
+}
+
+async function runCompanyFilesDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const paths = (Array.isArray(input?.paths) ? input.paths : [input?.path]).map((value: any) => String(value || "").trim()).filter(Boolean);
+  if (!paths.length) throw new Error("삭제할 회사 파일 또는 폴더 경로가 필요해요.");
+  return { kind: "company_files_delete", ...(await callInternalJson(ctx, "/api/agent/company-files", { method: "DELETE", body: { paths } })) };
+}
+
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
@@ -2627,6 +2670,14 @@ async function runRemindersListTool(_input: any, ctx: ToolContext): Promise<any>
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 코어가 대화만으로 에이전트 협업→Remotion 명세→업무 등록까지 완료한다.
   infographic: { agentId: "core", kind: "read", run: runInfographicTool },
+  // 회사 공용 파일: 모든 직원이 같은 폴더를 인지한다. 조회는 즉시, 변경은 사람 승인 후 실행한다.
+  company_files_list: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesListTool },
+  company_files_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesReadTool },
+  company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesWriteTool },
+  company_files_mkdir: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesMkdirTool },
+  company_files_copy: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("copy", input, ctx) },
+  company_files_move: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("move", input, ctx) },
+  company_files_delete: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesDeleteTool },
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
   video: { agentId: "pixel", kind: "external", run: runVideoTool },

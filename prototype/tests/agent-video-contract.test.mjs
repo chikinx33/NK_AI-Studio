@@ -120,7 +120,8 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.doesNotMatch(rightMenu, /VideoIcon/);
   assert.doesNotMatch(explorer, /onDoubleClick/);
   assert.match(explorer, /onClick=\{\(\) => openDateFolder\(folderDate\)\}/);
-  assert.match(explorer, /onClick=\{\(\) => onOpenWork\(work\)\}/);
+  assert.match(explorer, /onClick=\{\(\) => openWorkItem\(work\)\}/);
+  assert.match(explorer, /if \(work\.work_type === "infographic"\) onOpenWork\(work\)/);
   assert.match(explorer, /WorkLibraryIcon className="h-10 w-10"/);
   assert.doesNotMatch(explorer, /Company Work Library/);
   assert.match(explorer, /소스 보기/);
@@ -148,7 +149,7 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(explorer, /data-item-menu/);
   assert.match(explorer, /documentMenu/);
   assert.match(explorer, /beginRenameDocument/);
-  assert.doesNotMatch(explorer, /status === "completed" \? "완료"/);
+  assert.match(explorer, /status === "completed" \? "완료"/);
   assert.match(explorer, /이름 변경/);
   assert.match(explorer, /removeDateFolder/);
   assert.match(markdown, /raviok-open-work/);

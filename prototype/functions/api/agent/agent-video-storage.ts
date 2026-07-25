@@ -100,6 +100,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const requestedObject = String(url.searchParams.get("objectName") || "").trim();
     const filterDate = /^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get("date") || "")) ? String(url.searchParams.get("date")) : "";
     const filterWorkId = safeWorkId(String(url.searchParams.get("workId") || ""));
+    const includeSignedUrl = url.searchParams.get("sign") !== "0";
 
     if (requestedObject) {
       if (!requestedObject.startsWith(allowedPrefix)) return send({ error: "허용되지 않은 저장소 경로입니다." }, 400, origin);
@@ -149,13 +150,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           size: Number(item?.size || 0),
           createdAt: String(item?.timeCreated || item?.updated || ""),
           updatedAt: String(item?.updated || ""),
-          signedUrl: await signGcsUrl({
+          ...(includeSignedUrl ? { signedUrl: await signGcsUrl({
             bucket: ctx.bucket,
             object: name,
             clientEmail: ctx.clientEmail,
             privateKeyPem: ctx.privateKeyRaw,
             expiresInSec: 3600,
-          }),
+          }) } : {}),
         });
       }
       pageToken = String(payload?.nextPageToken || "");

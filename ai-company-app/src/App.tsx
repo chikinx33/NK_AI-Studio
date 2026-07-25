@@ -215,7 +215,7 @@ export default function App() {
 
   function handleUiAction(action: UiAction) {
     const name = String(action.action || "");
-    if (name.startsWith("work_explorer.")) setCenterView("works");
+    if (name.startsWith("work_explorer.") || name.startsWith("company_files.")) setCenterView("works");
     else if (name === "dashboard.calendar" || name === "project.sidebar") setCenterView("dashboard");
     else if (name === "skill.view") openKnowledgeCategory("스킬");
     else if (name === "chat.log") {

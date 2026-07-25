@@ -13,10 +13,12 @@ import {
   type CompanyWorkItem,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
+import CompanyFileExplorer from "./CompanyFileExplorer";
 
 type ViewMode = "cards" | "list";
 type SearchScope = "title" | "content" | "all";
 type SortMode = "newest" | "oldest" | "name-asc" | "name-desc";
+type StatusFilter = "all" | CompanyWorkItem["status"];
 
 function koreaDate(value: string) {
   const date = new Date(value);
@@ -114,6 +116,7 @@ async function inChunks<T>(items: T[], size: number, task: (chunk: T[]) => Promi
 }
 
 export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void }) {
+  const [section, setSection] = useState<"works" | "files">("works");
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
@@ -123,6 +126,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   const [viewMode, setViewMode] = useState<ViewMode>(() => window.localStorage.getItem("company-work-view") === "list" ? "list" : "cards");
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     const saved = window.localStorage.getItem("company-work-sort");
     return saved === "oldest" || saved === "name-asc" || saved === "name-desc" ? saved : "newest";
@@ -163,9 +167,10 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   }, [folderMenu, documentMenu]);
 
   const searchTerm = normalized(searchQuery.trim());
+  const filteredItems = useMemo(() => statusFilter === "all" ? items : items.filter((item) => item.status === statusFilter), [items, statusFilter]);
   const dates = useMemo(() => {
     const grouped = new Map<string, CompanyWorkItem[]>();
-    for (const item of items) {
+    for (const item of filteredItems) {
       const dateKey = koreaDate(item.created_at);
       grouped.set(dateKey, [...(grouped.get(dateKey) || []), item]);
     }
@@ -182,8 +187,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       const titleB = folderTitles.get(dateB) || dateB;
       return sortMode === "name-asc" ? titleA.localeCompare(titleB, "ko") : titleB.localeCompare(titleA, "ko");
     });
-  }, [folderTitles, items, searchScope, searchTerm, sortMode]);
-  const datedItems = useMemo(() => items.filter((item) => koreaDate(item.created_at) === date), [date, items]);
+  }, [filteredItems, folderTitles, searchScope, searchTerm, sortMode]);
+  const datedItems = useMemo(() => filteredItems.filter((item) => koreaDate(item.created_at) === date), [date, filteredItems]);
   const currentFolderMatches = searchScope !== "content" && normalized(`${folderTitles.get(date) || date} ${date}`).includes(searchTerm);
   const visibleDatedItems = useMemo(() => (currentFolderMatches ? datedItems : datedItems.filter((work) => workMatches(work, searchTerm, searchScope))).sort((a, b) => {
     if (sortMode === "newest") return b.created_at.localeCompare(a.created_at);
@@ -237,9 +242,6 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     if (!window.confirm(`'${label}' 폴더의 업무 ${works.length}개와 보관된 소스를 모두 삭제할까요?`)) return;
     setFolderMenu(""); setBusy("delete-folder"); setError("");
     try {
-      const stored = await Promise.all(works.map((work) => listAgentVideoStorage({ date: dateKey, workId: work.id })));
-      const objectNames = stored.flatMap((result) => result.items.map((item) => item.objectName));
-      await inChunks(objectNames, 100, (chunk) => deleteAgentVideoStorageFiles(chunk));
       await inChunks(works.map((work) => work.id), 100, (chunk) => deleteCompanyWorkItems(chunk));
       await deleteCompanyWorkFolderMeta(dateKey);
       if (date === dateKey) setDate("");
@@ -257,12 +259,15 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     finally { setBusy(""); }
   }
 
+  function openWorkItem(work: CompanyWorkItem) {
+    if (work.work_type === "infographic") onOpenWork(work);
+    else void openSources(work);
+  }
+
   async function removeWork(work: CompanyWorkItem) {
     if (!window.confirm(`'${work.title}' 업무와 보관된 소스를 모두 삭제할까요?`)) return;
     setBusy("delete-work"); setError("");
     try {
-      const stored = await listAgentVideoStorage({ date: koreaDate(work.created_at), workId: work.id });
-      await inChunks(stored.items.map((item) => item.objectName), 100, (chunk) => deleteAgentVideoStorageFiles(chunk));
       await deleteCompanyWorkItems([work.id]);
       setDocumentMenu(""); await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "업무 삭제에 실패했습니다."); }
@@ -310,7 +315,12 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   }
 
   useUiAction((action) => {
+    if (action.action === "company_files.view" || action.action === "company_files.refresh") {
+      setSection("files");
+      return;
+    }
     if (action.action === "work_explorer.view") {
+      setSection("works");
       const mode = actionString(action, "mode");
       const sort = actionString(action, "sort");
       const scope = actionString(action, "scope");
@@ -328,7 +338,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       const work = items.find((item) => item.id === query || item.title === query);
       if (!work) return;
       if (actionString(action, "kind") === "sources") void openSources(work);
-      else onOpenWork(work);
+      else openWorkItem(work);
       return;
     }
 
@@ -375,6 +385,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     }
   }, "work_explorer");
 
+  if (section === "files") return <CompanyFileExplorer onShowWorks={() => setSection("works")} />;
+
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";
 
   return (
@@ -385,6 +397,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-[#0b1018] px-5 py-2.5">
         <button onClick={back} disabled={!date} className="rounded-md border border-edge px-2.5 py-1.5 text-xs text-gray-300 disabled:opacity-30">← 뒤로</button>
         <button onClick={() => { setDate(""); setSourceWork(null); }} className="text-xs font-bold text-emerald-300">업무</button>
+        <button type="button" onClick={() => setSection("files")} className="rounded-lg border border-edge px-3 py-1.5 text-xs font-bold text-sky-300">내 파일</button>
         {date && <><span className="text-gray-700">›</span><button onClick={() => setSourceWork(null)} className="max-w-48 truncate text-xs text-gray-300">{folderTitles.get(date) || date}</button></>}
         {sourceWork && <><span className="text-gray-700">›</span><span className="max-w-64 truncate text-xs text-gray-300">{sourceWork.title}</span><span className="text-gray-700">›</span><span className="text-xs text-gray-500">소스</span></>}
         <div className="ml-auto flex items-center gap-2">
@@ -404,8 +417,11 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
             <option value="name-asc" className="bg-[#111722]">이름순 A–Z</option>
             <option value="name-desc" className="bg-[#111722]">이름순 Z–A</option>
           </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="h-9 rounded-lg border border-edge bg-[#090d13] px-2 text-[11px] text-gray-300 outline-none hover:border-gray-600" aria-label="업무 상태">
+            <option value="all" className="bg-[#111722]">전체 상태</option><option value="working" className="bg-[#111722]">진행 중</option><option value="completed" className="bg-[#111722]">완료</option><option value="error" className="bg-[#111722]">오류</option>
+          </select>
           <ViewModeControl value={viewMode} onChange={setViewMode} />
-          {sourceWork && <><button onClick={() => onOpenWork(sourceWork)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button><button onClick={() => void downloadSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-200 disabled:opacity-30">다운로드</button><button onClick={() => void removeSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300 disabled:opacity-30">삭제</button></>}
+          {sourceWork && <>{sourceWork.work_type === "infographic" && <button onClick={() => onOpenWork(sourceWork)} className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">업무 열기</button>}<button onClick={() => void downloadSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-200 disabled:opacity-30">다운로드</button><button onClick={() => void removeSources()} disabled={!selectedSources.size || !!busy} className="rounded-lg border border-red-900 px-3 py-1.5 text-xs text-red-300 disabled:opacity-30">삭제</button></>}
           {!sourceWork && <button onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:bg-edge disabled:opacity-40">새로고침</button>}
         </div>
       </div>
@@ -414,9 +430,9 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
         {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">업무 폴더를 불러오는 중...</div> : sourceWork ? (
           visibleSources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleSources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleSources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 업무에 저장된 소스가 없습니다."}</div>
         ) : date ? (
-          visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => onOpenWork(work)} onKeyDown={(event) => { if (event.key === "Enter") onOpenWork(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
+          visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} /> : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
-            <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
+            <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${work.status === "completed" ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{work.status === "completed" ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
               {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}

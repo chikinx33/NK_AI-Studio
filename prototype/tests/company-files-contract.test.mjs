@@ -1,0 +1,95 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
+
+test("회사 파일 API는 사용자별 GCS 경로와 안전한 상대 경로를 사용한다", async () => {
+  const source = await read("prototype/functions/api/agent/company-files.ts");
+  assert.match(source, /authorizeRequest\(request, env\)/);
+  assert.match(source, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
+  assert.match(source, /\/company-files\//);
+  assert.match(source, /function normalizePath/);
+  assert.match(source, /part === "\.\."/);
+  assert.match(source, /MAX_UPLOAD_BYTES = 100 \* 1024 \* 1024/);
+  assert.match(source, /MAX_TEXT_BYTES = 1024 \* 1024/);
+  assert.match(source, /if \(uploadPath !== null\)/);
+});
+
+test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제를 제공한다", async () => {
+  const source = await read("prototype/functions/api/agent/company-files.ts");
+  assert.match(source, /action === "mkdir"/);
+  assert.match(source, /action === "write"/);
+  assert.match(source, /action === "copy" \|\| action === "move"/);
+  assert.match(source, /copyObject/);
+  assert.match(source, /export const onRequestDelete/);
+  assert.match(source, /폴더를 자기 하위 경로로 복사하거나 이동할 수 없습니다/);
+});
+
+test("내 파일 화면은 업로드·복사·이동·이름 변경·삭제와 경로 탐색을 제공한다", async () => {
+  const [explorer, workExplorer, api] = await Promise.all([
+    read("ai-company-app/src/components/CompanyFileExplorer.tsx"),
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+  ]);
+  assert.match(workExplorer, /CompanyFileExplorer/);
+  assert.match(workExplorer, />내 파일<\/button>/);
+  assert.match(explorer, /type="file" multiple/);
+  assert.match(explorer, />파일 추가<\/button>/);
+  assert.match(explorer, /transfer\("copy"\)/);
+  assert.match(explorer, /transfer\("move"\)/);
+  assert.match(explorer, /renameSelected/);
+  assert.match(explorer, /deleteCompanyFiles/);
+  assert.match(api, /listCompanyFiles/);
+  assert.match(api, /uploadCompanyFile/);
+  assert.match(api, /createCompanyFolder/);
+  assert.match(api, /copyCompanyFile/);
+  assert.match(api, /moveCompanyFile/);
+});
+
+test("모든 에이전트는 회사 파일 조회 도구를 공유하고 변경은 승인 게이트를 거친다", async () => {
+  const [shared, orchestrator, app, approvals] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("ai-company-app/src/App.tsx"),
+    read("ai-company-app/src/components/Approvals.tsx"),
+  ]);
+  assert.match(shared, /company_files_list:[^\n]+kind: "read"/);
+  assert.match(shared, /company_files_read:[^\n]+kind: "read"/);
+  for (const tool of ["company_files_write", "company_files_mkdir", "company_files_copy", "company_files_move", "company_files_delete"]) {
+    assert.match(shared, new RegExp(`${tool}:[^\\n]+kind: "external", gate: true`));
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`));
+  }
+  assert.match(orchestrator, /"company_files\.view", "company_files\.refresh"/);
+  assert.match(app, /name\.startsWith\("company_files\."\)/);
+  assert.match(approvals, /dispatchUiAction\(\{ action: "company_files\.refresh" \}\)/);
+});
+
+test("업무 상태는 명세 생성부터 렌더·보관 완료까지 분리된다", async () => {
+  const [create, browserArchive, serverArchive, explorer] = await Promise.all([
+    read("prototype/functions/api/agent/agent-video.ts"),
+    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("prototype/functions/api/agent/skill-jobs/[jobId]/render-output.ts"),
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+  ]);
+  assert.match(create, /'infographic', 'working'/);
+  assert.match(browserArchive, /updateActiveWorkStatus\("completed"\)/);
+  assert.match(browserArchive, /updateActiveWorkStatus\("error"\)/);
+  assert.match(serverArchive, /company_work_items SET status = 'completed'/);
+  assert.match(serverArchive, /company_work_items SET status = 'error'/);
+  assert.match(explorer, /전체 상태/);
+  assert.match(explorer, /진행 중/);
+});
+
+test("업무 삭제는 서버가 산출물과 SkillJob 정리를 함께 수행한다", async () => {
+  const [endpoint, explorer, storage] = await Promise.all([
+    read("prototype/functions/api/agent/work-items.ts"),
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("prototype/functions/api/agent/agent-video-storage.ts"),
+  ]);
+  assert.match(endpoint, /agent-video-storage/);
+  assert.match(endpoint, /DELETE FROM company_skill_jobs/);
+  assert.match(endpoint, /DELETE FROM company_work_items/);
+  assert.doesNotMatch(explorer, /async function removeWork[\s\S]{0,500}deleteAgentVideoStorageFiles/);
+  assert.match(storage, /includeSignedUrl/);
+});

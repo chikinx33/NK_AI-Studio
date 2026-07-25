@@ -117,6 +117,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
         },
         resetExecutionLease: true,
       });
+      if (job.work_item_id) {
+        await sql("UPDATE company_work_items SET status = 'error', updated_at = now() WHERE id = $1 AND user_id = $2", [job.work_item_id, job.user_id]);
+      }
       await appendCompanySkillJobEvent(sql, {
         jobId: job.id,
         userId: job.user_id,
@@ -214,6 +217,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
       qualityResults,
       resetExecutionLease: true,
     }) as CompanySkillJobRow;
+    await sql("UPDATE company_work_items SET status = 'completed', completed_at = COALESCE(completed_at, now()), updated_at = now() WHERE id = $1 AND user_id = $2", [job.work_item_id, job.user_id]);
     await appendCompanySkillJobEvent(sql, {
       jobId: job.id,
       userId: job.user_id,

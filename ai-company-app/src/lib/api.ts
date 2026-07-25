@@ -202,6 +202,17 @@ export async function renameCompanyWorkItem(id: string, title: string): Promise<
   return data.item as CompanyWorkItem;
 }
 
+export async function setCompanyWorkItemStatus(id: string, status: CompanyWorkItem["status"]): Promise<CompanyWorkItem> {
+  const res = await fetch("/api/agent/work-items", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, status }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "회사 업무 상태를 변경하지 못했어요.");
+  return data.item as CompanyWorkItem;
+}
+
 export interface CompanyWorkFolder {
   date_key: string;
   title: string;
@@ -233,6 +244,80 @@ export async function deleteCompanyWorkFolderMeta(dateKey: string): Promise<void
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "회사 업무 폴더 정보를 삭제하지 못했어요.");
+}
+
+export interface CompanyFileEntry {
+  kind: "folder" | "file";
+  name: string;
+  path: string;
+  parentPath: string;
+  contentType?: string;
+  size?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+async function readCompanyFileResponse(res: Response, fallback: string): Promise<any> {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || fallback);
+  return data;
+}
+
+export async function listCompanyFiles(path = ""): Promise<{ path: string; parentPath: string; entries: CompanyFileEntry[] }> {
+  const query = new URLSearchParams();
+  if (path) query.set("path", path);
+  const res = await fetch(`/api/agent/company-files${query.size ? `?${query}` : ""}`);
+  const data = await readCompanyFileResponse(res, "회사 파일을 불러오지 못했어요.");
+  return { path: String(data.path || ""), parentPath: String(data.parentPath || ""), entries: Array.isArray(data.entries) ? data.entries : [] };
+}
+
+export async function uploadCompanyFile(path: string, file: Blob): Promise<CompanyFileEntry> {
+  const res = await fetch(`/api/agent/company-files?path=${encodeURIComponent(path)}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  const data = await readCompanyFileResponse(res, "파일을 업로드하지 못했어요.");
+  return data.entry as CompanyFileEntry;
+}
+
+export async function createCompanyFolder(path: string): Promise<CompanyFileEntry> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mkdir", path }),
+  });
+  const data = await readCompanyFileResponse(res, "폴더를 만들지 못했어요.");
+  return data.entry as CompanyFileEntry;
+}
+
+export async function copyCompanyFile(source: string, destination: string): Promise<void> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "copy", source, destination }),
+  });
+  await readCompanyFileResponse(res, "파일 또는 폴더를 복사하지 못했어요.");
+}
+
+export async function moveCompanyFile(source: string, destination: string): Promise<void> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", source, destination }),
+  });
+  await readCompanyFileResponse(res, "파일 또는 폴더를 이동하지 못했어요.");
+}
+
+export async function deleteCompanyFiles(paths: string[]): Promise<number> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths }),
+  });
+  const data = await readCompanyFileResponse(res, "파일 또는 폴더를 삭제하지 못했어요.");
+  return Number(data.deletedCount || 0);
+}
+
+export async function downloadCompanyFile(entry: CompanyFileEntry): Promise<Blob> {
+  const res = await fetch(`/api/agent/company-files?path=${encodeURIComponent(entry.path)}&download=1`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "파일을 다운로드하지 못했어요.");
+  }
+  return res.blob();
 }
 
 export async function createAgentVideo(input: CreateAgentVideoInput): Promise<CreateAgentVideoResult> {
@@ -292,7 +377,8 @@ export async function listAgentVideoStorage(filter: { date?: string; workId?: st
   const query = new URLSearchParams();
   if (filter.date) query.set("date", filter.date);
   if (filter.workId) query.set("workId", filter.workId);
-  const res = await fetch(`/api/agent/agent-video-storage${query.size ? `?${query.toString()}` : ""}`);
+  query.set("sign", "0");
+  const res = await fetch(`/api/agent/agent-video-storage?${query.toString()}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "Agent Video 저장소를 불러오지 못했어요.");
   return {
