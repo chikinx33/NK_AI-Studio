@@ -118,6 +118,10 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(rightMenu, /회사 업무 탐색기/);
   assert.match(rightMenu, /FolderIcon/);
   assert.doesNotMatch(rightMenu, /VideoIcon/);
+  assert.match(
+    rightMenu,
+    /title="채팅"[\s\S]*title="홈 \(대시보드\)"[\s\S]*title="회사 업무 탐색기"[\s\S]*title="회사 지식/,
+  );
   assert.doesNotMatch(explorer, /onDoubleClick/);
   assert.match(explorer, /onClick=\{\(\) => openDateFolder\(folderDate\)\}/);
   assert.match(explorer, /onClick=\{\(\) => openWorkItem\(work\)\}/);

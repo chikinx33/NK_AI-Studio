@@ -121,20 +121,20 @@ export default function RightMenu({
 }: Props) {
   return (
     <div className="mb-3 flex items-center gap-1 rounded-xl border border-edge bg-panel p-1">
+      <IconBtn active={centerView === "chat"} title="채팅" onClick={onChat}>
+        <MessagesSquareIcon className="h-4 w-4" />
+      </IconBtn>
       <IconBtn active={centerView === "dashboard"} title="홈 (대시보드)" onClick={onHome}>
         <HouseIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "chat"} title="채팅" onClick={onChat}>
-        <MessagesSquareIcon className="h-4 w-4" />
+      <IconBtn active={centerView === "works" || centerView === "video"} title="회사 업무 탐색기" onClick={onWorks}>
+        <FolderIcon className="h-4 w-4" />
       </IconBtn>
       <IconBtn active={centerView === "knowledge"} title="회사 지식 (그래프 + 리스트)" onClick={onKnowledge}>
         <BrainIcon className="h-4 w-4" />
       </IconBtn>
       <IconBtn active={centerView === "agents"} title="직원 관리 (페르소나·규칙)" onClick={onAgents}>
         <UsersIcon className="h-4 w-4" />
-      </IconBtn>
-      <IconBtn active={centerView === "works" || centerView === "video"} title="회사 업무 탐색기" onClick={onWorks}>
-        <FolderIcon className="h-4 w-4" />
       </IconBtn>
       <div className="ml-auto" />
       <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
