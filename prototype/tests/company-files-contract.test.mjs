@@ -67,6 +67,8 @@ test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉�
   assert.match(orchestrator, /\[\[RUN: company_files_mkdir/);
   assert.match(orchestrator, /inferCompanyFolderCreateRun/);
   assert.match(orchestrator, /result\.runs\.push\(inferred\)/);
+  assert.match(orchestrator, /await runTools\(res2\.runs, agentId, depth \+ 1, seenRuns\)/);
+  assert.match(orchestrator, /if \(seenRuns\.has\(runKey\)\) continue/);
   assert.match(orchestrator, /company_files\.view[\s\S]+output\?\.parentPath/);
   assert.match(orchestrator, /"company_files\.view", "company_files\.refresh"/);
   assert.match(app, /name\.startsWith\("company_files\."\)/);

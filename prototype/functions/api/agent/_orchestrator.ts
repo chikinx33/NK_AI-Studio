@@ -1229,8 +1229,16 @@ export async function runGroupChat(
   // 직원이 찍은 RUN 마커 → 본인 도구만 실행.
   //  - 읽기 도구(kind=read, 예: gmail_read·calendar_list): 검수 게이트 없이 결과를 채팅에 바로 출력.
   //  - 생성/외부 도구(image·video·calendar_create 등): 잡+검수 패널 흐름 유지.
-  const runTools = async (runs: { tool: string; reason: string }[], agentId: string) => {
+  const runTools = async (
+    runs: { tool: string; reason: string }[],
+    agentId: string,
+    depth = 0,
+    seenRuns = new Set<string>(),
+  ) => {
     for (const r of runs) {
+      const runKey = `${r.tool}\n${r.reason}`;
+      if (seenRuns.has(runKey)) continue;
+      seenRuns.add(runKey);
       const tool = AGENT_TOOLS[r.tool];
       if (!tool || !toolOwnedBy(tool, agentId)) continue; // 본인(또는 공유) 도구만
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
@@ -1258,6 +1266,12 @@ export async function runGroupChat(
             await _applyKnows(res2.knows, meta.name);
             await _applyProjects(res2.projects);
             await _applySkills(res2.skills);
+            await _applyCancel(res2.cancels);
+            // 조회 결과를 본 에이전트가 후속 작업(예: 빈 목록 확인 후 폴더 생성)을 결정하면
+            // 2차 응답의 RUN도 같은 턴에 실행한다. 동일 호출 중복과 과도한 연쇄는 제한한다.
+            if (depth < 3 && res2.runs.length > 0) {
+              await runTools(res2.runs, agentId, depth + 1, seenRuns);
+            }
           } else {
             await emit({
               userId, conversationId, role: "agent", agentId, name: meta.name,
