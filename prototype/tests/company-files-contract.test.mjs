@@ -40,10 +40,14 @@ test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제�
 });
 
 test("통합 업무 파일 화면은 생성 업무와 일반 파일을 한 루트에서 관리한다", async () => {
-  const [explorer, workExplorer, api] = await Promise.all([
+  const [explorer, preview, workExplorer, dashboard, app, api, endpoint] = await Promise.all([
     read("ai-company-app/src/components/CompanyFileExplorer.tsx"),
+    read("ai-company-app/src/components/CompanyFilePreview.tsx"),
     read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("ai-company-app/src/components/Dashboard.tsx"),
+    read("ai-company-app/src/App.tsx"),
     read("ai-company-app/src/lib/api.ts"),
+    read("prototype/functions/api/agent/company-files.ts"),
   ]);
   assert.match(workExplorer, /CompanyFileExplorer/);
   assert.match(workExplorer, /if \(!date && !sourceWork\) return <CompanyFileExplorer/);
@@ -60,6 +64,24 @@ test("통합 업무 파일 화면은 생성 업무와 일반 파일을 한 루�
   assert.match(explorer, /function duplicateSelected/);
   assert.match(explorer, /nextDuplicateDestination/);
   assert.match(explorer, />복제<\/button>/);
+  assert.match(explorer, /setPreviewEntry\(entry\)/);
+  assert.match(explorer, /CompanyFilePreview/);
+  assert.doesNotMatch(explorer, /entry\.kind === "file"\) void downloadEntry/);
+  assert.match(preview, /content\.kind === "image"/);
+  assert.match(preview, /content\.kind === "video"/);
+  assert.match(preview, /content\.kind === "audio"/);
+  assert.match(preview, /content\.kind === "pdf"/);
+  assert.match(preview, /ReactMarkdown/);
+  assert.match(preview, /parseProjectId/);
+  assert.match(preview, /onOpenProjectRef\.current\(projectId\)/);
+  assert.match(workExplorer, /onOpenProject=\{onOpenProject\}/);
+  assert.match(app, /focusProjectId=\{dashboardProjectId\}/);
+  assert.match(dashboard, /scrollIntoView/);
+  assert.match(api, /getCompanyFilePreviewUrl/);
+  assert.match(api, /readCompanyTextFile/);
+  assert.match(endpoint, /wantsPreview/);
+  assert.match(endpoint, /Content-Disposition", `\$\{wantsPreview \? "inline" : "attachment"\}/);
+  assert.match(endpoint, /request\.headers\.get\("Range"\)/);
   assert.match(explorer, /renameSelected/);
   assert.match(explorer, /deleteCompanyFiles/);
   assert.match(api, /listCompanyFiles/);
@@ -85,6 +107,7 @@ test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉�
     assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`));
   }
   assert.match(orchestrator, /\[\[RUN: company_files_mkdir/);
+  assert.match(orchestrator, /\.project\.json 파일에 \{"kind":"project","projectId":"프로젝트 ID"\}/);
   assert.match(orchestrator, /inferCompanyFolderCreateRun/);
   assert.match(orchestrator, /result\.runs\.push\(inferred\)/);
   assert.match(orchestrator, /await runTools\(res2\.runs, agentId, depth \+ 1, seenRuns\)/);

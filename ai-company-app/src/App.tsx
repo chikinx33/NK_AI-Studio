@@ -123,6 +123,7 @@ export default function App() {
   const [skillCategoryId, setSkillCategoryId] = useState("design-content");
   const [workRevision, setWorkRevision] = useState(0);
   const [workFolderDate, setWorkFolderDate] = useState("");
+  const [dashboardProjectId, setDashboardProjectId] = useState("");
 
   async function openCompanyWork(work: CompanyWorkItem, autoRender = false) {
     if (work.work_type === "infographic") {
@@ -137,6 +138,11 @@ export default function App() {
   function openSkillCategory(categoryId: string) {
     setSkillCategoryId(categoryId);
     setCenterView("skills");
+  }
+
+  function openCompanyProject(projectId: string) {
+    setDashboardProjectId(projectId);
+    setCenterView("dashboard");
   }
 
   useEffect(() => {
@@ -1150,6 +1156,7 @@ export default function App() {
         {centerView === "dashboard" ? (
           <Dashboard
             activeConvId={activeConvId}
+            focusProjectId={dashboardProjectId}
             onOpenConversation={(id) => {
               setActiveConvId(id);
               setCenterView("chat");
@@ -1161,7 +1168,7 @@ export default function App() {
           <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
-            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} />
+            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} />
           </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>

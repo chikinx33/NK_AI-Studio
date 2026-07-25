@@ -115,7 +115,7 @@ async function inChunks<T>(items: T[], size: number, task: (chunk: T[]) => Promi
   for (let index = 0; index < items.length; index += size) await task(items.slice(index, index + size));
 }
 
-export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void }) {
+export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork, onOpenProject }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void; onOpenProject: (projectId: string) => void }) {
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
@@ -393,6 +393,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       setFolderTitles((current) => new Map(current).set(dateKey, title));
     }}
     onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)}
+    onOpenProject={onOpenProject}
   />;
 
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";

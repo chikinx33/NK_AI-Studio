@@ -10,6 +10,7 @@ import {
   type CompanyFileEntry,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
+import CompanyFilePreview from "./CompanyFilePreview";
 
 type ViewMode = "cards" | "list";
 
@@ -73,10 +74,12 @@ export default function CompanyFileExplorer({
   onOpenWorkFolder,
   onRenameWorkFolder,
   onDeleteWorkFolder,
+  onOpenProject,
 }: {
   onOpenWorkFolder: (dateKey: string) => void;
   onRenameWorkFolder: (dateKey: string, title: string) => Promise<void>;
   onDeleteWorkFolder: (dateKey: string) => Promise<void>;
+  onOpenProject: (projectId: string) => void;
 }) {
   const [path, setPath] = useState("");
   const [entries, setEntries] = useState<CompanyFileEntry[]>([]);
@@ -87,6 +90,7 @@ export default function CompanyFileExplorer({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [previewEntry, setPreviewEntry] = useState<CompanyFileEntry | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh(targetPath = path) {
@@ -219,7 +223,7 @@ export default function CompanyFileExplorer({
   function openEntry(entry: CompanyFileEntry) {
     if (entry.kind === "work-folder" && entry.dateKey) onOpenWorkFolder(entry.dateKey);
     else if (entry.kind === "folder") setPath(entry.path);
-    else if (entry.kind === "file") void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다."));
+    else if (entry.kind === "file") setPreviewEntry(entry);
   }
 
   return <div className="flex min-h-0 flex-1 flex-col bg-[#090d13]">
@@ -253,5 +257,6 @@ export default function CompanyFileExplorer({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} className={`relative rounded-2xl border p-4 transition ${selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div><button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
         <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{query ? "검색 결과가 없습니다." : <>이 폴더가 비어 있습니다.<br/>새 폴더를 만들거나 파일을 추가해 주세요.</>}</div>}
     </main>
+    <CompanyFilePreview entry={previewEntry} onClose={() => setPreviewEntry(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />
   </div>;
 }

@@ -152,14 +152,14 @@ async function listObjects(ctx: any, prefix: string, delimiter = "") {
   return { items, prefixes: [...prefixes] };
 }
 
-async function getObject(ctx: any, objectName: string, media = false) {
+async function getObject(ctx: any, objectName: string, media = false, range = "") {
   return gcsFetch(ctx, (useBilling) => {
     const params = new URLSearchParams();
     if (media) params.set("alt", "media");
     if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
     const query = params.size ? `?${params}` : "";
     return fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}${query}`, {
-      headers: billingHeaders(ctx, useBilling),
+      headers: { ...billingHeaders(ctx, useBilling), ...(media && range ? { Range: range } : {}) },
     });
   });
 }
@@ -237,15 +237,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const requestedPath = String(url.searchParams.get("path") || "").replace(/^\/+|\/+$/g, "");
     const path = normalizePath(requestedPath);
     const wantsDownload = url.searchParams.get("download") === "1";
+    const wantsPreview = url.searchParams.get("preview") === "1";
     const wantsRead = url.searchParams.get("read") === "1";
 
-    if (!wantsDownload && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
+    if (!wantsDownload && !wantsPreview && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
       const dateKey = requestedPath.slice(WORK_PATH_PREFIX.length).split("/")[0];
       const entries = await listVirtualWorkItems(getSql(env), auth.userId, dateKey);
       return send({ path: `${WORK_PATH_PREFIX}${dateKey}`, parentPath: "", entries, unified: true }, 200, origin);
     }
 
-    if (wantsDownload || wantsRead) {
+    if (wantsDownload || wantsPreview || wantsRead) {
       const filePath = normalizePath(path, false);
       const objectName = `${rootPrefix}${filePath}`;
       const metadataResponse = await getObject(ctx, objectName);
@@ -254,11 +255,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       if (!metadataResponse.ok) return send({ error: metadata?.error?.message || "파일 정보를 읽지 못했습니다." }, metadataResponse.status, origin);
       const size = Number(metadata.size || 0);
       if (wantsRead && size > MAX_TEXT_BYTES) return send({ error: "에이전트가 읽을 수 있는 텍스트 파일은 1MB 이하입니다." }, 413, origin);
-      const media = await getObject(ctx, objectName, true);
+      const range = wantsPreview ? String(request.headers.get("Range") || "") : "";
+      const media = await getObject(ctx, objectName, true, range);
       if (!media.ok) return send({ error: `파일 다운로드 실패 (HTTP ${media.status})` }, media.status, origin);
       if (wantsRead) {
         const contentType = String(metadata.contentType || "application/octet-stream");
-        if (!contentType.startsWith("text/") && !/(json|xml|yaml|javascript|csv|markdown)/i.test(contentType) && !/\.(txt|md|json|csv|tsv|xml|ya?ml|js|ts|tsx|jsx|css|html)$/i.test(filePath)) {
+        if (!contentType.startsWith("text/") && !/(json|xml|yaml|javascript|csv|markdown|raviok-project|x-project)/i.test(contentType) && !/\.(txt|md|mdx|json|csv|tsv|xml|ya?ml|js|ts|tsx|jsx|css|html|nkproject|nkproj|raviok-project|project)$/i.test(filePath)) {
           return send({ error: "텍스트로 읽을 수 없는 파일 형식입니다." }, 415, origin);
         }
         const text = await media.text();
@@ -270,9 +272,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
       const headers = new Headers(corsHeaders(origin));
       headers.set("Content-Type", String(metadata.contentType || media.headers.get("Content-Type") || "application/octet-stream"));
-      headers.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(baseName(filePath))}`);
-      if (size) headers.set("Content-Length", String(size));
-      return new Response(media.body, { status: 200, headers });
+      headers.set("Content-Disposition", `${wantsPreview ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(baseName(filePath))}`);
+      headers.set("Accept-Ranges", media.headers.get("Accept-Ranges") || "bytes");
+      headers.set("Cache-Control", "private, max-age=60");
+      for (const header of ["Content-Range", "ETag", "Last-Modified"]) {
+        const value = media.headers.get(header);
+        if (value) headers.set(header, value);
+      }
+      const responseLength = media.headers.get("Content-Length");
+      if (responseLength) headers.set("Content-Length", responseLength);
+      else if (size && media.status !== 206) headers.set("Content-Length", String(size));
+      return new Response(media.body, { status: media.status === 206 ? 206 : 200, headers });
     }
 
     const listPrefix = `${rootPrefix}${path ? `${path}/` : ""}`;

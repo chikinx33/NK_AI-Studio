@@ -327,6 +327,28 @@ export async function downloadCompanyFile(entry: CompanyFileEntry): Promise<Blob
   return res.blob();
 }
 
+export function getCompanyFilePreviewUrl(entry: CompanyFileEntry): string {
+  return `/api/agent/company-files?path=${encodeURIComponent(entry.path)}&preview=1`;
+}
+
+export async function readCompanyTextFile(entry: CompanyFileEntry): Promise<{ content: string; contentType: string }> {
+  let content = "";
+  let offset = 0;
+  let contentType = entry.contentType || "text/plain";
+  for (let page = 0; page < 80; page += 1) {
+    const query = new URLSearchParams({ path: entry.path, read: "1", offset: String(offset), limit: "16000" });
+    const res = await fetch(`/api/agent/company-files?${query}`);
+    const data = await readCompanyFileResponse(res, "문서 내용을 읽지 못했어요.");
+    const chunk = String(data.content || "");
+    content += chunk;
+    contentType = String(data.contentType || contentType);
+    const nextOffset = Number(data.nextOffset || offset + chunk.length);
+    if (!data.hasMore || nextOffset <= offset) return { content, contentType };
+    offset = nextOffset;
+  }
+  throw new Error("문서가 너무 길어 미리보기를 완료하지 못했습니다.");
+}
+
 export async function createAgentVideo(input: CreateAgentVideoInput): Promise<CreateAgentVideoResult> {
   const res = await fetch("/api/agent/agent-video", {
     method: "POST",

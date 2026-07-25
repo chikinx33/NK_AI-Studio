@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getProjects,
   reorderProjectCards,
@@ -160,13 +160,19 @@ function ConversationList({
 export default function Dashboard({
   activeConvId,
   onOpenConversation,
+  focusProjectId = "",
 }: {
   activeConvId?: string;
   onOpenConversation?: (id: string) => void;
+  focusProjectId?: string;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
   const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
+  const [highlightProjectId, setHighlightProjectId] = useState("");
+  const [projectOpenNotice, setProjectOpenNotice] = useState("");
+  const handledProjectRef = useRef("");
+  const projectsReady = projects !== null;
   const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
     try {
       const s = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
@@ -189,6 +195,27 @@ export default function Dashboard({
     const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (!focusProjectId || projects === null || handledProjectRef.current === focusProjectId) return;
+    handledProjectRef.current = focusProjectId;
+    const target = projects.find((project) => project.id === focusProjectId || project.name === focusProjectId);
+    if (!target) {
+      setProjectOpenNotice(`'${focusProjectId}' 프로젝트를 찾지 못했습니다.`);
+      return;
+    }
+    setProjectOpenNotice("");
+    setHighlightProjectId(target.id);
+    if (target.collapsed !== false) {
+      setProjects((current) => current?.map((project) => project.id === target.id ? { ...project, collapsed: false } : project) ?? current);
+      void setProjectCollapsed(target.id, false).catch(() => {});
+    }
+    const scrollTimer = window.setTimeout(() => {
+      document.querySelector<HTMLElement>(`[data-project-card-id="${CSS.escape(target.id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    const highlightTimer = window.setTimeout(() => setHighlightProjectId(""), 2600);
+    return () => { window.clearTimeout(scrollTimer); window.clearTimeout(highlightTimer); };
+  }, [focusProjectId, projectsReady]);
 
   useUiAction((action) => {
     if (action.action !== "project.sidebar" || !projects) return;
@@ -255,6 +282,7 @@ export default function Dashboard({
         <div className="mx-auto flex max-w-5xl flex-col gap-4 md:flex-row">
           {/* 좌: 프로젝트 */}
           <div className="min-w-0 flex-1 space-y-3">
+            {projectOpenNotice && <div className="rounded-xl border border-amber-900/70 bg-amber-950/20 px-4 py-3 text-xs text-amber-300">{projectOpenNotice}</div>}
             {projects === null && <div className="text-xs text-gray-500">불러오는 중…</div>}
             {projects?.length === 0 && (
               <div className="rounded-xl border border-edge bg-panel p-5 text-sm text-gray-500">등록된 프로젝트가 없습니다.</div>
@@ -293,7 +321,9 @@ export default function Dashboard({
                   className={`overflow-hidden rounded-2xl border bg-panel transition ${
                     dragOverProjectId === p.id && draggedProjectId !== p.id
                       ? "border-emerald-500 ring-1 ring-emerald-500/40"
-                      : "border-edge"
+                      : highlightProjectId === p.id
+                        ? "border-emerald-400 ring-2 ring-emerald-500/35"
+                        : "border-edge"
                   } ${draggedProjectId === p.id ? "opacity-45" : "opacity-100"}`}
                 >
                   <div className="flex w-full items-center gap-3 px-4 py-3 transition hover:bg-edge/30">

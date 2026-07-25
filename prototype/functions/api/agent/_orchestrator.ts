@@ -167,7 +167,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
     company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → 통합 '업무 파일'의 생성 업무·폴더·파일 목록 조회. 파일 위치를 모르면 먼저 실행.`,
     company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 업무 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽음(1MB 이하). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
-    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀. 사람 승인 후 실행.`,
+    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀. 프로젝트 바로가기는 .project.json 파일에 {"kind":"project","projectId":"프로젝트 ID"} 형식으로 작성. 사람 승인 후 실행.`,
     company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 업무 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
