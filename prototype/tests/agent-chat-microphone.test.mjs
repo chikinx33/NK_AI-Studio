@@ -54,6 +54,7 @@ test("일반 채팅과 VN 모드는 동일한 마이크 UI와 상태를 공유�
 
 test("마이크 모드는 화면 전환과 무관하게 유지되고 채팅 밖에서도 코어 UI 명령을 보낸다", () => {
   const app = read("ai-company-app/src/App.tsx");
+  const sidebar = read("ai-company-app/src/components/Sidebar.tsx");
   const control = read("ai-company-app/src/components/SpeechInputControl.tsx");
   assert.match(app, /const \[speechModeEnabled, setSpeechModeEnabled\] = useState\(false\)/);
   assert.match(app, /const speechInput = useSpeechInput\(/);
@@ -61,8 +62,13 @@ test("마이크 모드는 화면 전환과 무관하게 유지되고 채팅 밖�
   assert.match(app, /void send\(text, undefined, today\)/);
   assert.match(app, /conversationId === activeConvRef\.current/);
   assert.match(app, /conversationId, signal: controller\.signal/);
-  assert.match(app, /centerView !== "chat" && \(/);
-  assert.match(app, /코어 전역 음성 명령/);
+  assert.match(app, /coreOverlay=\{centerView !== "chat" \? \(/);
+  assert.match(app, /absolute bottom-1\.5 left-1\.5 z-30/);
+  assert.doesNotMatch(app, /코어 전역 음성 명령/);
+  assert.doesNotMatch(app, /어느 화면에서든 마이크로 UI를 제어할 수 있습니다/);
+  assert.doesNotMatch(app, /fixed bottom-4 right-4/);
+  assert.match(sidebar, /coreOverlay\?: ReactNode/);
+  assert.match(sidebar, /overlay=\{coreOverlay\}/);
   assert.equal((app.match(/speechInput=\{speechInput\}/g) || []).length, 2);
   assert.match(control, /return \(\) => \{\s+mountedRef\.current = false;/);
   assert.doesNotMatch(control, /return \(\) => \{[\s\S]{0,200}onEnabledChangeRef\.current\(false\)/);

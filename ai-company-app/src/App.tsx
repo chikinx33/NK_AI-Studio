@@ -44,7 +44,7 @@ import {
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
 import { dispatchUiAction, type UiAction } from "./lib/uiActions";
-import { SpeechInputButton, SpeechInputStatus, useSpeechInput } from "./components/SpeechInputControl";
+import { SpeechInputButton, useSpeechInput } from "./components/SpeechInputControl";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
@@ -1085,30 +1085,6 @@ export default function App() {
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={closeNav} aria-hidden="true" />
       )}
 
-      {centerView !== "chat" && (
-        <div className="fixed bottom-4 right-4 z-[70] flex max-w-[min(28rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-edge bg-panel/95 p-2 shadow-2xl backdrop-blur lg:right-[19rem]">
-          <SpeechInputButton
-            enabled={speechInput.enabled}
-            listening={speechInput.listening}
-            supported={speechInput.supported}
-            isExpired={false}
-            onToggle={speechInput.toggle}
-          />
-          <div className="min-w-0">
-            <div className="px-1 text-xs font-medium text-gray-200">코어 전역 음성 명령</div>
-            <SpeechInputStatus
-              enabled={speechInput.enabled}
-              listening={speechInput.listening}
-              waiting={busy || presentationActive || status?.workMode === "off"}
-              error={speechInput.error}
-            />
-            {!speechInput.enabled && !speechInput.error && (
-              <div className="px-1 text-[11px] text-gray-500">어느 화면에서든 마이크로 UI를 제어할 수 있습니다.</div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* 좌측 사이드바: 모바일에선 드로어(fixed, 슬라이드), 데스크톱(lg)에선 정적 배치 */}
       <div
         className={`fixed inset-y-0 left-0 z-50 h-full transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${
@@ -1129,6 +1105,17 @@ export default function App() {
           manageMode={centerView === "agents"}
           selectedManageId={agentMgrId}
           onManageSelect={setAgentMgrId}
+          coreOverlay={centerView !== "chat" ? (
+            <div className="absolute bottom-1.5 left-1.5 z-30">
+              <SpeechInputButton
+                enabled={speechInput.enabled}
+                listening={speechInput.listening}
+                supported={speechInput.supported}
+                isExpired={false}
+                onToggle={speechInput.toggle}
+              />
+            </div>
+          ) : undefined}
         />
       </div>
 

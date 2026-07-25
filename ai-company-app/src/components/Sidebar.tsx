@@ -19,6 +19,7 @@ interface Props {
   manageMode?: boolean;
   selectedManageId?: string | null;
   onManageSelect?: (id: string) => void;
+  coreOverlay?: ReactNode;
 }
 
 function CloudIcon({ className }: { className?: string }) {
@@ -365,6 +366,7 @@ export default function Sidebar({
   manageMode,
   selectedManageId,
   onManageSelect,
+  coreOverlay,
 }: Props) {
   // 직원 관리 모드면 아바타 클릭 = 관리할 직원 선택, 아니면 @멘션 토글
   const pickHandler = (a: AgentInfo) =>
@@ -492,6 +494,7 @@ export default function Sidebar({
               onPick={pickHandler(a)}
               onFocus={onFocusChat}
               onOpenCard={setCardAgentId}
+              overlay={coreOverlay}
             />
           ))}
 
