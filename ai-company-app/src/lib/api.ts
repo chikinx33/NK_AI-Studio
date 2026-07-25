@@ -247,7 +247,7 @@ export async function deleteCompanyWorkFolderMeta(dateKey: string): Promise<void
 }
 
 export interface CompanyFileEntry {
-  kind: "folder" | "file";
+  kind: "folder" | "file" | "work-folder" | "work";
   name: string;
   path: string;
   parentPath: string;
@@ -255,6 +255,13 @@ export interface CompanyFileEntry {
   size?: number;
   createdAt?: string;
   updatedAt?: string;
+  source?: "work";
+  dateKey?: string;
+  itemCount?: number;
+  workId?: string;
+  workType?: string;
+  status?: CompanyWorkItem["status"];
+  summary?: string;
 }
 
 async function readCompanyFileResponse(res: Response, fallback: string): Promise<any> {

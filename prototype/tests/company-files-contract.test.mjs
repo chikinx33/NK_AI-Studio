@@ -14,6 +14,11 @@ test("회사 파일 API는 사용자별 GCS 경로와 안전한 상대 경로를
   assert.match(source, /MAX_UPLOAD_BYTES = 100 \* 1024 \* 1024/);
   assert.match(source, /MAX_TEXT_BYTES = 1024 \* 1024/);
   assert.match(source, /if \(uploadPath !== null\)/);
+  assert.match(source, /listVirtualWorkFolders/);
+  assert.match(source, /listVirtualWorkItems/);
+  assert.match(source, /kind: "work-folder"/);
+  assert.match(source, /unified: true/);
+  assert.match(source, /function assertMutablePath/);
 });
 
 test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제를 제공한다", async () => {
@@ -28,14 +33,18 @@ test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제�
   assert.match(source, /created: false/);
 });
 
-test("내 파일 화면은 업로드·복사·이동·이름 변경·삭제와 경로 탐색을 제공한다", async () => {
+test("통합 업무 파일 화면은 생성 업무와 일반 파일을 한 루트에서 관리한다", async () => {
   const [explorer, workExplorer, api] = await Promise.all([
     read("ai-company-app/src/components/CompanyFileExplorer.tsx"),
     read("ai-company-app/src/components/WorkExplorer.tsx"),
     read("ai-company-app/src/lib/api.ts"),
   ]);
   assert.match(workExplorer, /CompanyFileExplorer/);
-  assert.match(workExplorer, />내 파일<\/button>/);
+  assert.match(workExplorer, /if \(!date && !sourceWork\) return <CompanyFileExplorer/);
+  assert.doesNotMatch(workExplorer, />내 파일<\/button>/);
+  assert.match(explorer, />업무 파일<\/span>/);
+  assert.match(explorer, /entry\.kind === "work-folder"/);
+  assert.match(explorer, /onOpenWorkFolder/);
   assert.match(explorer, /type="file" multiple/);
   assert.match(explorer, />파일 추가<\/button>/);
   assert.match(explorer, /transfer\("copy"\)/);

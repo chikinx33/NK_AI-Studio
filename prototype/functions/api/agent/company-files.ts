@@ -3,6 +3,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { ensureAgentSchema, getSql } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -11,6 +12,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_TEXT_BYTES = 1024 * 1024;
 const MAX_OPERATION_OBJECTS = 2000;
 const FOLDER_MARKER = ".raviok-folder";
+const WORK_PATH_PREFIX = "@work/";
 
 const corsHeaders = (origin: string | null) => ({
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -55,6 +57,51 @@ function baseName(path: string) {
 
 function parentPath(path: string) {
   return path.split("/").slice(0, -1).join("/");
+}
+
+function assertMutablePath(path: string) {
+  if (path === WORK_PATH_PREFIX.slice(0, -1) || path.startsWith(WORK_PATH_PREFIX)) {
+    throw new Error("통합 업무 경로는 일반 파일 작업의 대상으로 사용할 수 없습니다.");
+  }
+}
+
+async function listVirtualWorkFolders(sql: any, userId: string) {
+  if (!sql) return [];
+  await ensureAgentSchema(sql);
+  const rows = await sql(`
+    SELECT to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key,
+           COALESCE(folder.title, to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')) AS title,
+           COUNT(*)::int AS item_count,
+           MAX(item.updated_at) AS updated_at
+      FROM company_work_items item
+      LEFT JOIN company_work_folders folder
+        ON folder.user_id = item.user_id
+       AND folder.date_key = to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')
+     WHERE item.user_id = $1
+     GROUP BY date_key, folder.title
+     ORDER BY date_key DESC`, [userId]);
+  return rows.map((row: any) => ({
+    kind: "work-folder", source: "work", name: String(row.title || row.date_key),
+    path: `${WORK_PATH_PREFIX}${row.date_key}`, parentPath: "", dateKey: String(row.date_key),
+    itemCount: Number(row.item_count || 0), updatedAt: String(row.updated_at || ""),
+  }));
+}
+
+async function listVirtualWorkItems(sql: any, userId: string, dateKey: string) {
+  if (!sql || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return [];
+  await ensureAgentSchema(sql);
+  const rows = await sql(`
+    SELECT id, title, work_type, status, request_text, result_summary, created_at, updated_at
+      FROM company_work_items
+     WHERE user_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $2::date
+     ORDER BY created_at DESC`, [userId, dateKey]);
+  return rows.map((row: any) => ({
+    kind: "work", source: "work", name: String(row.title || "업무"),
+    path: `${WORK_PATH_PREFIX}${dateKey}/${row.id}`, parentPath: `${WORK_PATH_PREFIX}${dateKey}`,
+    dateKey, workId: String(row.id), workType: String(row.work_type || ""), status: String(row.status || "working"),
+    summary: String(row.result_summary || row.request_text || ""), createdAt: String(row.created_at || ""), updatedAt: String(row.updated_at || ""),
+  }));
 }
 
 async function accessContext(env: any) {
@@ -172,9 +219,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const ctx = await accessContext(env);
     const rootPrefix = workspacePrefix(ctx.basePrefix, auth.userId);
     const url = new URL(request.url);
-    const path = normalizePath(url.searchParams.get("path") || "");
+    const requestedPath = String(url.searchParams.get("path") || "").replace(/^\/+|\/+$/g, "");
+    const path = normalizePath(requestedPath);
     const wantsDownload = url.searchParams.get("download") === "1";
     const wantsRead = url.searchParams.get("read") === "1";
+
+    if (!wantsDownload && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
+      const dateKey = requestedPath.slice(WORK_PATH_PREFIX.length).split("/")[0];
+      const entries = await listVirtualWorkItems(getSql(env), auth.userId, dateKey);
+      return send({ path: `${WORK_PATH_PREFIX}${dateKey}`, parentPath: "", entries, unified: true }, 200, origin);
+    }
 
     if (wantsDownload || wantsRead) {
       const filePath = normalizePath(path, false);
@@ -222,8 +276,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
         };
       });
-    const entries = [...folders, ...files].sort((a: any, b: any) => a.kind === b.kind ? a.name.localeCompare(b.name, "ko") : a.kind === "folder" ? -1 : 1);
-    return send({ path, parentPath: parentPath(path), entries }, 200, origin);
+    const workFolders = path ? [] : await listVirtualWorkFolders(getSql(env), auth.userId);
+    const entries = [...workFolders, ...folders, ...files].sort((a: any, b: any) => {
+      const aFolder = a.kind === "folder" || a.kind === "work-folder";
+      const bFolder = b.kind === "folder" || b.kind === "work-folder";
+      return aFolder === bFolder ? a.name.localeCompare(b.name, "ko") : aFolder ? -1 : 1;
+    });
+    return send({ path, parentPath: parentPath(path), entries, unified: true }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 조회에 실패했습니다.") }, 500, origin);
   }
@@ -243,6 +302,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 사용자 파일 업로드와 JSON 작업 명령을 구분한다.
     if (uploadPath !== null) {
       const path = normalizePath(uploadPath, false);
+      assertMutablePath(path);
       const declaredSize = Number(request.headers.get("Content-Length") || 0);
       if (declaredSize > MAX_UPLOAD_BYTES) return send({ error: "파일은 100MB 이하만 업로드할 수 있습니다." }, 413, origin);
       const bytes = await request.arrayBuffer();
@@ -256,6 +316,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const action = String(body.action || "").trim();
     if (action === "mkdir") {
       const path = normalizePath(body.path, false);
+      assertMutablePath(path);
       const existing = await resolveObjects(ctx, rootPrefix, path);
       if (existing) {
         if (existing.kind === "folder" && body.existOk === true) {
@@ -268,6 +329,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     if (action === "write") {
       const path = normalizePath(body.path, false);
+      assertMutablePath(path);
       const content = String(body.content ?? "");
       const bytes = new TextEncoder().encode(content);
       if (bytes.byteLength > MAX_TEXT_BYTES) return send({ error: "에이전트가 작성할 수 있는 텍스트 파일은 1MB 이하입니다." }, 413, origin);
@@ -278,6 +340,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (action === "copy" || action === "move") {
       const source = normalizePath(body.source, false);
       const destination = normalizePath(body.destination, false);
+      assertMutablePath(source);
+      assertMutablePath(destination);
       if (source === destination) return send({ error: "원본과 대상 경로가 같습니다." }, 400, origin);
       const resolved = await resolveObjects(ctx, rootPrefix, source);
       if (!resolved) return send({ error: "복사하거나 이동할 파일 또는 폴더를 찾지 못했습니다." }, 404, origin);
@@ -306,6 +370,7 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body: any = await request.json().catch(() => ({}));
     const paths = (Array.isArray(body.paths) ? body.paths : [body.path]).map((value: any) => normalizePath(value, false));
+    paths.forEach(assertMutablePath);
     if (!paths.length || paths.length > 100) return send({ error: "한 번에 삭제할 항목은 1~100개여야 합니다." }, 400, origin);
     const ctx = await accessContext(env);
     const rootPrefix = workspacePrefix(ctx.basePrefix, auth.userId);

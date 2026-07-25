@@ -116,7 +116,6 @@ async function inChunks<T>(items: T[], size: number, task: (chunk: T[]) => Promi
 }
 
 export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void }) {
-  const [section, setSection] = useState<"works" | "files">("works");
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
@@ -236,10 +235,10 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     finally { setBusy(""); }
   }
 
-  async function removeDateFolder(dateKey: string) {
+  async function removeDateFolder(dateKey: string, confirmed = false) {
     const works = items.filter((item) => koreaDate(item.created_at) === dateKey);
     const label = folderTitles.get(dateKey) || dateKey;
-    if (!window.confirm(`'${label}' 폴더의 업무 ${works.length}개와 보관된 소스를 모두 삭제할까요?`)) return;
+    if (!confirmed && !window.confirm(`'${label}' 폴더의 업무 ${works.length}개와 보관된 소스를 모두 삭제할까요?`)) return;
     setFolderMenu(""); setBusy("delete-folder"); setError("");
     try {
       await inChunks(works.map((work) => work.id), 100, (chunk) => deleteCompanyWorkItems(chunk));
@@ -316,11 +315,13 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
 
   useUiAction((action) => {
     if (action.action === "company_files.view" || action.action === "company_files.refresh") {
-      setSection("files");
+      setDate("");
+      setSourceWork(null);
       return;
     }
     if (action.action === "work_explorer.view") {
-      setSection("works");
+      setDate("");
+      setSourceWork(null);
       const mode = actionString(action, "mode");
       const sort = actionString(action, "sort");
       const scope = actionString(action, "scope");
@@ -385,7 +386,14 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     }
   }, "work_explorer");
 
-  if (section === "files") return <CompanyFileExplorer onShowWorks={() => setSection("works")} />;
+  if (!date && !sourceWork) return <CompanyFileExplorer
+    onOpenWorkFolder={openDateFolder}
+    onRenameWorkFolder={async (dateKey, title) => {
+      await renameCompanyWorkFolder(dateKey, title);
+      setFolderTitles((current) => new Map(current).set(dateKey, title));
+    }}
+    onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)}
+  />;
 
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";
 
@@ -396,8 +404,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       </header>
       <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-[#0b1018] px-5 py-2.5">
         <button onClick={back} disabled={!date} className="rounded-md border border-edge px-2.5 py-1.5 text-xs text-gray-300 disabled:opacity-30">← 뒤로</button>
-        <button onClick={() => { setDate(""); setSourceWork(null); }} className="text-xs font-bold text-emerald-300">업무</button>
-        <button type="button" onClick={() => setSection("files")} className="rounded-lg border border-edge px-3 py-1.5 text-xs font-bold text-sky-300">내 파일</button>
+        <button onClick={() => { setDate(""); setSourceWork(null); }} className="text-xs font-bold text-emerald-300">업무 파일</button>
         {date && <><span className="text-gray-700">›</span><button onClick={() => setSourceWork(null)} className="max-w-48 truncate text-xs text-gray-300">{folderTitles.get(date) || date}</button></>}
         {sourceWork && <><span className="text-gray-700">›</span><span className="max-w-64 truncate text-xs text-gray-300">{sourceWork.title}</span><span className="text-gray-700">›</span><span className="text-xs text-gray-500">소스</span></>}
         <div className="ml-auto flex items-center gap-2">

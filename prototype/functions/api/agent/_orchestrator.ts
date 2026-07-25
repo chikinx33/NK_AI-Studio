@@ -165,10 +165,10 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   // 이 에이전트가 실행 가능한 도구 목록 (AGENT_TOOLS 기준)
   const MY_TOOL_DESCRIPTIONS: Record<string, string> = {
     infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
-    company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → AI 회사 '내 파일' 폴더와 파일 목록 조회. 파일 위치를 모르면 먼저 실행.`,
-    company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 내 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽음(1MB 이하). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
-    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 내 파일에 텍스트 파일을 생성하거나 덮어씀. 사람 승인 후 실행.`,
-    company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 내 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
+    company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → 통합 '업무 파일'의 생성 업무·폴더·파일 목록 조회. 파일 위치를 모르면 먼저 실행.`,
+    company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 업무 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽음(1MB 이하). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
+    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀. 사람 승인 후 실행.`,
+    company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 업무 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
     company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
@@ -339,7 +339,7 @@ ${teamToolMap}
 - 업무 보기: {"action":"work_explorer.view","mode":"cards|list","sort":"newest|oldest|name-asc|name-desc","query":"검색어","scope":"all|title|content"}
 - 업무 열기·이름 변경: {"action":"work_explorer.open","title":"업무명"} / {"action":"work_explorer.rename","kind":"work|folder","title":"기존명","newTitle":"새 이름"}
 - 업무·폴더 삭제: {"action":"work_explorer.delete","kind":"work|folder","title":"이름"} (사람 확인 후 실행)
-- 내 파일 열기·갱신: {"action":"company_files.view","path":"폴더/경로"} / {"action":"company_files.refresh"}. 파일 도구로 변경한 뒤 해당 폴더를 열어 결과를 보여주세요.
+- 업무 파일 열기·갱신: {"action":"company_files.view","path":"폴더/경로"} / {"action":"company_files.refresh"}. 파일 도구로 변경한 뒤 해당 폴더를 열어 결과를 보여주세요.
 - 직원 관리: {"action":"agent_manager.select","agentId":"pixel"} / {"action":"agent_manager.persona","agentId":"pixel","prompt":"새 페르소나"}
 - 영상: {"action":"video.configure","prompt":"내용","durationSec":30,"aspectRatio":"16:9","audience":"대상","tone":"톤","style":"스타일"} / {"action":"video.run"} / {"action":"video.approval","decision":"approve|reject"} / {"action":"video.render"} / {"action":"video.storage","operation":"open|close|download|delete"}
 - 승인: {"action":"approval.decide","id":"작업ID","decision":"approve|reject"} / {"action":"approval.clear"} (사람 확인 후 실행)
@@ -905,7 +905,7 @@ export function formatReadResult(toolName: string, out: any): string {
   if (toolName === "company_files_mkdir") {
     const path = String(out?.entry?.path || "폴더");
     const state = out?.created === false ? "이미 있어 그대로 확인했어요" : "만들었어요";
-    return `📁 **${path}** 폴더를 ${state}. 실제 목록 확인도 완료했습니다. 업무 페이지의 **내 파일**에서 확인하실 수 있어요.`;
+    return `📁 **${path}** 폴더를 ${state}. 실제 통합 목록 확인도 완료했습니다. **업무 파일**에서 확인하실 수 있어요.`;
   }
   if (toolName === "infographic") {
     const work = out?.work;
