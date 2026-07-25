@@ -19,6 +19,10 @@ test("회사 파일 API는 사용자별 GCS 경로와 안전한 상대 경로를
   assert.match(source, /kind: "work-folder"/);
   assert.match(source, /unified: true/);
   assert.match(source, /function assertMutablePath/);
+  assert.match(source, /WITH normalized_items AS/);
+  assert.match(source, /COALESCE\(MAX\(folder\.title\), item\.date_key\)/);
+  assert.match(source, /GROUP BY item\.date_key/);
+  assert.doesNotMatch(source, /GROUP BY date_key, folder\.title/);
 });
 
 test("회사 파일 API는 폴더 생성·파일 작성·복사·이동·삭제를 제공한다", async () => {

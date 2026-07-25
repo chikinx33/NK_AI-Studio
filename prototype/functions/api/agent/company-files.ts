@@ -69,17 +69,22 @@ async function listVirtualWorkFolders(sql: any, userId: string) {
   if (!sql) return [];
   await ensureAgentSchema(sql);
   const rows = await sql(`
-    SELECT to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key,
-           COALESCE(folder.title, to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')) AS title,
+    WITH normalized_items AS (
+      SELECT to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key,
+             updated_at
+        FROM company_work_items
+       WHERE user_id = $1
+    )
+    SELECT item.date_key,
+           COALESCE(MAX(folder.title), item.date_key) AS title,
            COUNT(*)::int AS item_count,
            MAX(item.updated_at) AS updated_at
-      FROM company_work_items item
+      FROM normalized_items item
       LEFT JOIN company_work_folders folder
-        ON folder.user_id = item.user_id
-       AND folder.date_key = to_char((item.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')
-     WHERE item.user_id = $1
-     GROUP BY date_key, folder.title
-     ORDER BY date_key DESC`, [userId]);
+        ON folder.user_id = $1
+       AND folder.date_key = item.date_key
+     GROUP BY item.date_key
+     ORDER BY item.date_key DESC`, [userId]);
   return rows.map((row: any) => ({
     kind: "work-folder", source: "work", name: String(row.title || row.date_key),
     path: `${WORK_PATH_PREFIX}${row.date_key}`, parentPath: "", dateKey: String(row.date_key),
