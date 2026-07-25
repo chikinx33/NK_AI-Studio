@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
-import { addKnowledge } from "../lib/api";
+import { addKnowledge, type ChatFileReference } from "../lib/api";
 import Markdown from "./Markdown";
+import ChatFileAttachments from "./ChatFileAttachments";
 import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
 import { actionString, useUiAction } from "../lib/uiActions";
@@ -24,6 +25,7 @@ export interface Turn {
   queued?: boolean; // 앞선 에이전트 발언이 끝날 때까지 화면 노출을 보류
   imagePreview?: string; // (레거시) 단일 첨부 미리보기 data URL
   imagePreviews?: string[]; // 첨부 이미지 data URL 목록 (사용자 메시지 버블에 표시)
+  files?: ChatFileReference[]; // 회사 파일·생성 산출물 — 말풍선 카드에서 미리보기
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
 }
 
@@ -64,6 +66,7 @@ interface Props {
   voiceMode?: "browser" | "server" | "cloud";
   onToggleVoiceMode?: () => void;
   speechInput: SpeechInputState;
+  onOpenProject: (projectId: string) => void;
 }
 
 /** YYYY-MM-DD → YYYY.MM.DD (날짜 형식이 아니면 빈 문자열) */
@@ -302,7 +305,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput }: Props) {
+export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -585,6 +588,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                   ) : (
                     <span className="text-gray-500">…</span>
                   )}
+                  {!revealing && <ChatFileAttachments files={t.files} onOpenProject={onOpenProject} />}
                   {/* 코어 제안에 등장한 담당자 → 원클릭 위임 (협업이 실제로 흐르게) */}
                   {!t.streaming && t.agentId === "core" && t.text && agents && (() => {
                     const mentioned = agents.filter((a) => a.id !== "core" && t.text.includes(a.name));

@@ -720,7 +720,7 @@ export default function App() {
     cancelAgentPresentations();
     getConversationMessages(activeConvId)
       .then((h) => {
-        const loaded = h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, ts: t.ts }));
+        const loaded = h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, files: t.files, ts: t.ts }));
         markSpoken(loaded);
         commit(loaded);
       })
@@ -850,6 +850,7 @@ export default function App() {
                     displayText: "",
                     typing: false,
                     voicePreparing: false,
+                    files: Array.isArray(data.files) ? data.files : next[i].files,
                   };
                   reveal = { turnId: id, agentId: next[i].agentId, text: finalText, waitBeforeReveal };
                   break;
@@ -942,6 +943,7 @@ export default function App() {
               name: m.turn.name,
               emoji: m.turn.emoji,
               text: m.turn.text,
+              files: m.turn.files,
               ts: m.turn.ts || Date.now(),
             }));
             presentCompletedAgentTurns(add);
@@ -1227,6 +1229,7 @@ export default function App() {
             voiceMode={voiceMode}
             onToggleVoiceMode={toggleVoiceMode}
             speechInput={speechInput}
+            onOpenProject={openCompanyProject}
           />
         )}
         </ErrorBoundary>
@@ -1251,7 +1254,7 @@ export default function App() {
               onPickCategory={openKnowledgeCategory}
               onAgentSay={(m) => {
                 presentCompletedAgentTurns([
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
+                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
                 ]);
                 setCenterView("chat");
               }}
@@ -1263,7 +1266,7 @@ export default function App() {
               refreshKey={resultsRefreshKey}
               onAgentSay={(m) => {
                 presentCompletedAgentTurns([
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
+                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
                 ]);
                 setCenterView("chat");
               }}

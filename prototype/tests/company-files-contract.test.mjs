@@ -118,6 +118,54 @@ test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉�
   assert.match(approvals, /dispatchUiAction\(\{ action: "company_files\.refresh" \}\)/);
 });
 
+test("에이전트는 확장자를 생략한 파일을 찾아 읽고 채팅에 파일 참조를 영속한다", async () => {
+  const [endpoint, shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/company-files.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(endpoint, /async function resolveReadableFile/);
+  assert.match(endpoint, /pathWithoutExtension\(normalizedBase\) === wantedBaseStem/);
+  assert.match(endpoint, /파일이 여러 개입니다\. 전체 경로를 지정해 주세요/);
+  assert.match(endpoint, /wantsRead[\s\S]+resolveReadableFile/);
+  assert.match(shared, /files jsonb NOT NULL DEFAULT '\[\]'::jsonb/);
+  assert.match(shared, /ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS files jsonb/);
+  assert.match(shared, /messageFilesFromToolOutput/);
+  assert.match(shared, /source: "company-file"/);
+  assert.match(shared, /source: "generated"/);
+  assert.match(orchestrator, /files: messageFiles\(r\.tool, output\)/);
+  assert.match(orchestrator, /files: result\.gated \? \[\] : messageFiles\(r\.tool, result\.output, job\.id\)/);
+  assert.match(orchestrator, /사용자가 '파일 보여줘\/열어줘\/읽어줘'라고 하면 반드시 실행/);
+  assert.match(orchestrator, /const autoOpenFileRequested = \/\(보여/);
+  assert.match(orchestrator, /tool !== "company_files_list" && files\.length === 1/);
+});
+
+test("채팅 말풍선은 문서·이미지·영상·음악·PDF 파일 카드를 열고 생성 결과도 복원한다", async () => {
+  const [chat, attachments, app, api, review] = await Promise.all([
+    read("ai-company-app/src/components/Chat.tsx"),
+    read("ai-company-app/src/components/ChatFileAttachments.tsx"),
+    read("ai-company-app/src/App.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("prototype/functions/api/agent/review.ts"),
+  ]);
+  assert.match(chat, /files\?: ChatFileReference\[\]/);
+  assert.match(chat, /<ChatFileAttachments files=\{t\.files\}/);
+  assert.match(attachments, /CompanyFilePreview/);
+  assert.match(attachments, /kind === "image"/);
+  assert.match(attachments, /kind === "video"/);
+  assert.match(attachments, /kind === "audio"/);
+  assert.match(attachments, /kind === "pdf"/);
+  assert.match(attachments, /downloadPdfViaPrint/);
+  assert.match(attachments, /downloadPpt/);
+  assert.match(attachments, /getAgentJob\(file\.jobId\)/);
+  assert.match(attachments, /files\?\.find\(\(candidate\) => candidate\.autoOpen\)/);
+  assert.match(api, /files: Array\.isArray\(m\.files\) \? m\.files/);
+  assert.match(api, /onEvent\("turn_end", \{ agentId: m\.agent_id, text: m\.text, files:/);
+  assert.match(app, /files: Array\.isArray\(data\.files\) \? data\.files/);
+  assert.match(app, /onOpenProject=\{openCompanyProject\}/);
+  assert.match(review, /files: decision === "approved" \? messageFilesFromToolOutput/);
+});
+
 test("업무 상태는 명세 생성부터 렌더·보관 완료까지 분리된다", async () => {
   const [create, browserArchive, serverArchive, explorer] = await Promise.all([
     read("prototype/functions/api/agent/agent-video.ts"),

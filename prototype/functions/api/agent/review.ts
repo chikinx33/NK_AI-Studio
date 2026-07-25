@@ -12,6 +12,7 @@ import {
   setJobStatus,
   AGENT_META,
   AGENT_TOOLS,
+  messageFilesFromToolOutput,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -107,6 +108,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       role: "agent",
       agentId: job.agent_id,
       name: meta.name,
+      files: decision === "approved" ? messageFilesFromToolOutput(job.type, executedOutput, job.id) : [],
       text: decision === "approved"
         ? approvalDoneText(job.type, executedOutput, job.input)
         : "재검토로 돌릴게요. 어떤 점을 고칠지 알려주시면 다시 해볼게요.",

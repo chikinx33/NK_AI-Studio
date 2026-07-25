@@ -59,6 +59,12 @@ function parentPath(path: string) {
   return path.split("/").slice(0, -1).join("/");
 }
 
+function pathWithoutExtension(path: string) {
+  const slash = path.lastIndexOf("/");
+  const dot = path.lastIndexOf(".");
+  return dot > slash ? path.slice(0, dot) : path;
+}
+
 function assertMutablePath(path: string) {
   if (path === WORK_PATH_PREFIX.slice(0, -1) || path.startsWith(WORK_PATH_PREFIX)) {
     throw new Error("통합 업무 경로는 일반 파일 작업의 대상으로 사용할 수 없습니다.");
@@ -226,6 +232,41 @@ async function ensureDestinationAvailable(ctx: any, rootPrefix: string, relative
   if (await resolveObjects(ctx, rootPrefix, relativePath)) throw new Error(`'${relativePath}' 경로에 이미 파일 또는 폴더가 있습니다.`);
 }
 
+async function resolveReadableFile(ctx: any, rootPrefix: string, requestedPath: string) {
+  const exact = await getObject(ctx, `${rootPrefix}${requestedPath}`);
+  if (exact.status !== 404) return { path: requestedPath, metadataResponse: exact };
+
+  // 대화에서는 사용자가 확장자나 상위 폴더를 생략하는 경우가 많다. 에이전트 읽기에 한해
+  // 사용자 작업공간 전체에서 파일명/확장자 생략을 안전하게 보정하고, 동명이면 임의 선택하지 않는다.
+  const listed = await listObjects(ctx, rootPrefix);
+  const wanted = requestedPath.normalize("NFC").toLocaleLowerCase("ko-KR");
+  const wantedBase = baseName(wanted);
+  const wantedStem = pathWithoutExtension(wanted);
+  const wantedBaseStem = pathWithoutExtension(wantedBase);
+  const candidates = listed.items
+    .map((item) => String(item.name || ""))
+    .filter((name) => name.startsWith(rootPrefix) && baseName(name) !== FOLDER_MARKER)
+    .map((name) => name.slice(rootPrefix.length))
+    .map((path) => {
+      const normalized = path.normalize("NFC").toLocaleLowerCase("ko-KR");
+      const normalizedBase = baseName(normalized);
+      let score = Number.POSITIVE_INFINITY;
+      if (normalized === wanted) score = 0;
+      else if (normalizedBase === wantedBase) score = 1;
+      else if (pathWithoutExtension(normalized) === wantedStem) score = 2;
+      else if (pathWithoutExtension(normalizedBase) === wantedBaseStem) score = 3;
+      return { path, score };
+    })
+    .filter((candidate) => Number.isFinite(candidate.score));
+  if (!candidates.length) return { path: requestedPath, metadataResponse: exact };
+  const bestScore = Math.min(...candidates.map((candidate) => candidate.score));
+  const best = candidates.filter((candidate) => candidate.score === bestScore);
+  if (best.length > 1) {
+    throw new Error(`'${requestedPath}' 이름의 파일이 여러 개입니다. 전체 경로를 지정해 주세요: ${best.slice(0, 8).map((candidate) => candidate.path).join(", ")}`);
+  }
+  return { path: best[0].path, metadataResponse: await getObject(ctx, `${rootPrefix}${best[0].path}`) };
+}
+
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
@@ -247,9 +288,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     if (wantsDownload || wantsPreview || wantsRead) {
-      const filePath = normalizePath(path, false);
+      let filePath = normalizePath(path, false);
+      const resolved = wantsRead
+        ? await resolveReadableFile(ctx, rootPrefix, filePath)
+        : { path: filePath, metadataResponse: await getObject(ctx, `${rootPrefix}${filePath}`) };
+      filePath = resolved.path;
       const objectName = `${rootPrefix}${filePath}`;
-      const metadataResponse = await getObject(ctx, objectName);
+      const metadataResponse = resolved.metadataResponse;
       if (metadataResponse.status === 404) return send({ error: "파일을 찾지 못했습니다." }, 404, origin);
       const metadata: any = await metadataResponse.json().catch(() => ({}));
       if (!metadataResponse.ok) return send({ error: metadata?.error?.message || "파일 정보를 읽지 못했습니다." }, metadataResponse.status, origin);

@@ -129,6 +129,7 @@ export default function Approvals({
           name: raw.name,
           emoji: raw.emoji,
           text: raw.text,
+          files: Array.isArray(raw.files) ? raw.files : undefined,
         });
       }
     } catch (e) {

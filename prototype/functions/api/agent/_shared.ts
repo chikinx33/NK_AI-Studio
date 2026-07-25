@@ -99,9 +99,11 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       agent_id text,
       name text,
       text text NOT NULL,
+      files jsonb NOT NULL DEFAULT '[]'::jsonb,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await sql("ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb");
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
   } catch (_) {}
@@ -648,17 +650,68 @@ export interface AgentMessage {
   agent_id: string | null;
   name: string | null;
   text: string;
+  files: MessageFileReference[];
   created_at: string;
+}
+
+export interface MessageFileReference {
+  source: "company-file" | "generated";
+  name: string;
+  contentType: string;
+  path?: string;
+  size?: number;
+  jobId?: string;
+  kind?: string;
+  autoOpen?: boolean;
+}
+
+function inferredFileType(kind: string, output: any) {
+  const normalized = String(kind || output?.kind || "").toLocaleLowerCase();
+  if (normalized === "pdf") return { contentType: "application/pdf", extension: ".pdf" };
+  if (normalized === "ppt" || normalized === "pptx") return { contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", extension: ".pptx" };
+  if (normalized.includes("video") || output?.videoUrl) return { contentType: "video/mp4", extension: ".mp4" };
+  if (normalized.includes("voice") || normalized.includes("audio") || normalized.includes("sound") || normalized.includes("music") || output?.audioUrl) return { contentType: "audio/mpeg", extension: ".mp3" };
+  if (normalized.includes("image") || output?.signedUrl || output?.imageUrl || output?.dataUrl) return { contentType: "image/png", extension: ".png" };
+  return { contentType: "application/octet-stream", extension: "" };
+}
+
+/** 도구 결과를 대화 말풍선에서 다시 열 수 있는 작은 파일 참조로 변환한다. */
+export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""): MessageFileReference[] {
+  if (!output || typeof output !== "object") return [];
+  const companyEntries = output.kind === "company_files_list" && Array.isArray(output.entries)
+    ? output.entries.filter((entry: any) => entry?.kind === "file")
+    : output.entry?.kind === "file"
+      ? [output.entry]
+      : output.path && (output.kind === "company_files_read" || output.kind === "company_files_write")
+        ? [output]
+        : [];
+  if (companyEntries.length) {
+    return companyEntries.slice(0, 20).map((entry: any) => ({
+      source: "company-file" as const,
+      name: String(entry.name || String(entry.path || "").split("/").pop() || "파일"),
+      path: String(entry.path || ""),
+      contentType: String(entry.contentType || "application/octet-stream"),
+      size: Math.max(0, Number(entry.size || 0) || 0),
+    })).filter((entry: MessageFileReference) => !!entry.path);
+  }
+  if (!jobId) return [];
+  const inferred = inferredFileType(String(output.kind || tool), output);
+  const hasDeliverable = inferred.contentType !== "application/octet-stream"
+    || !!(output.signedUrl || output.imageUrl || output.videoUrl || output.audioUrl || output.dataUrl);
+  if (!hasDeliverable) return [];
+  const rawName = String(output.fileName || output.filename || output.title || tool || "산출물").trim() || "산출물";
+  const name = rawName.includes(".") || !inferred.extension ? rawName : `${rawName}${inferred.extension}`;
+  return [{ source: "generated", jobId, name, contentType: inferred.contentType, kind: String(output.kind || tool) }];
 }
 
 export async function addMessage(
   sql: SqlFn,
-  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string }
+  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string; files?: MessageFileReference[] }
 ): Promise<AgentMessage> {
   const rows = await sql(
-    `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text]
+    `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text, files)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING *`,
+    [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text, JSON.stringify((m.files || []).slice(0, 20))]
   );
   return rows[0] as AgentMessage;
 }
@@ -2797,7 +2850,7 @@ export async function processJob(
   jobId: string,
   type: string,
   input: any
-): Promise<{ ok: boolean; error?: string; gated?: boolean }> {
+): Promise<{ ok: boolean; error?: string; gated?: boolean; output?: any }> {
   try {
     const tool = AGENT_TOOLS[type];
     if (!tool) throw new Error(`unknown tool: ${type}`);
@@ -2809,7 +2862,7 @@ export async function processJob(
     await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const output = await tool.run(input, ctx);
     await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
-    return { ok: true };
+    return { ok: true, output };
   } catch (e: any) {
     const error = String(e?.message || e || "tool_failed");
     await setJobStatus(sql, jobId, ctx.userId, { status: "error", error });

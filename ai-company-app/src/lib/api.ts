@@ -917,6 +917,7 @@ export async function getConversationMessages(id: string): Promise<HistoryTurn[]
   const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(id)}`)).json();
   return ((d && d.items) || []).map((m: any) => ({
     role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined, text: m.text,
+    files: Array.isArray(m.files) ? m.files : undefined,
     ts: m.created_at ? (Date.parse(m.created_at) || undefined) : undefined,
   }));
 }
@@ -1306,6 +1307,25 @@ export interface AgentMessage {
   name?: string;
   emoji?: string;
   text: string;
+  files?: ChatFileReference[];
+}
+
+export interface ChatFileReference {
+  source: "company-file" | "generated";
+  name: string;
+  contentType: string;
+  path?: string;
+  size?: number;
+  jobId?: string;
+  kind?: string;
+  autoOpen?: boolean;
+}
+
+export async function getAgentJob(id: string): Promise<any> {
+  const res = await fetch(`/api/agent/job?id=${encodeURIComponent(id)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.job) throw new Error(data?.error || "생성 파일 정보를 불러오지 못했어요.");
+  return data.job;
 }
 export async function reviewResult(
   id: string,
@@ -1339,6 +1359,7 @@ export async function cancelResult(id: string): Promise<{ ok: boolean; message?:
         name: raw.name,
         emoji: AGENT_EMOJI[raw.agent_id || raw.agentId] || raw.emoji,
         text: raw.text,
+        files: Array.isArray(raw.files) ? raw.files : undefined,
       }
     : undefined;
   return { ok: !!d.ok, message };
@@ -1503,6 +1524,7 @@ export interface HistoryTurn {
   name?: string;
   emoji?: string;
   text: string;
+  files?: ChatFileReference[];
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
 }
 
@@ -1603,7 +1625,7 @@ export async function streamChat(
         if (event.type === "msg" && event.msg?.role === "agent") {
           const m = event.msg;
           onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: AGENT_EMOJI[m.agent_id] || "" });
-          onEvent("turn_end", { agentId: m.agent_id, text: m.text });
+          onEvent("turn_end", { agentId: m.agent_id, text: m.text, files: Array.isArray(m.files) ? m.files : [] });
           agentEmitted++;
         } else if (event.type === "job_ready") {
           onEvent("job_ready", { payload: event.payload });
