@@ -36,13 +36,23 @@
 
   function readPublishResults(projectOrId) {
     if (isBrandTarget(projectOrId)) {
+      var combined = [];
       if (NK.service && NK.service.brand && NK.service.brand.listPublishResults) {
         var directBrandResults = NK.service.brand.listPublishResults(projectOrId);
-        if (directBrandResults.length) return directBrandResults;
+        combined = combined.concat(directBrandResults);
       }
-      return brandProjects(projectOrId).reduce(function (acc, project) {
+      combined = combined.concat(brandProjects(projectOrId).reduce(function (acc, project) {
         return acc.concat(readPublishResults(project));
-      }, []);
+      }, []));
+      var seen = new Map();
+      combined.forEach(function (item, index) {
+        var row = item && typeof item === 'object' ? item : {};
+        var key = String(row.remotePostId || '').trim()
+          ? [row.channelType, row.remotePostId].join('|')
+          : [row.id || ('publish_' + index), row.projectId || '', row.publishedAt || ''].join('|');
+        if (!seen.has(key)) seen.set(key, row);
+      });
+      return Array.from(seen.values());
     }
     var project = normalizeProject(projectOrId);
     if (!project) return [];
@@ -59,7 +69,10 @@
         contentType: String(raw.contentType || '').trim() || 'unknown',
         status: String(raw.status || 'published').trim() || 'published',
         publishedAt: String(raw.publishedAt || raw.capturedAt || '').trim(),
+        metricsUpdatedAt: String(raw.metricsUpdatedAt || raw.capturedAt || raw.updatedAt || '').trim(),
         remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
+        remoteUrl: String(raw.remoteUrl || raw.url || raw.postUrl || '').trim(),
+        thumbnailUrl: String(raw.thumbnailUrl || raw.thumbnail || raw.previewUrl || '').trim(),
         title: String(raw.title || '').trim() || translate('게시 결과'),
         projectId: String(raw.projectId || project.id || '').trim(),
         projectTitle: String(raw.projectTitle || project.title || project.seriesTitle || '').trim(),
@@ -105,7 +118,12 @@
     var season = normalizeFilterValue(opts.seasonId);
     var campaign = normalizeFilterValue(opts.campaignId);
     var purpose = normalizeFilterValue(opts.purposeKey);
+    var dateFrom = normalizeFilterValue(opts.dateFrom);
+    var dateTo = normalizeFilterValue(opts.dateTo);
+    var includeNonPublished = opts.includeNonPublished === true;
     return src.filter(function (item) {
+      var status = normalizeFilterValue(item.status).toLowerCase();
+      if (!includeNonPublished && status !== 'published' && status !== 'complete') return false;
       if (episode && normalizeFilterValue(item.projectId) !== episode) return false;
       if (channel && normalizeFilterValue(item.channelType) !== channel) return false;
       if (contentType && normalizeFilterValue(item.contentType) !== contentType) return false;
@@ -116,6 +134,12 @@
         var matchesCategory = normalizeFilterValue(item.purposeCategory) === purpose;
         var matchesTag = Array.isArray(item.purposeTags) && item.purposeTags.some(function (tag) { return normalizeFilterValue(tag) === purpose; });
         if (!matchesCategory && !matchesTag && purposeKey !== purpose) return false;
+      }
+      if (dateFrom || dateTo) {
+        var publishedDate = normalizeFilterValue(item.publishedAt).slice(0, 10);
+        if (!publishedDate) return false;
+        if (dateFrom && publishedDate < dateFrom) return false;
+        if (dateTo && publishedDate > dateTo) return false;
       }
       return true;
     });
@@ -139,13 +163,19 @@
       totals.shares += item.metrics.shares;
       totals.clicks += item.metrics.clicks;
       var key = item.channelType || 'unknown';
-      if (!byChannel.has(key)) byChannel.set(key, 0);
-      byChannel.set(key, byChannel.get(key) + item.metrics.views);
+      if (!byChannel.has(key)) byChannel.set(key, { views: 0, posts: 0 });
+      var channelRow = byChannel.get(key);
+      channelRow.views += item.metrics.views;
+      channelRow.posts += 1;
     });
+    totals.averageViews = totals.totalPosts ? totals.views / totals.totalPosts : 0;
+    totals.engagements = totals.likes + totals.comments + totals.shares;
+    totals.engagementRate = totals.views ? (totals.engagements / totals.views) * 100 : 0;
     var topViews = -1;
-    byChannel.forEach(function (views, key) {
-      if (views > topViews) {
-        topViews = views;
+    byChannel.forEach(function (row, key) {
+      var averageViews = row.posts ? row.views / row.posts : 0;
+      if (averageViews > topViews) {
+        topViews = averageViews;
         totals.topChannel = key;
       }
     });
@@ -173,7 +203,7 @@
     return filterRows(readPublishResults(projectOrId), filters);
   };
   analytics.listFilterOptions = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
+    var rows = filterRows(readPublishResults(projectOrId), {});
     var episodeMap = new Map();
     var channelMap = new Map();
     var contentTypeMap = new Map();
@@ -251,9 +281,7 @@
       if (!row.topContentType && item.contentType) {
         row.topContentType = item.contentType;
       }
-    }).sort(function (a, b) {
-      return b.views - a.views || b.totalPosts - a.totalPosts;
-    });
+    }).map(finalizeGroup).sort(compareGroupPerformance);
   };
 
   analytics.summarizeByContentType = function (projectOrId, filters) {
@@ -281,9 +309,7 @@
       if (!row.topChannel && item.channelType) {
         row.topChannel = item.channelType;
       }
-    }).sort(function (a, b) {
-      return b.views - a.views || b.totalPosts - a.totalPosts;
-    });
+    }).map(finalizeGroup).sort(compareGroupPerformance);
   };
 
   analytics.summarizeByEpisode = function (projectOrId, filters) {
@@ -316,9 +342,7 @@
       if (!row.topChannel && item.channelType) {
         row.topChannel = item.channelType;
       }
-    }).sort(function (a, b) {
-      return b.views - a.views || b.totalPosts - a.totalPosts;
-    });
+    }).map(finalizeGroup).sort(compareGroupPerformance);
   };
 
   analytics.summarizeByUploadTime = function (projectOrId, filters) {
@@ -355,9 +379,7 @@
       row.shares += item.metrics.shares;
       row.clicks += item.metrics.clicks;
     });
-    return Array.from(map.values()).sort(function (a, b) {
-      return b.views - a.views || b.totalPosts - a.totalPosts;
-    });
+    return Array.from(map.values()).map(finalizeGroup).sort(compareGroupPerformance);
   };
 
   analytics.summarizeByHashtag = function (projectOrId, filters) {
@@ -388,8 +410,42 @@
         row.clicks += item.metrics.clicks;
       });
     });
-    return Array.from(map.values()).sort(function (a, b) {
-      return b.views - a.views || b.totalPosts - a.totalPosts;
-    }).slice(0, 8);
+    return Array.from(map.values()).map(finalizeGroup).sort(compareGroupPerformance).slice(0, 8);
+  };
+
+  function finalizeGroup(row) {
+    var target = row && typeof row === 'object' ? row : {};
+    target.averageViews = target.totalPosts ? target.views / target.totalPosts : 0;
+    target.engagements = Number(target.likes || 0) + Number(target.comments || 0) + Number(target.shares || 0);
+    target.engagementRate = target.views ? (target.engagements / target.views) * 100 : 0;
+    return target;
+  }
+
+  function compareGroupPerformance(a, b) {
+    return Number(b.averageViews || 0) - Number(a.averageViews || 0)
+      || Number(b.engagementRate || 0) - Number(a.engagementRate || 0)
+      || Number(b.totalPosts || 0) - Number(a.totalPosts || 0);
+  }
+
+  analytics.summarizeTrend = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
+    var map = new Map();
+    rows.forEach(function (item) {
+      var date = String(item.publishedAt || '').slice(0, 10);
+      if (!date) return;
+      if (!map.has(date)) {
+        map.set(date, { date: date, totalPosts: 0, views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 });
+      }
+      var row = map.get(date);
+      row.totalPosts += 1;
+      row.views += item.metrics.views;
+      row.likes += item.metrics.likes;
+      row.comments += item.metrics.comments;
+      row.shares += item.metrics.shares;
+      row.clicks += item.metrics.clicks;
+    });
+    return Array.from(map.values()).map(finalizeGroup).sort(function (a, b) {
+      return String(a.date).localeCompare(String(b.date));
+    });
   };
 })();

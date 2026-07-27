@@ -84,29 +84,20 @@
     return '#' + raw.replace(/[^0-9A-Za-z가-힣_]+/g, '');
   }
 
-  strategy.buildRecommendations = function (projectOrId) {
+  strategy.buildRecommendations = function (projectOrId, filters) {
     var project = normalizeProject(projectOrId);
     if (!project || !NK.service || !NK.service.analytics) return [];
 
     var payload = payloadForTarget(projectOrId);
-    var summary = NK.service.analytics.summarizeProject(project);
-    var byChannel = NK.service.analytics.summarizeByChannel(project);
-    var byType = NK.service.analytics.summarizeByContentType(project);
-    var byTime = NK.service.analytics.summarizeByUploadTime(project);
-    var byHashtag = NK.service.analytics.summarizeByHashtag(project);
+    var summary = NK.service.analytics.summarizeProject(project, filters);
+    var byChannel = NK.service.analytics.summarizeByChannel(project, filters);
+    var byType = NK.service.analytics.summarizeByContentType(project, filters);
+    var byTime = NK.service.analytics.summarizeByUploadTime(project, filters);
+    var byHashtag = NK.service.analytics.summarizeByHashtag(project, filters);
     var knowledge = payload.knowledgeHub && typeof payload.knowledgeHub === 'object' ? payload.knowledgeHub : payload;
     var recommendations = [];
 
-    if (!summary.totalPosts) {
-      recommendations.push({
-        id: 'seed-data',
-        category: translate('데이터 확보'),
-        title: translate('먼저 게시 결과를 최소 3건 이상 쌓으세요'),
-        reason: translate('현재는 추천에 사용할 게시 결과 데이터가 부족합니다.'),
-        action: translate('Brand Studio에서 같은 프로젝트로 채널별 게시 결과를 3건 이상 기록하세요.')
-      });
-      return recommendations;
-    }
+    if (summary.totalPosts < 3 || summary.views <= 0) return recommendations;
 
     var topChannel = firstItem(byChannel);
     if (topChannel) {
@@ -114,8 +105,10 @@
         id: 'focus-channel',
         category: translate('채널 전략'),
         title: channelLabel(topChannel.channelType) + translate('에 운영 우선순위를 두세요'),
-        reason: translate('현재 가장 많은 조회수를 만든 채널은 ') + channelLabel(topChannel.channelType) + translate('입니다.'),
-        action: translate('다음 3개 콘텐츠는 ') + channelLabel(topChannel.channelType) + translate(' 기준 포맷으로 먼저 배치하세요.')
+        reason: channelLabel(topChannel.channelType) + translate('의 게시물당 평균 조회수가 현재 분석 범위에서 가장 높습니다.'),
+        evidence: translate('게시물 ') + topChannel.totalPosts + translate('건 · 평균 조회수 ') + Math.round(topChannel.averageViews || 0).toLocaleString(),
+        confidence: topChannel.totalPosts >= 10 ? translate('근거 충분') : translate('추가 검증 필요'),
+        action: translate('다음 2개 콘텐츠에서 같은 채널을 우선 테스트하고 평균 조회수가 유지되는지 확인하세요.')
       });
     }
 
@@ -125,8 +118,10 @@
         id: 'focus-format',
         category: translate('포맷 전략'),
         title: contentTypeLabel(topType.contentType) + translate(' 비중을 높이세요'),
-        reason: translate('현재 가장 강한 콘텐츠 유형은 ') + contentTypeLabel(topType.contentType) + translate('입니다.'),
-        action: translate('다음 제작 큐에서 ') + contentTypeLabel(topType.contentType) + translate('를 2회 이상 연속 테스트하세요.')
+        reason: contentTypeLabel(topType.contentType) + translate('의 게시물당 평균 조회수가 현재 가장 높습니다.'),
+        evidence: translate('게시물 ') + topType.totalPosts + translate('건 · 평균 조회수 ') + Math.round(topType.averageViews || 0).toLocaleString(),
+        confidence: topType.totalPosts >= 10 ? translate('근거 충분') : translate('추가 검증 필요'),
+        action: translate('다음 제작 큐에서 같은 유형을 2회 테스트하고 평균 조회수 변화를 비교하세요.')
       });
     }
 
@@ -137,7 +132,9 @@
         category: translate('배포 전략'),
         title: bestTime.label + translate(' 업로드를 우선 테스트하세요'),
         reason: translate('현재 저장된 데이터 기준으로 가장 높은 조회수를 만든 시간대는 ') + bestTime.label + translate('입니다.'),
-        action: translate('예약 게시 기본값을 ') + bestTime.label + translate(' 구간에 맞추고 2회 이상 반복 검증하세요.')
+        evidence: translate('게시물 ') + bestTime.totalPosts + translate('건 · 평균 조회수 ') + Math.round(bestTime.averageViews || 0).toLocaleString(),
+        confidence: bestTime.totalPosts >= 5 ? translate('근거 보통') : translate('추가 검증 필요'),
+        action: translate('예약 게시를 ') + bestTime.label + translate(' 구간에서 2회 반복해 시간대 효과를 검증하세요.')
       });
     }
 
@@ -148,6 +145,8 @@
         category: translate('태그 전략'),
         title: bestTag.hashtag + translate(' 태그 조합을 유지하세요'),
         reason: translate('현재 가장 높은 성과를 보인 해시태그는 ') + bestTag.hashtag + translate('입니다.'),
+        evidence: translate('사용 게시물 ') + bestTag.totalPosts + translate('건 · 평균 조회수 ') + Math.round(bestTag.averageViews || 0).toLocaleString(),
+        confidence: bestTag.totalPosts >= 5 ? translate('근거 보통') : translate('추가 검증 필요'),
         action: translate('다음 캡션 생성 시 ') + bestTag.hashtag + translate('를 기본 태그로 포함하고 보조 태그만 교체해 비교하세요.')
       });
     }
@@ -165,15 +164,17 @@
     return recommendations.slice(0, 5);
   };
 
-  strategy.buildContentSuggestions = function (projectOrId) {
+  strategy.buildContentSuggestions = function (projectOrId, filters) {
     var project = normalizeProject(projectOrId);
     if (!project || !NK.service || !NK.service.analytics) return [];
 
     var payload = payloadForTarget(projectOrId);
-    var byChannel = NK.service.analytics.summarizeByChannel(project);
-    var byType = NK.service.analytics.summarizeByContentType(project);
-    var byTime = NK.service.analytics.summarizeByUploadTime(project).filter(function (item) { return item.totalPosts > 0; });
-    var byHashtag = NK.service.analytics.summarizeByHashtag(project);
+    var summary = NK.service.analytics.summarizeProject(project, filters);
+    if (summary.totalPosts < 3 || summary.views <= 0) return [];
+    var byChannel = NK.service.analytics.summarizeByChannel(project, filters);
+    var byType = NK.service.analytics.summarizeByContentType(project, filters);
+    var byTime = NK.service.analytics.summarizeByUploadTime(project, filters).filter(function (item) { return item.totalPosts > 0; });
+    var byHashtag = NK.service.analytics.summarizeByHashtag(project, filters);
     var topChannel = firstItem(byChannel);
     var topType = firstItem(byType);
     var bestTime = firstItem(byTime);

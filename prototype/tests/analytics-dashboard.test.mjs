@@ -1,0 +1,143 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+
+const read = (relativePath) => fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
+
+function createContext(rows = []) {
+  const project = {
+    id: 'episode-1',
+    title: '첫 에피소드',
+    payload: { brandStudioPublishResults: rows }
+  };
+  const context = {
+    console,
+    Map,
+    Date,
+    URLSearchParams,
+    window: null,
+    NK: {
+      state: { runtime: { lang: 'ko' } },
+      service: {
+        project: { getDraftById: () => project },
+        brand: {
+          listProjects: () => [project],
+          listPublishResults: () => []
+        }
+      },
+      ui: {}
+    }
+  };
+  context.window = context;
+  return { context: vm.createContext(context), project };
+}
+
+function load(ctx, relativePath) {
+  vm.runInContext(read(relativePath), ctx, { filename: relativePath });
+}
+
+function metricRow(overrides = {}) {
+  return {
+    id: overrides.id || 'post-1',
+    channelType: overrides.channelType || 'instagram',
+    contentType: overrides.contentType || 'shorts-promo',
+    status: overrides.status || 'published',
+    publishedAt: overrides.publishedAt || '2026-07-20T10:00:00.000Z',
+    title: overrides.title || '게시물',
+    metrics: {
+      views: overrides.views ?? 100,
+      likes: overrides.likes ?? 10,
+      comments: overrides.comments ?? 2,
+      shares: overrides.shares ?? 3,
+      clicks: overrides.clicks ?? 4
+    }
+  };
+}
+
+test('analytics excludes scheduled and failed posts and respects the selected period', () => {
+  const { context, project } = createContext([
+    metricRow({ id: 'published', publishedAt: '2026-07-10T00:00:00Z' }),
+    metricRow({ id: 'scheduled', status: 'scheduled', publishedAt: '2026-07-11T00:00:00Z' }),
+    metricRow({ id: 'failed', status: 'failed', publishedAt: '2026-07-12T00:00:00Z' }),
+    metricRow({ id: 'outside', publishedAt: '2026-06-01T00:00:00Z' })
+  ]);
+  load(context, 'prototype/js/service/analytics.js');
+
+  const filtered = context.NK.service.analytics.filterPublishResults(project, {
+    dateFrom: '2026-07-01',
+    dateTo: '2026-07-31'
+  });
+  assert.deepEqual(Array.from(filtered, (item) => item.id), ['published']);
+});
+
+test('analytics calculates comparable averages and engagement rate', () => {
+  const { context, project } = createContext([
+    metricRow({ id: 'a', views: 100, likes: 10, comments: 2, shares: 3 }),
+    metricRow({ id: 'b', views: 300, likes: 20, comments: 4, shares: 6 })
+  ]);
+  load(context, 'prototype/js/service/analytics.js');
+
+  const summary = context.NK.service.analytics.summarizeProject(project, {});
+  assert.equal(summary.totalPosts, 2);
+  assert.equal(summary.views, 400);
+  assert.equal(summary.averageViews, 200);
+  assert.equal(summary.engagements, 45);
+  assert.equal(summary.engagementRate, 11.25);
+});
+
+test('brand analytics merges direct and episode results without duplicating the same remote post', () => {
+  const { context, project } = createContext([
+    metricRow({ id: 'episode-copy', channelType: 'instagram', views: 100 })
+  ]);
+  project.payload.brandStudioPublishResults[0].remotePostId = 'remote-1';
+  context.NK.service.brand.listPublishResults = () => [
+    { ...metricRow({ id: 'brand-copy', channelType: 'instagram', views: 100 }), remotePostId: 'remote-1' },
+    { ...metricRow({ id: 'brand-only', channelType: 'youtube', views: 500 }), remotePostId: 'remote-2' }
+  ];
+  load(context, 'prototype/js/service/analytics.js');
+
+  const brandTarget = { brandId: 'brand-1' };
+  const rows = context.NK.service.analytics.listPublishResults(brandTarget);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(Array.from(rows, (item) => item.remotePostId).sort(), ['remote-1', 'remote-2']);
+});
+
+test('strategy does not make performance claims before the minimum sample and uses filtered evidence', () => {
+  const rows = [
+    metricRow({ id: 'ig-1', channelType: 'instagram', views: 100 }),
+    metricRow({ id: 'ig-2', channelType: 'instagram', views: 200 }),
+    metricRow({ id: 'yt-1', channelType: 'youtube', views: 900 })
+  ];
+  const { context, project } = createContext(rows);
+  load(context, 'prototype/js/service/analytics.js');
+  load(context, 'prototype/js/service/strategy-engine.js');
+
+  assert.deepEqual(Array.from(context.NK.service.strategyEngine.buildRecommendations(project, { channelType: 'instagram' })), []);
+  const recommendations = context.NK.service.strategyEngine.buildRecommendations(project, {});
+  assert.ok(recommendations.length > 0);
+  assert.match(recommendations[0].evidence, /게시물/);
+  assert.match(recommendations[0].action, /확인|검증/);
+});
+
+test('analytics UI keeps the selected brand title and renders truthful dashboard states', () => {
+  const uiSource = read('prototype/js/ui/brand-intelligence.js');
+  assert.match(uiSource, /<h2>' \+ escapeHtml\(brandTitle\)/);
+  assert.match(uiSource, /성과 목표/);
+  assert.match(uiSource, /KPI 추이/);
+  assert.match(uiSource, /성과 기여 게시물/);
+  assert.match(uiSource, /성과 원인 분해/);
+  assert.match(uiSource, /근거가 있는 제안만 표시합니다/);
+  assert.match(uiSource, /allPublishedRows\.some\(metricHasValue\)/);
+  assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
+  assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
+});
+
+test('Brand Studio persists successful publish responses as analytics input', () => {
+  const studioSource = read('prototype/js/ui/brand-studio.js');
+  assert.match(studioSource, /function persistPublishedResult/);
+  assert.match(studioSource, /brandStudioPublishResults: nextBrandRows/);
+  assert.match(studioSource, /brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows/);
+  assert.match(studioSource, /metrics: \{ views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 \}/);
+});

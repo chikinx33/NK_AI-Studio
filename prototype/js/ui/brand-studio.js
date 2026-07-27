@@ -1458,6 +1458,66 @@
       });
     }
 
+    function appendPublishResult(rows, nextItem) {
+      var next = Array.isArray(rows) ? rows.slice() : [];
+      var remoteKey = String(nextItem.remotePostId || '').trim();
+      var existingIndex = next.findIndex(function (item) {
+        var row = item && typeof item === 'object' ? item : {};
+        if (remoteKey) {
+          return String(row.channelType || '') === String(nextItem.channelType || '')
+            && String(row.remotePostId || row.postId || '') === remoteKey;
+        }
+        return String(row.id || '') === String(nextItem.id || '');
+      });
+      if (existingIndex >= 0) next[existingIndex] = Object.assign({}, next[existingIndex], nextItem);
+      else next.unshift(nextItem);
+      return next;
+    }
+
+    function persistPublishedResult(formatId, draft, publishResponse, scheduledAt) {
+      var result = publishResponse && publishResponse.result && typeof publishResponse.result === 'object'
+        ? publishResponse.result
+        : {};
+      var remotePostId = String(result.postId || result.remotePostId || '').trim();
+      var status = String(result.status || ((scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'published')).trim() || 'published';
+      var publishedAt = String(result.publishedAt || result.scheduledFor || '').trim() || new Date().toISOString();
+      var rawHashtags = String(draft && draft.hashtags || '').trim();
+      var record = {
+        id: remotePostId ? (String(formatId || 'channel') + '_' + remotePostId) : ('publish_' + Date.now() + '_' + String(formatId || 'channel')),
+        channelType: String(formatId || '').trim(),
+        contentType: String(payload.brandStudioContentType || 'sns-post').trim() || 'sns-post',
+        status: status,
+        publishedAt: publishedAt,
+        metricsUpdatedAt: '',
+        remotePostId: remotePostId,
+        remoteUrl: String(result.url || '').trim(),
+        title: String(draft && draft.title || project.title || '게시 결과').trim() || '게시 결과',
+        projectId: projectId,
+        projectTitle: String(project.title || payload.episodeTitle || projectId).trim(),
+        seasonId: String(payload.seasonId || '').trim(),
+        seasonLabel: String(payload.seasonLabel || payload.seasonTitle || '').trim(),
+        campaignId: String(payload.campaignId || '').trim(),
+        campaignTitle: String(payload.campaignTitle || payload.campaignLabel || '').trim(),
+        purposeCategory: String(payload.purposeCategory || '').trim(),
+        purposeTags: Array.isArray(payload.purposeTags) ? payload.purposeTags.slice() : [],
+        caption: String(draft && draft.caption || '').trim(),
+        hashtags: rawHashtags.split(/[\s,\n]+/).map(function (tag) { return String(tag || '').trim(); }).filter(Boolean),
+        metrics: { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 }
+      };
+      var brandRows = brand && Array.isArray(brand.brandStudioPublishResults)
+        ? brand.brandStudioPublishResults.slice()
+        : [];
+      var projectRows = Array.isArray(payload.brandStudioPublishResults)
+        ? payload.brandStudioPublishResults.slice()
+        : (Array.isArray(payload.publishResults) ? payload.publishResults.slice() : []);
+      var nextBrandRows = appendPublishResult(brandRows, record);
+      var nextProjectRows = appendPublishResult(projectRows, record);
+      return syncBrandAndProject(
+        { brandStudioPublishResults: nextBrandRows },
+        { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
+      );
+    }
+
     // 스토리(가상 ID)를 포함한 선택된 자산 총 수
     var persistedSelCount = persistedSelectedAssetItems.length + (storySelected ? 1 : 0);
     var savedActiveStep = parseInt(String(payload.brandStudioActiveStep || '0'), 10);
@@ -3943,6 +4003,14 @@
           .then(function (publishResult) {
             if (publishResult && publishResult.skipped) return;
             if (publishResult && publishResult.ok) {
+              return persistPublishedResult(oneFmtId, formatDrafts[oneFmtId] || {}, publishResult, scheduledAtOne)
+                .then(function () { return publishResult; });
+            }
+            return publishResult;
+          })
+          .then(function (publishResult) {
+            if (!publishResult) return;
+            if (publishResult && publishResult.ok) {
               _deployedFormats[oneFmtId] = true;
               persistDeployedFormats();
               var oneFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
@@ -3996,9 +4064,13 @@
                 return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt)
                   .then(function (pubRes) {
                     if (pubRes && pubRes.skipped) { delete _deployingFormats[fmtId]; refreshDeploySummary(); return; }
-                    _deployedFormats[fmtId] = true; persistDeployedFormats();
-                    _allDeployedCount += 1;
-                    delete _deployingFormats[fmtId]; refreshDeploySummary();
+                    if (!pubRes || !pubRes.ok) return;
+                    return persistPublishedResult(fmtId, formatDrafts[fmtId] || {}, pubRes, fmtScheduledAt)
+                      .then(function () {
+                        _deployedFormats[fmtId] = true; persistDeployedFormats();
+                        _allDeployedCount += 1;
+                        delete _deployingFormats[fmtId]; refreshDeploySummary();
+                      });
                   });
               });
             }, Promise.resolve());

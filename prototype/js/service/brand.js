@@ -133,7 +133,10 @@
                 contentType: normalizeText(raw.contentType) || 'unknown',
                 status: normalizeText(raw.status) || 'published',
                 publishedAt: normalizeText(raw.publishedAt || raw.capturedAt),
+                metricsUpdatedAt: normalizeText(raw.metricsUpdatedAt || raw.capturedAt || raw.updatedAt),
                 remotePostId: normalizeText(raw.remotePostId || raw.postId),
+                remoteUrl: normalizeText(raw.remoteUrl || raw.url || raw.postUrl),
+                thumbnailUrl: normalizeText(raw.thumbnailUrl || raw.thumbnail || raw.previewUrl),
                 title: normalizeText(raw.title) || '게시 결과',
                 projectId: normalizeText(raw.projectId),
                 projectTitle: normalizeText(raw.projectTitle || raw.episodeTitle),
@@ -157,6 +160,23 @@
         }).filter(function (item) {
             return item.channelType || item.remotePostId || item.title;
         });
+    }
+
+    function normalizePerformanceGoal(value) {
+        var raw = value && typeof value === 'object' ? value : null;
+        if (!raw) return null;
+        var allowedMetrics = ['views', 'averageViews', 'engagementRate', 'clicks'];
+        var metric = normalizeText(raw.metric);
+        if (allowedMetrics.indexOf(metric) < 0) metric = 'views';
+        var target = Math.max(0, Number(raw.target || 0) || 0);
+        if (!target) return null;
+        return {
+            metric: metric,
+            target: target,
+            startDate: normalizeText(raw.startDate),
+            endDate: normalizeText(raw.endDate),
+            updatedAt: normalizeText(raw.updatedAt) || new Date().toISOString()
+        };
     }
 
     function normalizeCharacterName(value) {
@@ -462,6 +482,7 @@
             brandCharacters: normalizeBrandCharacters(raw.brandCharacters),
             brandStudioPublishPlan: normalizePublishPlan(raw.brandStudioPublishPlan),
             brandStudioPublishResults: normalizePublishResults(raw.brandStudioPublishResults),
+            performanceGoal: normalizePerformanceGoal(raw.performanceGoal || raw.analyticsGoal),
             seriesIds: seriesIds,
             sourceProjectIds: sourceProjectIds,
             status: normalizeText(raw.status || 'active') || 'active',
@@ -628,6 +649,9 @@
             brandCharacters: mergeBrandCharacters(current.brandCharacters, incoming.brandCharacters),
             brandStudioPublishPlan: mergePublishPlan(current.brandStudioPublishPlan, incoming.brandStudioPublishPlan, preferIncoming),
             brandStudioPublishResults: mergePublishResults(current.brandStudioPublishResults, incoming.brandStudioPublishResults),
+            performanceGoal: preferIncoming
+                ? (incoming.performanceGoal || current.performanceGoal)
+                : (current.performanceGoal || incoming.performanceGoal),
             seriesIds: mergeTextList(current.seriesIds, incoming.seriesIds),
             sourceProjectIds: mergeTextList(current.sourceProjectIds, incoming.sourceProjectIds),
             status: pickText(current.status, incoming.status, preferIncoming) || 'active',
@@ -748,6 +772,7 @@
             connectedChannels: payload.brandStudioChannels || payload.connectedChannels,
             brandStudioPublishPlan: payload.brandStudioPublishPlan || payload.publishPlan,
             brandStudioPublishResults: payload.brandStudioPublishResults || payload.publishResults,
+            performanceGoal: payload.performanceGoal || payload.analyticsGoal,
             seriesIds: [payload.seriesId || project.seriesId].filter(Boolean),
             sourceProjectIds: [project.id].filter(Boolean)
         });
