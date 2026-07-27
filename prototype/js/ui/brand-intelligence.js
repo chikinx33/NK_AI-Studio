@@ -338,36 +338,59 @@
       cursor = shiftDate(cursor, 1);
     }
     if (!dates.length) return '';
-    var values = dates.map(function (date) { return Number((map.get(date) || {}).views || 0); });
-    var max = Math.max.apply(Math, values.concat([1]));
+    var values = dates.map(function (date) { return Math.max(0, Number((map.get(date) || {}).views || 0)); });
+    var positiveValues = values.filter(function (value) { return value > 0; });
+    var peakValue = Math.max.apply(Math, positiveValues.concat([0]));
+    var scale = peakValue > 0 ? Math.pow(10, Math.floor(Math.log10(peakValue))) : 1;
+    var normalizedPeak = peakValue / scale;
+    var scaleSteps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    var nicePeak = scaleSteps.find(function (stepValue) { return stepValue >= normalizedPeak; }) || 10;
+    var max = Math.max(1, nicePeak * scale);
     var width = 960;
-    var height = 250;
-    var left = 42;
-    var right = 16;
-    var top = 18;
-    var bottom = 42;
+    var height = 286;
+    var left = 52;
+    var right = 20;
+    var top = 34;
+    var bottom = 44;
     var plotWidth = width - left - right;
     var plotHeight = height - top - bottom;
     var step = plotWidth / dates.length;
-    var barWidth = Math.max(3, Math.min(22, step * 0.58));
+    var barWidth = Math.max(5, Math.min(28, step * 0.64));
     var grid = [0, 0.25, 0.5, 0.75, 1].map(function (ratio) {
       var y = top + plotHeight - (plotHeight * ratio);
       return '<line x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" class="analytics-chart-grid" />' +
         '<text x="' + (left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="analytics-chart-label">' + escapeHtml(numberText(max * ratio, 0)) + '</text>';
     }).join('');
+    var xLabels = dates.map(function (date, index) {
+      if (!(index === 0 || index === dates.length - 1 || index % Math.max(1, Math.ceil(dates.length / 6)) === 0)) return '';
+      var x = left + (index * step) + (step / 2);
+      return '<text x="' + x.toFixed(2) + '" y="' + (height - 14) + '" text-anchor="middle" class="analytics-chart-label analytics-chart-date">' + escapeHtml(date.slice(5).replace('-', '.')) + '</text>';
+    }).join('');
     var bars = dates.map(function (date, index) {
       var value = values[index];
+      if (value <= 0) return '';
       var barHeight = (value / max) * plotHeight;
       var x = left + (index * step) + ((step - barWidth) / 2);
       var y = top + plotHeight - barHeight;
-      var label = (index === 0 || index === dates.length - 1 || index % Math.max(1, Math.ceil(dates.length / 6)) === 0)
-        ? '<text x="' + (x + barWidth / 2) + '" y="' + (height - 16) + '" text-anchor="middle" class="analytics-chart-label">' + escapeHtml(date.slice(5).replace('-', '.')) + '</text>'
-        : '';
-      return '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + Math.max(1, barHeight).toFixed(2) + '" rx="3" class="analytics-chart-bar"><title>' + escapeHtml(date + ' · 조회수 ' + numberText(value)) + '</title></rect>' + label;
+      var isPeak = value === peakValue;
+      return '<g class="analytics-chart-column' + (isPeak ? ' is-peak' : '') + '">' +
+        '<rect x="' + (x - 3).toFixed(2) + '" y="' + (y - 3).toFixed(2) + '" width="' + (barWidth + 6).toFixed(2) + '" height="' + (barHeight + 6).toFixed(2) + '" rx="9" class="analytics-chart-bar-glow" />' +
+        '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + barHeight.toFixed(2) + '" rx="7" class="analytics-chart-bar"><title>' + escapeHtml(date + ' · 조회수 ' + numberText(value)) + '</title></rect>' +
+        '<line x1="' + (x + 4).toFixed(2) + '" y1="' + (y + 3).toFixed(2) + '" x2="' + (x + barWidth - 4).toFixed(2) + '" y2="' + (y + 3).toFixed(2) + '" class="analytics-chart-bar-cap" />' +
+        '<text x="' + (x + barWidth / 2).toFixed(2) + '" y="' + Math.max(18, y - 10).toFixed(2) + '" text-anchor="middle" class="analytics-chart-value">' + escapeHtml(numberText(value, 0)) + '</text>' +
+        '</g>';
     }).join('');
-    var emptyNote = values.some(function (value) { return value > 0; }) ? '' :
+    var average = positiveValues.length ? positiveValues.reduce(function (sum, value) { return sum + value; }, 0) / positiveValues.length : 0;
+    var averageY = top + plotHeight - ((average / max) * plotHeight);
+    var averageLine = average > 0
+      ? '<g class="analytics-chart-average-group"><line x1="' + left + '" y1="' + averageY.toFixed(2) + '" x2="' + (width - right) + '" y2="' + averageY.toFixed(2) + '" class="analytics-chart-average" /><text x="' + (width - right - 4) + '" y="' + (averageY - 7).toFixed(2) + '" text-anchor="end" class="analytics-chart-average-label">게시일 평균 ' + escapeHtml(numberText(average, 0)) + '</text></g>'
+      : '';
+    var emptyNote = positiveValues.length ? '' :
       '<g class="analytics-chart-empty"><text x="' + (width / 2) + '" y="' + (height / 2 - 4) + '" text-anchor="middle">성과 수집 대기</text><text x="' + (width / 2) + '" y="' + (height / 2 + 20) + '" text-anchor="middle">동기화가 완료되면 날짜별 막대가 표시됩니다</text></g>';
-    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="게시일별 조회수 합계 추이">' + grid + bars + emptyNote + '</svg>';
+    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="게시일별 조회수 합계 추이">' +
+      '<defs><linearGradient id="analytics-bar-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" class="analytics-chart-stop-top"/><stop offset="100%" class="analytics-chart-stop-bottom"/></linearGradient><filter id="analytics-bar-glow" x="-80%" y="-30%" width="260%" height="170%"><feGaussianBlur stdDeviation="6"/></filter></defs>' +
+      '<rect x="' + left + '" y="' + top + '" width="' + plotWidth + '" height="' + plotHeight + '" rx="16" class="analytics-chart-plot" />' +
+      grid + averageLine + '<line x1="' + left + '" y1="' + (top + plotHeight) + '" x2="' + (width - right) + '" y2="' + (top + plotHeight) + '" class="analytics-chart-axis" />' + bars + xLabels + emptyNote + '</svg>';
   }
 
   function breakdownCardHtml(title, rows, labeler) {

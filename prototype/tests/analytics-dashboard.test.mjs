@@ -157,6 +157,14 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(studioCss, /\.analytics-editorial \.analytics-kpi-card[\s\S]+background: transparent/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
   assert.match(studioCss, /analytics-context-episode strong[\s\S]+font-size: clamp\(20px/);
+  assert.doesNotMatch(uiSource, /Math\.max\(1, barHeight\)/);
+  assert.match(uiSource, /if \(value <= 0\) return ''/);
+  assert.match(uiSource, /analytics-chart-bar-gradient|analytics-bar-gradient/);
+  assert.match(uiSource, /analytics-chart-average-label/);
+  assert.match(uiSource, /analytics-chart-value/);
+  assert.match(studioCss, /\.analytics-chart-bar[\s\S]+fill: url\(#analytics-bar-gradient\)/);
+  assert.match(studioCss, /\[data-theme="light"\] \.analytics-editorial \.analytics-sync-platform strong[\s\S]+color: var\(--text\)/);
+  assert.doesNotMatch(studioCss, /\.analytics-sync-platform strong \{ color: #f5f7ff/);
 });
 
 test('analytics and SNS settings share the same platform icon source', () => {
