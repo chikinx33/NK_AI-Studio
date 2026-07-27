@@ -123,8 +123,13 @@ test('strategy does not make performance claims before the minimum sample and us
 
 test('analytics UI keeps the selected brand title and renders truthful dashboard states', () => {
   const uiSource = read('prototype/js/ui/brand-intelligence.js');
+  const studioCss = read('prototype/styles.studio-pages.css');
   assert.match(uiSource, /<h2>' \+ escapeHtml\(brandTitle\)/);
   assert.match(uiSource, /analytics-context-episode/);
+  assert.match(uiSource, /analytics-dashboard-v2 analytics-editorial/);
+  assert.match(uiSource, /analytics-sync-details/);
+  assert.match(uiSource, /analytics-metric-section/);
+  assert.match(uiSource, /채널별 수집 상태/);
   assert.doesNotMatch(uiSource, /선택 브랜드의 목표 달성 상태와 성과 변화 원인을 확인합니다/);
   assert.doesNotMatch(uiSource, /data-action="analytics-open-(brand|knowledge|library)"/);
   assert.match(uiSource, /성과 목표/);
@@ -142,6 +147,9 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /fitLatestPeriod: true/);
   assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
   assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
+  assert.match(studioCss, /성과 분석 editorial layout/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-kpi-card[\s\S]+background: transparent/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
 });
 
 test('analytics page cache-busts every release-sensitive local asset', () => {

@@ -304,18 +304,20 @@
     var platforms = Array.isArray(current.platforms) ? current.platforms : [];
     var statusLabel = current.status === 'loading' ? '수집 중' : (current.status === 'error' ? '수집 실패' : (current.syncedAt ? '동기화 완료' : '수집 대기'));
     var statusClass = current.status === 'loading' ? 'is-loading' : (current.status === 'error' ? 'is-error' : 'is-ready');
+    var issueCount = platforms.filter(function (item) { return item && (item.state === 'error' || item.state === 'permission_required'); }).length;
+    var channelStatusText = connections.length + '개 채널' + (issueCount ? ' · ' + issueCount + '개 확인 필요' : (connections.length ? ' · 정상' : ''));
     var detail = current.status === 'loading'
       ? '연결된 플랫폼에서 최근 게시물과 성과 수치를 가져오고 있습니다.'
       : (current.error || (current.syncedAt ? formatDate(current.syncedAt) + ' 기준으로 갱신했습니다.' : '페이지 진입 시 자동으로 성과를 동기화합니다.'));
     return '<section class="analytics-sync-panel ' + statusClass + '"><div class="analytics-sync-summary"><span class="analytics-sync-indicator"></span><div><span class="analytics-section-kicker">계정·성과 동기화</span><h3>' + escapeHtml(statusLabel) + '</h3><p>' + escapeHtml(detail) + '</p></div></div>' +
-      '<div class="analytics-sync-platforms">' + (connections.length ? connections.map(function (connection) {
+      '<div class="analytics-sync-actions"><button type="button" class="btn-secondary compact" data-action="analytics-sync-now" ' + (current.status === 'loading' ? 'disabled' : '') + '>지금 새로고침</button><button type="button" class="btn-secondary compact" data-action="analytics-open-sns">SNS 설정</button></div>' +
+      '<details class="analytics-sync-details"><summary><span>채널별 수집 상태</span><strong>' + escapeHtml(channelStatusText) + '</strong></summary><div class="analytics-sync-platforms">' + (connections.length ? connections.map(function (connection) {
         var platform = String(connection.channelType || '').trim();
         var platformStatus = platforms.find(function (item) { return String(item.platform || '') === platform; }) || {};
         var state = String(platformStatus.state || (current.status === 'loading' ? 'loading' : 'connected'));
         var stateLabel = state === 'synced' ? '수집 완료' : (state === 'empty' ? '게시물 없음' : (state === 'paused' ? '사용 중지' : (state === 'permission_required' ? '권한 필요' : (state === 'error' ? '수집 오류' : (state === 'loading' ? '수집 중' : '연결됨')))));
         return '<div class="analytics-sync-platform is-' + escapeHtml(state) + '"><strong>' + escapeHtml(channelLabel(platform)) + '</strong><span>' + escapeHtml(connection.accountName ? '@' + String(connection.accountName).replace(/^@/, '') : '') + '</span><em>' + escapeHtml(stateLabel) + '</em><small>' + escapeHtml(platformStatus.message || '') + '</small></div>';
-      }).join('') : '<p class="analytics-muted">SNS 설정에서 연결된 계정을 찾지 못했습니다.</p>') + '</div>' +
-      '<div class="analytics-sync-actions"><button type="button" class="btn-secondary compact" data-action="analytics-sync-now" ' + (current.status === 'loading' ? 'disabled' : '') + '>지금 새로고침</button><button type="button" class="btn-secondary compact" data-action="analytics-open-sns">SNS 설정</button></div></section>';
+      }).join('') : '<p class="analytics-muted">SNS 설정에서 연결된 계정을 찾지 못했습니다.</p>') + '</div></details></section>';
   }
 
   function buildTrendSvg(trend, filters) {
@@ -437,7 +439,7 @@
   }
 
   function renderEmpty(root, message) {
-    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2"><div class="analytics-context-header"><div><span class="analytics-section-kicker">성과 분석</span><h2>브랜드를 선택해 주세요</h2><p>' + escapeHtml(message || '먼저 분석할 브랜드 프로젝트를 선택해 주세요.') + '</p></div><a class="btn-primary" href="dashboard.html">대시보드로 이동</a></div></section>';
+    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial"><div class="analytics-context-header"><div><span class="analytics-section-kicker">성과 분석</span><h2>브랜드를 선택해 주세요</h2><p>' + escapeHtml(message || '먼저 분석할 브랜드 프로젝트를 선택해 주세요.') + '</p></div><a class="btn-primary" href="dashboard.html">대시보드로 이동</a></div></section>';
     applyCurrentLocale();
   }
 
@@ -575,13 +577,13 @@
       '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
       '<details class="analytics-advanced-filters" ' + (filters.seasonId || filters.campaignId || filters.purposeKey ? 'open' : '') + '><summary>상세 필터 ' + (activeFilterCount ? '· ' + activeFilterCount + '개 적용' : '') + '</summary><div>' + selectHtml('seasonId', filterOptions.seasons, filters.seasonId, '시즌') + selectHtml('campaignId', filterOptions.campaigns, filters.campaignId, '캠페인') + selectHtml('purposeKey', filterOptions.purposes, filters.purposeKey, '운영 목적') + '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters">필터 초기화</button></div></details></section>';
 
-    var goalAlertsHtml = syncStatusHtml(sync) + '<div class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</div>';
+    var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</section>';
     var contentHtml = '';
-    var kpis = '<section class="analytics-kpi-grid-v2">' +
+    var kpis = '<section class="analytics-metric-section"><div class="analytics-section-heading"><div><span class="analytics-section-kicker">핵심 성과</span><h3>선택 기간의 결과</h3></div><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + '</p></div><div class="analytics-kpi-grid-v2">' +
       kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
       kpiCardHtml('게시물당 평균 조회수', numberText(summary.averageViews, 1) + '회', deltaText(summary.averageViews, previousSummary.averageViews), '게시량 차이를 보정한 성과') +
       kpiCardHtml('참여율', percentText(summary.engagementRate), deltaText(summary.engagementRate, previousSummary.engagementRate, 'point'), '(좋아요+댓글+공유) ÷ 조회수') +
-      kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</section>';
+      kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</div></section>';
     var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>게시일별 조회수 합계</h3><p>각 날짜에 게시된 콘텐츠의 현재 누적 조회수를 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
       '<section class="analytics-panel analytics-diagnosis-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">냉정한 진단</span><h3>현재 상태</h3></div></div><div class="analytics-diagnosis-list">' +
       '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? '브랜드 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
@@ -622,7 +624,7 @@
       contentHtml = kpis + trendHtml + postsHtml + breakdownHtml + actionHtml + tableHtml;
     }
 
-    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2">' + headerHtml + toolbarHtml + goalAlertsHtml + contentHtml + goalModalHtml(goal, filters) + '</section>';
+    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial">' + headerHtml + toolbarHtml + goalAlertsHtml + contentHtml + goalModalHtml(goal, filters) + '</section>';
     applyCurrentLocale();
 
     root.onclick = function (event) {
