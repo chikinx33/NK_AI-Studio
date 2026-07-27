@@ -124,6 +124,9 @@ test('strategy does not make performance claims before the minimum sample and us
 test('analytics UI keeps the selected brand title and renders truthful dashboard states', () => {
   const uiSource = read('prototype/js/ui/brand-intelligence.js');
   assert.match(uiSource, /<h2>' \+ escapeHtml\(brandTitle\)/);
+  assert.match(uiSource, /analytics-context-episode/);
+  assert.doesNotMatch(uiSource, /선택 브랜드의 목표 달성 상태와 성과 변화 원인을 확인합니다/);
+  assert.doesNotMatch(uiSource, /data-action="analytics-open-(brand|knowledge|library)"/);
   assert.match(uiSource, /성과 목표/);
   assert.match(uiSource, /KPI 추이/);
   assert.match(uiSource, /성과 기여 게시물/);
@@ -136,6 +139,16 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /성과 수집 대기/);
   assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
   assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
+});
+
+test('analytics page cache-busts every release-sensitive local asset', () => {
+  const html = read('prototype/analytics.html');
+  const configSource = read('prototype/js/config.js');
+  const version = configSource.match(/APP_VERSION\s*=\s*'([^']+)'/)?.[1];
+  assert.ok(version);
+  assert.match(html, new RegExp('styles\\.studio-pages\\.css\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(html, new RegExp('js/ui/brand-intelligence\\.js\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(html, new RegExp('js/service/brand\\.js\\?v=' + version.replaceAll('.', '\\.')));
 });
 
 test('analytics sync endpoint collects supported platform posts and metrics from the SNS source of truth', () => {

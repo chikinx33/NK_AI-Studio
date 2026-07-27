@@ -445,9 +445,14 @@
     return fetch('/api/userdata/sns/get' + query, {
       headers: { Authorization: 'Bearer ' + token },
       cache: 'no-store'
-    }).then(function (response) { return response.json(); }).then(function (result) {
-      if (!result || !result.ok || !result.settings) return [];
-      return connectionsFromSettings(result.settings);
+    }).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (result) {
+        if (!response.ok || !result || !result.ok) {
+          throw new Error(result && result.error || 'SNS 연결 상태 조회 실패 (' + response.status + ')');
+        }
+        if (result.missing || !result.settings) return [];
+        return connectionsFromSettings(result.settings);
+      });
     });
   }
 
@@ -543,8 +548,7 @@
     var hasPerformanceData = rows.some(metricHasValue);
     var activeFilterCount = ['episodeId', 'channelType', 'contentType', 'seasonId', 'campaignId', 'purposeKey'].filter(function (key) { return !!filters[key]; }).length;
 
-    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span><h2>' + escapeHtml(brandTitle) + '</h2><p>선택 브랜드의 목표 달성 상태와 성과 변화 원인을 확인합니다. 현재 기준 에피소드: <strong>' + escapeHtml(episodeTitle) + '</strong></p></div>' +
-      '<div class="analytics-context-actions"><button type="button" class="btn-secondary compact" data-action="analytics-open-brand">Brand Studio</button><button type="button" class="btn-secondary compact" data-action="analytics-open-knowledge">브랜드 허브</button><button type="button" class="btn-secondary compact" data-action="analytics-open-library">콘텐츠 저장소</button></div></header>';
+    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span><h2>' + escapeHtml(brandTitle) + '</h2><p class="analytics-context-episode"><strong>' + escapeHtml(episodeTitle) + '</strong></p></div></header>';
 
     var toolbarHtml = '<section class="analytics-toolbar"><div class="analytics-period-fields"><label><span>분석 시작일</span><input type="date" data-analytics-filter="dateFrom" value="' + escapeHtml(filters.dateFrom) + '"></label><span class="analytics-period-separator">~</span><label><span>분석 종료일</span><input type="date" data-analytics-filter="dateTo" value="' + escapeHtml(filters.dateTo) + '"></label><span class="analytics-compare-badge">이전 동일 기간 비교</span></div>' +
       '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
@@ -656,10 +660,7 @@
         });
         return;
       }
-      if (action === 'analytics-open-brand') destination = buildStageUrl('brand.html', projectId, brandId);
-      else if (action === 'analytics-open-library') destination = buildStageUrl('library.html', projectId, brandId);
-      else if (action === 'analytics-open-knowledge') destination = buildStageUrl('knowledge.html', projectId, brandId);
-      else if (action === 'analytics-open-sns') destination = 'sns-settings.html';
+      if (action === 'analytics-open-sns') destination = 'sns-settings.html';
       if (!destination) return;
       if (window.self !== window.top && window.parent) window.parent.postMessage({ type: 'load-stage', url: destination }, '*');
       else window.location.href = destination;
