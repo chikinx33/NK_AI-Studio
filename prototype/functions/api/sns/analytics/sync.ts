@@ -320,7 +320,7 @@ async function collectFacebook(env: any, userId: string, entry: any, syncedAt: s
     const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(page.pageId)}/${edge}`);
     url.search = new URLSearchParams({
       fields: "id,message,created_time,permalink_url,full_picture",
-      limit: "25",
+      limit: "5",
       access_token: page.pageToken,
     }).toString();
     response = await fetch(url.toString());

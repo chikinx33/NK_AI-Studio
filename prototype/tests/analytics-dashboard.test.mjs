@@ -164,6 +164,7 @@ test('analytics sync endpoint collects supported platform posts and metrics from
   assert.match(source, /graph\.threads\.net/);
   assert.match(source, /token\.threadsUserId\)\}\/threads/);
   assert.match(source, /for \(const edge of \["published_posts", "feed"\]\)/);
+  assert.match(source, /fields: "id,message,created_time,permalink_url,full_picture",\s+limit: "5"/);
   assert.match(source, /일부 Insights 조회가 실패했습니다/);
   assert.match(source, /platform === "instagram"[^\n]+expired/);
   assert.match(source, /api\.x\.com\/2\/users/);
