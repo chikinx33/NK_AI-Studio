@@ -102,7 +102,59 @@
 
   function normalizeViewState(state) {
     var src = state && typeof state === 'object' ? state : {};
-    return { filters: normalizeFilters(src.filters || src) };
+    var sync = src.sync && typeof src.sync === 'object' ? src.sync : {};
+    return {
+      filters: normalizeFilters(src.filters || src),
+      sync: {
+        status: String(sync.status || 'idle').trim(),
+        syncedAt: String(sync.syncedAt || '').trim(),
+        error: String(sync.error || '').trim(),
+        connections: Array.isArray(sync.connections) ? sync.connections.slice() : [],
+        platforms: Array.isArray(sync.platforms) ? sync.platforms.slice() : []
+      }
+    };
+  }
+
+  function connectionsFromSettings(settings) {
+    var sns = settings && settings.sns && typeof settings.sns === 'object' ? settings.sns : {};
+    return Object.keys(sns).filter(function (platform) {
+      return platform !== 'youtube-shorts' && sns[platform] && sns[platform].connected;
+    }).map(function (platform) {
+      var row = sns[platform] || {};
+      return {
+        channelType: platform,
+        accountName: String(row.username || row.channelTitle || row.pageName || row.name || '').trim(),
+        connected: true,
+        enabled: row.enabled !== false,
+        needsReconnect: !!row.needsReconnect
+      };
+    });
+  }
+
+  function mergeSyncedRows(existingRows, incomingRows) {
+    var map = new Map();
+    function key(item, index) {
+      var channel = String(item && item.channelType || 'unknown').trim();
+      var remote = String(item && (item.remotePostId || item.postId) || '').trim();
+      return remote ? channel + ':' + remote : String(item && item.id || ('row_' + index));
+    }
+    (Array.isArray(existingRows) ? existingRows : []).forEach(function (item, index) { map.set(key(item, index), item); });
+    (Array.isArray(incomingRows) ? incomingRows : []).forEach(function (item, index) {
+      var itemKey = key(item, index);
+      var current = map.get(itemKey) || {};
+      map.set(itemKey, Object.assign({}, current, item, {
+        projectId: item.projectId || current.projectId || '',
+        projectTitle: item.projectTitle || current.projectTitle || '',
+        seasonId: item.seasonId || current.seasonId || '',
+        seasonLabel: item.seasonLabel || current.seasonLabel || '',
+        campaignId: item.campaignId || current.campaignId || '',
+        campaignTitle: item.campaignTitle || current.campaignTitle || '',
+        purposeCategory: item.purposeCategory || current.purposeCategory || '',
+        purposeTags: Array.isArray(item.purposeTags) && item.purposeTags.length ? item.purposeTags : (current.purposeTags || []),
+        metrics: Object.assign({}, current.metrics || {}, item.metrics || {})
+      }));
+    });
+    return Array.from(map.values());
   }
 
   function previousPeriodFilters(filters) {
@@ -211,14 +263,15 @@
       '<button type="button" class="btn-secondary compact" data-action="analytics-open-goal">목표 수정</button></section>';
   }
 
-  function alertsHtml(brand, rawRows, publishedRows, goal) {
-    var connected = brand && Array.isArray(brand.connectedChannels) ? brand.connectedChannels : [];
+  function alertsHtml(connections, sync, rawRows, publishedRows, goal) {
+    var connected = Array.isArray(connections) ? connections : [];
     var pending = Math.max(0, rawRows.length - publishedRows.length);
     var emptyMetricCount = publishedRows.filter(function (item) { return !metricHasValue(item); }).length;
     var alerts = [];
     if (!goal) alerts.push({ kind: 'warn', title: '성과 목표 미설정', detail: '목표를 설정해야 달성 여부를 판단할 수 있습니다.' });
-    if (!connected.length) alerts.push({ kind: 'risk', title: '연결된 SNS 계정 없음', detail: 'SNS 설정에서 운영 채널을 연결해 주세요.' });
-    else alerts.push({ kind: 'good', title: 'SNS 채널 ' + connected.length + '개 연결', detail: '계정 연결 상태를 기준으로 게시할 수 있습니다.' });
+    if (!connected.length) alerts.push({ kind: 'risk', title: '연결된 SNS 계정 없음', detail: '사용자 SNS 설정 기준으로 연결된 운영 채널이 없습니다.' });
+    else alerts.push({ kind: 'good', title: 'SNS 계정 ' + connected.length + '개 연결', detail: 'SNS 설정에 저장된 최신 연결 상태입니다.' });
+    if (sync && sync.status === 'error') alerts.push({ kind: 'risk', title: '성과 동기화 실패', detail: sync.error || '플랫폼 성과 수집 요청을 완료하지 못했습니다.' });
     if (pending) alerts.push({ kind: 'warn', title: '성과 집계 제외 ' + pending + '건', detail: '예약·처리 중·실패 게시물은 성과에서 제외했습니다.' });
     if (emptyMetricCount) alerts.push({ kind: 'warn', title: '성과 수치 대기 ' + emptyMetricCount + '건', detail: '게시 결과는 있지만 조회수·반응 수치가 아직 없습니다.' });
     if (!rawRows.length) alerts.push({ kind: 'risk', title: '게시 결과 없음', detail: 'Brand Studio에서 게시하면 결과가 이 페이지에 기록됩니다.' });
@@ -226,6 +279,26 @@
       '<div class="analytics-alert-list">' + alerts.slice(0, 4).map(function (item) {
         return '<div class="analytics-alert-item is-' + item.kind + '"><span class="analytics-alert-dot"></span><div><strong>' + escapeHtml(item.title) + '</strong><p>' + escapeHtml(item.detail) + '</p></div></div>';
       }).join('') + '</div></section>';
+  }
+
+  function syncStatusHtml(sync) {
+    var current = sync && typeof sync === 'object' ? sync : {};
+    var connections = Array.isArray(current.connections) ? current.connections : [];
+    var platforms = Array.isArray(current.platforms) ? current.platforms : [];
+    var statusLabel = current.status === 'loading' ? '수집 중' : (current.status === 'error' ? '수집 실패' : (current.syncedAt ? '동기화 완료' : '수집 대기'));
+    var statusClass = current.status === 'loading' ? 'is-loading' : (current.status === 'error' ? 'is-error' : 'is-ready');
+    var detail = current.status === 'loading'
+      ? '연결된 플랫폼에서 최근 게시물과 성과 수치를 가져오고 있습니다.'
+      : (current.error || (current.syncedAt ? formatDate(current.syncedAt) + ' 기준으로 갱신했습니다.' : '페이지 진입 시 자동으로 성과를 동기화합니다.'));
+    return '<section class="analytics-sync-panel ' + statusClass + '"><div class="analytics-sync-summary"><span class="analytics-sync-indicator"></span><div><span class="analytics-section-kicker">계정·성과 동기화</span><h3>' + escapeHtml(statusLabel) + '</h3><p>' + escapeHtml(detail) + '</p></div></div>' +
+      '<div class="analytics-sync-platforms">' + (connections.length ? connections.map(function (connection) {
+        var platform = String(connection.channelType || '').trim();
+        var platformStatus = platforms.find(function (item) { return String(item.platform || '') === platform; }) || {};
+        var state = String(platformStatus.state || (current.status === 'loading' ? 'loading' : 'connected'));
+        var stateLabel = state === 'synced' ? '수집 완료' : (state === 'empty' ? '게시물 없음' : (state === 'paused' ? '사용 중지' : (state === 'permission_required' ? '권한 필요' : (state === 'error' ? '수집 오류' : (state === 'loading' ? '수집 중' : '연결됨')))));
+        return '<div class="analytics-sync-platform is-' + escapeHtml(state) + '"><strong>' + escapeHtml(channelLabel(platform)) + '</strong><span>' + escapeHtml(connection.accountName ? '@' + String(connection.accountName).replace(/^@/, '') : '') + '</span><em>' + escapeHtml(stateLabel) + '</em><small>' + escapeHtml(platformStatus.message || '') + '</small></div>';
+      }).join('') : '<p class="analytics-muted">SNS 설정에서 연결된 계정을 찾지 못했습니다.</p>') + '</div>' +
+      '<div class="analytics-sync-actions"><button type="button" class="btn-secondary compact" data-action="analytics-sync-now" ' + (current.status === 'loading' ? 'disabled' : '') + '>지금 새로고침</button><button type="button" class="btn-secondary compact" data-action="analytics-open-sns">SNS 설정</button></div></section>';
   }
 
   function buildTrendSvg(trend, filters) {
@@ -266,7 +339,9 @@
         : '';
       return '<rect x="' + x.toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + barWidth.toFixed(2) + '" height="' + Math.max(1, barHeight).toFixed(2) + '" rx="3" class="analytics-chart-bar"><title>' + escapeHtml(date + ' · 조회수 ' + numberText(value)) + '</title></rect>' + label;
     }).join('');
-    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="게시일별 조회수 합계 추이">' + grid + bars + '</svg>';
+    var emptyNote = values.some(function (value) { return value > 0; }) ? '' :
+      '<g class="analytics-chart-empty"><text x="' + (width / 2) + '" y="' + (height / 2 - 4) + '" text-anchor="middle">성과 수집 대기</text><text x="' + (width / 2) + '" y="' + (height / 2 + 20) + '" text-anchor="middle">동기화가 완료되면 날짜별 막대가 표시됩니다</text></g>';
+    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="게시일별 조회수 합계 추이">' + grid + bars + emptyNote + '</svg>';
   }
 
   function breakdownCardHtml(title, rows, labeler) {
@@ -314,20 +389,20 @@
       }).join('') + '</tbody></table></div>';
   }
 
-  function readinessHtml(brand, rawRows, publishedRows, goal, projectId, brandId) {
-    var connected = brand && Array.isArray(brand.connectedChannels) ? brand.connectedChannels.length : 0;
+  function readinessHtml(brand, connections, sync, rawRows, publishedRows, goal) {
+    var connected = Array.isArray(connections) ? connections.length : 0;
     var hasMetrics = publishedRows.some(metricHasValue);
     var steps = [
       { done: true, title: '분석 브랜드 확인', detail: brand && brand.brandTitle || '현재 브랜드' },
-      { done: connected > 0, title: 'SNS 계정 연결', detail: connected ? connected + '개 채널 연결됨' : 'SNS 설정에서 계정을 연결해 주세요.' },
-      { done: publishedRows.length > 0, title: '게시 결과 저장', detail: publishedRows.length ? publishedRows.length + '건 저장됨' : 'Brand Studio에서 첫 게시를 진행해 주세요.' },
-      { done: hasMetrics, title: '성과 수치 확보', detail: hasMetrics ? '조회수와 반응 수치가 확인됩니다.' : '게시 플랫폼의 성과 수치가 필요합니다.' },
+      { done: connected > 0, title: 'SNS 계정 연결', detail: connected ? connected + '개 계정 연결됨' : 'SNS 설정에서 계정을 연결해 주세요.' },
+      { done: publishedRows.length > 0, title: '게시 결과 저장', detail: publishedRows.length ? publishedRows.length + '건 저장됨' : (sync && sync.status === 'loading' ? '연결 계정의 게시물을 가져오는 중입니다.' : '연결 계정에 게시물이 없거나 수집 권한이 없습니다.') },
+      { done: hasMetrics, title: '성과 수치 확보', detail: hasMetrics ? '조회수와 반응 수치가 확인됩니다.' : '플랫폼별 성과 수집 상태를 확인해 주세요.' },
       { done: !!goal, title: '성과 목표 설정', detail: goal ? '목표 기준이 설정되었습니다.' : '목표값과 기간을 정해 주세요.' }
     ];
     return '<section class="analytics-readiness"><div class="analytics-readiness-copy"><span class="analytics-section-kicker">분석 준비 상태</span><h3>' +
       (rawRows.length ? '게시 결과는 있지만 아직 판단할 성과 수치가 부족합니다' : '성과 분석을 시작할 데이터가 없습니다') + '</h3>' +
-      '<p>데이터가 없는 상태에서는 상위 채널·시간대·전략을 표시하지 않습니다. 아래 준비가 완료되면 목표 중심 대시보드가 열립니다.</p>' +
-      '<div class="analytics-readiness-actions"><button type="button" class="btn-primary" data-action="analytics-open-brand">Brand Studio에서 게시</button>' +
+      '<p>KPI와 그래프는 0 상태로 유지하며, 근거 없는 순위와 전략만 생성하지 않습니다. 플랫폼별 수집 상태에서 필요한 조치를 확인해 주세요.</p>' +
+      '<div class="analytics-readiness-actions"><button type="button" class="btn-primary" data-action="analytics-sync-now">성과 다시 수집</button>' +
       '<button type="button" class="btn-secondary" data-action="analytics-open-sns">SNS 설정</button></div></div>' +
       '<div class="analytics-readiness-steps">' + steps.map(function (step, index) {
         return '<div class="analytics-readiness-step ' + (step.done ? 'is-done' : '') + '"><span>' + (step.done ? '✓' : String(index + 1)) + '</span><div><strong>' + escapeHtml(step.title) + '</strong><p>' + escapeHtml(step.detail) + '</p></div></div>';
@@ -358,6 +433,87 @@
     return current;
   }
 
+  function sharedSnsQuery(projectId) {
+    var ownerId = NK.api && NK.api.getSharedOwner ? String(NK.api.getSharedOwner(projectId) || '').trim() : '';
+    return ownerId ? { ownerId: ownerId, projectId: String(projectId || '') } : { projectId: String(projectId || '') };
+  }
+
+  function loadSnsConnections(projectId) {
+    var token = localStorage.getItem('nk_auth_token') || '';
+    var context = sharedSnsQuery(projectId);
+    var query = context.ownerId ? '?ownerId=' + encodeURIComponent(context.ownerId) + '&projectId=' + encodeURIComponent(context.projectId) : '';
+    return fetch('/api/userdata/sns/get' + query, {
+      headers: { Authorization: 'Bearer ' + token },
+      cache: 'no-store'
+    }).then(function (response) { return response.json(); }).then(function (result) {
+      if (!result || !result.ok || !result.settings) return [];
+      return connectionsFromSettings(result.settings);
+    });
+  }
+
+  function runAnalyticsSync(root, project, brand, state) {
+    var projectId = String(project && project.id || '').trim();
+    var payload = project && project.payload || {};
+    var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
+    var currentState = normalizeViewState(state);
+    if (currentState.sync.status === 'loading') return Promise.resolve();
+    currentState.sync.status = 'loading';
+    currentState.sync.error = '';
+    renderProject(root, project, brand, currentState);
+    var token = localStorage.getItem('nk_auth_token') || '';
+    var requestBody = sharedSnsQuery(projectId);
+    return fetch('/api/sns/analytics/sync', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+      cache: 'no-store'
+    }).then(function (response) {
+      return response.json().then(function (result) {
+        if (!response.ok || !result || !result.ok) throw new Error(result && result.error || '성과 동기화 요청 실패');
+        return result;
+      });
+    }).then(function (result) {
+      var existingRows = brand && Array.isArray(brand.brandStudioPublishResults)
+        ? brand.brandStudioPublishResults
+        : (Array.isArray(payload.brandStudioPublishResults) ? payload.brandStudioPublishResults : (payload.publishResults || []));
+      var mergedRows = mergeSyncedRows(existingRows, result.posts || []);
+      var analyticsSync = {
+        syncedAt: result.syncedAt || new Date().toISOString(),
+        connected: result.summary && result.summary.connected || 0,
+        collected: result.summary && result.summary.collected || 0,
+        platforms: result.platforms || []
+      };
+      var nextSync = {
+        status: 'ready',
+        syncedAt: analyticsSync.syncedAt,
+        error: '',
+        connections: Array.isArray(result.connections) ? result.connections : currentState.sync.connections,
+        platforms: result.platforms || []
+      };
+      var temporaryBrand = brand ? Object.assign({}, brand, { brandStudioPublishResults: mergedRows, analyticsSync: analyticsSync }) : null;
+      var savePromise;
+      if (brandId && NK.service.brand && NK.service.brand.persistShared) {
+        savePromise = NK.service.brand.persistShared(brandId, { brandStudioPublishResults: mergedRows, analyticsSync: analyticsSync });
+      } else if (NK.service.project && NK.service.project.updatePayload) {
+        savePromise = NK.service.project.updatePayload(projectId, { brandStudioPublishResults: mergedRows, publishResults: mergedRows, analyticsSync: analyticsSync });
+      } else savePromise = Promise.resolve(null);
+      return Promise.resolve(savePromise).catch(function (error) {
+        nextSync.status = 'error';
+        nextSync.error = '성과는 수집했지만 브랜드 데이터 저장에 실패했습니다: ' + (error && error.message ? error.message : error);
+        return temporaryBrand;
+      }).then(function (savedBrand) {
+        var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
+        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : (temporaryBrand || brand), { filters: currentState.filters, sync: nextSync });
+      });
+    }).catch(function (error) {
+      var failedSync = Object.assign({}, currentState.sync, {
+        status: 'error',
+        error: error && error.message ? error.message : String(error || '성과 동기화 실패')
+      });
+      renderProject(root, project, brand, { filters: currentState.filters, sync: failedSync });
+    });
+  }
+
   function renderProject(root, project, brand, state) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
@@ -367,6 +523,8 @@
     var target = brand || project;
     var currentState = normalizeViewState(state);
     var filters = currentState.filters;
+    var sync = currentState.sync;
+    var connections = sync.connections;
     var previousFilters = previousPeriodFilters(filters);
     var filterOptions = NK.service.analytics.listFilterOptions(target);
     var rawRows = NK.service.analytics.listPublishResults(target);
@@ -392,31 +550,35 @@
       '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
       '<details class="analytics-advanced-filters" ' + (filters.seasonId || filters.campaignId || filters.purposeKey ? 'open' : '') + '><summary>상세 필터 ' + (activeFilterCount ? '· ' + activeFilterCount + '개 적용' : '') + '</summary><div>' + selectHtml('seasonId', filterOptions.seasons, filters.seasonId, '시즌') + selectHtml('campaignId', filterOptions.campaigns, filters.campaignId, '캠페인') + selectHtml('purposeKey', filterOptions.purposes, filters.purposeKey, '운영 목적') + '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters">필터 초기화</button></div></details></section>';
 
-    var goalAlertsHtml = '<div class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary) + alertsHtml(brand, rawRows, allPublishedRows, goal) + '</div>';
+    var goalAlertsHtml = syncStatusHtml(sync) + '<div class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</div>';
     var contentHtml = '';
+    var kpis = '<section class="analytics-kpi-grid-v2">' +
+      kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
+      kpiCardHtml('게시물당 평균 조회수', numberText(summary.averageViews, 1) + '회', deltaText(summary.averageViews, previousSummary.averageViews), '게시량 차이를 보정한 성과') +
+      kpiCardHtml('참여율', percentText(summary.engagementRate), deltaText(summary.engagementRate, previousSummary.engagementRate, 'point'), '(좋아요+댓글+공유) ÷ 조회수') +
+      kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</section>';
+    var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>게시일별 조회수 합계</h3><p>각 날짜에 게시된 콘텐츠의 현재 누적 조회수를 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
+      '<section class="analytics-panel analytics-diagnosis-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">냉정한 진단</span><h3>현재 상태</h3></div></div><div class="analytics-diagnosis-list">' +
+      '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? '브랜드 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
+      '<div><span>이전 기간 대비</span><strong>' + escapeHtml(previousSummary.views ? percentText(((summary.views - previousSummary.views) / previousSummary.views) * 100) : '비교 불가') + '</strong><p>총 조회수 변화이며 게시물당 평균과 함께 확인해야 합니다.</p></div>' +
+      '<div><span>분석 신뢰도</span><strong>' + (summary.totalPosts >= 10 ? '근거 보통' : '표본 부족') + '</strong><p>현재 표본 ' + summary.totalPosts + '건 · 10건 미만의 패턴은 추가 검증이 필요합니다.</p></div></div></section></div>';
 
     if (!allPublishedRows.length || !allPublishedRows.some(metricHasValue)) {
-      contentHtml = readinessHtml(brand, rawRows, allPublishedRows, goal, projectId, brandId);
+      var emptyBreakdownHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 원인 분해</span><h3>채널별 비교</h3><p>성과 수집이 완료되면 동일한 기준으로 채널·콘텐츠·시간대를 비교합니다.</p></div></div><div class="analytics-breakdown-grid">' +
+        breakdownCardHtml('채널', channels, function (item) { return channelLabel(item.channelType); }) +
+        breakdownCardHtml('콘텐츠 유형', contentTypes, function (item) { return contentTypeLabel(item.contentType); }) +
+        breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) +
+        breakdownCardHtml('업로드 시간', uploadTimes, function (item) { return item.label; }) +
+        breakdownCardHtml('해시태그', hashtags, function (item) { return item.hashtag; }) + '</div></section>';
+      contentHtml = kpis + trendHtml + readinessHtml(brand, connections, sync, rawRows, allPublishedRows, goal) + emptyBreakdownHtml;
     } else if (!rows.length) {
-      contentHtml = '<section class="analytics-period-empty"><span class="analytics-section-kicker">선택 기간 결과</span><h3>이 기간에는 분석할 게시물이 없습니다</h3><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + ' 범위나 필터를 변경해 주세요. 다른 기간의 데이터는 ' + allPublishedRows.length + '건 있습니다.</p><button type="button" class="btn-primary" data-action="analytics-show-all-period">전체 데이터 기간 보기</button></section>';
+      contentHtml = kpis + trendHtml + '<section class="analytics-period-empty"><span class="analytics-section-kicker">선택 기간 결과</span><h3>이 기간에는 분석할 게시물이 없습니다</h3><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + ' 범위나 필터를 변경해 주세요. 다른 기간의 데이터는 ' + allPublishedRows.length + '건 있습니다.</p><button type="button" class="btn-primary" data-action="analytics-show-all-period">전체 데이터 기간 보기</button></section>';
     } else {
-      var kpis = '<section class="analytics-kpi-grid-v2">' +
-        kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
-        kpiCardHtml('게시물당 평균 조회수', numberText(summary.averageViews, 1) + '회', deltaText(summary.averageViews, previousSummary.averageViews), '게시량 차이를 보정한 성과') +
-        kpiCardHtml('참여율', percentText(summary.engagementRate), deltaText(summary.engagementRate, previousSummary.engagementRate, 'point'), '(좋아요+댓글+공유) ÷ 조회수') +
-        kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</section>';
-
       var sortedRows = rows.slice().sort(function (a, b) { return Number(b.metrics.views || 0) - Number(a.metrics.views || 0); });
       var topRows = sortedRows.slice(0, Math.min(5, sortedRows.length));
       var bottomRows = sortedRows.length > 2 ? sortedRows.slice().reverse().slice(0, Math.min(3, sortedRows.length)) : [];
       var recommendations = NK.service.strategyEngine ? NK.service.strategyEngine.buildRecommendations(target, filters) : [];
       var suggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, filters) : [];
-
-      var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>게시일별 조회수 합계</h3><p>각 날짜에 게시된 콘텐츠의 현재 누적 조회수를 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
-        '<section class="analytics-panel analytics-diagnosis-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">냉정한 진단</span><h3>현재 상태</h3></div></div><div class="analytics-diagnosis-list">' +
-        '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? '브랜드 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
-        '<div><span>이전 기간 대비</span><strong>' + escapeHtml(previousSummary.views ? percentText(((summary.views - previousSummary.views) / previousSummary.views) * 100) : '비교 불가') + '</strong><p>총 조회수 변화이며 게시물당 평균과 함께 확인해야 합니다.</p></div>' +
-        '<div><span>분석 신뢰도</span><strong>' + (summary.totalPosts >= 10 ? '근거 보통' : '표본 부족') + '</strong><p>현재 표본 ' + summary.totalPosts + '건 · 10건 미만의 패턴은 추가 검증이 필요합니다.</p></div></div></section></div>';
 
       var postsHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 기여 게시물</span><h3>어떤 콘텐츠가 결과를 만들었는가</h3><p>누적 합계가 아닌 게시물 단위로 평균 대비 성과를 확인합니다.</p></div><span>조회수 기준</span></div><div class="analytics-post-grid">' + topRows.map(function (item, index) { return postCardHtml(item, summary.averageViews, '상위 ' + (index + 1)); }).join('') + '</div>' +
         (bottomRows.length ? '<div class="analytics-low-performer"><h4>검토가 필요한 게시물</h4><div class="analytics-post-grid is-compact">' + bottomRows.map(function (item, index) { return postCardHtml(item, summary.averageViews, '하위 ' + (index + 1)); }).join('') + '</div></div>' : '') + '</section>';
@@ -455,7 +617,12 @@
         return;
       }
       if (action === 'analytics-clear-filters') {
-        renderProject(root, project, brand, { filters: { dateFrom: nextFilters.dateFrom, dateTo: nextFilters.dateTo } });
+        renderProject(root, project, brand, { filters: { dateFrom: nextFilters.dateFrom, dateTo: nextFilters.dateTo }, sync: sync });
+        return;
+      }
+      if (action === 'analytics-sync-now') {
+        if (sync.status === 'loading') return;
+        runAnalyticsSync(root, project, brand, { filters: nextFilters, sync: sync });
         return;
       }
       if (action === 'analytics-show-all-period') {
@@ -464,7 +631,7 @@
           nextFilters.dateFrom = String(datedRows[0].publishedAt).slice(0, 10);
           nextFilters.dateTo = String(datedRows[datedRows.length - 1].publishedAt).slice(0, 10);
         }
-        renderProject(root, project, brand, { filters: nextFilters });
+        renderProject(root, project, brand, { filters: nextFilters, sync: sync });
         return;
       }
       if (action === 'analytics-apply-suggestion') {
@@ -506,7 +673,7 @@
         if (field.dataset.analyticsFilter === 'dateFrom') next.dateTo = next.dateFrom;
         else next.dateFrom = next.dateTo;
       }
-      renderProject(root, project, brand, { filters: next });
+      renderProject(root, project, brand, { filters: next, sync: sync });
     };
 
     root.onsubmit = function (event) {
@@ -533,7 +700,7 @@
       else savePromise = NK.service.project.updatePayload(projectId, { analyticsGoal: nextGoal }).then(function (result) { return result && result.draft ? null : null; });
       Promise.resolve(savePromise).then(function (savedBrand) {
         var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
-        renderProject(root, nextProject, savedBrand || brand, { filters: filters });
+        renderProject(root, nextProject, savedBrand || brand, { filters: filters, sync: sync });
       }).catch(function (error) {
         alert('성과 목표 저장 실패: ' + (error && error.message ? error.message : error));
         if (submit) submit.disabled = false;
@@ -557,6 +724,24 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project, brand, {});
+    var initialSync = {
+      status: 'loading',
+      syncedAt: brand && brand.analyticsSync && brand.analyticsSync.syncedAt || '',
+      error: '',
+      connections: [],
+      platforms: brand && brand.analyticsSync && Array.isArray(brand.analyticsSync.platforms) ? brand.analyticsSync.platforms : []
+    };
+    renderProject(root, project, brand, { sync: initialSync });
+    loadSnsConnections(project.id).then(function (connections) {
+      var readyToSync = Object.assign({}, initialSync, { status: 'idle', connections: connections });
+      renderProject(root, project, brand, { sync: readyToSync });
+      return runAnalyticsSync(root, project, brand, { sync: readyToSync });
+    }).catch(function (error) {
+      var fallbackSync = Object.assign({}, initialSync, {
+        status: 'idle',
+        error: error && error.message ? error.message : String(error || '')
+      });
+      return runAnalyticsSync(root, project, brand, { sync: fallbackSync });
+    });
   };
 })();

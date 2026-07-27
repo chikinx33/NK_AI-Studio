@@ -130,8 +130,41 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /성과 원인 분해/);
   assert.match(uiSource, /근거가 있는 제안만 표시합니다/);
   assert.match(uiSource, /allPublishedRows\.some\(metricHasValue\)/);
+  assert.match(uiSource, /\/api\/userdata\/sns\/get/);
+  assert.match(uiSource, /\/api\/sns\/analytics\/sync/);
+  assert.match(uiSource, /var kpis =[\s\S]+if \(!allPublishedRows\.length/);
+  assert.match(uiSource, /성과 수집 대기/);
   assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
   assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
+});
+
+test('analytics sync endpoint collects supported platform posts and metrics from the SNS source of truth', () => {
+  const source = read('prototype/functions/api/sns/analytics/sync.ts');
+  assert.match(source, /readSnsSettings/);
+  assert.match(source, /youtube\/v3\/videos/);
+  assert.match(source, /graph\.instagram\.com/);
+  assert.match(source, /graph\.facebook\.com/);
+  assert.match(source, /open\.tiktokapis\.com\/v2\/video\/list/);
+  assert.match(source, /graph\.threads\.net/);
+  assert.match(source, /api\.x\.com\/2\/users/);
+  assert.match(source, /connections,/);
+  assert.match(source, /platforms,/);
+  assert.doesNotMatch(source, /accessToken[^\n]+return send/);
+});
+
+test('analytics OAuth requests include the read scopes required by platform insights APIs', () => {
+  assert.match(read('prototype/functions/api/sns/connect/instagram.ts'), /instagram_business_manage_insights/);
+  assert.match(read('prototype/functions/api/sns/connect/facebook.ts'), /read_insights/);
+  assert.match(read('prototype/functions/api/sns/connect/tiktok.ts'), /video\.list/);
+  assert.match(read('prototype/functions/api/sns/connect/threads.ts'), /threads_manage_insights/);
+});
+
+test('brand analytics persistence keeps synchronized account metadata and collection status', () => {
+  const source = read('prototype/js/service/brand.js');
+  assert.match(source, /sourceScope: normalizeText\(raw\.sourceScope\)/);
+  assert.match(source, /accountName: normalizeText\(raw\.accountName\)/);
+  assert.match(source, /function normalizeAnalyticsSync/);
+  assert.match(source, /analyticsSync: normalizeAnalyticsSync\(raw\.analyticsSync\)/);
 });
 
 test('Brand Studio persists successful publish responses as analytics input', () => {

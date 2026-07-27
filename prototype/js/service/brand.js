@@ -137,6 +137,8 @@
                 remotePostId: normalizeText(raw.remotePostId || raw.postId),
                 remoteUrl: normalizeText(raw.remoteUrl || raw.url || raw.postUrl),
                 thumbnailUrl: normalizeText(raw.thumbnailUrl || raw.thumbnail || raw.previewUrl),
+                sourceScope: normalizeText(raw.sourceScope),
+                accountName: normalizeText(raw.accountName),
                 title: normalizeText(raw.title) || '게시 결과',
                 projectId: normalizeText(raw.projectId),
                 projectTitle: normalizeText(raw.projectTitle || raw.episodeTitle),
@@ -176,6 +178,26 @@
             startDate: normalizeText(raw.startDate),
             endDate: normalizeText(raw.endDate),
             updatedAt: normalizeText(raw.updatedAt) || new Date().toISOString()
+        };
+    }
+
+    function normalizeAnalyticsSync(value) {
+        var raw = value && typeof value === 'object' ? value : null;
+        if (!raw) return null;
+        return {
+            syncedAt: normalizeText(raw.syncedAt),
+            connected: Math.max(0, Number(raw.connected || 0) || 0),
+            collected: Math.max(0, Number(raw.collected || 0) || 0),
+            platforms: (Array.isArray(raw.platforms) ? raw.platforms : []).map(function (item) {
+                var row = item && typeof item === 'object' ? item : {};
+                return {
+                    platform: normalizeText(row.platform),
+                    state: normalizeText(row.state),
+                    accountName: normalizeText(row.accountName),
+                    collected: Math.max(0, Number(row.collected || 0) || 0),
+                    message: normalizeText(row.message)
+                };
+            }).filter(function (item) { return item.platform; })
         };
     }
 
@@ -483,6 +505,7 @@
             brandStudioPublishPlan: normalizePublishPlan(raw.brandStudioPublishPlan),
             brandStudioPublishResults: normalizePublishResults(raw.brandStudioPublishResults),
             performanceGoal: normalizePerformanceGoal(raw.performanceGoal || raw.analyticsGoal),
+            analyticsSync: normalizeAnalyticsSync(raw.analyticsSync),
             seriesIds: seriesIds,
             sourceProjectIds: sourceProjectIds,
             status: normalizeText(raw.status || 'active') || 'active',
@@ -652,6 +675,9 @@
             performanceGoal: preferIncoming
                 ? (incoming.performanceGoal || current.performanceGoal)
                 : (current.performanceGoal || incoming.performanceGoal),
+            analyticsSync: preferIncoming
+                ? (incoming.analyticsSync || current.analyticsSync)
+                : (current.analyticsSync || incoming.analyticsSync),
             seriesIds: mergeTextList(current.seriesIds, incoming.seriesIds),
             sourceProjectIds: mergeTextList(current.sourceProjectIds, incoming.sourceProjectIds),
             status: pickText(current.status, incoming.status, preferIncoming) || 'active',
@@ -773,6 +799,7 @@
             brandStudioPublishPlan: payload.brandStudioPublishPlan || payload.publishPlan,
             brandStudioPublishResults: payload.brandStudioPublishResults || payload.publishResults,
             performanceGoal: payload.performanceGoal || payload.analyticsGoal,
+            analyticsSync: payload.analyticsSync,
             seriesIds: [payload.seriesId || project.seriesId].filter(Boolean),
             sourceProjectIds: [project.id].filter(Boolean)
         });

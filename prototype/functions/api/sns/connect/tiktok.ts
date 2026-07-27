@@ -25,7 +25,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   const params = new URLSearchParams({
     client_key: clientKey,
-    scope: "video.publish,video.upload,user.info.basic",
+    scope: "video.publish,video.upload,video.list,user.info.basic",
     response_type: "code",
     redirect_uri: redirectUri,
     state,
