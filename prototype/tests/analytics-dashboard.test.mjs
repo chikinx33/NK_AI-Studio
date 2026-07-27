@@ -158,9 +158,15 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.doesNotMatch(uiSource, /channelLabel\(item\.channelType\)\.slice\(0, 2\)/);
   assert.match(uiSource, /analytics-dashboard-v2 analytics-editorial/);
   assert.match(uiSource, /analytics-sync-details/);
+  assert.match(uiSource, /data-analytics-settings/);
+  assert.match(uiSource, /<span>설정<\/span><span class="analytics-settings-toggle"/);
+  assert.match(uiSource, /settingsOpen: src\.settingsOpen === true/);
+  assert.match(uiSource, /settingsOpenFromRoot/);
   assert.match(uiSource, /analytics-metric-section/);
   assert.match(uiSource, /채널별 수집 상태/);
   assert.doesNotMatch(uiSource, /선택 브랜드의 목표 달성 상태와 성과 변화 원인을 확인합니다/);
+  assert.doesNotMatch(uiSource, /선택 기간의 결과/);
+  assert.match(uiSource, /<h3 data-no-i18n>' \+ escapeHtml\(filters\.dateFrom \+ ' ~ ' \+ filters\.dateTo\)/);
   assert.doesNotMatch(uiSource, /data-action="analytics-open-(brand|knowledge|library)"/);
   assert.match(uiSource, /성과 목표/);
   assert.match(uiSource, /KPI 추이/);
@@ -183,6 +189,9 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(studioCss, /성과 분석 editorial layout/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-kpi-card[\s\S]+background: transparent/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-settings > summary/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-settings-toggle svg/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-settings\[open\] \.analytics-settings-toggle svg/);
   assert.match(studioCss, /analytics-scope-tab\.is-active/);
   assert.match(studioCss, /analytics-attribution-row/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-advanced-filters \{[^}]*border-top: 0/);

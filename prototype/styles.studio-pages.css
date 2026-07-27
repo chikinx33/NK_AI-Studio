@@ -1726,6 +1726,70 @@
   letter-spacing: 0.13em;
 }
 
+.analytics-editorial .analytics-settings {
+  margin: 8px 0 0;
+}
+
+.analytics-editorial .analytics-settings > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  list-style: none;
+  user-select: none;
+}
+
+.analytics-editorial .analytics-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.analytics-editorial .analytics-settings-toggle {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent 22%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 66%, transparent 34%);
+  color: var(--accent);
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+
+.analytics-editorial .analytics-settings > summary:hover .analytics-settings-toggle,
+.analytics-editorial .analytics-settings > summary:focus-visible .analytics-settings-toggle {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border) 38%);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel) 90%);
+}
+
+.analytics-editorial .analytics-settings > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent 42%);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.analytics-editorial .analytics-settings-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform .18s ease;
+}
+
+.analytics-editorial .analytics-settings[open] .analytics-settings-toggle svg {
+  transform: rotate(180deg);
+}
+
+.analytics-editorial .analytics-settings-content {
+  display: block;
+}
+
 .analytics-editorial .analytics-toolbar {
   padding: 18px 4px 20px;
   border: 0;

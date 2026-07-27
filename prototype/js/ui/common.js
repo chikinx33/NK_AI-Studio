@@ -70,6 +70,8 @@
         '브랜드 스튜디오': 'Brand Studio',
         '브랜드 허브': 'Brand Hub',
         '성과 분석': 'Analytics',
+        '설정': 'Settings',
+        '설정 펼치기 또는 접기': 'Expand or collapse settings',
         '콘텐츠 저장소': 'Content Library',
         '신규 프로젝트': 'New project',
         '에피소드': 'Episode',

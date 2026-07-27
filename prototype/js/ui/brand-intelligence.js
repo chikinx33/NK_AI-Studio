@@ -131,6 +131,7 @@
     var sync = src.sync && typeof src.sync === 'object' ? src.sync : {};
     return {
       filters: normalizeFilters(src.filters || src),
+      settingsOpen: src.settingsOpen === true,
       sync: {
         status: String(sync.status || 'idle').trim(),
         syncedAt: String(sync.syncedAt || '').trim(),
@@ -569,6 +570,11 @@
     return current;
   }
 
+  function settingsOpenFromRoot(root, fallback) {
+    var settings = root && root.querySelector ? root.querySelector('[data-analytics-settings]') : null;
+    return settings ? !!settings.open : !!fallback;
+  }
+
   function sharedSnsQuery(projectId) {
     var ownerId = NK.api && NK.api.getSharedOwner ? String(NK.api.getSharedOwner(projectId) || '').trim() : '';
     return ownerId ? { ownerId: ownerId, projectId: String(projectId || '') } : { projectId: String(projectId || '') };
@@ -653,14 +659,14 @@
         return temporaryBrand;
       }).then(function (savedBrand) {
         var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
-        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : (temporaryBrand || brand), { filters: nextFilters, sync: nextSync });
+        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : (temporaryBrand || brand), { filters: nextFilters, sync: nextSync, settingsOpen: currentState.settingsOpen });
       });
     }).catch(function (error) {
       var failedSync = Object.assign({}, currentState.sync, {
         status: 'error',
         error: error && error.message ? error.message : String(error || '성과 동기화 실패')
       });
-      renderProject(root, project, brand, { filters: currentState.filters, sync: failedSync });
+      renderProject(root, project, brand, { filters: currentState.filters, sync: failedSync, settingsOpen: currentState.settingsOpen });
     });
   }
 
@@ -676,6 +682,7 @@
     var brandProjects = brand && NK.service.brand && NK.service.brand.listProjects ? NK.service.brand.listProjects(brand) : [project];
     var currentState = normalizeViewState(state);
     var filters = currentState.filters;
+    var settingsOpen = currentState.settingsOpen;
     var effectiveFilters = Object.assign({}, filters);
     if (scope === 'episode') effectiveFilters.episodeId = projectId;
     var sync = currentState.sync;
@@ -723,8 +730,9 @@
       '<details class="analytics-advanced-filters" ' + (filters.seasonId || filters.campaignId || filters.purposeKey ? 'open' : '') + '><summary>상세 필터 ' + (activeFilterCount ? '· ' + activeFilterCount + '개 적용' : '') + '</summary><div>' + selectHtml('seasonId', filterOptions.seasons, filters.seasonId, '시즌') + selectHtml('campaignId', filterOptions.campaigns, filters.campaignId, '캠페인') + selectHtml('purposeKey', filterOptions.purposes, filters.purposeKey, '운영 목적') + '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters">필터 초기화</button></div></details></section>';
 
     var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary, scopeLabel) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal, scopeLabel) + '</section>' + attributionPanelHtml(unassignedRows, brandProjects);
+    var settingsHtml = '<details class="analytics-settings" data-analytics-settings ' + (settingsOpen ? 'open' : '') + '><summary aria-label="설정 펼치기 또는 접기"><span>설정</span><span class="analytics-settings-toggle" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="m5.5 7.5 4.5 4.5 4.5-4.5"/></svg></span></summary><div class="analytics-settings-content">' + toolbarHtml + goalAlertsHtml + '</div></details>';
     var contentHtml = '';
-    var kpis = '<section class="analytics-metric-section"><div class="analytics-section-heading"><div><span class="analytics-section-kicker">핵심 성과</span><h3>선택 기간의 결과</h3></div><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + '</p></div><div class="analytics-kpi-grid-v2">' +
+    var kpis = '<section class="analytics-metric-section"><div class="analytics-section-heading"><div><span class="analytics-section-kicker">핵심 성과</span><h3 data-no-i18n>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + '</h3></div></div><div class="analytics-kpi-grid-v2">' +
       kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
       kpiCardHtml('게시물당 평균 조회수', numberText(summary.averageViews, 1) + '회', deltaText(summary.averageViews, previousSummary.averageViews), '게시량 차이를 보정한 성과') +
       kpiCardHtml('참여율', percentText(summary.engagementRate), deltaText(summary.engagementRate, previousSummary.engagementRate, 'point'), '(좋아요+댓글+공유) ÷ 조회수') +
@@ -769,7 +777,7 @@
       contentHtml = kpis + trendHtml + postsHtml + breakdownHtml + actionHtml + tableHtml;
     }
 
-    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial" data-analytics-scope="' + escapeHtml(scope) + '">' + headerHtml + toolbarHtml + goalAlertsHtml + contentHtml + goalModalHtml(goal, filters, scopeLabel) + '</section>';
+    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial" data-analytics-scope="' + escapeHtml(scope) + '">' + headerHtml + settingsHtml + contentHtml + goalModalHtml(goal, filters, scopeLabel) + '</section>';
     applyCurrentLocale();
 
     root.onclick = function (event) {
@@ -777,6 +785,7 @@
       if (!button) return;
       var action = String(button.dataset.action || '').trim();
       var nextFilters = readFiltersFromRoot(root, filters);
+      var nextSettingsOpen = settingsOpenFromRoot(root, settingsOpen);
       var destination = '';
       if (action === 'analytics-set-scope') {
         var nextScope = String(button.dataset.scope || 'brand') === 'episode' ? 'episode' : 'brand';
@@ -804,7 +813,7 @@
         });
         button.disabled = true;
         NK.service.brand.persistShared(brandId, { brandStudioPublishResults: bulkUpdatedRows }).then(function (savedBrand) {
-          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync });
+          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync, settingsOpen: nextSettingsOpen });
         }).catch(function (error) {
           alert('게시물 일괄 분류 실패: ' + (error && error.message ? error.message : error));
           button.disabled = false;
@@ -843,7 +852,7 @@
         if (!matched) return;
         button.disabled = true;
         NK.service.brand.persistShared(brandId, { brandStudioPublishResults: updatedRows }).then(function (savedBrand) {
-          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync });
+          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync, settingsOpen: nextSettingsOpen });
         }).catch(function (error) {
           alert('게시물 분류 저장 실패: ' + (error && error.message ? error.message : error));
           button.disabled = false;
@@ -861,12 +870,12 @@
         return;
       }
       if (action === 'analytics-clear-filters') {
-        renderProject(root, project, brand, { filters: { dateFrom: nextFilters.dateFrom, dateTo: nextFilters.dateTo }, sync: sync });
+        renderProject(root, project, brand, { filters: { dateFrom: nextFilters.dateFrom, dateTo: nextFilters.dateTo }, sync: sync, settingsOpen: nextSettingsOpen });
         return;
       }
       if (action === 'analytics-sync-now') {
         if (sync.status === 'loading') return;
-        runAnalyticsSync(root, project, brand, { filters: nextFilters, sync: sync });
+        runAnalyticsSync(root, project, brand, { filters: nextFilters, sync: sync, settingsOpen: nextSettingsOpen });
         return;
       }
       if (action === 'analytics-show-all-period') {
@@ -875,7 +884,7 @@
           nextFilters.dateFrom = String(datedRows[0].publishedAt).slice(0, 10);
           nextFilters.dateTo = String(datedRows[datedRows.length - 1].publishedAt).slice(0, 10);
         }
-        renderProject(root, project, brand, { filters: nextFilters, sync: sync });
+        renderProject(root, project, brand, { filters: nextFilters, sync: sync, settingsOpen: nextSettingsOpen });
         return;
       }
       if (action === 'analytics-apply-suggestion') {
@@ -945,7 +954,7 @@
         if (field.dataset.analyticsFilter === 'dateFrom') next.dateTo = next.dateFrom;
         else next.dateFrom = next.dateTo;
       }
-      renderProject(root, project, brand, { filters: next, sync: sync });
+      renderProject(root, project, brand, { filters: next, sync: sync, settingsOpen: settingsOpenFromRoot(root, settingsOpen) });
     };
 
     root.onsubmit = function (event) {
@@ -973,7 +982,7 @@
       else savePromise = Promise.reject(new Error('brand_goal_target_missing'));
       Promise.resolve(savePromise).then(function (savedBrand) {
         var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
-        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : brand, { filters: filters, sync: sync });
+        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : brand, { filters: filters, sync: sync, settingsOpen: settingsOpenFromRoot(root, settingsOpen) });
       }).catch(function (error) {
         alert('성과 목표 저장 실패: ' + (error && error.message ? error.message : error));
         if (submit) submit.disabled = false;
