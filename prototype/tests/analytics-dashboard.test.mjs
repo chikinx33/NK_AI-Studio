@@ -126,6 +126,9 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   const studioCss = read('prototype/styles.studio-pages.css');
   assert.match(uiSource, /<h2>' \+ escapeHtml\(brandTitle\)/);
   assert.match(uiSource, /analytics-context-episode/);
+  assert.match(uiSource, /현재 에피소드/);
+  assert.match(uiSource, /channelIconHtml\(item\.channelType\)/);
+  assert.doesNotMatch(uiSource, /channelLabel\(item\.channelType\)\.slice\(0, 2\)/);
   assert.match(uiSource, /analytics-dashboard-v2 analytics-editorial/);
   assert.match(uiSource, /analytics-sync-details/);
   assert.match(uiSource, /analytics-metric-section/);
@@ -147,9 +150,23 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /fitLatestPeriod: true/);
   assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
   assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
+  assert.match(uiSource, /brandStudioFormatDrafts: formatDrafts/);
+  assert.match(uiSource, /brandStudioActiveStep: 3/);
+  assert.match(uiSource, /게시·예약은 실행되지 않습니다/);
   assert.match(studioCss, /성과 분석 editorial layout/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-kpi-card[\s\S]+background: transparent/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
+  assert.match(studioCss, /analytics-context-episode strong[\s\S]+font-size: clamp\(20px/);
+});
+
+test('analytics and SNS settings share the same platform icon source', () => {
+  const commonSource = read('prototype/js/ui/common.js');
+  const snsSource = read('prototype/js/ui/sns-settings.js');
+  const uiSource = read('prototype/js/ui/brand-intelligence.js');
+  assert.match(commonSource, /common\.platformIconSvg = function/);
+  assert.match(commonSource, /if \(id === 'youtube-shorts'\) id = 'youtube'/);
+  assert.match(snsSource, /NK\.ui\.common\.platformIconSvg\(platform\.id, 36\)/);
+  assert.match(uiSource, /NK\.ui\.common\.platformIconSvg\(type, 26\)/);
 });
 
 test('analytics page cache-busts every release-sensitive local asset', () => {

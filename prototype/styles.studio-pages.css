@@ -1460,11 +1460,27 @@
 }
 
 .analytics-editorial .analytics-context-episode {
-  padding-bottom: 3px;
-  color: color-mix(in srgb, var(--text) 74%, var(--muted) 26%);
-  font-size: 13px;
-  font-weight: 650;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  margin: 0;
+  padding-bottom: 0;
   white-space: nowrap;
+}
+
+.analytics-editorial .analytics-context-episode span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.analytics-editorial .analytics-context-episode strong {
+  color: color-mix(in srgb, var(--text) 90%, var(--muted) 10%);
+  font-size: clamp(20px, 1.55vw, 25px);
+  font-weight: 760;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
 }
 
 .analytics-editorial .analytics-section-kicker {
@@ -1772,7 +1788,14 @@
 .analytics-editorial .analytics-post-visual {
   width: 52px;
   height: 52px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent 91%);
   border-radius: 14px;
+}
+
+.analytics-editorial .analytics-post-visual svg {
+  width: 26px;
+  height: 26px;
 }
 
 .analytics-editorial .analytics-post-visual span {
@@ -1842,6 +1865,13 @@
   background: transparent;
 }
 
+.analytics-editorial .analytics-apply-note {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .analytics-dashboard-v2.analytics-editorial > .analytics-readiness {
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
   padding-bottom: 0;
@@ -1908,6 +1938,7 @@
   }
 
   .analytics-editorial .analytics-context-episode {
+    justify-items: start;
     white-space: normal;
   }
 

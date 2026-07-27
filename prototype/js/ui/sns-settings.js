@@ -416,7 +416,9 @@
     var enabled = !!snsState.enabled;
     var username = snsState.username || snsState.channelTitle || snsState.pageName || '';
     var comingSoon = !!platform.comingSoon;
-    var icon = _platformIcons[platform.id] || '';
+    var icon = (NK.ui && NK.ui.common && NK.ui.common.platformIconSvg)
+      ? NK.ui.common.platformIconSvg(platform.id, 36)
+      : (_platformIcons[platform.id] || '');
 
     var statusText;
     var needsReconnect = !!snsState.needsReconnect;

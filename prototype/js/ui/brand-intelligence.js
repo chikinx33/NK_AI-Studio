@@ -35,6 +35,13 @@
     return labels[String(type || '').trim()] || String(type || '미분류');
   }
 
+  function channelIconHtml(type) {
+    var icon = NK.ui && NK.ui.common && NK.ui.common.platformIconSvg
+      ? NK.ui.common.platformIconSvg(type, 26)
+      : '';
+    return icon || '<span aria-hidden="true">?</span>';
+  }
+
   function contentTypeLabel(type) {
     var labels = { 'sns-post': 'SNS 게시물', 'shorts-promo': '쇼츠 홍보', 'promo-image': '홍보 이미지', 'blog-post': '블로그 글', unknown: '미분류' };
     return labels[String(type || '').trim()] || String(type || '미분류');
@@ -383,14 +390,15 @@
     return '<article class="analytics-action-card is-suggestion"><div class="analytics-action-top"><span class="analytics-channel-badge">콘텐츠 초안</span>' +
       '<span class="analytics-confidence">' + escapeHtml(item.targetChannel ? channelLabel(item.targetChannel) : '브랜드 전체') + '</span></div>' +
       '<h4>' + escapeHtml(item.title || '콘텐츠 제안') + '</h4><p>' + escapeHtml(item.summary || '') + '</p><div class="analytics-evidence">' + escapeHtml(item.reason || '') + '</div>' +
-      '<button type="button" class="btn-primary compact" data-action="analytics-apply-suggestion" data-suggestion-id="' + escapeHtml(item.id || '') + '">Brand Studio에 적용</button></article>';
+      '<p class="analytics-apply-note">대상 채널의 캡션·해시태그 초안을 저장하고 Brand Studio 초안 단계로 이동합니다. 게시·예약은 실행되지 않습니다.</p>' +
+      '<button type="button" class="btn-primary compact" data-action="analytics-apply-suggestion" data-suggestion-id="' + escapeHtml(item.id || '') + '">초안을 Brand Studio로 보내기</button></article>';
   }
 
   function postCardHtml(item, averageViews, rankLabel) {
     var metrics = item.metrics || {};
     var views = Number(metrics.views || 0);
     var ratio = averageViews ? (views / averageViews) * 100 : 0;
-    return '<article class="analytics-post-card"><div class="analytics-post-visual"><span>' + escapeHtml(channelLabel(item.channelType).slice(0, 2).toUpperCase()) + '</span></div>' +
+    return '<article class="analytics-post-card"><div class="analytics-post-visual" role="img" aria-label="' + escapeHtml(channelLabel(item.channelType)) + '" title="' + escapeHtml(channelLabel(item.channelType)) + '">' + channelIconHtml(item.channelType) + '</div>' +
       '<div class="analytics-post-body"><div class="analytics-post-meta"><span>' + escapeHtml(rankLabel) + '</span><span>' + escapeHtml(channelLabel(item.channelType)) + '</span><span>' + escapeHtml(formatDate(item.publishedAt)) + '</span></div>' +
       '<h4>' + escapeHtml(item.title || item.caption || '게시 결과') + '</h4><div class="analytics-post-numbers"><span><small>조회수</small><strong>' + escapeHtml(numberText(views)) + '</strong></span>' +
       '<span><small>참여율</small><strong>' + escapeHtml(percentText(rowEngagementRate(item))) + '</strong></span><span><small>평균 대비</small><strong>' + escapeHtml(percentText(ratio)) + '</strong></span></div></div></article>';
@@ -571,7 +579,7 @@
     var hasPerformanceData = rows.some(metricHasValue);
     var activeFilterCount = ['episodeId', 'channelType', 'contentType', 'seasonId', 'campaignId', 'purposeKey'].filter(function (key) { return !!filters[key]; }).length;
 
-    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span><h2>' + escapeHtml(brandTitle) + '</h2><p class="analytics-context-episode"><strong>' + escapeHtml(episodeTitle) + '</strong></p></div></header>';
+    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span><h2>' + escapeHtml(brandTitle) + '</h2><p class="analytics-context-episode"><span>현재 에피소드</span><strong>' + escapeHtml(episodeTitle) + '</strong></p></div></header>';
 
     var toolbarHtml = '<section class="analytics-toolbar"><div class="analytics-period-fields"><label><span>분석 시작일</span><input type="date" data-analytics-filter="dateFrom" value="' + escapeHtml(filters.dateFrom) + '"></label><span class="analytics-period-separator">~</span><label><span>분석 종료일</span><input type="date" data-analytics-filter="dateTo" value="' + escapeHtml(filters.dateTo) + '"></label><span class="analytics-compare-badge">이전 동일 기간 비교</span></div>' +
       '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
@@ -667,12 +675,28 @@
         var availableSuggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, filters) : [];
         var suggestion = availableSuggestions.find(function (item) { return String(item.id || '') === suggestionId; });
         if (!suggestion) return;
+        var targetFormat = String(suggestion.targetChannel || '').trim();
+        var selectedFormats = Array.isArray(payload.brandStudioSelectedFormats) ? payload.brandStudioSelectedFormats.slice() : [];
+        if (targetFormat && selectedFormats.indexOf(targetFormat) < 0) selectedFormats.push(targetFormat);
+        var formatDrafts = payload.brandStudioFormatDrafts && typeof payload.brandStudioFormatDrafts === 'object'
+          ? Object.assign({}, payload.brandStudioFormatDrafts)
+          : {};
+        if (targetFormat) {
+          formatDrafts[targetFormat] = Object.assign({}, formatDrafts[targetFormat] || {}, {
+            caption: String(suggestion.captionDraft || '').trim(),
+            hashtags: Array.isArray(suggestion.hashtags) ? suggestion.hashtags.join(' ') : ''
+          });
+        }
         button.disabled = true;
         NK.service.project.updatePayload(projectId, {
           brandStudioContentType: suggestion.contentType || 'sns-post',
           brandStudioCaptionDraft: String(suggestion.captionDraft || '').trim(),
           brandStudioHashtagDraft: Array.isArray(suggestion.hashtags) ? suggestion.hashtags.join(' ') : '',
-          brandStudioAutoSuggestion: { id: suggestion.id, title: suggestion.title, targetChannel: suggestion.targetChannel, recommendedTime: suggestion.recommendedTime, reason: suggestion.reason }
+          brandStudioAutoSuggestion: { id: suggestion.id, title: suggestion.title, targetChannel: suggestion.targetChannel, recommendedTime: suggestion.recommendedTime, reason: suggestion.reason },
+          brandStudioSelectedFormats: selectedFormats,
+          brandStudioFormatDrafts: formatDrafts,
+          brandStudioActiveDraftTab: targetFormat,
+          brandStudioActiveStep: 3
         }).then(function () {
           destination = buildStageUrl('brand.html', projectId, brandId);
           if (window.self !== window.top && window.parent) window.parent.postMessage({ type: 'load-stage', url: destination }, '*');
