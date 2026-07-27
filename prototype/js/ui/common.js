@@ -662,6 +662,7 @@
         ,'기간별 조회수 합계': 'Views by period'
         ,'분석 기간 길이에 따라 일·주·월 단위로 자동 묶어 비교합니다.': 'Automatically groups results by day, week, or month based on the analysis period.'
         ,'브랜드 공통 게시물': 'Brand-wide posts'
+        ,'전체를 브랜드 공통으로 연결': 'Assign all as brand-wide'
         ,'선택 포맷': 'Selected format'
         ,'규칙 정리 필요': 'Needs rules defined'
         ,'브랜드 톤': 'Brand tone'

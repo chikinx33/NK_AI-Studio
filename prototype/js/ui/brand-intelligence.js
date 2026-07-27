@@ -516,7 +516,7 @@
     var episodeOptions = (Array.isArray(projects) ? projects : []).map(function (episode) {
       return '<option value="' + escapeHtml(episode.id || '') + '">' + escapeHtml(episode.title || episode.id || '에피소드') + '</option>';
     }).join('');
-    return '<section class="analytics-attribution-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">게시물 귀속 확인</span><h3>분류되지 않은 게시물 ' + rows.length + '건</h3><p>연결 계정에서 가져왔지만 브랜드 또는 에피소드가 확인되지 않아 공식 KPI에서 제외했습니다.</p></div><span>임의 집계 금지</span></div>' +
+    return '<section class="analytics-attribution-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">게시물 귀속 확인</span><h3>분류되지 않은 게시물 ' + rows.length + '건</h3><p>연결 계정에서 가져왔지만 브랜드 또는 에피소드가 확인되지 않아 공식 KPI에서 제외했습니다.</p></div><div class="analytics-attribution-head-actions"><span>임의 집계 금지</span><button type="button" class="btn-secondary compact" data-action="analytics-assign-all-brand">전체를 브랜드 공통으로 연결</button></div></div>' +
       '<div class="analytics-attribution-list">' + rows.slice(0, 20).map(function (item, index) {
         return '<article class="analytics-attribution-row" data-attribution-key="' + escapeHtml(publishRowKey(item, index)) + '"><div><span>' + escapeHtml(channelLabel(item.channelType)) + ' · ' + escapeHtml(formatDate(item.publishedAt)) + '</span><strong>' + escapeHtml(item.title || item.caption || '게시 결과') + '</strong></div>' +
           '<select data-attribution-target aria-label="게시물 귀속 대상"><option value="">대상 선택</option><option value="__brand__">브랜드 공통</option>' + episodeOptions + '<option value="__exclude__">이 브랜드와 관련 없음</option></select>' +
@@ -782,6 +782,33 @@
         var nextScope = String(button.dataset.scope || 'brand') === 'episode' ? 'episode' : 'brand';
         var nextProjectId = nextScope === 'episode' ? String(button.dataset.projectId || projectId).trim() : projectId;
         navigateStage(buildAnalyticsUrl(nextScope, nextProjectId, brandId));
+        return;
+      }
+      if (action === 'analytics-assign-all-brand') {
+        if (!brandId || !NK.service.brand || !NK.service.brand.persistShared) return;
+        if (!window.confirm('분류되지 않은 게시물 ' + unassignedRows.length + '건을 이 브랜드의 공통 성과로 연결할까요?')) return;
+        var bulkBrand = NK.service.brand.getById ? NK.service.brand.getById(brandId) || brand : brand;
+        var bulkRows = bulkBrand && Array.isArray(bulkBrand.brandStudioPublishResults) ? bulkBrand.brandStudioPublishResults.slice() : [];
+        var bulkNow = new Date().toISOString();
+        var bulkUpdatedRows = bulkRows.map(function (item) {
+          var status = String(item && item.attributionStatus || '').trim().toLowerCase();
+          if (status === 'assigned' || status === 'excluded') return item;
+          return Object.assign({}, item, {
+            brandId: brandId,
+            projectId: '',
+            projectTitle: '',
+            attributionStatus: 'assigned',
+            attributionSource: 'manual-bulk-brand',
+            attributedAt: bulkNow
+          });
+        });
+        button.disabled = true;
+        NK.service.brand.persistShared(brandId, { brandStudioPublishResults: bulkUpdatedRows }).then(function (savedBrand) {
+          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync });
+        }).catch(function (error) {
+          alert('게시물 일괄 분류 실패: ' + (error && error.message ? error.message : error));
+          button.disabled = false;
+        });
         return;
       }
       if (action === 'analytics-assign-post') {

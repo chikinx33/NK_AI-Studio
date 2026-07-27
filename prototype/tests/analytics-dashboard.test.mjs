@@ -190,6 +190,8 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.doesNotMatch(uiSource, /var limit = 62/);
   assert.match(uiSource, /이 에피소드에 귀속된 게시물이 없습니다/);
   assert.match(uiSource, /브랜드 공통 게시물/);
+  assert.match(uiSource, /analytics-assign-all-brand/);
+  assert.match(uiSource, /manual-bulk-brand/);
   assert.doesNotMatch(uiSource, /Math\.max\(1, barHeight\)/);
   assert.match(uiSource, /if \(value <= 0\) return ''/);
   assert.match(uiSource, /analytics-chart-bar-gradient|analytics-bar-gradient/);
