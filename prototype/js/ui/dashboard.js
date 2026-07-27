@@ -316,6 +316,25 @@
     if (NK.state?.broadcast) NK.state.broadcast('update-project', { project: draft });
   };
 
+  const publishBrandWorkspaceContext = (scope, draft, series) => {
+    if (getHostShell() !== 'brand') return;
+    const safeScope = ['list', 'brand', 'episode'].includes(scope) ? scope : 'list';
+    const normalized = draft ? (normalizeDraft(draft) || draft) : null;
+    const context = {
+      scope: safeScope,
+      brandId: safeScope === 'list' ? '' : String(normalized?.payload?.brandId || normalized?.brandId || series?.id || normalized?.seriesId || '').trim(),
+      brandName: safeScope === 'list' ? '' : String(series?.title || normalized?.seriesTitle || normalized?.payload?.seriesTitle || '').trim(),
+      episodeId: safeScope === 'episode' ? String(normalized?.id || '').trim() : '',
+      episodeName: safeScope === 'episode' ? String(normalized?.title || normalized?.payload?.episodeTitle || '').trim() : ''
+    };
+    try { sessionStorage.setItem('nk_brand_workspace_context', JSON.stringify(context)); } catch (_) { }
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'brand-workspace-context', context }, '*');
+      }
+    } catch (_) { }
+  };
+
   dashboard.triggerThumbnailUpload = triggerThumbnailUpload;
 
   // 공유 UI 다국어 — 기존 중앙 사전(NK.core.translations) 재사용.
@@ -736,6 +755,7 @@
       currentSeriesFilter = '__all__';
     }
     const selectedSeries = seriesList.find((s) => s.id === currentSeriesFilter) || null;
+    const host = getHostShell();
     // 최신순 정렬: lastUsedAt 내림차순 → ID(생성 timestamp) 내림차순 폴백
     const sortByRecency = (a, b) => {
       const ta = Date.parse(a && a.lastUsedAt || '') || 0;
@@ -794,10 +814,21 @@
     };
     const runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
     const labels = runtimeLang === 'en'
-      ? { project: 'Project', genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio' }
-      : { project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율' };
+      ? {
+        project: 'Project', genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio',
+        brandManagement: 'Brand Management', brandPortfolio: 'Brand portfolio', brandPortfolioDesc: 'Choose a brand to open its workspace and episodes.',
+        allBrands: 'All brands', brandWorkspace: 'Brand workspace', episodes: 'Episodes', recentEpisode: 'Latest episode',
+        openBrand: 'Open brand', newBrand: 'New brand', addEpisode: 'Add episode', settings: 'Settings', share: 'Share', remove: 'Delete',
+        episodeListDesc: 'Choose an episode to enter its production workspace.', hub: 'Hub Center', analytics: 'Analytics', assets: 'Content Library', sns: 'SNS Settings'
+      }
+      : {
+        project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율',
+        brandManagement: '브랜드 관리', brandPortfolio: '브랜드 포트폴리오', brandPortfolioDesc: '브랜드를 선택하면 브랜드 작업공간과 에피소드 목록이 열립니다.',
+        allBrands: '전체 브랜드', brandWorkspace: '브랜드 작업공간', episodes: '에피소드', recentEpisode: '최근 에피소드',
+        openBrand: '브랜드 열기', newBrand: '새 브랜드', addEpisode: '에피소드 추가', settings: '설정', share: '공유', remove: '삭제',
+        episodeListDesc: '에피소드를 선택하면 해당 콘텐츠의 제작 작업공간으로 이동합니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 설정'
+      };
     const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
-    const host = getHostShell();
     const manageBarHtml = host === 'video' ? `
       <div class="series-manage-bar">
         <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${escapeHtml(selectedSeries.title)}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
@@ -819,39 +850,112 @@
       ? `<button class="btn-primary series-share-btn" data-action="share-series" data-series-id="${escapeHtml(currentSeriesFilter)}" data-series-title="${escapeHtml((selectedSeries && selectedSeries.title) || categoryTitle || '')}" aria-label="${escapeHtml(dt('share_btn'))}" title="${escapeHtml(dt('share_whole_project'))}"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>`
       : '';
 
-    const filterBar = `
-      <div class="series-filter-bar">
-        <div class="series-filter-main">
-          <div class="series-filter-header">
-            <div class="series-filter-title-block">
-              <p class="series-filter-eyebrow">Dashboard</p>
-              <strong class="series-filter-title">${categoryTitle}</strong>
+    let brandPortfolioCards = '';
+    let filterBar = '';
+    if (host === 'brand' && currentSeriesFilter === '__all__') {
+      publishBrandWorkspaceContext('list');
+      filterBar = `
+        <header class="brand-portfolio-header">
+          <div>
+            <p class="series-filter-eyebrow">BRAND PORTFOLIO</p>
+            <h1>${labels.brandManagement}</h1>
+            <p>${labels.brandPortfolioDesc}</p>
+          </div>
+          <button class="btn-primary brand-primary-action" data-action="create-brand">${labels.newBrand}</button>
+        </header>`;
+      brandPortfolioCards = seriesList.map((series) => {
+        const episodes = drafts.filter((draft) => String(draft.seriesId) === String(series.id)).sort(sortByRecency);
+        const latest = episodes[0] || null;
+        const sharedMeta = _sharedMeta.get(series.id);
+        let thumbObj = String(brandLogoBySeriesId.get(String(series.id)) || '').trim()
+          || String(latest?.payload?.thumbnailObjectName || '').trim()
+          || String(seriesThumbBySeriesId.get(String(series.id)) || '').trim();
+        if (isDeadMedia(thumbObj)) thumbObj = '';
+        const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
+          ? NK.api.mediaProxyObjectUrl(thumbObj)
+          : '';
+        const thumbHtml = thumbUrl
+          ? `<button type="button" class="brand-portfolio-logo has-image" data-action="thumb-upload" data-id="${escapeHtml(latest?.id || '')}" aria-label="${escapeHtml(runtimeLang === 'en' ? 'Change brand image' : '브랜드 이미지 변경')}"><img src="${escapeHtml(thumbUrl)}" data-thumb-obj="${escapeHtml(thumbObj)}" alt="" /></button>`
+          : `<button type="button" class="brand-portfolio-logo empty" data-action="thumb-upload" data-id="${escapeHtml(latest?.id || '')}" aria-label="${escapeHtml(runtimeLang === 'en' ? 'Add brand image' : '브랜드 이미지 추가')}">${THUMB_EMPTY_SVG}</button>`;
+        const summary = String(latest?.payload?.brandSummary || latest?.payload?.seriesSummary || '').trim();
+        return `
+          <article class="brand-portfolio-card" data-action="open-series" data-series-id="${escapeHtml(series.id)}" tabindex="0">
+            ${thumbHtml}
+            <div class="brand-portfolio-copy">
+              <div class="brand-portfolio-title-row">
+                <span class="brand-scope-badge">BRAND</span>
+                ${sharedMeta ? `<span class="brand-shared-badge">${sharedLabelIcons(sharedMeta.role)}</span>` : ''}
+              </div>
+              <h2>${escapeHtml(series.title)}</h2>
+              <p>${escapeHtml(summary || `${labels.recentEpisode} · ${latest?.title || '-'}`)}</p>
+              <div class="brand-portfolio-metrics">
+                <span><strong>${episodes.length}</strong> ${labels.episodes}</span>
+                <span>${labels.recentEpisode} · ${escapeHtml(latest?.title || '-')}</span>
+              </div>
+            </div>
+            <div class="brand-portfolio-actions">
+              ${sharedMeta ? '' : `<button class="btn-secondary compact" data-action="series-edit" data-series-id="${escapeHtml(series.id)}">${labels.settings}</button>`}
+              ${sharedMeta ? '' : `<button class="btn-secondary compact" data-action="share-series" data-series-id="${escapeHtml(series.id)}" data-series-title="${escapeHtml(series.title)}">${labels.share}</button>`}
+              ${sharedMeta ? '' : `<button class="btn-secondary compact danger" data-action="series-delete" data-series-id="${escapeHtml(series.id)}">${labels.remove}</button>`}
+              <span class="brand-open-label">${labels.openBrand}<span aria-hidden="true">→</span></span>
+            </div>
+          </article>`;
+      }).join('') || `<div class="brand-portfolio-empty"><strong>${runtimeLang === 'en' ? 'No brands yet' : '아직 등록된 브랜드가 없습니다.'}</strong><span>${runtimeLang === 'en' ? 'Create a brand and its first episode to begin.' : '새 브랜드를 만들면 첫 에피소드가 함께 생성됩니다.'}</span></div>`;
+    } else if (host === 'brand' && selectedSeries) {
+      const primaryDraft = getPrimaryDraftForSeries(selectedSeries.id, drafts);
+      publishBrandWorkspaceContext('brand', primaryDraft, selectedSeries);
+      filterBar = `
+        <header class="brand-workspace-header">
+          <div class="brand-workspace-copy">
+            <button class="brand-workspace-back" data-action="back-to-brands">← ${labels.allBrands}</button>
+            <p class="series-filter-eyebrow">BRAND WORKSPACE</p>
+            <h1>${escapeHtml(selectedSeries.title)}</h1>
+            <p>${labels.brandWorkspace} · ${selectedSeries.count} ${labels.episodes}</p>
+          </div>
+          <div class="brand-workspace-actions">
+            <button class="btn-secondary compact" data-action="open-brand-tool" data-url="knowledge.html">${labels.hub}</button>
+            <button class="btn-secondary compact" data-action="open-brand-tool" data-url="analytics.html">${labels.analytics}</button>
+            <button class="btn-secondary compact" data-action="open-brand-tool" data-url="library.html">${labels.assets}</button>
+            <button class="btn-secondary compact" data-action="open-brand-tool" data-url="sns-settings.html">${labels.sns}</button>
+            ${shareBtnHtml}
+            <button class="btn-primary brand-add-episode" data-action="create-episode" data-series-id="${escapeHtml(selectedSeries.id)}">${labels.addEpisode}</button>
+          </div>
+        </header>
+        <div class="episode-section-heading">
+          <div><p class="series-filter-eyebrow">EPISODES</p><h2>${labels.episodes}</h2></div>
+          <p>${labels.episodeListDesc}</p>
+        </div>`;
+    } else {
+      filterBar = `
+        <div class="series-filter-bar">
+          <div class="series-filter-main">
+            <div class="series-filter-header">
+              <div class="series-filter-title-block">
+                <p class="series-filter-eyebrow">Dashboard</p>
+                <strong class="series-filter-title">${categoryTitle}</strong>
+              </div>
+            </div>
+            <div class="series-filter-chip-row">
+              <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">${runtimeLang === 'en' ? 'All' : '전체'}</button>
+              ${seriesList.map((s) => {
+                const sm = _sharedMeta.get(s.id);
+                const iconPrefix = sm ? sharedLabelIcons(sm.role) : '';
+                return `<button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}${sm ? ' is-shared' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">${iconPrefix}${escapeHtml(s.title)} (${s.count})</button>`;
+              }).join('')}
             </div>
           </div>
-          <div class="series-filter-chip-row">
-            <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
-            ${seriesList.map((s) => {
-              const sm = _sharedMeta.get(s.id);
-              const iconPrefix = sm ? sharedLabelIcons(sm.role) : '';
-              return `
-              <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}${sm ? ' is-shared' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
-                ${iconPrefix}${escapeHtml(s.title)} (${s.count})
-              </button>`;
-            }).join('')}
+          <div class="series-filter-actions" style="display:flex;align-items:center;gap:8px;">
+            ${shareBtnHtml}
+            ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">${runtimeLang === 'en' ? 'New' : '신규'}</button>` : ``}
           </div>
         </div>
-        <div class="series-filter-actions" style="display:flex;align-items:center;gap:8px;">
-          ${shareBtnHtml}
-          ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">신규</button>` : ``}
-        </div>
-      </div>
-      ${manageBarHtml}
-    `;
+        ${manageBarHtml}`;
+    }
     const showStageButtons = host === 'video';
     const showTitleEdit = (host === 'video' || host === 'brand');
     const showDelete = (host === 'video' || host === 'brand');
 
-    const list = filteredDrafts.map(d => {
+    const episodeList = filteredDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
       const dur = fmtDuration(d.payload?.duration || 0);
       const cat = d.payload?.purposeCategory || '';
@@ -910,16 +1014,17 @@
         </article>
       `;
     }).join('');
+    const list = host === 'brand' && currentSeriesFilter === '__all__' ? brandPortfolioCards : episodeList;
 
     container.innerHTML = filterBar + list;
 
     // 죽은(404) 썸네일 self-heal: 로드 실패 시 그 objectName 을 기록하고 빈 썸네일로 교체한다.
     // 다음 렌더부터는 isDeadMedia 필터에 걸려 아예 요청하지 않으므로 콘솔 404 가 사라진다.
     try {
-      container.querySelectorAll('.draft-thumb.has-image img[data-thumb-obj]').forEach(function (img) {
+      container.querySelectorAll('.draft-thumb.has-image img[data-thumb-obj], .brand-portfolio-logo.has-image img[data-thumb-obj]').forEach(function (img) {
         img.onerror = function () {
           markDeadMedia(img.getAttribute('data-thumb-obj'));
-          var btn = img.closest('.draft-thumb');
+          var btn = img.closest('.draft-thumb, .brand-portfolio-logo');
           if (btn) {
             btn.classList.remove('has-image');
             btn.classList.add('empty');
@@ -935,6 +1040,15 @@
       if (selectedCard) selectedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (_) {}
 
+    container.onkeydown = (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target.closest('button, a, input, select, textarea')) return;
+      const brandCard = e.target.closest('.brand-portfolio-card[data-action="open-series"]');
+      if (!brandCard) return;
+      e.preventDefault();
+      brandCard.click();
+    };
+
     container.onclick = (e) => {
       const btn = e.target.closest('[data-action]');
       const card = e.target.closest('.draft-card[data-draft-id]');
@@ -944,6 +1058,7 @@
         // 소유 + 공유받은(의사) 드래프트 합본에서 조회 → 공유 카드도 열 수 있게.
         const draft = getViewDrafts().find(d => String(d.id) === cardId);
         if (!draft) return;
+        publishBrandWorkspaceContext('episode', draft, seriesList.find((series) => String(series.id) === String(draft.seriesId)) || null);
         selectProject(draft);
         container.querySelectorAll('.draft-card.is-selected').forEach(c => c.classList.remove('is-selected'));
         card.classList.add('is-selected');
@@ -983,6 +1098,47 @@
       const isIframe = window.self !== window.top;
       const isStandaloneStage = !isIframe && document.querySelector('.app.no-sidebar');
 
+      if (action === 'open-series') {
+        const seriesId = String(btn.dataset.seriesId || '').trim();
+        const series = seriesList.find((item) => String(item.id) === seriesId) || null;
+        const primaryDraft = getPrimaryDraftForSeries(seriesId, drafts);
+        if (!series || !primaryDraft) return;
+        currentSeriesFilter = seriesId;
+        selectProject(primaryDraft);
+        publishBrandWorkspaceContext('brand', primaryDraft, series);
+        dashboard.renderDrafts();
+        return;
+      }
+
+      if (action === 'back-to-brands') {
+        currentSeriesFilter = '__all__';
+        publishBrandWorkspaceContext('list');
+        dashboard.renderDrafts();
+        return;
+      }
+
+      if (action === 'open-brand-tool') {
+        const target = String(btn.dataset.url || '').trim();
+        const primaryDraft = selectedSeries ? getPrimaryDraftForSeries(selectedSeries.id, drafts) : null;
+        if (!target || !primaryDraft) return;
+        selectProject(primaryDraft);
+        publishBrandWorkspaceContext('brand', primaryDraft, selectedSeries);
+        if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage(target);
+        else window.location.href = target;
+        return;
+      }
+
+      if (action === 'create-brand') {
+        if (NK.ui && NK.ui.openProjectOverlay) NK.ui.openProjectOverlay({ mode: 'new-series' });
+        return;
+      }
+
+      if (action === 'create-episode') {
+        const seriesId = String(btn.dataset.seriesId || selectedSeries?.id || '').trim();
+        if (NK.ui && NK.ui.openProjectOverlay) NK.ui.openProjectOverlay({ mode: 'episode', seriesId });
+        return;
+      }
+
       if (action === 'share-series') {
         const sid = String(btn.dataset.seriesId || '').trim();
         const stitle = btn.dataset.seriesTitle || '';
@@ -1000,7 +1156,13 @@
         currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
         if (currentSeriesFilter !== '__all__') {
           const primaryDraft = getPrimaryDraftForSeries(currentSeriesFilter, drafts);
-          if (primaryDraft) selectProject(primaryDraft);
+          const series = seriesList.find((item) => String(item.id) === String(currentSeriesFilter)) || null;
+          if (primaryDraft) {
+            selectProject(primaryDraft);
+            publishBrandWorkspaceContext('brand', primaryDraft, series);
+          }
+        } else {
+          publishBrandWorkspaceContext('list');
         }
         dashboard.renderDrafts();
         return;
@@ -1009,20 +1171,23 @@
       // series-rename 기능은 영상 대시보드에서 제거됨
 
       if (action === 'series-edit') {
-        if (!selectedSeries) return;
+        const targetSeriesId = String(btn.dataset.seriesId || selectedSeries?.id || '').trim();
+        if (!targetSeriesId) return;
         if (NK.ui && NK.ui.openProjectOverlay) {
           NK.ui.openProjectOverlay({
             mode: 'edit-series',
-            seriesId: selectedSeries.id
+            seriesId: targetSeriesId
           });
         }
         return;
       }
 
       if (action === 'series-delete') {
-        if (!selectedSeries) return;
-        const targetCount = Number(selectedSeries.count || 0);
-        const message = `시리즈 "${selectedSeries.title}"의 에피소드 ${targetCount}개를 모두 삭제합니다.\n계속하시겠습니까?`;
+        const targetSeriesId = String(btn.dataset.seriesId || selectedSeries?.id || '').trim();
+        const targetSeries = seriesList.find((item) => String(item.id) === targetSeriesId) || selectedSeries;
+        if (!targetSeries) return;
+        const targetCount = Number(targetSeries.count || 0);
+        const message = `시리즈 "${targetSeries.title}"의 에피소드 ${targetCount}개를 모두 삭제합니다.\n계속하시겠습니까?`;
         (async () => {
           var ok = true;
           if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
@@ -1033,7 +1198,7 @@
           if (!ok) return;
           setDashLoading(true, '시리즈 삭제 중...');
           try {
-            await NK.service.project.deleteSeries(selectedSeries.id);
+            await NK.service.project.deleteSeries(targetSeries.id);
             currentSeriesFilter = '__all__';
             serverMerged = false;
             dashboard.renderDrafts();

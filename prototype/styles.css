@@ -543,6 +543,80 @@ body.page-shell-ai-sound .brand-mark {
   gap: 10px;
 }
 
+.brand-workspace-context {
+  min-width: 0;
+  padding: 2px 0 14px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 78%, var(--border) 22%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent 28%);
+}
+
+.brand-context-kicker,
+.brand-context-brand,
+.brand-context-episode {
+  display: block;
+}
+
+.brand-context-kicker {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.brand-context-brand {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-context-episode {
+  margin-top: 5px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text) 30%);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-scope-group {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-scope-group + .nav-scope-group {
+  margin-top: 8px;
+  padding-top: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent 38%);
+}
+
+.nav-scope-label {
+  margin: 0 0 3px 12px;
+  color: color-mix(in srgb, var(--muted) 78%, transparent 22%);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+body.page-shell-brand .nav {
+  gap: 0;
+}
+
+body.page-shell-brand .nav-item {
+  min-height: 38px;
+  padding-block: 8px;
+}
+
+body.page-shell-brand .nav-item.disabled {
+  opacity: .38;
+}
+
 .nav-item {
   color: var(--muted);
   text-decoration: none;

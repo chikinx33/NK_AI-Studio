@@ -357,6 +357,49 @@
     }
   };
 
+  const BRAND_WORKSPACE_CONTEXT_KEY = 'nk_brand_workspace_context';
+  const normalizeBrandWorkspaceContext = (raw) => {
+    const value = raw && typeof raw === 'object' ? raw : {};
+    const scope = ['list', 'brand', 'episode'].includes(value.scope) ? value.scope : 'list';
+    return {
+      scope,
+      brandId: String(value.brandId || '').trim(),
+      brandName: String(value.brandName || '').trim(),
+      episodeId: scope === 'episode' ? String(value.episodeId || '').trim() : '',
+      episodeName: scope === 'episode' ? String(value.episodeName || '').trim() : ''
+    };
+  };
+  const readBrandWorkspaceContext = () => {
+    try {
+      return normalizeBrandWorkspaceContext(JSON.parse(sessionStorage.getItem(BRAND_WORKSPACE_CONTEXT_KEY) || '{}'));
+    } catch (_) {
+      return normalizeBrandWorkspaceContext(null);
+    }
+  };
+  const writeBrandWorkspaceContext = (raw) => {
+    const next = normalizeBrandWorkspaceContext(raw);
+    try { sessionStorage.setItem(BRAND_WORKSPACE_CONTEXT_KEY, JSON.stringify(next)); } catch (_) { }
+    return next;
+  };
+  const renderBrandWorkspaceContext = (raw) => {
+    const root = document.getElementById('brand-workspace-context');
+    if (!root) return;
+    const context = raw ? writeBrandWorkspaceContext(raw) : readBrandWorkspaceContext();
+    const lang = currentLang === 'en' ? 'en' : 'ko';
+    const brandEl = root.querySelector('[data-context-brand]');
+    const episodeEl = root.querySelector('[data-context-episode]');
+    root.dataset.scope = context.scope;
+    if (brandEl) {
+      brandEl.textContent = context.brandName || (lang === 'en' ? 'Select a brand' : '브랜드를 선택해 주세요');
+    }
+    if (episodeEl) {
+      episodeEl.textContent = context.scope === 'episode' && context.episodeName
+        ? `${lang === 'en' ? 'Episode' : '에피소드'} · ${context.episodeName}`
+        : (context.scope === 'brand' ? (lang === 'en' ? 'Brand workspace' : '브랜드 작업공간') : '');
+      episodeEl.hidden = !episodeEl.textContent;
+    }
+  };
+
   const normalizeStageTarget = (raw) => {
     var candidate = String(raw || '').trim();
     if (!candidate) return '';
@@ -745,6 +788,7 @@
         currentLang = (data.lang === 'en') ? 'en' : 'ko';
         NK.ui.common.applyI18n(currentLang);
         applyUserStudioTitleToSidebar();
+        renderBrandWorkspaceContext();
         // 부모창에서 받은 경우 자식 iframe에도 전파
         if (window.self === window.top) broadcastLang(currentLang);
       }
@@ -771,6 +815,7 @@
           currentLang = nextLang;
           NK.ui.common.applyI18n(currentLang);
           applyUserStudioTitleToSidebar();
+          renderBrandWorkspaceContext();
         }
         return;
       }
@@ -802,6 +847,7 @@
       // 2. 하이라이트는 항상 렌더링 이후에 수행 (카드가 존재해야 하므로)
       if (stage) updateSidebarHighlight(stage);
       refreshSidebarCard();
+      renderBrandWorkspaceContext();
     });
 
     // 만약 현재 상태에 이미 프로젝트가 있다면 즉시 렌더링 시도
@@ -1067,7 +1113,13 @@
       if (data.type === 'load-stage' && data.url) {
         NK.navigation.loadStage(data.url);
       }
+      if (data.type === 'brand-workspace-context') {
+        renderBrandWorkspaceContext(data.context || {});
+        updateSidebarHighlight(NK.state?.runtime?.currentStage || 'dashboard');
+      }
     });
+
+    renderBrandWorkspaceContext();
   };
 
   // 초기 로드 시 현재 테마를 iframe에도 한번 전파(iframe가 늦게 만들어지는 경우 대비)
@@ -3257,6 +3309,19 @@
         if (isBrandHost) {
           url = draft.id ? `brand.html?projectId=${encodeURIComponent(draft.id)}` : 'brand.html';
           highlightStage = 'brand';
+          const workspaceContext = writeBrandWorkspaceContext({
+            scope: 'episode',
+            brandId: String(draft?.payload?.brandId || draft?.brandId || draft?.seriesId || '').trim(),
+            brandName: String(draft?.seriesTitle || draft?.payload?.seriesTitle || '').trim(),
+            episodeId: String(draft?.id || '').trim(),
+            episodeName: String(draft?.title || draft?.payload?.episodeTitle || '').trim()
+          });
+          renderBrandWorkspaceContext(workspaceContext);
+          try {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'brand-workspace-context', context: workspaceContext }, '*');
+            }
+          } catch (_) { }
         } else {
           url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
           highlightStage = 'scenario';
@@ -3305,12 +3370,22 @@
     });
 
     // 오버레이 열릴 때 배경 블러 처리
-    const openFromAnywhere = () => {
+    const openFromAnywhere = (options) => {
       setCreatingState(false);
       const seriesList = refreshSeriesOptions();
       overlayPurpose = 'create';
       editingSeriesId = '';
-      setMode(seriesList.length ? 'episode' : 'new-series');
+      const requestedMode = options?.mode === 'new-series'
+        ? 'new-series'
+        : (options?.mode === 'episode' ? 'episode' : '');
+      setMode(requestedMode || (seriesList.length ? 'episode' : 'new-series'));
+      if (requestedMode === 'episode' && seriesSelect && options?.seriesId) {
+        const targetSeriesId = String(options.seriesId || '').trim();
+        if (Array.from(seriesSelect.options || []).some((option) => String(option.value) === targetSeriesId)) {
+          seriesSelect.value = targetSeriesId;
+          seriesSelect.dispatchEvent(new Event('change'));
+        }
+      }
       overlay.classList.remove('hidden');
       blurTargets.forEach(el => el.classList.add('blur-active'));
       applyCurrentLocale();
@@ -3342,12 +3417,17 @@
         openEditor(options);
         return;
       }
-      openFromAnywhere();
+      openFromAnywhere(options);
     };
     applyCurrentLocale();
   };
 
   const updateSidebarHighlight = (stage) => {
+    const isBrandShell = document.body?.classList?.contains('page-shell-brand')
+      || document.documentElement?.classList?.contains('page-shell-brand');
+    const brandContext = isBrandShell ? readBrandWorkspaceContext() : null;
+    const hasBrandContext = !!(brandContext && brandContext.brandId);
+    const hasEpisodeContext = !!(brandContext && brandContext.scope === 'episode' && brandContext.episodeId);
     // 1. 일반 네비게이션 아이템 - 정확 매칭 (부분문자열 매칭 제거)
     document.querySelectorAll('.nav-item').forEach(item => {
       // ai-doc 페이지 내부 뷰 전환 nav는 ai-doc.js가 직접 관리
@@ -3361,11 +3441,27 @@
       if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
 
-      // 대시보드 스테이지에서 프로젝트 선택이 필요한 메뉴는 비활성화
-      const needsProject = ['brand', 'knowledge', 'analytics', 'library', 'sns-settings'];
-      if (needsProject.includes(file)) {
-        if (stage === 'dashboard') item.classList.add('disabled');
-        else item.classList.remove('disabled');
+      // 브랜드 셸에서는 브랜드 범위와 에피소드 범위를 구분한다.
+      // 브랜드 도구는 브랜드 선택 후, 제작 화면은 실제 에피소드 선택 후에만 연다.
+      if (isBrandShell) {
+        const needsBrand = ['knowledge', 'analytics', 'library', 'sns-settings'].includes(file);
+        const needsEpisode = file === 'brand';
+        const unavailable = (needsBrand && !hasBrandContext) || (needsEpisode && !hasEpisodeContext);
+        item.classList.toggle('disabled', unavailable);
+        item.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+        if (unavailable) {
+          item.title = needsEpisode
+            ? (currentLang === 'en' ? 'Select an episode first.' : '먼저 에피소드를 선택해 주세요.')
+            : (currentLang === 'en' ? 'Select a brand first.' : '먼저 브랜드를 선택해 주세요.');
+        } else {
+          item.removeAttribute('title');
+        }
+      } else {
+        const needsProject = ['brand', 'knowledge', 'analytics', 'library', 'sns-settings'];
+        if (needsProject.includes(file)) {
+          if (stage === 'dashboard') item.classList.add('disabled');
+          else item.classList.remove('disabled');
+        }
       }
 
       // data-stage 속성이 있는 메뉴는 해당 스테이지일 때만 표시
@@ -3453,6 +3549,7 @@
     NK.ui.common.applyI18n(currentLang);
     NK.ui.common.updateScreenButton(currentLang);
     applyUserStudioTitleToSidebar();
+    renderBrandWorkspaceContext();
     try {
       if (typeof window.__nkRefreshLoginUi === 'function') window.__nkRefreshLoginUi();
     } catch (_) { }

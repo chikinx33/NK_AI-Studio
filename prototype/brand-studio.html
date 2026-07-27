@@ -13,28 +13,28 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.dashboard-cards.css" />
-  <link rel="stylesheet" href="styles.css?v=3.1398" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1399" />
+  <link rel="stylesheet" href="styles.css?v=3.1399" />
   <style>
     body.page-shell-brand .draft-card .draft-actions { display: none !important; }
     body.page-shell-brand .draft-card .edit-btn { display: none !important; }
     body.page-shell-brand .draft-card .trash-btn { display: inline-flex !important; }
   </style>
-  <script src="core.js?v=3.1398" defer></script>
-  <script src="js/config.js?v=3.1398" defer></script>
-  <script src="js/utils.js" defer></script>
-  <script src="store.js" defer></script>
-  <script src="api.js" defer></script>
-  <script src="js/state.js" defer></script>
-  <script src="js/auth.js" defer></script>
-  <script src="js/navigation.js" defer></script>
-  <script src="js/service/media.js" defer></script>
-  <script src="js/service/project.js" defer></script>
-  <script src="js/service/brand.js" defer></script>
-  <script src="js/service/content-library.js" defer></script>
-  <script src="js/ui/common.js" defer></script>
-  <script src="js/ui/dashboard.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="core.js?v=3.1399" defer></script>
+  <script src="js/config.js?v=3.1399" defer></script>
+  <script src="js/utils.js?v=3.1399" defer></script>
+  <script src="store.js?v=3.1399" defer></script>
+  <script src="api.js?v=3.1399" defer></script>
+  <script src="js/state.js?v=3.1399" defer></script>
+  <script src="js/auth.js?v=3.1399" defer></script>
+  <script src="js/navigation.js?v=3.1399" defer></script>
+  <script src="js/service/media.js?v=3.1399" defer></script>
+  <script src="js/service/project.js?v=3.1399" defer></script>
+  <script src="js/service/brand.js?v=3.1399" defer></script>
+  <script src="js/service/content-library.js?v=3.1399" defer></script>
+  <script src="js/ui/common.js?v=3.1399" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1399" defer></script>
+  <script src="script.js?v=3.1399" defer></script>
 </head>
 
 <body class="layout-fixed page-shell-brand">
@@ -49,25 +49,39 @@
           <span class="subtitle" data-i18n="brand_manage_subtitle">브랜드 스튜디오</span>
         </div>
       </div>
-      <nav class="nav">
-        <a class="nav-item" href="brand-dashboard.html">
-          <span data-i18n="brand_nav_studio">브랜드 관리</span>
-        </a>
-        <a class="nav-item" href="brand.html">
-          <span data-i18n="brand_nav_episode">에피소드</span>
-        </a>
-        <a class="nav-item" href="knowledge.html">
-          <span data-i18n="brand_nav_hub_center">허브 센터</span>
-        </a>
-        <a class="nav-item" href="analytics.html">
-          <span data-i18n="nav_analytics">성과 분석</span>
-        </a>
-        <a class="nav-item" href="library.html">
-          <span data-i18n="nav_library">콘텐츠 저장소</span>
-        </a>
-        <a class="nav-item" href="sns-settings.html">
-          <span data-i18n="nav_sns">SNS 설정</span>
-        </a>
+      <div id="brand-workspace-context" class="brand-workspace-context" data-scope="list" aria-live="polite">
+        <span class="brand-context-kicker" data-i18n="brand_context_current">현재 작업 범위</span>
+        <strong class="brand-context-brand" data-context-brand data-i18n="brand_context_select">브랜드를 선택해 주세요</strong>
+        <span class="brand-context-episode" data-context-episode></span>
+      </div>
+      <nav class="nav" aria-label="브랜드 스튜디오 메뉴">
+        <section class="nav-scope-group" data-nav-scope="brand">
+          <p class="nav-scope-label" data-i18n="brand_scope_brand">브랜드</p>
+          <a class="nav-item" href="brand-dashboard.html">
+            <span data-i18n="brand_nav_studio">브랜드 관리</span>
+          </a>
+          <a class="nav-item disabled" href="knowledge.html" aria-disabled="true">
+            <span data-i18n="brand_nav_hub_center">허브 센터</span>
+          </a>
+          <a class="nav-item disabled" href="sns-settings.html" aria-disabled="true">
+            <span data-i18n="nav_sns">SNS 설정</span>
+          </a>
+        </section>
+        <section class="nav-scope-group" data-nav-scope="episode">
+          <p class="nav-scope-label" data-i18n="brand_scope_episode">에피소드</p>
+          <a class="nav-item disabled" href="brand.html" aria-disabled="true">
+            <span data-i18n="brand_nav_episode">에피소드</span>
+          </a>
+        </section>
+        <section class="nav-scope-group" data-nav-scope="shared">
+          <p class="nav-scope-label" data-i18n="brand_scope_shared">분석 · 자산</p>
+          <a class="nav-item disabled" href="analytics.html" aria-disabled="true">
+            <span data-i18n="nav_analytics">성과 분석</span>
+          </a>
+          <a class="nav-item disabled" href="library.html" aria-disabled="true">
+            <span data-i18n="nav_library">콘텐츠 저장소</span>
+          </a>
+        </section>
       </nav>
       <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
       <div class="sidebar-footer">

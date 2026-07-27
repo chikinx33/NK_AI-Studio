@@ -33,6 +33,9 @@ test('brand management shell cache-busts its translated navigation assets', () =
   assert.match(html, new RegExp('core\\.js\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(html, new RegExp('js/config\\.js\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(html, new RegExp('styles\\.css\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(html, new RegExp('styles\\.dashboard-cards\\.css\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(html, new RegExp('js/ui/dashboard\\.js\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(html, new RegExp('script\\.js\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(dashboardHtml, new RegExp('styles\\.css\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(dashboardHtml, new RegExp('script\\.js\\?v=' + version.replaceAll('.', '\\.')));
 });
