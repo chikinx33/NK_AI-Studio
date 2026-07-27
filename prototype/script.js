@@ -960,6 +960,17 @@
         if (!cp) return;
         NK.service?.project?.setCurrent?.(cp);
       };
+      const buildAnalyticsStageUrl = () => {
+        const context = readBrandWorkspaceContext();
+        const cp = NK.state?.runtime?.currentProject;
+        const projectId = String(context.episodeId || cp?.id || '').trim();
+        const brandId = String(context.brandId || cp?.brandId || cp?.payload?.brandId || '').trim();
+        const scope = context.scope === 'episode' && projectId ? 'episode' : 'brand';
+        const params = new URLSearchParams({ scope });
+        if (brandId) params.set('brandId', brandId);
+        if (projectId) params.set('projectId', projectId);
+        return `analytics.html?${params.toString()}`;
+      };
       const buildAiImageStageUrl = () => {
         const cp = NK.state?.runtime?.currentProject;
         const pid = String(cp && cp.id || '').trim();
@@ -1080,7 +1091,11 @@
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-analytics') {
         persistCurrentProject();
-        const url = currentProject?.id ? `analytics.html?projectId=${encodeURIComponent(currentProject.id)}` : 'analytics.html';
+        const brandId = String(currentProject?.brandId || currentProject?.payload?.brandId || '').trim();
+        const params = new URLSearchParams({ scope: 'episode' });
+        if (currentProject?.id) params.set('projectId', String(currentProject.id));
+        if (brandId) params.set('brandId', brandId);
+        const url = `analytics.html?${params.toString()}`;
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-scenes') {
         persistCurrentProject();
@@ -3415,6 +3430,15 @@
     NK.ui.openProjectOverlay = function (options) {
       if (options && options.mode === 'edit-series') {
         openEditor(options);
+        return;
+      }
+
+      const isAnalyticsStageLink = !!href && /(^|[\\\/])analytics\.html([?#]|$)/i.test(href);
+      if (isAnalyticsStageLink && document.body?.classList?.contains('page-shell-brand')) {
+        e.preventDefault();
+        e.stopPropagation();
+        persistCurrentProject();
+        NK.navigation.loadStage(buildAnalyticsStageUrl());
         return;
       }
       openFromAnywhere(options);

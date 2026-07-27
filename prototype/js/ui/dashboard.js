@@ -1118,11 +1118,18 @@
       }
 
       if (action === 'open-brand-tool') {
-        const target = String(btn.dataset.url || '').trim();
+        let target = String(btn.dataset.url || '').trim();
         const primaryDraft = selectedSeries ? getPrimaryDraftForSeries(selectedSeries.id, drafts) : null;
         if (!target || !primaryDraft) return;
         selectProject(primaryDraft);
         publishBrandWorkspaceContext('brand', primaryDraft, selectedSeries);
+        if (/^analytics\.html(?:\?|$)/.test(target)) {
+          const brandId = String(primaryDraft?.payload?.brandId || primaryDraft?.brandId || '').trim();
+          const params = new URLSearchParams({ scope: 'brand' });
+          if (brandId) params.set('brandId', brandId);
+          if (primaryDraft.id) params.set('projectId', String(primaryDraft.id));
+          target = `analytics.html?${params.toString()}`;
+        }
         if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage(target);
         else window.location.href = target;
         return;

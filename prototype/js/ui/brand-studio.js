@@ -1491,9 +1491,14 @@
         metricsUpdatedAt: '',
         remotePostId: remotePostId,
         remoteUrl: String(result.url || '').trim(),
+        sourceScope: 'studio',
+        brandId: brandId,
         title: String(draft && draft.title || project.title || '게시 결과').trim() || '게시 결과',
         projectId: projectId,
         projectTitle: String(project.title || payload.episodeTitle || projectId).trim(),
+        attributionStatus: 'assigned',
+        attributionSource: 'studio-publish',
+        attributedAt: new Date().toISOString(),
         seasonId: String(payload.seasonId || '').trim(),
         seasonLabel: String(payload.seasonLabel || payload.seasonTitle || '').trim(),
         campaignId: String(payload.campaignId || '').trim(),
@@ -4287,7 +4292,7 @@
         return;
       }
       var target = '';
-      if (action === 'brand-open-analytics') target = buildStageUrl('analytics.html', projectId, brandId);
+      if (action === 'brand-open-analytics') target = buildStageUrl('analytics.html', projectId, brandId) + '&scope=episode';
       else if (action === 'brand-open-knowledge') target = buildStageUrl('knowledge.html', projectId, brandId);
       else if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId, brandId);
       else if (action === 'brand-open-scenario') target = buildStageUrl('scenario.html', projectId, brandId);

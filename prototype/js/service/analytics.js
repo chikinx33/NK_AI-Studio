@@ -34,7 +34,7 @@
     return NK.service.brand.listProjects(target);
   }
 
-  function readPublishResults(projectOrId) {
+  function readAllPublishResults(projectOrId) {
     if (isBrandTarget(projectOrId)) {
       var combined = [];
       if (NK.service && NK.service.brand && NK.service.brand.listPublishResults) {
@@ -42,7 +42,7 @@
         combined = combined.concat(directBrandResults);
       }
       combined = combined.concat(brandProjects(projectOrId).reduce(function (acc, project) {
-        return acc.concat(readPublishResults(project));
+        return acc.concat(readAllPublishResults(project));
       }, []));
       var seen = new Map();
       combined.forEach(function (item, index) {
@@ -50,7 +50,21 @@
         var key = String(row.remotePostId || '').trim()
           ? [row.channelType, row.remotePostId].join('|')
           : [row.id || ('publish_' + index), row.projectId || '', row.publishedAt || ''].join('|');
-        if (!seen.has(key)) seen.set(key, row);
+        if (!seen.has(key)) {
+          seen.set(key, row);
+          return;
+        }
+        var current = seen.get(key) || {};
+        var assigned = String(current.attributionStatus || '').trim() === 'assigned' || String(row.attributionStatus || '').trim() === 'assigned';
+        seen.set(key, Object.assign({}, current, row, {
+          brandId: row.brandId || current.brandId || '',
+          projectId: row.projectId || current.projectId || '',
+          projectTitle: row.projectTitle || current.projectTitle || '',
+          attributionStatus: assigned ? 'assigned' : (row.attributionStatus || current.attributionStatus || 'unassigned'),
+          attributionSource: row.attributionStatus === 'assigned' ? row.attributionSource : (current.attributionSource || row.attributionSource || ''),
+          attributedAt: row.attributedAt || current.attributedAt || '',
+          metrics: Object.assign({}, current.metrics || {}, row.metrics || {})
+        }));
       });
       return Array.from(seen.values());
     }
@@ -73,9 +87,15 @@
         remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
         remoteUrl: String(raw.remoteUrl || raw.url || raw.postUrl || '').trim(),
         thumbnailUrl: String(raw.thumbnailUrl || raw.thumbnail || raw.previewUrl || '').trim(),
+        sourceScope: String(raw.sourceScope || '').trim(),
+        accountName: String(raw.accountName || '').trim(),
+        brandId: String(raw.brandId || payload.brandId || '').trim(),
         title: String(raw.title || '').trim() || translate('게시 결과'),
         projectId: String(raw.projectId || project.id || '').trim(),
         projectTitle: String(raw.projectTitle || project.title || project.seriesTitle || '').trim(),
+        attributionStatus: String(raw.attributionStatus || 'assigned').trim() || 'assigned',
+        attributionSource: String(raw.attributionSource || (raw.sourceScope === 'account' ? 'account-sync' : 'legacy-project')).trim(),
+        attributedAt: String(raw.attributedAt || '').trim(),
         seasonId: String(raw.seasonId || payload.seasonId || '').trim(),
         seasonLabel: String(raw.seasonLabel || raw.seasonTitle || payload.seasonLabel || payload.seasonTitle || '').trim(),
         campaignId: String(raw.campaignId || payload.campaignId || '').trim(),
@@ -103,6 +123,26 @@
     }).filter(function (item) {
       return item.channelType || item.remotePostId || item.title;
     });
+  }
+
+  function assignedToBrand(item, target, projects) {
+    var row = item && typeof item === 'object' ? item : {};
+    var status = String(row.attributionStatus || '').trim().toLowerCase();
+    if (status === 'unassigned' || status === 'excluded') return false;
+    var brandId = String(target && target.brandId || '').trim();
+    var rowBrandId = String(row.brandId || '').trim();
+    if (brandId && rowBrandId && brandId === rowBrandId) return true;
+    var projectId = String(row.projectId || '').trim();
+    return !!projectId && projects.some(function (project) {
+      return String(project && project.id || '').trim() === projectId;
+    });
+  }
+
+  function readPublishResults(projectOrId) {
+    var rows = readAllPublishResults(projectOrId);
+    if (!isBrandTarget(projectOrId)) return rows;
+    var projects = brandProjects(projectOrId);
+    return rows.filter(function (item) { return assignedToBrand(item, projectOrId, projects); });
   }
 
   function normalizeFilterValue(value) {
@@ -193,11 +233,37 @@
   }
 
   analytics.listPublishResults = readPublishResults;
+  analytics.listAllPublishResults = readAllPublishResults;
   analytics.listPublishResultsByBrand = function (brandOrId) {
     var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
       ? NK.service.brand.getById(brandOrId)
       : brandOrId;
     return readPublishResults(target);
+  };
+  analytics.listUnassignedPublishResults = function (brandOrId) {
+    var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandOrId)
+      : brandOrId;
+    if (!isBrandTarget(target)) return [];
+    var projects = brandProjects(target);
+    return readAllPublishResults(target).filter(function (item) {
+      var status = String(item && item.attributionStatus || '').trim().toLowerCase();
+      return status !== 'excluded' && !assignedToBrand(item, target, projects);
+    });
+  };
+  analytics.getAttributionStats = function (brandOrId) {
+    var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandOrId)
+      : brandOrId;
+    if (!isBrandTarget(target)) return { assigned: 0, unassigned: 0, excluded: 0 };
+    var projects = brandProjects(target);
+    return readAllPublishResults(target).reduce(function (summary, item) {
+      var status = String(item && item.attributionStatus || '').trim().toLowerCase();
+      if (status === 'excluded') summary.excluded += 1;
+      else if (assignedToBrand(item, target, projects)) summary.assigned += 1;
+      else summary.unassigned += 1;
+      return summary;
+    }, { assigned: 0, unassigned: 0, excluded: 0 });
   };
   analytics.filterPublishResults = function (projectOrId, filters) {
     return filterRows(readPublishResults(projectOrId), filters);

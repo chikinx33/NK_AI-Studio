@@ -20,6 +20,25 @@
     return parts.length ? safePage + '?' + parts.join('&') : safePage;
   }
 
+  function analyticsScopeFromSearch(project) {
+    var params = new URLSearchParams(window.location.search || '');
+    var requested = String(params.get('scope') || '').trim().toLowerCase();
+    if (requested === 'episode' && project && project.id) return 'episode';
+    return 'brand';
+  }
+
+  function buildAnalyticsUrl(scope, projectId, brandId) {
+    var params = new URLSearchParams({ scope: scope === 'episode' ? 'episode' : 'brand' });
+    if (brandId) params.set('brandId', String(brandId));
+    if (projectId) params.set('projectId', String(projectId));
+    return 'analytics.html?' + params.toString();
+  }
+
+  function navigateStage(url) {
+    if (window.self !== window.top && window.parent) window.parent.postMessage({ type: 'load-stage', url: url }, '*');
+    else window.location.href = url;
+  }
+
   function applyCurrentLocale() {
     if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
     var lang = NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
@@ -139,20 +158,27 @@
     });
   }
 
+  function publishRowKey(item, index) {
+    var channel = String(item && item.channelType || 'unknown').trim();
+    var remote = String(item && (item.remotePostId || item.postId) || '').trim();
+    return remote ? channel + ':' + remote : String(item && item.id || ('row_' + (index || 0)));
+  }
+
   function mergeSyncedRows(existingRows, incomingRows) {
     var map = new Map();
-    function key(item, index) {
-      var channel = String(item && item.channelType || 'unknown').trim();
-      var remote = String(item && (item.remotePostId || item.postId) || '').trim();
-      return remote ? channel + ':' + remote : String(item && item.id || ('row_' + index));
-    }
-    (Array.isArray(existingRows) ? existingRows : []).forEach(function (item, index) { map.set(key(item, index), item); });
+    (Array.isArray(existingRows) ? existingRows : []).forEach(function (item, index) { map.set(publishRowKey(item, index), item); });
     (Array.isArray(incomingRows) ? incomingRows : []).forEach(function (item, index) {
-      var itemKey = key(item, index);
+      var itemKey = publishRowKey(item, index);
       var current = map.get(itemKey) || {};
       map.set(itemKey, Object.assign({}, current, item, {
+        brandId: item.brandId || current.brandId || '',
         projectId: item.projectId || current.projectId || '',
         projectTitle: item.projectTitle || current.projectTitle || '',
+        attributionStatus: current.attributionStatus === 'assigned' || current.attributionStatus === 'excluded'
+          ? current.attributionStatus
+          : (item.attributionStatus || current.attributionStatus || 'unassigned'),
+        attributionSource: current.attributionSource || item.attributionSource || 'account-sync',
+        attributedAt: current.attributedAt || item.attributedAt || '',
         seasonId: item.seasonId || current.seasonId || '',
         seasonLabel: item.seasonLabel || current.seasonLabel || '',
         campaignId: item.campaignId || current.campaignId || '',
@@ -267,10 +293,11 @@
     return { meta: meta, target: target, current: currentValue, progress: progress, forecast: forecast, status: status };
   }
 
-  function goalPanelHtml(goal, goalSummary) {
+  function goalPanelHtml(goal, goalSummary, scopeLabel) {
+    var safeScopeLabel = String(scopeLabel || '브랜드 전체').trim();
     if (!goal) {
-      return '<section class="analytics-goal-card is-empty"><div><span class="analytics-section-kicker">성과 목표</span>' +
-        '<h3>판단 기준이 아직 없습니다</h3><p>이 브랜드가 언제까지 어떤 수치를 달성해야 하는지 먼저 정해 주세요.</p></div>' +
+      return '<section class="analytics-goal-card is-empty"><div><span class="analytics-section-kicker">' + escapeHtml(safeScopeLabel) + ' 성과 목표</span>' +
+        '<h3>판단 기준이 아직 없습니다</h3><p>' + escapeHtml(safeScopeLabel) + '가 언제까지 어떤 수치를 달성해야 하는지 먼저 정해 주세요.</p></div>' +
         '<button type="button" class="btn-primary" data-action="analytics-open-goal">목표 설정</button></section>';
     }
     var current = goalMetricValue(goalSummary, goal.metric);
@@ -279,9 +306,9 @@
     var currentText = goal.metric === 'engagementRate' ? percentText(current) : numberText(current, goal.metric === 'averageViews' ? 1 : 0) + info.meta.unit;
     var targetText = goal.metric === 'engagementRate' ? percentText(info.target) : numberText(info.target, goal.metric === 'averageViews' ? 1 : 0) + info.meta.unit;
     var forecastText = goal.metric === 'engagementRate' ? percentText(info.forecast) : numberText(info.forecast, 0) + info.meta.unit;
-    return '<section class="analytics-goal-card"><div class="analytics-goal-copy"><span class="analytics-section-kicker">성과 목표 · ' + escapeHtml(info.meta.label) + '</span>' +
+    return '<section class="analytics-goal-card"><div class="analytics-goal-copy"><span class="analytics-section-kicker">' + escapeHtml(safeScopeLabel) + ' 성과 목표 · ' + escapeHtml(info.meta.label) + '</span>' +
       '<div class="analytics-goal-title"><h3>' + escapeHtml(targetText) + ' 목표</h3><span class="analytics-status is-' + (info.status === '위험' ? 'risk' : 'good') + '">' + escapeHtml(info.status) + '</span></div>' +
-      '<p>' + escapeHtml((goal.startDate || '-') + ' ~ ' + (goal.endDate || '-') + ' · 브랜드 전체 기준') + '</p>' +
+      '<p>' + escapeHtml((goal.startDate || '-') + ' ~ ' + (goal.endDate || '-') + ' · ' + safeScopeLabel + ' 기준') + '</p>' +
       '<div class="analytics-goal-progress"><span style="width:' + progressPercent.toFixed(1) + '%"></span></div>' +
       '<div class="analytics-goal-numbers"><strong>현재 ' + escapeHtml(currentText) + '</strong><span>달성률 ' + escapeHtml(percentText(info.progress * 100)) + '</span><span>기간 종료 예상 ' + escapeHtml(forecastText) + '</span></div></div>' +
       '<button type="button" class="btn-secondary compact" data-action="analytics-open-goal">목표 수정</button></section>';
@@ -409,12 +436,19 @@
       '<strong class="analytics-action-command">다음 행동 · ' + escapeHtml(item.action || '') + '</strong></article>';
   }
 
-  function suggestionCardHtml(item) {
+  function suggestionCardHtml(item, scope, project, projects) {
+    var episodeOptions = (Array.isArray(projects) ? projects : []).map(function (episode) {
+      return '<option value="' + escapeHtml(episode.id || '') + '">' + escapeHtml(episode.title || episode.id || '에피소드') + '</option>';
+    }).join('');
+    var targetControl = scope === 'episode'
+      ? '<div class="analytics-suggestion-target"><span>적용 대상</span><strong>' + escapeHtml(project && project.title || '현재 에피소드') + '</strong></div>'
+      : '<label class="analytics-suggestion-target"><span>적용할 에피소드</span><select data-suggestion-episode><option value="">에피소드를 선택해 주세요</option>' + episodeOptions + '</select></label>';
+    var buttonLabel = scope === 'episode' ? '이 에피소드로 보내기' : '선택한 에피소드로 보내기';
     return '<article class="analytics-action-card is-suggestion"><div class="analytics-action-top"><span class="analytics-channel-badge">콘텐츠 초안</span>' +
       '<span class="analytics-confidence">' + escapeHtml(item.targetChannel ? channelLabel(item.targetChannel) : '브랜드 전체') + '</span></div>' +
       '<h4>' + escapeHtml(item.title || '콘텐츠 제안') + '</h4><p>' + escapeHtml(item.summary || '') + '</p><div class="analytics-evidence">' + escapeHtml(item.reason || '') + '</div>' +
       '<p class="analytics-apply-note">대상 채널의 캡션·해시태그 초안을 저장하고 Brand Studio 초안 단계로 이동합니다. 게시·예약은 실행되지 않습니다.</p>' +
-      '<button type="button" class="btn-primary compact" data-action="analytics-apply-suggestion" data-suggestion-id="' + escapeHtml(item.id || '') + '">초안을 Brand Studio로 보내기</button></article>';
+      targetControl + '<button type="button" class="btn-primary compact" data-action="analytics-apply-suggestion" data-suggestion-id="' + escapeHtml(item.id || '') + '" data-project-id="' + escapeHtml(scope === 'episode' && project ? project.id : '') + '">' + buttonLabel + '</button></article>';
   }
 
   function postCardHtml(item, averageViews, rankLabel) {
@@ -439,6 +473,20 @@
       }).join('') + '</tbody></table></div>';
   }
 
+  function attributionPanelHtml(unassignedRows, projects) {
+    var rows = Array.isArray(unassignedRows) ? unassignedRows : [];
+    if (!rows.length) return '';
+    var episodeOptions = (Array.isArray(projects) ? projects : []).map(function (episode) {
+      return '<option value="' + escapeHtml(episode.id || '') + '">' + escapeHtml(episode.title || episode.id || '에피소드') + '</option>';
+    }).join('');
+    return '<section class="analytics-attribution-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">게시물 귀속 확인</span><h3>분류되지 않은 게시물 ' + rows.length + '건</h3><p>연결 계정에서 가져왔지만 브랜드 또는 에피소드가 확인되지 않아 공식 KPI에서 제외했습니다.</p></div><span>임의 집계 금지</span></div>' +
+      '<div class="analytics-attribution-list">' + rows.slice(0, 20).map(function (item, index) {
+        return '<article class="analytics-attribution-row" data-attribution-key="' + escapeHtml(publishRowKey(item, index)) + '"><div><span>' + escapeHtml(channelLabel(item.channelType)) + ' · ' + escapeHtml(formatDate(item.publishedAt)) + '</span><strong>' + escapeHtml(item.title || item.caption || '게시 결과') + '</strong></div>' +
+          '<select data-attribution-target aria-label="게시물 귀속 대상"><option value="">대상 선택</option><option value="__brand__">브랜드 공통</option>' + episodeOptions + '<option value="__exclude__">이 브랜드와 관련 없음</option></select>' +
+          '<button type="button" class="btn-secondary compact" data-action="analytics-assign-post">분류 저장</button></article>';
+      }).join('') + '</div>' + (rows.length > 20 ? '<p class="analytics-muted">우선 20건을 표시합니다. 저장 후 다음 게시물이 이어서 표시됩니다.</p>' : '') + '</section>';
+  }
+
   function readinessHtml(brand, connections, sync, rawRows, publishedRows, goal) {
     var connected = Array.isArray(connections) ? connections.length : 0;
     var hasMetrics = publishedRows.some(metricHasValue);
@@ -460,13 +508,13 @@
       (publishedRows.length ? '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">저장된 게시 결과</span><h3>성과 수치 대기 목록</h3></div><span>' + publishedRows.length + '건</span></div>' + postTableHtml(publishedRows) + '</section>' : '');
   }
 
-  function goalModalHtml(goal, filters) {
+  function goalModalHtml(goal, filters, scopeLabel) {
     var current = goal || {};
-    return '<div class="analytics-modal" data-analytics-goal-modal hidden><form class="analytics-goal-form" data-form="analytics-goal"><div class="analytics-modal-head"><div><span class="analytics-section-kicker">브랜드 성과 목표</span><h3>목표 설정</h3></div><button type="button" class="btn-secondary compact" data-action="analytics-close-goal">닫기</button></div>' +
+    return '<div class="analytics-modal" data-analytics-goal-modal hidden><form class="analytics-goal-form" data-form="analytics-goal"><div class="analytics-modal-head"><div><span class="analytics-section-kicker">' + escapeHtml(scopeLabel || '브랜드 전체') + ' 성과 목표</span><h3>목표 설정</h3></div><button type="button" class="btn-secondary compact" data-action="analytics-close-goal">닫기</button></div>' +
       '<label><span>핵심 목표 지표</span><select name="metric"><option value="views" ' + (current.metric === 'views' || !current.metric ? 'selected' : '') + '>기간 총 조회수</option><option value="averageViews" ' + (current.metric === 'averageViews' ? 'selected' : '') + '>게시물당 평균 조회수</option><option value="engagementRate" ' + (current.metric === 'engagementRate' ? 'selected' : '') + '>참여율</option><option value="clicks" ' + (current.metric === 'clicks' ? 'selected' : '') + '>기간 총 클릭</option></select></label>' +
       '<label><span>목표값</span><input name="target" type="number" min="0.01" step="0.01" required value="' + escapeHtml(current.target || '') + '" placeholder="예: 10000"></label>' +
       '<div class="analytics-goal-form-dates"><label><span>시작일</span><input name="startDate" type="date" required value="' + escapeHtml(current.startDate || filters.dateFrom) + '"></label><label><span>종료일</span><input name="endDate" type="date" required value="' + escapeHtml(current.endDate || filters.dateTo) + '"></label></div>' +
-      '<p>목표는 선택한 브랜드 전체에 저장되며, 분석 필터와 별개로 목표 기간 전체를 평가합니다.</p><button type="submit" class="btn-primary">목표 저장</button></form></div>';
+      '<p>목표는 ' + escapeHtml(scopeLabel || '브랜드 전체') + '에 별도로 저장되며, 다른 분석 범위의 목표와 섞이지 않습니다.</p><button type="submit" class="btn-primary">목표 저장</button></form></div>';
   }
 
   function renderEmpty(root, message) {
@@ -517,6 +565,7 @@
     renderProject(root, project, brand, currentState);
     var token = localStorage.getItem('nk_auth_token') || '';
     var requestBody = sharedSnsQuery(projectId);
+    if (brandId) requestBody.brandId = brandId;
     return fetch('/api/sns/analytics/sync', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -546,8 +595,12 @@
         platforms: result.platforms || [],
         fitLatestPeriod: false
       };
+      var attributableRows = mergedRows.filter(function (item) {
+        var status = String(item && item.attributionStatus || '').trim().toLowerCase();
+        return status === 'assigned' || (!!item.projectId && status !== 'excluded');
+      });
       var nextFilters = currentState.sync.fitLatestPeriod
-        ? fitFiltersToLatestPublishedPeriod(currentState.filters, mergedRows)
+        ? fitFiltersToLatestPublishedPeriod(currentState.filters, attributableRows)
         : currentState.filters;
       var temporaryBrand = brand ? Object.assign({}, brand, { brandStudioPublishResults: mergedRows, analyticsSync: analyticsSync }) : null;
       var savePromise;
@@ -579,36 +632,59 @@
     var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
     var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '프로젝트').trim();
     var episodeTitle = String(project.title || payload.episodeTitle || projectId).trim();
+    var scope = analyticsScopeFromSearch(project);
+    var scopeLabel = scope === 'episode' ? '에피소드' : '브랜드 전체';
     var target = brand || project;
+    var brandProjects = brand && NK.service.brand && NK.service.brand.listProjects ? NK.service.brand.listProjects(brand) : [project];
     var currentState = normalizeViewState(state);
     var filters = currentState.filters;
+    var effectiveFilters = Object.assign({}, filters);
+    if (scope === 'episode') effectiveFilters.episodeId = projectId;
     var sync = currentState.sync;
     var connections = sync.connections;
-    var previousFilters = previousPeriodFilters(filters);
+    var previousFilters = previousPeriodFilters(effectiveFilters);
     var filterOptions = NK.service.analytics.listFilterOptions(target);
     var rawRows = NK.service.analytics.listPublishResults(target);
-    var allPublishedRows = NK.service.analytics.filterPublishResults(target, {});
-    var rows = NK.service.analytics.filterPublishResults(target, filters);
-    var summary = NK.service.analytics.summarizeProject(target, filters);
+    var unassignedRows = scope === 'brand' && brand && NK.service.analytics.listUnassignedPublishResults
+      ? NK.service.analytics.listUnassignedPublishResults(brand)
+      : [];
+    var scopeBaseFilters = scope === 'episode' ? { episodeId: projectId } : {};
+    var allPublishedRows = NK.service.analytics.filterPublishResults(target, scopeBaseFilters);
+    var rows = NK.service.analytics.filterPublishResults(target, effectiveFilters);
+    var summary = NK.service.analytics.summarizeProject(target, effectiveFilters);
     var previousSummary = NK.service.analytics.summarizeProject(target, previousFilters);
-    var channels = NK.service.analytics.summarizeByChannel(target, filters);
-    var episodes = NK.service.analytics.summarizeByEpisode(target, filters);
-    var contentTypes = NK.service.analytics.summarizeByContentType(target, filters);
-    var uploadTimes = NK.service.analytics.summarizeByUploadTime(target, filters).filter(function (item) { return item.totalPosts > 0; });
-    var hashtags = NK.service.analytics.summarizeByHashtag(target, filters);
-    var trend = NK.service.analytics.summarizeTrend ? NK.service.analytics.summarizeTrend(target, filters) : [];
-    var goal = brand && brand.performanceGoal || payload.analyticsGoal || payload.performanceGoal || null;
-    var goalSummary = goal ? NK.service.analytics.summarizeProject(target, { dateFrom: goal.startDate, dateTo: goal.endDate }) : summary;
+    var channels = NK.service.analytics.summarizeByChannel(target, effectiveFilters);
+    var episodes = NK.service.analytics.summarizeByEpisode(target, effectiveFilters);
+    var contentTypes = NK.service.analytics.summarizeByContentType(target, effectiveFilters);
+    var uploadTimes = NK.service.analytics.summarizeByUploadTime(target, effectiveFilters).filter(function (item) { return item.totalPosts > 0; });
+    var hashtags = NK.service.analytics.summarizeByHashtag(target, effectiveFilters);
+    var trend = NK.service.analytics.summarizeTrend ? NK.service.analytics.summarizeTrend(target, effectiveFilters) : [];
+    var goal = scope === 'episode' ? (payload.episodePerformanceGoal || null) : (brand && brand.performanceGoal || null);
+    var goalFilters = goal ? { dateFrom: goal.startDate, dateTo: goal.endDate } : effectiveFilters;
+    if (scope === 'episode') goalFilters.episodeId = projectId;
+    var goalSummary = goal ? NK.service.analytics.summarizeProject(target, goalFilters) : summary;
     var hasPerformanceData = rows.some(metricHasValue);
-    var activeFilterCount = ['episodeId', 'channelType', 'contentType', 'seasonId', 'campaignId', 'purposeKey'].filter(function (key) { return !!filters[key]; }).length;
+    var activeFilterCount = ['episodeId', 'channelType', 'contentType', 'seasonId', 'campaignId', 'purposeKey'].filter(function (key) { return scope === 'episode' && key === 'episodeId' ? false : !!filters[key]; }).length;
 
-    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span><h2>' + escapeHtml(brandTitle) + '</h2><p class="analytics-context-episode"><span>현재 에피소드</span><strong>' + escapeHtml(episodeTitle) + '</strong></p></div></header>';
+    var episodeJumpOptions = brandProjects.map(function (episode) {
+      return '<option value="' + escapeHtml(episode.id || '') + '" ' + (String(episode.id || '') === projectId ? 'selected' : '') + '>' + escapeHtml(episode.title || episode.id || '에피소드') + '</option>';
+    }).join('');
+    var scopeNavHtml = '<div class="analytics-scope-nav" aria-label="분석 범위"><button type="button" class="analytics-scope-tab ' + (scope === 'brand' ? 'is-active' : '') + '" data-action="analytics-set-scope" data-scope="brand">브랜드 전체 성과</button>' +
+      '<button type="button" class="analytics-scope-tab ' + (scope === 'episode' ? 'is-active' : '') + '" data-action="analytics-set-scope" data-scope="episode" data-project-id="' + escapeHtml(projectId) + '">에피소드 성과</button>' +
+      '<label class="analytics-scope-episode-picker"><span>분석 에피소드</span><select data-analytics-episode-jump>' + episodeJumpOptions + '</select></label></div>';
+    var scopeDescription = scope === 'episode'
+      ? '<p class="analytics-scope-description"><span>분석 범위</span><strong>' + escapeHtml(episodeTitle) + '에 귀속된 게시물만</strong><em>게시물 ' + allPublishedRows.length + '건</em></p>'
+      : '<p class="analytics-scope-description"><span>분석 범위</span><strong>' + escapeHtml(brandTitle) + '에 귀속된 전체 게시물</strong><em>에피소드 ' + brandProjects.length + '개 · 게시물 ' + allPublishedRows.length + '건</em></p>';
+    var headerTitle = scope === 'episode'
+      ? '<p class="analytics-breadcrumb">' + escapeHtml(brandTitle) + '<span>›</span>에피소드</p><h2>' + escapeHtml(episodeTitle) + '</h2>'
+      : '<h2>' + escapeHtml(brandTitle) + '</h2>';
+    var headerHtml = '<header class="analytics-context-header"><div class="analytics-context-copy"><span class="analytics-section-kicker">성과 분석</span>' + headerTitle + scopeDescription + '</div>' + scopeNavHtml + '</header>';
 
     var toolbarHtml = '<section class="analytics-toolbar"><div class="analytics-period-fields"><label><span>분석 시작일</span><input type="date" data-analytics-filter="dateFrom" value="' + escapeHtml(filters.dateFrom) + '"></label><span class="analytics-period-separator">~</span><label><span>분석 종료일</span><input type="date" data-analytics-filter="dateTo" value="' + escapeHtml(filters.dateTo) + '"></label><span class="analytics-compare-badge">이전 동일 기간 비교</span></div>' +
-      '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
+      '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + (scope === 'brand' ? selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') : '') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
       '<details class="analytics-advanced-filters" ' + (filters.seasonId || filters.campaignId || filters.purposeKey ? 'open' : '') + '><summary>상세 필터 ' + (activeFilterCount ? '· ' + activeFilterCount + '개 적용' : '') + '</summary><div>' + selectHtml('seasonId', filterOptions.seasons, filters.seasonId, '시즌') + selectHtml('campaignId', filterOptions.campaigns, filters.campaignId, '캠페인') + selectHtml('purposeKey', filterOptions.purposes, filters.purposeKey, '운영 목적') + '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters">필터 초기화</button></div></details></section>';
 
-    var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</section>';
+    var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary, scopeLabel) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</section>' + attributionPanelHtml(unassignedRows, brandProjects);
     var contentHtml = '';
     var kpis = '<section class="analytics-metric-section"><div class="analytics-section-heading"><div><span class="analytics-section-kicker">핵심 성과</span><h3>선택 기간의 결과</h3></div><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + '</p></div><div class="analytics-kpi-grid-v2">' +
       kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
@@ -617,7 +693,7 @@
       kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</div></section>';
     var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>게시일별 조회수 합계</h3><p>각 날짜에 게시된 콘텐츠의 현재 누적 조회수를 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
       '<section class="analytics-panel analytics-diagnosis-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">냉정한 진단</span><h3>현재 상태</h3></div></div><div class="analytics-diagnosis-list">' +
-      '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? '브랜드 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
+      '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? scopeLabel + ' 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
       '<div><span>이전 기간 대비</span><strong>' + escapeHtml(previousSummary.views ? percentText(((summary.views - previousSummary.views) / previousSummary.views) * 100) : '비교 불가') + '</strong><p>총 조회수 변화이며 게시물당 평균과 함께 확인해야 합니다.</p></div>' +
       '<div><span>분석 신뢰도</span><strong>' + (summary.totalPosts >= 10 ? '근거 보통' : '표본 부족') + '</strong><p>현재 표본 ' + summary.totalPosts + '건 · 10건 미만의 패턴은 추가 검증이 필요합니다.</p></div></div></section></div>';
 
@@ -625,7 +701,7 @@
       var emptyBreakdownHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 원인 분해</span><h3>채널별 비교</h3><p>성과 수집이 완료되면 동일한 기준으로 채널·콘텐츠·시간대를 비교합니다.</p></div></div><div class="analytics-breakdown-grid">' +
         breakdownCardHtml('채널', channels, function (item) { return channelLabel(item.channelType); }) +
         breakdownCardHtml('콘텐츠 유형', contentTypes, function (item) { return contentTypeLabel(item.contentType); }) +
-        breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) +
+        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) : '') +
         breakdownCardHtml('업로드 시간', uploadTimes, function (item) { return item.label; }) +
         breakdownCardHtml('해시태그', hashtags, function (item) { return item.hashtag; }) + '</div></section>';
       contentHtml = kpis + trendHtml + readinessHtml(brand, connections, sync, rawRows, allPublishedRows, goal) + emptyBreakdownHtml;
@@ -635,8 +711,8 @@
       var sortedRows = rows.slice().sort(function (a, b) { return Number(b.metrics.views || 0) - Number(a.metrics.views || 0); });
       var topRows = sortedRows.slice(0, Math.min(5, sortedRows.length));
       var bottomRows = sortedRows.length > 2 ? sortedRows.slice().reverse().slice(0, Math.min(3, sortedRows.length)) : [];
-      var recommendations = NK.service.strategyEngine ? NK.service.strategyEngine.buildRecommendations(target, filters) : [];
-      var suggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, filters) : [];
+      var recommendations = NK.service.strategyEngine ? NK.service.strategyEngine.buildRecommendations(target, effectiveFilters) : [];
+      var suggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, effectiveFilters) : [];
 
       var postsHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 기여 게시물</span><h3>어떤 콘텐츠가 결과를 만들었는가</h3><p>누적 합계가 아닌 게시물 단위로 평균 대비 성과를 확인합니다.</p></div><span>조회수 기준</span></div><div class="analytics-post-grid">' + topRows.map(function (item, index) { return postCardHtml(item, summary.averageViews, '상위 ' + (index + 1)); }).join('') + '</div>' +
         (bottomRows.length ? '<div class="analytics-low-performer"><h4>검토가 필요한 게시물</h4><div class="analytics-post-grid is-compact">' + bottomRows.map(function (item, index) { return postCardHtml(item, summary.averageViews, '하위 ' + (index + 1)); }).join('') + '</div></div>' : '') + '</section>';
@@ -644,18 +720,18 @@
       var breakdownHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 원인 분해</span><h3>어디에서 차이가 발생했는가</h3><p>총 조회수가 아니라 게시물당 평균 조회수와 참여율로 비교합니다.</p></div></div><div class="analytics-breakdown-grid">' +
         breakdownCardHtml('채널', channels, function (item) { return channelLabel(item.channelType); }) +
         breakdownCardHtml('콘텐츠 유형', contentTypes, function (item) { return contentTypeLabel(item.contentType); }) +
-        breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) +
+        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) : '') +
         breakdownCardHtml('업로드 시간', uploadTimes, function (item) { return item.label; }) +
         breakdownCardHtml('해시태그', hashtags, function (item) { return item.hashtag; }) + '</div></section>';
 
       var actionHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">다음 실행</span><h3>근거가 있는 제안만 표시합니다</h3><p>관찰·표본·실행·검증 조건이 연결된 제안입니다.</p></div><span>최소 표본 3건</span></div>' +
-        (summary.totalPosts < 3 ? '<div class="analytics-learning-state"><strong>학습 중 · ' + summary.totalPosts + '/3건</strong><p>현재 표본으로는 전략을 확정하지 않습니다. 게시 결과를 더 수집해 주세요.</p></div>' : '<div class="analytics-action-grid">' + recommendations.slice(0, 3).map(recommendationCardHtml).join('') + suggestions.slice(0, 1).map(suggestionCardHtml).join('') + '</div>') + '</section>';
+        (summary.totalPosts < 3 ? '<div class="analytics-learning-state"><strong>학습 중 · ' + summary.totalPosts + '/3건</strong><p>현재 표본으로는 전략을 확정하지 않습니다. 게시 결과를 더 수집해 주세요.</p></div>' : '<div class="analytics-action-grid">' + recommendations.slice(0, 3).map(recommendationCardHtml).join('') + suggestions.slice(0, 1).map(function (item) { return suggestionCardHtml(item, scope, project, brandProjects); }).join('') + '</div>') + '</section>';
 
       var tableHtml = '<details class="analytics-raw-data"><summary><div><span class="analytics-section-kicker">상세 데이터</span><strong>게시물별 원시 성과 보기</strong></div><span>' + rows.length + '건</span></summary><div>' + postTableHtml(sortedRows) + '</div></details>';
       contentHtml = kpis + trendHtml + postsHtml + breakdownHtml + actionHtml + tableHtml;
     }
 
-    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial">' + headerHtml + toolbarHtml + goalAlertsHtml + contentHtml + goalModalHtml(goal, filters) + '</section>';
+    root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial" data-analytics-scope="' + escapeHtml(scope) + '">' + headerHtml + toolbarHtml + goalAlertsHtml + contentHtml + goalModalHtml(goal, filters, scopeLabel) + '</section>';
     applyCurrentLocale();
 
     root.onclick = function (event) {
@@ -664,6 +740,51 @@
       var action = String(button.dataset.action || '').trim();
       var nextFilters = readFiltersFromRoot(root, filters);
       var destination = '';
+      if (action === 'analytics-set-scope') {
+        var nextScope = String(button.dataset.scope || 'brand') === 'episode' ? 'episode' : 'brand';
+        var nextProjectId = nextScope === 'episode' ? String(button.dataset.projectId || projectId).trim() : projectId;
+        navigateStage(buildAnalyticsUrl(nextScope, nextProjectId, brandId));
+        return;
+      }
+      if (action === 'analytics-assign-post') {
+        if (!brandId || !NK.service.brand || !NK.service.brand.persistShared) return;
+        var attributionRow = button.closest('[data-attribution-key]');
+        var attributionSelect = attributionRow && attributionRow.querySelector('[data-attribution-target]');
+        var attributionTarget = String(attributionSelect && attributionSelect.value || '').trim();
+        var attributionKey = String(attributionRow && attributionRow.dataset.attributionKey || '').trim();
+        if (!attributionTarget || !attributionKey) {
+          alert('게시물을 연결할 브랜드 공통 또는 에피소드를 선택해 주세요.');
+          return;
+        }
+        var latestBrand = NK.service.brand.getById ? NK.service.brand.getById(brandId) || brand : brand;
+        var latestRows = latestBrand && Array.isArray(latestBrand.brandStudioPublishResults) ? latestBrand.brandStudioPublishResults.slice() : [];
+        var targetEpisode = brandProjects.find(function (episode) { return String(episode.id || '') === attributionTarget; }) || null;
+        var matched = false;
+        var updatedRows = latestRows.map(function (item, index) {
+          if (publishRowKey(item, index) !== attributionKey) return item;
+          matched = true;
+          if (attributionTarget === '__exclude__') {
+            return Object.assign({}, item, { brandId: '', projectId: '', projectTitle: '', attributionStatus: 'excluded', attributionSource: 'manual', attributedAt: new Date().toISOString() });
+          }
+          return Object.assign({}, item, {
+            brandId: brandId,
+            projectId: targetEpisode ? String(targetEpisode.id || '') : '',
+            projectTitle: targetEpisode ? String(targetEpisode.title || '') : '',
+            attributionStatus: 'assigned',
+            attributionSource: 'manual',
+            attributedAt: new Date().toISOString()
+          });
+        });
+        if (!matched) return;
+        button.disabled = true;
+        NK.service.brand.persistShared(brandId, { brandStudioPublishResults: updatedRows }).then(function (savedBrand) {
+          renderProject(root, project, savedBrand || brand, { filters: filters, sync: sync });
+        }).catch(function (error) {
+          alert('게시물 분류 저장 실패: ' + (error && error.message ? error.message : error));
+          button.disabled = false;
+        });
+        return;
+      }
       if (action === 'analytics-open-goal') {
         var modal = root.querySelector('[data-analytics-goal-modal]');
         if (modal) modal.hidden = false;
@@ -695,14 +816,24 @@
       if (action === 'analytics-apply-suggestion') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var suggestionId = String(button.dataset.suggestionId || '').trim();
-        var availableSuggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, filters) : [];
+        var availableSuggestions = NK.service.strategyEngine ? NK.service.strategyEngine.buildContentSuggestions(target, effectiveFilters) : [];
         var suggestion = availableSuggestions.find(function (item) { return String(item.id || '') === suggestionId; });
         if (!suggestion) return;
+        var suggestionCard = button.closest('.analytics-action-card');
+        var suggestionEpisodeSelect = suggestionCard && suggestionCard.querySelector('[data-suggestion-episode]');
+        var targetProjectId = String(button.dataset.projectId || suggestionEpisodeSelect && suggestionEpisodeSelect.value || '').trim();
+        if (!targetProjectId) {
+          alert('초안을 적용할 에피소드를 선택해 주세요.');
+          return;
+        }
+        var targetProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(targetProjectId) : null;
+        if (!targetProject) return;
+        var targetPayload = targetProject.payload || {};
         var targetFormat = String(suggestion.targetChannel || '').trim();
-        var selectedFormats = Array.isArray(payload.brandStudioSelectedFormats) ? payload.brandStudioSelectedFormats.slice() : [];
+        var selectedFormats = Array.isArray(targetPayload.brandStudioSelectedFormats) ? targetPayload.brandStudioSelectedFormats.slice() : [];
         if (targetFormat && selectedFormats.indexOf(targetFormat) < 0) selectedFormats.push(targetFormat);
-        var formatDrafts = payload.brandStudioFormatDrafts && typeof payload.brandStudioFormatDrafts === 'object'
-          ? Object.assign({}, payload.brandStudioFormatDrafts)
+        var formatDrafts = targetPayload.brandStudioFormatDrafts && typeof targetPayload.brandStudioFormatDrafts === 'object'
+          ? Object.assign({}, targetPayload.brandStudioFormatDrafts)
           : {};
         if (targetFormat) {
           formatDrafts[targetFormat] = Object.assign({}, formatDrafts[targetFormat] || {}, {
@@ -711,7 +842,7 @@
           });
         }
         button.disabled = true;
-        NK.service.project.updatePayload(projectId, {
+        NK.service.project.updatePayload(targetProjectId, {
           brandStudioContentType: suggestion.contentType || 'sns-post',
           brandStudioCaptionDraft: String(suggestion.captionDraft || '').trim(),
           brandStudioHashtagDraft: Array.isArray(suggestion.hashtags) ? suggestion.hashtags.join(' ') : '',
@@ -721,9 +852,8 @@
           brandStudioActiveDraftTab: targetFormat,
           brandStudioActiveStep: 3
         }).then(function () {
-          destination = buildStageUrl('brand.html', projectId, brandId);
-          if (window.self !== window.top && window.parent) window.parent.postMessage({ type: 'load-stage', url: destination }, '*');
-          else window.location.href = destination;
+          destination = buildStageUrl('brand.html', targetProjectId, brandId);
+          navigateStage(destination);
         }).catch(function (error) {
           alert('자동 제안 적용 실패: ' + (error && error.message ? error.message : error));
           button.disabled = false;
@@ -738,7 +868,13 @@
 
     root.onchange = function (event) {
       var field = event.target;
-      if (!field || !field.matches || !field.matches('[data-analytics-filter]')) return;
+      if (!field || !field.matches) return;
+      if (field.matches('[data-analytics-episode-jump]')) {
+        var selectedEpisodeId = String(field.value || '').trim();
+        if (selectedEpisodeId) navigateStage(buildAnalyticsUrl('episode', selectedEpisodeId, brandId));
+        return;
+      }
+      if (!field.matches('[data-analytics-filter]')) return;
       var next = readFiltersFromRoot(root, filters);
       if (next.dateFrom && next.dateTo && next.dateFrom > next.dateTo) {
         if (field.dataset.analyticsFilter === 'dateFrom') next.dateTo = next.dateFrom;
@@ -767,11 +903,12 @@
       var submit = form.querySelector('[type="submit"]');
       if (submit) submit.disabled = true;
       var savePromise;
-      if (brandId && NK.service.brand && NK.service.brand.persistShared) savePromise = NK.service.brand.persistShared(brandId, { performanceGoal: nextGoal });
-      else savePromise = NK.service.project.updatePayload(projectId, { analyticsGoal: nextGoal }).then(function (result) { return result && result.draft ? null : null; });
+      if (scope === 'episode') savePromise = NK.service.project.updatePayload(projectId, { episodePerformanceGoal: nextGoal });
+      else if (brandId && NK.service.brand && NK.service.brand.persistShared) savePromise = NK.service.brand.persistShared(brandId, { performanceGoal: nextGoal });
+      else savePromise = Promise.reject(new Error('brand_goal_target_missing'));
       Promise.resolve(savePromise).then(function (savedBrand) {
         var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
-        renderProject(root, nextProject, savedBrand || brand, { filters: filters, sync: sync });
+        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : brand, { filters: filters, sync: sync });
       }).catch(function (error) {
         alert('성과 목표 저장 실패: ' + (error && error.message ? error.message : error));
         if (submit) submit.disabled = false;
@@ -795,6 +932,24 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
+    try {
+      var initialScope = analyticsScopeFromSearch(project);
+      var initialPayload = project.payload || {};
+      var initialBrandId = String(brand && brand.brandId || initialPayload.brandId || '').trim();
+      var initialBrandName = String(brand && brand.brandTitle || initialPayload.brandTitle || project.seriesTitle || '').trim();
+      if (window.self !== window.top && window.parent) {
+        window.parent.postMessage({
+          type: 'brand-workspace-context',
+          context: {
+            scope: initialScope === 'episode' ? 'episode' : 'brand',
+            brandId: initialBrandId,
+            brandName: initialBrandName,
+            episodeId: initialScope === 'episode' ? String(project.id || '') : '',
+            episodeName: initialScope === 'episode' ? String(project.title || initialPayload.episodeTitle || '') : ''
+          }
+        }, '*');
+      }
+    } catch (_) { }
     var initialSync = {
       status: 'loading',
       syncedAt: brand && brand.analyticsSync && brand.analyticsSync.syncedAt || '',

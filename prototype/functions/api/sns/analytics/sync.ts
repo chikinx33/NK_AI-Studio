@@ -33,6 +33,11 @@ type AnalyticsPost = {
   hashtags: string[];
   sourceScope: "account";
   accountName: string;
+  brandId?: string;
+  projectId?: string;
+  projectTitle?: string;
+  attributionStatus: "unassigned";
+  attributionSource: "account-sync";
   metrics: Metrics;
 };
 
@@ -239,6 +244,8 @@ async function collectYouTube(env: any, userId: string, entry: any, syncedAt: st
       hashtags: Array.isArray(snippet?.tags) ? snippet.tags.map((tag: unknown) => `#${text(tag).replace(/^#/, "")}`).filter(Boolean) : hashtagsFrom(caption),
       sourceScope: "account",
       accountName: channelName,
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics: {
         views: positive(statistics?.viewCount),
         likes: positive(statistics?.likeCount),
@@ -301,6 +308,8 @@ async function collectInstagram(env: any, entry: any, syncedAt: string, ctx: Sto
       hashtags: hashtagsFrom(caption),
       sourceScope: "account",
       accountName: accountName(entry),
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics,
     };
   }));
@@ -377,6 +386,8 @@ async function collectFacebook(env: any, userId: string, entry: any, syncedAt: s
       hashtags: hashtagsFrom(caption),
       sourceScope: "account",
       accountName: page.pageName,
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics,
     };
   }));
@@ -417,6 +428,8 @@ async function collectTikTok(env: any, entry: any, syncedAt: string, ctx: Storag
       hashtags: hashtagsFrom(caption),
       sourceScope: "account",
       accountName: accountName(entry),
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics: {
         views: positive(item?.view_count),
         likes: positive(item?.like_count),
@@ -477,6 +490,8 @@ async function collectThreads(env: any, userId: string, entry: any, syncedAt: st
       hashtags: hashtagsFrom(caption),
       sourceScope: "account",
       accountName: token.username || accountName(entry),
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics,
     };
   }));
@@ -526,6 +541,8 @@ async function collectX(env: any, userId: string, entry: any, syncedAt: string):
         : hashtagsFrom(caption),
       sourceScope: "account",
       accountName: token.username || accountName(entry),
+      attributionStatus: "unassigned",
+      attributionSource: "account-sync",
       metrics: {
         views: positive(metrics?.impression_count),
         likes: positive(metrics?.like_count),

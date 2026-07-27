@@ -1559,6 +1559,160 @@
   letter-spacing: -0.035em;
 }
 
+.analytics-dashboard-v2.analytics-editorial .analytics-context-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 28px;
+}
+
+.analytics-editorial .analytics-context-copy {
+  display: block;
+}
+
+.analytics-editorial .analytics-context-copy .analytics-section-kicker {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.analytics-editorial .analytics-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.analytics-editorial .analytics-breadcrumb span {
+  color: var(--accent);
+}
+
+.analytics-editorial .analytics-scope-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+}
+
+.analytics-editorial .analytics-scope-description span,
+.analytics-editorial .analytics-scope-description em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.analytics-editorial .analytics-scope-description strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.analytics-editorial .analytics-scope-nav {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 8px;
+  min-width: min(100%, 410px);
+}
+
+.analytics-editorial .analytics-scope-tab {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent 22%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 62%, transparent 38%);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.analytics-editorial .analytics-scope-tab.is-active {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border) 30%);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel) 84%);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.analytics-editorial .analytics-scope-episode-picker {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.analytics-editorial .analytics-scope-episode-picker select,
+.analytics-editorial .analytics-suggestion-target select,
+.analytics-editorial .analytics-attribution-row select {
+  min-height: 38px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent 22%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 78%, transparent 22%);
+  color: var(--text);
+  padding: 0 34px 0 12px;
+}
+
+.analytics-editorial .analytics-attribution-panel {
+  padding: 24px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent 24%);
+}
+
+.analytics-editorial .analytics-attribution-list {
+  margin-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 64%, transparent 36%);
+}
+
+.analytics-editorial .analytics-attribution-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 300px) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 54%, transparent 46%);
+}
+
+.analytics-editorial .analytics-attribution-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.analytics-editorial .analytics-attribution-row span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.analytics-editorial .analytics-attribution-row strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-editorial .analytics-suggestion-target {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 10px;
+}
+
+.analytics-editorial .analytics-suggestion-target span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.analytics-editorial .analytics-suggestion-target strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .analytics-editorial .analytics-section-kicker {
   font-size: 10px;
   letter-spacing: 0.13em;
@@ -2054,6 +2208,16 @@
   .analytics-editorial .analytics-action-grid,
   .analytics-dashboard-v2.analytics-editorial > .analytics-readiness {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-dashboard-v2.analytics-editorial .analytics-context-header,
+  .analytics-editorial .analytics-attribution-row {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-editorial .analytics-scope-nav {
+    width: 100%;
+    min-width: 0;
   }
 
   .analytics-editorial .analytics-context-episode {

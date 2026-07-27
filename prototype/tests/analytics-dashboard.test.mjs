@@ -87,7 +87,7 @@ test('analytics calculates comparable averages and engagement rate', () => {
   assert.equal(summary.engagementRate, 11.25);
 });
 
-test('brand analytics merges direct and episode results without duplicating the same remote post', () => {
+test('brand analytics separates attributed performance from unassigned account posts', () => {
   const { context, project } = createContext([
     metricRow({ id: 'episode-copy', channelType: 'instagram', views: 100 })
   ]);
@@ -100,8 +100,29 @@ test('brand analytics merges direct and episode results without duplicating the 
 
   const brandTarget = { brandId: 'brand-1' };
   const rows = context.NK.service.analytics.listPublishResults(brandTarget);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(Array.from(rows, (item) => item.remotePostId).sort(), ['remote-1', 'remote-2']);
+  const allRows = context.NK.service.analytics.listAllPublishResults(brandTarget);
+  const unassigned = context.NK.service.analytics.listUnassignedPublishResults(brandTarget);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(Array.from(rows, (item) => item.remotePostId), ['remote-1']);
+  assert.equal(allRows.length, 2);
+  assert.deepEqual(Array.from(unassigned, (item) => item.remotePostId), ['remote-2']);
+});
+
+test('brand and episode summaries use explicit independent scopes', () => {
+  const episode2 = { id: 'episode-2', title: '둘째 에피소드', payload: { brandStudioPublishResults: [] } };
+  const { context, project } = createContext([
+    { ...metricRow({ id: 'ep1', views: 100 }), projectId: 'episode-1', projectTitle: '첫 에피소드', attributionStatus: 'assigned' }
+  ]);
+  context.NK.service.brand.listProjects = () => [project, episode2];
+  context.NK.service.brand.listPublishResults = () => [
+    { ...metricRow({ id: 'ep2', views: 300 }), remotePostId: 'remote-2', projectId: 'episode-2', projectTitle: '둘째 에피소드', attributionStatus: 'assigned' }
+  ];
+  load(context, 'prototype/js/service/analytics.js');
+
+  const brandTarget = { brandId: 'brand-1' };
+  assert.equal(context.NK.service.analytics.summarizeProject(brandTarget, {}).views, 400);
+  assert.equal(context.NK.service.analytics.summarizeProject(brandTarget, { episodeId: 'episode-1' }).views, 100);
+  assert.equal(context.NK.service.analytics.summarizeProject(brandTarget, { episodeId: 'episode-2' }).views, 300);
 });
 
 test('strategy does not make performance claims before the minimum sample and uses filtered evidence', () => {
@@ -125,8 +146,14 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   const uiSource = read('prototype/js/ui/brand-intelligence.js');
   const studioCss = read('prototype/styles.studio-pages.css');
   assert.match(uiSource, /<h2>' \+ escapeHtml\(brandTitle\)/);
-  assert.match(uiSource, /analytics-context-episode/);
-  assert.match(uiSource, /현재 에피소드/);
+  assert.match(uiSource, /analyticsScopeFromSearch/);
+  assert.match(uiSource, /브랜드 전체 성과/);
+  assert.match(uiSource, /에피소드 성과/);
+  assert.match(uiSource, /data-analytics-scope/);
+  assert.match(uiSource, /effectiveFilters\.episodeId = projectId/);
+  assert.match(uiSource, /listUnassignedPublishResults/);
+  assert.match(uiSource, /게시물 귀속 확인/);
+  assert.doesNotMatch(uiSource, /analytics-context-episode/);
   assert.match(uiSource, /channelIconHtml\(item\.channelType\)/);
   assert.doesNotMatch(uiSource, /channelLabel\(item\.channelType\)\.slice\(0, 2\)/);
   assert.match(uiSource, /analytics-dashboard-v2 analytics-editorial/);
@@ -156,7 +183,8 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(studioCss, /성과 분석 editorial layout/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-kpi-card[\s\S]+background: transparent/);
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
-  assert.match(studioCss, /analytics-context-episode strong[\s\S]+font-size: clamp\(20px/);
+  assert.match(studioCss, /analytics-scope-tab\.is-active/);
+  assert.match(studioCss, /analytics-attribution-row/);
   assert.doesNotMatch(uiSource, /Math\.max\(1, barHeight\)/);
   assert.match(uiSource, /if \(value <= 0\) return ''/);
   assert.match(uiSource, /analytics-chart-bar-gradient|analytics-bar-gradient/);
@@ -203,6 +231,8 @@ test('analytics sync endpoint collects supported platform posts and metrics from
   assert.match(source, /api\.x\.com\/2\/users/);
   assert.match(source, /connections,/);
   assert.match(source, /platforms,/);
+  assert.match(source, /attributionStatus: "unassigned"/);
+  assert.match(source, /attributionSource: "account-sync"/);
   assert.doesNotMatch(source, /accessToken[^\n]+return send/);
 });
 
@@ -217,6 +247,7 @@ test('brand analytics persistence keeps synchronized account metadata and collec
   const source = read('prototype/js/service/brand.js');
   assert.match(source, /sourceScope: normalizeText\(raw\.sourceScope\)/);
   assert.match(source, /accountName: normalizeText\(raw\.accountName\)/);
+  assert.match(source, /attributionStatus: normalizeText\(raw\.attributionStatus\)/);
   assert.match(source, /function normalizeAnalyticsSync/);
   assert.match(source, /analyticsSync: normalizeAnalyticsSync\(raw\.analyticsSync\)/);
 });
@@ -226,5 +257,17 @@ test('Brand Studio persists successful publish responses as analytics input', ()
   assert.match(studioSource, /function persistPublishedResult/);
   assert.match(studioSource, /brandStudioPublishResults: nextBrandRows/);
   assert.match(studioSource, /brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows/);
+  assert.match(studioSource, /attributionSource: 'studio-publish'/);
+  assert.match(studioSource, /brandId: brandId/);
   assert.match(studioSource, /metrics: \{ views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 \}/);
+});
+
+test('analytics navigation declares brand and episode scope instead of inferring it', () => {
+  const dashboardSource = read('prototype/js/ui/dashboard.js');
+  const studioSource = read('prototype/js/ui/brand-studio.js');
+  const shellSource = read('prototype/script.js');
+  assert.match(dashboardSource, /new URLSearchParams\(\{ scope: 'brand' \}\)/);
+  assert.match(studioSource, /analytics\.html[^\n]+scope=episode/);
+  assert.match(shellSource, /context\.scope === 'episode' && projectId \? 'episode' : 'brand'/);
+  assert.match(shellSource, /buildAnalyticsStageUrl/);
 });
