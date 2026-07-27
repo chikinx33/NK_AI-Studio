@@ -169,7 +169,9 @@
 
   function fitFiltersToLatestPublishedPeriod(filters, rows) {
     var current = normalizeFilters(filters);
-    var dates = (Array.isArray(rows) ? rows : []).map(function (item) {
+    var sourceRows = Array.isArray(rows) ? rows : [];
+    var metricRows = sourceRows.filter(metricHasValue);
+    var dates = (metricRows.length ? metricRows : sourceRows).map(function (item) {
       return String(item && item.publishedAt || '').slice(0, 10);
     }).filter(function (date) { return /^\d{4}-\d{2}-\d{2}$/.test(date); }).sort();
     if (!dates.length) return current;

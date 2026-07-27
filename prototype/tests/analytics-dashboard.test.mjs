@@ -138,6 +138,7 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /var kpis =[\s\S]+if \(!allPublishedRows\.length/);
   assert.match(uiSource, /성과 수집 대기/);
   assert.match(uiSource, /fitFiltersToLatestPublishedPeriod/);
+  assert.match(uiSource, /metricRows\.length \? metricRows : sourceRows/);
   assert.match(uiSource, /fitLatestPeriod: true/);
   assert.match(uiSource, /uploadTimes[^;]+filter\(function \(item\) \{ return item\.totalPosts > 0; \}\)/);
   assert.doesNotMatch(uiSource, /전략 추천[^\n]+recommendations\.length/);
@@ -164,6 +165,7 @@ test('analytics sync endpoint collects supported platform posts and metrics from
   assert.match(source, /token\.threadsUserId\)\}\/threads/);
   assert.match(source, /for \(const edge of \["published_posts", "feed"\]\)/);
   assert.match(source, /일부 Insights 조회가 실패했습니다/);
+  assert.match(source, /platform === "instagram"[^\n]+expired/);
   assert.match(source, /api\.x\.com\/2\/users/);
   assert.match(source, /connections,/);
   assert.match(source, /platforms,/);

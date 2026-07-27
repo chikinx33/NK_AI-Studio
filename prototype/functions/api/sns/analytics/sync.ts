@@ -597,7 +597,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       posts.push(...result.posts);
       platforms.push(result.state);
     } catch (error) {
-      const permissionRequired = isPermissionError(error) || /reconnect_required|not_connected/.test(text((error as any)?.message));
+      const errorText = text((error as any)?.detail || (error as any)?.message || error);
+      const permissionRequired = isPermissionError(error)
+        || /reconnect_required|not_connected/.test(text((error as any)?.message))
+        || (platform === "instagram" && /expired|error validating access token|oauth/i.test(errorText));
       platforms.push(platformState(
         platform,
         entry,
@@ -605,7 +608,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         0,
         permissionRequired
           ? (platform === "x" ? "X API의 게시물 조회 권한 또는 이용 요금제를 확인해 주세요." : "성과 조회 권한이 없습니다. SNS 설정에서 계정을 다시 연결해 주세요.")
-          : `성과 수집 실패: ${text((error as any)?.detail || (error as any)?.message || error).slice(0, 180)}`
+          : `성과 수집 실패: ${errorText.slice(0, 180)}`
       ));
     }
   }
