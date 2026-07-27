@@ -5951,6 +5951,67 @@ html.page-shell-image #sidebar-project-card {
   background: var(--scrollbar-track);
 }
 
+/* 활성 입력 영역은 비활성 필드와 명확히 구분한다. */
+#project-overlay .form-row input:not(:disabled),
+#project-overlay .form-row select:not(:disabled),
+#project-overlay .form-row textarea:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border) 76%, var(--text) 24%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel) 90%, var(--bg) 10%),
+    color-mix(in srgb, var(--bg-2) 92%, var(--accent) 8%)
+  );
+  color: var(--text);
+  caret-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent 92%),
+    0 5px 14px rgba(0, 0, 0, .14);
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+#project-overlay .form-row input:not(:disabled)::placeholder,
+#project-overlay .form-row textarea:not(:disabled)::placeholder {
+  color: color-mix(in srgb, var(--muted) 86%, var(--text) 14%);
+  opacity: 1;
+}
+
+#project-overlay .form-row input:not(:disabled):hover,
+#project-overlay .form-row select:not(:disabled):hover,
+#project-overlay .form-row textarea:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border) 54%);
+}
+
+#project-overlay .form-row input:not(:disabled):focus,
+#project-overlay .form-row select:not(:disabled):focus,
+#project-overlay .form-row textarea:not(:disabled):focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent 82%),
+    0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent 90%);
+}
+
+[data-theme="light"] #project-overlay .form-row input:not(:disabled),
+[data-theme="light"] #project-overlay .form-row select:not(:disabled),
+[data-theme="light"] #project-overlay .form-row textarea:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border) 82%, var(--text) 18%);
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--panel) 90%, var(--bg-2) 10%));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .92),
+    0 4px 12px rgba(31, 52, 87, .08);
+}
+
+[data-theme="light"] #project-overlay .form-row input:not(:disabled):focus,
+[data-theme="light"] #project-overlay .form-row select:not(:disabled):focus,
+[data-theme="light"] #project-overlay .form-row textarea:not(:disabled):focus {
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent 84%),
+    0 8px 20px rgba(31, 52, 87, .1);
+}
+
 #project-overlay .project-create-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
