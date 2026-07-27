@@ -121,7 +121,7 @@ function apiError(platform: string, response: Response, data: any): Error {
 function isPermissionError(error: unknown): boolean {
   const status = Number((error as any)?.status || 0);
   const message = text((error as any)?.message || error).toLowerCase();
-  return status === 401 || status === 403 || /permission|scope|reconnect|not authorized|access level|forbidden/.test(message);
+  return status === 401 || status === 403 || /permission|scope|reconnect|not authorized|access level|forbidden|expired|invalid[^\n]*token|error validating access token|oauth/.test(message);
 }
 
 function isoDurationSeconds(value: unknown): number {
@@ -314,23 +314,40 @@ async function collectInstagram(env: any, entry: any, syncedAt: string, ctx: Sto
 async function collectFacebook(env: any, userId: string, entry: any, syncedAt: string): Promise<CollectionResult> {
   const page = await getFacebookPageToken(env, userId);
   const version = graphVersion(env);
-  const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(page.pageId)}/published_posts`);
-  url.search = new URLSearchParams({
-    fields: "id,message,created_time,permalink_url,full_picture,shares,reactions.limit(0).summary(true),comments.limit(0).summary(true)",
-    limit: "5",
-    access_token: page.pageToken,
-  }).toString();
-  const response = await fetch(url.toString());
-  const data = await readJson(response);
+  let response: Response | null = null;
+  let data: any = null;
+  for (const edge of ["published_posts", "feed"]) {
+    const url = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(page.pageId)}/${edge}`);
+    url.search = new URLSearchParams({
+      fields: "id,message,created_time,permalink_url,full_picture",
+      limit: "25",
+      access_token: page.pageToken,
+    }).toString();
+    response = await fetch(url.toString());
+    data = await readJson(response);
+    if (response.ok || response.status < 500) break;
+  }
+  if (!response) throw new Error("facebook_api_unavailable");
   if (!response.ok) throw apiError("facebook", response, data);
   const rows = Array.isArray(data?.data) ? data.data : [];
   let insightPermissionFailures = 0;
   const posts = await Promise.all(rows.map(async (item: any): Promise<AnalyticsPost> => {
     const id = text(item?.id);
     const metrics = emptyMetrics();
-    metrics.likes = positive(item?.reactions?.summary?.total_count);
-    metrics.comments = positive(item?.comments?.summary?.total_count);
-    metrics.shares = positive(item?.shares?.count);
+    try {
+      const reactionsUrl = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(id)}`);
+      reactionsUrl.search = new URLSearchParams({
+        fields: "shares,reactions.limit(0).summary(true),comments.limit(0).summary(true)",
+        access_token: page.pageToken,
+      }).toString();
+      const reactionsRes = await fetch(reactionsUrl.toString());
+      const reactionsData = await readJson(reactionsRes);
+      if (reactionsRes.ok) {
+        metrics.likes = positive(reactionsData?.reactions?.summary?.total_count);
+        metrics.comments = positive(reactionsData?.comments?.summary?.total_count);
+        metrics.shares = positive(reactionsData?.shares?.count);
+      }
+    } catch { /* 게시물 기본 정보는 유지 */ }
     try {
       const insightsUrl = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(id)}/insights`);
       insightsUrl.search = new URLSearchParams({ metric: "post_impressions,post_clicks", period: "lifetime", access_token: page.pageToken }).toString();
@@ -414,27 +431,36 @@ async function collectTikTok(env: any, entry: any, syncedAt: string, ctx: Storag
 
 async function collectThreads(env: any, userId: string, entry: any, syncedAt: string): Promise<CollectionResult> {
   const token = await getThreadsToken(env, userId);
-  const url = new URL("https://graph.threads.net/v1.0/me/threads");
+  const url = new URL(`https://graph.threads.net/v1.0/${encodeURIComponent(token.threadsUserId)}/threads`);
   url.search = new URLSearchParams({ fields: "id,media_type,media_url,permalink,text,timestamp,shortcode,thumbnail_url", limit: "5", access_token: token.accessToken }).toString();
   const response = await fetch(url.toString());
   const data = await readJson(response);
   if (!response.ok) throw apiError("threads", response, data);
   const rows = Array.isArray(data?.data) ? data.data : [];
+  let insightPermissionFailures = 0;
+  let insightFailures = 0;
   const posts = await Promise.all(rows.map(async (item: any): Promise<AnalyticsPost> => {
     const id = text(item?.id);
     const metrics = emptyMetrics();
     const insightsUrl = new URL(`https://graph.threads.net/v1.0/${encodeURIComponent(id)}/insights`);
     insightsUrl.search = new URLSearchParams({ metric: "views,likes,replies,reposts,quotes", access_token: token.accessToken }).toString();
-    const insightsRes = await fetch(insightsUrl.toString());
-    const insightsData = await readJson(insightsRes);
-    if (!insightsRes.ok) throw apiError("threads", insightsRes, insightsData);
-    (insightsData?.data || []).forEach((row: any) => {
-      const value = positive(row?.total_value?.value ?? row?.values?.[0]?.value);
-      if (row?.name === "views") metrics.views = value;
-      if (row?.name === "likes") metrics.likes = value;
-      if (row?.name === "replies") metrics.comments = value;
-      if (row?.name === "reposts" || row?.name === "quotes") metrics.shares += value;
-    });
+    try {
+      const insightsRes = await fetch(insightsUrl.toString());
+      const insightsData = await readJson(insightsRes);
+      if (insightsRes.ok) {
+        (insightsData?.data || []).forEach((row: any) => {
+          const value = positive(row?.total_value?.value ?? row?.values?.[0]?.value);
+          if (row?.name === "views") metrics.views = value;
+          if (row?.name === "likes") metrics.likes = value;
+          if (row?.name === "replies") metrics.comments = value;
+          if (row?.name === "reposts" || row?.name === "quotes") metrics.shares += value;
+        });
+      } else {
+        const error = apiError("threads", insightsRes, insightsData);
+        if (isPermissionError(error)) insightPermissionFailures += 1;
+        else insightFailures += 1;
+      }
+    } catch { insightFailures += 1; }
     const caption = text(item?.text);
     return {
       id: `threads_${id}`,
@@ -454,7 +480,13 @@ async function collectThreads(env: any, userId: string, entry: any, syncedAt: st
       metrics,
     };
   }));
-  return { posts, state: platformState("threads", entry, posts.length ? "synced" : "empty", posts.length, posts.length ? "최근 게시물 Insights를 동기화했습니다." : "게시물이 없습니다.") };
+  const state = !posts.length ? "empty" : (insightPermissionFailures ? "permission_required" : (insightFailures ? "error" : "synced"));
+  const message = !posts.length
+    ? "게시물이 없습니다."
+    : (insightPermissionFailures
+      ? "게시물은 가져왔지만 Insights 권한은 재연결이 필요합니다."
+      : (insightFailures ? "게시물은 가져왔지만 일부 Insights 조회가 실패했습니다." : "최근 게시물 Insights를 동기화했습니다."));
+  return { posts, state: platformState("threads", entry, state, posts.length, message) };
 }
 
 async function collectX(env: any, userId: string, entry: any, syncedAt: string): Promise<CollectionResult> {

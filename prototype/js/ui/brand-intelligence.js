@@ -110,7 +110,8 @@
         syncedAt: String(sync.syncedAt || '').trim(),
         error: String(sync.error || '').trim(),
         connections: Array.isArray(sync.connections) ? sync.connections.slice() : [],
-        platforms: Array.isArray(sync.platforms) ? sync.platforms.slice() : []
+        platforms: Array.isArray(sync.platforms) ? sync.platforms.slice() : [],
+        fitLatestPeriod: !!sync.fitLatestPeriod
       }
     };
   }
@@ -164,6 +165,20 @@
       dateTo: shiftDate(current.dateFrom, -1),
       dateFrom: shiftDate(current.dateFrom, -span)
     });
+  }
+
+  function fitFiltersToLatestPublishedPeriod(filters, rows) {
+    var current = normalizeFilters(filters);
+    var dates = (Array.isArray(rows) ? rows : []).map(function (item) {
+      return String(item && item.publishedAt || '').slice(0, 10);
+    }).filter(function (date) { return /^\d{4}-\d{2}-\d{2}$/.test(date); }).sort();
+    if (!dates.length) return current;
+    var hasRowsInSelectedPeriod = dates.some(function (date) {
+      return (!current.dateFrom || date >= current.dateFrom) && (!current.dateTo || date <= current.dateTo);
+    });
+    if (hasRowsInSelectedPeriod) return current;
+    var latest = dates[dates.length - 1];
+    return Object.assign({}, current, { dateFrom: shiftDate(latest, -29), dateTo: latest });
   }
 
   function selectHtml(key, options, currentValue, title, formatter) {
@@ -493,8 +508,12 @@
         syncedAt: analyticsSync.syncedAt,
         error: '',
         connections: Array.isArray(result.connections) ? result.connections : currentState.sync.connections,
-        platforms: result.platforms || []
+        platforms: result.platforms || [],
+        fitLatestPeriod: false
       };
+      var nextFilters = currentState.sync.fitLatestPeriod
+        ? fitFiltersToLatestPublishedPeriod(currentState.filters, mergedRows)
+        : currentState.filters;
       var temporaryBrand = brand ? Object.assign({}, brand, { brandStudioPublishResults: mergedRows, analyticsSync: analyticsSync }) : null;
       var savePromise;
       if (brandId && NK.service.brand && NK.service.brand.persistShared) {
@@ -508,7 +527,7 @@
         return temporaryBrand;
       }).then(function (savedBrand) {
         var nextProject = NK.service.project.getDraftById ? NK.service.project.getDraftById(projectId) || project : project;
-        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : (temporaryBrand || brand), { filters: currentState.filters, sync: nextSync });
+        renderProject(root, nextProject, savedBrand && savedBrand.brandId ? savedBrand : (temporaryBrand || brand), { filters: nextFilters, sync: nextSync });
       });
     }).catch(function (error) {
       var failedSync = Object.assign({}, currentState.sync, {
@@ -730,7 +749,8 @@
       syncedAt: brand && brand.analyticsSync && brand.analyticsSync.syncedAt || '',
       error: '',
       connections: [],
-      platforms: brand && brand.analyticsSync && Array.isArray(brand.analyticsSync.platforms) ? brand.analyticsSync.platforms : []
+      platforms: brand && brand.analyticsSync && Array.isArray(brand.analyticsSync.platforms) ? brand.analyticsSync.platforms : [],
+      fitLatestPeriod: true
     };
     renderProject(root, project, brand, { sync: initialSync });
     loadSnsConnections(project.id).then(function (connections) {
