@@ -592,12 +592,11 @@ body.page-shell-ai-sound .brand-mark {
 .nav-scope-group + .nav-scope-group {
   margin-top: 8px;
   padding-top: 13px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent 38%);
 }
 
 .nav-scope-label {
   margin: 0 0 3px 12px;
-  color: color-mix(in srgb, var(--muted) 78%, transparent 22%);
+  color: var(--accent);
   font-size: 10px;
   font-weight: 750;
   letter-spacing: .13em;

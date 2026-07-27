@@ -20,6 +20,7 @@ test('brand shell exposes explicit brand, episode, and shared tool scopes', () =
   const html = read('prototype/brand-studio.html');
   const script = read('prototype/script.js');
   const core = read('prototype/core.js');
+  const styles = read('prototype/styles.css');
 
   assert.match(html, /id="brand-workspace-context"/);
   assert.match(html, /data-i18n="brand_scope_brand"/);
@@ -30,6 +31,8 @@ test('brand shell exposes explicit brand, episode, and shared tool scopes', () =
   assert.match(script, /scope === 'episode'/);
   assert.match(core, /brand_scope_brand: 'Brand'/);
   assert.match(core, /brand_scope_brand: '브랜드'/);
+  assert.match(styles, /\.nav-scope-label \{[^}]*color: var\(--accent\)/);
+  assert.doesNotMatch(styles, /\.nav-scope-group \+ \.nav-scope-group \{[^}]*border-top/);
 });
 
 test('project overlay accepts an explicit new-brand or episode creation intent', () => {
