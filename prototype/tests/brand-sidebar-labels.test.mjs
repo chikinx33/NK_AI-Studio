@@ -25,6 +25,7 @@ test('brand studio header and management sidebar use the requested localized lab
 
 test('brand management shell cache-busts its translated navigation assets', () => {
   const html = read('prototype/brand-studio.html');
+  const dashboardHtml = read('prototype/brand-dashboard.html');
   const config = read('prototype/js/config.js');
   const version = config.match(/APP_VERSION\s*=\s*'([^']+)'/)?.[1];
 
@@ -32,6 +33,8 @@ test('brand management shell cache-busts its translated navigation assets', () =
   assert.match(html, new RegExp('core\\.js\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(html, new RegExp('js/config\\.js\\?v=' + version.replaceAll('.', '\\.')));
   assert.match(html, new RegExp('styles\\.css\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(dashboardHtml, new RegExp('styles\\.css\\?v=' + version.replaceAll('.', '\\.')));
+  assert.match(dashboardHtml, new RegExp('script\\.js\\?v=' + version.replaceAll('.', '\\.')));
 });
 
 test('project creation fields have distinct active styles in dark and light themes', () => {
