@@ -185,6 +185,9 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
   assert.match(studioCss, /analytics-scope-tab\.is-active/);
   assert.match(studioCss, /analytics-attribution-row/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-advanced-filters \{[^}]*border-top: 0/);
+  assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details \{[^}]*border-top: 0/);
+  assert.doesNotMatch(studioCss, /\.analytics-editorial \.analytics-sync-panel \{[^}]*border-(?:top|bottom): 1px/);
   assert.match(uiSource, /granularity === 'month'/);
   assert.match(uiSource, /기간별 조회수 합계/);
   assert.doesNotMatch(uiSource, /var limit = 62/);

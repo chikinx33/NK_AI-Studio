@@ -1729,7 +1729,6 @@
 .analytics-editorial .analytics-toolbar {
   padding: 18px 4px 20px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent 24%);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1743,7 +1742,7 @@
 }
 
 .analytics-editorial .analytics-advanced-filters {
-  border-top-color: color-mix(in srgb, var(--border) 68%, transparent 32%);
+  border-top: 0;
 }
 
 .analytics-editorial .analytics-sync-panel {
@@ -1754,8 +1753,6 @@
   margin-top: 22px;
   padding: 16px 4px;
   border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent 30%);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent 30%);
   border-radius: 0;
   background: transparent;
 }
@@ -1791,7 +1788,7 @@
 .analytics-editorial .analytics-sync-details {
   grid-column: 1 / -1;
   padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 62%, transparent 38%);
+  border-top: 0;
 }
 
 .analytics-editorial .analytics-sync-details > summary {
