@@ -314,8 +314,9 @@
       '<button type="button" class="btn-secondary compact" data-action="analytics-open-goal">목표 수정</button></section>';
   }
 
-  function alertsHtml(connections, sync, rawRows, publishedRows, goal) {
+  function alertsHtml(connections, sync, rawRows, publishedRows, goal, scopeLabel) {
     var connected = Array.isArray(connections) ? connections : [];
+    var safeScopeLabel = String(scopeLabel || '브랜드 전체').trim();
     var pending = Math.max(0, rawRows.length - publishedRows.length);
     var emptyMetricCount = publishedRows.filter(function (item) { return !metricHasValue(item); }).length;
     var alerts = [];
@@ -325,7 +326,13 @@
     if (sync && sync.status === 'error') alerts.push({ kind: 'risk', title: '성과 동기화 실패', detail: sync.error || '플랫폼 성과 수집 요청을 완료하지 못했습니다.' });
     if (pending) alerts.push({ kind: 'warn', title: '성과 집계 제외 ' + pending + '건', detail: '예약·처리 중·실패 게시물은 성과에서 제외했습니다.' });
     if (emptyMetricCount) alerts.push({ kind: 'warn', title: '성과 수치 대기 ' + emptyMetricCount + '건', detail: '게시 결과는 있지만 조회수·반응 수치가 아직 없습니다.' });
-    if (!rawRows.length) alerts.push({ kind: 'risk', title: '게시 결과 없음', detail: 'Brand Studio에서 게시하면 결과가 이 페이지에 기록됩니다.' });
+    if (!rawRows.length) alerts.push({
+      kind: 'risk',
+      title: safeScopeLabel + ' 게시 결과 없음',
+      detail: safeScopeLabel === '에피소드'
+        ? 'Brand Studio 게시 결과를 이 에피소드에 귀속하면 성과가 집계됩니다.'
+        : 'Brand Studio에서 게시하거나 연결 계정의 게시물을 이 브랜드에 귀속해 주세요.'
+    });
     return '<section class="analytics-alert-card"><div class="analytics-card-head"><div><span class="analytics-section-kicker">운영·데이터 상태</span><h3>확인할 항목</h3></div></div>' +
       '<div class="analytics-alert-list">' + alerts.slice(0, 4).map(function (item) {
         return '<div class="analytics-alert-item is-' + item.kind + '"><span class="analytics-alert-dot"></span><div><strong>' + escapeHtml(item.title) + '</strong><p>' + escapeHtml(item.detail) + '</p></div></div>';
@@ -355,17 +362,46 @@
   }
 
   function buildTrendSvg(trend, filters) {
-    var map = new Map();
-    (Array.isArray(trend) ? trend : []).forEach(function (item) { map.set(item.date, item); });
+    var source = Array.isArray(trend) ? trend : [];
+    var span = daysBetween(filters.dateFrom, filters.dateTo) + 1;
+    var granularity = span > 3650 ? 'year' : (span > 366 ? 'month' : (span > 62 ? 'week' : 'day'));
     var dates = [];
     var cursor = filters.dateFrom;
-    var limit = 62;
-    while (cursor && cursor <= filters.dateTo && dates.length < limit) {
-      dates.push(cursor);
-      cursor = shiftDate(cursor, 1);
+    if (granularity === 'day') {
+      while (cursor && cursor <= filters.dateTo) {
+        dates.push(cursor);
+        cursor = shiftDate(cursor, 1);
+      }
+    } else if (granularity === 'week') {
+      while (cursor && cursor <= filters.dateTo) {
+        dates.push(cursor);
+        cursor = shiftDate(cursor, 7);
+      }
+    } else if (granularity === 'month') {
+      var monthCursor = new Date(String(filters.dateFrom || '') + 'T00:00:00');
+      if (isFinite(monthCursor.getTime())) monthCursor.setDate(1);
+      while (isFinite(monthCursor.getTime()) && localDateString(monthCursor) <= filters.dateTo) {
+        dates.push(localDateString(monthCursor).slice(0, 7));
+        monthCursor.setMonth(monthCursor.getMonth() + 1);
+      }
+    } else {
+      var startYear = Number(String(filters.dateFrom || '').slice(0, 4));
+      var endYear = Number(String(filters.dateTo || '').slice(0, 4));
+      for (var year = startYear; year <= endYear; year += 1) dates.push(String(year));
     }
     if (!dates.length) return '';
-    var values = dates.map(function (date) { return Math.max(0, Number((map.get(date) || {}).views || 0)); });
+    var valuesByBucket = new Map(dates.map(function (date) { return [date, 0]; }));
+    source.forEach(function (item) {
+      var date = String(item && item.date || '').slice(0, 10);
+      if (!date || date < filters.dateFrom || date > filters.dateTo) return;
+      var key = date;
+      if (granularity === 'week') key = shiftDate(filters.dateFrom, Math.floor(daysBetween(filters.dateFrom, date) / 7) * 7);
+      else if (granularity === 'month') key = date.slice(0, 7);
+      else if (granularity === 'year') key = date.slice(0, 4);
+      if (!valuesByBucket.has(key)) return;
+      valuesByBucket.set(key, valuesByBucket.get(key) + Math.max(0, Number(item.views || 0)));
+    });
+    var values = dates.map(function (date) { return valuesByBucket.get(date) || 0; });
     var positiveValues = values.filter(function (value) { return value > 0; });
     var peakValue = Math.max.apply(Math, positiveValues.concat([0]));
     var scale = peakValue > 0 ? Math.pow(10, Math.floor(Math.log10(peakValue))) : 1;
@@ -391,7 +427,8 @@
     var xLabels = dates.map(function (date, index) {
       if (!(index === 0 || index === dates.length - 1 || index % Math.max(1, Math.ceil(dates.length / 6)) === 0)) return '';
       var x = left + (index * step) + (step / 2);
-      return '<text x="' + x.toFixed(2) + '" y="' + (height - 14) + '" text-anchor="middle" class="analytics-chart-label analytics-chart-date">' + escapeHtml(date.slice(5).replace('-', '.')) + '</text>';
+      var label = granularity === 'year' ? date : (granularity === 'month' ? date.slice(2).replace('-', '.') : date.slice(5).replace('-', '.'));
+      return '<text x="' + x.toFixed(2) + '" y="' + (height - 14) + '" text-anchor="middle" class="analytics-chart-label analytics-chart-date">' + escapeHtml(label) + '</text>';
     }).join('');
     var bars = dates.map(function (date, index) {
       var value = values[index];
@@ -410,11 +447,11 @@
     var average = positiveValues.length ? positiveValues.reduce(function (sum, value) { return sum + value; }, 0) / positiveValues.length : 0;
     var averageY = top + plotHeight - ((average / max) * plotHeight);
     var averageLine = average > 0
-      ? '<g class="analytics-chart-average-group"><line x1="' + left + '" y1="' + averageY.toFixed(2) + '" x2="' + (width - right) + '" y2="' + averageY.toFixed(2) + '" class="analytics-chart-average" /><text x="' + (width - right - 4) + '" y="' + (averageY - 7).toFixed(2) + '" text-anchor="end" class="analytics-chart-average-label">게시일 평균 ' + escapeHtml(numberText(average, 0)) + '</text></g>'
+      ? '<g class="analytics-chart-average-group"><line x1="' + left + '" y1="' + averageY.toFixed(2) + '" x2="' + (width - right) + '" y2="' + averageY.toFixed(2) + '" class="analytics-chart-average" /><text x="' + (width - right - 4) + '" y="' + (averageY - 7).toFixed(2) + '" text-anchor="end" class="analytics-chart-average-label">구간 평균 ' + escapeHtml(numberText(average, 0)) + '</text></g>'
       : '';
     var emptyNote = positiveValues.length ? '' :
-      '<g class="analytics-chart-empty"><text x="' + (width / 2) + '" y="' + (height / 2 - 4) + '" text-anchor="middle">성과 수집 대기</text><text x="' + (width / 2) + '" y="' + (height / 2 + 20) + '" text-anchor="middle">동기화가 완료되면 날짜별 막대가 표시됩니다</text></g>';
-    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="게시일별 조회수 합계 추이">' +
+      '<g class="analytics-chart-empty"><text x="' + (width / 2) + '" y="' + (height / 2 - 4) + '" text-anchor="middle">선택 범위에 성과 데이터가 없습니다</text><text x="' + (width / 2) + '" y="' + (height / 2 + 20) + '" text-anchor="middle">수집 상태 또는 게시물 귀속을 확인해 주세요</text></g>';
+    return '<svg class="analytics-trend-chart" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="기간별 조회수 합계 추이">' +
       '<defs><linearGradient id="analytics-bar-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" class="analytics-chart-stop-top"/><stop offset="100%" class="analytics-chart-stop-bottom"/></linearGradient><filter id="analytics-bar-glow" x="-80%" y="-30%" width="260%" height="170%"><feGaussianBlur stdDeviation="6"/></filter></defs>' +
       '<rect x="' + left + '" y="' + top + '" width="' + plotWidth + '" height="' + plotHeight + '" rx="16" class="analytics-chart-plot" />' +
       grid + averageLine + '<line x1="' + left + '" y1="' + (top + plotHeight) + '" x2="' + (width - right) + '" y2="' + (top + plotHeight) + '" class="analytics-chart-axis" />' + bars + xLabels + emptyNote + '</svg>';
@@ -487,18 +524,19 @@
       }).join('') + '</div>' + (rows.length > 20 ? '<p class="analytics-muted">우선 20건을 표시합니다. 저장 후 다음 게시물이 이어서 표시됩니다.</p>' : '') + '</section>';
   }
 
-  function readinessHtml(brand, connections, sync, rawRows, publishedRows, goal) {
+  function readinessHtml(brand, connections, sync, rawRows, publishedRows, goal, scopeLabel) {
     var connected = Array.isArray(connections) ? connections.length : 0;
+    var safeScopeLabel = String(scopeLabel || '브랜드 전체').trim();
     var hasMetrics = publishedRows.some(metricHasValue);
     var steps = [
       { done: true, title: '분석 브랜드 확인', detail: brand && brand.brandTitle || '현재 브랜드' },
       { done: connected > 0, title: 'SNS 계정 연결', detail: connected ? connected + '개 계정 연결됨' : 'SNS 설정에서 계정을 연결해 주세요.' },
-      { done: publishedRows.length > 0, title: '게시 결과 저장', detail: publishedRows.length ? publishedRows.length + '건 저장됨' : (sync && sync.status === 'loading' ? '연결 계정의 게시물을 가져오는 중입니다.' : '연결 계정에 게시물이 없거나 수집 권한이 없습니다.') },
+      { done: publishedRows.length > 0, title: '게시 결과 저장', detail: publishedRows.length ? publishedRows.length + '건 저장됨' : (safeScopeLabel === '에피소드' ? '이 에피소드에 귀속된 게시물이 없습니다.' : (sync && sync.status === 'loading' ? '연결 계정의 게시물을 가져오는 중입니다.' : '연결 계정에 게시물이 없거나 수집 권한이 없습니다.')) },
       { done: hasMetrics, title: '성과 수치 확보', detail: hasMetrics ? '조회수와 반응 수치가 확인됩니다.' : '플랫폼별 성과 수집 상태를 확인해 주세요.' },
       { done: !!goal, title: '성과 목표 설정', detail: goal ? '목표 기준이 설정되었습니다.' : '목표값과 기간을 정해 주세요.' }
     ];
     return '<section class="analytics-readiness"><div class="analytics-readiness-copy"><span class="analytics-section-kicker">분석 준비 상태</span><h3>' +
-      (rawRows.length ? '게시 결과는 있지만 아직 판단할 성과 수치가 부족합니다' : '성과 분석을 시작할 데이터가 없습니다') + '</h3>' +
+      (rawRows.length ? '게시 결과는 있지만 아직 판단할 성과 수치가 부족합니다' : safeScopeLabel + ' 성과 분석을 시작할 데이터가 없습니다') + '</h3>' +
       '<p>KPI와 그래프는 0 상태로 유지하며, 근거 없는 순위와 전략만 생성하지 않습니다. 플랫폼별 수집 상태에서 필요한 조치를 확인해 주세요.</p>' +
       '<div class="analytics-readiness-actions"><button type="button" class="btn-primary" data-action="analytics-sync-now">성과 다시 수집</button>' +
       '<button type="button" class="btn-secondary" data-action="analytics-open-sns">SNS 설정</button></div></div>' +
@@ -643,12 +681,12 @@
     var sync = currentState.sync;
     var connections = sync.connections;
     var previousFilters = previousPeriodFilters(effectiveFilters);
-    var filterOptions = NK.service.analytics.listFilterOptions(target);
-    var rawRows = NK.service.analytics.listPublishResults(target);
+    var scopeBaseFilters = scope === 'episode' ? { episodeId: projectId } : {};
+    var filterOptions = NK.service.analytics.listFilterOptions(target, scopeBaseFilters);
+    var rawRows = NK.service.analytics.filterPublishResults(target, Object.assign({ includeNonPublished: true }, scopeBaseFilters));
     var unassignedRows = scope === 'brand' && brand && NK.service.analytics.listUnassignedPublishResults
       ? NK.service.analytics.listUnassignedPublishResults(brand)
       : [];
-    var scopeBaseFilters = scope === 'episode' ? { episodeId: projectId } : {};
     var allPublishedRows = NK.service.analytics.filterPublishResults(target, scopeBaseFilters);
     var rows = NK.service.analytics.filterPublishResults(target, effectiveFilters);
     var summary = NK.service.analytics.summarizeProject(target, effectiveFilters);
@@ -684,14 +722,14 @@
       '<div class="analytics-primary-filters">' + selectHtml('channelType', filterOptions.channels, filters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) + (scope === 'brand' ? selectHtml('episodeId', filterOptions.episodes, filters.episodeId, '에피소드') : '') + selectHtml('contentType', filterOptions.contentTypes, filters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) + '</div>' +
       '<details class="analytics-advanced-filters" ' + (filters.seasonId || filters.campaignId || filters.purposeKey ? 'open' : '') + '><summary>상세 필터 ' + (activeFilterCount ? '· ' + activeFilterCount + '개 적용' : '') + '</summary><div>' + selectHtml('seasonId', filterOptions.seasons, filters.seasonId, '시즌') + selectHtml('campaignId', filterOptions.campaigns, filters.campaignId, '캠페인') + selectHtml('purposeKey', filterOptions.purposes, filters.purposeKey, '운영 목적') + '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters">필터 초기화</button></div></details></section>';
 
-    var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary, scopeLabel) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal) + '</section>' + attributionPanelHtml(unassignedRows, brandProjects);
+    var goalAlertsHtml = syncStatusHtml(sync) + '<section class="analytics-goal-alert-grid">' + goalPanelHtml(goal, goalSummary, scopeLabel) + alertsHtml(connections, sync, rawRows, allPublishedRows, goal, scopeLabel) + '</section>' + attributionPanelHtml(unassignedRows, brandProjects);
     var contentHtml = '';
     var kpis = '<section class="analytics-metric-section"><div class="analytics-section-heading"><div><span class="analytics-section-kicker">핵심 성과</span><h3>선택 기간의 결과</h3></div><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + '</p></div><div class="analytics-kpi-grid-v2">' +
       kpiCardHtml('총 조회수', numberText(summary.views) + '회', deltaText(summary.views, previousSummary.views), '게시물 ' + summary.totalPosts + '건 기준') +
       kpiCardHtml('게시물당 평균 조회수', numberText(summary.averageViews, 1) + '회', deltaText(summary.averageViews, previousSummary.averageViews), '게시량 차이를 보정한 성과') +
       kpiCardHtml('참여율', percentText(summary.engagementRate), deltaText(summary.engagementRate, previousSummary.engagementRate, 'point'), '(좋아요+댓글+공유) ÷ 조회수') +
       kpiCardHtml('클릭', numberText(summary.clicks) + '회', deltaText(summary.clicks, previousSummary.clicks), '선택 기간 누적 클릭') + '</div></section>';
-    var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>게시일별 조회수 합계</h3><p>각 날짜에 게시된 콘텐츠의 현재 누적 조회수를 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
+    var trendHtml = '<div class="analytics-trend-insight-grid"><section class="analytics-panel analytics-trend-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">KPI 추이</span><h3>기간별 조회수 합계</h3><p>분석 기간 길이에 따라 일·주·월 단위로 자동 묶어 비교합니다.</p></div><span>표본 ' + summary.totalPosts + '건</span></div>' + buildTrendSvg(trend, filters) + '</section>' +
       '<section class="analytics-panel analytics-diagnosis-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">냉정한 진단</span><h3>현재 상태</h3></div></div><div class="analytics-diagnosis-list">' +
       '<div><span>목표 상태</span><strong>' + escapeHtml(goal ? goalStatus(goal, goalMetricValue(goalSummary, goal.metric)).status : '판단 불가') + '</strong><p>' + escapeHtml(goal ? scopeLabel + ' 목표 기간 전체를 기준으로 평가했습니다.' : '목표를 설정해야 달성 여부를 판단할 수 있습니다.') + '</p></div>' +
       '<div><span>이전 기간 대비</span><strong>' + escapeHtml(previousSummary.views ? percentText(((summary.views - previousSummary.views) / previousSummary.views) * 100) : '비교 불가') + '</strong><p>총 조회수 변화이며 게시물당 평균과 함께 확인해야 합니다.</p></div>' +
@@ -701,10 +739,10 @@
       var emptyBreakdownHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 원인 분해</span><h3>채널별 비교</h3><p>성과 수집이 완료되면 동일한 기준으로 채널·콘텐츠·시간대를 비교합니다.</p></div></div><div class="analytics-breakdown-grid">' +
         breakdownCardHtml('채널', channels, function (item) { return channelLabel(item.channelType); }) +
         breakdownCardHtml('콘텐츠 유형', contentTypes, function (item) { return contentTypeLabel(item.contentType); }) +
-        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) : '') +
+        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectId ? (item.projectTitle || item.projectId) : '브랜드 공통 게시물'; }) : '') +
         breakdownCardHtml('업로드 시간', uploadTimes, function (item) { return item.label; }) +
         breakdownCardHtml('해시태그', hashtags, function (item) { return item.hashtag; }) + '</div></section>';
-      contentHtml = kpis + trendHtml + readinessHtml(brand, connections, sync, rawRows, allPublishedRows, goal) + emptyBreakdownHtml;
+      contentHtml = kpis + trendHtml + readinessHtml(brand, connections, sync, rawRows, allPublishedRows, goal, scopeLabel) + emptyBreakdownHtml;
     } else if (!rows.length) {
       contentHtml = kpis + trendHtml + '<section class="analytics-period-empty"><span class="analytics-section-kicker">선택 기간 결과</span><h3>이 기간에는 분석할 게시물이 없습니다</h3><p>' + escapeHtml(filters.dateFrom + ' ~ ' + filters.dateTo) + ' 범위나 필터를 변경해 주세요. 다른 기간의 데이터는 ' + allPublishedRows.length + '건 있습니다.</p><button type="button" class="btn-primary" data-action="analytics-show-all-period">전체 데이터 기간 보기</button></section>';
     } else {
@@ -720,7 +758,7 @@
       var breakdownHtml = '<section class="analytics-panel"><div class="analytics-card-head"><div><span class="analytics-section-kicker">성과 원인 분해</span><h3>어디에서 차이가 발생했는가</h3><p>총 조회수가 아니라 게시물당 평균 조회수와 참여율로 비교합니다.</p></div></div><div class="analytics-breakdown-grid">' +
         breakdownCardHtml('채널', channels, function (item) { return channelLabel(item.channelType); }) +
         breakdownCardHtml('콘텐츠 유형', contentTypes, function (item) { return contentTypeLabel(item.contentType); }) +
-        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectTitle || '미지정'; }) : '') +
+        (scope === 'brand' ? breakdownCardHtml('에피소드', episodes, function (item) { return item.projectId ? (item.projectTitle || item.projectId) : '브랜드 공통 게시물'; }) : '') +
         breakdownCardHtml('업로드 시간', uploadTimes, function (item) { return item.label; }) +
         breakdownCardHtml('해시태그', hashtags, function (item) { return item.hashtag; }) + '</div></section>';
 

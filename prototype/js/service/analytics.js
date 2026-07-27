@@ -268,8 +268,8 @@
   analytics.filterPublishResults = function (projectOrId, filters) {
     return filterRows(readPublishResults(projectOrId), filters);
   };
-  analytics.listFilterOptions = function (projectOrId) {
-    var rows = filterRows(readPublishResults(projectOrId), {});
+  analytics.listFilterOptions = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters || {});
     var episodeMap = new Map();
     var channelMap = new Map();
     var contentTypeMap = new Map();

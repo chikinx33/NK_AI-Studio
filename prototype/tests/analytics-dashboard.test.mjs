@@ -171,7 +171,7 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(uiSource, /\/api\/userdata\/sns\/get/);
   assert.match(uiSource, /\/api\/sns\/analytics\/sync/);
   assert.match(uiSource, /var kpis =[\s\S]+if \(!allPublishedRows\.length/);
-  assert.match(uiSource, /성과 수집 대기/);
+  assert.match(uiSource, /선택 범위에 성과 데이터가 없습니다/);
   assert.match(uiSource, /fitFiltersToLatestPublishedPeriod/);
   assert.match(uiSource, /metricRows\.length \? metricRows : sourceRows/);
   assert.match(uiSource, /fitLatestPeriod: true/);
@@ -185,6 +185,11 @@ test('analytics UI keeps the selected brand title and renders truthful dashboard
   assert.match(studioCss, /\.analytics-editorial \.analytics-sync-details/);
   assert.match(studioCss, /analytics-scope-tab\.is-active/);
   assert.match(studioCss, /analytics-attribution-row/);
+  assert.match(uiSource, /granularity === 'month'/);
+  assert.match(uiSource, /기간별 조회수 합계/);
+  assert.doesNotMatch(uiSource, /var limit = 62/);
+  assert.match(uiSource, /이 에피소드에 귀속된 게시물이 없습니다/);
+  assert.match(uiSource, /브랜드 공통 게시물/);
   assert.doesNotMatch(uiSource, /Math\.max\(1, barHeight\)/);
   assert.match(uiSource, /if \(value <= 0\) return ''/);
   assert.match(uiSource, /analytics-chart-bar-gradient|analytics-bar-gradient/);
