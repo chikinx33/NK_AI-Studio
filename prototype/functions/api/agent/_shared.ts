@@ -1898,18 +1898,31 @@ function pickInterval(start: string, end: string, input: any): string {
 }
 
 /**
- * 센트 → 표시 문자열. currency 를 주면 그 통화로 표기한다(상품 가격은 통화가 섞일 수 있다).
- *  · currency 미지정 또는 usd → 기존 동작 그대로($ 표기 + usd_krw 있으면 원화 병기)
- *  · 그 외 통화 → Intl 로 해당 통화 표기. ★ 원화 병기는 붙이지 않는다 —
- *    USD 환율을 다른 통화 금액에 곱하면 틀린 값이 된다.
- * ※ 나누기는 통화와 무관하게 100 고정. Polar 는 금액 필드를 전부 "in cents" 로만 문서화하고
- *   zero-decimal 통화(JPY·KRW 등)의 인코딩 규약은 명시가 없다. 현재 조직은 USD 라 영향이 없으며,
- *   해당 통화로 상품을 만들게 되면 실제 응답값을 확인해 이 divisor 를 조정할 것.
+ * 소수점 없는(zero-decimal) 통화 — 금액이 최소단위가 아니라 그대로 온다. ₩3,900 = 3900.
+ * 출처: polarsource/polar · server/polar/kit/currency.py 의 _ZERO_DECIMAL_CURRENCIES 그대로.
+ *   get_currency_decimal_factor(c) = 1 if c in _ZERO_DECIMAL_CURRENCIES else 100
+ * ★ 이걸 무시하고 100으로 나누면 원화 3545 가 $35.45 로 둔갑한다(실제로 났던 사고).
  */
-function polarMoney(cfg: PolarConfig, cents: any, currency?: string): string {
-  const n = Number(cents || 0) / 100;
-  const code = String(currency || "").trim().toUpperCase();
-  if (code && code !== "USD") {
+const POLAR_ZERO_DECIMAL = new Set([
+  "bif", "clp", "djf", "gnf", "jpy", "kmf", "krw",
+  "mga", "pyg", "rwf", "vnd", "vuv", "xaf", "xof", "xpf",
+]);
+function polarDecimalFactor(code: string): number {
+  return POLAR_ZERO_DECIMAL.has(String(code || "").trim().toLowerCase()) ? 1 : 100;
+}
+
+/**
+ * 금액(최소단위) → 표시 문자열.
+ *  · currency 미지정 → USD 로 본다. /metrics/ 응답은 Polar 가 조직 정산통화(USD)로
+ *    환산해서 주기 때문(queries.py: converted_amount).
+ *  · USD → $ 표기 + usd_krw 있으면 원화 병기
+ *  · 그 외 → Intl 로 해당 통화 표기. ★ 원화 병기는 붙이지 않는다 —
+ *    USD 환율을 다른 통화 금액에 곱하면 틀린 값이 되고, 원화에 원화를 또 붙이게 된다.
+ */
+function polarMoney(cfg: PolarConfig, amount: any, currency?: string): string {
+  const code = (String(currency || "").trim() || "USD").toUpperCase();
+  const n = Number(amount || 0) / polarDecimalFactor(code);
+  if (code !== "USD") {
     try {
       return new Intl.NumberFormat("ko-KR", { style: "currency", currency: code }).format(n);
     } catch (_) {
@@ -1998,6 +2011,12 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
     // ── 진단용(모델이 아니라 사람이 볼 용도) ──────────────────────────────
     // MRR 이 이상하게 나올 때 원인을 특정하려면 원본 센트값·단위·구간 구성이 필요하다.
     debug: {
+      // /metrics/ 금액은 Polar 가 조직 정산통화(현재 USD 고정)로 환산해 준다 —
+      //   queries.py: converted_amount = net_amount * coalesce(bucketed_fx_rate, closest_global_fx_rate, 1)
+      // ★ 환율 행이 없으면 배수가 1 로 폴백해 '원화 원본'이 USD 센트 자리에 그대로 들어온다.
+      //   원화 구독 ₩3,545 가 3545 로 와서 $35.45 로 보이던 사고가 이 경로였다.
+      //   대시보드와 다르면 mrrSeries 에서 특정 시간대만 값이 튀는지 먼저 볼 것.
+      currencyNote: "metrics 금액은 Polar 가 USD 로 환산한 값(정산통화). 비-USD 결제는 Polar 환율 데이터가 비면 원본 통화 값이 그대로 올 수 있음.",
       mrrSource: "latest_period",
       latestPeriodTs: last.timestamp ?? null,
       mrrCents: last.monthly_recurring_revenue ?? null,
@@ -2046,20 +2065,40 @@ async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
     limit, page: 1, sorting: "-created_at", product_id: ids,
   });
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
-  return {
-    kind: "polar_orders",
-    scope: mapped ? app : "조직 전체",
-    total: data?.pagination?.total_count ?? items.length,
-    orders: items.map((o: any) => ({
+  const orders = items.map((o: any) => {
+    // ★ Polar 의 Order 에는 'amount' 필드가 없다(subtotal/discount/net/tax/total 로 나뉨).
+    //   o.amount 를 읽으면 undefined → 전 주문이 $0.00 으로 표시된다.
+    //   실제 결제액 = total_amount(할인·세금 반영). 없으면 net → subtotal 순으로 폴백.
+    const gross = o.total_amount ?? o.net_amount ?? o.subtotal_amount ?? 0;
+    const refundedRaw = Number(o.refunded_amount || 0);
+    const cur = o.currency;                       // 주문마다 통화가 다를 수 있다(원화 결제 등)
+    const fullyRefunded = refundedRaw > 0 && refundedRaw >= Number(gross || 0);
+    return {
       id: o.id,
       at: String(o.created_at || "").slice(0, 19).replace("T", " "),
-      amount: polarMoney(cfg, o.amount),
-      refunded: Number(o.refunded_amount || 0) > 0 ? polarMoney(cfg, o.refunded_amount) : null,
+      amount: polarMoney(cfg, gross, cur),
+      net: polarMoney(cfg, o.net_amount ?? gross, cur),   // 부가세 제외(지표가 쓰는 기준)
+      currency: String(cur || "").toUpperCase() || null,
+      refunded: refundedRaw > 0 ? polarMoney(cfg, refundedRaw, cur) : null,
+      // 환불 후 실제로 남은 금액 — 엣지가 환불건을 매출로 세지 않게 하는 근거.
+      netAfterRefund: polarMoney(cfg, Math.max(Number(gross || 0) - refundedRaw, 0), cur),
+      fullyRefunded,
       status: o.status,
       reason: o.billing_reason,           // purchase | subscription_create | subscription_cycle | subscription_update
       product: o.product?.name || "",
       customer: o.customer?.email || o.customer?.name || "",
-    })),
+    };
+  });
+  const refundedCount = orders.filter((o) => Number(o.refunded ? 1 : 0)).length;
+  return {
+    kind: "polar_orders",
+    scope: mapped ? app : "조직 전체",
+    total: data?.pagination?.total_count ?? items.length,
+    refundedCount,
+    orders,
+    notes: refundedCount
+      ? [`환불된 주문이 ${refundedCount}건 있어요. 매출로 세지 말고 netAfterRefund 를 기준으로 말하세요. (Polar 의 누적매출 지표는 환불을 즉시 차감하지 않아 대시보드에 남아 있을 수 있어요)`]
+      : [],
   };
 }
 
@@ -2082,7 +2121,9 @@ async function runPolarSubscriptionsTool(input: any, ctx: ToolContext): Promise<
     total: data?.pagination?.total_count ?? items.length,
     subscriptions: items.slice(0, 50).map((s: any) => ({
       id: s.id, status: s.status,
-      amount: polarMoney(cfg, s.amount),
+      // 구독은 자기 통화로 온다(원화 결제면 KRW). 반드시 통화를 넘겨 환산·기호를 맞춘다.
+      amount: polarMoney(cfg, s.amount, s.currency),
+      currency: String(s.currency || "").toUpperCase() || null,
       interval: s.recurring_interval,
       product: s.product?.name || "",
       customer: s.customer?.email || "",

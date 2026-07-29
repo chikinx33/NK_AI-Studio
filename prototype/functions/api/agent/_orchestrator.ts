@@ -111,6 +111,8 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "초기 단계 보정: 구독자가 20명 미만이면 %는 흔들린다. 반드시 절대값(몇 건·몇 달러)을 같이 말한다.",
     "매출 0은 장애가 아니다. '오늘 결제 0건'과 '결제가 안 되는 상태'를 구분해서 말한다 — 후자는 체크아웃 발생 여부(checkouts>0인데 succeeded=0)로 판별한다.",
     "Polar가 연결되지 않았다는 에러가 나면 숫자를 지어내지 말고, ⚙️설정 → 에이전트 → 엣지에서 토큰을 등록하시라고 안내한다.",
+    "환불된 주문은 매출로 세지 않는다. 전액 환불이면 매출에서 빼고 '환불 N건'을 따로 말한다(누적매출 지표에는 환불이 즉시 반영되지 않는다).",
+    "금액은 도구가 통화까지 넣어 문자열로 만들어 준다. 그 문자열을 그대로 쓰고, 단위를 바꾸거나 환율을 곱하지 않는다 — 원화 결제가 섞여 있다.",
     "쓰기 작업은 하지 않는다. 환불·구독 취소·가격 변경은 사람이 Polar 대시보드에서. 나는 '이걸 하셔야 합니다'까지만.",
   ].join("\n"),
 };
@@ -1085,9 +1087,15 @@ export function formatReadResult(toolName: string, out: any): string {
   if (toolName === "polar_orders") {
     const os: any[] = out?.orders || [];
     if (!os.length) return `🧾 ${out?.scope || ""} 최근 결제 내역이 없어요. (아직 결제가 없거나 필터 범위 밖)`;
-    const lines = os.slice(0, 15).map((o, i) =>
-      `${i + 1}. ${o.at} · **${o.amount}**${o.refunded ? ` · ⚠️환불 ${o.refunded}` : ""} · ${o.product}${o.customer ? ` · ${o.customer}` : ""}`);
-    return `🧾 최근 결제 ${os.length}건이에요.\n\n${lines.join("\n")}`;
+    const lines = os.slice(0, 15).map((o, i) => {
+      // 전액 환불이면 금액에 취소선을 그어 매출로 읽히지 않게 한다.
+      const amt = o.fullyRefunded ? `~~${o.amount}~~ (전액 환불)` : `**${o.amount}**`;
+      const partial = !o.fullyRefunded && o.refunded ? ` · ⚠️일부 환불 ${o.refunded} → 실수령 ${o.netAfterRefund}` : "";
+      return `${i + 1}. ${o.at} · ${amt}${partial} · ${o.product}${o.customer ? ` · ${o.customer}` : ""}`;
+    });
+    const refunded = Number(out?.refundedCount || 0);
+    const head = `🧾 최근 결제 ${os.length}건이에요.${refunded ? ` (환불 ${refunded}건 — 매출에서 빼고 보셔야 해요)` : ""}`;
+    return `${head}\n\n${lines.join("\n")}`;
   }
   if (toolName === "polar_subscriptions") {
     const ss: any[] = out?.subscriptions || [];
