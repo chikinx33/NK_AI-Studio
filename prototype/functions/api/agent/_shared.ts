@@ -1886,12 +1886,21 @@ function polarPeriod(input: any): { start: string; end: string; interval: string
   return { start: s, end: e, interval: pickInterval(s, e, input), label };
 }
 
-/** 기간 길이에 맞는 interval 자동 선택 (periods 배열이 과도하게 길어지는 것 방지). */
+/**
+ * 기간 길이에 맞는 interval 자동 선택 (periods 배열이 과도하게 길어지는 것 방지).
+ * ★ 최소 단위는 "day". "hour" 는 쓰지 않는다 —
+ *   같은 구독 1건을 인터벌만 바꿔 조회한 실측에서 day=$2.44(대시보드 일치),
+ *   hour=$35.45(환율 폴백) 로 갈렸다. 시간 버킷에는 환율(bucketed_fx_rate)이 없어
+ *   metrics/queries.py 의 coalesce(..., 1) 폴백이 걸리고, 원본 통화 값이 그대로 나온다.
+ *   시간 단위가 정말 필요해지면 그때 플로우 지표(매출·주문)만 분리해 조회할 것.
+ */
+const POLAR_INTERVALS = ["day", "week", "month", "year"];
 function pickInterval(start: string, end: string, input: any): string {
   const explicit = String(input?.interval || "").trim().toLowerCase();
-  if (["hour", "day", "week", "month", "year"].includes(explicit)) return explicit;
+  if (POLAR_INTERVALS.includes(explicit)) return explicit;
+  // 모델이 "hour" 를 넣어도 day 로 내린다(위 사고 재발 방지).
+  if (explicit === "hour") return "day";
   const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
-  if (days <= 2) return "hour";
   if (days <= 62) return "day";
   if (days <= 210) return "week";
   return "month";
@@ -2033,7 +2042,13 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
           .map(([k, v]: [string, any]) => [k, v?.type ?? null])
           .filter(([, t]) => t !== null)
       ),
-      interval, periodCount: periods.length,
+      // 실제 조회에 쓴 interval. "hour" 면 환율 폴백으로 금액이 튄다 — 즉시 갈리도록 남긴다.
+      interval,
+      intervalRequested: String(input?.interval || "").trim().toLowerCase() || null,
+      intervalNote: interval === "hour"
+        ? "⚠️ hour 인터벌은 환율 버킷이 없어 금액이 원본 통화로 나올 수 있음(day 로 조회할 것)"
+        : "day 이상 인터벌 — 환율 적용 정상",
+      periodCount: periods.length,
       // 스톡 지표를 시간 단위로 쪼갤 때 값이 튀는지 확인 — 일정해야 정상.
       mrrSeries: periods.map((p: any) => [String(p.timestamp || ""), p.monthly_recurring_revenue ?? null]),
     },
