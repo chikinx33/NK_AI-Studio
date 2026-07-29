@@ -254,6 +254,28 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   try { await sql("CREATE INDEX IF NOT EXISTS agent_reminders_due_idx ON agent_reminders (user_id, fired_at, fire_at)"); } catch (_) {}
+  // 사용자별 외부 서비스 자격증명(BYOK). 비밀값은 AES-GCM 암호화해서 저장. ★ user_id 격리.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_credentials (
+      user_id text NOT NULL,
+      provider text NOT NULL,
+      key_name text NOT NULL,
+      value text NOT NULL DEFAULT '',
+      encrypted boolean NOT NULL DEFAULT false,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, provider, key_name)
+    )
+  `);
+  // 엣지 일일 수익 브리핑 — 그날 첫 접속 시 1회만 띄우기 위한 상태. ★ user_id 격리.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_daily_brief (
+      user_id text PRIMARY KEY,
+      enabled boolean NOT NULL DEFAULT true,
+      hour_kst int NOT NULL DEFAULT 9,
+      last_brief_date date,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
   await ensureCompanySkillJobSchema(sql);
   agentSchemaReady = true;
 }
@@ -287,6 +309,106 @@ export async function saveGoogleOAuth(
 }
 export async function deleteGoogleOAuth(sql: SqlFn, userId: string): Promise<void> {
   await sql("DELETE FROM agent_google_oauth WHERE user_id = $1", [userId]);
+}
+
+// ── 사용자별 자격증명 (BYOK) ─────────────────────────────────────────────────
+// 사용자가 설정 UI에서 등록한 외부 서비스 토큰. 비밀값은 CRED_ENC_KEY 로 AES-GCM 암호화.
+// ★ 평문 폴백 금지 — 키가 없으면 저장을 거부한다(조용히 평문으로 두면 유출 사고).
+const CRED_ENC_PREFIX = "enc:v1:";
+
+async function credEncKey(env: any): Promise<CryptoKey> {
+  const raw = String(env?.CRED_ENC_KEY || "").trim();
+  if (!raw) {
+    throw new Error(
+      "서버에 암호화 키(CRED_ENC_KEY)가 없어 토큰을 저장할 수 없어요. " +
+      "Cloudflare Pages 환경변수에 32바이트 랜덤값(base64)을 추가해주세요. (openssl rand -base64 32)"
+    );
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+  } catch {
+    throw new Error("CRED_ENC_KEY 가 올바른 base64가 아니에요. openssl rand -base64 32 로 다시 만들어주세요.");
+  }
+  if (bytes.length !== 32) throw new Error("CRED_ENC_KEY 는 base64로 인코딩된 32바이트여야 해요.");
+  return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+const credB64 = (b: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(b as any)));
+const credUnB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+export async function encryptSecret(env: any, plain: string): Promise<string> {
+  const key = await credEncKey(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain));
+  return `${CRED_ENC_PREFIX}${credB64(iv)}:${credB64(ct)}`;   // enc:v1:<iv>:<ct>
+}
+
+export async function decryptSecret(env: any, stored: string): Promise<string> {
+  const s = String(stored || "");
+  if (!s.startsWith(CRED_ENC_PREFIX)) return s;   // 비밀 아닌 평문 값
+  const parts = s.split(":");                      // ["enc","v1",iv,ct] — base64에 ':' 없음
+  const key = await credEncKey(env);
+  const pt = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: credUnB64(parts[2]) }, key, credUnB64(parts[3])
+  );
+  return new TextDecoder().decode(pt);
+}
+
+/** provider 의 모든 키를 평문 map 으로. 값 없으면 빈 객체. */
+export async function getCredentials(
+  sql: SqlFn, userId: string, provider: string, env: any
+): Promise<Record<string, string>> {
+  const rows = await sql(
+    "SELECT key_name, value, encrypted FROM agent_credentials WHERE user_id = $1 AND provider = $2",
+    [userId, provider]
+  );
+  const out: Record<string, string> = {};
+  for (const r of rows as any[]) {
+    const v = String(r.value || "");
+    out[r.key_name] = r.encrypted ? await decryptSecret(env, v) : v;
+  }
+  return out;
+}
+
+/**
+ * 등록/수정. ★ 빈 문자열은 '변경 없음'으로 건너뛴다 —
+ *   UI가 비밀값을 마스킹해서 보여주므로, 빈 칸 저장이 기존 토큰을 지우는 사고를 막는다.
+ *   (지우려면 deleteCredentials 사용)
+ */
+export async function saveCredentials(
+  sql: SqlFn, userId: string, provider: string,
+  values: Record<string, any>, secretKeys: string[], env: any
+): Promise<string[]> {
+  const saved: string[] = [];
+  for (const [k, raw] of Object.entries(values || {})) {
+    const val = String(raw ?? "").trim();
+    if (!val) continue;
+    const isSecret = secretKeys.includes(k);
+    const stored = isSecret ? await encryptSecret(env, val) : val;
+    await sql(
+      `INSERT INTO agent_credentials (user_id, provider, key_name, value, encrypted)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, provider, key_name)
+       DO UPDATE SET value = EXCLUDED.value, encrypted = EXCLUDED.encrypted, updated_at = now()`,
+      [userId, provider, k, stored, isSecret]
+    );
+    saved.push(k);
+  }
+  return saved;
+}
+
+/** 값이 들어있는 키 이름만 (상태 표시용 — 값은 절대 반환하지 않는다). */
+export async function listCredentialKeys(sql: SqlFn, userId: string, provider: string): Promise<string[]> {
+  const rows = await sql(
+    "SELECT key_name FROM agent_credentials WHERE user_id = $1 AND provider = $2 AND value <> ''",
+    [userId, provider]
+  );
+  return (rows as any[]).map((r) => String(r.key_name));
+}
+
+export async function deleteCredentials(sql: SqlFn, userId: string, provider: string, key?: string): Promise<void> {
+  if (key) await sql("DELETE FROM agent_credentials WHERE user_id=$1 AND provider=$2 AND key_name=$3", [userId, provider, key]);
+  else await sql("DELETE FROM agent_credentials WHERE user_id=$1 AND provider=$2", [userId, provider]);
 }
 
 // ── 런타임(출근·자율) ────────────────────────────────────────────────────────
@@ -1634,40 +1756,58 @@ async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
 
 // ── 엣지(전략) Polar 수익 도구 ────────────────────────────────────────────────
 // 정책: 읽기 전용. 쓰기(환불·구독변경·가격수정) 도구는 만들지 않는다.
+// 자격증명: 사용자가 설정 UI에서 등록(BYOK, agent_credentials). 서버 env 에는 토큰을 두지 않는다.
 // 단위: Polar 금액은 전부 '센트'. 표시 직전에 100으로 나눈다.
 
 const POLAR_TZ = "Asia/Seoul";
+const POLAR_PROVIDER = "polar";
 
-function polarBase(env: any): string {
-  return String(env?.POLAR_API_BASE || "https://api.polar.sh/v1").replace(/\/+$/, "");
+interface PolarConfig {
+  token: string;
+  base: string;
+  appProducts: Record<string, string[]>;
+  usdKrw: number;
 }
 
-function polarToken(env: any): string {
-  const t = String(env?.POLAR_OAT || env?.POLAR_ACCESS_TOKEN || "").trim();
-  if (!t) {
+/** 이 사용자의 Polar 설정을 DB에서 로드. 미등록이면 설정 화면으로 안내하는 에러. */
+async function polarConfig(ctx: ToolContext): Promise<PolarConfig> {
+  const sql = getSql(ctx.env);
+  if (!sql) throw new Error("DB에 연결하지 못해 Polar 설정을 읽지 못했어요.");
+  await ensureAgentSchema(sql);
+  const cred = await getCredentials(sql, ctx.userId, POLAR_PROVIDER, ctx.env);
+  const token = String(cred.access_token || "").trim();
+  if (!token) {
     throw new Error(
-      "Polar 토큰이 없어요. Cloudflare 환경변수에 POLAR_OAT 를 추가해주세요. " +
-      "(Polar 대시보드 → Settings → Organization Access Token, 읽기 스코프만)"
+      "Polar가 아직 연결되지 않았어요. ⚙️설정 → 에이전트 → 엣지 → 'Polar 수익' 에서 " +
+      "Organization Access Token을 등록해주세요. (Polar 대시보드 → Settings → Organization Access Token, " +
+      "읽기 스코프만: metrics:read · orders:read · subscriptions:read · products:read)"
     );
   }
-  return t;
+  let appProducts: Record<string, string[]> = {};
+  try { appProducts = JSON.parse(String(cred.app_products || "{}")) || {}; } catch { appProducts = {}; }
+  return {
+    token,
+    base: String(cred.api_base || "https://api.polar.sh/v1").replace(/\/+$/, ""),
+    appProducts,
+    usdKrw: Number(cred.usd_krw || 0),
+  };
 }
 
 /** Polar GET 공통 — 배열 파라미터는 같은 키를 반복해서 붙인다(product_id=a&product_id=b). */
-async function polarGet(env: any, path: string, params: Record<string, any>): Promise<any> {
-  const url = new URL(`${polarBase(env)}${path}`);
+async function polarGet(cfg: PolarConfig, path: string, params: Record<string, any>): Promise<any> {
+  const url = new URL(`${cfg.base}${path}`);
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null || v === "") continue;
     if (Array.isArray(v)) { for (const item of v) if (item) url.searchParams.append(k, String(item)); }
     else url.searchParams.append(k, String(v));
   }
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${polarToken(env)}`, Accept: "application/json" },
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: "application/json" },
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401) throw new Error("Polar 토큰이 만료되었거나 잘못됐어요. POLAR_OAT 를 다시 발급해주세요.");
-    if (res.status === 403) throw new Error("Polar 토큰에 읽기 권한이 부족해요. metrics:read·orders:read·subscriptions:read·products:read 스코프를 확인해주세요.");
+    if (res.status === 401) throw new Error("Polar 토큰이 만료되었거나 잘못됐어요. ⚙️설정 → 에이전트 → 엣지 → 'Polar 수익'에서 새 토큰으로 교체해주세요.");
+    if (res.status === 403) throw new Error("Polar 토큰에 읽기 권한이 부족해요. 토큰 발급 시 metrics:read · orders:read · subscriptions:read · products:read 스코프를 체크했는지 확인해주세요.");
     if (res.status === 429) throw new Error("Polar 호출 한도(500/분)에 걸렸어요. 잠시 뒤 다시 시도할게요.");
     const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data).slice(0, 200);
     throw new Error(`Polar 조회 실패 (${res.status}) ${detail}`);
@@ -1675,71 +1815,75 @@ async function polarGet(env: any, path: string, params: Record<string, any>): Pr
   return data;
 }
 
-/** 앱 이름 → product_id[] (POLAR_APP_PRODUCTS). 미설정/미매칭이면 빈 배열 = 조직 전체. */
-function polarProductIds(env: any, app?: string): { ids: string[]; mapped: boolean; knownApps: string[] } {
-  let map: Record<string, string[]> = {};
-  try { map = JSON.parse(String(env?.POLAR_APP_PRODUCTS || "{}")); } catch { map = {}; }
-  const knownApps = Object.keys(map);
-  const key = String(app || "").trim().toLowerCase().replace(/\s+/g, "");
-  if (!key) return { ids: [], mapped: false, knownApps };
-  const hit = knownApps.find((k) => k.toLowerCase().replace(/\s+/g, "") === key);
-  if (!hit) return { ids: [], mapped: false, knownApps };
-  const ids = (Array.isArray(map[hit]) ? map[hit] : []).map(String).filter(Boolean);
-  return { ids, mapped: ids.length > 0, knownApps };
+/**
+ * 앱 이름 → product_id[].
+ *  1) 사용자가 등록한 app_products 매핑 우선
+ *  2) 매핑이 없으면 상품명 부분일치로 자동 매칭 (설정 없이도 앱별 보고가 되게)
+ *  3) 그래도 없으면 빈 배열 = 조직 전체
+ */
+async function resolvePolarProducts(
+  cfg: PolarConfig, app?: string
+): Promise<{ ids: string[]; mapped: boolean; source: "map" | "name" | "none"; knownApps: string[] }> {
+  const knownApps = Object.keys(cfg.appProducts);
+  const norm = (s: any) => String(s || "").trim().toLowerCase().replace(/\s+/g, "");
+  const key = norm(app);
+  if (!key) return { ids: [], mapped: false, source: "none", knownApps };
+
+  const hit = knownApps.find((k) => norm(k) === key);
+  if (hit) {
+    const ids = (Array.isArray(cfg.appProducts[hit]) ? cfg.appProducts[hit] : []).map(String).filter(Boolean);
+    if (ids.length) return { ids, mapped: true, source: "map", knownApps };
+  }
+  try {
+    const d = await polarGet(cfg, "/products", { limit: 100, page: 1, is_archived: false });
+    const ids = (Array.isArray(d?.items) ? d.items : [])
+      .filter((p: any) => norm(p?.name).includes(key))
+      .map((p: any) => String(p.id));
+    if (ids.length) return { ids, mapped: true, source: "name", knownApps };
+  } catch (_) { /* 상품 조회 실패는 치명적이지 않음 → 전체 집계로 폴백 */ }
+  return { ids: [], mapped: false, source: "none", knownApps };
 }
 
 /**
- * 기간 프리셋 → {start_date, end_date, interval, label} (Asia/Seoul 기준).
+ * 기간 프리셋 → {start, end, interval, label} (Asia/Seoul 기준).
  * ★ 날짜 계산을 모델에 맡기지 않는다 — 모델이 "오늘"을 틀리게 잡는 사고가 가장 흔하다.
  */
 function polarPeriod(input: any): { start: string; end: string; interval: string; label: string } {
-  const fmt = (d: Date) => {
-    // UTC 시각을 KST(+9)로 옮긴 뒤 날짜만 취한다.
-    const k = new Date(d.getTime() + 9 * 3600 * 1000);
-    return k.toISOString().slice(0, 10);
-  };
-  const dayShift = (base: Date, n: number) => new Date(base.getTime() + n * 86400000);
+  const fmt = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10); // UTC→KST
+  const shift = (base: Date, n: number) => new Date(base.getTime() + n * 86400000);
   const now = new Date();
   const today = fmt(now);
 
-  const explicitStart = String(input?.start_date || input?.startDate || "").trim();
-  const explicitEnd = String(input?.end_date || input?.endDate || "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(explicitStart)) {
-    const end = /^\d{4}-\d{2}-\d{2}$/.test(explicitEnd) ? explicitEnd : today;
-    return { start: explicitStart, end, interval: pickInterval(explicitStart, end, input), label: `${explicitStart} ~ ${end}` };
+  const es = String(input?.start_date || input?.startDate || "").trim();
+  const ee = String(input?.end_date || input?.endDate || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(es)) {
+    const end = /^\d{4}-\d{2}-\d{2}$/.test(ee) ? ee : today;
+    return { start: es, end, interval: pickInterval(es, end, input), label: `${es} ~ ${end}` };
   }
 
   const p = String(input?.period || input?.range || input?.prompt || "today").trim().toLowerCase();
-  const kNow = new Date(now.getTime() + 9 * 3600 * 1000); // KST 기준 달력 계산용
-  const y = kNow.getUTCFullYear(), m = kNow.getUTCMonth();
+  const k = new Date(now.getTime() + 9 * 3600 * 1000); // KST 달력 계산용
+  const y = k.getUTCFullYear(), m = k.getUTCMonth();
+  const dow = (k.getUTCDay() + 6) % 7; // 월요일 = 0
+  let s: string, e: string, label: string;
 
-  const preset = (s: string, e: string, label: string) => ({ s, e, label });
-  let r: { s: string; e: string; label: string };
-
-  if (/(어제|yesterday)/.test(p)) { const d = fmt(dayShift(now, -1)); r = preset(d, d, "어제"); }
-  else if (/(이번\s*주|this[_ ]?week|금주)/.test(p)) {
-    const dow = (kNow.getUTCDay() + 6) % 7; // 월요일=0
-    r = preset(fmt(dayShift(now, -dow)), today, "이번 주(월~오늘)");
-  }
-  else if (/(지난\s*주|last[_ ]?week|전주)/.test(p)) {
-    const dow = (kNow.getUTCDay() + 6) % 7;
-    r = preset(fmt(dayShift(now, -dow - 7)), fmt(dayShift(now, -dow - 1)), "지난 주");
-  }
-  else if (/(이번\s*달|this[_ ]?month|당월)/.test(p)) {
-    r = preset(`${y}-${String(m + 1).padStart(2, "0")}-01`, today, "이번 달");
-  }
-  else if (/(지난\s*달|last[_ ]?month|전월)/.test(p)) {
+  if (/(어제|yesterday)/.test(p))                    { s = e = fmt(shift(now, -1)); label = "어제"; }
+  else if (/(이번\s*주|this[_ ]?week|금주)/.test(p)) { s = fmt(shift(now, -dow)); e = today; label = "이번 주(월~오늘)"; }
+  else if (/(지난\s*주|last[_ ]?week|전주)/.test(p)) { s = fmt(shift(now, -dow - 7)); e = fmt(shift(now, -dow - 1)); label = "지난 주"; }
+  else if (/(이번\s*달|this[_ ]?month|당월)/.test(p)){ s = `${y}-${String(m + 1).padStart(2, "0")}-01`; e = today; label = "이번 달"; }
+  else if (/(지난\s*달|last[_ ]?month|전월)/.test(p)){
     const ly = m === 0 ? y - 1 : y, lm = m === 0 ? 11 : m - 1;
-    const last = new Date(Date.UTC(ly, lm + 1, 0)).toISOString().slice(0, 10);
-    r = preset(`${ly}-${String(lm + 1).padStart(2, "0")}-01`, last, "지난 달");
+    s = `${ly}-${String(lm + 1).padStart(2, "0")}-01`;
+    e = new Date(Date.UTC(ly, lm + 1, 0)).toISOString().slice(0, 10);
+    label = "지난 달";
   }
-  else if (/(7일|7d|일주일|주간)/.test(p)) { r = preset(fmt(dayShift(now, -6)), today, "최근 7일"); }
-  else if (/(30일|30d|한\s*달|월간)/.test(p)) { r = preset(fmt(dayShift(now, -29)), today, "최근 30일"); }
-  else if (/(90일|90d|분기)/.test(p)) { r = preset(fmt(dayShift(now, -89)), today, "최근 90일"); }
-  else if (/(올해|this[_ ]?year|연간)/.test(p)) { r = preset(`${y}-01-01`, today, "올해"); }
-  else { r = preset(today, today, "오늘"); }
+  else if (/(7일|7d|일주일|주간)/.test(p))           { s = fmt(shift(now, -6)); e = today; label = "최근 7일"; }
+  else if (/(30일|30d|한\s*달|월간)/.test(p))        { s = fmt(shift(now, -29)); e = today; label = "최근 30일"; }
+  else if (/(90일|90d|분기)/.test(p))                { s = fmt(shift(now, -89)); e = today; label = "최근 90일"; }
+  else if (/(올해|this[_ ]?year|연간)/.test(p))      { s = `${y}-01-01`; e = today; label = "올해"; }
+  else                                               { s = e = today; label = "오늘"; }
 
-  return { start: r.s, end: r.e, interval: pickInterval(r.s, r.e, input), label: r.label };
+  return { start: s, end: e, interval: pickInterval(s, e, input), label };
 }
 
 /** 기간 길이에 맞는 interval 자동 선택 (periods 배열이 과도하게 길어지는 것 방지). */
@@ -1753,21 +1897,21 @@ function pickInterval(start: string, end: string, input: any): string {
   return "month";
 }
 
-/** 센트 → 표시 문자열. USD 기준 + POLAR_USD_KRW 있으면 원화 병기. */
-function polarMoney(env: any, cents: any): string {
+/** 센트 → 표시 문자열. USD 기준 + usd_krw 등록돼 있으면 원화 병기. */
+function polarMoney(cfg: PolarConfig, cents: any): string {
   const n = Number(cents || 0) / 100;
   const usd = `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const rate = Number(env?.POLAR_USD_KRW || 0);
-  if (!rate) return usd;
-  const krw = Math.round(n * rate);
-  return `${usd}(약 ${krw.toLocaleString("ko-KR")}원)`;
+  if (!cfg.usdKrw) return usd;
+  return `${usd}(약 ${Math.round(n * cfg.usdKrw).toLocaleString("ko-KR")}원)`;
 }
 
-/** 엣지(전략) Polar 지표: 매출·MRR·구독·해지·전환. 수익 질문의 기본 진입점. */
-async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
+/** 엣지(전략) Polar 지표: 매출·MRR·구독·해지·전환. 수익 질문의 기본 진입점.
+ *  (edge-brief.ts 일일 브리핑이 직접 호출하므로 export.) */
+export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
+  const cfg = await polarConfig(ctx);
   const { start, end, interval, label } = polarPeriod(input);
   const app = String(input?.app || input?.product || "").trim();
-  const { ids, mapped, knownApps } = polarProductIds(ctx.env, app);
+  const { ids, mapped, source, knownApps } = await resolvePolarProducts(cfg, app);
 
   const METRICS = [
     "revenue", "net_revenue", "cumulative_revenue",
@@ -1778,7 +1922,7 @@ async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
     "checkouts", "succeeded_checkouts", "checkouts_conversion",
   ].join(",");
 
-  const data = await polarGet(ctx.env, "/metrics/", {
+  const data = await polarGet(cfg, "/metrics/", {
     start_date: start, end_date: end, interval, timezone: POLAR_TZ,
     metrics: METRICS, product_id: ids,
   });
@@ -1794,7 +1938,7 @@ async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
   const prevStart = new Date(prevEndMs - (days - 1) * 86400000).toISOString().slice(0, 10);
   let prevTotals: any = null;
   try {
-    const prev = await polarGet(ctx.env, "/metrics/", {
+    const prev = await polarGet(cfg, "/metrics/", {
       start_date: prevStart, end_date: prevEnd, interval, timezone: POLAR_TZ,
       metrics: "revenue,orders,monthly_recurring_revenue,active_subscriptions,churn_rate,succeeded_checkouts",
       product_id: ids,
@@ -1806,17 +1950,18 @@ async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
     kind: "polar_metrics",
     scope: mapped ? app : "조직 전체",
     scopeMapped: mapped,
+    scopeSource: source,   // "map" = 사용자 매핑 / "name" = 상품명 자동매칭 / "none" = 전체
     knownApps,
     period: { start, end, label, interval },
     prevPeriod: { start: prevStart, end: prevEnd },
     // ★ 표시용 문자열을 서버가 만들어 넘긴다 — 모델이 센트를 달러로 잘못 바꾸는 사고를 원천 차단.
     display: {
-      revenue: polarMoney(ctx.env, totals.revenue),
-      net_revenue: polarMoney(ctx.env, totals.net_revenue),
-      mrr: polarMoney(ctx.env, last.monthly_recurring_revenue ?? totals.monthly_recurring_revenue),
-      arr: polarMoney(ctx.env, last.annual_recurring_revenue ?? totals.annual_recurring_revenue),
-      aov: polarMoney(ctx.env, totals.average_order_value),
-      prevRevenue: prevTotals ? polarMoney(ctx.env, prevTotals.revenue) : null,
+      revenue: polarMoney(cfg, totals.revenue),
+      net_revenue: polarMoney(cfg, totals.net_revenue),
+      mrr: polarMoney(cfg, last.monthly_recurring_revenue ?? totals.monthly_recurring_revenue),
+      arr: polarMoney(cfg, last.annual_recurring_revenue ?? totals.annual_recurring_revenue),
+      aov: polarMoney(cfg, totals.average_order_value),
+      prevRevenue: prevTotals ? polarMoney(cfg, prevTotals.revenue) : null,
     },
     totals, prevTotals, latest: last,
     // 일자별 추이(최근 14개만 — 모델 컨텍스트 절약)
@@ -1829,19 +1974,21 @@ async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
     })),
     notes: [
       "금액은 이미 달러로 환산되어 display/trend에 들어 있음. totals는 센트 원본.",
-      mapped ? null : (knownApps.length
-        ? `앱 필터가 적용되지 않아 조직 전체 수치입니다. 사용 가능한 앱: ${knownApps.join(", ")}`
-        : "POLAR_APP_PRODUCTS 미설정 — 조직 전체 합계입니다."),
+      source === "name" ? `'${app}' 상품명으로 자동 매칭했어요. 정확히 고정하려면 설정에서 앱별 상품 매핑을 등록해주세요.` : null,
+      !mapped && app ? (knownApps.length
+        ? `'${app}' 에 해당하는 상품을 못 찾아 조직 전체 수치예요. 등록된 앱: ${knownApps.join(", ")}`
+        : `'${app}' 에 해당하는 상품을 못 찾아 조직 전체 수치예요.`) : null,
     ].filter(Boolean),
   };
 }
 
 /** 엣지(전략) Polar 최근 결제 건별 — "누가 언제 얼마" + 환불 확인. */
 async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
+  const cfg = await polarConfig(ctx);
   const app = String(input?.app || input?.product || "").trim();
-  const { ids, mapped } = polarProductIds(ctx.env, app);
+  const { ids, mapped } = await resolvePolarProducts(cfg, app);
   const limit = Math.min(Math.max(Number(input?.limit || 20), 1), 100);
-  const data = await polarGet(ctx.env, "/orders", {
+  const data = await polarGet(cfg, "/orders", {
     limit, page: 1, sorting: "-created_at", product_id: ids,
   });
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
@@ -1852,8 +1999,8 @@ async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
     orders: items.map((o: any) => ({
       id: o.id,
       at: String(o.created_at || "").slice(0, 19).replace("T", " "),
-      amount: polarMoney(ctx.env, o.amount),
-      refunded: Number(o.refunded_amount || 0) > 0 ? polarMoney(ctx.env, o.refunded_amount) : null,
+      amount: polarMoney(cfg, o.amount),
+      refunded: Number(o.refunded_amount || 0) > 0 ? polarMoney(cfg, o.refunded_amount) : null,
       status: o.status,
       reason: o.billing_reason,           // purchase | subscription_create | subscription_cycle | subscription_update
       product: o.product?.name || "",
@@ -1864,12 +2011,13 @@ async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
 
 /** 엣지(전략) Polar 구독 목록 — 활성 구독자 수/해지 예정 파악. */
 async function runPolarSubscriptionsTool(input: any, ctx: ToolContext): Promise<any> {
+  const cfg = await polarConfig(ctx);
   const app = String(input?.app || input?.product || "").trim();
-  const { ids, mapped } = polarProductIds(ctx.env, app);
+  const { ids, mapped } = await resolvePolarProducts(cfg, app);
   const raw = String(input?.status || input?.prompt || "").toLowerCase();
   const active = input?.active !== undefined ? !!input.active : !/(해지|취소|만료|canceled|inactive|churn)/.test(raw);
   const limit = Math.min(Math.max(Number(input?.limit || 50), 1), 100);
-  const data = await polarGet(ctx.env, "/subscriptions", {
+  const data = await polarGet(cfg, "/subscriptions", {
     active, limit, page: 1, sorting: "-started_at", product_id: ids,
   });
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
@@ -1880,7 +2028,7 @@ async function runPolarSubscriptionsTool(input: any, ctx: ToolContext): Promise<
     total: data?.pagination?.total_count ?? items.length,
     subscriptions: items.slice(0, 50).map((s: any) => ({
       id: s.id, status: s.status,
-      amount: polarMoney(ctx.env, s.amount),
+      amount: polarMoney(cfg, s.amount),
       interval: s.recurring_interval,
       product: s.product?.name || "",
       customer: s.customer?.email || "",
@@ -1891,23 +2039,22 @@ async function runPolarSubscriptionsTool(input: any, ctx: ToolContext): Promise<
   };
 }
 
-/** 엣지(전략) Polar 상품·가격 구성 — POLAR_APP_PRODUCTS 매핑을 만들 때 필요한 UUID 확인용. */
+/** 엣지(전략) Polar 상품·가격 구성 — 앱별 매핑을 등록할 때 필요한 상품 UUID 확인용. */
 async function runPolarProductsTool(_input: any, ctx: ToolContext): Promise<any> {
-  const data = await polarGet(ctx.env, "/products", { limit: 100, page: 1, is_archived: false });
+  const cfg = await polarConfig(ctx);
+  const data = await polarGet(cfg, "/products", { limit: 100, page: 1, is_archived: false });
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
-  let map: Record<string, string[]> = {};
-  try { map = JSON.parse(String(ctx.env?.POLAR_APP_PRODUCTS || "{}")); } catch {}
-  const mappedIds = new Set(Object.values(map).flat().map(String));
+  const mappedIds = new Set(Object.values(cfg.appProducts).flat().map(String));
   return {
     kind: "polar_products",
     products: items.map((p: any) => ({
       id: p.id, name: p.name,
       recurring: p.recurring_interval || "일회성",
       prices: (p.prices || []).map((pr: any) =>
-        pr.amount_type === "fixed" ? polarMoney(ctx.env, pr.price_amount) : (pr.amount_type || "custom")),
+        pr.amount_type === "fixed" ? polarMoney(cfg, pr.price_amount) : (pr.amount_type || "custom")),
       mapped: mappedIds.has(String(p.id)),   // false면 아직 앱 매핑에 안 들어간 상품
     })),
-    appMap: map,
+    appMap: cfg.appProducts,
   };
 }
 

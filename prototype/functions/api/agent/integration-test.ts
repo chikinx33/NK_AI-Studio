@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/integration-test.ts
 // POST /api/agent/integration-test { tool } — 도구의 NK 키 설정 여부로 연결 상태 확인.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, getGoogleOAuth } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, getGoogleOAuth, getCredentials } from "./_shared";
 import { refreshAccessToken } from "./_google";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -86,6 +86,28 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   // 구글 OAuth 연동(싱크 gmail·calendar·drive, 엣지 sheets)은 사용자별 토큰으로 라이브 검증.
   if (tool === "gmail" || tool === "calendar" || tool === "drive" || tool === "sheets") {
     return send(await testGoogle(env, auth.userId, tool), 200, origin);
+  }
+
+  // 엣지 Polar 수익(BYOK): 사용자가 등록한 토큰으로 부수효과 없는 읽기 1건을 실제 호출해 검증.
+  if (tool === "polar_metrics") {
+    try {
+      const sql = getSql(env);
+      if (!sql) return send({ ok: false, message: "연결 상태를 확인하지 못했어요(DB)." }, 200, origin);
+      await ensureAgentSchema(sql);
+      const cred = await getCredentials(sql, auth.userId, "polar", env);
+      const token = String(cred.access_token || "").trim();
+      if (!token) return send({ ok: false, message: "아직 Polar 토큰이 등록되지 않았어요." }, 200, origin);
+      const base = String(cred.api_base || "https://api.polar.sh/v1").replace(/\/+$/, "");
+      const r = await fetch(`${base}/products?limit=1&page=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+      const d: any = await r.json().catch(() => ({}));
+      if (r.status === 401) return send({ ok: false, message: "토큰이 만료되었거나 잘못됐어요." }, 200, origin);
+      if (r.status === 403) return send({ ok: false, message: "읽기 스코프가 부족해요(metrics/orders/subscriptions/products read)." }, 200, origin);
+      if (!r.ok) return send({ ok: false, message: `Polar 연결 실패 (${r.status})` }, 200, origin);
+      const n = d?.pagination?.total_count ?? 0;
+      return send({ ok: true, message: `✅ Polar 연결 정상 — 상품 ${n}개 확인` }, 200, origin);
+    } catch (e: any) {
+      return send({ ok: false, message: String(e?.message || "확인 실패") }, 200, origin);
+    }
   }
 
   // 웹 열람(크롤링): 1단계 Tavily 키 + 2단계 Cloudflare Browser Rendering. 2단계는 실제 호출로 토큰 유효성까지 라이브 검증.

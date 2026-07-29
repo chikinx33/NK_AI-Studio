@@ -13,6 +13,7 @@ const TOOL_LABEL: Record<string, string> = {
   web_search: "웹 검색 (날씨·뉴스·최신정보)", naver_datalab: "네이버 데이터랩 (검색 트렌드)",
   github: "GitHub (레포·이슈)", sheets: "Google Sheets (매출·지표)",
   gmail: "Gmail", calendar: "Google 캘린더", drive: "Google Drive (내 파일)",
+  polar_metrics: "Polar 수익 (매출·MRR·구독)",
 };
 const toolLabel = (t: string) => TOOL_LABEL[t] || t;
 
@@ -36,6 +37,8 @@ export function ToolCard({
   const [testMsg, setTestMsg] = useState("");
   // 구글 OAuth 연동(싱크 gmail·calendar, 엣지 sheets) — env 키가 아니라 사용자별 OAuth 팝업 흐름.
   const isGoogleOAuth = it.oauth === "google";
+  // BYOK(엣지 Polar 등) — 사용자가 직접 키를 넣고 저장한다. 공용 env 키 도구는 읽기전용 표시만.
+  const isByok = !!it.byok;
   const connectedAs = (it as { connectedAs?: string }).connectedAs;
   const [connecting, setConnecting] = useState(false);
 
@@ -50,7 +53,14 @@ export function ToolCard({
     }
     const r = await saveIntegration(it.agentId, it.tool, values);
     setSaving(false);
-    setMsg(r?.ok ? "✅ 저장됨" : "⚠️ 실패");
+    setMsg((r?.ok ? "✅ " : "⚠️ ") + (r?.message || (r?.ok ? "저장됨" : "실패")));
+    // 저장 후 비밀 입력칸은 비운다 — 화면에 토큰이 남지 않게. (서버가 값을 되돌려주지 않으므로
+    //  빈 칸 = "기존 값 유지" 로 동작한다.)
+    if (r?.ok) setForm((f) => {
+      const next = { ...f };
+      for (const fl of it.fields) if (fl.secret) next[fl.key] = "";
+      return next;
+    });
     onSaved();
   }
 
@@ -135,24 +145,50 @@ export function ToolCard({
           {it.configured ? "연결됨" : "설정 필요"}
         </span>
       </div>
-      {/* env 키 도구: 키는 서버 환경변수로만 읽으므로 입력칸 대신 '설정 여부'만 읽기전용으로 표시. */}
-      <div className="space-y-1.5">
-        {it.fields.map((fl) => (
-          <div key={fl.key} className="flex items-start gap-1.5 text-xs">
-            <CircleIcon
-              className={`mt-1 h-2.5 w-2.5 shrink-0 ${fl.hasValue ? "text-emerald-400" : "text-amber-400"}`}
-              filled={fl.hasValue}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="inline-flex items-center text-gray-300">
+      {/* BYOK 도구: 사용자가 직접 값을 넣고 저장한다. 비밀값은 서버가 되돌려주지 않으므로
+          빈 칸으로 두면 기존 값이 유지된다(빈 칸 저장이 토큰을 지우지 않게). */}
+      {isByok ? (
+        <div className="space-y-2">
+          {it.fields.map((fl) => (
+            <div key={fl.key}>
+              <label className="inline-flex items-center text-xs text-gray-300">
                 <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
                 {!fl.required && <span className="ml-1 text-[10px] text-gray-500">(선택)</span>}
+                {fl.hasValue && <span className="ml-1.5 text-[10px] text-emerald-400">저장됨 ✓</span>}
+              </label>
+              <input
+                type={fl.secret ? "password" : "text"}
+                value={form[fl.key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [fl.key]: e.target.value }))}
+                placeholder={fl.hasValue ? "변경할 때만 입력 (빈 칸 = 기존 값 유지)" : (fl.placeholder || "")}
+                autoComplete="off"
+                spellCheck={false}
+                className={inputCls}
+              />
+              {fl.hint && <p className="mt-0.5 text-[11px] leading-snug text-gray-600">{fl.hint}</p>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* env 키 도구: 키는 서버 환경변수로만 읽으므로 입력칸 대신 '설정 여부'만 읽기전용으로 표시. */
+        <div className="space-y-1.5">
+          {it.fields.map((fl) => (
+            <div key={fl.key} className="flex items-start gap-1.5 text-xs">
+              <CircleIcon
+                className={`mt-1 h-2.5 w-2.5 shrink-0 ${fl.hasValue ? "text-emerald-400" : "text-amber-400"}`}
+                filled={fl.hasValue}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="inline-flex items-center text-gray-300">
+                  <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
+                  {!fl.required && <span className="ml-1 text-[10px] text-gray-500">(선택)</span>}
+                </span>
+                {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-gray-600">{fl.hint}</span>}
               </span>
-              {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-gray-600">{fl.hint}</span>}
-            </span>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
       {isGoogleOAuth && (
         <p className="mb-1 text-[11px] leading-snug text-gray-500">
           한 번 '구글 연결'하면 Gmail·캘린더가 함께 연결돼요. 본인 구글 계정의 메일 읽기·일정 보기/추가에 사용됩니다.
@@ -189,14 +225,31 @@ export function ToolCard({
             </button>
           )
         ) : (
-          <button
-            onClick={runTest}
-            disabled={testing || !it.configured}
-            title={it.configured ? "안전 모드로 1회 실행해 연결을 확인합니다" : "환경변수를 설정하고 재배포하면 활성화돼요"}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
-          >
-            <PlugIcon className="h-4 w-4" /> 연결 테스트
-          </button>
+          <>
+            {isByok && (
+              <button
+                onClick={save}
+                disabled={saving}
+                className="inline-flex min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-900/30 px-3 py-1.5 text-sm text-emerald-200 transition hover:bg-emerald-900/60 disabled:opacity-40"
+              >
+                <KeyRoundIcon className="h-4 w-4" /> {saving ? "저장 중…" : "저장"}
+              </button>
+            )}
+            <button
+              onClick={runTest}
+              disabled={testing || !it.configured}
+              title={
+                it.configured
+                  ? "안전 모드로 1회 실행해 연결을 확인합니다"
+                  : isByok
+                    ? "필수 값을 저장하면 활성화돼요"
+                    : "환경변수를 설정하고 재배포하면 활성화돼요"
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+            >
+              <PlugIcon className="h-4 w-4" /> 연결 테스트
+            </button>
+          </>
         )}
         {msg && <StatusText msg={msg} className="text-xs text-gray-300" />}
       </div>

@@ -977,6 +977,7 @@ export interface IntegrationField {
   secret: boolean;
   hasValue: boolean;
   value?: string | number;
+  placeholder?: string;
 }
 export interface ToolIntegration {
   agentId: string;
@@ -987,6 +988,9 @@ export interface ToolIntegration {
   configured: boolean;
   oauth?: "google"; // 사용자별 OAuth 연동(싱크 gmail·calendar) — env 공용키가 아님
   connectedAs?: string; // 연결된 구글 계정(연동됨일 때만)
+  // 사용자별 키 등록(BYOK, 예: 엣지 Polar) — 공용 env 키가 아니라 여기서 직접 입력·저장한다.
+  // 서버는 값을 절대 되돌려주지 않으므로 비밀 필드는 hasValue(저장됨 여부)로만 표시된다.
+  byok?: boolean;
 }
 export async function getIntegrations(): Promise<ToolIntegration[]> {
   return (await fetch("/api/agent/integrations")).json();
@@ -1478,6 +1482,18 @@ export async function getReminders(): Promise<{ due: DueReminder[]; upcoming: Du
     return { due: [], upcoming: [] };
   }
 }
+// 엣지 일일 수익 브리핑: 그날 첫 접속 시 1회. 서버가 KST 기준 시각·중복 여부를 판단하므로
+// 프런트는 알람 폴링 사이클에 얹어 호출만 하고 due:true 일 때 말풍선으로 띄운다.
+export interface EdgeBrief { agentId: string; name: string; emoji: string; text: string }
+export async function getEdgeBrief(conversationId: string): Promise<EdgeBrief | null> {
+  try {
+    const d = await (await fetch(`/api/agent/edge-brief?conversationId=${encodeURIComponent(conversationId)}`)).json();
+    return d?.due && d?.brief?.text ? (d.brief as EdgeBrief) : null;
+  } catch {
+    return null;
+  }
+}
+
 // 예약 직접 삭제(사용자 삭제 지시).
 export async function deleteReminder(id: string): Promise<{ ok: boolean }> {
   try {

@@ -21,6 +21,7 @@ import {
   getEvents,
   getApprovals,
   getReminders,
+  getEdgeBrief,
   deleteReminder,
   synthesizeAgentSpeech,
   synthesizeAgentSpeechServer,
@@ -998,6 +999,18 @@ export default function App() {
       const { due, upcoming } = await getReminders().catch(() => ({ due: [], upcoming: [] }));
       if (stopped) return;
       setReminders(upcoming); // 예약 패널 갱신
+
+      // 엣지 일일 수익 브리핑 — 그날 첫 접속 시 1회. 시각·중복 판단은 전부 서버(KST 기준)가 하고,
+      // 서버가 대화에도 저장하므로 새로고침해도 중복되지 않는다. Polar 미등록이면 아무것도 안 온다.
+      const brief = await getEdgeBrief(activeConvRef.current).catch(() => null);
+      if (stopped) return;
+      if (brief) {
+        commit([
+          ...turnsRef.current,
+          { role: "agent", agentId: brief.agentId, name: brief.name, emoji: brief.emoji, text: brief.text, ts: Date.now() },
+        ]);
+      }
+
       // 최근(3분 이내) 도래분만 울린다. 앱이 닫혀 한참 지난 건은 서버에서 이미 삭제됐고 늦게 울리지 않음.
       const fresh = due.filter((r) => {
         const ms = Date.parse(r.fire_at);

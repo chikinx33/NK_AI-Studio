@@ -110,6 +110,7 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "  · 체크아웃 성공 0건인 날이 이틀 연속(결제 경로 장애 의심) · 하루 환불 3건 이상",
     "초기 단계 보정: 구독자가 20명 미만이면 %는 흔들린다. 반드시 절대값(몇 건·몇 달러)을 같이 말한다.",
     "매출 0은 장애가 아니다. '오늘 결제 0건'과 '결제가 안 되는 상태'를 구분해서 말한다 — 후자는 체크아웃 발생 여부(checkouts>0인데 succeeded=0)로 판별한다.",
+    "Polar가 연결되지 않았다는 에러가 나면 숫자를 지어내지 말고, ⚙️설정 → 에이전트 → 엣지에서 토큰을 등록하시라고 안내한다.",
     "쓰기 작업은 하지 않는다. 환불·구독 취소·가격 변경은 사람이 Polar 대시보드에서. 나는 '이걸 하셔야 합니다'까지만.",
   ].join("\n"),
 };
@@ -257,7 +258,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     polar_metrics: `[[RUN: polar_metrics | {"period": "today", "app": "memoment"}]]  → Polar 결제 지표 조회(매출·MRR·구독수·해지율·전환율). 매출/수익/MRR/구독/해지/전환 관련 질문이면 추측하지 말고 반드시 이 도구로 먼저 조회한다. period는 today·yesterday·this_week·last_week·this_month·last_month·7d·30d·90d·this_year 중 하나, 또는 {"start_date":"2026-07-01","end_date":"2026-07-29"}. app은 앱 이름(예: memoment) — 생략하면 조직 전체.`,
     polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "memoment"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
     polar_subscriptions: `[[RUN: polar_subscriptions | {"active": true, "app": "memoment"}]]  → 구독 목록. active:true=현재 유료 구독자, active:false=해지·만료 건. "구독자 몇 명?", "이번 주 해지한 사람?"에 사용.`,
-    polar_products: `[[RUN: polar_products | {}]]  → Polar 상품·가격 구성과 상품 UUID 조회. 앱별 매핑(POLAR_APP_PRODUCTS) 설정·점검할 때 사용.`,
+    polar_products: `[[RUN: polar_products | {}]]  → Polar 상품·가격 구성과 상품 UUID 조회. 앱별 매핑을 설정·점검할 때 사용.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -1096,7 +1097,7 @@ export function formatReadResult(toolName: string, out: any): string {
     if (!ps.length) return "📦 등록된 상품이 없어요.";
     const lines = ps.map((p, i) =>
       `${i + 1}. **${p.name}** · ${p.prices.join(", ") || "가격 미설정"} · ${p.recurring}\n   \`${p.id}\`${p.mapped ? "" : " ← 앱 매핑 미등록"}`);
-    return `📦 Polar 상품 ${ps.length}개예요. (앱별 보고를 켜려면 아래 UUID로 POLAR_APP_PRODUCTS 를 설정)\n\n${lines.join("\n")}`;
+    return `📦 Polar 상품 ${ps.length}개예요. (앱별 보고를 고정하려면 ⚙️설정 → 에이전트 → 엣지에서 이 UUID로 매핑을 등록하세요)\n\n${lines.join("\n")}`;
   }
   if (toolName === "image_library" || toolName === "video_library" || toolName === "ip_library") {
     const n = Number(out?.count ?? (Array.isArray(out?.items) ? out.items.length : 0)) || 0;
