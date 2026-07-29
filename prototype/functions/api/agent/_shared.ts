@@ -1930,6 +1930,9 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
   const app = String(input?.app || input?.product || "").trim();
   const { ids, mapped, source, knownApps } = await resolvePolarProducts(cfg, app);
 
+  // ★ metrics 는 배열 쿼리 파라미터다 — 반드시 배열로 넘겨 metrics=a&metrics=b 로 나가게 한다.
+  //   콤마로 이어붙이면 Polar 가 그 문자열 전체를 슬러그 1개로 읽어 422(Invalid metric slugs)가 난다.
+  //   (Polar 스키마상 metrics 는 array 만 허용 — product_id 와 달리 문자열 대안이 없다.)
   const METRICS = [
     "revenue", "net_revenue", "cumulative_revenue",
     "monthly_recurring_revenue", "annual_recurring_revenue",
@@ -1937,7 +1940,7 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
     "active_subscriptions", "new_subscriptions", "renewed_subscriptions",
     "canceled_subscriptions", "churned_subscriptions", "churn_rate",
     "checkouts", "succeeded_checkouts", "checkouts_conversion",
-  ].join(",");
+  ];
 
   const data = await polarGet(cfg, "/metrics/", {
     start_date: start, end_date: end, interval, timezone: POLAR_TZ,
@@ -1957,7 +1960,7 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
   try {
     const prev = await polarGet(cfg, "/metrics/", {
       start_date: prevStart, end_date: prevEnd, interval, timezone: POLAR_TZ,
-      metrics: "revenue,orders,monthly_recurring_revenue,active_subscriptions,churn_rate,succeeded_checkouts",
+      metrics: ["revenue", "orders", "monthly_recurring_revenue", "active_subscriptions", "churn_rate", "succeeded_checkouts"],
       product_id: ids,
     });
     prevTotals = prev?.totals || null;
