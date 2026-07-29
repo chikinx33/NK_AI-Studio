@@ -100,6 +100,18 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "라우팅 기준: 전략·수익=엣지 / 리서치·웹검색·날씨·뉴스·최신정보=레이더 / 마케팅=마키 / 기획=플롯 / 글=잉크 / 디자인=픽셀 / 사운드=비트 / 개발=엔지 / 발행=리치 / 일정·알람·진행=싱크.",
     "원칙: 직접 실무를 하지 않는다. 분배하고, 합치고, 결정한다. 삭제·배포·발송은 항상 승인 게이트.",
   ].join("\n"),
+  edge: [
+    "나는 전략·비즈니스 담당 엣지다. 이 회사의 '돈'을 책임진다.",
+    "말투: 숫자 먼저, 해석은 한 줄. 장식하지 않는다. 나쁜 소식일수록 먼저, 정확하게.",
+    "수익 질문(매출·MRR·구독·해지·전환·결제·환불)에는 절대 추측하지 않는다. 반드시 polar_* 도구로 조회한 실제 숫자로만 답한다.",
+    "보고 형식: ①핵심 숫자 1~2개 ②직전 대비 증감 ③'그래서 뭐' 한 문장(병목·원인·다음 액션).",
+    "판단 규칙 — 아래 중 하나라도 걸리면 묻지 않아도 먼저 알린다:",
+    "  · MRR이 직전 대비 5% 이상 하락 · 해지율이 최근 평균의 1.5배 초과",
+    "  · 체크아웃 성공 0건인 날이 이틀 연속(결제 경로 장애 의심) · 하루 환불 3건 이상",
+    "초기 단계 보정: 구독자가 20명 미만이면 %는 흔들린다. 반드시 절대값(몇 건·몇 달러)을 같이 말한다.",
+    "매출 0은 장애가 아니다. '오늘 결제 0건'과 '결제가 안 되는 상태'를 구분해서 말한다 — 후자는 체크아웃 발생 여부(checkouts>0인데 succeeded=0)로 판별한다.",
+    "쓰기 작업은 하지 않는다. 환불·구독 취소·가격 변경은 사람이 Polar 대시보드에서. 나는 '이걸 하셔야 합니다'까지만.",
+  ].join("\n"),
 };
 
 /** 라비오크 stripThink 포팅 — 로컬 추론모델의 <think> 누출 제거(클라우드도 안전망). */
@@ -242,6 +254,10 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     subscription_get: `[[RUN: subscription_get | {}]]  → 구독·크레딧 잔량 조회. "크레딧 얼마 남았어?"에 사용.`,
     image_edit: `[[RUN: image_edit | {"imageUrl": "원본 이미지URL", "prompt": "수정 지시(예: 배경만 노을로 바꿔줘)"}]]  → 기존 이미지를 채팅형으로 수정(image-to-image, Gemini). "이 이미지 배경 바꿔"에 사용. ※ 마스크로 특정 영역만 정밀 수정하는 인페인트는 사용자가 UI에서 마스크를 그려야 해요(도구 아님).`,
     reminders_list: `[[RUN: reminders_list | {}]]  → 다가올 알람(예약) 목록 조회. "예약/알람 뭐 있어?"에 사용. (예약발행 목록이 아니라 앱 알람)`,
+    polar_metrics: `[[RUN: polar_metrics | {"period": "today", "app": "memoment"}]]  → Polar 결제 지표 조회(매출·MRR·구독수·해지율·전환율). 매출/수익/MRR/구독/해지/전환 관련 질문이면 추측하지 말고 반드시 이 도구로 먼저 조회한다. period는 today·yesterday·this_week·last_week·this_month·last_month·7d·30d·90d·this_year 중 하나, 또는 {"start_date":"2026-07-01","end_date":"2026-07-29"}. app은 앱 이름(예: memoment) — 생략하면 조직 전체.`,
+    polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "memoment"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
+    polar_subscriptions: `[[RUN: polar_subscriptions | {"active": true, "app": "memoment"}]]  → 구독 목록. active:true=현재 유료 구독자, active:false=해지·만료 건. "구독자 몇 명?", "이번 주 해지한 사람?"에 사용.`,
+    polar_products: `[[RUN: polar_products | {}]]  → Polar 상품·가격 구성과 상품 UUID 조회. 앱별 매핑(POLAR_APP_PRODUCTS) 설정·점검할 때 사용.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -265,6 +281,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
     image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
+    polar_metrics: "Polar 수익 지표(매출·MRR·해지)", polar_orders: "Polar 결제 내역", polar_subscriptions: "Polar 구독 목록", polar_products: "Polar 상품·가격",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -1032,6 +1049,54 @@ export function formatReadResult(toolName: string, out: any): string {
     const mine = ids.length ? `📁 내 프로젝트 ${ids.length}개예요.\n${ids.map((id, i) => `${i + 1}. ${id}`).join("\n")}` : "📁 내가 만든 프로젝트는 아직 없어요.";
     const sh = shared.length ? `\n\n🤝 공유받은 프로젝트 ${shared.length}개:\n${shared.map((s, i) => `${i + 1}. ${s.projectId}${s.title ? ` (${s.title})` : ""} · ${s.role || "viewer"}`).join("\n")}` : "";
     return `${mine}${sh}`;
+  }
+  // ── Polar(엣지 수익 모니터링) ─────────────────────────────────────────────
+  // synthesize:true라 보통은 모델 합성 답이 나가지만, 합성 실패·폴백 경로에서 이 문자열이 쓰인다.
+  // 금액은 서버가 이미 달러로 환산한 display.* 만 쓴다(totals는 센트 원본 → 표시에 직접 쓰지 않음).
+  if (toolName === "polar_metrics") {
+    const d = out?.display || {}, t = out?.totals || {}, pt = out?.prevTotals || null;
+    const per = out?.period || {};
+    const pct = (cur: any, prev: any) => {
+      const c = Number(cur || 0), p = Number(prev || 0);
+      if (!p) return c > 0 ? " (신규)" : "";
+      const r = ((c - p) / p) * 100;
+      return ` (직전 대비 ${r >= 0 ? "+" : ""}${r.toFixed(1)}%)`;
+    };
+    const lines = [
+      `💰 **${out?.scope || "조직 전체"} · ${per.label || ""}(${per.start}~${per.end}) 수익 요약**`,
+      ``,
+      `- 매출: **${d.revenue}**${pt ? pct(t.revenue, pt.revenue) : ""} · 순매출 ${d.net_revenue}`,
+      `- 주문: ${Number(t.orders || 0)}건 · 객단가 ${d.aov}`,
+      `- MRR: **${d.mrr}**${pt ? pct(out?.latest?.monthly_recurring_revenue, pt.monthly_recurring_revenue) : ""} · ARR ${d.arr}`,
+      `- 활성 구독: ${Number(out?.latest?.active_subscriptions || 0)}건 (신규 ${Number(t.new_subscriptions || 0)} · 해지 ${Number(t.canceled_subscriptions || 0)})`,
+      `- 해지율: ${(Number(t.churn_rate || 0) * 100).toFixed(1)}%`,
+      `- 체크아웃: ${Number(t.checkouts || 0)}회 → 성공 ${Number(t.succeeded_checkouts || 0)}회 (전환 ${(Number(t.checkouts_conversion || 0) * 100).toFixed(1)}%)`,
+    ];
+    const notes: string[] = Array.isArray(out?.notes) ? out.notes : [];
+    if (notes.length) lines.push(``, ...notes.map((n) => `> ${n}`));
+    return lines.join("\n");
+  }
+  if (toolName === "polar_orders") {
+    const os: any[] = out?.orders || [];
+    if (!os.length) return `🧾 ${out?.scope || ""} 최근 결제 내역이 없어요. (아직 결제가 없거나 필터 범위 밖)`;
+    const lines = os.slice(0, 15).map((o, i) =>
+      `${i + 1}. ${o.at} · **${o.amount}**${o.refunded ? ` · ⚠️환불 ${o.refunded}` : ""} · ${o.product}${o.customer ? ` · ${o.customer}` : ""}`);
+    return `🧾 최근 결제 ${os.length}건이에요.\n\n${lines.join("\n")}`;
+  }
+  if (toolName === "polar_subscriptions") {
+    const ss: any[] = out?.subscriptions || [];
+    if (!ss.length) return `👥 ${out?.mode || ""} 구독이 없어요.`;
+    const pend = ss.filter((s) => s.cancelAtPeriodEnd).length;
+    const lines = ss.slice(0, 15).map((s, i) =>
+      `${i + 1}. ${s.product} · ${s.amount}/${s.interval} · ${s.customer}${s.cancelAtPeriodEnd ? ` · ⚠️${s.periodEnd} 해지 예정` : ""}`);
+    return `👥 ${out?.mode} 구독 ${out?.total}건이에요.${pend ? ` (해지 예정 ${pend}건)` : ""}\n\n${lines.join("\n")}`;
+  }
+  if (toolName === "polar_products") {
+    const ps: any[] = out?.products || [];
+    if (!ps.length) return "📦 등록된 상품이 없어요.";
+    const lines = ps.map((p, i) =>
+      `${i + 1}. **${p.name}** · ${p.prices.join(", ") || "가격 미설정"} · ${p.recurring}\n   \`${p.id}\`${p.mapped ? "" : " ← 앱 매핑 미등록"}`);
+    return `📦 Polar 상품 ${ps.length}개예요. (앱별 보고를 켜려면 아래 UUID로 POLAR_APP_PRODUCTS 를 설정)\n\n${lines.join("\n")}`;
   }
   if (toolName === "image_library" || toolName === "video_library" || toolName === "ip_library") {
     const n = Number(out?.count ?? (Array.isArray(out?.items) ? out.items.length : 0)) || 0;

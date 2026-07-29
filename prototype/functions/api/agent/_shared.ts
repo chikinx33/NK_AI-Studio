@@ -1632,6 +1632,285 @@ async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "naver_datalab", startDate, endDate, results: data.results || [] };
 }
 
+// ── 엣지(전략) Polar 수익 도구 ────────────────────────────────────────────────
+// 정책: 읽기 전용. 쓰기(환불·구독변경·가격수정) 도구는 만들지 않는다.
+// 단위: Polar 금액은 전부 '센트'. 표시 직전에 100으로 나눈다.
+
+const POLAR_TZ = "Asia/Seoul";
+
+function polarBase(env: any): string {
+  return String(env?.POLAR_API_BASE || "https://api.polar.sh/v1").replace(/\/+$/, "");
+}
+
+function polarToken(env: any): string {
+  const t = String(env?.POLAR_OAT || env?.POLAR_ACCESS_TOKEN || "").trim();
+  if (!t) {
+    throw new Error(
+      "Polar 토큰이 없어요. Cloudflare 환경변수에 POLAR_OAT 를 추가해주세요. " +
+      "(Polar 대시보드 → Settings → Organization Access Token, 읽기 스코프만)"
+    );
+  }
+  return t;
+}
+
+/** Polar GET 공통 — 배열 파라미터는 같은 키를 반복해서 붙인다(product_id=a&product_id=b). */
+async function polarGet(env: any, path: string, params: Record<string, any>): Promise<any> {
+  const url = new URL(`${polarBase(env)}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === "") continue;
+    if (Array.isArray(v)) { for (const item of v) if (item) url.searchParams.append(k, String(item)); }
+    else url.searchParams.append(k, String(v));
+  }
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${polarToken(env)}`, Accept: "application/json" },
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Polar 토큰이 만료되었거나 잘못됐어요. POLAR_OAT 를 다시 발급해주세요.");
+    if (res.status === 403) throw new Error("Polar 토큰에 읽기 권한이 부족해요. metrics:read·orders:read·subscriptions:read·products:read 스코프를 확인해주세요.");
+    if (res.status === 429) throw new Error("Polar 호출 한도(500/분)에 걸렸어요. 잠시 뒤 다시 시도할게요.");
+    const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data).slice(0, 200);
+    throw new Error(`Polar 조회 실패 (${res.status}) ${detail}`);
+  }
+  return data;
+}
+
+/** 앱 이름 → product_id[] (POLAR_APP_PRODUCTS). 미설정/미매칭이면 빈 배열 = 조직 전체. */
+function polarProductIds(env: any, app?: string): { ids: string[]; mapped: boolean; knownApps: string[] } {
+  let map: Record<string, string[]> = {};
+  try { map = JSON.parse(String(env?.POLAR_APP_PRODUCTS || "{}")); } catch { map = {}; }
+  const knownApps = Object.keys(map);
+  const key = String(app || "").trim().toLowerCase().replace(/\s+/g, "");
+  if (!key) return { ids: [], mapped: false, knownApps };
+  const hit = knownApps.find((k) => k.toLowerCase().replace(/\s+/g, "") === key);
+  if (!hit) return { ids: [], mapped: false, knownApps };
+  const ids = (Array.isArray(map[hit]) ? map[hit] : []).map(String).filter(Boolean);
+  return { ids, mapped: ids.length > 0, knownApps };
+}
+
+/**
+ * 기간 프리셋 → {start_date, end_date, interval, label} (Asia/Seoul 기준).
+ * ★ 날짜 계산을 모델에 맡기지 않는다 — 모델이 "오늘"을 틀리게 잡는 사고가 가장 흔하다.
+ */
+function polarPeriod(input: any): { start: string; end: string; interval: string; label: string } {
+  const fmt = (d: Date) => {
+    // UTC 시각을 KST(+9)로 옮긴 뒤 날짜만 취한다.
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return k.toISOString().slice(0, 10);
+  };
+  const dayShift = (base: Date, n: number) => new Date(base.getTime() + n * 86400000);
+  const now = new Date();
+  const today = fmt(now);
+
+  const explicitStart = String(input?.start_date || input?.startDate || "").trim();
+  const explicitEnd = String(input?.end_date || input?.endDate || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicitStart)) {
+    const end = /^\d{4}-\d{2}-\d{2}$/.test(explicitEnd) ? explicitEnd : today;
+    return { start: explicitStart, end, interval: pickInterval(explicitStart, end, input), label: `${explicitStart} ~ ${end}` };
+  }
+
+  const p = String(input?.period || input?.range || input?.prompt || "today").trim().toLowerCase();
+  const kNow = new Date(now.getTime() + 9 * 3600 * 1000); // KST 기준 달력 계산용
+  const y = kNow.getUTCFullYear(), m = kNow.getUTCMonth();
+
+  const preset = (s: string, e: string, label: string) => ({ s, e, label });
+  let r: { s: string; e: string; label: string };
+
+  if (/(어제|yesterday)/.test(p)) { const d = fmt(dayShift(now, -1)); r = preset(d, d, "어제"); }
+  else if (/(이번\s*주|this[_ ]?week|금주)/.test(p)) {
+    const dow = (kNow.getUTCDay() + 6) % 7; // 월요일=0
+    r = preset(fmt(dayShift(now, -dow)), today, "이번 주(월~오늘)");
+  }
+  else if (/(지난\s*주|last[_ ]?week|전주)/.test(p)) {
+    const dow = (kNow.getUTCDay() + 6) % 7;
+    r = preset(fmt(dayShift(now, -dow - 7)), fmt(dayShift(now, -dow - 1)), "지난 주");
+  }
+  else if (/(이번\s*달|this[_ ]?month|당월)/.test(p)) {
+    r = preset(`${y}-${String(m + 1).padStart(2, "0")}-01`, today, "이번 달");
+  }
+  else if (/(지난\s*달|last[_ ]?month|전월)/.test(p)) {
+    const ly = m === 0 ? y - 1 : y, lm = m === 0 ? 11 : m - 1;
+    const last = new Date(Date.UTC(ly, lm + 1, 0)).toISOString().slice(0, 10);
+    r = preset(`${ly}-${String(lm + 1).padStart(2, "0")}-01`, last, "지난 달");
+  }
+  else if (/(7일|7d|일주일|주간)/.test(p)) { r = preset(fmt(dayShift(now, -6)), today, "최근 7일"); }
+  else if (/(30일|30d|한\s*달|월간)/.test(p)) { r = preset(fmt(dayShift(now, -29)), today, "최근 30일"); }
+  else if (/(90일|90d|분기)/.test(p)) { r = preset(fmt(dayShift(now, -89)), today, "최근 90일"); }
+  else if (/(올해|this[_ ]?year|연간)/.test(p)) { r = preset(`${y}-01-01`, today, "올해"); }
+  else { r = preset(today, today, "오늘"); }
+
+  return { start: r.s, end: r.e, interval: pickInterval(r.s, r.e, input), label: r.label };
+}
+
+/** 기간 길이에 맞는 interval 자동 선택 (periods 배열이 과도하게 길어지는 것 방지). */
+function pickInterval(start: string, end: string, input: any): string {
+  const explicit = String(input?.interval || "").trim().toLowerCase();
+  if (["hour", "day", "week", "month", "year"].includes(explicit)) return explicit;
+  const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+  if (days <= 2) return "hour";
+  if (days <= 62) return "day";
+  if (days <= 210) return "week";
+  return "month";
+}
+
+/** 센트 → 표시 문자열. USD 기준 + POLAR_USD_KRW 있으면 원화 병기. */
+function polarMoney(env: any, cents: any): string {
+  const n = Number(cents || 0) / 100;
+  const usd = `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rate = Number(env?.POLAR_USD_KRW || 0);
+  if (!rate) return usd;
+  const krw = Math.round(n * rate);
+  return `${usd}(약 ${krw.toLocaleString("ko-KR")}원)`;
+}
+
+/** 엣지(전략) Polar 지표: 매출·MRR·구독·해지·전환. 수익 질문의 기본 진입점. */
+async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise<any> {
+  const { start, end, interval, label } = polarPeriod(input);
+  const app = String(input?.app || input?.product || "").trim();
+  const { ids, mapped, knownApps } = polarProductIds(ctx.env, app);
+
+  const METRICS = [
+    "revenue", "net_revenue", "cumulative_revenue",
+    "monthly_recurring_revenue", "annual_recurring_revenue",
+    "orders", "average_order_value",
+    "active_subscriptions", "new_subscriptions", "renewed_subscriptions",
+    "canceled_subscriptions", "churned_subscriptions", "churn_rate",
+    "checkouts", "succeeded_checkouts", "checkouts_conversion",
+  ].join(",");
+
+  const data = await polarGet(ctx.env, "/metrics/", {
+    start_date: start, end_date: end, interval, timezone: POLAR_TZ,
+    metrics: METRICS, product_id: ids,
+  });
+
+  const totals = data?.totals || {};
+  const periods: any[] = Array.isArray(data?.periods) ? data.periods : [];
+  const last = periods[periods.length - 1] || {};
+
+  // 직전 동일 길이 구간과 비교(전일 대비 / 전주 대비 근거).
+  const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
+  const prevEndMs = Date.parse(`${start}T00:00:00Z`) - 86400000;
+  const prevEnd = new Date(prevEndMs).toISOString().slice(0, 10);
+  const prevStart = new Date(prevEndMs - (days - 1) * 86400000).toISOString().slice(0, 10);
+  let prevTotals: any = null;
+  try {
+    const prev = await polarGet(ctx.env, "/metrics/", {
+      start_date: prevStart, end_date: prevEnd, interval, timezone: POLAR_TZ,
+      metrics: "revenue,orders,monthly_recurring_revenue,active_subscriptions,churn_rate,succeeded_checkouts",
+      product_id: ids,
+    });
+    prevTotals = prev?.totals || null;
+  } catch (_) { prevTotals = null; } // 비교 실패는 치명적이지 않음 — 본 수치는 그대로 보고.
+
+  return {
+    kind: "polar_metrics",
+    scope: mapped ? app : "조직 전체",
+    scopeMapped: mapped,
+    knownApps,
+    period: { start, end, label, interval },
+    prevPeriod: { start: prevStart, end: prevEnd },
+    // ★ 표시용 문자열을 서버가 만들어 넘긴다 — 모델이 센트를 달러로 잘못 바꾸는 사고를 원천 차단.
+    display: {
+      revenue: polarMoney(ctx.env, totals.revenue),
+      net_revenue: polarMoney(ctx.env, totals.net_revenue),
+      mrr: polarMoney(ctx.env, last.monthly_recurring_revenue ?? totals.monthly_recurring_revenue),
+      arr: polarMoney(ctx.env, last.annual_recurring_revenue ?? totals.annual_recurring_revenue),
+      aov: polarMoney(ctx.env, totals.average_order_value),
+      prevRevenue: prevTotals ? polarMoney(ctx.env, prevTotals.revenue) : null,
+    },
+    totals, prevTotals, latest: last,
+    // 일자별 추이(최근 14개만 — 모델 컨텍스트 절약)
+    trend: periods.slice(-14).map((p: any) => ({
+      t: String(p.timestamp || "").slice(0, 10),
+      revenue: Number(p.revenue || 0) / 100,
+      orders: Number(p.orders || 0),
+      mrr: Number(p.monthly_recurring_revenue || 0) / 100,
+      active_subs: Number(p.active_subscriptions || 0),
+    })),
+    notes: [
+      "금액은 이미 달러로 환산되어 display/trend에 들어 있음. totals는 센트 원본.",
+      mapped ? null : (knownApps.length
+        ? `앱 필터가 적용되지 않아 조직 전체 수치입니다. 사용 가능한 앱: ${knownApps.join(", ")}`
+        : "POLAR_APP_PRODUCTS 미설정 — 조직 전체 합계입니다."),
+    ].filter(Boolean),
+  };
+}
+
+/** 엣지(전략) Polar 최근 결제 건별 — "누가 언제 얼마" + 환불 확인. */
+async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
+  const app = String(input?.app || input?.product || "").trim();
+  const { ids, mapped } = polarProductIds(ctx.env, app);
+  const limit = Math.min(Math.max(Number(input?.limit || 20), 1), 100);
+  const data = await polarGet(ctx.env, "/orders", {
+    limit, page: 1, sorting: "-created_at", product_id: ids,
+  });
+  const items: any[] = Array.isArray(data?.items) ? data.items : [];
+  return {
+    kind: "polar_orders",
+    scope: mapped ? app : "조직 전체",
+    total: data?.pagination?.total_count ?? items.length,
+    orders: items.map((o: any) => ({
+      id: o.id,
+      at: String(o.created_at || "").slice(0, 19).replace("T", " "),
+      amount: polarMoney(ctx.env, o.amount),
+      refunded: Number(o.refunded_amount || 0) > 0 ? polarMoney(ctx.env, o.refunded_amount) : null,
+      status: o.status,
+      reason: o.billing_reason,           // purchase | subscription_create | subscription_cycle | subscription_update
+      product: o.product?.name || "",
+      customer: o.customer?.email || o.customer?.name || "",
+    })),
+  };
+}
+
+/** 엣지(전략) Polar 구독 목록 — 활성 구독자 수/해지 예정 파악. */
+async function runPolarSubscriptionsTool(input: any, ctx: ToolContext): Promise<any> {
+  const app = String(input?.app || input?.product || "").trim();
+  const { ids, mapped } = polarProductIds(ctx.env, app);
+  const raw = String(input?.status || input?.prompt || "").toLowerCase();
+  const active = input?.active !== undefined ? !!input.active : !/(해지|취소|만료|canceled|inactive|churn)/.test(raw);
+  const limit = Math.min(Math.max(Number(input?.limit || 50), 1), 100);
+  const data = await polarGet(ctx.env, "/subscriptions", {
+    active, limit, page: 1, sorting: "-started_at", product_id: ids,
+  });
+  const items: any[] = Array.isArray(data?.items) ? data.items : [];
+  return {
+    kind: "polar_subscriptions",
+    scope: mapped ? app : "조직 전체",
+    mode: active ? "활성" : "해지·만료",
+    total: data?.pagination?.total_count ?? items.length,
+    subscriptions: items.slice(0, 50).map((s: any) => ({
+      id: s.id, status: s.status,
+      amount: polarMoney(ctx.env, s.amount),
+      interval: s.recurring_interval,
+      product: s.product?.name || "",
+      customer: s.customer?.email || "",
+      periodEnd: String(s.current_period_end || "").slice(0, 10),
+      cancelAtPeriodEnd: !!s.cancel_at_period_end,
+      canceledAt: s.canceled_at ? String(s.canceled_at).slice(0, 10) : null,
+    })),
+  };
+}
+
+/** 엣지(전략) Polar 상품·가격 구성 — POLAR_APP_PRODUCTS 매핑을 만들 때 필요한 UUID 확인용. */
+async function runPolarProductsTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await polarGet(ctx.env, "/products", { limit: 100, page: 1, is_archived: false });
+  const items: any[] = Array.isArray(data?.items) ? data.items : [];
+  let map: Record<string, string[]> = {};
+  try { map = JSON.parse(String(ctx.env?.POLAR_APP_PRODUCTS || "{}")); } catch {}
+  const mappedIds = new Set(Object.values(map).flat().map(String));
+  return {
+    kind: "polar_products",
+    products: items.map((p: any) => ({
+      id: p.id, name: p.name,
+      recurring: p.recurring_interval || "일회성",
+      prices: (p.prices || []).map((pr: any) =>
+        pr.amount_type === "fixed" ? polarMoney(ctx.env, pr.price_amount) : (pr.amount_type || "custom")),
+      mapped: mappedIds.has(String(p.id)),   // false면 아직 앱 매핑에 안 들어간 상품
+    })),
+    appMap: map,
+  };
+}
+
 /** 싱크(비서) Gmail 발송: to·subject·body로 메일 전송. (외부·되돌리기 어려움 → 승인 게이트) */
 function gmailB64(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -2766,6 +3045,14 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   github: { agentId: "engi", kind: "read", synthesize: true, run: runGithubTool },
   // 마키(마케팅): 네이버 데이터랩 검색어 트렌드.
   naver_datalab: { agentId: "maki", kind: "read", synthesize: true, run: runNaverDatalabTool },
+
+  // ── 엣지(전략) Polar 수익 모니터링 ──────────────────────────────────────
+  // 전부 읽기 전용. 환불·구독변경·가격수정 도구는 의도적으로 만들지 않음(사람이 Polar 대시보드에서).
+  // polar_metrics만 코어와 공유 — 총괄이 "회사 상황 요약"에 매출 한 줄을 넣기 위해.
+  polar_metrics: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runPolarMetricsTool },
+  polar_orders: { agentId: "edge", kind: "read", synthesize: true, run: runPolarOrdersTool },
+  polar_subscriptions: { agentId: "edge", kind: "read", synthesize: true, run: runPolarSubscriptionsTool },
+  polar_products: { agentId: "edge", kind: "read", synthesize: true, run: runPolarProductsTool },
 
   // ── AI 스튜디오 확장 도구 ──────────────────────────────────────────────
   // 브랜드 허브(코어 총괄 · 조회는 온브랜드 작업하는 여러 직무가 공유):
