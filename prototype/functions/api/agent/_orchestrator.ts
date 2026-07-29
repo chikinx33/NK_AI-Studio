@@ -1056,6 +1056,11 @@ export function formatReadResult(toolName: string, out: any): string {
   // 금액은 서버가 이미 달러로 환산한 display.* 만 쓴다(totals는 센트 원본 → 표시에 직접 쓰지 않음).
   if (toolName === "polar_metrics") {
     const d = out?.display || {}, t = out?.totals || {}, pt = out?.prevTotals || null;
+    // 비교 기준을 지표 성격에 맞춰 나눈다:
+    //  · 플로우(매출·주문·체크아웃) → 기간 합계(prevTotals)
+    //  · 스톡(MRR·ARR·활성구독)     → 이전 구간의 마지막 시점값(prevStock)
+    // 둘을 섞어 비교하면 증감이 성립하지 않는다.
+    const ps = out?.prevStock || out?.prevLatest || pt;
     const per = out?.period || {};
     const pct = (cur: any, prev: any) => {
       const c = Number(cur || 0), p = Number(prev || 0);
@@ -1068,8 +1073,8 @@ export function formatReadResult(toolName: string, out: any): string {
       ``,
       `- 매출: **${d.revenue}**${pt ? pct(t.revenue, pt.revenue) : ""} · 순매출 ${d.net_revenue}`,
       `- 주문: ${Number(t.orders || 0)}건 · 객단가 ${d.aov}`,
-      `- MRR: **${d.mrr}**${pt ? pct(out?.latest?.monthly_recurring_revenue, pt.monthly_recurring_revenue) : ""} · ARR ${d.arr}`,
-      `- 활성 구독: ${Number(out?.latest?.active_subscriptions || 0)}건 (신규 ${Number(t.new_subscriptions || 0)} · 해지 ${Number(t.canceled_subscriptions || 0)})`,
+      `- MRR: **${d.mrr}**${ps ? pct(out?.latest?.monthly_recurring_revenue, ps.monthly_recurring_revenue) : ""} · ARR ${d.arr}`,
+      `- 활성 구독: ${Number(out?.latest?.active_subscriptions || 0)}건${ps ? pct(out?.latest?.active_subscriptions, ps.active_subscriptions) : ""} (신규 ${Number(t.new_subscriptions || 0)} · 해지 ${Number(t.canceled_subscriptions || 0)})`,
       `- 해지율: ${(Number(t.churn_rate || 0) * 100).toFixed(1)}%`,
       `- 체크아웃: ${Number(t.checkouts || 0)}회 → 성공 ${Number(t.succeeded_checkouts || 0)}회 (전환 ${(Number(t.checkouts_conversion || 0) * 100).toFixed(1)}%)`,
     ];

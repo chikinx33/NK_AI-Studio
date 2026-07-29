@@ -1957,6 +1957,7 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
   const prevEnd = new Date(prevEndMs).toISOString().slice(0, 10);
   const prevStart = new Date(prevEndMs - (days - 1) * 86400000).toISOString().slice(0, 10);
   let prevTotals: any = null;
+  let prevLatest: any = null;
   try {
     const prev = await polarGet(cfg, "/metrics/", {
       start_date: prevStart, end_date: prevEnd, interval, timezone: POLAR_TZ,
@@ -1964,7 +1965,15 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
       product_id: ids,
     });
     prevTotals = prev?.totals || null;
-  } catch (_) { prevTotals = null; } // 비교 실패는 치명적이지 않음 — 본 수치는 그대로 보고.
+    // 스톡 지표(MRR·ARR·활성구독)는 '그 시점의 상태'라 기간 합계가 의미를 갖지 않는다.
+    // 현재값이 마지막 period 값이므로, 비교값도 이전 구간의 마지막 period 값으로 통일한다.
+    // (Polar 는 지금도 스톡 지표의 totals 를 마지막 period 값으로 주지만, 그건 문서화된
+    //  계약이 아니라 구현 세부라 여기서 명시적으로 맞춰 둔다.)
+    const prevPeriods: any[] = Array.isArray(prev?.periods) ? prev.periods : [];
+    prevLatest = prevPeriods[prevPeriods.length - 1] || null;
+  } catch (_) { prevTotals = null; prevLatest = null; } // 비교 실패는 치명적이지 않음 — 본 수치는 그대로 보고.
+  // 플로우 지표(매출·주문·체크아웃)는 기간 합계가 맞으므로 totals 로 비교한다.
+  const prevStock = prevLatest || prevTotals;   // periods 가 비면 totals 로 폴백
 
   return {
     kind: "polar_metrics",
@@ -1984,6 +1993,31 @@ export async function runPolarMetricsTool(input: any, ctx: ToolContext): Promise
       prevRevenue: prevTotals ? polarMoney(cfg, prevTotals.revenue) : null,
     },
     totals, prevTotals, latest: last,
+    prevLatest,        // 스톡 지표 비교의 기준값(이전 구간 마지막 period)
+    prevStock,         // formatReadResult 가 실제로 쓰는 값(prevLatest, 없으면 prevTotals)
+    // ── 진단용(모델이 아니라 사람이 볼 용도) ──────────────────────────────
+    // MRR 이 이상하게 나올 때 원인을 특정하려면 원본 센트값·단위·구간 구성이 필요하다.
+    debug: {
+      mrrSource: "latest_period",
+      latestPeriodTs: last.timestamp ?? null,
+      mrrCents: last.monthly_recurring_revenue ?? null,
+      prevMrrCents: prevLatest?.monthly_recurring_revenue ?? null,
+      // Polar 가 스톡 지표 totals 를 마지막 period 값으로 주는지 눈으로 대조할 수 있게 같이 남긴다.
+      totalsMrrCents: totals.monthly_recurring_revenue ?? null,
+      prevTotalsMrrCents: prevTotals?.monthly_recurring_revenue ?? null,
+      arrCents: last.annual_recurring_revenue ?? null,
+      activeSubs: last.active_subscriptions ?? null,
+      // 응답이 알려주는 각 지표의 단위(scalar·currency·currency_sub_cent·percentage).
+      // currency 가 아닌 지표를 100으로 나누면 값이 틀어지므로 확인용으로 남긴다.
+      metricTypes: Object.fromEntries(
+        Object.entries(data?.metrics || {})
+          .map(([k, v]: [string, any]) => [k, v?.type ?? null])
+          .filter(([, t]) => t !== null)
+      ),
+      interval, periodCount: periods.length,
+      // 스톡 지표를 시간 단위로 쪼갤 때 값이 튀는지 확인 — 일정해야 정상.
+      mrrSeries: periods.map((p: any) => [String(p.timestamp || ""), p.monthly_recurring_revenue ?? null]),
+    },
     // 일자별 추이(최근 14개만 — 모델 컨텍스트 절약)
     trend: periods.slice(-14).map((p: any) => ({
       t: String(p.timestamp || "").slice(0, 10),
