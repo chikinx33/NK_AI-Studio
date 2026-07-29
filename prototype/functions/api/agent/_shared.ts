@@ -1897,9 +1897,26 @@ function pickInterval(start: string, end: string, input: any): string {
   return "month";
 }
 
-/** 센트 → 표시 문자열. USD 기준 + usd_krw 등록돼 있으면 원화 병기. */
-function polarMoney(cfg: PolarConfig, cents: any): string {
+/**
+ * 센트 → 표시 문자열. currency 를 주면 그 통화로 표기한다(상품 가격은 통화가 섞일 수 있다).
+ *  · currency 미지정 또는 usd → 기존 동작 그대로($ 표기 + usd_krw 있으면 원화 병기)
+ *  · 그 외 통화 → Intl 로 해당 통화 표기. ★ 원화 병기는 붙이지 않는다 —
+ *    USD 환율을 다른 통화 금액에 곱하면 틀린 값이 된다.
+ * ※ 나누기는 통화와 무관하게 100 고정. Polar 는 금액 필드를 전부 "in cents" 로만 문서화하고
+ *   zero-decimal 통화(JPY·KRW 등)의 인코딩 규약은 명시가 없다. 현재 조직은 USD 라 영향이 없으며,
+ *   해당 통화로 상품을 만들게 되면 실제 응답값을 확인해 이 divisor 를 조정할 것.
+ */
+function polarMoney(cfg: PolarConfig, cents: any, currency?: string): string {
   const n = Number(cents || 0) / 100;
+  const code = String(currency || "").trim().toUpperCase();
+  if (code && code !== "USD") {
+    try {
+      return new Intl.NumberFormat("ko-KR", { style: "currency", currency: code }).format(n);
+    } catch (_) {
+      // 알 수 없는 통화 코드 → 잘못된 기호를 붙이는 대신 숫자 + 코드로 폴백.
+      return `${n.toLocaleString("ko-KR", { maximumFractionDigits: 2 })} ${code}`;
+    }
+  }
   const usd = `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (!cfg.usdKrw) return usd;
   return `${usd}(약 ${Math.round(n * cfg.usdKrw).toLocaleString("ko-KR")}원)`;
@@ -2047,13 +2064,25 @@ async function runPolarProductsTool(_input: any, ctx: ToolContext): Promise<any>
   const mappedIds = new Set(Object.values(cfg.appProducts).flat().map(String));
   return {
     kind: "polar_products",
-    products: items.map((p: any) => ({
-      id: p.id, name: p.name,
-      recurring: p.recurring_interval || "일회성",
-      prices: (p.prices || []).map((pr: any) =>
-        pr.amount_type === "fixed" ? polarMoney(cfg, pr.price_amount) : (pr.amount_type || "custom")),
-      mapped: mappedIds.has(String(p.id)),   // false면 아직 앱 매핑에 안 들어간 상품
-    })),
+    products: items.map((p: any) => {
+      const all: any[] = Array.isArray(p.prices) ? p.prices : [];
+      // 현재 판매 중인 가격만 남긴다. 상품 하나에 가격이 여러 개로 보이던 원인:
+      //  · is_archived — 값을 올리며 보관된 구 가격
+      //  · legacy      — 구 정기결제 스키마(LegacyRecurringProductPrice)로만 존재하는 필드
+      // 두 필드 모두 최신 가격 객체엔 없거나 false라 undefined → falsy 로 안전하게 통과한다.
+      const live = all.filter((pr: any) => !pr.is_archived && !pr.legacy);
+      return {
+        id: p.id, name: p.name,
+        recurring: p.recurring_interval || "일회성",
+        prices: live.map((pr: any) =>
+          pr.amount_type === "fixed"
+            ? polarMoney(cfg, pr.price_amount, pr.price_currency)
+            : (pr.amount_type || "custom")),
+        // 가격이 아예 없는 것과 '전부 아카이브됨'은 다른 상황이라 구분해 알린다.
+        archivedOnly: all.length > 0 && live.length === 0,
+        mapped: mappedIds.has(String(p.id)),   // false면 아직 앱 매핑에 안 들어간 상품
+      };
+    }),
     appMap: cfg.appProducts,
   };
 }

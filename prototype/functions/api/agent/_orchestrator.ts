@@ -1095,8 +1095,11 @@ export function formatReadResult(toolName: string, out: any): string {
   if (toolName === "polar_products") {
     const ps: any[] = out?.products || [];
     if (!ps.length) return "📦 등록된 상품이 없어요.";
-    const lines = ps.map((p, i) =>
-      `${i + 1}. **${p.name}** · ${p.prices.join(", ") || "가격 미설정"} · ${p.recurring}\n   \`${p.id}\`${p.mapped ? "" : " ← 앱 매핑 미등록"}`);
+    const lines = ps.map((p, i) => {
+      const price = p.prices.join(", ")
+        || (p.archivedOnly ? "활성 가격 없음(아카이브만 존재)" : "가격 미설정");
+      return `${i + 1}. **${p.name}** · ${price} · ${p.recurring}\n   \`${p.id}\`${p.mapped ? "" : " ← 앱 매핑 미등록"}`;
+    });
     return `📦 Polar 상품 ${ps.length}개예요. (앱별 보고를 고정하려면 ⚙️설정 → 에이전트 → 엣지에서 이 UUID로 매핑을 등록하세요)\n\n${lines.join("\n")}`;
   }
   if (toolName === "image_library" || toolName === "video_library" || toolName === "ip_library") {
