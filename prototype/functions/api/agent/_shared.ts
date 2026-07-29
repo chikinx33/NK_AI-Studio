@@ -2084,27 +2084,42 @@ async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
     // ★ Polar 의 Order 에는 'amount' 필드가 없다(subtotal/discount/net/tax/total 로 나뉨).
     //   o.amount 를 읽으면 undefined → 전 주문이 $0.00 으로 표시된다.
     //   실제 결제액 = total_amount(할인·세금 반영). 없으면 net → subtotal 순으로 폴백.
-    const gross = o.total_amount ?? o.net_amount ?? o.subtotal_amount ?? 0;
-    const refundedRaw = Number(o.refunded_amount || 0);
+    const gross = Number(o.total_amount ?? o.net_amount ?? o.subtotal_amount ?? 0);
+    // ★ 환불액은 순액과 세금이 따로 온다 — 합쳐야 고객에게 실제로 돌아간 금액이다.
+    //   refunded_amount = "Amount refunded"(세전), refunded_tax_amount = "Sales tax refunded".
+    //   ₩3,900 결제 건이 refunded_amount=3545 로만 와서 '부분 환불'로 오판했었다(3545+355=3900=전액).
+    const refundedTotal = Number(o.refunded_amount || 0) + Number(o.refunded_tax_amount || 0);
     const cur = o.currency;                       // 주문마다 통화가 다를 수 있다(원화 결제 등)
-    const fullyRefunded = refundedRaw > 0 && refundedRaw >= Number(gross || 0);
+    // ★ 전액/부분 판정은 Polar 의 status 가 1순위 — 우리가 금액으로 추측하지 않는다.
+    //   OrderStatus: draft | pending | paid | refunded | partially_refunded | void
+    const st = String(o.status || "").toLowerCase();
+    const fullyRefunded = st ? st === "refunded" : (refundedTotal > 0 && refundedTotal >= gross);
+    const partiallyRefunded = st ? st === "partially_refunded" : (refundedTotal > 0 && refundedTotal < gross);
+    const statusLabel = fullyRefunded ? "전액 환불"
+      : partiallyRefunded ? "부분 환불"
+      : st === "paid" ? "결제 완료"
+      : st === "pending" ? "결제 대기"
+      : st === "void" ? "무효"
+      : st === "draft" ? "임시" : (st || "");
     return {
       id: o.id,
       at: String(o.created_at || "").slice(0, 19).replace("T", " "),
       amount: polarMoney(cfg, gross, cur),
       net: polarMoney(cfg, o.net_amount ?? gross, cur),   // 부가세 제외(지표가 쓰는 기준)
       currency: String(cur || "").toUpperCase() || null,
-      refunded: refundedRaw > 0 ? polarMoney(cfg, refundedRaw, cur) : null,
+      // 세금 포함 환불 총액. 이 값이 결제액과 같으면 남는 게 없다.
+      refunded: refundedTotal > 0 ? polarMoney(cfg, refundedTotal, cur) : null,
       // 환불 후 실제로 남은 금액 — 엣지가 환불건을 매출로 세지 않게 하는 근거.
-      netAfterRefund: polarMoney(cfg, Math.max(Number(gross || 0) - refundedRaw, 0), cur),
-      fullyRefunded,
+      netAfterRefund: polarMoney(cfg, fullyRefunded ? 0 : Math.max(gross - refundedTotal, 0), cur),
+      fullyRefunded, partiallyRefunded,
       status: o.status,
+      statusLabel,          // 모델이 상태를 제 맘대로 지어내지 않도록 한국어 라벨을 준다
       reason: o.billing_reason,           // purchase | subscription_create | subscription_cycle | subscription_update
       product: o.product?.name || "",
       customer: o.customer?.email || o.customer?.name || "",
     };
   });
-  const refundedCount = orders.filter((o) => Number(o.refunded ? 1 : 0)).length;
+  const refundedCount = orders.filter((o) => o.fullyRefunded || o.partiallyRefunded).length;
   return {
     kind: "polar_orders",
     scope: mapped ? app : "조직 전체",
@@ -2112,7 +2127,10 @@ async function runPolarOrdersTool(input: any, ctx: ToolContext): Promise<any> {
     refundedCount,
     orders,
     notes: refundedCount
-      ? [`환불된 주문이 ${refundedCount}건 있어요. 매출로 세지 말고 netAfterRefund 를 기준으로 말하세요. (Polar 의 누적매출 지표는 환불을 즉시 차감하지 않아 대시보드에 남아 있을 수 있어요)`]
+      ? [
+          `환불된 주문이 ${refundedCount}건 있어요. 매출로 세지 말고 netAfterRefund 를 기준으로 말하세요. (Polar 의 누적매출 지표는 환불을 즉시 차감하지 않아 대시보드에 남아 있을 수 있어요)`,
+          "환불 여부는 statusLabel 을 그대로 쓰세요. refunded 는 세금까지 합친 환불 총액이라 결제액과 같으면 전액 환불이고 남는 금액은 0이에요.",
+        ]
       : [],
   };
 }

@@ -1089,8 +1089,8 @@ export function formatReadResult(toolName: string, out: any): string {
     if (!os.length) return `🧾 ${out?.scope || ""} 최근 결제 내역이 없어요. (아직 결제가 없거나 필터 범위 밖)`;
     const lines = os.slice(0, 15).map((o, i) => {
       // 전액 환불이면 금액에 취소선을 그어 매출로 읽히지 않게 한다.
-      const amt = o.fullyRefunded ? `~~${o.amount}~~ (전액 환불)` : `**${o.amount}**`;
-      const partial = !o.fullyRefunded && o.refunded ? ` · ⚠️일부 환불 ${o.refunded} → 실수령 ${o.netAfterRefund}` : "";
+      const amt = o.fullyRefunded ? `~~${o.amount}~~ (전액 환불 · 실수령 ${o.netAfterRefund})` : `**${o.amount}**`;
+      const partial = o.partiallyRefunded ? ` · ⚠️부분 환불 ${o.refunded} → 실수령 ${o.netAfterRefund}` : "";
       return `${i + 1}. ${o.at} · ${amt}${partial} · ${o.product}${o.customer ? ` · ${o.customer}` : ""}`;
     });
     const refunded = Number(out?.refundedCount || 0);
