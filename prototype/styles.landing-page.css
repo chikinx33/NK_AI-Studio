@@ -4,14 +4,20 @@
    ========================================================================= */
 
 :root{
-  --bg:#000; --ink:#fff; --muted:#8a8a92;
-  --accent:#ff5a1f;
-  --c1:#ff7a00; --c2:#5c7cff; --c3:#0bbfa5; --c4:#b47cff; --c5:#ff4d8d;
+  /* 프로젝트 공통 테마(styles.css)와 동일한 토큰 */
+  --ink:#e9edf7; --muted:#8aa0c3; --dim:#5c6f90;
+  --accent:#ff7a00; --border:#1b2845;
+  --c1:#ff7a00; --c2:#5c7cff; --c3:#0bbfa5; --c4:#b47cff; --c5:#ff5d7a;
+  --bg:
+    radial-gradient(circle at 20% 20%, rgba(255,122,0,.08), transparent 28%),
+    radial-gradient(circle at 80% 0%, rgba(11,191,165,.12), transparent 30%),
+    linear-gradient(145deg,#0c1326 0%,#0f172a 45%,#0a0f1f 100%);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  background:var(--bg); color:var(--ink); overflow:hidden;
+  background-color:#0a0f1f; background:var(--bg); background-attachment:fixed;
+  color:var(--ink); overflow:hidden;
   font-family:'Space Grotesk',-apple-system,'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
   -webkit-font-smoothing:antialiased;
   display:flex; flex-direction:column; min-height:100dvh;
@@ -23,8 +29,6 @@ header{display:flex;align-items:center;justify-content:space-between;
 .logo{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:-.01em}
 .logo i{width:20px;height:20px;border-radius:6px;display:block;
   background:conic-gradient(from 200deg,var(--c1),var(--c5),var(--c4),var(--c2),var(--c3),var(--c1))}
-.hlink{font-size:13px;color:var(--muted);text-decoration:none;transition:color .2s}
-.hlink:hover{color:#fff}
 
 /* ===== 본문 ===== */
 main{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -48,15 +52,15 @@ h1{font-weight:700;letter-spacing:-.035em;line-height:1.06}
 .cta{display:inline-flex;align-items:center;gap:9px;margin-top:clamp(18px,3vh,32px);
   background:var(--accent);color:#fff;text-decoration:none;font-weight:600;
   font-size:clamp(14px,1.8vh,16px);padding:clamp(12px,1.7vh,16px) clamp(26px,3.2vw,38px);
-  border-radius:999px;transition:.22s;box-shadow:0 10px 34px -8px rgba(255,90,31,.7)}
-.cta:hover{transform:translateY(-2px);box-shadow:0 16px 42px -8px rgba(255,90,31,.85)}
+  border-radius:999px;transition:.22s;box-shadow:0 10px 34px -8px rgba(255,122,0,.45)}
+.cta:hover{transform:translateY(-2px);box-shadow:0 16px 42px -8px rgba(255,122,0,.62)}
 .cta svg{width:15px;height:15px}
 
 /* 카테고리 라인 */
 .facts{display:flex;align-items:center;gap:clamp(10px,1.6vw,20px);
   margin-top:clamp(16px,2.6vh,28px);font-size:clamp(11.5px,1.45vh,13px);
-  color:#b9b9c2;flex-wrap:wrap;justify-content:center;letter-spacing:-.005em}
-.facts i{width:3px;height:3px;border-radius:50%;background:#3a3a42;display:block}
+  color:#b9c6e0;flex-wrap:wrap;justify-content:center;letter-spacing:-.005em}
+.facts i{width:3px;height:3px;border-radius:50%;background:var(--border);display:block}
 
 /* ===== 마퀴 =====
    .card 는 지금 그라데이션 플레이스홀더다. SHAPES 실물 이미지가 오면
@@ -64,17 +68,19 @@ h1{font-weight:700;letter-spacing:-.035em;line-height:1.06}
 .strip{flex:0 0 auto;overflow:hidden;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);
   mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
-.track{display:flex;gap:14px;width:max-content;animation:slide 42s linear infinite;padding:clamp(12px,2vh,22px) 0}
+.track{display:flex;width:max-content;animation:slide 42s linear infinite;padding:clamp(12px,2vh,22px) 0}
 .strip:hover .track{animation-play-state:paused}
-@keyframes slide{to{transform:translateX(-50%)}}
+/* --shift = 카드 1세트의 실제 폭(px). js/landing.js 가 측정해 넣는다.
+   -50% 로 밀면 gap 절반만큼 어긋나 이음새가 툭 끊긴다. */
+@keyframes slide{to{transform:translateX(var(--shift,-50%))}}
 .card{width:clamp(108px,13vh,148px);aspect-ratio:9/16;border-radius:14px;flex:0 0 auto;
-  overflow:hidden;background-size:cover;background-position:center}
+  margin-right:14px;overflow:hidden;background-size:cover;background-position:center}
 
 /* ===== 푸터 ===== */
 footer{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:16px;
-  padding:clamp(10px,1.6vh,18px);font-size:11px;color:#55555e;flex-wrap:wrap}
+  padding:clamp(10px,1.6vh,18px);font-size:11px;color:var(--dim);flex-wrap:wrap}
 footer a{color:inherit;text-decoration:none}
-footer a:hover{color:#9a9aa4}
+footer a:hover{color:var(--muted)}
 
 @media(max-width:640px){
   .facts{gap:8px}
