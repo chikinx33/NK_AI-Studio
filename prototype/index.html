@@ -36,7 +36,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.landing-page.css?v=3.1417" />
+  <link rel="stylesheet" href="styles.landing-page.css?v=3.1418" />
 
   <!-- ===== JSON-LD (Organization) ===== -->
   <script type="application/ld+json">
@@ -183,43 +183,14 @@
           </div>
         </div>
 
-        <!-- Hero 비주얼: 제품 목업 -->
-        <div class="lp-hero-visual lp-reveal">
-          <div class="lp-mock" role="img" data-i18n-aria="hero.mockAria" aria-label="NK AI Studio 제작 화면 미리보기">
-            <div class="lp-mock-bar"><i></i><i></i><i></i><small>NK AI Studio · <span data-i18n="mock.project">프로젝트</span></small></div>
-            <div class="lp-mock-body">
-              <div class="lp-mock-row">
-                <div class="lp-mock-thumb">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#ff7a00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
-                </div>
-                <div class="lp-mock-lines"><span></span><span></span><span class="accent"></span></div>
-              </div>
-              <div class="lp-mock-row">
-                <div class="lp-mock-thumb">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#0bbfa5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                </div>
-                <div class="lp-mock-lines"><span></span><span></span></div>
-              </div>
-              <div class="lp-mock-row">
-                <div class="lp-mock-thumb">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#5c7cff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                </div>
-                <div class="lp-mock-lines"><span></span><span class="accent"></span></div>
-              </div>
-            </div>
-            <div class="lp-mock-foot">
-              <span class="lp-chip" data-i18n="chip.plan">기획</span><span class="lp-chip" data-i18n="chip.create">생성</span><span class="lp-chip" data-i18n="chip.edit">편집</span><span class="lp-chip" data-i18n="chip.publish">배포</span><span class="lp-chip" data-i18n="chip.analytics">성과</span>
-            </div>
-          </div>
-          <div class="lp-float one">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-            <span data-i18n="float.video">영상 생성 완료</span>
-          </div>
-          <div class="lp-float two">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
-            <span data-i18n="float.publish">6개 채널 배포 중</span>
-          </div>
-        </div>
+        <!-- Hero 비주얼: 실제 AI 기업 화면 (설계서 §3-① D7 — 더미 목업 교체).
+             width/height 를 명시해 이미지 로드 전에도 자리를 잡는다(CLS 0). -->
+        <figure class="lp-hero-visual lp-shot lp-reveal">
+          <img src="images/hero-ai-company.png" width="1280" height="557"
+               data-i18n-alt="hero.shotAlt"
+               alt="NK AI Studio AI 기업 화면 — 11명의 AI 직원 로스터, 진행 중인 프로젝트, 승인 · 보고 패널"
+               decoding="async" />
+        </figure>
       </div>
     </section>
 
@@ -583,7 +554,7 @@
     </div>
   </footer>
 
-  <script src="js/landing.js?v=3.1417" defer></script>
+  <script src="js/landing.js?v=3.1418" defer></script>
 </body>
 
 </html>

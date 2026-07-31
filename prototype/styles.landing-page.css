@@ -215,62 +215,17 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 .lp-hero-trust span { display: inline-flex; align-items: center; gap: 7px; }
 .lp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lp-teal); box-shadow: 0 0 10px var(--lp-teal); }
 
-/* Hero 비주얼: 제품 목업 카드 */
+/* Hero 비주얼: 실제 AI 기업 화면 스크린샷 (설계서 §3-① D7) */
 .lp-hero-visual { position: relative; }
-.lp-mock {
+.lp-shot {
+  margin: 0;
   border-radius: var(--lp-radius);
   border: 1px solid var(--lp-border);
-  background: linear-gradient(180deg, var(--lp-panel-2), var(--lp-panel));
+  background: var(--lp-panel);
   box-shadow: var(--lp-shadow);
   overflow: hidden;
 }
-.lp-mock-bar {
-  display: flex; align-items: center; gap: 7px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--lp-border);
-  background: rgba(255, 255, 255, 0.02);
-}
-.lp-mock-bar i { width: 11px; height: 11px; border-radius: 50%; background: #2a3a5e; display: inline-block; }
-.lp-mock-bar i:nth-child(1) { background: #ff5f57; }
-.lp-mock-bar i:nth-child(2) { background: #febc2e; }
-.lp-mock-bar i:nth-child(3) { background: #28c840; }
-.lp-mock-bar small { margin-left: 10px; color: var(--lp-muted); font-size: 12px; }
-.lp-mock-body { padding: 18px; display: grid; gap: 14px; }
-.lp-mock-row { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
-.lp-mock-thumb {
-  height: 64px; border-radius: 12px;
-  background: var(--lp-grad-soft);
-  border: 1px solid var(--lp-border-soft);
-  display: grid; place-items: center;
-}
-.lp-mock-thumb svg { width: 30px; height: 30px; opacity: 0.92; }
-.lp-mock-lines { display: grid; gap: 8px; }
-.lp-mock-lines span { height: 9px; border-radius: 6px; background: rgba(255, 255, 255, 0.09); display: block; }
-.lp-mock-lines span:nth-child(2) { width: 72%; }
-.lp-mock-lines span.accent { background: linear-gradient(90deg, var(--lp-orange), transparent); width: 46%; }
-.lp-mock-foot { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--lp-border); flex-wrap: wrap; }
-.lp-chip {
-  font-size: 12px; font-weight: 600; color: var(--lp-text-2);
-  padding: 6px 11px; border-radius: 999px;
-  border: 1px solid var(--lp-border-soft); background: rgba(255, 255, 255, 0.03);
-}
-.lp-float {
-  position: absolute;
-  border-radius: 14px;
-  border: 1px solid var(--lp-border);
-  background: rgba(14, 23, 48, 0.92);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--lp-shadow);
-  padding: 12px 14px;
-  display: flex; align-items: center; gap: 10px;
-  font-size: 13px; font-weight: 600;
-  animation: lp-floaty 5.5s ease-in-out infinite;
-}
-.lp-float svg { width: 20px; height: 20px; }
-.lp-float.one { top: -22px; right: -10px; color: var(--lp-teal); }
-.lp-float.two { bottom: -20px; left: -16px; color: var(--lp-orange); animation-delay: -2.4s; }
-@keyframes lp-floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
-@media (prefers-reduced-motion: reduce) { .lp-float { animation: none; } }
+.lp-shot img { width: 100%; height: auto; display: block; }
 
 /* ---------- 신뢰 밴드 ---------- */
 .lp-band-sec { padding: clamp(10px, 2vw, 22px) 0 0; }
@@ -570,7 +525,7 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 }
 @media (max-width: 960px) {
   .lp-hero-grid { grid-template-columns: 1fr; }
-  .lp-hero-visual { order: -1; max-width: 460px; }
+  .lp-hero-visual { order: -1; }
   .lp-pipe { grid-template-columns: repeat(2, 1fr); }
   .lp-pipe-arrow { display: none; }
   .lp-features { grid-template-columns: repeat(2, 1fr); }

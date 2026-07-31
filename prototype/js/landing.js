@@ -13,6 +13,7 @@
      data-i18n        → textContent 치환
      data-i18n-html   → innerHTML 치환(인라인 <br>/<span>/<b> 포함 카피)
      data-i18n-aria   → aria-label 치환
+     data-i18n-alt    → img alt 치환
      data-cta-login   → 표시 전용 마커: 로그인 상태면 'cta.authed'로 덮어씀
 
      카피 SSOT: docs/landing_page_revamp_design_20260731.md §3.
@@ -35,15 +36,7 @@
       'hero.cta2': 'AI 직원 만나보기',
       'hero.trust1': '지시 → 실행 → 승인 → 배포 원스톱',
       'hero.trust2': '6개 SNS 자동 게시 + 성과 자동 수집',
-      'hero.mockAria': 'NK AI Studio 제작 화면 미리보기',
-      'float.video': '영상 생성 완료',
-      'float.publish': '6개 채널 배포 중',
-      'chip.plan': '기획',
-      'chip.create': '생성',
-      'chip.edit': '편집',
-      'chip.publish': '배포',
-      'chip.analytics': '성과',
-      'mock.project': '프로젝트',
+      'hero.shotAlt': 'NK AI Studio AI 기업 화면 — 11명의 AI 직원 로스터, 진행 중인 프로젝트, 승인 · 보고 패널',
 
       'band.item1': '<b>11명</b> AI 직원 로스터',
       'band.item2': '<b>81개</b> 실행 도구',
@@ -232,15 +225,7 @@
       'hero.cta2': 'Meet the team',
       'hero.trust1': 'Instruct → execute → approve → publish',
       'hero.trust2': 'Auto-publish to 6 channels, auto-collect results',
-      'hero.mockAria': 'NK AI Studio workspace preview',
-      'float.video': 'Video ready',
-      'float.publish': 'Publishing to 6 channels',
-      'chip.plan': 'Plan',
-      'chip.create': 'Create',
-      'chip.edit': 'Edit',
-      'chip.publish': 'Publish',
-      'chip.analytics': 'Analytics',
-      'mock.project': 'Project',
+      'hero.shotAlt': 'NK AI Studio AI Company screen — the 11-teammate roster, active projects, approvals and reports',
 
       'band.item1': '<b>11</b> AI teammates',
       'band.item2': '<b>81</b> execution tools',
@@ -446,6 +431,10 @@
     document.querySelectorAll('[data-i18n-aria]').forEach(function (el) {
       var key = el.getAttribute('data-i18n-aria');
       if (key in d) el.setAttribute('aria-label', d[key]);
+    });
+    document.querySelectorAll('[data-i18n-alt]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n-alt');
+      if (key in d) el.setAttribute('alt', d[key]);
     });
 
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'ko');
