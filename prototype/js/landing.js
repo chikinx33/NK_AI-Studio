@@ -46,6 +46,23 @@
       agents: [['코어', '팀장'], ['엣지', '전략'], ['레이더', '리서치'], ['마키', '마케팅'],
                ['플롯', 'PD'], ['잉크', '작가'], ['픽셀', '디자인'], ['비트', '음악'],
                ['엔지', '코딩'], ['리치', '홍보'], ['싱크', '비서']],
+      // 메뉴 — 이름은 core.js 의 top_*_label 원문, 설명은 설계서 §3-⑤ 기능표
+      menus: [
+        ['브랜드 스튜디오', '브랜드 · 에피소드'],
+        ['AI 시네마', '씬 편집 · 최종 렌더'],
+        ['AI 영상', '영상 생성 · 립싱크'],
+        ['AI 이미지', '생성 · 인페인팅'],
+        ['AI 문서', '카피 · PDF · PPT'],
+        ['AI 오디오', '나레이션 · BGM']
+      ],
+      menuDesc: [
+        '캐릭터·세계관·말투를 브랜드에 정의하고, 에피소드 단위로 작업을 나눕니다.',
+        '씬을 배열하고 나레이션·음악·효과음을 입힌 뒤 채널 규격에 맞춰 최종본까지 렌더·다운로드합니다.',
+        '이미지와 프롬프트로 장면을 영상화합니다. 립싱크로 입모양까지 맞춥니다.',
+        '텍스트·이미지로 생성하고, 인페인팅으로 원하는 부분만 다시 그리고, 업스케일까지 합니다.',
+        'SNS 카피·상세페이지는 물론 PDF·PPT·인포그래픽까지 산출합니다.',
+        '나레이션·BGM·효과음·캐릭터 더빙을 만듭니다. 자체 호스팅 음성 엔진도 씁니다.'
+      ],
       // 호버 말풍선 — _orchestrator.ts ROSTER 의 role 원문
       agentDesc: [
         '총괄 오케스트레이터 — 작업 분해·라우팅·종합·최종 판단',
@@ -92,6 +109,22 @@
       agents: [['Core', 'Lead'], ['Edge', 'Strategy'], ['Radar', 'Research'], ['Maki', 'Marketing'],
                ['Plot', 'PD'], ['Ink', 'Writer'], ['Pixel', 'Design'], ['Beat', 'Music'],
                ['Engi', 'Dev'], ['Reach', 'PR'], ['Sync', 'Assistant']],
+      menus: [
+        ['Brand Studio', 'Brands · Episodes'],
+        ['AI Cinema', 'Scene edit · Final render'],
+        ['AI Video', 'Video generation · Lip sync'],
+        ['AI Image', 'Generate · Inpaint'],
+        ['AI Doc', 'Copy · PDF · PPT'],
+        ['AI Audio', 'Narration · BGM']
+      ],
+      menuDesc: [
+        'Define characters, lore and voice on the brand, then split the work by episode.',
+        'Arrange scenes, layer narration, music and SFX, then render the final cut to each channel spec.',
+        'Turn images and prompts into video scenes, with lip sync matching the mouth.',
+        'Generate from text or images, repaint just the part you want with inpainting, and upscale.',
+        'SNS copy and detail pages, plus PDF, PPT and infographic output.',
+        'Narration, BGM, sound effects and character dubbing — including a self-hosted voice engine.'
+      ],
       agentDesc: [
         'Orchestrator — breaks work down, routes it, makes the final call',
         'Strategy & business — revenue model, pricing, market, KPIs',
@@ -204,19 +237,29 @@
      margin 절반만큼 어긋나서 한 바퀴마다 툭 끊겨 보인다.
      이동 거리 = 정확히 1세트이므로 흐르는 속도는 42s 기준 그대로다. */
   var AGENT_IDS = ['core', 'edge', 'radar', 'maki', 'plot', 'ink', 'pixel', 'beat', 'engi', 'reach', 'sync'];
+  var MENU_IDS = ['brand', 'cinema', 'video', 'image', 'doc', 'sound'];
   var track = document.getElementById('track');
 
-  function unitHTML(lang) {
-    var list = (DICT[lang] || DICT.ko).agents;
-    return AGENT_IDS.map(function (id, i) {
-      return '<figure class="card" data-i="' + i + '">'
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // kind: 'a'=에이전트(images/agents), 'm'=메뉴(images/menu). 말풍선이 이 값으로 사전을 고른다.
+  function cardHTML(kind, dir, ids, list) {
+    return ids.map(function (id, i) {
+      return '<figure class="card" data-k="' + kind + '" data-i="' + i + '">'
         + '<picture>'
-        + '<source srcset="images/agents/' + id + '.webp" type="image/webp" />'
-        + '<img src="images/agents/' + id + '.png" width="256" height="256" alt="" loading="lazy" decoding="async" />'
+        + '<source srcset="images/' + dir + '/' + id + '.webp" type="image/webp" />'
+        + '<img src="images/' + dir + '/' + id + '.png" width="256" height="256" alt="" loading="lazy" decoding="async" />'
         + '</picture>'
-        + '<b>' + list[i][0] + '</b><span>' + list[i][1] + '</span>'
+        + '<b>' + esc(list[i][0]) + '</b><span>' + esc(list[i][1]) + '</span>'
         + '</figure>';
     }).join('');
+  }
+
+  function unitHTML(lang) {
+    var d = DICT[lang] || DICT.ko;
+    return cardHTML('a', 'agents', AGENT_IDS, d.agents) + cardHTML('m', 'menu', MENU_IDS, d.menus);
   }
 
   function buildTrack(lang) {
@@ -256,10 +299,13 @@
 
   function showTip(card) {
     var d = DICT[currentLang] || DICT.ko;
-    var i = parseInt(card.getAttribute('data-i'), 10) % d.agents.length;
+    var menu = card.getAttribute('data-k') === 'm';
+    var names = menu ? d.menus : d.agents;
+    var descs = menu ? d.menuDesc : d.agentDesc;
+    var i = parseInt(card.getAttribute('data-i'), 10) % names.length;
     tip.innerHTML = '<b></b><span></span>';
-    tip.querySelector('b').textContent = d.agents[i][0] + ' · ' + d.agents[i][1];
-    tip.querySelector('span').textContent = d.agentDesc[i];
+    tip.querySelector('b').textContent = names[i][0] + ' — ' + names[i][1];
+    tip.querySelector('span').textContent = descs[i];
     tip.classList.add('on');
     tip.setAttribute('aria-hidden', 'false');
 
