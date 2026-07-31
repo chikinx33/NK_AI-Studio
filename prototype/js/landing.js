@@ -45,7 +45,21 @@
       // [이름, 직책] — ROSTER(_orchestrator.ts) · JOB(ai-company-app/src/lib/jobs.ts) 원문
       agents: [['코어', '팀장'], ['엣지', '전략'], ['레이더', '리서치'], ['마키', '마케팅'],
                ['플롯', 'PD'], ['잉크', '작가'], ['픽셀', '디자인'], ['비트', '음악'],
-               ['엔지', '코딩'], ['리치', '홍보'], ['싱크', '비서']]
+               ['엔지', '코딩'], ['리치', '홍보'], ['싱크', '비서']],
+      // 호버 말풍선 — _orchestrator.ts ROSTER 의 role 원문
+      agentDesc: [
+        '총괄 오케스트레이터 — 작업 분해·라우팅·종합·최종 판단',
+        '전략·비즈니스 — 수익모델·가격·시장/경쟁·KPI',
+        '리서치·인텔리전스 — 트렌드/경쟁사 분석·사실확인',
+        '마케팅·그로스 리드 — 캠페인·퍼널·성장',
+        '콘텐츠 디렉터(PD) — 기획·포맷·후크·제작 브리프',
+        '작가·카피 — 스크립트·캡션·블로그·후크·PDF 문서',
+        '디자인 — 브랜드·썸네일·비주얼 시스템',
+        '사운드·음악 — BGM 생성·영상-음악 합성',
+        '엔지니어·개발 — 코드·자동화·API·웹/봇',
+        '채널·배포 — 전 채널 발행·해시태그·SEO·커뮤니티',
+        'PM·비서 — 일정·할일·요약·보고·알림'
+      ]
     },
     en: {
       'hero.fix': 'NK AI Studio is all it takes',
@@ -77,7 +91,20 @@
       ],
       agents: [['Core', 'Lead'], ['Edge', 'Strategy'], ['Radar', 'Research'], ['Maki', 'Marketing'],
                ['Plot', 'PD'], ['Ink', 'Writer'], ['Pixel', 'Design'], ['Beat', 'Music'],
-               ['Engi', 'Dev'], ['Reach', 'PR'], ['Sync', 'Assistant']]
+               ['Engi', 'Dev'], ['Reach', 'PR'], ['Sync', 'Assistant']],
+      agentDesc: [
+        'Orchestrator — breaks work down, routes it, makes the final call',
+        'Strategy & business — revenue model, pricing, market, KPIs',
+        'Research & intelligence — trends, competitors, fact-checking',
+        'Marketing & growth lead — campaigns, funnels, demand',
+        'Content director (PD) — planning, formats, hooks, briefs',
+        'Writer & copy — scripts, captions, blogs, hooks, PDF docs',
+        'Design — brand, thumbnails, visual systems',
+        'Sound & music — BGM generation, video-music mixing',
+        'Engineer — code, automation, APIs, web and bots',
+        'Channels & publishing — all-channel posting, hashtags, SEO',
+        'PM & assistant — schedule, tasks, summaries, reports'
+      ]
     }
   };
 
@@ -182,7 +209,7 @@
   function unitHTML(lang) {
     var list = (DICT[lang] || DICT.ko).agents;
     return AGENT_IDS.map(function (id, i) {
-      return '<figure class="card">'
+      return '<figure class="card" data-i="' + i + '">'
         + '<picture>'
         + '<source srcset="images/agents/' + id + '.webp" type="image/webp" />'
         + '<img src="images/agents/' + id + '.png" width="256" height="256" alt="" loading="lazy" decoding="async" />'
@@ -213,11 +240,55 @@
   var resizeTimer = null;
   window.addEventListener('resize', function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () { buildTrack(readLang()); }, 200);
+    resizeTimer = setTimeout(function () { buildTrack(readLang()); hideTip(); }, 200);
   });
 
+  /* ===== 호버 말풍선 =====
+     .strip 이 overflow:hidden 이라 카드 내부에 두면 잘린다. body 직속 fixed 요소를
+     공유해서 띄운다. 호버하면 CSS 가 트랙을 멈추므로 위치가 흔들리지 않는다. */
+  var tip = document.getElementById('tip');
+  var strip = document.querySelector('.strip');
+
+  function hideTip() {
+    tip.classList.remove('on');
+    tip.setAttribute('aria-hidden', 'true');
+  }
+
+  function showTip(card) {
+    var d = DICT[currentLang] || DICT.ko;
+    var i = parseInt(card.getAttribute('data-i'), 10) % d.agents.length;
+    tip.innerHTML = '<b></b><span></span>';
+    tip.querySelector('b').textContent = d.agents[i][0] + ' · ' + d.agents[i][1];
+    tip.querySelector('span').textContent = d.agentDesc[i];
+    tip.classList.add('on');
+    tip.setAttribute('aria-hidden', 'false');
+
+    var r = card.getBoundingClientRect();
+    var t = tip.getBoundingClientRect();
+    var left = r.left + r.width / 2 - t.width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - t.width - 8));
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(8, r.top - t.height - 10) + 'px';
+    // 화면 밖으로 밀렸을 때도 꼬리는 카드 중앙을 가리키게
+    tip.style.setProperty('--arrow', (r.left + r.width / 2 - left) + 'px');
+  }
+
+  strip.addEventListener('pointerover', function (e) {
+    if (e.pointerType && e.pointerType !== 'mouse') return;
+    var card = e.target.closest ? e.target.closest('.card') : null;
+    if (card) showTip(card);
+  });
+  strip.addEventListener('pointerout', function (e) {
+    if (!e.relatedTarget || !strip.contains(e.relatedTarget)) hideTip();
+  });
+  window.addEventListener('scroll', hideTip, { passive: true });
+
   /* ===== 초기 적용 (defer 라 DOM 준비됨) ===== */
+  var currentLang = 'ko';
+
   function render(lang) {
+    currentLang = lang;
+    hideTip();
     applyLang(lang);
     startRotation(lang);
     startSubRotation(lang);
