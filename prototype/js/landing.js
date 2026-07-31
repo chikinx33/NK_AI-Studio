@@ -259,7 +259,7 @@
 
   function unitHTML(lang) {
     var d = DICT[lang] || DICT.ko;
-    return cardHTML('a', 'agents', AGENT_IDS, d.agents) + cardHTML('m', 'menu', MENU_IDS, d.menus);
+    return cardHTML('m', 'menu', MENU_IDS, d.menus) + cardHTML('a', 'agents', AGENT_IDS, d.agents);
   }
 
   function buildTrack(lang) {
@@ -399,7 +399,9 @@
     }
 
     function reset(p, spread) {
-      p.x = w * 0.5 + randRange(RANGE_Y);              // 중앙에서 태어나 바깥으로 흐른다
+      // 원본 initParticle: x = rand(width), y = center.y + randRange(rangeY)
+      // x 를 가로 전체에 뿌려야 화면을 가로지르는 띠가 만들어진다.
+      p.x = rand(w);
       p.y = h * 0.5 + randRange(RANGE_Y);
       p.px = p.x; p.py = p.y;
       p.ttl = BASE_TTL + rand(RANGE_TTL);
