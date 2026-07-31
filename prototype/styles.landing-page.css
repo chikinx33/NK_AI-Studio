@@ -373,15 +373,6 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 .lp-ip-role { font-size: 12.5px; color: var(--lp-teal); font-weight: 600; margin: 0 0 10px; }
 .lp-ip-card p { margin: 0; color: var(--lp-muted); font-size: 13.5px; }
 
-/* 확정 필요 마커 */
-.lp-todo {
-  display: inline-block; margin-top: 10px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
-  color: #ffd27a; background: rgba(255, 180, 0, 0.1);
-  border: 1px dashed rgba(255, 180, 0, 0.45);
-  padding: 3px 8px; border-radius: 6px;
-}
-
 /* ---------- SNS 밴드 ---------- */
 .lp-sns-band {
   border-radius: var(--lp-radius);

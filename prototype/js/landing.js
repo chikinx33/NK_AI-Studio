@@ -114,8 +114,7 @@
       'footer.link.terms': '이용약관 (Terms of Service)',
       'footer.link.privacy': '개인정보처리방침 (Privacy Policy)',
       'footer.link.contact': '문의: chikinx1@gmail.com',
-      'footer.copy': '© 2026 NK Studio. All rights reserved. · 운영자: NK Studio',
-      'todo.biz': '⟨확정 필요: 사업자/대표자 정보⟩'
+      'footer.copy': '© 2026 NK Studio. All rights reserved. · 운영자: NK Studio'
     },
     en: {
       'nav.pipeline': 'Pipeline',
@@ -216,8 +215,7 @@
       'footer.link.terms': 'Terms of Service',
       'footer.link.privacy': 'Privacy Policy',
       'footer.link.contact': 'Contact: chikinx1@gmail.com',
-      'footer.copy': '© 2026 NK Studio. All rights reserved. · Operated by NK Studio',
-      'todo.biz': '⟨To confirm: business/representative info⟩'
+      'footer.copy': '© 2026 NK Studio. All rights reserved. · Operated by NK Studio'
     }
   };
 
