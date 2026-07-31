@@ -1,8 +1,13 @@
-/* =========================================================================
-   NK AI Studio — 공개 랜딩 (스크롤 없는 1화면)
-   기준: docs/landing-oneview-reference.html — 구조·색·모션·간격은 확정안 그대로.
-   ========================================================================= */
-
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NK AI Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
 :root{
   --bg:#000; --ink:#fff; --muted:#8a8a92;
   --accent:#ff5a1f;
@@ -58,9 +63,7 @@ h1{font-weight:700;letter-spacing:-.035em;line-height:1.06}
   color:#b9b9c2;flex-wrap:wrap;justify-content:center;letter-spacing:-.005em}
 .facts i{width:3px;height:3px;border-radius:50%;background:#3a3a42;display:block}
 
-/* ===== 마퀴 =====
-   .card 는 지금 그라데이션 플레이스홀더다. SHAPES 실물 이미지가 오면
-   js/landing.js 의 배열에서 background 값만 교체하면 된다(구조 유지). */
+/* ===== 마퀴 ===== */
 .strip{flex:0 0 auto;overflow:hidden;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);
   mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
@@ -76,9 +79,86 @@ footer{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:
 footer a{color:inherit;text-decoration:none}
 footer a:hover{color:#9a9aa4}
 
+.tag{position:fixed;left:14px;bottom:12px;font-size:10.5px;color:#4a4a52;letter-spacing:.02em}
+
 @media(max-width:640px){
   .facts{gap:8px}
   .card{width:96px}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
   .rot b{transform:none;opacity:1}.rot b:not(.in){display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><i></i>NK AI Studio</div>
+  <a class="hlink" href="#">로그인</a>
+</header>
+
+<main>
+  <h1>
+    <span class="rot" id="rot" aria-live="polite"></span>
+    <span class="fix">브랜드 하나면 됩니다</span>
+  </h1>
+
+  <p class="sub">캐릭터와 톤을 한 번 정해두면 제작부터 채널 배포, 성과 확인까지 한 자리에서 돌아갑니다.</p>
+
+  <a class="cta" href="app.html">시작하기
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </a>
+
+  <div class="facts">
+    <span>브랜드 IP 관리</span><i></i>
+    <span>AI 시네마</span><i></i>
+    <span>AI 에이전트 협업</span><i></i>
+    <span>SNS 마케팅 자동화</span>
+  </div>
+</main>
+
+<div class="strip">
+  <div class="track" id="track"></div>
+</div>
+
+<footer>
+  <span>© 2026 NK Studio</span>
+  <a href="terms">이용약관</a>
+  <a href="privacy">개인정보처리방침</a>
+  <a href="mailto:chikinx1@gmail.com">문의</a>
+</footer>
+
+<div class="tag">프로토타입 · 스크롤 없는 1화면</div>
+
+<script>
+/* 로테이팅 워드 */
+(function(){
+  const W=['숏폼','캐릭터','에피소드','팬덤','굿즈','채널'],r=document.getElementById('rot');
+  let i=0,prev=null;
+  function show(t){
+    const el=document.createElement('b');el.textContent=t;r.appendChild(el);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));
+    if(prev){const p=prev;p.classList.remove('in');p.classList.add('out');setTimeout(()=>p.remove(),700)}
+    prev=el;
+  }
+  show(W[0]);
+  setInterval(()=>{i=(i+1)%W.length;show(W[i])},2400);
+})();
+
+/* 마퀴 — 실제 SHAPES 이미지가 들어갈 자리. 지금은 그라데이션 플레이스홀더 */
+(function(){
+  const bg=[
+    'linear-gradient(160deg,#ff7a00,#ff2d6f)',
+    'linear-gradient(160deg,#5c7cff,#b47cff)',
+    'linear-gradient(160deg,#0bbfa5,#5c7cff)',
+    'linear-gradient(160deg,#b47cff,#ff4d8d)',
+    'linear-gradient(160deg,#ff9d3d,#ff5a1f)',
+    'linear-gradient(160deg,#1a1a24,#3d3d52)',
+    'linear-gradient(160deg,#0bbfa5,#0a6e63)',
+    'linear-gradient(160deg,#5c7cff,#1a1a24)'
+  ];
+  const html=bg.map(g=>`<div class="card" style="background:${g}"></div>`).join('');
+  document.getElementById('track').innerHTML=html+html;
+})();
+</script>
+</body>
+</html>
