@@ -30,6 +30,11 @@ header{display:flex;align-items:center;justify-content:space-between;
 .logo i{width:20px;height:20px;border-radius:6px;display:block;
   background:conic-gradient(from 200deg,var(--c1),var(--c5),var(--c4),var(--c2),var(--c3),var(--c1))}
 
+.lang{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.02em;
+  color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:999px;padding:6px 12px;min-width:52px;cursor:pointer;transition:.2s}
+.lang:hover{color:var(--ink);background:rgba(255,255,255,.08);border-color:#2a3a5e}
+
 /* ===== 본문 ===== */
 main{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;padding:0 24px;min-height:0}
@@ -46,7 +51,10 @@ h1{font-weight:700;letter-spacing:-.035em;line-height:1.06}
 .fix{display:block;font-size:clamp(28px,4.6vh,52px);margin-top:clamp(2px,.6vh,8px)}
 
 .sub{color:var(--muted);font-size:clamp(13.5px,1.75vh,16px);line-height:1.7;
-  margin-top:clamp(14px,2.4vh,26px);max-width:520px}
+  margin-top:clamp(14px,2.4vh,26px);max-width:520px;
+  min-height:3.4em;display:flex;align-items:center;justify-content:center;
+  transition:opacity .38s ease}
+.sub.fade{opacity:0}
 
 /* CTA */
 .cta{display:inline-flex;align-items:center;gap:9px;margin-top:clamp(18px,3vh,32px);
@@ -78,8 +86,8 @@ h1{font-weight:700;letter-spacing:-.035em;line-height:1.06}
   margin-right:14px;overflow:hidden;
   background:linear-gradient(180deg,#111d3a,#0d152a);border:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:clamp(4px,.7vh,8px);padding:clamp(8px,1.2vh,14px) 8px;text-align:center}
-.card picture{display:block;width:70%;flex:0 0 auto}
+  gap:clamp(2px,.4vh,5px);padding:clamp(6px,.9vh,10px) 6px;text-align:center}
+.card picture{display:block;width:100%;flex:0 0 auto}
 .card img{width:100%;height:auto;aspect-ratio:1/1;object-fit:contain;display:block}
 .card b{font-size:clamp(11px,1.35vh,13.5px);font-weight:600;letter-spacing:-.01em;line-height:1.2}
 .card span{font-size:clamp(9.5px,1.1vh,11.5px);color:var(--muted);letter-spacing:.01em;line-height:1.2}

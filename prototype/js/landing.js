@@ -14,8 +14,7 @@
      rot            → 헤드라인 회전 단어(배열, DOM 생성 시 사용) */
   var DICT = {
     ko: {
-      'hero.fix': '브랜드 하나면 됩니다',
-      'hero.sub': '캐릭터와 톤을 한 번 정해두면 제작부터 채널 배포, 성과 확인까지 한 자리에서 돌아갑니다.',
+      'hero.fix': 'NK AI Studio 하나면 됩니다',
       'cta.start': '시작하기',
       'cta.authed': '스튜디오 입장',
       'fact1': '브랜드 IP 관리',
@@ -27,14 +26,29 @@
       'footer.privacy': '개인정보처리방침',
       'footer.contact': '문의',
       rot: ['숏폼', '캐릭터', '에피소드', '팬덤', '굿즈', '채널'],
+      // 부연 문구 로테이션 — 실제 기능만(설계서 §3-⑤ 기능표 기준)
+      subs: [
+        '주제만 던지면 시나리오가 숏 단위로 쪼개집니다.',
+        '글·이미지·영상·사운드를 한 자리에서 만듭니다.',
+        '인페인팅으로 원하는 부분만 다시 그립니다.',
+        '립싱크로 입모양까지 맞춘 영상을 뽑습니다.',
+        '씬을 배열하고 최종본까지 렌더·다운로드합니다.',
+        '나레이션·BGM·효과음을 그대로 입힙니다.',
+        '캐릭터와 톤을 브랜드에 저장해 계속 씁니다.',
+        '채널 규격에 맞춰 한 번에 게시합니다.',
+        'AI 직원 11명이 직무별 도구로 나눠 일합니다.',
+        '게시·삭제는 승인한 뒤에만 실행됩니다.',
+        '성과는 자동으로 모여 다음 기획에 반영됩니다.',
+        'PDF·PPT·인포그래픽도 바로 뽑아냅니다.',
+        'Gmail·캘린더·Drive를 직원이 직접 씁니다.'
+      ],
       // [이름, 직책] — ROSTER(_orchestrator.ts) · JOB(ai-company-app/src/lib/jobs.ts) 원문
       agents: [['코어', '팀장'], ['엣지', '전략'], ['레이더', '리서치'], ['마키', '마케팅'],
                ['플롯', 'PD'], ['잉크', '작가'], ['픽셀', '디자인'], ['비트', '음악'],
                ['엔지', '코딩'], ['리치', '홍보'], ['싱크', '비서']]
     },
     en: {
-      'hero.fix': 'One brand is all it takes',
-      'hero.sub': 'Set the character and tone once, and production, channel publishing and results all run from one place.',
+      'hero.fix': 'NK AI Studio is all it takes',
       'cta.start': 'Get started',
       'cta.authed': 'Enter Studio',
       'fact1': 'Brand IP management',
@@ -46,6 +60,21 @@
       'footer.privacy': 'Privacy',
       'footer.contact': 'Contact',
       rot: ['Shorts', 'Characters', 'Episodes', 'Fandom', 'Merch', 'Channels'],
+      subs: [
+        'Give it a topic and the scenario comes back broken into shots.',
+        'Copy, images, video and sound — all made in one place.',
+        'Repaint just the part you want with inpainting.',
+        'Lip sync matches the mouth to the voice.',
+        'Arrange scenes and render the final cut for download.',
+        'Layer narration, BGM and sound effects right in.',
+        'Save a character and tone to the brand and keep reusing it.',
+        'Publish everywhere at once, formatted per channel.',
+        '11 AI teammates split the work by job-specific tools.',
+        'Publishing and deleting run only after your approval.',
+        'Results come back automatically and feed the next plan.',
+        'PDF, PPT and infographics come straight out too.',
+        'Your teammates use Gmail, Calendar and Drive directly.'
+      ],
       agents: [['Core', 'Lead'], ['Edge', 'Strategy'], ['Radar', 'Research'], ['Maki', 'Marketing'],
                ['Plot', 'PD'], ['Ink', 'Writer'], ['Pixel', 'Design'], ['Beat', 'Music'],
                ['Engi', 'Dev'], ['Reach', 'PR'], ['Sync', 'Assistant']]
@@ -78,6 +107,8 @@
     });
 
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'ko');
+    var btn = document.querySelector('[data-lang-toggle]');
+    if (btn) btn.textContent = lang === 'en' ? 'EN' : 'KR';
   }
 
   /* ===== 헤드라인 회전 단어 — 2.4초 간격 ===== */
@@ -115,6 +146,29 @@
       idx = (idx + 1) % words.length;
       show(words[idx]);
     }, 2400);
+  }
+
+  /* ===== 부연 문구 로테이션 — 4.2초 간격(읽을 시간을 주려고 단어보다 느리게) ===== */
+  var subEl = document.getElementById('sub');
+  var subTimer = null;
+  var subIdx = 0;
+
+  function startSubRotation(lang) {
+    if (subTimer) { clearInterval(subTimer); subTimer = null; }
+    var list = (DICT[lang] || DICT.ko).subs;
+    subIdx = 0;
+    subEl.classList.remove('fade');
+    subEl.textContent = list[0];
+    // 모션 최소화 설정이면 첫 문장만 고정 노출한다.
+    if (reduce) return;
+    subTimer = setInterval(function () {
+      subEl.classList.add('fade');
+      setTimeout(function () {
+        subIdx = (subIdx + 1) % list.length;
+        subEl.textContent = list[subIdx];
+        subEl.classList.remove('fade');
+      }, 380);
+    }, 4200);
   }
 
   /* ===== 마퀴 — AI 에이전트 카드 =====
@@ -163,18 +217,32 @@
   });
 
   /* ===== 초기 적용 (defer 라 DOM 준비됨) ===== */
-  var lang = readLang();
-  applyLang(lang);
-  startRotation(lang);
-  buildTrack(lang);
+  function render(lang) {
+    applyLang(lang);
+    startRotation(lang);
+    startSubRotation(lang);
+    buildTrack(lang);
+  }
+
+  function setLang(next) {
+    var safe = next === 'en' ? 'en' : 'ko';
+    try { localStorage.setItem(LANG_KEY, safe); } catch (_) {}
+    render(safe);
+  }
+
+  render(readLang());
+
+  var langBtn = document.querySelector('[data-lang-toggle]');
+  if (langBtn) {
+    langBtn.addEventListener('click', function () {
+      setLang(readLang() === 'ko' ? 'en' : 'ko');
+    });
+  }
 
   // 다른 탭/앱 화면에서 언어를 바꾼 경우 동기화
   window.addEventListener('storage', function (e) {
     if (e && e.key === LANG_KEY) {
-      var next = readLang();
-      applyLang(next);
-      startRotation(next);
-      buildTrack(next);
+      render(readLang());
     }
   });
 })();
