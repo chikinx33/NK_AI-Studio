@@ -272,10 +272,62 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 @keyframes lp-floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
 @media (prefers-reduced-motion: reduce) { .lp-float { animation: none; } }
 
+/* ---------- 신뢰 밴드 ---------- */
+.lp-band-sec { padding: clamp(10px, 2vw, 22px) 0 0; }
+.lp-band {
+  list-style: none;
+  margin: 0;
+  padding: clamp(18px, 2.4vw, 26px) clamp(18px, 3vw, 32px);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 28px;
+  border-radius: var(--lp-radius);
+  border: 1px solid var(--lp-border);
+  background: linear-gradient(120deg, rgba(255, 122, 0, 0.06), rgba(92, 124, 255, 0.06));
+}
+.lp-band li { color: var(--lp-text-2); font-size: 14.5px; text-align: center; }
+.lp-band b { color: var(--lp-text); font-weight: 700; }
+
+/* ---------- AI 기업: 로스터 · 서브 기능 ---------- */
+.lp-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 14px;
+  margin-bottom: clamp(24px, 4vw, 40px);
+}
+.lp-rost {
+  padding: 20px 16px;
+  border-radius: var(--lp-radius-sm);
+  border: 1px solid var(--lp-border);
+  background: linear-gradient(180deg, var(--lp-panel-2), var(--lp-panel));
+  text-align: center;
+  transition: transform 0.25s var(--lp-ease), border-color 0.25s;
+}
+.lp-rost:hover { transform: translateY(-4px); border-color: rgba(255, 122, 0, 0.4); }
+.lp-rost-emoji {
+  display: grid; place-items: center;
+  width: 46px; height: 46px; margin: 0 auto 10px;
+  font-size: 24px; line-height: 1;
+  border-radius: 14px;
+  background: var(--lp-grad-soft); border: 1px solid var(--lp-border-soft);
+}
+.lp-rost h3 { margin: 0 0 6px; font-size: 16px; }
+.lp-rost p { margin: 0; color: var(--lp-muted); font-size: 12.5px; line-height: 1.5; }
+
+.lp-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.lp-mini {
+  padding: 24px 22px;
+  border-radius: var(--lp-radius);
+  border: 1px solid var(--lp-border);
+  background: rgba(14, 23, 48, 0.55);
+}
+.lp-mini h3 { margin: 0 0 8px; font-size: 17px; color: var(--lp-teal); }
+.lp-mini p { margin: 0; color: var(--lp-muted); font-size: 14.5px; }
+
 /* ---------- 파이프라인 ---------- */
 .lp-pipe {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   position: relative;
 }
@@ -332,7 +384,7 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 }
 
 /* ---------- 작동 방식 ---------- */
-.lp-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; counter-reset: lp-step; }
+.lp-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: lp-step; }
 .lp-step {
   padding: 28px 22px;
   border-radius: var(--lp-radius);
@@ -394,6 +446,72 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 }
 .lp-sns-pill:hover { transform: translateY(-3px); background: rgba(255, 255, 255, 0.08); }
 .lp-sns-pill svg { width: 22px; height: 22px; }
+.lp-sns-pill.sm { padding: 9px 15px; font-size: 13.5px; color: var(--lp-text-2); }
+
+/* 업무툴 연동 블록(SNS 밴드 내부) */
+.lp-int-block {
+  margin-top: clamp(30px, 4vw, 44px);
+  padding-top: clamp(26px, 3.5vw, 36px);
+  border-top: 1px solid var(--lp-border);
+}
+.lp-int-title { font-size: clamp(20px, 2.4vw, 26px); font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+.lp-int-sub { font-size: clamp(14px, 1.5vw, 16px); color: var(--lp-text-2); margin: 0; }
+
+/* ---------- 성과 분석 포인트 ---------- */
+.lp-points { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.lp-point {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px;
+  border-radius: var(--lp-radius-sm);
+  border: 1px solid var(--lp-border);
+  background: rgba(14, 23, 48, 0.55);
+  color: var(--lp-text-2); font-size: 14.5px; font-weight: 500;
+}
+.lp-point svg { width: 20px; height: 20px; flex: 0 0 20px; color: var(--lp-teal); }
+
+/* ---------- 안전 · 신뢰 ---------- */
+.lp-trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.lp-trust-card {
+  padding: 28px 24px;
+  border-radius: var(--lp-radius);
+  border: 1px solid var(--lp-border);
+  background: linear-gradient(180deg, rgba(17, 29, 58, 0.7), rgba(14, 23, 48, 0.7));
+}
+.lp-trust-card h3 { margin: 0 0 10px; font-size: 18px; }
+.lp-trust-card h3::before {
+  content: ""; display: block;
+  width: 34px; height: 3px; border-radius: 3px;
+  background: var(--lp-grad); margin-bottom: 14px;
+}
+.lp-trust-card p { margin: 0; color: var(--lp-muted); font-size: 14.5px; }
+
+/* ---------- FAQ ---------- */
+.lp-faq { display: grid; gap: 12px; max-width: 860px; margin-inline: auto; }
+.lp-faq-item {
+  border-radius: var(--lp-radius-sm);
+  border: 1px solid var(--lp-border);
+  background: rgba(14, 23, 48, 0.55);
+  transition: border-color 0.25s;
+}
+.lp-faq-item[open] { border-color: rgba(92, 124, 255, 0.4); }
+.lp-faq-item summary {
+  list-style: none; cursor: pointer;
+  position: relative;
+  padding: 20px 52px 20px 22px;
+  font-size: 16px; font-weight: 600; color: var(--lp-text);
+}
+.lp-faq-item summary::-webkit-details-marker { display: none; }
+.lp-faq-item summary::after {
+  content: "+";
+  position: absolute; right: 22px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px; font-weight: 400; line-height: 1;
+  color: var(--lp-teal);
+  transition: transform 0.2s var(--lp-ease);
+}
+.lp-faq-item[open] summary::after { transform: translateY(-50%) rotate(45deg); }
+.lp-faq-item p { margin: 0; padding: 0 22px 22px; color: var(--lp-muted); font-size: 14.5px; }
+@media (prefers-reduced-motion: reduce) { .lp-faq-item summary::after { transition: none; } }
 
 /* ---------- CTA 밴드 ---------- */
 .lp-cta {
@@ -446,6 +564,10 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
 }
 
 /* ---------- 반응형 ---------- */
+@media (max-width: 1180px) {
+  .lp-pipe { grid-template-columns: repeat(3, 1fr); }
+  .lp-nav-links { gap: 20px; }
+}
 @media (max-width: 960px) {
   .lp-hero-grid { grid-template-columns: 1fr; }
   .lp-hero-visual { order: -1; max-width: 460px; }
@@ -454,12 +576,23 @@ section { padding: clamp(72px, 11vw, 132px) 0; }
   .lp-features { grid-template-columns: repeat(2, 1fr); }
   .lp-steps { grid-template-columns: repeat(2, 1fr); }
   .lp-ip { grid-template-columns: repeat(2, 1fr); }
+  .lp-band { grid-template-columns: repeat(2, 1fr); }
+  .lp-points { grid-template-columns: repeat(2, 1fr); }
+  .lp-trust { grid-template-columns: 1fr; }
   .lp-footer-grid { grid-template-columns: 1fr 1fr; }
   .lp-nav-links { display: none; }
 }
 @media (max-width: 560px) {
   .lp-wrap { width: min(var(--lp-max), 100% - 32px); }
   .lp-features, .lp-steps, .lp-ip, .lp-pipe { grid-template-columns: 1fr; }
+  .lp-band, .lp-points, .lp-mini-grid { grid-template-columns: 1fr; }
+  .lp-band li { text-align: left; }
+  .lp-roster { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .lp-rost { padding: 16px 12px; }
+  .lp-rost p { font-size: 12px; }
+  .lp-faq-item summary { font-size: 15px; padding: 18px 44px 18px 18px; }
+  .lp-faq-item summary::after { right: 18px; }
+  .lp-faq-item p { padding: 0 18px 18px; }
   .lp-footer-grid { grid-template-columns: 1fr; }
   .lp-hero-actions .lp-btn { flex: 1 1 auto; }
   .lp-footer-bottom { flex-direction: column; align-items: flex-start; }

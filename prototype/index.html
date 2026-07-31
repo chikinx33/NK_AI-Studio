@@ -36,7 +36,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.landing-page.css?v=3.1415" />
+  <link rel="stylesheet" href="styles.landing-page.css?v=3.1416" />
 
   <!-- ===== JSON-LD (Organization) ===== -->
   <script type="application/ld+json">
@@ -64,10 +64,12 @@
         <b>NK AI Studio</b>
       </a>
       <nav class="lp-nav-links" aria-label="섹션 내비게이션">
+        <a href="#company" data-i18n="nav.company">AI 기업</a>
         <a href="#pipeline" data-i18n="nav.pipeline">파이프라인</a>
         <a href="#features" data-i18n="nav.features">기능</a>
-        <a href="#how" data-i18n="nav.how">작동 방식</a>
+        <a href="#analytics" data-i18n="nav.analytics">성과 분석</a>
         <a href="#sns" data-i18n="nav.sns">SNS 연동</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
       </nav>
       <div class="lp-nav-cta">
         <button type="button" class="lp-lang" data-lang-toggle aria-label="언어 전환 / Switch language">KR</button>
@@ -78,23 +80,23 @@
 
   <main id="top">
 
-    <!-- ============ Hero ============ -->
+    <!-- ============ ① Hero ============ -->
     <section class="lp-hero">
       <div class="lp-wrap lp-hero-grid">
         <div class="lp-hero-copy">
-          <span class="lp-eyebrow" data-i18n="hero.eyebrow">AI 영상 · IP 브랜드 · SNS 자동화</span>
-          <h1 data-i18n-html="hero.title">기획부터 SNS 배포까지,<br /><span class="lp-grad-text">한 흐름의 AI 스튜디오</span></h1>
-          <p class="lp-lead" data-i18n="hero.lead">
-            시나리오 기획, 글·이미지·영상·사운드 생성, 편집, 그리고 6개 채널 자동 배포까지.
-            흩어진 도구를 오가지 않고 하나의 흐름으로 콘텐츠를 완성하세요.
+          <span class="lp-eyebrow" data-i18n="hero.eyebrow">AI 기업 · 콘텐츠 제작 · SNS 자동화</span>
+          <h1 data-i18n-html="hero.title">11명의 AI 직원이,<br /><span class="lp-grad-text">당신의 콘텐츠 회사를 굴립니다</span></h1>
+          <p class="lp-lead" data-i18n-html="hero.lead">
+            기획·글·이미지·영상·사운드 제작부터 6개 SNS 배포와 성과 분석까지.
+            지시만 하면 담당 AI 직원이 실행하고, 배포·삭제 같은 되돌릴 수 없는 일은 <strong>당신 승인</strong> 뒤에만 움직입니다.
           </p>
           <div class="lp-hero-actions">
             <a class="lp-btn lp-btn-primary lp-btn-lg" href="app.html" data-cta-login data-i18n="cta.startFree">무료로 시작하기</a>
-            <a class="lp-btn lp-btn-ghost lp-btn-lg" href="#pipeline" data-i18n="hero.cta2">제작 흐름 보기</a>
+            <a class="lp-btn lp-btn-ghost lp-btn-lg" href="#company" data-i18n="hero.cta2">AI 직원 만나보기</a>
           </div>
           <div class="lp-hero-trust">
-            <span><i class="lp-dot"></i> <span data-i18n="hero.trust1">시나리오 → 영상 → 배포 원스톱</span></span>
-            <span><i class="lp-dot"></i> <span data-i18n="hero.trust2">6개 SNS 채널 자동 게시</span></span>
+            <span><i class="lp-dot"></i> <span data-i18n="hero.trust1">지시 → 실행 → 승인 → 배포 원스톱</span></span>
+            <span><i class="lp-dot"></i> <span data-i18n="hero.trust2">6개 SNS 자동 게시 + 성과 자동 수집</span></span>
           </div>
         </div>
 
@@ -123,7 +125,7 @@
               </div>
             </div>
             <div class="lp-mock-foot">
-              <span class="lp-chip" data-i18n="chip.plan">기획</span><span class="lp-chip" data-i18n="chip.create">생성</span><span class="lp-chip" data-i18n="chip.edit">편집</span><span class="lp-chip" data-i18n="chip.publish">배포</span>
+              <span class="lp-chip" data-i18n="chip.plan">기획</span><span class="lp-chip" data-i18n="chip.create">생성</span><span class="lp-chip" data-i18n="chip.edit">편집</span><span class="lp-chip" data-i18n="chip.publish">배포</span><span class="lp-chip" data-i18n="chip.analytics">성과</span>
             </div>
           </div>
           <div class="lp-float one">
@@ -138,47 +140,101 @@
       </div>
     </section>
 
-    <!-- ============ 파이프라인 ============ -->
+    <!-- ============ ② 신뢰 밴드 ============
+         숫자 출처(하드코딩): 11인 = functions/api/agent/_orchestrator.ts ROSTER,
+         81개 = functions/api/agent/_shared.ts AGENT_TOOLS, 6채널 = SNS 연동 채널 수.
+         도구·로스터가 늘어나면 이 숫자와 feat9 태그(11인 / 81 도구)를 함께 갱신할 것. -->
+    <section class="lp-band-sec">
+      <div class="lp-wrap">
+        <ul class="lp-band lp-reveal">
+          <li data-i18n-html="band.item1"><b>11명</b> AI 직원 로스터</li>
+          <li data-i18n-html="band.item2"><b>81개</b> 실행 도구</li>
+          <li data-i18n-html="band.item3"><b>6개</b> SNS 채널 자동 배포</li>
+          <li data-i18n-html="band.item4">되돌릴 수 없는 작업은 <b>100% 사람 승인</b></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ ③ AI 기업 ============ -->
+    <section id="company">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow" data-i18n="co.eyebrow">AI 기업</span>
+          <h2 class="lp-section-title" data-i18n="co.title">도구를 배우지 말고, 직원에게 시키세요</h2>
+          <p class="lp-section-sub" data-i18n="co.sub">총괄 에이전트 '코어'가 요청을 쪼개 담당자에게 넘깁니다. 각 직원은 자기 직무의 실제 도구를 들고 실행합니다.</p>
+        </div>
+
+        <!-- 로스터 11인 — 이름·직무는 _orchestrator.ts ROSTER 고정(창작 금지) -->
+        <div class="lp-roster lp-reveal">
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🧭</span><h3 data-i18n="co.r1.n">코어</h3><p data-i18n="co.r1.d">총괄 — 작업 분해·라우팅·최종 판단</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">💼</span><h3 data-i18n="co.r2.n">엣지</h3><p data-i18n="co.r2.d">전략·비즈니스 — 수익모델·가격·KPI</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🔍</span><h3 data-i18n="co.r3.n">레이더</h3><p data-i18n="co.r3.d">리서치 — 트렌드·경쟁사·사실확인</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📈</span><h3 data-i18n="co.r4.n">마키</h3><p data-i18n="co.r4.d">마케팅·그로스 — 캠페인·퍼널</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎬</span><h3 data-i18n="co.r5.n">플롯</h3><p data-i18n="co.r5.d">콘텐츠 디렉터 — 기획·포맷·후크</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">✍️</span><h3 data-i18n="co.r6.n">잉크</h3><p data-i18n="co.r6.d">작가·카피 — 스크립트·캡션·문서</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎨</span><h3 data-i18n="co.r7.n">픽셀</h3><p data-i18n="co.r7.d">디자인 — 브랜드·비주얼·영상</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎵</span><h3 data-i18n="co.r8.n">비트</h3><p data-i18n="co.r8.d">사운드 — BGM·효과음·더빙</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">💻</span><h3 data-i18n="co.r9.n">엔지</h3><p data-i18n="co.r9.d">엔지니어 — 코드·자동화·API</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📡</span><h3 data-i18n="co.r10.n">리치</h3><p data-i18n="co.r10.d">채널·배포 — 전 채널 발행·해시태그·SEO</p></article>
+          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📱</span><h3 data-i18n="co.r11.n">싱크</h3><p data-i18n="co.r11.d">PM·비서 — 일정·할일·요약·보고</p></article>
+        </div>
+
+        <div class="lp-mini-grid lp-reveal">
+          <div class="lp-mini"><h3 data-i18n="co.f1.t">승인 게이트</h3><p data-i18n="co.f1.d">게시·삭제·발송처럼 되돌릴 수 없는 일은 실행 전에 승인 카드로 올라옵니다.</p></div>
+          <div class="lp-mini"><h3 data-i18n="co.f2.t">말로 지시</h3><p data-i18n="co.f2.d">마이크를 켜고 말하면 그대로 업무가 됩니다. 답변도 음성으로 돌아옵니다.</p></div>
+          <div class="lp-mini"><h3 data-i18n="co.f3.t">업무 파일함</h3><p data-i18n="co.f3.d">직원이 만든 산출물은 폴더로 정리되고, 프로젝트에 그대로 연결됩니다.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ④ 파이프라인 (5단계) ============ -->
     <section id="pipeline">
       <div class="lp-wrap">
         <div class="lp-head center lp-reveal">
           <span class="lp-eyebrow" data-i18n="pipe.eyebrow">제작 파이프라인</span>
-          <h2 class="lp-section-title" data-i18n="pipe.title">하나의 흐름, 네 단계로 완성</h2>
+          <h2 class="lp-section-title" data-i18n="pipe.title">하나의 흐름, 다섯 단계로 완성</h2>
           <p class="lp-section-sub" data-i18n="pipe.sub">아이디어가 게시물이 되기까지, 도구를 바꾸지 않아도 됩니다.</p>
         </div>
         <div class="lp-pipe lp-reveal">
           <div class="lp-pipe-step">
             <span class="lp-step-no">STEP 01</span>
             <h3 data-i18n="pipe1.title">기획</h3>
-            <p data-i18n="pipe1.desc">주제·브랜드만 입력하면 AI가 스토리 비트와 숏 단위 시나리오로 분해합니다.</p>
+            <p data-i18n="pipe1.desc">주제·브랜드만 주면 스토리 비트와 숏 단위 시나리오로 분해합니다.</p>
             <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.scenario">시나리오</span><span class="lp-tag" data-i18n="tag.shot">숏 분해</span></div>
             <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
           </div>
           <div class="lp-pipe-step">
             <span class="lp-step-no">STEP 02</span>
             <h3 data-i18n="pipe2.title">생성</h3>
-            <p data-i18n="pipe2.desc">글·이미지·영상·사운드를 한 자리에서 생성합니다. 장면마다 필요한 소재를 즉시 만들어요.</p>
+            <p data-i18n="pipe2.desc">글·이미지·영상·사운드를 한 자리에서 만듭니다. 장면마다 필요한 소재를 즉시.</p>
             <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.copy">글</span><span class="lp-tag" data-i18n="tag.image">이미지</span><span class="lp-tag" data-i18n="tag.video">영상</span><span class="lp-tag" data-i18n="tag.sound">사운드</span></div>
             <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
           </div>
           <div class="lp-pipe-step">
             <span class="lp-step-no">STEP 03</span>
-            <h3 data-i18n="pipe3.title">편집</h3>
-            <p data-i18n="pipe3.desc">씬을 배열하고 나레이션·음악·효과음을 입혀 완성본으로 다듬습니다.</p>
-            <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.sceneEdit">씬 편집</span><span class="lp-tag" data-i18n="tag.soundMix">사운드 믹스</span></div>
+            <h3 data-i18n="pipe3.title">편집 · 렌더</h3>
+            <p data-i18n="pipe3.desc">씬을 배열하고 나레이션·음악·효과음을 입힌 뒤 최종본까지 렌더·다운로드합니다.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.sceneEdit">씬 편집</span><span class="lp-tag" data-i18n="tag.finalRender">최종 렌더</span></div>
             <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
           </div>
           <div class="lp-pipe-step">
             <span class="lp-step-no">STEP 04</span>
             <h3 data-i18n="pipe4.title">SNS 배포</h3>
-            <p data-i18n="pipe4.desc">채널별 캡션·해시태그를 자동 정리해 6개 SNS에 한 번에 게시합니다.</p>
+            <p data-i18n="pipe4.desc">채널별 캡션·해시태그를 정리해 6개 SNS에 한 번에 게시합니다.</p>
             <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.autoCaption">자동 캡션</span><span class="lp-tag" data-i18n="tag.simulPublish">동시 배포</span></div>
+            <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          </div>
+          <div class="lp-pipe-step">
+            <span class="lp-step-no">STEP 05</span>
+            <h3 data-i18n="pipe5.title">성과 분석</h3>
+            <p data-i18n="pipe5.desc">조회수·반응을 자동으로 모아 브랜드·에피소드 단위로 보여주고, 다음에 뭘 바꿀지 제안합니다.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag" data-i18n="tag.autoCollect">자동 수집</span><span class="lp-tag" data-i18n="tag.suggest">개선 제안</span></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ 기능 그리드 ============ -->
+    <!-- ============ ⑤ 핵심 기능 (12개) ============ -->
     <section id="features">
       <div class="lp-wrap">
         <div class="lp-head center lp-reveal">
@@ -190,79 +246,115 @@
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
             <h3 data-i18n="feat1.title">기획 · 시나리오</h3>
-            <p data-i18n="feat1.desc">주제와 스토리를 입력하면 장르·톤·길이에 맞춰 비트와 숏으로 자동 구조화합니다.</p>
+            <p data-i18n="feat1.desc">장르·톤·길이에 맞춰 비트와 숏으로 자동 구조화합니다.</p>
             <div class="lp-models"><span class="lp-tag">Claude</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
-            <h3 data-i18n="feat2.title">글 · 문서 생성</h3>
-            <p data-i18n="feat2.desc">상세페이지, SNS 카피, 해시태그를 채널 성격에 맞춰 자동으로 작성합니다.</p>
-            <div class="lp-models"><span class="lp-tag">Claude</span></div>
+            <h3 data-i18n="feat2.title">글 · 문서</h3>
+            <p data-i18n="feat2.desc">SNS 카피·상세페이지는 물론 PDF·PPT·인포그래픽까지 산출합니다.</p>
+            <div class="lp-models"><span class="lp-tag">Claude</span><span class="lp-tag">PDF</span><span class="lp-tag">PPT</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-image.png" alt="" aria-hidden="true" /></div>
-            <h3 data-i18n="feat3.title">이미지 생성</h3>
-            <p data-i18n="feat3.desc">텍스트·이미지로 비주얼을 생성하고, 인페인팅으로 원하는 부분만 다시 그립니다.</p>
-            <div class="lp-models"><span class="lp-tag">Gemini Image</span><span class="lp-tag">OpenAI</span></div>
+            <h3 data-i18n="feat3.title">이미지 생성 · 편집</h3>
+            <p data-i18n="feat3.desc">텍스트·이미지로 생성하고, 인페인팅으로 원하는 부분만 다시 그리고, 업스케일까지.</p>
+            <div class="lp-models"><span class="lp-tag">Gemini Image</span><span class="lp-tag">OpenAI</span><span class="lp-tag" data-i18n="tag.upscale">업스케일</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-video.png" alt="" aria-hidden="true" /></div>
             <h3 data-i18n="feat4.title">영상 생성</h3>
-            <p data-i18n="feat4.desc">이미지와 프롬프트로 장면을 영상으로 만듭니다. 여러 영상 모델을 골라 쓸 수 있어요.</p>
-            <div class="lp-models"><span class="lp-tag">Kling</span><span class="lp-tag">Veo</span><span class="lp-tag">Grok</span><span class="lp-tag">Seedance</span></div>
+            <p data-i18n="feat4.desc">이미지와 프롬프트로 장면을 영상화. 립싱크로 입모양까지 맞춥니다.</p>
+            <div class="lp-models"><span class="lp-tag">Kling</span><span class="lp-tag">Veo</span><span class="lp-tag">Grok</span><span class="lp-tag">Seedance</span><span class="lp-tag" data-i18n="tag.lipsync">립싱크</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-cinema.png" alt="" aria-hidden="true" /></div>
-            <h3 data-i18n="feat5.title">영상 편집 · 후반</h3>
-            <p data-i18n="feat5.desc">씬을 배열하고 트랜스코드·믹싱으로 채널 규격에 맞는 완성본을 만듭니다.</p>
+            <h3 data-i18n="feat5.title">편집 · 최종 렌더</h3>
+            <p data-i18n="feat5.desc">씬을 배열하고 채널 규격에 맞춰 최종본을 렌더·다운로드합니다.</p>
             <div class="lp-models"><span class="lp-tag" data-i18n="tag.sceneEdit">씬 편집</span><span class="lp-tag" data-i18n="tag.transcode">트랜스코드</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-sound.png" alt="" aria-hidden="true" /></div>
             <h3 data-i18n="feat6.title">사운드 · 음성</h3>
-            <p data-i18n="feat6.desc">나레이션 TTS, 배경음악, 효과음, 캐릭터 보이스북까지 한 화면에서 만듭니다.</p>
-            <div class="lp-models"><span class="lp-tag">ElevenLabs</span><span class="lp-tag">Google Cloud TTS</span></div>
+            <p data-i18n="feat6.desc">나레이션·BGM·효과음·캐릭터 더빙. 자체 호스팅 음성 엔진도 씁니다.</p>
+            <div class="lp-models"><span class="lp-tag">ElevenLabs</span><span class="lp-tag">Google Cloud TTS</span><span class="lp-tag">MeloTTS</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-branding.png" alt="" aria-hidden="true" /></div>
-            <h3 data-i18n="feat7.title">IP 브랜드 관리</h3>
-            <p data-i18n="feat7.desc">캐릭터·세계관·말투 규칙을 브랜드 허브에 정의해 일관된 콘텐츠를 만듭니다.</p>
-            <div class="lp-models"><span class="lp-tag" data-i18n="tag.brandHub">브랜드 허브</span><span class="lp-tag" data-i18n="tag.character">캐릭터</span></div>
+            <h3 data-i18n="feat7.title">브랜드 · 에피소드 작업공간</h3>
+            <p data-i18n="feat7.desc">캐릭터·세계관·말투를 브랜드에 정의하고, 에피소드 단위로 작업을 나눕니다.</p>
+            <div class="lp-models"><span class="lp-tag" data-i18n="tag.brandHub">브랜드 허브</span><span class="lp-tag" data-i18n="tag.episode">에피소드</span></div>
           </article>
           <article class="lp-feature">
             <div class="lp-feature-ico"><img src="images/icon-ai-branding.png" alt="" aria-hidden="true" /></div>
             <h3 data-i18n="feat8.title">SNS 자동 배포</h3>
-            <p data-i18n="feat8.desc">완성한 콘텐츠를 6개 채널에 동시에 게시하고 채널별 메타데이터를 자동 정리합니다.</p>
+            <p data-i18n="feat8.desc">6개 채널에 동시 게시하고 채널별 메타데이터를 자동 정리합니다.</p>
             <div class="lp-models"><span class="lp-tag" data-i18n="tag.sixChannels">6개 채널</span><span class="lp-tag" data-i18n="tag.simulPost">동시 게시</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
+            <h3 data-i18n="feat9.title">AI 직원 · 승인 게이트</h3>
+            <p data-i18n="feat9.desc">11명이 직무별 도구 81개로 실행하고, 되돌릴 수 없는 일은 승인 뒤에만 진행합니다.</p>
+            <div class="lp-models"><span class="lp-tag" data-i18n="tag.roster11">11인</span><span class="lp-tag" data-i18n="tag.tools81">81 도구</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-cinema.png" alt="" aria-hidden="true" /></div>
+            <h3 data-i18n="feat10.title">성과 분석</h3>
+            <p data-i18n="feat10.desc">게시물 성과를 자동 수집해 브랜드·에피소드별 장기 그래프와 개선 제안으로 보여줍니다.</p>
+            <div class="lp-models"><span class="lp-tag" data-i18n="tag.autoSync">자동 동기화</span><span class="lp-tag" data-i18n="tag.suggest">개선 제안</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
+            <h3 data-i18n="feat11.title">업무 파일 · 회사 지식</h3>
+            <p data-i18n="feat11.desc">산출물은 폴더로 정리되고, 회사 지식과 지식 그래프로 쌓여 다음 작업에 쓰입니다.</p>
+            <div class="lp-models"><span class="lp-tag" data-i18n="tag.fileExplorer">파일 탐색기</span><span class="lp-tag" data-i18n="tag.knowledgeGraph">지식 그래프</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-branding.png" alt="" aria-hidden="true" /></div>
+            <h3 data-i18n="feat12.title">외부 업무 연동</h3>
+            <p data-i18n="feat12.desc">Gmail·캘린더·Drive/Sheets·GitHub·네이버 데이터랩·웹 검색을 직원이 직접 씁니다.</p>
+            <div class="lp-models"><span class="lp-tag">Gmail</span><span class="lp-tag">Calendar</span><span class="lp-tag">Drive</span><span class="lp-tag">GitHub</span></div>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- ============ 작동 방식 ============ -->
-    <section id="how">
+    <!-- ============ ⑥ 성과 분석 ============ -->
+    <section id="analytics">
       <div class="lp-wrap">
         <div class="lp-head center lp-reveal">
-          <span class="lp-eyebrow" data-i18n="how.eyebrow">작동 방식</span>
-          <h2 class="lp-section-title" data-i18n="how.title">네 단계면 충분합니다</h2>
-          <p class="lp-section-sub" data-i18n="how.sub">전문 편집 경험이 없어도, 흐름을 따라가기만 하면 됩니다.</p>
+          <span class="lp-eyebrow" data-i18n="an.eyebrow">성과 분석</span>
+          <h2 class="lp-section-title" data-i18n="an.title">올리고 끝이 아니라, 숫자로 돌아옵니다</h2>
+          <p class="lp-section-sub" data-i18n="an.sub">연결한 채널의 게시물 성과를 자동으로 모아 브랜드·에피소드 단위로 나눠 보여주고, 다음 콘텐츠에서 뭘 바꿀지 제안합니다.</p>
         </div>
-        <div class="lp-steps lp-reveal">
-          <div class="lp-step"><h3 data-i18n="how1.title">주제 · 브랜드 입력</h3><p data-i18n="how1.desc">만들고 싶은 주제와 브랜드를 선택하면 준비가 끝납니다.</p></div>
-          <div class="lp-step"><h3 data-i18n="how2.title">AI가 콘텐츠 생성</h3><p data-i18n="how2.desc">시나리오에 맞춰 글·이미지·영상·사운드를 자동으로 만들어요.</p></div>
-          <div class="lp-step"><h3 data-i18n="how3.title">편집 · 사운드 마무리</h3><p data-i18n="how3.desc">장면을 다듬고 음성·음악을 입혀 완성본으로 정리합니다.</p></div>
-          <div class="lp-step"><h3 data-i18n="how4.title">채널 자동 배포</h3><p data-i18n="how4.desc">게시할 SNS를 고르면 캡션까지 정리해 한 번에 올립니다.</p></div>
+        <div class="lp-points lp-reveal">
+          <div class="lp-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span data-i18n="an.p1">채널 6곳 성과 자동 동기화</span>
+          </div>
+          <div class="lp-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span data-i18n="an.p2">브랜드 · 에피소드 단위 분리 집계</span>
+          </div>
+          <div class="lp-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span data-i18n="an.p3">장기 추세 그래프</span>
+          </div>
+          <div class="lp-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span data-i18n="an.p4">개선 제안과 적용</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ SNS 연동 밴드 ============ -->
+    <!-- ============ ⑦ 연동 (SNS 6채널 + 업무툴 6종) ============ -->
     <section id="sns">
       <div class="lp-wrap">
         <div class="lp-sns-band lp-reveal">
           <span class="lp-eyebrow" data-i18n="sns.eyebrow">SNS 연동</span>
           <h2 class="lp-section-title" data-i18n="sns.title">한 번 만들고, 여섯 채널에 동시에</h2>
-          <p class="lp-section-sub" style="margin-inline:auto;" data-i18n="sns.sub">계정을 연결해 두면 완성한 콘텐츠를 채널별 형식에 맞춰 자동으로 게시합니다.</p>
+          <p class="lp-section-sub" style="margin-inline:auto;" data-i18n="sns.sub">계정을 연결해 두면 채널별 형식에 맞춰 자동 게시하고, 성과까지 다시 끌어옵니다.</p>
           <div class="lp-sns-logos">
             <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="#FF0000" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></svg> YouTube</span>
             <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" stroke="#E1306C" stroke-width="2"/><circle cx="12" cy="12" r="4.5" stroke="#E1306C" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.4" fill="#E1306C"/></svg> Instagram</span>
@@ -271,16 +363,96 @@
             <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.2 21c-5 0-8.2-2.9-8.2-8.9C4 6 7.3 3 12.3 3c3.4 0 5.9 1.5 7 4.2l-2.2.9c-.8-1.9-2.4-2.9-4.8-2.9-3.6 0-5.8 2.2-5.8 6.9s2.1 6.7 5.7 6.7c2.7 0 4.3-1.3 4.7-3.6h-4.3v-2.2H19c.5 4.9-2.1 8.1-6.8 8.1Z"/></svg> Threads</span>
             <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 3h3.3l-7.2 8.3L22 21h-6.6l-5.2-6.8L4.3 21H1l7.7-8.8L2 3h6.8l4.7 6.2L17.5 3Zm-1.2 16h1.8L7.8 4.9H5.9L16.3 19Z"/></svg> X</span>
           </div>
+
+          <div class="lp-int-block">
+            <h3 class="lp-int-title" data-i18n="int.title">업무 도구도 그대로 붙습니다</h3>
+            <p class="lp-int-sub" data-i18n="int.sub">메일·일정·문서·코드까지, AI 직원이 직접 사용합니다.</p>
+            <div class="lp-sns-logos">
+              <span class="lp-sns-pill sm">Gmail</span>
+              <span class="lp-sns-pill sm">Google Calendar</span>
+              <span class="lp-sns-pill sm">Google Drive/Sheets</span>
+              <span class="lp-sns-pill sm">GitHub</span>
+              <span class="lp-sns-pill sm" data-i18n="int.naver">네이버 데이터랩</span>
+              <span class="lp-sns-pill sm" data-i18n="int.websearch">웹 검색</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ CTA 밴드 ============ -->
+    <!-- ============ ⑧ 작동 방식 (3단계) ============ -->
+    <section id="how">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow" data-i18n="how.eyebrow">작동 방식</span>
+          <h2 class="lp-section-title" data-i18n="how.title">세 마디면 끝납니다</h2>
+          <p class="lp-section-sub" data-i18n="how.sub">전문 편집 경험이 없어도, 흐름을 따라가기만 하면 됩니다.</p>
+        </div>
+        <div class="lp-steps lp-reveal">
+          <div class="lp-step"><h3 data-i18n="how1.title">하고 싶은 걸 말한다</h3><p data-i18n="how1.desc">"엘리더스 ep2 숏폼 만들어서 유튜브랑 인스타에 올려줘" 처럼 그냥 지시하면 됩니다.</p></div>
+          <div class="lp-step"><h3 data-i18n="how2.title">AI 직원이 만들고, 당신이 승인한다</h3><p data-i18n="how2.desc">담당 직원이 시나리오·영상·사운드를 만들고, 게시 직전에 승인 카드가 올라옵니다.</p></div>
+          <div class="lp-step"><h3 data-i18n="how3.title">배포하고 성과를 본다</h3><p data-i18n="how3.desc">승인하면 채널에 올라가고, 며칠 뒤 성과가 자동으로 모여 다음 기획에 반영됩니다.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ⑨ 안전 · 신뢰 ============ -->
+    <section id="trust">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow" data-i18n="tr.eyebrow">안전 · 신뢰</span>
+          <h2 class="lp-section-title" data-i18n="tr.title">자동화하되, 통제는 당신에게</h2>
+        </div>
+        <div class="lp-trust lp-reveal">
+          <div class="lp-trust-card"><h3 data-i18n="tr.i1.t">승인 없이는 배포 없음</h3><p data-i18n="tr.i1.d">게시·삭제·발송은 자율도와 무관하게 항상 사람 승인을 거칩니다.</p></div>
+          <div class="lp-trust-card"><h3 data-i18n="tr.i2.t">내 계정, 내 데이터</h3><p data-i18n="tr.i2.d">브랜드·프로젝트·산출물은 내 계정 스코프 안에서만 조회·수정됩니다.</p></div>
+          <div class="lp-trust-card"><h3 data-i18n="tr.i3.t">연결은 내가 고른다</h3><p data-i18n="tr.i3.d">SNS·업무툴 연동은 필요한 것만 직접 연결하고 언제든 해제할 수 있습니다.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ⑩ FAQ ============ -->
+    <section id="faq">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow" data-i18n="faq.eyebrow">FAQ</span>
+          <h2 class="lp-section-title" data-i18n="faq.title">자주 묻는 질문</h2>
+        </div>
+        <div class="lp-faq lp-reveal">
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q1">영상 편집을 해본 적이 없어도 쓸 수 있나요?</summary>
+            <p data-i18n="faq.a1">네. 주제와 브랜드만 정하면 시나리오·영상·사운드까지 AI 직원이 만들고, 사용자는 확인하고 승인만 하면 됩니다.</p>
+          </details>
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q2">AI가 마음대로 게시하지는 않나요?</summary>
+            <p data-i18n="faq.a2">게시·삭제·발송처럼 되돌리기 어려운 작업은 항상 승인 카드로 먼저 올라옵니다. 승인 전에는 실행되지 않습니다.</p>
+          </details>
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q3">어떤 SNS에 올릴 수 있나요?</summary>
+            <p data-i18n="faq.a3">YouTube, Instagram, TikTok, Facebook, Threads, X 6개 채널입니다. 계정 연결 후 한 번에 게시됩니다.</p>
+          </details>
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q4">성과는 어떻게 확인하나요?</summary>
+            <p data-i18n="faq.a4">연결된 채널의 게시물 성과를 자동으로 모아 브랜드·에피소드 단위 그래프와 개선 제안으로 보여줍니다.</p>
+          </details>
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q5">어떤 AI 모델을 쓰나요?</summary>
+            <p data-i18n="faq.a5">기획·글은 Claude, 이미지는 Gemini Image·OpenAI, 영상은 Kling·Veo·Grok·Seedance, 음성은 ElevenLabs·Google Cloud TTS·자체 호스팅 엔진을 단계별로 씁니다.</p>
+          </details>
+          <details class="lp-faq-item">
+            <summary data-i18n="faq.q6">지금 유료인가요?</summary>
+            <p data-i18n="faq.a6">현재는 가입 후 무료로 사용할 수 있습니다. 유료 플랜은 준비 중입니다.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ⑪ CTA 밴드 ============ -->
     <section>
       <div class="lp-wrap">
         <div class="lp-cta lp-reveal">
           <h2 data-i18n-html="cta.title">아이디어를 콘텐츠로,<br /><span class="lp-grad-text">지금 시작하세요</span></h2>
-          <p data-i18n="cta.sub">기획부터 배포까지 한 흐름으로. NK AI Studio에서 첫 영상을 만들어 보세요.</p>
+          <p data-i18n="cta.sub">지시 한 줄이면 AI 직원이 움직입니다. 첫 콘텐츠를 만들어 보세요.</p>
           <a class="lp-btn lp-btn-primary lp-btn-lg" href="app.html" data-cta-login data-i18n="cta.startFree">무료로 시작하기</a>
         </div>
       </div>
@@ -288,19 +460,21 @@
 
   </main>
 
-  <!-- ============ 푸터 ============ -->
+  <!-- ============ ⑫ 푸터 ============ -->
   <footer class="lp-footer">
     <div class="lp-wrap">
       <div class="lp-footer-grid">
         <div>
           <div class="lp-footer-brand"><img src="images/logo.png" alt="NK AI Studio 로고" /><b>NK AI Studio</b></div>
-          <p data-i18n-html="footer.desc">AI 영상 제작 · IP 브랜드 관리 · SNS 자동화 플랫폼.<br />기획부터 배포까지 콘텐츠 제작의 전 과정을 하나로 잇습니다.</p>
+          <p data-i18n-html="footer.desc">AI 직원이 운영하는 콘텐츠 제작 · IP 브랜드 · SNS 자동화 플랫폼.<br />기획부터 배포와 성과 분석까지 하나로 잇습니다.</p>
         </div>
         <div>
           <h4 data-i18n="footer.col.service">서비스</h4>
           <ul>
+            <li><a href="#company" data-i18n="footer.link.company">AI 기업</a></li>
             <li><a href="#pipeline" data-i18n="footer.link.pipeline">제작 파이프라인</a></li>
             <li><a href="#features" data-i18n="footer.link.features">핵심 기능</a></li>
+            <li><a href="#analytics" data-i18n="footer.link.analytics">성과 분석</a></li>
             <li><a href="#sns" data-i18n="footer.link.sns">SNS 연동</a></li>
             <li><a href="app.html" data-cta-login data-i18n="cta.start">시작하기</a></li>
           </ul>
@@ -308,6 +482,7 @@
         <div>
           <h4 data-i18n="footer.col.legal">약관 · 문의</h4>
           <ul>
+            <li><a href="#faq" data-i18n="footer.link.faq">자주 묻는 질문</a></li>
             <li><a href="terms" data-i18n="footer.link.terms">이용약관 (Terms of Service)</a></li>
             <li><a href="privacy" data-i18n="footer.link.privacy">개인정보처리방침 (Privacy Policy)</a></li>
             <li><a href="mailto:chikinx1@gmail.com" data-i18n="footer.link.contact">문의: chikinx1@gmail.com</a></li>
@@ -325,7 +500,7 @@
     </div>
   </footer>
 
-  <script src="js/landing.js?v=3.1415" defer></script>
+  <script src="js/landing.js?v=3.1416" defer></script>
 </body>
 
 </html>
