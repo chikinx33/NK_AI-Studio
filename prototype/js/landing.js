@@ -26,7 +26,11 @@
       'footer.terms': '이용약관',
       'footer.privacy': '개인정보처리방침',
       'footer.contact': '문의',
-      rot: ['숏폼', '캐릭터', '에피소드', '팬덤', '굿즈', '채널']
+      rot: ['숏폼', '캐릭터', '에피소드', '팬덤', '굿즈', '채널'],
+      // [이름, 직책] — ROSTER(_orchestrator.ts) · JOB(ai-company-app/src/lib/jobs.ts) 원문
+      agents: [['코어', '팀장'], ['엣지', '전략'], ['레이더', '리서치'], ['마키', '마케팅'],
+               ['플롯', 'PD'], ['잉크', '작가'], ['픽셀', '디자인'], ['비트', '음악'],
+               ['엔지', '코딩'], ['리치', '홍보'], ['싱크', '비서']]
     },
     en: {
       'hero.fix': 'One brand is all it takes',
@@ -41,7 +45,10 @@
       'footer.terms': 'Terms',
       'footer.privacy': 'Privacy',
       'footer.contact': 'Contact',
-      rot: ['Shorts', 'Characters', 'Episodes', 'Fandom', 'Merch', 'Channels']
+      rot: ['Shorts', 'Characters', 'Episodes', 'Fandom', 'Merch', 'Channels'],
+      agents: [['Core', 'Lead'], ['Edge', 'Strategy'], ['Radar', 'Research'], ['Maki', 'Marketing'],
+               ['Plot', 'PD'], ['Ink', 'Writer'], ['Pixel', 'Design'], ['Beat', 'Music'],
+               ['Engi', 'Dev'], ['Reach', 'PR'], ['Sync', 'Assistant']]
     }
   };
 
@@ -110,33 +117,31 @@
     }, 2400);
   }
 
-  /* ===== 마퀴 =====
-     SHAPES 실물 이미지가 준비되면 아래 배열 값만 교체한다(구조·개수 유지).
-     예: "url('images/shapes/01.webp')"
-
+  /* ===== 마퀴 — AI 에이전트 카드 =====
      이음새 처리: 카드 1세트의 실제 폭(U)을 재서 --shift: -Upx 로 넣고,
      화면 폭을 덮고도 남도록 세트를 반복한다. -50% 로 밀면 마지막 카드의
      margin 절반만큼 어긋나서 한 바퀴마다 툭 끊겨 보인다.
      이동 거리 = 정확히 1세트이므로 흐르는 속도는 42s 기준 그대로다. */
-  var CARD_BG = [
-    'linear-gradient(160deg,#ff7a00,#ff2d6f)',
-    'linear-gradient(160deg,#5c7cff,#b47cff)',
-    'linear-gradient(160deg,#0bbfa5,#5c7cff)',
-    'linear-gradient(160deg,#b47cff,#ff5d7a)',
-    'linear-gradient(160deg,#ff9d3d,#ff7a00)',
-    'linear-gradient(160deg,#0f172a,#3d3d52)',
-    'linear-gradient(160deg,#0bbfa5,#0a6e63)',
-    'linear-gradient(160deg,#5c7cff,#0c1326)'
-  ];
-
+  var AGENT_IDS = ['core', 'edge', 'radar', 'maki', 'plot', 'ink', 'pixel', 'beat', 'engi', 'reach', 'sync'];
   var track = document.getElementById('track');
-  var unitHTML = CARD_BG.map(function (g) {
-    return '<div class="card" style="background:' + g + '"></div>';
-  }).join('');
 
-  function buildTrack() {
+  function unitHTML(lang) {
+    var list = (DICT[lang] || DICT.ko).agents;
+    return AGENT_IDS.map(function (id, i) {
+      return '<figure class="card">'
+        + '<picture>'
+        + '<source srcset="images/agents/' + id + '.webp" type="image/webp" />'
+        + '<img src="images/agents/' + id + '.png" width="256" height="256" alt="" loading="lazy" decoding="async" />'
+        + '</picture>'
+        + '<b>' + list[i][0] + '</b><span>' + list[i][1] + '</span>'
+        + '</figure>';
+    }).join('');
+  }
+
+  function buildTrack(lang) {
+    var unit = unitHTML(lang);
     // 1세트만 깔고 실제 폭을 측정한다(카드 폭은 vh 기반이라 뷰포트마다 다르다).
-    track.innerHTML = unitHTML;
+    track.innerHTML = unit;
     var unitWidth = 0;
     Array.prototype.forEach.call(track.children, function (c) {
       unitWidth += c.getBoundingClientRect().width + parseFloat(getComputedStyle(c).marginRight || 0);
@@ -146,23 +151,22 @@
     // 화면을 덮고도 1세트가 더 남도록 반복 — 되감는 순간에도 빈 공간이 없다.
     var reps = Math.max(2, Math.ceil(window.innerWidth / unitWidth) + 1);
     var html = '';
-    for (var i = 0; i < reps; i++) html += unitHTML;
+    for (var i = 0; i < reps; i++) html += unit;
     track.innerHTML = html;
     track.style.setProperty('--shift', (-unitWidth) + 'px');
   }
 
-  buildTrack();
-
   var resizeTimer = null;
   window.addEventListener('resize', function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(buildTrack, 200);
+    resizeTimer = setTimeout(function () { buildTrack(readLang()); }, 200);
   });
 
   /* ===== 초기 적용 (defer 라 DOM 준비됨) ===== */
   var lang = readLang();
   applyLang(lang);
   startRotation(lang);
+  buildTrack(lang);
 
   // 다른 탭/앱 화면에서 언어를 바꾼 경우 동기화
   window.addEventListener('storage', function (e) {
@@ -170,6 +174,7 @@
       var next = readLang();
       applyLang(next);
       startRotation(next);
+      buildTrack(next);
     }
   });
 })();
