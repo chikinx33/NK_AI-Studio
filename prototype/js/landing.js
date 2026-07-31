@@ -31,7 +31,7 @@
       'cta.authed': '스튜디오 입장',
 
       'hero.eyebrow': 'AI 기업 · 콘텐츠 제작 · SNS 자동화',
-      'hero.title': '11명의 AI 직원이,<br /><span class="lp-grad-text">당신의 콘텐츠 회사를 굴립니다</span>',
+      'hero.title': '혼자 시작한 회사에,<br /><span class="lp-grad-text">매일 11명이 출근합니다</span>',
       'hero.lead': '기획·글·이미지·영상·사운드 제작부터 6개 SNS 배포와 성과 분석까지. 지시만 하면 담당 AI 직원이 실행하고, 배포·삭제 같은 되돌릴 수 없는 일은 <strong>당신 승인</strong> 뒤에만 움직입니다.',
       'hero.cta2': 'AI 직원 만나보기',
       'hero.trust1': '지시 → 실행 → 승인 → 배포 원스톱',
@@ -150,7 +150,7 @@
       'an.p4': '개선 제안과 적용',
 
       'sns.eyebrow': 'SNS 연동',
-      'sns.title': '한 번 만들고, 여섯 채널에 동시에',
+      'sns.title': '한 번 만들고, 다양한 채널에 동시에',
       'sns.sub': '계정을 연결해 두면 채널별 형식에 맞춰 자동 게시하고, 성과까지 다시 끌어옵니다.',
       'int.title': '업무 도구도 그대로 붙습니다',
       'int.sub': '메일·일정·문서·코드까지, AI 직원이 직접 사용합니다.',
@@ -220,7 +220,7 @@
       'cta.authed': 'Enter Studio',
 
       'hero.eyebrow': 'AI Company · Content Production · SNS Automation',
-      'hero.title': '11 AI teammates,<br /><span class="lp-grad-text">running your content company</span>',
+      'hero.title': 'You started alone.<br /><span class="lp-grad-text">Eleven show up every day.</span>',
       'hero.lead': 'From planning, copy, image, video and sound to publishing across 6 social channels and reading the results. Give the instruction — the right AI teammate executes, and anything irreversible waits for your approval.',
       'hero.cta2': 'Meet the team',
       'hero.trust1': 'Instruct → execute → approve → publish',
@@ -339,7 +339,7 @@
       'an.p4': 'Suggestions you can apply',
 
       'sns.eyebrow': 'Integrations',
-      'sns.title': 'Make once, publish to six',
+      'sns.title': 'Make once, publish everywhere',
       'sns.sub': 'Connect once — we publish in each channel’s format and pull the results back.',
       'int.title': 'Your work tools, connected',
       'int.sub': 'Mail, calendar, docs, code — your AI teammates use them directly.',

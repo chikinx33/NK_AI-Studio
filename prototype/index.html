@@ -36,7 +36,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.landing-page.css?v=3.1419" />
+  <link rel="stylesheet" href="styles.landing-page.css?v=3.1420" />
 
   <!-- ===== JSON-LD (Organization) ===== -->
   <script type="application/ld+json">
@@ -168,7 +168,7 @@
       <div class="lp-wrap lp-hero-grid">
         <div class="lp-hero-copy">
           <span class="lp-eyebrow" data-i18n="hero.eyebrow">AI 기업 · 콘텐츠 제작 · SNS 자동화</span>
-          <h1 data-i18n-html="hero.title">11명의 AI 직원이,<br /><span class="lp-grad-text">당신의 콘텐츠 회사를 굴립니다</span></h1>
+          <h1 data-i18n-html="hero.title">혼자 시작한 회사에,<br /><span class="lp-grad-text">매일 11명이 출근합니다</span></h1>
           <p class="lp-lead" data-i18n-html="hero.lead">
             기획·글·이미지·영상·사운드 제작부터 6개 SNS 배포와 성과 분석까지.
             지시만 하면 담당 AI 직원이 실행하고, 배포·삭제 같은 되돌릴 수 없는 일은 <strong>당신 승인</strong> 뒤에만 움직입니다.
@@ -220,17 +220,83 @@
 
         <!-- 로스터 11인 — 이름·직무는 _orchestrator.ts ROSTER 고정(창작 금지) -->
         <div class="lp-roster lp-reveal">
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🧭</span><h3 data-i18n="co.r1.n">코어</h3><p data-i18n="co.r1.d">총괄 — 작업 분해·라우팅·최종 판단</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">💼</span><h3 data-i18n="co.r2.n">엣지</h3><p data-i18n="co.r2.d">전략·비즈니스 — 수익모델·가격·KPI</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🔍</span><h3 data-i18n="co.r3.n">레이더</h3><p data-i18n="co.r3.d">리서치 — 트렌드·경쟁사·사실확인</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📈</span><h3 data-i18n="co.r4.n">마키</h3><p data-i18n="co.r4.d">마케팅·그로스 — 캠페인·퍼널</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎬</span><h3 data-i18n="co.r5.n">플롯</h3><p data-i18n="co.r5.d">콘텐츠 디렉터 — 기획·포맷·후크</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">✍️</span><h3 data-i18n="co.r6.n">잉크</h3><p data-i18n="co.r6.d">작가·카피 — 스크립트·캡션·문서</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎨</span><h3 data-i18n="co.r7.n">픽셀</h3><p data-i18n="co.r7.d">디자인 — 브랜드·비주얼·영상</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">🎵</span><h3 data-i18n="co.r8.n">비트</h3><p data-i18n="co.r8.d">사운드 — BGM·효과음·더빙</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">💻</span><h3 data-i18n="co.r9.n">엔지</h3><p data-i18n="co.r9.d">엔지니어 — 코드·자동화·API</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📡</span><h3 data-i18n="co.r10.n">리치</h3><p data-i18n="co.r10.d">채널·배포 — 전 채널 발행·해시태그·SEO</p></article>
-          <article class="lp-rost"><span class="lp-rost-emoji" aria-hidden="true">📱</span><h3 data-i18n="co.r11.n">싱크</h3><p data-i18n="co.r11.d">PM·비서 — 일정·할일·요약·보고</p></article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/core.webp" type="image/webp" />
+              <img src="images/agents/core.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r1.n">코어</h3><p data-i18n="co.r1.d">총괄 — 작업 분해·라우팅·최종 판단</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/edge.webp" type="image/webp" />
+              <img src="images/agents/edge.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r2.n">엣지</h3><p data-i18n="co.r2.d">전략·비즈니스 — 수익모델·가격·KPI</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/radar.webp" type="image/webp" />
+              <img src="images/agents/radar.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r3.n">레이더</h3><p data-i18n="co.r3.d">리서치 — 트렌드·경쟁사·사실확인</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/maki.webp" type="image/webp" />
+              <img src="images/agents/maki.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r4.n">마키</h3><p data-i18n="co.r4.d">마케팅·그로스 — 캠페인·퍼널</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/plot.webp" type="image/webp" />
+              <img src="images/agents/plot.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r5.n">플롯</h3><p data-i18n="co.r5.d">콘텐츠 디렉터 — 기획·포맷·후크</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/ink.webp" type="image/webp" />
+              <img src="images/agents/ink.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r6.n">잉크</h3><p data-i18n="co.r6.d">작가·카피 — 스크립트·캡션·문서</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/pixel.webp" type="image/webp" />
+              <img src="images/agents/pixel.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r7.n">픽셀</h3><p data-i18n="co.r7.d">디자인 — 브랜드·비주얼·영상</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/beat.webp" type="image/webp" />
+              <img src="images/agents/beat.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r8.n">비트</h3><p data-i18n="co.r8.d">사운드 — BGM·효과음·더빙</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/engi.webp" type="image/webp" />
+              <img src="images/agents/engi.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r9.n">엔지</h3><p data-i18n="co.r9.d">엔지니어 — 코드·자동화·API</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/reach.webp" type="image/webp" />
+              <img src="images/agents/reach.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r10.n">리치</h3><p data-i18n="co.r10.d">채널·배포 — 전 채널 발행·해시태그·SEO</p>
+          </article>
+          <article class="lp-rost">
+            <picture class="lp-rost-avatar">
+              <source srcset="images/agents/sync.webp" type="image/webp" />
+              <img src="images/agents/sync.png" width="128" height="128" alt="" loading="lazy" decoding="async" />
+            </picture>
+            <h3 data-i18n="co.r11.n">싱크</h3><p data-i18n="co.r11.d">PM·비서 — 일정·할일·요약·보고</p>
+          </article>
         </div>
 
         <div class="lp-mini-grid lp-reveal">
@@ -407,7 +473,7 @@
       <div class="lp-wrap">
         <div class="lp-sns-band lp-reveal">
           <span class="lp-eyebrow" data-i18n="sns.eyebrow">SNS 연동</span>
-          <h2 class="lp-section-title" data-i18n="sns.title">한 번 만들고, 여섯 채널에 동시에</h2>
+          <h2 class="lp-section-title" data-i18n="sns.title">한 번 만들고, 다양한 채널에 동시에</h2>
           <p class="lp-section-sub" style="margin-inline:auto;" data-i18n="sns.sub">계정을 연결해 두면 채널별 형식에 맞춰 자동 게시하고, 성과까지 다시 끌어옵니다.</p>
           <div class="lp-sns-logos">
             <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="#FF0000" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></svg> YouTube</span>
@@ -554,7 +620,7 @@
     </div>
   </footer>
 
-  <script src="js/landing.js?v=3.1419" defer></script>
+  <script src="js/landing.js?v=3.1420" defer></script>
 </body>
 
 </html>
