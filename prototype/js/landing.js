@@ -283,6 +283,134 @@
   });
   window.addEventListener('scroll', hideTip, { passive: true });
 
+  /* ===== 배경 스월 (노이즈 플로우 필드) =====
+     Codrops "Ambient Canvas Backgrounds — Swirl" 과 같은 결의 효과를 직접 구현했다.
+     (원본 소스를 옮긴 게 아니다. 이 페이지의 의존성 0 원칙 유지 — 노이즈도 자체 구현)
+     입자가 노이즈 각도장을 따라 흐르고, 누적된 잔상에 블러를 얹어 발광시킨다.
+     색은 프로젝트 팔레트(오렌지·핑크·블루·틸) 안에서만 고른다. */
+  (function () {
+    var view = document.getElementById('fx');
+    // 모션 최소화 설정이면 아예 돌리지 않는다 — CSS 그라데이션 배경만 남는다.
+    if (!view || reduce || !view.getContext) return;
+
+    var vctx = view.getContext('2d');
+    var buf = document.createElement('canvas');
+    var bctx = buf.getContext('2d');
+    if (!vctx || !bctx) return;
+
+    var HUES = [29, 349, 231, 172];   // #ff7a00 · #ff5d7a · #5c7cff · #0bbfa5
+    var TAU = Math.PI * 2;
+    var w = 0, h = 0, dpr = 1, count = 0, parts = [], tick = 0, raf = 0;
+
+    // 2D 그래디언트 노이즈(Perlin). 외부 라이브러리 대신 최소 구현.
+    var noise = (function () {
+      var perm = new Uint8Array(512), src = [];
+      for (var i = 0; i < 256; i++) src[i] = i;
+      var seed = 1337;
+      for (var i = 255; i > 0; i--) {          // 결정적 셔플 — 새로고침해도 같은 흐름
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        var j = seed % (i + 1), t = src[i]; src[i] = src[j]; src[j] = t;
+      }
+      for (var i = 0; i < 512; i++) perm[i] = src[i & 255];
+      function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+      function grad(hash, x, y) {
+        return ((hash & 1) ? -x : x) + ((hash & 2) ? -y : y);
+      }
+      return function (x, y) {
+        var X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+        x -= Math.floor(x); y -= Math.floor(y);
+        var u = fade(x), v = fade(y);
+        var A = perm[X] + Y, B = perm[X + 1] + Y;
+        var n = (1 - v) * ((1 - u) * grad(perm[A], x, y) + u * grad(perm[B], x - 1, y))
+              + v * ((1 - u) * grad(perm[A + 1], x, y - 1) + u * grad(perm[B + 1], x - 1, y - 1));
+        return (n + 1) * 0.5;                  // 0~1
+      };
+    })();
+
+    function reset(p, spread) {
+      p.x = Math.random() * w;
+      p.y = Math.random() * h;
+      p.px = p.x; p.py = p.y;
+      p.ttl = 140 + Math.random() * 200;
+      p.life = spread ? Math.random() * p.ttl : 0;
+      p.speed = 0.45 + Math.random() * 1.5;
+      p.width = 0.6 + Math.random() * 1.7;
+      p.hue = HUES[(Math.random() * HUES.length) | 0] + (Math.random() * 26 - 13);
+    }
+
+    function resize() {
+      w = window.innerWidth; h = window.innerHeight;
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);   // 고DPI 에서 과부하 방지
+      view.width = buf.width = Math.round(w * dpr);
+      view.height = buf.height = Math.round(h * dpr);
+      view.style.width = w + 'px'; view.style.height = h + 'px';
+      bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      count = Math.max(160, Math.min(520, Math.round(w * h / 2800)));
+      parts = [];
+      for (var i = 0; i < count; i++) { var p = {}; reset(p, true); parts.push(p); }
+      bctx.clearRect(0, 0, w, h);
+    }
+
+    function frame() {
+      tick++;
+
+      // 잔상 감쇠 — 투명하게 지워서 CSS 그라데이션이 비치게 한다
+      bctx.globalCompositeOperation = 'destination-out';
+      bctx.fillStyle = 'rgba(0,0,0,0.035)';
+      bctx.fillRect(0, 0, w, h);
+
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.lineCap = 'round';
+
+      for (var i = 0; i < count; i++) {
+        var p = parts[i];
+        var ang = noise(p.x * 0.0016, p.y * 0.0016 + tick * 0.0011) * TAU * 2.2;
+        p.px = p.x; p.py = p.y;
+        p.x += Math.cos(ang) * p.speed;
+        p.y += Math.sin(ang) * p.speed;
+        p.life++;
+
+        var a = Math.sin((p.life / p.ttl) * Math.PI) * 0.5;   // 페이드 인·아웃
+        bctx.strokeStyle = 'hsla(' + p.hue + ',95%,62%,' + a + ')';
+        bctx.lineWidth = p.width;
+        bctx.beginPath();
+        bctx.moveTo(p.px, p.py);
+        bctx.lineTo(p.x, p.y);
+        bctx.stroke();
+
+        if (p.life >= p.ttl || p.x < -60 || p.x > w + 60 || p.y < -60 || p.y > h + 60) reset(p);
+      }
+
+      // 블러 한 겹 + 원본 한 겹 = 발광
+      vctx.clearRect(0, 0, w, h);
+      vctx.globalCompositeOperation = 'source-over';
+      vctx.filter = 'blur(7px)';
+      vctx.drawImage(buf, 0, 0, w, h);
+      vctx.filter = 'none';
+      vctx.globalCompositeOperation = 'lighter';
+      vctx.drawImage(buf, 0, 0, w, h);
+
+      raf = requestAnimationFrame(frame);
+    }
+
+    function start() { if (!raf) raf = requestAnimationFrame(frame); }
+    function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+
+    resize();
+    start();
+
+    var fxTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(fxTimer);
+      fxTimer = setTimeout(resize, 200);
+    });
+    // 탭이 안 보이면 멈춘다(배터리·CPU)
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+  })();
+
   /* ===== 초기 적용 (defer 라 DOM 준비됨) ===== */
   var currentLang = 'ko';
 
