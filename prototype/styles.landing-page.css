@@ -22,7 +22,7 @@
    body::after 라 .fx 보다 뒤에 그려진다(둘 다 z-index:-1). */
 body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(118% 72% at 50% 46%,
-    rgba(10,15,31,.74), rgba(10,15,31,.34) 50%, rgba(10,15,31,0) 78%)}
+    rgba(10,15,31,.52), rgba(10,15,31,.2) 48%, rgba(10,15,31,0) 74%)}
 html,body{height:100%}
 body{
   background-color:#0a0f1f; background:var(--bg); background-attachment:fixed;

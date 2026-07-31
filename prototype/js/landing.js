@@ -330,111 +330,130 @@
   window.addEventListener('scroll', hideTip, { passive: true });
 
   /* ===== 배경 스월 (노이즈 플로우 필드) =====
-     Codrops "Ambient Canvas Backgrounds — Swirl" 과 같은 결의 효과를 직접 구현했다.
-     (원본 소스를 옮긴 게 아니다. 이 페이지의 의존성 0 원칙 유지 — 노이즈도 자체 구현)
-     입자가 노이즈 각도장을 따라 흐르고, 누적된 잔상에 블러를 얹어 발광시킨다.
-     색은 프로젝트 팔레트(오렌지·핑크·블루·틸) 안에서만 고른다. */
+     Codrops "Ambient Canvas Backgrounds — Swirl" 의 동작을 그대로 맞춘 자체 구현.
+     (원본 소스를 옮긴 게 아니다. 이 페이지의 의존성 0 원칙 유지 — 노이즈도 직접 작성)
+     핵심 수치는 원본과 동일: noiseSteps 8 · xOff/yOff 0.00125 · zOff 0.0005 ·
+     TTL 50~200 · speed 0.1~2.1 · radius 1~5 · rangeY 100 · 중앙에서 스폰.
+     각도를 8*TAU 로 크게 휘게 만드는 noiseSteps 가 소용돌이의 정체다.
+     색만 프로젝트 팔레트로 — hue 231(블루) → 389(=29, 오렌지) 밴드를 훑는다. */
   (function () {
     var view = document.getElementById('fx');
-    // 모션 최소화 설정이면 아예 돌리지 않는다 — CSS 그라데이션 배경만 남는다.
-    if (!view || reduce || !view.getContext) return;
+    if (!view || reduce || !view.getContext) return;   // 모션 최소화면 아예 안 돈다
 
     var vctx = view.getContext('2d');
     var buf = document.createElement('canvas');
     var bctx = buf.getContext('2d');
     if (!vctx || !bctx) return;
 
-    var HUES = [29, 349, 231, 172];   // #ff7a00 · #ff5d7a · #5c7cff · #0bbfa5
     var TAU = Math.PI * 2;
+    var BASE_TTL = 50, RANGE_TTL = 150;
+    var BASE_SPEED = 0.1, RANGE_SPEED = 2;
+    var BASE_RADIUS = 1, RANGE_RADIUS = 4;
+    var BASE_HUE = 231, RANGE_HUE = 158;               // 블루 → 핑크 → 오렌지
+    var NOISE_STEPS = 8, X_OFF = 0.00125, Y_OFF = 0.00125, Z_OFF = 0.0005;
+    var RANGE_Y = 100;
+
     var w = 0, h = 0, dpr = 1, count = 0, parts = [], tick = 0, raf = 0;
 
-    // 2D 그래디언트 노이즈(Perlin). 외부 라이브러리 대신 최소 구현.
-    var noise = (function () {
+    /* 3D 그래디언트 노이즈(Perlin). simplex-noise 라이브러리 대신 최소 구현.
+       반환 범위 -1~1 로 원본 simplex 와 맞춘다. */
+    var noise3 = (function () {
       var perm = new Uint8Array(512), src = [];
       for (var i = 0; i < 256; i++) src[i] = i;
-      var seed = 1337;
-      for (var i = 255; i > 0; i--) {          // 결정적 셔플 — 새로고침해도 같은 흐름
+      var seed = 20260801;
+      for (var i = 255; i > 0; i--) {                  // 고정 시드 — 매번 같은 흐름
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         var j = seed % (i + 1), t = src[i]; src[i] = src[j]; src[j] = t;
       }
       for (var i = 0; i < 512; i++) perm[i] = src[i & 255];
       function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-      function grad(hash, x, y) {
-        return ((hash & 1) ? -x : x) + ((hash & 2) ? -y : y);
+      function lerp(a, b, t) { return a + t * (b - a); }
+      function grad(hash, x, y, z) {
+        var hu = hash & 15;
+        var u = hu < 8 ? x : y;
+        var v = hu < 4 ? y : (hu === 12 || hu === 14 ? x : z);
+        return ((hu & 1) ? -u : u) + ((hu & 2) ? -v : v);
       }
-      return function (x, y) {
-        var X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        var u = fade(x), v = fade(y);
-        var A = perm[X] + Y, B = perm[X + 1] + Y;
-        var n = (1 - v) * ((1 - u) * grad(perm[A], x, y) + u * grad(perm[B], x - 1, y))
-              + v * ((1 - u) * grad(perm[A + 1], x, y - 1) + u * grad(perm[B + 1], x - 1, y - 1));
-        return (n + 1) * 0.5;                  // 0~1
+      return function (x, y, z) {
+        var X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+        x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+        var u = fade(x), v = fade(y), ww = fade(z);
+        var A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A + 1] + Z;
+        var B = perm[X + 1] + Y, BA = perm[B] + Z, BB = perm[B + 1] + Z;
+        return lerp(
+          lerp(lerp(grad(perm[AA], x, y, z), grad(perm[BA], x - 1, y, z), u),
+               lerp(grad(perm[AB], x, y - 1, z), grad(perm[BB], x - 1, y - 1, z), u), v),
+          lerp(lerp(grad(perm[AA + 1], x, y, z - 1), grad(perm[BA + 1], x - 1, y, z - 1), u),
+               lerp(grad(perm[AB + 1], x, y - 1, z - 1), grad(perm[BB + 1], x - 1, y - 1, z - 1), u), v),
+          ww);
       };
     })();
 
+    function rand(n) { return Math.random() * n; }
+    function randRange(n) { return n - rand(n * 2); }
+
+    // 원본과 동일한 삼각 페이드
+    function fadeInOut(t, m) {
+      var hm = 0.5 * m;
+      return Math.abs(((t + hm) % m) - hm) / hm;
+    }
+
     function reset(p, spread) {
-      p.x = Math.random() * w;
-      p.y = Math.random() * h;
+      p.x = w * 0.5 + randRange(RANGE_Y);              // 중앙에서 태어나 바깥으로 흐른다
+      p.y = h * 0.5 + randRange(RANGE_Y);
       p.px = p.x; p.py = p.y;
-      p.ttl = 140 + Math.random() * 200;
-      p.life = spread ? Math.random() * p.ttl : 0;
-      p.speed = 0.45 + Math.random() * 1.5;
-      p.width = 0.6 + Math.random() * 1.7;
-      p.hue = HUES[(Math.random() * HUES.length) | 0] + (Math.random() * 26 - 13);
+      p.ttl = BASE_TTL + rand(RANGE_TTL);
+      p.life = spread ? rand(p.ttl) : 0;
+      p.speed = BASE_SPEED + rand(RANGE_SPEED);
+      p.radius = BASE_RADIUS + rand(RANGE_RADIUS);
+      p.hue = BASE_HUE + rand(RANGE_HUE);
     }
 
     function resize() {
       w = window.innerWidth; h = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5);   // 고DPI 에서 과부하 방지
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       view.width = buf.width = Math.round(w * dpr);
       view.height = buf.height = Math.round(h * dpr);
       view.style.width = w + 'px'; view.style.height = h + 'px';
       bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      count = Math.max(160, Math.min(520, Math.round(w * h / 2800)));
+      count = Math.max(220, Math.min(700, Math.round(w * h / 2100)));
       parts = [];
       for (var i = 0; i < count; i++) { var p = {}; reset(p, true); parts.push(p); }
-      bctx.clearRect(0, 0, w, h);
     }
 
     function frame() {
       tick++;
-
-      // 잔상 감쇠 — 투명하게 지워서 CSS 그라데이션이 비치게 한다
-      bctx.globalCompositeOperation = 'destination-out';
-      bctx.fillStyle = 'rgba(0,0,0,0.035)';
-      bctx.fillRect(0, 0, w, h);
-
+      bctx.clearRect(0, 0, w, h);                      // 잔상 없이 매 프레임 새로 그린다
       bctx.globalCompositeOperation = 'lighter';
       bctx.lineCap = 'round';
 
       for (var i = 0; i < count; i++) {
         var p = parts[i];
-        var ang = noise(p.x * 0.0016, p.y * 0.0016 + tick * 0.0011) * TAU * 2.2;
+        var ang = noise3(p.x * X_OFF, p.y * Y_OFF, tick * Z_OFF) * NOISE_STEPS * TAU;
         p.px = p.x; p.py = p.y;
         p.x += Math.cos(ang) * p.speed;
         p.y += Math.sin(ang) * p.speed;
         p.life++;
 
-        var a = Math.sin((p.life / p.ttl) * Math.PI) * 0.5;   // 페이드 인·아웃
-        bctx.strokeStyle = 'hsla(' + p.hue + ',95%,62%,' + a + ')';
-        bctx.lineWidth = p.width;
+        bctx.strokeStyle = 'hsla(' + p.hue + ',100%,60%,' + fadeInOut(p.life, p.ttl) + ')';
+        bctx.lineWidth = p.radius;
         bctx.beginPath();
         bctx.moveTo(p.px, p.py);
         bctx.lineTo(p.x, p.y);
         bctx.stroke();
 
-        if (p.life >= p.ttl || p.x < -60 || p.x > w + 60 || p.y < -60 || p.y > h + 60) reset(p);
+        if (p.life > p.ttl || p.x < 0 || p.x > w || p.y < 0 || p.y > h) reset(p);
       }
 
-      // 블러 한 겹 + 원본 한 겹 = 발광
+      // 원본과 같은 3패스 합성: blur8 + blur4 + 원본, 전부 lighter
       vctx.clearRect(0, 0, w, h);
-      vctx.globalCompositeOperation = 'source-over';
-      vctx.filter = 'blur(7px)';
+      vctx.globalCompositeOperation = 'lighter';
+      vctx.filter = 'blur(8px) brightness(200%)';
+      vctx.drawImage(buf, 0, 0, w, h);
+      vctx.filter = 'blur(4px) brightness(200%)';
       vctx.drawImage(buf, 0, 0, w, h);
       vctx.filter = 'none';
-      vctx.globalCompositeOperation = 'lighter';
       vctx.drawImage(buf, 0, 0, w, h);
 
       raf = requestAnimationFrame(frame);
@@ -451,7 +470,6 @@
       clearTimeout(fxTimer);
       fxTimer = setTimeout(resize, 200);
     });
-    // 탭이 안 보이면 멈춘다(배터리·CPU)
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stop(); else start();
     });
