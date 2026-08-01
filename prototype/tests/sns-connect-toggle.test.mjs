@@ -63,6 +63,32 @@ test("해제 저장이 실패하면 화면을 연결됨으로 되돌린다", () 
   assert.match(s, /The channel is still connected|계속 연결된 상태/);
 });
 
+test("언어 전환 시 이 화면의 사전으로 다시 그린다", () => {
+  const s = src();
+  // 구독하지 않으면 common.js 의 범용 ko→en 치환 사전이 남긴 옛 문구가 그대로 남아
+  // 한국어는 최신인데 영어만 예전 표현이 되는 상태가 된다.
+  assert.match(s, /window\.addEventListener\('nk:lang-changed'/);
+  assert.match(s, /render\(\);/);
+  // 같은 언어로 재진입해 무한 렌더가 도는 것을 막는다
+  assert.match(s, /__snsSettingsLastLang === newLang\) return;/);
+  // 리스너 중복 등록 방지
+  assert.match(s, /__snsSettingsLangBound/);
+});
+
+test("화면 문구는 자기 사전(T)에서 나온다 — ko/en 키가 짝을 이룬다", () => {
+  const s = src();
+  const block = s.slice(s.indexOf("var T = {"), s.indexOf("function _lang"));
+  const ko = block.slice(block.indexOf("ko: {"), block.indexOf("en: {"));
+  const en = block.slice(block.indexOf("en: {"));
+  const keysOf = (chunk) =>
+    new Set([...chunk.matchAll(/^\s{6}([a-zA-Z]+):/gm)].map((m) => m[1]));
+  const koKeys = keysOf(ko);
+  const enKeys = keysOf(en);
+  assert.ok(koKeys.size > 10, `ko 키 수집 실패 (${koKeys.size})`);
+  const missing = [...koKeys].filter((k) => !enKeys.has(k));
+  assert.deepEqual(missing, [], `en 사전에 빠진 키: ${missing.join(", ")}`);
+});
+
 test("화면과 상태가 갈라지면 콘솔 경고를 남긴다", () => {
   const s = src();
   assert.match(s, /function warnIfConnectStateDrifted/);

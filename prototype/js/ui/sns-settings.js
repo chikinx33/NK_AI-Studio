@@ -708,6 +708,21 @@
   function init() {
     if (!document.querySelector('.content')) return;
     window.addEventListener('message', onOAuthMessage);
+
+    // 언어 전환 시 이 화면의 사전(T[lang])으로 다시 그린다.
+    // 구독하지 않으면 common.js 의 범용 ko→en 치환 사전이 남긴 옛 문구가 그대로
+    // 남아, 한국어는 최신인데 영어만 예전 표현이 되는 상태가 된다.
+    // (brand-studio 등 다른 화면은 이미 같은 방식으로 처리한다)
+    if (!window.__snsSettingsLangBound) {
+      window.__snsSettingsLangBound = true;
+      window.__snsSettingsLastLang = _lang();
+      window.addEventListener('nk:lang-changed', function (e) {
+        var newLang = (e && e.detail && e.detail.lang) === 'en' ? 'en' : 'ko';
+        if (window.__snsSettingsLastLang === newLang) return;  // 동일 언어 재진입 차단
+        window.__snsSettingsLastLang = newLang;
+        if (document.querySelector('.content')) render();
+      });
+    }
     loadSettings()
       .then(function () { render(); })
       .then(function () { return maybeRefreshYoutubeInfo(); })
