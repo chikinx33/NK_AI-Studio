@@ -1362,6 +1362,14 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     : (input?.platform ? [input.platform] : ["instagram"]);
   const caption = String(input?.caption || input?.prompt || "").trim();
   if (!caption) throw new Error("caption is required");
+  // TikTok Direct Post 는 게시 전 확인 화면에서 사용자가 공개 범위·상호작용·상업적 콘텐츠
+  // 고지를 직접 골라야 한다(TikTok 가이드라인). 에이전트 경로에는 그 화면이 없으므로
+  // 여기서 막고 브랜드 스튜디오의 게시 버튼으로 유도한다.
+  if (platforms.some((p: any) => String(p || "").toLowerCase() === "tiktok")) {
+    throw new Error(
+      "TikTok 게시는 브랜드 스튜디오의 'TikTok에 게시' 버튼에서 진행해 주세요. TikTok 정책상 공개 범위·상호작용·상업적 콘텐츠 고지를 게시 전 확인 화면에서 직접 선택해야 해요."
+    );
+  }
   const body: any = {
     platforms,
     caption,

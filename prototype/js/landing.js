@@ -22,6 +22,8 @@
       'fact3': 'AI 에이전트 협업',
       'fact4': 'SNS 마케팅 자동화',
       'footer.copy': '© 2026 NK Studio',
+      'footer.tiktok': 'TikTok 연동',
+      'footer.support': '지원',
       'footer.terms': '이용약관',
       'footer.privacy': '개인정보처리방침',
       'footer.contact': '문의',
@@ -87,6 +89,8 @@
       'fact3': 'AI agent collaboration',
       'fact4': 'SNS marketing automation',
       'footer.copy': '© 2026 NK Studio',
+      'footer.tiktok': 'TikTok Integration',
+      'footer.support': 'Support',
       'footer.terms': 'Terms',
       'footer.privacy': 'Privacy',
       'footer.contact': 'Contact',
@@ -154,6 +158,17 @@
       var v = String(localStorage.getItem(LANG_KEY) || 'ko').trim().toLowerCase();
       return v === 'en' ? 'en' : 'ko';
     } catch (_) { return 'ko'; }
+  }
+
+  /* ?lang=en / ?lang=ko 로 들어오면 그 값을 즉시 반영한다.
+     외부(플랫폼 심사·공유 링크)에서 영문으로 바로 열 수 있어야 하므로,
+     저장값을 덮어써서 이후 readLang() 호출도 전부 같은 값을 보게 만든다. */
+  function syncLangFromQuery() {
+    var q = '';
+    try { q = new URLSearchParams(window.location.search).get('lang') || ''; } catch (_) { return; }
+    q = String(q).trim().toLowerCase();
+    if (q !== 'en' && q !== 'ko') return;
+    try { localStorage.setItem(LANG_KEY, q); } catch (_) {}
   }
 
   function applyLang(lang) {
@@ -495,6 +510,7 @@
     render(safe);
   }
 
+  syncLangFromQuery();
   render(readLang());
 
   var langBtn = document.querySelector('[data-lang-toggle]');

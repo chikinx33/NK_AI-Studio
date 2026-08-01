@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" class="preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok Integration — NK AI Studio</title>
+  <meta name="description" content="How NK AI Studio integrates with TikTok: the permissions we request, what we do with the data, and what we never do. / NK AI Studio의 TikTok 연동 안내" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://nkstudio.org/tiktok" />
+  <style>
+    html.preload-veiled, body.preload-veiled { background: #0f172a; color: #cbd5e1; }
+    html.preload-veiled .legal-wrap { visibility: hidden; }
+    [data-theme="light"].preload-veiled, [data-theme="light"] body.preload-veiled { background: #f7f9fd; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Page Layout (terms.html / privacy.html 과 동일한 2단 언어 구조) ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: auto; overflow: auto; }
+
+    body {
+      font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    .legal-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .legal-header {
+      position: sticky; top: 0; z-index: 100;
+      background: color-mix(in srgb, var(--bg-2) 92%, transparent 8%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    .legal-header-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 16px;
+    }
+
+    .legal-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text); flex-shrink: 0;
+    }
+
+    .legal-logo-icon { width: 28px; height: 28px; border-radius: 8px; overflow: hidden; }
+    .legal-logo-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .legal-logo-text { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+    .legal-logo-text span { color: var(--orange); }
+
+    .legal-header-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .legal-nav-link {
+      font-size: 13px; font-weight: 500; color: var(--text-2);
+      text-decoration: none; padding: 6px 10px; border-radius: 8px;
+      transition: background 0.14s, color 0.14s;
+    }
+
+    .legal-nav-link:hover { background: var(--layer-strong); color: var(--text); }
+    .legal-nav-link.active { color: var(--orange); }
+
+    .legal-lang-btn {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); border-radius: 8px; padding: 5px 10px;
+      cursor: pointer; min-width: 46px; text-align: center;
+      transition: background 0.14s, color 0.14s;
+    }
+    .legal-lang-btn:hover { background: var(--layer-strong); color: var(--text); }
+
+    /* ── Content ────────────────────────────────────────── */
+    .legal-main { flex: 1; padding: 24px 24px 64px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    .legal-content { display: none; }
+    .legal-content.active { display: block; }
+
+    .legal-doc-title { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: var(--text); line-height: 1.25; }
+
+    .legal-doc-meta {
+      font-size: 13px; color: var(--text-3); margin-bottom: 32px;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+
+    .legal-toc { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 36px; }
+    .legal-toc-title { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .legal-toc-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .legal-toc-list li a { font-size: 13px; color: var(--text-2); text-decoration: none; display: flex; align-items: center; gap: 6px; padding: 3px 0; transition: color 0.12s; }
+    .legal-toc-list li a:hover { color: var(--orange); }
+    .legal-toc-list li a::before { content: attr(data-num); font-size: 11px; font-weight: 700; color: var(--orange); min-width: 18px; opacity: 0.8; }
+
+    .legal-section { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 36px; }
+    .legal-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .legal-section-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+    .legal-section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border) 70%);
+      color: var(--orange); font-size: 12px; font-weight: 700;
+    }
+
+    .legal-p { font-size: 14px; color: var(--text-2); line-height: 1.8; margin-bottom: 12px; }
+    .legal-p:last-child { margin-bottom: 0; }
+    .legal-p a { color: var(--orange); text-decoration: none; }
+    .legal-p a:hover { text-decoration: underline; }
+
+    .legal-list { list-style: none; padding-left: 0; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .legal-list li { font-size: 14px; color: var(--text-2); line-height: 1.7; padding-left: 16px; position: relative; }
+    .legal-list li::before { content: '·'; position: absolute; left: 4px; color: var(--orange); font-size: 16px; line-height: 1.4; }
+    .legal-list li.sub { padding-left: 32px; font-size: 13px; color: var(--text-3); }
+    .legal-list li.sub::before { left: 20px; content: '–'; font-size: 14px; color: var(--text-3); }
+
+    .legal-highlight {
+      background: color-mix(in srgb, var(--orange) 8%, var(--panel) 92%);
+      border: 1px solid color-mix(in srgb, var(--orange) 20%, var(--border) 80%);
+      border-radius: 10px; padding: 14px 18px; margin: 12px 0;
+      font-size: 13px; color: var(--text-2); line-height: 1.75;
+    }
+    .legal-highlight strong { color: var(--orange); }
+
+    /* ── Data Table ──────────────────────────────────────── */
+    .legal-table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 10px; }
+
+    .legal-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+
+    .legal-table th {
+      background: color-mix(in srgb, var(--bg-3) 80%, var(--panel) 20%);
+      color: var(--text-2); font-weight: 600; text-align: left;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .legal-table td {
+      padding: 9px 14px; color: var(--text-2);
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent 50%);
+      vertical-align: top; line-height: 1.6;
+    }
+
+    .legal-table tr:last-child td { border-bottom: none; }
+    .legal-table tr:hover td { background: var(--layer-soft); }
+    .legal-table code { font-size: 12px; color: var(--orange); background: var(--layer-soft); padding: 1px 5px; border-radius: 4px; }
+
+    /* ── Flow Steps (스크린샷 포함) ───────────────────────── */
+    .flow-step {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px 22px; margin-bottom: 18px;
+    }
+
+    .flow-step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+
+    .flow-step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--orange) 18%, var(--panel) 82%);
+      border: 1px solid color-mix(in srgb, var(--orange) 36%, var(--border) 64%);
+      color: var(--orange); font-size: 11px; font-weight: 700;
+    }
+
+    .flow-step-title { font-size: 15px; font-weight: 700; color: var(--text); }
+
+    .flow-step-scope {
+      margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+      color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--panel) 88%);
+      border: 1px solid color-mix(in srgb, var(--teal) 28%, var(--border) 72%);
+      border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+    }
+
+    .flow-step-body { font-size: 14px; color: var(--text-2); line-height: 1.8; }
+
+    .flow-shot { margin-top: 14px; }
+
+    .flow-shot img {
+      display: block; width: 100%; height: auto; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg-2);
+    }
+
+    .flow-shot figcaption {
+      font-size: 12px; color: var(--text-3); margin-top: 7px; text-align: center;
+    }
+
+    /* 스크린샷 파일이 아직 없을 때 깨진 이미지 대신 캡션만 남긴다. */
+    .flow-shot.shot-missing img { display: none; }
+
+    /* ── Contact Card ────────────────────────────────────── */
+    .legal-contact-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; margin-top: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .legal-contact-item { display: flex; flex-direction: column; gap: 3px; }
+    .legal-contact-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; }
+    .legal-contact-value { font-size: 13px; color: var(--text-2); }
+    .legal-contact-value a { color: var(--orange); text-decoration: none; }
+    .legal-contact-value a:hover { text-decoration: underline; }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .legal-footer { border-top: 1px solid var(--border); padding: 22px 24px; background: var(--bg-2); }
+
+    .legal-footer-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+
+    .legal-footer-copy { font-size: 12px; color: var(--text-3); }
+    .legal-footer-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .legal-footer-links a { font-size: 12px; color: var(--text-3); text-decoration: none; padding: 2px 6px; border-radius: 5px; transition: color 0.12s; }
+    .legal-footer-links a:hover { color: var(--text); }
+    .legal-footer-links a.active { color: var(--orange); }
+    .legal-footer-links span { color: var(--border); font-size: 11px; }
+
+    /* ── Scroll To Top ───────────────────────────────────── */
+    .scroll-top {
+      position: fixed; bottom: 28px; right: 28px; z-index: 200;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 36%, var(--border) 64%);
+      color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+      opacity: 0; pointer-events: none; transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s, background 0.14s;
+    }
+    .scroll-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .scroll-top:hover { background: color-mix(in srgb, var(--orange) 22%, var(--panel) 78%); }
+    .scroll-top svg { display: block; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .legal-header-inner { padding: 0; height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+      .legal-doc-title { font-size: 22px; }
+      .legal-section-title { font-size: 15px; }
+      .legal-toc { padding: 14px 16px; }
+      .legal-contact-card { grid-template-columns: 1fr; }
+      .legal-footer-inner { flex-direction: column; align-items: flex-start; }
+      .flow-step-scope { margin-left: 0; }
+      .flow-step-head { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grain"></div>
+  <div class="legal-wrap">
+
+    <!-- Header -->
+    <header class="legal-header">
+      <div class="legal-header-inner">
+        <a href="/" class="legal-logo">
+          <div class="legal-logo-icon">
+            <img src="images/logo(500500).png" alt="NK AI Studio" />
+          </div>
+          <span class="legal-logo-text">NK <span>AI Studio</span></span>
+        </a>
+        <nav class="legal-header-nav">
+          <a href="/" class="legal-nav-link" id="nav-home">Home</a>
+          <a href="tiktok" class="legal-nav-link active" id="nav-tiktok">TikTok</a>
+          <a href="support" class="legal-nav-link" id="nav-support">Support</a>
+          <a href="terms" class="legal-nav-link" id="nav-terms">Terms</a>
+          <a href="privacy" class="legal-nav-link" id="nav-privacy">Privacy</a>
+          <button type="button" class="legal-lang-btn" id="lang-btn" aria-label="Switch language">한국어</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="legal-main">
+
+      <!-- ═══════════════════════ ENGLISH ═══════════════════════ -->
+      <article class="legal-content active" id="content-en">
+        <h1 class="legal-doc-title">TikTok Integration</h1>
+        <div class="legal-doc-meta">
+          <span>App Name: NK AI Studio</span>
+          <span>Website: nkstudio.org</span>
+          <span>Last Updated: August 1, 2026</span>
+          <span>Operator: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="Table of Contents">
+          <p class="legal-toc-title">Contents</p>
+          <ol class="legal-toc-list">
+            <li><a href="#en-t1" data-num="1">What NK AI Studio is</a></li>
+            <li><a href="#en-t2" data-num="2">How the TikTok integration works</a></li>
+            <li><a href="#en-t3" data-num="3">Permissions we request</a></li>
+            <li><a href="#en-t4" data-num="4">What we never do</a></li>
+            <li><a href="#en-t5" data-num="5">Data retention &amp; deletion</a></li>
+            <li><a href="#en-t6" data-num="6">Contact</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="en-t1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>What NK AI Studio is</h2>
+          <p class="legal-p"><strong>NK AI Studio</strong> is a web-based content production and brand management platform for individual creators and small brand owners. It runs entirely in the browser at <strong>nkstudio.org</strong>.</p>
+          <p class="legal-p">Inside the editor a user plans a campaign, generates the script, images, video and voice-over with AI, and reviews the finished asset. Only after the user explicitly approves that exact asset on screen is it published to the user's <strong>own</strong> connected social accounts. After publishing, the user can see how each post performed and use that to plan the next one.</p>
+          <p class="legal-p">TikTok is one of the supported destinations, alongside YouTube, Instagram, Facebook, Threads and X. Connecting a TikTok account is entirely optional — the rest of the product works without it.</p>
+          <div class="legal-highlight">
+            <strong>Human approval is mandatory.</strong> Nothing is ever posted automatically, on a schedule, or in bulk. Every single post requires a confirmation step in which the caption, the media, the audience setting and the content disclosures are shown before the post is sent.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-t2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>How the TikTok integration works</h2>
+          <p class="legal-p">Four steps, in this order. Each step is shown below with a screenshot of the actual product UI.</p>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">1</span>
+              <span class="flow-step-title">Connect</span>
+              <span class="flow-step-scope">user.info.basic</span>
+            </div>
+            <div class="flow-step-body">
+              The user opens <strong>Settings &gt; SNS Connections</strong> and presses <strong>Connect TikTok</strong>. They are redirected to TikTok's own authorization page, grant consent there, and return to <code>https://nkstudio.org/auth/tiktok/callback</code>. We then call TikTok's user info endpoint exactly once and read only <code>open_id</code>, <code>display_name</code> and <code>username</code>, so the connected account name is visible on the screen from that point on.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/01-connect.png" alt="SNS Connections screen showing the TikTok account connected, with the connected account name displayed" loading="lazy" />
+              <figcaption>Step 1 — Settings &gt; SNS Connections, after the TikTok account is connected.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">2</span>
+              <span class="flow-step-title">Create</span>
+              <span class="flow-step-scope">no TikTok data used</span>
+            </div>
+            <div class="flow-step-body">
+              The user produces the content inside NK AI Studio — scenario, images, video, narration and caption. This step uses no TikTok data and calls no TikTok API. The finished asset is stored in that user's own private storage.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/02-create.png" alt="NK AI Studio editor generating a short-form video and its caption" loading="lazy" />
+              <figcaption>Step 2 — The asset is produced inside the editor before any TikTok call happens.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">3</span>
+              <span class="flow-step-title">Review &amp; Approve</span>
+              <span class="flow-step-scope">video.publish</span>
+            </div>
+            <div class="flow-step-body">
+              Pressing <strong>Publish to TikTok</strong> does not publish anything. We first query TikTok's <code>creator_info</code> endpoint and build a confirmation dialog from the response. In that dialog the user sees the creator nickname and a preview of the media and caption, and must:
+              <ul class="legal-list" style="margin-top: 10px;">
+                <li>choose <strong>who can view this video</strong> from the privacy levels the account allows — no option is pre-selected, and the Post button stays disabled until one is chosen;</li>
+                <li>set the <strong>Comment / Duet / Stitch</strong> toggles, with any interaction the creator has disabled shown as unavailable;</li>
+                <li>declare whether the post is <strong>commercial content</strong> — "Your brand" and/or "Branded content" — and confirm the resulting "Promotional content" / "Paid partnership" label, next to links to TikTok's Branded Content Policy and Music Usage Confirmation.</li>
+              </ul>
+              Only when the user presses the confirm button do we send the post to TikTok using exactly the values the user selected.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/03-review-approve.png" alt="Direct Post confirmation dialog showing creator nickname, media preview, audience selection, interaction toggles and commercial content disclosure" loading="lazy" />
+              <figcaption>Step 3 — The confirmation dialog shown before every TikTok post.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">4</span>
+              <span class="flow-step-title">Publish &amp; Measure</span>
+              <span class="flow-step-scope">video.publish · video.list</span>
+            </div>
+            <div class="flow-step-body">
+              We show posting progress while TikTok processes the upload, then a link to the published post. Later, on the <strong>Analytics</strong> dashboard, the user can sync their recent TikTok videos and see view, like, comment and share counts for their own posts, so they can compare what worked and plan the next piece of content.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/04-publish-measure.png" alt="Analytics dashboard showing TikTok view, like, comment and share counts for the user's own posts" loading="lazy" />
+              <figcaption>Step 4 — The Analytics dashboard after a TikTok sync.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-t3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>Permissions we request</h2>
+          <p class="legal-p">We request three scopes. We do <strong>not</strong> request <code>video.upload</code>.</p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Scope</th>
+                  <th>What we access</th>
+                  <th>Why</th>
+                  <th>What we store</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>user.info.basic</code><br><span style="color:var(--text-3);font-size:12px;">Login Kit</span></td>
+                  <td>A single call to the user info endpoint immediately after the OAuth token exchange, requesting only <code>open_id</code>, <code>display_name</code>, <code>username</code>.</td>
+                  <td><code>display_name</code> and <code>username</code> are shown on the SNS Connections screen and again in the publish confirmation dialog, so that before approving a post the user can visually confirm <em>which</em> TikTok account the content will be sent to. Our users often manage more than one brand account. <code>open_id</code> is the internal key that binds the stored token and the performance data to the correct account.</td>
+                  <td><code>open_id</code>, <code>display_name</code>, <code>username</code>, and the access/refresh tokens. Nothing else — no followers, following, likes, bio or avatar.</td>
+                </tr>
+                <tr>
+                  <td><code>video.publish</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — Direct Post</span></td>
+                  <td><code>creator_info/query</code> for the creator nickname, allowed privacy levels, max duration and comment/duet/stitch availability; then <code>video/init</code> or <code>content/init</code> to send the approved post; then <code>status/fetch</code> to follow its progress.</td>
+                  <td>This is the core feature of the product and the reason we integrate with TikTok at all: publishing the asset the user created and approved inside NK AI Studio to their own TikTok account, with the audience and disclosure settings they chose on screen.</td>
+                  <td>The returned <code>publish_id</code> and the resulting post id and URL, so the user can open their own post from our interface and so performance data can be matched to it.</td>
+                </tr>
+                <tr>
+                  <td><code>video.list</code><br><span style="color:var(--text-3);font-size:12px;">Display API</span></td>
+                  <td>For up to 20 of the user's most recent videos: <code>id</code>, <code>title</code>, <code>video_description</code>, <code>duration</code>, <code>cover_image_url</code>, <code>embed_link</code>, <code>create_time</code>, <code>like_count</code>, <code>comment_count</code>, <code>share_count</code>, <code>view_count</code>.</td>
+                  <td>Shown to that same user as a performance table and charts, so they can compare how content published through NK AI Studio performed against their other posts. <code>cover_image_url</code> renders the thumbnail and <code>embed_link</code> sends the user back to the original video on TikTok. The aggregate counts feed our planning tool, which suggests what to produce next.</td>
+                  <td>The listed metrics plus the video id and embed link, in that user's private record, refreshed on each sync. We never download or re-host TikTok video files.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="legal-p">Media delivery: because TikTok's <code>PULL_FROM_URL</code> requires a verified domain, media is served through <code>https://nkstudio.org/api/sns/tiktok-media</code>, a proxy on our own verified domain that streams the user's file only when accompanied by a short-lived HMAC-SHA256 signed token generated at publish time.</p>
+          <div class="legal-highlight">
+            <strong>Before app approval:</strong> until this app passes TikTok's review, our server forces <code>privacy_level</code> to <code>SELF_ONLY</code> regardless of what the user selects, so that no post created through our app can become publicly visible before review is complete.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-t4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>What we never do</h2>
+          <ul class="legal-list">
+            <li><strong>No automatic or unattended posting.</strong> There is no scheduler, no bulk poster and no bot. Every post passes through the confirmation dialog described above.</li>
+            <li><strong>No exposure to other users.</strong> One user's TikTok data is never shown to any other NK AI Studio user, and never aggregated across accounts.</li>
+            <li><strong>No selling and no model training.</strong> TikTok data is never sold, never used for advertising, and never used to train any AI model.</li>
+            <li><strong>No re-hosting of TikTok videos.</strong> We store metrics and links only. Video files stay on TikTok, and thumbnails and embed links send traffic back there.</li>
+            <li><strong>No use of TikTok as a login provider.</strong> Users sign in to NK AI Studio with their own NK AI Studio account. TikTok authorization is used solely to establish the publishing connection.</li>
+            <li><strong>No posting of content the user has not seen.</strong> The media is content the user created inside NK AI Studio and approved on screen.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="en-t5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>Data retention &amp; deletion</h2>
+          <ul class="legal-list">
+            <li>All TikTok data is scoped to the single NK AI Studio user who authorized it.</li>
+            <li>Tokens and TikTok data are kept in a private per-user object in Google Cloud Storage, encrypted at rest. Access tokens are refreshed through TikTok's token endpoint using the refresh token.</li>
+            <li><strong>Disconnecting:</strong> the user can disconnect TikTok at any time from <strong>Settings &gt; SNS Connections</strong>. This immediately deletes the stored tokens and all cached TikTok data.</li>
+            <li><strong>Account deletion:</strong> deleting the NK AI Studio account deletes everything, including all TikTok tokens and cached metrics.</li>
+            <li>You may also request deletion by email at any time — see the contact section below.</li>
+          </ul>
+          <p class="legal-p">Full details are in our <a href="privacy">Privacy Policy</a> and <a href="terms">Terms of Service</a>.</p>
+        </section>
+
+        <section class="legal-section" id="en-t6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>Contact</h2>
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Support Email</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Response Time</span>
+              <span class="legal-contact-value">Within 3 business days</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Operator</span>
+              <span class="legal-contact-value">NK Studio</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Help Center</span>
+              <span class="legal-contact-value"><a href="support">nkstudio.org/support</a></span>
+            </div>
+          </div>
+        </section>
+      </article>
+
+      <!-- ═══════════════════════ KOREAN ═══════════════════════ -->
+      <article class="legal-content" id="content-ko">
+        <h1 class="legal-doc-title">TikTok 연동 안내</h1>
+        <div class="legal-doc-meta">
+          <span>앱 이름: NK AI Studio</span>
+          <span>웹사이트: nkstudio.org</span>
+          <span>최종 수정: 2026년 8월 1일</span>
+          <span>운영사: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="목차">
+          <p class="legal-toc-title">목차</p>
+          <ol class="legal-toc-list">
+            <li><a href="#ko-t1" data-num="1">NK AI Studio 소개</a></li>
+            <li><a href="#ko-t2" data-num="2">TikTok 연동 동작 방식</a></li>
+            <li><a href="#ko-t3" data-num="3">요청하는 권한</a></li>
+            <li><a href="#ko-t4" data-num="4">절대 하지 않는 것</a></li>
+            <li><a href="#ko-t5" data-num="5">데이터 보관 및 삭제</a></li>
+            <li><a href="#ko-t6" data-num="6">문의</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="ko-t1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>NK AI Studio 소개</h2>
+          <p class="legal-p"><strong>NK AI Studio</strong>는 개인 창작자와 소규모 브랜드 운영자를 위한 웹 기반 콘텐츠 제작·브랜드 관리 플랫폼입니다. 별도 설치 없이 <strong>nkstudio.org</strong>에서 브라우저로 동작합니다.</p>
+          <p class="legal-p">사용자는 에디터 안에서 캠페인을 기획하고 대본·이미지·영상·나레이션을 AI로 생성한 뒤 결과물을 검토합니다. 화면에서 <strong>직접 승인한 그 결과물만</strong> 사용자 <strong>본인의</strong> 연결된 SNS 계정에 게시됩니다. 게시 후에는 각 게시물의 성과를 확인하고 다음 콘텐츠 기획에 반영할 수 있습니다.</p>
+          <p class="legal-p">TikTok은 지원 채널 중 하나이며 YouTube, Instagram, Facebook, Threads, X도 함께 지원합니다. TikTok 계정 연결은 선택 사항으로, 연결하지 않아도 나머지 기능은 그대로 사용할 수 있습니다.</p>
+          <div class="legal-highlight">
+            <strong>사람의 승인이 반드시 필요합니다.</strong> 자동 게시·예약 대량 게시는 존재하지 않습니다. 모든 게시는 캡션·미디어·공개 범위·상업적 콘텐츠 고지를 화면에 띄우고 사용자가 확인 버튼을 누른 뒤에만 실행됩니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-t2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>TikTok 연동 동작 방식</h2>
+          <p class="legal-p">아래 4단계 순서로 동작하며, 각 단계마다 실제 화면 스크린샷을 함께 제공합니다.</p>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">1</span>
+              <span class="flow-step-title">연결 (Connect)</span>
+              <span class="flow-step-scope">user.info.basic</span>
+            </div>
+            <div class="flow-step-body">
+              <strong>설정 &gt; SNS 연결</strong>에서 <strong>TikTok 연결</strong>을 누르면 TikTok 공식 인증 화면으로 이동합니다. 사용자가 동의하면 <code>https://nkstudio.org/auth/tiktok/callback</code>으로 돌아오고, 이때 사용자 정보 API를 <strong>단 한 번</strong> 호출해 <code>open_id</code>, <code>display_name</code>, <code>username</code>만 읽습니다. 이후 화면에는 연결된 계정 이름이 표시됩니다.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/01-connect.png" alt="TikTok 계정이 연결된 SNS 연결 화면" loading="lazy" />
+              <figcaption>1단계 — 설정 &gt; SNS 연결, TikTok 계정 연결 완료 상태.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">2</span>
+              <span class="flow-step-title">제작 (Create)</span>
+              <span class="flow-step-scope">TikTok 데이터 미사용</span>
+            </div>
+            <div class="flow-step-body">
+              NK AI Studio 안에서 시나리오·이미지·영상·나레이션·캡션을 제작합니다. 이 단계에서는 TikTok 데이터를 전혀 사용하지 않고 TikTok API도 호출하지 않습니다. 완성된 결과물은 해당 사용자의 비공개 저장소에 보관됩니다.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/02-create.png" alt="NK AI Studio 에디터에서 숏폼 영상과 캡션을 생성하는 화면" loading="lazy" />
+              <figcaption>2단계 — TikTok 호출 이전에 에디터 안에서 결과물을 제작합니다.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">3</span>
+              <span class="flow-step-title">검토 및 승인 (Review &amp; Approve)</span>
+              <span class="flow-step-scope">video.publish</span>
+            </div>
+            <div class="flow-step-body">
+              <strong>TikTok에 게시</strong>를 눌러도 즉시 게시되지 않습니다. 먼저 TikTok의 <code>creator_info</code>를 조회해 그 응답으로 확인 모달을 구성합니다. 사용자는 크리에이터 닉네임과 미디어·캡션 미리보기를 확인한 뒤 다음을 직접 선택해야 합니다.
+              <ul class="legal-list" style="margin-top: 10px;">
+                <li>계정이 허용하는 범위 안에서 <strong>공개 대상</strong>을 선택합니다. 기본 선택값은 없으며, 선택하기 전까지 게시 버튼은 비활성 상태입니다.</li>
+                <li><strong>댓글 / 듀엣 / 스티치</strong> 허용 여부를 설정합니다. 크리에이터가 비활성화해 둔 항목은 선택할 수 없게 표시됩니다.</li>
+                <li><strong>상업적 콘텐츠</strong> 여부("자사 브랜드" 및/또는 "브랜디드 콘텐츠")를 고지하고, 그에 따라 붙는 "홍보 콘텐츠" / "유료 광고" 라벨과 TikTok의 브랜디드 콘텐츠 정책·음원 사용 확인 링크를 확인합니다.</li>
+              </ul>
+              사용자가 확인 버튼을 누른 뒤에야, 사용자가 고른 값 그대로 TikTok에 게시 요청을 보냅니다.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/03-review-approve.png" alt="크리에이터 닉네임, 미디어 미리보기, 공개 범위 선택, 상호작용 토글, 상업적 콘텐츠 고지가 포함된 Direct Post 확인 모달" loading="lazy" />
+              <figcaption>3단계 — 모든 TikTok 게시 전에 표시되는 확인 모달.</figcaption>
+            </figure>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-head">
+              <span class="flow-step-num">4</span>
+              <span class="flow-step-title">게시 및 성과 측정 (Publish &amp; Measure)</span>
+              <span class="flow-step-scope">video.publish · video.list</span>
+            </div>
+            <div class="flow-step-body">
+              TikTok이 업로드를 처리하는 동안 진행 상태를 표시하고, 완료되면 게시물 링크를 보여줍니다. 이후 <strong>애널리틱스</strong> 대시보드에서 본인의 최근 TikTok 영상을 동기화해 조회수·좋아요·댓글·공유 수를 확인하고, 무엇이 잘 됐는지 비교해 다음 콘텐츠를 기획할 수 있습니다.
+            </div>
+            <figure class="flow-shot">
+              <img src="images/tiktok/04-publish-measure.png" alt="사용자 본인 게시물의 TikTok 조회수·좋아요·댓글·공유 수를 보여주는 애널리틱스 대시보드" loading="lazy" />
+              <figcaption>4단계 — TikTok 동기화 후 애널리틱스 대시보드.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-t3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>요청하는 권한</h2>
+          <p class="legal-p">요청하는 스코프는 3개입니다. <code>video.upload</code>는 <strong>요청하지 않습니다.</strong></p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>스코프</th>
+                  <th>접근하는 데이터</th>
+                  <th>사용 목적</th>
+                  <th>저장하는 항목</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>user.info.basic</code><br><span style="color:var(--text-3);font-size:12px;">Login Kit</span></td>
+                  <td>OAuth 토큰 교환 직후 사용자 정보 API를 1회 호출해 <code>open_id</code>, <code>display_name</code>, <code>username</code>만 요청합니다.</td>
+                  <td><code>display_name</code>·<code>username</code>은 SNS 연결 화면과 게시 확인 모달에 표시되어, 사용자가 승인 전에 <em>어느</em> TikTok 계정으로 게시되는지 눈으로 확인할 수 있게 합니다(브랜드 계정을 여러 개 운영하는 사용자가 많습니다). <code>open_id</code>는 저장된 토큰과 성과 데이터를 올바른 계정에 연결하는 내부 키로 씁니다.</td>
+                  <td><code>open_id</code>, <code>display_name</code>, <code>username</code>, 액세스/리프레시 토큰. 그 외에는 저장하지 않습니다(팔로워·팔로잉·좋아요·소개글·프로필 사진 모두 미수집).</td>
+                </tr>
+                <tr>
+                  <td><code>video.publish</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — Direct Post</span></td>
+                  <td>크리에이터 닉네임·허용 공개범위·최대 길이·댓글/듀엣/스티치 가능 여부를 얻기 위한 <code>creator_info/query</code>, 승인된 게시물을 보내는 <code>video/init</code> 또는 <code>content/init</code>, 진행 상태를 확인하는 <code>status/fetch</code>.</td>
+                  <td>제품의 핵심 기능이자 TikTok과 연동하는 이유입니다. NK AI Studio에서 사용자가 만들고 승인한 결과물을, 화면에서 직접 고른 공개 범위·고지 설정 그대로 본인 TikTok 계정에 게시합니다.</td>
+                  <td>응답으로 받은 <code>publish_id</code>와 결과 게시물 id·URL. 사용자가 우리 화면에서 자기 게시물을 바로 열 수 있게 하고, 성과 데이터를 해당 게시물에 매칭하기 위함입니다.</td>
+                </tr>
+                <tr>
+                  <td><code>video.list</code><br><span style="color:var(--text-3);font-size:12px;">Display API</span></td>
+                  <td>사용자의 최근 영상 최대 20건에 대해 <code>id</code>, <code>title</code>, <code>video_description</code>, <code>duration</code>, <code>cover_image_url</code>, <code>embed_link</code>, <code>create_time</code>, <code>like_count</code>, <code>comment_count</code>, <code>share_count</code>, <code>view_count</code>.</td>
+                  <td>같은 사용자에게 성과 표와 그래프로 보여주어, NK AI Studio로 게시한 콘텐츠와 다른 게시물의 성과를 비교할 수 있게 합니다. <code>cover_image_url</code>은 썸네일 표시, <code>embed_link</code>는 원본 TikTok 영상으로 돌려보내는 데 씁니다. 집계 수치는 다음에 어떤 콘텐츠를 만들지 제안하는 기획 도구의 입력으로 사용합니다.</td>
+                  <td>위 지표와 영상 id·임베드 링크를 해당 사용자의 비공개 레코드에 저장하며, 동기화할 때마다 갱신합니다. TikTok 영상 파일은 절대 내려받거나 재호스팅하지 않습니다.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="legal-p">미디어 전달 방식: TikTok의 <code>PULL_FROM_URL</code>은 도메인 소유 인증을 요구하므로, 미디어는 자체 인증 도메인의 프록시 <code>https://nkstudio.org/api/sns/tiktok-media</code>를 통해 제공됩니다. 이 프록시는 게시 시점에 발급한 단기 HMAC-SHA256 서명 토큰이 있을 때만 파일을 스트리밍합니다.</p>
+          <div class="legal-highlight">
+            <strong>앱 심사 통과 전:</strong> 심사를 통과하기 전까지 서버는 사용자가 무엇을 선택하든 <code>privacy_level</code>을 <code>SELF_ONLY</code>로 강제합니다. 심사가 끝나기 전에 이 앱으로 만든 게시물이 공개될 수 없게 하기 위함입니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-t4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>절대 하지 않는 것</h2>
+          <ul class="legal-list">
+            <li><strong>자동·무단 게시 없음.</strong> 스케줄러도, 대량 게시기도, 봇도 없습니다. 모든 게시는 위 확인 모달을 거칩니다.</li>
+            <li><strong>다른 사용자에게 노출 없음.</strong> 한 사용자의 TikTok 데이터는 다른 NK AI Studio 사용자에게 절대 표시되지 않으며 계정 간 집계도 하지 않습니다.</li>
+            <li><strong>판매·모델 학습 사용 없음.</strong> TikTok 데이터는 판매하지 않고, 광고에 사용하지 않으며, 어떤 AI 모델의 학습에도 사용하지 않습니다.</li>
+            <li><strong>TikTok 영상 재호스팅 없음.</strong> 지표와 링크만 저장합니다. 영상 파일은 TikTok에 그대로 있고, 썸네일과 임베드 링크는 트래픽을 TikTok으로 돌려보냅니다.</li>
+            <li><strong>TikTok을 로그인 수단으로 사용하지 않음.</strong> NK AI Studio 로그인은 자체 계정으로 합니다. TikTok 인증은 오직 게시 연결을 만드는 데만 씁니다.</li>
+            <li><strong>사용자가 보지 않은 콘텐츠 게시 없음.</strong> 게시되는 미디어는 사용자가 NK AI Studio에서 만들고 화면에서 승인한 결과물입니다.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="ko-t5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>데이터 보관 및 삭제</h2>
+          <ul class="legal-list">
+            <li>모든 TikTok 데이터는 인증한 NK AI Studio 사용자 한 명에게만 귀속됩니다.</li>
+            <li>토큰과 TikTok 데이터는 Google Cloud Storage의 사용자별 비공개 객체에 저장되며 저장 시 암호화됩니다. 액세스 토큰은 리프레시 토큰으로 TikTok 토큰 엔드포인트를 통해 갱신합니다.</li>
+            <li><strong>연결 해제:</strong> <strong>설정 &gt; SNS 연결</strong>에서 언제든지 TikTok 연결을 해제할 수 있으며, 이때 저장된 토큰과 캐시된 TikTok 데이터가 즉시 삭제됩니다.</li>
+            <li><strong>계정 삭제:</strong> NK AI Studio 계정을 삭제하면 TikTok 토큰과 캐시된 지표를 포함해 전부 삭제됩니다.</li>
+            <li>이메일로도 언제든 삭제를 요청할 수 있습니다(아래 문의 참조).</li>
+          </ul>
+          <p class="legal-p">자세한 내용은 <a href="privacy">개인정보처리방침</a>과 <a href="terms">서비스 이용약관</a>을 참고하세요.</p>
+        </section>
+
+        <section class="legal-section" id="ko-t6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>문의</h2>
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">지원 이메일</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">응답 기한</span>
+              <span class="legal-contact-value">영업일 기준 3일 이내</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">운영사</span>
+              <span class="legal-contact-value">NK Studio</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">지원 센터</span>
+              <span class="legal-contact-value"><a href="support">nkstudio.org/support</a></span>
+            </div>
+          </div>
+        </section>
+      </article>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="legal-footer">
+      <div class="legal-footer-inner">
+        <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
+        <nav class="legal-footer-links">
+          <a href="/" id="footer-home">Home</a>
+          <span>|</span>
+          <a href="tiktok" class="active" id="footer-tiktok">TikTok Integration</a>
+          <span>|</span>
+          <a href="support" id="footer-support">Support</a>
+          <span>|</span>
+          <a href="terms" id="footer-terms">Terms</a>
+          <span>|</span>
+          <a href="privacy" id="footer-privacy">Privacy Policy</a>
+          <span>|</span>
+          <a href="mailto:chikinx1@gmail.com" id="footer-contact">Contact</a>
+        </nav>
+      </div>
+    </footer>
+
+  </div><!-- .legal-wrap -->
+
+  <button class="scroll-top" id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    TOP
+  </button>
+
+  <script>
+    /* 이 페이지는 영어가 기본이다 — TikTok 심사관이 읽는 페이지이기 때문.
+       ?lang=ko 또는 언어 버튼으로 한국어로 전환하며, 선택은 앱과 같은
+       localStorage 키(nk_lang)에 저장한다. */
+    var LABELS = {
+      en: {
+        title: 'TikTok Integration — NK AI Studio',
+        langBtn: '한국어',
+        nav: { home: 'Home', tiktok: 'TikTok', support: 'Support', terms: 'Terms', privacy: 'Privacy' },
+        footer: { home: 'Home', tiktok: 'TikTok Integration', support: 'Support', terms: 'Terms', privacy: 'Privacy Policy', contact: 'Contact' }
+      },
+      ko: {
+        title: 'TikTok 연동 안내 — NK AI Studio',
+        langBtn: 'English',
+        nav: { home: '홈', tiktok: 'TikTok 연동', support: '지원', terms: '이용약관', privacy: '개인정보' },
+        footer: { home: '홈', tiktok: 'TikTok 연동', support: '지원', terms: '이용약관', privacy: '개인정보처리방침', contact: '문의' }
+      }
+    };
+
+    function setLang(lang) {
+      var safe = lang === 'ko' ? 'ko' : 'en';
+      var L = LABELS[safe];
+      var en = document.getElementById('content-en');
+      var ko = document.getElementById('content-ko');
+      if (safe === 'ko') { ko.classList.add('active'); en.classList.remove('active'); }
+      else { en.classList.add('active'); ko.classList.remove('active'); }
+      document.documentElement.lang = safe;
+      document.title = L.title;
+      var btn = document.getElementById('lang-btn');
+      if (btn) btn.textContent = L.langBtn;
+      Object.keys(L.nav).forEach(function (k) {
+        var el = document.getElementById('nav-' + k);
+        if (el) el.textContent = L.nav[k];
+      });
+      Object.keys(L.footer).forEach(function (k) {
+        var el = document.getElementById('footer-' + k);
+        if (el) el.textContent = L.footer[k];
+      });
+    }
+
+    (function () {
+      var theme = localStorage.getItem('nk_theme') || 'dark';
+      var variant = localStorage.getItem('nk_theme_variant') || '';
+      document.documentElement.setAttribute('data-theme', theme);
+      if (variant) document.documentElement.setAttribute('data-theme-variant', variant);
+
+      function initialLang() {
+        // ?lang= 이 최우선. 그다음 저장된 선택. 기본값은 영어(심사관 기준).
+        var q = '';
+        try { q = new URLSearchParams(location.search).get('lang') || ''; } catch (_) {}
+        q = String(q).trim().toLowerCase();
+        if (q === 'ko' || q === 'en') return q;
+        var saved = '';
+        try { saved = String(localStorage.getItem('nk_lang') || '').trim().toLowerCase(); } catch (_) {}
+        return saved === 'ko' ? 'ko' : 'en';
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        document.documentElement.classList.remove('preload-veiled');
+        setLang(initialLang());
+
+        // 스크린샷 파일이 아직 없으면 깨진 이미지 아이콘 대신 캡션만 남긴다.
+        document.querySelectorAll('.flow-shot img').forEach(function (img) {
+          img.addEventListener('error', function () {
+            var fig = img.closest('.flow-shot');
+            if (fig) fig.classList.add('shot-missing');
+          });
+        });
+
+        var btn = document.getElementById('lang-btn');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            var next = document.documentElement.lang === 'ko' ? 'en' : 'ko';
+            try { localStorage.setItem('nk_lang', next); } catch (_) {}
+            setLang(next);
+          });
+        }
+
+        var top = document.getElementById('scroll-top-btn');
+        window.addEventListener('scroll', function () {
+          top.classList.toggle('visible', window.scrollY > 300);
+        }, { passive: true });
+      });
+
+      window.addEventListener('storage', function (e) {
+        if (e.key === 'nk_lang') setLang(e.newValue || 'en');
+        if (e.key === 'nk_theme') document.documentElement.setAttribute('data-theme', e.newValue || 'dark');
+      });
+    })();
+  </script>
+</body>
+
+</html>

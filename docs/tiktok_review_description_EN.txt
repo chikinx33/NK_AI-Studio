@@ -1,0 +1,231 @@
+================================================================
+NK AI Studio — TikTok App Review Description
+Paste into: Review Description / Apply Reason
+Replace <TEST_ID> and <TEST_PW> with the real reviewer credentials.
+================================================================
+
+--- VERSION A : FULL (use this unless the field rejects it for length) ---
+
+## 1. What NK AI Studio does
+
+NK AI Studio (https://nkstudio.org) is a web-based content production and brand
+management platform for individual creators and small brand owners.
+
+Inside our editor a user plans a campaign, generates the script, images, video and
+voice-over, and reviews the finished asset. Only after the user explicitly approves
+that exact asset on screen is it published to the user's OWN connected social
+accounts. After publishing, the user can see how each post performed and use that
+to plan the next one. TikTok is one of the supported destinations, alongside
+YouTube, Instagram, Facebook, Threads and X.
+
+Nothing is ever posted automatically, on a schedule, or in bulk. Every single post
+requires a human confirmation step in which the caption, the media, the audience
+setting and the content disclosures are shown before the post is sent.
+
+A public page describing this integration in detail, with screenshots of every step,
+is available at https://nkstudio.org/tiktok
+
+## 2. Products and scopes we are requesting
+
+We request three scopes: user.info.basic (Login Kit), video.publish (Content Posting
+API - Direct Post) and video.list (Display API). We are NOT requesting video.upload.
+
+--- 2.1 user.info.basic (Login Kit) ---
+
+WHERE IT IS TRIGGERED
+Settings > SNS Connections > "Connect TikTok". The user is redirected to TikTok's
+authorization page and, after granting consent, returns to
+https://nkstudio.org/auth/tiktok/callback
+
+WHAT WE READ
+We call /v2/user/info/ exactly once, immediately after the OAuth token exchange, and
+request only these fields: open_id, display_name, username.
+
+HOW THE DATA IS USED
+- display_name and username are shown on the SNS Connections screen and again in the
+  publish confirmation dialog, so that before approving a post the user can visually
+  confirm WHICH TikTok account the content will be sent to. Our users often manage
+  more than one brand account, so this is essential to prevent posting to the wrong
+  account.
+- open_id is used as the internal key that binds the stored access token and the
+  performance data to the correct TikTok account.
+
+WHAT WE STORE
+open_id, display_name, username, and the access/refresh tokens. Nothing else. We do
+not read or store followers, following, likes, bio, avatar, or any other profile data.
+
+NOTE
+We do not use TikTok as an identity provider. Users sign in to NK AI Studio with
+their own NK AI Studio account. TikTok authorization is used solely to establish the
+publishing connection.
+
+--- 2.2 video.publish (Content Posting API - Direct Post) ---
+
+WHERE IT IS TRIGGERED
+Publish > Review & Approve > "Publish to TikTok". This is the core feature of our
+product and the reason we integrate with TikTok at all.
+
+FLOW
+1. When the user chooses to publish to TikTok, we first call
+   /v2/post/publish/creator_info/query/ to retrieve the creator nickname, the privacy
+   level options the account allows, the maximum video duration, and whether comment,
+   duet and stitch are disabled for that creator.
+2. We render a confirmation dialog built from that response. In this dialog the user:
+   - sees the creator nickname and a preview of the media and caption;
+   - selects the audience (privacy level) from the options returned by creator_info.
+     No option is pre-selected, and the post button stays disabled until the user
+     chooses one;
+   - toggles Comment / Duet / Stitch, with any interaction the creator has disabled
+     shown as unavailable;
+   - declares whether the post is commercial content, choosing "Your brand" and/or
+     "Branded content", which sets brand_organic_toggle and brand_content_toggle
+     respectively, and sees the corresponding "Promotional content" / "Paid
+     partnership" label notice plus links to TikTok's Branded Content Policy and
+     Music Usage Confirmation.
+3. Only when the user presses the confirm button do we call
+   /v2/post/publish/video/init/ (for video) or /v2/post/publish/content/init/ (for
+   photo posts) using PULL_FROM_URL, passing exactly the values the user selected.
+4. We then poll /v2/post/publish/status/fetch/ to display posting progress and, on
+   completion, a link to the published post.
+
+WHAT IS BEING POSTED
+The media is content the user created inside NK AI Studio and that is stored in that
+user's own private storage. We never post content the user has not seen and approved.
+
+MEDIA DELIVERY
+Because PULL_FROM_URL requires a verified domain, media is served through
+https://nkstudio.org/api/sns/tiktok-media, a proxy on our own verified domain that
+streams the user's file only when accompanied by a short-lived HMAC-SHA256 signed
+token generated at publish time.
+
+UNAUDITED BEHAVIOUR
+Until this app is approved, our server forces privacy_level to SELF_ONLY regardless
+of what the user selects, so that no post created through our app can become publicly
+visible before review is complete.
+
+WHAT WE STORE
+The returned publish_id and the resulting post id and URL, so the user can open their
+own post from our interface and so that performance data can be matched to it.
+
+--- 2.3 video.list (Display API) ---
+
+WHERE IT IS TRIGGERED
+Analytics > Performance dashboard, when the user opens it or presses Sync.
+
+WHAT WE READ
+Via /v2/video/list/ we request, for up to 20 of the user's most recent videos:
+id, title, video_description, duration, cover_image_url, embed_link, create_time,
+like_count, comment_count, share_count, view_count.
+
+HOW THE DATA IS USED
+- These are displayed to that same user as a performance table and charts, so they
+  can compare how the content published through NK AI Studio performed against their
+  other posts.
+- cover_image_url renders the post thumbnail and embed_link links the user back to
+  the original video on TikTok, so all traffic returns to TikTok.
+- The aggregate view/like/comment/share counts feed our planning tool, which suggests
+  what type of content the user should produce next based on what performed well on
+  their own account.
+
+WHAT WE STORE
+The listed metrics plus the video id and embed link, in that user's private record,
+refreshed on each sync. We never download or re-host TikTok video files, and one
+user's TikTok data is never shown to any other user.
+
+## 3. Data handling, common to all three scopes
+
+- All TikTok data is scoped to the single NK AI Studio user who authorized it. It is
+  never shared with other users, never sold, never used for advertising, and never
+  used to train any model.
+- Tokens and TikTok data are kept in a private per-user object in Google Cloud
+  Storage, encrypted at rest, and access tokens are refreshed through
+  /v2/oauth/token/ using the refresh token.
+- The user can disconnect TikTok at any time from Settings > SNS Connections. This
+  immediately deletes the stored tokens and all cached TikTok data. Deleting the
+  NK AI Studio account deletes everything.
+- Privacy Policy: https://nkstudio.org/privacy
+  Terms of Service: https://nkstudio.org/terms
+  Both are linked in the footer of every public page.
+- Support contact: chikinx1@gmail.com
+
+## 4. Test account for the reviewer
+
+Our marketing site at https://nkstudio.org/ is fully public and requires no login.
+The product itself requires an account, so please use the reviewer credentials below.
+
+  Sign-in URL : https://nkstudio.org/app.html
+  ID          : <TEST_ID>
+  Password    : <TEST_PW>
+
+Suggested path once signed in:
+  1. Settings > SNS Connections  -> the TikTok connect flow (user.info.basic)
+  2. Publish > Review & Approve  -> the Direct Post confirmation dialog with audience
+                                    selection, interaction toggles and commercial
+                                    content disclosure (video.publish)
+  3. Analytics                   -> the performance dashboard (video.list)
+
+This account is kept active for the duration of the review. If it stops working,
+please contact chikinx1@gmail.com and we will reissue it within one business day.
+
+
+================================================================
+
+--- VERSION B : CONDENSED (use ONLY if the field has a character limit) ---
+
+NK AI Studio (https://nkstudio.org) is a web platform where creators and small brands
+generate content with AI (script, image, video, voice), review it, and then publish it
+to their own social accounts after explicit human approval, and finally measure how it
+performed. TikTok is one supported destination. Nothing is ever posted automatically or
+without an on-screen confirmation step. A detailed public page with screenshots of the
+whole flow is at https://nkstudio.org/tiktok
+
+We request three scopes. We are NOT requesting video.upload.
+
+1) user.info.basic (Login Kit). Triggered at Settings > SNS Connections > Connect
+TikTok, returning to https://nkstudio.org/auth/tiktok/callback. We call /v2/user/info/
+once and read only open_id, display_name, username. display_name and username are shown
+on the connections screen and in the publish confirmation dialog so the user can verify
+which TikTok account a post will go to (our users manage multiple brand accounts).
+open_id binds the stored token and the performance data to the right account. We store
+only those three fields plus the tokens. We never read followers, following or likes,
+and we do not use TikTok as a login provider for our own product.
+
+2) video.publish (Content Posting API - Direct Post). Triggered at Publish > Review &
+Approve > Publish to TikTok. We first call /v2/post/publish/creator_info/query/ and
+build a confirmation dialog from the response: creator nickname, media and caption
+preview, an audience (privacy level) selector limited to the returned options with no
+pre-selected value, Comment/Duet/Stitch toggles that respect the creator's disabled
+settings, and a commercial content disclosure offering "Your brand"
+(brand_organic_toggle) and "Branded content" (brand_content_toggle) with the matching
+Promotional content / Paid partnership notice and links to TikTok's Branded Content
+Policy and Music Usage Confirmation. Only after the user confirms do we call
+/v2/post/publish/video/init/ or /v2/post/publish/content/init/ with PULL_FROM_URL, then
+poll /v2/post/publish/status/fetch/ for progress. Media is served from our own verified
+domain via https://nkstudio.org/api/sns/tiktok-media, gated by a short-lived HMAC signed
+token. Until this app is approved we force privacy_level to SELF_ONLY server-side so
+nothing can become public before review. We store the publish_id and the resulting post
+id/URL only.
+
+3) video.list (Display API). Triggered on the Analytics dashboard. Via /v2/video/list/
+we read id, title, video_description, duration, cover_image_url, embed_link,
+create_time, like_count, comment_count, share_count, view_count for up to 20 recent
+videos. We show these to the same user as a performance table and charts, use
+cover_image_url for thumbnails and embed_link to send the user back to TikTok, and use
+the aggregate counts to suggest what content to make next. We store only those metrics
+and identifiers, refreshed on sync. We never download or re-host video files, and never
+show one user's data to another.
+
+Data handling: all TikTok data is scoped to the authorizing user, never shared, sold,
+advertised against, or used for model training. Tokens live in a private per-user
+Google Cloud Storage object, encrypted at rest, refreshed via /v2/oauth/token/.
+Disconnecting TikTok in Settings deletes tokens and cached data immediately; deleting
+the account deletes everything. Privacy Policy: https://nkstudio.org/privacy — Terms:
+https://nkstudio.org/terms — both linked in the footer of every public page. Support:
+chikinx1@gmail.com
+
+Test account (the marketing site is fully public; the product requires an account):
+  URL: https://nkstudio.org/app.html
+  ID: <TEST_ID>
+  PW: <TEST_PW>
+Path: Settings > SNS Connections (user.info.basic) -> Publish > Review & Approve
+(video.publish confirmation dialog) -> Analytics (video.list dashboard).

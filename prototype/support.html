@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" class="preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — NK AI Studio</title>
+  <meta name="description" content="NK AI Studio support: how to connect and disconnect social accounts, what to do when publishing fails, how to request data deletion. / NK AI Studio 지원 센터" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://nkstudio.org/support" />
+  <style>
+    html.preload-veiled, body.preload-veiled { background: #0f172a; color: #cbd5e1; }
+    html.preload-veiled .legal-wrap { visibility: hidden; }
+    [data-theme="light"].preload-veiled, [data-theme="light"] body.preload-veiled { background: #f7f9fd; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Page Layout (terms.html / privacy.html / tiktok.html 공통 2단 언어 구조) ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: auto; overflow: auto; }
+
+    body {
+      font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    .legal-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .legal-header {
+      position: sticky; top: 0; z-index: 100;
+      background: color-mix(in srgb, var(--bg-2) 92%, transparent 8%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    .legal-header-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 16px;
+    }
+
+    .legal-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); flex-shrink: 0; }
+    .legal-logo-icon { width: 28px; height: 28px; border-radius: 8px; overflow: hidden; }
+    .legal-logo-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .legal-logo-text { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+    .legal-logo-text span { color: var(--orange); }
+
+    .legal-header-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .legal-nav-link {
+      font-size: 13px; font-weight: 500; color: var(--text-2);
+      text-decoration: none; padding: 6px 10px; border-radius: 8px;
+      transition: background 0.14s, color 0.14s;
+    }
+    .legal-nav-link:hover { background: var(--layer-strong); color: var(--text); }
+    .legal-nav-link.active { color: var(--orange); }
+
+    .legal-lang-btn {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); border-radius: 8px; padding: 5px 10px;
+      cursor: pointer; min-width: 46px; text-align: center;
+      transition: background 0.14s, color 0.14s;
+    }
+    .legal-lang-btn:hover { background: var(--layer-strong); color: var(--text); }
+
+    /* ── Content ────────────────────────────────────────── */
+    .legal-main { flex: 1; padding: 24px 24px 64px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    .legal-content { display: none; }
+    .legal-content.active { display: block; }
+
+    .legal-doc-title { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: var(--text); line-height: 1.25; }
+    .legal-doc-meta { font-size: 13px; color: var(--text-3); margin-bottom: 32px; display: flex; gap: 16px; flex-wrap: wrap; }
+
+    .legal-section { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 36px; }
+    .legal-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .legal-section-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+    .legal-section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border) 70%);
+      color: var(--orange); font-size: 12px; font-weight: 700;
+    }
+
+    .legal-p { font-size: 14px; color: var(--text-2); line-height: 1.8; margin-bottom: 12px; }
+    .legal-p:last-child { margin-bottom: 0; }
+    .legal-p a { color: var(--orange); text-decoration: none; }
+    .legal-p a:hover { text-decoration: underline; }
+
+    .legal-list { list-style: none; padding-left: 0; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .legal-list li { font-size: 14px; color: var(--text-2); line-height: 1.7; padding-left: 16px; position: relative; }
+    .legal-list li::before { content: '·'; position: absolute; left: 4px; color: var(--orange); font-size: 16px; line-height: 1.4; }
+
+    .legal-highlight {
+      background: color-mix(in srgb, var(--orange) 8%, var(--panel) 92%);
+      border: 1px solid color-mix(in srgb, var(--orange) 20%, var(--border) 80%);
+      border-radius: 10px; padding: 14px 18px; margin: 12px 0;
+      font-size: 13px; color: var(--text-2); line-height: 1.75;
+    }
+    .legal-highlight strong { color: var(--orange); }
+
+    /* ── FAQ ─────────────────────────────────────────────── */
+    .faq-item {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 12px;
+    }
+    .faq-q { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 7px; display: flex; gap: 8px; }
+    .faq-q::before { content: 'Q'; color: var(--orange); font-weight: 700; flex-shrink: 0; }
+    .faq-a { font-size: 14px; color: var(--text-2); line-height: 1.8; }
+    .faq-a a { color: var(--orange); text-decoration: none; }
+    .faq-a a:hover { text-decoration: underline; }
+    .faq-a code { font-size: 12px; color: var(--orange); background: var(--layer-soft); padding: 1px 5px; border-radius: 4px; }
+
+    /* ── Contact Card ────────────────────────────────────── */
+    .legal-contact-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; margin-top: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .legal-contact-item { display: flex; flex-direction: column; gap: 3px; }
+    .legal-contact-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; }
+    .legal-contact-value { font-size: 13px; color: var(--text-2); }
+    .legal-contact-value a { color: var(--orange); text-decoration: none; }
+    .legal-contact-value a:hover { text-decoration: underline; }
+
+    /* ── Platform chips ──────────────────────────────────── */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 4px; }
+    .chip {
+      font-size: 12px; font-weight: 600; color: var(--text-2);
+      background: var(--layer-soft); border: 1px solid var(--border);
+      border-radius: 999px; padding: 4px 12px;
+    }
+    .chip.live {
+      color: var(--teal);
+      background: color-mix(in srgb, var(--teal) 12%, var(--panel) 88%);
+      border-color: color-mix(in srgb, var(--teal) 28%, var(--border) 72%);
+    }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .legal-footer { border-top: 1px solid var(--border); padding: 22px 24px; background: var(--bg-2); }
+    .legal-footer-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .legal-footer-copy { font-size: 12px; color: var(--text-3); }
+    .legal-footer-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .legal-footer-links a { font-size: 12px; color: var(--text-3); text-decoration: none; padding: 2px 6px; border-radius: 5px; transition: color 0.12s; }
+    .legal-footer-links a:hover { color: var(--text); }
+    .legal-footer-links a.active { color: var(--orange); }
+    .legal-footer-links span { color: var(--border); font-size: 11px; }
+
+    /* ── Scroll To Top ───────────────────────────────────── */
+    .scroll-top {
+      position: fixed; bottom: 28px; right: 28px; z-index: 200;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 36%, var(--border) 64%);
+      color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+      opacity: 0; pointer-events: none; transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s, background 0.14s;
+    }
+    .scroll-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .scroll-top:hover { background: color-mix(in srgb, var(--orange) 22%, var(--panel) 78%); }
+    .scroll-top svg { display: block; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .legal-header-inner { padding: 10px 0; height: auto; flex-wrap: wrap; gap: 8px; }
+      .legal-doc-title { font-size: 22px; }
+      .legal-section-title { font-size: 15px; }
+      .legal-contact-card { grid-template-columns: 1fr; }
+      .legal-footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grain"></div>
+  <div class="legal-wrap">
+
+    <!-- Header -->
+    <header class="legal-header">
+      <div class="legal-header-inner">
+        <a href="/" class="legal-logo">
+          <div class="legal-logo-icon">
+            <img src="images/logo(500500).png" alt="NK AI Studio" />
+          </div>
+          <span class="legal-logo-text">NK <span>AI Studio</span></span>
+        </a>
+        <nav class="legal-header-nav">
+          <a href="/" class="legal-nav-link" id="nav-home">Home</a>
+          <a href="tiktok" class="legal-nav-link" id="nav-tiktok">TikTok</a>
+          <a href="support" class="legal-nav-link active" id="nav-support">Support</a>
+          <a href="terms" class="legal-nav-link" id="nav-terms">Terms</a>
+          <a href="privacy" class="legal-nav-link" id="nav-privacy">Privacy</a>
+          <button type="button" class="legal-lang-btn" id="lang-btn" aria-label="Switch language">한국어</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="legal-main">
+
+      <!-- ═══════════════════════ ENGLISH ═══════════════════════ -->
+      <article class="legal-content active" id="content-en">
+        <h1 class="legal-doc-title">Support</h1>
+        <div class="legal-doc-meta">
+          <span>App Name: NK AI Studio</span>
+          <span>Website: nkstudio.org</span>
+          <span>Last Updated: August 1, 2026</span>
+          <span>Operator: NK Studio</span>
+        </div>
+
+        <section class="legal-section" id="en-s0">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>How to reach us</h2>
+          <p class="legal-p">NK AI Studio is operated by NK Studio. Email is the fastest way to reach a human — there is no phone queue and no ticket portal to sign up for.</p>
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Support Email</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Response Time</span>
+              <span class="legal-contact-value">Within 3 business days</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Data deletion requests</span>
+              <span class="legal-contact-value">Same address, handled within 7 days</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Language</span>
+              <span class="legal-contact-value">English / 한국어</span>
+            </div>
+          </div>
+          <p class="legal-p" style="margin-top: 14px;">When reporting a publishing problem, please include the platform, the approximate time, and the error message shown on screen. That is usually enough for us to find the request in our logs.</p>
+        </section>
+
+        <section class="legal-section" id="en-s1">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>Frequently asked questions</h2>
+
+          <div class="faq-item">
+            <p class="faq-q">How do I connect a social account?</p>
+            <p class="faq-a">Sign in, open <strong>Settings &gt; SNS Connections</strong>, and press the Connect button for the platform you want. You are taken to that platform's own authorization page, and after you grant consent you return to NK AI Studio with the account name shown on the connections screen. You can connect as many or as few platforms as you like.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">Does NK AI Studio post anything without asking me?</p>
+            <p class="faq-a">No. There is no scheduler, no bulk poster and no bot. Every post goes through a confirmation step that shows the caption, the media, the target account, the audience setting and any content disclosures. Nothing is sent until you press the confirm button. For TikTok specifically, the confirmation dialog is described step by step on the <a href="tiktok">TikTok Integration</a> page.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">Publishing failed. What should I check?</p>
+            <p class="faq-a">In order: (1) the account is still connected in <strong>Settings &gt; SNS Connections</strong> — re-connect if the authorization expired; (2) the asset meets the platform's limits (file size, duration, aspect ratio, caption length); (3) the audience setting is one your account actually allows. If the error persists, email us the platform, the time and the exact error text.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">Why did my TikTok post end up visible only to me?</p>
+            <p class="faq-a">Until an app passes TikTok's review, TikTok only allows posts created through that app to be private. Our server therefore forces <code>SELF_ONLY</code> during this period, regardless of the audience you select in the dialog. Once the app is approved, your selection is used as-is.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">How do I disconnect an account?</p>
+            <p class="faq-a">Open <strong>Settings &gt; SNS Connections</strong> and press Disconnect on that platform. The stored access and refresh tokens and all cached platform data are deleted immediately. Posts already published to that platform stay on the platform — you manage those in the platform's own app.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">How do I request deletion of my data?</p>
+            <p class="faq-a">Deleting your NK AI Studio account removes everything we hold, including all connection tokens and cached platform metrics. If you would rather have us do it, email <a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a> from the address on your account and we will process it within 7 days. See the <a href="privacy">Privacy Policy</a> for the full retention terms.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">Which platforms are supported?</p>
+            <p class="faq-a">Publishing is live for the platforms below. The list grows over time, and each new integration is disclosed in the <a href="privacy">Privacy Policy</a> when it goes live.</p>
+            <div class="chip-row">
+              <span class="chip live">TikTok</span>
+              <span class="chip live">YouTube</span>
+              <span class="chip live">YouTube Shorts</span>
+              <span class="chip live">Instagram</span>
+              <span class="chip live">Facebook</span>
+              <span class="chip live">Threads</span>
+              <span class="chip live">X</span>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">What does it cost?</p>
+            <p class="faq-a">NK AI Studio is currently free to use after signing up. Paid plans are in preparation; we will announce pricing in the product and update the <a href="terms">Terms of Service</a> before any charge applies.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">Who owns the content I generate?</p>
+            <p class="faq-a">You do. You are responsible for the AI-generated output you publish, and you should review it before approving a post. Content pulled from a connected platform remains owned by its original creator and is governed by that platform's terms. Details are in the <a href="terms">Terms of Service</a>.</p>
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-s2">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>More information</h2>
+          <ul class="legal-list">
+            <li><a href="tiktok" style="color:var(--orange);text-decoration:none;">TikTok Integration</a> — the full four-step flow, the permissions we request and what we do with each one.</li>
+            <li><a href="privacy" style="color:var(--orange);text-decoration:none;">Privacy Policy</a> — what we collect, where it is stored, how long we keep it.</li>
+            <li><a href="terms" style="color:var(--orange);text-decoration:none;">Terms of Service</a> — your rights and obligations when using the service.</li>
+          </ul>
+        </section>
+      </article>
+
+      <!-- ═══════════════════════ KOREAN ═══════════════════════ -->
+      <article class="legal-content" id="content-ko">
+        <h1 class="legal-doc-title">지원 센터</h1>
+        <div class="legal-doc-meta">
+          <span>앱 이름: NK AI Studio</span>
+          <span>웹사이트: nkstudio.org</span>
+          <span>최종 수정: 2026년 8월 1일</span>
+          <span>운영사: NK Studio</span>
+        </div>
+
+        <section class="legal-section" id="ko-s0">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>문의 방법</h2>
+          <p class="legal-p">NK AI Studio는 NK Studio가 운영합니다. 이메일이 가장 빠른 연락 수단이며, 별도 티켓 시스템 가입 없이 바로 문의할 수 있습니다.</p>
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">지원 이메일</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">응답 기한</span>
+              <span class="legal-contact-value">영업일 기준 3일 이내</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">데이터 삭제 요청</span>
+              <span class="legal-contact-value">같은 주소, 7일 이내 처리</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">지원 언어</span>
+              <span class="legal-contact-value">한국어 / English</span>
+            </div>
+          </div>
+          <p class="legal-p" style="margin-top: 14px;">게시 오류를 알려주실 때는 플랫폼, 대략적인 시각, 화면에 표시된 오류 메시지를 함께 보내주세요. 대개 이 세 가지면 로그에서 해당 요청을 찾을 수 있습니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-s1">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>자주 묻는 질문</h2>
+
+          <div class="faq-item">
+            <p class="faq-q">SNS 계정은 어떻게 연결하나요?</p>
+            <p class="faq-a">로그인 후 <strong>설정 &gt; SNS 연결</strong>에서 원하는 플랫폼의 연결 버튼을 누르세요. 해당 플랫폼의 공식 인증 화면으로 이동하고, 동의하면 NK AI Studio로 돌아와 연결 화면에 계정 이름이 표시됩니다. 필요한 플랫폼만 골라서 연결할 수 있습니다.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">묻지 않고 자동으로 게시되지는 않나요?</p>
+            <p class="faq-a">그런 일은 없습니다. 스케줄러도, 대량 게시기도, 봇도 없습니다. 모든 게시는 캡션·미디어·대상 계정·공개 범위·콘텐츠 고지를 보여주는 확인 단계를 거치며, 확인 버튼을 누르기 전에는 아무것도 전송되지 않습니다. TikTok의 확인 모달은 <a href="tiktok">TikTok 연동 안내</a> 페이지에 단계별로 설명해 두었습니다.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">게시에 실패했습니다. 무엇을 확인해야 하나요?</p>
+            <p class="faq-a">순서대로 확인해 주세요. (1) <strong>설정 &gt; SNS 연결</strong>에서 계정이 여전히 연결돼 있는지(인증이 만료됐다면 재연결), (2) 파일 크기·길이·비율·캡션 길이가 플랫폼 제한 안에 있는지, (3) 선택한 공개 범위를 계정이 실제로 허용하는지. 그래도 계속 실패하면 플랫폼·시각·오류 문구를 이메일로 보내주세요.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">TikTok 게시물이 왜 저에게만 보이나요?</p>
+            <p class="faq-a">TikTok은 앱이 심사를 통과하기 전까지 해당 앱으로 만든 게시물을 비공개로만 허용합니다. 그래서 이 기간에는 확인 모달에서 어떤 공개 범위를 고르든 서버가 <code>SELF_ONLY</code>로 강제합니다. 심사를 통과하면 선택한 값이 그대로 적용됩니다.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">계정 연결은 어떻게 해제하나요?</p>
+            <p class="faq-a"><strong>설정 &gt; SNS 연결</strong>에서 해당 플랫폼의 연결 해제를 누르면 됩니다. 저장된 액세스·리프레시 토큰과 캐시된 플랫폼 데이터가 즉시 삭제됩니다. 이미 게시된 게시물은 해당 플랫폼에 그대로 남으며, 플랫폼 앱에서 직접 관리하시면 됩니다.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">데이터 삭제는 어떻게 요청하나요?</p>
+            <p class="faq-a">NK AI Studio 계정을 삭제하면 연결 토큰과 캐시된 성과 지표를 포함해 보관 중인 데이터가 전부 삭제됩니다. 대신 처리해 드리길 원하시면 계정에 등록된 주소로 <a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a>에 메일 주세요. 7일 이내 처리해 드립니다. 자세한 보관 기준은 <a href="privacy">개인정보처리방침</a>을 참고하세요.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">어떤 플랫폼을 지원하나요?</p>
+            <p class="faq-a">아래 플랫폼에 게시할 수 있습니다. 지원 범위는 계속 넓어지며, 새 연동이 시작될 때마다 <a href="privacy">개인정보처리방침</a>에 고지합니다.</p>
+            <div class="chip-row">
+              <span class="chip live">TikTok</span>
+              <span class="chip live">YouTube</span>
+              <span class="chip live">YouTube Shorts</span>
+              <span class="chip live">Instagram</span>
+              <span class="chip live">Facebook</span>
+              <span class="chip live">Threads</span>
+              <span class="chip live">X</span>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">요금은 얼마인가요?</p>
+            <p class="faq-a">현재는 가입 후 무료로 사용할 수 있습니다. 유료 플랜은 준비 중이며, 과금이 시작되기 전에 제품 내 공지와 <a href="terms">서비스 이용약관</a> 갱신으로 먼저 안내합니다.</p>
+          </div>
+
+          <div class="faq-item">
+            <p class="faq-q">제가 만든 콘텐츠의 권리는 누구에게 있나요?</p>
+            <p class="faq-a">사용자 본인에게 있습니다. 게시하는 AI 생성 결과물에 대한 책임도 사용자에게 있으므로, 승인 전에 반드시 내용을 검토해 주세요. 연결된 플랫폼에서 가져온 콘텐츠의 권리는 원작자에게 있으며 해당 플랫폼 약관이 적용됩니다. 자세한 내용은 <a href="terms">서비스 이용약관</a>에 있습니다.</p>
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-s2">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>관련 문서</h2>
+          <ul class="legal-list">
+            <li><a href="tiktok" style="color:var(--orange);text-decoration:none;">TikTok 연동 안내</a> — 4단계 흐름 전체와 요청 권한별 사용 목적.</li>
+            <li><a href="privacy" style="color:var(--orange);text-decoration:none;">개인정보처리방침</a> — 수집 항목, 보관 위치, 보관 기간.</li>
+            <li><a href="terms" style="color:var(--orange);text-decoration:none;">서비스 이용약관</a> — 서비스 이용 시 권리와 의무.</li>
+          </ul>
+        </section>
+      </article>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="legal-footer">
+      <div class="legal-footer-inner">
+        <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
+        <nav class="legal-footer-links">
+          <a href="/" id="footer-home">Home</a>
+          <span>|</span>
+          <a href="tiktok" id="footer-tiktok">TikTok Integration</a>
+          <span>|</span>
+          <a href="support" class="active" id="footer-support">Support</a>
+          <span>|</span>
+          <a href="terms" id="footer-terms">Terms</a>
+          <span>|</span>
+          <a href="privacy" id="footer-privacy">Privacy Policy</a>
+          <span>|</span>
+          <a href="mailto:chikinx1@gmail.com" id="footer-contact">Contact</a>
+        </nav>
+      </div>
+    </footer>
+
+  </div><!-- .legal-wrap -->
+
+  <button class="scroll-top" id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    TOP
+  </button>
+
+  <script>
+    /* tiktok.html 과 동일한 규칙: 영어 기본, ?lang=ko 또는 버튼으로 한국어 전환. */
+    var LABELS = {
+      en: {
+        title: 'Support — NK AI Studio',
+        langBtn: '한국어',
+        nav: { home: 'Home', tiktok: 'TikTok', support: 'Support', terms: 'Terms', privacy: 'Privacy' },
+        footer: { home: 'Home', tiktok: 'TikTok Integration', support: 'Support', terms: 'Terms', privacy: 'Privacy Policy', contact: 'Contact' }
+      },
+      ko: {
+        title: '지원 센터 — NK AI Studio',
+        langBtn: 'English',
+        nav: { home: '홈', tiktok: 'TikTok 연동', support: '지원', terms: '이용약관', privacy: '개인정보' },
+        footer: { home: '홈', tiktok: 'TikTok 연동', support: '지원', terms: '이용약관', privacy: '개인정보처리방침', contact: '문의' }
+      }
+    };
+
+    function setLang(lang) {
+      var safe = lang === 'ko' ? 'ko' : 'en';
+      var L = LABELS[safe];
+      var en = document.getElementById('content-en');
+      var ko = document.getElementById('content-ko');
+      if (safe === 'ko') { ko.classList.add('active'); en.classList.remove('active'); }
+      else { en.classList.add('active'); ko.classList.remove('active'); }
+      document.documentElement.lang = safe;
+      document.title = L.title;
+      var btn = document.getElementById('lang-btn');
+      if (btn) btn.textContent = L.langBtn;
+      Object.keys(L.nav).forEach(function (k) {
+        var el = document.getElementById('nav-' + k);
+        if (el) el.textContent = L.nav[k];
+      });
+      Object.keys(L.footer).forEach(function (k) {
+        var el = document.getElementById('footer-' + k);
+        if (el) el.textContent = L.footer[k];
+      });
+    }
+
+    (function () {
+      var theme = localStorage.getItem('nk_theme') || 'dark';
+      var variant = localStorage.getItem('nk_theme_variant') || '';
+      document.documentElement.setAttribute('data-theme', theme);
+      if (variant) document.documentElement.setAttribute('data-theme-variant', variant);
+
+      function initialLang() {
+        var q = '';
+        try { q = new URLSearchParams(location.search).get('lang') || ''; } catch (_) {}
+        q = String(q).trim().toLowerCase();
+        if (q === 'ko' || q === 'en') return q;
+        var saved = '';
+        try { saved = String(localStorage.getItem('nk_lang') || '').trim().toLowerCase(); } catch (_) {}
+        return saved === 'ko' ? 'ko' : 'en';
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        document.documentElement.classList.remove('preload-veiled');
+        setLang(initialLang());
+
+        var btn = document.getElementById('lang-btn');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            var next = document.documentElement.lang === 'ko' ? 'en' : 'ko';
+            try { localStorage.setItem('nk_lang', next); } catch (_) {}
+            setLang(next);
+          });
+        }
+
+        var top = document.getElementById('scroll-top-btn');
+        window.addEventListener('scroll', function () {
+          top.classList.toggle('visible', window.scrollY > 300);
+        }, { passive: true });
+      });
+
+      window.addEventListener('storage', function (e) {
+        if (e.key === 'nk_lang') setLang(e.newValue || 'en');
+        if (e.key === 'nk_theme') document.documentElement.setAttribute('data-theme', e.newValue || 'dark');
+      });
+    })();
+  </script>
+</body>
+
+</html>

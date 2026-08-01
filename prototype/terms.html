@@ -546,13 +546,17 @@
       <div class="legal-footer-inner">
         <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
         <nav class="legal-footer-links">
+          <a href="/" id="footer-home">홈</a>
+          <span>|</span>
+          <a href="tiktok" id="footer-tiktok">TikTok 연동</a>
+          <span>|</span>
+          <a href="support" id="footer-support">지원</a>
+          <span>|</span>
           <a href="terms" class="active" id="footer-terms">이용약관</a>
           <span>|</span>
           <a href="privacy" id="footer-privacy">개인정보처리방침</a>
           <span>|</span>
           <a href="mailto:chikinx1@gmail.com">Contact</a>
-          <span>|</span>
-          <a href="/" id="footer-home">홈</a>
         </nav>
       </div>
     </footer>
@@ -573,6 +577,10 @@
       var fTerms = document.getElementById('footer-terms');
       var fPrivacy = document.getElementById('footer-privacy');
       var fHome = document.getElementById('footer-home');
+      var fTiktok = document.getElementById('footer-tiktok');
+      var fSupport = document.getElementById('footer-support');
+      if (fTiktok) fTiktok.textContent = lang === 'en' ? 'TikTok Integration' : 'TikTok 연동';
+      if (fSupport) fSupport.textContent = lang === 'en' ? 'Support' : '지원';
       if (lang === 'en') {
         if (en) en.classList.add('active');
         if (ko) ko.classList.remove('active');

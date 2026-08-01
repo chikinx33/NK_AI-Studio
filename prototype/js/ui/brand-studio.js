@@ -3915,34 +3915,88 @@
           if (_snsOwner) requestBody.ownerId = String(_snsOwner);
         } catch (_) {}
 
-        return fetch('/api/sns/publish', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        })
-          .then(function (r) { return r.json().then(function (j) { return { httpStatus: r.status, body: j }; }); })
-          .then(function (wrap) {
-            var res = wrap.body;
-            // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)
-            if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않|만료|expired|revoked/i.test(res.error))) {
-              bsfNotify((res && res.error)
-                ? res.error
-                : (isEn
-                    ? 'YouTube is not connected. Connect it in SNS Settings first.'
-                    : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.'));
-              return { skipped: true };
-            }
-            if (!res || !res.ok) throw new Error((res && res.error) || 'SNS publish failed');
+        function doPublish() {
+          return fetch('/api/sns/publish', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { httpStatus: r.status, body: j }; }); })
+            .then(function (wrap) {
+              var res = wrap.body;
+              // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)
+              if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않|만료|expired|revoked/i.test(res.error))) {
+                bsfNotify((res && res.error)
+                  ? res.error
+                  : (isEn
+                      ? 'YouTube is not connected. Connect it in SNS Settings first.'
+                      : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.'));
+                return { skipped: true };
+              }
+              if (!res || !res.ok) throw new Error((res && res.error) || 'SNS publish failed');
 
-            // 하이브리드: 서버가 직접 PUT한 경우 result.postId 가 채워져 있음 → 그대로 반환
-            if (res.result) return res;
+              // 하이브리드: 서버가 직접 PUT한 경우 result.postId 가 채워져 있음 → 그대로 반환
+              if (res.result) return res;
 
-            // 큰 영상 → 클라 직접 PUT (resumable session)
-            if (res.uploadUrl && res.sourceUrl) {
-              return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId, !!res.scheduledPublish, res.scheduledFor || '');
+              // 큰 영상 → 클라 직접 PUT (resumable session)
+              if (res.uploadUrl && res.sourceUrl) {
+                return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId, !!res.scheduledPublish, res.scheduledFor || '');
+              }
+              throw new Error('Unexpected publish response');
+            });
+        }
+
+        // ── TikTok Direct Post — 확인 모달을 반드시 거친다 ─────────────────
+        // 명세: docs/tiktok_direct_post_modal_spec_20260801.md §6
+        // 일괄 배포 루프에서도 이 분기를 지나므로 "한 번에 배포"로도 확인 없이 나가지 않는다.
+        if (formatId === 'tiktok') {
+          // 예약 발행은 사용자가 없는 시점에 확인 화면 없이 게시되는 경로라 금지한다.
+          if (scheduledAt && scheduledAt !== 'now') {
+            bsfNotify(isEn
+              ? 'TikTok supports immediate posting only. Publish it now instead of scheduling.'
+              : 'TikTok은 즉시 게시만 지원합니다. 예약 대신 지금 게시해 주세요.');
+            return Promise.resolve({ skipped: true, reason: 'tiktok_no_schedule' });
+          }
+          if (!NK.tiktokConsentModal) {
+            bsfNotify(isEn
+              ? 'The TikTok confirmation dialog failed to load. Please reload the page and try again.'
+              : 'TikTok 확인 창을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+            return Promise.resolve({ skipped: true, reason: 'tiktok_modal_unavailable' });
+          }
+
+          // 프리뷰용 원본 URL 과 길이 — 선택한 자산에서 그대로 가져온다.
+          var ttPreviewUrl = '';
+          var ttDurationSec = 0;
+          for (var ti = 0; ti < selMediaItems.length; ti++) {
+            var tItem = selMediaItems[ti];
+            var tUrl = String(tItem.url || '').trim();
+            if (!ttPreviewUrl && (tUrl.indexOf('http') === 0 || tUrl.indexOf('/') === 0)) {
+              ttPreviewUrl = tUrl;
+              ttDurationSec = Number(tItem.duration) || 0;
             }
-            throw new Error('Unexpected publish response');
+          }
+          // 영상이 하나라도 있으면 영상 게시로 본다(Duet/Stitch 노출 기준).
+          var ttHasVideo = resolvedItems.some(function (it) { return it.mediaType === 'video'; });
+
+          return NK.tiktokConsentModal.open({
+            mediaType: ttHasVideo ? 'video' : 'image',
+            mediaPreviewUrl: ttPreviewUrl,
+            caption: finalCaption,
+            videoDurationSec: ttHasVideo ? ttDurationSec : 0,
+            ownerId: requestBody.ownerId || '',
+            projectId: requestBody.projectId || '',
+            onSubmit: function (ttSettings) {
+              requestBody.tiktok = ttSettings;
+              return doPublish();
+            },
+          }).then(function (modalResult) {
+            // null = 사용자가 취소. 그 외엔 게시 결과를 그대로 흘려보낸다.
+            if (!modalResult) return { skipped: true, reason: 'user_cancelled' };
+            return modalResult;
           });
+        }
+
+        return doPublish();
       }
 
       // YouTube resumable PUT (큰 영상 — XHR로 진행률 표시)

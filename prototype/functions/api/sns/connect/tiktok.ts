@@ -25,7 +25,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   const params = new URLSearchParams({
     client_key: clientKey,
-    scope: "video.publish,video.upload,video.list,user.info.basic",
+    // 심사 제출 스코프 3개. video.upload 는 코드상 사용처(inbox 게시)가 없어 제거.
+    // 요청만 하고 데모로 증명 못 하는 스코프는 그 자체가 반려 사유가 된다.
+    scope: "user.info.basic,video.publish,video.list",
     response_type: "code",
     redirect_uri: redirectUri,
     state,
