@@ -127,6 +127,12 @@
       var root = document.createElement('div');
       root.id = 'nk-dialog-root';
       root.className = 'nk-dialog-root';
+      // 런타임 ko->en 로컬라이저(common.js localizeSubtree)의 대상에서 제외한다.
+      // 그 로직은 요소별로 "첫 텍스트"를 저장해 두고 이후 변경을 그 저장본으로 되돌린다.
+      // 제목/메시지 요소는 모든 모달이 재사용하는 단일 노드라, 제외하지 않으면
+      // 처음 떴던 모달의 문구가 이후 모든 모달을 덮어쓴다
+      // (연결 성공 알림 자리에 지난 해제 확인창 문구가 그대로 나오는 증상).
+      root.setAttribute('data-i18n-skip', '');
       root.innerHTML =
         '<div class="nk-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="nk-dialog-title">' +
         '<h3 id="nk-dialog-title" class="nk-dialog-title">알림</h3>' +
@@ -207,12 +213,27 @@
       }
     }
 
+    /** 현재 런타임 언어로 1회 번역. 결과를 캐시하지 않는다. */
+    function localizeOnce(text) {
+      try {
+        var lang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+        if (NK.ui && NK.ui.common && typeof NK.ui.common.translateText === 'function') {
+          return NK.ui.common.translateText(text, lang);
+        }
+      } catch (_) {}
+      return text;
+    }
+
     function renderCurrent(item) {
       if (!item || !refs) return;
       var mode = item.mode || 'alert';
       var opts = item.opts || {};
       var title = String(opts.title || (mode === 'confirm' ? '확인' : '알림'));
       var message = toText(item.message || '');
+      // 로컬라이저를 껐으므로 번역은 여기서 매번 새로 한다. 저장해 두지 않으니
+      // 이전 모달의 문구가 남아 다음 모달을 덮어쓰는 일이 없다.
+      title = localizeOnce(title);
+      message = localizeOnce(message);
       if (refs.title) refs.title.textContent = title;
       if (refs.message) refs.message.textContent = message;
 

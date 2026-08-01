@@ -70,6 +70,31 @@ test("표시 중인 항목 없이 close 가 불려도 큐가 멈추지 않는다
   assert.match(core, /if \(busy\) \{ busy = false; flushQueue\(\); \}/);
 });
 
+test("다이얼로그는 런타임 로컬라이저의 대상에서 제외된다", () => {
+  const core = read("prototype/core.js");
+  const common = read("prototype/js/ui/common.js");
+
+  // common.js 의 localizeSubtree 는 요소별로 '첫 텍스트'를 저장해 두고 이후 변경을
+  // 그 저장본으로 되돌린다. 제목/메시지는 모든 모달이 재사용하는 단일 노드라,
+  // 제외하지 않으면 처음 떴던 모달 문구가 이후 모든 모달을 덮어쓴다.
+  assert.match(common, /if \(!el\.hasAttribute\(storeAttr\)\) \{\s*\n\s*el\.setAttribute\(storeAttr, text\);/);
+  // 제외 장치가 실제로 동작하는 조건
+  assert.match(common, /closest\('\[data-no-i18n\], \[data-i18n-skip\]'\)/);
+  assert.match(common, /el\.hasAttribute\('data-i18n-skip'\)[\s\S]{0,200}return;/);
+
+  // 다이얼로그 루트가 그 제외 표시를 단다
+  assert.match(core, /root\.setAttribute\('data-i18n-skip', ''\)/);
+});
+
+test("다이얼로그 문구는 렌더할 때마다 새로 번역한다 (캐시 없음)", () => {
+  const core = read("prototype/core.js");
+  assert.match(core, /function localizeOnce\(text\)/);
+  assert.match(core, /title = localizeOnce\(title\);/);
+  assert.match(core, /message = localizeOnce\(message\);/);
+  // 번역 결과를 요소나 맵에 저장하지 않는다
+  assert.doesNotMatch(core, /setAttribute\('data-nk-original/);
+});
+
 test("렌더된 모드와 요청 모드가 어긋나면 감지하고, 반환은 요청 모드를 따른다", () => {
   const core = read("prototype/core.js");
   // 그린 모드를 DOM 에 남긴다
