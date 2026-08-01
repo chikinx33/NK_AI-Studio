@@ -437,6 +437,10 @@
       nav_knowledge: 'Brand Hub',
       brand_nav_studio: 'Brand Management',
       brand_nav_episode: 'Episode',
+      // SNS 세팅 = 선택한 에피소드의 배포 설정(brand.html)
+      // SNS 연결 = 채널 계정 연결(sns-settings.html)
+      brand_nav_sns_setting: 'SNS Setup',
+      brand_nav_sns_connect: 'SNS Connect',
       brand_nav_hub_center: 'Hub Center',
       brand_scope_brand: 'Brand',
       // 그룹 라벨은 'SNS' 로 표시한다. 스코프 식별자(data-nav-scope="episode")와
@@ -820,6 +824,10 @@
       nav_knowledge: '브랜드 허브',
       brand_nav_studio: '브랜드 관리',
       brand_nav_episode: '에피소드',
+      // SNS 세팅 = 선택한 에피소드의 배포 설정(brand.html)
+      // SNS 연결 = 채널 계정 연결(sns-settings.html)
+      brand_nav_sns_setting: 'SNS 세팅',
+      brand_nav_sns_connect: 'SNS 연결',
       brand_nav_hub_center: '허브 센터',
       brand_scope_brand: '브랜드',
       // 그룹 라벨은 'SNS' 로 표시한다. 스코프 식별자(data-nav-scope="episode")와

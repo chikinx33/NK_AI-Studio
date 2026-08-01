@@ -13,28 +13,28 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1437" />
-  <link rel="stylesheet" href="styles.css?v=3.1437" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1438" />
+  <link rel="stylesheet" href="styles.css?v=3.1438" />
   <style>
     body.page-shell-brand .draft-card .draft-actions { display: none !important; }
     body.page-shell-brand .draft-card .edit-btn { display: none !important; }
     body.page-shell-brand .draft-card .trash-btn { display: inline-flex !important; }
   </style>
-  <script src="core.js?v=3.1437" defer></script>
-  <script src="js/config.js?v=3.1437" defer></script>
-  <script src="js/utils.js?v=3.1437" defer></script>
-  <script src="store.js?v=3.1437" defer></script>
-  <script src="api.js?v=3.1437" defer></script>
-  <script src="js/state.js?v=3.1437" defer></script>
-  <script src="js/auth.js?v=3.1437" defer></script>
-  <script src="js/navigation.js?v=3.1437" defer></script>
-  <script src="js/service/media.js?v=3.1437" defer></script>
-  <script src="js/service/project.js?v=3.1437" defer></script>
-  <script src="js/service/brand.js?v=3.1437" defer></script>
-  <script src="js/service/content-library.js?v=3.1437" defer></script>
-  <script src="js/ui/common.js?v=3.1437" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1437" defer></script>
-  <script src="script.js?v=3.1437" defer></script>
+  <script src="core.js?v=3.1438" defer></script>
+  <script src="js/config.js?v=3.1438" defer></script>
+  <script src="js/utils.js?v=3.1438" defer></script>
+  <script src="store.js?v=3.1438" defer></script>
+  <script src="api.js?v=3.1438" defer></script>
+  <script src="js/state.js?v=3.1438" defer></script>
+  <script src="js/auth.js?v=3.1438" defer></script>
+  <script src="js/navigation.js?v=3.1438" defer></script>
+  <script src="js/service/media.js?v=3.1438" defer></script>
+  <script src="js/service/project.js?v=3.1438" defer></script>
+  <script src="js/service/brand.js?v=3.1438" defer></script>
+  <script src="js/service/content-library.js?v=3.1438" defer></script>
+  <script src="js/ui/common.js?v=3.1438" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1438" defer></script>
+  <script src="script.js?v=3.1438" defer></script>
 </head>
 
 <body class="layout-fixed page-shell-brand">
@@ -57,7 +57,7 @@
       <nav class="nav" aria-label="브랜드 스튜디오 메뉴">
         <section class="nav-scope-group" data-nav-scope="brand">
           <p class="nav-scope-label" data-i18n="brand_scope_brand">브랜드</p>
-          <a class="nav-item" href="brand-dashboard.html">
+          <a class="nav-item" href="brand-dashboard.html?view=brands">
             <span data-i18n="brand_nav_studio">브랜드 관리</span>
           </a>
           <a class="nav-item disabled" href="knowledge.html" aria-disabled="true">
@@ -66,11 +66,14 @@
         </section>
         <section class="nav-scope-group" data-nav-scope="episode">
           <p class="nav-scope-label" data-i18n="brand_scope_episode">SNS</p>
-          <a class="nav-item disabled" href="brand.html" aria-disabled="true">
+          <a class="nav-item disabled" href="brand-dashboard.html?view=episodes" aria-disabled="true">
             <span data-i18n="brand_nav_episode">에피소드</span>
           </a>
+          <a class="nav-item disabled" href="brand.html" aria-disabled="true">
+            <span data-i18n="brand_nav_sns_setting">SNS 세팅</span>
+          </a>
           <a class="nav-item disabled" href="sns-settings.html" aria-disabled="true">
-            <span data-i18n="nav_sns">SNS 설정</span>
+            <span data-i18n="brand_nav_sns_connect">SNS 연결</span>
           </a>
         </section>
         <section class="nav-scope-group" data-nav-scope="shared">

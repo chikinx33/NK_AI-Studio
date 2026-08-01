@@ -119,7 +119,9 @@
         const st = nav.normalizeStageName(targetName);
         // shell-specific dashboard mapping
         if (st === 'dashboard' || /(^|[\\\/])(brand-dashboard|image-dashboard|video-dashboard|dashboard)\.html([?#]|$)/i.test(targetName)) {
-            targetName = shellDefaultDashboard();
+            // 대시보드 파일명은 셸별로 치환하되 쿼리(?view=brands 등)는 보존한다.
+            var qIdx = targetName.indexOf('?');
+            targetName = shellDefaultDashboard() + (qIdx >= 0 ? targetName.slice(qIdx) : '');
         }
         if (st === 'ai-image-stage' && /(^|[\\\/])ai-image(\.html?)?([?#]|$)/i.test(targetName)) {
             targetName = 'ai-image-stage.html';

@@ -596,9 +596,59 @@
     return owned.concat(_sharedDrafts);
   }
 
+  // ── 브랜드 셸 진입 뷰(?view=) ───────────────────────────────────────────────
+  // 사이드바 "브랜드 관리"는 ?view=brands, "에피소드"는 ?view=episodes 로 들어온다.
+  // 브랜드 관리는 언제 눌러도 브랜드(IP) 목록으로 돌아가야 하므로, 이전에 어떤
+  // 브랜드를 열어 뒀든 필터를 초기화한다. 반대로 에피소드는 선택된 브랜드의
+  // 에피소드 목록을 연다. 규칙은 페이지 로드당 1회만 적용해서 이후 사용자의
+  // 브랜드 선택(open-series 등)을 덮어쓰지 않는다.
+  let _brandViewApplied = false;
+  const markBrandViewSettled = () => { _brandViewApplied = true; };
+  const resolveSelectedSeriesId = () => {
+    try {
+      const runtimeSeriesId = String(NK.state?.runtime?.currentProject?.seriesId || '').trim();
+      if (runtimeSeriesId) return runtimeSeriesId;
+    } catch (_) { }
+    try {
+      const pid = getSelectedProjectId();
+      if (pid) {
+        const hit = (NK.store.getDrafts() || []).map(normalizeDraft).filter(Boolean)
+          .find((d) => String(d.id) === String(pid));
+        if (hit && hit.seriesId) return String(hit.seriesId).trim();
+      }
+    } catch (_) { }
+    return '';
+  };
+  const applyBrandViewFromUrl = () => {
+    if (_brandViewApplied) return;
+    if (getHostShell() !== 'brand') { markBrandViewSettled(); return; }
+    let view = '';
+    try { view = String(new URLSearchParams(String(window.location.search || '')).get('view') || '').trim(); } catch (_) { }
+    if (view === 'brands') { currentSeriesFilter = '__all__'; markBrandViewSettled(); return; }
+    if (view !== 'episodes') { markBrandViewSettled(); return; }
+    // 프로젝트 동기화 전이면 시리즈를 못 찾을 수 있다. 그때는 확정하지 않고
+    // 다음 렌더에서 다시 시도한다(서버 머지 후 두 번째 renderDrafts 에서 성공).
+    const seriesId = resolveSelectedSeriesId();
+    if (!seriesId) return;
+    currentSeriesFilter = seriesId;
+    markBrandViewSettled();
+  };
+  // 캐시된 stage iframe 을 재사용(= URL 동일, reload 없음)할 때도 진입 뷰를 다시 적용한다.
+  if (!window.__nk_dashboard_revisit_bound) {
+    window.__nk_dashboard_revisit_bound = true;
+    window.addEventListener('message', (evt) => {
+      const data = (evt && evt.data) || {};
+      if (!data || data.type !== 'stage-revisit' || data.stage !== 'dashboard') return;
+      _brandViewApplied = false;
+      applyBrandViewFromUrl();
+      dashboard.renderDrafts();
+    });
+  }
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
+    applyBrandViewFromUrl();
 
     // 대시보드 진입 즉시(카드 그리기 전) 로딩 스피너를 띄운다. 이미 캐시된 카드가 있어도
     // 소유 + 공유 동기화가 모두 끝날 때까지 스피너를 유지(중간에 카드가 먼저 보이는 현상 방지).
@@ -819,14 +869,14 @@
         brandManagement: 'Brand Management', brandPortfolio: 'Brand portfolio', brandPortfolioDesc: 'Choose a brand to open its workspace and episodes.',
         allBrands: 'All brands', brandWorkspace: 'Brand workspace', episodes: 'Episodes', recentEpisode: 'Latest episode',
         openBrand: 'Open brand', newBrand: 'New brand', addEpisode: 'Add episode', settings: 'Settings', share: 'Share', remove: 'Delete',
-        episodeListDesc: 'Choose an episode to enter its production workspace.', hub: 'Hub Center', analytics: 'Analytics', assets: 'Content Library', sns: 'SNS Settings'
+        episodeListDesc: 'Choose an episode to open its SNS setup.', hub: 'Hub Center', analytics: 'Analytics', assets: 'Content Library', sns: 'SNS Connect'
       }
       : {
         project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율',
         brandManagement: '브랜드 관리', brandPortfolio: '브랜드 포트폴리오', brandPortfolioDesc: '브랜드를 선택하면 브랜드 작업공간과 에피소드 목록이 열립니다.',
         allBrands: '전체 브랜드', brandWorkspace: '브랜드 작업공간', episodes: '에피소드', recentEpisode: '최근 에피소드',
         openBrand: '브랜드 열기', newBrand: '새 브랜드', addEpisode: '에피소드 추가', settings: '설정', share: '공유', remove: '삭제',
-        episodeListDesc: '에피소드를 선택하면 해당 콘텐츠의 제작 작업공간으로 이동합니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 설정'
+        episodeListDesc: '에피소드를 선택하면 해당 에피소드의 SNS 세팅 화면이 열립니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 연결'
       };
     const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
     const manageBarHtml = host === 'video' ? `
@@ -1103,6 +1153,7 @@
         const series = seriesList.find((item) => String(item.id) === seriesId) || null;
         const primaryDraft = getPrimaryDraftForSeries(seriesId, drafts);
         if (!series || !primaryDraft) return;
+        markBrandViewSettled(); // 사용자가 직접 고른 브랜드 — URL 진입 뷰가 덮어쓰지 않게
         currentSeriesFilter = seriesId;
         selectProject(primaryDraft);
         publishBrandWorkspaceContext('brand', primaryDraft, series);
@@ -1111,6 +1162,7 @@
       }
 
       if (action === 'back-to-brands') {
+        markBrandViewSettled();
         currentSeriesFilter = '__all__';
         publishBrandWorkspaceContext('list');
         dashboard.renderDrafts();
@@ -1160,6 +1212,7 @@
       }
 
       if (action === 'series-filter') {
+        markBrandViewSettled();
         currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
         if (currentSeriesFilter !== '__all__') {
           const primaryDraft = getPrimaryDraftForSeries(currentSeriesFilter, drafts);

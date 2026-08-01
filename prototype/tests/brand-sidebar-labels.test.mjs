@@ -10,17 +10,33 @@ test('brand studio header and management sidebar use the requested localized lab
   const core = read('prototype/core.js');
 
   assert.match(html, /data-i18n="brand_manage_subtitle">브랜드 스튜디오</);
-  assert.match(html, /href="brand-dashboard\.html"[\s\S]*?data-i18n="brand_nav_studio">브랜드 관리</);
-  assert.match(html, /href="brand\.html"[\s\S]*?data-i18n="brand_nav_episode">에피소드</);
+  // 브랜드 관리 = 항상 브랜드(IP) 목록, 에피소드 = 선택한 브랜드의 에피소드 목록.
+  // 둘 다 brand-dashboard.html 이라 ?view= 로 구분한다.
+  assert.match(html, /href="brand-dashboard\.html\?view=brands"[\s\S]*?data-i18n="brand_nav_studio">브랜드 관리</);
+  assert.match(html, /href="brand-dashboard\.html\?view=episodes"[\s\S]*?data-i18n="brand_nav_episode">에피소드</);
+  // SNS 세팅 = 에피소드 배포 설정(brand.html), SNS 연결 = 채널 연결(sns-settings.html)
+  assert.match(html, /href="brand\.html"[\s\S]*?data-i18n="brand_nav_sns_setting">SNS 세팅</);
+  assert.match(html, /href="sns-settings\.html"[\s\S]*?data-i18n="brand_nav_sns_connect">SNS 연결</);
   assert.match(html, /href="knowledge\.html"[\s\S]*?data-i18n="brand_nav_hub_center">허브 센터</);
   assert.match(core, /brand_manage_subtitle: 'Brand Studio'/);
   assert.match(core, /brand_nav_studio: 'Brand Management'/);
   assert.match(core, /brand_nav_episode: 'Episode'/);
+  assert.match(core, /brand_nav_sns_setting: 'SNS Setup'/);
+  assert.match(core, /brand_nav_sns_connect: 'SNS Connect'/);
   assert.match(core, /brand_nav_hub_center: 'Hub Center'/);
   assert.match(core, /brand_manage_subtitle: '브랜드 스튜디오'/);
   assert.match(core, /brand_nav_studio: '브랜드 관리'/);
   assert.match(core, /brand_nav_episode: '에피소드'/);
+  assert.match(core, /brand_nav_sns_setting: 'SNS 세팅'/);
+  assert.match(core, /brand_nav_sns_connect: 'SNS 연결'/);
   assert.match(core, /brand_nav_hub_center: '허브 센터'/);
+});
+
+test('brand shell keeps dashboard view query when remapping the stage href', () => {
+  const navigation = read('prototype/js/navigation.js');
+  // ?view=brands / ?view=episodes 가 셸별 대시보드 치환에서 잘려나가면
+  // "브랜드 관리"와 "에피소드"가 같은 화면으로 떨어진다.
+  assert.match(navigation, /targetName\.indexOf\('\?'\)[\s\S]*?shellDefaultDashboard\(\) \+ \(qIdx >= 0 \? targetName\.slice\(qIdx\) : ''\)/);
 });
 
 test('brand management shell cache-busts its translated navigation assets', () => {

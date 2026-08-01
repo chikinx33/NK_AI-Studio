@@ -3458,17 +3458,27 @@
       if (item.hasAttribute('data-ai-doc-view')) return;
       const href = item.getAttribute('href') || '';
       const file = href.replace(/.*\//, '').split('?')[0].replace(/\.html?$/, '') || 'index';
+      // 브랜드 셸의 "브랜드 관리"(?view=brands)와 "에피소드"(?view=episodes)는 같은
+      // brand-dashboard.html 을 가리키므로 view 값으로 구분한다.
+      const navView = (href.split('?')[1] || '').match(/(?:^|&)view=([^&]*)/)?.[1] || '';
       let targetStage = file;
       if (file === 'brand-dashboard' || file === 'image-dashboard' || file === 'video-dashboard' || file === 'video-gen-dashboard') targetStage = 'dashboard';
       if (file === 'ai-video') targetStage = 'dashboard';
-      const isMatch = (stage === targetStage) || (stage === 'dashboard' && (targetStage === 'index' || targetStage === 'dashboard'));
+      let isMatch = (stage === targetStage) || (stage === 'dashboard' && (targetStage === 'index' || targetStage === 'dashboard'));
+      // 대시보드가 열려 있을 때 브랜드 목록이면 "브랜드 관리", 특정 브랜드를 열었으면
+      // "에피소드"만 활성 표시한다(두 메뉴가 동시에 켜지지 않게).
+      if (isMatch && isBrandShell && navView) {
+        const onBrandList = !brandContext || brandContext.scope === 'list';
+        isMatch = navView === 'brands' ? onBrandList : !onBrandList;
+      }
       if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
 
       // 브랜드 셸에서는 브랜드 범위와 에피소드 범위를 구분한다.
-      // 브랜드 도구는 브랜드 선택 후, 제작 화면은 실제 에피소드 선택 후에만 연다.
+      // 브랜드 도구·SNS 연결은 브랜드 선택 후, SNS 세팅은 에피소드 선택 후에만 연다.
       if (isBrandShell) {
-        const needsBrand = ['knowledge', 'analytics', 'library', 'sns-settings'].includes(file);
+        const needsBrand = ['knowledge', 'analytics', 'library', 'sns-settings'].includes(file)
+          || navView === 'episodes';
         const needsEpisode = file === 'brand';
         const unavailable = (needsBrand && !hasBrandContext) || (needsEpisode && !hasEpisodeContext);
         item.classList.toggle('disabled', unavailable);

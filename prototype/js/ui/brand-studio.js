@@ -17,6 +17,12 @@
   // 배포 진행 중 상태(formatId→true). renderProject 가 재실행돼도 스피너가 유지되도록
   // 모듈 스코프에 둔다(렌더 내부 지역변수였을 때는 재렌더 시 초기화돼 스피너가 꺼졌음).
   var _deployingFormats = {};
+  // "SNS 세팅" 진입 시작 단계. 에피소드를 열 때 1회만 계산해 renderProject 재실행에도 유지된다.
+  //  - 1~4 단계를 모두 마친 에피소드 → 04(배포 설정)로 바로 진입
+  //  - 그 외 → 01(자산)부터 진행
+  // 사용자가 단계를 직접 바꾸면(switchToStep / 원클릭 초안) 해제되어 저장된 단계를 따른다.
+  var _entryStep = { projectId: '', step: 0 };
+  function releaseEntryStep() { _entryStep = { projectId: _entryStep.projectId, step: 0 }; }
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -1375,6 +1381,8 @@
     }
 
     function switchToStep(newStep) {
+      // 사용자가 직접 단계를 바꿨으므로 진입 단계 고정을 해제한다.
+      releaseEntryStep();
       // 포맷 탭 진입 시 자산 기반 자동 선택 — 자산 선택이 바뀌었을 때만 재계산
       if (newStep === 2) {
         var curSig = selectedAssetIds.slice().sort().join('\x00');
@@ -1526,12 +1534,24 @@
     // 스토리(가상 ID)를 포함한 선택된 자산 총 수
     var persistedSelCount = persistedSelectedAssetItems.length + (storySelected ? 1 : 0);
     var savedActiveStep = parseInt(String(payload.brandStudioActiveStep || '0'), 10);
-    var activeStep = (savedActiveStep >= 1 && savedActiveStep <= 4) ? savedActiveStep : (function () {
+    // 이 에피소드가 01~04 를 모두 마쳤는지. 04(배포)는 '배포 계획 저장(예약 시각 + 채널)' 기준.
+    var allStepsDone = persistedSelCount > 0
+      && selectedFormats.length > 0
+      && hasDraftForAnyFormat
+      && !!(publishPlan.scheduledAt && publishPlan.channels.length);
+    // 에피소드를 새로 열었을 때만 진입 단계를 계산한다(재렌더 시에는 유지).
+    if (_entryStep.projectId !== projectId) {
+      _entryStep = { projectId: projectId, step: allStepsDone ? 4 : 1 };
+      if (savedActiveStep !== _entryStep.step && NK.service && NK.service.project && NK.service.project.updatePayload) {
+        NK.service.project.updatePayload(projectId, { brandStudioActiveStep: _entryStep.step }).catch(function () {});
+      }
+    }
+    var activeStep = _entryStep.step || ((savedActiveStep >= 1 && savedActiveStep <= 4) ? savedActiveStep : (function () {
       if (!persistedSelCount) return 1;
       if (!selectedFormats.length) return 2;
       if (!hasDraftForAnyFormat) return 3;
       return 4;
-    }());
+    }()));
     var stepDefs = [
       { id: 1, num: '01', title: T.stepAsset, done: persistedSelCount > 0, value: persistedSelCount ? T.stepValSelected(persistedSelCount) : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음')) },
       { id: 2, num: '02', title: T.stepFormat, done: selectedFormats.length > 0, value: selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone },
@@ -3744,6 +3764,7 @@
           brandStudioActiveDraftTab: defaultFormats[0] || '',
           brandStudioActiveStep: 3
         };
+        releaseEntryStep(); // 원클릭 초안은 3단계로 이동하므로 진입 단계 고정 해제
         NK.service.project.updatePayload(projectId, oneClickPayload)
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -4500,6 +4521,26 @@
     // ① 스피너 즉시 표시 — 빈 화면/깜박임 없음
     root.innerHTML = '<div class="bsf-init-spinner"><div class="bsf-init-spinner-ring"></div></div>';
     bindDeferredHydrationFlush(root);
+
+    // 사이드바에서 "SNS 세팅"을 다시 눌러 캐시된 iframe 이 그대로 재사용되는 경우
+    // (URL 이 같아 reload 가 일어나지 않음) 진입 단계 규칙을 다시 적용한다.
+    if (!window.__brandStudioRevisitBound) {
+      window.__brandStudioRevisitBound = true;
+      window.addEventListener('message', function (evt) {
+        var data = (evt && evt.data) || {};
+        if (!data || data.type !== 'stage-revisit' || data.stage !== 'brand') return;
+        var rootEl = document.getElementById('brand-studio-root');
+        if (!rootEl || !rootEl.isConnected) return;
+        if (!NK.service || !NK.service.project || !NK.service.project.resolveCurrent) return;
+        var p = NK.service.project.resolveCurrent({ search: window.location.search });
+        if (!p) return;
+        _entryStep = { projectId: '', step: 0 };
+        var b = null;
+        var bId = String((p.payload && p.payload.brandId) || p.brandId || '').trim();
+        if (bId && NK.service.brand && NK.service.brand.getById) b = NK.service.brand.getById(bId);
+        try { renderProject(rootEl, p, b); } catch (_) {}
+      });
+    }
 
     // 언어 전환(nk:lang-changed) 수신 — 한 페이지 라이프사이클당 1회만 등록
     if (!window.__brandStudioLangBound) {
