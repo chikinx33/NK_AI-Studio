@@ -1,7 +1,15 @@
 ================================================================
-NK AI Studio — TikTok App Review Description
-Paste into: Review Description / Apply Reason
-Replace <TEST_ID> and <TEST_PW> with the real reviewer credentials.
+NK AI Studio — TikTok App Review Description (REFERENCE ONLY)
+
+⚠️ THIS FILE IS NOT WHAT GETS SUBMITTED.
+The portal's Review Description field has a 1000-character limit, so the
+text that actually goes into the portal lives in:
+
+    docs/tiktok_review_description_1000.txt   <-- THE REAL SUBMISSION
+
+Keep this file as the long-form reference, but whenever scopes, transfer
+method or the confirmation dialog change, update _1000.txt as well —
+that is the one the reviewer reads.
 ================================================================
 
 --- VERSION A : FULL (use this unless the field rejects it for length) ---

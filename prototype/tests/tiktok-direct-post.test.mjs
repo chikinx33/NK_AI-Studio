@@ -266,12 +266,42 @@ test("영상 업로드 가드가 TikTok 단일 청크 상한(64MB)을 넘지 않
 test("/tiktok 페이지의 전송 방식 서술이 제출 원문·코드와 일치한다", () => {
   const page = read("prototype/tiktok.html");
   const submission = read("docs/tiktok_review_description_EN.txt");
-  // 영상 FILE_UPLOAD / 사진만 PULL_FROM_URL — 셋이 어긋나면 그 자체가 반려 사유다.
+  // 영상 FILE_UPLOAD / 사진만 PULL_FROM_URL — 어긋나면 그 자체가 반려 사유다.
   assert.match(page, /videos are sent with <code>FILE_UPLOAD<\/code>/);
   assert.match(page, /Photo posts must use <code>PULL_FROM_URL<\/code>/);
   assert.match(page, /영상은 <code>FILE_UPLOAD<\/code>로 보냅니다/);
   assert.match(submission, /Video: \/v2\/post\/publish\/video\/init\/ with source FILE_UPLOAD/);
   assert.match(read("prototype/functions/api/sns/publish.ts"), /source: "FILE_UPLOAD"/);
+  // 장문 EN.txt 는 참고용이다. 실제 제출본이 어느 파일인지 헷갈리면 이번처럼 한쪽만
+  // 고치는 사고가 난다 — 헤더가 그 사실을 명시하고 있어야 한다.
+  assert.match(submission, /THIS FILE IS NOT WHAT GETS SUBMITTED/);
+  assert.match(submission, /tiktok_review_description_1000\.txt/);
+});
+
+test("포털 제출본(_1000.txt)이 1000자 이내이고 코드와 같은 스코프를 서술한다", () => {
+  // ★ 이 파일이 포털 Review Description 에 실제로 들어가는 원문이다.
+  //   코드 / prototype/tiktok.html / 이 파일 — 셋이 항상 같이 움직여야 한다.
+  const sub = read("docs/tiktok_review_description_1000.txt");
+  assert.ok(sub.trimEnd().length <= 1000, `제출본이 ${sub.trimEnd().length}자 — 포털 상한 1000자 초과`);
+
+  // 코드가 실제로 요청하는 스코프 조합과 같아야 한다
+  const scope = read("prototype/functions/api/sns/connect/tiktok.ts");
+  for (const s of ["user.info.basic", "video.publish", "video.upload"]) {
+    assert.ok(scope.includes(s), `scope 문자열에 ${s} 가 있어야 한다`);
+    assert.ok(sub.includes(s), `제출본에 ${s} 설명이 있어야 한다`);
+  }
+  // 요청하지 않는 스코프를 제출본이 주장하면 안 된다
+  assert.doesNotMatch(sub, /video\.list/);
+  // user.info.basic 필드 (username 은 profile 스코프라 요청하지 않는다)
+  assert.match(sub, /avatar_url/);
+  assert.doesNotMatch(sub, /display_name, username/);
+  // Direct Post 확인 모달의 핵심 주장 — 실제 모달 동작과 일치해야 한다
+  assert.match(sub, /nothing pre-selected/i);
+  assert.match(sub, /off by default/i);
+  assert.match(sub, /FILE_UPLOAD/);
+  // 초안함은 post_info 없이 보낸다는 서술이 inbox 구현과 맞아야 한다
+  assert.match(sub, /no post_info/i);
+  assert.doesNotMatch(read("prototype/functions/api/sns/tiktok/inbox.ts"), /post_info:/);
 });
 
 test("sitemap 에 새 공개 페이지가 등록돼 있다", () => {

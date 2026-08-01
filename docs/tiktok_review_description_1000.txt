@@ -1,0 +1,11 @@
+NK AI Studio (https://nkstudio.org) lets brand owners create video with AI and send it to their own TikTok account only after on-screen approval. Nothing posts automatically.
+
+user.info.basic: after OAuth we call /v2/user/info/ once for open_id, display_name, avatar_url. These appear on the SNS Connections screen so the user knows which account is linked; open_id ties the stored token to it. We store only these and tokens.
+
+video.publish (Direct Post): we query creator_info and show a confirmation dialog - creator name, media preview, audience selector with nothing pre-selected, Comment/Duet/Stitch off by default (greyed if the creator disabled them), commercial disclosure. Only on confirm do we call video/init (FILE_UPLOAD) and poll status.
+
+video.upload (Send to drafts): a second button sends the video to the creator's TikTok inbox with no post_info; they finish and publish in TikTok.
+
+Disconnecting deletes all TikTok data.
+
+Test: https://nkstudio.org/app.html ID ticktok / PW icktok
