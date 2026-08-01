@@ -295,7 +295,7 @@
   function startOAuth(platform) {
     apiGet('/api/sns/connect/' + platform).then(function (res) {
       if (!res || !res.ok || !res.oauthUrl) {
-        alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
+        snsAlert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
         return;
       }
       var w = 600, h = 700;
@@ -333,7 +333,7 @@
       _writeCache(_settings.sns);
       render();
       console.log('[SNS] OAuth local merge:', platform, JSON.stringify(_settings.sns[platform] || {}));
-      alert(T[_lang()].connectOk(platform, result.username || ''));
+      snsAlert(T[_lang()].connectOk(platform, result.username || ''));
       loadSettings().then(function (s) {
         var serverState = (s && s.sns && s.sns[platform]) || {};
         console.log('[SNS] loadSettings() server state for', platform, ':', JSON.stringify(serverState));
@@ -341,7 +341,7 @@
         render();
       }).catch(function (err) { console.warn('[SNS] loadSettings after OAuth failed:', err); });
     } else {
-      alert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
+      snsAlert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
     }
   }
 
@@ -352,6 +352,28 @@
     el.className = 'sns-save-status' + (type ? ' sns-save-status--' + type : '');
   }
 
+  // 인앱 다이얼로그 래퍼. 네이티브 alert/confirm 은 브라우저 자동화 세션을 막고
+  // (자동화 도구가 프롬프트에서 멈춘다) 테마와도 어긋나므로 core.js 의 NK.ui.dialog 를 쓴다.
+  // dialog 가 아직 없으면 네이티브로 폴백한다.
+  function snsAlert(message) {
+    try {
+      if (NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
+        return NK.ui.dialog.alert(String(message == null ? '' : message), { title: t('title') || 'SNS' });
+      }
+    } catch (_) {}
+    alert(String(message == null ? '' : message));
+    return Promise.resolve();
+  }
+
+  function snsConfirm(message) {
+    try {
+      if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
+        return Promise.resolve(NK.ui.dialog.confirm(String(message == null ? '' : message), { title: t('disconnect') || 'Confirm' }));
+      }
+    } catch (_) {}
+    return Promise.resolve(confirm(String(message == null ? '' : message)));
+  }
+
   function onAction(e) {
     var btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -360,7 +382,7 @@
     // 공유받은 프로젝트: 연결 계정은 소유자의 것 → 읽기 전용. 변경 액션 차단.
     if (_sharedOwnerId && (action === 'sns-connect-toggle' || action === 'sns-usage-toggle' || action === 'sns-save')) {
       e.preventDefault();
-      alert(_lang() === 'en'
+      snsAlert(_lang() === 'en'
         ? 'These channels belong to the project owner and can only be changed by the owner.'
         : '연결 계정은 프로젝트 소유자의 것이라 소유자만 변경할 수 있습니다.');
       return;
@@ -378,10 +400,12 @@
         return;
       }
       if (s.connected) {
-        if (!confirm(T[_lang()].disconnectConfirm(pid))) return;
-        _settings.sns[pid] = { connected: false, enabled: false };
-        _writeCache(_settings.sns);
-        saveSettings().then(function () { render(); });
+        snsConfirm(T[_lang()].disconnectConfirm(pid)).then(function (ok) {
+          if (!ok) return;
+          _settings.sns[pid] = { connected: false, enabled: false };
+          _writeCache(_settings.sns);
+          return saveSettings().then(function () { render(); });
+        });
       } else {
         startOAuth(pid);
       }
@@ -394,7 +418,7 @@
       var upid = btn.dataset.platform;
       var us = (_settings && _settings.sns && _settings.sns[upid]) || {};
       if (!us.connected) {
-        alert(_lang() === 'en'
+        snsAlert(_lang() === 'en'
           ? 'Connect this channel first.'
           : '먼저 채널을 연결해 주세요.');
         return;
@@ -420,13 +444,23 @@
       ? NK.ui.common.platformIconSvg(platform.id, 36)
       : (_platformIcons[platform.id] || '');
 
+    // '@' 는 진짜 handle 일 때만 붙인다. TikTok 의 username 필드에는 display_name 이
+    // 들어있어서 무조건 '@' 를 붙이면 없는 계정을 가리키는 것처럼 보인다.
+    var accountLabel = '';
+    if (platform.id === 'tiktok') {
+      var _tth = String(snsState.handle || '').replace(/^@/, '');
+      accountLabel = _tth ? '@' + _tth : username;
+    } else {
+      accountLabel = username ? '@' + username : '';
+    }
+
     var statusText;
     var needsReconnect = !!snsState.needsReconnect;
     if (comingSoon) statusText = t('comingSoon');
     else if (!connected) statusText = t('notConnected');
-    else if (needsReconnect) statusText = (username ? '@' + username + ' · ' : '') + t('reconnectHint');
-    else if (enabled) statusText = username ? '@' + username : t('inUse');
-    else statusText = username ? '@' + username + ' · ' + t('paused') : t('paused');
+    else if (needsReconnect) statusText = (accountLabel ? accountLabel + ' · ' : '') + t('reconnectHint');
+    else if (enabled) statusText = accountLabel || t('inUse');
+    else statusText = accountLabel ? accountLabel + ' · ' + t('paused') : t('paused');
 
     // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
     var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -466,7 +500,10 @@
       var _ytPath = _handle ? (_handle.charAt(0) === '@' ? _handle : '@' + _handle) : '';
       if (platform.id === 'instagram')      profileUrl = _u ? 'https://www.instagram.com/' + _u + '/' : '';
       else if (platform.id === 'youtube')   profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
-      else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
+      // TikTok: username 필드에는 display_name 이 들어있다(진짜 @handle 은 user.info.basic
+      // 으로 못 받는다). 그걸로 링크를 만들면 handle 이 다른 계정에서 404 가 나므로,
+      // creator_info 로 확인된 handle 이 있을 때만 링크를 건다.
+      else if (platform.id === 'tiktok')    profileUrl = snsState.handle ? 'https://www.tiktok.com/@' + encodeURIComponent(String(snsState.handle).replace(/^@/, '')) : '';
       else if (platform.id === 'facebook')  profileUrl = snsState.pageId ? 'https://www.facebook.com/' + snsState.pageId : '';
       else if (platform.id === 'threads')   profileUrl = _u ? 'https://www.threads.net/@' + _u : '';
       else if (platform.id === 'x')         profileUrl = _u ? 'https://x.com/' + _u : '';

@@ -214,6 +214,27 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     const displayName = user.display_name || openId;
     const avatarUrl = user.avatar_url || "";
 
+    // 진짜 @handle 은 user.info.basic 으로 받을 수 없다(user.info.profile 소관).
+    // creator_info 는 creator_username 을 주므로 여기서 한 번 받아 저장해 둔다.
+    // 프로필 링크(https://tiktok.com/@handle)를 만들 수 있는 유일한 근거값이라,
+    // 실패하면 handle 을 비워 두고 링크를 아예 표시하지 않는다 — display_name 으로
+    // 링크를 만들면 handle 이 다른 계정에서 404 가 난다.
+    let handle = "";
+    try {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 6000);
+      const ciRes = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+        signal: ac.signal,
+      });
+      clearTimeout(timer);
+      const ciData = (await ciRes.json()) as { data?: { creator_username?: string } };
+      handle = String(ciData.data?.creator_username || "").replace(/^@/, "");
+    } catch (e) {
+      console.log("[tiktok] creator_info(handle) 조회 실패 — 프로필 링크는 숨겨진다:", e);
+    }
+
     // Step 3: Save to GCS
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
     const bucket = outParsed.bucket;
@@ -239,6 +260,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
         username: displayName,
         displayName,
         avatarUrl,
+        // creator_info 로 확인된 진짜 @handle. 못 받았으면 빈 문자열이고, 그 경우
+        // SNS 설정의 프로필 링크는 표시되지 않는다.
+        handle,
         accessToken,
         refreshToken,
         tokenExpiresAt: expiresAt,

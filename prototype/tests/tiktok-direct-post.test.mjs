@@ -322,6 +322,47 @@ test("개인정보처리방침이 TikTok 을 '연동 중'으로 표기하고 수
   assert.match(src, /open_id, display_name, avatar_url/);
 });
 
+test("TikTok 프로필 링크는 확인된 handle 이 있을 때만 만든다", () => {
+  const src = read("prototype/js/ui/sns-settings.js");
+  // username 필드에는 display_name 이 들어있어 그걸로 링크를 만들면 404 가 난다.
+  assert.match(src, /platform\.id === 'tiktok'\)\s*profileUrl = snsState\.handle \?/);
+  assert.doesNotMatch(src, /tiktok'\)\s*profileUrl = _u \?/);
+  // handle 은 creator_info 의 creator_username 으로 채운다
+  const cb = read("prototype/functions/auth/tiktok/callback.ts");
+  assert.match(cb, /creator_username/);
+  assert.match(cb, /handle,/);
+  // 클라이언트가 읽을 수 있어야 링크가 생긴다
+  assert.match(read("prototype/functions/api/userdata/sns/get.ts"), /"handle"/);
+});
+
+test("sns-settings 는 네이티브 alert/confirm 을 직접 호출하지 않는다", () => {
+  const src = read("prototype/js/ui/sns-settings.js");
+  // 자동화 세션이 네이티브 프롬프트에서 멈춘다 → 인앱 다이얼로그로 감싼다.
+  assert.match(src, /function snsAlert/);
+  assert.match(src, /function snsConfirm/);
+  assert.match(src, /NK\.ui\.dialog\.confirm/);
+  // 폴백을 제외하면 호출부에 네이티브 호출이 남아 있으면 안 된다
+  const callSites = src
+    .split("\n")
+    .filter((l) => /(^|[^.\w])(alert|confirm)\(/.test(l) && !/function sns(Alert|Confirm)/.test(l));
+  for (const line of callSites) {
+    assert.ok(
+      /snsAlert|snsConfirm|NK\.ui\.dialog|return Promise\.resolve\(confirm|^\s*alert\(String/.test(line),
+      `네이티브 호출이 남아 있다: ${line.trim()}`
+    );
+  }
+});
+
+test("프로덕션 키 전환 절차가 문서로 남아 있다", () => {
+  const doc = read("docs/tiktok_production_cutover.md");
+  // 키 교체와 APP_AUDITED 는 같은 시점에 처리해야 한다
+  assert.match(doc, /TIKTOK_CLIENT_KEY/);
+  assert.match(doc, /TIKTOK_CLIENT_SECRET/);
+  assert.match(doc, /TIKTOK_APP_AUDITED\s*=\s*true/);
+  // 전원 재연결이 필요하다는 사실이 빠지면 안 된다
+  assert.match(doc, /재연결/);
+});
+
 test("랜딩이 ?lang=en 진입을 즉시 반영한다", () => {
   const src = read("prototype/js/landing.js");
   assert.match(src, /function syncLangFromQuery/);

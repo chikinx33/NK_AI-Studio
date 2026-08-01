@@ -4,7 +4,7 @@ import { loadShares, getGrantRole } from "../../_shared/shares";
 
 // 비소유자(공유 협업자)에게 반환할 때 노출해도 안전한 필드만 남긴다.
 // accessToken/refreshToken/tokenExpiresAt 등 자격증명은 절대 클라이언트로 보내지 않는다.
-const SAFE_SNS_FIELDS = ["connected", "enabled", "username", "pageName", "channelTitle", "igUserId", "needsReconnect"];
+const SAFE_SNS_FIELDS = ["connected", "enabled", "username", "pageName", "channelTitle", "igUserId", "needsReconnect", "displayName", "avatarUrl", "handle"];
 function maskSnsSettings(settings: any) {
   const sns = settings && typeof settings === "object" ? settings.sns : null;
   if (!sns || typeof sns !== "object") return settings;
