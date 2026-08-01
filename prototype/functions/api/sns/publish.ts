@@ -850,6 +850,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     // 공유받은 프로젝트를 소유자 자격증명으로 게시할 때 사용
     projectId?: string;
     ownerId?: string;
+    // X · Threads 답글 허용 범위. UI 값(public|followers|mentioned)을 그대로 받아
+    // 플랫폼별 어휘로 매핑한다.
+    replySetting?: string;
     // TikTok Direct Post 전용 — 게시 전 확인 모달이 확정한 설정.
     // 서버는 여기에 묵시적 기본값을 채우지 않는다(누락 시 400).
     // 명세: docs/tiktok_direct_post_modal_spec_20260801.md §4-1
@@ -1580,6 +1583,23 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       const { accessToken, threadsUserId, username } = th;
       const text = caption.slice(0, 500);
 
+      // 답글 허용 범위 (Threads: reply_control). 최상위 컨테이너에만 붙이고
+      // 캐러셀 자식에는 붙이지 않는다 — 게시물 단위 설정이기 때문.
+      // 문서상 값은 everyone / accounts_you_follow / mentioned_only /
+      // parent_post_author_only / followers_only 다섯 개이고, UI 에 있는 셋만 매핑한다.
+      // 'followers'(내 팔로워) 는 accounts_you_follow(내가 팔로우하는 계정) 가 아니라
+      // followers_only 다. 둘을 바꿔 쓰면 의미가 정반대가 된다.
+      const THREADS_REPLY_CONTROL: Record<string, string> = {
+        public: "everyone",
+        followers: "followers_only",
+        mentioned: "mentioned_only",
+      };
+      const threadsReply = THREADS_REPLY_CONTROL[String(body.replySetting || "").trim()];
+      /** 최상위 컨테이너 params 에 reply_control 을 얹는다. */
+      function withReplyControl(p: Record<string, string>): Record<string, string> {
+        return threadsReply ? { ...p, reply_control: threadsReply } : p;
+      }
+
       // GCS 경로는 Threads 가 직접 fetch 할 수 있는 signed URL 로 변환.
       async function resolveUrl(gcsPath?: string, directUrl?: string): Promise<string> {
         if (gcsPath) return buildSignedUrl(bucket, gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
@@ -1598,7 +1618,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           const p: Record<string, string> = it.mediaType === "video"
             ? { media_type: "VIDEO", video_url: url, text }
             : { media_type: "IMAGE", image_url: url, text };
-          creationId = await createThreadsContainer({ threadsUserId, accessToken, params: p });
+          creationId = await createThreadsContainer({ threadsUserId, accessToken, params: withReplyControl(p) });
           await waitForThreadsContainer(accessToken, creationId);
         } else {
           // 캐러셀(2~20장): 자식 컨테이너 생성 → CAROUSEL 컨테이너로 묶기
@@ -1614,7 +1634,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           }
           creationId = await createThreadsContainer({
             threadsUserId, accessToken,
-            params: { media_type: "CAROUSEL", children: childIds.join(","), text },
+            params: withReplyControl({ media_type: "CAROUSEL", children: childIds.join(","), text }),
           });
           await waitForThreadsContainer(accessToken, creationId);
         }
@@ -1623,14 +1643,14 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const p: Record<string, string> = body.mediaType === "video"
           ? { media_type: "VIDEO", video_url: url, text }
           : { media_type: "IMAGE", image_url: url, text };
-        creationId = await createThreadsContainer({ threadsUserId, accessToken, params: p });
+        creationId = await createThreadsContainer({ threadsUserId, accessToken, params: withReplyControl(p) });
         await waitForThreadsContainer(accessToken, creationId);
       } else {
         // 텍스트 전용 게시
         if (!text.trim()) return send({ error: "Threads 텍스트 게시에는 캡션이 필요합니다." }, 400);
         creationId = await createThreadsContainer({
           threadsUserId, accessToken,
-          params: { media_type: "TEXT", text },
+          params: withReplyControl({ media_type: "TEXT", text }),
         });
       }
 
@@ -1804,9 +1824,24 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: "X 게시에는 텍스트 또는 미디어가 필요합니다." }, 400);
       }
 
-      const tweetBody: { text?: string; media?: { media_ids: string[] } } = {};
+      const tweetBody: {
+        text?: string;
+        media?: { media_ids: string[] };
+        reply_settings?: string;
+      } = {};
       if (text.trim()) tweetBody.text = text;
       if (mediaIds.length) tweetBody.media = { media_ids: mediaIds };
+      // 답글 허용 범위. X 의 어휘는 우리 UI 와 다르다:
+      //   following      = 내가 팔로우하는 계정만
+      //   mentionedUsers = 게시물에서 언급한 계정만
+      // 'public' 은 필드를 아예 보내지 않는 게 X 의 기본값(전체 허용)이다.
+      // UI 에 없는 값(subscribers/verified)은 매핑하지 않는다.
+      const X_REPLY_SETTINGS: Record<string, string> = {
+        followers: "following",
+        mentioned: "mentionedUsers",
+      };
+      const xReply = X_REPLY_SETTINGS[String(body.replySetting || "").trim()];
+      if (xReply) tweetBody.reply_settings = xReply;
 
       const tweetRes = await fetch("https://api.twitter.com/2/tweets", {
         method: "POST",

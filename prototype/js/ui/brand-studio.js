@@ -3951,6 +3951,12 @@
           }
         }
 
+        // X · Threads 답글 허용 범위. 초안 카드의 값을 그대로 실어 보내고
+        // 플랫폼별 어휘 매핑은 서버(publish.ts)가 한다.
+        if (isTextCapable) {
+          requestBody.replySetting = String(draft.reply_setting || 'public');
+        }
+
         // 공유받은 프로젝트는 소유자 SNS 자격증명으로 게시(서버가 editor 권한 검증).
         try {
           requestBody.projectId = String(projectId || '');
