@@ -26,28 +26,108 @@
   var STYLE_ID = 'tt-consent-modal-style';
 
   var PRIVACY_LABEL = {
-    PUBLIC_TO_EVERYONE: 'Public',
-    FOLLOWER_OF_CREATOR: 'Followers',
-    MUTUAL_FOLLOW_FRIENDS: 'Friends',
-    SELF_ONLY: 'Only you'
+    en: {
+      PUBLIC_TO_EVERYONE: 'Public',
+      FOLLOWER_OF_CREATOR: 'Followers',
+      MUTUAL_FOLLOW_FRIENDS: 'Friends',
+      SELF_ONLY: 'Only you'
+    },
+    ko: {
+      PUBLIC_TO_EVERYONE: '전체 공개',
+      FOLLOWER_OF_CREATOR: '팔로워',
+      MUTUAL_FOLLOW_FRIENDS: '친구 (서로 팔로우)',
+      SELF_ONLY: '나만 보기'
+    }
   };
 
   var BC_POLICY_URL = 'https://www.tiktok.com/legal/page/global/bc-policy/en';
   var MUSIC_URL = 'https://www.tiktok.com/legal/page/global/music-usage-confirmation/en';
 
-  // 명세 §5-2 원문. 수정 금지.
+  /**
+   * ⚠️ en 문구는 명세 §5-2 원문이다. 심사관이 TikTok 가이드라인과 대조하므로
+   *    한 글자도 바꾸지 말 것(테스트가 고정하고 있다).
+   *    ko 는 같은 의미의 한국어. 심사 스크린샷·데모는 영어 모드로 촬영하므로
+   *    ko 를 추가해도 심사 자료에는 영향이 없다.
+   */
   var COPY = {
-    discloseHelp: 'Turn on to disclose that this video promotes goods or services in exchange for something of value. Your video could promote yourself, a third party, or both.',
-    yourBrandHelp: 'You are promoting yourself or your own business. This video will be classified as Brand Organic.',
-    brandedContentHelp: 'You are promoting another brand or a third party. This video will be classified as Branded Content.',
-    labelPromotional: "Your photo/video will be labeled as 'Promotional content'. This cannot be changed once your video is posted.",
-    labelPaidPartnership: "Your photo/video will be labeled as 'Paid partnership'. This cannot be changed once your video is posted.",
-    brandedNotPrivate: 'Branded content visibility cannot be set to private.',
-    unauditedTooltip: 'Available after TikTok app review',
-    interactionOffTooltip: 'Turned off in your TikTok account settings',
-    creatorInfoFailed: 'Could not load your TikTok account settings. Please try again.',
-    posted: 'Your video has been posted to TikTok.'
+    en: {
+      title: 'Post to TikTok',
+      audience: 'Who can view this video',
+      audiencePhoto: 'Who can view this photo',
+      allow: 'Allow users to',
+      comment: 'Comment',
+      duet: 'Duet',
+      stitch: 'Stitch',
+      disclose: 'Disclose video content',
+      disclosePhoto: 'Disclose photo content',
+      yourBrand: 'Your brand',
+      brandedContent: 'Branded content',
+      agreePrefix: 'By posting, you agree to TikTok’s ',
+      bcPolicy: 'Branded Content Policy',
+      musicUsage: 'Music Usage Confirmation',
+      and: ' and ',
+      cancel: 'Cancel',
+      post: 'Post to TikTok',
+      posting: 'Posting to TikTok...',
+      processing: 'TikTok is processing your post.',
+      viewPost: 'View post on TikTok',
+      close: 'Close',
+      discloseHelp: 'Turn on to disclose that this video promotes goods or services in exchange for something of value. Your video could promote yourself, a third party, or both.',
+      yourBrandHelp: 'You are promoting yourself or your own business. This video will be classified as Brand Organic.',
+      brandedContentHelp: 'You are promoting another brand or a third party. This video will be classified as Branded Content.',
+      labelPromotional: "Your photo/video will be labeled as 'Promotional content'. This cannot be changed once your video is posted.",
+      labelPaidPartnership: "Your photo/video will be labeled as 'Paid partnership'. This cannot be changed once your video is posted.",
+      brandedNotPrivate: 'Branded content visibility cannot be set to private.',
+      unauditedTooltip: 'Available after TikTok app review',
+      interactionOffTooltip: 'Turned off in your TikTok account settings',
+      creatorInfoFailed: 'Could not load your TikTok account settings. Please try again.',
+      posted: 'Your video has been posted to TikTok.',
+      tooLong: function (n) { return 'This video is longer than your TikTok limit of ' + n + ' seconds.'; }
+    },
+    ko: {
+      title: 'TikTok에 게시',
+      audience: '이 영상을 볼 수 있는 사람',
+      audiencePhoto: '이 사진을 볼 수 있는 사람',
+      allow: '허용할 상호작용',
+      comment: '댓글',
+      duet: '듀엣',
+      stitch: '스티치',
+      disclose: '상업적 콘텐츠 고지 (영상)',
+      disclosePhoto: '상업적 콘텐츠 고지 (사진)',
+      yourBrand: '자사 브랜드',
+      brandedContent: '브랜디드 콘텐츠',
+      agreePrefix: '게시하면 TikTok의 ',
+      bcPolicy: '브랜디드 콘텐츠 정책',
+      musicUsage: '음원 사용 확인',
+      and: ' 및 ',
+      cancel: '취소',
+      post: 'TikTok에 게시',
+      posting: 'TikTok에 게시하는 중...',
+      processing: 'TikTok이 게시물을 처리하고 있어요.',
+      viewPost: 'TikTok에서 게시물 보기',
+      close: '닫기',
+      discloseHelp: '대가를 받고 상품이나 서비스를 홍보하는 영상이면 켜주세요. 본인 홍보, 제3자 홍보, 또는 둘 다일 수 있습니다.',
+      yourBrandHelp: '본인 또는 본인 사업을 홍보하는 경우입니다. 이 영상은 Brand Organic 으로 분류됩니다.',
+      brandedContentHelp: '다른 브랜드나 제3자를 홍보하는 경우입니다. 이 영상은 Branded Content 로 분류됩니다.',
+      labelPromotional: "영상에 '홍보 콘텐츠' 라벨이 표시됩니다. 게시한 뒤에는 바꿀 수 없습니다.",
+      labelPaidPartnership: "영상에 '유료 광고' 라벨이 표시됩니다. 게시한 뒤에는 바꿀 수 없습니다.",
+      brandedNotPrivate: '브랜디드 콘텐츠는 비공개로 설정할 수 없습니다.',
+      unauditedTooltip: 'TikTok 앱 심사 통과 후 사용할 수 있습니다',
+      interactionOffTooltip: 'TikTok 계정 설정에서 꺼져 있습니다',
+      creatorInfoFailed: 'TikTok 계정 설정을 불러오지 못했습니다. 다시 시도해 주세요.',
+      posted: 'TikTok에 게시했습니다.',
+      tooLong: function (n) { return '이 영상은 TikTok 제한 길이 ' + n + '초를 넘습니다.'; }
+    }
   };
+
+  /** 앱 런타임 언어. 다른 화면과 같은 출처를 쓴다. */
+  function lang() {
+    try {
+      if ((NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en') return 'en';
+      if (NK.state && NK.state.runtime && NK.state.runtime.lang) return 'ko';
+      return String(localStorage.getItem('nk_lang') || 'ko') === 'en' ? 'en' : 'ko';
+    } catch (_) { return 'ko'; }
+  }
 
   function esc(v) {
     return String(v == null ? '' : v)
@@ -151,7 +231,10 @@
     injectStyle();
     var o = opts || {};
     var isPhoto = o.mediaType === 'image';
-    var noun = isPhoto ? 'photo' : 'video';
+    // 이 모달이 열려 있는 동안의 언어. 열린 뒤 바뀌어도 화면이 섞이지 않도록 고정한다.
+    var L = lang();
+    var C = COPY[L] || COPY.ko;
+    var PL = PRIVACY_LABEL[L] || PRIVACY_LABEL.ko;
 
     var overlay = document.createElement('div');
     overlay.className = 'ttc-overlay';
@@ -263,34 +346,34 @@
         var lockedByAudit = !appAudited && key !== 'SELF_ONLY';
         var lockedByBranded = state.brandedContent && key === 'SELF_ONLY';
         var off = lockedByAudit || lockedByBranded;
-        var tip = lockedByAudit ? COPY.unauditedTooltip : (lockedByBranded ? COPY.brandedNotPrivate : '');
+        var tip = lockedByAudit ? C.unauditedTooltip : (lockedByBranded ? C.brandedNotPrivate : '');
         return '<label class="ttc-opt' + (off ? ' ttc-off' : '') + '"' +
           (tip ? ' title="' + esc(tip) + '"' : '') + '>' +
           '<input type="radio" name="ttc-privacy" value="' + esc(key) + '"' +
           (off ? ' disabled' : '') + (state.privacy === key ? ' checked' : '') + ' />' +
-          '<span class="ttc-opt-label">' + esc(PRIVACY_LABEL[key] || key) +
+          '<span class="ttc-opt-label">' + esc(PL[key] || key) +
           (tip ? '<span class="ttc-opt-help">' + esc(tip) + '</span>' : '') +
           '</span></label>';
       }).join('');
       return '<div class="ttc-group">' +
-        '<div class="ttc-group-title">Who can view this ' + noun + '</div>' +
+        '<div class="ttc-group-title">' + esc(isPhoto ? C.audiencePhoto : C.audience) + '</div>' +
         (rows || '<div class="ttc-note">&mdash;</div>') +
-        (state.brandedContent ? '<div class="ttc-warn">' + esc(COPY.brandedNotPrivate) + '</div>' : '') +
+        (state.brandedContent ? '<div class="ttc-warn">' + esc(C.brandedNotPrivate) + '</div>' : '') +
         '</div>';
     }
 
     function interactionHtml() {
       var info = state.info || {};
-      var rows = [{ key: 'allowComment', label: 'Comment', off: !!info.commentDisabled }];
+      var rows = [{ key: 'allowComment', label: C.comment, off: !!info.commentDisabled }];
       // 명세 §5-2 ④: 사진 게시에는 Duet / Stitch 를 렌더하지 않는다.
       if (!isPhoto) {
-        rows.push({ key: 'allowDuet', label: 'Duet', off: !!info.duetDisabled });
-        rows.push({ key: 'allowStitch', label: 'Stitch', off: !!info.stitchDisabled });
+        rows.push({ key: 'allowDuet', label: C.duet, off: !!info.duetDisabled });
+        rows.push({ key: 'allowStitch', label: C.stitch, off: !!info.stitchDisabled });
       }
-      return '<div class="ttc-group"><div class="ttc-group-title">Allow users to</div>' +
+      return '<div class="ttc-group"><div class="ttc-group-title">' + esc(C.allow) + '</div>' +
         '<div class="ttc-inline">' + rows.map(function (r) {
           return '<label class="ttc-opt' + (r.off ? ' ttc-off' : '') + '"' +
-            (r.off ? ' title="' + esc(COPY.interactionOffTooltip) + '"' : '') + '>' +
+            (r.off ? ' title="' + esc(C.interactionOffTooltip) + '"' : '') + '>' +
             '<input type="checkbox" data-ttc-interaction="' + r.key + '"' +
             (r.off ? ' disabled' : '') + (state[r.key] ? ' checked' : '') + ' />' +
             '<span class="ttc-opt-label">' + esc(r.label) + '</span></label>';
@@ -300,7 +383,7 @@
     function bannerHtml() {
       if (!state.commercialContent) return '';
       if (!state.brandOrganic && !state.brandedContent) return '';
-      var text = state.brandedContent ? COPY.labelPaidPartnership : COPY.labelPromotional;
+      var text = state.brandedContent ? C.labelPaidPartnership : C.labelPromotional;
       return '<div class="ttc-banner">' + esc(text) + '</div>';
     }
 
@@ -310,29 +393,29 @@
         sub = '<div class="ttc-sub">' +
           '<label class="ttc-opt"><input type="checkbox" data-ttc-brand="brandOrganic"' +
           (state.brandOrganic ? ' checked' : '') + ' />' +
-          '<span class="ttc-opt-label">Your brand' +
-          '<span class="ttc-opt-help">' + esc(COPY.yourBrandHelp) + '</span></span></label>' +
+          '<span class="ttc-opt-label">' + esc(C.yourBrand) +
+          '<span class="ttc-opt-help">' + esc(C.yourBrandHelp) + '</span></span></label>' +
           '<label class="ttc-opt"><input type="checkbox" data-ttc-brand="brandedContent"' +
           (state.brandedContent ? ' checked' : '') + ' />' +
-          '<span class="ttc-opt-label">Branded content' +
-          '<span class="ttc-opt-help">' + esc(COPY.brandedContentHelp) + '</span></span></label>' +
+          '<span class="ttc-opt-label">' + esc(C.brandedContent) +
+          '<span class="ttc-opt-help">' + esc(C.brandedContentHelp) + '</span></span></label>' +
           bannerHtml() +
           '</div>';
       }
       return '<div class="ttc-group">' +
         '<label class="ttc-opt"><input type="checkbox" data-ttc-disclose' +
         (state.commercialContent ? ' checked' : '') + ' />' +
-        '<span class="ttc-opt-label">Disclose ' + noun + ' content' +
-        '<span class="ttc-opt-help">' + esc(COPY.discloseHelp) + '</span></span></label>' +
+        '<span class="ttc-opt-label">' + esc(isPhoto ? C.disclosePhoto : C.disclose) +
+        '<span class="ttc-opt-help">' + esc(C.discloseHelp) + '</span></span></label>' +
         sub + '</div>';
     }
 
     function agreeHtml() {
-      var music = '<a href="' + MUSIC_URL + '" target="_blank" rel="noopener">Music Usage Confirmation</a>';
+      var music = '<a href="' + MUSIC_URL + '" target="_blank" rel="noopener">' + esc(C.musicUsage) + '</a>';
       var body = state.brandedContent
-        ? '<a href="' + BC_POLICY_URL + '" target="_blank" rel="noopener">Branded Content Policy</a> and ' + music
+        ? '<a href="' + BC_POLICY_URL + '" target="_blank" rel="noopener">' + esc(C.bcPolicy) + '</a>' + esc(C.and) + music
         : music;
-      return '<div class="ttc-agree">By posting, you agree to TikTok’s ' + body + '.</div>';
+      return '<div class="ttc-agree">' + esc(C.agreePrefix) + body + '.</div>';
     }
 
     function errorHtml() {
@@ -344,12 +427,12 @@
     function durationHtml() {
       if (!durationExceeded()) return '';
       var max = Number(state.info.maxVideoPostDurationSec || 0);
-      return '<div class="ttc-warn">This video is longer than your TikTok limit of ' + max + ' seconds.</div>';
+      return '<div class="ttc-warn">' + esc(C.tooLong(max)) + '</div>';
     }
 
     function paint() {
       modal.innerHTML =
-        '<div class="ttc-head"><span class="ttc-title">Post to TikTok</span>' +
+        '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span>' +
         '<button type="button" class="ttc-x" data-ttc-cancel aria-label="Close">&#x2715;</button></div>' +
         '<div class="ttc-body">' +
         errorHtml() +
@@ -362,12 +445,12 @@
         agreeHtml() +
         '</div>' +
         '<div class="ttc-foot">' +
-        '<button type="button" class="ttc-btn" data-ttc-cancel>Cancel</button>' +
+        '<button type="button" class="ttc-btn" data-ttc-cancel>' + esc(C.cancel) + '</button>' +
         '<button type="button" class="ttc-btn ttc-btn-primary" data-ttc-post' +
         (canPost() ? '' : ' disabled') + '>' +
         (state.posting
-          ? '<span class="ttc-spinner"></span>Posting to TikTok...'
-          : 'Post to TikTok') +
+          ? '<span class="ttc-spinner"></span>' + esc(C.posting)
+          : esc(C.post)) +
         '</button></div>';
       bind();
     }
@@ -452,16 +535,16 @@
       var res = (result && result.result) ? result.result : {};
       var url = String(res.url || '').trim();
       var complete = String(res.status || '') === 'published';
-      var title = complete ? COPY.posted : 'TikTok is processing your post.';
+      var title = complete ? C.posted : C.processing;
       var note = (res.privacyDowngraded && res.privacyDowngradeReason)
         ? '<div class="ttc-banner">' + esc(res.privacyDowngradeReason) + '</div>' : '';
       modal.innerHTML =
-        '<div class="ttc-head"><span class="ttc-title">Post to TikTok</span></div>' +
+        '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span></div>' +
         '<div class="ttc-body"><div class="ttc-done">' +
         '<div class="ttc-done-title">' + esc(title) + '</div>' +
-        (url ? '<a class="ttc-link" href="' + esc(url) + '" target="_blank" rel="noopener">View post on TikTok</a>' : '') +
+        (url ? '<a class="ttc-link" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(C.viewPost) + '</a>' : '') +
         note + '</div></div>' +
-        '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>Close</button></div>';
+        '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>' + esc(C.close) + '</button></div>';
       modal.querySelector('[data-ttc-done]').onclick = function () {
         finish(result);
         destroy();
@@ -474,7 +557,7 @@
       .catch(function (err) {
         // 기본값을 추측해서 게시하지 않는다 — 모달은 열되 Post 를 막는다(명세 §3).
         state.info = null;
-        state.loadError = COPY.creatorInfoFailed +
+        state.loadError = C.creatorInfoFailed +
           (err && err.message ? ' (' + err.message + ')' : '');
         paint();
       });

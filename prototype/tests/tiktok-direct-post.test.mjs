@@ -175,13 +175,17 @@ test("모달 문구가 명세 §5-2 원문 그대로다", () => {
   assert.match(src, /Your video has been posted to TikTok\./);
   assert.match(src, /This video is longer than your TikTok limit of/);
   // 공개범위 표기
-  assert.match(src, /PUBLIC_TO_EVERYONE: 'Public'/);
+  assert.match(src, /PUBLIC_TO_EVERYONE: 'Public'/);      // en
+  assert.match(src, /PUBLIC_TO_EVERYONE: '전체 공개'/);     // ko (양쪽 동시 구현)
   assert.match(src, /FOLLOWER_OF_CREATOR: 'Followers'/);
   assert.match(src, /MUTUAL_FOLLOW_FRIENDS: 'Friends'/);
   assert.match(src, /SELF_ONLY: 'Only you'/);
   // 두 정책 링크는 실제 클릭 가능한 새 탭 링크여야 한다
-  assert.match(src, /<a href="' \+ BC_POLICY_URL \+ '" target="_blank" rel="noopener">Branded Content Policy<\/a>/);
-  assert.match(src, /<a href="' \+ MUSIC_URL \+ '" target="_blank" rel="noopener">Music Usage Confirmation<\/a>/);
+  // 링크 문구는 사전(en)에 있고, 실제 클릭 가능한 새 탭 앵커로 렌더된다
+  assert.match(src, /bcPolicy: 'Branded Content Policy'/);
+  assert.match(src, /musicUsage: 'Music Usage Confirmation'/);
+  assert.match(src, /<a href="' \+ BC_POLICY_URL \+ '" target="_blank" rel="noopener">' \+ esc\(C\.bcPolicy\)/);
+  assert.match(src, /<a href="' \+ MUSIC_URL \+ '" target="_blank" rel="noopener">' \+ esc\(C\.musicUsage\)/);
   assert.match(src, /https:\/\/www\.tiktok\.com\/legal\/page\/global\/bc-policy\/en/);
   assert.match(src, /https:\/\/www\.tiktok\.com\/legal\/page\/global\/music-usage-confirmation\/en/);
 });
@@ -189,7 +193,7 @@ test("모달 문구가 명세 §5-2 원문 그대로다", () => {
 test("creator_info 로딩 실패 시 모달은 열리되 게시를 막는다 (기본값 추측 금지)", () => {
   const src = read("prototype/js/ui/tiktok-consent-modal.js");
   assert.match(src, /if \(!state\.info \|\| state\.loadError\) return false;/);
-  assert.match(src, /state\.loadError = COPY\.creatorInfoFailed/);
+  assert.match(src, /state\.loadError = C\.creatorInfoFailed/);
 });
 
 test("일괄 배포 경로도 TikTok 모달을 거치고, 예약 발행은 막는다 (명세 §6)", () => {
