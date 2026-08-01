@@ -4,6 +4,9 @@
 
   var _settings = null;
   var _saving = false;
+  var _savePromise = null;
+  // 연결/해제 처리 중인 플랫폼. 완료 전 재클릭을 막고, 렌더도 버튼을 잠근다.
+  var _togglingPlatforms = {};
   var _CACHE_KEY = 'nk_sns_states';
   // 현재 프로젝트가 공유받은 것이면 소유자 id (그 경우 화면은 읽기 전용으로 소유자 연결 표시)
   var _sharedOwnerId = '';
@@ -259,7 +262,15 @@
   }
 
   function saveSettings() {
-    if (_saving) return Promise.resolve();
+    // 이전 저장이 진행 중이면 끝난 뒤에 이어서 저장한다.
+    // 예전에는 그냥 무시했고(return Promise.resolve()), 그 바람에 연결 해제가 서버에
+    // 반영되지 않은 채 화면만 '연결 안됨'으로 바뀌어 상태가 갈라졌다.
+    _savePromise = (_savePromise || Promise.resolve()).then(_doSave, _doSave);
+    return _savePromise;
+  }
+
+  /** 실제 저장. 성공 여부를 { ok, error } 로 돌려준다(호출부가 롤백 판단에 쓴다). */
+  function _doSave() {
     _saving = true;
     setStatus(t('saving'), 'pending');
     // 모든 알려진 플랫폼의 connected/enabled/igUserId/username만 전송.
@@ -282,12 +293,16 @@
         if (res && res.ok) {
           setStatus(t('saved'), 'success');
           setTimeout(function () { setStatus('', ''); }, 2000);
-        } else {
-          setStatus(t('saveFail') + ': ' + (res && res.error ? res.error : t('unknownErr')), 'error');
+          return { ok: true };
         }
+        var msg = (res && res.error) ? res.error : t('unknownErr');
+        setStatus(t('saveFail') + ': ' + msg, 'error');
+        return { ok: false, error: msg };
       })
       .catch(function (err) {
-        setStatus(t('saveErr') + ': ' + (err && err.message ? err.message : err), 'error');
+        var msg = (err && err.message) ? err.message : String(err);
+        setStatus(t('saveErr') + ': ' + msg, 'error');
+        return { ok: false, error: msg };
       })
       .finally(function () { _saving = false; });
   }
@@ -393,6 +408,10 @@
       e.preventDefault();
       var pid = btn.dataset.platform;
 
+      // 처리 중이면 무시한다. 예전에는 저장이 끝나기 전에도 계속 눌려서, 두 번째
+      // 클릭이 아직 반영 안 된 _settings 를 보고 엉뚱한 분기를 탔다.
+      if (_togglingPlatforms[pid]) return;
+
       var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
       // 토큰 만료/취소(재연결 필요) 상태면 해제 확인 없이 바로 재인증 진행
       if (s.connected && s.needsReconnect) {
@@ -402,9 +421,25 @@
       if (s.connected) {
         snsConfirm(T[_lang()].disconnectConfirm(pid)).then(function (ok) {
           if (!ok) return;
+          // 롤백용 스냅샷. 저장이 실패하면 서버는 여전히 '연결됨'이므로
+          // 화면만 '연결 안됨'으로 남겨두면 상태가 갈라진다.
+          var prev = Object.assign({}, s);
+          _togglingPlatforms[pid] = true;
           _settings.sns[pid] = { connected: false, enabled: false };
           _writeCache(_settings.sns);
-          return saveSettings().then(function () { render(); });
+          render();   // 잠긴 상태로 즉시 반영
+          return saveSettings().then(function (res) {
+            if (!res || !res.ok) {
+              _settings.sns[pid] = prev;
+              _writeCache(_settings.sns);
+              snsAlert(_lang() === 'en'
+                ? 'Could not disconnect. The channel is still connected.'
+                : '연결 해제에 실패했습니다. 채널은 계속 연결된 상태입니다.');
+            }
+          }).finally(function () {
+            delete _togglingPlatforms[pid];
+            render();
+          });
         });
       } else {
         startOAuth(pid);
@@ -464,9 +499,11 @@
 
     // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
     var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    var isToggling = !!_togglingPlatforms[platform.id];
     var connectBoxHtml = comingSoon
       ? ''
       : '<button type="button" class="sns-connect-box' + (connected ? ' is-connected' : '') + '" ' +
+          (isToggling ? 'disabled ' : '') +
           'data-action="sns-connect-toggle" data-platform="' + platform.id + '" ' +
           'title="' + (connected ? t('disconnect') : t('connect')) + '" ' +
           'aria-label="' + (connected ? t('disconnect') : t('connect')) + '" ' +
@@ -528,6 +565,20 @@
     ].join('');
   }
 
+  /** 렌더 결과와 _settings 가 어긋났는지 검사한다. 재발 시 원인 추적용. */
+  function warnIfConnectStateDrifted(root) {
+    try {
+      root.querySelectorAll('[data-action="sns-connect-toggle"]').forEach(function (btn) {
+        var pid = btn.dataset.platform;
+        var shown = btn.getAttribute('aria-pressed') === 'true';
+        var actual = !!(_settings && _settings.sns && _settings.sns[pid] && _settings.sns[pid].connected);
+        if (shown !== actual) {
+          console.warn('[SNS] 화면/상태 불일치:', pid, '표시=', shown, '실제=', actual);
+        }
+      });
+    } catch (_) {}
+  }
+
   function render() {
     var root = document.querySelector('.content');
     if (!root) return;
@@ -570,6 +621,10 @@
 
       '</div>',
     ].join('');
+
+    // 방어: 그려진 버튼(aria-pressed)과 실제 상태(_settings)가 갈라지면 경고를 남긴다.
+    // 이 둘이 어긋나면 "화면은 미연결인데 해제 확인창이 뜨는" 종류의 버그가 된다.
+    warnIfConnectStateDrifted(root);
 
     // 클릭 리스너는 한 번만 등록 (중복 방지)
     if (!root._snsListenerAttached) {
