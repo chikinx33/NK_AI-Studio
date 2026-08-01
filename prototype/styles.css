@@ -14135,6 +14135,14 @@ textarea.bsf-skeleton {
   cursor: not-allowed;
 }
 
+/* TikTok 초안함 버튼 — 배포 버튼과 같은 크기를 유지한다.
+   라벨이 두 줄이라 line-height 를 줄이지 않으면 정사각형 안에서 넘친다. */
+.bsf-tiktok-inbox-btn {
+  font-size: 12px !important;
+  line-height: 1.2;
+  text-align: center;
+}
+
 /* Deploy tab header — global schedule picker + 전체 배포 button */
 .bsf-detail-head-deploy > .bsf-deploy-head-right {
   grid-column: 2;

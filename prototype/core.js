@@ -439,7 +439,9 @@
       brand_nav_episode: 'Episode',
       brand_nav_hub_center: 'Hub Center',
       brand_scope_brand: 'Brand',
-      brand_scope_episode: 'Episode',
+      // 그룹 라벨은 'SNS' 로 표시한다. 스코프 식별자(data-nav-scope="episode")와
+      // script.js 의 scope === 'episode' 분기는 그대로라 키 이름은 유지한다.
+      brand_scope_episode: 'SNS',
       brand_scope_shared: 'Insights · Assets',
       brand_context_current: 'Current workspace',
       brand_context_select: 'Select a brand',
@@ -820,7 +822,9 @@
       brand_nav_episode: '에피소드',
       brand_nav_hub_center: '허브 센터',
       brand_scope_brand: '브랜드',
-      brand_scope_episode: '에피소드',
+      // 그룹 라벨은 'SNS' 로 표시한다. 스코프 식별자(data-nav-scope="episode")와
+      // script.js 의 scope === 'episode' 분기는 그대로라 키 이름은 유지한다.
+      brand_scope_episode: 'SNS',
       brand_scope_shared: '분석 · 자산',
       brand_context_current: '현재 작업 범위',
       brand_context_select: '브랜드를 선택해 주세요',

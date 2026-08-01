@@ -2503,13 +2503,15 @@
                   // video.upload 스코프를 요청하는 근거이자 심사 데모에서 시연하는 화면이다.
                   // 게시가 아니라 파일만 보내는 흐름이라 확인 모달을 거치지 않는다.
                   if (formatId === 'tiktok') {
+                    // 라벨은 두 줄로 짧게. 한 줄 긴 문구는 nowrap 때문에 버튼 폭을 밀어내고,
+                    // aspect-ratio 1/1 이라 그만큼 높이까지 커져 카드 전체가 부풀었다.
                     mainBtn += '<button type="button" class="bsf-deploy-one-btn btn-ghost bsf-tiktok-inbox-btn"'
                       + ' data-action="brand-tiktok-inbox"'
                       + (canDeploy ? '' : ' disabled')
                       + ' title="' + escapeHtml(isEn
                           ? 'Upload the video to your TikTok drafts and finish posting in the TikTok app.'
                           : '영상을 TikTok 초안함으로 보내고, 게시는 TikTok 앱에서 마무리합니다.') + '">'
-                      + (isEn ? 'Send to drafts' : '초안함으로 보내기')
+                      + (isEn ? 'Send to<br>drafts' : '초안<br>배포')
                       + '</button>';
                   }
                   return mainBtn;
@@ -4088,8 +4090,9 @@
           return;
         }
         btn.disabled = true;
-        var inboxLabelPrev = btn.textContent;
-        btn.textContent = isEn ? 'Sending…' : '보내는 중…';
+        // 라벨에 <br> 이 있어 textContent 로 저장·복원하면 줄바꿈이 사라진다.
+        var inboxLabelPrev = btn.innerHTML;
+        btn.innerHTML = isEn ? 'Sending…' : '보내는<br>중…';
         var inboxBody = Object.assign({}, inboxVideo, { projectId: String(projectId || '') });
         try {
           var _inboxOwner = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
@@ -4121,7 +4124,7 @@
           })
           .finally(function () {
             btn.disabled = false;
-            btn.textContent = inboxLabelPrev;
+            btn.innerHTML = inboxLabelPrev;
           });
         return;
       }
