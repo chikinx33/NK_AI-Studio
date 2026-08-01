@@ -3056,16 +3056,42 @@
       root.querySelectorAll('.bsf-mock-shorts-vid, .bsf-mock-tiktok-vid, video.bsf-mock-x-media-el').forEach(function (v) {
         if (v.dataset.mockVidInit) return;
         v.dataset.mockVidInit = '1';
+
+        // 영상을 못 불러오면(만료된 서명 URL·404 등) <video> 는 아무 표시 없이 검은
+        // 사각형으로만 남는다. "영상이 없다"와 "영상이 깨졌다"를 화면에서 구분할 수
+        // 없어 원인 파악이 안 되므로, 실패하면 플레이스홀더로 교체한다.
+        v.addEventListener('error', function () {
+          console.warn('[bsf] 목업 영상 로드 실패:', v.currentSrc || v.src);
+          if (!v.parentNode) return;
+          var ph = document.createElement('div');
+          ph.className = 'bsf-mock-vid-failed';
+          ph.innerHTML = '<span>▶</span>' +
+            (isEn ? 'Preview unavailable' : '미리보기를 불러오지 못했어요');
+          v.parentNode.replaceChild(ph, v);
+        }, { once: true });
+
         function trySeekMock() {
           try {
-            var t = (v.duration && !isNaN(v.duration)) ? Math.min(Math.max(v.duration * 0.1, 0.5), 5) : 0.5;
+            var dur = Number(v.duration);
+            if (!dur || isNaN(dur) || !isFinite(dur)) return;
+            // 10% 지점. 다만 페이드인이 그보다 길면 여전히 검은 프레임이라 최소 1초는
+            // 넘긴다. 짧은 클립에서 끝을 넘지 않도록 길이의 절반으로 상한을 건다.
+            var t = Math.min(Math.max(dur * 0.1, 1), Math.min(5, dur * 0.5));
+            // 서버가 range 요청을 지원하지 않으면 seekable 이 비어 시크가 무시된다.
+            if (v.seekable && v.seekable.length) {
+              var end = v.seekable.end(v.seekable.length - 1);
+              if (t > end) t = Math.max(0, end - 0.05);
+            }
             v.currentTime = t;
           } catch (e) {}
         }
-        if (v.readyState >= 1) {
+
+        // loadedmetadata(readyState 1) 시점에는 디코드된 프레임이 아직 없다.
+        // 프레임이 생긴 뒤(loadeddata, readyState 2) 시크해야 실제로 그려진다.
+        if (v.readyState >= 2) {
           trySeekMock();
         } else {
-          v.addEventListener('loadedmetadata', trySeekMock, { once: true });
+          v.addEventListener('loadeddata', trySeekMock, { once: true });
         }
       });
     }
