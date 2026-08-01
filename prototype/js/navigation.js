@@ -58,7 +58,17 @@
 
     var __lastResolvedUrl = '';
     var __pendingUrl = '';
+    var __pendingAt = 0;
     var __lastAt = 0;
+    // 진행 중 표시의 수명. iframe load 가 끝나면 즉시 지워지지만, load 가 영영
+    // 오지 않는 경우(로드 실패·스테이지 뷰 생성 실패 등)에도 잠금이 풀려야 한다.
+    // 이게 없으면 한 번 막힌 메뉴가 새로고침 전까지 영구히 안 열린다.
+    var PENDING_TTL_MS = 4000;
+
+    function clearPending() {
+        __pendingUrl = '';
+        __pendingAt = 0;
+    }
 
     // Stage iframe cache: stage name -> iframe element
     // 캐시된 iframe은 DOM에 attach된 채 display:none으로 hidden, 활성화 시 활성 iframe으로 promote
@@ -153,10 +163,13 @@
         // 갱신되지 않아 stale(=dashboard URL) 상태로 남는다. URL 일치만으로 막으면
         // "대시보드 메뉴를 눌러도 반응 없음" 버그가 생기므로 dashboard 는 제외한다.
         // (아래 80ms 디바운스가 중복 클릭은 별도로 막아 준다.)
-        if (url === __pendingUrl) return;
+        // 같은 URL 이 '진행 중'이면 중복 클릭으로 보고 무시한다. 단 시간 제한을 둔다 —
+        // 무기한이면 진행이 끝나지 않은 한 번의 실패가 그 메뉴를 영구히 잠근다.
+        if (url === __pendingUrl && (now - __pendingAt) < PENDING_TTL_MS) return;
         if (st !== 'dashboard' && url === __lastResolvedUrl) return;
         if (now - __lastAt < 80 && st === 'dashboard') return;
         __pendingUrl = url;
+        __pendingAt = now;
         __lastAt = now;
 
         if (isIframe) {
@@ -175,13 +188,21 @@
         } else {
             // 부모 창에서 직접 호출된 경우 (사이드바 클릭 등)
             const iframe = nav.ensureStageView(st);
+            if (!iframe) {
+                // 스테이지 뷰를 만들지 못했다. 잠금을 남기면 이 메뉴가 영구히 막히므로
+                // 반드시 풀고, 클릭이 무반응으로 끝나지 않게 직접 이동한다.
+                console.warn('[nav] 스테이지 뷰 생성 실패 → 직접 이동:', targetName);
+                clearPending();
+                try { window.location.href = targetName; } catch (_) {}
+                return;
+            }
             if (iframe) {
                 activateIframe(iframe);
 
                 // 캐시 hit: 같은 stage + 같은 URL이면 src 변경 없이 즉시 표시
                 if (iframe.__nkUrl === url) {
                     __lastResolvedUrl = url;
-                    __pendingUrl = '';
+                    clearPending();
                     try { iframe.style.opacity = '1'; } catch (_) {}
                     try {
                         var ovHit = document.getElementById('stage-overlay');
@@ -204,7 +225,7 @@
                     } catch (_) {}
                     var onLoad = function () {
                         __lastResolvedUrl = url;
-                        __pendingUrl = '';
+                        clearPending();
                         try {
                             if (iframe.__nkReadyTimer) clearTimeout(iframe.__nkReadyTimer);
                             iframe.__nkReadyTimer = setTimeout(function () {
@@ -219,6 +240,19 @@
                         iframe.removeEventListener('load', onLoad);
                     };
                     iframe.addEventListener('load', onLoad);
+                    // load 가 오지 않는 경우에도 잠금이 남지 않게 한다.
+                    var onError = function () {
+                        console.warn('[nav] 스테이지 로드 실패:', url);
+                        clearPending();
+                        iframe.removeEventListener('error', onError);
+                    };
+                    iframe.addEventListener('error', onError);
+                    setTimeout(function () {
+                        if (__pendingUrl === url) {
+                            console.warn('[nav] 스테이지 로드가 끝나지 않아 잠금을 해제한다:', url);
+                            clearPending();
+                        }
+                    }, PENDING_TTL_MS);
                     try {
                         var ov = document.getElementById('stage-overlay');
                         if (ov) ov.classList.add('is-active');
