@@ -363,6 +363,27 @@ test("프로덕션 키 전환 절차가 문서로 남아 있다", () => {
   assert.match(doc, /재연결/);
 });
 
+test("TikTok 초안 카드에는 공개 범위·상호작용 입력이 없다", () => {
+  const src = read("prototype/js/ui/brand-studio.js");
+  // buildTiktokPreview 안에 해당 입력이 있으면 안 된다. 초안에 저장해 두는 것 자체가
+  // "게시 직전 확인 창에서 매번 고르게 하라"는 TikTok 요구와 어긋난다.
+  const fn = src.slice(
+    src.indexOf("function buildTiktokPreview"),
+    src.indexOf("function buildXThreadsPreview")
+  );
+  assert.ok(fn.length > 200, "buildTiktokPreview 를 찾지 못했다");
+  for (const field of ["privacy_level", "allow_comment", "allow_duet"]) {
+    assert.ok(!fn.includes(field), `TikTok 초안 카드에 ${field} 입력이 남아 있다`);
+  }
+  // 왜 없는지 설명하는 안내가 대신 있어야 한다
+  assert.match(fn, /noteField\(/);
+  assert.match(fn, /confirmation dialog each time you post/);
+  assert.match(fn, /게시 직전 확인 창에서 매번 선택/);
+  // 초안 생성기도 죽은 기본값을 만들지 않아야 한다
+  const gen = read("prototype/functions/api/draft-generate.js");
+  assert.doesNotMatch(gen, /tiktok:\s*\{\s*privacy_level/);
+});
+
 test("랜딩이 ?lang=en 진입을 즉시 반영한다", () => {
   const src = read("prototype/js/landing.js");
   assert.match(src, /function syncLangFromQuery/);

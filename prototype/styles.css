@@ -13448,6 +13448,20 @@ textarea.bsf-skeleton {
 
 /* Field wrappers */
 .bsf-field { margin-bottom: 16px; }
+
+/* 입력이 아닌 안내 한 줄 (플랫폼 정책상 초안에서 설정할 수 없는 항목 설명) */
+.bsf-field-note {
+  background: var(--layer-soft, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, #2a3348);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.bsf-field-note-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-2, #b9c4d6);
+}
 .bsf-field-hd {
   display: flex;
   align-items: center;

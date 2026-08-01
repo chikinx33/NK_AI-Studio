@@ -425,7 +425,10 @@ export async function onRequestPost(context) {
     const PLATFORM_DEFAULTS = {
       youtube:          { category: "entertainment", privacy_status: "public" },
       "youtube-shorts": { category: "entertainment", privacy_status: "public" },
-      tiktok:           { privacy_level: "public", allow_comment: true, allow_duet: false },
+      // TikTok 은 공개 범위·댓글·듀엣을 초안에 담지 않는다. 게시 직전 확인 창에서
+      // 사용자가 매번 직접 고르도록 TikTok 이 요구하므로(사전 선택 금지), 여기서
+      // 기본값을 만들어 두면 쓰이지도 않는 값이 초안에 남는다.
+      tiktok:           {},
       facebook:         { privacy_status: "public" },
       linkedin:         { visibility: "public" },
       threads:          { reply_setting: "public" },

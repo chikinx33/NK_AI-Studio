@@ -1882,6 +1882,13 @@
       return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' +
         '<div class="bsf-radio-group">' + radios + '</div></div>';
     }
+    /**
+     * 입력이 아닌 안내 한 줄. 플랫폼 정책 때문에 초안에서 설정할 수 없는 항목을
+     * "왜 여기 없는지" 설명하는 용도다. draft 에 아무 값도 만들지 않는다.
+     */
+    function noteField(text) {
+      return '<div class="bsf-field bsf-field-note"><p class="bsf-field-note-text">' + escapeHtml(text) + '</p></div>';
+    }
     function toggleField(fmtId, fieldKey, label, currentVal, fieldTier) {
       var wC = fieldTier === 'copy' ? 'bsf-field-copy' : 'bsf-field-auto';
       var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
@@ -2072,13 +2079,12 @@
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag')) +
-      radioField(fmtId, 'privacy_level', isEn ? 'Audience' : '공개 범위', [
-        { value: 'public',      label: isEn ? 'Everyone' : '전체공개' },
-        { value: 'friends',     label: isEn ? 'Followers' : '팔로워만' },
-        { value: 'private',     label: isEn ? 'Private' : '비공개' },
-      ], draft.privacy_level || 'public', 'auto') +
-      toggleField(fmtId, 'allow_comment', isEn ? 'Allow comments' : '댓글 허용', draft.allow_comment !== false, 'auto') +
-      toggleField(fmtId, 'allow_duet',    isEn ? 'Allow duet' : '듀엣 허용',    draft.allow_duet === true, 'auto');
+      // 공개 범위·댓글·듀엣 입력을 여기 두지 않는다. TikTok 은 이 값들을 게시 직전
+      // 확인 창에서 매번 직접 고르도록 요구하고(사전 선택 금지), 초안에 저장해 두면
+      // 그 요구와 어긋난다. 실제 값은 tiktok-consent-modal.js 가 받는다.
+      noteField(isEn
+        ? 'TikTok requires the audience and interaction settings to be chosen in the confirmation dialog each time you post.'
+        : 'TikTok은 정책상 공개 범위와 상호작용 설정을 게시 직전 확인 창에서 매번 선택해야 합니다.');
     }
     function buildXThreadsPreview(fmtId, captionVal, hashtagVal, draft) {
       var isThreads = (fmtId === 'threads');
