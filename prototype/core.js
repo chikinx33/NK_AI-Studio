@@ -96,6 +96,11 @@
   };
 
   (function initDialogSystem() {
+    // core.js 로드 시점의 진짜 네이티브 confirm 을 잡아둔다. 이후 다른 스크립트가
+    // window.confirm 을 감싸도 폴백 경로는 원본을 쓴다.
+    var nativeConfirm = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+      ? window.confirm.bind(window)
+      : null;
     var ui = NK.ui || (NK.ui = {});
     var dialog = ui.dialog || (ui.dialog = {});
     var mounted = false;
@@ -215,8 +220,9 @@
       }
       var wantsCancel = (mode === 'confirm' || mode === 'prompt');
       if (refs.cancel) {
-        refs.cancel.style.display = wantsCancel ? 'inline-flex' : 'none';
-        // display 를 덮는 CSS 가 끼어들어도 취소 버튼이 사라지지 않게 이중으로 건다.
+        // CSS 가 덮지 못하도록 !important 로 강제한다. 취소를 누를 수 없는 확인창은
+        // 사용자가 되돌릴 방법이 없는 화면이라 절대 나오면 안 된다.
+        refs.cancel.style.setProperty('display', wantsCancel ? 'inline-flex' : 'none', 'important');
         refs.cancel.hidden = !wantsCancel;
       }
       if (refs.copy) refs.copy.style.display = opts.copy ? 'inline-flex' : 'none';
@@ -233,8 +239,31 @@
 
       refs.root.classList.add('is-open');
       refs.root.setAttribute('aria-hidden', 'false');
+
+      // 열린 뒤 취소 버튼이 실제로 보이는지 확인한다. 어떤 이유로든 안 보이면
+      // "취소할 수 없는 확인창"이 되므로, 이 다이얼로그를 버리고 네이티브로 넘긴다.
+      if (wantsCancel && !isVisible(refs.cancel)) {
+        console.error('[dialog] confirm/prompt 인데 취소 버튼이 보이지 않는다 → 네이티브로 대체');
+        return false;
+      }
+
       if (useInput && refs.input && refs.input.focus) refs.input.focus();
       else if (refs.ok && refs.ok.focus) refs.ok.focus();
+      return true;
+    }
+
+    /** 화면에 실제로 렌더돼 보이는지 (display:none·visibility·크기 0 모두 잡는다) */
+    function isVisible(el) {
+      if (!el) return false;
+      try {
+        if (el.hidden) return false;
+        if (!el.offsetParent && el.style.position !== 'fixed') return false;
+        var cs = window.getComputedStyle(el);
+        if (!cs) return true;
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+      } catch (_) {
+        return true;   // 판정 불가면 정상으로 본다 (과잉 폴백 방지)
+      }
     }
 
     function closeCurrent(ok) {
@@ -283,7 +312,23 @@
         return;
       }
       busy = true;
-      renderCurrent(queue[0]);
+      var item = queue[0];
+      if (renderCurrent(item) === false) {
+        // 확인창을 신뢰할 수 없다 → 즉시 닫고 네이티브로 물어본다.
+        refs.root.classList.remove('is-open');
+        refs.root.setAttribute('aria-hidden', 'true');
+        queue.shift();
+        busy = false;
+        var msg = toText(item.message || '');
+        var answer = false;
+        try {
+          answer = (typeof nativeConfirm === 'function') ? nativeConfirm(msg) : window.confirm(msg);
+        } catch (_) { answer = false; }
+        if (item.mode === 'prompt') item.resolve(answer ? '' : null);
+        else item.resolve(!!answer);
+        flushQueue();
+        return;
+      }
     }
 
     function enqueue(mode, message, opts) {

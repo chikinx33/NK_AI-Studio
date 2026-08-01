@@ -407,7 +407,7 @@
     var action = btn.dataset.action;
 
     // 공유받은 프로젝트: 연결 계정은 소유자의 것 → 읽기 전용. 변경 액션 차단.
-    if (_sharedOwnerId && (action === 'sns-connect-toggle' || action === 'sns-usage-toggle' || action === 'sns-save')) {
+    if (_sharedOwnerId && (action === 'sns-connect' || action === 'sns-disconnect' || action === 'sns-usage-toggle' || action === 'sns-save')) {
       e.preventDefault();
       snsAlert(_lang() === 'en'
         ? 'These channels belong to the project owner and can only be changed by the owner.'
@@ -415,8 +415,17 @@
       return;
     }
 
-    // 좌측 연결 체크박스: 연결 안 됐으면 OAuth 진행, 연결됐으면 해제 확인
-    if (action === 'sns-connect-toggle') {
+    // 연결 버튼: 항상 OAuth 만 시작한다. 확인창이 뜰 여지 자체가 없다.
+    if (action === 'sns-connect') {
+      e.preventDefault();
+      var cpid = btn.dataset.platform;
+      if (_togglingPlatforms[cpid]) return;
+      startOAuth(cpid);
+      return;
+    }
+
+    // 해제 버튼: 연결된 상태에서만 그려지므로 언제나 해제 의도다.
+    if (action === 'sns-disconnect') {
       e.preventDefault();
       var pid = btn.dataset.platform;
 
@@ -425,41 +434,38 @@
       if (_togglingPlatforms[pid]) return;
 
       var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
-      // 토큰 만료/취소(재연결 필요) 상태면 해제 확인 없이 바로 재인증 진행
-      if (s.connected && s.needsReconnect) {
-        startOAuth(pid);
+      if (!s.connected) {
+        // 렌더와 상태가 어긋난 경우. 조용히 넘어가지 않고 흔적을 남긴다.
+        console.warn('[SNS] 미연결 상태에서 해제 요청이 들어왔다 — 무시:', pid);
+        render();
         return;
       }
-      if (s.connected) {
-        snsConfirm(T[_lang()].disconnectConfirm(pid)).then(function (ok) {
-          // 눌렀는데 아무 반응이 없을 때 최소한 콘솔에 흔적이 남아야 한다.
-          console.log('[SNS] 연결 해제 확인 결과:', pid, ok);
-          if (!ok) return;
-          // 롤백용 스냅샷. 저장이 실패하면 서버는 여전히 '연결됨'이므로
-          // 화면만 '연결 안됨'으로 남겨두면 상태가 갈라진다.
-          var prev = Object.assign({}, s);
-          _togglingPlatforms[pid] = true;
-          _settings.sns[pid] = { connected: false, enabled: false };
-          _writeCache(_settings.sns);
-          render();   // 잠긴 상태로 즉시 반영
-          console.log('[SNS] 연결 해제 저장 요청:', pid);
-          return saveSettings().then(function (res) {
-            console.log('[SNS] 연결 해제 저장 결과:', pid, res);
-            if (!res || !res.ok) {
-              _settings.sns[pid] = prev;
-              _writeCache(_settings.sns);
-              snsAlert(_lang() === 'en'
-                ? 'Could not disconnect. The channel is still connected.'
-                : '연결 해제에 실패했습니다. 채널은 계속 연결된 상태입니다.');
-            }
-          }).finally(function () {
-            delete _togglingPlatforms[pid];
-            render();
-          });
+      snsConfirm(T[_lang()].disconnectConfirm(pid)).then(function (ok) {
+        // 눌렀는데 아무 반응이 없을 때 최소한 콘솔에 흔적이 남아야 한다.
+        console.log('[SNS] 연결 해제 확인 결과:', pid, ok);
+        if (!ok) return;
+        // 롤백용 스냅샷. 저장이 실패하면 서버는 여전히 '연결됨'이므로
+        // 화면만 '연결 안됨'으로 남겨두면 상태가 갈라진다.
+        var prev = Object.assign({}, s);
+        _togglingPlatforms[pid] = true;
+        _settings.sns[pid] = { connected: false, enabled: false };
+        _writeCache(_settings.sns);
+        render();   // 잠긴 상태로 즉시 반영
+        console.log('[SNS] 연결 해제 저장 요청:', pid);
+        return saveSettings().then(function (res) {
+          console.log('[SNS] 연결 해제 저장 결과:', pid, res);
+          if (!res || !res.ok) {
+            _settings.sns[pid] = prev;
+            _writeCache(_settings.sns);
+            snsAlert(_lang() === 'en'
+              ? 'Could not disconnect. The channel is still connected.'
+              : '연결 해제에 실패했습니다. 채널은 계속 연결된 상태입니다.');
+          }
+        }).finally(function () {
+          delete _togglingPlatforms[pid];
+          render();
         });
-      } else {
-        startOAuth(pid);
-      }
+      });
       return;
     }
 
@@ -510,20 +516,35 @@
     if (comingSoon) statusText = t('comingSoon');
     else if (!connected) statusText = t('notConnected');
     else if (needsReconnect) statusText = (accountLabel ? accountLabel + ' · ' : '') + t('reconnectHint');
-    else if (enabled) statusText = accountLabel || t('inUse');
-    else statusText = accountLabel ? accountLabel + ' · ' + t('paused') : t('paused');
+    else if (enabled) statusText = t('connected') + (accountLabel ? ' ' + accountLabel : '');
+    else statusText = t('connected') + (accountLabel ? ' ' + accountLabel : '') + ' · ' + t('paused');
 
-    // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
-    var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    // 연결/해제는 서로 다른 버튼이다. 하나의 토글이 둘을 겸하면 "연결하려고 눌렀는데
+    // 해제 확인창이 뜨는" 상황이 구조적으로 가능해진다. 상태별로 필요한 버튼만 그린다.
     var isToggling = !!_togglingPlatforms[platform.id];
-    var connectBoxHtml = comingSoon
-      ? ''
-      : '<button type="button" class="sns-connect-box' + (connected ? ' is-connected' : '') + '" ' +
-          (isToggling ? 'disabled ' : '') +
-          'data-action="sns-connect-toggle" data-platform="' + platform.id + '" ' +
-          'title="' + (connected ? t('disconnect') : t('connect')) + '" ' +
-          'aria-label="' + (connected ? t('disconnect') : t('connect')) + '" ' +
-          'aria-pressed="' + (connected ? 'true' : 'false') + '">' + checkSvg + '</button>';
+    var dis = isToggling ? ' disabled' : '';
+    var connectBoxHtml = '';
+    if (!comingSoon) {
+      if (!connected) {
+        connectBoxHtml =
+          '<button type="button" class="sns-action-btn sns-action-connect"' + dis + ' ' +
+            'data-action="sns-connect" data-platform="' + platform.id + '">' +
+            escapeHtml(t('connect')) + '</button>';
+      } else if (needsReconnect) {
+        connectBoxHtml =
+          '<button type="button" class="sns-action-btn sns-action-connect"' + dis + ' ' +
+            'data-action="sns-connect" data-platform="' + platform.id + '">' +
+            escapeHtml(t('reconnectHint')) + '</button>' +
+          '<button type="button" class="sns-action-btn sns-action-disconnect"' + dis + ' ' +
+            'data-action="sns-disconnect" data-platform="' + platform.id + '">' +
+            escapeHtml(t('disconnect')) + '</button>';
+      } else {
+        connectBoxHtml =
+          '<button type="button" class="sns-action-btn sns-action-disconnect"' + dis + ' ' +
+            'data-action="sns-disconnect" data-platform="' + platform.id + '">' +
+            escapeHtml(t('disconnect')) + '</button>';
+      }
+    }
 
     // 사용 토글 (우측): 연결됐을 때만 활성. 연결 안 됐으면 비활성 처리(클릭 시 OAuth 안내).
     var usageToggleHtml;
@@ -584,12 +605,17 @@
   /** 렌더 결과와 _settings 가 어긋났는지 검사한다. 재발 시 원인 추적용. */
   function warnIfConnectStateDrifted(root) {
     try {
-      root.querySelectorAll('[data-action="sns-connect-toggle"]').forEach(function (btn) {
+      // 해제 버튼은 연결된 플랫폼에만, 연결 버튼은 미연결(또는 재연결 필요)에만 있어야 한다.
+      root.querySelectorAll('[data-action="sns-disconnect"]').forEach(function (btn) {
         var pid = btn.dataset.platform;
-        var shown = btn.getAttribute('aria-pressed') === 'true';
         var actual = !!(_settings && _settings.sns && _settings.sns[pid] && _settings.sns[pid].connected);
-        if (shown !== actual) {
-          console.warn('[SNS] 화면/상태 불일치:', pid, '표시=', shown, '실제=', actual);
+        if (!actual) console.warn('[SNS] 화면/상태 불일치: 미연결인데 해제 버튼이 있다 —', pid);
+      });
+      root.querySelectorAll('[data-action="sns-connect"]').forEach(function (btn) {
+        var pid = btn.dataset.platform;
+        var st = (_settings && _settings.sns && _settings.sns[pid]) || {};
+        if (st.connected && !st.needsReconnect) {
+          console.warn('[SNS] 화면/상태 불일치: 연결됨인데 연결 버튼이 있다 —', pid);
         }
       });
     } catch (_) {}

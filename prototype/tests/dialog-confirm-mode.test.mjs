@@ -30,9 +30,13 @@ test("dialog.confirm 은 boolean 이 아닌 값을 절대 반환하지 않는다
 test("confirm·prompt 는 취소 버튼을 display 와 hidden 양쪽으로 보장한다", () => {
   const core = read("prototype/core.js");
   assert.match(core, /var wantsCancel = \(mode === 'confirm' \|\| mode === 'prompt'\);/);
-  assert.match(core, /refs\.cancel\.style\.display = wantsCancel \? 'inline-flex' : 'none';/);
-  // display 를 덮는 CSS 가 있어도 사라지지 않도록 이중 방어
+  // CSS 가 덮지 못하도록 !important 로 강제한다
+  assert.match(core, /setProperty\('display', wantsCancel \? 'inline-flex' : 'none', 'important'\)/);
   assert.match(core, /refs\.cancel\.hidden = !wantsCancel;/);
+  // 그래도 안 보이면 그 확인창을 버리고 네이티브로 대체한다
+  assert.match(core, /wantsCancel && !isVisible\(refs\.cancel\)/);
+  assert.match(core, /네이티브로 대체/);
+  assert.match(core, /nativeConfirm\(msg\) : window\.confirm\(msg\)/);
 });
 
 test("가운데 큰 버튼 스타일(is-simple)은 alert 에만 붙는다", () => {

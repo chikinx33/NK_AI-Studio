@@ -35,9 +35,23 @@ test("해제 처리 중에는 버튼이 잠기고 재클릭이 무시된다", ()
   assert.match(s, /_togglingPlatforms\[pid\] = true;/);
   // 렌더도 잠금을 반영해야 화면상 다시 눌리지 않는다
   assert.match(s, /var isToggling = !!_togglingPlatforms\[platform\.id\];/);
-  assert.match(s, /\(isToggling \? 'disabled ' : ''\)/);
+  assert.match(s, /var dis = isToggling \? ' disabled' : '';/);
   // 처리 종료 시 반드시 해제 + 재렌더
   assert.match(s, /delete _togglingPlatforms\[pid\];/);
+});
+
+test("연결과 해제는 서로 다른 버튼이다 (겸용 토글 금지)", () => {
+  const s = src();
+  // 겸용 토글은 "연결하려는데 해제 확인창"을 구조적으로 허용한다 → 없어야 한다
+  assert.doesNotMatch(s, /data-action="sns-connect-toggle"/);
+  assert.doesNotMatch(s, /action === 'sns-connect-toggle'/);
+  // 연결 버튼은 확인창 없이 곧바로 OAuth 만 시작한다
+  assert.match(s, /if \(action === 'sns-connect'\) \{[\s\S]*?startOAuth\(cpid\);/);
+  // 해제 버튼은 연결된 상태에서만 그려진다
+  assert.match(s, /data-action="sns-disconnect"/);
+  assert.match(s, /if \(action === 'sns-disconnect'\)/);
+  // 미연결인데 해제 요청이 오면 무시하고 흔적을 남긴다
+  assert.match(s, /미연결 상태에서 해제 요청/);
 });
 
 test("해제 저장이 실패하면 화면을 연결됨으로 되돌린다", () => {
@@ -52,8 +66,9 @@ test("해제 저장이 실패하면 화면을 연결됨으로 되돌린다", () 
 test("화면과 상태가 갈라지면 콘솔 경고를 남긴다", () => {
   const s = src();
   assert.match(s, /function warnIfConnectStateDrifted/);
-  assert.match(s, /aria-pressed'\) === 'true'/);
-  assert.match(s, /화면\/상태 불일치/);
+  // 미연결인데 해제 버튼이 있거나, 연결됨인데 연결 버튼이 있으면 경고
+  assert.match(s, /미연결인데 해제 버튼이 있다/);
+  assert.match(s, /연결됨인데 연결 버튼이 있다/);
   // render() 안에서 실제로 호출돼야 의미가 있다.
   // (buildPlatformCard 는 render 보다 앞에 정의돼 있어 경계로 쓸 수 없다 —
   //  render 다음에 오는 최상위 함수 선언까지를 본문으로 잘라낸다)

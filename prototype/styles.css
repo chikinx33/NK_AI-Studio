@@ -14905,6 +14905,48 @@ textarea.bsf-skeleton {
   transform: scale(0.94);
 }
 
+/* 연결 / 연결 해제 — 서로 다른 버튼. 하나의 토글이 둘을 겸하면
+   "연결하려고 눌렀는데 해제 확인창이 뜨는" 상황이 생긴다. */
+.sns-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sns-action-btn:active { transform: scale(0.96); }
+.sns-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 연결하기 — 눈에 띄는 주 액션 */
+.sns-action-connect {
+  background: var(--accent, #5eaaff);
+  border-color: var(--accent, #5eaaff);
+  color: #0d1626;
+}
+.sns-action-connect:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* 연결 해제 — 작고 조용한 보조 액션 (실수로 누르지 않도록) */
+.sns-action-disconnect {
+  min-width: 72px;
+  color: var(--muted, #8a96ad);
+  border-color: var(--border);
+}
+.sns-action-disconnect:hover:not(:disabled) {
+  border-color: var(--danger, #e5534b);
+  color: var(--danger, #e5534b);
+}
+
 /* 연결 체크박스 (V 표시) — 좌측 액션 */
 .sns-connect-box {
   display: inline-flex;
