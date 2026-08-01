@@ -347,11 +347,22 @@
       });
       _writeCache(_settings.sns);
       render();
-      console.log('[SNS] OAuth local merge:', platform, JSON.stringify(_settings.sns[platform] || {}));
+      console.log('[SNS] OAuth local merge:', platform, {
+        connected: true,
+        username: result.username || '',
+      });
       snsAlert(T[_lang()].connectOk(platform, result.username || ''));
       loadSettings().then(function (s) {
         var serverState = (s && s.sns && s.sns[platform]) || {};
-        console.log('[SNS] loadSettings() server state for', platform, ':', JSON.stringify(serverState));
+        // 상태 객체를 통째로 찍지 않는다. 예전에는 여기서 access/refresh 토큰까지
+        // 콘솔에 남았다(서버는 이제 토큰을 내려주지 않지만, 로그도 최소로 유지한다).
+        console.log('[SNS] server state for', platform, ':', {
+          connected: !!serverState.connected,
+          enabled: !!serverState.enabled,
+          needsReconnect: !!serverState.needsReconnect,
+          username: serverState.username || '',
+          handle: serverState.handle || '',
+        });
         console.log('[SNS] all sns keys from server:', s && s.sns ? Object.keys(s.sns).join(',') : '(none)');
         render();
       }).catch(function (err) { console.warn('[SNS] loadSettings after OAuth failed:', err); });

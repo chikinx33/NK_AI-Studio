@@ -2,10 +2,33 @@ import { buildUserDataObject, gcsObjectPath } from "../../_shared/storage";
 import { authorizeRequest, sanitizeUserId } from "../../_shared/auth.js";
 import { loadShares, getGrantRole } from "../../_shared/shares";
 
-// 비소유자(공유 협업자)에게 반환할 때 노출해도 안전한 필드만 남긴다.
-// accessToken/refreshToken/tokenExpiresAt 등 자격증명은 절대 클라이언트로 보내지 않는다.
-const SAFE_SNS_FIELDS = ["connected", "enabled", "username", "pageName", "channelTitle", "igUserId", "needsReconnect", "displayName", "avatarUrl", "handle"];
-function maskSnsSettings(settings: any) {
+// 클라이언트로 내보내도 안전한 필드만 남긴다. 소유자에게도 동일하게 적용한다.
+//
+// accessToken/refreshToken 은 브라우저가 쓸 일이 전혀 없다. 게시·분석·토큰 갱신은
+// 모두 서버가 GCS 에서 직접 읽어 처리하고, 저장(save.ts)도 서버에서 read-modify-write
+// 로 병합하므로 클라이언트가 토큰을 알 필요가 없다. 그런데도 소유자 응답에는 그대로
+// 실려 나가 브라우저 메모리·콘솔·확장 프로그램에 노출됐고, 에이전트 도구
+// (sns_prefs_get)를 통해 LLM 컨텍스트에까지 들어갔다.
+//
+// 필드를 새로 추가할 때는 "브라우저가 화면을 그리는 데 실제로 필요한가"만 기준으로
+// 판단할 것. 자격증명은 어떤 경우에도 여기 넣지 않는다.
+const SAFE_SNS_FIELDS = [
+  "connected",
+  "enabled",
+  "needsReconnect",
+  // 화면 표기용 계정 정보
+  "username",
+  "displayName",
+  "avatarUrl",
+  "handle",
+  "pageName",
+  "pageId",
+  "channelTitle",
+  "channelId",
+  "channelHandle",
+  "igUserId",
+];
+function maskSnsSettings(settings: any, shared: boolean) {
   const sns = settings && typeof settings === "object" ? settings.sns : null;
   if (!sns || typeof sns !== "object") return settings;
   const maskedSns: Record<string, any> = {};
@@ -19,7 +42,7 @@ function maskSnsSettings(settings: any) {
     maskedSns[key] = safe;
   }
   // deployDefaults 등 비자격증명 메타는 유지, sns만 마스킹
-  return Object.assign({}, settings, { sns: maskedSns, shared: true });
+  return Object.assign({}, settings, { sns: maskedSns }, shared ? { shared: true } : {});
 }
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
@@ -140,8 +163,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
     if (!gcsRes.ok) throw new Error(`GCS read error: ${gcsRes.status}`);
     const settings = await gcsRes.json();
-    // 비소유자에겐 자격증명을 제거한 마스킹 버전만 반환
-    const outSettings = masked ? maskSnsSettings(settings) : settings;
+    // 소유자·공유 협업자 모두 자격증명을 제거해서 반환한다.
+    // (masked 는 이제 "공유받은 사용자인가" 표시 용도로만 쓴다)
+    const outSettings = maskSnsSettings(settings, masked);
     return send({ ok: true, settings: outSettings });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
