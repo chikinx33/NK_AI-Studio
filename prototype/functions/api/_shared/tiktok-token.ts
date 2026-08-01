@@ -163,6 +163,69 @@ export async function getTikTokAccessToken(
   };
 }
 
+/**
+ * TikTok 발행 상태를 폴링한다. (Direct Post·초안함 업로드 공용)
+ *
+ * 중요: init 이 publish_id 를 반환한 시점에 TikTok 은 이미 발행을 "수락"한 것이며,
+ * 실제 처리는 비동기로 진행돼 수 분이 걸릴 수 있다. status 폴링은 타임아웃·FAILED 를
+ * 반환해도 실제로는 게시가 정상 완료된 사례가 반복 확인됐다. 즉 신뢰할 수 있는
+ * 성공/실패 oracle 이 아니다. 따라서:
+ *  - 절대 throw 하지 않는다 (배포를 막지 않음).
+ *  - 결과는 정보성으로만 반환하고, FAILED 면 fail_reason 을 캡처해 노출한다.
+ * 진짜 init 단계 실패(파라미터/ownership 등)는 init 호출에서 이미 throw 되므로
+ * 여기서 막을 필요가 없다.
+ *
+ * 초안함 업로드는 게시가 아니라 "사용자 inbox 로 전달"이 완료 상태이므로
+ * SEND_TO_USER_INBOX 도 완료로 취급한다.
+ */
+export async function waitForTikTokStatus(
+  accessToken: string,
+  publishId: string,
+  maxRetries = 12,
+  intervalMs = 3000
+): Promise<{ status: "complete" | "processing" | "failed"; failReason?: string; postId?: string }> {
+  let lastStatus = "";
+  for (let i = 0; i < maxRetries; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    let status: string | undefined;
+    let failReason: string | undefined;
+    let postId: string | undefined;
+    try {
+      const r = await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify({ publish_id: publishId }),
+      });
+      const d = (await r.json()) as {
+        // TikTok 응답 필드명의 오타(publicaly)는 그쪽 스펙 그대로다.
+        data?: { status?: string; fail_reason?: string; publicaly_available_post_id?: Array<string | number> };
+        error?: { code?: string; message?: string };
+      };
+      status = d.data?.status;
+      failReason = d.data?.fail_reason;
+      const ids = d.data?.publicaly_available_post_id;
+      if (Array.isArray(ids) && ids.length) postId = String(ids[0]);
+      console.log(`[tiktok] status poll ${i + 1}/${maxRetries}: ${JSON.stringify(d.data || {})} (publish_id: ${publishId})`);
+    } catch (err) {
+      // 상태 조회 일시 실패는 무시하고 계속 폴링
+      console.log(`[tiktok] status poll ${i + 1}/${maxRetries} fetch 실패:`, err);
+      continue;
+    }
+    if (status) lastStatus = status;
+    if (status === "PUBLISH_COMPLETE" || status === "SEND_TO_USER_INBOX") {
+      return { status: "complete", postId };
+    }
+    if (status === "FAILED") {
+      // throw 하지 않음 — 실제로는 게시 성공인 경우가 반복 확인됨. 이유만 노출.
+      console.log(`[tiktok] status=FAILED (fail_reason=${failReason || "?"}, publish_id: ${publishId}) — soft 처리`);
+      return { status: "failed", failReason: failReason || "unknown" };
+    }
+  }
+  // 타임아웃: 실패가 아니라 아직 처리 중. publish_id 는 유효하므로 게시는 완료된다.
+  console.log(`[tiktok] status 폴링 타임아웃 — 처리 중으로 간주 (last=${lastStatus}, publish_id: ${publishId})`);
+  return { status: "processing" };
+}
+
 /** POST /v2/post/publish/creator_info/query/ 원본 응답. */
 export async function queryTikTokCreatorInfo(
   accessToken: string

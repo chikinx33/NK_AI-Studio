@@ -193,16 +193,26 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       : new Date(Date.now() + 365 * 86400 * 1000).toISOString();
 
     // Step 2: Fetch user display name
+    //
+    // ⚠️ username 은 user.info.profile 스코프 소관이다. 우리는 user.info.basic 만
+    // 요청하므로 fields 에 username 을 끼우면 권한 없는 필드 때문에 호출 전체가 실패하고,
+    // 폴백 체인이 openId 로 떨어져 SNS 설정에 "@-000odDuYzvoTX..." 같은 내부 id 가 뜬다.
+    // basic 으로 받을 수 있는 필드만 요청할 것.
     const userRes = await fetch(
-      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,username",
+      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const userData = (await userRes.json()) as {
-      data?: { user?: { open_id?: string; display_name?: string; username?: string } };
+      data?: { user?: { open_id?: string; display_name?: string; avatar_url?: string } };
       error?: { code?: string; message?: string };
     };
+    if (!userRes.ok || userData.error?.code && userData.error.code !== "ok") {
+      // 실패해도 연결 자체는 진행하되(토큰은 유효하다), 원인을 남긴다.
+      console.log(`[tiktok] user/info 실패 (${userRes.status}):`, JSON.stringify(userData));
+    }
     const user = userData.data?.user || {};
-    const displayName = user.display_name || user.username || openId;
+    const displayName = user.display_name || openId;
+    const avatarUrl = user.avatar_url || "";
 
     // Step 3: Save to GCS
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
@@ -224,7 +234,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
         connected: true,
         enabled: true,
         openId,
+        // username 필드에는 display_name 이 들어간다(진짜 @handle 은 basic 스코프로 못 받는다).
+        // SNS 설정 화면이 이 값을 표시하므로 하위 호환을 위해 이름은 유지한다.
         username: displayName,
+        displayName,
+        avatarUrl,
         accessToken,
         refreshToken,
         tokenExpiresAt: expiresAt,

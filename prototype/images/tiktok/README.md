@@ -9,13 +9,17 @@
 
 | 파일명 | 배치 | 프레임 안에 반드시 있어야 하는 것 |
 |---|---|---|
-| `01-connect.png` | 1. Connect | TikTok 카드 "Connected" 상태, 연결된 display name + `@username`, Disconnect 버튼 |
-| `02-confirm-dialog.png` | 3. Review & Approve | 확인 모달 **초기 상태** — 아바타+닉네임+`@username`, 미디어 썸네일+캡션, 공개범위 **전부 미선택**, Comment/Duet/Stitch **전부 해제**, `Post to TikTok` **비활성(회색)**, 하단 `Music Usage Confirmation` 동의문 |
+| `01-connect.png` | 1. Connect | TikTok 카드 "Connected" 상태, 연결된 **display name**(아바타가 있으면 함께), Disconnect 버튼. ※ `@handle` 은 `user.info.profile` 스코프 소관이라 표시되지 않는 게 정상이다 |
+| `02-confirm-dialog.png` | 3. Review & Approve | 확인 모달 **초기 상태** — 아바타+닉네임, 미디어 썸네일+캡션, 공개범위 **전부 미선택**, Comment/Duet/Stitch **전부 해제**, `Post to TikTok` **비활성(회색)**, 하단 `Music Usage Confirmation` 동의문 |
 | `03-disclosure.png` | 3. Review & Approve | `Disclose video content` ON + `Branded content` 체크, `Paid partnership` 배너, 동의문이 `Branded Content Policy and Music Usage Confirmation` 으로 바뀐 것, (가능하면) `Only you` 비활성 |
-| `04-analytics.png` | 4. Publish & Measure | 조회수·좋아요·댓글·공유가 **0이 아닌 실제 값**, 썸네일, TikTok 원본 링크 |
+| `04-drafts.png` | 4. Publish, or save to drafts | TikTok 카드의 **초안함으로 보내기** 버튼과, 누른 뒤 나오는 "TikTok 초안함으로 보냈습니다" 안내. `video.upload` 스코프를 증명하는 유일한 화면이다 |
 
 > `02-confirm-dialog.png` 는 값을 다 채운 뒤에 찍으면 "사전 선택 없음 + 기본 전부 꺼짐 +
 > 미선택 시 게시 불가" 증거가 통째로 사라진다. **반드시 초기 상태로.**
+
+> ⚠️ `04` 가 analytics 에서 drafts 로 바뀌었다. `video.list`(Display API)를 요청하지 않기로
+> 하면서 Analytics 의 TikTok 수치를 채울 방법이 없어졌고, 대신 새로 요청하는 `video.upload`
+> 를 시연해야 하기 때문이다. Analytics 화면은 이번 제출에 넣지 않는다.
 
 ## 촬영 공통 규칙
 

@@ -2498,7 +2498,21 @@
                   var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
                   // 연결되어 있고 '사용 중'인 플랫폼만 배포 가능
                   var canDeploy = isEnabled && !isDeploying;
-                  return '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (canDeploy ? '' : ' disabled') + '>' + btnContent + '</button>';
+                  var mainBtn = '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (canDeploy ? '' : ' disabled') + '>' + btnContent + '</button>';
+                  // TikTok 만 초안함(inbox) 업로드 진입점을 함께 제공한다.
+                  // video.upload 스코프를 요청하는 근거이자 심사 데모에서 시연하는 화면이다.
+                  // 게시가 아니라 파일만 보내는 흐름이라 확인 모달을 거치지 않는다.
+                  if (formatId === 'tiktok') {
+                    mainBtn += '<button type="button" class="bsf-deploy-one-btn btn-ghost bsf-tiktok-inbox-btn"'
+                      + ' data-action="brand-tiktok-inbox"'
+                      + (canDeploy ? '' : ' disabled')
+                      + ' title="' + escapeHtml(isEn
+                          ? 'Upload the video to your TikTok drafts and finish posting in the TikTok app.'
+                          : '영상을 TikTok 초안함으로 보내고, 게시는 TikTok 앱에서 마무리합니다.') + '">'
+                      + (isEn ? 'Send to drafts' : '초안함으로 보내기')
+                      + '</button>';
+                  }
+                  return mainBtn;
                 })() +
               '</div>'
             );
@@ -4043,6 +4057,74 @@
           });
       }
 
+      // TikTok 초안함(inbox) 업로드 — scope: video.upload
+      // Direct Post 와 달리 게시가 아니라 파일만 사용자의 TikTok 초안함으로 보낸다.
+      // 캡션·공개 범위는 사용자가 TikTok 앱에서 직접 정하므로 확인 모달이 없다.
+      if (action === 'brand-tiktok-inbox') {
+        var inboxItems = assetItems.filter(function (i) {
+          return String(i.type || '').trim() === 'video' &&
+            selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
+        });
+        var inboxVideo = null;
+        for (var ii = 0; ii < inboxItems.length; ii++) {
+          var iu = String(inboxItems[ii].url || '').trim();
+          var iPath = extractGcsObjectName(iu);
+          if (iPath) { inboxVideo = { mediaGcsPath: iPath }; break; }
+          if (iu.indexOf('http') === 0) { inboxVideo = { mediaDirectUrl: iu }; break; }
+        }
+        // 선택된 영상이 없으면 렌더 캐시 첫 영상으로 폴백 (배포 버튼과 동일한 규칙)
+        if (!inboxVideo) {
+          var inboxRenders = _renderStorageCache[projectId] || [];
+          for (var ri = 0; ri < inboxRenders.length; ri++) {
+            var rn = String(inboxRenders[ri].name || '').trim();
+            var rExt = rn.split('.').pop().toLowerCase();
+            if (rn && (rExt === 'mp4' || rExt === 'webm')) { inboxVideo = { mediaGcsPath: rn }; break; }
+          }
+        }
+        if (!inboxVideo) {
+          bsfNotify(isEn
+            ? 'No video found. Render a video in Post-Production first.'
+            : '영상이 없습니다. 포스트프로덕션에서 먼저 렌더링해 주세요.');
+          return;
+        }
+        btn.disabled = true;
+        var inboxLabelPrev = btn.textContent;
+        btn.textContent = isEn ? 'Sending…' : '보내는 중…';
+        var inboxBody = Object.assign({}, inboxVideo, { projectId: String(projectId || '') });
+        try {
+          var _inboxOwner = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
+          if (_inboxOwner) inboxBody.ownerId = String(_inboxOwner);
+        } catch (_) {}
+        fetch('/api/sns/tiktok/inbox', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + (localStorage.getItem('nk_auth_token') || ''),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(inboxBody),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res || !res.ok) throw new Error((res && res.error) || 'TikTok inbox upload failed');
+            var sent = res.result && res.result.status === 'sent_to_inbox';
+            bsfNotify(sent
+              ? (isEn
+                  ? 'Sent to your TikTok drafts. Open the TikTok app to add a caption and post it.'
+                  : 'TikTok 초안함으로 보냈습니다. TikTok 앱에서 캡션을 넣고 게시해 주세요.')
+              : (isEn
+                  ? 'TikTok is still processing the upload. It will appear in your drafts shortly.'
+                  : 'TikTok이 업로드를 처리 중입니다. 잠시 후 초안함에 나타납니다.'));
+          })
+          .catch(function (err) {
+            bsfNotify((isEn ? 'Could not send to TikTok drafts: ' : 'TikTok 초안함 전송 실패: ')
+              + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+            btn.textContent = inboxLabelPrev;
+          });
+        return;
+      }
       if (action === 'brand-deploy-one-format') {
         var oneFmtId = String(btn.dataset.deployFormat || '').trim();
         if (!oneFmtId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;

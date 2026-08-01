@@ -28,7 +28,9 @@ is available at https://nkstudio.org/tiktok
 ## 2. Products and scopes we are requesting
 
 We request three scopes: user.info.basic (Login Kit), video.publish (Content Posting
-API - Direct Post) and video.list (Display API). We are NOT requesting video.upload.
+API - Direct Post) and video.upload (Content Posting API - upload to drafts). We are
+NOT requesting video.list or any other Display API scope, so we never read the user's
+existing TikTok videos.
 
 --- 2.1 user.info.basic (Login Kit) ---
 
@@ -39,20 +41,22 @@ https://nkstudio.org/auth/tiktok/callback
 
 WHAT WE READ
 We call /v2/user/info/ exactly once, immediately after the OAuth token exchange, and
-request only these fields: open_id, display_name, username.
+request only these fields: open_id, display_name, avatar_url. We deliberately do not
+request username, because that field belongs to user.info.profile, a scope we do not
+ask for.
 
 HOW THE DATA IS USED
-- display_name and username are shown on the SNS Connections screen and again in the
+- display_name and avatar_url are shown on the SNS Connections screen and again in the
   publish confirmation dialog, so that before approving a post the user can visually
   confirm WHICH TikTok account the content will be sent to. Our users often manage
   more than one brand account, so this is essential to prevent posting to the wrong
   account.
-- open_id is used as the internal key that binds the stored access token and the
-  performance data to the correct TikTok account.
+- open_id is used as the internal key that binds the stored access token to the
+  correct TikTok account.
 
 WHAT WE STORE
-open_id, display_name, username, and the access/refresh tokens. Nothing else. We do
-not read or store followers, following, likes, bio, avatar, or any other profile data.
+open_id, display_name, avatar_url, and the access/refresh tokens. Nothing else. We do
+not read or store followers, following, likes, bio, or any other profile data.
 
 NOTE
 We do not use TikTok as an identity provider. Users sign in to NK AI Studio with
@@ -114,32 +118,35 @@ visible before review is complete.
 
 WHAT WE STORE
 The returned publish_id and the resulting post id and URL, so the user can open their
-own post from our interface and so that performance data can be matched to it.
+own post from our interface.
 
---- 2.3 video.list (Display API) ---
+--- 2.3 video.upload (Content Posting API - upload to drafts) ---
 
 WHERE IT IS TRIGGERED
-Analytics > Performance dashboard, when the user opens it or presses Sync.
+Publish > the TikTok channel card > "Send to drafts". This is an explicit, separate
+button next to the normal publish button. It never runs on its own.
 
-WHAT WE READ
-Via /v2/video/list/ we request, for up to 20 of the user's most recent videos:
-id, title, video_description, duration, cover_image_url, embed_link, create_time,
-like_count, comment_count, share_count, view_count.
+WHY WE OFFER IT
+Some users want to look at the finished video one more time inside TikTok, or prefer
+to write the caption there with TikTok's own editor. For them we upload only the video
+file into their TikTok drafts, and they finish and publish it in the TikTok app.
 
-HOW THE DATA IS USED
-- These are displayed to that same user as a performance table and charts, so they
-  can compare how the content published through NK AI Studio performed against their
-  other posts.
-- cover_image_url renders the post thumbnail and embed_link links the user back to
-  the original video on TikTok, so all traffic returns to TikTok.
-- The aggregate view/like/comment/share counts feed our planning tool, which suggests
-  what type of content the user should produce next based on what performed well on
-  their own account.
+FLOW
+1. The user presses "Send to drafts".
+2. We call /v2/post/publish/inbox/video/init/ with source FILE_UPLOAD.
+3. We upload the file to the returned upload URL, server-to-server, so the video is
+   never exposed on a public URL.
+4. We poll /v2/post/publish/status/fetch/ until SEND_TO_USER_INBOX and then tell the
+   user the video is waiting in their TikTok drafts.
+
+WHAT IS NOT SENT
+No caption, no privacy level, no interaction settings and no commercial content
+disclosure are sent with this call. Nothing is published. The user decides all of that
+inside the TikTok app, which is exactly why this path has no confirmation dialog of
+its own - there is nothing for us to confirm on TikTok's behalf.
 
 WHAT WE STORE
-The listed metrics plus the video id and embed link, in that user's private record,
-refreshed on each sync. We never download or re-host TikTok video files, and one
-user's TikTok data is never shown to any other user.
+The returned publish_id only, so that we can report whether the transfer completed.
 
 ## 3. Data handling, common to all three scopes
 
@@ -171,7 +178,8 @@ Suggested path once signed in:
   2. Publish > Review & Approve  -> the Direct Post confirmation dialog with audience
                                     selection, interaction toggles and commercial
                                     content disclosure (video.publish)
-  3. Analytics                   -> the performance dashboard (video.list)
+  3. Publish > TikTok card       -> "Send to drafts", which uploads the file to the
+                                    user's TikTok drafts (video.upload)
 
 This account is kept active for the duration of the review. If it stops working,
 please contact chikinx1@gmail.com and we will reissue it within one business day.
@@ -188,16 +196,18 @@ performed. TikTok is one supported destination. Nothing is ever posted automatic
 without an on-screen confirmation step. A detailed public page with screenshots of the
 whole flow is at https://nkstudio.org/tiktok
 
-We request three scopes. We are NOT requesting video.upload.
+We request three scopes. We are NOT requesting video.list or any other Display API
+scope.
 
 1) user.info.basic (Login Kit). Triggered at Settings > SNS Connections > Connect
 TikTok, returning to https://nkstudio.org/auth/tiktok/callback. We call /v2/user/info/
-once and read only open_id, display_name, username. display_name and username are shown
-on the connections screen and in the publish confirmation dialog so the user can verify
-which TikTok account a post will go to (our users manage multiple brand accounts).
-open_id binds the stored token and the performance data to the right account. We store
-only those three fields plus the tokens. We never read followers, following or likes,
-and we do not use TikTok as a login provider for our own product.
+once and read only open_id, display_name, avatar_url. We do not request username: that
+field belongs to user.info.profile, which we do not ask for. display_name and avatar_url
+are shown on the connections screen and in the publish confirmation dialog so the user
+can verify which TikTok account a post will go to (our users manage multiple brand
+accounts). open_id binds the stored token to the right account. We store only those three
+fields plus the tokens. We never read followers, following or likes, and we do not use
+TikTok as a login provider for our own product.
 
 2) video.publish (Content Posting API - Direct Post). Triggered at Publish > Review &
 Approve > Publish to TikTok. We first call /v2/post/publish/creator_info/query/ and
@@ -219,14 +229,16 @@ We then poll /v2/post/publish/status/fetch/ for progress. Until this app is appr
 force privacy_level to SELF_ONLY server-side so nothing can become public before review.
 We store the publish_id and the resulting post id/URL only.
 
-3) video.list (Display API). Triggered on the Analytics dashboard. Via /v2/video/list/
-we read id, title, video_description, duration, cover_image_url, embed_link,
-create_time, like_count, comment_count, share_count, view_count for up to 20 recent
-videos. We show these to the same user as a performance table and charts, use
-cover_image_url for thumbnails and embed_link to send the user back to TikTok, and use
-the aggregate counts to suggest what content to make next. We store only those metrics
-and identifiers, refreshed on sync. We never download or re-host video files, and never
-show one user's data to another.
+3) video.upload (Content Posting API - upload to drafts). Triggered by an explicit
+"Send to drafts" button next to the publish button on the TikTok channel card. It never
+runs on its own. Some users want to review the finished video inside TikTok, or write
+the caption with TikTok's own editor, so we upload only the file: we call
+/v2/post/publish/inbox/video/init/ with source FILE_UPLOAD, transfer the file
+server-to-server so it is never exposed on a public URL, and poll
+/v2/post/publish/status/fetch/ until SEND_TO_USER_INBOX. No caption, privacy level,
+interaction setting or commercial disclosure is sent and nothing is published - the
+user completes the post in the TikTok app, which is why this path has no confirmation
+dialog of its own. We store the returned publish_id only.
 
 Data handling: all TikTok data is scoped to the authorizing user, never shared, sold,
 advertised against, or used for model training. Tokens live in a private per-user
@@ -241,4 +253,5 @@ Test account (the marketing site is fully public; the product requires an accoun
   ID: <TEST_ID>
   PW: <TEST_PW>
 Path: Settings > SNS Connections (user.info.basic) -> Publish > Review & Approve
-(video.publish confirmation dialog) -> Analytics (video.list dashboard).
+(video.publish confirmation dialog) -> Publish > TikTok card > Send to drafts
+(video.upload).

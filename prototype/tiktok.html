@@ -334,7 +334,7 @@
               <span class="flow-step-scope">user.info.basic</span>
             </div>
             <div class="flow-step-body">
-              The user opens <strong>Settings &gt; SNS Connections</strong> and presses <strong>Connect TikTok</strong>. They are redirected to TikTok's own authorization page, grant consent there, and return to <code>https://nkstudio.org/auth/tiktok/callback</code>. We then call TikTok's user info endpoint exactly once and read only <code>open_id</code>, <code>display_name</code> and <code>username</code>, so the connected account name is visible on the screen from that point on.
+              The user opens <strong>Settings &gt; SNS Connections</strong> and presses <strong>Connect TikTok</strong>. They are redirected to TikTok's own authorization page, grant consent there, and return to <code>https://nkstudio.org/auth/tiktok/callback</code>. We then call TikTok's user info endpoint exactly once and read only <code>open_id</code>, <code>display_name</code> and <code>avatar_url</code>, so the connected account name and picture are visible on the screen from that point on.
             </div>
             <figure class="flow-shot">
               <img src="images/tiktok/01-connect.png" alt="After authorizing, the connected TikTok account is shown so the user always knows which account will be posted to." loading="lazy" />
@@ -381,22 +381,22 @@
           <div class="flow-step">
             <div class="flow-step-head">
               <span class="flow-step-num">4</span>
-              <span class="flow-step-title">Publish &amp; Measure</span>
-              <span class="flow-step-scope">video.publish · video.list</span>
+              <span class="flow-step-title">Publish, or save to drafts</span>
+              <span class="flow-step-scope">video.publish · video.upload</span>
             </div>
             <div class="flow-step-body">
-              We show posting progress while TikTok processes the upload, then a link to the published post. Later, on the <strong>Analytics</strong> dashboard, the user can sync their recent TikTok videos and see view, like, comment and share counts for their own posts, so they can compare what worked and plan the next piece of content.
+              After the user confirms, we show posting progress while TikTok processes the upload, then a link to the published post. The user can also choose <strong>Send to drafts</strong> instead: that uploads only the video file to their TikTok inbox with <code>video.upload</code>, and they write the caption and choose the audience inside the TikTok app. Nothing is posted in that case — the file simply waits in their drafts.
             </div>
             <figure class="flow-shot">
-              <img src="images/tiktok/04-analytics.png" alt="Performance data retrieved with video.list is shown only to the account owner, with thumbnails and links back to the original posts on TikTok." loading="lazy" />
-              <figcaption>Performance data retrieved with video.list is shown only to the account owner, with thumbnails and links back to the original posts on TikTok.</figcaption>
+              <img src="images/tiktok/04-drafts.png" alt="Send to drafts uploads only the video file to the user's TikTok inbox, so they can finish writing and posting it inside the TikTok app." loading="lazy" />
+              <figcaption>Send to drafts uploads only the video file to the user's TikTok inbox, so they can finish writing and posting it inside the TikTok app.</figcaption>
             </figure>
           </div>
         </section>
 
         <section class="legal-section" id="en-t3">
           <h2 class="legal-section-title"><span class="legal-section-num">3</span>Permissions we request</h2>
-          <p class="legal-p">We request three scopes. We do <strong>not</strong> request <code>video.upload</code>.</p>
+          <p class="legal-p">We request three scopes. We do <strong>not</strong> request <code>video.list</code> or any other Display API scope, so we never read your existing TikTok videos.</p>
           <div class="legal-table-wrap">
             <table class="legal-table">
               <thead>
@@ -410,21 +410,21 @@
               <tbody>
                 <tr>
                   <td><code>user.info.basic</code><br><span style="color:var(--text-3);font-size:12px;">Login Kit</span></td>
-                  <td>A single call to the user info endpoint immediately after the OAuth token exchange, requesting only <code>open_id</code>, <code>display_name</code>, <code>username</code>.</td>
-                  <td><code>display_name</code> and <code>username</code> are shown on the SNS Connections screen and again in the publish confirmation dialog, so that before approving a post the user can visually confirm <em>which</em> TikTok account the content will be sent to. Our users often manage more than one brand account. <code>open_id</code> is the internal key that binds the stored token and the performance data to the correct account.</td>
-                  <td><code>open_id</code>, <code>display_name</code>, <code>username</code>, and the access/refresh tokens. Nothing else — no followers, following, likes, bio or avatar.</td>
+                  <td>A single call to the user info endpoint immediately after the OAuth token exchange, requesting only <code>open_id</code>, <code>display_name</code>, <code>avatar_url</code>. We do not request <code>username</code>, because that field belongs to <code>user.info.profile</code>, a scope we do not ask for.</td>
+                  <td><code>display_name</code> and <code>avatar_url</code> are shown on the SNS Connections screen and again in the publish confirmation dialog, so that before approving a post the user can visually confirm <em>which</em> TikTok account the content will be sent to. Our users often manage more than one brand account. <code>open_id</code> is the internal key that binds the stored token to the correct account.</td>
+                  <td><code>open_id</code>, <code>display_name</code>, <code>avatar_url</code>, and the access/refresh tokens. Nothing else — no followers, following, likes or bio.</td>
                 </tr>
                 <tr>
                   <td><code>video.publish</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — Direct Post</span></td>
                   <td><code>creator_info/query</code> for the creator nickname, allowed privacy levels, max duration and comment/duet/stitch availability; then <code>video/init</code> or <code>content/init</code> to send the approved post; then <code>status/fetch</code> to follow its progress.</td>
                   <td>This is the core feature of the product and the reason we integrate with TikTok at all: publishing the asset the user created and approved inside NK AI Studio to their own TikTok account, with the audience and disclosure settings they chose on screen.</td>
-                  <td>The returned <code>publish_id</code> and the resulting post id and URL, so the user can open their own post from our interface and so performance data can be matched to it.</td>
+                  <td>The returned <code>publish_id</code> and the resulting post id and URL, so the user can open their own post from our interface.</td>
                 </tr>
                 <tr>
-                  <td><code>video.list</code><br><span style="color:var(--text-3);font-size:12px;">Display API</span></td>
-                  <td>For up to 20 of the user's most recent videos: <code>id</code>, <code>title</code>, <code>video_description</code>, <code>duration</code>, <code>cover_image_url</code>, <code>embed_link</code>, <code>create_time</code>, <code>like_count</code>, <code>comment_count</code>, <code>share_count</code>, <code>view_count</code>.</td>
-                  <td>Shown to that same user as a performance table and charts, so they can compare how content published through NK AI Studio performed against their other posts. <code>cover_image_url</code> renders the thumbnail and <code>embed_link</code> sends the user back to the original video on TikTok. The aggregate counts feed our planning tool, which suggests what to produce next.</td>
-                  <td>The listed metrics plus the video id and embed link, in that user's private record, refreshed on each sync. We never download or re-host TikTok video files.</td>
+                  <td><code>video.upload</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — Upload to drafts</span></td>
+                  <td><code>inbox/video/init</code> to open an upload session, the returned upload URL to transfer the file, then <code>status/fetch</code> to confirm it reached the user's inbox.</td>
+                  <td>For users who want to review the video one last time inside TikTok, or write the caption there, we upload only the file to their TikTok drafts. No caption, audience or disclosure is sent — the user completes the post in the TikTok app. This is a deliberate alternative to Direct Post, not a background upload: it runs only when the user presses <strong>Send to drafts</strong>.</td>
+                  <td>The returned <code>publish_id</code> only, so we can report whether the transfer finished.</td>
                 </tr>
               </tbody>
             </table>
@@ -525,7 +525,7 @@
               <span class="flow-step-scope">user.info.basic</span>
             </div>
             <div class="flow-step-body">
-              <strong>설정 &gt; SNS 연결</strong>에서 <strong>TikTok 연결</strong>을 누르면 TikTok 공식 인증 화면으로 이동합니다. 사용자가 동의하면 <code>https://nkstudio.org/auth/tiktok/callback</code>으로 돌아오고, 이때 사용자 정보 API를 <strong>단 한 번</strong> 호출해 <code>open_id</code>, <code>display_name</code>, <code>username</code>만 읽습니다. 이후 화면에는 연결된 계정 이름이 표시됩니다.
+              <strong>설정 &gt; SNS 연결</strong>에서 <strong>TikTok 연결</strong>을 누르면 TikTok 공식 인증 화면으로 이동합니다. 사용자가 동의하면 <code>https://nkstudio.org/auth/tiktok/callback</code>으로 돌아오고, 이때 사용자 정보 API를 <strong>단 한 번</strong> 호출해 <code>open_id</code>, <code>display_name</code>, <code>avatar_url</code>만 읽습니다. 이후 화면에는 연결된 계정 이름과 프로필 사진이 표시됩니다.
             </div>
             <figure class="flow-shot">
               <img src="images/tiktok/01-connect.png" alt="인증을 마치면 연결된 TikTok 계정이 표시되어, 어느 계정으로 게시되는지 사용자가 항상 알 수 있습니다." loading="lazy" />
@@ -572,22 +572,22 @@
           <div class="flow-step">
             <div class="flow-step-head">
               <span class="flow-step-num">4</span>
-              <span class="flow-step-title">게시 및 성과 측정 (Publish &amp; Measure)</span>
-              <span class="flow-step-scope">video.publish · video.list</span>
+              <span class="flow-step-title">게시 또는 초안함 저장 (Publish, or save to drafts)</span>
+              <span class="flow-step-scope">video.publish · video.upload</span>
             </div>
             <div class="flow-step-body">
-              TikTok이 업로드를 처리하는 동안 진행 상태를 표시하고, 완료되면 게시물 링크를 보여줍니다. 이후 <strong>애널리틱스</strong> 대시보드에서 본인의 최근 TikTok 영상을 동기화해 조회수·좋아요·댓글·공유 수를 확인하고, 무엇이 잘 됐는지 비교해 다음 콘텐츠를 기획할 수 있습니다.
+              사용자가 확인하면 TikTok이 업로드를 처리하는 동안 진행 상태를 표시하고, 완료되면 게시물 링크를 보여줍니다. 대신 <strong>초안함으로 보내기</strong>를 고를 수도 있습니다. 이 경우 <code>video.upload</code>로 영상 파일만 사용자의 TikTok 초안함에 올리고, 캡션과 공개 범위는 TikTok 앱에서 사용자가 직접 정합니다. 게시는 일어나지 않고 파일이 초안함에 남아 있을 뿐입니다.
             </div>
             <figure class="flow-shot">
-              <img src="images/tiktok/04-analytics.png" alt="video.list로 가져온 성과 데이터는 계정 소유자에게만 표시되며, 썸네일과 TikTok 원본 게시물로 돌아가는 링크가 함께 제공됩니다." loading="lazy" />
-              <figcaption>video.list로 가져온 성과 데이터는 계정 소유자에게만 표시되며, 썸네일과 TikTok 원본 게시물로 돌아가는 링크가 함께 제공됩니다.</figcaption>
+              <img src="images/tiktok/04-drafts.png" alt="초안함으로 보내기는 영상 파일만 사용자의 TikTok 초안함에 올려, 나머지 작성과 게시를 TikTok 앱에서 마무리할 수 있게 합니다." loading="lazy" />
+              <figcaption>초안함으로 보내기는 영상 파일만 사용자의 TikTok 초안함에 올려, 나머지 작성과 게시를 TikTok 앱에서 마무리할 수 있게 합니다.</figcaption>
             </figure>
           </div>
         </section>
 
         <section class="legal-section" id="ko-t3">
           <h2 class="legal-section-title"><span class="legal-section-num">3</span>요청하는 권한</h2>
-          <p class="legal-p">요청하는 스코프는 3개입니다. <code>video.upload</code>는 <strong>요청하지 않습니다.</strong></p>
+          <p class="legal-p">요청하는 스코프는 3개입니다. <code>video.list</code>를 비롯한 Display API 스코프는 <strong>요청하지 않으며</strong>, 따라서 기존 TikTok 영상을 읽지 않습니다.</p>
           <div class="legal-table-wrap">
             <table class="legal-table">
               <thead>
@@ -601,21 +601,21 @@
               <tbody>
                 <tr>
                   <td><code>user.info.basic</code><br><span style="color:var(--text-3);font-size:12px;">Login Kit</span></td>
-                  <td>OAuth 토큰 교환 직후 사용자 정보 API를 1회 호출해 <code>open_id</code>, <code>display_name</code>, <code>username</code>만 요청합니다.</td>
-                  <td><code>display_name</code>·<code>username</code>은 SNS 연결 화면과 게시 확인 모달에 표시되어, 사용자가 승인 전에 <em>어느</em> TikTok 계정으로 게시되는지 눈으로 확인할 수 있게 합니다(브랜드 계정을 여러 개 운영하는 사용자가 많습니다). <code>open_id</code>는 저장된 토큰과 성과 데이터를 올바른 계정에 연결하는 내부 키로 씁니다.</td>
-                  <td><code>open_id</code>, <code>display_name</code>, <code>username</code>, 액세스/리프레시 토큰. 그 외에는 저장하지 않습니다(팔로워·팔로잉·좋아요·소개글·프로필 사진 모두 미수집).</td>
+                  <td>OAuth 토큰 교환 직후 사용자 정보 API를 1회 호출해 <code>open_id</code>, <code>display_name</code>, <code>avatar_url</code>만 요청합니다. <code>username</code>은 요청하지 않습니다 — 이 필드는 우리가 요청하지 않는 <code>user.info.profile</code> 스코프 소관입니다.</td>
+                  <td><code>display_name</code>·<code>avatar_url</code>은 SNS 연결 화면과 게시 확인 모달에 표시되어, 사용자가 승인 전에 <em>어느</em> TikTok 계정으로 게시되는지 눈으로 확인할 수 있게 합니다(브랜드 계정을 여러 개 운영하는 사용자가 많습니다). <code>open_id</code>는 저장된 토큰을 올바른 계정에 연결하는 내부 키로 씁니다.</td>
+                  <td><code>open_id</code>, <code>display_name</code>, <code>avatar_url</code>, 액세스/리프레시 토큰. 그 외에는 저장하지 않습니다(팔로워·팔로잉·좋아요·소개글 모두 미수집).</td>
                 </tr>
                 <tr>
                   <td><code>video.publish</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — Direct Post</span></td>
                   <td>크리에이터 닉네임·허용 공개범위·최대 길이·댓글/듀엣/스티치 가능 여부를 얻기 위한 <code>creator_info/query</code>, 승인된 게시물을 보내는 <code>video/init</code> 또는 <code>content/init</code>, 진행 상태를 확인하는 <code>status/fetch</code>.</td>
                   <td>제품의 핵심 기능이자 TikTok과 연동하는 이유입니다. NK AI Studio에서 사용자가 만들고 승인한 결과물을, 화면에서 직접 고른 공개 범위·고지 설정 그대로 본인 TikTok 계정에 게시합니다.</td>
-                  <td>응답으로 받은 <code>publish_id</code>와 결과 게시물 id·URL. 사용자가 우리 화면에서 자기 게시물을 바로 열 수 있게 하고, 성과 데이터를 해당 게시물에 매칭하기 위함입니다.</td>
+                  <td>응답으로 받은 <code>publish_id</code>와 결과 게시물 id·URL. 사용자가 우리 화면에서 자기 게시물을 바로 열 수 있게 하기 위함입니다.</td>
                 </tr>
                 <tr>
-                  <td><code>video.list</code><br><span style="color:var(--text-3);font-size:12px;">Display API</span></td>
-                  <td>사용자의 최근 영상 최대 20건에 대해 <code>id</code>, <code>title</code>, <code>video_description</code>, <code>duration</code>, <code>cover_image_url</code>, <code>embed_link</code>, <code>create_time</code>, <code>like_count</code>, <code>comment_count</code>, <code>share_count</code>, <code>view_count</code>.</td>
-                  <td>같은 사용자에게 성과 표와 그래프로 보여주어, NK AI Studio로 게시한 콘텐츠와 다른 게시물의 성과를 비교할 수 있게 합니다. <code>cover_image_url</code>은 썸네일 표시, <code>embed_link</code>는 원본 TikTok 영상으로 돌려보내는 데 씁니다. 집계 수치는 다음에 어떤 콘텐츠를 만들지 제안하는 기획 도구의 입력으로 사용합니다.</td>
-                  <td>위 지표와 영상 id·임베드 링크를 해당 사용자의 비공개 레코드에 저장하며, 동기화할 때마다 갱신합니다. TikTok 영상 파일은 절대 내려받거나 재호스팅하지 않습니다.</td>
+                  <td><code>video.upload</code><br><span style="color:var(--text-3);font-size:12px;">Content Posting API — 초안함 업로드</span></td>
+                  <td>업로드 세션을 여는 <code>inbox/video/init</code>, 응답으로 받은 업로드 URL로 파일 전송, 초안함 도달을 확인하는 <code>status/fetch</code>.</td>
+                  <td>TikTok 안에서 영상을 한 번 더 확인하거나 캡션을 거기서 쓰고 싶은 사용자를 위해, 파일만 초안함에 올립니다. 캡션·공개 범위·고지는 전송하지 않고 사용자가 TikTok 앱에서 마무리합니다. 백그라운드 업로드가 아니라 Direct Post의 대안이며, 사용자가 <strong>초안함으로 보내기</strong>를 눌렀을 때만 실행됩니다.</td>
+                  <td>전송 완료 여부를 알려주기 위한 <code>publish_id</code>만 저장합니다.</td>
                 </tr>
               </tbody>
             </table>

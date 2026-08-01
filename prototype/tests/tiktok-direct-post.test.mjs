@@ -5,18 +5,40 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-const SCREENSHOTS = ["01-connect", "02-confirm-dialog", "03-disclosure", "04-analytics"];
+const SCREENSHOTS = ["01-connect", "02-confirm-dialog", "03-disclosure", "04-drafts"];
 
 // TikTok 앱 심사 재제출 요건을 코드가 계속 만족하는지 지킨다.
 //   docs/tiktok_app_review_resubmit_20260801.md
 //   docs/tiktok_direct_post_modal_spec_20260801.md  ← 모달·계약의 최종 명세
 // 여기 깨지면 제출한 Review Description 과 실제 동작이 어긋나 즉시 반려된다.
 
-test("OAuth 요청 스코프는 3개뿐이고 video.upload 를 요청하지 않는다", () => {
+test("OAuth 요청 스코프는 3개이고 video.list 는 요청하지 않는다", () => {
   const src = read("prototype/functions/api/sns/connect/tiktok.ts");
-  assert.match(src, /scope: "user\.info\.basic,video\.publish,video\.list"/);
-  // 주석에는 남아 있어도 되지만 실제 scope 문자열에는 절대 들어가면 안 된다
-  assert.doesNotMatch(src, /scope: "[^"]*video\.upload/);
+  // 이 앱에 Display API 제품이 없어 video.list 는 토큰에 실리지 않는다 → 요청하지 않는다.
+  assert.match(src, /scope: "user\.info\.basic,video\.publish,video\.upload"/);
+  assert.doesNotMatch(src, /scope: "[^"]*video\.list/);
+});
+
+test("video.upload 를 요청하는 한 초안함(inbox) 흐름이 존재해야 한다", () => {
+  // 시연 못 하는 스코프는 그 자체가 반려 사유다.
+  const scope = read("prototype/functions/api/sns/connect/tiktok.ts");
+  if (!/scope: "[^"]*video\.upload/.test(scope)) return;
+  const inbox = read("prototype/functions/api/sns/tiktok/inbox.ts");
+  assert.match(inbox, /export const onRequestPost/);
+  assert.match(inbox, /post\/publish\/inbox\/video\/init/);
+  assert.match(inbox, /source: "FILE_UPLOAD"/);
+  // 게시가 아니므로 요청 바디에 post_info(캡션·공개범위·고지)를 싣지 않는다
+  assert.doesNotMatch(inbox, /post_info:/);
+  // UI 진입점이 실제로 있어야 데모가 가능하다
+  const ui = read("prototype/js/ui/brand-studio.js");
+  assert.match(ui, /brand-tiktok-inbox/);
+  assert.match(ui, /\/api\/sns\/tiktok\/inbox/);
+});
+
+test("user.info.basic 은 username 을 요청하지 않는다 (profile 스코프 소관)", () => {
+  const src = read("prototype/functions/auth/tiktok/callback.ts");
+  assert.match(src, /fields=open_id,display_name,avatar_url/);
+  assert.doesNotMatch(src, /fields=[^"]*username/);
 });
 
 test("publish 는 tiktok 설정 오브젝트를 요청 바디에서 받는다", () => {
@@ -200,10 +222,12 @@ test("공개 페이지 2장이 존재하고 서로 링크된다", () => {
   for (const shot of SCREENSHOTS) {
     assert.match(tiktok, new RegExp(`images/tiktok/${shot}\\.png`), `${shot} 스크린샷 자리 필요`);
   }
-  // 스코프 3개 표
+  // 스코프 3개 표 — 코드가 실제로 요청하는 조합과 같아야 한다
   assert.match(tiktok, /user\.info\.basic/);
   assert.match(tiktok, /video\.publish/);
-  assert.match(tiktok, /video\.list/);
+  assert.match(tiktok, /video\.upload/);
+  // 요청하지 않는 스코프를 기능처럼 광고하면 안 된다
+  assert.doesNotMatch(tiktok, /<code>video\.list<\/code><br>/);
   // 모든 공개 페이지 푸터에 Terms / Privacy 가 직접 보여야 한다
   for (const src of [read("prototype/index.html"), read("prototype/terms.html"), read("prototype/privacy.html"), tiktok, support]) {
     assert.match(src, /href="tiktok"/);
@@ -261,9 +285,11 @@ test("개인정보처리방침이 TikTok 을 '연동 중'으로 표기하고 수
   const src = read("prototype/privacy.html");
   // 더 이상 '연동 예정' 목록에 TikTok 이 없어야 한다
   assert.doesNotMatch(src, /<span class="status-badge soon">연동 예정<\/span>\s*<\/td>\s*<td><strong>TikTok<\/strong>/);
-  assert.match(src, /open_id, display_name, username/);
-  assert.match(src, /영상 메트릭\(조회수·좋아요·댓글·공유\)/);
-  assert.match(src, /video metrics \(views, likes, comments, shares\)/);
+
+  // video.list 를 요청하지 않으므로 영상 메트릭은 수집 항목에서 빠져야 한다
+  assert.doesNotMatch(src, /영상 메트릭/);
+  assert.doesNotMatch(src, /video metrics/);
+  assert.match(src, /open_id, display_name, avatar_url/);
 });
 
 test("랜딩이 ?lang=en 진입을 즉시 반영한다", () => {
