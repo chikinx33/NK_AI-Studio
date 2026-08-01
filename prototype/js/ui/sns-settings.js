@@ -381,12 +381,24 @@
   }
 
   function snsConfirm(message) {
+    var msg = String(message == null ? '' : message);
     try {
       if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
-        return Promise.resolve(NK.ui.dialog.confirm(String(message == null ? '' : message), { title: t('disconnect') || 'Confirm' }));
+        return Promise.resolve(NK.ui.dialog.confirm(msg, { title: t('disconnect') || 'Confirm' }))
+          .then(function (ok) {
+            if (typeof ok === 'boolean') return ok;
+            // 인앱 다이얼로그가 boolean 을 돌려주지 않은 경우(예: confirm 요청이 alert
+            // 모드로 그려짐, 오래된 core.js 캐시). 그대로 두면 사용자가 확인을 눌러도
+            // 아무 일도 일어나지 않으므로, 네이티브로 한 번 더 물어 진행을 막지 않는다.
+            console.error('[SNS] 인앱 confirm 이 boolean 을 반환하지 않음:', ok, '→ 네이티브 confirm 폴백');
+            return confirm(msg);
+          });
       }
-    } catch (_) {}
-    return Promise.resolve(confirm(String(message == null ? '' : message)));
+      console.warn('[SNS] NK.ui.dialog.confirm 을 찾지 못함 → 네이티브 confirm 사용');
+    } catch (e) {
+      console.error('[SNS] confirm 처리 중 오류 → 네이티브 confirm 폴백:', e);
+    }
+    return Promise.resolve(confirm(msg));
   }
 
   function onAction(e) {
@@ -420,6 +432,8 @@
       }
       if (s.connected) {
         snsConfirm(T[_lang()].disconnectConfirm(pid)).then(function (ok) {
+          // 눌렀는데 아무 반응이 없을 때 최소한 콘솔에 흔적이 남아야 한다.
+          console.log('[SNS] 연결 해제 확인 결과:', pid, ok);
           if (!ok) return;
           // 롤백용 스냅샷. 저장이 실패하면 서버는 여전히 '연결됨'이므로
           // 화면만 '연결 안됨'으로 남겨두면 상태가 갈라진다.
@@ -428,7 +442,9 @@
           _settings.sns[pid] = { connected: false, enabled: false };
           _writeCache(_settings.sns);
           render();   // 잠긴 상태로 즉시 반영
+          console.log('[SNS] 연결 해제 저장 요청:', pid);
           return saveSettings().then(function (res) {
+            console.log('[SNS] 연결 해제 저장 결과:', pid, res);
             if (!res || !res.ok) {
               _settings.sns[pid] = prev;
               _writeCache(_settings.sns);

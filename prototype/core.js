@@ -213,7 +213,12 @@
         refs.input.style.display = useInput ? 'block' : 'none';
         refs.input.value = useInput ? String(opts.defaultValue || '') : '';
       }
-      if (refs.cancel) refs.cancel.style.display = (mode === 'confirm' || mode === 'prompt') ? 'inline-flex' : 'none';
+      var wantsCancel = (mode === 'confirm' || mode === 'prompt');
+      if (refs.cancel) {
+        refs.cancel.style.display = wantsCancel ? 'inline-flex' : 'none';
+        // display 를 덮는 CSS 가 끼어들어도 취소 버튼이 사라지지 않게 이중으로 건다.
+        refs.cancel.hidden = !wantsCancel;
+      }
       if (refs.copy) refs.copy.style.display = opts.copy ? 'inline-flex' : 'none';
       if (refs.ok) refs.ok.textContent = String(opts.okText || '확인');
       if (refs.cancel) refs.cancel.textContent = String(opts.cancelText || '취소');
@@ -221,6 +226,10 @@
       // 단순 알림(버튼 1개, 복사/취소 없음)은 좁게·가운데·큰 버튼으로 표시
       var simple = mode === 'alert' && !opts.copy;
       refs.root.classList.toggle('is-simple', simple);
+
+      // 실제로 그린 모드를 DOM 에 남긴다. closeCurrent 가 이 값과 큐의 모드를 대조해
+      // "confirm 을 요청했는데 alert 으로 그려진" 어긋남을 잡아낸다.
+      refs.root.dataset.mode = mode;
 
       refs.root.classList.add('is-open');
       refs.root.setAttribute('aria-hidden', 'false');
@@ -242,6 +251,15 @@
       refs.root.setAttribute('aria-hidden', 'true');
 
       var mode = current.mode || 'alert';
+      // 그려진 모드와 큐의 모드가 다르면 사용자가 본 버튼과 반환값이 어긋난다.
+      // (confirm 을 alert 으로 그리면 취소 버튼이 없고 resolve() 가 undefined 라
+      //  호출부의 "확인했는가" 판정이 조용히 실패한다)
+      var renderedMode = refs.root && refs.root.dataset ? refs.root.dataset.mode : '';
+      if (renderedMode && renderedMode !== mode) {
+        console.error('[dialog] 렌더 모드와 요청 모드가 다르다 — 요청:', mode, '렌더:', renderedMode,
+          '| 요청 모드 기준으로 반환한다');
+      }
+      // 반환은 항상 "호출부가 요청한 모드" 기준이다.
       if (mode === 'confirm') current.resolve(!!ok);
       else if (mode === 'prompt') current.resolve(ok ? String((refs.input && refs.input.value) || '') : null);
       else current.resolve();
@@ -284,7 +302,13 @@
       return enqueue('alert', message, opts || {});
     };
     dialog.confirm = function (message, opts) {
-      return enqueue('confirm', message, opts || {});
+      // confirm 은 반드시 boolean 으로 끝나야 한다. undefined 가 새어나가면 호출부의
+      // if (!ok) return 이 "취소"로 오인해 동작이 조용히 스킵된다.
+      return enqueue('confirm', message, opts || {}).then(function (v) {
+        if (typeof v === 'boolean') return v;
+        console.error('[dialog] confirm 이 boolean 이 아닌 값으로 닫혔다:', v, '→ false 로 처리');
+        return false;
+      });
     };
     dialog.prompt = function (message, opts) {
       return enqueue('prompt', message, opts || {});

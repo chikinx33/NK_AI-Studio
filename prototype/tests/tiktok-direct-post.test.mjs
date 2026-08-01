@@ -341,16 +341,17 @@ test("sns-settings 는 네이티브 alert/confirm 을 직접 호출하지 않는
   assert.match(src, /function snsAlert/);
   assert.match(src, /function snsConfirm/);
   assert.match(src, /NK\.ui\.dialog\.confirm/);
-  // 폴백을 제외하면 호출부에 네이티브 호출이 남아 있으면 안 된다
-  const callSites = src
+  // 네이티브 호출은 snsAlert / snsConfirm 래퍼 안의 폴백에만 허용한다.
+  // 래퍼 본문을 통째로 들어내고 나머지에 네이티브 호출이 남았는지 본다.
+  const withoutWrappers = src
+    .replace(/function snsAlert\(message\)[\s\S]*?\n  \}/, "")
+    .replace(/function snsConfirm\(message\)[\s\S]*?\n  \}/, "");
+  const strays = withoutWrappers
     .split("\n")
-    .filter((l) => /(^|[^.\w])(alert|confirm)\(/.test(l) && !/function sns(Alert|Confirm)/.test(l));
-  for (const line of callSites) {
-    assert.ok(
-      /snsAlert|snsConfirm|NK\.ui\.dialog|return Promise\.resolve\(confirm|^\s*alert\(String/.test(line),
-      `네이티브 호출이 남아 있다: ${line.trim()}`
-    );
-  }
+    .filter((l) => /(^|[^.\w])(alert|confirm)\(/.test(l))
+    .filter((l) => !/snsAlert|snsConfirm|NK\.ui\.dialog|disconnectConfirm/.test(l))
+    .map((l) => l.trim());
+  assert.deepEqual(strays, [], "래퍼 밖에 네이티브 alert/confirm 호출이 남아 있다");
 });
 
 test("프로덕션 키 전환 절차가 문서로 남아 있다", () => {
