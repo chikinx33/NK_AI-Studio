@@ -48,6 +48,28 @@ test("가운데 큰 버튼 스타일(is-simple)은 alert 에만 붙는다", () =
   assert.match(css, /\.nk-dialog-root\.is-simple #nk-dialog-ok \{/);
 });
 
+test("큐의 머리를 참조하지 않는다 (낡은 모달이 다시 그려지는 것 차단)", () => {
+  const core = read("prototype/core.js");
+  // queue[0] 을 렌더하고 닫을 때 다시 queue[0] 을 읽으면, 머리를 한 번이라도 못
+  // 치웠을 때 이후 모든 모달이 그 낡은 항목을 계속 다시 그린다.
+  // (연결 성공 알림 자리에 지난 '해제 확인창'이 뜨는 증상)
+  assert.doesNotMatch(core, /queue\[0\]/);
+  // 표시 중인 항목을 별도로 들고 있어야 한다
+  assert.match(core, /var showing = null;/);
+  // 큐에서 즉시 빼낸다
+  assert.match(core, /var item = queue\.shift\(\);\s*\n\s*showing = item;/);
+  // 닫을 때는 showing 을 쓰고 비운다
+  assert.match(core, /var item = showing;\s*\n\s*showing = null;/);
+});
+
+test("표시 중인 항목 없이 close 가 불려도 큐가 멈추지 않는다", () => {
+  const core = read("prototype/core.js");
+  assert.match(core, /if \(!showing\) \{/);
+  assert.match(core, /표시 중인 항목 없이 close 가 호출됐다/);
+  // busy 를 풀고 다시 굴려야 이후 모달이 막히지 않는다
+  assert.match(core, /if \(busy\) \{ busy = false; flushQueue\(\); \}/);
+});
+
 test("렌더된 모드와 요청 모드가 어긋나면 감지하고, 반환은 요청 모드를 따른다", () => {
   const core = read("prototype/core.js");
   // 그린 모드를 DOM 에 남긴다
@@ -56,7 +78,7 @@ test("렌더된 모드와 요청 모드가 어긋나면 감지하고, 반환은 
   assert.match(core, /renderedMode && renderedMode !== mode/);
   assert.match(core, /렌더 모드와 요청 모드가 다르다/);
   // 반환 기준은 큐에 들어간(=호출부가 요청한) 모드다
-  assert.match(core, /if \(mode === 'confirm'\) current\.resolve\(!!ok\);/);
+  assert.match(core, /if \(mode === 'confirm'\) item\.resolve\(!!ok\);/);
 });
 
 test("sns-settings 는 confirm 이 boolean 을 못 주면 네이티브로 폴백한다", () => {

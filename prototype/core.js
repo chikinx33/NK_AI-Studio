@@ -106,6 +106,9 @@
     var mounted = false;
     var busy = false;
     var queue = [];
+    // 지금 화면에 떠 있는 항목. 큐의 머리를 참조하지 않는다 — 참조하면 머리가
+    // 한 번이라도 남았을 때 다음 모달들이 낡은 내용을 그대로 다시 그리게 된다.
+    var showing = null;
     var refs = null;
     var mountWaitBound = false;
 
@@ -267,10 +270,18 @@
     }
 
     function closeCurrent(ok) {
-      if (!busy || !refs) return;
-      var current = queue.length ? queue[0] : null;
-      if (!current) return;
-      queue.shift();
+      if (!refs) return;
+      if (!showing) {
+        // 떠 있는 항목이 없는데 닫기가 불렸다 = 상태가 어긋난 것.
+        // 화면만 정리하고 큐를 다시 굴린다(멈춘 채로 두면 이후 모달이 전부 막힌다).
+        console.warn('[dialog] 표시 중인 항목 없이 close 가 호출됐다 — 상태를 복구한다');
+        refs.root.classList.remove('is-open');
+        refs.root.setAttribute('aria-hidden', 'true');
+        if (busy) { busy = false; flushQueue(); }
+        return;
+      }
+      var item = showing;
+      showing = null;
       refs.root.classList.remove('is-open');
       try {
         var active = document.activeElement;
@@ -279,7 +290,7 @@
       } catch (_) {}
       refs.root.setAttribute('aria-hidden', 'true');
 
-      var mode = current.mode || 'alert';
+      var mode = item.mode || 'alert';
       // 그려진 모드와 큐의 모드가 다르면 사용자가 본 버튼과 반환값이 어긋난다.
       // (confirm 을 alert 으로 그리면 취소 버튼이 없고 resolve() 가 undefined 라
       //  호출부의 "확인했는가" 판정이 조용히 실패한다)
@@ -289,9 +300,9 @@
           '| 요청 모드 기준으로 반환한다');
       }
       // 반환은 항상 "호출부가 요청한 모드" 기준이다.
-      if (mode === 'confirm') current.resolve(!!ok);
-      else if (mode === 'prompt') current.resolve(ok ? String((refs.input && refs.input.value) || '') : null);
-      else current.resolve();
+      if (mode === 'confirm') item.resolve(!!ok);
+      else if (mode === 'prompt') item.resolve(ok ? String((refs.input && refs.input.value) || '') : null);
+      else item.resolve();
 
       busy = false;
       flushQueue();
@@ -312,12 +323,16 @@
         return;
       }
       busy = true;
-      var item = queue[0];
+      // 큐에서 바로 빼낸다. 머리를 남겨두면 어떤 이유로든 한 번 못 치웠을 때
+      // 이후의 모든 모달이 그 낡은 항목을 계속 다시 그린다
+      // (연결 성공 알림 자리에 지난 해제 확인창이 뜨는 식).
+      var item = queue.shift();
+      showing = item;
       if (renderCurrent(item) === false) {
         // 확인창을 신뢰할 수 없다 → 즉시 닫고 네이티브로 물어본다.
+        showing = null;
         refs.root.classList.remove('is-open');
         refs.root.setAttribute('aria-hidden', 'true');
-        queue.shift();
         busy = false;
         var msg = toText(item.message || '');
         var answer = false;
