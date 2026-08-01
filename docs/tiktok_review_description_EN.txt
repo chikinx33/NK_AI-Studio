@@ -82,9 +82,17 @@ FLOW
      respectively, and sees the corresponding "Promotional content" / "Paid
      partnership" label notice plus links to TikTok's Branded Content Policy and
      Music Usage Confirmation.
-3. Only when the user presses the confirm button do we call
-   /v2/post/publish/video/init/ (for video) or /v2/post/publish/content/init/ (for
-   photo posts) using PULL_FROM_URL, passing exactly the values the user selected.
+3. Only when the user presses the confirm button do we call the publish endpoint,
+   passing exactly the values the user selected. Before doing so our server queries
+   creator_info once more and re-validates the submitted values against it, so that a
+   request cannot ask for a privacy level the account does not allow, and so that any
+   interaction the creator has disabled in their TikTok account settings is forced off
+   regardless of what was submitted.
+   - Video: /v2/post/publish/video/init/ with source FILE_UPLOAD. Our server reads the
+     user's rendered file from their own private storage and uploads the bytes directly
+     to the upload URL TikTok returns. The file is never made publicly accessible.
+   - Photo: /v2/post/publish/content/init/ with post_mode DIRECT_POST, media_type PHOTO
+     and source PULL_FROM_URL, because the photo endpoint requires a fetchable URL.
 4. We then poll /v2/post/publish/status/fetch/ to display posting progress and, on
    completion, a link to the published post.
 
@@ -93,10 +101,11 @@ The media is content the user created inside NK AI Studio and that is stored in 
 user's own private storage. We never post content the user has not seen and approved.
 
 MEDIA DELIVERY
-Because PULL_FROM_URL requires a verified domain, media is served through
-https://nkstudio.org/api/sns/tiktok-media, a proxy on our own verified domain that
-streams the user's file only when accompanied by a short-lived HMAC-SHA256 signed
-token generated at publish time.
+Videos are transferred with FILE_UPLOAD, so the file is sent from our server straight
+to TikTok and is never exposed on a public URL. Photo posts must use PULL_FROM_URL, so
+they are served through https://nkstudio.org/api/sns/tiktok-media, a proxy on our own
+verified domain that streams the user's file only when accompanied by a short-lived
+HMAC-SHA256 signed token generated at publish time.
 
 UNAUDITED BEHAVIOUR
 Until this app is approved, our server forces privacy_level to SELF_ONLY regardless
@@ -198,13 +207,17 @@ pre-selected value, Comment/Duet/Stitch toggles that respect the creator's disab
 settings, and a commercial content disclosure offering "Your brand"
 (brand_organic_toggle) and "Branded content" (brand_content_toggle) with the matching
 Promotional content / Paid partnership notice and links to TikTok's Branded Content
-Policy and Music Usage Confirmation. Only after the user confirms do we call
-/v2/post/publish/video/init/ or /v2/post/publish/content/init/ with PULL_FROM_URL, then
-poll /v2/post/publish/status/fetch/ for progress. Media is served from our own verified
-domain via https://nkstudio.org/api/sns/tiktok-media, gated by a short-lived HMAC signed
-token. Until this app is approved we force privacy_level to SELF_ONLY server-side so
-nothing can become public before review. We store the publish_id and the resulting post
-id/URL only.
+Policy and Music Usage Confirmation. Only after the user confirms do we publish, and our
+server first re-queries creator_info and re-validates the submitted values against it,
+so a request cannot use a privacy level the account disallows and any interaction the
+creator has turned off is forced off. Videos go to /v2/post/publish/video/init/ with
+source FILE_UPLOAD, uploaded server-to-server so the file is never publicly exposed.
+Photos go to /v2/post/publish/content/init/ with post_mode DIRECT_POST, media_type PHOTO
+and source PULL_FROM_URL, served from our own verified domain via
+https://nkstudio.org/api/sns/tiktok-media and gated by a short-lived HMAC signed token.
+We then poll /v2/post/publish/status/fetch/ for progress. Until this app is approved we
+force privacy_level to SELF_ONLY server-side so nothing can become public before review.
+We store the publish_id and the resulting post id/URL only.
 
 3) video.list (Display API). Triggered on the Analytics dashboard. Via /v2/video/list/
 we read id, title, video_description, duration, cover_image_url, embed_link,

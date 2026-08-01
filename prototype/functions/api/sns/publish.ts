@@ -367,8 +367,15 @@ async function publishTikTokVideo(opts: {
   if (!headRes.ok) throw new Error(`영상 메타데이터 조회 실패: ${headRes.status}`);
   const videoSize = parseInt(headRes.headers.get("content-length") || "0");
   if (!videoSize) throw new Error("영상 파일 크기를 확인할 수 없습니다");
-  if (videoSize > 100 * 1024 * 1024) {
-    throw new Error(`영상이 너무 큽니다 (${Math.round(videoSize / 1024 / 1024)}MB, 최대 100MB)`);
+  // 우리는 total_chunk_count:1 로 통짜 업로드한다. TikTok 의 단일 청크 상한은 64MB 이므로
+  // 그 이상은 TikTok 이 init 단계에서 거부한다. 분할 업로드를 붙이기 전까지는 여기서 막아
+  // "왜 실패했는지 모르는 실패" 대신 원인이 분명한 메시지를 준다.
+  const TIKTOK_MAX_SINGLE_CHUNK = 64 * 1024 * 1024;
+  if (videoSize > TIKTOK_MAX_SINGLE_CHUNK) {
+    throw new Error(
+      `영상이 너무 큽니다 (${Math.round(videoSize / 1024 / 1024)}MB). ` +
+      `TikTok 단일 업로드 상한은 64MB 입니다. 렌더 화질을 낮추거나 길이를 줄여 주세요.`
+    );
   }
   console.log(`[tiktok] 영상 크기: ${Math.round(videoSize / 1024)}KB`);
 

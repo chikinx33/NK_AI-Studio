@@ -5,6 +5,8 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
+const SCREENSHOTS = ["01-connect", "02-confirm-dialog", "03-disclosure", "04-analytics"];
+
 // TikTok 앱 심사 재제출 요건을 코드가 계속 만족하는지 지킨다.
 //   docs/tiktok_app_review_resubmit_20260801.md
 //   docs/tiktok_direct_post_modal_spec_20260801.md  ← 모달·계약의 최종 명세
@@ -194,8 +196,8 @@ test("공개 페이지 2장이 존재하고 서로 링크된다", () => {
   // 영어 우선 — 심사관이 읽는 페이지
   assert.match(tiktok, /<html lang="en"/);
   assert.match(support, /<html lang="en"/);
-  // 4단계 흐름과 스크린샷
-  for (const shot of ["01-connect", "02-create", "03-review-approve", "04-publish-measure"]) {
+  // 4단계 흐름과 스크린샷 (docs/tiktok_screenshot_spec_20260801.md)
+  for (const shot of SCREENSHOTS) {
     assert.match(tiktok, new RegExp(`images/tiktok/${shot}\\.png`), `${shot} 스크린샷 자리 필요`);
   }
   // 스코프 3개 표
@@ -209,6 +211,43 @@ test("공개 페이지 2장이 존재하고 서로 링크된다", () => {
     assert.match(src, /href="terms"/);
     assert.match(src, /href="privacy"/);
   }
+});
+
+test("스크린샷은 캡션·alt 와 함께 배선되고, 넣으면 500KB 이하여야 한다", () => {
+  const tiktok = read("prototype/tiktok.html");
+  // 이미지만 있고 설명이 없으면 심사관이 무엇을 보라는 건지 알 수 없다.
+  for (const shot of SCREENSHOTS) {
+    const figure = new RegExp(
+      `<img src="images/tiktok/${shot}\\.png" alt="[^"]{20,}"[^>]*>\\s*<figcaption>[^<]{20,}</figcaption>`
+    );
+    assert.match(tiktok, figure, `${shot} 은 alt + figcaption 이 함께 있어야 한다`);
+  }
+  // 파일이 아직 없으면 통과시키되, 넣었다면 페이지 로딩 지연을 막기 위해 상한을 지킨다.
+  for (const shot of SCREENSHOTS) {
+    const file = path.join(process.cwd(), "prototype/images/tiktok", `${shot}.png`);
+    if (!fs.existsSync(file)) continue;
+    const kb = Math.round(fs.statSync(file).size / 1024);
+    assert.ok(kb <= 500, `${shot}.png 가 ${kb}KB — 500KB 이하로 압축할 것`);
+  }
+});
+
+test("영상 업로드 가드가 TikTok 단일 청크 상한(64MB)을 넘지 않는다", () => {
+  const src = read("prototype/functions/api/sns/publish.ts");
+  // total_chunk_count:1 로 통짜 전송하므로 64MB 초과는 TikTok 이 거부한다.
+  assert.match(src, /TIKTOK_MAX_SINGLE_CHUNK = 64 \* 1024 \* 1024/);
+  assert.match(src, /videoSize > TIKTOK_MAX_SINGLE_CHUNK/);
+  assert.doesNotMatch(src, /videoSize > 100 \* 1024 \* 1024/);
+});
+
+test("/tiktok 페이지의 전송 방식 서술이 제출 원문·코드와 일치한다", () => {
+  const page = read("prototype/tiktok.html");
+  const submission = read("docs/tiktok_review_description_EN.txt");
+  // 영상 FILE_UPLOAD / 사진만 PULL_FROM_URL — 셋이 어긋나면 그 자체가 반려 사유다.
+  assert.match(page, /videos are sent with <code>FILE_UPLOAD<\/code>/);
+  assert.match(page, /Photo posts must use <code>PULL_FROM_URL<\/code>/);
+  assert.match(page, /영상은 <code>FILE_UPLOAD<\/code>로 보냅니다/);
+  assert.match(submission, /Video: \/v2\/post\/publish\/video\/init\/ with source FILE_UPLOAD/);
+  assert.match(read("prototype/functions/api/sns/publish.ts"), /source: "FILE_UPLOAD"/);
 });
 
 test("sitemap 에 새 공개 페이지가 등록돼 있다", () => {

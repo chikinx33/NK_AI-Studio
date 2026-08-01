@@ -1,19 +1,35 @@
 # /tiktok 페이지 스크린샷
 
-`prototype/tiktok.html`(→ https://nkstudio.org/tiktok)의 4단계 흐름에 들어가는 실제 UI 스크린샷.
-TikTok 심사관이 읽는 페이지이므로 **4장 모두 필수**다. 없으면 해당 자리는 캡션만 남고
-(깨진 이미지 아이콘은 뜨지 않게 처리돼 있음) 페이지의 설득력이 절반으로 떨어진다.
+`prototype/tiktok.html`(→ https://nkstudio.org/tiktok) §2 "How the TikTok integration works"에
+배선된 실제 UI 스크린샷. 배선·캡션은 이미 들어가 있고, **아래 4개 파일만 넣으면 된다.**
+파일이 없으면 깨진 이미지 대신 캡션만 남지만, 그 상태로 재제출하면 안 된다 —
+심사관이 우리 주장을 눈으로 대조하는 유일한 수단이다.
 
-| 파일명 | 담을 화면 |
-|---|---|
-| `01-connect.png` | 설정 &gt; SNS 연결 — TikTok 계정이 연결되어 계정 이름이 표시된 상태 |
-| `02-create.png` | 에디터에서 숏폼 영상·캡션을 생성 중인 화면 |
-| `03-review-approve.png` | Direct Post 확인 모달 — 크리에이터 닉네임, 미디어·캡션 프리뷰, 공개 범위 라디오, 댓글/듀엣/스티치 토글, 상업적 콘텐츠 고지가 모두 보이게 |
-| `04-publish-measure.png` | 애널리틱스 대시보드 — TikTok 조회수·좋아요·댓글·공유가 채워진 상태 |
+명세 원문: `docs/tiktok_screenshot_spec_20260801.md`
 
-촬영 규칙:
+| 파일명 | 배치 | 프레임 안에 반드시 있어야 하는 것 |
+|---|---|---|
+| `01-connect.png` | 1. Connect | TikTok 카드 "Connected" 상태, 연결된 display name + `@username`, Disconnect 버튼 |
+| `02-confirm-dialog.png` | 3. Review & Approve | 확인 모달 **초기 상태** — 아바타+닉네임+`@username`, 미디어 썸네일+캡션, 공개범위 **전부 미선택**, Comment/Duet/Stitch **전부 해제**, `Post to TikTok` **비활성(회색)**, 하단 `Music Usage Confirmation` 동의문 |
+| `03-disclosure.png` | 3. Review & Approve | `Disclose video content` ON + `Branded content` 체크, `Paid partnership` 배너, 동의문이 `Branded Content Policy and Music Usage Confirmation` 으로 바뀐 것, (가능하면) `Only you` 비활성 |
+| `04-analytics.png` | 4. Publish & Measure | 조회수·좋아요·댓글·공유가 **0이 아닌 실제 값**, 썸네일, TikTok 원본 링크 |
 
-- **주소창의 도메인이 `nkstudio.org` 로 보여야 한다.** localhost·pages.dev 화면은 쓰지 말 것
-  (심사관이 제출 URL과 화면이 다른 것을 반려 사유로 잡는다).
-- 가로 1400~1600px 권장, PNG. 개인정보(실명 이메일 등)는 가리거나 테스트 계정으로 촬영.
-- 03 은 데모 영상에서도 그대로 나와야 하는 핵심 화면이다. 모달 전체가 잘리지 않게 담을 것.
+> `02-confirm-dialog.png` 는 값을 다 채운 뒤에 찍으면 "사전 선택 없음 + 기본 전부 꺼짐 +
+> 미선택 시 게시 불가" 증거가 통째로 사라진다. **반드시 초기 상태로.**
+
+## 촬영 공통 규칙
+
+- **주소창에 `nkstudio.org` 도메인이 보이게** 찍는다. localhost·pages.dev 화면 금지
+  (심사관이 제출 URL과 화면이 같은 서비스인지 대조한다).
+- 데스크톱 1440×900 기준, 가로 1200px 이상으로 저장.
+- UI 언어를 **영어**로 전환한 상태에서 촬영.
+- PNG, **각 500KB 이하**로 압축. (`prototype/tests/tiktok-direct-post.test.mjs` 가
+  파일이 존재할 때 크기를 검사하므로, 넘으면 `npm test` 가 실패한다.)
+- 가릴 것: 실제 이메일, 결제 정보, 다른 SNS 계정의 실명.
+  **TikTok 계정명·아바타는 가리지 말 것** — 그게 증거다.
+
+## 2단계(Create)는 스크린샷 없음
+
+TikTok API 를 전혀 호출하지 않는 단계라 명세상 생략 가능으로 정리했다.
+에디터 화면을 넣고 싶으면 `tiktok.html` 의 2단계 `flow-step` 안에 `flow-shot` figure 를
+추가하면 되지만, 없어도 심사 요건에는 영향이 없다.

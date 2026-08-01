@@ -1,12 +1,15 @@
-# 엣지(전략) 수익 모니터링 — Polar 연동 설계서 (v2)
+# 엣지(전략) 수익 모니터링 — Polar 연동 설계서 (v3 · 구현 완료)
 
-> 2026-07-29 · 작성: 기획·설계 담당 / 구현·배포: **코드**(코딩 에이전트 + git 자동배포)
+> 2026-07-29 최초 작성 / 2026-07-30 실전 검증 반영 · 작성: 기획·설계 담당 / 구현·배포: **코드**(코딩 에이전트 + git 자동배포)
 > 대상: RAVIOK `edge`(엣지 💼 전략·비즈니스) 에이전트
 > 목표: **"엣지, 오늘 매출 어때?" → "오늘 MeMoment에서 $5.00(2건) 벌었어요. MRR은 $48로 전주 대비 +4%요."**
 >
-> **v2 변경(중요):** v1은 Polar 토큰을 Cloudflare 환경변수(`POLAR_OAT`)로 읽는 설계였다. → **사용자가 설정 UI에서 직접 등록하는 BYOK 방식으로 전면 교체**한다. 이유는 §2 참조. 이번 BYOK는 **Polar에만 적용**하고, 기존 도구(GEMINI·TAVILY 등)는 공용 env 방식을 그대로 둔다.
+> **상태: 1단계(도구+BYOK)·2단계(일일 브리핑) 구현·배포 완료(v3.1414). 대시보드 대조 검증 통과.**
 >
-> 이번 범위: **Polar만** (MS Store·Cloudflare·자체 백엔드는 §10 후속)
+> **v2 변경:** Polar 토큰을 Cloudflare 환경변수(`POLAR_OAT`)로 읽던 설계 → **사용자가 설정 UI에서 등록하는 BYOK로 전면 교체**(§2).
+> **v3 변경:** 실전에서 드러난 함정 7건을 **§9-B 실전 검증 로그**에 기록. **이 코드를 다시 만지는 사람은 §9-B를 먼저 읽을 것.** 아래 §4 코드 블록은 최초 설계안이며, 실제 구현은 §9-B의 수정이 반영된 상태다.
+>
+> 이번 범위: **Polar만** (MS Store·Cloudflare·자체 백엔드는 §11 후속)
 > 보고 방식: **대화형 + 매일 아침 자동 요약**
 > 상품 구분: **앱별 분리 보고** (MeMoment 외 상품 존재)
 
@@ -835,6 +838,79 @@ POST /api/agent/edge-brief   → { enabled?: boolean, hour_kst?: number }
 | 앱 매핑 미설정 | MeMoment 수치라고 단정 | `scopeSource`로 구분 — `name`이면 "상품명으로 매칭했어요", `none`이면 "조직 전체예요" 명시 |
 | 비교 구간 조회 실패 | 전체 실패 | 본 수치는 그대로 보고, 증감만 생략(`prevTotals: null`) |
 | 깨진 `app_products` JSON | 조용히 무시 | POST 시점에 파싱 검증 → 저장 거부 + 예시 안내 |
+
+---
+
+## 9-B. 실전 검증 로그 — 이 코드를 다시 만지기 전에 반드시 읽을 것
+
+2026-07-30, 실제 Polar 계정에 연결하고 대시보드와 대조하는 과정에서 드러난 것들이다. **§4의 설계 코드에는 이 중 상당수가 틀린 채로 들어 있었다.** 각 항목은 추측이 아니라 Polar 소스(`polarsource/polar`) 또는 대시보드 실측으로 확정했다.
+
+### 확정된 대조 기준 (2026-07-30 기준, MeMoment)
+Polar 대시보드 → Products → Memoment Pro (Monthly):
+`MRR $2.44` · `Active Subscriptions 1` · `Cumulative Revenue $2.38`
+구독 실체: `₩3,900/월(원화 결제)` · 주문 `₩3,900` **전액 환불(Refunded)** · `2026-08-18 해지 예정`
+관계식: `₩3,900 = 순액 ₩3,545 + 부가세 10% ₩355`, `₩3,545 ≈ $2.44`
+
+### 함정 1 — 통화. 모든 금액이 USD 센트가 아니다 ★가장 중요
+Polar는 **원화 결제를 지원**하고, MeMoment의 유일한 구독이 실제로 원화였다.
+`server/polar/kit/currency.py`에 명시적 목록이 있다:
+
+```python
+_ZERO_DECIMAL_CURRENCIES = {"bif","clp","djf","gnf","jpy","kmf","krw",
+                           "mga","pyg","rwf","vnd","vuv","xaf","xof","xpf"}
+def get_currency_decimal_factor(currency) -> int:
+    return 1 if currency.lower() in _ZERO_DECIMAL_CURRENCIES else 100
+```
+
+**KRW·JPY 등은 factor 1이다.** ₩3,900은 `3900`으로 온다. 100으로 나누면 안 된다.
+→ 초기 구현이 무조건 `/100` + `"$"`를 붙여 **₩3,900을 "$39.00"으로, ₩3,545를 "$35.45"로** 표시했다.
+→ 앞서 "상품 가격이 두 개씩 찍힌다"고 본 것도 아카이브 가격이 아니라 **원화 가격의 오표시**였다.
+**규칙: `polarMoney`에 항상 해당 객체의 통화를 넘긴다.** `order.currency`, `subscription.currency`, `price.price_currency`. 원화 병기(`usd_krw`)는 **USD일 때만** 붙인다.
+
+### 함정 2 — `interval="hour"`로 조회하면 환율이 적용되지 않는다
+`server/polar/metrics/queries.py`:
+
+```python
+converted_amount = case(
+    (lower(Subscription.currency) == "usd", Subscription.net_amount),
+    else_=round(Subscription.net_amount * coalesce(bucketed_fx_rate, closest_global_fx_rate, 1)),
+)
+```
+
+환율 행이 없으면 **배수 1로 폴백**해 원화 순액이 USD 센트 자리에 그대로 들어온다.
+실측: 같은 구독 1건을 `period="7d"`(interval=day)로 보면 **$2.44**(대시보드 일치), `period="today"`(interval=hour)로 보면 **$35.45**. 비율 14.53 = USD/KRW 환율.
+→ `pickInterval`의 `hour` 분기를 제거하고 **최소 단위를 `day`로** 뒀다. 시간 단위로 봐야 할 실익이 없다.
+**Polar 데이터 문제가 아니라 조회 조건 문제다.** 대시보드가 같은 쿼리로 정상값을 낸다.
+
+### 함정 3 — `Order`에 `amount` 필드는 없다
+문서 페이지에는 "amount: Transaction total in cents"라고 적혀 있으나 **실제 OpenAPI 스키마에는 없다.**
+실제 필드: `subtotal_amount` · `discount_amount` · `net_amount` · `tax_amount` · `total_amount` · `refunded_amount` · `refunded_tax_amount`.
+→ `o.amount`를 읽던 초기 구현은 **모든 주문을 $0.00으로 표시**하고 있었다.
+**규칙: Polar 필드는 렌더된 문서 페이지가 아니라 `api.polar.sh/openapi.json`으로 확인한다.** 문서 페이지는 낡아 있다.
+
+### 함정 4 — 환불은 세금까지 합쳐야 전액이 된다
+전액 환불 판정에 `refunded_amount`만 보면 세금분이 빠져 "부분 환불"로 잘못 표시된다.
+`refunded_amount + refunded_tax_amount`를 `total_amount`와 비교해야 한다. 상태는 스스로 판단하지 말고 **`status`를 그대로 쓰고, 서버가 `statusLabel`을 만들어 내려보낸다**(모델이 상태를 추론하면 틀린다).
+
+### 함정 5 — `totals`는 지표마다 의미가 다르다 (설계서 최초 진단이 틀렸던 부분)
+`totals`가 기간 합계라고 가정했으나 아니다. Polar는 이미 스톡/플로우를 구분한다:
+- `cumulative_last`(마지막 period 값): `monthly_recurring_revenue`, `annual_recurring_revenue`, `active_subscriptions`, `churn_rate`
+- `cumulative_sum`(기간 합계): `revenue`, `orders`, `checkouts`
+→ MRR은 `totals`와 마지막 period 값이 **애초에 같은 숫자**다. "기준이 달라 비교가 안 된다"는 진단은 성립하지 않았다.
+
+### 함정 6 — `metrics`는 배열 파라미터다
+`metrics=a,b,c`처럼 콤마로 이어붙이면 Polar가 문자열 전체를 슬러그 1개로 읽어 **422 Invalid metric slugs**가 난다. 배열로 넘겨 `metrics=a&metrics=b`로 나가야 한다. `product_id`도 같은 배열 파라미터다.
+
+### 함정 7 — MRR과 실수령액이 동시에 다를 수 있다 (버그 아님)
+MRR은 **활성 구독 기준**이라 환불과 무관하게 잡힌다. 실수령은 주문 기준이다.
+현재 상태가 정확히 그렇다 — `MRR $2.44`(약정된 금액) + `실수령 ₩0`(유일 주문이 전액 환불). 구독이 아직 `active`(8/18 해지 예정)이기 때문이며 대시보드도 같은 값을 보인다.
+**엣지가 이 둘을 모순으로 오해하지 않도록 표시를 구분한다.**
+
+### 이 과정에서 세운 작업 원칙
+- **Polar 대시보드가 정답이다.** 도구 값과 다르면 Polar가 아니라 우리 쪽을 먼저 의심한다. 도구에 자체 보정(환율 계산 등)을 넣지 않는다.
+- **필드·규약은 소스나 OpenAPI 스키마로 확정한다.** 문서 페이지·요약·추측으로 고치지 않는다. 100배 오차가 나는 영역이다.
+- **증상을 못 고치는 걸 알면서 표시만 바꾸지 않는다.** 원인 특정이 먼저다.
+- 테스트 픽스처는 실제 스키마를 따른다. 없는 필드를 지어내면 테스트가 버그를 통과시킨다(함정 3이 그렇게 숨어 있었다).
 
 ---
 
