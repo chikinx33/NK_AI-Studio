@@ -1047,6 +1047,12 @@
             if (!normalized.lastUsedAt && existing.lastUsedAt) {
                 normalized.lastUsedAt = existing.lastUsedAt;
             }
+            if (!normalized.modifiedAt && existing.modifiedAt) {
+                normalized.modifiedAt = existing.modifiedAt;
+            }
+            if (!normalized.savedAt && existing.savedAt) {
+                normalized.savedAt = existing.savedAt;
+            }
             if (!normalized.createdAt && existing.createdAt) {
                 normalized.createdAt = existing.createdAt;
             }
@@ -1098,6 +1104,25 @@
         } catch (_) {
             return null;
         }
+    };
+    // 저장이 잦은 화면(씬 편집 자동저장 등)에서 매 호출마다 전체 draft 목록을 다시 쓰지
+    // 않도록 프로젝트별 최근 stamp 시각을 기억한다.
+    var _modifiedStampAt = {};
+    /**
+     * '마지막으로 수정한 시각'(modifiedAt) 기록.
+     * 저장 성공 시점(api.projectSave)에 호출된다 — 대시보드 카드 정렬/하이라이트의 기준.
+     * markUsed(스테이지 '진입' 기록)와 달리 현재 프로젝트 선택을 바꾸지 않는다.
+     */
+    project.markModified = function (projectId) {
+        var targetId = String(projectId || '').trim();
+        if (!targetId) return null;
+        var now = Date.now();
+        if (now - (_modifiedStampAt[targetId] || 0) < 3000) return null;
+        _modifiedStampAt[targetId] = now;
+        var nowIso = new Date(now).toISOString();
+        return project.updateLocal(targetId, function (cur) {
+            return Object.assign({}, cur || {}, { modifiedAt: nowIso });
+        });
     };
     project.markUsed = function (projectId) {
         var targetId = String(projectId || '').trim();

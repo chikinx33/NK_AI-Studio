@@ -281,12 +281,45 @@
     return 'video';
   };
 
+  // 카드 정렬·하이라이트의 단일 기준 = '마지막으로 수정한 시각'.
+  //  1) modifiedAt : 저장(projectSave) 성공 시 찍는 로컬 수정 stamp — 가장 정확
+  //  2) savedAt    : 서버가 기록한 저장 시각(project/get 응답) — 다른 기기에서 수정한 경우
+  //  3) lastUsedAt : 스테이지 '진입' 시각(markUsed) — 구버전 데이터 폴백
+  //  4) id         : 생성 timestamp — 한 번도 저장한 적 없는 에피소드
+  const draftModifiedTs = (draft) => {
+    if (!draft) return 0;
+    const at = (value) => {
+      const ts = Date.parse(String(value || ''));
+      return Number.isFinite(ts) ? ts : 0;
+    };
+    const ts = Math.max(
+      at(draft.modifiedAt),
+      at(draft.savedAt),
+      at(draft.payload && draft.payload.savedAt),
+      at(draft.lastUsedAt)
+    );
+    if (ts) return ts;
+    const idTs = Number(draft.id || 0);
+    return Number.isFinite(idTs) ? idTs : 0;
+  };
+
+  // 최근 수정 내림차순 → 동률이면 생성(ID) 내림차순
+  const sortByRecency = (a, b) => {
+    const ta = draftModifiedTs(a);
+    const tb = draftModifiedTs(b);
+    if (ta !== tb) return tb - ta;
+    return Number((b && b.id) || 0) - Number((a && a.id) || 0);
+  };
+
+  // 브랜드(시리즈)의 대표 에피소드. 하이라이트 카드와 어긋나지 않도록 목록과 같은
+  // '마지막 수정' 기준을 쓴다.
   const getPrimaryDraftForSeries = (seriesId, drafts) => {
     const targetSeriesId = String(seriesId || '').trim();
     if (!targetSeriesId) return null;
     return (Array.isArray(drafts) ? drafts : [])
       .filter((draft) => String(draft?.seriesId || '').trim() === targetSeriesId)
-      .sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0))[0] || null;
+      .slice()
+      .sort(sortByRecency)[0] || null;
   };
 
   const syncBrandContextFromDraft = (draft) => {
@@ -505,6 +538,7 @@
         title: String((data && data.title) || s.title || s.projectId),
         payload: payload,
         scenes: [],
+        savedAt: String((data && data.savedAt) || ''),
       });
       if (!nd) return;
       nd.__shared = true;
@@ -737,10 +771,36 @@
         NK.store.saveDrafts(sortByOrder(nextMap));
         dashboard.renderDrafts();
 
+        // 로컬 캐시에 '마지막 수정 시각'이 없는(이 기능 이전에 저장된) 카드는 서버 savedAt
+        // 만 한 번 보충한다. 카드 정렬·하이라이트가 생성순으로 밀리는 것을 막기 위함이고,
+        // __savedAtChecked 로 표시해 매 진입마다 다시 훑지 않는다. 본문 데이터는 건드리지
+        // 않는다(동기화 안 된 로컬 편집을 서버 응답으로 덮어쓰지 않기 위해).
+        const backfillSavedAt = async () => {
+          if (!NK.api.projectGet) return;
+          const staleIds = Array.from(nextMap.values())
+            .filter((d) => d && !d.__pending && !d.modifiedAt && !d.savedAt && !d.__savedAtChecked)
+            .map((d) => String(d.id))
+            .slice(0, 100);
+          if (!staleIds.length) return;
+          await runTasksInBatches(staleIds, async (id) => {
+            let savedAt = '';
+            try {
+              const res = await NK.api.projectGet(id);
+              savedAt = String(res?.data?.savedAt || '');
+            } catch (_) { return; }
+            const cur = nextMap.get(String(id));
+            if (!cur) return;
+            nextMap.set(String(id), Object.assign({}, cur, { savedAt: savedAt, __savedAtChecked: true }));
+          }, 8);
+          persistFinal();
+          dashboard.renderDrafts();
+        };
+
         // 받아올 항목이 없으면(모두 캐시에 있음) 스피너 해제 후 종료.
         if (!missingIds.length || !NK.api.projectGet) {
           clearLoading();
           serverMerged = true;
+          await backfillSavedAt();
           return;
         }
 
@@ -767,6 +827,9 @@
               payload: data.payload || {},
               scenes: data.scenes || [],
               header: data.header || '',
+              // 서버가 기록한 저장 시각 — 다른 기기에서 수정한 경우의 '마지막 수정' 기준.
+              savedAt: String(data.savedAt || ''),
+              __savedAtChecked: true,
             }));
           } catch (_) {
             nextMap.set(String(id), normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' }));
@@ -778,6 +841,7 @@
         persistFinal();
         dashboard.renderDrafts();
         serverMerged = true;
+        await backfillSavedAt();
       } catch (err) {
         serverMerged = true;
         const msg = String(err && err.message ? err.message : '');
@@ -806,13 +870,7 @@
     }
     const selectedSeries = seriesList.find((s) => s.id === currentSeriesFilter) || null;
     const host = getHostShell();
-    // 최신순 정렬: lastUsedAt 내림차순 → ID(생성 timestamp) 내림차순 폴백
-    const sortByRecency = (a, b) => {
-      const ta = Date.parse(a && a.lastUsedAt || '') || 0;
-      const tb = Date.parse(b && b.lastUsedAt || '') || 0;
-      if (ta !== tb) return tb - ta;
-      return Number((b && b.id) || 0) - Number((a && a.id) || 0);
-    };
+    // 정렬 기준은 모듈 상단 sortByRecency(= 마지막 수정 시각) 하나로 통일한다.
     const filteredDrafts = (currentSeriesFilter === '__all__'
       ? drafts.slice()
       : drafts.filter((d) => d.seriesId === currentSeriesFilter)
@@ -889,8 +947,17 @@
     const showCreateButton = host === 'brand' || host === 'video';
 
     const _rawSelectedId = getSelectedProjectId();
-    const selectedProjectId = _rawSelectedId ||
-      (filteredDrafts.length > 0 ? String(filteredDrafts[0].id) : '');
+    // 브랜드 워크스페이스의 에피소드 목록에서 주황 테두리(.is-selected)는 '가장 마지막에
+    // 수정한 에피소드'를 가리킨다. 예전에는 currentProject(마지막으로 '선택/열었던' 것,
+    // localStorage 에 남은 값 포함)를 표시해서 오래된 에피소드가 계속 강조되곤 했다.
+    // filteredDrafts 는 sortByRecency(마지막 수정 내림차순) 정렬이므로 첫 카드가 기준.
+    // 다른 셸(비디오/이미지 등)은 그대로 '현재 선택된 프로젝트'를 표시한다 — 스테이지
+    // 진입 대상과 하이라이트가 일치해야 하기 때문.
+    const latestModifiedId = filteredDrafts.length > 0 ? String(filteredDrafts[0].id) : '';
+    const isBrandEpisodeList = host === 'brand' && currentSeriesFilter !== '__all__';
+    const selectedProjectId = isBrandEpisodeList
+      ? latestModifiedId
+      : (_rawSelectedId || latestModifiedId);
 
     // 브랜드 스튜디오에서 카테고리(시리즈)를 선택했을 때, 신규 버튼 왼쪽에 공유 버튼 표시.
     // 선택된 시리즈(프로젝트) 전체 = 모든 에피소드를 다른 계정에 공유한다.

@@ -1152,6 +1152,13 @@
         throw new Error((res.status + ' ' + (e(text) || 'save_error') + sizeNote));
       }
       api.projectListInvalidate();
+      // 저장 성공 = 실제 '수정' 시각. 모든 저장 경로가 이 함수를 지나므로 여기서 한 번만
+      // 찍어 대시보드 카드 정렬/하이라이트(마지막 수정 기준)의 단일 출처로 삼는다.
+      try {
+        if (NK.service && NK.service.project && NK.service.project.markModified) {
+          NK.service.project.markModified(body.projectId);
+        }
+      } catch (_) {}
       return j(text);
     } catch (err) {
       if (err && /timeout/i.test(String(err.message || ''))) {
