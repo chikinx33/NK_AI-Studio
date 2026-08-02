@@ -1135,6 +1135,22 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         }
       }
 
+      // 아무것도 발행하지 않았는데 성공으로 응답하면 안 된다. 화면은 publish_id 로
+      // 완료를 확인하는데, 그게 없으면 "확인할 수 없음"에 갇혀 원인을 영영 모른다.
+      if (!publishResults.length) {
+        const kinds = (body.mediaItems || []).map((i) => String(i.mediaType || "?")).join(",");
+        console.log(`[tiktok] 발행 대상이 없다: isCarousel=${isCarousel} mediaType=${body.mediaType || "?"} items=[${kinds}]`);
+        return send(
+          {
+            ok: false,
+            error: "게시할 미디어를 찾지 못했습니다. 자산 선택을 확인해 주세요.",
+            code: "tiktok_no_media_resolved",
+            detail: `isCarousel=${isCarousel} mediaType=${body.mediaType || "?"} items=[${kinds}]`,
+          },
+          400
+        );
+      }
+
       // publish_id 가 발급된 시점에 TikTok 은 발행을 수락한 상태이므로 항상 ok:true.
       // status 폴링 결과는 정보성: 전부 complete → published, 하나라도 failed →
       // status_reported_failed(이 세션에서 FAILED 여도 실제 게시 성공 사례 반복 확인됨),

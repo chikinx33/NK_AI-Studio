@@ -97,3 +97,20 @@ test("발행 실패를 사용자에게 알린다 (조용히 넘어가지 않는�
   assert.match(all, /_notPublished\.push/, "전체 배포가 실패를 모으지 않는다");
   assert.match(all, /alertNotPublished|alertPublishPending/, "전체 배포가 실패를 알리지 않는다");
 });
+
+test("발행 대상이 없으면 서버가 성공으로 응답하지 않는다", () => {
+  const pub = fs.readFileSync(path.join(process.cwd(), "prototype/functions/api/sns/publish.ts"), "utf8");
+  assert.match(pub, /if \(!publishResults\.length\)/, "아무것도 발행하지 않았는데 ok 로 응답한다");
+  assert.match(pub, /tiktok_no_media_resolved/);
+});
+
+test("publish_id 가 없으면 '처리 중'으로 두지 않는다", () => {
+  // 폴링할 대상이 없는데 처리 중으로 두면 영원히 '확인 불가'에 갇힌다.
+  const body = functionBody(modal, "renderDone");
+  assert.match(body, /!pubIds\.length && !String\(res\.postId \|\| ''\)\.trim\(\)/);
+  assert.match(body, /C\.noPublishId/);
+  for (const key of ["noPublishId"]) {
+    const hits = modal.split(`${key}:`).length - 1;
+    assert.equal(hits, 2, `${key} 가 ko/en 양쪽에 있지 않다 (발견 ${hits}개)`);
+  }
+});

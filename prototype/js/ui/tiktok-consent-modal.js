@@ -84,6 +84,7 @@
       posted: 'Your video has been posted to TikTok.',
       postFailed: 'TikTok did not publish this post.',
       postPending: 'TikTok has not finished processing yet. Check the TikTok app in a few minutes.',
+      noPublishId: 'TikTok returned no publish id, so nothing was submitted. Check the selected assets and try again.',
       noAudience: 'No audience option is available with the current settings. Turn off the commercial content disclosure to continue.',
       tooLong: function (n) { return 'This video is longer than your TikTok limit of ' + n + ' seconds.'; }
     },
@@ -121,6 +122,7 @@
       posted: 'TikTok에 게시했습니다.',
       postFailed: 'TikTok이 이 게시물을 발행하지 않았습니다.',
       postPending: 'TikTok이 아직 처리를 끝내지 않았습니다. 몇 분 뒤 TikTok 앱에서 확인해 주세요.',
+      noPublishId: 'TikTok이 발행 ID를 돌려주지 않아 아무것도 전송되지 않았습니다. 선택한 자산을 확인한 뒤 다시 시도해 주세요.',
       noAudience: '현재 설정으로는 선택할 수 있는 공개 범위가 없습니다. 상업적 콘텐츠 고지를 끄면 계속할 수 있습니다.',
       tooLong: function (n) { return '이 영상은 TikTok 제한 길이 ' + n + '초를 넘습니다.'; }
     }
@@ -718,6 +720,18 @@
       // 서버가 이미 발행 완료를 확인해 준 경우가 아니면, 실제 결과를 끝까지 확인한다.
       if (String(res.status || '') === 'published') {
         state2.phase = 'complete';
+        paintDone();
+        return;
+      }
+      /* publish_id 가 없으면 폴링할 대상 자체가 없다. 이걸 "처리 중"으로 두면
+       * 영원히 확인 불가에 갇힌다. 발행되지 않은 것으로 보고 원인을 드러낸다. */
+      var pubIds = (res.publishIds || []);
+      if (!pubIds.length && !String(res.postId || '').trim()) {
+        console.warn('[tiktok] publish_id 없이 응답이 왔다:', JSON.stringify(result));
+        state2.phase = 'failed';
+        state2.reason = (res.failReasons && res.failReasons.length)
+          ? res.failReasons.join(' / ')
+          : C.noPublishId;
         paintDone();
         return;
       }
