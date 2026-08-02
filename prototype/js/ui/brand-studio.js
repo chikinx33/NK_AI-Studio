@@ -968,6 +968,7 @@
       alertPublishSuccess: function (label) { return label + ' 배포 완료!'; },
       alertPublishProcessing: function (label) { return label + ' 배포 요청 완료 — 채널에서 처리 중입니다. 잠시 후 계정에서 게시물을 확인하세요.'; },
       alertNotPublished: function (label, reason) { return label + ' 게시되지 않았습니다.' + (reason ? '\n\n' + reason : '') + '\n\n배포 완료로 표시하지 않았습니다. 원인을 확인한 뒤 다시 시도해 주세요.'; },
+      reasonNoPublishId: 'TikTok이 발행 ID를 돌려주지 않아 아무것도 전송되지 않았습니다.',
       alertPublishPending: function (label) { return label + ' 결과를 확인하지 못했습니다.\n\n채널이 아직 처리 중일 수 있습니다. 계정에서 직접 확인해 주세요. 배포 완료로는 표시하지 않았습니다.'; },
       alertPublishAllDone: function (n) { return n + '개 채널 배포 요청을 완료했습니다.'; },
       alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
@@ -1033,6 +1034,7 @@
       alertPublishSuccess: function (label) { return label + ' published!'; },
       alertPublishProcessing: function (label) { return label + ' publish requested — the channel is still processing it. Check your account shortly.'; },
       alertNotPublished: function (label, reason) { return label + ' was not published.' + (reason ? '\n\n' + reason : '') + '\n\nIt has not been marked as published. Check the cause and try again.'; },
+      reasonNoPublishId: 'TikTok returned no publish id, so nothing was submitted.',
       alertPublishPending: function (label) { return label + ' result could not be confirmed.\n\nThe channel may still be processing it. Check your account directly. It has not been marked as published.'; },
       alertPublishAllDone: function (n) { return 'Publish requested for ' + n + ' channel' + (n === 1 ? '' : 's') + '.'; },
       alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
@@ -2718,6 +2720,12 @@
       if (sb) sb.disabled = false;
     }
 
+    /** 결과만 전하면 되는 알림. 확인 버튼을 누르게 하지 않는다. */
+    function bsfToast(message, opts) {
+      if (NK.ui && typeof NK.ui.toast === 'function') return NK.ui.toast(message, opts);
+      return bsfNotify(message);
+    }
+
     /**
      * TikTok 이 아직 처리 중일 때, 확인 창을 닫아도 결과를 끝까지 지켜본다.
      *
@@ -2725,7 +2733,7 @@
      * 걸린다. 확인 창 안에서만 기다리면 사용자가 창을 닫는 순간 결과를 영영 모르고,
      * 화면에는 "확인하지 못했습니다"만 남는다.
      */
-    function watchTikTokPublish(fmtId, label, publishId) {
+    function watchTikTokPublish(fmtId, label, publishId, handle) {
       var token = '';
       try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
       var tries = 0;
@@ -2742,7 +2750,18 @@
               _deployedFormats[fmtId] = true;
               persistDeployedFormats();
               refreshDeploySummary();
-              bsfNotify(T.alertPublishSuccess(label));
+              var h = String(handle || '').replace(/^@/, '');
+              var url = (h && st.postId)
+                ? 'https://www.tiktok.com/@' + encodeURIComponent(h) + '/video/' + encodeURIComponent(st.postId)
+                : '';
+              // 완료 문구는 TikTok 명세 원문을 그대로 쓴다(심사관이 대조한다)
+              var dc = (NK.tiktokConsentModal && NK.tiktokConsentModal.doneCopy)
+                ? NK.tiktokConsentModal.doneCopy() : null;
+              bsfToast(dc ? dc.posted : T.alertPublishSuccess(label), {
+                tone: 'ok',
+                href: url || undefined,
+                linkLabel: dc ? dc.viewPost : (isEn ? 'View post' : '게시물 보기'),
+              });
               return;
             }
             if (st && st.ok && st.status === 'failed') {
@@ -4226,11 +4245,15 @@
             // 수락만 보고 ok 로 넘기면 발행되지 않았는데도 '배포 완료' 배지가 남는다.
             var ttFinal = String(modalResult.tiktokFinalStatus || '');
             if (ttFinal === 'failed' || ttFinal === 'pending') {
+              // 발행 ID 가 없으면 확인할 대상 자체가 없다. '처리 중'으로 두면
+              // 영원히 확인 불가에 갇히므로 발행 실패로 다룬다.
+              var hasPid = !!String(modalResult.tiktokPublishId || '').trim();
               return Object.assign({}, modalResult, {
                 ok: false,
                 notPublished: true,
-                notPublishedReason: String(modalResult.tiktokFailReason || ''),
-                pending: ttFinal === 'pending',
+                notPublishedReason: String(modalResult.tiktokFailReason || '')
+                  || (hasPid ? '' : T.reasonNoPublishId),
+                pending: ttFinal === 'pending' && hasPid,
               });
             }
             return modalResult;
@@ -4389,18 +4412,27 @@
               var oneMsg = (oneStatus === 'published'
                 ? T.alertPublishSuccess(oneLabel)
                 : T.alertPublishProcessing(oneLabel));
-              // 게시 결과 URL 노출 — 영상이 실제로 어디에 올라갔는지(쇼츠/일반영상·공개여부) 바로 확인 가능.
-              if (oneUrl) oneMsg += '\n\n' + oneUrl;
-              bsfNotify(oneMsg);
+              // 성공은 읽고 넘어가면 그만이다. 확인 버튼을 누르게 하지 않는다.
+              // 게시물 링크는 알림 안의 링크로 준다(영상이 쇼츠로 갔는지 등 바로 확인).
+              bsfToast(oneMsg, {
+                tone: 'ok',
+                href: oneUrl || undefined,
+                linkLabel: isEn ? 'View post' : '게시물 보기',
+              });
             } else if (publishResult.notPublished) {
               // 발행되지 않았다. 조용히 넘어가면 배포된 줄 알고 넘어간다.
               var failFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
               var failLabel = failFmt && failFmt.title ? failFmt.title : oneFmtId;
               // 아직 처리 중이면 확인 창을 닫아도 백그라운드로 계속 지켜본다.
               if (publishResult.pending && publishResult.tiktokPublishId) {
-                watchTikTokPublish(oneFmtId, failLabel, publishResult.tiktokPublishId);
+                bsfToast(T.alertPublishProcessing(failLabel));
+                watchTikTokPublish(
+                  oneFmtId, failLabel, publishResult.tiktokPublishId,
+                  (publishResult.result && publishResult.result.handle) || ''
+                );
                 return;
               }
+              // 원인을 읽어야 하는 알림은 스스로 사라지면 안 된다.
               bsfNotify(publishResult.pending
                 ? T.alertPublishPending(failLabel)
                 : T.alertNotPublished(failLabel, publishResult.notPublishedReason || ''));

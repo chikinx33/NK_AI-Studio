@@ -69,9 +69,6 @@
       cancel: 'Cancel',
       post: 'Post to TikTok',
       posting: 'Posting to TikTok...',
-      processing: 'TikTok is processing your post.',
-      viewPost: 'View post on TikTok',
-      close: 'Close',
       discloseHelp: 'Turn on to disclose that this video promotes goods or services in exchange for something of value. Your video could promote yourself, a third party, or both.',
       yourBrandHelp: 'You are promoting yourself or your own business. This video will be classified as Brand Organic.',
       brandedContentHelp: 'You are promoting another brand or a third party. This video will be classified as Branded Content.',
@@ -82,9 +79,7 @@
       interactionOffTooltip: 'Turned off in your TikTok account settings',
       creatorInfoFailed: 'Could not load your TikTok account settings. Please try again.',
       posted: 'Your video has been posted to TikTok.',
-      postFailed: 'TikTok did not publish this post.',
-      postPending: 'TikTok has not finished processing yet. Check the TikTok app in a few minutes.',
-      noPublishId: 'TikTok returned no publish id, so nothing was submitted. Check the selected assets and try again.',
+      viewPost: 'View post on TikTok',
       noAudience: 'No audience option is available with the current settings. Turn off the commercial content disclosure to continue.',
       tooLong: function (n) { return 'This video is longer than your TikTok limit of ' + n + ' seconds.'; }
     },
@@ -107,9 +102,6 @@
       cancel: '취소',
       post: 'TikTok에 게시',
       posting: 'TikTok에 게시하는 중...',
-      processing: 'TikTok이 게시물을 처리하고 있어요.',
-      viewPost: 'TikTok에서 게시물 보기',
-      close: '닫기',
       discloseHelp: '대가를 받고 상품이나 서비스를 홍보하는 영상이면 켜주세요. 본인 홍보, 제3자 홍보, 또는 둘 다일 수 있습니다.',
       yourBrandHelp: '본인 또는 본인 사업을 홍보하는 경우입니다. 이 영상은 Brand Organic 으로 분류됩니다.',
       brandedContentHelp: '다른 브랜드나 제3자를 홍보하는 경우입니다. 이 영상은 Branded Content 로 분류됩니다.',
@@ -120,9 +112,7 @@
       interactionOffTooltip: 'TikTok 계정 설정에서 꺼져 있습니다',
       creatorInfoFailed: 'TikTok 계정 설정을 불러오지 못했습니다. 다시 시도해 주세요.',
       posted: 'TikTok에 게시했습니다.',
-      postFailed: 'TikTok이 이 게시물을 발행하지 않았습니다.',
-      postPending: 'TikTok이 아직 처리를 끝내지 않았습니다. 몇 분 뒤 TikTok 앱에서 확인해 주세요.',
-      noPublishId: 'TikTok이 발행 ID를 돌려주지 않아 아무것도 전송되지 않았습니다. 선택한 자산을 확인한 뒤 다시 시도해 주세요.',
+      viewPost: 'TikTok에서 게시물 보기',
       noAudience: '현재 설정으로는 선택할 수 있는 공개 범위가 없습니다. 상업적 콘텐츠 고지를 끄면 계속할 수 있습니다.',
       tooLong: function (n) { return '이 영상은 TikTok 제한 길이 ' + n + '초를 넘습니다.'; }
     }
@@ -606,7 +596,17 @@
           state.posting = false;
           // 호출부가 자체 안내 후 skip 한 경우엔 완료 화면을 띄우지 않는다.
           if (!result || result.skipped) { finish(result || null); destroy(); return; }
-          renderDone(result);
+          /* TikTok 이 요청을 수락했다. 여기서 완료 화면을 하나 더 띄우고 사용자가
+           * 닫기를 누르게 하면 단계만 늘어난다(확인 창 → 처리 중 창 → 알림 창).
+           * 결과 표시와 완료 확인은 호출부의 전역 알림에 맡기고 확인 창은 즉시 닫는다.
+           * 실패는 아래 catch 에서 모달 안에 남긴다 — 입력값을 유지한 채 재시도해야
+           * 하므로(명세 §5-2 ⑦). */
+          var doneIds = (result.result && result.result.publishIds) || [];
+          finish(Object.assign({}, result, {
+            tiktokFinalStatus: 'pending',
+            tiktokPublishId: String(doneIds[0] || (result.result && result.result.postId) || '').trim(),
+          }));
+          destroy();
         })
         .catch(function (err) {
           // 실패해도 입력값을 유지한 채 재시도할 수 있어야 한다(명세 §5-2 ⑦).
@@ -616,136 +616,10 @@
         });
     }
 
-    /**
-     * 게시 완료 여부는 서버가 아니라 브라우저가 확인한다.
-     * 게시 요청 안에서 기다리면 실행 제한을 넘겨 응답을 잃고, 실제로는 게시됐는데
-     * 실패로 보이는 상태가 된다. 요청은 "수락"까지만 하고 완료는 여기서 폴링한다.
-     */
-    function pollPublishStatus(res, onUpdate) {
-      var ids = (res && res.publishIds) || [];
-      var pid = String(ids[0] || res.postId || '').trim();
-      if (!pid) return;
-      var token = '';
-      try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
-      var qs = ['publishId=' + encodeURIComponent(pid)];
-      if (o.ownerId) qs.push('ownerId=' + encodeURIComponent(o.ownerId));
-      if (o.projectId) qs.push('projectId=' + encodeURIComponent(o.projectId));
-      /* 사진 카루셀은 TikTok 이 우리 프록시에서 이미지를 한 장씩 받아가므로
-       * 영상(우리가 직접 올림)보다 훨씬 오래 걸린다. 예전 창은 30초라 10장짜리
-       * 게시가 늘 결론 없이 끝났고, 화면에는 "확인 불가"만 남았다.
-       * 브라우저에는 실행 제한이 없으니 넉넉히 본다. */
-      var tries = 0;
-      var MAX = 40;                   // 40회, 3~8초 간격 → 최대 약 4분
-      var deadline = Date.now() + 4 * 60 * 1000;
-      function nextDelay() { return tries < 10 ? 3000 : (tries < 20 ? 5000 : 8000); }
-      function tick() {
-        if (settled) return;
-        tries++;
-        fetch('/api/sns/tiktok/publish-status?' + qs.join('&'), {
-          headers: { Authorization: 'Bearer ' + token },
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (st) {
-            if (!st || !st.ok) { retry(); return; }
-            if (st.status === 'complete') {
-              onUpdate({ state: 'complete', postId: st.postId || '' });
-              return;
-            }
-            // 실패를 삼키면 안 된다. 예전에는 complete 만 보고 나머지는 버려서,
-            // TikTok 이 발행하지 않았는데도 화면은 "처리 중"인 채로 끝났고
-            // 배포 목록에는 '배포 완료' 배지가 남았다.
-            if (st.status === 'failed') {
-              onUpdate({ state: 'failed', reason: String(st.failReason || st.rawStatus || '') });
-              return;
-            }
-            retry();
-          })
-          .catch(function () { retry(); });
-      }
-      function retry() {
-        if (tries < MAX && Date.now() < deadline) { setTimeout(tick, nextDelay()); return; }
-        // 시간 안에 결론이 안 났으면 성공으로 넘기지 않는다. 모른다고 말한다.
-        // publishId 를 함께 넘겨, 창을 닫아도 배포 화면이 계속 확인할 수 있게 한다.
-        onUpdate({ state: 'pending', publishId: pid });
-      }
-      setTimeout(tick, 2000);
-    }
-
-    function renderDone(result) {
-      var res = (result && result.result) ? result.result : {};
-      var handle = String(res.handle || '').replace(/^@/, '');
-      // 'waiting' = 아직 확인 중, 'complete' | 'failed' | 'pending' = 확인된 결과
-      var state2 = { phase: 'waiting', reason: '', url: String(res.url || '').trim(), publishId: '' };
-
-      /* 호출부는 이 값을 보고 '배포 완료'로 칠지 정한다.
-       * 서버가 게시를 "수락"한 것과 TikTok 이 실제로 "발행"한 것은 다르다.
-       * 수락만으로 완료 처리하면, 발행되지 않았는데 배포 완료 배지가 남는다. */
-      function outcome() {
-        var ids = (res && res.publishIds) || [];
-        return Object.assign({}, result, {
-          tiktokFinalStatus: state2.phase === 'waiting' ? 'pending' : state2.phase,
-          tiktokFailReason: state2.reason || '',
-          // 아직 모르면 배포 화면이 이어서 확인한다
-          tiktokPublishId: state2.publishId || String(ids[0] || res.postId || '').trim(),
-        });
-      }
-
-      function paintDone() {
-        var title = C.processing;
-        if (state2.phase === 'complete') title = C.posted;
-        else if (state2.phase === 'failed') title = C.postFailed;
-        else if (state2.phase === 'pending') title = C.postPending;
-
-        var spinning = (state2.phase === 'waiting');
-        var note = (res.privacyDowngraded && res.privacyDowngradeReason)
-          ? '<div class="ttc-banner">' + esc(res.privacyDowngradeReason) + '</div>' : '';
-        if (state2.phase === 'failed' && state2.reason) {
-          note = '<div class="ttc-banner">' + esc(state2.reason) + '</div>' + note;
-        }
-        modal.innerHTML =
-          '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span></div>' +
-          '<div class="ttc-body"><div class="ttc-done">' +
-          (spinning ? '<div class="ttc-spinner"></div>' : '') +
-          '<div class="ttc-done-title">' + esc(title) + '</div>' +
-          (state2.url ? '<a class="ttc-link" href="' + esc(state2.url) + '" target="_blank" rel="noopener">' + esc(C.viewPost) + '</a>' : '') +
-          note + '</div></div>' +
-          '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>' + esc(C.close) + '</button></div>';
-        modal.querySelector('[data-ttc-done]').onclick = function () {
-          finish(outcome());
-          destroy();
-        };
-      }
-
-      paintDone();
-      // 서버가 이미 발행 완료를 확인해 준 경우가 아니면, 실제 결과를 끝까지 확인한다.
-      if (String(res.status || '') === 'published') {
-        state2.phase = 'complete';
-        paintDone();
-        return;
-      }
-      /* publish_id 가 없으면 폴링할 대상 자체가 없다. 이걸 "처리 중"으로 두면
-       * 영원히 확인 불가에 갇힌다. 발행되지 않은 것으로 보고 원인을 드러낸다. */
-      var pubIds = (res.publishIds || []);
-      if (!pubIds.length && !String(res.postId || '').trim()) {
-        console.warn('[tiktok] publish_id 없이 응답이 왔다:', JSON.stringify(result));
-        state2.phase = 'failed';
-        state2.reason = (res.failReasons && res.failReasons.length)
-          ? res.failReasons.join(' / ')
-          : C.noPublishId;
-        paintDone();
-        return;
-      }
-      pollPublishStatus(res, function (upd) {
-        state2.phase = upd.state;
-        state2.reason = upd.reason || '';
-        if (upd.publishId) state2.publishId = upd.publishId;
-        if (upd.postId && handle) {
-          state2.url = 'https://www.tiktok.com/@' + encodeURIComponent(handle) +
-            '/video/' + encodeURIComponent(upd.postId);
-        }
-        paintDone();
-      });
-    }
+    /* 게시 결과 표시와 완료 확인은 호출부(브랜드 스튜디오)의 전역 알림이 맡는다.
+     * 예전에는 이 안에서 완료 화면을 그리고 상태를 폴링했는데, 확인 창을 닫는
+     * 단계가 하나 더 생기고 호출부 알림까지 겹쳐 창이 세 번 떴다.
+     * publish_id 는 finish() 로 넘겨 호출부가 이어서 확인한다. */
 
     paint();
     fetchCreatorInfo(o)
@@ -767,5 +641,12 @@
     return promise;
   }
 
-  NK.tiktokConsentModal = { open: open };
+  /* 게시 완료 문구는 명세 §7 원문이다(심사관이 대조한다).
+   * 표시는 호출부의 전역 알림이 하지만 문구의 출처는 여기 하나로 둔다. */
+  function doneCopy() {
+    var C = COPY[lang()] || COPY.ko;
+    return { posted: C.posted, viewPost: C.viewPost };
+  }
+
+  NK.tiktokConsentModal = { open: open, doneCopy: doneCopy };
 })();

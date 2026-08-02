@@ -103,6 +103,70 @@
       : null;
     var ui = NK.ui || (NK.ui = {});
     var dialog = ui.dialog || (ui.dialog = {});
+
+    /* 전역 알림(토스트). 확인 버튼을 누르지 않아도 스스로 사라진다.
+     *
+     * 결과를 알리기만 하면 되는 자리에 확인 모달을 쓰면, 사용자가 흐름마다
+     * 닫기를 눌러야 해서 단계가 늘어난다. 읽고 넘어가면 그만인 알림은 여기로 보낸다.
+     * 사용자가 읽어야 하는 오류·선택은 여전히 dialog 를 쓸 것.
+     *
+     *   NK.ui.toast('게시했습니다', { href: url, linkLabel: '보기', tone: 'ok', ms: 3000 })
+     */
+    var toastHost = null;
+    ui.toast = function (message, options) {
+      var opts = options && typeof options === 'object' ? options : {};
+      var text = String(message == null ? '' : message).trim();
+      if (!text) return function () {};
+      try {
+        if (!toastHost || !document.body.contains(toastHost)) {
+          toastHost = document.createElement('div');
+          toastHost.className = 'nk-toast-host';
+          document.body.appendChild(toastHost);
+        }
+        var el = document.createElement('div');
+        el.className = 'nk-toast' + (opts.tone === 'error' ? ' is-error' : (opts.tone === 'ok' ? ' is-ok' : ''));
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+
+        var msg = document.createElement('div');
+        msg.className = 'nk-toast-msg';
+        msg.textContent = text;
+        el.appendChild(msg);
+
+        if (opts.href) {
+          var a = document.createElement('a');
+          a.className = 'nk-toast-link';
+          a.href = String(opts.href);
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = String(opts.linkLabel || opts.href);
+          el.appendChild(a);
+        }
+        toastHost.appendChild(el);
+        requestAnimationFrame(function () { el.classList.add('is-in'); });
+
+        var ms = Number(opts.ms);
+        if (!isFinite(ms) || ms <= 0) ms = 3000;
+        var timer = null;
+        var closed = false;
+        function close() {
+          if (closed) return;
+          closed = true;
+          clearTimeout(timer);
+          el.classList.remove('is-in');
+          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+        }
+        function arm() { clearTimeout(timer); timer = setTimeout(close, ms); }
+        // 링크를 누르려는 사용자가 사라지는 알림을 쫓게 하지 않는다
+        el.addEventListener('mouseenter', function () { clearTimeout(timer); });
+        el.addEventListener('mouseleave', arm);
+        el.addEventListener('click', function (ev) { if (ev.target.tagName !== 'A') close(); });
+        arm();
+        return close;
+      } catch (_) {
+        return function () {};
+      }
+    };
     var mounted = false;
     var busy = false;
     var queue = [];

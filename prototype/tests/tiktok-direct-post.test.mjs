@@ -172,19 +172,17 @@ test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다"
   // 공유 프로젝트도 소유자 토큰으로 조회해야 한다
   assert.match(st, /getGrantRole/);
 
-  // 모달이 브라우저에서 폴링해 링크를 채운다
   const modal = read("prototype/js/ui/tiktok-consent-modal.js");
-  assert.match(modal, /function pollPublishStatus/);
-  assert.match(modal, /\/api\/sns\/tiktok\/publish-status\?/);
-  // 결과가 확정되면 폴링을 멈춘다
-  assert.match(modal, /if \(settled\) return;/);
-  // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸린다.
-  // 창이 30초면 늘 결론 없이 끝나 "확인 불가"만 남는다.
-  assert.match(modal, /var deadline = Date\.now\(\) \+ 4 \* 60 \* 1000;/);
-  // 창을 닫아도 배포 화면이 이어서 확인할 수 있도록 publishId 를 넘긴다
-  assert.match(modal, /state: 'pending', publishId: pid/);
+  // 폴링은 확인 창이 아니라 배포 화면에 있다 — 창을 닫아도 결과를 끝까지 본다.
+  assert.ok(!/function pollPublishStatus\(/.test(modal), "폴링이 두 곳에 있다");
+  assert.match(modal, /tiktokPublishId: String\(doneIds\[0\]/, "publish_id 를 호출부로 넘기지 않는다");
   const studio = read("prototype/js/ui/brand-studio.js");
   assert.match(studio, /function watchTikTokPublish\(/, "확인 창을 닫으면 결과를 영영 모른다");
+  // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸린다
+  assert.match(studio, /deadline = Date\.now\(\) \+ 10 \* 60 \* 1000/);
+  // 완료 문구는 명세 §7 원문을 쓴다 — 문구 출처는 모달 하나로 유지
+  assert.match(studio, /NK\.tiktokConsentModal\.doneCopy\(\)/);
+  assert.match(modal, /function doneCopy\(\)/);
 });
 
 test("심사 전에는 브랜디드 콘텐츠를 고를 수 없다 (막다른 상태 방지)", () => {

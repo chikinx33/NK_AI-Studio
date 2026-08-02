@@ -42,34 +42,40 @@ test("서버는 실패 상태와 사유를 내려준다", () => {
 });
 
 test("폴링이 실패를 버리지 않는다", () => {
-  const body = functionBody(modal, "pollPublishStatus");
+  // 폴링은 확인 창이 아니라 배포 화면에 있다 — 창을 닫아도 결과를 끝까지 본다.
+  const body = functionBody(studio, "watchTikTokPublish");
   assert.match(body, /st\.status === 'failed'/, "failed 상태를 처리하지 않는다");
-  assert.match(body, /state: 'failed'/, "실패를 호출부에 알리지 않는다");
-  assert.match(body, /failReason/, "실패 사유를 전달하지 않는다");
+  assert.match(body, /failReason/, "실패 사유를 쓰지 않는다");
+  assert.match(body, /alertNotPublished/, "실패를 알리지 않는다");
 });
 
 test("시간 안에 결론이 안 나면 성공으로 넘기지 않는다", () => {
-  const body = functionBody(modal, "pollPublishStatus");
-  assert.match(body, /state: 'pending'/, "시간 초과를 미확인으로 보고하지 않는다");
-  // 재시도 소진 경로가 실제로 존재해야 한다
+  const body = functionBody(studio, "watchTikTokPublish");
+  assert.match(body, /alertPublishPending/, "시간 초과를 미확인으로 알리지 않는다");
   assert.match(body, /tries < MAX/);
 });
 
-test("모달이 완료·실패·미확인을 구분해 보여준다", () => {
-  const body = functionBody(modal, "renderDone");
-  for (const key of ["C.posted", "C.postFailed", "C.postPending"]) {
-    assert.ok(body.includes(key), `${key} 를 쓰지 않는다 — 세 결과가 같은 화면으로 보인다`);
-  }
-  // 결과를 호출부로 흘려보내야 배포 완료 판정에 쓸 수 있다
-  assert.match(body, /tiktokFinalStatus/);
-  assert.match(body, /tiktokFailReason/);
+test("확인 창은 결과 화면을 따로 그리지 않고 즉시 닫힌다", () => {
+  // 확인 창 → 처리 중 창 → 알림 창으로 세 번 뜨던 것을 하나로 합쳤다.
+  assert.ok(!/function renderDone\(/.test(modal), "모달이 아직 완료 화면을 그린다");
+  assert.ok(!/function pollPublishStatus\(/.test(modal), "폴링이 두 곳에 있다");
+  const at = modal.indexOf("tiktokFinalStatus: 'pending'");
+  assert.ok(at > 0, "publish_id 를 호출부로 넘기지 않는다");
+  const near = modal.slice(at - 400, at + 300);
+  assert.match(near, /destroy\(\);/, "수락 후 확인 창이 닫히지 않는다");
 });
 
-test("실패·미확인 문구가 한/영 모두 있다", () => {
-  for (const key of ["postFailed", "postPending"]) {
-    const hits = modal.split(`${key}:`).length - 1;
-    assert.equal(hits, 2, `${key} 가 ko/en 양쪽에 있지 않다 (발견 ${hits}개)`);
-  }
+test("성공 알림은 스스로 사라지고, 원인을 읽어야 하는 알림은 남는다", () => {
+  const core = fs.readFileSync(path.join(process.cwd(), "prototype/core.js"), "utf8");
+  assert.match(core, /ui\.toast = function/, "전역 알림이 없다");
+  assert.match(core, /ms = 3000/, "자동으로 닫히지 않는다");
+  // 링크를 누르려는 사용자가 사라지는 알림을 쫓게 하면 안 된다
+  assert.match(core, /mouseenter/);
+
+  const at = studio.indexOf("if (action === 'brand-deploy-one-format')");
+  const one = studio.slice(at, studio.indexOf("      if (action === '", at + 10));
+  assert.match(one, /bsfToast\(oneMsg/, "성공에도 확인 버튼을 누르게 한다");
+  assert.match(one, /bsfNotify\(publishResult\.pending/, "실패 원인이 스스로 사라진다");
 });
 
 test("발행되지 않으면 '배포 완료'로 표시하지 않는다", () => {
@@ -106,13 +112,12 @@ test("발행 대상이 없으면 서버가 성공으로 응답하지 않는다",
 
 test("publish_id 가 없으면 '처리 중'으로 두지 않는다", () => {
   // 폴링할 대상이 없는데 처리 중으로 두면 영원히 '확인 불가'에 갇힌다.
-  const body = functionBody(modal, "renderDone");
-  assert.match(body, /!pubIds\.length && !String\(res\.postId \|\| ''\)\.trim\(\)/);
-  assert.match(body, /C\.noPublishId/);
-  for (const key of ["noPublishId"]) {
-    const hits = modal.split(`${key}:`).length - 1;
-    assert.equal(hits, 2, `${key} 가 ko/en 양쪽에 있지 않다 (발견 ${hits}개)`);
-  }
+  const at = studio.indexOf("tiktokFinalStatus");
+  const body = studio.slice(at - 200, at + 900);
+  assert.match(body, /var hasPid = /);
+  assert.match(body, /pending: ttFinal === 'pending' && hasPid/);
+  const hits = studio.split("reasonNoPublishId").length - 1;
+  assert.ok(hits >= 3, `reasonNoPublishId 가 ko/en 양쪽에 정의되고 쓰여야 한다 (발견 ${hits})`);
 });
 
 test("TikTok 사진 게시 전에 PNG 를 JPEG 로 바꾼다", () => {

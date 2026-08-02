@@ -15152,3 +15152,51 @@ textarea.bsf-skeleton {
   border-top: 1px solid var(--border);
   font-size: 12px;
 }
+
+/* ═══════════════════════════════════════
+   전역 알림(토스트)
+   확인 버튼 없이 스스로 사라지는 알림. 결과만 전하면 되는 자리에 쓴다.
+═══════════════════════════════════════ */
+.nk-toast-host {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.nk-toast {
+  pointer-events: auto;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid #3f8dd6;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-2) 96%, transparent 4%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: default;
+}
+
+.nk-toast.is-in { opacity: 1; transform: translateY(0); }
+.nk-toast.is-ok { border-left-color: #4ade80; }
+.nk-toast.is-error { border-left-color: #f87171; }
+
+.nk-toast-msg { white-space: pre-line; }
+
+.nk-toast-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: #3f8dd6;
+  text-decoration: underline;
+  word-break: break-all;
+}
