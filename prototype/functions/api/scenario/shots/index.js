@@ -3,8 +3,9 @@
  *
  * Pass 2 의 공개 API.
  *
- *   decomposeScene(apiKey, scene, opts)   — 단일 씬 분해
- *   decomposeScenes(apiKey, scenes, opts) — 모든 씬을 병렬 분해 (장애 시 fallback)
+ *   decomposeScene(auth, scene, opts)   — 단일 씬 분해
+ *   decomposeScenes(auth, scenes, opts) — 모든 씬을 병렬 분해 (장애 시 fallback)
+ *   auth 는 claude-auth.js 의 studioAuth() 결과 {headers, subscription}
  */
 
 import {
@@ -18,27 +19,24 @@ import {
 } from "./decomposer.js";
 import { diversifyShotCameraMoves } from "../rebalancer.js";
 import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
+import { buildClaudeSystem } from "../../_shared/claude-auth.js";
 
 const SHOT_TIMEOUT_MS = 22000;
 const SHOT_MAX_TOKENS = 900;
 const MODEL = "claude-sonnet-4-6";
 
-async function callAnthropicForShots({ apiKey, system, user, signal, url }) {
+async function callAnthropicForShots({ auth, system, user, signal, url }) {
   const controller = new AbortController();
   if (signal) signal.addEventListener("abort", () => controller.abort(signal.reason));
   const timer = setTimeout(() => controller.abort("shot_decompose_timeout"), SHOT_TIMEOUT_MS);
   try {
     const res = await fetch(url || "https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: auth.headers,
       body: JSON.stringify({
         model: MODEL,
         max_tokens: SHOT_MAX_TOKENS,
-        system,
+        system: buildClaudeSystem(auth.subscription, system),
         messages: [{ role: "user", content: user }],
         temperature: 0.4,
       }),
@@ -67,12 +65,12 @@ async function callAnthropicForShots({ apiKey, system, user, signal, url }) {
 /**
  * 단일 scene 의 shot 분해. 실패하면 throw.
  */
-export async function decomposeScene(apiKey, scene, opts = {}) {
+export async function decomposeScene(auth, scene, opts = {}) {
   const lang = opts.lang === "en" ? "en" : "ko";
   const system = lang === "en" ? buildShotPromptEn() : buildShotPromptKo();
   const user = lang === "en" ? buildShotUserPromptEn(scene) : buildShotUserPromptKo(scene);
   const text = await callAnthropicForShots({
-    apiKey,
+    auth,
     system,
     user,
     signal: opts.signal,
@@ -89,9 +87,9 @@ export async function decomposeScene(apiKey, scene, opts = {}) {
  *
  * 반환: 같은 scenes 배열에 shots 필드가 채워진 새 배열.
  */
-export async function decomposeScenes(apiKey, scenes, opts = {}) {
+export async function decomposeScenes(auth, scenes, opts = {}) {
   if (!Array.isArray(scenes) || !scenes.length) return scenes;
-  if (!apiKey) {
+  if (!auth || !auth.headers) {
     return scenes.map((s) => ({ ...s, shots: fallbackSingleShot(s), shotsFallback: "no_api_key" }));
   }
 
@@ -99,7 +97,7 @@ export async function decomposeScenes(apiKey, scenes, opts = {}) {
 
   const tasks = scenes.map(async (scene, idx) => {
     try {
-      const shots = await decomposeScene(apiKey, scene, opts);
+      const shots = await decomposeScene(auth, scene, opts);
       meta.ok++;
       return { ...scene, shots };
     } catch (err) {

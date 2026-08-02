@@ -95,8 +95,27 @@ export async function saveAgentVoiceSettings(sql, userId, patch) {
   );
 }
 
-/** DB 설정 우선, 없으면 env 폴백 → 해석된 인증 {mode, oauthToken, apiKey}. */
-export async function resolveAuth(sql, userId, env) {
+/** 사용자가 인증을 등록하지 않았을 때 던지는 오류. 화면이 설정으로 유도할 수 있게 코드를 붙인다. */
+export const CLAUDE_AUTH_REQUIRED = "claude_auth_required";
+export function claudeAuthRequiredError() {
+  const e = new Error(CLAUDE_AUTH_REQUIRED);
+  e.code = CLAUDE_AUTH_REQUIRED;
+  return e;
+}
+export function isClaudeAuthRequired(err) {
+  return !!err && (err.code === CLAUDE_AUTH_REQUIRED || String(err.message || "") === CLAUDE_AUTH_REQUIRED);
+}
+
+/**
+ * DB 설정 우선, 없으면 env 폴백 → 해석된 인증 {mode, oauthToken, apiKey}.
+ *
+ * opts.allowEnvFallback=false 면 env 를 보지 않는다. 스튜디오 기능이 이 모드를 쓴다.
+ * 사용자가 자기 구독/키를 등록하지 않았는데 조용히 운영자 키로 넘어가면, 크레딧은
+ * 운영자가 내면서 사용자는 그 사실을 모른 채 쓰게 된다. 그래서 폴백 대신 차단한다.
+ * AI 기업(agent/) 콘솔은 운영자 본인 도구라 기존대로 env 폴백을 유지한다.
+ */
+export async function resolveAuth(sql, userId, env, opts) {
+  const allowEnvFallback = !opts || opts.allowEnvFallback !== false;
   let mode, oauth, key;
   if (sql && userId) {
     const row = await getSettingsRow(sql, userId).catch(() => null);
@@ -106,10 +125,25 @@ export async function resolveAuth(sql, userId, env) {
       key = row.claude_api_key;
     }
   }
+  if (!allowEnvFallback) {
+    const m = mode === "api_key" ? "api_key" : "subscription";
+    const cred = m === "api_key" ? key : oauth;
+    if (!String(cred || "").trim()) throw claudeAuthRequiredError();
+    return { mode: m, oauthToken: oauth || null, apiKey: key || null };
+  }
   if (!mode) mode = String((env && env.CLAUDE_AUTH_MODE) || "").toLowerCase() === "api_key" ? "api_key" : "subscription";
   if (!oauth) oauth = String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim() || null;
   if (!key) key = String((env && env.ANTHROPIC_API_KEY) || "").trim() || null;
   return { mode: mode === "api_key" ? "api_key" : "subscription", oauthToken: oauth, apiKey: key };
+}
+
+/**
+ * 스튜디오 AI 기능이 쓰는 단 하나의 인증 진입점. 사용자가 등록한 자격증명만 쓴다.
+ * 미등록이면 claude_auth_required 를 던지므로, 호출부는 그대로 위로 올려
+ * 화면이 "API 설정에서 등록하세요" 로 안내하게 한다.
+ */
+export async function studioAuth(env, userId) {
+  return authHeadersFor(await resolveAuth(getSql(env), userId, env, { allowEnvFallback: false }));
 }
 
 /** 해석된 인증 → fetch 헤더 + subscription 여부. */

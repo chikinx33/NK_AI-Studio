@@ -5045,7 +5045,8 @@ html.page-shell-image #sidebar-project-card {
   display: none !important;
 }
 
-.user-widget.theme-preset-widget {
+.user-widget.theme-preset-widget,
+.user-widget.api-settings-widget {
   padding: 0;
   border: none;
   border-radius: 0;
@@ -5070,7 +5071,8 @@ html.page-shell-image #sidebar-project-card {
   font-weight: 400;
 }
 
-#theme-preset-widget .user-widget-head h4 {
+#theme-preset-widget .user-widget-head h4,
+#api-settings-widget .user-widget-head h4 {
   color: #3f8dd6;
   font-weight: 400;
 }
@@ -5183,12 +5185,14 @@ html.page-shell-image #sidebar-project-card {
 
 .favorite-form-toggle:hover,
 .subscription-toggle:hover,
+.api-settings-toggle:hover,
 .theme-preset-toggle:hover {
   background: color-mix(in srgb, var(--panel) 72%, transparent 28%);
 }
 
 .favorite-form-toggle::after,
 .subscription-toggle::after,
+.api-settings-toggle::after,
 .theme-preset-toggle::after {
   content: "▾";
   width: 20px;
@@ -5207,12 +5211,14 @@ html.page-shell-image #sidebar-project-card {
 
 .favorite-form.is-collapsed .favorite-form-toggle::after,
 .subscription-widget.is-collapsed .subscription-toggle::after,
+.api-settings-widget.is-collapsed .api-settings-toggle::after,
 .theme-preset-widget.is-collapsed .theme-preset-toggle::after {
   transform: rotate(-90deg);
 }
 
 .subscription-body,
 .favorite-form-body,
+.api-settings-body,
 .theme-preset-body {
   margin-top: 14px;
   display: flex;
@@ -5228,6 +5234,7 @@ html.page-shell-image #sidebar-project-card {
 
 .subscription-widget.is-collapsed .subscription-body,
 .favorite-form.is-collapsed .favorite-form-body,
+.api-settings-widget.is-collapsed .api-settings-body,
 .theme-preset-widget.is-collapsed .theme-preset-body {
   max-height: 0;
   margin-top: 0;
@@ -5240,6 +5247,7 @@ html.page-shell-image #sidebar-project-card {
 
 .subscription-widget.is-collapsed .user-widget-head,
 .favorite-form.is-collapsed .user-widget-head,
+.api-settings-widget.is-collapsed .user-widget-head,
 .theme-preset-widget.is-collapsed .user-widget-head {
   margin-bottom: 0;
 }
@@ -15064,3 +15072,94 @@ textarea.bsf-skeleton {
 /* ═══════════════════════════════════════
    End SNS Settings Page
 ═══════════════════════════════════════ */
+
+/* ═══════════════════════════════════════
+   API 설정 위젯 (/app 우측 대시보드)
+   AI 기업 설정 화면의 인증 토글을 런처에 옮겨 온 것.
+═══════════════════════════════════════ */
+.api-auth-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.api-auth-mode {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--layer-strong) 60%, transparent 40%);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.api-auth-mode:hover { color: var(--text); }
+
+.api-auth-mode.is-active {
+  border-color: #3f8dd6;
+  color: var(--text);
+  background: color-mix(in srgb, #3f8dd6 16%, transparent 84%);
+}
+
+.api-settings-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.api-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.api-settings-row input {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent 12%);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* 저장 중에도 버튼 폭이 흔들리지 않게 고정한다 */
+#api-settings-save { min-width: 64px; }
+#api-settings-diagnose { min-width: 100%; }
+
+.api-settings-state {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.api-settings-state.is-ok    { color: #4ade80; }
+.api-settings-state.is-error { color: #f87171; }
+
+.api-settings-scope {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.api-settings-scope-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3f8dd6;
+}
+
+.api-settings-scope p.muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* 접힌 상태에서 본문 높이 상한이 짧으면 적용 범위가 잘린다 */
+.api-settings-body { max-height: 620px; }

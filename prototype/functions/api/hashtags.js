@@ -1,4 +1,5 @@
-import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { anthropicMessagesUrl, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
 const corsHeaders = (origin) => ({
@@ -17,8 +18,15 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const origin = request.headers.get("Origin");
 
-  if (!env.ANTHROPIC_API_KEY) {
-    return json({ error: "ANTHROPIC_API_KEY missing" }, 500, origin);
+  const who = await authorizeRequest(request, env);
+  if (!who.ok) return json({ error: who.error }, who.status, origin);
+
+  let auth;
+  try {
+    auth = await studioAuth(env, who.userId);
+  } catch (e) {
+    if (isClaudeAuthRequired(e)) return json({ error: CLAUDE_AUTH_REQUIRED }, 412, origin);
+    throw e;
   }
 
   let body;
@@ -34,16 +42,12 @@ export async function onRequestPost(context) {
   try {
     const completion = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: auth.headers,
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 512,
         temperature: 0.2,
-        system: buildSystemPrompt(input.language),
+        system: buildClaudeSystem(auth.subscription, buildSystemPrompt(input.language)),
         messages: [
           {
             role: "user",

@@ -19,7 +19,8 @@
  */
 
 import { decomposeScenes } from "./scenario/shots/index.js";
-import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { authorizeRequest } from "./_shared/auth.js";
 
 /**
  * 분해 결과를 평탄화. 부모 씬의 narration/dialogue 는 첫 sub-scene 에만 두고,
@@ -205,12 +206,19 @@ export async function onRequestPost(context) {
   }
   const lang = body?.language === "en" ? "en" : "ko";
 
-  if (!env?.ANTHROPIC_API_KEY) {
-    return jsonError("ANTHROPIC_API_KEY missing", 500, origin);
+  const who = await authorizeRequest(request, env);
+  if (!who.ok) return jsonError(who.error, who.status, origin);
+
+  let auth;
+  try {
+    auth = await studioAuth(env, who.userId);
+  } catch (e) {
+    if (isClaudeAuthRequired(e)) return jsonError(CLAUDE_AUTH_REQUIRED, 412, origin);
+    throw e;
   }
 
   try {
-    const result = await decomposeScenes(env.ANTHROPIC_API_KEY, scenes, { lang, messagesUrl: anthropicMessagesUrl(env) });
+    const result = await decomposeScenes(auth, scenes, { lang, messagesUrl: anthropicMessagesUrl(env) });
     // decomposeScenes 의 정상 결과: { scenes, meta } 또는 array fallback
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };

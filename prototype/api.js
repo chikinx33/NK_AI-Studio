@@ -37,6 +37,21 @@
       return '';
     }
   };
+  /* AI 호출 실패에 의미 있는 표식을 단다.
+   * - CREDIT_EXHAUSTED: 잔액 부족
+   * - CLAUDE_AUTH_REQUIRED: 사용자가 아직 구독/API 키를 등록하지 않음 → 설정으로 유도해야 한다
+   * 두 경우 모두 화면이 원문 대신 전용 안내를 띄운다. */
+  const markAiError = (err, status, text) => {
+    if (status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
+      err.message = 'CREDIT_EXHAUSTED';
+      err.creditExhausted = true;
+    } else if (status === 412 || /claude_auth_required/.test(text)) {
+      err.message = 'CLAUDE_AUTH_REQUIRED';
+      err.authRequired = true;
+    }
+    return err;
+  };
+
   const buildAuthHeaders = (headers) => {
     var out = Object.assign({}, headers || {});
     var token = getAuthToken();
@@ -157,10 +172,59 @@
     return j(text);
   };
 
+  /* ── 사용자별 Claude 인증 설정 ────────────────────────────────────────────
+   * AI 기업 설정 화면과 런처(/app) API 설정 위젯이 같은 엔드포인트를 쓴다.
+   * 서버는 토큰·키 실값을 응답에 절대 싣지 않는다(oauthSet/apiKeySet 만). */
+  api.agentSettings = async function () {
+    var res = await fetchWithTimeout(withBase('/api/agent/settings'), {
+      method: 'GET',
+      headers: buildAuthHeaders()
+    }, 20000);
+    var text = await readTextWithTimeout(res, 20000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'agent_settings_error');
+      err.status = res.status;
+      throw err;
+    }
+    return j(text);
+  };
+
+  api.agentSettingsSave = async function (payload) {
+    var res = await fetchWithTimeout(withBase('/api/agent/settings'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {})
+    }, 20000);
+    var text = await readTextWithTimeout(res, 20000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'agent_settings_save_error');
+      err.status = res.status;
+      throw err;
+    }
+    return j(text);
+  };
+
+  api.agentSettingsDiagnose = async function () {
+    // 라이브 호출이라 느릴 수 있다. 게이트웨이 경유까지 감안해 넉넉히 잡는다.
+    var res = await fetchWithTimeout(withBase('/api/agent/settings'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ kind: 'diag' })
+    }, 45000);
+    var text = await readTextWithTimeout(res, 45000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'agent_settings_diag_error');
+      err.status = res.status;
+      throw err;
+    }
+    var data = j(text);
+    return (data && data.diag) || data;
+  };
+
   api.scenario = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/scenario'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 60000);
     var text = await readTextWithTimeout(res, 60000);
@@ -168,10 +232,7 @@
       var err = new Error(e(text) || 'api_error');
       err.status = res.status;
       err.detail = text;
-      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
-        err.message = 'CREDIT_EXHAUSTED';
-        err.creditExhausted = true;
-      }
+      markAiError(err, res.status, text);
       throw err;
     }
     var data = j(text);
@@ -200,6 +261,7 @@
       var err = new Error(e(text) || 'scenario_locations_failed');
       err.status = res.status;
       err.detail = text;
+      markAiError(err, res.status, text);
       throw err;
     }
     return j(text);
@@ -212,7 +274,7 @@
     }
     var res = await fetchWithTimeout(withBase('/api/scenario-shots'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 60000);
     var text = await readTextWithTimeout(res, 60000);
@@ -220,10 +282,7 @@
       var err = new Error(e(text) || 'scenario_shots_failed');
       err.status = res.status;
       err.detail = text;
-      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
-        err.message = 'CREDIT_EXHAUSTED';
-        err.creditExhausted = true;
-      }
+      markAiError(err, res.status, text);
       throw err;
     }
     var data = j(text);
@@ -238,7 +297,7 @@
   api.storyStructure = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/story-structure'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 30000);
     var text = await readTextWithTimeout(res, 30000);
@@ -246,6 +305,7 @@
       var err = new Error(e(text) || 'story_structure_api_error');
       err.status = res.status;
       err.detail = text;
+      markAiError(err, res.status, text);
       throw err;
     }
     var data = j(text);
@@ -261,7 +321,7 @@
     // Phase 0 Step 10 — 주제/이야기 입력으로 개요 나머지 필드를 자동 제안
     var res = await fetchWithTimeout(withBase('/api/overview-suggest'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 25000);
     var text = await readTextWithTimeout(res, 25000);
@@ -283,7 +343,7 @@
   api.generateHashtags = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/hashtags'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 30000);
     var text = await readTextWithTimeout(res, 30000);
@@ -291,6 +351,7 @@
       var err = new Error(e(text) || 'hashtag_api_error');
       err.status = res.status;
       err.detail = text;
+      markAiError(err, res.status, text);
       throw err;
     }
     var data = j(text);
@@ -305,7 +366,7 @@
   api.draftGenerate = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/draft-generate'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
     }, 30000);
     var text = await readTextWithTimeout(res, 30000);
@@ -313,10 +374,7 @@
       var err = new Error(e(text) || 'draft_generate_api_error');
       err.status = res.status;
       err.detail = text;
-      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
-        err.message = 'CREDIT_EXHAUSTED';
-        err.creditExhausted = true;
-      }
+      markAiError(err, res.status, text);
       throw err;
     }
     return j(text);

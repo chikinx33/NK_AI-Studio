@@ -1,4 +1,5 @@
-import { claudeAuthHeaders, buildClaudeSystem, anthropicConfigured, anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { buildClaudeSystem, anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
 const corsHeaders = (origin) => ({
@@ -41,10 +42,23 @@ export async function onRequestPost(context) {
     fallbackStory,
     input
   );
-  if (!anthropicConfigured(env)) {
-    return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "Claude 자격증명 미설정" }, 200, origin);
+  // 인증이 없으면 규칙 기반 폴백으로 답한다. 이 경로는 Claude 를 부르지 않아
+  // 크레딧을 쓰지 않으므로 차단하지 않고, error 코드로 설정만 안내한다.
+  const who = await authorizeRequest(request, env);
+  let auth = null;
+  if (who.ok) {
+    auth = await studioAuth(env, who.userId).catch((e) => {
+      if (isClaudeAuthRequired(e)) return null;
+      throw e;
+    });
   }
-  const auth = claudeAuthHeaders(env);
+  if (!auth) {
+    return json(
+      { story: fallbackStory, beats: fallbackBeats, fallback: true, error: who.ok ? CLAUDE_AUTH_REQUIRED : who.error },
+      200,
+      origin
+    );
+  }
 
   try {
     const controller = new AbortController();

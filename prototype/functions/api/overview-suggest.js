@@ -19,7 +19,8 @@
  *   카탈로그는 core.js / scenario.js 드롭다운 옵션과 1:1 동기화한다.
  */
 
-import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { anthropicMessagesUrl, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { authorizeRequest } from "./_shared/auth.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -78,13 +79,22 @@ export async function onRequestPost(context) {
     return json({ error: input.language === "en" ? "topic or story is required" : "주제 또는 이야기를 먼저 입력해 주세요." }, 400, origin);
   }
 
-  // API 키 없으면 휴리스틱 폴백
-  if (!env?.ANTHROPIC_API_KEY) {
+  // 인증이 없으면 휴리스틱 폴백. 이 경로는 Claude 를 부르지 않아 크레딧을 쓰지 않으므로
+  // 차단하지 않고 그대로 결과를 준다. 화면은 error 코드로 설정을 안내할 수 있다.
+  const who = await authorizeRequest(request, env);
+  let auth = null;
+  if (who.ok) {
+    auth = await studioAuth(env, who.userId).catch((e) => {
+      if (isClaudeAuthRequired(e)) return null;
+      throw e;
+    });
+  }
+  if (!auth) {
     return json({
       suggestions: heuristicFallback(input),
       characterHints: extractCharacterHints(input.story),
       fallback: true,
-      error: "ANTHROPIC_API_KEY missing",
+      error: who.ok ? CLAUDE_AUTH_REQUIRED : who.error,
     }, 200, origin);
   }
 
@@ -95,16 +105,12 @@ export async function onRequestPost(context) {
     try {
       completion = await fetch(anthropicMessagesUrl(env), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: auth.headers,
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 800,
           temperature: 0.3,
-          system: buildSystemPrompt(input.language),
+          system: buildClaudeSystem(auth.subscription, buildSystemPrompt(input.language)),
           messages: [{ role: "user", content: buildUserPrompt(input) }],
         }),
         signal: controller.signal,

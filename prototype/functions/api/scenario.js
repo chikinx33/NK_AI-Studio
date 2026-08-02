@@ -4,7 +4,8 @@
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
 import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
-import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { buildClaudeSystem, anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
@@ -595,6 +596,18 @@ export async function onRequestPost(context) {
     return new Response(null, { status: 204, headers: corsHeaders(origin) });
   }
 
+  const who = await authorizeRequest(request, env);
+  if (!who.ok) return jsonError(who.error, who.status, origin);
+
+  // 인증은 요청당 한 번만 해석해서 아래로 내린다(호출마다 DB 를 다시 읽지 않도록).
+  let studioAuthHeaders;
+  try {
+    studioAuthHeaders = await studioAuth(env, who.userId);
+  } catch (e) {
+    if (isClaudeAuthRequired(e)) return jsonError(CLAUDE_AUTH_REQUIRED, 412, origin);
+    throw e;
+  }
+
   let body;
   try {
     body = await request.json();
@@ -640,6 +653,7 @@ export async function onRequestPost(context) {
     try {
       const generated = await generateScenarioScenes({
         env,
+        auth: studioAuthHeaders,
         lang,
         topic,
         episodeTitle,
@@ -1308,13 +1322,13 @@ function enforceCharacterTokenInVisual(rawVisual, beat, input) {
 /**
  * 단일 비트 → 단일 씬 LLM 호출. 실패하면 throw.
  */
-async function requestSingleBeatScene(apiKey, input, ctx) {
+async function requestSingleBeatScene(input, ctx) {
   const lang = input.lang === "en" ? "en" : "ko";
   const sys = lang === "en" ? buildSingleBeatSystemPromptEn() : buildSingleBeatSystemPromptKo();
   const user = lang === "en" ? buildSingleBeatUserPromptEn(input, ctx) : buildSingleBeatUserPromptKo(input, ctx);
   const { text } = await streamAnthropicText({
-    apiKey,
     env: input.env,
+    auth: input.auth,
     payload: {
       model: "claude-sonnet-4-6",
       max_tokens: SINGLE_BEAT_MAX_TOKENS,
@@ -1403,7 +1417,6 @@ function buildBeatFallbackScene(beat, sceneIndex, input) {
  * @returns {Promise<{scenes:Array, failures:Array, fallbacks:number}>}
  */
 async function generateScenesPerBeat(input, budgetedBeats) {
-  const apiKey = input.env.ANTHROPIC_API_KEY;
   const beats = Array.isArray(budgetedBeats) ? budgetedBeats : [];
   if (!beats.length) return { scenes: [], failures: [], fallbacks: 0 };
 
@@ -1423,7 +1436,7 @@ async function generateScenesPerBeat(input, budgetedBeats) {
   for (let i = 0; i < contexts.length; i += SINGLE_BEAT_CONCURRENCY) {
     const batch = contexts.slice(i, i + SINGLE_BEAT_CONCURRENCY);
     const results = await Promise.allSettled(
-      batch.map((ctx) => requestSingleBeatScene(apiKey, input, ctx)),
+      batch.map((ctx) => requestSingleBeatScene(input, ctx)),
     );
     results.forEach((res, j) => {
       const ctx = batch[j];
@@ -1548,7 +1561,7 @@ async function generateScenarioScenesViaBeats(input) {
 }
 
 async function generateScenarioScenes(input) {
-  if (!input?.env?.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+  if (!input?.auth?.headers) throw new Error("scenario_auth_missing");
 
   // v3.875: storyBeats 가 있고 단일 청크면 비트별 병렬 LLM 호출 경로 사용 (100% 비트 커버리지 보장).
   // 비트가 없거나(=자유 생성) 다중 청크면 기존 단일 호출 경로 유지.
@@ -1669,8 +1682,8 @@ async function generateScenarioScenes(input) {
         defaultSpeaker: input.characters[0]?.token || "@narrator",
       });
       const firstPass = await requestAndShapeScenarioChunk({
-        apiKey: input.env.ANTHROPIC_API_KEY,
         env: input.env,
+        auth: input.auth,
         sys,
         userPrompt: basePrompt,
         spec,
@@ -1700,8 +1713,8 @@ async function generateScenarioScenes(input) {
             const suffixPart = rulePromptSuffix ? `\n\n[블록 규칙]\n${rulePromptSuffix}` : "";
             const retrySys = `${sys}${suffixPart}\n\n[재생성 지시]\n${refinePrompt}`;
             const retryPass = await requestAndShapeScenarioChunk({
-              apiKey: input.env.ANTHROPIC_API_KEY,
               env: input.env,
+              auth: input.auth,
               sys: retrySys,
               userPrompt: basePrompt,
               spec,
@@ -1791,10 +1804,11 @@ async function generateScenarioScenes(input) {
   };
 }
 
-async function requestAndShapeScenarioChunk({ apiKey, env, sys, userPrompt, spec, options }) {
-  const rawScenes = await requestScenarioChunk(apiKey, sys, userPrompt, {
+async function requestAndShapeScenarioChunk({ env, auth, sys, userPrompt, spec, options }) {
+  const rawScenes = await requestScenarioChunk(sys, userPrompt, {
     sceneCount: options.sceneCount,
     env,
+    auth,
   });
   const shaped = shapeScenesFromModel(rawScenes, {
     lang: options.lang,
@@ -2043,7 +2057,7 @@ function salvageCompletedScenes(text) {
  * Anthropic SSE 스트림에서 text_delta 만 모아 합본 텍스트를 반환한다.
  * abort 가 걸리면 그 시점까지의 텍스트와 timedOut=true 를 같이 돌려준다.
  */
-async function streamAnthropicText({ apiKey, env, payload, signal, timeoutMs }) {
+async function streamAnthropicText({ auth, env, payload, signal, timeoutMs }) {
   const controller = new AbortController();
   // 외부 signal 이 있으면 같이 묶어둔다
   if (signal) signal.addEventListener("abort", () => controller.abort(signal.reason));
@@ -2052,18 +2066,12 @@ async function streamAnthropicText({ apiKey, env, payload, signal, timeoutMs }) 
   let collected = "";
   let timedOut = false;
 
-  // 구독(OAuth)/API키 2모드. env 있으면 공유 헬퍼(구독이면 Bearer+oauth beta+Claude Code system).
-  let reqHeaders;
-  let reqPayload = payload;
-  if (env) {
-    const auth = claudeAuthHeaders(env);
-    reqHeaders = auth.headers;
-    if (auth.subscription) {
-      reqPayload = { ...payload, system: buildClaudeSystem(true, typeof payload.system === "string" ? payload.system : "") };
-    }
-  } else {
-    reqHeaders = { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
-  }
+  // 인증은 요청 진입부에서 사용자 설정으로 이미 해석돼 내려온다(구독이면 Bearer + Claude Code system).
+  if (!auth || !auth.headers) throw new Error("scenario_auth_missing");
+  const reqHeaders = auth.headers;
+  const reqPayload = auth.subscription
+    ? { ...payload, system: buildClaudeSystem(true, typeof payload.system === "string" ? payload.system : "") }
+    : payload;
 
   try {
     const res = await fetch(anthropicMessagesUrl(env), {
@@ -2125,7 +2133,7 @@ async function streamAnthropicText({ apiKey, env, payload, signal, timeoutMs }) 
   return { text: collected, timedOut };
 }
 
-async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
+async function requestScenarioChunk(sys, userPrompt, opts = {}) {
   const maxTokens = resolveMaxTokensForScenes(opts.sceneCount);
   const payload = {
     model: "claude-sonnet-4-6",
@@ -2141,8 +2149,8 @@ async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
   // 27초 타임아웃: CF 30s 리밋 안쪽에 안전 마진 3초.
   // 끝까지 못 받아도 그 시점까지의 텍스트를 살려서 부분 씬이라도 돌려준다.
   const { text, timedOut } = await streamAnthropicText({
-    apiKey,
     env: opts.env,
+    auth: opts.auth,
     payload,
     timeoutMs: 27000,
   });

@@ -14,25 +14,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=3.1460" />
-  <link rel="stylesheet" href="styles.landing.css?v=3.1460" />
-  <script src="core.js?v=3.1460" defer></script>
-  <script src="js/config.js?v=3.1460" defer></script>
-  <script src="js/utils.js?v=3.1460" defer></script>
-  <script src="js/util/last-frame.js?v=3.1460" defer></script>
-  <script src="store.js?v=3.1460" defer></script>
-  <script src="api.js?v=3.1460" defer></script>
-  <script src="js/state.js?v=3.1460" defer></script>
-  <script src="js/auth.js?v=3.1460" defer></script>
-  <script src="js/navigation.js?v=3.1460" defer></script>
-  <script src="js/service/media.js?v=3.1460" defer></script>
-  <script src="js/service/project.js?v=3.1460" defer></script>
-  <script src="js/service/content-library.js?v=3.1460" defer></script>
-  <script src="js/ui/common.js?v=3.1460" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1460" defer></script>
-  <script src="js/ui/scenario.js?v=3.1460" defer></script>
-  <script src="js/ui/production.js?v=3.1460" defer></script>
-  <script src="script.js?v=3.1460" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1461" />
+  <link rel="stylesheet" href="styles.landing.css?v=3.1461" />
+  <script src="core.js?v=3.1461" defer></script>
+  <script src="js/config.js?v=3.1461" defer></script>
+  <script src="js/utils.js?v=3.1461" defer></script>
+  <script src="js/util/last-frame.js?v=3.1461" defer></script>
+  <script src="store.js?v=3.1461" defer></script>
+  <script src="api.js?v=3.1461" defer></script>
+  <script src="js/state.js?v=3.1461" defer></script>
+  <script src="js/auth.js?v=3.1461" defer></script>
+  <script src="js/navigation.js?v=3.1461" defer></script>
+  <script src="js/service/media.js?v=3.1461" defer></script>
+  <script src="js/service/project.js?v=3.1461" defer></script>
+  <script src="js/service/content-library.js?v=3.1461" defer></script>
+  <script src="js/ui/common.js?v=3.1461" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1461" defer></script>
+  <script src="js/ui/scenario.js?v=3.1461" defer></script>
+  <script src="js/ui/production.js?v=3.1461" defer></script>
+  <script src="script.js?v=3.1461" defer></script>
 </head>
 
 <body class="layout-fixed">
@@ -219,6 +219,38 @@
                     <div class="theme-preset-options" id="theme-light-options"></div>
                   </section>
                   <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
+                </div>
+              </section>
+
+              <section class="user-widget api-settings-widget is-collapsed hidden" id="api-settings-widget">
+                <div class="user-widget-head">
+                  <h4 data-i18n="API 설정">API 설정</h4>
+                  <button type="button" class="api-settings-toggle" id="api-settings-toggle" aria-expanded="false" aria-label="API 설정 펼치기"></button>
+                </div>
+                <div class="api-settings-body">
+                  <p class="muted user-widget-help" data-i18n="AI 생성에 쓸 Claude 인증을 직접 등록합니다. 등록 전에는 AI 기능이 동작하지 않습니다.">AI 생성에 쓸 Claude 인증을 직접 등록합니다. 등록 전에는 AI 기능이 동작하지 않습니다.</p>
+
+                  <div class="api-auth-modes" role="group" aria-label="인증 방식">
+                    <button type="button" class="api-auth-mode is-active" data-auth-mode="subscription" aria-pressed="true" data-i18n="구독(OAuth)">구독(OAuth)</button>
+                    <button type="button" class="api-auth-mode" data-auth-mode="api_key" aria-pressed="false" data-i18n="API 키">API 키</button>
+                  </div>
+
+                  <p class="muted api-settings-hint" id="api-settings-hint"></p>
+
+                  <div class="api-settings-row">
+                    <input type="password" id="api-settings-token" autocomplete="off" spellcheck="false" />
+                    <button type="button" class="btn-primary" id="api-settings-save" data-i18n="저장">저장</button>
+                  </div>
+
+                  <p class="api-settings-state" id="api-settings-state" aria-live="polite"></p>
+
+                  <button type="button" class="btn-secondary" id="api-settings-diagnose" data-i18n="인증 진단(라이브 테스트)">인증 진단(라이브 테스트)</button>
+
+                  <div class="api-settings-scope">
+                    <p class="api-settings-scope-title" data-i18n="적용 범위">적용 범위</p>
+                    <p class="muted" data-i18n="적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.">적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.</p>
+                    <p class="muted" data-i18n="적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. 이 기능들은 OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.">적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. 이 기능들은 OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.</p>
+                  </div>
                 </div>
               </section>
             </section>

@@ -947,6 +947,7 @@
       alertDraftSaveFail: function (e) { return '초안 저장 실패: ' + e; },
       alertDraftGenFail: function (e) { return '초안 생성 실패: ' + e; },
       alertCreditExhausted: 'AI 크레딧이 모두 소진되어 생성할 수 없어요.\n\nAnthropic 콘솔에서 크레딧을 충전한 뒤 다시 시도해 주세요.',
+      alertAuthRequired: 'AI 인증이 등록되지 않았어요.\n\n런처(/app) 우측 ‘API 설정’에서 구독(OAuth) 또는 API 키를 등록한 뒤 다시 시도해 주세요.',
       alertOneClickFail: function (e) { return '원클릭 초안 생성 실패: ' + e; },
       alertPublishSaved: function (n) { return n + '개 포맷에 배포 계획을 저장했습니다.'; },
       alertPublishFail: function (e) { return '배포 실패: ' + e; },
@@ -1009,6 +1010,7 @@
       alertDraftSaveFail: function (e) { return 'Failed to save draft: ' + e; },
       alertDraftGenFail: function (e) { return 'Failed to generate draft: ' + e; },
       alertCreditExhausted: 'AI credits are exhausted, so nothing can be generated.\n\nTop up credits in the Anthropic console and try again.',
+      alertAuthRequired: 'No AI credentials are registered.\n\nRegister a subscription (OAuth) or API key under ‘API settings’ on the launcher (/app), then try again.',
       alertOneClickFail: function (e) { return 'One-click draft failed: ' + e; },
       alertPublishSaved: function (n) { return 'Publish plan saved for ' + n + ' format' + (n === 1 ? '' : 's') + '.'; },
       alertPublishFail: function (e) { return 'Publish failed: ' + e; },
@@ -1837,6 +1839,7 @@
      * 화면에는 스켈레톤이 잠깐 깜빡일 뿐 아무 안내가 없었다. 버튼이 죽은 것처럼 보였다. */
     function describeGenError(err) {
       var msg = (err && err.message ? String(err.message) : String(err || '')).trim();
+      if ((err && err.authRequired) || /CLAUDE_AUTH_REQUIRED|claude_auth_required/.test(msg)) return T.alertAuthRequired;
       if ((err && err.creditExhausted) || /CREDIT_EXHAUSTED/.test(msg)) return T.alertCreditExhausted;
       return T.alertDraftGenFail(msg || (isEn ? 'unknown error' : '알 수 없는 오류'));
     }

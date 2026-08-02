@@ -133,6 +133,27 @@ test("brand-studio.js — bsfT 의 한/영 키가 짝을 이룬다", () => {
   assert.deepEqual(missingKo, [], `ko 에 없는 키: ${missingKo.join(", ")}`);
 });
 
+/**
+ * app.html 은 한국어를 그대로 쓰고 common.js 의 ko→en 사전으로 영어를 만든다.
+ * 사전에 없는 문구는 영어 모드에서 한국어 그대로 노출된다. 눈으로만 검사할 수 없다.
+ */
+test("app.html 의 한국어 data-i18n 문구는 모두 영어 사전에 있다", () => {
+  const dict = read("prototype/js/ui/common.js");
+  const dictAt = dict.indexOf("var EN_TEXT_EXACT = {");
+  assert.ok(dictAt > 0, "EN_TEXT_EXACT 사전을 찾지 못했다");
+  const dictBody = objectBodyAt(dict, dict.indexOf("{", dictAt));
+
+  const html = read("prototype/app.html");
+  const hangul = /[가-힣]/;
+  const missing = [];
+  for (const m of html.matchAll(/data-i18n="([^"]+)"/g)) {
+    const key = m[1];
+    if (!hangul.test(key)) continue; // 키 방식(brand_nav_studio 등)은 다른 경로로 번역된다
+    if (!dictBody.includes(`'${key}'`) && !dictBody.includes(`"${key}"`)) missing.push(key);
+  }
+  assert.deepEqual(missing, [], `영어 사전에 없는 문구:\n${missing.join("\n")}`);
+});
+
 test("TikTok 확인 모달에 하드코딩된 사용자 문구가 남아 있지 않다", () => {
   const src = read("prototype/js/ui/tiktok-consent-modal.js");
   // 사전 정의부를 제외한 렌더 코드에서 영문 문장이 직접 튀어나오면 안 된다.

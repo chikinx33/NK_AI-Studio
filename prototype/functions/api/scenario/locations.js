@@ -6,8 +6,7 @@
 // 출력:  { locations: [{ id, name, description, refObjectName:"", sceneIds:[...] }] }
 //   - description: 캐릭터·동작·카메라 없는 "빈 배경 플레이트" 묘사(이미지 생성용)
 import { authorizeRequest } from "../_shared/auth.js";
-import { getSql } from "../knowledge/_shared";
-import { resolveAuth, authHeadersFor, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
+import { buildClaudeSystem, anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "../_shared/claude-auth.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -43,11 +42,13 @@ export const onRequestPost = async ({ request, env }) => {
       ? "Scenes of one episode (with per-scene location/frame description). Group them into the episode's actually-distinct physical spaces.\n\n"
       : "한 에피소드의 씬 목록(씬별 장소/화면 묘사). 이 에피소드에서 실제로 구분되는 물리적 공간으로 묶어라.\n\n") + digest;
 
-    const sql = getSql(env);
-    const resolved = await resolveAuth(sql, auth.userId, env).catch(() => null);
-    if (!resolved) return send({ error: "auth_unresolved" }, 500, origin);
     let ah;
-    try { ah = authHeadersFor(resolved); } catch (e) { return send({ error: String((e && e.message) || e) }, 500, origin); }
+    try {
+      ah = await studioAuth(env, auth.userId);
+    } catch (e) {
+      if (isClaudeAuthRequired(e)) return send({ error: CLAUDE_AUTH_REQUIRED }, 412, origin);
+      return send({ error: String((e && e.message) || e) }, 500, origin);
+    }
 
     const res = await fetch(anthropicMessagesUrl(env), {
       method: "POST",

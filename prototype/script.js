@@ -1187,6 +1187,13 @@
     const favoriteIconNameEl = document.getElementById('favorite-icon-name');
     const themePresetWidget = document.getElementById('theme-preset-widget');
     const themePresetToggleBtn = document.getElementById('theme-preset-toggle');
+    const apiSettingsWidget = document.getElementById('api-settings-widget');
+    const apiSettingsToggleBtn = document.getElementById('api-settings-toggle');
+    const apiSettingsTokenInput = document.getElementById('api-settings-token');
+    const apiSettingsHintEl = document.getElementById('api-settings-hint');
+    const apiSettingsStateEl = document.getElementById('api-settings-state');
+    const apiSettingsSaveBtn = document.getElementById('api-settings-save');
+    const apiSettingsDiagnoseBtn = document.getElementById('api-settings-diagnose');
     const themeDarkOptionsEl = document.getElementById('theme-dark-options');
     const themeLightOptionsEl = document.getElementById('theme-light-options');
     const subscriptionManageBtn = document.getElementById('subscription-manage-btn');
@@ -1219,6 +1226,9 @@
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
     let themePresetCollapsed = true;
+    let apiSettingsCollapsed = true;
+    let apiAuthMode = 'subscription';
+    let apiAuthLoaded = false;
     let lastLoginState = false;
     let favoriteThemePresets = readThemePresets();
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
@@ -1238,6 +1248,7 @@
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
     const canUseThemePresetUI = () => !!(themePresetWidget && themePresetToggleBtn && themeDarkOptionsEl && themeLightOptionsEl);
+    const canUseApiSettingsUI = () => !!(apiSettingsWidget && apiSettingsToggleBtn && apiSettingsTokenInput && apiSettingsSaveBtn);
 
     const favoriteStorageKey = (user) => {
       const safe = String(user || '').trim().toLowerCase();
@@ -1852,6 +1863,107 @@
       }
     };
 
+    /* ── API 설정 위젯 ─────────────────────────────────────────────────────────
+     * AI 기업 설정 화면의 Claude 인증 토글을 런처로 옮겨 온 것.
+     * 백엔드는 같은 /api/agent/settings 를 쓴다(사용자별 app_settings).
+     * 비밀값은 서버가 응답에 절대 싣지 않으므로, 화면은 '설정됨' 여부만 안다. */
+    const setApiSettingsCollapsed = (collapsed) => {
+      if (!apiSettingsWidget) return;
+      apiSettingsCollapsed = !!collapsed;
+      apiSettingsWidget.classList.toggle('is-collapsed', apiSettingsCollapsed);
+      if (apiSettingsToggleBtn) {
+        apiSettingsToggleBtn.setAttribute('aria-expanded', apiSettingsCollapsed ? 'false' : 'true');
+        apiSettingsToggleBtn.setAttribute(
+          'aria-label',
+          translateUiText(apiSettingsCollapsed ? 'API 설정 펼치기' : 'API 설정 접기')
+        );
+      }
+    };
+
+    const setApiSettingsState = (text, kind) => {
+      if (!apiSettingsStateEl) return;
+      apiSettingsStateEl.textContent = translateUiText(text || '');
+      apiSettingsStateEl.classList.toggle('is-ok', kind === 'ok');
+      apiSettingsStateEl.classList.toggle('is-error', kind === 'error');
+    };
+
+    const renderApiAuthMode = () => {
+      if (!canUseApiSettingsUI()) return;
+      apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
+        const on = b.dataset.authMode === apiAuthMode;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const isSub = apiAuthMode === 'subscription';
+      if (apiSettingsHintEl) {
+        apiSettingsHintEl.textContent = translateUiText(
+          isSub
+            ? '터미널에서 claude setup-token 으로 발급한 구독 토큰(sk-ant-oat…)'
+            : 'Anthropic 콘솔에서 발급한 API 키(sk-ant-api…)'
+        );
+      }
+      apiSettingsTokenInput.placeholder = isSub ? 'sk-ant-oat…' : 'sk-ant-api…';
+    };
+
+    const loadApiSettings = async () => {
+      if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
+      setApiSettingsState('불러오는 중…');
+      try {
+        const data = await NK.api.agentSettings();
+        const claudeAuth = (data && data.claudeAuth) || {};
+        apiAuthMode = claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription';
+        apiAuthLoaded = true;
+        renderApiAuthMode();
+        const set = apiAuthMode === 'api_key' ? claudeAuth.apiKeySet : claudeAuth.oauthSet;
+        setApiSettingsState(set ? '등록됨 — AI 기능 사용 가능' : '미등록 — AI 기능이 동작하지 않습니다', set ? 'ok' : 'error');
+      } catch (err) {
+        setApiSettingsState(translateUiText('설정을 불러오지 못했습니다') + ': ' + ((err && err.message) || err), 'error');
+      }
+    };
+
+    const saveApiSettings = async () => {
+      if (!canUseApiSettingsUI()) return;
+      const value = String(apiSettingsTokenInput.value || '').trim();
+      if (!value) {
+        // 값 없이 저장하면 모드만 바꾼다. 기존 자격증명은 서버가 보존한다.
+        setApiSettingsState('저장 중…');
+      }
+      apiSettingsSaveBtn.disabled = true;
+      try {
+        await NK.api.agentSettingsSave({
+          kind: 'claudeAuth',
+          authMode: apiAuthMode,
+          oauthToken: apiAuthMode === 'subscription' ? value : '',
+          apiKey: apiAuthMode === 'api_key' ? value : '',
+        });
+        apiSettingsTokenInput.value = '';
+        await loadApiSettings();
+      } catch (err) {
+        setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
+      } finally {
+        apiSettingsSaveBtn.disabled = false;
+      }
+    };
+
+    const diagnoseApiSettings = async () => {
+      if (!canUseApiSettingsUI()) return;
+      apiSettingsDiagnoseBtn.disabled = true;
+      setApiSettingsState('진단 중…');
+      try {
+        const d = await NK.api.agentSettingsDiagnose();
+        const t = (d && d.test) || {};
+        if (t.ok) {
+          setApiSettingsState('정상 — 실제 호출에 성공했습니다', 'ok');
+        } else {
+          setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error');
+        }
+      } catch (err) {
+        setApiSettingsState(translateUiText('진단 실패') + ': ' + ((err && err.message) || err), 'error');
+      } finally {
+        apiSettingsDiagnoseBtn.disabled = false;
+      }
+    };
+
     const renderFavoriteCategorySelect = () => {
       if (!favoriteCategorySelectInput) return;
       const selected = parseFavoriteCategoryIndex(favoriteCategorySelectInput.value);
@@ -2354,6 +2466,15 @@
         }
       }
 
+      if (canUseApiSettingsUI()) {
+        apiSettingsWidget.classList.toggle('hidden', !loggedIn);
+        if (!loggedIn || !lastLoginState) {
+          setApiSettingsCollapsed(true);
+          apiAuthLoaded = false;
+          setApiSettingsState('');
+        }
+      }
+
       if (canUseFavoriteUI()) {
         if (!loggedIn) {
           setFavoriteFormOpen(false);
@@ -2602,6 +2723,25 @@
         if (!NK.auth.isAuthed()) return;
         setThemePresetCollapsed(!themePresetCollapsed);
       });
+    }
+
+    if (canUseApiSettingsUI()) {
+      apiSettingsToggleBtn.addEventListener('click', () => {
+        if (!NK.auth.isAuthed()) return;
+        setApiSettingsCollapsed(!apiSettingsCollapsed);
+        // 펼칠 때 처음 한 번만 불러온다(닫아둔 사용자에게 불필요한 요청을 보내지 않는다)
+        if (!apiSettingsCollapsed && !apiAuthLoaded) loadApiSettings();
+      });
+      apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
+        b.addEventListener('click', () => {
+          apiAuthMode = b.dataset.authMode === 'api_key' ? 'api_key' : 'subscription';
+          renderApiAuthMode();
+          setApiSettingsState('');
+        });
+      });
+      apiSettingsSaveBtn.addEventListener('click', saveApiSettings);
+      if (apiSettingsDiagnoseBtn) apiSettingsDiagnoseBtn.addEventListener('click', diagnoseApiSettings);
+      renderApiAuthMode();
     }
 
     if (subscriptionManageBtn) {

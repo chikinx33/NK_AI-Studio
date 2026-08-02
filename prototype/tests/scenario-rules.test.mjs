@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { inlineCreditHelper } from './lib/inline-esm-deps.mjs';
+import { prepareEndpointSource } from './lib/inline-esm-deps.mjs';
 
 function loadScenarioHelpers() {
   const fullPath = path.join(process.cwd(), 'prototype/functions/api/scenario.js');
   let source = fs.readFileSync(fullPath, 'utf8');
-  source = inlineCreditHelper(source);
+  source = prepareEndpointSource(source);
   source = source
     .replace('export function calculateSceneCountForDuration', 'function calculateSceneCountForDuration')
     .replace('export async function onRequestPost', 'async function onRequestPost')
