@@ -226,38 +226,6 @@ const EXPECTED = {
     "img2+vid120": "recommended",
     "story+img2+vid700": "recommended",
   },
-  "linkedin": {
-    "none": "unavailable",
-    "story": "recommended",
-    "img1": "available",
-    "img2": "available",
-    "img10": "available",
-    "img36": "available",
-    "vid-unknown": "available",
-    "vid30": "available",
-    "vid120": "available",
-    "vid700": "available",
-    "story+img1": "recommended",
-    "story+vid120": "recommended",
-    "img2+vid120": "available",
-    "story+img2+vid700": "recommended",
-  },
-  "pinterest": {
-    "none": "unavailable",
-    "story": "unavailable",
-    "img1": "recommended",
-    "img2": "available",
-    "img10": "available",
-    "img36": "available",
-    "vid-unknown": "available",
-    "vid30": "available",
-    "vid120": "available",
-    "vid700": "available",
-    "story+img1": "recommended",
-    "story+vid120": "available",
-    "img2+vid120": "available",
-    "story+img2+vid700": "available",
-  },
   "youtube": {
     "none": "unavailable",
     "story": "unavailable",
@@ -327,7 +295,7 @@ test("8. 전 플랫폼 회귀 — 리팩터링 전 동작과 동일하다", () =
  * SPEC 의 cardAccepts 로 드러내 두었다. 정리는 별건이다.
  * 여기서는 알려진 드리프트만 예외로 두고, 새로운 드리프트가 생기면 실패시킨다.
  */
-const KNOWN_DRIFT = new Set(["naver-blog", "pinterest", "naver-post"]);
+const KNOWN_DRIFT = new Set(["naver-blog", "naver-post"]);
 
 test("9. isCompatible 이 false 면 evaluate 는 unavailable (알려진 드리프트 제외)", () => {
   const violations = [];
@@ -493,4 +461,87 @@ test("brand-studio.js 에 자동 배포 대상 리터럴 배열이 남아 있지
     src.includes("NKFormatMedia.autoDeliveryIds()"),
     "자동 배포 대상을 SPEC 에서 읽지 않는다"
   );
+});
+
+// ── 제품에서 뺀 채널 ────────────────────────────────────────────────────────
+/**
+ * LinkedIn·Pinterest 는 제품에서 배제됐다.
+ *
+ * 채널 하나가 여러 파일에 흩어져 있어서(SPEC·추천표·포맷목록·아이콘·프롬프트·
+ * 미리보기·CSS) 한 곳만 남아도 카드는 뜨는데 판정이 없거나 그 반대가 된다.
+ * 되살아나는 것을 여기서 막는다.
+ */
+const DROPPED = ["linkedin", "pinterest"];
+
+test("제거된 채널은 SPEC 에도 추천표에도 없다", () => {
+  for (const id of DROPPED) {
+    assert.equal(M.SPEC[id], undefined, `${id} 가 SPEC 에 남아 있다`);
+    // 모르는 포맷 기조상 evaluate 는 죽지 않고 available 을 준다.
+    assert.deepEqual(ev(id, img(1)), { state: "available", reason: null });
+    assert.equal(M.deliveryOf(id), "auto");
+    assert.equal(M.manualUrlOf(id), "");
+  }
+});
+
+test("제거된 채널이 UI 코드에 남아 있지 않다", () => {
+  const FILES = [
+    "prototype/js/ui/brand-studio.js",
+    "prototype/js/ui/sns-settings.js",
+    "prototype/js/ui/format-media-spec.js",
+    "prototype/functions/api/draft-generate.js",
+    "prototype/styles.css",
+  ];
+  for (const rel of FILES) {
+    const src = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+    for (const line of src.split("\n")) {
+      // 이 변경을 설명하는 주석은 예외 — 왜 뺐는지 남겨 둬야 한다.
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
+      assert.ok(
+        !/linkedin|pinterest/i.test(line),
+        `${rel} 에 제거된 채널 참조가 남아 있다: ${line.trim().slice(0, 80)}`
+      );
+    }
+  }
+});
+
+test("SPEC 에 없는 채널이 저장돼 있어도 포맷 목록에서 걸러진다", () => {
+  // brand-studio.js 가 저장된 selectedFormats 를 SPEC 으로 거르는지 확인한다.
+  // 기존 프로젝트에 linkedin/pinterest 가 선택된 채로 남아 있기 때문이다.
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "prototype/js/ui/brand-studio.js"),
+    "utf8"
+  );
+  assert.ok(
+    /function _isKnownFormatId/.test(src),
+    "SPEC 기준 방어 함수가 없다"
+  );
+  assert.ok(
+    /_isKnownFormatId\(id\)[\s\S]{0,80}out\.indexOf\(id\)/.test(src),
+    "readSelectedFormats 가 SPEC 에 없는 id 를 거르지 않는다"
+  );
+  assert.ok(
+    /channelFormats[\s\S]{0,200}_isKnownFormatId\(f\.id\)/.test(src),
+    "channelFormats 가 SPEC 에 없는 채널을 거르지 않는다"
+  );
+});
+
+test("배포 이력 표시용 라벨·아이콘은 남겨 둔다 (기록을 지우지 않는다)", () => {
+  const label = fs.readFileSync(
+    path.join(process.cwd(), "prototype/js/ui/brand-intelligence.js"),
+    "utf8"
+  );
+  const icon = fs.readFileSync(
+    path.join(process.cwd(), "prototype/js/ui/common.js"),
+    "utf8"
+  );
+  for (const id of DROPPED) {
+    assert.ok(
+      new RegExp(`${id}:`, "i").test(label),
+      `${id} 라벨이 없으면 과거 이력이 id 날것으로 노출된다`
+    );
+    assert.ok(
+      new RegExp(`${id}:`, "i").test(icon),
+      `${id} 아이콘이 없으면 과거 이력 행에 아이콘이 빠진다`
+    );
+  }
 });

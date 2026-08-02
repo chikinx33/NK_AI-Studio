@@ -157,37 +157,7 @@ first_comment 값의 줄바꿈은 반드시 \n 으로 표현.
 {"caption":"...","hashtags":"#태그1 #태그2 ...","first_comment":"레이어1 문장\n레이어2 문장"}
 `.trim(),
 
-  linkedin: `
-당신은 LinkedIn B2B 콘텐츠 전략가입니다.
-아래 브랜드 컨텍스트와 스토리를 바탕으로 LinkedIn 게시물을 작성합니다.
 
-[작성 규칙]
-- 헤드라인: 전문적이고 인사이트 있는 한 문장
-- 본문: 3~5단락, 비즈니스 어조, 구체적 인사이트 포함
-- 각 단락은 짧게 (3~4문장), 단락 사이 빈 줄
-- 마지막: 독자에게 질문 또는 CTA
-- 해시태그: 3~5개 (전문 키워드 중심)
-- 금칙어 절대 사용 금지
-
-[출력 형식]
-반드시 아래 JSON만 반환. 설명·마크다운 없이.
-{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
-`.trim(),
-
-  pinterest: `
-당신은 Pinterest 비주얼 콘텐츠 전문 큐레이터입니다.
-아래 브랜드 컨텍스트와 스토리를 바탕으로 Pinterest 핀을 작성합니다.
-
-[작성 규칙]
-- 제목: 검색 키워드 중심, 구체적이고 명확하게, 30자 이내
-- 설명: 2~3줄, 감성적이고 영감을 주는 톤, 행동 유도 포함
-- 해시태그: 5~10개 (검색 최적화 키워드 중심)
-- 금칙어 절대 사용 금지
-
-[출력 형식]
-반드시 아래 JSON만 반환. 설명·마크다운 없이.
-{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
-`.trim(),
 
   threads: `
 당신은 Threads 콘텐츠 전문 카피라이터입니다.
@@ -437,7 +407,6 @@ export async function onRequestPost(context) {
       // 기본값을 만들어 두면 쓰이지도 않는 값이 초안에 남는다.
       tiktok:           {},
       facebook:         { privacy_status: "public" },
-      linkedin:         { visibility: "public" },
       threads:          { reply_setting: "public" },
       x:                { reply_setting: "public" },
       kakao:            { button_label: "자세히 보기" },

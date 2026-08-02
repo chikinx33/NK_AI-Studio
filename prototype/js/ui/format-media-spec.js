@@ -95,26 +95,6 @@
       video: { minSec: null, maxSec: null },
       delivery: 'auto',
     },
-    linkedin: {
-      accepts: { story: true, image: true, video: true },
-      image: { min: null, max: null },
-      video: { minSec: null, maxSec: null },
-      // ■ 한시적 manual — API 있음 · 자동 배포 구현 예정.
-      //   LinkedIn 은 UGC Posts / Share API 를 제공한다. 우리가 아직 구현하지
-      //   않았을 뿐이므로, 구현 완료 시 delivery 를 'auto' 로 바꾸고 manualUrl 을 지운다.
-      delivery: 'manual',
-      manualUrl: 'https://www.linkedin.com/feed/?shareActive=true',
-    },
-    pinterest: {
-      accepts: { story: false, image: true, video: false },
-      cardAccepts: { story: false, image: true, video: true },  // 드리프트(기존 동작 유지)
-      image: { min: null, max: null },
-      video: { minSec: null, maxSec: null },
-      // ■ 한시적 manual — API 있음 · 자동 배포 구현 예정.
-      //   Pinterest 는 Pins API 를 제공한다. 구현 완료 시 'auto' 로 전환한다.
-      delivery: 'manual',
-      manualUrl: 'https://www.pinterest.com/pin-creation-tool/',
-    },
     youtube: {
       accepts: { story: false, image: false, video: true },
       image: { min: null, max: null },
@@ -156,13 +136,11 @@
     threads: function () { return 'recommended'; },
     x: function () { return 'recommended'; },
     youtube: function () { return 'recommended'; },
-    pinterest: function (f) { return (f.hasImage && f.imageCount === 1) ? 'recommended' : 'available'; },
     facebook: function (f) {
       if (f.hasImage && f.imageCount >= 1) return 'recommended';
       if (f.hasStory) return 'recommended';
       return 'available';
     },
-    linkedin: function (f) { return f.hasStory ? 'recommended' : 'available'; },
     'naver-blog': function (f) {
       if (f.hasImage && f.imageCount >= 2) return 'recommended';
       if (f.hasStory) return 'recommended';

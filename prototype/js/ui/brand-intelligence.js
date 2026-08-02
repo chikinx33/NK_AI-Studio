@@ -45,6 +45,9 @@
     NK.ui.common.applyRuntimeLocale(lang);
   }
 
+  // linkedin·pinterest 는 제품에서 뺐지만 과거 배포 이력에는 남아 있다.
+  // 이력은 실제로 있었던 기록이라 지우지 않으므로, 라벨은 여기 남겨 둔다.
+  // 지우면 대시보드에 id 가 날것으로 노출된다.
   function channelLabel(type) {
     var labels = {
       youtube: 'YouTube', 'youtube-shorts': 'YouTube Shorts', instagram: 'Instagram', tiktok: 'TikTok',

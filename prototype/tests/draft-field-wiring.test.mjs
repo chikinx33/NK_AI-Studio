@@ -19,11 +19,9 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 // 화면에 있지만 의도적으로 전송하지 않는 필드 — 사유 필수.
 const UNSENT_FIELDS = {
   // 연동 자체가 Coming Soon 인 플랫폼. 각 플랫폼을 실제로 붙일 때 그 시점에 배선한다.
-  board_name: "Pinterest — 연동 전(Coming Soon)",
   button_label: "Kakao — 연동 전(Coming Soon)",
   seo_description: "Naver Blog — 연동 전(Coming Soon)",
   series_name: "Naver Post — 연동 전(Coming Soon)",
-  visibility: "LinkedIn — 연동 전(Coming Soon)",
   // Instagram 은 연동돼 있지만 이 필드는 지원 불가. Graph API 의 location_id 는
   // Facebook 위치 페이지 ID 를 요구하고 자유 입력 지명을 받지 않는다. 위치 검색 UI 가
   // 생기기 전까지는 비활성(disabled) 입력으로만 노출한다.

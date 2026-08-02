@@ -340,6 +340,22 @@
     return id === 'x-threads' ? 'threads' : id;
   }
 
+  /**
+   * 제품에서 빠진 채널 방어.
+   *
+   * LinkedIn·Pinterest 를 제거했지만 그전에 저장된 프로젝트의 selectedFormats 에는
+   * 남아 있다. SPEC 에 없는 id 는 화면에서 조용히 빼고, 다음 저장 때 자동으로
+   * 정리되게 한다(readSelectedFormats 를 거친 값이 그대로 저장되므로).
+   * ★배포 이력은 여기서 건드리지 않는다 — 실제로 있었던 기록이다.★
+   */
+  function _isKnownFormatId(id) {
+    try {
+      return !!(NKFormatMedia && NKFormatMedia.SPEC && NKFormatMedia.SPEC[id]);
+    } catch (_) {
+      return true;   // SPEC 을 못 읽으면 막지 않는다(기존 기조)
+    }
+  }
+
   function readSelectedFormats(payload) {
     var src = payload && Array.isArray(payload.brandStudioSelectedFormats)
       ? payload.brandStudioSelectedFormats
@@ -347,7 +363,7 @@
     var out = [];
     src.forEach(function (item) {
       var id = _migrateFormatId(String(item || '').trim());
-      if (id && out.indexOf(id) === -1) out.push(id);
+      if (id && _isKnownFormatId(id) && out.indexOf(id) === -1) out.push(id);
     });
     return out;
   }
@@ -729,12 +745,6 @@
         if (coreMsg)   parts.push('\n\n' + coreMsg);
         break;
 
-      case 'linkedin':
-        if (storyText) parts.push(storyText);
-        if (coreMsg)   parts.push('\n\n' + coreMsg);
-        if (toneHint)  parts.push('\n\n— ' + (brandName || '') + ' | ' + toneHint);
-        break;
-
       case 'youtube':
         if (storyText) parts.push(storyText);
         if (brandName) parts.push('\n\n─\n' + brandName);
@@ -771,7 +781,6 @@
         break;
 
       case 'naver-post':
-      case 'pinterest':
         parts.push(compactSentence(storyText || coreMsg, 120));
         break;
 
@@ -818,8 +827,6 @@
       'youtube-shorts':  6,
       'tiktok':          4,
       'facebook':        4,
-      'linkedin':        4,
-      'pinterest':       8,
       'threads':         5,
       'x':               3,
       'naver-post':      6,
@@ -948,8 +955,6 @@
         'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
         'kakao': '카카오톡 채널 운영',
         'facebook': '피드·릴스·그룹·페이지 브랜드 운영 채널',
-        'linkedin': 'B2B 아티클·피드·뉴스레터 전문 채널',
-        'pinterest': '이미지 핀 중심 비주얼 콘텐츠 채널',
         'youtube': '롱폼 영상·튜토리얼·리뷰 운영 채널',
         'naver-post': '모바일 카드뉴스·매거진형 콘텐츠 채널',
         'band': '팬 커뮤니티·소모임 중심 운영 채널'
@@ -1017,8 +1022,6 @@
         'naver-blog': 'Search-optimized blog content channel',
         'kakao': 'KakaoTalk Channel management',
         'facebook': 'Feed, Reels, Groups & Pages brand channel',
-        'linkedin': 'B2B articles, feed & newsletter channel',
-        'pinterest': 'Visual content channel focused on image pins',
         'youtube': 'Long-form videos, tutorials & reviews channel',
         'naver-post': 'Mobile card news & magazine-style content channel',
         'band': 'Fan community & interest group channel'
@@ -1097,7 +1100,12 @@
     ]), 88);
   }
 
+  // SPEC 에 없는 채널은 목록에서 뺀다 — 두 곳이 어긋나면 카드는 뜨는데 판정이 없다.
   function channelFormats() {
+    return _channelFormatsAll().filter(function (f) { return _isKnownFormatId(f.id); });
+  }
+
+  function _channelFormatsAll() {
     return [
       { id: 'instagram', title: 'Instagram', desc: '피드·릴스·스토리 중심 이미지·영상 SNS', hasTitle: false },
       { id: 'youtube-shorts', title: 'YouTube Shorts', desc: '세로형 쇼츠·영상 업로드 및 설명 운영', hasTitle: true },
@@ -1107,8 +1115,6 @@
       { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
       { id: 'kakao', title: 'Kakao', desc: '카카오톡 채널 운영', hasTitle: false },
       { id: 'facebook', title: 'Facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
-      { id: 'linkedin', title: 'LinkedIn', desc: 'B2B 아티클·피드·뉴스레터 전문 채널', hasTitle: true },
-      { id: 'pinterest', title: 'Pinterest', desc: '이미지 핀 중심 비주얼 콘텐츠 채널', hasTitle: true },
       { id: 'youtube', title: 'YouTube', desc: '롱폼 영상·튜토리얼·리뷰 운영 채널', hasTitle: true },
       { id: 'naver-post', title: 'Naver Post', desc: '모바일 카드뉴스·매거진형 콘텐츠 채널', hasTitle: true },
       { id: 'band', title: 'Band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false }
@@ -1127,8 +1133,6 @@
     'naver-post':     '<path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/>',
     'kakao':          '<path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/>',
     'band':           '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/>',
-    'linkedin':       '<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>',
-    'pinterest':      '<path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>',
   };
   // instagram 은 stroke 기반(라인 아이콘), 나머지는 fill 기반.
   function formatBrandIcon(id, size) {
@@ -1819,7 +1823,7 @@
     }
 
     // 블로그/롱폼 포맷용 구조화 미리보기 빌더
-    var LONG_FORM_FMTS = { 'naver-blog': true, 'facebook': true, 'linkedin': true, 'youtube': true, 'naver-post': true };
+    var LONG_FORM_FMTS = { 'naver-blog': true, 'facebook': true, 'youtube': true, 'naver-post': true };
     function buildBlogStructHtml(fmtId, storyTxt) {
       if (!LONG_FORM_FMTS[fmtId]) return '';
       var selImgs = imageItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
@@ -2332,56 +2336,6 @@
       inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url') +
       inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto', 'textarea');
     }
-    function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
-      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
-        '<div class="bsf-mockup bsf-mock-li">' +
-        '<div class="bsf-mock-li-hd">' +
-          mockAvatarEl('bsf-mock-li-avatar') +
-          '<div class="bsf-mock-li-meta">' +
-            '<div class="bsf-mock-li-name">' + mockBrandName + '</div>' +
-            '<div class="bsf-mock-li-title">' + (isEn ? 'Brand Page' : '브랜드 페이지') + '</div>' +
-            '<div class="bsf-mock-li-sub">' + (isEn ? '1h · 🌐' : '1시간 전 · 🌐') + '</div>' +
-          '</div>' +
-        '</div>' +
-        (titleVal ? '<div class="bsf-mock-li-headline" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal.slice(0, 60)) + '</div>' : '') +
-        '<div class="bsf-mock-li-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
-        (draftFirstImgUrl ? '<img class="bsf-mock-li-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
-        '<div class="bsf-mock-li-reactions">👍 ❤️ 💡 128 · ' + (isEn ? '24 comments' : '댓글 24개') + '</div>' +
-        '<div class="bsf-mock-li-actions">' +
-          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgThumbsUp18 + ' ' + (isEn ? 'Like' : '좋아요') + '</span>' +
-          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgMsg18 + ' ' + (isEn ? 'Comment' : '댓글') + '</span>' +
-          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgRepeat18 + ' ' + (isEn ? 'Repost' : '리포스트') + '</span>' +
-          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgSend18 + ' ' + (isEn ? 'Send' : '보내기') + '</span>' +
-        '</div>' +
-        '</div>') +
-      afWrap(isEn ? 'Headline' : '헤드라인', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Headline or article title' : '헤드라인')) +
-      afWrap(isEn ? 'Post body' : '본문', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Write your article…' : '아티클을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
-      radioField(fmtId, 'visibility', isEn ? 'Visibility' : '공개 범위', [
-        { value: 'public',      label: isEn ? 'Everyone' : '전체공개' },
-        { value: 'connections', label: isEn ? 'Connections only' : '연결만' },
-      ], draft.visibility || 'public', 'auto') +
-      inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url');
-    }
-    function buildPinterestPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
-      return pvWrap(isEn ? 'Pin preview' : '핀 미리보기',
-        '<div class="bsf-mockup bsf-mock-pin">' +
-        '<div class="bsf-mock-pin-img-wrap">' +
-          (draftFirstImgUrl ? '<img class="bsf-mock-pin-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-pin-img-empty">📌</div>') +
-          '<div class="bsf-mock-pin-save-btn">' + (isEn ? 'Save' : '저장') + '</div>' +
-        '</div>' +
-        '<div class="bsf-mock-pin-body">' +
-          '<div class="bsf-mock-pin-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
-          '<div class="bsf-mock-pin-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
-          '<div class="bsf-mock-pin-author">' + mockAvatarEl('bsf-mock-pin-author-avatar') + '<span class="bsf-mock-pin-author-name">' + mockBrandName + '</span></div>' +
-        '</div>' +
-        '</div>') +
-      afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
-      afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Describe your pin' : '핀을 설명하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
-      inputField(fmtId, 'board_name', isEn ? 'Board name' : '보드명', isEn ? 'Board to pin to' : '게시할 보드명', draft.board_name || '', 'auto') +
-      inputField(fmtId, 'link_url', isEn ? 'Destination URL' : '목적지 URL', 'https://', draft.link_url || '', 'auto', 'url');
-    }
     function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var playerContent, hasDuration;
       if (draftFirstVidUrl) {
@@ -2488,8 +2442,6 @@
         case 'naver-blog':     bodyHtml = buildNaverBlogPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'kakao':          bodyHtml = buildKakaoPreview(formatId, captionVal, hashtagVal, draft); break;
         case 'facebook':       bodyHtml = buildFacebookPreview(formatId, captionVal, hashtagVal, draft); break;
-        case 'linkedin':       bodyHtml = buildLinkedinPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
-        case 'pinterest':      bodyHtml = buildPinterestPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'youtube':        bodyHtml = buildYoutubePreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'naver-post':     bodyHtml = buildNaverPostPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'band':           bodyHtml = buildBandPreview(formatId, captionVal, hashtagVal, draft); break;
@@ -2537,8 +2489,6 @@
       'naver-blog':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z"/></svg>',
       'kakao':          '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/></svg>',
       'facebook':       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-      'linkedin':       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
-      'pinterest':      '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>',
       'youtube':        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
       'naver-post':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
       'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>'
@@ -4754,7 +4704,6 @@
           {
             title: isEn ? 'Single Image' : '이미지 1장 기반',
             items: [
-              { name: 'Pinterest',  conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
               { name: 'Naver Post', conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
               { name: 'Kakao',      conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
             ]
@@ -4762,7 +4711,6 @@
           {
             title: isEn ? 'Story Based' : '스토리 기반',
             items: [
-              { name: 'LinkedIn',   conds: isEn ? ['Story required']          : ['스토리 필요'] },
               { name: 'Naver Blog', conds: isEn ? ['Story, or 2+ images']     : ['스토리 또는 이미지 2장 이상'] },
               { name: 'Band',       conds: isEn ? ['Story required']          : ['스토리 필요'] },
             ]
