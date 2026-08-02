@@ -23,6 +23,7 @@ const DICTIONARIES = [
   ["prototype/js/ui/tiktok-consent-modal.js", "var ERROR_COPY = {", "\n  function describeError"],
   ["prototype/js/ui/tiktok-consent-modal.js", "var PRIVACY_LABEL = {", "\n  var BC_POLICY_URL"],
   ["prototype/js/ui/sns-settings.js", "var T = {", "\n  function _lang"],
+  ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
 ];
 
 /** `ko: {` / `en: {` 블록에서 최상위 키 이름을 뽑는다. */
@@ -47,8 +48,9 @@ function keysByLang(block) {
     const keys = new Set();
     let d = 0;
     for (const line of body.split("\n")) {
-      const m = d === 0 ? line.match(/^\s{4,}([A-Za-z_][A-Za-z0-9_]*)\s*:/) : null;
-      if (m) keys.add(m[1]);
+      // 'no-asset' 처럼 따옴표로 감싼 키도 인식한다
+      const m = d === 0 ? line.match(/^\s{4,}(['"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:/) : null;
+      if (m) keys.add(m[2]);
       for (const ch of line) {
         if (ch === "{") d++;
         else if (ch === "}") d--;
