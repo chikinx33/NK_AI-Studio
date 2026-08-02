@@ -176,8 +176,15 @@ test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다"
   const modal = read("prototype/js/ui/tiktok-consent-modal.js");
   assert.match(modal, /function pollPublishStatus/);
   assert.match(modal, /\/api\/sns\/tiktok\/publish-status\?/);
-  // 모달이 닫혔으면 폴링을 멈춘다
-  assert.match(modal, /if \(settled \|\| !document\.body\.contains\(overlay\)\) return;/);
+  // 결과가 확정되면 폴링을 멈춘다
+  assert.match(modal, /if \(settled\) return;/);
+  // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸린다.
+  // 창이 30초면 늘 결론 없이 끝나 "확인 불가"만 남는다.
+  assert.match(modal, /var deadline = Date\.now\(\) \+ 4 \* 60 \* 1000;/);
+  // 창을 닫아도 배포 화면이 이어서 확인할 수 있도록 publishId 를 넘긴다
+  assert.match(modal, /state: 'pending', publishId: pid/);
+  const studio = read("prototype/js/ui/brand-studio.js");
+  assert.match(studio, /function watchTikTokPublish\(/, "확인 창을 닫으면 결과를 영영 모른다");
 });
 
 test("심사 전에는 브랜디드 콘텐츠를 고를 수 없다 (막다른 상태 방지)", () => {

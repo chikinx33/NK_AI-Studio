@@ -628,10 +628,16 @@
       var qs = ['publishId=' + encodeURIComponent(pid)];
       if (o.ownerId) qs.push('ownerId=' + encodeURIComponent(o.ownerId));
       if (o.projectId) qs.push('projectId=' + encodeURIComponent(o.projectId));
+      /* 사진 카루셀은 TikTok 이 우리 프록시에서 이미지를 한 장씩 받아가므로
+       * 영상(우리가 직접 올림)보다 훨씬 오래 걸린다. 예전 창은 30초라 10장짜리
+       * 게시가 늘 결론 없이 끝났고, 화면에는 "확인 불가"만 남았다.
+       * 브라우저에는 실행 제한이 없으니 넉넉히 본다. */
       var tries = 0;
-      var MAX = 10;          // 최대 10회 × 3초 ≈ 30초. 브라우저라 실행 제한이 없다.
+      var MAX = 40;                   // 40회, 3~8초 간격 → 최대 약 4분
+      var deadline = Date.now() + 4 * 60 * 1000;
+      function nextDelay() { return tries < 10 ? 3000 : (tries < 20 ? 5000 : 8000); }
       function tick() {
-        if (settled || !document.body.contains(overlay)) return;   // 닫혔으면 중단
+        if (settled) return;
         tries++;
         fetch('/api/sns/tiktok/publish-status?' + qs.join('&'), {
           headers: { Authorization: 'Bearer ' + token },
@@ -655,9 +661,10 @@
           .catch(function () { retry(); });
       }
       function retry() {
-        if (tries < MAX) { setTimeout(tick, 3000); return; }
+        if (tries < MAX && Date.now() < deadline) { setTimeout(tick, nextDelay()); return; }
         // 시간 안에 결론이 안 났으면 성공으로 넘기지 않는다. 모른다고 말한다.
-        onUpdate({ state: 'pending' });
+        // publishId 를 함께 넘겨, 창을 닫아도 배포 화면이 계속 확인할 수 있게 한다.
+        onUpdate({ state: 'pending', publishId: pid });
       }
       setTimeout(tick, 2000);
     }
@@ -666,15 +673,18 @@
       var res = (result && result.result) ? result.result : {};
       var handle = String(res.handle || '').replace(/^@/, '');
       // 'waiting' = 아직 확인 중, 'complete' | 'failed' | 'pending' = 확인된 결과
-      var state2 = { phase: 'waiting', reason: '', url: String(res.url || '').trim() };
+      var state2 = { phase: 'waiting', reason: '', url: String(res.url || '').trim(), publishId: '' };
 
       /* 호출부는 이 값을 보고 '배포 완료'로 칠지 정한다.
        * 서버가 게시를 "수락"한 것과 TikTok 이 실제로 "발행"한 것은 다르다.
        * 수락만으로 완료 처리하면, 발행되지 않았는데 배포 완료 배지가 남는다. */
       function outcome() {
+        var ids = (res && res.publishIds) || [];
         return Object.assign({}, result, {
           tiktokFinalStatus: state2.phase === 'waiting' ? 'pending' : state2.phase,
           tiktokFailReason: state2.reason || '',
+          // 아직 모르면 배포 화면이 이어서 확인한다
+          tiktokPublishId: state2.publishId || String(ids[0] || res.postId || '').trim(),
         });
       }
 
@@ -714,6 +724,7 @@
       pollPublishStatus(res, function (upd) {
         state2.phase = upd.state;
         state2.reason = upd.reason || '';
+        if (upd.publishId) state2.publishId = upd.publishId;
         if (upd.postId && handle) {
           state2.url = 'https://www.tiktok.com/@' + encodeURIComponent(handle) +
             '/video/' + encodeURIComponent(upd.postId);

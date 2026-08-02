@@ -2718,6 +2718,48 @@
       if (sb) sb.disabled = false;
     }
 
+    /**
+     * TikTok 이 아직 처리 중일 때, 확인 창을 닫아도 결과를 끝까지 지켜본다.
+     *
+     * 사진 카루셀은 TikTok 이 우리 프록시에서 이미지를 한 장씩 받아가므로 몇 분이
+     * 걸린다. 확인 창 안에서만 기다리면 사용자가 창을 닫는 순간 결과를 영영 모르고,
+     * 화면에는 "확인하지 못했습니다"만 남는다.
+     */
+    function watchTikTokPublish(fmtId, label, publishId) {
+      var token = '';
+      try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
+      var tries = 0;
+      var MAX = 60;                                  // 최대 약 10분
+      var deadline = Date.now() + 10 * 60 * 1000;
+      function tick() {
+        tries++;
+        fetch('/api/sns/tiktok/publish-status?publishId=' + encodeURIComponent(publishId), {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (st) {
+            if (st && st.ok && st.status === 'complete') {
+              _deployedFormats[fmtId] = true;
+              persistDeployedFormats();
+              refreshDeploySummary();
+              bsfNotify(T.alertPublishSuccess(label));
+              return;
+            }
+            if (st && st.ok && st.status === 'failed') {
+              bsfNotify(T.alertNotPublished(label, String(st.failReason || st.rawStatus || '')));
+              return;
+            }
+            again();
+          })
+          .catch(again);
+      }
+      function again() {
+        if (tries < MAX && Date.now() < deadline) { setTimeout(tick, 10000); return; }
+        bsfNotify(T.alertPublishPending(label));
+      }
+      setTimeout(tick, 10000);
+    }
+
     /** 입력 요소 하나에서 현재 값을 읽는다. 타입마다 값이 있는 곳이 다르다. */
     function readFieldValue(el) {
       if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable) {
@@ -4278,6 +4320,11 @@
               // 발행되지 않았다. 조용히 넘어가면 배포된 줄 알고 넘어간다.
               var failFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
               var failLabel = failFmt && failFmt.title ? failFmt.title : oneFmtId;
+              // 아직 처리 중이면 확인 창을 닫아도 백그라운드로 계속 지켜본다.
+              if (publishResult.pending && publishResult.tiktokPublishId) {
+                watchTikTokPublish(oneFmtId, failLabel, publishResult.tiktokPublishId);
+                return;
+              }
               bsfNotify(publishResult.pending
                 ? T.alertPublishPending(failLabel)
                 : T.alertNotPublished(failLabel, publishResult.notPublishedReason || ''));
