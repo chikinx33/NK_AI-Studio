@@ -581,21 +581,23 @@ test("연결 페이지에 자체 채널 상태 플래그가 없다", () => {
   }
 });
 
-test("연결 페이지의 채널 집합이 SPEC 과 정확히 일치한다", () => {
+test("연결 페이지가 자체 채널 목록을 갖지 않는다", () => {
+  // 예전에는 PLATFORMS 배열이 채널 목록이자 상태(comingSoon)이자 이름표의 원천이었다.
+  // 이제 목록도 이름도 SPEC 에서 유도하므로 이 파일에 채널 id 목록이 있으면 안 된다.
   const src = readRepo("prototype/js/ui/sns-settings.js");
-  const body = src.slice(src.indexOf("var PLATFORM_LABELS = {"));
-  const listed = new Set();
-  for (const m of body.slice(0, body.indexOf("};")).matchAll(/'([a-z-]+)'\s*:/g)) {
-    listed.add(m[1]);
+  assert.ok(/connectTargets\(\)/.test(src), "카드 목록을 SPEC 에서 유도하지 않는다");
+
+  const declared = [];
+  for (const line of src.split("\n")) {
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;   // 사유 주석은 예외
+    if (line.includes("<svg")) continue;             // 아이콘 표는 표시용이라 예외
+    for (const id of Object.keys(M.SPEC)) {
+      if (line.includes(`'${id}':`) || line.includes(`"${id}":`)) {
+        declared.push(`${id} :: ${line.trim().slice(0, 60)}`);
+      }
+    }
   }
-  assert.ok(listed.size > 0, "PLATFORM_LABELS 에서 채널 id 를 뽑지 못했다");
-  // 연결 카드는 '연결 대상' 단위다. youtube-shorts 는 youtube 인증을 공유하므로
-  // 카드가 따로 없는 것이 정상이고, 그 사실도 SPEC(connectsAs)이 정한다.
-  assert.deepEqual(
-    [...listed].sort(),
-    [...M.connectTargets()].sort(),
-    "연결 페이지 채널 목록이 SPEC 과 어긋났다 — 한쪽만 고쳤다"
-  );
+  assert.deepEqual(declared, [], `연결 페이지가 자체 채널 목록을 들고 있다:\n${declared.join("\n")}`);
 });
 
 test("connectTargets() 는 SPEC 전 채널을 빠짐없이 덮는다", () => {
@@ -729,4 +731,61 @@ test("연결 페이지에 동작 없는 주소 등록 버튼이 없다", () => {
   for (const dead of ["sns-manual-url", "addUrl", "editUrl"]) {
     assert.ok(!src.includes(dead), `죽은 문자열이 남아 있다: ${dead}`);
   }
+});
+
+// ── 채널 표시 이름 ──────────────────────────────────────────────────────────
+/**
+ * 채널 상태는 단일 원천화했는데 이름표는 두 곳에 남아 있었다.
+ * Format 카드는 'Naver Blog', 연결 페이지는 '네이버 블로그' 고정이라
+ * 영어 UI 인데 연결 페이지만 한글이 튀었다. 이름도 SPEC 하나로 모은다.
+ */
+test("SPEC 의 모든 채널에 ko/en 표시 이름이 있다", () => {
+  for (const id of Object.keys(M.SPEC)) {
+    for (const lang of ["ko", "en"]) {
+      const label = M.labelOf(id, lang);
+      assert.ok(label && label !== id,
+        `${id} 의 ${lang} 이름이 없다 — 화면에 id 가 날것으로 뜬다`);
+    }
+  }
+});
+
+test("언어에 따라 채널 이름이 바뀐다", () => {
+  assert.equal(M.labelOf("naver-blog", "ko"), "네이버 블로그");
+  assert.equal(M.labelOf("naver-blog", "en"), "Naver Blog");
+  assert.equal(M.labelOf("kakao", "ko"), "카카오");
+  assert.equal(M.labelOf("kakao", "en"), "Kakao");
+  // 브랜드명이 그대로인 채널은 양쪽이 같아도 된다.
+  assert.equal(M.labelOf("instagram", "ko"), "Instagram");
+});
+
+test("모르는 채널은 id 를 그대로 쓴다 (빠뜨려도 사라지지 않게)", () => {
+  assert.equal(M.labelOf("unknown-platform", "ko"), "unknown-platform");
+});
+
+test("화면 코드에 채널 이름 리터럴이 남아 있지 않다", () => {
+  const NAMES = ["네이버 블로그", "네이버 포스트", "Naver Blog", "Naver Post"];
+  for (const rel of ["prototype/js/ui/sns-settings.js", "prototype/js/ui/brand-studio.js"]) {
+    const src = readRepo(rel);
+    for (const line of src.split("\n")) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;   // 사유 주석은 예외
+      for (const name of NAMES) {
+        assert.ok(!line.includes(`'${name}'`) && !line.includes(`"${name}"`),
+          `${rel} 에 채널 이름 리터럴이 남아 있다: ${line.trim().slice(0, 70)}`);
+      }
+    }
+  }
+});
+
+test("연결 페이지가 표시 이름을 SPEC 에서 읽는다", () => {
+  const src = readRepo("prototype/js/ui/sns-settings.js");
+  assert.ok(!src.includes("PLATFORM_LABELS"), "자체 라벨 표가 되살아났다");
+  assert.ok(/M\.labelOf\(|NKFormatMedia\.labelOf\(/.test(src), "labelOf 를 쓰지 않는다");
+});
+
+test("직접 올리는 채널 카드에는 사용 토글이 없다", () => {
+  // connected 가 true 가 될 수 없어 켤 방법이 없고, 눌러도 "먼저 연결해 주세요"라는
+  // 불가능한 요구만 뜬다. 배포 대상 선택은 Format 단계(02)가 이미 한다.
+  const src = readRepo("prototype/js/ui/sns-settings.js");
+  assert.ok(/var usageToggleHtml = manual \? '' :/.test(src),
+    "manual 채널에도 사용 토글을 렌더하고 있다");
 });

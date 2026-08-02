@@ -289,6 +289,50 @@
   }
 
   /**
+   * 채널 표시 이름.
+   *
+   * 예전에는 Format 카드(brand-studio.js)와 연결 페이지(sns-settings.js)가 각자
+   * 자기 이름표를 들고 있었다. 그래서 영어 UI 인데 연결 페이지만 '네이버 블로그'가
+   * 한글로 튀었다. 채널 상태는 단일 원천화하면서 이름은 두 곳에 남아 있던 것이다.
+   * ★설명 문구는 화면마다 다를 수 있지만 이름은 하나여야 한다.★
+   */
+  var CHANNEL_LABEL = {
+    ko: {
+      instagram: 'Instagram',
+      youtube: 'YouTube',
+      'youtube-shorts': 'YouTube Shorts',
+      tiktok: 'TikTok',
+      facebook: 'Facebook',
+      threads: 'Threads',
+      x: 'X',
+      'naver-blog': '네이버 블로그',
+      'naver-post': '네이버 포스트',
+      kakao: '카카오',
+      band: 'BAND',
+    },
+    en: {
+      instagram: 'Instagram',
+      youtube: 'YouTube',
+      'youtube-shorts': 'YouTube Shorts',
+      tiktok: 'TikTok',
+      facebook: 'Facebook',
+      threads: 'Threads',
+      x: 'X',
+      'naver-blog': 'Naver Blog',
+      'naver-post': 'Naver Post',
+      kakao: 'Kakao',
+      band: 'BAND',
+    },
+  };
+
+  /** 라벨이 없으면 id 를 그대로 쓴다 — 빠뜨려도 채널이 사라지지는 않게. */
+  function labelOf(formatId, lang) {
+    var id = String(formatId || '').trim();
+    var table = CHANNEL_LABEL[lang === 'en' ? 'en' : 'ko'];
+    return table[id] || id;
+  }
+
+  /**
    * 직접 올릴 때 붙여넣을 항목의 이름.
    * 입력칸이 여러 개인 채널(네이버 블로그 등)은 어디에 무엇을 넣는지 알아야 한다.
    */
@@ -402,6 +446,7 @@
     isManualDelivery: isManualDelivery,
     autoDeliveryIds: autoDeliveryIds,
     connectTargets: connectTargets,
+    labelOf: labelOf,
     manualUrlOf: manualUrlOf,
     composeManualText: composeManualText,
     deliveryLabel: deliveryLabel,

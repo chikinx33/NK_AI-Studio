@@ -1101,23 +1101,34 @@
   }
 
   // SPEC 에 없는 채널은 목록에서 뺀다 — 두 곳이 어긋나면 카드는 뜨는데 판정이 없다.
-  function channelFormats() {
-    return _channelFormatsAll().filter(function (f) { return _isKnownFormatId(f.id); });
+  // ★표시 이름(title)은 SPEC 이 준다.★ 여기서 다시 적으면 연결 페이지와 어긋난다.
+  function channelFormats(lang) {
+    var l = (lang === 'en') ? 'en' : 'ko';
+    return _channelFormatsAll()
+      .filter(function (f) { return _isKnownFormatId(f.id); })
+      .map(function (f) {
+        return { id: f.id, title: _channelLabel(f.id, l), desc: f.desc, hasTitle: f.hasTitle };
+      });
   }
 
+  function _channelLabel(id, lang) {
+    try { return NKFormatMedia.labelOf(id, lang); } catch (_) { return id; }
+  }
+
+  // desc(카드 설명)와 hasTitle 만 여기서 정한다. 이름은 SPEC 소관이다.
   function _channelFormatsAll() {
     return [
-      { id: 'instagram', title: 'Instagram', desc: '피드·릴스·스토리 중심 이미지·영상 SNS', hasTitle: false },
-      { id: 'youtube-shorts', title: 'YouTube Shorts', desc: '세로형 쇼츠·영상 업로드 및 설명 운영', hasTitle: true },
-      { id: 'tiktok', title: 'TikTok', desc: '짧은 영상·사진 카루셀 중심 빠른 확산 채널', hasTitle: false },
-      { id: 'threads', title: 'Threads', desc: '짧은 글 중심 실시간 대화형 채널', hasTitle: false },
-      { id: 'x', title: 'X', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
-      { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
-      { id: 'kakao', title: 'Kakao', desc: '카카오톡 채널 운영', hasTitle: false },
-      { id: 'facebook', title: 'Facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
-      { id: 'youtube', title: 'YouTube', desc: '롱폼 영상·튜토리얼·리뷰 운영 채널', hasTitle: true },
-      { id: 'naver-post', title: 'Naver Post', desc: '모바일 카드뉴스·매거진형 콘텐츠 채널', hasTitle: true },
-      { id: 'band', title: 'Band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false }
+      { id: 'instagram', desc: '피드·릴스·스토리 중심 이미지·영상 SNS', hasTitle: false },
+      { id: 'youtube-shorts', desc: '세로형 쇼츠·영상 업로드 및 설명 운영', hasTitle: true },
+      { id: 'tiktok', desc: '짧은 영상·사진 카루셀 중심 빠른 확산 채널', hasTitle: false },
+      { id: 'threads', desc: '짧은 글 중심 실시간 대화형 채널', hasTitle: false },
+      { id: 'x', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
+      { id: 'naver-blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
+      { id: 'kakao', desc: '카카오톡 채널 운영', hasTitle: false },
+      { id: 'facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
+      { id: 'youtube', desc: '롱폼 영상·튜토리얼·리뷰 운영 채널', hasTitle: true },
+      { id: 'naver-post', desc: '모바일 카드뉴스·매거진형 콘텐츠 채널', hasTitle: true },
+      { id: 'band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false }
     ];
   }
 
@@ -1270,7 +1281,7 @@
     var formatDrafts = readFormatDrafts(payload);
     var persistedDeployedFormats = readDeployedFormats(payload, projectId);
     var activeDraftTab = readActiveDraftTab(payload) || (selectedFormats.length ? selectedFormats[0] : '');
-    var formatItems = channelFormats();
+    var formatItems = channelFormats(isEn ? 'en' : 'ko');
     var channelRows = channelOptions();
     var channelTitleMap = {};
     channelRows.forEach(function (item) { channelTitleMap[item.id] = item.title; });
@@ -4690,37 +4701,37 @@
           {
             title: isEn ? 'Video Based' : '영상 기반',
             items: [
-              { name: 'YouTube',        conds: isEn ? ['Video required', 'Min. 1 min (60s)']    : ['영상 필요', '최소 1분(60초) 이상'] },
-              { name: 'YouTube Shorts', conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
-              { name: 'TikTok',         conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
+              { name: _channelLabel('youtube', isEn ? 'en' : 'ko'),        conds: isEn ? ['Video required', 'Min. 1 min (60s)']    : ['영상 필요', '최소 1분(60초) 이상'] },
+              { name: _channelLabel('youtube-shorts', isEn ? 'en' : 'ko'), conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
+              { name: _channelLabel('tiktok', isEn ? 'en' : 'ko'),         conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
             ]
           },
           {
             title: isEn ? 'Image or Video' : '이미지·영상 복합',
             items: [
-              { name: 'Instagram', conds: isEn ? ['Image or video required', 'Video ≤ 10 min'] : ['이미지 또는 영상 필요', '영상은 10분(600초) 이내'] },
-              { name: 'Facebook',  conds: isEn ? ['Image (1+) or story']                       : ['이미지 1장 이상 또는 스토리'] },
+              { name: _channelLabel('instagram', isEn ? 'en' : 'ko'), conds: isEn ? ['Image or video required', 'Video ≤ 10 min'] : ['이미지 또는 영상 필요', '영상은 10분(600초) 이내'] },
+              { name: _channelLabel('facebook', isEn ? 'en' : 'ko'),  conds: isEn ? ['Image (1+) or story']                       : ['이미지 1장 이상 또는 스토리'] },
             ]
           },
           {
             title: isEn ? 'Single Image' : '이미지 1장 기반',
             items: [
-              { name: 'Naver Post', conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
-              { name: 'Kakao',      conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
+              { name: _channelLabel('naver-post', isEn ? 'en' : 'ko'), conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
+              { name: _channelLabel('kakao', isEn ? 'en' : 'ko'),      conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
             ]
           },
           {
             title: isEn ? 'Story Based' : '스토리 기반',
             items: [
-              { name: 'Naver Blog', conds: isEn ? ['Story, or 2+ images']     : ['스토리 또는 이미지 2장 이상'] },
-              { name: 'Band',       conds: isEn ? ['Story required']          : ['스토리 필요'] },
+              { name: _channelLabel('naver-blog', isEn ? 'en' : 'ko'), conds: isEn ? ['Story, or 2+ images']     : ['스토리 또는 이미지 2장 이상'] },
+              { name: _channelLabel('band', isEn ? 'en' : 'ko'),       conds: isEn ? ['Story required']          : ['스토리 필요'] },
             ]
           },
           {
             title: isEn ? 'Any Asset' : '자유 조합',
             items: [
-              { name: 'Threads', conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
-              { name: 'X',       conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+              { name: _channelLabel('threads', isEn ? 'en' : 'ko'), conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+              { name: _channelLabel('x', isEn ? 'en' : 'ko'),       conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
             ]
           },
         ];

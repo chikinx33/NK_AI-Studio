@@ -14796,9 +14796,13 @@ textarea.bsf-skeleton {
 
 /* ── 4×3 플랫폼 그리드 ───────────────── */
 
+/* repeat(4, 1fr) 고정이면 창이 좁아질수록 카드가 계속 줄어든다. auto 카드는
+   액션(링크·버튼·토글)이 170px 를 차지하는데 그 자리는 안 줄어드니, 좁아지는 만큼
+   이름 칸만 깎여 'Instagram' 이 잘렸다. 열 수를 줄이는 쪽으로 양보시킨다.
+   340px 하한은 현재 폭(1570px)에서 4열을 그대로 유지하도록 잡은 값이다. */
 .sns-platform-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 10px;
 }
 

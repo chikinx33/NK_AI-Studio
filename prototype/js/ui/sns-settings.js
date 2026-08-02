@@ -33,33 +33,19 @@
   }
 
   /**
-   * 표시용 이름만 여기 둔다. ★채널의 존재 여부와 상태는 SPEC 이 유일한 근거다.★
+   * 카드 목록도 표시 이름도 SPEC 에서 온다.
+   * ★이 파일은 채널에 대해 아무것도 정의하지 않는다.★
    *
-   * 예전에는 이 배열이 채널 목록이자 상태(comingSoon)의 원천이었다. 그래서
-   * format-media-spec.js 를 로드하지도 않는 이 화면만 판단이 달랐고, 네이버
-   * 블로그가 여기선 '준비 중'인데 Format 카드는 선택 가능하고 초안 화면은
-   * 제목·본문·태그·SEO·프리뷰까지 완성돼 있는 상태가 됐다.
+   * 예전에는 이 파일이 채널 목록이자 상태(comingSoon)이자 이름표의 원천이었다.
+   * 그래서 format-media-spec.js 를 로드하지도 않는 이 화면만 판단이 달랐고,
+   * 영어 UI 인데 여기만 '네이버 블로그'가 한글로 튀었다.
    */
-  var PLATFORM_LABELS = {
-    'instagram':  'Instagram',
-    'youtube':    'YouTube',
-    'tiktok':     'TikTok',
-    'facebook':   'Facebook',
-    'threads':    'Threads',
-    'x':          'X',
-    'naver-blog': '네이버 블로그',
-    'naver-post': '네이버 포스트',
-    'kakao':      '카카오',
-    'band':       'BAND',
-  };
-
-  /** 카드 목록은 SPEC 에서 유도한다. 라벨이 없으면 id 를 그대로 쓴다(빠뜨려도 안 사라지게). */
   function platforms() {
-    var ids = (window.NKFormatMedia && window.NKFormatMedia.connectTargets)
-      ? window.NKFormatMedia.connectTargets()
-      : Object.keys(PLATFORM_LABELS);
-    return ids.map(function (id) {
-      return { id: id, label: PLATFORM_LABELS[id] || id };
+    var M = window.NKFormatMedia;
+    if (!M || !M.connectTargets) return [];
+    var lang = _lang();
+    return M.connectTargets().map(function (id) {
+      return { id: id, label: M.labelOf(id, lang) };
     });
   }
 
@@ -588,15 +574,15 @@
     }
 
     // 사용 토글 (우측): 연결됐을 때만 활성. 연결 안 됐으면 비활성 처리(클릭 시 OAuth 안내).
-    // 직접 올리는 채널은 연결이 없으므로 connected 로 잠그면 영영 못 켠다.
-    // 이 채널에 배포할지 여부만 묻는 토글이라 항상 조작 가능해야 한다.
-    var toggleOn = manual ? (snsState.enabled !== false) : (connected && enabled);
-    var toggleLocked = manual ? false : !connected;
-    var usageToggleHtml =
-      '<label class="sns-toggle' + (toggleLocked ? ' is-disabled' : '') + '" ' +
+    // 직접 올리는 채널에는 사용 토글을 두지 않는다.
+    // connected 가 true 가 될 수 없어서 켤 방법이 없고(누르면 "먼저 연결해 주세요"라는
+    // 불가능한 요구가 뜬다), 켜져도 아무것도 바꾸지 않는다 — 배포 대상 선택은 이미
+    // Format 단계(02)가 한다. 비활성 토글도 두지 않는다.
+    var usageToggleHtml = manual ? '' :
+      '<label class="sns-toggle' + (connected ? '' : ' is-disabled') + '" ' +
           'data-action="sns-usage-toggle" data-platform="' + platform.id + '" ' +
           'title="' + t('useToggleAria') + '" aria-label="' + t('useToggleAria') + '">' +
-        '<input type="checkbox" ' + (toggleOn ? 'checked' : '') + (toggleLocked ? ' disabled' : '') + ' />' +
+        '<input type="checkbox" ' + (connected && enabled ? 'checked' : '') + (connected ? '' : ' disabled') + ' />' +
         '<span class="sns-toggle-track"></span>' +
       '</label>';
 
@@ -634,11 +620,12 @@
           '<div class="sns-pcard-status">', statusText, '</div>',
           (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
         '</div>',
-        '<div class="sns-pcard-actions">',
-          linkBtnHtml,
-          finalConnectBoxHtml,
-          '<div class="sns-pcard-toggle">', usageToggleHtml, '</div>',
-        '</div>',
+        // 직접 올리는 채널은 액션이 하나도 없다. 빈 껍데기를 두면 카드 간격만 먹는다.
+        (linkBtnHtml || finalConnectBoxHtml || usageToggleHtml)
+          ? '<div class="sns-pcard-actions">' + linkBtnHtml + finalConnectBoxHtml +
+            (usageToggleHtml ? '<div class="sns-pcard-toggle">' + usageToggleHtml + '</div>' : '') +
+            '</div>'
+          : '',
       '</div>',
     ].join('');
   }
