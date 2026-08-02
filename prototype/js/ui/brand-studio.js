@@ -967,6 +967,8 @@
       alertPublishFail: function (e) { return '배포 실패: ' + e; },
       alertPublishSuccess: function (label) { return label + ' 배포 완료!'; },
       alertPublishProcessing: function (label) { return label + ' 배포 요청 완료 — 채널에서 처리 중입니다. 잠시 후 계정에서 게시물을 확인하세요.'; },
+      alertNotPublished: function (label, reason) { return label + ' 게시되지 않았습니다.' + (reason ? '\n\n' + reason : '') + '\n\n배포 완료로 표시하지 않았습니다. 원인을 확인한 뒤 다시 시도해 주세요.'; },
+      alertPublishPending: function (label) { return label + ' 결과를 확인하지 못했습니다.\n\n채널이 아직 처리 중일 수 있습니다. 계정에서 직접 확인해 주세요. 배포 완료로는 표시하지 않았습니다.'; },
       alertPublishAllDone: function (n) { return n + '개 채널 배포 요청을 완료했습니다.'; },
       alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
       alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; }
@@ -1030,6 +1032,8 @@
       alertPublishFail: function (e) { return 'Publish failed: ' + e; },
       alertPublishSuccess: function (label) { return label + ' published!'; },
       alertPublishProcessing: function (label) { return label + ' publish requested — the channel is still processing it. Check your account shortly.'; },
+      alertNotPublished: function (label, reason) { return label + ' was not published.' + (reason ? '\n\n' + reason : '') + '\n\nIt has not been marked as published. Check the cause and try again.'; },
+      alertPublishPending: function (label) { return label + ' result could not be confirmed.\n\nThe channel may still be processing it. Check your account directly. It has not been marked as published.'; },
       alertPublishAllDone: function (n) { return 'Publish requested for ' + n + ' channel' + (n === 1 ? '' : 's') + '.'; },
       alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
       alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; }
@@ -4098,8 +4102,19 @@
               return doPublish();
             },
           }).then(function (modalResult) {
-            // null = 사용자가 취소. 그 외엔 게시 결과를 그대로 흘려보낸다.
+            // null = 사용자가 취소.
             if (!modalResult) return { skipped: true, reason: 'user_cancelled' };
+            // 서버가 요청을 "수락"한 것과 TikTok 이 실제로 "발행"한 것은 다르다.
+            // 수락만 보고 ok 로 넘기면 발행되지 않았는데도 '배포 완료' 배지가 남는다.
+            var ttFinal = String(modalResult.tiktokFinalStatus || '');
+            if (ttFinal === 'failed' || ttFinal === 'pending') {
+              return Object.assign({}, modalResult, {
+                ok: false,
+                notPublished: true,
+                notPublishedReason: String(modalResult.tiktokFailReason || ''),
+                pending: ttFinal === 'pending',
+              });
+            }
             return modalResult;
           });
         }
@@ -4259,6 +4274,13 @@
               // 게시 결과 URL 노출 — 영상이 실제로 어디에 올라갔는지(쇼츠/일반영상·공개여부) 바로 확인 가능.
               if (oneUrl) oneMsg += '\n\n' + oneUrl;
               bsfNotify(oneMsg);
+            } else if (publishResult.notPublished) {
+              // 발행되지 않았다. 조용히 넘어가면 배포된 줄 알고 넘어간다.
+              var failFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
+              var failLabel = failFmt && failFmt.title ? failFmt.title : oneFmtId;
+              bsfNotify(publishResult.pending
+                ? T.alertPublishPending(failLabel)
+                : T.alertNotPublished(failLabel, publishResult.notPublishedReason || ''));
             }
           })
           .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
@@ -4288,6 +4310,7 @@
         refreshDeploySummary();
         var deployPlan = { channels: allFmtIds, scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         var _allDeployedCount = 0;
+        var _notPublished = [];   // 발행되지 않은 채널 — 끝에 모아서 알린다
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
             // 배포 플랜 저장은 초안 내용을 바꾸지 않으므로 전체 재렌더(renderNext) 대신
@@ -4300,7 +4323,19 @@
                 return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt)
                   .then(function (pubRes) {
                     if (pubRes && pubRes.skipped) { delete _deployingFormats[fmtId]; refreshDeploySummary(); return; }
-                    if (!pubRes || !pubRes.ok) return;
+                    if (!pubRes || !pubRes.ok) {
+                      // 실패를 모아 두었다가 끝에 함께 알린다(루프 중간에 모달을 띄우지 않는다)
+                      if (pubRes && pubRes.notPublished) {
+                        var nfFmt = formatItems.find(function (f) { return f.id === fmtId; });
+                        _notPublished.push({
+                          label: (nfFmt && nfFmt.title) ? nfFmt.title : fmtId,
+                          reason: pubRes.notPublishedReason || '',
+                          pending: !!pubRes.pending,
+                        });
+                      }
+                      delete _deployingFormats[fmtId]; refreshDeploySummary();
+                      return;
+                    }
                     return persistPublishedResult(fmtId, formatDrafts[fmtId] || {}, pubRes, fmtScheduledAt)
                       .then(function () {
                         _deployedFormats[fmtId] = true; persistDeployedFormats();
@@ -4312,7 +4347,12 @@
             }, Promise.resolve());
           })
           .then(function () {
-            if (_allDeployedCount > 0) bsfNotify(T.alertPublishAllDone(_allDeployedCount));
+            var lines = [];
+            if (_allDeployedCount > 0) lines.push(T.alertPublishAllDone(_allDeployedCount));
+            _notPublished.forEach(function (nf) {
+              lines.push(nf.pending ? T.alertPublishPending(nf.label) : T.alertNotPublished(nf.label, nf.reason));
+            });
+            if (lines.length) bsfNotify(lines.join('\n\n'));
           })
           .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () {

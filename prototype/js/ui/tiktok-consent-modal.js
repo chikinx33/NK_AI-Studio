@@ -82,6 +82,8 @@
       interactionOffTooltip: 'Turned off in your TikTok account settings',
       creatorInfoFailed: 'Could not load your TikTok account settings. Please try again.',
       posted: 'Your video has been posted to TikTok.',
+      postFailed: 'TikTok did not publish this post.',
+      postPending: 'TikTok has not finished processing yet. Check the TikTok app in a few minutes.',
       noAudience: 'No audience option is available with the current settings. Turn off the commercial content disclosure to continue.',
       tooLong: function (n) { return 'This video is longer than your TikTok limit of ' + n + ' seconds.'; }
     },
@@ -117,6 +119,8 @@
       interactionOffTooltip: 'TikTok 계정 설정에서 꺼져 있습니다',
       creatorInfoFailed: 'TikTok 계정 설정을 불러오지 못했습니다. 다시 시도해 주세요.',
       posted: 'TikTok에 게시했습니다.',
+      postFailed: 'TikTok이 이 게시물을 발행하지 않았습니다.',
+      postPending: 'TikTok이 아직 처리를 끝내지 않았습니다. 몇 분 뒤 TikTok 앱에서 확인해 주세요.',
       noAudience: '현재 설정으로는 선택할 수 있는 공개 범위가 없습니다. 상업적 콘텐츠 고지를 끄면 계속할 수 있습니다.',
       tooLong: function (n) { return '이 영상은 TikTok 제한 길이 ' + n + '초를 넘습니다.'; }
     }
@@ -634,14 +638,26 @@
         })
           .then(function (r) { return r.json(); })
           .then(function (st) {
-            if (!st || !st.ok) return;
+            if (!st || !st.ok) { retry(); return; }
             if (st.status === 'complete') {
-              onUpdate({ complete: true, postId: st.postId || '' });
+              onUpdate({ state: 'complete', postId: st.postId || '' });
               return;
             }
-            if (tries < MAX) setTimeout(tick, 3000);
+            // 실패를 삼키면 안 된다. 예전에는 complete 만 보고 나머지는 버려서,
+            // TikTok 이 발행하지 않았는데도 화면은 "처리 중"인 채로 끝났고
+            // 배포 목록에는 '배포 완료' 배지가 남았다.
+            if (st.status === 'failed') {
+              onUpdate({ state: 'failed', reason: String(st.failReason || st.rawStatus || '') });
+              return;
+            }
+            retry();
           })
-          .catch(function () { if (tries < MAX) setTimeout(tick, 3000); });
+          .catch(function () { retry(); });
+      }
+      function retry() {
+        if (tries < MAX) { setTimeout(tick, 3000); return; }
+        // 시간 안에 결론이 안 났으면 성공으로 넘기지 않는다. 모른다고 말한다.
+        onUpdate({ state: 'pending' });
       }
       setTimeout(tick, 2000);
     }
@@ -649,38 +665,61 @@
     function renderDone(result) {
       var res = (result && result.result) ? result.result : {};
       var handle = String(res.handle || '').replace(/^@/, '');
-      var state2 = { complete: false, url: String(res.url || '').trim() };
+      // 'waiting' = 아직 확인 중, 'complete' | 'failed' | 'pending' = 확인된 결과
+      var state2 = { phase: 'waiting', reason: '', url: String(res.url || '').trim() };
+
+      /* 호출부는 이 값을 보고 '배포 완료'로 칠지 정한다.
+       * 서버가 게시를 "수락"한 것과 TikTok 이 실제로 "발행"한 것은 다르다.
+       * 수락만으로 완료 처리하면, 발행되지 않았는데 배포 완료 배지가 남는다. */
+      function outcome() {
+        return Object.assign({}, result, {
+          tiktokFinalStatus: state2.phase === 'waiting' ? 'pending' : state2.phase,
+          tiktokFailReason: state2.reason || '',
+        });
+      }
 
       function paintDone() {
-        var title = state2.complete ? C.posted : C.processing;
+        var title = C.processing;
+        if (state2.phase === 'complete') title = C.posted;
+        else if (state2.phase === 'failed') title = C.postFailed;
+        else if (state2.phase === 'pending') title = C.postPending;
+
+        var spinning = (state2.phase === 'waiting');
         var note = (res.privacyDowngraded && res.privacyDowngradeReason)
           ? '<div class="ttc-banner">' + esc(res.privacyDowngradeReason) + '</div>' : '';
+        if (state2.phase === 'failed' && state2.reason) {
+          note = '<div class="ttc-banner">' + esc(state2.reason) + '</div>' + note;
+        }
         modal.innerHTML =
           '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span></div>' +
           '<div class="ttc-body"><div class="ttc-done">' +
-          (state2.complete ? '' : '<div class="ttc-spinner"></div>') +
+          (spinning ? '<div class="ttc-spinner"></div>' : '') +
           '<div class="ttc-done-title">' + esc(title) + '</div>' +
           (state2.url ? '<a class="ttc-link" href="' + esc(state2.url) + '" target="_blank" rel="noopener">' + esc(C.viewPost) + '</a>' : '') +
           note + '</div></div>' +
           '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>' + esc(C.close) + '</button></div>';
         modal.querySelector('[data-ttc-done]').onclick = function () {
-          finish(result);
+          finish(outcome());
           destroy();
         };
       }
 
       paintDone();
-      // 아직 처리 중이면 완료될 때까지 확인해 링크를 채운다.
-      if (String(res.status || '') !== 'published') {
-        pollPublishStatus(res, function (upd) {
-          state2.complete = true;
-          if (upd.postId && handle) {
-            state2.url = 'https://www.tiktok.com/@' + encodeURIComponent(handle) +
-              '/video/' + encodeURIComponent(upd.postId);
-          }
-          paintDone();
-        });
+      // 서버가 이미 발행 완료를 확인해 준 경우가 아니면, 실제 결과를 끝까지 확인한다.
+      if (String(res.status || '') === 'published') {
+        state2.phase = 'complete';
+        paintDone();
+        return;
       }
+      pollPublishStatus(res, function (upd) {
+        state2.phase = upd.state;
+        state2.reason = upd.reason || '';
+        if (upd.postId && handle) {
+          state2.url = 'https://www.tiktok.com/@' + encodeURIComponent(handle) +
+            '/video/' + encodeURIComponent(upd.postId);
+        }
+        paintDone();
+      });
     }
 
     paint();
