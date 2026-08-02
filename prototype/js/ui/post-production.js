@@ -2661,6 +2661,26 @@
         throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
       }
 
+      /* 렌더는 성공했지만 화면이 멈춘 프레임이 많으면 알려준다.
+       * 소스 영상 seek 이 제때 끝나지 않으면 직전 화면이 그대로 다시 인코딩된다.
+       * 파일은 정상 mp4 라 포맷을 아무리 확인해도 원인이 안 나온다 — 그래서 수치로 말한다. */
+      var staleN = Number(result && result.staleFrames) || 0;
+      var totalN = Number(result && result.totalFrames) || 0;
+      if (totalN > 0 && staleN / totalN >= 0.03) {
+        var stalePct = Math.round((staleN / totalN) * 100);
+        var isEnPp = !!(NK.state && NK.state.runtime && NK.state.runtime.lang === 'en');
+        showMessageDialog(
+          isEnPp
+            ? 'Rendering finished, but ' + stalePct + '% of frames (' + staleN + '/' + totalN + ') reused the previous image '
+              + 'because the source video could not seek in time. Playback will look choppy at those points.\n\n'
+              + 'Close other tabs or apps and render again, or re-render the affected scenes.'
+            : '렌더링은 끝났지만 소스 영상 탐색이 제때 끝나지 않아 전체의 ' + stalePct + '%('
+              + staleN + '/' + totalN + '프레임)가 직전 화면을 그대로 다시 썼습니다. 그 구간은 끊겨 보입니다.\n\n'
+              + '다른 탭·프로그램을 닫고 다시 렌더링하거나, 해당 씬만 다시 렌더링해 주세요.',
+          isEnPp ? 'Choppy playback expected' : '끊김이 예상됩니다'
+        );
+      }
+
       // MP4 직접 출력인 경우 blob URL로 즉시 사용
       var outputVideoMime = String(result && result.mimeType || 'video/webm').trim();
       var isMp4Direct = outputVideoMime.indexOf('mp4') >= 0;

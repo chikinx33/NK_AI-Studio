@@ -262,7 +262,7 @@
         }
         resolve(!!ok);
       };
-      tid = setTimeout(function () { finish(false); }, Math.max(200, Number(timeoutMs) || 400));
+      tid = setTimeout(function () { finish(false); }, Math.max(200, Number(timeoutMs) || 1200));
       if (typeof video.requestVideoFrameCallback === 'function') {
         try {
           rVFCId = video.requestVideoFrameCallback(function () { finish(true); });
@@ -965,8 +965,17 @@
       var t = Math.min(segmentDuration, i / fps);
       // 소스 영상 절대 위치 = videoOffset + 클립 내 경과 시간
       var seekTime = Math.min(safeMax, voff + t);
-      // seek + 프레임 presented 대기 (timeout 시 직전 프레임 그대로 진행)
-      try { await awaitVideoFrameAt(video, seekTime, 400); } catch (_) { }
+      /* seek + 프레임 presented 대기.
+       * 제때 못 받으면 직전 프레임이 그대로 다시 인코딩된다 — 타임스탬프는 균등한데
+       * 그림만 멈춰 있어서, 이런 프레임이 쌓이면 영상이 뚝뚝 끊겨 보인다.
+       * 예전에는 400ms 만 기다리고 조용히 넘어가 원인을 알 수도 없었다. */
+      var got = false;
+      try { got = await awaitVideoFrameAt(video, seekTime, 1200); } catch (_) { got = false; }
+      if (!got) {
+        // 한 번 더 기회를 준다. 디코더가 키프레임을 찾는 중일 수 있다.
+        try { got = await awaitVideoFrameAt(video, seekTime, 1200); } catch (_) { got = false; }
+      }
+      if (!got) state.staleFrames++;
       if (state.encoderError) return false;
       if (shouldCancel && shouldCancel()) return false;
       // drawImage(video)는 video.error 상태에서 InvalidStateError를 던질 수 있다.
@@ -1167,6 +1176,9 @@
       canvas: canvas,
       encoder: encoder,
       globalFrame: 0,
+      // seek 이 제때 끝나지 않아 직전 화면을 그대로 다시 인코딩한 프레임 수.
+      // 이 값이 많으면 영상이 뚝뚝 끊겨 보인다(타임스탬프는 균등한데 그림이 멈춘다).
+      staleFrames: 0,
       get encoderError() { return encoderError; },
       markEncoderError: function (err) {
         encoderError = encoderError || err || new Error('encoder_failed');
@@ -1324,10 +1336,22 @@
     var mp4Blob = new Blob([target.buffer], { type: 'video/mp4' });
     if (!mp4Blob.size) throw new Error('빈 렌더링 결과');
 
+    // 몇 프레임이 직전 화면 재사용이었는지 남긴다. 조용히 넘어가면 왜 끊기는지
+    // 알 방법이 없다(파일은 정상 mp4 라 포맷을 아무리 봐도 안 나온다).
+    var staleFrames = Number(segState.staleFrames) || 0;
+    var totalFrames = Number(segState.globalFrame) || 0;
+    if (staleFrames > 0) {
+      console.warn('[postprod-render] seek 지연으로 재사용한 프레임 ' +
+        staleFrames + '/' + totalFrames +
+        ' (' + Math.round((staleFrames / Math.max(1, totalFrames)) * 100) + '%) — 그만큼 화면이 멈춰 보인다');
+    }
+
     return {
       blob: mp4Blob,
       mimeType: 'video/mp4',
       allVisualsFailed: loadedVisualCount === 0 && failedVisualCount > 0,
+      staleFrames: staleFrames,
+      totalFrames: totalFrames,
       durationSec: Math.max(0.2, Number(total) || 0)
     };
   }
