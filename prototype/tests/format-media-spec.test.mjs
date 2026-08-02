@@ -545,3 +545,95 @@ test("배포 이력 표시용 라벨·아이콘은 남겨 둔다 (기록을 지�
     );
   }
 });
+
+// ── 화면 간 단일 원천 ───────────────────────────────────────────────────────
+/**
+ * ★채널 상태의 원천은 SPEC 하나여야 한다.★
+ *
+ * 예전에는 원천이 둘이었다. brand.html 계열은 SPEC.delivery 를 읽는데,
+ * 연결 페이지는 sns-settings.js 안의 PLATFORMS[].comingSoon 을 읽었다.
+ * sns-settings.html 이 format-media-spec.js 를 로드하지도 않았기 때문에
+ * 어긋나도 아무도 알아채지 못했다 — 네이버 블로그가 연결 페이지에서는
+ * '준비 중'인데 Format 카드는 선택 가능하고 초안은 완성돼 있었다.
+ *
+ * ★채널을 표시하는 화면이 늘어나면 이 블록을 그 화면까지 확장할 것.★
+ * 현재 대상: sns-settings.js / sns-settings.html / privacy.html
+ */
+const readRepo = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+test("연결 페이지가 format-media-spec.js 를 로드한다 (이번 사고의 직접 원인)", () => {
+  const html = readRepo("prototype/sns-settings.html");
+  const specAt = html.indexOf("js/ui/format-media-spec.js");
+  const pageAt = html.indexOf("js/ui/sns-settings.js");
+  assert.ok(specAt > 0, "format-media-spec.js 를 로드하지 않는다 — 자기만의 채널 상태를 갖게 된다");
+  assert.ok(pageAt > 0, "sns-settings.js 로드를 찾지 못했다");
+  assert.ok(specAt < pageAt, "format-media-spec.js 가 sns-settings.js 보다 먼저 로드돼야 한다");
+});
+
+test("연결 페이지에 자체 채널 상태 플래그가 없다", () => {
+  const src = readRepo("prototype/js/ui/sns-settings.js");
+  for (const line of src.split("\n")) {
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;   // 사유 주석은 예외
+    assert.ok(
+      !/comingSoon/.test(line),
+      `두 번째 원천이 되살아났다: ${line.trim().slice(0, 80)}`
+    );
+  }
+});
+
+test("연결 페이지의 채널 집합이 SPEC 과 정확히 일치한다", () => {
+  const src = readRepo("prototype/js/ui/sns-settings.js");
+  const body = src.slice(src.indexOf("var PLATFORM_LABELS = {"));
+  const listed = new Set();
+  for (const m of body.slice(0, body.indexOf("};")).matchAll(/'([a-z-]+)'\s*:/g)) {
+    listed.add(m[1]);
+  }
+  assert.ok(listed.size > 0, "PLATFORM_LABELS 에서 채널 id 를 뽑지 못했다");
+  // 연결 카드는 '연결 대상' 단위다. youtube-shorts 는 youtube 인증을 공유하므로
+  // 카드가 따로 없는 것이 정상이고, 그 사실도 SPEC(connectsAs)이 정한다.
+  assert.deepEqual(
+    [...listed].sort(),
+    [...M.connectTargets()].sort(),
+    "연결 페이지 채널 목록이 SPEC 과 어긋났다 — 한쪽만 고쳤다"
+  );
+});
+
+test("connectTargets() 는 SPEC 전 채널을 빠짐없이 덮는다", () => {
+  const targets = new Set(M.connectTargets());
+  for (const id of Object.keys(M.SPEC)) {
+    const via = M.SPEC[id].connectsAs || id;
+    assert.ok(
+      targets.has(via),
+      `${id} 의 연결 대상(${via})이 카드 목록에 없다 — 연결할 방법이 없는 채널이 생긴다`
+    );
+    assert.ok(M.SPEC[via], `${id}.connectsAs 가 SPEC 에 없는 채널(${via})을 가리킨다`);
+  }
+});
+
+/**
+ * 개인정보 처리방침은 법적 고지 문서다.
+ * ★문구를 SPEC 에서 자동 생성하지 않는다 — 사람이 검토한 확정 텍스트여야 한다.★
+ * 대신 채널이 늘거나 줄었는데 고지를 안 고친 경우를 여기서 잡는다.
+ */
+test("개인정보 처리방침의 채널 집합이 SPEC 과 일치한다", () => {
+  const html = readRepo("prototype/privacy.html");
+  // 플랫폼 표의 <strong>채널명</strong> 을 모아 SPEC 이름으로 정규화한다.
+  const NAME_TO_ID = {
+    "Instagram": "instagram", "TikTok": "tiktok",
+    "YouTube": "youtube", "YouTube Shorts": "youtube-shorts",
+    "Facebook": "facebook", "Threads": "threads", "X": "x",
+    "Naver Blog": "naver-blog", "Naver 블로그": "naver-blog",
+    "Naver Post": "naver-post", "Naver 포스트": "naver-post",
+    "Kakao": "kakao", "BAND": "band",
+  };
+  const listed = new Set();
+  for (const m of html.matchAll(/<strong>([^<]+)<\/strong>/g)) {
+    const id = NAME_TO_ID[m[1].trim()];
+    if (id) listed.add(id);
+  }
+  assert.deepEqual(
+    [...listed].sort(),
+    Object.keys(M.SPEC).sort(),
+    "채널이 바뀌었는데 개인정보 처리방침이 그대로다 (또는 그 반대)"
+  );
+});

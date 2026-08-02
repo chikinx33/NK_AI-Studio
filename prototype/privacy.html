@@ -279,7 +279,7 @@
       border: 1px solid color-mix(in srgb, var(--teal) 30%, var(--border) 70%);
       color: var(--teal);
     }
-    .status-badge.soon {
+    .status-badge.manual {
       background: var(--layer-soft);
       border: 1px solid var(--border);
       color: var(--text-3);
@@ -385,7 +385,7 @@
                 </tr>
                 <tr>
                   <td><strong>SNS 연동</strong></td>
-                  <td><strong>현재 연동:</strong> Instagram — 계정 ID, 액세스 토큰, 미디어 정보, 인사이트 데이터 / TikTok — open_id, display_name, avatar_url, 액세스·리프레시 토큰, publish_id 및 게시물 id·URL<br><strong>연동 예정(8개):</strong> YouTube, YouTube Shorts, Facebook, X/Threads, Naver 블로그, Naver 포스트, Kakao, BAND — 각 플랫폼 연동 시 별도 고지</td>
+                  <td><strong>API 연동(7개):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X — 액세스·리프레시 토큰과 계정 식별 정보를 수집합니다. 플랫폼별 상세 항목은 아래 표를 참고하세요.<br><strong>직접 올리기(4개):</strong> Naver 블로그, Naver 포스트, Kakao, BAND — API 연동이 없어 <strong>수집하는 데이터가 없습니다</strong>.</td>
                   <td>OAuth 2.0 인증을 통한 이용자 직접 연동</td>
                 </tr>
                 <tr>
@@ -503,47 +503,59 @@
                   <td>사용자가 화면에서 승인한 콘텐츠를 본인 계정에 게시, 게시 대상 계정 확인, 사용자 요청 시 초안함 업로드. 상세 안내: <a href="tiktok" style="color:var(--orange);text-decoration:none;">TikTok 연동 안내</a></td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge live">연동 완료</span></td>
                   <td><strong>YouTube</strong></td>
-                  <td rowspan="10" style="color:var(--text-3);font-size:13px;">각 플랫폼 연동 완료 시<br>본 방침에 상세 고지</td>
-                  <td>동영상 자동 업로드</td>
+                  <td>채널 ID, 채널명, 채널 핸들, 액세스·리프레시 토큰, 토큰 만료시각, 승인 범위(scope)</td>
+                  <td>영상 자동 업로드, 채널 확인</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge live">연동 완료</span></td>
                   <td><strong>YouTube Shorts</strong></td>
+                  <td>별도 수집 없음 — YouTube 와 동일한 구글 인증을 공유합니다</td>
                   <td>쇼츠 자동 업로드</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge live">연동 완료</span></td>
                   <td><strong>Facebook</strong></td>
-                  <td>페이지 콘텐츠 자동 게시</td>
+                  <td>페이지 ID, 페이지명, 사용자 ID, 장기 사용자 토큰, 페이지 토큰, 토큰 만료시각, 승인 범위(scope)</td>
+                  <td>페이지 콘텐츠 자동 게시, 인사이트 조회</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
-                  <td><strong>X / Threads</strong></td>
+                  <td><span class="status-badge live">연동 완료</span></td>
+                  <td><strong>Threads</strong></td>
+                  <td>Threads 사용자 ID, 사용자명, 액세스·리프레시 토큰, 토큰 만료시각, 승인 범위(scope)</td>
+                  <td>게시물 자동 게시, 인사이트 조회</td>
+                </tr>
+                <tr>
+                  <td><span class="status-badge live">연동 완료</span></td>
+                  <td><strong>X</strong></td>
+                  <td>사용자 ID, 사용자명, 액세스·리프레시 토큰, 토큰 만료시각, 승인 범위(scope)</td>
                   <td>게시물 자동 게시</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge manual">직접 올리기</span></td>
                   <td><strong>Naver 블로그</strong></td>
-                  <td>블로그 포스트 자동 게시</td>
+                  <td><strong>수집 항목 없음</strong> — API 연동이 없어 토큰·계정 정보를 일절 받지 않습니다</td>
+                  <td>블로그 글쓰기 화면으로 이동</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge manual">직접 올리기</span></td>
                   <td><strong>Naver 포스트</strong></td>
-                  <td>포스트 자동 게시</td>
+                  <td><strong>수집 항목 없음</strong> — API 연동이 없어 토큰·계정 정보를 일절 받지 않습니다</td>
+                  <td>포스트 작성 화면으로 이동</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge manual">직접 올리기</span></td>
                   <td><strong>Kakao</strong></td>
-                  <td>카카오 채널 자동 게시</td>
+                  <td><strong>수집 항목 없음</strong> — API 연동이 없어 토큰·계정 정보를 일절 받지 않습니다</td>
+                  <td>채널 관리자센터로 이동</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">연동 예정</span></td>
+                  <td><span class="status-badge manual">직접 올리기</span></td>
                   <td><strong>BAND</strong></td>
-                  <td>밴드 콘텐츠 자동 게시</td>
+                  <td><strong>수집 항목 없음</strong> — API 연동이 없어 토큰·계정 정보를 일절 받지 않습니다</td>
+                  <td>밴드 글쓰기 화면으로 이동</td>
                 </tr>
-              </tbody>
             </table>
           </div>
 
@@ -696,7 +708,7 @@
                 </tr>
                 <tr>
                   <td><strong>SNS Integration</strong></td>
-                  <td><strong>Live:</strong> Instagram — Account ID, access token, media info, insights data / TikTok — open_id, display_name, avatar_url, access/refresh tokens, publish_id and the resulting post id/URL<br><strong>Planned (8 platforms):</strong> YouTube, YouTube Shorts, Facebook, X/Threads, Naver Blog, Naver Post, Kakao, BAND — details disclosed upon each integration</td>
+                  <td><strong>API integrations (7):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X — access/refresh tokens and account identifiers are collected. See the table below for per-platform details.<br><strong>Post manually (4):</strong> Naver Blog, Naver Post, Kakao, BAND — no API integration, so <strong>nothing is collected</strong>.</td>
                   <td>User-initiated OAuth 2.0 authorization</td>
                 </tr>
                 <tr>
@@ -814,47 +826,59 @@
                   <td>Publishing content the user approved on screen to their own account, confirming which account a post goes to, and uploading to the user's drafts on request. Full details: <a href="tiktok" style="color:var(--orange);text-decoration:none;">TikTok Integration</a></td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge live">Live</span></td>
                   <td><strong>YouTube</strong></td>
-                  <td rowspan="10" style="color:var(--text-3);font-size:13px;">Details disclosed upon<br>each platform going live</td>
-                  <td>Video auto-upload</td>
+                  <td>Channel ID, channel title, channel handle, access/refresh tokens, token expiry, granted scopes</td>
+                  <td>Video auto-upload, channel verification</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge live">Live</span></td>
                   <td><strong>YouTube Shorts</strong></td>
+                  <td>No separate collection — shares the same Google authorization as YouTube</td>
                   <td>Shorts auto-upload</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge live">Live</span></td>
                   <td><strong>Facebook</strong></td>
-                  <td>Page content auto-publishing</td>
+                  <td>Page ID, page name, user ID, long-lived user token, page token, token expiry, granted scopes</td>
+                  <td>Page content auto-publishing, insights</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
-                  <td><strong>X / Threads</strong></td>
+                  <td><span class="status-badge live">Live</span></td>
+                  <td><strong>Threads</strong></td>
+                  <td>Threads user ID, username, access/refresh tokens, token expiry, granted scopes</td>
+                  <td>Post auto-publishing, insights</td>
+                </tr>
+                <tr>
+                  <td><span class="status-badge live">Live</span></td>
+                  <td><strong>X</strong></td>
+                  <td>User ID, username, access/refresh tokens, token expiry, granted scopes</td>
                   <td>Post auto-publishing</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge manual">Post manually</span></td>
                   <td><strong>Naver Blog</strong></td>
-                  <td>Blog post auto-publishing</td>
+                  <td><strong>Nothing collected</strong> — no API integration, so no tokens or account data are received</td>
+                  <td>Opens the blog composer</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge manual">Post manually</span></td>
                   <td><strong>Naver Post</strong></td>
-                  <td>Post auto-publishing</td>
+                  <td><strong>Nothing collected</strong> — no API integration, so no tokens or account data are received</td>
+                  <td>Opens the post composer</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge manual">Post manually</span></td>
                   <td><strong>Kakao</strong></td>
-                  <td>Kakao channel auto-publishing</td>
+                  <td><strong>Nothing collected</strong> — no API integration, so no tokens or account data are received</td>
+                  <td>Opens the channel admin center</td>
                 </tr>
                 <tr>
-                  <td><span class="status-badge soon">Planned</span></td>
+                  <td><span class="status-badge manual">Post manually</span></td>
                   <td><strong>BAND</strong></td>
-                  <td>BAND content auto-publishing</td>
+                  <td><strong>Nothing collected</strong> — no API integration, so no tokens or account data are received</td>
+                  <td>Opens the band composer</td>
                 </tr>
-              </tbody>
             </table>
           </div>
 

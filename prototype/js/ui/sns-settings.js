@@ -32,18 +32,43 @@
     try { localStorage.setItem(_CACHE_KEY, JSON.stringify(sns || {})); } catch (e) {}
   }
 
-  var PLATFORMS = [
-    { id: 'instagram',      label: 'Instagram' },
-    { id: 'youtube',        label: 'YouTube' },
-    { id: 'tiktok',         label: 'TikTok' },
-    { id: 'facebook',       label: 'Facebook' },
-    { id: 'threads',        label: 'Threads' },
-    { id: 'x',              label: 'X' },
-    { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },
-    { id: 'naver-post',     label: '네이버 포스트',   comingSoon: true },
-    { id: 'kakao',          label: '카카오',          comingSoon: true },
-    { id: 'band',           label: 'BAND',            comingSoon: true },
-  ];
+  /**
+   * 표시용 이름만 여기 둔다. ★채널의 존재 여부와 상태는 SPEC 이 유일한 근거다.★
+   *
+   * 예전에는 이 배열이 채널 목록이자 상태(comingSoon)의 원천이었다. 그래서
+   * format-media-spec.js 를 로드하지도 않는 이 화면만 판단이 달랐고, 네이버
+   * 블로그가 여기선 '준비 중'인데 Format 카드는 선택 가능하고 초안 화면은
+   * 제목·본문·태그·SEO·프리뷰까지 완성돼 있는 상태가 됐다.
+   */
+  var PLATFORM_LABELS = {
+    'instagram':  'Instagram',
+    'youtube':    'YouTube',
+    'tiktok':     'TikTok',
+    'facebook':   'Facebook',
+    'threads':    'Threads',
+    'x':          'X',
+    'naver-blog': '네이버 블로그',
+    'naver-post': '네이버 포스트',
+    'kakao':      '카카오',
+    'band':       'BAND',
+  };
+
+  /** 카드 목록은 SPEC 에서 유도한다. 라벨이 없으면 id 를 그대로 쓴다(빠뜨려도 안 사라지게). */
+  function platforms() {
+    var ids = (window.NKFormatMedia && window.NKFormatMedia.connectTargets)
+      ? window.NKFormatMedia.connectTargets()
+      : Object.keys(PLATFORM_LABELS);
+    return ids.map(function (id) {
+      return { id: id, label: PLATFORM_LABELS[id] || id };
+    });
+  }
+
+  /** 이 채널을 사용자가 직접 올리는가. 판단은 SPEC 만 본다. */
+  function isManual(id) {
+    try {
+      return !!(window.NKFormatMedia && window.NKFormatMedia.isManualDelivery(id));
+    } catch (_) { return false; }
+  }
 
   var _platformIcons = {
     'instagram':      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
@@ -67,7 +92,9 @@
       saved:         '저장 완료 ✓',
       saveFail:      '저장 실패',
       saveErr:       '저장 오류',
-      comingSoon:    '준비 중',
+      manualDelivery: '직접 올리기',
+      addUrl:        '주소 등록',
+      editUrl:       '주소 변경',
       notConnected:  '미연결',
       connected:     '연결됨',
       paused:        '사용 안 함',
@@ -94,7 +121,9 @@
       saved:         'Saved ✓',
       saveFail:      'Save failed',
       saveErr:       'Save error',
-      comingSoon:    'Coming Soon',
+      manualDelivery: 'Post manually',
+      addUrl:        'Add URL',
+      editUrl:       'Edit URL',
       notConnected:  'Not connected',
       connected:     'Connected',
       paused:        'Paused',
@@ -414,7 +443,7 @@
     var action = btn.dataset.action;
 
     // 공유받은 프로젝트: 연결 계정은 소유자의 것 → 읽기 전용. 변경 액션 차단.
-    if (_sharedOwnerId && (action === 'sns-connect' || action === 'sns-disconnect' || action === 'sns-usage-toggle' || action === 'sns-save')) {
+    if (_sharedOwnerId && (action === 'sns-connect' || action === 'sns-disconnect' || action === 'sns-usage-toggle' || action === 'sns-manual-url' || action === 'sns-save')) {
       e.preventDefault();
       snsAlert(_lang() === 'en'
         ? 'These channels belong to the project owner and can only be changed by the owner.'
@@ -503,7 +532,9 @@
     var connected = !!snsState.connected;
     var enabled = !!snsState.enabled;
     var username = snsState.username || snsState.channelTitle || snsState.pageName || '';
-    var comingSoon = !!platform.comingSoon;
+    // 직접 올리는 채널은 연결할 토큰이 없다. '연결' 대신 '내 채널 주소'를 다룬다.
+    var manual = isManual(platform.id);
+    var manualUrl = String(snsState.manualChannelUrl || '').trim();
     var icon = (NK.ui && NK.ui.common && NK.ui.common.platformIconSvg)
       ? NK.ui.common.platformIconSvg(platform.id, 36)
       : (_platformIcons[platform.id] || '');
@@ -520,7 +551,7 @@
 
     var statusText;
     var needsReconnect = !!snsState.needsReconnect;
-    if (comingSoon) statusText = t('comingSoon');
+    if (manual) statusText = t('manualDelivery') + (manualUrl ? ' · ' + escapeHtml(manualUrl) : '');
     else if (!connected) statusText = t('notConnected');
     else if (needsReconnect) statusText = (accountLabel ? accountLabel + ' · ' : '') + t('reconnectHint');
     else if (enabled) statusText = t('connected') + (accountLabel ? ' ' + accountLabel : '');
@@ -531,7 +562,14 @@
     var isToggling = !!_togglingPlatforms[platform.id];
     var dis = isToggling ? ' disabled' : '';
     var connectBoxHtml = '';
-    if (!comingSoon) {
+    if (manual) {
+      // OAuth 가 아니다. 등록해 두면 배포 단계의 '글쓰기 페이지 열기'가 플랫폼
+      // 첫 화면이 아니라 본인 채널로 간다. 등록은 선택 사항이다.
+      connectBoxHtml =
+        '<button type="button" class="sns-action-btn sns-action-connect"' + dis + ' ' +
+          'data-action="sns-manual-url" data-platform="' + platform.id + '">' +
+          escapeHtml(manualUrl ? t('editUrl') : t('addUrl')) + '</button>';
+    } else {
       if (!connected) {
         connectBoxHtml =
           '<button type="button" class="sns-action-btn sns-action-connect"' + dis + ' ' +
@@ -554,25 +592,24 @@
     }
 
     // 사용 토글 (우측): 연결됐을 때만 활성. 연결 안 됐으면 비활성 처리(클릭 시 OAuth 안내).
-    var usageToggleHtml;
-    if (comingSoon) {
-      usageToggleHtml = '<span class="sns-soon-label">' + t('comingSoon') + '</span>';
-    } else {
-      usageToggleHtml =
-        '<label class="sns-toggle' + (connected ? '' : ' is-disabled') + '" ' +
-            'data-action="sns-usage-toggle" data-platform="' + platform.id + '" ' +
-            'title="' + t('useToggleAria') + '" aria-label="' + t('useToggleAria') + '">' +
-          '<input type="checkbox" ' + (connected && enabled ? 'checked' : '') + (connected ? '' : ' disabled') + ' />' +
-          '<span class="sns-toggle-track"></span>' +
-        '</label>';
-    }
+    // 직접 올리는 채널은 연결이 없으므로 connected 로 잠그면 영영 못 켠다.
+    // 이 채널에 배포할지 여부만 묻는 토글이라 항상 조작 가능해야 한다.
+    var toggleOn = manual ? (snsState.enabled !== false) : (connected && enabled);
+    var toggleLocked = manual ? false : !connected;
+    var usageToggleHtml =
+      '<label class="sns-toggle' + (toggleLocked ? ' is-disabled' : '') + '" ' +
+          'data-action="sns-usage-toggle" data-platform="' + platform.id + '" ' +
+          'title="' + t('useToggleAria') + '" aria-label="' + t('useToggleAria') + '">' +
+        '<input type="checkbox" ' + (toggleOn ? 'checked' : '') + (toggleLocked ? ' disabled' : '') + ' />' +
+        '<span class="sns-toggle-track"></span>' +
+      '</label>';
 
     var finalConnectBoxHtml = connectBoxHtml;
 
     // 프로필 링크 버튼: 연결됐을 때만 표시
     var linkSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
     var profileUrl = '';
-    if (connected && !comingSoon) {
+    if (connected && !manual) {
       var _u = snsState.username || snsState.channelTitle || '';
       var _cid = snsState.channelId || '';
       // channelHandle = snippet.customUrl (e.g. "@shapesU") — 실제 YouTube 핸들
@@ -594,7 +631,7 @@
       : '';
 
     return [
-      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (connected && needsReconnect ? ' sns-pcard--reconnect' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
+      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (connected && needsReconnect ? ' sns-pcard--reconnect' : '') + '">',
         '<div class="sns-pcard-icon">', icon, '</div>',
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
@@ -641,7 +678,7 @@
           : '공유받은 프로젝트 — 소유자의 연결 채널을 표시합니다(읽기 전용). 배포는 소유자 계정으로 진행됩니다.')
       : t('heroDesc');
 
-    var cards = PLATFORMS.map(buildPlatformCard).join('');
+    var cards = platforms().map(buildPlatformCard).join('');
 
     root.innerHTML = [
       '<div class="sns-settings-page">',

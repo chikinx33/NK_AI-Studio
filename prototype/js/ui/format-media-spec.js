@@ -32,6 +32,9 @@
    *              자산이 맞으면 추천되고 선택되고 초안이 작성된다.
    * manualUrl  delivery='manual' 일 때 사용자가 글을 올릴 페이지. 새 탭으로 연다.
    *            (자동 배포로 전환되면 delivery 와 함께 지운다)
+   * connectsAs 이 포맷이 어느 채널의 연결을 쓰는지. 생략하면 자기 자신이다.
+   *            YouTube Shorts 는 YouTube 와 같은 구글 인증을 쓰므로 연결 카드가
+   *            따로 있으면 안 된다. 연결 페이지의 카드 목록은 이 값으로 유도된다.
    */
   var SPEC = {
     instagram: {
@@ -45,6 +48,7 @@
       image: { min: null, max: null },
       video: { minSec: null, maxSec: 600 },   // 기존 코드 상수 유지(제품 정책)
       delivery: 'auto',
+      connectsAs: 'youtube',                  // 구글 인증 하나를 YouTube 와 공유한다
     },
     tiktok: {
       // 2026-08-02 Photo Post 구현·URL 소유 인증 완료 → 이미지 단독 게시 가능
@@ -289,6 +293,28 @@
     return Object.keys(SPEC).filter(function (id) { return SPEC[id].delivery !== 'manual'; });
   }
 
+  /**
+   * 연결 페이지가 카드를 그릴 채널 목록.
+   *
+   * 연결 페이지가 자기만의 채널 배열과 상태 플래그(comingSoon)를 들고 있어서
+   * 화면 간 드리프트가 생겼다 — 네이버 블로그가 연결 페이지에서는 '준비 중'인데
+   * 초안 화면은 완성돼 있었다. 목록의 근거를 여기 하나로 모은다.
+   *
+   * 자동 배포 채널을 앞에 모은다. 연결이 필요한 쪽과 아닌 쪽이 섞이면 읽기 어렵다.
+   */
+  function connectTargets() {
+    var seen = {};
+    var auto = [];
+    var manual = [];
+    Object.keys(SPEC).forEach(function (id) {
+      var target = SPEC[id].connectsAs || id;
+      if (seen[target]) return;
+      seen[target] = true;
+      (deliveryOf(target) === 'manual' ? manual : auto).push(target);
+    });
+    return auto.concat(manual);
+  }
+
   /** manual 채널의 글쓰기 페이지 URL. auto 채널이면 빈 문자열. */
   function manualUrlOf(formatId) {
     var spec = SPEC[formatId];
@@ -313,6 +339,7 @@
     deliveryOf: deliveryOf,
     isManualDelivery: isManualDelivery,
     autoDeliveryIds: autoDeliveryIds,
+    connectTargets: connectTargets,
     manualUrlOf: manualUrlOf,
     deliveryLabel: deliveryLabel,
     manualScheduleReason: manualScheduleReason,
