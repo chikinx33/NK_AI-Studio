@@ -80,6 +80,9 @@
       delivery: 'manual',
       // 비로그인 시 nid.naver.com 로그인으로 갔다가 이 URL 로 되돌아온다(정상).
       manualUrl: 'https://blog.naver.com/GoBlogWrite.naver',
+      // 네이버 블로그 글쓰기 화면의 입력 순서. 제목·본문·태그·검색설정이 각각
+      // 다른 입력칸이라 한 덩어리로 뭉치면 사용자가 다시 잘라내야 한다.
+      manualCompose: { fields: ['title', 'caption', 'hashtags', 'seo_description'], labeled: true },
     },
     kakao: {
       accepts: { story: true, image: true, video: true },
@@ -92,6 +95,8 @@
       // center-pf.kakao.com 은 301 로 business.kakao.com 에 넘겨진 레거시 도메인이다.
       // 현행 채널 관리 화면은 파트너센터 대시보드다.
       manualUrl: 'https://business.kakao.com/dashboard',
+      // 카카오 채널 포스트는 본문과 별개로 버튼 문구·연결 링크를 따로 넣는다.
+      manualCompose: { fields: ['caption', 'hashtags', 'button_label', 'link_url'], labeled: true },
     },
     facebook: {
       accepts: { story: true, image: true, video: true },
@@ -115,6 +120,8 @@
       // 글쓰기 딥링크(my/writeForm.naver 등)는 모두 301 로 홈에 영구 통합됐다.
       // 살아 있는 진입점은 홈뿐이다.
       manualUrl: 'https://post.naver.com/',
+      // 네이버 포스트도 제목·본문·태그·시리즈가 각각 다른 입력칸이다.
+      manualCompose: { fields: ['title', 'caption', 'hashtags', 'series_name'], labeled: true },
     },
     band: {
       accepts: { story: true, image: true, video: true },
@@ -124,6 +131,9 @@
       //   BAND 는 Open API 의 글쓰기 엔드포인트를 제공한다. 구현 완료 시 'auto' 로 전환한다.
       delivery: 'manual',
       manualUrl: 'https://www.band.us/',
+      // BAND 는 본문 하나에 다 쓴다. 말머리(category)는 붙여넣기가 아니라 선택이라 뺀다.
+      // 라벨을 붙이면 그 라벨까지 그대로 게시되므로 auto 경로와 같은 형태로 둔다.
+      manualCompose: { fields: ['caption', 'hashtags'], labeled: false },
     },
   };
 
@@ -278,6 +288,58 @@
     return table[key] || '';
   }
 
+  /**
+   * 직접 올릴 때 붙여넣을 항목의 이름.
+   * 입력칸이 여러 개인 채널(네이버 블로그 등)은 어디에 무엇을 넣는지 알아야 한다.
+   */
+  var COMPOSE_LABEL = {
+    ko: {
+      title: '제목',
+      caption: '본문',
+      hashtags: '태그',
+      seo_description: 'SEO 설명',
+      series_name: '시리즈',
+      button_label: '버튼 문구',
+      link_url: '링크',
+    },
+    en: {
+      title: 'Title',
+      caption: 'Body',
+      hashtags: 'Tags',
+      seo_description: 'SEO description',
+      series_name: 'Series',
+      button_label: 'Button label',
+      link_url: 'Link',
+    },
+  };
+
+  /**
+   * 직접 올릴 본문을 채널 규격으로 조립한다.
+   *
+   * ★조립 규격은 SPEC.manualCompose 가 정한다.★ 화면이 자기 방식대로 뭉치면
+   * 채널마다 다른 입력 구조가 다시 코드 여기저기로 흩어진다.
+   * 값이 빈 항목은 건너뛴다 — 빈 라벨만 붙여넣게 하지 않는다.
+   */
+  function composeManualText(formatId, draft, lang) {
+    var spec = SPEC[formatId];
+    var plan = spec && spec.manualCompose;
+    var d = draft || {};
+    if (!plan || !Array.isArray(plan.fields)) {
+      // 규격이 없는 채널은 자동 배포 경로(snsPublishFormat)와 같은 형태로 둔다.
+      return [d.caption, d.hashtags]
+        .map(function (v) { return String(v == null ? '' : v).trim(); })
+        .filter(Boolean).join('\n\n');
+    }
+    var labels = COMPOSE_LABEL[lang === 'en' ? 'en' : 'ko'];
+    var parts = [];
+    plan.fields.forEach(function (key) {
+      var val = String(d[key] == null ? '' : d[key]).trim();
+      if (!val) return;
+      parts.push(plan.labeled ? ('[' + (labels[key] || key) + ']\n' + val) : val);
+    });
+    return parts.join('\n\n');
+  }
+
   /** 모르는 포맷은 'auto' 로 본다 — 기존 동작(모르는 포맷을 막지 않는다)과 결이 같다. */
   function deliveryOf(formatId) {
     var spec = SPEC[formatId];
@@ -341,6 +403,7 @@
     autoDeliveryIds: autoDeliveryIds,
     connectTargets: connectTargets,
     manualUrlOf: manualUrlOf,
+    composeManualText: composeManualText,
     deliveryLabel: deliveryLabel,
     manualScheduleReason: manualScheduleReason,
   };

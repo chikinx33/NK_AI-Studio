@@ -93,8 +93,7 @@
       saveFail:      '저장 실패',
       saveErr:       '저장 오류',
       manualDelivery: '직접 올리기',
-      addUrl:        '주소 등록',
-      editUrl:       '주소 변경',
+      manualNote:    '이 채널은 연결 없이 직접 올려요.',
       notConnected:  '미연결',
       connected:     '연결됨',
       paused:        '사용 안 함',
@@ -122,8 +121,7 @@
       saveFail:      'Save failed',
       saveErr:       'Save error',
       manualDelivery: 'Post manually',
-      addUrl:        'Add URL',
-      editUrl:       'Edit URL',
+      manualNote:    'No connection needed — you post this one yourself.',
       notConnected:  'Not connected',
       connected:     'Connected',
       paused:        'Paused',
@@ -443,7 +441,7 @@
     var action = btn.dataset.action;
 
     // 공유받은 프로젝트: 연결 계정은 소유자의 것 → 읽기 전용. 변경 액션 차단.
-    if (_sharedOwnerId && (action === 'sns-connect' || action === 'sns-disconnect' || action === 'sns-usage-toggle' || action === 'sns-manual-url' || action === 'sns-save')) {
+    if (_sharedOwnerId && (action === 'sns-connect' || action === 'sns-disconnect' || action === 'sns-usage-toggle' || action === 'sns-save')) {
       e.preventDefault();
       snsAlert(_lang() === 'en'
         ? 'These channels belong to the project owner and can only be changed by the owner.'
@@ -532,9 +530,8 @@
     var connected = !!snsState.connected;
     var enabled = !!snsState.enabled;
     var username = snsState.username || snsState.channelTitle || snsState.pageName || '';
-    // 직접 올리는 채널은 연결할 토큰이 없다. '연결' 대신 '내 채널 주소'를 다룬다.
+    // 직접 올리는 채널은 연결할 토큰이 없다.
     var manual = isManual(platform.id);
-    var manualUrl = String(snsState.manualChannelUrl || '').trim();
     var icon = (NK.ui && NK.ui.common && NK.ui.common.platformIconSvg)
       ? NK.ui.common.platformIconSvg(platform.id, 36)
       : (_platformIcons[platform.id] || '');
@@ -551,7 +548,7 @@
 
     var statusText;
     var needsReconnect = !!snsState.needsReconnect;
-    if (manual) statusText = t('manualDelivery') + (manualUrl ? ' · ' + escapeHtml(manualUrl) : '');
+    if (manual) statusText = t('manualDelivery');
     else if (!connected) statusText = t('notConnected');
     else if (needsReconnect) statusText = (accountLabel ? accountLabel + ' · ' : '') + t('reconnectHint');
     else if (enabled) statusText = t('connected') + (accountLabel ? ' ' + accountLabel : '');
@@ -563,12 +560,9 @@
     var dis = isToggling ? ' disabled' : '';
     var connectBoxHtml = '';
     if (manual) {
-      // OAuth 가 아니다. 등록해 두면 배포 단계의 '글쓰기 페이지 열기'가 플랫폼
-      // 첫 화면이 아니라 본인 채널로 간다. 등록은 선택 사항이다.
-      connectBoxHtml =
-        '<button type="button" class="sns-action-btn sns-action-connect"' + dis + ' ' +
-          'data-action="sns-manual-url" data-platform="' + platform.id + '">' +
-          escapeHtml(manualUrl ? t('editUrl') : t('addUrl')) + '</button>';
+      // 연결할 대상이 없다. 그게 이 카드의 진실이라 그대로 적는다.
+      // 비활성 버튼조차 두지 않는다 — "지금은 안 되지만 곧 된다"는 잘못된 신호다.
+      connectBoxHtml = '<span class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</span>';
     } else {
       if (!connected) {
         connectBoxHtml =

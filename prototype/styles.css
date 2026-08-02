@@ -14264,9 +14264,7 @@ textarea.bsf-skeleton {
   height: 13px;
   flex-shrink: 0;
 }
-/* ── 직접 올리기(manual) 채널 ────────────────────────────────────────────
-   배포 단계에는 채널 종류와 예약 불가 사유만 둔다. 본문 복사·자산 확인은
-   초안 단계(03)의 COPY 필드와 미디어 미리보기가 이미 담당한다. */
+/* ── 직접 올리기(manual) 채널 ──────────────────────────────────────────── */
 .bsf-deploy-connect-badge.is-manual {
   color: var(--text);
   padding: 0 8px;
@@ -14283,6 +14281,91 @@ textarea.bsf-skeleton {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+/* 복사 → 다운로드 → 열기 → 완료 체크를 한 패널 안에서 끊기지 않게 한 줄로 세운다. */
+.bsf-manual-panel {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bsf-manual-guide {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.bsf-manual-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.bsf-manual-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bsf-manual-step-no {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.bsf-manual-step-label {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.bsf-manual-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  /* 상태에 따라 문구가 바뀌는 버튼이라 폭이 출렁이지 않게 하한을 준다 */
+  min-width: 96px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+.bsf-manual-btn svg { display: block; width: 13px; height: 13px; flex-shrink: 0; }
+.bsf-manual-btn:hover { border-color: var(--accent); }
+.bsf-manual-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+.bsf-manual-btn.copied {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+.bsf-manual-btn--done.is-done {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #fff;
 }
 .bsf-deploy-one-btn.is-deploying,
 .bsf-deploy-all-btn.is-deploying {
@@ -15059,6 +15142,15 @@ textarea.bsf-skeleton {
 
 .sns-toggle input:checked + .sns-toggle-track::before {
   transform: translateX(18px);
+}
+
+/* 직접 올리는 채널: 연결할 대상이 없어 버튼 자리가 비는 곳을 설명으로 채운다.
+   비활성 버튼을 두면 "곧 된다"는 잘못된 신호가 된다. */
+.sns-manual-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-3);
+  max-width: 190px;
 }
 
 /* ── 저장 상태 표시 ──────────────────── */

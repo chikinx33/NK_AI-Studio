@@ -637,3 +637,87 @@ test("개인정보 처리방침의 채널 집합이 SPEC 과 일치한다", () =
     "채널이 바뀌었는데 개인정보 처리방침이 그대로다 (또는 그 반대)"
   );
 });
+
+// ── 직접 올리기 패널 ────────────────────────────────────────────────────────
+/**
+ * manualUrl / manualUrlOf() 는 한동안 정의만 되고 호출부가 없는 죽은 코드였다.
+ * 패널이 실제로 쓰는지, 조립 규격이 SPEC 에 있는지를 여기서 지킨다.
+ */
+test("직접 올리는 채널마다 조립 규격이 SPEC 에 있다", () => {
+  for (const id of Object.keys(M.SPEC)) {
+    const plan = M.SPEC[id].manualCompose;
+    if (M.deliveryOf(id) !== "manual") {
+      assert.equal(plan, undefined, `${id} 는 auto 인데 manualCompose 가 남아 있다`);
+      continue;
+    }
+    assert.ok(plan && Array.isArray(plan.fields) && plan.fields.length > 0,
+      `${id} 에 manualCompose 가 없다 — 조립 규격이 화면으로 흩어진다`);
+    assert.ok(plan.fields.includes("caption"), `${id} 조립 규격에 본문이 없다`);
+    assert.equal(typeof plan.labeled, "boolean", `${id}.manualCompose.labeled 가 없다`);
+  }
+});
+
+test("네이버 블로그 본문 복사는 제목·본문·태그·SEO 를 순서대로 담는다", () => {
+  const draft = {
+    title: "가을 산책", caption: "네모가 숲을 걷는다.",
+    hashtags: "#가을 #산책", seo_description: "가을 숲 산책 이야기",
+  };
+  const ko = M.composeManualText("naver-blog", draft, "ko");
+  // 한 덩어리로 뭉치면 사용자가 다시 잘라내야 한다. 입력칸별로 구분돼야 한다.
+  for (const label of ["[제목]", "[본문]", "[태그]", "[SEO 설명]"]) {
+    assert.ok(ko.includes(label), `${label} 구분이 없다`);
+  }
+  // 붙여넣기 순서 = 글쓰기 화면 입력 순서
+  assert.ok(ko.indexOf("[제목]") < ko.indexOf("[본문]"));
+  assert.ok(ko.indexOf("[본문]") < ko.indexOf("[태그]"));
+  assert.ok(ko.indexOf("[태그]") < ko.indexOf("[SEO 설명]"));
+  const en = M.composeManualText("naver-blog", draft, "en");
+  assert.ok(en.includes("[Title]") && en.includes("[Body]"), "en 조립이 ko 와 짝을 이루지 않는다");
+});
+
+test("본문 하나로 쓰는 채널은 라벨을 붙이지 않는다 (라벨까지 게시된다)", () => {
+  const out = M.composeManualText("band", { caption: "오늘의 이야기", hashtags: "#밴드" }, "ko");
+  assert.ok(!out.includes("["), `BAND 조립에 라벨이 섞였다: ${out}`);
+  // 자동 배포 경로(snsPublishFormat)와 같은 형태여야 결과물이 갈라지지 않는다.
+  assert.equal(out, "오늘의 이야기\n\n#밴드");
+});
+
+test("값이 빈 항목은 조립에서 건너뛴다 (빈 라벨만 붙여넣게 하지 않는다)", () => {
+  const out = M.composeManualText("naver-post", { title: "제목", caption: "본문", hashtags: "", series_name: "" }, "ko");
+  assert.ok(!out.includes("[태그]"), "빈 태그 라벨이 남았다");
+  assert.ok(!out.includes("[시리즈]"), "빈 시리즈 라벨이 남았다");
+});
+
+test("manualUrlOf() 가 죽은 코드가 아니다 — 패널이 실제로 호출한다", () => {
+  const src = readRepo("prototype/js/ui/brand-studio.js");
+  assert.ok(/NKFormatMedia\.manualUrlOf\(/.test(src),
+    "manualUrlOf 호출부가 없다 — 정의만 있고 안 쓰이는 상태로 되돌아갔다");
+  assert.ok(/NKFormatMedia\.composeManualText\(/.test(src),
+    "composeManualText 호출부가 없다 — 화면이 자기 방식대로 조립하고 있다");
+});
+
+test("직접 올리기 패널에 네 단계가 모두 있다", () => {
+  const src = readRepo("prototype/js/ui/brand-studio.js");
+  const panel = src.slice(
+    src.indexOf("function buildManualPanelHtml"),
+    src.indexOf("function buildDeploySummaryHtml")
+  );
+  assert.ok(panel.length > 0, "buildManualPanelHtml 을 찾지 못했다");
+  for (const [what, re] of [
+    ["① 본문 복사", /brand-manual-copy/],
+    ["② 자산 다운로드", /brand-manual-download/],
+    ["③ 글쓰기 페이지 열기", /manualUrlOf\([\s\S]{0,40}target="_blank"|target="_blank"/],
+    ["④ 게시 완료 체크", /toggle-deploy-done/],
+  ]) {
+    assert.ok(re.test(panel), `패널에 ${what} 가 없다`);
+  }
+});
+
+test("연결 페이지에 동작 없는 주소 등록 버튼이 없다", () => {
+  // UI 먼저 / 동작 나중으로 쪼개지 않는다. 4단계에서 실제 동작과 함께 다시 넣고,
+  // 그때 이 테스트를 핸들러 존재 검사로 바꾼다.
+  const src = readRepo("prototype/js/ui/sns-settings.js");
+  for (const dead of ["sns-manual-url", "addUrl", "editUrl"]) {
+    assert.ok(!src.includes(dead), `죽은 문자열이 남아 있다: ${dead}`);
+  }
+});
