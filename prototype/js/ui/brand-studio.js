@@ -1249,6 +1249,8 @@
     var channelConnections = readChannelConnections(brand, payload);
     var publishPlan = readPublishPlan(brand, payload);
     var selectedFormats = readSelectedFormats(payload);
+    // 사용자가 고른 포맷이 저장돼 있는가. 자동 선택이 이걸 덮어쓰면 안 된다.
+    var _hasUserFormatChoice = selectedFormats.length > 0;
     var formatDrafts = readFormatDrafts(payload);
     var persistedDeployedFormats = readDeployedFormats(payload, projectId);
     var activeDraftTab = readActiveDraftTab(payload) || (selectedFormats.length ? selectedFormats[0] : '');
@@ -1388,7 +1390,12 @@
       // 사용자가 직접 단계를 바꿨으므로 진입 단계 고정을 해제한다.
       releaseEntryStep();
       // 포맷 탭 진입 시 자산 기반 자동 선택 — 자산 선택이 바뀌었을 때만 재계산
-      if (newStep === 2) {
+      // 저장된 선택이 있으면 자동 선택은 돌리지 않는다.
+      // 예전에는 페이지를 새로 열 때마다 _lastAutoFormatSig 가 비어 있어서, 포맷 단계에
+      // 처음 들어가는 순간 사용자가 고르고 저장한 목록이 'recommended' 집합으로
+      // 통째로 교체되고 그대로 저장됐다. 저장 버튼을 눌러도 새로고침하면 풀려 있던 이유다.
+      // (TikTok 은 사진만 있을 때 recommended 가 아니라 available 이라 특히 잘 사라졌다)
+      if (newStep === 2 && !_hasUserFormatChoice) {
         var curSig = selectedAssetIds.slice().sort().join('\x00');
         if (curSig !== _lastAutoFormatSig) {
           // 카드 상태(클래스/뱃지/lock) 즉시 갱신
@@ -2706,6 +2713,64 @@
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = false;
     }
+
+    /** 입력 요소 하나에서 현재 값을 읽는다. 타입마다 값이 있는 곳이 다르다. */
+    function readFieldValue(el) {
+      if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable) {
+        return (el.innerText || el.textContent || '').trim();
+      }
+      if (el.type === 'checkbox') return el.checked;
+      if (el.type === 'radio') return el.checked ? String(el.value || '').trim() : undefined;
+      return String(el.value || '').trim();
+    }
+
+    /**
+     * 저장 버튼이 담을 것 — 현재 작업 흐름 전체.
+     *
+     * 예전에는 활성 탭 하나의 초안만 담았다. 그래서 포맷을 고르고 저장을 눌러도
+     * 선택은 이 저장에 실리지 않았고, 다른 경로가 덮어쓰면 그대로 사라졌다.
+     * 단계별로 나눠 저장하지 않는다. 한 번 누르면 자산·포맷·초안·배포가 함께 간다.
+     */
+    function buildWholeFlowPatch() {
+      // ── 초안: 화면에 떠 있는 모든 포맷의 필드를 읽는다(활성 탭만이 아니다).
+      //    배포 카드의 입력도 같은 data-draft-format/field 를 쓰므로 함께 잡힌다.
+      var nextFormatDrafts = Object.assign({}, formatDrafts || {});
+      root.querySelectorAll('[data-draft-field][data-draft-format]').forEach(function (el) {
+        var fid = String(el.dataset.draftFormat || '').trim();
+        var key = String(el.dataset.draftField || '').trim();
+        if (!fid || !key) return;
+        var val = readFieldValue(el);
+        if (val === undefined) return;   // 선택 안 된 라디오
+        nextFormatDrafts[fid] = Object.assign({}, nextFormatDrafts[fid] || {});
+        nextFormatDrafts[fid][key] = val;
+      });
+      // legacy textarea fallback (구버전 마크업이 남아 있는 포맷)
+      selectedFormats.forEach(function (fid) {
+        var legacy = {
+          caption: root.querySelector('#brand-draft-caption-' + fid),
+          hashtags: root.querySelector('#brand-draft-hashtag-' + fid),
+          title: root.querySelector('#brand-draft-title-' + fid),
+        };
+        Object.keys(legacy).forEach(function (key) {
+          if (!legacy[key]) return;
+          nextFormatDrafts[fid] = Object.assign({}, nextFormatDrafts[fid] || {});
+          nextFormatDrafts[fid][key] = String(legacy[key].value || '').trim();
+        });
+      });
+
+      var stepBtn = root.querySelector('[data-action="brand-set-step"].is-active');
+      var curStep = stepBtn ? parseInt(stepBtn.dataset.step || '0', 10) : 0;
+
+      var patch = {
+        brandStudioSelectedAssetIds: selectedAssetIds.slice(),   // 01 자산
+        brandStudioSelectedFormats: selectedFormats.slice(),     // 02 포맷
+        brandStudioActiveDraftTab: activeDraftTabOrFirst,
+        brandStudioFormatDrafts: nextFormatDrafts,               // 03 초안 + 04 배포 설정
+        brandStudioDeployedFormats: Object.assign({}, _deployedFormats),
+      };
+      if (curStep >= 1 && curStep <= 4) patch.brandStudioActiveStep = curStep;
+      return patch;
+    }
     function showSaveOverlay(label) {
       var existing = document.getElementById('bsf-save-overlay');
       if (existing) return existing;
@@ -2922,8 +2987,11 @@
     }
     // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
     function refreshFormatCardStates() {
-      // 먼저 unavailable로 바뀐 선택 포맷 제거
-      pruneUnavailableSelectedFormats();
+      // 먼저 unavailable로 바뀐 선택 포맷 제거.
+      // 단, 자산 URL이 아직 도착하지 않았으면 건너뛴다 — 하이드레이션 전에는
+      // hasVideo/hasImage 가 false 로 보여서 멀쩡한 선택이 지워지고 저장까지 된다.
+      // (초기 렌더 경로에는 이미 같은 가드가 있었는데 여기만 빠져 있었다)
+      if (!hasUnhydratedSelectedMedia()) pruneUnavailableSelectedFormats();
       var current = getCurrentSelectedAssetItems();
       var cards = root.querySelectorAll('.bsf-format-card');
       cards.forEach(function (card) {
@@ -3442,6 +3510,7 @@
         // 즉시 토글 (리렌더 없음)
         var fmtIdx = selectedFormats.indexOf(formatId);
         if (fmtIdx >= 0) selectedFormats.splice(fmtIdx, 1); else selectedFormats.push(formatId);
+        _hasUserFormatChoice = true;   // 직접 고른 뒤로는 자동 선택이 끼어들지 않는다
         btn.classList.toggle('is-selected', selectedFormats.indexOf(formatId) >= 0);
         // activeDraftTab 유지
         if (selectedFormats.indexOf(activeDraftTabOrFirst) < 0) {
@@ -3617,41 +3686,11 @@
         return;
       }
       if (action === 'brand-save-format-draft') {
-        if (!activeDraftTabOrFirst || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         flushAssetSave(); // 대기 중인 자산 선택 변경도 함께 flush
-        var currentFmtId = activeDraftTabOrFirst;
-        var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[currentFmtId]) || {});
-        // contenteditable 필드 읽기
-        var activePanel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + currentFmtId + '"]');
-        if (activePanel) {
-          activePanel.querySelectorAll('[data-draft-field]').forEach(function (el) {
-            var key = String(el.dataset.draftField || '').trim();
-            if (!key) return;
-            if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable) {
-              nextFmtDraft[key] = (el.innerText || el.textContent || '').trim();
-            } else if (el.tagName === 'SELECT') {
-              nextFmtDraft[key] = String(el.value || '').trim();
-            } else if (el.type === 'radio') {
-              if (el.checked) nextFmtDraft[key] = String(el.value || '').trim();
-            } else if (el.type === 'checkbox') {
-              nextFmtDraft[key] = el.checked;
-            } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-              nextFmtDraft[key] = String(el.value || '').trim();
-            }
-          });
-        }
-        // legacy textarea fallback
-        var captionEl = root.querySelector('#brand-draft-caption-' + currentFmtId);
-        var hashtagEl = root.querySelector('#brand-draft-hashtag-' + currentFmtId);
-        var titleElFmt = root.querySelector('#brand-draft-title-' + currentFmtId);
-        if (captionEl) nextFmtDraft.caption = String(captionEl.value || '').trim();
-        if (hashtagEl) nextFmtDraft.hashtags = String(hashtagEl.value || '').trim();
-        if (titleElFmt) nextFmtDraft.title = String(titleElFmt.value || '').trim();
-        var nextFormatDrafts = Object.assign({}, formatDrafts || {});
-        nextFormatDrafts[currentFmtId] = nextFmtDraft;
         btn.disabled = true;
         showSaveOverlay();
-        NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts })
+        NK.service.project.updatePayload(projectId, buildWholeFlowPatch())
           .then(function (result) {
             if (result && result.draft) { renderNext(result.draft); } else { setSaveBtnEnabled(false); }
             alert(T.alertDraftSaved);
