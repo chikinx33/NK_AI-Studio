@@ -13890,9 +13890,10 @@ textarea.bsf-skeleton {
 }
 /* 전달 방식 보조 배지 — 잠금이 아니다. 선택 가능한 상태이며 추천 별(★)과 공존한다.
    그래서 별처럼 절대 배치하지 않고 설명 아래 흐름에 둔다(겹치지 않게). */
+/* 제목 오른쪽에 붙인다. 흐름에 한 줄로 두면 이 배지가 있는 카드만 키가 커져서
+   포맷 그리드의 카드 높이가 제각각이 됐다. */
 .bsf-format-card__delivery {
-  align-self: flex-start;
-  margin-top: 2px;
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -13924,6 +13925,17 @@ textarea.bsf-skeleton {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
+  /* 추천 별(.bsf-format-card__badge)이 top:10 right:10 에 절대 배치돼 있다.
+     그 아래로 배지가 파고들지 않게 자리를 비워 둔다. */
+  padding-right: 22px;
+  min-width: 0;
+}
+/* 폭이 모자라면 제목이 줄고 배지는 그대로 둔다 — 배지가 밀려나면 잘려 보인다 */
+.bsf-fmt-card-head > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bsf-fmt-card-icon {
   flex-shrink: 0;

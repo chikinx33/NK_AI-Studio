@@ -1669,9 +1669,9 @@
         '<div class="bsf-fmt-card-head">' +
         formatBrandIcon(item.id, 18) +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
+        deliveryHtml +
         '</div>' +
         '<p>' + escapeHtml(fmtDesc) + '</p>' +
-        deliveryHtml +
         lockHtml +
         '</button>'
       );
