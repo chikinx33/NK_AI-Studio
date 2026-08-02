@@ -688,29 +688,38 @@ test("값이 빈 항목은 조립에서 건너뛴다 (빈 라벨만 붙여넣게
   assert.ok(!out.includes("[시리즈]"), "빈 시리즈 라벨이 남았다");
 });
 
-test("manualUrlOf() 가 죽은 코드가 아니다 — 패널이 실제로 호출한다", () => {
+/**
+ * ★배포 화면에는 직접 올리기 절차를 두지 않는다.★
+ *
+ * 복사·다운로드·글쓰기 페이지 열기를 배포 단계(04)에 단계별로 늘어놓았다가
+ * 걷어냈다. 초안 단계(03)가 이미 같은 일을 한다 — 필드마다 COPY 버튼이 붙어
+ * 있고 선택한 이미지·영상 썸네일도 그 화면에 뜬다. 같은 동작을 두 화면에 두면
+ * 어느 쪽이 최신인지 사용자가 판단해야 한다.
+ *
+ * 배포 카드에 남는 것은 채널 종류·예약 불가 사유·완료 체크뿐이다.
+ */
+test("배포 화면에 직접 올리기 절차 패널이 없다", () => {
   const src = readRepo("prototype/js/ui/brand-studio.js");
-  assert.ok(/NKFormatMedia\.manualUrlOf\(/.test(src),
-    "manualUrlOf 호출부가 없다 — 정의만 있고 안 쓰이는 상태로 되돌아갔다");
-  assert.ok(/NKFormatMedia\.composeManualText\(/.test(src),
-    "composeManualText 호출부가 없다 — 화면이 자기 방식대로 조립하고 있다");
+  for (const dead of [
+    "buildManualPanelHtml", "buildManualCopyText", "getManualMediaItems",
+    "brand-manual-copy", "brand-manual-download", "bsf-manual-panel",
+  ]) {
+    assert.ok(!src.includes(dead), `배포 화면에 절차 패널 잔재가 남아 있다: ${dead}`);
+  }
 });
 
-test("직접 올리기 패널에 네 단계가 모두 있다", () => {
+test("직접 올리는 채널도 완료 체크로 배포 이력을 남긴다", () => {
+  // 자동 배포 채널은 게시 응답이 이력을 남기지만 manual 은 그 응답이 없다.
+  // 이 배지가 유일한 기록 지점이라, 빠지면 대시보드가 영구 미게시로 표시한다.
   const src = readRepo("prototype/js/ui/brand-studio.js");
-  const panel = src.slice(
-    src.indexOf("function buildManualPanelHtml"),
-    src.indexOf("function buildDeploySummaryHtml")
+  const handler = src.slice(
+    src.indexOf("if (action === 'toggle-deploy-done')"),
+    src.indexOf("if (action === 'brand-toggle-story-card')")
   );
-  assert.ok(panel.length > 0, "buildManualPanelHtml 을 찾지 못했다");
-  for (const [what, re] of [
-    ["① 본문 복사", /brand-manual-copy/],
-    ["② 자산 다운로드", /brand-manual-download/],
-    ["③ 글쓰기 페이지 열기", /manualUrlOf\([\s\S]{0,40}target="_blank"|target="_blank"/],
-    ["④ 게시 완료 체크", /toggle-deploy-done/],
-  ]) {
-    assert.ok(re.test(panel), `패널에 ${what} 가 없다`);
-  }
+  assert.ok(handler.length > 0, "toggle-deploy-done 핸들러를 찾지 못했다");
+  assert.ok(/isManualFormat\(/.test(handler), "manual 채널을 따로 처리하지 않는다");
+  assert.ok(/persistPublishedResult\(/.test(handler), "완료 체크가 이력을 남기지 않는다");
+  assert.ok(/removePublishedResult\(/.test(handler), "완료 해제가 이력을 지우지 않는다");
 });
 
 test("연결 페이지에 동작 없는 주소 등록 버튼이 없다", () => {
