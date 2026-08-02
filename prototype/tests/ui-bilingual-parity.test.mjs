@@ -138,10 +138,15 @@ test("brand-studio.js — bsfT 의 한/영 키가 짝을 이룬다", () => {
  * 사전에 없는 문구는 영어 모드에서 한국어 그대로 노출된다. 눈으로만 검사할 수 없다.
  */
 test("app.html 의 한국어 data-i18n 문구는 모두 영어 사전에 있다", () => {
-  const dict = read("prototype/js/ui/common.js");
-  const dictAt = dict.indexOf("var EN_TEXT_EXACT = {");
-  assert.ok(dictAt > 0, "EN_TEXT_EXACT 사전을 찾지 못했다");
-  const dictBody = objectBodyAt(dict, dict.indexOf("{", dictAt));
+  // data-i18n 은 core.js 의 NK.core.translations.en 을 본다.
+  // common.js 의 EN_TEXT_EXACT 는 JS 로 넣는 문구(translateText)용이라 서로 다른 사전이다.
+  // 실제로 여기에 넣을 것을 저기에 넣어, 영어 모드에서 한국어가 그대로 노출된 적이 있다.
+  const core = read("prototype/core.js");
+  const coreAt = core.indexOf("core.translations = {");
+  assert.ok(coreAt > 0, "core.translations 를 찾지 못했다");
+  const enAt = core.indexOf("en: {", coreAt);
+  assert.ok(enAt > coreAt, "core.translations.en 을 찾지 못했다");
+  const dictBody = objectBodyAt(core, core.indexOf("{", enAt));
 
   const html = read("prototype/app.html");
   const hangul = /[가-힣]/;

@@ -154,9 +154,12 @@ test("/app 에 API 설정 위젯이 있고 기존 위젯과 같은 접기 구조
   for (const mode of ["subscription", "api_key"]) {
     assert.ok(html.includes(`data-auth-mode="${mode}"`), `${mode} 선택 버튼이 없다`);
   }
-  // 적용 범위를 화면에 적어 두지 않으면 "왜 이미지 생성은 그대로냐"가 반드시 나온다
-  assert.match(html, /적용 범위/);
-  assert.match(html, /적용 안 됨/);
+  // 적용 범위 자리는 남겨 둔다. 카드 높이 고정을 위해 한 줄 요약만 넣고
+  // 전체 목록은 툴팁으로 내렸지만, 안내 자체가 사라지면 안 된다.
+  assert.match(html, /id="api-settings-scope"/, "적용 범위 안내 자리가 없다");
+  const js = read("prototype/script.js");
+  assert.match(js, /적용: 텍스트 AI 전체/, "적용 범위 요약 문구가 없다");
+  assert.match(js, /적용 안 됨 — 이미지 생성/, "미적용 목록 안내가 사라졌다");
 });
 
 test("인증 미설정 응답이 사용자 안내로 이어진다", () => {
@@ -170,4 +173,45 @@ test("인증 미설정 응답이 사용자 안내로 이어진다", () => {
   assert.ok(at > 0);
   const body = bs.slice(at, at + 500);
   assert.match(body, /authRequired/, "인증 미설정이 일반 오류로 뭉뚱그려진다");
+});
+
+/**
+ * 위젯 겉모습은 기존 3개(구독 현황·즐겨찾기·테마)와 같아야 한다.
+ * 처음엔 접기 버튼 본체 규칙에 넣지 않아 혼자 사각형으로 보였다.
+ */
+test("API 설정 접기 버튼은 다른 위젯과 같은 스타일 규칙을 쓴다", () => {
+  const css = read("prototype/styles.css");
+  const SIBLINGS = [".favorite-form-toggle", ".subscription-toggle", ".theme-preset-toggle"];
+  // 버튼 본체 / hover / 화살표 / 접힘 회전 — 네 규칙 모두에 함께 들어 있어야 한다
+  // 주석 안의 문장이 선택자로 잡히지 않게 먼저 걷어낸다
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const groups = [...bare.matchAll(/([^{}]*\.subscription-toggle[^{}]*)\{/g)].map((m) => m[1]);
+  assert.ok(groups.length >= 5, `토글 규칙을 충분히 찾지 못했다 (${groups.length}개)`);
+  const missing = groups.filter((g) => !g.includes("api-settings-toggle"));
+  assert.deepEqual(
+    missing.map((g) => g.trim().split(/\s*,\s*/)[0]),
+    [],
+    "api-settings-toggle 이 빠진 규칙이 있다 — 혼자 다른 모양이 된다"
+  );
+  for (const sib of SIBLINGS) assert.ok(css.includes(sib), `${sib} 규칙이 사라졌다`);
+});
+
+test("상태·적용 범위 줄은 한 줄로 잘려 카드 높이를 흔들지 않는다", () => {
+  const css = read("prototype/styles.css");
+  const at = css.indexOf(".api-settings-state,");
+  assert.ok(at > 0, "상태/적용 범위 줄 고정 규칙이 없다");
+  const rule = css.slice(at, css.indexOf("}", at));
+  for (const prop of ["white-space: nowrap", "overflow: hidden", "text-overflow: ellipsis", "min-height"]) {
+    assert.ok(rule.includes(prop), `${prop} 이 없다 — 문구 길이에 따라 높이가 변한다`);
+  }
+  // 본문 높이 상한을 따로 키우면 다른 위젯과 접힘 높이가 어긋난다
+  assert.ok(!/\.api-settings-body\s*\{[^}]*max-height/.test(css), "api-settings-body 가 별도 max-height 를 갖는다");
+});
+
+test("JS 로 넣는 문구는 언어 변경 때 다시 그린다", () => {
+  const src = read("prototype/script.js");
+  const at = src.indexOf("renderApiScopeLine();");
+  assert.ok(at > 0);
+  const after = src.slice(at, at + 700);
+  assert.match(after, /nk:lang-changed/, "언어를 바꿔도 툴팁·상태 문구가 한국어로 남는다");
 });

@@ -1190,7 +1190,7 @@
     const apiSettingsWidget = document.getElementById('api-settings-widget');
     const apiSettingsToggleBtn = document.getElementById('api-settings-toggle');
     const apiSettingsTokenInput = document.getElementById('api-settings-token');
-    const apiSettingsHintEl = document.getElementById('api-settings-hint');
+    const apiSettingsScopeEl = document.getElementById('api-settings-scope');
     const apiSettingsStateEl = document.getElementById('api-settings-state');
     const apiSettingsSaveBtn = document.getElementById('api-settings-save');
     const apiSettingsDiagnoseBtn = document.getElementById('api-settings-diagnose');
@@ -1882,7 +1882,9 @@
 
     const setApiSettingsState = (text, kind) => {
       if (!apiSettingsStateEl) return;
-      apiSettingsStateEl.textContent = translateUiText(text || '');
+      var full = translateUiText(text || '');
+      apiSettingsStateEl.textContent = full;
+      apiSettingsStateEl.title = full;   // 한 줄로 잘리므로 전체는 툴팁에
       apiSettingsStateEl.classList.toggle('is-ok', kind === 'ok');
       apiSettingsStateEl.classList.toggle('is-error', kind === 'error');
     };
@@ -1894,15 +1896,25 @@
         b.classList.toggle('is-active', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
+      // 발급 방법 안내는 본문에 줄을 늘리지 않도록 placeholder 와 툴팁으로만 준다
       const isSub = apiAuthMode === 'subscription';
-      if (apiSettingsHintEl) {
-        apiSettingsHintEl.textContent = translateUiText(
-          isSub
-            ? '터미널에서 claude setup-token 으로 발급한 구독 토큰(sk-ant-oat…)'
-            : 'Anthropic 콘솔에서 발급한 API 키(sk-ant-api…)'
-        );
-      }
       apiSettingsTokenInput.placeholder = isSub ? 'sk-ant-oat…' : 'sk-ant-api…';
+      apiSettingsTokenInput.title = translateUiText(
+        isSub
+          ? '터미널에서 claude setup-token 으로 발급한 구독 토큰'
+          : 'Anthropic 콘솔에서 발급한 API 키'
+      );
+    };
+
+    // 적용 범위는 한 줄만 보여주고 전체 목록은 툴팁에 둔다(카드 높이 고정)
+    const renderApiScopeLine = () => {
+      if (!apiSettingsScopeEl) return;
+      apiSettingsScopeEl.textContent = translateUiText('적용: 텍스트 AI 전체 · 이미지/음악/영상 제외');
+      // 사전 키에 개행을 넣지 않으려고 두 줄을 따로 번역해 합친다
+      apiSettingsScopeEl.title = [
+        translateUiText('적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.'),
+        translateUiText('적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.'),
+      ].join('\n');
     };
 
     const loadApiSettings = async () => {
@@ -2742,6 +2754,15 @@
       apiSettingsSaveBtn.addEventListener('click', saveApiSettings);
       if (apiSettingsDiagnoseBtn) apiSettingsDiagnoseBtn.addEventListener('click', diagnoseApiSettings);
       renderApiAuthMode();
+      renderApiScopeLine();
+      // data-i18n 은 applyI18n 이 처리하지만, JS 로 넣은 문구(툴팁·상태·접기 라벨)는
+      // 언어가 바뀔 때 직접 다시 그려야 한다.
+      window.addEventListener('nk:lang-changed', () => {
+        renderApiAuthMode();
+        renderApiScopeLine();
+        setApiSettingsCollapsed(apiSettingsCollapsed);
+        if (apiAuthLoaded) loadApiSettings();
+      });
     }
 
     if (subscriptionManageBtn) {

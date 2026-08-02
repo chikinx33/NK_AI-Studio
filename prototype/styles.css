@@ -4629,6 +4629,7 @@ textarea::-webkit-scrollbar-corner {
   .scenario-circle-toggle,
   .favorite-form-toggle,
   .subscription-toggle,
+  .api-settings-toggle,
   .theme-preset-toggle,
   .theme-preset-btn,
   .edit-btn,
@@ -5169,6 +5170,7 @@ html.page-shell-image #sidebar-project-card {
 
 .favorite-form-toggle,
 .subscription-toggle,
+.api-settings-toggle,
 .theme-preset-toggle {
   width: 30px;
   height: 30px;
@@ -15103,12 +15105,6 @@ textarea.bsf-skeleton {
   background: color-mix(in srgb, #3f8dd6 16%, transparent 84%);
 }
 
-.api-settings-hint {
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 0;
-}
-
 .api-settings-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -15140,26 +15136,19 @@ textarea.bsf-skeleton {
 .api-settings-state.is-ok    { color: #4ade80; }
 .api-settings-state.is-error { color: #f87171; }
 
+/* 상태 문구·적용 범위는 한 줄로 잘라 카드 높이를 고정한다.
+   전체 내용은 title 툴팁으로 볼 수 있다. */
+.api-settings-state,
 .api-settings-scope {
-  border-top: 1px solid var(--border);
+  min-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.api-settings-scope {
+  margin: 0;
   padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.api-settings-scope-title {
-  margin: 0;
+  border-top: 1px solid var(--border);
   font-size: 12px;
-  font-weight: 600;
-  color: #3f8dd6;
 }
-
-.api-settings-scope p.muted {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-/* 접힌 상태에서 본문 높이 상한이 짧으면 적용 범위가 잘린다 */
-.api-settings-body { max-height: 620px; }
