@@ -4008,7 +4008,14 @@
                       : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.'));
                 return { skipped: true };
               }
-              if (!res || !res.ok) throw new Error((res && res.error) || 'SNS publish failed');
+              if (!res || !res.ok) {
+                // TikTok init 실패는 code 를 함께 넘긴다. 확인 모달이 code 로
+                // 한/영 안내 문구를 고른다(서버는 UI 언어를 모른다).
+                var pubErr = new Error((res && res.error) || 'SNS publish failed');
+                if (res && res.code) pubErr.code = res.code;
+                if (res && res.detail) pubErr.detail = res.detail;
+                throw pubErr;
+              }
 
               // 하이브리드: 서버가 직접 PUT한 경우 result.postId 가 채워져 있음 → 그대로 반환
               if (res.result) return res;

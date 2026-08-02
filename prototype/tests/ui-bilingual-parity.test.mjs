@@ -20,6 +20,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 // [파일, 사전 시작 표식, 사전 끝 표식]
 const DICTIONARIES = [
   ["prototype/js/ui/tiktok-consent-modal.js", "var COPY = {", "\n  /** 앱 런타임 언어"],
+  ["prototype/js/ui/tiktok-consent-modal.js", "var ERROR_COPY = {", "\n  function describeError"],
   ["prototype/js/ui/tiktok-consent-modal.js", "var PRIVACY_LABEL = {", "\n  var BC_POLICY_URL"],
   ["prototype/js/ui/sns-settings.js", "var T = {", "\n  function _lang"],
 ];

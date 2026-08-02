@@ -274,6 +274,18 @@ async function saveTikTokTokenPatch(opts: {
  * (privacy_level 이 없으면 400). 사용자가 화면에서 고른 값 그대로 TikTok 에 보내는 것이
  * Direct Post 승인 조건이기 때문.
  */
+/**
+ * TikTok init 실패를 코드가 붙은 Error 로 만든다.
+ * 사용자에게 보여줄 문구는 클라이언트가 code 로 골라 한/영으로 표시한다
+ * (서버는 UI 언어를 모른다). 진단용 상세는 로그에만 남긴다.
+ */
+function tiktokInitError(kind: 'video' | 'photo', code: string | undefined, detail: string): Error {
+  const err = new Error(`tiktok_${kind}_init_failed: ${code || 'unknown'}`) as Error & { tiktokCode?: string; detail?: string };
+  err.tiktokCode = String(code || '');
+  err.detail = detail;
+  return err;
+}
+
 type TikTokPostOptions = {
   privacyLevel: string;
   disableComment: boolean;
@@ -365,7 +377,8 @@ async function publishTikTokVideo(opts: {
       `privacyLevel=${privacyLevel}`,
       `postInfo=${JSON.stringify(post)}`,
     ].join(" | ");
-    throw new Error(`TikTok 영상 발행 초기화 실패: ${detail}`);
+    console.log(`[tiktok] video/init 실패: ${detail}`);
+    throw tiktokInitError('video', initData.error?.code, detail);
   }
   console.log(`[tiktok] 발행 초기화 완료, publish_id: ${publishId}`);
 
@@ -437,7 +450,8 @@ async function publishTikTokPhoto(opts: {
       `privacyLevel=${privacyLevel}`,
       `postInfo=${JSON.stringify(post)}`,
     ].join(" | ");
-    throw new Error(`TikTok 이미지 발행 초기화 실패: ${detail}`);
+    console.log(`[tiktok] content/init 실패: ${detail}`);
+    throw tiktokInitError('photo', data.error?.code, detail);
   }
   const publishId = data.data.publish_id;
   console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
@@ -1869,6 +1883,13 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    const code = (err as { tiktokCode?: string })?.tiktokCode || '';
+    const detail = (err as { detail?: string })?.detail || '';
+    if (code) {
+      // 클라이언트가 code 로 한/영 안내 문구를 고른다. 원문 detail 도 함께 주되
+      // 화면에는 code 기반 문구를 우선 쓴다.
+      return send({ ok: false, error: msg, code, detail }, 502);
+    }
     return send({ ok: false, error: msg }, 500);
   }
 };

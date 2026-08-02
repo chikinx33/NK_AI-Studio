@@ -131,6 +131,43 @@
     } catch (_) { return 'ko'; }
   }
 
+  /**
+   * TikTok 이 돌려준 오류 코드를 사용자가 뭘 해야 하는지 아는 문구로 바꾼다.
+   * 원문 덤프(httpStatus/postInfo 등)는 화면에 쓰지 않는다 — 사용자가 읽을 수 없고
+   * 내부 구조만 드러난다. 진단이 필요하면 콘솔에 남긴 detail 을 본다.
+   */
+  var ERROR_COPY = {
+    en: {
+      url_ownership_unverified:
+        'TikTok has not verified that we own the media URL, so photo posts are blocked. ' +
+        'Verify the URL property in the TikTok Developer Portal, or post a video instead ' +
+        '(videos are uploaded directly and do not need URL verification).',
+      spam_risk_too_many_posts: 'TikTok is rate limiting this account right now. Try again later.',
+      unaudited_client_can_only_post_to_private_accounts:
+        'Until this app passes TikTok review, posts can only be visible to you.',
+      generic: 'TikTok rejected the post.'
+    },
+    ko: {
+      url_ownership_unverified:
+        'TikTok이 미디어 URL의 소유를 아직 확인하지 못해 사진 게시가 막혔습니다. ' +
+        'TikTok 개발자 포털에서 URL 소유 인증을 완료하거나, 영상으로 게시해 주세요 ' +
+        '(영상은 직접 업로드라 URL 인증이 필요 없습니다).',
+      spam_risk_too_many_posts: '지금 이 계정에 TikTok 게시 제한이 걸려 있습니다. 잠시 후 다시 시도해 주세요.',
+      unaudited_client_can_only_post_to_private_accounts:
+        '앱이 TikTok 심사를 통과하기 전까지는 나만 볼 수 있는 게시물로만 올라갑니다.',
+      generic: 'TikTok이 게시를 거부했습니다.'
+    }
+  };
+
+  function describeError(err) {
+    var code = err && err.code ? String(err.code) : '';
+    if (err && err.detail) console.warn('[tiktok] 게시 실패 상세:', err.detail);
+    var table = ERROR_COPY[lang()] || ERROR_COPY.ko;
+    if (code && table[code]) return table[code];
+    if (code) return table.generic + ' (' + code + ')';
+    return (err && err.message) ? err.message : String(err);
+  }
+
   function esc(v) {
     return String(v == null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -562,7 +599,7 @@
         .catch(function (err) {
           // 실패해도 입력값을 유지한 채 재시도할 수 있어야 한다(명세 §5-2 ⑦).
           state.posting = false;
-          state.submitError = (err && err.message) ? err.message : String(err);
+          state.submitError = describeError(err);
           paint();
         });
     }
