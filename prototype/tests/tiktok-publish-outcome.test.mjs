@@ -114,3 +114,25 @@ test("publish_id 가 없으면 '처리 중'으로 두지 않는다", () => {
     assert.equal(hits, 2, `${key} 가 ko/en 양쪽에 있지 않다 (발견 ${hits}개)`);
   }
 });
+
+test("TikTok 사진 게시 전에 PNG 를 JPEG 로 바꾼다", () => {
+  // 생성 이미지는 PNG 로 저장되는데 TikTok 사진 게시는 JPEG 만 받는다.
+  // 그대로 넘기면 발행 ID 는 나오지만 file_format_check_failed 로 떨어진다.
+  const at = studio.indexOf("function toJpegForTiktok(");
+  assert.ok(at > 0, "JPEG 변환 경로가 없다");
+  const body = studio.slice(at, at + 2600);
+  assert.match(body, /image\/jpeg/, "JPEG 로 인코딩하지 않는다");
+  // JPEG 는 투명도가 없다. 배경을 깔지 않으면 투명 영역이 검게 나온다.
+  assert.match(body, /fillStyle = '#ffffff'/, "투명 배경 처리를 하지 않는다");
+  // 이미 JPEG 인 자산은 건드리지 않는다
+  assert.match(body, /\.jpe\?g\$/);
+  // 변환 실패해도 게시 자체는 막지 않는다
+  assert.match(body, /원본 사용/);
+
+  // 확인 모달 제출 시점에 실제로 호출돼야 한다
+  const submitAt = studio.indexOf("onSubmit: function (ttSettings)");
+  assert.ok(submitAt > 0);
+  const submit = studio.slice(submitAt, submitAt + 700);
+  assert.match(submit, /toJpegForTiktok\(resolvedItems\)/, "변환이 게시 경로에 연결되지 않았다");
+  assert.match(submit, /requestBody\.mediaItems = conv/, "변환 결과가 요청에 반영되지 않는다");
+});

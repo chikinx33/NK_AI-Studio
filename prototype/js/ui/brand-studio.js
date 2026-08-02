@@ -4100,6 +4100,73 @@
             });
         }
 
+        /* TikTok 사진 게시는 JPEG 만 받는다.
+         *
+         * 우리 생성 이미지는 PNG 로 저장된다(imagen 이 image/png 로 올린다).
+         * 그대로 넘기면 TikTok 이 file_format_check_failed 로 거부한다 — 발행 ID 는
+         * 나오지만 처리 단계에서 떨어져서, 화면에는 아무 문제 없어 보였다.
+         *
+         * Cloudflare 이미지 변환은 이 도메인에 켜져 있지 않아(요청이 404) 서버에서
+         * 바꿀 수 없다. 브라우저 캔버스로 JPEG 로 바꿔 올린 뒤 그 경로를 넘긴다.
+         * 원본 PNG 는 그대로 두고, 게시용 사본만 만든다.
+         */
+        function toJpegForTiktok(items) {
+          var targets = [];
+          items.forEach(function (it, i) {
+            if (it && it.mediaType === 'image' && it.gcsPath) targets.push(i);
+          });
+          if (!targets.length) return Promise.resolve(items);
+
+          function convertOne(idx) {
+            var it = items[idx];
+            var srcUrl = NK.api.mediaProxyObjectUrl(it.gcsPath);
+            if (!srcUrl) return Promise.resolve();
+            // 이미 JPEG 면 손대지 않는다
+            if (/\.jpe?g$/i.test(String(it.gcsPath))) return Promise.resolve();
+            return new Promise(function (resolve) {
+              var img = new Image();
+              img.onload = function () {
+                try {
+                  var cv = document.createElement('canvas');
+                  cv.width = img.naturalWidth || img.width;
+                  cv.height = img.naturalHeight || img.height;
+                  var ctx = cv.getContext('2d');
+                  // JPEG 는 투명도가 없다. 흰 배경을 깔지 않으면 투명 영역이 검게 나온다.
+                  ctx.fillStyle = '#ffffff';
+                  ctx.fillRect(0, 0, cv.width, cv.height);
+                  ctx.drawImage(img, 0, 0);
+                  cv.toBlob(function (blob) {
+                    if (!blob) { resolve(); return; }
+                    var name = String(it.gcsPath).split('/').pop().replace(/\.[^.]+$/, '') + '.jpg';
+                    var file = new File([blob], name, { type: 'image/jpeg' });
+                    NK.api.imageUpload(projectId, file, { kind: 'image' })
+                      .then(function (up) {
+                        if (up && up.objectName) items[idx] = { mediaType: 'image', gcsPath: up.objectName };
+                        resolve();
+                      })
+                      .catch(function (err) {
+                        console.warn('[tiktok] JPEG 업로드 실패, 원본 사용:', err && err.message ? err.message : err);
+                        resolve();
+                      });
+                  }, 'image/jpeg', 0.92);
+                } catch (err) {
+                  console.warn('[tiktok] JPEG 변환 실패, 원본 사용:', err && err.message ? err.message : err);
+                  resolve();
+                }
+              };
+              img.onerror = function () {
+                console.warn('[tiktok] 이미지를 불러오지 못했다:', it.gcsPath);
+                resolve();
+              };
+              img.src = srcUrl;
+            });
+          }
+
+          return targets.reduce(function (chain, idx) {
+            return chain.then(function () { return convertOne(idx); });
+          }, Promise.resolve()).then(function () { return items; });
+        }
+
         // ── TikTok Direct Post — 확인 모달을 반드시 거친다 ─────────────────
         // 명세: docs/tiktok_direct_post_modal_spec_20260801.md §6
         // 일괄 배포 루프에서도 이 분기를 지나므로 "한 번에 배포"로도 확인 없이 나가지 않는다.
@@ -4141,7 +4208,16 @@
             projectId: requestBody.projectId || '',
             onSubmit: function (ttSettings) {
               requestBody.tiktok = ttSettings;
-              return doPublish();
+              // 확인을 누른 뒤에 변환한다(모달이 "게시하는 중"을 그리고 있다).
+              return toJpegForTiktok(resolvedItems).then(function (conv) {
+                if (requestBody.mediaItems) {
+                  requestBody.mediaItems = conv;
+                } else if (conv.length === 1 && conv[0].gcsPath) {
+                  requestBody.mediaGcsPath = conv[0].gcsPath;
+                  requestBody.mediaDirectUrl = '';
+                }
+                return doPublish();
+              });
             },
           }).then(function (modalResult) {
             // null = 사용자가 취소.
