@@ -24,6 +24,7 @@ const DICTIONARIES = [
   ["prototype/js/ui/tiktok-consent-modal.js", "var PRIVACY_LABEL = {", "\n  var BC_POLICY_URL"],
   ["prototype/js/ui/sns-settings.js", "var T = {", "\n  function _lang"],
   ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
+  ["prototype/js/ui/format-media-spec.js", "var DELIVERY_TEXT = {", "\n  function deliveryText"],
 ];
 
 /** `{` 위치부터 짝이 맞는 `}` 까지의 본문을 돌려준다. */

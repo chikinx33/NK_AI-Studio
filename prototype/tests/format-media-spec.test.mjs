@@ -390,3 +390,107 @@ test("모르는 포맷은 막지 않는다 (기존 동작)", () => {
   assert.equal(M.isCompatible("unknown-platform", { story: false, image: false, video: false }), true);
   assert.deepEqual(ev("unknown-platform", []), { state: "available", reason: null });
 });
+
+// ── 전달 방식(delivery) ────────────────────────────────────────────────────
+/**
+ * delivery 는 자산 규칙과 직교하는 축이다.
+ *
+ * 전에는 자동 배포 대상 목록이 brand-studio.js 안에 리터럴 배열로 박혀 있었고,
+ * 거기 없는 채널은 배포 단계에서 조용히 skipped 됐다. 사용자는 초안을 다 써 놓고
+ * 게시된 줄 알았다. 목록을 SPEC 으로 옮겼으니 두 곳이 어긋나지 않는지 여기서 지킨다.
+ */
+const MANUAL_FOREVER = ["naver-blog", "naver-post", "kakao"];
+
+test("직접 올리는 채널은 잠기지 않는다 — delivery 는 state 를 바꾸지 않는다", () => {
+  for (const fmt of MANUAL_FOREVER) {
+    assert.equal(M.deliveryOf(fmt), "manual", `${fmt} 는 manual 이어야 한다`);
+    // 자산 조합을 바꿔 가며 확인한다. manual 이라는 이유로 unavailable 이 되면 안 된다.
+    for (const [name, assets] of [
+      ["스토리", story()],
+      ["사진 1장", img(1)],
+      ["사진 10장", img(10)],
+      ["영상", vid(30)],
+      ["스토리+사진", [...story(), ...img(3)]],
+    ]) {
+      const r = ev(fmt, assets);
+      assert.notEqual(r.state, "unavailable", `${fmt} / ${name} 이 잠겼다`);
+      assert.equal(r.reason, null);
+    }
+    // 자산이 하나도 없을 때만 잠긴다 — auto 채널과 똑같은 이유로.
+    assert.equal(ev(fmt, []).state, "unavailable");
+    assert.equal(ev(fmt, []).reason, "no-asset");
+  }
+});
+
+test("직접 올리는 채널도 추천 배지를 받는다", () => {
+  // 추천 휴리스틱이 delivery 때문에 죽지 않았는지. (자산 규칙과 직교한다는 뜻)
+  assert.equal(ev("naver-blog", img(2)).state, "recommended");
+  assert.equal(ev("naver-post", img(1)).state, "recommended");
+  assert.equal(ev("kakao", img(1)).state, "recommended");
+});
+
+test("manual 채널에는 글쓰기 페이지 URL 이 있다", () => {
+  for (const id of Object.keys(M.SPEC)) {
+    const url = M.manualUrlOf(id);
+    if (M.deliveryOf(id) === "manual") {
+      assert.match(url, /^https:\/\//, `${id} 에 manualUrl 이 없다 — 패널의 '열기'가 죽는다`);
+    } else {
+      assert.equal(url, "", `${id} 는 auto 인데 manualUrl 이 남아 있다`);
+    }
+  }
+});
+
+test("모르는 포맷의 delivery 는 auto 로 본다 (기존 '막지 않는다' 기조)", () => {
+  assert.equal(M.deliveryOf("unknown-platform"), "auto");
+  assert.equal(M.manualUrlOf("unknown-platform"), "");
+});
+
+test("배지 문구는 잠금 문구와 같은 곳에서 ko/en 짝으로 나온다", () => {
+  assert.equal(M.deliveryLabel("naver-blog", "ko"), "✍ 직접 올리기");
+  assert.equal(M.deliveryLabel("naver-blog", "en"), "✍ Post manually");
+  // auto 채널은 빈 문자열 — 호출부가 분기하지 않아도 되게.
+  assert.equal(M.deliveryLabel("instagram", "ko"), "");
+  assert.ok(M.manualScheduleReason("ko").length > 0);
+  assert.ok(M.manualScheduleReason("en").length > 0);
+});
+
+/**
+ * ★ 이 테스트가 이번 작업의 핵심이다.
+ * autoDeliveryIds() 가 publish.ts 의 실제 분기보다 넓으면 "배포했다"고 해 놓고
+ * 서버가 400 을 뱉고, 좁으면 구현해 둔 채널이 조용히 skipped 된다.
+ */
+test("autoDeliveryIds() 가 publish.ts 의 지원 플랫폼 집합과 정확히 일치한다", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "prototype/functions/api/sns/publish.ts"),
+    "utf8"
+  );
+  const supported = new Set();
+  for (const m of src.matchAll(/platform\s*===\s*["']([a-z0-9-]+)["']/g)) {
+    supported.add(m[1]);
+  }
+  assert.ok(supported.size > 0, "publish.ts 에서 platform 분기를 하나도 찾지 못했다");
+
+  // vm 컨텍스트가 만든 배열은 프로토타입 realm 이 달라 deepEqual 이 값과 무관하게
+  // 실패한다(파일 상단 ev() 와 같은 이유). 현재 realm 배열로 옮겨 비교한다.
+  assert.deepEqual(
+    [...M.autoDeliveryIds()].sort(),
+    [...supported].sort(),
+    "SPEC 의 delivery:'auto' 집합과 publish.ts 의 분기가 어긋났다"
+  );
+});
+
+test("brand-studio.js 에 자동 배포 대상 리터럴 배열이 남아 있지 않다", () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "prototype/js/ui/brand-studio.js"),
+    "utf8"
+  );
+  assert.equal(
+    /SNS_PLATFORMS\s*=/.test(src),
+    false,
+    "SNS_PLATFORMS 리터럴 배열이 되살아났다 — SPEC 과 드리프트가 생긴다"
+  );
+  assert.ok(
+    src.includes("NKFormatMedia.autoDeliveryIds()"),
+    "자동 배포 대상을 SPEC 에서 읽지 않는다"
+  );
+});

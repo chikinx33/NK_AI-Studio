@@ -24,76 +24,122 @@
    * ⚠️ video.maxSec 는 본래 creator_info.max_video_post_duration_sec 에서 와야 하는
    *    값이다. 포맷 선택 단계에서는 아직 계정을 조회하기 전이라 creator_info 가 없고,
    *    그래서 기본값을 쓴다. (동적 연동은 별건)
+   *
+   * delivery   전달 방식. 'auto' = 우리가 게시 API 를 구현한 채널(자동 배포).
+   *            'manual' = 사용자가 직접 올린다.
+   *            ★ 자산 규칙(recommended/available/unavailable)과 직교하는 축이다.
+   *              evaluate() 의 state 는 delivery 를 보지 않는다. manual 채널도
+   *              자산이 맞으면 추천되고 선택되고 초안이 작성된다.
+   * manualUrl  delivery='manual' 일 때 사용자가 글을 올릴 페이지. 새 탭으로 연다.
+   *            (자동 배포로 전환되면 delivery 와 함께 지운다)
    */
   var SPEC = {
     instagram: {
       accepts: { story: false, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: 600 },   // 기존 코드 상수 유지(제품 정책)
+      delivery: 'auto',
     },
     'youtube-shorts': {
       accepts: { story: false, image: false, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: 600 },   // 기존 코드 상수 유지(제품 정책)
+      delivery: 'auto',
     },
     tiktok: {
       // 2026-08-02 Photo Post 구현·URL 소유 인증 완료 → 이미지 단독 게시 가능
       accepts: { story: false, image: true, video: true },
       image: { min: 1, max: 35 },             // TikTok 포토 카루셀 상한(공식 문서)
       video: { minSec: null, maxSec: 600 },   // 기존 코드 상수 유지(제품 정책)
+      delivery: 'auto',
     },
     threads: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      delivery: 'auto',
     },
     x: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      delivery: 'auto',
     },
     'naver-blog': {
       accepts: { story: true, image: true, video: false },
       cardAccepts: { story: true, image: true, video: true },   // 드리프트(기존 동작 유지)
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 영구 manual — 글쓰기 API 가 없다.
+      //   네이버가 2020-05-06 블로그 글쓰기 API 를 종료했다(광고성 글 남용이 사유).
+      //   대체 API 가 제공되지 않았으므로 자동 배포 구현 예정이 아니다.
+      delivery: 'manual',
+      // 비로그인 시 nid.naver.com 로그인으로 갔다가 이 URL 로 되돌아온다(정상).
+      manualUrl: 'https://blog.naver.com/GoBlogWrite.naver',
     },
     kakao: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 영구 manual — 피드 게시 API 가 없다.
+      //   KakaoStory API 는 2023-11-15 종료됐다. 카카오톡 채널 API 는 남아 있지만
+      //   친구 대상 메시지 발송 상품이라 피드 게시와 성격이 다르다.
+      delivery: 'manual',
+      // center-pf.kakao.com 은 301 로 business.kakao.com 에 넘겨진 레거시 도메인이다.
+      // 현행 채널 관리 화면은 파트너센터 대시보드다.
+      manualUrl: 'https://business.kakao.com/dashboard',
     },
     facebook: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      delivery: 'auto',
     },
     linkedin: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 한시적 manual — API 있음 · 자동 배포 구현 예정.
+      //   LinkedIn 은 UGC Posts / Share API 를 제공한다. 우리가 아직 구현하지
+      //   않았을 뿐이므로, 구현 완료 시 delivery 를 'auto' 로 바꾸고 manualUrl 을 지운다.
+      delivery: 'manual',
+      manualUrl: 'https://www.linkedin.com/feed/?shareActive=true',
     },
     pinterest: {
       accepts: { story: false, image: true, video: false },
       cardAccepts: { story: false, image: true, video: true },  // 드리프트(기존 동작 유지)
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 한시적 manual — API 있음 · 자동 배포 구현 예정.
+      //   Pinterest 는 Pins API 를 제공한다. 구현 완료 시 'auto' 로 전환한다.
+      delivery: 'manual',
+      manualUrl: 'https://www.pinterest.com/pin-creation-tool/',
     },
     youtube: {
       accepts: { story: false, image: false, video: true },
       image: { min: null, max: null },
       video: { minSec: 60, maxSec: null },    // 기존 코드 상수 유지(쇼츠와 구분하는 제품 정책)
+      delivery: 'auto',
     },
     'naver-post': {
       accepts: { story: false, image: true, video: false },
       cardAccepts: { story: true, image: true, video: true },   // 드리프트(기존 동작 유지)
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 영구 manual — 공개 API 가 없다. 글쓰기용 공개 엔드포인트가 제공된 적이 없다.
+      delivery: 'manual',
+      // 글쓰기 딥링크(my/writeForm.naver 등)는 모두 301 로 홈에 영구 통합됐다.
+      // 살아 있는 진입점은 홈뿐이다.
+      manualUrl: 'https://post.naver.com/',
     },
     band: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
       video: { minSec: null, maxSec: null },
+      // ■ 한시적 manual — API 있음 · 자동 배포 구현 예정.
+      //   BAND 는 Open API 의 글쓰기 엔드포인트를 제공한다. 구현 완료 시 'auto' 로 전환한다.
+      delivery: 'manual',
+      manualUrl: 'https://www.band.us/',
     },
   };
 
@@ -229,10 +275,68 @@
     }
   }
 
+  // ── 전달 방식 ────────────────────────────────────────────────────────────
+  /**
+   * 전달 방식 문구. 잠금(🔒)이 아니다 — manual 채널도 선택 가능한 상태이며
+   * 추천 배지(★)와 함께 뜨는 것이 정상이다.
+   */
+  var DELIVERY_TEXT = {
+    ko: {
+      manualBadge: '✍ 직접 올리기',
+      manualScheduleBlocked: '직접 올리는 채널이라 예약할 수 없어요',
+    },
+    en: {
+      manualBadge: '✍ Post manually',
+      manualScheduleBlocked: 'Manual channels cannot be scheduled',
+    },
+  };
+
+  function deliveryText(key, lang) {
+    var table = DELIVERY_TEXT[lang === 'en' ? 'en' : 'ko'];
+    return table[key] || '';
+  }
+
+  /** 모르는 포맷은 'auto' 로 본다 — 기존 동작(모르는 포맷을 막지 않는다)과 결이 같다. */
+  function deliveryOf(formatId) {
+    var spec = SPEC[formatId];
+    return (spec && spec.delivery === 'manual') ? 'manual' : 'auto';
+  }
+
+  function isManualDelivery(formatId) {
+    return deliveryOf(formatId) === 'manual';
+  }
+
+  /** 자동 배포 대상 포맷 id 목록. brand-studio.js 가 이것만 게시 API 로 보낸다. */
+  function autoDeliveryIds() {
+    return Object.keys(SPEC).filter(function (id) { return SPEC[id].delivery !== 'manual'; });
+  }
+
+  /** manual 채널의 글쓰기 페이지 URL. auto 채널이면 빈 문자열. */
+  function manualUrlOf(formatId) {
+    var spec = SPEC[formatId];
+    return (spec && spec.delivery === 'manual' && spec.manualUrl) ? spec.manualUrl : '';
+  }
+
+  /** manual 배지 문구. auto 채널이면 빈 문자열 — 호출부에서 분기하지 않아도 되게. */
+  function deliveryLabel(formatId, lang) {
+    return isManualDelivery(formatId) ? deliveryText('manualBadge', lang) : '';
+  }
+
+  /** 예약 불가 사유 한 줄. */
+  function manualScheduleReason(lang) {
+    return deliveryText('manualScheduleBlocked', lang);
+  }
+
   root.NKFormatMedia = {
     SPEC: SPEC,
     isCompatible: isCompatible,
     evaluate: evaluate,
     lockLabel: lockLabel,
+    deliveryOf: deliveryOf,
+    isManualDelivery: isManualDelivery,
+    autoDeliveryIds: autoDeliveryIds,
+    manualUrlOf: manualUrlOf,
+    deliveryLabel: deliveryLabel,
+    manualScheduleReason: manualScheduleReason,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

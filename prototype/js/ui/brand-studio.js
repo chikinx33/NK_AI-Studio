@@ -946,7 +946,7 @@
         'threads': '짧은 글 중심 실시간 대화형 채널 (최대 500자)',
         'x': '짧은 글·링크 중심 실시간 확산 채널 (최대 280자)',
         'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
-        'kakao': '카카오채널·카카오스토리 운영',
+        'kakao': '카카오톡 채널 운영',
         'facebook': '피드·릴스·그룹·페이지 브랜드 운영 채널',
         'linkedin': 'B2B 아티클·피드·뉴스레터 전문 채널',
         'pinterest': '이미지 핀 중심 비주얼 콘텐츠 채널',
@@ -972,7 +972,25 @@
       alertPublishPending: function (label) { return label + ' 결과를 확인하지 못했습니다.\n\n채널이 아직 처리 중일 수 있습니다. 계정에서 직접 확인해 주세요. 배포 완료로는 표시하지 않았습니다.'; },
       alertPublishAllDone: function (n) { return n + '개 채널 배포 요청을 완료했습니다.'; },
       alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
-      alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; }
+      alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; },
+      // ── 직접 올리기(manual) 패널 ──
+      manualGuide: '본문을 복사하고 자산을 내려받은 뒤, 글쓰기 페이지에 붙여넣고 마지막에 완료를 눌러 주세요.',
+      manualStepCopy: '본문 복사',
+      manualStepDownload: '자산 다운로드',
+      manualStepOpen: '글쓰기 페이지',
+      manualStepDone: '게시 완료',
+      manualCopyBtn: '복사하기',
+      manualDownloadBtn: function (n) { return n ? ('내려받기 (' + n + '개)') : '내려받을 자산 없음'; },
+      manualOpenBtn: function (label) { return label + ' 열기'; },
+      manualDoneBtn: '올렸어요',
+      manualDoneBtnDone: '완료됨',
+      manualCopied: '본문을 복사했어요. 글쓰기 페이지에 붙여넣어 주세요.',
+      manualCopyFail: '복사하지 못했어요. 초안 카드에서 직접 복사해 주세요.',
+      manualNothingToCopy: '복사할 본문이 없어요. 03 단계에서 초안을 먼저 작성해 주세요.',
+      manualDownloadStarted: function (n) { return n + '개 자산을 내려받는 중이에요.'; },
+      manualDownloadFail: function (e) { return '자산을 내려받지 못했어요: ' + e; },
+      manualDoneRecorded: function (label) { return label + ' 게시를 완료로 기록했어요.'; },
+      manualDoneUndone: function (label) { return label + ' 게시 완료 표시를 해제했어요.'; }
     };
     return {
       eyebrow: 'Brand Operations', oneClickDraft: 'One-Stop',
@@ -1012,7 +1030,7 @@
         'threads': 'Short-text conversational channel (up to 500 chars)',
         'x': 'Short text & link real-time distribution (up to 280 chars)',
         'naver-blog': 'Search-optimized blog content channel',
-        'kakao': 'KakaoChannel & KakaoStory management',
+        'kakao': 'KakaoTalk Channel management',
         'facebook': 'Feed, Reels, Groups & Pages brand channel',
         'linkedin': 'B2B articles, feed & newsletter channel',
         'pinterest': 'Visual content channel focused on image pins',
@@ -1038,7 +1056,25 @@
       alertPublishPending: function (label) { return label + ' result could not be confirmed.\n\nThe channel may still be processing it. Check your account directly. It has not been marked as published.'; },
       alertPublishAllDone: function (n) { return 'Publish requested for ' + n + ' channel' + (n === 1 ? '' : 's') + '.'; },
       alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
-      alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; }
+      alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; },
+      // ── Manual delivery panel ──
+      manualGuide: 'Copy the text, download the assets, paste them on the channel’s composer, then mark it done.',
+      manualStepCopy: 'Copy text',
+      manualStepDownload: 'Download assets',
+      manualStepOpen: 'Composer page',
+      manualStepDone: 'Mark as posted',
+      manualCopyBtn: 'Copy',
+      manualDownloadBtn: function (n) { return n ? ('Download (' + n + ')') : 'No assets to download'; },
+      manualOpenBtn: function (label) { return 'Open ' + label; },
+      manualDoneBtn: 'I posted it',
+      manualDoneBtnDone: 'Done',
+      manualCopied: 'Text copied. Paste it into the composer.',
+      manualCopyFail: 'Could not copy. Copy it from the draft card instead.',
+      manualNothingToCopy: 'Nothing to copy. Write the draft in step 03 first.',
+      manualDownloadStarted: function (n) { return 'Downloading ' + n + ' asset' + (n === 1 ? '' : 's') + '.'; },
+      manualDownloadFail: function (e) { return 'Could not download assets: ' + e; },
+      manualDoneRecorded: function (label) { return label + ' recorded as posted.'; },
+      manualDoneUndone: function (label) { return label + ' unmarked as posted.'; }
     };
   }
 
@@ -1099,7 +1135,7 @@
       { id: 'threads', title: 'Threads', desc: '짧은 글 중심 실시간 대화형 채널', hasTitle: false },
       { id: 'x', title: 'X', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
       { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
-      { id: 'kakao', title: 'Kakao', desc: '카카오채널·카카오스토리 운영', hasTitle: false },
+      { id: 'kakao', title: 'Kakao', desc: '카카오톡 채널 운영', hasTitle: false },
       { id: 'facebook', title: 'Facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
       { id: 'linkedin', title: 'LinkedIn', desc: 'B2B 아티클·피드·뉴스레터 전문 채널', hasTitle: true },
       { id: 'pinterest', title: 'Pinterest', desc: '이미지 핀 중심 비주얼 콘텐츠 채널', hasTitle: true },
@@ -1507,8 +1543,16 @@
       var status = String(result.status || ((scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'published')).trim() || 'published';
       var publishedAt = String(result.publishedAt || result.scheduledFor || '').trim() || new Date().toISOString();
       var rawHashtags = String(draft && draft.hashtags || '').trim();
+      // 직접 올린 채널은 remotePostId 가 없다. 매번 새 id 를 만들면 완료 체크를
+      // 껐다 켤 때마다 이력이 불어나므로, 채널+에피소드로 고정 id 를 만든다.
+      var isManualRow = isManualFormat(formatId);
+      var manualId = 'manual_' + String(projectId || '') + '_' + String(formatId || 'channel');
       var record = {
-        id: remotePostId ? (String(formatId || 'channel') + '_' + remotePostId) : ('publish_' + Date.now() + '_' + String(formatId || 'channel')),
+        id: remotePostId
+          ? (String(formatId || 'channel') + '_' + remotePostId)
+          : (isManualRow ? manualId : ('publish_' + Date.now() + '_' + String(formatId || 'channel'))),
+        // 전달 방식. 이 값이 없으면 대시보드가 manual 채널을 영구 미게시로 본다.
+        delivery: isManualRow ? 'manual' : 'auto',
         channelType: String(formatId || '').trim(),
         contentType: String(payload.brandStudioContentType || 'sns-post').trim() || 'sns-post',
         status: status,
@@ -1542,6 +1586,28 @@
         : (Array.isArray(payload.publishResults) ? payload.publishResults.slice() : []);
       var nextBrandRows = appendPublishResult(brandRows, record);
       var nextProjectRows = appendPublishResult(projectRows, record);
+      return syncBrandAndProject(
+        { brandStudioPublishResults: nextBrandRows },
+        { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
+      );
+    }
+
+    /**
+     * 배포 이력에서 한 줄을 지운다. 직접 올리기 완료 체크를 해제할 때만 쓴다 —
+     * 안 올린 걸 올렸다고 남겨 두면 대시보드가 거짓말을 한다.
+     */
+    function removePublishedResult(recordId) {
+      var rid = String(recordId || '').trim();
+      if (!rid) return Promise.resolve();
+      function without(rows) {
+        return (Array.isArray(rows) ? rows : []).filter(function (row) {
+          return String((row && row.id) || '') !== rid;
+        });
+      }
+      var nextBrandRows = without(brand && brand.brandStudioPublishResults);
+      var nextProjectRows = without(
+        Array.isArray(payload.brandStudioPublishResults) ? payload.brandStudioPublishResults : payload.publishResults
+      );
       return syncBrandAndProject(
         { brandStudioPublishResults: nextBrandRows },
         { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
@@ -1606,6 +1672,8 @@
       var lockHtml = (cardState === 'unavailable')
         ? '<div class="bsf-format-card__lock">' + escapeHtml(formatLockLabel(item.id, cardEval.reason)) + '</div>'
         : '';
+      // 전달 방식 배지는 상태와 무관하다 — 추천(★)이든 아니든 manual 이면 함께 뜬다.
+      var deliveryHtml = formatDeliveryBadgeHtml(item.id);
       return (
         '<button type="button" class="' + cls + '"' +
         ' data-action="brand-toggle-format"' +
@@ -1618,6 +1686,7 @@
         '<strong>' + escapeHtml(item.title) + '</strong>' +
         '</div>' +
         '<p>' + escapeHtml(fmtDesc) + '</p>' +
+        deliveryHtml +
         lockHtml +
         '</button>'
       );
@@ -2512,6 +2581,74 @@
       } catch (_) {}
       try { return JSON.parse(localStorage.getItem('nk_sns_states') || '{}'); } catch (e) { return {}; }
     }
+    // ── 직접 올리기(manual) 채널 ────────────────────────────────────────────
+    /** 이 채널에 직접 올릴 때 붙여넣을 본문. 제목이 있는 채널은 제목도 맨 앞에 넣는다. */
+    function buildManualCopyText(formatId) {
+      var draft = (formatDrafts && formatDrafts[formatId]) || {};
+      var fmt = formatItems.find(function (f) { return f.id === formatId; });
+      var parts = [];
+      if (fmt && fmt.hasTitle) {
+        var t = String(draft.title || '').trim();
+        if (t) parts.push(t);
+      }
+      var cap = String(draft.caption || '').trim();
+      if (cap) parts.push(cap);
+      var tags = String(draft.hashtags || '').trim();
+      if (tags) parts.push(tags);
+      // 자동 배포 경로(snsPublishFormat)와 같은 구분자를 쓴다 — 결과물이 갈라지지 않게.
+      return parts.join('\n\n');
+    }
+    /** 직접 올릴 때 내려받을 자산. 사용자가 화면에서 보는 순서를 그대로 쓴다. */
+    function getManualMediaItems() {
+      return assetItems.filter(function (i) {
+        var t = String(i.type || '').trim();
+        return (t === 'image' || t === 'video') &&
+          selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 &&
+          !!i.url;
+      });
+    }
+    /**
+     * ①복사 → ②다운로드 → ③열기 → ④완료 체크가 이 패널 안에서 끊기지 않아야 한다.
+     * 복사 버튼만 두고 어디에 붙일지 사용자가 알아서 하게 두지 않는다.
+     */
+    function buildManualPanelHtml(formatId) {
+      var url = NKFormatMedia.manualUrlOf(formatId);
+      var mediaCount = getManualMediaItems().length;
+      var hasText = !!buildManualCopyText(formatId);
+      var fmt = formatItems.find(function (f) { return f.id === formatId; });
+      var fmtLabel = (fmt && fmt.title) ? fmt.title : formatId;
+      var isDone = !!_deployedFormats[formatId];
+      function step(n, label, inner) {
+        return '<div class="bsf-manual-step">' +
+          '<span class="bsf-manual-step-no">' + n + '</span>' +
+          '<span class="bsf-manual-step-label">' + escapeHtml(label) + '</span>' +
+          inner +
+          '</div>';
+      }
+      var fid = escapeHtml(formatId);
+      return (
+        '<div class="bsf-manual-panel">' +
+          '<p class="bsf-manual-guide">' + escapeHtml(T.manualGuide) + '</p>' +
+          '<div class="bsf-manual-steps">' +
+            step(1, T.manualStepCopy,
+              '<button type="button" class="bsf-manual-btn" data-action="brand-manual-copy" data-manual-format="' + fid + '"' +
+              (hasText ? '' : ' disabled') + '>' + escapeHtml(T.manualCopyBtn) + '</button>') +
+            step(2, T.manualStepDownload,
+              '<button type="button" class="bsf-manual-btn" data-action="brand-manual-download" data-manual-format="' + fid + '"' +
+              (mediaCount ? '' : ' disabled') + '>' + escapeHtml(T.manualDownloadBtn(mediaCount)) + '</button>') +
+            step(3, T.manualStepOpen,
+              url
+                ? '<a class="bsf-manual-btn" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
+                  escapeHtml(T.manualOpenBtn(fmtLabel)) + '</a>'
+                : '<button type="button" class="bsf-manual-btn" disabled>' + escapeHtml(T.manualOpenBtn(fmtLabel)) + '</button>') +
+            step(4, T.manualStepDone,
+              '<button type="button" class="bsf-manual-btn bsf-manual-btn--done' + (isDone ? ' is-done' : '') + '"' +
+              ' data-action="brand-manual-done" data-manual-format="' + fid + '">' +
+              escapeHtml(isDone ? T.manualDoneBtnDone : T.manualDoneBtn) + '</button>') +
+          '</div>' +
+        '</div>'
+      );
+    }
     function buildDeploySummaryHtml() {
       var snsStates = _readSnsStates();
       return selectedFormats.length
@@ -2538,27 +2675,41 @@
               connectLabel = isEn ? 'Paused' : '사용 안 함';
               connectCls = 'is-paused';
             }
-            var perCardPicker = buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
+            var isManual = isManualFormat(formatId);
+            // manual 채널은 예약 대상이 아니다 — 시각 선택기를 아예 렌더하지 않는다.
+            var perCardPicker = isManual ? '' : buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
             return (
-              '<div class="bsf-deploy-format-row">' +
+              '<div class="bsf-deploy-format-row' + (isManual ? ' bsf-deploy-format-row--manual' : '') + '">' +
                 '<div class="bsf-deploy-platform-icon">' + icon + '</div>' +
                 '<div class="bsf-deploy-format-body">' +
                   '<div class="bsf-deploy-format-head">' +
                     '<strong class="bsf-deploy-fmt-title">' + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
-                    '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
+                    (isManual
+                      ? '<span class="bsf-deploy-schedule-blocked">' + escapeHtml(manualScheduleReason()) + '</span>'
+                      : '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>') +
                     '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
                     (function () {
                       var checkSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
                       var connectIcon = connectCls === 'is-connected' ? checkSvg : '';
                       var isDone = !!_deployedFormats[formatId];
-                      var connectBadge = '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectIcon + connectLabel + '</span>';
-                      var doneBadge = '<span class="bsf-deploy-done-badge' + (isDone ? ' is-done' : '') + '" data-action="toggle-deploy-done" data-deploy-format="' + escapeHtml(formatId) + '">' + (isDone ? checkSvg : '') + (isEn ? 'Published' : '배포 완료') + '</span>';
+                      // manual 채널은 우리가 연결하는 계정이 없다 — 연결 배지 대신 전달 방식을 보여준다.
+                      var connectBadge = isManual
+                        ? '<span class="bsf-deploy-connect-badge is-manual">' + escapeHtml(NKFormatMedia.deliveryLabel(formatId, isEn ? 'en' : 'ko')) + '</span>'
+                        : '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectIcon + connectLabel + '</span>';
+                      // manual 채널의 완료 처리는 패널 ④ 하나뿐이다. 여기 배지는 상태 표시로만 둔다 —
+                      // 두 곳에서 토글되면 이력 기록 없이 완료로 보이는 경로가 생긴다.
+                      var doneBadge = '<span class="bsf-deploy-done-badge' + (isDone ? ' is-done' : '') + (isManual ? ' is-readonly' : '') + '"' +
+                        (isManual ? '' : ' data-action="toggle-deploy-done" data-deploy-format="' + escapeHtml(formatId) + '"') +
+                        '>' + (isDone ? checkSvg : '') + (isEn ? 'Published' : '배포 완료') + '</span>';
                       return connectBadge + doneBadge;
                     })() +
                   '</div>' +
                   '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
+                  (isManual ? buildManualPanelHtml(formatId) : '') +
                 '</div>' +
                 (function () {
+                  // manual 채널에는 자동 배포 버튼을 두지 않는다. 패널이 그 자리를 대신한다.
+                  if (isManual) return '';
                   var isDeploying = !!_deployingFormats[formatId];
                   var btnCls = 'bsf-deploy-one-btn btn-primary' + (isDeploying ? ' is-deploying' : '');
                   var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
@@ -2863,6 +3014,23 @@
     /** 잠금 배지 문구. 렌더 경로와 in-place 갱신 경로가 모두 이것만 쓴다. */
     function formatLockLabel(formatId, reason) {
       return NKFormatMedia.lockLabel(formatId, reason, isEn ? 'en' : 'ko');
+    }
+    /** 이 채널을 사용자가 직접 올려야 하는가. */
+    function isManualFormat(formatId) {
+      return NKFormatMedia.isManualDelivery(formatId);
+    }
+    /** 예약 불가 사유. 배지 문구와 같은 곳(format-media-spec.js)에서 조립한다. */
+    function manualScheduleReason() {
+      return NKFormatMedia.manualScheduleReason(isEn ? 'en' : 'ko');
+    }
+    /**
+     * 전달 방식 보조 배지. manual 이 아니면 빈 문자열이라 호출부가 분기하지 않아도 된다.
+     * 잠금이 아니라는 점이 중요하다 — 카드는 여전히 선택 가능하다.
+     */
+    function formatDeliveryBadgeHtml(formatId) {
+      var label = NKFormatMedia.deliveryLabel(formatId, isEn ? 'en' : 'ko');
+      if (!label) return '';
+      return '<span class="bsf-format-card__delivery">' + escapeHtml(label) + '</span>';
     }
 
     function getCurrentSelectedAssetItems() {
@@ -3904,9 +4072,10 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook', 'threads', 'x'];
-        if (SNS_PLATFORMS.indexOf(formatId) === -1) {
-          return Promise.resolve({ skipped: true });
+        // 자동 배포 대상은 format-media-spec.js 가 단일 원천이다.
+        // manual 채널은 여기서 걸러지지만, 배포 카드가 '직접 올리기' 패널을 대신 띄운다.
+        if (NKFormatMedia.autoDeliveryIds().indexOf(formatId) === -1) {
+          return Promise.resolve({ skipped: true, manual: NKFormatMedia.isManualDelivery(formatId) });
         }
         var isYoutubeFamily = (formatId === 'youtube' || formatId === 'youtube-shorts');
         // Threads·X 는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
@@ -4449,6 +4618,8 @@
         // '사용 중'인 플랫폼만 배포 (사용 안 함으로 꺼둔 채널은 skip)
         var _snsStatesAll = _readSnsStates();
         var allFmtIds = selectedFormats.filter(function (fid) {
+          // 직접 올리는 채널은 자동 배포·예약 대상이 아니다. 카드의 패널이 대신 처리한다.
+          if (isManualFormat(fid)) return false;
           var row = _snsStatesAll[fid] || {};
           return !!row.connected && (row.enabled !== false);
         });
@@ -4517,6 +4688,110 @@
             btn.textContent = isEn ? 'Publish All' : (T.ctrlPublishAll || '전체 배포');
             refreshDeploySummary();
           });
+        return;
+      }
+      // ── 직접 올리기 패널: ①복사 ②다운로드 ④완료 (③열기는 <a target="_blank">) ──
+      if (action === 'brand-manual-copy') {
+        var mcFmtId = String(btn.dataset.manualFormat || '').trim();
+        if (!mcFmtId) return;
+        flushPendingDraftEdits();   // 편집 중인 내용까지 복사되도록
+        var mcText = buildManualCopyText(mcFmtId);
+        if (!mcText) { bsfToast(T.manualNothingToCopy, { tone: 'warn' }); return; }
+        function mcDone() {
+          var prev = btn.textContent;
+          btn.textContent = '✓';
+          btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = prev; btn.classList.remove('copied'); }, 1500);
+          bsfToast(T.manualCopied, { tone: 'ok' });
+        }
+        function mcFallback() {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = mcText;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            mcDone();
+          } catch (_) {
+            bsfToast(T.manualCopyFail, { tone: 'warn' });
+          }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(mcText).then(mcDone).catch(mcFallback);
+        } else {
+          mcFallback();
+        }
+        return;
+      }
+      if (action === 'brand-manual-download') {
+        var mdFmtId = String(btn.dataset.manualFormat || '').trim();
+        if (!mdFmtId) return;
+        var mdItems = getManualMediaItems();
+        if (!mdItems.length) return;
+        // 파일명에 순번을 넣어야 카루셀 순서를 잃지 않는다. 1개뿐이면 번호를 붙이지 않는다.
+        var mdMulti = mdItems.length > 1;
+        function mdExtOf(item) {
+          var obj = extractGcsObjectName(item.url) || String(item.url || '');
+          var m = obj.split('?')[0].match(/\.([a-z0-9]{2,4})$/i);
+          if (m) return m[1].toLowerCase();
+          return String(item.type || '') === 'video' ? 'mp4' : 'jpg';
+        }
+        btn.disabled = true;
+        bsfToast(T.manualDownloadStarted(mdItems.length), { tone: 'ok' });
+        mdItems.reduce(function (chain, item, idx) {
+          return chain.then(function () {
+            // 자산은 같은 오리진(/api/media/proxy)에서 오므로 blob 으로 받아 저장할 수 있다.
+            return fetch(item.url)
+              .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+              })
+              .then(function (blob) {
+                var name = (mdMulti ? (('0' + (idx + 1)).slice(-2) + '_') : '') + mdFmtId + '.' + mdExtOf(item);
+                var objUrl = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = objUrl;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                // 즉시 revoke 하면 저장이 시작되기 전에 끊기는 브라우저가 있다.
+                setTimeout(function () { URL.revokeObjectURL(objUrl); }, 10000);
+              });
+          });
+        }, Promise.resolve())
+          .catch(function (err) {
+            bsfToast(T.manualDownloadFail(err && err.message ? err.message : err), { tone: 'warn' });
+          })
+          .finally(function () { btn.disabled = false; });
+        return;
+      }
+      if (action === 'brand-manual-done') {
+        var mnFmtId = String(btn.dataset.manualFormat || '').trim();
+        if (!mnFmtId) return;
+        var mnFmt = formatItems.find(function (f) { return f.id === mnFmtId; });
+        var mnLabel = (mnFmt && mnFmt.title) ? mnFmt.title : mnFmtId;
+        var mnWasDone = !!_deployedFormats[mnFmtId];
+        btn.disabled = true;
+        if (mnWasDone) {
+          delete _deployedFormats[mnFmtId];
+          persistDeployedFormats();
+          refreshDeploySummary();
+          removePublishedResult('manual_' + projectId + '_' + mnFmtId)
+            .then(function () { bsfToast(T.manualDoneUndone(mnLabel), { tone: 'ok' }); })
+            .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
+            .finally(function () { btn.disabled = false; });
+          return;
+        }
+        _deployedFormats[mnFmtId] = true;
+        persistDeployedFormats();
+        refreshDeploySummary();
+        // 자동 배포와 같은 이력 경로를 쓴다 — delivery 만 'manual' 로 남는다.
+        persistPublishedResult(mnFmtId, (formatDrafts && formatDrafts[mnFmtId]) || {}, { result: { status: 'published' } }, '')
+          .then(function () { bsfToast(T.manualDoneRecorded(mnLabel), { tone: 'ok' }); })
+          .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
+          .finally(function () { btn.disabled = false; });
         return;
       }
       if (action === 'toggle-deploy-done') {
