@@ -928,7 +928,7 @@
       fmtDescs: {
         'instagram': '피드·릴스·스토리 중심 이미지·영상 SNS',
         'youtube-shorts': '세로형 쇼츠·영상 업로드 및 설명 운영',
-        'tiktok': '짧은 영상 중심 빠른 확산 채널',
+        'tiktok': '짧은 영상·사진 카루셀 중심 빠른 확산 채널',
         'threads': '짧은 글 중심 실시간 대화형 채널 (최대 500자)',
         'x': '짧은 글·링크 중심 실시간 확산 채널 (최대 280자)',
         'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
@@ -989,7 +989,7 @@
       fmtDescs: {
         'instagram': 'Feed, Reels & Stories — image & video SNS',
         'youtube-shorts': 'Vertical shorts, video uploads & descriptions',
-        'tiktok': 'Short-video channel for rapid viral growth',
+        'tiktok': 'Short-video & photo carousel channel for rapid viral growth',
         'threads': 'Short-text conversational channel (up to 500 chars)',
         'x': 'Short text & link real-time distribution (up to 280 chars)',
         'naver-blog': 'Search-optimized blog content channel',
@@ -1071,7 +1071,7 @@
     return [
       { id: 'instagram', title: 'Instagram', desc: '피드·릴스·스토리 중심 이미지·영상 SNS', hasTitle: false },
       { id: 'youtube-shorts', title: 'YouTube Shorts', desc: '세로형 쇼츠·영상 업로드 및 설명 운영', hasTitle: true },
-      { id: 'tiktok', title: 'TikTok', desc: '짧은 영상 중심 빠른 확산 채널', hasTitle: false },
+      { id: 'tiktok', title: 'TikTok', desc: '짧은 영상·사진 카루셀 중심 빠른 확산 채널', hasTitle: false },
       { id: 'threads', title: 'Threads', desc: '짧은 글 중심 실시간 대화형 채널', hasTitle: false },
       { id: 'x', title: 'X', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
       { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
@@ -1111,23 +1111,9 @@
     return '<svg class="bsf-fmt-card-icon" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" ' + attrs + ' aria-hidden="true">' + paths + '</svg>';
   }
 
+  // 규칙은 js/ui/format-media-spec.js 가 단일 원천이다. 여기서 판정하지 않는다.
   function isFormatCompatible(id, hasStory, hasImage, hasVideo) {
-    switch (id) {
-      case 'instagram':    return hasImage || hasVideo;
-      case 'youtube-shorts': return hasVideo;
-      case 'tiktok':       return hasVideo;
-      case 'threads':      return hasStory || hasImage || hasVideo;
-      case 'x':            return hasStory || hasImage || hasVideo;
-      case 'naver-blog':   return hasStory || hasImage;
-      case 'kakao':        return hasImage || hasStory || hasVideo;
-      case 'facebook':     return hasImage || hasVideo || hasStory;
-      case 'linkedin':     return hasStory || hasImage || hasVideo;
-      case 'pinterest':    return hasImage;
-      case 'youtube':      return hasVideo;
-      case 'naver-post':   return hasImage;
-      case 'band':         return hasStory || hasImage || hasVideo;
-      default: return true;
-    }
+    return NKFormatMedia.isCompatible(id, { story: hasStory, image: hasImage, video: hasVideo });
   }
 
   function splitIntoParagraphs(text, n) {
@@ -1392,7 +1378,7 @@
           // 'recommended' 상태인 카드만 자동 선택
           var curSelected = getCurrentSelectedAssetItems();
           var autoFormats = formatItems.filter(function (fmt) {
-            return getFormatCardState(fmt.id, curSelected) === 'recommended';
+            return getFormatCardState(fmt.id, curSelected).state === 'recommended';
           }).map(function (fmt) { return fmt.id; });
           if (autoFormats.length || curSelected.length) {
             selectedFormats = autoFormats;
@@ -1578,7 +1564,8 @@
     var _starSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
     var formatCards = formatItems.map(function (item) {
       var isSelected = selectedFormats.indexOf(item.id) >= 0;
-      var cardState = getFormatCardState(item.id, __initialSelectedForFormatState);
+      var cardEval = getFormatCardState(item.id, __initialSelectedForFormatState);
+      var cardState = cardEval.state;
       var fmtDesc = (T.fmtDescs && T.fmtDescs[item.id]) || item.desc;
       var cls = 'bsf-format-card bsf-format-card--' + cardState +
         (isSelected ? ' is-selected' : '');
@@ -1586,7 +1573,7 @@
         ? '<div class="bsf-format-card__badge" aria-label="' + (isEn ? 'Recommended' : '추천') + '">' + _starSvg + '</div>'
         : '';
       var lockHtml = (cardState === 'unavailable')
-        ? '<div class="bsf-format-card__lock">' + (isEn ? '🔒 Asset required' : '🔒 자산 필요') + '</div>'
+        ? '<div class="bsf-format-card__lock">' + escapeHtml(formatLockLabel(item.id, cardEval.reason)) + '</div>'
         : '';
       return (
         '<button type="button" class="' + cls + '"' +
@@ -2057,10 +2044,22 @@
       scheduledAtField(fmtId, draft.scheduled_at || '', draft.privacy_status || 'public');
     }
     function buildTiktokPreview(fmtId, captionVal, hashtagVal, draft) {
-      var tiktokVidHtml = draftFirstVidUrl
-        ? '<video class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video>'
-        : '<div class="bsf-mock-tiktok-vid-empty">▶</div>';
-      return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
+      // TikTok 은 사진 카루셀도 게시된다. 영상만 보고 그리면 사진 에피소드에서
+      // 빈 '▶' 상자가 떠 실제로 무엇이 올라가는지 알 수 없다.
+      var tiktokVidHtml;
+      var tiktokPreviewLabel;
+      if (draftFirstVidUrl) {
+        tiktokVidHtml = '<video class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video>';
+        tiktokPreviewLabel = isEn ? 'Video preview' : '영상 미리보기';
+      } else if (draftFirstImgUrl) {
+        // 영상과 같은 영역·비율을 채우도록 같은 클래스를 쓴다(object-fit: cover).
+        tiktokVidHtml = '<img class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstImgUrl) + '" alt="" />';
+        tiktokPreviewLabel = isEn ? 'Photo preview' : '사진 미리보기';
+      } else {
+        tiktokVidHtml = '<div class="bsf-mock-tiktok-vid-empty">▶</div>';
+        tiktokPreviewLabel = isEn ? 'Video preview' : '영상 미리보기';
+      }
+      return pvWrap(tiktokPreviewLabel,
         '<div class="bsf-mockup bsf-mock-tiktok">' +
         tiktokVidHtml +
         '<div class="bsf-mock-tiktok-sidebar">' +
@@ -2698,77 +2697,16 @@
     }
     // ── 포맷 카드 3단계 상태 판정 ─────────────────────────────────────────────
     // returns 'recommended' | 'available' | 'unavailable'
+    // 규칙은 js/ui/format-media-spec.js 가 단일 원천이다.
+    // 반환은 { state, reason } 객체다 — 잠금 문구를 reason 으로 만들기 위함.
     function getFormatCardState(formatId, selected) {
-      var hasStory = selected.some(function (i) { return i.type === 'text'; });
-      var hasImage = selected.some(function (i) { return i.type === 'image' && i.url; });
-      var hasVideo = selected.some(function (i) { return i.type === 'video' && i.url; });
-      var imageCount = selected.filter(function (i) { return i.type === 'image' && i.url; }).length;
-      var videoDuration = null;
-      for (var k = 0; k < selected.length; k++) {
-        var s = selected[k];
-        if (s.type === 'video' && s.duration != null) { videoDuration = s.duration; break; }
-      }
-      var DURATION_UNKNOWN = (videoDuration === null);
-      var OVER_600 = (videoDuration !== null && videoDuration > 600);
-      var UNDER_60 = (videoDuration !== null && videoDuration < 60);
-
-      switch (formatId) {
-        // ── 핵심 5개: 명시 규칙 ────────────────────────────────────────────
-        case 'instagram':
-          if (!hasImage && !hasVideo) return 'unavailable';
-          if (hasVideo && !DURATION_UNKNOWN && OVER_600) return 'unavailable';
-          return 'recommended';
-        case 'threads':
-        case 'x':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          return 'recommended';
-        case 'tiktok':
-          if (!hasVideo) return 'unavailable';
-          if (!DURATION_UNKNOWN && OVER_600) return 'unavailable';
-          return 'recommended';
-        case 'youtube':
-          if (!hasVideo) return 'unavailable';
-          if (!DURATION_UNKNOWN && UNDER_60) return 'unavailable';
-          return 'recommended';
-        case 'youtube-shorts':
-          if (!hasVideo) return 'unavailable';
-          if (!DURATION_UNKNOWN && OVER_600) return 'unavailable';
-          return 'recommended';
-        // ── 나머지 7개: 기존 로직 그대로 case 이전 ─────────────────────────
-        case 'pinterest':
-          if (!hasImage && !hasVideo) return 'unavailable';
-          if (hasImage && imageCount === 1) return 'recommended';
-          return 'available';
-        case 'facebook':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasImage && imageCount >= 1) return 'recommended';
-          if (hasStory) return 'recommended';
-          return 'available';
-        case 'linkedin':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasStory) return 'recommended';
-          return 'available';
-        case 'naver-blog':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasImage && imageCount >= 2) return 'recommended';
-          if (hasStory) return 'recommended';
-          return 'available';
-        case 'naver-post':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasImage && imageCount === 1) return 'recommended';
-          return 'available';
-        case 'kakao':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasImage && imageCount === 1) return 'recommended';
-          return 'available';
-        case 'band':
-          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-          if (hasStory) return 'recommended';
-          return 'available';
-        default:
-          return 'available';
-      }
+      return NKFormatMedia.evaluate(formatId, selected);
     }
+    /** 잠금 배지 문구. 렌더 경로와 in-place 갱신 경로가 모두 이것만 쓴다. */
+    function formatLockLabel(formatId, reason) {
+      return NKFormatMedia.lockLabel(formatId, reason, isEn ? 'en' : 'ko');
+    }
+
     function getCurrentSelectedAssetItems() {
       var arr = assetItems.filter(function (item) {
         return selectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
@@ -2841,7 +2779,7 @@
     function pruneUnavailableSelectedFormats() {
       var current = getCurrentSelectedAssetItems();
       var keep = selectedFormats.filter(function (fid) {
-        return getFormatCardState(fid, current) !== 'unavailable';
+        return getFormatCardState(fid, current).state !== 'unavailable';
       });
       if (keep.length === selectedFormats.length) return false; // 변경 없음
       selectedFormats = keep;
@@ -2963,7 +2901,8 @@
       cards.forEach(function (card) {
         var fid = String(card.dataset.formatId || '').trim();
         if (!fid) return;
-        var newState = getFormatCardState(fid, current);
+        var newEval = getFormatCardState(fid, current);
+        var newState = newEval.state;
         card.classList.remove('bsf-format-card--recommended', 'bsf-format-card--available', 'bsf-format-card--unavailable');
         card.classList.add('bsf-format-card--' + newState);
         if (newState === 'unavailable') {
@@ -2982,10 +2921,15 @@
           existingBadge.remove();
         }
         var existingLock = card.querySelector('.bsf-format-card__lock');
+        // 이미 잠긴 카드라도 사유가 바뀔 수 있다(자산 없음 → 사진 초과 등).
+        // 문구를 갱신하지 않으면 옛 사유가 남는다.
+        if (newState === 'unavailable' && existingLock) {
+          existingLock.textContent = formatLockLabel(fid, newEval.reason);
+        }
         if (newState === 'unavailable' && !existingLock) {
           var l = document.createElement('div');
           l.className = 'bsf-format-card__lock';
-          l.textContent = (isEn ? '🔒 Asset required' : '🔒 자산 필요');
+          l.textContent = formatLockLabel(fid, newEval.reason);
           card.appendChild(l);
         } else if (newState !== 'unavailable' && existingLock) {
           existingLock.remove();
