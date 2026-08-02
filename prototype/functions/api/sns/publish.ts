@@ -10,7 +10,6 @@ import {
   isValidPrivacyLevel,
   resolveTikTokPrivacyLevel,
   queryTikTokCreatorInfo,
-  waitForTikTokStatus,
 } from "../_shared/tiktok-token";
 
 function send(body: unknown, status = 200) {
@@ -400,10 +399,12 @@ async function publishTikTokVideo(opts: {
     const errText = await uploadRes.text().catch(() => "");
     throw new Error(`TikTok 영상 업로드 실패: ${uploadRes.status} ${errText}`);
   }
-  console.log(`[tiktok] 영상 업로드 완료, 상태 폴링 시작`);
-  const r = await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 영상 발행 status=${r.status}: ${publishId}`);
-  return { publishId, status: r.status, failReason: r.failReason, postId: r.postId };
+  // 업로드가 끝나면 TikTok 이 발행을 수락한 것이다. 여기서 상태를 폴링하지 않는다 —
+  // 폴링은 정보성인데, 요청 안에서 기다리면 실행 제한을 넘겨 응답 자체를 잃고
+  // "이미 게시됐는데 실패로 보이는" 상태가 된다. 상태 확인은 클라이언트가
+  // /api/sns/tiktok/publish-status 로 따로 한다.
+  console.log(`[tiktok] 영상 업로드 완료(수락됨): ${publishId}`);
+  return { publishId, status: "processing" as const };
 }
 
 async function publishTikTokPhoto(opts: {
@@ -454,10 +455,10 @@ async function publishTikTokPhoto(opts: {
     throw tiktokInitError('photo', data.error?.code, detail);
   }
   const publishId = data.data.publish_id;
-  console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
-  const r = await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 이미지 발행 status=${r.status}: ${publishId}`);
-  return { publishId, status: r.status, failReason: r.failReason, postId: r.postId };
+  // 사진은 TikTok 이 URL 에서 직접 가져간다. publish_id 가 나온 시점에 수락된 것이므로
+  // 여기서 기다리지 않는다(위 영상 경로와 같은 이유).
+  console.log(`[tiktok] 이미지 발행 수락됨: ${publishId}`);
+  return { publishId, status: "processing" as const };
 }
 
 // ── Instagram 헬퍼 ─────────────────────────────────────────────────────────
@@ -1139,30 +1140,28 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       // status_reported_failed(이 세션에서 FAILED 여도 실제 게시 성공 사례 반복 확인됨),
       // 그 외 → processing. fail_reason 은 publishResults 에 그대로 노출된다.
       const anyFailed = publishResults.some((r) => r.status === "failed");
-      const allComplete = publishResults.every((r) => r.status === "complete");
       const failReasons = publishResults
         .filter((r) => r.status === "failed" && r.failReason)
         .map((r) => `${r.type}:${r.failReason}`);
-      // 발행이 끝나 실제 게시물 id 가 나온 경우에만 링크를 만든다.
-      // (publish_id 는 내부 식별자라 URL 로 열리지 않는다)
-      const publicPostId = publishResults.find((r) => r.postId)?.postId || "";
-      // 게시물 URL 에는 진짜 @handle 이 필요하다. 저장된 username 필드에는 display_name 이
-      // 들어있고(user.info.basic 으로는 handle 을 못 받는다) 그대로 쓰면 링크가 깨지므로,
-      // 방금 조회한 creator_info 의 creator_username 을 우선 쓴다.
+      // 게시물 URL 은 여기서 만들지 않는다. 실제 게시물 id 는 TikTok 이 처리를 끝낸 뒤에야
+      // 나오는데, 그걸 기다리면 요청이 실행 제한을 넘긴다. 클라이언트가
+      // /api/sns/tiktok/publish-status 로 확인해 링크를 만든다.
+      // 게시물 URL 에 필요한 진짜 @handle 은 방금 조회한 creator_info 값을 함께 내려준다
+      // (저장된 username 필드에는 display_name 이 들어있어 그대로 쓰면 링크가 깨진다).
       const tiktokUsername = String(
         creatorInfoData?.creator_username || tiktokSettings.username || ""
       ).replace(/^@/, "");
-      const postUrl = publicPostId && tiktokUsername
-        ? `https://www.tiktok.com/@${encodeURIComponent(tiktokUsername)}/video/${encodeURIComponent(publicPostId)}`
-        : "";
       return send({
         ok: true,
         result: {
           platform: "tiktok",
           postId: publishResults[0]?.publishId,
-          url: postUrl || undefined,
+          // 상태 조회에 쓸 publish_id 목록과 핸들
+          publishIds: publishResults.map((r) => r.publishId).filter(Boolean),
+          handle: tiktokUsername || undefined,
           username: tiktokSettings.username || "",
-          status: allComplete ? "published" : (anyFailed ? "status_reported_failed" : "processing"),
+          // TikTok 이 발행을 수락한 상태. 완료 여부는 별도 조회로 확인한다.
+          status: anyFailed ? "status_reported_failed" : "processing",
           failReasons: failReasons.length ? failReasons : undefined,
           publishedAt: new Date().toISOString(),
           // 사용자가 고른 공개 범위와 실제 적용된 값. 강등됐다면 사유를 함께 노출해

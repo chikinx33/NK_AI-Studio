@@ -154,6 +154,32 @@ test("모달은 공개 범위를 사전 선택하지 않고 미선택 시 게시
   assert.match(src, /Branded content visibility cannot be set to private\./);
 });
 
+test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다", () => {
+  const pub = read("prototype/functions/api/sns/publish.ts");
+  // 요청 안에서 상태를 기다리면 실행 제한을 넘겨 응답을 잃고, 실제로는 게시됐는데
+  // 실패로 보이는 상태가 된다(실제로 그렇게 동작했다).
+  assert.doesNotMatch(pub, /waitForTikTokStatus/);
+  assert.match(pub, /return \{ publishId, status: "processing" as const \};/);
+  // 클라이언트가 상태를 조회할 수 있도록 publish_id 와 handle 을 내려준다
+  assert.match(pub, /publishIds: publishResults\.map/);
+  assert.match(pub, /handle: tiktokUsername \|\| undefined/);
+
+  // 상태 조회 전용 엔드포인트
+  const st = read("prototype/functions/api/sns/tiktok/publish-status.ts");
+  assert.match(st, /export const onRequestGet/);
+  assert.match(st, /post\/publish\/status\/fetch/);
+  assert.match(st, /PUBLISH_COMPLETE" \|\| raw === "SEND_TO_USER_INBOX"/);
+  // 공유 프로젝트도 소유자 토큰으로 조회해야 한다
+  assert.match(st, /getGrantRole/);
+
+  // 모달이 브라우저에서 폴링해 링크를 채운다
+  const modal = read("prototype/js/ui/tiktok-consent-modal.js");
+  assert.match(modal, /function pollPublishStatus/);
+  assert.match(modal, /\/api\/sns\/tiktok\/publish-status\?/);
+  // 모달이 닫혔으면 폴링을 멈춘다
+  assert.match(modal, /if \(settled \|\| !document\.body\.contains\(overlay\)\) return;/);
+});
+
 test("심사 전에는 브랜디드 콘텐츠를 고를 수 없다 (막다른 상태 방지)", () => {
   const src = read("prototype/js/ui/tiktok-consent-modal.js");
   // 미심사 앱은 SELF_ONLY 만 가능한데 브랜디드 콘텐츠는 SELF_ONLY 가 금지다.

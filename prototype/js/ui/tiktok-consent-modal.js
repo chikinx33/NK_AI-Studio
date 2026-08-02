@@ -610,24 +610,77 @@
         });
     }
 
+    /**
+     * 게시 완료 여부는 서버가 아니라 브라우저가 확인한다.
+     * 게시 요청 안에서 기다리면 실행 제한을 넘겨 응답을 잃고, 실제로는 게시됐는데
+     * 실패로 보이는 상태가 된다. 요청은 "수락"까지만 하고 완료는 여기서 폴링한다.
+     */
+    function pollPublishStatus(res, onUpdate) {
+      var ids = (res && res.publishIds) || [];
+      var pid = String(ids[0] || res.postId || '').trim();
+      if (!pid) return;
+      var token = '';
+      try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
+      var qs = ['publishId=' + encodeURIComponent(pid)];
+      if (o.ownerId) qs.push('ownerId=' + encodeURIComponent(o.ownerId));
+      if (o.projectId) qs.push('projectId=' + encodeURIComponent(o.projectId));
+      var tries = 0;
+      var MAX = 10;          // 최대 10회 × 3초 ≈ 30초. 브라우저라 실행 제한이 없다.
+      function tick() {
+        if (settled || !document.body.contains(overlay)) return;   // 닫혔으면 중단
+        tries++;
+        fetch('/api/sns/tiktok/publish-status?' + qs.join('&'), {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (st) {
+            if (!st || !st.ok) return;
+            if (st.status === 'complete') {
+              onUpdate({ complete: true, postId: st.postId || '' });
+              return;
+            }
+            if (tries < MAX) setTimeout(tick, 3000);
+          })
+          .catch(function () { if (tries < MAX) setTimeout(tick, 3000); });
+      }
+      setTimeout(tick, 2000);
+    }
+
     function renderDone(result) {
       var res = (result && result.result) ? result.result : {};
-      var url = String(res.url || '').trim();
-      var complete = String(res.status || '') === 'published';
-      var title = complete ? C.posted : C.processing;
-      var note = (res.privacyDowngraded && res.privacyDowngradeReason)
-        ? '<div class="ttc-banner">' + esc(res.privacyDowngradeReason) + '</div>' : '';
-      modal.innerHTML =
-        '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span></div>' +
-        '<div class="ttc-body"><div class="ttc-done">' +
-        '<div class="ttc-done-title">' + esc(title) + '</div>' +
-        (url ? '<a class="ttc-link" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(C.viewPost) + '</a>' : '') +
-        note + '</div></div>' +
-        '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>' + esc(C.close) + '</button></div>';
-      modal.querySelector('[data-ttc-done]').onclick = function () {
-        finish(result);
-        destroy();
-      };
+      var handle = String(res.handle || '').replace(/^@/, '');
+      var state2 = { complete: false, url: String(res.url || '').trim() };
+
+      function paintDone() {
+        var title = state2.complete ? C.posted : C.processing;
+        var note = (res.privacyDowngraded && res.privacyDowngradeReason)
+          ? '<div class="ttc-banner">' + esc(res.privacyDowngradeReason) + '</div>' : '';
+        modal.innerHTML =
+          '<div class="ttc-head"><span class="ttc-title">' + esc(C.title) + '</span></div>' +
+          '<div class="ttc-body"><div class="ttc-done">' +
+          (state2.complete ? '' : '<div class="ttc-spinner"></div>') +
+          '<div class="ttc-done-title">' + esc(title) + '</div>' +
+          (state2.url ? '<a class="ttc-link" href="' + esc(state2.url) + '" target="_blank" rel="noopener">' + esc(C.viewPost) + '</a>' : '') +
+          note + '</div></div>' +
+          '<div class="ttc-foot"><button type="button" class="ttc-btn ttc-btn-primary" data-ttc-done>' + esc(C.close) + '</button></div>';
+        modal.querySelector('[data-ttc-done]').onclick = function () {
+          finish(result);
+          destroy();
+        };
+      }
+
+      paintDone();
+      // 아직 처리 중이면 완료될 때까지 확인해 링크를 채운다.
+      if (String(res.status || '') !== 'published') {
+        pollPublishStatus(res, function (upd) {
+          state2.complete = true;
+          if (upd.postId && handle) {
+            state2.url = 'https://www.tiktok.com/@' + encodeURIComponent(handle) +
+              '/video/' + encodeURIComponent(upd.postId);
+          }
+          paintDone();
+        });
+      }
     }
 
     paint();
