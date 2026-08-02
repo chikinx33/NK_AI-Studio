@@ -742,10 +742,24 @@
         break;
 
       case 'youtube-shorts':
-      case 'tiktok':
         var hook = firstSentence(storyText);
         if (hook)         parts.push(hook);
         else if (coreMsg) parts.push(coreMsg);
+        break;
+
+      // TikTok 은 쇼츠와 같은 규칙을 쓰다가 첫 문장 하나만 남아, 캡션만 보고는
+      // 에피소드에 무슨 일이 있었는지 알 수 없었다. 훅 뒤에 상황 한 줄을 더 붙인다.
+      case 'tiktok':
+        var tkSents = String(storyText || '')
+          .split(/(?<=[.!?。！？])\s+|\n+/)
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean);
+        if (tkSents.length) {
+          parts.push(tkSents[0]);
+          if (tkSents[1]) parts.push('\n' + tkSents[1]);
+        } else if (coreMsg) {
+          parts.push(coreMsg);
+        }
         break;
 
       case 'threads':
