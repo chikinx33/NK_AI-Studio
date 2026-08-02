@@ -3996,7 +3996,20 @@
             headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
           })
-            .then(function (r) { return r.json().then(function (j) { return { httpStatus: r.status, body: j }; }); })
+            .then(function (r) {
+              // 응답이 JSON 이 아닐 수 있다. 요청이 플랫폼 실행 제한을 넘기면
+              // Cloudflare 가 HTML 에러 페이지를 돌려주는데, 그대로 r.json() 하면
+              // "Unexpected token '<'" 로 죽어서 진짜 원인이 가려진다.
+              return r.text().then(function (raw) {
+                var j = null;
+                try { j = raw ? JSON.parse(raw) : null; } catch (_) { j = null; }
+                if (!j) {
+                  console.warn('[publish] JSON 이 아닌 응답:', r.status, String(raw).slice(0, 300));
+                  j = { ok: false, error: '', code: 'non_json_response', httpStatus: r.status };
+                }
+                return { httpStatus: r.status, body: j };
+              });
+            })
             .then(function (wrap) {
               var res = wrap.body;
               // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)

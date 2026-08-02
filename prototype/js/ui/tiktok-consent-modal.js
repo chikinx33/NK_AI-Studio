@@ -145,6 +145,9 @@
       spam_risk_too_many_posts: 'TikTok is rate limiting this account right now. Try again later.',
       unaudited_client_can_only_post_to_private_accounts:
         'Until this app passes TikTok review, posts can only be visible to you.',
+      non_json_response:
+        'The publish request took too long and the server returned an error page. ' +
+        'The post may still have gone through — check TikTok before retrying.',
       generic: 'TikTok rejected the post.'
     },
     ko: {
@@ -155,6 +158,9 @@
       spam_risk_too_many_posts: '지금 이 계정에 TikTok 게시 제한이 걸려 있습니다. 잠시 후 다시 시도해 주세요.',
       unaudited_client_can_only_post_to_private_accounts:
         '앱이 TikTok 심사를 통과하기 전까지는 나만 볼 수 있는 게시물로만 올라갑니다.',
+      non_json_response:
+        '게시 요청이 너무 오래 걸려 서버가 오류 페이지를 반환했습니다. ' +
+        '게시가 이미 처리되었을 수 있으니 TikTok에서 확인한 뒤 다시 시도해 주세요.',
       generic: 'TikTok이 게시를 거부했습니다.'
     }
   };

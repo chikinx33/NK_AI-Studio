@@ -181,8 +181,13 @@ export async function getTikTokAccessToken(
 export async function waitForTikTokStatus(
   accessToken: string,
   publishId: string,
-  maxRetries = 12,
-  intervalMs = 3000
+  // ⚠️ 요청 하나가 Cloudflare Functions 실행 제한(약 30초)을 넘기면 응답이 JSON 이
+  // 아니라 HTML 에러 페이지로 바뀌어, 클라이언트가 "Unexpected token '<'" 로 죽는다.
+  // 예전 기본값(12회 × 3초 = 36초)은 폴링만으로 이미 제한을 넘겼다.
+  // publish_id 가 나온 시점에 TikTok 은 이미 발행을 수락한 상태이고 폴링은 정보성이므로,
+  // 짧게만 확인하고 끝나지 않으면 processing 으로 돌려준다.
+  maxRetries = 3,
+  intervalMs = 2000
 ): Promise<{ status: "complete" | "processing" | "failed"; failReason?: string; postId?: string }> {
   let lastStatus = "";
   for (let i = 0; i < maxRetries; i++) {
