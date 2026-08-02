@@ -39,6 +39,23 @@ test('brand shell keeps dashboard view query when remapping the stage href', () 
   assert.match(navigation, /targetName\.indexOf\('\?'\)[\s\S]*?shellDefaultDashboard\(\) \+ \(qIdx >= 0 \? targetName\.slice\(qIdx\) : ''\)/);
 });
 
+test('self-navigating stage iframe is re-keyed so the sidebar never hits a stale cache', () => {
+  const navigation = read('prototype/js/navigation.js');
+  const script = read('prototype/script.js');
+
+  // 에피소드 카드를 누르면 대시보드 iframe 이 스스로 brand.html 로 이동한다.
+  // 부모가 그 iframe 을 여전히 'dashboard' 로 기억하면, 사이드바에서 "에피소드"를
+  // 눌렀을 때 URL 이 같다고 보고 캐시 hit 처리해 화면이 그대로 남는다.
+  assert.match(navigation, /postMessage\(\{ type: 'stage-changed', stage: st, url: url \}/);
+  assert.match(navigation, /nav\.adoptStageIframe = function \(stage, url\)/);
+  // 새 stage 키로 옮기고 실제 문서 주소를 기록해야 한다.
+  assert.match(navigation, /active\.__nkUrl = String\(url \|\| ''\)/);
+  assert.match(navigation, /__stageIframes\[targetStage\] = active/);
+  assert.match(navigation, /delete __stageIframes\[prevKey\]/);
+  // 부모 쪽 stage-changed 핸들러가 setStage 전에 호출해야 한다.
+  assert.match(script, /adoptStageIframe\?\.\(data\.stage, data\.url\)[\s\S]{0,200}?NK\.navigation\.setStage\(data\.stage\)/);
+});
+
 test('brand management shell cache-busts its translated navigation assets', () => {
   const html = read('prototype/brand-studio.html');
   const dashboardHtml = read('prototype/brand-dashboard.html');

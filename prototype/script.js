@@ -1114,6 +1114,9 @@
       if (!data || typeof data !== 'object') return;
 
       if (data.type === 'stage-changed' && data.stage) {
+        // iframe 이 스스로 이동한 경우다. stage 캐시를 실제 문서에 맞춰 다시 묶어야
+        // 이후 사이드바 클릭이 stale 캐시 hit 로 무시되지 않는다.
+        NK.navigation.adoptStageIframe?.(data.stage, data.url);
         NK.navigation.setStage(data.stage);
       }
       if (data.type === 'stage-loading') {

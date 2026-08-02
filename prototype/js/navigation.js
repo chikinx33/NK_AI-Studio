@@ -181,9 +181,11 @@
             } catch (_) {}
             // 1. 아이프레임 스스로 이동
             window.location.assign(url);
-            // 2. 부모에게 상태 변경 알림
+            // 2. 부모에게 상태 변경 알림.
+            //    url 을 함께 넘겨야 부모가 이 iframe 을 새 stage 키로 다시 묶고
+            //    실제 문서 주소를 기록할 수 있다(안 그러면 캐시 hit 판정이 어긋난다).
             if (window.parent) {
-                window.parent.postMessage({ type: 'stage-changed', stage: st }, '*');
+                window.parent.postMessage({ type: 'stage-changed', stage: st, url: url }, '*');
             }
         } else {
             // 부모 창에서 직접 호출된 경우 (사이드바 클릭 등)
@@ -293,6 +295,36 @@
         } catch (_) { }
         // 전역 상태 업데이트 (구독자들에게 알림)
         if (NK.state) NK.state.set({ currentStage: stage });
+    };
+
+    // stage iframe 이 스스로 다른 페이지로 이동했을 때(예: 대시보드에서 에피소드 카드를
+    // 눌러 brand.html 로 이동) 부모의 stage 캐시를 실제 문서에 맞춰 다시 묶는다.
+    //
+    // 이걸 안 하면 __stageIframes['dashboard'] 가 brand.html 을 담은 채로 남고,
+    // __nkUrl 은 옛 대시보드 URL 그대로다. 이후 사이드바에서 대시보드 계열 메뉴
+    // (브랜드 관리 / 에피소드)를 누르면 URL 이 같다고 판단해 캐시 hit 로 처리되어
+    // 화면은 그대로인데 사이드바 하이라이트만 바뀌는 상태가 된다.
+    nav.adoptStageIframe = function (stage, url) {
+        try {
+            var targetStage = String(stage || '').trim();
+            if (!targetStage) return;
+            var active = document.getElementById('stage-iframe');
+            if (!active) return;
+            var prevKey = String(active.getAttribute('data-stage') || '').trim();
+            // url 을 못 받았으면(옛 캐시 JS 등) 빈 값으로 둬서 다음 이동 때 반드시 재로드시킨다.
+            active.__nkUrl = String(url || '');
+            if (!prevKey || prevKey === targetStage) return;
+            if (__stageIframes[prevKey] === active) delete __stageIframes[prevKey];
+            var occupied = __stageIframes[targetStage];
+            if (occupied && occupied !== active) {
+                try { occupied.remove(); } catch (_) { }
+            }
+            active.setAttribute('data-stage', targetStage);
+            __stageIframes[targetStage] = active;
+            // 부모가 기억하던 "마지막으로 띄운 URL" 도 더 이상 유효하지 않다.
+            __lastResolvedUrl = '';
+            clearPending();
+        } catch (_) { }
     };
 
     nav.normalizeStageName = function (u) {
