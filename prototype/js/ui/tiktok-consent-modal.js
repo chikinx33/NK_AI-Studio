@@ -82,6 +82,7 @@
       interactionOffTooltip: 'Turned off in your TikTok account settings',
       creatorInfoFailed: 'Could not load your TikTok account settings. Please try again.',
       posted: 'Your video has been posted to TikTok.',
+      noAudience: 'No audience option is available with the current settings. Turn off the commercial content disclosure to continue.',
       tooLong: function (n) { return 'This video is longer than your TikTok limit of ' + n + ' seconds.'; }
     },
     ko: {
@@ -116,6 +117,7 @@
       interactionOffTooltip: 'TikTok 계정 설정에서 꺼져 있습니다',
       creatorInfoFailed: 'TikTok 계정 설정을 불러오지 못했습니다. 다시 시도해 주세요.',
       posted: 'TikTok에 게시했습니다.',
+      noAudience: '현재 설정으로는 선택할 수 있는 공개 범위가 없습니다. 상업적 콘텐츠 고지를 끄면 계속할 수 있습니다.',
       tooLong: function (n) { return '이 영상은 TikTok 제한 길이 ' + n + '초를 넘습니다.'; }
     }
   };
@@ -341,6 +343,7 @@
 
     function audienceHtml() {
       var opts = privacyOptions();
+      var ordered = opts;
       var appAudited = !!(state.info && state.info.appAudited);
       var rows = opts.map(function (key) {
         var lockedByAudit = !appAudited && key !== 'SELF_ONLY';
@@ -355,10 +358,22 @@
           (tip ? '<span class="ttc-opt-help">' + esc(tip) + '</span>' : '') +
           '</span></label>';
       }).join('');
+      // 고를 수 있는 항목이 하나도 없으면 게시 버튼이 영영 비활성인 막다른 상태가 된다.
+      // 지금은 브랜디드 콘텐츠를 심사 전 비활성으로 막아 도달하지 않지만, 규칙이
+      // 늘어나며 다시 생길 수 있으므로 감지해서 이유를 보여준다.
+      var selectable = opts.filter(function (key) {
+        var lockedByAudit = !appAudited && key !== 'SELF_ONLY';
+        var lockedByBranded = state.brandedContent && key === 'SELF_ONLY';
+        return !lockedByAudit && !lockedByBranded;
+      });
+      var deadEnd = ordered.length > 0 && selectable.length === 0;
+      if (deadEnd) console.error('[tiktok] 선택 가능한 공개 범위가 없다 — 게시 불가 상태');
+
       return '<div class="ttc-group">' +
         '<div class="ttc-group-title">' + esc(isPhoto ? C.audiencePhoto : C.audience) + '</div>' +
         (rows || '<div class="ttc-note">&mdash;</div>') +
-        (state.brandedContent ? '<div class="ttc-warn">' + esc(C.brandedNotPrivate) + '</div>' : '') +
+        (deadEnd ? '<div class="ttc-warn">' + esc(C.noAudience) + '</div>' : '') +
+        (state.brandedContent && !deadEnd ? '<div class="ttc-warn">' + esc(C.brandedNotPrivate) + '</div>' : '') +
         '</div>';
     }
 
@@ -387,18 +402,34 @@
       return '<div class="ttc-banner">' + esc(text) + '</div>';
     }
 
+    /**
+     * 브랜디드 콘텐츠는 앱 심사 통과 전에는 게시 자체가 불가능하다.
+     * 미심사 앱은 SELF_ONLY 로만 올릴 수 있는데, TikTok 규칙상 브랜디드 콘텐츠는
+     * 비공개로 올릴 수 없기 때문이다(서버도 이 조합을 400 으로 막는다).
+     * 선택은 되게 두고 공개 범위를 전부 잠가버리면, 사용자는 고를 수 있는 항목이
+     * 하나도 없는 채로 게시 버튼이 영영 비활성인 막다른 상태에 빠진다.
+     */
+    function brandedContentAvailable() {
+      return !!(state.info && state.info.appAudited);
+    }
+
     function discloseHtml() {
       var sub = '';
       if (state.commercialContent) {
+        var bcOff = !brandedContentAvailable();
         sub = '<div class="ttc-sub">' +
           '<label class="ttc-opt"><input type="checkbox" data-ttc-brand="brandOrganic"' +
           (state.brandOrganic ? ' checked' : '') + ' />' +
           '<span class="ttc-opt-label">' + esc(C.yourBrand) +
           '<span class="ttc-opt-help">' + esc(C.yourBrandHelp) + '</span></span></label>' +
-          '<label class="ttc-opt"><input type="checkbox" data-ttc-brand="brandedContent"' +
-          (state.brandedContent ? ' checked' : '') + ' />' +
+          '<label class="ttc-opt' + (bcOff ? ' ttc-off' : '') + '"' +
+          (bcOff ? ' title="' + esc(C.unauditedTooltip) + '"' : '') + '>' +
+          '<input type="checkbox" data-ttc-brand="brandedContent"' +
+          (bcOff ? ' disabled' : '') + (state.brandedContent ? ' checked' : '') + ' />' +
           '<span class="ttc-opt-label">' + esc(C.brandedContent) +
-          '<span class="ttc-opt-help">' + esc(C.brandedContentHelp) + '</span></span></label>' +
+          '<span class="ttc-opt-help">' +
+          esc(bcOff ? C.unauditedTooltip : C.brandedContentHelp) +
+          '</span></span></label>' +
           bannerHtml() +
           '</div>';
       }
@@ -478,7 +509,12 @@
       }
       modal.querySelectorAll('[data-ttc-brand]').forEach(function (el) {
         el.addEventListener('change', function () {
-          state[el.getAttribute('data-ttc-brand')] = el.checked;
+          var key = el.getAttribute('data-ttc-brand');
+          if (key === 'brandedContent' && !brandedContentAvailable()) {
+            el.checked = false;
+            return;
+          }
+          state[key] = el.checked;
           // 브랜디드 콘텐츠는 비공개 게시가 불가 — 이미 고른 값이면 선택을 해제한다.
           if (state.brandedContent && state.privacy === 'SELF_ONLY') state.privacy = '';
           paint();
@@ -553,7 +589,13 @@
 
     paint();
     fetchCreatorInfo(o)
-      .then(function (info) { state.info = info; state.loadError = ''; paint(); })
+      .then(function (info) {
+        state.info = info;
+        state.loadError = '';
+        // 심사 전이면 브랜디드 콘텐츠는 선택 불가 → 남아 있던 선택을 정리한다.
+        if (!brandedContentAvailable()) state.brandedContent = false;
+        paint();
+      })
       .catch(function (err) {
         // 기본값을 추측해서 게시하지 않는다 — 모달은 열되 Post 를 막는다(명세 §3).
         state.info = null;

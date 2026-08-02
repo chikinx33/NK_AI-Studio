@@ -154,6 +154,20 @@ test("모달은 공개 범위를 사전 선택하지 않고 미선택 시 게시
   assert.match(src, /Branded content visibility cannot be set to private\./);
 });
 
+test("심사 전에는 브랜디드 콘텐츠를 고를 수 없다 (막다른 상태 방지)", () => {
+  const src = read("prototype/js/ui/tiktok-consent-modal.js");
+  // 미심사 앱은 SELF_ONLY 만 가능한데 브랜디드 콘텐츠는 SELF_ONLY 가 금지다.
+  // 둘 다 허용하면 고를 수 있는 공개 범위가 0개가 되어 게시 버튼이 영영 안 켜진다.
+  assert.match(src, /function brandedContentAvailable\(\)/);
+  assert.match(src, /return !!\(state\.info && state\.info\.appAudited\);/);
+  // 체크 자체를 막고, 이미 켜져 있던 값도 정리한다
+  assert.match(src, /if \(key === 'brandedContent' && !brandedContentAvailable\(\)\)/);
+  assert.match(src, /if \(!brandedContentAvailable\(\)\) state\.brandedContent = false;/);
+  // 그래도 0개가 되면 이유를 보여주고 콘솔에 남긴다
+  assert.match(src, /선택 가능한 공개 범위가 없다/);
+  assert.match(src, /noAudience:/);
+});
+
 test("모달의 Comment / Duet / Stitch 는 전부 기본 해제다 (명세 §5-2 ④)", () => {
   const src = read("prototype/js/ui/tiktok-consent-modal.js");
   assert.match(src, /allowComment: false,/);
