@@ -93,7 +93,7 @@
       saveFail:      '저장 실패',
       saveErr:       '저장 오류',
       manualDelivery: '직접 올리기',
-      manualNote:    '이 채널은 연결 없이 직접 올려요.',
+      manualNote:    '연결이 필요 없어요',
       notConnected:  '미연결',
       connected:     '연결됨',
       paused:        '사용 안 함',
@@ -121,7 +121,7 @@
       saveFail:      'Save failed',
       saveErr:       'Save error',
       manualDelivery: 'Post manually',
-      manualNote:    'No connection needed — you post this one yourself.',
+      manualNote:    'No connection needed',
       notConnected:  'Not connected',
       connected:     'Connected',
       paused:        'Paused',
@@ -560,9 +560,11 @@
     var dis = isToggling ? ' disabled' : '';
     var connectBoxHtml = '';
     if (manual) {
-      // 연결할 대상이 없다. 그게 이 카드의 진실이라 그대로 적는다.
-      // 비활성 버튼조차 두지 않는다 — "지금은 안 되지만 곧 된다"는 잘못된 신호다.
-      connectBoxHtml = '<span class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</span>';
+      // 연결할 대상이 없으므로 버튼 자리를 비운다. 비활성 버튼조차 두지 않는다 —
+      // "지금은 안 되지만 곧 된다"는 잘못된 신호다.
+      // 안내 문구는 본문 영역(sns-pcard-body)에 둔다. 여기(actions)는 flex-shrink:0 이라
+      // 문구를 넣으면 그만큼 이름 영역을 밀어내 '네이버 블로그'가 '네...' 로 잘렸다.
+      connectBoxHtml = '';
     } else {
       if (!connected) {
         connectBoxHtml =
@@ -630,6 +632,7 @@
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
+          (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
         '</div>',
         '<div class="sns-pcard-actions">',
           linkBtnHtml,
