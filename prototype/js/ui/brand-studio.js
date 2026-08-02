@@ -979,6 +979,13 @@
       alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
       alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; },
       // ── 직접 올리기(manual) 채널 ──
+      manualDownload: function (nImg, nVid) {
+        if (nImg && nVid) return '자산 내려받기';
+        return nVid ? '영상 내려받기' : '이미지 내려받기';
+      },
+      manualOpenComposer: function (label) { return label + '에서 글쓰기 열기'; },
+      manualDownloadStarted: function (n) { return n + '개 자산을 내려받는 중이에요.'; },
+      manualDownloadFail: function (e) { return '자산을 내려받지 못했어요: ' + e; },
       manualDoneRecorded: function (label) { return label + ' 게시를 완료로 기록했어요.'; },
       manualDoneUndone: function (label) { return label + ' 게시 완료 표시를 해제했어요.'; }
     };
@@ -1046,6 +1053,13 @@
       alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
       alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; },
       // ── Manual delivery channels ──
+      manualDownload: function (nImg, nVid) {
+        if (nImg && nVid) return 'Download assets';
+        return nVid ? 'Download video' : 'Download images';
+      },
+      manualOpenComposer: function (label) { return 'Open the composer on ' + label; },
+      manualDownloadStarted: function (n) { return 'Downloading ' + n + ' asset' + (n === 1 ? '' : 's') + '.'; },
+      manualDownloadFail: function (e) { return 'Could not download assets: ' + e; },
       manualDoneRecorded: function (label) { return label + ' recorded as posted.'; },
       manualDoneUndone: function (label) { return label + ' unmarked as posted.'; }
     };
@@ -2463,9 +2477,46 @@
       return (
         '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
         bodyHtml +
+        buildManualHandoffHtml(formatId) +
         refineBarHtml(formatId) +
         '</div>'
       );
+    }
+
+    /**
+     * 직접 올리는 채널에서 초안을 다 쓴 직후에 필요한 것.
+     *
+     * 필드별 COPY 버튼 바로 아래에 둔다 — 복사 → 자산 받기 → 글쓰기 열기가
+     * 이어져야 하기 때문이다. 조립본을 통째로 복사하는 방식은 쓰지 않는다.
+     * 네이버 블로그처럼 제목·본문·태그가 별도 입력란이면 붙여넣을 때 다시
+     * 쪼개야 해서, 필드별 복사가 정답이다.
+     */
+    function buildManualHandoffHtml(formatId) {
+      if (!isManualFormat(formatId)) return '';
+      var lang = isEn ? 'en' : 'ko';
+      var url = NKFormatMedia.manualUrlOf(formatId);
+      var label = NKFormatMedia.labelOf(formatId, lang);
+      var parts = [];
+
+      // 자산이 없으면 버튼을 만들지 않는다(비활성 처리 아님) — 받을 게 없으니까.
+      var nImg = draftSelImgs.length;
+      var nVid = draftSelVids.length;
+      if (nImg || nVid) {
+        parts.push(
+          '<button type="button" class="bsf-handoff-btn" data-action="brand-manual-download"' +
+          ' data-manual-format="' + escapeHtml(formatId) + '">' +
+          escapeHtml(T.manualDownload(nImg, nVid)) + '</button>'
+        );
+      }
+      if (url) {
+        parts.push(
+          '<a class="bsf-handoff-btn bsf-handoff-btn--go" href="' + escapeHtml(url) + '"' +
+          ' target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(T.manualOpenComposer(label)) + '</a>'
+        );
+      }
+      if (!parts.length) return '';
+      return '<div class="bsf-manual-handoff">' + parts.join('') + '</div>';
     }
 
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
@@ -4549,6 +4600,52 @@
             btn.textContent = isEn ? 'Publish All' : (T.ctrlPublishAll || '전체 배포');
             refreshDeploySummary();
           });
+        return;
+      }
+      // 직접 올리는 채널: 선택한 자산을 파일로 받는다.
+      // 03 에 썸네일은 있지만 파일을 받는 경로는 없었다 — 보는 것과 받는 것은 다르다.
+      if (action === 'brand-manual-download') {
+        var mdFmtId = String(btn.dataset.manualFormat || '').trim();
+        if (!mdFmtId) return;
+        // 영상 먼저, 이미지 나중 — 자동 배포 경로(snsPublishFormat)와 같은 순서로 번호를 매긴다.
+        var mdItems = draftSelVids.concat(draftSelImgs);
+        if (!mdItems.length) return;
+        // 순번을 넣어야 카루셀 순서를 잃지 않는다. 1개뿐이면 번호를 붙이지 않는다.
+        var mdMulti = mdItems.length > 1;
+        function mdExtOf(item) {
+          var obj = extractGcsObjectName(item.url) || String(item.url || '');
+          var m = obj.split('?')[0].match(/\.([a-z0-9]{2,4})$/i);
+          if (m) return m[1].toLowerCase();
+          return String(item.type || '') === 'video' ? 'mp4' : 'jpg';
+        }
+        btn.disabled = true;
+        bsfToast(T.manualDownloadStarted(mdItems.length), { tone: 'ok' });
+        mdItems.reduce(function (chain, item, idx) {
+          return chain.then(function () {
+            // 자산은 같은 오리진(/api/media/proxy)에서 오므로 blob 으로 받아 저장할 수 있다.
+            return fetch(item.url)
+              .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+              })
+              .then(function (blob) {
+                var name = (mdMulti ? (('0' + (idx + 1)).slice(-2) + '_') : '') + mdFmtId + '.' + mdExtOf(item);
+                var objUrl = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = objUrl;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                // 즉시 revoke 하면 저장이 시작되기 전에 끊기는 브라우저가 있다.
+                setTimeout(function () { URL.revokeObjectURL(objUrl); }, 10000);
+              });
+          });
+        }, Promise.resolve())
+          .catch(function (err) {
+            bsfToast(T.manualDownloadFail(err && err.message ? err.message : err), { tone: 'warn' });
+          })
+          .finally(function () { btn.disabled = false; });
         return;
       }
       if (action === 'toggle-deploy-done') {

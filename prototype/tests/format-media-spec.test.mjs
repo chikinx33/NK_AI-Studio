@@ -641,73 +641,23 @@ test("개인정보 처리방침의 채널 집합이 SPEC 과 일치한다", () =
 });
 
 // ── 직접 올리기 패널 ────────────────────────────────────────────────────────
-/**
- * manualUrl / manualUrlOf() 는 한동안 정의만 되고 호출부가 없는 죽은 코드였다.
- * 패널이 실제로 쓰는지, 조립 규격이 SPEC 에 있는지를 여기서 지킨다.
- */
-test("직접 올리는 채널마다 조립 규격이 SPEC 에 있다", () => {
-  for (const id of Object.keys(M.SPEC)) {
-    const plan = M.SPEC[id].manualCompose;
-    if (M.deliveryOf(id) !== "manual") {
-      assert.equal(plan, undefined, `${id} 는 auto 인데 manualCompose 가 남아 있다`);
-      continue;
-    }
-    assert.ok(plan && Array.isArray(plan.fields) && plan.fields.length > 0,
-      `${id} 에 manualCompose 가 없다 — 조립 규격이 화면으로 흩어진다`);
-    assert.ok(plan.fields.includes("caption"), `${id} 조립 규격에 본문이 없다`);
-    assert.equal(typeof plan.labeled, "boolean", `${id}.manualCompose.labeled 가 없다`);
-  }
-});
-
-test("네이버 블로그 본문 복사는 제목·본문·태그·SEO 를 순서대로 담는다", () => {
-  const draft = {
-    title: "가을 산책", caption: "네모가 숲을 걷는다.",
-    hashtags: "#가을 #산책", seo_description: "가을 숲 산책 이야기",
-  };
-  const ko = M.composeManualText("naver-blog", draft, "ko");
-  // 한 덩어리로 뭉치면 사용자가 다시 잘라내야 한다. 입력칸별로 구분돼야 한다.
-  for (const label of ["[제목]", "[본문]", "[태그]", "[SEO 설명]"]) {
-    assert.ok(ko.includes(label), `${label} 구분이 없다`);
-  }
-  // 붙여넣기 순서 = 글쓰기 화면 입력 순서
-  assert.ok(ko.indexOf("[제목]") < ko.indexOf("[본문]"));
-  assert.ok(ko.indexOf("[본문]") < ko.indexOf("[태그]"));
-  assert.ok(ko.indexOf("[태그]") < ko.indexOf("[SEO 설명]"));
-  const en = M.composeManualText("naver-blog", draft, "en");
-  assert.ok(en.includes("[Title]") && en.includes("[Body]"), "en 조립이 ko 와 짝을 이루지 않는다");
-});
-
-test("본문 하나로 쓰는 채널은 라벨을 붙이지 않는다 (라벨까지 게시된다)", () => {
-  const out = M.composeManualText("band", { caption: "오늘의 이야기", hashtags: "#밴드" }, "ko");
-  assert.ok(!out.includes("["), `BAND 조립에 라벨이 섞였다: ${out}`);
-  // 자동 배포 경로(snsPublishFormat)와 같은 형태여야 결과물이 갈라지지 않는다.
-  assert.equal(out, "오늘의 이야기\n\n#밴드");
-});
-
-test("값이 빈 항목은 조립에서 건너뛴다 (빈 라벨만 붙여넣게 하지 않는다)", () => {
-  const out = M.composeManualText("naver-post", { title: "제목", caption: "본문", hashtags: "", series_name: "" }, "ko");
-  assert.ok(!out.includes("[태그]"), "빈 태그 라벨이 남았다");
-  assert.ok(!out.includes("[시리즈]"), "빈 시리즈 라벨이 남았다");
-});
-
-/**
- * ★배포 화면에는 직접 올리기 절차를 두지 않는다.★
- *
- * 복사·다운로드·글쓰기 페이지 열기를 배포 단계(04)에 단계별로 늘어놓았다가
- * 걷어냈다. 초안 단계(03)가 이미 같은 일을 한다 — 필드마다 COPY 버튼이 붙어
- * 있고 선택한 이미지·영상 썸네일도 그 화면에 뜬다. 같은 동작을 두 화면에 두면
- * 어느 쪽이 최신인지 사용자가 판단해야 한다.
- *
- * 배포 카드에 남는 것은 채널 종류·예약 불가 사유·완료 체크뿐이다.
- */
-test("배포 화면에 직접 올리기 절차 패널이 없다", () => {
+test("배포 화면(04)에는 직접 올리기 절차가 없다", () => {
+  // 04 는 완료 체크만 남긴다. 복사·자산 받기·글쓰기 열기는 03 이 담당한다.
+  // ★파일 전체가 아니라 배포 요약 빌더만 본다★ — 03 의 동선까지 잡으면 안 된다.
   const src = readRepo("prototype/js/ui/brand-studio.js");
+  const deploy = src.slice(
+    src.indexOf("function buildDeploySummaryHtml"),
+    src.indexOf("var _deployedFormats =")
+  );
+  assert.ok(deploy.length > 0, "buildDeploySummaryHtml 을 찾지 못했다");
   for (const dead of [
-    "buildManualPanelHtml", "buildManualCopyText", "getManualMediaItems",
-    "brand-manual-copy", "brand-manual-download", "bsf-manual-panel",
+    "buildManualPanelHtml", "manualUrlOf", "brand-manual-copy",
+    "brand-manual-download", "bsf-manual-panel",
   ]) {
-    assert.ok(!src.includes(dead), `배포 화면에 절차 패널 잔재가 남아 있다: ${dead}`);
+    assert.ok(!deploy.includes(dead), `배포 화면에 절차 잔재가 남아 있다: ${dead}`);
   }
+  // 조립 복사 개념은 폐기했다. 어디에서도 되살아나면 안 된다.
+  assert.ok(!src.includes("composeManualText"), "조립 복사가 되살아났다");
 });
 
 test("직접 올리는 채널도 완료 체크로 배포 이력을 남긴다", () => {
@@ -788,4 +738,71 @@ test("직접 올리는 채널 카드에는 사용 토글이 없다", () => {
   const src = readRepo("prototype/js/ui/sns-settings.js");
   assert.ok(/var usageToggleHtml = manual \? '' :/.test(src),
     "manual 채널에도 사용 토글을 렌더하고 있다");
+});
+
+// ── 초안 화면(03)의 직접 올리기 마무리 동선 ─────────────────────────────────
+/**
+ * 04 의 절차 패널을 걷어내면서 03 에 원래 없던 두 가지까지 함께 사라졌었다.
+ *   - 글쓰기 페이지 열기 → 03 에 없었다. 중복이 아니었다.
+ *   - 자산 다운로드     → 03 에도 없었다. 썸네일이 보이는 것과 파일을 받는 것은 다르다.
+ * 조립 복사는 되살리지 않는다 — 필드별 COPY 가 정답이다.
+ */
+function draftPanelSrc() {
+  const src = readRepo("prototype/js/ui/brand-studio.js");
+  const s = src.indexOf("function buildManualHandoffHtml");
+  assert.ok(s > 0, "buildManualHandoffHtml 을 찾지 못했다");
+  return src.slice(s, src.indexOf("var activeDraftTabOrFirst"));
+}
+
+test("manualUrlOf() 가 다시 살아있는 코드다 — 초안 화면이 호출한다", () => {
+  const panel = draftPanelSrc();
+  assert.ok(/NKFormatMedia\.manualUrlOf\(/.test(panel),
+    "manualUrlOf 호출부가 없다 — 정의만 있고 안 쓰이는 상태로 되돌아갔다");
+  assert.ok(/target="_blank"/.test(panel), "새 탭으로 열지 않는다");
+  assert.ok(/rel="noopener noreferrer"/.test(panel), "rel=noopener 가 없다");
+});
+
+test("글쓰기 링크의 채널명은 라벨 단일 원천에서 온다", () => {
+  const panel = draftPanelSrc();
+  assert.ok(/NKFormatMedia\.labelOf\(/.test(panel),
+    "채널명을 labelOf 에서 가져오지 않는다 — 이름이 또 두 곳에 생긴다");
+});
+
+test("자산 다운로드는 자산이 있을 때만 렌더한다 (비활성 버튼을 두지 않는다)", () => {
+  const panel = draftPanelSrc();
+  assert.ok(/if \(nImg \|\| nVid\)/.test(panel),
+    "자산이 없어도 버튼을 만들고 있다");
+  assert.ok(!/disabled/.test(panel),
+    "비활성 버튼을 두고 있다 — 받을 게 없으면 버튼 자체가 없어야 한다");
+});
+
+test("직접 올리는 채널에만 마무리 동선이 붙는다", () => {
+  const panel = draftPanelSrc();
+  assert.ok(/if \(!isManualFormat\(formatId\)\) return '';/.test(panel),
+    "auto 채널 초안 화면에도 렌더될 수 있다");
+});
+
+test("자산 다운로드가 순번 파일명을 붙인다", () => {
+  const src = readRepo("prototype/js/ui/brand-studio.js");
+  const h = src.slice(
+    src.indexOf("if (action === 'brand-manual-download')"),
+    src.indexOf("if (action === 'toggle-deploy-done')")
+  );
+  assert.ok(h.length > 0, "brand-manual-download 핸들러를 찾지 못했다");
+  assert.ok(/mdMulti/.test(h) && /'0' \+ \(idx \+ 1\)/.test(h),
+    "2개 이상일 때 01_, 02_ 순번을 붙이지 않는다");
+  assert.ok(/URL\.createObjectURL/.test(h), "blob 으로 저장하지 않는다");
+});
+
+test("조립 복사 개념이 코드에서 사라졌다", () => {
+  for (const rel of ["prototype/js/ui/format-media-spec.js", "prototype/js/ui/brand-studio.js"]) {
+    const src = readRepo(rel);
+    for (const dead of ["manualCompose", "composeManualText", "COMPOSE_LABEL"]) {
+      assert.ok(!src.includes(dead), `${rel} 에 ${dead} 가 남아 있다`);
+    }
+  }
+  assert.equal(M.composeManualText, undefined, "composeManualText 가 아직 공개돼 있다");
+  for (const id of Object.keys(M.SPEC)) {
+    assert.equal(M.SPEC[id].manualCompose, undefined, `${id} 에 manualCompose 가 남아 있다`);
+  }
 });

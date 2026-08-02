@@ -12957,6 +12957,40 @@ body {
 }
 
 /* Step 3 — Per-card AI refine bar */
+/* 직접 올리는 채널의 마무리 동선 — 필드별 복사 바로 아래.
+   자산 받기 → 글쓰기 열기가 이어지도록 한 줄로 둔다. */
+.bsf-manual-handoff {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 0;
+}
+.bsf-handoff-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+.bsf-handoff-btn:hover { border-color: var(--accent); }
+.bsf-handoff-btn:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--border); }
+/* 마지막 행동이라 이것만 강조한다 */
+.bsf-handoff-btn--go {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .bsf-refine-bar {
   grid-column: 1;
   display: flex;
