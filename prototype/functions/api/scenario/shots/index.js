@@ -17,6 +17,7 @@ import {
   fallbackSingleShot,
 } from "./decomposer.js";
 import { diversifyShotCameraMoves } from "../rebalancer.js";
+import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
 
 const SHOT_TIMEOUT_MS = 22000;
 const SHOT_MAX_TOKENS = 900;
@@ -45,7 +46,7 @@ async function callAnthropicForShots({ apiKey, system, user, signal, url }) {
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      if (res.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(errText)) {
+      if (isCreditExhausted(errText, res.status)) {
         const e = new Error("CREDIT_EXHAUSTED");
         e.code = "CREDIT_EXHAUSTED";
         throw e;

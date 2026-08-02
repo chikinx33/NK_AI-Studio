@@ -1,10 +1,11 @@
-﻿// Phase 0 Step 8 — 선언적 블록 규칙 기반 프롬프트/검증기 연결
+// Phase 0 Step 8 — 선언적 블록 규칙 기반 프롬프트/검증기 연결
 // v2.684: 풀 systemPrompt 를 덧붙이면 CF 30s 리밋 근처에서 타임아웃 났던 문제 수정.
 // enforcement-only compact suffix 로 전환, 재시도는 시간 예산에 여유가 있을 때만.
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
 import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
 import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -2073,7 +2074,7 @@ async function streamAnthropicText({ apiKey, env, payload, signal, timeoutMs }) 
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      if (res.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(errText)) {
+      if (isCreditExhausted(errText, res.status)) {
         throw new Error("CREDIT_EXHAUSTED");
       }
       throw new Error(`Anthropic error: ${res.status} ${errText}`);
@@ -4389,7 +4390,7 @@ function isRetryableError(err) {
 
 function isCreditExhaustedError(err) {
   const text = String(err?.message || err || "");
-  return /CREDIT_EXHAUSTED/.test(text) || /\b402\b/.test(text) || /billing_error|credit_balance|insufficient.{0,10}credit/i.test(text);
+  return /CREDIT_EXHAUSTED/.test(text) || /\b402\b/.test(text) || isCreditExhausted(text);
 }
 
 function wait(ms) {

@@ -946,6 +946,7 @@
       alertDraftSaved: '초안을 저장했습니다.',
       alertDraftSaveFail: function (e) { return '초안 저장 실패: ' + e; },
       alertDraftGenFail: function (e) { return '초안 생성 실패: ' + e; },
+      alertCreditExhausted: 'AI 크레딧이 모두 소진되어 생성할 수 없어요.\n\nAnthropic 콘솔에서 크레딧을 충전한 뒤 다시 시도해 주세요.',
       alertOneClickFail: function (e) { return '원클릭 초안 생성 실패: ' + e; },
       alertPublishSaved: function (n) { return n + '개 포맷에 배포 계획을 저장했습니다.'; },
       alertPublishFail: function (e) { return '배포 실패: ' + e; },
@@ -1007,6 +1008,7 @@
       alertDraftSaved: 'Draft saved.',
       alertDraftSaveFail: function (e) { return 'Failed to save draft: ' + e; },
       alertDraftGenFail: function (e) { return 'Failed to generate draft: ' + e; },
+      alertCreditExhausted: 'AI credits are exhausted, so nothing can be generated.\n\nTop up credits in the Anthropic console and try again.',
       alertOneClickFail: function (e) { return 'One-click draft failed: ' + e; },
       alertPublishSaved: function (n) { return 'Publish plan saved for ' + n + ' format' + (n === 1 ? '' : 's') + '.'; },
       alertPublishFail: function (e) { return 'Publish failed: ' + e; },
@@ -1830,6 +1832,15 @@
         '</div>'
       );
     }
+    /* AI 생성 실패를 사용자 문구로 옮긴다.
+     * 예전에는 재생성·보완 경로가 console.error 만 하고 끝나서, 크레딧이 바닥나도
+     * 화면에는 스켈레톤이 잠깐 깜빡일 뿐 아무 안내가 없었다. 버튼이 죽은 것처럼 보였다. */
+    function describeGenError(err) {
+      var msg = (err && err.message ? String(err.message) : String(err || '')).trim();
+      if ((err && err.creditExhausted) || /CREDIT_EXHAUSTED/.test(msg)) return T.alertCreditExhausted;
+      return T.alertDraftGenFail(msg || (isEn ? 'unknown error' : '알 수 없는 오류'));
+    }
+
     function showDraftSkeleton(panel) {
       var regenBtn = root.querySelector('.bsf-draft-regen-head');
       if (regenBtn) regenBtn.disabled = true;
@@ -3501,6 +3512,7 @@
         }).catch(function (err) {
           hideDraftSkeleton(regenPanel);
           console.error('[draft-generate]', err && err.message ? err.message : err);
+          alert(describeGenError(err));
         });
         return;
       }
@@ -3556,6 +3568,7 @@
         }).catch(function (err) {
           hideDraftSkeleton(refinePanel);
           console.error('[draft-refine]', err && err.message ? err.message : err);
+          alert(describeGenError(err));
         }).finally(function () {
           btn.disabled = false;
           btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
@@ -3647,7 +3660,7 @@
           });
           NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextAllDrafts })
             .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-            .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
+            .catch(function (err) { alert(describeGenError(err)); })
             .finally(function () {
               btn.disabled = false;
               if (window.__bsfOneClickInProgress) {
@@ -3688,7 +3701,7 @@
           if (idx >= _fmtsToGen.length) {
             return NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: formatDrafts })
               .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-              .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
+              .catch(function (err) { alert(describeGenError(err)); })
               .finally(function () {
                 btn.disabled = false;
                 if (window.__bsfOneClickInProgress) {

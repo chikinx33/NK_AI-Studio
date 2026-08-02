@@ -1,4 +1,5 @@
 import { claudeAuthHeaders, buildClaudeSystem, anthropicConfigured, anthropicMessagesUrl } from "./_shared/claude-auth.js";
+import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -74,7 +75,7 @@ export async function onRequestPost(context) {
 
     if (!completion.ok) {
       const text = await completion.text();
-      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+      if (isCreditExhausted(text, completion.status)) {
         return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "CREDIT_EXHAUSTED" }, 402, origin);
       }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);

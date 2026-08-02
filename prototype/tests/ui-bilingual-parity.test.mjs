@@ -26,37 +26,62 @@ const DICTIONARIES = [
   ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
 ];
 
+/** `{` 위치부터 짝이 맞는 `}` 까지의 본문을 돌려준다. */
+function objectBodyAt(src, braceAt) {
+  let depth = 0;
+  let i = braceAt;
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return src.slice(braceAt + 1, i);
+}
+
+/**
+ * 객체 본문에서 최상위 키 이름만 뽑는다(중첩 객체·함수 본문 안쪽은 세지 않는다).
+ *
+ * 줄 단위로 훑으면 `a: 1, b: 2` 처럼 한 줄에 여러 키가 있을 때 첫 개만 잡힌다.
+ * 실제 사전이 그렇게 쓰여 있어서 문자 단위로 훑는다.
+ * 괄호도 깊이에 포함시켜 `n === 1 ? x : y` 같은 삼항 연산자를 키로 오인하지 않는다.
+ */
+function topLevelKeys(body) {
+  // 'no-asset' 처럼 따옴표로 감싼 키도 인식한다
+  const KEY_RE = /(['"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:/y;
+  const keys = new Set();
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < body.length; ) {
+    const ch = body[i];
+    if (quote) {
+      if (ch === "\\") { i += 2; continue; }
+      if (ch === quote) quote = null;
+      i++;
+      continue;
+    }
+    // 따옴표 처리보다 먼저 본다 — 'no-asset' 같은 키가 문자열로 삼켜지면 안 된다
+    if (depth === 0 && !/[A-Za-z0-9_$.]/.test(i > 0 ? body[i - 1] : ",")) {
+      KEY_RE.lastIndex = i;
+      const m = KEY_RE.exec(body);
+      if (m) { keys.add(m[2]); i = KEY_RE.lastIndex; continue; }
+    }
+    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; i++; continue; }
+    if (ch === "{" || ch === "(" || ch === "[") { depth++; i++; continue; }
+    if (ch === "}" || ch === ")" || ch === "]") { depth--; i++; continue; }
+    i++;
+  }
+  return keys;
+}
+
 /** `ko: {` / `en: {` 블록에서 최상위 키 이름을 뽑는다. */
 function keysByLang(block) {
   const out = {};
   for (const lang of ["ko", "en"]) {
     const start = block.indexOf(`${lang}: {`);
     if (start < 0) continue;
-    // 중괄호 깊이를 세어 해당 언어 블록의 끝을 찾는다
-    let depth = 0;
-    let i = block.indexOf("{", start);
-    const from = i;
-    for (; i < block.length; i++) {
-      if (block[i] === "{") depth++;
-      else if (block[i] === "}") {
-        depth--;
-        if (depth === 0) break;
-      }
-    }
-    const body = block.slice(from + 1, i);
-    // 중첩 오브젝트 안의 키까지 세지 않도록 깊이 0 인 줄만 본다
-    const keys = new Set();
-    let d = 0;
-    for (const line of body.split("\n")) {
-      // 'no-asset' 처럼 따옴표로 감싼 키도 인식한다
-      const m = d === 0 ? line.match(/^\s{4,}(['"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:/) : null;
-      if (m) keys.add(m[2]);
-      for (const ch of line) {
-        if (ch === "{") d++;
-        else if (ch === "}") d--;
-      }
-    }
-    out[lang] = keys;
+    out[lang] = topLevelKeys(objectBodyAt(block, block.indexOf("{", start)));
   }
   return out;
 }
@@ -80,6 +105,33 @@ for (const [file, startMark, endMark] of DICTIONARIES) {
     assert.deepEqual(missingKo, [], `ko 에 없는 키: ${missingKo.join(", ")}`);
   });
 }
+
+/**
+ * brand-studio.js 의 bsfT 는 앱에서 가장 큰 사전인데 `ko: {}` / `en: {}` 형태가
+ * 아니라 `if (!isEn) return {…}; return {…}` 이라 위 목록 방식으로는 잡히지 않았다.
+ * 실제로 새 문구를 한쪽에만 넣어도 아무것도 실패하지 않는 구멍이 있었다.
+ */
+test("brand-studio.js — bsfT 의 한/영 키가 짝을 이룬다", () => {
+  const src = read("prototype/js/ui/brand-studio.js");
+  const fnAt = src.indexOf("function bsfT(isEn) {");
+  assert.ok(fnAt > 0, "bsfT 를 찾지 못했다");
+
+  const koAt = src.indexOf("if (!isEn) return {", fnAt);
+  assert.ok(koAt > fnAt, "한국어 사전을 찾지 못했다");
+  const koBody = objectBodyAt(src, src.indexOf("{", koAt + "if (!isEn) return ".length));
+  const ko = topLevelKeys(koBody);
+
+  const enAt = src.indexOf("return {", koAt + koBody.length);
+  assert.ok(enAt > koAt, "영어 사전을 찾지 못했다 — 한쪽 언어만 만들지 말 것");
+  const en = topLevelKeys(objectBodyAt(src, src.indexOf("{", enAt)));
+
+  assert.ok(ko.size > 50 && en.size > 50, `사전 추출이 깨졌다 (ko ${ko.size} / en ${en.size})`);
+
+  const missingEn = [...ko].filter((k) => !en.has(k));
+  const missingKo = [...en].filter((k) => !ko.has(k));
+  assert.deepEqual(missingEn, [], `en 에 없는 키: ${missingEn.join(", ")}`);
+  assert.deepEqual(missingKo, [], `ko 에 없는 키: ${missingKo.join(", ")}`);
+});
 
 test("TikTok 확인 모달에 하드코딩된 사용자 문구가 남아 있지 않다", () => {
   const src = read("prototype/js/ui/tiktok-consent-modal.js");
