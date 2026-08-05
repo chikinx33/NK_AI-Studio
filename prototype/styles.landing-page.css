@@ -36,8 +36,8 @@ body{
 header{display:flex;align-items:center;justify-content:space-between;
   padding:clamp(14px,2.2vh,24px) clamp(18px,3vw,38px);flex:0 0 auto}
 .logo{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:-.01em}
-.logo i{width:20px;height:20px;border-radius:6px;display:block;
-  background:conic-gradient(from 200deg,var(--c1),var(--c5),var(--c4),var(--c2),var(--c3),var(--c1))}
+.logo i{width:20px;height:20px;display:block;
+  background:url("favicon.svg") center/contain no-repeat}
 
 .lang{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.02em;
   color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--border);
