@@ -32,6 +32,8 @@
       generating: '영화적 구도 캡처 중...',
       gallery: '생성 기록 (CAPTURE GALLERY)',
       galleryEmpty: '이미지가 생성되면 여기에 표시됩니다',
+      gridOn: '그리드 끄기',
+      gridOff: '그리드 켜기',
       viewDetail: '자세히 보기',
       shotMeta: 'Shot Metadata',
       cameraParams: 'Camera Parameters',
@@ -65,6 +67,8 @@
       generating: 'Capturing cinematic composition...',
       gallery: 'CAPTURE GALLERY',
       galleryEmpty: 'Generated images will appear here',
+      gridOn: 'Hide grid',
+      gridOff: 'Show grid',
       viewDetail: 'View detail',
       shotMeta: 'Shot Metadata',
       cameraParams: 'Camera Parameters',
@@ -89,7 +93,9 @@
       palette: '<path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>',
       maximize: '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
       download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
-      loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>'
+      loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+      eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+      eyeOff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>'
     };
     return '<svg class="nk-camstudio-icon" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || '') + '</svg>';
   }
@@ -133,6 +139,7 @@
     bridge: null,
     camera: defaultCamera(),
     viewMode: 'world', // 'world' | 'pov'
+    showGrid: true,
     reference: null,   // { url, name, generationUrl }
     isGenerating: false,
     error: '',
@@ -331,6 +338,7 @@
               '</div>' +
             '</div>' +
             '<div class="nk-camstudio-hud" id="nk-camstudio-hud"></div>' +
+            '<button type="button" class="nk-camstudio-grid-toggle' + (studio.showGrid ? '' : ' is-off') + '" id="nk-camstudio-grid-toggle" data-camstudio="toggle-grid" aria-pressed="' + (studio.showGrid ? 'true' : 'false') + '" aria-label="' + esc(studio.showGrid ? t('gridOn') : t('gridOff')) + '" title="' + esc(studio.showGrid ? t('gridOn') : t('gridOff')) + '">' + icon(studio.showGrid ? 'eye' : 'eyeOff') + '</button>' +
           '</div>' +
           '<div class="nk-camstudio-gallery-wrap">' +
             '<div class="nk-camstudio-label">' + esc(t('gallery')) + '</div>' +
@@ -382,6 +390,17 @@
   function renderGallery() {
     var gallery = document.getElementById('nk-camstudio-gallery');
     if (gallery) gallery.innerHTML = buildGalleryHtml();
+  }
+
+  function updateGridToggle() {
+    var btn = document.getElementById('nk-camstudio-grid-toggle');
+    if (!btn) return;
+    var label = studio.showGrid ? t('gridOn') : t('gridOff');
+    btn.classList.toggle('is-off', !studio.showGrid);
+    btn.setAttribute('aria-pressed', studio.showGrid ? 'true' : 'false');
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+    btn.innerHTML = icon(studio.showGrid ? 'eye' : 'eyeOff');
   }
 
   function updateModeButtons() {
@@ -769,6 +788,12 @@
 
     ctx.syncScene = syncScene;
     ctx.setBillboard = setBillboard;
+    // 그리드 토글: 바닥 그리드 2겹 + 접지 그림자를 함께 숨겨 피사체만 남긴다.
+    ctx.setGridVisible = function (visible) {
+      cellGrid.visible = !!visible;
+      sectionGrid.visible = !!visible;
+      shadowPlane.visible = !!visible;
+    };
     ctx.resetView = function () {
       ctx.worldViewPos.set(3, 2, 3);
       viewCamera.position.set(4, 3, 4);
@@ -823,6 +848,12 @@
       studio.viewMode = target.getAttribute('data-mode') === 'pov' ? 'pov' : 'world';
       updateModeButtons();
       if (studio.three) studio.three.syncScene();
+      return;
+    }
+    if (action === 'toggle-grid') {
+      studio.showGrid = !studio.showGrid;
+      updateGridToggle();
+      if (studio.three) studio.three.setGridVisible(studio.showGrid);
       return;
     }
     if (action === 'select-reference') {
@@ -945,6 +976,7 @@
     studio.lang = (bridge && bridge.lang) || (NK.state && NK.state.lang) || 'ko';
     studio.camera = defaultCamera();
     studio.viewMode = 'world';
+    studio.showGrid = true;
     studio.reference = null;
     studio.isGenerating = false;
     studio.error = '';
@@ -971,6 +1003,7 @@
       studio.lang = (event && event.detail && event.detail.lang) === 'en' ? 'en' : 'ko';
       renderSidebar();
       renderGallery();
+      updateGridToggle();
       var galleryLabel = overlay.querySelector('.nk-camstudio-gallery-wrap .nk-camstudio-label');
       if (galleryLabel) galleryLabel.textContent = t('gallery');
     };
@@ -982,6 +1015,7 @@
     try {
       var viewport = document.getElementById('nk-camstudio-viewport');
       studio.three = await initThree(viewport);
+      studio.three.setGridVisible(studio.showGrid);
     } catch (err) {
       try { console.error('[camera-studio] three init failed', err); } catch (_) {}
     }

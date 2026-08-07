@@ -178,6 +178,40 @@
 .nk-camstudio-hud strong { color: #37C68D; font-weight: 700; }
 .nk-camstudio-hud strong.is-gold { color: #FFD700; }
 
+/* 그리드 토글 (뷰포트 우측 하단) */
+.nk-camstudio-grid-toggle {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #37C68D;
+  cursor: pointer;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.nk-camstudio-grid-toggle:hover {
+  background: rgba(55, 198, 141, 0.16);
+  border-color: rgba(55, 198, 141, 0.4);
+}
+
+.nk-camstudio-grid-toggle.is-off { color: rgba(255, 255, 255, 0.4); }
+
+.nk-camstudio-grid-toggle.is-off:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+}
+
 /* 갤러리 */
 .nk-camstudio-gallery-wrap {
   height: 172px;
@@ -437,24 +471,26 @@
   box-shadow: 0 0 10px rgba(55, 198, 141, 0.4);
 }
 
-/* 프리셋 그리드 */
+/* 프리셋 그리드 (3열) */
 .nk-camstudio-preset-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
 .nk-camstudio-preset {
-  text-align: left;
-  padding: 10px 12px;
+  text-align: center;
+  padding: 10px 6px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   font-size: 10px;
   font-weight: 500;
+  line-height: 1.25;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   transition: background 0.15s ease;
+  overflow-wrap: anywhere;
 }
 
 .nk-camstudio-preset:hover { background: rgba(255, 255, 255, 0.1); }

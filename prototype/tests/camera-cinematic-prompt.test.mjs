@@ -99,6 +99,28 @@ test('camera studio module wires 3D overlay into ai-image stage', () => {
   assert.match(stage, /styles\.camera-studio\.css/);
 });
 
+test('viewport exposes a grid visibility toggle wired to the three.js scene', () => {
+  const studio = fs.readFileSync(path.join(process.cwd(), 'prototype/js/ui/camera-studio.js'), 'utf8');
+  assert.match(studio, /data-camstudio="toggle-grid"/);
+  assert.match(studio, /showGrid: true/);
+  assert.match(studio, /ctx\.setGridVisible = function/);
+  assert.match(studio, /cellGrid\.visible/);
+  assert.match(studio, /sectionGrid\.visible/);
+  // 눈 아이콘은 켜짐/꺼짐 상태에 따라 바뀐다
+  assert.match(studio, /icon\(studio\.showGrid \? 'eye' : 'eyeOff'\)/);
+  assert.match(studio, /gridOn: '그리드 끄기'/);
+  assert.match(studio, /gridOn: 'Hide grid'/);
+  const css = fs.readFileSync(path.join(process.cwd(), 'prototype/styles.camera-studio.css'), 'utf8');
+  // 우측 하단 모서리 고정
+  assert.match(css, /\.nk-camstudio-grid-toggle \{[^}]*bottom: 16px;[^}]*right: 16px;/s);
+});
+
+test('angle and shot-size presets render in three columns', () => {
+  const css = fs.readFileSync(path.join(process.cwd(), 'prototype/styles.camera-studio.css'), 'utf8');
+  assert.match(css, /\.nk-camstudio-preset-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/s);
+  assert.doesNotMatch(css, /\.nk-camstudio-preset-grid \{[^}]*grid-template-columns: 1fr 1fr;/s);
+});
+
 test('camera studio UI ships both ko and en dictionaries', () => {
   const studio = fs.readFileSync(path.join(process.cwd(), 'prototype/js/ui/camera-studio.js'), 'utf8');
   assert.match(studio, /ko: \{/);
