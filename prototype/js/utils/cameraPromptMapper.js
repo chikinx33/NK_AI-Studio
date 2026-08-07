@@ -127,9 +127,88 @@
     }
     return mapCameraToPrompt(c, options);
   }
+  // === Virtual Cinematographer Pro 매핑 (원본 App.tsx handleGenerate 이식) ===
+  // azimuth 12구간 / elevation 6구간 / distance 5구간 / lens 3구간
+  function cineAzimuthDesc(az) {
+    var a = wrapPan(az, 0);
+    if (a >= 345 || a < 15) return 'front center view, facing subject directly';
+    if (a < 45) return 'slight 3/4 front view angle';
+    if (a < 75) return 'broad 3/4 side view';
+    if (a < 105) return 'pure side profile view, 90 degree angle';
+    if (a < 135) return 'rear 3/4 side view from behind';
+    if (a < 165) return 'over-the-shoulder perspective from back-right';
+    if (a < 195) return 'full back view, behind the subject';
+    if (a < 225) return 'over-the-shoulder perspective from back-left';
+    if (a < 255) return 'opposite rear 3/4 side view';
+    if (a < 285) return 'opposite pure side profile view, 270 degree angle';
+    if (a < 315) return 'opposite broad 3/4 side view';
+    return 'opposite slight 3/4 front view';
+  }
+  function cineElevationDesc(el) {
+    var e = clamp(el, -85, 85);
+    if (e > 75) return "extreme top-down bird's eye view, vertical plunge";
+    if (e > 45) return 'high-angle cinematic shot looking down';
+    if (e > 15) return 'slight high-angle, looking down at subject';
+    if (e >= -15) return 'perfectly horizontal eye-level shot';
+    if (e >= -45) return 'low-angle hero shot, looking up at subject';
+    return "extreme low-angle worm's eye view, ground-level looking up";
+  }
+  function cineShotSizeDesc(dist) {
+    var d = clamp(dist, 0.1, 3.5);
+    if (d < 0.45) return 'extreme close-up detail shot';
+    if (d < 0.75) return 'tight close-up portrait';
+    if (d < 1.1) return 'medium portrait shot';
+    if (d < 1.6) return 'full body shot';
+    return 'wide cinematic establishment shot';
+  }
+  function cineLensDesc(fl) {
+    var f = Math.round(clamp(fl, 12, 200));
+    if (f < 24) return 'ultra-wide ' + f + 'mm lens, dramatic perspective distortion, deep depth of field';
+    if (f <= 50) return 'naturalistic ' + f + 'mm lens, human-eye perspective';
+    if (f > 85) return 'compressed telephoto ' + f + 'mm lens, creamy bokeh, shallow depth of field, background compression';
+    return 'portrait ' + f + 'mm lens, flattering compression';
+  }
+  function normalizeCineCamera(raw) {
+    var c = raw && typeof raw === 'object' ? raw : {};
+    return {
+      azimuth: wrapPan(c.azimuth, 0),
+      elevation: clamp(c.elevation, -85, 85),
+      distance: clamp(Number.isFinite(Number(c.distance)) ? Number(c.distance) : 0.8, 0.1, 3.5),
+      focalLength: Math.round(clamp(Number.isFinite(Number(c.focalLength)) ? Number(c.focalLength) : 35, 12, 200)),
+      style: String(c.style || 'None')
+    };
+  }
+  // 공간 지시문(카메라 위치·앵글·프레이밍·렌즈)만 생성 — 스타일 미포함
+  function buildCineSpatialInstruction(raw) {
+    var c = normalizeCineCamera(raw);
+    return 'Camera Setup: [Position: ' + cineAzimuthDesc(c.azimuth)
+      + ', Angle: ' + cineElevationDesc(c.elevation)
+      + ', Framing: ' + cineShotSizeDesc(c.distance)
+      + ', Lens: ' + cineLensDesc(c.focalLength)
+      + ']. Technical: (azimuth: ' + c.azimuth.toFixed(1) + '°, elevation: ' + c.elevation.toFixed(1) + '°).';
+  }
+  // 최종 생성 프롬프트: 공간 지시문 + (사용자가 고른 스타일 프리셋 텍스트)
+  function buildCinematicPrompt(raw, styleText) {
+    var spatial = buildCineSpatialInstruction(raw);
+    var style = String(styleText || '').trim();
+    var parts = ['Professional cinematography.', spatial];
+    if (style) parts.push(style);
+    parts.push('Sharp details, coherent lighting and perspective.');
+    return parts.join(' ');
+  }
+
   utils.mapCameraToPrompt = mapCameraToPrompt;
   utils.mapPresetToPrompt = mapPresetToPrompt;
   utils.buildCameraPrompt = buildCameraPrompt;
+  utils.normalizeCineCamera = normalizeCineCamera;
+  utils.buildCineSpatialInstruction = buildCineSpatialInstruction;
+  utils.buildCinematicPrompt = buildCinematicPrompt;
+  utils.cineDescriptors = {
+    azimuth: cineAzimuthDesc,
+    elevation: cineElevationDesc,
+    shotSize: cineShotSizeDesc,
+    lens: cineLensDesc
+  };
   if (typeof window.mapCameraToPrompt !== 'function') window.mapCameraToPrompt = mapCameraToPrompt;
   if (typeof window.buildCameraPrompt !== 'function') window.buildCameraPrompt = buildCameraPrompt;
 })(); 

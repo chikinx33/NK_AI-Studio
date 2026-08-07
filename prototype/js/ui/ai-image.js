@@ -3216,6 +3216,100 @@
     }
   }
 
+  // === 3D 카메라 스튜디오 (Virtual Cinematographer Pro) 연동 ===
+  // 시네마틱 카메라 상태(azimuth/elevation/distance/focalLength)를 레거시 pan/tilt/distance 로 근사 변환.
+  // 기존 히스토리 메타(cameraSummary) 표시 호환용.
+  function cineToLegacyControls(cine) {
+    var cam = cine && typeof cine === 'object' ? cine : {};
+    var dist = Number(cam.distance);
+    return normalizeCameraControls({
+      orbitPan: true,
+      enabled: true,
+      preset: 'custom',
+      pan: Math.round(Number(cam.azimuth) || 0),
+      tilt: Math.round(clampNumber(cam.elevation, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0)),
+      distance: Number.isFinite(dist) ? (dist < 0.75 ? 0 : (dist < 1.6 ? 1 : 2)) : 1
+    });
+  }
+
+  async function generateCinematicShot(options) {
+    var opts = options && typeof options === 'object' ? options : {};
+    var prompt = String(opts.prompt || '').trim();
+    var referenceUrl = String(opts.referenceUrl || '').trim();
+    var cine = opts.camera && typeof opts.camera === 'object' ? opts.camera : {};
+    if (!prompt || !referenceUrl) throw new Error('cinematic_shot_payload_missing');
+    var payload = {
+      prompt: prompt,
+      aspectRatio: '16:9',
+      storageService: 'ai-image',
+      sessionId: state.sessionId,
+      generationMode: 'image-to-image',
+      generationStyle: 'single',
+      cameraTargetMode: 'scene',
+      imageSize: String(state.imageSize || '1K').toUpperCase(),
+      referenceImages: [{
+        referenceId: 1,
+        imageDataUrl: referenceUrl,
+        subjectDescription: 'cinematographer reference image',
+        subjectType: 'SUBJECT_TYPE_DEFAULT'
+      }],
+      conversationHistory: []
+    };
+    var response = await NK.api.imagen(payload);
+    var result = {
+      id: 'res_' + Date.now(),
+      url: String(response && (response.signedUrl || response.dataUrl) || '').trim(),
+      objectName: String(response && response.objectName || '').trim(),
+      imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
+      prompt: 'Cinematic shot · ' + String(opts.label || ''),
+      resolvedPrompt: prompt,
+      mode: 'image-to-image',
+      generationStyle: 'single',
+      cameraTargetMode: 'scene',
+      cameraControls: cineToLegacyControls(cine),
+      cameraShot: {
+        azimuth: Number(cine.azimuth) || 0,
+        elevation: Number(cine.elevation) || 0,
+        distance: Number(cine.distance) || 0.8,
+        focalLength: Number(cine.focalLength) || 35,
+        style: String(cine.style || 'None')
+      },
+      conversationTurnCount: 0,
+      aspectRatio: '16:9',
+      createdAt: new Date().toISOString(),
+      savedToProject: false,
+      sessionId: state.sessionId
+    };
+    if (!result.url) throw new Error('image_result_missing');
+    state.results.unshift(result);
+    state.results = state.results.slice(0, 30);
+    state.currentResultId = result.id;
+    state.previewTargetType = 'result';
+    persistHistory();
+    updateResultSelectionUI();
+    updateHistoryPanelUI();
+    return result;
+  }
+
+  function openCameraStudio() {
+    if (!(NK.cameraStudio && typeof NK.cameraStudio.open === 'function')) return;
+    NK.cameraStudio.open({
+      lang: state.lang,
+      getReferenceCandidate: function () {
+        var preview = currentPreviewTarget();
+        if (!preview || !preview.url) return null;
+        return { url: preview.url, name: preview.name || t('latestResult') };
+      },
+      getShots: function () {
+        return state.results.filter(function (item) {
+          return item && item.cameraShot && String(item.url || '').trim();
+        });
+      },
+      generate: generateCinematicShot,
+      download: function (result) { downloadResult(result); }
+    });
+  }
+
   function bindStaticEvents() {
     var root = document.getElementById('ai-image-root');
     if (root && !root.dataset.bound) {
@@ -3354,9 +3448,8 @@
           return;
         }
         if (action === 'toggle-camera-panel') {
-          state.historyPanelMode = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera' ? 'history' : 'camera';
-          updatePreviewPanelUI();
-          updateHistoryPanelUI();
+          // 3D 카메라 스튜디오(Virtual Cinematographer Pro)로 대체 — 미리보기 영역까지 확장되는 오버레이
+          openCameraStudio();
           return;
         }
         if (action === 'clear-preview') {
