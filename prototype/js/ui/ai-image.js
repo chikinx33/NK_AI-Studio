@@ -88,9 +88,9 @@
       sizeStd: '표준(1K)',
       sizeHigh: '고품질(2K)',
       cropButton: '이미지 자르기',
-      cropSave: '자른 이미지 등록',
+      cropSave: '히스토리에 저장',
       cropCancel: '취소',
-      cropRegistered: '잘린 이미지를 소스로 등록했습니다.',
+      cropRegistered: '잘린 이미지를 히스토리에 저장했습니다.',
       cropFailed: '이미지 자르기 실패: ',
       upscale4k: '업스케일 4K',
       providerLabel: '이미지 모델',
@@ -246,9 +246,9 @@
       sizeStd: 'Standard (1K)',
       sizeHigh: 'High (2K)',
       cropButton: 'Crop image',
-      cropSave: 'Register cropped image',
+      cropSave: 'Save to history',
       cropCancel: 'Cancel',
-      cropRegistered: 'Cropped image added to sources.',
+      cropRegistered: 'Cropped image saved to history.',
       cropFailed: 'Crop failed: ',
       upscale4k: 'Upscale (4K)',
       providerLabel: 'Image model',
@@ -1624,6 +1624,9 @@
     img.src = src;
 
     var drag = null; // { mode: 'move'|'nw'|..., startX, startY, base: {...crop} }
+    // 드래그를 오버레이 위에서 놓으면 브라우저가 그 지점 기준으로 click 을 합성해
+    // "바깥 클릭 = 닫기"가 오작동한다 → 드래그 직후의 click 은 무시한다.
+    var suppressOverlayClick = false;
 
     function boundsRect() {
       var r = img.getBoundingClientRect();
@@ -1633,6 +1636,8 @@
     box.addEventListener('pointerdown', function (ev) {
       var handle = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-crop-handle');
       drag = { mode: handle || 'move', startX: ev.clientX, startY: ev.clientY, base: { x: crop.x, y: crop.y, w: crop.w, h: crop.h } };
+      // 포인터를 박스에 캡처해 두면 놓는 위치가 어디든 click 타깃이 오버레이로 새지 않는다
+      try { box.setPointerCapture(ev.pointerId); } catch (_) { }
       ev.preventDefault();
     });
     function onMove(ev) {
@@ -1661,13 +1666,17 @@
       crop = next;
       applyBox();
     }
-    function onUp() { drag = null; }
+    function onUp() {
+      if (drag) suppressOverlayClick = true;
+      drag = null;
+    }
     function onKey(ev) { if (ev.key === 'Escape') close(); }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     document.addEventListener('keydown', onKey);
 
     overlay.addEventListener('click', function (ev) {
+      if (suppressOverlayClick) { suppressOverlayClick = false; return; }
       if (ev.target === overlay) { close(); return; }
       var btn = ev.target && ev.target.closest ? ev.target.closest('[data-crop-action]') : null;
       if (!btn) return;
@@ -1688,18 +1697,47 @@
         canvas.width = sw;
         canvas.height = sh;
         canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-        var dataUrl = canvas.toDataURL('image/png');
-        var entry = makeSourceImage(dataUrl, 'crop ' + sw + 'x' + sh, 'upload');
-        var added = appendSourceImages([entry]);
-        if (added.hitLimit) { alert(t('sourceLimitReached')); return; }
-        if (added.addedIds && added.addedIds[0]) state.selectedSourceId = String(added.addedIds[0]);
-        // 소스 박스는 이미지→이미지 모드에서만 보인다 — 등록했는데 안 보이면 "동작 안 함"으로 읽힌다
-        state.mode = 'image-to-image';
-        close();
-        updateModeUI();
-        updateSourceUI();
-        updatePreviewPanelUI();
-        if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
+        // 히스토리는 localStorage 에 저장된다 — data URL 을 그대로 넣으면 용량이 터진다(과거 OOM).
+        // GCS 에 올려 objectName/서명 URL 로 결과 카드를 만든다.
+        canvas.toBlob(function (blob) {
+          if (!blob) { alert(t('cropFailed') + 'blob_failed'); return; }
+          var file = new File([blob], 'crop-' + sw + 'x' + sh + '.png', { type: 'image/png' });
+          var project = readCurrentProject();
+          setGlobalLoading(true, t('generating'));
+          NK.api.imageUpload(project && project.id || '', file).then(function (uploaded) {
+            var cropResult = {
+              id: 'res_' + Date.now(),
+              url: String(uploaded && uploaded.signedUrl || '').trim(),
+              objectName: String(uploaded && uploaded.objectName || '').trim(),
+              imageSize: '',
+              prompt: 'crop ' + sw + 'x' + sh,
+              resolvedPrompt: 'crop ' + sw + 'x' + sh,
+              mode: 'image-to-image',
+              generationStyle: 'single',
+              cameraControls: normalizeCameraControls(state.cameraControls),
+              conversationTurnCount: 0,
+              aspectRatio: state.aspectRatio,
+              createdAt: new Date().toISOString(),
+              savedToProject: false,
+              sessionId: state.sessionId
+            };
+            if (!cropResult.url) throw new Error('upload_result_missing');
+            state.results.unshift(cropResult);
+            state.results = state.results.slice(0, 30);
+            state.currentResultId = cropResult.id;
+            state.previewTargetType = 'result';
+            close();
+            persistHistory();
+            appendHistoryCardIfPossible(cropResult);
+            updateResultSelectionUI();
+            updatePreviewPanelUI();
+            if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
+          }).catch(function (err) {
+            alert(t('cropFailed') + (err && err.message ? err.message : err));
+          }).finally(function () {
+            setGlobalLoading(false);
+          });
+        }, 'image/png');
       } catch (err) {
         alert(t('cropFailed') + (err && err.message ? err.message : err));
       }
