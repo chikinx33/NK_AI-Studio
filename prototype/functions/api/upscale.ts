@@ -11,6 +11,10 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 // Cloudflare Function 이 죽기 전에 우리가 먼저 끊는다 (플랫폼 한도보다 짧게)
 const VERTEX_TIMEOUT_MS = 25000;
 
+// 주의: 이 함수는 502·504 를 반환하면 안 된다. Cloudflare 가 게이트웨이 오류로 보고
+// 우리 JSON 본문을 자기 "502 Bad gateway" HTML 페이지로 갈아치워, 화면에는 원인 대신
+// 그 페이지가 통째로 뜬다(실제로 겪은 증상). 우리 쪽 실패는 500 으로 알린다.
+
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   const origin = request.headers.get("Origin");
   return new Response(null, {
@@ -159,9 +163,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           error: timedOut
             ? `Vertex AI 업스케일 시간 초과 (${model}, ${Math.round(elapsed / 1000)}초). 이미지가 크면 더 오래 걸릴 수 있습니다.`
             : `Vertex AI 업스케일 요청 실패 (${model}): ${err?.message || err}`,
+          code: timedOut ? "vertex_timeout" : "vertex_request_failed",
           model,
           elapsedMs: elapsed,
-        }, timedOut ? 504 : 502, origin);
+        }, 500, origin);
       }
 
       const vertexText = await vertexRes.text();
@@ -199,7 +204,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({
         error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")}`,
         hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL 환경변수를 설정하세요.`,
-      }, 502, origin);
+      }, 500, origin);
     }
 
     // 3) 폴백 경로에서만 결과를 직접 GCS 에 올린다

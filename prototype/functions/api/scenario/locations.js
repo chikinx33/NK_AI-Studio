@@ -63,7 +63,7 @@ export const onRequestPost = async ({ request, env }) => {
     });
     if (!res.ok) {
       const t = await res.text().catch(() => "");
-      return send({ error: "llm_error", status: res.status, detail: String(t).slice(0, 240) }, 502, origin);
+      return send({ error: "llm_error", status: res.status, detail: String(t).slice(0, 240) }, 500, origin);
     }
     const data = await res.json().catch(() => ({}));
     const text = Array.isArray(data && data.content) ? data.content.map((c) => (c && c.text) || "").join("") : "";

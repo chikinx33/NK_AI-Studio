@@ -425,7 +425,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           error: "music_generation_failed",
           detail: providerFallbackReason || "lyria_unavailable_and_no_elevenlabs_key",
           musicPrompt,
-        }, 502, origin);
+        }, 500, origin);
       }
       // ElevenLabs 는 22초가 한계라 별도로 클램프.
       const fallbackDur = Math.min(22, Math.max(3, durationSec));
@@ -435,7 +435,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     if (!audioBytes || audioBytes.length === 0) {
-      return send({ error: "music_generation_returned_empty", musicPrompt, providerUsed }, 502, origin);
+      return send({ error: "music_generation_returned_empty", musicPrompt, providerUsed }, 500, origin);
     }
 
     // Step 4: GCS 업로드 — mp3 / wav 응답을 따라 확장자·Content-Type 결정

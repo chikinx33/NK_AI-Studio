@@ -205,7 +205,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         });
         audioInfo = { data: v1.base64, mime: v1.mime };
       } catch (fallbackErr: any) {
-        return send({ error: "tts_failed", fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, 502, origin);
+        return send({ error: "tts_failed", fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, 500, origin);
       }
     }
     const audioContent = audioInfo.data;

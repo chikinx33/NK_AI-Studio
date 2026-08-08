@@ -30,9 +30,35 @@ test("Vertex 호출은 플랫폼 한도보다 먼저 끊고 이유를 돌려준�
   const ms = Number(src.match(/const VERTEX_TIMEOUT_MS = (\d+);/)[1]);
   assert.ok(ms > 0 && ms < 30000, `한도(30초)보다 짧아야 한다: ${ms}ms`);
   assert.match(src, /signal: AbortSignal\.timeout\(VERTEX_TIMEOUT_MS\)/);
-  // 끊겼을 때는 504 로, 그 외 요청 실패는 502 로 — 어느 쪽이든 JSON 으로 끝난다
-  assert.match(src, /timedOut \? 504 : 502/);
+  assert.match(src, /code: timedOut \? "vertex_timeout" : "vertex_request_failed"/);
   assert.match(src, /시간 초과/);
+});
+
+/**
+ * 실제로 겪은 증상: 우리 함수가 502(JSON 본문 포함)를 돌려주자 Cloudflare 가 그걸
+ * 게이트웨이 오류로 보고 본문을 자기 "502 Bad gateway" HTML 로 갈아치웠다. 화면에는
+ * 원인 대신 그 페이지가 통째로 떴고, 로그에는 함수가 Ok 로 끝났다고 찍혀 추적이 어려웠다.
+ * 같은 실수를 어디서도 반복하지 않도록 전 엔드포인트를 훑는다.
+ */
+test("Pages Function 은 502·504 를 반환하지 않는다 (본문이 엣지 오류 페이지로 바뀐다)", () => {
+  const dir = path.join(process.cwd(), "prototype/functions");
+  const offenders = [];
+  const walk = (d) => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!/\.(ts|js|mjs)$/.test(entry.name)) continue;
+      const text = fs.readFileSync(full, "utf8");
+      text.split(/\r?\n/).forEach((line, i) => {
+        // send(...)/json(...) 의 status 인자 자리에 502·504 가 오는 경우
+        if (/,\s*50[24]\s*,/.test(line) || /status:\s*50[24]\b/.test(line)) {
+          offenders.push(`${path.relative(process.cwd(), full)}:${i + 1}`);
+        }
+      });
+    }
+  };
+  walk(dir);
+  assert.deepEqual(offenders, [], `502/504 를 돌려주면 Cloudflare 가 본문을 덮어쓴다 → 500 을 쓸 것: ${offenders.join(", ")}`);
 });
 
 test("엣지 오류 HTML 은 제목·Ray ID 한 줄로 줄여 보여준다", () => {
