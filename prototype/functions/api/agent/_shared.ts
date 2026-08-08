@@ -2522,7 +2522,7 @@ async function runUpscaleTool(input: any, ctx: ToolContext): Promise<any> {
   });
   return {
     signedUrl: data.signedUrl || "", objectName: data.objectName || "",
-    kind: "image", model: data.model || "imagen-3.0-capability-001",
+    kind: "image", model: data.model || "imagen-4.0-upscale-preview",
     promptEcho: "업스케일 2X", imageSizeApplied: data.imageSizeApplied || "2X",
   };
 }

@@ -1,6 +1,7 @@
 // prototype/functions/api/upscale.ts
 // POST /api/upscale { imageUrl | objectName, sessionId, storageService }
-// Vertex AI Imagen (imagen-3.0-capability-001) 업스케일 — GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 재사용
+// Vertex AI Imagen 업스케일 (imagen-4.0-upscale-preview) — GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 재사용
+// imagen-3.0-capability-001은 편집/커스터마이즈 전용이라 mode:"upscale" 미지원(+승인 필요) → 404가 났었음
 import { buildAiImageSessionPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
@@ -87,35 +88,75 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     if (!srcBytes || srcBytes.length === 0) return json({ error: "소스 이미지 바이트 없음" }, 500, origin);
 
-    // 2) Vertex AI Imagen 업스케일 (동기 응답, 바이트 직접 전달)
-    const b64Input = uint8ToBase64(srcBytes);
-    const vertexEndpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-capability-001:predict`;
-
-    const vertexRes = await fetch(vertexEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        instances: [{ image: { bytesBase64Encoded: b64Input } }],
-        parameters: {
-          sampleCount: 1,
-          mode: "upscale",
-          upscaleConfig: { upscaleFactor: "x2" },
-        },
-      }),
-    });
-
-    const vertexText = await vertexRes.text();
-    if (!vertexRes.ok) {
-      return json({ error: `Vertex AI 업스케일 오류 (${vertexRes.status}): ${vertexText.slice(0, 400)}` }, 500, origin);
+    // Imagen 업스케일 입력 제한: 원본 10MB 이하, 출력(=원본 해상도 x2) 17MP 이하
+    if (srcBytes.length > 10 * 1024 * 1024) {
+      return json({ error: `소스 이미지가 너무 큽니다 (${(srcBytes.length / 1048576).toFixed(1)}MB / 최대 10MB)` }, 400, origin);
+    }
+    const dims = readImageSize(srcBytes);
+    if (dims && dims.width * dims.height * 4 > 17_000_000) {
+      return json({
+        error: `업스케일 결과가 17MP 제한을 초과합니다 (원본 ${dims.width}x${dims.height} → 2X ${dims.width * 2}x${dims.height * 2})`,
+      }, 400, origin);
     }
 
-    const vertexJson = safeJson(vertexText);
-    const b64Output = String(vertexJson?.predictions?.[0]?.bytesBase64Encoded || "").trim();
+    // 2) Vertex AI Imagen 업스케일 (동기 응답, 바이트 직접 전달)
+    const b64Input = uint8ToBase64(srcBytes);
+    const location = String(env.VERTEX_LOCATION || "us-central1").trim() || "us-central1";
+    // 업스케일 지원 모델만 사용. env로 덮어쓸 수 있고, 접근 권한이 없으면(404/403) 다음 후보로 폴백
+    const modelCandidates = String(env.IMAGEN_UPSCALE_MODEL || "").trim()
+      ? [String(env.IMAGEN_UPSCALE_MODEL).trim()]
+      : ["imagen-4.0-upscale-preview", "imagegeneration@002"];
+
+    let b64Output = "";
+    let usedModel = "";
+    const attemptErrors: string[] = [];
+
+    for (const model of modelCandidates) {
+      const vertexEndpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+      const parameters: Record<string, any> = {
+        mode: "upscale",
+        upscaleConfig: { upscaleFactor: "x2" },
+        outputOptions: { mimeType: "image/png" },
+      };
+      // 구형 imagegeneration@* 계열은 sampleCount를 요구
+      if (model.startsWith("imagegeneration@")) parameters.sampleCount = 1;
+
+      const vertexRes = await fetch(vertexEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          instances: [{ prompt: "", image: { bytesBase64Encoded: b64Input } }],
+          parameters,
+        }),
+      });
+
+      const vertexText = await vertexRes.text();
+      if (!vertexRes.ok) {
+        attemptErrors.push(`${model} → ${vertexRes.status}: ${vertexText.slice(0, 200)}`);
+        // 모델 미존재/권한 없음이면 다음 후보로, 그 외 오류는 즉시 중단
+        if (vertexRes.status === 404 || vertexRes.status === 403) continue;
+        return json({ error: `Vertex AI 업스케일 오류 (${vertexRes.status}): ${vertexText.slice(0, 400)}` }, 500, origin);
+      }
+
+      const vertexJson = safeJson(vertexText);
+      const out = String(vertexJson?.predictions?.[0]?.bytesBase64Encoded || "").trim();
+      if (!out) {
+        attemptErrors.push(`${model} → 결과 이미지 없음`);
+        continue;
+      }
+      b64Output = out;
+      usedModel = model;
+      break;
+    }
+
     if (!b64Output) {
-      return json({ error: "Vertex AI 업스케일 결과 없음", raw: vertexJson }, 500, origin);
+      return json({
+        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")}`,
+        hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL 환경변수를 설정하세요.`,
+      }, 502, origin);
     }
 
     // 3) 결과 GCS 저장
@@ -146,7 +187,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       objectName: resultObjectName,
       dataUrl: "",
       imageSizeApplied: "2X",
-      model: "imagen-3.0-capability-001",
+      model: usedModel,
       provider: "google",
       storageService,
       sessionId,
@@ -179,6 +220,31 @@ function base64ToUint8(b64: string): Uint8Array {
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
+}
+
+/** PNG/JPEG 헤더에서 해상도 추출. 알 수 없으면 null(제한 검사 생략). */
+function readImageSize(bytes: Uint8Array): { width: number; height: number } | null {
+  // PNG: 8바이트 시그니처 + IHDR(width/height big-endian)
+  if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  // JPEG: SOF0~SOF15 마커에서 height/width
+  if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let i = 2;
+    while (i + 9 < bytes.length) {
+      if (bytes[i] !== 0xff) { i++; continue; }
+      const marker = bytes[i + 1];
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+      const len = view.getUint16(i + 2);
+      const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      if (isSof) return { height: view.getUint16(i + 5), width: view.getUint16(i + 7) };
+      if (len < 2) break;
+      i += 2 + len;
+    }
+  }
+  return null;
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
