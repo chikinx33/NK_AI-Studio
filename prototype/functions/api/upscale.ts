@@ -70,25 +70,32 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }).catch(() => null);
     if (!accessToken) return json({ error: "Google 액세스 토큰 획득 실패" }, 500, origin);
 
-    // 1) 소스 지정 — GCS 객체면 gs:// 경로를 그대로 Vertex 에 넘긴다.
-    // 이미지 바이트를 Worker 로 통과시키면(다운로드 → base64 → 업로드) 큰 이미지에서
-    // 메모리·CPU 한도를 넘겨 Function 이 그냥 죽고, Cloudflare 가 대신 502 를 돌려준다.
-    let sourceImage: Record<string, string>;
+    // 1) 소스 파트 구성 — GCS 객체는 gs:// 참조로 그대로 넘긴다.
+    // 원본 바이트를 Worker 로 통과시키지 않기 위해서다(다운로드 → base64 재인코딩은
+    // 큰 이미지에서 메모리·CPU 를 태운다). data:/http 소스만 인라인으로 싣는다.
+    let srcPart: any;                                        // Gemini generateContent 용
+    let imagenSource: Record<string, string> | null = null;  // (env 로 강제한) Imagen predict 용
 
     if (objectName) {
-      sourceImage = { gcsUri: `gs://${outParsed.bucket}/${objectName.replace(/^\/+/, "")}` };
+      const cleanObject = objectName.replace(/^\/+/, "");
+      const gcsUri = `gs://${outParsed.bucket}/${cleanObject}`;
+      srcPart = { fileData: { mimeType: mimeFromName(cleanObject), fileUri: gcsUri } };
+      imagenSource = { gcsUri };
 
     } else {
       let srcBytes: Uint8Array | null = null;
+      let srcMime = "image/png";
 
       if (imageUrl.startsWith("data:")) {
-        const match = imageUrl.match(/^data:[^;]+;base64,(.+)$/);
+        const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
         if (!match) return json({ error: "data URL 파싱 실패" }, 400, origin);
-        srcBytes = base64ToUint8(match[1]);
+        srcMime = match[1] || "image/png";
+        srcBytes = base64ToUint8(match[2]);
 
       } else if (imageUrl.startsWith("http")) {
         const fetchRes = await fetch(imageUrl).catch(() => null);
         if (!fetchRes?.ok) return json({ error: "소스 이미지 fetch 실패" }, 500, origin);
+        srcMime = String(fetchRes.headers.get("content-type") || "").split(";")[0].trim() || "image/png";
         srcBytes = new Uint8Array(await fetchRes.arrayBuffer());
 
       } else {
@@ -96,75 +103,120 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
 
       if (!srcBytes || srcBytes.length === 0) return json({ error: "소스 이미지 바이트 없음" }, 500, origin);
-
-      // Imagen 업스케일 입력 제한: 원본 10MB 이하, 출력(=원본 해상도 x2) 17MP 이하
       if (srcBytes.length > 10 * 1024 * 1024) {
         return json({ error: `소스 이미지가 너무 큽니다 (${(srcBytes.length / 1048576).toFixed(1)}MB / 최대 10MB)` }, 400, origin);
       }
-      const dims = readImageSize(srcBytes);
-      if (dims && dims.width * dims.height * 4 > 17_000_000) {
-        return json({
-          error: `업스케일 결과가 17MP 제한을 초과합니다 (원본 ${dims.width}x${dims.height} → 2X ${dims.width * 2}x${dims.height * 2})`,
-        }, 400, origin);
-      }
 
-      sourceImage = { bytesBase64Encoded: uint8ToBase64(srcBytes) };
+      const b64 = uint8ToBase64(srcBytes);
+      srcPart = { inlineData: { mimeType: srcMime, data: b64 } };
+      imagenSource = { bytesBase64Encoded: b64 };
     }
 
-    // 2) Vertex AI Imagen 업스케일. 결과도 GCS 로 직접 받아 Worker 메모리를 태우지 않는다.
+    // 2) 업스케일 실행.
+    //
+    // 이 프로젝트에서 Vertex Imagen 표면은 전 모델·전 리전 404 다 (서비스 계정·Owner 양쪽,
+    // 판별자 검증까지 마친 실측 결과). 구글이 Imagen 3 를 폐기하며 공식 이전처로 지정한
+    // Gemini 이미지 모델(gemini-3.1-flash-image 등)은 같은 자격증명으로 200 이 확인됐다.
+    // → 기본 경로는 Gemini 이미지 모델에 "원본 충실 재현 + 고해상도 출력"을 시키는 방식.
+    //   Imagen predict 는 나중에 열릴 때를 대비해 IMAGEN_UPSCALE_MODEL env 로만 켠다.
     const stamp = Date.now();
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
     const outputPrefix = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x`;
-    const location = String(env.VERTEX_LOCATION || "us-central1").trim() || "us-central1";
-    // 업스케일 지원 모델만 사용. env로 덮어쓸 수 있고, 접근 권한이 없으면(404/403) 다음 후보로 폴백
-    const modelCandidates = String(env.IMAGEN_UPSCALE_MODEL || "").trim()
-      ? [String(env.IMAGEN_UPSCALE_MODEL).trim()]
-      : ["imagen-4.0-upscale-preview", "imagegeneration@002"];
-    // 최신 Imagen 계열은 리전 엔드포인트에 없고 global 에만 있는 경우가 있다 → 둘 다 훑는다
-    const locationCandidates = String(env.VERTEX_LOCATION || "").trim()
-      ? [location]
-      : [location, "global"];
-    const attempts: Array<{ model: string; loc: string }> = [];
-    for (const model of modelCandidates) {
-      for (const loc of locationCandidates) attempts.push({ model, loc });
-    }
 
     let resultObjectName = "";
     let b64Output = "";
+    let outMime = "image/png";
     let usedModel = "";
     let usedLocation = "";
     const attemptErrors: string[] = [];
 
-    for (const { model, loc } of attempts) {
-      const vertexEndpoint = `https://${vertexHost(loc)}/v1/projects/${projectId}/locations/${loc}/publishers/google/models/${model}:predict`;
-      const parameters: Record<string, any> = {
-        mode: "upscale",
-        upscaleConfig: { upscaleFactor: "x2" },
-        outputOptions: { mimeType: "image/png" },
-        // 결과를 응답 본문(base64)이 아니라 GCS 로 바로 쓰게 한다
-        storageUri: `gs://${outParsed.bucket}/${outputPrefix}/`,
-      };
-      // 구형 imagegeneration@* 계열은 sampleCount를 요구
-      if (model.startsWith("imagegeneration@")) parameters.sampleCount = 1;
+    // 2-a) (선택) 강제된 Imagen 업스케일 — env 가 있을 때만 시도, 실패해도 Gemini 로 넘어간다
+    const forcedImagen = String(env.IMAGEN_UPSCALE_MODEL || "").trim();
+    if (forcedImagen && imagenSource) {
+      const location = String(env.VERTEX_LOCATION || "us-central1").trim() || "us-central1";
+      for (const loc of [location, "global"]) {
+        const vertexEndpoint = `https://${vertexHost(loc)}/v1/projects/${projectId}/locations/${loc}/publishers/google/models/${forcedImagen}:predict`;
+        const parameters: Record<string, any> = {
+          mode: "upscale",
+          upscaleConfig: { upscaleFactor: "x2" },
+          outputOptions: { mimeType: "image/png" },
+          // 결과를 응답 본문(base64)이 아니라 GCS 로 바로 쓰게 한다
+          storageUri: `gs://${outParsed.bucket}/${outputPrefix}/`,
+        };
+        if (forcedImagen.startsWith("imagegeneration@")) parameters.sampleCount = 1;
 
-      // Vertex 가 오래 끌면 Function 이 플랫폼 한도에 걸려 통째로 죽고, 그러면 사용자에게는
-      // 원인을 알 수 없는 Cloudflare 502 HTML 만 남는다. 그 전에 우리가 끊고 이유를 돌려준다.
+        let vertexRes: Response;
+        try {
+          vertexRes = await fetch(vertexEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+              "x-goog-user-project": projectId,
+            },
+            body: JSON.stringify({ instances: [{ prompt: "", image: imagenSource }], parameters }),
+            signal: AbortSignal.timeout(VERTEX_TIMEOUT_MS),
+          });
+        } catch (err: any) {
+          attemptErrors.push(`${forcedImagen}@${loc} → ${err?.name === "TimeoutError" ? "시간 초과" : err?.message || err}`);
+          continue;
+        }
+
+        const vertexText = await vertexRes.text();
+        if (!vertexRes.ok) {
+          attemptErrors.push(`${forcedImagen}@${loc} → ${vertexRes.status}: ${shortGoogleError(vertexText)}`);
+          continue;
+        }
+        const prediction = safeJson(vertexText)?.predictions?.[0] || {};
+        const outGcsUri = String(prediction?.gcsUri || "").trim();
+        const outBytes = String(prediction?.bytesBase64Encoded || "").trim();
+        if (outGcsUri) {
+          const parsedOut = parseGcsUri(outGcsUri);
+          if (!parsedOut) { attemptErrors.push(`${forcedImagen}@${loc} → 결과 gcsUri 파싱 실패`); continue; }
+          resultObjectName = parsedOut.object;
+        } else if (outBytes) {
+          b64Output = outBytes;
+        } else {
+          attemptErrors.push(`${forcedImagen}@${loc} → 결과 이미지 없음`);
+          continue;
+        }
+        usedModel = forcedImagen;
+        usedLocation = loc;
+        break;
+      }
+    }
+
+    // 2-b) 기본 경로: Gemini 이미지 모델로 원본 충실 재현 업스케일 (global 에서 200 확인됨)
+    const upscaleSize = String(env.UPSCALE_IMAGE_SIZE || "2K").trim() || "2K";
+    if (!resultObjectName && !b64Output) {
+      const geminiModel = String(env.GEMINI_UPSCALE_MODEL || "gemini-3.1-flash-image").trim();
+      const loc = "global";
+      const endpoint = `https://${vertexHost(loc)}/v1/projects/${projectId}/locations/${loc}/publishers/google/models/${geminiModel}:generateContent`;
+
       const started = Date.now();
-      let vertexRes: Response;
+      let res: Response;
       try {
-        vertexRes = await fetch(vertexEndpoint, {
+        res = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
-            // 이 헤더가 없으면 Vertex 는 "호출한 자격증명의 소속 프로젝트"를 기준으로 판단한다.
-            // 서비스 계정이 다른 프로젝트 소속이면 모델이 있어도 404(권한 없음을 감춘 응답)가 난다.
             "x-goog-user-project": projectId,
           },
           body: JSON.stringify({
-            instances: [{ prompt: "", image: sourceImage }],
-            parameters,
+            contents: [{
+              role: "user",
+              parts: [
+                // 스타일·내용은 절대 건드리지 않는다 — 해상도만 올리는 충실 재현 지시.
+                { text: "Reproduce this exact image at a higher resolution. Do not change the composition, framing, colors, lighting, style, or any content. Do not add, remove, or reinterpret anything. Output only the faithfully upscaled image." },
+                srcPart,
+              ],
+            }],
+            generationConfig: {
+              responseModalities: ["IMAGE"],
+              imageConfig: { imageSize: upscaleSize },
+            },
           }),
           signal: AbortSignal.timeout(VERTEX_TIMEOUT_MS),
         });
@@ -173,68 +225,51 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const timedOut = err?.name === "TimeoutError" || err?.name === "AbortError";
         return json({
           error: timedOut
-            ? `Vertex AI 업스케일 시간 초과 (${model}, ${Math.round(elapsed / 1000)}초). 이미지가 크면 더 오래 걸릴 수 있습니다.`
-            : `Vertex AI 업스케일 요청 실패 (${model}): ${err?.message || err}`,
+            ? `업스케일 시간 초과 (${geminiModel}, ${Math.round(elapsed / 1000)}초). 잠시 후 다시 시도해 주세요.`
+            : `업스케일 요청 실패 (${geminiModel}): ${err?.message || err}`,
           code: timedOut ? "vertex_timeout" : "vertex_request_failed",
-          model,
+          model: geminiModel,
           elapsedMs: elapsed,
         }, 500, origin);
       }
 
-      const vertexText = await vertexRes.text();
-      if (!vertexRes.ok) {
-        attemptErrors.push(`${model}@${loc} → ${vertexRes.status}: ${shortGoogleError(vertexText)}`);
-        // 모델 미존재/권한 없음이면 다음 후보로, 그 외 오류는 즉시 중단
-        if (vertexRes.status === 404 || vertexRes.status === 403) continue;
-        return json({ error: `Vertex AI 업스케일 오류 (${vertexRes.status}): ${vertexText.slice(0, 400)}` }, 500, origin);
+      const text = await res.text();
+      if (!res.ok) {
+        // 모델·권한 문제라면 대조 호출로 원인을 갈라서 함께 알려준다
+        const diagnostic = (res.status === 404 || res.status === 403)
+          ? await diagnoseVertexAccess(loc, projectId, accessToken)
+          : "";
+        return json({
+          error: `업스케일 실패 (${geminiModel}@${loc} → ${res.status}): ${shortGoogleError(text)}`
+            + (attemptErrors.length ? ` | 이전 시도: ${attemptErrors.join(" | ")}` : "")
+            + (diagnostic ? ` · 진단: ${diagnostic}` : ""),
+          serviceAccount: clientEmail,
+          project: projectId,
+        }, 500, origin);
       }
 
-      const vertexJson = safeJson(vertexText);
-      const prediction = vertexJson?.predictions?.[0] || {};
-      const outGcsUri = String(prediction?.gcsUri || "").trim();
-      const outBytes = String(prediction?.bytesBase64Encoded || "").trim();
-
-      if (outGcsUri) {
-        const parsedOut = parseGcsUri(outGcsUri);
-        if (!parsedOut) {
-          attemptErrors.push(`${model}@${loc} → 결과 gcsUri 파싱 실패 (${outGcsUri})`);
-          continue;
-        }
-        resultObjectName = parsedOut.object;
-      } else if (outBytes) {
-        // storageUri 를 무시하는 모델을 위한 폴백 — 이때만 바이트가 Worker 를 지난다
-        b64Output = outBytes;
-      } else {
-        attemptErrors.push(`${model}@${loc} → 결과 이미지 없음`);
-        continue;
+      const parts: any[] = safeJson(text)?.candidates?.[0]?.content?.parts || [];
+      const imgPart = parts.find((p) => p?.inlineData?.data);
+      if (!imgPart) {
+        return json({
+          error: `업스케일 결과에 이미지가 없습니다 (${geminiModel}). ${String(text).slice(0, 200)}`,
+        }, 500, origin);
       }
-      usedModel = model;
+      b64Output = String(imgPart.inlineData.data);
+      outMime = String(imgPart.inlineData.mimeType || "image/png");
+      usedModel = geminiModel;
       usedLocation = loc;
-      break;
     }
 
-    if (!resultObjectName && !b64Output) {
-      // 후보를 다 못 쓰면 "왜 못 쓰는지"까지 같이 알려준다. 이게 없으면 404 문구만 보고
-      // 모델 이름을 바꿔가며 배포를 반복하게 된다(실제로 그렇게 두 번 헛돌았다).
-      const diagnostic = await diagnoseVertexAccess(location, projectId, accessToken);
-      // 화면은 error 필드만 읽는다 → 진단 결과를 여기에 같이 담아야 사용자 눈에 닿는다
-      return json({
-        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")} · 호출 계정: ${clientEmail} · 진단: ${diagnostic}`,
-        diagnostic,
-        serviceAccount: clientEmail,
-        project: projectId,
-        hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL, 리전은 VERTEX_LOCATION 환경변수를 설정하세요.`,
-      }, 500, origin);
-    }
-
-    // 3) 폴백 경로에서만 결과를 직접 GCS 에 올린다
+    // 3) 결과가 인라인으로 온 경우에만 직접 GCS 에 올린다 (Imagen storageUri 경로는 이미 GCS 에 있음)
     if (!resultObjectName) {
-      resultObjectName = `${outputPrefix}.png`;
+      const ext = outMime === "image/jpeg" ? "jpg" : (outMime === "image/webp" ? "webp" : "png");
+      resultObjectName = `${outputPrefix}.${ext}`;
       const resultBytes = base64ToUint8(b64Output);
       const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
       const upRes = await fetch(uploadUrl, {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": outMime },
         body: resultBytes,
       });
       if (!upRes.ok) return json({ error: "GCS 결과 업로드 실패" }, 500, origin);
@@ -252,7 +287,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       signedUrl,
       objectName: resultObjectName,
       dataUrl: "",
-      imageSizeApplied: "2X",
+      imageSizeApplied: usedModel.startsWith("imagen") ? "2X" : upscaleSize,
       model: usedModel,
       location: usedLocation,
       provider: "google",
@@ -272,6 +307,14 @@ function safeJson(text: string): any {
 /** global 은 리전 접두사가 없는 호스트를 쓴다 */
 function vertexHost(location: string): string {
   return location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+}
+
+/** 확장자 → MIME. Vertex fileData 는 mimeType 이 필수다. */
+function mimeFromName(name: string): string {
+  const n = name.toLowerCase();
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  if (n.endsWith(".webp")) return "image/webp";
+  return "image/png";
 }
 
 /** Google 오류 JSON 에서 message 만 뽑는다. 원문을 통째로 흘리면 화면이 JSON 으로 뒤덮인다. */
@@ -336,31 +379,6 @@ function base64ToUint8(b64: string): Uint8Array {
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
-}
-
-/** PNG/JPEG 헤더에서 해상도 추출. 알 수 없으면 null(제한 검사 생략). */
-function readImageSize(bytes: Uint8Array): { width: number; height: number } | null {
-  // PNG: 8바이트 시그니처 + IHDR(width/height big-endian)
-  if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return { width: view.getUint32(16), height: view.getUint32(20) };
-  }
-  // JPEG: SOF0~SOF15 마커에서 height/width
-  if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    let i = 2;
-    while (i + 9 < bytes.length) {
-      if (bytes[i] !== 0xff) { i++; continue; }
-      const marker = bytes[i + 1];
-      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
-      const len = view.getUint16(i + 2);
-      const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
-      if (isSof) return { height: view.getUint16(i + 5), width: view.getUint16(i + 7) };
-      if (len < 2) break;
-      i += 2 + len;
-    }
-  }
-  return null;
 }
 
 /** 청크 단위로 묶어 변환한다. 바이트마다 문자열을 이어붙이면 큰 이미지에서 Worker CPU 한도를 넘긴다. */

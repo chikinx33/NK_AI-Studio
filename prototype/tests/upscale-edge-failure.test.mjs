@@ -14,14 +14,30 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
  *  2) 클라이언트: 그래도 엣지 오류 페이지를 받으면 제목·Ray ID 한 줄로 줄여 보여준다.
  */
 
-test("업스케일은 이미지 바이트를 Worker 로 통과시키지 않는다", () => {
+test("업스케일은 원본 바이트를 Worker 로 통과시키지 않는다", () => {
   const src = read("prototype/functions/api/upscale.ts");
-  // 저장된 객체는 gs:// 로 그대로 넘긴다 (다운로드 없음)
-  assert.match(src, /sourceImage = \{ gcsUri: `gs:\/\/\$\{outParsed\.bucket\}/);
-  // 결과도 Vertex 가 GCS 에 직접 쓴다
-  assert.match(src, /storageUri: `gs:\/\/\$\{outParsed\.bucket\}\/\$\{outputPrefix\}\/`/);
+  // 저장된 객체는 gs:// 참조(fileData)로 그대로 넘긴다 (다운로드 없음)
+  assert.match(src, /fileData: \{ mimeType: mimeFromName\(cleanObject\), fileUri: gcsUri \}/);
+  assert.match(src, /gs:\/\/\$\{outParsed\.bucket\}/);
   // 예전처럼 GCS 에서 원본을 통째로 내려받는 경로가 남아 있으면 안 된다
   assert.doesNotMatch(src, /download\/storage\/v1\/b/);
+});
+
+/**
+ * 이 프로젝트의 Vertex Imagen 표면은 전 모델·전 리전 404 (실측: 서비스 계정·Owner 동일,
+ * 가짜 모델명 대조군과 같은 응답). 같은 자격증명으로 Gemini 이미지 모델은 200.
+ * → 기본 업스케일은 Gemini 이미지 모델의 고해상도 충실 재현으로 간다.
+ */
+test("기본 업스케일 경로는 Gemini 이미지 모델(global)이다", () => {
+  const src = read("prototype/functions/api/upscale.ts");
+  assert.match(src, /GEMINI_UPSCALE_MODEL \|\| "gemini-3\.1-flash-image"/);
+  assert.match(src, /responseModalities: \["IMAGE"\]/);
+  assert.match(src, /imageConfig: \{ imageSize: upscaleSize \}/);
+  // 충실 재현 지시 — 내용·스타일 변경 금지가 프롬프트에 명시돼야 한다
+  assert.match(src, /Do not change the composition/);
+  // Imagen predict 는 env 로 강제할 때만 시도한다 (기본 경로에서 404 왕복 낭비 금지)
+  assert.match(src, /forcedImagen && imagenSource/);
+  assert.doesNotMatch(src, /"imagen-4\.0-upscale-preview", "imagegeneration@002"/);
 });
 
 test("Vertex 호출은 플랫폼 한도보다 먼저 끊고 이유를 돌려준다", () => {
