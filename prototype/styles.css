@@ -363,6 +363,51 @@ body::-webkit-scrollbar {
   gap: 8px;
 }
 
+/* 문구 복사 아이콘 — 초안 카드의 .copy-btn 과 같은 모양.
+   다이얼로그는 모든 페이지에서 뜨는데 styles.dashboard-cards.css 는 일부 페이지만
+   싣기 때문에, 어디서나 같게 보이도록 같은 값을 여기에 둔다. */
+.nk-dialog-copy {
+  width: 35px;
+  height: 35px;
+  min-width: 35px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background:
+    radial-gradient(circle at 24% 22%, rgba(255, 159, 63, 0.2), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.nk-dialog-copy svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.6;
+}
+
+.nk-dialog-copy:hover {
+  transform: translateY(-1px);
+  color: #F5F7FD;
+  border-color: rgba(255, 140, 0, 0.4);
+  box-shadow:
+    0 16px 30px rgba(255, 122, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 복사 완료 — 폭은 그대로 두고 색만 바꾼다 */
+.nk-dialog-copy.is-copied {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
 /* 단순 알림: 좁은 폭 + 가운데 정렬 + 큰 확인 버튼 */
 .nk-dialog-root.is-simple .nk-dialog-panel {
   width: min(400px, 100%);

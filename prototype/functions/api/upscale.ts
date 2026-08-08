@@ -63,50 +63,59 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }).catch(() => null);
     if (!accessToken) return json({ error: "Google 액세스 토큰 획득 실패" }, 500, origin);
 
-    // 1) 소스 이미지 바이트 획득
-    let srcBytes: Uint8Array | null = null;
+    // 1) 소스 지정 — GCS 객체면 gs:// 경로를 그대로 Vertex 에 넘긴다.
+    // 이미지 바이트를 Worker 로 통과시키면(다운로드 → base64 → 업로드) 큰 이미지에서
+    // 메모리·CPU 한도를 넘겨 Function 이 그냥 죽고, Cloudflare 가 대신 502 를 돌려준다.
+    let sourceImage: Record<string, string>;
 
     if (objectName) {
-      const dlUrl = `https://storage.googleapis.com/download/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
-      const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null);
-      if (!dlRes?.ok) return json({ error: `GCS 소스 다운로드 실패 (${dlRes?.status ?? "network"})` }, 500, origin);
-      srcBytes = new Uint8Array(await dlRes.arrayBuffer());
-
-    } else if (imageUrl.startsWith("data:")) {
-      const match = imageUrl.match(/^data:[^;]+;base64,(.+)$/);
-      if (!match) return json({ error: "data URL 파싱 실패" }, 400, origin);
-      srcBytes = base64ToUint8(match[1]);
-
-    } else if (imageUrl.startsWith("http")) {
-      const fetchRes = await fetch(imageUrl).catch(() => null);
-      if (!fetchRes?.ok) return json({ error: "소스 이미지 fetch 실패" }, 500, origin);
-      srcBytes = new Uint8Array(await fetchRes.arrayBuffer());
+      sourceImage = { gcsUri: `gs://${outParsed.bucket}/${objectName.replace(/^\/+/, "")}` };
 
     } else {
-      return json({ error: "지원하지 않는 이미지 소스 형식" }, 400, origin);
+      let srcBytes: Uint8Array | null = null;
+
+      if (imageUrl.startsWith("data:")) {
+        const match = imageUrl.match(/^data:[^;]+;base64,(.+)$/);
+        if (!match) return json({ error: "data URL 파싱 실패" }, 400, origin);
+        srcBytes = base64ToUint8(match[1]);
+
+      } else if (imageUrl.startsWith("http")) {
+        const fetchRes = await fetch(imageUrl).catch(() => null);
+        if (!fetchRes?.ok) return json({ error: "소스 이미지 fetch 실패" }, 500, origin);
+        srcBytes = new Uint8Array(await fetchRes.arrayBuffer());
+
+      } else {
+        return json({ error: "지원하지 않는 이미지 소스 형식" }, 400, origin);
+      }
+
+      if (!srcBytes || srcBytes.length === 0) return json({ error: "소스 이미지 바이트 없음" }, 500, origin);
+
+      // Imagen 업스케일 입력 제한: 원본 10MB 이하, 출력(=원본 해상도 x2) 17MP 이하
+      if (srcBytes.length > 10 * 1024 * 1024) {
+        return json({ error: `소스 이미지가 너무 큽니다 (${(srcBytes.length / 1048576).toFixed(1)}MB / 최대 10MB)` }, 400, origin);
+      }
+      const dims = readImageSize(srcBytes);
+      if (dims && dims.width * dims.height * 4 > 17_000_000) {
+        return json({
+          error: `업스케일 결과가 17MP 제한을 초과합니다 (원본 ${dims.width}x${dims.height} → 2X ${dims.width * 2}x${dims.height * 2})`,
+        }, 400, origin);
+      }
+
+      sourceImage = { bytesBase64Encoded: uint8ToBase64(srcBytes) };
     }
 
-    if (!srcBytes || srcBytes.length === 0) return json({ error: "소스 이미지 바이트 없음" }, 500, origin);
-
-    // Imagen 업스케일 입력 제한: 원본 10MB 이하, 출력(=원본 해상도 x2) 17MP 이하
-    if (srcBytes.length > 10 * 1024 * 1024) {
-      return json({ error: `소스 이미지가 너무 큽니다 (${(srcBytes.length / 1048576).toFixed(1)}MB / 최대 10MB)` }, 400, origin);
-    }
-    const dims = readImageSize(srcBytes);
-    if (dims && dims.width * dims.height * 4 > 17_000_000) {
-      return json({
-        error: `업스케일 결과가 17MP 제한을 초과합니다 (원본 ${dims.width}x${dims.height} → 2X ${dims.width * 2}x${dims.height * 2})`,
-      }, 400, origin);
-    }
-
-    // 2) Vertex AI Imagen 업스케일 (동기 응답, 바이트 직접 전달)
-    const b64Input = uint8ToBase64(srcBytes);
+    // 2) Vertex AI Imagen 업스케일. 결과도 GCS 로 직접 받아 Worker 메모리를 태우지 않는다.
+    const stamp = Date.now();
+    const basePrefix = outParsed.object.replace(/\/$/, "");
+    const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
+    const outputPrefix = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x`;
     const location = String(env.VERTEX_LOCATION || "us-central1").trim() || "us-central1";
     // 업스케일 지원 모델만 사용. env로 덮어쓸 수 있고, 접근 권한이 없으면(404/403) 다음 후보로 폴백
     const modelCandidates = String(env.IMAGEN_UPSCALE_MODEL || "").trim()
       ? [String(env.IMAGEN_UPSCALE_MODEL).trim()]
       : ["imagen-4.0-upscale-preview", "imagegeneration@002"];
 
+    let resultObjectName = "";
     let b64Output = "";
     let usedModel = "";
     const attemptErrors: string[] = [];
@@ -117,6 +126,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         mode: "upscale",
         upscaleConfig: { upscaleFactor: "x2" },
         outputOptions: { mimeType: "image/png" },
+        // 결과를 응답 본문(base64)이 아니라 GCS 로 바로 쓰게 한다
+        storageUri: `gs://${outParsed.bucket}/${outputPrefix}/`,
       };
       // 구형 imagegeneration@* 계열은 sampleCount를 요구
       if (model.startsWith("imagegeneration@")) parameters.sampleCount = 1;
@@ -128,7 +139,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          instances: [{ prompt: "", image: { bytesBase64Encoded: b64Input } }],
+          instances: [{ prompt: "", image: sourceImage }],
           parameters,
         }),
       });
@@ -142,37 +153,47 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
 
       const vertexJson = safeJson(vertexText);
-      const out = String(vertexJson?.predictions?.[0]?.bytesBase64Encoded || "").trim();
-      if (!out) {
+      const prediction = vertexJson?.predictions?.[0] || {};
+      const outGcsUri = String(prediction?.gcsUri || "").trim();
+      const outBytes = String(prediction?.bytesBase64Encoded || "").trim();
+
+      if (outGcsUri) {
+        const parsedOut = parseGcsUri(outGcsUri);
+        if (!parsedOut) {
+          attemptErrors.push(`${model} → 결과 gcsUri 파싱 실패 (${outGcsUri})`);
+          continue;
+        }
+        resultObjectName = parsedOut.object;
+      } else if (outBytes) {
+        // storageUri 를 무시하는 모델을 위한 폴백 — 이때만 바이트가 Worker 를 지난다
+        b64Output = outBytes;
+      } else {
         attemptErrors.push(`${model} → 결과 이미지 없음`);
         continue;
       }
-      b64Output = out;
       usedModel = model;
       break;
     }
 
-    if (!b64Output) {
+    if (!resultObjectName && !b64Output) {
       return json({
         error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")}`,
         hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL 환경변수를 설정하세요.`,
       }, 502, origin);
     }
 
-    // 3) 결과 GCS 저장
-    const stamp = Date.now();
-    const basePrefix = outParsed.object.replace(/\/$/, "");
-    const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
-    const resultObjectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
-
-    const resultBytes = base64ToUint8(b64Output);
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
-    const upRes = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
-      body: resultBytes,
-    });
-    if (!upRes.ok) return json({ error: "GCS 결과 업로드 실패" }, 500, origin);
+    // 3) 폴백 경로에서만 결과를 직접 GCS 에 올린다
+    if (!resultObjectName) {
+      resultObjectName = `${outputPrefix}.png`;
+      const resultBytes = base64ToUint8(b64Output);
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
+      const upRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+        body: resultBytes,
+      });
+      if (!upRes.ok) return json({ error: "GCS 결과 업로드 실패" }, 500, origin);
+    }
 
     const signedUrl = await signGcsUrl({
       bucket: outParsed.bucket,
@@ -247,10 +268,14 @@ function readImageSize(bytes: Uint8Array): { width: number; height: number } | n
   return null;
 }
 
+/** 청크 단위로 묶어 변환한다. 바이트마다 문자열을 이어붙이면 큰 이미지에서 Worker CPU 한도를 넘긴다. */
 function uint8ToBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
+  const CHUNK = 0x8000;
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    parts.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)) as any));
+  }
+  return btoa(parts.join(""));
 }
 
 // ── Google OAuth2 / JWT ────────────────────────────────────────────────────────

@@ -184,6 +184,26 @@
       try { return String(value); } catch (_) { return ''; }
     }
 
+    // 아이콘은 lucide (https://lucide.dev/icons/) — copy / check
+    var COPY_ICON =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    var COPIED_ICON =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M20 6 9 17l-5-5"/></svg>';
+    var copyResetTimer = null;
+
+    /** 복사 버튼의 아이콘·라벨을 한 번에 바꾼다. 아이콘 버튼이라 textContent 를 쓰면 SVG 가 날아간다. */
+    function setCopyState(state) {
+      if (!refs || !refs.copy) return;
+      var label = state === 'ok' ? '복사됨' : (state === 'fail' ? '복사 실패' : '복사');
+      refs.copy.innerHTML = state === 'ok' ? COPIED_ICON : COPY_ICON;
+      refs.copy.classList.toggle('is-copied', state === 'ok');
+      var localized = localizeOnce(label);
+      refs.copy.title = localized;
+      refs.copy.setAttribute('aria-label', localized);
+    }
+
     function ensureMounted() {
       if (mounted) return true;
       if (typeof document === 'undefined' || !document.body) return false;
@@ -203,7 +223,7 @@
         '<pre id="nk-dialog-message" class="nk-dialog-message"></pre>' +
         '<input id="nk-dialog-input" class="nk-dialog-input" type="text" />' +
         '<div class="nk-dialog-actions">' +
-        '<button type="button" class="btn-secondary compact" id="nk-dialog-copy">복사</button>' +
+        '<button type="button" class="nk-dialog-copy" id="nk-dialog-copy" title="복사" aria-label="복사"></button>' +
         '<button type="button" class="btn-secondary compact" id="nk-dialog-cancel">취소</button>' +
         '<button type="button" class="btn-primary compact" id="nk-dialog-ok">확인</button>' +
         '</div>' +
@@ -226,6 +246,7 @@
       refs.ok && refs.ok.addEventListener('click', function () { closeCurrent(true); });
       refs.cancel && refs.cancel.addEventListener('click', function () { closeCurrent(false); });
       refs.copy && refs.copy.addEventListener('click', function () { copyCurrentMessage(); });
+      setCopyState('idle');
       document.addEventListener('keydown', function (evt) {
         if (!refs || !refs.root || !refs.root.classList.contains('is-open')) return;
         if (evt.key === 'Escape') {
@@ -268,13 +289,9 @@
           document.body.removeChild(ta);
         } catch (_) { ok = false; }
       }
-      if (refs.copy) {
-        var prev = refs.copy.textContent;
-        refs.copy.textContent = ok ? '복사됨' : '복사 실패';
-        setTimeout(function () {
-          if (refs && refs.copy) refs.copy.textContent = prev || '복사';
-        }, 1200);
-      }
+      setCopyState(ok ? 'ok' : 'fail');
+      clearTimeout(copyResetTimer);
+      copyResetTimer = setTimeout(function () { setCopyState('idle'); }, 1200);
     }
 
     /** 현재 런타임 언어로 1회 번역. 결과를 캐시하지 않는다. */
@@ -313,12 +330,18 @@
         refs.cancel.style.setProperty('display', wantsCancel ? 'inline-flex' : 'none', 'important');
         refs.cancel.hidden = !wantsCancel;
       }
-      if (refs.copy) refs.copy.style.display = opts.copy ? 'inline-flex' : 'none';
+      // 오류·경고 문구는 그대로 옮겨 붙여야 할 때가 많다 → 복사 아이콘은 항상 노출한다.
+      // (입력창이 주인공인 prompt 만 제외)
+      if (refs.copy) {
+        clearTimeout(copyResetTimer);
+        setCopyState('idle');
+        refs.copy.style.display = useInput ? 'none' : 'inline-flex';
+      }
       if (refs.ok) refs.ok.textContent = String(opts.okText || '확인');
       if (refs.cancel) refs.cancel.textContent = String(opts.cancelText || '취소');
 
-      // 단순 알림(버튼 1개, 복사/취소 없음)은 좁게·가운데·큰 버튼으로 표시
-      var simple = mode === 'alert' && !opts.copy;
+      // 단순 알림(취소 없음)은 좁게·가운데·큰 버튼으로 표시
+      var simple = mode === 'alert';
       refs.root.classList.toggle('is-simple', simple);
 
       // 실제로 그린 모드를 DOM 에 남긴다. closeCurrent 가 이 값과 큐의 모드를 대조해

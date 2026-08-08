@@ -41,11 +41,37 @@ test("confirm·prompt 는 취소 버튼을 display 와 hidden 양쪽으로 보�
 
 test("가운데 큰 버튼 스타일(is-simple)은 alert 에만 붙는다", () => {
   const core = read("prototype/core.js");
-  assert.match(core, /var simple = mode === 'alert' && !opts\.copy;/);
+  assert.match(core, /var simple = mode === 'alert';/);
   const css = read("prototype/styles.css");
   // 이 세 규칙이 합쳐져 "취소 없이 가운데 큰 버튼" 모습을 만든다
   assert.match(css, /\.nk-dialog-root\.is-simple \.nk-dialog-actions \{[^}]*justify-content: center/);
   assert.match(css, /\.nk-dialog-root\.is-simple #nk-dialog-ok \{/);
+});
+
+/**
+ * 오류·경고 문구는 그대로 복사해 공유해야 할 때가 많다. 예전에는 호출부가
+ * { copy: true } 를 넘겨야만 복사 버튼이 나와서, 정작 긴 서버 오류를 그대로 띄우는
+ * alert() 경로에는 복사 수단이 없었다.
+ */
+test("알림창의 복사 아이콘은 옵션 없이도 항상 보인다", () => {
+  const core = read("prototype/core.js");
+  // opts.copy 로 노출을 가르지 않는다 (입력창이 주인공인 prompt 만 제외)
+  assert.doesNotMatch(core, /refs\.copy\.style\.display = opts\.copy/);
+  assert.match(core, /refs\.copy\.style\.display = useInput \? 'none' : 'inline-flex';/);
+});
+
+test("복사 버튼은 아이콘이고, 상태가 바뀌어도 폭이 흔들리지 않는다", () => {
+  const core = read("prototype/core.js");
+  const css = read("prototype/styles.css");
+  // 아이콘 버튼이라 textContent 로 라벨을 갈아끼우면 SVG 가 날아간다
+  assert.match(core, /id="nk-dialog-copy"[^>]*aria-label="복사"><\/button>/);
+  assert.doesNotMatch(core, /refs\.copy\.textContent/);
+  assert.match(core, /function setCopyState\(state\)/);
+  // 복사됨/복사 실패 라벨은 title·aria-label 로만 바뀐다
+  assert.match(core, /var label = state === 'ok' \? '복사됨' : \(state === 'fail' \? '복사 실패' : '복사'\);/);
+  // 고정 폭 (상태가 바뀌어도 버튼이 커지거나 줄지 않는다)
+  assert.match(css, /\.nk-dialog-copy \{[^}]*min-width: 35px/);
+  assert.match(css, /\.nk-dialog-copy\.is-copied \{/);
 });
 
 test("큐의 머리를 참조하지 않는다 (낡은 모달이 다시 그려지는 것 차단)", () => {
