@@ -281,39 +281,41 @@ function shortGoogleError(text: string): string {
 }
 
 /**
- * 업스케일 모델을 하나도 못 쓸 때, 원인이 "API 미활성화"인지 "모델 미제공"인지 가른다.
- * 프로젝트가 실제로 볼 수 있는 Imagen 계열 모델 이름을 그대로 돌려준다.
+ * 업스케일 모델을 하나도 못 쓸 때, 원인이 "자격증명·API 문제"인지 "그 모델만 미제공"인지 가른다.
+ *
+ * 예전에는 publishers/google/models 목록을 근거로 썼는데, 그 목록은 resnet50·bert-base 같은
+ * 구형 배포용 카탈로그라 Gemini·Imagen 이 애초에 들어 있지 않다. 그걸 "이미지 모델 없음"으로
+ * 읽고 엉뚱한 결론(프로젝트에 Imagen 권한 없음)을 냈던 적이 있어, 대조 호출로 바꿨다.
  */
 async function diagnoseVertexAccess(location: string, projectId: string, token: string): Promise<string> {
-  const url = `https://${vertexHost(location)}/v1beta1/publishers/google/models?pageSize=200`;
+  const probeModel = "gemini-2.5-flash";
+  const url = `https://${vertexHost(location)}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${probeModel}:generateContent`;
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": projectId },
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "x-goog-user-project": projectId,
+      },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping" }] }] }),
       signal: AbortSignal.timeout(10000),
     });
   } catch (e: any) {
-    return `모델 목록 조회 실패: ${e?.message || e}`;
+    return `대조 호출 실패: ${e?.message || e}`;
   }
 
   const text = await res.text();
-  if (!res.ok) {
-    const msg = shortGoogleError(text);
-    if (/SERVICE_DISABLED|has not been used in project|is disabled/i.test(text)) {
-      return `Vertex AI API 가 프로젝트 ${projectId} 에서 비활성화 상태입니다 → aiplatform.googleapis.com 을 활성화하세요. (${msg})`;
-    }
-    return `모델 목록 조회 실패 (${res.status}): ${msg}`;
+  if (res.ok) {
+    // 같은 자격증명·리전으로 다른 퍼블리셔 모델은 되는데 업스케일 모델만 404 → 모델 미제공
+    return `대조 호출(${probeModel}) 정상 → 자격증명·리전·Vertex API 모두 문제 없음. 이 프로젝트에 Imagen 업스케일 모델이 제공되지 않는 것으로 보입니다.`;
   }
-
-  const list: any[] = Array.isArray(safeJson(text)?.publisherModels) ? safeJson(text).publisherModels : [];
-  const names = list
-    .map((m) => String(m?.name || "").split("/").pop() || "")
-    .filter(Boolean);
-  const imageModels = names.filter((n) => /imagen|imagegeneration|upscal/i.test(n));
-  if (!names.length) return `${location} 에서 조회된 퍼블리셔 모델이 없습니다.`;
-  if (imageModels.length) return `${location} 에서 사용 가능한 이미지 모델: ${imageModels.join(", ")}`;
-  // 필터가 헛짚었을 수도 있으니 실제 이름을 몇 개 보여준다 (판단 근거를 눈으로 확인)
-  return `${location} 에서 이미지 계열 모델이 보이지 않습니다 (전체 ${names.length}개). 예: ${names.slice(0, 25).join(", ")}`;
+  const msg = shortGoogleError(text);
+  if (/SERVICE_DISABLED|has not been used in project|is disabled/i.test(text)) {
+    return `Vertex AI API 가 프로젝트 ${projectId} 에서 비활성화 상태입니다 → aiplatform.googleapis.com 을 활성화하세요. (${msg})`;
+  }
+  return `대조 호출(${probeModel})도 ${res.status} 로 실패 → 모델 문제가 아니라 자격증명·권한 문제일 수 있습니다. (${msg})`;
 }
 
 function json(data: any, status = 200, origin?: string | null) {
