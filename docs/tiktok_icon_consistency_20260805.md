@@ -24,7 +24,7 @@
 | 8 | OG 카드 `og-landing.png` | **NK 모노그램** | ❌ #1과 다름 |
 
 ### 1-2. 전수조사에서 추가로 나온 더 큰 구멍
-`prototype/` HTML 34개 중 **19개에 `<link rel="icon">`이 아예 없다.**
+`prototype/` HTML **29개**(하위 `ai-company/index.html` 포함) 중 **19개에 `<link rel="icon">`이 아예 없다.**
 
 ```
 admin / ai-image / ai-image-stage / ai-video / analytics / brand / brand-dashboard /
@@ -98,7 +98,7 @@ HTML은 건드리지 않고 CSS만 바꾼다. 변경 최소화.
 `border-radius:6px` 제거: SVG가 자체 라운드(rx 12/64)를 갖고 있어 CSS로 한 번 더 깎으면
 파비콘과 모서리가 미세하게 달라진다. 심사 기준은 "동일 아이콘"이므로 원본 형태 그대로 노출한다.
 
-### B. 파비콘 선언 전역 통일 — HTML 34개 전부
+### B. 파비콘 선언 전역 통일 — HTML 29개 전부
 
 모든 페이지 `<head>`에 아래 5줄이 있어야 한다. **루트 상대경로(`/`)로 쓴다** —
 `ai-company/`가 하위 디렉터리라 상대경로면 깨진다.
@@ -179,3 +179,33 @@ Unified app icon: portal icon, website logo and favicon now use the same NK mark
 ## 6. 승인 후 할 일 (기존 목록 유지)
 `TIKTOK_APP_AUDITED=true` / 영상 분할 업로드(현재 64MB 가드) / 64MB 에러 메시지 영문 병기 /
 creator_info 프리페치 / `video.list` Display API 별도 신청 / 사진 게시용 title 입력란 분리
+
+
+---
+
+## 7. 실행 결과 (2026-08-05 마감)
+
+- 코드 커밋 `5b898849` → `origin/main`. 앱 버전 `v3.1483`. 테스트 521개 통과.
+- 코드가 추가 판단으로 처리한 2건(타당, 유지):
+  - `ai-company-app/index.html`(Vite 원본)도 수정 — 빌드 시 `prototype/ai-company/index.html`을
+    덮어써서 아바타 아이콘이 되살아나는 회귀를 막음.
+  - `.gitignore`에 `_brand_backup_20260805/` 추가.
+- **라이브 검증 완료** (브라우저 실측):
+  - 8개 페이지 전부 아이콘 link 5줄 / 옛 상대경로 0건 / 아바타 아이콘 0건
+  - `/favicon.ico` 200 (3147B), `/favicon-32.png` 200, `/apple-touch-icon.png` 200,
+    `/images/logo.png` 200 (13108B), `/images/tiktok-app-icon-1024.png` 200 (33852B)
+    → 전부 신규 자산 바이트와 일치
+  - 랜딩 헤더 `.logo i` 계산값 = `url("https://nkstudio.org/favicon.svg")`, `border-radius: 0px`
+  - 랜딩 헤더·로그인 카드 육안 확인 = NK 모노그램
+- **포털 재제출 완료**: Production → Return to Draft → 아이콘 교체 → Save → Submit for review.
+  상태 `In review`, 우상단 `Recall` 노출. 제출 사유 114자 사용.
+  제출 후 유지 확인: Products 2개 / Scopes 3개 / Review description 999자 / 데모영상 01·02·03.mp4.
+
+### 이번에 겪은 함정 (다음에 반복 금지)
+1. **`Return to Draft` 는 미저장 아이콘을 날린다.** 순서는 반드시
+   `Return to Draft` → `Confirm` → 아이콘 업로드 → `Save` → `Submit for review`.
+   Not approved 상태에서 먼저 올린 아이콘은 Draft 전환 시 사라진다.
+2. **`device_stage_files` 는 같은 경로를 재stage해도 컨테이너 파일이 갱신되지 않는다.**
+   응답의 `bytes` 는 새 값을 보고하지만 실파일은 구 스냅샷이다. 하마터면 구 뇌 아이콘을
+   그대로 재업로드할 뻔했다(`file_upload` 응답의 "1067 KB" 로 발견). 업로드 전
+   `md5sum` 으로 컨테이너 실파일을 직접 검증하고, 내용이 바뀌었으면 **새 파일명으로 복사해 stage** 한다.
