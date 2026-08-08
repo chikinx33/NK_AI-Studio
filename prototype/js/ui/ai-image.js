@@ -82,10 +82,17 @@
       promptPlaceholderText: '원하는 이미지의 장면, 스타일, 색감, 구도, 재질감을 설명해 주세요.',
       promptPlaceholderImage: '소스 이미지를 어떻게 바꾸거나 유지할지 설명해 주세요. 예: 같은 구도는 유지하고 수채화 질감으로 바꾸기',
       aspectLabel: '비율',
+      aspectFreeHint: '비율을 프롬프트로 자유롭게 지정',
       sizeLabel: '해상도',
       sizeFast: '빠름(512)',
       sizeStd: '표준(1K)',
       sizeHigh: '고품질(2K)',
+      cropButton: '이미지 자르기',
+      cropSave: '자른 이미지 등록',
+      cropCancel: '취소',
+      cropRegistered: '잘린 이미지를 소스로 등록했습니다.',
+      cropFailed: '이미지 자르기 실패: ',
+      upscale4k: '업스케일 4K',
       providerLabel: '이미지 모델',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
@@ -233,10 +240,17 @@
       promptPlaceholderText: 'Describe the scene, style, lighting, composition, and textures you want.',
       promptPlaceholderImage: 'Describe what to preserve or transform from the source image. Example: keep the same composition and convert it into watercolor.',
       aspectLabel: 'Aspect ratio',
+      aspectFreeHint: 'Set the aspect ratio freely via the prompt',
       sizeLabel: 'Image size',
       sizeFast: 'Fast (512)',
       sizeStd: 'Standard (1K)',
       sizeHigh: 'High (2K)',
+      cropButton: 'Crop image',
+      cropSave: 'Register cropped image',
+      cropCancel: 'Cancel',
+      cropRegistered: 'Cropped image added to sources.',
+      cropFailed: 'Crop failed: ',
+      upscale4k: 'Upscale (4K)',
       providerLabel: 'Image model',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
@@ -1491,8 +1505,155 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"></circle><path d="M6.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5"></path></svg>';
   }
 
-  function upscaleIconSvg() {
-    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 16l8-8"></path><path d="M12 8h4v4"></path></svg>';
+  // lucide "crop" (https://lucide.dev/icons/crop)
+  function cropIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"></path><path d="M18 22V8a2 2 0 0 0-2-2H2"></path></svg>';
+  }
+
+  /**
+   * 이미지 자르기 도구. 미리보기 이미지 위에 크롭 영역을 드래그로 조절하고,
+   * 저장하면 원본 해상도 기준으로 잘라 소스 이미지로 등록한다.
+   * 코너 핸들 4개 = 크기 조절, 영역 내부 드래그 = 이동.
+   */
+  function openCropTool(url) {
+    var src = String(url || '').trim();
+    if (!src) return;
+    var existing = document.getElementById('ai-image-crop-overlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+
+    var overlay = document.createElement('div');
+    overlay.id = 'ai-image-crop-overlay';
+    overlay.className = 'ai-image-crop-overlay';
+    overlay.innerHTML =
+      '<div class="ai-image-crop-panel">' +
+      '<div class="ai-image-crop-stage"><div class="ai-image-crop-media">' +
+      '<img class="ai-image-crop-img" alt="" />' +
+      '<div class="ai-image-crop-box">' +
+      ['nw', 'ne', 'sw', 'se'].map(function (pos) {
+        return '<span class="ai-image-crop-handle is-' + pos + '" data-crop-handle="' + pos + '"></span>';
+      }).join('') +
+      '</div>' +
+      '</div></div>' +
+      '<div class="ai-image-crop-actions">' +
+      '<button type="button" class="btn-secondary compact" data-crop-action="cancel">' + escapeHtml(t('cropCancel')) + '</button>' +
+      '<button type="button" class="btn-primary compact" data-crop-action="save">' + escapeHtml(t('cropSave')) + '</button>' +
+      '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var img = overlay.querySelector('.ai-image-crop-img');
+    var media = overlay.querySelector('.ai-image-crop-media');
+    var box = overlay.querySelector('.ai-image-crop-box');
+    // 크롭 좌표는 표시 이미지 기준 px. 저장 시 natural 해상도로 환산한다.
+    var crop = { x: 0, y: 0, w: 0, h: 0 };
+    var MIN_CROP = 24;
+
+    function applyBox() {
+      box.style.left = crop.x + 'px';
+      box.style.top = crop.y + 'px';
+      box.style.width = crop.w + 'px';
+      box.style.height = crop.h + 'px';
+    }
+
+    function close() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.removeEventListener('keydown', onKey);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+
+    // CORS: GCS 서명 URL 은 ACAO * 를 주므로 anonymous 로 받으면 canvas 가 오염되지 않는다
+    if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous';
+    img.onload = function () {
+      var rect = img.getBoundingClientRect();
+      var w = rect.width, h = rect.height;
+      crop = { x: Math.round(w * 0.1), y: Math.round(h * 0.1), w: Math.round(w * 0.8), h: Math.round(h * 0.8) };
+      applyBox();
+    };
+    img.onerror = function () {
+      close();
+      alert(t('cropFailed') + 'image load error');
+    };
+    img.src = src;
+
+    var drag = null; // { mode: 'move'|'nw'|..., startX, startY, base: {...crop} }
+
+    function boundsRect() {
+      var r = img.getBoundingClientRect();
+      return { w: r.width, h: r.height };
+    }
+
+    box.addEventListener('pointerdown', function (ev) {
+      var handle = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-crop-handle');
+      drag = { mode: handle || 'move', startX: ev.clientX, startY: ev.clientY, base: { x: crop.x, y: crop.y, w: crop.w, h: crop.h } };
+      ev.preventDefault();
+    });
+    function onMove(ev) {
+      if (!drag) return;
+      var b = boundsRect();
+      var dx = ev.clientX - drag.startX;
+      var dy = ev.clientY - drag.startY;
+      var base = drag.base;
+      var next = { x: base.x, y: base.y, w: base.w, h: base.h };
+      if (drag.mode === 'move') {
+        next.x = Math.min(Math.max(0, base.x + dx), b.w - base.w);
+        next.y = Math.min(Math.max(0, base.y + dy), b.h - base.h);
+      } else {
+        // 코너별로 반대편 모서리를 고정한 채 크기를 바꾼다
+        var left = base.x, top = base.y, right = base.x + base.w, bottom = base.y + base.h;
+        if (drag.mode === 'nw') { left = base.x + dx; top = base.y + dy; }
+        if (drag.mode === 'ne') { right = base.x + base.w + dx; top = base.y + dy; }
+        if (drag.mode === 'sw') { left = base.x + dx; bottom = base.y + base.h + dy; }
+        if (drag.mode === 'se') { right = base.x + base.w + dx; bottom = base.y + base.h + dy; }
+        left = Math.min(Math.max(0, left), right - MIN_CROP);
+        top = Math.min(Math.max(0, top), bottom - MIN_CROP);
+        right = Math.max(Math.min(b.w, right), left + MIN_CROP);
+        bottom = Math.max(Math.min(b.h, bottom), top + MIN_CROP);
+        next = { x: left, y: top, w: right - left, h: bottom - top };
+      }
+      crop = next;
+      applyBox();
+    }
+    function onUp() { drag = null; }
+    function onKey(ev) { if (ev.key === 'Escape') close(); }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.addEventListener('keydown', onKey);
+
+    overlay.addEventListener('click', function (ev) {
+      if (ev.target === overlay) { close(); return; }
+      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-crop-action]') : null;
+      if (!btn) return;
+      var actionName = btn.getAttribute('data-crop-action');
+      if (actionName === 'cancel') { close(); return; }
+      if (actionName !== 'save') return;
+      try {
+        var rect = img.getBoundingClientRect();
+        if (!rect.width || !rect.height || !img.naturalWidth) throw new Error('image not ready');
+        var scaleX = img.naturalWidth / rect.width;
+        var scaleY = img.naturalHeight / rect.height;
+        var sx = Math.max(0, Math.round(crop.x * scaleX));
+        var sy = Math.max(0, Math.round(crop.y * scaleY));
+        var sw = Math.min(img.naturalWidth - sx, Math.round(crop.w * scaleX));
+        var sh = Math.min(img.naturalHeight - sy, Math.round(crop.h * scaleY));
+        if (sw < 2 || sh < 2) throw new Error('crop too small');
+        var canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        var dataUrl = canvas.toDataURL('image/png');
+        var entry = makeSourceImage(dataUrl, 'crop ' + sw + 'x' + sh, 'upload');
+        var added = appendSourceImages([entry]);
+        if (added.hitLimit) { alert(t('sourceLimitReached')); return; }
+        if (added.addedIds && added.addedIds[0]) state.selectedSourceId = String(added.addedIds[0]);
+        close();
+        updateSourceUI();
+        updatePreviewPanelUI();
+        if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
+      } catch (err) {
+        alert(t('cropFailed') + (err && err.message ? err.message : err));
+      }
+    });
   }
 
   function trashIconGlyph() {
@@ -1755,6 +1916,7 @@
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === 'free' ? ' active' : '') + '" data-action="set-aspect" data-ratio="free" title="' + escapeHtml(t('aspectFreeHint')) + '">Free</button>' +
         '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
         '</div>' +
       '</div>' +
@@ -1789,6 +1951,7 @@
           '<img src="' + escapeHtml(previewUrl) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
           '<button type="button" class="ai-image-clear-fab" data-action="clear-preview" aria-label="' + escapeHtml(t('clearPreview')) + '" title="' + escapeHtml(t('clearPreview')) + '">' + clearPreviewIconSvg() + '</button>' +
+          '<button type="button" class="ai-image-crop-fab" data-action="open-crop-tool" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('cropButton')) + '" title="' + escapeHtml(t('cropButton')) + '">' + cropIconSvg() + '</button>' +
           '<button type="button" class="ai-image-camera-fab' + (cameraPanelActive ? ' is-active' : '') + '" data-action="toggle-camera-panel" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
@@ -1798,7 +1961,8 @@
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">' + upscaleIconSvg() + '</button>' +
+                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-size="2K" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">2K</button>' +
+                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-size="4K" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale4k')) + '" title="' + escapeHtml(t('upscale4k')) + '">4K</button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
               (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
@@ -1823,7 +1987,8 @@
               '</div>'
               : (preview && preview.type === 'source'
                 ? '<div class="ai-image-inline-actions"><div class="ai-image-inline-actions-left">' +
-                  '<button type="button" class="btn-primary compact ai-image-upscale-btn" data-action="upscale-source-2x" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscaleSource2x')) + '" title="' + escapeHtml(t('upscaleSource2x')) + '">' + upscaleIconSvg() + ' 2×</button>' +
+                  '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-source-2x" data-size="2K" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">2K</button>' +
+                  '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-source-2x" data-size="4K" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscale4k')) + '" title="' + escapeHtml(t('upscale4k')) + '">4K</button>' +
                   '</div></div>'
                 : '')) +
               '<div class="ai-image-preview-meta">' +
@@ -2089,11 +2254,11 @@
           sourceBtn.setAttribute('aria-label', t('useAsSource'));
           sourceBtn.setAttribute('title', t('useAsSource'));
         }
-            var upscaleBtn = root.querySelector('[data-action="upscale-result-2k"]');
-            if (upscaleBtn) {
-              upscaleBtn.setAttribute('aria-label', t('upscale2k'));
-              upscaleBtn.setAttribute('title', t('upscale2k'));
-            }
+            Array.prototype.forEach.call(root.querySelectorAll('[data-action="upscale-result-2k"]'), function (b) {
+              var sizeKey = String(b.getAttribute('data-size') || '2K') === '4K' ? 'upscale4k' : 'upscale2k';
+              b.setAttribute('aria-label', t(sizeKey));
+              b.setAttribute('title', t(sizeKey));
+            });
         var downloadBtn = root.querySelector('[data-action="download-result"]');
         if (downloadBtn) {
           downloadBtn.setAttribute('aria-label', t('download'));
@@ -3452,6 +3617,10 @@
           openCameraStudio();
           return;
         }
+        if (action === 'open-crop-tool') {
+          openCropTool(btn.getAttribute('data-url'));
+          return;
+        }
         if (action === 'clear-preview') {
           state.currentResultId = '';
           state.previewTargetType = 'none';
@@ -3791,6 +3960,7 @@
               setGlobalLoading(true, t('generating'));
               NK.api.upscale({
                 objectName: ruObjectName,
+                imageSize: String(btn.getAttribute('data-size') || '2K'),
                 sessionId: state.sessionId,
                 storageService: 'ai-image'
               }).then(function (responseUpscale) {
@@ -3840,6 +4010,7 @@
             NK.api.upscale({
               objectName: srcObjectName,
               imageUrl: srcObjectName ? '' : srcUrl,
+              imageSize: String(btn.getAttribute('data-size') || '2K'),
               sessionId: state.sessionId,
               storageService: 'ai-image'
             }).then(function (responseUpscaleSrc) {

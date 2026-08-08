@@ -18,8 +18,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const body = await request.json().catch(() => ({} as any));
     const prompt = normalizePrompt((body?.prompt ?? "").toString().trim());
-    const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim();
-    const allowed = new Set(["16:9", "9:16", "1:1"]);
+    const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim().toLowerCase() === "free"
+      ? "free"
+      : (body?.aspectRatio ?? "16:9").toString().trim();
+    // "free" = 비율을 강제하지 않고 프롬프트가 정하게 둔다
+    const allowed = new Set(["16:9", "9:16", "1:1", "free"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
     const incomingReferenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages : [];
     const incomingConversationHistory = Array.isArray(body?.conversationHistory) ? body.conversationHistory : [];
@@ -405,15 +408,14 @@ function buildGeminiContents(
 }
 
 function buildGeminiGenerationConfig(model: string, aspectRatio: string, imageSize: string) {
-  const config: Record<string, unknown> = {
-    responseModalities: ["IMAGE"],
-    imageConfig: {
-      aspectRatio,
-    }
-  };
+  // "free"면 aspectRatio 를 아예 보내지 않는다 — 모델이 프롬프트의 비율 지시를 따르게 둔다
+  const imageConfig: Record<string, unknown> = {};
+  if (aspectRatio && aspectRatio !== "free") imageConfig.aspectRatio = aspectRatio;
   if (/gemini-3\./i.test(model) || /image-preview/i.test(model)) {
-    (config.imageConfig as Record<string, unknown>).imageSize = imageSize;
+    imageConfig.imageSize = imageSize;
   }
+  const config: Record<string, unknown> = { responseModalities: ["IMAGE"] };
+  if (Object.keys(imageConfig).length) config.imageConfig = imageConfig;
   return config;
 }
 
@@ -437,7 +439,8 @@ function buildGeminiImagePrompt(
   targetAspect?: string
 ) {
   const base = normalizePrompt(prompt);
-  const aspectLine = targetAspect
+  // "free"는 비율 강제 문장을 넣지 않는다 — 프롬프트가 비율을 정한다
+  const aspectLine = targetAspect && targetAspect !== "free"
     ? `The output image MUST use aspect ratio exactly ${targetAspect}, identical to the source. Do not change the canvas shape or proportions.`
     : "";
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
@@ -615,6 +618,7 @@ function mapAspectToOpenAISize(aspectRatio: string): string {
   switch (aspectRatio) {
     case "9:16": return "1024x1536";
     case "1:1": return "1024x1024";
+    case "free": return "auto"; // 비율 자유 — 모델이 프롬프트에 맞춰 고른다
     case "16:9":
     default: return "1536x1024";
   }

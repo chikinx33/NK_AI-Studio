@@ -887,10 +887,42 @@ body.layout-fixed.page-shell-image .content {
   height: 18px;
 }
 
-.ai-image-clear-fab {
+/* FAB 세로 스택: 비우기(112) → 자르기(62) → 카메라(12) */
+.ai-image-crop-fab {
   position: absolute;
   right: 12px;
   bottom: 62px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  background: rgba(8, 12, 18, 0.84);
+  color: #bae6fd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.ai-image-crop-fab:hover {
+  border-color: rgba(125, 211, 252, 0.55);
+  color: #e0f2fe;
+}
+
+.ai-image-crop-fab .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-image-clear-fab {
+  position: absolute;
+  right: 12px;
+  bottom: 112px;
   width: 42px;
   height: 42px;
   min-width: 42px;
@@ -1121,6 +1153,13 @@ body.layout-fixed.page-shell-image .content {
   padding: 0;
   font-size: 0;
   text-align: center;
+}
+
+/* 2K/4K 업스케일 — 아이콘 자리에 텍스트 라벨. 고정 폭 유지(상태 변화로 폭이 흔들리면 안 됨) */
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-upscale-btn {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-action-icon .icon {
@@ -1812,4 +1851,87 @@ body.layout-fixed.page-shell-image .content {
     min-width: 42px;
     padding: 3px 8px;
   }
+}
+
+/* ── 이미지 자르기 도구 ──────────────────────────────────────────────────── */
+
+.ai-image-crop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500; /* 전역 다이얼로그(10000)보다 아래, 페이지 위 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 8, 16, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.ai-image-crop-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: min(920px, 92vw);
+  max-height: 88vh;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.ai-image-crop-stage {
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-image-crop-media {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.ai-image-crop-img {
+  display: block;
+  max-width: min(860px, 86vw);
+  max-height: 68vh;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ai-image-crop-box {
+  position: absolute;
+  border: 1.5px dashed rgba(255, 214, 130, 0.95);
+  /* 바깥 영역 어둡게: 거대한 그림자를 잘라낼 영역 밖에 깐다 */
+  box-shadow: 0 0 0 9999px rgba(4, 8, 16, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+
+.ai-image-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #0b1220;
+  background: #ffd882;
+  touch-action: none;
+}
+
+.ai-image-crop-handle.is-nw { left: -8px; top: -8px; cursor: nwse-resize; }
+.ai-image-crop-handle.is-ne { right: -8px; top: -8px; cursor: nesw-resize; }
+.ai-image-crop-handle.is-sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.ai-image-crop-handle.is-se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+.ai-image-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-image-crop-actions .btn-secondary,
+.ai-image-crop-actions .btn-primary {
+  min-width: 96px; /* 상태와 무관한 고정 폭 */
 }

@@ -190,7 +190,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     // 2-b) 기본 경로: Gemini 이미지 모델로 원본 충실 재현 업스케일 (global 에서 200 확인됨)
-    const upscaleSize = String(env.UPSCALE_IMAGE_SIZE || "2K").trim() || "2K";
+    // 해상도는 요청(body.imageSize: "2K"|"4K")이 우선, 없으면 env, 기본 2K
+    const sizeIncoming = String(body?.imageSize || "").trim().toUpperCase();
+    const upscaleSize = ["1K", "2K", "4K"].includes(sizeIncoming)
+      ? sizeIncoming
+      : (String(env.UPSCALE_IMAGE_SIZE || "2K").trim() || "2K");
     if (!resultObjectName && !b64Output) {
       const geminiModel = String(env.GEMINI_UPSCALE_MODEL || "gemini-3.1-flash-image").trim();
       const loc = "global";
