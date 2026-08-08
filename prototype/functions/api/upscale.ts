@@ -121,14 +121,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const modelCandidates = String(env.IMAGEN_UPSCALE_MODEL || "").trim()
       ? [String(env.IMAGEN_UPSCALE_MODEL).trim()]
       : ["imagen-4.0-upscale-preview", "imagegeneration@002"];
+    // 최신 Imagen 계열은 리전 엔드포인트에 없고 global 에만 있는 경우가 있다 → 둘 다 훑는다
+    const locationCandidates = String(env.VERTEX_LOCATION || "").trim()
+      ? [location]
+      : [location, "global"];
+    const attempts: Array<{ model: string; loc: string }> = [];
+    for (const model of modelCandidates) {
+      for (const loc of locationCandidates) attempts.push({ model, loc });
+    }
 
     let resultObjectName = "";
     let b64Output = "";
     let usedModel = "";
+    let usedLocation = "";
     const attemptErrors: string[] = [];
 
-    for (const model of modelCandidates) {
-      const vertexEndpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+    for (const { model, loc } of attempts) {
+      const vertexEndpoint = `https://${vertexHost(loc)}/v1/projects/${projectId}/locations/${loc}/publishers/google/models/${model}:predict`;
       const parameters: Record<string, any> = {
         mode: "upscale",
         upscaleConfig: { upscaleFactor: "x2" },
@@ -171,7 +180,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
       const vertexText = await vertexRes.text();
       if (!vertexRes.ok) {
-        attemptErrors.push(`${model} → ${vertexRes.status}: ${vertexText.slice(0, 200)}`);
+        attemptErrors.push(`${model}@${loc} → ${vertexRes.status}: ${shortGoogleError(vertexText)}`);
         // 모델 미존재/권한 없음이면 다음 후보로, 그 외 오류는 즉시 중단
         if (vertexRes.status === 404 || vertexRes.status === 403) continue;
         return json({ error: `Vertex AI 업스케일 오류 (${vertexRes.status}): ${vertexText.slice(0, 400)}` }, 500, origin);
@@ -185,7 +194,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (outGcsUri) {
         const parsedOut = parseGcsUri(outGcsUri);
         if (!parsedOut) {
-          attemptErrors.push(`${model} → 결과 gcsUri 파싱 실패 (${outGcsUri})`);
+          attemptErrors.push(`${model}@${loc} → 결과 gcsUri 파싱 실패 (${outGcsUri})`);
           continue;
         }
         resultObjectName = parsedOut.object;
@@ -193,17 +202,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         // storageUri 를 무시하는 모델을 위한 폴백 — 이때만 바이트가 Worker 를 지난다
         b64Output = outBytes;
       } else {
-        attemptErrors.push(`${model} → 결과 이미지 없음`);
+        attemptErrors.push(`${model}@${loc} → 결과 이미지 없음`);
         continue;
       }
       usedModel = model;
+      usedLocation = loc;
       break;
     }
 
     if (!resultObjectName && !b64Output) {
+      // 후보를 다 못 쓰면 "왜 못 쓰는지"까지 같이 알려준다. 이게 없으면 404 문구만 보고
+      // 모델 이름을 바꿔가며 배포를 반복하게 된다(실제로 그렇게 두 번 헛돌았다).
+      const diagnostic = await diagnoseVertexAccess(location, projectId, accessToken);
+      // 화면은 error 필드만 읽는다 → 진단 결과를 여기에 같이 담아야 사용자 눈에 닿는다
       return json({
-        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")}`,
-        hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL 환경변수를 설정하세요.`,
+        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")} · 진단: ${diagnostic}`,
+        diagnostic,
+        hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL, 리전은 VERTEX_LOCATION 환경변수를 설정하세요.`,
       }, 500, origin);
     }
 
@@ -234,6 +249,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       dataUrl: "",
       imageSizeApplied: "2X",
       model: usedModel,
+      location: usedLocation,
       provider: "google",
       storageService,
       sessionId,
@@ -246,6 +262,53 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
 function safeJson(text: string): any {
   try { return JSON.parse(text); } catch { return {}; }
+}
+
+/** global 은 리전 접두사가 없는 호스트를 쓴다 */
+function vertexHost(location: string): string {
+  return location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
+}
+
+/** Google 오류 JSON 에서 message 만 뽑는다. 원문을 통째로 흘리면 화면이 JSON 으로 뒤덮인다. */
+function shortGoogleError(text: string): string {
+  const msg = String(safeJson(text)?.error?.message || "").trim();
+  return (msg || String(text || "")).slice(0, 180);
+}
+
+/**
+ * 업스케일 모델을 하나도 못 쓸 때, 원인이 "API 미활성화"인지 "모델 미제공"인지 가른다.
+ * 프로젝트가 실제로 볼 수 있는 Imagen 계열 모델 이름을 그대로 돌려준다.
+ */
+async function diagnoseVertexAccess(location: string, projectId: string, token: string): Promise<string> {
+  const url = `https://${vertexHost(location)}/v1beta1/publishers/google/models?pageSize=200`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": projectId },
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (e: any) {
+    return `모델 목록 조회 실패: ${e?.message || e}`;
+  }
+
+  const text = await res.text();
+  if (!res.ok) {
+    const msg = shortGoogleError(text);
+    if (/SERVICE_DISABLED|has not been used in project|is disabled/i.test(text)) {
+      return `Vertex AI API 가 프로젝트 ${projectId} 에서 비활성화 상태입니다 → aiplatform.googleapis.com 을 활성화하세요. (${msg})`;
+    }
+    return `모델 목록 조회 실패 (${res.status}): ${msg}`;
+  }
+
+  const list: any[] = Array.isArray(safeJson(text)?.publisherModels) ? safeJson(text).publisherModels : [];
+  const names = list
+    .map((m) => String(m?.name || "").split("/").pop() || "")
+    .filter(Boolean);
+  const imageModels = names.filter((n) => /imagen|imagegeneration|upscal/i.test(n));
+  if (!names.length) return `${location} 에서 조회된 퍼블리셔 모델이 없습니다.`;
+  return imageModels.length
+    ? `${location} 에서 사용 가능한 이미지 모델: ${imageModels.join(", ")}`
+    : `${location} 에서 이미지 계열 모델이 보이지 않습니다 (전체 ${names.length}개 조회됨).`;
 }
 
 function json(data: any, status = 200, origin?: string | null) {
