@@ -1559,11 +1559,7 @@
       }
     }
     if (!objectName) return src;
-    var token = '';
-    try {
-      token = String(localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || '').trim();
-    } catch (_) { }
-    return '/api/media/proxy?objectName=' + encodeURIComponent(objectName) + (token ? ('&nk_token=' + encodeURIComponent(token)) : '');
+    return resolveResultUrl({ objectName: objectName, url: src });
   }
 
   function openCropTool(url) {
@@ -3547,8 +3543,12 @@
         return { url: preview.url, name: preview.name || t('latestResult') };
       },
       getShots: function () {
+        // url 을 그대로 넘기면 갤러리·상세 모달이 만료된 GCS 서명 URL(1시간)을 물어 깨진다.
+        // 히스토리·미리보기와 동일하게 objectName 기반 프록시 URL 로 바꿔서 넘긴다.
         return state.results.filter(function (item) {
           return item && item.cameraShot && String(item.url || '').trim();
+        }).map(function (item) {
+          return Object.assign({}, item, { url: resolveResultUrl(item) });
         });
       },
       generate: generateCinematicShot,

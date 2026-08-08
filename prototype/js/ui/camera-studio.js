@@ -280,7 +280,8 @@
     return shots.map(function (result) {
       return '' +
         '<div class="nk-camstudio-shot" data-camstudio="open-shot" data-id="' + esc(result.id) + '" role="button" tabindex="0">' +
-          '<img src="' + esc(result.url) + '" alt="" loading="lazy" />' +
+          // 링크가 죽은 옛 기록은 깨진 아이콘 대신 빈 칸으로 둔다 (만료된 서명 URL 등)
+          '<img src="' + esc(result.url) + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'" />' +
           '<div class="nk-camstudio-shot-hover">' + icon('maximize', 28) + '<p>' + esc(t('viewDetail')) + '</p></div>' +
         '</div>';
     }).join('');
