@@ -158,6 +158,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
+            // 이 헤더가 없으면 Vertex 는 "호출한 자격증명의 소속 프로젝트"를 기준으로 판단한다.
+            // 서비스 계정이 다른 프로젝트 소속이면 모델이 있어도 404(권한 없음을 감춘 응답)가 난다.
+            "x-goog-user-project": projectId,
           },
           body: JSON.stringify({
             instances: [{ prompt: "", image: sourceImage }],
@@ -216,8 +219,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const diagnostic = await diagnoseVertexAccess(location, projectId, accessToken);
       // 화면은 error 필드만 읽는다 → 진단 결과를 여기에 같이 담아야 사용자 눈에 닿는다
       return json({
-        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")} · 진단: ${diagnostic}`,
+        error: `Vertex AI 업스케일 실패 — 사용 가능한 업스케일 모델이 없습니다. ${attemptErrors.join(" | ")} · 호출 계정: ${clientEmail} · 진단: ${diagnostic}`,
         diagnostic,
+        serviceAccount: clientEmail,
+        project: projectId,
         hint: `프로젝트 ${projectId}(${location})에서 Vertex AI API 활성화 및 Imagen 업스케일 모델 접근 권한을 확인하세요. 특정 모델을 강제하려면 IMAGEN_UPSCALE_MODEL, 리전은 VERTEX_LOCATION 환경변수를 설정하세요.`,
       }, 500, origin);
     }
