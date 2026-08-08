@@ -197,6 +197,44 @@
       '</div>';
   }
 
+  /**
+   * 프리셋 버튼 라벨 축약표. 버튼이 3행씩 차지해 생성 버튼이 화면 밖으로 밀리던 문제 때문에
+   * 화면에는 약자만 쓰고, 풀 명칭은 툴팁(title/aria-label)으로 알린다.
+   * 키는 constants 의 프리셋 키와 1:1 로 맞춘다.
+   */
+  var PRESET_LABELS = {
+    'Eye Level': { abbr: 'EL', ko: '아이 레벨', en: 'Eye Level' },
+    'Low Angle': { abbr: 'LA', ko: '로우 앵글', en: 'Low Angle' },
+    'High Angle': { abbr: 'HA', ko: '하이 앵글', en: 'High Angle' },
+    "Bird's Eye": { abbr: 'BE', ko: '버즈아이(부감)', en: "Bird's Eye" },
+    '45° Side': { abbr: '45S', ko: '45° 측면', en: '45° Side' },
+    'Profile': { abbr: 'PRF', ko: '프로파일(정측면)', en: 'Profile' },
+    'Over the Shoulder': { abbr: 'OTS', ko: '오버 더 숄더', en: 'Over the Shoulder' },
+    "Worm's Eye": { abbr: 'WE', ko: '웜즈아이(앙각)', en: "Worm's Eye" },
+    'Extreme CU': { abbr: 'ECU', ko: '익스트림 클로즈업', en: 'Extreme Close Up' },
+    'Close Up': { abbr: 'CU', ko: '클로즈업', en: 'Close Up' },
+    'Bust': { abbr: 'BS', ko: '바스트', en: 'Bust' },
+    'Medium': { abbr: 'MS', ko: '미디엄', en: 'Medium' },
+    'American': { abbr: 'AS', ko: '아메리칸(카우보이)', en: 'American (Cowboy)' },
+    'Full Shot': { abbr: 'FS', ko: '풀 샷', en: 'Full Shot' },
+    'Wide': { abbr: 'WS', ko: '와이드', en: 'Wide' }
+  };
+
+  /** 툴팁 문구: 한국어일 때는 한글명과 원어를 함께 보여 준다. */
+  function presetFullLabel(key) {
+    var entry = PRESET_LABELS[key];
+    if (!entry) return key;
+    if (studio.lang === 'en') return entry.en;
+    return entry.ko === entry.en ? entry.en : (entry.ko + ' (' + entry.en + ')');
+  }
+
+  function presetButtonHtml(action, key) {
+    var entry = PRESET_LABELS[key];
+    var full = presetFullLabel(key);
+    return '<button type="button" class="nk-camstudio-preset" data-camstudio="' + action + '" data-key="' + esc(key) + '"' +
+      ' title="' + esc(full) + '" aria-label="' + esc(full) + '">' + esc(entry ? entry.abbr : key) + '</button>';
+  }
+
   function formatAz(v) { return Number(v).toFixed(1) + '°'; }
   function formatEl(v) { return Number(v).toFixed(1) + '°'; }
   function formatDist(v) { return Number(v).toFixed(2) + 'm'; }
@@ -205,10 +243,10 @@
   function buildSidebarHtml() {
     var cam = studio.camera;
     var presetButtons = Object.keys(anglePresets()).map(function (key) {
-      return '<button type="button" class="nk-camstudio-preset" data-camstudio="angle-preset" data-key="' + esc(key) + '">' + esc(key) + '</button>';
+      return presetButtonHtml('angle-preset', key);
     }).join('');
     var shotButtons = Object.keys(shotSizePresets()).map(function (key) {
-      return '<button type="button" class="nk-camstudio-preset" data-camstudio="shot-preset" data-key="' + esc(key) + '">' + esc(key) + '</button>';
+      return presetButtonHtml('shot-preset', key);
     }).join('');
     var styleOptions = Object.keys(stylePresets()).map(function (key) {
       return '<button type="button" class="nk-camstudio-style-option' + (studio.camera.style === key ? ' active' : '') + '" data-camstudio="set-style" data-key="' + esc(key) + '">' + esc(key) + '</button>';

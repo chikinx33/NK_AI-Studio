@@ -115,10 +115,47 @@ test('viewport exposes a grid visibility toggle wired to the three.js scene', ()
   assert.match(css, /\.nk-camstudio-grid-toggle \{[^}]*bottom: 16px;[^}]*right: 16px;/s);
 });
 
-test('angle and shot-size presets render in three columns', () => {
+/**
+ * 프리셋이 3열이던 시절엔 각도 8개·샷 7개가 3행씩 차지해 사이드바가 스크롤되고
+ * 생성 버튼이 화면 밖으로 밀렸다. 약자 라벨 + 4열로 각 그룹을 2행에 담는다.
+ */
+test('angle and shot-size presets fit two rows in four columns', () => {
   const css = fs.readFileSync(path.join(process.cwd(), 'prototype/styles.camera-studio.css'), 'utf8');
-  assert.match(css, /\.nk-camstudio-preset-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/s);
-  assert.doesNotMatch(css, /\.nk-camstudio-preset-grid \{[^}]*grid-template-columns: 1fr 1fr;/s);
+  assert.match(css, /\.nk-camstudio-preset-grid \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/s);
+  // 생성 버튼은 어떤 경우에도 보여야 한다
+  assert.match(css, /\.nk-camstudio-generate-wrap \{[^}]*position: sticky;[^}]*bottom: 0;/s);
+});
+
+test('preset buttons show abbreviations with full-name tooltips in ko and en', () => {
+  const studio = fs.readFileSync(path.join(process.cwd(), 'prototype/js/ui/camera-studio.js'), 'utf8');
+  // 버튼 라벨은 약자, 풀 명칭은 title·aria-label 로
+  assert.match(studio, /function presetButtonHtml\(action, key\)/);
+  assert.match(studio, /title="' \+ esc\(full\) \+ '" aria-label="' \+ esc\(full\) \+ '"/);
+  assert.match(studio, /esc\(entry \? entry\.abbr : key\)/);
+
+  // 축약표의 모든 항목이 abbr/ko/en 을 갖춰야 한다 (한쪽 언어만 만들고 미루지 않기)
+  const start = studio.indexOf('var PRESET_LABELS = {');
+  assert.ok(start > 0, 'PRESET_LABELS 를 찾지 못했다');
+  const body = studio.slice(start, studio.indexOf('\n  };', start));
+  const entries = body.match(/\{ abbr:[^}]*\}/g) || [];
+  assert.ok(entries.length >= 15, `프리셋 라벨이 모자라다: ${entries.length}`);
+  entries.forEach((entry) => {
+    assert.match(entry, /abbr: '[^']+'/);
+    assert.match(entry, /ko: '[^']+'/);
+    // en 값은 아포스트로피가 든 이름("Bird's Eye") 때문에 큰따옴표로 쓰기도 한다
+    assert.match(entry, /en: (?:'[^']+'|"[^"]+")/);
+  });
+
+  // constants 의 프리셋 키가 모두 축약표에 있어야 버튼에 원문이 그대로 노출되지 않는다
+  const presets = fs.readFileSync(path.join(process.cwd(), 'prototype/js/constants/cameraPresets.js'), 'utf8');
+  const angleBlock = presets.slice(presets.indexOf('CINE_ANGLE_PRESETS'), presets.indexOf('CINE_SHOT_SIZE_PRESETS'));
+  const shotBlock = presets.slice(presets.indexOf('CINE_SHOT_SIZE_PRESETS'), presets.indexOf('CINE_STYLE_PRESETS'));
+  const keys = [...angleBlock.matchAll(/^\s*(?:'([^']+)'|"([^"]+)")\s*:/gm), ...shotBlock.matchAll(/^\s*(?:'([^']+)'|"([^"]+)")\s*:/gm)]
+    .map((m) => m[1] || m[2]);
+  assert.ok(keys.length >= 15, `프리셋 키를 못 읽었다: ${keys.length}`);
+  keys.forEach((key) => {
+    assert.ok(body.includes(`'${key}'`) || body.includes(`"${key}"`), `축약표에 없는 프리셋: ${key}`);
+  });
 });
 
 test('camera studio UI ships both ko and en dictionaries', () => {

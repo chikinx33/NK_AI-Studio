@@ -472,25 +472,27 @@
 }
 
 /* 프리셋 그리드 (3열) */
+/* 약자 라벨이라 4열에 들어간다 — 각 프리셋이 2행을 넘지 않아 생성 버튼이 화면에 남는다 */
 .nk-camstudio-preset-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
 .nk-camstudio-preset {
   text-align: center;
-  padding: 10px 6px;
+  padding: 9px 4px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.25;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   transition: background 0.15s ease;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .nk-camstudio-preset:hover { background: rgba(255, 255, 255, 0.1); }
@@ -572,12 +574,20 @@
   color: rgba(255, 255, 255, 0.55);
   word-break: break-word;
   user-select: text;
+  /* 프롬프트가 길어져도 사이드바를 밀어내지 않게 — 이 블록만 스크롤한다 */
+  max-height: 84px;
+  overflow-y: auto;
 }
 
-/* 생성 버튼 */
+/* 생성 버튼 — 어떤 경우에도 화면에서 사라지지 않도록 사이드바 하단에 고정 */
 .nk-camstudio-generate-wrap {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   margin-top: auto;
   padding-top: 16px;
+  padding-bottom: 4px;
+  background: #111111;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
