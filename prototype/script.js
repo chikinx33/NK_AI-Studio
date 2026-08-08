@@ -1178,7 +1178,8 @@
     const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
     const favoriteListEl = document.getElementById('favorite-list');
     const favoritePaginationEl = document.getElementById('favorite-pagination');
-    const favoriteTransferBoxEl = document.getElementById('favorite-transfer-box');
+    const favoriteTransferPrevEl = document.getElementById('favorite-transfer-prev');
+    const favoriteTransferNextEl = document.getElementById('favorite-transfer-next');
     const favoriteTitleInput = document.getElementById('favorite-title');
     const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
@@ -1577,7 +1578,9 @@
         const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
         activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
       }
-      if (favoriteTransferBoxEl) favoriteTransferBoxEl.classList.remove('is-drop-target');
+      [favoriteTransferPrevEl, favoriteTransferNextEl].forEach((el) => {
+        if (el) el.classList.remove('is-drop-target');
+      });
     };
 
     const clampFavoritePageIndex = (value) => {
@@ -1610,9 +1613,12 @@
       return { startCategoryIndex, endCategoryIndex };
     };
 
-    const oppositeFavoritePage = (pageIndex) => {
-      if (FAVORITE_PAGE_COUNT <= 1) return 0;
-      return clampFavoritePageIndex(pageIndex) === 0 ? 1 : 0;
+    const favoriteTransferTargetPage = (direction) => {
+      if (FAVORITE_PAGE_COUNT <= 1) return -1;
+      const step = direction === 'prev' ? -1 : 1;
+      const target = clampFavoritePageIndex(favoritePageIndex) + step;
+      if (target < 0 || target > FAVORITE_PAGE_COUNT - 1) return -1;
+      return target;
     };
 
     const findFirstAvailableFavoriteSlotInPage = (pageIndex) => {
@@ -1648,7 +1654,9 @@
         const dotBtn = document.createElement('button');
         dotBtn.type = 'button';
         dotBtn.className = 'favorite-page-dot';
-        dotBtn.setAttribute('aria-label', `즐겨찾기 ${pageIdx + 1} / ${FAVORITE_PAGE_COUNT} 페이지 보기`);
+        dotBtn.setAttribute('aria-label', currentLang === 'en'
+          ? `Show favorites page ${pageIdx + 1} of ${FAVORITE_PAGE_COUNT}`
+          : `즐겨찾기 ${pageIdx + 1} / ${FAVORITE_PAGE_COUNT} 페이지 보기`);
         if (pageIdx === favoritePageIndex) {
           dotBtn.classList.add('is-active');
           dotBtn.setAttribute('aria-current', 'page');
@@ -1666,17 +1674,32 @@
     };
 
     const renderFavoriteTransferBox = (loggedIn) => {
-      if (!favoriteTransferBoxEl) return;
-      if (!loggedIn || FAVORITE_PAGE_COUNT <= 1) {
-        favoriteTransferBoxEl.classList.add('hidden');
-        favoriteTransferBoxEl.classList.remove('is-drop-target');
-        return;
-      }
-      const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
-      favoriteTransferBoxEl.classList.remove('hidden');
-      favoriteTransferBoxEl.dataset.targetPage = String(targetPageIndex);
-      favoriteTransferBoxEl.setAttribute('aria-label', `현재 페이지의 즐겨찾기를 다른 페이지 빈 칸으로 이동`);
-      favoriteTransferBoxEl.title = '다른 페이지 빈 칸으로 이동';
+      const en = currentLang === 'en';
+      const boxes = [
+        { el: favoriteTransferPrevEl, direction: 'prev' },
+        { el: favoriteTransferNextEl, direction: 'next' },
+      ];
+      boxes.forEach(({ el, direction }) => {
+        if (!el) return;
+        const targetPageIndex = loggedIn ? favoriteTransferTargetPage(direction) : -1;
+        if (targetPageIndex < 0) {
+          el.classList.add('hidden');
+          el.classList.remove('is-drop-target');
+          delete el.dataset.targetPage;
+          return;
+        }
+        el.classList.remove('hidden');
+        el.dataset.targetPage = String(targetPageIndex);
+        const label = direction === 'prev'
+          ? (en
+            ? `Drop here to move this favorite to page ${targetPageIndex + 1} (previous)`
+            : `이전 페이지(${targetPageIndex + 1}) 빈 칸으로 이동`)
+          : (en
+            ? `Drop here to move this favorite to page ${targetPageIndex + 1} (next)`
+            : `다음 페이지(${targetPageIndex + 1}) 빈 칸으로 이동`);
+        el.setAttribute('aria-label', label);
+        el.title = label;
+      });
     };
 
     const findFirstAvailableFavoriteSlot = (categoryIndex) => {
@@ -2559,38 +2582,46 @@
     setUI(NK.auth.isAuthed(), initialUser);
 
     if (canUseFavoriteUI()) {
-      if (favoriteTransferBoxEl) {
-        favoriteTransferBoxEl.addEventListener('dragover', (evt) => {
+      const bindFavoriteTransferBox = (boxEl, direction) => {
+        if (!boxEl) return;
+
+        boxEl.addEventListener('dragover', (evt) => {
           if (!favoriteDragId) return;
           const draggedItem = favoriteItems.find((row) => String(row.id) === String(favoriteDragId));
           if (!draggedItem) return;
           const draggedPageIndex = favoritePageForSlot(draggedItem.slot);
-          const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
+          const targetPageIndex = favoriteTransferTargetPage(direction);
+          if (targetPageIndex < 0) return;
           if (draggedPageIndex !== favoritePageIndex) return;
           if (targetPageIndex === draggedPageIndex) return;
           if (findFirstAvailableFavoriteSlotInPage(targetPageIndex) < 0) return;
           evt.preventDefault();
-          favoriteTransferBoxEl.classList.add('is-drop-target');
+          boxEl.classList.add('is-drop-target');
           try {
             if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
           } catch (_) { }
         });
 
-        favoriteTransferBoxEl.addEventListener('dragleave', () => {
-          favoriteTransferBoxEl.classList.remove('is-drop-target');
+        boxEl.addEventListener('dragleave', () => {
+          boxEl.classList.remove('is-drop-target');
         });
 
-        favoriteTransferBoxEl.addEventListener('drop', async (evt) => {
+        boxEl.addEventListener('drop', async (evt) => {
           evt.preventDefault();
           evt.stopPropagation();
-          favoriteTransferBoxEl.classList.remove('is-drop-target');
+          boxEl.classList.remove('is-drop-target');
           const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
           if (!droppedId) return;
-          const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
+          const en = currentLang === 'en';
+          const targetPageIndex = favoriteTransferTargetPage(direction);
+          if (targetPageIndex < 0) {
+            favoriteDragId = '';
+            return;
+          }
           const targetSlot = findFirstAvailableFavoriteSlotInPage(targetPageIndex);
           if (targetSlot < 0) {
             favoriteDragId = '';
-            alert('이동할 페이지에 빈 공간이 없습니다.');
+            alert(en ? 'There is no empty space on the target page.' : '이동할 페이지에 빈 공간이 없습니다.');
             return;
           }
           const changed = moveFavoriteItemToSlot(droppedId, targetSlot);
@@ -2605,10 +2636,23 @@
           } catch (err) {
             if (err?.code === 'session_expired') return;
             const detail = String(err?.message || '').trim();
-            alert('페이지 이동 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+            alert((en
+              ? 'Could not save the page move to the server. Please try again shortly.'
+              : '페이지 이동 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+              + (detail ? ((en ? '\nReason: ' : '\n원인: ') + detail) : ''));
           }
         });
-      }
+      };
+
+      bindFavoriteTransferBox(favoriteTransferPrevEl, 'prev');
+      bindFavoriteTransferBox(favoriteTransferNextEl, 'next');
+
+      // JS 로 넣는 페이지 이동 툴팁·라벨은 언어 전환 때 직접 다시 그려야 한다.
+      window.addEventListener('nk:lang-changed', () => {
+        const loggedIn = NK.auth.isAuthed();
+        renderFavoritePagination(loggedIn);
+        renderFavoriteTransferBox(loggedIn);
+      });
 
       if (favoriteFormToggleBtn) {
         favoriteFormToggleBtn.addEventListener('click', () => {
