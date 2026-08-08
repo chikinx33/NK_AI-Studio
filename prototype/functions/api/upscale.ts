@@ -8,6 +8,9 @@ import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
+// Cloudflare Function 이 죽기 전에 우리가 먼저 끊는다 (플랫폼 한도보다 짧게)
+const VERTEX_TIMEOUT_MS = 25000;
+
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   const origin = request.headers.get("Origin");
   return new Response(null, {
@@ -132,17 +135,34 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       // 구형 imagegeneration@* 계열은 sampleCount를 요구
       if (model.startsWith("imagegeneration@")) parameters.sampleCount = 1;
 
-      const vertexRes = await fetch(vertexEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          instances: [{ prompt: "", image: sourceImage }],
-          parameters,
-        }),
-      });
+      // Vertex 가 오래 끌면 Function 이 플랫폼 한도에 걸려 통째로 죽고, 그러면 사용자에게는
+      // 원인을 알 수 없는 Cloudflare 502 HTML 만 남는다. 그 전에 우리가 끊고 이유를 돌려준다.
+      const started = Date.now();
+      let vertexRes: Response;
+      try {
+        vertexRes = await fetch(vertexEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            instances: [{ prompt: "", image: sourceImage }],
+            parameters,
+          }),
+          signal: AbortSignal.timeout(VERTEX_TIMEOUT_MS),
+        });
+      } catch (err: any) {
+        const elapsed = Date.now() - started;
+        const timedOut = err?.name === "TimeoutError" || err?.name === "AbortError";
+        return json({
+          error: timedOut
+            ? `Vertex AI 업스케일 시간 초과 (${model}, ${Math.round(elapsed / 1000)}초). 이미지가 크면 더 오래 걸릴 수 있습니다.`
+            : `Vertex AI 업스케일 요청 실패 (${model}): ${err?.message || err}`,
+          model,
+          elapsedMs: elapsed,
+        }, timedOut ? 504 : 502, origin);
+      }
 
       const vertexText = await vertexRes.text();
       if (!vertexRes.ok) {

@@ -124,7 +124,25 @@
   };
 
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
-  var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
+
+  /* Cloudflare 같은 엣지가 돌려주는 HTML 오류 페이지를 한 줄로 줄인다.
+   * 30KB 짜리 오류 페이지가 그대로 알림창에 박히면 정작 필요한 상태 코드와
+   * Ray ID(지원 문의용 식별자)를 사람이 찾아낼 수가 없다. */
+  var edgeErrorSummary = function (text) {
+    var raw = String(text || '');
+    if (!/^\s*<(!doctype|html)/i.test(raw)) return '';
+    var titleMatch = raw.match(/<title>([\s\S]*?)<\/title>/i);
+    var title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : '';
+    var rayMatch = raw.match(/Ray ID:\s*<strong[^>]*>([^<]+)</i) || raw.match(/Ray ID:\s*([a-f0-9]{8,})/i);
+    var ray = rayMatch ? rayMatch[1].trim() : '';
+    var summary = title || 'server_error';
+    return summary + (ray ? (' (Cloudflare Ray ID: ' + ray + ')') : '');
+  };
+
+  var e = function (t) {
+    try { return JSON.parse(t).error; } catch (_) { }
+    return edgeErrorSummary(t) || t;
+  };
   const getImagenTimeoutMs = function (payload, opts) {
     var override = Number(opts && opts.timeoutMs);
     if (Number.isFinite(override) && override > 0) return Math.max(DEFAULT_TIMEOUT_MS, override);
