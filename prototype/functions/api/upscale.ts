@@ -306,9 +306,9 @@ async function diagnoseVertexAccess(location: string, projectId: string, token: 
     .filter(Boolean);
   const imageModels = names.filter((n) => /imagen|imagegeneration|upscal/i.test(n));
   if (!names.length) return `${location} 에서 조회된 퍼블리셔 모델이 없습니다.`;
-  return imageModels.length
-    ? `${location} 에서 사용 가능한 이미지 모델: ${imageModels.join(", ")}`
-    : `${location} 에서 이미지 계열 모델이 보이지 않습니다 (전체 ${names.length}개 조회됨).`;
+  if (imageModels.length) return `${location} 에서 사용 가능한 이미지 모델: ${imageModels.join(", ")}`;
+  // 필터가 헛짚었을 수도 있으니 실제 이름을 몇 개 보여준다 (판단 근거를 눈으로 확인)
+  return `${location} 에서 이미지 계열 모델이 보이지 않습니다 (전체 ${names.length}개). 예: ${names.slice(0, 25).join(", ")}`;
 }
 
 function json(data: any, status = 200, origin?: string | null) {
