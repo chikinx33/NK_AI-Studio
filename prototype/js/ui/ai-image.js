@@ -1505,6 +1505,27 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"></circle><path d="M6.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5"></path></svg>';
   }
 
+  /**
+   * 업스케일 단일 토글 버튼. 라벨이 다음에 실행할 해상도를 보여주고, 누르면 그 해상도로 실행된다.
+   * 원본 → "2K", 이미 2K 결과 → "4K", 4K 결과 → 버튼 없음(더 올릴 단계 없음).
+   */
+  function nextUpscaleSize(result) {
+    var size = String(result && result.imageSize || '').trim().toUpperCase();
+    if (size === '4K') return '';
+    if (size === '2K' || size === '2X') return '4K';
+    return '2K';
+  }
+
+  function buildUpscaleToggleMarkup(action, size, refs) {
+    if (!size) return '';
+    var labelKey = size === '4K' ? 'upscale4k' : 'upscale2k';
+    var refAttr = refs && refs.id != null
+      ? ' data-id="' + escapeHtml(refs.id) + '"'
+      : ' data-url="' + escapeHtml(refs && refs.url || '') + '"';
+    return '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="' + action + '" data-size="' + size + '"' + refAttr +
+      ' aria-label="' + escapeHtml(t(labelKey)) + '" title="' + escapeHtml(t(labelKey)) + '">' + size + '</button>';
+  }
+
   // lucide "crop" (https://lucide.dev/icons/crop)
   function cropIconSvg() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"></path><path d="M18 22V8a2 2 0 0 0-2-2H2"></path></svg>';
@@ -1515,8 +1536,34 @@
    * 저장하면 원본 해상도 기준으로 잘라 소스 이미지로 등록한다.
    * 코너 핸들 4개 = 크기 조절, 영역 내부 드래그 = 이동.
    */
-  function openCropTool(url) {
+  /**
+   * 크롭 캔버스용 이미지 URL. GCS 서명 URL 은 버킷에 CORS 설정이 없어 crossOrigin
+   * 로드가 실패한다(ACAO 미응답 실측). objectName 을 알아낼 수 있으면 같은 출처인
+   * 미디어 프록시로 우회해 캔버스 오염 없이 읽는다.
+   */
+  function cropSafeImageUrl(url) {
     var src = String(url || '').trim();
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) return src;
+    var objectName = '';
+    var q = src.match(/[?&]objectName=([^&]+)/);
+    if (q) {
+      try { objectName = decodeURIComponent(q[1]); } catch (_) { objectName = q[1]; }
+    } else {
+      var g = src.match(/^https?:\/\/storage\.googleapis\.com\/[^/]+\/([^?]+)/);
+      if (g) {
+        try { objectName = decodeURIComponent(g[1]); } catch (_) { objectName = g[1]; }
+      }
+    }
+    if (!objectName) return src;
+    var token = '';
+    try {
+      token = String(localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || '').trim();
+    } catch (_) { }
+    return '/api/media/proxy?objectName=' + encodeURIComponent(objectName) + (token ? ('&nk_token=' + encodeURIComponent(token)) : '');
+  }
+
+  function openCropTool(url) {
+    var src = cropSafeImageUrl(url);
     if (!src) return;
     var existing = document.getElementById('ai-image-crop-overlay');
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
@@ -1646,7 +1693,10 @@
         var added = appendSourceImages([entry]);
         if (added.hitLimit) { alert(t('sourceLimitReached')); return; }
         if (added.addedIds && added.addedIds[0]) state.selectedSourceId = String(added.addedIds[0]);
+        // 소스 박스는 이미지→이미지 모드에서만 보인다 — 등록했는데 안 보이면 "동작 안 함"으로 읽힌다
+        state.mode = 'image-to-image';
         close();
+        updateModeUI();
         updateSourceUI();
         updatePreviewPanelUI();
         if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
@@ -1961,8 +2011,7 @@
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-size="2K" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">2K</button>' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-size="4K" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale4k')) + '" title="' + escapeHtml(t('upscale4k')) + '">4K</button>' +
+                buildUpscaleToggleMarkup('upscale-result-2k', nextUpscaleSize(selectedResult), { id: selectedResult.id }) +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
               (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
@@ -1987,8 +2036,7 @@
               '</div>'
               : (preview && preview.type === 'source'
                 ? '<div class="ai-image-inline-actions"><div class="ai-image-inline-actions-left">' +
-                  '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-source-2x" data-size="2K" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">2K</button>' +
-                  '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-source-2x" data-size="4K" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscale4k')) + '" title="' + escapeHtml(t('upscale4k')) + '">4K</button>' +
+                  buildUpscaleToggleMarkup('upscale-source-2x', '2K', { url: previewUrl }) +
                   '</div></div>'
                 : '')) +
               '<div class="ai-image-preview-meta">' +

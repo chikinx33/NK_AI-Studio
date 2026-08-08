@@ -707,7 +707,8 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-ratio-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2fr);
+  /* 비율 4개(1:1·16:9·9:16·Free)는 동일 폭, 생성 버튼만 길게 — 항상 한 행 */
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.8fr);
   gap: 8px;
   align-items: end;
   margin-top: 0;
@@ -1761,7 +1762,8 @@ body.layout-fixed.page-shell-image .content {
 
 @media (max-width: 820px) {
   .ai-image-ratio-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* 좁은 화면: 비율 4개 한 행 + 생성 버튼 전체 행 */
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .ai-image-ratio-row .btn-primary.wide-generate {
