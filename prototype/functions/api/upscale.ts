@@ -8,8 +8,10 @@ import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-// Cloudflare Function 이 죽기 전에 우리가 먼저 끊는다 (플랫폼 한도보다 짧게)
-const VERTEX_TIMEOUT_MS = 25000;
+// 2K 이미지 생성은 수십 초 걸릴 수 있다. Worker 의 fetch 대기는 CPU 를 쓰지 않아
+// 플랫폼 한도와 무관하므로, 클라이언트 타임아웃(api.js upscale: 120초)보다만 짧게 잡는다.
+// (예전 25초는 "30초 플랫폼 한도" 오판에서 나온 값 — 실제 2K 생성이 그보다 오래 걸려 끊겼다)
+const VERTEX_TIMEOUT_MS = 110000;
 
 // 주의: 이 함수는 502·504 를 반환하면 안 된다. Cloudflare 가 게이트웨이 오류로 보고
 // 우리 JSON 본문을 자기 "502 Bad gateway" HTML 페이지로 갈아치워, 화면에는 원인 대신

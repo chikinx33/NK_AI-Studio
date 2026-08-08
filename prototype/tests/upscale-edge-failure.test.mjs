@@ -40,11 +40,15 @@ test("기본 업스케일 경로는 Gemini 이미지 모델(global)이다", () =
   assert.doesNotMatch(src, /"imagen-4\.0-upscale-preview", "imagegeneration@002"/);
 });
 
-test("Vertex 호출은 플랫폼 한도보다 먼저 끊고 이유를 돌려준다", () => {
+test("Vertex 호출은 클라이언트 타임아웃보다 먼저 끊고 이유를 돌려준다", () => {
   const src = read("prototype/functions/api/upscale.ts");
   assert.match(src, /const VERTEX_TIMEOUT_MS = \d+;/);
   const ms = Number(src.match(/const VERTEX_TIMEOUT_MS = (\d+);/)[1]);
-  assert.ok(ms > 0 && ms < 30000, `한도(30초)보다 짧아야 한다: ${ms}ms`);
+  // 클라이언트(api.js upscale)가 120초까지 기다린다 → 서버가 그 전에 끊어야 원인이 전달된다.
+  // 너무 짧으면 정상적인 2K 생성(수십 초)까지 끊는다 — 25초로 잡았다가 실제로 그랬다.
+  const client = read("prototype/api.js");
+  assert.match(client, /withBase\('\/api\/upscale'\)[\s\S]{0,200}120000/);
+  assert.ok(ms >= 60000 && ms < 120000, `60초 이상, 클라이언트(120초)보다 짧아야 한다: ${ms}ms`);
   assert.match(src, /signal: AbortSignal\.timeout\(VERTEX_TIMEOUT_MS\)/);
   assert.match(src, /code: timedOut \? "vertex_timeout" : "vertex_request_failed"/);
   assert.match(src, /시간 초과/);
