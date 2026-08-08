@@ -88,9 +88,11 @@
       sizeStd: '표준(1K)',
       sizeHigh: '고품질(2K)',
       cropButton: '이미지 자르기',
-      cropSave: '히스토리에 저장',
+      cropRegister: '등록',
+      cropSave: '저장',
       cropCancel: '취소',
-      cropRegistered: '잘린 이미지를 히스토리에 저장했습니다.',
+      cropRegistered: '잘린 이미지를 소스로 등록했습니다.',
+      cropSaved: '잘린 이미지를 저장했습니다.',
       cropFailed: '이미지 자르기 실패: ',
       upscale4k: '업스케일 4K',
       providerLabel: '이미지 모델',
@@ -246,9 +248,11 @@
       sizeStd: 'Standard (1K)',
       sizeHigh: 'High (2K)',
       cropButton: 'Crop image',
-      cropSave: 'Save to history',
+      cropRegister: 'Register',
+      cropSave: 'Save',
       cropCancel: 'Cancel',
-      cropRegistered: 'Cropped image saved to history.',
+      cropRegistered: 'Cropped image added to sources.',
+      cropSaved: 'Cropped image saved.',
       cropFailed: 'Crop failed: ',
       upscale4k: 'Upscale (4K)',
       providerLabel: 'Image model',
@@ -1583,7 +1587,8 @@
       '</div></div>' +
       '<div class="ai-image-crop-actions">' +
       '<button type="button" class="btn-secondary compact" data-crop-action="cancel">' + escapeHtml(t('cropCancel')) + '</button>' +
-      '<button type="button" class="btn-primary compact" data-crop-action="save">' + escapeHtml(t('cropSave')) + '</button>' +
+      '<button type="button" class="btn-secondary compact" data-crop-action="save">' + escapeHtml(t('cropSave')) + '</button>' +
+      '<button type="button" class="btn-primary compact" data-crop-action="register">' + escapeHtml(t('cropRegister')) + '</button>' +
       '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -1682,7 +1687,7 @@
       if (!btn) return;
       var actionName = btn.getAttribute('data-crop-action');
       if (actionName === 'cancel') { close(); return; }
-      if (actionName !== 'save') return;
+      if (actionName !== 'save' && actionName !== 'register') return;
       try {
         var rect = img.getBoundingClientRect();
         if (!rect.width || !rect.height || !img.naturalWidth) throw new Error('image not ready');
@@ -1697,46 +1702,36 @@
         canvas.width = sw;
         canvas.height = sh;
         canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-        // 히스토리는 localStorage 에 저장된다 — data URL 을 그대로 넣으면 용량이 터진다(과거 OOM).
-        // GCS 에 올려 objectName/서명 URL 로 결과 카드를 만든다.
+
+        if (actionName === 'register') {
+          // 등록: 잘린 이미지를 프롬프트 소스로 추가
+          var entry = makeSourceImage(canvas.toDataURL('image/png'), 'crop ' + sw + 'x' + sh, 'upload');
+          var added = appendSourceImages([entry]);
+          if (added.hitLimit) { alert(t('sourceLimitReached')); return; }
+          if (added.addedIds && added.addedIds[0]) state.selectedSourceId = String(added.addedIds[0]);
+          // 소스 박스는 이미지→이미지 모드에서만 보인다 — 등록했는데 안 보이면 "동작 안 함"으로 읽힌다
+          state.mode = 'image-to-image';
+          close();
+          updateModeUI();
+          updateSourceUI();
+          updatePreviewPanelUI();
+          if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
+          return;
+        }
+
+        // 저장: 잘린 이미지를 파일로 내려받기
         canvas.toBlob(function (blob) {
           if (!blob) { alert(t('cropFailed') + 'blob_failed'); return; }
-          var file = new File([blob], 'crop-' + sw + 'x' + sh + '.png', { type: 'image/png' });
-          var project = readCurrentProject();
-          setGlobalLoading(true, t('generating'));
-          NK.api.imageUpload(project && project.id || '', file).then(function (uploaded) {
-            var cropResult = {
-              id: 'res_' + Date.now(),
-              url: String(uploaded && uploaded.signedUrl || '').trim(),
-              objectName: String(uploaded && uploaded.objectName || '').trim(),
-              imageSize: '',
-              prompt: 'crop ' + sw + 'x' + sh,
-              resolvedPrompt: 'crop ' + sw + 'x' + sh,
-              mode: 'image-to-image',
-              generationStyle: 'single',
-              cameraControls: normalizeCameraControls(state.cameraControls),
-              conversationTurnCount: 0,
-              aspectRatio: state.aspectRatio,
-              createdAt: new Date().toISOString(),
-              savedToProject: false,
-              sessionId: state.sessionId
-            };
-            if (!cropResult.url) throw new Error('upload_result_missing');
-            state.results.unshift(cropResult);
-            state.results = state.results.slice(0, 30);
-            state.currentResultId = cropResult.id;
-            state.previewTargetType = 'result';
-            close();
-            persistHistory();
-            appendHistoryCardIfPossible(cropResult);
-            updateResultSelectionUI();
-            updatePreviewPanelUI();
-            if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropRegistered'), { tone: 'ok' });
-          }).catch(function (err) {
-            alert(t('cropFailed') + (err && err.message ? err.message : err));
-          }).finally(function () {
-            setGlobalLoading(false);
-          });
+          var a = document.createElement('a');
+          var blobUrl = URL.createObjectURL(blob);
+          a.href = blobUrl;
+          a.download = 'crop-' + sw + 'x' + sh + '.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 4000);
+          close();
+          if (NK.ui && NK.ui.toast) NK.ui.toast(t('cropSaved'), { tone: 'ok' });
         }, 'image/png');
       } catch (err) {
         alert(t('cropFailed') + (err && err.message ? err.message : err));
