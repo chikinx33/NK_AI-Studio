@@ -1121,24 +1121,57 @@ export function parseToolInput(reason: string): any {
 }
 
 /** 픽셀 도구: /api/imagen 호출 어댑터. input.prompt 등을 그대로 전달. */
+/**
+ * "ip:<brandId>:<token|이름>" → 그 캐릭터의 대표 시트 이미지 경로.
+ * 브랜드 정의(characterSheets)에서 찾으므로 브랜드 허브 UI 가 보여주는 것과 항상 같다.
+ */
+async function resolveIpRef(ref: string, ctx: ToolContext): Promise<{ imageUrl: string; name: string } | null> {
+  const m = /^ip:([^:]+):(.+)$/.exec(String(ref || "").trim());
+  if (!m) return null;
+  const [, brandId, key] = m;
+  const norm = (s: any) => String(s || "").replace(/^@+/, "").trim().toLowerCase();
+  try {
+    const got: any = await runBrandGetTool({ brandId }, ctx);
+    const sheets = Array.isArray(got?.brand?.characterSheets) ? got.brand.characterSheets : [];
+    const hit = sheets.find((e: any) => norm(e?.token) === norm(key) || norm(e?.displayName) === norm(key));
+    const items = Array.isArray(hit?.items) ? hit.items : [];
+    const primary = items.find((it: any) => it?.isPrimary) || items[0];
+    const imageUrl = String(primary?.imageDataUrl || "").trim();
+    if (!imageUrl) return null;
+    return { imageUrl, name: String(hit?.displayName || key).replace(/^@+/, "") };
+  } catch {
+    return null;
+  }
+}
+
 async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || "").trim();
   if (!prompt) throw new Error("prompt is required");
   // 등록 캐릭터 시트(IP 라이브러리)를 신원 가이드로 넘길 수 있게 한다. 이게 없으면
   // "우리 캐릭터로 포스터 그려줘"가 매번 남남인 캐릭터로 나온다.
-  const referenceImages = (Array.isArray(input?.referenceImages) ? input.referenceImages : [])
-    .map((raw: any, i: number) => {
-      const imageUrl = String(raw?.imageUrl || raw?.url || raw?.signedUrl || raw?.imageDataUrl || "").trim();
-      if (!imageUrl) return null;
-      return {
-        imageUrl,
-        referenceId: Number(raw?.referenceId || i + 1) || i + 1,
-        subjectDescription: String(raw?.subjectDescription || raw?.name || `등록 캐릭터 ${i + 1}`).trim(),
-        referenceKind: String(raw?.referenceKind || "character").trim(),
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 4);
+  // ip_library 가 준 ref("ip:<brandId>:<token>")는 여기서 실제 이미지 경로로 해석한다 —
+  // 이미지 URL/data URL 을 프롬프트 마커에 실어 보내지 않아도 되게 하는 우회 경로.
+  const rawRefs = (Array.isArray(input?.referenceImages) ? input.referenceImages : []).slice(0, 4);
+  const referenceImages: any[] = [];
+  for (let i = 0; i < rawRefs.length; i++) {
+    const raw = rawRefs[i] && typeof rawRefs[i] === "object" ? rawRefs[i] : { ref: rawRefs[i] };
+    let imageUrl = String(raw?.imageUrl || raw?.url || raw?.signedUrl || raw?.imageDataUrl || "").trim();
+    let name = String(raw?.subjectDescription || raw?.name || "").trim();
+    const ref = String(raw?.ref || (imageUrl.startsWith("ip:") ? imageUrl : "")).trim();
+    if (ref.startsWith("ip:")) {
+      const hit = await resolveIpRef(ref, ctx);
+      if (!hit) continue;
+      imageUrl = hit.imageUrl;
+      if (!name) name = hit.name;
+    }
+    if (!imageUrl) continue;
+    referenceImages.push({
+      imageUrl,
+      referenceId: Number(raw?.referenceId || i + 1) || i + 1,
+      subjectDescription: name || `등록 캐릭터 ${i + 1}`,
+      referenceKind: String(raw?.referenceKind || "character").trim(),
+    });
+  }
   const payload = {
     prompt,
     aspectRatio: input?.aspectRatio || "16:9",
@@ -2649,14 +2682,94 @@ async function runVideoLibraryTool(input: any, ctx: ToolContext): Promise<any> {
 }
 
 /** 브랜드 캐릭터/IP 자산 목록: /api/ip/library?brandId=. read+synthesize. */
+/**
+ * 브랜드 id 해석. 대소문자·표기가 조금 달라도 실제 등록된 브랜드를 찾아준다.
+ * (브랜드 허브가 저장하는 GCS 경로는 대소문자를 구분해서, "shapes" vs "SHAPES" 가 다른 폴더가 된다.
+ *  이 불일치 때문에 "등록된 캐릭터 시트가 없다"는 오답이 나왔다.)
+ */
+async function resolveBrandId(given: string, ctx: ToolContext): Promise<{ brandId: string; candidates: string[] }> {
+  const wanted = String(given || "").trim();
+  let ids: string[] = [];
+  try {
+    const list = await callInternalJson(ctx, "/api/brand/list");
+    ids = (Array.isArray(list?.ids) ? list.ids : []).map((v: any) => String(v));
+  } catch { /* 목록 조회 실패 시 주어진 값 그대로 사용 */ }
+  if (!ids.length) return { brandId: wanted, candidates: [] };
+  const exact = ids.find((id) => id === wanted);
+  if (exact) return { brandId: exact, candidates: ids };
+  const ci = ids.find((id) => id.toLowerCase() === wanted.toLowerCase());
+  if (ci) return { brandId: ci, candidates: ids };
+  // 이름 일부만 말한 경우(예: "모양새" → shapes)까지는 못 맞추므로, 브랜드가 하나면 그것으로 본다.
+  if (!wanted && ids.length === 1) return { brandId: ids[0], candidates: ids };
+  if (ids.length === 1) return { brandId: ids[0], candidates: ids };
+  return { brandId: wanted, candidates: ids };
+}
+
+/**
+ * IP(캐릭터 시트) 목록. 두 출처를 합쳐서 본다.
+ *  ① 브랜드 정의(reference/data.json)의 characterSheets — 브랜드 허브 'IP 라이브러리' UI 가 쓰는 곳(권위 있는 등록부)
+ *  ② GCS brands/<id>/ip/ 파일 목록 — brand_asset 등으로 직접 올라간 파일
+ * 예전엔 ②만 봤는데, UI 등록분은 ①에 있어서 "자산이 비어있다"는 오답이 났다.
+ * 이미지 바이트(data: URL)는 절대 실어 보내지 않는다 — 대신 ref 키로 나중에 서버가 해석한다.
+ */
 async function runIpLibraryTool(input: any, ctx: ToolContext): Promise<any> {
-  const brandId = String(input?.brandId || input?.slug || "").trim();
+  const givenBrand = String(input?.brandId || input?.slug || input?.brand || "").trim();
   const projectId = String(input?.projectId || "").trim();
-  if (!brandId && !projectId) throw new Error("brandId 또는 projectId 필요");
-  const qs = brandId ? `brandId=${encodeURIComponent(brandId)}` : `projectId=${encodeURIComponent(projectId)}`;
-  const data = await callInternalJson(ctx, `/api/ip/library?${qs}`);
-  const items = (Array.isArray(data.items) ? data.items : []).slice(0, 40);
-  return { kind: "ip_library", brandId: brandId || undefined, projectId: projectId || undefined, count: items.length, items };
+  if (!givenBrand && !projectId) throw new Error("brandId 또는 projectId 필요");
+
+  let brandId = givenBrand;
+  let brandCandidates: string[] = [];
+  if (!projectId) {
+    const resolved = await resolveBrandId(givenBrand, ctx);
+    brandId = resolved.brandId;
+    brandCandidates = resolved.candidates;
+  }
+
+  // ① 브랜드 정의에 등록된 캐릭터 시트
+  const characters: any[] = [];
+  if (brandId) {
+    try {
+      const got: any = await runBrandGetTool({ brandId }, ctx);
+      const sheets = Array.isArray(got?.brand?.characterSheets) ? got.brand.characterSheets : [];
+      for (const entry of sheets) {
+        const items = Array.isArray(entry?.items) ? entry.items : [];
+        if (!items.length) continue;
+        const token = String(entry?.token || "").trim();
+        const name = String(entry?.displayName || token.replace(/^@/, "")).trim();
+        characters.push({
+          name,
+          token,
+          sheetCount: items.length,
+          // image 도구의 referenceImages 에 그대로 넣을 수 있는 참조 키(용량 0).
+          ref: `ip:${brandId}:${token || name}`,
+        });
+      }
+    } catch { /* 브랜드 정의가 없으면 ②만 본다 */ }
+  }
+
+  // ② GCS 파일 목록(직접 업로드분)
+  let files: any[] = [];
+  try {
+    const qs = projectId ? `projectId=${encodeURIComponent(projectId)}` : `brandId=${encodeURIComponent(brandId)}`;
+    const data = await callInternalJson(ctx, `/api/ip/library?${qs}`);
+    files = (Array.isArray(data?.items) ? data.items : [])
+      .slice(0, 20)
+      .map((it: any) => ({ name: String(it?.name || "").split("/").slice(-2).join("/"), imageUrl: String(it?.signedUrl || "") }));
+  } catch { /* 목록 실패는 무시 — ①만으로도 답할 수 있다 */ }
+
+  const count = characters.length || files.length;
+  return {
+    kind: "ip_library",
+    brandId: brandId || undefined,
+    projectId: projectId || undefined,
+    count,
+    characters,
+    files,
+    brandCandidates: characters.length ? undefined : brandCandidates,
+    note: count === 0 && brandCandidates.length
+      ? `이 브랜드에는 등록 시트가 없어요. 등록된 브랜드: ${brandCandidates.join(", ")} — 다른 브랜드일 수 있으니 확인해 주세요.`
+      : undefined,
+  };
 }
 
 /** 나레이션/음성 생성: /api/tts (Google TTS). external(즉시 실행·검수 패널). */

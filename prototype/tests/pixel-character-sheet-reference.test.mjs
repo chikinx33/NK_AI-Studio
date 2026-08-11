@@ -20,18 +20,38 @@ test("image_library 는 캐릭터 시트가 없다는 사실을 알려준다", (
 test("ip_library 가 '우리 캐릭터/자산' 요청의 목적지로 명시된다", () => {
   const src = orch();
   assert.match(src, /ip_library[\s\S]{0,300}"우리 캐릭터", "스튜디오\/브랜드 자산"/);
-  // brandId 를 모를 때의 경로까지 안내해야 실제로 호출할 수 있다
-  assert.match(src, /brandId를 모르면 brand_list로 먼저 확인/);
+  // 비었을 때 '없다'고 단정하지 않고 등록 브랜드 목록을 보고 다시 조회하도록 안내한다
+  assert.match(src, /brandId 대소문자·표기가 달라도 자동으로 맞춰 찾고/);
+  assert.match(src, /brandCandidates\)을 함께 돌려주니 그걸 보고 다시 조회한다/);
 });
 
 test("등록 시트를 이미지 생성의 신원 가이드로 넘길 수 있다", () => {
   const src = shared();
-  assert.match(src, /const referenceImages = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)/);
-  // ip_library 결과(signedUrl)를 그대로 받아들인다
+  assert.match(src, /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 4\)/);
+  // 직접 URL 도, ip_library 가 준 ref 도 받아들인다
   assert.match(src, /raw\?\.imageUrl \|\| raw\?\.url \|\| raw\?\.signedUrl \|\| raw\?\.imageDataUrl/);
+  assert.match(src, /if \(ref\.startsWith\("ip:"\)\) \{[\s\S]{0,200}await resolveIpRef\(ref, ctx\)/);
   assert.match(src, /referenceKind: String\(raw\?\.referenceKind \|\| "character"\)/);
-  assert.match(src, /\.slice\(0, 4\)/);
   assert.match(src, /referenceImages,/);
+});
+
+test("UI 등록분(브랜드 정의의 characterSheets)을 출처로 읽는다", () => {
+  const src = shared();
+  // 예전엔 GCS 파일 목록만 봐서, 브랜드 허브 UI로 등록한 시트를 못 찾았다
+  assert.match(src, /const sheets = Array\.isArray\(got\?\.brand\?\.characterSheets\) \? got\.brand\.characterSheets : \[\]/);
+  // 이미지 바이트를 대화에 싣지 않기 위해 ref 키만 돌려준다
+  assert.match(src, /ref: `ip:\$\{brandId\}:\$\{token \|\| name\}`/);
+  assert.match(src, /async function resolveIpRef\(ref: string, ctx: ToolContext\)/);
+  assert.match(src, /const primary = items\.find\(\(it: any\) => it\?\.isPrimary\) \|\| items\[0\]/);
+});
+
+test("브랜드 id 대소문자·표기 불일치를 스스로 맞춘다", () => {
+  const src = shared();
+  assert.match(src, /async function resolveBrandId\(given: string, ctx: ToolContext\)/);
+  assert.match(src, /ids\.find\(\(id\) => id\.toLowerCase\(\) === wanted\.toLowerCase\(\)\)/);
+  // 못 찾으면 등록 브랜드 목록을 함께 알려준다 — '없다'고 단정하지 않게
+  assert.match(src, /brandCandidates: characters\.length \? undefined : brandCandidates/);
+  assert.match(src, /등록된 브랜드: \$\{brandCandidates\.join\(", "\)\}/);
 });
 
 test("레퍼런스가 있어도 구도는 프롬프트가 정한다 (text-to-image 고정)", () => {
