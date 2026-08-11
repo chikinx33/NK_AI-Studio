@@ -1124,9 +1124,29 @@ export function parseToolInput(reason: string): any {
 async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || "").trim();
   if (!prompt) throw new Error("prompt is required");
+  // 등록 캐릭터 시트(IP 라이브러리)를 신원 가이드로 넘길 수 있게 한다. 이게 없으면
+  // "우리 캐릭터로 포스터 그려줘"가 매번 남남인 캐릭터로 나온다.
+  const referenceImages = (Array.isArray(input?.referenceImages) ? input.referenceImages : [])
+    .map((raw: any, i: number) => {
+      const imageUrl = String(raw?.imageUrl || raw?.url || raw?.signedUrl || raw?.imageDataUrl || "").trim();
+      if (!imageUrl) return null;
+      return {
+        imageUrl,
+        referenceId: Number(raw?.referenceId || i + 1) || i + 1,
+        subjectDescription: String(raw?.subjectDescription || raw?.name || `등록 캐릭터 ${i + 1}`).trim(),
+        referenceKind: String(raw?.referenceKind || "character").trim(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
   const payload = {
     prompt,
     aspectRatio: input?.aspectRatio || "16:9",
+    referenceImages,
+    // 레퍼런스가 있으면 imagen 기본값이 image-to-image(=1번 이미지가 구도 기준)로 바뀐다.
+    // 포스터·새 장면은 "구도는 프롬프트, 캐릭터 디자인만 시트 유지"여야 하므로
+    // 에이전트가 명시하지 않으면 text-to-image 로 고정한다.
+    generationMode: String(input?.generationMode || "").trim() || (referenceImages.length ? "text-to-image" : undefined),
     // 회사 산출물은 프로젝트(GCS users/<userId>/ai-video/projects…)에 저장.
     projectId: input?.projectId || "ai-company",
     storageService: input?.storageService || "ai-video",
