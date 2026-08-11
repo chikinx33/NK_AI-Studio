@@ -13,6 +13,27 @@ import { SortAscIcon, SortDescIcon } from "./icons";
 import { SkillPopup } from "./Skills";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 
+// 📋 복사 — Lucide copy (채팅 복사 버튼과 동일 도형)
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
 function BrainIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -72,6 +93,8 @@ export default function Knowledge({
   const [editValue, setEditValue] = useState("");
   const [tidying, setTidying] = useState(false);
   const [tidyMsg, setTidyMsg] = useState<string | null>(null);
+  // 복사 피드백: 개별 항목은 그 항목 텍스트, 목록 전체 복사는 "__list__"
+  const [copied, setCopied] = useState<string | null>(null);
   // 그래프에서 노드 클릭 시 해당 항목으로 스크롤·하이라이트 (행 ref 맵)
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [highlight, setHighlight] = useState<string | null>(null);
@@ -111,6 +134,43 @@ export default function Knowledge({
       setTidying(false);
       setTimeout(() => setTidyMsg(null), 4000);
     }
+  }
+
+  // 클립보드 복사 — 에이전트에게 "이 지식 이렇게 고쳐줘"로 붙여넣기 위한 용도.
+  // 보안 컨텍스트가 아니면 clipboard API가 없으므로 textarea + execCommand 로 보조.
+  async function copyToClipboard(text: string, key: string) {
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else throw new Error("no clipboard api");
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        /* 복사 불가 — 피드백만 생략 */
+        return;
+      }
+    }
+    setCopied(key);
+    setTimeout(() => setCopied((c) => (c === key ? null : c)), 1400);
+  }
+
+  // 지금 화면에 보이는 지식(+스킬)을 한 번에 복사 — 유형 표시를 붙여 에이전트가 바로 알아보게 한다.
+  function copyVisibleList() {
+    const lines = [
+      ...(filter === "스킬" ? [] : ordered.map((it) => `- [${TYPE_BADGE[it.type ?? "사실"].t}] ${it.text}`)),
+      ...(showSkills ? skills.map((s) => `- [스킬] ${s.name}: ${s.description}`) : []),
+    ];
+    if (!lines.length) return;
+    void copyToClipboard(lines.join("\n"), "__list__");
+    setTidyMsg(`📋 ${lines.length}개를 복사했어요 — 채팅에 붙여넣고 수정할 내용을 알려주세요`);
+    setTimeout(() => setTidyMsg(null), 4000);
   }
 
   async function refresh() {
@@ -198,28 +258,53 @@ export default function Knowledge({
   // 스킬 목록을 함께 보일지: 전체(null) 또는 스킬 분류
   const showSkills = filter === null || filter === "스킬";
 
-  const renderSkillItem = (s: AgentSkill) => (
-    <button
-      key={`sk_${s.name}`}
-      ref={(el) => {
-        if (el) rowRefs.current.set(s.name, el);
-      }}
-      onClick={() => setOpenSkill(s.name)}
-      className={`flex w-full items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60 ${
-        highlight === s.name ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-edge"
-      }`}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1 font-medium text-gray-200">
-          {s.pinned && <span className="text-amber-400">📌</span>}
-          <span className="truncate">{s.name}</span>
-          {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
+  // 스킬 행: 클릭하면 상세 팝업. 안에 복사 버튼을 두므로 button 중첩을 피해 div + role=button 으로 둔다.
+  const renderSkillItem = (s: AgentSkill) => {
+    const skillKey = `sk_${s.name}`;
+    return (
+      <div
+        key={skillKey}
+        role="button"
+        tabIndex={0}
+        ref={(el) => {
+          if (el) rowRefs.current.set(s.name, el);
+        }}
+        onClick={() => setOpenSkill(s.name)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpenSkill(s.name);
+          }
+        }}
+        className={`group flex w-full cursor-pointer items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60 ${
+          highlight === s.name ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-edge"
+        }`}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1 font-medium text-gray-200">
+            {s.pinned && <span className="text-amber-400">📌</span>}
+            <span className="truncate">{s.name}</span>
+            {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
+          </span>
+          <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
         </span>
-        <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
-      </span>
-      <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
-    </button>
-  );
+        <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            copyToClipboard(`${s.name}: ${s.description}`, skillKey);
+          }}
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded text-gray-600 transition hover:bg-edge hover:text-gray-200 group-hover:opacity-100 ${
+            copied === skillKey ? "opacity-100" : "opacity-0"
+          }`}
+          title={copied === skillKey ? "복사됨" : "이 스킬 복사"}
+          aria-label="이 스킬 복사"
+        >
+          <CopyIcon className={`h-3.5 w-3.5 ${copied === skillKey ? "text-emerald-400" : ""}`} />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
@@ -272,6 +357,17 @@ export default function Knowledge({
                 {tidying ? "정리 중…" : "🧹 중복 정리"}
               </button>
             )}
+            {/* 목록 복사 — 지금 보이는 분류를 전부 복사해서 에이전트에게 수정 지시 */}
+            <button
+              onClick={copyVisibleList}
+              title="지금 보이는 지식을 전부 복사합니다. 채팅에 붙여넣어 에이전트에게 수정을 지시할 수 있어요."
+              aria-label="목록 복사"
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-edge transition hover:bg-edge hover:text-gray-200 ${
+                filter === "스킬" ? "ml-auto " : ""
+              }${copied === "__list__" ? "text-emerald-400" : "text-gray-400"}`}
+            >
+              <CopyIcon className="h-3.5 w-3.5" />
+            </button>
             {/* 정렬 방향 토글 (오름/내림차순) — 아이콘만 */}
             <button
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
@@ -369,6 +465,17 @@ export default function Knowledge({
                 >
                   {it.source === "기반" ? "기반" : it.source === "수동" ? "수동" : "학습"}
                 </span>
+                {/* 복사 — 에이전트에게 수정 지시할 때 이 문장을 그대로 붙여넣기 위함 */}
+                <button
+                  onClick={() => copyToClipboard(it.text, it.text)}
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded text-gray-600 transition hover:bg-edge hover:text-gray-200 group-hover:opacity-100 ${
+                    copied === it.text ? "opacity-100" : "opacity-0"
+                  }`}
+                  title={copied === it.text ? "복사됨" : "이 지식 복사"}
+                  aria-label="이 지식 복사"
+                >
+                  <CopyIcon className={`h-3.5 w-3.5 ${copied === it.text ? "text-emerald-400" : ""}`} />
+                </button>
                 <button
                   onClick={() => setPendingDelete(it)}
                   className="shrink-0 text-gray-600 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
