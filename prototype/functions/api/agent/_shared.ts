@@ -1130,7 +1130,11 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     // 회사 산출물은 프로젝트(GCS users/<userId>/ai-video/projects…)에 저장.
     projectId: input?.projectId || "ai-company",
     storageService: input?.storageService || "ai-video",
-    provider: input?.provider,
+    // 우선순위: 픽셀이 지정한 provider → 에이전트 전용 기본값(AGENT_IMAGE_PROVIDER)
+    // → 없으면 imagen 쪽 기본값(AI_IMAGE_PROVIDER, 미설정 시 gemini).
+    // AGENT_IMAGE_PROVIDER 를 두는 이유: 스튜디오 이미지 화면의 기본값은 건드리지 않고
+    // 회사 에이전트(픽셀)만 다른 모델로 돌릴 수 있게 하기 위함.
+    provider: input?.provider || String(ctx.env?.AGENT_IMAGE_PROVIDER || "").trim() || undefined,
     imageSize: input?.imageSize,
   };
   const res = await fetch(internalUrl(ctx.request, "/api/imagen"), {
@@ -1154,6 +1158,11 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     dataUrl: data.signedUrl ? "" : (data.dataUrl || ""), // signedUrl 있으면 무거운 dataUrl 미저장
     model: data.model || "",
     provider: data.provider || "",
+    // 요청한 프로바이더와 실제 사용된 프로바이더가 다르면(=폴백) 그 사실을 그대로 올린다.
+    // 조용히 대체되면 "GPT로 만들었다"고 착각하게 되므로 채팅 결과 문구에 노출한다.
+    providerRequested: data.providerRequested || "",
+    providerFallbackFrom: data.providerFallbackFrom || "",
+    fallbackReason: data.openaiError?.message || data.openaiError?.hint || "",
     aspectApplied: data.aspectApplied || payload.aspectRatio,
     promptEcho: data.promptEcho || prompt,
   };

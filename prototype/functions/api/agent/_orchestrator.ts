@@ -190,7 +190,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
     company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
-    image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9"}]]  → 이미지 생성 (Gemini/GPT-4o)`,
+    image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9", "provider": "gemini|openai(선택)"}]]  → 이미지 생성. 기본은 서버 설정 모델(Gemini 3.1 Flash Image). 사용자가 "GPT로", "지피티 이미지로"처럼 지정하면 provider:"openai"(GPT Image)로 호출. openai가 막히면 자동으로 Gemini로 대체되고 실제 사용 모델이 결과에 표시된다.`,
     sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
     video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
     scenario: `[[RUN: scenario | {"topic": "주제", "story": "원하는 이야기 흐름·사건·감정선(선택)", "purposeCategory": "장르(예: 키즈·영유아)", "purposeTags": ["세부 장르"], "target": "시청 타겟(예: 영유아·학습/놀이/감성 발달)", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing", "characters": []}]]  → 시나리오 생성(씬분해·대사·카메라 지시). 프리프로덕션 폼의 모든 항목을 지정할 수 있다 — 장르=purposeCategory, 세부장르=purposeTags, 시청목적=needs, 음성모드=voiceMode. topic만 필수, 나머지는 사용자가 말한 것만 채우고 생략 가능.`,
@@ -1246,6 +1246,19 @@ const SYNTH_TIMEOUT_MS = 30000;    // 조회 결과 재추론(자연스러운 �
 const TURN_BUDGET_MS = 80000;      // 한 턴 전체 예산
 const RUN_MIN_MS = 20000;          // 조회 1건을 끝내는 데 필요한 최소 여유
 
+/**
+ * 생성 결과에 실제 사용된 모델을 덧붙인다. 프로바이더가 자동 대체(폴백)되면 그 사실도 함께 알린다.
+ * (요청은 GPT였는데 조용히 Gemini로 대체되면 사용자가 어떤 모델 결과인지 알 수 없다.)
+ */
+function modelNote(output: any): string {
+  const model = String(output?.model || "").trim();
+  if (!model) return "";
+  const from = String(output?.providerFallbackFrom || "").trim();
+  if (!from) return ` (모델: ${model})`;
+  const why = String(output?.fallbackReason || "").trim().slice(0, 120);
+  return ` (⚠️ ${from} 호출이 막혀 ${model} 로 대체했어요${why ? `: ${why}` : ""})`;
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
@@ -1469,7 +1482,7 @@ export async function runGroupChat(
           result.gated ? `🔐 이 작업은 승인이 필요해요. 오른쪽 **승인 패널**에서 승인하면 그때 실제로 실행할게요.`
           : r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
           : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
-          : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.`;
+          : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.${modelNote(result.output)}`;
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText,
           files: result.gated ? [] : messageFiles(r.tool, result.output, job.id),
