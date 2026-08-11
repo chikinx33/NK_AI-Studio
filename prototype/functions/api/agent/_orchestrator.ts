@@ -1235,6 +1235,28 @@ export interface OrchestratorDeps {
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
 }
 
+// ── 미완 흐름 방지용 시간 상한 ─────────────────────────────────────────────
+// 상한 없이 도구·재추론에 매달리면 "🔎 … 조회 중이에요…" 안내만 남긴 채 워커가 먼저 끝나버려,
+// 사용자에겐 '아무 반응 없음'으로 보인다. 그래서 ① 도구/재추론에 개별 상한을 두고
+// ② 턴 전체 예산을 보고 남은 시간이 부족하면 조회를 시작하지 않고 다음 턴으로 미룬다.
+const TOOL_RUN_TIMEOUT_MS = 30000; // 조회 도구 1건
+const SYNTH_TIMEOUT_MS = 30000;    // 조회 결과 재추론(자연스러운 답 만들기)
+const TURN_BUDGET_MS = 80000;      // 한 턴 전체 예산
+const RUN_MIN_MS = 20000;          // 조회 1건을 끝내는 데 필요한 최소 여유
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label}이(가) ${Math.round(ms / 1000)}초를 넘겨 중단했어요`)),
+      ms
+    );
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
 /**
  * 단톡방 한 턴 처리: 1차 응답 → 위임(CALL) → 직원 작업·보고(+RUN 도구) → 코어 통솔 마무리.
  * waitUntil 백그라운드에서 멀티 Claude 호출(30초 응답 제약 회피). 각 발언은 agent_messages 로 영속.
@@ -1246,6 +1268,9 @@ export async function runGroupChat(
 ): Promise<any[]> {
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
+  // 턴 시작 시각 — 남은 예산 계산용(부족하면 새 조회를 시작하지 않고 다음 턴으로 미룬다)
+  const turnStartedAt = Date.now();
+  const remainingMs = () => TURN_BUDGET_MS - (Date.now() - turnStartedAt);
 
   // DB 선취 캐시 — company knowledge·skills·projects·auth·pendingJobs를 한 번만 읽고 전 직원이 공유.
   // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
@@ -1337,12 +1362,21 @@ export async function runGroupChat(
       // 읽기 전용 조회: 검수 없이 즉시 실행. synthesize 도구(웹 검색 등)는 결과를 모델에 다시 먹여
       // 자연스러운 답을 만들고(툴콜→결과→재추론), 그 외엔 결과를 채팅에 요약 출력.
       if (tool.kind === "read" || tool.kind === "local") {
+        // 남은 예산이 부족하면 아예 시작하지 않는다 — "조회 중" 안내만 남고 끊기는 흐름을 막는다.
+        if (remainingMs() < RUN_MIN_MS) {
+          await emit({
+            userId, conversationId, role: "agent", agentId, name: meta.name,
+            text: `⏸️ ${r.tool} 조회는 이번 턴에 시간이 부족해 시작하지 않았어요. "계속"이라고 말씀해 주시면 이어서 조회할게요.`,
+          });
+          continue;
+        }
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
           text: tool.kind === "read" ? `🔎 ${r.tool} 조회 중이에요…` : `🛠️ ${r.tool} 실행 중이에요…`,
         });
         try {
-          const output = await tool.run(parsedInput, toolCtx);
+          const runBudget = Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs()));
+          const output = await withTimeout(tool.run(parsedInput, toolCtx), runBudget, `${r.tool} 조회`);
           if (tool.synthesize) {
             const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
             const toolResultLimit = r.tool === "company_files_read" ? 20000 : 4500;
@@ -1350,7 +1384,22 @@ export async function runGroupChat(
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
               `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
               `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, toolResultLimit)}`;
-            const res2 = await speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
+            let res2: SpeakResult | null = null;
+            try {
+              res2 = await withTimeout(
+                speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts }),
+                SYNTH_TIMEOUT_MS,
+                "결과 정리"
+              );
+            } catch {
+              // 재추론이 지연·실패해도 가져온 결과는 그대로 내보낸다(빈손으로 끊기지 않게).
+              await emit({
+                userId, conversationId, role: "agent", agentId, name: meta.name,
+                text: `${formatReadResult(r.tool, output)}\n\n⚠️ 결과 정리가 지연돼 조회 원문으로 대신 보여드려요.`,
+                files: messageFiles(r.tool, output),
+              });
+            }
+            if (res2) {
             await emit({
               userId, conversationId, role: "agent", agentId, name: meta.name, text: res2.text,
               files: messageFiles(r.tool, output),
@@ -1364,6 +1413,7 @@ export async function runGroupChat(
             // 2차 응답의 RUN도 같은 턴에 실행한다. 동일 호출 중복과 과도한 연쇄는 제한한다.
             if (depth < 3 && res2.runs.length > 0) {
               await runTools(res2.runs, agentId, depth + 1, seenRuns);
+            }
             }
           } else {
             await emit({
@@ -1379,9 +1429,13 @@ export async function runGroupChat(
             }
           }
         } catch (e: any) {
+          const msg = String(e?.message || e);
+          const timedOut = /초를 넘겨 중단했어요/.test(msg);
           await emit({
             userId, conversationId, role: "agent", agentId, name: meta.name,
-            text: `❌ 조회에 실패했어요: ${String(e?.message || e)}`,
+            text: timedOut
+              ? `⏱️ ${r.tool} 조회가 오래 걸려서 멈췄어요. 잠시 후 다시 요청해 주세요. (${msg})`
+              : `❌ 조회에 실패했어요: ${msg}`,
           });
         }
         continue;

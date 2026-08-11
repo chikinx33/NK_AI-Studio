@@ -185,6 +185,27 @@ function CopyIcon({ className }: { className?: string }) {
   );
 }
 
+// ↓ 맨 아래로 — Lucide arrow-down
+function ArrowDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </svg>
+  );
+}
+
 function RepeatIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -317,6 +338,15 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const didInitScroll = useRef(false);
+  // ── 스크롤 추종 ──
+  // 맨 아래에 있을 때만 새 메시지를 따라 내려간다. 위로 올려 이전 기록을 읽는 중에는
+  // 절대 끌어내리지 않고, 대신 '맨 아래로' 버튼을 띄운다.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true); // 지금 맨 아래에 붙어 있는가(=자동 추종 여부)
+  const autoScrollRef = useRef(false); // 우리가 스크롤을 움직이는 중(사용자 조작으로 오인 방지)
+  const autoScrollTimer = useRef<number | null>(null);
+  const [showJump, setShowJump] = useState(false);
+  const NEAR_BOTTOM_PX = 80; // 이 정도 여유는 '맨 아래'로 본다
 
   // 이미지/파일 첨부 state — 여러 개 동시 첨부 지원
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -379,20 +409,55 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     });
   const LONG_CHARS = 600; // 이보다 길면 접어서 보여줌
 
+  // 맨 아래로 이동. 스트리밍 추종은 즉시(auto) — 부드러운 애니메이션 중 발생하는
+  // 중간 스크롤 이벤트를 사용자 조작으로 오인해 추종이 끊기는 문제를 막는다.
+  function scrollToBottom(behavior: ScrollBehavior = "auto") {
+    const el = scrollRef.current;
+    if (!el) return;
+    autoScrollRef.current = true;
+    if (autoScrollTimer.current) window.clearTimeout(autoScrollTimer.current);
+    autoScrollTimer.current = window.setTimeout(() => { autoScrollRef.current = false; }, behavior === "smooth" ? 800 : 120);
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    stickRef.current = true;
+    setShowJump(false);
+  }
+
+  // 스크롤 위치로 추종 여부를 갱신. 맨 아래에 닿으면 다시 붙고, 위로 올리면 떨어진다.
+  function onMessagesScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (gap <= NEAR_BOTTOM_PX) {
+      stickRef.current = true;
+      setShowJump(false);
+    } else if (!autoScrollRef.current) {
+      stickRef.current = false;
+      setShowJump(true);
+    }
+  }
+
+  // 휠·터치로 위로 올리는 즉시 추종 해제 (진행 중인 자동 스크롤보다 사용자 조작이 우선)
+  function onMessagesWheel(e: React.WheelEvent) {
+    if (e.deltaY >= 0) return;
+    autoScrollRef.current = false;
+    stickRef.current = false;
+    setShowJump(true);
+  }
+
   useEffect(() => {
     if (turns.length === 0) return;
-    const el = endRef.current;
-    if (!el) return;
     if (!didInitScroll.current) {
       // 단톡방 진입: 애니메이션 없이 즉시 맨 아래로 (레이아웃 반영 후 1회 보정)
       didInitScroll.current = true;
-      el.scrollIntoView({ behavior: "auto", block: "end" });
-      requestAnimationFrame(() => el.scrollIntoView({ behavior: "auto", block: "end" }));
-    } else {
-      // 이후 새 메시지는 부드럽게
-      el.scrollIntoView({ behavior: "smooth", block: "end" });
+      scrollToBottom("auto");
+      requestAnimationFrame(() => scrollToBottom("auto"));
+      return;
     }
+    // 위로 올려 읽는 중이면 건드리지 않는다 — 사용자가 '맨 아래로'를 누를 때만 내려간다.
+    if (stickRef.current) scrollToBottom("auto");
   }, [turns]);
+
+  useEffect(() => () => { if (autoScrollTimer.current) window.clearTimeout(autoScrollTimer.current); }, []);
 
   function injectKnowledge(i: number, text: string) {
     setInjectedIdx(i); // 즉시 피드백 (서버 적재는 백그라운드 — retire 판정이 느릴 수 있음)
@@ -416,6 +481,9 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     onSend(t, attachments.length ? attachments : undefined);
     setDraft("");
     setAttachments([]);
+    // 내가 보낸 메시지는 항상 따라간다 — 위로 올려 읽던 중이었어도 다시 붙는다.
+    stickRef.current = true;
+    scrollToBottom("auto");
   }
 
   async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -491,7 +559,14 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-2 relative">
+      {/* 메시지 영역 — 스크롤은 안쪽 div, '맨 아래로' 버튼은 스크롤과 함께 밀리지 않게 바깥에 고정 */}
+      <div className="relative flex flex-1 min-h-0 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={onMessagesScroll}
+        onWheel={onMessagesWheel}
+        className="flex-1 min-h-0 overflow-y-auto p-5 space-y-2 relative"
+      >
         {turns.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center p-5">
             <div className="text-center text-gray-500">
@@ -672,6 +747,18 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
           );
         })()}
         <div ref={endRef} />
+      </div>
+        {/* 맨 아래(최신 대화)로 — 위로 올려 읽는 중에만 나타난다 */}
+        {showJump && (
+          <button
+            onClick={() => scrollToBottom("smooth")}
+            title="맨 아래(최신 대화)로"
+            aria-label="맨 아래로 이동"
+            className="absolute bottom-4 right-5 z-10 grid h-9 w-9 place-items-center rounded-full border border-edge bg-panel/95 text-gray-300 shadow-lg backdrop-blur transition hover:bg-edge hover:text-white"
+          >
+            <ArrowDownIcon className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {isExpired ? (

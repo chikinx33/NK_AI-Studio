@@ -1621,6 +1621,8 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = "";
   let agentEmitted = 0;
+  let sawDone = false;      // 서버가 턴을 정상 종료했는가
+  let lastAgentText = "";   // 마지막 발언 — 끊긴 지점을 사용자에게 알려주기 위해 보관
 
   try {
     outer: while (true) {
@@ -1643,11 +1645,13 @@ export async function streamChat(
           onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: AGENT_EMOJI[m.agent_id] || "" });
           onEvent("turn_end", { agentId: m.agent_id, text: m.text, files: Array.isArray(m.files) ? m.files : [] });
           agentEmitted++;
+          lastAgentText = String(m.text || "");
         } else if (event.type === "job_ready") {
           onEvent("job_ready", { payload: event.payload });
         } else if (event.type === "ui_action") {
           onEvent("ui_action", { action: event.action });
         } else if (event.type === "done") {
+          sawDone = true;
           break outer;
         }
       }
@@ -1661,6 +1665,18 @@ export async function streamChat(
     onEvent("turn_end", {
       agentId: "core",
       text: "⚠️ 응답을 받지 못했어요. 가능한 원인: ① 모두 퇴근(휴식) 상태 — 출근시켜 주세요. ② 인증 문제 — 설정 → 🔍 인증 진단을 확인해 주세요. ③ 서버 처리 지연 — 잠시 후 다시 시도해 주세요.",
+    });
+  } else if (!sawDone && !opts.signal?.aborted) {
+    // done 없이 스트림이 끊긴 경우(서버 워커 종료·네트워크 단절). 예전엔 조용히 넘어가서
+    // "🔎 … 조회 중이에요…"가 마지막 말로 남아 아무 반응 없는 것처럼 보였다. 이제 끊김을 알린다.
+    // 진행 안내로 끝났는지 판별 — "…조회 중이에요…", "…실행 중이에요…", "…잠시 기다려주세요…"
+    const pending = /(중이에요…?|기다려주세요…?)$/.test(lastAgentText.trim())
+      ? ` (진행 중이던 단계: ${lastAgentText.trim()})`
+      : "";
+    onEvent("turn_start", { agentId: "core", name: "코어", emoji: AGENT_EMOJI.core || "" });
+    onEvent("turn_end", {
+      agentId: "core",
+      text: `⚠️ 응답이 중간에 끊겼어요${pending}. 같은 내용으로 다시 요청하시면 이어서 진행할게요.`,
     });
   }
   onEvent("done", {});
