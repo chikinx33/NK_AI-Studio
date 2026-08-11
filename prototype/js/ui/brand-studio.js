@@ -2638,8 +2638,8 @@
                       + ' data-action="brand-tiktok-inbox"'
                       + (canDeploy ? '' : ' disabled')
                       + ' title="' + escapeHtml(isEn
-                          ? 'Upload the video to your TikTok drafts and finish posting in the TikTok app.'
-                          : '영상을 TikTok 초안함으로 보내고, 게시는 TikTok 앱에서 마무리합니다.') + '">'
+                          ? 'Send the video to TikTok. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
+                          : '영상을 TikTok으로 보냅니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시하세요.') + '">'
                       + (isEn ? 'Send to<br>drafts' : '초안<br>배포')
                       + '</button>';
                   }
@@ -4441,14 +4441,14 @@
             var sent = res.result && res.result.status === 'sent_to_inbox';
             bsfNotify(sent
               ? (isEn
-                  ? 'Sent to your TikTok drafts. Open the TikTok app to add a caption and post it.'
-                  : 'TikTok 초안함으로 보냈습니다. TikTok 앱에서 캡션을 넣고 게시해 주세요.')
+                  ? 'Sent to TikTok. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
+                  : 'TikTok으로 보냈습니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.')
               : (isEn
-                  ? 'TikTok is still processing the upload. It will appear in your drafts shortly.'
-                  : 'TikTok이 업로드를 처리 중입니다. 잠시 후 초안함에 나타납니다.'));
+                  ? 'TikTok is still processing the upload. You will get a notification in the TikTok app shortly.'
+                  : 'TikTok이 업로드를 처리 중입니다. 잠시 후 TikTok 앱으로 알림이 도착합니다.'));
           })
           .catch(function (err) {
-            bsfNotify((isEn ? 'Could not send to TikTok drafts: ' : 'TikTok 초안함 전송 실패: ')
+            bsfNotify((isEn ? 'Could not send to TikTok: ' : 'TikTok 전송 실패: ')
               + (err && err.message ? err.message : err));
           })
           .finally(function () {
