@@ -104,6 +104,9 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   await sql("ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb");
+  // pending=true 는 "…조회 중이에요…" 같은 진행 안내. 결과가 붙으면 false 로 내리고,
+  // 오래 남아 있으면(=중간에 끊김) 안내 문구를 마무리로 고쳐 대화가 미완으로 남지 않게 한다.
+  await sql("ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS pending boolean NOT NULL DEFAULT false");
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
   } catch (_) {}
@@ -828,14 +831,50 @@ export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""
 
 export async function addMessage(
   sql: SqlFn,
-  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string; files?: MessageFileReference[] }
+  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string; files?: MessageFileReference[]; pending?: boolean }
 ): Promise<AgentMessage> {
   const rows = await sql(
-    `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text, files)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING *`,
-    [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text, JSON.stringify((m.files || []).slice(0, 20))]
+    `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text, files, pending)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8) RETURNING *`,
+    [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text, JSON.stringify((m.files || []).slice(0, 20)), m.pending === true]
   );
   return rows[0] as AgentMessage;
+}
+
+/** 진행 안내 해제 — 결과(또는 실패) 메시지를 붙인 뒤 호출. */
+export async function resolvePendingMessage(sql: SqlFn, id: string): Promise<void> {
+  if (!id) return;
+  try {
+    await sql("UPDATE agent_messages SET pending = false WHERE id = $1", [id]);
+  } catch (_) {}
+}
+
+/**
+ * 끊긴 진행 안내 정리. 결과가 붙지 않은 채 오래 남은 "…조회 중이에요…"를 마무리 문구로 고친다.
+ * 무응답 시간을 문구에 남겨(진단용) 어디서 얼마나 멈췄는지 바로 알 수 있게 한다.
+ */
+export async function sweepDanglingMessages(
+  sql: SqlFn,
+  userId: string,
+  conversationId: string,
+  olderThanSec = 90
+): Promise<number> {
+  try {
+    const rows = await sql(
+      `UPDATE agent_messages
+          SET pending = false,
+              text = text || ' → ⚠️ 여기서 끊겼어요(' ||
+                     ROUND(EXTRACT(EPOCH FROM (now() - created_at)))::text ||
+                     '초 무응답). 같은 내용으로 다시 요청하시면 이어서 진행할게요.'
+        WHERE user_id = $1 AND conversation_id = $2 AND pending = true
+          AND created_at < now() - make_interval(secs => $3::int)
+        RETURNING id`,
+      [userId, conversationId, Math.max(30, Math.round(olderThanSec))]
+    );
+    return Array.isArray(rows) ? rows.length : 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
 export async function recordUiAction(

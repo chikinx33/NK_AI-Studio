@@ -14,7 +14,8 @@ test("여러 에이전트 답변은 공통 표시 큐에서 한 건씩 노출된
   assert.match(app, /presentationQueueRef = useRef<AgentPresentationItem\[]>\(\[\]\)/);
   assert.match(app, /while \(presentationQueueRef\.current\.length > 0/);
   assert.match(app, /const item = presentationQueueRef\.current\.shift\(\)!/);
-  assert.match(app, /await revealAgentTurn\(item\.turnId, item\.agentId, item\.text\)/);
+  // 노출은 감시 타이머와 함께 await 한다 — 한 건이 멈춰도 큐가 계속 흐르도록.
+  assert.match(app, /const timedOut = await Promise\.race\(\[\s*\n\s*revealAgentTurn\(item\.turnId, item\.agentId, item\.text\)/);
   assert.match(app, /const presentedTurns = turns\.filter\(\(turn\) => !turn\.queued\)/);
   assert.match(app, /liveTurnIsVisible = turnsRef\.current\.some/);
   assert.match(app, /else presentationQueueRef\.current\.unshift\(item\)/);
@@ -35,5 +36,7 @@ test("사용자 입력과 대화 전환은 대기열을 안전하게 정리한�
   assert.match(app, /async function send[\s\S]*finishAgentPresentations\(\)/);
   assert.match(app, /cancelAgentPresentations\(\);[\s\S]*getConversationMessages\(activeConvId\)/);
   assert.match(app, /presentationWorkerRef\.current \+= 1/);
-  assert.match(app, /audio\.onpause = \(\) => resolve\(\)/);
+  // 일시정지도 재생 대기를 끝낸다 (ended/error/pause + 시간 상한을 finish 로 일원화)
+  assert.match(app, /const finish = \(\) => \{[\s\S]{0,90}resolve\(\);/);
+  assert.match(app, /audio\.onpause = finish/);
 });

@@ -211,6 +211,9 @@ export default function App() {
   const presentationQueueRef = useRef<AgentPresentationItem[]>([]);
   const presentationRunningRef = useRef(false);
   const presentationWorkerRef = useRef(0);
+  // 강제 노출로 이미 마무리한 발언 — 뒤늦게 끝난 TTS/타이핑이 자막을 되돌리지 못하게 막는다.
+  const revealSettledRef = useRef<Set<string>>(new Set());
+  const queueRetryRef = useRef(0);
   // 활성 대화(스레드) — 기본값 오늘(로컬 날짜). 전환 시 그 대화 메시지를 불러온다.
   const localToday = () => {
     const d = new Date();
@@ -426,7 +429,28 @@ export default function App() {
     commit(next);
   }
 
+  // 노출이 끝나지 않을 때 남은 자막을 즉시 채워 큐를 풀어준다(빈 말풍선 방지).
+  function forceRevealTurn(turnId: string, fullText: string) {
+    revealSettledRef.current.add(turnId);
+    revealRunsRef.current[turnId] = (revealRunsRef.current[turnId] || 0) + 1; // 진행 중 타이핑 취소
+    patchTurn(turnId, { displayText: fullText, typing: false, voicePreparing: false, streaming: false, queued: false });
+  }
+
+  // 발언 1건 노출에 허용할 최대 시간. 음성 낭독은 길어질 수 있어 문자수에 비례해 넉넉히 준다.
+  function revealCapMs(text: string) {
+    const len = Array.from(text).length;
+    const budget = voiceEnabledRef.current ? len * 170 + 75000 : len * 30 + 15000;
+    return Math.min(Math.max(budget, 30000), 240000);
+  }
+
   function typeTurnText(turnId: string, fullText: string): Promise<void> {
+    if (revealSettledRef.current.has(turnId)) return Promise.resolve();
+    // 백그라운드 탭에서는 setTimeout이 분 단위로 억제돼 타이핑이 사실상 멈춘다.
+    // 그 동안 뒤 발언들이 큐에 갇히므로, 화면이 숨어 있으면 애니메이션 없이 즉시 노출한다.
+    if (typeof document !== "undefined" && document.hidden) {
+      patchTurn(turnId, { displayText: fullText, typing: false, voicePreparing: false });
+      return Promise.resolve();
+    }
     const chars = Array.from(fullText);
     const run = (revealRunsRef.current[turnId] || 0) + 1;
     revealRunsRef.current[turnId] = run;
@@ -494,7 +518,17 @@ export default function App() {
 
   async function processPresentationQueue() {
     const liveTurnIsVisible = turnsRef.current.some((turn) => !turn.queued && turn.streaming);
-    if (presentationRunningRef.current || liveTurnIsVisible) return;
+    if (presentationRunningRef.current) return;
+    if (liveTurnIsVisible) {
+      // 실시간 발언이 끝나기를 기다린다. 예전엔 그냥 return 해서, 그 발언이 끝나지 않으면
+      // 큐에 쌓인 뒤 발언들이 영원히 안 나왔다(= 아무 반응 없음). 이제 다시 확인한다.
+      if (queueRetryRef.current) window.clearTimeout(queueRetryRef.current);
+      queueRetryRef.current = window.setTimeout(() => {
+        queueRetryRef.current = 0;
+        void processPresentationQueue();
+      }, 500);
+      return;
+    }
     presentationRunningRef.current = true;
     setPresentationActive(true);
     const worker = ++presentationWorkerRef.current;
@@ -518,7 +552,16 @@ export default function App() {
           if (presentationWorkerRef.current !== worker) break;
         }
 
-        await revealAgentTurn(item.turnId, item.agentId, item.text);
+        // 감시 타이머: TTS 응답·오디오 재생·브라우저 낭독이 끝나지 않아도 큐가 멈추지 않게
+        // 상한을 넘기면 남은 자막을 즉시 채우고 다음 발언으로 넘어간다.
+        const timedOut = await Promise.race([
+          revealAgentTurn(item.turnId, item.agentId, item.text).then(() => false),
+          presentationDelay(revealCapMs(item.text)).then(() => true),
+        ]);
+        if (timedOut) {
+          stopSpeech();
+          forceRevealTurn(item.turnId, item.text);
+        }
         if (presentationWorkerRef.current !== worker) break;
 
         // 다음 말풍선이 같은 순간에 붙지 않도록 문장 길이에 비례한 짧은 간격을 둔다.
@@ -579,6 +622,26 @@ export default function App() {
       : turn));
   }
 
+  // 마지막 안전망: 자막이 빈 채로 남은 발언(대기·타이핑·음성준비도 아니고 큐에도 없음)을
+  // 주기적으로 찾아 즉시 노출한다. 어떤 경로로 노출이 실패해도 '아무 반응 없음'은 만들지 않는다.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const queuedIds = new Set(presentationQueueRef.current.map((i) => i.turnId));
+      const orphanIds = turnsRef.current
+        .filter((turn) =>
+          turn.role === "agent" && !!turn.text && !turn.streaming && !turn.queued && !turn.typing &&
+          !turn.voicePreparing && turn.displayText === "" && !!turn.id && !queuedIds.has(turn.id)
+        )
+        .map((turn) => turn.id!);
+      if (!orphanIds.length) return;
+      orphanIds.forEach((id) => revealSettledRef.current.add(id));
+      commit(turnsRef.current.map((turn) => (turn.id && orphanIds.includes(turn.id)
+        ? { ...turn, displayText: turn.text, typing: false, voicePreparing: false }
+        : turn)));
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
   // 서버/클라우드 TTS로 오디오를 생성해 재생하면서 자막을 타이핑한다.
   async function revealViaCloudAudio(turnId: string, agentId: string | undefined, fullText: string, speechText: string, engine: VoiceMode) {
     patchTurn(turnId, { displayText: "", typing: false, voicePreparing: true });
@@ -586,6 +649,8 @@ export default function App() {
       const speech = engine === "server"
         ? await synthesizeAgentSpeechServer({ agentId, text: speechText })
         : await synthesizeAgentSpeech({ agentId, text: speechText });
+      // 합성이 늦게 끝났고 그 사이 감시 타이머가 자막을 마무리했다면 되돌리지 않는다.
+      if (revealSettledRef.current.has(turnId)) return;
       if (!voiceEnabledRef.current) {
         await typeTurnText(turnId, fullText);
         return;
@@ -656,8 +721,11 @@ export default function App() {
       onBoundary: (p) => revealTo(Math.ceil(p * chars.length)),
     });
     browserSpeechRef.current = handle;
-    await handle.done;
+    // speechSynthesis 는 end 이벤트가 오지 않는 경우가 흔하다(탭 비활성·긴 문장 등).
+    // 낭독 예상시간의 2배 + 15초를 넘기면 낭독을 끊고 자막을 마무리한다.
+    await Promise.race([handle.done, presentationDelay(Math.min(estMs * 2 + 15000, 180000))]);
     ended = true;
+    try { handle.cancel(); } catch {}
     if (browserSpeechRef.current === handle) browserSpeechRef.current = null;
     // 낭독이 끝나면 남은 자막을 마저 채운다.
     if (revealRunsRef.current[turnId] === run) revealTo(chars.length);
@@ -668,11 +736,24 @@ export default function App() {
       const audio = new Audio(url);
       applyAudioPlaybackRate(audio, speed);
       speechAudioRef.current = audio;
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
-      audio.onpause = () => resolve();
+      // ended/error/pause 중 아무것도 오지 않는 브라우저·기기가 있다. 그대로 두면 낭독이
+      // 영원히 안 끝나 다음 발언이 화면에 나오지 않으므로 재생 길이 기준 상한을 함께 둔다.
+      let timer = 0;
+      const finish = () => { if (timer) window.clearTimeout(timer); resolve(); };
+      const arm = (ms: number) => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(finish, Math.min(ms, 180000));
+      };
+      audio.onended = finish;
+      audio.onerror = finish;
+      audio.onpause = finish;
+      audio.onloadedmetadata = () => {
+        const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
+        if (dur > 0) arm((dur / Math.max(0.5, speed)) * 1000 + 15000);
+      };
+      arm(60000); // 메타데이터조차 안 오는 경우의 기본 상한
       const started = audio.play();
-      if (started && typeof started.catch === "function") started.catch(() => resolve());
+      if (started && typeof started.catch === "function") started.catch(finish);
     });
     if (speechAudioRef.current?.src === url) speechAudioRef.current = null;
   }

@@ -10,6 +10,8 @@ import {
   toolOwnedBy,
   parseToolInput,
   addMessage,
+  resolvePendingMessage,
+  sweepDanglingMessages,
   recordUiAction,
   listMessages,
   buildTranscript,
@@ -1271,6 +1273,8 @@ export async function runGroupChat(
   // 턴 시작 시각 — 남은 예산 계산용(부족하면 새 조회를 시작하지 않고 다음 턴으로 미룬다)
   const turnStartedAt = Date.now();
   const remainingMs = () => TURN_BUDGET_MS - (Date.now() - turnStartedAt);
+  // 이전 턴에서 결과가 못 붙은 진행 안내가 남아 있으면 먼저 마무리 문구로 정리한다.
+  await sweepDanglingMessages(sql, userId, conversationId).catch(() => 0);
 
   // DB 선취 캐시 — company knowledge·skills·projects·auth·pendingJobs를 한 번만 읽고 전 직원이 공유.
   // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
@@ -1370,9 +1374,11 @@ export async function runGroupChat(
           });
           continue;
         }
-        await emit({
+        // pending=true: 결과가 붙기 전까지는 '미완' 표시. 끊기면 폴링·다음 턴에서 마무리된다.
+        const notice = await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
           text: tool.kind === "read" ? `🔎 ${r.tool} 조회 중이에요…` : `🛠️ ${r.tool} 실행 중이에요…`,
+          pending: true,
         });
         try {
           const runBudget = Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs()));
@@ -1437,6 +1443,9 @@ export async function runGroupChat(
               ? `⏱️ ${r.tool} 조회가 오래 걸려서 멈췄어요. 잠시 후 다시 요청해 주세요. (${msg})`
               : `❌ 조회에 실패했어요: ${msg}`,
           });
+        } finally {
+          // 성공·실패 어느 쪽이든 결과 메시지가 붙었으므로 진행 안내는 해제한다.
+          await resolvePendingMessage(sql, String((notice as any)?.id || ""));
         }
         continue;
       }

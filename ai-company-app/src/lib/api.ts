@@ -768,6 +768,15 @@ export function getAgentServerVoiceParams(agentId?: string, voiceKey?: string): 
 }
 
 // 자체 호스팅 MeloTTS 서버로 음성 생성(무료·과금 없음). /api/tts/melo → Cloud Run.
+/** fetch 시간 상한 — AbortSignal.timeout 미지원 브라우저도 커버 */
+export function timeoutSignal(ms: number): AbortSignal {
+  const anySignal = AbortSignal as any;
+  if (typeof anySignal?.timeout === "function") return anySignal.timeout(ms) as AbortSignal;
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
 export async function synthesizeAgentSpeechServer(input: {
   agentId?: string;
   text: string;
@@ -776,10 +785,13 @@ export async function synthesizeAgentSpeechServer(input: {
   if (!script) throw new Error("script is required");
   await loadAgentVoiceSettings();
   const { speed, semitones } = getAgentServerVoiceParams(input.agentId);
+  // 상한 필수: 응답이 멈추면 발언 낭독이 끝나지 않아 이후 메시지가 화면에 안 나타난다.
+  // (Cloud Run 콜드스타트 20~40초를 감안해 60초)
   const res = await fetch("/api/tts/melo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ script, speed, semitones }),
+    signal: timeoutSignal(60000),
   });
   const raw = await res.text().catch(() => "");
   let data: any = {};
@@ -816,6 +828,7 @@ export async function synthesizeAgentSpeech(input: {
       strictCloudGeminiTts: true,
       ephemeral: true, // 채팅 음성은 GCS에 저장하지 않고 즉시 반환(재생 후 소멸)
     }),
+    signal: timeoutSignal(45000), // 상한 필수 — 위 melo 주석과 같은 이유
   });
   const raw = await res.text().catch(() => "");
   let data: any = {};

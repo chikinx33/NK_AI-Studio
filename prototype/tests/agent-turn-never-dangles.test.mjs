@@ -38,6 +38,28 @@ test("턴 예산이 부족하면 조회를 시작하지 않고 다음 턴으로 
   assert.ok(budgetAt > 0 && noticeAt > budgetAt, "예산 확인이 '조회 중' 안내보다 앞에 있어야 합니다");
 });
 
+test("진행 안내는 pending 으로 표시되고 결과가 붙으면 해제된다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS pending boolean NOT NULL DEFAULT false/);
+  assert.match(shared, /INSERT INTO agent_messages \(user_id, conversation_id, role, agent_id, name, text, files, pending\)/);
+  assert.match(shared, /export async function resolvePendingMessage/);
+  const src = orch();
+  assert.match(src, /const notice = await emit\(\{[\s\S]{0,260}pending: true,/);
+  // 성공·실패 어느 경로로 끝나도 해제된다(finally)
+  assert.match(src, /\} finally \{[\s\S]{0,200}resolvePendingMessage\(sql, String\(\(notice as any\)\?\.id \|\| ""\)\)/);
+});
+
+test("끊긴 진행 안내는 폴링·다음 턴에서 마무리 문구로 정리된다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /export async function sweepDanglingMessages/);
+  // 무응답 시간을 남겨 진단에 쓸 수 있게 한다
+  assert.match(shared, /⚠️ 여기서 끊겼어요\(' \|\|\s*\n\s*ROUND\(EXTRACT\(EPOCH FROM \(now\(\) - created_at\)\)\)::text/);
+  assert.match(shared, /AND created_at < now\(\) - make_interval\(secs => \$3::int\)/);
+  // 메시지 폴링과 새 턴 시작 양쪽에서 정리한다
+  assert.match(read("prototype/functions/api/agent/messages.ts"), /await sweepDanglingMessages\(sql, auth\.userId, conversationId\)/);
+  assert.match(orch(), /await sweepDanglingMessages\(sql, userId, conversationId\)/);
+});
+
 test("스트림이 done 없이 끊기면 사용자에게 알린다", () => {
   const src = api();
   assert.match(src, /let sawDone = false;/);
