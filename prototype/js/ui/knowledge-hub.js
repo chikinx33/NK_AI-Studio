@@ -103,7 +103,14 @@
         uploadFail: 'Failed to upload sheets: ',
         uploadLimitReached: 'You can register up to 4 sheets per character.',
         uploadLimitPartial: 'You can register up to 4 sheets per character, so only the first ',
-        uploadLimitPartialSuffix: ' image(s) will be added.'
+        uploadLimitPartialSuffix: ' image(s) will be added.',
+        propsTitle: 'Edit text attributes',
+        aiFill: 'Auto-fill with AI',
+        aiFillTitle: 'Analyze the registered sheets and draft the text attributes (review before saving)',
+        aiFilling: 'Analyzing…',
+        aiFillNoSheet: 'Register at least one sheet image first.',
+        aiFillDone: 'Draft filled from the sheets. Review it and press Save.',
+        aiFillFail: 'Auto-fill failed: '
       }
       : {
         title: 'IP 라이브러리',
@@ -125,7 +132,14 @@
         uploadFail: '시트 업로드 실패: ',
         uploadLimitReached: '시트는 캐릭터당 최대 4장까지 등록할 수 있습니다.',
         uploadLimitPartial: '시트는 캐릭터당 최대 4장까지 등록할 수 있어 앞의 ',
-        uploadLimitPartialSuffix: '장만 추가합니다.'
+        uploadLimitPartialSuffix: '장만 추가합니다.',
+        propsTitle: '텍스트 속성 편집',
+        aiFill: 'AI 자동 채우기',
+        aiFillTitle: '등록된 시트를 분석해 텍스트 속성 초안을 채웁니다(저장 전에 확인·수정하세요)',
+        aiFilling: '분석 중…',
+        aiFillNoSheet: '먼저 시트 이미지를 1장 이상 등록해 주세요.',
+        aiFillDone: '시트 분석으로 초안을 채웠어요. 확인·수정 후 저장을 눌러주세요.',
+        aiFillFail: 'AI 자동 채우기 실패: '
       };
   }
 
@@ -991,6 +1005,10 @@
     var modalSaveInFlight = false;
     var modalPreviewImageUrl = '';
     var modalPreviewImageAlt = '';
+    // AI 자동 채우기 상태: 분석 중(버튼 잠금) / 펼쳐둘 캐릭터 / 완료 안내를 띄울 캐릭터
+    var aiFillBusyToken = '';
+    var aiFillOpenToken = '';
+    var aiFillNoticeToken = '';
     // 배경·소품 라이브러리 모달 상태 (캐릭터 IP 라이브러리와 동일한 구조).
     var modalEnvDraft = null;
     var modalEnvSaveInFlight = false;
@@ -1548,9 +1566,25 @@
             '</div>' +
             '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '</div>' +
-            '<details class="character-props-disclosure">' +
-            '<summary>텍스트 속성 편집</summary>' +
+            '<details class="character-props-disclosure"' + (aiFillOpenToken === entry.token ? ' open' : '') + '>' +
+            // 요약줄 안에 AI 자동 채우기 버튼을 둔다. summary 기본 토글과 충돌하지 않도록
+            // 핸들러에서 preventDefault 하고, 채운 뒤에는 열린 상태로 다시 렌더한다.
+            '<summary>' + escapeHtml(ipLibraryUiText.propsTitle) +
+            '<button type="button" class="character-props-ai-btn" data-action="character-props-ai" data-character-token="' + escapeHtml(entry.token) + '"' +
+            (aiFillBusyToken ? ' disabled' : '') +
+            ' title="' + escapeHtml(ipLibraryUiText.aiFillTitle) + '" aria-label="' + escapeHtml(ipLibraryUiText.aiFill) + '">' +
+            // Lucide wand-sparkles
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/>' +
+            '<path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/>' +
+            '</svg>' +
+            '<span>' + escapeHtml(aiFillBusyToken === entry.token ? ipLibraryUiText.aiFilling : ipLibraryUiText.aiFill) + '</span>' +
+            '</button>' +
+            '</summary>' +
             '<div class="character-props-form">' +
+            (aiFillNoticeToken === entry.token
+              ? '<p class="character-props-ai-notice">' + escapeHtml(ipLibraryUiText.aiFillDone) + '</p>'
+              : '') +
             '<label class="character-props-label">캐릭터 설명<textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="외모, 성격, 특징 등을 설명합니다.">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
             '<label class="character-props-label">고정 특성 <span class="character-props-hint">(쉼표 구분)</span><input type="text" class="character-props-input" data-char-prop="fixedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.fixedTraits) ? bChar.fixedTraits.join(', ') : bChar && bChar.fixedTraits || '') || '') + '" placeholder="예: 파란 눈, 빨간 머리" /></label>' +
             '<label class="character-props-label">금지 특성 <span class="character-props-hint">(프롬프트 텍스트에 포함)</span><input type="text" class="character-props-input" data-char-prop="bannedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.bannedTraits) ? bChar.bannedTraits.join(', ') : bChar && bChar.bannedTraits || '') || '') + '" placeholder="예: 손가락 없음, 안경 없음" /></label>' +
@@ -1631,6 +1665,65 @@
           modalPreviewImageUrl = resolveSheetPreviewUrl(previewTarget.sheet.imageDataUrl);
           modalPreviewImageAlt = (normalizeCharacterName(previewTarget.entry && (previewTarget.entry.displayName || previewTarget.entry.token) || previewToken || '') || String(previewToken || '').replace(/^@/, '')) + ' ' + ipLibraryUiText.previewAlt;
           renderCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-props-ai') {
+          // summary 안의 버튼이라 기본 토글을 막고, 우리가 열린 상태를 제어한다.
+          if (evt.preventDefault) evt.preventDefault();
+          if (evt.stopPropagation) evt.stopPropagation();
+          if (aiFillBusyToken) return;
+          var aiToken = String(btn.dataset.characterToken || '').trim();
+          var aiTokenKey = aiToken.toLowerCase();
+          var aiEntry = (Array.isArray(sheetEntries) ? sheetEntries : []).find(function (e) {
+            return String((e && e.token) || '').trim().toLowerCase() === aiTokenKey;
+          }) || null;
+          var aiSheets = (aiEntry && Array.isArray(aiEntry.items) ? aiEntry.items : [])
+            .map(function (sheet) { return String((sheet && sheet.imageDataUrl) || '').trim(); })
+            .filter(Boolean)
+            .slice(0, 4);
+          if (!aiSheets.length) { alert(ipLibraryUiText.aiFillNoSheet); return; }
+          var aiName = normalizeCharacterName((aiEntry && (aiEntry.displayName || aiEntry.token)) || aiToken) || String(aiToken).replace(/^@/, '');
+          // 브랜드 맥락을 함께 넘겨 같은 세계관·규칙 안에서 서술되게 한다.
+          var otherNames = (Array.isArray(sheetEntries) ? sheetEntries : [])
+            .map(function (e) { return String((e && (e.displayName || e.token)) || '').replace(/^@/, '').trim(); })
+            .filter(function (n) { return n && n !== aiName; });
+          var aiBrandContext = {
+            brandTitle: String((brand && brand.brandTitle) || knowledge.brandTitle || '').trim(),
+            brandStory: String(knowledge.brandStory || '').trim(),
+            worldSetting: String(knowledge.worldSetting || '').trim(),
+            brandRules: Array.isArray(knowledge.brandRules) ? knowledge.brandRules : [],
+            bannedExpressions: Array.isArray(knowledge.bannedExpressions) ? knowledge.bannedExpressions : [],
+            otherCharacters: otherNames
+          };
+          aiFillBusyToken = aiToken;
+          aiFillOpenToken = aiToken;
+          renderCharacterManagerModal();
+          Promise.resolve()
+            .then(function () {
+              if (!NK.api || typeof NK.api.ipAnalyze !== 'function') throw new Error('API client가 로드되지 않았습니다.');
+              return NK.api.ipAnalyze({
+                characterName: aiName,
+                imageUrls: aiSheets,
+                brandContext: aiBrandContext,
+                lang: getRuntimeLang() === 'en' ? 'en' : 'ko'
+              });
+            })
+            .then(function (res) {
+              // 초안만 채운다 — 영속화는 사용자가 '저장'을 눌렀을 때만.
+              if (res && res.description) syncBrandCharField(aiToken, 'description', String(res.description));
+              if (res && Array.isArray(res.fixedTraits) && res.fixedTraits.length) syncBrandCharField(aiToken, 'fixedTraits', res.fixedTraits);
+              if (res && Array.isArray(res.bannedTraits) && res.bannedTraits.length) syncBrandCharField(aiToken, 'bannedTraits', res.bannedTraits);
+              if (res && res.negativePrompt) syncBrandCharField(aiToken, 'negativePrompt', String(res.negativePrompt));
+              if (res && res.styleGuide) syncBrandCharField(aiToken, 'styleGuide', String(res.styleGuide));
+              aiFillBusyToken = '';
+              aiFillNoticeToken = aiToken;
+              renderCharacterManagerModal();
+            })
+            .catch(function (err) {
+              aiFillBusyToken = '';
+              renderCharacterManagerModal();
+              alert(ipLibraryUiText.aiFillFail + (err && err.message ? err.message : err));
+            });
           return;
         }
         if (action === 'character-sheet-set-primary') {

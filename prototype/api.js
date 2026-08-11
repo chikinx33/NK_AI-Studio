@@ -529,6 +529,26 @@
     return j(text);
   };
 
+  // IP 라이브러리 텍스트 속성 자동 채우기 — 등록 시트 이미지 + 브랜드 맥락 → 캐릭터 규격 초안.
+  api.ipAnalyze = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
+    var res = await fetchWithTimeout(withBase('/api/ip/analyze'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    }, (opts && opts.timeoutMs) || 90000);
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'ip_analyze_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.videoStart = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();

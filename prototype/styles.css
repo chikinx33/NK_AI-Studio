@@ -10418,6 +10418,38 @@ details[open] > .knowledge-hub-disclosure-body {
 }
 .character-props-disclosure > summary::-webkit-details-marker { display: none; }
 .character-props-disclosure[open] > summary { color: var(--text, #f0f0f0); }
+/* 요약줄 오른쪽의 'AI 자동 채우기' — 시트를 분석해 텍스트 속성 초안을 채운다. */
+.character-props-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.character-props-ai-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary, #999);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.character-props-ai-btn:hover:not(:disabled) {
+  color: #a5b4fc;
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+}
+.character-props-ai-btn:disabled { opacity: 0.5; cursor: progress; }
+.character-props-ai-notice {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #6ee7b7;
+}
 .character-props-form {
   display: grid !important;
   grid-template-rows: 0fr;
