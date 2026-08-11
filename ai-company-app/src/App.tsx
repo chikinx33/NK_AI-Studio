@@ -1264,6 +1264,7 @@ export default function App() {
               onOpenCategory={openSkillCategory}
             />
             <Approvals
+              centerView={centerView}
               onPickCategory={openKnowledgeCategory}
               onAgentSay={(m) => {
                 presentCompletedAgentTurns([

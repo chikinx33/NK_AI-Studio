@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 import CollapsibleSection from "./CollapsibleSection";
 import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
@@ -9,6 +9,11 @@ const KNOW_CHIPS = [
   { key: "사실", label: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
   { key: "결정", label: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
 ] as const;
+
+type KnowKey = "원칙" | "사실" | "결정" | "스킬";
+const KNOW_KEYS: KnowKey[] = ["원칙", "사실", "결정", "스킬"];
+// 신규 지식 강조 — 방금 늘어난 분류 칩에만 붙인다.
+const FRESH_RING = "ring-2 ring-white/70 animate-pulse";
 
 function ListTodoIcon({ className }: { className?: string }) {
   return (
@@ -93,9 +98,12 @@ interface ApprovalItem {
 export default function Approvals({
   onPickCategory,
   onAgentSay,
+  centerView,
 }: {
-  onPickCategory?: (key: "원칙" | "사실" | "결정" | "스킬" | null) => void;
+  onPickCategory?: (key: KnowKey | null) => void;
   onAgentSay?: (m: AgentMessage) => void;
+  /** 현재 보고 있는 중앙 화면 — 바뀌면(=다른 페이지로 이동) 신규 지식 강조를 해제한다. */
+  centerView?: string;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   const [history, setHistory] = useState<ApprovalItem[]>([]);
@@ -110,6 +118,11 @@ export default function Approvals({
   });
   // 클릭한 항목 → 어떤 처리(승인/거절)인지 기록. 목록에서 사라질 때까지 버튼 잠금 유지(중복 클릭 방지)
   const [acting, setActing] = useState<Record<string, "approve" | "reject">>({});
+  // 신규 지식이 들어온 분류 칩을 강조. 해제 조건 ① 다음 신규 지식(새 강조로 교체)
+  // ② 다른 페이지로 이동(centerView 변경 · 새로고침 — 메모리에만 두므로 자동) ③ 그 칩을 직접 클릭.
+  const [freshTypes, setFreshTypes] = useState<Set<KnowKey>>(new Set());
+  // 분류별 개수 스냅샷. 첫 조회는 기준선만 잡고 강조하지 않는다(기존 지식이 새 것으로 보이면 안 됨).
+  const prevCountsRef = useRef<Record<KnowKey, number> | null>(null);
 
   // 버튼 클릭 즉시 잠금 → 항목이 pending에서 사라지면 잠금 자동 해제(refresh에서 정리)
   async function act(id: string, action: "approve" | "reject") {
@@ -158,6 +171,20 @@ export default function Approvals({
     setKnowledge(know);
     setSkills(sk);
     setProjects(proj);
+    // 신규 지식 감지: 분류별 개수가 늘어난 분류만 강조. 수정(개수 그대로)·정리(개수 감소)는 강조하지 않는다.
+    const counts: Record<KnowKey, number> = {
+      원칙: know.filter((k: KnowledgeItem) => (k.type ?? "사실") === "원칙").length,
+      사실: know.filter((k: KnowledgeItem) => (k.type ?? "사실") === "사실").length,
+      결정: know.filter((k: KnowledgeItem) => (k.type ?? "사실") === "결정").length,
+      스킬: sk.length,
+    };
+    const prevCounts = prevCountsRef.current;
+    prevCountsRef.current = counts;
+    if (prevCounts) {
+      const grown = KNOW_KEYS.filter((k) => counts[k] > prevCounts[k]);
+      // 새로 늘어난 게 있을 때만 교체 → 이전 강조는 이 시점에 함께 해제된다.
+      if (grown.length) setFreshTypes(new Set(grown));
+    }
     try {
       const s = localStorage.getItem("nk_project_sidebar_hidden");
       setSidebarHidden(s ? new Set(JSON.parse(s)) : new Set());
@@ -184,6 +211,22 @@ export default function Approvals({
     const t = setInterval(refresh, 4000);
     return () => clearInterval(t);
   }, []);
+
+  // 다른 페이지로 이동하면 강조 해제 — 돌아왔을 때 남아 있지 않게 한다.
+  useEffect(() => {
+    setFreshTypes((prev) => (prev.size ? new Set<KnowKey>() : prev));
+  }, [centerView]);
+
+  // 칩 클릭: 그 분류의 강조를 해제하고 지식 페이지로 이동
+  function pickCategory(key: KnowKey) {
+    setFreshTypes((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    onPickCategory?.(key);
+  }
 
   useUiAction((action) => {
     if (action.action === "approval.decide") {
@@ -213,12 +256,13 @@ export default function Approvals({
           <div className="flex flex-wrap items-center gap-1">
             {KNOW_CHIPS.map(({ key, label, c }) => {
               const n = knowledge.filter((k) => (k.type ?? "사실") === key).length;
+              const fresh = freshTypes.has(key);
               return (
                 <button
                   key={label}
-                  onClick={() => onPickCategory?.(key)}
-                  title="지식 페이지에서 이 분류 보기"
-                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 ${c}`}
+                  onClick={() => pickCategory(key)}
+                  title={fresh ? `방금 새 ${label} 지식이 추가됐어요 · 눌러서 보기` : "지식 페이지에서 이 분류 보기"}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 ${c} ${fresh ? FRESH_RING : ""}`}
                 >
                   {label} {n}
                 </button>
@@ -226,9 +270,11 @@ export default function Approvals({
             })}
             {/* 스킬도 회사 지식의 한 분류로 — 클릭 시 지식 페이지에서 스킬 목록 표시 */}
             <button
-              onClick={() => onPickCategory?.("스킬")}
-              title="지식 페이지에서 스킬 목록 보기"
-              className="rounded-full border border-emerald-700/50 bg-emerald-900/50 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition hover:brightness-125"
+              onClick={() => pickCategory("스킬")}
+              title={freshTypes.has("스킬") ? "방금 새 스킬이 추가됐어요 · 눌러서 보기" : "지식 페이지에서 스킬 목록 보기"}
+              className={`rounded-full border border-emerald-700/50 bg-emerald-900/50 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition hover:brightness-125 ${
+                freshTypes.has("스킬") ? FRESH_RING : ""
+              }`}
             >
               스킬 {skills.length}
             </button>
