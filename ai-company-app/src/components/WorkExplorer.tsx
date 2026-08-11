@@ -315,8 +315,10 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
 
   useUiAction((action) => {
     if (action.action === "company_files.view" || action.action === "company_files.refresh") {
-      setDate("");
       setSourceWork(null);
+      // dateKey 를 주면 그 날짜 폴더를 바로 연다(검수 패널 '폴더 열기' → 해당 업무가 있는 폴더).
+      const dateKey = actionString(action, "dateKey");
+      setDate(/^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : "");
       return;
     }
     if (action.action === "work_explorer.view") {

@@ -3039,7 +3039,7 @@
     newSeriesRow.className = 'form-row project-create-series-row';
     newSeriesRow.innerHTML = `
       <label>프로젝트</label>
-      <input id="project-series-input" placeholder="프로젝트 이름 (예: 우울의 숲)" />
+      <input id="project-series-input" placeholder="프로젝트 이름 · 영문 (예: Judge Bao)" lang="en" autocapitalize="words" />
     `;
 
     const existingSeriesRow = document.createElement('div');
@@ -3100,6 +3100,22 @@
 
     const modeButtons = Array.from(modeRow.querySelectorAll('.mode-btn-item'));
     const seriesInput = newSeriesRow.querySelector('#project-series-input');
+    // 프로젝트 이름은 영문만. 이 이름이 GCS 폴더명(seriesId)이 되는데 경로가 ASCII만 허용해서,
+    // 한글로 적으면 폴더명이 projects+타임스탬프로 떨어져 사람이 못 읽는 폴더가 만들어진다.
+    // IME 조합 중에도 남지 않도록 input·compositionend 양쪽에서 걸러낸다.
+    if (seriesInput) {
+      const stripNonAscii = () => {
+        const next = String(seriesInput.value || '').replace(/[^A-Za-z0-9 ._-]/g, '');
+        if (next !== seriesInput.value) {
+          const atEnd = seriesInput.selectionStart === seriesInput.value.length;
+          seriesInput.value = next;
+          if (atEnd) seriesInput.setSelectionRange(next.length, next.length);
+        }
+      };
+      seriesInput.addEventListener('input', stripNonAscii);
+      seriesInput.addEventListener('compositionend', stripNonAscii);
+      seriesInput.addEventListener('blur', stripNonAscii);
+    }
     const seriesSelect = existingSeriesRow.querySelector('#project-series-select');
     const projectTypeSelect = profileLine.querySelector('#project-type-select');
     const brandSummaryInput = profileLine.querySelector('#project-brand-summary-input');

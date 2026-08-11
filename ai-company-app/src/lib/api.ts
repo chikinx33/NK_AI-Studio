@@ -1,3 +1,4 @@
+import { dispatchUiAction } from "./uiActions";
 import type { AgentVideoContribution, AgentVideoSpec } from "../remotion/spec";
 import type { SkillArtifact, SkillJob, SkillJobInput } from "./skillJobs";
 
@@ -1288,6 +1289,9 @@ export interface ResultItem {
   note?: string;
   reviewStatus: "pending" | "approved" | "revise";
   createdAt: number;
+  /** 검수 승인 시 등록된 '회사 업무' 위치 — 업무 파일에서 이 날짜 폴더를 열면 산출물이 있다. */
+  workDateKey?: string;
+  workItemId?: string;
 }
 // NK: 검수 결과 = 잡(agent_jobs) 중 산출물 있는 것. /api/agent/jobs 를 ResultItem 으로 변환.
 const NK_AGENT_NAMES: Record<string, string> = {
@@ -1314,6 +1318,8 @@ export async function getResults(limit = 30): Promise<{ items: ResultItem[]; tot
       prompt: (j.input && j.input.prompt) || out.promptEcho || "", provider: out.provider || out.model || "",
       note: j.review_note || "", reviewStatus: j.review_status || "pending",
       createdAt: Date.parse(j.created_at) || 0,
+      workDateKey: out.workDateKey || "",
+      workItemId: out.workItemId || "",
     };
   });
   return { items, total: items.length };
@@ -1382,9 +1388,18 @@ export async function cancelResult(id: string): Promise<{ ok: boolean; message?:
   return { ok: !!d.ok, message };
 }
 
-export async function openResultFolder(_id: string) {
-  // NK: 클라우드 저장이라 로컬 폴더 열기는 미지원.
-  return { ok: false, message: "클라우드에서는 폴더 열기를 지원하지 않아요." };
+/**
+ * 산출물이 정리된 '업무 파일' 폴더로 이동. 클라우드 앱이라 로컬 폴더 개념은 없고,
+ * 검수 승인 시 등록된 업무의 날짜 폴더가 그 산출물의 실제 위치다.
+ * (예전에는 무조건 실패만 반환해서 버튼을 눌러도 아무 일도 일어나지 않았다.)
+ */
+export function openResultFolder(item: { workDateKey?: string }): { ok: boolean; message: string } {
+  const dateKey = String(item?.workDateKey || "").trim();
+  if (!dateKey) {
+    return { ok: false, message: "아직 업무 파일에 정리되지 않았어요. ‘검토 승인’하면 그날 폴더에 등록돼요." };
+  }
+  dispatchUiAction({ action: "company_files.view", dateKey });
+  return { ok: true, message: "" };
 }
 
 // 서버 → 클라이언트 폴링: 백그라운드 보고 메시지 + 작업중 에이전트

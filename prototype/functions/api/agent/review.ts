@@ -13,6 +13,7 @@ import {
   AGENT_META,
   AGENT_TOOLS,
   messageFilesFromToolOutput,
+  fileJobAsWorkItem,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -102,6 +103,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       waitUntil(recordDecision(request, authHeader, text).catch(() => {}));
     }
 
+    // 승인된 산출물을 '회사 업무'로 등록 → 업무 파일의 날짜 폴더에 실제로 나타난다.
+    // (이 등록이 없어서 승인해도 폴더가 안 생기고 '폴더 열기'가 갈 곳이 없었다.)
+    let filed: { workId: string; dateKey: string } | null = null;
+    if (decision === "approved" && executedOutput) {
+      filed = await fileJobAsWorkItem(sql, auth.userId, job, executedOutput);
+      // 새로고침 후에도 '폴더 열기'가 동작하도록 잡 출력에 위치를 남긴다.
+      if (filed) {
+        updated = await setJobStatus(sql, id, auth.userId, {
+          output: { ...(executedOutput || {}), workItemId: filed.workId, workDateKey: filed.dateKey },
+        }).catch(() => updated);
+      }
+    }
+
     // 담당 직원(예: 싱크)이 채팅으로 결과를 답하도록 메시지를 함께 반환 (프런트가 alert 대신 채팅에 표시).
     const meta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
     const message = {
@@ -114,7 +128,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
         : "재검토로 돌릴게요. 어떤 점을 고칠지 알려주시면 다시 해볼게요.",
     };
 
-    return send({ ok: true, job: updated, message }, 200, origin);
+    return send({ ok: true, job: updated, message, filed }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "검수 처리 중 오류" }, 500, origin);
   }

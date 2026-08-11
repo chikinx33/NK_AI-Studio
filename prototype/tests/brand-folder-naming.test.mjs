@@ -60,3 +60,20 @@ test("폴더만 옮기지 않고 레코드에 박힌 예전 경로도 고친다"
   assert.match(src, /if \(String\(payload\.seriesId \|\| ""\) === brandId\) payload\.seriesId = newBrandId/);
   assert.match(src, /payload\.brandRef\.id = newBrandId/);
 });
+
+test("프로젝트 이름 입력칸은 한글을 받지 않는다", () => {
+  const src = read("prototype/script.js");
+  assert.match(src, /project-series-input" placeholder="프로젝트 이름 · 영문/);
+  assert.match(src, /replace\(\/\[\^A-Za-z0-9 \._-\]\/g, ''\)/);
+  // IME 조합 중에도 남지 않게 input·compositionend 양쪽에서 걸러낸다
+  assert.match(src, /seriesInput\.addEventListener\('input', stripNonAscii\)/);
+  assert.match(src, /seriesInput\.addEventListener\('compositionend', stripNonAscii\)/);
+});
+
+test("id 를 몰라도 현재 이름으로 폴더를 지목할 수 있다", () => {
+  const src = rename();
+  assert.match(src, /const wantedTitle = String\(body\?\.brandTitle \|\| ""\)\.trim\(\)/);
+  assert.match(src, /if \(title && title\.toLowerCase\(\) === wantedTitle\.toLowerCase\(\)\) matches\.push\(id\)/);
+  // 같은 이름이 여러 개면 임의로 고르지 않는다
+  assert.match(src, /brandId 로 지목해 주세요/);
+});

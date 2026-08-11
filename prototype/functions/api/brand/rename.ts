@@ -121,11 +121,27 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if ("error" in ctx) return send({ error: ctx.error }, ctx.status, origin);
 
     const body = await request.json().catch(() => ({} as any));
-    const brandId = String(body?.brandId || "").trim();
+    // id 를 몰라도 현재 이름(brandTitle)으로 지목할 수 있게 한다 — 폴더명이 projects<숫자>라서
+    // 사람이 id 를 외우고 있을 이유가 없다.
+    let brandId = String(body?.brandId || "").trim();
+    const wantedTitle = String(body?.brandTitle || "").trim();
+    if (!brandId && wantedTitle) {
+      const userRootForLookup = buildAiVideoUserRoot(ctx.basePrefix, ctx.userId);
+      const ids = await listChildFolders(ctx, `${userRootForLookup}/brands/`);
+      const matches: string[] = [];
+      for (const id of ids) {
+        const rec = await readJson(ctx, `${buildAiVideoBrandPrefix(ctx.basePrefix, ctx.userId, id)}/reference/data.json`);
+        const title = String(rec?.brandTitle || rec?.title || rec?.brandName || "").trim();
+        if (title && title.toLowerCase() === wantedTitle.toLowerCase()) matches.push(id);
+      }
+      if (matches.length === 0) return send({ error: `'${wantedTitle}' 이름의 브랜드를 찾지 못했어요. GET /api/brand/rename 으로 목록을 확인해 주세요.` }, 404, origin);
+      if (matches.length > 1) return send({ error: `'${wantedTitle}' 이름이 ${matches.length}개예요(${matches.join(", ")}). brandId 로 지목해 주세요.` }, 409, origin);
+      brandId = matches[0];
+    }
     const newBrandId = String(body?.newBrandId || "").trim();
     const confirm = String(body?.confirm || "").trim().toLowerCase() === "yes";
     const deleteOld = body?.deleteOld === true;
-    if (!brandId || !newBrandId) return send({ error: "brandId, newBrandId 필요" }, 400, origin);
+    if (!brandId || !newBrandId) return send({ error: "brandId(또는 brandTitle)와 newBrandId 필요" }, 400, origin);
     if (!/^[a-zA-Z0-9._-]+$/.test(newBrandId)) {
       return send({ error: "newBrandId 는 영문/숫자/._- 만 사용할 수 있어요(GCS 경로 제약)." }, 400, origin);
     }

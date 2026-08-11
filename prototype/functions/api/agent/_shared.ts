@@ -841,6 +841,74 @@ export async function addMessage(
   return rows[0] as AgentMessage;
 }
 
+/** 업무 제목에 쓰는 도구 이름(한국어). 없으면 도구 id 를 그대로 쓴다. */
+const TOOL_LABELS: Record<string, string> = {
+  image: "이미지", image_edit: "이미지 수정", upscale: "이미지 업스케일", video: "영상",
+  scene_still: "장면 스틸", scene_video: "장면 영상", render_final: "최종 렌더",
+  lipsync: "립싱크 영상", ppt: "PPT", pdf: "PDF", sound: "효과음", music: "BGM",
+  narration: "나레이션", scenario: "시나리오", brand_asset: "브랜드 자산", infographic: "인포그래픽",
+};
+
+/**
+ * 검수 승인된 산출물을 '회사 업무'로 등록한다. 업무 파일 화면의 날짜 폴더는
+ * company_work_items 를 그대로 비추므로, 이 등록이 없으면 승인해도 폴더가 생기지 않는다.
+ * (이미지·영상 산출물이 검수 패널에만 남고 업무 파일에는 안 보이던 원인.)
+ * 이미 등록된 잡이면 기존 항목을 그대로 돌려준다(중복 폴더 방지).
+ * dataUrl 같은 큰 값은 metadata 에 넣지 않는다 — 목록 조회가 무거워진다.
+ */
+export async function fileJobAsWorkItem(
+  sql: SqlFn,
+  userId: string,
+  job: { id: string; type: string; agent_id?: string; input?: any; conversation_id?: string },
+  output: any
+): Promise<{ workId: string; dateKey: string } | null> {
+  if (!sql) return null;
+  try {
+    await ensureAgentSchema(sql);
+    const existing = await sql(
+      `SELECT id, to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key
+         FROM company_work_items
+        WHERE user_id = $1 AND metadata->>'jobId' = $2
+        LIMIT 1`,
+      [userId, job.id]
+    );
+    if (existing[0]) return { workId: String(existing[0].id), dateKey: String(existing[0].date_key) };
+
+    const input = typeof job.input === "string"
+      ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })()
+      : (job.input || {});
+    const prompt = String(input?.prompt || input?.topic || output?.promptEcho || "").trim();
+    const label = TOOL_LABELS[job.type] || job.type;
+    const title = (prompt ? `${label} · ${prompt}` : label).slice(0, 60);
+    const rows = await sql(
+      `INSERT INTO company_work_items
+         (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
+       VALUES ($1, $2, $3, $4, 'done', $5, $6, $7::jsonb, now())
+       RETURNING id, to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key`,
+      [
+        userId,
+        String(job.conversation_id || "main"),
+        title,
+        String(job.type || "job"),
+        prompt.slice(0, 2000),
+        `${label} 산출물 검수 승인`,
+        JSON.stringify({
+          jobId: job.id,
+          agentId: job.agent_id || "",
+          model: output?.model || "",
+          provider: output?.provider || "",
+          objectName: output?.objectName || "",
+          signedUrl: output?.signedUrl || output?.videoUrl || output?.audioUrl || "",
+        }),
+      ]
+    );
+    const row = rows[0];
+    return row ? { workId: String(row.id), dateKey: String(row.date_key) } : null;
+  } catch (_) {
+    return null; // 업무 등록 실패가 검수 자체를 막지 않게 한다
+  }
+}
+
 /** 진행 안내 해제 — 결과(또는 실패) 메시지를 붙인 뒤 호출. */
 export async function resolvePendingMessage(sql: SqlFn, id: string): Promise<void> {
   if (!id) return;

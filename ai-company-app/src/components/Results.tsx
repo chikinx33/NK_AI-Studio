@@ -120,6 +120,7 @@ function ImagePopup({
   onReview: (action: "approve" | "revise", note?: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [folderHint, setFolderHint] = useState("");
 
   async function review(action: "approve" | "revise") {
     let note: string | undefined;
@@ -173,12 +174,22 @@ function ImagePopup({
           )}
         </div>
         <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
+          {/* 산출물은 '검토 승인' 시점에 업무 파일의 그날 폴더로 등록된다.
+              승인 전에는 갈 폴더가 없으므로 버튼을 비활성으로 두고 이유를 알려준다
+              (예전엔 눌러도 아무 반응이 없어서 고장으로 보였다). */}
           <button
-            onClick={() => openResultFolder(item.id)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge"
+            onClick={() => {
+              const r = openResultFolder(item);
+              if (r.ok) onClose();
+              else setFolderHint(r.message);
+            }}
+            disabled={!item.workDateKey}
+            title={item.workDateKey ? `업무 파일 ${item.workDateKey} 폴더 열기` : "검토 승인하면 업무 파일에 정리돼요"}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:cursor-not-allowed disabled:opacity-40"
           >
             <FolderIcon className="h-4 w-4" /> 폴더 열기
           </button>
+          {folderHint && <span className="text-[11px] text-gray-500">{folderHint}</span>}
           <div className="ml-auto flex items-center gap-2">
             <span className={`text-xs ${STATUS[item.reviewStatus]?.c ?? "text-gray-400"}`}>
               {STATUS[item.reviewStatus]?.t ?? item.reviewStatus}
@@ -457,9 +468,10 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
                   {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
                 </button>
                 <button
-                  onClick={() => openResultFolder(it.id)}
-                  title="폴더 열기"
-                  className="ml-auto inline-flex items-center gap-1 rounded border border-edge px-2 py-1 text-gray-300 transition hover:bg-edge hover:text-white"
+                  onClick={() => openResultFolder(it)}
+                  disabled={!it.workDateKey}
+                  title={it.workDateKey ? `업무 파일 ${it.workDateKey} 폴더 열기` : "검토 승인하면 업무 파일에 정리돼요"}
+                  className="ml-auto inline-flex items-center gap-1 rounded border border-edge px-2 py-1 text-gray-300 transition hover:bg-edge hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <FolderIcon className="h-3.5 w-3.5" /> 폴더
                 </button>
