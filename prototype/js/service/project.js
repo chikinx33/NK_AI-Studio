@@ -13,6 +13,30 @@
         return String(Date.now() + Math.floor(Math.random() * 1000));
     }
 
+    // 사용자가 입력한 프로젝트 이름을 그대로 폴더명(seriesId)으로 쓴다.
+    // GCS 경로가 ASCII만 허용해서 영문/숫자/.-_ 만 남긴다 — 쓸 글자가 없으면(순한글 등) 빈 문자열을
+    // 돌려주고 호출부가 기존 방식(projects+타임스탬프)으로 떨어진다.
+    // 같은 이름이 이미 있으면 -2, -3 을 붙여 폴더가 섞이지 않게 한다.
+    function slugifySeriesId(title, takenIds) {
+        var slug = String(title || '').trim().toLowerCase()
+            .replace(/[\s_]+/g, '-')
+            .replace(/[^a-z0-9.-]+/g, '')
+            .replace(/-{2,}/g, '-')
+            .replace(/^[-.]+|[-.]+$/g, '')
+            .slice(0, 40);
+        if (!slug) return '';
+        var taken = {};
+        (Array.isArray(takenIds) ? takenIds : []).forEach(function (v) {
+            var key = String(v && v.id !== undefined ? v.id : v || '').trim().toLowerCase();
+            if (key) taken[key] = true;
+        });
+        if (!taken[slug]) return slug;
+        for (var i = 2; i < 100; i++) {
+            if (!taken[slug + '-' + i]) return slug + '-' + i;
+        }
+        return '';
+    }
+
     function normalizeBrandId(value) {
         var raw = String(value || '').trim().toLowerCase();
         if (!raw) return '';
@@ -903,7 +927,9 @@
             inheritedPayload = extractEpisodeTemplate((matchedDraft && matchedDraft.payload) || {});
         } else {
             if (!seriesTitle) throw new Error('series_title_required');
-            seriesId = seriesId || ('projects' + Date.now());
+            // 입력한 이름 기반 폴더명 우선. (예전엔 항상 projects+타임스탬프여서
+            //  projects1771052244218 처럼 사람이 못 읽는 폴더가 만들어졌다.)
+            seriesId = seriesId || slugifySeriesId(seriesTitle, seriesList) || ('projects' + Date.now());
             if (!episodeTitle) episodeTitle = seriesTitle + ' EP1';
         }
 
