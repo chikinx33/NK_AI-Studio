@@ -11,6 +11,8 @@ import { authorizeRequest } from "../_shared/auth.js";
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const MAX_IMAGES = 4;
+// 인라인 이미지 총량 상한(약 6MB). 시트 4장을 그대로 넣으면 요청이 커져 400 이 난다.
+const MAX_INLINE_BYTES = 6 * 1024 * 1024;
 
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {
@@ -53,49 +55,90 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const parts: any[] = [{ text: buildInstruction(lang, characterName, brandContext) }];
     let usable = 0;
+    let skippedForSize = 0;
+    let inlineBytes = 0;
     for (const url of imageUrls) {
       const parsed = await resolveImageBytes(url, accessToken, request.url, authHeader);
       if (!parsed) continue;
+      // 시트는 4분할 그리드라 장당 수 MB가 될 수 있다. 요청이 커지면 Gemini 가 400 으로 거절하므로
+      // 총량에 상한을 두고, 넘치는 장은 건너뛴다(1장이라도 있으면 분석은 가능하다).
+      const bytes = Math.floor(parsed.base64.length * 0.75);
+      if (usable > 0 && inlineBytes + bytes > MAX_INLINE_BYTES) { skippedForSize++; continue; }
+      inlineBytes += bytes;
       parts.push({ inlineData: { mimeType: parsed.mimeType || "image/png", data: parsed.base64 } });
       usable++;
     }
     if (!usable) return json({ error: "시트 이미지를 읽지 못했어요(경로 확인 필요)." }, 400);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
-    const geminiRes = await fetch(generateUrl, {
-      method: "POST",
-      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-        // JSON 스키마를 강제해 파싱 실패·형식 흔들림을 없앤다.
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              description: { type: "STRING" },
-              fixedTraits: { type: "ARRAY", items: { type: "STRING" } },
-              bannedTraits: { type: "ARRAY", items: { type: "STRING" } },
-              negativePrompt: { type: "STRING" },
-              styleGuide: { type: "STRING" },
-            },
-            required: ["description", "fixedTraits", "bannedTraits", "negativePrompt", "styleGuide"],
+    const callGemini = async (useSchema: boolean) => {
+      const generationConfig: any = { temperature: 0.3 };
+      if (useSchema) {
+        // JSON 스키마를 강제하면 파싱 실패·형식 흔들림이 없다. 단, 모델·버전에 따라 거절될 수 있어
+        // 실패하면 스키마 없이 한 번 더 시도한다(아래 폴백).
+        generationConfig.responseMimeType = "application/json";
+        generationConfig.responseSchema = {
+          type: "OBJECT",
+          properties: {
+            description: { type: "STRING" },
+            fixedTraits: { type: "ARRAY", items: { type: "STRING" } },
+            bannedTraits: { type: "ARRAY", items: { type: "STRING" } },
+            negativePrompt: { type: "STRING" },
+            styleGuide: { type: "STRING" },
           },
-        },
-      }),
-    });
-    const geminiText = await geminiRes.text();
-    if (!geminiRes.ok) {
-      return json({ error: "Gemini API error", status: geminiRes.status, detail: safeJson(geminiText) }, 500);
+          required: ["description", "fixedTraits", "bannedTraits", "negativePrompt", "styleGuide"],
+        };
+      }
+      const res = await fetch(generateUrl, {
+        method: "POST",
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: useSchema ? parts : [...parts, { text: JSON_ONLY_HINT }] }],
+          generationConfig,
+        }),
+      });
+      return { res, text: await res.text() };
+    };
+
+    let attempt = await callGemini(true);
+    let schemaFallback = false;
+    if (!attempt.res.ok) {
+      // 스키마 거절(400 등)일 수 있으니 스키마 없이 재시도. 그래도 실패하면 사유를 그대로 올린다.
+      const retry = await callGemini(false);
+      if (retry.res.ok) {
+        attempt = retry;
+        schemaFallback = true;
+      } else {
+        // ★ 사유를 error 문자열에 넣는다. 클라이언트는 error 필드만 표시하므로
+        //   detail 로만 내려보내면 "Gemini API error" 만 보이고 원인을 알 수 없다.
+        return json({
+          error: `Gemini API error (${attempt.res.status}): ${geminiErrorMessage(attempt.text)}`,
+          status: attempt.res.status,
+          model: geminiModel,
+          analyzedImages: usable,
+          inlineBytes,
+          retryStatus: retry.res.status,
+          retryMessage: geminiErrorMessage(retry.text),
+          detail: safeJson(attempt.text),
+        }, 502);
+      }
     }
-    const parsedOut = safeJson(extractGeminiText(safeJson(geminiText) || {}) || "");
+    const rawText = extractGeminiText(safeJson(attempt.text) || {}) || "";
+    const parsedOut = safeJson(extractJsonBlock(rawText));
     const out = (parsedOut && typeof parsedOut === "object") ? parsedOut : {};
+    if (!out.description && !Array.isArray(out.fixedTraits)) {
+      return json({
+        error: `분석 응답을 이해하지 못했어요. (모델: ${geminiModel}) ${rawText.slice(0, 200)}`,
+        model: geminiModel,
+      }, 502);
+    }
 
     return json({
       ok: true,
       characterName,
       analyzedImages: usable,
+      skippedForSize,
+      schemaFallback,
       model: geminiModel,
       description: oneLine(out.description, 600),
       fixedTraits: toList(out.fixedTraits, 10),
@@ -107,6 +150,33 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };
+
+// 스키마를 못 쓰는 경우를 위한 지시 — 순수 JSON만 받도록 못박는다.
+const JSON_ONLY_HINT = [
+  "Return ONLY a JSON object with exactly these keys:",
+  '{"description": string, "fixedTraits": string[], "bannedTraits": string[], "negativePrompt": string, "styleGuide": string}',
+  "No markdown fences, no commentary.",
+].join("\n");
+
+/** Gemini 오류 본문에서 사람이 읽을 사유만 뽑는다. */
+function geminiErrorMessage(text: string) {
+  const parsed = safeJson(text);
+  const msg = (parsed && typeof parsed === "object")
+    ? String((parsed as any)?.error?.message || (parsed as any)?.message || "")
+    : "";
+  return (msg || String(text || "")).replace(/\s+/g, " ").trim().slice(0, 300) || "unknown";
+}
+
+/** 코드펜스·앞뒤 설명이 섞여 와도 JSON 본문만 꺼낸다(스키마 폴백 경로용). */
+function extractJsonBlock(text: string) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
+  const body = fenced ? fenced[1].trim() : raw;
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  return start >= 0 && end > start ? body.slice(start, end + 1) : body;
+}
 
 function oneLine(value: unknown, max: number) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);

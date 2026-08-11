@@ -11,7 +11,7 @@ const hub = () => read("prototype/js/ui/knowledge-hub.js");
 test("시트 분석 엔드포인트는 다섯 속성을 스키마로 강제한다", () => {
   const src = analyze();
   assert.match(src, /export const onRequestPost/);
-  assert.match(src, /responseMimeType: "application\/json"/);
+  assert.match(src, /generationConfig\.responseMimeType = "application\/json"/);
   assert.match(src, /required: \["description", "fixedTraits", "bannedTraits", "negativePrompt", "styleGuide"\]/);
   // 시트는 최대 4장까지 함께 본다(같은 캐릭터의 다른 각도를 통합)
   assert.match(src, /const MAX_IMAGES = 4/);
@@ -73,4 +73,32 @@ test("API 클라이언트에 ipAnalyze 가 있다", () => {
   assert.match(src, /withBase\('\/api\/ip\/analyze'\)/);
   // 이미지 여러 장 분석이라 기본 타임아웃보다 길게 잡는다
   assert.match(src, /\(opts && opts\.timeoutMs\) \|\| 90000/);
+});
+
+test("Gemini 실패 사유가 사용자에게 그대로 전달된다", () => {
+  const src = analyze();
+  // 클라이언트(api.js e())는 error 필드만 표시하므로 사유를 그 문자열에 넣어야 한다
+  assert.match(src, /error: `Gemini API error \(\$\{attempt\.res\.status\}\): \$\{geminiErrorMessage\(attempt\.text\)\}`/);
+  assert.match(src, /function geminiErrorMessage\(text: string\)/);
+  assert.match(src, /String\(\(parsed as any\)\?\.error\?\.message/);
+  // 진단에 필요한 값(모델·이미지 수·용량)도 함께 내려준다
+  assert.match(src, /model: geminiModel,\s*\n\s*analyzedImages: usable,\s*\n\s*inlineBytes,/);
+});
+
+test("스키마가 거절되면 스키마 없이 한 번 더 시도한다", () => {
+  const src = analyze();
+  assert.match(src, /let attempt = await callGemini\(true\)/);
+  assert.match(src, /const retry = await callGemini\(false\)/);
+  assert.match(src, /schemaFallback = true/);
+  // 폴백 경로에서도 JSON만 받도록 지시하고, 코드펜스가 섞여도 파싱한다
+  assert.match(src, /const JSON_ONLY_HINT/);
+  assert.match(src, /function extractJsonBlock\(text: string\)/);
+});
+
+test("시트가 커도 요청 크기를 넘기지 않는다", () => {
+  const src = analyze();
+  assert.match(src, /const MAX_INLINE_BYTES = 6 \* 1024 \* 1024/);
+  assert.match(src, /if \(usable > 0 && inlineBytes \+ bytes > MAX_INLINE_BYTES\) \{ skippedForSize\+\+; continue; \}/);
+  // 1장도 못 넣는 상황은 만들지 않는다(usable > 0 조건)
+  assert.match(src, /skippedForSize,/);
 });
