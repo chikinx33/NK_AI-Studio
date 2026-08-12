@@ -58,6 +58,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!upRes.ok) {
       return send({ error: "Upload failed", status: upRes.status, detail: safeJson(upText) }, upRes.status, origin);
     }
+    // 생성 정보를 object metadata로 기록 → library 응답에 실려 기기 간 목록이 같아진다.
+    const metadata: Record<string, string> = {};
+    for (const key of ["prompt", "model", "modelLabel", "aspectRatio", "duration", "resultId"]) {
+      const v = String(fd.get(key) || "").trim();
+      if (v) metadata[key] = v.slice(0, 400);
+    }
+    if (Object.keys(metadata).length) {
+      try {
+        const patchUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}`;
+        await fetch(patchUrl, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ metadata }),
+        });
+      } catch { /* 메타 기록 실패는 업로드 자체를 실패시키지 않는다 */ }
+    }
     const signedUrl = await signGcsUrl({
       bucket: outParsed.bucket,
       object: objectName,

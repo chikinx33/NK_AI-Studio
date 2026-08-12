@@ -268,10 +268,27 @@
         var s = Object.assign({}, r);
         // strip large data-URLs from thumbnails to keep localStorage lean
         if (s.thumbnailDataUrl && s.thumbnailDataUrl.length > 60000) delete s.thumbnailDataUrl;
+        // 만료되는 인증 토큰은 절대 영구 저장하지 않는다 (재생 시점에 새로 만든다).
+        delete s.videoUrl;
+        if (s.rawVideoUrl && String(s.rawVideoUrl).indexOf('nk_token=') !== -1) delete s.rawVideoUrl;
         return s;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch (_) {}
+  }
+
+  // 저장된 objectName으로 "지금 이 순간"의 토큰이 붙은 재생 URL을 만든다.
+  function resultPlayUrl(r) {
+    if (!r) return '';
+    var n = r.videoObjectName
+      || ((NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(r.videoUrl || r.rawVideoUrl || '') : '');
+    return (n && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(n) : '';
+  }
+
+  function resultObjectName(r) {
+    if (!r) return '';
+    return r.videoObjectName
+      || ((NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(r.videoUrl || r.rawVideoUrl || '') : '');
   }
 
   function loadDeletedSet() {
@@ -350,6 +367,15 @@
     render();
     NK.api.videoGenLibrary(state.projectId || null).then(function (data) {
       var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
+      // 서버(GCS)가 삭제의 단일 출처다. 목록에서 이미 사라진 tombstone은 캐시로서 역할이
+      // 끝났으므로 정리한다 (무한히 쌓이면 다른 기기의 유효 항목까지 가릴 위험이 있다).
+      var present = {};
+      items.forEach(function (s) { if (s && s.name) present[s.name] = true; });
+      var pruned = false;
+      Object.keys(state.deletedSet).forEach(function (name) {
+        if (!present[name]) { delete state.deletedSet[name]; pruned = true; }
+      });
+      if (pruned) saveDeletedSet();
       state.serverItems = items.filter(function (s) { return !state.deletedSet[s.name]; });
       state.historyLoading = false;
       render();
@@ -410,14 +436,16 @@
   var _serverThumbCache = {};
 
   function tryCaptureThumbnail(r) {
-    if (!r || !r.id || r.thumbnailDataUrl || r.status !== 'done' || !r.videoUrl) return;
+    if (!r || !r.id || r.thumbnailDataUrl || r.status !== 'done') return;
+    var playUrl = resultPlayUrl(r);
+    if (!playUrl) return;
     if (_capturingIds[r.id]) return;
     _capturingIds[r.id] = true;
     var vid = document.createElement('video');
     vid.crossOrigin = 'anonymous';
     vid.muted = true;
     vid.preload = 'metadata';
-    vid.src = r.videoUrl;
+    vid.src = playUrl;
     var captured = false;
     function captureFrame() {
       if (captured) return;
@@ -502,10 +530,22 @@
   var TRASH_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"/><path d="M10 10v5.25M14 10v5.25"/></svg>';
   var PLAY_SVG     = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
 
+  function expiredMessage() {
+    return state.lang === 'en'
+      ? 'Playback permission expired. Please refresh the page and try again.'
+      : '재생 권한이 만료되었습니다. 새로고침 후 다시 시도해 주세요.';
+  }
+
   async function downloadVideo(url, filename) {
     var name = filename || 'video.mp4';
     try {
       var res = await fetch(url);
+      var ctype = String(res.headers.get('Content-Type') || '').toLowerCase();
+      // 401/403 등의 JSON 오류 본문을 .mp4로 저장하는 사고를 막는다.
+      if (!res.ok || ctype.indexOf('application/json') !== -1) {
+        window.alert(expiredMessage());
+        return;
+      }
       var blob = await res.blob();
       var blobUrl = URL.createObjectURL(blob);
       var a = document.createElement('a');
@@ -513,13 +553,12 @@
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 60000);
     } catch (_) {
-      var a = document.createElement('a');
-      a.href = url; a.download = name; a.target = '_blank';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      window.alert(expiredMessage());
     }
   }
 
-  function openVideoModal(url) {
+  // retryFn: 호출하면 최신 토큰이 붙은 URL을 새로 만들어 주는 함수 (1회 자동 재시도용)
+  function openVideoModal(url, retryFn) {
     closeVideoModal();
     var overlay = document.createElement('div');
     overlay.className = 'vgen-modal-overlay';
@@ -537,6 +576,18 @@
     vid.controls = true;
     vid.autoplay = true;
     vid.setAttribute('playsinline', '1');
+    var retried = false;
+    vid.addEventListener('error', function () {
+      if (!retried && typeof retryFn === 'function') {
+        retried = true;
+        var next = '';
+        try { next = retryFn() || ''; } catch (_) { next = ''; }
+        if (next) { vid.src = next; try { vid.load(); } catch (_) {} return; }
+      }
+      if (inner.querySelector('.vgen-modal-error')) return;
+      vid.style.display = 'none';
+      inner.appendChild(el('p', 'vgen-modal-error', { textContent: expiredMessage() }));
+    });
     inner.appendChild(closeBtn);
     inner.appendChild(vid);
     overlay.appendChild(inner);
@@ -618,8 +669,15 @@
     } else {
       state.results.slice().reverse().forEach(function (r) { list.appendChild(renderResultCard(r)); });
       var localIds = state.results.map(function (r) { return r.id; });
+      // 로컬 카드가 이미 가리키는 객체는 서버 카드로 중복 표시하지 않는다.
+      var localObjects = {};
+      state.results.forEach(function (r) {
+        var n = resultObjectName(r);
+        if (n) localObjects[n] = true;
+      });
       state.serverItems.filter(function (s) {
-        return !state.deletedSet[s.name] && !localIds.some(function (id) { return s.name.indexOf(id) !== -1; });
+        if (state.deletedSet[s.name] || localObjects[s.name]) return false;
+        return !localIds.some(function (id) { return s.name.indexOf(id) !== -1; });
       }).forEach(function (s) { list.appendChild(renderServerCard(s)); });
     }
     panel.appendChild(list);
@@ -653,13 +711,14 @@
     card.appendChild(info);
 
     var actions = el('div', 'vgen-result-actions');
-    if (r.status === 'done' && r.videoUrl) {
+    var rObjectName = r.status === 'done' ? resultObjectName(r) : '';
+    if (rObjectName) {
       var playBtn = el('button', 'vgen-action-btn vgen-action-btn--play', {
-        type: 'button', title: '재생', 'data-action': 'play-result', 'data-url': r.videoUrl, innerHTML: PLAY_SVG
+        type: 'button', title: '재생', 'data-action': 'play-result', 'data-object': rObjectName, innerHTML: PLAY_SVG
       });
       actions.appendChild(playBtn);
       var dlBtn = el('button', 'vgen-action-btn', {
-        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-url': r.videoUrl, 'data-id': r.id, innerHTML: DOWNLOAD_SVG
+        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-object': rObjectName, 'data-id': r.id, innerHTML: DOWNLOAD_SVG
       });
       actions.appendChild(dlBtn);
     }
@@ -676,6 +735,11 @@
     var card = el('div', 'vgen-result-card vgen-server-card');
     card.dataset.serverName = objectName;
 
+    // signedUrl(1h 만료) 대신 objectName 기반 프록시 URL을 매 렌더마다 새로 만든다.
+    var playUrl = (objectName && NK.api && NK.api.mediaProxyObjectUrl)
+      ? NK.api.mediaProxyObjectUrl(objectName)
+      : '';
+
     var thumb = el('div', 'vgen-result-thumb');
     var cachedThumb = _serverThumbCache[objectName];
     if (cachedThumb && cachedThumb !== 'loading') {
@@ -683,28 +747,47 @@
     } else {
       thumb.classList.add('vgen-result-thumb--done');
       thumb.innerHTML = PLAY_SVG;
-      if (s.signedUrl && cachedThumb !== 'loading') {
-        tryCaptureThumbnailServer(objectName, s.signedUrl, function () { render(); });
+      if (playUrl && cachedThumb !== 'loading') {
+        tryCaptureThumbnailServer(objectName, playUrl, function () { render(); });
       }
     }
     card.appendChild(thumb);
 
-    var info = el('div', 'vgen-result-info');
+    // 업로드 시 GCS object metadata에 기록해 둔 생성 정보(있으면 로컬 카드와 같은 형태로 렌더)
+    var meta = s.metadata || {};
     var nameParts = objectName.split('/');
     var fileName = nameParts[nameParts.length - 1] || objectName;
-    info.appendChild(el('p', 'vgen-result-prompt', { textContent: fileName }));
-    info.appendChild(el('p', 'vgen-result-meta', { textContent: new Date(s.timeCreated || s.updated || '').toLocaleDateString() }));
+    var metaPrompt = String(meta.prompt || '').trim();
+    var metaLine = '';
+    if (meta.model || meta.aspectRatio || meta.duration) {
+      metaLine = [
+        String(meta.modelLabel || meta.model || '').trim(),
+        String(meta.aspectRatio || '').trim(),
+        meta.duration ? (String(meta.duration) + (state.lang === 'ko' ? '초' : 's')) : ''
+      ].filter(Boolean).join(' · ');
+    }
+
+    var info = el('div', 'vgen-result-info');
+    if (metaPrompt) {
+      var shown = metaPrompt.slice(0, 60) + (metaPrompt.length > 60 ? '…' : '');
+      info.appendChild(el('p', 'vgen-result-prompt', { textContent: shown }));
+    } else {
+      info.appendChild(el('p', 'vgen-result-prompt', { textContent: fileName }));
+    }
+    info.appendChild(el('p', 'vgen-result-meta', {
+      textContent: metaLine || new Date(s.timeCreated || s.updated || '').toLocaleDateString()
+    }));
     info.appendChild(el('span', 'vgen-result-status vgen-status--done', { textContent: t('server_item') }));
     card.appendChild(info);
 
     var actions = el('div', 'vgen-result-actions');
-    if (s.signedUrl) {
+    if (objectName) {
       var playBtn = el('button', 'vgen-action-btn vgen-action-btn--play', {
-        type: 'button', title: '재생', 'data-action': 'play-result', 'data-url': s.signedUrl, innerHTML: PLAY_SVG
+        type: 'button', title: '재생', 'data-action': 'play-result', 'data-object': objectName, innerHTML: PLAY_SVG
       });
       actions.appendChild(playBtn);
       var dlBtn = el('button', 'vgen-action-btn', {
-        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-url': s.signedUrl, innerHTML: DOWNLOAD_SVG
+        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-object': objectName, innerHTML: DOWNLOAD_SVG
       });
       actions.appendChild(dlBtn);
     }
@@ -1137,11 +1220,17 @@
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var action = btn.dataset.action;
+        // 클릭하는 "그 순간" 최신 토큰으로 URL을 만든다 (저장된 URL은 만료돼 있을 수 있음).
+        var freshUrl = function () {
+          var obj = btn.dataset.object;
+          if (obj && NK.api && NK.api.mediaProxyObjectUrl) return NK.api.mediaProxyObjectUrl(obj);
+          return btn.dataset.url || '';
+        };
         if (action === 'play-result') {
-          var url = btn.dataset.url;
-          if (url) openVideoModal(url);
+          var url = freshUrl();
+          if (url) openVideoModal(url, freshUrl);
         } else if (action === 'download-result') {
-          var url = btn.dataset.url;
+          var url = freshUrl();
           var id  = btn.dataset.id;
           var r   = id && state.results.find(function (x) { return x.id === id; });
           var filename = r ? ('vg_' + (r.model || 'video') + '_' + r.id + '.mp4') : 'video.mp4';
@@ -1321,10 +1410,27 @@
 
   function deleteResult(id) {
     if (state.polls[id]) { clearInterval(state.polls[id]); delete state.polls[id]; }
+    var target = state.results.find(function (r) { return r.id === id; });
     state.results = state.results.filter(function (r) { return r.id !== id; });
     if (state.selectedId === id) state.selectedId = null;
     saveResults();
     render();
+
+    // 삭제의 단일 출처(SSOT)는 GCS 객체다. 로컬에서만 지우면 다른 기기에서 서버 카드로
+    // 되살아난다. deletedSet은 목록이 갱신되기 전까지의 캐시로만 쓴다.
+    var objectName = resultObjectName(target);
+    if (objectName) {
+      state.deletedSet[objectName] = true;
+      saveDeletedSet();
+      state.serverItems = state.serverItems.filter(function (s) { return s.name !== objectName; });
+      if (NK.api && NK.api.videoDelete) {
+        NK.api.videoDelete(objectName)
+          .then(function () {
+            if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
+          })
+          .catch(function () { /* 이미 없는 객체이거나 네트워크 오류 — 목록 필터로 가려진다 */ });
+      }
+    }
   }
 
   // ─── Generation ───────────────────────────────────────────
@@ -1359,7 +1465,7 @@
       duration:        state.duration,
       mode:            state.mode,
       status:          'processing',
-      videoUrl:        '',
+      videoObjectName: '',
       thumbnailDataUrl: state.startImageUrl || '',
       createdAt:       Date.now()
     };
@@ -1416,7 +1522,14 @@
       var startRes = await NK.api.videoStart(payload);
       updateResult(resultId, { jobId: startRes.jobId });
       saveResults();
-      pollVideoStatus(resultId, startRes.jobId, state.projectId || null);
+      pollVideoStatus(resultId, startRes.jobId, state.projectId || null, {
+        prompt:      prompt,
+        model:       state.model,
+        modelLabel:  modelInfo.label,
+        aspectRatio: state.aspectRatio,
+        duration:    state.duration,
+        resultId:    resultId
+      });
 
     } catch (err) {
       updateResult(resultId, { status: 'error', errorMessage: (err && err.message) || 'error' });
@@ -1425,7 +1538,7 @@
     }
   }
 
-  function pollVideoStatus(resultId, jobId, projectId) {
+  function pollVideoStatus(resultId, jobId, projectId, meta) {
     var attempts = 0;
 
     function check() {
@@ -1439,7 +1552,7 @@
       }
       attempts++;
 
-      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen' })
+      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen', meta: meta })
         .then(function (data) {
           var s = String((data && (data.status || data.state)) || '').toLowerCase();
           var done = /^(done|succeeded|success|completed)$/.test(s);
@@ -1449,8 +1562,10 @@
             clearInterval(state.polls[resultId]);
             delete state.polls[resultId];
             var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || data.outputUrl || data.output_url || '';
-            var proxyUrl = (rawUrl && NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(rawUrl) : rawUrl;
-            updateResult(resultId, { status: 'done', videoUrl: proxyUrl, rawVideoUrl: rawUrl });
+            // 토큰이 박힌 URL은 저장하지 않는다(12h TTL 만료 후 401 → 재생 불가).
+            // objectName만 보관하고 재생 직전에 최신 토큰으로 URL을 만든다.
+            var objectName = (NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(rawUrl) : '';
+            updateResult(resultId, { status: 'done', videoObjectName: objectName, rawVideoUrl: rawUrl });
             saveResults();
             render();
             tryCaptureThumbnail(state.results.find(function (r) { return r.id === resultId; }));
@@ -1518,12 +1633,26 @@
       }
     } catch (_) {}
     loadResults();
+    // 레거시 마이그레이션: 만료 토큰이 박힌 videoUrl을 objectName으로 바꿔 저장한다.
+    var _migrated = false;
+    state.results = state.results.map(function (r) {
+      if (!r) return r;
+      if (!r.videoObjectName && (r.videoUrl || r.rawVideoUrl)) {
+        var n = (NK.api && NK.api.objectNameFromUrl)
+          ? NK.api.objectNameFromUrl(r.videoUrl || r.rawVideoUrl)
+          : '';
+        if (n) { _migrated = true; return Object.assign({}, r, { videoObjectName: n, videoUrl: '' }); }
+      }
+      if (r.videoUrl) { _migrated = true; return Object.assign({}, r, { videoUrl: '' }); }
+      return r;
+    });
+    if (_migrated) saveResults();
     loadDeletedSet();
     detectLang();
     render();
     // 기존 완료 결과 중 썸네일 없는 것 캡처 시도
     state.results.forEach(function (r) {
-      if (r.status === 'done' && r.videoUrl && !r.thumbnailDataUrl) tryCaptureThumbnail(r);
+      if (r.status === 'done' && !r.thumbnailDataUrl) tryCaptureThumbnail(r);
     });
     syncServerHistory();
 

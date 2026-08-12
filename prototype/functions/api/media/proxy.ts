@@ -5,7 +5,9 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin?: string | null) => ({
   "Access-Control-Allow-Origin": origin || "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Range",
+  // <video>가 타임라인 탐색(seek)을 하려면 Range 응답 헤더를 읽을 수 있어야 한다.
+  "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
   "Vary": "Origin",
 });
 
@@ -80,20 +82,30 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         lastDetail = String(e?.message || e);
         continue;
       }
-      const gcsResp = await fetch(signed, { method: "GET" });
+      // 클라이언트 Range 를 GCS 로 그대로 전달해 206 부분 응답을 지원한다(영상 seek).
+      const range = request.headers.get("Range");
+      const gcsResp = await fetch(signed, { method: "GET", headers: range ? { Range: range } : {} });
       if (gcsResp.ok) {
-        const buf = await gcsResp.arrayBuffer();
-        const type = gcsResp.headers.get("Content-Type") || "application/octet-stream";
-        return new Response(buf, {
-          status: 200,
-          headers: { ...corsHeaders(origin), "Content-Type": type, "Cache-Control": "private, max-age=3600" }
+        const contentRange = gcsResp.headers.get("Content-Range");
+        const contentLength = gcsResp.headers.get("Content-Length");
+        // 본문을 버퍼링하지 않고 스트리밍한다(대용량 mp4 메모리 절약 + 206 상태 유지).
+        return new Response(gcsResp.body, {
+          status: gcsResp.status,
+          headers: {
+            ...corsHeaders(origin),
+            "Content-Type": gcsResp.headers.get("Content-Type") || "application/octet-stream",
+            "Accept-Ranges": "bytes",
+            ...(contentRange ? { "Content-Range": contentRange } : {}),
+            ...(contentLength ? { "Content-Length": contentLength } : {}),
+            "Cache-Control": "private, max-age=3600"
+          }
         });
       }
       lastStatus = gcsResp.status;
       lastDetail = await gcsResp.text().catch(() => "");
     }
     // 모든 버킷에서 실패: 없음/권한은 실제 코드(404/403)로, 그 외는 502 로 전달.
-    const outStatus = (lastStatus === 404 || lastStatus === 403) ? lastStatus : 502;
+    const outStatus = (lastStatus === 404 || lastStatus === 403 || lastStatus === 416) ? lastStatus : 502;
     return send({ error: "gcs_fetch_failed", status: lastStatus, detail: lastDetail }, outStatus, origin);
   } catch (e: any) {
     return send({ error: e?.message || "proxy_error" }, 500, origin);

@@ -32,7 +32,23 @@ test('media proxy dedups by bucket+signer so identical pairs are not retried', (
   assert.match(source, /seen\.has\(dedupKey\)/);
 });
 
-test('media proxy surfaces real 404/403 instead of masking every failure as 502', () => {
+test('media proxy surfaces real 404/403/416 instead of masking every failure as 502', () => {
   const source = readProxySource();
-  assert.match(source, /const outStatus = \(lastStatus === 404 \|\| lastStatus === 403\) \? lastStatus : 502;/);
+  assert.match(source, /lastStatus === 404 \|\| lastStatus === 403 \|\| lastStatus === 416/);
+  assert.match(source, /: 502;/);
+});
+
+test('media proxy forwards Range so <video> can seek (206 partial content)', () => {
+  const source = readProxySource();
+  // 클라이언트 Range 를 GCS 로 전달
+  assert.match(source, /request\.headers\.get\("Range"\)/);
+  assert.match(source, /headers: range \? \{ Range: range \} : \{\}/);
+  // 206 상태를 그대로 유지하고 본문은 스트리밍 (arrayBuffer 로 버퍼링하지 않는다)
+  assert.match(source, /new Response\(gcsResp\.body/);
+  assert.match(source, /status: gcsResp\.status/);
+  assert.doesNotMatch(source, /await gcsResp\.arrayBuffer\(\)/);
+  // Range 관련 응답 헤더 전달 + CORS 노출
+  assert.match(source, /"Accept-Ranges": "bytes"/);
+  assert.match(source, /Content-Range/);
+  assert.match(source, /"Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length"/);
 });

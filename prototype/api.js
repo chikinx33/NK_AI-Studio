@@ -606,6 +606,17 @@
     q.set('userId', String(p.userId || resolveUserId()));
     var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
+    // 생성 메타(프롬프트/모델/비율/길이)를 넘기면 서버가 GCS object metadata로 기록한다.
+    // → 다른 기기에서도 결과 목록이 같은 형태로 보인다.
+    if (p.meta && typeof p.meta === 'object') {
+      var m = {};
+      Object.keys(p.meta).forEach(function (k) {
+        var v = p.meta[k];
+        if (v === null || v === undefined || v === '') return;
+        m[k] = String(v).slice(0, 400);
+      });
+      if (Object.keys(m).length) q.set('meta', JSON.stringify(m));
+    }
     var res = await fetch(withBase('/api/video/status?' + q.toString()), {
       headers: buildAuthHeaders(),
       signal: opts && opts.signal
@@ -649,11 +660,11 @@
     return j(text);
   };
 
-  api.mediaProxyUrl = function (rawUrl) {
+  // rawUrl(gs://, storage.googleapis.com 서명 URL, 기존 프록시 URL)에서 objectName만 뽑아낸다.
+  // 토큰이 붙지 않으므로 "영구 저장"해도 안전하다. 재생 시점에 mediaProxyObjectUrl()로 URL을 만들 것.
+  api.objectNameFromUrl = function (rawUrl) {
     var u = String(rawUrl || '').trim();
     if (!u) return '';
-    var token = getAuthToken();
-    var tail = token ? ('&nk_token=' + encodeURIComponent(token)) : '';
     var objectName = '';
     try {
       if (u.indexOf('gs://') === 0) {
@@ -675,8 +686,12 @@
         }
       }
     } catch (_) { objectName = ''; }
-    if (!objectName) return '';
-    return withBase('/api/media/proxy?objectName=' + encodeURIComponent(objectName) + tail);
+    return objectName;
+  };
+
+  api.mediaProxyUrl = function (rawUrl) {
+    var n = api.objectNameFromUrl(rawUrl);
+    return n ? api.mediaProxyObjectUrl(n) : '';
   };
 
   api.mediaProxyObjectUrl = function (objectName) {

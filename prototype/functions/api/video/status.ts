@@ -40,6 +40,22 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const projectTag = (url.searchParams.get('projectId') || '').trim();
     const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
     const source = (url.searchParams.get('source') || '').trim();
+    // 클라이언트가 넘긴 생성 메타(프롬프트/모델/비율/길이). GCS object metadata 로 기록해
+    // 다른 기기에서 목록을 열어도 같은 정보가 보이게 한다.
+    const genMeta: Record<string, string> = (() => {
+      const raw = (url.searchParams.get('meta') || '').trim();
+      if (!raw) return {};
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return {};
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (v === null || v === undefined || v === '') continue;
+          out[String(k).slice(0, 64)] = String(v).slice(0, 400);
+        }
+        return out;
+      } catch { return {}; }
+    })();
     const isVideoGen = source === 'video-gen';
     const userId = auth.userId;
 
@@ -131,6 +147,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         });
         const upTxt = await upRes.text();
         if (!upRes.ok) { log('flatten_upload_failed', { status: upRes.status, detail: safeJson(upTxt) }); return ''; }
+        await patchObjectMetadata(outParsed.bucket, objectName, genMeta, accessTokenUpload);
         return await signAsStorageUrl(outParsed.bucket, objectName);
       } catch (err) { log('flatten_error', err); return ''; }
     };
@@ -488,6 +505,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             });
             const upTxt = await upRes.text();
             if (upRes.ok) {
+              await patchObjectMetadata(outParsed.bucket, objectName, genMeta, accessToken, userProject);
               const gsUri = `gs://${outParsed.bucket}/${objectName}`;
               try {
                 playback = await signGcsUrl({
@@ -575,6 +593,30 @@ function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   const bucket = rest.slice(0, slash);
   const object = rest.slice(slash + 1);
   return { bucket, object };
+}
+
+// 업로드된 객체에 생성 메타를 붙인다(실패해도 영상 자체는 유효하므로 조용히 넘어간다).
+async function patchObjectMetadata(
+  bucket: string,
+  objectName: string,
+  metadata: Record<string, string>,
+  accessToken: string,
+  userProject?: string
+) {
+  if (!metadata || !Object.keys(metadata).length) return;
+  try {
+    const patchUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(objectName)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ''}`;
+    const res = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...(userProject ? { 'X-Goog-User-Project': userProject } : {})
+      },
+      body: JSON.stringify({ metadata })
+    });
+    if (!res.ok) log('metadata_patch_failed', { status: res.status, detail: await res.text().catch(() => '') });
+  } catch (err) { log('metadata_patch_error', err); }
 }
 
 function parseStorageHttpsUrl(url: string): { bucket: string; object: string } | null {

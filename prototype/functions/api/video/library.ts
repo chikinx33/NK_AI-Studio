@@ -75,7 +75,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const json = safeJson(text);
     const items = Array.isArray(json.items) ? json.items : [];
 
-    const result: Array<{ name: string; size: number; contentType: string; timeCreated: string; updated: string; signedUrl: string }> = [];
+    const result: Array<{ name: string; size: number; contentType: string; timeCreated: string; updated: string; signedUrl: string; metadata: Record<string, string> | null }> = [];
     for (const it of items) {
       const name = String(it.name || "");
       if (!name || !name.toLowerCase().endsWith(".mp4")) continue;
@@ -86,6 +86,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         privateKeyPem: privateKeyRaw,
         expiresInSec: 3600,
       }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${name}`));
+      // 생성 시 기록해 둔 프롬프트/모델/비율/길이 (없을 수도 있음)
+      const meta = (it.metadata && typeof it.metadata === "object") ? it.metadata as Record<string, string> : null;
       result.push({
         name,
         size: Number(it.size || 0),
@@ -93,6 +95,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         timeCreated: String(it.timeCreated || ""),
         updated: String(it.updated || ""),
         signedUrl: signed,
+        metadata: meta,
       });
     }
     // Sort by updated desc
