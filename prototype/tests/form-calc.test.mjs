@@ -35,7 +35,7 @@ test("부가세 별도 — 소계·부가세·합계가 설계서 §4.1 그대�
   assert.equal(totals.supplyAmount, 3500000);
   assert.equal(totals.vatAmount, 350000);
   assert.equal(totals.grandTotal, 3850000);
-  assert.equal(totals.grandTotalKo, "금삼백팔십오만원정");
+  assert.equal(totals.grandTotalKo, "일금 삼백팔십오만원정");
   assert.equal(totals.roundingAdj, 0);
 });
 
@@ -121,12 +121,12 @@ test("소수 수량이어도 항목 금액은 정수 원", () => {
 });
 
 test("한글 금액 표기", () => {
-  assert.equal(grandTotalKo(0), "금영원정");
-  assert.equal(grandTotalKo(15), "금일십오원정");     // 금액 표기는 일을 생략하지 않는다
-  assert.equal(grandTotalKo(10000), "금일만원정");
-  assert.equal(grandTotalKo(1000000), "금일백만원정");
-  assert.equal(grandTotalKo(3850000), "금삼백팔십오만원정");
-  assert.equal(grandTotalKo(123456789), "금일억이천삼백사십오만육천칠백팔십구원정");
+  assert.equal(grandTotalKo(0), "일금 영원정");
+  assert.equal(grandTotalKo(15), "일금 일십오원정");   // 금액 표기는 일을 생략하지 않는다
+  assert.equal(grandTotalKo(10000), "일금 일만원정");
+  assert.equal(grandTotalKo(1000000), "일금 일백만원정");
+  assert.equal(grandTotalKo(3850000), "일금 삼백팔십오만원정");
+  assert.equal(grandTotalKo(123456789), "일금 일억이천삼백사십오만육천칠백팔십구원정");
 });
 
 test("P0 는 원화 전용 — 다른 통화는 에러", () => {

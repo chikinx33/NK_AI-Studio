@@ -98,7 +98,7 @@ test("템플릿의 단순 태그와 항목 표가 값으로 채워진다", () =>
   assert.match(text, /메인 영상 기획·연출/);
   assert.match(text, /편집·색보정/);
   assert.match(text, /3,000,000/);
-  assert.match(text, /금삼백팔십오만원정/);
+  assert.match(text, /일금 삼백팔십오만원정/);
   assert.match(text, /3,850,000/);
 });
 

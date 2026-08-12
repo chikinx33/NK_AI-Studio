@@ -145,7 +145,7 @@ test("실제 DOCX 서식이 끝까지 채워진다 (미치환 태그 0개)", { s
   assert.match(text, /■ 기획/);
   assert.match(text, /■ 실비/);
   assert.match(text, /9,143,000/);
-  assert.match(text, /금구백일십사만삼천원정/);
+  assert.match(text, /일금 구백일십사만삼천원정/);
   assert.match(text, /단수조정/);
   assert.match(text, /입금계좌/);
   assert.match(text, /촬영 실사 촬영은 본 견적에 포함되지 않습니다/);
@@ -159,7 +159,7 @@ test("실제 HWPX 서식이 끝까지 채워지고 남는 행이 삭제된다", 
   assert.match(text, /\(주\)가나다/);
   assert.match(text, /■ 제작/);
   assert.match(text, /9,143,000/);
-  assert.match(text, /금구백일십사만삼천원정/);
+  assert.match(text, /일금 구백일십사만삼천원정/);
 
   // 항목 표: 머리글 1 + 데이터 15행 = 16 (템플릿의 31행에서 15행이 지워짐)
   const rowCounts = (xml.match(/rowCnt="(\d+)"/g) || []).map((m) => Number(m.match(/\d+/)[0]));

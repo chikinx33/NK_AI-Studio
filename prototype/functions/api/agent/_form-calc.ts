@@ -96,8 +96,8 @@ export interface QuoteTotals {
   vatAmount: number;
   roundingAdj: number;            // 0 이 아니면 문서에 '단수조정' 행을 반드시 표시
   grandTotal: number | null;      // missing 이 있으면 null
-  grandTotalKo: string | null;    // "금삼백팔십오만원정"
-  grandTotalText: string;         // "금삼백팔십오만원정  (₩3,850,000)"
+  grandTotalKo: string | null;    // "일금 삼백팔십오만원정"
+  grandTotalText: string;         // "일금 삼백팔십오만원정 (₩3,850,000)"
   workAmount: number;
   expenseAmount: number;
   groupSubtotals: { group: string; amount: number }[];
@@ -198,10 +198,13 @@ function koreanGroup(group: number): string {
   return out;
 }
 
-/** 3850000 → "금삼백팔십오만원정". 위변조 방지용 관행 표기. */
+/**
+ * 3850000 → "일금 삼백팔십오만원정". 위변조 방지용 관행 표기(설계서 §4.3 · 사용자 확정).
+ * '일금' 뒤는 띄우고 금액은 붙여 쓴다.
+ */
 export function grandTotalKo(amount: number): string {
   const total = Math.round(Number(amount) || 0);
-  if (total === 0) return "금영원정";
+  if (total === 0) return "일금 영원정";
   const negative = total < 0;
   let rest = Math.abs(total);
   const groups: number[] = [];
@@ -209,13 +212,13 @@ export function grandTotalKo(amount: number): string {
     groups.push(rest % 10000);
     rest = Math.floor(rest / 10000);
   }
-  if (groups.length > KO_BIG_UNITS.length) return `금${Math.abs(total)}원정`; // 경 초과: 현실적으로 없음
+  if (groups.length > KO_BIG_UNITS.length) return `일금 ${Math.abs(total)}원정`; // 경 초과: 현실적으로 없음
   let text = "";
   for (let i = groups.length - 1; i >= 0; i--) {
     if (!groups[i]) continue;
     text += koreanGroup(groups[i]) + KO_BIG_UNITS[i];
   }
-  return `금${negative ? "마이너스" : ""}${text}원정`;
+  return `일금 ${negative ? "마이너스" : ""}${text}원정`;
 }
 
 // ── 기본 거래 조건 (§5) ──────────────────────────────────────────────────────
@@ -442,7 +445,7 @@ export function computeQuoteTotals(
     roundingAdj: finalRoundingAdj,
     grandTotal: finalGrandTotal,
     grandTotalKo: ko,
-    grandTotalText: ko ? `${ko}  (₩${formatKrw(grandTotal)})` : "—",
+    grandTotalText: ko ? `${ko} (₩${formatKrw(grandTotal)})` : "—",
     workAmount,
     expenseAmount,
     groupSubtotals,

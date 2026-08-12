@@ -101,7 +101,7 @@ test("단순 필드가 채워지고 XML 특수문자는 이스케이프된다", 
   assert.match(text, /Q-20260812-001/);
   assert.match(xml, /&amp; 파트너스/);                  // ★XML 이스케이프 — 안 하면 한글이 파일을 거부한다
   assert.doesNotMatch(xml.replace(/&amp;/g, ""), /&/);  // 이스케이프되지 않은 & 가 없어야 한다
-  assert.match(text, /금사백일십팔만원정/);                // 3,800,000 + 부가세 380,000
+  assert.match(text, /일금 사백일십팔만원정/);             // 3,800,000 + 부가세 380,000
 });
 
 test("항목 3개 → 남은 17행이 삭제되고 표가 4행(머리글+3)만 남는다", () => {
