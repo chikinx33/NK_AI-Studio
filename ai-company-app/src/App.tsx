@@ -116,6 +116,8 @@ export default function App() {
   const { openWork } = useAgentVideoWorkspace();
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
+  // 세션이 끊긴 상태 — 빈 화면 대신 로그인으로 가는 길을 보여준다.
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [presentationActive, setPresentationActive] = useState(false);
@@ -797,7 +799,12 @@ export default function App() {
 
   useEffect(() => {
     refreshStatus();
-    getAgents().then(setAgents).catch(() => {});
+    getAgents()
+      .then((list) => { setAgents(Array.isArray(list) ? list : []); setSessionExpired(false); })
+      .catch((error) => {
+        setAgents([]); // ★어떤 경우에도 배열을 유지한다(화면이 통째로 죽는 것보다 낫다)
+        if (String((error as Error)?.message) === "unauthorized") setSessionExpired(true);
+      });
   }, []);
 
   // 활성 대화가 바뀌면 그 대화의 메시지를 불러온다 (전환·복원)
@@ -1183,6 +1190,24 @@ export default function App() {
     ...serverWorking,
   ]);
   const presentedTurns = turns.filter((turn) => !turn.queued);
+
+  // 세션이 끊겼는데 직원 목록도 못 받은 상태 — 텅 빈 회사를 그리지 말고 길을 알려준다.
+  if (sessionExpired && agents.length === 0) {
+    return (
+      <div className="grid h-full place-items-center bg-ink p-6 text-center">
+        <div className="max-w-sm rounded-2xl border border-edge bg-panel p-7">
+          <h1 className="text-sm font-bold text-gray-100">로그인이 풀렸어요</h1>
+          <p className="mt-2 text-xs leading-6 text-gray-400">
+            로그인 화면에서 다시 들어오시면 대화와 업무가 그대로 있어요.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <a href="/app" className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-600">로그인 화면</a>
+            <button type="button" onClick={() => location.reload()} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 transition hover:bg-edge">다시 시도</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">

@@ -489,8 +489,21 @@ export async function getCompany() {
   return (await fetch("/api/company")).json();
 }
 
+/**
+ * 직원 목록. ★반드시 배열을 돌려준다.
+ *
+ * 실측(2026-08-13): 세션이 끊겨 401 이 오자 { error: … } 객체가 그대로 상태에 들어갔고,
+ * 사이드바의 agents.find(...) 가 "find is not a function" 으로 터지면서 화면 전체가
+ * 렌더되지 않았다(로딩 문구에서 멈춤). 응답을 믿지 말고 형태를 확인한다.
+ */
 export async function getAgents(): Promise<AgentInfo[]> {
-  return (await fetch("/api/agent/agents")).json();
+  const res = await fetch("/api/agent/agents");
+  if (res.status === 401 || res.status === 403) throw new Error("unauthorized");
+  if (!res.ok) throw new Error(`agents_failed_${res.status}`);
+  const data = await res.json().catch(() => null);
+  const list = Array.isArray(data) ? data : Array.isArray((data as any)?.agents) ? (data as any).agents : null;
+  if (!list) throw new Error("agents_bad_payload");
+  return list as AgentInfo[];
 }
 
 export interface AgentVoicePreset {
