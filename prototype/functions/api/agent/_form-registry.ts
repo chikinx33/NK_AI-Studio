@@ -26,9 +26,9 @@ export interface CompanyStorage {
 }
 
 /**
- * 반복 영역 하나. HWPX 는 템플릿에 행을 미리 만들어 두고 남는 행을 지우는 방식이라
- * (§6.2.1 — 행 복제는 실패 위험이 커서 하지 않는다) 접두어마다 몇 행까지 있는지가 계약이다.
- * 예: { "row": { source: "totals.rows", maxRows: 30 } } → {{row.name}} 이 든 행이 30개.
+ * 반복 영역 하나 — 템플릿에 행을 미리 만들어 두는 포맷을 위한 선언.
+ * 예: { "row": { source: "totals.rows", maxRows: 30 } } → 항목 표의 데이터 행이 30개.
+ * P0 의 DOCX 는 루프가 행을 알아서 늘리므로 maxItemRows(행 상한) 유도에만 쓴다.
  */
 export interface FormRepeater {
   source: string;

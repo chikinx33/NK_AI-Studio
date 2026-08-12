@@ -1,6 +1,6 @@
-// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — docs/forms/견적서_표준서식_v3_20260812.zip.
+// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — docs/forms/견적서_표준서식_20260812_final.zip.
 // 합성 템플릿은 우리가 만든 규칙만 확인한다. 이 테스트는 사람이 한글·워드로 만든 진짜 서식이
-// 우리 렌더러로 채워지는지, 그리고 DOCX·HWPX 의 금액이 같은지를 본다(설계서 §10 #2·#8·#11).
+// 우리 렌더러로 채워지는지, 그리고 DOCX·XLSX 의 금액이 같은지를 본다(설계서 §10 #2·#11).
 //
 // ※ 서식 zip 이 없으면 통째로 건너뛴다(자산은 회사 파일 GCS 에 두는 것이 본래 자리).
 import test from "node:test";
@@ -11,12 +11,11 @@ import { dirname, join } from "node:path";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const agentDir = join(repoRoot, "prototype/functions/api/agent");
-const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v3_20260812.zip");
+const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_20260812_final.zip");
 
 const { unzipSync, strFromU8 } = await import(pathToFileURL(join(agentDir, "vendor/fflate.bundle.js")).href);
 const { PizZip } = await import(pathToFileURL(join(agentDir, "vendor/docxtemplater-pizzip.bundle.js")).href);
 const { renderDocx } = await import(pathToFileURL(join(agentDir, "_render-docx.ts")).href);
-const { renderHwpx } = await import(pathToFileURL(join(agentDir, "_render-hwpx.ts")).href);
 const { renderXlsx } = await import(pathToFileURL(join(agentDir, "_render-xlsx.ts")).href);
 const XLSX = await import(pathToFileURL(join(agentDir, "vendor/sheetjs.bundle.js")).href);
 const { computeQuoteTotals, buildQuoteView } = await import(pathToFileURL(join(agentDir, "_form-calc.ts")).href);
@@ -31,8 +30,7 @@ const entry = (suffix) => {
 
 const manifestBytes = entry("quote-standard/manifest.json");
 const docxTemplate = entry("quote-standard/template.docx");
-const hwpxTemplate = entry("quote-standard/template.hwpx");
-const skip = !manifestBytes || !docxTemplate || !hwpxTemplate
+const skip = !manifestBytes || !docxTemplate
   ? "표준 서식 zip(docs/forms/…)이 없어 건너뜁니다"
   : false;
 
@@ -151,59 +149,16 @@ test("실제 DOCX 서식이 끝까지 채워진다 (미치환 태그 0개)", { s
   assert.match(text, /촬영 실사 촬영은 본 견적에 포함되지 않습니다/);
 });
 
-test("실제 HWPX 서식이 끝까지 채워지고 남는 행이 삭제된다", { skip }, () => {
-  const { quote, totals } = prepared();
-  const xml = hwpxSection(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
-  const text = hwpxText(xml);
-  assert.doesNotMatch(text, /\{\{/);            // §10 #11
-  assert.match(text, /\(주\)가나다/);
-  assert.match(text, /■ 제작/);
-  assert.match(text, /9,143,000/);
-  assert.match(text, /일금 구백일십사만삼천원정/);
 
-  // 항목 표: 머리글 1 + 데이터 15행 = 16 (템플릿의 31행에서 15행이 지워짐)
-  const rowCounts = (xml.match(/rowCnt="(\d+)"/g) || []).map((m) => Number(m.match(/\d+/)[0]));
-  assert.ok(rowCounts.includes(totals.rows.length + 1), `표 행 수가 ${totals.rows.length + 1} 이어야 하는데 ${rowCounts}`);
-  assert.ok(!rowCounts.includes(31), "미사용 행이 남아 있다");
-});
 
-test("★행 삭제 후 rowAddr 가 0부터 다시 매겨진다 (빠뜨리면 한글이 파일을 거부한다)", { skip }, () => {
-  const { quote, totals } = prepared();
-  const xml = hwpxSection(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
-  const tables = [...xml.matchAll(/<hp:tbl[\s\S]*?<\/hp:tbl>/g)].map((match) =>
-    [...match[0].matchAll(/<hp:tr[\s\S]*?<\/hp:tr>/g)].map((row) => {
-      const found = row[0].match(/rowAddr="(\d+)"/);
-      return found ? Number(found[1]) : null;
-    })
-  );
-  const itemTable = tables.find((rows) => rows.length === totals.rows.length + 1);
-  assert.ok(itemTable, "항목 표를 찾지 못했다");
-  // 머리글 포함해 0,1,2,… 로 빈틈없이 이어져야 한다
-  assert.deepEqual(itemTable, itemTable.map((_, index) => index));
-});
 
-test("★서식의 네임스페이스·손대지 않은 영역이 그대로 유지된다", { skip }, () => {
-  const { quote } = prepared();
-  const templateXml = hwpxSection(hwpxTemplate);
-  const rendered = hwpxSection(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
-
-  const namespaces = (xml) => (xml.match(/xmlns:[a-zA-Z0-9]+=/g) || []).sort().join(",");
-  assert.equal(namespaces(rendered), namespaces(templateXml), "xmlns 선언이 사라졌다");
-  assert.match(rendered, /<hs:sec /, "루트 접두어가 바뀌었다");
-
-  // 첫 표 이전(문서 설정 블록)은 우리가 손댈 이유가 없으므로 바이트가 같아야 한다.
-  const head = (xml) => xml.slice(0, xml.indexOf("<hp:tbl"));
-  assert.equal(head(rendered), head(templateXml), "건드리지 않은 영역이 바뀌었다");
-});
-
-test("DOCX·HWPX·XLSX 의 합계가 전부 같다 (§10 #2)", { skip }, () => {
+test("DOCX 와 XLSX 의 합계가 같다 (§10 #2)", { skip }, () => {
   const { quote, totals } = prepared();
   const view = buildQuoteView(quote);
   const inDocx = docxText(renderDocx(docxTemplate, view));
-  const inHwpx = hwpxText(hwpxSection(renderHwpx(hwpxTemplate, view, { repeaters: manifest.repeaters })));
   const grand = totals.grandTotal.toLocaleString("ko-KR");
-  assert.ok(inDocx.includes(grand) && inHwpx.includes(grand), "두 포맷의 합계가 다르다");
-  assert.ok(inDocx.includes(totals.grandTotalKo) && inHwpx.includes(totals.grandTotalKo));
+  assert.ok(inDocx.includes(grand), "DOCX 합계가 다르다");
+  assert.ok(inDocx.includes(totals.grandTotalKo));
 
   // XLSX 는 숫자 셀이라 캐시값으로 비교한다(수식은 엑셀이 다시 계산한다).
   const workbook = XLSX.read(renderXlsx(quote, view, null), { type: "array", cellFormula: true });
@@ -220,25 +175,10 @@ test("DOCX·HWPX·XLSX 의 합계가 전부 같다 (§10 #2)", { skip }, () => {
 test("부가세 포함·면세도 실제 서식에서 렌더된다", { skip }, () => {
   for (const mode of ["inclusive", "exempt"]) {
     const { quote, totals } = prepared({ vat: { mode, rate: 0.1 } });
-    const view = buildQuoteView(quote);
-    assert.doesNotThrow(() => renderDocx(docxTemplate, view), `${mode} DOCX`);
-    const xml = hwpxSection(renderHwpx(hwpxTemplate, view, { repeaters: manifest.repeaters }));
-    assert.doesNotMatch(hwpxText(xml), /\{\{/, `${mode} HWPX 에 미치환 태그`);
+    const text = docxText(renderDocx(docxTemplate, buildQuoteView(quote)));
+    assert.doesNotMatch(text, /\{/, `${mode}: 미치환 태그가 남았다`);
+    assert.ok(text.includes(totals.grandTotal.toLocaleString("ko-KR")), `${mode}: 합계가 안 보인다`);
     assert.ok(totals.summaryRows.length <= manifest.repeaters.sum.maxRows, "합계 행이 서식 행 수를 넘는다");
   }
 });
 
-test("항목이 서식 행 수를 넘으면 파일을 만들지 않는다 (§10 #9)", { skip }, () => {
-  const many = Array.from({ length: 31 }, (_, i) => ({
-    group: "", costType: "work", name: `항목 ${i + 1}`, qty: 1, unit: "식", unitPrice: 1000, note: "",
-  }));
-  const { missing } = prepared({ items: many });
-  assert.deepEqual(missing, [{ field: "items", reason: "overflow" }]);
-
-  // 계산 단계를 건너뛰어도 렌더러가 한 번 더 막는다(이중 방어).
-  const { quote } = prepared({ items: many });
-  assert.throws(
-    () => renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }),
-    /행을 늘리거나 항목을 줄여/
-  );
-});

@@ -35,7 +35,6 @@ import {
   type CompanyStorage,
 } from "./_form-registry";
 import { renderDocx, DOCX_CONTENT_TYPE } from "./_render-docx";
-import { renderHwpx, HWPX_CONTENT_TYPE } from "./_render-hwpx";
 import { renderXlsx, XLSX_CONTENT_TYPE } from "./_render-xlsx";
 
 export { getSql };
@@ -1622,7 +1621,6 @@ const FORM_SYSTEM_PROMPTS: Record<string, string> = {
 /** 포맷별 파일 확장자·MIME. */
 const FORM_FORMATS: Record<string, { ext: string; contentType: string; needsTemplate: boolean; convertedFrom?: boolean }> = {
   docx: { ext: "docx", contentType: DOCX_CONTENT_TYPE, needsTemplate: true },
-  hwpx: { ext: "hwpx", contentType: HWPX_CONTENT_TYPE, needsTemplate: true },
   // XLSX 는 템플릿이 없으면 기본 표를 만든다(§6.3) — manifest.templates.xlsx 가 null 이어도 된다.
   xlsx: { ext: "xlsx", contentType: XLSX_CONTENT_TYPE, needsTemplate: false },
   // PDF 는 직접 만들지 않는다. manifest.pdfFrom(=docx)을 렌더한 뒤 변환 서비스에 맡긴다(§6.4).
@@ -1684,7 +1682,7 @@ async function convertDocxToPdf(env: any, docx: Uint8Array, sourceFormat: string
 
 /**
  * ★회사 파일(GCS)에 바이너리를 저장한다. company_files_write 는 텍스트 전용이라
- * 생성한 문서(.docx·.hwpx)를 저장할 수 없다.
+ * 생성한 문서(.docx·.xlsx)를 저장할 수 없다.
  */
 async function saveCompanyBinary(
   ctx: ToolContext,
@@ -1838,7 +1836,7 @@ export async function runFormListTool(_input: any, ctx: ToolContext): Promise<an
     })),
     problems,
     hint: forms.length
-      ? "form_fill 에 formId 와 formats(docx·hwpx)를 넘겨 문서를 만드세요."
+      ? "form_fill 에 formId 와 formats(docx·xlsx·pdf)를 넘겨 문서를 만드세요."
       : `회사 파일의 '${FORMS_ROOT}' 폴더에 서식 폴더(manifest.json + 템플릿)를 올리면 여기 나타나요.`,
   };
 }
@@ -1987,11 +1985,9 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     if (!template && spec.needsTemplate) {
       throw new Error(`'${manifest.name}' 서식에 ${format.toUpperCase()} 템플릿이 없어요. manifest.templates 를 확인해 주세요.`);
     }
-    const bytes = format === "hwpx"
-      ? renderHwpx(template as Uint8Array, view, { repeaters: manifest.repeaters })
-      : format === "xlsx"
-        ? renderXlsx(data, view, template)
-        : renderDocx(template as Uint8Array, view);
+    const bytes = format === "xlsx"
+      ? renderXlsx(data, view, template)
+      : renderDocx(template as Uint8Array, view);
     renderedBytes.set(format, bytes);
     return bytes;
   };
@@ -4090,11 +4086,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", gate: true, run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
-  // 서식 문서 엔진(form_list · form_fill). ⚠️ 회사 파일 `_서식/견적서-표준/` 에 manifest.json 과
-  // template.docx 가 올라간 뒤에 주석을 푼다 — 템플릿이 없으면 form_fill 이 실패한다.
-  // (form_list 는 템플릿 없이도 안전하지만, 목록만 보이고 만들지 못하면 사용자만 헷갈린다.)
-  // form_list: { agentId: "ink", agentIds: ["core", "edge"], kind: "read", synthesize: true, run: runFormListTool },
-  // form_fill: { agentId: "ink", agentIds: ["core", "edge"], kind: "external", run: runFormFillTool },
+  // 서식 문서 엔진(§7). 서식은 회사 파일 `_서식/<폴더>/` 의 데이터라 코드 수정 없이 늘어난다.
+  form_list: { agentId: "ink", agentIds: ["core", "edge"], kind: "read", synthesize: true, run: runFormListTool },
+  form_fill: { agentId: "ink", agentIds: ["core", "edge"], kind: "external", run: runFormFillTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
   // 메일 발송: 외부·되돌리기 어려움 → 승인 게이트(승인하면 그때 실제 발송).
   gmail_send: { agentId: "sync", kind: "external", gate: true, run: runGmailSendTool },

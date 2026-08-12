@@ -6,9 +6,9 @@ import { downloadCompanyFile, type FormFile, type FormOutput } from "../lib/api"
 //   (화면과 파일의 금액이 갈라지는 사고를 원천 차단).
 
 const FORMAT_LABEL: Record<string, string> = {
-  docx: "워드(DOCX)", hwpx: "한글(HWPX)", xlsx: "엑셀(XLSX)", pdf: "PDF",
+  docx: "워드(DOCX)", xlsx: "엑셀(XLSX)", pdf: "PDF",
 };
-const FORMAT_SHORT: Record<string, string> = { docx: "DOCX", hwpx: "HWPX", xlsx: "XLSX", pdf: "PDF" };
+const FORMAT_SHORT: Record<string, string> = { docx: "DOCX", xlsx: "XLSX", pdf: "PDF" };
 
 const MISSING_LABEL: Record<string, string> = {
   name: "품명", qty: "수량", unitPrice: "단가",

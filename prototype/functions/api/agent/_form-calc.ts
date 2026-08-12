@@ -3,7 +3,7 @@
 //
 // ★ 금액의 단일 출처(SSOT). 계산은 오직 여기서만 한다.
 //   - LLM 은 금액을 계산하지 않는다(§3.1). 서버가 모델 출력의 totals 를 지우고 이 결과로 덮어쓴다.
-//   - 렌더러(DOCX·HWPX·…)는 여기서 나온 totals 를 '표시'만 한다.
+//   - 렌더러(DOCX·XLSX·…)는 여기서 나온 totals 를 '표시'만 한다.
 //     포맷마다 계산하면 파일마다 금액이 갈라진다.
 //   - 반올림은 Math.round 하나만 쓴다. 다른 반올림 헬퍼를 만들지 않는다(§4.2).
 //
@@ -550,7 +550,6 @@ export function assertRenderable(source: any, formatLabel: string): void {
 //   합계      {#totals.summaryRows} … {label} {amount}
 //   특이사항  {#totals.infoRows} … {label} {value}
 //   거래조건  {#totals.termRows} … {no} {text}
-// (HWPX 는 같은 자료를 {{row.*}} {{sum.*}} {{info.*}} {{term.*}} 로 쓴다 — manifest.repeaters)
 
 export function buildQuoteView(quote: Quote | any): Record<string, any> {
   const view = buildQuoteViewNested(quote);

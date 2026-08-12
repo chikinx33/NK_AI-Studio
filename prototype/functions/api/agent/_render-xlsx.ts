@@ -6,7 +6,7 @@
 // 수식을 계산하지 않는 뷰어에서도 서버와 같은 금액이 보이게 한다.
 //
 // ★이 파일에서 금액을 계산하지 않는다. 숫자는 전부 totals 에서 가져온다(_form-calc.ts 가 SSOT).
-//   여기서 한 번이라도 더하기를 시작하면 DOCX·HWPX 와 금액이 갈라진다.
+//   여기서 한 번이라도 더하기를 시작하면 DOCX 와 금액이 갈라진다.
 import { utils, write, read } from "./vendor/sheetjs.bundle.js";
 import { assertRenderable } from "./_form-calc.ts";
 import type { Quote, QuoteRow, QuoteTotals } from "./_form-calc";
@@ -52,7 +52,7 @@ function mergeRow(merges: any[], startColumn: number, endColumn: number, row: nu
 
 /**
  * 기본 견적서 시트 생성 (manifest.templates.xlsx 가 없을 때).
- * 표의 행 구성은 DOCX·HWPX 와 같은 totals.rows 를 쓴다 — 세 포맷이 같은 표를 보여줘야 한다.
+ * 표의 행 구성은 DOCX 와 같은 totals.rows 를 쓴다 — 두 포맷이 같은 표를 보여줘야 한다.
  */
 export function buildQuoteSheet(quote: Quote): { sheet: SheetData; lastRow: number } {
   const totals = quote.totals as QuoteTotals;

@@ -1278,7 +1278,7 @@ export async function reorderProjectCards(projectIds: string[]) {
 // 서식 문서(form_fill) 산출물 — 서버가 만든 파일과 계산 결과를 그대로 받는다.
 // ★금액은 전부 서버(_form-calc.ts)가 계산한 값이다. 화면에서 다시 계산하지 않는다.
 export interface FormFile {
-  format: string;      // docx · hwpx · xlsx …
+  format: string;      // docx · xlsx · pdf
   path: string;        // 회사 파일 경로(업무/<날짜>/…)
   name: string;
   contentType: string;
