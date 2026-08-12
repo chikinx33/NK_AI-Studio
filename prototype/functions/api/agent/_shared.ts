@@ -7,6 +7,17 @@ import { getSql, type SqlFn } from "../knowledge/_shared";
 import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
+import {
+  computeQuoteTotals,
+  defaultQuoteTerms,
+  normalizeDiscount,
+  normalizeRounding,
+  normalizeVat,
+  toAmountNumber,
+  type Quote,
+  type QuoteItem,
+  type QuoteSupplier,
+} from "./_quote-math";
 
 export { getSql };
 export type { SqlFn };
@@ -845,7 +856,7 @@ export async function addMessage(
 const TOOL_LABELS: Record<string, string> = {
   image: "이미지", image_edit: "이미지 수정", upscale: "이미지 업스케일", video: "영상",
   scene_still: "장면 스틸", scene_video: "장면 영상", render_final: "최종 렌더",
-  lipsync: "립싱크 영상", ppt: "PPT", pdf: "PDF", sound: "효과음", music: "BGM",
+  lipsync: "립싱크 영상", ppt: "PPT", pdf: "PDF", quote: "견적서", sound: "효과음", music: "BGM",
   narration: "나레이션", scenario: "시나리오", brand_asset: "브랜드 자산", infographic: "인포그래픽",
 };
 
@@ -1522,6 +1533,185 @@ async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
   const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
   const parsed = await callClaudeForJson(ctx.env, PDF_SYSTEM, userMsg);
   return { ...parsed, kind: "pdf", promptEcho: prompt };
+}
+
+// ── 견적서(quote/v1) ─────────────────────────────────────────────────────────
+// 설계서 docs/quote_document_engine_design_20260812.md §4. 금액 계산은 _quote-math.ts 가 전담하고
+// 모델은 '무엇을 얼마에 몇 개' 라는 사실만 옮겨 적는다. 모르는 단가를 지어내면 제품이 그 자리에서 망가진다.
+
+const QUOTE_SUPPLIER_PATH = "_회사정보/견적서-공급자.json";
+
+const QUOTE_SYSTEM = `당신은 견적서 작성 담당자입니다. 요청과 참고 자료를 바탕으로 quote/v1 견적서 JSON을 생성하세요.
+
+출력 형식 (마크다운 코드블록 없이 JSON만):
+{
+  "title": "브랜드 영상 제작 견적서",
+  "validUntil": "2026-09-11",
+  "client": { "company": "(주)고객사", "person": "홍길동", "title": "부장", "tel": "", "email": "", "address": "" },
+  "currency": "KRW",
+  "items": [
+    { "name": "메인 영상 기획·연출", "spec": "60초 / 1편", "qty": 1, "unit": "식", "unitPrice": 3000000, "note": "" }
+  ],
+  "discount": { "type": "amount", "value": 0, "label": "" },
+  "vat": { "mode": "exclusive", "rate": 0.1 },
+  "rounding": { "unit": 1, "mode": "floor" },
+  "terms": ["거래 조건 문장"],
+  "notes": ""
+}
+
+규칙:
+- 출력은 quote/v1 JSON만. 마크다운 코드블록 금지. 설명 문장 금지.
+- ★단가(unitPrice)와 수량(qty)은 사용자가 말했거나 첨부 자료에 적힌 값만 쓴다.
+  모르면 반드시 null 로 둔다. 시세·경험·유사 사례로 추정하지 않는다.
+  "대략" "보통" 같은 근거로 숫자를 넣는 것을 금지한다.
+- ★totals, docNo, issuedAt 은 절대 쓰지 않는다(서버가 계산). supplier(공급자)도 쓰지 않는다(서버가 저장소에서 로드).
+- 금액 합계를 문장으로도 쓰지 않는다.
+- 항목명은 고객이 읽고 무엇인지 알 수 있게 구체적으로. "기타" "일체" 같은 뭉뚱그린 항목 금지.
+- unit(단위)은 사용자가 말하지 않았으면 "식".
+- vat.mode 는 사용자가 '부가세 포함'이라 하면 inclusive, '별도'면 exclusive, 면세 사업이면 exempt. 언급 없으면 exclusive.
+- discount 는 사용자가 할인을 말했을 때만. percent 면 value 는 퍼센트 숫자(10% → 10).
+- terms 는 사용자가 조건을 말했을 때만 쓴다. 말하지 않았으면 빈 배열로 두면 서버가 표준 조건을 넣는다.
+- currency 는 "KRW" 고정.
+- 한국어로 작성.`;
+
+/**
+ * 공급자(= 우리 회사) 정보를 회사 파일에서 로드. 없으면 빈 값으로 두고 계산엔진의 missing 이 잡는다.
+ * (에이전트가 사용자에게 물어 company_files_write 로 저장하면 다음 견적서부터 자동 반영)
+ */
+async function loadQuoteSupplier(ctx: ToolContext): Promise<QuoteSupplier> {
+  const empty: QuoteSupplier = { name: "", bizNo: "", ceo: "", address: "", tel: "", email: "", stampUrl: "" };
+  try {
+    const read = await callInternalJson(
+      ctx,
+      `/api/agent/company-files?path=${encodeURIComponent(QUOTE_SUPPLIER_PATH)}&read=1`
+    );
+    const parsed = JSON.parse(String(read?.content || "{}"));
+    const source = parsed?.supplier && typeof parsed.supplier === "object" ? parsed.supplier : parsed;
+    return {
+      name: String(source?.name || "").trim(),
+      bizNo: String(source?.bizNo || source?.businessNumber || "").trim(),
+      ceo: String(source?.ceo || source?.representative || "").trim(),
+      address: String(source?.address || "").trim(),
+      tel: String(source?.tel || source?.phone || "").trim(),
+      email: String(source?.email || "").trim(),
+      stampUrl: String(source?.stampUrl || source?.stamp || "").trim(),
+    };
+  } catch {
+    return empty; // 파일 없음·형식 오류 — 견적 자체는 계속 만들고 supplier.name 을 missing 으로 되묻는다.
+  }
+}
+
+/** Asia/Seoul 기준 YYYY-MM-DD (KST 는 서머타임이 없어 UTC+9 고정 오프셋으로 충분). */
+function seoulDateString(date: Date = new Date()): string {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function addDaysToDateString(dateString: string, days: number): string {
+  const base = new Date(`${dateString}T00:00:00Z`);
+  return new Date(base.getTime() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * 문서번호 Q-YYYYMMDD-NNN. NNN 은 그 사용자의 '오늘(서울) quote 잡 수'.
+ * 잡은 도구 실행 직전에 이미 INSERT 되어 있으므로 첫 견적서가 001 이 된다.
+ * DB 를 못 읽으면 001 로 두고 견적서 생성 자체는 막지 않는다.
+ */
+async function nextQuoteDocNo(ctx: ToolContext, issuedAt: string): Promise<string> {
+  let seq = 1;
+  try {
+    const sql = getSql(ctx.env);
+    if (sql) {
+      const rows = await sql(
+        `SELECT COUNT(*)::int AS n
+           FROM agent_jobs
+          WHERE user_id = $1 AND type = 'quote'
+            AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $2::date`,
+        [ctx.userId, issuedAt]
+      );
+      const counted = Number(rows?.[0]?.n || 0);
+      if (counted > 0) seq = counted;
+    }
+  } catch {
+    seq = 1;
+  }
+  return `Q-${issuedAt.replace(/-/g, "")}-${String(Math.min(seq, 999)).padStart(3, "0")}`;
+}
+
+/**
+ * 잉크 견적서 도구(설계서 §4.1). Claude 로 quote/v1 JSON 을 만들고
+ * ★모델이 쓴 totals·missing·docNo·issuedAt·supplier 는 지운 뒤 서버 값으로 덮어쓴다.
+ * 금액은 _quote-math.computeQuoteTotals 만 계산한다.
+ */
+export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
+  if (!prompt) throw new Error("견적 요청 내용(prompt)이 필요해요.");
+
+  // 1. 입력 조립 — baseQuote 가 있으면 그 견적서를 고쳐 쓰는 요청이다.
+  const baseQuote = input?.baseQuote && typeof input.baseQuote === "object" ? { ...input.baseQuote } : null;
+  if (baseQuote) {
+    for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete (baseQuote as any)[key];
+  }
+  const parts = [`요청: ${prompt}`];
+  if (input?.context) parts.push(`참고 컨텍스트:\n${String(input.context)}`);
+  if (baseQuote) parts.push(`기존 견적서(이 내용을 수정):\n${JSON.stringify(baseQuote)}`);
+
+  // 2. 공급자 정보 로드
+  const supplier = await loadQuoteSupplier(ctx);
+
+  // 3. 모델 생성
+  const parsed = await callClaudeForJson(ctx.env, QUOTE_SYSTEM, parts.join("\n\n"));
+
+  // 4. ★서버 소유 키 삭제 — 모델이 채워 보냈어도 여기서 사라진다.
+  for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete parsed?.[key];
+
+  const issuedAt = seoulDateString();
+  const vat = normalizeVat(parsed?.vat);
+  const modelTerms = Array.isArray(parsed?.terms)
+    ? parsed.terms.map((term: any) => String(term || "").trim()).filter(Boolean)
+    : [];
+  const items: QuoteItem[] = (Array.isArray(parsed?.items) ? parsed.items : []).map((item: any, index: number) => ({
+    no: index + 1, // 번호는 코드가 부여(§2.1)
+    name: String(item?.name || "").trim(),
+    spec: String(item?.spec || "").trim(),
+    qty: toAmountNumber(item?.qty),
+    unit: String(item?.unit || "식").trim() || "식",
+    unitPrice: toAmountNumber(item?.unitPrice),
+    note: String(item?.note || "").trim(),
+  }));
+
+  const quote: Quote = {
+    schema: "quote/v1",
+    docNo: await nextQuoteDocNo(ctx, issuedAt),
+    issuedAt,
+    validUntil: String(parsed?.validUntil || "").trim() || addDaysToDateString(issuedAt, 30),
+    title: String(parsed?.title || "").trim() || "견적서",
+    supplier,
+    client: {
+      company: String(parsed?.client?.company || "").trim(),
+      person: String(parsed?.client?.person || "").trim(),
+      title: String(parsed?.client?.title || "").trim(),
+      tel: String(parsed?.client?.tel || "").trim(),
+      email: String(parsed?.client?.email || "").trim(),
+      address: String(parsed?.client?.address || "").trim(),
+    },
+    currency: "KRW",
+    items,
+    discount: normalizeDiscount(parsed?.discount),
+    vat,
+    rounding: normalizeRounding(parsed?.rounding),
+    terms: modelTerms.length ? modelTerms : defaultQuoteTerms(vat.mode),
+    notes: String(parsed?.notes || "").trim(),
+    totals: null,
+    missing: [],
+  };
+
+  // 5. 계산 — 금액의 단일 출처
+  const { totals, missing } = computeQuoteTotals(quote);
+  quote.totals = totals;
+  quote.missing = missing;
+
+  // 6. 반환. needs_input 이면 클라이언트가 PDF·XLSX 버튼을 잠근다(§3.4).
+  return { kind: "quote", status: missing.length > 0 ? "needs_input" : "ready", quote, promptEcho: prompt };
 }
 
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
@@ -3567,6 +3757,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", gate: true, run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
+  // 견적서(quote/v1). ⚠️ 2단계(프론트 kind:"quote" 렌더러)가 들어올 때 주석을 푼다 —
+  // 지금 열면 도구는 도는데 채팅·검수 패널에 견적서를 그릴 화면이 없다.
+  // quote: { agentId: "ink", agentIds: ["core", "edge"], kind: "external", run: runQuoteTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
   // 메일 발송: 외부·되돌리기 어려움 → 승인 게이트(승인하면 그때 실제 발송).
   gmail_send: { agentId: "sync", kind: "external", gate: true, run: runGmailSendTool },
