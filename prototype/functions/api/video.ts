@@ -15,6 +15,13 @@ import {
   stripDataUrlPrefix,
   type KlingQuality,
 } from "./_shared/kling";
+import {
+  MAX_IMAGE_DATA_URL_CHARS,
+  SEEDANCE_RESOLUTION,
+  SUPPORTED_IMAGE_MIMES,
+  allowedDurationsFor,
+  snapDurationFor,
+} from "./_shared/video-specs";
 
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -52,8 +59,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       : `${String(promptText || "").trim()}\n${noSpeechDirective}`.trim();
     // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅 (Veo/Grok 공용)
     const snapDuration = snapToAllowedDuration(durationSeconds);
-    // Seedance는 4–15초 지원 → 스냅 없이 클램프만 적용
-    const seedanceDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
+    // Seedance 계열: 허용 집합(_shared/video-specs)에서 가장 가까운 값으로 스냅.
+    // 클램프만 하던 시절엔 UI 에 없는 값이 그대로 나가 공급자가 400 으로 거부할 수 있었다.
+    const seedanceDuration = snapDurationFor("seedance", durationSeconds);
 
     const audioDataUrl = String((body as any)?.audioDataUrl || "").trim();
     const videoDataUrl = String((body as any)?.videoDataUrl || "").trim();
@@ -68,6 +76,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     if (isI2vOnlyModel && !imageDataUrl && referenceImages.length === 0) {
       return json({ error: "imageDataUrl or referenceImages is required for this model" }, 400);
+    }
+
+    // 과대 이미지는 워커를 죽이는(1102 / 빈 응답) 대신 읽을 수 있는 400 으로 반려한다.
+    const endImageDataUrlRaw = String((body as any)?.endImageDataUrl || "");
+    const oversized = [
+      { field: "imageDataUrl", value: String(imageDataUrl || "") },
+      { field: "endImageDataUrl", value: endImageDataUrlRaw },
+      ...referenceImages.map((v, i) => ({ field: `referenceImages[${i}]`, value: v })),
+    ].find((x) => x.value.length > MAX_IMAGE_DATA_URL_CHARS);
+    if (oversized) {
+      log('image_too_large', { field: oversized.field, chars: oversized.value.length });
+      return json({
+        error: "image_too_large",
+        field: oversized.field,
+        chars: oversized.value.length,
+        maxBytes: MAX_IMAGE_DATA_URL_CHARS,
+      }, 400);
     }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
@@ -114,11 +139,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (src.startsWith("data:")) {
         const outParsedImg = parseGcsUri(baseOutput!);
         if (!outParsedImg) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+        // 실제 mime 을 헤더에서 읽는다. JPEG/WebP 를 .png + image/png 로 올리면
+        // 공급자가 디코드에 실패하거나 조용히 거부할 수 있다.
+        const mimeMatch = /^data:([^;,]+)[;,]/.exec(src);
+        const mime = (mimeMatch && mimeMatch[1]) || "image/png";
+        if (!(SUPPORTED_IMAGE_MIMES as readonly string[]).includes(mime)) {
+          throw new Error(`unsupported_image_mime: ${mime}`);
+        }
+        const ext = mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png";
         const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
-        const objName = `${projectPrefix}/atlas/${stamp}-${suffix}.png`;
+        const objName = `${projectPrefix}/atlas/${stamp}-${suffix}.${ext}`;
         const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
         const b64 = src.split(",")[1] || "";
-        const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "image/png" }, body: base64ToUint8(b64) });
+        const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": mime }, body: base64ToUint8(b64) });
         if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
         return await signGcsUrl({ bucket: outParsedImg.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${objName}`));
       }
@@ -226,7 +259,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "wan") {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      const wanDuration = Math.min(15, Math.max(2, Math.round(Number(durationSeconds) || 5)));
+      const wanDuration = snapDurationFor("wan", durationSeconds);
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
       const endImageRaw = String((body as any)?.endImageDataUrl || "").trim();
       const endImageResolved = endImageRaw ? await toAtlasImageUrl(endImageRaw, `end-${sceneId}`).catch(() => "") : "";
@@ -262,7 +295,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "seedance-r2v") {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      const r2vDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
+      const r2vDuration = snapDurationFor("seedance-r2v", durationSeconds);
       const refResolved: string[] = [];
       for (let i = 0; i < referenceImages.length; i++) {
         const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
@@ -292,7 +325,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "vidu-q3") {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      const viduDuration = Math.min(12, Math.max(4, Math.round(Number(durationSeconds) || 5)));
+      const viduDuration = snapDurationFor("vidu-q3", durationSeconds);
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
       const refResolved: string[] = [];
       for (let i = 0; i < referenceImages.length; i++) {
@@ -439,16 +472,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
         : "";
 
+      const seedanceModel = "bytedance/seedance-2.0/image-to-video";
       const seedanceBody: any = {
-        model: "bytedance/seedance-2.0/image-to-video",
+        model: seedanceModel,
         prompt: safePromptText,
         duration: seedanceDuration,
-        resolution: "720p",
+        resolution: SEEDANCE_RESOLUTION,
         ratio: aspectFinal,
       };
       if (imageUrl) seedanceBody.image = imageUrl;
       if ((body as any)?.negativePrompt) seedanceBody.negative_prompt = String((body as any).negativePrompt);
 
+      log('seedance_request', {
+        model: seedanceModel,
+        duration: seedanceDuration,
+        requestedDuration: durationSeconds,
+        resolution: SEEDANCE_RESOLUTION,
+        ratio: aspectFinal,
+        hasImage: !!imageUrl,
+      });
       const seedanceRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",
         headers: {
@@ -459,7 +501,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       });
       const seedanceText = await seedanceRes.text();
       if (!seedanceRes.ok) {
-        return json({ error: "seedance_error", status: seedanceRes.status, detail: safeJson(seedanceText) }, seedanceRes.status);
+        // 공급자 거부 사유를 그대로 흘려보낸다 → 프론트의 errorDetail 툴팁까지 도달한다.
+        log('seedance_rejected', { status: seedanceRes.status, body: seedanceText.slice(0, 500) });
+        return json({
+          error: "seedance_error",
+          status: seedanceRes.status,
+          detail: safeJson(seedanceText),
+          sent: { duration: seedanceDuration, resolution: SEEDANCE_RESOLUTION, ratio: aspectFinal, hasImage: !!imageUrl },
+          allowedDurations: allowedDurationsFor("seedance"),
+        }, seedanceRes.status);
       }
       const seedanceJson = safeJson(seedanceText);
       const predictionId =
@@ -508,8 +558,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ job_id: `veo:${predictionId}`, model: veoAtlasModel, aspectApplied: aspectFinal, outputGcsUri });
     }
   } catch (e: any) {
-    log('catch', e?.message, e?.stack);
-    return json({ error: e?.message ?? "Unknown error", stack: e?.stack ?? '' }, 500);
+    const msg = String(e?.message ?? "Unknown error");
+    log('catch', msg, e?.stack);
+    // 지원하지 않는 이미지 형식은 서버 장애가 아니라 입력 오류다 → 400 으로 명확히 알려준다.
+    const mimeErr = /unsupported_image_mime:\s*([^\s"']+)/.exec(msg);
+    if (mimeErr) return json({ error: "unsupported_image_mime", detail: mimeErr[1] }, 400);
+    return json({ error: msg, stack: e?.stack ?? '' }, 500);
   }
 };
 
@@ -539,27 +593,23 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
   return { base64: b64.trim(), mimeType: mime || 'image/png' };
 }
 
+// 큰 입력에서 한 번에 순회하면 Worker 가 CPU 한도에 걸려 1102 로 죽는다.
+// imagen 쪽(60b235a9)과 동일하게 청크 단위로 나눠 디코드한다.
 function base64ToUint8(base64: string) {
+  const CHUNK = 8192;
   const raw = atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+  const len = raw.length;
+  const arr = new Uint8Array(len);
+  for (let i = 0; i < len; i += CHUNK) {
+    const end = Math.min(i + CHUNK, len);
+    for (let j = i; j < end; j++) arr[j] = raw.charCodeAt(j);
+  }
   return arr;
 }
 
-// Veo fast는 4/6/8초만 허용 → 근접값으로 스냅
+// Veo/Grok 공용. 허용 집합은 _shared/video-specs 가 단일 출처다.
 function snapToAllowedDuration(sec: number) {
-  const allowed = [4, 6, 8];
-  const n = Math.max(1, Math.floor(Number(sec) || 0));
-  let best = allowed[0];
-  let diff = Math.abs(n - best);
-  for (const v of allowed) {
-    const d = Math.abs(n - v);
-    if (d < diff) {
-      diff = d;
-      best = v;
-    }
-  }
-  return best;
+  return snapDurationFor("veo", sec);
 }
 
 function gcsToHttps(uri: string) {

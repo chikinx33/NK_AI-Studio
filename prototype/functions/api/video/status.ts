@@ -3,6 +3,7 @@
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
 import {
   callKlingApi,
   isKlingDone,
@@ -129,7 +130,21 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         }
 
         const bufRes = await fetch(sourceUrl);
-        if (!bufRes.ok) return '';
+        if (!bufRes.ok) {
+          log('flatten_source_failed', {
+            host: safeHost(sourceUrl),
+            status: bufRes.status,
+            contentLength: bufRes.headers.get('Content-Length') || '',
+          });
+          return '';
+        }
+        // 워커 메모리 보호: 아주 큰 파일은 복제하지 않고 원본 URL 을 그대로 재생에 쓴다.
+        // (복제 실패로 생성 결과를 통째로 잃는 것보다 낫다.)
+        const srcLen = Number(bufRes.headers.get('Content-Length') || 0);
+        if (srcLen > MAX_MIRROR_BYTES) {
+          log('flatten_skipped_too_large', { host: safeHost(sourceUrl), contentLength: srcLen, limit: MAX_MIRROR_BYTES });
+          return sourceUrl;
+        }
         const buf = await bufRes.arrayBuffer();
         const stamp = Date.now();
         const sceneSafe = sceneId || 'scene';
@@ -146,10 +161,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           body: buf
         });
         const upTxt = await upRes.text();
-        if (!upRes.ok) { log('flatten_upload_failed', { status: upRes.status, detail: safeJson(upTxt) }); return ''; }
+        if (!upRes.ok) {
+          log('flatten_upload_failed', { host: safeHost(sourceUrl), status: upRes.status, bytes: buf.byteLength, detail: safeJson(upTxt) });
+          return '';
+        }
         await patchObjectMetadata(outParsed.bucket, objectName, genMeta, accessTokenUpload);
         return await signAsStorageUrl(outParsed.bucket, objectName);
-      } catch (err) { log('flatten_error', err); return ''; }
+      } catch (err) { log('flatten_error', { host: safeHost(playbackUrl), err: String((err as any)?.message || err) }); return ''; }
     };
     
 
@@ -227,19 +245,25 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         flattenedPlayback = await flattenPlayback(playbackRaw, sceneIdParam || 'seedance');
       }
       const flattenFailed = done && !!playbackRaw && !flattenedPlayback;
-
+      if (failed) {
+        const msg = json?.data?.error || json?.error || 'Seedance generation failed';
+        return corsJson({ ok: true, job_id: jobId, done: true, error: { code: 'generation_failed', message: msg }, response: json, rawOperation: json, playback: null, playbackUrl: null, status: 'error' }, 200);
+      }
+      // 미러링 실패를 영구 실패로 확정하지 않는다. 생성은 성공(크레딧 차감)했는데 앱만
+      // 실패로 표시되던 문제 → 다른 Atlas 모델과 동일하게 processing 으로 두고 재시도한다.
+      if (flattenFailed) {
+        return corsJson({ ok: true, job_id: jobId, done: false, error: null, response: json, rawOperation: json, playback: null, playbackUrl: null, status: 'processing' }, 200);
+      }
       return corsJson({
         ok: true,
         job_id: jobId,
         done,
-        error: failed
-          ? { code: 'generation_failed', message: json?.error || 'Seedance generation failed' }
-          : (flattenFailed ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' } : null),
+        error: done && !playbackRaw ? { code: 'done_no_url', message: 'seedance done but no video url' } : null,
         response: json,
         rawOperation: json,
         playback: done ? (flattenedPlayback || null) : null,
         playbackUrl: done ? (flattenedPlayback || null) : null,
-        status: failed ? 'error' : (done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing')
+        status: done ? (flattenedPlayback ? 'done' : 'done_no_output') : 'processing'
       }, 200);
     }
 
@@ -583,6 +607,11 @@ export const onRequestOptions: PagesFunction = async () => {
 
 function safeJson(t: string) {
   try { return JSON.parse(t); } catch { return t; }
+}
+
+// 로그에 서명 토큰이 붙은 전체 URL을 남기지 않도록 호스트만 뽑는다.
+function safeHost(url: string) {
+  try { return new URL(String(url || '')).host; } catch { return ''; }
 }
 
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {

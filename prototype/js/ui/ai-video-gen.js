@@ -28,9 +28,28 @@
     { id: 'rotate',     ko: '회전',       en: 'Rotate'     }
   ];
 
-  var DURATIONS_DEFAULT  = [4, 5, 6, 8];
+  // ⚠️ functions/api/_shared/video-specs.ts 의 미러다. 서버가 실제로 받는 값만 고른다.
+  // (예전엔 Veo 에서 5초를 고를 수 있었지만 서버가 조용히 4초로 스냅했다.)
+  // 값을 바꿀 땐 video-specs.ts 를 먼저 고칠 것 — tests/video-duration-spec.test.mjs 가 일치를 검사한다.
+  var DURATIONS_VEO      = [4, 6, 8];
+  var DURATIONS_KLING    = [5, 10];
   var DURATIONS_SEEDANCE = [4, 5, 6, 8, 10, 15];
   var DURATIONS_VIDU     = [4, 5, 6, 8, 10];
+
+  var MODEL_DURATIONS = {
+    'veo':          DURATIONS_VEO,
+    'veo-full':     DURATIONS_VEO,
+    'grok':         DURATIONS_VEO,
+    'grok-r2v':     DURATIONS_VEO,
+    'grok-extend':  DURATIONS_VEO,
+    'kling':        DURATIONS_KLING,
+    'kling-draft':  DURATIONS_KLING,
+    'kling-final':  DURATIONS_KLING,
+    'seedance':     DURATIONS_SEEDANCE,
+    'seedance-r2v': DURATIONS_SEEDANCE,
+    'wan':          DURATIONS_SEEDANCE,
+    'vidu-q3':      DURATIONS_VIDU
+  };
 
   var MODEL_DESCS = {
     ko: {
@@ -63,7 +82,16 @@
   var STORAGE_SESSION_KEY = 'nk_video_gen_session_id';
   var MAX_RESULTS  = 50;
   var POLL_INTERVAL_MS = 4000;
-  var MAX_POLL_ATTEMPTS = 120; // ~8 min
+  var MAX_POLL_ATTEMPTS = 120; // ~8 min (veo/grok 기본)
+  // 느린 모델은 8분 안에 끝나지 않아 성공한 생성을 timeout 으로 버리는 일이 있었다.
+  var MAX_POLL_ATTEMPTS_SLOW = 300; // ~20 min
+  var SLOW_MODELS = ['seedance', 'seedance-r2v', 'wan', 'vidu-q3'];
+
+  function maxPollAttemptsFor(model) {
+    return SLOW_MODELS.indexOf(String(model || '')) !== -1
+      ? MAX_POLL_ATTEMPTS_SLOW
+      : MAX_POLL_ATTEMPTS;
+  }
 
   var i18n = {
     ko: {
@@ -85,6 +113,11 @@
       status_processing: '생성 중',
       status_done:       '완료',
       status_error:      '오류',
+      error_unknown:     '알 수 없는 오류',
+      retry:             '다시 시도',
+      image_too_large:   '이미지가 너무 큽니다. 더 작은 이미지를 사용해 주세요.',
+      image_type_alert:  'PNG, JPEG, WebP 이미지만 사용할 수 있어요.',
+      tracking_lost:     '세션 종료로 추적 실패',
       no_prompt_alert:   '프롬프트를 입력해주세요.',
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
       no_video_alert:    '이 모델은 연장할 영상을 업로드해야 합니다.',
@@ -131,6 +164,11 @@
       status_processing: 'Processing',
       status_done:       'Done',
       status_error:      'Error',
+      error_unknown:     'Unknown error',
+      retry:             'Retry',
+      image_too_large:   'This image is too large. Please use a smaller one.',
+      image_type_alert:  'Only PNG, JPEG, and WebP images are supported.',
+      tracking_lost:     'Tracking lost (session ended)',
       no_prompt_alert:   'Please enter a prompt.',
       no_image_alert:    'A start frame image is required for Image to Video mode.',
       no_video_alert:    'This model requires uploading a source video to extend.',
@@ -220,6 +258,54 @@
     return 'vg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
   }
 
+  // ─── Image intake ─────────────────────────────────────────
+  // 원본 사진(수 MB~수십 MB)을 그대로 data URL로 보내면 Worker 가 base64 디코드 도중
+  // 죽어(1102) 사유 없는 실패가 된다. 업로드 전에 항상 축소·JPEG 정규화한다.
+  var IMAGE_MAX_EDGE      = 1536;
+  var IMAGE_MAX_CHARS     = 4 * 1024 * 1024;   // 축소 후에도 이보다 크면 거부
+  var IMAGE_PASSTHRU_CHARS = 1500000;          // 충분히 작으면 재인코딩 없이 통과
+  var ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+  function downscaleImageFile(file, maxEdge, cb) {
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var src = ev.target.result;
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, maxEdge / Math.max(w, h));
+        if (scale >= 1 && String(src || '').length < IMAGE_PASSTHRU_CHARS) { cb(src); return; }
+        var cw = Math.max(1, Math.round(w * scale));
+        var ch = Math.max(1, Math.round(h * scale));
+        var c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        try { cb(c.toDataURL('image/jpeg', 0.9)); } catch (_) { cb(src); }
+      };
+      img.onerror = function () { cb(src); };
+      img.src = src;
+    };
+    reader.onerror = function () { cb(''); };
+    reader.readAsDataURL(file);
+  }
+
+  // 형식 검사 → 축소 → 크기 재확인까지 마친 data URL만 onReady 로 넘긴다.
+  function acceptImageFile(file, onReady) {
+    if (!file) return;
+    if (ALLOWED_IMAGE_TYPES.indexOf(String(file.type || '').toLowerCase()) === -1) {
+      window.alert(t('image_type_alert'));
+      return;
+    }
+    downscaleImageFile(file, IMAGE_MAX_EDGE, function (dataUrl) {
+      if (!dataUrl) return;
+      if (dataUrl.length > IMAGE_MAX_CHARS) {
+        window.alert(t('image_too_large'));
+        return;
+      }
+      onReady(dataUrl);
+    });
+  }
+
   function availableModels() {
     return ALL_MODELS.filter(function (m) {
       return state.mode === 't2v' ? m.t2v : m.i2v;
@@ -231,9 +317,7 @@
   }
 
   function durations() {
-    if (state.model === 'seedance' || state.model === 'seedance-r2v' || state.model === 'wan') return DURATIONS_SEEDANCE;
-    if (state.model === 'vidu-q3') return DURATIONS_VIDU;
-    return DURATIONS_DEFAULT;
+    return MODEL_DURATIONS[state.model] || DURATIONS_VEO;
   }
 
   function currentModelObj() {
@@ -280,9 +364,10 @@
   // 저장된 objectName으로 "지금 이 순간"의 토큰이 붙은 재생 URL을 만든다.
   function resultPlayUrl(r) {
     if (!r) return '';
-    var n = r.videoObjectName
-      || ((NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(r.videoUrl || r.rawVideoUrl || '') : '');
-    return (n && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(n) : '';
+    var n = resultObjectName(r);
+    if (n && NK.api && NK.api.mediaProxyObjectUrl) return NK.api.mediaProxyObjectUrl(n);
+    // 미러링을 건너뛴 대용량 결과는 원본 URL이 유일한 재생 경로다.
+    return /^https?:\/\//i.test(r.rawVideoUrl || '') ? r.rawVideoUrl : '';
   }
 
   function resultObjectName(r) {
@@ -529,6 +614,8 @@
   var DOWNLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>';
   var TRASH_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"/><path d="M10 10v5.25M14 10v5.25"/></svg>';
   var PLAY_SVG     = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+  // lucide: rotate-ccw
+  var RETRY_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
 
   function expiredMessage() {
     return state.lang === 'en'
@@ -708,19 +795,32 @@
     info.appendChild(el('p', 'vgen-result-prompt', { textContent: promptText }));
     info.appendChild(el('p', 'vgen-result-meta', { textContent: (r.modelLabel || r.model || '') + ' · ' + (r.aspectRatio || '') + ' · ' + (r.duration || '') + (state.lang === 'ko' ? '초' : 's') }));
     info.appendChild(el('span', 'vgen-result-status vgen-status--' + (r.status || 'processing'), { textContent: t('status_' + (r.status || 'processing')) }));
+    // 실패 사유를 카드에 직접 노출한다. 전문은 title(툴팁)로.
+    if (r.status === 'error') {
+      var errAttrs = { textContent: r.errorMessage || t('error_unknown') };
+      var tip = [r.errorStatus ? ('HTTP ' + r.errorStatus) : '', r.errorMessage || '', r.errorDetail || '']
+        .filter(Boolean).join('\n');
+      if (tip) errAttrs.title = tip;
+      info.appendChild(el('p', 'vgen-result-error', errAttrs));
+    }
     card.appendChild(info);
 
     var actions = el('div', 'vgen-result-actions');
+    // 원본 URL만 남은 경우(대용량이라 미러링을 건너뜀)도 재생할 수 있어야 한다.
     var rObjectName = r.status === 'done' ? resultObjectName(r) : '';
-    if (rObjectName) {
-      var playBtn = el('button', 'vgen-action-btn vgen-action-btn--play', {
-        type: 'button', title: '재생', 'data-action': 'play-result', 'data-object': rObjectName, innerHTML: PLAY_SVG
-      });
-      actions.appendChild(playBtn);
-      var dlBtn = el('button', 'vgen-action-btn', {
-        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-object': rObjectName, 'data-id': r.id, innerHTML: DOWNLOAD_SVG
-      });
-      actions.appendChild(dlBtn);
+    var rDirectUrl = (!rObjectName && r.status === 'done' && /^https?:\/\//i.test(r.rawVideoUrl || '')) ? r.rawVideoUrl : '';
+    if (rObjectName || rDirectUrl) {
+      var playAttrs = { type: 'button', title: '재생', 'data-action': 'play-result', innerHTML: PLAY_SVG };
+      var dlAttrs = { type: 'button', title: t('download'), 'data-action': 'download-result', 'data-id': r.id, innerHTML: DOWNLOAD_SVG };
+      if (rObjectName) { playAttrs['data-object'] = rObjectName; dlAttrs['data-object'] = rObjectName; }
+      else { playAttrs['data-url'] = rDirectUrl; dlAttrs['data-url'] = rDirectUrl; }
+      actions.appendChild(el('button', 'vgen-action-btn vgen-action-btn--play', playAttrs));
+      actions.appendChild(el('button', 'vgen-action-btn', dlAttrs));
+    }
+    if (r.status === 'error' && r.canRetry) {
+      actions.appendChild(el('button', 'vgen-action-btn vgen-action-btn--retry', {
+        type: 'button', title: t('retry'), 'data-action': 'retry-result', 'data-id': r.id, innerHTML: RETRY_SVG
+      }));
     }
     var delBtn = el('button', 'vgen-action-btn vgen-action-btn--danger vgen-delete-btn', {
       type: 'button', title: t('delete_result'), 'data-action': 'delete-result', 'data-id': r.id, innerHTML: TRASH_SVG
@@ -975,6 +1075,8 @@
 
     var durGrp = el('div', 'vgen-field');
     var durSel = el('select', 'vgen-select', { id: 'vgen-duration' });
+    // 선택지에 없는 값이 state 에 남아 있으면 화면과 실제 전송값이 어긋난다.
+    if (durations().indexOf(state.duration) === -1) state.duration = durations()[0];
     durations().forEach(function (d) {
       var opt = el('option', '', { value: d, textContent: d + t('duration_unit') });
       if (d === state.duration) opt.selected = true;
@@ -1178,13 +1280,12 @@
       inp.addEventListener('change', function () {
         var file = inp.files && inp.files[0];
         if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-          if (inp.dataset.slot === 'start') state.startImageUrl = ev.target.result;
-          else state.endImageUrl = ev.target.result;
+        var slot = inp.dataset.slot;
+        acceptImageFile(file, function (dataUrl) {
+          if (slot === 'start') state.startImageUrl = dataUrl;
+          else state.endImageUrl = dataUrl;
           render();
-        };
-        reader.readAsDataURL(file);
+        });
       });
     });
 
@@ -1235,6 +1336,8 @@
           var r   = id && state.results.find(function (x) { return x.id === id; });
           var filename = r ? ('vg_' + (r.model || 'video') + '_' + r.id + '.mp4') : 'video.mp4';
           if (url) downloadVideo(url, filename);
+        } else if (action === 'retry-result') {
+          retryResult(btn.dataset.id);
         } else if (action === 'delete-result') {
           if (!window.confirm(t('confirm_delete'))) return;
           deleteResult(btn.dataset.id);
@@ -1315,13 +1418,11 @@
         var file = inp.files && inp.files[0];
         if (!file) return;
         var idx = parseInt(inp.getAttribute('data-ref-idx'), 10);
-        var reader = new FileReader();
-        reader.onload = function (ev) {
+        acceptImageFile(file, function (dataUrl) {
           if (!state.referenceUrls) state.referenceUrls = [];
-          state.referenceUrls[idx] = ev.target.result;
+          state.referenceUrls[idx] = dataUrl;
           render();
-        };
-        reader.readAsDataURL(file);
+        });
       });
     });
 
@@ -1408,8 +1509,44 @@
     }
   }
 
+  // 실패 카드의 "다시 시도"용 입력 스냅샷. 이미지 data URL은 localStorage 를 터뜨리므로
+  // 메모리에만 둔다(같은 세션 안에서의 재시도를 커버).
+  var _retryInputs = {};
+
+  function retryResult(id) {
+    var r = state.results.find(function (x) { return x.id === id; });
+    if (!r) return;
+    // 설정을 폼으로 되돌린다.
+    if (r.prompt) state.prompt = r.prompt;
+    if (r.model) state.model = r.model;
+    if (r.aspectRatio) state.aspectRatio = r.aspectRatio;
+    if (r.mode) state.mode = r.mode;
+    // 모델 허용 집합이 바뀌었을 수 있으니 되돌린 길이를 다시 검사한다.
+    if (r.duration) {
+      state.duration = durations().indexOf(r.duration) !== -1 ? r.duration : durations()[0];
+    }
+
+    var snap = _retryInputs[id];
+    if (snap) {
+      state.startImageUrl = snap.startImageUrl || '';
+      state.endImageUrl   = snap.endImageUrl || '';
+      state.referenceUrls = (snap.referenceUrls || []).slice();
+      state.audioUrl      = snap.audioUrl || '';
+      state.videoUrl      = snap.videoUrl || '';
+      state.videoFileName = snap.videoFileName || '';
+      state.audioFileName = snap.audioFileName || '';
+    }
+
+    // 실패 카드는 치우고 같은 조건으로 새로 요청한다.
+    deleteResult(id);
+    delete _retryInputs[id];
+    render();
+    startGeneration();
+  }
+
   function deleteResult(id) {
     if (state.polls[id]) { clearInterval(state.polls[id]); delete state.polls[id]; }
+    delete _retryInputs[id];
     var target = state.results.find(function (r) { return r.id === id; });
     state.results = state.results.filter(function (r) { return r.id !== id; });
     if (state.selectedId === id) state.selectedId = null;
@@ -1473,6 +1610,16 @@
     state.results.push(newResult);
     state.selectedId = resultId;
     state.generating = false;
+    // 실패 시 같은 입력으로 재시도할 수 있도록 스냅샷을 남긴다(메모리 전용).
+    _retryInputs[resultId] = {
+      startImageUrl: state.startImageUrl,
+      endImageUrl:   state.endImageUrl,
+      referenceUrls: (state.referenceUrls || []).slice(),
+      audioUrl:      state.audioUrl,
+      audioFileName: state.audioFileName,
+      videoUrl:      state.videoUrl,
+      videoFileName: state.videoFileName
+    };
     saveResults();
     render();
 
@@ -1532,20 +1679,61 @@
       });
 
     } catch (err) {
-      updateResult(resultId, { status: 'error', errorMessage: (err && err.message) || 'error' });
+      var msg = (err && err.message) || 'error';
+      var detail = '';
+      try {
+        detail = typeof (err && err.detail) === 'string' ? err.detail : JSON.stringify((err && err.detail) || '');
+      } catch (_) { detail = ''; }
+      console.error('[vgen] start failed', err && err.status, msg, detail);
+      updateResult(resultId, {
+        status: 'error',
+        errorMessage: msg,
+        errorDetail: String(detail || '').slice(0, 2000),
+        errorStatus: (err && err.status) || 0
+      });
       saveResults();
       render();
     }
   }
 
+  // 서버가 준 error 는 문자열일 수도, {code,message} 객체일 수도 있다. 사람이 읽을 문구로 편다.
+  function readErrorMessage(data) {
+    var e = data && data.error;
+    if (typeof e === 'string' && e) return e;
+    if (e && typeof e === 'object') {
+      if (e.message) return String(e.message);
+      if (e.code) return String(e.code);
+    }
+    if (data && data.message) return String(data.message);
+    return 'failed';
+  }
+
+  function readErrorDetail(data) {
+    try { return JSON.stringify((data && data.error) || data || '').slice(0, 2000); }
+    catch (_) { return ''; }
+  }
+
   function pollVideoStatus(resultId, jobId, projectId, meta) {
     var attempts = 0;
+    var consecutiveErrors = 0;
+    var maxAttempts = maxPollAttemptsFor((meta && meta.model) || '');
+
+    function stop() {
+      clearInterval(state.polls[resultId]);
+      delete state.polls[resultId];
+    }
 
     function check() {
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        clearInterval(state.polls[resultId]);
-        delete state.polls[resultId];
-        updateResult(resultId, { status: 'error', errorMessage: 'timeout' });
+      if (attempts >= maxAttempts) {
+        stop();
+        var mins = Math.round((maxAttempts * POLL_INTERVAL_MS) / 60000);
+        console.error('[vgen] poll timeout', { resultId: resultId, jobId: jobId, attempts: attempts });
+        updateResult(resultId, {
+          status: 'error',
+          errorMessage: 'timeout(' + mins + '분)',
+          errorDetail: 'jobId=' + jobId,
+          canRetry: true
+        });
         saveResults();
         render();
         return;
@@ -1554,13 +1742,13 @@
 
       NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen', meta: meta })
         .then(function (data) {
+          consecutiveErrors = 0;
           var s = String((data && (data.status || data.state)) || '').toLowerCase();
           var done = /^(done|succeeded|success|completed)$/.test(s);
           var failed = /^(error|failed|cancelled)$/.test(s);
 
           if (done) {
-            clearInterval(state.polls[resultId]);
-            delete state.polls[resultId];
+            stop();
             var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || data.outputUrl || data.output_url || '';
             // 토큰이 박힌 URL은 저장하지 않는다(12h TTL 만료 후 401 → 재생 불가).
             // objectName만 보관하고 재생 직전에 최신 토큰으로 URL을 만든다.
@@ -1570,14 +1758,35 @@
             render();
             tryCaptureThumbnail(state.results.find(function (r) { return r.id === resultId; }));
           } else if (failed) {
-            clearInterval(state.polls[resultId]);
-            delete state.polls[resultId];
-            updateResult(resultId, { status: 'error', errorMessage: data.error || data.message || 'failed' });
+            stop();
+            var msg = readErrorMessage(data);
+            console.error('[vgen] generation failed', resultId, msg, data);
+            updateResult(resultId, {
+              status: 'error',
+              errorMessage: msg,
+              errorDetail: readErrorDetail(data),
+              canRetry: true
+            });
             saveResults();
             render();
           }
         })
-        .catch(function () { /* network hiccup, keep polling */ });
+        .catch(function (err) {
+          // 조용히 삼키면 카드가 영원히 'processing' 으로 남는다. 연속 3회면 실패로 확정.
+          consecutiveErrors++;
+          console.error('[vgen] status poll error', resultId, consecutiveErrors, err && err.message);
+          if (consecutiveErrors >= 3) {
+            stop();
+            updateResult(resultId, {
+              status: 'error',
+              errorMessage: 'status_polling_failed',
+              errorDetail: String((err && err.message) || '').slice(0, 2000),
+              canRetry: true
+            });
+            saveResults();
+            render();
+          }
+        });
     }
 
     state.polls[resultId] = setInterval(check, POLL_INTERVAL_MS);
@@ -1647,12 +1856,36 @@
       return r;
     });
     if (_migrated) saveResults();
+    detectLang(); // 아래 tracking_lost 문구가 현재 언어를 따르도록 먼저 확정한다
+
+    // 새로고침하면 폴링 타이머가 사라져 'processing' 카드가 영원히 남는다.
+    // jobId 가 있으면 폴링을 재개하고, 없으면 추적 불가로 확정한다.
+    var _settled = false;
+    state.results.forEach(function (r) {
+      if (!r || r.status !== 'processing') return;
+      if (r.jobId) return; // 아래에서 폴링 재개
+      updateResult(r.id, { status: 'error', errorMessage: t('tracking_lost'), canRetry: true });
+      _settled = true;
+    });
+    if (_settled) saveResults();
+
     loadDeletedSet();
-    detectLang();
     render();
     // 기존 완료 결과 중 썸네일 없는 것 캡처 시도
     state.results.forEach(function (r) {
       if (r.status === 'done' && !r.thumbnailDataUrl) tryCaptureThumbnail(r);
+    });
+    // 진행 중이던 작업 폴링 재개
+    state.results.forEach(function (r) {
+      if (!r || r.status !== 'processing' || !r.jobId || state.polls[r.id]) return;
+      pollVideoStatus(r.id, r.jobId, state.projectId || null, {
+        prompt:      r.prompt,
+        model:       r.model,
+        modelLabel:  r.modelLabel,
+        aspectRatio: r.aspectRatio,
+        duration:    r.duration,
+        resultId:    r.id
+      });
     });
     syncServerHistory();
 

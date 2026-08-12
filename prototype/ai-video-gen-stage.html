@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1522" />
+  <link rel="stylesheet" href="styles.css?v=3.1523" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -196,6 +196,11 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .vgen-result-meta { font-size: 0.72rem; color: var(--muted); margin: 0 0 4px; }
+    .vgen-result-error {
+      font-size: 0.7rem; color: #f87171; margin: 2px 0 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: help;
+    }
     .vgen-result-status { font-size: 0.7rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; }
     .vgen-status--processing { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
     .vgen-status--done { background: color-mix(in srgb, #22c55e 15%, transparent); color: #4ade80; }
@@ -225,6 +230,9 @@
     }
     .vgen-action-btn--play { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
     .vgen-action-btn--play:hover { background: color-mix(in srgb, var(--accent) 15%, var(--bg-2, var(--bg))); }
+    .vgen-action-btn--retry { color: #fbbf24; border-color: color-mix(in srgb, #f59e0b 35%, var(--border)); }
+    .vgen-action-btn--retry:hover { background: color-mix(in srgb, #f59e0b 15%, var(--bg-2, var(--bg))); color: #fcd34d; }
+    .vgen-action-btn--retry svg { width: 15px; height: 15px; }
 
     /* ── Video modal popup ───────────────────────────────────── */
     .vgen-modal-overlay {
@@ -483,18 +491,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1522" defer></script>
-  <script src="js/config.js?v=3.1522" defer></script>
-  <script src="js/utils.js?v=3.1522" defer></script>
-  <script src="store.js?v=3.1522" defer></script>
-  <script src="api.js?v=3.1522" defer></script>
-  <script src="js/state.js?v=3.1522" defer></script>
-  <script src="js/auth.js?v=3.1522" defer></script>
-  <script src="js/navigation.js?v=3.1522" defer></script>
-  <script src="js/service/project.js?v=3.1522" defer></script>
-  <script src="js/ui/common.js?v=3.1522" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1522" defer></script>
-  <script src="script.js?v=3.1522" defer></script>
+  <script src="core.js?v=3.1523" defer></script>
+  <script src="js/config.js?v=3.1523" defer></script>
+  <script src="js/utils.js?v=3.1523" defer></script>
+  <script src="store.js?v=3.1523" defer></script>
+  <script src="api.js?v=3.1523" defer></script>
+  <script src="js/state.js?v=3.1523" defer></script>
+  <script src="js/auth.js?v=3.1523" defer></script>
+  <script src="js/navigation.js?v=3.1523" defer></script>
+  <script src="js/service/project.js?v=3.1523" defer></script>
+  <script src="js/ui/common.js?v=3.1523" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1523" defer></script>
+  <script src="script.js?v=3.1523" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">
