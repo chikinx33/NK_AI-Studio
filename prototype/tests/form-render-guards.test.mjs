@@ -18,7 +18,7 @@ const { computeQuoteTotals, buildQuoteView, assertRenderable } =
   await import(pathToFileURL(join(agentDir, "_form-calc.ts")).href);
 const { parseManifest } = await import(pathToFileURL(join(agentDir, "_form-registry.ts")).href);
 
-const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_20260812.zip");
+const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v2_20260812.zip");
 const bundle = existsSync(zipPath) ? unzipSync(new Uint8Array(readFileSync(zipPath))) : null;
 const entry = (suffix) => {
   if (!bundle) return null;
@@ -110,25 +110,41 @@ test("어떤 필드가 비었는지 사람 말로 알려준다", () => {
 
 // ── ② 배열이 빈 반복 표는 표째 사라진다 ─────────────────────────────────────
 
-test("★거래 조건이 없으면 rowCnt=0 인 빈 표를 남기지 않는다", { skip }, () => {
+test("★거래 조건이 없으면 빈 표를 남기지 않는다 (한컴이 파일을 거부한다 — 실측 확인)", { skip }, () => {
+  // 근거: docs/forms/한컴확인용_빈표케이스.hwpx (rowCnt="0" 표가 든 옛 결과물)를 한컴에서 열면
+  // 오류가 난다. 사용자가 직접 확인했다. 같은 데이터의 수정본(…_빈표케이스_v2.hwpx)은 정상.
   const { quote, missing } = prepared({ terms: [], validUntil: "" });
   assert.equal(missing.length, 0, "이 케이스는 결손 없이 렌더돼야 한다");
 
   const files = unzipSync(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
   const name = Object.keys(files).find((key) => /section\d*\.xml$/.test(key));
   const xml = strFromU8(files[name]);
+  const tables = xml.match(/<hp:tbl[\s\S]*?<\/hp:tbl>/g) || [];
 
-  assert.doesNotMatch(xml, /rowCnt="0"/, "0행짜리 표가 남았다");
+  assert.doesNotMatch(xml, /rowCnt="0"/, "rowCnt=0 인 표가 남았다");
+  assert.equal(tables.filter((table) => !/<hp:tr[ >]/.test(table)).length, 0, "행이 하나도 없는 표가 남았다");
+
   // 표가 통째로 사라졌는지 — 템플릿보다 <hp:tbl> 이 줄어야 한다
   const templateXml = strFromU8(unzipSync(hwpxTemplate)[name]);
   const count = (text) => (text.match(/<hp:tbl[\s\S]/g) || []).length;
-  assert.ok(count(xml) < count(templateXml), "빈 표가 그대로 남아 있다");
+  assert.equal(count(xml), count(templateXml) - 1, "머리행 없는 빈 표(거래조건) 하나만 사라져야 한다");
+
   // 남은 표들은 rowCnt 와 실제 행 수가 맞는다
-  for (const table of xml.match(/<hp:tbl[\s\S]*?<\/hp:tbl>/g) || []) {
+  for (const table of tables) {
     const declared = table.match(/rowCnt="(\d+)"/);
     if (!declared) continue;
     assert.equal(Number(declared[1]), (table.match(/<hp:tr[ >]/g) || []).length);
   }
+});
+
+test("머리행이 있는 표(특이사항)는 데이터가 비어도 남는다", { skip }, () => {
+  // 머리행은 반복 행이 아니라 지워지지 않는다 → 표가 사라지는 경로를 타지 않는다.
+  const { quote } = prepared({ payment: {}, delivery: {}, validUntil: "", terms: [] });
+  const files = unzipSync(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
+  const name = Object.keys(files).find((key) => /section\d*\.xml$/.test(key));
+  const xml = strFromU8(files[name]);
+  assert.match(xml, /특 이 사 항|특이사항/, "머리행만 남은 특이사항 표가 사라졌다");
+  assert.doesNotMatch(xml, /rowCnt="0"/);
 });
 
 test("DOCX 는 루프가 0회면 행이 알아서 사라진다 (별도 조치 불필요)", { skip }, () => {
