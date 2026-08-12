@@ -18,7 +18,7 @@ const { computeQuoteTotals, buildQuoteView, assertRenderable } =
   await import(pathToFileURL(join(agentDir, "_form-calc.ts")).href);
 const { parseManifest } = await import(pathToFileURL(join(agentDir, "_form-registry.ts")).href);
 
-const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v2_20260812.zip");
+const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v3_20260812.zip");
 const bundle = existsSync(zipPath) ? unzipSync(new Uint8Array(readFileSync(zipPath))) : null;
 const entry = (suffix) => {
   if (!bundle) return null;

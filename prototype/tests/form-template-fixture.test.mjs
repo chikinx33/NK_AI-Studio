@@ -1,4 +1,4 @@
-// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — docs/forms/견적서_표준서식_v2_20260812.zip.
+// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — docs/forms/견적서_표준서식_v3_20260812.zip.
 // 합성 템플릿은 우리가 만든 규칙만 확인한다. 이 테스트는 사람이 한글·워드로 만든 진짜 서식이
 // 우리 렌더러로 채워지는지, 그리고 DOCX·HWPX 의 금액이 같은지를 본다(설계서 §10 #2·#8·#11).
 //
@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const agentDir = join(repoRoot, "prototype/functions/api/agent");
-const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v2_20260812.zip");
+const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_v3_20260812.zip");
 
 const { unzipSync, strFromU8 } = await import(pathToFileURL(join(agentDir, "vendor/fflate.bundle.js")).href);
 const { PizZip } = await import(pathToFileURL(join(agentDir, "vendor/docxtemplater-pizzip.bundle.js")).href);
