@@ -1619,12 +1619,65 @@ const FORM_SYSTEM_PROMPTS: Record<string, string> = {
 };
 
 /** 포맷별 파일 확장자·MIME. */
-const FORM_FORMATS: Record<string, { ext: string; contentType: string; needsTemplate: boolean }> = {
+const FORM_FORMATS: Record<string, { ext: string; contentType: string; needsTemplate: boolean; convertedFrom?: boolean }> = {
   docx: { ext: "docx", contentType: DOCX_CONTENT_TYPE, needsTemplate: true },
   hwpx: { ext: "hwpx", contentType: HWPX_CONTENT_TYPE, needsTemplate: true },
   // XLSX 는 템플릿이 없으면 기본 표를 만든다(§6.3) — manifest.templates.xlsx 가 null 이어도 된다.
   xlsx: { ext: "xlsx", contentType: XLSX_CONTENT_TYPE, needsTemplate: false },
+  // PDF 는 직접 만들지 않는다. manifest.pdfFrom(=docx)을 렌더한 뒤 변환 서비스에 맡긴다(§6.4).
+  pdf: { ext: "pdf", contentType: "application/pdf", needsTemplate: false, convertedFrom: true },
 };
+
+// ── PDF 변환 (Cloud Run · doc-convert) ──────────────────────────────────────
+// 변환 서비스는 문서를 만들지 않고 바꾸기만 한다. 그래야 DOCX 와 PDF 의 생김새가 같다(§10 #3).
+
+const DOC_CONVERT_TIMEOUT_MS = 90_000; // 콜드스타트(이미지가 큰 LibreOffice)를 감안한 상한
+
+/** 변환 서비스가 설정돼 있는지 — 없으면 PDF 를 아예 권하지 않는다. */
+function docConvertConfig(env: any): { url: string; token: string } | null {
+  const url = String(env?.DOC_CONVERT_URL || "").trim().replace(/\/+$/, "");
+  const token = String(env?.DOC_CONVERT_TOKEN || "").trim();
+  if (!url || !token) return null;
+  return { url, token };
+}
+
+/**
+ * DOCX bytes → PDF bytes. 콜드스타트 때문에 첫 요청이 오래 걸릴 수 있어 90초까지 기다리고
+ * 실패하면 1회만 다시 시도한다(설계서 §6.4). 그래도 안 되면 던진다 — 호출부가 DOCX 는 살린다.
+ */
+async function convertDocxToPdf(env: any, docx: Uint8Array, sourceFormat: string): Promise<Uint8Array> {
+  const config = docConvertConfig(env);
+  if (!config) {
+    throw new Error("PDF 변환 서비스가 설정되지 않았어요(DOC_CONVERT_URL·DOC_CONVERT_TOKEN).");
+  }
+  let lastError = "";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(`${config.url}/convert?from=${encodeURIComponent(sourceFormat)}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: docx.buffer.slice(docx.byteOffset, docx.byteOffset + docx.byteLength) as ArrayBuffer,
+        signal: AbortSignal.timeout(DOC_CONVERT_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(`변환 서비스 오류 (HTTP ${response.status}) ${detail.slice(0, 200)}`);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // 앞 4바이트가 %PDF 가 아니면 PDF 가 아니다 — 오류 페이지를 파일로 저장하지 않는다.
+      if (bytes.byteLength < 5 || String.fromCharCode(...bytes.slice(0, 4)) !== "%PDF") {
+        throw new Error("변환 결과가 PDF 가 아니에요.");
+      }
+      return bytes;
+    } catch (error: any) {
+      lastError = String(error?.message || error);
+    }
+  }
+  throw new Error(lastError || "PDF 변환에 실패했어요.");
+}
 
 /**
  * ★회사 파일(GCS)에 바이너리를 저장한다. company_files_write 는 텍스트 전용이라
@@ -1744,10 +1797,21 @@ async function registerFormWorkItem(
   }
 }
 
-/** 이 서식으로 지금 만들 수 있는 포맷 — 템플릿이 필요한 포맷은 템플릿이 있어야 한다. */
-function producibleFormats(manifest: { templates: Record<string, string | null> }): string[] {
+/**
+ * 이 서식으로 지금 만들 수 있는 포맷.
+ * - 템플릿이 필요한 포맷은 템플릿이 있어야 한다.
+ * - PDF 는 변환 서비스(DOC_CONVERT_*)가 설정돼 있고 원본(pdfFrom) 템플릿이 있어야 한다.
+ *   만들지 못할 포맷을 목록에 넣으면 사용자에게 헛된 버튼만 보여주게 된다.
+ */
+function producibleFormats(
+  manifest: { templates: Record<string, string | null>; pdfFrom: string },
+  env?: any
+): string[] {
   return Object.entries(FORM_FORMATS)
-    .filter(([format, spec]) => (spec.needsTemplate ? !!manifest.templates[format] : true))
+    .filter(([format, spec]) => {
+      if (format === "pdf") return !!docConvertConfig(env) && !!manifest.templates[manifest.pdfFrom];
+      return spec.needsTemplate ? !!manifest.templates[format] : true;
+    })
     .map(([format]) => format);
 }
 
@@ -1766,7 +1830,7 @@ export async function runFormListTool(_input: any, ctx: ToolContext): Promise<an
       folder: form.folder,
       // 지금 실제로 만들 수 있는 포맷만 알려준다. 렌더러가 없으면(pdf — 이후 단계)
       // 목록에 넣지 않는다. 만들지 못할 걸 권하면 안 된다.
-      formats: producibleFormats(form),
+      formats: producibleFormats(form, ctx.env),
       maxItemRows: form.maxItemRows,
     })),
     problems,
@@ -1895,7 +1959,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
       data,
       missing,
       files: [],
-      availableFormats: producibleFormats(manifest),
+      availableFormats: producibleFormats(manifest, ctx.env),
       promptEcho: prompt,
       note: "부족한 값을 한 번에 모아 사용자에게 물어보세요. 임의로 채우지 마세요.",
     };
@@ -1909,7 +1973,12 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     + (sequence !== "001" && !manifest.outputName.includes("docNo") ? `_${sequence}` : "");
   const folder = `${OUTPUT_ROOT}/${issuedAt}`;
   const files: { format: string; path: string; name: string; contentType: string; size: number }[] = [];
-  for (const format of formats) {
+  const warnings: string[] = [];
+  const renderedBytes = new Map<string, Uint8Array>(); // 같은 포맷을 두 번 만들지 않기 위해
+
+  const renderFormat = async (format: string): Promise<Uint8Array> => {
+    const cached = renderedBytes.get(format);
+    if (cached) return cached;
     const spec = FORM_FORMATS[format];
     const template = await loadTemplate(storage, manifest, format);
     if (!template && spec.needsTemplate) {
@@ -1920,9 +1989,34 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
       : format === "xlsx"
         ? renderXlsx(data, view, template)
         : renderDocx(template as Uint8Array, view);
+    renderedBytes.set(format, bytes);
+    return bytes;
+  };
+
+  const save = async (format: string, bytes: Uint8Array) => {
+    const spec = FORM_FORMATS[format];
     const fileName = `${baseName}.${spec.ext}`;
     const saved = await saveCompanyBinary(ctx, `${folder}/${fileName}`, bytes, spec.contentType);
     files.push({ format, path: saved.path, name: fileName, contentType: spec.contentType, size: saved.size });
+  };
+
+  // 직접 만드는 포맷 먼저 (PDF 는 원본이 있어야 하므로 뒤로 미룬다)
+  for (const format of formats.filter((candidate) => !FORM_FORMATS[candidate].convertedFrom)) {
+    await save(format, await renderFormat(format));
+  }
+
+  // PDF — manifest.pdfFrom(기본 docx)을 렌더해 변환 서비스로 넘긴다.
+  if (formats.includes("pdf")) {
+    const sourceFormat = FORM_FORMATS[manifest.pdfFrom] ? manifest.pdfFrom : "docx";
+    try {
+      const source = await renderFormat(sourceFormat);
+      await save("pdf", await convertDocxToPdf(ctx.env, source, sourceFormat));
+    } catch (error: any) {
+      // ★PDF 하나 때문에 나머지를 버리지 않는다. 만든 파일은 그대로 주고 사람에게 방법을 알려준다.
+      warnings.push(
+        `PDF 변환에 실패했어요. 워드에서 PDF로 저장해 주세요. (${String(error?.message || error).slice(0, 160)})`
+      );
+    }
   }
 
   // 8. 업무 등록
@@ -1943,7 +2037,8 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     data,
     missing: [],
     files,
-    availableFormats: producibleFormats(manifest),
+    availableFormats: producibleFormats(manifest, ctx.env),
+    warnings,
     workId,
     promptEcho: prompt,
   };

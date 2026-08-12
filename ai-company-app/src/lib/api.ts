@@ -1299,6 +1299,7 @@ export interface FormOutput {
   missing?: FormMissingField[];
   files?: FormFile[];
   availableFormats?: string[]; // 이 서식으로 만들 수 있는 포맷
+  warnings?: string[];         // 일부 포맷만 실패했을 때의 안내(예: PDF 변환 실패)
   workId?: string;
   promptEcho?: string;
 }

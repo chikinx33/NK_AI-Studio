@@ -105,6 +105,10 @@ export function FormDownloadButtons({ output, compact }: { output: FormOutput; c
           단가가 비어 있어요 — {describeMissing(output.missing) || "부족한 값"}을 알려주시면 바로 만들어 드릴게요.
         </p>
       )}
+      {/* 일부 포맷만 실패한 경우(예: PDF 변환) — 만들어진 파일은 그대로 쓸 수 있다. */}
+      {(output.warnings || []).map((warning, index) => (
+        <p key={index} className="mt-1.5 text-[11px] text-amber-300">{warning}</p>
+      ))}
       {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
     </div>
   );

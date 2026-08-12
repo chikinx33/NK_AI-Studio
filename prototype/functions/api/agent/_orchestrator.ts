@@ -199,7 +199,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
     form_list: `[[RUN: form_list | {}]]  → 회사에 등록된 문서 서식 목록 조회. 사용자가 견적서·계약서 등 서식 작업을 요청하면 먼저 실행해 어떤 서식이 있는지 확인.`,
-    form_fill: `[[RUN: form_fill | {"formId": "서식 ID", "formats": ["docx"], "prompt": "내용을 사용자가 말한 그대로", "context": "첨부 자료 등(선택)"}]]  → 서식에 내용을 채워 문서 파일 생성. formats는 docx·hwpx 중 사용자가 원하는 것. 단가나 수량을 사용자가 말하지 않았으면 임의로 넣지 말 것 — 시스템이 되물어 준다.`,
+    form_fill: `[[RUN: form_fill | {"formId": "서식 ID", "formats": ["docx", "pdf"], "prompt": "내용을 사용자가 말한 그대로", "context": "첨부 자료 등(선택)"}]]  → 서식에 내용을 채워 문서 파일 생성. formats는 docx(워드)·hwpx(한글)·xlsx(엑셀)·pdf 중 사용자가 원하는 것(여러 개 가능, 미지정이면 docx). form_list 의 formats 에 있는 것만 만들 수 있다. 단가나 수량을 사용자가 말하지 않았으면 임의로 넣지 말 것 — 시스템이 되물어 준다.`,
     gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
     gmail_send: `[[RUN: gmail_send | {"to": "받는사람@메일", "subject": "제목", "body": "본문 전체"}]]  → Gmail로 메일 발송. 본문은 사용자 요청에 맞춰 자연스럽고 완성된 형태로 직접 작성한다. ⚠️ 되돌릴 수 없어 사람 승인 후 발송됨(승인 패널). (구글 연결 필요)`,
     gmail_trash: `[[RUN: gmail_trash | {"query": "from:no-reply@x.com 또는 subject:광고 등 Gmail 검색어", "max": 5}]]  → 검색어에 맞는 메일을 휴지통으로(30일 복구 가능). ⚠️ 반드시 먼저 gmail_read 등으로 어떤 메일인지 사용자에게 보여주고 명확히 동의받은 뒤에만 실행. 광범위한 검색어로 한꺼번에 지우지 말 것.`,
