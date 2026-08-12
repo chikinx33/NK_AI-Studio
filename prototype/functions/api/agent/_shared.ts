@@ -1549,10 +1549,31 @@ async function callClaudeForJson(env: any, system: string, userMsg: string): Pro
   return parsed;
 }
 
+/**
+ * 서식 문서(견적서·계약서 등)를 ppt·pdf 같은 '줄글 문서' 도구로 만들려는 시도를 막는다.
+ *
+ * 실측(2026-08-13): 잉크가 form_fill 이 막히자 pdf 도구로 견적서를 만들었다. 결과는
+ * "섹션 1 / 거래처명: (공란) / 섹션 2 …" — 서식도 아니고 금액 계산도 없고 빈칸을 지어냈다.
+ * 서식 문서는 표·소계·부가세·합계가 계산돼야 하고 그건 form_fill(_form-calc)만 한다.
+ */
+const FORM_DOCUMENT_WORDS = /(견적서|견적 서|계약서|거래명세서|거래 명세서|명세서|청구서|인보이스|발주서|세금계산서)/;
+
+function refuseFormDocument(tool: string, prompt: string, extra = ""): void {
+  const haystack = `${prompt} ${extra}`;
+  const hit = FORM_DOCUMENT_WORDS.exec(haystack);
+  if (!hit) return;
+  throw new Error(
+    `'${hit[1]}' 는 서식 문서예요. ${tool} 도구로 만들면 서식도 계산도 없는 줄글이 나옵니다. ` +
+    "form_list 로 등록된 서식을 확인하고 form_fill 로 만들어 주세요. " +
+    "값이 모자라면 form_fill 이 무엇이 필요한지 알려주니 빈칸을 지어내지 마세요."
+  );
+}
+
 /** 플롯 PPT 도구: Claude 직접 호출 → 슬라이드 JSON. 클라이언트에서 .pptx 생성. */
 async function runPptTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
   if (!prompt) throw new Error("prompt is required");
+  refuseFormDocument("ppt", prompt, String(input?.title || ""));
   const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
   const parsed = await callClaudeForJson(ctx.env, PPT_SYSTEM, userMsg);
   return { ...parsed, kind: "ppt", promptEcho: prompt };
@@ -1562,6 +1583,7 @@ async function runPptTool(input: any, ctx: ToolContext): Promise<any> {
 async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
   if (!prompt) throw new Error("prompt is required");
+  refuseFormDocument("pdf", prompt, String(input?.title || ""));
   const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
   const parsed = await callClaudeForJson(ctx.env, PDF_SYSTEM, userMsg);
   return { ...parsed, kind: "pdf", promptEcho: prompt };
