@@ -167,6 +167,35 @@ test("실제 HWPX 서식이 끝까지 채워지고 남는 행이 삭제된다", 
   assert.ok(!rowCounts.includes(31), "미사용 행이 남아 있다");
 });
 
+test("★행 삭제 후 rowAddr 가 0부터 다시 매겨진다 (빠뜨리면 한글이 파일을 거부한다)", { skip }, () => {
+  const { quote, totals } = prepared();
+  const xml = hwpxSection(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
+  const tables = [...xml.matchAll(/<hp:tbl[\s\S]*?<\/hp:tbl>/g)].map((match) =>
+    [...match[0].matchAll(/<hp:tr[\s\S]*?<\/hp:tr>/g)].map((row) => {
+      const found = row[0].match(/rowAddr="(\d+)"/);
+      return found ? Number(found[1]) : null;
+    })
+  );
+  const itemTable = tables.find((rows) => rows.length === totals.rows.length + 1);
+  assert.ok(itemTable, "항목 표를 찾지 못했다");
+  // 머리글 포함해 0,1,2,… 로 빈틈없이 이어져야 한다
+  assert.deepEqual(itemTable, itemTable.map((_, index) => index));
+});
+
+test("★서식의 네임스페이스·손대지 않은 영역이 그대로 유지된다", { skip }, () => {
+  const { quote } = prepared();
+  const templateXml = hwpxSection(hwpxTemplate);
+  const rendered = hwpxSection(renderHwpx(hwpxTemplate, buildQuoteView(quote), { repeaters: manifest.repeaters }));
+
+  const namespaces = (xml) => (xml.match(/xmlns:[a-zA-Z0-9]+=/g) || []).sort().join(",");
+  assert.equal(namespaces(rendered), namespaces(templateXml), "xmlns 선언이 사라졌다");
+  assert.match(rendered, /<hs:sec /, "루트 접두어가 바뀌었다");
+
+  // 첫 표 이전(문서 설정 블록)은 우리가 손댈 이유가 없으므로 바이트가 같아야 한다.
+  const head = (xml) => xml.slice(0, xml.indexOf("<hp:tbl"));
+  assert.equal(head(rendered), head(templateXml), "건드리지 않은 영역이 바뀌었다");
+});
+
 test("DOCX·HWPX·XLSX 의 합계가 전부 같다 (§10 #2)", { skip }, () => {
   const { quote, totals } = prepared();
   const view = buildQuoteView(quote);

@@ -1,262 +1,51 @@
 // prototype/functions/api/agent/_render-hwpx.ts
 // HWPX 렌더러 — 설계서 docs/form_document_engine_design_v2_20260812.md §6.2 · §9.2.
 //
-// HWPX(OWPML)는 DOCX 와 같은 ZIP+XML 이라 Workers 에서 다룰 수 있다. 검증된 JS 라이브러리가
-// 없어 직접 구현한다. 구조는 python-hwpx(Apache 2.0)를 '읽어서' 이해했고 코드는 옮기지 않았다
-// (이식하면 고지 의무가 생긴다).
+// 참조 구현: docs/forms/견적서_표준서식_20260812.zip 의 hwpx_render_proto.py (검증 완료).
+// 그 알고리즘을 그대로 옮겼다 — 절차·판정 기준·중단 조건이 모두 같다.
+//   1. 같은 <hp:run> 안 인접 <hp:t> 병합 (한글이 서식 경계에서 글자를 쪼개기 때문)
+//   2. 행 안 텍스트에서 {{<접두어>. 를 찾아 어느 repeater 소속인지 판정
+//   3. 배열보다 행이 많으면 <hp:tr> 삭제 → rowCnt 갱신 → cellAddr 의 rowAddr 재부여
+//      ★rowAddr 재부여를 빠뜨리면 한글이 파일을 거부한다
+//   4. 배열이 행보다 많으면 에러로 중단 (조용히 자르지 않는다)
+//   5. 다시 압축할 때 mimetype 은 STORED 로 맨 앞
 //
-// 이 파일에서 제일 자주 깨지는 곳은 §6.2 2단계 '텍스트 run 병합'이다. 한글은 서식이 조금만
-// 달라져도 한 낱말을 여러 <hp:t> 로 쪼개 저장한다. 그대로 치환하면 {{client. / company}} 가
-// 되어 전부 실패한다. 먼저 합치고 나서 치환한다.
-//
-// 반복 영역은 manifest.repeaters 가 정한다: {"row": {source:"totals.rows", maxRows:30}} 이면
-// {{row.*}} 가 든 행을 위에서부터 totals.rows 로 채우고 남는 행을 지운다. ★행 복제는 하지 않는다.
+// 다만 XML 다루는 방식은 프로토타입과 다르다. ElementTree 는 파싱→직렬화하면서 루트를
+// <hs:sec> → <ns0:sec> 로 바꾸고 xmlns 선언 12개 중 10개를 버린다(실측). 한글이 그런 파일을
+// 어디까지 받아 주는지 보장할 수 없어서, 손대지 않은 노드는 원본 바이트를 그대로 두는
+// _xml-dom.ts 를 쓴다. 결과물의 '보이는 텍스트·행 수·rowCnt' 는 프로토타입과 완전히 같다.
 import { unzipSync, zipSync, strFromU8, strToU8 } from "./vendor/fflate.bundle.js";
+import {
+  childElements,
+  escapeXmlText,
+  findAll,
+  findAllExcluding,
+  getAttribute,
+  parseXml,
+  removeChild,
+  serializeXml,
+  setAttribute,
+  setTextContent,
+  textContent,
+  textNodes,
+  type XmlDocument,
+  type XmlElement,
+} from "./_xml-dom.ts"; // 확장자 포함 — 번들러(esbuild)와 Node 테스트 양쪽에서 해석된다
 
 export const HWPX_CONTENT_TYPE = "application/hwp+zip";
 const MIMETYPE_ENTRY = "mimetype";
 const SECTION_PATTERN = /section\d*\.xml$/;
 
+const RUN = "hp:run";
+const TEXT = "hp:t";
+const TABLE = "hp:tbl";
+const ROW = "hp:tr";
+const CELL_ADDR = "hp:cellAddr";
+
 export interface HwpxRepeater {
   source: string;
   maxRows?: number;
 }
-
-// ── XML 유틸 ────────────────────────────────────────────────────────────────
-
-function escapeXml(value: any): string {
-  return String(value === null || value === undefined ? "" : value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-interface ElementRange {
-  start: number;   // 여는 태그 시작
-  openEnd: number; // 여는 태그 끝(exclusive)
-  end: number;     // 닫는 태그 끝(exclusive)
-}
-
-/** 같은 이름의 태그가 중첩돼 있어도(표 안의 표) 짝을 맞춰 범위를 찾는다. */
-function findElements(xml: string, tag: string): ElementRange[] {
-  const pattern = new RegExp(`<(/?)${tag}(\\s[^>]*?)?(/?)>`, "g");
-  const stack: { start: number; openEnd: number }[] = [];
-  const found: ElementRange[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(xml))) {
-    const isClose = match[1] === "/";
-    const isSelfClosing = match[3] === "/";
-    const start = match.index;
-    const end = start + match[0].length;
-    if (isSelfClosing) {
-      found.push({ start, openEnd: end, end });
-    } else if (isClose) {
-      const open = stack.pop();
-      if (open) found.push({ start: open.start, openEnd: open.openEnd, end });
-    } else {
-      stack.push({ start, openEnd: end });
-    }
-  }
-  return found.sort((a, b) => a.start - b.start);
-}
-
-/** <hp:t> 안의 글자만 이어붙인다(태그 탐지·검증용). */
-function textOf(xml: string): string {
-  return (xml.match(/<hp:t(?:\s[^>]*)?>[\s\S]*?<\/hp:t>/g) || [])
-    .map((node) => node.replace(/<[^>]+>/g, ""))
-    .join("");
-}
-
-/**
- * ★2단계. 같은 run 안에서 잘게 쪼개진 <hp:t> 를 하나로 합친다.
- * `</hp:t><hp:t>` 사이에 다른 태그가 끼어 있으면(=다른 run) 매치되지 않으므로,
- * 서로 다른 run 의 글자가 잘못 합쳐지는 일은 없다.
- */
-export function mergeTextRuns(xml: string): string {
-  return xml.replace(/<\/hp:t>\s*<hp:t(?:\s[^>]*?)?>/g, "");
-}
-
-/** 점 표기 경로로 값 찾기. 뷰가 펼친 키를 함께 갖고 있으면 그걸 먼저 쓴다. */
-function lookup(view: Record<string, any>, path: string): any {
-  if (Object.prototype.hasOwnProperty.call(view, path)) return view[path];
-  return String(path)
-    .split(".")
-    .reduce((acc: any, key: string) => (acc === null || acc === undefined ? undefined : acc[key]), view);
-}
-
-// ── 반복 표 (§6.2.1) ────────────────────────────────────────────────────────
-
-interface Edit { start: number; end: number; text: string }
-
-/** 이 행이 어떤 반복 접두어({{row. · {{sum. …)에 속하는지. 없으면 null. */
-function rowPrefix(rowXml: string, prefixes: string[]): string | null {
-  const text = textOf(rowXml);
-  for (const prefix of prefixes) {
-    if (text.includes(`{{${prefix}.`)) return prefix;
-  }
-  return null;
-}
-
-/** 행 안의 셀 주소(rowAddr)를 실제 위치로 다시 매긴다. 중첩 표의 셀은 건드리지 않는다. */
-function renumberRowAddr(rowXml: string, rowIndex: number): string {
-  const nested = findElements(rowXml, "hp:tbl");
-  const insideNested = (position: number) => nested.some((table) => position >= table.start && position < table.end);
-  return rowXml.replace(/rowAddr="\d+"/g, (match, offset: number) =>
-    insideNested(offset) ? match : `rowAddr="${rowIndex}"`
-  );
-}
-
-/**
- * 표 처리: 반복 행을 위에서부터 데이터로 채우고, 남는 행은 <hp:tr> 째 삭제한 뒤
- * rowCnt 와 rowAddr 를 실제 행 수에 맞춘다(빠뜨리면 한글이 파일을 거부한다).
- * 데이터가 행보다 많으면 조용히 자르지 않고 에러로 멈춘다.
- */
-function applyRepeaterTables(
-  xml: string,
-  view: Record<string, any>,
-  repeaters: Record<string, HwpxRepeater>
-): string {
-  const prefixes = Object.keys(repeaters);
-  if (!prefixes.length) return xml;
-
-  const tables = findElements(xml, "hp:tbl");
-  if (!tables.length) return xml;
-  const allRows = findElements(xml, "hp:tr");
-  const edits: Edit[] = [];
-
-  for (const table of tables) {
-    // 이 표에 직접 속한 행만 (중첩 표의 행은 그 표가 가져간다)
-    const ownRows = allRows.filter((row) => {
-      if (row.start < table.openEnd || row.end > table.end) return false;
-      const nested = tables.find(
-        (other) => other !== table && other.start > table.start && row.start >= other.openEnd && row.end <= other.end
-      );
-      return !nested;
-    });
-    if (!ownRows.length) continue;
-
-    const rowInfos = ownRows.map((row) => {
-      const rowXml = xml.slice(row.start, row.end);
-      return { range: row, xml: rowXml, prefix: rowPrefix(rowXml, prefixes) };
-    });
-    if (!rowInfos.some((info) => info.prefix)) continue;
-
-    // 접두어별로 채울 데이터와 남길 행 수를 먼저 정한다.
-    const keepCount: Record<string, number> = {};
-    const dataOf: Record<string, any[]> = {};
-    for (const prefix of prefixes) {
-      const rowsForPrefix = rowInfos.filter((info) => info.prefix === prefix);
-      if (!rowsForPrefix.length) continue;
-      const data = lookup(view, repeaters[prefix].source);
-      const list: any[] = Array.isArray(data) ? data : [];
-      if (list.length > rowsForPrefix.length) {
-        throw new Error(
-          `항목이 ${rowsForPrefix.length}개를 넘습니다(현재 ${list.length}개). 서식의 행을 늘리거나 항목을 줄여 주세요.`
-        );
-      }
-      keepCount[prefix] = list.length;
-      dataOf[prefix] = list;
-    }
-
-    // 어떤 행을 남길지 결정하고, 남길 행에는 최종 rowAddr 를 다시 매긴다.
-    const used: Record<string, number> = {};
-    let keptIndex = 0;
-    for (const info of rowInfos) {
-      const prefix = info.prefix;
-      if (!prefix || keepCount[prefix] === undefined) {
-        edits.push({ start: info.range.start, end: info.range.end, text: renumberRowAddr(info.xml, keptIndex) });
-        keptIndex += 1;
-        continue;
-      }
-      const cursor = used[prefix] || 0;
-      if (cursor >= keepCount[prefix]) {
-        edits.push({ start: info.range.start, end: info.range.end, text: "" }); // 미사용 행은 노드째 삭제
-        used[prefix] = cursor + 1;
-        continue;
-      }
-      const item = dataOf[prefix][cursor] || {};
-      const filled = info.xml.replace(
-        new RegExp(`\\{\\{${prefix}\\.([a-zA-Z0-9_]+)\\}\\}`, "g"),
-        (_match, field: string) => escapeXml(item?.[field] ?? "")
-      );
-      edits.push({ start: info.range.start, end: info.range.end, text: renumberRowAddr(filled, keptIndex) });
-      used[prefix] = cursor + 1;
-      keptIndex += 1;
-    }
-
-    // rowCnt 갱신 — 남는 행을 지웠으니 실제 행 수와 맞춰야 한다.
-    const openTag = xml.slice(table.start, table.openEnd);
-    if (/\browCnt="\d+"/.test(openTag)) {
-      edits.push({
-        start: table.start,
-        end: table.openEnd,
-        text: openTag.replace(/\browCnt="\d+"/, `rowCnt="${keptIndex}"`),
-      });
-    }
-  }
-
-  // 뒤에서부터 적용해야 앞쪽 오프셋이 밀리지 않는다.
-  return edits
-    .sort((a, b) => b.start - a.start)
-    .reduce((acc, edit) => acc.slice(0, edit.start) + edit.text + acc.slice(edit.end), xml);
-}
-
-// ── 검증 (§6.2.2) ───────────────────────────────────────────────────────────
-
-/**
- * 아주 가벼운 well-formed 검사. Workers 에는 DOMParser 가 없어 태그 짝만 확인한다.
- * 우리가 만든 편집(행 삭제)이 구조를 깨뜨렸는지 잡는 것이 목적이다.
- */
-export function assertWellFormed(xml: string, label: string): void {
-  const pattern = /<(\/?)([A-Za-z_][\w:.-]*)(\s[^>]*?)?(\/?)>/g;
-  const stack: string[] = [];
-  const body = xml.replace(/<\?[\s\S]*?\?>/g, "").replace(/<!--[\s\S]*?-->/g, "");
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(body))) {
-    const [, close, name, , selfClose] = match;
-    if (selfClose === "/") continue;
-    if (close === "/") {
-      const open = stack.pop();
-      if (open !== name) throw new Error(`${label} 의 XML 구조가 깨졌어요: </${name}> 짝이 맞지 않습니다.`);
-    } else {
-      stack.push(name);
-    }
-  }
-  if (stack.length) throw new Error(`${label} 의 XML 구조가 깨졌어요: <${stack[stack.length - 1]}> 가 닫히지 않았습니다.`);
-}
-
-function assertRowCount(xml: string, label: string): void {
-  const tables = findElements(xml, "hp:tbl");
-  const rows = findElements(xml, "hp:tr");
-  for (const table of tables) {
-    const openTag = xml.slice(table.start, table.openEnd);
-    const declared = openTag.match(/\browCnt="(\d+)"/);
-    if (!declared) continue;
-    const actual = rows.filter((row) => {
-      if (row.start < table.openEnd || row.end > table.end) return false;
-      const nested = tables.find(
-        (other) => other !== table && other.start > table.start && row.start >= other.openEnd && row.end <= other.end
-      );
-      return !nested;
-    }).length;
-    if (Number(declared[1]) !== actual) {
-      throw new Error(`${label} 의 표 rowCnt(${declared[1]})가 실제 행 수(${actual})와 다릅니다.`);
-    }
-  }
-}
-
-function assertNoLeftoverPlaceholders(xml: string, label: string): void {
-  const leftovers = textOf(xml).match(/\{\{[^{}]{0,60}\}?\}?/g) || [];
-  if (leftovers.length) {
-    throw new Error(
-      `${label} 에 채워지지 않은 자리표시자가 남았어요(${leftovers.length}개): ${leftovers.slice(0, 3).join(", ")}. ` +
-      "서식의 태그 이름이 데이터와 다르거나, 태그 중간에 글꼴·크기가 바뀌어 한글이 글자를 쪼갠 경우예요."
-    );
-  }
-}
-
-// ── 렌더 ────────────────────────────────────────────────────────────────────
 
 /** 반복 영역을 지정하지 않은 서식의 기본값 — 표준 견적서와 같은 이름 규칙. */
 const DEFAULT_REPEATERS: Record<string, HwpxRepeater> = {
@@ -266,6 +55,165 @@ const DEFAULT_REPEATERS: Record<string, HwpxRepeater> = {
   term: { source: "totals.termRows" },
   item: { source: "totals.rows" }, // 설계서 §9.2 의 {{item.*}} 표기도 받아 준다
 };
+
+// ── 1. 텍스트 run 병합 (프로토타입 merge_runs) ──────────────────────────────
+
+/**
+ * 같은 <hp:run> 안의 인접 <hp:t> 를 하나로 합친다.
+ * 한글은 서식이 조금만 달라져도 한 낱말을 여러 <hp:t> 로 쪼개 저장한다. 그대로 치환하면
+ * {{client. / company}} 가 되어 전부 실패한다. ★지금 템플릿이 안 쪼개져 있어도 빼면 안 된다 —
+ * 사용자가 한글에서 글꼴을 한 번 손보는 순간 필요해진다.
+ */
+function mergeRuns(document: XmlDocument): void {
+  for (const run of findAll(document, RUN)) {
+    const texts = childElements(run, TEXT);
+    if (texts.length <= 1) continue;
+    const merged = texts.map((node) => textContent(node)).join("");
+    setTextContent(texts[0], "");
+    // 이미 이스케이프된 원문을 그대로 이어 붙인다(두 번 이스케이프하지 않기 위해).
+    texts[0].children = [{ type: "text", raw: merged }];
+    for (const extra of texts.slice(1)) removeChild(run, extra);
+  }
+}
+
+/** 문자열 단위로도 쓸 수 있게 — 테스트와 다른 도구에서 쓴다. */
+export function mergeTextRuns(xml: string): string {
+  const document = parseXml(xml);
+  mergeRuns(document);
+  return serializeXml(document);
+}
+
+// ── 2. 행 접두어 판정 (프로토타입 row_prefix) ───────────────────────────────
+
+/** 이 행이 어떤 반복 접두어에 속하는지. 없으면 null. */
+function rowPrefix(row: XmlElement, repeaters: Record<string, HwpxRepeater>): string | null {
+  const match = /\{\{([A-Za-z0-9_]+)\./.exec(textContent(row));
+  if (!match) return null;
+  return repeaters[match[1]] ? match[1] : null;
+}
+
+// ── 값 조회 ─────────────────────────────────────────────────────────────────
+
+function lookup(view: Record<string, any>, path: string): any {
+  if (Object.prototype.hasOwnProperty.call(view, path)) return view[path];
+  return String(path)
+    .split(".")
+    .reduce((acc: any, key: string) => (acc === null || acc === undefined ? undefined : acc[key]), view);
+}
+
+/** <hp:t> 안의 {{...}} 치환. 바꾼 게 있으면 true. */
+function substituteTextNode(node: XmlElement, replace: (path: string) => string | null): boolean {
+  let changed = false;
+  for (const text of textNodes(node)) {
+    if (!text.raw.includes("{{")) continue;
+    const next = text.raw.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (match, path: string) => {
+      const value = replace(path);
+      return value === null ? match : value;
+    });
+    if (next !== text.raw) {
+      text.raw = next;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// ── 3·4. 반복 표 (프로토타입 render 의 표 처리) ─────────────────────────────
+
+function applyRepeaterTables(
+  document: XmlDocument,
+  view: Record<string, any>,
+  repeaters: Record<string, HwpxRepeater>
+): void {
+  for (const table of findAll(document, TABLE)) {
+    // 바로 아래 <hp:tr> 만 — 중첩된 표의 행은 그 표가 가져간다.
+    const rows = childElements(table, ROW);
+    if (!rows.length) continue;
+
+    const groups = new Map<string, XmlElement[]>();
+    for (const row of rows) {
+      const prefix = rowPrefix(row, repeaters);
+      if (!prefix) continue;
+      const list = groups.get(prefix) || [];
+      list.push(row);
+      groups.set(prefix, list);
+    }
+    if (!groups.size) continue;
+
+    for (const [prefix, prefixRows] of groups) {
+      const data = lookup(view, repeaters[prefix].source);
+      const list: any[] = Array.isArray(data) ? data : [];
+      // ★조용히 자르지 않는다 — 서식을 고치거나 항목을 줄이라고 말한다.
+      if (list.length > prefixRows.length) {
+        throw new Error(
+          `항목이 ${prefixRows.length}개를 넘습니다(현재 ${list.length}개). 서식의 행을 늘리거나 항목을 줄여 주세요.`
+        );
+      }
+      prefixRows.forEach((row, index) => {
+        if (index < list.length) {
+          const item = list[index] || {};
+          for (const node of findAll(row, TEXT)) {
+            substituteTextNode(node, (path) => {
+              const [head, field] = path.split(".");
+              if (head !== prefix || !field) return null;
+              return escapeXmlText(item?.[field] ?? "");
+            });
+          }
+        } else {
+          removeChild(table, row); // 미사용 행은 노드째 삭제
+        }
+      });
+    }
+
+    // rowCnt 갱신 + 행 주소(rowAddr) 재부여 — 빠뜨리면 한글이 파일을 거부한다.
+    const remaining = childElements(table, ROW);
+    if (getAttribute(table, "rowCnt") !== null) setAttribute(table, "rowCnt", String(remaining.length));
+    remaining.forEach((row, rowIndex) => {
+      // 중첩된 표 안의 셀 주소는 그 표의 것이므로 건드리지 않는다.
+      for (const address of findAllExcluding(row, CELL_ADDR, TABLE)) {
+        if (getAttribute(address, "rowAddr") !== null) setAttribute(address, "rowAddr", String(rowIndex));
+      }
+    });
+  }
+}
+
+// ── 5. 검증 (§6.2.2) ────────────────────────────────────────────────────────
+
+/** XML 이 스스로 닫히는지 — 우리가 만든 편집이 구조를 깨뜨렸는지 여기서 걸린다. */
+export function assertWellFormed(xml: string, label: string): void {
+  try {
+    parseXml(xml);
+  } catch (error: any) {
+    throw new Error(`${label} 의 XML 구조가 깨졌어요: ${String(error?.message || error)}`);
+  }
+}
+
+function assertNoLeftoverPlaceholders(document: XmlDocument, label: string): void {
+  const leftovers: string[] = [];
+  for (const node of findAll(document, TEXT)) {
+    const found = textContent(node).match(/\{\{[^{}]{0,60}\}?\}?/g);
+    if (found) leftovers.push(...found);
+  }
+  if (leftovers.length) {
+    throw new Error(
+      `${label} 에 채워지지 않은 자리표시자가 남았어요(${leftovers.length}개): ${leftovers.slice(0, 3).join(", ")}. ` +
+      "서식의 태그 이름이 데이터와 다르거나, 태그 중간에 글꼴·크기가 바뀌어 한글이 글자를 쪼갠 경우예요."
+    );
+  }
+}
+
+function assertRowCount(document: XmlDocument, label: string): void {
+  for (const table of findAll(document, TABLE)) {
+    const declared = getAttribute(table, "rowCnt");
+    if (declared === null) continue;
+    const actual = childElements(table, ROW).length;
+    if (Number(declared) !== actual) {
+      throw new Error(`${label} 의 표 rowCnt(${declared})가 실제 행 수(${actual})와 다릅니다.`);
+    }
+  }
+}
+
+// ── 렌더 ────────────────────────────────────────────────────────────────────
 
 /** 템플릿 bytes + 뷰 → HWPX bytes. */
 export function renderHwpx(
@@ -286,27 +234,34 @@ export function renderHwpx(
   }
 
   const repeaters = options.repeaters && Object.keys(options.repeaters).length ? options.repeaters : DEFAULT_REPEATERS;
+  const repeaterPrefixes = Object.keys(repeaters);
   const rendered: Record<string, Uint8Array> = { ...entries };
 
   for (const name of sectionNames) {
-    let xml = strFromU8(entries[name]);
+    let document: XmlDocument;
+    try {
+      document = parseXml(strFromU8(entries[name]));
+    } catch (error: any) {
+      throw new Error(`${name} 을(를) 읽지 못했어요: ${String(error?.message || error)}`);
+    }
 
-    // 2. 쪼개진 텍스트 합치기 → 4. 반복 표 → 3. 남은 단순 필드 치환
-    xml = mergeTextRuns(xml);
-    xml = applyRepeaterTables(xml, view, repeaters);
-    const repeaterPrefixes = Object.keys(repeaters);
-    xml = xml.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (match, path: string) => {
-      const prefix = path.split(".")[0];
-      if (repeaterPrefixes.includes(prefix)) return match; // 표 밖에 남은 반복 태그 → 검증에서 잡는다
-      const value = lookup(view, path);
-      return value === undefined ? match : escapeXml(value); // 모르는 태그는 남겨 검증에서 잡는다
-    });
+    mergeRuns(document);                                   // 1
+    applyRepeaterTables(document, view, repeaters);        // 2·3·4
+    // 표 밖에 남은 단순 필드 치환. 반복 접두어는 표에서만 처리하므로 여기서 건드리지 않고
+    // 남겨 두면 아래 검증이 잡아 준다(모르는 태그를 조용히 지우지 않는다).
+    for (const node of findAll(document, TEXT)) {
+      substituteTextNode(node, (path) => {
+        if (repeaterPrefixes.includes(path.split(".")[0])) return null;
+        const value = lookup(view, path);
+        return value === undefined ? null : escapeXmlText(value);
+      });
+    }
 
     // 5. 검증 — 하나라도 실패하면 파일을 만들지 않는다.
-    assertWellFormed(xml, name);
-    assertNoLeftoverPlaceholders(xml, name);
-    assertRowCount(xml, name);
-
+    assertNoLeftoverPlaceholders(document, name);
+    assertRowCount(document, name);
+    const xml = serializeXml(document);
+    assertWellFormed(xml, name); // 직렬화 결과를 다시 읽어 구조를 재확인
     rendered[name] = strToU8(xml);
   }
 
@@ -319,7 +274,7 @@ export function renderHwpx(
   }
   const output = zipSync(ordered, { level: 6 });
 
-  // 1. ZIP 무결성 — 다시 열어 엔트리 목록이 원본과 같은지.
+  // ZIP 무결성 — 다시 열어 엔트리 목록이 원본과 같은지.
   const reopened = unzipSync(output);
   const before = Object.keys(entries).sort().join("|");
   const after = Object.keys(reopened).sort().join("|");
