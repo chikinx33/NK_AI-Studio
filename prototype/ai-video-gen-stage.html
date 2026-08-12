@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1524" />
+  <link rel="stylesheet" href="styles.css?v=3.1525" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -202,6 +202,16 @@
       cursor: help;
     }
     .vgen-result-status { font-size: 0.7rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; }
+    .vgen-result-badge {
+      display: inline-block; margin-left: 5px;
+      font-size: 0.68rem; font-weight: 600; padding: 1px 7px; border-radius: 99px;
+      cursor: help;
+    }
+    .vgen-badge--temp {
+      background: color-mix(in srgb, #f59e0b 16%, transparent);
+      color: #fbbf24;
+      border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+    }
     .vgen-status--processing { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
     .vgen-status--done { background: color-mix(in srgb, #22c55e 15%, transparent); color: #4ade80; }
     .vgen-status--error { background: color-mix(in srgb, #ef4444 15%, transparent); color: #f87171; }
@@ -491,18 +501,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1524" defer></script>
-  <script src="js/config.js?v=3.1524" defer></script>
-  <script src="js/utils.js?v=3.1524" defer></script>
-  <script src="store.js?v=3.1524" defer></script>
-  <script src="api.js?v=3.1524" defer></script>
-  <script src="js/state.js?v=3.1524" defer></script>
-  <script src="js/auth.js?v=3.1524" defer></script>
-  <script src="js/navigation.js?v=3.1524" defer></script>
-  <script src="js/service/project.js?v=3.1524" defer></script>
-  <script src="js/ui/common.js?v=3.1524" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1524" defer></script>
-  <script src="script.js?v=3.1524" defer></script>
+  <script src="core.js?v=3.1525" defer></script>
+  <script src="js/config.js?v=3.1525" defer></script>
+  <script src="js/utils.js?v=3.1525" defer></script>
+  <script src="store.js?v=3.1525" defer></script>
+  <script src="api.js?v=3.1525" defer></script>
+  <script src="js/state.js?v=3.1525" defer></script>
+  <script src="js/auth.js?v=3.1525" defer></script>
+  <script src="js/navigation.js?v=3.1525" defer></script>
+  <script src="js/service/project.js?v=3.1525" defer></script>
+  <script src="js/ui/common.js?v=3.1525" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1525" defer></script>
+  <script src="script.js?v=3.1525" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">

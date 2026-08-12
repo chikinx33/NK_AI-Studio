@@ -28,15 +28,16 @@
     { id: 'rotate',     ko: '회전',       en: 'Rotate'     }
   ];
 
-  // ⚠️ functions/api/_shared/video-specs.ts 의 미러다. 서버가 실제로 받는 값만 고른다.
+  // ⚠️ functions/api/_shared/video-specs.ts 의 MODEL_DURATION_CHOICES 미러다.
+  // 여기 값은 서버 허용 집합(MODEL_DURATIONS)의 부분집합이어야 한다.
   // (예전엔 Veo 에서 5초를 고를 수 있었지만 서버가 조용히 4초로 스냅했다.)
-  // 값을 바꿀 땐 video-specs.ts 를 먼저 고칠 것 — tests/video-duration-spec.test.mjs 가 일치를 검사한다.
+  // 값을 바꿀 땐 video-specs.ts 를 먼저 고칠 것 — tests/video-duration-spec.test.mjs 가 검사한다.
   var DURATIONS_VEO      = [4, 6, 8];
   var DURATIONS_KLING    = [5, 10];
-  var DURATIONS_SEEDANCE = [4, 5, 6, 8, 10, 15];
+  var CHOICES_SEEDANCE   = [4, 5, 6, 8, 10, 15];  // 서버 허용은 4~15 전체, 드롭다운은 이 값만
   var DURATIONS_VIDU     = [4, 5, 6, 8, 10];
 
-  var MODEL_DURATIONS = {
+  var MODEL_DURATION_CHOICES = {
     'veo':          DURATIONS_VEO,
     'veo-full':     DURATIONS_VEO,
     'grok':         DURATIONS_VEO,
@@ -45,9 +46,9 @@
     'kling':        DURATIONS_KLING,
     'kling-draft':  DURATIONS_KLING,
     'kling-final':  DURATIONS_KLING,
-    'seedance':     DURATIONS_SEEDANCE,
-    'seedance-r2v': DURATIONS_SEEDANCE,
-    'wan':          DURATIONS_SEEDANCE,
+    'seedance':     CHOICES_SEEDANCE,
+    'seedance-r2v': CHOICES_SEEDANCE,
+    'wan':          CHOICES_SEEDANCE,
     'vidu-q3':      DURATIONS_VIDU
   };
 
@@ -117,6 +118,12 @@
       retry:             '다시 시도',
       image_too_large:   '이미지가 너무 큽니다. 더 작은 이미지를 사용해 주세요.',
       image_type_alert:  'PNG, JPEG, WebP 이미지만 사용할 수 있어요.',
+      image_ratio_alert: '이 이미지는 가로세로 비율이 모델 지원 범위(0.4~2.5)를 벗어납니다.\n잘라내거나 다른 이미지를 사용해 주세요. (현재 %s×%s)',
+      image_upscale_confirm: '이미지가 작아 %s배로 늘려야 합니다. 화질이 떨어질 수 있어요.\n계속할까요?',
+      retry_no_image:    '이전 이미지는 복원되지 않습니다. 이미지를 다시 선택해 주세요.',
+      retry_settings_only: '설정만 복원됩니다 — 이미지는 다시 선택해 주세요',
+      badge_temp_link:   '임시 링크 · 곧 만료',
+      badge_temp_link_tip: '용량이 커서 서버에 보관하지 못했습니다. 링크가 만료되기 전에 내려받아 주세요.',
       tracking_lost:     '세션 종료로 추적 실패',
       no_prompt_alert:   '프롬프트를 입력해주세요.',
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
@@ -172,6 +179,12 @@
       retry:             'Retry',
       image_too_large:   'This image is too large. Please use a smaller one.',
       image_type_alert:  'Only PNG, JPEG, and WebP images are supported.',
+      image_ratio_alert: 'This image aspect ratio is outside the supported range (0.4–2.5).\nPlease crop it or use another image. (currently %s×%s)',
+      image_upscale_confirm: 'This image is small and must be upscaled %s×. Quality may suffer.\nContinue?',
+      retry_no_image:    'The previous image was not restored. Please select an image again.',
+      retry_settings_only: 'Settings only — please select the image again',
+      badge_temp_link:   'Temporary link · expires soon',
+      badge_temp_link_tip: 'This video was too large to store on the server. Please download it before the link expires.',
       tracking_lost:     'Tracking lost (session ended)',
       no_prompt_alert:   'Please enter a prompt.',
       no_image_alert:    'A start frame image is required for Image to Video mode.',
@@ -267,27 +280,76 @@
   }
 
   // ─── Image intake ─────────────────────────────────────────
-  // 원본 사진(수 MB~수십 MB)을 그대로 data URL로 보내면 Worker 가 base64 디코드 도중
-  // 죽어(1102) 사유 없는 실패가 된다. 업로드 전에 항상 축소·JPEG 정규화한다.
-  var IMAGE_MAX_EDGE      = 1536;
-  var IMAGE_MAX_CHARS     = 4 * 1024 * 1024;   // 축소 후에도 이보다 크면 거부
-  var IMAGE_PASSTHRU_CHARS = 1500000;          // 충분히 작으면 재인코딩 없이 통과
-  var ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+  // 두 가지를 동시에 만족시켜야 한다.
+  //  1) 원본 사진을 그대로 data URL로 보내면 Worker 가 base64 디코드 도중 죽어(1102)
+  //     사유 없는 실패가 된다 → 축소·JPEG 정규화.
+  //  2) 공급자(Atlas)가 변 길이 300~6000px, 종횡비 0.4~2.5 를 요구한다 → 게이트.
+  // ⚠️ IMAGE_SPEC 값은 functions/api/_shared/video-specs.ts 의 미러다(테스트가 일치 검사).
+  var IMAGE_SPEC = {
+    minEdge:  300,
+    maxEdge:  6000,
+    minRatio: 0.4,
+    maxRatio: 2.5,
+    mimes:    ['image/jpeg', 'image/png', 'image/webp']
+  };
+  var IMAGE_MAX_EDGE  = 1536;                // 우리 쪽 전송 상한(공급자 상한보다 훨씬 작다)
+  var IMAGE_MAX_CHARS = 4 * 1024 * 1024;     // 축소 후에도 이보다 크면 거부
+  var UPSCALE_WARN_FACTOR = 2;               // 이 배율을 넘겨 늘려야 하면 사용자에게 묻는다
 
-  function downscaleImageFile(file, maxEdge, cb) {
+  function ratioOf(w, h) { return h > 0 ? (w / h) : 0; }
+
+  // 목표 배율. 짧은 변 하한이 긴 변 상한보다 우선하고, 공급자 상한이 최종적으로 이긴다.
+  function targetScale(w, h) {
+    var longEdge = Math.max(w, h), shortEdge = Math.min(w, h);
+    var scale = Math.min(1, IMAGE_MAX_EDGE / longEdge);
+    if (shortEdge * scale < IMAGE_SPEC.minEdge) scale = IMAGE_SPEC.minEdge / shortEdge;
+    if (longEdge * scale > IMAGE_SPEC.maxEdge) scale = IMAGE_SPEC.maxEdge / longEdge;
+    return scale;
+  }
+
+  // 원본 그대로 보내도 되는가? (용량이 작아도 치수가 규격을 벗어나면 안 된다)
+  function fitsSpecAsIs(w, h, chars) {
+    var longEdge = Math.max(w, h), shortEdge = Math.min(w, h);
+    return shortEdge >= IMAGE_SPEC.minEdge
+      && longEdge <= Math.min(IMAGE_SPEC.maxEdge, IMAGE_MAX_EDGE)
+      && chars < IMAGE_MAX_CHARS;
+  }
+
+  function downscaleImageFile(file, cb) {
     var reader = new FileReader();
     reader.onload = function (ev) {
       var src = ev.target.result;
       var img = new Image();
       img.onload = function () {
         var w = img.naturalWidth, h = img.naturalHeight;
-        var scale = Math.min(1, maxEdge / Math.max(w, h));
-        if (scale >= 1 && String(src || '').length < IMAGE_PASSTHRU_CHARS) { cb(src); return; }
+        if (!w || !h) { cb(src); return; }
+
+        // 종횡비는 축소로 해결되지 않는다 → 업로드 시점에 거부.
+        var ratio = ratioOf(w, h);
+        if (ratio < IMAGE_SPEC.minRatio || ratio > IMAGE_SPEC.maxRatio) {
+          window.alert(t('image_ratio_alert').replace('%s', String(w)).replace('%s', String(h)));
+          cb('');
+          return;
+        }
+
+        // 용량이 작아도 치수가 규격을 벗어나면 통과시키지 않는다.
+        if (fitsSpecAsIs(w, h, String(src || '').length)) { cb(src); return; }
+
+        var scale = targetScale(w, h);
+        if (scale > UPSCALE_WARN_FACTOR) {
+          // 너무 작은 원본을 크게 늘리면 화질이 무너진다 → 진행 여부를 묻는다.
+          if (!window.confirm(t('image_upscale_confirm').replace('%s', scale.toFixed(1)))) {
+            cb('');
+            return;
+          }
+        }
         var cw = Math.max(1, Math.round(w * scale));
         var ch = Math.max(1, Math.round(h * scale));
         var c = document.createElement('canvas');
         c.width = cw; c.height = ch;
-        c.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        var ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(img, 0, 0, cw, ch);
         try { cb(c.toDataURL('image/jpeg', 0.9)); } catch (_) { cb(src); }
       };
       img.onerror = function () { cb(src); };
@@ -297,15 +359,16 @@
     reader.readAsDataURL(file);
   }
 
-  // 형식 검사 → 축소 → 크기 재확인까지 마친 data URL만 onReady 로 넘긴다.
+  // 모든 이미지 슬롯(시작/끝/레퍼런스)이 거치는 단 하나의 관문.
+  // 형식 → 치수·종횡비 게이트 → 축소 → 용량 재확인을 마친 data URL만 onReady 로 넘긴다.
   function acceptImageFile(file, onReady) {
     if (!file) return;
-    if (ALLOWED_IMAGE_TYPES.indexOf(String(file.type || '').toLowerCase()) === -1) {
+    if (IMAGE_SPEC.mimes.indexOf(String(file.type || '').toLowerCase()) === -1) {
       window.alert(t('image_type_alert'));
       return;
     }
-    downscaleImageFile(file, IMAGE_MAX_EDGE, function (dataUrl) {
-      if (!dataUrl) return;
+    downscaleImageFile(file, function (dataUrl) {
+      if (!dataUrl) return; // 게이트에서 이미 안내함
       if (dataUrl.length > IMAGE_MAX_CHARS) {
         window.alert(t('image_too_large'));
         return;
@@ -325,7 +388,7 @@
   }
 
   function durations() {
-    return MODEL_DURATIONS[state.model] || DURATIONS_VEO;
+    return MODEL_DURATION_CHOICES[state.model] || DURATIONS_VEO;
   }
 
   function currentModelObj() {
@@ -811,6 +874,13 @@
       if (tip) errAttrs.title = tip;
       info.appendChild(el('p', 'vgen-result-error', errAttrs));
     }
+    // 서버 복제를 건너뛴 결과는 원본 링크가 만료되면 사라진다 → '완료'로 위장하지 않는다.
+    if (r.status === 'done' && r.mirrored === false) {
+      info.appendChild(el('span', 'vgen-result-badge vgen-badge--temp', {
+        textContent: t('badge_temp_link'),
+        title: t('badge_temp_link_tip')
+      }));
+    }
     card.appendChild(info);
 
     var actions = el('div', 'vgen-result-actions');
@@ -826,8 +896,12 @@
       actions.appendChild(el('button', 'vgen-action-btn', dlAttrs));
     }
     if (r.status === 'error' && r.canRetry) {
+      // 새로고침 이후엔 이미지 스냅샷이 사라진다 → 무엇이 복원되는지 미리 알린다.
+      var hasSnap = !!_retryInputs[r.id];
       actions.appendChild(el('button', 'vgen-action-btn vgen-action-btn--retry', {
-        type: 'button', title: t('retry'), 'data-action': 'retry-result', 'data-id': r.id, innerHTML: RETRY_SVG
+        type: 'button',
+        title: hasSnap ? t('retry') : t('retry_settings_only'),
+        'data-action': 'retry-result', 'data-id': r.id, innerHTML: RETRY_SVG
       }));
     }
     var delBtn = el('button', 'vgen-action-btn vgen-action-btn--danger vgen-delete-btn', {
@@ -928,9 +1002,19 @@
       }
     });
     wrap.appendChild(tags);
-    var descEl = el('p', 'vgen-model-desc-text', { textContent: desc });
+    // 지원 길이를 설명 끝에 덧붙인다. MODEL_DESCS 문구에 직접 적으면 duration 표와
+    // 이중 관리가 되므로 표에서 만들어 붙인다(예전엔 UI가 5초를 제시하고 서버가
+    // 조용히 4초로 스냅해 사용자가 이유를 알 수 없었다).
+    var descEl = el('p', 'vgen-model-desc-text', { textContent: desc + ' ' + durationNote() });
     wrap.appendChild(descEl);
     return wrap;
+  }
+
+  function durationNote() {
+    var list = durations().join('·');
+    return state.lang === 'en'
+      ? '(Supported lengths: ' + list + 's)'
+      : '(지원 길이: ' + list + '초)';
   }
 
   function renderRefSection() {
@@ -1524,11 +1608,38 @@
       state.audioFileName = snap.audioFileName || '';
     }
 
+    // 새로고침 이후엔 이미지 스냅샷이 사라진다. 그대로 생성을 걸면 '이미지를 업로드하세요'
+    // 경고가 떠서 버그처럼 보이므로, 폼만 복원하고 무엇을 해야 하는지 알려준다.
+    if (!snap && requiredInputMissing()) {
+      render();
+      focusImageSlot();
+      window.alert(t('retry_no_image'));
+      return;
+    }
+
     // 실패 카드는 치우고 같은 조건으로 새로 요청한다.
     deleteResult(id);
     delete _retryInputs[id];
     render();
     startGeneration();
+  }
+
+  // 생성에 필요한 입력이 빠졌는지 한 곳에서 판정한다(생성 버튼과 재시도가 같은 규칙을 쓰도록).
+  function requiredInputMissing() {
+    var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
+    var refCount = (state.referenceUrls || []).filter(Boolean).length;
+    if (isI2vMode && hasCap('start') && !state.startImageUrl && refCount === 0) return 'no_image_alert';
+    if (hasCap('video') && !hasCap('start') && !hasCap('refs') && !state.videoUrl) return 'no_video_alert';
+    return '';
+  }
+
+  function focusImageSlot() {
+    if (!root) return;
+    var slot = root.querySelector('.vgen-image-slot') || root.querySelector('.vgen-ref-slot');
+    if (!slot) return;
+    try { slot.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+    var trigger = slot.querySelector('.vgen-upload-trigger, .vgen-ref-add');
+    if (trigger && trigger.focus) { try { trigger.focus(); } catch (_) {} }
   }
 
   // 삭제의 단일 출처(SSOT)는 GCS 객체다. 서버 삭제가 실패했는데 로컬 tombstone 만 남기면
@@ -1584,6 +1695,37 @@
         return false;
       });
   }
+
+  // 미러링을 건너뛴 결과는 원본 링크가 만료되기 전에 서버 복제를 한 번 더 시도한다.
+  // status 를 다시 물으면 서버가 flattenPlayback 을 재실행한다(공급자에 예측이 남아 있는 동안만
+  // 성공한다 — 실패해도 조용히 임시 링크 상태를 유지한다).
+  function tryRemirror(r) {
+    if (!r || r.status !== 'done' || r.mirrored !== false || !r.jobId) return;
+    if (_remirrorTried[r.id]) return;
+    _remirrorTried[r.id] = true;
+    if (!(NK.api && NK.api.videoStatus)) return;
+
+    NK.api.videoStatus({
+      projectId: state.projectId || null,
+      sceneId: r.id,
+      jobId: r.jobId,
+      source: 'video-gen',
+      meta: {
+        prompt: r.prompt, model: r.model, modelLabel: r.modelLabel,
+        aspectRatio: r.aspectRatio, duration: r.duration, resultId: r.id
+      }
+    }).then(function (data) {
+      var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || '';
+      var objectName = (NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(rawUrl) : '';
+      if (!objectName) return; // 여전히 미러링되지 않음 — 뱃지 유지
+      updateResult(r.id, { videoObjectName: objectName, rawVideoUrl: rawUrl, mirrored: true });
+      saveResults();
+      render();
+    }).catch(function (err) {
+      console.error('[vgen] remirror failed', r.id, err && err.message);
+    });
+  }
+  var _remirrorTried = {};
 
   // 화면에 실제로 보이는 카드 수(로컬 + 중복되지 않는 서버 카드).
   function visibleResultCount() {
@@ -1677,12 +1819,8 @@
     if (!prompt) { alert(t('no_prompt_alert')); return; }
 
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
-    if (isI2vMode && hasCap('start') && !state.startImageUrl && (state.referenceUrls || []).filter(Boolean).length === 0) {
-      alert(t('no_image_alert')); return;
-    }
-    if (hasCap('video') && !hasCap('start') && !hasCap('refs') && !state.videoUrl) {
-      alert(t('no_video_alert')); return;
-    }
+    var missingKey = requiredInputMissing();
+    if (missingKey) { alert(t(missingKey)); return; }
 
     state.prompt = prompt;
     state.generating = true;
@@ -1851,7 +1989,14 @@
             // 토큰이 박힌 URL은 저장하지 않는다(12h TTL 만료 후 401 → 재생 불가).
             // objectName만 보관하고 재생 직전에 최신 토큰으로 URL을 만든다.
             var objectName = (NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(rawUrl) : '';
-            updateResult(resultId, { status: 'done', videoObjectName: objectName, rawVideoUrl: rawUrl });
+            // objectName 이 없다 = 서버가 GCS 복제를 건너뛰고 원본(만료되는) 링크를 준 것.
+            // '완료'로 위장하지 않고 임시 링크임을 표시한다.
+            updateResult(resultId, {
+              status: 'done',
+              videoObjectName: objectName,
+              rawVideoUrl: rawUrl,
+              mirrored: !!objectName
+            });
             saveResults();
             render();
             tryCaptureThumbnail(state.results.find(function (r) { return r.id === resultId; }));
@@ -1973,6 +2118,8 @@
     state.results.forEach(function (r) {
       if (r.status === 'done' && !r.thumbnailDataUrl) tryCaptureThumbnail(r);
     });
+    // 임시 링크 상태로 남은 결과는 서버 복제를 1회 재시도
+    state.results.forEach(tryRemirror);
     // 진행 중이던 작업 폴링 재개
     state.results.forEach(function (r) {
       if (!r || r.status !== 'processing' || !r.jobId || state.polls[r.id]) return;

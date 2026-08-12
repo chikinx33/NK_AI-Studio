@@ -16,6 +16,7 @@ import {
   type KlingQuality,
 } from "./_shared/kling";
 import {
+  IMAGE_SPEC,
   MAX_IMAGE_DATA_URL_CHARS,
   SEEDANCE_RESOLUTION,
   SUPPORTED_IMAGE_MIMES,
@@ -151,7 +152,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const objName = `${projectPrefix}/atlas/${stamp}-${suffix}.${ext}`;
         const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
         const b64 = src.split(",")[1] || "";
-        const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": mime }, body: base64ToUint8(b64) });
+        const bytes = base64ToUint8(b64);
+        // 모델이 받는 최대 크기를 넘으면 업로드 전에 끊는다(치수 검사는 클라이언트 게이트 담당).
+        if (bytes.byteLength > IMAGE_SPEC.maxBytes) {
+          throw new Error(`image_too_large_for_model: ${bytes.byteLength}`);
+        }
+        const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": mime }, body: bytes });
         if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
         return await signGcsUrl({ bucket: outParsedImg.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${objName}`));
       }
@@ -560,9 +566,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   } catch (e: any) {
     const msg = String(e?.message ?? "Unknown error");
     log('catch', msg, e?.stack);
-    // 지원하지 않는 이미지 형식은 서버 장애가 아니라 입력 오류다 → 400 으로 명확히 알려준다.
+    // 입력 문제는 서버 장애가 아니다 → 400 으로 명확히 알려준다.
     const mimeErr = /unsupported_image_mime:\s*([^\s"']+)/.exec(msg);
     if (mimeErr) return json({ error: "unsupported_image_mime", detail: mimeErr[1] }, 400);
+    const sizeErr = /image_too_large_for_model:\s*(\d+)/.exec(msg);
+    if (sizeErr) {
+      return json({ error: "image_too_large_for_model", bytes: Number(sizeErr[1]), maxBytes: IMAGE_SPEC.maxBytes }, 400);
+    }
     return json({ error: msg, stack: e?.stack ?? '' }, 500);
   }
 };

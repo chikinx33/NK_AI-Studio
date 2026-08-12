@@ -30,16 +30,17 @@ function parseModelTable(source, open, close) {
   const body = source.slice(start + open.length, end);
   const table = {};
   for (const line of body.split('\n')) {
-    const m = /^\s*["']?([\w-]+)["']?\s*:\s*(DURATIONS_[A-Z]+)\s*,?\s*$/.exec(line);
+    const m = /^\s*["']?([\w-]+)["']?\s*:\s*((?:DURATIONS|CHOICES)_[A-Z]+)\s*,?\s*$/.exec(line);
     if (m) table[m[1]] = m[2];
   }
   return table;
 }
 
-const SET_NAMES = ['DURATIONS_VEO', 'DURATIONS_KLING', 'DURATIONS_SEEDANCE', 'DURATIONS_VIDU'];
+// 프론트가 미러링하는 것은 "UI 선택지(CHOICES)" 쪽이다.
+const MIRRORED_SETS = ['DURATIONS_VEO', 'DURATIONS_KLING', 'CHOICES_SEEDANCE', 'DURATIONS_VIDU'];
 
-test('duration 집합 값이 서버 SSOT 와 프론트 미러에서 동일하다', () => {
-  for (const name of SET_NAMES) {
+test('UI 선택지 집합이 서버 SSOT 와 프론트 미러에서 동일하다', () => {
+  for (const name of MIRRORED_SETS) {
     const server = parseNumberArray(specSrc, `export const ${name}`, '=');
     const front = parseNumberArray(frontSrc, `var ${name}`, '=');
     assert.ok(server.length > 0, `${name} 서버 값이 비었습니다`);
@@ -47,14 +48,54 @@ test('duration 집합 값이 서버 SSOT 와 프론트 미러에서 동일하다
   }
 });
 
-test('모델 → duration 집합 매핑이 프론트/서버에서 동일하다', () => {
-  const server = parseModelTable(specSrc, 'export const MODEL_DURATIONS: Record<string, readonly number[]> = {', '};');
-  const front = parseModelTable(frontSrc, 'var MODEL_DURATIONS = {', '};');
-  assert.deepEqual(front, server, '모델별 허용 duration 매핑이 어긋났습니다');
-  // 실제로 UI 가 제공하는 모델이 표에 모두 있어야 한다
+test('모델 → UI 선택지 매핑이 프론트/서버에서 동일하다', () => {
+  const server = parseModelTable(specSrc, 'export const MODEL_DURATION_CHOICES: Record<string, readonly number[]> = {', '};');
+  const front = parseModelTable(frontSrc, 'var MODEL_DURATION_CHOICES = {', '};');
+  assert.deepEqual(front, server, '모델별 UI 선택지 매핑이 어긋났습니다');
   for (const id of ['veo', 'veo-full', 'grok', 'kling-final', 'seedance', 'seedance-r2v', 'wan', 'vidu-q3']) {
-    assert.ok(server[id], `${id} 의 허용 duration 이 정의되지 않았습니다`);
+    assert.ok(server[id], `${id} 의 UI 선택지가 정의되지 않았습니다`);
   }
+});
+
+test('UI 선택지는 공급자 허용 집합의 부분집합이다', () => {
+  const allowedTable = parseModelTable(specSrc, 'export const MODEL_DURATIONS: Record<string, readonly number[]> = {', '};');
+  const choiceTable = parseModelTable(specSrc, 'export const MODEL_DURATION_CHOICES: Record<string, readonly number[]> = {', '};');
+  const setValue = (name) => parseNumberArray(specSrc, `export const ${name}`, '=');
+
+  for (const [model, choiceSetName] of Object.entries(choiceTable)) {
+    const allowedSetName = allowedTable[model];
+    assert.ok(allowedSetName, `${model} 의 허용 집합이 없습니다`);
+    const allowed = setValue(allowedSetName);
+    const choices = setValue(choiceSetName);
+    for (const v of choices) {
+      assert.ok(allowed.includes(v), `${model}: UI 선택지 ${v}초가 허용 집합에 없습니다`);
+    }
+  }
+});
+
+test('Seedance 허용 duration 은 4~15 정수 전체다 (Atlas 확인값)', () => {
+  const allowed = parseNumberArray(specSrc, 'export const DURATIONS_SEEDANCE', '=');
+  assert.deepEqual(allowed, [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+});
+
+test('이미지 제약이 서버 SSOT 와 프론트 미러에서 동일하다', () => {
+  const grab = (source, key, re) => {
+    const m = new RegExp(`${key}\\s*:\\s*(${re})`).exec(source);
+    assert.ok(m, `${key} 를 찾지 못했습니다`);
+    return m[1].replace(/\s/g, '');
+  };
+  for (const [key, re] of [
+    ['minEdge', '[\\d_]+'], ['maxEdge', '[\\d_]+'],
+    ['minRatio', '[\\d.]+'], ['maxRatio', '[\\d.]+'],
+  ]) {
+    const server = grab(specSrc, key, re);
+    const front = grab(frontSrc, key, re);
+    assert.equal(front, server, `IMAGE_SPEC.${key} 가 프론트/서버에서 다릅니다`);
+  }
+  // mime 화이트리스트도 동일해야 한다
+  const mimeRe = /mimes:\s*\[([^\]]*)\]/;
+  const norm = (s) => s.replace(/['"\s]/g, '').split(',').filter(Boolean).sort();
+  assert.deepEqual(norm(mimeRe.exec(frontSrc)[1]), norm(mimeRe.exec(specSrc)[1]));
 });
 
 test('서버 분기들이 개별 클램프 대신 공유 스냅 함수를 쓴다', () => {
@@ -70,7 +111,7 @@ test('서버 분기들이 개별 클램프 대신 공유 스냅 함수를 쓴다
 });
 
 test('프론트 duration 선택지는 모델 표에서만 나온다', () => {
-  assert.match(frontSrc, /return MODEL_DURATIONS\[state\.model\] \|\| DURATIONS_VEO;/);
+  assert.match(frontSrc, /return MODEL_DURATION_CHOICES\[state\.model\] \|\| DURATIONS_VEO;/);
   // 선택지에 없는 값이 state 에 남지 않도록 렌더 시 스냅한다
   assert.match(frontSrc, /if \(durations\(\)\.indexOf\(state\.duration\) === -1\) state\.duration = durations\(\)\[0\];/);
 });

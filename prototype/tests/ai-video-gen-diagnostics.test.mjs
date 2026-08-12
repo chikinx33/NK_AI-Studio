@@ -62,9 +62,9 @@ test('새로고침 후 processing 카드는 폴링을 재개하거나 실패로 
 
 test('업로드 이미지는 형식 검사 + 다운스케일을 거친다', () => {
   const source = vgen();
-  assert.match(source, /function downscaleImageFile\(file, maxEdge, cb\)/);
+  assert.match(source, /function downscaleImageFile\(file, cb\)/);
   assert.match(source, /function acceptImageFile\(file, onReady\)/);
-  assert.match(source, /ALLOWED_IMAGE_TYPES = \['image\/png', 'image\/jpeg', 'image\/webp'\]/);
+  assert.match(source, /mimes:\s*\['image\/jpeg', 'image\/png', 'image\/webp'\]/);
   assert.match(source, /toDataURL\('image\/jpeg', 0\.9\)/);
   // 시작/끝 프레임과 레퍼런스 슬롯 모두 적용
   const uses = source.match(/acceptImageFile\(file, function \(dataUrl\)/g) || [];
@@ -72,6 +72,110 @@ test('업로드 이미지는 형식 검사 + 다운스케일을 거친다', () =
   // 원본을 그대로 읽어 state 에 넣던 경로가 남아 있지 않다
   assert.doesNotMatch(source, /state\.startImageUrl = ev\.target\.result/);
   assert.doesNotMatch(source, /state\.referenceUrls\[idx\] = ev\.target\.result/);
+});
+
+// ── P6: 공급자 이미지 제약 게이트 ─────────────────────────────
+// Atlas 는 변 길이 300~6000px, 종횡비 0.4~2.5 를 요구한다. 긴 변만 맞추면
+// 가로로 긴 이미지의 짧은 변이 300 아래로 떨어져 조용히 거부당한다.
+
+test('축소 배율은 짧은 변 하한을 긴 변 상한보다 먼저 보장한다', () => {
+  const source = vgen();
+  assert.match(source, /function targetScale\(w, h\)/);
+  assert.match(source, /if \(shortEdge \* scale < IMAGE_SPEC\.minEdge\) scale = IMAGE_SPEC\.minEdge \/ shortEdge;/);
+  assert.match(source, /if \(longEdge \* scale > IMAGE_SPEC\.maxEdge\) scale = IMAGE_SPEC\.maxEdge \/ longEdge;/);
+  // 짧은 변 보정이 긴 변 상한보다 먼저 와야 상한이 최종적으로 이긴다
+  assert.ok(
+    source.indexOf('IMAGE_SPEC.minEdge / shortEdge') < source.indexOf('IMAGE_SPEC.maxEdge / longEdge'),
+    '짧은 변 보정이 긴 변 상한보다 뒤에 있습니다'
+  );
+});
+
+test('통과 경로도 용량이 아니라 치수로 판정한다', () => {
+  const source = vgen();
+  assert.match(source, /function fitsSpecAsIs\(w, h, chars\)/);
+  assert.match(source, /shortEdge >= IMAGE_SPEC\.minEdge/);
+  assert.match(source, /longEdge <= Math\.min\(IMAGE_SPEC\.maxEdge, IMAGE_MAX_EDGE\)/);
+  // 용량만 보고 통과시키던 예전 경로가 남아 있지 않다
+  assert.doesNotMatch(source, /IMAGE_PASSTHRU_CHARS/);
+});
+
+test('지원 범위를 벗어난 종횡비는 업로드 시점에 거부한다', () => {
+  const source = vgen();
+  assert.match(source, /if \(ratio < IMAGE_SPEC\.minRatio \|\| ratio > IMAGE_SPEC\.maxRatio\)/);
+  assert.match(source, /t\('image_ratio_alert'\)/);
+  assert.match(source, /가로세로 비율이 모델 지원 범위\(0\.4~2\.5\)/);
+  assert.match(source, /aspect ratio is outside the supported range \(0\.4–2\.5\)/);
+});
+
+test('과도한 업스케일은 진행 여부를 묻는다', () => {
+  const source = vgen();
+  assert.match(source, /UPSCALE_WARN_FACTOR = 2/);
+  assert.match(source, /if \(scale > UPSCALE_WARN_FACTOR\)/);
+  assert.match(source, /window\.confirm\(t\('image_upscale_confirm'\)/);
+});
+
+test('이미지 검사는 함수 하나로 두고 슬롯이 그것만 호출한다', () => {
+  const source = vgen();
+  // 게이트 로직(종횡비/치수)은 downscaleImageFile 안에만 있어야 한다
+  const gateHits = source.match(/IMAGE_SPEC\.minRatio/g) || [];
+  assert.equal(gateHits.length, 1, '종횡비 검사가 여러 곳에 복제됐습니다');
+  const scaleHits = source.match(/function targetScale/g) || [];
+  assert.equal(scaleHits.length, 1);
+});
+
+test('서버는 모델 상한(30MB)을 넘는 이미지를 400 으로 반려한다', () => {
+  const source = videoApi();
+  assert.match(source, /if \(bytes\.byteLength > IMAGE_SPEC\.maxBytes\)/);
+  assert.match(source, /image_too_large_for_model/);
+  assert.match(source, /return json\(\{ error: "image_too_large_for_model"/);
+});
+
+// ── P7: 재시도 UX ────────────────────────────────────────────
+
+test('스냅샷이 없으면 재시도 버튼이 무엇이 복원되는지 알린다', () => {
+  const source = vgen();
+  assert.match(source, /var hasSnap = !!_retryInputs\[r\.id\];/);
+  assert.match(source, /hasSnap \? t\('retry'\) : t\('retry_settings_only'\)/);
+});
+
+test('이미지가 필요한데 스냅샷이 없으면 생성 대신 안내·포커스', () => {
+  const source = vgen();
+  assert.match(source, /if \(!snap && requiredInputMissing\(\)\) \{/);
+  assert.match(source, /focusImageSlot\(\);/);
+  assert.match(source, /window\.alert\(t\('retry_no_image'\)\)/);
+  // 생성 필수 입력 판정은 한 곳에서만 (생성 버튼과 재시도가 같은 규칙)
+  assert.match(source, /function requiredInputMissing\(\)/);
+  assert.match(source, /var missingKey = requiredInputMissing\(\);/);
+});
+
+// ── P8: 미러링 스킵 표시 ─────────────────────────────────────
+
+test('미러링을 건너뛴 결과는 완료로 위장하지 않는다', () => {
+  const source = vgen();
+  assert.match(source, /mirrored: !!objectName/);
+  assert.match(source, /r\.status === 'done' && r\.mirrored === false/);
+  assert.match(source, /t\('badge_temp_link'\)/);
+  assert.match(read('prototype/ai-video-gen-stage.html'), /\.vgen-badge--temp \{/);
+});
+
+test('임시 링크 결과는 mount 때 재-미러링을 1회 시도한다', () => {
+  const source = vgen();
+  assert.match(source, /function tryRemirror\(r\)/);
+  assert.match(source, /if \(_remirrorTried\[r\.id\]\) return;/);
+  assert.match(source, /_remirrorTried\[r\.id\] = true;/);
+  // 성공하면 objectName 을 채우고 뱃지를 없앤다
+  assert.match(source, /updateResult\(r\.id, \{ videoObjectName: objectName, rawVideoUrl: rawUrl, mirrored: true \}\)/);
+  assert.match(source, /state\.results\.forEach\(tryRemirror\);/);
+});
+
+// ── 지원 길이 안내 ───────────────────────────────────────────
+
+test('모델 설명에 지원 길이를 표에서 만들어 붙인다', () => {
+  const source = vgen();
+  assert.match(source, /function durationNote\(\)/);
+  assert.match(source, /desc \+ ' ' \+ durationNote\(\)/);
+  assert.match(source, /'\(지원 길이: ' \+ list \+ '초\)'/);
+  assert.match(source, /'\(Supported lengths: ' \+ list \+ 's\)'/);
 });
 
 test('base64 디코드는 청크 단위다 (Worker 1102 방지)', () => {
