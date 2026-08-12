@@ -32,7 +32,8 @@ import {
   writeCompanyBytes,
   FORMS_ROOT,
   OUTPUT_ROOT,
-  SUPPLIER_PATH,
+  SUPPLIER_PATHS,
+  FORMS_ROOTS,
   type CompanyStorage,
 } from "./_form-registry";
 import { renderDocx, DOCX_CONTENT_TYPE } from "./_render-docx";
@@ -1728,7 +1729,12 @@ async function loadFormSupplier(storage: CompanyStorage): Promise<QuoteSupplier>
     payment: { bank: "", accountHolder: "", accountNo: "" },
   };
   try {
-    const raw = await readCompanyText(storage, SUPPLIER_PATH);
+    // 폴더 이름을 바꿨을 수 있다('_회사정보' → '회사정보'). 후보를 차례로 본다.
+    let raw: string | null = null;
+    for (const path of SUPPLIER_PATHS) {
+      raw = await readCompanyText(storage, path).catch(() => null);
+      if (raw) break;
+    }
     if (!raw) return empty;
     const parsed = JSON.parse(raw);
     const source = parsed?.supplier && typeof parsed.supplier === "object" ? parsed.supplier : parsed;
@@ -1860,7 +1866,7 @@ export async function runFormListTool(_input: any, ctx: ToolContext): Promise<an
     problems,
     hint: forms.length
       ? "form_fill 에 formId 와 formats(docx·xlsx·pdf)를 넘겨 문서를 만드세요."
-      : `회사 파일의 '${FORMS_ROOT}' 폴더에 서식 폴더(manifest.json + 템플릿)를 올리면 여기 나타나요.`,
+      : `회사 파일의 ${FORMS_ROOTS.map((root) => `'${root}'`).join(" 또는 ")} 폴더에 서식 폴더(manifest.json + 템플릿)를 올리면 여기 나타나요.`,
   };
 }
 

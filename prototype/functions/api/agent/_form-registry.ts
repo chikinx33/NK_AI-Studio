@@ -11,10 +11,20 @@ import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 
 const GCS_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
-/** `_서식/` — 서식 저장소 루트(회사 파일 기준 상대 경로). */
-export const FORMS_ROOT = "_서식";
-/** 공급자(우리 회사) 정보 파일(§7.2 2단계). */
-export const SUPPLIER_PATH = "_회사정보/공급자.json";
+/**
+ * 서식 저장소 루트 후보 — 앞에 있는 것이 기본 이름이다.
+ *
+ * 사용자가 파일 탐색기에서 폴더 이름을 바꿀 수 있는 자리다(실제로 '_서식' → '서식' 으로 바꿨다).
+ * 이름 하나를 코드에 박아 두면 그 순간 서식이 통째로 사라진 것처럼 보인다 — 그래서 후보를 훑는다.
+ * 새 이름을 쓰고 싶으면 맨 앞에 넣으면 되고, 옛 이름은 뒤에 남겨 두면 예전 파일도 계속 읽힌다.
+ */
+export const FORMS_ROOTS = ["서식", "_서식"];
+/** 목록이 비었을 때 안내에 쓰는 기본 이름. */
+export const FORMS_ROOT = FORMS_ROOTS[0];
+
+/** 공급자(우리 회사) 정보 파일 후보(§7.2 2단계). 폴더 이름 변경을 같은 방식으로 따라간다. */
+export const SUPPLIER_PATHS = ["회사정보/공급자.json", "_회사정보/공급자.json"];
+export const SUPPLIER_PATH = SUPPLIER_PATHS[0];
 /** 생성 문서가 저장되는 곳. 업무 탐색기의 날짜 폴더와 같은 이름 규칙. */
 export const OUTPUT_ROOT = "업무";
 
@@ -48,8 +58,10 @@ export interface FormManifest {
   outputName: string;
   maxItemRows: number;
   description: string;
-  /** 이 서식이 들어 있는 `_서식/` 하위 폴더 이름 (formId 와 다를 수 있다). */
+  /** 이 서식이 들어 있는 하위 폴더 이름 (formId 와 다를 수 있다). */
   folder: string;
+  /** 그 폴더가 들어 있는 서식 루트('서식' 또는 '_서식'). 템플릿을 읽을 때 쓴다. */
+  root: string;
   /** 어떻게 찾았는지. exact 가 아니면 사용자에게 알린다(조용히 다른 서식을 쓰지 않기 위해). */
   matchedBy?: "exact" | "folder" | "name" | "normalized" | "tokens" | "only-one";
   /** 호출자가 실제로 요청했던 id (보정된 경우에만 채운다). */
@@ -166,19 +178,19 @@ export async function writeCompanyBytes(
 const REQUIRED_KEYS = ["formId", "name", "dataSchema", "calculator", "templates"] as const;
 
 /** manifest.json 파싱 — 필수 키가 없으면 서식을 만든 사람이 바로 고칠 수 있게 말해 준다(§2.2). */
-export function parseManifest(raw: string, folder: string): FormManifest {
+export function parseManifest(raw: string, folder: string, root: string = FORMS_ROOT): FormManifest {
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
   } catch (error: any) {
-    throw new Error(`_서식/${folder}/manifest.json 이 올바른 JSON 이 아니에요: ${String(error?.message || error)}`);
+    throw new Error(`${root}/${folder}/manifest.json 이 올바른 JSON 이 아니에요: ${String(error?.message || error)}`);
   }
   const missingKeys = REQUIRED_KEYS.filter((key) => parsed?.[key] === undefined || parsed?.[key] === null || parsed?.[key] === "");
   if (missingKeys.length) {
-    throw new Error(`_서식/${folder}/manifest.json 에 필수 항목이 없어요: ${missingKeys.join(", ")}`);
+    throw new Error(`${root}/${folder}/manifest.json 에 필수 항목이 없어요: ${missingKeys.join(", ")}`);
   }
   if (typeof parsed.templates !== "object" || Array.isArray(parsed.templates)) {
-    throw new Error(`_서식/${folder}/manifest.json 의 templates 는 {"docx": "template.docx"} 형태의 객체여야 해요.`);
+    throw new Error(`${root}/${folder}/manifest.json 의 templates 는 {"docx": "template.docx"} 형태의 객체여야 해요.`);
   }
   const templates: Record<string, string | null> = {};
   for (const [format, file] of Object.entries(parsed.templates)) {
@@ -187,7 +199,7 @@ export function parseManifest(raw: string, folder: string): FormManifest {
   const repeaters: Record<string, FormRepeater> = {};
   for (const [prefix, config] of Object.entries(parsed.repeaters || {})) {
     const source = String((config as any)?.source || "").trim();
-    if (!source) throw new Error(`_서식/${folder}/manifest.json 의 repeaters.${prefix} 에 source 가 없어요.`);
+    if (!source) throw new Error(`${root}/${folder}/manifest.json 의 repeaters.${prefix} 에 source 가 없어요.`);
     repeaters[String(prefix)] = { source, maxRows: Math.max(1, Number((config as any)?.maxRows || 20) || 20) };
   }
   const name = String(parsed.name);
@@ -207,6 +219,7 @@ export function parseManifest(raw: string, folder: string): FormManifest {
     maxItemRows: Math.max(1, Number(parsed.maxItemRows || itemRowSource?.maxRows || 20) || 20),
     description: String(parsed.description || ""),
     folder,
+    root,
   };
 }
 
@@ -215,19 +228,24 @@ export function parseManifest(raw: string, folder: string): FormManifest {
  * 하나가 잘못됐다고 나머지 서식까지 못 쓰게 만들지 않는다.
  */
 export async function listForms(storage: CompanyStorage): Promise<{ forms: FormManifest[]; problems: { folder: string; error: string }[] }> {
-  const folders = await listSubfolders(storage, FORMS_ROOT);
   const forms: FormManifest[] = [];
   const problems: { folder: string; error: string }[] = [];
-  for (const folder of folders) {
-    try {
-      const raw = await readCompanyText(storage, `${FORMS_ROOT}/${folder}/manifest.json`);
-      if (raw === null) {
-        problems.push({ folder, error: "manifest.json 이 없어요." });
-        continue;
+  for (const root of FORMS_ROOTS) {
+    const folders = await listSubfolders(storage, root).catch(() => [] as string[]);
+    for (const folder of folders) {
+      // 같은 formId 가 두 루트에 다 있으면 앞 후보(기본 이름)를 쓴다.
+      try {
+        const raw = await readCompanyText(storage, `${root}/${folder}/manifest.json`);
+        if (raw === null) {
+          problems.push({ folder: `${root}/${folder}`, error: "manifest.json 이 없어요." });
+          continue;
+        }
+        const manifest = parseManifest(raw, folder, root);
+        if (forms.some((existing) => existing.formId === manifest.formId)) continue;
+        forms.push(manifest);
+      } catch (error: any) {
+        problems.push({ folder: `${root}/${folder}`, error: String(error?.message || error) });
       }
-      forms.push(parseManifest(raw, folder));
-    } catch (error: any) {
-      problems.push({ folder, error: String(error?.message || error) });
     }
   }
   return { forms, problems };
@@ -286,14 +304,20 @@ export async function findForm(storage: CompanyStorage, formId: string): Promise
   if (!wanted) throw new Error("어떤 서식인지(formId) 알려주세요. form_list 로 목록을 먼저 확인하세요.");
 
   // 폴더 이름이 그대로 오면 목록 스캔 없이 바로 읽는다(빠른 경로).
-  const direct = await readCompanyText(storage, `${FORMS_ROOT}/${wanted}/manifest.json`).catch(() => null);
-  if (direct !== null) return { ...parseManifest(direct, wanted), matchedBy: "folder" };
+  for (const root of FORMS_ROOTS) {
+    const direct = await readCompanyText(storage, `${root}/${wanted}/manifest.json`).catch(() => null);
+    if (direct !== null) return { ...parseManifest(direct, wanted, root), matchedBy: "folder" };
+  }
 
   const { forms } = await listForms(storage);
   const found = matchForm(forms, wanted);
   if (!found) {
     const known = forms.map((form) => `${form.formId}(${form.name})`).join(", ") || "등록된 서식 없음";
-    throw new Error(`'${wanted}' 서식을 찾지 못했어요. form_list 로 목록을 확인하세요. 현재 등록: ${known}`);
+    // 어디를 봤는지까지 말해 준다 — 폴더 이름이 달라서 못 찾는 경우가 실제로 있었다.
+    throw new Error(
+      `'${wanted}' 서식을 찾지 못했어요. 회사 파일의 ${FORMS_ROOTS.map((root) => `'${root}/'`).join(" · ")} 폴더를 봤어요. ` +
+      `현재 등록: ${known}. form_list 로 목록을 확인하세요.`
+    );
   }
   return found;
 }
@@ -317,7 +341,7 @@ export async function loadTemplate(
 ): Promise<Uint8Array | null> {
   const fileName = manifest.templates[String(format).toLowerCase()];
   if (!fileName) return null;
-  const path = `${FORMS_ROOT}/${manifest.folder}/${fileName}`;
+  const path = `${manifest.root || FORMS_ROOT}/${manifest.folder}/${fileName}`;
   const bytes = await readCompanyBytes(storage, path);
   if (!bytes) {
     throw new Error(`서식 템플릿 파일이 없어요: ${path} — 회사 파일의 그 폴더에 올려 주세요.`);
