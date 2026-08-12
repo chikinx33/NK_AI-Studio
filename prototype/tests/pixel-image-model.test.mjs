@@ -28,7 +28,12 @@ test("실제 사용 모델과 폴백 사실을 결과 문구에 노출한다", (
   assert.match(src, /function modelNote\(output: any\): string/);
   assert.match(src, /if \(!from\) return ` \(모델: \$\{model\}\)`/);
   assert.match(src, /⚠️ \$\{from\} 호출이 막혀 \$\{model\} 로 대체했어요/);
-  assert.match(src, /✅ \$\{r\.tool\} 작업 완료\. 검수 패널에서 확인하세요\.\$\{modelNote\(result\.output\)\}/);
+  // 완료 문구는 _tool-messages.ts 로 옮겼다 — 모델 표기는 그리로 전달돼 그대로 붙는다.
+  assert.match(src, /toolDoneText\(r\.tool, result\.output, modelNote\(result\.output\)\)/);
+  assert.match(
+    read("prototype/functions/api/agent/_tool-messages.ts"),
+    /✅ \$\{tool\} 작업 완료\. 검수 패널에서 확인하세요\.\$\{extra\}/
+  );
   // 폴백 판단에 필요한 필드를 도구 출력에 실어 올린다
   assert.match(shared(), /providerFallbackFrom: data\.providerFallbackFrom \|\| ""/);
   assert.match(shared(), /fallbackReason: data\.openaiError\?\.message \|\| data\.openaiError\?\.hint \|\| ""/);

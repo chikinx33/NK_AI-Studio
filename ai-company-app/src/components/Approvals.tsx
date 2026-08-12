@@ -99,11 +99,19 @@ export default function Approvals({
   onPickCategory,
   onAgentSay,
   centerView,
+  extraPending,
+  extraPendingCount = 0,
 }: {
   onPickCategory?: (key: KnowKey | null) => void;
   onAgentSay?: (m: AgentMessage) => void;
   /** 현재 보고 있는 중앙 화면 — 바뀌면(=다른 페이지로 이동) 신규 지식 강조를 해제한다. */
   centerView?: string;
+  /**
+   * 승인 목록 맨 위에 끼워 넣을 카드 — '아직 만들지 않았고 진행하려면 사람의 입력이 필요한' 것.
+   * 규칙: 승인 = 진행하겠다는 허락, 보고 = 끝난 결과물. 만들기 전 단계는 전부 여기로 온다.
+   */
+  extraPending?: React.ReactNode;
+  extraPendingCount?: number;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   const [history, setHistory] = useState<ApprovalItem[]>([]);
@@ -309,7 +317,7 @@ export default function Approvals({
 
     <CollapsibleSection
       storageKey="nk_collapse_approvals"
-      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length})</span>}
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length + extraPendingCount})</span>}
       right={pending.length > 0 ? (
         <button
           onClick={async () => {
@@ -329,9 +337,10 @@ export default function Approvals({
         </button>
       ) : undefined}
     >
-      {pending.length === 0 && (
+      {pending.length === 0 && extraPendingCount === 0 && (
         <div className="text-xs text-gray-500 mb-2">대기 중인 승인이 없어요.</div>
       )}
+      {extraPending}
       <div className="space-y-2">
         {pending.map((a) => (
           <div key={a.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">

@@ -416,7 +416,48 @@ function DocCard({
   );
 }
 
-export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: AgentMessage) => void; refreshKey?: number }) {
+/**
+ * 승인 패널에 끼워 넣는 '정보 필요' 카드 묶음.
+ * 아직 문서가 없으므로 다운로드·검토 버튼은 없다 — 값을 채워 진행할지 말지만 정한다.
+ */
+export function PendingFormRequests({
+  items,
+  onAgentSay,
+  onChanged,
+}: {
+  items: ResultItem[];
+  onAgentSay?: (m: AgentMessage) => void;
+  onChanged?: () => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="mb-2 space-y-2">
+      {items.map((it) => (
+        <FormCard
+          key={it.id}
+          it={it}
+          onReview={() => {}}
+          onCancel={() => {
+            void cancelResult(it.id).then((result) => {
+              if (result?.message && onAgentSay) onAgentSay(result.message);
+              onChanged?.();
+            }).catch(() => {});
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
+  onAgentSay?: (m: AgentMessage) => void;
+  refreshKey?: number;
+  /**
+   * '아직 만들지 않았고 사람 입력을 기다리는' 항목을 위로 올려보낸다.
+   * ★보고에는 끝난 결과물만 남긴다 — 만들기 전 단계는 승인 쪽에서 다룬다.
+   */
+  onPendingRequests?: (items: ResultItem[]) => void;
+}) {
   const [items, setItems] = useState<ResultItem[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -514,27 +555,16 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
     .filter((it) => it.reviewStatus !== "pending" && it.createdAt >= startOfToday)
     .slice(0, 5);
 
+  // '만들기 전' 항목은 승인 쪽에서 보여준다(보고 = 끝난 결과물만).
+  const needsInputKey = needsInput.map((it) => it.id).join(",");
+  useEffect(() => {
+    onPendingRequests?.(needsInput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsInputKey]);
+
   // 보고 패널은 빈 상태여도 항상 표시(원본과 동일).
   return (
     <>
-    {needsInput.length > 0 && (
-      <CollapsibleSection
-        storageKey="nk_collapse_needs_input"
-        header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 이어서 할 일 ({needsInput.length})</span>}
-      >
-        <div className="mb-2 text-[11px] text-gray-500">값이 모자라 아직 만들지 않았어요. 알려주시면 이어서 만들어요.</div>
-        <div className="space-y-2">
-          {needsInput.map((it) => (
-            <FormCard
-              key={it.id}
-              it={it}
-              onReview={(action) => reviewInline(it, action)}
-              onCancel={() => cancelInline(it)}
-            />
-          ))}
-        </div>
-      </CollapsibleSection>
-    )}
     <CollapsibleSection
       storageKey="nk_collapse_results"
       header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})</span>}

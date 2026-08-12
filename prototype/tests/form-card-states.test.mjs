@@ -81,13 +81,6 @@ test("★승인 버튼이 무엇을 하는지 화면에 쓰여 있다 (툴팁 �
   assert.match(results, /저장하면 업무 파일 .* 폴더에 정리돼요/);
 });
 
-test("★needs_input 은 '보고'가 아니라 '이어서 할 일' 묶음으로 간다", () => {
-  const results = read("ai-company-app/src/components/Results.tsx");
-  assert.match(results, /const needsInput = waiting\.filter\(/);
-  assert.match(results, /const pending = waiting\.filter\(\(it\) => !needsInput\.includes\(it\)\)/);
-  assert.match(results, /이어서 할 일 \(\{needsInput\.length\}\)/);
-});
-
 test("미리보기 없이 승인만 두지 않는다 — 미리보기가 승인보다 먼저 나온다", () => {
   const results = read("ai-company-app/src/components/Results.tsx");
   const card = results.slice(results.indexOf("function FormCard({"), results.indexOf("// ── 문서 카드 ─"));
@@ -119,4 +112,52 @@ test("이어서 만들기는 채팅에 채우기만 하고 보내지 않는다",
   assert.match(chat, /setDraft\(text\)/);
   const handler = chat.slice(chat.indexOf('action.action !== "chat.prefill"'), chat.indexOf('}, "chat-prefill")'));
   assert.equal(handler.includes("submit("), false, "채우기만 해야 하는데 전송까지 한다");
+});
+
+// ── 승인 vs 보고 — 진행 허락은 승인, 끝난 결과물은 보고 ─────────────────────
+
+const { toolDoneText } = await import(
+  pathToFileURL(join(repoRoot, "prototype/functions/api/agent/_tool-messages.ts")).href
+);
+
+test("★아직 안 만든 것을 '완료'라고 하지 않는다", () => {
+  const text = toolDoneText("form_fill", { kind: "form", status: "needs_input" });
+  assert.doesNotMatch(text, /완료/);
+  assert.doesNotMatch(text, /검수/);
+  assert.match(text, /아직 만들지 않았어요/);
+  assert.match(text, /승인/); // 어디로 가야 하는지 알려준다
+});
+
+test("정말 만들어졌을 때만 '완료'라 하고 보고로 안내한다", () => {
+  const text = toolDoneText("form_fill", { kind: "form", status: "ready", formName: "견적서 (표준)" });
+  assert.match(text, /견적서 \(표준\) 작성 완료/);
+  assert.match(text, /보고/);
+  // 다른 도구는 기존 문구 유지
+  assert.match(toolDoneText("image", { kind: "image" }), /작업 완료/);
+});
+
+test("★'정보 필요' 카드는 보고가 아니라 승인 쪽으로 올라간다", () => {
+  const results = read("ai-company-app/src/components/Results.tsx");
+  // 보고 목록(pending)에서 빠지고, 위로 올려보낸다
+  assert.match(results, /const pending = waiting\.filter\(\(it\) => !needsInput\.includes\(it\)\)/);
+  assert.match(results, /onPendingRequests\?\.\(needsInput\)/);
+  assert.match(results, /export function PendingFormRequests/);
+  // 보고 안에 '이어서 할 일' 섹션을 따로 만들지 않는다
+  assert.doesNotMatch(results, /이어서 할 일/);
+
+  const app = read("ai-company-app/src/App.tsx");
+  assert.match(app, /extraPending=\{/);
+  assert.match(app, /<PendingFormRequests/);
+  assert.match(app, /onPendingRequests=\{setPendingFormRequests\}/);
+
+  const approvals = read("ai-company-app/src/components/Approvals.tsx");
+  assert.match(approvals, /승인 \(\{pending\.length \+ extraPendingCount\}\)/);
+  assert.match(approvals, /\{extraPending\}/);
+});
+
+test("승인 카드에는 검토 승인 버튼이 없다 (만들어진 게 없으니 검토할 것도 없다)", () => {
+  const results = read("ai-company-app/src/components/Results.tsx");
+  const block = results.slice(results.indexOf("export function PendingFormRequests"), results.indexOf("export default function Results"));
+  assert.match(block, /onReview=\{\(\) => \{\}\}/); // 검토 동작을 넘기지 않는다
+  assert.doesNotMatch(block, /FormDownloadButtons/);
 });

@@ -48,7 +48,7 @@ import {
   archiveSkillByName,
   restoreSkill,
 } from "./_shared";
-import { toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
+import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
 
@@ -1484,11 +1484,9 @@ export async function runGroupChat(
       });
       const result = await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
       if (result.ok) {
-        const doneText =
-          result.gated ? `🔐 이 작업은 승인이 필요해요. 오른쪽 **승인 패널**에서 승인하면 그때 실제로 실행할게요.`
-          : r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
-          : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
-          : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.${modelNote(result.output)}`;
+        const doneText = result.gated
+          ? `🔐 이 작업은 승인이 필요해요. 오른쪽 **승인 패널**에서 승인하면 그때 실제로 실행할게요.`
+          : toolDoneText(r.tool, result.output, modelNote(result.output));
         // 도구가 무언가를 보정했으면(예: formId) 그 사실을 사람과 다음 턴 컨텍스트에 남긴다.
         const notice = String((result.output as any)?.notice || "").trim();
         await emit({

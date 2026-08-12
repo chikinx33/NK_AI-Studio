@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
-import Results from "./components/Results";
+import Results, { PendingFormRequests } from "./components/Results";
+import type { ResultItem } from "./lib/api";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
 import Dashboard from "./components/Dashboard";
@@ -187,6 +188,8 @@ export default function App() {
   const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | "스킬" | null>(null);
   const [knowFilterNonce, setKnowFilterNonce] = useState(0);
   const [resultsRefreshKey, setResultsRefreshKey] = useState(0);
+  // '아직 만들지 않았고 값을 기다리는' 서식 요청 — 승인 쪽에 보여준다(보고 = 끝난 결과물만).
+  const [pendingFormRequests, setPendingFormRequests] = useState<ResultItem[]>([]);
   const [reminders, setReminders] = useState<DueReminder[]>([]); // 예정된 알람(예약 패널)
   function openKnowledgeCategory(key: "원칙" | "사실" | "결정" | "스킬" | null) {
     setKnowFilter(key);
@@ -1346,6 +1349,18 @@ export default function App() {
             />
             <Approvals
               centerView={centerView}
+              extraPendingCount={pendingFormRequests.length}
+              extraPending={
+                <PendingFormRequests
+                  items={pendingFormRequests}
+                  onAgentSay={(m) => {
+                    presentCompletedAgentTurns([
+                      { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
+                    ]);
+                  }}
+                  onChanged={() => setResultsRefreshKey((k) => k + 1)}
+                />
+              }
               onPickCategory={openKnowledgeCategory}
               onAgentSay={(m) => {
                 presentCompletedAgentTurns([
@@ -1359,6 +1374,7 @@ export default function App() {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Results
               refreshKey={resultsRefreshKey}
+              onPendingRequests={setPendingFormRequests}
               onAgentSay={(m) => {
                 presentCompletedAgentTurns([
                   { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
