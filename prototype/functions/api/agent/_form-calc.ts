@@ -485,6 +485,61 @@ export function knownCalculators(): string[] {
   return Object.keys(CALCULATORS);
 }
 
+// ── 렌더 차단 (§6 공통 규칙) ─────────────────────────────────────────────────
+// "missing 이 있으면 렌더러 진입 즉시 return" 은 렌더러 4곳 모두에 있어야 한다.
+// 위쪽(runFormFillTool)에서 이미 막지만 그건 방어선 하나다. 렌더러를 직접 부르는 코드가
+// 하나라도 생기면 반쯤 빈 견적서가 고객에게 나갈 수 있어서, 렌더러 자체도 거절하게 만든다.
+
+const MISSING_FIELD_LABELS: Record<string, string> = {
+  name: "품명",
+  qty: "수량",
+  unitPrice: "단가",
+  "client.company": "고객사 이름",
+  "supplier.name": "우리 회사 정보(_회사정보/공급자.json)",
+  items: "견적 항목",
+};
+
+/** 무엇이 비었는지 사람 말로 한 줄. 항목마다 따로 나열하지 않고 필드별로 묶는다. */
+export function describeMissing(missing: FormMissing[] | undefined | null): string {
+  if (!missing?.length) return "";
+  const byLabel = new Map<string, number[]>();
+  for (const entry of missing) {
+    const label = entry.reason === "overflow"
+      ? "서식의 행 수보다 많은 항목"
+      : MISSING_FIELD_LABELS[entry.field] || entry.field;
+    const rows = byLabel.get(label) || [];
+    if (typeof entry.index === "number") rows.push(entry.index + 1);
+    byLabel.set(label, rows);
+  }
+  return [...byLabel.entries()]
+    .map(([label, rows]) => (rows.length ? `${label}(${rows.join("·")}번 항목)` : label))
+    .join(", ");
+}
+
+/**
+ * 부족한 값이 있으면 문서를 만들지 않는다. 렌더러 맨 앞에서 부른다.
+ * quote 든 view 든 missing 배열만 있으면 된다.
+ */
+export function assertRenderable(source: any, formatLabel: string): void {
+  const missing: FormMissing[] | undefined = Array.isArray(source?.missing)
+    ? source.missing
+    : Array.isArray(source?.data?.missing)
+      ? source.data.missing
+      : undefined;
+  if (!missing?.length) return;
+  // 행 넘침은 '비어 있음'이 아니라 '너무 많음'이다 — 할 일이 다르니 문구도 다르게.
+  const overflow = missing.find((entry) => entry.reason === "overflow");
+  if (overflow) {
+    throw new Error(
+      `${formatLabel}: 항목이 서식의 행 수를 넘습니다. 서식의 행을 늘리거나 항목을 줄여 주세요.`
+    );
+  }
+  throw new Error(
+    `아직 ${formatLabel} 를 만들 수 없어요 — ${describeMissing(missing)}이(가) 비어 있어요. ` +
+    "부족한 값을 알려주시면 바로 만들어 드릴게요."
+  );
+}
+
 // ── 템플릿에 넘길 뷰 ─────────────────────────────────────────────────────────
 // 템플릿 작성자가 알아야 할 키는 설계서 §9 와 이 함수뿐이다.
 //   단순 값   {docNo} {client.company} {supplier.bizType} {totals.grandTotalText} {notes}
@@ -518,6 +573,8 @@ function buildQuoteViewNested(quote: Quote | any): Record<string, any> {
   const discount = normalizeDiscount(quote?.discount);
 
   return {
+    // 렌더러가 스스로 "이건 못 만든다"를 판단할 수 있게 결손 목록도 함께 넘긴다(§6 이중 방어).
+    missing: Array.isArray(quote?.missing) ? quote.missing : [],
     docNo: String(quote?.docNo || ""),
     issuedAt: String(quote?.issuedAt || ""),
     validUntil: String(quote?.validUntil || ""),

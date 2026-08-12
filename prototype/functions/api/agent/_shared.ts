@@ -8,6 +8,7 @@ import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
+  assertRenderable,
   buildQuoteView,
   defaultQuoteTerms,
   formatKrw,
@@ -1645,7 +1646,9 @@ function docConvertConfig(env: any): { url: string; token: string } | null {
  * DOCX bytes → PDF bytes. 콜드스타트 때문에 첫 요청이 오래 걸릴 수 있어 90초까지 기다리고
  * 실패하면 1회만 다시 시도한다(설계서 §6.4). 그래도 안 되면 던진다 — 호출부가 DOCX 는 살린다.
  */
-async function convertDocxToPdf(env: any, docx: Uint8Array, sourceFormat: string): Promise<Uint8Array> {
+async function convertDocxToPdf(env: any, docx: Uint8Array, sourceFormat: string, source?: any): Promise<Uint8Array> {
+  // ★부족한 값이 있으면 변환도 시작하지 않는다(§6 — 렌더러 4곳 모두).
+  assertRenderable(source, "PDF");
   const config = docConvertConfig(env);
   if (!config) {
     throw new Error("PDF 변환 서비스가 설정되지 않았어요(DOC_CONVERT_URL·DOC_CONVERT_TOKEN).");
@@ -2010,7 +2013,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     const sourceFormat = FORM_FORMATS[manifest.pdfFrom] ? manifest.pdfFrom : "docx";
     try {
       const source = await renderFormat(sourceFormat);
-      await save("pdf", await convertDocxToPdf(ctx.env, source, sourceFormat));
+      await save("pdf", await convertDocxToPdf(ctx.env, source, sourceFormat, data));
     } catch (error: any) {
       // ★PDF 하나 때문에 나머지를 버리지 않는다. 만든 파일은 그대로 주고 사람에게 방법을 알려준다.
       warnings.push(

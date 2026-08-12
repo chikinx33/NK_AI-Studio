@@ -81,9 +81,9 @@ const QUOTE = {
   notes: "",
 };
 
-function renderQuote(overrides = {}) {
+function renderQuote(overrides = {}, options = { maxItemRows: 20 }) {
   const quote = { ...QUOTE, ...overrides };
-  const { totals, missing } = computeQuoteTotals(quote, { maxItemRows: 20 });
+  const { totals, missing } = computeQuoteTotals(quote, options);
   quote.totals = totals;
   quote.missing = missing;
   return { quote, bytes: renderDocx(buildTemplateDocx(), buildQuoteView(quote)) };
@@ -102,9 +102,10 @@ test("템플릿의 단순 태그와 항목 표가 값으로 채워진다", () =>
   assert.match(text, /3,850,000/);
 });
 
-test("항목 수만큼 표 행이 생긴다 (행 수 제한 없음)", () => {
+test("항목 수만큼 표 행이 생긴다 (DOCX 는 행 수 제한 없음)", () => {
   const many = Array.from({ length: 25 }, (_, i) => ({ name: `항목 ${i + 1}`, qty: 1, unit: "식", unitPrice: 1000 }));
-  const { bytes } = renderQuote({ items: many });
+  // 행 상한은 HWPX 서식(미리 만들어 둔 행 수)의 제약이라 DOCX 테스트에선 넉넉히 준다.
+  const { bytes } = renderQuote({ items: many }, { maxItemRows: 30 });
   const rowCount = (new PizZip(bytes).file("word/document.xml").asText().match(/<w:tr>/g) || []).length;
   assert.equal(rowCount, 26); // 머리글 1 + 데이터 25
 });

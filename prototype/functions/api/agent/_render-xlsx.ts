@@ -8,7 +8,7 @@
 // ★이 파일에서 금액을 계산하지 않는다. 숫자는 전부 totals 에서 가져온다(_form-calc.ts 가 SSOT).
 //   여기서 한 번이라도 더하기를 시작하면 DOCX·HWPX 와 금액이 갈라진다.
 import { utils, write, read } from "./vendor/sheetjs.bundle.js";
-// 타입만 가져온다(런타임 의존 없음) — 이 파일은 계산하지 않고 totals 를 옮겨 담기만 한다.
+import { assertRenderable } from "./_form-calc.ts";
 import type { Quote, QuoteRow, QuoteTotals } from "./_form-calc";
 
 export const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -294,6 +294,9 @@ export function renderXlsx(
   view: Record<string, any>,
   templateBytes?: Uint8Array | null
 ): Uint8Array {
+  // ★부족한 값이 있으면 여기서 멈춘다(§6 이중 방어).
+  assertRenderable(quote, "XLSX");
+  assertRenderable(view, "XLSX");
   if (!quote?.totals) throw new Error("totals 가 없어 XLSX 를 만들 수 없어요. 계산 엔진을 먼저 실행하세요.");
   if (templateBytes && templateBytes.byteLength) return fillTemplate(templateBytes, view);
 

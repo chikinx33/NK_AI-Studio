@@ -9,6 +9,7 @@
 //   docxtemplater 기본 파서(단순 키 조회)만 쓴다.
 // ★ 유료 모듈(xlsx·image·html·chart)은 쓰지 않는다. 코어(MIT)만.
 import { Docxtemplater, PizZip } from "./vendor/docxtemplater-pizzip.bundle.js";
+import { assertRenderable } from "./_form-calc.ts";
 
 /** 텍스트가 들어 있는 파트만 검사한다(문서 본문·머리글·바닥글). */
 const TEXT_PARTS = /^word\/(document\d*\.xml|header\d*\.xml|footer\d*\.xml)$/;
@@ -40,6 +41,8 @@ function describeTemplateError(error: any): string {
  * 항목 표는 docxtemplater 의 행 반복({#items}…{/items})이 기본 지원하므로 행 수 제한이 없다.
  */
 export function renderDocx(templateBytes: Uint8Array, view: Record<string, any>): Uint8Array {
+  // ★부족한 값이 있으면 여기서 멈춘다 — 반쯤 빈 견적서가 고객에게 나가는 쪽이 훨씬 나쁘다(§6).
+  assertRenderable(view, "DOCX");
   let zip: any;
   try {
     zip = new PizZip(templateBytes);

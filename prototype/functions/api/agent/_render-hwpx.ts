@@ -15,6 +15,7 @@
 // 어디까지 받아 주는지 보장할 수 없어서, 손대지 않은 노드는 원본 바이트를 그대로 두는
 // _xml-dom.ts 를 쓴다. 결과물의 '보이는 텍스트·행 수·rowCnt' 는 프로토타입과 완전히 같다.
 import { unzipSync, zipSync, strFromU8, strToU8 } from "./vendor/fflate.bundle.js";
+import { assertRenderable } from "./_form-calc.ts";
 import {
   childElements,
   escapeXmlText,
@@ -165,8 +166,17 @@ function applyRepeaterTables(
       });
     }
 
-    // rowCnt 갱신 + 행 주소(rowAddr) 재부여 — 빠뜨리면 한글이 파일을 거부한다.
     const remaining = childElements(table, ROW);
+
+    // 데이터가 하나도 없어 행이 전부 사라졌으면 rowCnt="0" 인 빈 표를 남기지 않고 표째 지운다.
+    // (거래 조건이 없는 견적서처럼 배열이 빈 경우. 한글이 0행 표를 받아 준다는 보장이 없다.
+    //  표가 있던 자리에 빈 문단이 남는 것은 그대로 둔다 — 문서 흐름이 깨지지 않는다.)
+    if (remaining.length === 0) {
+      if (table.parent) removeChild(table.parent, table);
+      continue;
+    }
+
+    // rowCnt 갱신 + 행 주소(rowAddr) 재부여 — 빠뜨리면 한글이 파일을 거부한다.
     if (getAttribute(table, "rowCnt") !== null) setAttribute(table, "rowCnt", String(remaining.length));
     remaining.forEach((row, rowIndex) => {
       // 중첩된 표 안의 셀 주소는 그 표의 것이므로 건드리지 않는다.
@@ -221,6 +231,8 @@ export function renderHwpx(
   view: Record<string, any>,
   options: { repeaters?: Record<string, HwpxRepeater> } = {}
 ): Uint8Array {
+  // ★부족한 값이 있으면 여기서 멈춘다(§6 이중 방어).
+  assertRenderable(view, "HWPX");
   let entries: Record<string, Uint8Array>;
   try {
     entries = unzipSync(templateBytes);
