@@ -77,10 +77,75 @@ test('재생·다운로드 실패는 침묵하지 않고 안내 문구를 띄운
   assert.match(source, /ctype\.indexOf\('application\/json'\) !== -1/);
 });
 
+function deleteResultFn(source) {
+  const start = source.indexOf('function deleteResult(id)');
+  assert.ok(start >= 0, 'deleteResult 를 찾지 못했습니다');
+  const end = source.indexOf('\n  function ', start + 1);
+  return source.slice(start, end > start ? end : undefined);
+}
+
 test('삭제는 GCS 객체를 SSOT 로 삼는다 (로컬 카드 삭제도 서버 삭제를 호출)', () => {
   const source = vgen();
-  const deleteFn = source.slice(source.indexOf('function deleteResult(id)'));
-  assert.match(deleteFn.slice(0, 1200), /NK\.api\.videoDelete\(objectName\)/);
+  assert.match(deleteResultFn(source), /NK\.api\.videoDelete\(objectName\)/);
   // tombstone 은 캐시일 뿐이므로 서버 목록에서 사라지면 정리한다
   assert.match(source, /if \(!present\[name\]\) \{ delete state\.deletedSet\[name\]; pruned = true; \}/);
+});
+
+// ── 삭제 실패 시 롤백 ────────────────────────────────────────
+// 서버 삭제가 실패했는데 로컬 tombstone 만 남으면 "이 기기에서만 숨김 + 다른 기기엔 그대로"
+// 라는 SSOT 위반 상태가 굳는다. 성공 후에만 기록하고, 실패하면 카드를 되돌린다.
+
+test('tombstone 은 서버 삭제 성공 이후에만 기록한다', () => {
+  const fn = deleteResultFn(vgen());
+  const thenIdx = fn.indexOf('.then(function () {');
+  const tombstoneIdx = fn.indexOf('state.deletedSet[objectName] = true;');
+  assert.ok(thenIdx >= 0 && tombstoneIdx > thenIdx, 'tombstone 이 성공 콜백 안에 있지 않습니다');
+});
+
+test('삭제 실패 시 카드를 원래 인덱스로 복원하고 tombstone 을 지운다', () => {
+  const fn = deleteResultFn(vgen());
+  assert.match(fn, /function restore\(\)/);
+  assert.match(fn, /next\.splice\(Math\.min\(index, next\.length\), 0, target\)/);
+  assert.match(fn, /delete state\.deletedSet\[objectName\];/);
+  assert.match(fn, /state\.serverItems = prevServerItems;/);
+  assert.match(fn, /console\.error\('\[vgen\] delete failed', objectName, err\)/);
+  // 실패를 호출자에게 알린다 (false)
+  assert.match(fn, /return false;/);
+});
+
+test('서버 카드 삭제도 같은 롤백 규칙을 쓴다', () => {
+  const source = vgen();
+  const start = source.indexOf('function deleteServerItem(objectName)');
+  assert.ok(start >= 0, 'deleteServerItem 를 찾지 못했습니다');
+  const fn = source.slice(start, source.indexOf('\n  // ─── Generation', start));
+  assert.match(fn, /delete state\.deletedSet\[objectName\];/);
+  assert.match(fn, /state\.serverItems = prevServerItems;/);
+  // 예전의 "실패해도 tombstone 유지" 경로가 남아 있지 않다
+  assert.doesNotMatch(source, /\.catch\(function \(\) \{ \/\* deletedSet으로 클라이언트에서 필터링됨 \*\/ \}\)/);
+});
+
+test('삭제 실패는 사용자에게 안내한다', () => {
+  const source = vgen();
+  assert.match(source, /if \(!ok\) window\.alert\(t\('delete_failed'\)\)/);
+  assert.match(source, /t\('delete_failed_n'\)\.replace\('\{n\}', String\(failedCount\)\)/);
+});
+
+test('전체 삭제는 2단계 확인 후 순차 처리하며 실패분을 남긴다', () => {
+  const source = vgen();
+  assert.match(source, /window\.prompt\(t\('confirm_delete_all_typed'\)/);
+  assert.match(source, /!== t\('confirm_delete_all_word'\)/);
+  assert.match(source, /function clearAllResults\(\)/);
+  // 실패해도 중단하지 않고 끝까지 진행한 뒤 건수를 돌려준다
+  assert.match(source, /return jobs\.reduce\(function \(chain, run\)/);
+  assert.match(source, /\}, Promise\.resolve\(\)\)\.then\(function \(\) \{ return failed; \}\)/);
+  // 전부 지우고 보던 예전 경로가 남아 있지 않다
+  assert.doesNotMatch(source, /state\.results = \[\];\s*\n\s*state\.serverItems = \[\];/);
+});
+
+test('삭제 확인 문구가 영구·전기기 삭제임을 밝힌다 (ko/en)', () => {
+  const source = vgen();
+  assert.match(source, /서버에서 완전히 삭제합니다/);
+  assert.match(source, /되돌릴 수 없습니다/);
+  assert.match(source, /permanently deletes the video from the server/);
+  assert.match(source, /cannot be undone/);
 });

@@ -126,8 +126,12 @@
       download:          '다운로드',
       delete_result:     '삭제',
       delete_all:        '전체 삭제',
-      confirm_delete:    '이 영상을 삭제할까요?',
-      confirm_delete_all:'생성된 영상 전체를 삭제할까요?',
+      confirm_delete:    '이 영상을 서버에서 완전히 삭제합니다.\n다른 기기에서도 사라지며 되돌릴 수 없습니다. 계속할까요?',
+      confirm_delete_all:'생성된 영상 전체를 서버에서 완전히 삭제합니다.\n모든 기기에서 사라지며 되돌릴 수 없습니다. 계속할까요?',
+      confirm_delete_all_typed: '삭제할 영상 {n}개입니다. 정말 지우려면 "삭제" 를 입력해 주세요.',
+      confirm_delete_all_word:  '삭제',
+      delete_failed:     '삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      delete_failed_n:   '{n}개를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       history_loading:   '히스토리 불러오는 중...',
       server_item:       '클라우드 보관',
       refs_label:        '레퍼런스 이미지',
@@ -177,8 +181,12 @@
       download:          'Download',
       delete_result:     'Delete',
       delete_all:        'Clear All',
-      confirm_delete:    'Delete this video?',
-      confirm_delete_all:'Delete all generated videos?',
+      confirm_delete:    'This permanently deletes the video from the server.\nIt will disappear on all your devices and cannot be undone. Continue?',
+      confirm_delete_all:'This permanently deletes ALL generated videos from the server.\nThey will disappear on all your devices and cannot be undone. Continue?',
+      confirm_delete_all_typed: '{n} video(s) will be deleted. Type "DELETE" to confirm.',
+      confirm_delete_all_word:  'DELETE',
+      delete_failed:     'Delete failed. Please try again.',
+      delete_failed_n:   'Failed to delete {n} item(s). Please try again.',
       history_loading:   'Loading history...',
       server_item:       'Cloud saved',
       refs_label:        'Reference Images',
@@ -1340,7 +1348,10 @@
           retryResult(btn.dataset.id);
         } else if (action === 'delete-result') {
           if (!window.confirm(t('confirm_delete'))) return;
-          deleteResult(btn.dataset.id);
+          btn.disabled = true;
+          deleteResult(btn.dataset.id).then(function (ok) {
+            if (!ok) window.alert(t('delete_failed'));
+          });
         } else if (action === 'preview-image') {
           var src = btn.getAttribute('data-src') || btn.getAttribute('src') || '';
           if (src) openImageModal(src);
@@ -1349,19 +1360,12 @@
           var name = btn.dataset.name;
           if (name) {
             btn.disabled = true;
-            (NK.api && NK.api.videoDelete ? NK.api.videoDelete(name) : Promise.reject(new Error('videoDelete unavailable')))
-              .then(function () {
-                state.deletedSet[name] = true;
-                saveDeletedSet();
-                state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
-                // 프로젝트 씬/컷에서 삭제된 영상 URL 참조 제거
-                if (state.projectId) clearProjectVideoRef(state.projectId, name);
-                render();
-              })
-              .catch(function (err) {
+            deleteServerItem(name).then(function (ok) {
+              if (!ok) {
                 btn.disabled = false;
-                window.alert((err && err.message) ? err.message : 'delete failed');
-              });
+                window.alert(t('delete_failed'));
+              }
+            });
           }
         }
       });
@@ -1372,34 +1376,17 @@
     if (clearAllBtn) {
       clearAllBtn.addEventListener('click', function () {
         if (!window.confirm(t('confirm_delete_all'))) return;
-        Object.values(state.polls).forEach(function (id) { clearInterval(id); });
-        state.polls = {};
-
-        // 서버 항목을 실제로 삭제하고 deletedSet에 기록 (재로그인 후 재출현 방지)
-        var serverNames = state.serverItems
-          .map(function (s) { return s && s.name; })
-          .filter(Boolean);
-
-        state.results = [];
-        state.serverItems = [];
-        state.selectedId = null;
-        saveResults();
-        render();
-
-        serverNames.forEach(function (name) {
-          state.deletedSet[name] = true;
+        // 되돌릴 수 없는 전체 삭제라 2단계 확인을 둔다.
+        var count = visibleResultCount();
+        var typed = window.prompt(t('confirm_delete_all_typed').replace('{n}', String(count)));
+        if (String(typed || '').trim() !== t('confirm_delete_all_word')) return;
+        clearAllBtn.disabled = true;
+        clearAllResults().then(function (failedCount) {
+          clearAllBtn.disabled = false;
+          if (failedCount > 0) {
+            window.alert(t('delete_failed_n').replace('{n}', String(failedCount)));
+          }
         });
-        saveDeletedSet();
-
-        if (NK.api && NK.api.videoDelete) {
-          serverNames.forEach(function (name) {
-            NK.api.videoDelete(name)
-              .then(function () {
-                if (state.projectId) clearProjectVideoRef(state.projectId, name);
-              })
-              .catch(function () { /* deletedSet으로 클라이언트에서 필터링됨 */ });
-          });
-        }
       });
     }
 
@@ -1544,30 +1531,141 @@
     startGeneration();
   }
 
+  // 삭제의 단일 출처(SSOT)는 GCS 객체다. 서버 삭제가 실패했는데 로컬 tombstone 만 남기면
+  // "이 기기에서만 영구 숨김 + 다른 기기엔 그대로" 라는 어긋난 상태가 된다.
+  // → tombstone 은 성공 응답 이후에만 기록하고, 실패하면 카드를 원위치로 되돌린다.
   function deleteResult(id) {
     if (state.polls[id]) { clearInterval(state.polls[id]); delete state.polls[id]; }
+    var snapshot = _retryInputs[id];
     delete _retryInputs[id];
-    var target = state.results.find(function (r) { return r.id === id; });
+
+    var index = state.results.findIndex(function (r) { return r.id === id; });
+    if (index < 0) return Promise.resolve(true);
+    var target = state.results[index];
+    var wasSelected = state.selectedId === id;
+
     state.results = state.results.filter(function (r) { return r.id !== id; });
-    if (state.selectedId === id) state.selectedId = null;
+    if (wasSelected) state.selectedId = null;
     saveResults();
     render();
 
-    // 삭제의 단일 출처(SSOT)는 GCS 객체다. 로컬에서만 지우면 다른 기기에서 서버 카드로
-    // 되살아난다. deletedSet은 목록이 갱신되기 전까지의 캐시로만 쓴다.
-    var objectName = resultObjectName(target);
-    if (objectName) {
-      state.deletedSet[objectName] = true;
-      saveDeletedSet();
-      state.serverItems = state.serverItems.filter(function (s) { return s.name !== objectName; });
-      if (NK.api && NK.api.videoDelete) {
-        NK.api.videoDelete(objectName)
-          .then(function () {
-            if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
-          })
-          .catch(function () { /* 이미 없는 객체이거나 네트워크 오류 — 목록 필터로 가려진다 */ });
-      }
+    function restore() {
+      // 원래 인덱스를 유지해 목록 순서가 흔들리지 않게 되돌린다.
+      var next = state.results.slice();
+      next.splice(Math.min(index, next.length), 0, target);
+      state.results = next;
+      if (wasSelected) state.selectedId = id;
+      if (snapshot) _retryInputs[id] = snapshot;
+      saveResults();
+      render();
     }
+
+    var objectName = resultObjectName(target);
+    // 서버에 올라간 적 없는 결과(생성 실패 등)는 로컬 제거로 끝난다.
+    if (!objectName) return Promise.resolve(true);
+    if (!(NK.api && NK.api.videoDelete)) { restore(); return Promise.resolve(false); }
+
+    var prevServerItems = state.serverItems;
+    state.serverItems = state.serverItems.filter(function (s) { return s.name !== objectName; });
+
+    return NK.api.videoDelete(objectName)
+      .then(function () {
+        state.deletedSet[objectName] = true;
+        saveDeletedSet();
+        if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
+        return true;
+      })
+      .catch(function (err) {
+        console.error('[vgen] delete failed', objectName, err);
+        delete state.deletedSet[objectName];
+        saveDeletedSet();
+        state.serverItems = prevServerItems;
+        restore();
+        return false;
+      });
+  }
+
+  // 화면에 실제로 보이는 카드 수(로컬 + 중복되지 않는 서버 카드).
+  function visibleResultCount() {
+    var localObjects = {};
+    state.results.forEach(function (r) {
+      var n = resultObjectName(r);
+      if (n) localObjects[n] = true;
+    });
+    var serverOnly = state.serverItems.filter(function (s) {
+      return s && s.name && !state.deletedSet[s.name] && !localObjects[s.name];
+    });
+    return state.results.length + serverOnly.length;
+  }
+
+  // 전체 삭제: 개별 결과를 하나씩 처리해 성공분만 제거하고 실패분은 목록에 남긴다.
+  function clearAllResults() {
+    Object.values(state.polls).forEach(function (id) { clearInterval(id); });
+    state.polls = {};
+
+    var localObjects = {};
+    state.results.forEach(function (r) {
+      var n = resultObjectName(r);
+      if (n) localObjects[n] = true;
+    });
+    var serverOnlyNames = state.serverItems
+      .map(function (s) { return s && s.name; })
+      .filter(function (n) { return n && !localObjects[n]; });
+
+    // 서버에 없는 결과(생성 실패 등)는 되돌릴 것이 없으므로 즉시 제거한다.
+    var localOnly = state.results.filter(function (r) { return !resultObjectName(r); });
+    localOnly.forEach(function (r) { delete _retryInputs[r.id]; });
+    state.results = state.results.filter(function (r) { return !!resultObjectName(r); });
+    state.selectedId = null;
+    saveResults();
+    render();
+
+    // 하나씩 순차 처리한다. 동시에 돌리면 각 삭제가 뜬 롤백 스냅샷(results 인덱스,
+    // serverItems)이 서로를 덮어써 실패분이 엉뚱한 자리로 되살아난다.
+    // 실패해도 중단하지 않고 끝까지 진행한 뒤 실패 건수만 돌려준다.
+    var jobs = state.results
+      .map(function (r) { return r.id; })
+      .map(function (id) { return function () { return deleteResult(id); }; })
+      .concat(serverOnlyNames.map(function (name) {
+        return function () { return deleteServerItem(name); };
+      }));
+
+    var failed = 0;
+    return jobs.reduce(function (chain, run) {
+      return chain.then(function () {
+        return run().then(
+          function (ok) { if (!ok) failed++; },
+          function (err) { failed++; console.error('[vgen] delete failed', err); }
+        );
+      });
+    }, Promise.resolve()).then(function () { return failed; });
+  }
+
+  // 서버 카드 삭제도 로컬 카드와 같은 규칙: tombstone 은 성공 후에만, 실패하면 원위치.
+  function deleteServerItem(objectName) {
+    if (!objectName) return Promise.resolve(true);
+    if (!(NK.api && NK.api.videoDelete)) return Promise.resolve(false);
+
+    var prevServerItems = state.serverItems;
+    state.serverItems = state.serverItems.filter(function (s) { return s.name !== objectName; });
+    render();
+
+    return NK.api.videoDelete(objectName)
+      .then(function () {
+        state.deletedSet[objectName] = true;
+        saveDeletedSet();
+        if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
+        render();
+        return true;
+      })
+      .catch(function (err) {
+        console.error('[vgen] delete failed', objectName, err);
+        delete state.deletedSet[objectName];
+        saveDeletedSet();
+        state.serverItems = prevServerItems;
+        render();
+        return false;
+      });
   }
 
   // ─── Generation ───────────────────────────────────────────
