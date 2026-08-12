@@ -35,6 +35,18 @@ function parseProjectId(entry: CompanyFileEntry, content: string) {
   }
 }
 
+// 열어봤자 깨진 글자만 나오는 형식 — 워드·엑셀·한글·압축 파일.
+// ★docx 의 MIME 에는 "openxmlformats" 가 들어 있어서 예전 규칙(/xml/)이 텍스트로 오인했다.
+//   그래서 template.docx 를 누르면 바이너리가 그대로 쏟아졌다.
+const BINARY_EXTENSIONS = [".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".zip", ".ttf", ".otf"];
+const BINARY_MIME = /(officedocument|msword|ms-excel|ms-powerpoint|hancom|hwp|zip|octet-stream|font)/i;
+
+function isBinaryDocument(entry: CompanyFileEntry): boolean {
+  const type = String(entry.contentType || "").toLocaleLowerCase();
+  const extension = extensionOf(entry.name);
+  return BINARY_EXTENSIONS.includes(extension) || BINARY_MIME.test(type);
+}
+
 function classify(entry: CompanyFileEntry): PreviewKind {
   const type = String(entry.contentType || "").split(";")[0].trim().toLocaleLowerCase();
   const extension = extensionOf(entry.name);
@@ -42,9 +54,11 @@ function classify(entry: CompanyFileEntry): PreviewKind {
   if (type.startsWith("video/") || [".mp4", ".webm", ".mov", ".m4v", ".ogv"].includes(extension)) return "video";
   if (type.startsWith("audio/") || [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus"].includes(extension)) return "audio";
   if (type === "application/pdf" || extension === ".pdf") return "pdf";
+  // 바이너리 문서는 텍스트 판정보다 먼저 걸러낸다.
+  if (isBinaryDocument(entry)) return "unsupported";
   if (type.includes("markdown") || extension === ".md" || extension === ".mdx") return "markdown";
   if (isProjectDescriptor(entry)) return "text";
-  if (type.startsWith("text/") || /(json|xml|yaml|javascript|csv)/i.test(type) || [".txt", ".json", ".csv", ".tsv", ".xml", ".yaml", ".yml", ".js", ".ts", ".tsx", ".jsx", ".css", ".html", ".log"].includes(extension)) return "text";
+  if (type.startsWith("text/") || /\b(json|xml|yaml|javascript|csv)\b/i.test(type) || [".txt", ".json", ".csv", ".tsv", ".xml", ".yaml", ".yml", ".js", ".ts", ".tsx", ".jsx", ".css", ".html", ".log"].includes(extension)) return "text";
   return "unsupported";
 }
 
@@ -84,7 +98,7 @@ export default function CompanyFilePreview({
       return;
     }
     if (kind === "unsupported") {
-      setContent({ kind, message: "이 파일 형식은 브라우저에서 바로 표시할 수 없습니다. 다운로드해서 열어 주세요." });
+      setContent({ kind, message: "이 형식은 브라우저에서 바로 못 열어요. 오른쪽 위 '다운로드'로 받아서 워드·엑셀·한글에서 열어 주세요." });
       return;
     }
     setContent({ kind: "loading" });

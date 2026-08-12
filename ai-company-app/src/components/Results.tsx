@@ -167,7 +167,9 @@ function ImagePopup({
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-ink/60 p-3">
-          <img src={item.url} alt={item.file} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
+          {item.url
+            ? <img src={item.url} alt={item.file} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
+            : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">미리볼 이미지가 없는 산출물이에요. 아래 '폴더 열기'나 채팅의 파일에서 확인해 주세요.</p>}
           {item.prompt && (
             <div className="mt-3 rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[12px] leading-relaxed text-gray-300">
               <span className="text-gray-500">프롬프트 · </span>
@@ -572,7 +574,10 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
                   title="크게 보기"
                   className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-lg ring-2 ring-amber-500/60"
                 >
-                  <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
+                  {/* 이미지 주소가 없는 산출물(문서 등)에서 깨진 이미지 아이콘이 뜨던 자리 */}
+                  {it.url
+                    ? <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
+                    : <span className="grid h-full w-full place-items-center bg-amber-900/30 text-[10px] font-semibold text-amber-200">문서</span>}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">
