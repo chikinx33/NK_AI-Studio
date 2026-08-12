@@ -1,4 +1,9 @@
-# 견적서 문서 엔진 설계서 (P0)
+# 견적서 문서 엔진 설계서 (P0) — ⚠️ 폐기(v1.0)
+
+> **이 문서는 폐기됐다. 참조하지 말 것.**
+> 후속: [form_document_engine_design_v2_20260812.md](form_document_engine_design_v2_20260812.md) (v2.0)
+> 무엇이 바뀌었는지는 v2 문서 §0.1. 코드도 v2 기준으로 옮겨졌다
+> (`_quote-math.ts` → `_form-calc.ts`, `quote` 도구 → `form_list`·`form_fill`).
 
 > 문서 버전: 1.0 · 기준일: 2026-08-12
 > 적용 대상: RAVIOK AI 회사 (`prototype/functions/api/agent/`, `ai-company-app/`)

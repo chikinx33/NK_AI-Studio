@@ -8,8 +8,10 @@ import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
-  computeQuoteTotals,
+  buildQuoteView,
   defaultQuoteTerms,
+  formatKrw,
+  getCalculator,
   normalizeDiscount,
   normalizeRounding,
   normalizeVat,
@@ -17,7 +19,22 @@ import {
   type Quote,
   type QuoteItem,
   type QuoteSupplier,
-} from "./_quote-math";
+} from "./_form-calc";
+import {
+  companyStorage,
+  findForm,
+  listForms,
+  loadTemplate,
+  readCompanyText,
+  renderOutputName,
+  writeCompanyBytes,
+  FORMS_ROOT,
+  OUTPUT_ROOT,
+  SUPPLIER_PATH,
+  type CompanyStorage,
+} from "./_form-registry";
+import { renderDocx, DOCX_CONTENT_TYPE } from "./_render-docx";
+import { renderHwpx, HWPX_CONTENT_TYPE } from "./_render-hwpx";
 
 export { getSql };
 export type { SqlFn };
@@ -814,6 +831,16 @@ function inferredFileType(kind: string, output: any) {
 /** 도구 결과를 대화 말풍선에서 다시 열 수 있는 작은 파일 참조로 변환한다. */
 export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""): MessageFileReference[] {
   if (!output || typeof output !== "object") return [];
+  // 서식 문서: 회사 파일에 저장된 실제 파일이므로 경로 그대로 열기 아이콘을 붙인다.
+  if (output.kind === "form" && Array.isArray(output.files)) {
+    return output.files.slice(0, 8).map((file: any) => ({
+      source: "company-file" as const,
+      name: String(file?.name || String(file?.path || "").split("/").pop() || "문서"),
+      path: String(file?.path || ""),
+      contentType: String(file?.contentType || "application/octet-stream"),
+      size: Math.max(0, Number(file?.size || 0) || 0),
+    })).filter((file: MessageFileReference) => !!file.path);
+  }
   const companyEntries = output.kind === "company_files_list" && Array.isArray(output.entries)
     ? output.entries.filter((entry: any) => entry?.kind === "file")
     : output.entry?.kind === "file"
@@ -856,7 +883,7 @@ export async function addMessage(
 const TOOL_LABELS: Record<string, string> = {
   image: "이미지", image_edit: "이미지 수정", upscale: "이미지 업스케일", video: "영상",
   scene_still: "장면 스틸", scene_video: "장면 영상", render_final: "최종 렌더",
-  lipsync: "립싱크 영상", ppt: "PPT", pdf: "PDF", quote: "견적서", sound: "효과음", music: "BGM",
+  lipsync: "립싱크 영상", ppt: "PPT", pdf: "PDF", form_fill: "서식 문서", sound: "효과음", music: "BGM",
   narration: "나레이션", scenario: "시나리오", brand_asset: "브랜드 자산", infographic: "인포그래픽",
 };
 
@@ -1156,6 +1183,9 @@ export interface ToolContext {
   authHeader: string;
   userId: string;
   conversationId?: string;
+  // 실행 중인 잡 id. 도구가 스스로 업무를 등록할 때 이 값으로 중복 등록을 막는다
+  // (검수 승인 시 fileJobAsWorkItem 이 metadata->>'jobId' 로 같은 잡을 다시 등록하지 않는다).
+  jobId?: string;
 }
 
 export interface ToolDef {
@@ -1535,11 +1565,10 @@ async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
   return { ...parsed, kind: "pdf", promptEcho: prompt };
 }
 
-// ── 견적서(quote/v1) ─────────────────────────────────────────────────────────
-// 설계서 docs/quote_document_engine_design_20260812.md §4. 금액 계산은 _quote-math.ts 가 전담하고
-// 모델은 '무엇을 얼마에 몇 개' 라는 사실만 옮겨 적는다. 모르는 단가를 지어내면 제품이 그 자리에서 망가진다.
-
-const QUOTE_SUPPLIER_PATH = "_회사정보/견적서-공급자.json";
+// ── 서식 문서 엔진 (form_list · form_fill) ──────────────────────────────────
+// 설계서 docs/form_document_engine_design_v2_20260812.md §7.
+// 서식은 회사 파일 `_서식/` 의 데이터다. 여기에 서식 이름을 하드코딩하면 자산화 구조가 죽는다.
+// 금액 계산은 _form-calc.ts 가 전담하고, 모델은 '무엇을 얼마에 몇 개' 라는 사실만 옮겨 적는다.
 
 const QUOTE_SYSTEM = `당신은 견적서 작성 담당자입니다. 요청과 참고 자료를 바탕으로 quote/v1 견적서 JSON을 생성하세요.
 
@@ -1548,9 +1577,11 @@ const QUOTE_SYSTEM = `당신은 견적서 작성 담당자입니다. 요청과 �
   "title": "브랜드 영상 제작 견적서",
   "validUntil": "2026-09-11",
   "client": { "company": "(주)고객사", "person": "홍길동", "title": "부장", "tel": "", "email": "", "address": "" },
+  "payment": { "terms": "계약 시 50%, 납품 완료 후 50%" },
+  "delivery": { "dueDate": "", "place": "" },
   "currency": "KRW",
   "items": [
-    { "name": "메인 영상 기획·연출", "spec": "60초 / 1편", "qty": 1, "unit": "식", "unitPrice": 3000000, "note": "" }
+    { "group": "기획", "costType": "work", "name": "메인 영상 기획·연출", "spec": "60초 / 1편", "qty": 1, "unit": "식", "unitPrice": 3000000, "note": "" }
   ],
   "discount": { "type": "amount", "value": 0, "label": "" },
   "vat": { "mode": "exclusive", "rate": 0.1 },
@@ -1564,40 +1595,84 @@ const QUOTE_SYSTEM = `당신은 견적서 작성 담당자입니다. 요청과 �
 - ★단가(unitPrice)와 수량(qty)은 사용자가 말했거나 첨부 자료에 적힌 값만 쓴다.
   모르면 반드시 null 로 둔다. 시세·경험·유사 사례로 추정하지 않는다.
   "대략" "보통" 같은 근거로 숫자를 넣는 것을 금지한다.
-- ★totals, docNo, issuedAt 은 절대 쓰지 않는다(서버가 계산). supplier(공급자)도 쓰지 않는다(서버가 저장소에서 로드).
+- ★totals, docNo, issuedAt, supplier 는 절대 쓰지 않는다(서버가 채움).
 - 금액 합계를 문장으로도 쓰지 않는다.
 - 항목명은 고객이 읽고 무엇인지 알 수 있게 구체적으로. "기타" "일체" 같은 뭉뚱그린 항목 금지.
 - unit(단위)은 사용자가 말하지 않았으면 "식".
-- vat.mode 는 사용자가 '부가세 포함'이라 하면 inclusive, '별도'면 exclusive, 면세 사업이면 exempt. 언급 없으면 exclusive.
+- group 은 항목을 묶는 구간 이름(기획·제작·수정 등). 사용자가 구분해 말했을 때만 채우고,
+  아니면 빈 문자열로 둔다. 채우면 문서에 구간별 소계가 함께 찍힌다.
+- costType 은 우리 인건비·작업이면 "work", 고객이 실비로 부담하는 항목(라이선스·소스 구매 등)이면 "expense".
+  사용자가 실비라고 말한 것만 expense 로 한다.
+- payment.terms(결제조건)·delivery.dueDate(납기일)·delivery.place(납품장소)는 사용자가 말한 경우에만 채운다.
+  입금계좌는 쓰지 않는다(회사 정보에서 자동으로 들어간다).
+- vat.mode 는 사용자가 '부가세 포함'이라 하면 inclusive, '별도'면 exclusive, 면세 사업이면 exempt.
+  언급 없으면 exclusive.
 - discount 는 사용자가 할인을 말했을 때만. percent 면 value 는 퍼센트 숫자(10% → 10).
-- terms 는 사용자가 조건을 말했을 때만 쓴다. 말하지 않았으면 빈 배열로 두면 서버가 표준 조건을 넣는다.
+- terms 는 사용자가 조건을 말했을 때만 쓴다. 비워 두면 서버가 표준 조건을 넣는다.
 - currency 는 "KRW" 고정.
 - 한국어로 작성.`;
 
+/** dataSchema → 그 스키마를 만들 때 쓰는 시스템 프롬프트. 새 스키마는 여기에 추가한다. */
+const FORM_SYSTEM_PROMPTS: Record<string, string> = {
+  "quote/v1": QUOTE_SYSTEM,
+};
+
+/** 포맷별 파일 확장자·MIME. */
+const FORM_FORMATS: Record<string, { ext: string; contentType: string }> = {
+  docx: { ext: "docx", contentType: DOCX_CONTENT_TYPE },
+  hwpx: { ext: "hwpx", contentType: HWPX_CONTENT_TYPE },
+};
+
 /**
- * 공급자(= 우리 회사) 정보를 회사 파일에서 로드. 없으면 빈 값으로 두고 계산엔진의 missing 이 잡는다.
- * (에이전트가 사용자에게 물어 company_files_write 로 저장하면 다음 견적서부터 자동 반영)
+ * ★회사 파일(GCS)에 바이너리를 저장한다. company_files_write 는 텍스트 전용이라
+ * 생성한 문서(.docx·.hwpx)를 저장할 수 없다.
  */
-async function loadQuoteSupplier(ctx: ToolContext): Promise<QuoteSupplier> {
-  const empty: QuoteSupplier = { name: "", bizNo: "", ceo: "", address: "", tel: "", email: "", stampUrl: "" };
+async function saveCompanyBinary(
+  ctx: ToolContext,
+  relativePath: string,
+  bytes: Uint8Array,
+  contentType: string
+): Promise<{ path: string; size: number; contentType: string }> {
+  const storage = await companyStorage(ctx.env, ctx.userId);
+  return writeCompanyBytes(storage, relativePath, bytes, contentType);
+}
+
+/**
+ * 공급자(= 우리 회사) 정보. 없으면 빈 값으로 두고 계산엔진의 missing 이 잡는다 —
+ * 그때 에이전트가 사용자에게 묻고 company_files_write 로 저장하면 다음부터 자동이다.
+ */
+async function loadFormSupplier(storage: CompanyStorage): Promise<QuoteSupplier> {
+  const empty: QuoteSupplier = {
+    name: "", bizNo: "", ceo: "", bizType: "", bizItem: "", address: "",
+    tel: "", fax: "", email: "", manager: "", managerTel: "", stampUrl: "",
+    payment: { bank: "", accountHolder: "", accountNo: "" },
+  };
   try {
-    const read = await callInternalJson(
-      ctx,
-      `/api/agent/company-files?path=${encodeURIComponent(QUOTE_SUPPLIER_PATH)}&read=1`
-    );
-    const parsed = JSON.parse(String(read?.content || "{}"));
+    const raw = await readCompanyText(storage, SUPPLIER_PATH);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw);
     const source = parsed?.supplier && typeof parsed.supplier === "object" ? parsed.supplier : parsed;
     return {
       name: String(source?.name || "").trim(),
       bizNo: String(source?.bizNo || source?.businessNumber || "").trim(),
       ceo: String(source?.ceo || source?.representative || "").trim(),
+      bizType: String(source?.bizType || "").trim(),
+      bizItem: String(source?.bizItem || "").trim(),
       address: String(source?.address || "").trim(),
       tel: String(source?.tel || source?.phone || "").trim(),
+      fax: String(source?.fax || "").trim(),
       email: String(source?.email || "").trim(),
+      manager: String(source?.manager || "").trim(),
+      managerTel: String(source?.managerTel || "").trim(),
       stampUrl: String(source?.stampUrl || source?.stamp || "").trim(),
+      payment: {
+        bank: String(source?.payment?.bank || "").trim(),
+        accountHolder: String(source?.payment?.accountHolder || "").trim(),
+        accountNo: String(source?.payment?.accountNo || "").trim(),
+      },
     };
   } catch {
-    return empty; // 파일 없음·형식 오류 — 견적 자체는 계속 만들고 supplier.name 을 missing 으로 되묻는다.
+    return empty; // 파일 없음·형식 오류 — 문서 생성은 계속하고 supplier.name 을 missing 으로 되묻는다.
   }
 }
 
@@ -1612,11 +1687,11 @@ function addDaysToDateString(dateString: string, days: number): string {
 }
 
 /**
- * 문서번호 Q-YYYYMMDD-NNN. NNN 은 그 사용자의 '오늘(서울) quote 잡 수'.
- * 잡은 도구 실행 직전에 이미 INSERT 되어 있으므로 첫 견적서가 001 이 된다.
- * DB 를 못 읽으면 001 로 두고 견적서 생성 자체는 막지 않는다.
+ * 문서번호 Q-YYYYMMDD-NNN. NNN 은 그 사용자의 '오늘(서울) 그 서식 잡 수'.
+ * 잡은 도구 실행 직전에 이미 INSERT 되어 있으므로 첫 문서가 001 이 된다.
+ * DB 를 못 읽으면 001 로 두고 문서 생성 자체는 막지 않는다.
  */
-async function nextQuoteDocNo(ctx: ToolContext, issuedAt: string): Promise<string> {
+async function nextFormDocNo(ctx: ToolContext, formId: string, issuedAt: string): Promise<string> {
   let seq = 1;
   try {
     const sql = getSql(ctx.env);
@@ -1624,9 +1699,9 @@ async function nextQuoteDocNo(ctx: ToolContext, issuedAt: string): Promise<strin
       const rows = await sql(
         `SELECT COUNT(*)::int AS n
            FROM agent_jobs
-          WHERE user_id = $1 AND type = 'quote'
-            AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $2::date`,
-        [ctx.userId, issuedAt]
+          WHERE user_id = $1 AND type = 'form_fill' AND input->>'formId' = $2
+            AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $3::date`,
+        [ctx.userId, formId, issuedAt]
       );
       const counted = Number(rows?.[0]?.n || 0);
       if (counted > 0) seq = counted;
@@ -1637,29 +1712,107 @@ async function nextQuoteDocNo(ctx: ToolContext, issuedAt: string): Promise<strin
   return `Q-${issuedAt.replace(/-/g, "")}-${String(Math.min(seq, 999)).padStart(3, "0")}`;
 }
 
-/**
- * 잉크 견적서 도구(설계서 §4.1). Claude 로 quote/v1 JSON 을 만들고
- * ★모델이 쓴 totals·missing·docNo·issuedAt·supplier 는 지운 뒤 서버 값으로 덮어쓴다.
- * 금액은 _quote-math.computeQuoteTotals 만 계산한다.
- */
-export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
-  const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
-  if (!prompt) throw new Error("견적 요청 내용(prompt)이 필요해요.");
-
-  // 1. 입력 조립 — baseQuote 가 있으면 그 견적서를 고쳐 쓰는 요청이다.
-  const baseQuote = input?.baseQuote && typeof input.baseQuote === "object" ? { ...input.baseQuote } : null;
-  if (baseQuote) {
-    for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete (baseQuote as any)[key];
+/** 생성한 문서를 업무 탐색기에 노출한다(§7.2 8단계). 실패해도 문서 생성은 유효하다. */
+async function registerFormWorkItem(
+  ctx: ToolContext,
+  args: { title: string; requestText: string; summary: string; files: { path: string }[] }
+): Promise<string> {
+  try {
+    const sql = getSql(ctx.env);
+    if (!sql) return "";
+    await ensureAgentSchema(sql);
+    const rows = await sql(
+      `INSERT INTO company_work_items
+         (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
+       VALUES ($1, $2, $3, 'form_fill', 'done', $4, $5, $6::jsonb, now())
+       RETURNING id`,
+      [
+        ctx.userId,
+        String(ctx.conversationId || "main"),
+        args.title.slice(0, 60),
+        args.requestText.slice(0, 2000),
+        args.summary.slice(0, 500),
+        JSON.stringify({ jobId: ctx.jobId || "", paths: args.files.map((file) => file.path) }),
+      ]
+    );
+    return String(rows?.[0]?.id || "");
+  } catch {
+    return "";
   }
-  const parts = [`요청: ${prompt}`];
-  if (input?.context) parts.push(`참고 컨텍스트:\n${String(input.context)}`);
-  if (baseQuote) parts.push(`기존 견적서(이 내용을 수정):\n${JSON.stringify(baseQuote)}`);
+}
 
-  // 2. 공급자 정보 로드
-  const supplier = await loadQuoteSupplier(ctx);
+/** 잉크 서식 목록 도구(§7.1). manifest 가 깨진 폴더는 이유와 함께 알려 준다. */
+export async function runFormListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const storage = await companyStorage(ctx.env, ctx.userId);
+  const { forms, problems } = await listForms(storage);
+  return {
+    kind: "form_list",
+    count: forms.length,
+    forms: forms.map((form) => ({
+      formId: form.formId,
+      name: form.name,
+      category: form.category,
+      description: form.description,
+      folder: form.folder,
+      // 지금 실제로 만들 수 있는 포맷만 알려준다. 템플릿이 있어도 렌더러가 없으면
+      // (xlsx·pdf — 이후 단계) 목록에 넣지 않는다. 만들지 못할 걸 권하면 안 된다.
+      formats: Object.entries(form.templates)
+        .filter(([format, file]) => !!file && !!FORM_FORMATS[format])
+        .map(([format]) => format),
+      maxItemRows: form.maxItemRows,
+    })),
+    problems,
+    hint: forms.length
+      ? "form_fill 에 formId 와 formats(docx·hwpx)를 넘겨 문서를 만드세요."
+      : `회사 파일의 '${FORMS_ROOT}' 폴더에 서식 폴더(manifest.json + 템플릿)를 올리면 여기 나타나요.`,
+  };
+}
+
+/**
+ * 잉크 서식 작성 도구(§7.2). 9단계 순서를 그대로 따른다.
+ * ★missing 이 하나라도 있으면 파일을 하나도 만들지 않고 되묻는다 — 반쯤 채운 견적서가
+ *   고객에게 나가는 것이 이 기능에서 가장 나쁜 결과다.
+ */
+export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
+  if (!prompt) throw new Error("무엇을 담을지(prompt) 알려주세요.");
+
+  const storage = await companyStorage(ctx.env, ctx.userId);
+
+  // 1. manifest 로드
+  const manifest = await findForm(storage, String(input?.formId || ""));
+  const systemPrompt = FORM_SYSTEM_PROMPTS[manifest.dataSchema];
+  if (!systemPrompt) {
+    throw new Error(
+      `이 서식의 dataSchema "${manifest.dataSchema}" 를 아직 다룰 수 없어요. ` +
+      `(지원: ${Object.keys(FORM_SYSTEM_PROMPTS).join(", ")})`
+    );
+  }
+
+  // 요청 포맷 — 템플릿이 있는 포맷만. 아무것도 안 주면 docx.
+  const requested: string[] = (Array.isArray(input?.formats) ? input.formats : [input?.format || "docx"])
+    .map((format: any) => String(format || "").toLowerCase().trim())
+    .filter(Boolean);
+  const formats = [...new Set(requested.length ? requested : ["docx"])];
+  const unsupported = formats.filter((format) => !FORM_FORMATS[format]);
+  if (unsupported.length) {
+    throw new Error(
+      `아직 만들 수 없는 형식이에요: ${unsupported.join(", ")}. 지금은 ${Object.keys(FORM_FORMATS).join(" · ")} 를 지원해요.`
+    );
+  }
+
+  // 2. 공급자 정보
+  const supplier = await loadFormSupplier(storage);
 
   // 3. 모델 생성
-  const parsed = await callClaudeForJson(ctx.env, QUOTE_SYSTEM, parts.join("\n\n"));
+  const parts = [`요청: ${prompt}`];
+  if (input?.context) parts.push(`참고 컨텍스트:\n${String(input.context)}`);
+  const baseData = input?.baseData && typeof input.baseData === "object" ? { ...input.baseData } : null;
+  if (baseData) {
+    for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete (baseData as any)[key];
+    parts.push(`기존 내용(이 내용을 수정):\n${JSON.stringify(baseData)}`);
+  }
+  const parsed = await callClaudeForJson(ctx.env, systemPrompt, parts.join("\n\n"));
 
   // 4. ★서버 소유 키 삭제 — 모델이 채워 보냈어도 여기서 사라진다.
   for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete parsed?.[key];
@@ -1670,7 +1823,9 @@ export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
     ? parsed.terms.map((term: any) => String(term || "").trim()).filter(Boolean)
     : [];
   const items: QuoteItem[] = (Array.isArray(parsed?.items) ? parsed.items : []).map((item: any, index: number) => ({
-    no: index + 1, // 번호는 코드가 부여(§2.1)
+    no: index + 1, // 번호는 코드가 부여(§3.1)
+    group: String(item?.group || "").trim(),
+    costType: String(item?.costType || "work") === "expense" ? "expense" : "work",
     name: String(item?.name || "").trim(),
     spec: String(item?.spec || "").trim(),
     qty: toAmountNumber(item?.qty),
@@ -1679,12 +1834,12 @@ export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
     note: String(item?.note || "").trim(),
   }));
 
-  const quote: Quote = {
+  const data: Quote = {
     schema: "quote/v1",
-    docNo: await nextQuoteDocNo(ctx, issuedAt),
+    docNo: await nextFormDocNo(ctx, manifest.formId, issuedAt),
     issuedAt,
     validUntil: String(parsed?.validUntil || "").trim() || addDaysToDateString(issuedAt, 30),
-    title: String(parsed?.title || "").trim() || "견적서",
+    title: String(parsed?.title || "").trim() || manifest.name,
     supplier,
     client: {
       company: String(parsed?.client?.company || "").trim(),
@@ -1693,6 +1848,17 @@ export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
       tel: String(parsed?.client?.tel || "").trim(),
       email: String(parsed?.client?.email || "").trim(),
       address: String(parsed?.client?.address || "").trim(),
+    },
+    // 입금계좌는 회사 정보(_회사정보/공급자.json)가 출처다 — 모델이 지어내지 못하게 결제조건만 받는다.
+    payment: {
+      bank: supplier.payment?.bank || "",
+      accountHolder: supplier.payment?.accountHolder || "",
+      accountNo: supplier.payment?.accountNo || "",
+      terms: String(parsed?.payment?.terms || "").trim(),
+    },
+    delivery: {
+      dueDate: String(parsed?.delivery?.dueDate || "").trim(),
+      place: String(parsed?.delivery?.place || "").trim(),
     },
     currency: "KRW",
     items,
@@ -1706,12 +1872,69 @@ export async function runQuoteTool(input: any, ctx: ToolContext): Promise<any> {
   };
 
   // 5. 계산 — 금액의 단일 출처
-  const { totals, missing } = computeQuoteTotals(quote);
-  quote.totals = totals;
-  quote.missing = missing;
+  const calculate = getCalculator(manifest.calculator);
+  const { totals, missing } = calculate(data, { maxItemRows: manifest.maxItemRows });
+  data.totals = totals;
+  data.missing = missing;
 
-  // 6. 반환. needs_input 이면 클라이언트가 PDF·XLSX 버튼을 잠근다(§3.4).
-  return { kind: "quote", status: missing.length > 0 ? "needs_input" : "ready", quote, promptEcho: prompt };
+  // 6. ★부족한 값이 있으면 여기서 끝. 파일을 하나도 만들지 않는다.
+  if (missing.length > 0) {
+    return {
+      kind: "form",
+      status: "needs_input",
+      formId: manifest.formId,
+      formName: manifest.name,
+      data,
+      missing,
+      files: [],
+      promptEcho: prompt,
+      note: "부족한 값을 한 번에 모아 사용자에게 물어보세요. 임의로 채우지 마세요.",
+    };
+  }
+
+  // 7. 렌더 → 회사 파일 저장
+  const view = buildQuoteView(data);
+  // 같은 고객·같은 날 두 번째 문서가 첫 번째를 조용히 덮어쓰지 않게 문서번호 일련번호를 붙인다.
+  const sequence = data.docNo.slice(-3);
+  const baseName = renderOutputName(manifest.outputName, data)
+    + (sequence !== "001" && !manifest.outputName.includes("docNo") ? `_${sequence}` : "");
+  const folder = `${OUTPUT_ROOT}/${issuedAt}`;
+  const files: { format: string; path: string; name: string; contentType: string; size: number }[] = [];
+  for (const format of formats) {
+    const spec = FORM_FORMATS[format];
+    const template = await loadTemplate(storage, manifest, format);
+    if (!template) {
+      throw new Error(`'${manifest.name}' 서식에 ${format.toUpperCase()} 템플릿이 없어요. manifest.templates 를 확인해 주세요.`);
+    }
+    const bytes = format === "hwpx"
+      ? renderHwpx(template, view, { repeaters: manifest.repeaters })
+      : renderDocx(template, view);
+    const fileName = `${baseName}.${spec.ext}`;
+    const saved = await saveCompanyBinary(ctx, `${folder}/${fileName}`, bytes, spec.contentType);
+    files.push({ format, path: saved.path, name: fileName, contentType: spec.contentType, size: saved.size });
+  }
+
+  // 8. 업무 등록
+  const workId = await registerFormWorkItem(ctx, {
+    title: `${manifest.name} · ${data.client.company || data.title}`,
+    requestText: prompt,
+    summary: `${files.map((file) => file.format.toUpperCase()).join(" · ")} 생성 · 합계 ${formatKrw(totals?.grandTotal ?? null)}원`,
+    files,
+  });
+
+  // 9. 반환
+  return {
+    kind: "form",
+    status: "ready",
+    formId: manifest.formId,
+    formName: manifest.name,
+    docNo: data.docNo,
+    data,
+    missing: [],
+    files,
+    workId,
+    promptEcho: prompt,
+  };
 }
 
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
@@ -3757,9 +3980,11 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", gate: true, run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
-  // 견적서(quote/v1). ⚠️ 2단계(프론트 kind:"quote" 렌더러)가 들어올 때 주석을 푼다 —
-  // 지금 열면 도구는 도는데 채팅·검수 패널에 견적서를 그릴 화면이 없다.
-  // quote: { agentId: "ink", agentIds: ["core", "edge"], kind: "external", run: runQuoteTool },
+  // 서식 문서 엔진(form_list · form_fill). ⚠️ 회사 파일 `_서식/견적서-표준/` 에 manifest.json 과
+  // template.docx 가 올라간 뒤에 주석을 푼다 — 템플릿이 없으면 form_fill 이 실패한다.
+  // (form_list 는 템플릿 없이도 안전하지만, 목록만 보이고 만들지 못하면 사용자만 헷갈린다.)
+  // form_list: { agentId: "ink", agentIds: ["core", "edge"], kind: "read", synthesize: true, run: runFormListTool },
+  // form_fill: { agentId: "ink", agentIds: ["core", "edge"], kind: "external", run: runFormFillTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
   // 메일 발송: 외부·되돌리기 어려움 → 승인 게이트(승인하면 그때 실제 발송).
   gmail_send: { agentId: "sync", kind: "external", gate: true, run: runGmailSendTool },
@@ -3884,7 +4109,7 @@ export async function processJob(
       return { ok: true, gated: true };
     }
     await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
-    const output = await tool.run(input, ctx);
+    const output = await tool.run(input, { ...ctx, jobId });
     await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
     return { ok: true, output };
   } catch (e: any) {
