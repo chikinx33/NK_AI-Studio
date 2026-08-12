@@ -17,6 +17,8 @@ const { unzipSync, strFromU8 } = await import(pathToFileURL(join(agentDir, "vend
 const { PizZip } = await import(pathToFileURL(join(agentDir, "vendor/docxtemplater-pizzip.bundle.js")).href);
 const { renderDocx } = await import(pathToFileURL(join(agentDir, "_render-docx.ts")).href);
 const { renderHwpx } = await import(pathToFileURL(join(agentDir, "_render-hwpx.ts")).href);
+const { renderXlsx } = await import(pathToFileURL(join(agentDir, "_render-xlsx.ts")).href);
+const XLSX = await import(pathToFileURL(join(agentDir, "vendor/sheetjs.bundle.js")).href);
 const { computeQuoteTotals, buildQuoteView } = await import(pathToFileURL(join(agentDir, "_form-calc.ts")).href);
 const { parseManifest } = await import(pathToFileURL(join(agentDir, "_form-registry.ts")).href);
 
@@ -165,7 +167,7 @@ test("실제 HWPX 서식이 끝까지 채워지고 남는 행이 삭제된다", 
   assert.ok(!rowCounts.includes(31), "미사용 행이 남아 있다");
 });
 
-test("DOCX 와 HWPX 의 합계가 같다 (§10 #2)", { skip }, () => {
+test("DOCX·HWPX·XLSX 의 합계가 전부 같다 (§10 #2)", { skip }, () => {
   const { quote, totals } = prepared();
   const view = buildQuoteView(quote);
   const inDocx = docxText(renderDocx(docxTemplate, view));
@@ -173,6 +175,17 @@ test("DOCX 와 HWPX 의 합계가 같다 (§10 #2)", { skip }, () => {
   const grand = totals.grandTotal.toLocaleString("ko-KR");
   assert.ok(inDocx.includes(grand) && inHwpx.includes(grand), "두 포맷의 합계가 다르다");
   assert.ok(inDocx.includes(totals.grandTotalKo) && inHwpx.includes(totals.grandTotalKo));
+
+  // XLSX 는 숫자 셀이라 캐시값으로 비교한다(수식은 엑셀이 다시 계산한다).
+  const workbook = XLSX.read(renderXlsx(quote, view, null), { type: "array", cellFormula: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const totalCell = Object.entries(sheet).find(
+    ([key, cell]) => key.startsWith("F") && cell.t === "s" && String(cell.v).trim() === "합계"
+  );
+  assert.ok(totalCell, "XLSX 에 합계 행이 없다");
+  const amount = sheet[`G${totalCell[0].replace(/[A-Z]/g, "")}`];
+  assert.equal(amount.v, totals.grandTotal, "XLSX 합계가 다른 포맷과 다르다");
+  assert.ok(amount.f, "XLSX 합계가 수식이 아니다");
 });
 
 test("부가세 포함·면세도 실제 서식에서 렌더된다", { skip }, () => {

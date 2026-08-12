@@ -35,6 +35,7 @@ import {
 } from "./_form-registry";
 import { renderDocx, DOCX_CONTENT_TYPE } from "./_render-docx";
 import { renderHwpx, HWPX_CONTENT_TYPE } from "./_render-hwpx";
+import { renderXlsx, XLSX_CONTENT_TYPE } from "./_render-xlsx";
 
 export { getSql };
 export type { SqlFn };
@@ -1618,9 +1619,11 @@ const FORM_SYSTEM_PROMPTS: Record<string, string> = {
 };
 
 /** 포맷별 파일 확장자·MIME. */
-const FORM_FORMATS: Record<string, { ext: string; contentType: string }> = {
-  docx: { ext: "docx", contentType: DOCX_CONTENT_TYPE },
-  hwpx: { ext: "hwpx", contentType: HWPX_CONTENT_TYPE },
+const FORM_FORMATS: Record<string, { ext: string; contentType: string; needsTemplate: boolean }> = {
+  docx: { ext: "docx", contentType: DOCX_CONTENT_TYPE, needsTemplate: true },
+  hwpx: { ext: "hwpx", contentType: HWPX_CONTENT_TYPE, needsTemplate: true },
+  // XLSX 는 템플릿이 없으면 기본 표를 만든다(§6.3) — manifest.templates.xlsx 가 null 이어도 된다.
+  xlsx: { ext: "xlsx", contentType: XLSX_CONTENT_TYPE, needsTemplate: false },
 };
 
 /**
@@ -1741,6 +1744,13 @@ async function registerFormWorkItem(
   }
 }
 
+/** 이 서식으로 지금 만들 수 있는 포맷 — 템플릿이 필요한 포맷은 템플릿이 있어야 한다. */
+function producibleFormats(manifest: { templates: Record<string, string | null> }): string[] {
+  return Object.entries(FORM_FORMATS)
+    .filter(([format, spec]) => (spec.needsTemplate ? !!manifest.templates[format] : true))
+    .map(([format]) => format);
+}
+
 /** 잉크 서식 목록 도구(§7.1). manifest 가 깨진 폴더는 이유와 함께 알려 준다. */
 export async function runFormListTool(_input: any, ctx: ToolContext): Promise<any> {
   const storage = await companyStorage(ctx.env, ctx.userId);
@@ -1754,11 +1764,9 @@ export async function runFormListTool(_input: any, ctx: ToolContext): Promise<an
       category: form.category,
       description: form.description,
       folder: form.folder,
-      // 지금 실제로 만들 수 있는 포맷만 알려준다. 템플릿이 있어도 렌더러가 없으면
-      // (xlsx·pdf — 이후 단계) 목록에 넣지 않는다. 만들지 못할 걸 권하면 안 된다.
-      formats: Object.entries(form.templates)
-        .filter(([format, file]) => !!file && !!FORM_FORMATS[format])
-        .map(([format]) => format),
+      // 지금 실제로 만들 수 있는 포맷만 알려준다. 렌더러가 없으면(pdf — 이후 단계)
+      // 목록에 넣지 않는다. 만들지 못할 걸 권하면 안 된다.
+      formats: producibleFormats(form),
       maxItemRows: form.maxItemRows,
     })),
     problems,
@@ -1887,6 +1895,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
       data,
       missing,
       files: [],
+      availableFormats: producibleFormats(manifest),
       promptEcho: prompt,
       note: "부족한 값을 한 번에 모아 사용자에게 물어보세요. 임의로 채우지 마세요.",
     };
@@ -1903,12 +1912,14 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
   for (const format of formats) {
     const spec = FORM_FORMATS[format];
     const template = await loadTemplate(storage, manifest, format);
-    if (!template) {
+    if (!template && spec.needsTemplate) {
       throw new Error(`'${manifest.name}' 서식에 ${format.toUpperCase()} 템플릿이 없어요. manifest.templates 를 확인해 주세요.`);
     }
     const bytes = format === "hwpx"
-      ? renderHwpx(template, view, { repeaters: manifest.repeaters })
-      : renderDocx(template, view);
+      ? renderHwpx(template as Uint8Array, view, { repeaters: manifest.repeaters })
+      : format === "xlsx"
+        ? renderXlsx(data, view, template)
+        : renderDocx(template as Uint8Array, view);
     const fileName = `${baseName}.${spec.ext}`;
     const saved = await saveCompanyBinary(ctx, `${folder}/${fileName}`, bytes, spec.contentType);
     files.push({ format, path: saved.path, name: fileName, contentType: spec.contentType, size: saved.size });
@@ -1932,6 +1943,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     data,
     missing: [],
     files,
+    availableFormats: producibleFormats(manifest),
     workId,
     promptEcho: prompt,
   };

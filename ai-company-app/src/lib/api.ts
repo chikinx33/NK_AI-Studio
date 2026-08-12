@@ -1275,6 +1275,34 @@ export async function reorderProjectCards(projectIds: string[]) {
   return response.json();
 }
 
+// 서식 문서(form_fill) 산출물 — 서버가 만든 파일과 계산 결과를 그대로 받는다.
+// ★금액은 전부 서버(_form-calc.ts)가 계산한 값이다. 화면에서 다시 계산하지 않는다.
+export interface FormFile {
+  format: string;      // docx · hwpx · xlsx …
+  path: string;        // 회사 파일 경로(업무/<날짜>/…)
+  name: string;
+  contentType: string;
+  size: number;
+}
+export interface FormMissingField {
+  index?: number;
+  field: string;
+  reason?: string;
+}
+export interface FormOutput {
+  kind: "form";
+  status: "ready" | "needs_input";
+  formId: string;
+  formName: string;
+  docNo?: string;
+  data?: any;                 // quote/v1 (totals 포함)
+  missing?: FormMissingField[];
+  files?: FormFile[];
+  availableFormats?: string[]; // 이 서식으로 만들 수 있는 포맷
+  workId?: string;
+  promptEcho?: string;
+}
+
 // 결과(산출물) 리스트
 export interface ResultItem {
   id: string;
@@ -1282,8 +1310,10 @@ export interface ResultItem {
   agentName: string;
   file: string;
   url: string;
-  kind: "image" | "video" | "audio" | "ppt" | "pdf";
+  kind: "image" | "video" | "audio" | "ppt" | "pdf" | "form";
   docData?: { title?: string; subtitle?: string; slides?: any[]; sections?: any[] };
+  /** 서식 문서(form_fill) 산출물 — 표·합계 미리보기와 포맷별 다운로드에 쓴다. */
+  formData?: FormOutput;
   prompt?: string;
   provider?: string;
   note?: string;
@@ -1304,17 +1334,19 @@ export async function getResults(limit = 30): Promise<{ items: ResultItem[]; tot
     if (j.status === "cancelled") return false;
     if (!j.output) return false;
     const o = j.output;
-    return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf";
+    return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf" || o.kind === "form";
   });
   const items: ResultItem[] = all.map((j: any) => {
     const out = j.output || {};
     const isDoc = out.kind === "ppt" || out.kind === "pdf";
+    const isForm = out.kind === "form";
     return {
       id: j.id, agentId: j.agent_id, agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
       file: j.type,
       url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
-      kind: (out.kind === "ppt" ? "ppt" : out.kind === "pdf" ? "pdf" : out.audioUrl ? "audio" : out.videoUrl ? "video" : "image") as ResultItem["kind"],
+      kind: (out.kind === "form" ? "form" : out.kind === "ppt" ? "ppt" : out.kind === "pdf" ? "pdf" : out.audioUrl ? "audio" : out.videoUrl ? "video" : "image") as ResultItem["kind"],
       docData: isDoc ? { title: out.title, subtitle: out.subtitle, slides: out.slides, sections: out.sections } : undefined,
+      formData: isForm ? (out as FormOutput) : undefined,
       prompt: (j.input && j.input.prompt) || out.promptEcho || "", provider: out.provider || out.model || "",
       note: j.review_note || "", reviewStatus: j.review_status || "pending",
       createdAt: Date.parse(j.created_at) || 0,
@@ -1431,13 +1463,13 @@ export async function getEvents(since: number): Promise<LiveEvents> {
 function hasDeliverableOutput(j: any): boolean {
   const o = j?.output;
   if (!o) return false;
-  return !!(o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf");
+  return !!(o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf" || o.kind === "form");
 }
 // 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
 const APPROVAL_TOOL_LABEL: Record<string, string> = {
   gmail_send: "메일 발송", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
   image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
-  scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성",
+  scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성", form_list: "서식 목록 조회", form_fill: "서식 문서 작성",
 };
 // 외부에 영향을 주는(되돌리기 어려운) 도구 — 카드에 'external' 배지로 강조.
 const APPROVAL_EXTERNAL_TOOLS = new Set(["gmail_send", "calendar_create", "calendar_delete", "gmail_trash", "publish"]);

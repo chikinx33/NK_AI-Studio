@@ -10,6 +10,7 @@ import {
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
+import { FormDownloadButtons, describeMissing } from "./FormDocumentView";
 import { actionString, useUiAction } from "../lib/uiActions";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
@@ -227,6 +228,77 @@ async function handleDocDownload(it: ResultItem) {
   }
 }
 
+// ── 서식 문서 카드 ────────────────────────────────────────────────────────────
+// 파일은 서버가 이미 만들어 회사 파일에 저장해 뒀다. 여기서는 요약과 내려받기만 한다.
+// ★금액은 서버가 계산한 totals 를 표시만 한다(화면에서 다시 계산하지 않는다).
+function FormCard({
+  it,
+  onReview,
+  onCancel,
+}: {
+  it: ResultItem;
+  onReview: (action: "approve" | "revise") => void;
+  onCancel: () => void;
+}) {
+  const form = it.formData!;
+  const totals = form.data?.totals || {};
+  const rows: any[] = Array.isArray(totals.rows) ? totals.rows : [];
+  const itemCount = rows.filter((row) => row?.kind === "item").length;
+  const blocked = form.status === "needs_input";
+
+  return (
+    <div className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+      <div className="flex items-start gap-2">
+        <div className="h-11 w-11 shrink-0 rounded-lg ring-2 ring-amber-500/60 bg-amber-900/30 flex items-center justify-center">
+          <PdfIcon className="h-6 w-6 text-emerald-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">
+            <span className="text-amber-200">{it.agentName}</span>
+            <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
+            <span className="ml-2 text-[10px] font-semibold text-emerald-400">{form.formName || "서식"}</span>
+          </div>
+          <div className="truncate text-gray-300 font-medium" title={form.data?.title}>
+            {form.data?.title || it.prompt || "서식 문서"}
+          </div>
+          <div className="text-gray-500">
+            {blocked
+              ? `아직 못 만들었어요 · ${describeMissing(form.missing) || "값 부족"}`
+              : `${form.data?.client?.company || "고객사"} · 항목 ${itemCount}개 · 합계 ${totals.grandTotal ?? "—"}`}
+          </div>
+          {!blocked && totals.grandTotalText && (
+            <div className="mt-0.5 text-[11px] font-semibold text-emerald-300">{totals.grandTotalText}</div>
+          )}
+        </div>
+      </div>
+
+      <FormDownloadButtons output={form} compact />
+
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          onClick={() => onReview("approve")}
+          className="flex-1 inline-flex items-center justify-center rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
+        >
+          검토 승인
+        </button>
+        <button
+          onClick={() => onReview("revise")}
+          className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+        >
+          재검토
+        </button>
+        <button
+          onClick={onCancel}
+          title="지시 취소"
+          className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── 문서 카드 ─────────────────────────────────────────────────────────────────
 function DocCard({
   it,
@@ -421,6 +493,16 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
 
       <div className="space-y-2">
         {pending.map((it) => {
+          if (it.kind === "form" && it.formData) {
+            return (
+              <FormCard
+                key={it.id}
+                it={it}
+                onReview={(action) => reviewInline(it, action)}
+                onCancel={() => cancelInline(it)}
+              />
+            );
+          }
           const isDoc = it.kind === "ppt" || it.kind === "pdf";
           if (isDoc) {
             return (

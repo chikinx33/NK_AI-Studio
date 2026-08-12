@@ -7,6 +7,7 @@ import {
 } from "../lib/api";
 import { downloadPdfViaPrint, downloadPpt } from "../lib/docgen";
 import CompanyFilePreview from "./CompanyFilePreview";
+import FormDocumentView from "./FormDocumentView";
 
 function extensionOf(name: string) {
   const index = name.lastIndexOf(".");
@@ -121,7 +122,7 @@ function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onCl
       <header className="flex items-center gap-3 border-b border-edge px-5 py-3.5">
         <FileIcon kind={kind} />
         <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold text-gray-100">{file.name}</h2><p className="mt-0.5 text-[10px] text-gray-500">생성된 {KIND_LABEL[kind] || "파일"}</p></div>
-        <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900/40 disabled:opacity-40">다운로드</button>
+        {output.kind !== "form" && <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900/40 disabled:opacity-40">다운로드</button>}
         <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-gray-400 transition hover:bg-edge hover:text-white" aria-label="미리보기 닫기">×</button>
       </header>
       <div className="min-h-0 flex-1 overflow-auto bg-[#080c12] p-5">
@@ -131,8 +132,10 @@ function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onCl
         {job && kind === "video" && url && <div className="grid min-h-72 place-items-center"><video src={url} controls autoPlay className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
         {job && kind === "audio" && url && <div className="grid min-h-72 place-items-center"><audio src={url} controls autoPlay className="w-full max-w-2xl" /></div>}
         {job && kind === "pdf" && url && <iframe src={url} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}
-        {job && (kind === "pdf" || kind === "presentation") && !url && <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-[#0d131c] p-7 text-sm leading-7 text-gray-200"><h1 className="mb-2 text-2xl font-bold">{output.title || file.name}</h1>{output.subtitle && <p className="mb-6 text-gray-400">{output.subtitle}</p>}{blocks.map((block: any, index: number) => <section key={index} className="mb-5 border-t border-edge pt-4"><h2 className="mb-2 text-lg font-semibold text-emerald-200">{block?.title || `${kind === "presentation" ? "슬라이드" : "섹션"} ${index + 1}`}</h2><div className="whitespace-pre-wrap text-gray-300">{Array.isArray(block?.bullets) ? block.bullets.map((item: any) => `• ${String(item)}`).join("\n") : String(block?.content || block?.body || block?.text || block?.description || "")}</div></section>)}</article>}
-        {job && !url && !blocks.length && <pre className="mx-auto max-w-4xl whitespace-pre-wrap break-words rounded-xl border border-edge bg-[#0d131c] p-6 text-xs leading-6 text-gray-300">{JSON.stringify(output, null, 2)}</pre>}
+        {/* 서식 문서(form_fill): 표·합계 미리보기 + 포맷별 내려받기. 파일은 서버가 이미 만들어 뒀다. */}
+        {job && output.kind === "form" && <FormDocumentView output={output} />}
+        {job && output.kind !== "form" && (kind === "pdf" || kind === "presentation") && !url && <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-[#0d131c] p-7 text-sm leading-7 text-gray-200"><h1 className="mb-2 text-2xl font-bold">{output.title || file.name}</h1>{output.subtitle && <p className="mb-6 text-gray-400">{output.subtitle}</p>}{blocks.map((block: any, index: number) => <section key={index} className="mb-5 border-t border-edge pt-4"><h2 className="mb-2 text-lg font-semibold text-emerald-200">{block?.title || `${kind === "presentation" ? "슬라이드" : "섹션"} ${index + 1}`}</h2><div className="whitespace-pre-wrap text-gray-300">{Array.isArray(block?.bullets) ? block.bullets.map((item: any) => `• ${String(item)}`).join("\n") : String(block?.content || block?.body || block?.text || block?.description || "")}</div></section>)}</article>}
+        {job && output.kind !== "form" && !url && !blocks.length && <pre className="mx-auto max-w-4xl whitespace-pre-wrap break-words rounded-xl border border-edge bg-[#0d131c] p-6 text-xs leading-6 text-gray-300">{JSON.stringify(output, null, 2)}</pre>}
       </div>
     </section>
   </div>;
