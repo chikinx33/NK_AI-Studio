@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { addKnowledge, type ChatFileReference } from "../lib/api";
 import Markdown from "./Markdown";
+import { importSpreadsheet, isSpreadsheetFile, type SheetImportResult } from "../lib/xlsxImport";
 import ChatFileAttachments from "./ChatFileAttachments";
 import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
@@ -353,7 +354,18 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   const [dragOver, setDragOver] = useState(false);
   const dragDepth = useRef(0); // 자식 요소 진입/이탈로 인한 깜빡임 방지용 카운터
 
-  const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+  // 스프레드시트는 base64 첨부가 아니라 '텍스트로 읽어 본문에 붙이는' 방식이다(설계서 §8).
+  const [sheets, setSheets] = useState<SheetImportResult[]>([]);
+  const [attachError, setAttachError] = useState("");
+
+  const ALLOWED_MIME = [
+    "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+    // 스프레드시트 — 실제 첨부는 텍스트화 경로로 가지만, MIME 목록에도 함께 둔다.
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "text/tab-separated-values",
+  ];
 
   const readFile = useCallback((file: File): Promise<Attachment | null> => {
     return new Promise((resolve) => {
@@ -371,17 +383,42 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   }, []);
 
   // 여러 파일을 한 번에 첨부(최대 MAX_ATTACHMENTS). 허용 형식만 통과.
+  // 스프레드시트는 여기서 텍스트로 읽어 둔다 — 모델이 xlsx 바이너리를 읽지 못하기 때문(§8.1).
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
     if (!list.length) return;
-    const read = await Promise.all(list.map(readFile));
-    const valid = read.filter((a): a is Attachment => !!a);
-    if (!valid.length) return;
-    setAttachments((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
+    setAttachError("");
+
+    const spreadsheets = list.filter((file) => isSpreadsheetFile(file));
+    const others = list.filter((file) => !isSpreadsheetFile(file));
+
+    if (spreadsheets.length) {
+      const imported = await Promise.all(spreadsheets.map(async (file) => {
+        try {
+          return await importSpreadsheet(file);
+        } catch (error) {
+          setAttachError(`'${file.name}' 을(를) 읽지 못했어요. 엑셀에서 다시 저장해 보시겠어요?`);
+          return null;
+        }
+      }));
+      const valid = imported.filter((entry): entry is SheetImportResult => !!entry);
+      if (valid.length) setSheets((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
+    }
+
+    if (others.length) {
+      const read = await Promise.all(others.map(readFile));
+      const valid = read.filter((a): a is Attachment => !!a);
+      if (valid.length) setAttachments((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
+      else if (!spreadsheets.length) setAttachError("이미지·PDF·엑셀(csv 포함)만 첨부할 수 있어요.");
+    }
   }, [readFile]);
 
   const removeAttachment = useCallback((i: number) => {
     setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+  }, []);
+
+  const removeSheet = useCallback((i: number) => {
+    setSheets((prev) => prev.filter((_, idx) => idx !== i));
   }, []);
 
   // 입력칸 자동 높이 — 줄 수만큼 세로로 확장(최대치 넘으면 스크롤)
@@ -477,10 +514,13 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
 
   function submit() {
     const t = draft.trim();
-    if ((!t && !attachments.length) || busy || speechInput.enabled) return;
-    onSend(t, attachments.length ? attachments : undefined);
+    if ((!t && !attachments.length && !sheets.length) || busy || speechInput.enabled) return;
+    // 스프레드시트는 본문 끝에 텍스트로 붙는다 — 그 턴에 말하는 모든 직원이 같은 내용을 본다.
+    const body = [t, ...sheets.map((sheet) => sheet.text)].filter(Boolean).join("\n\n");
+    onSend(body, attachments.length ? attachments : undefined);
     setDraft("");
     setAttachments([]);
+    setSheets([]);
     // 내가 보낸 메시지는 항상 따라간다 — 위로 올려 읽던 중이었어도 다시 붙는다.
     stickRef.current = true;
     scrollToBottom("auto");
@@ -773,6 +813,33 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         </div>
       ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
+        {/* 스프레드시트 칩 — 읽은 행 수를 보여준다(조용히 잘린 게 아닌지 사용자가 바로 안다) */}
+        {sheets.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {sheets.map((sheet, i) => (
+              <div key={`sheet-${i}`} className="relative">
+                <div className="flex h-16 items-center gap-2 rounded-lg border border-emerald-800/70 bg-emerald-950/20 px-2.5 py-1.5 text-xs text-emerald-200">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M3 10h18M9 4v16" stroke="currentColor" strokeWidth="1.8" />
+                  </svg>
+                  <span className="min-w-0">
+                    <span className="block max-w-[150px] truncate font-semibold">{sheet.fileName}</span>
+                    <span className="block text-[10px] text-emerald-400/90">
+                      {sheet.rowsRead}행 읽음{sheet.rowsSkipped > 0 ? ` · ${sheet.rowsSkipped}행 생략` : ""}
+                    </span>
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeSheet(i)}
+                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-gray-800 text-gray-300 text-[10px] leading-none ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  title="첨부 제거"
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {attachError && <p className="mb-2 text-[11px] text-amber-300">{attachError}</p>}
         {/* 첨부 미리보기 — 여러 개를 가로로 나열 */}
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -801,7 +868,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,.xlsx,.xls,.csv,.tsv"
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }}
           />
@@ -809,7 +876,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={busy || attachments.length >= MAX_ATTACHMENTS}
-            title={attachments.length >= MAX_ATTACHMENTS ? `최대 ${MAX_ATTACHMENTS}개까지 첨부할 수 있어요` : "이미지/파일 첨부 (여러 개 가능)"}
+            title={attachments.length >= MAX_ATTACHMENTS ? `최대 ${MAX_ATTACHMENTS}개까지 첨부할 수 있어요` : "이미지·PDF·엑셀(csv) 첨부 (여러 개 가능)"}
             className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${attachments.length ? "border-emerald-600 bg-emerald-900/40 text-emerald-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
           >
             <PaperclipIcon className="h-4 w-4" />

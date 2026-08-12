@@ -1232,7 +1232,10 @@ export interface OrchestratorDeps {
   toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
   firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
   focusAgent?: string;   // 1:1 단독 대화 모드 — 이 직원만 응답, 위임·통솔·다른 직원 개입 전면 차단
-  images?: { base64: string; mimeType: string }[];  // 첨부(이미지·PDF) — 첫 번째 에이전트에게만 전달
+  // 첨부(이미지·PDF) — 그 턴에 발언하는 에이전트들에게 전달한다(§8.2).
+  // 코어가 받아 잉크에게 넘기는 흐름에서 잉크가 첨부를 못 보면 첨부를 무시한 견적서가 나온다.
+  // 다만 발언자 수만큼 토큰이 늘어나므로 앞의 IMAGE_RECIPIENT_LIMIT 명까지만 준다.
+  images?: { base64: string; mimeType: string }[];
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
   onJobReady?: (payload?: any) => void; // SSE 콜백: 도구/업무 완료 즉시 갱신
   onUiAction?: (action: UiAction) => Promise<void> | void; // 검증된 화면 제어 명령을 현재 브라우저로 전달
@@ -1533,6 +1536,17 @@ export async function runGroupChat(
   };
 
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
+  // 첨부는 그 턴에 말하는 모든 직원에게 주되, 앞의 4명까지만 준다(토큰 상한 · 설계서 §8.2).
+  // 5번째부터는 앞선 발언 기록(텍스트)으로 맥락을 잇는다.
+  const IMAGE_RECIPIENT_LIMIT = 4;
+  let imageRecipients = 0;
+  const imagesForNextSpeaker = () => {
+    if (!deps.images?.length) return undefined;
+    if (imageRecipients >= IMAGE_RECIPIENT_LIMIT) return undefined;
+    imageRecipients += 1;
+    return deps.images;
+  };
+
   const runWorker = async (workerId: string, instruction: string, workerModel?: string, workerMaxTokens?: number) => {
     if (workerId === "core" || !getAgent(workerId)) return;
     const meta = getAgent(workerId)!;
@@ -1540,7 +1554,8 @@ export async function runGroupChat(
     const trigger =
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
-    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
+    // ★첨부 전파: 코어가 넘긴 일을 받은 직원도 원본 첨부를 봐야 한다(§8.2).
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, images: imagesForNextSpeaker(), model: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await _emitUiActions(res.uiActions, workerId);
     await runTools(res.runs, workerId);
@@ -1563,9 +1578,9 @@ export async function runGroupChat(
             "단순 인사·잡담·1:1 질문이면 호출하지 마세요.")
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
-    // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
+    // 첨부는 이 발언자에게 먼저 주고, 이어서 발언하는 직원들에게도 같은 첨부를 준다(§8.2).
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: deps.images, model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
