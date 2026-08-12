@@ -924,7 +924,7 @@ export async function fileJobAsWorkItem(
     const rows = await sql(
       `INSERT INTO company_work_items
          (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
-       VALUES ($1, $2, $3, $4, 'done', $5, $6, $7::jsonb, now())
+       VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7::jsonb, now())
        RETURNING id, to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key`,
       [
         userId,
@@ -1810,7 +1810,7 @@ async function registerFormWorkItem(
     const rows = await sql(
       `INSERT INTO company_work_items
          (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
-       VALUES ($1, $2, $3, 'form_fill', 'done', $4, $5, $6::jsonb, now())
+       VALUES ($1, $2, $3, 'form_fill', 'completed', $4, $5, $6::jsonb, now())
        RETURNING id`,
       [
         ctx.userId,

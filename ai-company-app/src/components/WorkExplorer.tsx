@@ -11,6 +11,7 @@ import {
   renameCompanyWorkItem,
   type AgentVideoStorageItem,
   type CompanyWorkItem,
+  downloadCompanyFile,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
 import CompanyFileExplorer from "./CompanyFileExplorer";
@@ -113,6 +114,68 @@ function ViewModeControl({ value, onChange }: { value: ViewMode; onChange: (valu
 
 async function inChunks<T>(items: T[], size: number, task: (chunk: T[]) => Promise<unknown>) {
   for (let index = 0; index < items.length; index += size) await task(items.slice(index, index + size));
+}
+
+/**
+ * 완료 판정 — 저장된 값이 'completed' 도 'done' 도 될 수 있다.
+ * (예전 코드가 'done' 으로 넣어 둔 행들이 화면에서 계속 '진행 중'으로 보였다.)
+ */
+function isDone(status: string): boolean {
+  return status === "completed" || status === "done";
+}
+
+/**
+ * 이 업무가 만든 문서 — 회사 파일에 저장된 실제 경로(metadata.paths)를 보여준다.
+ * 영상 소스 보관함(listAgentVideoStorage)과는 다른 자리라, 이게 없으면 서식 문서는
+ * "저장된 소스가 없습니다" 만 뜨고 어디 있는지 알 길이 없었다.
+ */
+function WorkDocumentFiles({ work }: { work: CompanyWorkItem }) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const paths: string[] = Array.isArray((work.metadata as any)?.paths) ? (work.metadata as any).paths : [];
+  if (!paths.length) return null;
+
+  async function save(path: string) {
+    setBusy(path); setError("");
+    try {
+      const name = path.split("/").pop() || "문서";
+      const blob = await downloadCompanyFile({
+        kind: "file", name, path,
+        parentPath: path.split("/").slice(0, -1).join("/"),
+        contentType: "application/octet-stream", size: 0,
+      } as any);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = name;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "내려받지 못했습니다.");
+    } finally { setBusy(""); }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-emerald-900/60 bg-emerald-950/15 p-4">
+      <h3 className="text-xs font-bold text-emerald-200">이 업무가 만든 문서</h3>
+      <p className="mt-0.5 text-[10px] text-gray-500">회사 파일 · {paths[0].split("/").slice(0, -1).join("/")}</p>
+      <div className="mt-2 space-y-1.5">
+        {paths.map((path) => (
+          <div key={path} className="flex items-center gap-2 rounded-lg border border-edge bg-panel px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-gray-200" title={path}>{path.split("/").pop()}</span>
+            <button
+              type="button"
+              onClick={() => void save(path)}
+              disabled={busy === path}
+              className="shrink-0 rounded border border-emerald-800/70 bg-emerald-900/30 px-2 py-1 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-900/50 disabled:opacity-50"
+            >
+              {busy === path ? "받는 중…" : "내려받기"}
+            </button>
+          </div>
+        ))}
+      </div>
+      {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
+    </div>
+  );
 }
 
 export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork, onOpenProject }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void; onOpenProject: (projectId: string) => void }) {
@@ -438,11 +501,14 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       {error && <div className="mx-5 mt-4 rounded-xl border border-red-900 bg-red-950/30 p-3 text-xs text-red-300">{error}</div>}
       <main className="min-h-0 flex-1 overflow-y-auto p-5">
         {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">업무 폴더를 불러오는 중...</div> : sourceWork ? (
-          visibleSources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleSources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleSources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 업무에 저장된 소스가 없습니다."}</div>
+          <>
+          {sourceWork && <WorkDocumentFiles work={sourceWork} />}
+          {visibleSources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleSources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleSources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "영상·이미지 소스는 없어요. 만든 문서는 위에 있어요."}</div>}
+          </>
         ) : date ? (
           visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} /> : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
-            <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${work.status === "completed" ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{work.status === "completed" ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
+            <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDone(work.status) ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{isDone(work.status) ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
               {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}

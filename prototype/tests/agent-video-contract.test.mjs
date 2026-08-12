@@ -153,7 +153,9 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.match(explorer, /data-item-menu/);
   assert.match(explorer, /documentMenu/);
   assert.match(explorer, /beginRenameDocument/);
-  assert.match(explorer, /status === "completed" \? "완료"/);
+  // 완료 판정은 isDone() 으로 모았다 — 예전 코드가 넣어 둔 'done' 행도 완료로 읽어야 하기 때문.
+  assert.match(explorer, /isDone\(work\.status\) \? "완료"/);
+  assert.match(explorer, /status === "completed" \|\| status === "done"/);
   assert.match(explorer, /이름 변경/);
   assert.match(explorer, /removeDateFolder/);
   assert.match(markdown, /raviok-open-work/);
