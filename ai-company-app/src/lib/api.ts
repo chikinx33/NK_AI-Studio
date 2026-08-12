@@ -1291,7 +1291,9 @@ export interface FormMissingField {
 }
 export interface FormOutput {
   kind: "form";
-  status: "ready" | "needs_input";
+  status: "ready" | "needs_input" | "error";
+  /** status==="error" 일 때 실패 이유 원문(채팅에 나온 것과 같은 문구). */
+  error?: string;
   formId: string;
   formName: string;
   docNo?: string;
@@ -1334,21 +1336,29 @@ export async function getResults(limit = 30): Promise<{ items: ResultItem[]; tot
   const d = await (await fetch(`/api/agent/jobs?limit=${limit}`)).json();
   const all = ((d && d.items) || []).filter((j: any) => {
     if (j.status === "cancelled") return false;
-    if (!j.output) return false;
+    // 실패한 서식 작업도 보여준다 — 이유를 보고 다시 시도할 수 있어야 한다(§6.5 C).
+    if (!j.output) return j.type === "form_fill" && j.status === "error";
     const o = j.output;
     return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf" || o.kind === "form";
   });
   const items: ResultItem[] = all.map((j: any) => {
     const out = j.output || {};
     const isDoc = out.kind === "ppt" || out.kind === "pdf";
-    const isForm = out.kind === "form";
+    const failedForm = !j.output && j.type === "form_fill";
+    const isForm = out.kind === "form" || failedForm;
     return {
       id: j.id, agentId: j.agent_id, agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
       file: j.type,
       url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
       kind: (out.kind === "form" ? "form" : out.kind === "ppt" ? "ppt" : out.kind === "pdf" ? "pdf" : out.audioUrl ? "audio" : out.videoUrl ? "video" : "image") as ResultItem["kind"],
       docData: isDoc ? { title: out.title, subtitle: out.subtitle, slides: out.slides, sections: out.sections } : undefined,
-      formData: isForm ? (out as FormOutput) : undefined,
+      formData: isForm
+        ? (failedForm
+            // 실패는 output 이 없다 — 화면이 쓸 수 있는 최소 형태로 만들어 준다.
+            ? ({ kind: "form", status: "error", formId: "", formName: "서식 문서",
+                 error: String(j.error || ""), promptEcho: (j.input && j.input.prompt) || "" } as any)
+            : (out as FormOutput))
+        : undefined,
       prompt: (j.input && j.input.prompt) || out.promptEcho || "", provider: out.provider || out.model || "",
       note: j.review_note || "", reviewStatus: j.review_status || "pending",
       createdAt: Date.parse(j.created_at) || 0,

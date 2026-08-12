@@ -120,10 +120,9 @@ test("★단가가 missing 에 없으면 안내에 '단가'가 나오지 않는�
   // 하드코딩된 앞머리가 사라졌다
   assert.doesNotMatch(view, /단가가 비어 있어요 —/);
   assert.doesNotMatch(view, /"단가가 비어 있어 아직 파일을 만들지 않았어요"/);
-  // 문구는 missing 에서 만든다
-  assert.match(view, /export function missingMessage/);
-  assert.match(view, /blocked \? missingMessage\(output\.missing\)/);
-  assert.match(view, /\{blocked && <p[^>]*>\{missingMessage\(output\.missing\)\}<\/p>\}/);
-  // 라벨 표는 field 이름에서 나온다
-  assert.match(view, /unitPrice: "단가"/);
+  // 문구는 missing 목록에서 만든다(§6.5 — 목록 생성은 lib/formView.ts 가 맡는다)
+  assert.match(view, /missingItems\(output\.missing\)/);
+  const rules = read("ai-company-app/src/lib/formView.ts");
+  assert.match(rules, /export function missingItems/);
+  assert.match(rules, /unitPrice: "단가"/);
 });

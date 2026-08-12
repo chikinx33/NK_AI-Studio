@@ -10,7 +10,14 @@ import {
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
-import { FormDownloadButtons, missingMessage } from "./FormDocumentView";
+import {
+  FormDownloadButtons,
+  FormError,
+  FormNeedsInput,
+  FormPreviewModal,
+  FormStatusBadge,
+  formState,
+} from "./FormDocumentView";
 import { actionString, useUiAction } from "../lib/uiActions";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
@@ -241,60 +248,81 @@ function FormCard({
   onCancel: () => void;
 }) {
   const form = it.formData!;
+  const state = formState(form); // ★서버가 준 status 하나로만 판정한다(§6.5)
   const totals = form.data?.totals || {};
   const rows: any[] = Array.isArray(totals.rows) ? totals.rows : [];
   const itemCount = rows.filter((row) => row?.kind === "item").length;
-  const blocked = form.status === "needs_input";
+  const [preview, setPreview] = useState(false);
+
+  const frame =
+    state === "needs_input" ? "border-amber-600/50 bg-amber-950/20"
+    : state === "error" ? "border-rose-800/50 bg-rose-950/20"
+    : "border-emerald-800/50 bg-emerald-950/15";
 
   return (
-    <div className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
-      <div className="flex items-start gap-2">
-        <div className="h-11 w-11 shrink-0 rounded-lg ring-2 ring-amber-500/60 bg-amber-900/30 flex items-center justify-center">
-          <PdfIcon className="h-6 w-6 text-emerald-300" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-medium">
-            <span className="text-amber-200">{it.agentName}</span>
-            <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
-            <span className="ml-2 text-[10px] font-semibold text-emerald-400">{form.formName || "서식"}</span>
+    <div className={`text-xs border rounded-lg p-2 ${frame}`}>
+      <div className="flex items-center gap-1.5">
+        <FormStatusBadge state={state} />
+        <span className="truncate text-[10px] text-gray-500">
+          {it.agentName} · {JOB[it.agentId] ?? "직원"} · {form.formName || "서식"}
+        </span>
+      </div>
+      <div className="mt-1 truncate font-medium text-gray-200" title={form.data?.title}>
+        {form.data?.title || it.prompt || "서식 문서"}
+      </div>
+
+      {/* A. 정보 필요 — 다운로드·승인 버튼을 아예 그리지 않는다 */}
+      {state === "needs_input" && <FormNeedsInput output={form} onCancel={onCancel} />}
+
+      {/* C. 실패 — 이유 원문 + 다시 시도만 */}
+      {state === "error" && <FormError output={form as any} />}
+
+      {/* B. 완성 — 요약 → 미리보기 → 다운로드 → 저장/재작성 */}
+      {state === "ready" && (
+        <>
+          <div className="mt-0.5 text-gray-400">
+            {form.data?.client?.company || "고객사"} · 항목 {itemCount}개
           </div>
-          <div className="truncate text-gray-300 font-medium" title={form.data?.title}>
-            {form.data?.title || it.prompt || "서식 문서"}
-          </div>
-          <div className="text-gray-500">
-            {blocked
-              ? `아직 못 만들었어요 · ${missingMessage(form.missing)}`
-              : `${form.data?.client?.company || "고객사"} · 항목 ${itemCount}개 · 합계 ${totals.grandTotal ?? "—"}`}
-          </div>
-          {!blocked && totals.grandTotalText && (
+          {totals.grandTotalText && (
             <div className="mt-0.5 text-[11px] font-semibold text-emerald-300">{totals.grandTotalText}</div>
           )}
-        </div>
-      </div>
 
-      <FormDownloadButtons output={form} compact />
+          <button
+            onClick={() => setPreview(true)}
+            className="mt-2 w-full rounded border border-emerald-800/70 bg-emerald-900/25 px-2 py-1 text-[12px] font-semibold text-emerald-200 transition hover:bg-emerald-900/45"
+          >
+            미리보기
+          </button>
 
-      <div className="mt-2 flex items-center gap-1.5">
-        <button
-          onClick={() => onReview("approve")}
-          className="flex-1 inline-flex items-center justify-center rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
-        >
-          검토 승인
-        </button>
-        <button
-          onClick={() => onReview("revise")}
-          className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
-        >
-          재검토
-        </button>
-        <button
-          onClick={onCancel}
-          title="지시 취소"
-          className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
-        >
-          <XIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
+          <FormDownloadButtons output={form} compact />
+
+          <div className="mt-2 flex items-center gap-1.5">
+            <button
+              onClick={() => onReview("approve")}
+              className="flex-1 inline-flex items-center justify-center rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
+            >
+              업무 파일에 저장
+            </button>
+            <button
+              onClick={() => onReview("revise")}
+              className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+            >
+              재작성
+            </button>
+            <button
+              onClick={onCancel}
+              title="지시 취소"
+              className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {/* 이 버튼이 무엇을 하는지 화면에 쓴다 — 예전엔 툴팁에만 있어 사람이 알 수 없었다 */}
+          <p className="mt-1 text-[10px] text-gray-500">저장하면 업무 파일 {it.workDateKey || "오늘"} 폴더에 정리돼요</p>
+        </>
+      )}
+
+      {preview && <FormPreviewModal output={form} onClose={() => setPreview(false)} />}
     </div>
   );
 }
@@ -468,7 +496,11 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
   }, "results");
 
   // 검토 대기 = 박스 항목, 처리된 것(사용 확정/재검토) = 최근 처리 텍스트 리스트 (승인 대기와 동일 구조)
-  const pending = items.filter((it) => it.reviewStatus === "pending");
+  const waiting = items.filter((it) => it.reviewStatus === "pending");
+  // ★'정보 필요'는 검토할 게 없다 — 보고에 섞으면 사용자가 "완성된 건가?"로 읽는다(§6.5 A).
+  //   값을 채워 이어서 만들 일이므로 별도 묶음으로 뺀다.
+  const needsInput = waiting.filter((it) => it.kind === "form" && it.formData && formState(it.formData) === "needs_input");
+  const pending = waiting.filter((it) => !needsInput.includes(it));
   // '최근 처리'는 채팅방 리셋(자정)과 동일하게 비운다 — 오늘 0시(로컬) 이후 처리된 것만 표시.
   // 날짜가 넘어가면 채팅방이 새로 열리듯, 어제까지의 처리 내역은 자동으로 사라진다.
   const startOfToday = (() => {
@@ -483,6 +515,24 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
   // 보고 패널은 빈 상태여도 항상 표시(원본과 동일).
   return (
     <>
+    {needsInput.length > 0 && (
+      <CollapsibleSection
+        storageKey="nk_collapse_needs_input"
+        header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 이어서 할 일 ({needsInput.length})</span>}
+      >
+        <div className="mb-2 text-[11px] text-gray-500">값이 모자라 아직 만들지 않았어요. 알려주시면 이어서 만들어요.</div>
+        <div className="space-y-2">
+          {needsInput.map((it) => (
+            <FormCard
+              key={it.id}
+              it={it}
+              onReview={(action) => reviewInline(it, action)}
+              onCancel={() => cancelInline(it)}
+            />
+          ))}
+        </div>
+      </CollapsibleSection>
+    )}
     <CollapsibleSection
       storageKey="nk_collapse_results"
       header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})</span>}

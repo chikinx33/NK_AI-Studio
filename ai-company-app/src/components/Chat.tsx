@@ -432,6 +432,20 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [injectedIdx, setInjectedIdx] = useState<number | null>(null);
   const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(new Set());
+  // 검수 카드의 '이어서 만들기'가 채운다 — 전송은 사용자가 직접 누른다(멋대로 보내지 않는다).
+  useUiAction((action) => {
+    if (action.action !== "chat.prefill") return;
+    const text = actionString(action, "text");
+    if (!text) return;
+    setDraft(text);
+    window.setTimeout(() => {
+      const area = taRef.current;
+      if (!area) return;
+      area.focus();
+      area.setSelectionRange(area.value.length, area.value.length);
+    }, 0);
+  }, "chat-prefill");
+
   useUiAction((action) => {
     if (action.action !== "chat.messages") return;
     const operation = actionString(action, "operation");
