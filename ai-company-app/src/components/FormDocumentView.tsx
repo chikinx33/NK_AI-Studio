@@ -16,6 +16,19 @@ const MISSING_LABEL: Record<string, string> = {
   items: "견적 항목",
 };
 
+/**
+ * 안내 한 줄 — ★반드시 실제 missing 에서 만든다.
+ * 예전엔 "단가가 비어 있어요"가 앞머리에 박혀 있어서, 단가는 멀쩡하고 고객사만 비었을 때도
+ * 단가를 탓했다. 화면이 사실과 다르면 사용자는 엉뚱한 값을 고치러 간다.
+ */
+export function missingMessage(missing?: FormOutput["missing"]): string {
+  const described = describeMissing(missing);
+  if (!described) return "아직 만들 수 없어요 — 부족한 값을 알려주시면 바로 만들어 드릴게요.";
+  const overflow = (missing || []).some((entry) => entry.reason === "overflow");
+  if (overflow) return `${described} — 서식의 행을 늘리거나 항목을 줄여 주세요.`;
+  return `${described}이(가) 비어 있어요 — 알려주시면 바로 만들어 드릴게요.`;
+}
+
 /** 무엇이 비어서 문서를 못 만들었는지 사람 말로. 항목마다 따로 묻지 않게 한 줄로 모은다. */
 export function describeMissing(missing?: FormOutput["missing"]): string {
   if (!missing?.length) return "";
@@ -85,7 +98,7 @@ export function FormDownloadButtons({ output, compact }: { output: FormOutput; c
               disabled={disabled}
               onClick={() => file && void download(file)}
               title={
-                blocked ? "단가가 비어 있어 아직 파일을 만들지 않았어요"
+                blocked ? missingMessage(output.missing)
                   : file ? `${FORMAT_LABEL[format] || format} 내려받기`
                   : `${FORMAT_SHORT[format] || format} 형식도 필요하면 잉크에게 말씀해 주세요`
               }
@@ -100,11 +113,9 @@ export function FormDownloadButtons({ output, compact }: { output: FormOutput; c
           );
         })}
       </div>
-      {blocked && (
-        <p className="mt-1.5 text-[11px] text-amber-300">
-          단가가 비어 있어요 — {describeMissing(output.missing) || "부족한 값"}을 알려주시면 바로 만들어 드릴게요.
-        </p>
-      )}
+      {blocked && <p className="mt-1.5 text-[11px] text-amber-300">{missingMessage(output.missing)}</p>}
+      {/* 서버가 요청을 보정했으면(예: formId) 조용히 넘기지 않고 알린다. */}
+      {output.notice && <p className="mt-1.5 text-[11px] text-amber-300">⚠️ {output.notice}</p>}
       {/* 일부 포맷만 실패한 경우(예: PDF 변환) — 만들어진 파일은 그대로 쓸 수 있다. */}
       {(output.warnings || []).map((warning, index) => (
         <p key={index} className="mt-1.5 text-[11px] text-amber-300">{warning}</p>

@@ -50,6 +50,10 @@ export interface FormManifest {
   description: string;
   /** 이 서식이 들어 있는 `_서식/` 하위 폴더 이름 (formId 와 다를 수 있다). */
   folder: string;
+  /** 어떻게 찾았는지. exact 가 아니면 사용자에게 알린다(조용히 다른 서식을 쓰지 않기 위해). */
+  matchedBy?: "exact" | "folder" | "name" | "normalized" | "tokens" | "only-one";
+  /** 호출자가 실제로 요청했던 id (보정된 경우에만 채운다). */
+  requestedFormId?: string;
 }
 
 // ── GCS 접근 (company-files.ts 와 같은 패턴) ─────────────────────────────────
@@ -230,8 +234,52 @@ export async function listForms(storage: CompanyStorage): Promise<{ forms: FormM
 }
 
 /**
+ * 등록된 서식 목록에서 요청한 id 를 고른다(네트워크 없음 — 규칙만 담당한다).
+ * 넓혀 가는 순서: 정확 → 이름 → 표기 차이 → 토큰 순서 → 하나뿐일 때.
+ * 못 찾으면 null. ★'비슷하면 통과'가 아니라, 보정했으면 matchedBy 로 흔적을 남긴다.
+ */
+export function matchForm(forms: FormManifest[], formId: string): FormManifest | null {
+  const wanted = String(formId || "").trim();
+  if (!wanted) return null;
+  const pick = (
+    form: FormManifest | undefined,
+    matchedBy: NonNullable<FormManifest["matchedBy"]>
+  ): FormManifest | null => (form ? { ...form, matchedBy, requestedFormId: matchedBy === "exact" ? undefined : wanted } : null);
+
+  return (
+    pick(forms.find((form) => form.formId === wanted), "exact")
+    || pick(forms.find((form) => form.name === wanted), "name")
+    // 1) 대소문자·공백·하이픈·언더바 차이 (Quote_Standard, quotestandard …)
+    || pick(forms.find((form) => normalizeId(form.formId) === normalizeId(wanted)), "normalized")
+    || pick(forms.find((form) => normalizeId(form.name) === normalizeId(wanted)), "normalized")
+    // 2) 토큰 순서만 다른 경우 (standard-quote == quote-standard)
+    || pick(forms.find((form) => idTokens(form.formId) === idTokens(wanted)), "tokens")
+    // 3) 서식이 딱 하나뿐이면 그것으로 진행하고 무엇을 골랐는지 알린다
+    || (forms.length === 1 ? pick(forms[0], "only-one") : null)
+  );
+}
+
+/**
  * formId 로 서식 찾기. 폴더 이름(견적서-표준)과 formId(quote-standard)가 다를 수 있어
  * 폴더 이름으로도 찾아 준다 — 사용자가 둘 중 무엇을 말할지 모른다.
+ */
+/** 비교용 정규화 — 대소문자·공백·하이픈·언더바를 지운다. */
+function normalizeId(value: string): string {
+  return String(value || "").toLowerCase().replace(/[\s_-]/g, "");
+}
+
+/** 하이픈·언더바·공백으로 끊은 토큰 집합 (순서를 뒤집어 쓴 id 를 잡기 위해). */
+function idTokens(value: string): string {
+  return String(value || "").toLowerCase().split(/[\s_-]+/).filter(Boolean).sort().join("|");
+}
+
+/**
+ * formId 로 서식 찾기. 폴더 이름(견적서-표준)과 formId(quote-standard)가 다를 수 있어
+ * 폴더 이름으로도 찾아 준다 — 사용자가 둘 중 무엇을 말할지 모른다.
+ *
+ * 모델이 id 를 뒤집어 쓰는 일이 실제로 있었다(standard-quote). 그래서 정확 일치가 실패하면
+ * 표기 차이 → 토큰 순서 → 서식이 하나뿐인 경우 순으로 넓혀 가며 찾는다.
+ * ★단, '비슷하면 통과'가 아니다. 보정해서 찾았으면 matchedBy 에 남겨 호출부가 반드시 알린다.
  */
 export async function findForm(storage: CompanyStorage, formId: string): Promise<FormManifest> {
   const wanted = String(formId || "").trim();
@@ -239,16 +287,26 @@ export async function findForm(storage: CompanyStorage, formId: string): Promise
 
   // 폴더 이름이 그대로 오면 목록 스캔 없이 바로 읽는다(빠른 경로).
   const direct = await readCompanyText(storage, `${FORMS_ROOT}/${wanted}/manifest.json`).catch(() => null);
-  if (direct !== null) return parseManifest(direct, wanted);
+  if (direct !== null) return { ...parseManifest(direct, wanted), matchedBy: "folder" };
 
   const { forms } = await listForms(storage);
-  const found = forms.find((form) => form.formId === wanted)
-    || forms.find((form) => form.formId.toLowerCase() === wanted.toLowerCase() || form.name === wanted);
+  const found = matchForm(forms, wanted);
   if (!found) {
     const known = forms.map((form) => `${form.formId}(${form.name})`).join(", ") || "등록된 서식 없음";
     throw new Error(`'${wanted}' 서식을 찾지 못했어요. form_list 로 목록을 확인하세요. 현재 등록: ${known}`);
   }
   return found;
+}
+
+/** 보정해서 찾았을 때 사용자·직원에게 보여줄 한 줄. 정확히 맞았으면 빈 문자열. */
+export function formMatchNotice(manifest: FormManifest): string {
+  if (!manifest.requestedFormId || !manifest.matchedBy || manifest.matchedBy === "exact") return "";
+  const how = manifest.matchedBy === "only-one"
+    ? "등록된 서식이 하나뿐이라"
+    : manifest.matchedBy === "tokens"
+      ? "id 순서만 다른 것으로 보여"
+      : "표기 차이로 보여";
+  return `요청한 서식 id '${manifest.requestedFormId}' 는 없어서 ${how} '${manifest.formId}'(${manifest.name})로 만들었어요. 다음부터는 form_list 의 id 를 그대로 써 주세요.`;
 }
 
 /** 템플릿 파일 bytes. 포맷에 템플릿이 없으면 null(XLSX 처럼 기본 생성이 가능한 포맷용). */

@@ -1300,6 +1300,7 @@ export interface FormOutput {
   files?: FormFile[];
   availableFormats?: string[]; // 이 서식으로 만들 수 있는 포맷
   warnings?: string[];         // 일부 포맷만 실패했을 때의 안내(예: PDF 변환 실패)
+  notice?: string;             // 서버가 무언가를 보정했을 때의 고지(예: formId 오타 보정)
   workId?: string;
   promptEcho?: string;
 }

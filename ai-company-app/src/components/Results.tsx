@@ -10,7 +10,7 @@ import {
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
-import { FormDownloadButtons, describeMissing } from "./FormDocumentView";
+import { FormDownloadButtons, missingMessage } from "./FormDocumentView";
 import { actionString, useUiAction } from "../lib/uiActions";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
@@ -263,7 +263,7 @@ function FormCard({
           </div>
           <div className="text-gray-500">
             {blocked
-              ? `아직 못 만들었어요 · ${describeMissing(form.missing) || "값 부족"}`
+              ? `아직 못 만들었어요 · ${missingMessage(form.missing)}`
               : `${form.data?.client?.company || "고객사"} · 항목 ${itemCount}개 · 합계 ${totals.grandTotal ?? "—"}`}
           </div>
           {!blocked && totals.grandTotalText && (

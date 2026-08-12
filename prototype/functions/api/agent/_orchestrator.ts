@@ -48,6 +48,7 @@ import {
   archiveSkillByName,
   restoreSkill,
 } from "./_shared";
+import { toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
 
@@ -199,7 +200,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
     form_list: `[[RUN: form_list | {}]]  → 회사에 등록된 문서 서식 목록 조회. 사용자가 견적서·계약서 등 서식 작업을 요청하면 먼저 실행해 어떤 서식이 있는지 확인.`,
-    form_fill: `[[RUN: form_fill | {"formId": "서식 ID", "formats": ["docx", "pdf"], "prompt": "내용을 사용자가 말한 그대로", "context": "첨부 자료 등(선택)"}]]  → 서식에 내용을 채워 문서 파일 생성. formats는 docx(워드)·xlsx(엑셀)·pdf 중 사용자가 원하는 것(여러 개 가능, 미지정이면 docx). form_list 의 formats 에 있는 것만 만들 수 있다. 단가나 수량을 사용자가 말하지 않았으면 임의로 넣지 말 것 — 시스템이 되물어 준다.`,
+    form_fill: `[[RUN: form_fill | {"formId": "서식 ID", "formats": ["docx", "pdf"], "prompt": "내용을 사용자가 말한 그대로", "context": "첨부 자료 등(선택)"}]]  → 서식에 내용을 채워 문서 파일 생성. formats는 docx(워드)·xlsx(엑셀)·pdf 중 사용자가 원하는 것(여러 개 가능, 미지정이면 docx). form_list 의 formats 에 있는 것만 만들 수 있다. formId 는 form_list 가 돌려준 값을 그대로 복사해 쓸 것. 기억에 의존해 지어내지 말 것. 확실하지 않으면 form_list 를 먼저 실행할 것. 단가나 수량을 사용자가 말하지 않았으면 임의로 넣지 말 것 — 시스템이 되물어 준다.`,
     gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
     gmail_send: `[[RUN: gmail_send | {"to": "받는사람@메일", "subject": "제목", "body": "본문 전체"}]]  → Gmail로 메일 발송. 본문은 사용자 요청에 맞춰 자연스럽고 완성된 형태로 직접 작성한다. ⚠️ 되돌릴 수 없어 사람 승인 후 발송됨(승인 패널). (구글 연결 필요)`,
     gmail_trash: `[[RUN: gmail_trash | {"query": "from:no-reply@x.com 또는 subject:광고 등 Gmail 검색어", "max": 5}]]  → 검색어에 맞는 메일을 휴지통으로(30일 복구 가능). ⚠️ 반드시 먼저 gmail_read 등으로 어떤 메일인지 사용자에게 보여주고 명확히 동의받은 뒤에만 실행. 광범위한 검색어로 한꺼번에 지우지 말 것.`,
@@ -1488,15 +1489,22 @@ export async function runGroupChat(
           : r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
           : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
           : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.${modelNote(result.output)}`;
+        // 도구가 무언가를 보정했으면(예: formId) 그 사실을 사람과 다음 턴 컨텍스트에 남긴다.
+        const notice = String((result.output as any)?.notice || "").trim();
         await emit({
-          userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText,
+          userId, conversationId, role: "agent", agentId, name: meta.name,
+          text: notice ? `${doneText}
+⚠️ ${notice}` : doneText,
           files: result.gated ? [] : messageFiles(r.tool, result.output, job.id),
         });
         try { deps.onJobReady?.(); } catch {}
       } else {
+        // ★실패 이유를 그대로 보여준다. 이 문구는 대화 기록에 남아 다음 턴 컨텍스트로도 들어가므로,
+        // 직원이 "formId 를 잘못 썼구나" 를 스스로 알고 고쳐 재시도할 수 있다.
+        // 이유를 감추면 사용자도 직원도 같은 실수를 반복한다 — 도구 종류와 무관하게 항상 보여준다.
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
-          text: `❌ ${r.tool} 생성 중 오류가 발생했어요. 다시 요청해 주세요.`,
+          text: toolFailureText(r.tool, result.error),
         });
       }
     }

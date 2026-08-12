@@ -24,6 +24,7 @@ import {
 import {
   companyStorage,
   findForm,
+  formMatchNotice,
   listForms,
   loadTemplate,
   readCompanyText,
@@ -1961,6 +1962,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
       missing,
       files: [],
       availableFormats: producibleFormats(manifest, ctx.env),
+      notice: formMatchNotice(manifest),
       promptEcho: prompt,
       note: "부족한 값을 한 번에 모아 사용자에게 물어보세요. 임의로 채우지 마세요.",
     };
@@ -2038,6 +2040,8 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     files,
     availableFormats: producibleFormats(manifest, ctx.env),
     warnings,
+    // 요청한 formId 를 보정해 찾았으면 그 사실을 반드시 알린다(조용히 다른 서식을 쓰지 않는다).
+    notice: formMatchNotice(manifest),
     workId,
     promptEcho: prompt,
   };
