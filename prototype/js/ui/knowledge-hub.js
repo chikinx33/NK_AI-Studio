@@ -92,6 +92,16 @@
    *     클수록 업로드·분석이 느려지고 그게 곧 504 였다.
    */
   var ANALYZE_MAX_EDGE = 2048;
+  /*
+   * 손대지 않고 그냥 보내도 되는 한 장의 크기(data URL 문자열 길이 기준).
+   *
+   * 서버 본문 상한이 12MB 이고 시트는 최대 4장이라 장당 2.5MB 면 넉넉히 들어간다.
+   * 이 안에 들고 크기도 이미 작으면 다시 굽지 않는다 — 다시 구우면 JPEG 이 한 번 더
+   * 손실되고, 그 손실이 하필 눈·경계선 같은 작은 부위에 먼저 낀다.
+   */
+  var ANALYZE_PASSTHROUGH_BYTES = 2.5 * 1024 * 1024;
+  // 다시 구울 때의 화질. 0.85 는 경계선에 잡티가 껴서 부위 개수를 세는 데 불리했다.
+  var ANALYZE_JPEG_QUALITY = 0.92;
   function shrinkForAnalyze(dataUrl) {
     return new Promise(function (resolve) {
       var raw = String(dataUrl || '');
@@ -104,7 +114,16 @@
             var W = img.naturalWidth || img.width;
             var H = img.naturalHeight || img.height;
             if (!W || !H) { resolve(raw); return; }
+            /*
+             * 줄일 필요도 없고 크기도 작으면 원본을 그대로 보낸다.
+             *
+             * 캔버스를 한 번 거치면 그만큼 화질이 깎인다(JPEG 재압축). 줄이지도 않으면서
+             * 굳이 다시 구울 이유가 없다. 처음부터 2000px 이하로 올려 두면 이 길로 간다.
+             * 큰 파일이 들어올 때를 대비한 아래 축소 경로는 그대로 남긴다 — 사람이 규칙을
+             * 지킨다는 전제로 안전장치를 빼면, 어긴 날 12MB 를 넘겨 413 이 난다.
+             */
             var scale = Math.min(1, ANALYZE_MAX_EDGE / Math.max(W, H));
+            if (scale === 1 && raw.length <= ANALYZE_PASSTHROUGH_BYTES) { resolve(raw); return; }
             var w = Math.max(1, Math.round(W * scale));
             var h = Math.max(1, Math.round(H * scale));
             var canvas = document.createElement('canvas');
@@ -116,7 +135,7 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0, w, h);
-            var out = canvas.toDataURL('image/jpeg', 0.85);
+            var out = canvas.toDataURL('image/jpeg', ANALYZE_JPEG_QUALITY);
             // 어떤 이유로든 더 커졌다면 원본을 쓴다.
             resolve(out && out.length < raw.length ? out : raw);
           } catch (_) { resolve(raw); }

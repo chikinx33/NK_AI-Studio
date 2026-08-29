@@ -446,3 +446,25 @@ test("시트는 부위를 셀 수 있을 만큼의 해상도로 보낸다", () =
   // 왜 더 못 올리는지를 코드 옆에 남긴다(다음에 또 "더 올려" 가 나온다).
   assert.match(src, /최대 변 3072 를 넘으면 자기가 줄인다/);
 });
+
+test("이미 작은 시트는 다시 굽지 않고 그대로 보낸다", () => {
+  const src = hub();
+  /*
+   * 캔버스를 한 번 거치면 JPEG 이 다시 압축돼 화질이 깎인다. 줄일 필요도 없는데
+   * 굳이 다시 구우면 손실만 남고, 그 손실이 하필 눈·경계선 같은 작은 부위에 먼저 낀다.
+   * 처음부터 2000px 이하로 올리면 이 길로 간다.
+   */
+  assert.match(src, /var ANALYZE_PASSTHROUGH_BYTES = 2\.5 \* 1024 \* 1024;/);
+  assert.match(src, /if \(scale === 1 && raw\.length <= ANALYZE_PASSTHROUGH_BYTES\) \{ resolve\(raw\); return; \}/);
+  // 축소 경로는 남아 있어야 한다 — 큰 파일이 들어온 날 12MB 를 넘겨 413 이 나면 안 된다.
+  assert.match(src, /var scale = Math\.min\(1, ANALYZE_MAX_EDGE \/ Math\.max\(W, H\)\);/);
+  assert.match(src, /ctx\.drawImage\(img, 0, 0, w, h\)/);
+});
+
+test("다시 구울 때의 화질이 부위를 셀 수 있는 수준이다", () => {
+  const src = hub();
+  // 0.85 는 경계선에 잡티가 껴서 개수 세기에 불리했다. 본문 상한에 여유가 있어 올린다.
+  assert.match(src, /var ANALYZE_JPEG_QUALITY = 0\.92;/);
+  assert.match(src, /canvas\.toDataURL\('image\/jpeg', ANALYZE_JPEG_QUALITY\)/);
+  assert.doesNotMatch(src, /toDataURL\('image\/jpeg', 0\.85\)/);
+});
