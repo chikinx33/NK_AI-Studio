@@ -1160,7 +1160,16 @@ export interface AuthDiag {
   apiKeyKind: string;
   oauthKind: string;
   gateway: boolean;
-  test: { ok: boolean; status: number; detail: string } | null;
+  test: { ok: boolean; status: number; detail: string; requestId?: string; cfRay?: string } | null;
+  /** 자격증명 없이 경로만 확인한 결과. 구독·API키가 똑같이 막힐 때 원인을 가른다. */
+  reach?: {
+    label: "direct" | "gateway";
+    status: number;
+    ms: number;
+    colo?: string;
+    reached: boolean;
+    bodyHead?: string;
+  }[];
 }
 export async function authDiag(): Promise<{ ok: boolean; diag?: AuthDiag; error?: string }> {
   return (

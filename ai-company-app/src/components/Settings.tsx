@@ -600,6 +600,27 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                   {diag.test && (
                     <div className={diag.test.ok ? "text-emerald-400" : "text-red-400"}>
                       라이브 테스트: {diag.test.ok ? "✅ 성공 (200)" : `❌ 실패 (${diag.test.status}) — ${diag.test.detail}`}
+                      {!diag.test.ok && diag.test.requestId && (
+                        <span className="ml-1 text-gray-400">(Anthropic 도달 · req {diag.test.requestId.slice(-8)})</span>
+                      )}
+                    </div>
+                  )}
+                  {/* 도달성 — 자격증명 없이 경로만 확인. 구독·API키가 똑같이 막히면 여기서 갈린다. */}
+                  {Array.isArray(diag.reach) && diag.reach.length > 0 && (
+                    <div className="space-y-0.5 border-t border-edge pt-1">
+                      {diag.reach.map((r) => (
+                        <div key={r.label} className="text-gray-400">
+                          도달 검사 ({r.label === "gateway" ? "게이트웨이" : "직접"}):{" "}
+                          <span className={r.reached ? "text-emerald-300" : "text-red-400"}>
+                            {r.reached ? `✅ Anthropic 도달 (${r.status})` : `❌ 도달 못 함 (${r.status})`}
+                          </span>
+                          {r.colo && <span className="ml-1 text-gray-500">· {r.colo}</span>}
+                          <span className="ml-1 text-gray-500">· {r.ms}ms</span>
+                        </div>
+                      ))}
+                      <div className="text-[11px] text-gray-500">
+                        둘 다 ❌ 이면 자격증명이 아니라 경로 문제예요(키를 바꿔도 동일).
+                      </div>
                     </div>
                   )}
                   {diag.apiKeyKind === "oauth-token" && diag.mode === "api_key" && (

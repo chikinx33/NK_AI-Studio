@@ -253,27 +253,44 @@ export function hasClaudeFallback(auth) {
  *
  * 성공 응답은 손대지 않고 그대로 돌려준다(scenario.js 의 SSE 스트리밍 본문 보존).
  */
-export async function claudeFetch(env, auth, buildBody, init = {}) {
+export async function claudeFetch(env, auth, buildBody, init = {}, trace) {
   const url = anthropicMessagesUrl(env);
   const send = (a) =>
     fetch(url, { ...init, method: "POST", headers: a.headers, body: JSON.stringify(buildBody(a.subscription)) });
+  // 어떤 자격증명으로 어디까지 갔는지 기록한다. 오류 메시지가 늘 첫 시도 기준으로 찍혀
+  // 폴백이 돌았는지조차 알 수 없었다 — 그 때문에 원인 추적이 한참 헛돌았다.
+  const mark = (patch) => { if (trace) Object.assign(trace, patch); };
+  mark({ path: auth.subscription ? "subscription" : "api_key", fallbackTried: false });
 
   const res = await send(auth);
-  if (res.ok || !AUTH_FAILURE_STATUSES.has(res.status) || !hasClaudeFallback(auth)) return res;
+  mark({ firstStatus: res.status });
+  if (res.ok) return res;
+  if (!AUTH_FAILURE_STATUSES.has(res.status)) return res;
+  if (!hasClaudeFallback(auth)) {
+    mark({ fallbackSkipped: "예비 API 키 없음" });
+    return res;
+  }
 
   // 폴백 여부를 판단하려면 실패 본문을 봐야 한다. 자격증명 문제가 아닌 403/401 은
   // 폴백해도 똑같이 막히므로, 호출부가 본문을 한 번 더 읽을 수 있게 재구성해 돌려준다.
   const errText = await res.text().catch(() => "");
-  if (isCreditExhausted(errText, res.status)) return replayResponse(res, errText);
+  mark({ firstError: errText.slice(0, 200) });
+  if (isCreditExhausted(errText, res.status)) {
+    mark({ fallbackSkipped: "잔액 부족" });
+    return replayResponse(res, errText);
+  }
   // 엣지가 낸 응답이 확실할 때만 폴백을 건너뛴다(키를 바꿔도 같은 자리에서 막히므로).
   if (looksLikeEdgeBlock(res, errText)) {
     console.log(`claude_edge_block: ${res.status} — 폴백 생략`);
+    mark({ fallbackSkipped: "Cloudflare 엣지 차단" });
     return replayResponse(res, errText);
   }
 
   console.log(`claude_auth_fallback: subscription ${res.status} → api_key (${errText.slice(0, 120)})`);
   // 폴백도 실패하면 그 응답을 그대로 올린다. 마지막 시도의 상태·본문이 원인 파악에 쓰인다.
-  return send(auth.fallback);
+  const retry = await send(auth.fallback);
+  mark({ path: "subscription→api_key", fallbackTried: true, fallbackStatus: retry.status });
+  return retry;
 }
 
 /** 본문을 이미 읽어버린 실패 응답을, 호출부가 다시 읽을 수 있게 복제. */
@@ -389,9 +406,73 @@ export async function authDiagnose(sql, userId, env) {
         detail = t.slice(0, 160);
       }
     }
-    out.test = { ok: res.ok, status: res.status, detail };
+    out.test = {
+      ok: res.ok,
+      status: res.status,
+      detail,
+      // 어느 응답이 어디서 왔는지. x-request-id 가 있으면 Anthropic 까지 도달한 것이다.
+      requestId: String(res.headers.get("x-request-id") || ""),
+      cfRay: String(res.headers.get("cf-ray") || ""),
+    };
   } catch (e) {
     out.test = { ok: false, status: 0, detail: String((e && e.message) || e).slice(0, 160) };
+  }
+  // 도달성 검사: 자격증명 없이 GET 해서 '경로가 살아 있는지'만 본다.
+  // 구독·API 키가 똑같이 403 이면 자격증명이 아니라 경로 문제인데, 그걸 이걸로 가른다.
+  out.reach = await probeReach(env);
+  return out;
+}
+
+/** claudeFetch 의 trace 를 오류 메시지에 붙일 한 줄로. 무엇을 시도했는지가 드러나야 한다. */
+export function describeAuthTrace(trace) {
+  if (!trace || !trace.path) return "";
+  const bits = [trace.path];
+  if (trace.fallbackTried) {
+    bits.push(`구독 ${trace.firstStatus} → API키 ${trace.fallbackStatus}`);
+  } else if (trace.fallbackSkipped) {
+    bits.push(`폴백 생략: ${trace.fallbackSkipped}`);
+  }
+  return bits.join(" · ");
+}
+
+/**
+ * 자격증명 없이 Anthropic 도달 여부만 확인한다.
+ *
+ * 구독 모드와 API 키 모드가 '똑같이' 403 "Request not allowed" 로 실패하면 자격증명 문제가
+ * 아니다. 요청이 Anthropic 에 닿기 전에 잘린 것이다. 어디서 잘리는지(직접 경로냐 게이트웨이냐)를
+ * 갈라야 손댈 곳이 정해진다.
+ *
+ * 판정은 x-request-id 유무 하나로만 한다. 본문 문자열로 추정하면 차단 페이지 문구에 오판한다.
+ */
+async function probeReach(env) {
+  const targets = [{ label: "direct", base: "https://api.anthropic.com" }];
+  const gw = String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim().replace(/\/+$/, "");
+  if (gw) targets.push({ label: "gateway", base: gw });
+
+  const out = [];
+  for (const t of targets) {
+    const startedAt = Date.now();
+    try {
+      // 키를 붙이지 않는다. 도달만 하면 Anthropic 은 401 을 준다(과금·권한 영향 없음).
+      const res = await fetch(`${t.base}/v1/models`, {
+        method: "GET",
+        headers: { "anthropic-version": "2023-06-01" },
+      });
+      const body = await res.text().catch(() => "");
+      const requestId = String(res.headers.get("x-request-id") || "");
+      const cfRay = String(res.headers.get("cf-ray") || "");
+      out.push({
+        label: t.label,
+        status: res.status,
+        ms: Date.now() - startedAt,
+        requestId,
+        colo: cfRay.indexOf("-") >= 0 ? cfRay.slice(cfRay.lastIndexOf("-") + 1).toUpperCase() : "",
+        reached: !!requestId,
+        bodyHead: body.slice(0, 160),
+      });
+    } catch (e) {
+      out.push({ label: t.label, status: 0, ms: Date.now() - startedAt, reached: false, bodyHead: String((e && e.message) || e).slice(0, 160) });
+    }
   }
   return out;
 }

@@ -5,7 +5,7 @@
 // Anthropic Messages 규격과 OpenAI chat/completions 규격을 둘 다 알아야 하는 상황이 됐다.
 // 규격 차이(시스템 프롬프트 위치·이미지 블록 형태·토큰 파라미터 이름)를 전부 여기서 흡수하고,
 // 호출부에는 "system + messages + 모델" 하나만 남긴다.
-import { buildClaudeSystem, claudeFetch } from "./claude-auth.js";
+import { buildClaudeSystem, claudeFetch, describeAuthTrace } from "./claude-auth.js";
 import { isAnthropicProvider, normalizeProvider } from "./cloud-models.js";
 import { isCreditExhausted } from "./credit-exhausted.js";
 
@@ -42,18 +42,23 @@ async function callAnthropic(env, opts) {
   const messages = attachImagesAnthropic(opts.messages || [], opts.images || []);
 
   for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt++) {
+    // trace 를 넘겨 '무엇으로 어디까지 갔는지' 를 받아 온다. 예전엔 오류 라벨이 늘 첫 시도
+    // 기준이라, 폴백이 돌았는지조차 메시지로는 알 수 없었다.
+    const trace = {};
     const res = await claudeFetch(env, auth, (sub) => ({
       model: opts.model,
       max_tokens: opts.maxTokens || 1500,
       system: buildClaudeSystem(sub, opts.system),
       messages,
-    }));
+    }), {}, trace);
     const text = await res.text();
     if (res.status === 429 && attempt < RATE_LIMIT_RETRIES) {
       await sleep((attempt + 1) * 2000);
       continue;
     }
-    if (!res.ok) throw providerError("Claude", res.status, text, auth.subscription ? "subscription" : "api_key");
+    if (!res.ok) {
+      throw providerError("Claude", res.status, text, describeAuthTrace(trace) || (auth.subscription ? "subscription" : "api_key"));
+    }
     const data = JSON.parse(text);
     const parts = Array.isArray(data && data.content) ? data.content : [];
     return parts.map((p) => (typeof (p && p.text) === "string" ? p.text : "")).join("");
