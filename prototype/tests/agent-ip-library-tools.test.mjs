@@ -79,8 +79,32 @@ test("ip_text_save 는 지정한 캐릭터만 바꾸고 나머지는 그대로 �
   assert.match(body, /patch\.styleGuide = "";/);
   // 병합 저장이라 다른 브랜드 필드가 날아가지 않는다.
   assert.match(body, /merge: true/);
-  // 못 찾으면 조용히 넘어가지 말고 등록된 이름을 알려준다.
-  assert.match(body, /등록된 캐릭터: /);
+  // 못 찾으면 조용히 넘어가지 말고 어떤 이름들이 있는지 알려준다.
+  assert.match(body, /캐릭터를 찾지 못했어요/);
+});
+
+test("★회귀: 시트는 있는데 캐릭터 자산에 없으면 새로 만들어 저장한다", () => {
+  const src = shared();
+  const start = src.indexOf("async function runIpTextSaveTool");
+  const body = src.slice(start, start + 5000);
+  // 실제로 겪은 일: 세모는 시트가 등록돼 있는데 brandCharacters 에는 뚜뮤·네모만 있어
+  // 저장이 "'세모' 캐릭터를 찾지 못했어요" 로 실패했다. 화면(syncBrandCharField)은
+  // 이럴 때 항목을 새로 만든다 — 도구만 더 엄격할 이유가 없다.
+  assert.match(body, /characterSheets/);
+  assert.match(body, /const sheet = sheets\.find/);
+  assert.match(body, /next\.push\(applyPatch\(\{/);
+  assert.match(body, /trigger: token,/);
+  // 패치 로직이 한 곳에만 있어야 신규·기존 경로가 어긋나지 않는다.
+  assert.match(body, /const applyPatch = \(c: any\) =>/);
+});
+
+test("정말 없는 캐릭터면 두 출처를 모두 알려준다", () => {
+  const src = shared();
+  const start = src.indexOf("async function runIpTextSaveTool");
+  const body = src.slice(start, start + 5000);
+  // 한쪽만 보여주면 "시트는 보이는데 없다고 한다"는 혼선이 난다.
+  assert.match(body, /캐릭터 자산: /);
+  assert.match(body, /등록 시트: /);
 });
 
 test("둘 다 비면 저장하지 않는다 (빈 값으로 덮어쓰기 방지)", () => {

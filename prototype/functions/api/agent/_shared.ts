@@ -3555,13 +3555,10 @@ async function runIpTextSaveTool(input: any, ctx: ToolContext): Promise<any> {
   const got: any = await runBrandGetTool({ brandId }, ctx);
   if (!got?.exists) throw new Error("브랜드를 찾지 못했어요.");
   const list = Array.isArray(got.brand?.brandCharacters) ? got.brand.brandCharacters : [];
+  const sheets = Array.isArray(got.brand?.characterSheets) ? got.brand.characterSheets : [];
   const key = wanted.replace(/^@/, "").toLowerCase();
-  let hit = false;
-  const next = list.map((c: any) => {
-    const token = String(c?.trigger || c?.token || "").replace(/^@/, "").toLowerCase();
-    const name = String(c?.name || "").toLowerCase();
-    if (token !== key && name !== key) return c;
-    hit = true;
+
+  const applyPatch = (c: any) => {
     const patch: Record<string, any> = { ...c };
     if (description !== null) patch.description = description;
     if (negativePrompt !== null) patch.negativePrompt = negativePrompt;
@@ -3571,10 +3568,52 @@ async function runIpTextSaveTool(input: any, ctx: ToolContext): Promise<any> {
     patch.styleGuide = "";
     patch.updatedAt = new Date().toISOString();
     return patch;
+  };
+
+  let hit = false;
+  const next = list.map((c: any) => {
+    const token = String(c?.trigger || c?.token || "").replace(/^@/, "").toLowerCase();
+    const name = String(c?.name || "").toLowerCase();
+    if (token !== key && name !== key) return c;
+    hit = true;
+    return applyPatch(c);
   });
+
   if (!hit) {
-    const names = list.map((c: any) => String(c?.name || c?.trigger || "")).filter(Boolean).join(", ");
-    throw new Error("'" + wanted + "' 캐릭터를 찾지 못했어요. 등록된 캐릭터: " + (names || "없음"));
+    /*
+     * brandCharacters 에 없어도 IP 시트가 등록돼 있으면 실재하는 캐릭터다.
+     *
+     * 실제로 겪은 일: 세모는 시트가 등록돼 있는데 brandCharacters 에는 뚜뮤·네모만 있어
+     * 저장이 "'세모' 캐릭터를 찾지 못했어요" 로 실패했다. 화면(knowledge-hub.js
+     * syncBrandCharField)은 이럴 때 항목을 새로 만들어 넣는다 — 도구만 더 엄격할 이유가 없다.
+     * 같은 규칙으로 맞춘다.
+     */
+    const sheet = sheets.find((e: any) => {
+      const token = String(e?.token || "").replace(/^@/, "").toLowerCase();
+      const name = String(e?.displayName || "").toLowerCase();
+      return token === key || name === key;
+    });
+    if (sheet) {
+      const token = String(sheet.token || "").trim() || ("@" + wanted.replace(/^@/, ""));
+      const name = String(sheet.displayName || "").trim() || token.replace(/^@/, "");
+      next.push(applyPatch({
+        id: String(sheet.characterId || "").trim() || ("char_" + Date.now()),
+        trigger: token,
+        name,
+        createdAt: new Date().toISOString(),
+      }));
+      hit = true;
+    }
+  }
+
+  if (!hit) {
+    // 두 출처를 모두 보여준다. 한쪽만 보여주면 "시트는 보이는데 없다고 한다" 는 혼선이 난다.
+    const charNames = list.map((c: any) => String(c?.name || c?.trigger || "")).filter(Boolean);
+    const sheetNames = sheets.map((e: any) => String(e?.displayName || e?.token || "")).filter(Boolean);
+    throw new Error(
+      "'" + wanted + "' 캐릭터를 찾지 못했어요. 캐릭터 자산: " + (charNames.join(", ") || "없음") +
+      " / 등록 시트: " + (sheetNames.join(", ") || "없음")
+    );
   }
 
   await runBrandSaveTool({ brandId, brand: { brandCharacters: next }, merge: true }, ctx);
