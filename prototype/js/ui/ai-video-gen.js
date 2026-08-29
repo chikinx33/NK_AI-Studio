@@ -2,17 +2,24 @@
   var NK = window.NK || (window.NK = {});
   var vgen = NK.uiVideoGen || (NK.uiVideoGen = {});
 
+  // ⚠️ caps 는 **공급자 API 스키마**를 따른다. 여기가 틀리면 UI 가 못 쓰는 옵션을 열어 주고,
+  // 모델 가이드까지 거짓 정보를 싣는다(v3.1588 에서 실제로 그런 일이 있었다).
+  // 2026-08-30 Atlas Cloud 스키마로 재확인.
   var ALL_MODELS = [
     { id: 'veo',          label: 'Veo 3.1 Fast',          t2v: true,  i2v: true,  caps: ['start'] },
     { id: 'veo-full',     label: 'Veo 3.1 Full',          t2v: true,  i2v: true,  caps: ['start', 'audio'] },
     { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
-    { id: 'grok-r2v',    label: 'Grok R2V',               t2v: false, i2v: true,  caps: ['refs'], maxRefs: 4 },
+    { id: 'grok-r2v',    label: 'Grok R2V',               t2v: false, i2v: true,  caps: ['refs'], maxRefs: 7 },
     { id: 'grok-extend',  label: 'Grok Extend',            t2v: false, i2v: true,  caps: ['video'] },
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
-    { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'] },
-    { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'refs', 'audio'] },
-    { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['start', 'refs', 'audio'], maxRefs: 4 }
+    { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'], maxRefs: 9 },
+    // wan-2.7/image-to-video 는 image·last_image 만 받는다. refs 는 별도 엔드포인트(reference-to-video)라
+    // 시작 이미지와 함께 쓸 수 없다 → 여기서 refs 를 빼야 죽은 옵션이 UI 에 뜨지 않는다.
+    { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'audio'] },
+    // vidu 는 images 배열 하나뿐이다. 씬 이미지도 그 배열의 한 칸으로 들어가므로
+    // '시작 프레임' 이 보장되지 않는다 → start 를 빼고 refs 만 남긴다.
+    { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['refs', 'audio'], maxRefs: 4 }
   ];
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];

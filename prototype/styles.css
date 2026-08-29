@@ -15556,6 +15556,7 @@ textarea.bsf-skeleton {
 .vmg-cost.is-low  { background: rgba(34, 197, 94, .18);  color: #22c55e; }
 .vmg-cost.is-mid  { background: rgba(148, 163, 184, .20); color: #94a3b8; }
 .vmg-cost.is-high { background: rgba(245, 158, 11, .18); color: #f59e0b; }
+.vmg-cost.is-unknown { background: rgba(148, 163, 184, .12); color: #94a3b8; font-style: italic; }
 .vmg-fit.is-best  { background: rgba(34, 197, 94, .20);  color: #22c55e; font-weight: 600; }
 .vmg-fit.is-good  { background: rgba(56, 189, 248, .18); color: #38bdf8; }
 .vmg-fit.is-ok    { background: rgba(148, 163, 184, .18); color: #94a3b8; }

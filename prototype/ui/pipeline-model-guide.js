@@ -5,84 +5,101 @@
   /**
    * 영상 모델 선택 가이드.
    *
-   * 표의 능력치는 추측이 아니라 이 저장소에서 확인한 값이다:
-   *   - 길이 허용 집합: functions/api/_shared/video-specs.ts (MODEL_DURATIONS)
-   *   - 시작 이미지 / 레퍼런스 지원: js/ui/ai-video-gen.js (ALL_MODELS caps)
-   *   - 레퍼런스 자동 첨부 대상: ui/pipeline-video.js (REFS_MODELS)
-   *   - R2V 가 시작 이미지를 버리는 동작: functions/api/video.ts
+   * ⚠️ 값의 출처는 **공급자 API 스키마**다. 앱 내부의 caps 표가 아니다.
+   * v3.1588 가이드는 js/ui/ai-video-gen.js 의 caps 를 근거로 삼았는데, 그 표가
+   * 실제 API 와 달라 거짓 정보를 실었다. 대표적으로 Wan 2.7 을 "시작 이미지 +
+   * 캐릭터 참조 동시 사용 / 추천" 으로 표시했지만, alibaba/wan-2.7/image-to-video
+   * 스키마에는 reference_images 파라미터가 아예 없다(우리가 보내는 값은 조용히 버려진다).
    *
-   * 비용은 상대 등급이다. 공급자 단가표가 저장소에 없고 공개 페이지에서도
-   * 확인되지 않아 정확한 금액을 지어내지 않았다. 등급 근거는 아래 costBasis 에 적는다.
-   * 실제 단가를 확보하면 COST 만 고치면 된다.
+   * 2026-08-30 Atlas Cloud 스키마로 확인:
+   *   google/veo3.1-fast/image-to-video      image · last_image                 $0.08
+   *   google/veo3.1/image-to-video           image · last_image                 $0.20
+   *   xai/grok-imagine-video/image-to-video  image                              (미확인)
+   *   xai/grok-imagine-video/reference-to-video  image_urls 1~7                 $0.05
+   *   kwaivgi/kling-v2.6-pro/image-to-video  image (last_image 없음, 5·10초)     $0.06 (85% 할인)
+   *   bytedance/seedance-2.0/image-to-video  image · last_image, 4~15초, ~4K     $0.112
+   *   bytedance/seedance-2.0/reference-to-video  reference_images 최대 9         $0.112
+   *   alibaba/wan-2.7/image-to-video         image · last_image (참조 없음)      $0.10
+   *   alibaba/wan-2.7/reference-to-video     images (주체당 1장, 시작 이미지 없음) $0.10
+   *   vidu/q3-mix/reference-to-video         images 1~4 (필수, 시작 이미지 없음)  $0.106 (85% 할인)
    */
+
+  // 요청당 기본 단가(USD). 확인 못 한 값은 null → 화면에 "미확인".
   var COST = {
-    low:  { label: '낮음',   cls: 'is-low' },
-    mid:  { label: '보통',   cls: 'is-mid' },
-    high: { label: '높음',   cls: 'is-high' }
+    'veo':          { usd: 0.08,  note: '요청당 기본 단가' },
+    'veo-full':     { usd: 0.20,  note: '요청당 기본 단가' },
+    'grok':         { usd: null,  note: '' },
+    'grok-r2v':     { usd: 0.05,  note: '요청당 기본 단가' },
+    'kling-final':  { usd: 0.06,  note: '85% 할인 반영가' },
+    'seedance':     { usd: 0.112, note: '요청당 기본 단가' },
+    'seedance-r2v': { usd: 0.112, note: '요청당 기본 단가' },
+    'wan':          { usd: 0.10,  note: '요청당 기본 단가' },
+    'vidu-q3':      { usd: 0.106, note: '85% 할인 반영가' }
   };
 
+  // 이 앱은 컷마다 스틸컷을 먼저 만든다. 그래서 "시작 이미지를 쓰는가" 가 1차 정렬 기준이다.
   var MODELS = [
     {
-      id: 'wan', name: 'Wan 2.7',
-      dur: '4~15', start: '시작+끝', refs: '✓', res: '—', cost: 'mid',
-      good: '시작 이미지와 캐릭터 참조를 동시에 사용',
-      bad: '화질 최상위는 아님',
+      id: 'seedance', name: 'Seedance 2.0',
+      dur: '4~15', start: '시작+끝', refs: '✗', res: '720p~4K',
+      good: '스틸컷 유지 · 길이 가장 유연 · 4K 지원',
+      bad: '캐릭터 참조 없음 (앱은 720p 고정)',
       fit: 'best'
     },
     {
-      id: 'vidu-q3', name: 'Vidu Q3-Mix',
-      dur: '4·5·6·8·10', start: '시작', refs: '✓ 4장', res: '—', cost: 'mid',
-      good: '시작 이미지 + 참조, 길이 선택 무난',
-      bad: 'Wan 보다 길이 선택지가 좁음',
+      id: 'veo', name: 'Veo 3.1 Fast',
+      dur: '4·6·8', start: '시작+끝', refs: '✗', res: '720p~4K',
+      good: '움직임이 자연스럽고 값이 낮은 편',
+      bad: '캐릭터 참조 없음 · 길이 3종뿐',
       fit: 'good'
     },
     {
-      id: 'seedance', name: 'Seedance 2.0',
-      dur: '4~15', start: '시작', refs: '✗', res: '720p', cost: 'mid',
-      good: '길이가 가장 유연, 안정적',
-      bad: '캐릭터 참조 없음 · 720p 고정',
+      id: 'kling-final', name: 'Kling v2.6 Pro',
+      dur: '5 또는 10', start: '시작만', refs: '✗', res: '1080p FHD',
+      good: '화질 최고인데 단가는 가장 낮은 축',
+      bad: '최소 5초 — 2~3초 컷에 안 맞음 · 끝 프레임 미지원',
+      fit: 'long-only'
+    },
+    {
+      id: 'wan', name: 'Wan 2.7',
+      dur: '4~15', start: '시작+끝', refs: '✗', res: '720p/1080p',
+      good: '시작+끝 프레임, 1080p',
+      bad: '★참조 미지원 — i2v 스키마에 파라미터가 없음',
       fit: 'ok'
     },
     {
       id: 'grok', name: 'Grok Imagine',
-      dur: '4·6·8', start: '시작', refs: '✗', res: '480/720p', cost: 'low',
-      good: '가장 저렴, 이미지 애니메이션에 특화',
-      bad: '캐릭터 참조 없음 · 길이 3종뿐',
-      fit: 'ok'
-    },
-    {
-      id: 'veo', name: 'Veo 3.1 Fast',
-      dur: '4·6·8', start: '시작', refs: '✗', res: '—', cost: 'mid',
-      good: '움직임이 자연스럽고 빠름',
-      bad: '캐릭터 참조 없음',
+      dur: '4·6·8', start: '시작만', refs: '✗', res: '480/720p',
+      good: '이미지 애니메이션에 특화',
+      bad: '캐릭터 참조 없음 · 화질 상한 720p',
       fit: 'ok'
     },
     {
       id: 'veo-full', name: 'Veo 3.1 Full',
-      dur: '4·6·8', start: '시작', refs: '✗', res: '—', cost: 'high',
-      good: '품질 최상위, 네이티브 오디오',
-      bad: '노래 모드에선 오디오가 무용 → 값만 비쌈',
+      dur: '4·6·8', start: '시작+끝', refs: '✗', res: '720p~4K',
+      good: '품질 최상위',
+      bad: '가장 비쌈 · 노래 모드에선 오디오가 무용',
       fit: 'poor'
     },
     {
-      id: 'kling-final', name: 'Kling Final (v2.6 Pro)',
-      dur: '5 또는 10', start: '시작+끝', refs: '✗', res: '1080p FHD', cost: 'high',
-      good: '화질 최고 · 카메라 무브 직접 지정',
-      bad: '최소 5초 — 2~3초 컷에 안 맞음',
-      fit: 'long-only'
-    },
-    {
-      id: 'grok-r2v', name: 'Grok R2V',
-      dur: '4·6·8', start: '✗ 버림', refs: '✓ 4장', res: '480/720p', cost: 'low',
-      good: '캐릭터 참조로만 생성',
-      bad: '시작 이미지를 버려 컷 구도가 날아감',
+      id: 'seedance-r2v', name: 'Seedance 2.0 Reference',
+      dur: '4~15', start: '✗ 버림', refs: '✓ 9장', res: '720p~4K',
+      good: '참조 9장 — 캐릭터 일관성엔 가장 유리',
+      bad: '스틸컷을 버려 컷 구도가 날아감',
       fit: 'avoid'
     },
     {
-      id: 'seedance-r2v', name: 'Seedance 2.0 Reference',
-      dur: '4~15', start: '✗ 버림', refs: '✓', res: '720p', cost: 'mid',
-      good: '참조 기반 일관성',
-      bad: '시작 이미지를 버려 컷 구도가 날아감',
+      id: 'grok-r2v', name: 'Grok R2V',
+      dur: '4·6·8', start: '✗ 버림', refs: '✓ 7장', res: '480/720p',
+      good: '참조 7장 · 가장 저렴',
+      bad: '스틸컷을 버려 컷 구도가 날아감',
+      fit: 'avoid'
+    },
+    {
+      id: 'vidu-q3', name: 'Vidu Q3-Mix',
+      dur: '4·5·6·8·10', start: '✗ 참조에 섞임', refs: '✓ 1~4장', res: '720p~1440p',
+      good: '참조 기반, 화질 선택 폭이 넓음',
+      bad: '스틸컷이 참조 중 하나로 섞여 구도가 보장되지 않음',
       fit: 'avoid'
     }
   ];
@@ -102,9 +119,21 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
+  function formatUsd(n) {
+    var s = n.toFixed(3);
+    while (s.length > 4 && s.charAt(s.length - 1) === '0') s = s.slice(0, -1);
+    return '$' + s;
+  }
+
+  function costCell(id) {
+    var c = COST[id];
+    if (!c || c.usd == null) return '<span class="vmg-cost is-unknown">미확인</span>';
+    var cls = c.usd <= 0.08 ? 'is-low' : (c.usd <= 0.12 ? 'is-mid' : 'is-high');
+    return '<span class="vmg-cost ' + cls + '" title="' + esc(c.note) + '">' + formatUsd(c.usd) + '</span>';
+  }
+
   function rowHtml(m, currentModel) {
     var fit = FIT[m.fit] || FIT.ok;
-    var cost = COST[m.cost] || COST.mid;
     return '<tr class="' + (m.id === currentModel ? 'is-current' : '') + '">'
       + '<td class="vmg-name">' + esc(m.name)
         + (m.id === currentModel ? '<span class="vmg-now">현재</span>' : '') + '</td>'
@@ -112,7 +141,7 @@
       + '<td class="vmg-c">' + esc(m.start) + '</td>'
       + '<td class="vmg-c">' + esc(m.refs) + '</td>'
       + '<td class="vmg-c">' + esc(m.res) + '</td>'
-      + '<td class="vmg-c"><span class="vmg-cost ' + cost.cls + '">' + esc(cost.label) + '</span></td>'
+      + '<td class="vmg-c">' + costCell(m.id) + '</td>'
       + '<td class="vmg-good">' + esc(m.good) + '</td>'
       + '<td class="vmg-bad">' + esc(m.bad) + '</td>'
       + '<td class="vmg-c"><span class="vmg-fit ' + fit.cls + '">' + esc(fit.label) + '</span></td>'
@@ -128,20 +157,22 @@
       + '<table class="vmg-table">'
       +   '<thead><tr>'
       +     '<th>모델</th><th>길이(초)</th><th>시작 이미지</th><th>캐릭터 참조</th>'
-      +     '<th>화질</th><th>비용</th><th>강점</th><th>약점</th><th>적합도</th>'
+      +     '<th>화질</th><th>비용/컷</th><th>강점</th><th>약점</th><th>적합도</th>'
       +   '</tr></thead>'
       +   '<tbody>' + MODELS.map(function (m) { return rowHtml(m, currentModel); }).join('') + '</tbody>'
       + '</table>'
       + '<div class="vmg-notes">'
-      +   '<p><b>고르는 기준</b> — 이 앱은 컷마다 캐릭터가 정확한 이미지를 먼저 만듭니다. '
-      +      '그 이미지를 <b>시작 이미지</b>로 쓰면서 <b>캐릭터 참조</b>까지 얹을 수 있는 모델이 캐릭터 일관성에 가장 유리합니다.</p>'
-      +   '<p><b>R2V 주의</b> — Grok R2V · Seedance Reference 는 참조를 쓰면 시작 이미지를 <b>버립니다</b>. '
-      +      '공들여 만든 컷 구도·프레이밍이 사라지므로 이 작업 흐름에는 맞지 않습니다.</p>'
+      +   '<p><b>고르는 기준</b> — 이 앱은 컷마다 캐릭터가 정확한 <b>스틸컷</b>을 먼저 만듭니다. '
+      +      '그 스틸컷을 시작 이미지로 쓰는 모델이라야 공들인 구도·프레이밍이 살아납니다.</p>'
+      +   '<p><b>시작 이미지 vs 참조는 택일입니다</b> — 두 가지를 동시에 받는 모델은 없습니다. '
+      +      '참조를 쓰는 모델(R2V)은 예외 없이 스틸컷을 버리고 프롬프트만으로 다시 그립니다.</p>'
+      +   '<p><b>Wan 2.7 주의</b> — 앱은 참조를 보내지만 i2v 스키마에 그 파라미터가 없어 '
+      +      '<b>조용히 버려집니다</b>. 참조가 필요하면 다른 모델을 고르세요.</p>'
       +   '<p><b>길이 주의</b> — 모든 모델의 최소가 4초(Kling 은 5초)입니다. '
-      +      '2~3초 컷은 4초로 올려 생성한 뒤 잘라 쓰므로 그만큼 비용이 더 나갑니다. 컷이 짧을수록 낭비가 큽니다.</p>'
-      +   '<p class="vmg-caveat"><b>비용 표기</b> — 공급자 단가표가 앱에 없어 <b>상대 등급</b>으로만 표시합니다. '
-      +      '등급은 모델 등급(Fast/Lite &lt; 표준 &lt; Pro/Full)과 해상도를 근거로 했습니다. '
-      +      '정확한 금액은 공급자 콘솔에서 확인하세요.</p>'
+      +      '2~3초 컷도 4초로 생성한 뒤 잘라 쓰므로 컷이 짧을수록 낭비가 큽니다.</p>'
+      +   '<p class="vmg-caveat"><b>비용</b> — Atlas Cloud <b>요청당 기본 단가</b>(2026-08-30 확인)입니다. '
+      +      '길이·해상도에 따라 실제 청구액은 달라질 수 있고, 할인율은 변동됩니다. '
+      +      'Grok Imagine 은 단가를 확인하지 못해 "미확인" 으로 둡니다.</p>'
       + '</div>';
   };
 

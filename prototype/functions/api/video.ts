@@ -282,7 +282,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       };
       if (startImageResolved) atlasBody.image = startImageResolved;
       if (endImageResolved) atlasBody.last_image = endImageResolved;
-      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
+      // alibaba/wan-2.7/image-to-video 스키마에는 reference_images 가 없다(2026-08-30 확인).
+      // 예전에는 보내고 있었지만 공급자가 조용히 버려, 캐릭터 참조가 한 번도 전달된 적이 없다.
+      // 참조가 필요하면 wan-2.7/reference-to-video 를 써야 하는데 그쪽은 시작 이미지를 못 쓴다.
+      if (refResolved.length > 0) {
+        log('wan_refs_dropped', { sceneId, count: refResolved.length, reason: 'i2v_schema_has_no_reference_images' });
+      }
       if (audioDataUrl) atlasBody.audio = audioDataUrl;
       if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
@@ -338,12 +343,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
         if (r) refResolved.push(r);
       }
-      // vidu/q3-mix/reference-to-video: images 배열(1~7개) 필수
-      // 씬 이미지를 첫 번째로, 허브 레퍼런스 이미지를 뒤에 추가
+      // vidu/q3-mix/reference-to-video: images 배열 **1~4개** 필수 (스키마 확인 2026-08-30).
+      // 이전에는 7개까지 담았는데 공급자 상한이 4라 5장 이상이면 요청이 거절된다.
+      // 씬 이미지를 첫 번째로, 허브 레퍼런스 이미지를 뒤에 추가.
       const viduImages: string[] = [];
       if (startImageResolved) viduImages.push(startImageResolved);
       for (const r of refResolved) {
-        if (viduImages.length >= 7) break;
+        if (viduImages.length >= 4) break;
         if (r !== startImageResolved) viduImages.push(r);
       }
       if (viduImages.length === 0) {
