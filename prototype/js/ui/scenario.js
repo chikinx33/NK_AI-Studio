@@ -2017,21 +2017,41 @@
 
     // v3.884: 시나리오 생성 진단 — 전역 토스트 대신 모달 팝업 방식.
     let _lastDiagText = '';
+    // lucide.dev/icons/copy
+    const DIAG_COPY_ICON = (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" '
+      + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>'
+      + '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
+    );
+    // lucide.dev/icons/check
+    const DIAG_CHECK_ICON = (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" '
+      + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M20 6 9 17l-5-5"/></svg>'
+    );
+    // 제목줄 + 본문을 한곳에서 조립 (생성 직후 표시 / 진단 버튼 재표시 공용)
+    const renderScenarioDiagBody = (emptyMsg) => {
+      const copyLabel = escapeHtml(getScenarioText('scenario_diag_copy', '진단 내용 복사'));
+      return (
+        '<div class="scenario-diag-titlebar">' +
+        '<h2 class="scenario-diag-title">시나리오 생성 진단</h2>' +
+        '<button type="button" class="scenario-diag-copy" id="scenario-diag-copy-btn"'
+        + ' aria-label="' + copyLabel + '" title="' + copyLabel + '">' + DIAG_COPY_ICON + '</button>' +
+        '<button class="close-modal scenario-diag-close" data-close="scenario-diag-modal" aria-label="닫기">✕</button>' +
+        '</div>' +
+        (_lastDiagText
+          ? '<div class="scenario-diag-content">' + escapeHtml(_lastDiagText) + '</div>'
+          : '<p class="scenario-diag-empty">' + escapeHtml(emptyMsg) + '</p>')
+      );
+    };
     const showScenarioMetaToast = (text) => {
       try {
         _lastDiagText = text || '';
         const modal = document.getElementById('scenario-diag-modal');
         const body = document.getElementById('scenario-diag-modal-body');
         if (!modal || !body) return;
-        body.innerHTML = (
-          '<div class="scenario-diag-titlebar">' +
-          '<h2 class="scenario-diag-title">시나리오 생성 진단</h2>' +
-          '<button class="close-modal scenario-diag-close" data-close="scenario-diag-modal" aria-label="닫기">✕</button>' +
-          '</div>' +
-          (_lastDiagText
-            ? '<div class="scenario-diag-content">' + escapeHtml(_lastDiagText) + '</div>'
-            : '<p class="scenario-diag-empty">진단 정보가 없습니다.</p>')
-        );
+        body.innerHTML = renderScenarioDiagBody('진단 정보가 없습니다.');
         modal.classList.remove('hidden');
       } catch (_) { /* 표시 실패는 무시 */ }
     };
@@ -2797,18 +2817,53 @@
         const modal = document.getElementById('scenario-diag-modal');
         const body = document.getElementById('scenario-diag-modal-body');
         if (!modal || !body) return;
-        body.innerHTML = (
-          '<div class="scenario-diag-titlebar">' +
-          '<h2 class="scenario-diag-title">시나리오 생성 진단</h2>' +
-          '<button class="close-modal scenario-diag-close" data-close="scenario-diag-modal" aria-label="닫기">✕</button>' +
-          '</div>' +
-          (_lastDiagText
-            ? '<div class="scenario-diag-content">' + escapeHtml(_lastDiagText) + '</div>'
-            : '<p class="scenario-diag-empty">시나리오를 먼저 생성해 주세요.</p>')
-        );
+        body.innerHTML = renderScenarioDiagBody('시나리오를 먼저 생성해 주세요.');
         modal.classList.remove('hidden');
       });
     }
+    // 진단 내용 복사 (제목줄 복사 아이콘) — 모달 본문은 매번 다시 그리므로 위임 방식
+    document.addEventListener('click', async (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('#scenario-diag-copy-btn') : null;
+      if (!btn) return;
+      if (!_lastDiagText) return;
+      let ok = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(_lastDiagText);
+          ok = true;
+        }
+      } catch (_) { ok = false; }
+      if (!ok) {
+        // https 가 아니거나 권한이 없을 때의 폴백
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = _lastDiagText;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch (_) { ok = false; }
+      }
+      const doneLabel = getScenarioText(
+        ok ? 'scenario_diag_copied' : 'scenario_diag_copy_failed',
+        ok ? '복사됨' : '복사 실패'
+      );
+      const baseLabel = getScenarioText('scenario_diag_copy', '진단 내용 복사');
+      btn.innerHTML = ok ? DIAG_CHECK_ICON : DIAG_COPY_ICON;
+      btn.classList.toggle('is-copied', ok);
+      btn.setAttribute('title', doneLabel);
+      btn.setAttribute('aria-label', doneLabel);
+      setTimeout(() => {
+        if (!btn.isConnected) return;
+        btn.innerHTML = DIAG_COPY_ICON;
+        btn.classList.remove('is-copied');
+        btn.setAttribute('title', baseLabel);
+        btn.setAttribute('aria-label', baseLabel);
+      }, 1500);
+    });
     // 모달 닫기 (data-close 패턴 공용)
     document.addEventListener('click', (e) => {
       const closeBtn = e.target && e.target.closest ? e.target.closest('[data-close]') : null;

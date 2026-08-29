@@ -3113,6 +3113,27 @@ textarea::-webkit-scrollbar-corner {
   color: var(--text);
   flex: 1 1 auto;
 }
+.scenario-diag-copy {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.scenario-diag-copy:hover { background: var(--layer-strong); }
+.scenario-diag-copy.is-copied {
+  color: #22c55e;
+  border-color: #22c55e;
+}
 .scenario-diag-close {
   background: transparent;
   border: 1px solid var(--border);
