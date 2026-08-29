@@ -106,6 +106,9 @@ function flattenScenesWithShots(parentScenes) {
         backgroundStyle: parent.backgroundStyle || "",
         narration: parent.narration || "",
         dialogue: parent.dialogue || parent.dialogues || [],
+        // v3.1581: 노래 모드 가사. 빠뜨리면 컷 분해 후 가사가 통째로 사라진다.
+        lyrics: parent.lyrics || "",
+        isRefrain: !!parent.isRefrain,
         lines: parent.lines || "",
         subtitleText: parent.subtitleText || "",
         videoSpeechPrompt: parent.videoSpeechPrompt || "",
@@ -148,6 +151,9 @@ function flattenScenesWithShots(parentScenes) {
         // 첫 번째 sub-scene 만 부모의 narration/dialogue 를 가져감
         narration: isFirst ? (parent.narration || "") : "",
         dialogue: isFirst ? (parent.dialogue || parent.dialogues || []) : [],
+        // v3.1581: 가사도 첫 컷에만. 컷마다 반복되면 같은 소절을 여러 번 부르게 된다.
+        lyrics: isFirst ? (parent.lyrics || "") : "",
+        isRefrain: isFirst ? !!parent.isRefrain : false,
         lines: isFirst ? (parent.lines || "") : "",
         subtitleText: isFirst ? (parent.subtitleText || "") : "",
         videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || "") : "",

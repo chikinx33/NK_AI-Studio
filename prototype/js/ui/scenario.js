@@ -1019,7 +1019,16 @@
       token: c.token,
       personality: c.personality || ''
     }));
-    const voiceMode = (document.getElementById('voice-mode-select') || {}).value || 'none';
+    // v3.1581: 세부 장르가 동요·율동인데 음성 모드가 노래가 아니면 여기서 맞춘다.
+    // 세부 장르를 이미 골라 둔 채 저장된 프로젝트는 change 이벤트가 다시 뜨지 않아
+    // 자동 전환이 걸리지 않는다. 그 상태로 생성하면 가사 필드가 없어 또 일반 시나리오가 나온다.
+    let voiceMode = (document.getElementById('voice-mode-select') || {}).value || 'none';
+    if (isSongSubgenre(purposeTag) && voiceMode !== 'song') {
+      voiceMode = 'song';
+      const voiceSel = document.getElementById('voice-mode-select');
+      if (voiceSel) voiceSel.value = 'song';
+      notifyScenario(getScenarioText('scenario_song_mode_suggested', '세부 장르가 동요라서 음성 모드를 노래로 맞췄어요.'));
+    }
     payload.narrationEnabled = voiceMode === 'narration';
     payload.dubbingEnabled = voiceMode === 'dubbing';
     payload.songEnabled = voiceMode === 'song';

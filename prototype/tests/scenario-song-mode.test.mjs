@@ -196,6 +196,25 @@ test("진단 패널이 노래 생성 경로를 보여준다", () => {
   assert.match(src, /노래 역할: \$\{m\.songRolesAssigned\.join\(' → '\)\}/);
 });
 
+test("★회귀: Pass 2 컷 분해가 가사를 버리지 않는다", () => {
+  // 컷으로 쪼개지면 가사가 사라져 노래 모드가 통째로 무력화됐다.
+  const src = read("prototype/functions/api/scenario-shots.js");
+  assert.match(src, /lyrics: parent\.lyrics \|\| ""/, "단일 컷 경로가 가사를 옮겨야 한다");
+  assert.match(src, /lyrics: isFirst \? \(parent\.lyrics \|\| ""\) : ""/, "가사는 첫 컷에만 실려야 한다");
+  assert.match(src, /isRefrain: isFirst \? !!parent\.isRefrain : false/);
+});
+
+test("★회귀: 세부 장르를 이미 골라 둔 프로젝트도 생성 시 노래 모드로 맞춰진다", () => {
+  // change 이벤트가 다시 안 뜨는 저장된 프로젝트에서 자동 전환이 걸리지 않던 구멍.
+  const src = ui();
+  const fn = src.slice(src.indexOf("const collectPayload = () => {"));
+  const body = fn.slice(0, fn.indexOf("\n  };"));
+  assert.match(body, /isSongSubgenre\(purposeTag\) && voiceMode !== 'song'/);
+  assert.match(body, /payload\.songEnabled = voiceMode === 'song'/);
+  // 전환 후의 값으로 payload 가 만들어져야 한다 (const 로 굳어 있으면 안 됨)
+  assert.match(body, /let voiceMode = /);
+});
+
 test("서버 버전 표기가 다시 실제 릴리스를 따라간다", () => {
   // v3.1120 에 박제돼 있어서 진단 패널이 늘 '버전 불일치' 허위 경보를 냈다.
   const src = server();
