@@ -105,16 +105,28 @@ Cloudflare Pages 프로젝트 → Settings → Environment variables 에 추가:
 Cloudflare Pages 환경변수에 아래를 넣는다:
 
 ```
-ANTHROPIC_GATEWAY_BASE = https://<서비스URL>/anthropic
-ANTHROPIC_PROXY_SECRET = <배포할 때 만든 SECRET>   # OPENAI_PROXY_SECRET 과 같아도 된다
+ANTHROPIC_GATEWAY_BASE = https://nk-openai-proxy-510034693257.asia-northeast3.run.app/anthropic
 ```
 
-`anthropicMessagesUrl()` 이 여기에 `/v1/messages` 를 붙이므로 최종 목적지는
-`https://<서비스URL>/anthropic/v1/messages` 가 된다.
+시크릿은 따로 넣지 않아도 된다. Worker 는 `ANTHROPIC_PROXY_SECRET` 이 없으면
+이미 설정돼 있는 `OPENAI_PROXY_SECRET` 을 그대로 쓴다(프록시가 둘 다 같은 값을 검증한다).
+둘을 다르게 쓰고 싶을 때만 `ANTHROPIC_PROXY_SECRET` 을 추가한다.
 
-> `CF_AI_GATEWAY_URL` 이 이미 설정돼 있으면 그쪽이 우선한다. 프록시로 바꾸려면
-> `CF_AI_GATEWAY_URL` 을 지우고 `ANTHROPIC_GATEWAY_BASE` 를 쓰거나,
-> `CF_AI_GATEWAY_URL` 값 자체를 위 프록시 주소로 바꾼다.
+`anthropicMessagesUrl()` 이 여기에 `/v1/messages` 를 붙이므로 최종 목적지는
+`https://nk-openai-proxy-510034693257.asia-northeast3.run.app/anthropic/v1/messages` 가 된다.
+
+> `ANTHROPIC_GATEWAY_BASE` 가 `CF_AI_GATEWAY_URL` 보다 우선하므로, 기존 변수는
+> 지우지 않아도 된다(대시보드에서 값을 지우는 조작은 실수하기 쉬워 피하는 편이 낫다).
+
+### 실측 (2026-08-29, 서울 배포 후)
+
+```
+GET /anthropic/v1/models  +  x-nk-proxy-secret
+  → 401 authentication_error · request_id 있음 · cf-ray COLO=KIX   ← Anthropic 도달
+시크릿 없이 같은 요청
+  → 403 invalid_proxy_secret                                       ← 공개 프록시 아님
+헬스체크는 /healthz 가 아니라 / 를 쓴다(/healthz 는 Google Frontend 가 가로챈다).
+```
 
 ### 확인
 
