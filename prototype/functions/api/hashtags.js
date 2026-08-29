@@ -1,4 +1,4 @@
-import { anthropicMessagesUrl, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { claudeFetch, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
@@ -40,22 +40,18 @@ export async function onRequestPost(context) {
   const fallback = buildFallbackHashtags(input);
 
   try {
-    const completion = await fetch(anthropicMessagesUrl(env), {
-      method: "POST",
-      headers: auth.headers,
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 512,
-        temperature: 0.2,
-        system: buildClaudeSystem(auth.subscription, buildSystemPrompt(input.language)),
-        messages: [
-          {
-            role: "user",
-            content: buildUserPrompt(input),
-          },
-        ],
-      }),
-    });
+    const completion = await claudeFetch(env, auth, (sub) => ({
+      model: "claude-sonnet-4-6",
+      max_tokens: 512,
+      temperature: 0.2,
+      system: buildClaudeSystem(sub, buildSystemPrompt(input.language)),
+      messages: [
+        {
+          role: "user",
+          content: buildUserPrompt(input),
+        },
+      ],
+    }));
 
     if (!completion.ok) {
       const text = await completion.text();

@@ -19,7 +19,7 @@
  */
 
 import { decomposeScenes } from "./scenario/shots/index.js";
-import { anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 /**
@@ -218,7 +218,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const result = await decomposeScenes(auth, scenes, { lang, messagesUrl: anthropicMessagesUrl(env) });
+    const result = await decomposeScenes(auth, scenes, { lang, env });
     // decomposeScenes 의 정상 결과: { scenes, meta } 또는 array fallback
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };

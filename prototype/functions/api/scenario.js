@@ -4,7 +4,7 @@
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
 import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
-import { buildClaudeSystem, anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
@@ -2068,18 +2068,14 @@ async function streamAnthropicText({ auth, env, payload, signal, timeoutMs }) {
 
   // 인증은 요청 진입부에서 사용자 설정으로 이미 해석돼 내려온다(구독이면 Bearer + Claude Code system).
   if (!auth || !auth.headers) throw new Error("scenario_auth_missing");
-  const reqHeaders = auth.headers;
-  const reqPayload = auth.subscription
-    ? { ...payload, system: buildClaudeSystem(true, typeof payload.system === "string" ? payload.system : "") }
-    : payload;
+  // 폴백 시 system 형식(블록 배열 ↔ 문자열)이 달라지므로 payload 를 매 시도마다 다시 만든다.
+  const buildPayload = (sub) =>
+    sub
+      ? { ...payload, system: buildClaudeSystem(true, typeof payload.system === "string" ? payload.system : "") }
+      : payload;
 
   try {
-    const res = await fetch(anthropicMessagesUrl(env), {
-      method: "POST",
-      headers: reqHeaders,
-      body: JSON.stringify(reqPayload),
-      signal: controller.signal,
-    });
+    const res = await claudeFetch(env, auth, buildPayload, { signal: controller.signal });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       if (isCreditExhausted(errText, res.status)) {

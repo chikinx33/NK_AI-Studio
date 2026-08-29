@@ -4,7 +4,7 @@
 // - 도구 어댑터: 라비오크의 "도구=python spawn" 모델을 NK API fetch 로 전환.
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
-import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -1516,16 +1516,12 @@ const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청과 대화
 /** Claude를 직접 호출해 JSON 응답을 파싱. HTTP 중간 홉 없이 _shared에서 바로 호출. */
 async function callClaudeForJson(env: any, system: string, userMsg: string): Promise<any> {
   const auth = claudeAuthHeaders(env);
-  const res = await fetch(anthropicMessagesUrl(env), {
-    method: "POST",
-    headers: auth.headers,
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4000,
-      system: buildClaudeSystem(auth.subscription, system),
-      messages: [{ role: "user", content: userMsg }],
-    }),
-  });
+  const res = await claudeFetch(env, auth, (sub: boolean) => ({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4000,
+    system: buildClaudeSystem(sub, system),
+    messages: [{ role: "user", content: userMsg }],
+  }));
   const text = await res.text();
   if (!res.ok) {
     let detail: any = text;

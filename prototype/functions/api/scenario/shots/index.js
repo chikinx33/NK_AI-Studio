@@ -19,29 +19,24 @@ import {
 } from "./decomposer.js";
 import { diversifyShotCameraMoves } from "../rebalancer.js";
 import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
-import { buildClaudeSystem } from "../../_shared/claude-auth.js";
+import { buildClaudeSystem, claudeFetch } from "../../_shared/claude-auth.js";
 
 const SHOT_TIMEOUT_MS = 22000;
 const SHOT_MAX_TOKENS = 900;
 const MODEL = "claude-sonnet-4-6";
 
-async function callAnthropicForShots({ auth, system, user, signal, url }) {
+async function callAnthropicForShots({ auth, env, system, user, signal }) {
   const controller = new AbortController();
   if (signal) signal.addEventListener("abort", () => controller.abort(signal.reason));
   const timer = setTimeout(() => controller.abort("shot_decompose_timeout"), SHOT_TIMEOUT_MS);
   try {
-    const res = await fetch(url || "https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: auth.headers,
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: SHOT_MAX_TOKENS,
-        system: buildClaudeSystem(auth.subscription, system),
-        messages: [{ role: "user", content: user }],
-        temperature: 0.4,
-      }),
-      signal: controller.signal,
-    });
+    const res = await claudeFetch(env, auth, (sub) => ({
+      model: MODEL,
+      max_tokens: SHOT_MAX_TOKENS,
+      system: buildClaudeSystem(sub, system),
+      messages: [{ role: "user", content: user }],
+      temperature: 0.4,
+    }), { signal: controller.signal });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       if (isCreditExhausted(errText, res.status)) {
@@ -71,10 +66,10 @@ export async function decomposeScene(auth, scene, opts = {}) {
   const user = lang === "en" ? buildShotUserPromptEn(scene) : buildShotUserPromptKo(scene);
   const text = await callAnthropicForShots({
     auth,
+    env: opts.env,
     system,
     user,
     signal: opts.signal,
-    url: opts.messagesUrl,
   });
   const shots = parseShotResponse(text, scene);
   if (!shots || !shots.length) throw new Error("shot_parse_failed");

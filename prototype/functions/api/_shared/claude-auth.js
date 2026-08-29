@@ -2,10 +2,24 @@
 // Claude 인증 (구독 OAuth / API 키 2모드). 설정 UI에서 런타임 전환 가능하도록 DB(Neon) 우선.
 // 우선순위: app_settings(user_id별) → env 폴백. 스튜디오·AI기업 공용.
 import { getSql } from "../knowledge/_shared";
+import { isCreditExhausted } from "./credit-exhausted.js";
 
 const OAUTH_BETA = "oauth-2025-04-20";
 // 구독(OAuth) 토큰은 'Claude Code 요청'으로만 검증되므로 시스템 첫 블록에 이 정체성을 둔다.
 const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/**
+ * 구독 토큰이 '거부'된 것으로 보고 API 키 폴백을 시도할 HTTP 상태.
+ *
+ * 401/403 만 넣는다. 구독 인증 경로는 Anthropic 이 Claude Code 제품용으로 여는 통로라
+ * 정책이 바뀌면 예고 없이 401/403 이 되고, 그 순간 시나리오·에이전트 전체가 멈춘다.
+ * 반대로 429(레이트리밋)와 402/잔액부족은 폴백 대상이 아니다 — 일시적 한도까지 API 키로
+ * 넘겨버리면 사용자가 모르는 사이에 유료 크레딧이 빠져나간다.
+ */
+const AUTH_FAILURE_STATUSES = new Set([401, 403]);
+
+/** Cloudflare 엣지가 Worker→Anthropic 직접 호출을 막을 때의 403 본문. 자격증명 문제가 아니다. */
+const EDGE_BLOCK_RE = /request not allowed/i;
 
 let settingsSchemaReady = false;
 export async function ensureSettingsSchema(sql) {
@@ -146,7 +160,22 @@ export async function studioAuth(env, userId) {
   return authHeadersFor(await resolveAuth(getSql(env), userId, env, { allowEnvFallback: false }));
 }
 
-/** 해석된 인증 → fetch 헤더 + subscription 여부. */
+/** API 키 인증 한 벌. 폴백의 종착지라 자기 자신은 더 이상 폴백하지 않는다. */
+function apiKeyAuth(apiKey) {
+  return {
+    subscription: false,
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    fallback: null,
+  };
+}
+
+/**
+ * 해석된 인증 → fetch 헤더 + subscription 여부 (+ 구독일 때 예비 자격증명).
+ *
+ * fallback 에는 '같은 resolveAuth 가 해석한' API 키만 들어간다. 스튜디오 경로는
+ * allowEnvFallback:false 라 사용자가 직접 등록한 키만 오고, 운영자 env 키로 몰래
+ * 새는 일은 없다. 사용자가 키를 등록하지 않았으면 fallback 은 null 이다.
+ */
 export function authHeadersFor(resolved) {
   if (resolved.mode === "subscription") {
     if (!resolved.oauthToken) throw new Error("구독 토큰(CLAUDE_CODE_OAUTH_TOKEN)이 설정되지 않았어요.");
@@ -158,13 +187,56 @@ export function authHeadersFor(resolved) {
         "anthropic-version": "2023-06-01",
         "anthropic-beta": OAUTH_BETA,
       },
+      fallback: resolved.apiKey ? apiKeyAuth(resolved.apiKey) : null,
     };
   }
   if (!resolved.apiKey) throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았어요.");
-  return {
-    subscription: false,
-    headers: { "Content-Type": "application/json", "x-api-key": resolved.apiKey, "anthropic-version": "2023-06-01" },
-  };
+  return apiKeyAuth(resolved.apiKey);
+}
+
+/** 구독 토큰이 막혔을 때 넘어갈 곳이 준비돼 있는가. */
+export function hasClaudeFallback(auth) {
+  return !!(auth && auth.fallback && auth.fallback.headers);
+}
+
+/**
+ * Claude Messages 호출의 단일 진입점. 구독 토큰이 401/403 으로 거부되면
+ * 같은 사용자의 API 키로 한 번 자동 재시도한다.
+ *
+ * buildBody(subscription) 는 요청 payload 객체를 돌려줘야 한다. system 은 반드시
+ * buildClaudeSystem(subscription, ...) 으로 만들 것 — 구독은 블록 배열, API 키는
+ * 문자열이라 폴백 때 형식을 다시 맞춰야 하기 때문이다. 그래서 payload 를 값이 아니라
+ * 함수로 받는다.
+ *
+ * 성공 응답은 손대지 않고 그대로 돌려준다(scenario.js 의 SSE 스트리밍 본문 보존).
+ */
+export async function claudeFetch(env, auth, buildBody, init = {}) {
+  const url = anthropicMessagesUrl(env);
+  const send = (a) =>
+    fetch(url, { ...init, method: "POST", headers: a.headers, body: JSON.stringify(buildBody(a.subscription)) });
+
+  const res = await send(auth);
+  if (res.ok || !AUTH_FAILURE_STATUSES.has(res.status) || !hasClaudeFallback(auth)) return res;
+
+  // 폴백 여부를 판단하려면 실패 본문을 봐야 한다. 자격증명 문제가 아닌 403/401 은
+  // 폴백해도 똑같이 막히므로, 호출부가 본문을 한 번 더 읽을 수 있게 재구성해 돌려준다.
+  const errText = await res.text().catch(() => "");
+  if (isCreditExhausted(errText, res.status)) return replayResponse(res, errText);
+  // Cloudflare 엣지 봇차단도 403 "Request not allowed" 로 온다(anthropicMessagesUrl 주석 참조).
+  // 이건 토큰이 거부된 게 아니라 송출 경로 문제라, API 키로 바꿔도 같은 403 이 난다.
+  if (EDGE_BLOCK_RE.test(errText)) return replayResponse(res, errText);
+
+  console.log(`claude_auth_fallback: subscription ${res.status} → api_key`);
+  // 폴백도 실패하면 그 응답을 그대로 올린다. 마지막 시도의 상태·본문이 원인 파악에 쓰인다.
+  return send(auth.fallback);
+}
+
+/** 본문을 이미 읽어버린 실패 응답을, 호출부가 다시 읽을 수 있게 복제. */
+function replayResponse(res, text) {
+  return new Response(text, {
+    status: res.status,
+    headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
+  });
 }
 
 /** 구독이면 system 을 [Claude Code 정체성, 실제 system] 블록 배열로. 아니면 문자열. */
@@ -206,6 +278,8 @@ export async function authStatus(sql, userId, env) {
     configured: r.mode === "subscription" ? !!r.oauthToken : !!r.apiKey,
     oauthSet: !!r.oauthToken,
     apiKeySet: !!r.apiKey,
+    // 구독 토큰이 막혀도 서비스가 이어지는가. 설정 화면이 "예비 키 없음" 을 경고하는 근거.
+    fallbackReady: r.mode === "subscription" && !!r.oauthToken && !!r.apiKey,
   };
 }
 

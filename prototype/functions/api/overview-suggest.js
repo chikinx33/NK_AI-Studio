@@ -19,7 +19,7 @@
  *   카탈로그는 core.js / scenario.js 드롭다운 옵션과 1:1 동기화한다.
  */
 
-import { anthropicMessagesUrl, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { claudeFetch, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 const corsHeaders = (origin) => ({
@@ -103,18 +103,13 @@ export async function onRequestPost(context) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     let completion;
     try {
-      completion = await fetch(anthropicMessagesUrl(env), {
-        method: "POST",
-        headers: auth.headers,
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 800,
-          temperature: 0.3,
-          system: buildClaudeSystem(auth.subscription, buildSystemPrompt(input.language)),
-          messages: [{ role: "user", content: buildUserPrompt(input) }],
-        }),
-        signal: controller.signal,
-      });
+      completion = await claudeFetch(env, auth, (sub) => ({
+        model: "claude-sonnet-4-6",
+        max_tokens: 800,
+        temperature: 0.3,
+        system: buildClaudeSystem(sub, buildSystemPrompt(input.language)),
+        messages: [{ role: "user", content: buildUserPrompt(input) }],
+      }), { signal: controller.signal });
     } finally { clearTimeout(timeoutId); }
 
     if (!completion.ok) {

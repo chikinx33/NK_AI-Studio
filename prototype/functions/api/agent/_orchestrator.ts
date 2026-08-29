@@ -49,7 +49,7 @@ import {
   restoreSkill,
 } from "./_shared";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
-import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, claudeFetch } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
@@ -505,16 +505,12 @@ export async function callClaude(
   });
   // 429 레이트리밋 자동 재시도: 최대 2회(총 3회), 2s → 4s 지수 백오프
   for (let attempt = 0; attempt <= 2; attempt++) {
-    const res = await fetch(anthropicMessagesUrl(env), {
-      method: "POST",
-      headers: auth.headers,
-      body: JSON.stringify({
-        model: opts.model || "claude-sonnet-4-6",
-        max_tokens: opts.maxTokens || 1500,
-        system: buildClaudeSystem(auth.subscription, system),
-        messages: builtMessages,
-      }),
-    });
+    const res = await claudeFetch(env, auth, (sub: boolean) => ({
+      model: opts.model || "claude-sonnet-4-6",
+      max_tokens: opts.maxTokens || 1500,
+      system: buildClaudeSystem(sub, system),
+      messages: builtMessages,
+    }));
     const text = await res.text();
     if (res.status === 429 && attempt < 2) {
       await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));

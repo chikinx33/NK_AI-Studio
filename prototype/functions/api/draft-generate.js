@@ -1,4 +1,4 @@
-import { anthropicMessagesUrl, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
+import { claudeFetch, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 
@@ -350,17 +350,13 @@ export async function onRequestPost(context) {
       ].filter(Boolean).join("\n\n");
 
   try {
-    const completion = await fetch(anthropicMessagesUrl(env), {
-      method: "POST",
-      headers: auth.headers,
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        temperature: 0.8,
-        system: buildClaudeSystem(auth.subscription, systemPrompt),
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
+    const completion = await claudeFetch(env, auth, (sub) => ({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      temperature: 0.8,
+      system: buildClaudeSystem(sub, systemPrompt),
+      messages: [{ role: "user", content: userPrompt }],
+    }));
 
     if (!completion.ok) {
       const errText = await completion.text();

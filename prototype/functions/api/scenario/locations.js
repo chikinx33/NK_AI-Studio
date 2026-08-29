@@ -6,7 +6,7 @@
 // 출력:  { locations: [{ id, name, description, refObjectName:"", sceneIds:[...] }] }
 //   - description: 캐릭터·동작·카메라 없는 "빈 배경 플레이트" 묘사(이미지 생성용)
 import { authorizeRequest } from "../_shared/auth.js";
-import { buildClaudeSystem, anthropicMessagesUrl, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "../_shared/claude-auth.js";
+import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "../_shared/claude-auth.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -50,17 +50,13 @@ export const onRequestPost = async ({ request, env }) => {
       return send({ error: String((e && e.message) || e) }, 500, origin);
     }
 
-    const res = await fetch(anthropicMessagesUrl(env), {
-      method: "POST",
-      headers: ah.headers,
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1600,
-        temperature: 0.2,
-        system: buildClaudeSystem(ah.subscription, system),
-        messages: [{ role: "user", content: user }],
-      }),
-    });
+    const res = await claudeFetch(env, ah, (sub) => ({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1600,
+      temperature: 0.2,
+      system: buildClaudeSystem(sub, system),
+      messages: [{ role: "user", content: user }],
+    }));
     if (!res.ok) {
       const t = await res.text().catch(() => "");
       return send({ error: "llm_error", status: res.status, detail: String(t).slice(0, 240) }, 500, origin);
