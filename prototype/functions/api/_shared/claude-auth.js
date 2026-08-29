@@ -474,14 +474,19 @@ async function probeReach(env) {
       const body = await res.text().catch(() => "");
       const requestId = String(res.headers.get("x-request-id") || "");
       const cfRay = String(res.headers.get("cf-ray") || "");
-      // 도달 판정: x-request-id 가 1순위지만, 프록시를 한 홉 거치면 헤더가 사라질 수 있다.
-      // 그때는 본문이 Anthropic 의 에러 형태(JSON + error.type)인지로 보완한다.
-      // 엣지 차단은 HTML 이라 이 조건에 걸리지 않는다.
+      // 도달 판정: x-request-id 가 1순위다. 다만 프록시를 한 홉 거치면 그 헤더가
+      // 사라질 수 있어, 본문이 Anthropic 에러 형태(JSON + error.type)면 보완 인정한다.
+      //
+      // 403 은 예외로 둔다. 엣지 차단이 바로 그 403 이고, 본문이 JSON 이라
+      // 이 완화 조건에 걸려 '도달' 로 오판됐다(직접 경로가 14ms 만에 403 인데도
+      // ✅ 로 찍혔다). Anthropic 이 직접 낸 403 이라면 x-request-id 가 붙는다.
       let anthropicBody = false;
-      try {
-        const parsed = JSON.parse(body);
-        anthropicBody = !!(parsed && (parsed.type === "error" || (parsed.error && parsed.error.type)));
-      } catch (_) {}
+      if (res.status !== 403) {
+        try {
+          const parsed = JSON.parse(body);
+          anthropicBody = !!(parsed && (parsed.type === "error" || (parsed.error && parsed.error.type)));
+        } catch (_) {}
+      }
       out.push({
         label: t.label,
         status: res.status,
