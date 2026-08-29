@@ -4,7 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+// 줄바꿈을 LF 로 맞춰 읽는다. 이 저장소는 Windows 에서 CRLF 로 체크아웃되므로,
+// "return (\n    <div" 처럼 개행이 들어간 표식으로 소스를 자르면 CRLF 파일에서는
+// indexOf 가 -1 이 되어 엉뚱한 구간을 검사하게 된다(실제로 그렇게 오탐이 났다).
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const knowledge = () => read("ai-company-app/src/components/Knowledge.tsx");
 
 test("회사 지식 항목마다 복사 버튼이 있다", () => {

@@ -67,6 +67,27 @@ const TYPE_BADGE: Record<string, { t: string; c: string }> = {
   결정: { t: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
   스킬: { t: "스킬", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
 };
+/**
+ * 학습 날짜. 배지 아래에 작게 붙는다.
+ *
+ * "이 지식이 언제 들어온 건지" 를 못 보면, 오래된 규칙이 지금 결과를 흔들고 있어도
+ * 사람이 알아채지 못한다. 목록은 짧게(YYYY-MM-DD), 정확한 시각은 title 로 보여준다.
+ */
+function learnedDate(iso?: string): string {
+  const t = Date.parse(iso ?? "");
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function learnedFull(iso?: string): string {
+  const t = Date.parse(iso ?? "");
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `학습: ${learnedDate(iso)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 type TypeKey = "원칙" | "사실" | "결정" | "스킬";
 
 export default function Knowledge({
@@ -97,7 +118,10 @@ export default function Knowledge({
   const [copied, setCopied] = useState<string | null>(null);
   // 그래프에서 노드 클릭 시 해당 항목으로 스크롤·하이라이트 (행 ref 맵)
   const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  // highlight: 에이전트·그래프가 지목한 항목(2.6초 뒤 자동 해제)
+  // selected : 사용자가 직접 고른 항목(다른 걸 고르거나 Esc 를 누를 때까지 유지)
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   useUiAction((action) => {
     if (action.action === "skill.view") {
@@ -112,9 +136,29 @@ export default function Knowledge({
     const nextFilter = actionString(action, "filter");
     if (nextFilter === "원칙" || nextFilter === "사실" || nextFilter === "결정" || nextFilter === "스킬") setFilter(nextFilter);
     else if (nextFilter === "all") setFilter(null);
+    /*
+     * text: 에이전트가 "그 지식 보여줘" 라고 할 때 어느 항목인지 지목하는 값.
+     * 화면만 열어주면 47개 중에서 사람이 눈으로 찾아야 한다.
+     * 문장 전체를 정확히 옮기지 못할 수 있으므로 부분 일치까지 받아준다.
+     * 필터에 가려지면 못 찾으니 전체 보기로 돌린 뒤 하이라이트한다.
+     */
+    const wantText = actionString(action, "text");
+    if (wantText) {
+      const needle = wantText.trim().toLowerCase();
+      const hit =
+        items.find((it) => it.text === wantText) ||
+        items.find((it) => it.text.toLowerCase().includes(needle)) ||
+        items.find((it) => needle.includes(it.text.toLowerCase()));
+      if (hit) {
+        if (!nextFilter) setFilter(null);
+        setHighlight(hit.text);
+        setSelected(hit.text);
+      }
+    }
     const nextSort = actionString(action, "sort");
     if (nextSort === "asc" || nextSort === "desc") setSortDir(nextSort);
     if (actionBoolean(action, "dedupe") === true) void tidyDecisions();
+    // useUiAction 은 handlerRef 를 매 렌더 갱신하므로 이 핸들러는 항상 최신 items 를 본다.
   }, "knowledge");
 
   async function tidyDecisions() {
@@ -241,6 +285,15 @@ export default function Knowledge({
     const t = setTimeout(() => setHighlight(null), 2600);
     return () => clearTimeout(t);
   }, [highlight, scrollNonce]);
+  // 선택은 사용자가 풀 때까지 남는다. Esc 로 해제(편집 중일 땐 편집 취소가 먼저다).
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !editing) setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, editing]);
 
   const learned = items.filter((i) => i.source !== "기반");
   // 지식 항목: 전체(null)·규칙·사실·결정에서 표시. "스킬"은 지식 type이 아니므로 자동 제외.
@@ -416,10 +469,12 @@ export default function Knowledge({
                 ref={(el) => {
                   if (el) rowRefs.current.set(it.text, el);
                 }}
-                className={`group flex items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-sm transition ${
-                  highlight === it.text
+                // 박스를 누르면 그 지식이 선택돼 계속 하이라이트된다(다른 걸 누르면 옮겨간다).
+                onClick={() => setSelected(it.text)}
+                className={`group flex cursor-default items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-sm transition ${
+                  highlight === it.text || selected === it.text
                     ? "border-emerald-500 ring-2 ring-emerald-500/50"
-                    : "border-edge"
+                    : "border-edge hover:border-edge/80"
                 }`}
               >
                 {editing === it.text ? (
@@ -444,26 +499,35 @@ export default function Knowledge({
                     {it.text}
                   </span>
                 )}
-                {/* 유형 배지 (규칙/사실/결정) */}
-                {(() => {
-                  const b = TYPE_BADGE[it.type ?? "사실"];
-                  return (
-                    <span className={`shrink-0 rounded border px-1 text-[10px] ${b.c}`} title={`유형: ${it.type ?? "사실"}`}>
-                      {b.t}
+                {/* 유형·출처 배지와 학습 날짜를 세로로 묶는다 — 언제 배운 지식인지 바로 보이게. */}
+                <span className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className="flex items-center gap-1">
+                    {(() => {
+                      const b = TYPE_BADGE[it.type ?? "사실"];
+                      return (
+                        <span className={`rounded border px-1 text-[10px] ${b.c}`} title={`유형: ${it.type ?? "사실"}`}>
+                          {b.t}
+                        </span>
+                      );
+                    })()}
+                    <span
+                      className={`rounded px-1 text-[10px] ${
+                        it.source === "기반"
+                          ? "bg-gray-700 text-gray-400"
+                          : it.source === "수동"
+                            ? "bg-sky-900/60 text-sky-300"
+                            : "bg-emerald-900/60 text-emerald-300"
+                      }`}
+                      title={it.source}
+                    >
+                      {it.source === "기반" ? "기반" : it.source === "수동" ? "수동" : "학습"}
                     </span>
-                  );
-                })()}
-                <span
-                  className={`shrink-0 rounded px-1 text-[10px] ${
-                    it.source === "기반"
-                      ? "bg-gray-700 text-gray-400"
-                      : it.source === "수동"
-                        ? "bg-sky-900/60 text-sky-300"
-                        : "bg-emerald-900/60 text-emerald-300"
-                  }`}
-                  title={it.source}
-                >
-                  {it.source === "기반" ? "기반" : it.source === "수동" ? "수동" : "학습"}
+                  </span>
+                  {learnedDate(it.createdAt) && (
+                    <span className="text-[10px] leading-none text-gray-500" title={learnedFull(it.createdAt)}>
+                      {learnedDate(it.createdAt)}
+                    </span>
+                  )}
                 </span>
                 {/* 복사 — 에이전트에게 수정 지시할 때 이 문장을 그대로 붙여넣기 위함 */}
                 <button

@@ -386,7 +386,8 @@ ${teamToolMap}
 - 직원: {"action":"agent.focus","agentId":"pixel"} / {"action":"agent.card","agentId":"pixel","open":true} / {"action":"agent.visibility","agentId":"edge","visible":false} / {"action":"agent.order","agentIds":["pixel","edge"]}
 - 근무: {"action":"work.mode","mode":"on|off"} / {"action":"work.autonomous","enabled":true}
 - 달력·프로젝트 표시: {"action":"dashboard.calendar","date":"2026-07-25"} / {"action":"project.sidebar","project":"프로젝트명","visible":false}
-- 지식 보기: {"action":"knowledge.view","filter":"원칙|사실|결정|스킬|all","sort":"asc|desc","dedupe":false}
+- 지식 보기: {"action":"knowledge.view","filter":"원칙|사실|결정|스킬|all","sort":"asc|desc","dedupe":false,"text":"그 지식 문장(일부만도 됨)"}
+  ★특정 지식을 언급하거나 인용했다면 반드시 text 를 함께 보내세요. 화면만 열면 수십 개 중에서 사람이 눈으로 찾아야 합니다. text 를 주면 그 항목이 하이라이트되고 화면이 거기로 스크롤됩니다.
 - 보유 스킬 상세: {"action":"skill.view","name":"스킬명"}
 - 업무 보기: {"action":"work_explorer.view","mode":"cards|list","sort":"newest|oldest|name-asc|name-desc","query":"검색어","scope":"all|title|content"}
 - 업무 열기·이름 변경: {"action":"work_explorer.open","title":"업무명"} / {"action":"work_explorer.rename","kind":"work|folder","title":"기존명","newTitle":"새 이름"}
