@@ -3369,21 +3369,38 @@ async function runIpLibraryTool(input: any, ctx: ToolContext): Promise<any> {
 
   // ① 브랜드 정의에 등록된 캐릭터 시트
   const characters: any[] = [];
+  let hub: any = null;
   if (brandId) {
     try {
       const got: any = await runBrandGetTool({ brandId }, ctx);
+      hub = readBrandHub(got?.brand);
+      // 캐릭터별 현재 텍스트 속성(생김새·안 나오게 할 것)을 함께 싣는다.
+      // 이게 없으면 에이전트가 "지금 뭐라고 적혀 있는지" 를 모른 채 덮어쓰려 든다.
+      const textByToken = new Map<string, { description: string; negativePrompt: string }>();
+      const bChars = Array.isArray(got?.brand?.brandCharacters) ? got.brand.brandCharacters : [];
+      for (const c of bChars) {
+        const t = String(c?.trigger || c?.token || "").trim().toLowerCase();
+        if (!t) continue;
+        textByToken.set(t, {
+          description: String(c?.description || "").trim(),
+          negativePrompt: String(c?.negativePrompt || "").trim(),
+        });
+      }
       const sheets = Array.isArray(got?.brand?.characterSheets) ? got.brand.characterSheets : [];
       for (const entry of sheets) {
         const items = Array.isArray(entry?.items) ? entry.items : [];
         if (!items.length) continue;
         const token = String(entry?.token || "").trim();
         const name = String(entry?.displayName || token.replace(/^@/, "")).trim();
+        const text = textByToken.get(token.toLowerCase()) || { description: "", negativePrompt: "" };
         characters.push({
           name,
           token,
           sheetCount: items.length,
           // image 도구의 referenceImages 에 그대로 넣을 수 있는 참조 키(용량 0).
           ref: `ip:${brandId}:${token || name}`,
+          description: text.description,
+          negativePrompt: text.negativePrompt,
         });
       }
     } catch { /* 브랜드 정의가 없으면 ②만 본다 */ }
@@ -3405,12 +3422,169 @@ async function runIpLibraryTool(input: any, ctx: ToolContext): Promise<any> {
     brandId: brandId || undefined,
     projectId: projectId || undefined,
     count,
+    // 허브센터 맥락. 이걸 같이 줘야 이 IP 의 세계관·톤·금칙어를 알고 서술할 수 있다.
+    hub: hub || undefined,
     characters,
     files,
     brandCandidates: characters.length ? undefined : brandCandidates,
     note: count === 0 && brandCandidates.length
       ? `이 브랜드에는 등록 시트가 없어요. 등록된 브랜드: ${brandCandidates.join(", ")} — 다른 브랜드일 수 있으니 확인해 주세요.`
       : undefined,
+  };
+}
+
+/**
+ * 브랜드 허브센터 맥락.
+ *
+ * 시트 이미지만 보고 프롬프트를 쓰면 이 IP 가 어떤 세계관인지 모른 채 눈에 보이는
+ * 것만 받아적게 된다("빨간 삼각형 캐릭터"). 세계관·톤·규칙·금칙어를 같이 넘겨야
+ * 이 IP 의 규격으로 서술된다.
+ */
+function readBrandHub(brand: any) {
+  if (!brand || typeof brand !== "object") return null;
+  return {
+    brandTitle: String(brand.brandTitle || "").trim(),
+    brandStory: String(brand.brandStory || "").trim(),
+    worldSetting: String(brand.worldSetting || "").trim(),
+    brandVoice: String(brand.brandVoice || "").trim(),
+    brandRules: Array.isArray(brand.brandRules) ? brand.brandRules : [],
+    bannedExpressions: Array.isArray(brand.bannedExpressions) ? brand.bannedExpressions : [],
+  };
+}
+
+/** 브랜드 안에서 캐릭터 하나를 찾는다(이름 또는 @토큰, 대소문자 무시). */
+function findBrandCharacter(brand: any, wanted: string) {
+  const key = String(wanted || "").trim().replace(/^@/, "").toLowerCase();
+  if (!key) return null;
+  const list = Array.isArray(brand?.brandCharacters) ? brand.brandCharacters : [];
+  return list.find((c: any) => {
+    const token = String(c?.trigger || c?.token || "").replace(/^@/, "").toLowerCase();
+    const name = String(c?.name || "").toLowerCase();
+    return token === key || name === key;
+  }) || null;
+}
+
+/**
+ * 등록된 IP 시트를 허브 맥락과 함께 분석해 텍스트 속성 초안을 만든다.
+ *
+ * 시트는 저장될 때 gs:// 로 올라가므로 서버가 직접 읽는다(채팅 첨부와 달리 실제 주소가 있다).
+ * 초안만 돌려주고 저장하지는 않는다 — 저장은 ip_text_save 가 한다.
+ */
+async function runIpDescribeTool(input: any, ctx: ToolContext): Promise<any> {
+  const resolved = await resolveBrandId(String(input?.brandId || input?.brand || input?.slug || ""), ctx);
+  const brandId = resolved.brandId;
+  if (!brandId) throw new Error("brandId 를 특정하지 못했어요.");
+  const wanted = String(input?.character || input?.token || input?.name || "").trim();
+  if (!wanted) throw new Error("character(캐릭터 이름 또는 @토큰)가 필요해요.");
+
+  const got: any = await runBrandGetTool({ brandId }, ctx);
+  if (!got?.exists) throw new Error("브랜드를 찾지 못했어요.");
+  const hub = readBrandHub(got.brand);
+
+  const sheets = Array.isArray(got.brand?.characterSheets) ? got.brand.characterSheets : [];
+  const key = wanted.replace(/^@/, "").toLowerCase();
+  const entry = sheets.find((e: any) => {
+    const token = String(e?.token || "").replace(/^@/, "").toLowerCase();
+    const name = String(e?.displayName || "").toLowerCase();
+    return token === key || name === key;
+  });
+  const names = sheets.map((e: any) => String(e?.displayName || e?.token || "")).filter(Boolean).join(", ");
+  if (!entry) throw new Error("'" + wanted + "' 시트를 찾지 못했어요. 등록된 캐릭터: " + (names || "없음"));
+
+  const imageUrls = (Array.isArray(entry.items) ? entry.items : [])
+    .map((it: any) => String(it?.imageDataUrl || it?.imageUrl || it?.url || "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!imageUrls.length) throw new Error("'" + wanted + "' 에 등록된 시트 이미지가 없어요.");
+
+  const displayName = String(entry.displayName || entry.token || wanted).replace(/^@/, "");
+  const others = sheets
+    .map((e: any) => String(e?.displayName || "").trim())
+    .filter((n: string) => n && n.toLowerCase() !== displayName.toLowerCase());
+
+  const data = await callInternalJson(ctx, "/api/ip/analyze", {
+    body: {
+      characterName: displayName,
+      imageUrls,
+      lang: "ko",
+      brandContext: {
+        brandTitle: hub?.brandTitle,
+        brandStory: hub?.brandStory,
+        worldSetting: hub?.worldSetting,
+        brandRules: hub?.brandRules,
+        bannedExpressions: hub?.bannedExpressions,
+        otherCharacters: others,
+      },
+    },
+  });
+
+  const cur = findBrandCharacter(got.brand, wanted);
+  return {
+    kind: "ip_describe",
+    brandId,
+    character: displayName,
+    token: String(entry.token || ""),
+    analyzedImages: data?.analyzedImages ?? imageUrls.length,
+    description: String(data?.description || "").trim(),
+    negativePrompt: String(data?.negativePrompt || "").trim(),
+    current: {
+      description: String(cur?.description || "").trim(),
+      negativePrompt: String(cur?.negativePrompt || "").trim(),
+    },
+    usedHub: !!(hub && (hub.worldSetting || hub.brandStory || hub.brandRules.length)),
+  };
+}
+
+/**
+ * IP 텍스트 속성 저장: brandCharacters 의 해당 캐릭터만 갱신한다.
+ * 사용자가 손으로 다듬어 둔 값을 덮어쓰므로 쓰기 → 승인 게이트(brand_save 와 같은 취급).
+ */
+async function runIpTextSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const resolved = await resolveBrandId(String(input?.brandId || input?.brand || input?.slug || ""), ctx);
+  const brandId = resolved.brandId;
+  if (!brandId) throw new Error("brandId 를 특정하지 못했어요.");
+  const wanted = String(input?.character || input?.token || input?.name || "").trim();
+  if (!wanted) throw new Error("character(캐릭터 이름 또는 @토큰)가 필요해요.");
+
+  const description = input?.description === undefined ? null : String(input.description || "").trim();
+  const negativePrompt = input?.negativePrompt === undefined ? null : String(input.negativePrompt || "").trim();
+  if (description === null && negativePrompt === null) {
+    throw new Error("description(생김새) 또는 negativePrompt(안 나오게 할 것) 중 하나는 있어야 해요.");
+  }
+
+  const got: any = await runBrandGetTool({ brandId }, ctx);
+  if (!got?.exists) throw new Error("브랜드를 찾지 못했어요.");
+  const list = Array.isArray(got.brand?.brandCharacters) ? got.brand.brandCharacters : [];
+  const key = wanted.replace(/^@/, "").toLowerCase();
+  let hit = false;
+  const next = list.map((c: any) => {
+    const token = String(c?.trigger || c?.token || "").replace(/^@/, "").toLowerCase();
+    const name = String(c?.name || "").toLowerCase();
+    if (token !== key && name !== key) return c;
+    hit = true;
+    const patch: Record<string, any> = { ...c };
+    if (description !== null) patch.description = description;
+    if (negativePrompt !== null) patch.negativePrompt = negativePrompt;
+    // 5칸 → 2칸 통합 이후 옛 칸은 쓰지 않는다(character-traits.js 주석 참조).
+    patch.fixedTraits = [];
+    patch.bannedTraits = [];
+    patch.styleGuide = "";
+    patch.updatedAt = new Date().toISOString();
+    return patch;
+  });
+  if (!hit) {
+    const names = list.map((c: any) => String(c?.name || c?.trigger || "")).filter(Boolean).join(", ");
+    throw new Error("'" + wanted + "' 캐릭터를 찾지 못했어요. 등록된 캐릭터: " + (names || "없음"));
+  }
+
+  await runBrandSaveTool({ brandId, brand: { brandCharacters: next }, merge: true }, ctx);
+  return {
+    kind: "ip_text_save",
+    brandId,
+    character: wanted,
+    saved: true,
+    description: description === null ? undefined : description,
+    negativePrompt: negativePrompt === null ? undefined : negativePrompt,
   };
 }
 
@@ -4196,6 +4370,10 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   image_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runImageLibraryTool },
   video_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runVideoLibraryTool },
   ip_library: { agentId: "pixel", agentIds: ["core", "plot"], kind: "read", synthesize: true, run: runIpLibraryTool },
+  // 등록된 시트를 '허브센터 맥락과 함께' 분석 → 텍스트 속성 초안. 저장은 하지 않는다.
+  ip_describe: { agentId: "pixel", agentIds: ["core"], kind: "read", synthesize: true, run: runIpDescribeTool },
+  // 텍스트 속성 저장. 사용자가 다듬어 둔 값을 덮어쓰므로 brand_save 와 같이 승인 게이트.
+  ip_text_save: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runIpTextSaveTool },
   // 비트(사운드): 나레이션(TTS).
   narration: { agentId: "beat", kind: "external", run: runNarrationTool },
   // 마키(마케팅): 해시태그 생성. 리치(배포)도 공유.
