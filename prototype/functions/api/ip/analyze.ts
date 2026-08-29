@@ -8,7 +8,6 @@
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
-import { getSql } from "../knowledge/_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -65,34 +64,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!imageUrls.length) return json({ error: "등록된 시트 이미지가 필요해요(imageUrls)." }, 400);
 
     /*
-     * 회사 지식(스타일 가이드)을 서버가 직접 싣는다.
+     * ★회사 지식은 여기에 절대 들어오지 않는다.
      *
-     * 에이전트(ip_describe)는 이걸 넣어 부르고 화면 버튼은 안 넣었다. 그래서 같은 시트인데
-     * 에이전트가 쓴 설명만 세계관에 맞고 버튼이 만든 초안은 어긋났다 — "좌우 크림색 타원 돌기,
-     * 금지: 팔/손 추가" 같은 규칙을 버튼 경로만 못 보고 있었다. 브라우저가 지식을 모으게 하면
-     * 요청 본문만 커지고 화면마다 빠뜨릴 수 있으니, 부르는 쪽이 누구든 서버가 같은 자료를 붙인다.
+     * IP 라이브러리(허브센터)가 오리지널 저장소이고 회사 지식은 그것을 근거로 파생된다.
+     * 이 엔드포인트는 그 원본에 쓸 초안을 만든다. 회사 지식을 읽어 오면 파생물이 원본으로
+     * 되돌아가는 고리가 닫혀, 회사 지식에 낀 오류가 원본에 박히고 다시 파생되며 누적된다.
+     * (한 번 그렇게 만들었다가 걷어냈다. 다시 넣지 말 것.)
      *
-     * 전부 넣으면 토큰이 커지므로 이 캐릭터를 언급한 항목을 앞에 두고 30개까지만 쓴다.
+     * 캐릭터 설계 의도는 허브의 brandRules·bannedExpressions 에 적는다 — 같은 원본이라
+     * 되먹임이 아니다. brandContext 로 들어오는 것도 딱 그 허브 항목들뿐이다.
      */
-    if (!Array.isArray(brandContext.companyKnowledge) || !brandContext.companyKnowledge.length) {
-      try {
-        const sql = getSql(env);
-        const userId = String((auth as any).userId || "");
-        if (sql && userId) {
-          // agent/_shared 를 import 하면 200KB 넘는 모듈 그래프가 이 함수 번들에 딸려 온다.
-          // 필요한 건 문장 한 열뿐이라 쿼리만 직접 쓴다.
-          const rows: any[] = await withTimeout(
-            sql("SELECT text FROM company_knowledge WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200", [userId]),
-            4000,
-            "company_knowledge"
-          );
-          const key = characterName.toLowerCase();
-          const mentions = rows.filter((r: any) => String(r.text || "").toLowerCase().includes(key));
-          const general = rows.filter((r: any) => !String(r.text || "").toLowerCase().includes(key));
-          brandContext.companyKnowledge = [...mentions, ...general].slice(0, 30).map((r: any) => r.text);
-        }
-      } catch { /* 지식 조회 실패가 분석을 막지는 않는다 */ }
-    }
 
     const apiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = String(env.GOOGLE_CLIENT_EMAIL || "").trim();
@@ -408,8 +389,6 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
   push("Brand rules", brandContext?.brandRules);
   push("Banned expressions", brandContext?.bannedExpressions);
   push("Other registered characters", brandContext?.otherCharacters);
-  // 회사 지식에 캐릭터별 스타일 가이드가 들어 있다. 눈으로 본 것과 어긋나면 이쪽이 우선이다.
-  push("Style guide / company knowledge", brandContext?.companyKnowledge);
   const ctx = ctxLines.length ? `\n\n[Brand IP context]\n${ctxLines.join("\n")}` : "";
 
   if (lang === "en") {
@@ -424,7 +403,7 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       "  Those belong to the shared prompt, not to this character. A backdrop copied in here ('neutral grey background') gets baked into every future image.",
       "  Count body parts on ONE figure, from the clearest front view. The sheet repeats the same character at several angles — never add counts across cells.",
       "  Count arms (on the sides of the torso) and legs (underneath) separately; state each as an explicit number.",
-      "If the rules or style guide in [Brand IP context] contradict what you see, the rules win — they are the character's design intent.",
+      "If the brand rules in [Brand IP context] contradict what you see, the rules win — they are the character's design intent.",
       "  e.g. if the guide says 'oval side nubs, never add arms/hands', do not call them arms even if they look like arms. Instead state position, size and color precisely so they still render in the right place.",
       "  Only when the rules say nothing about a part, follow the default below.",
       "  Name body parts by what they are. An arm without fingers is still an arm; a leg without toes is still a leg.",
@@ -450,7 +429,7 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "★부위 개수는 한 개체 기준으로, 가장 잘 보이는 정면 한 컷에서 세세요.",
     "  시트는 같은 캐릭터를 여러 각도로 늘어놓은 것입니다. 여러 칸의 개수를 합치면 팔다리가 몇 배로 불어납니다.",
     "  팔(몸통 좌우)과 다리(몸통 아래)는 나눠서 세고, 각각 몇 개인지 숫자로 명시하세요. 서로 섞어 세지 마세요.",
-    "★[Brand IP context] 의 규칙·스타일 가이드가 눈으로 본 것과 어긋나면 규칙이 우선입니다. 그 캐릭터의 설계 의도이기 때문입니다.",
+    "★[Brand IP context] 의 허브 규칙이 눈으로 본 것과 어긋나면 규칙이 우선입니다. 그 캐릭터의 설계 의도이기 때문입니다.",
     "  예: 가이드에 '좌우 타원 돌기, 팔/손 추가 금지' 라고 적혀 있으면 팔처럼 보여도 팔이라고 쓰지 마세요. 대신 위치·크기·색을 정확히 적어 그 자리에 그려지게 하세요.",
     "  규칙에 그런 언급이 없을 때만 아래 기본 원칙을 따르세요.",
     "  신체 부위는 부위 이름으로 부르세요. 팔은 손가락이 없어도 팔이고, 다리는 발가락이 없어도 다리입니다.",

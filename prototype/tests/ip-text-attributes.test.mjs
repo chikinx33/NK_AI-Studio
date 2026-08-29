@@ -42,19 +42,38 @@ test("분석 지시문이 추측 금지와 긍정 서술을 요구한다", () =>
   assert.match(src, /push\("Other registered characters", brandContext\?\.otherCharacters\)/);
 });
 
-test("회사 지식(스타일 가이드)이 분석에 함께 넘어간다", () => {
-  const shared = read("prototype/functions/api/agent/_shared.ts");
-  // 이게 없어서 실제로 어긋났다: 가이드에 "타원 돌기 / 팔 추가 금지" 가 있는데
-  // 분석기는 못 보고 "핀 모양 노란 팔" 이라 썼고, 에이전트가 뒤늦게 고쳤다.
-  assert.match(shared, /listCompanyKnowledge\(sql, ctx\.userId\)/);
-  assert.match(shared, /companyKnowledge,/);
-  // 캐릭터를 언급한 항목을 먼저(토큰 예산 안에서 놓치지 않게).
-  assert.match(shared, /const mentions = rows\.filter/);
-  // 무엇을 참고했는지 결과에 남겨 추적 가능하게.
-  assert.match(shared, /usedCompanyKnowledge: companyKnowledge\.length/);
+test("★회사 지식은 IP 라이브러리 분석에 절대 들어가지 않는다", () => {
+  /*
+   * IP 라이브러리(허브센터)가 오리지널 저장소이고, 회사 지식은 그것을 근거로 파생된다.
+   * 그런데 이 분석은 그 원본에 쓸 초안을 만든다. 여기서 회사 지식을 읽으면 파생물이
+   * 원본으로 되돌아가는 고리가 닫힌다 — 회사 지식에 낀 오류가 원본에 박히고, 거기서
+   * 다시 회사 지식이 파생되며 오염이 누적된다.
+   *
+   * 한 번 그렇게 만들었다가 걷어냈다. 이 테스트가 되돌아가는 것을 막는다.
+   */
+  const src = analyze();
+  assert.doesNotMatch(src, /companyKnowledge/);
+  assert.doesNotMatch(src, /company_knowledge/);
 
-  const analyze2 = analyze();
-  assert.match(analyze2, /push\("Style guide \/ company knowledge", brandContext\?\.companyKnowledge\)/);
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  const tool = shared.slice(shared.indexOf("async function runIpDescribeTool"), shared.indexOf("async function runIpTextSaveTool"));
+  assert.ok(tool, "ip_describe 를 못 찾음");
+  assert.doesNotMatch(tool, /listCompanyKnowledge/);
+  assert.doesNotMatch(tool, /companyKnowledge/);
+  // 왜 넣으면 안 되는지를 코드 옆에 남긴다 — 이유가 없으면 다음에 또 넣는다.
+  assert.match(tool, /회사 지식은 절대 넣지 않는다/);
+});
+
+test("허브(원본 저장소)의 규칙만 분석에 넘어간다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  const tool = shared.slice(shared.indexOf("async function runIpDescribeTool"), shared.indexOf("async function runIpTextSaveTool"));
+  // 허브는 IP 라이브러리와 같은 원본 저장소라 되먹임이 아니다.
+  for (const field of ["brandTitle", "brandStory", "worldSetting", "brandRules", "bannedExpressions", "otherCharacters"]) {
+    assert.match(tool, new RegExp(field + ":"), field + " 가 안 넘어감");
+  }
+  // 설계 의도가 눈으로 본 것과 어긋나면 규칙이 이긴다 — 그 규칙의 출처는 허브다.
+  assert.match(analyze(), /허브 규칙이 눈으로 본 것과 어긋나면 규칙이 우선입니다/);
+  assert.match(analyze(), /If the brand rules in \[Brand IP context\] contradict what you see, the rules win/);
 });
 
 test("규칙이 눈으로 본 것보다 우선한다", () => {
@@ -351,21 +370,9 @@ test("화면이 시간 초과에 한 번 더 시도한다", () => {
   assert.equal(block.split("askOnce()").length - 1, 2);
 });
 
-test("회사 지식은 부르는 쪽이 누구든 서버가 싣는다", () => {
-  const src = analyze();
-  /*
-   * 에이전트(ip_describe)는 회사 지식을 넣어 부르고 화면 버튼은 안 넣었다.
-   * 그래서 같은 시트인데 버튼이 만든 초안만 세계관 규칙을 어겼다.
-   */
-  assert.match(src, /if \(!Array\.isArray\(brandContext\.companyKnowledge\) \|\| !brandContext\.companyKnowledge\.length\)/);
-  assert.match(src, /SELECT text FROM company_knowledge WHERE user_id = \$1/);
-  // 이 캐릭터를 언급한 지식이 먼저다(토큰 예산이 한정돼 있다).
-  assert.match(src, /const mentions = rows\.filter\(\(r: any\) => String\(r\.text \|\| ""\)\.toLowerCase\(\)\.includes\(key\)\)/);
-  assert.match(src, /\[\.\.\.mentions, \.\.\.general\]\.slice\(0, 30\)/);
-  // 지식 조회가 멈춰도 분석은 진행돼야 한다.
-  assert.match(src, /4000,\s*[\r\n]+\s*"company_knowledge"/);
-  // 200KB 넘는 agent/_shared 를 이 함수 번들에 끌어오지 않는다.
-  assert.doesNotMatch(src, /from "\.\.\/agent\/_shared"/);
+test("무거운 agent 모듈을 이 함수 번들에 끌어오지 않는다", () => {
+  // agent/_shared 는 200KB 넘는 모듈 그래프다. import 하면 이 함수의 콜드스타트가 느려진다.
+  assert.doesNotMatch(analyze(), /from "\.\.\/agent\/_shared"/);
 });
 
 test("GCS 토큰은 원격 시트가 있을 때만 발급한다", () => {
