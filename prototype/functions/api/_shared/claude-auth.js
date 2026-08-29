@@ -18,8 +18,27 @@ const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for 
  */
 const AUTH_FAILURE_STATUSES = new Set([401, 403]);
 
-/** Cloudflare 엣지가 Worker→Anthropic 직접 호출을 막을 때의 403 본문. 자격증명 문제가 아니다. */
-const EDGE_BLOCK_RE = /request not allowed/i;
+/**
+ * Cloudflare 엣지 차단인지 판별한다.
+ *
+ * 전에는 본문에 "Request not allowed" 가 있으면 무조건 엣지 차단으로 보고 폴백을 건너뛰었다.
+ * 그건 검증 안 된 가정이었다 — Anthropic 도 OAuth(구독) 토큰을 거부할 때 같은 문구를 쓴다.
+ * 그 경우엔 API 키로 바꾸면 되는데, 그 길을 스스로 막아 사용자가 그냥 실패를 봤다.
+ *
+ * 이제는 '확실히 엣지가 낸 응답' 일 때만 건너뛴다. Anthropic 응답에는 x-request-id 가 붙고
+ * 본문이 JSON 이다. 엣지 차단은 그게 없고 HTML 을 돌려준다. 애매하면 폴백을 시도한다 —
+ * 실패 경로에서 요청 한 번 더 쓰는 값보다, 살릴 수 있는 걸 못 살리는 손해가 크다.
+ */
+function looksLikeEdgeBlock(res, text) {
+  if (res.headers.get("x-request-id")) return false; // Anthropic 까지 도달한 응답
+  const ctype = String(res.headers.get("content-type") || "").toLowerCase();
+  if (ctype.includes("application/json")) return false;
+  try {
+    JSON.parse(text);
+    return false; // JSON 이면 API 가 낸 응답이다
+  } catch (_) {}
+  return /<html|cloudflare|request not allowed/i.test(text);
+}
 
 let settingsSchemaReady = false;
 export async function ensureSettingsSchema(sql) {
@@ -246,11 +265,13 @@ export async function claudeFetch(env, auth, buildBody, init = {}) {
   // 폴백해도 똑같이 막히므로, 호출부가 본문을 한 번 더 읽을 수 있게 재구성해 돌려준다.
   const errText = await res.text().catch(() => "");
   if (isCreditExhausted(errText, res.status)) return replayResponse(res, errText);
-  // Cloudflare 엣지 봇차단도 403 "Request not allowed" 로 온다(anthropicMessagesUrl 주석 참조).
-  // 이건 토큰이 거부된 게 아니라 송출 경로 문제라, API 키로 바꿔도 같은 403 이 난다.
-  if (EDGE_BLOCK_RE.test(errText)) return replayResponse(res, errText);
+  // 엣지가 낸 응답이 확실할 때만 폴백을 건너뛴다(키를 바꿔도 같은 자리에서 막히므로).
+  if (looksLikeEdgeBlock(res, errText)) {
+    console.log(`claude_edge_block: ${res.status} — 폴백 생략`);
+    return replayResponse(res, errText);
+  }
 
-  console.log(`claude_auth_fallback: subscription ${res.status} → api_key`);
+  console.log(`claude_auth_fallback: subscription ${res.status} → api_key (${errText.slice(0, 120)})`);
   // 폴백도 실패하면 그 응답을 그대로 올린다. 마지막 시도의 상태·본문이 원인 파악에 쓰인다.
   return send(auth.fallback);
 }
