@@ -1557,6 +1557,31 @@
       });
     }
 
+    /**
+     * v3.1589: 저장된 브랜드 캐릭터를 화면이 들고 있는 스냅샷에 반영한다.
+     *
+     * 이 화면은 `brand` 와 그것에서 뽑은 `characters` 를 렌더 시점에 한 번 잡아 두고 쓴다.
+     * 저장 경로가 저장소만 갱신하고 이 둘을 두면, 모달을 다시 열 때 저장 전 값이 되살아난다.
+     * persistShared 는 저장된 브랜드를 돌려주므로 그것을 우선 쓰고,
+     * 없으면(구 update 폴백) 방금 보낸 패치로 대신 맞춘다.
+     */
+    function applySavedBrandCharacters(savedBrand, sentPatch) {
+      var nextChars = null;
+      if (savedBrand && Array.isArray(savedBrand.brandCharacters)) nextChars = savedBrand.brandCharacters;
+      else if (Array.isArray(sentPatch)) nextChars = sentPatch;
+      if (!nextChars) return;
+      // characters 는 brand.brandCharacters 를 그대로 가리킨다(복사본이 아니다).
+      // 아래에서 제자리 비우기를 하므로, 같은 배열일 경우 원본까지 날아간다. 먼저 떠 둔다.
+      var snapshot = nextChars.slice();
+      if (savedBrand && typeof savedBrand === 'object') brand = savedBrand;
+      else if (brand && typeof brand === 'object') brand = Object.assign({}, brand, { brandCharacters: snapshot });
+      // characters 는 다음 '열기' 가 초안을 뜨는 원본이다. 내용을 제자리에서 갈아끼운다.
+      if (Array.isArray(characters)) {
+        characters.length = 0;
+        snapshot.forEach(function (c) { characters.push(c); });
+      }
+    }
+
     function closeCharacterManagerModal() {
       var modal = document.getElementById('character-manager-modal');
       if (modal) modal.classList.add('hidden');
@@ -1947,6 +1972,13 @@
                 return Promise.resolve(saveFn(brandId, { brandCharacters: brandCharsPatch }));
               }
               return null;
+            })
+            .then(function (savedBrand) {
+              // v3.1589: 저장은 됐는데 다시 열면 옛 값이 보이던 원인.
+              // 모달은 열 때마다 `characters`(= brand.brandCharacters 스냅샷)에서 초안을 만드는데,
+              // 저장 후 그 스냅샷을 갱신하지 않아 다음 열기에서 저장 전 상태를 다시 집어왔다.
+              // 새로고침하면 멀쩡했던 것도 그때는 저장소에서 다시 읽었기 때문이다.
+              applySavedBrandCharacters(savedBrand, brandCharsPatch);
             })
             .then(function () {
               return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft, environmentAssetDraft));
