@@ -23,6 +23,18 @@
   };
   var DEFAULT_DURATION_CAP = 6;
 
+  // v3.1591: 시나리오가 @토큰 체계를 쓰는 프로젝트면 씬 표기를 그대로 믿는다.
+  // 예전에는 토큰이 없는 컷에 활성 캐릭터를 전원 밀어넣어(forceActiveFallback),
+  // 캐릭터가 없어야 할 컷에도 전원이 등장했다.
+  function resolveTrustSceneTokens(scenes) {
+    try {
+      if (NK.service && NK.service.characterRegistry && NK.service.characterRegistry.projectUsesCharacterTokens) {
+        return NK.service.characterRegistry.projectUsesCharacterTokens(scenes);
+      }
+    } catch (_) {}
+    return false;
+  }
+
   function getModelMaxDuration(model) {
     if (model && Object.prototype.hasOwnProperty.call(MODEL_MAX_DURATION, model)) {
       return MODEL_MAX_DURATION[model];
@@ -133,7 +145,8 @@
       }
 
       var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, finalPrompt);
-      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
+      var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
       var characters = res.characters || [];
       try { console.log('Character parse (video/kling):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, count: characters.length }); } catch (_) {}
 
@@ -149,7 +162,7 @@
             var remotePayload = remoteDraft.payload;
             var remoteBrandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(remotePayload) : (remotePayload.brandId || brandId || '');
             if (!characters.length) {
-              res = NK.service.characterRegistry.resolveCharactersFromPrompt(remoteBrandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: remotePayload });
+              res = NK.service.characterRegistry.resolveCharactersFromPrompt(remoteBrandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: remotePayload });
               characters = res.characters || [];
             }
             bundle = helpers.buildReferenceBundle(remotePayload, characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
@@ -257,7 +270,8 @@
         var payload0 = st.payload || {};
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload0) : (payload0.brandId || '');
         var characterResolutionPrompt0 = buildCharacterResolutionPrompt(scene, rawPromptForLog);
-        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, forceActiveFallback: true, payload: payload0 });
+        var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload0 });
         try { console.debug('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt0 }); } catch (_) {}
         var built0 = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawPromptForLog,
@@ -555,7 +569,8 @@
       if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(statePayload) : (statePayload.brandId || '');
         var charPrompt = buildCharacterResolutionPrompt(scene, rawPrompt);
-        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, charPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: statePayload });
+        var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, charPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: statePayload });
         var built0 = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawPrompt,
           characters: res0.characters || [],

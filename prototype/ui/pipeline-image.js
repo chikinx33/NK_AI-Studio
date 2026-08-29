@@ -250,6 +250,18 @@
     return parts.join('\n');
   }
 
+  // v3.1591: 시나리오가 @토큰 체계를 쓰는 프로젝트면 씬 표기를 그대로 믿는다.
+  // 예전에는 토큰이 없는 컷에 활성 캐릭터를 전원 밀어넣어(forceActiveFallback),
+  // 큐브만 잡는 인서트 컷에도 캐릭터가 전부 등장했다. 레퍼런스 슬롯도 그때 다 소진됐다.
+  function resolveTrustSceneTokens(scenes) {
+    try {
+      if (NK.service && NK.service.characterRegistry && NK.service.characterRegistry.projectUsesCharacterTokens) {
+        return NK.service.characterRegistry.projectUsesCharacterTokens(scenes);
+      }
+    } catch (_) {}
+    return false;
+  }
+
   function buildReferenceBundle(payload, resolvedCharacters, options) {
     var opts = options || {};
     var safePayload = payload && typeof payload === 'object' ? payload : {};
@@ -878,7 +890,8 @@
           } catch (_) {}
         }
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
+        var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
         try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
@@ -899,7 +912,7 @@
               payload = remoteDraft.payload;
               brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || brandId || '');
               if (!(res.characters || []).length) {
-                res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
+                res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
                 built = NK.service.characterRegistry.buildResolvedPrompt({
                   rawPrompt: rawP,
                   characters: res.characters || [],
@@ -1208,7 +1221,8 @@
         }
         // shot 의 action/composition + 씬의 narration / dialogue 모두 캐릭터 해석 입력으로
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
+        var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
           characters: res.characters || [],

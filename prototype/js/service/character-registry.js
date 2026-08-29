@@ -281,6 +281,33 @@
     return { characters: uniqueFound, missing: missing, triggers: triggers };
   };
 
+  /**
+   * v3.1591: 이 프로젝트의 씬 표기를 믿어도 되는가?
+   *
+   * 시나리오 생성(Pass 1)의 enforceCharacterTokenInVisual 이, 비트가 다루는 캐릭터가
+   * visual 에 없으면 @토큰을 코드로 강제 주입한다. 그래서 그 단계를 거친 프로젝트라면
+   * "어떤 컷에 토큰이 없다" = "그 컷에는 캐릭터가 없다" 로 읽어도 된다.
+   *
+   * 반대로 토큰 강제 주입 이전의 옛 프로젝트는 캐릭터가 등장하는데도 표기가 없을 수 있다.
+   * 그 경우까지 표기를 믿으면 캐릭터가 통째로 빠진다.
+   *
+   * 두 경우를 가르는 신호: **프로젝트 전체에 @토큰이 하나라도 있는가.**
+   * 하나라도 있으면 표기 체계가 살아 있는 프로젝트다 → 빈 컷은 의도된 것.
+   * 하나도 없으면 옛 데이터 → 활성 캐릭터 폴백을 유지한다.
+   */
+  registry.projectUsesCharacterTokens = function (scenes) {
+    var list = Array.isArray(scenes) ? scenes : [];
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      if (!s || typeof s !== 'object') continue;
+      var text = [s.visual, s.shot, s.composition, s.action, s.narration, s.lines, s.subtitleText]
+        .map(function (v) { return String(v == null ? '' : v); })
+        .join(' ');
+      if (/@[0-9A-Za-z가-힣_]{1,24}/.test(text)) return true;
+    }
+    return false;
+  };
+
   registry.collectCharacterReferenceAssets = function (characters, options) {
     var list = Array.isArray(characters) ? characters : [];
     var assetIds = [];
