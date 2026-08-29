@@ -24,8 +24,32 @@ export function geminiTextModel(env) {
   return picked || GEMINI_TEXT_MODEL_DEFAULT;
 }
 
+const GEMINI_DIRECT = "https://generativelanguage.googleapis.com";
+
+/**
+ * Gemini API 베이스 URL.
+ *
+ * Cloudflare Worker 가 홍콩(HKG) COLO 로 송출되면 구글이 막는다:
+ *   400 "User location is not supported for the API use."
+ * Anthropic·OpenAI 와 같은 지역 차단이다. 지원 지역(서울)에서 도는 프록시를 거치면 풀린다.
+ * GEMINI_BASE_URL 에 `https://<프록시>/gemini` 를 넣으면 그쪽으로 나간다.
+ */
+export function geminiBaseUrl(env) {
+  const base = String((env && env.GEMINI_BASE_URL) || "").trim().replace(/\/+$/, "");
+  return base || GEMINI_DIRECT;
+}
+
+/** 프록시를 거칠 때만 붙이는 공유 시크릿(직접 호출엔 불필요). */
+export function geminiProxyHeaders(env) {
+  if (geminiBaseUrl(env) === GEMINI_DIRECT) return {};
+  const secret = String(
+    (env && (env.GEMINI_PROXY_SECRET || env.ANTHROPIC_PROXY_SECRET || env.OPENAI_PROXY_SECRET)) || ""
+  ).trim();
+  return secret ? { "x-nk-proxy-secret": secret } : {};
+}
+
 /** generateContent 엔드포인트 URL. 모델 이름을 URL 에 직접 박던 곳들을 여기로 모은다. */
 export function geminiGenerateUrl(env, model) {
   const name = String(model || geminiTextModel(env)).trim();
-  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(name)}:generateContent`;
+  return `${geminiBaseUrl(env)}/v1beta/models/${encodeURIComponent(name)}:generateContent`;
 }

@@ -14,7 +14,7 @@
  */
 
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
-import { geminiGenerateUrl } from "./_shared/gemini-models.js";
+import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -100,12 +100,13 @@ function lookupGenreMap(...candidates: string[]): string {
   return "";
 }
 
-async function callGemini(apiKey: string, body: object): Promise<string> {
-  // 이 헬퍼엔 env 가 없다(원래도 모델을 하드코딩했다). 기본값을 쓰고, 교체는 gemini-models.js 에서.
-  const url = `${geminiGenerateUrl(null)}?key=${encodeURIComponent(apiKey)}`;
+// env 를 받아야 프록시 베이스(GEMINI_BASE_URL)와 공유 시크릿을 쓸 수 있다.
+// 직접 호출은 홍콩(HKG) 송출에서 400 "User location is not supported" 로 막힌다.
+async function callGemini(env: any, apiKey: string, body: object): Promise<string> {
+  const url = `${geminiGenerateUrl(env)}?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...geminiProxyHeaders(env) },
     body: JSON.stringify(body),
   });
   if (!res.ok) return "";
@@ -123,6 +124,7 @@ interface MusicAnalysis {
 
 // 1단계: Gemini 가 영상 개요를 분석해 음악 키워드(JSON)를 추출.
 async function analyzeVideoForMusic(
+  env: any, // 프록시 베이스·시크릿 조회용(지역 차단 우회)
   apiKey: string,
   topic: string,
   story: string,
@@ -150,7 +152,7 @@ async function analyzeVideoForMusic(
     },
   };
   try {
-    const text = await callGemini(apiKey, body);
+    const text = await callGemini(env, apiKey, body);
     if (!text) return null;
     const parsed = JSON.parse(text);
     return {
@@ -397,7 +399,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // Step 1: 영상 개요 분석 → 음악 키워드(JSON) 추출 (Gemini)
     let analysis: MusicAnalysis | null = null;
     if (googleApiKey) {
-      analysis = await analyzeVideoForMusic(googleApiKey, topic, story, genre, subgenre, styles, tones);
+      analysis = await analyzeVideoForMusic(env, googleApiKey, topic, story, genre, subgenre, styles, tones);
     }
     // Step 2: 분석 결과 + 영상→음악 장르 매핑표 + 길이로 최종 프롬프트 조립
     const musicPrompt = (analysis || tones.length || genre || subgenre)

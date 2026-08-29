@@ -15,7 +15,7 @@
  */
 
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
-import { geminiGenerateUrl } from "./_shared/gemini-models.js";
+import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -46,12 +46,13 @@ function isEnglish(text: string): boolean {
   return !!text && /[a-zA-Z]{3,}/.test(text);
 }
 
-async function callGemini(apiKey: string, body: object): Promise<string> {
-  // 이 헬퍼엔 env 가 없다(원래도 모델을 하드코딩했다). 기본값을 쓰고, 교체는 gemini-models.js 에서.
-  const url = `${geminiGenerateUrl(null)}?key=${encodeURIComponent(apiKey)}`;
+// env 를 받아야 프록시 베이스(GEMINI_BASE_URL)와 공유 시크릿을 쓸 수 있다.
+// 직접 호출은 홍콩(HKG) 송출에서 400 "User location is not supported" 로 막힌다.
+async function callGemini(env: any, apiKey: string, body: object): Promise<string> {
+  const url = `${geminiGenerateUrl(env)}?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...geminiProxyHeaders(env) },
     body: JSON.stringify(body),
   });
   if (!res.ok) return "";
@@ -62,6 +63,7 @@ async function callGemini(apiKey: string, body: object): Promise<string> {
 // ── Gemini Vision — 영상 프레임(이미지) 기반 SFX 프롬프트 생성 ─────────────
 // frames: base64 JPEG 배열 (클라이언트에서 Canvas로 추출)
 async function buildSfxPromptFromFrames(
+  env: any, // 프록시 베이스·시크릿 조회용(지역 차단 우회)
   apiKey: string,
   frames: string[],
   clipLabel: string,
@@ -89,7 +91,7 @@ async function buildSfxPromptFromFrames(
       contents: [{ role: "user", parts: [...imageParts, textPart] }],
       generationConfig: { temperature: 0.6, maxOutputTokens: 80 },
     };
-    const text = await callGemini(apiKey, body);
+    const text = await callGemini(env, apiKey, body);
     if (isEnglish(text)) return text;
     return SFX_FALLBACK;
   } catch {
@@ -98,7 +100,7 @@ async function buildSfxPromptFromFrames(
 }
 
 // ── Gemini 텍스트 — sceneAction + 클립 라벨로 SFX 프롬프트 생성 (영상 없을 때 폴백) ──
-async function buildSfxPrompt(apiKey: string, clipLabel: string, sceneAction: string): Promise<string> {
+async function buildSfxPrompt(env: any, apiKey: string, clipLabel: string, sceneAction: string): Promise<string> {
   const actionLine = sceneAction
     ? `Scene context/intent (use as a hint for sound type only): "${sceneAction}"\n`
     : "";
@@ -113,7 +115,7 @@ async function buildSfxPrompt(apiKey: string, clipLabel: string, sceneAction: st
       contents: [{ role: "user", parts: [{ text: userMsg }] }],
       generationConfig: { temperature: 0.6, maxOutputTokens: 60 },
     };
-    const text = await callGemini(apiKey, body);
+    const text = await callGemini(env, apiKey, body);
     if (isEnglish(text)) return text;
     return SFX_FALLBACK;
   } catch {
@@ -224,6 +226,7 @@ async function fetchVideoBytes(
 }
 
 async function buildSfxPromptFromVideoUrl(
+  env: any, // 프록시 베이스·시크릿 조회용(지역 차단 우회)
   apiKey: string,
   videoUrl: string,
   clipLabel: string,
@@ -271,7 +274,7 @@ async function buildSfxPromptFromVideoUrl(
       }],
       generationConfig: { temperature: 0.6, maxOutputTokens: 80 },
     };
-    const text = await callGemini(apiKey, analysisBody);
+    const text = await callGemini(env, apiKey, analysisBody);
 
     // 6. 업로드한 파일 삭제 (비동기, 오류 무시)
     deleteGeminiFile(apiKey, fileUri).catch(() => {});
@@ -459,7 +462,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
 
         // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
-        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, resolvedClipUrl, clipLabel, sceneAction,
+        sfxPrompt = await buildSfxPromptFromVideoUrl(env, googleApiKey, resolvedClipUrl, clipLabel, sceneAction,
           (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
         if (sfxPrompt) {
           analysisMode = "video_server";
@@ -467,12 +470,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
       if (!sfxPrompt && frames.length > 0) {
         // ② 클라이언트 Canvas 프레임이 있으면 Vision 분석 (폴백)
-        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel, sceneAction);
+        sfxPrompt = await buildSfxPromptFromFrames(env, googleApiKey, frames, clipLabel, sceneAction);
         if (sfxPrompt !== SFX_FALLBACK) analysisMode = "vision";
       }
       if (!sfxPrompt || sfxPrompt === SFX_FALLBACK) {
         // ③ sceneAction + 라벨로 분석
-        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel, sceneAction);
+        sfxPrompt = await buildSfxPrompt(env, googleApiKey, clipLabel, sceneAction);
         analysisMode = "text";
       }
     }
@@ -523,7 +526,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let geminiErrorSnippet = "";
     if (googleApiKey) {
       try {
-        const testUrl = `${geminiGenerateUrl(null)}?key=${encodeURIComponent(googleApiKey)}`;
+        const testUrl = `${geminiGenerateUrl(env)}?key=${encodeURIComponent(googleApiKey)}`;
         const testRes = await fetch(testUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

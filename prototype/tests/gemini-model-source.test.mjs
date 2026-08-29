@@ -38,6 +38,36 @@ test("단일 원천이 존재하고 후속 모델을 가리킨다", () => {
   assert.match(src, /GEMINI_PROMPT_ANALYSIS_MODEL \|\| env\.GEMINI_TEXT_MODEL/);
 });
 
+test("지역 차단 우회를 위해 베이스 URL 을 바꿀 수 있다", () => {
+  const src = read(path.join(API, "_shared/gemini-models.js"));
+  // 홍콩(HKG) 송출은 구글이 막는다: 400 "User location is not supported for the API use."
+  // Anthropic·OpenAI 와 같은 지역 차단이라 같은 프록시를 거쳐야 한다.
+  assert.match(src, /export function geminiBaseUrl\(env\)/);
+  assert.match(src, /env\.GEMINI_BASE_URL/);
+  assert.match(src, /export function geminiProxyHeaders\(env\)/);
+  // 직접 호출일 땐 시크릿을 붙이지 않는다(구글에 보낼 이유가 없다).
+  assert.match(src, /if \(geminiBaseUrl\(env\) === GEMINI_DIRECT\) return \{\};/);
+  // generateContent URL 이 그 베이스를 따라야 의미가 있다.
+  assert.match(src, /\$\{geminiBaseUrl\(env\)\}\/v1beta\/models\//);
+});
+
+test("프록시가 Gemini 경로를 가른다", () => {
+  const proxy = fs.readFileSync(path.join(root, "openai-proxy/index.js"), "utf8");
+  assert.match(proxy, /const GEMINI_ORIGIN = "https:\/\/generativelanguage\.googleapis\.com"/);
+  assert.match(proxy, /url === "\/gemini" \|\| url\.startsWith\("\/gemini\/"\)/);
+  assert.match(proxy, /GEMINI_ORIGIN \+ \(url\.slice\("\/gemini"\.length\) \|\| "\/"\)/);
+});
+
+test("Gemini 를 부르는 곳은 모두 env 를 넘긴다", () => {
+  // env 가 없으면 프록시 베이스·시크릿을 못 읽어 직접 호출로 나가고, 그러면 다시 막힌다.
+  for (const rel of ["music.ts", "sfx.ts"]) {
+    const src = read(path.join(API, rel));
+    assert.match(src, /geminiGenerateUrl\(env\)/, `${rel} 가 env 를 안 넘김`);
+    assert.match(src, /geminiProxyHeaders\(env\)/, `${rel} 가 시크릿을 안 붙임`);
+    assert.doesNotMatch(src, /geminiGenerateUrl\(null\)/, `${rel} 에 직접 호출이 남음`);
+  }
+});
+
 test("퇴역한 gemini-2.5-flash 를 코드에서 쓰지 않는다", () => {
   const offenders = [];
   for (const file of sourceFiles()) {

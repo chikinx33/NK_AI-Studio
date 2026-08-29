@@ -1,4 +1,4 @@
-import { geminiTextModel } from "./_shared/gemini-models.js";
+import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -47,7 +47,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "image_reference_unavailable" }, 400);
     }
 
-    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+    const generateUrl = geminiGenerateUrl(env, geminiModel);
     const payload = {
       contents: [{
         role: "user",
@@ -70,6 +70,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const geminiRes = await fetch(generateUrl, {
       method: "POST",
       headers: {
+        ...geminiProxyHeaders(env),
         "x-goog-api-key": apiKey,
         "Content-Type": "application/json",
       },

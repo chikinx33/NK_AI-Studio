@@ -6,7 +6,7 @@
 // 왜 필요한가: 이미지 모델은 '없어야 하는 것'을 레퍼런스 이미지에서 배울 수 없다. 시트에 손가락이
 // 안 보이면 "이 각도에선 안 보인다"로 읽고 자기 사전지식으로 손가락을 그린다. 금지 정보는 텍스트로만
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
-import { geminiTextModel } from "../_shared/gemini-models.js";
+import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -120,7 +120,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     if (!usable) return json({ error: "시트 이미지를 읽지 못했어요(경로 확인 필요)." }, 400);
 
-    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+    const generateUrl = geminiGenerateUrl(env, geminiModel);
     // Cloudflare 가 요청을 끊으면 우리 JSON 이 아니라 502 페이지가 그대로 화면에 뜬다.
     // 그래서 Gemini 호출에 우리 예산을 걸고, 초과하면 우리가 먼저 사유를 붙여 응답한다.
     // 20초. Cloudflare 가 끊기 전에 우리가 먼저 끝내야 사유를 화면에 띄울 수 있다.
@@ -166,7 +166,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       try {
         const res = await fetch(generateUrl, {
           method: "POST",
-          headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+          headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json", ...geminiProxyHeaders(env) },
           body: JSON.stringify({
             contents: [{ role: "user", parts: useSchema ? parts : [...parts, { text: JSON_ONLY_HINT }] }],
             ...(generationConfig ? { generationConfig } : {}),

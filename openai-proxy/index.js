@@ -10,6 +10,7 @@
 //
 // 경로로 대상을 가른다:
 //   /anthropic/*  → https://api.anthropic.com/*
+//   /gemini/*     → https://generativelanguage.googleapis.com/*
 //   그 외          → https://api.openai.com/*   (기존 설정 그대로 동작)
 //
 // 동작: 받은 요청을 그대로 https://api.openai.com 같은 경로로 전달하고 응답을 그대로 돌려준다.
@@ -21,12 +22,17 @@ const http = require("http");
 
 const OPENAI_ORIGIN = "https://api.openai.com";
 const ANTHROPIC_ORIGIN = "https://api.anthropic.com";
+const GEMINI_ORIGIN = "https://generativelanguage.googleapis.com";
 const SECRET = String(process.env.OPENAI_PROXY_SECRET || "").trim();
 
 /** 요청 경로 → {대상 오리진, 뒤에 붙일 경로}. 접두어가 없으면 기존대로 OpenAI. */
 function routeTarget(url) {
   if (url === "/anthropic" || url.startsWith("/anthropic/")) {
     return ANTHROPIC_ORIGIN + (url.slice("/anthropic".length) || "/");
+  }
+  // Gemini 도 홍콩(HKG) 송출을 막는다: 400 "User location is not supported for the API use".
+  if (url === "/gemini" || url.startsWith("/gemini/")) {
+    return GEMINI_ORIGIN + (url.slice("/gemini".length) || "/");
   }
   return OPENAI_ORIGIN + url;
 }
