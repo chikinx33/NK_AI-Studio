@@ -13,6 +13,16 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const MAX_IMAGES = 4;
 // 인라인 이미지 총량 상한(약 6MB). 시트 4장을 그대로 넣으면 요청이 커져 400 이 난다.
 const MAX_INLINE_BYTES = 6 * 1024 * 1024;
+/**
+ * 요청 본문 상한.
+ *
+ * 시트는 업로드 원본 그대로 data: URL 로 보관된다. 4장을 원해상도로 실어 보내면
+ * 본문이 수십 MB 가 되고, 본문을 파싱하다 Worker 가 메모리 한계로 죽는다.
+ * 그러면 try/catch 로도 못 잡고 Cloudflare 가 502 를 돌려준다(우리 JSON 오류가 아니다).
+ * 화면이 보내기 전에 1024px 로 줄이므로 4장이라도 1MB 안팎이고, 12MB 는 넉넉한 여유다.
+ * 본문을 읽기 전에 Content-Length 로 먼저 거른다 — 읽고 나서는 이미 늦다.
+ */
+const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {
@@ -28,6 +38,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
+
+    const declaredBytes = Number(request.headers.get("content-length") || 0);
+    if (declaredBytes > MAX_REQUEST_BYTES) {
+      return json({
+        error: `시트 이미지가 너무 큽니다(${Math.round(declaredBytes / 1024 / 1024)}MB). 더 작은 시트로 다시 시도해 주세요.`,
+        requestBytes: declaredBytes,
+        limitBytes: MAX_REQUEST_BYTES,
+      }, 413);
+    }
 
     const body = await request.json().catch(() => ({} as any));
     const characterName = String(body?.characterName || body?.name || "").trim();

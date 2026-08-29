@@ -68,6 +68,52 @@
   }
 
   /**
+   * 분석에 보낼 시트 이미지를 줄인다.
+   *
+   * 시트는 업로드한 원본 그대로 data: URL 로 보관된다. 4장이면 수십 MB 가 되고,
+   * 그걸 JSON 본문에 실어 보내면 Pages Function 이 본문을 파싱하다 죽어
+   * Cloudflare 가 502 를 돌려준다(우리 JSON 오류가 아니라 CF 오류 페이지가 뜬다).
+   *
+   * 원본은 그대로 두고 '보내는 사본'만 줄인다. 캐릭터 생김새를 서술하는 데
+   * 원해상도는 필요 없고, 1024px 이면 충분하다.
+   */
+  var ANALYZE_MAX_EDGE = 1024;
+  function shrinkForAnalyze(dataUrl) {
+    return new Promise(function (resolve) {
+      var raw = String(dataUrl || '');
+      // 원격 URL(gs://·https)은 서버가 직접 받아오므로 줄일 대상이 아니다.
+      if (!/^data:image\//i.test(raw)) { resolve(raw); return; }
+      try {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var W = img.naturalWidth || img.width;
+            var H = img.naturalHeight || img.height;
+            if (!W || !H) { resolve(raw); return; }
+            var scale = Math.min(1, ANALYZE_MAX_EDGE / Math.max(W, H));
+            var w = Math.max(1, Math.round(W * scale));
+            var h = Math.max(1, Math.round(H * scale));
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d', { alpha: false });
+            if (!ctx) { resolve(raw); return; }
+            // 투명 배경이 검게 깔리지 않도록 흰 바탕을 먼저 칠한다.
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            var out = canvas.toDataURL('image/jpeg', 0.85);
+            // 어떤 이유로든 더 커졌다면 원본을 쓴다.
+            resolve(out && out.length < raw.length ? out : raw);
+          } catch (_) { resolve(raw); }
+        };
+        img.onerror = function () { resolve(raw); };
+        img.src = raw;
+      } catch (_) { resolve(raw); }
+    });
+  }
+
+  /**
    * 언어 전환 시 IP 라이브러리 모달 다시 그리기.
    *
    * 페이지 본문은 공통 런타임 로컬라이저(common.applyRuntimeLocale)가 DOM 을 훑어 바꿔주지만,
@@ -1765,7 +1811,10 @@
           aiFillOpenToken = aiToken;
           renderCharacterManagerModal();
           Promise.resolve()
-            .then(function () {
+            // 원본 그대로 보내면 본문이 수십 MB 가 돼 함수가 502 로 죽는다. 보내는 사본만 줄인다.
+            .then(function () { return Promise.all(aiSheets.map(shrinkForAnalyze)); })
+            .then(function (shrunkSheets) {
+              aiSheets = shrunkSheets.filter(Boolean);
               if (!NK.api || typeof NK.api.ipAnalyze !== 'function') throw new Error('API client가 로드되지 않았습니다.');
               return NK.api.ipAnalyze({
                 characterName: aiName,

@@ -168,6 +168,30 @@ test("스키마가 거절되면 스키마 없이 한 번 더 시도한다", () =
   assert.match(src, /function extractJsonBlock\(text: string\)/);
 });
 
+test("시트는 보내기 전에 줄여서 502(Worker 사망)를 막는다", () => {
+  const src = hub();
+  // 시트는 업로드 원본 그대로 data: URL 로 보관된다. 4장을 원해상도로 실어 보내면
+  // 본문이 수십 MB 가 되고, 본문 파싱 중 Worker 가 죽어 Cloudflare 502 가 나온다.
+  assert.match(src, /function shrinkForAnalyze/);
+  assert.match(src, /ANALYZE_MAX_EDGE = 1024/);
+  // 보내는 사본만 줄인다 — 저장된 원본은 그대로 둔다.
+  assert.match(src, /Promise\.all\(aiSheets\.map\(shrinkForAnalyze\)\)/);
+  // 원격 URL(gs://, https)은 서버가 직접 받아오므로 줄일 대상이 아니다.
+  assert.match(src, /data:image[\s\S]{0,40}test\(raw\)[\s\S]{0,40}resolve\(raw\)/);
+  // 투명 배경이 검게 깔리지 않도록 흰 바탕을 먼저 칠한다.
+  assert.match(src, /ctx\.fillStyle = '#ffffff'/);
+});
+
+test("본문이 너무 크면 읽기 전에 413 으로 끊는다", () => {
+  const src = analyze();
+  // request.json() 으로 읽고 나면 이미 늦다(메모리 초과는 try/catch 로 못 잡는다).
+  assert.match(src, /const MAX_REQUEST_BYTES = 12 \* 1024 \* 1024/);
+  const guard = src.indexOf("declaredBytes");
+  const parse = src.indexOf("await request.json()");
+  assert.ok(guard > 0 && guard < parse, "크기 검사가 본문 파싱보다 앞서야 합니다");
+  assert.match(src, /\}, 413\);/);
+});
+
 test("시트가 커도 요청 크기를 넘기지 않는다", () => {
   const src = analyze();
   assert.match(src, /const MAX_INLINE_BYTES = 6 \* 1024 \* 1024/);
