@@ -15441,3 +15441,148 @@ textarea.bsf-skeleton {
   text-decoration: underline;
   word-break: break-all;
 }
+
+/* ── 영상 모델 가이드 모달 ─────────────────────────────────────────
+   요구사항: 절대 스크롤 없이 한 화면에 전부 보일 것.
+   그래서 세로는 vh 로 묶고, 행 높이·글자 크기를 화면 높이에 맞춰 줄인다.
+   overflow 는 hidden 이 아니라 아예 스크롤이 생기지 않도록 내용을 압축한다. */
+.video-model-help {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
+.video-model-help:hover { background: var(--layer-strong); color: var(--text); }
+
+.vmg-box {
+  width: min(1200px, 96vw);
+  max-height: 94vh;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.vmg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.vmg-title { margin: 0; font-size: 15px; font-weight: 600; }
+.vmg-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.vmg-close:hover { background: var(--layer-strong); }
+
+.vmg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  line-height: 1.35;
+  table-layout: fixed;
+  flex: 0 1 auto;
+}
+.vmg-table th,
+.vmg-table td {
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vmg-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.vmg-table td.vmg-c { text-align: center; white-space: nowrap; }
+.vmg-table tr.is-current { background: var(--layer-soft); }
+.vmg-name { font-weight: 600; white-space: nowrap; }
+.vmg-now {
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, .22);
+  color: #a5b4fc;
+  font-size: 9.5px;
+  font-weight: 500;
+}
+.vmg-good { color: var(--text); }
+.vmg-bad { color: var(--muted); }
+
+/* 열 너비 — 강점/약점이 넓고 나머지는 좁게. 합계 100% */
+.vmg-table th:nth-child(1), .vmg-table td:nth-child(1) { width: 14%; }
+.vmg-table th:nth-child(2), .vmg-table td:nth-child(2) { width: 8.5%; }
+.vmg-table th:nth-child(3), .vmg-table td:nth-child(3) { width: 8%; }
+.vmg-table th:nth-child(4), .vmg-table td:nth-child(4) { width: 8%; }
+.vmg-table th:nth-child(5), .vmg-table td:nth-child(5) { width: 7.5%; }
+.vmg-table th:nth-child(6), .vmg-table td:nth-child(6) { width: 6%; }
+.vmg-table th:nth-child(7), .vmg-table td:nth-child(7) { width: 21%; }
+.vmg-table th:nth-child(8), .vmg-table td:nth-child(8) { width: 20%; }
+.vmg-table th:nth-child(9), .vmg-table td:nth-child(9) { width: 7%; }
+
+.vmg-cost, .vmg-fit {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.vmg-cost.is-low  { background: rgba(34, 197, 94, .18);  color: #22c55e; }
+.vmg-cost.is-mid  { background: rgba(148, 163, 184, .20); color: #94a3b8; }
+.vmg-cost.is-high { background: rgba(245, 158, 11, .18); color: #f59e0b; }
+.vmg-fit.is-best  { background: rgba(34, 197, 94, .20);  color: #22c55e; font-weight: 600; }
+.vmg-fit.is-good  { background: rgba(56, 189, 248, .18); color: #38bdf8; }
+.vmg-fit.is-ok    { background: rgba(148, 163, 184, .18); color: #94a3b8; }
+.vmg-fit.is-warn  { background: rgba(245, 158, 11, .18); color: #f59e0b; }
+.vmg-fit.is-bad   { background: rgba(239, 68, 68, .18);  color: #ef4444; }
+
+.vmg-notes {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.vmg-notes p { margin: 0; }
+.vmg-notes b { color: var(--text); font-weight: 600; }
+.vmg-caveat { grid-column: 1 / -1; }
+.vmg-caveat b { color: #f59e0b; }
+
+/* 낮은 화면에서도 스크롤이 생기지 않도록 더 압축 */
+@media (max-height: 780px) {
+  .vmg-table { font-size: 10.5px; }
+  .vmg-table th, .vmg-table td { padding: 3px 6px; }
+  .vmg-notes { font-size: 10px; line-height: 1.4; }
+}
+@media (max-width: 900px) {
+  .vmg-notes { grid-template-columns: 1fr; }
+  .vmg-table th:nth-child(5), .vmg-table td:nth-child(5) { display: none; }
+}

@@ -1143,6 +1143,14 @@
       __mopt('wan',          'Wan 2.7',                   videoModel, aspectRatio) +
       __mopt('vidu-q3',      'Vidu Q3-Mix',               videoModel, aspectRatio) +
       '</select>' +
+      // lucide.dev/icons/circle-help — 모델별 특징·비용 비교표를 연다
+      '<button type="button" class="video-model-help" id="video-model-help-btn" ' +
+      'title="모델별 특징·비용 비교" aria-label="모델별 특징·비용 비교">' +
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="10"/>' +
+      '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>' +
+      '<path d="M12 17h.01"/></svg></button>' +
       '</div>' +
       '<div class="pipeline-fold-center">' +
       '<button type="button" class="btn-icon-sm" id="pipeline-expand-all" title="전체 펼침" aria-label="전체 펼침" data-i18n-title="scene_expand_all" data-i18n-aria-label="scene_expand_all"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10"/><polyline points="6 14 12 20 18 14"/></svg></button>' +
@@ -1392,6 +1400,15 @@
         st2.videoModel = val;
         ctx.setState(st2);
         try { localStorage.setItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model', val); } catch (_) { }
+      };
+    }
+
+    var modelHelpBtn = document.getElementById('video-model-help-btn');
+    if (modelHelpBtn) {
+      modelHelpBtn.onclick = function () {
+        if (NK.uiModelGuide && NK.uiModelGuide.open) {
+          NK.uiModelGuide.open(modelSelect ? modelSelect.value : '');
+        }
       };
     }
 
