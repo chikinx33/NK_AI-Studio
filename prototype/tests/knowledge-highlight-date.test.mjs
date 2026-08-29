@@ -138,3 +138,43 @@ test("문장 매칭 규칙이 한 곳에 있다", () => {
   assert.match(src, /function matchKnowledge\(items: KnowledgeItem\[\], want: string\)/);
   assert.equal(src.split("matchKnowledge(items,").length - 1, 2);
 });
+
+/*
+ * 스킬도 학습 날짜를 보여준다.
+ *
+ * 스킬은 지식과 같은 목록에 나란히 놓이는데 날짜만 없었다. 옆 항목엔 날짜가 있고
+ * 스킬만 비어 있으면 "이 스킬은 언제 배운 거지" 를 알 수 없다. company_skills 에
+ * created_at 은 이미 있었고, 목록 쿼리가 그걸 안 실어 보내고 있었을 뿐이다.
+ */
+const AGENT_SHARED = path.join(root, "prototype/functions/api/agent/_shared.ts");
+const API = path.join(root, "ai-company-app/src/lib/api.ts");
+
+test("스킬 목록 쿼리가 created_at 을 실어 보낸다", () => {
+  const src = read(AGENT_SHARED);
+  assert.match(src, /SELECT name, category, description, pinned, created_at FROM company_skills/);
+  assert.match(src, /SELECT name, category, description, created_at FROM company_skills/);
+  // 컬럼명(created_at) → 프론트 표기(createdAt) 변환이 있어야 화면이 읽는다.
+  assert.match(src, /createdAt: r\.created_at/);
+});
+
+test("AgentSkill 타입이 createdAt 을 담는다", () => {
+  const src = read(API);
+  assert.match(src, /export interface AgentSkill \{[^}]*createdAt\?: string;/);
+});
+
+test("스킬 행이 배지 아래에 학습 날짜를 보여준다", () => {
+  const src = read(UI);
+  const row = src.slice(src.indexOf("const renderSkillItem"), src.indexOf("const renderSkillItem") + 2200);
+  // 지식 항목과 같은 세로 묶음·같은 헬퍼를 쓴다(형식이 갈리면 안 된다).
+  assert.match(row, /flex shrink-0 flex-col items-end/);
+  assert.match(row, /\{learnedDate\(s\.createdAt\) && \(/);
+  assert.match(row, /title=\{learnedFull\(s\.createdAt\)\}/);
+});
+
+test("스킬 행도 사용자 선택을 테두리로 보여준다", () => {
+  const src = read(UI);
+  const row = src.slice(src.indexOf("const renderSkillItem"), src.indexOf("const renderSkillItem") + 2200);
+  // skill.view 가 setSelected 를 부르는데 행이 그걸 안 읽으면 아무 일도 안 일어난다.
+  assert.match(row, /highlight === s\.name \|\| selected === s\.name/);
+  assert.match(row, /setSelected\(s\.name\);/);
+});

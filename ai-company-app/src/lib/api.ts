@@ -1062,7 +1062,8 @@ export async function getSkillReadiness(): Promise<SkillReadiness[]> {
 }
 
 // ── 헤르메스 스킬(절차적 기억) — 에이전트가 축적한 재사용 절차 ──
-export interface AgentSkill { name: string; category: string; description: string; pinned?: boolean; }
+// createdAt: 이 스킬을 배운 날. 지식 항목과 같은 목록에 놓이므로 같은 정보를 줘야 한다.
+export interface AgentSkill { name: string; category: string; description: string; pinned?: boolean; createdAt?: string; }
 export interface AgentSkillDetail extends AgentSkill {
   content: string; tags: string; useCount: number; updatedAt: string;
 }

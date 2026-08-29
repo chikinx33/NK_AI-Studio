@@ -365,7 +365,10 @@ export default function Knowledge({
         ref={(el) => {
           if (el) rowRefs.current.set(s.name, el);
         }}
-        onClick={() => setOpenSkill(s.name)}
+        onClick={() => {
+          setSelected(s.name);
+          setOpenSkill(s.name);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -373,7 +376,9 @@ export default function Knowledge({
           }
         }}
         className={`group flex w-full cursor-pointer items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60 ${
-          highlight === s.name ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-edge"
+          highlight === s.name || selected === s.name
+            ? "border-emerald-500 ring-2 ring-emerald-500/50"
+            : "border-edge"
         }`}
       >
         <span className="min-w-0 flex-1">
@@ -384,7 +389,15 @@ export default function Knowledge({
           </span>
           <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
         </span>
-        <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+        {/* 배지와 학습 날짜를 세로로 묶는다 — 지식 항목과 같은 자리, 같은 모양. */}
+        <span className="flex shrink-0 flex-col items-end gap-0.5">
+          <span className="rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+          {learnedDate(s.createdAt) && (
+            <span className="text-[10px] text-gray-600" title={learnedFull(s.createdAt)}>
+              {learnedDate(s.createdAt)}
+            </span>
+          )}
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation();

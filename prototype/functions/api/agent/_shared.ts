@@ -708,12 +708,17 @@ export interface CompanySkill {
   content: string; tags: string; pinned: boolean; useCount: number; updatedAt: string;
 }
 /** Level 0(progressive disclosure) — 활성 스킬 요약 목록(name·category·description). content 제외. */
-export async function listSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string; pinned: boolean }[]> {
+export async function listSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string; pinned: boolean; createdAt: string }[]> {
+  // created_at 은 '언제 배운 스킬인가'. 지식 항목과 나란히 놓이므로 같이 보여야 한다.
+  // (createSkill 의 ON CONFLICT 는 updated_at 만 건드리므로 최초 학습 시각이 유지된다.)
   const rows = await sql(
-    "SELECT name, category, description, pinned FROM company_skills WHERE user_id = $1 AND archived = false ORDER BY pinned DESC, use_count DESC, updated_at DESC",
+    "SELECT name, category, description, pinned, created_at FROM company_skills WHERE user_id = $1 AND archived = false ORDER BY pinned DESC, use_count DESC, updated_at DESC",
     [userId]
   );
-  return rows as { name: string; category: string; description: string; pinned: boolean }[];
+  return (rows as any[]).map((r) => ({
+    name: r.name, category: r.category, description: r.description,
+    pinned: !!r.pinned, createdAt: r.created_at,
+  }));
 }
 /** Level 1 — 특정 스킬 전체(SKILL.md content). 조회 시 use_count++. */
 export async function getSkill(sql: SqlFn, userId: string, name: string): Promise<CompanySkill | null> {
@@ -755,12 +760,14 @@ export async function archiveStaleSkills(sql: SqlFn, userId: string, days = 30):
   return Array.isArray(rows) ? rows.length : 0;
 }
 /** 아카이브된 스킬 목록(복원·점검용). */
-export async function listArchivedSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string }[]> {
+export async function listArchivedSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string; createdAt: string }[]> {
   const rows = await sql(
-    "SELECT name, category, description FROM company_skills WHERE user_id = $1 AND archived = true ORDER BY updated_at DESC",
+    "SELECT name, category, description, created_at FROM company_skills WHERE user_id = $1 AND archived = true ORDER BY updated_at DESC",
     [userId]
   );
-  return rows as { name: string; category: string; description: string }[];
+  return (rows as any[]).map((r) => ({
+    name: r.name, category: r.category, description: r.description, createdAt: r.created_at,
+  }));
 }
 /** 스킬 고정/해제 — 고정된 스킬은 큐레이터가 자동 아카이브하지 않음(헤르메스 pinned 보호). */
 export async function setPinSkill(sql: SqlFn, userId: string, name: string, pinned: boolean): Promise<void> {
