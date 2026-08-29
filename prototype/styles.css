@@ -3488,6 +3488,34 @@ textarea::-webkit-scrollbar-corner {
   font-style: normal;
 }
 
+/* 가사 한 소절이 걸치는 전체 길이·컷 수·속도 — 씬 길이만 보고 오해하지 않도록 */
+.scenario-card .lyrics-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.scenario-card .lyrics-body .view-lyrics-lines { flex: 1 1 auto; min-width: 0; }
+.scenario-card .lyrics-span-badge {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.scenario-card .lyrics-span-badge.is-too-fast {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+.scenario-card .lyrics-continued {
+  font-style: italic;
+  opacity: .55;
+}
+
 /* 노래 모드 — 가사 블록. 후렴 씬은 한눈에 구분되어야 반복 구조가 보인다. */
 .scenario-card .view-lyrics-lines {
   font-style: italic;

@@ -55,6 +55,25 @@ const KOREAN_PARTICLES_GROUP_SHOTS = "(이가|이|가|을|를|은|는|와|과|�
 // 색상 접두사까지 함께 소비해 "@네모" 만 남기기 위한 패턴.
 const KOREAN_COLOR_PREFIX_SHOTS = "(?:파란|노란|빨간|초록|하얀|흰|검은|보라|주황|분홍|하늘|갈색|금색|은색)\\s+";
 
+/**
+ * v3.1586: 등록 캐릭터에서 곧바로 토큰 맵을 만든다.
+ *
+ * 이전에는 부모 visual 안의 @토큰만 역추적했다. 그래서 Pass 1 결과에 @토큰이
+ * 하나도 없는 씬은 맵이 비어 보정이 통째로 건너뛰어졌고, 그 씬만 "파란 네모" 로
+ * 남아 이미지 생성에서 캐릭터 자산 매칭에 실패했다.
+ * 등록 캐릭터는 확실히 아는 정보이므로 그걸 1차 출처로 쓴다.
+ */
+function buildTokenMapFromCharacters(characters) {
+  const map = new Map();
+  for (const c of Array.isArray(characters) ? characters : []) {
+    const token = String(c?.token || "").trim();
+    const name = String(c?.displayName || "").trim() || token.replace(/^@+/, "");
+    if (!name) continue;
+    map.set(name, token.startsWith("@") ? token : `@${name}`);
+  }
+  return map;
+}
+
 function buildDisplayNameToTokenMap(text) {
   const map = new Map();
   const re = /@([0-9A-Za-z가-힣_]{1,24})/g;
@@ -86,7 +105,7 @@ function enforceTokensInText(text, tokenMap) {
   return { text: result, replacements };
 }
 
-function flattenScenesWithShots(parentScenes) {
+function flattenScenesWithShots(parentScenes, characters) {
   if (!Array.isArray(parentScenes)) return [];
   const flat = [];
   let nextId = 1;
@@ -96,7 +115,11 @@ function flattenScenesWithShots(parentScenes) {
     const shots = Array.isArray(parent.shots) ? parent.shots : [];
     const parentTokens = extractTokensFromText(parent.visual || parent.shot || "");
     // v3.883: parent visual 의 @토큰에서 displayName → token 매핑 도출
-    const tokenMap = buildDisplayNameToTokenMap(parent.visual || parent.shot || "");
+    // 등록 캐릭터가 1차 출처, 부모 visual 의 @토큰은 보조(등록 안 된 표기 대응).
+    const tokenMap = new Map([
+      ...buildTokenMapFromCharacters(characters),
+      ...buildDisplayNameToTokenMap(parent.visual || parent.shot || ""),
+    ]);
     if (!shots.length) {
       // shots 가 없으면 부모 씬을 그대로 single 로 (visual 만 있는 legacy fallback)
       flat.push({
@@ -211,6 +234,8 @@ export async function onRequestPost(context) {
   }
 
   const scenes = Array.isArray(body?.scenes) ? body.scenes : null;
+  // v3.1586: 등록 캐릭터를 받아 @토큰 보정의 1차 출처로 쓴다.
+  const characters = Array.isArray(body?.characters) ? body.characters : [];
   if (!scenes || !scenes.length) {
     return jsonError("scenes[] is required", 400, origin);
   }
@@ -233,7 +258,7 @@ export async function onRequestPost(context) {
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };
     // 평탄화: 각 shot 을 top-level scene 으로
-    const { flat: flatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed);
+    const { flat: flatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed, characters);
     return new Response(JSON.stringify({
       scenes: flatScenes,
       meta: {

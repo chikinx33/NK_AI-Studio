@@ -73,6 +73,14 @@ export function buildShotPromptKo() {
 14. dialogue 필드를 모든 샷에 반드시 포함한다. 대사가 있으면 문자열 또는 {"speaker":"@이름","line":"대사"} 객체, 없으면 null 로 명시한다 (필드 누락 금지).
 15. action 필드 안에 대사("하나, 둘, 셋!", "와!" 등)를 절대 섞지 마라. 대사는 dialogue 필드에만 두고, action 에는 입을 움직이는 물리 행동만 남긴다(예: '입을 크게 벌려 숫자를 외친다').
 16. 입력 scene 의 dialogue 정보가 있으면 적절한 샷의 dialogue 필드에 정확히 그대로 옮긴다.
+17. 한 샷은 **하나의 카메라 셋업**이다. 한 샷 안에 여러 컷을 서술하지 마라.
+   금지 표현(이런 말이 나오면 샷을 나눠야 한다는 뜻이다): "컷이 교차되며", "세 번 빠르게 전환",
+   "마지막 프레임에서", "이어서 카메라가 …한 뒤 다시 …", "A 했다가 B 로 전환".
+   입력 씬의 설명에 그런 다중 컷 연출이 적혀 있으면 그것을 **여러 shot 으로 실제로 쪼개라**.
+   한 shot 의 action 에 몰아 넣으면 영상 생성에서 그 지시가 통째로 무시된다.
+18. composition 과 action 은 서로 다른 것을 적는다. 같은 문장을 양쪽에 반복하지 마라.
+   composition = 프레임에 보이는 것(정지 화면으로 설명 가능한 것), action = 그 안에서 일어나는 움직임.
+   action 을 composition 으로 시작하거나 그대로 되풀이하면 두 칸을 나눈 의미가 없다.
 
 ${buildVocabPromptKo()}
 
@@ -98,6 +106,13 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
    (e.g., "doll sitting on the sill" + "camera pushes in to the doll's face" → 1 shot with cameraMove="push-in").
    Splitting one subject in the same location across multiple shots causes the model to re-generate the character each time, breaking silhouette/detail consistency.
    Only split into separate shots when (a) the angle changes clearly (face↔hand), (b) the sub-location changes (exterior↔interior), or (c) the subject itself changes per shot.
+6b. One shot is ONE camera setup. Never describe multiple cuts inside a single shot.
+   Banned phrasing (if you need it, split into more shots instead): "cuts intercut", "three quick cuts",
+   "in the final frame", "then the camera ... and back to ...".
+   If the input scene describes such a multi-cut sequence, actually SPLIT it into separate shots.
+   Cramming it into one action field makes the direction silently disappear in video generation.
+6c. composition and action must say different things. Never repeat the same sentence in both.
+   composition = what is visible (describable as a still), action = the movement inside it.
 7. composition: noun-centric description of what is visible in frame. "Face close-up, only eyes in frame".
    - When sceneLocation is broad (e.g., "Spaceship", "Palace"), feel free to specify per-shot
      sub-locations inside composition. Example:

@@ -28,6 +28,45 @@
 // 자막이 읽히고 한 소절로 들리려면 최소 3초는 있어야 한다.
 export const MIN_SECTION_SEC = 3;
 
+/**
+ * 3~6세가 따라 부를 수 있는 속도의 상한(음절/초).
+ * Twinkle Twinkle 이 약 1.6, 알파벳송이 1.8~2.2 다. 2.0 을 기준으로 잡는다.
+ * 이 값이 곧 "영상 N초에 넣을 수 있는 총 음절 수 = N × 2" 예산이 된다.
+ */
+export const SYLLABLES_PER_SEC = 2;
+
+/**
+ * 부르는 음절 수를 센다. 길이 배분의 기준이 되는 유일한 객관 지표다.
+ *
+ * durationSec 을 AI 가 정하게 두면 감으로 찍는다. 실제로 v3.1584 결과에서
+ * 16음절 소절에 3초를 줘 초당 5.3음절(랩 속도)이 나왔다.
+ * 글자 수는 셀 수 있으므로, 시간은 여기서 계산한다.
+ */
+export function estimateSyllables(text) {
+  const raw = String(text == null ? "" : text);
+  if (!raw.trim()) return 0;
+  // 한글은 글자 하나가 음절 하나다.
+  const hangul = (raw.match(/[가-힣]/g) || []).length;
+  // 한글을 걷어낸 나머지에서 라틴 단어를 센다.
+  const rest = raw.replace(/[가-힣]/g, " ");
+  let latin = 0;
+  for (const word of rest.split(/[^A-Za-z']+/)) {
+    if (!word) continue;
+    // 홀로 선 알파벳(A, B, C)은 이름 그대로 한 음절씩 읽는다.
+    if (word.length === 1) { latin += 1; continue; }
+    const groups = word.toLowerCase().replace(/e$/, "").match(/[aeiouy]+/g);
+    latin += Math.max(1, groups ? groups.length : 1);
+  }
+  // 숫자는 자릿수만큼 읽는 것으로 어림잡는다.
+  const digits = (raw.match(/\d/g) || []).length;
+  return hangul + latin + digits;
+}
+
+/** 이 가사를 부르는 데 최소 몇 초가 필요한가. */
+export function minSecondsFor(text) {
+  return Math.max(MIN_SECTION_SEC, Math.ceil(estimateSyllables(text) / SYLLABLES_PER_SEC));
+}
+
 const ROLE_BY_MARKER = [
   { re: /(후렴|chorus|refrain)/i, role: "chorus" },
   { re: /(훅|hook|intro|도입)/i, role: "hook" },
@@ -90,9 +129,16 @@ export function fitSectionDurations(sections, totalSec) {
   const maxCount = Math.max(1, Math.floor(target / MIN_SECTION_SEC));
   const kept = list.slice(0, maxCount);
 
-  const raw = kept.map((s) => Math.max(MIN_SECTION_SEC, Number(s.durationSec) || 0));
-  const rawSum = raw.reduce((a, b) => a + b, 0) || kept.length * MIN_SECTION_SEC;
-  const scaled = raw.map((v) => Math.max(MIN_SECTION_SEC, Math.round((v / rawSum) * target)));
+  // v3.1586: 배분 기준은 AI 가 찍은 durationSec 이 아니라 **음절 수**다.
+  // AI 의 시간 감각은 믿을 수 없다 — 실제로 16음절 소절에 3초(초당 5.3음절, 랩 속도)를 줬다.
+  // 음절 비례로 나누면 어느 한 소절만 짓눌리는 일이 없어지고, 전체가 같은 속도로 불린다.
+  // 가사가 비어 음절을 셀 수 없을 때만 AI 값으로 돌아간다.
+  const weights = kept.map((s) => {
+    const syl = estimateSyllables(s.text);
+    return syl > 0 ? syl : Math.max(1, Number(s.durationSec) || 1);
+  });
+  const weightSum = weights.reduce((a, b) => a + b, 0) || kept.length;
+  const scaled = weights.map((w) => Math.max(MIN_SECTION_SEC, Math.round((w / weightSum) * target)));
 
   let diff = target - scaled.reduce((a, b) => a + b, 0);
   // 오차는 여유 있는(긴) 구간부터 흡수시킨다 — 짧은 구간을 더 줄이면 최소 길이가 깨진다.
@@ -112,10 +158,38 @@ export function fitSectionDurations(sections, totalSec) {
   let cursor = 0;
   return kept.map((s, i) => {
     const durationSec = scaled[i];
-    const out = Object.assign({}, s, { durationSec, startSec: cursor });
+    const syllables = estimateSyllables(s.text);
+    const out = Object.assign({}, s, {
+      durationSec,
+      startSec: cursor,
+      syllables,
+      // 초당 음절. 2.0 을 넘으면 따라 부르기 벅차다는 신호다.
+      syllablesPerSec: durationSec > 0 ? Math.round((syllables / durationSec) * 100) / 100 : 0,
+    });
     cursor += durationSec;
     return out;
   });
+}
+
+/**
+ * v3.1586: 붙어 있는 같은 가사 구간을 하나로 합친다.
+ *
+ * AI 가 같은 절을 두 구간에 그대로 복사해 내는 일이 있다. 그대로 두면 같은 문장이
+ * 두 번 자막에 뜨고, 각 구간이 절반씩만 시간을 받아 둘 다 못 부를 속도가 된다.
+ * 후렴은 예외다 — 후렴이 연달아 나오는 건 실제로 두 번 부르는 구성일 수 있다.
+ */
+export function mergeAdjacentDuplicates(sections) {
+  const out = [];
+  for (const sec of Array.isArray(sections) ? sections : []) {
+    const prev = out[out.length - 1];
+    const bothChorus = prev && prev.role === "chorus" && sec.role === "chorus";
+    if (prev && !bothChorus && prev.text === sec.text) {
+      prev.durationSec = (Number(prev.durationSec) || 0) + (Number(sec.durationSec) || 0);
+      continue;
+    }
+    out.push(Object.assign({}, sec));
+  }
+  return out;
 }
 
 /**
@@ -178,8 +252,9 @@ export function normalizeSongSections(rawSections, { durationSec = 0, lang = "ko
     };
   });
 
-  // ⑤ 길이 합 = 영상 길이
-  return fitSectionDurations(labelled, durationSec).map((s, i) => Object.assign({}, s, {
+  // ⑥ 붙어 있는 중복 구간 병합 → ⑤ 길이 합 = 영상 길이
+  const merged = mergeAdjacentDuplicates(labelled);
+  return fitSectionDurations(merged, durationSec).map((s, i) => Object.assign({}, s, {
     id: `sec_${String(i + 1).padStart(2, "0")}`,
   }));
 }

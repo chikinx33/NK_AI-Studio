@@ -443,6 +443,24 @@
     if (isSong) updateSongSectionsSummary(null);
   };
 
+  // 서버 _shared/song-sections.js 의 estimateSyllables 와 같은 규칙.
+  // 화면에 "이 소절 9초 · 1.9음절/초" 를 보여주기 위한 표시용 계산이다.
+  const countSingableSyllables = (text) => {
+    const raw = String(text == null ? '' : text);
+    if (!raw.trim()) return 0;
+    const hangul = (raw.match(/[가-힣]/g) || []).length;
+    const rest = raw.replace(/[가-힣]/g, ' ');
+    let latin = 0;
+    rest.split(/[^A-Za-z']+/).forEach((word) => {
+      if (!word) return;
+      if (word.length === 1) { latin += 1; return; }
+      const groups = word.toLowerCase().replace(/e$/, '').match(/[aeiouy]+/g);
+      latin += Math.max(1, groups ? groups.length : 1);
+    });
+    const digits = (raw.match(/\d/g) || []).length;
+    return hangul + latin + digits;
+  };
+
   const notifyScenario = (msg) => {
     if (!msg) return;
     if (NK.ui?.toast?.show) NK.ui.toast.show(msg, { type: 'info', duration: 3800 });
@@ -1190,9 +1208,14 @@
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
       const rawSubtitle = String(s.subtitleText || s.caption || s.lines || '').trim();
       const cleanedSubtitle = extractNarrationOnlyText(rawSubtitle);
-      const rawNarration = s.narration || s.story || s.text || s.content || (
-        (!Array.isArray(s.dialogue) || !s.dialogue.length) ? cleanedSubtitle : ''
-      ) || '';
+      // v3.1586: 노래 모드에서는 자막(=가사) 폴백을 타면 안 된다.
+      // 그대로 두면 가사가 나레이션 칸으로 복사돼 모든 씬에 같은 문장이 두 번 나온다.
+      const songModeScene = boolVal(s?.songEnabled, boolVal(currentPayload?.songEnabled, false));
+      const rawNarration = songModeScene
+        ? String(s.narration || '')
+        : (s.narration || s.story || s.text || s.content || (
+            (!Array.isArray(s.dialogue) || !s.dialogue.length) ? cleanedSubtitle : ''
+          ) || '');
       const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], activeCharacters);
       const subtitleText = String(cleanedSubtitle || '').trim();
       const shot = firstFilledText(
@@ -1719,6 +1742,26 @@
     const __showNarration = !!__voiceFlags.narrationEnabled;
     const __showDialogue = !!__voiceFlags.dubbingEnabled;
     const __showLyrics = !!__voiceFlags.songEnabled;
+    // v3.1586: 가사 한 소절이 여러 컷에 걸친다. 가사가 붙은 씬의 길이만 보면
+    // "3초에 이걸 다 부른다"고 오해하게 되므로, 구간 전체 길이와 컷 수를 함께 보여준다.
+    const __sectionSpans = (() => {
+      const spans = {};
+      let anon = 0;
+      let currentKey = '';
+      sceneList.forEach((sc) => {
+        const hasLyrics = !!String(sc.lyricsText || '').trim();
+        const id = String(sc.songSectionId || '').trim();
+        const key = id || (hasLyrics ? `anon-${anon++}` : currentKey);
+        if (!key) return;
+        currentKey = key;
+        if (!spans[key]) spans[key] = { sec: 0, cuts: 0, syllables: 0 };
+        spans[key].sec += Number(sc.estSec) || 0;
+        spans[key].cuts += 1;
+        if (hasLyrics) spans[key].syllables = countSingableSyllables(sc.lyricsText);
+        sc.__sectionKey = key;
+      });
+      return spans;
+    })();
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1774,10 +1817,24 @@
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
           </div>`}
-          ${__showLyrics ? `
+          ${__showLyrics && String(s.lyricsText || '').trim() ? (() => {
+            const span = __sectionSpans[s.__sectionKey] || { sec: Number(s.estSec) || 0, cuts: 1, syllables: 0 };
+            const rate = span.sec > 0 ? Math.round((span.syllables / span.sec) * 10) / 10 : 0;
+            const tooFast = rate > 2.4;
+            const spanText = `${Math.round(span.sec)}초 · ${span.cuts}컷 · ${rate}음절/초`;
+            return `
           <div class="field-block${s.isRefrain ? ' is-refrain' : ''}">
             <p class="field-label muted small">${labels.lyrics}${s.isRefrain ? `<span class="refrain-badge">${escapeHtml(labels.refrain)}</span>` : ''}</p>
-            <p class="view-lines view-lyrics-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.lyricsText || '')}</p>
+            <div class="lyrics-body">
+              <p class="view-lines view-lyrics-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.lyricsText || '')}</p>
+              <span class="lyrics-span-badge${tooFast ? ' is-too-fast' : ''}" title="${tooFast ? '따라 부르기 벅찬 속도예요 (권장 2음절/초 이하)' : '이 소절이 걸치는 전체 길이'}">${escapeHtml(spanText)}</span>
+            </div>
+          </div>`;
+          })() : ''}
+          ${__showLyrics && !String(s.lyricsText || '').trim() ? `
+          <div class="field-block">
+            <p class="field-label muted small">${labels.lyrics}</p>
+            <p class="view-lines lyrics-continued muted">앞 소절이 이어지는 중</p>
           </div>` : ''}
           ${__showNarration ? `
           <div class="field-block">
@@ -2716,7 +2773,10 @@
             if (NK.api?.scenarioShots) {
               const shotsRes = await NK.api.scenarioShots({
                 scenes: res.scenes,
-                language: payload?.language === 'en' ? 'en' : 'ko'
+                language: payload?.language === 'en' ? 'en' : 'ko',
+                // v3.1586: 컷 분해도 @토큰 보정을 해야 하는데, 등록 캐릭터를 모르면
+                // 부모 visual 에 토큰이 없는 씬을 통째로 건너뛴다.
+                characters: Array.isArray(payload?.characters) ? payload.characters : []
               });
               // v2.702 부터 서버가 flat scenes 반환 (각 shot → top-level scene).
               // meta.flattened 가 true 인 경우만 채택. 안전.
@@ -2893,7 +2953,7 @@
           }
           const lang = (draft?.payload?.language === 'en') ? 'en' : 'ko';
           NK.core.setLoading(true, '씬을 컷 단위로 분해 중...');
-          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang });
+          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang, characters: Array.isArray(currentPayload?.characters) ? currentPayload.characters : [] });
           const decomposed = (shotsRes && Array.isArray(shotsRes.scenes)) ? shotsRes.scenes : null;
           if (!decomposed) {
             alert('컷 분해 응답이 비었습니다.');

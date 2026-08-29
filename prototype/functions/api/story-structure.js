@@ -1,7 +1,7 @@
 import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
-import { normalizeSongSections, MIN_SECTION_SEC } from "./_shared/song-sections.js";
+import { normalizeSongSections, SYLLABLES_PER_SEC } from "./_shared/song-sections.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -270,6 +270,7 @@ function buildUserPrompt(input) {
       `Banned expressions: ${input.bannedExpressions.join(", ") || "(none)"}`,
       ...(input.songMode ? [
         `[Video length] ${input.durationSeconds || 0}s - every durationSec in "lyrics" MUST sum to exactly this.`,
+        `[Total syllable budget] about ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)} syllables max. ${SYLLABLES_PER_SEC} syllables per second is the ceiling for a 3-6 year old to sing along. Going over makes some passage unsingable - write fewer words, not more.`,
         `[Lyrics language] ${detectLyricLanguage(input.story, "en") || "same language as the story"}`,
       ] : []),
       "Output goal: a faithful enumeration of every event in the user's story as separate beats — preserving the user's intent, direction, and event sequence. Replace abstract phrases with concrete action phrasing, but never merge or drop events."
@@ -297,6 +298,7 @@ function buildUserPrompt(input) {
     `금지 표현: ${input.bannedExpressions.join(", ") || "(없음)"}`,
     ...(input.songMode ? [
       `[영상 길이] ${input.durationSeconds || 0}초 — "lyrics" 의 durationSec 합이 정확히 이 값이어야 한다.`,
+      `[총 음절 예산] 약 ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)}음절 이내. 3~6세가 따라 부르려면 초당 ${SYLLABLES_PER_SEC}음절이 상한이다. 예산을 넘기면 어느 소절이든 못 부를 속도가 된다 — 가사를 늘리지 말고 줄여라.`,
       `[작사 언어] ${detectLyricLanguage(input.story, "ko") || "이야기와 같은 언어"}`,
     ] : []),
     "출력 목표: 사용자의 이야기에 등장한 모든 사건을 빠짐없이 비트로 enumerate한다. 의도·방향·사건 순서를 모두 보존하고, 추상 표현만 구체 행동으로 치환한다. 사건을 병합하거나 누락하지 않는다."

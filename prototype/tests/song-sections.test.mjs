@@ -9,6 +9,8 @@ import {
   sectionsToSongChunks,
   fitSectionDurations,
   cleanLyricText,
+  estimateSyllables,
+  mergeAdjacentDuplicates,
   MIN_SECTION_SEC,
 } from "../functions/api/_shared/song-sections.js";
 
@@ -286,4 +288,121 @@ test("포스트 프로덕션 자막은 구간 길이만큼 떠 있는다", () =>
   // 음악 API 에는 씬이 아니라 구간을 보낸다
   assert.match(src, /function getProjectSongSections\(payload\)/);
   assert.match(src, /songSections: songSections/);
+});
+
+// ---------------------------------------------------------------------------
+// v3.1586 — 실제 결과물에서 깨진 것들
+// ---------------------------------------------------------------------------
+
+test("음절 수를 센다 (길이 배분의 유일한 객관 지표)", () => {
+  // "A, B, C · Let's go, let's play! · Nemo holds the A cube up high today!"
+  assert.equal(estimateSyllables("A, B, C"), 3);
+  assert.equal(estimateSyllables("Let's go, let's play!"), 4);
+  assert.equal(estimateSyllables("굴려라 굴려"), 5);
+  assert.equal(estimateSyllables(""), 0);
+  // 한글·영문 혼용
+  assert.equal(estimateSyllables("네모 holds"), 3);
+});
+
+test("★회귀: 16음절 소절에 3초를 주던 문제 — 길이는 음절 비례로 배분된다", () => {
+  // v3.1584 결과: 같은 16음절 소절이 4초와 3초로 쪼개져 초당 4.0·5.3음절이 나왔다.
+  // AI 가 찍은 durationSec 을 그대로 믿었기 때문이다.
+  const sections = normalizeSongSections(
+    [
+      { label: "[1절]", text: "짧다", durationSec: 20 },           // AI 가 과하게 준 값
+      { label: "[후렴]", text: "aa bb cc dd ee ff gg hh", durationSec: 3 }, // 턱없이 짧게 준 값
+      { label: "[2절]", text: "또 짧다", durationSec: 20 },
+      { label: "[후렴]", text: "aa bb cc dd ee ff gg hh", durationSec: 3 },
+    ],
+    { durationSec: 60, lang: "ko" },
+  );
+  // 긴 가사 구간이 짧은 구간보다 더 많은 시간을 받아야 한다
+  const chorus = sections.find((s) => s.isRefrain);
+  const verse = sections.find((s) => s.role === "verse");
+  assert.ok(chorus.durationSec > verse.durationSec,
+    `후렴(${chorus.syllables}음절/${chorus.durationSec}초)이 절(${verse.syllables}음절/${verse.durationSec}초)보다 길어야 한다`);
+  // 모든 구간의 속도가 비슷해야 한다 (어느 하나만 짓눌리지 않는다)
+  const rates = sections.map((s) => s.syllablesPerSec);
+  assert.ok(Math.max(...rates) / Math.min(...rates) < 1.6,
+    `구간별 속도 편차가 크다: ${rates.join(", ")}`);
+});
+
+test("★회귀: 붙어 있는 같은 가사 구간을 합친다 (절이 두 번 복사되던 문제)", () => {
+  const sections = normalizeSongSections(
+    [
+      { label: "[1절]", text: "Dongle rolls the B", durationSec: 4 },
+      { label: "[1절]", text: "Dongle rolls the B", durationSec: 3 },
+      { label: "[후렴]", text: "A B C", durationSec: 6 },
+      { label: "[2절]", text: "different line", durationSec: 5 },
+      { label: "[후렴]", text: "A B C", durationSec: 6 },
+    ],
+    { durationSec: 40, lang: "ko" },
+  );
+  const dupes = sections.filter((s) => s.text === "Dongle rolls the B");
+  assert.equal(dupes.length, 1, "붙어 있는 같은 절은 하나로 합쳐져야 한다");
+  // 떨어져 있는 후렴 반복은 그대로 둔다 (실제로 두 번 부른다)
+  assert.equal(sections.filter((s) => s.text === "A B C").length, 2);
+});
+
+test("연달아 나오는 후렴은 합치지 않는다 (두 번 부르는 구성일 수 있다)", () => {
+  const merged = mergeAdjacentDuplicates([
+    { role: "chorus", text: "hook", durationSec: 5 },
+    { role: "chorus", text: "hook", durationSec: 5 },
+  ]);
+  assert.equal(merged.length, 2);
+});
+
+test("각 구간에 실제 속도가 실린다 (화면·진단에서 확인할 수 있게)", () => {
+  const sections = normalizeSongSections(
+    [{ label: "[후렴]", text: "가나다라마바사아", durationSec: 4 }],
+    { durationSec: 8, lang: "ko" },
+  );
+  sections.forEach((s) => {
+    assert.equal(typeof s.syllables, "number");
+    assert.equal(typeof s.syllablesPerSec, "number");
+    assert.ok(s.syllablesPerSec > 0);
+  });
+});
+
+test("작사 프롬프트가 총 음절 예산을 준다", () => {
+  const src = read("prototype/functions/api/story-structure.js");
+  assert.match(src, /\[총 음절 예산\]/);
+  assert.match(src, /\[Total syllable budget\]/);
+  assert.match(src, /SYLLABLES_PER_SEC/);
+});
+
+test("★회귀: 노래 모드에서 가사가 나레이션 칸으로 복사되지 않는다", () => {
+  // 폴백이 subtitleText(=가사)를 narration 으로 끌어와 모든 씬에 같은 문장이 두 번 나왔다.
+  const src = read("prototype/js/ui/scenario.js");
+  assert.match(src, /const songModeScene = boolVal\(s\?\.songEnabled/);
+  assert.match(src, /const rawNarration = songModeScene\s*\n\s*\? String\(s\.narration \|\| ''\)/);
+});
+
+test("★회귀: 컷 분해가 등록 캐릭터로 @토큰을 보정한다", () => {
+  // 부모 visual 에 @토큰이 없는 씬은 맵이 비어 보정이 통째로 건너뛰어졌다.
+  const src = read("prototype/functions/api/scenario-shots.js");
+  assert.match(src, /function buildTokenMapFromCharacters\(characters\)/);
+  assert.match(src, /\.\.\.buildTokenMapFromCharacters\(characters\)/);
+  assert.match(src, /const characters = Array\.isArray\(body\?\.characters\) \? body\.characters : \[\]/);
+  // 클라이언트가 실제로 캐릭터를 보낸다
+  const ui = read("prototype/js/ui/scenario.js");
+  assert.match(ui, /characters: Array\.isArray\(payload\?\.characters\) \? payload\.characters : \[\]/);
+});
+
+test("컷 분해가 한 샷에 여러 컷을 몰아넣지 못하게 막는다", () => {
+  const src = read("prototype/functions/api/scenario/shots/decomposer.js");
+  assert.match(src, /한 샷은 \*\*하나의 카메라 셋업\*\*이다/);
+  assert.match(src, /컷이 교차되며/);
+  assert.match(src, /여러 shot 으로 실제로 쪼개라/);
+  // composition 과 action 중복 금지
+  assert.match(src, /composition 과 action 은 서로 다른 것을 적는다/);
+});
+
+test("씬 카드가 소절의 전체 길이·컷 수·속도를 보여준다", () => {
+  // 3초짜리 씬에 가사가 붙어 있어도 실제로는 9초에 걸쳐 불릴 수 있다.
+  const src = read("prototype/js/ui/scenario.js");
+  assert.match(src, /const __sectionSpans = /);
+  assert.match(src, /lyrics-span-badge/);
+  assert.match(src, /const tooFast = rate > 2\.4/);
+  assert.match(src, /앞 소절이 이어지는 중/);
 });
