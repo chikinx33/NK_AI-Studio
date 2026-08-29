@@ -1219,6 +1219,18 @@ export interface ToolDef {
    * 그런 호출은 시작 자체를 하지 않는다.
    */
   precheck?: (input: any) => string | null;
+  /**
+   * '무엇에 대한 승인인가'를 나타내는 식별자. 같은 키를 가진 승인 요청은 한 장으로 합친다.
+   *
+   * 모델은 한 턴에 같은 일을 조금씩 다른 문장으로 두 번 요청하곤 한다(설명을 다듬어
+   * 다시 부르는 식). 그러면 승인 패널에 사실상 같은 카드가 두 장 쌓이고, 사용자는
+   * "왜 두 개지" 를 묻고 하나를 거절해야 했다. 반복 신고된 흐름이다.
+   *
+   * 키를 안 주면 입력 전체(키 순서 정규화)가 키가 된다 — 완전히 같은 요청만 합쳐진다.
+   * 대상 하나의 상태를 덮어쓰는 도구(같은 캐릭터의 텍스트 속성 저장 등)는 '대상'을
+   * 키로 삼아야 마지막 요청 하나만 남는다.
+   */
+  approvalKey?: (input: any) => string;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -4423,7 +4435,11 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // ── AI 스튜디오 확장 도구 ──────────────────────────────────────────────
   // 브랜드 허브(코어 총괄 · 조회는 온브랜드 작업하는 여러 직무가 공유):
   brand_get: { agentId: "core", agentIds: ["pixel", "plot", "ink", "maki", "edge", "reach"], kind: "read", synthesize: true, run: runBrandGetTool },
-  brand_save: { agentId: "core", kind: "external", gate: true, run: runBrandSaveTool },      // 쓰기 → 승인 게이트
+  // 브랜드 하나를 덮어쓴다 — 같은 브랜드면 승인할 건 마지막 하나뿐이다.
+  brand_save: {
+    agentId: "core", kind: "external", gate: true, run: runBrandSaveTool,      // 쓰기 → 승인 게이트
+    approvalKey: (i) => String(i?.brandId || i?.slug || "").trim().toLowerCase(),
+  },
   // 캐릭터/환경 자산 등록: 픽셀(디자인) 주담당 + 코어 공유. 쓰기 → 승인 게이트.
   brand_asset: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runBrandAssetTool },
   // 픽셀(디자인): 이미지 역분석·업스케일·립싱크·자산 라이브러리.
@@ -4444,7 +4460,13 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 등록된 시트를 '허브센터 맥락과 함께' 분석 → 텍스트 속성 초안. 저장은 하지 않는다.
   ip_describe: { agentId: "pixel", agentIds: ["core"], kind: "read", synthesize: true, run: runIpDescribeTool },
   // 텍스트 속성 저장. 사용자가 다듬어 둔 값을 덮어쓰므로 brand_save 와 같이 승인 게이트.
-  ip_text_save: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runIpTextSaveTool },
+  // 같은 캐릭터의 텍스트 속성은 덮어쓰기다. 두 번 요청해도 승인할 건 마지막 하나뿐이다.
+  ip_text_save: {
+    agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runIpTextSaveTool,
+    approvalKey: (i) =>
+      `${String(i?.brandId || i?.brand || i?.slug || "").trim().toLowerCase()}|` +
+      `${String(i?.character || i?.token || i?.name || "").trim().replace(/^@/, "").toLowerCase()}`,
+  },
   // 비트(사운드): 나레이션(TTS).
   narration: { agentId: "beat", kind: "external", run: runNarrationTool },
   // 마키(마케팅): 해시태그 생성. 리치(배포)도 공유.
@@ -4458,7 +4480,11 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   project_list: { agentId: "core", kind: "read", run: runProjectListTool },
   // 조회는 기획(플롯)이 상태를 파악하는 근거 + 코어 공유. read+synthesize.
   project_get: { agentId: "plot", agentIds: ["core"], kind: "read", synthesize: true, run: runProjectGetTool },
-  project_save: { agentId: "plot", kind: "external", gate: true, run: runProjectSaveTool },
+  // 프로젝트 하나를 덮어쓴다.
+  project_save: {
+    agentId: "plot", kind: "external", gate: true, run: runProjectSaveTool,
+    approvalKey: (i) => String(i?.projectId || i?.id || "").trim().toLowerCase(),
+  },
   // 시나리오→씬 저장(합성) · 씬 자산 부착 — 쓰기라 전부 승인 게이트.
   scenario_to_project: { agentId: "plot", kind: "external", gate: true, run: runScenarioToProjectTool },
   scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
@@ -4496,17 +4522,76 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   media_library: { agentId: "pixel", kind: "read", synthesize: true, run: runMediaLibraryTool },
   // 싱크(비서) 중심 userdata — 조회는 즉시(개인화 근거), 변경은 승인 게이트.
   profile_get: { agentId: "sync", agentIds: ["core", "edge", "maki"], kind: "read", synthesize: true, run: runProfileGetTool },
-  profile_save: { agentId: "sync", kind: "external", gate: true, run: runProfileSaveTool },
+  // 사용자당 하나뿐인 설정 — 대상이 하나라 도구 이름만으로 같은 일감이다.
+  profile_save: {
+    agentId: "sync", kind: "external", gate: true, run: runProfileSaveTool,
+    approvalKey: () => "singleton",
+  },
   favorites_get: { agentId: "sync", agentIds: ["pixel", "plot"], kind: "read", run: runFavoritesGetTool },
-  favorites_save: { agentId: "sync", kind: "external", gate: true, run: runFavoritesSaveTool },
+  // 사용자당 하나뿐인 설정 — 대상이 하나라 도구 이름만으로 같은 일감이다.
+  favorites_save: {
+    agentId: "sync", kind: "external", gate: true, run: runFavoritesSaveTool,
+    approvalKey: () => "singleton",
+  },
   sns_prefs_get: { agentId: "reach", agentIds: ["maki"], kind: "read", run: runSnsPrefsGetTool },
-  sns_prefs_save: { agentId: "reach", kind: "external", gate: true, run: runSnsPrefsSaveTool },
+  // 사용자당 하나뿐인 설정 — 대상이 하나라 도구 이름만으로 같은 일감이다.
+  sns_prefs_save: {
+    agentId: "reach", kind: "external", gate: true, run: runSnsPrefsSaveTool,
+    approvalKey: () => "singleton",
+  },
   subscription_get: { agentId: "sync", kind: "read", run: runSubscriptionGetTool },
 
   // ── 후속 마무리: 이미지 채팅형 수정 · 다가올 알람(예약) 목록 ──
   image_edit: { agentId: "pixel", kind: "external", run: runImageEditTool },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
+
+/** 키 순서와 무관하게 같은 값이면 같은 문자열이 나오도록 직렬화한다. */
+function stableStringify(value: any): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value ?? null) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+}
+
+/**
+ * 승인 요청의 정체성. 같은 값이면 '같은 일감'이라 카드를 하나로 합친다.
+ * 도구가 approvalKey 를 주면 그것을, 아니면 입력 전체를 정규화해서 쓴다.
+ */
+export function approvalIdentity(type: string, input: any): string {
+  const tool = AGENT_TOOLS[type];
+  if (tool?.approvalKey) {
+    try { return `${type}:${tool.approvalKey(input ?? {})}`; } catch { /* 아래 기본값으로 */ }
+  }
+  return `${type}:${stableStringify(input ?? {})}`;
+}
+
+/**
+ * 같은 일감으로 이미 대기 중인 승인을 취소한다(마지막 요청이 이긴다).
+ *
+ * 먼저 온 것을 남기면 모델이 다듬어 보낸 최신 내용이 버려진다. 사용자가 보는 건
+ * 늘 '가장 최근에 요청한 그 내용' 한 장이어야 한다. 취소한 개수를 돌려준다.
+ */
+export async function supersedePendingApprovals(
+  sql: SqlFn, userId: string, type: string, input: any, keepJobId: string
+): Promise<number> {
+  const identity = approvalIdentity(type, input);
+  const rows = await sql(
+    "SELECT id, input FROM agent_jobs WHERE user_id = $1 AND type = $2 AND status = 'review_pending' AND id <> $3",
+    [userId, type, keepJobId]
+  ).catch(() => [] as any[]);
+  const stale = (rows as any[]).filter((r) => {
+    const raw = typeof r.input === "string" ? (() => { try { return JSON.parse(r.input); } catch { return {}; } })() : r.input;
+    return approvalIdentity(type, raw) === identity;
+  });
+  for (const r of stale) {
+    await sql(
+      "UPDATE agent_jobs SET status = 'cancelled', updated_at = now() WHERE id = $1 AND user_id = $2 AND status = 'review_pending'",
+      [r.id, userId]
+    ).catch(() => {});
+  }
+  return stale.length;
+}
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
 export async function processJob(
@@ -4515,14 +4600,16 @@ export async function processJob(
   jobId: string,
   type: string,
   input: any
-): Promise<{ ok: boolean; error?: string; gated?: boolean; output?: any }> {
+): Promise<{ ok: boolean; error?: string; gated?: boolean; output?: any; superseded?: number }> {
   try {
     const tool = AGENT_TOOLS[type];
     if (!tool) throw new Error(`unknown tool: ${type}`);
     // 승인 게이트 도구: 승인 전에는 실행하지 않는다. 승인 대기로만 두고, 승인 시 review.ts에서 run 실행.
     if (tool.gate) {
       await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", reviewStatus: "pending" });
-      return { ok: true, gated: true };
+      // 같은 일감이 이미 대기 중이면 그 카드를 걷어낸다 — 패널엔 최신 요청 한 장만 남는다.
+      const superseded = await supersedePendingApprovals(sql, ctx.userId, type, input, jobId).catch(() => 0);
+      return { ok: true, gated: true, superseded };
     }
     await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const output = await tool.run(input, { ...ctx, jobId });

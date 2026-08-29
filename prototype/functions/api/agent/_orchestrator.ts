@@ -47,6 +47,7 @@ import {
   setPinSkill,
   archiveSkillByName,
   restoreSkill,
+  approvalIdentity,
 } from "./_shared";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
 import { claudeAuthHeaders, resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
@@ -1410,7 +1411,27 @@ export async function runGroupChat(
     depth = 0,
     seenRuns = new Set<string>(),
   ) => {
-    for (const r of runs) {
+    /*
+     * 같은 일감을 한 턴에 두 번 요청하면 뒤엣것만 남긴다.
+     *
+     * 모델은 설명을 다듬어 같은 도구를 다시 부르곤 한다. 그대로 두면 "🛠️ 시작했어요 →
+     * 🔐 승인이 필요해요" 가 두 번 나오고 승인 패널에도 같은 카드가 두 장 쌓인다.
+     * 먼저 온 것을 남기면 다듬어진 최신 내용이 버려지므로 마지막 것을 남긴다.
+     * (approvalIdentity 는 도구가 정한 '대상' 기준. 없으면 입력 전체 정규화.)
+     */
+    const lastGateIndex = new Map<string, number>();
+    runs.forEach((r, i) => {
+      if (!AGENT_TOOLS[r.tool]?.gate) return;
+      lastGateIndex.set(approvalIdentity(r.tool, parseToolInput(r.reason)), i);
+    });
+    for (const [i, r] of runs.entries()) {
+      if (AGENT_TOOLS[r.tool]?.gate) {
+        const identity = approvalIdentity(r.tool, parseToolInput(r.reason));
+        if (lastGateIndex.get(identity) !== i) {
+          console.log(`approval_dedupe_in_turn: ${r.tool} — 뒤에 같은 요청이 있어 건너뜀`);
+          continue;
+        }
+      }
       const runKey = `${r.tool}\n${r.reason}`;
       if (seenRuns.has(runKey)) continue;
       seenRuns.add(runKey);

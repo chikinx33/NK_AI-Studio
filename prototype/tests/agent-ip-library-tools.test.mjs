@@ -29,7 +29,7 @@ test("도구 3종이 등록돼 있고 권한·종류가 의도대로다", () => 
   assert.match(src, /ip_text_save: \{[^}]*kind: "external", gate: true[^}]*run: runIpTextSaveTool/);
   // 픽셀(이미지 담당)이 주인이고 코어도 쓸 수 있어야 위임이 된다.
   assert.match(src, /ip_describe: \{ agentId: "pixel", agentIds: \["core"\]/);
-  assert.match(src, /ip_text_save: \{ agentId: "pixel", agentIds: \["core"\]/);
+  assert.match(src, /ip_text_save: \{\s*[\r\n]+\s*agentId: "pixel", agentIds: \["core"\]/);
 });
 
 test("ip_library 가 허브 맥락과 현재 텍스트 속성을 함께 돌려준다", () => {
