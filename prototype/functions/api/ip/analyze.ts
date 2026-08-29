@@ -6,6 +6,7 @@
 // 왜 필요한가: 이미지 모델은 '없어야 하는 것'을 레퍼런스 이미지에서 배울 수 없다. 시트에 손가락이
 // 안 보이면 "이 각도에선 안 보인다"로 읽고 자기 사전지식으로 손가락을 그린다. 금지 정보는 텍스트로만
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
+import { geminiTextModel } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -65,7 +66,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const apiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = String(env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKeyRaw = String(env.GOOGLE_PRIVATE_KEY || "").trim();
-    const geminiModel = String(env.GEMINI_PROMPT_ANALYSIS_MODEL || env.GEMINI_TEXT_MODEL || "gemini-2.5-flash").trim();
+    const geminiModel = geminiTextModel(env);
     if (!apiKey) return json({ error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, 500);
 
     /**
@@ -141,7 +142,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           },
           required: ["description", "negativePrompt"],
         };
-        // gemini-2.5-flash 는 기본으로 '생각'을 하고, 이미지가 붙으면 그 시간이 크게 늘어
+        // Gemini flash 계열은 기본으로 '생각'을 하고, 이미지가 붙으면 그 시간이 크게 늘어
         // Cloudflare 제한을 넘기기 쉽다. 시트를 보고 특징을 받아적는 일에는 필요 없다.
         // 이 필드를 모르는 모델은 400 을 내므로, 폴백 호출에는 넣지 않는다.
         generationConfig.thinkingConfig = { thinkingBudget: 0 };

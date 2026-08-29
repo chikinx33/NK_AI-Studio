@@ -1,3 +1,4 @@
+import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -20,7 +21,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const clientEmail = String(env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKeyRaw = String(env.GOOGLE_PRIVATE_KEY || "").trim();
     const geminiModel = String(
-      env.GEMINI_PROMPT_ANALYSIS_MODEL || env.GEMINI_TEXT_MODEL || "gemini-2.5-flash"
+      geminiTextModel(env)
     ).trim();
 
     if (!apiKey) {

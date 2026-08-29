@@ -3,6 +3,7 @@
 // Vertex AI Imagen 업스케일 (imagen-4.0-upscale-preview) — GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 재사용
 // imagen-3.0-capability-001은 편집/커스터마이즈 전용이라 mode:"upscale" 미지원(+승인 필요) → 404가 났었음
 import { buildAiImageSessionPrefix } from "./_shared/storage";
+import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
 
@@ -337,7 +338,8 @@ function shortGoogleError(text: string): string {
  * 읽고 엉뚱한 결론(프로젝트에 Imagen 권한 없음)을 냈던 적이 있어, 대조 호출로 바꿨다.
  */
 async function diagnoseVertexAccess(location: string, projectId: string, token: string): Promise<string> {
-  const probeModel = "gemini-2.5-flash";
+  // 진단 프로브. env 를 안 받는 함수라 기본 모델로 대조한다.
+  const probeModel = geminiTextModel(null);
   const url = `https://${vertexHost(location)}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${probeModel}:generateContent`;
   let res: Response;
   try {

@@ -15,6 +15,7 @@
  */
 
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
+import { geminiGenerateUrl } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -46,7 +47,8 @@ function isEnglish(text: string): boolean {
 }
 
 async function callGemini(apiKey: string, body: object): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  // 이 헬퍼엔 env 가 없다(원래도 모델을 하드코딩했다). 기본값을 쓰고, 교체는 gemini-models.js 에서.
+  const url = `${geminiGenerateUrl(null)}?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -521,7 +523,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let geminiErrorSnippet = "";
     if (googleApiKey) {
       try {
-        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(googleApiKey)}`;
+        const testUrl = `${geminiGenerateUrl(null)}?key=${encodeURIComponent(googleApiKey)}`;
         const testRes = await fetch(testUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
