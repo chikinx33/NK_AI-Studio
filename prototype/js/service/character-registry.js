@@ -28,6 +28,37 @@
     return out;
   }
 
+  /**
+   * 캐릭터 텍스트 속성 통합기. character-traits.js 가 단일 원천이고,
+   * 그 파일이 없는 페이지를 위해 같은 규칙의 최소 폴백을 둔다.
+   */
+  function traitsApi() {
+    return (window.NK && NK.service && NK.service.characterTraits) || null;
+  }
+  function fallbackMerge(sources) {
+    var out = [];
+    var seen = Object.create(null);
+    sources.forEach(function (src) {
+      normList(src).forEach(function (phrase) {
+        var key = phrase.toLowerCase().replace(/[\s.,·・:;!?()[\]{}"'`-]/g, '');
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        out.push(phrase);
+      });
+    });
+    return out.join(', ');
+  }
+  function mergeAppearance(src) {
+    var api = traitsApi();
+    if (api && typeof api.mergeAppearance === 'function') return api.mergeAppearance(src);
+    return fallbackMerge([src.description, src.fixedTraits, src.styleGuide]);
+  }
+  function mergeNegative(src) {
+    var api = traitsApi();
+    if (api && typeof api.mergeNegative === 'function') return api.mergeNegative(src);
+    return fallbackMerge([src.negativePrompt, src.bannedTraits]);
+  }
+
   function normalizeCharacter(item, index) {
     var src = item && typeof item === 'object' ? item : {};
     var id = normText(src.id) || ('char_' + String((index || 0) + 1).padStart(3, '0'));
@@ -36,12 +67,10 @@
     var aliases = normList(src.aliases);
     var mainAssetId = normText(src.mainAssetId);
     var referenceAssetIds = normList(src.referenceAssetIds);
-    var description = normText(src.description);
-    var fixedTraits = normList(src.fixedTraits);
-    var bannedTraits = normList(src.bannedTraits);
-    var negativePrompt = normText(src.negativePrompt);
+    // 텍스트 속성은 2칸(생김새·네거티브). 옛 5칸 데이터는 여기서 흡수된다.
+    var description = mergeAppearance(src);
+    var negativePrompt = mergeNegative(src);
     var defaultPromptPrefix = normText(src.defaultPromptPrefix);
-    var styleGuide = normText(src.styleGuide);
     var isActive = src.isActive === false ? false : true;
     var createdAt = normText(src.createdAt) || new Date().toISOString();
     var updatedAt = new Date().toISOString();
@@ -54,11 +83,11 @@
       mainAssetId: mainAssetId,
       referenceAssetIds: referenceAssetIds,
       description: description,
-      fixedTraits: fixedTraits,
-      bannedTraits: bannedTraits,
+      fixedTraits: [],
+      bannedTraits: [],
       negativePrompt: negativePrompt,
       defaultPromptPrefix: defaultPromptPrefix || 'Keep character identity consistent.',
-      styleGuide: styleGuide,
+      styleGuide: '',
       isActive: !!isActive,
       createdAt: createdAt,
       updatedAt: updatedAt
@@ -275,15 +304,14 @@
       characters.forEach(function (c) {
         var lines = [];
         if (c.defaultPromptPrefix) lines.push(c.defaultPromptPrefix);
+        // 생김새는 한 줄. 예전엔 description·fixedTraits·styleGuide 를 세 줄로 쪼개 넣었는데,
+        // 같은 내용을 중복 서술하는 꼴이라 캡션 길이 예산만 갉아먹었다.
         if (c.description) lines.push(c.description);
-        if (c.fixedTraits && c.fixedTraits.length) lines.push('Fixed traits: ' + c.fixedTraits.join(', '));
-        if (c.styleGuide) lines.push('Style guide: ' + c.styleGuide);
         blocks.push(lines.join('\n'));
       });
+      // 부정문은 프롬프트 본문에 한 줄만. 캐릭터별 금지 특성은 negativePrompt 로 흡수됐고,
+      // 여기 남는 건 브랜드 차원의 금지 표현이다.
       var neg = [];
-      characters.forEach(function (c) {
-        (Array.isArray(c.bannedTraits) ? c.bannedTraits : []).forEach(function (t) { if (t) neg.push(String(t)); });
-      });
       bannedExpressions.forEach(function (t) { if (t) neg.push(String(t)); });
       if (neg.length) blocks.push('Avoid: ' + Array.from(new Set(neg)).join(', '));
     }

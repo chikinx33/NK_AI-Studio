@@ -17,6 +17,39 @@
         return raw;
     }
 
+    /**
+     * 캐릭터 텍스트 속성 통합기. 공용 모듈(character-traits.js)이 단일 원천이고,
+     * 그 파일이 아직 로드되지 않은 페이지를 위해 같은 규칙의 최소 폴백을 둔다.
+     */
+    function traitsApi() {
+        return (window.NK && NK.service && NK.service.characterTraits) || null;
+    }
+    function fallbackMerge(sources) {
+        var out = [];
+        var seen = Object.create(null);
+        sources.forEach(function (src) {
+            var list = Array.isArray(src) ? src : String(src || '').split(/[,\n]/);
+            list.forEach(function (raw) {
+                var phrase = normalizeText(raw);
+                var key = phrase.toLowerCase().replace(/[\s.,·・:;!?()[\]{}"'`-]/g, '');
+                if (!key || seen[key]) return;
+                seen[key] = true;
+                out.push(phrase);
+            });
+        });
+        return out.join(', ');
+    }
+    function mergeCharacterAppearance(item) {
+        var api = traitsApi();
+        if (api && typeof api.mergeAppearance === 'function') return api.mergeAppearance(item);
+        return fallbackMerge([item.description, item.fixedTraits, item.styleGuide]);
+    }
+    function mergeCharacterNegative(item) {
+        var api = traitsApi();
+        if (api && typeof api.mergeNegative === 'function') return api.mergeNegative(item);
+        return fallbackMerge([item.negativePrompt, item.bannedTraits]);
+    }
+
     function normalizeBrandCharacters(value) {
         var src = Array.isArray(value) ? value : [];
         var rows = [];
@@ -32,12 +65,14 @@
                 aliases: normalizeTextList(item.aliases),
                 mainAssetId: normalizeText(item.mainAssetId),
                 referenceAssetIds: normalizeTextList(item.referenceAssetIds),
-                description: normalizeText(item.description),
-                fixedTraits: normalizeTextList(item.fixedTraits),
-                bannedTraits: normalizeTextList(item.bannedTraits),
-                negativePrompt: normalizeText(item.negativePrompt),
+                // 텍스트 속성은 2칸(생김새·네거티브)으로 통합해 읽는다.
+                // 옛 5칸 데이터도 여기서 합쳐지므로 사용자가 적어둔 내용은 사라지지 않는다.
+                description: mergeCharacterAppearance(item),
+                fixedTraits: [],
+                bannedTraits: [],
+                negativePrompt: mergeCharacterNegative(item),
                 defaultPromptPrefix: normalizeText(item.defaultPromptPrefix || 'Keep character identity consistent.'),
-                styleGuide: normalizeText(item.styleGuide),
+                styleGuide: '',
                 isActive: item.isActive === false ? false : true,
                 createdAt: normalizeText(item.createdAt) || new Date().toISOString(),
                 updatedAt: new Date().toISOString()
@@ -69,11 +104,12 @@
                 mainAssetId: pickText(ex.mainAssetId, c.mainAssetId, true),
                 referenceAssetIds: mergeTextList(ex.referenceAssetIds, c.referenceAssetIds),
                 description: pickText(ex.description, c.description, true),
-                fixedTraits: mergeTextList(ex.fixedTraits, c.fixedTraits),
-                bannedTraits: mergeTextList(ex.bannedTraits, c.bannedTraits),
+                // 옛 칸들은 normalizeBrandCharacters 단계에서 이미 위 두 칸으로 흡수됐다.
+                fixedTraits: [],
+                bannedTraits: [],
                 negativePrompt: pickText(ex.negativePrompt, c.negativePrompt, true),
                 defaultPromptPrefix: pickText(ex.defaultPromptPrefix, c.defaultPromptPrefix, true) || 'Keep character identity consistent.',
-                styleGuide: pickText(ex.styleGuide, c.styleGuide, true),
+                styleGuide: '',
                 isActive: (c.isActive === false ? false : true) && (ex.isActive === false ? false : true),
                 createdAt: normalizeText(ex.createdAt || c.createdAt) || new Date().toISOString(),
                 updatedAt: new Date().toISOString()

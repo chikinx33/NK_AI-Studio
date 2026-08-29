@@ -327,12 +327,13 @@
       }) || null;
       var referenceId = index + 1;
       var displayName = entry.displayName || normalizeText(character && character.name) || token.replace(/^@/, '');
+      // 생김새는 character.description 한 칸에 통합돼 있다(구 fixedTraits·styleGuide 흡수).
+      // 예전엔 같은 내용을 세 칸에서 끌어와 이어붙이는 바람에 180자 상한에 먼저 걸려
+      // 뒤쪽 정보가 잘려 나갔다.
       var subjectDescription = compactDescription([
         displayName,
         characterMeta && characterMeta.personality,
-        character && character.description,
-        Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
-        character && character.styleGuide
+        character && character.description
       ]);
 
       selectedSheets.forEach(function (sheet) {
@@ -761,9 +762,7 @@
       var displayName = normalizeText(character && (character.name || character.displayName) || token.replace(/^@/, '')) || token.replace(/^@/, '');
       var subjectDescription = compactDescription([
         displayName,
-        character && character.description,
-        Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
-        character && character.styleGuide
+        character && character.description
       ]);
       matched.slice(0, Math.min(refsPerCharacter, MAX_REFERENCE_IMAGES - referenceImages.length)).forEach(function (file) {
         referenceImages.push({

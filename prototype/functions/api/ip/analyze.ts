@@ -81,12 +81,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           type: "OBJECT",
           properties: {
             description: { type: "STRING" },
-            fixedTraits: { type: "ARRAY", items: { type: "STRING" } },
-            bannedTraits: { type: "ARRAY", items: { type: "STRING" } },
             negativePrompt: { type: "STRING" },
-            styleGuide: { type: "STRING" },
           },
-          required: ["description", "fixedTraits", "bannedTraits", "negativePrompt", "styleGuide"],
+          required: ["description", "negativePrompt"],
         };
       }
       const res = await fetch(generateUrl, {
@@ -126,7 +123,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const rawText = extractGeminiText(safeJson(attempt.text) || {}) || "";
     const parsedOut = safeJson(extractJsonBlock(rawText));
     const out = (parsedOut && typeof parsedOut === "object") ? parsedOut : {};
-    if (!out.description && !Array.isArray(out.fixedTraits)) {
+    if (!out.description) {
       return json({
         error: `분석 응답을 이해하지 못했어요. (모델: ${geminiModel}) ${rawText.slice(0, 200)}`,
         model: geminiModel,
@@ -140,11 +137,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       skippedForSize,
       schemaFallback,
       model: geminiModel,
+      // 2칸만 돌려준다. 옛 5칸(fixedTraits·bannedTraits·styleGuide)은
+      // 같은 내용을 나눠 적게 만들 뿐이라 없앴다 — character-traits.js 주석 참조.
       description: oneLine(out.description, 600),
-      fixedTraits: toList(out.fixedTraits, 10),
-      bannedTraits: toList(out.bannedTraits, 10),
       negativePrompt: oneLine(out.negativePrompt, 300),
-      styleGuide: oneLine(out.styleGuide, 200),
     });
   } catch (e: any) {
     return json({ error: e?.message ?? "Unknown error" }, 500);
@@ -154,7 +150,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 // 스키마를 못 쓰는 경우를 위한 지시 — 순수 JSON만 받도록 못박는다.
 const JSON_ONLY_HINT = [
   "Return ONLY a JSON object with exactly these keys:",
-  '{"description": string, "fixedTraits": string[], "bannedTraits": string[], "negativePrompt": string, "styleGuide": string}',
+  '{"description": string, "negativePrompt": string}',
   "No markdown fences, no commentary.",
 ].join("\n");
 
@@ -224,11 +220,11 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       characterName ? `The character is "${characterName}".` : "",
       "All images show the SAME character from different angles or expressions. Merge them into one consistent spec.",
       "Return JSON with these fields:",
-      "- description: 2-3 sentences on identity, silhouette, face, body proportions, costume, materials, and colors.",
-      "- fixedTraits: short phrases that must never change. Describe SHAPES POSITIVELY (e.g. 'rounded mitten-like hands with no separated fingers'), because image models handle negation poorly.",
-      "- bannedTraits: things this character design does NOT have, only when the sheets make it clearly intentional (e.g. 'no separated fingers', 'no nose'). Never guess from one angle where something is merely hidden.",
-      "- negativePrompt: comma-separated English keywords for negative prompting (e.g. 'fingers, human hands, extra limbs').",
-      "- styleGuide: rendering style in a short phrase (e.g. '3D toy-like render, soft pastel palette, clean outlines').",
+      "- description: everything that must stay the same every time this character is drawn — identity, silhouette, face, body proportions, limbs, costume, materials, colors, and the rendering style. Comma-separated phrases, most identity-defining first.",
+      "  Write shapes POSITIVELY, never as negations: say 'rounded mitten-like hands' rather than 'no fingers'. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
+      "  Include the rendering style here too (e.g. '3D toy-like render, soft pastel palette, clean outlines').",
+      "- negativePrompt: comma-separated English keywords for the negative-prompt parameter (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong.",
+      "  List only what the design clearly does NOT have. Never guess from one angle where something is merely hidden — a hand tucked behind the back is not a missing hand.",
       "Base every claim on what the images actually show. Leave a field empty rather than guessing.",
       ctx,
     ].filter(Boolean).join("\n");
@@ -238,13 +234,13 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     characterName ? `대상 캐릭터: "${characterName}".` : "",
     "여러 장이면 모두 같은 캐릭터의 다른 각도·표정입니다. 하나의 일관된 규격으로 통합하세요.",
     "다음 필드를 JSON으로 반환하세요.",
-    "- description: 정체성·실루엣·얼굴·신체 비율·의상·재질·색상을 2~3문장으로.",
-    "- fixedTraits: 절대 변하면 안 되는 특징을 짧은 구로. 형태는 반드시 긍정문으로 서술하세요(예: '둥근 벙어리장갑 형태의 손, 손가락 구분 없음'). 이미지 모델은 부정문을 약하게 처리합니다.",
-    "- bannedTraits: 이 캐릭터 설계상 '없는' 요소만. 시트에서 의도적으로 없다는 게 분명할 때만 적으세요(예: '손가락 없음', '코 없음'). 한 각도에서 단순히 안 보이는 것은 넣지 마세요.",
-    "- negativePrompt: 네거티브 프롬프트용 영어 키워드를 쉼표로(예: 'fingers, human hands, extra limbs').",
-    "- styleGuide: 렌더링 스타일을 짧은 구로(예: '3D 토이 렌더, 파스텔 색감, 깔끔한 외곽선').",
+    "- description: 이 캐릭터를 그릴 때마다 똑같이 유지돼야 하는 모든 것 — 정체성·실루엣·얼굴·신체 비율·팔다리·의상·재질·색상, 그리고 그림체까지. 쉼표로 구분한 짧은 구로 쓰고, 정체성을 가장 크게 좌우하는 것부터 적으세요.",
+    "  형태는 반드시 긍정문으로. '손가락 없음'이 아니라 '둥근 벙어리장갑 형태의 손'이라고 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
+    "  그림체도 여기에 함께 적으세요(예: '3D 토이 렌더, 파스텔 색감, 깔끔한 외곽선').",
+    "- negativePrompt: 네거티브 프롬프트 파라미터에 넣을 영어 키워드를 쉼표로(예: 'fingers, human hands, extra limbs, nose'). 부정 표현은 오직 이 칸에만 씁니다.",
+    "  설계상 '분명히 없는' 것만 적으세요. 한 각도에서 단순히 안 보이는 것은 넣지 마세요 — 등 뒤로 가린 손은 없는 손이 아닙니다.",
     "모든 서술은 이미지에서 실제로 확인되는 것만 쓰세요. 확인 불가한 항목은 비워 두세요.",
-    "description·fixedTraits·bannedTraits·styleGuide 는 한국어로, negativePrompt 는 영어로 작성하세요.",
+    "description 은 한국어로, negativePrompt 는 영어로 작성하세요.",
     ctx,
   ].filter(Boolean).join("\n");
 }

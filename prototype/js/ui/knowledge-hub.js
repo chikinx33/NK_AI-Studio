@@ -1585,11 +1585,8 @@
             (aiFillNoticeToken === entry.token
               ? '<p class="character-props-ai-notice">' + escapeHtml(ipLibraryUiText.aiFillDone) + '</p>'
               : '') +
-            '<label class="character-props-label">캐릭터 설명<textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="외모, 성격, 특징 등을 설명합니다.">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
-            '<label class="character-props-label">고정 특성 <span class="character-props-hint">(쉼표 구분)</span><input type="text" class="character-props-input" data-char-prop="fixedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.fixedTraits) ? bChar.fixedTraits.join(', ') : bChar && bChar.fixedTraits || '') || '') + '" placeholder="예: 파란 눈, 빨간 머리" /></label>' +
-            '<label class="character-props-label">금지 특성 <span class="character-props-hint">(프롬프트 텍스트에 포함)</span><input type="text" class="character-props-input" data-char-prop="bannedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.bannedTraits) ? bChar.bannedTraits.join(', ') : bChar && bChar.bannedTraits || '') || '') + '" placeholder="예: 손가락 없음, 안경 없음" /></label>' +
-            '<label class="character-props-label">네거티브 프롬프트 <span class="character-props-hint">(이미지·영상 생성 시 자동 적용)</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="예: fingers, hands, extra limbs">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
-            '<label class="character-props-label">스타일 가이드<input type="text" class="character-props-input" data-char-prop="styleGuide" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && bChar.styleGuide) || '') + '" placeholder="예: 2D 애니메이션, 파스텔 색감" /></label>' +
+            '<label class="character-props-label">캐릭터 생김새 <span class="character-props-hint">(있는 것만 씁니다 · 없는 건 아래 칸에)</span><textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="4" placeholder="예: 파란 큐브형 몸, 둥근 모서리, 전면 일체형 얼굴, 짧은 육면체 팔, 3D 애니메이션 그림체">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
+            '<label class="character-props-label">안 나오게 할 것 <span class="character-props-hint">(영어 키워드, 쉼표 구분)</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="예: fingers, human hands, extra limbs">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
             '</div>' +
             '</details>' +
             '</section>'
@@ -1710,11 +1707,13 @@
             })
             .then(function (res) {
               // 초안만 채운다 — 영속화는 사용자가 '저장'을 눌렀을 때만.
-              if (res && res.description) syncBrandCharField(aiToken, 'description', String(res.description));
-              if (res && Array.isArray(res.fixedTraits) && res.fixedTraits.length) syncBrandCharField(aiToken, 'fixedTraits', res.fixedTraits);
-              if (res && Array.isArray(res.bannedTraits) && res.bannedTraits.length) syncBrandCharField(aiToken, 'bannedTraits', res.bannedTraits);
-              if (res && res.negativePrompt) syncBrandCharField(aiToken, 'negativePrompt', String(res.negativePrompt));
-              if (res && res.styleGuide) syncBrandCharField(aiToken, 'styleGuide', String(res.styleGuide));
+              // 서버가 옛 5필드로 답해도(캐시된 함수 등) 여기서 2칸으로 합쳐 받는다.
+              var traitsSvc = (NK.service && NK.service.characterTraits) || null;
+              var merged = traitsSvc && typeof traitsSvc.normalizeTextProps === 'function'
+                ? traitsSvc.normalizeTextProps(res || {})
+                : { description: String((res && res.description) || ''), negativePrompt: String((res && res.negativePrompt) || '') };
+              if (merged.description) syncBrandCharField(aiToken, 'description', merged.description);
+              if (merged.negativePrompt) syncBrandCharField(aiToken, 'negativePrompt', merged.negativePrompt);
               aiFillBusyToken = '';
               aiFillNoticeToken = aiToken;
               renderCharacterManagerModal();
