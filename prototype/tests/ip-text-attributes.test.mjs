@@ -218,6 +218,37 @@ test("생각 시간은 스키마 시도에만 끄고, 폴백에는 넣지 않는
   assert.ok(schemaBlock.includes("thinkingConfig"), "thinkingConfig 는 useSchema 분기 안에 있어야 합니다");
 });
 
+test("모든 외부 호출에 시간 제한이 있다 (하나라도 멈추면 CF 502 가 된다)", () => {
+  const src = analyze();
+  // 함수가 응답을 못 만들면 우리 JSON 이 아니라 Cloudflare 502 페이지가 그대로 뜬다.
+  // 그래서 밖으로 나가는 호출은 전부 시간 제한을 걸어 둔다.
+  assert.match(src, /function withTimeout<T>/);
+  assert.ok(src.includes("await withTimeout("), "토큰 발급에 시간 제한이 있어야 합니다");
+  assert.ok(src.includes("\"gcs_token\""), "토큰 단계 이름이 있어야 합니다");
+  assert.match(src, /withTimeout\(fetch\(resolvedUrl, \{ headers \}\), 8000, "sheet_fetch"\)/);
+  assert.match(src, /signal: controller\.signal/);
+});
+
+test("GCS 토큰은 원격 시트가 있을 때만 발급한다", () => {
+  const src = analyze();
+  // data: URL 만 있을 땐 RS256 서명 + OAuth 왕복이 통째로 낭비이자 멈춤 위험이다.
+  assert.match(src, /const needsGcsToken = imageUrls\.some\(\(u\) => !\/\^data:\/i\.test\(u\)\)/);
+  assert.match(src, /if \(needsGcsToken\) \{/);
+  // 자격증명이 없어도 data: URL 만이면 진행돼야 한다.
+  const guard = src.indexOf("Missing GOOGLE_CLIENT_EMAIL");
+  const branch = src.indexOf("if (needsGcsToken) {");
+  assert.ok(branch > 0 && guard > branch, "자격증명 검사는 needsGcsToken 안에 있어야 합니다");
+});
+
+test("예산 타이머는 핸들러 맨 앞에서 시작한다", () => {
+  const src = analyze();
+  // 예전엔 Gemini 호출 직전에 시작해서, 토큰·이미지 단계에서 시간을 다 써도
+  // 예산이 남은 것처럼 보였다. 그래서 예산이 걸려도 502 가 났다.
+  const timer = src.indexOf("const startedAt = Date.now()");
+  const tryStart = src.indexOf("  try {");
+  assert.ok(timer > 0 && timer < tryStart, "startedAt 은 try 블록보다 앞이어야 합니다");
+});
+
 test("시트가 커도 요청 크기를 넘기지 않는다", () => {
   const src = analyze();
   assert.match(src, /const MAX_INLINE_BYTES = 6 \* 1024 \* 1024/);

@@ -35,6 +35,10 @@ export const onRequestOptions: PagesFunction = async () =>
   });
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  // 예산 타이머는 핸들러 맨 앞에서 시작한다. 예전엔 Gemini 호출 직전에 시작해서
+  // 토큰 발급·이미지 로딩에서 시간을 다 써도 예산이 남은 것처럼 보였다.
+  const startedAt = Date.now();
+  const elapsed = () => Date.now() - startedAt;
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -63,13 +67,39 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const privateKeyRaw = String(env.GOOGLE_PRIVATE_KEY || "").trim();
     const geminiModel = String(env.GEMINI_PROMPT_ANALYSIS_MODEL || env.GEMINI_TEXT_MODEL || "gemini-2.5-flash").trim();
     if (!apiKey) return json({ error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, 500);
-    if (!clientEmail || !privateKeyRaw) return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
 
-    const accessToken = await getGoogleAccessToken({
-      clientEmail,
-      privateKeyPem: privateKeyRaw,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    });
+    /**
+     * GCS 접근 토큰은 gs:// · storage.googleapis.com 시트를 받아올 때만 필요하다.
+     *
+     * 시트는 대부분 업로드 원본 그대로 data: URL 로 보관되는데, 그때도 매번
+     * RS256 서명 + oauth2.googleapis.com 왕복을 하고 있었다. 이 호출에는 타임아웃이
+     * 없어서, 여기서 멈추면 함수가 응답을 못 만들고 Cloudflare 가 502 를 대신 낸다.
+     * 필요할 때만, 그것도 시간 제한을 걸고 부른다.
+     */
+    const needsGcsToken = imageUrls.some((u) => !/^data:/i.test(u));
+    let accessToken = "";
+    if (needsGcsToken) {
+      if (!clientEmail || !privateKeyRaw) {
+        return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
+      }
+      try {
+        accessToken = await withTimeout(
+          getGoogleAccessToken({
+            clientEmail,
+            privateKeyPem: privateKeyRaw,
+            scope: "https://www.googleapis.com/auth/cloud-platform",
+          }),
+          8000,
+          "gcs_token"
+        );
+      } catch (err: any) {
+        return json({
+          error: `시트 저장소 인증에 실패했어요: ${err?.message || err}`,
+          stage: "gcs_token",
+          elapsedMs: elapsed(),
+        }, 502);
+      }
+    }
     const authHeader = String(request.headers.get("Authorization") || "").trim();
 
     const parts: any[] = [{ text: buildInstruction(lang, characterName, brandContext) }];
@@ -90,8 +120,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!usable) return json({ error: "시트 이미지를 읽지 못했어요(경로 확인 필요)." }, 400);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
-    const startedAt = Date.now();
-    const elapsed = () => Date.now() - startedAt;
     // Cloudflare 가 요청을 끊으면 우리 JSON 이 아니라 502 페이지가 그대로 화면에 뜬다.
     // 그래서 Gemini 호출에 우리 예산을 걸고, 초과하면 우리가 먼저 사유를 붙여 응답한다.
     // 20초. Cloudflare 가 끊기 전에 우리가 먼저 끝내야 사유를 화면에 띄울 수 있다.
@@ -364,7 +392,8 @@ async function resolveImageBytes(
         headers.Authorization = authHeader;
       }
     } catch (_) {}
-    const res = await fetch(resolvedUrl, { headers });
+    // 원격 시트를 받아오는 길도 막히면 함수가 응답을 못 만든다(→ CF 502). 시간 제한을 건다.
+    const res = await withTimeout(fetch(resolvedUrl, { headers }), 8000, "sheet_fetch");
     if (!res.ok) {
       throw new Error(`reference_image_fetch_failed (${res.status})`);
     }
@@ -376,6 +405,17 @@ async function resolveImageBytes(
   } catch {
     return null;
   }
+}
+
+/** 약속에 시간 제한을 건다. 초과하면 어느 단계였는지 이름을 붙여 던진다. */
+function withTimeout<T>(promise: Promise<T>, ms: number, stage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${stage} timeout (${ms}ms)`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
 }
 
 async function getGoogleAccessToken(opts: {
