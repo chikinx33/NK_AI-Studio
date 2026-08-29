@@ -73,6 +73,22 @@ const TYPE_BADGE: Record<string, { t: string; c: string }> = {
  * "이 지식이 언제 들어온 건지" 를 못 보면, 오래된 규칙이 지금 결과를 흔들고 있어도
  * 사람이 알아채지 못한다. 목록은 짧게(YYYY-MM-DD), 정확한 시각은 title 로 보여준다.
  */
+/**
+ * 에이전트가 넘긴 문장으로 지식 항목을 찾는다.
+ *
+ * 문장 전체를 그대로 옮기지 못하는 경우가 많아(따옴표·말줄임·요약) 정확 일치 → 부분 일치
+ * → 역방향 부분 일치 순으로 넓혀 가며 찾는다.
+ */
+function matchKnowledge(items: KnowledgeItem[], want: string): KnowledgeItem | undefined {
+  const needle = want.trim().toLowerCase();
+  if (!needle) return undefined;
+  return (
+    items.find((it) => it.text === want) ||
+    items.find((it) => it.text.toLowerCase().includes(needle)) ||
+    items.find((it) => needle.includes(it.text.toLowerCase()))
+  );
+}
+
 function learnedDate(iso?: string): string {
   const t = Date.parse(iso ?? "");
   if (!Number.isFinite(t)) return "";
@@ -102,6 +118,14 @@ export default function Knowledge({
   filterNonce?: number;
 } = {}) {
   const [items, setItems] = useState<KnowledgeItem[]>([]);
+  /*
+   * 아직 목록이 없을 때 도착한 "이 지식을 지목해줘" 요청을 담아 둔다.
+   *
+   * 이 화면은 목록을 비동기로 받는다. 에이전트가 화면을 열면서 곧바로 지목하면
+   * 그 순간 items 는 비어 있어 찾을 대상이 없고, UI 액션은 한 번만 오므로
+   * 다시 시도할 기회도 없다. 그래서 원문을 보관했다가 목록이 도착하면 처리한다.
+   */
+  const [pendingText, setPendingText] = useState<string | null>(null);
   const [skills, setSkills] = useState<AgentSkill[]>([]);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -129,6 +153,9 @@ export default function Knowledge({
       if (name) {
         setFilter("스킬");
         setOpenSkill(name);
+        // 지식과 똑같이 그 행을 짚어 준다. 목록이 길면 열기만 해선 어디인지 알 수 없다.
+        setHighlight(name);
+        setSelected(name);
       }
       return;
     }
@@ -144,15 +171,16 @@ export default function Knowledge({
      */
     const wantText = actionString(action, "text");
     if (wantText) {
-      const needle = wantText.trim().toLowerCase();
-      const hit =
-        items.find((it) => it.text === wantText) ||
-        items.find((it) => it.text.toLowerCase().includes(needle)) ||
-        items.find((it) => needle.includes(it.text.toLowerCase()));
+      const hit = matchKnowledge(items, wantText);
       if (hit) {
         if (!nextFilter) setFilter(null);
         setHighlight(hit.text);
         setSelected(hit.text);
+      } else {
+        // 목록이 아직 안 왔거나 방금 추가돼 반영 전이다. 도착하면 그때 짚는다.
+        setPendingText(wantText);
+        // 화면이 이미 열려 있으면 목록이 저절로 바뀌지 않는다. 직접 다시 받아온다.
+        void refresh();
       }
     }
     const nextSort = actionString(action, "sort");
@@ -216,6 +244,21 @@ export default function Knowledge({
     setTidyMsg(`📋 ${lines.length}개를 복사했어요 — 채팅에 붙여넣고 수정할 내용을 알려주세요`);
     setTimeout(() => setTidyMsg(null), 4000);
   }
+
+  /*
+   * 보관해 둔 지목 요청을 목록이 도착한 뒤 처리한다.
+   * 끝내 못 찾으면(삭제됐거나 문장이 너무 다르면) 조용히 버린다 — 엉뚱한 걸
+   * 하이라이트하는 것보다 아무것도 안 하는 편이 낫다.
+   */
+  useEffect(() => {
+    if (!pendingText || !items.length) return;
+    const hit = matchKnowledge(items, pendingText);
+    setPendingText(null);
+    if (!hit) return;
+    setFilter(null); // 필터에 가려지면 짚어도 안 보인다
+    setHighlight(hit.text);
+    setSelected(hit.text);
+  }, [items, pendingText]);
 
   async function refresh() {
     const [k, s] = await Promise.all([

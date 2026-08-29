@@ -1,0 +1,35 @@
+{
+  "formId": "quote-standard",
+  "name": "견적서 (표준)",
+  "category": "영업",
+  "version": 1,
+  "dataSchema": "quote/v1",
+  "calculator": "quote-calc-v1",
+  "templates": {
+    "docx": "template.docx",
+    "hwpx": null,
+    "xlsx": null
+  },
+  "pdfFrom": "docx",
+  "outputName": "견적서_{client.company}_{issuedAt}",
+  "repeaters": {
+    "row": {
+      "source": "totals.rows",
+      "maxRows": 30
+    },
+    "sum": {
+      "source": "totals.summaryRows",
+      "maxRows": 6
+    },
+    "info": {
+      "source": "totals.infoRows",
+      "maxRows": 8
+    },
+    "term": {
+      "source": "totals.termRows",
+      "maxRows": 8
+    }
+  },
+  "description": "거래처 제출용 표준 견적서. 부가세 별도/포함/면세, 구간별 그룹 소계, 실비 구분, 입금계좌 표기를 지원합니다.",
+  "sourceNote": "견적서는 법정 서식이 아니며, 항목 구성은 국내 거래 관행(공급자 업태·종목 기재, 합계금액 한글+숫자 병기, 특이사항란의 유효기간·납기·결제조건·입금계좌)을 조사해 구성했습니다. HWPX(한글) 출력은 2026-08-12 폐기 — templates.hwpx 를 null 로 둔다."
+}

@@ -18,3 +18,5 @@ Working rules for this repository:
 - After any code change, update the app version as required by the project rules.
 - After coding work, commit and push the latest testable state unless a concrete blocker prevents it.
 - Prefer understanding the root cause of issues before applying localized fixes.
+
+## Imported Claude Cowork project instructions

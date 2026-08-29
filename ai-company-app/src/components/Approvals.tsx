@@ -129,8 +129,18 @@ export default function Approvals({
   // 신규 지식이 들어온 분류 칩을 강조. 해제 조건 ① 다음 신규 지식(새 강조로 교체)
   // ② 다른 페이지로 이동(centerView 변경 · 새로고침 — 메모리에만 두므로 자동) ③ 그 칩을 직접 클릭.
   const [freshTypes, setFreshTypes] = useState<Set<KnowKey>>(new Set());
+  /*
+   * 분류별로 '새로 들어온 항목 자체'를 기억한다.
+   *
+   * 개수만 세면 어느 분류가 늘었는지는 알아도 어느 항목이 새것인지는 모른다. 그래서 칩을
+   * 눌러 화면을 열어도 수십 개 중에서 사람이 눈으로 찾아야 했다. 직전 목록과 비교해
+   * 실제로 새로 생긴 문장(스킬은 이름)을 담아 두고, 칩을 누를 때 그걸 지목한다.
+   */
+  const [freshItems, setFreshItems] = useState<Partial<Record<KnowKey, string>>>({});
   // 분류별 개수 스냅샷. 첫 조회는 기준선만 잡고 강조하지 않는다(기존 지식이 새 것으로 보이면 안 됨).
   const prevCountsRef = useRef<Record<KnowKey, number> | null>(null);
+  // 직전에 본 항목들(분류별 텍스트 집합). 무엇이 새로 생겼는지 가려내는 기준.
+  const prevTextsRef = useRef<Record<KnowKey, Set<string>> | null>(null);
 
   // 버튼 클릭 즉시 잠금 → 항목이 pending에서 사라지면 잠금 자동 해제(refresh에서 정리)
   async function act(id: string, action: "approve" | "reject") {
@@ -186,12 +196,31 @@ export default function Approvals({
       결정: know.filter((k: KnowledgeItem) => (k.type ?? "사실") === "결정").length,
       스킬: sk.length,
     };
+    // 분류별 현재 항목(지식은 문장, 스킬은 이름)
+    const texts: Record<KnowKey, Set<string>> = {
+      원칙: new Set(), 사실: new Set(), 결정: new Set(), 스킬: new Set(),
+    };
+    for (const k of know) texts[(k.type ?? "사실") as KnowKey]?.add(k.text);
+    for (const item of sk) texts["스킬"].add(item.name);
+
     const prevCounts = prevCountsRef.current;
+    const prevTexts = prevTextsRef.current;
     prevCountsRef.current = counts;
+    prevTextsRef.current = texts;
     if (prevCounts) {
       const grown = KNOW_KEYS.filter((k) => counts[k] > prevCounts[k]);
       // 새로 늘어난 게 있을 때만 교체 → 이전 강조는 이 시점에 함께 해제된다.
-      if (grown.length) setFreshTypes(new Set(grown));
+      if (grown.length) {
+        setFreshTypes(new Set(grown));
+        // 늘어난 분류마다 '이번에 새로 생긴' 항목 하나를 집어 둔다(칩 클릭 시 지목용).
+        const picked: Partial<Record<KnowKey, string>> = {};
+        for (const k of grown) {
+          const before = prevTexts?.[k] ?? new Set<string>();
+          const added = [...texts[k]].filter((t) => !before.has(t));
+          if (added.length) picked[k] = added[0];
+        }
+        setFreshItems(picked);
+      }
     }
     try {
       const s = localStorage.getItem("nk_project_sidebar_hidden");
@@ -227,6 +256,7 @@ export default function Approvals({
 
   // 칩 클릭: 그 분류의 강조를 해제하고 지식 페이지로 이동
   function pickCategory(key: KnowKey) {
+    const target = freshItems[key];
     setFreshTypes((prev) => {
       if (!prev.has(key)) return prev;
       const next = new Set(prev);
@@ -234,6 +264,19 @@ export default function Approvals({
       return next;
     });
     onPickCategory?.(key);
+    /*
+     * 화면 전환만으로는 어느 항목이 새것인지 알 수 없다. 방금 들어온 항목을 지목해
+     * 하이라이트·스크롤까지 시킨다. 지식과 스킬은 화면에서 다른 액션으로 처리된다.
+     * 전환이 끝난 뒤 도착해야 하므로 다음 프레임에 보낸다.
+     */
+    if (!target) return;
+    setTimeout(() => {
+      dispatchUiAction(
+        key === "스킬"
+          ? { action: "skill.view", name: target }
+          : { action: "knowledge.view", filter: key, text: target }
+      );
+    }, 0);
   }
 
   useUiAction((action) => {

@@ -23,7 +23,9 @@ test("신규 지식이 들어온 분류 칩만 강조한다", () => {
 test("다음 신규 지식이 추가되면 이전 강조는 교체되어 사라진다", () => {
   const src = approvals();
   // 누적(add)이 아니라 새 Set 으로 교체해야 이전 강조가 해제된다
-  assert.match(src, /if \(grown\.length\) setFreshTypes\(new Set\(grown\)\)/);
+  assert.match(src, /const grown = KNOW_KEYS\.filter\(\(k\) => counts\[k\] > prevCounts\[k\]\);/);
+  // 새로 늘어난 게 있을 때만 강조를 교체한다(수정·정리는 강조하지 않는다).
+  assert.match(src, /if \(grown\.length\) \{\s*[\r\n]+\s*setFreshTypes\(new Set\(grown\)\);/);
 });
 
 test("다른 페이지로 이동하면 강조가 해제된다", () => {
