@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   getKnowledge,
   addKnowledge,
@@ -32,6 +32,56 @@ function CopyIcon({ className }: { className?: string }) {
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
     </svg>
   );
+}
+
+// 🔍 검색 — Lucide search
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </svg>
+  );
+}
+
+/**
+ * 검색어와 겹치는 부분을 노랗게 칠한다.
+ *
+ * 지식 문장은 길다. 목록만 좁혀 주고 어디가 걸렸는지 안 보여주면 사람이 다시 눈으로 훑어야 한다.
+ * 검색어가 없으면 원문 문자열을 그대로 돌려준다(불필요한 노드 분해를 피한다).
+ */
+function highlightText(text: string, needle: string): ReactNode {
+  if (!needle) return text;
+  const lower = text.toLowerCase();
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+  while (cursor <= text.length) {
+    const hit = lower.indexOf(needle, cursor);
+    if (hit < 0) {
+      parts.push(text.slice(cursor));
+      break;
+    }
+    if (hit > cursor) parts.push(text.slice(cursor, hit));
+    parts.push(
+      <mark key={key++} className="rounded bg-amber-400/25 px-0.5 text-amber-200">
+        {text.slice(hit, hit + needle.length)}
+      </mark>
+    );
+    cursor = hit + needle.length;
+  }
+  return <>{parts}</>;
 }
 
 function BrainIcon({ className }: { className?: string }) {
@@ -129,6 +179,8 @@ export default function Knowledge({
   const [skills, setSkills] = useState<AgentSkill[]>([]);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  // 검색어 — 유형 필터와 함께 걸린다(필터로 좁힌 뒤 그 안에서 검색).
+  const [query, setQuery] = useState("");
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null);
   const [filter, setFilter] = useState<TypeKey | null>(null);
   // 생성 시각(=학습 시간) 기준 정렬. desc=최신 순(기본), asc=오래된 순
@@ -237,7 +289,7 @@ export default function Knowledge({
   function copyVisibleList() {
     const lines = [
       ...(filter === "스킬" ? [] : ordered.map((it) => `- [${TYPE_BADGE[it.type ?? "사실"].t}] ${it.text}`)),
-      ...(showSkills ? skills.map((s) => `- [스킬] ${s.name}: ${s.description}`) : []),
+      ...(showSkills ? visibleSkills.map((s) => `- [스킬] ${s.name}: ${s.description}`) : []),
     ];
     if (!lines.length) return;
     void copyToClipboard(lines.join("\n"), "__list__");
@@ -339,8 +391,22 @@ export default function Knowledge({
   }, [selected, editing]);
 
   const learned = items.filter((i) => i.source !== "기반");
+  /*
+   * 검색: 문장뿐 아니라 유형 이름(규칙·사실·결정)과 출처(기반·수동·학습)까지 훑는다.
+   * "결정" 처럼 분류 이름을 쳐도 걸리게 해서, 칩을 못 찾은 사람도 같은 결과에 도착한다.
+   */
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (it: KnowledgeItem) =>
+    !q ||
+    it.text.toLowerCase().includes(q) ||
+    (TYPE_BADGE[it.type ?? "사실"]?.t ?? "").toLowerCase().includes(q) ||
+    (it.source ?? "").toLowerCase().includes(q);
+  const searched = items.filter(matchesQuery);
+  const visibleSkills = skills.filter(
+    (sk) => !q || [sk.name, sk.description, sk.category ?? ""].some((v) => (v ?? "").toLowerCase().includes(q))
+  );
   // 지식 항목: 전체(null)·규칙·사실·결정에서 표시. "스킬"은 지식 type이 아니므로 자동 제외.
-  const visible = items.filter((it) => filter === null || filter === "스킬" ? filter === null : (it.type ?? "사실") === filter);
+  const visible = searched.filter((it) => filter === null || filter === "스킬" ? filter === null : (it.type ?? "사실") === filter);
   // API 반환 순서에 기대지 않고 생성 시각을 직접 비교한다. 구형 데이터처럼 시각이 없거나 같으면
   // 서버의 최신순 원본 순서를 보조 기준으로 사용해 정렬 토글도 예측 가능하게 유지한다.
   const ordered = visible
@@ -353,6 +419,8 @@ export default function Knowledge({
     .map(({ item }) => item);
   // 스킬 목록을 함께 보일지: 전체(null) 또는 스킬 분류
   const showSkills = filter === null || filter === "스킬";
+  // 지금 화면에 실제로 그려지는 개수 — 검색 결과 표시와 빈 안내가 같은 기준을 쓰게 한다.
+  const matchCount = (filter === "스킬" ? 0 : ordered.length) + (showSkills ? visibleSkills.length : 0);
 
   // 스킬 행: 클릭하면 상세 팝업. 안에 복사 버튼을 두므로 button 중첩을 피해 div + role=button 으로 둔다.
   const renderSkillItem = (s: AgentSkill) => {
@@ -384,10 +452,10 @@ export default function Knowledge({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1 font-medium text-gray-200">
             {s.pinned && <span className="text-amber-400">📌</span>}
-            <span className="truncate">{s.name}</span>
+            <span className="truncate">{highlightText(s.name, q)}</span>
             {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
           </span>
-          <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
+          <span className="mt-0.5 block text-[12px] text-gray-500">{highlightText(s.description, q)}</span>
         </span>
         {/* 배지와 학습 날짜를 세로로 묶는다 — 지식 항목과 같은 자리, 같은 모양. */}
         <span className="flex shrink-0 flex-col items-end gap-0.5">
@@ -425,19 +493,60 @@ export default function Knowledge({
       {/* 고정 헤더: 제목 · 필터 · 정렬 · 직접 추가 (스크롤 안 됨) */}
       <div className="shrink-0 px-6 pt-4">
         <div className="mx-auto w-full max-w-2xl space-y-3">
-          {/* 헤더 */}
-          <div>
-            <h2 className="text-lg font-bold text-gray-100">회사 지식 ({items.length + skills.length})</h2>
-            <p className="mt-0.5 text-xs text-gray-500">
-              대화로 학습한 것 {learned.length + skills.length}개 · 기반 {items.length - learned.length}개. 쓸수록 늘어납니다.
-            </p>
-            {tidyMsg && <p className="mt-1 text-xs text-amber-400">{tidyMsg}</p>}
+          {/* 헤더 — 제목·설명 묶음(좌)과 검색(우)을 같은 행에 둔다. 행을 새로 만들지 않는다. */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-gray-100">회사 지식 ({items.length + skills.length})</h2>
+              <p className="mt-0.5 text-xs text-gray-500">
+                대화로 학습한 것 {learned.length + skills.length}개 · 기반 {items.length - learned.length}개. 쓸수록 늘어납니다.
+                {q && (
+                  <span className="text-emerald-400">
+                    {" "}· ‘{query.trim()}’ 검색 결과 {matchCount}개
+                  </span>
+                )}
+              </p>
+              {tidyMsg && <p className="mt-1 text-xs text-amber-400">{tidyMsg}</p>}
+            </div>
+            {/* 검색 — 지금 고른 분류 안에서 문장·유형·출처를 훑는다. Esc 로 지운다. */}
+            <div className="relative w-44 shrink-0 sm:w-56">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+              <input
+                spellCheck={false}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.stopPropagation();
+                    setQuery("");
+                  }
+                }}
+                placeholder="지식 검색…"
+                aria-label="지식 검색"
+                className="w-full rounded-lg border border-edge bg-panel py-1.5 pl-8 pr-7 text-xs text-gray-200 outline-none transition placeholder:text-gray-600 focus:border-emerald-600"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  title="검색어 지우기"
+                  aria-label="검색어 지우기"
+                  className="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-gray-500 transition hover:bg-edge hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 유형 필터 + 정렬 토글 */}
           <div className="flex flex-wrap items-center gap-1">
             {([null, "원칙", "사실", "결정", "스킬"] as (TypeKey | null)[]).map((t) => {
-              const n = t === "스킬" ? skills.length : t === null ? items.length + skills.length : items.filter((i) => (i.type ?? "사실") === t).length;
+              // 검색 중이면 칩 숫자도 검색 결과 기준 — 숫자와 목록이 어긋나지 않게.
+              const n =
+                t === "스킬"
+                  ? visibleSkills.length
+                  : t === null
+                    ? searched.length + visibleSkills.length
+                    : searched.filter((i) => (i.type ?? "사실") === t).length;
               const active = filter === t;
               const badge = t ? TYPE_BADGE[t] : null;
               // 오른쪽 사이드바 '회사 지식' 칩과 동일하게 항상 색상 표시(규칙=보라·사실=초록·결정=주황),
@@ -552,7 +661,7 @@ export default function Knowledge({
                     title="클릭해서 수정 · Enter 저장 · Esc 취소"
                     onClick={() => startEdit(it)}
                   >
-                    {it.text}
+                    {highlightText(it.text, q)}
                   </span>
                 )}
                 {/* 유형·출처 배지와 학습 날짜를 세로로 묶는다 — 언제 배운 지식인지 바로 보이게. */}
@@ -606,13 +715,15 @@ export default function Knowledge({
               </div>
               ))}
             {/* 스킬 항목 (전체·스킬 분류일 때 함께 표시) */}
-            {showSkills && skills.map(renderSkillItem)}
+            {showSkills && visibleSkills.map(renderSkillItem)}
             {/* 빈 안내 */}
-            {ordered.length === 0 && (!showSkills || skills.length === 0) && (
+            {matchCount === 0 && (
               <div className="text-sm text-gray-500">
-                {filter === "스킬"
-                  ? "아직 익힌 스킬이 없어요. 복잡한 작업을 하면 에이전트가 스스로 절차를 스킬로 저장해요."
-                  : "아직 지식이 없어요."}
+                {q
+                  ? `‘${query.trim()}’ 에 맞는 지식이 없어요. 다른 단어로 찾아보세요.`
+                  : filter === "스킬"
+                    ? "아직 익힌 스킬이 없어요. 복잡한 작업을 하면 에이전트가 스스로 절차를 스킬로 저장해요."
+                    : "아직 지식이 없어요."}
               </div>
             )}
           </div>
