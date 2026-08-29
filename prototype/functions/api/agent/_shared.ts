@@ -1203,7 +1203,34 @@ export interface ToolDef {
   // true면 실행이 오래 걸리는(수분) 도구 — 승인(review.ts) 시 응답을 블로킹하지 않고 waitUntil 백그라운드로 실행.
   // Results 패널(4초 폴링)이 완결을 반영한다. (예: scene_video)
   longRunning?: boolean;
+  /**
+   * 실행 전 점검. 문자열(사유)을 돌려주면 그 실행을 '조용히' 건너뛴다.
+   *
+   * 모델이 부를 수 없는 도구를 부르는 경우가 있다(예: 첨부 이미지를 imagen_describe 로
+   * 다시 분석하려는데 첨부는 URL 이 없다). 그대로 두면 "🔎 조회 중" → "❌ 실패" 가
+   * 사용자에게 노출된다. 답변은 이미 정상적으로 끝났는데 실패만 남아 흐름이 망가진다.
+   * 그런 호출은 시작 자체를 하지 않는다.
+   */
+  precheck?: (input: any) => string | null;
   run: (input: any, ctx: ToolContext) => Promise<any>;
+}
+
+/**
+ * 도구에 넘길 수 있는 '진짜' 이미지 참조인가.
+ *
+ * 첨부 이미지는 멀티모달 블록으로 모델에게 직접 보여줄 뿐 URL 이 없다. 그래서 모델이
+ * imagen_describe 를 부르려 하면 "이미지URL" 같은 자리표시자나 지어낸 주소를 넣게 된다.
+ * 그건 서버에서 image_reference_unavailable 로 떨어진다 — 부르기 전에 걸러야 한다.
+ */
+export function isUsableImageRef(value: any): boolean {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  if (/[<>{}]/.test(raw)) return false;                  // <이미지URL> 같은 자리표시자
+  if (/[가-힣]/.test(raw)) return false;                  // "이미지URL", "첨부이미지" 등
+  if (/^(data:image\/|gs:\/\/)/i.test(raw)) return true;
+  if (/^\/(?!\/)/.test(raw)) return true;                 // 같은 오리진 경로(/api/media/proxy?...)
+  if (!/^https?:\/\//i.test(raw)) return false;
+  return !/(example\.com|placeholder|your-image|image-url|dummy)/i.test(raw);
 }
 
 /** 이 직원이 해당 도구를 쓸 수 있는지 — 주 담당(agentId) 또는 공유 목록(agentIds)에 포함. */
@@ -4155,7 +4182,15 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 캐릭터/환경 자산 등록: 픽셀(디자인) 주담당 + 코어 공유. 쓰기 → 승인 게이트.
   brand_asset: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runBrandAssetTool },
   // 픽셀(디자인): 이미지 역분석·업스케일·립싱크·자산 라이브러리.
-  imagen_describe: { agentId: "pixel", kind: "read", synthesize: true, run: runImagenDescribeTool },
+  // precheck: 첨부 이미지는 URL 이 없어 이 도구로 다시 분석할 수 없다. 모델이 자리표시자를
+  // 넣어 부르는 경우가 잦아, 시작 전에 걸러 "조회 중 → 실패" 노이즈를 없앤다.
+  imagen_describe: {
+    agentId: "pixel", kind: "read", synthesize: true, run: runImagenDescribeTool,
+    precheck: (input) =>
+      isUsableImageRef(input?.imageUrl || input?.url || input?.image)
+        ? null
+        : "첨부 이미지는 이미 눈으로 보고 답했으므로 다시 조회하지 않음(URL 없음)",
+  },
   upscale: { agentId: "pixel", kind: "external", run: runUpscaleTool },
   lipsync: { agentId: "pixel", kind: "external", run: runLipsyncTool },
   image_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runImageLibraryTool },

@@ -141,6 +141,7 @@ interface BuildSystemOpts {
   companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[]; collapsed?: boolean; order?: number }[]; // 현재 프로젝트 목록
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
+  hasAttachments?: boolean; // 이번 턴에 사용자가 이미지·PDF를 첨부했는가(모델이 직접 보고 있음)
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -218,7 +219,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     brand_get: `[[RUN: brand_get | {"brandId": "elidus"}]]  → 브랜드 허브에서 그 브랜드 정의(보이스·톤·스토리·캐릭터·키워드·금지표현 등)를 읽어온다. 온브랜드 콘텐츠·카피를 만들기 전에 먼저 조회해 근거로 삼는다.`,
     brand_save: `[[RUN: brand_save | {"brandId": "elidus", "brand": {"brandTitle": "ELIDUS", "brandVoice": "…", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"]}}]]  → 브랜드 허브에 브랜드를 생성/수정. brand 객체에 채울 필드만 넣으면 기존 정의에 병합된다(부분 수정 안전). ⚠️ 쓰기라 사람 승인 후 반영(승인 패널). "엘리더스를 브랜드 허브에 생성해줘"에 사용.`,
     brand_asset: `[[RUN: brand_asset | {"brandId": "elidus", "name": "전략가", "kind": "character", "objectName": "생성이미지의 objectName(권장)"}]]  또는 {"imageUrl": "이미지URL"}  → 방금 생성한 이미지를 그 브랜드의 캐릭터(kind:character) 또는 환경(kind:environment) 자산으로 등록. objectName을 주면 영속 저장(권장). ⚠️ 쓰기라 사람 승인 후 반영. "이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
-    imagen_describe: `[[RUN: imagen_describe | {"imageUrl": "이미지URL", "lang": "ko"}]]  → 이미지를 분석해 재현용 프롬프트/설명을 역생성. 레퍼런스 이미지의 스타일을 프롬프트로 옮길 때 사용.`,
+    imagen_describe: `[[RUN: imagen_describe | {"imageUrl": "https://... 또는 gs://... 실제 주소", "lang": "ko"}]]  → 저장된 이미지를 분석해 재현용 프롬프트를 역생성. ⚠️ 실제 주소가 있는 이미지에만 사용. 사용자가 방금 첨부한 이미지는 이미 눈에 보이므로 이 도구를 쓰지 말고 바로 답할 것(첨부에는 URL 이 없어 반드시 실패한다).`,
     upscale: `[[RUN: upscale | {"imageUrl": "이미지URL"}]]  또는 {"objectName": "GCS objectName"}  → 이미지를 2배 고해상도로 업스케일. 발행/썸네일 전 품질 향상에 사용.`,
     lipsync: `[[RUN: lipsync | {"videoUrl": "영상URL", "mode": "text2video", "text": "대사(최대 120자)", "voiceLanguage": "ko"}]]  → 기존 영상 인물의 입모양을 대사/오디오에 맞춰 립싱크(수분 소요). audio2video면 {"mode":"audio2video","audioUrl":"오디오URL"}.`,
     image_library: `[[RUN: image_library | {"projectId": "ai-company"}]]  → 그 프로젝트에서 **생성해 저장한 결과 이미지** 목록만 조회. ⚠️ 브랜드 허브에 등록된 캐릭터 시트·IP 자산은 여기에 없다 — "우리 캐릭터/자산 확인해줘"는 ip_library를 써야 한다(여기서 비었다고 자산이 없다고 결론짓지 말 것).`,
@@ -304,6 +305,27 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => toolOwnedBy(t, agentId));
   const toolsRunBlock = myTools.length > 0
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
+    : "";
+
+  /**
+   * 첨부 안내.
+   *
+   * 첨부는 멀티모달 블록으로 이미 모델에게 주어진다. 그런데 그 사실을 안 알려주면
+   * 모델이 "이미지를 분석해야 하니 도구를 불러야겠다" 며 imagen_describe 를 부르고,
+   * 첨부에는 URL 이 없어 자리표시자를 넣게 된다 → 답은 멀쩡히 해놓고 뒤이어
+   * "조회 실패" 만 남는 흐름이 됐다. 그래서 '이미 보고 있다'를 명시한다.
+   */
+  const attachmentBlock = opts.hasAttachments
+    ? `
+
+## 📎 이번 대화의 첨부
+사용자가 올린 이미지·문서는 **지금 당신에게 그대로 보이고 있습니다.** 보고 바로 답하세요.
+` +
+      `- 첨부를 다시 분석하려고 imagen_describe 같은 조회 도구를 부르지 마세요. 첨부에는 URL 이 없어 반드시 실패합니다.
+` +
+      `- 답을 이미 냈다면 그걸로 끝입니다. 확인차 도구를 덧붙이지 마세요.
+` +
+      `- 이미지 조회 도구는 라이브러리·저장소에 있는 '실제 주소가 있는' 이미지에만 씁니다.`
     : "";
 
   // 현재 날짜·시각 — 사용자(브라우저) 로컬 기준. 미주입 시 LLM이 "오늘"을 몰라 캘린더를 엉뚱한 날짜로 만든다.
@@ -474,7 +496,7 @@ ${persona}${knowledgeBlock}
 이 마커를 쓰면 실제로 해당 작업이 취소됩니다. 마커 없이 "취소했어요"라고 말하지 마세요(거짓 보고 금지).
 
 ## ⛔ 미루지 말 것
-- 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}${toolsRunBlock}`;
+- 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${attachmentBlock}${delegation}${toolsRunBlock}`;
 }
 
 // ── Claude 호출 (NK scenario.js 패턴 재사용) ────────────────────────────────
@@ -785,6 +807,8 @@ export async function speak(
       ? opts.modelSelections
       : await getAgentModelSelections(opts.sql, opts.userId).catch(() => ({}));
   const modelChoice = resolveAgentModel(agentId, selections, opts.model, opts.modelHint);
+  // 첨부가 있으면 시스템 프롬프트가 '이미 보고 있다'를 알려준다(중복 조회 방지).
+  const hasAttachments = (opts.images || []).some((im) => im && im.base64);
 
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
@@ -814,7 +838,7 @@ export async function speak(
   if (companyProjects === undefined && opts.sql && opts.userId) {
     companyProjects = await listProjects(opts.sql, opts.userId).catch(() => []);
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects, hasAttachments });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
@@ -1390,6 +1414,16 @@ export async function runGroupChat(
       if (!tool || !toolOwnedBy(tool, agentId)) continue; // 본인(또는 공유) 도구만
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
       const meta = getAgent(agentId)!;
+
+      // 실행 전 점검. 부를 수 없는 호출은 '조회 중' 안내조차 내지 않고 조용히 건너뛴다.
+      // 답변이 이미 끝났는데 뒤이어 ❌ 실패만 남는 흐름을 없애려는 것이다.
+      if (typeof tool.precheck === "function") {
+        const skip = tool.precheck(parsedInput);
+        if (skip) {
+          console.log(`tool_precheck_skip: ${r.tool} — ${skip}`);
+          continue;
+        }
+      }
 
       // 읽기 전용 조회: 검수 없이 즉시 실행. synthesize 도구(웹 검색 등)는 결과를 모델에 다시 먹여
       // 자연스러운 답을 만들고(툴콜→결과→재추론), 그 외엔 결과를 채팅에 요약 출력.
