@@ -1,4 +1,4 @@
-# NK OpenAI 지역-우회 프록시 (Cloud Run)
+# NK 지역-우회 프록시 (Cloud Run) — OpenAI · Anthropic 공용
 
 Cloudflare Worker 가 OpenAI 로 나갈 때 간헐적으로 **홍콩(HKG)** 등 미지원 COLO 로 송출되어
 빈 본문 403(지역 차단)이 나는 문제를 영구히 없애기 위한 초경량 프록시입니다.
@@ -71,3 +71,52 @@ Cloudflare Pages 프로젝트 → Settings → Environment variables 에 추가:
 
 요청을 잠깐 전달만 하므로 CPU/메모리 사용이 매우 작습니다. Cloud Run 은 트래픽이 없으면
 인스턴스가 0 으로 줄어 비용이 거의 들지 않습니다(요청당 과금).
+
+
+---
+
+## 4. Anthropic(Claude) 도 이 프록시로
+
+### 왜 필요한가 — 측정으로 확정된 사실 (2026-08)
+
+설정 → 인증 진단의 '도달 검사' 결과:
+
+```
+도달 검사 (직접):       ❌ 도달 못 함 (403) · HKG · 11ms
+도달 검사 (게이트웨이): ❌ 도달 못 함 (403) · HKG · 17ms
+```
+
+- 구독(OAuth)과 API 키가 **똑같이** 403 `Request not allowed` → 자격증명 문제가 아니다.
+- `x-request-id` 가 없고 7~17ms 만에 응답 → Anthropic 서버까지 가지도 못하고 엣지에서 잘렸다.
+- COLO 가 **HKG(홍콩)** → OpenAI 때와 같은 지역 차단이다.
+- **Cloudflare AI Gateway 로는 해결되지 않는다.** 게이트웨이를 켜 둔 상태에서도 같은 403 이고
+  COLO 도 HKG 다. 게이트웨이의 송출 지역이 바뀌지 않기 때문이다.
+
+그래서 지원 지역(서울)에서 도는 이 프록시를 거쳐야 한다. 경로 접두어로 대상을 가른다:
+
+| 경로 | 전달 대상 |
+| --- | --- |
+| `/anthropic/*` | `https://api.anthropic.com/*` |
+| 그 외 | `https://api.openai.com/*` (기존 그대로) |
+
+### 설정
+
+프록시는 이미 위에서 배포한 그 서비스를 그대로 쓴다(재배포만 필요).
+Cloudflare Pages 환경변수에 아래를 넣는다:
+
+```
+ANTHROPIC_GATEWAY_BASE = https://<서비스URL>/anthropic
+ANTHROPIC_PROXY_SECRET = <배포할 때 만든 SECRET>   # OPENAI_PROXY_SECRET 과 같아도 된다
+```
+
+`anthropicMessagesUrl()` 이 여기에 `/v1/messages` 를 붙이므로 최종 목적지는
+`https://<서비스URL>/anthropic/v1/messages` 가 된다.
+
+> `CF_AI_GATEWAY_URL` 이 이미 설정돼 있으면 그쪽이 우선한다. 프록시로 바꾸려면
+> `CF_AI_GATEWAY_URL` 을 지우고 `ANTHROPIC_GATEWAY_BASE` 를 쓰거나,
+> `CF_AI_GATEWAY_URL` 값 자체를 위 프록시 주소로 바꾼다.
+
+### 확인
+
+설정 → 인증 진단을 다시 눌러 `도달 검사 (게이트웨이)` 가 **✅ Anthropic 도달 (401)** 로
+바뀌면 성공이다(401 은 진단이 키를 안 붙이기 때문이며 정상이다). 그 다음 라이브 테스트가 통과한다.

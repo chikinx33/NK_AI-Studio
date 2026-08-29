@@ -255,8 +255,14 @@ export function hasClaudeFallback(auth) {
  */
 export async function claudeFetch(env, auth, buildBody, init = {}, trace) {
   const url = anthropicMessagesUrl(env);
+  const extra = proxyHeaders(env);
   const send = (a) =>
-    fetch(url, { ...init, method: "POST", headers: a.headers, body: JSON.stringify(buildBody(a.subscription)) });
+    fetch(url, {
+      ...init,
+      method: "POST",
+      headers: { ...a.headers, ...extra },
+      body: JSON.stringify(buildBody(a.subscription)),
+    });
   // 어떤 자격증명으로 어디까지 갔는지 기록한다. 오류 메시지가 늘 첫 시도 기준으로 찍혀
   // 폴백이 돌았는지조차 알 수 없었다 — 그 때문에 원인 추적이 한참 헛돌았다.
   const mark = (patch) => { if (trace) Object.assign(trace, patch); };
@@ -456,7 +462,7 @@ async function probeReach(env) {
       // 키를 붙이지 않는다. 도달만 하면 Anthropic 은 401 을 준다(과금·권한 영향 없음).
       const res = await fetch(`${t.base}/v1/models`, {
         method: "GET",
-        headers: { "anthropic-version": "2023-06-01" },
+        headers: { "anthropic-version": "2023-06-01", ...(t.label === "gateway" ? proxyHeaders(env) : {}) },
       });
       const body = await res.text().catch(() => "");
       const requestId = String(res.headers.get("x-request-id") || "");
@@ -475,4 +481,17 @@ async function probeReach(env) {
     }
   }
   return out;
+}
+
+/**
+ * 자체 우회 프록시(openai-proxy/)를 경유할 때 붙이는 공유 시크릿.
+ *
+ * 프록시는 공개 엔드포인트라 x-nk-proxy-secret 으로 오남용을 막는다.
+ * Cloudflare AI Gateway 를 쓰는 경우엔 이 헤더가 있어도 무해하게 무시된다.
+ * 직접 호출(게이트웨이 미설정)일 땐 붙이지 않는다 — Anthropic 에 보낼 이유가 없다.
+ */
+function proxyHeaders(env) {
+  if (!usingGateway(env)) return {};
+  const secret = String((env && (env.ANTHROPIC_PROXY_SECRET || env.OPENAI_PROXY_SECRET)) || "").trim();
+  return secret ? { "x-nk-proxy-secret": secret } : {};
 }
