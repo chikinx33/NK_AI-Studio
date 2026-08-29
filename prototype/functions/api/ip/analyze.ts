@@ -128,8 +128,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const TOTAL_BUDGET_MS = Math.max(5000, Number(env.IP_ANALYZE_BUDGET_MS) || 20000);
     const remaining = () => Math.max(1000, TOTAL_BUDGET_MS - elapsed());
 
-    const callGemini = async (useSchema: boolean) => {
-      const generationConfig: any = { temperature: 0.3 };
+    /*
+     * 설정을 단계적으로 벗기는 사다리.
+     *
+     *   schema : 응답 스키마 + 생각 끄기 + temperature   (가장 좋은 결과)
+     *   plain  : temperature 만                          (스키마를 모르는 모델 대비)
+     *   bare   : generationConfig 없음                   (인자 자체를 거부하는 모델 대비)
+     *
+     * 왜 필요한가: 모델이 바뀌면 어떤 인자를 거부하는지 미리 알 수 없다. 실제로
+     * gemini-3.6-flash 로 올린 뒤 "Request contains an invalid argument"(400)가 났는데,
+     * 스키마를 빼도 같은 400 이라 공통 인자(temperature 등)가 원인일 수 있었다.
+     * 어느 인자인지 추측하는 대신 하나씩 벗겨 가며 살아남는 조합을 찾는다.
+     */
+    type GeminiMode = "schema" | "plain" | "bare";
+    const callGemini = async (mode: GeminiMode) => {
+      const useSchema = mode === "schema";
+      const generationConfig: any = mode === "bare" ? null : { temperature: 0.3 };
       if (useSchema) {
         // JSON 스키마를 강제하면 파싱 실패·형식 흔들림이 없다. 단, 모델·버전에 따라 거절될 수 있어
         // 실패하면 스키마 없이 한 번 더 시도한다(아래 폴백).
@@ -155,7 +169,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ role: "user", parts: useSchema ? parts : [...parts, { text: JSON_ONLY_HINT }] }],
-            generationConfig,
+            ...(generationConfig ? { generationConfig } : {}),
           }),
           signal: controller.signal,
         });
@@ -177,16 +191,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       model: geminiModel,
     }, 504);
 
-    let attempt = await callGemini(true);
+    let attempt = await callGemini("schema");
     let schemaFallback = false;
     if (attempt.timedOut) return timeoutResponse("schema");
     if (!attempt.res) {
       return json({ error: `Gemini 호출 실패: ${attempt.text}`, elapsedMs: elapsed(), model: geminiModel }, 502);
     }
     if (!attempt.res.ok) {
-      // 스키마 거절(400 등)일 수 있으니 스키마 없이 재시도. 그래도 실패하면 사유를 그대로 올린다.
-      const retry = await callGemini(false);
+      // 스키마 거절(400 등)일 수 있으니 스키마 없이 재시도. 그래도 안 되면 설정을 다 벗고 한 번 더.
+      let retry = await callGemini("plain");
       if (retry.timedOut) return timeoutResponse("retry");
+      if (retry.res && !retry.res.ok) {
+        const bare = await callGemini("bare");
+        if (bare.timedOut) return timeoutResponse("bare");
+        // 설정 없이 성공하면 그 결과를 쓴다. 실패해도 사유가 더 구체적이면 그쪽을 보고한다.
+        if (bare.res && bare.res.ok) retry = bare;
+        else if (bare.res) retry = bare;
+      }
       if (!retry.res) {
         return json({
           error: `Gemini API error (${attempt.res.status}): ${geminiErrorMessage(attempt.text)} · 재시도도 실패(${retry.text})`,
@@ -201,8 +222,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } else {
         // ★ 사유를 error 문자열에 넣는다. 클라이언트는 error 필드만 표시하므로
         //   detail 로만 내려보내면 "Gemini API error" 만 보이고 원인을 알 수 없다.
+        // 화면은 error 필드만 표시한다. 폴백 사유를 여기 붙이지 않으면 "무엇을 빼고
+        // 다시 시도했는데도 왜 실패했는지" 가 안 보여 원인 추적이 한 바퀴 더 돈다.
         return json({
-          error: `Gemini API error (${attempt.res.status}): ${geminiErrorMessage(attempt.text)}`,
+          error:
+            `Gemini API error (${attempt.res.status}): ${geminiErrorMessage(attempt.text)}` +
+            ` · 스키마 없이 재시도(${retry.res.status}): ${geminiErrorMessage(retry.text)}`,
           status: attempt.res.status,
           model: geminiModel,
           analyzedImages: usable,
@@ -250,10 +275,25 @@ const JSON_ONLY_HINT = [
 /** Gemini 오류 본문에서 사람이 읽을 사유만 뽑는다. */
 function geminiErrorMessage(text: string) {
   const parsed = safeJson(text);
-  const msg = (parsed && typeof parsed === "object")
-    ? String((parsed as any)?.error?.message || (parsed as any)?.message || "")
-    : "";
-  return (msg || String(text || "")).replace(/\s+/g, " ").trim().slice(0, 300) || "unknown";
+  const err = (parsed && typeof parsed === "object") ? (parsed as any).error : null;
+  const msg = String(err?.message || (parsed as any)?.message || "");
+  /*
+   * "Request contains an invalid argument." 만 보면 어느 인자인지 알 수 없다.
+   * Gemini 는 거부한 필드를 error.details[].fieldViolations 에 담아 준다.
+   * 그걸 같이 꺼내야 "thinkingConfig 를 모른다" 같은 진짜 원인이 보인다.
+   */
+  const violations: string[] = [];
+  for (const d of Array.isArray(err?.details) ? err.details : []) {
+    for (const v of Array.isArray(d?.fieldViolations) ? d.fieldViolations : []) {
+      const field = String(v?.field || "").trim();
+      const desc = String(v?.description || "").trim();
+      if (field || desc) violations.push([field, desc].filter(Boolean).join(": "));
+    }
+    const dm = String(d?.detail || d?.reason || "").trim();
+    if (dm) violations.push(dm);
+  }
+  const full = violations.length ? `${msg} (${violations.join(" | ")})` : msg;
+  return (full || String(text || "")).replace(/\s+/g, " ").trim().slice(0, 400) || "unknown";
 }
 
 /** 코드펜스·앞뒤 설명이 섞여 와도 JSON 본문만 꺼낸다(스키마 폴백 경로용). */

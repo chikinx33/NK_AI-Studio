@@ -202,17 +202,39 @@ test("API 클라이언트에 ipAnalyze 가 있다", () => {
 test("Gemini 실패 사유가 사용자에게 그대로 전달된다", () => {
   const src = analyze();
   // 클라이언트(api.js e())는 error 필드만 표시하므로 사유를 그 문자열에 넣어야 한다
-  assert.match(src, /error: `Gemini API error \(\$\{attempt\.res\.status\}\): \$\{geminiErrorMessage\(attempt\.text\)\}`/);
+  assert.match(src, /Gemini API error \(\$\{attempt\.res\.status\}\): \$\{geminiErrorMessage\(attempt\.text\)\}/);
   assert.match(src, /function geminiErrorMessage\(text: string\)/);
-  assert.match(src, /String\(\(parsed as any\)\?\.error\?\.message/);
+  assert.match(src, /err\?\.message \|\| \(parsed as any\)\?\.message/);
   // 진단에 필요한 값(모델·이미지 수·용량)도 함께 내려준다
   assert.match(src, /model: geminiModel,\s*\n\s*analyzedImages: usable,\s*\n\s*inlineBytes,/);
 });
 
+test("설정을 단계적으로 벗겨 살아남는 조합을 찾는다", () => {
+  const src = analyze();
+  // 모델이 바뀌면 어떤 인자를 거부하는지 미리 알 수 없다. gemini-3.6-flash 로 올린 뒤
+  // 스키마를 빼도 같은 400 이 나서, 공통 인자(temperature 등)까지 벗을 길이 필요했다.
+  assert.match(src, /type GeminiMode = "schema" \| "plain" \| "bare";/);
+  assert.match(src, /await callGemini\("schema"\)/);
+  assert.match(src, /await callGemini\("plain"\)/);
+  assert.match(src, /await callGemini\("bare"\)/);
+  // bare 는 generationConfig 자체를 보내지 않아야 의미가 있다.
+  assert.match(src, /mode === "bare" \? null : \{ temperature: 0\.3 \}/);
+  assert.match(src, /\.\.\.\(generationConfig \? \{ generationConfig \} : \{\}\)/);
+});
+
+test("400 의 진짜 사유(거부된 필드)를 화면까지 올린다", () => {
+  const src = analyze();
+  // "Request contains an invalid argument." 만으로는 어느 인자인지 알 수 없다.
+  assert.match(src, /fieldViolations/);
+  assert.match(src, /violations\.push/);
+  // 화면은 error 필드만 보여주므로 재시도 사유를 거기에 붙여야 한다.
+  assert.match(src, /스키마 없이 재시도\(\$\{retry\.res\.status\}\)/);
+});
+
 test("스키마가 거절되면 스키마 없이 한 번 더 시도한다", () => {
   const src = analyze();
-  assert.match(src, /let attempt = await callGemini\(true\)/);
-  assert.match(src, /const retry = await callGemini\(false\)/);
+  assert.match(src, /let attempt = await callGemini\("schema"\)/);
+  assert.match(src, /let retry = await callGemini\("plain"\)/);
   assert.match(src, /schemaFallback = true/);
   // 폴백 경로에서도 JSON만 받도록 지시하고, 코드펜스가 섞여도 파싱한다
   assert.match(src, /const JSON_ONLY_HINT/);
