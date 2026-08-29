@@ -192,6 +192,32 @@ test("본문이 너무 크면 읽기 전에 413 으로 끊는다", () => {
   assert.match(src, /\}, 413\);/);
 });
 
+test("Cloudflare 가 끊기 전에 우리가 먼저 사유를 붙여 응답한다", () => {
+  const src = analyze();
+  // 요청이 CF 제한을 넘으면 우리 JSON 이 아니라 502 페이지가 화면에 그대로 뜬다.
+  // 그래서 Gemini 호출에 예산을 걸고 초과하면 우리가 504 + 사유로 끝낸다.
+  assert.match(src, /const TOTAL_BUDGET_MS = Math\.max\(5000, Number\(env\.IP_ANALYZE_BUDGET_MS\) \|\| 20000\)/);
+  assert.match(src, /new AbortController\(\)/);
+  assert.match(src, /signal: controller\.signal/);
+  assert.match(src, /if \(attempt\.timedOut\) return timeoutResponse\("schema"\)/);
+  assert.match(src, /if \(retry\.timedOut\) return timeoutResponse\("retry"\)/);
+  // 사유를 좁히려면 어느 단계에서 몇 초 걸렸는지가 필요하다.
+  // 사유를 좁히려면 어느 단계에서 몇 초 걸렸는지가 필요하다.
+  assert.ok(src.includes("stage,") && src.includes("elapsedMs: elapsed(),"), "단계·소요시간을 응답에 담아야 합니다");
+  // 네트워크 실패로 res 가 없을 수 있다 — 그때 res.ok 를 읽으면 함수가 죽는다.
+  assert.match(src, /if \(!attempt\.res\) \{/);
+  assert.match(src, /if \(!retry\.res\) \{/);
+});
+
+test("생각 시간은 스키마 시도에만 끄고, 폴백에는 넣지 않는다", () => {
+  const src = analyze();
+  // gemini-2.5-flash 는 기본으로 '생각'을 해서 이미지가 붙으면 지연이 크게 는다.
+  assert.match(src, /thinkingConfig = \{ thinkingBudget: 0 \}/);
+  // 이 필드를 모르는 모델은 400 을 낸다. 폴백까지 붙이면 두 번 다 실패한다.
+  const schemaBlock = src.slice(src.indexOf("if (useSchema) {"), src.indexOf("const controller"));
+  assert.ok(schemaBlock.includes("thinkingConfig"), "thinkingConfig 는 useSchema 분기 안에 있어야 합니다");
+});
+
 test("시트가 커도 요청 크기를 넘기지 않는다", () => {
   const src = analyze();
   assert.match(src, /const MAX_INLINE_BYTES = 6 \* 1024 \* 1024/);

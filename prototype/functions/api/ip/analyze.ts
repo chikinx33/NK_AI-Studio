@@ -90,6 +90,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!usable) return json({ error: "시트 이미지를 읽지 못했어요(경로 확인 필요)." }, 400);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+    const startedAt = Date.now();
+    const elapsed = () => Date.now() - startedAt;
+    // Cloudflare 가 요청을 끊으면 우리 JSON 이 아니라 502 페이지가 그대로 화면에 뜬다.
+    // 그래서 Gemini 호출에 우리 예산을 걸고, 초과하면 우리가 먼저 사유를 붙여 응답한다.
+    // 20초. Cloudflare 가 끊기 전에 우리가 먼저 끝내야 사유를 화면에 띄울 수 있다.
+    // 환경변수로 조정 가능하게 둔다 — 한계는 플랜에 따라 다르다.
+    const TOTAL_BUDGET_MS = Math.max(5000, Number(env.IP_ANALYZE_BUDGET_MS) || 20000);
+    const remaining = () => Math.max(1000, TOTAL_BUDGET_MS - elapsed());
+
     const callGemini = async (useSchema: boolean) => {
       const generationConfig: any = { temperature: 0.3 };
       if (useSchema) {
@@ -104,23 +113,59 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           },
           required: ["description", "negativePrompt"],
         };
+        // gemini-2.5-flash 는 기본으로 '생각'을 하고, 이미지가 붙으면 그 시간이 크게 늘어
+        // Cloudflare 제한을 넘기기 쉽다. 시트를 보고 특징을 받아적는 일에는 필요 없다.
+        // 이 필드를 모르는 모델은 400 을 내므로, 폴백 호출에는 넣지 않는다.
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }
-      const res = await fetch(generateUrl, {
-        method: "POST",
-        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: useSchema ? parts : [...parts, { text: JSON_ONLY_HINT }] }],
-          generationConfig,
-        }),
-      });
-      return { res, text: await res.text() };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), remaining());
+      try {
+        const res = await fetch(generateUrl, {
+          method: "POST",
+          headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: useSchema ? parts : [...parts, { text: JSON_ONLY_HINT }] }],
+            generationConfig,
+          }),
+          signal: controller.signal,
+        });
+        return { res, text: await res.text(), timedOut: false };
+      } catch (err: any) {
+        const aborted = err?.name === "AbortError";
+        return { res: null as any, text: String(err?.message || err), timedOut: aborted };
+      } finally {
+        clearTimeout(timer);
+      }
     };
+
+    const timeoutResponse = (stage: string) => json({
+      error: `분석이 시간 안에 끝나지 않았어요(${stage}, ${Math.round(elapsed() / 1000)}초). 시트 장수를 줄이거나 잠시 후 다시 시도해 주세요.`,
+      stage,
+      elapsedMs: elapsed(),
+      analyzedImages: usable,
+      inlineBytes,
+      model: geminiModel,
+    }, 504);
 
     let attempt = await callGemini(true);
     let schemaFallback = false;
+    if (attempt.timedOut) return timeoutResponse("schema");
+    if (!attempt.res) {
+      return json({ error: `Gemini 호출 실패: ${attempt.text}`, elapsedMs: elapsed(), model: geminiModel }, 502);
+    }
     if (!attempt.res.ok) {
       // 스키마 거절(400 등)일 수 있으니 스키마 없이 재시도. 그래도 실패하면 사유를 그대로 올린다.
       const retry = await callGemini(false);
+      if (retry.timedOut) return timeoutResponse("retry");
+      if (!retry.res) {
+        return json({
+          error: `Gemini API error (${attempt.res.status}): ${geminiErrorMessage(attempt.text)} · 재시도도 실패(${retry.text})`,
+          status: attempt.res.status,
+          elapsedMs: elapsed(),
+          model: geminiModel,
+        }, 502);
+      }
       if (retry.res.ok) {
         attempt = retry;
         schemaFallback = true;
