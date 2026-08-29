@@ -1,6 +1,6 @@
 // prototype/functions/api/ip/analyze.ts
 // POST /api/ip/analyze — 등록된 캐릭터 시트를 분석해 IP 라이브러리의 '텍스트 속성' 초안을 만든다.
-// 캐릭터 설명·고정 특성·금지 특성·네거티브 프롬프트·스타일 가이드를 1차로 채우고,
+// 캐릭터 생김새(description)와 안 나오게 할 것(negativePrompt) 두 칸을 1차로 채우고,
 // 사람이 그 위에서 고치는 흐름을 전제로 한다. 저장하지 않는다 — 응답만 돌려준다.
 //
 // 왜 필요한가: 이미지 모델은 '없어야 하는 것'을 레퍼런스 이미지에서 배울 수 없다. 시트에 손가락이
@@ -316,6 +316,10 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       "- description: everything that must stay the same every time this character is drawn — identity, silhouette, face, body proportions, limbs, costume, materials, colors, and the rendering style. Comma-separated phrases, most identity-defining first.",
       "  Write shapes POSITIVELY, never as negations: say 'rounded mitten-like hands' rather than 'no fingers'. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
       "  Include the rendering style here too (e.g. '3D toy-like render, soft pastel palette, clean outlines').",
+      "  ALWAYS name body parts by what they are. An arm without fingers is still an arm; a leg without toes is still a leg.",
+      "  Never rename a limb to a non-limb noun ('nub', 'bump', 'protrusion') just because detail is missing — image models place a part by its name.",
+      "  Saying 'oval protrusion' renders a lump on the torso and loses the arm, so the character can no longer be posed.",
+      "  Express missing detail as shape instead: not 'no fingers' but 'rounded mitten-like arm with no separated fingers'.",
       "- negativePrompt: comma-separated keywords for what must NOT appear (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong.",
       "  List only what the design clearly does NOT have. Never guess from one angle where something is merely hidden — a hand tucked behind the back is not a missing hand.",
       "Base every claim on what the images actually show. Leave a field empty rather than guessing.",
@@ -330,6 +334,10 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "- description: 이 캐릭터를 그릴 때마다 똑같이 유지돼야 하는 모든 것 — 정체성·실루엣·얼굴·신체 비율·팔다리·의상·재질·색상, 그리고 그림체까지. 쉼표로 구분한 짧은 구로 쓰고, 정체성을 가장 크게 좌우하는 것부터 적으세요.",
     "  형태는 반드시 긍정문으로. '손가락 없음'이 아니라 '둥근 벙어리장갑 형태의 손'이라고 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
     "  그림체도 여기에 함께 적으세요(예: '3D 토이 렌더, 파스텔 색감, 깔끔한 외곽선').",
+    "  ★신체 부위는 반드시 부위 이름으로 부르세요. 팔은 손가락이 없어도 팔이고, 다리는 발가락이 없어도 다리입니다.",
+    "  세부가 없다고 해서 '돌기'·'혹'·'덩어리' 같은 다른 이름으로 바꿔 부르지 마세요 — 이미지 모델은 이름으로 부위의 위치와 역할을 정합니다.",
+    "  '타원형 돌기'라고 쓰면 몸에 붙은 혹이 그려지고, 팔이 사라져 포즈를 잡을 수 없습니다.",
+    "  없는 세부는 형태로 표현하세요: '손가락 없음'(X) → '손가락 구분 없는 뭉툭한 타원형 팔'(O).",
     "- negativePrompt: 화면에 나오면 안 되는 것을 쉼표로 나열(예: '손가락, 사람 손, 팔다리 추가, 코'). 부정 표현은 오직 이 칸에만 씁니다.",
     "  설계상 '분명히 없는' 것만 적으세요. 한 각도에서 단순히 안 보이는 것은 넣지 마세요 — 등 뒤로 가린 손은 없는 손이 아닙니다.",
     "모든 서술은 이미지에서 실제로 확인되는 것만 쓰세요. 확인 불가한 항목은 비워 두세요.",

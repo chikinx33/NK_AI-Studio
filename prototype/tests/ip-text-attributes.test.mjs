@@ -42,6 +42,29 @@ test("분석 지시문이 추측 금지와 긍정 서술을 요구한다", () =>
   assert.match(src, /push\("Other registered characters", brandContext\?\.otherCharacters\)/);
 });
 
+test("신체 부위는 부위 이름으로 부르게 못박는다", () => {
+  const src = analyze();
+  // 실제로 겪은 일: 손가락 없는 팔을 "타원형 돌기" 로 바꿔 적었다. 이미지 모델은 이름으로
+  // 부위의 위치·역할을 정하므로, 이렇게 쓰면 몸에 혹이 붙고 팔이 사라져 포즈를 못 잡는다.
+  assert.match(src, /신체 부위는 반드시 부위 이름으로 부르세요/);
+  assert.match(src, /팔은 손가락이 없어도 팔이고/);
+  assert.match(src, /ALWAYS name body parts by what they are/);
+  assert.match(src, /An arm without fingers is still an arm/);
+  // 이름을 바꾸지 말고 '형태' 로 표현하라는 대안까지 줘야 실제로 지켜진다.
+  assert.match(src, /손가락 구분 없는 뭉툭한 타원형 팔/);
+  assert.match(src, /rounded mitten-like arm with no separated fingers/);
+});
+
+test("초안을 고치면 근거를 밝히게 한다", () => {
+  const src = read("prototype/functions/api/agent/_orchestrator.ts");
+  const line = src.split(String.fromCharCode(10)).find((l) => l.includes("ip_describe: `[[RUN:"));
+  assert.ok(line, "ip_describe 설명을 못 찾음");
+  // "스타일 가이드 기준으론…" 처럼 출처를 뭉뚱그리면 사용자가 확인할 수 없다.
+  assert.match(line, /허브 규칙을 따랐다면 그 규칙을 그대로 인용하고/);
+  assert.match(line, /제 판단입니다/);
+  assert.match(line, /신체 부위의 이름을 바꾸지 말 것/);
+});
+
 test("IP 라이브러리에 AI 자동 채우기 버튼이 있다", () => {
   const src = hub();
   assert.match(src, /data-action="character-props-ai"/);
