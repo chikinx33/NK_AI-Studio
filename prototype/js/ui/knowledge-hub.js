@@ -77,7 +77,12 @@
    * 원본은 그대로 두고 '보내는 사본'만 줄인다. 캐릭터 생김새를 서술하는 데
    * 원해상도는 필요 없고, 1024px 이면 충분하다.
    */
-  var ANALYZE_MAX_EDGE = 1024;
+  /*
+   * 분석용 사본의 최대 변. 시트는 3×3 격자라 1024 로 줄이면 개체 하나가 340px 안팎이 되고,
+   * 다리처럼 작은 부위가 뭉개져 개수를 잘못 센다(실제로 다리 2개를 4개로 셌다).
+   * 원본을 그대로 보내면 본문이 수십 MB 라 함수가 죽으니, 셀 수 있을 만큼만 키운다.
+   */
+  var ANALYZE_MAX_EDGE = 1536;
   function shrinkForAnalyze(dataUrl) {
     return new Promise(function (resolve) {
       var raw = String(dataUrl || '');

@@ -35,8 +35,8 @@ test("분석 지시문이 추측 금지와 긍정 서술을 요구한다", () =>
   // 두 칸 모두 요청 언어로 — 화면 언어와 저장 내용이 어긋나면 사용자가 읽고 고칠 수 없다.
   assert.match(src, /두 필드 모두 한국어로 작성하세요/);
   assert.doesNotMatch(src, /negativePrompt 는 영어로 작성/);
-  // 그림체도 생김새 칸에 함께 적는다(캐릭터별 화풍 칸을 따로 두지 않는다).
-  assert.match(src, /그림체도 여기에 함께 적으세요/);
+  // 그림체는 캐릭터 속성이 아니다 — 공통 프롬프트가 단일 출처다.
+  // (아래 "그림체·배경은 캐릭터 속성이 아니다" 테스트가 자세히 다룬다.)
   // 브랜드 맥락(세계관·규칙·다른 캐릭터)을 함께 넣는다
   assert.match(src, /push\("World setting", brandContext\?\.worldSetting\)/);
   assert.match(src, /push\("Other registered characters", brandContext\?\.otherCharacters\)/);
@@ -246,7 +246,8 @@ test("시트는 보내기 전에 줄여서 502(Worker 사망)를 막는다", () 
   // 시트는 업로드 원본 그대로 data: URL 로 보관된다. 4장을 원해상도로 실어 보내면
   // 본문이 수십 MB 가 되고, 본문 파싱 중 Worker 가 죽어 Cloudflare 502 가 나온다.
   assert.match(src, /function shrinkForAnalyze/);
-  assert.match(src, /ANALYZE_MAX_EDGE = 1024/);
+  // 크기는 아래 "부위를 셀 수 있을 만큼의 해상도" 테스트가 정한다. 여기선 상한이 걸려 있는지만 본다.
+  assert.match(src, /ANALYZE_MAX_EDGE = \d+/);
   // 보내는 사본만 줄인다 — 저장된 원본은 그대로 둔다.
   assert.match(src, /Promise\.all\(aiSheets\.map\(shrinkForAnalyze\)\)/);
   // 원격 URL(gs://, https)은 서버가 직접 받아오므로 줄일 대상이 아니다.
@@ -393,4 +394,52 @@ test("시트가 커도 요청 크기를 넘기지 않는다", () => {
   assert.match(src, /if \(usable > 0 && inlineBytes \+ bytes > MAX_INLINE_BYTES\) \{ skippedForSize\+\+; continue; \}/);
   // 1장도 못 넣는 상황은 만들지 않는다(usable > 0 조건)
   assert.match(src, /skippedForSize,/);
+});
+
+/*
+ * 자동 채우기가 캐릭터가 아닌 것까지 적어 넣던 문제.
+ *
+ * 실제 결과: "3D 무광 클레이 점토 렌더 스타일, …, 하단의 통통한 크림색 발 4개,
+ * 검은 외곽선 없는 부드러운 질감, 중성 회색 배경"
+ *
+ * 세 가지가 한꺼번에 틀렸다.
+ *  ① 그림체를 적었다 — 지시문이 "그림체도 함께 적으세요" 라고 시켰다. 화풍은 공통
+ *     프롬프트가 단일 출처인데 캐릭터마다 박히면 통제가 안 된다.
+ *  ② 시트 배경("중성 회색 배경")을 캐릭터 속성으로 옮겼다. 그대로 두면 앞으로
+ *     만드는 모든 이미지에 회색 배경이 박힌다.
+ *  ③ 다리 2개를 "발 4개" 로 셌다. 시트는 같은 캐릭터를 9칸에 늘어놓은 것인데
+ *     칸을 넘어 합쳐 세면 팔다리가 불어난다.
+ */
+
+test("그림체·배경은 캐릭터 속성이 아니다", () => {
+  const src = analyze();
+  // 예전엔 지시문이 직접 시켰다. 그 문장이 남아 있으면 같은 결과가 또 나온다.
+  assert.doesNotMatch(src, /그림체도 여기에 함께 적으세요/);
+  assert.doesNotMatch(src, /Include the rendering style here too/);
+  // description 이 요구하는 항목에서 '재질'·'그림체'가 빠져야 한다.
+  assert.doesNotMatch(src, /팔다리·의상·재질·색상, 그리고 그림체까지/);
+  // 대신 명시적으로 금지한다.
+  assert.match(src, /그림체·화풍·렌더 방식, 배경, 조명, 카메라 각도, 시트 배치는 절대 적지 마세요/);
+  assert.match(src, /Never write the art style \/ medium \/ render look, the background, lighting, camera angle/);
+  // 왜 안 되는지까지 적어 둔다 — 이유 없는 금지는 모델이 잘 어긴다.
+  assert.match(src, /앞으로 만드는 모든 이미지에 그 배경이 박힙니다/);
+  assert.match(src, /gets baked into every future image/);
+});
+
+test("부위 개수는 한 개체·한 컷 기준으로 센다", () => {
+  const src = analyze();
+  assert.match(src, /부위 개수는 한 개체 기준으로, 가장 잘 보이는 정면 한 컷에서 세세요/);
+  assert.match(src, /여러 칸의 개수를 합치면 팔다리가 몇 배로 불어납니다/);
+  // 팔과 다리를 섞어 세면 '발 4개'(팔 2 + 다리 2)가 된다.
+  assert.match(src, /팔\(몸통 좌우\)과 다리\(몸통 아래\)는 나눠서 세고, 각각 몇 개인지 숫자로 명시하세요/);
+  assert.match(src, /Count body parts on ONE figure, from the clearest front view/);
+  assert.match(src, /never add counts across cells/);
+});
+
+test("시트는 부위를 셀 수 있을 만큼의 해상도로 보낸다", () => {
+  const src = fs.readFileSync(path.join(root, "prototype/js/ui/knowledge-hub.js"), "utf8");
+  // 3×3 격자를 1024 로 줄이면 개체 하나가 340px 안팎이라 다리가 뭉개진다.
+  assert.match(src, /var ANALYZE_MAX_EDGE = 1536;/);
+  // 그래도 원본을 그대로 보내지는 않는다(본문이 수십 MB 가 되면 함수가 죽는다).
+  assert.match(src, /Math\.min\(1, ANALYZE_MAX_EDGE \/ Math\.max\(W, H\)\)/);
 });
