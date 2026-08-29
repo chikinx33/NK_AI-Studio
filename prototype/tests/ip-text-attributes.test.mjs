@@ -439,7 +439,10 @@ test("부위 개수는 한 개체·한 컷 기준으로 센다", () => {
 test("시트는 부위를 셀 수 있을 만큼의 해상도로 보낸다", () => {
   const src = fs.readFileSync(path.join(root, "prototype/js/ui/knowledge-hub.js"), "utf8");
   // 3×3 격자를 1024 로 줄이면 개체 하나가 340px 안팎이라 다리가 뭉개진다.
-  assert.match(src, /var ANALYZE_MAX_EDGE = 1536;/);
-  // 그래도 원본을 그대로 보내지는 않는다(본문이 수십 MB 가 되면 함수가 죽는다).
+  // 2048 이면 흔한 시트(1920~2048)는 사실상 원본 그대로다.
+  assert.match(src, /var ANALYZE_MAX_EDGE = 2048;/);
+  // 확대는 하지 않는다 — 원본보다 크게 보내봐야 없는 정보가 생기지 않는다.
   assert.match(src, /Math\.min\(1, ANALYZE_MAX_EDGE \/ Math\.max\(W, H\)\)/);
+  // 왜 더 못 올리는지를 코드 옆에 남긴다(다음에 또 "더 올려" 가 나온다).
+  assert.match(src, /최대 변 3072 를 넘으면 자기가 줄인다/);
 });
