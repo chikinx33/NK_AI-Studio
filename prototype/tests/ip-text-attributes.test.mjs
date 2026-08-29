@@ -298,8 +298,73 @@ test("모든 외부 호출에 시간 제한이 있다 (하나라도 멈추면 CF
   assert.match(src, /function withTimeout<T>/);
   assert.ok(src.includes("await withTimeout("), "토큰 발급에 시간 제한이 있어야 합니다");
   assert.ok(src.includes("\"gcs_token\""), "토큰 단계 이름이 있어야 합니다");
-  assert.match(src, /withTimeout\(fetch\(resolvedUrl, \{ headers \}\), 8000, "sheet_fetch"\)/);
+  assert.match(src, /withTimeout\(fetch\(resolvedUrl, \{ headers \}\), timeoutMs, "sheet_fetch"\)/);
   assert.match(src, /signal: controller\.signal/);
+});
+
+test("준비 단계도 같은 예산 안에서 끝난다", () => {
+  const src = analyze();
+  /*
+   * 예전엔 예산이 Gemini 호출에만 걸려 있었다. 그 앞의 GCS 토큰(8초)과 시트
+   * 내려받기(장당 8초 × 4장)는 예산 밖이라 준비에서만 40초를 태우고도 계속
+   * 진행했고, Cloudflare 가 먼저 끊어 우리 사유 대신 504 페이지가 떴다.
+   */
+  const prepStart = src.indexOf("const prepTimeLeft");
+  assert.ok(prepStart > 0, "prepTimeLeft 가 없습니다");
+  // 예산·남은시간 계산이 준비 단계보다 앞에 있어야 준비가 그 예산을 쓸 수 있다.
+  assert.ok(prepStart < src.indexOf("const needsGcsToken"), "예산 계산이 준비 단계보다 뒤에 있습니다");
+  assert.match(src, /const GEMINI_MIN_MS = 6000;/); // 분석 몫은 남겨 둔다
+  assert.match(src, /const prepTimeLeft = \(\) => TOTAL_BUDGET_MS - GEMINI_MIN_MS - elapsed\(\);/);
+  // 토큰 발급과 시트 내려받기 둘 다 남은 시간을 상한으로 쓴다.
+  assert.match(src, /Math\.min\(8000, Math\.max\(1000, prepTimeLeft\(\)\)\),\s*[\r\n]+\s*"gcs_token"/);
+  assert.match(src, /Math\.min\(8000, Math\.max\(1000, prepTimeLeft\(\)\)\)\s*[\r\n]+\s*\);/);
+  // 시간이 없으면 남은 장은 포기한다 — 1장이라도 있으면 분석은 된다.
+  assert.match(src, /if \(usable > 0 && prepTimeLeft\(\) <= 0\) \{ skippedForTime\+\+; continue; \}/);
+  // 몇 장을 포기했는지 응답에 남긴다(조용히 일부만 보고 답하면 안 된다).
+  assert.match(src, /skippedForTime,/);
+});
+
+test("시간 초과는 화면이 다시 부를 수 있게 표시한다", () => {
+  const src = analyze();
+  /*
+   * Gemini 는 서울 Cloud Run 프록시를 거친다(홍콩 COLO 는 구글이 막는다).
+   * 그 컨테이너가 자고 있으면 콜드스타트가 20~40초라 첫 시도는 예산을 넘긴다.
+   * 두 번째는 이미 깨어 있어 빠르므로, 한 번의 요청에서 다 끝내려 하지 않는다.
+   */
+  assert.match(src, /retryable: true,/);
+  assert.match(src, /const proxied = generateUrl\.indexOf\("generativelanguage\.googleapis\.com"\) === -1;/);
+  // 프록시를 안 쓰면 콜드스타트 얘기를 하면 안 된다(사실이 아닌 안내는 추적을 방해한다).
+  assert.match(src, /proxied\s*[\r\n]+\s*\? `분석 서버를 깨우는 중이라/);
+});
+
+test("화면이 시간 초과에 한 번 더 시도한다", () => {
+  const src = fs.readFileSync(path.join(root, "prototype/js/ui/knowledge-hub.js"), "utf8");
+  const block = src.slice(src.indexOf("var askOnce ="), src.indexOf("var askOnce =") + 900);
+  assert.ok(block, "재시도 코드를 못 찾음");
+  // 엣지가 끊으면 JSON 이 아니라 HTML 이 온다 — 상태코드로도 판정해야 걸린다.
+  assert.match(block, /status === 502 \|\| status === 504/);
+  assert.match(block, /retryable/);
+  // 그 밖의 실패는 그대로 올린다(잘못된 입력까지 두 번 부르면 안 된다).
+  assert.match(block, /if \(!retryable\) throw err;/);
+  // 재시도는 한 번뿐이다(무한 반복 금지).
+  assert.equal(block.split("askOnce()").length - 1, 2);
+});
+
+test("회사 지식은 부르는 쪽이 누구든 서버가 싣는다", () => {
+  const src = analyze();
+  /*
+   * 에이전트(ip_describe)는 회사 지식을 넣어 부르고 화면 버튼은 안 넣었다.
+   * 그래서 같은 시트인데 버튼이 만든 초안만 세계관 규칙을 어겼다.
+   */
+  assert.match(src, /if \(!Array\.isArray\(brandContext\.companyKnowledge\) \|\| !brandContext\.companyKnowledge\.length\)/);
+  assert.match(src, /SELECT text FROM company_knowledge WHERE user_id = \$1/);
+  // 이 캐릭터를 언급한 지식이 먼저다(토큰 예산이 한정돼 있다).
+  assert.match(src, /const mentions = rows\.filter\(\(r: any\) => String\(r\.text \|\| ""\)\.toLowerCase\(\)\.includes\(key\)\)/);
+  assert.match(src, /\[\.\.\.mentions, \.\.\.general\]\.slice\(0, 30\)/);
+  // 지식 조회가 멈춰도 분석은 진행돼야 한다.
+  assert.match(src, /4000,\s*[\r\n]+\s*"company_knowledge"/);
+  // 200KB 넘는 agent/_shared 를 이 함수 번들에 끌어오지 않는다.
+  assert.doesNotMatch(src, /from "\.\.\/agent\/_shared"/);
 });
 
 test("GCS 토큰은 원격 시트가 있을 때만 발급한다", () => {

@@ -1816,11 +1816,28 @@
             .then(function (shrunkSheets) {
               aiSheets = shrunkSheets.filter(Boolean);
               if (!NK.api || typeof NK.api.ipAnalyze !== 'function') throw new Error('API client가 로드되지 않았습니다.');
-              return NK.api.ipAnalyze({
-                characterName: aiName,
-                imageUrls: aiSheets,
-                brandContext: aiBrandContext,
-                lang: getRuntimeLang() === 'en' ? 'en' : 'ko'
+              /*
+               * 첫 시도가 시간 초과면 한 번 더 부른다.
+               *
+               * Gemini 는 서울 프록시를 거치는데(홍콩 COLO 는 구글이 막는다) 그 컨테이너가
+               * 자고 있으면 콜드스타트가 20~40초다. 그동안 Cloudflare 가 먼저 끊어서
+               * 우리 사유 대신 504 페이지가 떴다. 두 번째 호출 때는 이미 깨어 있어 빠르다.
+               * 엣지가 끊은 경우(502·504)는 JSON 이 아니라 HTML 이 오므로 상태코드로도 본다.
+               */
+              var askOnce = function () {
+                return NK.api.ipAnalyze({
+                  characterName: aiName,
+                  imageUrls: aiSheets,
+                  brandContext: aiBrandContext,
+                  lang: getRuntimeLang() === 'en' ? 'en' : 'ko'
+                });
+              };
+              return askOnce().catch(function (err) {
+                var status = err && err.status;
+                var retryable = status === 502 || status === 504 ||
+                  /retryable/.test(String((err && err.detail) || ''));
+                if (!retryable) throw err;
+                return askOnce();
               });
             })
             .then(function (res) {

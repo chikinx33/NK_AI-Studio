@@ -8,6 +8,7 @@
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
+import { getSql } from "../knowledge/_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -63,11 +64,55 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const brandContext = (body?.brandContext && typeof body.brandContext === "object") ? body.brandContext : {};
     if (!imageUrls.length) return json({ error: "등록된 시트 이미지가 필요해요(imageUrls)." }, 400);
 
+    /*
+     * 회사 지식(스타일 가이드)을 서버가 직접 싣는다.
+     *
+     * 에이전트(ip_describe)는 이걸 넣어 부르고 화면 버튼은 안 넣었다. 그래서 같은 시트인데
+     * 에이전트가 쓴 설명만 세계관에 맞고 버튼이 만든 초안은 어긋났다 — "좌우 크림색 타원 돌기,
+     * 금지: 팔/손 추가" 같은 규칙을 버튼 경로만 못 보고 있었다. 브라우저가 지식을 모으게 하면
+     * 요청 본문만 커지고 화면마다 빠뜨릴 수 있으니, 부르는 쪽이 누구든 서버가 같은 자료를 붙인다.
+     *
+     * 전부 넣으면 토큰이 커지므로 이 캐릭터를 언급한 항목을 앞에 두고 30개까지만 쓴다.
+     */
+    if (!Array.isArray(brandContext.companyKnowledge) || !brandContext.companyKnowledge.length) {
+      try {
+        const sql = getSql(env);
+        const userId = String((auth as any).userId || "");
+        if (sql && userId) {
+          // agent/_shared 를 import 하면 200KB 넘는 모듈 그래프가 이 함수 번들에 딸려 온다.
+          // 필요한 건 문장 한 열뿐이라 쿼리만 직접 쓴다.
+          const rows: any[] = await withTimeout(
+            sql("SELECT text FROM company_knowledge WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200", [userId]),
+            4000,
+            "company_knowledge"
+          );
+          const key = characterName.toLowerCase();
+          const mentions = rows.filter((r: any) => String(r.text || "").toLowerCase().includes(key));
+          const general = rows.filter((r: any) => !String(r.text || "").toLowerCase().includes(key));
+          brandContext.companyKnowledge = [...mentions, ...general].slice(0, 30).map((r: any) => r.text);
+        }
+      } catch { /* 지식 조회 실패가 분석을 막지는 않는다 */ }
+    }
+
     const apiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = String(env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKeyRaw = String(env.GOOGLE_PRIVATE_KEY || "").trim();
     const geminiModel = geminiTextModel(env);
     if (!apiKey) return json({ error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, 500);
+
+    /*
+     * 예산은 준비 단계까지 함께 덮는다.
+     *
+     * 예전엔 Gemini 호출에만 걸려 있었다. 그 앞의 GCS 토큰(8초)과 시트 내려받기
+     * (장당 8초 × 4장)는 예산 밖이라, 준비에서만 40초를 태우고도 계속 진행했다.
+     * 그러면 Cloudflare 가 먼저 끊어 우리 사유 대신 504 페이지가 뜬다.
+     * 남은 시간이 없으면 준비를 멈추고, 여기까지 받은 시트로 진행한다.
+     */
+    const TOTAL_BUDGET_MS = Math.max(5000, Number(env.IP_ANALYZE_BUDGET_MS) || 20000);
+    const remaining = () => Math.max(1000, TOTAL_BUDGET_MS - elapsed());
+    // Gemini 에게 최소한 이만큼은 남겨 둔다 — 준비가 예산을 다 먹으면 분석 자체를 못 한다.
+    const GEMINI_MIN_MS = 6000;
+    const prepTimeLeft = () => TOTAL_BUDGET_MS - GEMINI_MIN_MS - elapsed();
 
     /**
      * GCS 접근 토큰은 gs:// · storage.googleapis.com 시트를 받아올 때만 필요하다.
@@ -90,7 +135,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             privateKeyPem: privateKeyRaw,
             scope: "https://www.googleapis.com/auth/cloud-platform",
           }),
-          8000,
+          Math.min(8000, Math.max(1000, prepTimeLeft())),
           "gcs_token"
         );
       } catch (err: any) {
@@ -107,8 +152,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let usable = 0;
     let skippedForSize = 0;
     let inlineBytes = 0;
+    let skippedForTime = 0;
     for (const url of imageUrls) {
-      const parsed = await resolveImageBytes(url, accessToken, request.url, authHeader);
+      // 시간이 없으면 남은 장은 포기한다. 1장이라도 있으면 분석은 된다 —
+      // 전부 받으려다 예산을 넘겨 아무 답도 못 주는 쪽이 훨씬 나쁘다.
+      if (usable > 0 && prepTimeLeft() <= 0) { skippedForTime++; continue; }
+      const parsed = await resolveImageBytes(
+        url, accessToken, request.url, authHeader,
+        Math.min(8000, Math.max(1000, prepTimeLeft()))
+      );
       if (!parsed) continue;
       // 시트는 4분할 그리드라 장당 수 MB가 될 수 있다. 요청이 커지면 Gemini 가 400 으로 거절하므로
       // 총량에 상한을 두고, 넘치는 장은 건너뛴다(1장이라도 있으면 분석은 가능하다).
@@ -121,12 +173,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!usable) return json({ error: "시트 이미지를 읽지 못했어요(경로 확인 필요)." }, 400);
 
     const generateUrl = geminiGenerateUrl(env, geminiModel);
-    // Cloudflare 가 요청을 끊으면 우리 JSON 이 아니라 502 페이지가 그대로 화면에 뜬다.
-    // 그래서 Gemini 호출에 우리 예산을 걸고, 초과하면 우리가 먼저 사유를 붙여 응답한다.
-    // 20초. Cloudflare 가 끊기 전에 우리가 먼저 끝내야 사유를 화면에 띄울 수 있다.
-    // 환경변수로 조정 가능하게 둔다 — 한계는 플랜에 따라 다르다.
-    const TOTAL_BUDGET_MS = Math.max(5000, Number(env.IP_ANALYZE_BUDGET_MS) || 20000);
-    const remaining = () => Math.max(1000, TOTAL_BUDGET_MS - elapsed());
+    /*
+     * 첫 호출이 유난히 느린 이유: Gemini 를 서울 Cloud Run 프록시로 우회하는데
+     * (홍콩 COLO 는 구글이 막는다) 그 컨테이너가 자고 있으면 콜드스타트가 20~40초다.
+     * 에이전트 경로는 결과를 채팅으로 늦게 줘도 되니 티가 안 났지만, 화면의
+     * 'AI 자동 채우기' 는 브라우저가 붙잡고 기다리다 Cloudflare 가 먼저 끊어
+     * 우리 사유 대신 504 페이지가 떴다.
+     *
+     * 그래서 한 번의 요청에서 다 끝내려 하지 않는다. 예산 안에 못 끝내면 사유와 함께
+     * retryable 을 돌려주고, 화면이 곧바로 한 번 더 부른다. 그때 프록시는 이미 깨어 있다.
+     */
+    const proxied = generateUrl.indexOf("generativelanguage.googleapis.com") === -1;
 
     /*
      * 설정을 단계적으로 벗기는 사다리.
@@ -183,7 +240,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     };
 
     const timeoutResponse = (stage: string) => json({
-      error: `분석이 시간 안에 끝나지 않았어요(${stage}, ${Math.round(elapsed() / 1000)}초). 시트 장수를 줄이거나 잠시 후 다시 시도해 주세요.`,
+      error: proxied
+        ? `분석 서버를 깨우는 중이라 첫 시도가 시간 안에 끝나지 않았어요(${stage}, ${Math.round(elapsed() / 1000)}초). 곧바로 다시 시도해 주세요.`
+        : `분석이 시간 안에 끝나지 않았어요(${stage}, ${Math.round(elapsed() / 1000)}초). 시트 장수를 줄이거나 잠시 후 다시 시도해 주세요.`,
+      // 화면이 자동으로 한 번 더 부를 수 있게 표시한다. 콜드스타트라면 두 번째는 빠르다.
+      retryable: true,
       stage,
       elapsedMs: elapsed(),
       analyzedImages: usable,
@@ -253,6 +314,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       characterName,
       analyzedImages: usable,
       skippedForSize,
+      // 시간이 없어 건너뛴 장수. 0 이 아니면 결과가 일부 시트만 본 것이다 — 조용히 넘기지 않는다.
+      skippedForTime,
       schemaFallback,
       model: geminiModel,
       // 2칸만 돌려준다. 옛 5칸(fixedTraits·bannedTraits·styleGuide)은
@@ -426,7 +489,8 @@ async function resolveImageBytes(
   imageDataUrl: string,
   accessToken: string,
   requestUrl: string,
-  authHeader: string
+  authHeader: string,
+  timeoutMs = 8000
 ): Promise<{ base64: string; mimeType: string } | null> {
   const parsed = parseDataUrl(imageDataUrl);
   if (parsed) return parsed;
@@ -450,7 +514,7 @@ async function resolveImageBytes(
       }
     } catch (_) {}
     // 원격 시트를 받아오는 길도 막히면 함수가 응답을 못 만든다(→ CF 502). 시간 제한을 건다.
-    const res = await withTimeout(fetch(resolvedUrl, { headers }), 8000, "sheet_fetch");
+    const res = await withTimeout(fetch(resolvedUrl, { headers }), timeoutMs, "sheet_fetch");
     if (!res.ok) {
       throw new Error(`reference_image_fetch_failed (${res.status})`);
     }
