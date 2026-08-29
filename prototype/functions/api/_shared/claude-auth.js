@@ -39,6 +39,8 @@ export async function ensureSettingsSchema(sql) {
   `);
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_voice_selections jsonb NOT NULL DEFAULT '{}'::jsonb`);
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_voice_speeds jsonb NOT NULL DEFAULT '{}'::jsonb`);
+  // 에이전트별 두뇌 모델 선택 { agentId: {provider, model} }. 비어 있으면 CLOUD_MODELS 기본값.
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_model_selections jsonb NOT NULL DEFAULT '{}'::jsonb`);
   settingsSchemaReady = true;
 }
 
@@ -107,6 +109,28 @@ export async function saveAgentVoiceSettings(sql, userId, patch) {
        updated_at = now()`,
     [userId, JSON.stringify(voiceSelections || {}), JSON.stringify(voiceSpeeds || {})]
   );
+}
+
+/**
+ * 에이전트별 두뇌 모델 선택 저장. { agentId: {provider, model} } 전체를 교체한다.
+ * 검증은 sanitizeModelSelections(cloud-models.js)가 이미 끝낸 값을 받는다.
+ */
+export async function saveAgentModelSettings(sql, userId, selections) {
+  await ensureSettingsSchema(sql);
+  await sql(
+    `INSERT INTO app_settings (user_id, agent_model_selections)
+     VALUES ($1, $2::jsonb)
+     ON CONFLICT (user_id) DO UPDATE SET agent_model_selections = $2::jsonb, updated_at = now()`,
+    [userId, JSON.stringify(selections || {})]
+  );
+}
+
+/** 에이전트 모델 선택 조회. 호출부가 매번 전체 설정 행을 읽지 않아도 되게 따로 뺐다. */
+export async function getAgentModelSelections(sql, userId) {
+  if (!sql || !userId) return {};
+  const row = await getSettingsRow(sql, userId).catch(() => null);
+  const sel = row && row.agent_model_selections;
+  return sel && typeof sel === "object" && !Array.isArray(sel) ? sel : {};
 }
 
 /** 사용자가 인증을 등록하지 않았을 때 던지는 오류. 화면이 설정으로 유도할 수 있게 코드를 붙인다. */

@@ -6,8 +6,8 @@
 // 비밀값(토큰/키)은 Neon에 저장하되 응답엔 절대 노출하지 않음(oauthSet/apiKeySet boolean만).
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema } from "./_shared";
-import { authStatus, authDiagnose, getSettingsRow, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
-import { CLOUD_MODELS } from "../_shared/cloud-models.js";
+import { authStatus, authDiagnose, getSettingsRow, saveAgentModelSettings, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
+import { CLOUD_MODELS, MODEL_CATALOG, sanitizeModelSelections } from "../_shared/cloud-models.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -42,6 +42,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         localModel: "auto",
       },
       cloudModels: CLOUD_MODELS,
+      // 에이전트별 두뇌 선택 화면용: 고를 수 있는 제공사·모델 목록과 현재 선택.
+      modelCatalog: MODEL_CATALOG,
+      agentModels: {
+        selections: (row && row.agent_model_selections) || {},
+        defaults: CLOUD_MODELS,
+      },
       claudeAuth,
       agentVoice: {
         selections: (row && row.agent_voice_selections) || {},
@@ -77,6 +83,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       voiceSpeeds: sanitizeSpeedMap(body.voiceSpeeds),
     });
     return send({ ok: true }, 200, origin);
+  }
+
+  if (body?.kind === "agentModel") {
+    // 카탈로그에 없는 조합은 sanitize 단계에서 버려진다(빈 객체 = 전부 기본값으로 되돌림).
+    const selections = sanitizeModelSelections(body.selections);
+    await saveAgentModelSettings(sql, auth.userId, selections);
+    return send({ ok: true, selections }, 200, origin);
   }
 
   if (body?.kind === "logRetention") {

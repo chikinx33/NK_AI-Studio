@@ -10,6 +10,7 @@ import {
   cleanupLogs,
   getIntegrations,
   getSkillReadiness,
+  setAgentModels,
   type StatusInfo,
   type LogStats,
   type AgentInfo,
@@ -18,6 +19,9 @@ import {
   type ClaudeAuthMode,
   type ClaudeAuthStatus,
   type AuthDiag,
+  type ModelCatalog,
+  type ModelChoice,
+  type ModelProvider,
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
 import { ToolCard } from "./Integrations";
@@ -64,7 +68,25 @@ interface Props {
 
 // 모델명 보기 좋게 축약: claude-haiku-4-5-20251001 → haiku-4-5
 const shortModel = (m: string) =>
-  m.replace(/^claude-/, "").replace(/-\d{8}$/, "");
+  m.replace(/^claude-/, "").replace(/^openai\//, "").replace(/-\d{8}$/, "");
+
+/**
+ * 서버가 준 선택값을 화면 형태로 정리.
+ * 옛 저장값은 모델 이름 문자열이라 anthropic 으로 읽는다(서버 normalizeModelChoice 와 같은 규칙).
+ */
+function normalizeSelections(raw: unknown): Record<string, ModelChoice> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, ModelChoice> = {};
+  for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof val === "string" && val.trim()) {
+      out[id] = { provider: "anthropic", model: val.trim() };
+    } else if (val && typeof val === "object") {
+      const v = val as { provider?: string; model?: string };
+      if (v.model) out[id] = { provider: (v.provider as ModelProvider) || "anthropic", model: v.model };
+    }
+  }
+  return out;
+}
 
 function SettingsIcon({ className }: { className?: string }) {
   return (
@@ -87,6 +109,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
   const [mode, setModeState] = useState<string>("auto");
   const [localModel, setLocalModelState] = useState<string>("auto");
   const [cloudModels, setCloudModels] = useState<Record<string, string>>({});
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null);
+  const [modelSelections, setModelSelections] = useState<Record<string, ModelChoice>>({});
+  const [modelMsg, setModelMsg] = useState("");
+  const [savingModels, setSavingModels] = useState(false);
   const [keyInput, setKeyInput] = useState("");
   const [authMode, setAuthMode] = useState<ClaudeAuthMode>("subscription");
   const [authStatus, setAuthStatus] = useState<ClaudeAuthStatus | null>(null);
@@ -172,11 +198,78 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
     onChanged();
   }
 
+  // ── 에이전트별 두뇌 ────────────────────────────────────────────────────────
+  /** 제공사를 바꾸면 그 제공사의 첫 모델로 맞춘다. 빈 값 = 기본값으로 되돌리기. */
+  function changeProvider(agentId: string, raw: string) {
+    setModelMsg("");
+    setModelSelections((cur) => {
+      const next = { ...cur };
+      if (!raw) {
+        delete next[agentId];
+        return next;
+      }
+      const provider = raw as ModelProvider;
+      const first = modelCatalog?.[provider]?.models[0]?.id ?? "";
+      next[agentId] = { provider, model: first };
+      return next;
+    });
+  }
+
+  function changeModel(agentId: string, provider: ModelProvider, model: string) {
+    setModelMsg("");
+    setModelSelections((cur) => ({
+      // 직접 입력을 고르면 모델 ID 를 비워 입력칸을 띄운다.
+      ...cur,
+      [agentId]: { provider, model: model === "__custom__" ? "" : model },
+    }));
+  }
+
+  async function saveAgentModels() {
+    setSavingModels(true);
+    setModelMsg("");
+    try {
+      // 모델 ID 가 빈 항목(직접 입력 중)은 보내지 않는다 — 서버가 버리고 조용히 기본값이 된다.
+      const payload: Record<string, ModelChoice> = {};
+      for (const [id, choice] of Object.entries(modelSelections)) {
+        if (choice.model.trim()) payload[id] = { provider: choice.provider, model: choice.model.trim() };
+      }
+      const r = await setAgentModels(payload);
+      if (r?.ok) {
+        const saved = normalizeSelections(r.selections);
+        setModelSelections(saved);
+        const dropped = Object.keys(payload).length - Object.keys(saved).length;
+        setModelMsg(dropped > 0 ? `✅ 저장됨 (인식 못 한 ${dropped}건은 기본값)` : "✅ 저장됨");
+        onChanged();
+      } else setModelMsg(`⚠️ ${r?.error ?? "저장 실패"}`);
+    } catch (e) {
+      setModelMsg(`⚠️ ${(e as Error)?.message ?? "저장 실패"}`);
+    } finally {
+      setSavingModels(false);
+    }
+  }
+
+  async function resetAgentModels() {
+    setSavingModels(true);
+    setModelMsg("");
+    try {
+      await setAgentModels({});
+      setModelSelections({});
+      setModelMsg("✅ 전부 기본값으로 되돌렸어요");
+      onChanged();
+    } catch (e) {
+      setModelMsg(`⚠️ ${(e as Error)?.message ?? "저장 실패"}`);
+    } finally {
+      setSavingModels(false);
+    }
+  }
+
   useEffect(() => {
     getSettings().then((s) => {
       setModeState(s.runtime?.llmMode ?? "auto");
       setLocalModelState(s.runtime?.localModel ?? "auto");
       setCloudModels(s.cloudModels ?? {});
+      setModelCatalog(s.modelCatalog ?? null);
+      setModelSelections(normalizeSelections(s.agentModels?.selections));
       setLogRetentionState(s.runtime?.logRetentionDays ?? 0);
       if (s.claudeAuth) {
         setAuthMode(s.claudeAuth.mode ?? "subscription");
@@ -519,30 +612,105 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
             </div>
           </section>
 
-          {/* 클라우드 모델 매핑 */}
+          {/* 에이전트별 두뇌 (제공사 · 모델) */}
           <section>
             <div className="mb-2 flex items-baseline gap-2">
-              <h3 className="shrink-0 text-sm font-semibold text-gray-200">클라우드 모델 매핑</h3>
+              <h3 className="shrink-0 text-sm font-semibold text-gray-200">에이전트별 두뇌</h3>
               <p className="text-xs text-gray-500">
-                에이전트별 Claude 모델 · <code className="text-gray-400">_shared/cloud_models.json</code>
+                직원마다 Claude / OpenAI 를 골라 쓸 수 있어요. 비워두면 기본값을 씁니다.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {Object.entries(cloudModels).map(([k, v]) => (
-                <div
-                  key={k}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-edge bg-ink px-2.5 py-1.5"
-                >
-                  <span className="text-xs font-medium text-gray-300">{k}</span>
-                  <span
-                    className="truncate font-mono text-[11px] text-emerald-300/90"
-                    title={v}
+
+            <div className="space-y-1.5">
+              {Object.keys(cloudModels).map((agentId) => {
+                const agent = agents.find((a) => a.id === agentId);
+                const def = cloudModels[agentId];
+                const picked = modelSelections[agentId];
+                const provider: ModelProvider = picked?.provider ?? "anthropic";
+                const entry = modelCatalog?.[provider];
+                const isCustom =
+                  !!picked && !!entry?.allowCustom && !entry.models.some((m) => m.id === picked.model);
+
+                return (
+                  <div
+                    key={agentId}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-edge bg-ink px-2.5 py-1.5"
                   >
-                    {shortModel(v)}
-                  </span>
-                </div>
-              ))}
+                    <span className="w-24 shrink-0 text-xs font-medium text-gray-300">
+                      {agent ? `${agent.emoji} ${agent.name}` : agentId}
+                    </span>
+
+                    <select
+                      className="rounded border border-edge bg-black/30 px-1.5 py-1 text-[11px] text-gray-200"
+                      value={picked ? provider : ""}
+                      onChange={(e) => changeProvider(agentId, e.target.value)}
+                    >
+                      <option value="">기본 ({shortModel(def)})</option>
+                      {modelCatalog &&
+                        (Object.keys(modelCatalog) as ModelProvider[]).map((p) => (
+                          <option key={p} value={p}>
+                            {modelCatalog[p].label}
+                          </option>
+                        ))}
+                    </select>
+
+                    {picked && entry && (
+                      <select
+                        className="min-w-0 flex-1 rounded border border-edge bg-black/30 px-1.5 py-1 text-[11px] text-gray-200"
+                        value={isCustom ? "__custom__" : picked.model}
+                        onChange={(e) => changeModel(agentId, provider, e.target.value)}
+                      >
+                        {entry.models.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                        {entry.allowCustom && <option value="__custom__">직접 입력…</option>}
+                      </select>
+                    )}
+
+                    {picked && isCustom && (
+                      <input
+                        className="w-40 rounded border border-edge bg-black/30 px-1.5 py-1 font-mono text-[11px] text-gray-200"
+                        placeholder="모델 ID"
+                        value={picked.model === "__custom__" ? "" : picked.model}
+                        onChange={(e) =>
+                          setModelSelections((cur) => ({
+                            ...cur,
+                            [agentId]: { provider, model: e.target.value.trim() },
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
+
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                disabled={savingModels}
+                onClick={saveAgentModels}
+              >
+                {savingModels ? "저장 중…" : "저장"}
+              </button>
+              <button
+                className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 disabled:opacity-50"
+                disabled={savingModels}
+                onClick={resetAgentModels}
+              >
+                전부 기본값으로
+              </button>
+              {modelMsg && <span className="text-xs text-gray-400">{modelMsg}</span>}
+            </div>
+
+            <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+              OpenAI 는 두 경로예요. <span className="text-gray-400">Atlas Cloud 경유</span>는 이미 쓰고 있는{" "}
+              <code className="text-gray-400">ATLASCLOUD_API_KEY</code> 로 바로 되고,{" "}
+              <span className="text-gray-400">API 키 직접</span>은{" "}
+              <code className="text-gray-400">OPENAI_API_KEY</code> 가 필요해요.
+            </p>
           </section>
           </>
           )}

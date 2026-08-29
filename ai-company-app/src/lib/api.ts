@@ -1107,6 +1107,34 @@ export interface ClaudeAuthStatus {
   configured: boolean;
   oauthSet: boolean;
   apiKeySet: boolean;
+  /** 구독 토큰이 막혀도 API 키로 이어받을 수 있는 상태인가. */
+  fallbackReady?: boolean;
+}
+
+// ── 에이전트별 두뇌(제공사·모델) ────────────────────────────────────────────
+export type ModelProvider = "anthropic" | "atlas" | "openai";
+export interface ModelChoice {
+  provider: ModelProvider;
+  model: string;
+}
+export interface ModelCatalogEntry {
+  label: string;
+  keyLabel: string;
+  /** 목록에 없는 모델 ID 를 직접 입력할 수 있는가(OpenAI 직접 호출용). */
+  allowCustom: boolean;
+  models: { id: string; label: string }[];
+}
+export type ModelCatalog = Record<ModelProvider, ModelCatalogEntry>;
+
+/** 에이전트별 모델 선택 저장. 보낸 맵이 통째로 현재 설정이 된다(빈 값 = 기본값 복귀). */
+export async function setAgentModels(selections: Record<string, ModelChoice>) {
+  return (
+    await fetch("/api/agent/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "agentModel", selections }),
+    })
+  ).json();
 }
 // 인증 모드 설정 (+ 선택적으로 토큰/키 동시 저장). app_settings(user_id별)에 영속.
 export async function setClaudeAuth(payload: {

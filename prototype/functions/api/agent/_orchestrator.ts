@@ -49,8 +49,9 @@ import {
   restoreSkill,
 } from "./_shared";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
-import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, claudeFetch } from "../_shared/claude-auth.js";
-import { modelFor } from "../_shared/cloud-models.js";
+import { claudeAuthHeaders, resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
+import { isAnthropicProvider, normalizeModelChoice, resolveAgentModel } from "../_shared/cloud-models.js";
+import { callLLM } from "../_shared/llm.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -479,57 +480,49 @@ ${persona}${knowledgeBlock}
 // ── Claude 호출 (NK scenario.js 패턴 재사용) ────────────────────────────────
 export interface ClaudeMsg { role: "user" | "assistant"; content: string; }
 
+/**
+ * 두뇌 호출. 이름은 그대로 두되(호출부 다수), 실제로는 제공사 중립이다.
+ *
+ * modelChoice 가 anthropic 이 아니면 Anthropic 인증을 아예 해석하지 않는다.
+ * Claude 자격증명 없이 GPT 만 쓰는 사용자가 인증 오류로 막히면 안 되기 때문이다.
+ */
 export async function callClaude(
   env: any,
   system: string,
   messages: ClaudeMsg[],
-  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; images?: { base64: string; mimeType: string }[]; resolvedAuth?: any } = {}
+  opts: {
+    model?: string;
+    modelChoice?: { provider: string; model: string };
+    maxTokens?: number;
+    sql?: SqlFn;
+    userId?: string;
+    images?: { base64: string; mimeType: string }[];
+    resolvedAuth?: any;
+  } = {}
 ): Promise<string> {
-  // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
-  const auth = opts.resolvedAuth || (opts.sql && opts.userId
-    ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
-    : claudeAuthHeaders(env));
-  // 이미지/파일 첨부 시 마지막 user 메시지를 멀티모달 content block으로 변환(여러 개 지원).
-  const images = (opts.images || []).filter((im) => im && im.base64);
-  const builtMessages = messages.map((m, idx) => {
-    if (idx === messages.length - 1 && m.role === "user" && images.length) {
-      const blocks = images.map((im) => {
-        const mtype = im.mimeType || "image/jpeg";
-        return mtype === "application/pdf"
-          ? { type: "document", source: { type: "base64", media_type: mtype, data: im.base64 } }
-          : { type: "image", source: { type: "base64", media_type: mtype, data: im.base64 } };
-      });
-      return { role: m.role, content: [...blocks, { type: "text", text: m.content }] };
-    }
-    return m;
-  });
-  // 429 레이트리밋 자동 재시도: 최대 2회(총 3회), 2s → 4s 지수 백오프
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    const res = await claudeFetch(env, auth, (sub: boolean) => ({
-      model: opts.model || "claude-sonnet-4-6",
-      max_tokens: opts.maxTokens || 1500,
-      system: buildClaudeSystem(sub, system),
-      messages: builtMessages,
-    }));
-    const text = await res.text();
-    if (res.status === 429 && attempt < 2) {
-      await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
-      continue;
-    }
-    if (!res.ok) {
-      let detail: any = text;
-      try { detail = JSON.parse(text); } catch (_) {}
-      const inner =
-        detail?.error?.message || detail?.message ||
-        (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
-      throw new Error(`Claude API ${res.status} [${auth.subscription ? "subscription" : "api_key"}] — ${inner}`);
-    }
-    const data = JSON.parse(text);
-    const parts = Array.isArray(data?.content) ? data.content : [];
-    const out = parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
-    return stripThink(out);
+  const choice =
+    opts.modelChoice ||
+    normalizeModelChoice(opts.model) ||
+    { provider: "anthropic", model: "claude-sonnet-4-6" };
+
+  let auth: any = null;
+  if (isAnthropicProvider(choice.provider)) {
+    // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
+    auth = opts.resolvedAuth || (opts.sql && opts.userId
+      ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
+      : claudeAuthHeaders(env));
   }
-  throw new Error("Claude API 최대 재시도 초과");
+
+  const out = await callLLM(env, {
+    provider: choice.provider,
+    model: choice.model,
+    system,
+    messages,
+    maxTokens: opts.maxTokens,
+    images: opts.images,
+    auth,
+  });
+  return stripThink(out);
 }
 
 export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
@@ -774,8 +767,25 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; images?: { base64: string; mimeType: string }[]; model?: string; maxTokens?: number; resolvedAuth?: any } = {}
+  opts: BuildSystemOpts & {
+    sql?: SqlFn;
+    userId?: string;
+    images?: { base64: string; mimeType: string }[];
+    model?: string;
+    maxTokens?: number;
+    resolvedAuth?: any;
+    modelSelections?: Record<string, any>;
+    modelHint?: string;
+  } = {}
 ): Promise<SpeakResult> {
+  // 이 에이전트의 두뇌를 한 번만 정한다: 강제 지정 > 사용자 설정 > 성능 힌트 > 기본.
+  // modelSelections 는 runGroupChat 이 미리 읽어 넘긴다. 없을 때만 DB 를 본다.
+  const selections =
+    opts.modelSelections !== undefined
+      ? opts.modelSelections
+      : await getAgentModelSelections(opts.sql, opts.userId).catch(() => ({}));
+  const modelChoice = resolveAgentModel(agentId, selections, opts.model, opts.modelHint);
+
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
   let agentKnowledge = opts.agentKnowledge;
@@ -806,7 +816,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
   if (opts.sql && opts.userId) {
     SELF_KNOW_RE.lastIndex = 0;
@@ -848,7 +858,7 @@ export async function speak(
         { role: "assistant", content: raw },
         { role: "user", content: "회사 파일·폴더 변경을 완료한다고 말했지만 실제 실행 RUN 마커가 빠졌어요. 원래 지시를 실행할 company_files_write/company_files_mkdir/company_files_copy/company_files_move/company_files_delete 중 정확한 RUN 마커 한 줄만 출력하세요. 경로를 확정할 수 없으면 빈 줄로 답하세요. 설명이나 완료 보고는 쓰지 마세요." },
       ],
-      { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: 300, resolvedAuth: opts.resolvedAuth }
+      { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: 300, resolvedAuth: opts.resolvedAuth }
     ).catch(() => "");
     const extra = extractMarkers(fixRaw);
     for (const run of extra.runs) {
@@ -874,7 +884,7 @@ export async function speak(
           { role: "assistant", content: raw },
           { role: "user", content: "방금 답에서 변경/반영을 말했지만 실제 반영 마커가 빠졌어요. 지금 이 턴에 그 변경을 실행하는 마커(KNOW/PROJECT/SKILL/SELF_KNOW)만 출력하세요. 인사·설명 없이 마커 줄만. 정말 변경할 게 없으면 빈 줄로 답하세요." },
         ],
-        { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: 400, resolvedAuth: opts.resolvedAuth }
+        { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: 400, resolvedAuth: opts.resolvedAuth }
       ).catch(() => "");
       if (fixRaw) {
         // SELF_KNOW(개인 지식)는 extractMarkers가 다루지 않으므로 보정분에서도 직접 처리.
@@ -1300,6 +1310,8 @@ export async function runGroupChat(
     listPendingReviewJobs(sql, userId).catch(() => [] as any[]),
   ]);
   const cachedAuth = await resolvedAuthHeaders(sql, userId, env).catch(() => null);
+  // 에이전트별 두뇌 선택도 한 번만 읽어 전 직원이 공유(직원당 DB 왕복 1회 추가를 막는다).
+  const cachedModelSelections = await getAgentModelSelections(sql, userId).catch(() => ({}));
   // 취소 가능한 대기 잡 컨텍스트 — 에이전트 시스템 프롬프트에 주입해 취소 마커를 쓸 수 있게 함
   const pendingJobsCtx = cachedPendingJobsRaw.map((j: any) => ({
     id: j.id as string,
@@ -1314,6 +1326,7 @@ export async function runGroupChat(
     companyProjects: cachedProjects as any[],
     pendingJobs: pendingJobsCtx,
     resolvedAuth: cachedAuth || undefined,
+    modelSelections: cachedModelSelections,
     clientNow: deps.clientNow,
   };
 
@@ -1557,7 +1570,7 @@ export async function runGroupChat(
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
     // ★첨부 전파: 코어가 넘긴 일을 받은 직원도 원본 첨부를 봐야 한다(§8.2).
-    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, images: imagesForNextSpeaker(), model: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, images: imagesForNextSpeaker(), modelHint: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await _emitUiActions(res.uiActions, workerId);
     await runTools(res.runs, workerId);
@@ -1582,7 +1595,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 첨부는 이 발언자에게 먼저 주고, 이어서 발언하는 직원들에게도 같은 첨부를 준다(§8.2).
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), modelHint: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
