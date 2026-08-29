@@ -67,6 +67,34 @@
     return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
   }
 
+  /**
+   * 언어 전환 시 IP 라이브러리 모달 다시 그리기.
+   *
+   * 페이지 본문은 공통 런타임 로컬라이저(common.applyRuntimeLocale)가 DOM 을 훑어 바꿔주지만,
+   * 이 모달은 렌더 시점에 사전(getIpLibraryUiText)을 읽어 문자열을 박아 넣는 방식이라
+   * 다시 그리지 않으면 이전 언어가 그대로 남는다. 모달을 열어둔 채 언어를 바꾸면
+   * 제목·버튼만 바뀌고 입력 칸 라벨은 옛 언어로 남는 식으로 섞여 보였다.
+   *
+   * renderProject 가 다시 돌 때마다 모달 렌더 함수가 새로 만들어지므로,
+   * 최신 참조를 모듈 스코프에 담아 두고 리스너는 한 번만 등록한다.
+   */
+  var rerenderCharacterModal = null;
+  var lastAppliedLang = null;
+  function bindLangChangeOnce() {
+    if (window.__knowledgeHubLangBound) return;
+    window.__knowledgeHubLangBound = true;
+    lastAppliedLang = getRuntimeLang();
+    window.addEventListener('nk:lang-changed', function (evt) {
+      var next = (evt && evt.detail && evt.detail.lang) === 'en' ? 'en' : 'ko';
+      // applyCurrentLocale() 이 렌더 도중 다시 dispatch 하므로 같은 언어면 건너뛴다(재귀 차단).
+      if (lastAppliedLang === next) return;
+      lastAppliedLang = next;
+      var modal = document.getElementById('character-manager-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      if (typeof rerenderCharacterModal === 'function') rerenderCharacterModal();
+    });
+  }
+
   function getCharacterUiText() {
     return getRuntimeLang() === 'en'
       ? {
@@ -110,7 +138,13 @@
         aiFilling: 'Analyzing…',
         aiFillNoSheet: 'Register at least one sheet image first.',
         aiFillDone: 'Draft filled from the sheets. Review it and press Save.',
-        aiFillFail: 'Auto-fill failed: '
+        aiFillFail: 'Auto-fill failed: ',
+        appearanceLabel: 'Character appearance',
+        appearanceHint: '(only what it HAS · what it lacks goes below)',
+        appearancePlaceholder: 'e.g. blue cube body, rounded corners, one-piece front face, short cuboid arms, 3D animation style',
+        negativeLabel: 'Keep out of the image',
+        negativeHint: '(comma separated)',
+        negativePlaceholder: 'e.g. fingers, human hands, extra limbs, nose'
       }
       : {
         title: 'IP 라이브러리',
@@ -139,7 +173,13 @@
         aiFilling: '분석 중…',
         aiFillNoSheet: '먼저 시트 이미지를 1장 이상 등록해 주세요.',
         aiFillDone: '시트 분석으로 초안을 채웠어요. 확인·수정 후 저장을 눌러주세요.',
-        aiFillFail: 'AI 자동 채우기 실패: '
+        aiFillFail: 'AI 자동 채우기 실패: ',
+        appearanceLabel: '캐릭터 생김새',
+        appearanceHint: '(있는 것만 씁니다 · 없는 건 아래 칸에)',
+        appearancePlaceholder: '예: 파란 큐브형 몸, 둥근 모서리, 전면 일체형 얼굴, 짧은 육면체 팔, 3D 애니메이션 그림체',
+        negativeLabel: '안 나오게 할 것',
+        negativeHint: '(쉼표 구분)',
+        negativePlaceholder: '예: 손가락, 사람 손, 팔다리 추가, 코'
       };
   }
 
@@ -637,26 +677,56 @@
     };
   }
 
+  /**
+   * '기본값 채우기' 가 넣는 초안 문구. 화면 문구가 아니라 사용자 필드에 들어가는 '내용'이라,
+   * 공통 런타임 로컬라이저(DOM 번역)의 대상이 아니다. 저장되고 나면 사용자 데이터이기도 해서
+   * 나중에 자동 번역하면 안 된다. 그래서 만들 때부터 현재 언어로 쓴다.
+   */
+  function getStarterText() {
+    return getRuntimeLang() === 'en'
+      ? {
+        voiceTo: function (t) { return 'For ' + t + '.'; },
+        voiceTone: 'Explain briefly and clearly, without overstating.',
+        storyFallback: function (title) { return 'Runs around the core message of ' + title + '.'; },
+        coreMessageLabel: 'Key message: ',
+        targetLabel: 'Primary target: ',
+        rules: [
+          'Avoid exaggeration that strays from the core message.',
+          'Keep the brand voice and vocabulary consistent.',
+          'Write sentences a reader can understand right away.'
+        ]
+      }
+      : {
+        voiceTo: function (t) { return t + '에게'; },
+        voiceTone: '짧고 명확하게 설명하되 과장하지 않는다.',
+        storyFallback: function (title) { return title + '의 핵심 메시지를 중심으로 운영합니다.'; },
+        coreMessageLabel: '핵심 메시지: ',
+        targetLabel: '주요 타깃: ',
+        rules: [
+          '핵심 메시지에서 벗어나는 과장 표현을 줄인다.',
+          '브랜드 말투와 어휘를 일관되게 유지한다.',
+          '사용자가 바로 이해할 수 있는 문장으로 정리한다.'
+        ]
+      };
+  }
+
   function buildStarterKnowledge(knowledge, project, brandTitle, brandSummary) {
     var payload = (project && project.payload) || {};
     var next = Object.assign({}, knowledge || {});
     var target = String(payload.targetAudience || payload.target || '').trim();
     var coreMessage = String(payload.coreMessage || '').trim();
+    var starter = getStarterText();
     next.brandVoice = next.brandVoice || [
-      target ? (target + '에게') : '',
-      '짧고 명확하게 설명하되 과장하지 않는다.'
+      target ? starter.voiceTo(target) : '',
+      starter.voiceTone
     ].filter(Boolean).join(' ');
-    next.brandStory = next.brandStory || compactSentence(brandSummary || coreMessage || (brandTitle + '의 핵심 메시지를 중심으로 운영합니다.'), 120);
+    next.brandStory = next.brandStory || compactSentence(brandSummary || coreMessage || starter.storyFallback(brandTitle), 120);
     next.worldSetting = next.worldSetting || compactSentence([
       brandTitle,
-      coreMessage ? ('핵심 메시지: ' + coreMessage) : '',
-      target ? ('주요 타깃: ' + target) : ''
+      coreMessage ? (starter.coreMessageLabel + coreMessage) : '',
+      target ? (starter.targetLabel + target) : ''
     ].filter(Boolean).join(' · '), 140);
-    next.brandRules = next.brandRules && next.brandRules.length ? next.brandRules : [
-      '핵심 메시지에서 벗어나는 과장 표현을 줄인다.',
-      '브랜드 말투와 어휘를 일관되게 유지한다.',
-      '사용자가 바로 이해할 수 있는 문장으로 정리한다.'
-    ];
+    next.brandRules = next.brandRules && next.brandRules.length ? next.brandRules : starter.rules.slice();
     next.characterSheets = normalizeCharacterSheets(next.characterSheets, next.characters);
     next.environmentAssets = normalizeEnvironmentAssets(next.environmentAssets);
     next.bannedExpressions = next.bannedExpressions && next.bannedExpressions.length ? next.bannedExpressions : [];
@@ -1486,6 +1556,9 @@
     }
 
     function renderCharacterManagerModal() {
+      // 언어 전환 리스너가 부를 수 있도록 최신 렌더 함수를 등록해 둔다.
+      rerenderCharacterModal = renderCharacterManagerModal;
+      bindLangChangeOnce();
       var modal = document.getElementById('character-manager-modal');
       var box = document.getElementById('character-manager-modal-content');
       if (!modal || !box) return;
@@ -1585,8 +1658,8 @@
             (aiFillNoticeToken === entry.token
               ? '<p class="character-props-ai-notice">' + escapeHtml(ipLibraryUiText.aiFillDone) + '</p>'
               : '') +
-            '<label class="character-props-label">캐릭터 생김새 <span class="character-props-hint">(있는 것만 씁니다 · 없는 건 아래 칸에)</span><textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="4" placeholder="예: 파란 큐브형 몸, 둥근 모서리, 전면 일체형 얼굴, 짧은 육면체 팔, 3D 애니메이션 그림체">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
-            '<label class="character-props-label">안 나오게 할 것 <span class="character-props-hint">(영어 키워드, 쉼표 구분)</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="예: fingers, human hands, extra limbs">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
+            '<label class="character-props-label">' + escapeHtml(ipLibraryUiText.appearanceLabel) + ' <span class="character-props-hint">' + escapeHtml(ipLibraryUiText.appearanceHint) + '</span><textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="4" placeholder="' + escapeHtml(ipLibraryUiText.appearancePlaceholder) + '">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
+            '<label class="character-props-label">' + escapeHtml(ipLibraryUiText.negativeLabel) + ' <span class="character-props-hint">' + escapeHtml(ipLibraryUiText.negativeHint) + '</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="' + escapeHtml(ipLibraryUiText.negativePlaceholder) + '">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
             '</div>' +
             '</details>' +
             '</section>'

@@ -71,6 +71,21 @@
         '브랜드 운영': 'Brand Operations',
         '브랜드 스튜디오': 'Brand Studio',
         '브랜드 허브': 'Brand Hub',
+
+        // ── 브랜드 허브(knowledge-hub) 누락분 ──
+        // 영어 모드에서 한글이 그대로 남던 문구들. 실제 번역기를 돌려 확인한 것만 넣는다.
+        '캐릭터 삭제': 'Delete character',
+        '브랜드': 'Brand',
+        '참조 / 성공 패턴': 'References / Success patterns',
+        '세계관 / 배경': 'World & setting',
+        '배경·소품 자산': 'Background & prop assets',
+        '배경·소품': 'Background & props',
+        '장소·소품 일관성용 레퍼런스': 'References that keep places and props consistent',
+        '캐릭터 토큰과 성격이 자산 목록과 개요에 반영됩니다.': 'Character tokens and personalities are reflected in the asset list and Overview.',
+        '저장중...': 'Saving...',
+        'API client가 로드되지 않았습니다.': 'The API client is not loaded.',
+        '예: 캐릭터 말투는 존댓말을 유지한다.': 'e.g. Characters always speak politely.',
+        '예: 선정적 표현 금지': 'e.g. No suggestive language',
         '성과 분석': 'Analytics',
         '설정': 'Settings',
         '설정 펼치기 또는 접기': 'Expand or collapse settings',
@@ -735,8 +750,15 @@
 
     var EN_PATTERNS = [
         { re: /^마지막 저장:\s*/, to: 'Last saved: ' },
+        // 브랜드 허브 오류 안내 — '접두 + 실제 사유' 형태라 정확일치로는 안 잡힌다.
+        { re: /^기본값 채우기 실패:\s*/, to: 'Failed to fill defaults: ' },
+        { re: /^저장 후 이동 실패:\s*/, to: 'Failed to save and open: ' },
+        { re: /^브랜드 허브 저장 실패:\s*/, to: 'Failed to save Brand Hub: ' },
+        { re: /^참조 콘텐츠 추가 실패:\s*/, to: 'Failed to add reference content: ' },
+        { re: /^참조 콘텐츠 삭제 실패:\s*/, to: 'Failed to delete reference content: ' },
         { re: /^마지막 렌더:\s*/, to: 'Last render: ' },
         { re: /^(\d+)차 편집$/, fn: function (m) { return 'Edit ' + m[1]; } },
+        { re: /^(\d+)명 관리 중$/, fn: function (m) { return m[1] + ' in use'; } },
         { re: /^프로젝트\s*:\s*/, to: 'Project: ' },
         { re: /^장르\s*:\s*/, to: 'Genre: ' },
         { re: /^타겟\s*:\s*/, to: 'Target: ' },

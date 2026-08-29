@@ -32,6 +32,9 @@ test("분석 지시문이 추측 금지와 긍정 서술을 요구한다", () =>
   // 부정 표현이 갈 곳은 negativePrompt 한 칸뿐이라고 못박는다.
   assert.match(src, /부정 표현은 오직 이 칸에만 씁니다/);
   assert.match(src, /This is the ONLY place negations belong/);
+  // 두 칸 모두 요청 언어로 — 화면 언어와 저장 내용이 어긋나면 사용자가 읽고 고칠 수 없다.
+  assert.match(src, /두 필드 모두 한국어로 작성하세요/);
+  assert.doesNotMatch(src, /negativePrompt 는 영어로 작성/);
   // 그림체도 생김새 칸에 함께 적는다(캐릭터별 화풍 칸을 따로 두지 않는다).
   assert.match(src, /그림체도 여기에 함께 적으세요/);
   // 브랜드 맥락(세계관·규칙·다른 캐릭터)을 함께 넣는다
@@ -68,10 +71,58 @@ test("시트가 없으면 분석을 시도하지 않는다", () => {
 
 test("자동 채우기 문구는 한국어·영어 양쪽에 있다", () => {
   const src = hub();
-  for (const key of ["propsTitle", "aiFill", "aiFillTitle", "aiFilling", "aiFillNoSheet", "aiFillDone", "aiFillFail"]) {
+  for (const key of [
+    "propsTitle", "aiFill", "aiFillTitle", "aiFilling", "aiFillNoSheet", "aiFillDone", "aiFillFail",
+    // 5칸 → 2칸 개편으로 새로 생긴 라벨·힌트·플레이스홀더
+    "appearanceLabel", "appearanceHint", "appearancePlaceholder",
+    "negativeLabel", "negativeHint", "negativePlaceholder",
+  ]) {
     const hits = src.match(new RegExp(`${key}:`, "g")) || [];
     assert.ok(hits.length >= 2, `${key} 문구가 ko/en 양쪽에 있어야 합니다 (현재 ${hits.length}곳)`);
   }
+});
+
+test("IP 라이브러리 사전은 ko/en 키가 정확히 짝을 이룬다", () => {
+  const src = hub();
+  const start = src.indexOf("function getIpLibraryUiText");
+  assert.ok(start > 0, "사전 함수를 못 찾음");
+  const body = src.slice(start, src.indexOf("\n  function ", start + 10));
+  const split = body.indexOf("      : {");
+  assert.ok(split > 0, "ko/en 분기를 못 찾음");
+  const keysOf = (text) => new Set([...text.matchAll(/^\s{8}(\w+):/gm)].map((m) => m[1]));
+  const en = keysOf(body.slice(0, split));
+  const ko = keysOf(body.slice(split));
+  const onlyEn = [...en].filter((k) => !ko.has(k));
+  const onlyKo = [...ko].filter((k) => !en.has(k));
+  assert.deepEqual(onlyEn, [], `영어에만 있는 키: ${onlyEn.join(", ")}`);
+  assert.deepEqual(onlyKo, [], `한국어에만 있는 키: ${onlyKo.join(", ")}`);
+  assert.ok(en.size >= 30, `사전 키가 너무 적음(${en.size})`);
+});
+
+test("텍스트 속성 입력 폼에 한국어를 직접 박아 넣지 않는다", () => {
+  const src = hub();
+  // 검사 대상은 텍스트 속성 폼 마크업 — 라벨·힌트·placeholder 가 모두 사전을 거쳐야 한다.
+  const start = src.indexOf(`'<div class="character-props-form">'`);
+  const end = src.indexOf(`'</details>'`, start);
+  assert.ok(start > 0 && end > start, "텍스트 속성 폼 영역을 못 찾음");
+  const body = src.slice(start, end);
+  const hardcoded = body
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line)) // 주석 줄은 대상 아님
+    .flatMap((line) => [...line.matchAll(/'[^'\n]*[가-힣][^'\n]*'/g)].map((m) => m[0]));
+  assert.deepEqual(hardcoded, [], `사전을 거치지 않은 한글: ${hardcoded.join(" / ")}`);
+});
+
+test("언어를 바꾸면 열려 있던 모달도 다시 그린다", () => {
+  const src = hub();
+  // 페이지 본문은 공통 런타임 로컬라이저가 처리하지만, 모달은 렌더 시점에 문자열을
+  // 박아 넣으므로 재렌더가 없으면 이전 언어가 남아 화면이 섞인다.
+  assert.match(src, /window\.addEventListener\('nk:lang-changed'/);
+  assert.match(src, /rerenderCharacterModal = renderCharacterManagerModal/);
+  // 같은 언어로 재진입하면 무한 재귀가 되므로 반드시 걸러야 한다.
+  assert.match(src, /if \(lastAppliedLang === next\) return;/);
+  // 리스너는 페이지 수명당 한 번만 — renderProject 가 여러 번 돌아도 중복 등록 금지.
+  assert.match(src, /if \(window\.__knowledgeHubLangBound\) return;/);
 });
 
 test("API 클라이언트에 ipAnalyze 가 있다", () => {

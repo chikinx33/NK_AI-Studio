@@ -223,7 +223,7 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       "- description: everything that must stay the same every time this character is drawn — identity, silhouette, face, body proportions, limbs, costume, materials, colors, and the rendering style. Comma-separated phrases, most identity-defining first.",
       "  Write shapes POSITIVELY, never as negations: say 'rounded mitten-like hands' rather than 'no fingers'. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
       "  Include the rendering style here too (e.g. '3D toy-like render, soft pastel palette, clean outlines').",
-      "- negativePrompt: comma-separated English keywords for the negative-prompt parameter (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong.",
+      "- negativePrompt: comma-separated keywords for what must NOT appear (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong.",
       "  List only what the design clearly does NOT have. Never guess from one angle where something is merely hidden — a hand tucked behind the back is not a missing hand.",
       "Base every claim on what the images actually show. Leave a field empty rather than guessing.",
       ctx,
@@ -237,10 +237,10 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "- description: 이 캐릭터를 그릴 때마다 똑같이 유지돼야 하는 모든 것 — 정체성·실루엣·얼굴·신체 비율·팔다리·의상·재질·색상, 그리고 그림체까지. 쉼표로 구분한 짧은 구로 쓰고, 정체성을 가장 크게 좌우하는 것부터 적으세요.",
     "  형태는 반드시 긍정문으로. '손가락 없음'이 아니라 '둥근 벙어리장갑 형태의 손'이라고 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
     "  그림체도 여기에 함께 적으세요(예: '3D 토이 렌더, 파스텔 색감, 깔끔한 외곽선').",
-    "- negativePrompt: 네거티브 프롬프트 파라미터에 넣을 영어 키워드를 쉼표로(예: 'fingers, human hands, extra limbs, nose'). 부정 표현은 오직 이 칸에만 씁니다.",
+    "- negativePrompt: 화면에 나오면 안 되는 것을 쉼표로 나열(예: '손가락, 사람 손, 팔다리 추가, 코'). 부정 표현은 오직 이 칸에만 씁니다.",
     "  설계상 '분명히 없는' 것만 적으세요. 한 각도에서 단순히 안 보이는 것은 넣지 마세요 — 등 뒤로 가린 손은 없는 손이 아닙니다.",
     "모든 서술은 이미지에서 실제로 확인되는 것만 쓰세요. 확인 불가한 항목은 비워 두세요.",
-    "description 은 한국어로, negativePrompt 는 영어로 작성하세요.",
+    "두 필드 모두 한국어로 작성하세요. 화면 언어와 저장되는 내용이 어긋나면 사용자가 읽고 고칠 수 없습니다.",
     ctx,
   ].filter(Boolean).join("\n");
 }
