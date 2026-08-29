@@ -236,10 +236,56 @@
     }, 180);
   }
 
+  /**
+   * v3.1586: 노래 모드 자막은 씬이 아니라 **가사 구간** 단위다.
+   *
+   * 한 소절은 여러 컷에 걸쳐 불리고, 가사는 구간이 시작되는 씬에만 실려 있다.
+   * 씬 단위로 자막을 만들면 소절 첫 컷에서만 번쩍이고 나머지 컷은 자막이 사라진다.
+   * 타임라인과 SRT 가 같은 결과를 내도록 이 계산은 여기 한 곳에만 둔다.
+   */
+  function listSongSubtitleEntries(scenes) {
+    var entries = [];
+    var cursor = 0;
+    var current = null;
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i] || {};
+      var duration = sceneDuration(scene);
+      var sectionId = String(scene.songSectionId || '').trim();
+      var lyrics = String(scene.lyrics || '').replace(/@+/g, '').trim();
+      if (lyrics && (!current || !sectionId || current.sectionId !== sectionId)) {
+        current = { sectionId: sectionId, text: lyrics, start: cursor, end: cursor + duration };
+        entries.push(current);
+      } else if (current && sectionId && current.sectionId === sectionId) {
+        current.end = cursor + duration; // 같은 소절이 이어지는 컷 — 자막을 늘린다
+      }
+      cursor += duration;
+    }
+    return entries.map(function (e, idx) {
+      return {
+        index: idx + 1,
+        start: e.start,
+        end: Math.max(e.start + 0.2, e.end),
+        baseDuration: Math.max(0.2, e.end - e.start),
+        label: e.text,
+        text: e.text
+      };
+    });
+  }
+
+  function isSongProject(project, scenes) {
+    var payload = (project && project.payload) || {};
+    if (!(payload.songEnabled || (project && project.songEnabled))) return false;
+    for (var i = 0; i < scenes.length; i++) {
+      if (String((scenes[i] && scenes[i].lyrics) || '').trim()) return true;
+    }
+    return false;
+  }
+
   exporter.listSubtitleEntries = function (projectOrId, options) {
     var project = getProject(projectOrId);
     if (!project) return [];
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
+    if (isSongProject(project, scenes)) return listSongSubtitleEntries(scenes);
     var entries = [];
     var cursor = 0;
     for (var i = 0; i < scenes.length; i++) {

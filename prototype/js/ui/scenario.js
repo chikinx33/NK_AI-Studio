@@ -1508,6 +1508,10 @@
         dialogue,
         lyrics: lyricsText,
         isRefrain: !!lyricsEl?.closest('.field-block')?.classList.contains('is-refrain'),
+        // v3.1586: 구간 식별자가 없으면 포스트 프로덕션에서 자막이 소절 단위로 안 묶인다.
+        // 머지의 prev 폴백에만 기대면 머지를 안 거치는 경로에서 유실된다.
+        songSectionId: String(card.dataset.songSectionId || ''),
+        songSectionLabel: String(card.dataset.songSectionLabel || ''),
         shot: visualText,
         visual: visualText,
         // 구조화된 씬: composition/action 을 명시적으로 내보내 머지 시 prev 값으로 되돌아가지 않게 한다.
@@ -1792,7 +1796,7 @@
       const hasAction = !!String(s.action || '').trim();
       const hasStructured = hasComposition || hasAction;
       return `
-      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
+      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}>
         <div class="card-top">
           <div class="card-title-row">
             <h5 title="${escapeHtml(labelMeta.plain)}">${labelMeta.html}</h5>
@@ -2750,9 +2754,10 @@
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
-            m.songEnabled ? `노래 모드: 후렴 ${m.songRefrainSource === 'composed' ? '작곡됨' : '실패(절만 생성)'}${m.songRefrain ? `\n후렴: ${m.songRefrain}` : ''}` : '',
-            m.songEnabled && Array.isArray(m.songRolesAssigned) && m.songRolesAssigned.length
-              ? `노래 역할: ${m.songRolesAssigned.join(' → ')} / 후렴 강제 교정: ${m.refrainEnforced || 0}회`
+            m.songEnabled ? `노래 모드: 가사 ${m.songRefrainSource === 'prewritten' ? '개요에서 작사됨' : (m.songRefrainSource === 'composed' ? '생성 단계에서 작곡됨' : '없음')} / 강제 교정 ${m.refrainEnforced || 0}회` : '',
+            m.songEnabled && Array.isArray(m.songSections) && m.songSections.length
+              ? `가사 구간: ${m.songSections.length}개 · 합 ${m.songSectionSeconds || 0}초\n`
+                + m.songSections.map((sec) => `  ${sec.label} ${sec.startSec}~${sec.startSec + sec.durationSec}초 (${sec.durationSec}초)`).join('\n')
               : '',
             m.tokensEnforced ? `@토큰 자동 보정 (Pass 1): ${m.tokensEnforced}회` : '@토큰 자동 보정 (Pass 1): 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',

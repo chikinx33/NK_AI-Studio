@@ -193,8 +193,9 @@ test("노래 관련 UI 문구는 ko·en 양쪽에 있다", () => {
 
 test("진단 패널이 노래 생성 경로를 보여준다", () => {
   const src = ui();
-  assert.match(src, /m\.songEnabled \? `노래 모드: 후렴/);
-  assert.match(src, /노래 역할: \$\{m\.songRolesAssigned\.join\(' → '\)\}/);
+  // v3.1586: 역할 배정 대신 구간 목록(시작~끝, 길이)을 보여준다.
+  assert.match(src, /m\.songEnabled \? `노래 모드: 가사/);
+  assert.match(src, /가사 구간: \$\{m\.songSections\.length\}개/);
 });
 
 test("★회귀: Pass 2 컷 분해가 가사를 버리지 않는다", () => {

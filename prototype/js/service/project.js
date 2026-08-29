@@ -1205,6 +1205,11 @@
         'style',
         'characters',
         'voiceMode',
+        // v3.1586: 노래 모드 — 이게 빠지면 복제한 에피소드에서 가사가 통째로 사라진다.
+        'narrationEnabled',
+        'dubbingEnabled',
+        'songEnabled',
+        'songSections',
         'language',
         // Project core
         'projectType',
@@ -1259,6 +1264,11 @@
         'sharedBackgroundStyle',
         'dialogue',
         'dialogues',
+        // v3.1586: 노래 모드 씬 필드. 구간 식별자가 없으면 자막이 소절 단위로 안 묶인다.
+        'lyrics',
+        'isRefrain',
+        'songSectionId',
+        'songSectionLabel',
         'estSec',
         'duration',
         'script',

@@ -4334,6 +4334,25 @@
    * 씬 단위로 만들면 소절 첫 컷에서만 잠깐 번쩍이고 나머지 컷에선 자막이 사라진다.
    */
   function buildSongSubtitleClips(scenes) {
+    // v3.1586: SRT 와 타임라인이 어긋나지 않도록 exporter 를 1차 출처로 쓴다.
+    // exporter 가 없을 때만 아래 자체 구현으로 내려간다.
+    if (NK.service && NK.service.exporter && NK.service.exporter.listSubtitleEntries) {
+      var project = getProjectByStateId() || resolveProject();
+      if (project) {
+        var entries = NK.service.exporter.listSubtitleEntries(project, { maxChars: 22 });
+        if (entries && entries.length) {
+          return entries.map(function (e, idx) {
+            return {
+              id: 'sub-song-' + idx,
+              label: stripSpeakerTokens(e.label || e.text || ''),
+              start: round1(Number(e.start) || 0),
+              end: round1(Math.max((Number(e.start) || 0) + 0.2, Number(e.end) || 0)),
+              baseDuration: Math.max(0.2, (Number(e.end) || 0) - (Number(e.start) || 0))
+            };
+          });
+        }
+      }
+    }
     var clips = [];
     var cursor = 0;
     var current = null;

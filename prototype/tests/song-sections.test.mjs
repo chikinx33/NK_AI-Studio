@@ -406,3 +406,47 @@ test("씬 카드가 소절의 전체 길이·컷 수·속도를 보여준다", (
   assert.match(src, /const tooFast = rate > 2\.4/);
   assert.match(src, /앞 소절이 이어지는 중/);
 });
+
+// ---------------------------------------------------------------------------
+// v3.1586 — 가사가 실제로 자막·음원까지 살아 도착하는가 (배선 검증)
+// ---------------------------------------------------------------------------
+
+test("★자막 계산은 exporter 한 곳에만 있다 (SRT 와 타임라인이 어긋나지 않게)", () => {
+  const exp = read("prototype/js/service/export.js");
+  assert.match(exp, /function listSongSubtitleEntries\(scenes\)/);
+  assert.match(exp, /function isSongProject\(project, scenes\)/);
+  // listSubtitleEntries 가 노래 프로젝트를 먼저 갈라낸다 → SRT·타임라인 모두 여기를 지난다
+  assert.match(exp, /if \(isSongProject\(project, scenes\)\) return listSongSubtitleEntries\(scenes\)/);
+  // 같은 구간이 이어지는 컷에서는 자막을 끊지 않고 늘린다
+  assert.match(exp, /current\.end = cursor \+ duration;/);
+
+  // 포스트 프로덕션 타임라인도 exporter 를 1차 출처로 쓴다
+  const post = read("prototype/js/ui/post-production.js");
+  assert.match(post, /NK\.service\.exporter\.listSubtitleEntries\(project, \{ maxChars: 22 \}\)/);
+});
+
+test("★씬 저장이 구간 식별자를 잃지 않는다", () => {
+  const src = read("prototype/js/ui/scenario.js");
+  // 카드에 심고
+  assert.match(src, /data-song-section-id="\$\{escapeHtml\(s\.songSectionId\)\}"/);
+  // 저장할 때 다시 읽는다
+  assert.match(src, /songSectionId: String\(card\.dataset\.songSectionId \|\| ''\)/);
+});
+
+test("★프로젝트 복제가 가사를 버리지 않는다", () => {
+  // 화이트리스트 방식이라 새 필드를 안 넣으면 조용히 사라진다.
+  const src = read("prototype/js/service/project.js");
+  for (const field of ["'songEnabled'", "'songSections'", "'lyrics'", "'isRefrain'", "'songSectionId'"]) {
+    assert.ok(src.includes(field), `복제 화이트리스트에 ${field} 가 없다`);
+  }
+});
+
+test("진단 패널이 실제로 존재하는 meta 필드만 읽는다", () => {
+  // v3.1584 에서 songRolesAssigned 를 없앴는데 화면은 계속 그걸 읽고 있었다.
+  const ui = read("prototype/js/ui/scenario.js");
+  const api = read("prototype/functions/api/scenario.js");
+  assert.doesNotMatch(ui, /songRolesAssigned/, "서버가 더는 안 보내는 필드를 읽고 있다");
+  assert.match(ui, /m\.songSections/);
+  assert.match(api, /songSections: songSections\.map\(/);
+  assert.match(api, /songSectionSeconds:/);
+});
