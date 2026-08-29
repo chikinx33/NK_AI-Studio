@@ -759,7 +759,13 @@ test('shortened blueprints still preserve a closing role in the last scene', () 
   });
 
   assert.equal(horrorSpec.sceneBlueprint.at(-1)?.role, 'escape');
-  assert.equal(musicSpec.sceneBlueprint.at(-1)?.role, 'outro');
+  // v3.1580: 동요의 엔딩은 outro 가 아니라 후렴이다 — 노래는 후렴으로 끝나야 끝난 느낌이 난다.
+  // (동요 아크가 hook/build/chorus/variation/chorus 로 바뀌면서 닫는 역할도 chorus 가 됐다.)
+  assert.equal(musicSpec.sceneBlueprint.at(-1)?.role, 'chorus');
+  // 절-후렴이 교대해야 '한 편의 노래'가 된다. 아크 재배치에 무너지지 않는지 함께 지킨다.
+  const musicRoles = musicSpec.sceneBlueprint.map((b) => b.role);
+  assert.ok(musicRoles.filter((r) => r === 'chorus').length >= 2, `후렴이 2회 이상이어야 한다: ${musicRoles.join(',')}`);
+  assert.ok(musicRoles.includes('variation'), `변주 씬이 있어야 유머 비트가 앉는다: ${musicRoles.join(',')}`);
 });
 
 test('duration-scaled blueprints keep contiguous setup-rise-turn-close arcs from 15 seconds to 1 hour', () => {

@@ -3456,6 +3456,25 @@ textarea::-webkit-scrollbar-corner {
   align-self: center;
 }
 
+/* 노래 모드 — 가사 블록. 후렴 씬은 한눈에 구분되어야 반복 구조가 보인다. */
+.scenario-card .view-lyrics-lines {
+  font-style: italic;
+}
+.scenario-card .field-block.is-refrain .view-lyrics-lines {
+  border-left: 2px solid #f59e0b;
+  padding-left: 8px;
+}
+.scenario-card .refrain-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .18);
+  color: #f59e0b;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.6;
+}
+
 .scenario-card.scenario-card-common .view-common-style-lines {
   min-height: 36px;
   max-height: 36px;

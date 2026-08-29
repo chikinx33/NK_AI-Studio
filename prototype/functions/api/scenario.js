@@ -17,7 +17,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1120";
+const SERVER_VERSION = "3.1580";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -638,6 +638,8 @@ export async function onRequestPost(context) {
     const activeCharacters = characterGenerationDisabled ? [] : characters;
     const narrationEnabled = toBool(body.narrationEnabled, false);
     const dubbingEnabled = toBool(body.dubbingEnabled, false);
+    // v3.1580: 음성 모드 '노래' — 씬마다 가사(lyrics)를 채우고 후렴을 반복시킨다.
+    const songEnabled = toBool(body.songEnabled, false);
     const sceneCount = calculateSceneCountForDuration(duration);
 
     let scenes;
@@ -673,6 +675,7 @@ export async function onRequestPost(context) {
         characterGenerationDisabled,
         narrationEnabled,
         dubbingEnabled,
+        songEnabled,
         characters: activeCharacters,
         sceneCount,
         storyBeats,
@@ -1114,10 +1117,20 @@ function buildSingleBeatSystemPromptKo() {
 - '없음': narration="" (빈 문자열) + dialogue=[] (빈 배열). 캐릭터 대사·내레이션 둘 다 금지. 시각 전달만.
 - '나레이션': narration에만 1~2문장 채움. dialogue=[]. 캐릭터는 입을 움직일 수 있으나 대사 텍스트는 절대 만들지 않음.
 - '더빙': dialogue에 [{"speaker":"@이름","line":"..."}] 채움. narration="". 캐릭터가 직접 말함.
+- '노래': lyrics에만 이 씬에서 부를 가사를 채움. narration="" + dialogue=[]. 아래 [노래 규칙]을 따른다.
 이는 사용자가 선택한 영상 형식이므로 LLM이 임의로 대사를 추가/제거하면 안 됨.
 
+[노래 규칙 — 음성 모드가 '노래'일 때만 적용]
+- lyrics 는 말이 아니라 **부르는 가사**다. 설명체("~합니다", "~해요") 금지, 노래체로 쓴다.
+- 사용자 메시지의 [노래 역할]을 그대로 따른다:
+  · 후렴(chorus) 역할이면 [후렴]으로 준 문장을 **글자 하나 바꾸지 말고 그대로** lyrics 에 넣고 isRefrain=true.
+  · 절(verse) 역할이면 이 비트의 사건을 [후렴]과 같은 박자·글자 수로 새로 써서 lyrics 에 넣고 isRefrain=false.
+  · 훅(hook) 역할이면 [후렴]의 앞부분을 살짝 흘리는 짧은 도입 가사를 쓰고 isRefrain=false.
+- estSec 안에 부를 수 있는 길이만. 1~2줄을 넘기지 않는다.
+- 캐릭터를 부를 때도 @토큰을 그대로 쓴다.
+
 [출력 JSON]
-{"id":<숫자>,"estSec":<숫자>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"coversBeats":["<beatId>"]}
+{"id":<숫자>,"estSec":<숫자>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"lyrics":"","isRefrain":false,"coversBeats":["<beatId>"]}
 
 응답은 { 로 시작해 } 로 끝나는 JSON 한 개. 마크다운/설명/배열 wrap 금지.`;
 }
@@ -1155,21 +1168,33 @@ Follow the 'Voice mode' value from the user message exactly:
 - 'none': narration="" (empty string) + dialogue=[] (empty array). NO character lines, NO narration. Convey through visuals only.
 - 'narration only': fill narration with 1-2 sentences. dialogue=[]. Characters may move mouths but produce no spoken lines.
 - 'dubbing': fill dialogue with [{"speaker":"@name","line":"..."}]. narration="". Characters speak directly.
+- 'song': fill lyrics with the sung lines for this scene. narration="" and dialogue=[]. Follow [SONG RULE] below.
 This is the user's chosen video format — never add or remove dialogue/narration on your own.
 
+[SONG RULE — applies only when voice mode is 'song']
+- lyrics are SUNG, not spoken. No expository phrasing; write singable lines.
+- Obey the [Song role] given in the user message:
+  - chorus: put the given [Refrain] into lyrics VERBATIM, and set isRefrain=true.
+  - verse: write new lines for this beat in the SAME meter as the [Refrain]; isRefrain=false.
+  - hook: a short opening line that hints at the [Refrain]; isRefrain=false.
+- Keep it singable within estSec. Never exceed 1-2 lines.
+- Keep @tokens when naming characters.
+
 [Output JSON]
-{"id":<number>,"estSec":<number>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"coversBeats":["<beatId>"]}
+{"id":<number>,"estSec":<number>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"lyrics":"","isRefrain":false,"coversBeats":["<beatId>"]}
 
 The response must be ONE JSON object starting with { and ending with }. No markdown, no commentary, no array wrap.`;
 }
 
 function describeVoiceModeKo(input) {
+  if (input?.songEnabled) return "노래 (lyrics 에 이 씬에서 부를 가사만 채움, narration=\"\" · dialogue=[] 유지. 말이 아니라 노래다)";
   if (input?.narrationEnabled) return "나레이션 (narration 한두 문장 채움, dialogue=[] 유지, 캐릭터는 입을 움직일 뿐 대사 없음)";
   if (input?.dubbingEnabled)   return "더빙 (dialogue에 {speaker,line} 채움, narration=\"\" 유지, 캐릭터가 직접 말함)";
   return "없음 (narration=\"\" 빈 문자열, dialogue=[] 빈 배열, 캐릭터 대사·내레이션 모두 금지, 시각으로만 전달)";
 }
 
 function describeVoiceModeEn(input) {
+  if (input?.songEnabled) return "song (fill lyrics with the sung lines for this scene only, narration=\"\" and dialogue=[]. These are sung, not spoken)";
   if (input?.narrationEnabled) return "narration only (fill narration with 1-2 sentences, dialogue=[], characters may move mouths but say no lines)";
   if (input?.dubbingEnabled)   return "dubbing (fill dialogue with {speaker, line}, narration=\"\", characters speak directly)";
   return "none (narration=\"\" empty string, dialogue=[] empty array, NO character lines, NO narration; convey through visuals only)";
@@ -1201,6 +1226,13 @@ function buildSingleBeatUserPromptKo(input, ctx) {
     `화면 비율: ${input.aspectRatio || "(미지정)"}`,
     `음성 모드: ${describeVoiceModeKo(input)}`,
     `등록 캐릭터: ${chars}`,
+    ...(input.songEnabled ? [
+      "",
+      "[노래]",
+      `[노래 역할] ${ctx.songRole || "verse"} — ${SONG_ROLE_GUIDE_KO[ctx.songRole] || SONG_ROLE_GUIDE_KO.verse}`,
+      `[후렴] ${input.songRefrain || "(후렴 없음 — 이 비트에 맞는 가사를 직접 쓴다)"}`,
+      input.songMeterNote ? `[박자] ${input.songMeterNote}` : "",
+    ].filter(Boolean) : []),
     "",
     `[출력] 위 비트 1개만 다루는 씬 1개를 JSON 으로. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. 음성 모드 규칙 반드시 준수.`,
   ];
@@ -1233,6 +1265,13 @@ function buildSingleBeatUserPromptEn(input, ctx) {
     `Aspect ratio: ${input.aspectRatio || "(none)"}`,
     `Voice mode: ${describeVoiceModeEn(input)}`,
     `Characters: ${chars}`,
+    ...(input.songEnabled ? [
+      "",
+      "[Song]",
+      `[Song role] ${ctx.songRole || "verse"} - ${SONG_ROLE_GUIDE_EN[ctx.songRole] || SONG_ROLE_GUIDE_EN.verse}`,
+      `[Refrain] ${input.songRefrain || "(no refrain - write lyrics that fit this beat)"}`,
+      input.songMeterNote ? `[Meter] ${input.songMeterNote}` : "",
+    ].filter(Boolean) : []),
     "",
     `[Output] One JSON scene covering ONLY this beat. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. Voice-mode rule MUST be obeyed.`,
   ];
@@ -1320,6 +1359,116 @@ function enforceCharacterTokenInVisual(rawVisual, beat, input) {
 }
 
 /**
+ * v3.1580: 세부 장르가 song 신호를 갖는지 (동요·율동 등) RULE_LIBRARY 로 판정.
+ * 클라이언트가 songEnabled 를 안 보내도 구조만은 노래로 잡기 위해 필요.
+ */
+function hasSongTag(purposeTags) {
+  const raw = Array.isArray(purposeTags) ? purposeTags.join(", ") : String(purposeTags || "");
+  if (!raw.trim()) return false;
+  return Object.entries(RULE_LIBRARY.purposeTag || {}).some(([tag, rule]) =>
+    raw.includes(tag) && Array.isArray(rule.signals) && rule.signals.includes("song"),
+  );
+}
+
+/**
+ * v3.1580: 씬 개수만큼 노래 역할을 배정한다.
+ *
+ * 규칙 두 가지가 '한 편의 노래'를 만든다:
+ *   ① 마지막 씬은 반드시 후렴 — 노래는 후렴으로 끝나야 끝난 느낌이 난다.
+ *   ② 후렴은 최소 2회 — 한 번뿐이면 반복이 아니라 그냥 한 줄이다.
+ * 그래서 끝에서부터 chorus/verse 를 번갈아 채우고, 4씬 이상이면 첫 씬만 도입 훅으로 바꾼다.
+ * 앞에서부터 채우면 씬 수가 짝수일 때 후렴이 맨 뒤에 연달아 붙는다.
+ *   3개 → chorus, verse, chorus
+ *   5개 → hook, verse, chorus, verse, chorus
+ *   6개 → hook, chorus, verse, chorus, verse, chorus
+ */
+function assignSongRoles(count) {
+  const n = Math.max(1, Number(count) || 1);
+  if (n === 1) return ["chorus"];
+  if (n === 2) return ["verse", "chorus"];
+  const roles = new Array(n);
+  for (let i = 0; i < n; i += 1) {
+    // 끝에서 몇 번째인지로 정한다 (마지막=0 → chorus)
+    roles[n - 1 - i] = i % 2 === 0 ? "chorus" : "verse";
+  }
+  if (n >= 4) roles[0] = "hook";
+  return roles;
+}
+
+const SONG_ROLE_GUIDE_KO = {
+  hook: "도입 훅 — 후렴의 첫 조각을 살짝 흘려 주제를 각인시킨다",
+  verse: "절 — 이 비트의 사건을 후렴과 같은 박자·글자 수로 새로 쓴다",
+  chorus: "후렴 — 아래 [후렴] 문장을 글자 하나 바꾸지 말고 그대로 넣는다",
+};
+const SONG_ROLE_GUIDE_EN = {
+  hook: "opening hook - hint at the refrain to plant the theme",
+  verse: "verse - write new lines for this beat in the same meter as the refrain",
+  chorus: "chorus - reuse the [Refrain] line below VERBATIM, no word changes",
+};
+
+/**
+ * v3.1580: 후렴을 비트 팬아웃 **이전에** 한 번만 짓는다.
+ * 비트별 병렬 호출은 서로를 못 보므로, 후렴을 여기서 고정하지 않으면
+ * 씬마다 다른 후렴이 나와 노래가 성립하지 않는다.
+ * 실패해도 생성은 계속된다 (후렴 없이 절만 나오는 정도로 degrade).
+ */
+async function composeSongRefrain(input, beats) {
+  const lang = input.lang === "en" ? "en" : "ko";
+  const subject = String(input.episodeTitle || input.topic || "").trim().slice(0, 80);
+  const chars = Array.isArray(input.characters) && input.characters.length
+    ? input.characters.map((c) => c.token).filter(Boolean).join(", ")
+    : "";
+  const beatLines = (Array.isArray(beats) ? beats : [])
+    .map((b, i) => `${i + 1}. ${String(b?.action || "").trim()}`)
+    .filter(Boolean)
+    .join("\n");
+  const sys = lang === "en"
+    ? `You write refrains for children's songs. Output ONE JSON object only: {"refrain":"...","meterNote":"..."}
+- refrain: 1-2 short lines a 3-6 year old can sing back after hearing it once. Rhythmic, repetitive, easy consonants.
+- meterNote: one sentence describing the meter so verses can match it.
+No markdown, no commentary.`
+    : `너는 동요 후렴을 짓는 작사가다. JSON 객체 하나만 출력한다: {"refrain":"...","meterNote":"..."}
+- refrain: 3~6세가 한 번 듣고 따라 부를 수 있는 1~2줄. 리듬감 있고 반복적이며 발음이 쉬워야 한다.
+- meterNote: 절(verse)이 같은 박자로 맞춰질 수 있게 박자·글자 수를 한 문장으로 설명한다.
+마크다운·설명 금지.`;
+  const user = lang === "en"
+    ? `[Subject] ${subject || "(none)"}
+[Characters] ${chars || "(none)"}
+[Story beats]
+${beatLines || "(none)"}
+
+Write the refrain this whole song will repeat.`
+    : `[주제] ${subject || "(미지정)"}
+[등장 캐릭터] ${chars || "(없음)"}
+[이야기 비트]
+${beatLines || "(없음)"}
+
+이 노래 전체가 반복할 후렴을 지어라. 캐릭터를 넣을 땐 @토큰 그대로 쓴다.`;
+  try {
+    const { text } = await streamAnthropicText({
+      env: input.env,
+      auth: input.auth,
+      payload: {
+        model: "claude-sonnet-4-6",
+        max_tokens: 400,
+        system: sys,
+        messages: [{ role: "user", content: user }],
+        temperature: 0.7,
+        stream: true,
+      },
+      timeoutMs: SINGLE_BEAT_TIMEOUT_MS,
+    });
+    if (!text) return null;
+    const parsed = JSON.parse(cleanJsonResponse(text));
+    const refrain = String(parsed?.refrain || "").trim();
+    if (!refrain) return null;
+    return { refrain, meterNote: String(parsed?.meterNote || "").trim() };
+  } catch (_) {
+    return null; // 후렴 실패는 치명적이지 않다
+  }
+}
+
+/**
  * 단일 비트 → 단일 씬 LLM 호출. 실패하면 throw.
  */
 async function requestSingleBeatScene(input, ctx) {
@@ -1365,6 +1514,9 @@ async function requestSingleBeatScene(input, ctx) {
     visual: String(parsed.visual || "").trim(),
     narration: String(parsed.narration || "").trim(),
     dialogue: Array.isArray(parsed.dialogue) ? parsed.dialogue : [],
+    // v3.1580: 노래 모드. lyrics 를 안 채우고 narration 에 가사를 넣는 경우가 잦아 폴백을 둔다.
+    lyrics: String(parsed.lyrics || (input?.songEnabled ? parsed.narration : "") || "").trim(),
+    isRefrain: !!parsed.isRefrain,
     coversBeats: Array.isArray(parsed.coversBeats) && parsed.coversBeats.length
       ? parsed.coversBeats
       : [beat.id],
@@ -1374,6 +1526,20 @@ async function requestSingleBeatScene(input, ctx) {
   // dubbingEnabled=false → dialogue 빈 배열로 클리어
   if (!input?.narrationEnabled) scene.narration = "";
   if (!input?.dubbingEnabled)   scene.dialogue  = [];
+  // v3.1580: 노래 모드면 가사가 유일한 발성. 노래 모드가 아니면 가사는 버린다.
+  if (input?.songEnabled) {
+    scene.narration = "";
+    scene.dialogue = [];
+    // 후렴 씬인데 LLM 이 후렴을 바꿔 썼으면 코드가 원본 후렴으로 되돌린다.
+    if (ctx?.songRole === "chorus" && input.songRefrain) {
+      scene.lyrics = input.songRefrain;
+      scene.isRefrain = true;
+      if (String(parsed.lyrics || "").trim() !== input.songRefrain) scene._refrainEnforced = true;
+    }
+  } else {
+    scene.lyrics = "";
+    scene.isRefrain = false;
+  }
   // v3.879: visual 에 등록 캐릭터의 @토큰이 누락됐으면 코드로 강제 보정 (이미지 생성기 fallback 오작동 방지).
   const visualFix = enforceCharacterTokenInVisual(scene.visual, beat, input);
   if (visualFix.modified) {
@@ -1392,8 +1558,12 @@ async function requestSingleBeatScene(input, ctx) {
  * 비트 실패 시 코드 레벨 fallback 씬. 최소한의 결과로 1:1 매핑 유지.
  * v3.878: 음성 모드 자체 반영 — fallback도 사용자 설정 준수.
  */
-function buildBeatFallbackScene(beat, sceneIndex, input) {
+function buildBeatFallbackScene(beat, sceneIndex, input, ctx) {
   const narration = input?.narrationEnabled ? String(beat?.action || "").trim() : "";
+  // v3.1580: 노래 모드 폴백 — 후렴 씬이면 후렴을, 아니면 비트 문장을 가사 자리에 둔다.
+  const lyrics = input?.songEnabled
+    ? ((ctx?.songRole === "chorus" && input.songRefrain) ? input.songRefrain : String(beat?.action || "").trim())
+    : "";
   return {
     id: sceneIndex + 1,
     title: `Scene ${sceneIndex + 1}`,
@@ -1403,6 +1573,8 @@ function buildBeatFallbackScene(beat, sceneIndex, input) {
     visual: `[자동 fallback 씬] ${beat.action}`,
     narration,
     dialogue: [],
+    lyrics,
+    isRefrain: ctx?.songRole === "chorus",
     coversBeats: [beat.id],
     _autoFallback: true,
   };
@@ -1420,12 +1592,16 @@ async function generateScenesPerBeat(input, budgetedBeats) {
   const beats = Array.isArray(budgetedBeats) ? budgetedBeats : [];
   if (!beats.length) return { scenes: [], failures: [], fallbacks: 0 };
 
+  // v3.1580: 노래 모드면 씬마다 hook/verse/chorus 역할을 미리 배정한다.
+  // 비트별 호출은 서로를 못 보므로 역할과 후렴을 여기서 고정해야 한 편의 노래가 된다.
+  const songRoles = input?.songEnabled ? assignSongRoles(beats.length) : [];
   const contexts = beats.map((beat, idx) => ({
     beat,
     sceneIndex: idx,
     totalScenes: beats.length,
     prevBeat: idx > 0 ? beats[idx - 1] : null,
     nextBeat: idx < beats.length - 1 ? beats[idx + 1] : null,
+    songRole: songRoles[idx] || "",
   }));
 
   const scenes = new Array(beats.length).fill(null);
@@ -1444,7 +1620,7 @@ async function generateScenesPerBeat(input, budgetedBeats) {
         scenes[ctx.sceneIndex] = res.value;
       } else {
         failures.push({ beatId: ctx.beat.id, error: res.reason?.message || String(res.reason) });
-        scenes[ctx.sceneIndex] = buildBeatFallbackScene(ctx.beat, ctx.sceneIndex, input);
+        scenes[ctx.sceneIndex] = buildBeatFallbackScene(ctx.beat, ctx.sceneIndex, input, ctx);
         fallbacks += 1;
       }
     });
@@ -1469,7 +1645,22 @@ async function generateScenarioScenesViaBeats(input) {
   const beats = Array.isArray(input.storyBeats) ? input.storyBeats : [];
   const budgeted = computeBeatTimeBudget(beats, totalSec);
 
-  const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(input, budgeted);
+  // v3.1580: 노래 모드면 팬아웃 전에 후렴을 한 번만 짓는다.
+  // 비트별 호출은 병렬이라 서로의 가사를 못 본다 → 여기서 고정하지 않으면 후렴이 매 씬 달라진다.
+  let songRefrain = "";
+  let songMeterNote = "";
+  if (input.songEnabled) {
+    const composed = await composeSongRefrain(input, budgeted);
+    if (composed) {
+      songRefrain = composed.refrain;
+      songMeterNote = composed.meterNote;
+    }
+  }
+  const beatInput = input.songEnabled
+    ? Object.assign({}, input, { songRefrain, songMeterNote })
+    : input;
+
+  const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(beatInput, budgeted);
 
   // 모든 슬롯이 채워졌는지 확인 (실패는 fallback 으로 이미 채워짐)
   // v3.878: 각 씬을 shapeSceneByMode 로 통과 — 음성 모드별 narration/dialogue 제거 +
@@ -1489,8 +1680,11 @@ async function generateScenarioScenesViaBeats(input) {
         visual: scene.visual,
         narration: scene.narration,
         dialogue: scene.dialogue,
+        lyrics: scene.lyrics,
+        isRefrain: scene.isRefrain,
         narrationEnabled: !!input.narrationEnabled,
         dubbingEnabled: !!input.dubbingEnabled,
+        songEnabled: !!input.songEnabled,
         defaultSpeaker,
         lang: input.lang === "en" ? "en" : "ko",
       });
@@ -1556,6 +1750,12 @@ async function generateScenarioScenesViaBeats(input) {
       // v3.882: 캐릭터 경로 디버그
       charactersCount: (input.characters || []).length,
       charactersList: charactersDebug,
+      // v3.1580: 노래 모드 추적
+      songEnabled: !!input.songEnabled,
+      songRefrain: songRefrain || "",
+      songRefrainSource: input.songEnabled ? (songRefrain ? "composed" : "failed") : "",
+      songRolesAssigned: input.songEnabled ? assignSongRoles(budgeted.length) : [],
+      refrainEnforced: rawScenes.filter((s) => s && s._refrainEnforced).length,
     },
   };
 }
@@ -1662,6 +1862,7 @@ async function generateScenarioScenes(input) {
       duration: String(chunkDuration),
       characterGenerationDisabled: input.characterGenerationDisabled,
       narrationEnabled: input.narrationEnabled,
+      songEnabled: input.songEnabled,
       dubbingEnabled: input.dubbingEnabled,
       characters: input.characters,
       spec,
@@ -1824,6 +2025,7 @@ async function requestAndShapeScenarioChunk({ env, auth, sys, userPrompt, spec, 
     duration: options.duration,
     characterGenerationDisabled: options.characterGenerationDisabled,
     narrationEnabled: options.narrationEnabled,
+    songEnabled: options.songEnabled,
     dubbingEnabled: options.dubbingEnabled,
     characters: options.characters,
   });
@@ -1833,6 +2035,7 @@ async function requestAndShapeScenarioChunk({ env, auth, sys, userPrompt, spec, 
     duration: String(options.duration),
     sceneCount: options.sceneCount,
     narrationEnabled: options.narrationEnabled,
+    songEnabled: options.songEnabled,
     dubbingEnabled: options.dubbingEnabled,
     characters: options.characters,
     lang: options.lang,
@@ -1858,6 +2061,7 @@ async function requestAndShapeScenarioChunk({ env, auth, sys, userPrompt, spec, 
     sceneCount: options.sceneCount,
     duration: options.duration,
     narrationEnabled: options.narrationEnabled,
+    songEnabled: options.songEnabled,
     dubbingEnabled: options.dubbingEnabled,
     defaultSpeaker: options.defaultSpeaker,
   });
@@ -2305,8 +2509,9 @@ function buildScenarioSpec(input = {}) {
     }
   }
   if (signals.song) {
-    requiredOutputsKo.push("리듬감 있는 반복 구절이나 후렴 느낌의 문장을 포함해야 한다.");
-    requiredOutputsEn.push("Include a rhythmic repeated phrase or hook-like line.");
+    // v3.1580: 동요는 '한 편의 노래'가 결과물이다. 다른 규칙보다 먼저 읽히도록 맨 앞에 둔다.
+    requiredOutputsKo.unshift("결과물은 장면 나열이 아니라 처음부터 끝까지 이어지는 한 편의 노래여야 한다. 후렴을 하나 정해 최소 2개 씬에서 글자 그대로 반복하고, 마지막 씬은 반드시 후렴으로 끝낸다. 후렴이 아닌 씬은 후렴과 같은 박자로 쓴 절이다.");
+    requiredOutputsEn.unshift("The result must be ONE continuous song, not a list of scenes. Fix one refrain, repeat it verbatim in at least two scenes, and end the last scene on that refrain. Non-refrain scenes are verses in the same meter.");
   }
   if (signals.humor) {
     requiredOutputsKo.push("귀여운 실수, 장난, 가벼운 반전 중 최소 1개의 유머 비트를 포함해야 한다.");
@@ -2466,7 +2671,9 @@ function resolveOverviewProfile({ lang = "ko", purposeCategory = "", purposeTags
     validationRules: buildProfileValidationRules({ lang, key, target, needValues, toneValues }),
   };
 
-  if (signals.song && !profile.roles.includes("chorus") && profile.key !== "kids") {
+  // v3.1580: 이전에는 profile.key !== "kids" 조건 때문에 정작 동요가 가장 많은 키즈에서만
+  // 후렴 role 이 배정되지 않았다. 동요면 프로필과 무관하게 후렴 구조를 준다.
+  if (signals.song && !profile.roles.includes("chorus")) {
     profile.roles = fitRoleSequence(["hook", "build", "chorus", "variation", "outro"], profile.roles.length || 4, "close");
   }
   if (signals.learning && ["entertainment", "story", "social"].includes(profile.key)) {
@@ -2805,7 +3012,16 @@ function uniqueStrings(list = []) {
 function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, profile = {}, continuity = {}, hasNarrativeStory = false }) {
   const count = Math.max(1, Number(sceneCount) || 1);
   let roles;
-  if (hasNarrativeStory) {
+  if (signals.song) {
+    // v3.1580: 세부 장르가 동요·율동이면 이야기가 있어도 노래 구조가 이긴다.
+    // (v3.1579 까지는 hasNarrativeStory 가 무조건 드라마 구조로 덮어써서
+    //  chorus/sing 역할이 한 번도 배정되지 않았다 — 동요를 골라도 일반 시나리오가 나온 원인.)
+    // 후렴 배치는 per-beat 경로와 같은 규칙(assignSongRoles)을 쓴다 — 출처를 하나로 유지.
+    // 절(verse)은 앞쪽이 빌드업, 마지막 절이 변주(유머 비트가 앉는 자리)가 된다.
+    const songRoles = assignSongRoles(count);
+    const lastVerseIdx = songRoles.lastIndexOf("verse");
+    roles = songRoles.map((role, i) => (role === "verse" ? (i === lastVerseIdx ? "variation" : "build") : role));
+  } else if (hasNarrativeStory) {
     roles = fitRoleSequence(["setup", "inciting", "turn", "payoff", "close"], count, "close");
   } else {
     roles = fitRoleSequence(profile.roles || [], count, "close");
@@ -2818,6 +3034,21 @@ function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signal
     }
   }
   const arcPlan = buildNarrativeArcPlan(count, lang);
+  // v3.1580: 노래는 절-후렴 교대 자체가 구조다. 아크(기승전결) 재배치를 거치면
+  // 그 교대가 무너져(hook,hook,chorus,chorus) 반복이 사라지므로 배정을 그대로 쓴다.
+  if (signals.song) {
+    return roles.map((role, idx) => createBlueprintItem({
+      lang,
+      role,
+      idx,
+      total: count,
+      topicProfile,
+      signals,
+      continuity,
+      profile,
+      phase: arcPlan[idx],
+    }));
+  }
   const closingRole = roles[roles.length - 1] || "close";
   const rolePools = buildRolePoolsForArc(roles, closingRole);
   const phaseOffsets = { setup: 0, rise: 0, turn: 0, close: 0 };
@@ -2867,7 +3098,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     intro: { title: "도입 소개", goal: `${subject}를 시작하며 전체 흐름을 알린다`, must: "오늘 다룰 대상과 결과물을 짚는다" },
     build: { title: "빌드업", goal: `${subject}의 리듬과 긴장을 끌어올린다`, must: "다음 반복이나 후렴으로 이어지는 준비가 보여야 한다" },
     chorus: { title: "후렴", goal: `${subject}의 반복 훅을 전면에 둔다`, must: "반복해서 따라 부를 수 있는 구간이 보여야 한다" },
-    variation: { title: "변주", goal: `${subject}를 조금 다르게 다시 체험시킨다`, must: "기존 훅을 유지한 채 변화를 준다" },
+    variation: { title: "변주", goal: `${subject}를 조금 다르게 다시 체험시킨다`, must: signals.humor ? "기존 훅은 유지하되 귀여운 실수나 장난을 한 번 넣는다" : "기존 훅을 유지한 채 변화를 준다" },
     outro: { title: "아웃트로", goal: `${subject}를 여운 있게 마무리한다`, must: "마지막 후렴이나 여운을 남긴다" },
     prep: { title: "준비", goal: `${subject}를 위한 준비 단계를 보여 준다`, must: "재료나 도구, 기본 세팅을 분명히 보여 준다" },
     cook: { title: "조리", goal: `${subject}의 핵심 과정을 진행한다`, must: "실제 핵심 동작이 보이도록 한다" },
@@ -2934,7 +3165,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     intro: { title: "Intro", goal: `Introduce ${subject} and its overall flow`, must: "State what will be made or covered" },
     build: { title: "Build", goal: `Build rhythm around ${subject}`, must: "Lead into the next hook or repetition" },
     chorus: { title: "Chorus", goal: `Put the repeatable hook of ${subject} front and center`, must: "The audience should be able to repeat it" },
-    variation: { title: "Variation", goal: `Revisit ${subject} with a twist`, must: "Keep the hook while changing the delivery" },
+    variation: { title: "Variation", goal: `Revisit ${subject} with a twist`, must: signals.humor ? "Keep the hook but land one cute mistake or gag" : "Keep the hook while changing the delivery" },
     outro: { title: "Outro", goal: `Leave ${subject} with afterglow`, must: "End on a memorable final beat" },
     prep: { title: "Prep", goal: `Prepare the stage for ${subject}`, must: "Show ingredients, tools, or setup clearly" },
     cook: { title: "Cook", goal: `Perform the core process for ${subject}`, must: "Show the actual main action" },
@@ -3310,7 +3541,10 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
       narration: noCharacterSafe.narration,
       dialogue: noCharacterSafe.dialogue,
       visual: noCharacterSafe.visual,
+      lyrics: String(s.lyrics || "").trim(),
+      isRefrain: !!s.isRefrain,
       narrationEnabled: !!options.narrationEnabled,
+      songEnabled: !!options.songEnabled,
       dubbingEnabled: !!options.dubbingEnabled,
       defaultSpeaker: characters[0]?.token || narratorSpeaker,
       lang: options.lang,
@@ -3357,7 +3591,9 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
     const dialogue = trimDialogueToDuration(repairDialogue(scene.dialogue || [], hints.dialogue, {
       dubbingEnabled: options.dubbingEnabled,
       defaultSpeaker: options.defaultSpeaker || "@narrator",
-      forceHumor: !!spec.signals?.humor && blueprint.role === "repeat",
+      // v3.1580: 노래 아크(hook/build/chorus/variation)에는 repeat 역할이 없다.
+      // 변주 씬이 노래에서 유머 비트가 앉는 자리 — 여기서도 웃음 포인트를 강제한다.
+      forceHumor: !!spec.signals?.humor && ["repeat", "variation"].includes(blueprint.role),
     }), estSec, options.lang);
     const aiVisual = String(scene.visual || "").trim();
     const visual = aiVisual.length > 30
@@ -3376,7 +3612,10 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       narration,
       dialogue,
       visual,
+      lyrics: String(scene.lyrics || "").trim(),
+      isRefrain: !!scene.isRefrain,
       narrationEnabled: !!options.narrationEnabled,
+      songEnabled: !!options.songEnabled,
       dubbingEnabled: !!options.dubbingEnabled,
       defaultSpeaker: options.defaultSpeaker || "@narrator",
       lang: options.lang,
@@ -4653,7 +4892,7 @@ function repairJsonString(text = "") {
   return out;
 }
 
-function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
+function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, songEnabled, characters, topic }) {
   const formatCharacter = (character) => {
     const token = String(character?.token || "").trim();
     const displayName = String(character?.displayName || "").trim();
@@ -4740,6 +4979,14 @@ D) narrationEnabled=false, dubbingEnabled=false:
 - If narrationEnabled is true, narration must be a full spoken sentence (not empty).
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
+${songEnabled ? `
+[SONG MODE - overrides A/B/C/D above]
+- Every scene MUST include "lyrics" (string) and "isRefrain" (boolean). narration="" and dialogue=[].
+- Together the scenes form ONE song. Decide the refrain once, then repeat it VERBATIM in every scene where isRefrain=true.
+- At least two scenes must carry the refrain, including the LAST scene.
+- Non-refrain scenes are verses: new lines for that beat in the SAME meter as the refrain.
+- Lyrics are sung, not spoken. Short, rhythmic, singable within that scene's estSec (1-2 lines).
+- Keep @tokens when naming characters.` : ""}
 ${charGuide}
 ${characterEnforcement}
 ${noCharacterRule}
@@ -4769,6 +5016,14 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
   - 문장 5(선택): 조명/시간대
   - 검증: 이 visual을 읽고 촬영감독이 바로 카메라를 세팅할 수 있어야 한다.
 - narration/dialogue 문구는 이후 TTS(음성 합성)에 바로 사용할 수 있는 문장으로 작성.
+${songEnabled ? `
+[노래 모드 — 위 A/B/C/D 보다 우선]
+- 모든 씬은 "lyrics"(문자열)와 "isRefrain"(불리언)을 반드시 포함한다. narration="" , dialogue=[].
+- 씬 전체가 합쳐져 **한 편의 노래**가 되어야 한다. 후렴을 먼저 하나 정하고, isRefrain=true 인 씬마다 **글자 하나 바꾸지 말고 그대로** 반복한다.
+- 후렴은 최소 2개 씬에 들어가야 하며, 마지막 씬은 반드시 후렴이다.
+- 후렴이 아닌 씬은 절(verse)이다. 그 비트의 사건을 후렴과 **같은 박자·글자 수**로 새로 쓴다.
+- 가사는 말이 아니라 노래다. 설명체 금지. 해당 씬 estSec 안에 부를 수 있는 1~2줄로 짧고 리듬감 있게.
+- 캐릭터를 부를 때도 @토큰을 그대로 쓴다.` : ""}
 ${charGuide}
 ${characterEnforcement}
 ${noCharacterRule}
@@ -4978,24 +5233,34 @@ function shapeSceneByMode(input) {
   const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
   const visual = String(input.visual || "").trim();
+  // v3.1580: 음성 모드 '노래' — 가사가 대사·나레이션 자리를 대신한다.
+  const songEnabled = !!input.songEnabled;
+  const lyrics = songEnabled ? String(input.lyrics || "").trim() : "";
+  const isRefrain = songEnabled && !!input.isRefrain;
   const videoSpeechPrompt = composeVideoSpeechPrompt({
     lang: input.lang || "ko",
     narration,
     dialogue,
     narrationEnabled: !!input.narrationEnabled,
     dubbingEnabled: !!input.dubbingEnabled,
+    songEnabled,
+    lyrics,
   });
   const subtitleText = composeSubtitleText({
     narration,
     dialogue,
     narrationEnabled: !!input.narrationEnabled,
     dubbingEnabled: !!input.dubbingEnabled,
+    songEnabled,
+    lyrics,
   });
   const voiceScript = composeVoiceScript({
     narration,
     dialogue,
     narrationEnabled: !!input.narrationEnabled,
     dubbingEnabled: !!input.dubbingEnabled,
+    songEnabled,
+    lyrics,
   });
   const out = {
     id: input.id,
@@ -5014,6 +5279,10 @@ function shapeSceneByMode(input) {
   };
   if (input.narrationEnabled) out.narration = narration;
   if (input.dubbingEnabled) out.dialogue = dialogue;
+  if (songEnabled) {
+    out.lyrics = lyrics;
+    out.isRefrain = isRefrain;
+  }
   out.script = voiceScript;
   out.lines = subtitleText;
   return out;
@@ -5037,7 +5306,12 @@ function formatDialogueForVideoPrompt(dialogue = [], lang = "ko") {
   }).filter(Boolean).join(" ").trim();
 }
 
-function composeVideoSpeechPrompt({ lang = "ko", narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+function composeVideoSpeechPrompt({ lang = "ko", narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false, songEnabled = false, lyrics = "" }) {
+  const safeLyrics = String(lyrics || "").trim();
+  if (songEnabled) {
+    if (!safeLyrics) return "";
+    return lang === "en" ? `Sung: "${safeLyrics}"` : `노래로 부른다. "${safeLyrics}"`;
+  }
   const parts = [];
   const safeNarration = String(narration || "").trim();
   const dialoguePrompt = formatDialogueForVideoPrompt(dialogue, lang);
@@ -5046,7 +5320,8 @@ function composeVideoSpeechPrompt({ lang = "ko", narration = "", dialogue = [], 
   return parts.join(" ").trim();
 }
 
-function composeSubtitleText({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+function composeSubtitleText({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false, songEnabled = false, lyrics = "" }) {
+  if (songEnabled) return String(lyrics || "").trim();
   const safeNarration = String(narration || "").trim();
   const dialogueOnly = composeDialogueOnlyText(dialogue);
   if (narrationEnabled && dubbingEnabled) return dialogueOnly;
@@ -5055,7 +5330,8 @@ function composeSubtitleText({ narration = "", dialogue = [], narrationEnabled =
   return "";
 }
 
-function composeVoiceScript({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+function composeVoiceScript({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false, songEnabled = false, lyrics = "" }) {
+  if (songEnabled) return String(lyrics || "").trim();
   const rows = [];
   const safeNarration = String(narration || "").trim();
   const dialogueOnly = composeDialogueOnlyText(dialogue);

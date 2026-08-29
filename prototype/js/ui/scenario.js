@@ -17,7 +17,8 @@
   let sceneFoldMode = 'focus'; // 'expand' | 'collapse' | 'focus'
   const DEFAULT_SCENARIO_FLAGS = {
     narrationEnabled: false,
-    dubbingEnabled: false
+    dubbingEnabled: false,
+    songEnabled: false
   };
   const TARGET_OPTIONS = [
     {
@@ -353,6 +354,21 @@
     return NK.core?.translations?.[lang]?.[key] || fallback;
   };
 
+  // v3.1580: 노래로 만들어야 하는 세부 장르. 서버 RULE_LIBRARY 의 signals:["song"] 태그와 짝을 이룬다.
+  const SONG_SUBGENRES = ['동요', '율동', 'Nursery rhyme', 'Movement song'];
+  const isSongSubgenre = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return false;
+    return SONG_SUBGENRES.some((tag) => raw === tag || raw.includes(tag));
+  };
+
+  const notifyScenario = (msg) => {
+    if (!msg) return;
+    if (NK.ui?.toast?.show) NK.ui.toast.show(msg, { type: 'info', duration: 3800 });
+    else if (NK.utils?.toast) NK.utils.toast(msg);
+    else { try { console.info('[scenario]', msg); } catch (_) {} }
+  };
+
   const looksLikeLegacyStoryText = (value = '') => {
     const text = sanitizeText(value);
     if (!text) return false;
@@ -582,7 +598,8 @@
 
   const getScenarioFlags = (payload = {}) => ({
     narrationEnabled: boolVal(payload?.narrationEnabled, DEFAULT_SCENARIO_FLAGS.narrationEnabled),
-    dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled)
+    dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled),
+    songEnabled: boolVal(payload?.songEnabled, DEFAULT_SCENARIO_FLAGS.songEnabled)
   });
 
   const readKnowledgeHub = (payload = {}) => {
@@ -697,14 +714,18 @@
         location: 'Location',
         visual: 'Visualization',
         narration: 'Narration',
-        dialogue: 'Dialogue'
+        dialogue: 'Dialogue',
+        lyrics: 'Lyrics',
+        refrain: 'Refrain'
       };
     }
     return {
       location: '장소',
       visual: '시각화',
       narration: '나레이션',
-      dialogue: '대사'
+      dialogue: '대사',
+      lyrics: '가사',
+      refrain: '후렴'
     };
   };
 
@@ -1001,6 +1022,7 @@
     const voiceMode = (document.getElementById('voice-mode-select') || {}).value || 'none';
     payload.narrationEnabled = voiceMode === 'narration';
     payload.dubbingEnabled = voiceMode === 'dubbing';
+    payload.songEnabled = voiceMode === 'song';
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1133,7 +1155,11 @@
         })) : [],
         estSec: est,
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
-        dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false))
+        dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false)),
+        // v3.1580: 노래 모드 — 가사와 후렴 표식
+        lyricsText: applyCharacterTokenHints(String(s?.lyrics || s?.lyricsText || '').trim(), activeCharacters),
+        isRefrain: !!s?.isRefrain,
+        songEnabled: boolVal(s?.songEnabled, boolVal(currentPayload?.songEnabled, false))
       };
     });
   };
@@ -1307,6 +1333,9 @@
       const est = parseEst(estTxt);
       const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
       const uiDialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
+      // v3.1580: 노래 모드 — 가사가 자막·음성 대본의 원본이 된다.
+      const lyricsEl = card.querySelector('.view-lyrics-lines');
+      const lyricsText = lyricsEl?.textContent?.trim() || '';
       // 장소: 새 layout(.location-input) 우선, legacy(.view-location-lines) 폴백
       const locationRawInput = (card.querySelector('.location-input')?.value
         || card.querySelector('.view-location-lines')?.textContent
@@ -1330,17 +1359,23 @@
         : shotOnlyText;
       const cleanNarration = extractNarrationOnlyText(narrationText);
       const dialogueOnly = composeDialogueOnlyText(dialogue);
-      const videoSpeechPrompt = flags.narrationEnabled && flags.dubbingEnabled
-        ? [cleanNarration ? `"${cleanNarration}"` : '', composeDialoguePrompt(dialogue)].filter(Boolean).join(' ').trim()
-        : (flags.narrationEnabled
-          ? cleanNarration
-          : composeDialoguePrompt(dialogue));
-      const subtitleText = flags.narrationEnabled && flags.dubbingEnabled
-        ? dialogueOnly
-        : (flags.narrationEnabled ? cleanNarration : dialogueOnly);
-      const script = flags.narrationEnabled && flags.dubbingEnabled
-        ? [cleanNarration, dialogueOnly].filter(Boolean).join('\n').trim()
-        : (flags.narrationEnabled ? cleanNarration : dialogueOnly);
+      const videoSpeechPrompt = flags.songEnabled
+        ? (lyricsText ? `노래로 부른다. "${lyricsText}"` : '')
+        : (flags.narrationEnabled && flags.dubbingEnabled
+          ? [cleanNarration ? `"${cleanNarration}"` : '', composeDialoguePrompt(dialogue)].filter(Boolean).join(' ').trim()
+          : (flags.narrationEnabled
+            ? cleanNarration
+            : composeDialoguePrompt(dialogue)));
+      const subtitleText = flags.songEnabled
+        ? lyricsText
+        : (flags.narrationEnabled && flags.dubbingEnabled
+          ? dialogueOnly
+          : (flags.narrationEnabled ? cleanNarration : dialogueOnly));
+      const script = flags.songEnabled
+        ? lyricsText
+        : (flags.narrationEnabled && flags.dubbingEnabled
+          ? [cleanNarration, dialogueOnly].filter(Boolean).join('\n').trim()
+          : (flags.narrationEnabled ? cleanNarration : dialogueOnly));
       return {
         id,
         title: '',
@@ -1351,6 +1386,8 @@
         script,
         narration: cleanNarration,
         dialogue,
+        lyrics: lyricsText,
+        isRefrain: !!lyricsEl?.closest('.field-block')?.classList.contains('is-refrain'),
         shot: visualText,
         visual: visualText,
         // 구조화된 씬: composition/action 을 명시적으로 내보내 머지 시 prev 값으로 되돌아가지 않게 한다.
@@ -1368,6 +1405,8 @@
       const prev = byId.get(String(s?.id)) || {};
       const narration = (s.narration !== undefined ? s.narration : prev.narration) || '';
       const dialogue = (s.dialogue !== undefined ? s.dialogue : prev.dialogue) || [];
+      const lyrics = (s.lyrics !== undefined ? s.lyrics : prev.lyrics) || '';
+      const isRefrain = (s.isRefrain !== undefined ? s.isRefrain : prev.isRefrain) || false;
       const visual = s.visual || s.shot || prev.visual || prev.shot || '';
       const sceneLocation = (s.sceneLocation !== undefined ? s.sceneLocation : prev.sceneLocation) || '';
       const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
@@ -1381,6 +1420,8 @@
         lines: subtitleText,
         narration,
         dialogue,
+        lyrics,
+        isRefrain,
         sceneLocation,
         subtitleText,
         videoSpeechPrompt,
@@ -1417,7 +1458,8 @@
     const normalized = getScenarioFlags(flags);
     const sel = document.getElementById('voice-mode-select');
     if (sel) {
-      if (normalized.narrationEnabled) sel.value = 'narration';
+      if (normalized.songEnabled) sel.value = 'song';
+      else if (normalized.narrationEnabled) sel.value = 'narration';
       else if (normalized.dubbingEnabled) sel.value = 'dubbing';
       else sel.value = 'none';
     }
@@ -1556,6 +1598,7 @@
     const __voiceFlags = getScenarioFlags(currentPayload || {});
     const __showNarration = !!__voiceFlags.narrationEnabled;
     const __showDialogue = !!__voiceFlags.dubbingEnabled;
+    const __showLyrics = !!__voiceFlags.songEnabled;
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1611,6 +1654,11 @@
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
           </div>`}
+          ${__showLyrics ? `
+          <div class="field-block${s.isRefrain ? ' is-refrain' : ''}">
+            <p class="field-label muted small">${labels.lyrics}${s.isRefrain ? `<span class="refrain-badge">${escapeHtml(labels.refrain)}</span>` : ''}</p>
+            <p class="view-lines view-lyrics-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.lyricsText || '')}</p>
+          </div>` : ''}
           ${__showNarration ? `
           <div class="field-block">
             <p class="field-label muted small">${labels.narration}</p>
@@ -2196,8 +2244,23 @@
         const vm = target.value || 'none';
         currentPayload = Object.assign({}, currentPayload || {}, {
           narrationEnabled: vm === 'narration',
-          dubbingEnabled: vm === 'dubbing'
+          dubbingEnabled: vm === 'dubbing',
+          songEnabled: vm === 'song'
         });
+      }
+      // v3.1580: 세부 장르가 동요·율동이면 음성 모드를 '노래'로 맞춘다.
+      // 노래 모드가 아니면 가사 필드가 아예 생성되지 않아 '한 편의 동요'가 나올 수 없다.
+      if (target.id === 'purpose-tag-select' && isSongSubgenre(target.value)) {
+        const voiceSel = document.getElementById('voice-mode-select');
+        if (voiceSel && voiceSel.value !== 'song') {
+          voiceSel.value = 'song';
+          currentPayload = Object.assign({}, currentPayload || {}, {
+            narrationEnabled: false,
+            dubbingEnabled: false,
+            songEnabled: true
+          });
+          notifyScenario(getScenarioText('scenario_song_mode_suggested', '세부 장르가 동요라서 음성 모드를 노래로 맞췄어요.'));
+        }
       }
       if (target.id === 'purpose-category') {
         renderOverviewSelects(Object.assign({}, getOverviewSelections(), {
@@ -2498,6 +2561,10 @@
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
+            m.songEnabled ? `노래 모드: 후렴 ${m.songRefrainSource === 'composed' ? '작곡됨' : '실패(절만 생성)'}${m.songRefrain ? `\n후렴: ${m.songRefrain}` : ''}` : '',
+            m.songEnabled && Array.isArray(m.songRolesAssigned) && m.songRolesAssigned.length
+              ? `노래 역할: ${m.songRolesAssigned.join(' → ')} / 후렴 강제 교정: ${m.refrainEnforced || 0}회`
+              : '',
             m.tokensEnforced ? `@토큰 자동 보정 (Pass 1): ${m.tokensEnforced}회` : '@토큰 자동 보정 (Pass 1): 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
             m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
@@ -2909,6 +2976,7 @@
             } else if (s.shot || s.visual) {
               lines.push(`시각화: ${s.shot || s.visual}`);
             }
+            if (s.lyricsText || s.lyrics) lines.push(`${s.isRefrain ? '가사(후렴)' : '가사'}: ${String(s.lyricsText || s.lyrics).replace(/\r?\n+/g, ' · ')}`);
             if (s.narrationText || s.narration) lines.push(`나레이션: ${String(s.narrationText || s.narration).replace(/\r?\n+/g, ' · ')}`);
             const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
             // 카드 UI 의 대사 표시와 동일하게 한 줄(여러 대사는 ' · ' 구분)로 출력 → 재주입 시 동일 파싱.
