@@ -70,7 +70,7 @@ export async function onRequestPost(context) {
         model: "claude-sonnet-4-6",
         max_tokens: 900,
         temperature: 0.5,
-        system: buildClaudeSystem(sub, buildSystemPrompt(input.language)),
+        system: buildClaudeSystem(sub, buildSystemPrompt(input.language, input.songMode)),
         messages: [
           {
             role: "user",
@@ -96,10 +96,14 @@ export async function onRequestPost(context) {
     const structured = restoreCharacterTokenHints(sanitizeStory(parsed?.story), input);
     if (!structured) throw new Error("No structured story generated");
     const beats = normalizeBeats(parsed?.beats, structured, input);
+    // v3.1582: 노래 모드면 비트와 1:1로 맞춘 가사를 함께 돌려준다.
+    const lyrics = input.songMode ? normalizeLyrics(parsed?.lyrics, beats.length, input) : null;
 
     return json({
       story: structured,
       beats,
+      lyrics,
+      songMode: !!input.songMode,
       fallback: false,
     }, 200, origin);
   } catch (err) {
@@ -142,10 +146,71 @@ function normalizeInput(body) {
     characters: selectedCharacters,
     excludedCharacters: excludedCharacters,
     tokenHints: extractCharacterTokens(story),
+    // v3.1582: 노래 모드면 이야기 정리와 함께 '작사'까지 한다.
+    // 클라이언트가 안 보내도 세부 장르(동요·율동)만으로 켜지게 둔다.
+    songMode: toBoolLoose(body?.songEnabled) || hasSongPurposeTag(normalizeTextList(body?.purposeTags)),
   };
 }
 
-function buildSystemPrompt(language) {
+// 훅(hook)은 후렴을 살짝 흘리는 도입부라 후렴이 아니다.
+// 여기에 넣으면 첫 [훅] 항목이 후렴으로 뽑혀 노래 전체가 도입부만 반복하게 된다.
+const CHORUS_MARKERS = ["후렴", "chorus", "refrain"];
+
+function isChorusSection(section) {
+  const raw = String(section || "").toLowerCase();
+  return CHORUS_MARKERS.some((m) => raw.includes(m));
+}
+
+/**
+ * v3.1582: LLM 이 준 가사를 비트 수에 정확히 맞춘다.
+ *
+ * 여기서 길이를 강제하지 않으면 시나리오 생성 단계에서 비트와 가사가 어긋나
+ * 어떤 씬은 가사가 비고 어떤 씬은 두 소절을 부르게 된다.
+ * 모자라면 후렴을 되풀이해 채우고(노래에서 가장 자연스러운 반복), 남으면 자른다.
+ * 단, 마지막 항목은 언제나 후렴이 되도록 맞춘다.
+ */
+function normalizeLyrics(rawLyrics, beatCount, input) {
+  const lang = input?.language === "en" ? "en" : "ko";
+  const chorusLabel = lang === "en" ? "[Chorus]" : "[후렴]";
+  const verseLabel = lang === "en" ? "[Verse]" : "[절]";
+  const list = (Array.isArray(rawLyrics) ? rawLyrics : [])
+    .map((item) => ({
+      section: sanitizeText(item?.section) || verseLabel,
+      text: restoreCharacterTokenHints(sanitizeText(item?.text), input),
+    }))
+    .filter((item) => item.text);
+  if (!list.length || !beatCount) return null;
+
+  const chorus = list.find((item) => isChorusSection(item.section)) || list[list.length - 1];
+  const out = list.slice(0, beatCount);
+  while (out.length < beatCount) {
+    // 절을 지어낼 수는 없으니 후렴을 되풀이한다 — 노래에서 가장 자연스러운 채움.
+    out.push({ section: chorusLabel, text: chorus.text });
+  }
+  // 노래는 후렴으로 끝나야 끝난 느낌이 난다.
+  const last = out[out.length - 1];
+  if (!isChorusSection(last.section)) {
+    out[out.length - 1] = { section: chorusLabel, text: chorus.text };
+  }
+  // 후렴으로 표시된 항목은 전부 같은 문장이어야 반복으로 들린다.
+  return out.map((item) => (isChorusSection(item.section)
+    ? { section: item.section, text: chorus.text, isRefrain: true }
+    : { section: item.section, text: item.text, isRefrain: false }));
+}
+
+const SONG_PURPOSE_TAGS = ["동요", "율동", "Nursery rhyme", "Movement song"];
+function hasSongPurposeTag(tags) {
+  const joined = (Array.isArray(tags) ? tags : []).join(", ");
+  if (!joined.trim()) return false;
+  return SONG_PURPOSE_TAGS.some((tag) => joined.includes(tag));
+}
+function toBoolLoose(v) {
+  if (typeof v === "boolean") return v;
+  const t = String(v == null ? "" : v).trim().toLowerCase();
+  return t === "true" || t === "1" || t === "yes";
+}
+
+function buildSystemPrompt(language, songMode = false) {
   if (language === "en") {
     return [
       "You enumerate every event in the user's story as one beat per event. You DO NOT compress, merge, or drop events. The user's story IS the source of truth.",
@@ -164,7 +229,8 @@ function buildSystemPrompt(language) {
       "Respect brand rules and avoid banned expressions when present.",
       "If the source story contains character tokens like @Nemo, preserve those exact @tokens and never strip the @ prefix.",
       "If registered characters are provided, use only those characters as the cast and do not introduce any unselected or new characters.",
-      "If no registered characters are provided, do not include named characters, protagonists, dialogue participants, or @tokens."
+      "If no registered characters are provided, do not include named characters, protagonists, dialogue participants, or @tokens.",
+      ...(songMode ? [SONG_LYRICS_RULE_EN] : []),
     ].join(" ");
   }
   return [
@@ -184,9 +250,16 @@ function buildSystemPrompt(language) {
     "브랜드 규칙과 금지 표현이 있으면 반드시 반영한다.",
     "이야기 초안에 @네모 같은 캐릭터 토큰이 있으면 그 @토큰을 그대로 유지하고 @를 절대 지우지 마라.",
     "등록 캐릭터가 있으면 그 캐릭터만 이야기의 등장 인물로 사용하고, 선택되지 않은 캐릭터나 새 캐릭터를 추가하지 마라.",
-    "등록 캐릭터가 없으면 이름 있는 캐릭터, 주인공, 대화 참여자, @토큰을 만들지 마라."
+    "등록 캐릭터가 없으면 이름 있는 캐릭터, 주인공, 대화 참여자, @토큰을 만들지 마라.",
+    ...(songMode ? [SONG_LYRICS_RULE_KO] : []),
   ].join(" ");
 }
+
+// v3.1582: 노래 모드 작사 규칙.
+// 비트마다 한 구간씩 대응시키는 이유 — 다음 단계(시나리오 생성)가 비트 단위로 병렬 호출되므로,
+// 여기서 비트에 1:1로 못 붙여두면 씬마다 다른 가사가 나와 노래가 성립하지 않는다.
+const SONG_LYRICS_RULE_KO = '[가사 필드 - 노래 모드 필수] 위 JSON 에 "lyrics" 배열을 추가한다. 형식: {"story":"...","beats":[...],"lyrics":[{"section":"[훅]|[1절]|[후렴]|[2절]","text":"..."}]}. 규칙: ① lyrics 길이는 beats 길이와 정확히 같다 (i번째 가사 = i번째 비트). ② 후렴은 최소 2번 등장하고 마지막 항목은 반드시 후렴이다. 후렴으로 표시된 항목들의 text 는 글자 하나까지 완전히 동일해야 한다. ③ 절은 그 비트의 사건을 후렴과 같은 박자·글자 수로 노래한다. ④ 각 항목은 해당 비트의 estSec(영상길이/비트수) 안에 부를 수 있는 1~2줄이다. 설명체("~합니다","~해요") 금지, 노래체로 쓴다. ⑤ 3~6세가 한 번 듣고 따라 부를 수 있게 쉬운 발음과 반복을 쓴다. ⑥ @캐릭터 토큰은 가사 안에서도 그대로 유지한다.';
+const SONG_LYRICS_RULE_EN = '[LYRICS FIELD - REQUIRED IN SONG MODE] Add a "lyrics" array to the JSON above. Format: {"story":"...","beats":[...],"lyrics":[{"section":"[Hook]|[Verse 1]|[Chorus]|[Verse 2]","text":"..."}]}. Rules: (1) lyrics length MUST equal beats length (lyrics[i] belongs to beats[i]). (2) The chorus appears at least twice and the LAST item must be the chorus; every chorus item must be character-for-character identical. (3) Verses sing that beat\'s event in the SAME meter as the chorus. (4) Each item is 1-2 lines singable within that beat\'s estSec (video length / beat count). Sung phrasing, never expository. (5) Easy consonants and repetition so a 3-6 year old can sing it back after one listen. (6) Preserve @character tokens inside the lyrics.';
 
 function buildUserPrompt(input) {
   const registeredCharacters = formatCharacterRoster(input.characters);

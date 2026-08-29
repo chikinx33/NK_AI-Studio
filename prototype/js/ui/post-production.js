@@ -938,7 +938,33 @@
       b.textContent = lang === 'en' ? '…' : '…';
       b.disabled = true;
     });
-    showPostprodToast(lang === 'en' ? 'Generating music…' : '음악 생성 중…', 30000);
+    // v3.1583: 노래 모드면 BGM 이 아니라 '가사가 들어간 노래'를 만든다.
+    // 씬의 가사와 길이를 그대로 넘겨 구간 경계가 자막 경계와 일치하게 한다.
+    var songMode = !!(payload.songEnabled);
+    var songScenes = songMode
+      ? (Array.isArray(payload.scenes) ? payload.scenes : [])
+          .map(function (sc) {
+            return {
+              lyrics: String((sc && (sc.lyrics || sc.lyricsText)) || '').trim(),
+              estSec: Number(sc && sc.estSec) || 0,
+              isRefrain: !!(sc && sc.isRefrain)
+            };
+          })
+          .filter(function (sc) { return !!sc.lyrics; })
+      : [];
+    if (songMode && !songScenes.length) {
+      showPostprodToast(lang === 'en'
+        ? 'No lyrics found in the scenes. Generate the scenario lyrics first.'
+        : '씬에 가사가 없어요. 시나리오에서 가사를 먼저 만들어 주세요.', 5000);
+      genBtns.forEach(function (b, i) { b.textContent = origTexts[i]; b.disabled = false; });
+      return;
+    }
+    showPostprodToast(
+      songMode
+        ? (lang === 'en' ? 'Composing the song…' : '노래 만드는 중…')
+        : (lang === 'en' ? 'Generating music…' : '음악 생성 중…'),
+      30000
+    );
 
     try {
       var base = getPostprodApiBase();
@@ -953,7 +979,9 @@
           subgenre:  String(Array.isArray(payload.purposeTags) ? (payload.purposeTags[0] || '') : (payload.purposeTags || '')).trim(),
           styles:    Array.isArray(payload.styles) ? payload.styles : [],
           tones:     Array.isArray(payload.tones)  ? payload.tones  : [],
-          durationSec: durationSec
+          durationSec: durationSec,
+          songMode:  songMode,
+          scenes:    songScenes
         })
       });
       var data = await res.json().catch(function () { return {}; });

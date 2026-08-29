@@ -274,6 +274,85 @@ async function generateElevenLabsMusic(
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/**
+ * v3.1583: 가사가 들어간 '노래' 생성 — Eleven Music (POST /v1/music).
+ *
+ * 기존 generateElevenLabsMusic 이 쓰던 /v1/sound-generation 은 효과음 API 라
+ * 보컬·가사를 다루지 못한다. Eleven Music 은 composition_plan.chunks 로
+ * 구간마다 가사(text)와 길이(duration_ms)를 지정할 수 있어, 우리 씬 구조와 1:1 로 맞는다.
+ *   씬 1개 → 청크 1개 (가사 + estSec*1000)
+ * 그래서 나중에 자막 타이밍을 맞출 때도 구간 경계가 이미 서로 대응한다.
+ *
+ * 엔진 교체 가능성을 남겨둔다: 이 함수만 갈아끼우면 다른 노래 엔진으로 바꿀 수 있다.
+ */
+type SongChunk = { text: string; durationMs: number; isRefrain?: boolean; section?: string };
+
+const ELEVEN_MUSIC_MIN_CHUNK_MS = 3000;
+const ELEVEN_MUSIC_MAX_TOTAL_MS = 300000;
+
+function buildCompositionPlan(chunks: SongChunk[], styles: string[]): any {
+  const positive = styles.filter(Boolean).slice(0, 8);
+  return {
+    chunks: chunks.map((c) => ({
+      text: c.text,
+      duration_ms: Math.max(ELEVEN_MUSIC_MIN_CHUNK_MS, Math.round(c.durationMs)),
+      positive_styles: positive,
+      negative_styles: ["harsh", "distorted", "explicit"],
+    })),
+  };
+}
+
+async function generateElevenSong(
+  apiKey: string,
+  chunks: SongChunk[],
+  styles: string[]
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const plan = buildCompositionPlan(chunks, styles);
+  const res = await fetch("https://api.elevenlabs.io/v1/music", {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
+    },
+    body: JSON.stringify({
+      composition_plan: plan,
+      model_id: "music_v2",
+      output_format: "mp3_44100_128",
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    // 요금제·권한 문제를 상위에서 구분할 수 있도록 상태코드를 그대로 실어 보낸다.
+    throw new Error(`eleven_music_failed::${res.status}::${errText.slice(0, 300)}`);
+  }
+  return { bytes: new Uint8Array(await res.arrayBuffer()), mimeType: "audio/mpeg" };
+}
+
+/**
+ * 씬 배열에서 노래 청크를 만든다.
+ * 연속으로 같은 가사(후렴 반복)라도 합치지 않는다 — 씬 경계가 곧 자막 경계이기 때문.
+ */
+function buildSongChunks(scenes: any[]): SongChunk[] {
+  const out: SongChunk[] = [];
+  let totalMs = 0;
+  for (const sc of Array.isArray(scenes) ? scenes : []) {
+    const text = String(sc?.lyrics || "").trim();
+    if (!text) continue;
+    const section = String(sc?.section || (sc?.isRefrain ? "[Chorus]" : "[Verse]")).trim();
+    const durationMs = Math.max(ELEVEN_MUSIC_MIN_CHUNK_MS, Math.round((Number(sc?.estSec) || 3) * 1000));
+    if (totalMs + durationMs > ELEVEN_MUSIC_MAX_TOTAL_MS) break;
+    totalMs += durationMs;
+    out.push({
+      text: /^\[/.test(text) ? text : `${section} ${text}`,
+      durationMs,
+      isRefrain: !!sc?.isRefrain,
+      section,
+    });
+  }
+  return out;
+}
+
 // ── GCS 헬퍼 (sfx.ts와 동일 패턴) ─────────────────────────────────────────
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
@@ -377,6 +456,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 재생 길이: Lyria 3 Pro 가 분 단위를 지원하므로 상한을 240초(4분)로 확장.
     // ElevenLabs 폴백 경로에서는 22초로 다시 클램프된다.
     const durationSec = Math.min(240, Math.max(3, Number(body.durationSec) || 15));
+    // v3.1583: 노래 모드 — 씬별 가사를 받아 보컬 곡을 만든다. 없으면 기존 BGM 경로 그대로.
+    const songMode = body.songMode === true || body.songMode === "true";
+    const songChunks = songMode ? buildSongChunks(body.scenes) : [];
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 
@@ -406,13 +488,40 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       ? assembleMusicPrompt(analysis, genre, subgenre, tones, durationSec)
       : MUSIC_FALLBACK;
 
-    // Step 3: 음악 생성 — Lyria 3 Pro 우선, 실패 시 ElevenLabs 폴백
+    // Step 3: 음악 생성
     let audioBytes: Uint8Array | null = null;
     let audioMimeType = "audio/mpeg";
     let providerUsed = "";
     let providerFallbackReason = "";
 
-    if (googleApiKey) {
+    // 노래 모드는 전용 경로. BGM 엔진(Lyria/효과음 API)은 가사를 부르지 못하므로 폴백하지 않고,
+    // 실패하면 왜 실패했는지 그대로 올린다 — 조용히 가사 없는 BGM 이 나오면 사용자가 알 수 없다.
+    if (songMode) {
+      if (!songChunks.length) {
+        return send({ error: "song_mode_requires_lyrics", detail: "씬에 가사가 없습니다. 시나리오에서 가사를 먼저 생성해 주세요." }, 400, origin);
+      }
+      if (!elevenLabsKey) {
+        return send({ error: "song_mode_requires_elevenlabs_key", detail: "ELEVENLABS_API_KEY 가 필요합니다." }, 500, origin);
+      }
+      try {
+        const song = await generateElevenSong(elevenLabsKey, songChunks, styles);
+        audioBytes = song.bytes;
+        audioMimeType = song.mimeType;
+        providerUsed = "eleven-music-v2";
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        return send({
+          error: "song_generation_failed",
+          detail: msg.slice(0, 400),
+          chunkCount: songChunks.length,
+          totalMs: songChunks.reduce((a, c) => a + c.durationMs, 0),
+          // 502/504 는 쓰지 않는다 — Cloudflare 가 본문을 자기 게이트웨이 오류 페이지로 덮어써
+          // 실제 실패 원인(요금제·권한 등)이 화면에서 사라진다.
+        }, 500, origin);
+      }
+    }
+
+    if (!audioBytes && googleApiKey) {
       const lyria = await generateLyriaMusic(googleApiKey, musicPrompt);
       if (lyria && lyria.bytes && lyria.bytes.length > 0) {
         audioBytes = lyria.bytes;
@@ -423,7 +532,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
     }
 
-    if (!audioBytes) {
+    if (!audioBytes && !songMode) {
       if (!elevenLabsKey) {
         return send({
           error: "music_generation_failed",

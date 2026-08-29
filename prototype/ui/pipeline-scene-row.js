@@ -41,7 +41,10 @@
 
   function isVoiceFeatureEnabled(payload) {
     var p = payload || {};
-    return !!(toBool(p.narrationEnabled, false) || toBool(p.dubbingEnabled, false));
+    return !!(toBool(p.narrationEnabled, false) || toBool(p.dubbingEnabled, false) || toBool(p.songEnabled, false));
+  }
+  function isSongMode(payload) {
+    return toBool((payload || {}).songEnabled, false);
   }
 
   function isSceneVideoProcessing(scene) {
@@ -64,6 +67,10 @@
     var p = payload || {};
     var narrationEnabled = toBool(p.narrationEnabled, false);
     var dubbingEnabled = toBool(p.dubbingEnabled, false);
+    // v3.1582: 노래 모드에서 가사는 영상 생성 프롬프트에 넣지 않는다.
+    // 넣으면 영상 모델이 가사를 자막처럼 화면에 새기거나 립싱크를 시도해 그림을 망친다.
+    // 노래는 포스트 프로덕션에서 음원으로 얹고, 자막은 자막 트랙이 담당한다.
+    if (isSongMode(p)) return '';
     if (!narrationEnabled && !dubbingEnabled) return '';
 
     // 사용자가 명시적으로 편집했으면(빈 값 포함) 그 값을 그대로 사용 — 자동 대사로 폴백하지 않음.
@@ -396,8 +403,19 @@
       (function () {
         var narOn = toBool(statePayload.narrationEnabled, false);
         var dubOn = toBool(statePayload.dubbingEnabled, false);
-        if (!narOn && !dubOn) {
+        var songOn = isSongMode(statePayload);
+        if (!narOn && !dubOn && !songOn) {
           return '<p class="eyebrow muted">대본 없음</p>';
+        }
+        // v3.1582: 노래 모드는 나레이션 자리를 '가사'가 대신한다.
+        if (songOn) {
+          var lyricsText = String((scene && (scene.lyrics || scene.subtitleText)) || '').trim();
+          var refrainChip = (scene && scene.isRefrain) ? '<span class="lyrics-refrain-chip">후렴</span>' : '';
+          return '<p class="eyebrow">가사' + refrainChip + '</p>' +
+            '<p class="story-lines is-editable is-lyrics" data-id="' + scene.id + '" data-lyrics-edit="1" contenteditable="true" spellcheck="false" ' +
+            'title="클릭해 가사를 수정 · Enter로 적용 (이미지·영상 생성에는 쓰이지 않고 자막·음원에만 반영됩니다)">' +
+            escapeText(lyricsText).replace(/\n/g, '<br>') + '</p>' +
+            voiceBlock;
         }
         var modeLabel = dubOn ? '더빙' : '나레이션';
         // 사용자가 직접 수정한 대본(scene.script)이 있으면 그것을 최우선 표시·사용한다.

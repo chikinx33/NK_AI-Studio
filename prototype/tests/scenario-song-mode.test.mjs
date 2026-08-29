@@ -155,8 +155,9 @@ test("음성 모드에 '노래' 선택지가 있고 payload 로 이어진다", (
 test("세부 장르가 동요면 음성 모드를 노래로 맞춘다", () => {
   const src = ui();
   assert.match(src, /const SONG_SUBGENRES = \['동요', '율동'/);
-  assert.match(src, /target\.id === 'purpose-tag-select' && isSongSubgenre\(target\.value\)/);
-  assert.match(src, /voiceSel\.value = 'song'/);
+  // v3.1582: 단순 자동 전환에서 '노래만 선택 가능'한 잠금으로 바뀌었다.
+  assert.match(src, /target\.id === 'purpose-tag-select' \|\| target\.id === 'purpose-category'/);
+  assert.match(src, /applyVoiceModeLock\(\)/);
   assert.match(src, /scenario_song_mode_suggested/);
 });
 

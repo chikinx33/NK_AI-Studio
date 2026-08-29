@@ -870,6 +870,9 @@
                 backgroundStyle: parent.backgroundStyle || '',
                 narration: isFirst ? (parent.narration || '') : '',
                 dialogue: isFirst ? (parent.dialogue || parent.dialogues || []) : [],
+                // v3.1582: 노래 모드 가사. 빠뜨리면 컷 분해 후 프로덕션에서 가사가 사라진다.
+                lyrics: isFirst ? (parent.lyrics || '') : '',
+                isRefrain: isFirst ? !!parent.isRefrain : false,
                 lines: isFirst ? (parent.lines || '') : '',
                 subtitleText: isFirst ? (parent.subtitleText || '') : '',
                 videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || '') : '',
@@ -935,6 +938,8 @@
               sceneLocation: s.sceneLocation || s.location || '',
               narration: s.narration || '',
               dialogue: s.dialogue || s.dialogues || [],
+              lyrics: s.lyrics || '',
+              isRefrain: !!s.isRefrain,
               script: s.script || '',
               // 사용자가 더빙 대본을 명시적으로 편집/삭제했는지(빈 값 영속 보존용)
               scriptEdited: !!s.scriptEdited,

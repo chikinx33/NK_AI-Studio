@@ -3456,6 +3456,29 @@ textarea::-webkit-scrollbar-corner {
   align-self: center;
 }
 
+/* 개요의 가사 입력칸 — 노래 모드에서만 노출 */
+.scenario-lyrics-group textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.scenario-lyrics-help { margin: 6px 0 0; }
+.voice-mode-lock-hint { margin: 6px 0 0; }
+#voice-mode-select.is-locked { opacity: .9; }
+
+/* 프로덕션 씬 행의 가사 (나레이션 자리를 대신함) */
+.story-lines.is-lyrics { font-style: italic; }
+.lyrics-refrain-chip {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .18);
+  color: #f59e0b;
+  font-size: 10px;
+  font-style: normal;
+}
+
 /* 노래 모드 — 가사 블록. 후렴 씬은 한눈에 구분되어야 반복 구조가 보인다. */
 .scenario-card .view-lyrics-lines {
   font-style: italic;

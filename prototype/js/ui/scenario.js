@@ -362,6 +362,48 @@
     return SONG_SUBGENRES.some((tag) => raw === tag || raw.includes(tag));
   };
 
+  // v3.1582: 가사는 화면엔 "[후렴] ...\n[1절] ..." 한 덩어리로 보여주고,
+  // 서버엔 비트와 1:1로 맞춘 구간 배열로 보낸다. 두 표현을 오가는 변환기.
+  // 훅(hook)은 후렴을 흘리는 도입부라 후렴으로 세지 않는다 (서버 CHORUS_MARKERS 와 같은 기준).
+  const CHORUS_MARKER_RE = /(후렴|chorus|refrain)/i;
+
+  const setSongLyricsSections = (sections) => {
+    const el = document.getElementById('scenario-lyrics-input');
+    if (!el) return;
+    const rows = (Array.isArray(sections) ? sections : [])
+      .map((s) => {
+        const section = String(s?.section || '').trim();
+        const text = String(s?.text || '').trim();
+        if (!text) return '';
+        return section ? `${section} ${text}` : text;
+      })
+      .filter(Boolean);
+    el.value = rows.join('\n');
+  };
+
+  const getSongLyricsSections = () => {
+    const el = document.getElementById('scenario-lyrics-input');
+    const raw = String(el?.value || '').trim();
+    if (!raw) return [];
+    return raw.split(/\r?\n/).map((line) => {
+      const t = String(line || '').trim();
+      if (!t) return null;
+      // "[후렴] 가사" 형태면 구간명을 떼어낸다. 표시가 없으면 절로 본다.
+      const m = t.match(/^\[([^\]]{1,20})\]\s*([\s\S]*)$/);
+      const section = m ? `[${m[1].trim()}]` : '';
+      const text = m ? String(m[2] || '').trim() : t;
+      if (!text) return null;
+      return { section: section || '[절]', text, isRefrain: CHORUS_MARKER_RE.test(section) };
+    }).filter(Boolean);
+  };
+
+  const syncSongLyricsVisibility = () => {
+    const group = document.getElementById('scenario-lyrics-group');
+    if (!group) return;
+    const isSong = (document.getElementById('voice-mode-select') || {}).value === 'song';
+    group.classList.toggle('hidden', !isSong);
+  };
+
   const notifyScenario = (msg) => {
     if (!msg) return;
     if (NK.ui?.toast?.show) NK.ui.toast.show(msg, { type: 'info', duration: 3800 });
@@ -1032,6 +1074,8 @@
     payload.narrationEnabled = voiceMode === 'narration';
     payload.dubbingEnabled = voiceMode === 'dubbing';
     payload.songEnabled = voiceMode === 'song';
+    // v3.1582: 작사해 둔 가사를 시나리오 생성으로 넘긴다. 사용자가 고쳤으면 고친 쪽이 원본.
+    payload.songLyrics = voiceMode === 'song' ? getSongLyricsSections() : [];
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1471,6 +1515,29 @@
       else if (normalized.narrationEnabled) sel.value = 'narration';
       else if (normalized.dubbingEnabled) sel.value = 'dubbing';
       else sel.value = 'none';
+    }
+    applyVoiceModeLock();
+  };
+
+  // v3.1582: 세부 장르가 동요·율동이면 음성 모드는 '노래' 하나만 고를 수 있다.
+  // 자동 전환만으로는 사용자가 곧바로 나레이션으로 되돌릴 수 있어, 가사 없는 동요가 다시 나온다.
+  // 목록에서 지우지 않고 disabled 로 두는 이유: 왜 못 고르는지 보여야 하기 때문.
+  const applyVoiceModeLock = () => {
+    const sel = document.getElementById('voice-mode-select');
+    if (!sel) return;
+    const purposeTag = document.getElementById('purpose-tag-select')?.value || '';
+    const locked = isSongSubgenre(purposeTag);
+    Array.from(sel.options || []).forEach((opt) => {
+      opt.disabled = locked && opt.value !== 'song';
+    });
+    sel.classList.toggle('is-locked', locked);
+    if (locked && sel.value !== 'song') sel.value = 'song';
+    const hint = document.getElementById('voice-mode-lock-hint');
+    if (hint) {
+      hint.textContent = locked
+        ? getScenarioText('scenario_voice_song_locked', '동요는 노래로만 만들 수 있어요.')
+        : '';
+      hint.classList.toggle('hidden', !locked);
     }
   };
 
@@ -2175,16 +2242,26 @@
           storyField.dataset.aiBeatsStory = '';
         }
 
+        // 2b) v3.1582: 노래 모드면 영상 길이에 맞춰 작사된 가사도 함께 온다.
+        let lyricsWritten = false;
+        if (Array.isArray(storyResult?.lyrics) && storyResult.lyrics.length) {
+          setSongLyricsSections(storyResult.lyrics);
+          lyricsWritten = true;
+        }
+
         // 3) 개요 자동 제안 반영 (이미 채워진 필드는 덮어쓰지 않음)
         let appliedFields = [];
         if (suggestResult && suggestResult.suggestions) {
           appliedFields = applyOverviewSuggestions(suggestResult.suggestions);
         }
 
+        applyVoiceModeLock();
+        syncSongLyricsVisibility();
         syncOverviewPayload();
 
         // 4) 사용자 피드백 토스트
         if (appliedFields.length) showOverviewSuggestedToast(appliedFields);
+        if (lyricsWritten) notifyScenario(getScenarioText('scenario_lyrics_written', '영상 길이에 맞춰 가사를 작사했어요.'));
       } catch (err) {
         alert(getScenarioText('scenario_story_structure_failed', '이야기 정리 실패') + ': ' + (err?.message || err));
       } finally {
@@ -2257,12 +2334,13 @@
           songEnabled: vm === 'song'
         });
       }
-      // v3.1580: 세부 장르가 동요·율동이면 음성 모드를 '노래'로 맞춘다.
+      // v3.1580: 세부 장르가 동요·율동이면 음성 모드를 '노래'로 잠근다.
       // 노래 모드가 아니면 가사 필드가 아예 생성되지 않아 '한 편의 동요'가 나올 수 없다.
-      if (target.id === 'purpose-tag-select' && isSongSubgenre(target.value)) {
-        const voiceSel = document.getElementById('voice-mode-select');
-        if (voiceSel && voiceSel.value !== 'song') {
-          voiceSel.value = 'song';
+      if (target.id === 'purpose-tag-select' || target.id === 'purpose-category') {
+        const wasSong = (document.getElementById('voice-mode-select') || {}).value === 'song';
+        applyVoiceModeLock();
+        const isSong = (document.getElementById('voice-mode-select') || {}).value === 'song';
+        if (isSong && !wasSong) {
           currentPayload = Object.assign({}, currentPayload || {}, {
             narrationEnabled: false,
             dubbingEnabled: false,
@@ -2270,6 +2348,7 @@
           });
           notifyScenario(getScenarioText('scenario_song_mode_suggested', '세부 장르가 동요라서 음성 모드를 노래로 맞췄어요.'));
         }
+        syncSongLyricsVisibility();
       }
       if (target.id === 'purpose-category') {
         renderOverviewSelects(Object.assign({}, getOverviewSelections(), {
