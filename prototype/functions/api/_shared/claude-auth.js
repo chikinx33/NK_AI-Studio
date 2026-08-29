@@ -398,7 +398,10 @@ export async function authDiagnose(sql, userId, env) {
     const auth = authHeadersFor(r);
     const res = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
-      headers: auth.headers,
+      // 프록시 경유 시 공유 시크릿이 없으면 프록시가 403 invalid_proxy_secret 을 낸다.
+      // claudeFetch·도달 검사에는 붙였는데 여기만 빠져 있어서, 실제로는 뚫렸는데도
+      // 라이브 테스트만 실패로 보였다.
+      headers: { ...auth.headers, ...proxyHeaders(env) },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 8,
@@ -471,13 +474,21 @@ async function probeReach(env) {
       const body = await res.text().catch(() => "");
       const requestId = String(res.headers.get("x-request-id") || "");
       const cfRay = String(res.headers.get("cf-ray") || "");
+      // 도달 판정: x-request-id 가 1순위지만, 프록시를 한 홉 거치면 헤더가 사라질 수 있다.
+      // 그때는 본문이 Anthropic 의 에러 형태(JSON + error.type)인지로 보완한다.
+      // 엣지 차단은 HTML 이라 이 조건에 걸리지 않는다.
+      let anthropicBody = false;
+      try {
+        const parsed = JSON.parse(body);
+        anthropicBody = !!(parsed && (parsed.type === "error" || (parsed.error && parsed.error.type)));
+      } catch (_) {}
       out.push({
         label: t.label,
         status: res.status,
         ms: Date.now() - startedAt,
         requestId,
         colo: cfRay.indexOf("-") >= 0 ? cfRay.slice(cfRay.lastIndexOf("-") + 1).toUpperCase() : "",
-        reached: !!requestId,
+        reached: !!requestId || anthropicBody,
         bodyHead: body.slice(0, 160),
       });
     } catch (e) {
