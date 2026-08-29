@@ -358,12 +358,16 @@ export async function resolvedAuthHeaders(sql, userId, env) {
 // Cloudflare Workers→api.anthropic.com 직접 호출은 엣지 노드에 따라 봇차단(403 "Request not allowed")이 난다.
 // CF_AI_GATEWAY_URL(예: https://gateway.ai.cloudflare.com/v1/{acct}/{gw}/anthropic) 있으면 게이트웨이 경유.
 export function anthropicMessagesUrl(env) {
-  const gw = String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim().replace(/\/+$/, "");
+  // ANTHROPIC_GATEWAY_BASE 가 CF_AI_GATEWAY_URL 보다 우선한다.
+  // Cloudflare AI Gateway 는 HKG COLO 차단을 못 고친다(게이트웨이 송출도 같은 지역).
+  // 그래서 지원 지역 프록시(openai-proxy/)를 가리키는 이 변수를 이기게 둬야,
+  // 기존 CF_AI_GATEWAY_URL 을 지우지 않고 추가만으로 전환할 수 있다.
+  const gw = String((env && (env.ANTHROPIC_GATEWAY_BASE || env.CF_AI_GATEWAY_URL)) || "").trim().replace(/\/+$/, "");
   if (gw) return `${gw}/v1/messages`;
   return "https://api.anthropic.com/v1/messages";
 }
 export function usingGateway(env) {
-  return !!String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim();
+  return !!String((env && (env.ANTHROPIC_GATEWAY_BASE || env.CF_AI_GATEWAY_URL)) || "").trim();
 }
 
 // 비밀값 노출 없이 자격증명 '종류'만 식별 (디버깅용).
@@ -452,7 +456,7 @@ export function describeAuthTrace(trace) {
  */
 async function probeReach(env) {
   const targets = [{ label: "direct", base: "https://api.anthropic.com" }];
-  const gw = String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim().replace(/\/+$/, "");
+  const gw = String((env && (env.ANTHROPIC_GATEWAY_BASE || env.CF_AI_GATEWAY_URL)) || "").trim().replace(/\/+$/, "");
   if (gw) targets.push({ label: "gateway", base: gw });
 
   const out = [];
