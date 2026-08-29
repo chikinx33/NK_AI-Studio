@@ -305,6 +305,8 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
   push("Brand rules", brandContext?.brandRules);
   push("Banned expressions", brandContext?.bannedExpressions);
   push("Other registered characters", brandContext?.otherCharacters);
+  // 회사 지식에 캐릭터별 스타일 가이드가 들어 있다. 눈으로 본 것과 어긋나면 이쪽이 우선이다.
+  push("Style guide / company knowledge", brandContext?.companyKnowledge);
   const ctx = ctxLines.length ? `\n\n[Brand IP context]\n${ctxLines.join("\n")}` : "";
 
   if (lang === "en") {
@@ -316,7 +318,10 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       "- description: everything that must stay the same every time this character is drawn — identity, silhouette, face, body proportions, limbs, costume, materials, colors, and the rendering style. Comma-separated phrases, most identity-defining first.",
       "  Write shapes POSITIVELY, never as negations: say 'rounded mitten-like hands' rather than 'no fingers'. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
       "  Include the rendering style here too (e.g. '3D toy-like render, soft pastel palette, clean outlines').",
-      "  ALWAYS name body parts by what they are. An arm without fingers is still an arm; a leg without toes is still a leg.",
+      "If the rules or style guide in [Brand IP context] contradict what you see, the rules win — they are the character's design intent.",
+      "  e.g. if the guide says 'oval side nubs, never add arms/hands', do not call them arms even if they look like arms. Instead state position, size and color precisely so they still render in the right place.",
+      "  Only when the rules say nothing about a part, follow the default below.",
+      "  Name body parts by what they are. An arm without fingers is still an arm; a leg without toes is still a leg.",
       "  Never rename a limb to a non-limb noun ('nub', 'bump', 'protrusion') just because detail is missing — image models place a part by its name.",
       "  Saying 'oval protrusion' renders a lump on the torso and loses the arm, so the character can no longer be posed.",
       "  Express missing detail as shape instead: not 'no fingers' but 'rounded mitten-like arm with no separated fingers'.",
@@ -334,7 +339,10 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "- description: 이 캐릭터를 그릴 때마다 똑같이 유지돼야 하는 모든 것 — 정체성·실루엣·얼굴·신체 비율·팔다리·의상·재질·색상, 그리고 그림체까지. 쉼표로 구분한 짧은 구로 쓰고, 정체성을 가장 크게 좌우하는 것부터 적으세요.",
     "  형태는 반드시 긍정문으로. '손가락 없음'이 아니라 '둥근 벙어리장갑 형태의 손'이라고 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
     "  그림체도 여기에 함께 적으세요(예: '3D 토이 렌더, 파스텔 색감, 깔끔한 외곽선').",
-    "  ★신체 부위는 반드시 부위 이름으로 부르세요. 팔은 손가락이 없어도 팔이고, 다리는 발가락이 없어도 다리입니다.",
+    "★[Brand IP context] 의 규칙·스타일 가이드가 눈으로 본 것과 어긋나면 규칙이 우선입니다. 그 캐릭터의 설계 의도이기 때문입니다.",
+    "  예: 가이드에 '좌우 타원 돌기, 팔/손 추가 금지' 라고 적혀 있으면 팔처럼 보여도 팔이라고 쓰지 마세요. 대신 위치·크기·색을 정확히 적어 그 자리에 그려지게 하세요.",
+    "  규칙에 그런 언급이 없을 때만 아래 기본 원칙을 따르세요.",
+    "  신체 부위는 부위 이름으로 부르세요. 팔은 손가락이 없어도 팔이고, 다리는 발가락이 없어도 다리입니다.",
     "  세부가 없다고 해서 '돌기'·'혹'·'덩어리' 같은 다른 이름으로 바꿔 부르지 마세요 — 이미지 모델은 이름으로 부위의 위치와 역할을 정합니다.",
     "  '타원형 돌기'라고 쓰면 몸에 붙은 혹이 그려지고, 팔이 사라져 포즈를 잡을 수 없습니다.",
     "  없는 세부는 형태로 표현하세요: '손가락 없음'(X) → '손가락 구분 없는 뭉툭한 타원형 팔'(O).",

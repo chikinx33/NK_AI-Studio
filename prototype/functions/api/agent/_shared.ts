@@ -3502,6 +3502,28 @@ async function runIpDescribeTool(input: any, ctx: ToolContext): Promise<any> {
     .map((e: any) => String(e?.displayName || "").trim())
     .filter((n: string) => n && n.toLowerCase() !== displayName.toLowerCase());
 
+  /*
+   * 회사 지식(스타일 가이드)도 함께 넘긴다.
+   *
+   * 이게 없어서 실제로 어긋났다: 세모의 스타일 가이드에 "좌우 크림색 타원 돌기",
+   * "금지: 팔/손 추가" 가 적혀 있는데 분석기는 그걸 못 보고 "핀 모양 노란 팔" 이라고 썼다.
+   * 에이전트는 회사 지식이 시스템 프롬프트에 들어 있어 뒤늦게 고쳤지만, 그러면
+   * 사용자가 매번 "이건 어디서 나온 거냐" 를 확인해야 한다. 처음부터 같은 자료를 보게 한다.
+   *
+   * 전부 넣으면 토큰이 커지므로 이 캐릭터를 언급한 항목을 우선하고, 그다음 일반 항목을 채운다.
+   */
+  let companyKnowledge: string[] = [];
+  try {
+    const sql = getSql(ctx.env);
+    if (sql && ctx.userId) {
+      const rows = await listCompanyKnowledge(sql, ctx.userId);
+      const key = displayName.toLowerCase();
+      const mentions = rows.filter((r) => r.text.toLowerCase().includes(key));
+      const general = rows.filter((r) => !r.text.toLowerCase().includes(key));
+      companyKnowledge = [...mentions, ...general].slice(0, 30).map((r) => r.text);
+    }
+  } catch { /* 지식 조회 실패는 분석을 막지 않는다 */ }
+
   const data = await callInternalJson(ctx, "/api/ip/analyze", {
     body: {
       characterName: displayName,
@@ -3514,6 +3536,7 @@ async function runIpDescribeTool(input: any, ctx: ToolContext): Promise<any> {
         brandRules: hub?.brandRules,
         bannedExpressions: hub?.bannedExpressions,
         otherCharacters: others,
+        companyKnowledge,
       },
     },
   });
@@ -3531,7 +3554,9 @@ async function runIpDescribeTool(input: any, ctx: ToolContext): Promise<any> {
       description: String(cur?.description || "").trim(),
       negativePrompt: String(cur?.negativePrompt || "").trim(),
     },
+    // 무엇을 근거로 썼는지 남긴다. "어디서 본 거냐" 를 사람이 되물어야 하는 상황을 없앤다.
     usedHub: !!(hub && (hub.worldSetting || hub.brandStory || hub.brandRules.length)),
+    usedCompanyKnowledge: companyKnowledge.length,
   };
 }
 

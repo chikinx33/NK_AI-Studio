@@ -42,13 +42,41 @@ test("분석 지시문이 추측 금지와 긍정 서술을 요구한다", () =>
   assert.match(src, /push\("Other registered characters", brandContext\?\.otherCharacters\)/);
 });
 
+test("회사 지식(스타일 가이드)이 분석에 함께 넘어간다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  // 이게 없어서 실제로 어긋났다: 가이드에 "타원 돌기 / 팔 추가 금지" 가 있는데
+  // 분석기는 못 보고 "핀 모양 노란 팔" 이라 썼고, 에이전트가 뒤늦게 고쳤다.
+  assert.match(shared, /listCompanyKnowledge\(sql, ctx\.userId\)/);
+  assert.match(shared, /companyKnowledge,/);
+  // 캐릭터를 언급한 항목을 먼저(토큰 예산 안에서 놓치지 않게).
+  assert.match(shared, /const mentions = rows\.filter/);
+  // 무엇을 참고했는지 결과에 남겨 추적 가능하게.
+  assert.match(shared, /usedCompanyKnowledge: companyKnowledge\.length/);
+
+  const analyze2 = analyze();
+  assert.match(analyze2, /push\("Style guide \/ company knowledge", brandContext\?\.companyKnowledge\)/);
+});
+
+test("규칙이 눈으로 본 것보다 우선한다", () => {
+  const src = analyze();
+  // 가이드가 "팔 아님" 이라고 하면 팔처럼 보여도 팔이라 쓰면 안 된다.
+  assert.match(src, /규칙이 우선입니다/);
+  assert.match(src, /the rules win/);
+  // 대신 위치·크기·색으로 그 자리에 그려지게 한다(형태 정보를 잃지 않게).
+  assert.match(src, /위치·크기·색을 정확히 적어/);
+  assert.match(src, /state position, size and color precisely/);
+  // 기본 원칙은 규칙이 침묵할 때만 적용한다.
+  assert.match(src, /규칙에 그런 언급이 없을 때만/);
+  assert.match(src, /Only when the rules say nothing about a part/);
+});
+
 test("신체 부위는 부위 이름으로 부르게 못박는다", () => {
   const src = analyze();
   // 실제로 겪은 일: 손가락 없는 팔을 "타원형 돌기" 로 바꿔 적었다. 이미지 모델은 이름으로
   // 부위의 위치·역할을 정하므로, 이렇게 쓰면 몸에 혹이 붙고 팔이 사라져 포즈를 못 잡는다.
-  assert.match(src, /신체 부위는 반드시 부위 이름으로 부르세요/);
+  assert.match(src, /신체 부위는 부위 이름으로 부르세요/);
   assert.match(src, /팔은 손가락이 없어도 팔이고/);
-  assert.match(src, /ALWAYS name body parts by what they are/);
+  assert.match(src, /Name body parts by what they are/);
   assert.match(src, /An arm without fingers is still an arm/);
   // 이름을 바꾸지 말고 '형태' 로 표현하라는 대안까지 줘야 실제로 지켜진다.
   assert.match(src, /손가락 구분 없는 뭉툭한 타원형 팔/);
