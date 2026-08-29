@@ -73,9 +73,9 @@ test("자동 채우기 문구는 한국어·영어 양쪽에 있다", () => {
   const src = hub();
   for (const key of [
     "propsTitle", "aiFill", "aiFillTitle", "aiFilling", "aiFillNoSheet", "aiFillDone", "aiFillFail",
-    // 5칸 → 2칸 개편으로 새로 생긴 라벨·힌트·플레이스홀더
-    "appearanceLabel", "appearanceHint", "appearancePlaceholder",
-    "negativeLabel", "negativeHint", "negativePlaceholder",
+    // 5칸 → 2칸 개편으로 새로 생긴 라벨·플레이스홀더
+    "appearanceLabel", "appearancePlaceholder",
+    "negativeLabel", "negativePlaceholder",
   ]) {
     const hits = src.match(new RegExp(`${key}:`, "g")) || [];
     assert.ok(hits.length >= 2, `${key} 문구가 ko/en 양쪽에 있어야 합니다 (현재 ${hits.length}곳)`);
@@ -111,6 +111,21 @@ test("텍스트 속성 입력 폼에 한국어를 직접 박아 넣지 않는다
     .filter((line) => !/^\s*\/\//.test(line)) // 주석 줄은 대상 아님
     .flatMap((line) => [...line.matchAll(/'[^'\n]*[가-힣][^'\n]*'/g)].map((m) => m[0]));
   assert.deepEqual(hardcoded, [], `사전을 거치지 않은 한글: ${hardcoded.join(" / ")}`);
+});
+
+test("두 칸은 한 줄에 6:4 로 놓이고, 라벨 밑 설명 구문은 없다", () => {
+  const src = hub();
+  // 설명 구문(character-props-hint)은 세로 길이만 잡아먹어 걷어냈다.
+  assert.doesNotMatch(src, /character-props-hint/);
+  assert.match(src, /character-props-label-appearance/);
+  assert.match(src, /character-props-label-negative/);
+
+  const css = read("prototype/styles.css");
+  // 두 칸을 6:4 로 나란히. 좁은 화면에서는 한 줄로 접힌다.
+  assert.match(css, /\.character-props-form > \.disclosure-inner \{[\s\S]*?grid-template-columns: 6fr 4fr;/);
+  assert.match(css, /@media \(max-width: 720px\) \{\s*\.character-props-form > \.disclosure-inner \{\s*grid-template-columns: 1fr;/);
+  // AI 안내는 두 칸 위에 한 줄로 걸쳐야 한다.
+  assert.match(css, /\.character-props-ai-notice \{\s*grid-column: 1 \/ -1;/);
 });
 
 test("언어를 바꾸면 열려 있던 모달도 다시 그린다", () => {

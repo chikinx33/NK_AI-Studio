@@ -140,10 +140,8 @@
         aiFillDone: 'Draft filled from the sheets. Review it and press Save.',
         aiFillFail: 'Auto-fill failed: ',
         appearanceLabel: 'Character appearance',
-        appearanceHint: '(only what it HAS · what it lacks goes below)',
         appearancePlaceholder: 'e.g. blue cube body, rounded corners, one-piece front face, short cuboid arms, 3D animation style',
         negativeLabel: 'Keep out of the image',
-        negativeHint: '(comma separated)',
         negativePlaceholder: 'e.g. fingers, human hands, extra limbs, nose'
       }
       : {
@@ -175,10 +173,8 @@
         aiFillDone: '시트 분석으로 초안을 채웠어요. 확인·수정 후 저장을 눌러주세요.',
         aiFillFail: 'AI 자동 채우기 실패: ',
         appearanceLabel: '캐릭터 생김새',
-        appearanceHint: '(있는 것만 씁니다 · 없는 건 아래 칸에)',
         appearancePlaceholder: '예: 파란 큐브형 몸, 둥근 모서리, 전면 일체형 얼굴, 짧은 육면체 팔, 3D 애니메이션 그림체',
         negativeLabel: '안 나오게 할 것',
-        negativeHint: '(쉼표 구분)',
         negativePlaceholder: '예: 손가락, 사람 손, 팔다리 추가, 코'
       };
   }
@@ -1658,8 +1654,8 @@
             (aiFillNoticeToken === entry.token
               ? '<p class="character-props-ai-notice">' + escapeHtml(ipLibraryUiText.aiFillDone) + '</p>'
               : '') +
-            '<label class="character-props-label">' + escapeHtml(ipLibraryUiText.appearanceLabel) + ' <span class="character-props-hint">' + escapeHtml(ipLibraryUiText.appearanceHint) + '</span><textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="4" placeholder="' + escapeHtml(ipLibraryUiText.appearancePlaceholder) + '">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
-            '<label class="character-props-label">' + escapeHtml(ipLibraryUiText.negativeLabel) + ' <span class="character-props-hint">' + escapeHtml(ipLibraryUiText.negativeHint) + '</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="' + escapeHtml(ipLibraryUiText.negativePlaceholder) + '">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
+            '<label class="character-props-label character-props-label-appearance">' + escapeHtml(ipLibraryUiText.appearanceLabel) + '<textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="5" placeholder="' + escapeHtml(ipLibraryUiText.appearancePlaceholder) + '">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
+            '<label class="character-props-label character-props-label-negative">' + escapeHtml(ipLibraryUiText.negativeLabel) + '<textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="5" placeholder="' + escapeHtml(ipLibraryUiText.negativePlaceholder) + '">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
             '</div>' +
             '</details>' +
             '</section>'
