@@ -3469,6 +3469,15 @@ textarea::-webkit-scrollbar-corner {
 
 /* 프로덕션 씬 행의 가사 (나레이션 자리를 대신함) */
 .story-lines.is-lyrics { font-style: italic; }
+/* 한 소절이 여러 컷에 걸칠 때, 이어지는 컷임을 흐리게 표시 */
+.story-lines.is-lyrics-continued {
+  font-style: italic;
+  opacity: .6;
+  border-left: 2px dashed var(--border);
+  padding-left: 8px;
+}
+.scenario-lyrics-summary { margin: 6px 0 0; }
+.scenario-lyrics-summary.is-mismatch { color: #f59e0b; }
 .lyrics-refrain-chip {
   margin-left: 6px;
   padding: 1px 6px;

@@ -873,6 +873,10 @@
                 // v3.1582: 노래 모드 가사. 빠뜨리면 컷 분해 후 프로덕션에서 가사가 사라진다.
                 lyrics: isFirst ? (parent.lyrics || '') : '',
                 isRefrain: isFirst ? !!parent.isRefrain : false,
+                // v3.1584: 구간 식별자는 모든 컷이 들고 있어야 한다 — 가사가 실리지 않은 중간 컷도
+                // 자기가 어느 소절 구간에 속하는지 알아야 자막 길이를 소절 단위로 계산할 수 있다.
+                songSectionId: parent.songSectionId || '',
+                songSectionLabel: parent.songSectionLabel || '',
                 lines: isFirst ? (parent.lines || '') : '',
                 subtitleText: isFirst ? (parent.subtitleText || '') : '',
                 videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || '') : '',
@@ -940,6 +944,8 @@
               dialogue: s.dialogue || s.dialogues || [],
               lyrics: s.lyrics || '',
               isRefrain: !!s.isRefrain,
+              songSectionId: s.songSectionId || '',
+              songSectionLabel: s.songSectionLabel || '',
               script: s.script || '',
               // 사용자가 더빙 대본을 명시적으로 편집/삭제했는지(빈 값 영속 보존용)
               scriptEdited: !!s.scriptEdited,

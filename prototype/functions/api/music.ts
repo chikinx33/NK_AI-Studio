@@ -16,6 +16,7 @@
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { normalizeSongSections, sectionsToSongChunks } from "./_shared/song-sections.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -330,25 +331,19 @@ async function generateElevenSong(
 }
 
 /**
- * 씬 배열에서 노래 청크를 만든다.
- * 연속으로 같은 가사(후렴 반복)라도 합치지 않는다 — 씬 경계가 곧 자막 경계이기 때문.
+ * v3.1584: 노래 청크는 '씬'이 아니라 '가사 구간'에서 만든다.
+ * 씬 단위로 자르면 한 소절이 컷 개수만큼 쪼개져 같은 가사를 여러 번 부르게 된다.
+ * 구간 1개 = 청크 1개라서 청크 경계가 곧 자막 경계이기도 하다.
  */
-function buildSongChunks(scenes: any[]): SongChunk[] {
-  const out: SongChunk[] = [];
+function buildSongChunksFromSections(rawSections: any, durationSec: number): SongChunk[] {
+  const sections = normalizeSongSections(rawSections, { durationSec, lang: "ko" });
+  const chunks = sectionsToSongChunks(sections) as SongChunk[];
   let totalMs = 0;
-  for (const sc of Array.isArray(scenes) ? scenes : []) {
-    const text = String(sc?.lyrics || "").trim();
-    if (!text) continue;
-    const section = String(sc?.section || (sc?.isRefrain ? "[Chorus]" : "[Verse]")).trim();
-    const durationMs = Math.max(ELEVEN_MUSIC_MIN_CHUNK_MS, Math.round((Number(sc?.estSec) || 3) * 1000));
-    if (totalMs + durationMs > ELEVEN_MUSIC_MAX_TOTAL_MS) break;
-    totalMs += durationMs;
-    out.push({
-      text: /^\[/.test(text) ? text : `${section} ${text}`,
-      durationMs,
-      isRefrain: !!sc?.isRefrain,
-      section,
-    });
+  const out: SongChunk[] = [];
+  for (const c of chunks) {
+    if (totalMs + c.durationMs > ELEVEN_MUSIC_MAX_TOTAL_MS) break;
+    totalMs += c.durationMs;
+    out.push(c);
   }
   return out;
 }
@@ -458,7 +453,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const durationSec = Math.min(240, Math.max(3, Number(body.durationSec) || 15));
     // v3.1583: 노래 모드 — 씬별 가사를 받아 보컬 곡을 만든다. 없으면 기존 BGM 경로 그대로.
     const songMode = body.songMode === true || body.songMode === "true";
-    const songChunks = songMode ? buildSongChunks(body.scenes) : [];
+    const songChunks = songMode ? buildSongChunksFromSections(body.songSections, durationSec) : [];
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 
@@ -498,7 +493,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 실패하면 왜 실패했는지 그대로 올린다 — 조용히 가사 없는 BGM 이 나오면 사용자가 알 수 없다.
     if (songMode) {
       if (!songChunks.length) {
-        return send({ error: "song_mode_requires_lyrics", detail: "씬에 가사가 없습니다. 시나리오에서 가사를 먼저 생성해 주세요." }, 400, origin);
+        return send({ error: "song_mode_requires_lyrics", detail: "가사 구간이 없습니다. 시나리오에서 가사를 먼저 생성해 주세요." }, 400, origin);
       }
       if (!elevenLabsKey) {
         return send({ error: "song_mode_requires_elevenlabs_key", detail: "ELEVENLABS_API_KEY 가 필요합니다." }, 500, origin);

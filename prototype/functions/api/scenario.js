@@ -2,6 +2,7 @@
 // v2.684: 풀 systemPrompt 를 덧붙이면 CF 30s 리밋 근처에서 타임아웃 났던 문제 수정.
 // enforcement-only compact suffix 로 전환, 재시도는 시간 예산에 여유가 있을 때만.
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
+import { normalizeSongSections, mapScenesToSections } from "./_shared/song-sections.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
 import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
 import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
@@ -17,7 +18,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1583";
+const SERVER_VERSION = "3.1584";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -640,8 +641,10 @@ export async function onRequestPost(context) {
     const dubbingEnabled = toBool(body.dubbingEnabled, false);
     // v3.1580: 음성 모드 '노래' — 씬마다 가사(lyrics)를 채우고 후렴을 반복시킨다.
     const songEnabled = toBool(body.songEnabled, false);
-    // v3.1582: 이야기 정리 단계에서 이미 작사된 가사. 있으면 후렴을 다시 짓지 않는다.
-    const songLyrics = normalizeSongLyricsInput(body.songLyrics);
+    // v3.1584: 이야기 정리 단계에서 작사된 '구간'들. 구간은 자기 길이를 갖고 여러 씬에 걸친다.
+    const songSections = songEnabled
+      ? normalizeSongSections(body.songSections, { durationSec: Number(duration) || 0, lang })
+      : [];
     const sceneCount = calculateSceneCountForDuration(duration);
 
     let scenes;
@@ -678,7 +681,7 @@ export async function onRequestPost(context) {
         narrationEnabled,
         dubbingEnabled,
         songEnabled,
-        songLyrics,
+        songSections,
         characters: activeCharacters,
         sceneCount,
         storyBeats,
@@ -1232,13 +1235,18 @@ function buildSingleBeatUserPromptKo(input, ctx) {
     ...(input.songEnabled ? [
       "",
       "[노래]",
-      ctx.songLyric
-        ? `[이 씬 가사 — 확정] ${ctx.songSection || ""} ${ctx.songLyric}`.trim()
+      ctx.songSectionText
+        ? `[이 컷에 흐르는 소절] ${ctx.songSection || ""} ${ctx.songSectionText}`.trim()
         : `[노래 역할] ${ctx.songRole || "verse"} — ${SONG_ROLE_GUIDE_KO[ctx.songRole] || SONG_ROLE_GUIDE_KO.verse}`,
-      ctx.songLyric
-        ? "가사는 이미 작사가 끝났다. lyrics 에 위 문장을 **글자 하나 바꾸지 말고 그대로** 넣는다. 새로 쓰거나 다듬지 않는다. visual 은 이 가사가 노래되는 동안 화면에 보일 장면으로 쓴다."
+      ctx.songSectionText
+        ? (ctx.isSectionStart
+          ? "가사는 이미 작사가 끝났다. lyrics 에 위 소절을 **글자 하나 바꾸지 말고 그대로** 넣는다. 새로 쓰거나 다듬지 않는다."
+          : "이 컷은 위 소절이 이어서 불리는 중간 구간이다. lyrics 는 빈 문자열(\"\")로 둔다 — 같은 소절을 여러 컷에 중복해 싣지 않는다.")
         : `[후렴] ${input.songRefrain || "(후렴 없음 — 이 비트에 맞는 가사를 직접 쓴다)"}`,
-      (!ctx.songLyric && input.songMeterNote) ? `[박자] ${input.songMeterNote}` : "",
+      ctx.songSectionText
+        ? "visual 은 이 소절이 흐르는 동안 화면에 보일 장면으로 쓴다. 가사 문장 자체를 화면에 글자로 띄우라는 뜻이 아니다."
+        : "",
+      (!ctx.songSectionText && input.songMeterNote) ? `[박자] ${input.songMeterNote}` : "",
     ].filter(Boolean) : []),
     "",
     `[출력] 위 비트 1개만 다루는 씬 1개를 JSON 으로. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. 음성 모드 규칙 반드시 준수.`,
@@ -1275,13 +1283,18 @@ function buildSingleBeatUserPromptEn(input, ctx) {
     ...(input.songEnabled ? [
       "",
       "[Song]",
-      ctx.songLyric
-        ? `[Lyrics for this scene - FINAL] ${ctx.songSection || ""} ${ctx.songLyric}`.trim()
+      ctx.songSectionText
+        ? `[Passage playing over this cut] ${ctx.songSection || ""} ${ctx.songSectionText}`.trim()
         : `[Song role] ${ctx.songRole || "verse"} - ${SONG_ROLE_GUIDE_EN[ctx.songRole] || SONG_ROLE_GUIDE_EN.verse}`,
-      ctx.songLyric
-        ? "The lyrics are already written. Put the line above into lyrics VERBATIM - do not rewrite or polish it. Write visual as what is on screen while that line is sung."
+      ctx.songSectionText
+        ? (ctx.isSectionStart
+          ? "The lyrics are already written. Put the passage above into lyrics VERBATIM - do not rewrite or polish it."
+          : "This cut is a continuation of that passage. Leave lyrics as an empty string (\"\") - never repeat the same passage across cuts.")
         : `[Refrain] ${input.songRefrain || "(no refrain - write lyrics that fit this beat)"}`,
-      (!ctx.songLyric && input.songMeterNote) ? `[Meter] ${input.songMeterNote}` : "",
+      ctx.songSectionText
+        ? "Write visual as what is on screen while that passage is sung. It does NOT mean rendering the lyric text on screen."
+        : "",
+      (!ctx.songSectionText && input.songMeterNote) ? `[Meter] ${input.songMeterNote}` : "",
     ].filter(Boolean) : []),
     "",
     `[Output] One JSON scene covering ONLY this beat. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. Voice-mode rule MUST be obeyed.`,
@@ -1373,21 +1386,6 @@ function enforceCharacterTokenInVisual(rawVisual, beat, input) {
  * v3.1580: 세부 장르가 song 신호를 갖는지 (동요·율동 등) RULE_LIBRARY 로 판정.
  * 클라이언트가 songEnabled 를 안 보내도 구조만은 노래로 잡기 위해 필요.
  */
-/**
- * v3.1582: 개요에서 넘어온 가사 구간 배열을 정규화한다.
- * [{section,text,isRefrain}] 형태만 통과시키고, 빈 줄은 버린다.
- */
-function normalizeSongLyricsInput(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => ({
-      section: String(item?.section || "").trim(),
-      text: String(item?.text || "").trim(),
-      isRefrain: !!item?.isRefrain,
-    }))
-    .filter((item) => item.text);
-}
-
 function hasSongTag(purposeTags) {
   const raw = Array.isArray(purposeTags) ? purposeTags.join(", ") : String(purposeTags || "");
   if (!raw.trim()) return false;
@@ -1556,11 +1554,15 @@ async function requestSingleBeatScene(input, ctx) {
   if (input?.songEnabled) {
     scene.narration = "";
     scene.dialogue = [];
-    // v3.1582: 이미 작사된 가사가 있으면 그 문장이 최종본이다. LLM 이 다듬었어도 되돌린다.
-    if (ctx?.songLyric) {
-      if (scene.lyrics !== ctx.songLyric) scene._refrainEnforced = true;
-      scene.lyrics = ctx.songLyric;
+    // v3.1584: 작사된 구간이 있으면 그 문장이 최종본이다. LLM 이 다듬었어도 되돌린다.
+    // 구간 중간 컷은 가사를 비운다 — 같은 소절이 여러 컷에 실리면 자막이 겹쳐 뜬다.
+    if (ctx?.songSectionText) {
+      const expected = ctx.isSectionStart ? ctx.songLyric : "";
+      if (scene.lyrics !== expected) scene._refrainEnforced = true;
+      scene.lyrics = expected;
       scene.isRefrain = ctx.songRole === "chorus";
+      scene.songSectionId = ctx.songSectionId || "";
+      scene.songSectionLabel = ctx.songSection || "";
     }
     // 후렴 씬인데 LLM 이 후렴을 바꿔 썼으면 코드가 원본 후렴으로 되돌린다.
     else if (ctx?.songRole === "chorus" && input.songRefrain) {
@@ -1627,19 +1629,24 @@ async function generateScenesPerBeat(input, budgetedBeats) {
   // v3.1580: 노래 모드면 씬마다 hook/verse/chorus 역할을 미리 배정한다.
   // 비트별 호출은 서로를 못 보므로 역할과 후렴을 여기서 고정해야 한 편의 노래가 된다.
   const songRoles = input?.songEnabled ? assignSongRoles(beats.length) : [];
-  // v3.1582: 이미 작사된 가사가 있으면 비트마다 그 줄을 그대로 붙인다 (LLM 재작사 금지).
-  const preLyrics = (input?.songEnabled && Array.isArray(input.songLyrics)) ? input.songLyrics : [];
+  // v3.1584: 시간축으로 계산된 비트↔구간 매핑. 구간이 시작되는 비트만 가사를 싣는다.
+  const sectionMap = (input?.songEnabled && Array.isArray(input.beatSectionMap)) ? input.beatSectionMap : [];
   const contexts = beats.map((beat, idx) => ({
     beat,
     sceneIndex: idx,
     totalScenes: beats.length,
     prevBeat: idx > 0 ? beats[idx - 1] : null,
     nextBeat: idx < beats.length - 1 ? beats[idx + 1] : null,
-    songRole: preLyrics[idx]
-      ? (preLyrics[idx].isRefrain ? "chorus" : (songRoles[idx] === "hook" ? "hook" : "verse"))
+    songRole: sectionMap[idx]
+      ? sectionMap[idx].sectionRole
       : (songRoles[idx] || ""),
-    songLyric: preLyrics[idx] ? preLyrics[idx].text : "",
-    songSection: preLyrics[idx] ? preLyrics[idx].section : "",
+    // 구간이 시작되는 비트에만 가사를 싣는다 (걸친 모든 비트에 넣으면 자막이 중복된다).
+    songLyric: sectionMap[idx] ? sectionMap[idx].lyrics : "",
+    songSection: sectionMap[idx] ? sectionMap[idx].sectionLabel : "",
+    songSectionId: sectionMap[idx] ? sectionMap[idx].sectionId : "",
+    // 가사가 안 실리는 비트도 '지금 무슨 소절이 흐르는지'는 알아야 화면을 맞출 수 있다.
+    songSectionText: sectionMap[idx] ? sectionMap[idx].sectionText : "",
+    isSectionStart: sectionMap[idx] ? !!sectionMap[idx].isSectionStart : false,
   }));
 
   const scenes = new Array(beats.length).fill(null);
@@ -1683,19 +1690,18 @@ async function generateScenarioScenesViaBeats(input) {
   const beats = Array.isArray(input.storyBeats) ? input.storyBeats : [];
   const budgeted = computeBeatTimeBudget(beats, totalSec);
 
-  // v3.1580: 노래 모드면 팬아웃 전에 후렴을 한 번만 짓는다.
-  // 비트별 호출은 병렬이라 서로의 가사를 못 본다 → 여기서 고정하지 않으면 후렴이 매 씬 달라진다.
+  // v3.1584: 노래 모드. 가사는 이미 '구간'으로 작사돼 있고, 구간은 여러 비트에 걸친다.
+  // 비트와 구간을 시간축으로 겹쳐 보고 어느 비트가 어느 소절을 부르는지 정한다.
+  // 이 매핑 하나로 자막 경계와 음원 청크 경계가 동시에 정해진다.
+  let songSections = Array.isArray(input.songSections) ? input.songSections : [];
+  let songLyricsSource = "";
   let songRefrain = "";
   let songMeterNote = "";
-  let songLyricsSource = "";
-  const preWritten = Array.isArray(input.songLyrics) ? input.songLyrics : [];
   if (input.songEnabled) {
-    if (preWritten.length) {
-      // v3.1582: 이야기 정리 단계에서 영상 길이를 보고 이미 작사했다.
-      // 여기서 또 지으면 사용자가 화면에서 고친 가사가 버려지므로 LLM 을 부르지 않는다.
-      songRefrain = (preWritten.find((l) => l.isRefrain) || preWritten[preWritten.length - 1]).text;
+    if (songSections.length) {
       songLyricsSource = "prewritten";
     } else {
+      // 개요에서 작사가 없었던 경우의 안전망 — 후렴만 지어 비트별로 절을 쓰게 한다.
       const composed = await composeSongRefrain(input, budgeted);
       if (composed) {
         songRefrain = composed.refrain;
@@ -1703,9 +1709,13 @@ async function generateScenarioScenesViaBeats(input) {
       }
       songLyricsSource = songRefrain ? "composed" : "failed";
     }
+    songRefrain = songRefrain || (songSections.find((s) => s.isRefrain) || {}).text || "";
   }
+  const beatSectionMap = (input.songEnabled && songSections.length)
+    ? mapScenesToSections(budgeted, songSections)
+    : [];
   const beatInput = input.songEnabled
-    ? Object.assign({}, input, { songRefrain, songMeterNote })
+    ? Object.assign({}, input, { songRefrain, songMeterNote, beatSectionMap })
     : input;
 
   const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(beatInput, budgeted);
@@ -1730,6 +1740,8 @@ async function generateScenarioScenesViaBeats(input) {
         dialogue: scene.dialogue,
         lyrics: scene.lyrics,
         isRefrain: scene.isRefrain,
+        songSectionId: scene.songSectionId,
+        songSectionLabel: scene.songSectionLabel,
         narrationEnabled: !!input.narrationEnabled,
         dubbingEnabled: !!input.dubbingEnabled,
         songEnabled: !!input.songEnabled,
@@ -1802,7 +1814,12 @@ async function generateScenarioScenesViaBeats(input) {
       songEnabled: !!input.songEnabled,
       songRefrain: songRefrain || "",
       songRefrainSource: songLyricsSource,
-      songRolesAssigned: input.songEnabled ? assignSongRoles(budgeted.length) : [],
+      songSections: songSections.map((sec) => ({
+        id: sec.id, label: sec.label, role: sec.role,
+        durationSec: sec.durationSec, startSec: sec.startSec, isRefrain: sec.isRefrain,
+      })),
+      songSectionCount: songSections.length,
+      songSectionSeconds: songSections.reduce((a, sec) => a + (sec.durationSec || 0), 0),
       refrainEnforced: rawScenes.filter((s) => s && s._refrainEnforced).length,
     },
   };
@@ -5330,6 +5347,9 @@ function shapeSceneByMode(input) {
   if (songEnabled) {
     out.lyrics = lyrics;
     out.isRefrain = isRefrain;
+    // 구간 식별자를 씬에 남겨야 자막·음원이 '어느 소절이 어디까지인지' 를 알 수 있다.
+    out.songSectionId = String(input.songSectionId || "").trim();
+    out.songSectionLabel = String(input.songSectionLabel || "").trim();
   }
   out.script = voiceScript;
   out.lines = subtitleText;

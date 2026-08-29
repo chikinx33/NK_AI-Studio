@@ -154,6 +154,10 @@ function flattenScenesWithShots(parentScenes) {
         // v3.1581: 가사도 첫 컷에만. 컷마다 반복되면 같은 소절을 여러 번 부르게 된다.
         lyrics: isFirst ? (parent.lyrics || "") : "",
         isRefrain: isFirst ? !!parent.isRefrain : false,
+        // v3.1584: 구간 식별자는 모든 컷이 들고 있어야 한다 — 가사가 실리지 않은 중간 컷도
+        // 자기가 어느 소절 구간에 속하는지 알아야 자막 길이를 소절 단위로 계산할 수 있다.
+        songSectionId: parent.songSectionId || "",
+        songSectionLabel: parent.songSectionLabel || "",
         lines: isFirst ? (parent.lines || "") : "",
         subtitleText: isFirst ? (parent.subtitleText || "") : "",
         videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || "") : "",

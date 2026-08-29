@@ -938,24 +938,15 @@
       b.textContent = lang === 'en' ? '…' : '…';
       b.disabled = true;
     });
-    // v3.1583: 노래 모드면 BGM 이 아니라 '가사가 들어간 노래'를 만든다.
-    // 씬의 가사와 길이를 그대로 넘겨 구간 경계가 자막 경계와 일치하게 한다.
+    // v3.1584: 노래 모드면 BGM 이 아니라 '가사가 들어간 노래'를 만든다.
+    // 씬이 아니라 **가사 구간**을 보낸다 — 씬 단위로 자르면 한 소절이 컷 개수만큼
+    // 쪼개져 같은 가사를 여러 번 부르게 된다. 구간 경계가 곧 자막 경계다.
     var songMode = !!(payload.songEnabled);
-    var songScenes = songMode
-      ? (Array.isArray(payload.scenes) ? payload.scenes : [])
-          .map(function (sc) {
-            return {
-              lyrics: String((sc && (sc.lyrics || sc.lyricsText)) || '').trim(),
-              estSec: Number(sc && sc.estSec) || 0,
-              isRefrain: !!(sc && sc.isRefrain)
-            };
-          })
-          .filter(function (sc) { return !!sc.lyrics; })
-      : [];
-    if (songMode && !songScenes.length) {
+    var songSections = songMode ? getProjectSongSections(payload) : [];
+    if (songMode && !songSections.length) {
       showPostprodToast(lang === 'en'
-        ? 'No lyrics found in the scenes. Generate the scenario lyrics first.'
-        : '씬에 가사가 없어요. 시나리오에서 가사를 먼저 만들어 주세요.', 5000);
+        ? 'No lyrics found. Generate the scenario lyrics first.'
+        : '가사가 없어요. 시나리오에서 가사를 먼저 만들어 주세요.', 5000);
       genBtns.forEach(function (b, i) { b.textContent = origTexts[i]; b.disabled = false; });
       return;
     }
@@ -981,7 +972,7 @@
           tones:     Array.isArray(payload.tones)  ? payload.tones  : [],
           durationSec: durationSec,
           songMode:  songMode,
-          scenes:    songScenes
+          songSections: songSections
         })
       });
       var data = await res.json().catch(function () { return {}; });
@@ -4296,6 +4287,79 @@
     };
   }
 
+  /**
+   * v3.1584: 프로젝트에서 가사 구간을 복원한다.
+   *
+   * 길이는 payload.songSections 의 값이 아니라 **실제 씬 타임라인**에서 다시 잰다.
+   * 시나리오 이후 컷 길이를 조정했을 수 있고, 노래는 화면에 맞아야 하기 때문이다.
+   * 그래서 구간 = 같은 songSectionId 를 가진 연속 씬들의 묶음, 길이 = 그 씬들의 estSec 합.
+   */
+  function getProjectSongSections(payload) {
+    var scenes = Array.isArray(payload && payload.scenes) ? payload.scenes : [];
+    var declared = Array.isArray(payload && payload.songSections) ? payload.songSections : [];
+    var byId = {};
+    declared.forEach(function (sec) { if (sec && sec.id) byId[sec.id] = sec; });
+
+    var groups = [];
+    var current = null;
+    scenes.forEach(function (sc) {
+      var id = String((sc && sc.songSectionId) || '').trim();
+      var lyrics = stripSpeakerTokens(String((sc && (sc.lyrics || sc.lyricsText)) || '').trim());
+      // 구간 식별자가 없는 옛 데이터는 가사가 있는 씬마다 한 구간으로 본다.
+      var key = id || (lyrics ? 'anon-' + groups.length : (current ? current.id : ''));
+      if (!key) return;
+      if (!current || current.id !== key) {
+        current = { id: key, text: lyrics, durationSec: 0, label: String((sc && sc.songSectionLabel) || ''), isRefrain: !!(sc && sc.isRefrain) };
+        groups.push(current);
+      }
+      if (!current.text && lyrics) current.text = lyrics;
+      current.durationSec += Math.max(0, Number(sc && sc.estSec) || 0);
+    });
+
+    return groups.filter(function (g) { return g.text && g.durationSec > 0; }).map(function (g) {
+      var meta = byId[g.id] || {};
+      return {
+        id: g.id,
+        label: g.label || meta.label || (g.isRefrain ? '[후렴]' : '[절]'),
+        role: meta.role || (g.isRefrain ? 'chorus' : 'verse'),
+        text: g.text,
+        durationSec: Math.round(g.durationSec),
+        isRefrain: !!(g.isRefrain || meta.isRefrain)
+      };
+    });
+  }
+
+  /**
+   * v3.1584: 노래 모드 자막은 씬이 아니라 **가사 구간** 길이만큼 떠 있어야 한다.
+   * 씬 단위로 만들면 소절 첫 컷에서만 잠깐 번쩍이고 나머지 컷에선 자막이 사라진다.
+   */
+  function buildSongSubtitleClips(scenes) {
+    var clips = [];
+    var cursor = 0;
+    var current = null;
+    (Array.isArray(scenes) ? scenes : []).forEach(function (scene, i) {
+      var dur = Math.max(0.2, Number(scene && scene.estSec) || 0);
+      var id = String((scene && scene.songSectionId) || '').trim();
+      var lyrics = stripSpeakerTokens(String((scene && (scene.lyrics || scene.subtitleText)) || '').trim());
+      if (lyrics && (!current || current.sectionId !== id || !id)) {
+        current = { sectionId: id, label: lyrics, start: cursor, end: cursor + dur, index: i };
+        clips.push(current);
+      } else if (current && id && current.sectionId === id) {
+        current.end = cursor + dur; // 같은 소절이 이어지는 컷 — 자막을 늘린다
+      }
+      cursor += dur;
+    });
+    return clips.map(function (c, idx) {
+      return {
+        id: 'sub-song-' + idx,
+        label: c.label,
+        start: round1(c.start),
+        end: round1(Math.max(c.start + 0.2, c.end)),
+        baseDuration: Math.max(0.2, c.end - c.start)
+      };
+    });
+  }
+
   function normalizeSubtitles(scene, baseStart, sceneDuration, sceneIndex) {
     if (NK.service && NK.service.exporter && NK.service.exporter.listSubtitleEntries) {
       var wrapped = { scenes: [Object.assign({}, scene, { estSec: sceneDuration })] };
@@ -4341,6 +4405,10 @@
 
   function buildTimelineModel(project) {
     var scenes = Array.isArray(project && project.scenes) ? project.scenes : [];
+    // 노래 모드에서는 자막이 씬이 아니라 가사 구간을 따라간다.
+    var songSubtitleMode = !!((project && project.payload && project.payload.songEnabled)
+      || (project && project.songEnabled))
+      && scenes.some(function (sc) { return String((sc && sc.lyrics) || '').trim(); });
     var visuals = [];
     var audio = [];
     var subtitles = [];
@@ -4446,8 +4514,14 @@
         });
       }
 
-      subtitles = subtitles.concat(normalizeSubtitles(scene, sceneStart, sceneDuration, i));
+      // v3.1584: 노래 모드 자막은 씬 루프 밖에서 구간 단위로 한 번에 만든다 (아래 참조).
+      if (!songSubtitleMode) {
+        subtitles = subtitles.concat(normalizeSubtitles(scene, sceneStart, sceneDuration, i));
+      }
       cursor = sceneEnd;
+    }
+    if (songSubtitleMode) {
+      subtitles = buildSongSubtitleClips(scenes);
     }
 
     var totalDuration = Math.max(12, Math.ceil(cursor || 0));

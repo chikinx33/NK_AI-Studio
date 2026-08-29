@@ -32,7 +32,18 @@ export function stubRequestAuth(source) {
   );
 }
 
+/**
+ * 노래 구간 모델 — 가사 길이·후렴·시간축 매핑 규칙이라 스텁을 두면 규칙이 갈라진다.
+ * 실제 구현을 그대로 끼워 넣는다.
+ */
+export function inlineSongSections(source) {
+  const helper = fs
+    .readFileSync(path.join(process.cwd(), "prototype/functions/api/_shared/song-sections.js"), "utf8")
+    .replace(/^export /gm, "");
+  return source.replace(/^import\s+.*from\s+["'].*_shared\/song-sections\.js["'];\s*$/m, () => helper);
+}
+
 /** 엔드포인트 소스를 vm 에서 돌릴 수 있게 준비한다. */
 export function prepareEndpointSource(source) {
-  return stubRequestAuth(inlineCreditHelper(source));
+  return stubRequestAuth(inlineCreditHelper(inlineSongSections(source)));
 }

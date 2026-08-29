@@ -410,8 +410,17 @@
         // v3.1582: 노래 모드는 나레이션 자리를 '가사'가 대신한다.
         if (songOn) {
           var lyricsText = String((scene && (scene.lyrics || scene.subtitleText)) || '').trim();
+          var sectionLabel = String((scene && scene.songSectionLabel) || '').trim();
+          // v3.1584: 한 소절이 여러 컷에 걸친다. 가사가 실리지 않은 중간 컷은
+          // 빈 칸이 아니라 '어느 소절이 이어지는 중'인지 보여야 편집할 때 헷갈리지 않는다.
+          if (!lyricsText) {
+            return '<p class="eyebrow muted">가사' + (sectionLabel ? ' ' + escapeText(sectionLabel) : '') + '</p>' +
+              '<p class="story-lines is-lyrics-continued muted">' +
+              (sectionLabel ? escapeText(sectionLabel) + ' 이어지는 중' : '앞 소절이 이어지는 중') + '</p>' +
+              voiceBlock;
+          }
           var refrainChip = (scene && scene.isRefrain) ? '<span class="lyrics-refrain-chip">후렴</span>' : '';
-          return '<p class="eyebrow">가사' + refrainChip + '</p>' +
+          return '<p class="eyebrow">가사' + (sectionLabel ? ' ' + escapeText(sectionLabel) : '') + refrainChip + '</p>' +
             '<p class="story-lines is-editable is-lyrics" data-id="' + scene.id + '" data-lyrics-edit="1" contenteditable="true" spellcheck="false" ' +
             'title="클릭해 가사를 수정 · Enter로 적용 (이미지·영상 생성에는 쓰이지 않고 자막·음원에만 반영됩니다)">' +
             escapeText(lyricsText).replace(/\n/g, '<br>') + '</p>' +

@@ -36,94 +36,40 @@ test("이야기 정리 단계가 노래 모드를 스스로 알아본다", () =>
   assert.match(src, /buildSystemPrompt\(input\.language, input\.songMode\)/);
 });
 
-test("작사 규칙은 비트와 1:1, 후렴 2회 이상, 마지막은 후렴을 요구한다", () => {
+test("작사 규칙은 구간 모델을 요구한다 (비트 수에 맞추지 않는다)", () => {
   const src = storyApi();
   assert.match(src, /const SONG_LYRICS_RULE_KO = /);
   assert.match(src, /const SONG_LYRICS_RULE_EN = /);
-  assert.match(src, /lyrics 길이는 beats 길이와 정확히 같다/);
-  assert.match(src, /후렴은 최소 2번 등장하고 마지막 항목은 반드시 후렴이다/);
-  // 영상 길이를 근거로 각 구간 길이를 정하게 한다
-  assert.match(src, /estSec\(영상길이\/비트수\)/);
+  // v3.1584: 가사 1구간 = 비트 1개 전제를 걷어냈다. 구간은 여러 컷에 걸친다.
+  assert.match(src, /lyrics 는 beats 와 개수를 맞추지 않는다/);
+  assert.match(src, /durationSec 합이 정확히 이 값이어야 한다/);
+  assert.match(src, /후렴은 최소 2번 등장하고 마지막 구간은 반드시 후렴이다/);
+  // 결과물이 깨지던 항목들을 프롬프트에서도 못박는다
+  assert.match(src, /가사에는 @토큰을 쓰지 않는다/);
+  assert.match(src, /줄바꿈은 슬래시\(\/\)가 아니라/);
+  assert.match(src, /label 의 절 번호는 1,2,3 순으로 올린다/);
+  assert.match(src, /이야기에 없는 사건을 지어내지 마라/);
 });
 
-test("가사는 비트 수에 강제로 맞춰지고 마지막은 후렴이 된다", () => {
-  const src = storyApi();
-  const start = src.indexOf("function normalizeLyrics(");
-  assert.ok(start > -1, "normalizeLyrics 가 있어야 한다");
-  const end = src.indexOf("\n}\n", start) + 2;
-  const isChorusStart = src.indexOf("function isChorusSection(");
-  const isChorusEnd = src.indexOf("\n}\n", isChorusStart) + 2;
-
-  const fn = new Function(
-    "sanitizeText",
-    "restoreCharacterTokenHints",
-    "CHORUS_MARKERS",
-    `${src.slice(isChorusStart, isChorusEnd)}\n${src.slice(start, end)}\nreturn normalizeLyrics;`,
-  )(
-    (v) => String(v == null ? "" : v).trim(),
-    (v) => v,
-    ["후렴", "chorus", "refrain"],
-  );
-
-  // 모자라면 후렴으로 채운다
-  const short = fn(
-    [{ section: "[훅]", text: "가나다" }, { section: "[후렴]", text: "라마바" }],
-    5,
-    { language: "ko" },
-  );
-  assert.equal(short.length, 5);
-  assert.equal(short[4].text, "라마바", "마지막은 후렴 문장이어야 한다");
-  assert.equal(short[4].isRefrain, true);
-
-  // 남으면 자르고, 그래도 마지막은 후렴
-  const long = fn(
-    [
-      { section: "[후렴]", text: "훅훅" },
-      { section: "[1절]", text: "절1" },
-      { section: "[2절]", text: "절2" },
-      { section: "[3절]", text: "절3" },
-    ],
-    2,
-    { language: "ko" },
-  );
-  assert.equal(long.length, 2);
-  assert.equal(long[1].isRefrain, true);
-  assert.equal(long[1].text, "훅훅");
-
-  // 후렴으로 표시된 항목은 모두 같은 문장 (반복으로 들려야 한다)
-  const mixed = fn(
-    [
-      { section: "[후렴]", text: "같은후렴" },
-      { section: "[1절]", text: "절하나" },
-      { section: "[후렴]", text: "제멋대로바뀐후렴" },
-    ],
-    3,
-    { language: "ko" },
-  );
-  const refrains = mixed.filter((m) => m.isRefrain).map((m) => m.text);
-  assert.equal(new Set(refrains).size, 1, `후렴이 서로 달라지면 안 된다: ${refrains.join(" / ")}`);
-
-  assert.equal(fn([], 5, { language: "ko" }), null);
-});
-
-test("작사된 가사가 있으면 시나리오 생성은 다시 작사하지 않는다", () => {
+test("작사된 구간이 있으면 시나리오 생성은 다시 작사하지 않는다", () => {
   const src = scenarioApi();
-  assert.match(src, /function normalizeSongLyricsInput\(raw\)/);
   assert.match(src, /songLyricsSource = "prewritten"/);
-  // 사용자가 화면에서 고친 가사가 버려지면 안 된다
-  assert.match(src, /여기서 또 지으면 사용자가 화면에서 고친 가사가 버려지므로 LLM 을 부르지 않는다/);
-  // 비트마다 확정 가사를 붙이고, LLM 이 다듬어도 되돌린다
-  assert.match(src, /songLyric: preLyrics\[idx\] \? preLyrics\[idx\]\.text : ""/);
-  assert.match(src, /if \(ctx\?\.songLyric\) \{[\s\S]{0,200}scene\.lyrics = ctx\.songLyric;/);
+  // 비트를 시간축으로 구간에 묶고, 구간 시작 컷에만 가사를 싣는다
+  assert.match(src, /mapScenesToSections\(budgeted, songSections\)/);
+  assert.match(src, /songLyric: sectionMap\[idx\] \? sectionMap\[idx\]\.lyrics : ""/);
+  assert.match(src, /const expected = ctx\.isSectionStart \? ctx\.songLyric : "";/);
 });
 
-test("가사 편집은 텍스트 ↔ 구간 배열을 왕복한다", () => {
+test("가사 편집은 텍스트 ↔ 구간 배열을 왕복한다 (길이 포함)", () => {
   const src = scenarioUi();
-  assert.match(src, /const setSongLyricsSections = \(sections\) => \{/);
-  assert.match(src, /const getSongLyricsSections = \(\) => \{/);
-  // "[후렴] 가사" 형태를 구간명과 본문으로 되돌린다
-  assert.match(src, /\^\\\[\(\[\^\\\]\]\{1,20\}\)\\\]/);
-  assert.match(src, /payload\.songLyrics = voiceMode === 'song' \? getSongLyricsSections\(\) : \[\]/);
+  assert.match(src, /const setSongSections = \(sections\) => \{/);
+  assert.match(src, /const getSongSections = \(\) => \{/);
+  // "[후렴](8초) 가사" 를 구간명·길이·본문으로 되돌린다
+  assert.match(src, /const SECTION_LINE_RE = /);
+  assert.match(src, /durationSec: Number\(m\[2\]\) \|\| 0/);
+  assert.match(src, /payload\.songSections = voiceMode === 'song' \? getSongSections\(\) : \[\]/);
+  // 구간 길이 합과 영상 길이가 맞는지 화면에서 바로 보인다
+  assert.match(src, /const updateSongSectionsSummary = /);
 });
 
 // ── 8단계: 프로덕션 ────────────────────────────────────────────────────────
@@ -166,12 +112,12 @@ test("노래는 Eleven Music composition_plan 으로 만든다 (효과음 API �
   assert.match(src, /https:\/\/api\.elevenlabs\.io\/v1\/sound-generation/);
 });
 
-test("씬 1개 = 청크 1개로 매핑되어 자막 경계와 맞는다", () => {
+test("구간 1개 = 청크 1개로 매핑되어 자막 경계와 맞는다", () => {
   const src = musicApi();
-  assert.match(src, /function buildSongChunks\(scenes: any\[\]\): SongChunk\[\]/);
-  assert.match(src, /duration_ms: Math\.max\(ELEVEN_MUSIC_MIN_CHUNK_MS, Math\.round\(c\.durationMs\)\)/);
-  // 후렴이 반복돼도 씬 경계를 합치지 않는다 (합치면 자막이 어긋난다)
-  assert.match(src, /연속으로 같은 가사\(후렴 반복\)라도 합치지 않는다/);
+  // v3.1584: 씬 단위로 자르면 한 소절이 컷 개수만큼 쪼개져 같은 가사를 여러 번 부른다.
+  assert.match(src, /function buildSongChunksFromSections\(rawSections: any, durationSec: number\)/);
+  assert.match(src, /sectionsToSongChunks\(sections\)/);
+  assert.doesNotMatch(src, /function buildSongChunks\(scenes/);
 });
 
 test("노래 생성 실패는 조용히 BGM 으로 흘러가지 않는다", () => {
@@ -182,11 +128,12 @@ test("노래 생성 실패는 조용히 BGM 으로 흘러가지 않는다", () =
   assert.match(src, /if \(!audioBytes && !songMode\) \{/);
 });
 
-test("포스트 프로덕션이 씬 가사와 길이를 그대로 넘긴다", () => {
+test("포스트 프로덕션이 구간과 길이를 그대로 넘긴다", () => {
   const src = postprod();
   assert.match(src, /var songMode = !!\(payload\.songEnabled\)/);
-  assert.match(src, /songMode:  songMode,/);
-  assert.match(src, /scenes:    songScenes/);
+  assert.match(src, /songSections: songSections/);
+  // 길이는 선언값이 아니라 실제 씬 타임라인에서 다시 잰다 (컷을 조정했을 수 있다)
+  assert.match(src, /current\.durationSec \+= Math\.max\(0, Number\(sc && sc\.estSec\) \|\| 0\)/);
   // 가사가 없으면 호출 자체를 하지 않는다 (헛돈 방지)
-  assert.match(src, /씬에 가사가 없어요\. 시나리오에서 가사를 먼저 만들어 주세요\./);
+  assert.match(src, /가사가 없어요\. 시나리오에서 가사를 먼저 만들어 주세요\./);
 });

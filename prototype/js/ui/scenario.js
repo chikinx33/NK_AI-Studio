@@ -362,39 +362,77 @@
     return SONG_SUBGENRES.some((tag) => raw === tag || raw.includes(tag));
   };
 
-  // v3.1582: 가사는 화면엔 "[후렴] ...\n[1절] ..." 한 덩어리로 보여주고,
-  // 서버엔 비트와 1:1로 맞춘 구간 배열로 보낸다. 두 표현을 오가는 변환기.
-  // 훅(hook)은 후렴을 흘리는 도입부라 후렴으로 세지 않는다 (서버 CHORUS_MARKERS 와 같은 기준).
-  const CHORUS_MARKER_RE = /(후렴|chorus|refrain)/i;
+  // v3.1584: 가사는 '구간'이다. 구간마다 자기 길이를 갖고 여러 컷에 걸쳐 불린다.
+  // 화면엔 "[후렴](8초) 가사..." 한 덩어리로 보여주고, 서버엔 구조화된 배열로 보낸다.
+  const SECTION_LINE_RE = /^\[([^\]]{1,20})\]\s*(?:\((\d+)\s*(?:초|s)\))?\s*([\s\S]*)$/;
 
-  const setSongLyricsSections = (sections) => {
+  const setSongSections = (sections) => {
     const el = document.getElementById('scenario-lyrics-input');
     if (!el) return;
-    const rows = (Array.isArray(sections) ? sections : [])
-      .map((s) => {
-        const section = String(s?.section || '').trim();
-        const text = String(s?.text || '').trim();
+    el.value = (Array.isArray(sections) ? sections : [])
+      .map((sec) => {
+        const text = String(sec?.text || '').trim();
         if (!text) return '';
-        return section ? `${section} ${text}` : text;
+        const label = String(sec?.label || '[절]').trim();
+        const dur = Number(sec?.durationSec) || 0;
+        // 여러 줄 가사는 이어지는 줄을 들여써서 구간 경계가 눈에 보이게 한다.
+        const body = text.split('\n').map((l, i) => (i === 0 ? l : '    ' + l)).join('\n');
+        return `${label}${dur ? `(${dur}초)` : ''} ${body}`;
       })
-      .filter(Boolean);
-    el.value = rows.join('\n');
+      .filter(Boolean)
+      .join('\n');
+    updateSongSectionsSummary(sections);
   };
 
-  const getSongLyricsSections = () => {
+  const getSongSections = () => {
     const el = document.getElementById('scenario-lyrics-input');
-    const raw = String(el?.value || '').trim();
-    if (!raw) return [];
-    return raw.split(/\r?\n/).map((line) => {
-      const t = String(line || '').trim();
-      if (!t) return null;
-      // "[후렴] 가사" 형태면 구간명을 떼어낸다. 표시가 없으면 절로 본다.
-      const m = t.match(/^\[([^\]]{1,20})\]\s*([\s\S]*)$/);
-      const section = m ? `[${m[1].trim()}]` : '';
-      const text = m ? String(m[2] || '').trim() : t;
-      if (!text) return null;
-      return { section: section || '[절]', text, isRefrain: CHORUS_MARKER_RE.test(section) };
-    }).filter(Boolean);
+    const raw = String(el?.value || '');
+    if (!raw.trim()) return [];
+    const out = [];
+    raw.split(/\r?\n/).forEach((line) => {
+      const m = String(line || '').match(SECTION_LINE_RE);
+      if (m) {
+        const text = String(m[3] || '').trim();
+        out.push({
+          label: `[${m[1].trim()}]`,
+          durationSec: Number(m[2]) || 0,
+          text,
+        });
+        return;
+      }
+      // 구간 표시가 없는 줄은 직전 구간의 이어지는 가사로 붙인다.
+      const cont = String(line || '').trim();
+      if (!cont) return;
+      if (out.length) out[out.length - 1].text = `${out[out.length - 1].text}\n${cont}`.trim();
+      else out.push({ label: '[절]', durationSec: 0, text: cont });
+    });
+    return out.filter((sec) => sec.text);
+  };
+
+  // 구간 길이 합이 영상 길이와 맞는지 바로 보여준다. 어긋나면 서버가 재분배하지만,
+  // 사용자가 직접 고칠 때 근거가 필요하다.
+  const updateSongSectionsSummary = (sections) => {
+    const el = document.getElementById('scenario-lyrics-summary');
+    if (!el) return;
+    const list = Array.isArray(sections) ? sections : getSongSections();
+    if (!list.length) { el.textContent = ''; return; }
+    const sum = list.reduce((a, sec) => a + (Number(sec?.durationSec) || 0), 0);
+    const target = getSelectedDurationSeconds();
+    const isEn = getUiLang() === 'en';
+    const parts = [
+      isEn ? `${list.length} sections` : `${list.length}구간`,
+      isEn ? `${sum}s total` : `합 ${sum}초`,
+    ];
+    if (target) parts.push(isEn ? `video ${target}s` : `영상 ${target}초`);
+    el.textContent = parts.join(' · ');
+    el.classList.toggle('is-mismatch', !!target && sum !== target);
+  };
+
+  const getSelectedDurationSeconds = () => {
+    const custom = String(document.getElementById('duration-custom-input')?.value || '').trim();
+    if (/^\d+$/.test(custom) && Number(custom) > 0) return Number(custom);
+    const preset = String(document.getElementById('duration-select')?.value || '').trim();
+    return /^\d+$/.test(preset) ? Number(preset) : 0;
   };
 
   const syncSongLyricsVisibility = () => {
@@ -402,6 +440,7 @@
     if (!group) return;
     const isSong = (document.getElementById('voice-mode-select') || {}).value === 'song';
     group.classList.toggle('hidden', !isSong);
+    if (isSong) updateSongSectionsSummary(null);
   };
 
   const notifyScenario = (msg) => {
@@ -1075,7 +1114,7 @@
     payload.dubbingEnabled = voiceMode === 'dubbing';
     payload.songEnabled = voiceMode === 'song';
     // v3.1582: 작사해 둔 가사를 시나리오 생성으로 넘긴다. 사용자가 고쳤으면 고친 쪽이 원본.
-    payload.songLyrics = voiceMode === 'song' ? getSongLyricsSections() : [];
+    payload.songSections = voiceMode === 'song' ? getSongSections() : [];
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1210,8 +1249,13 @@
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
         dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false)),
         // v3.1580: 노래 모드 — 가사와 후렴 표식
-        lyricsText: applyCharacterTokenHints(String(s?.lyrics || s?.lyricsText || '').trim(), activeCharacters),
+        // v3.1584: 가사에는 @토큰을 넣지 않는다 — 노래로 불리고 자막으로 뜨는 문장이라
+        // @ 가 남으면 음악 엔진이 "at 네모" 로 읽고 자막에도 그대로 새겨진다.
+        // 화면 연출용 @토큰은 씬의 visual 이 따로 들고 있으므로 잃는 정보가 없다.
+        lyricsText: String(s?.lyrics || s?.lyricsText || '').replace(/@+/g, '').trim(),
         isRefrain: !!s?.isRefrain,
+        songSectionId: String(s?.songSectionId || '').trim(),
+        songSectionLabel: String(s?.songSectionLabel || '').trim(),
         songEnabled: boolVal(s?.songEnabled, boolVal(currentPayload?.songEnabled, false))
       };
     });
@@ -2244,8 +2288,8 @@
 
         // 2b) v3.1582: 노래 모드면 영상 길이에 맞춰 작사된 가사도 함께 온다.
         let lyricsWritten = false;
-        if (Array.isArray(storyResult?.lyrics) && storyResult.lyrics.length) {
-          setSongLyricsSections(storyResult.lyrics);
+        if (Array.isArray(storyResult?.songSections) && storyResult.songSections.length) {
+          setSongSections(storyResult.songSections);
           lyricsWritten = true;
         }
 
