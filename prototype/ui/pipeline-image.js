@@ -175,8 +175,11 @@
   }
 
   function stripPromptTokens(text) {
+    // 사용자가 고른 토큰(@캐릭터 · #배경·소품)은 표기를 맞추기 위한 것이지 그림에 그릴
+    // 글자가 아니다. 매칭은 이름 부분 문자열로 하므로 기호만 떼어내면 된다.
     return String(text || '')
       .replace(/@([0-9A-Za-z가-힣_]{1,24})/g, '$1')
+      .replace(/#([0-9A-Za-z가-힣_]{1,24})/g, '$1')
       .replace(/\[(\d+)\]/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();

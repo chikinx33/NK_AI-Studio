@@ -1,6 +1,9 @@
 // pipeline-mention.js
-// 편집 가능한 프롬프트/더빙 필드에서 '@' 를 입력하면 브랜드 허브 자산
-// (캐릭터·배경·소품) 이름이 드롭다운으로 떠 직접 타이핑 없이 선택할 수 있게 한다.
+// 편집 가능한 프롬프트/더빙 필드에서 자산 이름을 직접 타이핑하지 않고 고를 수 있게 한다.
+//   '@' — 캐릭터 (+ 브랜드 허브의 배경·소품)
+//   '#' — 이 에피소드의 배경·소품 (배경 레퍼런스에서 만든 공간·소품이 먼저 온다)
+// 컷 생성은 씬 텍스트에 나온 "이름"으로 레퍼런스를 매칭한다. 손으로 적으면 표기가
+// 어긋나 매칭이 조용히 실패하므로, 목록에서 골라 넣는 길을 열어 둔다.
 ; (function () {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   var NK = window.NK = window.NK || {};
@@ -8,8 +11,22 @@
   var POP_ID = 'nk-mention-pop';
   var state = {
     open: false, items: [], filtered: [], active: 0,
-    fieldEl: null, atNode: null, atIndex: -1, query: '', suppressEnterKeyup: false
+    fieldEl: null, atNode: null, atIndex: -1, query: '', sigil: '@', suppressEnterKeyup: false
   };
+
+  function mentionLang() {
+    return (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+  }
+
+  var KIND_TEXT = {
+    ko: { character: '캐릭터', place: '배경', prop: '소품', asset: '배경·소품' },
+    en: { character: 'Character', place: 'Place', prop: 'Prop', asset: 'Place/Prop' }
+  };
+
+  function kindLabel(key) {
+    var dict = KIND_TEXT[mentionLang()] || KIND_TEXT.ko;
+    return dict[key] || key;
+  }
 
   function escapeHtml(s) {
     return String(s == null ? '' : s)
@@ -112,8 +129,45 @@
     return '';
   }
 
-  // 브랜드 허브 자산 → 자동완성 후보 [{token, label, kind}]
-  function buildSuggestions() {
+  // 이 에피소드의 배경(공간)·소품 → '#' 자동완성 후보.
+  // 배경 레퍼런스 모달이 payload.episodeLocations / episodeProps 에 저장한다.
+  function collectEpisodeAssets(st, projectId) {
+    var out = [];
+    var pushRows = function (rows, kind) {
+      (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        var name = String((row && row.name) || '').trim();
+        if (!name) return;
+        out.push({ name: name, kind: kind });
+      });
+    };
+    var fromPayload = function (payload) {
+      if (!payload || typeof payload !== 'object') return;
+      pushRows(payload.episodeLocations, 'place');
+      pushRows(payload.episodeProps, 'prop');
+    };
+    fromPayload(st && st.payload);
+    try {
+      if (projectId && NK.service && NK.service.project && NK.service.project.getDraftById) {
+        var draft = NK.service.project.getDraftById(projectId);
+        fromPayload(draft && draft.payload);
+      }
+    } catch (_) { }
+    // 서버 응답은 구조가 감싸여 올 수 있어 payload 후보를 몇 겹 훑는다.
+    var server = projectId ? projectEnvCache[projectId] : null;
+    if (server && typeof server === 'object') {
+      fromPayload(server.payload);
+      if (server.draft) fromPayload(server.draft.payload);
+      if (server.data) {
+        fromPayload(server.data.payload);
+        if (server.data.draft) fromPayload(server.data.draft.payload);
+      }
+    }
+    return out;
+  }
+
+  // 자산 → 자동완성 후보 [{token, label, kind}]
+  function buildSuggestions(sigil) {
+    var mark = sigil === '#' ? '#' : '@';
     var st = getCtxState();
     var brandId = resolveBrandId(st);
     var projectId = resolveProjectId(st);
@@ -127,20 +181,27 @@
     var out = [];
     var seen = {};
     var push = function (token, label, kind) {
-      var t = String(token || '').trim();
+      var t = String(token || '').trim().replace(/^[@#]+/, '');
       if (!t) return;
-      if (t.charAt(0) !== '@') t = '@' + t;
+      t = mark + t;
       var key = t.toLowerCase();
       if (seen[key]) return;
       seen[key] = 1;
-      out.push({ token: t, label: String(label || t.replace(/^@/, '')), kind: kind });
+      out.push({ token: t, label: String(label || t.slice(1)), kind: kind });
     };
+    // '#' 은 이 에피소드 자산 전용 — 배경 레퍼런스에서 만든 것이 맨 앞에 온다.
+    if (mark === '#') {
+      collectEpisodeAssets(st, projectId).forEach(function (a) {
+        push(a.name.replace(/\s+/g, ''), a.name, kindLabel(a.kind));
+      });
+    }
+    // 캐릭터는 '@' 전용이다. '#' 은 배경·소품만 보여 준다.
     try {
-      var reg = NK.service && NK.service.characterRegistry;
+      var reg = mark === '@' ? (NK.service && NK.service.characterRegistry) : null;
       if (reg && reg.listCharactersByBrand) {
         var chars = reg.listCharactersByBrand(brandId, { payload: st && st.payload }) || [];
         chars.forEach(function (c) {
-          if (c && c.isActive !== false) push(c.trigger || c.name, c.name || c.trigger, '캐릭터');
+          if (c && c.isActive !== false) push(c.trigger || c.name, c.name || c.trigger, kindLabel('character'));
         });
       }
     } catch (_) { }
@@ -209,13 +270,13 @@
         var token = String(raw.token || raw.trigger || '').trim();
         if (!token && name) token = '@' + name.replace(/\s+/g, '');
         if (!token) return;
-        push(token, name || token.replace(/^@/, ''), '배경·소품');
+        push(token, name || token.replace(/^[@#]/, ''), kindLabel(raw.kind === 'prop' ? 'prop' : 'asset'));
       });
     } catch (_) { }
     return out;
   }
 
-  // 캐럿 직전 텍스트가 '@질의' 패턴이면 위치/질의를 반환
+  // 캐럿 직전 텍스트가 '@질의' 또는 '#질의' 패턴이면 위치/질의/기호를 반환
   function caretMentionQuery() {
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount) return null;
@@ -225,9 +286,9 @@
     if (!node || node.nodeType !== 3) return null; // 텍스트 노드만
     var offset = range.endOffset;
     var before = String(node.textContent || '').slice(0, offset);
-    var m = before.match(/@([^\s@]{0,30})$/);
+    var m = before.match(/([@#])([^\s@#]{0,30})$/);
     if (!m) return null;
-    return { node: node, offset: offset, atIndex: offset - m[0].length, query: m[1] };
+    return { node: node, offset: offset, atIndex: offset - m[0].length, sigil: m[1], query: m[2] };
   }
 
   function ensurePop() {
@@ -331,7 +392,7 @@
   }
 
   function openPop(el, info) {
-    var all = buildSuggestions();
+    var all = buildSuggestions(info.sigil);
     var q = String(info.query || '').toLowerCase();
     var filtered = all.filter(function (s) {
       return !q || s.label.toLowerCase().indexOf(q) >= 0 || s.token.toLowerCase().indexOf(q) >= 0;
@@ -344,12 +405,13 @@
     state.atNode = info.node;
     state.atIndex = info.atIndex;
     state.query = info.query;
+    state.sigil = info.sigil === '#' ? '#' : '@';
     renderPop();
     positionPop();
   }
 
   function closePop() {
-    state.open = false; state.fieldEl = null; state.filtered = []; state.atNode = null; state.atIndex = -1;
+    state.open = false; state.fieldEl = null; state.filtered = []; state.atNode = null; state.atIndex = -1; state.sigil = '@';
     var pop = document.getElementById(POP_ID);
     if (pop) pop.style.display = 'none';
   }
@@ -364,8 +426,9 @@
       : String(node.textContent || '').length;
     var text = String(node.textContent || '');
     var atIndex = state.atIndex;
-    if (text.charAt(atIndex) !== '@') {
-      atIndex = text.slice(0, offset).lastIndexOf('@');
+    var mark = state.sigil === '#' ? '#' : '@';
+    if (text.charAt(atIndex) !== mark) {
+      atIndex = text.slice(0, offset).lastIndexOf(mark);
       if (atIndex < 0) { closePop(); return; }
     }
     var after = text.slice(offset);
