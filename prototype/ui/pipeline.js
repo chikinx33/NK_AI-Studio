@@ -1500,6 +1500,12 @@
     };
     // Expose fold mode for toggle handler
     ctx.getPipelineFoldMode = function () { return pipelineFoldMode; };
+    // 저장소(라이브러리) 고르기 창은 이 IIFE 안에만 있다. 배경 레퍼런스 모달은 바깥
+    // 최상위 함수라 그대로는 부를 수 없어, 네임스페이스로 꺼내 둔다.
+    if (window.NK) {
+      NK.uiPipeline = NK.uiPipeline || {};
+      NK.uiPipeline.openLibraryModal = openLibraryModal;
+    }
 
     if (window.NK && NK.uiPipelineSceneActions && NK.uiPipelineSceneActions.bindSceneEvents) {
       NK.uiPipelineSceneActions.bindSceneEvents({
@@ -2126,6 +2132,10 @@ function openBackgroundReferenceModal() {
       propRegen: '소품 재생성',
       propGen: '소품 생성',
       propPick: '파일 등록',
+      pickFile: '파일 등록',
+      pickLibrary: '저장소',
+      libraryEmpty: '저장소에 이미지가 없어요.',
+      libraryFail: '저장소를 불러오지 못했어요: ',
       addPlace: '+ 장소 추가',
       addProp: '+ 소품 추가',
       reextract: '씬에서 다시 추출',
@@ -2183,6 +2193,10 @@ function openBackgroundReferenceModal() {
       propRegen: 'Regenerate prop',
       propGen: 'Generate prop',
       propPick: 'Upload file',
+      pickFile: 'Upload file',
+      pickLibrary: 'Library',
+      libraryEmpty: 'No images in the library yet.',
+      libraryFail: 'Could not open the library: ',
       addPlace: '+ Add place',
       addProp: '+ Add prop',
       reextract: 'Re-extract from scenes',
@@ -2271,6 +2285,9 @@ function openBackgroundReferenceModal() {
             '<textarea class="bgref-desc" placeholder="' + esc(T().placeDescPh) + '" style="' + inStyle + 'resize:none;overflow:hidden;min-height:64px;">' + esc(l.description) + '</textarea>' +
             '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">' +
               '<button type="button" class="btn-secondary compact bgref-gen" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + esc(l._busy ? T().generating : (l.refObjectName ? T().regenPlate : T().genPlate)) + '</button>' +
+              '<button type="button" class="btn-secondary compact bgref-pick" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + esc(T().pickFile) + '</button>' +
+              '<button type="button" class="btn-secondary compact bgref-lib" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + esc(T().pickLibrary) + '</button>' +
+              '<input type="file" class="bgref-file" accept="image/*" style="display:none;"/>' +
               '<button type="button" class="btn-ghost compact bgref-del" style="' + btnH + '">' + esc(T().del) + '</button>' +
               '<span class="muted" style="font-size:11px;">' + esc(T().sceneCount(l.sceneIds ? l.sceneIds.length : 0)) + '</span>' +
             '</div>' +
@@ -2316,6 +2333,7 @@ function openBackgroundReferenceModal() {
             '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">' +
               '<button type="button" class="btn-secondary compact bgprop-gen" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + esc(p._busy ? T().processing : (p.refObjectName ? T().propRegen : T().propGen)) + '</button>' +
               '<button type="button" class="btn-secondary compact bgprop-pick" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + esc(T().propPick) + '</button>' +
+              '<button type="button" class="btn-secondary compact bgprop-lib" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + esc(T().pickLibrary) + '</button>' +
               '<button type="button" class="btn-ghost compact bgprop-del" style="' + btnH + '">' + esc(T().del) + '</button>' +
               '<input type="file" class="bgprop-file" accept="image/*" style="display:none;"/>' +
             '</div>' +
@@ -2372,6 +2390,16 @@ function openBackgroundReferenceModal() {
       if (del) del.onclick = function () { syncFromInputs(); locs.splice(i, 1); render(); };
       var gen = el.querySelector('.bgref-gen');
       if (gen) gen.onclick = function () { syncFromInputs(); generatePlate(i); };
+      var locFile = el.querySelector('.bgref-file');
+      var locPick = el.querySelector('.bgref-pick');
+      if (locPick && locFile) locPick.onclick = function () { syncFromInputs(); locFile.click(); };
+      if (locFile) locFile.onchange = function () {
+        var f = locFile.files && locFile.files[0];
+        locFile.value = '';
+        if (f) { syncFromInputs(); attachRefImageFile('loc', i, f); }
+      };
+      var locLib = el.querySelector('.bgref-lib');
+      if (locLib) locLib.onclick = function () { syncFromInputs(); pickRefFromLibrary('loc', i); };
       var ta = el.querySelector('.bgref-desc');
       if (ta) { autoGrow(ta); ta.addEventListener('input', function () { autoGrow(ta); }); }
       var thumb = el.querySelector('.bgref-thumb-img');
@@ -2402,6 +2430,8 @@ function openBackgroundReferenceModal() {
       var file = el.querySelector('.bgprop-file');
       var pick = el.querySelector('.bgprop-pick');
       if (pick && file) pick.onclick = function () { syncFromInputs(); file.click(); };
+      var propLib = el.querySelector('.bgprop-lib');
+      if (propLib) propLib.onclick = function () { syncFromInputs(); pickRefFromLibrary('prop', i); };
       if (file) file.onchange = function () {
         var f = file.files && file.files[0];
         file.value = '';
@@ -2553,6 +2583,62 @@ function openBackgroundReferenceModal() {
     } catch (e) {
       p._busy = false; render();
       alert(T().failProp + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 공간·소품이 공유하는 등록 경로.
+  // 어느 목록의 몇 번째인지만 다르고, "업로드해서 objectName 을 꽂는다" 는 똑같다.
+  function refRowOf(kind, i) {
+    return kind === 'loc' ? (locs[i] || null) : (props[i] || null);
+  }
+
+  async function attachRefImageFile(kind, i, file) {
+    var row = refRowOf(kind, i);
+    if (!row || !file) return;
+    var st = ctxRef.getState();
+    if (!st.draftId) { alert(T().needProject); return; }
+    if (!NK.api || !NK.api.imageUpload) { alert(T().noUploadApi); return; }
+    row._busy = true; render();
+    try {
+      var up = await NK.api.imageUpload(st.draftId, file, { kind: 'image' });
+      var objectName = String((up && up.objectName) || '').trim();
+      if (!objectName) throw new Error('upload_no_object');
+      row.refObjectName = objectName;
+      row._dataUrl = '';
+      if (kind === 'prop' && !row.id) row.id = 'p-' + slug(String(row.name || 'prop').trim() || 'prop');
+      row._busy = false; render();
+    } catch (e) {
+      row._busy = false; render();
+      alert(T().failAttach + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 저장소(라이브러리)에서 이미 만들어 둔 이미지를 골라 꽂는다.
+  // 저장소는 프록시 URL 을 돌려주므로 objectName 으로 되돌려 저장한다
+  // (URL 에는 토큰이 붙어 있어 그대로 저장하면 나중에 만료된다).
+  async function pickRefFromLibrary(kind, i) {
+    var row = refRowOf(kind, i);
+    if (!row) return;
+    var st = ctxRef.getState();
+    var projectId = st.draftId || '';
+    if (!projectId) { alert(T().needProject); return; }
+    if (!NK.api || !NK.api.library) { alert(T().libraryFail + 'API'); return; }
+    try {
+      var lib = await NK.api.library('image', projectId);
+      var items = Array.isArray(lib && lib.items) ? lib.items : [];
+      if (!items.length) { alert(T().libraryEmpty); return; }
+      var openLib = NK.uiPipeline && NK.uiPipeline.openLibraryModal;
+      if (typeof openLib !== 'function') { alert(T().libraryFail + 'UI'); return; }
+      openLib(items, 'image', function (url) {
+        var objectName = (NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(url) : '';
+        if (!objectName) return;
+        row.refObjectName = objectName;
+        row._dataUrl = '';
+        if (kind === 'prop' && !row.id) row.id = 'p-' + slug(String(row.name || 'prop').trim() || 'prop');
+        render();
+      }, projectId);
+    } catch (e) {
+      alert(T().libraryFail + (e && e.message ? e.message : e));
     }
   }
 
