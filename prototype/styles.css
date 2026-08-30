@@ -10660,6 +10660,29 @@ details[open] > .knowledge-hub-disclosure-body {
   display: block;
 }
 
+/* 원본이 사라진 시트: 빈칸처럼 보이지 않게 상태를 드러내고 삭제 버튼은 그대로 노출한다. */
+.character-sheet-slot.is-broken {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warn, #ffb020) 60%, var(--border) 40%);
+  background: color-mix(in srgb, var(--bg) 88%, transparent 12%);
+}
+
+.character-sheet-slot.is-broken .character-sheet-thumb {
+  opacity: 0;
+}
+
+.character-sheet-broken-note {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 .character-sheet-overlay-btn {
   position: absolute;
   bottom: 4px;

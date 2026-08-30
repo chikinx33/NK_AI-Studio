@@ -204,6 +204,7 @@
         preview: 'View original image',
         previewAlt: 'Original image',
         sheetAltSuffix: ' sheet',
+        brokenSheet: 'Image unavailable',
         setPrimary: 'Set as primary sheet',
         deleteSheet: 'Delete sheet',
         saveFail: 'Failed to save IP Library: ',
@@ -237,6 +238,7 @@
         preview: '원본 이미지 보기',
         previewAlt: '원본 이미지',
         sheetAltSuffix: ' 시트',
+        brokenSheet: '이미지 없음',
         setPrimary: '대표 시트 지정',
         deleteSheet: '시트 삭제',
         saveFail: 'IP 라이브러리 저장 실패: ',
@@ -470,6 +472,27 @@
       return NK.api.mediaProxyUrl(raw);
     }
     return raw;
+  }
+
+  // 원본이 이미 지워진 시트(옛 사본이 남아 되살아난 레코드 등)는 썸네일만 깨진 채 남는다.
+  // 정체 모를 찌꺼기로 보이지 않도록 상태를 드러내고, X 버튼으로 바로 지울 수 있게 한다.
+  function markBrokenSheetThumbs(scope, brokenLabel) {
+    if (!scope || !scope.querySelectorAll) return;
+    Array.prototype.forEach.call(scope.querySelectorAll('img.character-sheet-thumb'), function (img) {
+      var slot = img.closest ? img.closest('.character-sheet-slot') : null;
+      function flagBroken() {
+        if (!slot || slot.classList.contains('is-broken')) return;
+        slot.classList.add('is-broken');
+        var note = document.createElement('span');
+        note.className = 'character-sheet-broken-note';
+        note.textContent = brokenLabel;
+        slot.appendChild(note);
+      }
+      img.onerror = flagBroken;
+      if (!String(img.getAttribute('src') || '').trim()) flagBroken();
+      // 이미 실패한 캐시 이미지는 onerror 가 다시 오지 않으므로 완료 상태를 직접 본다.
+      else if (img.complete && !img.naturalWidth) flagBroken();
+    });
   }
 
   function normalizeCharacterSheets(value, characters) {
@@ -1394,6 +1417,8 @@
         '</div>' +
         previewHtml;
 
+      markBrokenSheetThumbs(box, uiText.brokenSheet);
+
       box.onclick = function (evt) {
         var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
         if (!btn) return;
@@ -1790,6 +1815,7 @@
         '</div>' +
         previewHtml;
 
+      markBrokenSheetThumbs(box, ipLibraryUiText.brokenSheet);
       restoreCharacterPropsDisclosureState(box, preservedDisclosureState);
       restoreModalActiveFieldState(box, preservedActiveField);
 

@@ -368,35 +368,43 @@
         });
     }
 
-    function mergeCharacterSheets(currentValue, incomingValue, characters) {
-        var current = normalizeCharacterSheets(currentValue, characters);
-        var incoming = normalizeCharacterSheets(incomingValue, characters);
-        var map = new Map();
-        current.forEach(function (item) {
-            map.set(String(item.token || '').toLowerCase(), item);
-        });
-        incoming.forEach(function (item) {
-            var key = String(item.token || '').toLowerCase();
-            if (!map.has(key)) {
-                map.set(key, item);
-                return;
-            }
-            var existing = map.get(key);
-            var itemMap = new Map();
-            normalizeCharacterSheetItems(existing.items).forEach(function (sheet) {
-                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
-            });
-            normalizeCharacterSheetItems(item.items).forEach(function (sheet) {
-                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
-            });
-            map.set(key, {
-                characterId: existing.characterId || item.characterId,
-                displayName: existing.displayName || item.displayName,
-                token: existing.token || item.token,
-                items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
-            });
-        });
-        return Array.from(map.values());
+    // IP 시트(캐릭터)·배경 소품 이미지 목록은 라이브러리 한 화면에서 통째로 작성된다.
+    // 예전에는 sheetId 합집합으로 병합해서, 지운 시트가 다른 사본(오래된 프로젝트 페이로드,
+    // 캐시된 브랜드 레코드)에서 되살아났다. 저장 시 서버는 빠진 시트의 GCS 오브젝트를 실제로
+    // 지우므로, 되살아난 레코드는 깨진 썸네일 찌꺼기로 남는다. 그래서 합집합 대신
+    // "권한 있는 한쪽 목록을 통째로 채택"한다.
+    var SHEET_LIST_KEYS = ['characterSheets', 'knowledgeCharacterSheets'];
+    var ENVIRONMENT_LIST_KEYS = ['environmentAssets', 'knowledgeEnvironmentAssets'];
+
+    function hasListOpinion(rawValue, keys) {
+        if (!rawValue || typeof rawValue !== 'object') return false;
+        return keys.some(function (key) { return Array.isArray(rawValue[key]); });
+    }
+
+    function countSheetItems(record) {
+        var lists = []
+            .concat(Array.isArray(record && record.characterSheets) ? record.characterSheets : [])
+            .concat(Array.isArray(record && record.environmentAssets) ? record.environmentAssets : []);
+        return lists.reduce(function (sum, entry) {
+            return sum + (Array.isArray(entry && entry.items) ? entry.items.length : 0);
+        }, 0);
+    }
+
+    // 어느 쪽 시트 목록을 채택할지 고른다.
+    // - sheetsFrom 'incoming'(서버 하이드레이트): 서버 목록이 기준. 로컬에서 지운 시트가
+    //   되살아나지 않고, 다른 기기에서 지운 시트도 그대로 반영된다.
+    // - 그 외(프로젝트 시드 병합): 라이브러리에서 저장한 이력(sheetsUpdatedAt)이 있는 쪽이 기준.
+    //   양쪽 다 이력이 없으면 비어 있지 않은 쪽을 살려 레거시 데이터 이관을 유지한다.
+    function resolveSheetSource(current, incoming, currentHas, incomingHas, sheetsFrom) {
+        if (sheetsFrom === 'incoming') return incomingHas ? 'incoming' : 'current';
+        var currentStamp = normalizeText(current && current.sheetsUpdatedAt);
+        var incomingStamp = normalizeText(incoming && incoming.sheetsUpdatedAt);
+        if (currentStamp || incomingStamp) {
+            if (incomingHas && incomingStamp > currentStamp) return 'incoming';
+            return currentHas ? 'current' : 'incoming';
+        }
+        if (incomingHas && !countSheetItems(current)) return 'incoming';
+        return currentHas ? 'current' : 'incoming';
     }
 
     function normalizeEnvironmentName(value) {
@@ -419,36 +427,6 @@
                 token: token,
                 description: normalizeText(raw.description || raw.personality || raw.note || ''),
                 items: normalizeCharacterSheetItems(raw.items)
-            });
-        });
-        return Array.from(map.values());
-    }
-
-    function mergeEnvironmentAssets(currentValue, incomingValue) {
-        var current = normalizeEnvironmentAssets(currentValue);
-        var incoming = normalizeEnvironmentAssets(incomingValue);
-        var map = new Map();
-        current.forEach(function (item) { map.set(String(item.token || '').toLowerCase(), item); });
-        incoming.forEach(function (item) {
-            var key = String(item.token || '').toLowerCase();
-            if (!map.has(key)) {
-                map.set(key, item);
-                return;
-            }
-            var existing = map.get(key);
-            var itemMap = new Map();
-            normalizeCharacterSheetItems(existing.items).forEach(function (sheet) {
-                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
-            });
-            normalizeCharacterSheetItems(item.items).forEach(function (sheet) {
-                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
-            });
-            map.set(key, {
-                assetId: existing.assetId || item.assetId,
-                displayName: existing.displayName || item.displayName,
-                token: existing.token || item.token,
-                description: item.description || existing.description || '',
-                items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
             });
         });
         return Array.from(map.values());
@@ -533,6 +511,9 @@
             knowledgeCharacters: normalizeCharacterEntries(raw.knowledgeCharacters, raw.brandCharacter),
             characterSheets: normalizeCharacterSheets(raw.characterSheets || raw.knowledgeCharacterSheets, raw.knowledgeCharacters || raw.brandCharacter),
             environmentAssets: normalizeEnvironmentAssets(raw.environmentAssets || raw.knowledgeEnvironmentAssets),
+            // 라이브러리에서 시트를 저장한 시각. 프로젝트 페이로드 같은 옛 사본과 병합할 때
+            // 어느 쪽이 최신 편집인지 판단하는 기준이 된다.
+            sheetsUpdatedAt: normalizeText(raw.sheetsUpdatedAt),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions),
@@ -686,6 +667,15 @@
         var current = normalizeBrand(currentValue || {});
         var incoming = normalizeBrand(incomingValue || {});
         var preferIncoming = !!(options && options.preferIncoming);
+        // 시트 목록은 합집합이 아니라 한쪽을 통째로 채택한다(지운 시트 부활 방지).
+        var sheetSource = resolveSheetSource(
+            current,
+            incoming,
+            hasListOpinion(currentValue, SHEET_LIST_KEYS) || hasListOpinion(currentValue, ENVIRONMENT_LIST_KEYS),
+            hasListOpinion(incomingValue, SHEET_LIST_KEYS) || hasListOpinion(incomingValue, ENVIRONMENT_LIST_KEYS),
+            options && options.sheetsFrom
+        );
+        var sheetWinner = sheetSource === 'incoming' ? incoming : current;
         return normalizeBrand({
             brandId: current.brandId || incoming.brandId,
             brandTitle: pickText(current.brandTitle, incoming.brandTitle, preferIncoming),
@@ -699,8 +689,9 @@
             brandStory: pickText(current.brandStory, incoming.brandStory, preferIncoming),
             brandCharacter: pickText(current.brandCharacter, incoming.brandCharacter, preferIncoming),
             knowledgeCharacters: mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters),
-            characterSheets: mergeCharacterSheets(current.characterSheets, incoming.characterSheets, mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters)),
-            environmentAssets: mergeEnvironmentAssets(current.environmentAssets, incoming.environmentAssets),
+            characterSheets: sheetWinner.characterSheets,
+            environmentAssets: sheetWinner.environmentAssets,
+            sheetsUpdatedAt: sheetWinner.sheetsUpdatedAt || current.sheetsUpdatedAt || incoming.sheetsUpdatedAt,
             worldSetting: pickText(current.worldSetting, incoming.worldSetting, preferIncoming),
             brandRules: mergeTextList(current.brandRules, incoming.brandRules),
             bannedExpressions: mergeTextList(current.bannedExpressions, incoming.bannedExpressions),
@@ -969,7 +960,9 @@
                 if (!remote) return brand.getById(targetId) || target || null;
                 var existing = brand.getById(targetId);
                 var merged = existing
-                    ? mergeBrandRecords(existing, remote, { preferIncoming: true })
+                    // 시트는 서버 레코드를 기준으로 삼는다. 로컬 캐시와 합집합을 만들면
+                    // 지운 시트가 새로고침마다 되살아나 깨진 썸네일로 남는다.
+                    ? mergeBrandRecords(existing, remote, { preferIncoming: true, sheetsFrom: 'incoming' })
                     : normalizeBrand(remote);
                 return upsertBrandLocal(merged);
             })
@@ -985,7 +978,17 @@
         ensureMigrated();
         var existing = brand.getById(targetId);
         // Shared knowledge edits are authored from a single UI state, so arrays must replace, not union-merge.
-        var nextBrand = normalizeBrand(Object.assign({}, existing || {}, patch || {}, { brandId: targetId, createdAt: existing && existing.createdAt }));
+        var patchTouchesSheets = SHEET_LIST_KEYS.concat(ENVIRONMENT_LIST_KEYS).some(function (key) {
+            return patch && Object.prototype.hasOwnProperty.call(patch, key);
+        });
+        var sheetsUpdatedAt = patchTouchesSheets
+            ? new Date().toISOString()
+            : normalizeText(existing && existing.sheetsUpdatedAt);
+        var nextBrand = normalizeBrand(Object.assign({}, existing || {}, patch || {}, {
+            brandId: targetId,
+            createdAt: existing && existing.createdAt,
+            sheetsUpdatedAt: sheetsUpdatedAt
+        }));
         upsertBrandLocal(nextBrand);
         if (!NK.api || !NK.api.brandSave) return nextBrand;
         var resp = await NK.api.brandSave(targetId, nextBrand);

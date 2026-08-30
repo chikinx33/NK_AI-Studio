@@ -106,11 +106,22 @@
     return Array.from(map.values());
   }
 
+  // 소스는 우선순위 순서(브랜드 레코드 → 프로젝트 페이로드)로 들어온다.
+  // 뒤쪽 프로젝트 페이로드에는 IP 라이브러리에서 이미 지운 시트가 남아 있을 수 있고
+  // (저장 시 서버가 그 이미지를 삭제하므로 참조하면 깨진다), 예전 구현은 뒤 소스가
+  // 같은 토큰을 통째로 덮어써서 지운 시트를 레퍼런스로 썼다.
+  // 이제는 시트를 가진 첫 소스가 이기고, 앞 소스에 시트가 없을 때만 뒤로 보충한다.
   function mergeCharacterSheetSources(sources, characters) {
+    var claimed = new Set();
     var merged = [];
     (Array.isArray(sources) ? sources : []).forEach(function (source) {
       if (!Array.isArray(source) || !source.length) return;
-      merged = merged.concat(source);
+      normalizeCharacterSheets(source, []).forEach(function (entry) {
+        var key = String(entry.token || '').toLowerCase();
+        if (!key || claimed.has(key) || !entry.items.length) return;
+        claimed.add(key);
+        merged.push(entry);
+      });
     });
     return normalizeCharacterSheets(merged, characters);
   }
