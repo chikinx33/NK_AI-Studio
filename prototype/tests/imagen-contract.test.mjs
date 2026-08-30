@@ -35,7 +35,7 @@ test('cut-based continuity reference keeps look but lets the prompt drive camera
   // 카메라/구도는 이 컷 프롬프트가 우선임을 강제
   assert.match(source, /do NOT reproduce the reference's composition, camera, or layout/);
   // 캐릭터 수 집계에서 continuity 는 제외(별도 인물로 렌더하지 않음)
-  assert.match(source, /item\.referenceKind !== "environment" && item\.referenceKind !== "continuity"/);
+  assert.match(source, /const isCharacterRef[\s\S]{0,200}item\.referenceKind !== "continuity"/);
 });
 
 test('frontend tags the cut reference as continuity (not a composition-locking environment ref)', () => {
@@ -57,8 +57,9 @@ test('gemini interleaves a per-character label immediately before each reference
   assert.match(source, /function buildGeminiParts\(referenceImages: NormalizedReferenceImage\[\], prompt: string, labelImages\?: boolean\)/);
   assert.match(source, /if \(labelImages\) \{/);
   assert.match(source, /Reference image \$\{index \+ 1\} \(immediately below\) is the registered/);
-  // 텍스트→이미지 + 레퍼런스 2장 이상일 때만 라벨링 활성화
-  assert.match(source, /generationMode === "text-to-image" && referenceImages\.length > 1/);
+  // 텍스트→이미지 + 레퍼런스 2장 이상일 때 라벨링 활성화
+  // (세부 배경 레퍼런스는 한 장이어도 라벨을 붙인다 — 아래 세부 배경 테스트 참고)
+  assert.match(source, /generationMode === "text-to-image" && \([\s\S]{0,240}referenceImages\.length > 1/);
 });
 
 test('text-to-image prompt enforces rendering every distinct registered character (no merge/drop)', () => {

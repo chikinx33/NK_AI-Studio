@@ -153,7 +153,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           maskImage,
           // 텍스트→이미지 + 레퍼런스 2장 이상일 때만 이미지별 캐릭터 라벨을 인터리브.
           // (단일 레퍼런스는 바인딩 모호성이 없고, image-to-image 는 0번이 소스 이미지)
-          generationMode === "text-to-image" && referenceImages.length > 1
+          // 예외: 세부 배경 레퍼런스는 한 장이어도 라벨을 붙인다 — "이 이미지를 그대로 그리지
+          // 말고 룩만 가져가라"는 지시는 이미지 바로 옆에 있어야 먹힌다.
+          generationMode === "text-to-image" && (
+            referenceImages.length > 1
+            || referenceImages.some((item) => item.referenceKind === "environment-detail")
+          )
         ),
         generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
       };
@@ -350,6 +355,10 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
       if (item.referenceKind === "continuity") {
         // 연속성 레퍼런스: 카메라/구도 복제를 명시적으로 금지한다.
         parts.push({ text: `Reference image ${index + 1} (immediately below) is a CONTINUITY reference from a previous cut in the same sequence. Reuse its character designs, colors, materials, world/setting art style, and lighting mood ONLY. Do NOT copy its camera angle, shot size, framing, perspective, or subject placement — the composition must follow the text prompt above.` });
+      } else if (item.referenceKind === "environment-detail") {
+        // 세부 배경: 같은 공간이지만 "다른 그림"이어야 한다. 룩만 잇고 구도는 프롬프트를 따른다.
+        const subject = String(item.subjectDescription || "this location").trim() || "this location";
+        parts.push({ text: `Reference image ${index + 1} (immediately below) shows the SAME location (${subject}) in a wide establishing view. Match its art style, materials, colors, textures and lighting EXACTLY, but do NOT reproduce its composition, camera angle, framing, or that wide room view. This image must be a different, closer shot of the specific detail described in the text prompt above.` });
       } else {
         const subject = String(item.subjectDescription || `registered character ${index + 1}`).trim() || `registered character ${index + 1}`;
         const kindLabel = item.referenceKind === "environment" ? "background/prop" : "character";
@@ -466,6 +475,9 @@ function buildGeminiImagePrompt(
     // 그대로 둔 채 지시문이 요청한 것만 바꾸도록 강하게 보존을 지시한다.
     const editGuideLines = referenceImages.slice(1).map((item, i) => {
       const label = String(item.subjectDescription || `reference ${i + 2}`).trim() || `reference ${i + 2}`;
+      if (item.referenceKind === "environment-detail") {
+        return `Reference image ${i + 2} (${label}) shows the same location in a wide view. Match its materials, colors, and lighting only; do not copy its layout, framing, or camera.`;
+      }
       if (item.referenceKind === "environment") {
         // 배경·소품 레퍼런스: 캐릭터 신원 가이드와 반대로, 해당 배경/소품을 그릴 때
         // 그 레이아웃·구조·재질·색·조명을 그대로 재현하도록 지시한다.
@@ -539,6 +551,10 @@ function buildGeminiImagePrompt(
       // 연속성 레퍼런스: "구도"가 아니라 룩(캐릭터/색/재질/월드/조명)만 잇는다.
       return `One reference image is a CONTINUITY reference from ${subject}. Reuse the same character designs, colors, materials, world/setting art style, and lighting mood so this cut clearly belongs to the same sequence. This reference governs LOOK ONLY, not composition.`;
     }
+    if (item.referenceKind === "environment-detail") {
+      // 레이아웃까지 유지하라고 하면 기본 배경과 똑같은 그림이 나온다(세부 배경이 안 나오던 원인).
+      return `One reference image shows ${subject} in a wide view. Keep the same art style, materials, colors, textures, and lighting, but render the NEW framing described in the prompt — a closer, tighter shot of the specified detail. Do NOT reproduce the reference's layout, camera angle, or wide composition.`;
+    }
     if (item.referenceKind === "environment") {
       return `Use the provided registered reference image for ${subject} and keep the exact same layout, architecture, props, materials, colors, and lighting. Do not redesign this background or prop.`;
     }
@@ -546,9 +562,13 @@ function buildGeminiImagePrompt(
   });
   const groupedValues = Array.from(grouped.values());
   const hasContinuityRef = groupedValues.some((item) => item.referenceKind === "continuity");
-  const hasEnvRef = groupedValues.some((item) => item.referenceKind === "environment");
-  const hasCharacterRef = groupedValues.some((item) => item.referenceKind !== "environment" && item.referenceKind !== "continuity");
-  const characterRefCount = groupedValues.filter((item) => item.referenceKind !== "environment" && item.referenceKind !== "continuity").length;
+  const hasEnvRef = groupedValues.some((item) => item.referenceKind === "environment" || item.referenceKind === "environment-detail");
+  const hasEnvDetailRef = groupedValues.some((item) => item.referenceKind === "environment-detail");
+  const isCharacterRef = (item: NormalizedReferenceImage) => item.referenceKind !== "environment"
+    && item.referenceKind !== "environment-detail"
+    && item.referenceKind !== "continuity";
+  const hasCharacterRef = groupedValues.some(isCharacterRef);
+  const characterRefCount = groupedValues.filter(isCharacterRef).length;
   // 다중 캐릭터: 각 이미지에 인접 라벨(buildGeminiParts)이 붙으므로, 프롬프트에서도
   // "전원을 각자의 시트로, 병합·교체·중복·누락 없이" 렌더하도록 못박는다.
   // 이 지시가 없으면 모델이 첫 캐릭터만 강하게 반영하고 나머지를 흘리는 회귀가 있었다.
@@ -565,9 +585,14 @@ function buildGeminiImagePrompt(
     : hasEnvRef
       ? "The uploaded reference images define the official registered background/prop designs."
       : "";
+  // 세부 배경도 연속성 레퍼런스와 같은 이유로, 구도는 이 컷의 프롬프트가 절대 우선이다.
+  const envDetailCompositionLine = hasEnvDetailRef
+    ? "CRITICAL: The location reference governs LOOK ONLY (style, materials, palette, lighting). Build this image's framing, camera angle, and shot size strictly from the text prompt above. Do NOT return the same wide view as the reference."
+    : "";
   return [
     base,
     continuityCompositionLine,
+    envDetailCompositionLine,
     ...conversationLines,
     designHeader,
     multiCharacterLine,
@@ -919,8 +944,13 @@ async function normalizeReferenceImages(args: {
     const subjectType = normalizeSubjectType(raw.subjectType);
     // referenceKind: character(기본) | environment(배경·소품) | continuity(이전 컷 연속성 — 캐릭터/
     // 색/재질/월드/조명만 유지, 카메라·구도는 새 프롬프트를 따름)
+    // environment-detail: 같은 공간의 "세부 배경"(그 공간 안 특정 요소를 당겨 찍은 컷).
+    //   재질·색·조명은 잇되 레이아웃·구도는 복제하면 안 된다. environment 로 보내면
+    //   "레이아웃을 그대로 유지하라"는 지시가 붙어 기본 배경과 똑같은 그림이 나온다.
     const rkRaw = String(raw.referenceKind || "").trim().toLowerCase();
-    const referenceKind = rkRaw === "environment" ? "environment"
+    const referenceKind = (rkRaw === "environment-detail" || rkRaw === "environment_detail" || rkRaw === "env-detail")
+      ? "environment-detail"
+      : rkRaw === "environment" ? "environment"
       : (rkRaw === "continuity" || rkRaw === "cut") ? "continuity"
       : "character";
     out.push({

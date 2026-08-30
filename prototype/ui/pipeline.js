@@ -2051,7 +2051,7 @@ function openBackgroundReferenceModal() {
           refObjectName: l.refObjectName || '',
           // 세부 배경(같은 공간의 다른 뷰: 바닥/수면 등). 기본 플레이트를 참조해 일관성 유지.
           variants: Array.isArray(l.variants) ? l.variants.map(function (v) {
-            return { id: v.id || '', label: v.label || '', refObjectName: v.refObjectName || '', _busy: false };
+            return { id: v.id || '', label: v.label || '', description: v.description || '', refObjectName: v.refObjectName || '', _busy: false };
           }) : [],
           sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false
         };
@@ -2077,6 +2077,7 @@ function openBackgroundReferenceModal() {
         var vi = Number(vel.getAttribute('data-vi'));
         if (locs[i].variants && locs[i].variants[vi]) {
           var vl = vel.querySelector('.bgref-vlabel'); if (vl) locs[i].variants[vi].label = vl.value;
+          var vd = vel.querySelector('.bgref-vdesc'); if (vd) locs[i].variants[vi].description = vd.value;
         }
       });
     });
@@ -2106,11 +2107,14 @@ function openBackgroundReferenceModal() {
               (l.refObjectName
                 ? (l.variants || []).map(function (v, vi) {
                     var vurl = thumbUrl(v.refObjectName) || (v._dataUrl || '');
-                    return '<div class="bgref-variant" data-vi="' + vi + '" style="width:104px;border:1px solid var(--border);border-radius:6px;padding:4px;">' +
+                    return '<div class="bgref-variant" data-vi="' + vi + '" style="width:150px;border:1px solid var(--border);border-radius:6px;padding:4px;">' +
                       '<div style="width:100%;height:56px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
                         (vurl ? '<img class="bgref-vthumb" src="' + esc(vurl) + '" data-full="' + esc(vurl) + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:10px;">' + (v._busy ? '생성중' : '없음') + '</span>') +
                       '</div>' +
-                      '<input class="bgref-vlabel" type="text" value="' + esc(v.label) + '" placeholder="예: 바닥" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;"/>' +
+                      '<input class="bgref-vlabel" type="text" value="' + esc(v.label) + '" placeholder="예: 바닥, ABC 육면 큐브" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;"/>' +
+                      // 이름만으로는 기본 배경 묘사에 묻혀 같은 그림이 나온다. 무엇을 어떻게
+                      // 담을지 여기에 적으면 그게 이 컷의 주제가 된다.
+                      '<textarea class="bgref-vdesc" placeholder="이 세부 배경 묘사 (예: 알파벳이 새겨진 나무 큐브를 가까이서, 카펫 위에 놓인 채)" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;resize:none;overflow:hidden;min-height:44px;">' + esc(v.description || '') + '</textarea>' +
                       '<div style="display:flex;gap:3px;margin-top:3px;">' +
                         '<button type="button" class="btn-secondary compact bgref-vgen" style="font-size:10px;padding:3px 5px;flex:1;"' + (v._busy ? ' disabled' : '') + '>' + (v._busy ? '...' : (v.refObjectName ? '재생성' : '생성')) + '</button>' +
                         '<button type="button" class="btn-ghost compact bgref-vdel" style="font-size:11px;padding:3px 6px;">×</button>' +
@@ -2178,9 +2182,11 @@ function openBackgroundReferenceModal() {
         if (vdel) vdel.onclick = function () { syncFromInputs(); if (locs[i] && locs[i].variants) { locs[i].variants.splice(vi, 1); render(); } };
         var vth = vel.querySelector('.bgref-vthumb');
         if (vth) vth.onclick = function () { openLightbox(vth.getAttribute('data-full')); };
+        var vta = vel.querySelector('.bgref-vdesc');
+        if (vta) { autoGrow(vta); vta.addEventListener('input', function () { autoGrow(vta); }); }
       });
       var vadd = el.querySelector('.bgref-vadd');
-      if (vadd) vadd.onclick = function () { syncFromInputs(); if (locs[i]) { locs[i].variants = locs[i].variants || []; locs[i].variants.push({ id: '', label: '', refObjectName: '', _busy: false }); render(); } };
+      if (vadd) vadd.onclick = function () { syncFromInputs(); if (locs[i]) { locs[i].variants = locs[i].variants || []; locs[i].variants.push({ id: '', label: '', description: '', refObjectName: '', _busy: false }); render(); } };
     });
     var addBtn = overlay.querySelector('#bgref-add');
     if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', variants: [], sceneIds: [], _busy: false }); render(); };
@@ -2228,10 +2234,18 @@ function openBackgroundReferenceModal() {
     try {
       var st = ctxRef.getState();
       var primaryUrl = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : '';
+      // 주제(세부 배경)를 맨 앞에 세운다. 예전에는 장소 전체 묘사를 먼저 깔고 세부 지시를
+      // 한 줄 덧붙였는데, 긴 방 묘사가 프롬프트를 지배해 기본 배경과 똑같은 그림이 나왔다.
+      // 장소 묘사는 "재질·팔레트·조명 참고용 맥락"으로 뒤로 물리고, 구도는 세부 배경이 정한다.
+      var vDesc = String(v.description || '').trim();
+      var placeName = String(l.name || 'this place').trim();
       var prompt = [
         commonPromptOf(st),
-        l.description || l.name,
-        'This is the SAME location as the reference image (' + (l.name || 'this place') + '). Show the "' + v.label + '" view/angle of this same place — keep the exact same architecture, materials, colors and lighting as the reference. Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
+        'SUBJECT: "' + v.label + '" — a specific detail inside ' + placeName + '.',
+        vDesc || ('A close, focused view of the ' + v.label + ' found in ' + placeName + '.'),
+        'FRAMING: tight, closer shot centered on the ' + v.label + '. It must fill most of the frame. Do NOT render the wide establishing view of ' + placeName + ' — that wide view already exists as the reference image.',
+        'CONTEXT (materials, palette and lighting only — do not reproduce this as the framing): ' + String(l.description || placeName).trim(),
+        'Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
         'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood/background lines above and the reference image. Do not invent or change the art style.'
       ].filter(Boolean).join('\n');
       var json = await NK.api.imagen({
@@ -2239,12 +2253,15 @@ function openBackgroundReferenceModal() {
         aspectRatio: st.aspectRatio || '16:9',
         projectId: st.draftId || '',
         generationMode: 'text-to-image',
+        // environment(레이아웃까지 그대로 유지) 가 아니라 environment-detail(룩만 유지, 구도는
+        // 프롬프트를 따름). environment 로 보내면 서버가 "같은 레이아웃을 유지하라"고 지시해
+        // 기본 배경과 동일한 이미지가 돌아온다.
         referenceImages: primaryUrl ? [{
           referenceId: 1,
           referenceType: 'REFERENCE_TYPE_STYLE',
-          referenceKind: 'environment',
+          referenceKind: 'environment-detail',
           imageDataUrl: primaryUrl,
-          subjectDescription: (l.name || 'this location') + ' base background plate; keep its materials, colors and lighting.',
+          subjectDescription: placeName,
           subjectType: 'SUBJECT_TYPE_DEFAULT'
         }] : []
       });
@@ -2293,7 +2310,7 @@ function openBackgroundReferenceModal() {
       .map(function (l) {
         var variants = (Array.isArray(l.variants) ? l.variants : [])
           .filter(function (v) { return v && v.refObjectName; })
-          .map(function (v) { return { id: v.id || ('v-' + slug(v.label)), label: String(v.label || '').trim(), refObjectName: v.refObjectName }; });
+          .map(function (v) { return { id: v.id || ('v-' + slug(v.label)), label: String(v.label || '').trim(), description: String(v.description || '').trim(), refObjectName: v.refObjectName }; });
         return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', variants: variants, sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
       });
     var st = ctxRef.getState();
