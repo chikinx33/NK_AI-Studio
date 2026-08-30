@@ -393,11 +393,12 @@ test("★회귀: 컷 분해가 등록 캐릭터로 @토큰을 보정한다", () 
 
 test("컷 분해가 한 샷에 여러 컷을 몰아넣지 못하게 막는다", () => {
   const src = read("prototype/functions/api/scenario/shots/decomposer.js");
-  assert.match(src, /한 샷은 \*\*하나의 카메라 셋업\*\*이다/);
+  assert.match(src, /한 샷은 "한 카메라 셋업" 단위이다/);
+  assert.match(src, /한 샷 안에 여러 컷을 서술하지 마라/);
   assert.match(src, /컷이 교차되며/);
-  assert.match(src, /여러 shot 으로 실제로 쪼개라/);
-  // composition 과 action 중복 금지
-  assert.match(src, /composition 과 action 은 서로 다른 것을 적는다/);
+  assert.match(src, /실제로 여러 shot 으로 쪼갠다/);
+  // 서술 칸끼리 같은 말을 반복하지 않는다
+  assert.match(src, /세 서술 칸\(composition·action·beats\)은 서로 다른 것을 쓴다/);
 });
 
 test("씬 카드가 소절의 전체 길이·컷 수·속도를 보여준다", () => {

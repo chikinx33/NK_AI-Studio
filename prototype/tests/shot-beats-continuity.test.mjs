@@ -34,8 +34,12 @@ test("★최소 컷 길이가 영상 모델 바닥(4초)과 같다", () => {
   // 왜 4인지 근거를 코드에 남긴다(다음 사람이 2로 되돌리지 않게).
   assert.match(src, /영상 생성 모델의 최소 길이가 4초/);
   // 한국어·영어 프롬프트 둘 다 새 바닥을 말한다.
-  assert.match(src, /각 샷은 ≥ 4초/);
-  assert.match(src, /Each shot must be ≥ 4 seconds/);
+  assert.match(src, /각 샷은 4초 이상, ≤ 6초/);
+  assert.match(src, /Each shot is at least 4 seconds and ≤ 6 seconds/);
+  // ★예시도 같은 바닥을 지켜야 한다. 규칙은 4초인데 예시가 2초면 모델은 예시를 따른다.
+  assert.match(src, /CU 얼굴\(5초\) \+ MS 뒷모습 실루엣\(5초\)/);
+  assert.match(src, /CU face \(5s\) \+ MS silhouette from behind \(5s\)/);
+  assert.doesNotMatch(src, /\(2초\) \+ MS/);
 });
 
 test("★한 컷 안의 시간을 적을 자리(beats)가 프롬프트 규칙에 있다", () => {
@@ -44,10 +48,17 @@ test("★한 컷 안의 시간을 적을 자리(beats)가 프롬프트 규칙에
   assert.match(src, /연속된 카메라 무브를 두 샷으로 쪼개지 마라/);
   assert.match(src, /NEVER split one continuous camera move into two shots/);
   // 첫 비트가 스틸컷이라는 것도 명시한다.
-  assert.match(src, /이것이 스틸컷으로 만들어지는\s*\n?\s*.*첫 프레임이다/);
+  assert.match(src, /이것이 스틸컷이 되는 첫 프레임이다/);
   assert.match(src, /It becomes the still image \(the first frame\)/);
-  // 출력 형식에 beats 가 들어 있다.
-  assert.match(src, /"beats":\[\{"at":0,"what":/);
+  // ★출력 형식에 beats 가 들어 있어야 한다 — 한국어·영어 양쪽 모두.
+  // (영어 스키마에 beats 가 빠져 있어, 영어로 만들면 절대 채워지지 않던 버그가 있었다)
+  assert.equal((src.match(/"beats":\[\{"at":0,"what":/g) || []).length, 2);
+  // 응답 직전에 한 번 더 확인시킨다 — 마지막 문장이 누락을 크게 줄인다.
+  assert.match(src, /cameraMove 가 static 이 아닌 샷에 beats 가 없으면 잘못된 응답이다/);
+  assert.match(src, /is not "static" and has no beats is an invalid response/);
+  // 필드 목록에서도 필수임을 밝힌다(규칙 번호에 묻히지 않게).
+  assert.match(src, /cameraMove 가 static 이 아니면 필수/);
+  assert.match(src, /REQUIRED whenever cameraMove is not "static"/);
 });
 
 test("★짧은 씬은 컷을 억지로 쪼개지 않고 합쳐서 시간표로 잇는다", async () => {
