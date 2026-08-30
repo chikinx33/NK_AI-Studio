@@ -676,6 +676,39 @@ function mapImageSizeToOpenAIQuality(imageSize: string): "low" | "medium" | "hig
   return "medium";
 }
 
+// OpenAI(images/edits)는 Gemini 처럼 이미지 바로 옆에 라벨을 끼워 넣을 수 없다.
+// image[] 순서대로 들어갈 뿐이라, 프롬프트의 "One reference image is ..." 같은 문장이
+// 어떤 이미지를 가리키는지 모델이 알 수 없다. 그래서 실제 전송 순서 그대로 번호를 매긴
+// 목록을 프롬프트에 덧붙여 이미지와 역할을 묶어 준다.
+function buildOpenAIReferenceManifest(
+  conversationCount: number,
+  referenceImages: NormalizedReferenceImage[]
+) {
+  const lines: string[] = [];
+  let index = 1;
+  for (let i = 0; i < conversationCount; i++) {
+    lines.push(`image ${index}: an image from an earlier turn of this same conversation (context only).`);
+    index += 1;
+  }
+  referenceImages.forEach((item) => {
+    const subject = String(item.subjectDescription || "a registered reference").trim() || "a registered reference";
+    if (item.referenceKind === "continuity") {
+      lines.push(`image ${index}: the previous cut in this sequence — reuse its character designs, colors, materials and lighting, but NOT its camera, framing or composition.`);
+    } else if (item.referenceKind === "prop") {
+      lines.push(`image ${index}: the registered design of ${subject} — keep that object's shape, proportions, markings, materials and colors, but place and scale it as this shot requires; ignore its background and framing.`);
+    } else if (item.referenceKind === "environment-detail") {
+      lines.push(`image ${index}: ${subject} in a wide view — match its style, materials, colors and lighting only; do NOT reuse its composition or that wide framing.`);
+    } else if (item.referenceKind === "environment") {
+      lines.push(`image ${index}: the registered background plate for ${subject} — keep its layout, architecture, materials, colors and lighting; the camera and framing of this cut come from the prompt, not from this image.`);
+    } else {
+      lines.push(`image ${index}: the registered character reference for ${subject} — keep that character's design, face, silhouette, colors, costume and proportions; do not copy its pose, crop or background.`);
+    }
+    index += 1;
+  });
+  if (!lines.length) return "";
+  return ["The input images are provided in this exact order:"].concat(lines).join("\n");
+}
+
 async function callOpenAIImage(opts: {
   apiKey: string;
   baseUrl?: string;
@@ -701,6 +734,14 @@ async function callOpenAIImage(opts: {
 
   const apiBase = String(opts.baseUrl || "https://api.openai.com").replace(/\/+$/, "");
   const isEdit = allRefs.length > 0;
+  // 레퍼런스가 있을 때만: 어떤 이미지가 무엇인지 순서로 못박는다.
+  const manifest = isEdit
+    ? buildOpenAIReferenceManifest(
+      opts.maskImage ? 0 : opts.conversationHistory.length,
+      opts.referenceImages
+    )
+    : "";
+  const promptForCall = manifest ? `${opts.prompt}\n${manifest}` : opts.prompt;
   const url = isEdit
     ? `${apiBase}/v1/images/edits`
     : `${apiBase}/v1/images/generations`;
@@ -712,7 +753,7 @@ async function callOpenAIImage(opts: {
     try {
       let init: RequestInit;
       if (isEdit) {
-        const editsInit = buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, useMask);
+        const editsInit = buildOpenAIEditsRequest(opts.model, promptForCall, size, quality, allRefs, opts.apiKey, useMask);
         // FormData 를 그대로 fetch 에 넘기면 Cloudflare Worker 가 청크 전송(chunked, Content-Length
         // 없음)으로 업로드한다. OpenAI 앞단 Cloudflare 엣지가 이런 업로드를 빈 본문 403 으로
         // 차단하는 경우가 있어(x-request-id 없음 = API 도달 전 엣지 차단), 멀티파트 바디를
@@ -726,7 +767,7 @@ async function callOpenAIImage(opts: {
           body: multipartBuf,
         };
       } else {
-        init = buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
+        init = buildOpenAIGenerationsRequest(opts.model, promptForCall, size, quality, opts.apiKey);
       }
       // 프록시(OPENAI_BASE_URL) 로 보낼 때만 공유 시크릿 헤더를 붙인다(직접 OpenAI 호출엔 불필요).
       if (opts.proxySecret && apiBase !== "https://api.openai.com") {
