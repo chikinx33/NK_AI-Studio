@@ -717,6 +717,43 @@
     return { referenceImages: referenceImages, promptLines: promptLines };
   }
 
+  // ── 레퍼런스 예산 ──────────────────────────────────────────────────────
+  // 레퍼런스는 컷당 4장이 상한이고, 서버도 앞에서 4장만 취한다. 그러니 "무엇을 버릴지"는
+  // 우리가 정해야 한다. 예전에는 컷 레퍼런스가 맨 뒤에 붙는 바람에, 캐릭터 한 명이
+  // 시트 4장을 채운 컷에서는 사용자가 직접 고른 컷 레퍼런스가 조용히 잘려 나갔다
+  // (배경 레퍼런스 + 컷 조합이 안 되던 원인).
+  //
+  // 우선순위
+  //   ① 각 캐릭터의 첫 시트  — 없으면 다른 인물이 그려진다
+  //   ② 컷 레퍼런스          — 사용자가 이 컷에 대해 직접 고른 것
+  //   ③ 배경 플레이트        — 그 장소의 구조·재질·조명
+  //   ④ 소품                 — 오브젝트 일관성
+  //   ⑤ 캐릭터 추가 포즈     — 남는 자리를 채운다
+  function applyReferenceBudget(list) {
+    var refs = Array.isArray(list) ? list.slice() : [];
+    if (refs.length <= MAX_REFERENCE_IMAGES) return refs;
+    var seenChar = {};
+    var firstChar = [];
+    var extraChar = [];
+    var continuity = [];
+    var environment = [];
+    var propRefs = [];
+    refs.forEach(function (r) {
+      var kind = String((r && r.referenceKind) || 'character');
+      if (kind === 'continuity') { continuity.push(r); return; }
+      if (kind === 'prop') { propRefs.push(r); return; }
+      if (kind === 'environment' || kind === 'environment-detail') { environment.push(r); return; }
+      var key = String((r && r.referenceId) || '');
+      if (!seenChar[key]) { seenChar[key] = true; firstChar.push(r); return; }
+      extraChar.push(r);
+    });
+    var kept = firstChar
+      .concat(continuity, environment, propRefs, extraChar)
+      .slice(0, MAX_REFERENCE_IMAGES);
+    // 붙이는 순서는 원래대로 둔다(이미지 옆 라벨 순서를 흐트러뜨리지 않게).
+    return refs.filter(function (r) { return kept.indexOf(r) >= 0; });
+  }
+
   // referencePayload 에 환경 레퍼런스를 합친다(총 MAX_REFERENCE_IMAGES 이내).
   // 반환: { referencePayload, finalPrompt }
   function mergeEnvironmentReferences(args) {
@@ -1247,6 +1284,19 @@
           : { referenceImages: baseRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
       }
     }
+    // 4장 상한을 넘겼으면 우선순위대로 남긴다(서버가 뒤에서 자르면 컷 레퍼런스가 사라진다).
+    if (referencePayload && Array.isArray(referencePayload.referenceImages)) {
+      var budgetedRefs = applyReferenceBudget(referencePayload.referenceImages);
+      if (budgetedRefs.length !== referencePayload.referenceImages.length) {
+        try {
+          console.log('Reference budget (image):', {
+            before: referencePayload.referenceImages.map(function (r) { return r && r.referenceKind || 'character'; }),
+            after: budgetedRefs.map(function (r) { return r && r.referenceKind || 'character'; })
+          });
+        } catch (_) {}
+        referencePayload = Object.assign({}, referencePayload, { referenceImages: budgetedRefs });
+      }
+    }
     if (imageCharacterNegativePrompt) {
       finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
     }
@@ -1676,6 +1726,7 @@
     buildReferenceBundle: buildReferenceBundle,
     buildEnvironmentReferenceBundle: buildEnvironmentReferenceBundle,
     mergeEnvironmentReferences: mergeEnvironmentReferences,
+    applyReferenceBudget: applyReferenceBudget,
     collectEnvironmentAssets: collectEnvironmentAssets,
     buildIpLibraryFallback: buildIpLibraryFallback,
     extractRemoteProjectRecord: extractRemoteProjectRecord,
