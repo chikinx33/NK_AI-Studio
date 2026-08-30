@@ -92,6 +92,43 @@
     });
   };
 
+  /**
+   * 새로 뽑은 공간 목록에 이전 목록의 "만들어 둔 것"을 얹는다.
+   *
+   * 시나리오를 다시 생성하면 공간 목록도 다시 추출되는데, 그때 새 목록에는 이미지가 없다.
+   * 그대로 갈아끼우면 공들여 만든 배경 플레이트와 세부 배경이 통째로 끊긴다
+   * (저장소에는 파일이 남아 있는데 화면에는 '배경 없음' 으로 보이던 문제).
+   * 이름이 같으면 같은 공간으로 보고 이미지·세부 배경을 그대로 물려준다.
+   *
+   * 이름·묘사는 새 추출을 따른다 — 새 시나리오에 맞춰 다시 쓰인 것이기 때문이다.
+   * 다만 새 묘사가 비어 있으면 이전 묘사를 지킨다.
+   */
+  mod.mergeWithExisting = function (nextLocations, existing) {
+    var next = Array.isArray(nextLocations) ? nextLocations : [];
+    var prevList = Array.isArray(existing) ? existing : [];
+    if (!next.length) return next;
+    var prevByKey = {};
+    prevList.forEach(function (e) {
+      if (e && e.name) prevByKey[normKey(e.name)] = e;
+    });
+    return next.map(function (loc) {
+      var row = loc && typeof loc === 'object' ? loc : { name: String(loc || '') };
+      var prev = prevByKey[normKey(row.name)];
+      if (!prev) return row;
+      return {
+        id: row.id || prev.id || '',
+        name: row.name || prev.name || '',
+        description: String(row.description || '').trim() || prev.description || '',
+        // 만들어 둔 이미지와 세부 배경은 이름이 같으면 그대로 물려받는다.
+        refObjectName: row.refObjectName || prev.refObjectName || '',
+        variants: Array.isArray(row.variants) && row.variants.length
+          ? row.variants
+          : (Array.isArray(prev.variants) ? prev.variants : []),
+        sceneIds: Array.isArray(row.sceneIds) ? row.sceneIds : (prev.sceneIds || []),
+      };
+    });
+  };
+
   // 씬 1개가 어느 episodeLocation 에 속하는지 찾는다(컷 자동 연결 단계에서 사용).
   mod.locationForScene = function (locations, scene) {
     if (!Array.isArray(locations) || !scene) return null;

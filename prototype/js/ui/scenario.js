@@ -2973,6 +2973,11 @@
           // (브랜드 환경자산과 별개의 에피소드 전용 데이터. 생성 결과는 메모리 유지 — '저장' 시 영속화.)
           // 1순위: LLM(같은 공간을 하나로 묶고 배경 플레이트 묘사 생성), 실패 시 규칙 기반 폴백.
           try {
+            // 이전 목록은 draft.payload 를 새 payload 로 덮기 전에 잡아 둬야 한다.
+            // (바로 위에서 draft.payload = payload 로 갈아치웠기 때문)
+            const prevEpLocs = Array.isArray(currentPayload?.episodeLocations)
+              ? currentPayload.episodeLocations
+              : (Array.isArray(draft.payload?.episodeLocations) ? draft.payload.episodeLocations : []);
             let epLocs = null;
             if (NK.api && NK.api.scenarioLocations) {
               try {
@@ -2981,9 +2986,15 @@
               } catch (llmErr) { console.warn('[episode-locations] LLM 추출 실패 → 규칙 기반 폴백', llmErr); }
             }
             if (!epLocs && NK.service && NK.service.episodeLocations && NK.service.episodeLocations.derive) {
-              epLocs = NK.service.episodeLocations.derive(draft.scenes, { existing: draft.payload && draft.payload.episodeLocations });
+              epLocs = NK.service.episodeLocations.derive(draft.scenes, { existing: prevEpLocs });
             }
             if (epLocs) {
+              // ★새로 뽑은 목록에는 이미지가 없다. 이름이 같은 공간의 배경 플레이트·세부 배경을
+              //   그대로 물려준다. 이게 없으면 시나리오를 다시 생성할 때마다 만들어 둔 배경이
+              //   통째로 끊겨 '배경 없음' 이 된다(파일은 저장소에 그대로 남아 있는데도).
+              if (NK.service?.episodeLocations?.mergeWithExisting) {
+                epLocs = NK.service.episodeLocations.mergeWithExisting(epLocs, prevEpLocs);
+              }
               draft.payload = Object.assign({}, draft.payload, { episodeLocations: epLocs });
               console.log('[episode-locations] 추출(' + epLocs.length + '개):', epLocs);
             }
