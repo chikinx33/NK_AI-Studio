@@ -100,6 +100,32 @@
     return fallback ? ('나레이션 "' + fallback + '"') : '';
   }
 
+  // 컷 안의 시간표를 "0.0s 발과 하체만 / 2.5s 전신" 처럼 보여 준다.
+  // 첫 줄이 스틸컷이 되는 프레임이라 눈에 띄게 표시한다.
+  function buildBeatTimelineHtml(scene) {
+    var raw = scene && scene.beats;
+    if (!Array.isArray(raw) || raw.length < 2) return '';
+    var rows = [];
+    raw.forEach(function (b) {
+      if (!b || typeof b !== 'object') return;
+      var what = String(b.what || b.text || '').trim();
+      if (!what) return;
+      var at = Number(b.at);
+      rows.push({ at: (isFinite(at) && at > 0) ? at : 0, what: what });
+    });
+    if (rows.length < 2) return '';
+    return '<p class="eyebrow">타임라인</p>' +
+      '<ul class="prompt-beats">' +
+      rows.map(function (row, i) {
+        return '<li' + (i === 0 ? ' class="is-first-frame"' : '') + '>' +
+          '<span class="beat-at">' + row.at.toFixed(1) + 's</span>' +
+          '<span class="beat-what">' + escapeText(row.what) + '</span>' +
+          (i === 0 ? '<span class="beat-note">스틸컷</span>' : '') +
+          '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
   function buildImageCard(scene, mediaUrlResolver) {
     var imagePlayableUrl = mediaUrlResolver(scene.imageDataUrl || '');
     if (scene.imgLoading) return '<div class="image-placeholder tall loading"><div class="spinner"></div><span>이미지 생성 중...</span></div>';
@@ -474,6 +500,9 @@
         : ('<p class="eyebrow">Visual</p>' +
            '<p class="prompt-visual is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true" spellcheck="false">' + (scene.shot || '') + '</p>')
       ) +
+      // 한 컷 안에서 보이는 것이 달라지는 샷은 시간표(beats)를 갖는다.
+      // 스틸컷은 0초 비트로 만들고, 영상은 이 표대로 시간을 분배한다 — 그래서 눈에 보여야 한다.
+      buildBeatTimelineHtml(scene) +
       '<p class="eyebrow">Duration</p>' +
       '<p class="prompt-duration is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true" spellcheck="false">' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
       '</div>' +

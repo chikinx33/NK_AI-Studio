@@ -882,7 +882,12 @@
     // 화면(composition)은 "정지 상태"(스틸 컷)라서 이미지 생성에만 쓴다. 행동(action)은 그
     // 이미지를 바탕으로 한 "영상 생성"용이므로 이미지 프롬프트엔 넣지 않는다. (넣으면 모델이
     // 동작 '중' 장면 — 예: 공중에 솟구친 순간 — 을 그려, 영상의 시작 프레임이 안 나온다.)
-    if (composition) {
+    // 이 컷이 시간에 따라 변하는 샷이면, 스틸컷은 그 시작 프레임만 그린다.
+    var firstFrame = firstFrameText(scene);
+    if (firstFrame) {
+      promptBlocks.push('Composition: ' + firstFrame);
+      promptBlocks.push('This still is the FIRST FRAME of the shot (t=0). Render ONLY what is visible at that instant. Do NOT render the end state of the camera move or anything the move is about to reveal — the reveal happens later in the video.');
+    } else if (composition) {
       promptBlocks.push('Composition: ' + composition);
     } else if (primaryVisual) {
       promptBlocks.push(primaryVisual);
@@ -900,6 +905,30 @@
    * shot 의 composition / action 을 메인으로 하고 shotType / cameraMove
    * 자연어 힌트를 카메라 라인에 추가한다.
    */
+  // ── 샷 안의 시간(beats) ────────────────────────────────────────────────
+  // 한 컷 안에서 보이는 것이 달라지는 연출("발만 보이다가 틸트업해 전신")은 하나의 샷이고,
+  // 그 변화는 beats 로 적힌다. 스틸컷은 그 샷의 **첫 프레임(t=0)** 이어야 한다.
+  // 예전엔 composition 을 통째로 그려서 무브의 "끝 상태"가 스틸로 나왔고, 그 결과
+  // 시작 프레임이 이미 결말이라 영상에서 드러낼 것이 남지 않았다.
+  function readBeats(row) {
+    var raw = row && row.beats;
+    if (!Array.isArray(raw) || raw.length < 2) return null;
+    var out = [];
+    raw.forEach(function (b) {
+      if (!b || typeof b !== 'object') return;
+      var what = normalizeText(b.what || b.text);
+      if (!what) return;
+      var at = Number(b.at);
+      out.push({ at: (isFinite(at) && at > 0) ? at : 0, what: what });
+    });
+    return out.length >= 2 ? out : null;
+  }
+
+  function firstFrameText(row) {
+    var beats = readBeats(row);
+    return beats ? beats[0].what : '';
+  }
+
   function buildShotImagePrompt(scene, shot, header, cleanHeader) {
     var common = cleanHeader(header || '');
     var sceneLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
@@ -921,7 +950,11 @@
       blocks.push('Scene context (broader beat): ' + trimmed);
     }
     // 행동(action)은 영상 생성용 — 이미지(스틸 컷)엔 화면(composition)만 쓴다.
-    if (composition) blocks.push('Composition: ' + composition);
+    var shotFirstFrame = firstFrameText(shot) || firstFrameText(scene);
+    if (shotFirstFrame) {
+      blocks.push('Composition: ' + shotFirstFrame);
+      blocks.push('This still is the FIRST FRAME of the shot (t=0). Render ONLY what is visible at that instant. Do NOT render the end state of the camera move or anything the move is about to reveal.');
+    } else if (composition) blocks.push('Composition: ' + composition);
     else if (action) blocks.push('Composition: ' + action); // 화면이 없을 때만 최후 보루
     if (cameraHint) blocks.push(cameraHint);
     blocks.push('Render this single shot only — do NOT depict the entire scene at once. Keep framing/composition strictly to the camera spec above.');

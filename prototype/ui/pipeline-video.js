@@ -204,6 +204,29 @@
     }
   }
 
+  // beats → "0.0s-2.5s: ..." 시간표 텍스트. 비트가 없으면 빈 문자열.
+  function buildBeatTimeline(scene, durationSec) {
+    var raw = scene && scene.beats;
+    if (!Array.isArray(raw) || raw.length < 2) return '';
+    var total = Number(durationSec) || 0;
+    var rows = [];
+    raw.forEach(function (b) {
+      if (!b || typeof b !== 'object') return;
+      var what = String(b.what || b.text || '').trim();
+      if (!what) return;
+      var at = Number(b.at);
+      rows.push({ at: (isFinite(at) && at > 0) ? at : 0, what: what });
+    });
+    if (rows.length < 2) return '';
+    return rows.map(function (row, i) {
+      var next = rows[i + 1];
+      var end = next ? next.at : total;
+      var from = row.at.toFixed(1);
+      var to = (end > row.at ? end : row.at).toFixed(1);
+      return from + 's-' + to + 's: ' + row.what;
+    }).join('\n');
+  }
+
   function buildCharacterResolutionPrompt(scene, prompt) {
     var row = scene && typeof scene === 'object' ? scene : {};
     var parts = [];
@@ -254,13 +277,20 @@
     var header = st.header || '';
     var statePayload = st.payload || {};
     var sharedContext = header || buildSelections(statePayload);
+    // 한 컷 안에서 보이는 것이 달라지는 샷은 beats 로 시간표가 적혀 있다.
+    // 그대로 "0.0s-2.5s / 2.5s-4.0s" 형식으로 실어 보내야 모델이 언제 무엇을 드러낼지 안다.
+    // (없으면 예전처럼 한 줄 설명으로 나가고, 그때는 컷 전체가 한 상태로 뭉개진다.)
+    var sceneDurationSec = Math.max(Number(scene.estSec) || 0, 1);
+    var timeline = buildBeatTimeline(scene, sceneDurationSec);
     var promptBase = [
       'Global',
       sharedContext,
       'Scene Visual',
       (scene.shot || ''),
+      timeline ? 'Shot timeline (what is visible over time)' : '',
+      timeline,
       'Scene Duration',
-      ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')
+      (sceneDurationSec + 's.')
     ].filter(Boolean).join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     var rawPromptForLog = finalPrompt;

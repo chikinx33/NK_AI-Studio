@@ -4469,6 +4469,50 @@ textarea::-webkit-scrollbar-corner {
   font-size: 12px;
 }
 
+/* 컷 안의 시간표(beats). 첫 줄은 스틸컷이 되는 프레임이라 도드라지게 둔다. */
+.prompt-beats {
+  margin: 2px 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.prompt-beats li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.prompt-beats .beat-at {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text);
+  opacity: .75;
+}
+
+.prompt-beats li.is-first-frame {
+  color: var(--text);
+}
+
+.prompt-beats li.is-first-frame .beat-at {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.prompt-beats .beat-note {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  color: var(--accent);
+}
+
 .image-placeholder.loading span {
   font-size: 12px;
   color: var(--muted);

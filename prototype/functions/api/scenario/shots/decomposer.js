@@ -25,9 +25,13 @@ import {
 const MAX_SHOTS_PER_SCENE = 5;
 const MIN_SHOTS_PER_SCENE = 1;
 const MAX_SHOT_DURATION = 6;
-// 2초 미만 컷은 영상 생성 모델에서 사실상 정지 프레임과 다름 없고,
-// 캐릭터 일관성도 추가 생성 1회만큼 흔들리므로 인접 컷에 흡수한다.
-const MIN_SHOT_DURATION = 2;
+// 영상 생성 모델의 최소 길이가 4초다(Kling 은 5초). 3초짜리 컷을 만들어도 4초로 생성해
+// 잘라 써야 하므로, 4초를 못 채우는 비트는 쪼갤 이유 자체가 없다. 예전엔 2초였고,
+// 그 탓에 "발만 보이다가 틸트업해 전신" 같은 하나의 연속 무브가 2초+3초 두 컷으로 갈렸다.
+// 두 컷으로 갈리면 스틸컷이 따로 두 번 생성되고 둘 다 전신이 나와 연출이 사라진다.
+const MIN_SHOT_DURATION = 4;
+// 한 샷 안의 시간 비트. 스틸컷은 beats[0](t=0)이고, 영상은 이 표를 시간 분배로 받는다.
+const MAX_BEATS_PER_SHOT = 4;
 const DURATION_TOLERANCE = 0.2; // ±20%
 
 /**
@@ -42,7 +46,8 @@ export function buildShotPromptKo() {
 [분해 원칙]
 1. 한 씬은 1~5 샷으로 분해. 정적 비트(독백 1마디, 인서트 단독)는 1샷도 OK.
 2. 각 샷은 ≤ 6초 (영상 생성 모델의 안정 출력 한계).
-3. 각 샷은 ≥ 2초. 2초 미만 샷은 만들지 말고 인접 샷의 카메라 무브로 흡수한다.
+3. 각 샷은 ≥ 4초. 영상 생성 모델의 최소 길이가 4초(Kling 5초)라, 2~3초 샷은 어차피 4초로
+   만들어 잘라 쓴다. 4초를 못 채우는 비트는 쪼개지 말고 인접 샷에 흡수한다.
 4. 모든 샷의 duration 합 = 씬의 estSec (오차 ±20% 이내).
 5. 같은 행동을 여러 앵글로 쪼갠다. 예: "전사가 칼을 뽑는다(4초)"
    → CU 얼굴(2초) + MS 뒷모습 실루엣(2초)
@@ -84,8 +89,24 @@ export function buildShotPromptKo() {
 
 ${buildVocabPromptKo()}
 
+[한 샷 안의 시간 — beats · 중요]
+19. 샷 안에서 보이는 것이 달라지면(카메라 무브가 static 이 아니거나, 피사체가 드러나거나 사라지면)
+    beats 를 채운다. beats 는 그 샷 안의 시간표다.
+      "beats": [{"at": 0, "what": "프레임 하단에 세 캐릭터의 발과 하체만 나란히"},
+                {"at": 2.5, "what": "틸트업이 끝나 세 캐릭터 전신과 방 전체가 들어옴"}]
+    - at 은 샷 시작으로부터의 초. beats[0].at 은 반드시 0.
+    - 마지막 at 은 duration 보다 작아야 한다. 2~4개.
+    - 변화가 없는 정적 샷이면 beats 를 넣지 않아도 된다(null 또는 생략).
+20. ★연속된 카메라 무브를 두 샷으로 쪼개지 마라. "발만 보이다가 틸트업해 전신이 보인다"는
+    한 샷 + beats 2개다. 두 샷으로 쪼개면 스틸컷이 따로 두 번 생성되고 둘 다 전신이 나와
+    "가려졌다가 드러나는" 연출이 통째로 사라진다. 결과 화면을 다음 컷으로 또 만들지 마라.
+21. beats[0].what 은 "그 순간 프레임에 보이는 것"만 적는다. 이것이 스틸컷으로 만들어지는
+    첫 프레임이다. 무브의 결과("…전신을 드러냄")를 여기 쓰지 마라 — 그건 다음 beat 다.
+22. composition 은 그 샷 전체를 한 줄로 요약하고(무브 포함 가능), 시간에 따른 변화는 beats 로만
+    쓴다. 두 곳에 같은 말을 반복하지 마라.
+
 [출력 형식 — JSON 만, 마크다운/설명 금지]
-{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null,"beats":[{"at":0,"what":"<t=0 에 보이는 것>"},{"at":<초>,"what":"<그때 보이는 것>"}]}, ...]}
 
 응답 첫 글자는 { 마지막 글자는 } 여야 한다.`;
 }
@@ -98,7 +119,8 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 [Decomposition Rules]
 1. A scene decomposes into 1-5 shots. Static beats (one line of monologue, a solo insert) can be a single shot.
 2. Each shot must be ≤ 6 seconds (AI video model stability limit).
-3. Each shot must be ≥ 2 seconds. Do NOT create shots shorter than 2s — absorb them as the cameraMove of an adjacent shot instead.
+3. Each shot must be ≥ 4 seconds. Video models cannot render less than 4s (Kling: 5s), so a 2-3s shot is
+   generated at 4s and trimmed anyway. Absorb beats that cannot fill 4s into an adjacent shot instead of splitting.
 4. Sum of shots[].duration must equal the scene's estSec (±20% tolerance).
 5. Cut the same action across multiple angles. Example: "warrior draws sword (4s)"
    → CU face (2s) + MS silhouette from behind (2s).
@@ -128,6 +150,19 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 
 [Camera Vocabulary Variety - REQUIRED]
 10. If a scene has 2+ shots, use at least 2 different shotTypes (e.g., CU + MS, WS + CU). Never make all shots in a scene the same shotType.
+
+[Time inside one shot — beats · IMPORTANT]
+- When what is visible changes during the shot (cameraMove is not static, or a subject is revealed/hidden),
+  fill "beats" — the timeline inside that shot:
+      "beats": [{"at": 0, "what": "only the three characters' feet and lower legs along the bottom of frame"},
+                {"at": 2.5, "what": "the tilt-up completes: full bodies and the whole room are in frame"}]
+  "at" is seconds from the start of the shot. beats[0].at MUST be 0. The last "at" must be < duration. 2-4 beats.
+  A static shot with no change may omit beats (null).
+- NEVER split one continuous camera move into two shots. "feet only, then tilt up to full bodies" is ONE shot
+  with two beats. Splitting it makes two separate stills — both showing the full bodies — and the reveal is gone.
+  Do not turn the end state of a move into the next shot.
+- beats[0].what describes ONLY what is visible at that instant. It becomes the still image (the first frame).
+  Never write the result of the move ("...revealing the full bodies") there — that belongs to the next beat.
 11. If a scene has 3+ shots, also use at least 2 different cameraMoves (e.g., static + push-in, pan + tilt). All-static is forbidden — even for calm beats, at least one shot should use a gentle move (slow-push, slow-pan).
 12. Climax scenes (when sceneIntent contains keywords like "discovery / payoff / peak / twist / result", or the final scene) MUST include many short ECU/CU cuts + varied strong moves (push-in, whip-pan, quick-pan).
 13. Two adjacent shots must NOT share the same shotType AND the same cameraMove simultaneously. Vary at least one of them.
@@ -224,7 +259,8 @@ export function parseShotResponse(text, scene) {
     if (!composition && !action) return; // 둘 다 비면 의미 없는 샷
     const id = String(raw.id || `${sceneId}.${idx + 1}`).trim() || `${sceneId}.${idx + 1}`;
     const dialogue = normalizeShotDialogue(raw.dialogue);
-    out.push({ id, duration, shotType, cameraMove, composition, action, dialogue });
+    const beats = normalizeBeats(raw.beats, duration);
+    out.push({ id, duration, shotType, cameraMove, composition, action, dialogue, beats });
   });
 
   if (!out.length) return null;
@@ -233,13 +269,78 @@ export function parseShotResponse(text, scene) {
 }
 
 /**
+ * 인접한 두 샷을 하나로 합친다.
+ *
+ * 합쳐진 샷은 "하나의 카메라 셋업 안에서 시간에 따라 변하는" 샷이 되므로,
+ * 두 샷의 화면을 beats(시간표)로 잇는다. 뒤 샷의 비트는 앞 샷 길이만큼 밀린다.
+ * 이게 "발만 보이다가(0s) 틸트업해 전신(2s)" 을 만들어 내는 실제 경로다.
+ */
+function mergeTwoShots(a, b) {
+  const durationA = Number(a.duration) || MIN_SHOT_DURATION;
+  const durationB = Number(b.duration) || MIN_SHOT_DURATION;
+  const beatsA = Array.isArray(a.beats) && a.beats.length
+    ? a.beats
+    : [{ at: 0, what: a.composition || a.action || "" }];
+  const beatsB = Array.isArray(b.beats) && b.beats.length
+    ? b.beats
+    : [{ at: 0, what: b.composition || b.action || "" }];
+  const shifted = beatsB.map((beat) => ({
+    at: (Number(beat.at) || 0) + durationA,
+    what: beat.what,
+  }));
+  const merged = beatsA.concat(shifted).filter((beat) => String(beat.what || "").trim());
+  const duration = Math.round((durationA + durationB) * 10) / 10;
+  return {
+    id: a.id,
+    duration,
+    shotType: a.shotType,
+    // 정적 샷과 움직이는 샷을 합치면 움직임이 있는 쪽이 이 샷의 성격이다.
+    cameraMove: (a.cameraMove && a.cameraMove !== "static") ? a.cameraMove : (b.cameraMove || a.cameraMove),
+    composition: a.composition || b.composition,
+    action: [a.action, b.action].map((v) => String(v || "").trim()).filter(Boolean).join(" 이어서 "),
+    dialogue: a.dialogue || b.dialogue || null,
+    beats: normalizeBeats(merged, duration),
+  };
+}
+
+/**
+ * 씬 길이가 허용하는 컷 수까지 줄인다.
+ *
+ * 최소 컷 길이가 4초(영상 모델 바닥)이므로 4초 씬에 2컷은 애초에 불가능하다.
+ * 예전에는 그런 경우에도 컷을 그대로 두고 길이만 늘려, 씬 길이가 부풀거나
+ * 모델이 못 만드는 2~3초 컷이 남았다. 이제는 컷을 합쳐서 시간표로 잇는다.
+ * 합칠 쌍은 "합쳐도 가장 짧은 쌍" — 긴 컷들을 함부로 붙이지 않는다.
+ */
+export function fitShotCount(shots, targetSec) {
+  const target = Number(targetSec) || 0;
+  if (!Array.isArray(shots) || shots.length < 2 || !target) return shots;
+  const maxShots = Math.max(1, Math.floor(target / MIN_SHOT_DURATION));
+  let list = shots.slice();
+  while (list.length > maxShots) {
+    let bestIndex = 0;
+    let bestSum = Infinity;
+    for (let i = 0; i < list.length - 1; i++) {
+      const sum = (Number(list[i].duration) || 0) + (Number(list[i + 1].duration) || 0);
+      if (sum < bestSum) { bestSum = sum; bestIndex = i; }
+    }
+    const merged = mergeTwoShots(list[bestIndex], list[bestIndex + 1]);
+    list = list.slice(0, bestIndex).concat([merged], list.slice(bestIndex + 2));
+  }
+  return list;
+}
+
+/**
  * shots 배열의 duration 합이 scene.estSec 와 일치하도록 ±20% 허용 안에서 보정.
  * 합이 너무 어긋나면 비례 스케일링.
+ *
+ * 스케일링 전에 컷 수부터 씬 길이에 맞춘다. 최소 4초 바닥이 있으므로 컷이 너무 많으면
+ * 아무리 줄여도 합이 목표를 넘는다 — 그때는 길이가 아니라 컷 수가 틀린 것이다.
  */
 export function reconcileDurations(shots, scene) {
   if (!Array.isArray(shots) || !shots.length) return shots;
   const target = Number(scene?.estSec) || 0;
   if (!target) return shots;
+  shots = fitShotCount(shots, target);
   const sum = shots.reduce((acc, s) => acc + (Number(s.duration) || 0), 0);
   if (!sum) return shots;
   const ratio = sum / target;
@@ -250,7 +351,10 @@ export function reconcileDurations(shots, scene) {
     let d = Math.round(Number(s.duration) * scale * 10) / 10;
     if (d < MIN_SHOT_DURATION) d = MIN_SHOT_DURATION;
     if (d > MAX_SHOT_DURATION) d = MAX_SHOT_DURATION;
-    return { ...s, duration: d };
+    // 길이가 바뀌면 비트 시각도 같은 비율로 따라가야 한다.
+    // (여기서 시각을 그대로 두면 뒤쪽 비트가 샷 밖으로 밀려나 통째로 사라진다)
+    const beatScale = (Number(s.duration) || 0) > 0 ? d / Number(s.duration) : 1;
+    return { ...s, duration: d, beats: normalizeBeats(scaleBeats(s.beats, beatScale), d) };
   });
 }
 
@@ -274,6 +378,7 @@ export function fallbackSingleShot(scene) {
     composition: visual.split(/[\n.]/)[0] || "프레임 중앙에 주요 피사체",
     action: visual || "씬 비트 그대로 진행",
     dialogue,
+    beats: null,
   }];
 }
 
@@ -282,6 +387,49 @@ export function fallbackSingleShot(scene) {
  * 수용 형태: null | undefined | "string" | {speaker, line} | {line} | [무시]
  * 출력 형태: null | "string" | {speaker, line}
  */
+/**
+ * 한 샷 안의 시간 비트.
+ *
+ * 스틸컷은 beats[0](t=0)로 만들고, 영상은 이 표를 시간 분배 프롬프트로 받는다.
+ * 그래서 두 가지를 보장해야 한다.
+ *   - 첫 비트는 반드시 t=0 (스틸컷이 샷의 시작이어야 한다)
+ *   - at 은 증가하고 duration 안에 있어야 한다 (영상 시간표가 뒤엉키지 않게)
+ * 하나뿐인 비트는 의미가 없으므로(=변화 없음) 버린다.
+ */
+/** 샷 길이가 바뀔 때 비트 시각을 같은 비율로 옮긴다. */
+export function scaleBeats(beats, scale) {
+  if (!Array.isArray(beats) || !beats.length) return beats;
+  const factor = Number(scale);
+  if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return beats;
+  return beats.map((beat) => ({
+    ...beat,
+    at: Math.round((Number(beat.at) || 0) * factor * 10) / 10,
+  }));
+}
+
+export function normalizeBeats(raw, duration) {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const total = Number(duration) || MIN_SHOT_DURATION;
+  const out = [];
+  let prevAt = -1;
+  raw.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const what = String(item.what || item.text || "").trim();
+    if (!what) return;
+    let at = Number(item.at);
+    if (!Number.isFinite(at) || at < 0) at = 0;
+    if (out.length === 0) at = 0; // 첫 비트는 언제나 샷의 시작
+    at = Math.round(at * 10) / 10;
+    if (at <= prevAt) at = Math.round((prevAt + 0.5) * 10) / 10;
+    if (at >= total) return; // 샷 밖의 비트는 버린다
+    prevAt = at;
+    out.push({ at, what });
+  });
+  if (out.length < 2) return null; // 변화가 없으면 비트를 둘 이유가 없다
+  if (out.length > MAX_BEATS_PER_SHOT) out.length = MAX_BEATS_PER_SHOT;
+  return out;
+}
+
 export function normalizeShotDialogue(raw) {
   if (raw == null) return null;
   if (typeof raw === "string") {
@@ -302,5 +450,6 @@ export const __testables = {
   MIN_SHOTS_PER_SCENE,
   MAX_SHOT_DURATION,
   MIN_SHOT_DURATION,
+  MAX_BEATS_PER_SHOT,
   DURATION_TOLERANCE,
 };

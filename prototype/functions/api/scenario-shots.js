@@ -192,6 +192,8 @@ function flattenScenesWithShots(parentScenes, characters) {
         shotType: String(sh.shotType || "MS"),
         cameraMove: String(sh.cameraMove || "static"),
         estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
+        // 한 샷 안의 시간표. 스틸컷은 beats[0](첫 프레임)으로, 영상은 시간 분배로 쓴다.
+        beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
         // 부모 추적용 (마이그레이션/디버깅)
         parentSceneId: parent.id != null ? parent.id : null,
         shotIndexInParent: j,
