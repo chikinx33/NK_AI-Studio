@@ -461,6 +461,38 @@
     return normalizeEnvironmentAssets(merged);
   }
 
+  // 에피소드 전용 소품(배경 레퍼런스 모달에서 등록·생성한 오브젝트)을 배경·소품 자산과
+  // 같은 모양으로 바꿔 준다. 브랜드 허브의 공용 자산은 IP 전체에서 오래 쓰는 것이고,
+  // 이건 이번 에피소드에서만 쓰는 물건이다. 둘 다 같은 매칭·레퍼런스 경로를 탄다.
+  function episodePropAssets(payload, projectRecord) {
+    var rows = []
+      .concat(Array.isArray(payload && payload.episodeProps) ? payload.episodeProps : [])
+      .concat(Array.isArray(projectRecord && projectRecord.payload && projectRecord.payload.episodeProps)
+        ? projectRecord.payload.episodeProps
+        : []);
+    var out = [];
+    var seen = {};
+    rows.forEach(function (row, index) {
+      var name = normalizeText(row && row.name);
+      var objectName = String((row && row.refObjectName) || '').trim();
+      if (!name || !objectName) return;
+      var key = name.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objectName) : '';
+      if (!url) return;
+      out.push({
+        assetId: String((row && row.id) || ('ep_prop_' + (index + 1))),
+        displayName: name,
+        token: '@' + name.replace(/\s+/g, ''),
+        kind: 'prop',
+        description: normalizeText(row && row.description),
+        items: [{ sheetId: 'episode', imageDataUrl: url, isPrimary: true }]
+      });
+    });
+    return out;
+  }
+
   function collectEnvironmentAssets(payload, options) {
     var opts = options || {};
     var safePayload = payload && typeof payload === 'object' ? payload : {};
@@ -479,6 +511,8 @@
       ? NK.service.project.getKnowledgeHub(brandRecord)
       : null;
     return mergeEnvironmentAssetSources([
+      // 에피소드 소품이 가장 앞. 같은 이름이면 이 에피소드에서 등록한 물건이 브랜드 공용 자산을 이긴다.
+      episodePropAssets(safePayload, projectRecord),
       brandKnowledge && brandKnowledge.environmentAssets,
       brandRecord && brandRecord.environmentAssets,
       brandRecord && brandRecord.knowledgeEnvironmentAssets,

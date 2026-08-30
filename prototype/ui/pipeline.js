@@ -2058,6 +2058,18 @@ function openBackgroundReferenceModal() {
       })
     : [];
 
+  // 에피소드 소품(오브젝트). 브랜드 허브의 배경·소품 자산이 IP 공용 장기 자산이라면,
+  // 이건 이 에피소드에서만 쓰는 물건이다. 이름이 씬 텍스트에 나오면 컷 생성 때
+  // 소품 레퍼런스로 붙어 컷마다 같은 물건이 나온다.
+  var props = (st0.payload && Array.isArray(st0.payload.episodeProps))
+    ? st0.payload.episodeProps.map(function (p) {
+        return {
+          id: p.id || '', name: p.name || '', description: p.description || '',
+          refObjectName: p.refObjectName || '', _busy: false
+        };
+      })
+    : [];
+
   var existing = document.getElementById('bg-ref-modal');
   if (existing) existing.remove();
   var overlay = document.createElement('div');
@@ -2080,6 +2092,12 @@ function openBackgroundReferenceModal() {
           var vd = vel.querySelector('.bgref-vdesc'); if (vd) locs[i].variants[vi].description = vd.value;
         }
       });
+    });
+    overlay.querySelectorAll('.bgprop-item').forEach(function (el) {
+      var i = Number(el.getAttribute('data-idx'));
+      if (!props[i]) return;
+      var nm = el.querySelector('.bgprop-name'); if (nm) props[i].name = nm.value;
+      var ds = el.querySelector('.bgprop-desc'); if (ds) props[i].description = ds.value;
     });
   }
 
@@ -2128,13 +2146,44 @@ function openBackgroundReferenceModal() {
         '</div>'
       );
     }).join('');
+    // 소품(오브젝트) 행. 생성뿐 아니라 파일 선택·드래그로도 등록할 수 있다.
+    var propRows = props.map(function (p, i) {
+      var purl = thumbUrl(p.refObjectName) || (p._dataUrl || '');
+      return (
+        '<div class="bgprop-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
+          '<div class="bgprop-drop" title="이미지를 끌어다 놓거나 클릭해 파일을 고르세요" style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);cursor:pointer;">' +
+            (purl
+              ? '<img class="bgprop-thumb-img" src="' + esc(purl) + '" data-full="' + esc(purl) + '" alt="" title="클릭하면 크게 보기" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>'
+              : '<span class="muted" style="font-size:11px;text-align:center;line-height:1.4;">' + (p._busy ? '처리 중...' : '이미지 끌어다 놓기<br/>또는 클릭해 선택') + '</span>') +
+          '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<input class="bgprop-name" type="text" value="' + esc(p.name) + '" placeholder="소품 이름 (예: ABC 육면 큐브) — 씬 텍스트의 표기와 같게" style="' + inStyle + 'margin-bottom:6px;"/>' +
+            '<textarea class="bgprop-desc" placeholder="소품 묘사 (모양·재질·색·표면의 글자나 무늬 등)" style="' + inStyle + 'resize:none;overflow:hidden;min-height:52px;">' + esc(p.description) + '</textarea>' +
+            '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">' +
+              '<button type="button" class="btn-secondary compact bgprop-gen" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + (p._busy ? '처리 중...' : (p.refObjectName ? '소품 재생성' : '소품 생성')) + '</button>' +
+              '<button type="button" class="btn-secondary compact bgprop-pick" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>파일 등록</button>' +
+              '<button type="button" class="btn-ghost compact bgprop-del" style="' + btnH + '">삭제</button>' +
+              '<input type="file" class="bgprop-file" accept="image/*" style="display:none;"/>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
     overlay.innerHTML =
       '<div class="cpbm-box" style="max-width:820px;width:92vw;max-height:88vh;display:flex;flex-direction:column;">' +
-        '<h3 class="cpbm-title">배경 레퍼런스 (공간)</h3>' +
-        '<p class="cpbm-help">이 에피소드의 공간 목록이에요. 각 공간의 <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)를 생성해 두면, 컷 생성 시 그 컷의 장소 배경을 참조해 <strong>배경은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (브랜드 세계관 배경과 별개의 에피소드 전용입니다.)</p>' +
-        '<div style="overflow-y:auto;flex:1;min-height:80px;">' + (rows || '<p class="muted" style="text-align:center;padding:20px;">추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.</p>') + '</div>' +
-        '<div style="display:flex;gap:6px;margin-top:8px;">' +
+        '<h3 class="cpbm-title">에피소드 레퍼런스 (배경·소품)</h3>' +
+        '<p class="cpbm-help">이 에피소드에서만 쓰는 공간과 소품이에요. <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)와 <strong>소품</strong>(반복 등장하는 물건)을 등록해 두면, 컷 생성 시 이름이 일치하는 컷에 자동으로 참조돼 <strong>배경·물건은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (오래 쓰는 IP 공용 자산은 브랜드 허브의 배경·소품 자산에 두세요.)</p>' +
+        '<div style="overflow-y:auto;flex:1;min-height:80px;">' +
+          '<div style="font-size:12px;font-weight:800;margin:0 0 6px;">공간 (배경 플레이트)</div>' +
+          (rows || '<p class="muted" style="text-align:center;padding:16px;">추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.</p>') +
+          '<div style="font-size:12px;font-weight:800;margin:14px 0 4px;">소품 (오브젝트)</div>' +
+          '<p class="muted" style="font-size:11px;margin:0 0 6px;">컷 생성 때 씬 텍스트에 이 이름이 나오면 자동으로 참조돼요. 생김새는 그대로 유지하고, 화면 안 위치·크기는 그 컷이 정합니다.</p>' +
+          (propRows || '<p class="muted" style="text-align:center;padding:16px;">등록된 소품이 없어요. "+ 소품 추가"로 만들어 보세요.</p>') +
+        '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
           '<button type="button" class="btn-secondary compact" id="bgref-add">+ 장소 추가</button>' +
+          '<button type="button" class="btn-secondary compact" id="bgprop-add">+ 소품 추가</button>' +
           '<button type="button" class="btn-secondary compact" id="bgref-reextract">씬에서 다시 추출</button>' +
         '</div>' +
         '<div class="cpbm-actions">' +
@@ -2188,6 +2237,35 @@ function openBackgroundReferenceModal() {
       var vadd = el.querySelector('.bgref-vadd');
       if (vadd) vadd.onclick = function () { syncFromInputs(); if (locs[i]) { locs[i].variants = locs[i].variants || []; locs[i].variants.push({ id: '', label: '', description: '', refObjectName: '', _busy: false }); render(); } };
     });
+    overlay.querySelectorAll('.bgprop-item').forEach(function (el) {
+      var i = Number(el.getAttribute('data-idx'));
+      var gen = el.querySelector('.bgprop-gen');
+      if (gen) gen.onclick = function () { syncFromInputs(); generateProp(i); };
+      var del = el.querySelector('.bgprop-del');
+      if (del) del.onclick = function () { syncFromInputs(); props.splice(i, 1); render(); };
+      var ta = el.querySelector('.bgprop-desc');
+      if (ta) { autoGrow(ta); ta.addEventListener('input', function () { autoGrow(ta); }); }
+      var file = el.querySelector('.bgprop-file');
+      var pick = el.querySelector('.bgprop-pick');
+      if (pick && file) pick.onclick = function () { syncFromInputs(); file.click(); };
+      if (file) file.onchange = function () {
+        var f = file.files && file.files[0];
+        file.value = '';
+        if (f) { syncFromInputs(); attachPropImage(i, f); }
+      };
+      // 드래그 앤 드롭: 파일이면 그대로, 앱 안의 이미지를 끌어온 경우엔 URL 을 받아 내려받는다.
+      var drop = el.querySelector('.bgprop-drop');
+      if (drop) {
+        drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = 'var(--accent)'; };
+        drop.ondragleave = function () { drop.style.borderColor = ''; };
+        drop.ondrop = function (ev) { ev.preventDefault(); drop.style.borderColor = ''; syncFromInputs(); handlePropDrop(i, ev); };
+        drop.onclick = function () { if (file) { syncFromInputs(); file.click(); } };
+      }
+      var pth = el.querySelector('.bgprop-thumb-img');
+      if (pth) pth.onclick = function (ev) { ev.stopPropagation(); openLightbox(pth.getAttribute('data-full')); };
+    });
+    var addPropBtn = overlay.querySelector('#bgprop-add');
+    if (addPropBtn) addPropBtn.onclick = function () { syncFromInputs(); props.push({ id: '', name: '', description: '', refObjectName: '', _busy: false }); render(); };
     var addBtn = overlay.querySelector('#bgref-add');
     if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', variants: [], sceneIds: [], _busy: false }); render(); };
     var reBtn = overlay.querySelector('#bgref-reextract');
@@ -2275,6 +2353,107 @@ function openBackgroundReferenceModal() {
     }
   }
 
+  // 소품 이미지 생성 — 컷에서 재사용할 레퍼런스라 물건 하나만 크게, 배경은 비운다.
+  async function generateProp(i) {
+    var p = props[i]; if (!p) return;
+    if (!String(p.name || '').trim() && !String(p.description || '').trim()) {
+      alert('소품 이름 또는 묘사를 입력하세요.');
+      return;
+    }
+    p._busy = true; render();
+    try {
+      var st = ctxRef.getState();
+      var propName = String(p.name || 'this prop').trim();
+      var prompt = [
+        commonPromptOf(st),
+        'SUBJECT: the prop "' + propName + '" — a single physical object.',
+        String(p.description || '').trim() || ('A clean reference view of the ' + propName + '.'),
+        'FRAMING: one isolated object, centered, filling most of the frame, slight three-quarter angle so its form reads clearly. Plain neutral empty background so this image can be reused as an object reference. No characters, no people, no hands, no text labels, no collage.',
+        'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood lines above. Do not invent or change the art style.'
+      ].filter(Boolean).join('\n');
+      var json = await NK.api.imagen({
+        prompt: prompt,
+        aspectRatio: st.aspectRatio || '16:9',
+        projectId: st.draftId || '',
+        generationMode: 'text-to-image',
+        referenceImages: []
+      });
+      p.refObjectName = String(json.objectName || '').trim() || p.refObjectName;
+      if (!p.refObjectName && json.dataUrl) p._dataUrl = json.dataUrl;
+      if (!p.id) p.id = 'p-' + slug(propName);
+      p._busy = false; render();
+    } catch (e) {
+      p._busy = false; render();
+      alert('소품 생성 실패: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 업로드하거나 끌어다 놓은 이미지를 이 소품의 레퍼런스로 등록한다.
+  async function attachPropImage(i, file) {
+    var p = props[i]; if (!p || !file) return;
+    var st = ctxRef.getState();
+    if (!st.draftId) { alert('프로젝트를 먼저 저장한 뒤 이미지를 등록해 주세요.'); return; }
+    if (!NK.api || !NK.api.imageUpload) { alert('업로드 API를 사용할 수 없습니다.'); return; }
+    p._busy = true; render();
+    try {
+      var up = await NK.api.imageUpload(st.draftId, file, { kind: 'image' });
+      var objectName = String((up && up.objectName) || '').trim();
+      if (!objectName) throw new Error('upload_no_object');
+      p.refObjectName = objectName;
+      p._dataUrl = '';
+      if (!p.id) p.id = 'p-' + slug(String(p.name || 'prop').trim() || 'prop');
+      p._busy = false; render();
+    } catch (e) {
+      p._busy = false; render();
+      alert('소품 이미지 등록 실패: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 앱 안의 이미지(생성된 컷 등)를 끌어오면 파일이 아니라 URL 로 오므로, 내려받아 파일로 만든다.
+  async function urlToImageFile(url, nameHint) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('image_fetch_failed_' + res.status);
+    var blob = await res.blob();
+    if (!/^image\//.test(String(blob.type || ''))) throw new Error('not_an_image');
+    var ext = String(blob.type).split('/')[1] || 'png';
+    ext = ext.replace(/[^a-z0-9]/gi, '') || 'png';
+    return new File([blob], (nameHint || 'prop') + '.' + ext, { type: blob.type });
+  }
+
+  function readDroppedImageUrl(dt) {
+    var url = '';
+    try { url = String(dt.getData('text/uri-list') || '').split('\n')[0].trim(); } catch (_) {}
+    if (!url) {
+      try {
+        var html = String(dt.getData('text/html') || '');
+        var m = html.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+        if (m) url = m[1];
+      } catch (_) {}
+    }
+    if (!url) { try { url = String(dt.getData('text/plain') || '').trim(); } catch (_) {} }
+    return /^(https?:|data:|blob:|\/)/i.test(url) ? url : '';
+  }
+
+  function handlePropDrop(i, ev) {
+    var p = props[i]; if (!p) return;
+    var dt = ev.dataTransfer; if (!dt) return;
+    var f = dt.files && dt.files[0];
+    if (f) {
+      if (!/^image\//.test(String(f.type || ''))) { alert('이미지 파일만 등록할 수 있어요.'); return; }
+      attachPropImage(i, f);
+      return;
+    }
+    var url = readDroppedImageUrl(dt);
+    if (!url) { alert('이미지 파일이나 화면 안의 이미지를 끌어다 놓아 주세요.'); return; }
+    p._busy = true; render();
+    urlToImageFile(url, slug(String(p.name || 'prop').trim() || 'prop'))
+      .then(function (file) { p._busy = false; return attachPropImage(i, file); })
+      .catch(function (e) {
+        p._busy = false; render();
+        alert('이미지 등록 실패: ' + (e && e.message ? e.message : e));
+      });
+  }
+
   async function reextract() {
     var st = ctxRef.getState();
     if (!NK.api || !NK.api.scenarioLocations) { alert('추출 API를 사용할 수 없습니다.'); return; }
@@ -2313,8 +2492,19 @@ function openBackgroundReferenceModal() {
           .map(function (v) { return { id: v.id || ('v-' + slug(v.label)), label: String(v.label || '').trim(), description: String(v.description || '').trim(), refObjectName: v.refObjectName }; });
         return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', variants: variants, sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
       });
+    // 이미지가 아직 없어도 이름을 적어 뒀다면 남긴다(입력이 사라지지 않게).
+    var cleanedProps = props
+      .filter(function (p) { return String(p.name || '').trim(); })
+      .map(function (p) {
+        return {
+          id: p.id || ('p-' + slug(p.name)),
+          name: String(p.name || '').trim(),
+          description: String(p.description || '').trim(),
+          refObjectName: p.refObjectName || ''
+        };
+      });
     var st = ctxRef.getState();
-    st.payload = Object.assign({}, st.payload, { episodeLocations: cleaned });
+    st.payload = Object.assign({}, st.payload, { episodeLocations: cleaned, episodeProps: cleanedProps });
     ctxRef.setState(st);
     if (ctxRef.persistPipeline) ctxRef.persistPipeline();
     if (ctxRef.updateDraftFromPipeline) ctxRef.updateDraftFromPipeline();
