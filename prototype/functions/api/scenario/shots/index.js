@@ -16,6 +16,8 @@ import {
   parseShotResponse,
   reconcileDurations,
   fallbackSingleShot,
+  shotsMissingBeats,
+  buildBeatsRepairPrompt,
 } from "./decomposer.js";
 import { diversifyShotCameraMoves } from "../rebalancer.js";
 import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
@@ -71,8 +73,30 @@ export async function decomposeScene(auth, scene, opts = {}) {
     user,
     signal: opts.signal,
   });
-  const shots = parseShotResponse(text, scene);
+  let shots = parseShotResponse(text, scene);
   if (!shots || !shots.length) throw new Error("shot_parse_failed");
+
+  // 카메라가 움직이는 샷에 시간표가 빠졌으면 그 샷만 짚어 한 번 더 요청한다.
+  // 프롬프트 규칙만으로는 모델이 자주 빼먹는데, 빠지면 스틸컷이 무브의 끝 상태로
+  // 만들어져 "가려졌다가 드러나는" 연출이 통째로 사라진다. 재시도는 1회로 묶어
+  // 비용·지연을 제한하고, 고쳐지지 않으면 원래 결과를 그대로 쓴다.
+  const missing = shotsMissingBeats(shots);
+  if (missing.length) {
+    try {
+      const repairText = await callAnthropicForShots({
+        auth,
+        env: opts.env,
+        system,
+        user: `${user}\n\n${buildBeatsRepairPrompt(missing, lang)}`,
+        signal: opts.signal,
+      });
+      const repaired = parseShotResponse(repairText, scene);
+      if (repaired && repaired.length && shotsMissingBeats(repaired).length < missing.length) {
+        shots = repaired;
+      }
+    } catch (_) { /* 보정 실패는 조용히 넘긴다 — 원래 분해 결과는 이미 쓸 수 있다 */ }
+  }
+
   return reconcileDurations(shots, scene);
 }
 
@@ -122,4 +146,6 @@ export {
   parseShotResponse,
   reconcileDurations,
   fallbackSingleShot,
+  shotsMissingBeats,
+  buildBeatsRepairPrompt,
 };

@@ -269,6 +269,30 @@ export function parseShotResponse(text, scene) {
 }
 
 /**
+ * 카메라가 움직이는데 시간표가 없는 샷을 찾는다.
+ *
+ * 무브가 있다는 것은 "보이는 것이 시간에 따라 달라진다"는 뜻이고, 그러면 beats 가 있어야
+ * 스틸컷을 시작 프레임으로 만들고 영상에 시간 분배를 줄 수 있다. 모델이 규칙을 지키지
+ * 않고 beats 를 빼먹는 일이 잦아, 코드가 직접 확인하고 한 번 더 요청한다.
+ */
+export function shotsMissingBeats(shots) {
+  return (Array.isArray(shots) ? shots : []).filter((shot) => {
+    const move = String(shot?.cameraMove || "static").trim().toLowerCase();
+    if (!move || move === "static") return false;
+    return !(Array.isArray(shot?.beats) && shot.beats.length >= 2);
+  });
+}
+
+/** 빠진 샷만 짚어 다시 채우게 하는 보정 지시문. */
+export function buildBeatsRepairPrompt(missing, lang = "ko") {
+  const ids = (Array.isArray(missing) ? missing : []).map((s) => s?.id).filter(Boolean).join(", ");
+  if (lang === "en") {
+    return `The shots [${ids}] have a camera move but no "beats". A moving shot MUST have beats — otherwise the still image is generated from the end state of the move and the reveal disappears. Return the SAME JSON again, unchanged except that those shots now carry beats: [{"at":0,"what":"<what is visible at the very start>"},{"at":<seconds>,"what":"<what is visible after the move>"}]. beats[0].at must be 0 and the last "at" must be smaller than that shot's duration. Do not change anything else.`;
+  }
+  return `샷 [${ids}] 은 카메라가 움직이는데 "beats" 가 없다. 움직이는 샷에는 beats 가 반드시 있어야 한다 — 없으면 스틸컷이 무브의 끝 상태로 만들어져 드러나는 연출이 사라진다. 같은 JSON 을 그대로 다시 내되, 그 샷들에만 beats 를 채워라: [{"at":0,"what":"<맨 처음 프레임에 보이는 것>"},{"at":<초>,"what":"<무브가 끝난 뒤 보이는 것>"}]. beats[0].at 은 반드시 0 이고, 마지막 at 은 그 샷의 duration 보다 작아야 한다. 다른 것은 하나도 바꾸지 마라.`;
+}
+
+/**
  * 인접한 두 샷을 하나로 합친다.
  *
  * 합쳐진 샷은 "하나의 카메라 셋업 안에서 시간에 따라 변하는" 샷이 되므로,
