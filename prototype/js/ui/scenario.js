@@ -1293,6 +1293,23 @@
     return /\b(401|403)\b|auth_required|invalid_session|session_expired/i.test(msg);
   };
 
+  // 서버가 준 시간표를 화면이 믿을 수 있는 모양으로 다듬는다.
+  // 두 줄 미만이면 시간표가 아니다(변화가 없다는 뜻) — null 로 둔다.
+  const normalizeSceneBeats = (raw) => {
+    if (!Array.isArray(raw) || raw.length < 2) return null;
+    const out = [];
+    raw.forEach((b) => {
+      if (!b || typeof b !== 'object') return;
+      const what = String(b.what || b.text || '').trim();
+      if (!what) return;
+      const at = Number(b.at);
+      out.push({ at: (isFinite(at) && at > 0) ? at : 0, what });
+    });
+    if (out.length < 2) return null;
+    out[0].at = 0; // 첫 줄은 언제나 컷의 시작(=스틸컷)
+    return out;
+  };
+
   const normalizeScenes = (scenes = []) => {
     const activeCharacters = getActiveCharactersForPayload(currentPayload || {});
     const flags = getScenarioFlags(currentPayload || {});
@@ -1351,6 +1368,9 @@
         cameraMove: String(s.cameraMove || 'static'),
         composition: String(s.composition || '').trim(),
         action: String(s.action || '').trim(),
+        // ★컷 안의 시간표. 여기서 빠뜨리면 서버가 아무리 잘 만들어 보내도
+        // 화면에 그리기 직전에 통째로 버려진다(타임라인이 늘 비어 있던 진짜 이유).
+        beats: normalizeSceneBeats(s.beats),
         // legacy 호환: shots[] 가 들어오면 보존 (마이그레이션 대상)
         shots: Array.isArray(s.shots) ? s.shots.map((sh, j) => ({
           id: String(sh?.id || `${s.id != null ? s.id : (i + 1)}.${j + 1}`),
@@ -3305,6 +3325,9 @@
             } else if (s.shot || s.visual) {
               lines.push(`시각화: ${s.shot || s.visual}`);
             }
+            // 컷 안의 시간표도 함께 싣는다. 안 실으면 복사→붙여넣기 한 번에 사라진다.
+            const beatsLine = beatsToText(s.beats).replace(/\r?\n+/g, ' / ');
+            if (beatsLine) lines.push(`타임라인: ${beatsLine}`);
             if (s.lyricsText || s.lyrics) lines.push(`${s.isRefrain ? '가사(후렴)' : '가사'}: ${String(s.lyricsText || s.lyrics).replace(/\r?\n+/g, ' · ')}`);
             if (s.narrationText || s.narration) lines.push(`나레이션: ${String(s.narrationText || s.narration).replace(/\r?\n+/g, ' · ')}`);
             const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
@@ -3337,15 +3360,15 @@
     const parseInjectedScenario = (text) => {
       const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
       const headerRe = /^\s*Scene\s+\d+(?:\s+cut\s*\d+)?\s*(?:[·•]\s*([0-9.]+)\s*s)?/i;
-      const fieldRe = /^\s*(장소|화면|행동|시각화|나레이션|대사)\s*[:：]\s*([\s\S]*)$/;
-      const labelMap = { '장소': 'location', '화면': 'composition', '행동': 'action', '시각화': 'shot', '나레이션': 'narration', '대사': 'dialogue' };
+      const fieldRe = /^\s*(장소|화면|행동|타임라인|시각화|나레이션|대사)\s*[:：]\s*([\s\S]*)$/;
+      const labelMap = { '장소': 'location', '화면': 'composition', '행동': 'action', '타임라인': 'beats', '시각화': 'shot', '나레이션': 'narration', '대사': 'dialogue' };
       const out = [];
       let cur = null;
       let curField = null;
       for (const raw of lines) {
         const headerMatch = raw.match(headerRe);
         if (headerMatch) {
-          cur = { estSec: headerMatch[1] ? parseEst(headerMatch[1]) : 0, location: '', composition: '', action: '', shot: '', narration: '', dialogue: '' };
+          cur = { estSec: headerMatch[1] ? parseEst(headerMatch[1]) : 0, location: '', composition: '', action: '', beats: '', shot: '', narration: '', dialogue: '' };
           out.push(cur);
           curField = null;
           continue;
@@ -3378,6 +3401,8 @@
         sceneLocation: String(p.location || '').trim(),
         composition: hasStructured ? comp : '',
         action: hasStructured ? act : '',
+        // "0s 발만 / 2s 전신" 을 다시 시간표 배열로. 없으면 null.
+        beats: textToBeats(String(p.beats || '').replace(/\s+\/\s+/g, '\n')),
         shot: visual,
         visual,
         narration,
