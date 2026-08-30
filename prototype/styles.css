@@ -4648,7 +4648,10 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  /* 저장소·이미지 보기 창은 다른 모달(.cpbm-overlay, z-index 9999) "안에서" 열릴 수 있다.
+     배경 레퍼런스 창에서 저장소를 누르면 그 아래에 깔려 아무것도 못 하던 문제 —
+     고르라고 띄운 창이니 언제나 위에 온다. (멘션 드롭다운 10050 보다는 아래) */
+  z-index: 10000;
 }
 
 .img-modal.hidden {

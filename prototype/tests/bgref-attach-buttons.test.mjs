@@ -66,6 +66,21 @@ test("★저장소 창은 다른 스코프에 있으므로 네임스페이스로
   assert.match(src, /if \(typeof openLib !== 'function'\)/);
 });
 
+test("★저장소 창이 배경 레퍼런스 창 위에 뜬다", () => {
+  // 저장소는 다른 모달 "안에서" 열린다. 아래에 깔리면 고를 수가 없다.
+  const css = read("prototype/styles.css");
+  const pick = (sel) => {
+    const at = css.indexOf(sel);
+    assert.ok(at > -1, sel + " 규칙이 있어야 한다");
+    const m = css.slice(at, at + 600).match(/z-index:\s*(\d+)/);
+    assert.ok(m, sel + " 에 z-index 가 있어야 한다");
+    return Number(m[1]);
+  };
+  const picker = pick(".img-modal {");        // 저장소·이미지 보기
+  const hostModal = pick(".cpbm-overlay {");  // 배경 레퍼런스·공통 프롬프트
+  assert.ok(picker > hostModal, `저장소(${picker}) 가 배경 레퍼런스(${hostModal}) 보다 위여야 한다`);
+});
+
 test("★버튼 문구가 한/영 짝으로 있다", () => {
   const src = pipeline();
   ["pickFile", "pickLibrary", "libraryEmpty", "libraryFail"].forEach((key) => {
