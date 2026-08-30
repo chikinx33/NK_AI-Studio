@@ -71,7 +71,7 @@ export async function onRequestPost(context) {
         model: "claude-sonnet-4-6",
         max_tokens: 900,
         temperature: 0.5,
-        system: buildClaudeSystem(sub, buildSystemPrompt(input.language, input.songMode)),
+        system: buildClaudeSystem(sub, buildSystemPrompt(input.language, input.songMode, !!input.userLyrics)),
         messages: [
           {
             role: "user",
@@ -157,6 +157,8 @@ function normalizeInput(body) {
       && body?.songLyricsEnabled !== false,
     // 노래를 "부를" 언어. 화면 언어(language)와 별개다 — 한국어 화면에서 영어 동요를 만들 수 있다.
     songLanguage: normalizeSongLanguage(body?.songLanguage),
+    // 사용자가 가사 칸에 이미 적어 둔 내용. 있으면 AI 가 새로 짓지 않고 이것을 살려 다듬는다.
+    userLyrics: formatUserLyrics(body?.songSections),
   };
 }
 
@@ -172,6 +174,23 @@ function normalizeSongLanguage(value) {
   return Object.prototype.hasOwnProperty.call(SONG_LANGUAGE_LABELS, raw) ? raw : "";
 }
 
+/**
+ * 사용자가 가사 칸에 적어 둔 구간들을 프롬프트에 실을 한 덩어리 텍스트로 만든다.
+ * 비어 있으면 "" — 그때는 AI 가 이야기만 보고 처음부터 작사한다.
+ */
+function formatUserLyrics(sections) {
+  const list = Array.isArray(sections) ? sections : [];
+  const lines = [];
+  list.forEach((sec) => {
+    const text = String(sec?.text || "").trim();
+    if (!text) return;
+    const label = String(sec?.label || "[절]").trim();
+    const dur = Number(sec?.durationSec) || 0;
+    lines.push(`${label}${dur ? `(${dur}초)` : ""} ${text}`);
+  });
+  return lines.join("\n");
+}
+
 const SONG_PURPOSE_TAGS = ["동요", "율동", "Nursery rhyme", "Movement song"];
 function hasSongPurposeTag(tags) {
   const joined = (Array.isArray(tags) ? tags : []).join(", ");
@@ -184,7 +203,7 @@ function toBoolLoose(v) {
   return t === "true" || t === "1" || t === "yes";
 }
 
-function buildSystemPrompt(language, songMode = false) {
+function buildSystemPrompt(language, songMode = false, hasUserLyrics = false) {
   if (language === "en") {
     return [
       "You enumerate every event in the user's story as one beat per event. You DO NOT compress, merge, or drop events. The user's story IS the source of truth.",
@@ -205,6 +224,7 @@ function buildSystemPrompt(language, songMode = false) {
       "If registered characters are provided, use only those characters as the cast and do not introduce any unselected or new characters.",
       "If no registered characters are provided, do not include named characters, protagonists, dialogue participants, or @tokens.",
       ...(songMode ? [SONG_LYRICS_RULE_EN] : []),
+      ...(songMode && hasUserLyrics ? [SONG_USER_LYRICS_RULE_EN] : []),
     ].join(" ");
   }
   return [
@@ -226,6 +246,7 @@ function buildSystemPrompt(language, songMode = false) {
     "등록 캐릭터가 있으면 그 캐릭터만 이야기의 등장 인물로 사용하고, 선택되지 않은 캐릭터나 새 캐릭터를 추가하지 마라.",
     "등록 캐릭터가 없으면 이름 있는 캐릭터, 주인공, 대화 참여자, @토큰을 만들지 마라.",
     ...(songMode ? [SONG_LYRICS_RULE_KO] : []),
+    ...(songMode && hasUserLyrics ? [SONG_USER_LYRICS_RULE_KO] : []),
   ].join(" ");
 }
 
@@ -233,6 +254,11 @@ function buildSystemPrompt(language, songMode = false) {
 // 비트마다 한 구간씩 대응시키는 이유 — 다음 단계(시나리오 생성)가 비트 단위로 병렬 호출되므로,
 // 여기서 비트에 1:1로 못 붙여두면 씬마다 다른 가사가 나와 노래가 성립하지 않는다.
 const SONG_LYRICS_RULE_KO = '[가사 필드 - 노래 모드 필수] 위 JSON 에 "lyrics" 배열을 추가한다. 형식: {"story":"...","beats":[...],"lyrics":[{"label":"[훅]|[1절]|[후렴]|[2절]|[브릿지]","text":"...","durationSec":8}]}. 규칙: ① lyrics 는 beats 와 개수를 맞추지 않는다. 가사 한 구간은 여러 컷에 걸쳐 불린다. 구간 하나는 한 호흡에 부르는 소절이며 보통 4~10초다. 알파벳 전체처럼 긴 후렴이면 그만큼 길게 잡아라. ② durationSec 은 그 구간을 실제로 부르는 데 걸리는 초다. 반드시 3 이상이고, 모든 구간의 합이 [영상 길이]와 같아야 한다. 직접 소리 내어 부른다고 생각하고 정하라 — 글자 수가 많으면 길게, 짧으면 짧게. ③ 후렴은 최소 2번 등장하고 마지막 구간은 반드시 후렴이다. 후렴으로 표시한 구간의 text 는 글자 하나까지 완전히 동일해야 한다. ④ 절은 이야기의 사건을 순서대로 노래한다. 이야기에 없는 사건을 지어내지 마라. label 의 절 번호는 1,2,3 순으로 올린다. ⑤ 설명체(~합니다, ~해요) 금지. 3~6세가 한 번 듣고 따라 부를 수 있게 쉬운 발음과 반복을 쓴다. ⑥ 줄바꿈은 슬래시(/)가 아니라 \n 으로 쓴다. ⑦ 가사에는 @토큰을 쓰지 않는다. 캐릭터는 이름만 쓴다(예: @네모 → 네모). ⑧ [작사 언어] 지시가 있으면 그 언어로 가사를 쓴다.';
+// 사용자가 직접 적어 둔 가사가 있을 때. 새로 짓지 말고 그것을 살려 다듬는 것이 핵심이다.
+// (사용자가 쓴 것을 AI 가 통째로 갈아엎으면 적은 의미가 없다)
+const SONG_USER_LYRICS_RULE_KO = '[이미 적힌 가사 - 최우선] 아래 [작성해 둔 가사] 에 사용자가 직접 쓴 가사가 있다. 이것이 원본이다. ① 표현·단어·이미지·구간 순서를 최대한 그대로 살린다. 마음대로 새로 짓거나 다른 내용으로 바꾸지 마라. ② 손대는 것은 형식뿐이다 — 구간 라벨을 붙이고, durationSec 을 실제로 부르는 길이로 채우고, 합이 [영상 길이]와 같아지도록 맞춘다. ③ 길이가 모자라면 사용자가 쓴 표현을 반복하거나 후렴을 한 번 더 넣어 채우고, 넘치면 덜 중요한 구간을 줄인다. ④ 이야기와 가사가 어긋나면 가사를 따르되, 이야기의 사건을 가사에 없는 내용으로 지어내지 마라. ⑤ 가사가 일부만 적혀 있으면 그 부분은 그대로 두고 나머지만 같은 말투·같은 리듬으로 이어 쓴다.';
+const SONG_USER_LYRICS_RULE_EN = '[EXISTING LYRICS - HIGHEST PRIORITY] The user already wrote lyrics in [Existing lyrics] below. Those are the source of truth. (1) Preserve their wording, word choices, imagery and section order as much as possible. Do NOT rewrite them into something else. (2) Only the format is yours to fix: add section labels, fill durationSec with how long each section actually takes to sing, and make the values sum to the video length. (3) If it is too short, repeat the user\'s own phrases or add one more chorus; if too long, shorten the least important section. (4) If the story and the lyrics disagree, follow the lyrics — never invent story events that are absent from them. (5) If only part of the lyrics is written, keep that part untouched and continue the rest in the same voice and rhythm.';
+
 const SONG_LYRICS_RULE_EN = '[LYRICS FIELD - REQUIRED IN SONG MODE] Add a "lyrics" array to the JSON above. Format: {"story":"...","beats":[...],"lyrics":[{"label":"[Hook]|[Verse 1]|[Chorus]|[Bridge]","text":"...","durationSec":8}]}. Rules: (1) lyrics does NOT have to match the beat count. One section is sung across several cuts. A section is one breath-length passage, usually 4-10 seconds; make it longer for a long refrain such as the full alphabet. (2) durationSec is how long that section actually takes to sing. It must be at least 3, and all durationSec values MUST sum to [video length]. Decide it as if you were singing it out loud - more syllables, more seconds. (3) The chorus appears at least twice and the LAST section must be the chorus; every chorus section must be character-for-character identical. (4) Verses sing the story events in order. Never invent events that are not in the story. Number the verses 1, 2, 3 in order. (5) Sung phrasing, never expository. Easy consonants and repetition so a 3-6 year old can sing it back after one listen. (6) Use \n for line breaks, never a slash (/). (7) Never put @tokens in the lyrics - use the plain character name. (8) If a [Lyrics language] instruction is given, write the lyrics in that language.';
 
 /**
@@ -298,6 +324,7 @@ function buildUserPrompt(input) {
         `[Video length] ${input.durationSeconds || 0}s - every durationSec in "lyrics" MUST sum to exactly this.`,
         `[Total syllable budget] about ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)} syllables max. ${SYLLABLES_PER_SEC} syllables per second is the ceiling for a 3-6 year old to sing along. Going over makes some passage unsingable - write fewer words, not more.`,
         `[Lyrics language] ${detectLyricLanguage(input.story, "en", input.songLanguage) || "same language as the story"}`,
+        input.userLyrics ? `[Existing lyrics - preserve these]\n${input.userLyrics}` : "",
       ] : []),
       "Output goal: a faithful enumeration of every event in the user's story as separate beats — preserving the user's intent, direction, and event sequence. Replace abstract phrases with concrete action phrasing, but never merge or drop events."
     ].join("\n");
@@ -326,6 +353,7 @@ function buildUserPrompt(input) {
       `[영상 길이] ${input.durationSeconds || 0}초 — "lyrics" 의 durationSec 합이 정확히 이 값이어야 한다.`,
       `[총 음절 예산] 약 ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)}음절 이내. 3~6세가 따라 부르려면 초당 ${SYLLABLES_PER_SEC}음절이 상한이다. 예산을 넘기면 어느 소절이든 못 부를 속도가 된다 — 가사를 늘리지 말고 줄여라.`,
       `[작사 언어] ${detectLyricLanguage(input.story, "ko", input.songLanguage) || "이야기와 같은 언어"}`,
+      input.userLyrics ? `[작성해 둔 가사 - 이대로 살릴 것]\n${input.userLyrics}` : "",
     ] : []),
     "출력 목표: 사용자의 이야기에 등장한 모든 사건을 빠짐없이 비트로 enumerate한다. 의도·방향·사건 순서를 모두 보존하고, 추상 표현만 구체 행동으로 치환한다. 사건을 병합하거나 누락하지 않는다."
   ].join("\n");

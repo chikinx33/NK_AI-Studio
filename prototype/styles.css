@@ -3463,36 +3463,43 @@ textarea::-webkit-scrollbar-corner {
   font-size: 13px;
   line-height: 1.8;
 }
-/* 노래 옵션(가사 체크 · 부를 언어) — 세부 장르가 동요일 때만 보이는 한 행. */
+/* 노래 옵션(가사 체크 · 부를 언어) — 세부 장르가 동요일 때만 보이는 한 행.
+   체크박스와 '가사'는 붙이고, 그다음 '언어'와는 확실히 띄운다.
+   가깝게 두면 "가사 언어" 한 덩어리로 읽힌다. */
 .scenario-song-options-row {
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 22px;
 }
 
 .scenario-song-check,
 .scenario-song-lang {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.scenario-song-check {
+  gap: 6px;
+}
+
+.scenario-song-lang {
+  gap: 8px;
+  padding-left: 22px;
+  border-left: 1px solid var(--border);
 }
 
 .scenario-song-check input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
 }
 
 .scenario-song-lang select {
   min-width: 110px;
-}
-
-.scenario-song-options-help {
-  flex: 1 1 100%;
-  margin: 0;
 }
 
 .scenario-lyrics-help { margin: 6px 0 0; }

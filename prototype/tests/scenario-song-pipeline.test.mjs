@@ -35,7 +35,8 @@ test("이야기 정리 단계가 노래 모드를 스스로 알아본다", () =>
   // 개요의 '가사' 체크를 끄면 작사하지 않는다(가사 없는 노래).
   assert.match(src, /body\?\.songLyricsEnabled !== false/);
   assert.match(src, /const SONG_PURPOSE_TAGS = \["동요", "율동"/);
-  assert.match(src, /buildSystemPrompt\(input\.language, input\.songMode\)/);
+  // 사용자가 적어 둔 가사가 있으면 그것을 살리는 규칙이 함께 붙는다.
+  assert.match(src, /buildSystemPrompt\(input\.language, input\.songMode, !!input\.userLyrics\)/);
 });
 
 test("작사 규칙은 구간 모델을 요구한다 (비트 수에 맞추지 않는다)", () => {

@@ -103,6 +103,55 @@ test("★고른 언어로 노래한다 (이야기 문장보다 우선)", () => {
   assert.match(scenarioApi(), /songLanguage,/);
 });
 
+test("★체크박스와 '가사'는 붙고, '언어'와는 떨어진다", () => {
+  // 가깝게 두면 "가사 언어" 한 덩어리로 읽힌다.
+  const css = read("prototype/styles.css");
+  const block = css.slice(
+    css.indexOf(".scenario-song-options-row {"),
+    css.indexOf(".scenario-song-lang select {")
+  );
+  const gap = Number((block.match(/\.scenario-song-options-row \{[\s\S]*?gap: (\d+)px/) || [])[1]);
+  const checkGap = Number((block.match(/\.scenario-song-check \{[\s\S]*?gap: (\d+)px/) || [])[1]);
+  assert.ok(checkGap > 0 && checkGap <= 8, "체크박스와 '가사'는 붙어 있어야 한다");
+  assert.ok(gap >= checkGap * 2, "'가사'와 '언어' 사이는 확실히 띄어야 한다");
+  // 경계선으로도 갈라 둔다.
+  assert.match(block, /\.scenario-song-lang \{[\s\S]*?border-left: 1px solid/);
+});
+
+test("★부연 설명은 없앤다", () => {
+  const src = html();
+  const optionsAt = src.indexOf('id="song-options-group"');
+  const row = src.slice(optionsAt, src.indexOf('id="target-select"'));
+  assert.doesNotMatch(row, /scenario-song-options-help/);
+  assert.doesNotMatch(read("prototype/core.js"), /scenario_song_options_help/);
+});
+
+test("★적어 둔 가사가 있으면 AI 가 그것을 살려 다듬는다", () => {
+  const src = storyApi();
+  // 사용자가 쓴 가사를 프롬프트에 싣는다.
+  assert.match(src, /userLyrics: formatUserLyrics\(body\?\.songSections\)/);
+  assert.match(src, /function formatUserLyrics\(sections\)/);
+  assert.match(src, /\[작성해 둔 가사 - 이대로 살릴 것\]/);
+  assert.match(src, /\[Existing lyrics - preserve these\]/);
+  // 새로 짓지 말라는 규칙이 한/영 모두 있다.
+  assert.match(src, /const SONG_USER_LYRICS_RULE_KO = /);
+  assert.match(src, /const SONG_USER_LYRICS_RULE_EN = /);
+  assert.match(src, /마음대로 새로 짓거나 다른 내용으로 바꾸지 마라/);
+  assert.match(src, /Do NOT rewrite them into something else/);
+  // 이 규칙은 사용자가 적었을 때만 붙는다(안 적었으면 AI 가 처음부터 작사).
+  assert.match(src, /songMode && hasUserLyrics \? \[SONG_USER_LYRICS_RULE_KO\] : \[\]/);
+  assert.match(src, /songMode && hasUserLyrics \? \[SONG_USER_LYRICS_RULE_EN\] : \[\]/);
+  assert.match(src, /buildSystemPrompt\(input\.language, input\.songMode, !!input\.userLyrics\)/);
+});
+
+test("★적어 둔 가사는 생성 요청에 실려 간다", () => {
+  const src = ui();
+  // 가사 칸의 내용이 songSections 로 나가고, 그게 곧 서버의 userLyrics 가 된다.
+  assert.match(src, /payload\.songSections = \(voiceMode === 'song' && songLyricsEnabled\) \? getSongSections\(\) : \[\];/);
+  // 이야기 정리 요청은 payload 를 그대로 넘긴다.
+  assert.match(src, /NK\.api\.storyStructure\(Object\.assign\(\{\}, payload, \{ language \}\)\)/);
+});
+
 test("★문구가 한/영 짝으로 있다", () => {
   const core = read("prototype/core.js");
   [
@@ -112,7 +161,6 @@ test("★문구가 한/영 짝으로 있다", () => {
     "scenario_song_language_ko",
     "scenario_song_language_en",
     "scenario_song_language_zh",
-    "scenario_song_options_help",
   ].forEach((key) => {
     const hits = core.match(new RegExp("\\b" + key + ":", "g")) || [];
     assert.equal(hits.length, 2, key + " 가 한/영 두 번 있어야 한다");
