@@ -9822,6 +9822,40 @@ details[open] > .knowledge-hub-disclosure-body {
   padding: 12px 16px 16px;
 }
 
+/* 펼침 연출 — common.js 가 여는 동안 details 에 .is-disclosure-revealing 을 붙인다.
+   높이가 열리는 리듬에 맞춰 안쪽 내용이 살짝 아래에서 떠오른다. 목록 행은 순차로 들어와
+   "한 번에 툭" 나타나지 않게 한다. */
+@keyframes nk-disclosure-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .is-disclosure-revealing > * > .disclosure-inner > * {
+    animation: nk-disclosure-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row {
+    animation: nk-disclosure-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 300ms;
+  }
+
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(1) { animation-delay: 80ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(2) { animation-delay: 125ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(3) { animation-delay: 165ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(4) { animation-delay: 200ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(5) { animation-delay: 230ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(6) { animation-delay: 255ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(7) { animation-delay: 275ms; }
+  .is-disclosure-revealing .knowledge-character-chips > .knowledge-character-row:nth-child(8) { animation-delay: 290ms; }
+}
+
 .brand-studio-disclosure-meta,
 .knowledge-hub-disclosure-meta {
   white-space: nowrap;

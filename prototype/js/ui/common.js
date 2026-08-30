@@ -1124,6 +1124,68 @@
         return null;
     }
 
+    // 펼침 애니메이션 길이. CSS 의 opacity 트랜지션과 맞춘다.
+    var DISCLOSURE_MOTION_MS = 320;
+    // 안쪽 행이 순차로 떠오르는 연출까지 끝나는 시점(CSS nk-disclosure-rise 지연 + 길이).
+    var DISCLOSURE_REVEAL_MS = 700;
+
+    function getDisclosureInner(body) {
+        if (!body) return null;
+        for (var i = 0; i < body.children.length; i++) {
+            var child = body.children[i];
+            if (child && child.classList && child.classList.contains('disclosure-inner')) return child;
+        }
+        return null;
+    }
+
+    // 애니메이션 동안에는 JS 가 높이를 직접 잡는다. 끝나면 인라인 스타일을 전부 걷어내
+    // 평소에는 CSS(grid-template-rows 0fr/1fr)가 상태를 소유하게 둔다 — 내용이 바뀌어도
+    // 높이가 굳지 않는다.
+    function clearDisclosureMotionStyles(body) {
+        if (!body || !body.style) return;
+        body.style.transition = '';
+        body.style.height = '';
+        body.style.opacity = '';
+        body.style.gridTemplateRows = '';
+        body.style.overflow = '';
+    }
+
+    function runDisclosureMotion(details, body, fromHeight, toHeight, onDone) {
+        if (details.__nkMotionCleanup) details.__nkMotionCleanup();
+        var inner = getDisclosureInner(body);
+        // 닫힌 상태의 그리드 행(0fr)에 갇히지 않도록 애니메이션 동안만 높이를 인라인으로 잡는다.
+        body.style.transition = 'none';
+        body.style.gridTemplateRows = '1fr';
+        body.style.overflow = 'clip';
+        body.style.height = fromHeight + 'px';
+        body.style.opacity = fromHeight ? '1' : '0';
+        if (inner) void inner.offsetHeight; // 시작 프레임 확정(리플로우)
+        body.style.transition = 'height ' + DISCLOSURE_MOTION_MS + 'ms cubic-bezier(0.22, 1, 0.36, 1)'
+            + ', opacity ' + (DISCLOSURE_MOTION_MS - 80) + 'ms ease';
+        body.style.height = toHeight + 'px';
+        body.style.opacity = toHeight ? '1' : '0';
+
+        var finished = false;
+        function finish() {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(timer);
+            body.removeEventListener('transitionend', onEnd);
+            details.__nkMotionCleanup = null;
+            clearDisclosureMotionStyles(body);
+            if (typeof onDone === 'function') onDone();
+        }
+        function onEnd(evt) {
+            if (evt.target !== body || evt.propertyName !== 'height') return;
+            finish();
+        }
+        // transitionend 가 유실되는 경우(탭 전환 등)에도 반드시 정리된다.
+        var timer = window.setTimeout(finish, DISCLOSURE_MOTION_MS + 80);
+        body.addEventListener('transitionend', onEnd);
+        details.__nkMotionCleanup = finish;
+        return finish;
+    }
+
     common.bindDisclosureMotion = function (root) {
         if (!root || !root.querySelectorAll) return;
         var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure, .character-props-disclosure');
@@ -1140,22 +1202,73 @@
                 body.appendChild(inner);
                 body.__nkInnerWrapped = true;
             }
-            // Native <details> open/close drives animation entirely via CSS grid-template-rows.
-            // No click interception — that was the root cause of the "no response" bug.
-            // Dispatch nk-disclosure-opened AFTER the 300ms CSS transition completes so that
-            // scrollDisclosureIntoView calculates final (expanded) coordinates, not pre-expansion.
-            if (!details.__nkDisclosureToggleBound) {
-                details.__nkDisclosureToggleBound = true;
+            // 열기: 네이티브 toggle 직후 실제 높이를 재서 0 → 높이로 편다.
+            //   (닫힌 <details> 는 브라우저마다 내용을 렌더하지 않기도 해서, CSS 0fr 시작 프레임만
+            //    믿으면 그냥 툭 펼쳐져 보이는 경우가 있다.)
+            // 닫기: 네이티브는 즉시 감춰 버리므로, 클릭을 가로채 접히는 동안 open 을 유지한다.
+            if (!details.__nkDisclosureMotionBound) {
+                details.__nkDisclosureMotionBound = true;
                 details.addEventListener('toggle', function () {
-                    if (details.open) {
-                        window.setTimeout(function () {
-                            if (!details.open) return; // guard: closed before timer fires
-                            try {
-                                details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
-                            } catch (_) { }
-                        }, 320); // 300ms transition + 20ms buffer
+                    // 다시 그린 뒤 열림 상태를 되돌리는 프로그램 토글은 연출 없이 지나간다.
+                    var suppressed = !!details.__nkSuppressMotion;
+                    details.__nkSuppressMotion = false;
+                    if (!details.open) return;
+                    if (details.__nkClosing) return;
+                    if (!suppressed && !prefersReducedMotion()) {
+                        var inner = getDisclosureInner(body);
+                        var target = inner ? inner.offsetHeight : body.scrollHeight;
+                        if (target > 0) {
+                            runDisclosureMotion(details, body, 0, target);
+                            // 안쪽 행이 순차로 떠오르는 연출은 높이 애니메이션보다 길다.
+                            // 끝나기 전에 클래스를 떼면 남은 행이 툭 나타나므로 따로 잰다.
+                            details.classList.add('is-disclosure-revealing');
+                            window.clearTimeout(details.__nkRevealTimer);
+                            details.__nkRevealTimer = window.setTimeout(function () {
+                                details.classList.remove('is-disclosure-revealing');
+                            }, DISCLOSURE_REVEAL_MS);
+                        }
                     }
+                    // Dispatch nk-disclosure-opened AFTER the transition completes so that
+                    // scrollDisclosureIntoView calculates final (expanded) coordinates.
+                    window.setTimeout(function () {
+                        if (!details.open) return; // guard: closed before timer fires
+                        try {
+                            details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
+                        } catch (_) { }
+                    }, DISCLOSURE_MOTION_MS + 20);
                 });
+
+                var summary = null;
+                for (var i = 0; i < details.children.length; i++) {
+                    if (details.children[i] && details.children[i].tagName === 'SUMMARY') {
+                        summary = details.children[i];
+                        break;
+                    }
+                }
+                if (summary) {
+                    summary.addEventListener('click', function (evt) {
+                        // 접히는 중에 또 누르면 상태가 꼬인다(네이티브가 즉시 닫아버림). 무시한다.
+                        if (details.__nkClosing) {
+                            evt.preventDefault();
+                            return;
+                        }
+                        if (!details.open) return;
+                        if (prefersReducedMotion()) return;
+                        var inner = getDisclosureInner(body);
+                        // 펼치는 중이면 지금 보이는 높이에서 이어서 접는다(끝까지 펼쳤다 접히지 않게).
+                        var current = body.offsetHeight || (inner ? inner.offsetHeight : body.scrollHeight);
+                        if (!current) return;
+                        // 접히는 동안 내용이 살아 있어야 하므로 기본 동작(즉시 닫기)을 막는다.
+                        evt.preventDefault();
+                        details.__nkClosing = true;
+                        window.clearTimeout(details.__nkRevealTimer);
+                        details.classList.remove('is-disclosure-revealing');
+                        runDisclosureMotion(details, body, current, 0, function () {
+                            details.__nkClosing = false;
+                            details.open = false;
+                        });
+                    });
+                }
             }
         });
     };

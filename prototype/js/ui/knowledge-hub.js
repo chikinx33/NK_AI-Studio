@@ -856,6 +856,9 @@
     if (!root || !state || !state.length || !root.querySelectorAll) return;
     var disclosures = root.querySelectorAll('.knowledge-hub-disclosure');
     Array.prototype.forEach.call(disclosures, function (el, idx) {
+      // 다시 그린 뒤 열림 상태만 되돌리는 것이므로 펼침 연출은 건너뛴다.
+      // (재렌더마다 애니메이션이 다시 재생되면 입력 중에 화면이 출렁인다.)
+      el.__nkSuppressMotion = true;
       if (state[idx]) el.setAttribute('open', '');
       else el.removeAttribute('open');
     });
@@ -1640,6 +1643,7 @@
         if (!token || !(token in state)) return;
         var details = card.querySelector('.character-props-disclosure');
         if (!details) return;
+        details.__nkSuppressMotion = true;
         if (state[token]) details.setAttribute('open', '');
         else details.removeAttribute('open');
       });
