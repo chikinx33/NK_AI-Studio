@@ -69,6 +69,36 @@ test("★서버가 컷 분할 결과에 beats 를 실어 보낸다", () => {
   assert.match(flatten, /beats: Array\.isArray\(sh\.beats\) && sh\.beats\.length \? sh\.beats : null,/);
 });
 
+test("★★서버 저장·불러오기가 beats 를 지킨다", () => {
+  // 여기가 마지막 관문이었다. 서버는 씬을 고정 목록으로 다시 만드는데 beats 가 없어서,
+  // 저장하면 서버가 버리고 새로고침하면 사라졌다. 클라이언트만 고쳐서는 소용이 없다.
+  ["prototype/functions/api/project/save.ts", "prototype/functions/api/project/get.ts"].forEach((file) => {
+    const src = read(file);
+    assert.match(src, /const normalizeBeats = \(value: any\) => \{/, file);
+    assert.match(src, /beats: normalizeBeats\(s\?\.beats\),/, file);
+    // 첫 줄은 언제나 컷의 시작(=스틸컷).
+    assert.match(src, /out\[0\]\.at = 0;/, file);
+    // 두 줄 미만은 시간표가 아니다.
+    assert.match(src, /if \(!Array\.isArray\(value\) \|\| value\.length < 2\) return null;/, file);
+  });
+});
+
+test("★시나리오 카드의 글자가 잘리지 않는다", () => {
+  // 높이를 못 박아 두면 두 줄 넘는 타임라인·화면 설명이 잘려 글자가 겹쳐 보인다.
+  const css = read("prototype/styles.css");
+  const block = css.slice(
+    css.indexOf(".scenario-card .view-lines,"),
+    css.indexOf(".scenario-card .view-shot-lines {")
+  );
+  assert.doesNotMatch(block, /max-height: var\(--scene-field-height\)/);
+  assert.match(block, /min-height: var\(--scene-field-height\)/, "한 줄 칸이 쪼그라들면 안 된다");
+  assert.match(block, /overflow: visible/);
+  // 여러 줄이 흐르도록 블록으로 둔다(가운데 정렬 flex 는 늘어나지 않는다).
+  assert.match(block, /display: block/);
+  // 개별 칸도 잘리지 않게 못박는다.
+  assert.match(css, /\.scenario-card \.view-beats-lines,[\s\S]{0,120}max-height: none/);
+});
+
 test("★프로젝트 저장·복원이 알 수 없는 필드를 버리지 않는다", () => {
   // project.js 의 씬 정규화는 Object.assign 으로 원본을 깔고 시작한다.
   // 이 방식이라야 나중에 늘어나는 필드(beats 같은)가 조용히 사라지지 않는다.

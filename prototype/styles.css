@@ -3602,28 +3602,28 @@ textarea::-webkit-scrollbar-corner {
 .scenario-card .view-lines,
 .scenario-card .view-shot-lines,
 .scenario-card .view-dialogue-lines {
+  /* 높이를 못 박아 두면 두 줄 넘는 내용이 잘려서 글자가 겹쳐 보인다(타임라인·긴 화면 설명).
+     최소 높이는 유지해 한 줄짜리 칸이 쪼그라들지 않게 하고, 내용이 길면 줄 수만큼 늘어난다. */
   min-height: var(--scene-field-height);
-  max-height: var(--scene-field-height);
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--layer-soft);
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   margin: 0;
-  display: flex;
-  align-items: center;
+  /* flex + align-items:center 는 한 줄을 가운데 맞추려던 것인데, 여러 줄에서는
+     내용이 넘쳐도 안 늘어나 잘림의 원인이 됐다. 블록으로 두고 위에서부터 흐르게 한다. */
+  display: block;
   white-space: pre-wrap;
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.5;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
 .scenario-card .view-shot-lines {
   min-height: var(--scene-shot-height);
-  max-height: var(--scene-shot-height);
 }
 
 .scenario-card .view-location-lines,
@@ -3636,9 +3636,15 @@ textarea::-webkit-scrollbar-corner {
   overflow-y: hidden;
 }
 
-.scenario-card .view-shot-lines {
-  overflow-y: auto;
-  overflow-x: hidden;
+/* 화면·행동·타임라인은 잘리지 않고 내용만큼 늘어난다(스크롤로 감추지 않는다). */
+.scenario-card .view-shot-lines,
+.scenario-card .view-composition-lines,
+.scenario-card .view-action-lines,
+.scenario-card .view-beats-lines,
+.scenario-card .view-lyrics-lines {
+  max-height: none;
+  overflow: visible;
+  white-space: pre-wrap;
 }
 
 .scenario-card .view-lines[contenteditable="true"],

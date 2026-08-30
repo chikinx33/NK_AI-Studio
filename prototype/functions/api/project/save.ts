@@ -142,6 +142,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return [];
     };
 
+    // 컷 안의 시간표. 스틸컷은 0초 줄로 만들고, 영상은 이 표대로 시간을 분배한다.
+    // 씬을 고정 목록으로 다시 만드는 구조라, 여기에 없으면 저장·불러오기에서 통째로 사라진다.
+    const normalizeBeats = (value: any) => {
+      if (!Array.isArray(value) || value.length < 2) return null;
+      const out: Array<{ at: number; what: string }> = [];
+      value.forEach((b: any) => {
+        if (!b || typeof b !== "object") return;
+        const what = typeof b.what === "string" ? b.what.trim() : "";
+        if (!what) return;
+        const at = Number(b.at);
+        out.push({ at: Number.isFinite(at) && at > 0 ? Math.round(at * 10) / 10 : 0, what });
+      });
+      if (out.length < 2) return null;
+      out[0].at = 0; // 첫 줄은 언제나 컷의 시작(=스틸컷)
+      return out;
+    };
+
     const normalizeShots = (value: any, sceneId: number) => {
       if (!Array.isArray(value)) return [];
       return value
@@ -246,6 +263,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         cameraMove,
         composition,
         action,
+        beats: normalizeBeats(s?.beats),
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: stripDataUrl(imagePath || imageUrl),
