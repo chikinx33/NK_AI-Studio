@@ -63,10 +63,12 @@ test("★가사를 끄면 작사 칸도 감춘다", () => {
 
 test("★두 값이 payload 로 나가고 저장에서 되살아난다", () => {
   const src = ui();
-  assert.match(src, /payload\.songLyricsEnabled = voiceMode === 'song' \? songLyricsEnabled : false;/);
+  // 체크 상태는 그때의 음성 모드와 무관하게 그대로 싣는다(잠깐 song 이 아니라는 이유로
+  // false 를 저장하면 다음에 열 때 체크가 풀려 가사가 지워진다).
+  assert.match(src, /payload\.songLyricsEnabled = songLyricsEnabled;/);
   assert.match(src, /payload\.songLanguage = getSongLanguage\(\);/);
   // 가사를 끄면 가사 구간도 넘기지 않는다.
-  assert.match(src, /payload\.songSections = \(voiceMode === 'song' && songLyricsEnabled\) \? getSongSections\(\) : \[\];/);
+  assert.match(src, /payload\.songSections = songLyricsEnabled/);
   // 복원
   assert.match(src, /lyricsCheck\.checked = p\.songLyricsEnabled !== false;/);
   assert.match(src, /SONG_LANGUAGES\.indexOf\(saved\) >= 0 \? saved : 'ko'/);
@@ -165,9 +167,55 @@ test("★적어 둔 가사가 있으면 AI 가 그것을 살려 다듬는다", (
 test("★적어 둔 가사는 생성 요청에 실려 간다", () => {
   const src = ui();
   // 가사 칸의 내용이 songSections 로 나가고, 그게 곧 서버의 userLyrics 가 된다.
-  assert.match(src, /payload\.songSections = \(voiceMode === 'song' && songLyricsEnabled\) \? getSongSections\(\) : \[\];/);
+  assert.match(src, /const typedSections = songLyricsEnabled \? getSongSections\(\) : \[\];/);
   // 이야기 정리 요청은 payload 를 그대로 넘긴다.
   assert.match(src, /NK\.api\.storyStructure\(Object\.assign\(\{\}, payload, \{ language \}\)\)/);
+});
+
+test("★★저장이 작사해 둔 가사를 지우지 않는다", () => {
+  const src = ui();
+  // 저장된 프로젝트를 열면 가사 칸을 되살린다.
+  // 이게 없어서 열자마자 칸이 비었고, 그 상태로 저장하면 빈 값이 덮어써졌다.
+  assert.match(src, /if \(Array\.isArray\(p\.songSections\) && p\.songSections\.length\) setSongSections\(p\.songSections\);/);
+  // 화면에서 읽은 값이 비어 있으면 저장된 가사를 그대로 지킨다.
+  assert.match(src, /const typedSections = songLyricsEnabled \? getSongSections\(\) : \[\];/);
+  assert.match(src, /const savedSections = Array\.isArray\(currentPayload\?\.songSections\) \? currentPayload\.songSections : \[\];/);
+  assert.match(src, /\(typedSections\.length \? typedSections : savedSections\)/);
+  // 체크 상태는 그때의 음성 모드와 무관하게 그대로 싣는다
+  // (잠깐 song 이 아니라는 이유로 false 를 저장하면 다음에 열 때 체크가 풀려 또 지워진다).
+  assert.match(src, /payload\.songLyricsEnabled = songLyricsEnabled;/);
+});
+
+test("★가사 칸이 다른 항목과 같은 폭을 쓴다", () => {
+  const css = read("prototype/styles.css");
+  const block = css.slice(
+    css.indexOf(".scenario-form .scenario-lyrics-body {"),
+    css.indexOf(".scenario-lyrics-group textarea {")
+  );
+  assert.match(block, /flex: 1;/);
+  assert.match(block, /min-width: 0;/);
+  // 이야기 칸과 같은 규칙이어야 나란히 보인다.
+  assert.match(css, /\.scenario-form \.scenario-story-field \{[\s\S]{0,80}flex: 1;/);
+});
+
+test("★AI 생성 중에는 가사 칸도 '쓰는 중'으로 보인다", () => {
+  const html2 = html();
+  assert.match(html2, /id="scenario-lyrics-loading"/);
+  assert.match(html2, /data-i18n="scenario_lyrics_ai_loading"/);
+  const src = ui();
+  assert.match(src, /const lyricsLoadingEl = document\.getElementById\('scenario-lyrics-loading'\);/);
+  assert.match(src, /if \(lyricsLoadingEl\) lyricsLoadingEl\.hidden = !loading;/);
+  // 생성 중에는 편집을 막는다(이야기 칸과 같은 처리).
+  assert.match(src, /lyricsField\.readOnly = !!loading;/);
+  // 한/영 문구 짝
+  const core = read("prototype/core.js");
+  assert.equal((core.match(/scenario_lyrics_ai_loading:/g) || []).length, 2);
+});
+
+test("★타임라인 라벨에 군더더기 설명이 없다", () => {
+  const src = ui();
+  assert.doesNotMatch(src, /첫 줄이 스틸컷/);
+  assert.doesNotMatch(src, /timelineHint/);
 });
 
 test("★문구가 한/영 짝으로 있다", () => {

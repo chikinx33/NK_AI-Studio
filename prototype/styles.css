@@ -3456,7 +3456,15 @@ textarea::-webkit-scrollbar-corner {
   align-self: center;
 }
 
-/* 개요의 가사 입력칸 — 노래 모드에서만 노출 */
+/* 개요의 가사 입력칸 — 노래 모드에서만 노출.
+   이야기 칸(.scenario-story-field)과 같은 규칙으로 남은 폭을 다 쓴다.
+   이게 없으면 내용 폭으로 쪼그라들어 다른 항목보다 훨씬 좁게 보였다. */
+.scenario-form .scenario-lyrics-body {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
 .scenario-lyrics-group textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

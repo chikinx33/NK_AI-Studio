@@ -70,7 +70,7 @@ test("가사 편집은 텍스트 ↔ 구간 배열을 왕복한다 (길이 포�
   // "[후렴](8초) 가사" 를 구간명·길이·본문으로 되돌린다
   assert.match(src, /const SECTION_LINE_RE = /);
   assert.match(src, /durationSec: Number\(m\[2\]\) \|\| 0/);
-  assert.match(src, /payload\.songSections = \(voiceMode === 'song' && songLyricsEnabled\) \? getSongSections\(\) : \[\]/);
+  assert.match(src, /const typedSections = songLyricsEnabled \? getSongSections\(\) : \[\]/);
   // 구간 길이 합과 영상 길이가 맞는지 화면에서 바로 보인다
   assert.match(src, /const updateSongSectionsSummary = /);
 });

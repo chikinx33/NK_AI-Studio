@@ -882,7 +882,6 @@
         lyrics: 'Lyrics',
         refrain: 'Refrain',
         timeline: 'Timeline',
-        timelineHint: 'first line = the still',
         timelinePlaceholder: 'e.g. 0s only the feet in frame / 2s tilt-up completes, full bodies'
       };
     }
@@ -894,7 +893,6 @@
       lyrics: '가사',
       refrain: '후렴',
       timeline: '타임라인',
-      timelineHint: '첫 줄이 스틸컷',
       timelinePlaceholder: '예: 0s 발만 프레임에 / 2s 틸트업이 끝나 전신'
     };
   };
@@ -1072,6 +1070,16 @@
     const aiBtn = document.querySelector('[data-action="scenario-structure-story"]');
     if (storyFieldWrap) storyFieldWrap.classList.toggle('is-loading', !!loading);
     if (loadingEl) loadingEl.hidden = !loading;
+    // 이야기 정리와 작사는 한 번의 호출로 함께 이뤄진다. 가사 칸도 같이 '쓰는 중'으로 둔다.
+    const lyricsWrap = document.querySelector('.scenario-lyrics-body');
+    const lyricsField = document.getElementById('scenario-lyrics-input');
+    const lyricsLoadingEl = document.getElementById('scenario-lyrics-loading');
+    if (lyricsWrap) lyricsWrap.classList.toggle('is-loading', !!loading);
+    if (lyricsLoadingEl) lyricsLoadingEl.hidden = !loading;
+    if (lyricsField) {
+      lyricsField.readOnly = !!loading;
+      lyricsField.setAttribute('aria-busy', loading ? 'true' : 'false');
+    }
     if (storyField) {
       storyField.readOnly = !!loading;
       storyField.setAttribute('aria-busy', loading ? 'true' : 'false');
@@ -1202,12 +1210,21 @@
     payload.narrationEnabled = voiceMode === 'narration';
     payload.dubbingEnabled = voiceMode === 'dubbing';
     payload.songEnabled = voiceMode === 'song';
-    // 노래 옵션. 가사를 끄면 작사도 하지 않고 가사도 넘기지 않는다.
+    // 노래 옵션. 체크 상태는 사용자의 의사이므로 그때의 음성 모드와 무관하게 그대로 싣는다.
+    // (음성 모드가 잠깐 song 이 아니라는 이유로 false 를 저장하면, 다음에 열 때 체크가 풀리고
+    //  그 상태로 또 저장되어 가사가 영영 사라진다.)
     const songLyricsEnabled = isSongLyricsEnabled();
-    payload.songLyricsEnabled = voiceMode === 'song' ? songLyricsEnabled : false;
+    payload.songLyricsEnabled = songLyricsEnabled;
     payload.songLanguage = getSongLanguage();
     // v3.1582: 작사해 둔 가사를 시나리오 생성으로 넘긴다. 사용자가 고쳤으면 고친 쪽이 원본.
-    payload.songSections = (voiceMode === 'song' && songLyricsEnabled) ? getSongSections() : [];
+    // ★저장이 가사를 지우지 않는다. 화면에서 읽은 값이 비어 있으면(가사 칸이 안 그려졌거나
+    //   아직 안 불러온 상태) 지우는 대신 이미 저장돼 있던 가사를 그대로 지킨다.
+    //   사용자가 가사를 정말 비웠다면 '가사' 체크를 끄면 된다.
+    const typedSections = songLyricsEnabled ? getSongSections() : [];
+    const savedSections = Array.isArray(currentPayload?.songSections) ? currentPayload.songSections : [];
+    payload.songSections = songLyricsEnabled
+      ? (typedSections.length ? typedSections : savedSections)
+      : [];
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1904,7 +1921,7 @@
             <p class="view-lines view-action-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.action || '')}</p>
           </div>
           <div class="field-block">
-            <p class="field-label muted small">${labels.timeline}<span class="field-hint muted">${escapeHtml(labels.timelineHint)}</span></p>
+            <p class="field-label muted small">${labels.timeline}</p>
             <p class="view-lines view-beats-lines" data-id="${s.id}" contenteditable="true" data-placeholder="${escapeHtml(labels.timelinePlaceholder)}">${escapeHtml(beatsToText(s.beats))}</p>
           </div>` : `
           <div class="field-block">
@@ -2064,6 +2081,9 @@
     // 노래 옵션 복원. 저장된 적 없는 프로젝트는 가사 있음(기본)·한국어로 둔다.
     const lyricsCheck = document.getElementById('song-lyrics-enabled');
     if (lyricsCheck) lyricsCheck.checked = p.songLyricsEnabled !== false;
+    // ★가사 복원. 이게 없어서 저장된 프로젝트를 열면 가사 칸이 비어 있었고,
+    // 그 상태로 다시 저장하면 빈 값이 덮어써져 작사해 둔 가사가 통째로 사라졌다.
+    if (Array.isArray(p.songSections) && p.songSections.length) setSongSections(p.songSections);
     const songLangSel = document.getElementById('song-language-select');
     if (songLangSel) {
       const saved = String(p.songLanguage || '').trim();
