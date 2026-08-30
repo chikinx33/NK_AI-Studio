@@ -2090,17 +2090,147 @@ function openBackgroundReferenceModal() {
   // Ctrl+V 로 붙여넣을 때 어느 소품 칸에 넣을지. 마지막으로 만진 칸을 기억한다.
   var activePropIdx = -1;
 
+  // 배경·소품 레퍼런스 모달 문구(한/영).
+  // NK.state.runtime.lang 을 따라가고, 모달이 열린 채 언어를 바꾸면 다시 그린다.
+  var BGREF_TEXT = {
+    ko: {
+      title: '에피소드 레퍼런스 (배경·소품)',
+      help: '이 에피소드에서만 쓰는 공간과 소품이에요. <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)와 <strong>소품</strong>(반복 등장하는 물건)을 등록해 두면, 컷 생성 시 이름이 일치하는 컷에 자동으로 참조돼 <strong>배경·물건은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (오래 쓰는 IP 공용 자산은 브랜드 허브의 배경·소품 자산에 두세요.)',
+      secPlaces: '공간 (배경 플레이트)',
+      secProps: '소품 (오브젝트)',
+      propsHint: '컷 생성 때 씬 텍스트에 이 이름이 나오면 자동으로 참조돼요. 생김새는 그대로 유지하고, 화면 안 위치·크기는 그 컷이 정합니다.',
+      emptyPlaces: '추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.',
+      emptyProps: '등록된 소품이 없어요. "+ 소품 추가"로 만들어 보세요.',
+      zoomTitle: '클릭하면 크게 보기',
+      noPlate: '배경 없음',
+      placeNamePh: '장소 이름 (예: 수영장)',
+      placeDescPh: '배경 플레이트 묘사 (캐릭터·동작 없이 공간만)',
+      generating: '생성 중...',
+      regenPlate: '배경 재생성',
+      genPlate: '배경 생성',
+      del: '삭제',
+      sceneCount: function (n) { return '씬 ' + n + '개'; },
+      variantLabelPh: '예: 바닥, ABC 육면 큐브',
+      variantDescPh: '이 세부 배경 묘사 (예: 알파벳이 새겨진 나무 큐브를 가까이서, 카펫 위에 놓인 채)',
+      variantAdd: '+ 세부 배경',
+      variantHint: '기본 배경을 먼저 생성하면, 같은 공간의 세부 배경(바닥·수면 등)을 추가할 수 있어요.',
+      gen: '생성',
+      regen: '재생성',
+      genShort: '생성중',
+      none: '없음',
+      dropTitle: '이미지를 끌어다 놓거나, 클릭해 파일을 고르거나, 이 칸을 클릭한 뒤 Ctrl+V 로 붙여넣으세요',
+      dropHint: '끌어다 놓기 · 클릭<br/>또는 Ctrl+V',
+      processing: '처리 중...',
+      propNamePh: '소품 이름 (예: ABC 육면 큐브) — 씬 텍스트의 표기와 같게',
+      propDescPh: '소품 묘사 (모양·재질·색·표면의 글자나 무늬 등)',
+      propRegen: '소품 재생성',
+      propGen: '소품 생성',
+      propPick: '파일 등록',
+      addPlace: '+ 장소 추가',
+      addProp: '+ 소품 추가',
+      reextract: '씬에서 다시 추출',
+      reextracting: '추출 중...',
+      close: '닫기',
+      save: '저장',
+      needPlaceInput: '묘사 또는 이름을 입력하세요.',
+      failPlate: '배경 생성 실패: ',
+      needBasePlate: '먼저 이 장소의 기본 배경을 생성하세요.',
+      needVariantName: '세부 배경 이름을 입력하세요 (예: 바닥, 수면 위).',
+      failVariant: '세부 배경 생성 실패: ',
+      needPropInput: '소품 이름 또는 묘사를 입력하세요.',
+      failProp: '소품 생성 실패: ',
+      needProject: '프로젝트를 먼저 저장한 뒤 이미지를 등록해 주세요.',
+      noUploadApi: '업로드 API를 사용할 수 없습니다.',
+      failAttach: '소품 이미지 등록 실패: ',
+      onlyImage: '이미지 파일만 등록할 수 있어요.',
+      dropNothing: '이미지 파일이나 화면 안의 이미지를 끌어다 놓아 주세요.',
+      failImage: '이미지 등록 실패: ',
+      pasteNeedSlot: '붙여넣을 소품 칸을 먼저 클릭해 주세요.',
+      pasteNeedSlotHint: '붙여넣을 소품 칸을 먼저 클릭해 주세요. (소품이 없으면 "+ 소품 추가")',
+      noExtractApi: '추출 API를 사용할 수 없습니다.',
+      failExtract: '추출 실패: '
+    },
+    en: {
+      title: 'Episode References (Places & Props)',
+      help: 'Places and props used only in this episode. Register a <strong>background plate</strong> (an empty background with no characters) and <strong>props</strong> (objects that keep appearing), and cuts whose names match will reference them automatically — <strong>consistent places and objects, free composition</strong>. (Keep long-lived IP-wide assets in the Brand Hub background/prop assets.)',
+      secPlaces: 'Places (background plates)',
+      secProps: 'Props (objects)',
+      propsHint: 'When this name appears in a scene text, the cut references it automatically. The object keeps its design; its position and size in the frame are decided by that cut.',
+      emptyPlaces: 'No places extracted yet. Try "Re-extract from scenes".',
+      emptyProps: 'No props registered. Use "+ Add prop" to create one.',
+      zoomTitle: 'Click to view larger',
+      noPlate: 'No background',
+      placeNamePh: 'Place name (e.g. Swimming pool)',
+      placeDescPh: 'Background plate description (the space only — no characters or action)',
+      generating: 'Generating...',
+      regenPlate: 'Regenerate plate',
+      genPlate: 'Generate plate',
+      del: 'Delete',
+      sceneCount: function (n) { return n + ' scene' + (n === 1 ? '' : 's'); },
+      variantLabelPh: 'e.g. Floor, ABC cube',
+      variantDescPh: 'Describe this detail (e.g. a close view of the wooden cube with letters, resting on the carpet)',
+      variantAdd: '+ Detail view',
+      variantHint: 'Generate the base plate first, then you can add detail views of the same place (floor, water surface, etc.).',
+      gen: 'Generate',
+      regen: 'Regenerate',
+      genShort: 'Working',
+      none: 'None',
+      dropTitle: 'Drag an image here, click to pick a file, or click this slot and press Ctrl+V',
+      dropHint: 'Drag & drop · click<br/>or Ctrl+V',
+      processing: 'Working...',
+      propNamePh: 'Prop name (e.g. ABC cube) — match how it is written in the scene text',
+      propDescPh: 'Prop description (shape, material, colors, letters or patterns on it)',
+      propRegen: 'Regenerate prop',
+      propGen: 'Generate prop',
+      propPick: 'Upload file',
+      addPlace: '+ Add place',
+      addProp: '+ Add prop',
+      reextract: 'Re-extract from scenes',
+      reextracting: 'Extracting...',
+      close: 'Close',
+      save: 'Save',
+      needPlaceInput: 'Enter a description or a name.',
+      failPlate: 'Background generation failed: ',
+      needBasePlate: 'Generate the base plate for this place first.',
+      needVariantName: 'Enter a name for the detail view (e.g. Floor, Water surface).',
+      failVariant: 'Detail view generation failed: ',
+      needPropInput: 'Enter a prop name or description.',
+      failProp: 'Prop generation failed: ',
+      needProject: 'Save the project first, then attach an image.',
+      noUploadApi: 'The upload API is unavailable.',
+      failAttach: 'Failed to register the prop image: ',
+      onlyImage: 'Only image files can be registered.',
+      dropNothing: 'Drop an image file or an image from the page.',
+      failImage: 'Failed to register the image: ',
+      pasteNeedSlot: 'Click the prop slot you want to paste into first.',
+      pasteNeedSlotHint: 'Click the prop slot you want to paste into first. (No props yet? Use "+ Add prop")',
+      noExtractApi: 'The extraction API is unavailable.',
+      failExtract: 'Extraction failed: '
+    }
+  };
+  function T() {
+    var lang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+    return BGREF_TEXT[lang];
+  }
+
   var existing = document.getElementById('bg-ref-modal');
   if (existing) existing.remove();
   var overlay = document.createElement('div');
   overlay.id = 'bg-ref-modal';
   overlay.className = 'cpbm-overlay';
   document.body.appendChild(overlay);
+  // 모달이 열린 채 언어를 바꿔도 즉시 반영한다(입력값은 먼저 저장해 두고 다시 그린다).
+  var onLangChanged = function () {
+    try { syncFromInputs(); } catch (_) {}
+    try { render(); } catch (_) {}
+  };
   var close = function () {
     try { document.removeEventListener('paste', onModalPaste, true); } catch (_) {}
+    try { window.removeEventListener('nk:lang-changed', onLangChanged); } catch (_) {}
     try { overlay.remove(); } catch (_) {}
   };
   document.addEventListener('paste', onModalPaste, true);
+  window.addEventListener('nk:lang-changed', onLangChanged);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
 
   function syncFromInputs() {
@@ -2134,15 +2264,15 @@ function openBackgroundReferenceModal() {
       return (
         '<div class="bgref-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
           '<div style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
-            (turl ? '<img class="bgref-thumb-img" src="' + esc(turl) + '" data-full="' + esc(turl) + '" alt="" title="클릭하면 크게 보기" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:11px;">배경 없음</span>') +
+            (turl ? '<img class="bgref-thumb-img" src="' + esc(turl) + '" data-full="' + esc(turl) + '" alt="" title="\' + esc(T().zoomTitle) + \'" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:11px;">' + esc(T().noPlate) + '</span>') +
           '</div>' +
           '<div style="flex:1;min-width:0;">' +
-            '<input class="bgref-name" type="text" value="' + esc(l.name) + '" placeholder="장소 이름 (예: 수영장)" style="' + inStyle + 'margin-bottom:6px;"/>' +
-            '<textarea class="bgref-desc" placeholder="배경 플레이트 묘사 (캐릭터·동작 없이 공간만)" style="' + inStyle + 'resize:none;overflow:hidden;min-height:64px;">' + esc(l.description) + '</textarea>' +
+            '<input class="bgref-name" type="text" value="' + esc(l.name) + '" placeholder="' + esc(T().placeNamePh) + '" style="' + inStyle + 'margin-bottom:6px;"/>' +
+            '<textarea class="bgref-desc" placeholder="' + esc(T().placeDescPh) + '" style="' + inStyle + 'resize:none;overflow:hidden;min-height:64px;">' + esc(l.description) + '</textarea>' +
             '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">' +
-              '<button type="button" class="btn-secondary compact bgref-gen" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + (l._busy ? '생성 중...' : (l.refObjectName ? '배경 재생성' : '배경 생성')) + '</button>' +
-              '<button type="button" class="btn-ghost compact bgref-del" style="' + btnH + '">삭제</button>' +
-              '<span class="muted" style="font-size:11px;">씬 ' + (l.sceneIds ? l.sceneIds.length : 0) + '개</span>' +
+              '<button type="button" class="btn-secondary compact bgref-gen" style="' + btnH + '"' + (l._busy ? ' disabled' : '') + '>' + esc(l._busy ? T().generating : (l.refObjectName ? T().regenPlate : T().genPlate)) + '</button>' +
+              '<button type="button" class="btn-ghost compact bgref-del" style="' + btnH + '">' + esc(T().del) + '</button>' +
+              '<span class="muted" style="font-size:11px;">' + esc(T().sceneCount(l.sceneIds ? l.sceneIds.length : 0)) + '</span>' +
             '</div>' +
             // 세부 배경(같은 공간의 다른 뷰). 기본 배경이 있어야 추가 가능(그걸 참조해 일관성 유지).
             '<div class="bgref-variants" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;">' +
@@ -2151,20 +2281,20 @@ function openBackgroundReferenceModal() {
                     var vurl = thumbUrl(v.refObjectName) || (v._dataUrl || '');
                     return '<div class="bgref-variant" data-vi="' + vi + '" style="width:150px;border:1px solid var(--border);border-radius:6px;padding:4px;">' +
                       '<div style="width:100%;height:56px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
-                        (vurl ? '<img class="bgref-vthumb" src="' + esc(vurl) + '" data-full="' + esc(vurl) + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:10px;">' + (v._busy ? '생성중' : '없음') + '</span>') +
+                        (vurl ? '<img class="bgref-vthumb" src="' + esc(vurl) + '" data-full="' + esc(vurl) + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:10px;">' + esc(v._busy ? T().genShort : T().none) + '</span>') +
                       '</div>' +
-                      '<input class="bgref-vlabel" type="text" value="' + esc(v.label) + '" placeholder="예: 바닥, ABC 육면 큐브" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;"/>' +
+                      '<input class="bgref-vlabel" type="text" value="' + esc(v.label) + '" placeholder="' + esc(T().variantLabelPh) + '" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;"/>' +
                       // 이름만으로는 기본 배경 묘사에 묻혀 같은 그림이 나온다. 무엇을 어떻게
                       // 담을지 여기에 적으면 그게 이 컷의 주제가 된다.
-                      '<textarea class="bgref-vdesc" placeholder="이 세부 배경 묘사 (예: 알파벳이 새겨진 나무 큐브를 가까이서, 카펫 위에 놓인 채)" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;resize:none;overflow:hidden;min-height:44px;">' + esc(v.description || '') + '</textarea>' +
+                      '<textarea class="bgref-vdesc" placeholder="' + esc(T().variantDescPh) + '" style="width:100%;box-sizing:border-box;margin-top:3px;font-size:11px;padding:3px 4px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:3px;resize:none;overflow:hidden;min-height:44px;">' + esc(v.description || '') + '</textarea>' +
                       '<div style="display:flex;gap:3px;margin-top:3px;">' +
-                        '<button type="button" class="btn-secondary compact bgref-vgen" style="font-size:10px;padding:3px 5px;flex:1;"' + (v._busy ? ' disabled' : '') + '>' + (v._busy ? '...' : (v.refObjectName ? '재생성' : '생성')) + '</button>' +
+                        '<button type="button" class="btn-secondary compact bgref-vgen" style="font-size:10px;padding:3px 5px;flex:1;"' + (v._busy ? ' disabled' : '') + '>' + esc(v._busy ? '...' : (v.refObjectName ? T().regen : T().gen)) + '</button>' +
                         '<button type="button" class="btn-ghost compact bgref-vdel" style="font-size:11px;padding:3px 6px;">×</button>' +
                       '</div>' +
                     '</div>';
                   }).join('') +
-                  '<button type="button" class="btn-secondary compact bgref-vadd" style="height:56px;align-self:flex-start;">+ 세부 배경</button>'
-                : '<span class="muted" style="font-size:11px;">기본 배경을 먼저 생성하면, 같은 공간의 세부 배경(바닥·수면 등)을 추가할 수 있어요.</span>') +
+                  '<button type="button" class="btn-secondary compact bgref-vadd" style="height:56px;align-self:flex-start;">' + esc(T().variantAdd) + '</button>'
+                : '<span class="muted" style="font-size:11px;">' + esc(T().variantHint) + '</span>') +
             '</div>' +
           '</div>' +
         '</div>'
@@ -2175,18 +2305,18 @@ function openBackgroundReferenceModal() {
       var purl = thumbUrl(p.refObjectName) || (p._dataUrl || '');
       return (
         '<div class="bgprop-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
-          '<div class="bgprop-drop" tabindex="0" title="이미지를 끌어다 놓거나, 클릭해 파일을 고르거나, 이 칸을 클릭한 뒤 Ctrl+V 로 붙여넣으세요" style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;border:1px dashed ' + (activePropIdx === i ? 'var(--accent)' : 'var(--border)') + ';cursor:pointer;">' +
+          '<div class="bgprop-drop" tabindex="0" title="' + esc(T().dropTitle) + '" style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;border:1px dashed ' + (activePropIdx === i ? 'var(--accent)' : 'var(--border)') + ';cursor:pointer;">' +
             (purl
-              ? '<img class="bgprop-thumb-img" src="' + esc(purl) + '" data-full="' + esc(purl) + '" alt="" title="클릭하면 크게 보기" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>'
-              : '<span class="muted" style="font-size:11px;text-align:center;line-height:1.4;">' + (p._busy ? '처리 중...' : '끌어다 놓기 · 클릭<br/>또는 Ctrl+V') + '</span>') +
+              ? '<img class="bgprop-thumb-img" src="' + esc(purl) + '" data-full="' + esc(purl) + '" alt="" title="\' + esc(T().zoomTitle) + \'" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>'
+              : '<span class="muted" style="font-size:11px;text-align:center;line-height:1.4;">' + (p._busy ? esc(T().processing) : T().dropHint) + '</span>') +
           '</div>' +
           '<div style="flex:1;min-width:0;">' +
-            '<input class="bgprop-name" type="text" value="' + esc(p.name) + '" placeholder="소품 이름 (예: ABC 육면 큐브) — 씬 텍스트의 표기와 같게" style="' + inStyle + 'margin-bottom:6px;"/>' +
-            '<textarea class="bgprop-desc" placeholder="소품 묘사 (모양·재질·색·표면의 글자나 무늬 등)" style="' + inStyle + 'resize:none;overflow:hidden;min-height:52px;">' + esc(p.description) + '</textarea>' +
+            '<input class="bgprop-name" type="text" value="' + esc(p.name) + '" placeholder="' + esc(T().propNamePh) + '" style="' + inStyle + 'margin-bottom:6px;"/>' +
+            '<textarea class="bgprop-desc" placeholder="' + esc(T().propDescPh) + '" style="' + inStyle + 'resize:none;overflow:hidden;min-height:52px;">' + esc(p.description) + '</textarea>' +
             '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">' +
-              '<button type="button" class="btn-secondary compact bgprop-gen" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + (p._busy ? '처리 중...' : (p.refObjectName ? '소품 재생성' : '소품 생성')) + '</button>' +
-              '<button type="button" class="btn-secondary compact bgprop-pick" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>파일 등록</button>' +
-              '<button type="button" class="btn-ghost compact bgprop-del" style="' + btnH + '">삭제</button>' +
+              '<button type="button" class="btn-secondary compact bgprop-gen" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + esc(p._busy ? T().processing : (p.refObjectName ? T().propRegen : T().propGen)) + '</button>' +
+              '<button type="button" class="btn-secondary compact bgprop-pick" style="' + btnH + '"' + (p._busy ? ' disabled' : '') + '>' + esc(T().propPick) + '</button>' +
+              '<button type="button" class="btn-ghost compact bgprop-del" style="' + btnH + '">' + esc(T().del) + '</button>' +
               '<input type="file" class="bgprop-file" accept="image/*" style="display:none;"/>' +
             '</div>' +
           '</div>' +
@@ -2196,23 +2326,23 @@ function openBackgroundReferenceModal() {
 
     overlay.innerHTML =
       '<div class="cpbm-box" style="max-width:820px;width:92vw;max-height:88vh;display:flex;flex-direction:column;">' +
-        '<h3 class="cpbm-title">에피소드 레퍼런스 (배경·소품)</h3>' +
-        '<p class="cpbm-help">이 에피소드에서만 쓰는 공간과 소품이에요. <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)와 <strong>소품</strong>(반복 등장하는 물건)을 등록해 두면, 컷 생성 시 이름이 일치하는 컷에 자동으로 참조돼 <strong>배경·물건은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (오래 쓰는 IP 공용 자산은 브랜드 허브의 배경·소품 자산에 두세요.)</p>' +
+        '<h3 class="cpbm-title">' + esc(T().title) + '</h3>' +
+        '<p class="cpbm-help">' + T().help + '</p>' +
         '<div style="overflow-y:auto;flex:1;min-height:80px;">' +
-          '<div style="font-size:12px;font-weight:800;margin:0 0 6px;">공간 (배경 플레이트)</div>' +
-          (rows || '<p class="muted" style="text-align:center;padding:16px;">추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.</p>') +
-          '<div style="font-size:12px;font-weight:800;margin:14px 0 4px;">소품 (오브젝트)</div>' +
-          '<p class="muted" style="font-size:11px;margin:0 0 6px;">컷 생성 때 씬 텍스트에 이 이름이 나오면 자동으로 참조돼요. 생김새는 그대로 유지하고, 화면 안 위치·크기는 그 컷이 정합니다.</p>' +
-          (propRows || '<p class="muted" style="text-align:center;padding:16px;">등록된 소품이 없어요. "+ 소품 추가"로 만들어 보세요.</p>') +
+          '<div style="font-size:12px;font-weight:800;margin:0 0 6px;">' + esc(T().secPlaces) + '</div>' +
+          (rows || '<p class="muted" style="text-align:center;padding:16px;">' + esc(T().emptyPlaces) + '</p>') +
+          '<div style="font-size:12px;font-weight:800;margin:14px 0 4px;">' + esc(T().secProps) + '</div>' +
+          '<p class="muted" style="font-size:11px;margin:0 0 6px;">' + esc(T().propsHint) + '</p>' +
+          (propRows || '<p class="muted" style="text-align:center;padding:16px;">' + esc(T().emptyProps) + '</p>') +
         '</div>' +
         '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
-          '<button type="button" class="btn-secondary compact" id="bgref-add">+ 장소 추가</button>' +
-          '<button type="button" class="btn-secondary compact" id="bgprop-add">+ 소품 추가</button>' +
-          '<button type="button" class="btn-secondary compact" id="bgref-reextract">씬에서 다시 추출</button>' +
+          '<button type="button" class="btn-secondary compact" id="bgref-add">' + esc(T().addPlace) + '</button>' +
+          '<button type="button" class="btn-secondary compact" id="bgprop-add">' + esc(T().addProp) + '</button>' +
+          '<button type="button" class="btn-secondary compact" id="bgref-reextract">' + esc(T().reextract) + '</button>' +
         '</div>' +
         '<div class="cpbm-actions">' +
-          '<button type="button" class="btn-ghost" id="bgref-cancel">닫기</button>' +
-          '<button type="button" class="btn-primary" id="bgref-save">저장</button>' +
+          '<button type="button" class="btn-ghost" id="bgref-cancel">' + esc(T().close) + '</button>' +
+          '<button type="button" class="btn-primary" id="bgref-save">' + esc(T().save) + '</button>' +
         '</div>' +
       '</div>';
     bind();
@@ -2314,7 +2444,7 @@ function openBackgroundReferenceModal() {
 
   async function generatePlate(i) {
     var l = locs[i]; if (!l) return;
-    if (!String(l.description || '').trim() && !String(l.name || '').trim()) { alert('묘사 또는 이름을 입력하세요.'); return; }
+    if (!String(l.description || '').trim() && !String(l.name || '').trim()) { alert(T().needPlaceInput); return; }
     l._busy = true; render();
     try {
       var st = ctxRef.getState();
@@ -2336,7 +2466,7 @@ function openBackgroundReferenceModal() {
       l._busy = false; render();
     } catch (e) {
       l._busy = false; render();
-      alert('배경 생성 실패: ' + (e && e.message ? e.message : e));
+      alert(T().failPlate + (e && e.message ? e.message : e));
     }
   }
 
@@ -2344,8 +2474,8 @@ function openBackgroundReferenceModal() {
   async function generateVariant(i, vi) {
     var l = locs[i]; if (!l || !l.variants || !l.variants[vi]) return;
     var v = l.variants[vi];
-    if (!l.refObjectName) { alert('먼저 이 장소의 기본 배경을 생성하세요.'); return; }
-    if (!String(v.label || '').trim()) { alert('세부 배경 이름을 입력하세요 (예: 바닥, 수면 위).'); return; }
+    if (!l.refObjectName) { alert(T().needBasePlate); return; }
+    if (!String(v.label || '').trim()) { alert(T().needVariantName); return; }
     v._busy = true; render();
     try {
       var st = ctxRef.getState();
@@ -2387,7 +2517,7 @@ function openBackgroundReferenceModal() {
       v._busy = false; render();
     } catch (e) {
       v._busy = false; render();
-      alert('세부 배경 생성 실패: ' + (e && e.message ? e.message : e));
+      alert(T().failVariant + (e && e.message ? e.message : e));
     }
   }
 
@@ -2395,7 +2525,7 @@ function openBackgroundReferenceModal() {
   async function generateProp(i) {
     var p = props[i]; if (!p) return;
     if (!String(p.name || '').trim() && !String(p.description || '').trim()) {
-      alert('소품 이름 또는 묘사를 입력하세요.');
+      alert(T().needPropInput);
       return;
     }
     p._busy = true; render();
@@ -2422,7 +2552,7 @@ function openBackgroundReferenceModal() {
       p._busy = false; render();
     } catch (e) {
       p._busy = false; render();
-      alert('소품 생성 실패: ' + (e && e.message ? e.message : e));
+      alert(T().failProp + (e && e.message ? e.message : e));
     }
   }
 
@@ -2430,8 +2560,8 @@ function openBackgroundReferenceModal() {
   async function attachPropImage(i, file) {
     var p = props[i]; if (!p || !file) return;
     var st = ctxRef.getState();
-    if (!st.draftId) { alert('프로젝트를 먼저 저장한 뒤 이미지를 등록해 주세요.'); return; }
-    if (!NK.api || !NK.api.imageUpload) { alert('업로드 API를 사용할 수 없습니다.'); return; }
+    if (!st.draftId) { alert(T().needProject); return; }
+    if (!NK.api || !NK.api.imageUpload) { alert(T().noUploadApi); return; }
     p._busy = true; render();
     try {
       var up = await NK.api.imageUpload(st.draftId, file, { kind: 'image' });
@@ -2443,7 +2573,7 @@ function openBackgroundReferenceModal() {
       p._busy = false; render();
     } catch (e) {
       p._busy = false; render();
-      alert('소품 이미지 등록 실패: ' + (e && e.message ? e.message : e));
+      alert(T().failAttach + (e && e.message ? e.message : e));
     }
   }
 
@@ -2518,7 +2648,7 @@ function openBackgroundReferenceModal() {
       var url = String(cd.getData('text/plain') || '').trim();
       if (!/^(https?:|data:|blob:|\/)/i.test(url)) return;
       var uIdx = resolveActivePropIdx();
-      if (uIdx < 0) { alert('붙여넣을 소품 칸을 먼저 클릭해 주세요.'); return; }
+      if (uIdx < 0) { alert(T().pasteNeedSlot); return; }
       ev.preventDefault();
       syncFromInputs();
       var up = props[uIdx];
@@ -2527,13 +2657,13 @@ function openBackgroundReferenceModal() {
         .then(function (f) { up._busy = false; return attachPropImage(uIdx, f); })
         .catch(function (e) {
           up._busy = false; render();
-          alert('이미지 등록 실패: ' + (e && e.message ? e.message : e));
+          alert(T().failImage + (e && e.message ? e.message : e));
         });
       return;
     }
     var idx = resolveActivePropIdx();
     if (idx < 0) {
-      alert('붙여넣을 소품 칸을 먼저 클릭해 주세요. (소품이 없으면 "+ 소품 추가")');
+      alert(T().pasteNeedSlotHint);
       return;
     }
     ev.preventDefault();
@@ -2546,26 +2676,26 @@ function openBackgroundReferenceModal() {
     var dt = ev.dataTransfer; if (!dt) return;
     var f = dt.files && dt.files[0];
     if (f) {
-      if (!/^image\//.test(String(f.type || ''))) { alert('이미지 파일만 등록할 수 있어요.'); return; }
+      if (!/^image\//.test(String(f.type || ''))) { alert(T().onlyImage); return; }
       attachPropImage(i, f);
       return;
     }
     var url = readDroppedImageUrl(dt);
-    if (!url) { alert('이미지 파일이나 화면 안의 이미지를 끌어다 놓아 주세요.'); return; }
+    if (!url) { alert(T().dropNothing); return; }
     p._busy = true; render();
     urlToImageFile(url, slug(String(p.name || 'prop').trim() || 'prop'))
       .then(function (file) { p._busy = false; return attachPropImage(i, file); })
       .catch(function (e) {
         p._busy = false; render();
-        alert('이미지 등록 실패: ' + (e && e.message ? e.message : e));
+        alert(T().failImage + (e && e.message ? e.message : e));
       });
   }
 
   async function reextract() {
     var st = ctxRef.getState();
-    if (!NK.api || !NK.api.scenarioLocations) { alert('추출 API를 사용할 수 없습니다.'); return; }
+    if (!NK.api || !NK.api.scenarioLocations) { alert(T().noExtractApi); return; }
     var reBtn = overlay.querySelector('#bgref-reextract');
-    if (reBtn) { reBtn.disabled = true; reBtn.textContent = '추출 중...'; }
+    if (reBtn) { reBtn.disabled = true; reBtn.textContent = T().reextracting; }
     try {
       syncFromInputs();
       var r = await NK.api.scenarioLocations(st.scenes || [], (st.payload && st.payload.language) === 'en' ? 'en' : 'ko');
@@ -2585,8 +2715,8 @@ function openBackgroundReferenceModal() {
         render();
       }
     } catch (e) {
-      alert('추출 실패: ' + (e && e.message ? e.message : e));
-      var rb = overlay.querySelector('#bgref-reextract'); if (rb) { rb.disabled = false; rb.textContent = '씬에서 다시 추출'; }
+      alert(T().failExtract + (e && e.message ? e.message : e));
+      var rb = overlay.querySelector('#bgref-reextract'); if (rb) { rb.disabled = false; rb.textContent = T().reextract; }
     }
   }
 

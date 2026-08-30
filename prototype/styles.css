@@ -15655,6 +15655,21 @@ textarea.bsf-skeleton {
 .vmg-table th:nth-child(8), .vmg-table td:nth-child(8) { width: 20%; }
 .vmg-table th:nth-child(9), .vmg-table td:nth-child(9) { width: 7%; }
 
+/* 이미지 모델 표는 8칸이라 영상 표(9칸) 폭 규칙을 그대로 쓰면 어긋난다.
+   강점이 6% 로 짜부라지고 적합도가 20% 를 먹던 문제 — 칸 수에 맞춰 따로 준다. */
+.vmg-table.vmg-table-image th:nth-child(1), .vmg-table.vmg-table-image td:nth-child(1) { width: 15%; }
+.vmg-table.vmg-table-image th:nth-child(2), .vmg-table.vmg-table-image td:nth-child(2) { width: 8%; }
+.vmg-table.vmg-table-image th:nth-child(3), .vmg-table.vmg-table-image td:nth-child(3) { width: 10%; }
+.vmg-table.vmg-table-image th:nth-child(4), .vmg-table.vmg-table-image td:nth-child(4) { width: 9%; }
+.vmg-table.vmg-table-image th:nth-child(5), .vmg-table.vmg-table-image td:nth-child(5) { width: 12%; }
+.vmg-table.vmg-table-image th:nth-child(6), .vmg-table.vmg-table-image td:nth-child(6) { width: 22%; }
+.vmg-table.vmg-table-image th:nth-child(7), .vmg-table.vmg-table-image td:nth-child(7) { width: 17%; }
+.vmg-table.vmg-table-image th:nth-child(8), .vmg-table.vmg-table-image td:nth-child(8) { width: 7%; }
+
+/* 비용·구분 방식은 문장이라 줄바꿈을 허용한다(가운데 정렬은 유지). */
+.vmg-table.vmg-table-image td.vmg-c:nth-child(3),
+.vmg-table.vmg-table-image td.vmg-c:nth-child(5) { white-space: normal; }
+
 .vmg-cost, .vmg-fit {
   display: inline-block;
   padding: 1px 7px;
