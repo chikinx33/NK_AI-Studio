@@ -5,6 +5,11 @@ import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
+// 컷당 레퍼런스 이미지 상한. 모델의 하드리밋이 아니라 우리가 정한 예산이며,
+// 클라이언트(pipeline-image.js MAX_REFERENCE_IMAGES)와 항상 같은 값이어야 한다.
+// 4장이던 시절에는 캐릭터 3명만 돼도 배경 플레이트나 컷 레퍼런스가 여기서 잘려 나갔다.
+const MAX_REFERENCE_IMAGES = 6;
+
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
@@ -946,7 +951,9 @@ async function normalizeReferenceImages(args: {
   requestUrl: string;
   authHeader: string;
 }): Promise<NormalizedReferenceImage[]> {
-  const items = Array.isArray(args.items) ? args.items.slice(0, 4) : [];
+  // 컷당 레퍼런스 상한. 클라이언트(pipeline-image.js MAX_REFERENCE_IMAGES)와 같이 움직인다.
+  // 4장일 때는 캐릭터 3명만 돼도 배경 플레이트·컷 레퍼런스가 여기서 잘려 나갔다.
+  const items = Array.isArray(args.items) ? args.items.slice(0, MAX_REFERENCE_IMAGES) : [];
   const out: NormalizedReferenceImage[] = [];
   for (let i = 0; i < items.length; i++) {
     const raw = items[i] && typeof items[i] === "object" ? items[i] : {};

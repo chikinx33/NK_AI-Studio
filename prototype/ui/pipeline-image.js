@@ -1,7 +1,14 @@
 ;(function () {
   var NK = window.NK || (window.NK = {});
   var image = NK.uiPipelineImage || (NK.uiPipelineImage = {});
-  var MAX_REFERENCE_IMAGES = 4;
+  // 컷당 레퍼런스 상한. 모델의 하드리밋이 아니라 우리가 정한 예산이다.
+  // 4장일 때는 캐릭터가 3명만 돼도 배경 플레이트나 컷 레퍼런스가 밀려났다
+  // (캐릭터 3 + 컷 + 배경 = 5). 6장으로 올려 "캐릭터 3명 + 컷 + 배경 + 소품" 이 들어간다.
+  // 늘릴수록 입력이 커지고 장당 반영도가 옅어지므로, 넘칠 때 무엇을 버릴지는
+  // applyReferenceBudget 이 우선순위로 정한다. 서버 상한(imagen.ts)과 함께 움직여야 한다.
+  var MAX_REFERENCE_IMAGES = 6;
+  // 한 캐릭터가 가져갈 수 있는 시트 수. 상한을 올려도 한 명이 전부 먹지 않게 따로 둔다.
+  var MAX_SHEETS_PER_CHARACTER = 4;
 
   function normalizeText(value) {
     return String(value == null ? '' : value).replace(/[<>]/g, '').trim();
@@ -325,7 +332,7 @@
     }
 
     var activeCharacters = sceneCharacters.slice(0, MAX_REFERENCE_IMAGES);
-    var refsPerCharacter = activeCharacters.length <= 1 ? MAX_REFERENCE_IMAGES : (activeCharacters.length === 2 ? 2 : 1);
+    var refsPerCharacter = activeCharacters.length <= 1 ? MAX_SHEETS_PER_CHARACTER : (activeCharacters.length === 2 ? 2 : 1);
     var referenceImages = [];
     var promptLines = [];
     var referenceMeta = [];
@@ -800,7 +807,8 @@
         skipEpisodeLocationId: args.skipEpisodeLocationId
       },
       maxRefId + 1,
-      Math.min(remaining, 2)
+      // 배경 플레이트 + 소품까지 들어갈 수 있게(넘치면 예산기가 정리한다)
+      Math.min(remaining, 3)
     );
     // 붙일 게 없으면 자리를 비웠던 것도 되돌린다(괜히 시트 한 장을 버리지 않게).
     if (!bundle.referenceImages.length) return { referencePayload: referencePayload, finalPrompt: finalPrompt };
@@ -954,7 +962,7 @@
     var items = Array.isArray(listing && listing.items) ? listing.items : [];
     var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice(0, MAX_REFERENCE_IMAGES) : [];
     if (!items.length || !sceneCharacters.length) return null;
-    var refsPerCharacter = sceneCharacters.length <= 1 ? MAX_REFERENCE_IMAGES : (sceneCharacters.length === 2 ? 2 : 1);
+    var refsPerCharacter = sceneCharacters.length <= 1 ? MAX_SHEETS_PER_CHARACTER : (sceneCharacters.length === 2 ? 2 : 1);
     var grouped = {};
     var generic = [];
     items.forEach(function (item) {
