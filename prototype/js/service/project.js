@@ -283,6 +283,8 @@
             if (map.has(key)) return;
             map.set(key, {
                 assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
+                // 배경(장소) / 소품(오브젝트) 구분. 컷 생성에서 레퍼런스 쓰임이 다르다.
+                kind: String(raw.kind || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background',
                 displayName: displayName,
                 token: token,
                 description: normalizeText(raw.description || raw.personality || raw.note || ''),

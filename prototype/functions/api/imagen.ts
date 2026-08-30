@@ -157,7 +157,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           // 말고 룩만 가져가라"는 지시는 이미지 바로 옆에 있어야 먹힌다.
           generationMode === "text-to-image" && (
             referenceImages.length > 1
-            || referenceImages.some((item) => item.referenceKind === "environment-detail")
+            || referenceImages.some((item) => item.referenceKind === "environment-detail" || item.referenceKind === "prop")
           )
         ),
         generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
@@ -355,6 +355,10 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
       if (item.referenceKind === "continuity") {
         // 연속성 레퍼런스: 카메라/구도 복제를 명시적으로 금지한다.
         parts.push({ text: `Reference image ${index + 1} (immediately below) is a CONTINUITY reference from a previous cut in the same sequence. Reuse its character designs, colors, materials, world/setting art style, and lighting mood ONLY. Do NOT copy its camera angle, shot size, framing, perspective, or subject placement — the composition must follow the text prompt above.` });
+      } else if (item.referenceKind === "prop") {
+        // 소품: 물건의 정체성만 가져오고 배경·구도는 이 컷의 프롬프트를 따른다.
+        const subject = String(item.subjectDescription || "the registered prop").trim() || "the registered prop";
+        parts.push({ text: `Reference image ${index + 1} (immediately below) is the registered design of ${subject}. Reproduce that OBJECT exactly — same shape, proportions, markings, materials and colors — wherever the scene includes it. Do NOT copy the background, framing, camera, or scale of this reference; place the object where the text prompt puts it.` });
       } else if (item.referenceKind === "environment-detail") {
         // 세부 배경: 같은 공간이지만 "다른 그림"이어야 한다. 룩만 잇고 구도는 프롬프트를 따른다.
         const subject = String(item.subjectDescription || "this location").trim() || "this location";
@@ -475,6 +479,9 @@ function buildGeminiImagePrompt(
     // 그대로 둔 채 지시문이 요청한 것만 바꾸도록 강하게 보존을 지시한다.
     const editGuideLines = referenceImages.slice(1).map((item, i) => {
       const label = String(item.subjectDescription || `reference ${i + 2}`).trim() || `reference ${i + 2}`;
+      if (item.referenceKind === "prop") {
+        return `Reference image ${i + 2} (${label}) is the registered design of that object. When the instruction adds or changes it, reproduce its exact shape, proportions, markings, materials, and colors; do not copy its background or framing.`;
+      }
       if (item.referenceKind === "environment-detail") {
         return `Reference image ${i + 2} (${label}) shows the same location in a wide view. Match its materials, colors, and lighting only; do not copy its layout, framing, or camera.`;
       }
@@ -551,6 +558,11 @@ function buildGeminiImagePrompt(
       // 연속성 레퍼런스: "구도"가 아니라 룩(캐릭터/색/재질/월드/조명)만 잇는다.
       return `One reference image is a CONTINUITY reference from ${subject}. Reuse the same character designs, colors, materials, world/setting art style, and lighting mood so this cut clearly belongs to the same sequence. This reference governs LOOK ONLY, not composition.`;
     }
+    if (item.referenceKind === "prop") {
+      // 배경과 같은 "레이아웃 유지" 지시를 주면 오브젝트가 장소처럼 취급돼, 컷마다 다른
+      // 물건이 되거나 레퍼런스의 배경까지 따라 그린다.
+      return `One reference image is the registered design of ${subject}. Keep that object's exact shape, proportions, markings, materials, and colors identical in every cut, but render it at the position, size, and angle this shot requires. Do not redesign the object, and do not copy the background, framing, or camera of that reference.`;
+    }
     if (item.referenceKind === "environment-detail") {
       // 레이아웃까지 유지하라고 하면 기본 배경과 똑같은 그림이 나온다(세부 배경이 안 나오던 원인).
       return `One reference image shows ${subject} in a wide view. Keep the same art style, materials, colors, textures, and lighting, but render the NEW framing described in the prompt — a closer, tighter shot of the specified detail. Do NOT reproduce the reference's layout, camera angle, or wide composition.`;
@@ -562,10 +574,13 @@ function buildGeminiImagePrompt(
   });
   const groupedValues = Array.from(grouped.values());
   const hasContinuityRef = groupedValues.some((item) => item.referenceKind === "continuity");
-  const hasEnvRef = groupedValues.some((item) => item.referenceKind === "environment" || item.referenceKind === "environment-detail");
+  const hasEnvRef = groupedValues.some((item) => item.referenceKind === "environment"
+    || item.referenceKind === "environment-detail"
+    || item.referenceKind === "prop");
   const hasEnvDetailRef = groupedValues.some((item) => item.referenceKind === "environment-detail");
   const isCharacterRef = (item: NormalizedReferenceImage) => item.referenceKind !== "environment"
     && item.referenceKind !== "environment-detail"
+    && item.referenceKind !== "prop"
     && item.referenceKind !== "continuity";
   const hasCharacterRef = groupedValues.some(isCharacterRef);
   const characterRefCount = groupedValues.filter(isCharacterRef).length;
@@ -948,8 +963,12 @@ async function normalizeReferenceImages(args: {
     //   재질·색·조명은 잇되 레이아웃·구도는 복제하면 안 된다. environment 로 보내면
     //   "레이아웃을 그대로 유지하라"는 지시가 붙어 기본 배경과 똑같은 그림이 나온다.
     const rkRaw = String(raw.referenceKind || "").trim().toLowerCase();
+    // prop: 씬 안에 등장하는 오브젝트(예: 등록된 큐브). 생김새·비율·색은 컷마다 동일해야 하지만
+    //   화면 안 위치·크기·각도는 그 컷이 정한다. environment 로 보내면 "레이아웃을 그대로"
+    //   지시가 붙어 배경 장소처럼 취급된다.
     const referenceKind = (rkRaw === "environment-detail" || rkRaw === "environment_detail" || rkRaw === "env-detail")
       ? "environment-detail"
+      : (rkRaw === "prop" || rkRaw === "object") ? "prop"
       : rkRaw === "environment" ? "environment"
       : (rkRaw === "continuity" || rkRaw === "cut") ? "continuity"
       : "character";

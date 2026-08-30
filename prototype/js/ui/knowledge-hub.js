@@ -551,6 +551,10 @@
         addPlaceholder: 'Enter a background/prop name and press Enter (e.g. Cafe interior)',
         descriptionPlaceholder: 'Describe the place/prop (materials, mood, colors, etc.)',
         removeAsset: 'Delete asset',
+        kindBackground: 'Place',
+        kindProp: 'Prop',
+        kindTitleBackground: 'Registered as a place. Cuts keep its layout, structure and lighting.',
+        kindTitleProp: 'Registered as a prop (object). Cuts keep its design and colors, and place it freely in the frame.',
         help: 'Saved as @token and reflected in the asset list and overview. Add a name first to reveal a description field. When a scene\'s location/prop name matches, AI Cinema reuses the registered image for consistency.'
       }
       : {
@@ -558,6 +562,10 @@
         addPlaceholder: '배경·소품 이름 입력 후 Enter (예: 카페 내부, 빨간 우산)',
         descriptionPlaceholder: '장소·소품 설명 (재질, 분위기, 색감 등). 비워둬도 저장할 수 있습니다.',
         removeAsset: '자산 삭제',
+        kindBackground: '배경',
+        kindProp: '소품',
+        kindTitleBackground: '장소로 등록됩니다. 컷에서 레이아웃·구조·조명을 그대로 유지합니다.',
+        kindTitleProp: '소품(오브젝트)으로 등록됩니다. 컷에서 생김새·색은 그대로 두고 화면 안 위치·크기는 그 컷이 정합니다.',
         help: '@토큰 형식으로 저장되며 배경·소품 자산 목록과 개요에 반영됩니다. 시나리오의 장소·소품 이름과 일치하면 AI 시네마가 해당 이미지를 참고해 일관성을 유지합니다.'
       };
   }
@@ -580,6 +588,10 @@
       });
   }
 
+  function normalizeEnvironmentKind(value) {
+    return String(value || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background';
+  }
+
   function normalizeEnvironmentName(value) {
     return normalizeText(value).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
   }
@@ -600,6 +612,10 @@
         assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
         displayName: displayName,
         token: token,
+        // 배경(장소)과 소품(오브젝트)은 컷 생성에서 쓰임이 다르다. 장소는 레이아웃까지 그대로,
+        // 소품은 생김새만 유지하고 화면 안 위치·크기는 컷이 정한다. 이 구분을 잃으면
+        // 큐브 같은 오브젝트가 "배경 장소"로 취급돼 컷마다 다르게 그려진다.
+        kind: normalizeEnvironmentKind(raw.kind),
         description: normalizeText(raw.description || raw.personality || raw.note || ''),
         items: normalizeCharacterSheetItems(raw.items)
       });
@@ -622,6 +638,10 @@
         '<span>' + escapeHtml(asset.token) + '</span>' +
         '<button type="button" class="knowledge-character-remove" data-action="knowledge-environment-remove" data-asset-id="' + escapeHtml(asset.assetId) + '" aria-label="' + escapeHtml(uiText.removeAsset) + '">×</button>' +
         '</span>' +
+        // 장소/오브젝트 구분 토글. 상태가 바뀌어도 폭이 흔들리지 않게 고정 폭을 준다.
+        '<button type="button" class="knowledge-environment-kind' + (asset.kind === 'prop' ? ' is-prop' : '') + '" data-action="knowledge-environment-kind" data-asset-id="' + escapeHtml(asset.assetId) + '" title="' + escapeHtml(asset.kind === 'prop' ? uiText.kindTitleProp : uiText.kindTitleBackground) + '">' +
+        escapeHtml(asset.kind === 'prop' ? uiText.kindProp : uiText.kindBackground) +
+        '</button>' +
         '<input type="text" class="knowledge-character-personality" data-environment-description="' + escapeHtml(asset.assetId) + '" value="' + escapeHtml(asset.description || '') + '" placeholder="' + escapeHtml(uiText.descriptionPlaceholder) + '" />' +
         '</label>'
       );
@@ -2224,6 +2244,19 @@
         syncCharacterUi();
         return;
       }
+      // 배경 ↔ 소품 전환. 컷 생성에서 레퍼런스를 어떻게 쓸지가 바뀌므로 즉시 저장한다.
+      if (action === 'knowledge-environment-kind') {
+        var envKindId = String(btn.dataset.assetId || '').trim();
+        if (!envKindId) return;
+        environmentAssetDraft = normalizeEnvironmentAssets((Array.isArray(environmentAssetDraft) ? environmentAssetDraft : []).map(function (asset) {
+          if (String(asset.assetId || '') !== envKindId) return asset;
+          return Object.assign({}, asset, { kind: asset.kind === 'prop' ? 'background' : 'prop' });
+        }));
+        syncEnvironmentUi();
+        persistEnvironmentDraft();
+        return;
+      }
+
       if (action === 'knowledge-environment-remove') {
         var envRemoveId = String(btn.dataset.assetId || '').trim();
         if (!envRemoveId) return;

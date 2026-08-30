@@ -4355,6 +4355,8 @@
         assetId: 'env_' + Date.now(),
         displayName: displayName,
         token: selectedToken,
+        // 새 자산은 배경으로 시작한다. 오브젝트면 브랜드 허브에서 '소품'으로 바꾼다.
+        kind: 'background',
         description: '',
         items: []
       };

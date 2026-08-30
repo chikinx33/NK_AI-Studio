@@ -10146,6 +10146,36 @@ details[open] > .knowledge-hub-disclosure-body {
   align-items: center;
 }
 
+/* 배경·소품 자산 행은 칩 + 배경/소품 토글 + 설명 3칸. */
+.knowledge-character-row:has(.knowledge-environment-kind) {
+  grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+/* 배경 ↔ 소품 토글. 글자 수가 달라도 폭이 흔들리지 않게 고정 폭을 준다. */
+.knowledge-environment-kind {
+  min-width: 62px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.knowledge-environment-kind.is-prop {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border) 40%);
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  color: var(--text);
+}
+
+.knowledge-environment-kind:hover {
+  border-color: var(--accent);
+}
+
 .knowledge-character-token,
 .knowledge-character-chip {
   display: inline-flex;

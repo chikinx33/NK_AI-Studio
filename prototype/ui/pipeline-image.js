@@ -519,7 +519,14 @@
     var max = Math.max(0, Number(limit) || 0);
     if (!hay || !max) return [];
     var out = [];
-    (Array.isArray(assets) ? assets : []).forEach(function (asset) {
+    // 레퍼런스 슬롯이 몇 칸 안 되므로 소품(오브젝트)을 먼저 채운다. 배경은 프롬프트 묘사만으로도
+    // 어느 정도 재현되지만, 오브젝트는 레퍼런스가 빠지면 컷마다 다른 물건이 된다.
+    var ordered = (Array.isArray(assets) ? assets.slice() : []).sort(function (a, b) {
+      var ap = (a && a.kind === 'prop') ? 0 : 1;
+      var bp = (b && b.kind === 'prop') ? 0 : 1;
+      return ap - bp;
+    });
+    ordered.forEach(function (asset) {
       if (out.length >= max) return;
       if (!asset || !Array.isArray(asset.items) || !asset.items.length) return;
       var name = normalizeText(asset.displayName).toLowerCase();
@@ -559,18 +566,26 @@
       var picked = pickReferenceSheets(asset.items, 1);
       if (!picked.length) return;
       var displayName = asset.displayName || String(asset.token || '').replace(/^@/, '');
-      var kindLabel = asset.kind === 'prop' ? 'prop' : 'background location';
-      var subjectDescription = 'the "' + displayName + '" ' + kindLabel;
+      var isProp = asset.kind === 'prop';
+      // 소품(오브젝트)과 배경(장소)은 레퍼런스 쓰임이 다르다.
+      //  - 배경: 레이아웃·구조까지 그대로 재현해야 같은 장소로 보인다.
+      //  - 소품: 생김새·비율·색만 그대로 유지하고, 화면 안 위치·크기·각도는 이 컷이 정한다.
+      //    예전엔 소품도 배경과 같은 "레이아웃을 유지하라" 지시를 받아서, 큐브 같은 오브젝트가
+      //    컷마다 다르게 그려지거나 배경 장소처럼 취급됐다.
+      var subjectDescription = isProp
+        ? 'the "' + displayName + '" prop (a physical object that appears in the scene)'
+        : 'the "' + displayName + '" background location';
       referenceImages.push({
         referenceId: refId,
         referenceType: 'REFERENCE_TYPE_STYLE',
-        referenceKind: 'environment',
+        referenceKind: isProp ? 'prop' : 'environment',
         imageDataUrl: picked[0].imageDataUrl,
         subjectDescription: subjectDescription,
         subjectType: 'SUBJECT_TYPE_DEFAULT'
       });
-      promptLines.push(
-        'Use the provided registered reference image for ' + subjectDescription + ' and keep the same layout, architecture, props, materials, colors, and lighting. Do not redesign this ' + (asset.kind === 'prop' ? 'prop' : 'location') + '.'
+      promptLines.push(isProp
+        ? 'Use the provided registered reference image for ' + subjectDescription + '. Keep its exact design, shape, proportions, markings, materials, and colors in every cut. Render it at the position, size, and angle this shot requires, and do NOT copy the background, framing, or camera of the reference image. Do not redesign this object.'
+        : 'Use the provided registered reference image for ' + subjectDescription + ' and keep the same layout, architecture, props, materials, colors, and lighting. Do not redesign this location.'
       );
       refId += 1;
     });
