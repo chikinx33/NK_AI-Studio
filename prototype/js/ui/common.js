@@ -1186,6 +1186,100 @@
         return finish;
     }
 
+    // ── 안착 스크롤 ────────────────────────────────────────────
+    // 펼친 뒤 화면을 맞춰 줄 때 즉시 점프하면 눈이 따라가지 못해 딱딱하게 느껴진다.
+    // 시작은 빠르게, 끝은 천천히 멈춘다(슬로우 아웃) — 펼침 이징과 같은 결.
+    var SCROLL_EASE_MIN_MS = 260;
+    var SCROLL_EASE_MAX_MS = 560;
+    var SCROLL_CANCEL_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+
+    function easeOutQuint(t) {
+        return 1 - Math.pow(1 - t, 5);
+    }
+
+    function isPageScroller(scroller) {
+        return scroller === document.body
+            || scroller === document.documentElement
+            || scroller === document.scrollingElement;
+    }
+
+    function readScrollTop(scroller) {
+        if (!scroller) return 0;
+        if (isPageScroller(scroller)) {
+            return window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0;
+        }
+        return scroller.scrollTop || 0;
+    }
+
+    function writeScrollTop(scroller, value) {
+        if (!scroller) return;
+        if (isPageScroller(scroller)) {
+            window.scrollTo(0, value);
+            return;
+        }
+        scroller.scrollTop = value;
+    }
+
+    common.scrollByEased = function (scroller, delta, options) {
+        var target = scroller || document.scrollingElement || document.documentElement;
+        var distance = Number(delta) || 0;
+        if (!target || !distance) return null;
+        var start = readScrollTop(target);
+        if (prefersReducedMotion() || typeof window.requestAnimationFrame !== 'function') {
+            writeScrollTop(target, start + distance);
+            return null;
+        }
+        // 진행 중이던 안착 스크롤이 있으면 새 목적지가 이긴다.
+        if (target.__nkScrollTween) target.__nkScrollTween.cancel();
+
+        var duration = Math.max(
+            SCROLL_EASE_MIN_MS,
+            Math.min(
+                Number(options && options.maxDuration) || SCROLL_EASE_MAX_MS,
+                220 + Math.abs(distance) * 0.7
+            )
+        );
+        // 첫 프레임 타임스탬프가 0 일 수 있으므로 -1 로 두고 시작 여부를 구분한다.
+        var startedAt = -1;
+        var frame = 0;
+
+        function detach() {
+            SCROLL_CANCEL_EVENTS.forEach(function (type) {
+                window.removeEventListener(type, onUserInput);
+            });
+        }
+        function release() {
+            frame = 0;
+            detach();
+            if (target.__nkScrollTween === tween) target.__nkScrollTween = null;
+        }
+        // 사용자가 직접 조작하면 즉시 손을 뗀다 — 스크롤을 붙잡고 싸우지 않는다.
+        function onUserInput() {
+            if (frame) window.cancelAnimationFrame(frame);
+            release();
+        }
+        var tween = { cancel: onUserInput };
+
+        SCROLL_CANCEL_EVENTS.forEach(function (type) {
+            window.addEventListener(type, onUserInput, { passive: true });
+        });
+        target.__nkScrollTween = tween;
+
+        function step(now) {
+            if (startedAt < 0) startedAt = now;
+            var elapsed = now - startedAt;
+            var t = elapsed >= duration ? 1 : elapsed / duration;
+            writeScrollTop(target, start + distance * easeOutQuint(t));
+            if (t < 1) {
+                frame = window.requestAnimationFrame(step);
+                return;
+            }
+            release();
+        }
+        frame = window.requestAnimationFrame(step);
+        return tween;
+    };
+
     common.bindDisclosureMotion = function (root) {
         if (!root || !root.querySelectorAll) return;
         var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure, .character-props-disclosure');

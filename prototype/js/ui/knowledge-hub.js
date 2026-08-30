@@ -287,7 +287,12 @@
           targetDelta = deltaBottom;
         }
         if (!targetDelta) return;
-        // Keep the auto-correction immediate so the next click still toggles the disclosure.
+        // 안착 스크롤은 슬로우 아웃으로 멈춘다(즉시 점프는 눈이 따라가기 힘들다).
+        // 사용자가 스크롤·클릭하면 바로 손을 떼므로 다음 클릭이 막히지 않는다.
+        if (NK.ui && NK.ui.common && typeof NK.ui.common.scrollByEased === 'function') {
+          NK.ui.common.scrollByEased(scroller, targetDelta);
+          return;
+        }
         if (scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
           window.scrollBy(0, targetDelta);
           return;
