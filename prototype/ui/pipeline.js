@@ -2560,7 +2560,8 @@ function openBackgroundReferenceModal() {
           return {
             id: nl.id || '', name: nl.name || '', description: nl.description || '',
             refObjectName: (prev && prev.refObjectName) || nl.refObjectName || '',
-            variants: (prev && Array.isArray(prev.variants)) ? prev.variants.map(function (v) { return { id: v.id || '', label: v.label || '', refObjectName: v.refObjectName || '', _busy: false }; }) : [],
+            // 세부 배경은 사용자가 직접 쓴 것이라 다시 추출해도 그대로 살린다(묘사 포함).
+            variants: (prev && Array.isArray(prev.variants)) ? prev.variants.map(function (v) { return { id: v.id || '', label: v.label || '', description: v.description || '', refObjectName: v.refObjectName || '', _busy: false }; }) : [],
             sceneIds: nl.sceneIds || [], _busy: false
           };
         });

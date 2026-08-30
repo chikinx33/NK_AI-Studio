@@ -286,27 +286,66 @@
 // ── 미디어 로딩 신뢰성 ──────────────────────────────────────────────────────
 // iOS Safari 등에서 씬/컷 이미지·영상이 일부만 로드되고 일부는 누락되는 문제 대응.
 // 원인: 네이티브 loading="lazy" 의 불안정성 + 동시 로딩/일시적 프록시 실패 시 재시도 부재.
-// 해결: ① 로드 실패 시 재시도(같은 URL 재요청), ② 주기 스윕으로 미로드/실패 이미지를
-//       점진적(틱당 제한)으로 강제 즉시 로드 → 어떤 환경에서든 결국 표시되도록 보장.
+//
+// 단, 재시도를 "보이는 <img> 의 src 를 비웠다가 다시 넣는" 방식으로 하면 안 된다.
+// 아직 받는 중인 이미지까지 요청이 취소되고, src 가 비는 순간 깨진 아이콘이 번쩍인다
+// (프로덕션 페이지를 열 때마다 깜박이던 원인). 그래서:
+//   ① 재시도는 화면 밖 프리로더(new Image)로 하고, 성공한 순간에만 보이는 img 를 바꾼다.
+//   ② 아직 받는 중인 이미지는 건드리지 않는다. 오래 멈춰 있을 때만 조용히 다시 받아 본다.
+//   ③ 로드되면 is-loaded 를 붙여 CSS 가 부드럽게 나타나게 한다.
 (function () {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
   var IMG_SEL = 'img.scene-img, img.shot-img';
   var VID_SEL = 'video.scene-video';
   var MAX_RETRY = 5;
-  var FORCE_PER_TICK = 6; // 틱당 강제 로드 수(동시 요청 폭주 방지)
+  var FORCE_PER_TICK = 6;   // 틱당 재시도 수(동시 요청 폭주 방지)
+  var STALL_TICKS = 8;      // 이만큼(초) 받는 중이면 멈춘 것으로 보고 조용히 다시 받아 본다
 
   function srcOf(img) {
     return img.getAttribute('data-src') || img.getAttribute('data-ml-base') || img.getAttribute('src') || '';
   }
+
+  function markLoaded(img) {
+    img.setAttribute('data-ml-done', '1');
+    img.setAttribute('data-ml-ticks', '0');
+    if (img.classList) img.classList.add('is-loaded');
+  }
+
+  // 실패한 요청은 브라우저가 잠깐 캐시할 수 있어, 재시도에만 무해한 파라미터를 붙여 우회한다.
+  // (첫 요청은 그대로 두어 정상 캐시를 살린다)
+  function retryUrl(base, attempt) {
+    if (!attempt) return base;
+    return base + (base.indexOf('?') >= 0 ? '&' : '?') + '_nkr=' + attempt;
+  }
+
+  // 보이는 이미지는 성공했을 때만 교체한다 → 깨진 아이콘이 스칠 일이 없다.
   function reloadImg(img, attempt) {
     var base = srcOf(img);
     if (!base) return;
     img.setAttribute('data-ml-base', base);
-    try { img.removeAttribute('loading'); } catch (_) { } // lazy 해제 → 즉시 로드
-    try { img.removeAttribute('src'); } catch (_) { }       // 같은 URL 재요청 강제
+    try { img.removeAttribute('loading'); } catch (_) { }
+    if (img.getAttribute('data-ml-inflight') === '1') return;
+    img.setAttribute('data-ml-inflight', '1');
     var delay = Math.min(2000, 250 * attempt);
-    setTimeout(function () { try { img.setAttribute('src', base); } catch (_) { } }, delay);
+    window.setTimeout(function () {
+      var url = retryUrl(base, attempt);
+      var pre = new Image();
+      pre.decoding = 'async';
+      pre.onload = function () {
+        img.removeAttribute('data-ml-inflight');
+        try {
+          if (img.getAttribute('src') !== url) img.setAttribute('src', url);
+          markLoaded(img);
+        } catch (_) { }
+      };
+      pre.onerror = function () {
+        img.removeAttribute('data-ml-inflight');
+        // 다음 스윕이 다시 시도한다. 보이는 이미지는 그대로 둔다.
+      };
+      pre.src = url;
+    }, delay);
   }
+
   function retryImg(img) {
     var n = (Number(img.getAttribute('data-ml-retry')) || 0);
     if (n >= MAX_RETRY) return;
@@ -314,7 +353,14 @@
     reloadImg(img, n);
   }
 
-  // ① 로드 실패 재시도 (error 이벤트는 버블되지 않으므로 capture 단계로 청취)
+  // 정상적으로 로드된 이미지도 표시해 둔다(스윕이 건드리지 않도록 + 페이드 인).
+  document.addEventListener('load', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'IMG' || !el.matches || !el.matches(IMG_SEL)) return;
+    if (el.naturalWidth > 0) markLoaded(el);
+  }, true);
+
+  // 로드 실패 재시도 (error 이벤트는 버블되지 않으므로 capture 단계로 청취)
   document.addEventListener('error', function (e) {
     var el = e.target;
     if (!el || !el.matches) return;
@@ -339,26 +385,28 @@
     } catch (_) { return true; }
   }
 
-  // ② 주기 스윕: "뷰포트 근처"의 누락/실패 이미지만 점진적으로 로드/재시도.
-  // 먼 이미지는 네이티브 lazy 에 맡겨 동시 디코딩 수를 제한 → iOS 메모리 부족(액박) 방지.
+  // 주기 스윕: 뷰포트 근처의 "실패했거나 오래 멈춘" 이미지만 조용히 다시 받아 본다.
+  // 받는 중인 이미지는 절대 건드리지 않는다(취소하면 처음부터 다시 받게 되고 화면이 깜박인다).
   function sweep() {
     var imgs = document.querySelectorAll(IMG_SEL);
     var forced = 0;
     for (var i = 0; i < imgs.length; i++) {
       var img = imgs[i];
       if (img.getAttribute('data-ml-done') === '1') continue;
-      if (img.complete && img.naturalWidth > 0) { img.setAttribute('data-ml-done', '1'); continue; }
+      if (img.complete && img.naturalWidth > 0) { markLoaded(img); continue; }
       if (!nearViewport(img)) {
         // 멀어지면 카운터 초기화 → 다시 가까워질 때 새로 시도(스크롤 복귀 시 회복)
         img.setAttribute('data-ml-ticks', '0');
         img.setAttribute('data-ml-retry', '0');
         continue;
       }
+      // 근처인데 lazy 로 대기 중이면, src 는 그대로 둔 채 즉시 로드만 풀어 준다.
+      try { if (img.getAttribute('loading') === 'lazy') img.removeAttribute('loading'); } catch (_) { }
       var failed = img.complete && img.naturalWidth === 0;
       var ticks = (Number(img.getAttribute('data-ml-ticks')) || 0) + 1;
       img.setAttribute('data-ml-ticks', String(ticks));
-      // 실패는 즉시 재시도, 미로드는 1틱 유예 후 강제(근처 이미지는 빨리 보이게)
-      if ((failed || ticks >= 1)
+      var stalled = !img.complete && ticks >= STALL_TICKS;
+      if ((failed || stalled)
         && forced < FORCE_PER_TICK
         && (Number(img.getAttribute('data-ml-retry')) || 0) < MAX_RETRY) {
         retryImg(img);
@@ -366,6 +414,30 @@
       }
     }
   }
+  // 이미 캐시에 있어 즉시 완료된 이미지는 1초 스윕을 기다릴 필요가 없다.
+  // 행이 그려지는 즉시(다음 프레임) 표시해 줘야 페이드가 지연처럼 보이지 않는다.
+  function markCompleted() {
+    var imgs = document.querySelectorAll(IMG_SEL);
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      if (img.getAttribute('data-ml-done') === '1') continue;
+      if (img.complete && img.naturalWidth > 0) markLoaded(img);
+    }
+  }
+  var markScheduled = false;
+  function markSoon() {
+    if (markScheduled) return;
+    markScheduled = true;
+    var run = function () { markScheduled = false; try { markCompleted(); } catch (_) { } };
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(run);
+    else window.setTimeout(run, 16);
+  }
+  try {
+    if (typeof MutationObserver === 'function') {
+      new MutationObserver(markSoon).observe(document.documentElement, { childList: true, subtree: true });
+    }
+  } catch (_) { }
+  markSoon();
   try { setInterval(sweep, 1000); } catch (_) { }
   if (document.addEventListener) {
     document.addEventListener('visibilitychange', function () {

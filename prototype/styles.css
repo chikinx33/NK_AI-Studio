@@ -6539,6 +6539,28 @@ button.cut-ref-pick-btn {
   border-radius: 4px;
 }
 
+/* 이미지가 도착하기 전에는 빈 자리를 조용한 판으로 채운다.
+   alt 텍스트와 깨진 아이콘이 스치지 않도록 글자색을 비우고, 도착하면 부드럽게 떠오른다.
+   (pipeline-media.js 가 로드 완료 시 is-loaded 를 붙인다) */
+.scene-img,
+.shot-img {
+  color: transparent;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.scene-img.is-loaded,
+.shot-img.is-loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-img,
+  .shot-img {
+    transition: none;
+  }
+}
+
 /* Post Production */
 .postprod-section {
   flex: 1;
