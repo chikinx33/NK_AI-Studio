@@ -118,12 +118,30 @@ test("★체크박스와 '가사'는 붙고, '언어'와는 떨어진다", () =>
   assert.match(block, /\.scenario-song-lang \{[\s\S]*?border-left: 1px solid/);
 });
 
+test("★체크박스가 행 폭으로 늘어나지 않는다", () => {
+  // 진짜 원인이었다: .scenario-form .scenario-inline-controls input { flex: 1 1 48% } 가
+  // 체크박스까지 잡아 절반 폭으로 늘렸고, 그 늘어난 폭이 '가사' 와의 간격처럼 보였다.
+  const css = read("prototype/styles.css");
+  assert.match(css, /\.scenario-form \.scenario-inline-controls input \{[\s\S]{0,60}flex: 1 1 48%/,
+    "상위 규칙이 아직 있으므로 되돌리는 규칙이 반드시 필요하다");
+  // 같은 자리(.scenario-form ...)에서 더 구체적으로 되돌린다.
+  assert.match(css, /\.scenario-form \.scenario-song-options-row input\[type="checkbox"\][\s\S]{0,200}flex: 0 0 auto/);
+  assert.match(css, /\.scenario-form \.scenario-song-options-row select[\s\S]{0,200}flex: 0 0 auto/);
+  // 라벨도 내용만큼만 차지한다.
+  assert.match(css, /\.scenario-form \.scenario-song-options-row > label \{[\s\S]{0,40}flex: 0 0 auto;/);
+});
+
 test("★부연 설명은 없앤다", () => {
   const src = html();
   const optionsAt = src.indexOf('id="song-options-group"');
   const row = src.slice(optionsAt, src.indexOf('id="target-select"'));
   assert.doesNotMatch(row, /scenario-song-options-help/);
-  assert.doesNotMatch(read("prototype/core.js"), /scenario_song_options_help/);
+  const core = read("prototype/core.js");
+  assert.doesNotMatch(core, /scenario_song_options_help/);
+  // 가사 칸 아래 설명("[후렴](8초) 처럼 ...")도 지웠다 — 문구·키·스타일 모두.
+  assert.doesNotMatch(src, /scenario-lyrics-help/);
+  assert.doesNotMatch(core, /scenario_lyrics_help/);
+  assert.doesNotMatch(read("prototype/styles.css"), /\.scenario-lyrics-help/);
 });
 
 test("★적어 둔 가사가 있으면 AI 가 그것을 살려 다듬는다", () => {
