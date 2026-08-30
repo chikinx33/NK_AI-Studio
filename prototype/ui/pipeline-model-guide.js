@@ -176,6 +176,89 @@
       + '</div>';
   };
 
+
+  /**
+   * 이미지 모델 선택 가이드.
+   *
+   * ⚠️ 값의 출처는 **공급자 공식 문서**다(2026-08-30 확인).
+   *   OpenAI  gpt-image-2  /v1/images/edits : 이미지 16장, 장당 png·webp·jpg 50MB 미만
+   *                        가격 1M 토큰당 텍스트 입력 $5 / 이미지 입력 $8 / 이미지 출력 $30
+   *   Gemini  3.1 Flash Image               : 레퍼런스 14장(오브젝트 10 + 캐릭터 4 권장)
+   *                        가격 입력 $0.50/1M · 출력 이미지 1K $0.067 · 2K $0.101 · 4K $0.151
+   * 앱 동작 차이도 함께 적는다 — 레퍼런스를 이미지에 묶는 방법이 서로 다르다.
+   */
+  var IMAGE_MODELS = [
+    {
+      id: 'openai', name: 'GPT Image 2',
+      refs: '16장', bind: '순서 목록', mask: '✓ 알파 마스크', cost: '출력 $30 / 1M 토큰',
+      good: '레퍼런스를 가장 많이 받음 · 지시 이행이 또렷함',
+      bad: '이미지별 라벨을 못 붙여 순서로만 구분 · 일부 지역에서 엣지 차단(프록시 경유)',
+      fit: 'best'
+    },
+    {
+      id: 'gemini', name: 'Gemini 3.1 Flash Image',
+      refs: '14장', bind: '이미지 옆 라벨', mask: '✓ 인페인팅 권장', cost: '1K $0.067 · 2K $0.101',
+      good: '이미지 바로 옆에 라벨을 붙여 다중 캐릭터 바인딩이 정확 · 컷당 비용이 예측 가능',
+      bad: '캐릭터 레퍼런스는 4장까지 권장(넘기면 오히려 흔들림)',
+      fit: 'good'
+    }
+  ];
+
+  function imageRowHtml(m, current) {
+    var fit = FIT[m.fit] || FIT.ok;
+    return '<tr class="' + (m.id === current ? 'is-current' : '') + '">'
+      + '<td class="vmg-name">' + esc(m.name)
+        + (m.id === current ? '<span class="vmg-now">현재</span>' : '') + '</td>'
+      + '<td class="vmg-c">' + esc(m.refs) + '</td>'
+      + '<td class="vmg-c">' + esc(m.bind) + '</td>'
+      + '<td class="vmg-c">' + esc(m.mask) + '</td>'
+      + '<td class="vmg-c">' + esc(m.cost) + '</td>'
+      + '<td class="vmg-good">' + esc(m.good) + '</td>'
+      + '<td class="vmg-bad">' + esc(m.bad) + '</td>'
+      + '<td class="vmg-c"><span class="vmg-fit ' + fit.cls + '">' + esc(fit.label) + '</span></td>'
+      + '</tr>';
+  }
+
+  guide.renderImage = function (currentProvider) {
+    return ''
+      + '<div class="vmg-head">'
+      +   '<h2 class="vmg-title">이미지 모델 고르기</h2>'
+      +   '<button type="button" class="vmg-close" data-vmg-close aria-label="닫기">✕</button>'
+      + '</div>'
+      + '<table class="vmg-table">'
+      +   '<thead><tr>'
+      +     '<th>모델</th><th>레퍼런스 최대</th><th>이미지 구분 방식</th><th>마스크 편집</th>'
+      +     '<th>비용</th><th>강점</th><th>약점</th><th>적합도</th>'
+      +   '</tr></thead>'
+      +   '<tbody>' + IMAGE_MODELS.map(function (m) { return imageRowHtml(m, currentProvider); }).join('') + '</tbody>'
+      + '</table>'
+      + '<div class="vmg-notes">'
+      +   '<p><b>레퍼런스가 하는 일</b> — 컷 하나에 캐릭터 시트 · 배경 플레이트 · 소품 · 이전 컷을 '
+      +      '함께 붙여 일관성을 잡습니다. 상한을 넘기면 <b>각 캐릭터의 첫 시트 → 컷 레퍼런스 → '
+      +      '배경 → 소품 → 캐릭터 추가 포즈</b> 순으로 남깁니다.</p>'
+      +   '<p><b>이미지 구분 방식</b> — Gemini 는 각 이미지 <b>바로 옆</b>에 "이건 @네모의 시트" 같은 '
+      +      '라벨을 끼워 넣을 수 있어 다중 캐릭터 바인딩이 정확합니다. GPT Image 는 그 자리가 없어 '
+      +      '<b>보내는 순서</b>로만 구분되므로, 앱이 프롬프트에 순서 목록을 덧붙여 역할을 알려줍니다.</p>'
+      +   '<p><b>몇 장이 적당한가</b> — 많이 붙일수록 장당 반영도는 옅어지고 입력 비용·시간은 늘어납니다. '
+      +      'Gemini 문서는 캐릭터 일관성용으로 <b>4장까지</b>를 권합니다. 상한은 막아두지 않았으니 '
+      +      '컷 성격에 맞게 쓰세요.</p>'
+      +   '<p><b>폴백</b> — GPT Image 호출이 실패하면 Gemini 로 자동 대체 생성합니다. 이때는 Gemini 상한에 '
+      +      '맞춰 뒤쪽 레퍼런스부터 줄여 보냅니다(중요한 것이 앞에 오도록 정렬돼 있습니다).</p>'
+      +   '<p class="vmg-caveat"><b>비용</b> — 공급자 공식 가격표(2026-08-30 확인)입니다. '
+      +      'GPT Image 2 는 1M 토큰당 텍스트 입력 $5 · 이미지 입력 $8 · 이미지 출력 $30 이라 '
+      +      '컷당 금액이 해상도·품질에 따라 달라집니다. Gemini 3.1 Flash Image 는 이미지 1장 기준 '
+      +      '1K $0.067 · 2K $0.101 · 4K $0.151 로 예측이 쉽습니다.</p>'
+      + '</div>';
+  };
+
+  guide.openImage = function (currentProvider) {
+    var modal = document.getElementById('video-model-guide-modal');
+    var body = document.getElementById('video-model-guide-body');
+    if (!modal || !body) return;
+    body.innerHTML = guide.renderImage(currentProvider);
+    modal.classList.remove('hidden');
+  };
+
   guide.open = function (currentModel) {
     var modal = document.getElementById('video-model-guide-modal');
     var body = document.getElementById('video-model-guide-body');

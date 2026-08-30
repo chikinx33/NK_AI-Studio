@@ -1,20 +1,20 @@
 ;(function () {
   var NK = window.NK || (window.NK = {});
   var image = NK.uiPipelineImage || (NK.uiPipelineImage = {});
-  // 컷당 레퍼런스 예산. 모델의 하드리밋이 아니라 우리가 정한 값이다.
-  // 프로바이더 공식 상한(2026-08 확인):
-  //   - OpenAI gpt-image-2 /v1/images/edits : 이미지 16장까지(장당 png·webp·jpg, 50MB 미만)
-  //   - Gemini 3.1 Flash Image             : 레퍼런스 14장까지
-  //     (오브젝트 10장 + 캐릭터 일관성용 4장 권장)
-  // 둘 다 여유가 있지만 무작정 채우지 않는다. 장수가 늘수록 장당 반영도가 옅어지고
-  // 입력 토큰·지연·비용이 함께 커진다. 실제로 쓰는 조합(캐릭터 1~3 + 배경 + 소품 + 컷)이
-  // 넉넉히 들어가는 8장을 예산으로 잡고, 넘칠 때 무엇을 버릴지는 applyReferenceBudget 이 정한다.
-  var MAX_REFERENCE_IMAGES = 8;
-  // 한 캐릭터가 가져갈 수 있는 시트 수. 예산을 올려도 한 명이 전부 먹지 않게 따로 둔다.
+  // 컷당 레퍼런스 상한 — 프로바이더가 허용하는 최대치까지 연다.
+  // 공식 상한(2026-08 확인):
+  //   - OpenAI gpt-image-2 /v1/images/edits : 16장 (장당 png·webp·jpg, 50MB 미만)
+  //   - Gemini 3.1 Flash Image             : 14장 (오브젝트 10 + 캐릭터 4 권장)
+  // 큰 쪽(16)을 클라이언트 상한으로 두고, Gemini 로 보낼 때만 서버가 14장으로 줄인다
+  // (OpenAI 실패 시 Gemini 폴백이 있으므로 서버에서 처리해야 안전하다).
+  // 장수가 늘수록 장당 반영도는 옅어지고 입력 비용·지연이 커진다 — 무엇을 붙일지는
+  // 사용자가 정하고, 넘칠 때 무엇을 버릴지는 applyReferenceBudget 이 우선순위로 정한다.
+  var MAX_REFERENCE_IMAGES = 16;
+  // 한 캐릭터가 가져갈 수 있는 시트 수. 상한을 열어도 한 명이 전부 먹지는 않게 둔다.
   var MAX_SHEETS_PER_CHARACTER = 4;
-  // 캐릭터 레퍼런스 총량. Gemini 문서가 캐릭터 일관성용으로 4장까지를 권한다.
-  // 넘기면 인물 일관성이 오히려 흔들리므로, 남는 자리는 배경·소품에 준다.
-  var MAX_CHARACTER_REFERENCES = 4;
+  // 캐릭터 레퍼런스 총량. Gemini 문서는 캐릭터 일관성용으로 4장까지를 권하지만,
+  // 상한을 막지 않는다(권장치는 이미지 모델 안내 모달에 적어 사용자가 판단한다).
+  var MAX_CHARACTER_REFERENCES = 16;
 
   function normalizeText(value) {
     return String(value == null ? '' : value).replace(/[<>]/g, '').trim();
@@ -817,8 +817,8 @@
         skipEpisodeLocationId: args.skipEpisodeLocationId
       },
       maxRefId + 1,
-      // 배경 플레이트 + 소품까지 들어갈 수 있게(넘치면 예산기가 정리한다)
-      Math.min(remaining, 3)
+      // 배경 플레이트 + 소품 여러 개까지 들어갈 수 있게(넘치면 예산기가 정리한다)
+      Math.min(remaining, 5)
     );
     // 붙일 게 없으면 자리를 비웠던 것도 되돌린다(괜히 시트 한 장을 버리지 않게).
     if (!bundle.referenceImages.length) return { referencePayload: referencePayload, finalPrompt: finalPrompt };

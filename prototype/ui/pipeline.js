@@ -1131,6 +1131,14 @@
       '<option value="gemini"' + (imageProvider === 'gemini' ? ' selected' : '') + '>Gemini 3.1 Flash</option>' +
       '<option value="openai"' + (imageProvider === 'openai' ? ' selected' : '') + '>GPT Image 2</option>' +
       '</select>' +
+      // lucide.dev/icons/circle-help — 이미지 모델별 레퍼런스 상한·특징·비용 비교표를 연다
+      '<button type="button" class="video-model-help" id="image-model-help-btn" ' +
+      'title="이미지 모델별 레퍼런스 상한·특징·비용 비교" aria-label="이미지 모델별 레퍼런스 상한·특징·비용 비교">' +
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="10"/>' +
+      '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>' +
+      '<path d="M12 17h.01"/></svg></button>' +
       '<span class="video-model-label">영상생성 모델</span>' +
       '<select id="video-model-select" class="video-model-select">' +
       __mopt('veo',          'Veo 3.1 Fast',              videoModel, aspectRatio) +
@@ -1403,6 +1411,15 @@
       };
     }
 
+    var imageModelHelpBtn = document.getElementById('image-model-help-btn');
+    if (imageModelHelpBtn) {
+      imageModelHelpBtn.onclick = function () {
+        if (NK.uiModelGuide && NK.uiModelGuide.openImage) {
+          var sel = document.getElementById('image-provider-select');
+          NK.uiModelGuide.openImage(sel ? sel.value : '');
+        }
+      };
+    }
     var modelHelpBtn = document.getElementById('video-model-help-btn');
     if (modelHelpBtn) {
       modelHelpBtn.onclick = function () {

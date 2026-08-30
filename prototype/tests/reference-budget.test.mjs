@@ -14,7 +14,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8").spl
  * 컷 레퍼런스가 조용히 잘려 나갔다.
  *
  * 지금은 프로바이더 공식 상한(OpenAI gpt-image-2 16장 / Gemini 3.1 Flash Image 14장)을
- * 확인한 뒤 예산을 8장으로 두고, 넘칠 때 무엇을 남길지 우선순위로 정한다:
+ * 확인해 그 최대치까지 열어 두고, 넘칠 때 무엇을 남길지 우선순위로 정한다:
  *   각 캐릭터의 첫 시트 → 컷 레퍼런스 → 배경 플레이트 → 소품 → 캐릭터 추가 포즈
  */
 
@@ -110,12 +110,13 @@ test("★붙이는 순서는 원래대로 유지된다 (이미지 옆 라벨 순
   assert.ok(order.indexOf("plate") < order.indexOf("cut"));
 });
 
-test("★캐릭터 레퍼런스는 권장치를 넘기지 않는다", () => {
-  // Gemini 문서가 캐릭터 일관성용으로 4장까지를 권한다. 넘기면 오히려 흔들린다.
+test("★캐릭터 레퍼런스 상한은 막지 않되 배경·컷 자리는 지킨다", () => {
+  // Gemini 문서는 캐릭터 일관성용으로 4장까지를 권하지만, 상한을 코드로 막지는 않는다
+  // (권장치는 이미지 모델 안내 모달에 적어 사용자가 판단한다).
   const budget = loadApplyReferenceBudget();
   const kept = budget(sheetsFor(1, 6).concat([plate(), cut()]));
-  assert.ok(charCount(kept) <= charCap(), charCount(kept) + "장 — " + charCap() + "장 이하여야 한다");
-  // 남는 자리는 배경·컷이 가져간다.
+  assert.ok(charCount(kept) <= charCap());
+  // 캐릭터를 아무리 많이 붙여도 배경·컷은 남는다.
   assert.ok(tags(kept).includes("plate"));
   assert.ok(tags(kept).includes("cut"));
 });
@@ -140,13 +141,24 @@ test("★서버 안전망이 클라이언트 예산보다 작지 않다", () => 
 
 test("★프로바이더 공식 상한을 넘지 않는다", () => {
   // OpenAI gpt-image-2 /v1/images/edits 는 16장, Gemini 3.1 Flash Image 는 14장.
-  // OpenAI 실패 시 Gemini 로 폴백하므로 같은 목록이 양쪽에 유효해야 한다 → 14장이 상한.
+  // 받아들이는 상한은 큰 쪽(16)에 맞추고, Gemini 로 호출할 때만 14장으로 줄인다.
   const server = read("prototype/functions/api/imagen.ts");
-  assert.ok(Number(server.match(/const MAX_REFERENCE_IMAGES = (\d+);/)[1]) <= 14);
-  assert.ok(clientCap() <= 14);
+  assert.ok(Number(server.match(/const MAX_REFERENCE_IMAGES = (\d+);/)[1]) <= 16);
+  assert.ok(clientCap() <= 16);
+  assert.equal(Number(server.match(/const GEMINI_MAX_REFERENCE_IMAGES = (\d+);/)[1]), 14);
   // 확인한 근거를 코드에 남겨 둔다(다음 사람이 다시 추측하지 않도록).
   assert.match(server, /OpenAI gpt-image-2/);
   assert.match(server, /Gemini 3\.1 Flash Image/);
+});
+
+test("★Gemini 로 폴백할 때 뒤쪽 레퍼런스부터 줄여 보낸다", () => {
+  const server = read("prototype/functions/api/imagen.ts");
+  // 호출 직전에 줄여야 OpenAI → Gemini 폴백에서도 안전하다.
+  assert.match(server, /const geminiRefs = referenceImages\.length > GEMINI_MAX_REFERENCE_IMAGES/);
+  assert.match(server, /referenceImages\.slice\(0, GEMINI_MAX_REFERENCE_IMAGES\)/);
+  // 잘렸으면 프롬프트도 그 목록으로 다시 만든다(없는 이미지를 가리키지 않게).
+  assert.match(server, /const geminiPrompt = geminiRefs === referenceImages/);
+  assert.match(server, /buildGeminiContents\(\s*conversationHistory,\s*geminiRefs,\s*geminiPrompt,/);
 });
 
 test("★한 캐릭터가 슬롯을 전부 가져가지 않는다", () => {

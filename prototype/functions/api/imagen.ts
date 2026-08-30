@@ -5,14 +5,14 @@ import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-// 레퍼런스 이미지 안전망. 프로바이더 공식 상한(2026-08 확인)은
+// 레퍼런스 이미지 상한 — 프로바이더 공식 상한(2026-08 확인)까지 허용한다.
 //   - OpenAI gpt-image-2 /v1/images/edits : 16장 (장당 png·webp·jpg, 50MB 미만)
 //   - Gemini 3.1 Flash Image             : 14장 (오브젝트 10 + 캐릭터 4 권장)
-// OpenAI 실패 시 Gemini 로 폴백하므로, 같은 목록이 양쪽 모두에 유효해야 한다.
-// 그래서 둘 중 작은 값(14)을 하드 상한으로 둔다. 실제로 몇 장을 보낼지는 클라이언트
-// 예산(pipeline-image.js MAX_REFERENCE_IMAGES)이 정한다 — 여기서 자르는 일은 없어야 한다.
+// 받아들이는 상한은 큰 쪽(16)에 맞추고, Gemini 로 실제 호출할 때만 14장으로 줄인다.
+// OpenAI 실패 시 Gemini 로 폴백하므로 이 축소는 호출 직전에 해야 안전하다.
 // 4장이던 시절에는 캐릭터 3명만 돼도 배경 플레이트나 컷 레퍼런스가 여기서 잘려 나갔다.
-const MAX_REFERENCE_IMAGES = 14;
+const MAX_REFERENCE_IMAGES = 16;
+const GEMINI_MAX_REFERENCE_IMAGES = 14;
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
@@ -154,19 +154,38 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         return { error: { error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, status: 500 };
       }
       const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+      // Gemini 는 14장까지. OpenAI(16장) 기준으로 실려 온 목록이 그대로 폴백될 수 있으므로
+      // 호출 직전에 줄인다. 앞쪽이 더 중요한 순서로 정렬돼 있어(캐릭터 → 컷 → 배경 → 소품)
+      // 뒤에서 자르는 것이 안전하고, 잘렸으면 프롬프트도 그 목록으로 다시 만든다.
+      const geminiRefs = referenceImages.length > GEMINI_MAX_REFERENCE_IMAGES
+        ? referenceImages.slice(0, GEMINI_MAX_REFERENCE_IMAGES)
+        : referenceImages;
+      const geminiPrompt = geminiRefs === referenceImages
+        ? finalPrompt
+        : buildGeminiImagePrompt(
+          prompt,
+          geminiRefs,
+          generationMode,
+          generationStyle,
+          conversationHistory.length,
+          cameraTargetMode,
+          !!maskImage,
+          editInPlace,
+          aspectFinal
+        );
       const requestPayload = {
         contents: buildGeminiContents(
           conversationHistory,
-          referenceImages,
-          finalPrompt,
+          geminiRefs,
+          geminiPrompt,
           maskImage,
           // 텍스트→이미지 + 레퍼런스 2장 이상일 때만 이미지별 캐릭터 라벨을 인터리브.
           // (단일 레퍼런스는 바인딩 모호성이 없고, image-to-image 는 0번이 소스 이미지)
           // 예외: 세부 배경 레퍼런스는 한 장이어도 라벨을 붙인다 — "이 이미지를 그대로 그리지
           // 말고 룩만 가져가라"는 지시는 이미지 바로 옆에 있어야 먹힌다.
           generationMode === "text-to-image" && (
-            referenceImages.length > 1
-            || referenceImages.some((item) => item.referenceKind === "environment-detail" || item.referenceKind === "prop")
+            geminiRefs.length > 1
+            || geminiRefs.some((item) => item.referenceKind === "environment-detail" || item.referenceKind === "prop")
           )
         ),
         generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
