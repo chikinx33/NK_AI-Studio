@@ -882,7 +882,7 @@
         lyrics: 'Lyrics',
         refrain: 'Refrain',
         timeline: 'Timeline',
-        timelinePlaceholder: 'e.g. 0s only the feet in frame / 2s tilt-up completes, full bodies'
+        timelinePlaceholder: 'Filled in when cuts are split. You can edit it — e.g. 0s only the feet / 2s full bodies'
       };
     }
     return {
@@ -893,7 +893,7 @@
       lyrics: '가사',
       refrain: '후렴',
       timeline: '타임라인',
-      timelinePlaceholder: '예: 0s 발만 프레임에 / 2s 틸트업이 끝나 전신'
+      timelinePlaceholder: '컷을 나눌 때 AI 가 채웁니다. 고쳐도 돼요 — 예: 0s 발만 / 2s 전신'
     };
   };
 
@@ -1920,10 +1920,19 @@
             <p class="field-label muted small">행동</p>
             <p class="view-lines view-action-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.action || '')}</p>
           </div>
+          ${(() => {
+            // 타임라인은 사용자가 채우는 칸이 아니라 AI 가 컷을 나눌 때 채우는 칸이다.
+            // 그래서 아무 컷에나 빈칸을 띄우면 "내가 적어야 하나?" 로 읽힌다.
+            // 값이 있거나, 카메라가 움직여 시간표가 있어야 마땅한 컷에만 보여 준다.
+            const beatsText = beatsToText(s.beats);
+            const moving = String(s.cameraMove || 'static').trim().toLowerCase() !== 'static';
+            if (!beatsText && !moving) return '';
+            return `
           <div class="field-block">
             <p class="field-label muted small">${labels.timeline}</p>
-            <p class="view-lines view-beats-lines" data-id="${s.id}" contenteditable="true" data-placeholder="${escapeHtml(labels.timelinePlaceholder)}">${escapeHtml(beatsToText(s.beats))}</p>
-          </div>` : `
+            <p class="view-lines view-beats-lines" data-id="${s.id}" contenteditable="true" data-placeholder="${escapeHtml(labels.timelinePlaceholder)}">${escapeHtml(beatsText)}</p>
+          </div>`;
+          })()}` : `
           <div class="field-block">
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>

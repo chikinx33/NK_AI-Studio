@@ -136,6 +136,19 @@ test("★시나리오 화면에서도 타임라인을 보고 고칠 수 있다",
   assert.match(ui, /timeline: '타임라인'/);
 });
 
+test("★타임라인 칸은 필요한 컷에만 나온다", () => {
+  // 이 칸은 사용자가 채우는 칸이 아니라 컷 분할이 채우는 칸이다.
+  // 아무 컷에나 빈칸을 띄우면 "내가 적어야 하나?" 로 읽힌다.
+  const ui = read("prototype/js/ui/scenario.js");
+  const start = ui.indexOf("const beatsText = beatsToText(s.beats);");
+  const block = ui.slice(start, ui.indexOf("view-beats-lines", start));
+  assert.match(block, /const moving = String\(s\.cameraMove \|\| 'static'\)/);
+  assert.match(block, /if \(!beatsText && !moving\) return '';/);
+  // 플레이스홀더가 누가 채우는 칸인지 알려 준다.
+  assert.match(ui, /컷을 나눌 때 AI 가 채웁니다/);
+  assert.match(ui, /Filled in when cuts are split/);
+});
+
 test("★편집·저장이 타임라인을 지우지 않는다", () => {
   const ui = read("prototype/js/ui/scenario.js");
   // 카드에서 수집할 때 싣고,
