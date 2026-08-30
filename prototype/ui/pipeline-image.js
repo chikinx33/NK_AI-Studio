@@ -574,15 +574,99 @@
     return out;
   }
 
+  // ── 에피소드 배경 레퍼런스(공간 플레이트) ──────────────────────────────
+  // 사용자가 배경 레퍼런스를 만들어 둔 이유는 "이 장소가 나오는 컷은 이 배경으로" 이다.
+  // 그러므로 컷 기반 생성(cutRefId) 체크 여부와 무관하게, 이 컷의 장소가 등록된 공간과
+  // 맞으면 항상 그 플레이트를 참조한다. 예전에는 사용자가 컷 레퍼런스로 직접 고른
+  // 경우에만 붙어서, 등록해 둔 배경이 대부분의 컷에서 무시됐다.
+  function episodeLocationRows(payload, projectRecord) {
+    var rows = []
+      .concat(Array.isArray(payload && payload.episodeLocations) ? payload.episodeLocations : [])
+      .concat(Array.isArray(projectRecord && projectRecord.payload && projectRecord.payload.episodeLocations)
+        ? projectRecord.payload.episodeLocations
+        : []);
+    var out = [];
+    var seen = {};
+    rows.forEach(function (row) {
+      if (!row || !String(row.refObjectName || '').trim()) return;
+      var key = String(row.id || row.name || '').trim().toLowerCase();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      out.push(row);
+    });
+    return out;
+  }
+
+  // ① 추출 때 이 컷이 배정된 장소가 가장 정확하다(sceneIds).
+  // ② 없으면 씬 텍스트에 장소 이름이 나오는지로 찾는다.
+  function matchEpisodeLocation(payload, projectRecord, scene, text, skipId) {
+    var rows = episodeLocationRows(payload, projectRecord);
+    if (!rows.length) return null;
+    var skip = String(skipId || '').trim().toLowerCase();
+    if (skip) {
+      rows = rows.filter(function (row) {
+        return String(row.id || row.name || '').trim().toLowerCase() !== skip;
+      });
+    }
+    var sceneId = String((scene && scene.id) || '').trim();
+    if (sceneId) {
+      for (var i = 0; i < rows.length; i++) {
+        var ids = Array.isArray(rows[i].sceneIds) ? rows[i].sceneIds : [];
+        for (var j = 0; j < ids.length; j++) {
+          if (String(ids[j]) === sceneId) return rows[i];
+        }
+      }
+    }
+    var hay = String(text || '').toLowerCase();
+    if (!hay) return null;
+    for (var k = 0; k < rows.length; k++) {
+      var name = normalizeText(rows[k].name).toLowerCase();
+      if (!name || name.length < 2) continue;
+      var compact = name.replace(/\s+/g, '');
+      if (hay.indexOf(name) >= 0 || (compact.length >= 2 && hay.indexOf(compact) >= 0)) return rows[k];
+    }
+    return null;
+  }
+
+  function episodeLocationAsset(row) {
+    if (!row) return null;
+    var name = normalizeText(row.name) || 'this location';
+    var objectName = String(row.refObjectName || '').trim();
+    var url = (objectName && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objectName) : '';
+    if (!url) return null;
+    return {
+      assetId: String(row.id || ('ep_loc_' + name)),
+      displayName: name,
+      token: '@' + name.replace(/\s+/g, ''),
+      kind: 'background',
+      description: normalizeText(row.description),
+      items: [{ sheetId: 'episode', imageDataUrl: url, isPrimary: true }]
+    };
+  }
+
   // 씬 텍스트와 일치하는 배경·소품 자산을 레퍼런스 이미지로 만든다.
   // startReferenceId 이후의 referenceId 를 사용하고, maxCount 만큼만 채운다.
   function buildEnvironmentReferenceBundle(payload, scene, promptText, options, startReferenceId, maxCount) {
     var max = Math.max(0, Number(maxCount) || 0);
     if (!max) return { referenceImages: [], promptLines: [] };
     var assets = collectEnvironmentAssets(payload, options);
-    if (!assets.length) return { referenceImages: [], promptLines: [] };
     var text = buildEnvironmentResolutionText(scene, promptText);
-    var matched = matchEnvironmentAssets(assets, text, max);
+    var matched = assets.length ? matchEnvironmentAssets(assets, text, max) : [];
+    // 이 컷의 장소로 등록된 배경 플레이트가 있으면 무조건 한 자리를 차지한다.
+    // (소품이 슬롯을 다 먹어 배경이 밀리면, 배경 레퍼런스를 만든 의미가 없어진다)
+    var locAsset = episodeLocationAsset(matchEpisodeLocation(
+      payload,
+      options && options.projectRecord,
+      scene,
+      text,
+      options && options.skipEpisodeLocationId
+    ));
+    if (locAsset) {
+      var locKey = String(locAsset.displayName || '').toLowerCase();
+      matched = [locAsset].concat(matched.filter(function (a) {
+        return String((a && a.displayName) || '').toLowerCase() !== locKey;
+      })).slice(0, max);
+    }
     if (!matched.length) {
       try {
         console.log('Environment asset lookup (image):', {
@@ -619,7 +703,7 @@
       });
       promptLines.push(isProp
         ? 'Use the provided registered reference image for ' + subjectDescription + '. Keep its exact design, shape, proportions, markings, materials, and colors in every cut. Render it at the position, size, and angle this shot requires, and do NOT copy the background, framing, or camera of the reference image. Do not redesign this object.'
-        : 'Use the provided registered reference image for ' + subjectDescription + ' and keep the same layout, architecture, props, materials, colors, and lighting. Do not redesign this location.'
+        : 'Use the provided registered reference image for ' + subjectDescription + ' and keep the same layout, architecture, props, materials, colors, and lighting. Do not redesign this location. The camera angle, shot size, and framing of THIS cut come from the prompt — do not copy the framing of the reference image.'
       );
       refId += 1;
     });
@@ -638,24 +722,57 @@
   function mergeEnvironmentReferences(args) {
     var referencePayload = args.referencePayload || null;
     var finalPrompt = String(args.finalPrompt || '');
-    var usedRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.length : 0;
+    var baseList = (referencePayload && referencePayload.referenceImages)
+      ? referencePayload.referenceImages.slice()
+      : [];
     var reserve = Math.max(0, Number(args.reserveSlots) || 0);
-    var remaining = Math.max(0, MAX_REFERENCE_IMAGES - usedRefs - reserve);
+    var remaining = Math.max(0, MAX_REFERENCE_IMAGES - baseList.length - reserve);
+    // 캐릭터가 한 명이면 시트 4장이 슬롯을 다 먹어 배경 플레이트가 들어갈 자리가 없었다.
+    // 등록된 배경은 그 컷에서 반드시 참조돼야 하므로, 같은 캐릭터의 "추가 포즈" 한 장을
+    // 양보시켜 자리를 만든다. 각 캐릭터의 첫 장은 남기므로 인물 일관성은 그대로다.
+    var evicted = false;
+    if (!remaining) {
+      var counts = {};
+      baseList.forEach(function (r) {
+        var k = String((r && r.referenceId) || '');
+        counts[k] = (counts[k] || 0) + 1;
+      });
+      for (var i = baseList.length - 1; i >= 0; i--) {
+        var key = String((baseList[i] && baseList[i].referenceId) || '');
+        if ((counts[key] || 0) > 1) {
+          counts[key] -= 1;
+          baseList.splice(i, 1);
+          remaining = 1;
+          evicted = true;
+          break;
+        }
+      }
+    }
     if (!remaining) return { referencePayload: referencePayload, finalPrompt: finalPrompt };
     var maxRefId = 0;
-    ((referencePayload && referencePayload.referenceImages) || []).forEach(function (r) {
+    baseList.forEach(function (r) {
       maxRefId = Math.max(maxRefId, Number(r && r.referenceId) || 0);
     });
     var bundle = buildEnvironmentReferenceBundle(
       args.payload,
       args.scene,
       finalPrompt,
-      { projectRecord: args.projectRecord, hydratedBrand: args.hydratedBrand },
+      {
+        projectRecord: args.projectRecord,
+        hydratedBrand: args.hydratedBrand,
+        skipEpisodeLocationId: args.skipEpisodeLocationId
+      },
       maxRefId + 1,
       Math.min(remaining, 2)
     );
+    // 붙일 게 없으면 자리를 비웠던 것도 되돌린다(괜히 시트 한 장을 버리지 않게).
     if (!bundle.referenceImages.length) return { referencePayload: referencePayload, finalPrompt: finalPrompt };
-    var baseImgs = (referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [])
+    if (evicted) {
+      try {
+        console.log('Environment reference took a slot from an extra character sheet (image).');
+      } catch (_) {}
+    }
+    var baseImgs = baseList
       .concat(bundle.referenceImages)
       .slice(0, MAX_REFERENCE_IMAGES);
     var nextPayload = referencePayload
@@ -1052,6 +1169,9 @@
         try { envHydratedBrand = await NK.service.brand.hydrateFromServer(envBrandId, { ttlMs: 0 }); } catch (_) {}
       }
       var reserveForCutRef = (scene.cutRefEnabled && scene.cutRefId) ? 1 : 0;
+      // 사용자가 이 컷의 레퍼런스로 바로 그 장소를 골랐다면 아래에서 붙으므로 중복 첨부하지 않는다.
+      var cutRefStr = (scene.cutRefEnabled && scene.cutRefId) ? String(scene.cutRefId) : '';
+      var pickedLocationId = cutRefStr.indexOf('loc:') === 0 ? cutRefStr.slice(4).split('#')[0] : '';
       var envMerged = mergeEnvironmentReferences({
         referencePayload: referencePayload,
         finalPrompt: finalPrompt,
@@ -1059,6 +1179,7 @@
         scene: scene,
         projectRecord: envLiveDraft,
         hydratedBrand: envHydratedBrand,
+        skipEpisodeLocationId: pickedLocationId,
         reserveSlots: reserveForCutRef
       });
       referencePayload = envMerged.referencePayload;
