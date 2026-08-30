@@ -1,14 +1,20 @@
 ;(function () {
   var NK = window.NK || (window.NK = {});
   var image = NK.uiPipelineImage || (NK.uiPipelineImage = {});
-  // 컷당 레퍼런스 상한. 모델의 하드리밋이 아니라 우리가 정한 예산이다.
-  // 4장일 때는 캐릭터가 3명만 돼도 배경 플레이트나 컷 레퍼런스가 밀려났다
-  // (캐릭터 3 + 컷 + 배경 = 5). 6장으로 올려 "캐릭터 3명 + 컷 + 배경 + 소품" 이 들어간다.
-  // 늘릴수록 입력이 커지고 장당 반영도가 옅어지므로, 넘칠 때 무엇을 버릴지는
-  // applyReferenceBudget 이 우선순위로 정한다. 서버 상한(imagen.ts)과 함께 움직여야 한다.
-  var MAX_REFERENCE_IMAGES = 6;
-  // 한 캐릭터가 가져갈 수 있는 시트 수. 상한을 올려도 한 명이 전부 먹지 않게 따로 둔다.
+  // 컷당 레퍼런스 예산. 모델의 하드리밋이 아니라 우리가 정한 값이다.
+  // 프로바이더 공식 상한(2026-08 확인):
+  //   - OpenAI gpt-image-2 /v1/images/edits : 이미지 16장까지(장당 png·webp·jpg, 50MB 미만)
+  //   - Gemini 3.1 Flash Image             : 레퍼런스 14장까지
+  //     (오브젝트 10장 + 캐릭터 일관성용 4장 권장)
+  // 둘 다 여유가 있지만 무작정 채우지 않는다. 장수가 늘수록 장당 반영도가 옅어지고
+  // 입력 토큰·지연·비용이 함께 커진다. 실제로 쓰는 조합(캐릭터 1~3 + 배경 + 소품 + 컷)이
+  // 넉넉히 들어가는 8장을 예산으로 잡고, 넘칠 때 무엇을 버릴지는 applyReferenceBudget 이 정한다.
+  var MAX_REFERENCE_IMAGES = 8;
+  // 한 캐릭터가 가져갈 수 있는 시트 수. 예산을 올려도 한 명이 전부 먹지 않게 따로 둔다.
   var MAX_SHEETS_PER_CHARACTER = 4;
+  // 캐릭터 레퍼런스 총량. Gemini 문서가 캐릭터 일관성용으로 4장까지를 권한다.
+  // 넘기면 인물 일관성이 오히려 흔들리므로, 남는 자리는 배경·소품에 준다.
+  var MAX_CHARACTER_REFERENCES = 4;
 
   function normalizeText(value) {
     return String(value == null ? '' : value).replace(/[<>]/g, '').trim();
@@ -738,7 +744,8 @@
   //   ⑤ 캐릭터 추가 포즈     — 남는 자리를 채운다
   function applyReferenceBudget(list) {
     var refs = Array.isArray(list) ? list.slice() : [];
-    if (refs.length <= MAX_REFERENCE_IMAGES) return refs;
+    // 예산 안에 들어와도 캐릭터 추가 포즈는 권장치까지만 남긴다(장수가 늘수록 오히려 흔들린다).
+    if (!refs.length) return refs;
     var seenChar = {};
     var firstChar = [];
     var extraChar = [];
@@ -754,9 +761,12 @@
       if (!seenChar[key]) { seenChar[key] = true; firstChar.push(r); return; }
       extraChar.push(r);
     });
+    // 캐릭터 추가 포즈는 캐릭터 레퍼런스 총량(권장 4장) 안에서만 채운다.
+    var characterRoom = Math.max(0, MAX_CHARACTER_REFERENCES - firstChar.length);
     var kept = firstChar
-      .concat(continuity, environment, propRefs, extraChar)
+      .concat(continuity, environment, propRefs, extraChar.slice(0, characterRoom))
       .slice(0, MAX_REFERENCE_IMAGES);
+    if (kept.length === refs.length) return refs;
     // 붙이는 순서는 원래대로 둔다(이미지 옆 라벨 순서를 흐트러뜨리지 않게).
     return refs.filter(function (r) { return kept.indexOf(r) >= 0; });
   }

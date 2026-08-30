@@ -5,10 +5,14 @@ import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-// 컷당 레퍼런스 이미지 상한. 모델의 하드리밋이 아니라 우리가 정한 예산이며,
-// 클라이언트(pipeline-image.js MAX_REFERENCE_IMAGES)와 항상 같은 값이어야 한다.
+// 레퍼런스 이미지 안전망. 프로바이더 공식 상한(2026-08 확인)은
+//   - OpenAI gpt-image-2 /v1/images/edits : 16장 (장당 png·webp·jpg, 50MB 미만)
+//   - Gemini 3.1 Flash Image             : 14장 (오브젝트 10 + 캐릭터 4 권장)
+// OpenAI 실패 시 Gemini 로 폴백하므로, 같은 목록이 양쪽 모두에 유효해야 한다.
+// 그래서 둘 중 작은 값(14)을 하드 상한으로 둔다. 실제로 몇 장을 보낼지는 클라이언트
+// 예산(pipeline-image.js MAX_REFERENCE_IMAGES)이 정한다 — 여기서 자르는 일은 없어야 한다.
 // 4장이던 시절에는 캐릭터 3명만 돼도 배경 플레이트나 컷 레퍼런스가 여기서 잘려 나갔다.
-const MAX_REFERENCE_IMAGES = 6;
+const MAX_REFERENCE_IMAGES = 14;
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
@@ -992,8 +996,7 @@ async function normalizeReferenceImages(args: {
   requestUrl: string;
   authHeader: string;
 }): Promise<NormalizedReferenceImage[]> {
-  // 컷당 레퍼런스 상한. 클라이언트(pipeline-image.js MAX_REFERENCE_IMAGES)와 같이 움직인다.
-  // 4장일 때는 캐릭터 3명만 돼도 배경 플레이트·컷 레퍼런스가 여기서 잘려 나갔다.
+  // 안전망. 정상 흐름에서는 클라이언트 예산이 이미 더 작게 잘라서 보낸다.
   const items = Array.isArray(args.items) ? args.items.slice(0, MAX_REFERENCE_IMAGES) : [];
   const out: NormalizedReferenceImage[] = [];
   for (let i = 0; i < items.length; i++) {
