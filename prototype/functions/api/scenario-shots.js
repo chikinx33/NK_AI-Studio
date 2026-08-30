@@ -255,7 +255,9 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const result = await decomposeScenes(auth, scenes, { lang, env });
+    // 신체 스펙(appearance/negative)까지 분해 프롬프트로 넘긴다 —
+    // 몸에 없는 부위로 하는 행동은 여기(글 쓰는 순간)서만 막을 수 있다.
+    const result = await decomposeScenes(auth, scenes, { lang, env, characters });
     // decomposeScenes 의 정상 결과: { scenes, meta } 또는 array fallback
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };

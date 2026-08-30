@@ -22,6 +22,8 @@ import {
   normalizeCameraMove,
 } from "./vocab.js";
 
+import { buildBodyGrammar } from "../../_shared/body-grammar.js";
+
 const MAX_SHOTS_PER_SCENE = 5;
 const MIN_SHOTS_PER_SCENE = 1;
 const MAX_SHOT_DURATION = 6;
@@ -183,7 +185,7 @@ The first character must be { and the last must be }.`;
 /**
  * 단일 scene → user 프롬프트 (Pass 2 호출용).
  */
-export function buildShotUserPromptKo(scene) {
+export function buildShotUserPromptKo(scene, opts = {}) {
   const id = scene.id ?? "?";
   const estSec = Number(scene.estSec) || 4;
   const lines = [];
@@ -199,12 +201,16 @@ export function buildShotUserPromptKo(scene) {
       .join(" / ");
     lines.push(`[scene dialogue] ${dlg}`);
   }
+  // 몸에 없는 부위로 하는 행동("손가락으로 가리킨다")이 여기서 태어나면
+  // 이미지 직전의 네거티브로는 절대 못 막는다. 쓰기 전에 몸부터 알려 준다.
+  const bodyKo = buildBodyGrammar(opts.characters, "ko");
+  if (bodyKo) { lines.push(""); lines.push(bodyKo); }
   lines.push("");
   lines.push("위 한 씬을 콘티 단위 샷들로 분해해 JSON 만 반환하라. id 는 \"" + id + ".1\", \"" + id + ".2\" ... 형식.");
   return lines.join("\n");
 }
 
-export function buildShotUserPromptEn(scene) {
+export function buildShotUserPromptEn(scene, opts = {}) {
   const id = scene.id ?? "?";
   const estSec = Number(scene.estSec) || 4;
   const lines = [];
@@ -220,6 +226,8 @@ export function buildShotUserPromptEn(scene) {
       .join(" / ");
     lines.push(`[scene dialogue] ${dlg}`);
   }
+  const bodyEn = buildBodyGrammar(opts.characters, "en");
+  if (bodyEn) { lines.push(""); lines.push(bodyEn); }
   lines.push("");
   lines.push(`Decompose the scene above into storyboard shots and return JSON only. Use id format "${id}.1", "${id}.2", ...`);
   return lines.join("\n");

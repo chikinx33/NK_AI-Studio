@@ -9,6 +9,22 @@
   // (OpenAI 실패 시 Gemini 폴백이 있으므로 서버에서 처리해야 안전하다).
   // 장수가 늘수록 장당 반영도는 옅어지고 입력 비용·지연이 커진다 — 무엇을 붙일지는
   // 사용자가 정하고, 넘칠 때 무엇을 버릴지는 applyReferenceBudget 이 우선순위로 정한다.
+  // "Do not include: 손가락 없음" 은 이중부정이다("포함하지 마라: 손가락-없음").
+  // 접미(없음/금지)를 벗겨 "Do not include: 손가락" 으로 편다.
+  function negativeNounsForPrompt(text) {
+    return String(text || '')
+      .split(/[,\n·]/)
+      .map(function (p) {
+        return p
+          .replace(/(?:이|가|은|는)?\s*(?:없음|없다|금지|불가)\.?$/, '')
+          .replace(/^no\s+/i, '')
+          .replace(/^without\s+/i, '')
+          .trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
   var MAX_REFERENCE_IMAGES = 16;
   // 한 캐릭터가 가져갈 수 있는 시트 수. 상한을 열어도 한 명이 전부 먹지는 않게 둔다.
   var MAX_SHEETS_PER_CHARACTER = 4;
@@ -1352,7 +1368,7 @@
       }
     }
     if (imageCharacterNegativePrompt) {
-      finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
+      finalPrompt = finalPrompt + '\nDo not include: ' + (negativeNounsForPrompt(imageCharacterNegativePrompt) || imageCharacterNegativePrompt);
     }
     console.log('Image prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
@@ -1560,7 +1576,7 @@
     } catch (_) { }
 
     if (imageCharacterNegativePrompt) {
-      finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
+      finalPrompt = finalPrompt + '\nDo not include: ' + (negativeNounsForPrompt(imageCharacterNegativePrompt) || imageCharacterNegativePrompt);
     }
 
     try { console.log('Shot image prompt (shot ' + shot.id + '):', finalPrompt); } catch (_) {}

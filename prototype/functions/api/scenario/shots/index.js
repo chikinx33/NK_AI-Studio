@@ -65,7 +65,7 @@ async function callAnthropicForShots({ auth, env, system, user, signal }) {
 export async function decomposeScene(auth, scene, opts = {}) {
   const lang = opts.lang === "en" ? "en" : "ko";
   const system = lang === "en" ? buildShotPromptEn() : buildShotPromptKo();
-  const user = lang === "en" ? buildShotUserPromptEn(scene) : buildShotUserPromptKo(scene);
+  const user = lang === "en" ? buildShotUserPromptEn(scene, opts) : buildShotUserPromptKo(scene, opts);
   const text = await callAnthropicForShots({
     auth,
     env: opts.env,

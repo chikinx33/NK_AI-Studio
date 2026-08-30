@@ -968,6 +968,26 @@
     normalizeCharacters(list, { defaultActive: false }).filter((character) => character.isActive)
   );
 
+  // 브랜드 허브의 신체 스펙(생김새 appearance · 없는 부위 negative)을 캐릭터에 얹는다.
+  // 이 스펙이 없으면 시나리오·컷 분해 AI 는 이름·성격만 보고 사람 관용구
+  // ("손가락으로 가리킨다", "코를 박고", "고개를 돌려")를 쓴다 — 손가락 없는 캐릭터에게.
+  const withBodySpecs = (list = []) => {
+    const registry = NK.service && NK.service.characterRegistry;
+    if (!registry || typeof registry.getCharacterByTrigger !== 'function') return list;
+    const brandId = (NK.service.project && NK.service.project.getBrandId)
+      ? NK.service.project.getBrandId(currentPayload || {})
+      : '';
+    return (Array.isArray(list) ? list : []).map((c) => {
+      let brandChar = null;
+      try { brandChar = registry.getCharacterByTrigger(brandId, c.token); } catch (_) { brandChar = null; }
+      if (!brandChar) return c;
+      return Object.assign({}, c, {
+        appearance: sanitizeText(brandChar.description || '').trim(),
+        negative: sanitizeText(brandChar.negativePrompt || '').trim()
+      });
+    });
+  };
+
   const insertStoryCharacterToken = (currentValue, token, selectionStart, selectionEnd) => {
     const text = String(currentValue || '');
     const normalizedToken = String(token || '').trim();
@@ -1191,12 +1211,12 @@
     syncCharacterSeq(currentCharacters);
     const selectedCharacters = normalizedCharacters.filter((character) => character.isActive);
     payload.charactersEnabled = selectedCharacters.length > 0;
-    payload.characters = selectedCharacters.map((c) => ({
+    payload.characters = withBodySpecs(selectedCharacters.map((c) => ({
       characterId: c.characterId,
       displayName: c.displayName,
       token: c.token,
       personality: c.personality || ''
-    }));
+    })));
     // v3.1581: 세부 장르가 동요·율동인데 음성 모드가 노래가 아니면 여기서 맞춘다.
     // 세부 장르를 이미 골라 둔 채 저장된 프로젝트는 change 이벤트가 다시 뜨지 않아
     // 자동 전환이 걸리지 않는다. 그 상태로 생성하면 가사 필드가 없어 또 일반 시나리오가 나온다.
@@ -3125,7 +3145,7 @@
           }
           const lang = (draft?.payload?.language === 'en') ? 'en' : 'ko';
           NK.core.setLoading(true, '씬을 컷 단위로 분해 중...');
-          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang, characters: Array.isArray(currentPayload?.characters) ? currentPayload.characters : [] });
+          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang, characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : []) });
           const decomposed = (shotsRes && Array.isArray(shotsRes.scenes)) ? shotsRes.scenes : null;
           if (!decomposed) {
             alert('컷 분해 응답이 비었습니다.');

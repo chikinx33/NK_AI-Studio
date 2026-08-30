@@ -43,7 +43,18 @@ export function inlineSongSections(source) {
   return source.replace(/^import\s+.*from\s+["'].*_shared\/song-sections\.js["'];\s*$/m, () => helper);
 }
 
+/**
+ * 캐릭터 신체 문법 — "몸에 없는 부위로 하는 행동 금지" 규칙의 단일 원천.
+ * 스텁을 두면 프롬프트 검증이 실물과 갈라지므로 실제 구현을 끼워 넣는다.
+ */
+export function inlineBodyGrammar(source) {
+  const helper = fs
+    .readFileSync(path.join(process.cwd(), "prototype/functions/api/_shared/body-grammar.js"), "utf8")
+    .replace(/^export /gm, "");
+  return source.replace(/^import\s+.*from\s+["'].*_shared\/body-grammar\.js["'];\s*$/m, () => helper);
+}
+
 /** 엔드포인트 소스를 vm 에서 돌릴 수 있게 준비한다. */
 export function prepareEndpointSource(source) {
-  return stubRequestAuth(inlineCreditHelper(inlineSongSections(source)));
+  return stubRequestAuth(inlineCreditHelper(inlineSongSections(inlineBodyGrammar(source))));
 }

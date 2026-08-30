@@ -8,6 +8,7 @@ import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js
 import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
+import { buildBodyGrammar } from "./_shared/body-grammar.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -1248,6 +1249,7 @@ function buildSingleBeatUserPromptKo(input, ctx) {
     `화면 비율: ${input.aspectRatio || "(미지정)"}`,
     `음성 모드: ${describeVoiceModeKo(input)}`,
     `등록 캐릭터: ${chars}`,
+    ...(buildBodyGrammar(input.characters, "ko") ? ["", buildBodyGrammar(input.characters, "ko")] : []),
     ...(input.songEnabled ? [
       "",
       "[노래]",
@@ -1296,6 +1298,7 @@ function buildSingleBeatUserPromptEn(input, ctx) {
     `Aspect ratio: ${input.aspectRatio || "(none)"}`,
     `Voice mode: ${describeVoiceModeEn(input)}`,
     `Characters: ${chars}`,
+    ...(buildBodyGrammar(input.characters, "en") ? ["", buildBodyGrammar(input.characters, "en")] : []),
     ...(input.songEnabled ? [
       "",
       "[Song]",
@@ -4997,6 +5000,10 @@ If traits are provided, keep each character's speaking style and behavior consis
 캐릭터 이름이 문장에 등장하면 가능하면 @토큰으로 표기.`)
     : (lang === "en" ? "No registered characters." : "등록된 캐릭터 없음.");
 
+  // 몸을 정하는 문서(브랜드 신체 스펙)와 몸을 움직이는 문서(씬 행동)가 서로를
+  // 모르면, 이미지 직전의 네거티브로는 못 막는다. 글이 써지는 여기서 막는다.
+  const bodyGrammar = buildBodyGrammar(characters, lang);
+
   // Pass 1 캐릭터 일관성 강제: 활성 캐릭터가 등록된 경우 모든 씬 visual 첫 문장에
   // 해당 @토큰이 1회 이상 반드시 등장해야 한다. 다운스트림(이미지/영상 생성)에서
   // @토큰을 키로 캐릭터 시트(레퍼런스)를 주입하기 때문에, 토큰이 없는 컷은
@@ -5069,6 +5076,7 @@ ${songEnabled ? `
 - Lyrics are sung, not spoken. Short, rhythmic, singable within that scene's estSec (1-2 lines).
 - Keep @tokens when naming characters.` : ""}
 ${charGuide}
+${bodyGrammar}
 ${characterEnforcement}
 ${noCharacterRule}
 ${taggingHint}`;
@@ -5106,6 +5114,7 @@ ${songEnabled ? `
 - 가사는 말이 아니라 노래다. 설명체 금지. 해당 씬 estSec 안에 부를 수 있는 1~2줄로 짧고 리듬감 있게.
 - 캐릭터를 부를 때도 @토큰을 그대로 쓴다.` : ""}
 ${charGuide}
+${bodyGrammar}
 ${characterEnforcement}
 ${noCharacterRule}
 ${taggingHint}`;
@@ -5182,6 +5191,9 @@ function normalizeCharacters(list = []) {
         displayName,
         token,
         personality: String(c?.personality || c?.description || c?.profile || c?.note || "").trim(),
+        // 신체 스펙. 여기서 떨어뜨리면 작가 AI 가 사람 관용구("손가락으로 가리킨다")를 쓴다.
+        appearance: String(c?.appearance || "").trim(),
+        negative: String(c?.negative || c?.negativePrompt || "").trim(),
       };
     })
     .filter(Boolean)
