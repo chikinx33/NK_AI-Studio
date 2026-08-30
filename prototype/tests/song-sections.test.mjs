@@ -276,7 +276,9 @@ test("작사 프롬프트가 비트 수가 아니라 영상 길이를 근거로 
   assert.match(src, /lyrics 는 beats 와 개수를 맞추지 않는다/);
   assert.match(src, /durationSec 합이 정확히 이 값이어야 한다/);
   // 이야기 안의 언어 지시를 읽는다
-  assert.match(src, /function detectLyricLanguage\(story, lang\)/);
+  assert.match(src, /function detectLyricLanguage\(story, lang, songLanguage\)/);
+  // 개요에서 고른 노래 언어가 이야기 문장 안의 지시보다 우선한다.
+  assert.match(src, /const picked = normalizeSongLanguage\(songLanguage\);/);
   assert.match(src, /\[작사 언어\]/);
 });
 

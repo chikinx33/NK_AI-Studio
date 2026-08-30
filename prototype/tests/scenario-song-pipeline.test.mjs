@@ -31,7 +31,9 @@ test("동요를 고르면 음성 모드는 '노래'만 고를 수 있다", () =>
 test("이야기 정리 단계가 노래 모드를 스스로 알아본다", () => {
   const src = storyApi();
   // 클라이언트가 songEnabled 를 안 보내도 세부 장르만으로 켜져야 한다
-  assert.match(src, /songMode: toBoolLoose\(body\?\.songEnabled\) \|\| hasSongPurposeTag\(/);
+  assert.match(src, /songMode: \(toBoolLoose\(body\?\.songEnabled\) \|\| hasSongPurposeTag\(/);
+  // 개요의 '가사' 체크를 끄면 작사하지 않는다(가사 없는 노래).
+  assert.match(src, /body\?\.songLyricsEnabled !== false/);
   assert.match(src, /const SONG_PURPOSE_TAGS = \["동요", "율동"/);
   assert.match(src, /buildSystemPrompt\(input\.language, input\.songMode\)/);
 });
@@ -67,7 +69,7 @@ test("가사 편집은 텍스트 ↔ 구간 배열을 왕복한다 (길이 포�
   // "[후렴](8초) 가사" 를 구간명·길이·본문으로 되돌린다
   assert.match(src, /const SECTION_LINE_RE = /);
   assert.match(src, /durationSec: Number\(m\[2\]\) \|\| 0/);
-  assert.match(src, /payload\.songSections = voiceMode === 'song' \? getSongSections\(\) : \[\]/);
+  assert.match(src, /payload\.songSections = \(voiceMode === 'song' && songLyricsEnabled\) \? getSongSections\(\) : \[\]/);
   // 구간 길이 합과 영상 길이가 맞는지 화면에서 바로 보인다
   assert.match(src, /const updateSongSectionsSummary = /);
 });

@@ -435,12 +435,36 @@
     return /^\d+$/.test(preset) ? Number(preset) : 0;
   };
 
+  // 노래 옵션 — 세부 장르가 동요·율동일 때만 쓰는 값들.
+  //   가사 체크: 자막으로 쓸 가사를 만들지 여부. 끄면 작사도, 가사 칸도 없다.
+  //   언어: 노래를 "부를" 언어. 화면 언어(UI)와 별개다 — 한국어 화면에서 영어 동요를 만들 수 있다.
+  const SONG_LANGUAGES = ['ko', 'en', 'zh'];
+  const isSongLyricsEnabled = () => {
+    const el = document.getElementById('song-lyrics-enabled');
+    return el ? !!el.checked : true;
+  };
+  const getSongLanguage = () => {
+    const raw = String(document.getElementById('song-language-select')?.value || '').trim();
+    return SONG_LANGUAGES.indexOf(raw) >= 0 ? raw : 'ko';
+  };
+
+  // 동요·율동을 고른 경우에만 이 행을 보여 준다.
+  const syncSongOptionsVisibility = () => {
+    const group = document.getElementById('song-options-group');
+    if (!group) return;
+    const purposeTag = document.getElementById('purpose-tag-select')?.value || '';
+    group.classList.toggle('hidden', !isSongSubgenre(purposeTag));
+    syncSongLyricsVisibility();
+  };
+
   const syncSongLyricsVisibility = () => {
     const group = document.getElementById('scenario-lyrics-group');
     if (!group) return;
     const isSong = (document.getElementById('voice-mode-select') || {}).value === 'song';
-    group.classList.toggle('hidden', !isSong);
-    if (isSong) updateSongSectionsSummary(null);
+    // 가사를 끄면 작사 칸도 감춘다 — 쓰지 않을 칸을 남겨 두면 무엇이 반영되는지 헷갈린다.
+    const show = isSong && isSongLyricsEnabled();
+    group.classList.toggle('hidden', !show);
+    if (show) updateSongSectionsSummary(null);
   };
 
   // 서버 _shared/song-sections.js 의 estimateSyllables 와 같은 규칙.
@@ -1131,8 +1155,12 @@
     payload.narrationEnabled = voiceMode === 'narration';
     payload.dubbingEnabled = voiceMode === 'dubbing';
     payload.songEnabled = voiceMode === 'song';
+    // 노래 옵션. 가사를 끄면 작사도 하지 않고 가사도 넘기지 않는다.
+    const songLyricsEnabled = isSongLyricsEnabled();
+    payload.songLyricsEnabled = voiceMode === 'song' ? songLyricsEnabled : false;
+    payload.songLanguage = getSongLanguage();
     // v3.1582: 작사해 둔 가사를 시나리오 생성으로 넘긴다. 사용자가 고쳤으면 고친 쪽이 원본.
-    payload.songSections = voiceMode === 'song' ? getSongSections() : [];
+    payload.songSections = (voiceMode === 'song' && songLyricsEnabled) ? getSongSections() : [];
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1610,6 +1638,9 @@
         : '';
       hint.classList.toggle('hidden', !locked);
     }
+    // 저장된 프로젝트를 열 때도 이 경로를 지나므로 노래 옵션 행을 여기서 맞춘다.
+    const optionGroup = document.getElementById('song-options-group');
+    if (optionGroup) optionGroup.classList.toggle('hidden', !locked);
   };
 
   // ---------- render scenes ----------
@@ -1971,6 +2002,15 @@
     // toggles
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
     setScenarioToggleButtons(flags);
+    // 노래 옵션 복원. 저장된 적 없는 프로젝트는 가사 있음(기본)·한국어로 둔다.
+    const lyricsCheck = document.getElementById('song-lyrics-enabled');
+    if (lyricsCheck) lyricsCheck.checked = p.songLyricsEnabled !== false;
+    const songLangSel = document.getElementById('song-language-select');
+    if (songLangSel) {
+      const saved = String(p.songLanguage || '').trim();
+      songLangSel.value = SONG_LANGUAGES.indexOf(saved) >= 0 ? saved : 'ko';
+    }
+    syncSongOptionsVisibility();
     renderCharacterChips();
     syncCharacterUi();
     syncDurationInputs(selectedDurationCustom ? 'custom' : 'preset');
@@ -2453,6 +2493,10 @@
           });
           notifyScenario(getScenarioText('scenario_song_mode_suggested', '세부 장르가 동요라서 음성 모드를 노래로 맞췄어요.'));
         }
+        syncSongOptionsVisibility();
+      }
+      // 가사 체크를 끄고 켜면 작사 칸이 따라 보였다 사라진다.
+      if (target.id === 'song-lyrics-enabled' || target.id === 'song-language-select') {
         syncSongLyricsVisibility();
       }
       if (target.id === 'purpose-category') {

@@ -151,8 +151,25 @@ function normalizeInput(body) {
     tokenHints: extractCharacterTokens(story),
     // v3.1582: 노래 모드면 이야기 정리와 함께 '작사'까지 한다.
     // 클라이언트가 안 보내도 세부 장르(동요·율동)만으로 켜지게 둔다.
-    songMode: toBoolLoose(body?.songEnabled) || hasSongPurposeTag(normalizeTextList(body?.purposeTags)),
+    // 단, 사용자가 '가사' 체크를 끄면(songLyricsEnabled=false) 작사하지 않는다 —
+    // 가사 없이 멜로디만 가는 동요를 만들 수 있어야 한다.
+    songMode: (toBoolLoose(body?.songEnabled) || hasSongPurposeTag(normalizeTextList(body?.purposeTags)))
+      && body?.songLyricsEnabled !== false,
+    // 노래를 "부를" 언어. 화면 언어(language)와 별개다 — 한국어 화면에서 영어 동요를 만들 수 있다.
+    songLanguage: normalizeSongLanguage(body?.songLanguage),
   };
+}
+
+// 노래를 부를 언어. 사용자가 개요에서 고르며, 이야기 문장 안의 지시보다 우선한다.
+const SONG_LANGUAGE_LABELS = {
+  ko: { ko: "한국어", en: "Korean" },
+  en: { ko: "영어", en: "English" },
+  zh: { ko: "중국어", en: "Chinese" },
+};
+
+function normalizeSongLanguage(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SONG_LANGUAGE_LABELS, raw) ? raw : "";
 }
 
 const SONG_PURPOSE_TAGS = ["동요", "율동", "Nursery rhyme", "Movement song"];
@@ -231,7 +248,16 @@ const LYRIC_LANGUAGE_HINTS = [
   { re: /한국어로|우리말로|in Korean|Korean lyrics/i, ko: "한국어", en: "Korean" },
 ];
 
-function detectLyricLanguage(story, lang) {
+/**
+ * 작사 언어를 정한다.
+ *
+ * 우선순위: 개요에서 고른 값 > 이야기 문장 안의 지시 > (없음 = 이야기와 같은 언어).
+ * 개요 선택을 이야기 문장보다 앞에 두는 이유 — 사용자가 드롭다운으로 명시한 것이
+ * 지나가듯 적힌 문장보다 분명한 의사이기 때문이다.
+ */
+function detectLyricLanguage(story, lang, songLanguage) {
+  const picked = normalizeSongLanguage(songLanguage);
+  if (picked) return SONG_LANGUAGE_LABELS[picked][lang === "en" ? "en" : "ko"];
   const raw = String(story || "");
   for (const hint of LYRIC_LANGUAGE_HINTS) {
     if (hint.re.test(raw)) return lang === "en" ? hint.en : hint.ko;
@@ -271,7 +297,7 @@ function buildUserPrompt(input) {
       ...(input.songMode ? [
         `[Video length] ${input.durationSeconds || 0}s - every durationSec in "lyrics" MUST sum to exactly this.`,
         `[Total syllable budget] about ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)} syllables max. ${SYLLABLES_PER_SEC} syllables per second is the ceiling for a 3-6 year old to sing along. Going over makes some passage unsingable - write fewer words, not more.`,
-        `[Lyrics language] ${detectLyricLanguage(input.story, "en") || "same language as the story"}`,
+        `[Lyrics language] ${detectLyricLanguage(input.story, "en", input.songLanguage) || "same language as the story"}`,
       ] : []),
       "Output goal: a faithful enumeration of every event in the user's story as separate beats — preserving the user's intent, direction, and event sequence. Replace abstract phrases with concrete action phrasing, but never merge or drop events."
     ].join("\n");
@@ -299,7 +325,7 @@ function buildUserPrompt(input) {
     ...(input.songMode ? [
       `[영상 길이] ${input.durationSeconds || 0}초 — "lyrics" 의 durationSec 합이 정확히 이 값이어야 한다.`,
       `[총 음절 예산] 약 ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)}음절 이내. 3~6세가 따라 부르려면 초당 ${SYLLABLES_PER_SEC}음절이 상한이다. 예산을 넘기면 어느 소절이든 못 부를 속도가 된다 — 가사를 늘리지 말고 줄여라.`,
-      `[작사 언어] ${detectLyricLanguage(input.story, "ko") || "이야기와 같은 언어"}`,
+      `[작사 언어] ${detectLyricLanguage(input.story, "ko", input.songLanguage) || "이야기와 같은 언어"}`,
     ] : []),
     "출력 목표: 사용자의 이야기에 등장한 모든 사건을 빠짐없이 비트로 enumerate한다. 의도·방향·사건 순서를 모두 보존하고, 추상 표현만 구체 행동으로 치환한다. 사건을 병합하거나 누락하지 않는다."
   ].join("\n");

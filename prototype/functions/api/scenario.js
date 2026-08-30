@@ -641,8 +641,14 @@ export async function onRequestPost(context) {
     const dubbingEnabled = toBool(body.dubbingEnabled, false);
     // v3.1580: 음성 모드 '노래' — 씬마다 가사(lyrics)를 채우고 후렴을 반복시킨다.
     const songEnabled = toBool(body.songEnabled, false);
+    // 개요의 '가사' 체크. 끄면 가사 없는 노래(멜로디만)로 간다 — 씬에 lyrics 를 채우지 않는다.
+    const songLyricsEnabled = body.songLyricsEnabled !== false;
+    // 노래를 부를 언어(ko|en|zh). 화면 언어와 별개다.
+    const songLanguage = ["ko", "en", "zh"].includes(String(body.songLanguage || "").trim().toLowerCase())
+      ? String(body.songLanguage).trim().toLowerCase()
+      : "";
     // v3.1584: 이야기 정리 단계에서 작사된 '구간'들. 구간은 자기 길이를 갖고 여러 씬에 걸친다.
-    const songSections = songEnabled
+    const songSections = (songEnabled && songLyricsEnabled)
       ? normalizeSongSections(body.songSections, { durationSec: Number(duration) || 0, lang })
       : [];
     const sceneCount = calculateSceneCountForDuration(duration);
@@ -681,6 +687,8 @@ export async function onRequestPost(context) {
         narrationEnabled,
         dubbingEnabled,
         songEnabled,
+        songLyricsEnabled,
+        songLanguage,
         songSections,
         characters: activeCharacters,
         sceneCount,
@@ -1193,6 +1201,10 @@ The response must be ONE JSON object starting with { and ending with }. No markd
 }
 
 function describeVoiceModeKo(input) {
+  // 가사 없는 노래: 멜로디만 흐르고 자막도 없다. lyrics 를 채우면 자막이 생겨 의도와 어긋난다.
+  if (input?.songEnabled && input?.songLyricsEnabled === false) {
+    return "노래(가사 없음) — 멜로디만 흐른다. lyrics=\"\" · narration=\"\" · dialogue=[] 모두 비우고 화면만으로 진행한다";
+  }
   if (input?.songEnabled) return "노래 (lyrics 에 이 씬에서 부를 가사만 채움, narration=\"\" · dialogue=[] 유지. 말이 아니라 노래다)";
   if (input?.narrationEnabled) return "나레이션 (narration 한두 문장 채움, dialogue=[] 유지, 캐릭터는 입을 움직일 뿐 대사 없음)";
   if (input?.dubbingEnabled)   return "더빙 (dialogue에 {speaker,line} 채움, narration=\"\" 유지, 캐릭터가 직접 말함)";
@@ -1200,6 +1212,10 @@ function describeVoiceModeKo(input) {
 }
 
 function describeVoiceModeEn(input) {
+  // A song with no lyrics: melody only, and no subtitles. Filling lyrics would create subtitles.
+  if (input?.songEnabled && input?.songLyricsEnabled === false) {
+    return "song without lyrics - melody only. Keep lyrics=\"\", narration=\"\" and dialogue=[] all empty and carry the beat with visuals alone";
+  }
   if (input?.songEnabled) return "song (fill lyrics with the sung lines for this scene only, narration=\"\" and dialogue=[]. These are sung, not spoken)";
   if (input?.narrationEnabled) return "narration only (fill narration with 1-2 sentences, dialogue=[], characters may move mouths but say no lines)";
   if (input?.dubbingEnabled)   return "dubbing (fill dialogue with {speaker, line}, narration=\"\", characters speak directly)";
