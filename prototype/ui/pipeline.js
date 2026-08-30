@@ -2070,13 +2070,20 @@ function openBackgroundReferenceModal() {
       })
     : [];
 
+  // Ctrl+V 로 붙여넣을 때 어느 소품 칸에 넣을지. 마지막으로 만진 칸을 기억한다.
+  var activePropIdx = -1;
+
   var existing = document.getElementById('bg-ref-modal');
   if (existing) existing.remove();
   var overlay = document.createElement('div');
   overlay.id = 'bg-ref-modal';
   overlay.className = 'cpbm-overlay';
   document.body.appendChild(overlay);
-  var close = function () { try { overlay.remove(); } catch (_) {} };
+  var close = function () {
+    try { document.removeEventListener('paste', onModalPaste, true); } catch (_) {}
+    try { overlay.remove(); } catch (_) {}
+  };
+  document.addEventListener('paste', onModalPaste, true);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
 
   function syncFromInputs() {
@@ -2151,10 +2158,10 @@ function openBackgroundReferenceModal() {
       var purl = thumbUrl(p.refObjectName) || (p._dataUrl || '');
       return (
         '<div class="bgprop-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
-          '<div class="bgprop-drop" title="이미지를 끌어다 놓거나 클릭해 파일을 고르세요" style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);cursor:pointer;">' +
+          '<div class="bgprop-drop" tabindex="0" title="이미지를 끌어다 놓거나, 클릭해 파일을 고르거나, 이 칸을 클릭한 뒤 Ctrl+V 로 붙여넣으세요" style="width:140px;height:84px;flex:0 0 140px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;border:1px dashed ' + (activePropIdx === i ? 'var(--accent)' : 'var(--border)') + ';cursor:pointer;">' +
             (purl
               ? '<img class="bgprop-thumb-img" src="' + esc(purl) + '" data-full="' + esc(purl) + '" alt="" title="클릭하면 크게 보기" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" onerror="this.style.display=\'none\'"/>'
-              : '<span class="muted" style="font-size:11px;text-align:center;line-height:1.4;">' + (p._busy ? '처리 중...' : '이미지 끌어다 놓기<br/>또는 클릭해 선택') + '</span>') +
+              : '<span class="muted" style="font-size:11px;text-align:center;line-height:1.4;">' + (p._busy ? '처리 중...' : '끌어다 놓기 · 클릭<br/>또는 Ctrl+V') + '</span>') +
           '</div>' +
           '<div style="flex:1;min-width:0;">' +
             '<input class="bgprop-name" type="text" value="' + esc(p.name) + '" placeholder="소품 이름 (예: ABC 육면 큐브) — 씬 텍스트의 표기와 같게" style="' + inStyle + 'margin-bottom:6px;"/>' +
@@ -2263,6 +2270,20 @@ function openBackgroundReferenceModal() {
       }
       var pth = el.querySelector('.bgprop-thumb-img');
       if (pth) pth.onclick = function (ev) { ev.stopPropagation(); openLightbox(pth.getAttribute('data-full')); };
+    });
+    overlay.querySelectorAll('.bgprop-item').forEach(function (el) {
+      var i = Number(el.getAttribute('data-idx'));
+      // 붙여넣기 대상 표시: 이 칸을 만지면 Ctrl+V 가 여기로 들어온다.
+      var markActive = function () {
+        if (activePropIdx === i) return;
+        activePropIdx = i;
+        overlay.querySelectorAll('.bgprop-item').forEach(function (other) {
+          var zone = other.querySelector('.bgprop-drop');
+          if (zone) zone.style.borderColor = (Number(other.getAttribute('data-idx')) === i) ? 'var(--accent)' : 'var(--border)';
+        });
+      };
+      el.addEventListener('mousedown', markActive);
+      el.addEventListener('focusin', markActive);
     });
     var addPropBtn = overlay.querySelector('#bgprop-add');
     if (addPropBtn) addPropBtn.onclick = function () { syncFromInputs(); props.push({ id: '', name: '', description: '', refObjectName: '', _busy: false }); render(); };
@@ -2432,6 +2453,75 @@ function openBackgroundReferenceModal() {
     }
     if (!url) { try { url = String(dt.getData('text/plain') || '').trim(); } catch (_) {} }
     return /^(https?:|data:|blob:|\/)/i.test(url) ? url : '';
+  }
+
+  // 클립보드에 이미지가 들어 있으면 파일로 꺼낸다(캡처 도구·이미지 복사 등).
+  function readPastedImageFile(cd) {
+    var items = cd.items ? Array.prototype.slice.call(cd.items) : [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it || it.kind !== 'file') continue;
+      if (!/^image\//.test(String(it.type || ''))) continue;
+      var f = it.getAsFile();
+      if (f) return f;
+    }
+    var files = cd.files ? Array.prototype.slice.call(cd.files) : [];
+    for (var j = 0; j < files.length; j++) {
+      if (files[j] && /^image\//.test(String(files[j].type || ''))) return files[j];
+    }
+    return null;
+  }
+
+  // 붙여넣기 대상 소품: 지금 포커스가 있는 칸 → 마지막으로 만진 칸 → 칸이 하나면 그것.
+  function resolveActivePropIdx() {
+    var active = document.activeElement;
+    var row = (active && active.closest) ? active.closest('.bgprop-item') : null;
+    if (row) {
+      var idx = Number(row.getAttribute('data-idx'));
+      if (props[idx]) return idx;
+    }
+    if (activePropIdx >= 0 && props[activePropIdx]) return activePropIdx;
+    if (props.length === 1) return 0;
+    return -1;
+  }
+
+    // Ctrl+V — 클립보드의 이미지를 소품으로 등록한다.
+  // 이름·묘사 칸에 텍스트를 붙여넣는 것은 그대로 통과시킨다(이미지일 때만 가로챈다).
+  function onModalPaste(ev) {
+    var cd = ev.clipboardData || window.clipboardData;
+    if (!cd) return;
+    var file = readPastedImageFile(cd);
+    var active = document.activeElement;
+    var inTextField = !!(active && active.matches && active.matches('input[type="text"], textarea'));
+    if (!file && inTextField) return;
+    // 장소(배경 플레이트) 행에서 붙여넣는 중이면 소품으로 끌어가지 않는다.
+    if (active && active.closest && active.closest('.bgref-item')) return;
+    if (!file) {
+      // 텍스트 칸이 아닌 곳에서 이미지 주소를 붙여넣은 경우.
+      var url = String(cd.getData('text/plain') || '').trim();
+      if (!/^(https?:|data:|blob:|\/)/i.test(url)) return;
+      var uIdx = resolveActivePropIdx();
+      if (uIdx < 0) { alert('붙여넣을 소품 칸을 먼저 클릭해 주세요.'); return; }
+      ev.preventDefault();
+      syncFromInputs();
+      var up = props[uIdx];
+      up._busy = true; render();
+      urlToImageFile(url, slug(String(up.name || 'prop').trim() || 'prop'))
+        .then(function (f) { up._busy = false; return attachPropImage(uIdx, f); })
+        .catch(function (e) {
+          up._busy = false; render();
+          alert('이미지 등록 실패: ' + (e && e.message ? e.message : e));
+        });
+      return;
+    }
+    var idx = resolveActivePropIdx();
+    if (idx < 0) {
+      alert('붙여넣을 소품 칸을 먼저 클릭해 주세요. (소품이 없으면 "+ 소품 추가")');
+      return;
+    }
+    ev.preventDefault();
+    syncFromInputs();
+    attachPropImage(idx, file);
   }
 
   function handlePropDrop(i, ev) {

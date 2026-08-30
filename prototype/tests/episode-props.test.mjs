@@ -58,9 +58,41 @@ test("★소품 이미지는 생성·파일 선택·드래그 앤 드롭 세 경
   assert.match(src, /getData\('text\/uri-list'\)/);
   assert.match(src, /getData\('text\/html'\)/);
   assert.match(src, /async function urlToImageFile\(url, nameHint\)/);
+  // 안내 문구에도 세 경로가 다 보인다
+  assert.match(src, /끌어다 놓기 · 클릭<br\/>또는 Ctrl\+V/);
   // 업로드는 공용 업로드 API 를 쓰고 objectName 을 저장한다.
   assert.match(src, /NK\.api\.imageUpload\(st\.draftId, file, \{ kind: 'image' \}\)/);
   assert.match(src, /p\.refObjectName = objectName;/);
+});
+
+test("★Ctrl+V 로 클립보드 이미지를 소품에 붙여넣을 수 있다", () => {
+  const src = bgRefModal();
+
+  // 모달이 열려 있는 동안만 문서 레벨에서 받는다(드롭존 클릭 시 포커스가 밖으로 나갈 수 있어서).
+  assert.match(src, /document\.addEventListener\('paste', onModalPaste, true\)/);
+  assert.match(src, /document\.removeEventListener\('paste', onModalPaste, true\)/);
+
+  const fn = src.slice(
+    src.indexOf("function onModalPaste(ev)"),
+    src.indexOf("function handlePropDrop(i, ev)")
+  );
+  // 클립보드의 이미지 파일(캡처 붙여넣기 포함)
+  assert.match(fn, /readPastedImageFile\(cd\)/);
+  assert.match(src, /it\.kind !== 'file'/);
+  // 이미지 주소 붙여넣기도 받는다
+  assert.match(fn, /urlToImageFile\(url/);
+  // 텍스트 칸의 일반 붙여넣기는 가로채지 않는다
+  assert.match(fn, /if \(!file && inTextField\) return;/);
+  // 장소 행에서 붙여넣는 중이면 소품으로 끌어가지 않는다
+  assert.match(fn, /closest\('\.bgref-item'\)\) return;/);
+  // 대상 칸: 포커스된 칸 → 마지막으로 만진 칸 → 칸이 하나면 그것
+  const resolver = src.slice(
+    src.indexOf("function resolveActivePropIdx()"),
+    src.indexOf("function handlePropDrop(i, ev)")
+  );
+  assert.match(resolver, /closest\('\.bgprop-item'\)/);
+  assert.match(resolver, /activePropIdx >= 0 && props\[activePropIdx\]/);
+  assert.match(resolver, /props\.length === 1/);
 });
 
 test("★소품 생성 프롬프트는 물건 하나만 크게, 배경은 비운다", () => {
