@@ -943,6 +943,8 @@
               narration: s.narration || '',
               dialogue: s.dialogue || s.dialogues || [],
               lyrics: s.lyrics || '',
+              // v3.1622: 자막 원문. 이걸 안 실으면 가사 폴백이 죽은 코드가 된다.
+              subtitleText: s.subtitleText || '',
               isRefrain: !!s.isRefrain,
               songSectionId: s.songSectionId || '',
               songSectionLabel: s.songSectionLabel || '',

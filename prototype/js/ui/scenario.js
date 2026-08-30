@@ -1350,6 +1350,10 @@
           ? dialogue.map((d) => d.line || '').filter(Boolean).join(' ')
           : (flags.narrationEnabled ? narrationText : dialogue.map((d) => d.line || '').filter(Boolean).join(' '))
       );
+      // v3.1584: 가사에는 @토큰을 넣지 않는다 — 노래로 불리고 자막으로 뜨는 문장이라
+      // @ 가 남으면 음악 엔진이 "at 네모" 로 읽고 자막에도 그대로 새겨진다.
+      // 화면 연출용 @토큰은 씬의 visual 이 따로 들고 있으므로 잃는 정보가 없다.
+      const lyricsClean = String(s?.lyrics || s?.lyricsText || '').replace(/@+/g, '').trim();
       return {
         id: s.id != null ? s.id : (i + 1),
         lines: resolvedSubtitleText,
@@ -1384,10 +1388,10 @@
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
         dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false)),
         // v3.1580: 노래 모드 — 가사와 후렴 표식
-        // v3.1584: 가사에는 @토큰을 넣지 않는다 — 노래로 불리고 자막으로 뜨는 문장이라
-        // @ 가 남으면 음악 엔진이 "at 네모" 로 읽고 자막에도 그대로 새겨진다.
-        // 화면 연출용 @토큰은 씬의 visual 이 따로 들고 있으므로 잃는 정보가 없다.
-        lyricsText: String(s?.lyrics || s?.lyricsText || '').replace(/@+/g, '').trim(),
+        lyricsText: lyricsClean,
+        // v3.1622: 프로덕션 화면과 저장 API 는 scene.lyrics 를 읽는다.
+        // 여기서 이름이 갈리면(lyricsText 만 남으면) 저장 한 번에 가사가 끊긴다.
+        lyrics: lyricsClean,
         isRefrain: !!s?.isRefrain,
         songSectionId: String(s?.songSectionId || '').trim(),
         songSectionLabel: String(s?.songSectionLabel || '').trim(),

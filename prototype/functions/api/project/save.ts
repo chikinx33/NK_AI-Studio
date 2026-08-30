@@ -264,6 +264,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         composition,
         action,
         beats: normalizeBeats(s?.beats),
+        // v3.1622: 노래 모드의 소절. 씬을 고정 목록으로 다시 만드는 구조라
+        // 여기 없으면 저장할 때 서버가 통째로 버린다 — 새로고침하면 모든 컷이
+        // '앞 소절이 이어지는 중' 으로 보이고 자막·음원도 소절을 잃는다.
+        lyrics: typeof s?.lyrics === "string" ? s.lyrics : "",
+        isRefrain: !!s?.isRefrain,
+        songSectionId: typeof s?.songSectionId === "string" ? s.songSectionId : "",
+        songSectionLabel: typeof s?.songSectionLabel === "string" ? s.songSectionLabel : "",
+        // 사용자가 더빙 대본을 비운 것도 뜻이 있는 편집이다(빈 값 영속 보존).
+        scriptEdited: !!s?.scriptEdited,
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: stripDataUrl(imagePath || imageUrl),
