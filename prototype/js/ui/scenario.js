@@ -457,6 +457,47 @@
     syncSongLyricsVisibility();
   };
 
+  // ── 컷 안의 시간표(beats) ────────────────────────────────────────────────
+  // 한 컷 안에서 보이는 것이 달라지는 연출("발만 보이다가 틸트업해 전신")은 컷을 쪼개지 않고
+  // 이 표로 적는다. 스틸컷은 0초 줄로 만들고, 영상은 이 표대로 시간을 분배한다.
+  // 화면에는 "0s 발과 하체만" 처럼 한 줄에 하나씩 보여 주고, 저장할 때 배열로 되돌린다.
+  const BEAT_LINE_RE = /^\s*(\d+(?:\.\d+)?)\s*(?:s|초)?\s*[)\].:-]?\s*(.+)$/;
+
+  const beatsToText = (beats) => {
+    if (!Array.isArray(beats) || !beats.length) return '';
+    return beats
+      .map((b) => {
+        const what = String((b && (b.what || b.text)) || '').trim();
+        if (!what) return '';
+        const at = Number(b && b.at);
+        return `${(isFinite(at) && at > 0 ? at : 0)}s ${what}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const textToBeats = (text) => {
+    const raw = String(text || '');
+    if (!raw.trim()) return null;
+    const out = [];
+    raw.split(/\r?\n/).forEach((line) => {
+      const m = String(line || '').match(BEAT_LINE_RE);
+      if (m) {
+        const what = String(m[2] || '').trim();
+        if (what) out.push({ at: Math.round(Number(m[1]) * 10) / 10, what });
+        return;
+      }
+      // 시각을 안 적은 줄은 앞 줄에 이어 붙인다(직접 타이핑하다 줄이 넘어간 경우).
+      const cont = String(line || '').trim();
+      if (!cont) return;
+      if (out.length) out[out.length - 1].what = `${out[out.length - 1].what} ${cont}`.trim();
+      else out.push({ at: 0, what: cont });
+    });
+    if (out.length < 2) return null; // 변화가 없으면 시간표를 둘 이유가 없다
+    out[0].at = 0;                   // 첫 줄은 언제나 컷의 시작(=스틸컷)
+    return out;
+  };
+
   const syncSongLyricsVisibility = () => {
     const group = document.getElementById('scenario-lyrics-group');
     if (!group) return;
@@ -839,7 +880,10 @@
         narration: 'Narration',
         dialogue: 'Dialogue',
         lyrics: 'Lyrics',
-        refrain: 'Refrain'
+        refrain: 'Refrain',
+        timeline: 'Timeline',
+        timelineHint: 'first line = the still',
+        timelinePlaceholder: 'e.g. 0s only the feet in frame / 2s tilt-up completes, full bodies'
       };
     }
     return {
@@ -848,7 +892,10 @@
       narration: '나레이션',
       dialogue: '대사',
       lyrics: '가사',
-      refrain: '후렴'
+      refrain: '후렴',
+      timeline: '타임라인',
+      timelineHint: '첫 줄이 스틸컷',
+      timelinePlaceholder: '예: 0s 발만 프레임에 / 2s 틸트업이 끝나 전신'
     };
   };
 
@@ -1500,6 +1547,9 @@
       // 두 필드를 별도로 수집한다. 일반(.view-shot) 표시일 때는 view-shot 만 있음.
       const compositionText = card.querySelector('.view-composition-lines')?.textContent?.trim() || '';
       const actionText = card.querySelector('.view-action-lines')?.textContent?.trim() || '';
+      // 컷 안의 시간표. 안 적었으면 null — 이 컷은 처음부터 끝까지 한 상태다.
+      const beatsEl = card.querySelector('.view-beats-lines');
+      const beats = beatsEl ? textToBeats(beatsEl.innerText || beatsEl.textContent || '') : null;
       const shotOnlyText = card.querySelector('.view-shot')?.textContent?.trim() || '';
       const hasStructuredEdit = !!(compositionText || actionText);
       const visualText = hasStructuredEdit
@@ -1546,6 +1596,7 @@
         // (메인 프로덕션 / Pass 2 분해 후 편집이 양방향으로 유지되도록 동기화)
         composition: hasStructuredEdit ? compositionText : '',
         action: hasStructuredEdit ? actionText : '',
+        beats,
         estSec: est
       };
     });
@@ -1568,6 +1619,9 @@
       const hasNewStructured = !!(String(s.composition || '').trim() || String(s.action || '').trim());
       const composition = hasNewStructured ? String(s.composition || '') : (prev.composition || '');
       const action = hasNewStructured ? String(s.action || '') : (prev.action || '');
+      // 컷 안의 시간표는 화면에 없을 수도 있는 필드다. 새 값이 undefined 면 이전 값을 지킨다
+      // (여기서 흘리면 컷 분할이 만든 시간표가 편집 한 번에 사라진다).
+      const beats = (s.beats !== undefined ? s.beats : prev.beats) || null;
       return Object.assign({}, prev, s, {
         lines: subtitleText,
         narration,
@@ -1581,7 +1635,8 @@
         shot: visual,
         visual,
         composition,
-        action
+        action,
+        beats
       });
     });
   };
@@ -1847,6 +1902,10 @@
           <div class="field-block">
             <p class="field-label muted small">행동</p>
             <p class="view-lines view-action-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.action || '')}</p>
+          </div>
+          <div class="field-block">
+            <p class="field-label muted small">${labels.timeline}<span class="field-hint muted">${escapeHtml(labels.timelineHint)}</span></p>
+            <p class="view-lines view-beats-lines" data-id="${s.id}" contenteditable="true" data-placeholder="${escapeHtml(labels.timelinePlaceholder)}">${escapeHtml(beatsToText(s.beats))}</p>
           </div>` : `
           <div class="field-block">
             <p class="field-label muted small">${labels.visual}</p>

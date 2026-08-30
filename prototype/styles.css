@@ -4520,6 +4520,20 @@ textarea::-webkit-scrollbar-corner {
   font-size: 12px;
 }
 
+/* 시나리오 카드의 타임라인 칸 — 비어 있으면 무엇을 적는지 예시를 보여 준다. */
+.view-beats-lines:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  opacity: .7;
+}
+
+.field-label .field-hint {
+  margin-left: 6px;
+  font-weight: 400;
+  font-size: 11px;
+  opacity: .75;
+}
+
 /* 컷 안의 시간표(beats). 첫 줄은 스틸컷이 되는 프레임이라 도드라지게 둔다. */
 .prompt-beats {
   margin: 2px 0 8px;

@@ -121,6 +121,31 @@ test("★타임라인이 컷 행에 보인다", () => {
   assert.match(css, /\.prompt-beats li\.is-first-frame/);
 });
 
+test("★시나리오 화면에서도 타임라인을 보고 고칠 수 있다", () => {
+  const ui = read("prototype/js/ui/scenario.js");
+  // 컷 카드에 타임라인 칸이 있다(화면·행동 옆).
+  assert.match(ui, /class="view-lines view-beats-lines"/);
+  assert.match(ui, /contenteditable="true" data-placeholder=/);
+  // "0s 발만 프레임에" 형식으로 보여 주고 되돌린다.
+  assert.match(ui, /const beatsToText = \(beats\) => \{/);
+  assert.match(ui, /const textToBeats = \(text\) => \{/);
+  assert.match(ui, /out\[0\]\.at = 0;/, "첫 줄은 언제나 컷의 시작(=스틸컷)");
+  assert.match(ui, /if \(out\.length < 2\) return null;/, "변화가 없으면 시간표를 두지 않는다");
+  // 한/영 라벨이 짝을 이룬다.
+  assert.match(ui, /timeline: 'Timeline'/);
+  assert.match(ui, /timeline: '타임라인'/);
+});
+
+test("★편집·저장이 타임라인을 지우지 않는다", () => {
+  const ui = read("prototype/js/ui/scenario.js");
+  // 카드에서 수집할 때 싣고,
+  assert.match(ui, /const beats = beatsEl \? textToBeats\(beatsEl\.innerText \|\| beatsEl\.textContent \|\| ''\) : null;/);
+  assert.match(ui, /action: hasStructuredEdit \? actionText : '',[\s\S]{0,20}beats,/);
+  // 스냅샷 머지에서도 지킨다(화면에 없을 수 있는 필드라 undefined 면 이전 값 유지).
+  assert.match(ui, /const beats = \(s\.beats !== undefined \? s\.beats : prev\.beats\) \|\| null;/);
+  assert.match(ui, /composition,[\s\S]{0,30}action,[\s\S]{0,30}beats[\s\S]{0,20}\}\);/);
+});
+
 function pathToFileUrl(rel) {
   const abs = path.resolve(process.cwd(), rel);
   return "file:///" + abs.replace(/\\/g, "/");
