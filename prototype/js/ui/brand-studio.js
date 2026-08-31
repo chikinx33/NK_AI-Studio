@@ -2192,12 +2192,11 @@
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag')) +
-      // 공개 범위·댓글·듀엣 입력을 여기 두지 않는다. TikTok 은 이 값들을 게시 직전
-      // 확인 창에서 매번 직접 고르도록 요구하고(사전 선택 금지), 초안에 저장해 두면
-      // 그 요구와 어긋난다. 실제 값은 tiktok-consent-modal.js 가 받는다.
+      // 공개 범위·댓글·듀엣 입력을 여기 두지 않는다. 초안 전송 방식에서는 그 값들을
+      // 사용자가 TikTok 앱 편집 화면에서 직접 고른다.
       noteField(isEn
-        ? 'TikTok requires the audience and interaction settings to be chosen in the confirmation dialog each time you post.'
-        : 'TikTok은 정책상 공개 범위와 상호작용 설정을 게시 직전 확인 창에서 매번 선택해야 합니다.');
+        ? 'Deploying sends this to your TikTok drafts. Finish and publish it in the TikTok app.'
+        : '배포하면 TikTok 초안함으로 전송됩니다. 게시 마무리는 TikTok 앱에서 하세요.');
     }
     function buildXThreadsPreview(fmtId, captionVal, hashtagVal, draft) {
       var isThreads = (fmtId === 'threads');
@@ -2632,22 +2631,16 @@
                   var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
                   // 연결되어 있고 '사용 중'인 플랫폼만 배포 가능
                   var canDeploy = isEnabled && !isDeploying;
-                  var mainBtn = '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (canDeploy ? '' : ' disabled') + '>' + btnContent + '</button>';
-                  // TikTok 만 초안함(inbox) 업로드 진입점을 함께 제공한다.
-                  // video.upload 스코프를 요청하는 근거이자 심사 데모에서 시연하는 화면이다.
-                  // 게시가 아니라 파일만 보내는 흐름이라 확인 모달을 거치지 않는다.
-                  if (formatId === 'tiktok') {
-                    // 라벨은 두 줄로 짧게. 한 줄 긴 문구는 nowrap 때문에 버튼 폭을 밀어내고,
-                    // aspect-ratio 1/1 이라 그만큼 높이까지 커져 카드 전체가 부풀었다.
-                    mainBtn += '<button type="button" class="bsf-deploy-one-btn btn-ghost bsf-tiktok-inbox-btn"'
-                      + ' data-action="brand-tiktok-inbox"'
-                      + (canDeploy ? '' : ' disabled')
-                      + ' title="' + escapeHtml(isEn
-                          ? 'Send the video to TikTok. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
-                          : '영상을 TikTok으로 보냅니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시하세요.') + '">'
-                      + (isEn ? 'Send to<br>drafts' : '초안<br>배포')
-                      + '</button>';
-                  }
+                  // TikTok 은 「배포」가 곧 초안함 전송이다(Direct Post 감사 미진행).
+                  // 게시 마무리는 사용자가 TikTok 앱 알림함에서 하므로 툴팁으로 알린다.
+                  var btnTitle = (formatId === 'tiktok')
+                    ? (isEn
+                        ? 'Sends to your TikTok drafts. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
+                        : 'TikTok 초안함으로 보냅니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시하세요.')
+                    : '';
+                  var mainBtn = '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"'
+                    + (btnTitle ? ' title="' + escapeHtml(btnTitle) + '"' : '')
+                    + (canDeploy ? '' : ' disabled') + '>' + btnContent + '</button>';
                   return mainBtn;
                 })() +
               '</div>'
@@ -2822,13 +2815,10 @@
               var url = (h && st.postId)
                 ? 'https://www.tiktok.com/@' + encodeURIComponent(h) + '/video/' + encodeURIComponent(st.postId)
                 : '';
-              // 완료 문구는 TikTok 명세 원문을 그대로 쓴다(심사관이 대조한다)
-              var dc = (NK.tiktokConsentModal && NK.tiktokConsentModal.doneCopy)
-                ? NK.tiktokConsentModal.doneCopy() : null;
-              bsfToast(dc ? dc.posted : T.alertPublishSuccess(label), {
+              bsfToast(T.alertPublishSuccess(label), {
                 tone: 'ok',
                 href: url || undefined,
-                linkLabel: dc ? dc.viewPost : (isEn ? 'View post' : '게시물 보기'),
+                linkLabel: (isEn ? 'View post' : '게시물 보기'),
               });
               return;
             }
@@ -3988,6 +3978,32 @@
         return;
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
+      /**
+       * TikTok 초안함(inbox) 전송. 영상 파일만 사용자의 TikTok 앱으로 보내고
+       * 캡션·공개 범위·상호작용은 사용자가 TikTok 앱에서 마무리한다.
+       * video.upload 스코프만 쓰므로 Direct Post 감사(audit)와 무관하고,
+       * 미감사 클라이언트의 SELF_ONLY 공개범위 제한도 받지 않는다.
+       */
+      function tiktokInboxSend(media, ctx) {
+        var reqBody = Object.assign({}, media, {
+          projectId: String((ctx && ctx.projectId) || projectId || ''),
+        });
+        if (ctx && ctx.ownerId) reqBody.ownerId = String(ctx.ownerId);
+        return fetch('/api/sns/tiktok/inbox', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + (localStorage.getItem('nk_auth_token') || ''),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(reqBody),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res || !res.ok) throw new Error((res && res.error) || 'TikTok inbox upload failed');
+            return res.result || {};
+          });
+      }
+
       function snsPublishFormat(formatId, drafts, scheduledAt) {
         // 자동 배포 대상은 format-media-spec.js 가 단일 원천이다.
         // manual 채널은 여기서 걸러지지만, 배포 카드가 '직접 올리기' 패널을 대신 띄운다.
@@ -4276,74 +4292,86 @@
         // 명세: docs/tiktok_direct_post_modal_spec_20260801.md §6
         // 일괄 배포 루프에서도 이 분기를 지나므로 "한 번에 배포"로도 확인 없이 나가지 않는다.
         if (formatId === 'tiktok') {
-          // 예약 발행은 사용자가 없는 시점에 확인 화면 없이 게시되는 경로라 금지한다.
-          if (scheduledAt && scheduledAt !== 'now') {
-            bsfNotify(isEn
-              ? 'TikTok supports immediate posting only. Publish it now instead of scheduling.'
-              : 'TikTok은 즉시 게시만 지원합니다. 예약 대신 지금 게시해 주세요.');
-            return Promise.resolve({ skipped: true, reason: 'tiktok_no_schedule' });
-          }
-          if (!NK.tiktokConsentModal) {
-            bsfNotify(isEn
-              ? 'The TikTok confirmation dialog failed to load. Please reload the page and try again.'
-              : 'TikTok 확인 창을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
-            return Promise.resolve({ skipped: true, reason: 'tiktok_modal_unavailable' });
-          }
-
-          // 프리뷰용 원본 URL 과 길이 — 선택한 자산에서 그대로 가져온다.
-          var ttPreviewUrl = '';
-          var ttDurationSec = 0;
-          for (var ti = 0; ti < selMediaItems.length; ti++) {
-            var tItem = selMediaItems[ti];
-            var tUrl = String(tItem.url || '').trim();
-            if (!ttPreviewUrl && (tUrl.indexOf('http') === 0 || tUrl.indexOf('/') === 0)) {
-              ttPreviewUrl = tUrl;
-              ttDurationSec = Number(tItem.duration) || 0;
+          /*
+           * TikTok 이 "받았다"와 "초안함까지 들어갔다"는 다르다.
+           * 처리 중이거나 실패인데 ok 로 넘기면 카드에 '배포 완료' 배지가 남아
+           * 사용자는 보낸 줄 안다. 상태를 그대로 호출부 계약으로 옮긴다.
+           */
+          function ttInboxOutcome(r) {
+            var st = String((r && r.status) || '');
+            if (st === 'sent_to_inbox') {
+              bsfNotify(isEn
+                ? 'Sent to TikTok drafts. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
+                : 'TikTok 초안함으로 보냈습니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.');
+              return { ok: true, mode: 'inbox', result: r };
             }
-          }
-          // 영상이 하나라도 있으면 영상 게시로 본다(Duet/Stitch 노출 기준).
-          var ttHasVideo = resolvedItems.some(function (it) { return it.mediaType === 'video'; });
-
-          return NK.tiktokConsentModal.open({
-            mediaType: ttHasVideo ? 'video' : 'image',
-            mediaPreviewUrl: ttPreviewUrl,
-            caption: finalCaption,
-            videoDurationSec: ttHasVideo ? ttDurationSec : 0,
-            ownerId: requestBody.ownerId || '',
-            projectId: requestBody.projectId || '',
-            onSubmit: function (ttSettings) {
-              requestBody.tiktok = ttSettings;
-              // 확인을 누른 뒤에 변환한다(모달이 "게시하는 중"을 그리고 있다).
-              return toJpegForTiktok(resolvedItems).then(function (conv) {
-                if (requestBody.mediaItems) {
-                  requestBody.mediaItems = conv;
-                } else if (conv.length === 1 && conv[0].gcsPath) {
-                  requestBody.mediaGcsPath = conv[0].gcsPath;
-                  requestBody.mediaDirectUrl = '';
-                }
-                return doPublish();
-              });
-            },
-          }).then(function (modalResult) {
-            // null = 사용자가 취소.
-            if (!modalResult) return { skipped: true, reason: 'user_cancelled' };
-            // 서버가 요청을 "수락"한 것과 TikTok 이 실제로 "발행"한 것은 다르다.
-            // 수락만 보고 ok 로 넘기면 발행되지 않았는데도 '배포 완료' 배지가 남는다.
-            var ttFinal = String(modalResult.tiktokFinalStatus || '');
-            if (ttFinal === 'failed' || ttFinal === 'pending') {
-              // 발행 ID 가 없으면 확인할 대상 자체가 없다. '처리 중'으로 두면
-              // 영원히 확인 불가에 갇히므로 발행 실패로 다룬다.
-              var hasPid = !!String(modalResult.tiktokPublishId || '').trim();
-              return Object.assign({}, modalResult, {
+            if (st === 'status_reported_failed') {
+              return {
                 ok: false,
                 notPublished: true,
-                notPublishedReason: String(modalResult.tiktokFailReason || '')
-                  || (hasPid ? '' : T.reasonNoPublishId),
-                pending: ttFinal === 'pending' && hasPid,
-              });
+                notPublishedReason: String((r && r.failReason) || ''),
+              };
             }
-            return modalResult;
-          });
+            // 아직 처리 중 — 배포 완료로 표시하지 않고 백그라운드로 지켜본다.
+            return {
+              ok: false,
+              notPublished: true,
+              pending: true,
+              tiktokPublishId: String((r && r.publishId) || ''),
+              result: r,
+            };
+          }
+
+          // 초안 전송은 파일을 즉시 넘기는 흐름이라 예약이 성립하지 않는다.
+          if (scheduledAt && scheduledAt !== 'now') {
+            bsfNotify(isEn
+              ? 'TikTok drafts are sent immediately. Deploy now instead of scheduling.'
+              : 'TikTok은 초안을 즉시 보냅니다. 예약 대신 지금 배포해 주세요.');
+            return Promise.resolve({ skipped: true, reason: 'tiktok_no_schedule' });
+          }
+          // ── 영상은 초안 전송(inbox)이 기본 경로다 ───────────────────────────
+          // Direct Post 감사(audit)를 진행하지 않기로 했다. 초안 전송은 video.upload 만
+          // 쓰므로 감사와 무관하고, 공개 범위도 사용자가 TikTok 앱에서 직접 고른다.
+          // 게시가 아니라 파일 전달이라 Direct Post 확인 모달 요건의 대상도 아니다.
+          // 사진 전용 게시는 inbox 엔드포인트가 영상만 받으므로 기존 경로를 그대로 둔다.
+          var ttInboxMedia = null;
+          for (var tvi = 0; tvi < resolvedItems.length; tvi++) {
+            var rvItem = resolvedItems[tvi];
+            if (rvItem.mediaType !== 'video') continue;
+            if (rvItem.gcsPath) { ttInboxMedia = { mediaGcsPath: rvItem.gcsPath }; break; }
+            if (rvItem.mediaUrl) { ttInboxMedia = { mediaDirectUrl: rvItem.mediaUrl }; break; }
+          }
+          // 사진만 있는 경우도 초안 전송으로 보낸다. TikTok 사진은 PULL_FROM_URL 만
+          // 받으므로 서버가 우리 도메인 프록시 URL 로 바꿔 넘긴다. PNG 는 받지 않아
+          // Direct Post 경로와 같은 JPEG 변환을 먼저 거친다.
+          if (!ttInboxMedia) {
+            var ttImageItems = resolvedItems.filter(function (it) { return it.mediaType === 'image'; });
+            if (ttImageItems.length > 0) {
+              return toJpegForTiktok(ttImageItems).then(function (conv) {
+                var ttPaths = [];
+                var ttUrls = [];
+                conv.forEach(function (c) {
+                  if (c.gcsPath) ttPaths.push(c.gcsPath);
+                  else if (c.mediaUrl) ttUrls.push(c.mediaUrl);
+                });
+                return tiktokInboxSend(
+                  { photoGcsPaths: ttPaths, photoUrls: ttUrls, caption: finalCaption },
+                  requestBody
+                );
+              }).then(ttInboxOutcome);
+            }
+          }
+
+          if (ttInboxMedia) {
+            return tiktokInboxSend(ttInboxMedia, requestBody).then(ttInboxOutcome);
+          }
+
+          // 여기까지 왔다면 보낼 영상도 사진도 없다. 그대로 두면 Direct Post 경로로
+          // 흘러가 서버가 400 을 내므로, 원인을 알 수 있게 여기서 끊는다.
+          bsfNotify(isEn
+            ? 'Select a video or photo before deploying to TikTok.'
+            : 'TikTok에 보낼 영상이나 사진을 먼저 선택해 주세요.');
+          return Promise.resolve({ skipped: true, reason: 'tiktok_no_media' });
         }
 
         return doPublish();
@@ -4396,72 +4424,6 @@
       // TikTok 초안함(inbox) 업로드 — scope: video.upload
       // Direct Post 와 달리 게시가 아니라 파일만 사용자의 TikTok 초안함으로 보낸다.
       // 캡션·공개 범위는 사용자가 TikTok 앱에서 직접 정하므로 확인 모달이 없다.
-      if (action === 'brand-tiktok-inbox') {
-        var inboxItems = assetItems.filter(function (i) {
-          return String(i.type || '').trim() === 'video' &&
-            selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
-        });
-        var inboxVideo = null;
-        for (var ii = 0; ii < inboxItems.length; ii++) {
-          var iu = String(inboxItems[ii].url || '').trim();
-          var iPath = extractGcsObjectName(iu);
-          if (iPath) { inboxVideo = { mediaGcsPath: iPath }; break; }
-          if (iu.indexOf('http') === 0) { inboxVideo = { mediaDirectUrl: iu }; break; }
-        }
-        // 선택된 영상이 없으면 렌더 캐시 첫 영상으로 폴백 (배포 버튼과 동일한 규칙)
-        if (!inboxVideo) {
-          var inboxRenders = _renderStorageCache[projectId] || [];
-          for (var ri = 0; ri < inboxRenders.length; ri++) {
-            var rn = String(inboxRenders[ri].name || '').trim();
-            var rExt = rn.split('.').pop().toLowerCase();
-            if (rn && (rExt === 'mp4' || rExt === 'webm')) { inboxVideo = { mediaGcsPath: rn }; break; }
-          }
-        }
-        if (!inboxVideo) {
-          bsfNotify(isEn
-            ? 'No video found. Render a video in Post-Production first.'
-            : '영상이 없습니다. 포스트프로덕션에서 먼저 렌더링해 주세요.');
-          return;
-        }
-        btn.disabled = true;
-        // 라벨에 <br> 이 있어 textContent 로 저장·복원하면 줄바꿈이 사라진다.
-        var inboxLabelPrev = btn.innerHTML;
-        btn.innerHTML = isEn ? 'Sending…' : '보내는<br>중…';
-        var inboxBody = Object.assign({}, inboxVideo, { projectId: String(projectId || '') });
-        try {
-          var _inboxOwner = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
-          if (_inboxOwner) inboxBody.ownerId = String(_inboxOwner);
-        } catch (_) {}
-        fetch('/api/sns/tiktok/inbox', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + (localStorage.getItem('nk_auth_token') || ''),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(inboxBody),
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (res) {
-            if (!res || !res.ok) throw new Error((res && res.error) || 'TikTok inbox upload failed');
-            var sent = res.result && res.result.status === 'sent_to_inbox';
-            bsfNotify(sent
-              ? (isEn
-                  ? 'Sent to TikTok. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
-                  : 'TikTok으로 보냈습니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.')
-              : (isEn
-                  ? 'TikTok is still processing the upload. You will get a notification in the TikTok app shortly.'
-                  : 'TikTok이 업로드를 처리 중입니다. 잠시 후 TikTok 앱으로 알림이 도착합니다.'));
-          })
-          .catch(function (err) {
-            bsfNotify((isEn ? 'Could not send to TikTok: ' : 'TikTok 전송 실패: ')
-              + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-            btn.innerHTML = inboxLabelPrev;
-          });
-        return;
-      }
       if (action === 'brand-deploy-one-format') {
         var oneFmtId = String(btn.dataset.deployFormat || '').trim();
         if (!oneFmtId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;

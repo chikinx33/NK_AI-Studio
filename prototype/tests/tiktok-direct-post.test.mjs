@@ -26,12 +26,18 @@ test("video.upload 를 요청하는 한 초안함(inbox) 흐름이 존재해야 
   const inbox = read("prototype/functions/api/sns/tiktok/inbox.ts");
   assert.match(inbox, /export const onRequestPost/);
   assert.match(inbox, /post\/publish\/inbox\/video\/init/);
+  assert.match(inbox, /source: "PULL_FROM_URL", video_url: pullUrl/);
+  // 외부 도메인 주소용 대비책은 남아 있어야 한다
   assert.match(inbox, /source: "FILE_UPLOAD"/);
-  // 게시가 아니므로 요청 바디에 post_info(캡션·공개범위·고지)를 싣지 않는다
-  assert.doesNotMatch(inbox, /post_info:/);
-  // UI 진입점이 실제로 있어야 데모가 가능하다
+  // 영상 초안에는 게시 설정을 싣지 않는다 — 캡션·공개범위·고지 전부 사용자 몫이다
+  const videoPart = inbox.slice(inbox.indexOf("inbox/video/init"));
+  assert.doesNotMatch(videoPart, /post_info:/);
+  // 어느 경로든 공개범위·브랜드 고지는 보내지 않는다(Direct Post 전용 필드)
+  assert.doesNotMatch(inbox, /privacy_level/);
+  assert.doesNotMatch(inbox, /brand_content_toggle|brand_organic_toggle/);
+  // UI 진입점: 배포 버튼이 곧 초안 전송이다
   const ui = read("prototype/js/ui/brand-studio.js");
-  assert.match(ui, /brand-tiktok-inbox/);
+  assert.match(ui, /function tiktokInboxSend\(/);
   assert.match(ui, /\/api\/sns\/tiktok\/inbox/);
 });
 
@@ -110,50 +116,6 @@ test("공유 헬퍼가 privacy_level 결정 규칙을 단일 출처로 갖는다
   assert.match(src, /env\?\.TIKTOK_APP_AUDITED/);
 });
 
-test("creator-info 엔드포인트가 명세 §3 응답을 따른다", () => {
-  const src = read("prototype/functions/api/sns/tiktok/creator-info.ts");
-  assert.match(src, /export const onRequestGet/);
-  assert.match(src, /queryTikTokCreatorInfo/);
-  assert.match(src, /normalizeCreatorInfo/);
-  // 미연결/만료 412, TikTok API 실패 502
-  assert.match(src, /"tiktok_reconnect_required" \}, 412\)/);
-  assert.match(src, /"creator_info_unavailable", detail: message \}, 502\)/);
-  // 아바타 TTL 2시간 — 캐시 금지
-  assert.match(src, /"Cache-Control": "no-store"/);
-  // 공유 프로젝트는 소유자 자격증명으로 게시되므로 권한 검증이 있어야 한다
-  assert.match(src, /getGrantRole/);
-  assert.match(src, /role !== "editor"/);
-
-  const shared = read("prototype/functions/api/_shared/tiktok-token.ts");
-  for (const field of [
-    "creatorNickname",
-    "creatorUsername",
-    "creatorAvatarUrl",
-    "privacyLevelOptions",
-    "commentDisabled",
-    "duetDisabled",
-    "stitchDisabled",
-    "maxVideoPostDurationSec",
-    "appAudited",
-  ]) {
-    assert.match(shared, new RegExp(`${field}:`), `${field} 를 반환해야 한다`);
-  }
-});
-
-test("모달은 공개 범위를 사전 선택하지 않고 미선택 시 게시를 막는다", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  assert.match(src, /privacy: '',/);
-  assert.match(src, /if \(!state\.privacy\) return false;/);
-  // creator_info 순서 그대로 렌더 (재정렬 금지)
-  assert.match(src, /return info\.privacyLevelOptions\.slice\(\);/);
-  // 미심사 앱은 SELF_ONLY 외 옵션 비활성 + 툴팁
-  assert.match(src, /lockedByAudit = !appAudited && key !== 'SELF_ONLY'/);
-  assert.match(src, /Available after TikTok app review/);
-  // 브랜디드 콘텐츠 선택 시 SELF_ONLY 차단
-  assert.match(src, /lockedByBranded = state\.brandedContent && key === 'SELF_ONLY'/);
-  assert.match(src, /Branded content visibility cannot be set to private\./);
-});
-
 test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다", () => {
   const pub = read("prototype/functions/api/sns/publish.ts");
   // 요청 안에서 상태를 기다리면 실행 제한을 넘겨 응답을 잃고, 실제로는 게시됐는데
@@ -172,88 +134,26 @@ test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다"
   // 공유 프로젝트도 소유자 토큰으로 조회해야 한다
   assert.match(st, /getGrantRole/);
 
-  const modal = read("prototype/js/ui/tiktok-consent-modal.js");
-  // 폴링은 확인 창이 아니라 배포 화면에 있다 — 창을 닫아도 결과를 끝까지 본다.
-  assert.ok(!/function pollPublishStatus\(/.test(modal), "폴링이 두 곳에 있다");
-  assert.match(modal, /tiktokPublishId: String\(doneIds\[0\]/, "publish_id 를 호출부로 넘기지 않는다");
   const studio = read("prototype/js/ui/brand-studio.js");
-  assert.match(studio, /function watchTikTokPublish\(/, "확인 창을 닫으면 결과를 영영 모른다");
+  // 폴링은 배포 화면에 있다 — 화면을 떠나지 않는 한 결과를 끝까지 본다.
+  assert.match(studio, /function watchTikTokPublish\(/);
   // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸린다
   assert.match(studio, /deadline = Date\.now\(\) \+ 10 \* 60 \* 1000/);
-  // 완료 문구는 명세 §7 원문을 쓴다 — 문구 출처는 모달 하나로 유지
-  assert.match(studio, /NK\.tiktokConsentModal\.doneCopy\(\)/);
-  assert.match(modal, /function doneCopy\(\)/);
 });
 
-test("심사 전에는 브랜디드 콘텐츠를 고를 수 없다 (막다른 상태 방지)", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  // 미심사 앱은 SELF_ONLY 만 가능한데 브랜디드 콘텐츠는 SELF_ONLY 가 금지다.
-  // 둘 다 허용하면 고를 수 있는 공개 범위가 0개가 되어 게시 버튼이 영영 안 켜진다.
-  assert.match(src, /function brandedContentAvailable\(\)/);
-  assert.match(src, /return !!\(state\.info && state\.info\.appAudited\);/);
-  // 체크 자체를 막고, 이미 켜져 있던 값도 정리한다
-  assert.match(src, /if \(key === 'brandedContent' && !brandedContentAvailable\(\)\)/);
-  assert.match(src, /if \(!brandedContentAvailable\(\)\) state\.brandedContent = false;/);
-  // 그래도 0개가 되면 이유를 보여주고 콘솔에 남긴다
-  assert.match(src, /선택 가능한 공개 범위가 없다/);
-  assert.match(src, /noAudience:/);
-});
-
-test("모달의 Comment / Duet / Stitch 는 전부 기본 해제다 (명세 §5-2 ④)", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  assert.match(src, /allowComment: false,/);
-  assert.match(src, /allowDuet: false,/);
-  assert.match(src, /allowStitch: false,/);
-  assert.match(src, /Turned off in your TikTok account settings/);
-  // 사진 게시에는 Duet / Stitch 를 렌더하지 않는다
-  assert.match(src, /if \(!isPhoto\) \{[\s\S]*?allowDuet/);
-});
-
-test("모달 문구가 명세 §5-2 원문 그대로다", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  assert.match(src, /Turn on to disclose that this video promotes goods or services in exchange for something of value\./);
-  assert.match(src, /This video will be classified as Brand Organic\./);
-  assert.match(src, /This video will be classified as Branded Content\./);
-  assert.match(src, /Your photo\/video will be labeled as 'Promotional content'\. This cannot be changed once your video is posted\./);
-  assert.match(src, /Your photo\/video will be labeled as 'Paid partnership'\. This cannot be changed once your video is posted\./);
-  assert.match(src, /Could not load your TikTok account settings\. Please try again\./);
-  assert.match(src, /Your video has been posted to TikTok\./);
-  assert.match(src, /This video is longer than your TikTok limit of/);
-  // 공개범위 표기
-  assert.match(src, /PUBLIC_TO_EVERYONE: 'Public'/);      // en
-  assert.match(src, /PUBLIC_TO_EVERYONE: '전체 공개'/);     // ko (양쪽 동시 구현)
-  assert.match(src, /FOLLOWER_OF_CREATOR: 'Followers'/);
-  assert.match(src, /MUTUAL_FOLLOW_FRIENDS: 'Friends'/);
-  assert.match(src, /SELF_ONLY: 'Only you'/);
-  // 두 정책 링크는 실제 클릭 가능한 새 탭 링크여야 한다
-  // 링크 문구는 사전(en)에 있고, 실제 클릭 가능한 새 탭 앵커로 렌더된다
-  assert.match(src, /bcPolicy: 'Branded Content Policy'/);
-  assert.match(src, /musicUsage: 'Music Usage Confirmation'/);
-  assert.match(src, /<a href="' \+ BC_POLICY_URL \+ '" target="_blank" rel="noopener">' \+ esc\(C\.bcPolicy\)/);
-  assert.match(src, /<a href="' \+ MUSIC_URL \+ '" target="_blank" rel="noopener">' \+ esc\(C\.musicUsage\)/);
-  assert.match(src, /https:\/\/www\.tiktok\.com\/legal\/page\/global\/bc-policy\/en/);
-  assert.match(src, /https:\/\/www\.tiktok\.com\/legal\/page\/global\/music-usage-confirmation\/en/);
-});
-
-test("creator_info 로딩 실패 시 모달은 열리되 게시를 막는다 (기본값 추측 금지)", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  assert.match(src, /if \(!state\.info \|\| state\.loadError\) return false;/);
-  assert.match(src, /state\.loadError = C\.creatorInfoFailed/);
-});
-
-test("일괄 배포 경로도 TikTok 모달을 거치고, 예약 발행은 막는다 (명세 §6)", () => {
+test("일괄 배포 경로에서 TikTok 은 곧장 초안 전송으로 간다", () => {
+  // Direct Post 감사를 진행하지 않기로 해, 확인 모달은 UI 에서 제거됐다.
+  // 「배포」 한 번이면 확인 단계 없이 초안함으로 전송된다.
   const src = read("prototype/js/ui/brand-studio.js");
   assert.match(src, /if \(formatId === 'tiktok'\) \{/);
-  assert.match(src, /NK\.tiktokConsentModal\.open\(/);
-  assert.match(src, /onSubmit: function \(ttSettings\)/);
-  assert.match(src, /requestBody\.tiktok = ttSettings;/);
-  // 예약 발행 차단
+  assert.match(src, /tiktokInboxSend\(/);
+  // 확인 모달 흔적이 남아 있으면 안 된다
+  assert.doesNotMatch(src, /tiktokConsentModal/);
+  assert.doesNotMatch(read("prototype/brand.html"), /tiktok-consent-modal/);
+  // 초안 전송은 즉시 전달이라 예약이 성립하지 않는다
   assert.match(src, /tiktok_no_schedule/);
-  assert.match(src, /TikTok supports immediate posting only/);
-  // 취소하면 TikTok 만 skip
-  assert.match(src, /reason: 'user_cancelled'/);
-  // 모달 스크립트가 실제로 로드돼야 한다
-  assert.match(read("prototype/brand.html"), /js\/ui\/tiktok-consent-modal\.js/);
+  // 보낼 미디어가 없으면 Direct Post 로 새지 않고 여기서 끊는다
+  assert.match(src, /reason: 'tiktok_no_media'/);
 });
 
 test("에이전트 경로로는 TikTok 을 게시할 수 없다 (확인 화면이 없으므로)", () => {
@@ -348,9 +248,15 @@ test("포털 제출본(_1000.txt)이 1000자 이내이고 코드와 같은 스�
   assert.match(sub, /nothing pre-selected/i);
   assert.match(sub, /off by default/i);
   assert.match(sub, /FILE_UPLOAD/);
-  // 초안함은 post_info 없이 보낸다는 서술이 inbox 구현과 맞아야 한다
+  // 초안함 영상은 post_info 없이 보낸다는 서술이 inbox 구현과 맞아야 한다
   assert.match(sub, /no post_info/i);
-  assert.doesNotMatch(read("prototype/functions/api/sns/tiktok/inbox.ts"), /post_info:/);
+  const inboxSrc = read("prototype/functions/api/sns/tiktok/inbox.ts");
+  assert.doesNotMatch(inboxSrc.slice(inboxSrc.indexOf("inbox/video/init")), /post_info:/);
+  /* ⚠️ 알려진 드리프트 (2026-08-31, Direct Post 감사 포기 시점)
+   *   제출본 문구는 "a second button sends the video ..." 이지만, 지금은
+   *   배포 버튼 자체가 초안 전송이고 사진 초안은 description 을 함께 보낸다.
+   *   포털의 Review Description 은 승인 시점에 고정된 문구라 여기서 고치지 않는다.
+   *   리비전을 만들어 재심사에 들어가는 날, 이 문단부터 갱신할 것. */
 });
 
 test("sitemap 에 새 공개 페이지가 등록돼 있다", () => {
@@ -415,8 +321,8 @@ test("프로덕션 키 전환 절차가 문서로 남아 있다", () => {
 
 test("TikTok 초안 카드에는 공개 범위·상호작용 입력이 없다", () => {
   const src = read("prototype/js/ui/brand-studio.js");
-  // buildTiktokPreview 안에 해당 입력이 있으면 안 된다. 초안에 저장해 두는 것 자체가
-  // "게시 직전 확인 창에서 매번 고르게 하라"는 TikTok 요구와 어긋난다.
+  // buildTiktokPreview 안에 해당 입력이 있으면 안 된다. 초안 전송 방식에서는
+  // 공개 범위·상호작용을 사용자가 TikTok 앱 편집 화면에서 고른다.
   const fn = src.slice(
     src.indexOf("function buildTiktokPreview"),
     src.indexOf("function buildXThreadsPreview")
@@ -427,8 +333,8 @@ test("TikTok 초안 카드에는 공개 범위·상호작용 입력이 없다", 
   }
   // 왜 없는지 설명하는 안내가 대신 있어야 한다
   assert.match(fn, /noteField\(/);
-  assert.match(fn, /confirmation dialog each time you post/);
-  assert.match(fn, /게시 직전 확인 창에서 매번 선택/);
+  assert.match(fn, /Finish and publish it in the TikTok app/);
+  assert.match(fn, /TikTok 초안함으로 전송됩니다/);
   // 초안 생성기도 죽은 기본값을 만들지 않아야 한다
   const gen = read("prototype/functions/api/draft-generate.js");
   assert.doesNotMatch(gen, /tiktok:\s*\{\s*privacy_level/);

@@ -107,7 +107,7 @@ async function getGoogleAccessToken(opts: {
   return data.access_token;
 }
 
-export const onRequestGet = async ({ request, env }: { request: Request; env: any }) => {
+async function serveMedia(request: Request, env: any, method: "GET" | "HEAD"): Promise<Response> {
   const url = new URL(request.url);
   const objectName = String(url.searchParams.get("o") || "");
   const exp = parseInt(url.searchParams.get("e") || "0", 10);
@@ -133,25 +133,48 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       privateKeyPem: env.GOOGLE_PRIVATE_KEY,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+
+    // TikTok 의 PULL_FROM_URL 수집기는 Range 요청으로 나눠 받아간다. 그대로 전달한다.
+    const gcsHeaders: Record<string, string> = { Authorization: `Bearer ${googleToken}` };
+    const range = request.headers.get("Range");
+    if (range) gcsHeaders["Range"] = range;
+
     const gcsRes = await fetch(
       `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${gcsObjectPath(objectName)}?alt=media`,
-      { headers: { Authorization: `Bearer ${googleToken}` } }
+      { headers: gcsHeaders }
     );
-    if (!gcsRes.ok) {
+    if (!gcsRes.ok && gcsRes.status !== 206) {
       return new Response("not found", { status: gcsRes.status === 404 ? 404 : 502 });
     }
-    const buf = await gcsRes.arrayBuffer();
-    const type = gcsRes.headers.get("Content-Type") || "image/jpeg";
-    return new Response(buf, {
-      status: 200,
-      headers: {
-        "Content-Type": type,
-        "Content-Length": String(buf.byteLength),
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
+
+    const type =
+      gcsRes.headers.get("Content-Type") ||
+      (/\.(mp4|mov|m4v)$/i.test(objectName) ? "video/mp4" : "image/jpeg");
+    const headers: Record<string, string> = {
+      "Content-Type": type,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=3600",
+    };
+    const len = gcsRes.headers.get("Content-Length");
+    if (len) headers["Content-Length"] = len;
+    const contentRange = gcsRes.headers.get("Content-Range");
+    if (contentRange) headers["Content-Range"] = contentRange;
+
+    // 영상은 수백 MB 가 될 수 있다. arrayBuffer 로 들고 있으면 워커 메모리가 터지므로
+    // 버퍼링 없이 그대로 흘려보낸다. HEAD 는 본문 없이 헤더만 돌려준다.
+    if (method === "HEAD") {
+      try { await gcsRes.body?.cancel(); } catch { /* 무시 */ }
+      return new Response(null, { status: gcsRes.status, headers });
+    }
+    return new Response(gcsRes.body, { status: gcsRes.status, headers });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return new Response(`proxy error: ${msg}`, { status: 500 });
   }
-};
+}
+
+export const onRequestGet = async ({ request, env }: { request: Request; env: any }) =>
+  serveMedia(request, env, "GET");
+
+export const onRequestHead = async ({ request, env }: { request: Request; env: any }) =>
+  serveMedia(request, env, "HEAD");

@@ -13,7 +13,6 @@ import path from "node:path";
  * '배포 완료' 배지가 남았다. 사용자에게는 배포된 것으로 보였다.
  */
 
-const modal = fs.readFileSync(path.join(process.cwd(), "prototype/js/ui/tiktok-consent-modal.js"), "utf8");
 const studio = fs.readFileSync(path.join(process.cwd(), "prototype/js/ui/brand-studio.js"), "utf8");
 const statusApi = fs.readFileSync(
   path.join(process.cwd(), "prototype/functions/api/sns/tiktok/publish-status.ts"),
@@ -55,16 +54,6 @@ test("시간 안에 결론이 안 나면 성공으로 넘기지 않는다", () =
   assert.match(body, /tries < MAX/);
 });
 
-test("확인 창은 결과 화면을 따로 그리지 않고 즉시 닫힌다", () => {
-  // 확인 창 → 처리 중 창 → 알림 창으로 세 번 뜨던 것을 하나로 합쳤다.
-  assert.ok(!/function renderDone\(/.test(modal), "모달이 아직 완료 화면을 그린다");
-  assert.ok(!/function pollPublishStatus\(/.test(modal), "폴링이 두 곳에 있다");
-  const at = modal.indexOf("tiktokFinalStatus: 'pending'");
-  assert.ok(at > 0, "publish_id 를 호출부로 넘기지 않는다");
-  const near = modal.slice(at - 400, at + 300);
-  assert.match(near, /destroy\(\);/, "수락 후 확인 창이 닫히지 않는다");
-});
-
 test("성공 알림은 스스로 사라지고, 원인을 읽어야 하는 알림은 남는다", () => {
   const core = fs.readFileSync(path.join(process.cwd(), "prototype/core.js"), "utf8");
   assert.match(core, /ui\.toast = function/, "전역 알림이 없다");
@@ -78,12 +67,17 @@ test("성공 알림은 스스로 사라지고, 원인을 읽어야 하는 알림
   assert.match(one, /bsfNotify\(publishResult\.pending/, "실패 원인이 스스로 사라진다");
 });
 
-test("발행되지 않으면 '배포 완료'로 표시하지 않는다", () => {
-  const at = studio.indexOf("tiktokFinalStatus");
-  assert.ok(at > 0, "브랜드 스튜디오가 최종 상태를 보지 않는다");
-  const body = studio.slice(at - 400, at + 700);
-  assert.match(body, /ok: false/, "실패인데도 ok 로 넘긴다");
-  assert.match(body, /notPublished: true/);
+test("초안이 실제로 들어가지 않으면 '배포 완료'로 표시하지 않는다", () => {
+  // TikTok 이 요청을 받은 것과 초안함까지 들어간 것은 다르다.
+  // 처리 중·실패를 ok 로 넘기면 카드에 '배포 완료' 배지가 남아 보낸 줄 안다.
+  const at = studio.indexOf("function ttInboxOutcome(");
+  assert.ok(at > 0, "초안 전송 결과를 해석하는 곳이 없다");
+  const body = studio.slice(at, at + 1400);
+  assert.match(body, /st === 'sent_to_inbox'/, "성공 조건이 명시돼 있지 않다");
+  assert.match(body, /ok: true, mode: 'inbox'/);
+  assert.match(body, /st === 'status_reported_failed'/, "실패를 구분하지 않는다");
+  assert.match(body, /ok: false,\s*\n\s*notPublished: true/, "실패인데도 ok 로 넘긴다");
+  assert.match(body, /pending: true/, "처리 중을 완료로 다룬다");
 });
 
 /** 한 액션 분기의 본문만 잘라 온다(다음 분기 시작 전까지). */
@@ -110,14 +104,14 @@ test("발행 대상이 없으면 서버가 성공으로 응답하지 않는다",
   assert.match(pub, /tiktok_no_media_resolved/);
 });
 
-test("publish_id 가 없으면 '처리 중'으로 두지 않는다", () => {
+test("처리 중이면 publish_id 로 백그라운드 추적을 건다", () => {
   // 폴링할 대상이 없는데 처리 중으로 두면 영원히 '확인 불가'에 갇힌다.
-  const at = studio.indexOf("tiktokFinalStatus");
-  const body = studio.slice(at - 200, at + 900);
-  assert.match(body, /var hasPid = /);
-  assert.match(body, /pending: ttFinal === 'pending' && hasPid/);
-  const hits = studio.split("reasonNoPublishId").length - 1;
-  assert.ok(hits >= 3, `reasonNoPublishId 가 ko/en 양쪽에 정의되고 쓰여야 한다 (발견 ${hits})`);
+  const at = studio.indexOf("function ttInboxOutcome(");
+  const body = studio.slice(at, at + 1400);
+  assert.match(body, /tiktokPublishId: String\(\(r && r\.publishId\) \|\| ''\)/);
+  // 호출부는 publish_id 가 있을 때만 추적을 건다
+  assert.match(studio, /if \(publishResult\.pending && publishResult\.tiktokPublishId\)/);
+  assert.match(studio, /function watchTikTokPublish\(/);
 });
 
 test("TikTok 사진 게시 전에 PNG 를 JPEG 로 바꾼다", () => {
@@ -134,10 +128,10 @@ test("TikTok 사진 게시 전에 PNG 를 JPEG 로 바꾼다", () => {
   // 변환 실패해도 게시 자체는 막지 않는다
   assert.match(body, /원본 사용/);
 
-  // 확인 모달 제출 시점에 실제로 호출돼야 한다
-  const submitAt = studio.indexOf("onSubmit: function (ttSettings)");
-  assert.ok(submitAt > 0);
-  const submit = studio.slice(submitAt, submitAt + 700);
-  assert.match(submit, /toJpegForTiktok\(resolvedItems\)/, "변환이 게시 경로에 연결되지 않았다");
-  assert.match(submit, /requestBody\.mediaItems = conv/, "변환 결과가 요청에 반영되지 않는다");
+  // 사진 초안 전송 경로에서 실제로 호출돼야 한다
+  const sendAt = studio.indexOf("var ttImageItems = resolvedItems.filter");
+  assert.ok(sendAt > 0, "사진 초안 분기를 찾지 못했다");
+  const send = studio.slice(sendAt, sendAt + 900);
+  assert.match(send, /toJpegForTiktok\(ttImageItems\)/, "변환이 전송 경로에 연결되지 않았다");
+  assert.match(send, /photoGcsPaths: ttPaths/, "변환 결과가 요청에 반영되지 않는다");
 });

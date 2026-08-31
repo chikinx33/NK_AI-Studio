@@ -19,9 +19,6 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 // [파일, 사전 시작 표식, 사전 끝 표식]
 const DICTIONARIES = [
-  ["prototype/js/ui/tiktok-consent-modal.js", "var COPY = {", "\n  /** 앱 런타임 언어"],
-  ["prototype/js/ui/tiktok-consent-modal.js", "var ERROR_COPY = {", "\n  function describeError"],
-  ["prototype/js/ui/tiktok-consent-modal.js", "var PRIVACY_LABEL = {", "\n  var BC_POLICY_URL"],
   ["prototype/js/ui/sns-settings.js", "var T = {", "\n  function _lang"],
   ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
   ["prototype/js/ui/format-media-spec.js", "var DELIVERY_TEXT = {", "\n  function deliveryText"],
@@ -161,41 +158,3 @@ test("app.html 의 한국어 data-i18n 문구는 모두 영어 사전에 있다"
   assert.deepEqual(missing, [], `영어 사전에 없는 문구:\n${missing.join("\n")}`);
 });
 
-test("TikTok 확인 모달에 하드코딩된 사용자 문구가 남아 있지 않다", () => {
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  // 사전 정의부를 제외한 렌더 코드에서 영문 문장이 직접 튀어나오면 안 된다.
-  const render = src.slice(src.indexOf("function open(opts)"));
-  const strays = [
-    "Post to TikTok",
-    "Who can view",
-    "Allow users to",
-    "Branded Content Policy",
-    "Music Usage Confirmation",
-    "By posting",
-    ">Cancel<",
-    ">Close<",
-  ].filter((phrase) => render.includes(phrase));
-  assert.deepEqual(strays, [], `렌더 코드에 하드코딩된 문구: ${strays.join(" | ")}`);
-});
-
-test("영문 심사 문구는 명세 원문 그대로 유지된다", () => {
-  // ko 를 추가하면서 en 이 흔들리면 심사에서 대조가 깨진다.
-  const src = read("prototype/js/ui/tiktok-consent-modal.js");
-  // PRIVACY_LABEL 에도 en/ko 가 있으므로 COPY 블록으로 먼저 좁힌다
-  const copyAt = src.indexOf("var COPY = {");
-  assert.ok(copyAt > 0, "COPY 를 찾지 못했다");
-  const enAt = src.indexOf("en: {", copyAt);
-  const en = src.slice(enAt, src.indexOf("ko: {", enAt));
-  for (const phrase of [
-    "Turn on to disclose that this video promotes goods or services in exchange for something of value.",
-    "This video will be classified as Brand Organic.",
-    "This video will be classified as Branded Content.",
-    "Your photo/video will be labeled as 'Promotional content'.",
-    "Your photo/video will be labeled as 'Paid partnership'.",
-    "Branded content visibility cannot be set to private.",
-    "Available after TikTok app review",
-    "Turned off in your TikTok account settings",
-  ]) {
-    assert.ok(en.includes(phrase), `영문 원문이 바뀌었다: ${phrase}`);
-  }
-});
