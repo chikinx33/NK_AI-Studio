@@ -95,7 +95,10 @@ function loadScript(ctx, relativePath) {
   vm.runInContext(source, ctx, { filename: fullPath });
 }
 
-test('pipeline image generation uses scene narration/dialogue context to attach registered character references', async () => {
+// @토큰을 안 쓰는 프로젝트: 화면(composition/시각화)에 캐릭터 이름이 없어도
+// forceActiveFallback 안전망이 활성 등록 캐릭터의 레퍼런스를 첨부한다.
+// (해석 프롬프트 자체는 이제 화면 레이어만 본다 — 나레이션/대사는 해석 대상이 아니다.)
+test('pipeline image generation attaches active character references via fallback on non-token projects', async () => {
   const ctx = createContext();
   loadScript(ctx, 'prototype/js/service/character-registry.js');
   loadScript(ctx, 'prototype/ui/pipeline-image.js');
@@ -148,7 +151,94 @@ test('pipeline image generation uses scene narration/dialogue context to attach 
   assert.doesNotMatch(String(ctx.__imagenCalls[0].prompt || ''), /@네모/);
   assert.doesNotMatch(String(ctx.__imagenCalls[0].prompt || ''), /\[1\]/);
   assert.deepEqual(Array.from(state.scenes[0].resolvedCharacterIds), ['char_001']);
-  assert.match(String(state.scenes[0].characterDetectionPrompt || ''), /네모/);
+  // 해석 프롬프트는 화면 레이어(시각화)만 담는다 — 나레이션/대사는 들어가지 않는다.
+  assert.match(String(state.scenes[0].characterDetectionPrompt || ''), /친구를 기다리는 장면/);
+  assert.doesNotMatch(String(state.scenes[0].characterDetectionPrompt || ''), /같이 놀자/);
+});
+
+// [회귀 테스트] "이미지=화면, 영상=행동" 분리가 레퍼런스 레이어까지 지켜져야 한다.
+// 화면(composition)엔 @네모만 있고 행동(action)·대사에만 @세모가 등장하는 컷에서,
+// 예전엔 씬 전체 텍스트로 캐릭터를 해석해 @세모 시트까지 첨부하고
+// "Include 세모 in this scene." 을 프롬프트에 덧붙여 스틸에 전원이 그려졌다.
+// 이미지 생성은 화면에 있는 캐릭터만 해석·첨부해야 한다.
+test('pipeline image generation attaches only characters present in the composition (화면), not action/dialogue', async () => {
+  const ctx = createContext({
+    brandById(brandId) {
+      if (String(brandId) !== 'shape-brand') return null;
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' },
+          { characterId: 'char_002', displayName: '세모', token: '@세모', personality: '호기심 많은 빨간 세모' }
+        ],
+        characterSheets: [
+          {
+            token: '@네모',
+            items: [
+              { sheetId: 'sheet_nemo_front', pose: 'front', imageDataUrl: 'gs://bucket/nemo-front.png', isPrimary: true }
+            ]
+          },
+          {
+            token: '@세모',
+            items: [
+              { sheetId: 'sheet_semo_front', pose: 'front', imageDataUrl: 'gs://bucket/semo-front.png', isPrimary: true }
+            ]
+          }
+        ]
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
+      characters: [
+        { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' },
+        { characterId: 'char_002', displayName: '세모', token: '@세모', personality: '호기심 많은 빨간 세모' }
+      ]
+    },
+    scenes: [
+      {
+        id: 1,
+        composition: '@네모가 큐브 옆에 서서 고개를 두리번거리며 친구들을 기다린다',
+        action: '@세모가 먼저 쿵 하고 착지해 큐브 앞에 코를 박듯 들여다본다',
+        dialogue: [{ speaker: '세모', line: '나 먼저 왔다!' }],
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  const call = ctx.__imagenCalls[0];
+  const refUrls = (call.referenceImages || []).map((r) => r.imageDataUrl);
+  assert.ok(refUrls.includes('gs://bucket/nemo-front.png'), '화면에 있는 @네모 레퍼런스는 첨부되어야 한다');
+  assert.ok(!refUrls.includes('gs://bucket/semo-front.png'), '행동/대사에만 있는 @세모 레퍼런스는 첨부되면 안 된다');
+  const prompt = String(call.prompt || '');
+  assert.doesNotMatch(prompt, /세모/, '행동에만 등장하는 캐릭터가 이미지 프롬프트에 주입되면 안 된다');
+  assert.doesNotMatch(prompt, /Include .+ in this scene/, '프레임 밖 캐릭터 강제 주입 문구가 없어야 한다');
 });
 
 test('pipeline image generation prefers live draft character sheets when stage state payload is stale', async () => {

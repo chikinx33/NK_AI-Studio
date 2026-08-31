@@ -229,9 +229,8 @@
       var updated = scenePrompt;
       if (token) updated = replaceFirstCaseInsensitive(updated, token, referenceLabel);
       if (updated === scenePrompt && plainName) updated = replaceFirstCaseInsensitive(updated, plainName, referenceLabel);
-      if (updated === scenePrompt) {
-        updated = scenePrompt + '\nInclude ' + referenceLabel + ' in this scene.';
-      }
+      // 이름 치환이 안 됐다고 "Include X in this scene." 을 덧붙이지 않는다 — 화면(composition)에
+      // 없는 캐릭터를 프레임에 강제 등장시키던 원인. 신원 유지 지시(아래)만 남긴다.
       scenePrompt = updated;
       lockedSubjects.push(
         'Use the provided registered reference images for ' + referenceLabel + ' and keep the exact same face, silhouette, colors, costume, and proportions.'
@@ -266,31 +265,26 @@
     return [];
   }
 
-  function buildCharacterResolutionPrompt(scene, prompt) {
+  // 캐릭터 해석(어떤 캐릭터의 레퍼런스 시트를 첨부할지)은 "이 스틸에 실제로 그려질 텍스트"만
+  // 본다. 예전엔 제목·시각화·나레이션·대사·스크립트(씬 전체 타임라인)까지 훑어서, 화면(composition)엔
+  // @네모만 있어도 행동/대사에만 등장하는 @세모·@동그라미의 시트까지 첨부됐고, 그 위에
+  // buildInlineReferencePrompt 가 "Include X in this scene." 을 덧붙여 전원이 그려졌다.
+  // "이미지=화면, 영상=행동" 분리를 레퍼런스 레이어까지 관철한다. 폴백 순서는
+  // buildImagePrompt / buildShotImagePrompt 의 Composition 블록 선택 순서와 동일하다.
+  function buildCharacterResolutionPrompt(scene, prompt, shot) {
     var row = scene && typeof scene === 'object' ? scene : {};
-    var parts = [];
-    var seen = new Set();
-    function push(value) {
-      var text = normalizeText(value);
-      if (!text) return;
-      var key = text.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      parts.push(text);
+    var source = '';
+    if (shot && typeof shot === 'object') {
+      source = firstFrameText(shot) || firstFrameText(row)
+        || normalizeText(shot.composition)
+        || normalizeText(shot.action);
+    } else {
+      source = firstFrameText(row)
+        || normalizeText(row.composition)
+        || normalizeText(row.shot || row.visual)
+        || normalizeText(row.action);
     }
-    push(prompt);
-    push(row.title);
-    push(row.shot || row.visual);
-    push(row.narrationText);
-    push(row.narration);
-    push(row.lines);
-    push(row.subtitleText);
-    push(row.dialogueText);
-    normalizeDialogueEntries(row.dialogue || row.dialogues).forEach(function (item) {
-      push((item.speaker ? (item.speaker + ': ') : '') + (item.line || ''));
-    });
-    push(row.script);
-    return parts.join('\n');
+    return source || normalizeText(prompt) || '';
   }
 
   // v3.1591: 시나리오가 @토큰 체계를 쓰는 프로젝트면 씬 표기를 그대로 믿는다.
@@ -1520,8 +1514,8 @@
         if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
           try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
         }
-        // shot 의 action/composition + 씬의 narration / dialogue 모두 캐릭터 해석 입력으로
-        var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
+        // 캐릭터 해석은 이 컷의 화면(beats t=0 → composition) 레이어만 본다
+        var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP, shot);
         var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
         var built = NK.service.characterRegistry.buildResolvedPrompt({
@@ -1706,7 +1700,10 @@
         return !!f;
       })(payload0.charactersEnabled, Array.isArray(payload0.characters) && payload0.characters.length);
       if (enabled) {
-        var resolutionText = buildCharacterResolutionPrompt(scene, text);
+        // 수정 지시문에 새로 언급된 캐릭터(@세모 추가 등)도 해석돼야 하므로,
+        // 지시문 텍스트 + 현재 스틸의 화면 레이어를 함께 해석 대상으로 삼는다.
+        var resolutionText = [text, buildCharacterResolutionPrompt(scene, '')]
+          .filter(Boolean).join('\n');
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, resolutionText, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
         if (res && Array.isArray(res.characters) && res.characters.length) {
           var built = NK.service.characterRegistry.buildResolvedPrompt({
