@@ -59,13 +59,21 @@ export function buildShotPromptKo() {
 
 [beats — 카메라가 움직이면 반드시 채운다]
 빠뜨리면 스틸컷이 무브의 "끝 상태"로 만들어져, 가려졌다가 드러나는 연출이 통째로 사라진다.
-  "beats": [{"at": 0, "what": "프레임 하단에 세 캐릭터의 발과 하체만 나란히"},
-            {"at": 2.5, "what": "틸트업이 끝나 세 캐릭터 전신과 방 전체가 들어옴"}]
+  "beats": [{"at": 0, "what": "프레임 하단에 @캐릭터A·@캐릭터B·@캐릭터C의 발과 하체만 나란히"},
+            {"at": 2.5, "what": "틸트업이 끝나 @캐릭터A·@캐릭터B·@캐릭터C 전신과 방 전체가 들어옴"}]
 · at 은 샷 시작으로부터의 초. beats[0].at 은 반드시 0, 마지막 at 은 duration 보다 작다. 2~4개.
 · beats[0].what 은 t=0 에 보이는 것만 쓴다. 이것이 스틸컷이 되는 첫 프레임이다.
   무브의 결과("…전신을 드러냄")를 여기 쓰지 마라 — 그건 다음 beat 다.
 · 연속된 카메라 무브를 두 샷으로 쪼개지 마라. "발만 보이다가 틸트업해 전신이 보인다" 는
   한 샷 + beats 2개다. 두 샷으로 쪼개면 스틸컷이 따로 두 번 만들어져 둘 다 전신이 나온다.
+
+[캐릭터 표기 — @토큰 강제]
+· 프레임에 보이는 등록 캐릭터는 composition 과 beats.what 에 반드시 @토큰으로 이름을 부른다.
+  "세 캐릭터", "친구들", "모두" 같은 익명 지칭만 쓰면 안 된다 — 이미지 생성이 composition 의
+  @토큰을 읽고 그 캐릭터의 레퍼런스 시트를 첨부하므로, 이름이 없으면 엉뚱하게 생긴
+  캐릭터가 그려진다. 예: "세 캐릭터의 발" ❌ → "@캐릭터A·@캐릭터B·@캐릭터C의 발" ⭕
+· 반대로 그 시점 프레임에 없는 캐릭터의 @토큰을 composition·beats.what 에 쓰지 마라.
+  나중에 등장하는 캐릭터는 action 과 이후 beats 에만 등장한다.
 
 [샷 나누기]
 · 한 씬은 1~5 샷. 정적 비트(독백 한 마디, 인서트 단독)는 1샷도 좋다.
@@ -130,13 +138,22 @@ put every change over time in beats.
 
 [beats — mandatory whenever the camera moves]
 Without them the still image is generated from the END state of the move, and the reveal disappears.
-  "beats": [{"at": 0, "what": "only the three characters' feet and lower legs along the bottom of frame"},
-            {"at": 2.5, "what": "the tilt-up completes: full bodies and the whole room are in frame"}]
+  "beats": [{"at": 0, "what": "only the feet and lower legs of @CharacterA, @CharacterB and @CharacterC along the bottom of frame"},
+            {"at": 2.5, "what": "the tilt-up completes: @CharacterA, @CharacterB and @CharacterC's full bodies and the whole room are in frame"}]
 · "at" is seconds from the start of the shot. beats[0].at MUST be 0, the last "at" must be < duration. 2-4 beats.
 · beats[0].what describes ONLY what is visible at t=0. It becomes the still image (the first frame).
   Never write the result of the move ("...revealing the full bodies") there — that belongs to the next beat.
 · NEVER split one continuous camera move into two shots. "feet only, then tilt up to full bodies" is ONE
   shot with two beats. Splitting it produces two separate stills, both showing the full bodies.
+
+[Character naming — @tokens are mandatory]
+· Every registered character visible in frame must be named by its @token inside composition and
+  beats.what. Never rely on anonymous references alone ("the three characters", "the friends") —
+  image generation reads the @tokens in the composition to attach each character's reference
+  sheets, so an unnamed character gets drawn as a random look-alike.
+  e.g. "the three characters' feet" ❌ → "the feet of @CharacterA, @CharacterB and @CharacterC" ⭕
+· Conversely, never write the @token of a character who is NOT visible in frame at that moment
+  into composition or beats.what. Characters who arrive later belong only in action and later beats.
 
 [Splitting into shots]
 · A scene becomes 1-5 shots. A static beat (one line of monologue, a solo insert) can be a single shot.

@@ -287,6 +287,40 @@
     return source || normalizeText(prompt) || '';
   }
 
+  // 2차 폴백용 — 씬 전체 텍스트(제목·시각화·나레이션·대사·스크립트)를 합친 해석 입력.
+  // 화면이 캐릭터를 이름 없이 지칭하는 컷("세 캐릭터의 발·하체", "친구들")은 1차(화면 레이어)
+  // 해석이 빈손이 되어 레퍼런스가 통째로 빠지고 엉뚱한 캐릭터가 생성된다. 그럴 때만
+  // 씬 전체로 넓혀 다시 해석한다. 1차에서 한 명이라도 잡히면 절대 쓰지 않는다 —
+  // 화면에 @네모만 있는 컷에 행동의 @세모까지 첨부되던 원래 버그로 돌아가기 때문이다.
+  function buildSceneWideResolutionPrompt(scene, prompt) {
+    var row = scene && typeof scene === 'object' ? scene : {};
+    var parts = [];
+    var seen = new Set();
+    function push(value) {
+      var text = normalizeText(value);
+      if (!text) return;
+      var key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      parts.push(text);
+    }
+    push(prompt);
+    push(row.title);
+    push(row.composition);
+    push(row.action);
+    push(row.shot || row.visual);
+    push(row.narrationText);
+    push(row.narration);
+    push(row.lines);
+    push(row.subtitleText);
+    push(row.dialogueText);
+    normalizeDialogueEntries(row.dialogue || row.dialogues).forEach(function (item) {
+      push((item.speaker ? (item.speaker + ': ') : '') + (item.line || ''));
+    });
+    push(row.script);
+    return parts.join('\n');
+  }
+
   // v3.1591: 시나리오가 @토큰 체계를 쓰는 프로젝트면 씬 표기를 그대로 믿는다.
   // 예전에는 토큰이 없는 컷에 활성 캐릭터를 전원 밀어넣어(forceActiveFallback),
   // 큐브만 잡는 인서트 컷에도 캐릭터가 전부 등장했다. 레퍼런스 슬롯도 그때 다 소진됐다.
@@ -1170,6 +1204,19 @@
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
         var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
+        // 화면이 캐릭터를 이름 없이 지칭만 하면("세 캐릭터", "친구들") 1차 해석이 비어
+        // 레퍼런스가 통째로 빠진다 → 씬 전체 텍스트로 넓혀 다시 해석. 1차에서 한 명이라도
+        // 잡히면 폴백하지 않는다(화면 밖 캐릭터가 끼어드는 원래 버그 방지).
+        if (!(res.characters || []).length) {
+          var sceneWidePrompt = buildSceneWideResolutionPrompt(scene, rawP);
+          if (sceneWidePrompt && sceneWidePrompt !== characterResolutionPrompt) {
+            var resWide = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, sceneWidePrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
+            if ((resWide.characters || []).length) {
+              res = resWide;
+              characterResolutionPrompt = sceneWidePrompt;
+            }
+          }
+        }
         try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
@@ -1518,6 +1565,17 @@
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP, shot);
         var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
+        // 화면이 캐릭터를 이름 없이 지칭만 하는 컷은 씬 전체 텍스트로 폴백 (scene 경로와 동일)
+        if (!(res.characters || []).length) {
+          var sceneWidePromptShot = buildSceneWideResolutionPrompt(scene, rawP);
+          if (sceneWidePromptShot && sceneWidePromptShot !== characterResolutionPrompt) {
+            var resWideShot = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, sceneWidePromptShot, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
+            if ((resWideShot.characters || []).length) {
+              res = resWideShot;
+              characterResolutionPrompt = sceneWidePromptShot;
+            }
+          }
+        }
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
           characters: res.characters || [],
@@ -1705,6 +1763,14 @@
         var resolutionText = [text, buildCharacterResolutionPrompt(scene, '')]
           .filter(Boolean).join('\n');
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, resolutionText, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
+        // 지시문·화면 모두 이름 없는 지칭뿐이면 씬 전체 텍스트로 폴백
+        if (!(res && Array.isArray(res.characters) && res.characters.length)) {
+          var sceneWideEdit = buildSceneWideResolutionPrompt(scene, text);
+          if (sceneWideEdit && sceneWideEdit !== resolutionText) {
+            var resWideEdit = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, sceneWideEdit, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
+            if (resWideEdit && Array.isArray(resWideEdit.characters) && resWideEdit.characters.length) res = resWideEdit;
+          }
+        }
         if (res && Array.isArray(res.characters) && res.characters.length) {
           var built = NK.service.characterRegistry.buildResolvedPrompt({
             rawPrompt: text,

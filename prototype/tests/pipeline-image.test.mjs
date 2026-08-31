@@ -241,6 +241,85 @@ test('pipeline image generation attaches only characters present in the composit
   assert.doesNotMatch(prompt, /Include .+ in this scene/, '프레임 밖 캐릭터 강제 주입 문구가 없어야 한다');
 });
 
+// [회귀 테스트] 화면(composition)이 캐릭터를 이름 없이 지칭만 하는 컷
+// ("세 캐릭터의 발·하체가 프레임 하단에")은 화면 레이어 해석이 빈손이 된다.
+// 그렇다고 레퍼런스를 통째로 빼면 등록 캐릭터가 엉뚱한 모습으로 생성된다 —
+// 이럴 때만 씬 전체 텍스트(행동 포함)로 폴백해 레퍼런스를 첨부해야 한다.
+test('pipeline image generation falls back to scene-wide resolution when the composition names no character', async () => {
+  const ctx = createContext({
+    brandById(brandId) {
+      if (String(brandId) !== 'shape-brand') return null;
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' },
+          { characterId: 'char_002', displayName: '세모', token: '@세모', personality: '호기심 많은 빨간 세모' }
+        ],
+        characterSheets: [
+          {
+            token: '@네모',
+            items: [
+              { sheetId: 'sheet_nemo_front', pose: 'front', imageDataUrl: 'gs://bucket/nemo-front.png', isPrimary: true }
+            ]
+          },
+          {
+            token: '@세모',
+            items: [
+              { sheetId: 'sheet_semo_front', pose: 'front', imageDataUrl: 'gs://bucket/semo-front.png', isPrimary: true }
+            ]
+          }
+        ]
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
+      characters: [
+        { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' },
+        { characterId: 'char_002', displayName: '세모', token: '@세모', personality: '호기심 많은 빨간 세모' }
+      ]
+    },
+    scenes: [
+      {
+        id: 1,
+        composition: '낮은 앵글에서 바라본 장난감 방 바닥 — 흩어진 블록과 두 캐릭터의 발·하체가 프레임 하단에 나란히',
+        action: '@네모가 고개를 좌우로 돌리고, @세모가 까치발을 들어 올린다',
+        estSec: 5
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  const refUrls = (ctx.__imagenCalls[0].referenceImages || []).map((r) => r.imageDataUrl);
+  assert.ok(refUrls.includes('gs://bucket/nemo-front.png'), '화면이 익명 지칭뿐이면 씬 전체 폴백으로 @네모 레퍼런스를 첨부해야 한다');
+  assert.ok(refUrls.includes('gs://bucket/semo-front.png'), '화면이 익명 지칭뿐이면 씬 전체 폴백으로 @세모 레퍼런스를 첨부해야 한다');
+});
+
 test('pipeline image generation prefers live draft character sheets when stage state payload is stale', async () => {
   const ctx = createContext({
     brandById() {
