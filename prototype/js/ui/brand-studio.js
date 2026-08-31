@@ -977,6 +977,11 @@
       alertPublishFail: function (e) { return '배포 실패: ' + e; },
       alertPublishSuccess: function (label) { return label + ' 배포 완료!'; },
       alertPublishProcessing: function (label) { return label + ' 배포 요청 완료 — 채널에서 처리 중입니다. 잠시 후 계정에서 게시물을 확인하세요.'; },
+      // 초안(inbox) 전송은 게시가 아니다 — "게시물을 확인하세요"라고 하면 사용자가
+      // 비공개 동영상 목록을 보고 실패로 오인해 재전송한다(24시간 5개 한도 소진).
+      alertTiktokInboxSending: function (label) { return label + ' 초안을 전송하는 중입니다. 완료되면 알려드릴게요.\n\n실패가 아니에요 — 배포를 다시 누르지 않아도 됩니다. 전송이 끝나면 게시물 목록이 아니라 TikTok 앱 알림함(Inbox)에 업로드 알림이 도착합니다.'; },
+      alertTiktokInboxSent: function (label) { return label + ' 초안 전송 완료 — 아직 게시된 것은 아니에요.\n\nTikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.'; },
+      alertTiktokInboxUnconfirmed: function (label) { return label + ' 초안 전송 결과를 여기서 확인하지 못했습니다.\n\n전송이 늦어지는 것일 수 있어요. 잠시 후 TikTok 앱 알림함(Inbox)에 업로드 알림이 왔는지 확인해 주세요. 알림이 끝내 없을 때만 다시 시도해 주세요.'; },
       alertNotPublished: function (label, reason) { return label + ' 게시되지 않았습니다.' + (reason ? '\n\n' + reason : '') + '\n\n배포 완료로 표시하지 않았습니다. 원인을 확인한 뒤 다시 시도해 주세요.'; },
       reasonNoPublishId: 'TikTok이 발행 ID를 돌려주지 않아 아무것도 전송되지 않았습니다.',
       alertPublishPending: function (label) { return label + ' 결과를 확인하지 못했습니다.\n\n채널이 아직 처리 중일 수 있습니다. 계정에서 직접 확인해 주세요. 배포 완료로는 표시하지 않았습니다.'; },
@@ -1051,6 +1056,11 @@
       alertPublishFail: function (e) { return 'Publish failed: ' + e; },
       alertPublishSuccess: function (label) { return label + ' published!'; },
       alertPublishProcessing: function (label) { return label + ' publish requested — the channel is still processing it. Check your account shortly.'; },
+      // Draft (inbox) transfers are not posts — steering users to their posts list
+      // makes them read success as failure and resend (burning the 5-per-24h cap).
+      alertTiktokInboxSending: function (label) { return 'Sending the ' + label + ' draft. We\'ll let you know when it\'s done.\n\nThis is not a failure — no need to deploy again. Nothing will appear in your posts; when the transfer finishes, an upload notification arrives in the TikTok app Inbox.'; },
+      alertTiktokInboxSent: function (label) { return label + ' draft sent — it is not published yet.\n\nOpen the TikTok app Inbox, tap the upload notification, then add a caption and post it.'; },
+      alertTiktokInboxUnconfirmed: function (label) { return 'Could not confirm the ' + label + ' draft transfer from here.\n\nIt may just be slow. Check the TikTok app Inbox for an upload notification in a little while, and retry only if none arrives.'; },
       alertNotPublished: function (label, reason) { return label + ' was not published.' + (reason ? '\n\n' + reason : '') + '\n\nIt has not been marked as published. Check the cause and try again.'; },
       reasonNoPublishId: 'TikTok returned no publish id, so nothing was submitted.',
       alertPublishPending: function (label) { return label + ' result could not be confirmed.\n\nThe channel may still be processing it. Check your account directly. It has not been marked as published.'; },
@@ -2794,7 +2804,7 @@
      * 걸린다. 확인 창 안에서만 기다리면 사용자가 창을 닫는 순간 결과를 영영 모르고,
      * 화면에는 "확인하지 못했습니다"만 남는다.
      */
-    function watchTikTokPublish(fmtId, label, publishId, handle) {
+    function watchTikTokPublish(fmtId, label, publishId, handle, inboxMode) {
       var token = '';
       try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
       var tries = 0;
@@ -2811,6 +2821,12 @@
               _deployedFormats[fmtId] = true;
               persistDeployedFormats();
               refreshDeploySummary();
+              // 초안(inbox) 전송의 complete 는 "게시 완료"가 아니라 "전송 완료"다.
+              // 게시물이 없으니 '게시물 보기' 링크도 달지 않는다.
+              if (inboxMode) {
+                bsfToast(T.alertTiktokInboxSent(label), { tone: 'ok' });
+                return;
+              }
               var h = String(handle || '').replace(/^@/, '');
               var url = (h && st.postId)
                 ? 'https://www.tiktok.com/@' + encodeURIComponent(h) + '/video/' + encodeURIComponent(st.postId)
@@ -2832,7 +2848,9 @@
       }
       function again() {
         if (tries < MAX && Date.now() < deadline) { setTimeout(tick, 10000); return; }
-        bsfNotify(T.alertPublishPending(label));
+        // 초안 전송은 "계정에서 확인하세요"가 오답이다 — 확인처는 앱 알림함이고,
+        // 성급한 재시도는 24시간 5개 한도를 태운다.
+        bsfNotify(inboxMode ? T.alertTiktokInboxUnconfirmed(label) : T.alertPublishPending(label));
       }
       setTimeout(tick, 10000);
     }
@@ -4457,15 +4475,19 @@
               var oneLabel = oneFmt && oneFmt.title ? oneFmt.title : oneFmtId;
               var oneStatus = publishResult.result && publishResult.result.status;
               var oneUrl = (publishResult.result && publishResult.result.url) ? String(publishResult.result.url) : '';
+              // 초안(inbox)의 ok 는 sent_to_inbox — 게시가 아니라 전송 완료다.
+              // "처리 중, 게시물을 확인하세요"로 흘리면 실패로 오인한다.
+              var oneInbox = !!(publishResult.result && publishResult.result.mode === 'inbox');
               var oneMsg = (oneStatus === 'published'
                 ? T.alertPublishSuccess(oneLabel)
-                : T.alertPublishProcessing(oneLabel));
+                : (oneInbox ? T.alertTiktokInboxSent(oneLabel) : T.alertPublishProcessing(oneLabel)));
               // 성공은 읽고 넘어가면 그만이다. 확인 버튼을 누르게 하지 않는다.
               // 게시물 링크는 알림 안의 링크로 준다(영상이 쇼츠로 갔는지 등 바로 확인).
+              // 초안 전송에는 게시물이 없으므로 링크를 달지 않는다.
               bsfToast(oneMsg, {
                 tone: 'ok',
-                href: oneUrl || undefined,
-                linkLabel: isEn ? 'View post' : '게시물 보기',
+                href: (oneInbox ? undefined : (oneUrl || undefined)),
+                linkLabel: oneInbox ? undefined : (isEn ? 'View post' : '게시물 보기'),
               });
             } else if (publishResult.notPublished) {
               // 발행되지 않았다. 조용히 넘어가면 배포된 줄 알고 넘어간다.
@@ -4473,10 +4495,16 @@
               var failLabel = failFmt && failFmt.title ? failFmt.title : oneFmtId;
               // 아직 처리 중이면 확인 창을 닫아도 백그라운드로 계속 지켜본다.
               if (publishResult.pending && publishResult.tiktokPublishId) {
-                bsfToast(T.alertPublishProcessing(failLabel));
+                // 초안(inbox) 전송은 게시물이 생기지 않는다 — "게시물을 확인하세요" 문구를
+                // 쓰면 실패로 오인해 재전송하므로 접수 문구를 따로 쓴다.
+                var pendingInbox = !!(publishResult.result && publishResult.result.mode === 'inbox');
+                bsfToast(pendingInbox
+                  ? T.alertTiktokInboxSending(failLabel)
+                  : T.alertPublishProcessing(failLabel));
                 watchTikTokPublish(
                   oneFmtId, failLabel, publishResult.tiktokPublishId,
-                  (publishResult.result && publishResult.result.handle) || ''
+                  (publishResult.result && publishResult.result.handle) || '',
+                  pendingInbox
                 );
                 return;
               }

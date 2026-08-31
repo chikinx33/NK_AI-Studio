@@ -135,3 +135,74 @@ test("TikTok 사진 게시 전에 PNG 를 JPEG 로 바꾼다", () => {
   assert.match(send, /toJpegForTiktok\(ttImageItems\)/, "변환이 전송 경로에 연결되지 않았다");
   assert.match(send, /photoGcsPaths: ttPaths/, "변환 결과가 요청에 반영되지 않는다");
 });
+
+/*
+ * 초안(inbox) 전송 안내 문구 — v3.1628 회귀 가드.
+ *
+ * 초안 전송의 pending 에 "계정에서 게시물을 확인하세요"를 띄웠더니, 사용자가
+ * 비공개 동영상 목록을 보고 실패로 판단해 배포를 다시 눌렀다(24시간 pending
+ * share 5개 한도 소진). 확인처는 게시물 목록이 아니라 TikTok 앱 알림함(Inbox)이다.
+ */
+
+/** 사전 정의 줄만 모은다 (ko/en 각 1개, 총 2개여야 한다). */
+function dictDefs(key) {
+  const defs = [...studio.matchAll(new RegExp(`${key}: function[^\\n]*`, "g"))].map((m) => m[0]);
+  assert.equal(defs.length, 2, `${key} 정의가 ko/en 짝으로 있지 않다 (발견 ${defs.length}개)`);
+  return defs;
+}
+
+test("초안 접수 문구는 게시물 확인으로 오도하지 않고 알림함을 가리킨다", () => {
+  for (const def of dictDefs("alertTiktokInboxSending")) {
+    assert.doesNotMatch(def, /게시물을 확인|게시물에서 확인|Check your account/, "접수 문구가 게시물 확인으로 오도한다");
+    assert.match(def, /알림함|Inbox/, "확인처(알림함)를 명시하지 않는다");
+    // 실패로 오인한 재전송이 5개/24h 한도를 태운다 — 재시도 불필요를 명시할 것
+    assert.match(def, /다시 누르지 않아도|no need to deploy again/i, "재시도 불필요 안내가 없다");
+  }
+});
+
+test("초안 전송 완료 문구는 게시가 아님과 알림함 마무리를 명시한다", () => {
+  for (const def of dictDefs("alertTiktokInboxSent")) {
+    assert.match(def, /알림함|Inbox/, "확인처(알림함)를 명시하지 않는다");
+    assert.match(def, /아직 게시된 것은 아니|not published yet/, "전송을 게시 완료처럼 말한다");
+    assert.doesNotMatch(def, /배포 완료!|published!/, "다른 플랫폼의 게시 완료 문구를 재사용한다");
+  }
+});
+
+test("초안 미확인(타임아웃) 문구도 알림함을 가리키고 성급한 재시도를 막는다", () => {
+  for (const def of dictDefs("alertTiktokInboxUnconfirmed")) {
+    assert.match(def, /알림함|Inbox/);
+    assert.doesNotMatch(def, /게시물을 확인|Check your account/);
+  }
+});
+
+test("초안 문구가 실제 표시 지점에 연결돼 있다", () => {
+  // 접수(pending): mode==='inbox' 일 때만 초안 문구, 아니면 기존 문구 유지
+  assert.match(studio, /pendingInbox\s*\r?\n?\s*\? T\.alertTiktokInboxSending\(failLabel\)\s*\r?\n?\s*: T\.alertPublishProcessing\(failLabel\)/, "pending 분기가 초안 문구로 연결되지 않았다");
+  // 추적기에 초안 여부가 전달된다
+  assert.match(studio, /function watchTikTokPublish\(fmtId, label, publishId, handle, inboxMode\)/);
+
+  const watch = functionBody(studio, "watchTikTokPublish");
+  // complete: 초안이면 전송 완료 문구, '게시물 보기' 링크 없음
+  const inboxToast = watch.match(/if \(inboxMode\) \{[\s\S]*?\}/);
+  assert.ok(inboxToast, "complete 의 초안 분기가 없다");
+  assert.match(inboxToast[0], /alertTiktokInboxSent\(label\)/);
+  assert.doesNotMatch(inboxToast[0], /linkLabel|View post|게시물 보기/, "초안 전송 완료에 게시물 링크를 단다");
+  // 타임아웃: 초안이면 미확인 문구
+  assert.match(watch, /inboxMode \? T\.alertTiktokInboxUnconfirmed\(label\) : T\.alertPublishPending\(label\)/);
+
+  // 폴링 창 안에 sent_to_inbox 로 끝난 경우(ok 경로)도 초안 문구·링크 제거
+  const one = actionBlock("brand-deploy-one-format");
+  assert.match(one, /oneInbox \? T\.alertTiktokInboxSent\(oneLabel\) : T\.alertPublishProcessing\(oneLabel\)/, "ok 경로가 초안 전송 완료를 처리 중으로 말한다");
+  assert.match(one, /oneInbox \? undefined : \(isEn \? 'View post' : '게시물 보기'\)/, "초안 전송 완료 토스트에 게시물 링크가 남아 있다");
+});
+
+test("문구를 고치면서 상태 매핑을 건드리지 않았다 (sent_to_inbox 만 ok)", () => {
+  const at = studio.indexOf("function ttInboxOutcome(");
+  const body = studio.slice(at, at + 1400);
+  assert.match(body, /st === 'sent_to_inbox'/);
+  assert.match(body, /ok: true, mode: 'inbox'/);
+  assert.match(body, /st === 'status_reported_failed'/);
+  assert.match(body, /pending: true/);
+  // 실패는 기존 alertNotPublished 재사용 + 사유 노출 유지
+  assert.match(studio, /alertNotPublished\(failLabel, publishResult\.notPublishedReason \|\| ''\)/);
+});
