@@ -982,6 +982,15 @@
         if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
         return `ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
       };
+      const isAnalyticsStageLink = !!href && /(^|[\\\/])analytics\.html([?#]|$)/i.test(href);
+      if (isAnalyticsStageLink && document.body?.classList?.contains('page-shell-brand')) {
+        e.preventDefault();
+        e.stopPropagation();
+        persistCurrentProject();
+        NK.navigation.loadStage(buildAnalyticsStageUrl());
+        return;
+      }
+
       const isAiImageStageLink = !!href && /(^|[\\\/])ai-image-stage\.html([?#]|$)/i.test(href);
       if (isAiImageStageLink) {
         e.preventDefault();
@@ -3654,15 +3663,6 @@
     NK.ui.openProjectOverlay = function (options) {
       if (options && options.mode === 'edit-series') {
         openEditor(options);
-        return;
-      }
-
-      const isAnalyticsStageLink = !!href && /(^|[\\\/])analytics\.html([?#]|$)/i.test(href);
-      if (isAnalyticsStageLink && document.body?.classList?.contains('page-shell-brand')) {
-        e.preventDefault();
-        e.stopPropagation();
-        persistCurrentProject();
-        NK.navigation.loadStage(buildAnalyticsStageUrl());
         return;
       }
       openFromAnywhere(options);
