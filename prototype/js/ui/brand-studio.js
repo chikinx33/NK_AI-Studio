@@ -4333,7 +4333,7 @@
           // Direct Post 감사(audit)를 진행하지 않기로 했다. 초안 전송은 video.upload 만
           // 쓰므로 감사와 무관하고, 공개 범위도 사용자가 TikTok 앱에서 직접 고른다.
           // 게시가 아니라 파일 전달이라 Direct Post 확인 모달 요건의 대상도 아니다.
-          // 사진 전용 게시는 inbox 엔드포인트가 영상만 받으므로 기존 경로를 그대로 둔다.
+          // 사진만 있는 경우도 아래에서 content/init(MEDIA_UPLOAD) 초안 전송으로 보낸다.
           var ttInboxMedia = null;
           for (var tvi = 0; tvi < resolvedItems.length; tvi++) {
             var rvItem = resolvedItems[tvi];

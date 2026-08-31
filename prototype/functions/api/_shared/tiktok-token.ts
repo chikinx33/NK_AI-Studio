@@ -1,10 +1,10 @@
 /**
  * TikTok 토큰 · creator_info 공용 헬퍼.
  *
- * 게시 전 확인 모달(GET /api/sns/tiktok/creator-info)과 실제 게시(api/sns/publish)가
- * **같은 규칙**을 봐야 한다. 모달이 보여준 선택지와 서버가 허용하는 값이 어긋나면
- * 사용자가 고른 대로 안 올라가고, TikTok 심사에서도 문서와 동작 불일치로 잡힌다.
- * 그래서 privacy_level 결정 로직을 여기 한 곳에만 둔다.
+ * 초안 전송(api/sns/tiktok/inbox)과 Direct Post(api/sns/publish), OAuth 콜백이
+ * 토큰 갱신·상태 폴링·creator_info 조회를 공유한다. privacy_level 결정 로직을
+ * 여기 한 곳에만 두는 이유: 허용 값 판단이 호출부마다 갈리면 사용자가 고른 대로
+ * 안 올라간다. (심사용 확인 모달 GET /api/sns/tiktok/creator-info 는 삭제됨)
  */
 import {
   getGoogleServiceAccountToken,

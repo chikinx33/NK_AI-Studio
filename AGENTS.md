@@ -20,3 +20,10 @@ Working rules for this repository:
 - Prefer understanding the root cause of issues before applying localized fixes.
 
 ## Imported Claude Cowork project instructions
+
+### 역할 분담
+- Cowork: 기획, 웹페이지 일감, Code 에게 전달할 작업 요청서 작성.
+  요청서는 한 번에 복사·붙여넣기 가능한 하나의 블록으로 작성한다.
+  Cowork 는 저장소 코드를 직접 수정하지 않는다.
+- NK(사용자): 컨펌, 승인, 로그인 등 결정적 권한.
+- Code: 코딩.
