@@ -417,6 +417,42 @@
 
   // ─── Persistence ──────────────────────────────────────────
 
+  // 결과 목록은 컨텍스트(프로젝트 종속/비종속)별로 분리 저장한다.
+  // 프로젝트를 골라 만든 영상은 그 프로젝트에서만, 비종속 영상은 비종속 화면에서만 보인다.
+  function scopedResultsKey(baseKey, projectId) {
+    return baseKey + ':' + (projectId ? ('p:' + projectId) : 'detached');
+  }
+
+  // 예전 단일 키에 컨텍스트 구분 없이 쌓인 결과를 GCS objectName 경로로 판별해
+  // 컨텍스트별 키로 한 번만 옮긴다. (projects{pid}/videos/ ↔ videos/)
+  function migrateLegacyResults(legacyKey) {
+    var raw = null;
+    try { raw = localStorage.getItem(legacyKey); } catch (_) { return; }
+    if (!raw) return;
+    var items = [];
+    try { items = JSON.parse(raw) || []; } catch (_) { items = []; }
+    var buckets = {};
+    items.forEach(function (r) {
+      if (!r) return;
+      var pid = String(r.projectId || '').trim();
+      if (!pid) {
+        var name = String(r.videoObjectName || '');
+        var m = name.match(/\/ai-video-gen\/projects([^/]+)\/videos\//);
+        if (m) pid = m[1];
+      }
+      var key = scopedResultsKey(legacyKey, pid);
+      (buckets[key] = buckets[key] || []).push(r);
+    });
+    try {
+      Object.keys(buckets).forEach(function (key) {
+        var existing = [];
+        try { existing = JSON.parse(localStorage.getItem(key) || '[]') || []; } catch (_) {}
+        localStorage.setItem(key, JSON.stringify(existing.concat(buckets[key]).slice(-MAX_RESULTS)));
+      });
+      localStorage.removeItem(legacyKey);
+    } catch (_) {}
+  }
+
   function loadResults() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -1844,6 +1880,7 @@
       aspectRatio:     state.aspectRatio,
       duration:        state.duration,
       mode:            state.mode,
+      projectId:       state.projectId || '',
       status:          'processing',
       videoObjectName: '',
       thumbnailDataUrl: state.startImageUrl || '',
@@ -2057,10 +2094,11 @@
   vgen.mount = function (container) {
     root = container;
     // Per-user storage isolation: namespace keys by logged-in userId
+    var _baseResultsKey = 'nk_video_gen_results_v1';
     try {
       var _uid = (NK.auth && NK.auth.getUser) ? String(NK.auth.getUser() || '').trim() : '';
       if (_uid) {
-        STORAGE_KEY         = 'nk_video_gen_results_v1_'   + _uid;
+        _baseResultsKey     = 'nk_video_gen_results_v1_'   + _uid;
         STORAGE_SESSION_KEY = 'nk_video_gen_session_id_'   + _uid;
         DELETED_KEY         = 'nk_video_gen_deleted_v1_'   + _uid;
       }
@@ -2071,6 +2109,9 @@
       var det = urlParams.get('detached') === '1';
       state.projectId = (pid && !det) ? pid : '';
     } catch (_) {}
+    // 결과 캐시를 컨텍스트별 키로 전환한다. 예전 통합 키는 첫 진입 때 컨텍스트별로 분배.
+    migrateLegacyResults(_baseResultsKey);
+    STORAGE_KEY = scopedResultsKey(_baseResultsKey, state.projectId);
     state.sessionId      = ensureSessionId();
     state.currentProject = readCurrentProject();
 
