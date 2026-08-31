@@ -52,7 +52,7 @@ test("★복사 → 붙여넣기 왕복에서도 살아남는다", () => {
   // 복사 텍스트에 싣고
   assert.match(src, /if \(beatsLine\) lines\.push\(`타임라인: \$\{beatsLine\}`\);/);
   // 붙여넣기 파서가 읽고
-  assert.match(src, /장소\|화면\|행동\|타임라인\|시각화\|나레이션\|대사/);
+  assert.match(src, /장소\|화면\|행동\|타임라인\|방위\|블로킹\|시각화\|나레이션\|대사/);
   assert.match(src, /'타임라인': 'beats'/);
   // 다시 배열로 되돌린다
   assert.match(src, /beats: textToBeats\(String\(p\.beats \|\| ''\)/);

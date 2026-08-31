@@ -158,6 +158,26 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return out;
     };
 
+    // t=0 무대 배치(정면 기준 좌표). 씬을 고정 목록으로 다시 만드는 구조라
+    // 여기 없으면 저장·불러오기에서 통째로 사라진다.
+    const normalizeBlocking = (value: any) => {
+      if (!Array.isArray(value)) return null;
+      const out: Array<{ token: string; x: string; depth: string; facing: string }> = [];
+      value.forEach((b: any) => {
+        if (!b || typeof b !== "object") return;
+        let token = typeof b.token === "string" ? b.token.trim() : "";
+        if (!token) return;
+        if (!token.startsWith("@")) token = "@" + token.replace(/^@+/, "");
+        out.push({
+          token,
+          x: typeof b.x === "string" ? b.x : "center",
+          depth: typeof b.depth === "string" ? b.depth : "mid",
+          facing: typeof b.facing === "string" ? b.facing : "camera",
+        });
+      });
+      return out.length ? out : null;
+    };
+
     const normalizeShots = (value: any, sceneId: number) => {
       if (!Array.isArray(value)) return [];
       return value
@@ -181,8 +201,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             duration: Number.isFinite(dur) && dur > 0 ? dur : 0,
             shotType: typeof sh.shotType === "string" ? sh.shotType : "MS",
             cameraMove: typeof sh.cameraMove === "string" ? sh.cameraMove : "static",
+            cameraDirection: typeof sh.cameraDirection === "string" ? sh.cameraDirection : "front",
             composition: typeof sh.composition === "string" ? sh.composition : "",
             action: typeof sh.action === "string" ? sh.action : "",
+            beats: normalizeBeats(sh.beats),
+            blocking: normalizeBlocking(sh.blocking),
             imageDataUrl: shotImagePath || shotImageUrl,
             imagePath: shotImagePath,
             videoUrl: shotVideoPath || shotVideoUrl,
@@ -231,6 +254,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const sceneId = Number(s?.id ?? idx + 1);
       const shotType = typeof s?.shotType === "string" ? s.shotType : "MS";
       const cameraMove = typeof s?.cameraMove === "string" ? s.cameraMove : "static";
+      const cameraDirection = typeof s?.cameraDirection === "string" ? s.cameraDirection : "front";
       const composition = typeof s?.composition === "string" ? s.composition : "";
       const action = typeof s?.action === "string" ? s.action : "";
       return {
@@ -248,9 +272,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         visual,
         shotType,
         cameraMove,
+        cameraDirection,
         composition,
         action,
         beats: normalizeBeats(s?.beats),
+        blocking: normalizeBlocking(s?.blocking),
         // v3.1622: 노래 모드의 소절. 씬을 고정 목록으로 다시 만드는 구조라
         // 여기 없으면 저장할 때 서버가 통째로 버린다 — 새로고침하면 모든 컷이
         // '앞 소절이 이어지는 중' 으로 보이고 자막·음원도 소절을 잃는다.

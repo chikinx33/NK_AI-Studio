@@ -409,6 +409,30 @@
     // 카메라 셋업 칩 (scene 단위)
     if (scene.shotType) statusChips += '<span class="scene-row-chip chip-shot-type" title="shot type">' + escapeText(scene.shotType) + '</span>';
     if (scene.cameraMove) statusChips += '<span class="scene-row-chip chip-camera-move" title="camera move">' + escapeText(scene.cameraMove) + '</span>';
+    if (scene.cameraDirection && scene.cameraDirection !== 'front') {
+      statusChips += '<span class="scene-row-chip chip-camera-direction" title="camera direction">' + escapeText(scene.cameraDirection === 'back' ? 'REV' : String(scene.cameraDirection).toUpperCase()) + '</span>';
+    }
+    // 구도 반복 린트: 바로 앞 컷과 shotType·cameraMove·cameraDirection 이 모두 같으면
+    // 컷이 튀지 않고 "같은 그림 두 번"이 된다 — 연출자가 한눈에 보도록 경고 칩을 단다.
+    (function () {
+      var idx = -1;
+      for (var i = 0; i < allScenes.length; i++) {
+        if (allScenes[i] && String(allScenes[i].id) === String(scene.id)) { idx = i; break; }
+      }
+      if (idx <= 0) return;
+      var prev = allScenes[idx - 1];
+      if (!prev) return;
+      var sameSetup = String(prev.shotType || 'MS') === String(scene.shotType || 'MS')
+        && String(prev.cameraMove || 'static') === String(scene.cameraMove || 'static')
+        && String(prev.cameraDirection || 'front') === String(scene.cameraDirection || 'front');
+      if (!sameSetup) return;
+      var en = /^en/i.test((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || '');
+      var label = en ? 'SAME SETUP' : '구도 반복';
+      var tip = en
+        ? 'Same shot type, camera move and direction as the previous cut — the edit may read as a jump. Vary at least one.'
+        : '앞 컷과 샷타입·무브·방위가 모두 같습니다 — 컷이 튀어 보일 수 있어요. 하나는 바꿔 주세요.';
+      statusChips += '<span class="scene-row-chip chip-setup-lint" title="' + escapeAttr(tip) + '">' + escapeText(label) + '</span>';
+    })();
     if (hasImage) statusChips += '<span class="scene-row-chip chip-image">IMG</span>';
     if (hasVideo) statusChips += '<span class="scene-row-chip chip-video">VID</span>';
     if (scene.imgLoading) statusChips += '<span class="scene-row-chip chip-loading">생성중</span>';

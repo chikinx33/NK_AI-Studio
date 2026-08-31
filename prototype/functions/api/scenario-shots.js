@@ -142,6 +142,9 @@ function flattenScenesWithShots(parentScenes, characters) {
         action: "",
         shotType: "MS",
         cameraMove: "static",
+        cameraDirection: "front",
+        beats: null,
+        blocking: null,
         estSec: Number(parent.estSec) || 0,
       });
       continue;
@@ -191,9 +194,13 @@ function flattenScenesWithShots(parentScenes, characters) {
         action,
         shotType: String(sh.shotType || "MS"),
         cameraMove: String(sh.cameraMove || "static"),
+        // 카메라 방위(front/back/left/right) — 배경 방위 플레이트 선택과 공간 기하의 축.
+        cameraDirection: String(sh.cameraDirection || "front"),
         estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
         // 한 샷 안의 시간표. 스틸컷은 beats[0](첫 프레임)으로, 영상은 시간 분배로 쓴다.
         beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
+        // t=0 무대 배치 (정면 기준 좌표). 이미지 프롬프트의 공간 문장이 여기서 나온다.
+        blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
         // 부모 추적용 (마이그레이션/디버깅)
         parentSceneId: parent.id != null ? parent.id : null,
         shotIndexInParent: j,

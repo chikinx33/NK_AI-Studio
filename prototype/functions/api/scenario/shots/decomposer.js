@@ -4,7 +4,7 @@
  * Pass 2 — 단일 scene 을 받아 1~5개의 shot 으로 분해한다.
  *
  * 입력: scene { id, estSec, sceneIntent, sceneLocation, narration, dialogue, visual, ... }
- * 출력: shots [{ id, duration, shotType, cameraMove, composition, action }]
+ * 출력: shots [{ id, duration, shotType, cameraMove, cameraDirection, composition, action, dialogue, beats, blocking }]
  *
  * 핵심 규칙
  * - Σ shots[].duration ≈ scene.estSec (±20% 허용)
@@ -20,6 +20,7 @@ import {
   buildVocabPromptEn,
   normalizeShotType,
   normalizeCameraMove,
+  normalizeCameraDirection,
 } from "./vocab.js";
 
 import { buildBodyGrammar } from "../../_shared/body-grammar.js";
@@ -53,6 +54,12 @@ export function buildShotPromptKo() {
 · action      : 그 안에서 일어나는 물리적 움직임. 추상 표현 금지.
 · beats       : 샷 안에서 보이는 것이 시간에 따라 달라질 때의 시간표.
                 cameraMove 가 static 이 아니면 필수. 정적 샷이면 null.
+· cameraDirection : 카메라 방위 — "front"(정면·기본) / "back"(리버스 샷) / "left" / "right".
+                같은 공간이라도 리버스 샷이면 반드시 "back" 을 쓴다. 배경 플레이트 선택이 이 값을 따른다.
+· blocking    : t=0 순간의 무대 배치. 프레임에 등장하는 캐릭터마다
+                {"token":"@이름","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}.
+                좌표는 카메라가 아니라 "무대를 정면(front)에서 본" 기준으로 적는다 — 방위가 바뀌어도
+                좌표는 그대로 두면 시스템이 회전시킨다. 캐릭터가 없는 샷(인서트)은 null.
 · dialogue    : 대사. 없으면 null 을 명시한다(필드 자체를 빼지 마라).
 세 서술 칸(composition·action·beats)은 서로 다른 것을 쓴다. 같은 문장을 두 칸에 반복하면
 나눈 의미가 없다. composition 은 샷 전체를 한 줄로, 시간에 따른 변화는 beats 로만 쓴다.
@@ -94,6 +101,8 @@ export function buildShotPromptKo() {
 · 인접한 두 샷이 shotType·cameraMove 가 둘 다 같으면 안 된다. 하나는 변주한다.
 · 클라이맥스 씬(sceneIntent 에 발견·페이오프·정점·반전·결과 같은 말이 있거나 마지막 씬)은
   ECU·CU 짧은 컷과 강한 무브(push-in, whip-pan, quick-pan)를 섞는다.
+· 마주보는 인물, 부르고 답하는 장면에는 리버스 샷을 적극 쓴다 — 그 샷의 cameraDirection 을
+  "back" 으로 명시해야 배경이 반대편 공간으로 그려진다. front 인 채로 두면 컷이 튄다.
 · 입력 씬의 visual 이 이미 샷 사이즈·앵글·프레이밍(로우앵글 와이드, ECU, 오프센터 등)을
   지정했다면 그 씬의 첫 샷은 그것을 따른다. 기본값(MS/아이레벨/정면)으로 평탄화하지 마라.
 · sceneLocation 이 넓으면(예: "우주선", "궁전") 컷별 sub-location 을 composition 에 적어도 된다.
@@ -112,7 +121,7 @@ export function buildShotPromptKo() {
 ${buildVocabPromptKo()}
 
 [출력 형식 — JSON 만, 마크다운/설명 금지]
-{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null,"beats":[{"at":0,"what":"<t=0 에 보이는 것>"},{"at":<초>,"what":"<그때 보이는 것>"}]}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","cameraDirection":"front|back|left|right","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null,"beats":[{"at":0,"what":"<t=0 에 보이는 것>"},{"at":<초>,"what":"<그때 보이는 것>"}],"blocking":[{"token":"@이름","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
 
 cameraMove 가 static 이 아닌 샷에 beats 가 없으면 잘못된 응답이다. 내보내기 전에 확인하라.
 응답 첫 글자는 { 마지막 글자는 } 여야 한다.`;
@@ -131,6 +140,12 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 · action      : the physical motion happening inside it. No abstract phrasing.
 · beats       : the timeline inside the shot, for when what is visible changes over time.
                 REQUIRED whenever cameraMove is not "static". null for a truly static shot.
+· cameraDirection : which way the camera faces — "front" (default) / "back" (REVERSE shot) / "left" / "right".
+                A reverse shot in the same space MUST say "back"; background plate selection follows this value.
+· blocking    : the stage layout at t=0. One entry per character in frame:
+                {"token":"@Name","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}.
+                Coordinates are written as seen from the FRONT of the stage, NOT from this shot's camera —
+                keep them fixed and the system rotates them per cameraDirection. null for character-less inserts.
 · dialogue    : the spoken line, or null when there is none (never drop the field).
 The three descriptive fields (composition / action / beats) must say different things. Repeating the
 same sentence in two of them defeats the split. Keep composition to one line for the whole shot and
@@ -176,6 +191,9 @@ Without them the still image is generated from the END state of the move, and th
 · Two adjacent shots must not share the same shotType AND the same cameraMove. Vary at least one.
 · Climax scenes (sceneIntent containing "discovery / payoff / peak / twist / result", or the final scene)
   mix short ECU/CU cuts with strong moves (push-in, whip-pan, quick-pan).
+· For characters facing each other, or call-and-answer beats, use reverse shots deliberately — and set that
+  shot's cameraDirection to "back" so the background renders the opposite side of the space. Leaving it
+  "front" makes the cut jump.
 · If the input scene's visual already specifies a shot size / angle / framing (low-angle wide, ECU,
   off-center...), the scene's first shot MUST honor it. Do not flatten it to a default (MS / eye-level / centered).
 · When sceneLocation is broad ("Spaceship", "Palace"), per-shot sub-locations may be written into composition.
@@ -193,7 +211,7 @@ Without them the still image is generated from the END state of the move, and th
 ${buildVocabPromptEn()}
 
 [Output format — JSON only, no markdown or explanation]
-{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","composition":"<frame description>","action":"<physical action, no dialogue>","dialogue":null,"beats":[{"at":0,"what":"<visible at t=0>"},{"at":<seconds>,"what":"<visible then>"}]}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","cameraDirection":"front|back|left|right","composition":"<frame description>","action":"<physical action, no dialogue>","dialogue":null,"beats":[{"at":0,"what":"<visible at t=0>"},{"at":<seconds>,"what":"<visible then>"}],"blocking":[{"token":"@Name","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
 
 A shot whose cameraMove is not "static" and has no beats is an invalid response. Check before you emit.
 The first character must be { and the last must be }.`;
@@ -285,7 +303,9 @@ export function parseShotResponse(text, scene) {
     const id = String(raw.id || `${sceneId}.${idx + 1}`).trim() || `${sceneId}.${idx + 1}`;
     const dialogue = normalizeShotDialogue(raw.dialogue);
     const beats = normalizeBeats(raw.beats, duration);
-    out.push({ id, duration, shotType, cameraMove, composition, action, dialogue, beats });
+    const cameraDirection = normalizeCameraDirection(raw.cameraDirection) || "front";
+    const blocking = normalizeBlocking(raw.blocking);
+    out.push({ id, duration, shotType, cameraMove, cameraDirection, composition, action, dialogue, beats, blocking });
   });
 
   if (!out.length) return null;
@@ -345,10 +365,13 @@ function mergeTwoShots(a, b) {
     shotType: a.shotType,
     // 정적 샷과 움직이는 샷을 합치면 움직임이 있는 쪽이 이 샷의 성격이다.
     cameraMove: (a.cameraMove && a.cameraMove !== "static") ? a.cameraMove : (b.cameraMove || a.cameraMove),
+    // 합쳐진 샷은 앞 샷의 카메라 셋업에서 시작한다 — 방위와 t=0 블로킹은 앞 샷의 것.
+    cameraDirection: a.cameraDirection || b.cameraDirection || "front",
     composition: a.composition || b.composition,
     action: [a.action, b.action].map((v) => String(v || "").trim()).filter(Boolean).join(" 이어서 "),
     dialogue: a.dialogue || b.dialogue || null,
     beats: normalizeBeats(merged, duration),
+    blocking: a.blocking || b.blocking || null,
   };
 }
 
@@ -424,10 +447,12 @@ export function fallbackSingleShot(scene) {
     duration,
     shotType: "MS",
     cameraMove: "static",
+    cameraDirection: "front",
     composition: visual.split(/[\n.]/)[0] || "프레임 중앙에 주요 피사체",
     action: visual || "씬 비트 그대로 진행",
     dialogue,
     beats: null,
+    blocking: null,
   }];
 }
 
@@ -477,6 +502,37 @@ export function normalizeBeats(raw, duration) {
   if (out.length < 2) return null; // 변화가 없으면 비트를 둘 이유가 없다
   if (out.length > MAX_BEATS_PER_SHOT) out.length = MAX_BEATS_PER_SHOT;
   return out;
+}
+
+/**
+ * blocking(t=0 무대 배치) 정규화. 좌표계는 "마스터 플레이트를 정면에서 본" 기준이다
+ * (클라이언트 js/service/stage-geometry.js 의 normalizeBlocking 과 동일 규약).
+ * 유효 항목이 없으면 null.
+ */
+const BLOCKING_X = ["left", "center", "right"];
+const BLOCKING_DEPTH = ["near", "mid", "far"];
+const BLOCKING_FACING = ["camera", "away", "left", "right"];
+
+export function normalizeBlocking(raw) {
+  if (!Array.isArray(raw)) return null;
+  const out = [];
+  raw.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    let token = String(item.token || item.name || "").trim();
+    if (!token) return;
+    if (!token.startsWith("@")) token = "@" + token.replace(/^@+/, "");
+    const pick = (v, allowed, fb) => {
+      const k = String(v || "").trim().toLowerCase();
+      return allowed.includes(k) ? k : fb;
+    };
+    out.push({
+      token,
+      x: pick(item.x, BLOCKING_X, "center"),
+      depth: pick(item.depth, BLOCKING_DEPTH, "mid"),
+      facing: pick(item.facing, BLOCKING_FACING, "camera"),
+    });
+  });
+  return out.length ? out : null;
 }
 
 export function normalizeShotDialogue(raw) {

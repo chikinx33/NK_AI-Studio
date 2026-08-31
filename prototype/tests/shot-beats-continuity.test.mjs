@@ -167,7 +167,8 @@ test("★편집·저장이 타임라인을 지우지 않는다", () => {
   assert.match(ui, /action: hasStructuredEdit \? actionText : '',[\s\S]{0,20}beats,/);
   // 스냅샷 머지에서도 지킨다(화면에 없을 수 있는 필드라 undefined 면 이전 값 유지).
   assert.match(ui, /const beats = \(s\.beats !== undefined \? s\.beats : prev\.beats\) \|\| null;/);
-  assert.match(ui, /composition,[\s\S]{0,30}action,[\s\S]{0,30}beats[\s\S]{0,20}\}\);/);
+  // v3.1631: beats 뒤에 cameraDirection·blocking 이 함께 실린다 — beats 가 머지 반환에 남아 있는지만 본다.
+  assert.match(ui, /composition,[\s\S]{0,30}action,[\s\S]{0,30}beats[\s\S]{0,80}\}\);/);
 });
 
 function pathToFileUrl(rel) {

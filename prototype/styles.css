@@ -5150,6 +5150,10 @@ textarea::-webkit-scrollbar-corner {
 .scene-row-chip.chip-image { background: rgba(59,130,246,0.15); color: #3b82f6; }
 .scene-row-chip.chip-video { background: rgba(16,185,129,0.15); color: #10b981; }
 .scene-row-chip.chip-loading { background: rgba(255,122,0,0.15); color: #ff7a00; }
+/* 카메라 방위(리버스 샷 등) 칩 */
+.scene-row-chip.chip-camera-direction { background: rgba(168,85,247,0.15); color: #a855f7; }
+/* 구도 반복 린트: 앞 컷과 카메라 셋업이 완전히 같을 때 */
+.scene-row-chip.chip-setup-lint { background: rgba(234,179,8,0.18); color: #eab308; }
 
 .scene-row-body-wrap {
   overflow: hidden;

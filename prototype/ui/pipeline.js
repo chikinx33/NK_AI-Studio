@@ -887,6 +887,9 @@
                 action: action,
                 shotType: String(sh.shotType || 'MS'),
                 cameraMove: String(sh.cameraMove || 'static'),
+                cameraDirection: String(sh.cameraDirection || 'front'),
+                beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
+                blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
                 estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
                 // shot 의 기존 미디어가 있으면 새 scene 의 미디어로 승격
                 imageDataUrl: sh.imageDataUrl || sh.imagePath || '',
@@ -921,8 +924,11 @@
                 duration: Number(sh.duration) || 0,
                 shotType: String(sh.shotType || 'MS'),
                 cameraMove: String(sh.cameraMove || 'static'),
+                cameraDirection: String(sh.cameraDirection || 'front'),
                 composition: String(sh.composition || ''),
                 action: String(sh.action || ''),
+                beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
+                blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
                 imageDataUrl: shImg,
                 imagePath: sh.imagePath || '',
                 videoUrl: shVid,
@@ -955,8 +961,14 @@
               // 새 평탄화 모델: scene 자체에 카메라 셋업
               shotType: String(s.shotType || 'MS'),
               cameraMove: String(s.cameraMove || 'static'),
+              cameraDirection: String(s.cameraDirection || 'front'),
               composition: String(s.composition || ''),
               action: String(s.action || ''),
+              // ★컷 안의 시간표. 여기 없으면 스틸컷 t=0(firstFrame) 로직과 타임라인 UI 가
+              // 프로덕션 화면에서 통째로 죽는다 (서버는 잘 보내는데 재조립이 버리고 있었다).
+              beats: Array.isArray(s.beats) && s.beats.length ? s.beats : null,
+              // t=0 무대 배치 — 리버스 샷 기하의 원천 데이터.
+              blocking: Array.isArray(s.blocking) && s.blocking.length ? s.blocking : null,
               promptText: (s.promptText || ['Common', hClean, 'Visual', (s.shot || '')].join('\n')),
               imageDataUrl: imageRef,
               imageHistory: Array.isArray(s.imageHistory) ? s.imageHistory.filter(Boolean) : [],
@@ -2122,6 +2134,13 @@ function openBackgroundReferenceModal() {
       variantDescPh: '이 세부 배경 묘사 (예: 알파벳이 새겨진 나무 큐브를 가까이서, 카펫 위에 놓인 채)',
       variantAdd: '+ 세부 배경',
       variantHint: '기본 배경을 먼저 생성하면, 같은 공간의 세부 배경(바닥·수면 등)을 추가할 수 있어요.',
+      dirPlates: '4방위 플레이트',
+      dirPlatesTitle: '기본 배경(정면)을 원본으로 후면(리버스)·좌측·우측 플레이트를 자동 생성해요. 리버스 샷의 배경이 반대편 공간으로 그려지는 근거가 됩니다.',
+      dirPlatesBusy: '방위 생성 중...',
+      failDirPlate: '방위 플레이트 생성 실패: ',
+      dirBack: '후면(리버스)',
+      dirLeft: '좌측',
+      dirRight: '우측',
       gen: '생성',
       regen: '재생성',
       genShort: '생성중',
@@ -2183,6 +2202,13 @@ function openBackgroundReferenceModal() {
       variantDescPh: 'Describe this detail (e.g. a close view of the wooden cube with letters, resting on the carpet)',
       variantAdd: '+ Detail view',
       variantHint: 'Generate the base plate first, then you can add detail views of the same place (floor, water surface, etc.).',
+      dirPlates: '4-way plates',
+      dirPlatesTitle: 'Auto-generate back (reverse), left and right plates from the base (front) plate. Reverse shots use these so their background shows the opposite side of the space.',
+      dirPlatesBusy: 'Generating sides...',
+      failDirPlate: 'Direction plate generation failed: ',
+      dirBack: 'Back (reverse)',
+      dirLeft: 'Left side',
+      dirRight: 'Right side',
       gen: 'Generate',
       regen: 'Regenerate',
       genShort: 'Working',
@@ -2312,7 +2338,8 @@ function openBackgroundReferenceModal() {
                       '</div>' +
                     '</div>';
                   }).join('') +
-                  '<button type="button" class="btn-secondary compact bgref-vadd" style="height:56px;align-self:flex-start;">' + esc(T().variantAdd) + '</button>'
+                  '<button type="button" class="btn-secondary compact bgref-vadd" style="height:56px;align-self:flex-start;">' + esc(T().variantAdd) + '</button>' +
+                  '<button type="button" class="btn-secondary compact bgref-dirgen" style="height:56px;align-self:flex-start;" title="' + esc(T().dirPlatesTitle) + '">' + esc(l._dirBusy ? T().dirPlatesBusy : T().dirPlates) + '</button>'
                 : '<span class="muted" style="font-size:11px;">' + esc(T().variantHint) + '</span>') +
             '</div>' +
           '</div>' +
@@ -2420,6 +2447,8 @@ function openBackgroundReferenceModal() {
       });
       var vadd = el.querySelector('.bgref-vadd');
       if (vadd) vadd.onclick = function () { syncFromInputs(); if (locs[i]) { locs[i].variants = locs[i].variants || []; locs[i].variants.push({ id: '', label: '', description: '', refObjectName: '', _busy: false }); render(); } };
+      var dirgen = el.querySelector('.bgref-dirgen');
+      if (dirgen) dirgen.onclick = function () { syncFromInputs(); generateDirectionPlates(i); };
     });
     overlay.querySelectorAll('.bgprop-item').forEach(function (el) {
       var i = Number(el.getAttribute('data-idx'));
@@ -2551,6 +2580,82 @@ function openBackgroundReferenceModal() {
       v._busy = false; render();
       alert(T().failVariant + (e && e.message ? e.message : e));
     }
+  }
+
+  // 4방위 세트 플레이트 — 기본(정면) 플레이트를 원본 삼아 후면·좌측·우측 플레이트를
+  // 순차 생성해 variants 에 dir-back / dir-left / dir-right 로 저장한다.
+  // 리버스 샷(cameraDirection: back)의 배경이 "반대편 공간"으로 그려지는 물리적 근거.
+  // pipeline-image 의 episodeLocationAsset 이 같은 id 규약으로 플레이트를 선택한다.
+  var DIRECTION_PLATE_SPECS = [
+    {
+      dir: 'back',
+      labelKey: 'dirBack',
+      instruction: 'REVERSE ANGLE of the exact same place: the camera has turned around 180 degrees and now shows the side that was BEHIND the camera in the reference image. Invent that opposite side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing or the wall it shows.'
+    },
+    {
+      dir: 'left',
+      labelKey: 'dirLeft',
+      instruction: 'The camera has turned 90 degrees to the LEFT inside the exact same place, now showing its left side. Invent that side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing.'
+    },
+    {
+      dir: 'right',
+      labelKey: 'dirRight',
+      instruction: 'The camera has turned 90 degrees to the RIGHT inside the exact same place, now showing its right side. Invent that side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing.'
+    }
+  ];
+
+  async function generateDirectionPlates(i) {
+    var l = locs[i]; if (!l) return;
+    if (!l.refObjectName) { alert(T().needBasePlate); return; }
+    l._dirBusy = true; render();
+    var st = ctxRef.getState();
+    var primaryUrl = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : '';
+    var placeName = String(l.name || 'this place').trim();
+    var failed = [];
+    for (var d = 0; d < DIRECTION_PLATE_SPECS.length; d++) {
+      var spec = DIRECTION_PLATE_SPECS[d];
+      try {
+        var prompt = [
+          commonPromptOf(st),
+          'SUBJECT: the ' + spec.dir + '-facing view of ' + placeName + '.',
+          spec.instruction,
+          'CONTEXT (materials, palette and lighting only): ' + String(l.description || placeName).trim(),
+          'Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
+          'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood lines above and the reference image. Do not invent or change the art style.'
+        ].filter(Boolean).join('\n');
+        var json = await NK.api.imagen({
+          prompt: prompt,
+          aspectRatio: st.aspectRatio || '16:9',
+          projectId: st.draftId || '',
+          generationMode: 'text-to-image',
+          // environment-detail: 룩만 유지, 구도(방위)는 프롬프트가 정한다.
+          referenceImages: primaryUrl ? [{
+            referenceId: 1,
+            referenceType: 'REFERENCE_TYPE_STYLE',
+            referenceKind: 'environment-detail',
+            imageDataUrl: primaryUrl,
+            subjectDescription: placeName + ' (front-facing master plate)',
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          }] : []
+        });
+        var obj = String(json.objectName || '').trim();
+        if (!obj) { failed.push(spec.dir); continue; }
+        var wantId = 'dir-' + spec.dir;
+        l.variants = l.variants || [];
+        var hit = null;
+        for (var vi = 0; vi < l.variants.length; vi++) {
+          if (l.variants[vi] && String(l.variants[vi].id || '') === wantId) { hit = l.variants[vi]; break; }
+        }
+        if (!hit) { hit = { id: wantId, label: '', description: '', refObjectName: '' }; l.variants.push(hit); }
+        hit.label = T()[spec.labelKey];
+        hit.refObjectName = obj;
+        render();
+      } catch (e) {
+        failed.push(spec.dir);
+      }
+    }
+    l._dirBusy = false; render();
+    if (failed.length) alert(T().failDirPlate + failed.join(', '));
   }
 
   // 소품 이미지 생성 — 컷에서 재사용할 레퍼런스라 물건 하나만 크게, 배경은 비운다.

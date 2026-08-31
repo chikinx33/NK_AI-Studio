@@ -35,8 +35,18 @@ export const CAMERA_MOVES = Object.freeze({
   pull_out: { ko: "풀아웃",          en: "Pull-Out",      hint: "피사체에서 천천히 멀어짐 (해소감)" },
 });
 
+// 카메라 방위 — 세트(장소)의 마스터 플레이트가 바라보는 방향이 front.
+// 리버스 샷 = back. 배경 방위 플레이트 선택과 공간 기하 조립의 기준 축이다.
+export const CAMERA_DIRECTIONS = Object.freeze({
+  front: { ko: "정면",       en: "Front",  hint: "마스터 플레이트와 같은 방향 (기본값)" },
+  back:  { ko: "후면(리버스)", en: "Back",   hint: "리버스 샷 — 정면의 반대편 공간을 비춘다" },
+  left:  { ko: "좌측",       en: "Left",   hint: "세트 왼쪽 벽을 바라본다" },
+  right: { ko: "우측",       en: "Right",  hint: "세트 오른쪽 벽을 바라본다" },
+});
+
 export const SHOT_TYPE_KEYS = Object.freeze(Object.keys(SHOT_TYPES));
 export const CAMERA_MOVE_KEYS = Object.freeze(Object.keys(CAMERA_MOVES));
+export const CAMERA_DIRECTION_KEYS = Object.freeze(Object.keys(CAMERA_DIRECTIONS));
 
 /**
  * 어휘 표(LLM 프롬프트용 멀티라인 텍스트). KO/EN 두 버전.
@@ -87,4 +97,13 @@ export function normalizeCameraMove(raw) {
   if (!raw) return null;
   const key = String(raw).trim().toLowerCase().replace(/[\s-]/g, "_");
   return CAMERA_MOVE_KEYS.includes(key) ? key : null;
+}
+
+export function normalizeCameraDirection(raw) {
+  if (!raw) return null;
+  const key = String(raw).trim().toLowerCase().replace(/[\s-]/g, "_");
+  if (CAMERA_DIRECTION_KEYS.includes(key)) return key;
+  // LLM 이 쓰기 쉬운 동의어 흡수
+  if (key === "reverse" || key === "rear" || key === "behind") return "back";
+  return null;
 }

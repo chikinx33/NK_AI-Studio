@@ -688,10 +688,29 @@
     return null;
   }
 
-  function episodeLocationAsset(row) {
+  function episodeLocationAsset(row, cameraDirection) {
     if (!row) return null;
     var name = normalizeText(row.name) || 'this location';
     var objectName = String(row.refObjectName || '').trim();
+    var directionNote = '';
+    // 방위별 세트 플레이트: 컷의 cameraDirection 이 front 가 아니고 그 방위의 플레이트
+    // (variant id 'dir-back' 등)가 등록돼 있으면 마스터 대신 그 플레이트를 쓴다.
+    // 리버스 샷의 배경이 "반대편 벽"이 되는 실제 경로다. 없으면 마스터로 폴백하되,
+    // 마스터가 반대 방향임을 프롬프트에 알려 그대로 베끼지 않게 한다.
+    var dir = String(cameraDirection || '').trim().toLowerCase();
+    if (dir && dir !== 'front') {
+      var wantId = (NK.service && NK.service.stageGeometry && NK.service.stageGeometry.directionVariantId)
+        ? NK.service.stageGeometry.directionVariantId(dir)
+        : ('dir-' + dir);
+      var variants = Array.isArray(row.variants) ? row.variants : [];
+      var hit = variants.find(function (v) { return v && String(v.id || '') === wantId && String(v.refObjectName || '').trim(); });
+      if (hit) {
+        objectName = String(hit.refObjectName).trim();
+        directionNote = ' (the ' + dir + '-facing side of this location)';
+      } else {
+        directionNote = ' — NOTE: this reference shows the FRONT side of the location, but this shot faces the ' + dir.toUpperCase() + ' side. Keep only the architectural style, palette and lighting; invent the ' + dir + '-side layout consistently instead of copying the reference framing.';
+      }
+    }
     var url = (objectName && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objectName) : '';
     if (!url) return null;
     return {
@@ -699,7 +718,7 @@
       displayName: name,
       token: '@' + name.replace(/\s+/g, ''),
       kind: 'background',
-      description: normalizeText(row.description),
+      description: (normalizeText(row.description) + directionNote).trim(),
       items: [{ sheetId: 'episode', imageDataUrl: url, isPrimary: true }]
     };
   }
@@ -720,7 +739,7 @@
       scene,
       text,
       options && options.skipEpisodeLocationId
-    ));
+    ), scene && scene.cameraDirection);
     if (locAsset) {
       var locKey = String(locAsset.displayName || '').toLowerCase();
       matched = [locAsset].concat(matched.filter(function (a) {
@@ -939,8 +958,36 @@
       promptBlocks.push('Composition: ' + action); // 화면·비주얼이 모두 없을 때만 최후 보루
     }
     if (cameraHint) promptBlocks.push(cameraHint);
+    appendStageGeometry(promptBlocks, scene, null);
     promptBlocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
     return promptBlocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
+  }
+
+  // ── 카메라 방위 + 블로킹(공간 기하) ──────────────────────────────────
+  // 방위(cameraDirection)가 front 가 아니면 "카메라가 반대편/옆면을 본다"는 사실을,
+  // 블로킹이 있으면 "이 카메라에서 각 캐릭터가 프레임 어디에·어느 거리에·어느 방향을
+  // 보고 서 있는지"를 기하 계산으로 문장화해 붙인다. 블로킹 문장은 화면(composition)
+  // 텍스트에 실제로 등장하는 @토큰으로만 제한한다 — 화면 밖 캐릭터를 끌어들이지 않도록.
+  function appendStageGeometry(blocks, scene, shot) {
+    var row = shot || scene || {};
+    var cameraDirection = String((shot && shot.cameraDirection) || (scene && scene.cameraDirection) || 'front');
+    try {
+      if (NK.service && NK.service.shotVocab && NK.service.shotVocab.buildCameraDirectionHint) {
+        var dirHint = NK.service.shotVocab.buildCameraDirectionHint(cameraDirection, 'en');
+        if (dirHint) blocks.push(dirHint);
+      }
+    } catch (_) {}
+    try {
+      var blocking = (shot && shot.blocking) || (scene && scene.blocking);
+      if (blocking && NK.service && NK.service.stageGeometry && NK.service.stageGeometry.buildBlockingLines) {
+        var compSource = shot
+          ? buildCharacterResolutionPrompt(scene, '', shot)
+          : buildCharacterResolutionPrompt(scene, '');
+        var tokens = String(compSource || '').match(/@[0-9A-Za-z가-힣_]{1,24}/g);
+        var line = NK.service.stageGeometry.buildBlockingLines(blocking, cameraDirection, tokens && tokens.length ? tokens : null);
+        if (line) blocks.push(line);
+      }
+    } catch (_) {}
   }
 
   /**
@@ -1001,6 +1048,7 @@
     } else if (composition) blocks.push('Composition: ' + composition);
     else if (action) blocks.push('Composition: ' + action); // 화면이 없을 때만 최후 보루
     if (cameraHint) blocks.push(cameraHint);
+    appendStageGeometry(blocks, scene, shot);
     blocks.push('Render this single shot only — do NOT depict the entire scene at once. Keep framing/composition strictly to the camera spec above.');
     blocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
     return blocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
@@ -1394,6 +1442,38 @@
           ? Object.assign({}, referencePayload, { referenceImages: baseRefs })
           : { referenceImages: baseRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
       }
+    } else {
+      // ── 자동 연속성 앵커 ──────────────────────────────────────────────
+      // 사용자가 컷 레퍼런스를 고르지 않았어도, 같은 장소의 직전 생성 컷이 있으면
+      // 그 스틸을 continuity 레퍼런스로 붙인다. 컷마다 공간이 새로 지어져
+      // B→C 화면이 튀던 문제의 완화 장치 — 세트(공간)의 정체성만 잇고,
+      // 구도·카메라·등장 인물은 이 컷의 프롬프트가 결정한다.
+      try {
+        var prevScenes = st.scenes || [];
+        var thisLoc = String(scene.sceneLocation || '').trim().toLowerCase();
+        for (var pi = opts.idx - 1; pi >= 0; pi--) {
+          var prevSc = prevScenes[pi];
+          if (!prevSc) continue;
+          var prevLoc = String(prevSc.sceneLocation || '').trim().toLowerCase();
+          if (thisLoc && prevLoc && prevLoc !== thisLoc) break; // 장소가 바뀌면 잇지 않는다
+          var prevImg = String(prevSc.imageDataUrl || '').trim();
+          if (!prevImg || prevImg.indexOf('data:') === 0) continue; // 저장 안 된 인라인은 제외
+          var autoRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [];
+          autoRefs.push({
+            referenceId: autoRefs.length + 1,
+            referenceType: 'REFERENCE_TYPE_STYLE',
+            referenceKind: 'continuity',
+            imageDataUrl: prevImg,
+            subjectDescription: 'an earlier cut in this same physical space — match the set dressing, architecture, palette and lighting of this place, but do NOT copy its framing, camera angle, or which characters appear; those come from the prompt',
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          });
+          referencePayload = referencePayload
+            ? Object.assign({}, referencePayload, { referenceImages: autoRefs })
+            : { referenceImages: autoRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
+          try { console.log('Auto continuity reference (image):', { sceneId: scene.id, fromSceneId: prevSc.id }); } catch (_) {}
+          break;
+        }
+      } catch (_) {}
     }
     // 4장 상한을 넘겼으면 우선순위대로 남긴다(서버가 뒤에서 자르면 컷 레퍼런스가 사라진다).
     if (referencePayload && Array.isArray(referencePayload.referenceImages)) {

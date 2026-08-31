@@ -36,6 +36,15 @@
     pull_out: { ko: '풀아웃',   en: 'Pull-Out',   hint: '피사체에서 천천히 멀어짐 (해소감)',   enHint: 'slow pull-out away from the subject, providing release' },
   };
 
+  // 카메라 방위 — 세트 마스터 플레이트가 바라보는 방향이 front. 리버스 샷 = back.
+  // functions/api/scenario/shots/vocab.js 의 CAMERA_DIRECTIONS 와 키 셋이 동일해야 한다.
+  var CAMERA_DIRECTIONS = {
+    front: { ko: '정면',        en: 'Front', enHint: 'front side of the set (same direction as the master plate)' },
+    back:  { ko: '후면(리버스)', en: 'Back',  enHint: 'REVERSE ANGLE — the camera has turned around and now faces the opposite side of the same space; the background behind the subject is the far side of the room, NOT the side seen in front-facing shots' },
+    left:  { ko: '좌측',        en: 'Left',  enHint: 'the camera faces the left side of the set' },
+    right: { ko: '우측',        en: 'Right', enHint: 'the camera faces the right side of the set' },
+  };
+
   function normalizeShotType(raw) {
     if (!raw) return null;
     var key = String(raw).trim().toUpperCase().replace(/[\s-]/g, '_');
@@ -46,6 +55,30 @@
     if (!raw) return null;
     var key = String(raw).trim().toLowerCase().replace(/[\s-]/g, '_');
     return Object.prototype.hasOwnProperty.call(CAMERA_MOVES, key) ? key : null;
+  }
+
+  function normalizeCameraDirection(raw) {
+    if (!raw) return null;
+    var key = String(raw).trim().toLowerCase().replace(/[\s-]/g, '_');
+    if (Object.prototype.hasOwnProperty.call(CAMERA_DIRECTIONS, key)) return key;
+    if (key === 'reverse' || key === 'rear' || key === 'behind') return 'back';
+    return null;
+  }
+
+  // 이미지 프롬프트에 붙일 방위 한 줄. front 는 기본값이라 빈 문자열(굳이 말하지 않는다).
+  function buildCameraDirectionHint(raw, lang) {
+    var key = normalizeCameraDirection(raw);
+    if (!key || key === 'front') return '';
+    var v = CAMERA_DIRECTIONS[key];
+    if (lang === 'ko') return '카메라 방위: ' + v.ko + '.';
+    return 'Camera direction: ' + v.enHint + '.';
+  }
+
+  function getCameraDirectionLabel(raw, lang) {
+    var key = normalizeCameraDirection(raw);
+    if (!key) return String(raw || '');
+    var v = CAMERA_DIRECTIONS[key];
+    return lang === 'ko' ? v.ko : v.en;
   }
 
   function describeShotType(raw, lang) {
@@ -98,10 +131,15 @@
   service.shotVocab = {
     SHOT_TYPES: SHOT_TYPES,
     CAMERA_MOVES: CAMERA_MOVES,
+    CAMERA_DIRECTIONS: CAMERA_DIRECTIONS,
     SHOT_TYPE_KEYS: Object.keys(SHOT_TYPES),
     CAMERA_MOVE_KEYS: Object.keys(CAMERA_MOVES),
+    CAMERA_DIRECTION_KEYS: Object.keys(CAMERA_DIRECTIONS),
     normalizeShotType: normalizeShotType,
     normalizeCameraMove: normalizeCameraMove,
+    normalizeCameraDirection: normalizeCameraDirection,
+    buildCameraDirectionHint: buildCameraDirectionHint,
+    getCameraDirectionLabel: getCameraDirectionLabel,
     describeShotType: describeShotType,
     describeCameraMove: describeCameraMove,
     buildShotCameraHint: buildShotCameraHint,

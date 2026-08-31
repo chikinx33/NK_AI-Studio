@@ -23,7 +23,7 @@ test("★등록된 배경 플레이트는 컷 기반 생성 체크와 무관하�
   assert.match(s, /배경·소품\(환경\) 레퍼런스: 캐릭터 활성화 여부와 무관하게 항상 시도/);
   // 그 경로에서 에피소드 배경 플레이트를 찾는다.
   assert.match(s, /function matchEpisodeLocation\(payload, projectRecord, scene, text, skipId\)/);
-  assert.match(s, /function episodeLocationAsset\(row\)/);
+  assert.match(s, /function episodeLocationAsset\(row, cameraDirection\)/);
 
   const bundle = s.slice(
     s.indexOf("function buildEnvironmentReferenceBundle"),
