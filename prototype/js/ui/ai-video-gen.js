@@ -11,7 +11,7 @@
     { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
     { id: 'grok-r2v',    label: 'Grok R2V',               t2v: false, i2v: true,  caps: ['refs'], maxRefs: 7 },
     { id: 'grok-extend',  label: 'Grok Extend',            t2v: false, i2v: true,  caps: ['video'] },
-    { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
+    { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
     { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'], maxRefs: 9 },
     // wan-2.7/image-to-video 는 image·last_image 만 받는다. refs 는 별도 엔드포인트(reference-to-video)라
@@ -66,11 +66,11 @@
       'grok':         'xAI 모델. 창의적·스타일리시 영상. 텍스트/이미지 모두 지원, 720p.',
       'grok-r2v':     '레퍼런스 이미지 기반 영상 생성. 인물·스타일 일관성 유지. 시작 프레임 고정 없이 참조로만 영향. 720p.',
       'grok-extend':  'Grok 영상을 마지막 프레임에서 자연스럽게 연장. 기존 영상 업로드 → 이어지는 장면 생성. 720p.',
-      'kling-final':  '1080p FHD 최고화질. 시작+끝 프레임, 카메라 무브먼트 지원.',
+      'kling-final':  '1080p FHD 고화질. 시작 프레임과 프롬프트 기반 카메라 무브먼트를 지원합니다.',
       'seedance':     'ByteDance 모델. 자연스러운 움직임, 최대 15초 영상 지원.',
-      'wan':          '끝 프레임·레퍼런스 5장·오디오 입력 모두 지원. 가장 다양한 입력 방식. $0.085/초.',
-      'seedance-r2v': '레퍼런스+오디오 기반 영상 생성. 기존 영상 편집·연장 가능. $0.127/초.',
-      'vidu-q3':      '1~4장 레퍼런스로 인물 일관성 유지. 영상+음향 동시 1패스 생성. 1080p. $0.106/초.'
+      'wan':          '시작+끝 프레임과 오디오 입력을 지원합니다. 레퍼런스 이미지는 이 모드에서 지원하지 않습니다.',
+      'seedance-r2v': '최대 9장 레퍼런스와 오디오·영상 입력으로 일관성, 편집, 연장을 다룹니다.',
+      'vidu-q3':      '1~4장 레퍼런스로 인물 일관성을 유지하고 영상과 음향을 함께 생성합니다.'
     },
     en: {
       'veo':          'Optional start frame. Google model, 1080p high-quality realistic video.',
@@ -78,11 +78,41 @@
       'grok':         'xAI model. Creative, stylized video. Supports text & image, 720p.',
       'grok-r2v':     'Reference-to-video. Maintains character/style consistency without locking the start frame. 720p.',
       'grok-extend':  'Extend a Grok video from its last frame. Upload an existing video → generate a seamless continuation. 720p.',
-      'kling-final':  '1080p FHD top quality. Start+end frames, camera movement supported.',
+      'kling-final':  '1080p FHD quality. Supports a start frame and prompt-based camera movement.',
       'seedance':     'ByteDance model. Smooth motion, up to 15-second video.',
-      'wan':          'End frame, 5 reference images, and audio all supported. Most versatile input. $0.085/sec.',
-      'seedance-r2v': 'Generate from references+audio. Edit or extend existing video. $0.127/sec.',
-      'vidu-q3':      '1–4 reference images for character consistency. Video+audio in one pass. 1080p. $0.106/sec.'
+      'wan':          'Supports start/end frames and audio. Reference images are not supported in this mode.',
+      'seedance-r2v': 'Use up to 9 references plus audio or video for consistency, editing, and extension.',
+      'vidu-q3':      'Uses 1–4 reference images for subject consistency and generates video with audio.'
+    }
+  };
+
+  // 모델 선택 안내. 기능은 ALL_MODELS/MODEL_DURATION_CHOICES 에서 읽고,
+  // 여기에는 사용 목적과 과금 방식만 둔다. 금액은 공급자 공식 가격표를
+  // 2026-09-01 확인한 값이며 변동될 수 있다.
+  var MODEL_GUIDE = {
+    ko: {
+      'veo': { best: '빠른 시안 · 일반 광고 · 자연스러운 움직임', how: '텍스트만 쓰거나 시작 이미지를 넣고, 피사체 동작과 카메라 움직임을 한 문장씩 명확히 적으세요.', billing: 'Atlas Cloud · 출력 $0.08/초' },
+      'veo-full': { best: '최종 납품 · 사실감 · 품질 우선 장면', how: '속도보다 디테일이 중요한 히어로 컷에 쓰세요. 텍스트 또는 시작 이미지로 생성할 수 있습니다.', billing: 'Atlas Cloud · 출력 $0.20/초' },
+      'grok': { best: '스타일리시한 연출 · 아이디어 탐색 · 빠른 변주', how: '텍스트 또는 시작 이미지를 넣고 화면에서 일어나야 할 변화를 중심으로 적으세요. 앱은 720p로 생성합니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 이미지 $0.002/장' },
+      'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 이미지 $0.002/장' },
+      'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 영상 $0.01/초' },
+      'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas Cloud · $0.06/회' },
+      'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시하세요. 앱은 720p로 생성합니다.', billing: 'Atlas Cloud · 출력 $0.112/초' },
+      'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭하세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 720p 약 21,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가)' },
+      'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
+      'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' }
+    },
+    en: {
+      'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas Cloud · $0.08/sec output' },
+      'veo-full': { best: 'Final delivery · realism · quality-first shots', how: 'Use for hero shots where detail matters more than speed. Generate from text or a start image.', billing: 'Atlas Cloud · $0.20/sec output' },
+      'grok': { best: 'Stylized direction · ideation · quick variations', how: 'Use text or a start image and focus the prompt on what should change on screen. The app outputs 720p.', billing: 'xAI · $0.07/sec 720p output + $0.002/input image' },
+      'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'xAI · $0.07/sec 720p output + $0.002/input image' },
+      'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'xAI · $0.07/sec 720p output + $0.01/sec input video' },
+      'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas Cloud · $0.06/run' },
+      'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image and prompt only the changes that are not already in it. The app outputs 720p.', billing: 'Atlas Cloud · $0.112/sec output' },
+      'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references and call them image 1, image 2, and so on. It does not lock a start frame.', billing: 'Atlas Cloud · ~21,600 output tokens/sec at 720p · $11.20/1M image-only · $6.88/1M with video (input video tokens added)' },
+      'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
+      'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' }
     }
   };
 
@@ -413,6 +443,147 @@
     if (state.model === 'vidu-q3') return 4;
     if (state.model === 'seedance-r2v') return 5;
     return 0;
+  }
+
+  function modeLabelsFor(model) {
+    var out = [];
+    if (model.t2v) out.push('T2V');
+    if (model.i2v) out.push('I2V');
+    return out;
+  }
+
+  function guideDurationFor(modelId) {
+    var choices = MODEL_DURATION_CHOICES[modelId] || DURATIONS_VEO;
+    if (choices.indexOf(state.duration) !== -1) return state.duration;
+    var target = Number(state.duration) || choices[0];
+    return choices.reduce(function (best, value) {
+      return Math.abs(value - target) < Math.abs(best - target) ? value : best;
+    }, choices[0]);
+  }
+
+  function money(n) {
+    return '$' + Number(n || 0).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  function currentUsageEstimate() {
+    var id = state.model;
+    var duration = guideDurationFor(id);
+    var suffix = state.lang === 'en' ? ' estimated' : ' 예상';
+    if (id === 'kling-final') return '$0.06' + suffix;
+    if (id === 'vidu-q3') return '$0.106' + suffix;
+    if (id === 'veo') return money(duration * 0.08) + suffix;
+    if (id === 'veo-full') return money(duration * 0.20) + suffix;
+    if (id === 'seedance') return money(duration * 0.112) + suffix;
+    if (id === 'wan') return money(Math.max(5, duration) * 0.10) + suffix;
+    if (id === 'grok' || id === 'grok-r2v' || id === 'grok-extend') {
+      var base = duration * 0.07;
+      if (id === 'grok' && state.startImageUrl) base += 0.002;
+      if (id === 'grok-r2v') base += state.referenceUrls.filter(Boolean).length * 0.002;
+      var extra = id === 'grok-extend'
+        ? (state.lang === 'en' ? ' + input video' : ' + 입력 영상')
+        : '';
+      return money(base) + extra + suffix;
+    }
+    if (id === 'seedance-r2v') {
+      var tokens = 21600 * duration;
+      var tokenText = tokens.toLocaleString(state.lang === 'en' ? 'en-US' : 'ko-KR');
+      if (state.videoUrl) {
+        return state.lang === 'en'
+          ? '~' + tokenText + ' output tokens + input video tokens · provider quote'
+          : '약 ' + tokenText + ' 출력 토큰 + 입력 영상 토큰 · 공급자 견적';
+      }
+      var cost = money(tokens / 1000000 * 11.20);
+      return state.lang === 'en'
+        ? '~' + tokenText + ' video tokens · ' + cost + ' estimated'
+        : '약 ' + tokenText + ' 영상 토큰 · ' + cost + ' 예상';
+    }
+    return state.lang === 'en' ? 'See provider quote' : '공급자 견적 확인';
+  }
+
+  var _modelGuideOpener = null;
+
+  function openModelGuide(opener) {
+    closeModelGuide();
+    _modelGuideOpener = opener || null;
+    var lang = state.lang === 'en' ? 'en' : 'ko';
+    var copy = lang === 'en' ? {
+      title: 'Video model guide',
+      subtitle: 'Choose by input type, desired result, and actual billing unit.',
+      current: 'Current selection', best: 'Best for', how: 'How to use', usage: 'Usage / cost', close: 'Close',
+      note: 'Opening this guide does not start a generation or spend credits. Video models do not all use text tokens: most bill per second or per run, while Seedance Reference uses output video tokens. Rates were checked against official provider pricing on Sep 1, 2026 and may change. Failed Atlas Cloud tasks are not charged.'
+    } : {
+      title: '영상 생성 모델 가이드',
+      subtitle: '입력 방식, 원하는 결과, 실제 과금 단위를 비교해 모델을 고르세요.',
+      current: '현재 선택', best: '추천 용도', how: '사용법', usage: '사용량 / 비용', close: '닫기',
+      note: '이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다. 영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라 대부분 초당 또는 회당 과금되며, Seedance Reference만 출력 영상 토큰을 사용합니다. 단가는 2026-09-01 공급자 공식 가격 기준이며 변동될 수 있습니다. Atlas Cloud의 실패 작업은 과금되지 않습니다.'
+    };
+    var modal = el('div', 'vgen-guide-modal', {
+      'data-vgen-guide-modal': '1', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'vgen-guide-title'
+    });
+    var box = el('div', 'vgen-guide-box');
+    var head = el('div', 'vgen-guide-head');
+    var headCopy = el('div', 'vgen-guide-head-copy');
+    headCopy.appendChild(el('h2', 'vgen-guide-title', { id: 'vgen-guide-title', textContent: copy.title }));
+    headCopy.appendChild(el('p', 'vgen-guide-subtitle', { textContent: copy.subtitle }));
+    head.appendChild(headCopy);
+    var closeBtn = el('button', 'vgen-guide-close', { type: 'button', 'data-vgen-guide-close': '1', 'aria-label': copy.close, textContent: '×' });
+    head.appendChild(closeBtn);
+    box.appendChild(head);
+
+    var current = currentModelObj();
+    var currentBar = el('div', 'vgen-guide-current');
+    currentBar.appendChild(el('span', 'vgen-guide-current-label', { textContent: copy.current }));
+    currentBar.appendChild(el('strong', '', { textContent: current.label + ' · ' + guideDurationFor(current.id) + (lang === 'en' ? 's' : '초') }));
+    currentBar.appendChild(el('span', 'vgen-guide-current-cost', { textContent: currentUsageEstimate() }));
+    box.appendChild(currentBar);
+
+    var grid = el('div', 'vgen-guide-grid');
+    var guideSet = MODEL_GUIDE[lang] || MODEL_GUIDE.ko;
+    ALL_MODELS.forEach(function (model) {
+      var info = guideSet[model.id];
+      if (!info) return;
+      var card = el('article', 'vgen-guide-card' + (model.id === state.model ? ' is-current' : ''));
+      var cardHead = el('div', 'vgen-guide-card-head');
+      cardHead.appendChild(el('h3', '', { textContent: model.label }));
+      var badges = el('div', 'vgen-guide-badges');
+      modeLabelsFor(model).forEach(function (label) {
+        badges.appendChild(el('span', 'vgen-guide-badge', { textContent: label }));
+      });
+      cardHead.appendChild(badges);
+      card.appendChild(cardHead);
+      card.appendChild(el('p', 'vgen-guide-lengths', {
+        textContent: (lang === 'en' ? 'Lengths ' : '지원 길이 ') + (MODEL_DURATION_CHOICES[model.id] || DURATIONS_VEO).join('·') + (lang === 'en' ? 's' : '초')
+      }));
+      [[copy.best, info.best], [copy.how, info.how], [copy.usage, info.billing]].forEach(function (row) {
+        var section = el('div', 'vgen-guide-card-row');
+        section.appendChild(el('span', 'vgen-guide-card-label', { textContent: row[0] }));
+        section.appendChild(el('p', '', { textContent: row[1] }));
+        card.appendChild(section);
+      });
+      grid.appendChild(card);
+    });
+    box.appendChild(grid);
+    box.appendChild(el('p', 'vgen-guide-note', { textContent: copy.note }));
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    document.body.classList.add('vgen-guide-open');
+    document.addEventListener('keydown', onModelGuideKeydown);
+    closeBtn.focus();
+  }
+
+  function closeModelGuide() {
+    var modal = document.querySelector('[data-vgen-guide-modal]');
+    if (modal) modal.remove();
+    document.body.classList.remove('vgen-guide-open');
+    document.removeEventListener('keydown', onModelGuideKeydown);
+    if (_modelGuideOpener && document.documentElement.contains(_modelGuideOpener)) {
+      try { _modelGuideOpener.focus(); } catch (_) {}
+    }
+    _modelGuideOpener = null;
+  }
+
+  function onModelGuideKeydown(e) {
+    if (e.key === 'Escape') closeModelGuide();
   }
 
   // ─── Persistence ──────────────────────────────────────────
@@ -811,6 +982,12 @@
     document.removeEventListener('keydown', _modalKeyHandler);
   }
 
+  document.addEventListener('click', function (e) {
+    var modal = e.target && e.target.closest ? e.target.closest('[data-vgen-guide-modal]') : null;
+    if (!modal) return;
+    if (e.target === modal || (e.target.closest && e.target.closest('[data-vgen-guide-close]'))) closeModelGuide();
+  });
+
   function render() {
     if (!root) return;
     root.innerHTML = '';
@@ -1170,6 +1347,7 @@
     var isI2vMode = isI2vOnly || state.mode === 'i2v';
 
     // Mode tabs (항상 표시; I2V 전용 모델은 T2V 탭 비활성)
+    var tabsRow = el('div', 'vgen-tabs-row');
     var tabs = el('div', 'vgen-tabs');
     ['t2v', 'i2v'].forEach(function (mode) {
       var isActive = state.mode === mode;
@@ -1183,7 +1361,13 @@
       if (isDisabled) tab.setAttribute('disabled', '');
       tabs.appendChild(tab);
     });
-    panel.appendChild(tabs);
+    tabsRow.appendChild(tabs);
+    tabsRow.appendChild(el('button', 'vgen-model-guide-btn', {
+      id: 'vgen-model-guide-btn', type: 'button', textContent: '?',
+      'aria-label': state.lang === 'en' ? 'Open video model guide' : '영상 모델 안내 열기',
+      title: state.lang === 'en' ? 'Video model guide' : '영상 모델 안내'
+    }));
+    panel.appendChild(tabsRow);
 
     // Settings row: model / aspect / duration
     var row1 = el('div', 'vgen-row');
@@ -1333,6 +1517,9 @@
 
   function bindEvents() {
     if (!root) return;
+
+    var guideBtn = root.querySelector('#vgen-model-guide-btn');
+    if (guideBtn) guideBtn.addEventListener('click', function () { openModelGuide(guideBtn); });
 
     // Mode tabs
     root.querySelectorAll('.vgen-tab').forEach(function (tab) {

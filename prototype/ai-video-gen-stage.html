@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1631" />
+  <link rel="stylesheet" href="styles.css?v=3.1632" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -279,6 +279,7 @@
     }
 
     /* ── Gen panel controls ──────────────────────────────────── */
+    .vgen-tabs-row { display: flex; align-items: center; gap: 8px; align-self: flex-start; }
     .vgen-tabs {
       display: flex; gap: 4px;
       background: var(--bg-2, var(--bg));
@@ -296,6 +297,108 @@
     .vgen-tab:hover { color: var(--text); }
     .vgen-tab.is-active { background: var(--bg); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
     .vgen-tab.is-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+    .vgen-model-guide-btn {
+      width: 30px; height: 30px; flex: 0 0 30px;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0; border-radius: 50%;
+      border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg-2, var(--bg)));
+      color: var(--accent); font: 700 0.9rem/1 inherit;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+    .vgen-model-guide-btn:hover {
+      background: color-mix(in srgb, var(--accent) 17%, var(--bg-2, var(--bg)));
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+      transform: translateY(-1px);
+    }
+    .vgen-model-guide-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ── Video model guide ───────────────────────────────────── */
+    body.vgen-guide-open { overflow: hidden; }
+    .vgen-guide-modal {
+      position: fixed; inset: 0; z-index: 10020;
+      display: flex; align-items: center; justify-content: center;
+      padding: 28px;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(8px);
+    }
+    .vgen-guide-box {
+      width: min(1180px, 96vw); max-height: 90vh;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--card) 96%, #020617);
+      box-shadow: 0 28px 80px rgba(0,0,0,0.52);
+    }
+    .vgen-guide-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
+      padding: 22px 24px 14px;
+    }
+    .vgen-guide-title { margin: 0; color: var(--text); font-size: 1.32rem; line-height: 1.2; }
+    .vgen-guide-subtitle { margin: 7px 0 0; color: var(--muted); font-size: 0.84rem; line-height: 1.5; }
+    .vgen-guide-close {
+      width: 34px; height: 34px; flex: 0 0 34px; padding: 0;
+      border: 1px solid var(--border); border-radius: 9px;
+      background: var(--bg-2, var(--bg)); color: var(--muted);
+      font-size: 1.25rem; cursor: pointer;
+    }
+    .vgen-guide-close:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+    .vgen-guide-current {
+      display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+      margin: 0 24px 15px; padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      color: var(--text); font-size: 0.8rem;
+    }
+    .vgen-guide-current-label {
+      padding: 3px 7px; border-radius: 999px;
+      background: var(--accent); color: #111827; font-size: 0.68rem; font-weight: 800;
+    }
+    .vgen-guide-current-cost { color: var(--accent); font-weight: 700; }
+    .vgen-guide-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+      padding: 0 24px 18px;
+      overflow-y: auto; overscroll-behavior: contain;
+      scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent;
+    }
+    .vgen-guide-card {
+      min-width: 0; padding: 14px;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-2, var(--bg)) 82%, transparent);
+    }
+    .vgen-guide-card.is-current {
+      border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .vgen-guide-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .vgen-guide-card h3 { margin: 0; color: var(--text); font-size: 0.91rem; }
+    .vgen-guide-badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+    .vgen-guide-badge {
+      padding: 2px 6px; border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+      color: var(--accent); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.04em;
+    }
+    .vgen-guide-lengths { margin: 5px 0 10px; color: var(--muted); font-size: 0.68rem; }
+    .vgen-guide-card-row { display: grid; grid-template-columns: 64px 1fr; gap: 8px; margin-top: 7px; }
+    .vgen-guide-card-label { color: var(--muted); font-size: 0.66rem; font-weight: 700; }
+    .vgen-guide-card-row p { margin: 0; color: var(--text); font-size: 0.72rem; line-height: 1.48; }
+    .vgen-guide-card-row:last-child p { color: var(--accent); font-weight: 700; }
+    .vgen-guide-note {
+      margin: 0; padding: 12px 24px 15px;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 0.68rem; line-height: 1.55;
+    }
+    @media (max-width: 720px) {
+      .vgen-guide-modal { padding: 10px; }
+      .vgen-guide-box { width: 100%; max-height: 94vh; border-radius: 13px; }
+      .vgen-guide-head { padding: 17px 16px 12px; }
+      .vgen-guide-current { margin: 0 16px 12px; }
+      .vgen-guide-grid { grid-template-columns: 1fr; padding: 0 16px 14px; }
+      .vgen-guide-note { padding: 11px 16px 13px; }
+    }
 
     .vgen-row { display: flex; gap: 12px; flex-wrap: nowrap; }
     .vgen-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
@@ -501,18 +604,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1631" defer></script>
-  <script src="js/config.js?v=3.1631" defer></script>
-  <script src="js/utils.js?v=3.1631" defer></script>
-  <script src="store.js?v=3.1631" defer></script>
-  <script src="api.js?v=3.1631" defer></script>
-  <script src="js/state.js?v=3.1631" defer></script>
-  <script src="js/auth.js?v=3.1631" defer></script>
-  <script src="js/navigation.js?v=3.1631" defer></script>
-  <script src="js/service/project.js?v=3.1631" defer></script>
-  <script src="js/ui/common.js?v=3.1631" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1631" defer></script>
-  <script src="script.js?v=3.1631" defer></script>
+  <script src="core.js?v=3.1632" defer></script>
+  <script src="js/config.js?v=3.1632" defer></script>
+  <script src="js/utils.js?v=3.1632" defer></script>
+  <script src="store.js?v=3.1632" defer></script>
+  <script src="api.js?v=3.1632" defer></script>
+  <script src="js/state.js?v=3.1632" defer></script>
+  <script src="js/auth.js?v=3.1632" defer></script>
+  <script src="js/navigation.js?v=3.1632" defer></script>
+  <script src="js/service/project.js?v=3.1632" defer></script>
+  <script src="js/ui/common.js?v=3.1632" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1632" defer></script>
+  <script src="script.js?v=3.1632" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">
