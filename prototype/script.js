@@ -78,6 +78,31 @@
     return /(^|\/)app\.html?$/.test(raw);
   };
 
+  // 앱 링크와 회원 권한 키의 단일 매핑. 로그인 메인·모든 사이드바·직접 URL 가드가
+  // 이 규칙을 함께 사용해야 특정 메뉴만 권한 검사에서 빠지는 일이 생기지 않는다.
+  const appPermissionForHref = (href) => {
+    const value = String(href || '').toLowerCase();
+    if (/ai-video-gen(?:-stage)?(?:\.html)?(?:[?#/]|$)/.test(value)) return 'videogen';
+    if (/ai-image(?:-stage)?(?:\.html)?(?:[?#/]|$)/.test(value)) return 'image';
+    if (/ai-video(?:\.html)?(?:[?#/]|$)/.test(value)) return 'video';
+    if (/brand-studio(?:\.html)?(?:[?#/]|$)/.test(value)) return 'brand';
+    if (/ai-doc(?:\.html)?(?:[?#/]|$)/.test(value)) return 'doc';
+    if (/ai-sound(?:\.html)?(?:[?#/]|$)/.test(value)) return 'sound';
+    return '';
+  };
+
+  const applyAppLauncherPermissions = () => {
+    if (!NK.auth || !NK.auth.isAuthed || !NK.auth.isAuthed()) return;
+    const perms = NK.auth.getPermissions ? NK.auth.getPermissions() : [];
+    document.querySelectorAll('.sidebar-launcher-item[href]').forEach(function (link) {
+      const permission = appPermissionForHref(link.getAttribute('href') || '');
+      const allowed = !perms.length || !permission || perms.indexOf(permission) !== -1;
+      link.classList.toggle('is-disabled', !allowed);
+      link.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+      if (!allowed) link.removeAttribute('aria-current');
+    });
+  };
+
   const toSameOriginAppHref = (rawUrl) => {
     const value = String(rawUrl || '').trim();
     if (!value) return '';
@@ -575,26 +600,35 @@
     const isBrandShellPath = /(^|\/)brand-studio(\.html)?\/?$/i.test(loweredPath);
     const isAiImageShellPath = /(^|\/)ai-image(\.html)?\/?$/i.test(loweredPath);
     const isAiVideoGenShellPath = /(^|\/)ai-video-gen(\.html)?\/?$/i.test(loweredPath);
+    const isAiImageStagePath = /(^|\/)ai-image-stage(\.html)?\/?$/i.test(loweredPath);
+    const isAiVideoGenStagePath = /(^|\/)ai-video-gen-stage(\.html)?\/?$/i.test(loweredPath);
+    const isAiDocPath = /(^|\/)ai-doc(\.html)?\/?$/i.test(loweredPath);
+    const isAiSoundPath = /(^|\/)ai-sound(\.html)?\/?$/i.test(loweredPath);
     // 자체 콘텐츠를 직접 렌더하는 단독 페이지(예: ai-doc, ai-sound)는 셸 자동 로드 대상에서 제외한다.
     const isSelfContainedPage = document.documentElement.classList.contains('page-shell-ai-doc')
       || document.documentElement.classList.contains('page-shell-ai-sound');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts') && !isSelfContainedPage;
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath || isAiVideoGenShellPath;
+    const _pagePermMap = [
+      { test: isAiVideoGenShellPath || isAiVideoGenStagePath, perm: 'videogen', href: 'ai-video-gen.html' },
+      { test: isAiImageShellPath || isAiImageStagePath, perm: 'image', href: 'ai-image.html' },
+      { test: isAiVideoShellPath, perm: 'video', href: 'ai-video.html' },
+      { test: isBrandShellPath, perm: 'brand', href: 'brand-studio.html' },
+      { test: isAiDocPath, perm: 'doc', href: 'ai-doc.html' },
+      { test: isAiSoundPath, perm: 'sound', href: 'ai-sound.html' },
+    ];
+    const currentPermissionEntry = _pagePermMap.find(function (entry) { return entry.test; });
 
-    // Permission guard: redirect restricted users away from disallowed shell pages
-    if (!isIframe && isKnownShellPath && NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) {
+    // Permission guard: 셸뿐 아니라 단독 문서/오디오 페이지와 직접 연 stage URL도 차단한다.
+    if (!isIframe && currentPermissionEntry && NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) {
       const _guardPerms = (NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
       if (_guardPerms.length) {
-        const _shellPermMap = [
-          { test: isAiVideoGenShellPath, perm: 'videogen', href: 'ai-video-gen.html' },
-          { test: isAiImageShellPath, perm: 'image', href: 'ai-image.html' },
-          { test: isAiVideoShellPath, perm: 'video', href: 'ai-video.html' },
-          { test: isBrandShellPath, perm: 'brand', href: 'brand-studio.html' },
-        ];
-        const currentEntry = _shellPermMap.find(function (m) { return m.test; });
-        if (currentEntry && _guardPerms.indexOf(currentEntry.perm) === -1) {
+        if (_guardPerms.indexOf(currentPermissionEntry.perm) === -1) {
           const fallbackHref = (function () {
-            const redirectMap = { videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html', brand: 'brand-studio.html' };
+            const redirectMap = {
+              videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html',
+              brand: 'brand-studio.html', doc: 'ai-doc.html', sound: 'ai-sound.html'
+            };
             return redirectMap[_guardPerms[0]] || 'app.html';
           })();
           window.location.replace(fallbackHref);
@@ -631,6 +665,7 @@
     if (!isIframe && !isSelfContainedPage) {
       setupParentLogic();
     }
+    if (!isIframe) applyAppLauncherPermissions();
 
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
     const isDashboard = !effectiveStage || effectiveStage === 'dashboard';
@@ -2454,17 +2489,12 @@
       // Permission-based icon visibility
       if (icons) {
         const _perms = (NK.auth && NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
-        const _iconPermMap = [
-          { pattern: /ai-video-gen/i, perm: 'videogen' },
-          { pattern: /ai-image/i, perm: 'image' },
-          { pattern: /ai-video\.html/i, perm: 'video' },
-          { pattern: /brand-studio/i, perm: 'brand' },
-        ];
         icons.querySelectorAll('a.login-icon-link[href]').forEach(function (a) {
           const href = a.getAttribute('href') || '';
-          const entry = _iconPermMap.find(function (m) { return m.pattern.test(href); });
-          const allowed = !loggedIn || !_perms.length || !entry || _perms.indexOf(entry.perm) !== -1;
+          const permission = appPermissionForHref(href);
+          const allowed = !loggedIn || !_perms.length || !permission || _perms.indexOf(permission) !== -1;
           a.classList.toggle('is-disabled', !allowed);
+          a.setAttribute('aria-disabled', allowed ? 'false' : 'true');
         });
       }
 

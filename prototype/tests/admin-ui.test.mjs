@@ -28,6 +28,8 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /key: 'image'/);
   assert.match(src, /key: 'video'/);
   assert.match(src, /key: 'brand'/);
+  assert.match(src, /key: 'doc'/);
+  assert.match(src, /key: 'sound'/);
   // 마스터 전용 게이트 (문구는 중앙 i18n 사전 키로 참조)
   assert.match(src, /NK\.auth\.isMaster/);
   assert.match(src, /t\('admin_no_access'\)/);
