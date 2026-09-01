@@ -60,7 +60,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     // 생성 정보를 object metadata로 기록 → library 응답에 실려 기기 간 목록이 같아진다.
     const metadata: Record<string, string> = {};
-    for (const key of ["prompt", "model", "modelLabel", "aspectRatio", "duration", "resultId"]) {
+    for (const key of ["prompt", "model", "modelLabel", "aspectRatio", "resolution", "duration", "resultId"]) {
       const v = String(fd.get(key) || "").trim();
       if (v) metadata[key] = v.slice(0, 400);
     }

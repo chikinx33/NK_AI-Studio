@@ -24,6 +24,20 @@
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];
 
+  // ⚠️ functions/api/_shared/video-specs.ts 의 SEEDANCE_RESOLUTIONS 미러다.
+  // 정식 Seedance 2.0 두 모델은 동일한 해상도 집합을 받는다.
+  var SEEDANCE_RESOLUTIONS = ['480p', '720p', '720p-SR', '1080p', '1080p-SR', '1440p-SR', '4k'];
+  var DEFAULT_SEEDANCE_RESOLUTION = '720p';
+  var SEEDANCE_RESOLUTION_LABELS = {
+    '480p': '480p',
+    '720p': '720p · HD',
+    '720p-SR': '720p · SR',
+    '1080p': '1080p · FHD',
+    '1080p-SR': '1080p · FHD SR',
+    '1440p-SR': '1440p · QHD SR',
+    '4k': '4K · UHD'
+  };
+
   var CAMERA_MOVEMENTS = [
     { id: '',           ko: '없음',       en: 'None'       },
     { id: 'zoom_in',    ko: '줌 인',      en: 'Zoom In'    },
@@ -97,8 +111,8 @@
       'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 이미지 $0.002/장' },
       'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 영상 $0.01/초' },
       'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas Cloud · $0.06/회' },
-      'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시하세요. 앱은 720p로 생성합니다.', billing: 'Atlas Cloud · 출력 $0.112/초' },
-      'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭하세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 720p 약 21,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가)' },
+      'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시한 뒤 480p~4K 해상도를 고르세요. SR은 업스케일 출력입니다.', billing: 'Atlas Cloud · 720p 기준 출력 $0.112/초 · 다른 해상도는 공급자 견적 확인' },
+      'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 1080p 약 48,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가, SR/4K 배율 적용)' },
       'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
       'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' }
     },
@@ -109,8 +123,8 @@
       'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'xAI · $0.07/sec 720p output + $0.002/input image' },
       'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'xAI · $0.07/sec 720p output + $0.01/sec input video' },
       'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas Cloud · $0.06/run' },
-      'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image and prompt only the changes that are not already in it. The app outputs 720p.', billing: 'Atlas Cloud · $0.112/sec output' },
-      'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references and call them image 1, image 2, and so on. It does not lock a start frame.', billing: 'Atlas Cloud · ~21,600 output tokens/sec at 720p · $11.20/1M image-only · $6.88/1M with video (input video tokens added)' },
+      'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image, prompt only changes not already present, and choose an output from 480p to 4K. SR options are upscaled outputs.', billing: 'Atlas Cloud · $0.112/sec at 720p · check provider quote for other resolutions' },
+      'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas Cloud · ~48,600 output tokens/sec at 1080p · $11.20/1M image-only · $6.88/1M with video (input video tokens and SR/4K multipliers added)' },
       'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
       'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' }
     }
@@ -139,6 +153,9 @@
       model_label:       '모델',
       aspect_label:      '화면비',
       duration_label:    '길이',
+      resolution_label:  '출력 해상도',
+      resolution_hint:   'Seedance 출력 품질 · SR은 업스케일',
+      resolution_4k_hint:'4K는 3840×2160, 16:9로만 생성됩니다.',
       duration_unit:     '초',
       start_frame:       '시작 프레임',
       end_frame:         '끝 프레임 (선택)',
@@ -200,6 +217,9 @@
       model_label:       'Model',
       aspect_label:      'Aspect',
       duration_label:    'Duration',
+      resolution_label:  'Output resolution',
+      resolution_hint:   'Seedance output quality · SR is upscaled',
+      resolution_4k_hint:'4K outputs 3840×2160 in 16:9 only.',
       duration_unit:     's',
       start_frame:       'Start Frame',
       end_frame:         'End Frame (optional)',
@@ -263,6 +283,7 @@
     model:          'veo',
     aspectRatio:    '16:9',
     duration:       5,
+    resolution:     DEFAULT_SEEDANCE_RESOLUTION,
     prompt:         '',
     startImageUrl:  '',
     endImageUrl:    '',
@@ -436,6 +457,20 @@
     return (currentModelObj().caps || []).indexOf(cap) !== -1;
   }
 
+  function isSeedanceModel(modelId) {
+    return modelId === 'seedance' || modelId === 'seedance-r2v';
+  }
+
+  function normalizeSeedanceResolution(value) {
+    var raw = String(value || '').toLowerCase();
+    return SEEDANCE_RESOLUTIONS.find(function (item) { return item.toLowerCase() === raw; })
+      || DEFAULT_SEEDANCE_RESOLUTION;
+  }
+
+  function resolutionLabel(value) {
+    return SEEDANCE_RESOLUTION_LABELS[value] || value || DEFAULT_SEEDANCE_RESOLUTION;
+  }
+
   function maxRefs() {
     var mo = currentModelObj();
     if (mo.maxRefs) return mo.maxRefs;
@@ -473,7 +508,10 @@
     if (id === 'vidu-q3') return '$0.106' + suffix;
     if (id === 'veo') return money(duration * 0.08) + suffix;
     if (id === 'veo-full') return money(duration * 0.20) + suffix;
-    if (id === 'seedance') return money(duration * 0.112) + suffix;
+    if (id === 'seedance') {
+      if (state.resolution === '720p') return money(duration * 0.112) + suffix;
+      return (state.lang === 'en' ? 'Provider quote · ' : '공급자 견적 · ') + resolutionLabel(state.resolution);
+    }
     if (id === 'wan') return money(Math.max(5, duration) * 0.10) + suffix;
     if (id === 'grok' || id === 'grok-r2v' || id === 'grok-extend') {
       var base = duration * 0.07;
@@ -485,14 +523,24 @@
       return money(base) + extra + suffix;
     }
     if (id === 'seedance-r2v') {
-      var tokens = 21600 * duration;
+      var tokenProfiles = {
+        '480p': { perSecond: 9607.5, multiplier: 1 },
+        '720p': { perSecond: 21600, multiplier: 1 },
+        '720p-SR': { perSecond: 21600, multiplier: 1.8 },
+        '1080p': { perSecond: 48600, multiplier: 1 },
+        '1080p-SR': { perSecond: 48600, multiplier: 1.8 },
+        '1440p-SR': { perSecond: 86400, multiplier: 3.2 },
+        '4k': { perSecond: 194400, multiplier: 0.57 }
+      };
+      var profile = tokenProfiles[state.resolution] || tokenProfiles[DEFAULT_SEEDANCE_RESOLUTION];
+      var tokens = Math.round(profile.perSecond * duration);
       var tokenText = tokens.toLocaleString(state.lang === 'en' ? 'en-US' : 'ko-KR');
       if (state.videoUrl) {
         return state.lang === 'en'
           ? '~' + tokenText + ' output tokens + input video tokens · provider quote'
           : '약 ' + tokenText + ' 출력 토큰 + 입력 영상 토큰 · 공급자 견적';
       }
-      var cost = money(tokens / 1000000 * 11.20);
+      var cost = money(tokens / 1000000 * 11.20 * profile.multiplier);
       return state.lang === 'en'
         ? '~' + tokenText + ' video tokens · ' + cost + ' estimated'
         : '약 ' + tokenText + ' 영상 토큰 · ' + cost + ' 예상';
@@ -533,7 +581,9 @@
     var current = currentModelObj();
     var currentBar = el('div', 'vgen-guide-current');
     currentBar.appendChild(el('span', 'vgen-guide-current-label', { textContent: copy.current }));
-    currentBar.appendChild(el('strong', '', { textContent: current.label + ' · ' + guideDurationFor(current.id) + (lang === 'en' ? 's' : '초') }));
+    var currentSummary = current.label + ' · ' + guideDurationFor(current.id) + (lang === 'en' ? 's' : '초');
+    if (isSeedanceModel(current.id)) currentSummary += ' · ' + resolutionLabel(state.resolution);
+    currentBar.appendChild(el('strong', '', { textContent: currentSummary }));
     currentBar.appendChild(el('span', 'vgen-guide-current-cost', { textContent: currentUsageEstimate() }));
     box.appendChild(currentBar);
 
@@ -1084,7 +1134,14 @@
     var info = el('div', 'vgen-result-info');
     var promptText = (r.prompt || '').slice(0, 60) + ((r.prompt || '').length > 60 ? '…' : '');
     info.appendChild(el('p', 'vgen-result-prompt', { textContent: promptText }));
-    info.appendChild(el('p', 'vgen-result-meta', { textContent: (r.modelLabel || r.model || '') + ' · ' + (r.aspectRatio || '') + ' · ' + (r.duration || '') + (state.lang === 'ko' ? '초' : 's') }));
+    info.appendChild(el('p', 'vgen-result-meta', {
+      textContent: [
+        r.modelLabel || r.model || '',
+        r.aspectRatio || '',
+        r.resolution || '',
+        r.duration ? (String(r.duration) + (state.lang === 'ko' ? '초' : 's')) : ''
+      ].filter(Boolean).join(' · ')
+    }));
     info.appendChild(el('span', 'vgen-result-status vgen-status--' + (r.status || 'processing'), { textContent: t('status_' + (r.status || 'processing')) }));
     // 실패 사유를 카드에 직접 노출한다. 전문은 title(툴팁)로.
     if (r.status === 'error') {
@@ -1161,10 +1218,11 @@
     var fileName = nameParts[nameParts.length - 1] || objectName;
     var metaPrompt = String(meta.prompt || '').trim();
     var metaLine = '';
-    if (meta.model || meta.aspectRatio || meta.duration) {
+    if (meta.model || meta.aspectRatio || meta.resolution || meta.duration) {
       metaLine = [
         String(meta.modelLabel || meta.model || '').trim(),
         String(meta.aspectRatio || '').trim(),
+        String(meta.resolution || '').trim(),
         meta.duration ? (String(meta.duration) + (state.lang === 'ko' ? '초' : 's')) : ''
       ].filter(Boolean).join(' · ');
     }
@@ -1406,6 +1464,34 @@
 
     panel.appendChild(row1);
 
+    // Seedance 정식 모델은 해상도를 공급자 요청에 직접 전달한다.
+    if (isSeedanceModel(state.model)) {
+      state.resolution = normalizeSeedanceResolution(state.resolution);
+      // 공급자 문서상 4K는 native 3840×2160(16:9)만 지원한다.
+      if (state.resolution === '4k') state.aspectRatio = '16:9';
+      aspectSel.value = state.aspectRatio;
+      aspectSel.disabled = state.resolution === '4k';
+      aspectSel.title = state.resolution === '4k' ? t('resolution_4k_hint') : '';
+
+      var resolutionRow = el('div', 'vgen-resolution-row');
+      var resolutionHead = el('div', 'vgen-resolution-head');
+      resolutionHead.appendChild(el('label', 'vgen-resolution-label', {
+        for: 'vgen-resolution', textContent: t('resolution_label')
+      }));
+      resolutionHead.appendChild(el('span', 'vgen-resolution-hint', {
+        textContent: state.resolution === '4k' ? t('resolution_4k_hint') : t('resolution_hint')
+      }));
+      resolutionRow.appendChild(resolutionHead);
+      var resolutionSel = el('select', 'vgen-select vgen-resolution-select', { id: 'vgen-resolution' });
+      SEEDANCE_RESOLUTIONS.forEach(function (resolution) {
+        var opt = el('option', '', { value: resolution, textContent: resolutionLabel(resolution) });
+        if (resolution === state.resolution) opt.selected = true;
+        resolutionSel.appendChild(opt);
+      });
+      resolutionRow.appendChild(resolutionSel);
+      panel.appendChild(resolutionRow);
+    }
+
     // Image slots (start/end)
     if (isI2vMode && hasCap('start')) {
       var imgSection = el('div', 'vgen-image-section');
@@ -1574,6 +1660,14 @@
     // Duration
     var durSel = root.querySelector('#vgen-duration');
     if (durSel) durSel.addEventListener('change', function () { state.duration = parseInt(durSel.value, 10); });
+
+    // Seedance resolution (4K는 공급자 제약에 맞춰 16:9로 전환)
+    var resolutionSel = root.querySelector('#vgen-resolution');
+    if (resolutionSel) resolutionSel.addEventListener('change', function () {
+      state.resolution = normalizeSeedanceResolution(resolutionSel.value);
+      if (state.resolution === '4k') state.aspectRatio = '16:9';
+      render();
+    });
 
     // Prompt
     var promptTA = root.querySelector('#vgen-prompt');
@@ -1821,6 +1915,7 @@
     if (r.prompt) state.prompt = r.prompt;
     if (r.model) state.model = r.model;
     if (r.aspectRatio) state.aspectRatio = r.aspectRatio;
+    if (r.resolution) state.resolution = normalizeSeedanceResolution(r.resolution);
     if (r.mode) state.mode = r.mode;
     // 모델 허용 집합이 바뀌었을 수 있으니 되돌린 길이를 다시 검사한다.
     if (r.duration) {
@@ -1942,7 +2037,7 @@
       source: 'video-gen',
       meta: {
         prompt: r.prompt, model: r.model, modelLabel: r.modelLabel,
-        aspectRatio: r.aspectRatio, duration: r.duration, resultId: r.id
+        aspectRatio: r.aspectRatio, resolution: r.resolution, duration: r.duration, resultId: r.id
       }
     }).then(function (data) {
       var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || '';
@@ -2065,6 +2160,7 @@
       model:           state.model,
       modelLabel:      modelInfo.label,
       aspectRatio:     state.aspectRatio,
+      resolution:      isSeedanceModel(state.model) ? state.resolution : '',
       duration:        state.duration,
       mode:            state.mode,
       projectId:       state.projectId || '',
@@ -2104,6 +2200,7 @@
         durationSeconds: state.duration,
         videoModel:      state.model
       };
+      if (isSeedanceModel(state.model)) payload.resolution = state.resolution;
       if (state.projectId) payload.projectId = state.projectId;
 
       // start image
@@ -2141,6 +2238,7 @@
         model:       state.model,
         modelLabel:  modelInfo.label,
         aspectRatio: state.aspectRatio,
+        resolution:  isSeedanceModel(state.model) ? state.resolution : '',
         duration:    state.duration,
         resultId:    resultId
       });
@@ -2363,6 +2461,7 @@
         model:       r.model,
         modelLabel:  r.modelLabel,
         aspectRatio: r.aspectRatio,
+        resolution:  r.resolution,
         duration:    r.duration,
         resultId:    r.id
       });

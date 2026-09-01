@@ -18,9 +18,10 @@ import {
 import {
   IMAGE_SPEC,
   MAX_IMAGE_DATA_URL_CHARS,
-  SEEDANCE_RESOLUTION,
+  SEEDANCE_RESOLUTIONS,
   SUPPORTED_IMAGE_MIMES,
   allowedDurationsFor,
+  normalizeSeedanceResolution,
   snapDurationFor,
 } from "./_shared/video-specs";
 
@@ -63,6 +64,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // Seedance 계열: 허용 집합(_shared/video-specs)에서 가장 가까운 값으로 스냅.
     // 클램프만 하던 시절엔 UI 에 없는 값이 그대로 나가 공급자가 400 으로 거부할 수 있었다.
     const seedanceDuration = snapDurationFor("seedance", durationSeconds);
+    const seedanceResolution = normalizeSeedanceResolution((body as any)?.resolution);
+    if ((videoModel === "seedance" || videoModel === "seedance-r2v") && !seedanceResolution) {
+      return json({
+        error: "invalid_seedance_resolution",
+        resolution: String((body as any)?.resolution || ""),
+        allowedResolutions: SEEDANCE_RESOLUTIONS,
+      }, 400);
+    }
+    if ((videoModel === "seedance" || videoModel === "seedance-r2v") && seedanceResolution === "4k" && aspectFinal !== "16:9") {
+      return json({ error: "seedance_4k_requires_16_9", resolution: seedanceResolution, aspectRatio: aspectFinal }, 400);
+    }
 
     const audioDataUrl = String((body as any)?.audioDataUrl || "").trim();
     const videoDataUrl = String((body as any)?.videoDataUrl || "").trim();
@@ -316,6 +328,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         model: "bytedance/seedance-2.0/reference-to-video",
         prompt: safePromptText,
         duration: r2vDuration,
+        resolution: seedanceResolution,
+        ratio: aspectFinal,
       };
       if (refResolved.length > 0) atlasBody.reference_images = refResolved;
       if (audioDataUrl) atlasBody.audio = audioDataUrl;
@@ -489,7 +503,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         model: seedanceModel,
         prompt: safePromptText,
         duration: seedanceDuration,
-        resolution: SEEDANCE_RESOLUTION,
+        resolution: seedanceResolution,
         ratio: aspectFinal,
       };
       if (imageUrl) seedanceBody.image = imageUrl;
@@ -499,7 +513,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         model: seedanceModel,
         duration: seedanceDuration,
         requestedDuration: durationSeconds,
-        resolution: SEEDANCE_RESOLUTION,
+        resolution: seedanceResolution,
         ratio: aspectFinal,
         hasImage: !!imageUrl,
       });
@@ -519,8 +533,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           error: "seedance_error",
           status: seedanceRes.status,
           detail: safeJson(seedanceText),
-          sent: { duration: seedanceDuration, resolution: SEEDANCE_RESOLUTION, ratio: aspectFinal, hasImage: !!imageUrl },
+          sent: { duration: seedanceDuration, resolution: seedanceResolution, ratio: aspectFinal, hasImage: !!imageUrl },
           allowedDurations: allowedDurationsFor("seedance"),
+          allowedResolutions: SEEDANCE_RESOLUTIONS,
         }, seedanceRes.status);
       }
       const seedanceJson = safeJson(seedanceText);

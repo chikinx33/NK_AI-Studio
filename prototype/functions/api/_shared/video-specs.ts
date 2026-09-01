@@ -83,12 +83,27 @@ export function snapDurationFor(videoModel: string, seconds: unknown): number {
   return best;
 }
 
-/**
- * Seedance 계열이 받는 해상도.
- * 공급자는 480p/720p/720p-SR/1080p/1080p-SR/1440p-SR/4k 를 받지만 지금은 720p 고정.
- * (해상도 옵션화는 별건)
- */
-export const SEEDANCE_RESOLUTION = "720p";
+/** Seedance 2.0 정식 모델의 공급자 해상도 집합 (Fast/Mini가 아님). */
+export const SEEDANCE_RESOLUTIONS = [
+  "480p",
+  "720p",
+  "720p-SR",
+  "1080p",
+  "1080p-SR",
+  "1440p-SR",
+  "4k",
+] as const;
+
+export type SeedanceResolution = (typeof SEEDANCE_RESOLUTIONS)[number];
+export const DEFAULT_SEEDANCE_RESOLUTION: SeedanceResolution = "720p";
+
+/** 대소문자는 관대하게 받되 공급자에는 문서의 canonical 값을 보낸다. */
+export function normalizeSeedanceResolution(value: unknown): SeedanceResolution | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return DEFAULT_SEEDANCE_RESOLUTION;
+  const matched = SEEDANCE_RESOLUTIONS.find((item) => item.toLowerCase() === raw.toLowerCase());
+  return matched || null;
+}
 
 /**
  * 입력 이미지 제약 (atlascloud.ai bytedance/seedance-2.0/image-to-video 기준).

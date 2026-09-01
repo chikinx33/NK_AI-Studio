@@ -28,9 +28,10 @@ test('가이드는 셀렉트의 10개 모델을 모두 설명한다', () => {
 test('과금 방식은 초당·회당·영상 토큰을 구분하고 현재 선택의 예상치를 계산한다', () => {
   const src = js();
   assert.match(src, /영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라/);
-  assert.match(src, /720p 약 21,600 출력 토큰\/초/);
-  assert.match(src, /영상 포함 \$6\.88\/100만 토큰\(입력 영상 토큰 추가\)/);
-  assert.match(src, /21600 \* duration/);
+  assert.match(src, /1080p 약 48,600 출력 토큰\/초/);
+  assert.match(src, /영상 포함 \$6\.88\/100만 토큰\(입력 영상 토큰 추가/);
+  assert.match(src, /'1080p': \{ perSecond: 48600, multiplier: 1 \}/);
+  assert.match(src, /profile\.perSecond \* duration/);
   assert.match(src, /Math\.max\(5, duration\) \* 0\.10/);
   assert.match(src, /id === 'kling-final'\) return '\$0\.06'/);
   assert.match(src, /id === 'vidu-q3'\) return '\$0\.106'/);
