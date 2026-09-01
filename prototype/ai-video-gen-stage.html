@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1634" />
+  <link rel="stylesheet" href="styles.css?v=3.1635" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -443,6 +443,7 @@
       gap: 8px; padding: 12px; overflow: hidden;
       background: color-mix(in srgb, var(--bg-2, var(--bg)) 60%, transparent);
       transition: border-color 0.15s;
+      position: relative;
     }
     .vgen-image-slot--required .vgen-image-preview { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
     .vgen-image-thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 6px; cursor: zoom-in; }
@@ -494,6 +495,23 @@
       transition: border-color 0.15s;
     }
     .vgen-ref-slot.has-image { border-style: solid; border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+    .vgen-image-preview.is-dragover,
+    .vgen-ref-slot[data-image-drop="ref"].is-dragover,
+    .vgen-refs-grid.is-dragover .vgen-ref-slot[data-image-drop="ref"]:not(.has-image) {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 13%, var(--bg-2, var(--bg)));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+    }
+    .vgen-image-preview.is-dragover::after,
+    .vgen-ref-slot[data-image-drop="ref"].is-dragover::after {
+      content: attr(data-drop-label);
+      position: absolute; inset: 6px; z-index: 3;
+      display: flex; align-items: center; justify-content: center;
+      padding: 6px; border-radius: 7px; pointer-events: none;
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      color: var(--accent); font-size: 0.72rem; font-weight: 700;
+      text-align: center;
+    }
     .vgen-ref-add {
       width: 100%; height: 100%; background: none; border: none;
       color: var(--muted); font-size: 1.4rem; cursor: pointer;
@@ -624,18 +642,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1634" defer></script>
-  <script src="js/config.js?v=3.1634" defer></script>
-  <script src="js/utils.js?v=3.1634" defer></script>
-  <script src="store.js?v=3.1634" defer></script>
-  <script src="api.js?v=3.1634" defer></script>
-  <script src="js/state.js?v=3.1634" defer></script>
-  <script src="js/auth.js?v=3.1634" defer></script>
-  <script src="js/navigation.js?v=3.1634" defer></script>
-  <script src="js/service/project.js?v=3.1634" defer></script>
-  <script src="js/ui/common.js?v=3.1634" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1634" defer></script>
-  <script src="script.js?v=3.1634" defer></script>
+  <script src="core.js?v=3.1635" defer></script>
+  <script src="js/config.js?v=3.1635" defer></script>
+  <script src="js/utils.js?v=3.1635" defer></script>
+  <script src="store.js?v=3.1635" defer></script>
+  <script src="api.js?v=3.1635" defer></script>
+  <script src="js/state.js?v=3.1635" defer></script>
+  <script src="js/auth.js?v=3.1635" defer></script>
+  <script src="js/navigation.js?v=3.1635" defer></script>
+  <script src="js/service/project.js?v=3.1635" defer></script>
+  <script src="js/ui/common.js?v=3.1635" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1635" defer></script>
+  <script src="script.js?v=3.1635" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">

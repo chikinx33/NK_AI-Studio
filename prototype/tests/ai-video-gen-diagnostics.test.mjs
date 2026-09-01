@@ -66,9 +66,11 @@ test('업로드 이미지는 형식 검사 + 다운스케일을 거친다', () =
   assert.match(source, /function acceptImageFile\(file, onReady\)/);
   assert.match(source, /mimes:\s*\['image\/jpeg', 'image\/png', 'image\/webp'\]/);
   assert.match(source, /toDataURL\('image\/jpeg', 0\.9\)/);
-  // 시작/끝 프레임과 레퍼런스 슬롯 모두 적용
-  const uses = source.match(/acceptImageFile\(file, function \(dataUrl\)/g) || [];
-  assert.ok(uses.length >= 2, `acceptImageFile 적용 위치가 부족합니다 (${uses.length})`);
+  // 시작/끝 프레임과 레퍼런스 슬롯 모두 같은 Promise 래퍼를 통해 적용
+  assert.match(source, /function prepareImageFile\(file\)/);
+  assert.match(source, /acceptImageFile\(file, resolve/);
+  const uses = source.match(/prepareImageFile\(/g) || [];
+  assert.ok(uses.length >= 4, `prepareImageFile 적용 위치가 부족합니다 (${uses.length})`);
   // 원본을 그대로 읽어 state 에 넣던 경로가 남아 있지 않다
   assert.doesNotMatch(source, /state\.startImageUrl = ev\.target\.result/);
   assert.doesNotMatch(source, /state\.referenceUrls\[idx\] = ev\.target\.result/);

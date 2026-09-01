@@ -183,6 +183,7 @@
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
       no_video_alert:    '이 모델은 연장할 영상을 업로드해야 합니다.',
       upload_image:      '이미지 업로드',
+      drop_image:        '이미지를 여기에 놓으세요',
       remove_image:      '제거',
       download:          '다운로드',
       delete_result:     '삭제',
@@ -247,6 +248,7 @@
       no_image_alert:    'A start frame image is required for Image to Video mode.',
       no_video_alert:    'This model requires uploading a source video to extend.',
       upload_image:      'Upload Image',
+      drop_image:        'Drop images here',
       remove_image:      'Remove',
       download:          'Download',
       delete_result:     'Delete',
@@ -420,19 +422,97 @@
   // 모든 이미지 슬롯(시작/끝/레퍼런스)이 거치는 단 하나의 관문.
   // 형식 → 치수·종횡비 게이트 → 축소 → 용량 재확인을 마친 data URL만 onReady 로 넘긴다.
   function acceptImageFile(file, onReady) {
-    if (!file) return;
+    var onRejected = arguments[2];
+    var reject = typeof onRejected === 'function' ? onRejected : function () {};
+    if (!file) { reject(); return; }
     if (IMAGE_SPEC.mimes.indexOf(String(file.type || '').toLowerCase()) === -1) {
       window.alert(t('image_type_alert'));
+      reject();
       return;
     }
     downscaleImageFile(file, function (dataUrl) {
-      if (!dataUrl) return; // 게이트에서 이미 안내함
+      if (!dataUrl) { reject(); return; } // 게이트에서 이미 안내함
       if (dataUrl.length > IMAGE_MAX_CHARS) {
         window.alert(t('image_too_large'));
+        reject();
         return;
       }
       onReady(dataUrl);
     });
+  }
+
+  function prepareImageFile(file) {
+    return new Promise(function (resolve) {
+      acceptImageFile(file, resolve, function () { resolve(''); });
+    });
+  }
+
+  function droppedImageFiles(dataTransfer) {
+    return Array.prototype.slice.call((dataTransfer && dataTransfer.files) || []).filter(function (file) {
+      return String(file && file.type || '').toLowerCase().indexOf('image/') === 0;
+    });
+  }
+
+  function hasDraggedImage(dataTransfer) {
+    var items = Array.prototype.slice.call((dataTransfer && dataTransfer.items) || []);
+    if (items.length) {
+      return items.some(function (item) {
+        return item.kind === 'file' && String(item.type || '').toLowerCase().indexOf('image/') === 0;
+      });
+    }
+    return droppedImageFiles(dataTransfer).length > 0;
+  }
+
+  function bindImageDropTarget(target, onFiles) {
+    if (!target) return;
+    ['dragenter', 'dragover'].forEach(function (eventName) {
+      target.addEventListener(eventName, function (event) {
+        // dragover 단계에서는 브라우저가 files를 숨길 수 있어 items의 MIME을 먼저 본다.
+        if (!hasDraggedImage(event.dataTransfer)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        target.classList.add('is-dragover');
+      });
+    });
+    target.addEventListener('dragleave', function (event) {
+      if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+      target.classList.remove('is-dragover');
+    });
+    target.addEventListener('drop', function (event) {
+      var files = droppedImageFiles(event.dataTransfer);
+      target.classList.remove('is-dragover');
+      if (!files.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onFiles(files);
+    });
+  }
+
+  async function setReferenceImages(files, startIndex, replaceTarget) {
+    var pending = Array.prototype.slice.call(files || []);
+    if (!pending.length) return;
+    if (!state.referenceUrls) state.referenceUrls = [];
+
+    var max = maxRefs();
+    var normalizedStart = Number.isInteger(startIndex) && startIndex >= 0 && startIndex < max
+      ? startIndex
+      : 0;
+    var targets = [];
+    if (replaceTarget && normalizedStart < max) targets.push(normalizedStart);
+    for (var offset = 0; offset < max; offset++) {
+      var idx = (normalizedStart + offset) % max;
+      if (targets.indexOf(idx) === -1 && !state.referenceUrls[idx]) targets.push(idx);
+    }
+
+    var changed = false;
+    for (var fileIndex = 0; fileIndex < pending.length && targets.length; fileIndex++) {
+      var dataUrl = await prepareImageFile(pending[fileIndex]);
+      if (!dataUrl) continue;
+      state.referenceUrls[targets.shift()] = dataUrl;
+      changed = true;
+    }
+    if (changed) render();
   }
 
   function availableModels() {
@@ -1301,10 +1381,14 @@
     var combineAudio = (state.model === 'vidu-q3' || state.model === 'wan') && hasCap('audio');
     var section = el('div', 'vgen-refs-section');
     var grid = el('div', 'vgen-refs-grid');
+    grid.setAttribute('data-image-drop-grid', '1');
     for (var i = 0; i < max; i++) {
       var slotUrl = state.referenceUrls[i] || '';
       var slot = el('div', 'vgen-ref-slot' + (slotUrl ? ' has-image' : ''));
       slot.setAttribute('data-ref-idx', i);
+      slot.setAttribute('data-image-drop', 'ref');
+      slot.setAttribute('data-drop-label', t('drop_image'));
+      slot.setAttribute('aria-label', t('ref_slot_label').replace('{n}', String(i + 1)));
       if (slotUrl) {
         var img = el('img', 'vgen-ref-thumb', { src: slotUrl, alt: '' });
         img.setAttribute('data-action', 'preview-image');
@@ -1317,7 +1401,7 @@
         var addBtn = el('button', 'vgen-ref-add', { type: 'button', textContent: '+' });
         addBtn.setAttribute('data-ref-idx', i);
         slot.appendChild(addBtn);
-        var fileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'image/*', id: 'vgen-ref-file-' + i });
+        var fileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'image/*', multiple: 'multiple', id: 'vgen-ref-file-' + i });
         fileInp.setAttribute('data-ref-idx', i);
         slot.appendChild(fileInp);
       }
@@ -1562,7 +1646,12 @@
   function renderImageSlot(slotId, labelText, currentUrl, required) {
     var slot = el('div', 'vgen-image-slot' + (required ? ' vgen-image-slot--required' : ''));
 
-    var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-' + slotId });
+    var preview = el('div', 'vgen-image-preview', {
+      id: 'vgen-img-preview-' + slotId,
+      'data-image-drop': 'slot',
+      'data-slot': slotId,
+      'data-drop-label': t('drop_image')
+    });
 
     if (currentUrl) {
       var previewImg = el('img', 'vgen-image-thumb', {
@@ -1697,7 +1786,21 @@
         var file = inp.files && inp.files[0];
         if (!file) return;
         var slot = inp.dataset.slot;
-        acceptImageFile(file, function (dataUrl) {
+        prepareImageFile(file).then(function (dataUrl) {
+          if (!dataUrl) return;
+          if (slot === 'start') state.startImageUrl = dataUrl;
+          else state.endImageUrl = dataUrl;
+          render();
+        });
+      });
+    });
+
+    // Start/end image drag and drop
+    root.querySelectorAll('.vgen-image-preview[data-image-drop="slot"]').forEach(function (preview) {
+      bindImageDropTarget(preview, function (files) {
+        var slot = preview.getAttribute('data-slot');
+        prepareImageFile(files[0]).then(function (dataUrl) {
+          if (!dataUrl) return;
           if (slot === 'start') state.startImageUrl = dataUrl;
           else state.endImageUrl = dataUrl;
           render();
@@ -1808,17 +1911,22 @@
     });
 
     // Reference file inputs
-    root.querySelectorAll('.vgen-ref-file').forEach(function (inp) {
+    root.querySelectorAll('.vgen-ref-file[data-ref-idx]').forEach(function (inp) {
       inp.addEventListener('change', function () {
-        var file = inp.files && inp.files[0];
-        if (!file) return;
         var idx = parseInt(inp.getAttribute('data-ref-idx'), 10);
-        acceptImageFile(file, function (dataUrl) {
-          if (!state.referenceUrls) state.referenceUrls = [];
-          state.referenceUrls[idx] = dataUrl;
-          render();
-        });
+        setReferenceImages(inp.files, idx, true);
       });
+    });
+
+    // Reference images: a file dropped on an occupied slot replaces it; additional files fill empty slots.
+    root.querySelectorAll('.vgen-ref-slot[data-image-drop="ref"]').forEach(function (slot) {
+      bindImageDropTarget(slot, function (files) {
+        setReferenceImages(files, parseInt(slot.getAttribute('data-ref-idx'), 10), true);
+      });
+    });
+    var refsGrid = root.querySelector('.vgen-refs-grid[data-image-drop-grid]');
+    bindImageDropTarget(refsGrid, function (files) {
+      setReferenceImages(files, 0, false);
     });
 
     // Reference remove buttons
