@@ -12,6 +12,7 @@ test("admin.html loads required scripts and content shell", () => {
   assert.match(src, /js\/ui\/admin-users\.js/);
   assert.match(src, /<section class="content">/);
   assert.match(src, /id="auth-overlay"/);
+  assert.match(src, /\.admin-badge\s*\{[^}]*white-space:\s*nowrap;/s);
 });
 
 test("admin-users.js renders list, modal, and wires CRUD actions", () => {
