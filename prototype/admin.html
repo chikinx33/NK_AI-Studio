@@ -48,7 +48,7 @@
 
     .admin-row-email { font-size:12px; color:var(--muted, #94a3b8); }
 
-    .admin-row-actions { display:flex; gap:8px; }
+    .admin-row-actions { display:flex; flex-wrap:nowrap; gap:8px; }
 
     /* 정사각형 아이콘 버튼 (홈/신규/새로고침/행 액션 공용) */
     .admin-sq-btn {
@@ -64,7 +64,7 @@
     /* 행 내 수정/삭제 버튼(텍스트형) */
     .admin-icon-btn {
       border:1px solid var(--border); background:var(--panel); color:var(--text);
-      border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px;
+      border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; flex:0 0 auto;
     }
     .admin-icon-btn:hover { background:var(--layer-strong); }
     .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#ef4444; border-color:rgba(239,68,68,.45); }
@@ -131,23 +131,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1639" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1639" />
-  <script src="core.js?v=3.1639" defer></script>
-  <script src="js/config.js?v=3.1639" defer></script>
-  <script src="js/utils.js?v=3.1639" defer></script>
-  <script src="store.js?v=3.1639" defer></script>
-  <script src="api.js?v=3.1639" defer></script>
-  <script src="js/state.js?v=3.1639" defer></script>
-  <script src="js/auth.js?v=3.1639" defer></script>
-  <script src="js/navigation.js?v=3.1639" defer></script>
-  <script src="js/service/media.js?v=3.1639" defer></script>
-  <script src="js/service/project.js?v=3.1639" defer></script>
-  <script src="js/service/character-traits.js?v=3.1639" defer></script>
-  <script src="js/service/brand.js?v=3.1639" defer></script>
-  <script src="js/ui/common.js?v=3.1639" defer></script>
-  <script src="js/ui/admin-users.js?v=3.1639" defer></script>
-  <script src="script.js?v=3.1639" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1640" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1640" />
+  <script src="core.js?v=3.1640" defer></script>
+  <script src="js/config.js?v=3.1640" defer></script>
+  <script src="js/utils.js?v=3.1640" defer></script>
+  <script src="store.js?v=3.1640" defer></script>
+  <script src="api.js?v=3.1640" defer></script>
+  <script src="js/state.js?v=3.1640" defer></script>
+  <script src="js/auth.js?v=3.1640" defer></script>
+  <script src="js/navigation.js?v=3.1640" defer></script>
+  <script src="js/service/media.js?v=3.1640" defer></script>
+  <script src="js/service/project.js?v=3.1640" defer></script>
+  <script src="js/service/character-traits.js?v=3.1640" defer></script>
+  <script src="js/service/brand.js?v=3.1640" defer></script>
+  <script src="js/ui/common.js?v=3.1640" defer></script>
+  <script src="js/ui/admin-users.js?v=3.1640" defer></script>
+  <script src="script.js?v=3.1640" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>
