@@ -1,5 +1,6 @@
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { resolveProjectStorageOwner } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
 const corsHeaders = (origin?: string | null) => ({
@@ -18,7 +19,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin)
     const fd = await request.formData()
     const projectId = String(fd.get("projectId") || "").trim()
-    const userId = auth.userId
+    const userId = await resolveProjectStorageOwner(env, auth.userId, String(fd.get("ownerId") || ""), projectId)
     const file = fd.get("file") as File | null
     if (!projectId || !file) {
       return send({ error: "projectId and file are required" }, 400, origin)

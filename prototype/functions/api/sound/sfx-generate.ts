@@ -71,11 +71,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         await ensureSoundSchema(sql);
         const rows = await sql(
           `INSERT INTO sound_assets
-             (type, scope, brand_id, episode_id, session_id, title, prompt, provider, params, output_url, output_format, duration_seconds, credits_used, status)
-           VALUES ('sfx', $1, $2, $3, $4, $5, $6, 'elevenlabs', $7::jsonb, $8, 'mp3_44100_128', $9, $10, 'ready')
+             (owner_id, type, scope, brand_id, episode_id, session_id, title, prompt, provider, params, output_url, output_format, duration_seconds, credits_used, status)
+           VALUES ($1, 'sfx', $2, $3, $4, $5, $6, $7, 'elevenlabs', $8::jsonb, $9, 'mp3_44100_128', $10, $11, 'ready')
            RETURNING id`,
           [
-            mode, brandId, episodeId, sessionId,
+            userId, mode, brandId, episodeId, sessionId,
             prompt.slice(0, 60), prompt,
             JSON.stringify({ duration, looping, influence, objectName }),
             outputUrl, duration, creditsUsed,

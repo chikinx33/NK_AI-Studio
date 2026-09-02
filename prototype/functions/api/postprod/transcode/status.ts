@@ -1,5 +1,6 @@
 import { buildUserRoot } from "../../_shared/storage";
 import { authorizeRequest } from "../../_shared/auth.js";
+import { resolveProjectStorageOwner } from "../../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -22,6 +23,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const url = new URL(request.url);
     const jobName = String(url.searchParams.get("jobName") || "").trim();
     const outputObjectName = String(url.searchParams.get("outputObjectName") || "").trim();
+    const projectId = String(url.searchParams.get("projectId") || "").trim();
+    const ownerId = String(url.searchParams.get("ownerId") || "").trim();
     if (!jobName || !outputObjectName) {
       return send({ error: "jobName and outputObjectName are required" }, 400, origin);
     }
@@ -36,7 +39,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const userRoot = buildUserRoot(basePrefix, auth.userId);
+    const storageUserId = projectId
+      ? await resolveProjectStorageOwner(env, auth.userId, ownerId, projectId)
+      : auth.userId;
+    const userRoot = buildUserRoot(basePrefix, storageUserId);
     if (!outputObjectName.startsWith(`${userRoot}/`)) {
       return send({ error: "outputObjectName is outside user scope" }, 403, origin);
     }

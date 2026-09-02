@@ -4,6 +4,7 @@
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
+import { resolveProjectStorageOwner } from "../_shared/shares";
 import {
   callKlingApi,
   isKlingDone,
@@ -58,7 +59,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       } catch { return {}; }
     })();
     const isVideoGen = source === 'video-gen';
-    const userId = auth.userId;
+    const requestedOwnerId = (url.searchParams.get('ownerId') || '').trim();
+    const userId = projectTag
+      ? await resolveProjectStorageOwner(env, auth.userId, requestedOwnerId, projectTag)
+      : auth.userId;
 
     if (!jobIdRaw.trim()) {
       return corsJson({ ok: false, job_id: '', done: false, error: { code: 'BAD_REQUEST', message: 'job_id is required' }, response: null, rawOperation: null, playback: null }, 400);

@@ -96,7 +96,8 @@
       await waitMs(3000);
       var st = await NK.api.postprodTranscodeStatus({
         jobName: jobName,
-        outputObjectName: outputObjectName
+        outputObjectName: outputObjectName,
+        projectId: opts.projectId
       });
       var status = String((st && st.status) || '').toUpperCase();
       if (st && st.done && status === 'SUCCEEDED') {

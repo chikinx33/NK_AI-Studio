@@ -55,7 +55,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const contentHash = await sha256Hex(`${name}:${text}`);
     const docRows = await sql(
-      "INSERT INTO knowledge_documents (name, content_hash, user_id) VALUES ($1, $2, $3) ON CONFLICT (content_hash) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+      "INSERT INTO knowledge_documents (name, content_hash, user_id) VALUES ($1, $2, $3) ON CONFLICT (user_id, content_hash) DO UPDATE SET name = EXCLUDED.name RETURNING id",
       [name, contentHash, auth.userId || ""]
     );
     const documentId = docRows[0]?.id as string;

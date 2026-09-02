@@ -862,6 +862,7 @@
         headers: Object.assign({ 'Content-Type': 'application/json' }, buildPostprodAuthHeaders()),
         body: JSON.stringify({
           projectId: projectId,
+          ownerId: (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '',
           clipId: clipId,
           clipLabel: label,
           clipDuration: duration,
@@ -964,6 +965,7 @@
         headers: Object.assign({ 'Content-Type': 'application/json' }, buildPostprodAuthHeaders()),
         body: JSON.stringify({
           projectId: projectId,
+          ownerId: (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '',
           topic:     String(payload.topic    || '').trim(),
           story:     String(payload.story    || '').trim(),
           genre:     String(Array.isArray(payload.purposeCategory) ? (payload.purposeCategory[0] || '') : (payload.purposeCategory || '')).trim(),

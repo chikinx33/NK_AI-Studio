@@ -20,9 +20,13 @@ import {
   primaryAdminId,
   REGISTRY_VERSION,
 } from "../_shared/admin-users";
-import { resolveGcsEnv, deleteGcsPrefix } from "../_shared/gcs.js";
-import { buildUserRoot } from "../_shared/storage";
-import { loadSharesStrict, saveShares, removeAllOwnerShares, removeAllGrantsToUser } from "../_shared/shares";
+import {
+  loadAccountDeletionsStrict,
+  saveAccountDeletions,
+  findAccountDeletion,
+  requestAccountDeletion,
+  isDeletionRegistrationBlocked,
+} from "../_shared/account-deletions";
 
 type PagesFunction = (ctx: { request: Request; env: any; waitUntil?: (p: Promise<any>) => void }) => Promise<Response>;
 
@@ -82,6 +86,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const reg = await loadRegistryStrict(env);
     if (findUser(reg, id)) return send({ error: "user_exists" }, 409, origin);
+    const deletions = await loadAccountDeletionsStrict(env, true);
+    const deletion = findAccountDeletion(deletions, id);
+    if (isDeletionRegistrationBlocked(deletion)) {
+      return send({ error: "user_deletion_pending", deleteAfter: deletion?.deleteAfter || "" }, 409, origin);
+    }
 
     // 이메일은 구글 로그인 매칭 키이므로 중복을 막는다(빈 값은 허용).
     const newEmail = normalizeEmail(body.email);
@@ -154,7 +163,7 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
   }
 };
 
-export const onRequestDelete: PagesFunction = async ({ request, env, waitUntil }) => {
+export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
     const g = await gate(request, env, origin);
@@ -183,39 +192,27 @@ export const onRequestDelete: PagesFunction = async ({ request, env, waitUntil }
       return send({ ok: true, id, soft }, 200, origin);
     }
 
-    // 하드 삭제: 웹 목록에 즉시 반영되도록 레지스트리에서 '먼저' 제거하고 응답한다.
-    // GCS 파일 폴더와 공유 레지스트리 정리는 시간이 오래 걸릴 수 있으므로
-    // 백그라운드(waitUntil)에서 best-effort 로 수행한다(실패해도 UI엔 영향 없음).
-    reg.users = reg.users.filter((u) => sanitizeUserId(u.id) !== id);
+    // 하드 삭제는 즉시 파일을 지우지 않는다. 먼저 영속 삭제 대기열에 기록해 모든 기존
+    // 세션을 폐기하고, 정확히 7일의 유예기간 동안 로그인·동일 ID 재등록을 막는다.
+    // 실제 GCS/Neon/공유 정리는 예약 정리 엔드포인트가 만료 후 수행한다.
+    const deletions = await loadAccountDeletionsStrict(env, true);
+    const deletion = requestAccountDeletion(deletions, id);
+    await saveAccountDeletions(env, deletions);
+
+    user.active = false;
+    user.deletionRequestedAt = deletion.requestedAt;
+    user.deleteAfter = deletion.deleteAfter;
+    user.updatedAt = new Date().toISOString();
     await saveRegistry(env, reg);
 
-    const cleanup = (async () => {
-      // 1) 이 회원이 소유한 모든 데이터 폴더(users/{id}/) 통째 삭제(배치).
-      try {
-        const { basePrefix } = resolveGcsEnv(env);
-        const userRoot = buildUserRoot(basePrefix, id);
-        await deleteGcsPrefix(env, `${userRoot}/`);
-      } catch (e: any) {
-        try { console.error("[admin/users] gcs cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
-      }
-      // 2) 공유 레지스트리 정리: 소유 공유 제거 + 이 회원에게 부여된 grant 회수.
-      try {
-        const sharesReg = await loadSharesStrict(env);
-        removeAllOwnerShares(sharesReg, id);
-        removeAllGrantsToUser(sharesReg, id);
-        await saveShares(env, sharesReg);
-      } catch (e: any) {
-        try { console.error("[admin/users] share cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
-      }
-    })();
-
-    if (typeof waitUntil === "function") {
-      waitUntil(cleanup); // 응답 후에도 런타임이 정리 작업을 끝까지 실행하도록 등록
-    } else {
-      await cleanup; // waitUntil 미지원 환경(로컬 등) 폴백 — 정리를 마친 뒤 응답
-    }
-
-    return send({ ok: true, id, soft }, 200, origin);
+    return send({
+      ok: true,
+      id,
+      soft: false,
+      deletionPending: true,
+      requestedAt: deletion.requestedAt,
+      deleteAfter: deletion.deleteAfter,
+    }, 202, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

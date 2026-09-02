@@ -1,5 +1,6 @@
 import { buildAiVideoProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { resolveProjectStorageOwner } from "../_shared/shares";
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin?: string | null) => ({
@@ -22,7 +23,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body?.projectId || "").trim();
-    const userId = auth.userId;
+    const userId = await resolveProjectStorageOwner(env, auth.userId, body?.ownerId, projectId);
     // 다중 씬 concat: sourceObjectNames(복수)를 우선 사용. 없으면 단일 sourceObjectName(하위호환).
     const rawSources: string[] = Array.isArray(body?.sourceObjectNames)
       ? body.sourceObjectNames.map((v: any) => String(v || "").trim()).filter(Boolean)

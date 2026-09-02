@@ -177,6 +177,28 @@ export function getGrantRole(reg: SharesRegistry, ownerId: string, projectId: st
   return g ? g.role : null;
 }
 
+/**
+ * 공유 프로젝트에서 새로 만든 파일은 작업자가 아니라 프로젝트 소유자의 저장소에 귀속한다.
+ * ownerId가 없거나 본인이 소유자이면 기존 개인 프로젝트 동작을 유지한다.
+ */
+export async function resolveProjectStorageOwner(
+  env: any,
+  requesterId: string,
+  requestedOwnerId: string | null | undefined,
+  projectId: string,
+): Promise<string> {
+  const requester = sanitizeUserId(requesterId);
+  const owner = String(requestedOwnerId || "").trim() ? sanitizeUserId(requestedOwnerId) : requester;
+  const pid = String(projectId || "").trim();
+  if (owner === requester) return requester;
+  if (!pid) throw new Error("shared_project_id_required");
+  const registry = await loadSharesStrict(env);
+  if (getGrantRole(registry, owner, pid, requester) !== "editor") {
+    throw new Error("shared_project_editor_required");
+  }
+  return owner;
+}
+
 /** userId에게 공유된 프로젝트 목록(소유자/역할 포함). */
 export function listSharedWith(reg: SharesRegistry, userId: string): Array<{ ownerId: string; projectId: string; title: string; seriesId: string; seriesTitle: string; role: ShareRole }> {
   const uid = sanitizeUserId(userId);

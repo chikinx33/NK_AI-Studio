@@ -6,6 +6,7 @@
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
+import { resolveProjectStorageOwner } from "./_shared/shares";
 import {
   callKlingApi,
   klingEndpoints,
@@ -40,6 +41,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       projectId: rawProjectId = "",
       source: rawSource = "",
       userId: rawUserId = "",
+      ownerId: rawOwnerId = "",
       promptText = "",
       imageDataUrl = "",
       durationSeconds = 6,
@@ -125,7 +127,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const projectTag = (projTag || "default").toString();
     const safeVideoGenProjectId = String(rawProjectId || "").trim();
-    const userId = auth.userId || "";
+    const storageProjectId = isVideoGen ? safeVideoGenProjectId : projectTag;
+    const userId = storageProjectId
+      ? await resolveProjectStorageOwner(env, auth.userId || "", rawOwnerId, storageProjectId)
+      : (auth.userId || "");
     const basePrefix = outParsed.object.replace(/\/$/, "");
     // AI 시네마: users/{userId}/ai-video/projects{projectId}/videos/
     // AI 영상(video-gen, detached): users/{userId}/ai-video-gen/videos/

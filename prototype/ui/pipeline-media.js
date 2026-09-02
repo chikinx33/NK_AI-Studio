@@ -224,7 +224,7 @@
 
     for (var i = 0; i < 240; i++) {
       await waitMs(3000);
-      var status = await NK.api.postprodTranscodeStatus({ jobName: jobName, outputObjectName: outputObjectName });
+      var status = await NK.api.postprodTranscodeStatus({ jobName: jobName, outputObjectName: outputObjectName, projectId: projectId });
       var done = !!(status && status.done);
       var state = String((status && status.status) || '').toUpperCase();
       if (done && (state === 'SUCCEEDED' || state === 'DONE' || state === 'OUTPUT_READY')) {

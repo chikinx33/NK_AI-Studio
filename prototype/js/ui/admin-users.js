@@ -214,12 +214,15 @@
     var roleBadge = master
       ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
       : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
-    var stateBadge = (u.active === false)
+    var stateBadge = u.deletionRequestedAt
+      ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(u.deleteAfter || '') + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
+      : (u.active === false)
       ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_inactive')) + '</span>'
       : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
     var id = escapeHtml(u.id);
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
-    var deleteBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
+    var deleteBtn = (master || u.deletionRequestedAt) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
+    var editBtn = u.deletionRequestedAt ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
     var nameCell = escapeHtml(u.name || '-')
       + (u.email ? '<br><span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '');
     return [
@@ -229,7 +232,7 @@
         '<td>' + roleBadge + ' ' + permHtml + '</td>',
         '<td>' + stateBadge + '</td>',
         '<td><div class="admin-row-actions">',
-          '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>',
+          editBtn,
           deleteBtn,
         '</div></td>',
       '</tr>'
@@ -431,6 +434,7 @@
       state.saving = false;
       var msg = (err && err.message) ? err.message : t('admin_err_save_fail');
       if (/user_exists/.test(msg)) msg = t('admin_err_exists');
+      else if (/user_deletion_pending/.test(msg)) msg = t('admin_err_deletion_pending');
       else if (/email_exists/.test(msg)) msg = t('admin_err_email_exists');
       else if (/conflict/.test(msg)) msg = t('admin_err_conflict');
       else if (/password_required/.test(msg)) msg = t('admin_err_enter_pw');
@@ -447,7 +451,10 @@
     if (!window.confirm(t('admin_confirm_delete') + ' (' + (u.name || u.id) + ')')) return;
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_deleting'));
     NK.api.adminUserDelete(id)
-      .then(function () { return loadUsers(); })
+      .then(function () {
+        window.alert(t('admin_delete_scheduled'));
+        return loadUsers();
+      })
       .catch(function (err) {
         var msg = (err && err.message) ? err.message : t('admin_err_del_fail');
         if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');

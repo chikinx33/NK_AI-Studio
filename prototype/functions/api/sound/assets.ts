@@ -52,6 +52,23 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const where: string[] = [];
     const params: any[] = [];
+    params.push(auth.userId);
+    const ownerParam = params.length;
+    params.push(`%/users/${auth.userId}/%`);
+    const legacyPathParam = params.length;
+    params.push(`%2Fusers%2F${auth.userId}%2F`);
+    const legacyEncodedPathParam = params.length;
+    where.push(`(
+      owner_id = $${ownerParam}
+      OR (
+        owner_id IS NULL
+        AND (
+          COALESCE(params->>'objectName', '') LIKE $${legacyPathParam}
+          OR COALESCE(output_url, '') LIKE $${legacyPathParam}
+          OR COALESCE(output_url, '') LIKE $${legacyEncodedPathParam}
+        )
+      )
+    )`);
     if (scope) { params.push(scope); where.push(`scope = $${params.length}`); }
     if (type) { params.push(type); where.push(`type = $${params.length}`); }
     if (scope === "project") {

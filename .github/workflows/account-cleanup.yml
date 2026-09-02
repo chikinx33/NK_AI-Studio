@@ -1,0 +1,22 @@
+name: Account data cleanup
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete accounts whose seven-day grace period expired
+        env:
+          ACCOUNT_CLEANUP_TOKEN: ${{ secrets.ACCOUNT_CLEANUP_TOKEN }}
+        run: |
+          test -n "$ACCOUNT_CLEANUP_TOKEN"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $ACCOUNT_CLEANUP_TOKEN" \
+            --header "Content-Type: application/json" \
+            https://nkstudio.org/api/admin/users-cleanup

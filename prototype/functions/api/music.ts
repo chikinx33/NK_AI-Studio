@@ -16,6 +16,7 @@
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { resolveProjectStorageOwner } from "./_shared/shares";
 import { normalizeSongSections, sectionsToSongChunks } from "./_shared/song-sections.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -551,7 +552,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const extension = isWav ? "wav" : "mp3";
     const uploadContentType = isWav ? "audio/wav" : "audio/mpeg";
 
-    const userId = String(auth.userId || "").trim() || "owner";
+    const userId = await resolveProjectStorageOwner(env, auth.userId, body.ownerId, projectId);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const objName = `${projectPrefix}/music/bgm-${Date.now()}.${extension}`;

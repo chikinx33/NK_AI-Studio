@@ -2,6 +2,7 @@
 import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
+import { resolveProjectStorageOwner } from "./_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -289,7 +290,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
     const projTag = projTagRaw || "default";
-    const userId = String((auth as any)?.userId || "owner").trim() || "owner";
+    const requesterId = String((auth as any)?.userId || "owner").trim() || "owner";
+    const userId = storageService === "ai-image"
+      ? requesterId
+      : await resolveProjectStorageOwner(env, requesterId, body?.ownerId, projTag);
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";

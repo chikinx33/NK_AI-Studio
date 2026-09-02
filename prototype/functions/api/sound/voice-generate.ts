@@ -173,11 +173,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const textContent = segIn.map((s) => s.text).join("\n").slice(0, 4000);
         const rows = await sql(
           `INSERT INTO sound_assets
-             (type, scope, brand_id, episode_id, session_id, title, text_content, segments, voice_id, provider, model, params, output_url, output_format, credits_used, status)
-           VALUES ('voice', $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11::jsonb, $12, $13, $14, 'ready')
+             (owner_id, type, scope, brand_id, episode_id, session_id, title, text_content, segments, voice_id, provider, model, params, output_url, output_format, credits_used, status)
+           VALUES ($1, 'voice', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, 'ready')
            RETURNING id`,
           [
-            mode, brandId, episodeId, sessionId,
+            userId, mode, brandId, episodeId, sessionId,
             (segIn[0] && segIn[0].text ? segIn[0].text.slice(0, 60) : "음성"),
             textContent,
             JSON.stringify(segIn),

@@ -92,11 +92,15 @@ export async function ensureSchema(sql: SqlFn) {
     CREATE TABLE IF NOT EXISTS knowledge_documents (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
-      content_hash text NOT NULL UNIQUE,
+      content_hash text NOT NULL,
       user_id text,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // 과거 전역 content_hash UNIQUE는 다른 회원의 동일 문서를 같은 행으로 합쳤다.
+  // 회원 삭제가 타 회원 문서까지 지우지 않도록 사용자별 문서 행으로 분리한다.
+  await sql(`ALTER TABLE knowledge_documents DROP CONSTRAINT IF EXISTS knowledge_documents_content_hash_key`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_documents_user_hash_idx ON knowledge_documents (user_id, content_hash)`);
   await sql(`
     CREATE TABLE IF NOT EXISTS knowledge_chunks (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -110,6 +110,7 @@ export async function ensureSoundSchema(sql: SqlFn): Promise<void> {
   await sql(`
     CREATE TABLE IF NOT EXISTS sound_assets (
       id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      owner_id      TEXT NOT NULL,
       type          TEXT NOT NULL CHECK (type IN ('voice','sfx','music')),
       scope         TEXT NOT NULL CHECK (scope IN ('instance','project')),
       brand_id      TEXT,
@@ -133,6 +134,8 @@ export async function ensureSoundSchema(sql: SqlFn): Promise<void> {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  await sql(`ALTER TABLE sound_assets ADD COLUMN IF NOT EXISTS owner_id TEXT`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_owner ON sound_assets(owner_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_scope ON sound_assets(scope, brand_id, episode_id, session_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_type ON sound_assets(type, status)`);
   schemaReady = true;

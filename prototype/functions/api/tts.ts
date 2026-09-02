@@ -1,5 +1,6 @@
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
+import { resolveProjectStorageOwner } from "./_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -59,7 +60,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const userId: string = String(auth.userId || "").trim() || "owner";
+    const userId: string = await resolveProjectStorageOwner(env, auth.userId, body.ownerId, projectId);
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
     const baseObjectName = `${projectPrefix}/sfx/voice-${sceneId}`;

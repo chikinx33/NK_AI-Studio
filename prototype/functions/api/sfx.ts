@@ -17,6 +17,7 @@
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { resolveProjectStorageOwner } from "./_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -488,7 +489,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = await generateElevenLabsSfx(elevenLabsKey, sfxPrompt, clipDuration);
 
     // Step 3: GCS 업로드
-    const userId = String(auth.userId || "").trim() || "owner";
+    const userId = await resolveProjectStorageOwner(env, auth.userId, body.ownerId, projectId);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const safeLabelId = (clipId || clipLabel).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);

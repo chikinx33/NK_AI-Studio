@@ -55,6 +55,28 @@ export async function authorizeRequest(request, env, options = {}) {
     if (!payload || !payload.sub) {
       return { ok: false, status: 401, error: "invalid_session" };
     }
+    if (!options.skipAccountDeletionCheck) {
+      let account;
+      try {
+        const { checkAccountSession } = await import("./account-deletions.js");
+        account = await checkAccountSession(
+          env,
+          sanitizeUserId(payload.sub),
+          Math.max(0, Number(payload.iat) || 0),
+        );
+      } catch (error) {
+        try { console.error("[auth] account deletion registry unavailable", error); } catch (_) { /* noop */ }
+        return { ok: false, status: 503, error: "account_status_unavailable" };
+      }
+      if (!account.ok) {
+        return {
+          ok: false,
+          status: 403,
+          error: account.error,
+          deleteAfter: account.deleteAfter || "",
+        };
+      }
+    }
     return {
       ok: true,
       status: 200,

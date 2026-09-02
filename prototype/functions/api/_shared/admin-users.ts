@@ -22,6 +22,8 @@ export interface AdminUser {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  deletionRequestedAt: string;
+  deleteAfter: string;
 }
 
 export interface UsersRegistry {
@@ -173,6 +175,8 @@ export async function createUserRecord(input: {
     active: input.active !== false,
     createdAt: now,
     updatedAt: now,
+    deletionRequestedAt: "",
+    deleteAfter: "",
   };
 }
 
@@ -206,5 +210,7 @@ function normalizeUser(raw: any): AdminUser {
     active: src.active !== false,
     createdAt: String(src.createdAt || ""),
     updatedAt: String(src.updatedAt || ""),
+    deletionRequestedAt: String(src.deletionRequestedAt || ""),
+    deleteAfter: String(src.deleteAfter || ""),
   };
 }

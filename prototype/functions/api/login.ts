@@ -5,6 +5,11 @@
 import { issueSessionToken, resolveSessionTtlSec, sanitizeUserId } from "./_shared/auth.js";
 import { verifyPassword } from "./_shared/password.js";
 import { loadRegistry, saveRegistry, findUser, createUserRecord } from "./_shared/admin-users";
+import {
+  loadAccountDeletionsStrict,
+  findAccountDeletion,
+  isDeletionRegistrationBlocked,
+} from "./_shared/account-deletions";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const LEGACY_AUTH_ID = "limfactory";
@@ -41,6 +46,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const rememberDevice = body.rememberDevice !== false;
     if (!id || !pw) return json({ error: 'ID and PW are required' }, 400, origin);
 
+    const deletionRegistry = await loadAccountDeletionsStrict(env, true);
+    const deletion = findAccountDeletion(deletionRegistry, id);
+    if (isDeletionRegistrationBlocked(deletion)) {
+      return json({ error: 'account_deletion_pending', deleteAfter: deletion?.deleteAfter || '' }, 403, origin);
+    }
+
     const issueLoginSession = () => issueSessionToken(
       id,
       env,
@@ -62,6 +73,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const user = findUser(reg, id);
       if (user) {
         // 최고 관리자(env 1차 관리자)는 절대 잠기지 않도록 active 무시 + 항상 admin.
+        if (!isPrimary && user.deletionRequestedAt) {
+          return json({ error: 'account_deletion_pending', deleteAfter: user.deleteAfter || '' }, 403, origin);
+        }
         if (!isPrimary && !user.active) return json({ error: 'account_disabled' }, 403, origin);
         const ok = await verifyPassword(pw, user.pwHash);
         if (ok) {

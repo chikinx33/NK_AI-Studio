@@ -163,6 +163,7 @@
   api.tts = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    if (!payload.ownerId && payload.projectId && api.getSharedOwner) payload.ownerId = api.getSharedOwner(payload.projectId);
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
     var url = withBase('/api/tts' + (token ? ('?nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetchWithTimeout(url, {
@@ -401,6 +402,8 @@
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    var imagenProjectId = payload.projectId || payload.projTag;
+    if (!payload.ownerId && imagenProjectId && api.getSharedOwner) payload.ownerId = api.getSharedOwner(imagenProjectId);
     if (!payload.provider) {
       try {
         var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
@@ -552,6 +555,8 @@
   api.videoStart = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    var videoProjectId = payload.projectId || payload.projTag;
+    if (!payload.ownerId && videoProjectId && api.getSharedOwner) payload.ownerId = api.getSharedOwner(videoProjectId);
     var res = await fetch(withBase('/api/video'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -601,6 +606,8 @@
     var p = params || {};
     var q = new URLSearchParams();
     if (p.projectId) q.set('projectId', String(p.projectId));
+    var statusOwner = p.ownerId || (p.projectId && api.getSharedOwner ? api.getSharedOwner(p.projectId) : '');
+    if (statusOwner) q.set('ownerId', String(statusOwner));
     if (p.sceneId) q.set('sceneId', String(p.sceneId));
     if (p.source) q.set('source', String(p.source));
     q.set('userId', String(p.userId || resolveUserId()));
@@ -630,6 +637,8 @@
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
     fd.append('userId', resolveUserId());
+    var imageOwner = (opts && opts.ownerId) || (api.getSharedOwner ? api.getSharedOwner(projectId) : '');
+    if (imageOwner) fd.append('ownerId', String(imageOwner));
     fd.append('file', file);
     // kind:'logo' 면 로고 전용 폴더(logo/)에 저장돼 프로덕션 이미지 저장소와 분리된다.
     var kind = (opts && opts.kind) ? String(opts.kind) : 'image';
@@ -648,6 +657,8 @@
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
     fd.append('userId', resolveUserId());
+    var videoOwner = api.getSharedOwner ? api.getSharedOwner(projectId) : '';
+    if (videoOwner) fd.append('ownerId', String(videoOwner));
     fd.append('sceneId', String(sceneId || ''));
     fd.append('file', file);
     var res = await fetch(withBase('/api/video/upload'), {
@@ -719,6 +730,7 @@
   api.postprodTranscodeStart = async function (body) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    if (!payload.ownerId && payload.projectId && api.getSharedOwner) payload.ownerId = api.getSharedOwner(payload.projectId);
     var res = await fetch(withBase('/api/postprod/transcode'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -742,6 +754,9 @@
     var q = new URLSearchParams();
     if (p.jobName) q.set('jobName', String(p.jobName));
     if (p.outputObjectName) q.set('outputObjectName', String(p.outputObjectName));
+    if (p.projectId) q.set('projectId', String(p.projectId));
+    var transcodeOwner = p.ownerId || (p.projectId && api.getSharedOwner ? api.getSharedOwner(p.projectId) : '');
+    if (transcodeOwner) q.set('ownerId', String(transcodeOwner));
     var res = await fetch(withBase('/api/postprod/transcode/status?' + q.toString()), {
       headers: buildAuthHeaders()
     });

@@ -213,6 +213,9 @@ async function batchDeleteObjects(ctx, token, names, useUserProject) {
   while ((m = re.exec(text)) !== null) statuses.push(Number(m[1]));
   let deleted = 0;
   const failures = [];
+  if (statuses.length !== names.length) {
+    failures.push(`batch_response_count_mismatch:${statuses.length}/${names.length}`);
+  }
   statuses.forEach((code, i) => {
     if (code === 204 || code === 200 || code === 404) deleted += 1; // 404 = 이미 없음(성공 취급)
     else failures.push(`${names[i] || `#${i}`}:${code}`);
