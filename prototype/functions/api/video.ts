@@ -7,6 +7,7 @@ import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjec
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
+import { withCreditCharge } from "./_shared/credits";
 import {
   callKlingApi,
   klingEndpoints,
@@ -30,7 +31,7 @@ import {
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const log = (...args: any[]) => console.log('[video]', ...args);
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -602,6 +603,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: msg, stack: e?.stack ?? '' }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "video", deferAccepted: true }, handlePost);
 
 // Kling image 필드 변환: https/gs URL은 그대로 URL 형식 유지, data:URL은 base64 문자열만 추출
 function toKlingImageField(src: string): string {

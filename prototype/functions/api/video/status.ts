@@ -5,6 +5,7 @@ import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjec
 import { authorizeRequest } from "../_shared/auth.js";
 import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
 import { resolveProjectStorageOwner } from "../_shared/shares";
+import { settleDeferredCreditFromResponse } from "../_shared/credits";
 import {
   callKlingApi,
   isKlingDone,
@@ -30,7 +31,7 @@ const corsJson = (data: any, status = 200) =>
 
 const log = (...args: any[]) => console.log('[video-status]', ...args);
 
-export const onRequestGet: PagesFunction = async ({ request, env }) => {
+const handleGet: PagesFunction = async ({ request, env }) => {
   let jobId = '';
   try {
     const url = new URL(request.url);
@@ -596,6 +597,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   } catch (e: any) {
     return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'INTERNAL', message: e?.message || 'Unknown error' }, response: null, rawOperation: null, playback: null }, 500);
   }
+};
+
+export const onRequestGet: PagesFunction = async (context) => {
+  const auth = await authorizeRequest(context.request, context.env);
+  const response = await handleGet(context);
+  if (auth.ok) {
+    const url = new URL(context.request.url);
+    const jobId = String(url.searchParams.get("job_id") || url.searchParams.get("jobId") || "");
+    await settleDeferredCreditFromResponse(context.env, auth.userId, jobId, response).catch(() => null);
+  }
+  return response;
 };
 export const onRequestOptions: PagesFunction = async () => {
   return new Response(null, {

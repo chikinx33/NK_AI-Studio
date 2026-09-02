@@ -871,9 +871,12 @@
           frames: frames
         })
       });
+      if (res.headers && res.headers.get('X-NK-Credit-Operation')) {
+        window.dispatchEvent(new CustomEvent('nk:credits-changed'));
+      }
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok || !data.sfxUrl) {
-        throw new Error(data.error || 'sfx_api_error');
+        throw new Error(data.message || data.error || 'sfx_api_error');
       }
 
       // Audio 트랙에 새 클립 삽입 (클립 위치와 동일한 시간대)
@@ -977,8 +980,11 @@
           songSections: songSections
         })
       });
+      if (res.headers && res.headers.get('X-NK-Credit-Operation')) {
+        window.dispatchEvent(new CustomEvent('nk:credits-changed'));
+      }
       var data = await res.json().catch(function () { return {}; });
-      if (!res.ok || !data.musicUrl) throw new Error(data.error || 'music_api_error');
+      if (!res.ok || !data.musicUrl) throw new Error(data.message || data.error || 'music_api_error');
 
       // 음악 클립을 클릭했을 때 어떤 지시문·엔진으로 만들어진 BGM 인지 다시 확인할 수 있도록
       // 메타데이터를 프로젝트에 영속화한다. 직접 업로드한 음악에는 musicMeta 가 없다.

@@ -65,6 +65,7 @@ async function deleteFromUserTable(sql: SqlFn, table: string, column: string, us
     "agent_conversation_meta", "agent_reminders", "agent_credentials", "agent_daily_brief",
     "company_skill_artifacts", "company_skill_job_events", "company_skill_jobs",
     "knowledge_documents", "voice_favorites", "voices",
+    "credit_transactions", "credit_operations", "credit_accounts",
   ]);
   const safeColumns = new Set(["user_id", "owner_id"]);
   if (!safeTables.has(table) || !safeColumns.has(column)) throw new Error("unsafe_cleanup_table");
@@ -81,6 +82,9 @@ async function cleanupDatabase(env: any, userId: string): Promise<number> {
   deleted += await deleteFromUserTable(sql, "company_skill_artifacts", "user_id", userId);
   deleted += await deleteFromUserTable(sql, "company_skill_job_events", "user_id", userId);
   deleted += await deleteFromUserTable(sql, "company_skill_jobs", "user_id", userId);
+  deleted += await deleteFromUserTable(sql, "credit_transactions", "user_id", userId);
+  deleted += await deleteFromUserTable(sql, "credit_operations", "user_id", userId);
+  deleted += await deleteFromUserTable(sql, "credit_accounts", "user_id", userId);
 
   for (const table of [
     "app_settings", "agent_jobs", "agent_messages", "agent_ui_actions", "agent_personas",

@@ -3,6 +3,7 @@
 // DELETE = 인덱싱된 지식파일 삭제
 
 import { authorizeRequest } from "../_shared/auth.js";
+import { withCreditCharge } from "../_shared/credits";
 import {
   canManageCommonKnowledge,
   chunkText,
@@ -17,7 +18,7 @@ import {
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -83,6 +84,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message || "지식파일 인덱싱 중 오류가 발생했습니다." }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "knowledge_index" }, handlePost);
 
 export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   try {

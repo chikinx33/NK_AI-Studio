@@ -8,6 +8,7 @@
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
+import { withCreditCharge } from "../_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -35,7 +36,7 @@ export const onRequestOptions: PagesFunction = async () =>
     },
   });
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   // 예산 타이머는 핸들러 맨 앞에서 시작한다. 예전엔 Gemini 호출 직전에 시작해서
   // 토큰 발급·이미지 로딩에서 시간을 다 써도 예산이 남은 것처럼 보였다.
   const startedAt = Date.now();
@@ -308,6 +309,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "ip_analyze" }, handlePost);
 
 // 스키마를 못 쓰는 경우를 위한 지시 — 순수 JSON만 받도록 못박는다.
 const JSON_ONLY_HINT = [

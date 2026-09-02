@@ -12,6 +12,7 @@
  */
 import { authorizeRequest } from "../_shared/auth.js";
 import { sanitizeUserId, buildUserRoot } from "../_shared/storage";
+import { withCreditCharge } from "../_shared/credits";
 import {
   corsHeaders, send, getSql, ensureSoundSchema,
   resolveGcsEnv, buildSoundObjectName, uploadToGcs, signGcsUrl,
@@ -67,7 +68,7 @@ async function synthesizeSegmentsGemini(opts: {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env, { allowQueryToken: true });
@@ -197,6 +198,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: String(e?.message || e || "voice_generate_error") }, 500, origin);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "voice" }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

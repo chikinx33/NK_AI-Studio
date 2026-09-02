@@ -1,6 +1,7 @@
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
+import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -26,7 +27,7 @@ const GEMINI_TTS_VOICES = new Set([
   "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
 ]);
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env, { allowQueryToken: true });
@@ -296,6 +297,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "tts" }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

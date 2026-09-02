@@ -6,6 +6,7 @@ import { buildAiImageSessionPrefix } from "./_shared/storage";
 import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
+import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -31,7 +32,7 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
   });
 };
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env);
@@ -306,6 +307,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "업스케일 처리 중 오류" }, 500, origin);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "image_upscale" }, handlePost);
 
 function safeJson(text: string): any {
   try { return JSON.parse(text); } catch { return {}; }

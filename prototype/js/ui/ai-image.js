@@ -37,7 +37,8 @@
     historyPanelMode: 'history',
     cameraTargetMode: 'scene',
     cameraControls: createDefaultCameraControls(),
-    deletedObjectNames: []
+    deletedObjectNames: [],
+    creditCost: null
   };
 
   var TEXT = {
@@ -1997,6 +1998,7 @@
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === 'free' ? ' active' : '') + '" data-action="set-aspect" data-ratio="free" title="' + escapeHtml(t('aspectFreeHint')) + '">Free</button>' +
         '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
+        '<span id="ai-image-credit-cost" class="nk-generation-credit-cost">' + (Number.isFinite(state.creditCost) ? ('예상 ' + escapeHtml(state.creditCost.toLocaleString()) + ' C') : '') + '</span>' +
         '</div>' +
       '</div>' +
       '</div>' +
@@ -2479,6 +2481,17 @@
     }
 
     hydratePromptControls();
+    refreshImageCreditQuote();
+  }
+
+  function refreshImageCreditQuote() {
+    if (!(NK.api && NK.api.creditQuote)) return;
+    NK.api.creditQuote('image_generation', { provider: state.provider, imageSize: state.imageSize, aspectRatio: state.aspectRatio })
+      .then(function (data) {
+        state.creditCost = Number(data && data.quote && data.quote.credits);
+        var label = document.getElementById('ai-image-credit-cost');
+        if (label) label.textContent = Number.isFinite(state.creditCost) ? ('예상 ' + state.creditCost.toLocaleString() + ' C') : '';
+      }).catch(function () { state.creditCost = null; });
   }
 
   function bindSourceFileInput() {

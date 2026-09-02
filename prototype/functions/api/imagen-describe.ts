@@ -1,9 +1,10 @@
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) {
@@ -96,6 +97,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "image_describe" }, handlePost);
 
 function normalizeLang(value: unknown) {
   return String(value || "").trim().toLowerCase() === "en" ? "en" : "ko";

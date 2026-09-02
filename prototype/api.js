@@ -96,6 +96,7 @@
     const timer = setTimeout(() => ctrl.abort(), ms);
     try {
       const res = await fetch(url, opts);
+      notifyCreditResponse(res);
       // 401 감지: 서버 세션 만료 → 로그아웃 팝업
       if (res.status === 401) {
         try { if (window.NK && NK.showLogoutPopup) NK.showLogoutPopup(); } catch (_) {}
@@ -140,9 +141,20 @@
   };
 
   var e = function (t) {
-    try { return JSON.parse(t).error; } catch (_) { }
+    try {
+      var parsed = JSON.parse(t);
+      if (parsed && parsed.error === 'credit_insufficient' && parsed.message) return parsed.message;
+      return parsed && (parsed.error || parsed.message);
+    } catch (_) { }
     return edgeErrorSummary(t) || t;
   };
+
+  function notifyCreditResponse(res) {
+    try {
+      if (!res || !res.headers || !res.headers.get('X-NK-Credit-Operation')) return;
+      window.dispatchEvent(new CustomEvent('nk:credits-changed'));
+    } catch (_) { }
+  }
   const getImagenTimeoutMs = function (payload, opts) {
     var override = Number(opts && opts.timeoutMs);
     if (Number.isFinite(override) && override > 0) return Math.max(DEFAULT_TIMEOUT_MS, override);
@@ -563,6 +575,7 @@
       body: JSON.stringify(payload),
       signal: opts && opts.signal
     });
+    notifyCreditResponse(res);
     var text = await res.text();
     if (!res.ok) {
       var err = new Error((e(text) || 'video_api_error') + '');
@@ -1443,6 +1456,49 @@
     });
     var text = await res.text();
     if (!res.ok) throw new Error(e(text) || 'admin_user_delete_error');
+    return j(text);
+  };
+
+  // ─── 회원 크레딧 ────────────────────────────────────────────
+  api.creditMe = async function () {
+    var res = await fetch(withBase('/api/credits/me'), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) { var err = new Error(e(text) || 'credit_load_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
+  api.creditQuote = async function (feature, input) {
+    var res = await fetch(withBase('/api/credits/quote'), {
+      method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ feature: String(feature || ''), input: input || {} })
+    });
+    var text = await res.text();
+    if (!res.ok) { var err = new Error(e(text) || 'credit_quote_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
+  api.adminCreditsList = async function () {
+    var res = await fetch(withBase('/api/admin/credits'), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_credits_list_error');
+    return j(text);
+  };
+
+  api.adminCreditDetail = async function (userId) {
+    var res = await fetch(withBase('/api/admin/credits?userId=' + encodeURIComponent(String(userId || ''))), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_credit_detail_error');
+    return j(text);
+  };
+
+  api.adminCreditAdjust = async function (payload) {
+    var res = await fetch(withBase('/api/admin/credits'), {
+      method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_credit_adjust_error');
+    try { window.dispatchEvent(new CustomEvent('nk:credits-changed')); } catch (_) { }
     return j(text);
   };
 

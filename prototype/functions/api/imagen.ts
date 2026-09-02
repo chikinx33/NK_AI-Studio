@@ -3,6 +3,7 @@ import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
+import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -15,7 +16,7 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const MAX_REFERENCE_IMAGES = 16;
 const GEMINI_MAX_REFERENCE_IMAGES = 14;
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) {
@@ -355,6 +356,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "image_generation" }, handlePost);
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {

@@ -10,12 +10,13 @@
 
 import { authorizeRequest } from "../_shared/auth.js";
 import { callKlingApi, klingEndpoints, stripDataUrlPrefix } from "../_shared/kling";
+import { withCreditCharge } from "../_shared/credits";
 
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const log = (...args: any[]) => console.log("[video-lipsync]", ...args);
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -88,6 +89,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "video_lipsync", deferAccepted: true }, handlePost);
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {

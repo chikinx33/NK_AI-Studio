@@ -1849,4 +1849,134 @@
         var sidebar = document.querySelector('.sidebar');
         if (!sidebar) return;
     };
+
+    // ── 전역 크레딧 게이지 ────────────────────────────────────
+    var creditState = { summary: null, transactions: [], loading: false, timer: null, observer: null };
+
+    function creditLang() {
+        try { return String(localStorage.getItem('nk_lang') || 'ko').toLowerCase() === 'en' ? 'en' : 'ko'; } catch (_) { return 'ko'; }
+    }
+
+    function creditNumber(value) {
+        try { return Math.max(0, Number(value) || 0).toLocaleString(creditLang() === 'en' ? 'en-US' : 'ko-KR'); } catch (_) { return String(value || 0); }
+    }
+
+    function creditGaugeElement() {
+        var gauge = document.getElementById('nk-credit-gauge');
+        if (gauge) return gauge;
+        gauge = document.createElement('button');
+        gauge.type = 'button';
+        gauge.id = 'nk-credit-gauge';
+        gauge.className = 'nk-credit-gauge is-floating';
+        gauge.setAttribute('aria-label', '크레딧 사용량');
+        gauge.addEventListener('click', function (event) { event.stopPropagation(); toggleCreditPopover(false); });
+        document.body.appendChild(gauge);
+        return gauge;
+    }
+
+    function placeCreditGauge() {
+        var gauge = creditGaugeElement();
+        var host = document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills');
+        if (host && host.parentNode) {
+            gauge.classList.remove('is-floating');
+            host.parentNode.insertBefore(gauge, host);
+        } else if (gauge.parentNode !== document.body) {
+            gauge.classList.add('is-floating');
+            document.body.appendChild(gauge);
+        } else {
+            gauge.classList.add('is-floating');
+        }
+    }
+
+    function renderCreditGauge() {
+        var gauge = creditGaugeElement();
+        var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();
+        gauge.classList.toggle('hidden', !authed);
+        if (!authed) return;
+        var s = creditState.summary;
+        if (!s) {
+            gauge.innerHTML = '<span class="nk-credit-label">Credit</span><strong>-- C</strong><span class="nk-credit-track"><i></i></span>';
+            return;
+        }
+        var netGranted = Math.max(0, Number(s.lifetimeGranted || 0) - Number(s.lifetimeRevoked || 0));
+        var used = Math.max(0, Number(s.lifetimeSpent || 0));
+        var denominator = Math.max(1, netGranted, used + Number(s.available || 0) + Number(s.reserved || 0));
+        var pct = Math.min(100, Math.max(0, Math.round(used / denominator * 100)));
+        gauge.classList.toggle('is-low', Number(s.available || 0) <= 0);
+        gauge.innerHTML = '<span class="nk-credit-label">' + (creditLang() === 'en' ? 'Credits' : '크레딧') + '</span>' +
+            '<strong>' + creditNumber(s.available) + ' C</strong>' +
+            '<span class="nk-credit-track"><i style="width:' + pct + '%"></i></span>' +
+            '<small>' + (creditLang() === 'en' ? (pct + '% used') : ('사용 ' + pct + '%')) + '</small>';
+        placeCreditGauge();
+    }
+
+    function toggleCreditPopover(forceClose) {
+        var old = document.getElementById('nk-credit-popover');
+        if (old) { old.remove(); if (!forceClose) return; }
+        if (forceClose) return;
+        var s = creditState.summary || {};
+        var pop = document.createElement('section');
+        pop.id = 'nk-credit-popover';
+        pop.className = 'nk-credit-popover';
+        var rows = (creditState.transactions || []).slice(0, 8).map(function (tx) {
+            var delta = Number(tx.delta_available || 0);
+            var sign = delta > 0 ? '+' : '';
+            var amountText = tx.kind === 'spend'
+                ? ('확정 ' + creditNumber(Math.abs(Number(tx.delta_reserved || 0))) + ' C')
+                : (sign + creditNumber(delta) + ' C');
+            var labelMap = { admin_grant: '관리자 지급', admin_revoke: '관리자 회수', reserve: '생성 예약', spend: '생성 사용', refund: '실패 반환' };
+            var meta = tx.metadata && typeof tx.metadata === 'object' ? tx.metadata : {};
+            var label = labelMap[tx.kind] || tx.kind || '-';
+            if (meta.basis && meta.basis.model) label += ' · ' + meta.basis.model;
+            return '<li><span>' + label + '</span><strong class="' + (delta > 0 ? 'is-plus' : '') + '">' + amountText + '</strong></li>';
+        }).join('');
+        pop.innerHTML = '<header><strong>크레딧 사용 내역</strong><button type="button" aria-label="닫기">×</button></header>' +
+            '<div class="nk-credit-summary"><span>사용 가능 <b>' + creditNumber(s.available) + ' C</b></span><span>예약 중 <b>' + creditNumber(s.reserved) + ' C</b></span><span>누적 사용 <b>' + creditNumber(s.lifetimeSpent) + ' C</b></span></div>' +
+            '<p class="nk-credit-test-note">현재 요율은 관리자 검증용 테스트 크레딧 기준입니다.</p>' +
+            '<ul>' + (rows || '<li><span>아직 사용 내역이 없습니다.</span></li>') + '</ul>';
+        document.body.appendChild(pop);
+        var rect = creditGaugeElement().getBoundingClientRect();
+        pop.style.top = Math.max(12, Math.min(window.innerHeight - pop.offsetHeight - 12, rect.bottom + 8)) + 'px';
+        pop.style.left = Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, rect.right - pop.offsetWidth)) + 'px';
+        pop.querySelector('button').addEventListener('click', function () { pop.remove(); });
+    }
+
+    common.refreshCreditGauge = function () {
+        if (creditState.loading || !(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) || !(NK.api && NK.api.creditMe)) {
+            renderCreditGauge();
+            return Promise.resolve(null);
+        }
+        creditState.loading = true;
+        return NK.api.creditMe().then(function (data) {
+            creditState.summary = data && data.summary || null;
+            creditState.transactions = data && data.transactions || [];
+            renderCreditGauge();
+            return data;
+        }).catch(function () {
+            creditState.summary = null;
+            renderCreditGauge();
+            return null;
+        }).finally(function () { creditState.loading = false; });
+    };
+
+    common.initCreditGauge = function () {
+        if (document.__nkCreditGaugeBound) return;
+        document.__nkCreditGaugeBound = true;
+        placeCreditGauge();
+        common.refreshCreditGauge();
+        window.addEventListener('nk:credits-changed', function () { setTimeout(common.refreshCreditGauge, 120); });
+        window.addEventListener('focus', common.refreshCreditGauge);
+        window.addEventListener('nk:lang-changed', renderCreditGauge);
+        document.addEventListener('click', function (event) {
+            var pop = document.getElementById('nk-credit-popover');
+            if (pop && !pop.contains(event.target) && event.target !== creditGaugeElement()) pop.remove();
+        });
+        creditState.observer = new MutationObserver(function () {
+            var gauge = document.getElementById('nk-credit-gauge');
+            if (!gauge || !gauge.isConnected) placeCreditGauge();
+            else if (document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills') && gauge.classList.contains('is-floating')) placeCreditGauge();
+        });
+        creditState.observer.observe(document.body, { childList: true, subtree: true });
+        creditState.timer = setInterval(common.refreshCreditGauge, 30000);
+    };
 })();

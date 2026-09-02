@@ -84,7 +84,7 @@
     .admin-modal h3 { margin:0 0 16px; font-size:18px; }
     .admin-field { margin-bottom:14px; }
     .admin-field label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
-    .admin-field input[type="text"], .admin-field input[type="password"] {
+    .admin-field input[type="text"], .admin-field input[type="password"], .admin-field input[type="email"], .admin-field input[type="number"] {
       width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
       background:var(--studio-input-bg, var(--panel)); color:var(--text); font-size:14px; box-sizing:border-box;
     }
@@ -111,27 +111,43 @@
     .admin-hint { font-size:12px; color:var(--muted); margin-top:4px; }
     .admin-modal-error { color:#ef4444; font-size:13px; margin-top:10px; min-height:18px; }
     .admin-status { font-size:13px; color:#16a34a; }
+    .admin-credit-cell { min-width:190px; }
+    .admin-credit-load-error { margin:0 0 14px; padding:12px 14px; border:1px solid rgba(239,68,68,.35); border-radius:10px; background:rgba(239,68,68,.08); }
+    .admin-credit-cell > strong { display:block; color:#fbbf24; font-size:14px; }
+    .admin-credit-cell > small { display:block; margin-top:2px; color:var(--muted); font-size:10px; }
+    .admin-credit-actions { display:flex; gap:4px; margin-top:6px; }
+    .admin-credit-actions button { border:1px solid var(--border); border-radius:6px; padding:3px 6px; background:transparent; color:var(--muted); font-size:10px; cursor:pointer; }
+    .admin-credit-actions button:hover { color:var(--text); border-color:var(--accent); }
+    .admin-credit-modal { max-width:860px; }
+    .admin-credit-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+    .admin-credit-summary span { padding:12px; border-radius:10px; background:var(--layer-strong); color:var(--muted); font-size:12px; }
+    .admin-credit-summary b { display:block; margin-top:4px; color:var(--text); font-size:15px; }
+    .admin-credit-history { max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:10px; }
+    .admin-credit-history table { width:100%; border-collapse:collapse; font-size:11px; }
+    .admin-credit-history th, .admin-credit-history td { padding:8px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
+    .admin-credit-history td:nth-child(3) { min-width:160px; white-space:normal; }
+    .admin-credit-history td.is-plus { color:#4ade80; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1637" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1637" />
-  <script src="core.js?v=3.1637" defer></script>
-  <script src="js/config.js?v=3.1637" defer></script>
-  <script src="js/utils.js?v=3.1637" defer></script>
-  <script src="store.js?v=3.1637" defer></script>
-  <script src="api.js?v=3.1637" defer></script>
-  <script src="js/state.js?v=3.1637" defer></script>
-  <script src="js/auth.js?v=3.1637" defer></script>
-  <script src="js/navigation.js?v=3.1637" defer></script>
-  <script src="js/service/media.js?v=3.1637" defer></script>
-  <script src="js/service/project.js?v=3.1637" defer></script>
-  <script src="js/service/character-traits.js?v=3.1637" defer></script>
-  <script src="js/service/brand.js?v=3.1637" defer></script>
-  <script src="js/ui/common.js?v=3.1637" defer></script>
-  <script src="js/ui/admin-users.js?v=3.1637" defer></script>
-  <script src="script.js?v=3.1637" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1638" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1638" />
+  <script src="core.js?v=3.1638" defer></script>
+  <script src="js/config.js?v=3.1638" defer></script>
+  <script src="js/utils.js?v=3.1638" defer></script>
+  <script src="store.js?v=3.1638" defer></script>
+  <script src="api.js?v=3.1638" defer></script>
+  <script src="js/state.js?v=3.1638" defer></script>
+  <script src="js/auth.js?v=3.1638" defer></script>
+  <script src="js/navigation.js?v=3.1638" defer></script>
+  <script src="js/service/media.js?v=3.1638" defer></script>
+  <script src="js/service/project.js?v=3.1638" defer></script>
+  <script src="js/service/character-traits.js?v=3.1638" defer></script>
+  <script src="js/service/brand.js?v=3.1638" defer></script>
+  <script src="js/ui/common.js?v=3.1638" defer></script>
+  <script src="js/ui/admin-users.js?v=3.1638" defer></script>
+  <script src="script.js?v=3.1638" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>

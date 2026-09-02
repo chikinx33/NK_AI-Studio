@@ -527,6 +527,7 @@
     });
     NK.ui.common.applyI18n(currentLang);
     NK.ui.common.bindScreenModeButton();
+    if (NK.ui.common.initCreditGauge) NK.ui.common.initCreditGauge();
     NK.ui.common.updateScreenButton(currentLang);
     if (NK.ui.common.restoreFullscreenIfNeeded) {
       await NK.ui.common.restoreFullscreenIfNeeded();

@@ -18,6 +18,7 @@ import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
+import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -399,7 +400,7 @@ function b64urlToHex(b64url: string) {
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
     const auth = await authorizeRequest(request, env, { allowQueryToken: true });
@@ -568,6 +569,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: String(e?.message || e || "sfx_error") }, 500, origin);
   }
 };
+
+export const onRequestPost: PagesFunction = async (context) =>
+  withCreditCharge(context, { feature: "sfx" }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

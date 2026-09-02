@@ -306,7 +306,8 @@
     projectId:      '',   // from URL ?projectId=; empty = detached mode
     sessionId:      '',
     currentProject: null,
-    currentBrand:   null
+    currentBrand:   null,
+    creditCost:     null
   };
 
   var DELETED_KEY = 'nk_video_gen_deleted_v1';
@@ -337,6 +338,22 @@
 
   function generateId() {
     return 'vg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  function refreshCreditQuote() {
+    if (!(NK.api && NK.api.creditQuote)) return;
+    NK.api.creditQuote('video', {
+      videoModel: state.model,
+      durationSeconds: state.duration,
+      resolution: state.resolution,
+      referenceImages: state.referenceUrls
+    }).then(function (data) {
+      state.creditCost = Number(data && data.quote && data.quote.credits);
+      var label = root && root.querySelector('#vgen-credit-cost');
+      if (label) label.textContent = Number.isFinite(state.creditCost) ? ('예상 ' + state.creditCost.toLocaleString() + ' C') : '';
+    }).catch(function () {
+      state.creditCost = null;
+    });
   }
 
   // ─── Image intake ─────────────────────────────────────────
@@ -1148,6 +1165,7 @@
 
     root.appendChild(wrap);
     bindEvents();
+    refreshCreditQuote();
   }
 
   // ── Left: Results ──────────────────────────────────────────
@@ -1639,6 +1657,10 @@
     });
     if (state.generating) genBtn.disabled = true;
     panel.appendChild(genBtn);
+    panel.appendChild(el('span', 'nk-generation-credit-cost', {
+      id: 'vgen-credit-cost',
+      textContent: Number.isFinite(state.creditCost) ? ('예상 ' + state.creditCost.toLocaleString() + ' C') : ''
+    }));
 
     return panel;
   }

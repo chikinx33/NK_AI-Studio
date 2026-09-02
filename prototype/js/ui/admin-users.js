@@ -24,7 +24,15 @@
     modalMode: 'create',    // create | edit
     modalError: '',
     saving: false,
-    edit: null              // 편집 중 사용자(편집 모드) 또는 null
+    edit: null,             // 편집 중 사용자(편집 모드) 또는 null
+    creditMap: {},
+    creditModalOpen: false,
+    creditMode: 'grant',    // grant | revoke | history
+    creditTargetId: '',
+    creditDetail: null,
+    creditError: '',
+    creditSaving: false,
+    creditLoadError: ''
   };
 
   // ─── 다국어(한/영) — 기존 중앙 사전(NK.core.translations) 재사용 ───
@@ -74,11 +82,21 @@
   function loadUsers() {
     state.loading = true;
     state.error = '';
+    state.creditLoadError = '';
     render();
-    return NK.api.adminUsersList()
-      .then(function (res) {
+    return Promise.all([NK.api.adminUsersList(), NK.api.adminCreditsList().catch(function (err) {
+      return { accounts: [], __error: (err && err.message) || 'credit_service_unavailable' };
+    })])
+      .then(function (results) {
+        var res = results[0];
+        var credits = results[1];
+        state.creditLoadError = String(credits && credits.__error || '');
         state.users = (res && Array.isArray(res.users)) ? res.users : [];
         state.primaryAdminId = (res && res.primaryAdminId) ? String(res.primaryAdminId) : '';
+        state.creditMap = {};
+        (credits && Array.isArray(credits.accounts) ? credits.accounts : []).forEach(function (item) {
+          state.creditMap[String(item.userId || '')] = item;
+        });
         state.loading = false;
         render();
       })
@@ -128,15 +146,15 @@
 
     var rows;
     if (state.loading) {
-      rows = '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_loading')) + '</div></td></tr>';
+      rows = '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_loading')) + '</div></td></tr>';
     } else if (state.error) {
-      rows = '<tr><td colspan="5"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
+      rows = '<tr><td colspan="6"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
     } else {
       var list = visibleUsers();
       var primaryRow = buildPrimaryAdminRowIfNeeded();
       var listRows = list.length ? list.map(buildRow).join('') : '';
       rows = primaryRow + listRows;
-      if (!rows) rows = '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
+      if (!rows) rows = '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
     }
 
     root.innerHTML = [
@@ -163,7 +181,8 @@
         '</div>',
 
         '<div class="bsf-detail-card admin-list-card">',
-          '<div class="admin-card-inner">',
+            '<div class="admin-card-inner">',
+            state.creditLoadError ? '<div class="admin-error admin-credit-load-error">' + (curLang() === 'en' ? 'Credit service unavailable: ' : '크레딧 서비스를 확인할 수 없습니다: ') + escapeHtml(state.creditLoadError) + '</div>' : '',
             '<div class="admin-toolbar">',
               '<div class="admin-search"><input type="text" id="admin-search" placeholder="' + escapeHtml(t('admin_search_ph')) + '" value="' + escapeHtml(state.search) + '" /></div>',
               '<select id="admin-filter">',
@@ -176,7 +195,7 @@
             '</div>',
             '<div class="admin-table-wrap">',
               '<table class="admin-table">',
-                '<thead><tr><th>ID</th><th>' + escapeHtml(t('admin_th_name')) + '</th><th>' + escapeHtml(t('admin_th_perm')) + '</th><th>' + escapeHtml(t('admin_th_status')) + '</th><th>' + escapeHtml(t('admin_th_manage')) + '</th></tr></thead>',
+                '<thead><tr><th>ID</th><th>' + escapeHtml(t('admin_th_name')) + '</th><th>' + escapeHtml(t('admin_th_perm')) + '</th><th>' + escapeHtml(t('admin_th_status')) + '</th><th>' + (curLang() === 'en' ? 'Credits' : '크레딧') + '</th><th>' + escapeHtml(t('admin_th_manage')) + '</th></tr></thead>',
                 '<tbody>', rows, '</tbody>',
               '</table>',
             '</div>',
@@ -186,6 +205,7 @@
         '<div class="admin-version">v' + escapeHtml((NK.config && NK.config.APP_VERSION) || '') + '</div>',
 
         state.modalOpen ? buildModal() : '',
+        state.creditModalOpen ? buildCreditModal() : '',
       '</div>'
     ].join('');
 
@@ -209,6 +229,7 @@
         '<td>' + escapeHtml(t('admin_master')) + '</td>',
         '<td><span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span> <span class="admin-perm-chip">' + escapeHtml(t('admin_full_perm')) + '</span></td>',
         '<td><span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_default_pw')) + '</span></td>',
+        '<td>' + buildCreditCell(pid) + '</td>',
         '<td><div class="admin-row-actions"><button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="set-primary-pw" style="min-width:auto;padding:6px 12px;">' + escapeHtml(t('admin_set_pw')) + '</button></div></td>',
       '</tr>'
     ].join('');
@@ -244,6 +265,7 @@
         '<td>' + nameCell + '</td>',
         '<td>' + roleBadge + ' ' + permHtml + '</td>',
         '<td>' + stateBadge + '</td>',
+        '<td>' + buildCreditCell(id) + '</td>',
         '<td><div class="admin-row-actions">',
           editBtn,
           restoreBtn,
@@ -251,6 +273,22 @@
         '</div></td>',
       '</tr>'
     ].join('');
+  }
+
+  function buildCreditCell(userId) {
+    if (state.creditLoadError) {
+      return '<div class="admin-credit-cell"><strong>' + (curLang() === 'en' ? 'Unavailable' : '확인 불가') + '</strong><small>' + (curLang() === 'en' ? 'Refresh to retry.' : '새로고침 후 다시 확인해 주세요.') + '</small></div>';
+    }
+    var credit = state.creditMap[String(userId || '')] || {};
+    var available = Math.max(0, Number(credit.available || 0));
+    var reserved = Math.max(0, Number(credit.reserved || 0));
+    return '<div class="admin-credit-cell"><strong>' + available.toLocaleString() + ' C</strong>' +
+      (reserved ? '<small>' + (curLang() === 'en' ? 'Reserved ' : '예약 ') + reserved.toLocaleString() + ' C</small>' : '') +
+      '<div class="admin-credit-actions">' +
+        '<button type="button" data-action="credit-grant" data-id="' + escapeHtml(userId) + '">' + (curLang() === 'en' ? 'Grant' : '지급') + '</button>' +
+        '<button type="button" data-action="credit-revoke" data-id="' + escapeHtml(userId) + '">' + (curLang() === 'en' ? 'Revoke' : '회수') + '</button>' +
+        '<button type="button" data-action="credit-history" data-id="' + escapeHtml(userId) + '">' + (curLang() === 'en' ? 'History' : '내역') + '</button>' +
+      '</div></div>';
   }
 
   function buildModal() {
@@ -305,6 +343,48 @@
     ].join('');
   }
 
+  function creditTxLabel(kind) {
+    var ko = { admin_grant: '관리자 지급', admin_revoke: '관리자 회수', reserve: '생성 예약', spend: '생성 사용', refund: '실패 반환' };
+    var en = { admin_grant: 'Admin grant', admin_revoke: 'Admin revoke', reserve: 'Generation reserve', spend: 'Generation spend', refund: 'Failure refund' };
+    return (curLang() === 'en' ? en : ko)[kind] || kind || '-';
+  }
+
+  function buildCreditModal() {
+    var id = escapeHtml(state.creditTargetId);
+    var historyMode = state.creditMode === 'history';
+    var title = historyMode
+      ? (curLang() === 'en' ? 'Credit history' : '크레딧 사용 내역')
+      : state.creditMode === 'revoke'
+        ? (curLang() === 'en' ? 'Revoke credits' : '크레딧 회수')
+        : (curLang() === 'en' ? 'Grant credits' : '크레딧 지급');
+    var body = '';
+    if (historyMode) {
+      var detail = state.creditDetail || {};
+      var s = detail.summary || state.creditMap[state.creditTargetId] || {};
+      var rows = (detail.transactions || []).map(function (tx) {
+        var delta = Number(tx.delta_available || 0);
+        var amountText = tx.kind === 'spend'
+          ? ((curLang() === 'en' ? 'Settled ' : '확정 ') + Math.abs(Number(tx.delta_reserved || 0)).toLocaleString() + ' C')
+          : ((delta > 0 ? '+' : '') + delta.toLocaleString() + ' C');
+        var when = '';
+        try { when = new Date(tx.created_at).toLocaleString(curLang() === 'en' ? 'en-US' : 'ko-KR'); } catch (_) { when = String(tx.created_at || ''); }
+        return '<tr><td>' + escapeHtml(when) + '</td><td>' + escapeHtml(creditTxLabel(tx.kind)) + '</td><td>' + escapeHtml(tx.reason || '-') + '</td><td class="' + (delta > 0 ? 'is-plus' : '') + '">' + amountText + '</td><td>' + Number(tx.balance_after || 0).toLocaleString() + ' C</td></tr>';
+      }).join('');
+      body = '<div class="admin-credit-summary"><span>사용 가능 <b>' + Number(s.available || 0).toLocaleString() + ' C</b></span><span>예약 중 <b>' + Number(s.reserved || 0).toLocaleString() + ' C</b></span><span>누적 사용 <b>' + Number(s.lifetimeSpent || 0).toLocaleString() + ' C</b></span></div>' +
+        '<div class="admin-credit-history"><table><thead><tr><th>일시</th><th>구분</th><th>사유</th><th>변동</th><th>잔액</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5">내역이 없습니다.</td></tr>') + '</tbody></table></div>';
+    } else {
+      body = '<div class="admin-field"><label>' + (curLang() === 'en' ? 'Amount' : '수량') + '</label><input type="number" id="admin-credit-amount" min="1" max="1000000000" step="1" placeholder="10000" /></div>' +
+        '<div class="admin-field"><label>' + (curLang() === 'en' ? 'Reason (required)' : '사유(필수)') + '</label><input type="text" id="admin-credit-reason" maxlength="240" placeholder="' + (curLang() === 'en' ? 'e.g. Test credit grant' : '예: 1차 테스트 크레딧 지급') + '" /></div>' +
+        '<p class="admin-hint">' + (curLang() === 'en' ? 'Balances are never overwritten. An immutable adjustment record is created.' : '잔액을 덮어쓰지 않고 관리자 조정 내역을 원장에 남깁니다.') + '</p>';
+    }
+    return '<div class="admin-modal-backdrop" data-action="credit-backdrop"><div class="admin-modal admin-credit-modal" data-modal>' +
+      '<h3>' + escapeHtml(title) + ' · ' + id + '</h3>' + body +
+      '<div class="admin-modal-error">' + escapeHtml(state.creditError || '') + '</div>' +
+      '<div class="admin-modal-actions"><button type="button" class="admin-icon-btn" data-action="credit-close">' + escapeHtml(t('admin_cancel')) + '</button>' +
+      (historyMode ? '' : '<button type="button" class="bsf-head-btn btn-primary" data-action="credit-save"' + (state.creditSaving ? ' disabled' : '') + '>' + (state.creditSaving ? '처리 중...' : (state.creditMode === 'revoke' ? '회수' : '지급')) + '</button>') +
+      '</div></div></div>';
+  }
+
   // ─── 이벤트 ────────────────────────────────────────────────
   function bindEvents(root) {
     var search = root.querySelector('#admin-search');
@@ -317,7 +397,7 @@
           var list = visibleUsers();
           var primaryRow = buildPrimaryAdminRowIfNeeded();
           var listRows = list.length ? list.map(buildRow).join('') : '';
-          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
+          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
           bindRowActions(root);
         }
       });
@@ -331,7 +411,7 @@
   }
 
   function bindRowActions(root) {
-    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"]').forEach(function (el) {
+    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"], [data-action^="credit-"]').forEach(function (el) {
       el.addEventListener('click', onAction);
     });
   }
@@ -349,6 +429,60 @@
     else if (action === 'modal-cancel') { closeModal(); }
     else if (action === 'modal-backdrop') { if (e.target === el) closeModal(); }
     else if (action === 'modal-save') { saveModal(); }
+    else if (action === 'credit-grant') { openCreditModal(el.getAttribute('data-id'), 'grant'); }
+    else if (action === 'credit-revoke') { openCreditModal(el.getAttribute('data-id'), 'revoke'); }
+    else if (action === 'credit-history') { openCreditModal(el.getAttribute('data-id'), 'history'); }
+    else if (action === 'credit-close') { closeCreditModal(); }
+    else if (action === 'credit-backdrop') { if (e.target === el) closeCreditModal(); }
+    else if (action === 'credit-save') { saveCreditAdjustment(); }
+  }
+
+  function openCreditModal(userId, mode) {
+    state.creditTargetId = String(userId || '');
+    state.creditMode = mode || 'grant';
+    state.creditError = '';
+    state.creditDetail = null;
+    state.creditModalOpen = true;
+    render();
+    if (state.creditMode === 'history') {
+      NK.api.adminCreditDetail(state.creditTargetId).then(function (detail) {
+        state.creditDetail = detail || null;
+        render();
+      }).catch(function (err) {
+        state.creditError = (err && err.message) || '크레딧 내역을 불러오지 못했습니다.';
+        render();
+      });
+    }
+  }
+
+  function closeCreditModal() {
+    state.creditModalOpen = false;
+    state.creditTargetId = '';
+    state.creditDetail = null;
+    state.creditError = '';
+    render();
+  }
+
+  function saveCreditAdjustment() {
+    var amountEl = document.getElementById('admin-credit-amount');
+    var reasonEl = document.getElementById('admin-credit-reason');
+    var amount = Math.trunc(Number(amountEl && amountEl.value) || 0);
+    var reason = String(reasonEl && reasonEl.value || '').trim();
+    if (!amount || amount < 1) { state.creditError = '1 이상의 크레딧 수량을 입력해 주세요.'; render(); return; }
+    if (!reason) { state.creditError = '지급·회수 사유를 입력해 주세요.'; render(); return; }
+    state.creditSaving = true;
+    state.creditError = '';
+    render();
+    NK.api.adminCreditAdjust({ userId: state.creditTargetId, action: state.creditMode, amount: amount, reason: reason })
+      .then(function () {
+        state.creditSaving = false;
+        state.creditModalOpen = false;
+        return loadUsers();
+      }).catch(function (err) {
+        state.creditSaving = false;
+        state.creditError = (err && err.message) || '크레딧 조정에 실패했습니다.';
+        render();
+      });
   }
 
   // 마스터 비밀번호 설정: ID 잠금으로 신규 등록 모달을 연다(권한은 서버가 전체로 강제).

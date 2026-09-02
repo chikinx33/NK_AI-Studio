@@ -511,8 +511,9 @@
     var m = root && root.querySelector('[data-snd-meter]');
     if (!m) return;
     var chars = totalChars();
+    var credits = Math.max(1, Math.ceil(chars / 100));
     m.querySelector('[data-meter-chars]').textContent = chars + ' / ' + CHAR_LIMIT;
-    m.querySelector('[data-meter-credits]').textContent = chars + ' ' + t('credit_unit');
+    m.querySelector('[data-meter-credits]').textContent = credits + ' ' + t('credit_unit');
   }
 
   // ── Voice field: 보이스 선택 + 속도 + 미리듣기 (설정 패널 최상단) ──
@@ -617,9 +618,10 @@
     // meter
     var meter = el('div', 'snd-meter', { 'data-snd-meter': '1' });
     var chars = totalChars();
+    var credits = Math.max(1, Math.ceil(chars / 100));
     var cspan = el('span'); cspan.appendChild(el('strong', '', { 'data-meter-chars': '1', textContent: chars + ' / ' + CHAR_LIMIT })); cspan.appendChild(document.createTextNode(' ' + t('char_unit')));
     meter.appendChild(cspan);
-    meter.appendChild(el('strong', '', { 'data-meter-credits': '1', textContent: chars + ' ' + t('credit_unit') }));
+    meter.appendChild(el('strong', '', { 'data-meter-credits': '1', textContent: credits + ' ' + t('credit_unit') }));
     panel.appendChild(meter);
 
     // generate
