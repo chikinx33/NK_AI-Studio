@@ -25,6 +25,7 @@ import {
   saveAccountDeletions,
   findAccountDeletion,
   requestAccountDeletion,
+  cancelAccountDeletion,
   isDeletionRegistrationBlocked,
 } from "../_shared/account-deletions";
 
@@ -128,6 +129,26 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     const reg = await loadRegistryStrict(env);
     const user = findUser(reg, id);
     if (!user) return send({ error: "user_not_found" }, 404, origin);
+
+    if (body.restoreDeletion === true) {
+      if (id === primaryAdminId(env)) return send({ error: "cannot_restore_primary_admin" }, 400, origin);
+      const deletions = await loadAccountDeletionsStrict(env, true);
+      const pending = findAccountDeletion(deletions, id);
+      if (!pending || pending.status !== "pending") {
+        return send({ error: "deletion_not_pending" }, 409, origin);
+      }
+      if (!cancelAccountDeletion(deletions, id)) {
+        return send({ error: "deletion_restore_window_expired", deleteAfter: pending.deleteAfter }, 409, origin);
+      }
+      // 삭제 대기열 취소를 먼저 영속화해야 정리 작업이 복구된 회원을 지우지 않는다.
+      await saveAccountDeletions(env, deletions);
+      user.active = true;
+      user.deletionRequestedAt = "";
+      user.deleteAfter = "";
+      user.updatedAt = new Date().toISOString();
+      await saveRegistry(env, reg);
+      return send({ ok: true, restored: true, user: publicUser(user) }, 200, origin);
+    }
 
     // 낙관적 락: 클라이언트가 보낸 updatedAt이 현재와 다르면 충돌.
     if (body.expectedUpdatedAt && String(body.expectedUpdatedAt) !== String(user.updatedAt || "")) {

@@ -9,11 +9,13 @@ export function resolveSessionTtlSec(rememberDevice) {
 export async function issueSessionToken(userId, env, ttlSec = DEFAULT_SESSION_TTL_SEC, options = {}) {
   const safeUserId = sanitizeUserId(userId);
   const secret = readSecret(env);
-  const now = Math.floor(Date.now() / 1000);
+  const nowMs = Date.now();
+  const now = Math.floor(nowMs / 1000);
   const payload = {
     v: 2,
     sub: safeUserId,
     iat: now,
+    iatMs: nowMs,
     exp: now + Math.max(300, Number(ttlSec) || DEFAULT_SESSION_TTL_SEC),
     persistent: options && options.persistent === true,
   };
@@ -62,7 +64,7 @@ export async function authorizeRequest(request, env, options = {}) {
         account = await checkAccountSession(
           env,
           sanitizeUserId(payload.sub),
-          Math.max(0, Number(payload.iat) || 0),
+          Math.max(0, Number(payload.iatMs) || ((Number(payload.iat) || 0) * 1000)),
         );
       } catch (error) {
         try { console.error("[auth] account deletion registry unavailable", error); } catch (_) { /* noop */ }

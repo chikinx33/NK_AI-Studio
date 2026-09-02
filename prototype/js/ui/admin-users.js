@@ -50,6 +50,16 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function formatDeleteAfter(value) {
+    var d = new Date(String(value || ''));
+    if (!Number.isFinite(d.getTime())) return '';
+    try {
+      return d.toLocaleString(curLang() === 'en' ? 'en-US' : 'ko-KR', {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      });
+    } catch (_) { return d.toISOString(); }
+  }
+
   // 마스터(유일 최고 관리자) 여부 — ID가 서버가 알려준 primaryAdminId와 같을 때만.
   function isMasterUser(u) {
     return !!u && !!state.primaryAdminId && String(u.id) === String(state.primaryAdminId);
@@ -214,8 +224,10 @@
     var roleBadge = master
       ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
       : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
+    var deleteAfterLabel = formatDeleteAfter(u.deleteAfter);
     var stateBadge = u.deletionRequestedAt
       ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(u.deleteAfter || '') + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
+        + (deleteAfterLabel ? '<br><span class="admin-row-email">' + escapeHtml(t('admin_delete_at')) + ' ' + escapeHtml(deleteAfterLabel) + '</span>' : '')
       : (u.active === false)
       ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_inactive')) + '</span>'
       : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
@@ -223,6 +235,7 @@
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
     var deleteBtn = (master || u.deletionRequestedAt) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
     var editBtn = u.deletionRequestedAt ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
+    var restoreBtn = u.deletionRequestedAt ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="restore-user" data-id="' + id + '">' + escapeHtml(t('admin_restore')) + '</button>' : '';
     var nameCell = escapeHtml(u.name || '-')
       + (u.email ? '<br><span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '');
     return [
@@ -233,6 +246,7 @@
         '<td>' + stateBadge + '</td>',
         '<td><div class="admin-row-actions">',
           editBtn,
+          restoreBtn,
           deleteBtn,
         '</div></td>',
       '</tr>'
@@ -317,7 +331,7 @@
   }
 
   function bindRowActions(root) {
-    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="set-primary-pw"]').forEach(function (el) {
+    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"]').forEach(function (el) {
       el.addEventListener('click', onAction);
     });
   }
@@ -331,6 +345,7 @@
     else if (action === 'reload') { loadUsers(); }
     else if (action === 'edit-user') { openModal('edit', el.getAttribute('data-id')); }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
+    else if (action === 'restore-user') { restoreUser(el.getAttribute('data-id')); }
     else if (action === 'modal-cancel') { closeModal(); }
     else if (action === 'modal-backdrop') { if (e.target === el) closeModal(); }
     else if (action === 'modal-save') { saveModal(); }
@@ -458,6 +473,26 @@
       .catch(function (err) {
         var msg = (err && err.message) ? err.message : t('admin_err_del_fail');
         if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');
+        else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
+        window.alert(msg);
+      })
+      .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
+  }
+
+  function restoreUser(id) {
+    var u = state.users.find(function (x) { return String(x.id) === String(id); });
+    if (!u || !u.deletionRequestedAt) return;
+    if (!window.confirm(t('admin_confirm_restore') + ' (' + (u.name || u.id) + ')')) return;
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_restoring'));
+    NK.api.adminUserRestore(id)
+      .then(function () {
+        window.alert(t('admin_restore_done'));
+        return loadUsers();
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : t('admin_err_restore_fail');
+        if (/deletion_restore_window_expired/.test(msg)) msg = t('admin_err_restore_expired');
+        else if (/deletion_not_pending/.test(msg)) msg = t('admin_err_restore_not_pending');
         else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
         window.alert(msg);
       })

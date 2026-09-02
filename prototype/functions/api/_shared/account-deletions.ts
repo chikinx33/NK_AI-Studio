@@ -10,11 +10,12 @@ export interface AccountDeletionRecord {
   requestedAt: string;
   deleteAfter: string;
   revokedBefore: number;
-  status: "pending" | "completed";
+  status: "pending" | "completed" | "cancelled";
   attempts: number;
   lastAttemptAt: string;
   lastError: string;
   completedAt: string;
+  cancelledAt: string;
 }
 
 export interface AccountDeletionsRegistry {
@@ -47,12 +48,16 @@ function normalizeRecord(raw: any): AccountDeletionRecord {
     userId: sanitizeUserId(src.userId),
     requestedAt,
     deleteAfter,
-    revokedBefore: Math.max(0, Number(src.revokedBefore) || 0),
-    status: src.status === "completed" ? "completed" : "pending",
+    revokedBefore: (() => {
+      const raw = Math.max(0, Number(src.revokedBefore) || 0);
+      return raw > 0 && raw < 1_000_000_000_000 ? raw * 1000 : raw;
+    })(),
+    status: src.status === "completed" ? "completed" : src.status === "cancelled" ? "cancelled" : "pending",
     attempts: Math.max(0, Number(src.attempts) || 0),
     lastAttemptAt: String(src.lastAttemptAt || ""),
     lastError: String(src.lastError || "").slice(0, 1000),
     completedAt: String(src.completedAt || ""),
+    cancelledAt: String(src.cancelledAt || ""),
   };
 }
 
@@ -82,9 +87,9 @@ export async function saveAccountDeletions(env: any, registry: AccountDeletionsR
     version: 1,
     updatedAt: new Date(now).toISOString(),
     records: normalizeRegistry(registry).records.filter((record) => {
-      if (record.status !== "completed") return true;
-      const completedMs = Date.parse(record.completedAt || "");
-      return !Number.isFinite(completedMs) || (now - completedMs) < ACCOUNT_DELETION_AUDIT_RETENTION_MS;
+      if (record.status === "pending") return true;
+      const finishedMs = Date.parse(record.completedAt || record.cancelledAt || "");
+      return !Number.isFinite(finishedMs) || (now - finishedMs) < ACCOUNT_DELETION_AUDIT_RETENTION_MS;
     }),
   };
   await writeGcsJson(env, objectName(env), payload);
@@ -106,17 +111,31 @@ export function requestAccountDeletion(
   const requestedAt = now.toISOString();
   const deleteAfter = new Date(now.getTime() + ACCOUNT_DELETION_GRACE_MS).toISOString();
   let record = findAccountDeletion(registry, uid);
-  if (!record || record.status === "completed") {
+  if (!record || record.status !== "pending") {
     record = normalizeRecord({
       userId: uid,
       requestedAt,
       deleteAfter,
-      revokedBefore: Math.floor(now.getTime() / 1000),
+      revokedBefore: now.getTime(),
       status: "pending",
     });
     registry.records = registry.records.filter((item) => item.userId !== uid);
     registry.records.push(record);
   }
+  return record;
+}
+
+export function cancelAccountDeletion(
+  registry: AccountDeletionsRegistry,
+  userId: string,
+  now = new Date(),
+): AccountDeletionRecord | null {
+  const record = findAccountDeletion(registry, userId);
+  if (!record || record.status !== "pending") return null;
+  if (Date.parse(record.deleteAfter) <= now.getTime()) return null;
+  record.status = "cancelled";
+  record.cancelledAt = now.toISOString();
+  record.lastError = "";
   return record;
 }
 
@@ -131,7 +150,7 @@ export function isDeletionDue(record: AccountDeletionRecord, now = new Date()): 
 export async function checkAccountSession(
   env: any,
   userId: string,
-  issuedAt: number,
+  issuedAtMs: number,
 ): Promise<{ ok: true } | { ok: false; error: string; deleteAfter?: string }> {
   const registry = await loadAccountDeletionsStrict(env);
   const record = findAccountDeletion(registry, userId);
@@ -139,7 +158,7 @@ export async function checkAccountSession(
   if (record.status === "pending") {
     return { ok: false, error: "account_deletion_pending", deleteAfter: record.deleteAfter };
   }
-  if (issuedAt > 0 && issuedAt <= record.revokedBefore) {
+  if (issuedAtMs > 0 && issuedAtMs <= record.revokedBefore) {
     return { ok: false, error: "account_session_revoked" };
   }
   return { ok: true };

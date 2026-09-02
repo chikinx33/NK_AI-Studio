@@ -21,6 +21,7 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /NK\.api\.adminUserCreate\(/);
   assert.match(src, /NK\.api\.adminUserUpdate\(/);
   assert.match(src, /NK\.api\.adminUserDelete\(/);
+  assert.match(src, /NK\.api\.adminUserRestore\(/);
   // 낙관적 락 토큰 전달
   assert.match(src, /expectedUpdatedAt: state\.edit\.updatedAt/);
   // 권한 키가 서버와 동기화
@@ -39,6 +40,15 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /data-action="go-home"/);
   assert.match(src, /function goHome/);
   assert.match(src, /window\.location\.href = 'app\.html'/);
+});
+
+test("admin-users.js shows deletion schedule and a restore action", () => {
+  const src = read("prototype/js/ui/admin-users.js");
+  assert.match(src, /formatDeleteAfter/);
+  assert.match(src, /t\('admin_delete_at'\)/);
+  assert.match(src, /data-action="restore-user"/);
+  assert.match(src, /function restoreUser/);
+  assert.match(src, /t\('admin_confirm_restore'\)/);
 });
 
 test("admin-users.js surfaces a primary-admin password-set affordance", () => {

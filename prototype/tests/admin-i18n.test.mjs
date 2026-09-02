@@ -9,7 +9,8 @@ test("central translations dictionary defines admin/share keys in both ko and en
   const src = read("prototype/core.js");
   const keys = [
     "admin_no_access", "admin_title", "admin_save_apply", "admin_m_set_master_pw",
-    "admin_perm_videogen", "share_project", "share_received", "share_revoke",
+    "admin_perm_videogen", "admin_deletion_pending", "admin_delete_at", "admin_restore",
+    "admin_confirm_restore", "admin_restore_done", "share_project", "share_received", "share_revoke",
   ];
   // 각 키는 ko/en 양쪽에 존재해야 한다(2회 이상 등장).
   for (const k of keys) {

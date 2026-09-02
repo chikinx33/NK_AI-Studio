@@ -1421,6 +1421,17 @@
     return j(text);
   };
 
+  api.adminUserRestore = async function (id) {
+    var res = await fetch(withBase('/api/admin/users'), {
+      method: 'PATCH',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ id: String(id || ''), restoreDeletion: true })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_user_restore_error');
+    return j(text);
+  };
+
   api.adminUserDelete = async function (id, options) {
     var opts = options && typeof options === 'object' ? options : {};
     var body = { id: String(id || '') };

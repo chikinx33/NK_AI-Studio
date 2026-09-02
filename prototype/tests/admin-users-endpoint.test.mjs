@@ -64,6 +64,8 @@ test("client api exposes admin user CRUD wrappers", () => {
   assert.match(src, /api\.adminUserCreate = async function/);
   assert.match(src, /api\.adminUserUpdate = async function/);
   assert.match(src, /api\.adminUserDelete = async function/);
+  assert.match(src, /api\.adminUserRestore = async function/);
+  assert.match(src, /restoreDeletion: true/);
   assert.match(src, /method: 'PATCH'/);
   assert.match(src, /method: 'DELETE'/);
   // 인증 헤더 사용

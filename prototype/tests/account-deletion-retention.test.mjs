@@ -23,7 +23,19 @@ test('삭제 대기 계정은 로그인·재등록·기존 세션이 모두 차�
   assert.match(users, /isDeletionRegistrationBlocked/);
   assert.match(login, /account_deletion_pending/);
   assert.match(auth, /checkAccountSession/);
-  assert.match(policy, /issuedAt > 0 && issuedAt <= record\.revokedBefore/);
+  assert.match(policy, /issuedAtMs > 0 && issuedAtMs <= record\.revokedBefore/);
+  assert.match(auth, /iatMs: nowMs/);
+});
+
+test('7일 안에는 삭제 예약을 취소하고 기존 회원을 활성 상태로 복구한다', () => {
+  assert.match(policy, /export function cancelAccountDeletion/);
+  assert.match(policy, /record\.status = "cancelled"/);
+  assert.match(policy, /Date\.parse\(record\.deleteAfter\) <= now\.getTime\(\)/);
+  assert.match(users, /body\.restoreDeletion === true/);
+  assert.match(users, /deletion_restore_window_expired/);
+  assert.match(users, /await saveAccountDeletions\(env, deletions\)[\s\S]*user\.active = true/);
+  assert.match(users, /user\.deletionRequestedAt = ""/);
+  assert.match(users, /user\.deleteAfter = ""/);
 });
 
 test('만료 정리는 영상·오디오 GCS, Neon, 공유 권한을 끝낸 뒤 회원 레코드를 제거한다', () => {
