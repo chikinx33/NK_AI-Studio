@@ -77,3 +77,10 @@ test('credit gauge restores its rendered summary after a generation page redraw'
   );
   assert.doesNotMatch(common, /관리자 검증용 테스트 크레딧 기준/);
 });
+
+test('generation shells delegate the credit gauge to the centered stage UI', async () => {
+  const common = await read('js/ui/common.js');
+  assert.match(common, /function creditGaugeDelegatedToStage\(\)/);
+  assert.match(common, /page-shell-\(\?:videogen\|image\)/);
+  assert.match(common, /if \(creditGaugeDelegatedToStage\(\)\) \{[\s\S]{0,180}duplicateGauge\.remove\(\);[\s\S]{0,80}return;/);
+});

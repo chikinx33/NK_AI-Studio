@@ -1853,6 +1853,16 @@
     // ── 전역 크레딧 게이지 ────────────────────────────────────
     var creditState = { summary: null, transactions: [], loading: false, timer: null, observer: null };
 
+    function creditGaugeDelegatedToStage() {
+        try {
+            var cls = String((document.documentElement && document.documentElement.className) || '') + ' ' +
+                String((document.body && document.body.className) || '');
+            // 영상·이미지 셸은 실제 생성 화면을 iframe 스테이지로 연다. 셸까지
+            // 게이지를 만들면 스테이지의 중앙 게이지와 우측 상단 고정 게이지가 중복된다.
+            return /\bpage-shell-(?:videogen|image)\b/.test(cls);
+        } catch (_) { return false; }
+    }
+
     function creditLang() {
         try { return String(localStorage.getItem('nk_lang') || 'ko').toLowerCase() === 'en' ? 'en' : 'ko'; } catch (_) { return 'ko'; }
     }
@@ -1960,6 +1970,11 @@
 
     common.initCreditGauge = function () {
         if (document.__nkCreditGaugeBound) return;
+        if (creditGaugeDelegatedToStage()) {
+            var duplicateGauge = document.getElementById('nk-credit-gauge');
+            if (duplicateGauge) duplicateGauge.remove();
+            return;
+        }
         document.__nkCreditGaugeBound = true;
         placeCreditGauge();
         common.refreshCreditGauge();
