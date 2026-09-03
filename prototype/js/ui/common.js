@@ -1932,7 +1932,6 @@
         }).join('');
         pop.innerHTML = '<header><strong>크레딧 사용 내역</strong><button type="button" aria-label="닫기">×</button></header>' +
             '<div class="nk-credit-summary"><span>사용 가능 <b>' + creditNumber(s.available) + ' C</b></span><span>예약 중 <b>' + creditNumber(s.reserved) + ' C</b></span><span>누적 사용 <b>' + creditNumber(s.lifetimeSpent) + ' C</b></span></div>' +
-            '<p class="nk-credit-test-note">현재 요율은 관리자 검증용 테스트 크레딧 기준입니다.</p>' +
             '<ul>' + (rows || '<li><span>아직 사용 내역이 없습니다.</span></li>') + '</ul>';
         document.body.appendChild(pop);
         var rect = creditGaugeElement().getBoundingClientRect();
@@ -1973,7 +1972,10 @@
         });
         creditState.observer = new MutationObserver(function () {
             var gauge = document.getElementById('nk-credit-gauge');
-            if (!gauge || !gauge.isConnected) placeCreditGauge();
+            // 영상/이미지 생성 화면은 옵션 변경 시 화면 루트를 통째로 다시 그린다.
+            // 그 안에 배치된 게이지도 제거되므로, 새 요소의 위치뿐 아니라 저장된
+            // 크레딧 요약까지 다시 그려 빈 게이지만 남지 않게 한다.
+            if (!gauge || !gauge.isConnected) renderCreditGauge();
             else if (document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills') && gauge.classList.contains('is-floating')) placeCreditGauge();
         });
         creditState.observer.observe(document.body, { childList: true, subtree: true });

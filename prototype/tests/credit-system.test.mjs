@@ -67,3 +67,13 @@ test('credit UI and account deletion cleanup are connected', async () => {
   assert.match(cleanup, /"credit_operations"/);
   assert.match(cleanup, /"credit_accounts"/);
 });
+
+test('credit gauge restores its rendered summary after a generation page redraw', async () => {
+  const common = await read('js/ui/common.js');
+  assert.match(
+    common,
+    /if \(!gauge \|\| !gauge\.isConnected\) renderCreditGauge\(\);/,
+    'a removed gauge must be rendered with the cached summary, not only repositioned',
+  );
+  assert.doesNotMatch(common, /관리자 검증용 테스트 크레딧 기준/);
+});
