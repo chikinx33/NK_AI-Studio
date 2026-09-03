@@ -1886,14 +1886,22 @@
 
     function placeCreditGauge() {
         var gauge = creditGaugeElement();
+        var subscriptionHost = document.getElementById('subscription-credit-host');
         var host = document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills');
-        if (host && host.parentNode) {
+        if (subscriptionHost) {
             gauge.classList.remove('is-floating');
+            gauge.classList.add('is-subscription');
+            if (gauge.parentNode !== subscriptionHost) subscriptionHost.appendChild(gauge);
+        } else if (host && host.parentNode) {
+            gauge.classList.remove('is-floating');
+            gauge.classList.remove('is-subscription');
             host.parentNode.insertBefore(gauge, host);
         } else if (gauge.parentNode !== document.body) {
+            gauge.classList.remove('is-subscription');
             gauge.classList.add('is-floating');
             document.body.appendChild(gauge);
         } else {
+            gauge.classList.remove('is-subscription');
             gauge.classList.add('is-floating');
         }
     }
@@ -1991,7 +1999,7 @@
             // 그 안에 배치된 게이지도 제거되므로, 새 요소의 위치뿐 아니라 저장된
             // 크레딧 요약까지 다시 그려 빈 게이지만 남지 않게 한다.
             if (!gauge || !gauge.isConnected) renderCreditGauge();
-            else if (document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills') && gauge.classList.contains('is-floating')) placeCreditGauge();
+            else if ((document.getElementById('subscription-credit-host') || document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills')) && gauge.classList.contains('is-floating')) placeCreditGauge();
         });
         creditState.observer.observe(document.body, { childList: true, subtree: true });
         creditState.timer = setInterval(common.refreshCreditGauge, 30000);

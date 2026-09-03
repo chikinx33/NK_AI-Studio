@@ -84,3 +84,17 @@ test('generation shells delegate the credit gauge to the centered stage UI', asy
   assert.match(common, /page-shell-\(\?:videogen\|image\)/);
   assert.match(common, /if \(creditGaugeDelegatedToStage\(\)\) \{[\s\S]{0,180}duplicateGauge\.remove\(\);[\s\S]{0,80}return;/);
 });
+
+test('landing page places the live credit gauge inside the subscription status grid', async () => {
+  const [app, common, script, styles] = await Promise.all([
+    read('app.html'),
+    read('js/ui/common.js'),
+    read('script.js'),
+    read('styles.css'),
+  ]);
+  assert.match(app, /class="subscription-grid"[\s\S]{0,800}id="subscription-credit-host"/);
+  assert.match(common, /getElementById\('subscription-credit-host'\)/);
+  assert.match(common, /gauge\.classList\.add\('is-subscription'\)/);
+  assert.match(script, /NK\.ui\.common\.refreshCreditGauge\(\);/);
+  assert.match(styles, /\.nk-credit-gauge\.is-subscription\s*\{/);
+});

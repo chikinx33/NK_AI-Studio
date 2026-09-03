@@ -2533,6 +2533,9 @@
           setSubscriptionCollapsed(true);
         }
       }
+      if (NK.ui && NK.ui.common && NK.ui.common.refreshCreditGauge) {
+        NK.ui.common.refreshCreditGauge();
+      }
 
       if (canUseThemePresetUI()) {
         themePresetWidget.classList.toggle('hidden', !loggedIn);
