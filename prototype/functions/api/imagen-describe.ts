@@ -1,5 +1,6 @@
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -9,6 +10,17 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) {
       return json({ error: auth.error }, auth.status);
+    }
+    if (!(await hasPagePermission(env, auth.userId, "image"))) {
+      return json({ error: "permission_denied" }, 403);
+    }
+    // 이 보조 분석 기능은 현재 Gemini 직접 호출만 지원한다. 회원 계정은 Atlas 외
+    // 공급자를 절대 호출하지 않도록 서버에서 차단한다(이미지 생성/편집은 imagen.ts의 Atlas 경로 사용).
+    if (!requireMaster(env, auth.userId)) {
+      return json({
+        error: "atlas_only_feature_unavailable",
+        message: "회원 계정에서는 Atlas Cloud 이미지 생성 기능만 사용할 수 있습니다.",
+      }, 403);
     }
 
     const body = await request.json().catch(() => ({} as any));

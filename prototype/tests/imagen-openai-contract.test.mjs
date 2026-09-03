@@ -96,7 +96,8 @@ test('openai response is parsed from data[0].b64_json and surfaces hint on commo
 test('response surfaces dynamic model and provider tag based on selected branch', () => {
   const source = readImagenSource();
   assert.match(source, /model: modelUsed,/);
-  assert.match(source, /provider: providerUsed === "openai" \? "openai-api" : "gemini-api"/);
+  assert.match(source, /providerUsed === "atlas-cloud" \? "atlas-cloud"/);
+  assert.match(source, /providerUsed === "openai" \? "openai-api" : "gemini-api"/);
 });
 
 test('openai account-level errors fall back to gemini so cut-based reference consistency keeps working', () => {

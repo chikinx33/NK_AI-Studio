@@ -5,8 +5,16 @@
 import { buildAiImageSessionPrefix } from "./_shared/storage";
 import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
-import { hasPagePermission } from "./_shared/admin-users";
+import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
+import {
+  atlasImageOutput,
+  atlasOutputs,
+  atlasPredictionId,
+  submitAtlasGeneration,
+  uploadAtlasDataUrl,
+  waitForAtlasPrediction,
+} from "./_shared/atlas-cloud";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -40,6 +48,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, "image"))) {
       return json({ error: "permission_denied" }, 403, origin);
     }
+    const atlasOnly = !requireMaster(env, auth.userId);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
@@ -50,7 +59,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!clientEmail || !privateKeyRaw) {
       return json({ error: "GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 미설정" }, 500, origin);
     }
-    if (!projectId) {
+    if (!atlasOnly && !projectId) {
       return json({ error: "GOOGLE_CLOUD_PROJECT 미설정" }, 500, origin);
     }
     if (!outParsed) {
@@ -73,6 +82,74 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     }).catch(() => null);
     if (!accessToken) return json({ error: "Google 액세스 토큰 획득 실패" }, 500, origin);
+
+    // 회원 업스케일은 Atlas Cloud 전용 모델로 실행한다. Google 자격증명은 결과를
+    // 회원별 GCS 폴더에 저장하는 데만 사용하며, 생성 공급자 호출에는 쓰지 않는다.
+    if (atlasOnly) {
+      const atlasKey = String(env.ATLASCLOUD_API_KEY || "").trim();
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY 미설정" }, 500, origin);
+      let atlasSourceUrl = "";
+      if (objectName) {
+        const cleanObject = objectName.replace(/^\/+/, "");
+        atlasSourceUrl = await signGcsUrl({
+          bucket: outParsed.bucket,
+          object: cleanObject,
+          clientEmail,
+          privateKeyPem: privateKeyRaw,
+          expiresInSec: 3600,
+        }).catch(() => "");
+      } else if (/^https?:\/\//i.test(imageUrl)) {
+        atlasSourceUrl = imageUrl;
+      } else if (imageUrl.startsWith("data:")) {
+        atlasSourceUrl = await uploadAtlasDataUrl(atlasKey, imageUrl, "upscale-source.png");
+      }
+      if (!atlasSourceUrl) return json({ error: "Atlas Cloud용 소스 이미지 URL 생성 실패" }, 500, origin);
+
+      const sizeIncoming = String(body?.imageSize || "").trim().toUpperCase();
+      const outscale = sizeIncoming === "4K" ? 4 : 2;
+      let atlasResult = await submitAtlasGeneration(atlasKey, "image", {
+        model: "atlascloud/image-upscaler",
+        image: atlasSourceUrl,
+        outscale,
+        output_format: "png",
+      });
+      if (atlasOutputs(atlasResult).length === 0) {
+        const predictionId = atlasPredictionId(atlasResult);
+        if (!predictionId) return json({ error: "Atlas Cloud 업스케일 작업 ID 없음" }, 500, origin);
+        atlasResult = await waitForAtlasPrediction(atlasKey, predictionId);
+      }
+      const atlasOutput = await atlasImageOutput(atlasResult);
+      const stamp = Date.now();
+      const basePrefix = outParsed.object.replace(/\/$/, "");
+      const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
+      const resultObjectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-atlas-${outscale}x.png`;
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
+      const resultBytes = base64ToUint8(atlasOutput.data);
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": atlasOutput.mimeType || "image/png" },
+        body: resultBytes,
+      });
+      if (!uploadRes.ok) return json({ error: "GCS 결과 업로드 실패" }, 500, origin);
+      const signedUrl = await signGcsUrl({
+        bucket: outParsed.bucket,
+        object: resultObjectName,
+        clientEmail,
+        privateKeyPem: privateKeyRaw,
+        expiresInSec: 3600,
+      }).catch(() => `https://storage.googleapis.com/${outParsed.bucket}/${resultObjectName}`);
+      return json({
+        signedUrl,
+        objectName: resultObjectName,
+        dataUrl: "",
+        imageSizeApplied: `${outscale}X`,
+        model: "atlascloud/image-upscaler",
+        location: "atlas-cloud",
+        provider: "atlas-cloud",
+        storageService,
+        sessionId,
+      }, 200, origin);
+    }
 
     // 1) 소스 파트 구성 — GCS 객체는 gs:// 참조로 그대로 넘긴다.
     // 원본 바이트를 Worker 로 통과시키지 않기 위해서다(다운로드 → base64 재인코딩은

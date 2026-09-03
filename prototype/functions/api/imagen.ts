@@ -1,9 +1,17 @@
 // prototype/functions/api/imagen.ts
 import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
-import { hasPagePermission } from "./_shared/admin-users";
+import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
+import {
+  atlasImageOutput,
+  atlasOutputs,
+  atlasPredictionId,
+  submitAtlasGeneration,
+  uploadAtlasDataUrl,
+  waitForAtlasPrediction,
+} from "./_shared/atlas-cloud";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -26,6 +34,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, "image"))) {
       return json({ error: "permission_denied" }, 403);
     }
+    // 결제 주체 격리: 마스터가 아닌 계정은 클라이언트 provider 값과 무관하게
+    // 마스터의 Atlas Cloud 크레딧만 사용한다. 이 판정은 반드시 서버 인증 ID로 한다.
+    const atlasOnly = !requireMaster(env, auth.userId);
 
     const body = await request.json().catch(() => ({} as any));
     const prompt = normalizePrompt((body?.prompt ?? "").toString().trim());
@@ -61,6 +72,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
     const openaiApiKey = String(env.OPENAI_API_KEY || "").trim();
+    const atlasApiKey = String(env.ATLASCLOUD_API_KEY || "").trim();
     const openaiModel = String(env.OPENAI_IMAGE_MODEL || "").trim() || "gpt-image-2";
     // OpenAI 베이스 URL 오버라이드. OpenAI 는 홍콩(HKG) 등 미지원 지역의 Cloudflare Worker
     // 송출을 403 으로 차단한다. 지원 지역의 프록시나 Cloudflare AI Gateway 엔드포인트를
@@ -73,7 +85,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
     const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
-    if (provider === "openai") {
+    if (atlasOnly) {
+      if (!atlasApiKey) {
+        return json({ error: "Missing ATLASCLOUD_API_KEY" }, 500);
+      }
+    } else if (provider === "openai") {
       if (!openaiApiKey) {
         return json({ error: "Missing OPENAI_API_KEY" }, 500);
       }
@@ -139,7 +155,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     let imageOutput: { data: string; mimeType: string } | null = null;
     let modelUsed = "";
-    let providerUsed: "gemini" | "openai" = provider;
+    let providerUsed: "gemini" | "openai" | "atlas-cloud" = provider;
     let providerFallbackFrom = "";
     // 폴백이 일어났을 때 "원래 GPT 가 왜 실패했는지"를 성공 응답에도 실어 보낸다.
     // 사용자가 GPT 품질을 원하므로, 조용히 Gemini 로 바뀐 사실과 그 사유(예: 조직 인증)를
@@ -230,7 +246,28 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       return {};
     };
 
-    if (provider === "openai") {
+    if (atlasOnly) {
+      try {
+        const atlasResult = await callAtlasMemberImage({
+          apiKey: atlasApiKey,
+          requestedProvider: provider,
+          prompt: finalPrompt,
+          aspectRatio: aspectFinal,
+          imageSize: geminiImageSize,
+          referenceImages,
+          conversationHistory,
+          maskImage,
+        });
+        imageOutput = atlasResult.output;
+        modelUsed = atlasResult.model;
+        providerUsed = "atlas-cloud";
+      } catch (err: any) {
+        return json({
+          error: "Atlas Cloud image generation failed",
+          detail: String(err?.message || err),
+        }, 500);
+      }
+    } else if (provider === "openai") {
       const openaiResult = await callOpenAIImage({
         apiKey: openaiApiKey,
         baseUrl: openaiBaseUrl,
@@ -336,7 +373,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       objectName,
       model: modelUsed,
       imageSizeApplied: geminiImageSize,
-      provider: providerUsed === "openai" ? "openai-api" : "gemini-api",
+      provider: providerUsed === "atlas-cloud" ? "atlas-cloud" : (providerUsed === "openai" ? "openai-api" : "gemini-api"),
       providerRequested: provider === "openai" ? "openai-api" : "gemini-api",
       providerFallbackFrom: providerFallbackFrom ? `${providerFallbackFrom}-api` : "",
       openaiError: openaiFallbackError,
@@ -684,6 +721,94 @@ function normalizeProvider(value: unknown): "gemini" | "openai" {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "openai" || raw === "gpt-image" || raw === "gpt-image-2") return "openai";
   return "gemini";
+}
+
+async function callAtlasMemberImage(opts: {
+  apiKey: string;
+  requestedProvider: "gemini" | "openai";
+  prompt: string;
+  aspectRatio: string;
+  imageSize: string;
+  referenceImages: NormalizedReferenceImage[];
+  conversationHistory: ConversationHistoryTurn[];
+  maskImage?: { base64: string; mimeType: string } | null;
+}): Promise<{ output: { data: string; mimeType: string }; model: string }> {
+  const inputs: Array<{ base64: string; mimeType: string; name: string }> = [];
+  opts.conversationHistory.forEach((turn, index) => {
+    if (turn.imageBase64) inputs.push({
+      base64: turn.imageBase64,
+      mimeType: turn.imageMimeType || "image/png",
+      name: `history-${index + 1}.${extensionForMime(turn.imageMimeType)}`,
+    });
+  });
+  opts.referenceImages.forEach((item, index) => {
+    if (item.base64) inputs.push({
+      base64: item.base64,
+      mimeType: item.mimeType || "image/png",
+      name: `reference-${index + 1}.${extensionForMime(item.mimeType)}`,
+    });
+  });
+  if (opts.maskImage?.base64) inputs.push({
+    base64: opts.maskImage.base64,
+    mimeType: opts.maskImage.mimeType || "image/png",
+    name: `mask.${extensionForMime(opts.maskImage.mimeType)}`,
+  });
+
+  // GPT Image 2 edit는 입력 10장, Nano Banana 2 edit는 14장까지 받는다.
+  // GPT 선택 상태라도 10장을 넘으면 이미지를 버리지 않고 Atlas의 Nano Banana 2로 전환한다.
+  if (inputs.length > 14) throw new Error(`atlas_reference_limit:${inputs.length}/14`);
+  const isEdit = inputs.length > 0;
+  const useOpenAIModel = opts.requestedProvider === "openai" && inputs.length <= 10;
+  const model = useOpenAIModel
+    ? (isEdit ? "openai/gpt-image-2/edit" : "openai/gpt-image-2/text-to-image")
+    : (isEdit ? "google/nano-banana-2/edit" : "google/nano-banana-2/text-to-image");
+
+  const uploadedUrls: string[] = [];
+  for (const input of inputs) {
+    uploadedUrls.push(await uploadAtlasDataUrl(
+      opts.apiKey,
+      `data:${input.mimeType};base64,${input.base64}`,
+      input.name
+    ));
+  }
+
+  const atlasPrompt = useOpenAIModel && isEdit
+    ? [
+      opts.prompt,
+      buildOpenAIReferenceManifest(opts.conversationHistory.length, opts.referenceImages),
+      opts.maskImage ? `image ${uploadedUrls.length} is the binary edit mask described above.` : "",
+    ].filter(Boolean).join("\n")
+    : opts.prompt;
+  const body: Record<string, unknown> = {
+    model,
+    prompt: atlasPrompt,
+    output_format: "png",
+    enable_sync_mode: true,
+    enable_base64_output: true,
+  };
+  if (isEdit) body.images = uploadedUrls;
+  if (useOpenAIModel) {
+    body.size = mapAspectToOpenAISize(opts.aspectRatio);
+    body.quality = mapImageSizeToOpenAIQuality(opts.imageSize);
+  } else {
+    if (opts.aspectRatio !== "free") body.aspect_ratio = opts.aspectRatio;
+    body.resolution = opts.imageSize === "2K" ? "2k" : "1k";
+  }
+
+  let result = await submitAtlasGeneration(opts.apiKey, "image", body);
+  if (atlasOutputs(result).length === 0) {
+    const predictionId = atlasPredictionId(result);
+    if (!predictionId) throw new Error("atlas_image_no_prediction_id");
+    result = await waitForAtlasPrediction(opts.apiKey, predictionId);
+  }
+  return { output: await atlasImageOutput(result), model };
+}
+
+function extensionForMime(mimeType: string): string {
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("webp")) return "webp";
+  return "png";
 }
 
 // OpenAI 호출용 User-Agent. Cloudflare Worker 기본 UA 가 OpenAI 엣지(Cloudflare) 봇 관리에

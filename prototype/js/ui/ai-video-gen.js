@@ -102,14 +102,14 @@
 
   // 모델 선택 안내. 기능은 ALL_MODELS/MODEL_DURATION_CHOICES 에서 읽고,
   // 여기에는 사용 목적과 과금 방식만 둔다. 금액은 공급자 공식 가격표를
-  // 2026-09-01 확인한 값이며 변동될 수 있다.
+  // 2026-09-03 확인한 값이며 변동될 수 있다.
   var MODEL_GUIDE = {
     ko: {
       'veo': { best: '빠른 시안 · 일반 광고 · 자연스러운 움직임', how: '텍스트만 쓰거나 시작 이미지를 넣고, 피사체 동작과 카메라 움직임을 한 문장씩 명확히 적으세요.', billing: 'Atlas Cloud · 출력 $0.08/초' },
       'veo-full': { best: '최종 납품 · 사실감 · 품질 우선 장면', how: '속도보다 디테일이 중요한 히어로 컷에 쓰세요. 텍스트 또는 시작 이미지로 생성할 수 있습니다.', billing: 'Atlas Cloud · 출력 $0.20/초' },
-      'grok': { best: '스타일리시한 연출 · 아이디어 탐색 · 빠른 변주', how: '텍스트 또는 시작 이미지를 넣고 화면에서 일어나야 할 변화를 중심으로 적으세요. 앱은 720p로 생성합니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 이미지 $0.002/장' },
-      'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 이미지 $0.002/장' },
-      'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: 'xAI · 720p 출력 $0.07/초 + 입력 영상 $0.01/초' },
+      'grok': { best: '스타일리시한 연출 · 아이디어 탐색 · 빠른 변주', how: '텍스트 또는 시작 이미지를 넣고 화면에서 일어나야 할 변화를 중심으로 적으세요. 앱은 720p로 생성합니다.', billing: '회원: Atlas Cloud · $0.05/초 · 마스터: xAI 직접 요율' },
+      'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: '회원: Atlas Cloud · $0.05/초 · 마스터: xAI 직접 요율' },
+      'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: '회원: Atlas Cloud · $0.07/초 · 마스터: xAI 직접 요율' },
       'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas Cloud · $0.06/회' },
       'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시한 뒤 480p~4K 해상도를 고르세요. SR은 업스케일 출력입니다.', billing: 'Atlas Cloud · 720p 기준 출력 $0.112/초 · 다른 해상도는 공급자 견적 확인' },
       'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 1080p 약 48,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가, SR/4K 배율 적용)' },
@@ -119,9 +119,9 @@
     en: {
       'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas Cloud · $0.08/sec output' },
       'veo-full': { best: 'Final delivery · realism · quality-first shots', how: 'Use for hero shots where detail matters more than speed. Generate from text or a start image.', billing: 'Atlas Cloud · $0.20/sec output' },
-      'grok': { best: 'Stylized direction · ideation · quick variations', how: 'Use text or a start image and focus the prompt on what should change on screen. The app outputs 720p.', billing: 'xAI · $0.07/sec 720p output + $0.002/input image' },
-      'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'xAI · $0.07/sec 720p output + $0.002/input image' },
-      'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'xAI · $0.07/sec 720p output + $0.01/sec input video' },
+      'grok': { best: 'Stylized direction · ideation · quick variations', how: 'Use text or a start image and focus the prompt on what should change on screen. The app outputs 720p.', billing: 'Members: Atlas Cloud · $0.05/sec · Master: direct xAI rate' },
+      'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'Members: Atlas Cloud · $0.05/sec · Master: direct xAI rate' },
+      'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'Members: Atlas Cloud · $0.07/sec · Master: direct xAI rate' },
       'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas Cloud · $0.06/run' },
       'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image, prompt only changes not already present, and choose an output from 480p to 4K. SR options are upscaled outputs.', billing: 'Atlas Cloud · $0.112/sec at 720p · check provider quote for other resolutions' },
       'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas Cloud · ~48,600 output tokens/sec at 1080p · $11.20/1M image-only · $6.88/1M with video (input video tokens and SR/4K multipliers added)' },
@@ -655,12 +655,12 @@
       title: 'Video model guide',
       subtitle: 'Choose by input type, desired result, and actual billing unit.',
       current: 'Current selection', best: 'Best for', how: 'How to use', usage: 'Usage / cost', close: 'Close',
-      note: 'Opening this guide does not start a generation or spend credits. Video models do not all use text tokens: most bill per second or per run, while Seedance Reference uses output video tokens. Rates were checked against official provider pricing on Sep 1, 2026 and may change. Failed Atlas Cloud tasks are not charged.'
+      note: 'Opening this guide does not start a generation or spend credits. Video models do not all use text tokens: most bill per second or per run, while Seedance Reference uses output video tokens. Rates were checked against official provider pricing on Sep 3, 2026 and may change. Failed Atlas Cloud tasks are not charged.'
     } : {
       title: '영상 생성 모델 가이드',
       subtitle: '입력 방식, 원하는 결과, 실제 과금 단위를 비교해 모델을 고르세요.',
       current: '현재 선택', best: '추천 용도', how: '사용법', usage: '사용량 / 비용', close: '닫기',
-      note: '이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다. 영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라 대부분 초당 또는 회당 과금되며, Seedance Reference만 출력 영상 토큰을 사용합니다. 단가는 2026-09-01 공급자 공식 가격 기준이며 변동될 수 있습니다. Atlas Cloud의 실패 작업은 과금되지 않습니다.'
+      note: '이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다. 영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라 대부분 초당 또는 회당 과금되며, Seedance Reference만 출력 영상 토큰을 사용합니다. 단가는 2026-09-03 공급자 공식 가격 기준이며 변동될 수 있습니다. Atlas Cloud의 실패 작업은 과금되지 않습니다.'
     };
     var modal = el('div', 'vgen-guide-modal', {
       'data-vgen-guide-modal': '1', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'vgen-guide-title'

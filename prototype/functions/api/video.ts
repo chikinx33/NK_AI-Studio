@@ -5,7 +5,7 @@
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
-import { hasPagePermission } from "./_shared/admin-users";
+import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
 import {
@@ -54,6 +54,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, isVideoGen ? "videogen" : "video"))) {
       return json({ error: "permission_denied" }, 403);
     }
+    // 마스터가 아닌 회원은 어떤 모델을 골라도 Atlas Cloud 크레딧만 사용한다.
+    // 클라이언트 값이 아니라 인증된 서버 userId로 판정해 직접 xAI 우회를 막는다.
+    const atlasOnly = !requireMaster(env, auth.userId);
     const aspectFinal = normalizeAspectRatio(aspectRatio);
     const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
@@ -395,8 +398,89 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       return json({ job_id: predictionId ? `vidu-q3:${predictionId}` : "", status: "processing" }, 202);
     }
 
-    // Grok Extend branch (xAI direct API — extends existing video from last frame)
-    if (videoModel === "grok-extend") {
+    // 회원용 Grok Extend — Atlas Cloud에서만 실행한다.
+    if (videoModel === "grok-extend" && atlasOnly) {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      if (!videoDataUrl) return json({ error: "videoDataUrl is required for grok-extend" }, 400);
+      const sourceVideoUrl = await (async () => {
+        if (/^https?:/i.test(videoDataUrl)) return videoDataUrl;
+        if (videoDataUrl.startsWith("gs://")) return await signIfGs(videoDataUrl);
+        if (videoDataUrl.startsWith("data:")) {
+          const outParsedVid = parseGcsUri(baseOutput!);
+          if (!outParsedVid) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+          const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
+          const objName = `${projectPrefix}/grok-extend/${stamp}-${sceneId}.mp4`;
+          const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedVid.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+          const b64 = videoDataUrl.split(",")[1] || "";
+          const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "video/mp4" }, body: base64ToUint8(b64) });
+          if (!upRes.ok) throw new Error(`video_upload_failed: ${await upRes.text()}`);
+          return await signGcsUrl({ bucket: outParsedVid.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedVid.bucket}/${objName}`));
+        }
+        return "";
+      })().catch((e: any) => { throw new Error("video_upload_error: " + (e?.message || e)); });
+      if (!sourceVideoUrl) return json({ error: "source video URL could not be resolved" }, 400);
+
+      const atlasBody = {
+        model: "xai/grok-imagine-video/extend-video",
+        video_url: sourceVideoUrl,
+        prompt: safePromptText,
+        duration: snapDuration,
+      };
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "grok_atlas_extend_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      if (!predictionId) return json({ error: "grok_atlas_extend_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `grok-extend-atlas:${predictionId}`, status: "processing", provider: "atlas-cloud" }, 202);
+    }
+
+    // 회원용 Grok T2V/I2V/R2V — 모두 Atlas Cloud에서만 실행한다.
+    if ((videoModel === "grok" || videoModel === "grok-r2v") && atlasOnly) {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const refResolved: string[] = [];
+      if (videoModel === "grok-r2v") {
+        for (let i = 0; i < referenceImages.length; i++) {
+          const ref = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+          if (ref) refResolved.push(ref);
+        }
+      }
+      const startImageResolved = !refResolved.length && imageDataUrl
+        ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
+        : "";
+      const atlasModel = refResolved.length
+        ? "xai/grok-imagine-video/reference-to-video"
+        : (startImageResolved ? "xai/grok-imagine-video/image-to-video" : "xai/grok-imagine-video/text-to-video");
+      const atlasBody: any = {
+        model: atlasModel,
+        prompt: startImageResolved ? `Animate this image. ${safePromptText}` : safePromptText,
+        duration: snapDuration,
+        aspect_ratio: aspectFinal,
+        resolution: "720p",
+      };
+      if (refResolved.length) atlasBody.image_urls = refResolved;
+      if (startImageResolved) atlasBody.image_url = startImageResolved;
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "grok_atlas_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      if (!predictionId) return json({ error: "grok_atlas_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `grok-atlas:${predictionId}`, status: "processing", model: atlasModel, provider: "atlas-cloud" }, 202);
+    }
+
+    // 마스터용 Grok Extend branch (xAI direct API — extends existing video from last frame)
+    if (videoModel === "grok-extend" && !atlasOnly) {
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
       if (!videoDataUrl) return json({ error: "videoDataUrl is required for grok-extend" }, 400);
@@ -444,8 +528,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       return json({ job_id: reqId ? `grok-extend:${reqId}` : "", status: "processing" }, 202);
     }
 
-    // Grok branch (xAI direct API — Atlas Cloud does not host Grok video)
-    if (videoModel === "grok" || videoModel === "grok-r2v") {
+    // 마스터용 Grok branch (xAI direct API)
+    if ((videoModel === "grok" || videoModel === "grok-r2v") && !atlasOnly) {
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
       const grokBody: any = {

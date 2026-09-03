@@ -3,6 +3,7 @@
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { requireMaster } from "../_shared/admin-users";
 import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
 import { resolveProjectStorageOwner } from "../_shared/shares";
 import { settleDeferredCreditFromResponse } from "../_shared/credits";
@@ -39,6 +40,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) {
       return corsJson({ ok: false, job_id: '', done: false, error: { code: auth.status, message: auth.error }, response: null, rawOperation: null, playback: null }, auth.status);
     }
+    const atlasOnly = !requireMaster(env, auth.userId);
     const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
     const projectTag = (url.searchParams.get('projectId') || '').trim();
     const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
@@ -79,6 +81,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     }
 
     const isGrok = jobId.startsWith('grok:') || jobId.startsWith('grok-extend:');
+    const isAtlasGrok = jobId.startsWith('grok-atlas:') || jobId.startsWith('grok-extend-atlas:');
     const isSeedance = jobId.startsWith('seedance:') && !jobId.startsWith('seedance-r2v:');
     const isSeedanceR2v = jobId.startsWith('seedance-r2v:');
     const isVeo = jobId.startsWith('veo:') && !jobId.startsWith('veo-full:');
@@ -177,6 +180,9 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     
 
     if (isGrok) {
+      if (atlasOnly) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'provider_forbidden', message: '회원 계정은 Atlas Cloud 작업만 조회할 수 있습니다.' }, response: null, rawOperation: null, playback: null }, 403);
+      }
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'XAI_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
@@ -362,8 +368,8 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       }, 200);
     }
 
-    // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3
-    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isViduQ3;
+    // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3, member Grok
+    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isViduQ3 || isAtlasGrok;
     if (isAtlasGeneric) {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) {
@@ -374,6 +380,8 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         'wan:': 'wan:',
         'seedance-r2v:': 'seedance-r2v:',
         'vidu-q3:': 'vidu-q3:',
+        'grok-extend-atlas:': 'grok-extend-atlas:',
+        'grok-atlas:': 'grok-atlas:',
       };
       let rawId = jobId;
       for (const prefix of Object.keys(prefixMap)) {

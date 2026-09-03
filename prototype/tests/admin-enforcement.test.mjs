@@ -18,14 +18,14 @@ test("admin-users module exposes permission guards with safe defaults", () => {
 
 test("imagen endpoint enforces image permission", () => {
   const src = read("prototype/functions/api/imagen.ts");
-  assert.match(src, /import \{ hasPagePermission \} from "\.\/_shared\/admin-users"/);
+  assert.match(src, /import \{ hasPagePermission, requireMaster \} from "\.\/_shared\/admin-users"/);
   assert.match(src, /hasPagePermission\(env, auth\.userId, "image"\)/);
   assert.match(src, /permission_denied/);
 });
 
 test("video endpoint enforces videogen/video permission by source", () => {
   const src = read("prototype/functions/api/video.ts");
-  assert.match(src, /import \{ hasPagePermission \} from "\.\/_shared\/admin-users"/);
+  assert.match(src, /import \{ hasPagePermission, requireMaster \} from "\.\/_shared\/admin-users"/);
   assert.match(src, /hasPagePermission\(env, auth\.userId, isVideoGen \? "videogen" : "video"\)/);
   assert.match(src, /permission_denied/);
 });

@@ -1944,6 +1944,9 @@
   }
 
   function buildPromptPanelMarkup(detached, project, sourceDisabled) {
+    var atlasMember = !!(NK.auth && typeof NK.auth.isMaster === 'function' && !NK.auth.isMaster());
+    var geminiProviderLabel = atlasMember ? 'Nano Banana 2 (Atlas Cloud)' : t('providerGemini');
+    var openaiProviderLabel = atlasMember ? 'GPT Image 2 (Atlas Cloud)' : t('providerOpenai');
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
       '<div class="ai-image-preview-head">' +
@@ -1968,8 +1971,8 @@
             '<div class="ai-image-source-library-title">' + escapeHtml(t('providerLabel')) + '</div>' +
             '<div class="ai-image-size-row">' +
               '<select id="ai-image-provider" class="btn-secondary ai-image-select">' +
-                '<option value="gemini"' + (normalizeProviderValue(state.provider) === 'gemini' ? ' selected' : '') + '>' + escapeHtml(t('providerGemini')) + '</option>' +
-                '<option value="openai"' + (normalizeProviderValue(state.provider) === 'openai' ? ' selected' : '') + '>' + escapeHtml(t('providerOpenai')) + '</option>' +
+                '<option value="gemini"' + (normalizeProviderValue(state.provider) === 'gemini' ? ' selected' : '') + '>' + escapeHtml(geminiProviderLabel) + '</option>' +
+                '<option value="openai"' + (normalizeProviderValue(state.provider) === 'openai' ? ' selected' : '') + '>' + escapeHtml(openaiProviderLabel) + '</option>' +
               '</select>' +
             '</div>' +
           '</div>' +
