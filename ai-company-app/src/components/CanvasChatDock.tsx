@@ -173,6 +173,10 @@ export default function CanvasChatDock({
       }, { conversationId, signal: controller.signal, images });
     } catch (e) {
       failed = !stoppedByUser.current;
+      if (!failed) {
+        // 사용자가 중지한 것 — 오류가 아니다. 조용히 한 줄만 남긴다(예전엔 '통신 오류' 로 표시돼 오해를 샀다).
+        commit([...turnsRef.current, { id: `s${Date.now()}`, role: "agent", name: "시스템", emoji: "⏹", text: "응답을 중지했어요.", ts: Date.now() }]);
+      }
       if (failed) {
         // 스트림이 끊겨도 서버는 도착한 답을 저장한다 — 잠시 뒤 스레드를 다시 읽어 보여준다.
         commit([...turnsRef.current, { id: `e${Date.now()}`, role: "agent", name: "시스템", emoji: "⚠️", text: `응답 스트림이 끊겼어요 (${(e as Error).message}). 저장된 답을 다시 불러올게요.`, ts: Date.now() }]);

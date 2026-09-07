@@ -181,6 +181,8 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.match(canvas, /onDirectGenerate=\{directGenerate\}/);
   // 스트림이 끊기면 서버에 저장된 답을 다시 읽는다.
   assert.match(dock, /if \(failed\) window\.setTimeout\(\(\) => \{ void loadThread\(\);/);
+  // 사용자 중지는 오류가 아니다.
+  assert.match(dock, /text: "응답을 중지했어요\."/);
   assert.match(dock, /placeholder=\{projectId \? "무엇을 만들고 싶으신가요\?"/);
   assert.match(canvas, /\{\/\* 대화 — 작성기\(하단 중앙 필\) \+ 세션 패널\(오른쪽 오버레이\)/);
   // 이미지 첨부(파일·붙여넣기) → 멀티모달로 전달.
