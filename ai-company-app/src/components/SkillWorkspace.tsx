@@ -7,7 +7,21 @@ function CloseIcon() {
   return <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m5 5 10 10M15 5 5 15" /></svg>;
 }
 
-export default function SkillWorkspace({ categoryId, onClose }: { categoryId: string; onClose: () => void }) {
+export default function SkillWorkspace({
+  categoryId,
+  onClose,
+  canvasProjectId = "",
+  canvasFocusSceneId = null,
+  canvasFocusNonce = 0,
+  onCanvasProjectChange,
+}: {
+  categoryId: string;
+  onClose: () => void;
+  canvasProjectId?: string;
+  canvasFocusSceneId?: string | number | null;
+  canvasFocusNonce?: number;
+  onCanvasProjectChange?: (projectId: string) => void;
+}) {
   const category = useMemo(() => getCompanySkillCategory(categoryId), [categoryId]);
   const firstAvailable = category.skills.find((skill) => skill.status === "available")?.id || "";
   const [selectedSkillId, setSelectedSkillId] = useState(firstAvailable);
@@ -60,7 +74,7 @@ export default function SkillWorkspace({ categoryId, onClose }: { categoryId: st
       {selectedSkill?.id === "infographic" ? (
         <AgentVideoWorkspace onClose={onClose} embedded />
       ) : selectedSkill?.id === "video_pipeline" ? (
-        <ProductionCanvas embedded />
+        <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div><p className="text-sm font-bold text-gray-300">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-gray-600">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>

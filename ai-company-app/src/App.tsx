@@ -13,6 +13,7 @@ import KnowledgeWorkspace from "./components/KnowledgeWorkspace";
 import AgentManager from "./components/AgentManager";
 import RightMenu from "./components/RightMenu";
 import SkillBox from "./components/SkillBox";
+import { CANVAS_SKILL_CATEGORY_ID } from "./lib/companySkills";
 import {
   getStatus,
   getAgents,
@@ -63,8 +64,6 @@ const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
 const SkillWorkspace = lazy(() => import("./components/SkillWorkspace"));
-// 제작 캔버스(노드 UI) — 무거운 화면이라 지연 로딩.
-const ProductionCanvas = lazy(() => import("./components/ProductionCanvas"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -125,7 +124,7 @@ export default function App() {
   const [presentationActive, setPresentationActive] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills" | "canvas">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">("chat");
   // 제작 캔버스: 채팅(canvas.open/focus)이 가리키는 프로젝트·컷.
   const [canvasProjectId, setCanvasProjectId] = useState(readStorage("canvasProjectId"));
   const [canvasFocus, setCanvasFocus] = useState<{ sceneId: string | number | null; nonce: number }>({ sceneId: null, nonce: 0 });
@@ -248,16 +247,22 @@ export default function App() {
       setCenterView("skills");
     }
     else if (name.startsWith("canvas.")) {
-      // 캔버스 열기·컷 가리키기. 세부 동작(선택·새로고침)은 캔버스 컴포넌트가 같은 액션을 구독해 처리한다.
+      // 캔버스 열기·컷 가리키기. 캔버스는 SKILL 줄의 '영상 제작' 분류 안에 산다(상단 메뉴 아님).
+      // 세부 동작(선택·새로고침)은 캔버스 컴포넌트가 같은 액션을 구독해 처리한다.
       const pid = String(action.projectId || "").trim();
       if (pid) setCanvasProjectId(pid);
       if (name === "canvas.focus" && action.sceneId != null) setCanvasFocus((prev) => ({ sceneId: action.sceneId as string | number, nonce: prev.nonce + 1 }));
-      setCenterView("canvas");
+      setSkillCategoryId(CANVAS_SKILL_CATEGORY_ID);
+      setCenterView("skills");
     }
     if (name === "navigate") {
       const view = String(action.view || "");
       const allowed = new Set(["chat", "dashboard", "settings", "knowledge", "agents", "works", "skills", "canvas"]);
-      if (allowed.has(view)) {
+      if (view === "canvas") {
+        // 캔버스는 스킬 화면의 한 분류 — navigate 로도 같은 곳에 닿게 한다.
+        setSkillCategoryId(CANVAS_SKILL_CATEGORY_ID);
+        setCenterView("skills");
+      } else if (allowed.has(view)) {
         if (view === "skills" && typeof action.categoryId === "string") setSkillCategoryId(action.categoryId);
         setCenterView(view as typeof centerView);
       }
@@ -1280,7 +1285,6 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onCanvas={() => setCenterView("canvas")}
               onSettings={() => setCenterView("settings")}
             />
           </div>
@@ -1313,11 +1317,14 @@ export default function App() {
           </Suspense>
         ) : centerView === "skills" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 스킬을 불러오는 중…</div>}>
-            <SkillWorkspace categoryId={skillCategoryId} onClose={() => setCenterView("chat")} />
-          </Suspense>
-        ) : centerView === "canvas" ? (
-          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">제작 캔버스를 불러오는 중…</div>}>
-            <ProductionCanvas projectId={canvasProjectId} focusSceneId={canvasFocus.sceneId} focusNonce={canvasFocus.nonce} onProjectChange={setCanvasProjectId} />
+            <SkillWorkspace
+              categoryId={skillCategoryId}
+              onClose={() => setCenterView("chat")}
+              canvasProjectId={canvasProjectId}
+              canvasFocusSceneId={canvasFocus.sceneId}
+              canvasFocusNonce={canvasFocus.nonce}
+              onCanvasProjectChange={setCanvasProjectId}
+            />
           </Suspense>
         ) : centerView === "settings" ? (
           <Settings
@@ -1383,7 +1390,6 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onCanvas={() => setCenterView("canvas")}
               onSettings={() => setCenterView("settings")}
             />
             <SkillBox

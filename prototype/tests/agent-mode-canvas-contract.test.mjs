@@ -99,9 +99,16 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(panel, /continueCompanySkillJob\(next\.id\)/);
   assert.match(api, /export async function continueCompanySkillJob/);
   assert.match(api, /nk_token=/);
-  assert.match(app, /centerView === "canvas"/);
-  assert.match(app, /name\.startsWith\("canvas\."\)/);
-  assert.match(menu, /onCanvas/);
+  // 캔버스는 상단 메뉴가 아니라 SKILL 줄의 '영상·캔버스' 분류로 연다(사용자 결정).
+  assert.doesNotMatch(menu, /onCanvas|canvas/);
+  assert.match(app, /name\.startsWith\("canvas\."\)[\s\S]*setSkillCategoryId\(CANVAS_SKILL_CATEGORY_ID\)/);
+  const skills = read("ai-company-app/src/lib/companySkills.ts");
+  const box = read("ai-company-app/src/components/SkillBox.tsx");
+  const workspace = read("ai-company-app/src/components/SkillWorkspace.tsx");
+  assert.match(skills, /id: "video-production"[\s\S]*icon: "canvas"[\s\S]*status: "available"[\s\S]*id: "video_pipeline"/);
+  assert.match(skills, /CANVAS_SKILL_CATEGORY_ID = "video-production"/);
+  assert.match(box, /name === "canvas"/);
+  assert.match(workspace, /selectedSkill\?\.id === "video_pipeline"[\s\S]*<ProductionCanvas embedded projectId=\{canvasProjectId\}/);
   // 버튼 폭 고정 규칙(상태 변화에 폭이 흔들리지 않게).
   assert.match(panel, /min-w-\[96px\]/);
 });

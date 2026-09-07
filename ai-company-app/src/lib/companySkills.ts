@@ -31,7 +31,7 @@ export interface CompanySkillCategory {
   label: string;
   shortLabel: string;
   description: string;
-  icon: "design" | "office" | "research" | "communication" | "marketing" | "development" | "management";
+  icon: "design" | "canvas" | "office" | "research" | "communication" | "marketing" | "development" | "management";
   status: CompanySkillStatus;
   skills: CompanySkillDefinition[];
 }
@@ -82,21 +82,6 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
         ],
       },
       {
-        id: "video_pipeline",
-        label: "영상 에이전트 모드",
-        description: "프로젝트의 빈 컷을 스틸→영상 순으로 계획·승인·배치 생성합니다. 제작 캔버스(노드)에서 관리해요.",
-        status: "available",
-        outputLabel: "컷별 스틸·영상 + 프롬프트 계보",
-        inputSchema: "company-skill/video-pipeline/v1",
-        executorId: "video-pipeline-adapter-v1",
-        previewType: "video",
-        artifactTypes: ["source", "preview", "final", "manifest", "report"],
-        requiredCapabilities: ["project-read", "prompt-assembly", "image-generation", "video-generation", "lineage-write"],
-        permissionPolicy: "project-write",
-        costPolicy: "estimate-before-paid-provider",
-        qualityGateIds: ["common-user-isolation", "video-pipeline-coverage"],
-      },
-      {
         id: "image", label: "이미지 제작", description: "제품 이미지, 일러스트, 캠페인 비주얼을 제작합니다.", status: "coming-soon", outputLabel: "PNG·JPG·WebP",
         inputSchema: "company-skill/image/v1", executorId: "image-adapter-v1", previewType: "image",
         artifactTypes: ["source", "preview", "final", "manifest", "report"],
@@ -109,6 +94,32 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
       { id: "poster-banner", label: "포스터·배너", description: "캠페인, 행사, 광고용 정적 디자인을 제작합니다.", status: "coming-soon", outputLabel: "이미지" },
       { id: "video-shortform", label: "영상·숏폼", description: "브랜드 영상과 숏폼 콘텐츠를 기획하고 제작합니다.", status: "coming-soon", outputLabel: "영상" },
       { id: "thumbnail", label: "썸네일", description: "플랫폼과 콘텐츠 목적에 맞는 썸네일을 제작합니다.", status: "coming-soon", outputLabel: "이미지" },
+    ],
+  }),
+  // 영상 제작: 제작 캔버스(노드 UI)와 에이전트 모드. 사용자 요청으로 상단 메뉴가 아니라 SKILL 줄에 둔다.
+  defineCompanySkillCategory({
+    id: "video-production",
+    label: "영상·캔버스",
+    shortLabel: "영상",
+    description: "스토리보드·영상·프롬프트를 노드로 관리하고, 에이전트가 빈 컷을 계획·승인·배치 생성합니다.",
+    icon: "canvas",
+    status: "available",
+    skills: [
+      {
+        id: "video_pipeline",
+        label: "제작 캔버스 · 에이전트 모드",
+        description: "프로젝트의 빈 컷을 스틸→영상 순으로 계획·승인·배치 생성합니다. 제작 캔버스(노드)에서 관리해요.",
+        status: "available",
+        outputLabel: "컷별 스틸·영상 + 프롬프트 계보",
+        inputSchema: "company-skill/video-pipeline/v1",
+        executorId: "video-pipeline-adapter-v1",
+        previewType: "video",
+        artifactTypes: ["source", "preview", "final", "manifest", "report"],
+        requiredCapabilities: ["project-read", "prompt-assembly", "image-generation", "video-generation", "lineage-write"],
+        permissionPolicy: "project-write",
+        costPolicy: "estimate-before-paid-provider",
+        qualityGateIds: ["common-user-isolation", "video-pipeline-coverage"],
+      },
     ],
   }),
   defineCompanySkillCategory({
@@ -197,6 +208,9 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
     ],
   }),
 ];
+
+/** 채팅 UI 액션(canvas.*)과 navigate view "canvas" 가 여는 분류. */
+export const CANVAS_SKILL_CATEGORY_ID = "video-production";
 
 export function getCompanySkillCategory(categoryId: string) {
   return COMPANY_SKILL_CATEGORIES.find((category) => category.id === categoryId) || COMPANY_SKILL_CATEGORIES[0];

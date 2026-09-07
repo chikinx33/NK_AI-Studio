@@ -24,14 +24,6 @@ const HouseIcon = (p: IconProps) => (
     <circle cx="14" cy="15" r="1"/>
   </SVG>
 );
-// lucide: workflow
-const WorkflowIcon = (p: IconProps) => (
-  <SVG {...p}>
-    <rect width="8" height="8" x="3" y="3" rx="2" />
-    <path d="M7 11v4a2 2 0 0 0 2 2h4" />
-    <rect width="8" height="8" x="13" y="13" rx="2" />
-  </SVG>
-);
 const BrainIcon = (p: IconProps) => (
   <SVG {...p}>
     <path d="M12 18V5" />
@@ -109,13 +101,12 @@ function IconBtn({
 }
 
 interface Props {
-  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills" | "canvas";
+  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills";
   onHome: () => void;
   onChat: () => void;
   onKnowledge: () => void;
   onAgents: () => void;
   onWorks: () => void;
-  onCanvas: () => void;
   onSettings: () => void;
 }
 
@@ -126,7 +117,6 @@ export default function RightMenu({
   onKnowledge,
   onAgents,
   onWorks,
-  onCanvas,
   onSettings,
 }: Props) {
   return (
@@ -139,9 +129,6 @@ export default function RightMenu({
       </IconBtn>
       <IconBtn active={centerView === "works" || centerView === "video"} title="회사 업무 탐색기" onClick={onWorks}>
         <FolderIcon className="h-4 w-4" />
-      </IconBtn>
-      <IconBtn active={centerView === "canvas"} title="제작 캔버스 (스토리보드·영상·프롬프트 노드)" onClick={onCanvas}>
-        <WorkflowIcon className="h-4 w-4" />
       </IconBtn>
       <IconBtn active={centerView === "knowledge"} title="회사 지식 (그래프 + 리스트)" onClick={onKnowledge}>
         <BrainIcon className="h-4 w-4" />

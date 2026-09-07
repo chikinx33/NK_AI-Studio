@@ -8,6 +8,8 @@ const SVG = ({ className, children }: IconProps & { children: ReactNode }) => (
 
 function CategoryIcon({ name, className }: { name: string; className?: string }) {
   if (name === "design") return <SVG className={className}><path d="M12 3a9 9 0 1 0 0 18h1.2a1.8 1.8 0 0 0 0-3.6h-1a1.7 1.7 0 0 1 0-3.4H14a7 7 0 0 0 0-14Z"/><circle cx="7.5" cy="10" r=".7" fill="currentColor"/><circle cx="9.2" cy="6.5" r=".7" fill="currentColor"/><circle cx="14" cy="6" r=".7" fill="currentColor"/></SVG>;
+  // lucide: workflow — 제작 캔버스(노드 UI)
+  if (name === "canvas") return <SVG className={className}><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></SVG>;
   if (name === "office") return <SVG className={className}><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h7M9 16h7"/></SVG>;
   if (name === "research") return <SVG className={className}><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M8 12l2-2 2 1 2.5-3"/></SVG>;
   if (name === "communication") return <SVG className={className}><path d="M4 5h16v11H8l-4 4z"/><path d="m5 6 7 6 7-6"/></SVG>;
