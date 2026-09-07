@@ -1866,3 +1866,29 @@ export function withMediaToken(url: string): string {
   if (!token) return url;
   return `${url}${url.includes("?") ? "&" : "?"}nk_token=${encodeURIComponent(token)}`;
 }
+
+/** 제작 캔버스 프로젝트 선택기용 요약(시리즈·에피소드 제목·규격·씬/스틸/영상 수·대표 스틸). */
+export interface ProductionProjectSummary {
+  id: string;
+  title: string;
+  seriesId: string;
+  seriesTitle: string;
+  episodeTitle: string;
+  projectType: string;
+  aspectRatio: string;
+  durationSec: number;
+  sceneCount: number;
+  stills: number;
+  clips: number;
+  savedAt: string;
+  shared: boolean;
+  ownerId: string;
+  thumbnail: string;
+}
+
+export async function listProductionProjects(): Promise<ProductionProjectSummary[]> {
+  const res = await fetch("/api/agent/production-projects");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "프로젝트 목록을 불러오지 못했어요.");
+  return Array.isArray(data?.projects) ? data.projects as ProductionProjectSummary[] : [];
+}

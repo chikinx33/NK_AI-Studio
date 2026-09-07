@@ -129,6 +129,28 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(panel, /min-w-\[96px\]/);
 });
 
+test("★프로젝트 선택기는 숫자 id 가 아니라 시리즈 › 에피소드 제목으로 고르고, 시리즈는 접힌 그룹이다", () => {
+  const endpoint = read("prototype/functions/api/agent/production-projects.ts");
+  const picker = read("ai-company-app/src/components/ProjectPicker.tsx");
+  const canvas = read("ai-company-app/src/components/ProductionCanvas.tsx");
+  const api = read("ai-company-app/src/lib/api.ts");
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  // 서버가 data.json 을 읽어 시리즈·에피소드 제목과 씬/스틸/영상 수를 붙인다.
+  assert.match(endpoint, /export function summarizeProject\(/);
+  assert.match(endpoint, /const seriesTitle = text\(extra\.sharedSeriesTitle \|\| payload\.seriesTitle/);
+  assert.match(endpoint, /episodeTitle = text\(payload\.episodeTitle \|\| project\?\.title/);
+  assert.match(endpoint, /projects\.sort\(\(a, b\) => \(b\.savedAt/);
+  // 공유 프로젝트는 소유자 폴더에서 읽는다.
+  assert.match(shared, /&ownerId=\$\{encodeURIComponent\(ownerId\)\}/);
+  assert.match(api, /export async function listProductionProjects/);
+  // 선택기: 시리즈 그룹 접힘 + 검색 + 캔버스는 <select> 를 더 쓰지 않는다.
+  assert.match(picker, /const groups = useMemo<SeriesGroup\[\]>/);
+  assert.match(picker, /placeholder="시리즈·에피소드 검색"/);
+  assert.match(picker, /if \(current\) next\.add\(current\.seriesId \|\| current\.id\)/);
+  assert.match(canvas, /<ProjectPicker projects=\{projects\} value=\{projectId\} onChange=\{setProjectId\}/);
+  assert.doesNotMatch(canvas, /<option value="">프로젝트 선택…<\/option>/);
+});
+
 // TypeScript 를 그대로 실행할 수는 없으니 ai-company-app 의 typescript 로 변환해 순수 함수만 검증한다.
 function loadPipelineModule() {
   let ts;

@@ -3843,7 +3843,9 @@ async function runProjectListTool(_input: any, ctx: ToolContext): Promise<any> {
 async function runProjectGetTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
   if (!projectId) throw new Error("projectId is required");
-  const data = await callInternalJson(ctx, `/api/project/get?projectId=${encodeURIComponent(projectId)}`);
+  // 공유받은 프로젝트는 소유자 폴더에 있다 — ownerId 를 주면 get 이 권한을 확인하고 그쪽을 읽는다.
+  const ownerId = String(input?.ownerId || "").trim();
+  const data = await callInternalJson(ctx, `/api/project/get?projectId=${encodeURIComponent(projectId)}${ownerId ? `&ownerId=${encodeURIComponent(ownerId)}` : ""}`);
   // get은 정상이면 {ok, data:{payload, scenes, title...}}, 최초(빈)면 {payload:null, scenes:[], source:"empty"}.
   const d = (data && typeof data.data === "object" && data.data) ? data.data : data;
   const scenes = Array.isArray(d?.scenes) ? d.scenes : [];

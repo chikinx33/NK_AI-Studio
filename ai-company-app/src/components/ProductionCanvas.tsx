@@ -3,13 +3,14 @@ import {
   createAgentJob,
   getAgentJob,
   getProductionGraph,
-  listStudioProjects,
+  listProductionProjects,
   withMediaToken,
   type ProductionEdge,
   type ProductionGraph,
   type ProductionNode,
-  type StudioProjectRef,
+  type ProductionProjectSummary,
 } from "../lib/api";
+import ProjectPicker from "./ProjectPicker";
 import { readStorage, writeStorage } from "../lib/safeStorage";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
@@ -129,7 +130,8 @@ export default function ProductionCanvas({
   edgeStyle?: "curve" | "straight";
   edgesVisible?: boolean;
 }) {
-  const [projects, setProjects] = useState<StudioProjectRef[]>([]);
+  const [projects, setProjects] = useState<ProductionProjectSummary[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectId, setProjectId] = useState(projectIdProp || readStorage("canvasProjectId"));
   const [graph, setGraph] = useState<ProductionGraph | null>(null);
   const [loading, setLoading] = useState(false);
@@ -153,9 +155,11 @@ export default function ProductionCanvas({
 
   useEffect(() => { if (projectIdProp) setProjectId(projectIdProp); }, [projectIdProp]);
 
-  useEffect(() => {
-    listStudioProjects().then(setProjects).catch(() => setProjects([]));
+  const reloadProjects = useCallback(() => {
+    setProjectsLoading(true);
+    listProductionProjects().then(setProjects).catch(() => setProjects([])).finally(() => setProjectsLoading(false));
   }, []);
+  useEffect(() => { reloadProjects(); }, [reloadProjects]);
 
   const load = useCallback(async (silent = false) => {
     if (!projectId) return;
@@ -386,15 +390,7 @@ export default function ProductionCanvas({
       <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0c1119] px-3 py-2">
         <WorkflowIcon className="h-4 w-4 text-emerald-400" />
         <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-400">Production Canvas</span>
-        <select
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          className="ml-2 min-w-[180px] rounded border border-edge bg-[#0b1018] px-2 py-1 text-[12px] text-gray-200"
-        >
-          <option value="">프로젝트 선택…</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.shared ? `↗ ${p.title}` : p.title}</option>)}
-          {projectId && !projects.some((p) => p.id === projectId) && <option value={projectId}>{projectId}</option>}
-        </select>
+        <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
         {graph && (
           <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
             <span className="truncate text-gray-300" title={graph.title}>{graph.title}</span>
@@ -408,7 +404,7 @@ export default function ProductionCanvas({
           <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>
           <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-gray-400 hover:bg-edge hover:text-white">정렬 초기화</button>
-          <button type="button" onClick={() => void load()} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
+          <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button
             type="button"
             onClick={() => setAgentOpen((v) => !v)}
