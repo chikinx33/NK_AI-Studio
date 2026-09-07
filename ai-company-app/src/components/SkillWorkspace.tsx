@@ -11,8 +11,9 @@ function CloseIcon() {
 function SplineIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M5 17A12 12 0 0 1 17 5" /></svg>;
 }
+// 직각선(수직·수평만) 아이콘 — 양 끝 점 사이를 ㄱ자로 잇는다.
 function StraightIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M6.6 17.4 17.4 6.6" /></svg>;
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M5 17v-5h14V7" /></svg>;
 }
 // lucide: eye / eye-off — 연결선 보기·숨기기
 function EyeIcon() {
@@ -97,8 +98,8 @@ export default function SkillWorkspace({
               type="button"
               onClick={toggleEdgeStyle}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-edge bg-[#0b1018] text-gray-400 transition hover:border-gray-600 hover:bg-edge hover:text-white"
-              title={edgeStyle === "curve" ? "연결선: 곡선 (누르면 직선)" : "연결선: 직선 (누르면 곡선)"}
-              aria-label={edgeStyle === "curve" ? "연결선을 직선으로" : "연결선을 곡선으로"}
+              title={edgeStyle === "curve" ? "연결선: 곡선 (누르면 직각선)" : "연결선: 직각선 (누르면 곡선)"}
+              aria-label={edgeStyle === "curve" ? "연결선을 직각선으로" : "연결선을 곡선으로"}
             >
               {edgeStyle === "curve" ? <SplineIcon /> : <StraightIcon />}
             </button>

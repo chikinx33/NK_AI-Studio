@@ -115,7 +115,10 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   // 연결선 곡선·직선 토글: 확장 버튼 옆, 브라우저에 기억, 캔버스가 prop 으로 받는다.
   assert.match(workspace, /writeStorage\("canvasEdgeStyle", next\)/);
   assert.match(workspace, /edgeStyle=\{edgeStyle\}/);
-  assert.match(canvas, /edgeStyle === "straight"[\s\S]*L \$\{b\.x\} \$\{b\.y\}/);
+  // 직선 모드는 대각선이 아니라 직각(수직·수평) 경로다(사용자 요청).
+  assert.match(canvas, /edgeStyle === "straight"[\s\S]*orthogonalPath\(a, b\)/);
+  assert.match(canvas, /L \$\{mx\} \$\{a\.y\} L \$\{mx\} \$\{b\.y\} L \$\{b\.x\} \$\{b\.y\}/);
+  assert.doesNotMatch(canvas, /`M \$\{a\.x\} \$\{a\.y\} L \$\{b\.x\} \$\{b\.y\}`/);
   // 연결선 보기·숨기기(눈 아이콘) — 기억하고, 캔버스는 숨김이면 선을 그리지 않는다.
   assert.match(workspace, /writeStorage\("canvasEdgesVisible"/);
   assert.match(workspace, /edgesVisible=\{edgesVisible\}/);

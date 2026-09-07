@@ -59,6 +59,17 @@ function layoutGraph(graph: ProductionGraph): PosMap {
   return pos;
 }
 
+/** 직각 경로. 도착이 오른쪽이면 가운데서 한 번 꺾고, 왼쪽(역방향)이면 밖으로 나갔다가 위아래 통로로 돌아 들어온다. */
+function orthogonalPath(a: Pos, b: Pos): string {
+  const stub = 32;
+  if (b.x - a.x >= stub * 2) {
+    const mx = Math.round((a.x + b.x) / 2);
+    return `M ${a.x} ${a.y} L ${mx} ${a.y} L ${mx} ${b.y} L ${b.x} ${b.y}`;
+  }
+  const my = Math.round((a.y + b.y) / 2);
+  return `M ${a.x} ${a.y} L ${a.x + stub} ${a.y} L ${a.x + stub} ${my} L ${b.x - stub} ${my} L ${b.x - stub} ${b.y} L ${b.x} ${b.y}`;
+}
+
 function anchorOut(node: ProductionNode, p: Pos): Pos { return { x: p.x + NODE_W[node.type], y: p.y + Math.min(NODE_H[node.type], 140) / 2 }; }
 function anchorIn(node: ProductionNode, p: Pos): Pos { return { x: p.x, y: p.y + Math.min(NODE_H[node.type], 140) / 2 }; }
 
@@ -359,9 +370,10 @@ export default function ProductionCanvas({
     const a = anchorOut(from, pf);
     const b = anchorIn(to, pt);
     const dx = Math.max(60, Math.abs(b.x - a.x) / 2);
-    // 곡선(베지어)은 흐름을 읽기 좋고, 직선은 노드가 많을 때 어디서 어디로 가는지 또렷하다 — 사용자가 고른다.
+    // 곡선(베지어)은 흐름을 읽기 좋고, 직각선(수직·수평만)은 노드가 많을 때 어디서 어디로 가는지 또렷하다 — 사용자가 고른다.
+    // 대각선은 쓰지 않는다(사용자 요청): 출발 노드 오른쪽 → 수평 → 수직 → 수평 → 도착 노드 왼쪽.
     const d = edgeStyle === "straight"
-      ? `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+      ? orthogonalPath(a, b)
       : `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
     return { edge: e, d, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
   }).filter(Boolean) as Array<{ edge: ProductionEdge; d: string; mid: Pos }>, [graph, nodeById, positions, edgeStyle]);
