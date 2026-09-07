@@ -107,12 +107,16 @@ export default function ProductionCanvas({
   focusNonce = 0,
   embedded = false,
   onProjectChange,
+  edgeStyle = "curve",
+  edgesVisible = true,
 }: {
   projectId?: string;
   focusSceneId?: string | number | null;
   focusNonce?: number;
   embedded?: boolean;
   onProjectChange?: (projectId: string) => void;
+  edgeStyle?: "curve" | "straight";
+  edgesVisible?: boolean;
 }) {
   const [projects, setProjects] = useState<StudioProjectRef[]>([]);
   const [projectId, setProjectId] = useState(projectIdProp || readStorage("canvasProjectId"));
@@ -355,9 +359,12 @@ export default function ProductionCanvas({
     const a = anchorOut(from, pf);
     const b = anchorIn(to, pt);
     const dx = Math.max(60, Math.abs(b.x - a.x) / 2);
-    const d = `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
+    // 곡선(베지어)은 흐름을 읽기 좋고, 직선은 노드가 많을 때 어디서 어디로 가는지 또렷하다 — 사용자가 고른다.
+    const d = edgeStyle === "straight"
+      ? `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+      : `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
     return { edge: e, d, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
-  }).filter(Boolean) as Array<{ edge: ProductionEdge; d: string; mid: Pos }>, [graph, nodeById, positions]);
+  }).filter(Boolean) as Array<{ edge: ProductionEdge; d: string; mid: Pos }>, [graph, nodeById, positions, edgeStyle]);
 
   const cutNodes = useMemo(() => (graph?.nodes || []).filter((n) => n.type === "cut"), [graph]);
 
@@ -423,7 +430,7 @@ export default function ProductionCanvas({
 
           <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
             <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
-              {edgesToDraw.map(({ edge, d, mid }) => {
+              {edgesVisible && edgesToDraw.map(({ edge, d, mid }) => {
                 const st = EDGE_STYLE[edge.type];
                 const highlighted = selectedId && (edge.from === selectedId || edge.to === selectedId);
                 return (

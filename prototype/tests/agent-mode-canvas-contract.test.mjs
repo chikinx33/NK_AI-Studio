@@ -112,6 +112,14 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   // 집중 모드: 닫기 옆 확장 버튼이 좌우 패널을 접는다(사용자 요청). 스킬 화면을 떠나면 자동 해제.
   assert.match(workspace, /onToggleFocus[\s\S]*title=\{focusMode \? "패널 다시 열기" : "집중 모드 \(좌우 패널 닫기\)"\}/);
   assert.match(app, /if \(centerView !== "skills"\) setFocusMode\(false\)/);
+  // 연결선 곡선·직선 토글: 확장 버튼 옆, 브라우저에 기억, 캔버스가 prop 으로 받는다.
+  assert.match(workspace, /writeStorage\("canvasEdgeStyle", next\)/);
+  assert.match(workspace, /edgeStyle=\{edgeStyle\}/);
+  assert.match(canvas, /edgeStyle === "straight"[\s\S]*L \$\{b\.x\} \$\{b\.y\}/);
+  // 연결선 보기·숨기기(눈 아이콘) — 기억하고, 캔버스는 숨김이면 선을 그리지 않는다.
+  assert.match(workspace, /writeStorage\("canvasEdgesVisible"/);
+  assert.match(workspace, /edgesVisible=\{edgesVisible\}/);
+  assert.match(canvas, /edgesVisible && edgesToDraw\.map/);
   assert.match(app, /focusMode \? "lg:hidden"/);
   assert.match(app, /\$\{focusMode \? "" : "lg:flex lg:flex-col"\}/);
   // 버튼 폭 고정 규칙(상태 변화에 폭이 흔들리지 않게).
