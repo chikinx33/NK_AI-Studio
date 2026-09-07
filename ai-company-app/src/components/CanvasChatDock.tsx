@@ -2,67 +2,83 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getAgents, getConversationMessages, streamChat, type AgentInfo, type HistoryTurn } from "../lib/api";
 import { readStorage, writeStorage } from "../lib/safeStorage";
 import { dispatchUiAction } from "../lib/uiActions";
+import { describeSettingsForAgent, summarizeSettings, type CanvasSettings } from "../lib/canvasSettings";
+import GenerationSettingsPopover from "./GenerationSettingsPopover";
+import AgentSettingsPanel from "./AgentSettingsPanel";
 import Markdown from "./Markdown";
 
 /**
- * 캔버스 대화 독 — 에이전트 모드의 "대화형" 입구.
+ * 캔버스 대화 — 에이전트 모드의 대화형 입구.
  *
- * 채팅 화면과 같은 코어·직원 파이프라인(/api/agent/chat)을 쓰되, 대화 스레드는 프로젝트별(canvas-<id>)로 분리한다.
- * 사용자 메시지 앞에 캔버스 맥락(프로젝트·선택 컷)을 붙여 보내므로 코어는 어느 프로젝트의 어느 컷 이야기인지 안다.
- * 코어가 내는 canvas.* UI 액션은 같은 화면의 캔버스가 바로 받고, 도구가 만든 결과(스틸·영상·파이프라인)는
- * job_ready 로 알려져 그래프와 에이전트 모드 패널이 갱신된다.
+ * 구성: 캔버스 위에 떠 있는 작성기(첨부 · 에이전트 설정 · 생성 설정 · 크레딧) + 오른쪽 세션 패널(스레드).
+ * 작업 공간을 띠로 잘라먹지 않도록 둘 다 오버레이다. 같은 채팅 파이프라인(/api/agent/chat)을 쓰되
+ * 스레드는 프로젝트별 세션(canvas-<projectId>[-<n>])로 나눈다. 메시지 앞에 캔버스 맥락(프로젝트·선택 컷·
+ * 생성 기본값)을 붙여 코어가 어느 컷을, 어떤 규격으로 만들지 알게 한다. 코어의 canvas.* 액션은 같은 화면의
+ * 캔버스가 받고, 도구 결과(job_ready)는 그래프·에이전트 모드 패널을 깨운다.
  */
 
 const CONTEXT_RE = /^\[캔버스[^\]]*\]\s*\n?/;
-const OPEN_KEY = "canvasChatOpen";
-const QUICK_PROMPTS = [
-  { label: "빈 컷 전부 채워줘", text: "이 프로젝트의 비어 있는 컷을 스틸→영상 순으로 전부 만들어줘. 에이전트 모드(video_pipeline)로 계획부터 세워줘." },
-  { label: "선택 컷 스틸 다시", text: "선택한 컷의 스틸을 다시 만들어줘. 화면 설명은 그대로 두고 구도만 더 또렷하게." },
-  { label: "선택 컷 프롬프트 다듬기", text: "선택한 컷의 화면·행동 문장을 연출 의도가 살도록 다듬어서 scene_upsert 로 반영해줘." },
-  { label: "연속성 점검", text: "컷 순서대로 장소·캐릭터·카메라 방위 연속성이 어긋난 곳이 있는지 점검하고 문제 컷을 canvas.focus 로 짚어줘." },
+const MAX_ATTACH = 6;
+const MAX_ATTACH_BYTES = 6 * 1024 * 1024;
+
+interface DockTurn { id: string; role: "user" | "agent"; agentId?: string; name?: string; emoji?: string; text: string; streaming?: boolean; ts?: number; attachments?: string[] }
+interface Attachment { id: string; name: string; mimeType: string; base64: string; preview: string }
+
+const Icon = ({ d, className }: { d: React.ReactNode; className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className || "h-4 w-4"} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+);
+// lucide 아이콘 경로: plus / arrow-right / bot / message-square / square-pen / x / panel-right-close / sliders-horizontal
+const PlusD = <><path d="M5 12h14" /><path d="M12 5v14" /></>;
+const ArrowRightD = <><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>;
+const BotD = <><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" /></>;
+const ChatD = <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />;
+const PenD = <><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" /></>;
+const XD = <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>;
+const SlidersD = <><line x1="21" x2="14" y1="4" y2="4" /><line x1="10" x2="3" y1="4" y2="4" /><line x1="21" x2="12" y1="12" y2="12" /><line x1="8" x2="3" y1="12" y2="12" /><line x1="21" x2="16" y1="20" y2="20" /><line x1="12" x2="3" y1="20" y2="20" /><line x1="14" x2="14" y1="2" y2="6" /><line x1="8" x2="8" y1="10" y2="14" /><line x1="16" x2="16" y1="18" y2="22" /></>;
+
+const SUGGESTIONS = [
+  { emoji: "🧠", label: "같이 브레인스토밍해 줘", text: "이 프로젝트의 컷 구성을 보고 더 좋은 연출 아이디어를 같이 브레인스토밍해 줘. 바꾸자고 제안하는 컷은 canvas.focus 로 짚어줘." },
+  { emoji: "📘", label: "무엇을 할 수 있는지 알려 줘", text: "이 캔버스에서 네가 할 수 있는 일을 알려줘 — 스틸·영상 생성, 컷 수정, 에이전트 모드(video_pipeline), 연속성 점검을 예시와 함께." },
+  { emoji: "🎬", label: "빈 컷 전부 채워 줘", text: "이 프로젝트의 비어 있는 컷을 스틸→영상 순으로 전부 만들어줘. 에이전트 모드(video_pipeline)로 계획부터 세워줘." },
 ];
 
-interface DockTurn { id: string; role: "user" | "agent"; agentId?: string; name?: string; emoji?: string; text: string; streaming?: boolean; ts?: number }
-
-function MessageSquareIcon({ className }: { className?: string }) {
-  // lucide: message-square
-  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
-}
-function SendIcon({ className }: { className?: string }) {
-  // lucide: send-horizontal
-  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z" /><path d="M6 12h16" /></svg>;
-}
-function ChevronDownIcon({ className }: { className?: string }) {
-  // lucide: chevron-down
-  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
-}
+function sessionKey(projectId: string) { return `canvasSession:${projectId}`; }
 
 export default function CanvasChatDock({
   projectId,
   projectTitle,
   selectedSceneIds,
+  settings,
+  onSettingsChange,
   onJobReady,
 }: {
   projectId: string;
   projectTitle: string;
   selectedSceneIds: Array<string | number>;
+  settings: CanvasSettings;
+  onSettingsChange: (next: CanvasSettings) => void;
   onJobReady: (payload: unknown) => void;
 }) {
-  const [open, setOpen] = useState(readStorage(OPEN_KEY) !== "0");
+  const [panelOpen, setPanelOpen] = useState(readStorage("canvasChatOpen") !== "0");
+  const [popover, setPopover] = useState<"none" | "settings" | "agent">("none");
   const [turns, setTurns] = useState<DockTurn[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [sessionSuffix, setSessionSuffix] = useState(() => readStorage(sessionKey(projectId)) || "");
   const turnsRef = useRef<DockTurn[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const conversationId = projectId ? `canvas-${projectId}` : "";
+  const conversationId = projectId ? `canvas-${projectId}${sessionSuffix}` : "";
 
   const commit = (next: DockTurn[]) => { turnsRef.current = next; setTurns(next); };
 
   useEffect(() => { getAgents().then(setAgents).catch(() => setAgents([])); }, []);
+  useEffect(() => { setSessionSuffix(readStorage(sessionKey(projectId)) || ""); setAttachments([]); }, [projectId]);
 
-  // 프로젝트별 스레드를 불러온다(서버가 대화를 저장하므로 새로고침해도 이어진다).
+  // 프로젝트·세션별 스레드(서버 저장 → 새로고침해도 이어진다).
   useEffect(() => {
     if (!conversationId) { commit([]); return; }
     let alive = true;
@@ -76,20 +92,49 @@ export default function CanvasChatDock({
     return () => { alive = false; };
   }, [conversationId]);
 
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, open]);
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [turns, panelOpen]);
 
-  const toggle = () => setOpen((v) => { writeStorage(OPEN_KEY, v ? "0" : "1"); return !v; });
+  const togglePanel = () => setPanelOpen((v) => { writeStorage("canvasChatOpen", v ? "0" : "1"); return !v; });
+  const newSession = () => {
+    if (streaming) abortRef.current?.abort();
+    const suffix = `-${Date.now().toString(36)}`;
+    writeStorage(sessionKey(projectId), suffix);
+    setSessionSuffix(suffix);
+    commit([]);
+  };
+
+  const addFiles = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, MAX_ATTACH);
+    const read = (file: File) => new Promise<Attachment | null>((resolve) => {
+      if (file.size > MAX_ATTACH_BYTES) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || "");
+        resolve({ id: `${file.name}-${file.size}-${Date.now()}`, name: file.name, mimeType: file.type, base64: dataUrl.split(",")[1] || "", preview: dataUrl });
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+    const loaded = (await Promise.all(list.map(read))).filter(Boolean) as Attachment[];
+    setAttachments((prev) => [...prev, ...loaded].slice(0, MAX_ATTACH));
+  }, []);
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith("image/"));
+    if (files.length) { e.preventDefault(); void addFiles(files); }
+  };
 
   const send = useCallback(async (raw: string) => {
     const text = raw.trim();
-    if (!text || !conversationId || streaming) return;
-    const context = `[캔버스 프로젝트 ${projectId}${projectTitle && projectTitle !== projectId ? ` "${projectTitle}"` : ""}${selectedSceneIds.length ? ` · 선택 컷 ${selectedSceneIds.join(",")}` : ""}]`;
-    const message = `${context}\n${text}`;
-    commit([...turnsRef.current, { id: `u${Date.now()}`, role: "user", text, ts: Date.now() }]);
+    if ((!text && !attachments.length) || !conversationId || streaming) return;
+    const context = `[캔버스 프로젝트 ${projectId}${projectTitle && projectTitle !== projectId ? ` "${projectTitle}"` : ""}${selectedSceneIds.length ? ` · 선택 컷 ${selectedSceneIds.join(",")}` : ""} · ${describeSettingsForAgent(settings)}]`;
+    const message = `${context}\n${text || "(첨부 이미지를 봐 주세요)"}`;
+    const images = attachments.map((a) => ({ base64: a.base64, mimeType: a.mimeType }));
+    commit([...turnsRef.current, { id: `u${Date.now()}`, role: "user", text: text || "(이미지 첨부)", ts: Date.now(), attachments: attachments.map((a) => a.preview) }]);
     setDraft("");
+    setAttachments([]);
+    setPanelOpen(true);
+    writeStorage("canvasChatOpen", "1");
     setStreaming(true);
     const controller = new AbortController();
     abortRef.current = controller;
@@ -102,16 +147,12 @@ export default function CanvasChatDock({
           case "turn_end": {
             const next = [...turnsRef.current];
             for (let i = next.length - 1; i >= 0; i--) {
-              if (next[i].role === "agent" && next[i].agentId === data.agentId && next[i].streaming) {
-                next[i] = { ...next[i], text: String(data.text ?? next[i].text), streaming: false };
-                break;
-              }
+              if (next[i].role === "agent" && next[i].agentId === data.agentId && next[i].streaming) { next[i] = { ...next[i], text: String(data.text ?? next[i].text), streaming: false }; break; }
             }
             commit(next);
             break;
           }
           case "ui_action":
-            // 캔버스가 같은 화면에서 구독한다(canvas.open/focus/select/refresh).
             if (data?.action) dispatchUiAction(data.action);
             break;
           case "job_ready":
@@ -121,7 +162,7 @@ export default function CanvasChatDock({
             commit([...turnsRef.current, { id: `e${Date.now()}`, role: "agent", name: "시스템", emoji: "⚠️", text: String(data?.message || "오류"), ts: Date.now() }]);
             break;
         }
-      }, { conversationId, signal: controller.signal });
+      }, { conversationId, signal: controller.signal, images });
     } catch (e) {
       commit([...turnsRef.current, { id: `e${Date.now()}`, role: "agent", name: "시스템", emoji: "⚠️", text: `통신 오류: ${(e as Error).message}`, ts: Date.now() }]);
     } finally {
@@ -129,90 +170,127 @@ export default function CanvasChatDock({
       commit(turnsRef.current.map((t) => (t.streaming ? { ...t, streaming: false } : t)));
       setStreaming(false);
     }
-  }, [conversationId, projectId, projectTitle, selectedSceneIds, streaming, onJobReady]);
+  }, [attachments, conversationId, projectId, projectTitle, selectedSceneIds, settings, streaming, onJobReady]);
 
-  const stop = () => { abortRef.current?.abort(); };
   const agentOf = (id?: string) => agents.find((a) => a.id === id);
+  const canSend = !!projectId && !streaming && (!!draft.trim() || attachments.length > 0);
 
   return (
-    <section
-      className={`flex shrink-0 flex-col border-t border-edge bg-[#0c1119] ${open ? "h-[38%] min-h-[220px]" : ""}`}
-      onPointerDown={(e) => e.stopPropagation()}
-      onWheel={(e) => e.stopPropagation()}
-    >
-      <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-edge/40">
-        <MessageSquareIcon className="h-4 w-4 text-emerald-400" />
-        <span className="text-[11px] font-bold text-white">대화</span>
-        <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">
-          {projectId ? `${projectTitle || projectId}${selectedSceneIds.length ? ` · 선택 컷 ${selectedSceneIds.join(",")}` : ""} — 코어에게 말하면 캔버스가 반응해요` : "프로젝트를 고르면 대화를 시작할 수 있어요"}
-        </span>
-        {streaming && <span className="text-[10px] text-emerald-300">응답 중…</span>}
-        <ChevronDownIcon className={`h-4 w-4 text-gray-500 transition-transform ${open ? "" : "rotate-180"}`} />
-      </button>
-
-      {open && (
-        <>
-          <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2">
-            {turns.length === 0 && (
-              <p className="text-[11px] text-gray-500">예: "3번 컷 스틸 다시 만들어줘", "빈 컷 전부 채워줘", "6번 컷 행동을 더 역동적으로 고쳐줘". 생성·저장은 승인 뒤에 실행돼요.</p>
-            )}
-            {turns.map((t) => {
-              const a = agentOf(t.agentId);
-              return t.role === "user" ? (
-                <div key={t.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-emerald-700/40 px-3 py-1.5 text-[12px] text-emerald-50 whitespace-pre-wrap">{t.text}</div>
-                </div>
-              ) : (
-                <div key={t.id} className="flex items-start gap-2">
-                  <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#151b25] text-[12px]">{t.emoji || a?.emoji || "🤖"}</span>
-                  <div className="min-w-0 max-w-[85%]">
-                    <div className="text-[10px] text-gray-500">{t.name || a?.name || t.agentId || "에이전트"}</div>
-                    <div className="rounded-2xl rounded-tl-sm border border-edge bg-[#0b1018] px-3 py-1.5 text-[12px] text-gray-200">
-                      {t.streaming && !t.text ? <span className="text-gray-500">생각 중…</span> : <Markdown text={t.text} />}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+    <>
+      {/* 세션 패널 — 오른쪽 오버레이 */}
+      {panelOpen && (
+        <aside className="absolute inset-y-0 right-0 z-30 flex w-[380px] max-w-[92%] flex-col border-l border-edge bg-[#0c1119]/95 shadow-2xl backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+          <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-2">
+            <Icon d={ChatD} className="h-4 w-4 text-emerald-400" />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{projectTitle || projectId || "제목 없는 세션"}</span>
+            <button type="button" onClick={newSession} disabled={!projectId} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white disabled:opacity-40" title="새 세션" aria-label="새 세션"><Icon d={PenD} /></button>
+            <button type="button" onClick={togglePanel} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" title="닫기" aria-label="닫기"><Icon d={XD} /></button>
           </div>
-          <div className="shrink-0 border-t border-edge px-3 py-2">
-            <div className="mb-1.5 flex flex-wrap gap-1">
-              {QUICK_PROMPTS.map((q) => (
-                <button
-                  key={q.label}
-                  type="button"
-                  disabled={!projectId || streaming || (q.label.startsWith("선택") && !selectedSceneIds.length)}
-                  onClick={() => void send(q.text)}
-                  className="rounded-full border border-edge px-2 py-0.5 text-[10px] text-gray-400 hover:border-emerald-600 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {q.label}
-                </button>
-              ))}
+          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            {turns.length === 0 ? (
+              <div className="flex h-full flex-col justify-center gap-4 pb-24">
+                <div className="text-center text-[22px] font-medium leading-snug text-gray-300">안녕하세요<br />무엇을 만들고 싶으신가요?</div>
+                <div className="space-y-2">
+                  {SUGGESTIONS.map((sug) => (
+                    <button key={sug.label} type="button" disabled={!projectId || streaming} onClick={() => void send(sug.text)} className="flex w-full items-center gap-3 rounded-2xl bg-[#151b25] px-3 py-3 text-left text-[13px] text-gray-100 transition hover:bg-[#1c2330] disabled:opacity-40">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#0b1018] text-xl">{sug.emoji}</span>
+                      <span className="font-bold">{sug.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {turns.map((t) => {
+                  const a = agentOf(t.agentId);
+                  return t.role === "user" ? (
+                    <div key={t.id} className="flex flex-col items-end gap-1">
+                      {t.attachments && t.attachments.length > 0 && (
+                        <div className="flex flex-wrap justify-end gap-1">{t.attachments.map((src, i) => <img key={i} src={src} alt="" className="h-16 w-16 rounded-lg object-cover" />)}</div>
+                      )}
+                      <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#1f2937] px-3 py-2 text-[13px] text-gray-100">{t.text}</div>
+                    </div>
+                  ) : (
+                    <div key={t.id} className="flex items-start gap-2">
+                      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#151b25] text-[13px]">{t.emoji || a?.emoji || "🤖"}</span>
+                      <div className="min-w-0 max-w-[88%]">
+                        <div className="mb-0.5 text-[10px] text-gray-500">{t.name || a?.name || t.agentId || "에이전트"}</div>
+                        <div className="text-[13px] leading-relaxed text-gray-200">
+                          {t.streaming && !t.text ? <span className="text-gray-500">생각 중…</span> : <Markdown text={t.text} />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* 작성기 — 캔버스 하단 중앙에 떠 있는 필 */}
+      <div className={`absolute bottom-4 z-30 w-[min(720px,calc(100%-32px))] ${panelOpen ? "left-4 lg:left-1/2 lg:-translate-x-1/2 lg:pr-[380px] lg:w-[min(1100px,calc(100%-32px))]" : "left-1/2 -translate-x-1/2"}`} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        <div className="relative">
+          {popover !== "none" && (
+            <div className="absolute bottom-full left-0 mb-2">
+              {popover === "settings"
+                ? <GenerationSettingsPopover settings={settings} onChange={onSettingsChange} onClose={() => setPopover("none")} />
+                : <AgentSettingsPanel settings={settings} onChange={onSettingsChange} onBack={() => setPopover("none")} />}
             </div>
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                // 한글 IME: keydown 의 Enter 는 조합 중에도 오므로 줄바꿈만 막고, 실제 전송은 keyup 의 진짜 Enter 로 한다.
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) e.preventDefault(); }}
-                onKeyUp={(e) => {
-                  if (e.key !== "Enter" || e.shiftKey || (e.nativeEvent as KeyboardEvent).isComposing) return;
-                  void send(draft);
-                }}
-                rows={1}
-                disabled={!projectId}
-                placeholder={projectId ? "코어에게 말하기 (Enter 전송 · Shift+Enter 줄바꿈)" : "프로젝트를 먼저 선택하세요"}
-                className="min-h-[38px] flex-1 resize-none rounded-xl border border-edge bg-[#0b1018] px-3 py-2 text-[12px] text-gray-200 outline-none focus:border-emerald-600 disabled:opacity-50"
-              />
+          )}
+          <div className="rounded-[28px] border border-edge bg-[#161b22]/95 px-4 pb-3 pt-3 shadow-2xl backdrop-blur">
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {attachments.map((a) => (
+                  <div key={a.id} className="relative">
+                    <img src={a.preview} alt={a.name} className="h-14 w-14 rounded-xl object-cover" />
+                    <button type="button" onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))} className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/80 text-gray-200 hover:bg-red-700" aria-label="첨부 제거"><Icon d={XD} className="h-3 w-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              // 한글 IME: keydown 의 Enter 는 조합 중에도 오므로 줄바꿈만 막고, 실제 전송은 keyup 의 진짜 Enter 로 한다.
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) e.preventDefault(); }}
+              onKeyUp={(e) => { if (e.key !== "Enter" || e.shiftKey || (e.nativeEvent as KeyboardEvent).isComposing) return; void send(draft); }}
+              onPaste={onPaste}
+              rows={1}
+              disabled={!projectId}
+              placeholder={projectId ? "무엇을 만들고 싶으신가요?" : "프로젝트를 먼저 선택하세요"}
+              className="max-h-32 min-h-[28px] w-full resize-none bg-transparent text-[14px] text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-50"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={!projectId} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#232a36] text-gray-200 hover:bg-[#2c3441] disabled:opacity-40" title="이미지 첨부" aria-label="이미지 첨부"><Icon d={PlusD} /></button>
+              <button
+                type="button"
+                onClick={() => setPopover((p) => (p === "agent" ? "none" : "agent"))}
+                className={`flex h-9 min-w-[96px] items-center justify-center gap-1.5 rounded-full px-3 text-[12px] font-bold transition ${popover === "agent" ? "bg-emerald-600 text-white" : "bg-[#232a36] text-gray-100 hover:bg-[#2c3441]"}`}
+                title="에이전트 설정"
+              >
+                <Icon d={BotD} className="h-4 w-4" /> 에이전트{settings.confirmBeforeGenerate ? "" : " · 자동"}
+              </button>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setPopover((p) => (p === "settings" ? "none" : "settings"))}
+                className={`flex h-9 items-center gap-2 rounded-full px-3 text-[12px] font-bold transition ${popover === "settings" ? "bg-emerald-600 text-white" : "bg-[#232a36] text-gray-100 hover:bg-[#2c3441]"}`}
+                title="생성 설정"
+              >
+                <Icon d={SlidersD} className="h-3.5 w-3.5" /> {summarizeSettings(settings)}
+              </button>
+              <button type="button" onClick={togglePanel} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${panelOpen ? "bg-emerald-900/50 text-emerald-200" : "bg-[#232a36] text-gray-200 hover:bg-[#2c3441]"}`} title={panelOpen ? "세션 패널 닫기" : "세션 패널 열기"} aria-label="세션 패널"><Icon d={ChatD} /></button>
               {streaming ? (
-                <button type="button" onClick={stop} className="grid h-[38px] min-w-[64px] place-items-center rounded-xl bg-red-700 px-3 text-[11px] font-bold text-white hover:bg-red-600">중지</button>
+                <button type="button" onClick={() => abortRef.current?.abort()} className="grid h-9 min-w-[44px] place-items-center rounded-full bg-red-700 px-3 text-[12px] font-bold text-white hover:bg-red-600">중지</button>
               ) : (
-                <button type="button" disabled={!projectId || !draft.trim()} onClick={() => void send(draft)} className="grid h-[38px] min-w-[64px] place-items-center rounded-xl bg-emerald-600 px-3 text-white hover:bg-emerald-500 disabled:opacity-40" title="보내기"><SendIcon className="h-4 w-4" /></button>
+                <button type="button" disabled={!canSend} onClick={() => void send(draft)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100 text-black transition hover:bg-white disabled:bg-[#232a36] disabled:text-gray-500" title="보내기" aria-label="보내기"><Icon d={ArrowRightD} /></button>
               )}
             </div>
           </div>
-        </>
-      )}
-    </section>
+        </div>
+      </div>
+    </>
   );
 }

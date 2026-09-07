@@ -1417,6 +1417,7 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
       ...(input?.sceneId != null ? { sceneId: String(input.sceneId) } : {}),
       ...(typeof input?.narrationEnabled === "boolean" ? { narrationEnabled: input.narrationEnabled } : {}),
       ...(typeof input?.dubbingEnabled === "boolean" ? { dubbingEnabled: input.dubbingEnabled } : {}),
+      ...(input?.resolution ? { resolution: String(input.resolution) } : {}),
     }),
   });
   const subText = await sub.text();
@@ -3939,7 +3940,12 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const header = String(cur.payload?.header || cur.header || "");
   const prompt = String(input?.prompt || "").trim() || buildSceneImagePrompt(scene, header, {});
   if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 화면/비주얼 필요).");
-  const img = await runImagenTool({ prompt, aspectRatio: input?.aspectRatio || "16:9", projectId }, ctx);
+  // 작성기 설정(모델·크기)을 그대로 넘긴다 — 스튜디오 버튼과 같은 경로.
+  const img = await runImagenTool({
+    prompt, aspectRatio: input?.aspectRatio || "16:9", projectId,
+    ...(input?.provider ? { provider: String(input.provider) } : {}),
+    ...(input?.imageSize ? { imageSize: String(input.imageSize) } : {}),
+  }, ctx);
   const bucket = studioBucket(ctx);
   const ref = (img.objectName && bucket) ? `gs://${bucket}/${img.objectName}` : (img.signedUrl || "");
   if (!ref) throw new Error("이미지 생성 결과에 저장할 URL이 없어요.");
@@ -4036,6 +4042,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
     imageUrl: videoFromImage || undefined,
     aspectRatio: input?.aspectRatio || payload0.aspectRatio || "16:9",
     videoModel: String(input?.videoModel || input?.model || payload0.videoModel || "").trim() || undefined,
+    resolution: String(input?.resolution || "").trim() || undefined,
     durationSeconds: Number(input?.durationSeconds || input?.duration || scene?.estSec) > 0
       ? Number(input?.durationSeconds || input?.duration || scene?.estSec)
       : undefined,

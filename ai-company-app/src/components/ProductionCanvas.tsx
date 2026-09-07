@@ -15,6 +15,8 @@ import { readStorage, writeStorage } from "../lib/safeStorage";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
+import { loadCanvasSettings, saveCanvasSettings, type CanvasSettings } from "../lib/canvasSettings";
+import { approveItem } from "../lib/api";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -145,6 +147,9 @@ export default function ProductionCanvas({
   const [agentOpen, setAgentOpen] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
   const [pipelineNonce, setPipelineNonce] = useState(0);
+  // 작성기 설정(생성 전 확인 · 이미지/영상 기본값). 인스펙터 버튼과 채팅 맥락이 같은 값을 쓴다.
+  const [settings, setSettings] = useState<CanvasSettings>(() => loadCanvasSettings());
+  const updateSettings = useCallback((next: CanvasSettings) => { setSettings(next); saveCanvasSettings(next); }, []);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -277,18 +282,47 @@ export default function ProductionCanvas({
     return () => window.clearInterval(timer);
   }, [pending, load]);
 
+  // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
+  // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert"];
+  useEffect(() => {
+    if (settings.confirmBeforeGenerate || !projectId) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const d = await (await fetch("/api/agent/jobs?limit=20")).json();
+        const items: any[] = Array.isArray(d?.items) ? d.items : [];
+        for (const j of items) {
+          if (!alive) return;
+          if (j?.status !== "review_pending" || j?.review_status !== "pending") continue;
+          if (!AUTO_APPROVE_TYPES.includes(String(j?.type))) continue;
+          if (String(j?.input?.projectId || "") !== projectId) continue;
+          await approveItem(String(j.id)).catch(() => null);
+        }
+      } catch { /* 다음 틱에 다시 */ }
+    };
+    void tick();
+    const timer = window.setInterval(() => { void tick(); }, 5_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [settings.confirmBeforeGenerate, projectId]);
+
   const enqueue = async (type: string, input: Record<string, unknown>, label: string, sceneId?: string | number) => {
     setSaving(true);
     setNotice("");
     try {
       const res = await createAgentJob(type, input);
       setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: res.status || "queued", label }, ...prev].slice(0, 20));
-      setNotice(`${label} — 승인 패널에서 승인하면 실행돼요.`);
+      setNotice(settings.confirmBeforeGenerate ? `${label} — 승인 패널에서 승인하면 실행돼요.` : `${label} — 자동 승인으로 바로 실행돼요.`);
     } catch (e) {
       setNotice(`실패: ${(e as Error).message}`);
     } finally {
       setSaving(false);
     }
+  };
+
+  // 생성 개수(x1~x4)만큼 같은 컷에 후보를 만든다. 스틸 이력(imageHistory)이 이전 후보를 보존한다.
+  const enqueueMany = async (type: string, input: Record<string, unknown>, label: string, sceneId: string | number, count: number) => {
+    for (let i = 0; i < Math.max(1, count); i++) await enqueue(type, input, count > 1 ? `${label} (${i + 1}/${count})` : label, sceneId);
   };
 
   const saveDraft = async () => {
@@ -437,7 +471,7 @@ export default function ProductionCanvas({
               <div><p className="font-bold text-gray-300">프로젝트를 선택하면 컷·프롬프트·자산이 노드로 펼쳐져요.</p><p className="mt-1 text-xs">채팅에서 "ep1 캔버스 열어줘"라고 해도 돼요.</p></div>
             </div>
           )}
-          {error && <div className="absolute left-3 top-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-300">{error}</div>}
+          {error && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded border border-red-800/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-300">{error}</div>}
           {loading && !graph && <div className="absolute inset-0 grid place-items-center text-sm text-gray-500">캔버스를 불러오는 중…</div>}
 
           <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
@@ -530,8 +564,22 @@ export default function ProductionCanvas({
             })}
           </div>
 
-          {/* 범례 */}
-          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-2 rounded-lg border border-edge bg-[#0c1119]/90 px-2 py-1 text-[10px] text-gray-400">
+          {/* 대화 — 작성기(하단 중앙 필) + 세션 패널(오른쪽 오버레이). 작업 공간을 띠로 자르지 않는다. */}
+          <CanvasChatDock
+            projectId={projectId}
+            projectTitle={graph?.title || ""}
+            selectedSceneIds={selectedSceneIds}
+            settings={settings}
+            onSettingsChange={updateSettings}
+            onJobReady={() => {
+              void load(true);
+              setPipelineNonce((n) => n + 1);
+              setAgentOpen(true);
+            }}
+          />
+
+          {/* 범례 — 작성기와 겹치지 않게 왼쪽 위 */}
+          <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-2 rounded-lg border border-edge bg-[#0c1119]/90 px-2 py-1 text-[10px] text-gray-400">
             {(Object.keys(EDGE_STYLE) as ProductionEdge["type"][]).map((k) => (
               <span key={k} className="flex items-center gap-1"><span className="inline-block h-0.5 w-4" style={{ background: EDGE_STYLE[k].stroke, borderTop: EDGE_STYLE[k].dash ? `2px dashed ${EDGE_STYLE[k].stroke}` : undefined, height: EDGE_STYLE[k].dash ? 0 : undefined }} />{EDGE_STYLE[k].label}</span>
             ))}
@@ -548,6 +596,7 @@ export default function ProductionCanvas({
                 onGraphChanged={() => void load(true)}
                 onFocusScene={(id) => focusScene(id)}
                 attachNonce={pipelineNonce}
+                autoApprove={!settings.confirmBeforeGenerate}
                 onAttached={(job) => { if (job.approvalState?.status === "pending") setAgentOpen(true); }}
               />
             </div>
@@ -583,8 +632,8 @@ export default function ProductionCanvas({
                 </div>
                 <div className="mb-3 flex flex-wrap gap-2">
                   <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
-                  <button type="button" disabled={saving} onClick={() => void enqueue("scene_still", { projectId, sceneId: selected.data.sceneId }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">스틸 생성</button>
-                  <button type="button" disabled={saving || !selected.data.still?.url} title={selected.data.still?.url ? "" : "스틸을 먼저 만드세요"} onClick={() => void enqueue("scene_video", { projectId, sceneId: selected.data.sceneId }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">영상 생성</button>
+                  <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, provider: settings.image.provider, imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
+                  <button type="button" disabled={saving || !selected.data.still?.url} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</button>
                 </div>
                 {notice && <p className="mb-3 text-[11px] text-amber-300">{notice}</p>}
 
@@ -650,17 +699,6 @@ export default function ProductionCanvas({
           </aside>
         )}
       </div>
-      {/* 대화 독 — 에이전트 모드의 대화형 입구. 코어가 canvas.* 액션으로 위 캔버스를 움직인다. */}
-      <CanvasChatDock
-        projectId={projectId}
-        projectTitle={graph?.title || ""}
-        selectedSceneIds={selectedSceneIds}
-        onJobReady={() => {
-          void load(true);
-          setPipelineNonce((n) => n + 1);
-          setAgentOpen(true);
-        }}
-      />
       </div>
     </div>
   );

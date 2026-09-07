@@ -86,8 +86,8 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   // 캔버스의 쓰기는 전부 에이전트 도구 잡.
   assert.match(canvas, /createAgentJob\(type, input\)/);
   assert.match(canvas, /enqueue\("scene_upsert"/);
-  assert.match(canvas, /enqueue\("scene_still"/);
-  assert.match(canvas, /enqueue\("scene_video"/);
+  assert.match(canvas, /enqueueMany\("scene_still"/);
+  assert.match(canvas, /enqueueMany\("scene_video"/);
   assert.doesNotMatch(canvas, /\/api\/project\/save/);
   assert.match(canvas, /useUiAction\(\(action\) => \{[\s\S]*name\.startsWith\("canvas\."\)/);
   // 실제 전송값을 보여준다.
@@ -138,7 +138,7 @@ test("★에이전트 모드는 캔버스 안에서 대화한다: 대화 독 + �
   const orch = read("prototype/functions/api/agent/_orchestrator.ts");
   // 같은 채팅 파이프라인(streamChat)을 쓰되 스레드는 프로젝트별.
   assert.match(dock, /streamChat\(message, \(event, data\) =>/);
-  assert.match(dock, /`canvas-\$\{projectId\}`/);
+  assert.match(dock, /`canvas-\$\{projectId\}\$\{sessionSuffix\}`/);
   // 캔버스 맥락을 메시지 앞에 붙이고, 코어의 UI 액션은 같은 화면의 캔버스로 보낸다.
   assert.match(dock, /\[캔버스 프로젝트 \$\{projectId\}/);
   assert.match(dock, /case "ui_action":[\s\S]*dispatchUiAction\(data\.action\)/);
@@ -155,6 +155,56 @@ test("★에이전트 모드는 캔버스 안에서 대화한다: 대화 독 + �
   assert.match(canvas, /onAttached=\{\(job\) => \{ if \(job\.approvalState\?\.status === "pending"\) setAgentOpen\(true\); \}\}/);
   // 코어가 캔버스 맥락 접두를 이해한다.
   assert.match(orch, /\[캔버스 프로젝트 <id> …\]/);
+});
+
+test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, 첨부·에이전트 설정·생성 설정·크레딧 표시를 갖춘다", () => {
+  const dock = read("ai-company-app/src/components/CanvasChatDock.tsx");
+  const canvas = read("ai-company-app/src/components/ProductionCanvas.tsx");
+  const settingsLib = read("ai-company-app/src/lib/canvasSettings.ts");
+  const popover = read("ai-company-app/src/components/GenerationSettingsPopover.tsx");
+  const agentPanel = read("ai-company-app/src/components/AgentSettingsPanel.tsx");
+  const panel = read("ai-company-app/src/components/VideoPipelinePanel.tsx");
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  const specs = read("prototype/functions/api/_shared/video-specs.ts");
+  // 오버레이: 작성기는 하단 중앙 필, 세션 패널은 오른쪽. 캔버스 컨테이너 안에 산다.
+  assert.match(dock, /absolute bottom-4 z-30/);
+  assert.match(dock, /absolute inset-y-0 right-0 z-30/);
+  assert.match(dock, /placeholder=\{projectId \? "무엇을 만들고 싶으신가요\?"/);
+  assert.match(canvas, /\{\/\* 대화 — 작성기\(하단 중앙 필\) \+ 세션 패널\(오른쪽 오버레이\)/);
+  // 이미지 첨부(파일·붙여넣기) → 멀티모달로 전달.
+  assert.match(dock, /reader\.readAsDataURL\(file\)/);
+  assert.match(dock, /onPaste=\{onPaste\}/);
+  assert.match(dock, /images = attachments\.map\(\(a\) => \(\{ base64: a\.base64, mimeType: a\.mimeType \}\)\)/);
+  assert.match(dock, /\{ conversationId, signal: controller\.signal, images \}/);
+  // 새 세션 · 제안 카드.
+  assert.match(dock, /const newSession = \(\) => \{/);
+  assert.match(dock, /같이 브레인스토밍해 줘/);
+  // 생성 설정: 이미지/동영상 · 비율 · 모델 · 해상도 · 길이 · 개수 · 크레딧(서버 요율).
+  assert.match(popover, /quoteCanvasCredits\(settings\)/);
+  assert.match(popover, /크레딧<\/span>이 사용됩니다/);
+  assert.match(settingsLib, /fetch\("\/api\/credits\/quote"/);
+  // 에이전트 설정: 생성 전 확인 항상/안 함 + 기본값. '안 함' 은 브라우저가 승인 게이트를 대신 누른다.
+  assert.match(agentPanel, /에이전트가 미디어를 생성하고 자동으로 크레딧을 사용합니다\./);
+  assert.match(canvas, /if \(settings\.confirmBeforeGenerate \|\| !projectId\) return;/);
+  assert.match(canvas, /await approveItem\(String\(j\.id\)\)/);
+  assert.match(panel, /if \(!autoApprove \|\| !job \|\| job\.approvalState\?\.status !== "pending"/);
+  // 설정이 실제 생성 경로에 닿는다: 인스펙터 버튼 → 도구 입력 → /api/imagen·/api/video.
+  assert.match(canvas, /provider: settings\.image\.provider, imageSize: settings\.image\.size/);
+  assert.match(canvas, /videoModel: settings\.video\.model, durationSeconds: settings\.video\.durationSec, resolution: settings\.video\.resolution/);
+  assert.match(shared, /\.\.\.\(input\?\.provider \? \{ provider: String\(input\.provider\) \} : \{\}\)/);
+  assert.match(shared, /\.\.\.\(input\?\.resolution \? \{ resolution: String\(input\.resolution\) \} : \{\}\)/);
+  // 코어에게 기본값을 맥락으로 넘긴다.
+  assert.match(dock, /describeSettingsForAgent\(settings\)/);
+  // 길이 선택지는 서버 SSOT(video-specs.ts) 미러 — 값이 어긋나면 서버가 조용히 스냅한다.
+  const serverChoices = {};
+  const block = specs.slice(specs.indexOf("export const MODEL_DURATION_CHOICES"), specs.indexOf("export function allowedDurationsFor"));
+  const named = { DURATIONS_VEO: [4, 6, 8], DURATIONS_KLING: [5, 10], CHOICES_SEEDANCE: [4, 5, 6, 8, 10, 15], DURATIONS_VIDU: [4, 5, 6, 8, 10] };
+  for (const m of block.matchAll(/"([a-z0-9-]+)":\s*([A-Z_]+)/g)) serverChoices[m[1]] = named[m[2]];
+  const clientBlock = settingsLib.slice(settingsLib.indexOf("export const VIDEO_DURATION_CHOICES"), settingsLib.indexOf("export function durationChoicesFor"));
+  for (const m of clientBlock.matchAll(/"([a-z0-9-]+)":\s*\[([0-9, ]+)\]/g)) {
+    const client = m[2].split(",").map((v) => Number(v.trim()));
+    assert.deepEqual(client, serverChoices[m[1]], `영상 길이 선택지가 서버와 다르다: ${m[1]}`);
+  }
 });
 
 test("★프로젝트 선택기는 숫자 id 가 아니라 시리즈 › 에피소드 제목으로 고르고, 시리즈는 접힌 그룹이다", () => {

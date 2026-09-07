@@ -54,6 +54,7 @@ export default function VideoPipelinePanel({
   onGraphChanged,
   onFocusScene,
   attachNonce = 0,
+  autoApprove = false,
   onAttached,
 }: {
   projectId: string;
@@ -62,6 +63,8 @@ export default function VideoPipelinePanel({
   onFocusScene: (sceneId: string | number) => void;
   // 채팅(video_pipeline 도구)이 파이프라인을 만들면 캔버스가 이 값을 올려 최신 잡을 다시 찾게 한다.
   attachNonce?: number;
+  // 에이전트 설정 '생성 전 확인: 안 함' — 비용 승인 대기를 브라우저가 자동으로 승인한다.
+  autoApprove?: boolean;
   onAttached?: (job: SkillJob) => void;
 }) {
   const [stages, setStages] = useState<{ still: boolean; video: boolean }>({ still: true, video: true });
@@ -166,6 +169,17 @@ export default function VideoPipelinePanel({
       setJob(next);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
+
+  // 자동 승인: 승인 대기 상태가 되면 곧바로 승인한다(한 잡당 한 번).
+  const autoApprovedRef = useRef<string>("");
+  useEffect(() => {
+    if (!autoApprove || !job || job.approvalState?.status !== "pending" || busy) return;
+    const key = `${job.id}:${job.approvalState?.scope?.gateId || ""}`;
+    if (autoApprovedRef.current === key) return;
+    autoApprovedRef.current = key;
+    void decide("approved");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoApprove, job, busy]);
 
   const act = async (fn: (id: string) => Promise<SkillJob>) => {
     if (!job) return;
