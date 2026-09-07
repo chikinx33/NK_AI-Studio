@@ -169,10 +169,16 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   // 두 모드가 한 자리를 번갈아 쓴다(동시에 뜨지 않는다): 에이전트 모드 = 세션 패널(안에 입력창)만, 일반 모드 = 떠 있는 작성기만.
   const agentBranch = dock.slice(dock.indexOf('if (mode === "agent") {'), dock.indexOf("// ════════ 일반 모드"));
   const normalBranch = dock.slice(dock.indexOf("// ════════ 일반 모드"));
-  assert.match(agentBranch, /absolute inset-y-0 right-0 z-30/);
+  assert.match(agentBranch, /absolute bottom-4 right-4 top-4 z-30[^"]*rounded-3xl/);
   assert.doesNotMatch(agentBranch, /absolute bottom-4 left-1\/2/);
   assert.match(normalBranch, /absolute bottom-4 left-1\/2 z-30/);
-  assert.doesNotMatch(normalBranch, /absolute inset-y-0 right-0/);
+  assert.doesNotMatch(normalBranch, /absolute bottom-4 right-4 top-4/);
+  // 노드 상세는 우측 패널이 아니라 가운데 4:3 모달(배경 흐림). 노드는 격자 스냅. 범례 없음.
+  assert.match(canvas, /absolute inset-0 z-40 flex items-center justify-center bg-black\/55 p-4 backdrop-blur-sm/);
+  assert.match(canvas, /aspect-\[4\/3\] max-h-full w-\[min\(1100px,100%\)\]/);
+  assert.match(canvas, /const snap = \(v: number\) => Math\.round\(v \/ GRID\) \* GRID;/);
+  assert.doesNotMatch(canvas, /Shift\+클릭 다중 선택/);
+  assert.match(canvas, /빈 컷 일괄 생성/);
   // 일반 모드는 대화 없이 선택 컷에 바로 생성하고, '에이전트' 칩이 모드를 바꾼다.
   assert.match(normalBranch, /onClick=\{\(\) => switchMode\("agent"\)\}/);
   assert.match(normalBranch, /generateNow\(draft\)/);

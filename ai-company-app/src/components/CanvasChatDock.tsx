@@ -218,7 +218,7 @@ export default function CanvasChatDock({
   if (mode === "agent") {
     const canSend = !!projectId && !streaming && (!!draft.trim() || attachments.length > 0);
     return (
-      <aside className="absolute inset-y-0 right-0 z-30 flex w-[400px] max-w-[94%] flex-col border-l border-edge bg-[#0c1119]/97 shadow-2xl backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <aside className="absolute bottom-4 right-4 top-4 z-30 flex w-[400px] max-w-[94%] flex-col overflow-hidden rounded-3xl border border-edge bg-[#0c1119]/97 shadow-2xl backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
         <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-2">
           <Icon d={ChatD} className="h-4 w-4 text-emerald-400" />
           <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{projectTitle || projectId || "제목 없는 세션"}</span>
