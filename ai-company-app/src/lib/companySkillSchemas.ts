@@ -59,6 +59,29 @@ export const COMPANY_SKILL_INPUT_SCHEMAS: Record<string, CompanySkillJsonSchema>
       },
     },
   },
+  "company-skill/video-pipeline/v1": {
+    $id: "company-skill/video-pipeline/v1",
+    type: "object",
+    additionalProperties: false,
+    required: ["invocationMode", "request"],
+    properties: {
+      ...commonProperties,
+      options: {
+        type: "object",
+        additionalProperties: false,
+        required: ["projectId"],
+        properties: {
+          projectId: { type: "string", minLength: 1, maxLength: 120 },
+          stages: { type: "array", maxItems: 2, items: { type: "string", enum: ["still", "video"] } },
+          sceneIds: { type: "array", maxItems: 200, items: { type: "string", maxLength: 40 } },
+          aspectRatio: { type: "string", enum: ["", "16:9", "9:16", "1:1", "4:3", "3:4"] },
+          videoModel: { type: "string", maxLength: 40 },
+          maxScenesPerRun: { type: "integer", minimum: 1, maximum: 20 },
+          regenerate: { type: "boolean" },
+        },
+      },
+    },
+  },
   "company-skill/image/v1": {
     $id: "company-skill/image/v1",
     type: "object",

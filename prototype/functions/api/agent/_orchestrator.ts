@@ -258,6 +258,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
     sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
     media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
+    video_pipeline: `[[RUN: video_pipeline | {"projectId": "elidus-ep1", "stages": ["still", "video"], "sceneIds": [], "aspectRatio": "16:9", "videoModel": "veo", "regenerate": false}]]  → ★에이전트 모드. 프로젝트의 비어 있는 컷을 스틸→영상 순으로 자동 생성하는 파이프라인 업무를 만든다. 먼저 계획(몇 컷·예상 크레딧)을 세워 사람 승인을 기다리고, 승인되면 배치로 생성한다. "이 프로젝트 영상 전부 만들어줘", "빈 컷 채워줘", "에이전트 모드로 돌려줘"에 사용. sceneIds 를 주면 그 컷만, stages 에 "still" 만 주면 스틸만. 이미 있는 자산은 건너뛰고 regenerate:true 면 다시 만든다. 결과는 제작 캔버스(canvas.open)에서 보여준다.`,
     profile_get: `[[RUN: profile_get | {}]]  → 내(사용자) 프로필을 조회해 개인화(톤·우선순위)의 근거로 삼는다.`,
     profile_save: `[[RUN: profile_save | {"profile": {"key": "value"}}]]  → 내 프로필을 저장/수정. ⚠️ 계정 정보라 사람 승인 후 반영.`,
     favorites_get: `[[RUN: favorites_get | {}]]  → 내 즐겨찾기(선호) 목록 조회.`,
@@ -295,6 +296,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
     image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
+    video_pipeline: "에이전트 모드(컷 스틸→영상 자동 파이프라인)",
     polar_metrics: "Polar 수익 지표(매출·MRR·해지)", polar_orders: "Polar 결제 내역", polar_subscriptions: "Polar 구독 목록", polar_products: "Polar 상품·가격",
   };
   const toolsByAgent: Record<string, string[]> = {};
@@ -380,7 +382,9 @@ ${teamToolMap}
 형식: [[UI_ACTION: {"action":"명령", "필드":"값"}]]
 여러 동작이면 실행 순서대로 여러 줄 출력하세요. 사용자가 요청하지 않은 화면 조작은 하지 마세요.
 
-- 화면 이동: {"action":"navigate","view":"dashboard|chat|knowledge|agents|works|skills|settings"}
+- 화면 이동: {"action":"navigate","view":"dashboard|chat|knowledge|agents|works|skills|canvas|settings"}
+- 제작 캔버스(노드 UI): {"action":"canvas.open","projectId":"elidus-ep1"} / {"action":"canvas.focus","projectId":"elidus-ep1","sceneId":3} / {"action":"canvas.select","projectId":"elidus-ep1","sceneIds":[2,3]} / {"action":"canvas.refresh"}
+  ★씬·컷·스틸·영상·프롬프트 이야기를 하면서 프로젝트를 알고 있으면 canvas.open 으로 캔버스를 열고, 특정 컷을 언급하면 canvas.focus 로 그 컷을 가리키세요. 컷 내용 변경은 scene_upsert 도구로만 하고(캔버스는 그 결과를 보여줄 뿐), 스틸·영상 생성은 scene_still/scene_video 또는 video_pipeline 으로만 합니다.
 - 우측 카드: {"action":"panel.set","panel":"projects|approvals|results|reservations","open":true}
 - 대화·채팅 표시: {"action":"conversation.open","date":"2026-07-25"} / {"action":"chat.mode","mode":"normal|vn"} / {"action":"chat.log","open":true} / {"action":"chat.messages","operation":"expand_all|collapse_all"}
 - 음성: {"action":"chat.voice","enabled":true,"mode":"browser|server|cloud"}
@@ -595,6 +599,8 @@ const UI_ACTION_ALLOWLIST = new Set([
   "video.approval", "video.render", "video.storage", "approval.decide", "approval.clear", "result.open", "result.review",
   "result.cancel", "reminder.delete", "settings.open", "settings.mode", "settings.auth_diag", "settings.log",
   "integration.open", "integration.test", "integration.connect", "integration.disconnect",
+  // 제작 캔버스(노드 UI): 채팅이 컷·프롬프트를 열고 가리킨다. 캔버스 → 씬 데이터 변경은 도구(scene_upsert 등)로만.
+  "canvas.open", "canvas.focus", "canvas.select", "canvas.refresh",
 ]);
 
 function parseUiAction(raw: string): UiAction | null {

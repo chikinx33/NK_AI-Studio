@@ -10,6 +10,15 @@ import {
   transitionCompanySkillJob,
   type CompanySkillJobRow,
 } from "./_skill-jobs";
+import { AGENT_TOOLS } from "./_shared";
+import {
+  buildVideoPipelinePlan,
+  describePlanProgress,
+  readVideoPipelinePlan,
+  runVideoPipelineBatch,
+  VIDEO_PIPELINE_EXECUTOR_ID,
+  type VideoPipelinePlan,
+} from "./_video-pipeline-executor";
 
 export interface CompanySkillExecutorContext {
   request: Request;
@@ -23,6 +32,10 @@ export interface CompanySkillExecutorResult {
   workItemId: string;
   agentReports: unknown[];
   qualityResults: unknown[];
+  // 배치형 실행기(영상 파이프라인): 예산이 남은 스텝보다 먼저 끝나면 true — running 을 유지하고 continue 로 재개한다.
+  continueRunning?: boolean;
+  executionPlan?: unknown;
+  events?: Array<{ stage: string; status: string; summary: string; details?: unknown; eventKey: string }>;
 }
 
 export interface CompanySkillExecutor {
@@ -109,8 +122,72 @@ const infographicExecutor: CompanySkillExecutor = {
   },
 };
 
+function toolContext(job: CompanySkillJobRow, context: CompanySkillExecutorContext) {
+  return { request: context.request, env: context.env, authHeader: context.authHeader, userId: context.userId, jobId: job.id };
+}
+
+/** 계획 선행 단계: 프로젝트 씬을 읽어 스텝·예상 크레딧을 execution_plan 에 남긴다(비용 게이트가 이걸 읽는다). */
+async function prepareVideoPipelinePlan(job: CompanySkillJobRow, context: CompanySkillExecutorContext): Promise<CompanySkillJobRow> {
+  const input = job.input && typeof job.input === "object" ? job.input as any : {};
+  const projectId = String(input?.options?.projectId || "").trim();
+  if (!projectId) throw new Error("영상 파이프라인에는 projectId 가 필요합니다.");
+  const project = await AGENT_TOOLS.project_get.run({ projectId }, toolContext(job, context) as any);
+  if (!Array.isArray(project?.scenes) || !project.scenes.length) {
+    throw new Error("프로젝트에 씬이 없어요. 먼저 시나리오를 만들어 씬을 저장하세요.");
+  }
+  const plan = buildVideoPipelinePlan(job, project, context.env);
+  const next = await transitionCompanySkillJob(context.sql, context.userId, job.id, "planning", {
+    progress: 10,
+    currentStage: "planning",
+    executionPlan: plan,
+    resolvedBrief: {
+      request: input.request || "",
+      options: input.options || {},
+      projectId,
+      projectTitle: String(project?.title || ""),
+      sceneCount: project.scenes.length,
+    },
+  }) as CompanySkillJobRow;
+  await appendCompanySkillJobEvent(context.sql, {
+    jobId: job.id, userId: context.userId, eventType: "stage", stage: "planning", status: "working",
+    summary: `플롯이 ${plan.summary.scenes}개 컷을 점검했습니다 — 스틸 ${plan.summary.pendingStills}개 · 영상 ${plan.summary.pendingVideos}개 생성 예정 (예상 ${plan.summary.credits} 크레딧).`,
+    details: plan.summary, eventKey: `video-pipeline:plan:${job.version}`,
+  });
+  return next;
+}
+
+const videoPipelineExecutor: CompanySkillExecutor = {
+  id: VIDEO_PIPELINE_EXECUTOR_ID,
+  async execute(job, context) {
+    const plan = readVideoPipelinePlan(job);
+    if (!plan) throw new Error("영상 파이프라인 계획이 없습니다. 다시 시작해 주세요.");
+    const batch = await runVideoPipelineBatch(plan, toolContext(job, context));
+    const now = new Date().toISOString();
+    const progress = describePlanProgress(batch.plan);
+    const agentReports = [
+      {
+        agentId: "pixel", agentName: "픽셀", status: batch.continueRunning ? "working" : "completed",
+        decision: `스틸·영상 ${progress.done}/${progress.total} 스텝 완료${progress.failed ? `, 실패 ${progress.failed}` : ""}.`,
+        artifactIds: [], remainingRisks: progress.failed ? ["실패한 컷은 재시도가 필요합니다."] : [], createdAt: now,
+      },
+    ];
+    const qualityResults = batch.continueRunning ? [] : [
+      {
+        gateId: "video-pipeline-coverage",
+        status: progress.failed === 0 ? "passed" : (progress.done > 0 ? "warning" : "failed"),
+        summary: progress.failed === 0
+          ? `대상 컷 ${progress.total}개 스텝을 모두 생성했습니다.`
+          : `${progress.failed}개 스텝이 실패했습니다. 캔버스에서 해당 컷을 확인하세요.`,
+        checkedAt: now,
+      },
+    ];
+    return { workItemId: "", agentReports, qualityResults, continueRunning: batch.continueRunning, executionPlan: batch.plan, events: batch.events };
+  },
+};
+
 export const COMPANY_SKILL_EXECUTORS: Readonly<Record<string, CompanySkillExecutor>> = {
   [infographicExecutor.id]: infographicExecutor,
+  [videoPipelineExecutor.id]: videoPipelineExecutor,
 };
 
 function buildExecutionPlan(job: CompanySkillJobRow, executorId: string) {
@@ -131,6 +208,22 @@ export async function runCompanySkillJob(
   let pendingJob = await getCompanySkillJob(context.sql, context.userId, jobId);
   if (!pendingJob || ["completed", "failed", "cancelled"].includes(pendingJob.status)) return pendingJob;
   const pendingDefinition = SERVER_COMPANY_SKILLS[pendingJob.skill_id];
+  // 영상 파이프라인은 비용을 셈하려면 먼저 프로젝트를 읽어 계획을 세워야 한다(어느 컷이 비었는지).
+  if (pendingJob.skill_id === "video_pipeline" && pendingJob.status === "validating" && !readVideoPipelinePlan(pendingJob)) {
+    try {
+      pendingJob = await prepareVideoPipelinePlan(pendingJob, context);
+    } catch (error: any) {
+      const failed = await transitionCompanySkillJob(context.sql, context.userId, jobId, "failed", {
+        error: { code: "SKILL_PLAN_FAILED", message: String(error?.message || error || "계획 수립 실패"), retryable: true, stage: "validating" },
+        resetExecutionLease: true,
+      });
+      await appendCompanySkillJobEvent(context.sql, {
+        jobId, userId: context.userId, eventType: "error", stage: "validating", status: "failed",
+        summary: String(error?.message || error || "계획 수립 실패"), eventKey: `video-pipeline:plan-failed:${Date.now()}`,
+      });
+      return failed;
+    }
+  }
   const costGate = await estimateCompanySkillJobCost(
     context.sql,
     context.userId,
@@ -212,11 +305,38 @@ export async function runCompanySkillJob(
 
     if (job.status === "running") {
       const result = await executor.execute(job, context);
+      for (const [index, ev] of (result.events || []).entries()) {
+        await appendCompanySkillJobEvent(context.sql, {
+          jobId: job.id, userId: context.userId, eventType: ev.status === "failed" ? "error" : "stage",
+          stage: ev.stage, status: ev.status, summary: ev.summary, details: ev.details,
+          agentId: "pixel", agentName: "픽셀",
+          eventKey: ev.eventKey || `${executionToken}:batch:${index}`,
+        });
+      }
+      if (result.continueRunning) {
+        // 예산이 먼저 끝났다 — running 을 유지하고 계획만 갱신한 뒤 리스를 반납한다. continue 엔드포인트가 이어간다.
+        const planProgress = result.executionPlan ? describePlanProgress(result.executionPlan as VideoPipelinePlan) : null;
+        job = await transitionCompanySkillJob(context.sql, context.userId, job.id, "running", {
+          progress: planProgress ? planProgress.progress : job.progress,
+          currentStage: "running",
+          executionPlan: result.executionPlan,
+          agentReports: result.agentReports,
+          resetExecutionLease: true,
+          expectedExecutionToken: executionToken,
+        }) as CompanySkillJobRow;
+        await appendCompanySkillJobEvent(context.sql, {
+          jobId: job.id, userId: context.userId, eventType: "stage", stage: "running", status: "queued",
+          summary: "이번 배치를 마쳤습니다. 남은 컷은 다음 배치에서 이어서 생성합니다.",
+          details: planProgress || {}, eventKey: `${executionToken}:batch-paused`,
+        });
+        return job;
+      }
       job = await transitionCompanySkillJob(context.sql, context.userId, job.id, "reviewing", {
+        ...(result.executionPlan ? { executionPlan: result.executionPlan } : {}),
         progress: 85,
         agentReports: result.agentReports,
         qualityResults: result.qualityResults,
-        workItemId: result.workItemId,
+        workItemId: result.workItemId || null,
         actualCost: buildActualCompanySkillCost(job.cost_estimate as any),
         providerUsage: {
           provider: "anthropic",
@@ -250,7 +370,8 @@ export async function runCompanySkillJob(
     }
 
     if (job.status === "reviewing") {
-      if (!job.work_item_id) throw new Error("검수할 회사 업무 결과가 연결되지 않았습니다.");
+      // 인포그래픽은 업무 탐색기 항목이 산출물이지만, 영상 파이프라인의 산출물은 프로젝트 씬 자체다.
+      if (!job.work_item_id && job.skill_id === "infographic") throw new Error("검수할 회사 업무 결과가 연결되지 않았습니다.");
       if (job.skill_id === "infographic" && resolveCompanySkillRenderer(context.env)) {
         await dispatchCompanySkillRender({ request: context.request, env: context.env, sql: context.sql, job });
         job = await transitionCompanySkillJob(context.sql, context.userId, job.id, "reviewing", {
@@ -278,7 +399,9 @@ export async function runCompanySkillJob(
       }) as CompanySkillJobRow;
       await appendCompanySkillJobEvent(context.sql, {
         jobId: job.id, userId: context.userId, eventType: "stage", stage: "completed", status: "completed",
-        summary: "SkillJob 결과를 회사 업무 탐색기에 등록했습니다.",
+        summary: job.skill_id === "video_pipeline"
+          ? "영상 파이프라인을 마쳤습니다. 프로젝트 씬에 스틸·영상과 프롬프트 계보가 저장됐습니다."
+          : "SkillJob 결과를 회사 업무 탐색기에 등록했습니다.",
         details: { workItemId: job.work_item_id }, eventKey: `${executionToken}:completed`,
       });
     }

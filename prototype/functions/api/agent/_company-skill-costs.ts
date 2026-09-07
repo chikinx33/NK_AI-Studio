@@ -44,6 +44,13 @@ export async function estimateCompanySkillJobCost(
   const baseGateId = `${job.skill_id}:provider-cost:v1`;
   const action = "외부 AI 제공자를 사용해 인포그래픽 제작 회의를 실행합니다.";
 
+  // 영상 파이프라인은 Anthropic 토큰이 아니라 이미지·영상 생성 크레딧을 쓴다.
+  // USD 환산 단가가 없으므로 amount 는 null 로 두고 항상 승인을 요구한다 — 크레딧이 실제로 빠지는 작업은
+  // 계획(몇 컷·어느 단계)과 예상 크레딧을 사람이 보고 누르기 전엔 돌지 않는다.
+  if (job.skill_id === "video_pipeline") {
+    return estimateVideoPipelineCost(job, maxAmountUsd);
+  }
+
   if (costPolicy === "no-external-cost") {
     const gateId = `${baseGateId}:none`;
     return {
@@ -100,6 +107,51 @@ export async function estimateCompanySkillJobCost(
     gateId,
     action,
     scope: { gateId, provider: "anthropic", authMode: "api_key", maxAmountUsd, estimatedAmountUsd: amount },
+  };
+}
+
+/** 실행기의 계획 선행 단계(prepareVideoPipelinePlan)가 execution_plan.summary 에 남긴 크레딧 합계를 읽는다. */
+export function estimateVideoPipelineCost(job: CompanySkillJobRow, maxAmountUsd: number): CompanySkillCostGate {
+  const plan = job.execution_plan && typeof job.execution_plan === "object" ? job.execution_plan as any : {};
+  const summary = plan.summary && typeof plan.summary === "object" ? plan.summary : {};
+  const pendingStills = Math.max(0, Number(summary.pendingStills) || 0);
+  const pendingVideos = Math.max(0, Number(summary.pendingVideos) || 0);
+  const credits = Math.max(0, Number(summary.credits) || 0);
+  const steps = pendingStills + pendingVideos;
+  const gateId = `video_pipeline:credits:v1:${pendingStills}s-${pendingVideos}v:${credits}`;
+  if (steps === 0) {
+    return {
+      cost: { category: "none", currency: "USD", amount: 0, isEstimate: true, breakdown: [], basis: { credits: 0, pendingStills, pendingVideos } },
+      approvalRequired: false,
+      gateId,
+      action: "생성할 컷이 없어 추가 비용 없이 상태만 정리합니다.",
+      scope: { gateId, credits: 0, pendingStills, pendingVideos, maxAmountUsd },
+    };
+  }
+  const breakdown: CompanySkillCost["breakdown"] = [];
+  if (pendingStills) breakdown.push({ provider: "imagen", operation: `still x${pendingStills}`, amount: null });
+  if (pendingVideos) breakdown.push({ provider: "video", operation: `clip x${pendingVideos}`, amount: null });
+  const cost: CompanySkillCost = {
+    category: "estimated",
+    currency: "USD",
+    amount: null,
+    isEstimate: true,
+    breakdown,
+    basis: {
+      credits,
+      pendingStills,
+      pendingVideos,
+      videoModel: String(summary.videoModel || ""),
+      rateSource: "credit-rates",
+      note: "크레딧 단가는 USD 환산 없이 표시됩니다.",
+    },
+  };
+  return {
+    cost,
+    approvalRequired: true,
+    gateId,
+    action: `${pendingStills}개 스틸 · ${pendingVideos}개 영상 컷을 생성합니다 (예상 ${credits} 크레딧).`,
+    scope: { gateId, credits, pendingStills, pendingVideos, maxAmountUsd },
   };
 }
 

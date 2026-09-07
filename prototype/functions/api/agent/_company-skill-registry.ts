@@ -29,7 +29,45 @@ export const SERVER_COMPANY_SKILLS: Readonly<Record<string, ServerCompanySkillDe
     permissionPolicy: "local-draft",
     costPolicy: "estimate-before-paid-provider",
   },
+  // 에이전트 모드: 프로젝트의 컷을 스틸→영상 순으로 자동 생성한다. 실행 전에 계획(어느 컷에 무엇이 비었는지)과
+  // 예상 크레딧을 먼저 보여주고 승인받는다 — 시장의 에이전트 모드(계획→비용→승인→실행) 표준과 같다.
+  video_pipeline: {
+    id: "video_pipeline",
+    categoryId: "design-content",
+    inputSchema: "company-skill/video-pipeline/v1",
+    executorId: "video-pipeline-adapter-v1",
+    permissionPolicy: "project-write",
+    costPolicy: "estimate-before-paid-provider",
+  },
 };
+
+export const VIDEO_PIPELINE_STAGES = ["still", "video"] as const;
+export type VideoPipelineStage = (typeof VIDEO_PIPELINE_STAGES)[number];
+
+export function normalizeVideoPipelineOptions(value: unknown): { options: Record<string, unknown>; warnings: string[]; error?: string } {
+  const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const warnings: string[] = [];
+  const projectId = cleanText(input.projectId, 120);
+  if (!projectId) return { options: {}, warnings, error: "projectId(프로젝트)가 필요합니다." };
+  const stagesRaw = Array.isArray(input.stages) ? input.stages.map((s) => cleanText(s, 20)) : [];
+  const stages = VIDEO_PIPELINE_STAGES.filter((s) => stagesRaw.includes(s));
+  const resolvedStages = stages.length ? stages : [...VIDEO_PIPELINE_STAGES];
+  if (!stages.length) warnings.push("작업 단계가 없어 스틸→영상 전체를 적용했습니다.");
+  const sceneIds = Array.isArray(input.sceneIds)
+    ? input.sceneIds.map((v) => cleanText(v, 40)).filter(Boolean).slice(0, 200)
+    : [];
+  const aspectRatio = ["16:9", "9:16", "1:1", "4:3", "3:4"].includes(String(input.aspectRatio))
+    ? String(input.aspectRatio)
+    : "";
+  const videoModel = cleanText(input.videoModel, 40);
+  const requestedMax = Number(input.maxScenesPerRun);
+  const maxScenesPerRun = Number.isFinite(requestedMax) ? Math.min(20, Math.max(1, Math.round(requestedMax))) : 3;
+  const regenerate = input.regenerate === true;
+  return {
+    options: { projectId, stages: resolvedStages, sceneIds, aspectRatio, videoModel, maxScenesPerRun, regenerate },
+    warnings,
+  };
+}
 
 function cleanText(value: unknown, maxLength: number): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -88,6 +126,27 @@ export function normalizeCompanySkillJobInput(
 
   if (skillId === "infographic") {
     const normalized = normalizeInfographicOptions(body.options);
+    const requestedMaxAmountUsd = Number((body.costControl as any)?.maxAmountUsd);
+    return {
+      ok: true,
+      input: {
+        invocationMode,
+        request,
+        conversationId: cleanText(body.conversationId, 120) || "main",
+        companyId: cleanText(body.companyId, 120) || null,
+        references: normalizeReferences(body.references),
+        options: normalized.options,
+        costControl: {
+          maxAmountUsd: Number.isFinite(requestedMaxAmountUsd) ? Math.max(0, requestedMaxAmountUsd) : 0,
+        },
+        idempotencyKey: rawIdempotencyKey || null,
+      },
+      warnings: normalized.warnings,
+    };
+  }
+  if (skillId === "video_pipeline") {
+    const normalized = normalizeVideoPipelineOptions(body.options);
+    if (normalized.error) return { ok: false, error: normalized.error };
     const requestedMaxAmountUsd = Number((body.costControl as any)?.maxAmountUsd);
     return {
       ok: true,

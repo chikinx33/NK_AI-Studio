@@ -1542,10 +1542,19 @@
         imgHistory.push(prevImg);
         if (imgHistory.length > 10) imgHistory = imgHistory.slice(imgHistory.length - 10);
       }
+      // 프롬프트 계보: 이 이미지가 실제로 어떤 최종 프롬프트에서 나왔는지 남긴다.
+      // 노드 캔버스가 컷의 이미지↔프롬프트 계보를 그리는 원천(서버 화이트리스트가 살려 보낸다).
+      var prevLineage = (scene.lineage && typeof scene.lineage === 'object') ? scene.lineage : {};
+      var nextLineage = Object.assign({}, prevLineage, {
+        imagePrompt: String(finalPrompt || ''),
+        imageAttempts: (Number(prevLineage.imageAttempts) || 0) + 1,
+        updatedAt: new Date().toISOString()
+      });
       st.scenes[opts.idx] = Object.assign({}, scene, {
         imageDataUrl: imageRef,
         imagePath: objectName || scene.imagePath || '',
         imageHistory: imgHistory,
+        lineage: nextLineage,
         imgLoading: false,
         imgError: '',
         promptText: scene.promptText

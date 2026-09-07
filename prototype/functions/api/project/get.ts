@@ -178,6 +178,43 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return out.length ? out : null;
     };
 
+    // 컷↔레퍼런스 컷 참조·프롬프트 계보. 노드 캔버스가 컷↔컷 참조선과
+    // "어떤 프롬프트·어떤 이미지에서 이 영상이 나왔나" 를 그리려면 서버 왕복에서 살아남아야 한다.
+    // (씬을 고정 목록으로 다시 만드는 구조라 여기 없으면 저장 한 번에 통째로 사라진다.)
+    // 타입 주석 없이 쓴 이유: 체인 테스트가 이 함수 본문을 그대로 실행해 검증한다.
+    const isInlineUrl = (v) => typeof v === "string" && (v.startsWith("data:") || v.startsWith("blob:"));
+    const normalizeLineage = (value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const str = (v) => (typeof v === "string" ? v : "");
+      const count = (v) => {
+        const n = Math.floor(Number(v));
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      };
+      return {
+        imagePrompt: str(value.imagePrompt),
+        videoPrompt: str(value.videoPrompt),
+        // data:/blob: 은 절대 영속화하지 않는다(과거 data: URL 영속화로 OOM 난 전례 — stripDataUrl 참고).
+        videoFromImage: isInlineUrl(value.videoFromImage) ? "" : str(value.videoFromImage),
+        imageAttempts: count(value.imageAttempts),
+        videoAttempts: count(value.videoAttempts),
+        agentJobId: str(value.agentJobId),
+        updatedAt: str(value.updatedAt),
+      };
+    };
+
+    // 이미지 버전 이력(되돌리기용). data:/blob: 은 버리고 최근 10개만 남긴다.
+    const normalizeImageHistory = (value) => {
+      if (!Array.isArray(value)) return [];
+      const out = [];
+      value.forEach((v) => {
+        if (typeof v !== "string") return;
+        const s = v.trim();
+        if (!s || isInlineUrl(s) || out.indexOf(s) !== -1) return;
+        out.push(s);
+      });
+      return out.length > 10 ? out.slice(out.length - 10) : out;
+    };
+
     const normalizeShots = (value: any, sceneId: number) => {
       if (!Array.isArray(value)) return [];
       return value
@@ -286,6 +323,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         songSectionLabel: typeof s?.songSectionLabel === "string" ? s.songSectionLabel : "",
         // 사용자가 더빙 대본을 비운 것도 뜻이 있는 편집이다(빈 값 영속 보존).
         scriptEdited: !!s?.scriptEdited,
+        // 컷별 공통 프롬프트 덮어쓰기·영상 프롬프트 편집본·컷 참조·계보.
+        // 노드 캔버스가 컷↔컷 참조선과 프롬프트 계보를 그리려면 서버 왕복에서 살아남아야 한다.
+        common: typeof s?.common === "string" ? s.common : "",
+        promptText: typeof s?.promptText === "string" ? s.promptText : "",
+        promptEdited: !!s?.promptEdited,
+        imageHistory: normalizeImageHistory(s?.imageHistory),
+        cutRefId: typeof s?.cutRefId === "string" ? s.cutRefId : (s?.cutRefId != null ? String(s.cutRefId) : ""),
+        cutRefEnabled: !!s?.cutRefEnabled,
+        lineage: normalizeLineage(s?.lineage),
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AgentVideoWorkspace from "./AgentVideoWorkspace";
+import ProductionCanvas from "./ProductionCanvas";
 import { getCompanySkillCategory } from "../lib/companySkills";
 
 function CloseIcon() {
@@ -58,6 +59,8 @@ export default function SkillWorkspace({ categoryId, onClose }: { categoryId: st
 
       {selectedSkill?.id === "infographic" ? (
         <AgentVideoWorkspace onClose={onClose} embedded />
+      ) : selectedSkill?.id === "video_pipeline" ? (
+        <ProductionCanvas embedded />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div><p className="text-sm font-bold text-gray-300">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-gray-600">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>

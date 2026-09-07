@@ -474,7 +474,18 @@
 
       console.debug('videoStart ok', { jobId: jobId, playback: playback, resp: resp });
       st = ctx.getState() || st;
+      // 프롬프트 계보: 이 영상이 어떤 최종 프롬프트·어떤 이미지에서 나왔는지 남긴다.
+      // data:/blob: 은 영속화하면 OOM 이 나므로(전례 있음) 영속 URL 일 때만 기록한다.
+      // 노드 캔버스가 이미지→영상 계보선을 그리는 원천(서버 화이트리스트가 살려 보낸다).
+      var prevLineage = (st.scenes[opts.idx] && st.scenes[opts.idx].lineage && typeof st.scenes[opts.idx].lineage === 'object') ? st.scenes[opts.idx].lineage : {};
+      var nextLineage = Object.assign({}, prevLineage, {
+        videoPrompt: String(finalPrompt || ''),
+        videoFromImage: (imageUrl && imageUrl.slice(0, 5) !== 'data:' && imageUrl.slice(0, 5) !== 'blob:') ? imageUrl : '',
+        videoAttempts: (Number(prevLineage.videoAttempts) || 0) + 1,
+        updatedAt: new Date().toISOString()
+      });
       st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], {
+        lineage: nextLineage,
         videoUrl: playback,
         videoStatus: playback ? 'done' : 'processing',
         videoError: resp.error || '',

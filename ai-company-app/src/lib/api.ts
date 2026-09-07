@@ -1,4 +1,5 @@
 import { dispatchUiAction } from "./uiActions";
+import { readStorage } from "./safeStorage";
 import type { AgentVideoContribution, AgentVideoSpec } from "../remotion/spec";
 import type { SkillArtifact, SkillJob, SkillJobInput } from "./skillJobs";
 
@@ -1803,4 +1804,65 @@ export async function streamChat(
     });
   }
   onEvent("done", {});
+}
+
+// ── 제작 캔버스(노드 UI) · 에이전트 모드 ─────────────────────────────────────
+export type ProductionNodeType = "common" | "location" | "character" | "cut";
+export type ProductionEdgeType = "sequence" | "cutRef" | "location" | "character" | "commonOverride";
+export interface ProductionNode { id: string; type: ProductionNodeType; label: string; data: Record<string, any> }
+export interface ProductionEdge { id: string; type: ProductionEdgeType; from: string; to: string; label?: string }
+export interface ProductionGraph {
+  projectId: string;
+  title: string;
+  header: string;
+  nodes: ProductionNode[];
+  edges: ProductionEdge[];
+  summary: { scenes: number; stills: number; clips: number };
+}
+
+export async function getProductionGraph(projectId: string): Promise<ProductionGraph> {
+  const res = await fetch(`/api/agent/production-graph?projectId=${encodeURIComponent(projectId)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "제작 캔버스 데이터를 불러오지 못했어요.");
+  return data as ProductionGraph;
+}
+
+export interface StudioProjectRef { id: string; title: string; shared: boolean }
+export async function listStudioProjects(): Promise<StudioProjectRef[]> {
+  const res = await fetch("/api/project/list");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "프로젝트 목록을 불러오지 못했어요.");
+  const own: StudioProjectRef[] = (Array.isArray(data?.ids) ? data.ids : []).map((id: unknown) => ({ id: String(id), title: String(id), shared: false }));
+  const shared: StudioProjectRef[] = (Array.isArray(data?.shared) ? data.shared : []).map((s: any) => ({
+    id: String(s?.projectId || s?.id || ""), title: String(s?.title || s?.projectId || ""), shared: true,
+  })).filter((s: StudioProjectRef) => s.id);
+  return [...own, ...shared];
+}
+
+/** 에이전트 도구 잡 생성(승인 게이트 도구는 승인 패널에서 승인해야 실행된다). */
+export async function createAgentJob(type: string, input: Record<string, unknown>): Promise<{ jobId: string; status: string; agentId: string }> {
+  const res = await fetch("/api/agent/job", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, input }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "에이전트 작업을 만들지 못했어요.");
+  return { jobId: String(data?.jobId || ""), status: String(data?.status || ""), agentId: String(data?.agentId || "") };
+}
+
+/** 배치형 SkillJob(영상 파이프라인)을 다음 배치로 이어간다. */
+export async function continueCompanySkillJob(jobId: string): Promise<{ job: SkillJob; resumed: boolean; reason?: string }> {
+  const res = await fetch(`/api/agent/skill-jobs/${encodeURIComponent(jobId)}/continue`, { method: "POST" });
+  const data = await readSkillJobResponse(res, "회사 Skill 업무를 이어가지 못했어요.");
+  return { job: data.job as SkillJob, resumed: data.resumed !== false, reason: data.reason };
+}
+
+/** <img>/<video> 는 Authorization 헤더를 못 붙이므로 프록시 URL 에 토큰을 쿼리로 싣는다. */
+export function withMediaToken(url: string): string {
+  if (!url || !url.startsWith("/api/media/proxy")) return url;
+  let token = "";
+  try { token = String(readStorage("nk_auth_token") || "").replace(/^"|"$/g, ""); } catch { token = ""; }
+  if (!token) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}nk_token=${encodeURIComponent(token)}`;
 }

@@ -980,6 +980,13 @@
               videoJobId: s.videoJobId || '',
               promptEdited: !!s.promptEdited,
               editingPrompt: !!s.editingPrompt,
+              // ★컷별 공통 프롬프트·컷↔레퍼런스 컷 참조·프롬프트 계보. 서버가 살려 보내도
+              // 여기서 안 실으면 프로덕션 화면에서 증발한다(beats 가 그랬다).
+              // 노드 캔버스가 컷↔컷 참조선과 계보를 그리는 원천 데이터.
+              common: (typeof s.common === 'string' ? s.common : ''),
+              cutRefId: String(s.cutRefId || ''),
+              cutRefEnabled: !!s.cutRefEnabled,
+              lineage: (s.lineage && typeof s.lineage === 'object') ? s.lineage : null,
               voiceUrl: s.voiceUrl || '',
               voiceObjectName: s.voiceObjectName || '',
               voiceStatus: s.voiceStatus || '',
@@ -1038,6 +1045,9 @@
               var _mediaUrlFields = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
                 'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl', 'voiceUrl'];
               var _statusFields = ['videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+              // 계보·컷 참조·프롬프트 편집본: 서버 값이 있으면 서버가 이기고, 비었을 때만 로컬을 쓴다.
+              // (다른 기기에서 편집한 참조선이 이 기기의 stale 캐시에 덮이지 않게)
+              var _lineageFields = ['common', 'cutRefId', 'cutRefEnabled', 'lineage', 'promptText', 'promptEdited'];
               var _prevById = {};
               prevScenes.forEach(function (s) { if (s) _prevById[String(s.id)] = s; });
               freshState = Object.assign({}, freshState, {
@@ -1053,6 +1063,9 @@
                   });
                   // 상태 필드: 서버가 비었을 때만 로컬 사용
                   _statusFields.forEach(function (f) {
+                    if (!merged[f] && cur[f]) merged[f] = cur[f];
+                  });
+                  _lineageFields.forEach(function (f) {
                     if (!merged[f] && cur[f]) merged[f] = cur[f];
                   });
                   // 버전 이력: 서버가 아직 저장하지 않았을 수 있으니 로컬 이력이 더 많으면 보존

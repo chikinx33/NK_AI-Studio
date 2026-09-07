@@ -5,6 +5,8 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
+// 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
+import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -1402,7 +1404,20 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
   const sub = await fetch(internalUrl(ctx.request, "/api/video"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-    body: JSON.stringify({ promptText, imageUrl: input?.imageUrl, aspectRatio: input?.aspectRatio || "16:9" }),
+    // /api/video 는 imageDataUrl 만 읽는다(imageUrl 은 무시) — 전엔 이 이름 하나 때문에 에이전트의
+    // 이미지→영상이 전부 텍스트→영상으로 조용히 떨어졌다. 모델·길이·프로젝트 태그도 같이 넘겨
+    // 스튜디오 버튼과 같은 경로(크레딧 산정·모델 스냅)를 탄다.
+    body: JSON.stringify({
+      promptText,
+      imageDataUrl: String(input?.imageUrl || input?.imageDataUrl || "").trim() || undefined,
+      aspectRatio: input?.aspectRatio || "16:9",
+      ...(input?.videoModel || input?.model ? { videoModel: String(input.videoModel || input.model) } : {}),
+      ...(Number(input?.durationSeconds || input?.duration) > 0 ? { durationSeconds: Number(input.durationSeconds || input.duration) } : {}),
+      ...(input?.projectId ? { projectId: String(input.projectId) } : {}),
+      ...(input?.sceneId != null ? { sceneId: String(input.sceneId) } : {}),
+      ...(typeof input?.narrationEnabled === "boolean" ? { narrationEnabled: input.narrationEnabled } : {}),
+      ...(typeof input?.dubbingEnabled === "boolean" ? { dubbingEnabled: input.dubbingEnabled } : {}),
+    }),
   });
   const subText = await sub.text();
   let subData: any = {};
@@ -3835,6 +3850,8 @@ async function runProjectGetTool(input: any, ctx: ToolContext): Promise<any> {
   return {
     kind: "project_get", projectId,
     title: d?.title || "", payload: d?.payload ?? null,
+    // 프로젝트 공통 헤더(save 가 최상위 header 로 영속). 씬 프롬프트의 COMMON 폴백 원천.
+    header: typeof d?.header === "string" ? d.header : "",
     scenes, sceneCount: scenes.length,
   };
 }
@@ -3916,13 +3933,31 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
   if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
   const scene = scenes[idx];
-  const prompt = String(input?.prompt || scene?.visual || scene?.shot || scene?.title || "").trim();
-  if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 visual 필요).");
+  // 프롬프트는 브라우저 buildImagePrompt 와 같은 조립기로 만든다(명시 prompt 가 오면 그것이 우선).
+  const header = String(cur.payload?.header || cur.header || "");
+  const prompt = String(input?.prompt || "").trim() || buildSceneImagePrompt(scene, header, {});
+  if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 화면/비주얼 필요).");
   const img = await runImagenTool({ prompt, aspectRatio: input?.aspectRatio || "16:9", projectId }, ctx);
   const bucket = studioBucket(ctx);
   const ref = (img.objectName && bucket) ? `gs://${bucket}/${img.objectName}` : (img.signedUrl || "");
   if (!ref) throw new Error("이미지 생성 결과에 저장할 URL이 없어요.");
-  scenes[idx] = { ...scene, imageDataUrl: ref };
+  // 이전 이미지는 버전 이력에 보존(되돌리기용). data: 는 영속 금지(OOM 전례) → https/gs 만 보관, 최근 10개.
+  const prevImg = String(scene?.imageDataUrl || "").trim();
+  let imageHistory: string[] = Array.isArray(scene?.imageHistory) ? scene.imageHistory.filter((v: any) => typeof v === "string" && v) : [];
+  if (prevImg && prevImg !== ref && /^(https?:\/\/|gs:\/\/)/i.test(prevImg)) {
+    imageHistory.push(prevImg);
+    if (imageHistory.length > 10) imageHistory = imageHistory.slice(imageHistory.length - 10);
+  }
+  // 프롬프트 계보: 이 이미지가 실제로 어떤 최종 프롬프트에서 나왔는지(노드 캔버스가 그린다).
+  const prevLineage = (scene?.lineage && typeof scene.lineage === "object") ? scene.lineage : {};
+  const lineage = {
+    ...prevLineage,
+    imagePrompt: prompt,
+    imageAttempts: (Number(prevLineage.imageAttempts) || 0) + 1,
+    agentJobId: String(ctx.jobId || ""),
+    updatedAt: new Date().toISOString(),
+  };
+  scenes[idx] = { ...scene, imageDataUrl: ref, imageHistory, lineage };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
   return {
     kind: "scene_still", projectId, sceneId: scene?.id,
@@ -3931,8 +3966,47 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 에이전트 모드(video_pipeline): 프로젝트의 빈 컷을 스틸→영상 순으로 채우는 SkillJob 을 만든다.
+ *  인포그래픽 도구와 같은 경로(공통 SkillJob API, wait=1)로 계획·비용 게이트까지 돌고 승인 대기 상태로 돌아온다. */
+async function runVideoPipelineTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId 가 필요해요. project_list 로 확인한 뒤 다시 실행하세요.");
+  const stages = Array.isArray(input?.stages) ? input.stages.map((s: any) => String(s)) : ["still", "video"];
+  const sceneIds = Array.isArray(input?.sceneIds) ? input.sceneIds.map((s: any) => String(s)) : [];
+  const data = await callInternalJson(ctx, "/api/agent/skills/video_pipeline/jobs?wait=1", {
+    body: {
+      invocationMode: "agent",
+      request: String(input?.request || `${projectId} 에이전트 모드 (${stages.join("→")})`),
+      conversationId: ctx.conversationId || "main",
+      options: {
+        projectId, stages, sceneIds,
+        aspectRatio: input?.aspectRatio || "",
+        videoModel: input?.videoModel || input?.model || "",
+        regenerate: input?.regenerate === true,
+        maxScenesPerRun: Number(input?.maxScenesPerRun) || 3,
+      },
+      costControl: { maxAmountUsd: 0 },
+    },
+  });
+  const job = data?.job || {};
+  const plan = job?.executionPlan || {};
+  const summary = plan?.summary || {};
+  return {
+    kind: "video_pipeline",
+    skillJobId: String(job?.id || ""),
+    status: String(job?.status || ""),
+    approvalPending: job?.approvalState?.status === "pending",
+    plan: summary,
+    projectId,
+    message: job?.approvalState?.status === "pending"
+      ? `계획 완료: 스틸 ${summary.pendingStills ?? 0}개 · 영상 ${summary.pendingVideos ?? 0}개, 예상 ${summary.credits ?? 0} 크레딧. 제작 캔버스의 에이전트 모드 패널에서 승인하면 생성이 시작돼요.`
+      : `파이프라인 상태: ${job?.status || "?"}`,
+  };
+}
+
 /** 씬 영상: video 생성 → 해당 scene.videoUrl 에 부착 후 project_save. 쓰기 → 승인 게이트.
- *  입력 imageUrl(http)이 있으면 image-to-video로 사용(저장된 gs 경로는 서명 불가라 미사용). */
+ *  image-to-video 소스: 입력 imageUrl(https) > 씬 스틸(gs:// 또는 https). gs:// 는 /api/video 가
+ *  자체 서명(signIfGs / toKlingImageField)하므로 여기서 따로 서명하지 않고 그대로 넘긴다. */
 async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
   if (!projectId) throw new Error("projectId is required");
@@ -3942,19 +4016,47 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
   if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
   const scene = scenes[idx];
-  const prompt = String(input?.prompt || scene?.videoSpeechPrompt || scene?.visual || scene?.shot || scene?.title || "").trim();
-  if (!prompt) throw new Error("영상 프롬프트가 없어요(prompt 또는 씬 visual 필요).");
-  const imageUrl = String(input?.imageUrl || "").trim();
+  // 프롬프트는 브라우저 pipeline-video 의 promptBase 와 같은 조립기로(명시 prompt 가 오면 그것이 우선).
+  const header = String(cur.payload?.header || cur.header || "");
+  const prompt = String(input?.prompt || "").trim() || buildSceneVideoPrompt(scene, header, cur.payload || {});
+  if (!prompt) throw new Error("영상 프롬프트가 없어요(prompt 또는 씬 비주얼 필요).");
+  // i2v 소스 결정: 명시 https > 씬 스틸(imageDataUrl/imagePath — gs:// 또는 https). data: 는 쓰지 않는다.
+  const inputImage = String(input?.imageUrl || "").trim();
+  const sceneImage = String(scene?.imageDataUrl || scene?.imagePath || "").trim();
+  const videoFromImage = /^https?:\/\//i.test(inputImage)
+    ? inputImage
+    : (/^(https?:\/\/|gs:\/\/)/i.test(sceneImage) ? sceneImage : "");
+  // 스튜디오 버튼과 같은 파라미터를 넘긴다: 모델(파이프라인 옵션) · 길이(컷의 estSec) · 음성 플래그(payload).
+  const payload0: any = cur.payload || {};
+  const toBoolFlag = (v: any, fb: boolean) => (typeof v === "boolean" ? v : (v == null ? fb : String(v).toLowerCase() === "true"));
   const vid = await runVideoTool({
     prompt,
-    imageUrl: /^https?:\/\//i.test(imageUrl) ? imageUrl : undefined,
-    aspectRatio: input?.aspectRatio || "16:9",
+    imageUrl: videoFromImage || undefined,
+    aspectRatio: input?.aspectRatio || payload0.aspectRatio || "16:9",
+    videoModel: String(input?.videoModel || input?.model || payload0.videoModel || "").trim() || undefined,
+    durationSeconds: Number(input?.durationSeconds || input?.duration || scene?.estSec) > 0
+      ? Number(input?.durationSeconds || input?.duration || scene?.estSec)
+      : undefined,
+    projectId,
+    sceneId: scene?.id,
+    narrationEnabled: toBoolFlag(payload0.narrationEnabled, false),
+    dubbingEnabled: toBoolFlag(payload0.dubbingEnabled, false),
   }, ctx);
   const ref = String(vid.videoUrl || "").trim();
   if (!ref) throw new Error("영상 생성 결과 URL이 없어요.");
-  scenes[idx] = { ...scene, videoUrl: ref };
+  // 프롬프트 계보: 어떤 프롬프트·어떤 스틸에서 이 영상이 나왔는지(노드 캔버스가 그린다).
+  const prevLineage = (scene?.lineage && typeof scene.lineage === "object") ? scene.lineage : {};
+  const lineage = {
+    ...prevLineage,
+    videoPrompt: prompt,
+    videoFromImage,
+    videoAttempts: (Number(prevLineage.videoAttempts) || 0) + 1,
+    agentJobId: String(ctx.jobId || ""),
+    updatedAt: new Date().toISOString(),
+  };
+  scenes[idx] = { ...scene, videoUrl: ref, lineage };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
-  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", saved: true, promptEcho: prompt };
+  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", videoFromImage, saved: true, promptEcho: prompt };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -4116,7 +4218,10 @@ async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
   const cur = await runProjectGetTool({ projectId }, ctx);
   const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes.slice() : [];
   const patch: Record<string, any> = (input?.scene && typeof input.scene === "object") ? { ...input.scene } : {};
-  const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec"];
+  // common/promptText/promptEdited/cameraDirection/beats/blocking/cutRef* 는 캔버스·채팅이 프롬프트와
+  // 컷↔컷 참조선을 편집하는 필드 — 여기 없으면 에이전트가 고쳐도 저장 전에 증발한다.
+  const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec",
+    "common", "promptText", "promptEdited", "cameraDirection", "beats", "blocking", "cutRefId", "cutRefEnabled"];
   for (const f of FIELDS) if (input?.[f] !== undefined && patch[f] === undefined) patch[f] = input[f];
   delete patch.id; // id는 매칭·부여 전용, 병합 대상 아님
   const ref = input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex;
@@ -4477,6 +4582,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
   // scene_video: 영상 생성이 수분 걸림 → longRunning(승인 시 review.ts가 백그라운드로 실행, POST 논블로킹).
   scene_video: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSceneVideoTool },
+  // 에이전트 모드: 파이프라인 SkillJob 을 만든다. 실제 생성은 SkillJob 의 비용 승인 뒤 배치로 돌므로
+  // 이 도구 자체는 게이트가 없다(계획·크레딧을 보여주고 승인을 기다리는 것이 결과물).
+  video_pipeline: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", run: runVideoPipelineTool },
 
   // ── STEP 2 (P2): 렌더·다운로드 + 사운드/편집 확장 ──
   // 픽셀(디자인): 최종 렌더(생성물) · 다운로드 링크(조회) · 영상 삭제(비가역 → 게이트).

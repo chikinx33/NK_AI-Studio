@@ -1,7 +1,8 @@
 import { authorizeRequest } from "../../../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "../../_shared";
 import { runCompanySkillJob } from "../../_company-skill-executors";
-import { appendCompanySkillJobEvent, CompanySkillJobTransitionError, isCompanySkillJobId, retryCompanySkillJob, toCompanySkillJobDto } from "../../_skill-jobs";
+import { appendCompanySkillJobEvent, CompanySkillJobTransitionError, isCompanySkillJobId, retryCompanySkillJob, toCompanySkillJobDto, transitionCompanySkillJob } from "../../_skill-jobs";
+import { readVideoPipelinePlan, resetFailedSteps } from "../../_video-pipeline-executor";
 
 type PagesFunction = (ctx: { request: Request; env: any; params: { jobId?: string }; waitUntil: (promise: Promise<unknown>) => void }) => Promise<Response>;
 
@@ -18,8 +19,13 @@ export const onRequestPost: PagesFunction = async ({ request, env, params, waitU
     const sql = getSql(env);
     if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
     await ensureAgentSchema(sql);
-    const job = await retryCompanySkillJob(sql, auth.userId, jobId);
+    let job = await retryCompanySkillJob(sql, auth.userId, jobId);
     if (!job) return send({ error: "not_found" }, 404, origin);
+    // 영상 파이프라인: 실패로 표시된 컷 스텝을 다시 pending 으로 돌려야 재시도가 실제로 그 컷을 다시 만든다.
+    const plan = readVideoPipelinePlan(job);
+    if (plan) {
+      job = (await transitionCompanySkillJob(sql, auth.userId, jobId, job.status, { executionPlan: resetFailedSteps(plan) })) || job;
+    }
     await appendCompanySkillJobEvent(sql, {
       jobId, userId: auth.userId, eventType: "stage", stage: job.current_stage, status: "working",
       summary: "실패한 SkillJob을 다시 시작했습니다.", eventKey: `retry:${job.updated_at}`,

@@ -63,6 +63,8 @@ const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
 const SkillWorkspace = lazy(() => import("./components/SkillWorkspace"));
+// 제작 캔버스(노드 UI) — 무거운 화면이라 지연 로딩.
+const ProductionCanvas = lazy(() => import("./components/ProductionCanvas"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -123,7 +125,10 @@ export default function App() {
   const [presentationActive, setPresentationActive] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills" | "canvas">("chat");
+  // 제작 캔버스: 채팅(canvas.open/focus)이 가리키는 프로젝트·컷.
+  const [canvasProjectId, setCanvasProjectId] = useState(readStorage("canvasProjectId"));
+  const [canvasFocus, setCanvasFocus] = useState<{ sceneId: string | number | null; nonce: number }>({ sceneId: null, nonce: 0 });
   const [skillCategoryId, setSkillCategoryId] = useState("design-content");
   const [workRevision, setWorkRevision] = useState(0);
   const [workFolderDate, setWorkFolderDate] = useState("");
@@ -242,9 +247,16 @@ export default function App() {
       setSkillCategoryId("design-content");
       setCenterView("skills");
     }
+    else if (name.startsWith("canvas.")) {
+      // 캔버스 열기·컷 가리키기. 세부 동작(선택·새로고침)은 캔버스 컴포넌트가 같은 액션을 구독해 처리한다.
+      const pid = String(action.projectId || "").trim();
+      if (pid) setCanvasProjectId(pid);
+      if (name === "canvas.focus" && action.sceneId != null) setCanvasFocus((prev) => ({ sceneId: action.sceneId as string | number, nonce: prev.nonce + 1 }));
+      setCenterView("canvas");
+    }
     if (name === "navigate") {
       const view = String(action.view || "");
-      const allowed = new Set(["chat", "dashboard", "settings", "knowledge", "agents", "works", "skills"]);
+      const allowed = new Set(["chat", "dashboard", "settings", "knowledge", "agents", "works", "skills", "canvas"]);
       if (allowed.has(view)) {
         if (view === "skills" && typeof action.categoryId === "string") setSkillCategoryId(action.categoryId);
         setCenterView(view as typeof centerView);
@@ -1268,6 +1280,7 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
+              onCanvas={() => setCenterView("canvas")}
               onSettings={() => setCenterView("settings")}
             />
           </div>
@@ -1301,6 +1314,10 @@ export default function App() {
         ) : centerView === "skills" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 스킬을 불러오는 중…</div>}>
             <SkillWorkspace categoryId={skillCategoryId} onClose={() => setCenterView("chat")} />
+          </Suspense>
+        ) : centerView === "canvas" ? (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">제작 캔버스를 불러오는 중…</div>}>
+            <ProductionCanvas projectId={canvasProjectId} focusSceneId={canvasFocus.sceneId} focusNonce={canvasFocus.nonce} onProjectChange={setCanvasProjectId} />
           </Suspense>
         ) : centerView === "settings" ? (
           <Settings
@@ -1366,6 +1383,7 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
+              onCanvas={() => setCenterView("canvas")}
               onSettings={() => setCenterView("settings")}
             />
             <SkillBox
