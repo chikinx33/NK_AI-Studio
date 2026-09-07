@@ -71,7 +71,21 @@ export default function SkillWorkspace({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
+      {/* 집중 모드: 상단 메뉴를 전부 숨기고 복귀 버튼 하나만 띄운다(사용자 요청). */}
+      {focusMode && onToggleFocus && (
+        <button
+          type="button"
+          onClick={onToggleFocus}
+          aria-pressed
+          className="absolute right-3 top-3 z-50 grid h-9 w-9 place-items-center rounded-full border border-emerald-500 bg-emerald-900/60 text-emerald-200 shadow-lg backdrop-blur hover:bg-emerald-900/80"
+          title="패널 다시 열기"
+          aria-label="패널 다시 열기"
+        >
+          <MinimizeIcon />
+        </button>
+      )}
+      {!focusMode && (
       <section className="shrink-0 border-b border-edge bg-[#0c1119] px-4 py-2.5">
         <div className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
@@ -151,11 +165,12 @@ export default function SkillWorkspace({
           })}
         </div>
       </section>
+      )}
 
       {selectedSkill?.id === "infographic" ? (
         <AgentVideoWorkspace onClose={onClose} embedded />
       ) : selectedSkill?.id === "video_pipeline" ? (
-        <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} edgeStyle={edgeStyle} edgesVisible={edgesVisible} />
+        <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} edgeStyle={edgeStyle} edgesVisible={edgesVisible} hideTopBar={focusMode} />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div><p className="text-sm font-bold text-gray-300">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-gray-600">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>

@@ -126,6 +126,7 @@ export default function ProductionCanvas({
   onProjectChange,
   edgeStyle = "curve",
   edgesVisible = true,
+  hideTopBar = false,
 }: {
   projectId?: string;
   focusSceneId?: string | number | null;
@@ -134,6 +135,8 @@ export default function ProductionCanvas({
   onProjectChange?: (projectId: string) => void;
   edgeStyle?: "curve" | "straight";
   edgesVisible?: boolean;
+  // 집중 모드: 상단 바(프로젝트 선택·줌·일괄 생성)도 숨긴다.
+  hideTopBar?: boolean;
 }) {
   const [projects, setProjects] = useState<ProductionProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -455,6 +458,7 @@ export default function ProductionCanvas({
   return (
     <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13] ${embedded ? "" : ""}`}>
       {/* 상단 바 */}
+      {!hideTopBar && (
       <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0c1119] px-3 py-2">
         <WorkflowIcon className="h-4 w-4 text-emerald-400" />
         <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-400">Production Canvas</span>
@@ -483,6 +487,7 @@ export default function ProductionCanvas({
           </button>
         </div>
       </section>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1">
