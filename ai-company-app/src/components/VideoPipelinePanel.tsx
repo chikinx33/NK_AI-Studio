@@ -5,6 +5,7 @@ import {
   continueCompanySkillJob,
   createCompanySkillJob,
   getCompanySkillJob,
+  listCompanySkillJobs,
   retryCompanySkillJob,
 } from "../lib/api";
 import { readStorage, writeStorage } from "../lib/safeStorage";
@@ -52,11 +53,16 @@ export default function VideoPipelinePanel({
   selectedSceneIds,
   onGraphChanged,
   onFocusScene,
+  attachNonce = 0,
+  onAttached,
 }: {
   projectId: string;
   selectedSceneIds: Array<string | number>;
   onGraphChanged: () => void;
   onFocusScene: (sceneId: string | number) => void;
+  // 채팅(video_pipeline 도구)이 파이프라인을 만들면 캔버스가 이 값을 올려 최신 잡을 다시 찾게 한다.
+  attachNonce?: number;
+  onAttached?: (job: SkillJob) => void;
 }) {
   const [stages, setStages] = useState<{ still: boolean; video: boolean }>({ still: true, video: true });
   const [regenerate, setRegenerate] = useState(false);
@@ -79,6 +85,27 @@ export default function VideoPipelinePanel({
       }
     } catch { writeStorage(VIDEO_PIPELINE_JOB_KEY, ""); }
   }, [projectId]);
+
+  // 이 프로젝트의 최신 파이프라인(채팅으로 만든 것 포함)을 서버에서 찾아 붙는다.
+  // 진행 중(승인 대기·실행 중)인 잡이 있으면 지금 보고 있는 것보다 우선한다 — 승인 버튼이 여기 있어야 한다.
+  const jobIdRef = useRef<string>("");
+  jobIdRef.current = job?.id || "";
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    listCompanySkillJobs({ skillId: "video_pipeline", projectId, limit: 5 }).then((jobs) => {
+      if (!alive || !jobs.length) return;
+      const active = jobs.find((j) => !["completed", "failed", "cancelled"].includes(j.status));
+      const latest = active || jobs[0];
+      if (!latest || latest.id === jobIdRef.current) return;
+      if (active || !jobIdRef.current) {
+        setJob(latest);
+        writeStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: latest.id, projectId }));
+        onAttached?.(latest);
+      }
+    }).catch(() => null);
+    return () => { alive = false; };
+  }, [projectId, attachNonce, onAttached]);
 
   const refresh = useCallback(async () => {
     if (!job) return;

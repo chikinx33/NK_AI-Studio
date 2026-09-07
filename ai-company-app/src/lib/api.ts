@@ -1892,3 +1892,14 @@ export async function listProductionProjects(): Promise<ProductionProjectSummary
   if (!res.ok) throw new Error(data?.error || "프로젝트 목록을 불러오지 못했어요.");
   return Array.isArray(data?.projects) ? data.projects as ProductionProjectSummary[] : [];
 }
+
+/** SkillJob 목록(스킬·프로젝트 필터). 캔버스 패널이 채팅으로 만든 파이프라인을 찾아 붙는다. */
+export async function listCompanySkillJobs(filter: { skillId?: string; projectId?: string; limit?: number } = {}): Promise<SkillJob[]> {
+  const params = new URLSearchParams();
+  if (filter.skillId) params.set("skillId", filter.skillId);
+  if (filter.projectId) params.set("projectId", filter.projectId);
+  if (filter.limit) params.set("limit", String(filter.limit));
+  const res = await fetch(`/api/agent/skill-jobs?${params.toString()}`);
+  const data = await readSkillJobResponse(res, "회사 Skill 업무 목록을 불러오지 못했어요.");
+  return Array.isArray(data.jobs) ? data.jobs as SkillJob[] : [];
+}

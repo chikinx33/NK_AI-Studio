@@ -406,7 +406,9 @@ ${teamToolMap}
 - 설정: {"action":"settings.open","tab":"basic|agents|logs"} / {"action":"settings.mode","mode":"auto|local|cloud"} / {"action":"settings.auth_diag"} / {"action":"settings.log","operation":"retention|cleanup","days":30}
 - 연동: {"action":"integration.open","agentId":"sync","tool":"gmail"} / integration.test·connect·disconnect도 같은 필드 사용. 연결·해제는 사람 확인 후 실행하며 비밀 키 입력은 절대 대신하지 않습니다.
 
-삭제·승인·외부 연결은 사용자가 명시적으로 요청했을 때만 출력하세요. 자율 근무에서는 UI_ACTION을 절대 출력하지 마세요.` : "";
+삭제·승인·외부 연결은 사용자가 명시적으로 요청했을 때만 출력하세요. 자율 근무에서는 UI_ACTION을 절대 출력하지 마세요.
+
+★사용자 메시지가 "[캔버스 프로젝트 <id> …]" 로 시작하면 제작 캔버스 안의 대화입니다. 그 projectId 를 그대로 쓰고(project_list 로 되묻지 말 것), "선택 컷" 이 적혀 있으면 그 컷을 대상으로 하세요. 컷 내용 변경은 scene_upsert, 스틸·영상은 scene_still/scene_video, 여러 컷 자동 생성은 video_pipeline 으로 실행하고, 언급한 컷은 canvas.focus 로 짚어 주세요. 캔버스는 이미 열려 있으니 navigate 는 보내지 마세요.` : "";
 
   return `${hardState}
 

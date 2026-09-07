@@ -14,6 +14,7 @@ import ProjectPicker from "./ProjectPicker";
 import { readStorage, writeStorage } from "../lib/safeStorage";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
+import CanvasChatDock from "./CanvasChatDock";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -142,6 +143,8 @@ export default function ProductionCanvas({
   const [multi, setMulti] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingJob[]>([]);
   const [agentOpen, setAgentOpen] = useState(false);
+  // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
+  const [pipelineNonce, setPipelineNonce] = useState(0);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -416,6 +419,7 @@ export default function ProductionCanvas({
         </div>
       </section>
 
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1">
         {/* 캔버스 */}
         <div
@@ -543,6 +547,8 @@ export default function ProductionCanvas({
                 selectedSceneIds={selectedSceneIds}
                 onGraphChanged={() => void load(true)}
                 onFocusScene={(id) => focusScene(id)}
+                attachNonce={pipelineNonce}
+                onAttached={(job) => { if (job.approvalState?.status === "pending") setAgentOpen(true); }}
               />
             </div>
           )}
@@ -643,6 +649,18 @@ export default function ProductionCanvas({
             )}
           </aside>
         )}
+      </div>
+      {/* 대화 독 — 에이전트 모드의 대화형 입구. 코어가 canvas.* 액션으로 위 캔버스를 움직인다. */}
+      <CanvasChatDock
+        projectId={projectId}
+        projectTitle={graph?.title || ""}
+        selectedSceneIds={selectedSceneIds}
+        onJobReady={() => {
+          void load(true);
+          setPipelineNonce((n) => n + 1);
+          setAgentOpen(true);
+        }}
+      />
       </div>
     </div>
   );

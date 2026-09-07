@@ -129,6 +129,34 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(panel, /min-w-\[96px\]/);
 });
 
+test("★에이전트 모드는 캔버스 안에서 대화한다: 대화 독 + 채팅이 만든 파이프라인을 패널이 붙잡는다", () => {
+  const dock = read("ai-company-app/src/components/CanvasChatDock.tsx");
+  const canvas = read("ai-company-app/src/components/ProductionCanvas.tsx");
+  const panel = read("ai-company-app/src/components/VideoPipelinePanel.tsx");
+  const list = read("prototype/functions/api/agent/skill-jobs.ts");
+  const api = read("ai-company-app/src/lib/api.ts");
+  const orch = read("prototype/functions/api/agent/_orchestrator.ts");
+  // 같은 채팅 파이프라인(streamChat)을 쓰되 스레드는 프로젝트별.
+  assert.match(dock, /streamChat\(message, \(event, data\) =>/);
+  assert.match(dock, /`canvas-\$\{projectId\}`/);
+  // 캔버스 맥락을 메시지 앞에 붙이고, 코어의 UI 액션은 같은 화면의 캔버스로 보낸다.
+  assert.match(dock, /\[캔버스 프로젝트 \$\{projectId\}/);
+  assert.match(dock, /case "ui_action":[\s\S]*dispatchUiAction\(data\.action\)/);
+  assert.match(dock, /case "job_ready":[\s\S]*onJobReady\(data\?\.payload\)/);
+  // 한글 IME: 전송은 keyup 의 진짜 Enter.
+  assert.match(dock, /onKeyUp=\{\(e\) => \{[\s\S]*isComposing/);
+  assert.match(canvas, /<CanvasChatDock/);
+  assert.match(canvas, /setPipelineNonce\(\(n\) => n \+ 1\)/);
+  // 채팅이 만든 파이프라인을 패널이 서버 목록에서 찾아 붙고, 승인 대기면 패널을 연다.
+  assert.match(list, /skill-jobs\?skillId=video_pipeline/);
+  assert.match(list, /input\?\.options\?\.projectId/);
+  assert.match(api, /export async function listCompanySkillJobs/);
+  assert.match(panel, /listCompanySkillJobs\(\{ skillId: "video_pipeline", projectId, limit: 5 \}\)/);
+  assert.match(canvas, /onAttached=\{\(job\) => \{ if \(job\.approvalState\?\.status === "pending"\) setAgentOpen\(true\); \}\}/);
+  // 코어가 캔버스 맥락 접두를 이해한다.
+  assert.match(orch, /\[캔버스 프로젝트 <id> …\]/);
+});
+
 test("★프로젝트 선택기는 숫자 id 가 아니라 시리즈 › 에피소드 제목으로 고르고, 시리즈는 접힌 그룹이다", () => {
   const endpoint = read("prototype/functions/api/agent/production-projects.ts");
   const picker = read("ai-company-app/src/components/ProjectPicker.tsx");
