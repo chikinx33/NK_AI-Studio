@@ -109,6 +109,11 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(skills, /CANVAS_SKILL_CATEGORY_ID = "video-production"/);
   assert.match(box, /name === "canvas"/);
   assert.match(workspace, /selectedSkill\?\.id === "video_pipeline"[\s\S]*<ProductionCanvas embedded projectId=\{canvasProjectId\}/);
+  // 집중 모드: 닫기 옆 확장 버튼이 좌우 패널을 접는다(사용자 요청). 스킬 화면을 떠나면 자동 해제.
+  assert.match(workspace, /onToggleFocus[\s\S]*title=\{focusMode \? "패널 다시 열기" : "집중 모드 \(좌우 패널 닫기\)"\}/);
+  assert.match(app, /if \(centerView !== "skills"\) setFocusMode\(false\)/);
+  assert.match(app, /focusMode \? "lg:hidden"/);
+  assert.match(app, /\$\{focusMode \? "" : "lg:flex lg:flex-col"\}/);
   // 버튼 폭 고정 규칙(상태 변화에 폭이 흔들리지 않게).
   assert.match(panel, /min-w-\[96px\]/);
 });

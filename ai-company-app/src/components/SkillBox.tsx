@@ -35,8 +35,9 @@ export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeC
               aria-label={title}
               disabled={!available}
               onClick={() => available && onOpenCategory(category.id)}
-              className={`grid h-8 w-8 shrink-0 place-items-center transition ${active
-                ? "text-orange-300 drop-shadow-[0_0_7px_rgba(251,146,60,0.55)]"
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${active
+                // 선택된 분류: 주황 둥근 카드 배경 + 검은 아이콘 (사용자 요청)
+                ? "bg-orange-400 text-black shadow-[0_0_10px_rgba(251,146,60,0.45)]"
                 : available
                   ? "text-orange-400 hover:text-orange-200"
                   : "cursor-not-allowed text-orange-950"

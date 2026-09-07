@@ -6,6 +6,13 @@ import { getCompanySkillCategory } from "../lib/companySkills";
 function CloseIcon() {
   return <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m5 5 10 10M15 5 5 15" /></svg>;
 }
+// lucide: maximize-2 / minimize-2 — 집중 모드(좌우 패널 접기) 토글
+function MaximizeIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6" /><path d="m21 3-7 7" /><path d="m3 21 7-7" /><path d="M9 21H3v-6" /></svg>;
+}
+function MinimizeIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m14 10 7-7" /><path d="M20 10h-6V4" /><path d="m3 21 7-7" /><path d="M4 14h6v6" /></svg>;
+}
 
 export default function SkillWorkspace({
   categoryId,
@@ -14,6 +21,8 @@ export default function SkillWorkspace({
   canvasFocusSceneId = null,
   canvasFocusNonce = 0,
   onCanvasProjectChange,
+  focusMode = false,
+  onToggleFocus,
 }: {
   categoryId: string;
   onClose: () => void;
@@ -21,6 +30,8 @@ export default function SkillWorkspace({
   canvasFocusSceneId?: string | number | null;
   canvasFocusNonce?: number;
   onCanvasProjectChange?: (projectId: string) => void;
+  focusMode?: boolean;
+  onToggleFocus?: () => void;
 }) {
   const category = useMemo(() => getCompanySkillCategory(categoryId), [categoryId]);
   const firstAvailable = category.skills.find((skill) => skill.status === "available")?.id || "";
@@ -38,6 +49,21 @@ export default function SkillWorkspace({
             <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-400">Company Skills</span>
             <h1 className="mt-0.5 text-lg font-bold text-white">{category.label.replace("·", ".")}</h1>
           </div>
+          {onToggleFocus && (
+            <button
+              type="button"
+              onClick={onToggleFocus}
+              aria-pressed={focusMode}
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border transition ${focusMode
+                ? "border-emerald-500 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-900/60"
+                : "border-edge bg-[#0b1018] text-gray-400 hover:border-gray-600 hover:bg-edge hover:text-white"
+              }`}
+              title={focusMode ? "패널 다시 열기" : "집중 모드 (좌우 패널 닫기)"}
+              aria-label={focusMode ? "패널 다시 열기" : "집중 모드 (좌우 패널 닫기)"}
+            >
+              {focusMode ? <MinimizeIcon /> : <MaximizeIcon />}
+            </button>
+          )}
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-edge bg-[#0b1018] text-gray-400 transition hover:border-gray-600 hover:bg-edge hover:text-white" title="스킬 닫기" aria-label="스킬 닫기"><CloseIcon /></button>
         </div>
 

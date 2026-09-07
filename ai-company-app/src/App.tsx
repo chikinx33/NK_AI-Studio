@@ -186,6 +186,9 @@ export default function App() {
     return v === "cloud" || v === "server" ? v : "browser";
   });
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
+  // 집중 모드: 스킬 작업(제작 캔버스 등)에 몰입하도록 좌측 직원 패널·우측 메뉴 패널을 접는다. 스킬 화면을 떠나면 자동 해제.
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => { if (centerView !== "skills") setFocusMode(false); }, [centerView]);
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
@@ -1235,9 +1238,9 @@ export default function App() {
 
       {/* 좌측 사이드바: 모바일에선 드로어(fixed, 슬라이드), 데스크톱(lg)에선 정적 배치 */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 h-full transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${
-          navOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 h-full transition-transform duration-200 ease-out ${
+          focusMode ? "lg:hidden" : "lg:static lg:z-auto lg:translate-x-0"
+        } ${navOpen ? "translate-x-0" : `-translate-x-full ${focusMode ? "" : "lg:translate-x-0"}`}`}
       >
         <Sidebar
           status={status}
@@ -1324,6 +1327,8 @@ export default function App() {
               canvasFocusSceneId={canvasFocus.sceneId}
               canvasFocusNonce={canvasFocus.nonce}
               onCanvasProjectChange={setCanvasProjectId}
+              focusMode={focusMode}
+              onToggleFocus={() => setFocusMode((v) => !v)}
             />
           </Suspense>
         ) : centerView === "settings" ? (
@@ -1380,7 +1385,7 @@ export default function App() {
         )}
         </ErrorBoundary>
 
-        <div className="w-72 shrink-0 border-l border-edge p-3 overflow-hidden hidden lg:flex lg:flex-col min-h-0">
+        <div className={`w-72 shrink-0 border-l border-edge p-3 overflow-hidden hidden ${focusMode ? "" : "lg:flex lg:flex-col"} min-h-0`}>
           {/* 상단(메뉴·회사 지식·승인 대기)은 고정 */}
           <div className="shrink-0">
             <RightMenu
