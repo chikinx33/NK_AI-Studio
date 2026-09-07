@@ -33,6 +33,13 @@ function readPlan(job: SkillJob | null): Plan | null {
   return plan as Plan;
 }
 
+function stepLabel(state: string, jobStatus: string): string {
+  if (state === "done") return "완료";
+  if (state === "failed") return "실패";
+  if (state === "pending") return jobStatus === "cancelled" ? "취소" : "대기";
+  return state;
+}
+
 const STEP_BADGE: Record<string, string> = {
   pending: "bg-gray-800 text-gray-400",
   done: "bg-emerald-900/60 text-emerald-300",
@@ -107,7 +114,7 @@ export default function VideoPipelinePanel({
       const stageList = [stages.still ? "still" : "", stages.video ? "video" : ""].filter(Boolean);
       if (!stageList.length) throw new Error("스틸 또는 영상 중 하나는 선택해야 해요.");
       const sceneIds = onlySelected ? selectedSceneIds.map(String) : [];
-      const label = `${projectId} 에이전트 모드 (${stageList.join("→")}${sceneIds.length ? `, 컷 ${sceneIds.join(",")}` : ""})`;
+      const label = `에이전트 모드 ${stageList.join("→")}${sceneIds.length ? ` 컷 ${sceneIds.join(",")}` : ""} · ${projectId}`;
       const { job: created } = await createCompanySkillJob("video_pipeline", {
         invocationMode: "manual",
         request: label,
@@ -148,6 +155,22 @@ export default function VideoPipelinePanel({
   const plan = readPlan(job);
   const pending = job?.approvalState?.status === "pending";
   const finished = !!job && ["completed", "failed", "cancelled"].includes(job.status);
+  // 상태 표시는 사람 말로. 취소·완료 뒤에도 서버 current_stage 는 마지막 단계(awaiting-approval 등)로 남아 있어
+  // 그대로 보여주면 "아직 승인 대기 중인가?" 하고 오해한다.
+  const statusLabel = (() => {
+    if (!job) return "";
+    if (job.status === "cancelled") return "취소됨";
+    if (job.status === "completed") return "완료";
+    if (job.status === "failed") return "실패";
+    if (pending) return "승인 대기";
+    if (job.status === "validating") return "계획 세우는 중";
+    if (job.status === "planning") return "계획 완료";
+    if (job.status === "running") return plan?.continueRunning ? "배치 대기" : "생성 중";
+    if (job.status === "reviewing") return "검수 중";
+    return job.status;
+  })();
+  // 크레딧은 승인 뒤 도구가 실제로 돌 때만 빠진다. 스텝이 하나도 done 이 아니면 소비가 없다.
+  const spentSteps = plan ? plan.steps.filter((s) => s.still === "done" || s.video === "done").length : 0;
   const credits = Number(job?.costEstimate?.basis?.credits ?? plan?.summary?.credits ?? 0);
 
   return (
@@ -177,12 +200,24 @@ export default function VideoPipelinePanel({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate font-bold text-white">{job.title}</div>
-              <div className="text-[11px] text-gray-500">{job.status} · {job.currentStage} · {job.progress}%</div>
+              <div className="text-[11px] text-gray-500">{statusLabel} · {job.progress}%</div>
             </div>
             <div className="h-1.5 w-28 shrink-0 overflow-hidden rounded bg-gray-800"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${job.progress}%` }} /></div>
           </div>
 
-          {plan && (
+          {job.status === "cancelled" && (
+            <div className="rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">
+              {spentSteps === 0
+                ? "승인 전에 취소돼 크레딧이 소비되지 않았어요. 생성은 승인 뒤에만 시작돼요."
+                : `취소됐어요. 이미 완료된 ${spentSteps}개 스텝의 크레딧만 사용됐고, 남은 컷은 만들지 않아요.`}
+            </div>
+          )}
+          {job.status === "completed" && plan && (
+            <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 p-2 text-[11px] text-emerald-200">
+              파이프라인을 마쳤어요. 캔버스에서 각 컷의 스틸·영상과 프롬프트 계보를 확인하세요.
+            </div>
+          )}
+          {plan && !(job.status === "cancelled" && spentSteps === 0) && (
             <div className="rounded-lg border border-edge bg-[#0b1018] p-2">
               <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
                 <span>컷 {plan.summary.scenes}</span>
@@ -195,8 +230,8 @@ export default function VideoPipelinePanel({
                 {plan.steps.filter((s) => s.still !== "skipped" || s.video !== "skipped").map((s) => (
                   <li key={String(s.sceneId)} className="flex items-center gap-2">
                     <button type="button" onClick={() => onFocusScene(s.sceneId)} className="w-20 shrink-0 truncate text-left text-gray-300 hover:text-emerald-300" title={s.title}>컷 {String(s.sceneId)}</button>
-                    <span className={`w-14 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.still] || ""}`} title={s.stillError || ""}>{s.still === "skipped" ? "" : `스틸 ${s.still}`}</span>
-                    <span className={`w-14 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.video] || ""}`} title={s.videoError || ""}>{s.video === "skipped" ? "" : `영상 ${s.video}`}</span>
+                    <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.still] || ""}`} title={s.stillError || ""}>{s.still === "skipped" ? "" : `스틸 ${stepLabel(s.still, job.status)}`}</span>
+                    <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.video] || ""}`} title={s.videoError || ""}>{s.video === "skipped" ? "" : `영상 ${stepLabel(s.video, job.status)}`}</span>
                   </li>
                 ))}
               </ul>
