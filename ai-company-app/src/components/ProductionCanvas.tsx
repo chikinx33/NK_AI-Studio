@@ -325,6 +325,26 @@ export default function ProductionCanvas({
     for (let i = 0; i < Math.max(1, count); i++) await enqueue(type, input, count > 1 ? `${label} (${i + 1}/${count})` : label, sceneId);
   };
 
+  // 일반 모드(대화 없음): 작성기 프롬프트로 선택 컷에 바로 생성한다. 프롬프트는 도구의 명시 prompt 로 넘어가
+  // 자동 조립을 대신한다. 컷을 고르지 않았으면 만들지 않는다 — 캔버스의 생성 단위는 컷이다.
+  const directGenerate = useCallback(async (kind: "image" | "video", prompt: string): Promise<string> => {
+    if (!projectId) return "프로젝트를 먼저 선택하세요.";
+    const targets = selectedSceneIds.length ? selectedSceneIds : [];
+    if (!targets.length) return "컷을 먼저 선택하세요. (에이전트 모드에선 말로 지정할 수 있어요)";
+    for (const sceneId of targets) {
+      if (kind === "image") {
+        await enqueueMany("scene_still", { projectId, sceneId, prompt, aspectRatio: settings.image.aspect, provider: settings.image.provider, imageSize: settings.image.size }, `컷 ${sceneId} 스틸 생성`, sceneId, settings.image.count);
+      } else {
+        const node = nodeById.get(`cut:${sceneId}`);
+        if (!node?.data?.still?.url) return `컷 ${sceneId}에 스틸이 없어요. 스틸을 먼저 만드세요.`;
+        await enqueueMany("scene_video", { projectId, sceneId, prompt, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${sceneId} 영상 생성`, sceneId, settings.video.count);
+      }
+    }
+    const count = kind === "image" ? settings.image.count : settings.video.count;
+    return `컷 ${targets.join(",")}에 ${kind === "image" ? "스틸" : "영상"} ${count > 1 ? `x${count} ` : ""}${settings.confirmBeforeGenerate ? "요청 — 승인 패널에서 승인하면 생성돼요." : "생성 시작 — 자동 승인됐어요."}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, selectedSceneIds, settings, nodeById]);
+
   const saveDraft = async () => {
     if (!selected || selected.type !== "cut" || !draft) return;
     await enqueue("scene_upsert", {
@@ -571,6 +591,7 @@ export default function ProductionCanvas({
             selectedSceneIds={selectedSceneIds}
             settings={settings}
             onSettingsChange={updateSettings}
+            onDirectGenerate={directGenerate}
             onJobReady={() => {
               void load(true);
               setPipelineNonce((n) => n + 1);

@@ -144,7 +144,7 @@ test("★에이전트 모드는 캔버스 안에서 대화한다: 대화 독 + �
   assert.match(dock, /case "ui_action":[\s\S]*dispatchUiAction\(data\.action\)/);
   assert.match(dock, /case "job_ready":[\s\S]*onJobReady\(data\?\.payload\)/);
   // 한글 IME: 전송은 keyup 의 진짜 Enter.
-  assert.match(dock, /onKeyUp=\{\(e\) => \{[\s\S]*isComposing/);
+  assert.match(dock, /const onKeyUp = \(fn[\s\S]*isComposing/);
   assert.match(canvas, /<CanvasChatDock/);
   assert.match(canvas, /setPipelineNonce\(\(n\) => n \+ 1\)/);
   // 채팅이 만든 파이프라인을 패널이 서버 목록에서 찾아 붙고, 승인 대기면 패널을 연다.
@@ -166,9 +166,21 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   const panel = read("ai-company-app/src/components/VideoPipelinePanel.tsx");
   const shared = read("prototype/functions/api/agent/_shared.ts");
   const specs = read("prototype/functions/api/_shared/video-specs.ts");
-  // 오버레이: 작성기는 하단 중앙 필, 세션 패널은 오른쪽. 캔버스 컨테이너 안에 산다.
-  assert.match(dock, /absolute bottom-4 z-30/);
-  assert.match(dock, /absolute inset-y-0 right-0 z-30/);
+  // 두 모드가 한 자리를 번갈아 쓴다(동시에 뜨지 않는다): 에이전트 모드 = 세션 패널(안에 입력창)만, 일반 모드 = 떠 있는 작성기만.
+  const agentBranch = dock.slice(dock.indexOf('if (mode === "agent") {'), dock.indexOf("// ════════ 일반 모드"));
+  const normalBranch = dock.slice(dock.indexOf("// ════════ 일반 모드"));
+  assert.match(agentBranch, /absolute inset-y-0 right-0 z-30/);
+  assert.doesNotMatch(agentBranch, /absolute bottom-4 left-1\/2/);
+  assert.match(normalBranch, /absolute bottom-4 left-1\/2 z-30/);
+  assert.doesNotMatch(normalBranch, /absolute inset-y-0 right-0/);
+  // 일반 모드는 대화 없이 선택 컷에 바로 생성하고, '에이전트' 칩이 모드를 바꾼다.
+  assert.match(normalBranch, /onClick=\{\(\) => switchMode\("agent"\)\}/);
+  assert.match(normalBranch, /generateNow\(draft\)/);
+  assert.match(dock, /onDirectGenerate\(settings\.kind, text\)/);
+  assert.match(canvas, /const directGenerate = useCallback\(async \(kind: "image" \| "video", prompt: string\)/);
+  assert.match(canvas, /onDirectGenerate=\{directGenerate\}/);
+  // 스트림이 끊기면 서버에 저장된 답을 다시 읽는다.
+  assert.match(dock, /if \(failed\) window\.setTimeout\(\(\) => \{ void loadThread\(\);/);
   assert.match(dock, /placeholder=\{projectId \? "무엇을 만들고 싶으신가요\?"/);
   assert.match(canvas, /\{\/\* 대화 — 작성기\(하단 중앙 필\) \+ 세션 패널\(오른쪽 오버레이\)/);
   // 이미지 첨부(파일·붙여넣기) → 멀티모달로 전달.
