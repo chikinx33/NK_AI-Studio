@@ -3,6 +3,7 @@ import { addKnowledge, type ChatFileReference } from "../lib/api";
 import Markdown from "./Markdown";
 import { importSpreadsheet, isSpreadsheetFile, type SheetImportResult } from "../lib/xlsxImport";
 import ChatFileAttachments from "./ChatFileAttachments";
+import ImageLightbox from "./ImageLightbox";
 import SoundToggle from "./SoundToggle";
 import VoiceModeToggle from "./VoiceModeToggle";
 import { actionString, useUiAction } from "../lib/uiActions";
@@ -357,6 +358,9 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   // 스프레드시트는 base64 첨부가 아니라 '텍스트로 읽어 본문에 붙이는' 방식이다(설계서 §8).
   const [sheets, setSheets] = useState<SheetImportResult[]>([]);
   const [attachError, setAttachError] = useState("");
+  // 이미지 확대 미리보기 — 작성기 썸네일·메시지 버블 이미지 클릭 시 라이트박스로 띄운다
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const closeLightbox = useCallback(() => setLightbox(null), []);
 
   const ALLOWED_MIME = [
     "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
@@ -664,7 +668,15 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                       {hasAttachment && (
                         <div className="mb-2 flex flex-wrap gap-1.5">
                           {previews.map((src, i) => (
-                            <img key={i} src={src} alt="첨부 이미지" className="max-h-48 w-auto rounded-lg object-contain" />
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setLightbox({ images: previews, index: i })}
+                              className="cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-white/60"
+                              title="클릭하면 크게 볼 수 있어요"
+                            >
+                              <img src={src} alt="첨부 이미지" className="max-h-48 w-auto rounded-lg object-contain" />
+                            </button>
                           ))}
                         </div>
                       )}
@@ -860,7 +872,17 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             {attachments.map((a, i) => (
               <div key={i} className="relative">
                 {a.preview ? (
-                  <img src={a.preview} alt={a.name} className="h-16 w-16 rounded-lg object-cover border border-edge" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const imgs = attachments.filter((x) => x.preview).map((x) => x.preview);
+                      setLightbox({ images: imgs, index: Math.max(0, imgs.indexOf(a.preview)) });
+                    }}
+                    className="block cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400/70"
+                    title="클릭하면 크게 볼 수 있어요"
+                  >
+                    <img src={a.preview} alt={a.name} className="h-16 w-16 rounded-lg object-cover border border-edge" />
+                  </button>
                 ) : (
                   <div className="flex h-16 items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-gray-400">
                     📄 <span className="max-w-[120px] truncate">{a.name}</span>
@@ -945,6 +967,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         />
       </div>
       )}
+      {lightbox && <ImageLightbox images={lightbox.images} index={lightbox.index} onClose={closeLightbox} />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { describeSettingsForAgent, summarizeSettings, type CanvasSettings } from
 import GenerationSettingsPopover from "./GenerationSettingsPopover";
 import AgentSettingsPanel from "./AgentSettingsPanel";
 import Markdown from "./Markdown";
+import ImageLightbox from "./ImageLightbox";
 
 /**
  * 캔버스 작성기 — 두 모드가 한 자리를 번갈아 쓴다(동시에 뜨지 않는다).
@@ -72,6 +73,7 @@ export default function CanvasChatDock({
   const [turns, setTurns] = useState<DockTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [notice, setNotice] = useState("");
@@ -246,7 +248,7 @@ export default function CanvasChatDock({
                 return t.role === "user" ? (
                   <div key={t.id} className="flex flex-col items-end gap-1">
                     {t.attachments && t.attachments.length > 0 && (
-                      <div className="flex flex-wrap justify-end gap-1">{t.attachments.map((src, i) => <img key={i} src={src} alt="" className="h-16 w-16 rounded-lg object-cover" />)}</div>
+                      <div className="flex flex-wrap justify-end gap-1">{t.attachments.map((src, i) => <button key={i} type="button" onClick={() => setLightbox({ images: t.attachments || [], index: i })} className="cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-white/60" title="클릭하면 크게 볼 수 있어요"><img src={src} alt="" className="h-16 w-16 rounded-lg object-cover" /></button>)}</div>
                     )}
                     <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#1f2937] px-3 py-2 text-[13px] text-gray-100">{t.text}</div>
                   </div>
@@ -278,7 +280,7 @@ export default function CanvasChatDock({
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((a) => (
                   <div key={a.id} className="relative">
-                    <img src={a.preview} alt={a.name} className="h-12 w-12 rounded-lg object-cover" />
+                    <button type="button" onClick={() => { const imgs = attachments.map((x) => x.preview); setLightbox({ images: imgs, index: Math.max(0, imgs.indexOf(a.preview)) }); }} className="block cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400/70" title="클릭하면 크게 볼 수 있어요"><img src={a.preview} alt={a.name} className="h-12 w-12 rounded-lg object-cover" /></button>
                     <button type="button" onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))} className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/80 text-gray-200 hover:bg-red-700" aria-label="첨부 제거"><Icon d={XD} className="h-3 w-3" /></button>
                   </div>
                 ))}
@@ -333,6 +335,7 @@ export default function CanvasChatDock({
           </div>
         </div>
       </div>
+      {lightbox && <ImageLightbox images={lightbox.images} index={lightbox.index} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
