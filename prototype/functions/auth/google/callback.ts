@@ -4,7 +4,7 @@
 // 결과는 팝업 창에서 opener 로 postMessage(platform: 'google_login') 하여 전달한다.
 import { issueSessionToken, resolveSessionTtlSec } from "../../api/_shared/auth.js";
 import {
-  loadRegistry,
+  loadRegistryStrict,
   findUserByEmail,
   primaryAdminId,
 } from "../../api/_shared/admin-users";
@@ -21,6 +21,7 @@ interface LoginResult {
   email?: string;
   persistent?: boolean;
   error?: string;
+  detail?: string;
 }
 
 function popupHtml(result: LoginResult): Response {
@@ -113,7 +114,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!verified) return popupHtml({ ok: false, error: "email_not_verified", email });
 
     // 3) 승인된 이메일인지 확인 — 레지스트리에서 같은 이메일의 회원을 찾는다.
-    const reg = await loadRegistry(env);
+    //    저장소(GCS) 읽기 실패는 '미승인'과 구분해 별도 오류로 돌려준다. 그래야 서비스 계정 키
+    //    만료·권한·과금 같은 서버 문제를 "이메일 등록 안 됨"으로 오진하지 않는다.
+    let reg;
+    try {
+      reg = await loadRegistryStrict(env);
+    } catch (e: unknown) {
+      const detail = e instanceof Error ? e.message : String(e);
+      try { console.error("[google-login] registry read failed:", detail); } catch (_) { /* noop */ }
+      return popupHtml({ ok: false, error: "registry_unavailable", email, detail: detail.slice(0, 200) });
+    }
     const user = findUserByEmail(reg, email);
     if (!user) return popupHtml({ ok: false, error: "not_approved", email });
     if (user.active === false) return popupHtml({ ok: false, error: "account_disabled", email });

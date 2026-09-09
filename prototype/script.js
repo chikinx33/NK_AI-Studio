@@ -2955,13 +2955,21 @@
     if (googleLoginBtn && !googleLoginBtn.dataset.nkBound) {
       googleLoginBtn.dataset.nkBound = '1';
 
-      const googleErrorText = (code) => {
+      const googleErrorText = (code, r) => {
         const en = currentLang === 'en';
+        const email = (r && r.email) ? String(r.email) : '';
+        const who = email ? ` (${email})` : '';
+        const detail = (r && r.detail) ? `
+${String(r.detail)}` : '';
         switch (String(code || '')) {
           case 'not_approved':
             return en
-              ? 'This Google account is not approved. Ask the admin to register your email.'
-              : '승인되지 않은 구글 계정이에요. 관리자에게 이메일 등록을 요청해 주세요.';
+              ? `This Google account${who} is not approved. Ask the admin to register your email.`
+              : `승인되지 않은 구글 계정이에요${who}. 관리자에게 이메일 등록을 요청해 주세요.`;
+          case 'registry_unavailable':
+            return en
+              ? `Could not load the member list (server storage error). Please try again later.${detail}`
+              : `회원 목록을 불러오지 못했어요(서버 저장소 오류). 잠시 후 다시 시도해 주세요.${detail}`;
           case 'account_disabled':
             return en ? 'This account is disabled.' : '비활성화된 계정이에요.';
           case 'email_not_verified':
@@ -3004,7 +3012,7 @@
             }
             alert(translateUiText('로그인 성공'));
           } else {
-            alert(googleErrorText(r.error));
+            alert(googleErrorText(r.error, r));
           }
         };
         window.addEventListener('message', onMsg);
