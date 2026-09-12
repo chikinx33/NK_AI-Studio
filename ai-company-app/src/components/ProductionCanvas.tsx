@@ -947,16 +947,16 @@ export default function ProductionCanvas({
                     {selected.data.narration ? <p className="mt-3 rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">{String(selected.data.narration)}</p> : null}
                     {selected.data.lyrics ? <p className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">♪ {String(selected.data.lyrics)}</p> : null}
                     <details className="mt-3 rounded-lg border border-edge bg-[#0b1018] p-2" open>
-                      <summary className="cursor-pointer text-[10px] font-bold text-gray-500">스틸 프롬프트 (서버 조립 · 실제 전송값)</summary>
-                      <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap text-[10px] leading-snug text-gray-300">{String(selected.data.imagePrompt || "")}</pre>
+                      <summary className="cursor-pointer text-[11px] font-bold text-gray-400">스틸 프롬프트 (서버 조립 · 실제 전송값)</summary>
+                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-gray-200">{String(selected.data.imagePrompt || "")}</pre>
                     </details>
                     <details className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2">
-                      <summary className="cursor-pointer text-[10px] font-bold text-gray-500">영상 프롬프트 (서버 조립 · 실제 전송값)</summary>
-                      <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap text-[10px] leading-snug text-gray-300">{String(selected.data.videoPrompt || "")}</pre>
+                      <summary className="cursor-pointer text-[11px] font-bold text-gray-400">영상 프롬프트 (서버 조립 · 실제 전송값)</summary>
+                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-gray-200">{String(selected.data.videoPrompt || "")}</pre>
                     </details>
                     {selected.data.lineage && (
                       <details className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2">
-                        <summary className="cursor-pointer text-[10px] font-bold text-gray-500">계보 (스틸 {String(selected.data.lineage.imageAttempts || 0)}회 · 영상 {String(selected.data.lineage.videoAttempts || 0)}회)</summary>
+                        <summary className="cursor-pointer text-[11px] font-bold text-gray-400">계보 (스틸 {String(selected.data.lineage.imageAttempts || 0)}회 · 영상 {String(selected.data.lineage.videoAttempts || 0)}회)</summary>
                         <div className="mt-1 space-y-1 text-[10px] text-gray-400">
                           {selected.data.lineage.videoFromImage ? <p>영상 원본 스틸: <span className="break-all text-gray-500">{String(selected.data.lineage.videoFromImage)}</span></p> : null}
                           {selected.data.lineage.imagePrompt ? <p>마지막 스틸 프롬프트: <span className="text-gray-500">{String(selected.data.lineage.imagePrompt).slice(0, 200)}…</span></p> : null}
