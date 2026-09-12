@@ -43,13 +43,32 @@ function bumpHtmlAssetVersions(next) {
   });
 }
 
+// 서버 응답에 실리는 SERVER_VERSION(functions/api/scenario.js)을 config.js 와 같은 값으로 맞춘다.
+// 손으로 올리던 값이라 늘 뒤처져, 진단 패널이 매번 '버전 불일치' 허위 경보를 냈다.
+function bumpServerVersion(next) {
+  const file = 'prototype/functions/api/scenario.js';
+  try {
+    if (!fs.existsSync(file)) return;
+    let txt = fs.readFileSync(file, 'utf8');
+    const re = /const SERVER_VERSION = "(\d+)\.(\d+)";/;
+    if (!re.test(txt)) return;
+    const updated = txt.replace(re, `const SERVER_VERSION = "${next}";`);
+    if (updated === txt) return;
+    fs.writeFileSync(file, updated, 'utf8');
+    cp.execSync(`git add "${file}"`);
+    process.stdout.write(`pre-commit: SERVER_VERSION synced to ${next}\n`);
+  } catch (e) {
+    process.stderr.write(`pre-commit: SERVER_VERSION sync failed: ${e.message}\n`);
+  }
+}
+
 function main() {
   const target = 'prototype/js/config.js';
   try {
     if (!fs.existsSync(target)) return;
     if (!isStaged(target)) {
       const next = bumpVersion(target);
-      if (next) bumpHtmlAssetVersions(next);
+      if (next) { bumpHtmlAssetVersions(next); bumpServerVersion(next); }
     }
   } catch (e) {
     process.stderr.write(`pre-commit bump failed: ${e.message}\n`);
