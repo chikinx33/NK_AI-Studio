@@ -2531,6 +2531,10 @@
       const i = lines.indexOf(placeholder);
       if (i >= 0) lines.splice(i, 1, next); else lines.push(next);
     };
+    const replaceDiagLines = (lines, placeholder, nextLines) => {
+      const i = lines.indexOf(placeholder);
+      if (i >= 0) lines.splice(i, 1, ...nextLines); else nextLines.forEach((l) => lines.push(l));
+    };
 
     const showScenarioMetaToast = (text) => {
       try {
@@ -3043,6 +3047,7 @@
           let flatScenes = res.scenes;
           try {
             if (NK.api?.scenarioShots) {
+              const p2StartedAt = Date.now();
               const shotsRes = await NK.api.scenarioShots({
                 scenes: res.scenes,
                 language: payload?.language === 'en' ? 'en' : 'ko',
@@ -3062,15 +3067,20 @@
                   const enforcedLine = (typeof shotsM.tokensEnforcedShots === 'number')
                     ? `@토큰 자동 보정 (Pass 2 컷): ${shotsM.tokensEnforcedShots}회`
                     : '@토큰 자동 보정 (Pass 2 컷): -';
-                  replaceDiagLine(metaLines, DIAG_PENDING_PASS2, enforcedLine);
-                  // Pass 2 요약: 씬→컷 수, 성공/폴백, 시퀀스 검증기가 손댄 횟수(서버 meta 가 이미 세고 있다)
+                  // Pass 2 요약: 씬→컷 수, 성공/폴백, 시퀀스 검증기가 손댄 횟수(서버 meta 가 이미 세고 있다).
+                  // 자리표시자 자리에 블록째 끼운다 — 장소 줄이 먼저 끝나도 순서가 Pass 1 → Pass 2 → 장소로 유지된다.
                   const p2Total = Number(shotsM.total) || 0;
                   const p2Cuts = Number(shotsM.flatCount) || (Array.isArray(flatScenes) ? flatScenes.length : 0);
-                  metaLines.push(`컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})`);
-                  metaLines.push(`자동 보정 (Pass 2): 같은 셋업 사이즈 이동 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`);
+                  const p2Elapsed = (typeof p2StartedAt === 'number') ? ` · 소요 ${((Date.now() - p2StartedAt) / 1000).toFixed(1)}s` : '';
+                  const pass2Lines = [
+                    `컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})${p2Elapsed}`,
+                    `자동 보정 (Pass 2): 같은 셋업 사이즈 이동 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
+                    enforcedLine,
+                  ];
                   if (Array.isArray(shotsM.fallbackReasons) && shotsM.fallbackReasons.length) {
-                    metaLines.push((payload?.language === 'en' ? 'Cut decomposition fell back: ' : '컷 분해 폴백: ') + shotsM.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));
+                    pass2Lines.push((payload?.language === 'en' ? 'Cut decomposition fell back: ' : '컷 분해 폴백: ') + shotsM.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));
                   }
+                  replaceDiagLines(metaLines, DIAG_PENDING_PASS2, pass2Lines);
                   showScenarioMetaToast(metaLines.join('\n'));
                   console.log('[scenario meta:pass2]', {
                     tokensEnforcedShots: shotsM.tokensEnforcedShots,

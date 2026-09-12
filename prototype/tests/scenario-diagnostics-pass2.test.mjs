@@ -31,7 +31,9 @@ test('★진단 패널은 뒤 단계를 자리표시자로 예고하고 끝나�
   const ui = read('prototype/js/ui/scenario.js');
   assert.match(ui, /const DIAG_PENDING_PASS2 = '컷 분해 \(Pass 2\): 진행 중…';/);
   assert.match(ui, /const DIAG_PENDING_LOCATIONS = '장소\(세트\): 추출 중…';/);
-  assert.match(ui, /replaceDiagLine\(metaLines, DIAG_PENDING_PASS2, enforcedLine\)/);
+  assert.match(ui, /replaceDiagLines\(metaLines, DIAG_PENDING_PASS2, pass2Lines\)/, 'Pass 2 요약은 자리표시자 자리에 블록째 들어가야 순서가 유지된다');
+  assert.match(ui, /const p2StartedAt = Date\.now\(\);/);
+  assert.match(ui, /소요 \$\{\(\(Date\.now\(\) - p2StartedAt\) \/ 1000\)\.toFixed\(1\)\}s/);
   assert.match(ui, /replaceDiagLine\(metaLines, DIAG_PENDING_LOCATIONS, '장소\(세트\): ' \+ epLocs\.length/);
   assert.match(ui, /장소\(세트\): 추출 실패 — /);
   assert.match(ui, /장소\(세트\): 0개 — 씬에 장소가 없어/);
