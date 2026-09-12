@@ -18,29 +18,29 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1675" />
-  <script src="core.js?v=3.1675" defer></script>
-  <script src="js/config.js?v=3.1675" defer></script>
-  <script src="js/utils.js?v=3.1675" defer></script>
-  <script src="store.js?v=3.1675" defer></script>
-  <script src="api.js?v=3.1675" defer></script>
-  <script src="js/state.js?v=3.1675" defer></script>
-  <script src="js/auth.js?v=3.1675" defer></script>
-  <script src="js/navigation.js?v=3.1675" defer></script>
-  <script src="js/service/media.js?v=3.1675" defer></script>
-  <script src="js/service/project.js?v=3.1675" defer></script>
-  <script src="js/service/character-traits.js?v=3.1675" defer></script>
-  <script src="js/service/character-registry.js?v=3.1675" defer></script>
-  <script src="js/service/content-library.js?v=3.1675" defer></script>
-  <script src="js/service/scene-assets.js?v=3.1675" defer></script>
-  <script src="js/service/episode-locations.js?v=3.1675" defer></script>
-  <script src="js/service/shot-vocab.js?v=3.1675" defer></script>
-  <script src="js/ui/common.js?v=3.1675" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1675" defer></script>
-  <script src="js/scenario-progress.js?v=3.1675" defer></script>
-  <script src="js/ui/scenario.js?v=3.1675" defer></script>
-  <script src="js/ui/production.js?v=3.1675" defer></script>
-  <script src="script.js?v=3.1675" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1676" />
+  <script src="core.js?v=3.1676" defer></script>
+  <script src="js/config.js?v=3.1676" defer></script>
+  <script src="js/utils.js?v=3.1676" defer></script>
+  <script src="store.js?v=3.1676" defer></script>
+  <script src="api.js?v=3.1676" defer></script>
+  <script src="js/state.js?v=3.1676" defer></script>
+  <script src="js/auth.js?v=3.1676" defer></script>
+  <script src="js/navigation.js?v=3.1676" defer></script>
+  <script src="js/service/media.js?v=3.1676" defer></script>
+  <script src="js/service/project.js?v=3.1676" defer></script>
+  <script src="js/service/character-traits.js?v=3.1676" defer></script>
+  <script src="js/service/character-registry.js?v=3.1676" defer></script>
+  <script src="js/service/content-library.js?v=3.1676" defer></script>
+  <script src="js/service/scene-assets.js?v=3.1676" defer></script>
+  <script src="js/service/episode-locations.js?v=3.1676" defer></script>
+  <script src="js/service/shot-vocab.js?v=3.1676" defer></script>
+  <script src="js/ui/common.js?v=3.1676" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1676" defer></script>
+  <script src="js/scenario-progress.js?v=3.1676" defer></script>
+  <script src="js/ui/scenario.js?v=3.1676" defer></script>
+  <script src="js/ui/production.js?v=3.1676" defer></script>
+  <script src="script.js?v=3.1676" defer></script>
 </head>
 
 <body class="layout-fixed">
@@ -204,6 +204,7 @@
               <div class="caption-actions">
                 <button type="submit" form="scenario-form" class="btn-primary" data-i18n="scenario_generate">시나리오 생성</button>
                 <button type="reset" form="scenario-form" class="btn-ghost" data-i18n="scenario_reset">초기화</button>
+                <button type="button" class="btn-secondary" id="decompose-shots" data-i18n="scenario_redecompose" data-i18n-title="scenario_redecompose_hint" title="이야기는 그대로 두고, 지금 컷들의 화면·행동·타임라인·블로킹을 최신 규칙으로 다시 써요. 결과는 저장하기를 눌러야 남아요.">컷 다시 나누기</button>
                 <button class="btn-secondary" id="save-draft" data-i18n="scenario_save">저장하기</button>
               </div>
             </div>

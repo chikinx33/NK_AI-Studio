@@ -3249,6 +3249,10 @@
     }
 
     // 컷 분해 버튼 — 기존 씬을 유지한 채 Pass 2 만 다시 돌려서 shots 추가/갱신
+    // "컷 다시 나누기": 이야기(Pass 1)는 그대로 두고 지금 컷들만 최신 분해 규칙으로 다시 쓴다.
+    // 컷 하나를 씬 하나로 넘기므로 컷 경계·가사 구간·나레이션 배치는 그대로고, 화면(t=0)·행동·
+    // 타임라인·블로킹만 새로 쓰인다. 예전 핸들러는 버튼 자체가 HTML 에 없었고, 서버가 평탄화 응답으로
+    // 바뀐 뒤엔 결과를 읽지도 못했다(scene.shots 를 기대). 결과는 저장하기를 눌러야 남는다.
     const decomposeBtn = document.getElementById('decompose-shots');
     if (decomposeBtn) {
       decomposeBtn.onclick = async () => {
@@ -3265,42 +3269,37 @@
             return;
           }
           const lang = (draft?.payload?.language === 'en') ? 'en' : 'ko';
-          NK.core.setLoading(true, '씬을 컷 단위로 분해 중...');
-          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang, characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : []) });
-          const decomposed = (shotsRes && Array.isArray(shotsRes.scenes)) ? shotsRes.scenes : null;
-          if (!decomposed) {
+          const ask = lang === 'en'
+            ? `Re-cut ${mergedBase.length} cuts with the latest rules? Cut boundaries and lyrics stay; composition, action, timeline and blocking are rewritten. Nothing is saved until you press Save.`
+            : `지금 ${mergedBase.length}개 컷의 화면·행동·타임라인·블로킹을 최신 규칙으로 다시 쓸까요? 컷 경계와 가사는 그대로예요. 결과는 저장하기를 눌러야 남아요.`;
+          if (!confirm(ask)) return;
+          // 컷 → 분해 입력(씬) 모양으로. 서버는 visual 을 읽으므로 화면/행동에서 만들어 준다.
+          const asScenes = mergedBase.map((c, i) => Object.assign({}, c, {
+            id: c.id != null ? c.id : (i + 1),
+            visual: String(c.visual || c.shot || [c.composition, c.action].filter(Boolean).join(' / ') || '').trim(),
+          }));
+          NK.core.setLoading(true, lang === 'en' ? 'Re-cutting shots…' : '컷을 최신 규칙으로 다시 나누는 중...');
+          const shotsRes = await NK.api.scenarioShots({ scenes: asScenes, language: lang, characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : []) });
+          const flat = (shotsRes && Array.isArray(shotsRes.scenes) && shotsRes.meta?.flattened) ? shotsRes.scenes : null;
+          if (!flat || !flat.length) {
             alert('컷 분해 응답이 비었습니다.');
             return;
           }
-          // 기존 scene 의 shots 만 교체 (다른 필드는 그대로)
-          const byId = new Map(decomposed.map(s => [String(s?.id), s]));
-          const updated = mergedBase.map((s, i) => {
-            const fresh = byId.get(String(s?.id)) || decomposed[i];
-            const newShots = (fresh && Array.isArray(fresh.shots)) ? fresh.shots : (Array.isArray(s.shots) ? s.shots : []);
-            return Object.assign({}, s, { shots: newShots });
-          });
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
-          draft.scenes = normalizeScenes(updated);
-          if (NK.service?.project?.upsertLocalDraft) {
-            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
-          } else {
-            if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-            NK.store.saveDrafts([draft]);
-          }
-          // 서버에도 즉시 반영 (가능하면)
-          if (NK.api?.projectSave) {
-            try {
-              await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
-            } catch (saveErr) {
-              console.warn('[scenario] decompose-shots: 서버 저장 실패 (로컬은 유지):', saveErr);
-            }
-          }
+          draft.scenes = normalizeScenes(flat);
+          // 저장하지 않는다 — 생성 결과는 저장하기로만 영속화(이전 컷으로 되돌릴 여지를 남긴다).
           invalidatePipelineCache();
-          // UI 다시 그림
           scenario.renderScenes(draft.scenes || []);
-          const total = decomposed.reduce((acc, s) => acc + (Array.isArray(s.shots) ? s.shots.length : 0), 0);
           const meta = shotsRes.meta || {};
-          alert(`컷 분해 완료: ${total} 컷 (성공 ${meta.ok || 0} / 실패 ${meta.failed || 0} / fallback ${meta.fallback || 0}). 저장됨.`);
+          const lines = [
+            `컷 다시 나누기 완료: 씬 ${Number(meta.total) || asScenes.length} → 컷 ${flat.length} (성공 ${Number(meta.ok) || 0} / 폴백 ${Number(meta.fallback) || 0})`,
+            `자동 보정: 같은 셋업 사이즈 이동 ${Number(meta.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(meta.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(meta.cameraSwaps) || 0}회`,
+          ];
+          if (Array.isArray(meta.fallbackReasons) && meta.fallbackReasons.length) {
+            lines.push('컷 분해 폴백: ' + meta.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));
+          }
+          lines.push(lang === 'en' ? 'Not saved yet — press Save to keep this result.' : '아직 저장되지 않았어요. 마음에 들면 저장하기를 눌러 주세요.');
+          showScenarioMetaToast(lines.join('\n'));
         } catch (err) {
           alert('컷 분해 실패: ' + (err?.message || err));
         } finally {
