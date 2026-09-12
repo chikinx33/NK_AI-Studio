@@ -29,10 +29,12 @@ test('이미지 프롬프트에 방위·블로킹 기하가 주입된다 (씬·�
 test('컷 레퍼런스를 고르지 않은 컷은 같은 장소의 직전 스틸을 자동 연속성 앵커로 붙인다', () => {
   const src = read('prototype/ui/pipeline-image.js');
   assert.match(src, /Auto continuity reference \(image\)/, '자동 연속성 로그가 없습니다');
-  assert.match(src, /referenceKind: 'continuity',\n\s+imageDataUrl: prevImg/, '직전 스틸을 continuity 로 붙이지 않습니다');
+  assert.match(src, /referenceKind: 'continuity',\n\s+imageDataUrl: prevImageUrl/, '직전 스틸을 continuity 로 붙이지 않습니다');
+  // 5단계: 플레이트가 없을 때만 룩 참조로 붙이고, 같은 순간이면 카메라 재구성으로 간다
+  assert.match(src, /else if \(prevCut && !hasPlateRef\)/);
   assert.match(src, /do NOT copy its framing, camera angle/, '연속성 레퍼런스에 구도 복제 금지 지시가 없습니다');
   // 장소가 바뀌면 잇지 않는다
-  assert.match(src, /prevLoc !== thisLoc\) break/, '장소 경계에서 연속성을 끊지 않습니다');
+  assert.match(src, /prevLoc !== thisLoc\) return null/, '장소 경계에서 연속성을 끊지 않습니다');
 });
 
 test('bgref 모달: 4방위 플레이트 생성기가 있고 dir-* id 규약을 쓴다', () => {

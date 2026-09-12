@@ -47,13 +47,15 @@ test('(4) front 방위 힌트가 서버·브라우저 모두 같은 문장으로
   assert.notEqual(buildCameraDirectionHint('back', 'en'), server);
 });
 
-test('(3) 자동 연속성 앵커는 data: URL 직전 컷을 imagePath 영속 URL 로 대체해 잇는다', () => {
+test('(3) 직전 컷 스틸이 data: URL 이면 imagePath 로 영속 URL 을 만들어 잇는다', () => {
   const src = read('prototype/ui/pipeline-image.js');
-  const block = src.slice(src.indexOf('자동 연속성 앵커'), src.indexOf('Auto continuity reference (image)'));
-  assert.ok(block.length > 0, '자동 연속성 앵커 블록을 찾지 못함');
-  assert.match(block, /prevSc\.imagePath/, 'imagePath 폴백이 없습니다');
-  assert.match(block, /mediaProxyObjectUrl\(prevObj\)/, '영속 프록시 URL 로 바꾸지 않습니다');
-  assert.doesNotMatch(block, /indexOf\('data:'\) === 0\) continue/, 'data: URL 을 여전히 그냥 건너뜁니다');
+  const start = src.indexOf('function persistedImageUrlOf(row)');
+  assert.ok(start > 0, 'persistedImageUrlOf 가 없습니다');
+  const fn = src.slice(start, src.indexOf('function locKeyOfRow', start));
+  assert.match(fn, /row\.imagePath/, 'imagePath 폴백이 없습니다');
+  assert.match(fn, /mediaProxyObjectUrl\(obj\)/, '영속 프록시 URL 로 바꾸지 않습니다');
+  assert.match(fn, /indexOf\('data:'\) !== 0/);
+  assert.doesNotMatch(src, /indexOf\('data:'\) === 0\) continue; \/\/ 저장 안 된 인라인은 제외/, 'data: URL 을 여전히 그냥 건너뜁니다');
 });
 
 test('(1) 역방향 image_tail 체인이 사라지고, 스틸 없는 컷은 직전 마지막 프레임에서 시작한다', () => {

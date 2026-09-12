@@ -195,6 +195,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         videoPrompt: str(value.videoPrompt),
         // data:/blob: 은 절대 영속화하지 않는다(과거 data: URL 영속화로 OOM 난 전례 — stripDataUrl 참고).
         videoFromImage: isInlineUrl(value.videoFromImage) ? "" : str(value.videoFromImage),
+        // 이 스틸이 어떤 연속성 경로로 나왔나(camera-reconstruct | plate | look-only | none) — 캔버스 계보 표시용.
+        imageContinuity: str(value.imageContinuity),
         imageAttempts: count(value.imageAttempts),
         videoAttempts: count(value.videoAttempts),
         agentJobId: str(value.agentJobId),

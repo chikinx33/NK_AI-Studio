@@ -309,7 +309,7 @@ export function stepShotType(prevPrevType, prevType) {
 }
 
 // "인물이 실제로 이동한다"는 서술. 이게 있으면 무대 좌표가 바뀌는 것을 허용한다.
-const MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서]|앉|눕|넘어|올라|내려|건너|따라가|옮기|밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
+const MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서난선]|앉|눕|넘어|올라|내려|건너|따라가|옮기|밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
 
 function tokenMentioned(text, token) {
   const t = String(token || "").trim();

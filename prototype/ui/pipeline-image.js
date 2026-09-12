@@ -1207,6 +1207,133 @@
     } catch (_) {}
   }
 
+  // ── 연속성 결정 헬퍼(순수) ────────────────────────────────────────────
+  // "인물이 실제로 이동한다"는 서술. 서버 rebalancer.js 의 MOVE_RE 와 같은 목록을 유지한다.
+  var MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서난선]|앉|눕|넘어|올라|내려|건너|따라가|옮기|밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
+
+  // 컷(씬 또는 샷)의 영속 이미지 URL. data:/blob: 이면 생성 시 보존한 imagePath 로 프록시 URL 을 만든다.
+  function persistedImageUrlOf(row) {
+    if (!row) return '';
+    var url = String(row.imageDataUrl || '').trim();
+    if (url && url.indexOf('data:') !== 0 && url.indexOf('blob:') !== 0) return url;
+    var obj = String(row.imagePath || '').trim();
+    return (obj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : '';
+  }
+
+  function locKeyOfRow(row) {
+    return String((row && (row.sceneLocation || row.location)) || '').trim().toLowerCase();
+  }
+
+  // 같은 세트의 직전 생성 컷(씬 경로). 장소가 바뀌면 잇지 않는다. 반환: { row, imageUrl } | null
+  function findPrevCutInSameSet(scenes, idx) {
+    var list = Array.isArray(scenes) ? scenes : [];
+    var cur = list[idx];
+    if (!cur) return null;
+    var thisLoc = locKeyOfRow(cur);
+    for (var i = idx - 1; i >= 0; i--) {
+      var prev = list[i];
+      if (!prev) continue;
+      var prevLoc = locKeyOfRow(prev);
+      if (thisLoc && prevLoc && prevLoc !== thisLoc) return null;
+      var url = persistedImageUrlOf(prev);
+      if (url) return { row: prev, imageUrl: url };
+    }
+    return null;
+  }
+
+  // 같은 세트의 직전 생성 샷(컷 경로): 같은 씬의 앞 샷 → 앞 씬(같은 세트)의 마지막 샷들 순.
+  function findPrevShotInSameSet(scenes, sceneIdx, shotIdx) {
+    var list = Array.isArray(scenes) ? scenes : [];
+    var cur = list[sceneIdx];
+    if (!cur) return null;
+    var thisLoc = locKeyOfRow(cur);
+    for (var si = sceneIdx; si >= 0; si--) {
+      var sc = list[si];
+      if (!sc) continue;
+      if (si !== sceneIdx) {
+        var loc = locKeyOfRow(sc);
+        if (thisLoc && loc && loc !== thisLoc) return null;
+      }
+      var shots = Array.isArray(sc.shots) ? sc.shots : [];
+      var from = si === sceneIdx ? shotIdx - 1 : shots.length - 1;
+      for (var j = from; j >= 0; j--) {
+        var url = persistedImageUrlOf(shots[j]);
+        if (url) return { row: Object.assign({ sceneLocation: sc.sceneLocation }, shots[j]), imageUrl: url };
+      }
+    }
+    return null;
+  }
+
+  function blockingMap(row) {
+    var out = {};
+    var list = Array.isArray(row && row.blocking) ? row.blocking : [];
+    list.forEach(function (b) {
+      if (!b || !b.token) return;
+      out[String(b.token).toLowerCase()] = { x: String(b.x || 'center'), depth: String(b.depth || 'mid') };
+    });
+    return out;
+  }
+
+  // "같은 순간을 다른 카메라로" 인가: 두 컷 모두 블로킹이 있고, 같은 인물 집합이 같은 자리(x/depth)에 있으며,
+  // 이번 컷의 행동·비트에 이동 서술이 없다. (facing 은 대화 방향이라 비교하지 않는다)
+  function isSameMomentCoverage(prevRow, row) {
+    var a = blockingMap(prevRow);
+    var b = blockingMap(row);
+    var ak = Object.keys(a);
+    var bk = Object.keys(b);
+    if (!ak.length || !bk.length || ak.length !== bk.length) return false;
+    for (var i = 0; i < bk.length; i++) {
+      var k = bk[i];
+      if (!a[k]) return false;
+      if (a[k].x !== b[k].x || a[k].depth !== b[k].depth) return false;
+    }
+    var moveText = [row && row.action].concat(Array.isArray(row && row.beats) ? row.beats.map(function (bt) { return bt && bt.what; }) : []).filter(Boolean).join('\n');
+    if (MOVE_RE.test(moveText)) return false;
+    return true;
+  }
+
+  function referenceListHasPlate(referencePayload) {
+    var list = referencePayload && Array.isArray(referencePayload.referenceImages) ? referencePayload.referenceImages : [];
+    return list.some(function (r) { return r && r.referenceKind === 'environment'; });
+  }
+
+  // (B) 카메라 재구성: 직전 스틸을 1번 소스로 세우고 나머지 레퍼런스는 뒤로 민다.
+  function applyCameraReconstruct(referencePayload, finalPrompt, prevImageUrl) {
+    var rest = referencePayload && Array.isArray(referencePayload.referenceImages) ? referencePayload.referenceImages.slice() : [];
+    var refs = [{
+      referenceId: 1,
+      referenceType: 'REFERENCE_TYPE_STYLE',
+      referenceKind: 'continuity',
+      imageDataUrl: prevImageUrl,
+      subjectDescription: 'the previous cut of this exact same moment, seen from another camera',
+      subjectType: 'SUBJECT_TYPE_DEFAULT'
+    }].concat(rest.map(function (r) { return Object.assign({}, r, { referenceId: (Number(r && r.referenceId) || 1) + 1 }); }));
+    var line = 'SAME MOMENT, NEW CAMERA: Reference image 1 shows this exact moment from another camera. Keep every character, pose, prop, and set element exactly where it is in that image. Change ONLY the camera to the setup described above (shot size, camera direction, framing). Do NOT return the same framing as reference image 1.';
+    var nextPrompt = String(finalPrompt || '') + '\n' + line;
+    return {
+      referencePayload: referencePayload
+        ? Object.assign({}, referencePayload, { referenceImages: refs })
+        : { referenceImages: refs, promptPrefix: '', promptSuffix: '', referenceMeta: [] },
+      finalPrompt: nextPrompt
+    };
+  }
+
+  // (C) 플레이트가 없을 때만: 직전 스틸을 룩 참조로 덧붙인다(구도는 프롬프트가 정한다).
+  function appendLookOnlyContinuity(referencePayload, prevImageUrl) {
+    var refs = referencePayload && Array.isArray(referencePayload.referenceImages) ? referencePayload.referenceImages.slice() : [];
+    refs.push({
+      referenceId: refs.length + 1,
+      referenceType: 'REFERENCE_TYPE_STYLE',
+      referenceKind: 'continuity',
+      imageDataUrl: prevImageUrl,
+      subjectDescription: 'an earlier cut in this same physical space — match the set dressing, architecture, palette and lighting of this place, but do NOT copy its framing, camera angle, or which characters appear; those come from the prompt',
+      subjectType: 'SUBJECT_TYPE_DEFAULT'
+    });
+    return referencePayload
+      ? Object.assign({}, referencePayload, { referenceImages: refs })
+      : { referenceImages: refs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
+  }
+
   // ── 세트 준비 게이트 ─────────────────────────────────────────────────
   // 컷 이미지를 만들기 전에 그 컷의 장소 플레이트(마스터 + 쓰이는 방위)를 반드시 준비한다.
   // 플레이트가 없으면 텍스트만으로 컷마다 공간을 새로 지어 배경이 컷마다 달라지던 근본 원인.
@@ -1281,6 +1408,9 @@
     var rawP = finalPrompt;
     var referencePayload = null;
     var imageCharacterNegativePrompt = '';
+    var imageGenMode = 'text-to-image';
+    var imageCameraTarget = '';
+    var imageContinuityMode = 'none';
     try {
       var __charContextOk = hasResolvableCharacterContext(st.payload || {});
       if (!__charContextOk) {
@@ -1494,42 +1624,30 @@
           : { referenceImages: baseRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
       }
     } else {
-      // ── 자동 연속성 앵커 ──────────────────────────────────────────────
-      // 사용자가 컷 레퍼런스를 고르지 않았어도, 같은 장소의 직전 생성 컷이 있으면
-      // 그 스틸을 continuity 레퍼런스로 붙인다. 컷마다 공간이 새로 지어져
-      // B→C 화면이 튀던 문제의 완화 장치 — 세트(공간)의 정체성만 잇고,
-      // 구도·카메라·등장 인물은 이 컷의 프롬프트가 결정한다.
+      // ── 연속성 결정(세트 위에서 카메라만 옮긴다) ─────────────────────────
+      // 같은 세트의 직전 컷이 있을 때, 세 갈래로 나뉜다.
+      //  (B) 같은 순간·같은 배치(블로킹 동일, 이동 서술 없음) → "카메라 재구성":
+      //      직전 스틸을 1번 소스로 image-to-image(scene 모드) — 인물·소품·세트는 그대로 두고 카메라만 옮긴다.
+      //  (A) 배치가 다르거나 이동이 있고 플레이트가 붙어 있음 → 스틸을 붙이지 않는다.
+      //      (직전 스틸은 "룩만 참고"라고 써도 구도를 끌고 간다 — 세트 정체성은 플레이트가 이미 담당)
+      //  (C) 플레이트가 없음(장소 미배정 등) → 예전대로 직전 스틸을 룩 참조로만 붙인다.
       try {
-        var prevScenes = st.scenes || [];
-        var thisLoc = String(scene.sceneLocation || '').trim().toLowerCase();
-        for (var pi = opts.idx - 1; pi >= 0; pi--) {
-          var prevSc = prevScenes[pi];
-          if (!prevSc) continue;
-          var prevLoc = String(prevSc.sceneLocation || '').trim().toLowerCase();
-          if (thisLoc && prevLoc && prevLoc !== thisLoc) break; // 장소가 바뀌면 잇지 않는다
-          var prevImg = String(prevSc.imageDataUrl || '').trim();
-          // 종횡비 보정을 거친 스틸은 data: URL 이라 그대로 보내면 요청이 비대해진다.
-          // 대신 생성 시 보존해 둔 GCS objectName(imagePath)으로 영속 URL 을 만들어 쓴다.
-          // 예전엔 여기서 그냥 건너뛰어, 보정된 컷 뒤로는 앵커가 조용히 사라졌다.
-          if (prevImg.indexOf('data:') === 0 || prevImg.indexOf('blob:') === 0) {
-            var prevObj = String(prevSc.imagePath || '').trim();
-            prevImg = (prevObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(prevObj) : '';
-          }
-          if (!prevImg) continue; // 영속 참조가 없는 컷은 잇지 않는다
-          var autoRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [];
-          autoRefs.push({
-            referenceId: autoRefs.length + 1,
-            referenceType: 'REFERENCE_TYPE_STYLE',
-            referenceKind: 'continuity',
-            imageDataUrl: prevImg,
-            subjectDescription: 'an earlier cut in this same physical space — match the set dressing, architecture, palette and lighting of this place, but do NOT copy its framing, camera angle, or which characters appear; those come from the prompt',
-            subjectType: 'SUBJECT_TYPE_DEFAULT'
-          });
-          referencePayload = referencePayload
-            ? Object.assign({}, referencePayload, { referenceImages: autoRefs })
-            : { referenceImages: autoRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
-          try { console.log('Auto continuity reference (image):', { sceneId: scene.id, fromSceneId: prevSc.id }); } catch (_) {}
-          break;
+        var prevCut = findPrevCutInSameSet(st.scenes || [], opts.idx);
+        var hasPlateRef = referenceListHasPlate(referencePayload);
+        if (prevCut && isSameMomentCoverage(prevCut.row, scene)) {
+          var recon = applyCameraReconstruct(referencePayload, finalPrompt, prevCut.imageUrl);
+          referencePayload = recon.referencePayload;
+          finalPrompt = recon.finalPrompt;
+          imageGenMode = 'image-to-image';
+          imageCameraTarget = 'scene';
+          imageContinuityMode = 'camera-reconstruct';
+          try { console.log('Camera reconstruct from previous cut (image):', { sceneId: scene.id, fromSceneId: prevCut.row.id }); } catch (_) {}
+        } else if (prevCut && !hasPlateRef) {
+          referencePayload = appendLookOnlyContinuity(referencePayload, prevCut.imageUrl);
+          imageContinuityMode = 'look-only';
+          try { console.log('Auto continuity reference (image):', { sceneId: scene.id, fromSceneId: prevCut.row.id }); } catch (_) {}
+        } else if (prevCut) {
+          imageContinuityMode = 'plate';
         }
       } catch (_) {}
     }
@@ -1570,7 +1688,9 @@
         prompt: finalPrompt,
         aspectRatio: aspectRatio,
         projectId: projectId,
-        generationMode: 'text-to-image',
+        // 카메라 재구성 컷만 image-to-image(scene). 그 외는 text-to-image 로 다중 캐릭터 라벨 경로를 유지한다.
+        generationMode: imageGenMode,
+        cameraTargetMode: imageCameraTarget || undefined,
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
       // [진단] OpenAI 요청이 어느 COLO(데이터센터)로 나갔는지 출력 — 지역 차단 가설 검증용.
@@ -1605,6 +1725,7 @@
       var prevLineage = (scene.lineage && typeof scene.lineage === 'object') ? scene.lineage : {};
       var nextLineage = Object.assign({}, prevLineage, {
         imagePrompt: String(finalPrompt || ''),
+        imageContinuity: imageContinuityMode,
         imageAttempts: (Number(prevLineage.imageAttempts) || 0) + 1,
         updatedAt: new Date().toISOString()
       });
@@ -1701,6 +1822,9 @@
     var rawP = basePrompt;
     var referencePayload = null;
     var imageCharacterNegativePrompt = '';
+    var imageGenMode = 'text-to-image';
+    var imageCameraTarget = '';
+    var imageContinuityMode = 'none';
 
     // ── 캐릭터 레퍼런스 해결: scene 단위와 동일 체인을 그대로 사용 ──
     try {
@@ -1782,11 +1906,31 @@
       finalPrompt = envMergedShot.finalPrompt;
     } catch (_) { }
 
+    // ── 연속성 결정(컷 경로) — 씬 경로와 같은 세 갈래. 직전 컷 = 같은 씬의 앞 샷, 없으면 같은 세트의 앞 씬 마지막 샷.
+    try {
+      var prevShotCut = findPrevShotInSameSet(st.scenes || [], opts.sceneIdx, shotIdx);
+      var hasPlateRefShot = referenceListHasPlate(referencePayload);
+      if (prevShotCut && isSameMomentCoverage(prevShotCut.row, shot)) {
+        var reconShot = applyCameraReconstruct(referencePayload, finalPrompt, prevShotCut.imageUrl);
+        referencePayload = reconShot.referencePayload;
+        finalPrompt = reconShot.finalPrompt;
+        imageGenMode = 'image-to-image';
+        imageCameraTarget = 'scene';
+        imageContinuityMode = 'camera-reconstruct';
+        try { console.log('Camera reconstruct from previous cut (shot image):', { shotId: shot.id, fromShotId: prevShotCut.row.id }); } catch (_) {}
+      } else if (prevShotCut && !hasPlateRefShot) {
+        referencePayload = appendLookOnlyContinuity(referencePayload, prevShotCut.imageUrl);
+        imageContinuityMode = 'look-only';
+      } else if (prevShotCut) {
+        imageContinuityMode = 'plate';
+      }
+    } catch (_) { }
+
     if (imageCharacterNegativePrompt) {
       finalPrompt = finalPrompt + '\nDo not include: ' + (negativeNounsForPrompt(imageCharacterNegativePrompt) || imageCharacterNegativePrompt);
     }
 
-    try { console.log('Shot image prompt (shot ' + shot.id + '):', finalPrompt); } catch (_) {}
+    try { console.log('Shot image prompt (shot ' + shot.id + '):', finalPrompt, { continuity: imageContinuityMode }); } catch (_) {}
 
     // 로딩 플래그 set
     var nextShots = scene.shots.slice();
@@ -1811,7 +1955,9 @@
         prompt: finalPrompt,
         aspectRatio: aspectRatio,
         projectId: projectId,
-        generationMode: 'text-to-image',
+        // 카메라 재구성 컷만 image-to-image(scene). 그 외는 text-to-image 로 다중 캐릭터 라벨 경로를 유지한다.
+        generationMode: imageGenMode,
+        cameraTargetMode: imageCameraTarget || undefined,
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
       // [진단] OpenAI 요청이 어느 COLO(데이터센터)로 나갔는지 출력 — 지역 차단 가설 검증용.
@@ -2019,6 +2165,12 @@
     buildIpLibraryFallback: buildIpLibraryFallback,
     extractRemoteProjectRecord: extractRemoteProjectRecord,
     extractRemoteBrandRecord: extractRemoteBrandRecord,
-    logBrandIpLookupDiagnostics: logBrandIpLookupDiagnostics
+    logBrandIpLookupDiagnostics: logBrandIpLookupDiagnostics,
+    findPrevCutInSameSet: findPrevCutInSameSet,
+    findPrevShotInSameSet: findPrevShotInSameSet,
+    isSameMomentCoverage: isSameMomentCoverage,
+    referenceListHasPlate: referenceListHasPlate,
+    applyCameraReconstruct: applyCameraReconstruct,
+    appendLookOnlyContinuity: appendLookOnlyContinuity
   };
 })();
