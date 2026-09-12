@@ -209,6 +209,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     nodes,
     edges,
     summary: { scenes: scenes.length, stills: done, clips },
+    // 캔버스 배치(바·카드 위치). 프로젝트에 저장된 것이 있으면 그대로 돌려준다.
+    canvasLayout: payload.canvasLayout && typeof payload.canvasLayout === "object" ? payload.canvasLayout : null,
   };
 }
 

@@ -16,7 +16,7 @@ import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
 import { loadCanvasSettings, saveCanvasSettings, type CanvasSettings } from "../lib/canvasSettings";
-import { approveItem } from "../lib/api";
+import { approveItem, saveCanvasLayout } from "../lib/api";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -60,18 +60,19 @@ const SCENE_BAR_GAP = CARD_GAP;
 const BAR_H = 44;                                                 // 바 높이(세 종류 공통)
 const SCENE_BAR_H = BAR_H;
 const CELL_W = NODE_W.cut + CARD_GAP;                             // 컷 슬롯 가로(카드 300 + 간격 12)
-const GROUP_GAP_Y = 60;                                           // 바 그룹 사이 세로 간격
+const GROUP_GAP_Y = 24;                                           // 바 그룹 사이 세로 간격(씬과 씬 사이를 좁게)
 const GROUP_PITCH_Y = BAR_H + CARD_GAP + NODE_H.cut + GROUP_GAP_Y;
 const BAR_SNAP = GRID * 2;                                        // 바는 40px 격자로 움직인다
 
 type LaneKind = "scene" | "characters" | "locations";
-interface Lane { key: string; kind: LaneKind; index: number; label: string; location: string; memberIds: string[]; cellW: number; cardW: number; cardH: number }
+interface Lane { key: string; kind: LaneKind; orient: "row" | "column"; index: number; label: string; location: string; memberIds: string[]; cellW: number; cardW: number; cardH: number }
 interface CanvasLayout { nodes: PosMap; bars: Record<string, Pos>; groups: Record<string, string[]> }
 
-const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; text: string; label: string }> = {
-  scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", text: "text-sky-100/80", label: "Scene" },
-  characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", text: "text-emerald-100/80", label: "캐릭터" },
-  locations: { bar: "border-lime-500/80 bg-lime-900/50 hover:border-lime-300", barSelected: "border-lime-300 bg-lime-700/70 ring-2 ring-lime-400/40", text: "text-lime-100/80", label: "장소 · 배경" },
+// 바 색과, 그 바의 카드가 선택됐을 때의 테두리 색을 같은 계열로 맞춘다(씬 파랑 · 캐릭터 초록 · 장소 보라).
+const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; card: string; text: string; label: string }> = {
+  scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", card: "border-sky-400 ring-2 ring-sky-500/30", text: "text-sky-100/80", label: "Scene" },
+  characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", card: "border-emerald-400 ring-2 ring-emerald-500/30", text: "text-emerald-100/80", label: "캐릭터" },
+  locations: { bar: "border-violet-500/80 bg-violet-900/60 hover:border-violet-300", barSelected: "border-violet-300 bg-violet-700/70 ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-violet-100/80", label: "장소 · 배경" },
 };
 
 function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
@@ -87,8 +88,8 @@ function deriveLanes(graph: ProductionGraph | null): Lane[] {
   const lanes: Lane[] = [];
   const characters = graph.nodes.filter((n) => n.type === "character");
   const locations = graph.nodes.filter((n) => n.type === "location");
-  if (characters.length) lanes.push({ key: "characters", kind: "characters", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: NODE_H.character });
-  if (locations.length) lanes.push({ key: "locations", kind: "locations", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: NODE_H.location });
+  if (characters.length) lanes.push({ key: "characters", kind: "characters", orient: "column", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: NODE_H.character });
+  if (locations.length) lanes.push({ key: "locations", kind: "locations", orient: "column", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: NODE_H.location });
   const cuts = graph.nodes.filter((n) => n.type === "cut").sort((a, b) => Number(a.data.order) - Number(b.data.order));
   let last: Lane | null = null;
   let sceneNo = 0;
@@ -96,7 +97,7 @@ function deriveLanes(graph: ProductionGraph | null): Lane[] {
     const loc = String(n.data.sceneLocation || "").trim();
     if (!last || !loc || loc !== last.location) {
       sceneNo += 1;
-      last = { key: `s${sceneNo}`, kind: "scene", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: NODE_H.cut };
+      last = { key: `s${sceneNo}`, kind: "scene", orient: "row", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: NODE_H.cut };
       lanes.push(last);
     }
     last.memberIds.push(n.id);
@@ -110,17 +111,18 @@ function defaultLayout(graph: ProductionGraph | null): CanvasLayout {
   const groups: Record<string, string[]> = {};
   if (!graph) return { nodes, bars, groups };
   nodes.common = { x: 40, y: 40 };
-  // 위: 공통 프롬프트 오른쪽에 캐릭터 바 → 장소 바. 아래: 씬 바들이 세로로.
-  let assetY = 40;
-  let sceneY = 40 + NODE_H.common + GROUP_GAP_Y;
+  // 왼쪽 세로 열: 공통 프롬프트 → 캐릭터 바(카드 세로) → 장소 바(카드 세로). 오른쪽: 씬 바들이 위에서 아래로.
+  const assetColW = Math.max(NODE_W.character, NODE_W.location, NODE_W.common);
+  let assetY = 40 + NODE_H.common + GROUP_GAP_Y;
+  let sceneY = 40;
+  const sceneX = 40 + assetColW + 40;
   deriveLanes(graph).forEach((l) => {
     if (l.kind === "scene") {
-      bars[l.key] = { x: 40, y: sceneY };
+      bars[l.key] = { x: sceneX, y: sceneY };
       sceneY += GROUP_PITCH_Y;
     } else {
-      bars[l.key] = { x: 40 + NODE_W.common + 40, y: assetY };
-      assetY += BAR_H + CARD_GAP + l.cardH + GROUP_GAP_Y;
-      sceneY = Math.max(sceneY, assetY);
+      bars[l.key] = { x: 40, y: assetY };
+      assetY += BAR_H + CARD_GAP + Math.max(1, l.memberIds.length) * (l.cardH + CARD_GAP) + GROUP_GAP_Y;
     }
     groups[l.key] = l.memberIds.slice();
   });
@@ -160,7 +162,11 @@ function computePositions(layout: CanvasLayout, lanes: Lane[]): PosMap {
     const b = layout.bars[l.key];
     if (!b) return;
     pos[`lane:${l.key}`] = b;
-    l.memberIds.forEach((id, i) => { pos[id] = { x: b.x + i * l.cellW, y: b.y + BAR_H + CARD_GAP }; });
+    l.memberIds.forEach((id, i) => {
+      pos[id] = l.orient === "column"
+        ? { x: b.x, y: b.y + BAR_H + CARD_GAP + i * (l.cardH + CARD_GAP) }
+        : { x: b.x + i * l.cellW, y: b.y + BAR_H + CARD_GAP };
+    });
   });
   return pos;
 }
@@ -169,6 +175,7 @@ function slotPosition(layout: CanvasLayout, lanes: Lane[], key: string, index: n
   const b = layout.bars[key];
   const l = lanes.find((x) => x.key === key);
   if (!b || !l) return null;
+  if (l.orient === "column") return { x: b.x, y: b.y + BAR_H + CARD_GAP + index * (l.cardH + CARD_GAP), w: l.cardW, h: l.cardH };
   return { x: b.x + index * l.cellW, y: b.y + BAR_H + CARD_GAP, w: l.cardW, h: l.cardH };
 }
 
@@ -179,12 +186,24 @@ function slotFromPoint(layout: CanvasLayout, lanes: Lane[], x: number, y: number
     if (kind && l.kind !== kind) continue;
     const b = layout.bars[l.key];
     if (!b) continue;
-    const top = b.y;
-    const bottom = b.y + BAR_H + CARD_GAP + l.cardH;
-    const dy = y < top ? top - y : (y > bottom ? y - bottom : 0);
     const others = l.memberIds.filter((id) => id !== draggedId);
-    const index = Math.max(0, Math.min(others.length, Math.round((x - b.x) / l.cellW)));
-    const dist = dy * 4 + Math.abs((x - b.x) - index * l.cellW);
+    let index = 0;
+    let dist = 0;
+    if (l.orient === "column") {
+      // 세로 레인: 가로로 얼마나 벗어났나 + 세로 칸 번호
+      const left = b.x;
+      const right = b.x + l.cardW;
+      const dx = x < left ? left - x : (x > right ? x - right : 0);
+      const firstY = b.y + BAR_H + CARD_GAP;
+      index = Math.max(0, Math.min(others.length, Math.round((y - firstY) / (l.cardH + CARD_GAP))));
+      dist = dx * 4 + Math.abs((y - firstY) - index * (l.cardH + CARD_GAP));
+    } else {
+      const top = b.y;
+      const bottom = b.y + BAR_H + CARD_GAP + l.cardH;
+      const dy = y < top ? top - y : (y > bottom ? y - bottom : 0);
+      index = Math.max(0, Math.min(others.length, Math.round((x - b.x) / l.cellW)));
+      dist = dy * 4 + Math.abs((x - b.x) - index * l.cellW);
+    }
     if (!best || dist < best.dist) best = { key: l.key, index, dist };
   }
   if (!best) return null;
@@ -281,6 +300,9 @@ export default function ProductionCanvas({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [layout, setLayout] = useState<CanvasLayout>({ nodes: {}, bars: {}, groups: {} });
+  // 프로젝트(서버)에 저장된 배치. 로컬 작업 사본과 다르면 "저장 안 됨"으로 표시한다.
+  const [serverLayout, setServerLayout] = useState<CanvasLayout | null>(null);
+  const [layoutSaving, setLayoutSaving] = useState(false);
   // 끌고 있는 컷의 임시 좌표와, 놓일 슬롯(점선 칸).
   const [dragGhost, setDragGhost] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dropSlot, setDropSlot] = useState<{ key: string; index: number } | null>(null);
@@ -329,10 +351,14 @@ export default function ProductionCanvas({
       const g = await getProductionGraph(projectId);
       setGraph(g);
       // 배치는 프로젝트별로 기억한다(사용자가 옮긴 노드는 그대로).
+      const base = defaultLayout(g);
+      const fromServer = g.canvasLayout && typeof g.canvasLayout === "object" ? (g.canvasLayout as Partial<CanvasLayout>) : null;
+      setServerLayout(fromServer ? reconcileLayout(fromServer, g, base) : null);
+      // 로컬 작업 사본이 있으면 그것을, 없으면 프로젝트에 저장된 배치를, 둘 다 없으면 기본 배치를 쓴다.
       const saved = readStorage(`canvasLayout:${projectId}`);
       let parsed: Partial<CanvasLayout> | null = null;
       try { parsed = saved ? JSON.parse(saved) : null; } catch { parsed = null; }
-      setLayout(reconcileLayout(parsed, g, defaultLayout(g)));
+      setLayout(reconcileLayout(parsed || fromServer, g, base));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -613,6 +639,19 @@ export default function ProductionCanvas({
       return { scale, x: mx - (mx - v.x) * k, y: my - (my - v.y) * k };
     });
   };
+  const layoutDirty = useMemo(() => JSON.stringify(layout) !== JSON.stringify(serverLayout), [layout, serverLayout]);
+  const saveLayout = async () => {
+    if (!projectId || layoutSaving) return;
+    setLayoutSaving(true);
+    try {
+      await saveCanvasLayout(projectId, layout);
+      setServerLayout(layout);
+    } catch (e) {
+      setError(`배치 저장 실패: ${(e as Error).message}`);
+    } finally {
+      setLayoutSaving(false);
+    }
+  };
   const resetLayout = () => {
     if (!graph) return;
     setLayout(defaultLayout(graph));
@@ -666,6 +705,15 @@ export default function ProductionCanvas({
           <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>
           <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-gray-400 hover:bg-edge hover:text-white">정렬 초기화</button>
+          <button
+            type="button"
+            onClick={() => void saveLayout()}
+            disabled={!projectId || layoutSaving || !layoutDirty}
+            className={`min-w-[88px] rounded border px-2 py-1 text-[11px] transition disabled:opacity-40 ${layoutDirty ? "border-amber-600/70 text-amber-200 hover:bg-amber-900/30" : "border-edge text-gray-400"}`}
+            title="현재 배치를 프로젝트에 저장해요. 다른 기기와 AI 기업 캔버스에서도 같은 배치로 열려요."
+          >
+            {layoutSaving ? "저장 중…" : (layoutDirty ? "배치 저장 •" : "배치 저장됨")}
+          </button>
           <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button
             type="button"
@@ -720,7 +768,7 @@ export default function ProductionCanvas({
             {lanes.map((l) => {
               const b = layout.bars[l.key];
               if (!b) return null;
-              const width = Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
+              const width = l.orient === "column" ? l.cardW : Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
               const allSelected = l.memberIds.length > 0 && l.memberIds.every((id) => multi.has(id));
               const totalSec = l.kind === "scene" ? l.memberIds.reduce((acc, id) => acc + (Number(nodeById.get(id)?.data?.estSec) || 0), 0) : 0;
               const st = LANE_STYLE[l.kind];
@@ -752,11 +800,13 @@ export default function ProductionCanvas({
               if (!p) return null;
               const isGhost = !!(dragGhost && dragGhost.id === n.id);
               const isSelected = selectedId === n.id || multi.has(n.id);
+              const nodeLaneKind = laneKindForNode(n.type);
+              const selectedClass = nodeLaneKind ? LANE_STYLE[nodeLaneKind].card : "border-emerald-400 ring-2 ring-emerald-500/30";
               const jobsForNode = n.type === "cut" ? pending.filter((j) => String(j.sceneId) === String(n.data.sceneId) && !["approved", "error", "cancelled"].includes(j.status)) : [];
               return (
                 <div
                   key={n.id}
-                  className={`absolute rounded-xl border bg-[#10151d] shadow-lg transition-colors ${isSelected ? "border-emerald-400 ring-2 ring-emerald-500/30" : "border-edge hover:border-gray-500"}`}
+                  className={`absolute rounded-xl border bg-[#10151d] shadow-lg transition-colors ${isSelected ? selectedClass : "border-edge hover:border-gray-500"}`}
                   style={{ left: p.x, top: p.y, width: NODE_W[n.type], zIndex: isGhost ? 30 : undefined, opacity: isGhost ? 0.85 : 1 }}
                   onPointerDown={(e) => onPointerDown(e, n.id)}
                 >
@@ -768,7 +818,7 @@ export default function ProductionCanvas({
                   )}
                   {n.type === "location" && (
                     <div className="p-3">
-                      <Chip tone="cyan">장소</Chip>
+                      <Chip tone="violet">장소</Chip>
                       <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
                     </div>
                   )}
@@ -776,7 +826,7 @@ export default function ProductionCanvas({
                     <div className="flex items-center gap-2 p-3">
                       {n.data.imageUrl ? <img src={withMediaToken(String(n.data.imageUrl))} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" draggable={false} /> : <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-violet-900/30 text-violet-300">@</div>}
                       <div className="min-w-0">
-                        <Chip tone="violet">캐릭터</Chip>
+                        <Chip tone="emerald">캐릭터</Chip>
                         <p className="truncate text-[12px] font-bold text-gray-200">{n.label}</p>
                       </div>
                     </div>

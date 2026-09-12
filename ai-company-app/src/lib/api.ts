@@ -1818,6 +1818,8 @@ export interface ProductionGraph {
   nodes: ProductionNode[];
   edges: ProductionEdge[];
   summary: { scenes: number; stills: number; clips: number };
+  // 프로젝트에 저장된 캔버스 배치(payload.canvasLayout). 없으면 null.
+  canvasLayout?: unknown;
 }
 
 export async function getProductionGraph(projectId: string): Promise<ProductionGraph> {
@@ -1837,6 +1839,17 @@ export async function listStudioProjects(): Promise<StudioProjectRef[]> {
     id: String(s?.projectId || s?.id || ""), title: String(s?.title || s?.projectId || ""), shared: true,
   })).filter((s: StudioProjectRef) => s.id);
   return [...own, ...shared];
+}
+
+/** 캔버스 배치를 프로젝트 payload.canvasLayout 에 저장한다. 배치는 UI 상태라 에이전트 잡을 거치지 않는다(씬·프롬프트는 건드리지 않음). */
+export async function saveCanvasLayout(projectId: string, layout: unknown): Promise<void> {
+  const res = await fetch("/api/project/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, payload: { canvasLayout: layout } }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "캔버스 배치를 저장하지 못했어요.");
 }
 
 /** 에이전트 도구 잡 생성(승인 게이트 도구는 승인 패널에서 승인해야 실행된다). */
