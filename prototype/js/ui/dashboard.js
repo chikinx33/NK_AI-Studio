@@ -207,17 +207,23 @@
     return Object.assign({}, draft || {}, { id, title, seriesId, seriesTitle, payload });
   };
 
+  // 카테고리(시리즈) 칩 순서 = 그 시리즈에서 가장 최근에 작업한 에피소드의 수정 시각 내림차순.
+  // 예전엔 에피소드 생성 ID(만든 순서)로 정렬해, 오래전에 만든 시리즈를 오늘 작업해도 뒤에 남았다.
+  // 기준은 카드 정렬과 같은 draftModifiedTs(수정 → 서버 저장 → 진입 → 생성 순 폴백) 하나로 통일한다.
   const listSeriesFromDrafts = (drafts) => {
     const map = new Map();
     (Array.isArray(drafts) ? drafts : []).forEach((d) => {
       const nd = normalizeDraft(d);
       if (!nd) return;
-      if (!map.has(nd.seriesId)) map.set(nd.seriesId, { id: nd.seriesId, title: nd.seriesTitle, count: 0, latestEpisodeId: nd.id });
+      if (!map.has(nd.seriesId)) map.set(nd.seriesId, { id: nd.seriesId, title: nd.seriesTitle, count: 0, latestEpisodeId: nd.id, latestWorkedTs: 0 });
       const row = map.get(nd.seriesId);
       row.count += 1;
       if (Number(nd.id) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = nd.id;
+      const worked = draftModifiedTs(nd);
+      if (worked > row.latestWorkedTs) row.latestWorkedTs = worked;
     });
-    return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
+    return Array.from(map.values()).sort((a, b) =>
+      (b.latestWorkedTs - a.latestWorkedTs) || (Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0)));
   };
 
   const runTasksInBatches = async (items, worker, concurrency) => {
