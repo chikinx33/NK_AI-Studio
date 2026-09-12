@@ -99,6 +99,9 @@
       providerLabel: '이미지 모델',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      // GPT Image 2.5 는 같은 모델의 두 갈래 — Flare 는 빠른 기본형, Sunburst 는 정밀·저속형.
+      providerGpt25Flare: 'GPT Image 2.5 Flare — 빠름',
+      providerGpt25Sunburst: 'GPT Image 2.5 Sunburst — 정밀',
       clearPreview: '미리보기 비우기',
       generate: '생성',
       generating: '생성 중...',
@@ -259,6 +262,8 @@
       providerLabel: 'Image model',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      providerGpt25Flare: 'GPT Image 2.5 Flare — fast',
+      providerGpt25Sunburst: 'GPT Image 2.5 Sunburst — precise',
       clearPreview: 'Clear preview',
       generate: 'Generate',
       generating: 'Generating...',
@@ -1125,9 +1130,12 @@
     return raw === 'conversation' ? 'conversation' : 'single';
   }
 
+  // 선택 가능한 이미지 모델. gpt25-* 는 Atlas Cloud 경유 전용이다.
+  var PROVIDER_VALUES = ['gemini', 'gpt25-flare', 'gpt25-sunburst', 'openai'];
+
   function normalizeProviderValue(value) {
     var raw = String(value || '').trim().toLowerCase();
-    return raw === 'openai' ? 'openai' : 'gemini';
+    return PROVIDER_VALUES.indexOf(raw) >= 0 ? raw : 'gemini';
   }
 
   function readStoredProvider() {
@@ -1947,6 +1955,13 @@
     var atlasMember = !!(NK.auth && typeof NK.auth.isMaster === 'function' && !NK.auth.isMaster());
     var geminiProviderLabel = atlasMember ? 'Nano Banana 2 (Atlas Cloud)' : t('providerGemini');
     var openaiProviderLabel = atlasMember ? 'GPT Image 2 (Atlas Cloud)' : t('providerOpenai');
+    // GPT Image 2.5 는 마스터도 Atlas 경유라 라벨을 나누지 않는다.
+    var providerOptions = [
+      { id: 'gemini', label: geminiProviderLabel },
+      { id: 'gpt25-flare', label: t('providerGpt25Flare') },
+      { id: 'gpt25-sunburst', label: t('providerGpt25Sunburst') },
+      { id: 'openai', label: openaiProviderLabel }
+    ];
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
       '<div class="ai-image-preview-head">' +
@@ -1971,8 +1986,11 @@
             '<div class="ai-image-source-library-title">' + escapeHtml(t('providerLabel')) + '</div>' +
             '<div class="ai-image-size-row">' +
               '<select id="ai-image-provider" class="btn-secondary ai-image-select">' +
-                '<option value="gemini"' + (normalizeProviderValue(state.provider) === 'gemini' ? ' selected' : '') + '>' + escapeHtml(geminiProviderLabel) + '</option>' +
-                '<option value="openai"' + (normalizeProviderValue(state.provider) === 'openai' ? ' selected' : '') + '>' + escapeHtml(openaiProviderLabel) + '</option>' +
+                providerOptions.map(function (opt) {
+                  return '<option value="' + opt.id + '"' +
+                    (normalizeProviderValue(state.provider) === opt.id ? ' selected' : '') + '>' +
+                    escapeHtml(opt.label) + '</option>';
+                }).join('') +
               '</select>' +
             '</div>' +
           '</div>' +

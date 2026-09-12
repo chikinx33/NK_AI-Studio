@@ -112,3 +112,20 @@ test("★영상 가이드와 같은 방법으로 닫힌다", () => {
   // 닫기 핸들러(✕·배경·Esc)는 모듈 하나를 공유한다.
   assert.match(src, /t\.id === 'video-model-guide-modal'/);
 });
+
+test("★GPT Image 2.5 두 갈래를 한/영 모두에서 쉬운 말로 구분해 준다", () => {
+  const dict = imageDict();
+  // 표에 네 모델이 다 있고, 선택값(provider)과 같은 id 를 쓴다.
+  assert.match(guide(), /\{ id: 'gpt25-flare', name: 'GPT Image 2\.5 Flare'/);
+  assert.match(guide(), /\{ id: 'gpt25-sunburst', name: 'GPT Image 2\.5 Sunburst'/);
+  // 핵심: 별개 모델이 아니라 같은 모델의 두 조율이고, 빠름 vs 정밀로 갈린다.
+  assert.match(dict, /같은 모델의 두 갈래/);
+  assert.match(dict, /Flare = 빠른 기본형/);
+  assert.match(dict, /Sunburst = 정밀형/);
+  assert.match(dict, /two tunings of one model/);
+  assert.match(dict, /Flare is the fast default/);
+  assert.match(dict, /Sunburst is the precise one/);
+  // 비용은 공개 단가가 아니라 실측치임을 밝힌다.
+  assert.match(dict, /실측/);
+  assert.match(dict, /measured/);
+});

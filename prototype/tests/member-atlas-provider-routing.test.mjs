@@ -8,11 +8,29 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 test("회원 이미지 생성은 서버 인증 ID로 Atlas 전용 경로에 고정된다", () => {
   const src = read("prototype/functions/api/imagen.ts");
   assert.match(src, /const atlasOnly = !requireMaster\(env, auth\.userId\)/);
-  assert.match(src, /if \(atlasOnly\) \{[\s\S]*?callAtlasMemberImage/);
+  // atlasOnly 가 참이면 어떤 모델을 골라도 Atlas 경로로 간다(결제 주체 격리).
+  assert.match(src, /const useAtlasPath = atlasOnly \|\| isGpt25Provider\(provider\)/);
+  assert.match(src, /if \(useAtlasPath\) \{[\s\S]*?callAtlasMemberImage/);
   assert.match(src, /providerUsed = "atlas-cloud"/);
   assert.match(src, /google\/nano-banana-2\/text-to-image/);
   assert.match(src, /openai\/gpt-image-2\/text-to-image/);
   assert.match(src, /ATLASCLOUD_API_KEY/);
+});
+
+test("GPT Image 2.5 는 Atlas 모델 ID 로만 나가고 동기 모드 파라미터를 붙이지 않는다", () => {
+  const src = read("prototype/functions/api/imagen.ts");
+  // 두 갈래 모두 Atlas 경유 전용 — 마스터도 같은 경로를 탄다.
+  assert.match(src, /openai\/gpt-image-2\.5-\$\{gpt25Variant\}\/edit/);
+  assert.match(src, /openai\/gpt-image-2\.5-\$\{gpt25Variant\}\/text-to-image/);
+  assert.match(src, /"gpt25-flare"/);
+  assert.match(src, /"gpt25-sunburst"/);
+  // 2.5 스키마는 enable_sync_mode / enable_base64_output 를 거부한다.
+  assert.match(src, /if \(!useGpt25Model\) \{\s*body\.enable_sync_mode = true;\s*body\.enable_base64_output = true;/);
+  // 동기 모드가 없으니 폴링 대기를 기본(90초)보다 늘려 잡는다.
+  assert.match(src, /useGpt25Model \? \{ maxAttempts: \d+, delayMs: \d+ \} : undefined/);
+  // 2.5 edit 는 16장까지 받는다 — 그 아래에서만 14장 상한(나노바나나) 판정을 한다.
+  assert.match(src, /const useGpt25Model = !!gpt25Variant && inputs\.length <= 16/);
+  assert.match(src, /if \(!useGpt25Model && inputs\.length > 14\)/);
 });
 
 test("회원 Grok 영상은 Atlas 모델로 생성하고 xAI 직접 분기는 마스터로 제한된다", () => {

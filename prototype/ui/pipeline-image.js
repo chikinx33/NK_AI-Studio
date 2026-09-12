@@ -25,6 +25,25 @@
       .join(', ');
   }
 
+  // 이미지 모델 선택지 — 셀렉트·안내 모달·저장값이 모두 이 목록을 따른다.
+  // GPT Image 2.5 는 같은 모델의 두 갈래다(OpenAI 발표 기준).
+  //   Flare    — 빠른 기본형. gpt-image-2 보다 품질이 좋고 지연은 절반 수준.
+  //   Sunburst — 편집 제어·디테일이 더 정밀한 상위형. 생성은 더 오래 걸린다.
+  var IMAGE_PROVIDERS = [
+    { id: 'gemini', ko: 'Gemini 3.1 Flash', en: 'Gemini 3.1 Flash' },
+    { id: 'gpt25-flare', ko: 'GPT Image 2.5 Flare — 빠름', en: 'GPT Image 2.5 Flare — fast' },
+    { id: 'gpt25-sunburst', ko: 'GPT Image 2.5 Sunburst — 정밀', en: 'GPT Image 2.5 Sunburst — precise' },
+    { id: 'openai', ko: 'GPT Image 2', en: 'GPT Image 2' }
+  ];
+
+  function normalizeProvider(value) {
+    var raw = String(value || '').trim().toLowerCase();
+    for (var i = 0; i < IMAGE_PROVIDERS.length; i++) {
+      if (IMAGE_PROVIDERS[i].id === raw) return raw;
+    }
+    return 'gemini';
+  }
+
   var MAX_REFERENCE_IMAGES = 16;
   // 한 캐릭터가 가져갈 수 있는 시트 수. 상한을 열어도 한 명이 전부 먹지는 않게 둔다.
   var MAX_SHEETS_PER_CHARACTER = 4;
@@ -1376,6 +1395,8 @@
     setStage('');
     return res || { ok: true, loc: null };
   }
+  image.IMAGE_PROVIDERS = IMAGE_PROVIDERS;
+  image.normalizeProvider = normalizeProvider;
   image.ensureSetForCut = ensureSetForCut;
 
   image.generateImageForIdx = async function (options) {

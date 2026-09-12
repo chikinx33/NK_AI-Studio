@@ -24,6 +24,10 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const MAX_REFERENCE_IMAGES = 16;
 const GEMINI_MAX_REFERENCE_IMAGES = 14;
 
+// 이미지 모델 선택값. gemini/openai 는 예전부터 쓰던 값이라 그대로 두고,
+// GPT Image 2.5 두 갈래만 새 값으로 추가한다(저장된 옛 값은 계속 유효).
+type ImageProvider = "gemini" | "openai" | "gpt25-flare" | "gpt25-sunburst";
+
 const handlePost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
@@ -85,7 +89,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
     const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
-    if (atlasOnly) {
+    // GPT Image 2.5 는 Atlas 전용 모델이라 마스터 계정도 Atlas 키가 있어야 한다.
+    const useAtlasPath = atlasOnly || isGpt25Provider(provider);
+
+    if (useAtlasPath) {
       if (!atlasApiKey) {
         return json({ error: "Missing ATLASCLOUD_API_KEY" }, 500);
       }
@@ -246,7 +253,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       return {};
     };
 
-    if (atlasOnly) {
+    if (useAtlasPath) {
       try {
         const atlasResult = await callAtlasMemberImage({
           apiKey: atlasApiKey,
@@ -717,15 +724,29 @@ function normalizeStorageService(value: unknown) {
   return raw === "ai-image" ? "ai-image" : "ai-video";
 }
 
-function normalizeProvider(value: unknown): "gemini" | "openai" {
+// GPT Image 2.5 는 같은 모델의 두 갈래다(OpenAI 발표 기준).
+//   Flare    — 빠른 기본형. gpt-image-2 보다 품질이 좋고 지연은 절반 수준.
+//   Sunburst — 편집 제어·디테일이 더 정밀한 상위형. 대신 생성이 더 오래 걸린다.
+// 둘 다 Atlas Cloud 경유로만 붙인다. OpenAI 직접 호출 경로는 모델 이름 체계가 다르고
+// 지역 차단(HKG COLO)도 그대로라, 검증된 Atlas 모델 ID 로만 보낸다.
+const GPT25_PROVIDERS = new Set(["gpt25-flare", "gpt25-sunburst"]);
+
+function normalizeProvider(value: unknown): ImageProvider {
   const raw = String(value || "").trim().toLowerCase();
+  if (raw === "gpt25-flare" || raw === "gpt-image-2.5-flare" || raw === "flare") return "gpt25-flare";
+  if (raw === "gpt25-sunburst" || raw === "gpt-image-2.5-sunburst" || raw === "sunburst") return "gpt25-sunburst";
   if (raw === "openai" || raw === "gpt-image" || raw === "gpt-image-2") return "openai";
   return "gemini";
 }
 
+// GPT Image 2.5 는 Atlas 경유 전용이다 — 마스터 계정도 이 경로를 탄다.
+function isGpt25Provider(provider: ImageProvider): boolean {
+  return GPT25_PROVIDERS.has(provider);
+}
+
 async function callAtlasMemberImage(opts: {
   apiKey: string;
-  requestedProvider: "gemini" | "openai";
+  requestedProvider: ImageProvider;
   prompt: string;
   aspectRatio: string;
   imageSize: string;
@@ -754,14 +775,25 @@ async function callAtlasMemberImage(opts: {
     name: `mask.${extensionForMime(opts.maskImage.mimeType)}`,
   });
 
-  // GPT Image 2 edit는 입력 10장, Nano Banana 2 edit는 14장까지 받는다.
-  // GPT 선택 상태라도 10장을 넘으면 이미지를 버리지 않고 Atlas의 Nano Banana 2로 전환한다.
-  if (inputs.length > 14) throw new Error(`atlas_reference_limit:${inputs.length}/14`);
+  // 입력 상한은 모델마다 다르다.
+  //   GPT Image 2.5 edit  : 16장
+  //   GPT Image 2 edit    : 10장
+  //   Nano Banana 2 edit  : 14장
+  // 상한을 넘으면 이미지를 버리지 않고 더 많이 받는 모델로 옮겨 태운다.
   const isEdit = inputs.length > 0;
-  const useOpenAIModel = opts.requestedProvider === "openai" && inputs.length <= 10;
-  const model = useOpenAIModel
-    ? (isEdit ? "openai/gpt-image-2/edit" : "openai/gpt-image-2/text-to-image")
-    : (isEdit ? "google/nano-banana-2/edit" : "google/nano-banana-2/text-to-image");
+  const gpt25Variant = opts.requestedProvider === "gpt25-sunburst"
+    ? "sunburst"
+    : (opts.requestedProvider === "gpt25-flare" ? "flare" : "");
+  const useGpt25Model = !!gpt25Variant && inputs.length <= 16;
+  const useOpenAIModel = !useGpt25Model && opts.requestedProvider === "openai" && inputs.length <= 10;
+  if (!useGpt25Model && inputs.length > 14) throw new Error(`atlas_reference_limit:${inputs.length}/14`);
+  const model = useGpt25Model
+    ? (isEdit
+      ? `openai/gpt-image-2.5-${gpt25Variant}/edit`
+      : `openai/gpt-image-2.5-${gpt25Variant}/text-to-image`)
+    : useOpenAIModel
+      ? (isEdit ? "openai/gpt-image-2/edit" : "openai/gpt-image-2/text-to-image")
+      : (isEdit ? "google/nano-banana-2/edit" : "google/nano-banana-2/text-to-image");
 
   const uploadedUrls: string[] = [];
   for (const input of inputs) {
@@ -772,7 +804,9 @@ async function callAtlasMemberImage(opts: {
     ));
   }
 
-  const atlasPrompt = useOpenAIModel && isEdit
+  // GPT 계열은 이미지 옆에 라벨을 못 붙여 보낸 순서로만 구분한다 — 2.5 도 마찬가지다.
+  const useGptManifest = (useOpenAIModel || useGpt25Model) && isEdit;
+  const atlasPrompt = useGptManifest
     ? [
       opts.prompt,
       buildOpenAIReferenceManifest(opts.conversationHistory.length, opts.referenceImages),
@@ -783,12 +817,17 @@ async function callAtlasMemberImage(opts: {
     model,
     prompt: atlasPrompt,
     output_format: "png",
-    enable_sync_mode: true,
-    enable_base64_output: true,
   };
+  // GPT Image 2.5 는 동기 모드 파라미터를 받지 않는다(스키마에 없음 → 요청 거부).
+  // 제출 후 예측 ID 로 폴링해서 결과를 받는다.
+  if (!useGpt25Model) {
+    body.enable_sync_mode = true;
+    body.enable_base64_output = true;
+  }
   if (isEdit) body.images = uploadedUrls;
-  if (useOpenAIModel) {
+  if (useOpenAIModel || useGpt25Model) {
     body.size = mapAspectToOpenAISize(opts.aspectRatio);
+    // 2.5 는 xhigh·max 단계가 더 있지만 장당 단가가 올라가므로 기존 3단계를 그대로 쓴다.
     body.quality = mapImageSizeToOpenAIQuality(opts.imageSize);
   } else {
     if (opts.aspectRatio !== "free") body.aspect_ratio = opts.aspectRatio;
@@ -799,7 +838,12 @@ async function callAtlasMemberImage(opts: {
   if (atlasOutputs(result).length === 0) {
     const predictionId = atlasPredictionId(result);
     if (!predictionId) throw new Error("atlas_image_no_prediction_id");
-    result = await waitForAtlasPrediction(opts.apiKey, predictionId);
+    // 2.5 는 항상 폴링이고 실측 1~2분대라(특히 Sunburst) 기본 90초로는 모자란다.
+    result = await waitForAtlasPrediction(
+      opts.apiKey,
+      predictionId,
+      useGpt25Model ? { maxAttempts: 105, delayMs: 2000 } : undefined
+    );
   }
   return { output: await atlasImageOutput(result), model };
 }

@@ -1131,7 +1131,9 @@
       try {
         var key = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
         var raw = String(localStorage.getItem(key) || '').trim().toLowerCase();
-        return raw === 'openai' ? 'openai' : 'gemini';
+        return NK.uiPipelineImage && NK.uiPipelineImage.normalizeProvider
+          ? NK.uiPipelineImage.normalizeProvider(raw)
+          : (raw === 'openai' ? 'openai' : 'gemini');
       } catch (_) { return 'gemini'; }
     })();
     var __modelAspectSupport = {
@@ -1145,6 +1147,17 @@
       'wan':          ['16:9', '9:16', '1:1'],
       'vidu-q3':      ['16:9', '9:16', '1:1']
     };
+    // 이미지 모델 옵션 — 목록은 pipeline-image.js 가 단일 원천이고, 라벨만 언어를 따른다.
+    var __iopt = function (sel) {
+      var lang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+      var list = (NK.uiPipelineImage && NK.uiPipelineImage.IMAGE_PROVIDERS) || [
+        { id: 'gemini', ko: 'Gemini 3.1 Flash', en: 'Gemini 3.1 Flash' }
+      ];
+      return list.map(function (m) {
+        return '<option value="' + m.id + '"' + (sel === m.id ? ' selected' : '') + '>' +
+          (lang === 'en' ? m.en : m.ko) + '</option>';
+      }).join('');
+    };
     var __mopt = function (val, label, sel, ar) {
       var ok = !__modelAspectSupport[val] || __modelAspectSupport[val].indexOf(ar) !== -1;
       return '<option value="' + val + '"' + (sel === val ? ' selected' : '') + (ok ? '' : ' disabled') + '>' +
@@ -1155,8 +1168,7 @@
       '<div class="video-model-left">' +
       '<span class="video-model-label">이미지생성 모델</span>' +
       '<select id="image-provider-select" class="video-model-select">' +
-      '<option value="gemini"' + (imageProvider === 'gemini' ? ' selected' : '') + '>Gemini 3.1 Flash</option>' +
-      '<option value="openai"' + (imageProvider === 'openai' ? ' selected' : '') + '>GPT Image 2</option>' +
+      __iopt(imageProvider) +
       '</select>' +
       // lucide.dev/icons/circle-help — 이미지 모델별 레퍼런스 상한·특징·비용 비교표를 연다
       '<button type="button" class="video-model-help" id="image-model-help-btn" ' +
@@ -1460,7 +1472,9 @@
     if (providerSelect) {
       providerSelect.onchange = function () {
         var raw = String(providerSelect.value || '').trim().toLowerCase();
-        var val = raw === 'openai' ? 'openai' : 'gemini';
+        var val = (NK.uiPipelineImage && NK.uiPipelineImage.normalizeProvider)
+          ? NK.uiPipelineImage.normalizeProvider(raw)
+          : (raw === 'openai' ? 'openai' : 'gemini');
         try { localStorage.setItem((NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider', val); } catch (_) { }
       };
     }

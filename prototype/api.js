@@ -420,7 +420,7 @@
       try {
         var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
         var stored = String(localStorage.getItem(providerKey) || '').trim().toLowerCase();
-        if (stored === 'openai' || stored === 'gemini') payload.provider = stored;
+        if (stored === 'openai' || stored === 'gemini' || stored === 'gpt25-flare' || stored === 'gpt25-sunburst') payload.provider = stored;
       } catch (_) {}
     }
     var timeoutMs = getImagenTimeoutMs(payload, opts);

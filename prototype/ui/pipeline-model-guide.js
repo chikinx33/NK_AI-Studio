@@ -204,7 +204,9 @@
    */
   // 수치·기호는 언어와 무관하고, 문장만 사전에서 고른다.
   var IMAGE_MODELS = [
-    { id: 'openai', name: 'GPT Image 2', fit: 'best' },
+    { id: 'gpt25-flare', name: 'GPT Image 2.5 Flare', fit: 'best' },
+    { id: 'gpt25-sunburst', name: 'GPT Image 2.5 Sunburst', fit: 'best' },
+    { id: 'openai', name: 'GPT Image 2', fit: 'good' },
     { id: 'gemini', name: 'Gemini 3.1 Flash Image', fit: 'good' }
   ];
 
@@ -214,6 +216,16 @@
       cols: ['모델', '레퍼런스 최대', '이미지 구분 방식', '마스크 편집', '비용', '강점', '약점', '적합도'],
       now: '현재',
       models: {
+        'gpt25-flare': {
+          refs: '16장', bind: '보내는 순서', mask: '✓ 알파 마스크', cost: '실측 컷당 약 $0.046',
+          good: 'GPT Image 2 보다 화질이 좋고 속도는 약 2배 · 한글 간판 글자가 정확 · 레퍼런스 16장',
+          bad: '이미지별 라벨을 못 붙여 순서로만 구분 · 요청 안 한 글자(문구·간판)를 끼워 넣는 편'
+        },
+        'gpt25-sunburst': {
+          refs: '16장', bind: '보내는 순서', mask: '✓ 알파 마스크', cost: '실측 컷당 약 $0.046',
+          good: 'Flare 와 같은 화질에 편집 제어·디테일이 더 정밀 · 캠페인용 마감 컷에 적합',
+          bad: 'Flare 보다 생성이 느림 · 순서로만 구분 · 요청 안 한 글자를 끼워 넣는 편'
+        },
         openai: {
           refs: '16장', bind: '보내는 순서', mask: '✓ 알파 마스크', cost: '출력 $30 / 1M 토큰',
           good: '레퍼런스를 가장 많이 받음 · 지시 이행이 또렷함',
@@ -226,18 +238,29 @@
         }
       },
       notes: [
+        '<b>Flare 와 Sunburst 는 같은 모델의 두 갈래입니다</b> — 이름만 다른 별개 모델이 아니라 같은 GPT Image 2.5 를 두 가지로 조율한 것이고, 쓰는 방법(API·옵션·가격)이 같습니다. <b>Flare = 빠른 기본형</b>이라 컷을 여러 장 돌리는 일상 작업에 맞고, <b>Sunburst = 정밀형</b>이라 편집 제어와 디테일이 더 좋은 대신 느립니다. 일괄 생성은 Flare, 마감 컷 다듬기는 Sunburst 로 보면 쉽습니다.',
         '<b>레퍼런스가 하는 일</b> — 컷 하나에 캐릭터 시트 · 배경 플레이트 · 소품 · 이전 컷을 함께 붙여 일관성을 잡습니다. 상한을 넘기면 <b>각 캐릭터의 첫 시트 → 컷 레퍼런스 → 배경 → 소품 → 캐릭터 추가 포즈</b> 순으로 남깁니다.',
         '<b>이미지 구분 방식</b> — Gemini 는 각 이미지 <b>바로 옆</b>에 "이건 @네모의 시트" 같은 라벨을 끼워 넣을 수 있어 다중 캐릭터 바인딩이 정확합니다. GPT Image 는 그 자리가 없어 <b>보내는 순서</b>로만 구분되므로, 앱이 프롬프트에 순서 목록을 덧붙여 역할을 알려줍니다.',
         '<b>몇 장이 적당한가</b> — 많이 붙일수록 장당 반영도는 옅어지고 입력 비용·시간은 늘어납니다. Gemini 문서는 캐릭터 일관성용으로 <b>4장까지</b>를 권합니다. 상한은 막아두지 않았으니 컷 성격에 맞게 쓰세요.',
         '<b>폴백</b> — GPT Image 호출이 실패하면 Gemini 로 자동 대체 생성합니다. 이때는 Gemini 상한에 맞춰 뒤쪽 레퍼런스부터 줄여 보냅니다(중요한 것이 앞에 오도록 정렬돼 있습니다).'
       ],
-      caveat: '<b>비용</b> — 공급자 공식 가격표(2026-08-30 확인)입니다. GPT Image 2 는 1M 토큰당 텍스트 입력 $5 · 이미지 입력 $8 · 이미지 출력 $30 이라 컷당 금액이 해상도·품질에 따라 달라집니다. Gemini 3.1 Flash Image 는 이미지 1장 기준 1K $0.067 · 2K $0.101 · 4K $0.151 로 예측이 쉽습니다.'
+      caveat: '<b>비용</b> — 공급자 공식 가격표(2026-08-30 확인)입니다. GPT Image 2.5(Flare·Sunburst)는 공개 단가 대신 <b>Atlas Cloud 실측치</b>를 적었습니다 — 2026-09-12 에 high 품질 1536×1024 로 4장을 생성해 컷당 약 $0.046 이었고, 두 갈래의 가격은 같습니다(품질 단계를 올리면 더 비싸집니다). GPT Image 2 는 1M 토큰당 텍스트 입력 $5 · 이미지 입력 $8 · 이미지 출력 $30 이라 컷당 금액이 해상도·품질에 따라 달라집니다. Gemini 3.1 Flash Image 는 이미지 1장 기준 1K $0.067 · 2K $0.101 · 4K $0.151 로 예측이 쉽습니다.'
     },
     en: {
       title: 'Choosing an image model',
       cols: ['Model', 'Max references', 'How images are told apart', 'Mask editing', 'Cost', 'Strengths', 'Weaknesses', 'Fit'],
       now: 'current',
       models: {
+        'gpt25-flare': {
+          refs: '16', bind: 'Upload order', mask: '✓ Alpha mask', cost: '~$0.046 per cut (measured)',
+          good: 'Better quality than GPT Image 2 at about twice the speed · accurate Korean signage · 16 references',
+          bad: 'No per-image labels — order is the only cue · tends to add text you did not ask for'
+        },
+        'gpt25-sunburst': {
+          refs: '16', bind: 'Upload order', mask: '✓ Alpha mask', cost: '~$0.046 per cut (measured)',
+          good: 'Same quality as Flare with tighter edit control and finer detail · suits finished campaign cuts',
+          bad: 'Slower than Flare · order is the only cue · tends to add text you did not ask for'
+        },
         openai: {
           refs: '16', bind: 'Upload order', mask: '✓ Alpha mask', cost: 'Output $30 / 1M tokens',
           good: 'Takes the most references · follows instructions crisply',
@@ -250,12 +273,13 @@
         }
       },
       notes: [
+        '<b>Flare and Sunburst are two tunings of one model</b> — not separate models: same GPT Image 2.5, same API, options and price. <b>Flare is the fast default</b>, right for everyday batches of cuts; <b>Sunburst is the precise one</b>, with tighter edit control and finer detail but slower generation. Rule of thumb: Flare for bulk generation, Sunburst for polishing a final cut.',
         '<b>What references do</b> — a single cut can carry character sheets, a background plate, props and the previous cut together to keep things consistent. Over the limit, what survives is <b>each character\'s first sheet → the cut reference → background → props → extra character poses</b>.',
         '<b>How images are told apart</b> — Gemini can slot a label such as "this is @Nemo\'s sheet" <b>right next to</b> each image, so multi-character binding is precise. GPT Image has no such slot and relies on <b>upload order</b>, so the app appends an ordered manifest to the prompt to explain each image\'s role.',
         '<b>How many is right</b> — the more you attach, the weaker each one lands, while input cost and latency grow. Gemini\'s docs recommend <b>up to 4</b> for character consistency. The limit is not enforced, so use what the cut needs.',
         '<b>Fallback</b> — if the GPT Image call fails, generation falls back to Gemini automatically. References are then trimmed from the end to fit Gemini\'s limit (the important ones are ordered first).'
       ],
-      caveat: '<b>Cost</b> — provider price lists (checked 2026-08-30). GPT Image 2 is $5 text input · $8 image input · $30 image output per 1M tokens, so the per-cut amount varies with resolution and quality. Gemini 3.1 Flash Image is $0.067 (1K) · $0.101 (2K) · $0.151 (4K) per image, which is easier to predict.'
+      caveat: '<b>Cost</b> — provider price lists (checked 2026-08-30). For GPT Image 2.5 (Flare and Sunburst) the figure is <b>measured on Atlas Cloud</b> rather than a published rate — four images at high quality, 1536×1024, on 2026-09-12 came to about $0.046 per cut, and both tunings cost the same (higher quality tiers cost more). GPT Image 2 is $5 text input · $8 image input · $30 image output per 1M tokens, so the per-cut amount varies with resolution and quality. Gemini 3.1 Flash Image is $0.067 (1K) · $0.101 (2K) · $0.151 (4K) per image, which is easier to predict.'
     }
   };
 
