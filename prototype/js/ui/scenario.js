@@ -88,6 +88,10 @@
       commonPromptAria: '공통 프롬프트 보기',
       sceneExpand: '씬 펼치기',
       decomposeFallbackChip: '분해 실패',
+      autoShotSwapChip: '자동',
+      autoShotSwapTitle: '앞 컷과 같은 셋업(사이즈+방위)이라 검증기가 사이즈를 한 단계 옮겼어요. 화면 문구와 어긋나면 사이즈를 직접 고쳐 주세요.',
+      autoBlockingChip: '위치 앵커',
+      autoBlockingTitle: '이동 서술이 없는데 인물 좌표가 앞 컷과 달라, 같은 세트의 앞 위치로 되돌렸어요.',
       sceneCollapse: '씬 접기',
       commonInfoLabels: {
         topic: '주제',
@@ -152,6 +156,10 @@
       commonPromptAria: 'View common prompt',
       sceneExpand: 'Expand scene',
       decomposeFallbackChip: 'Decompose failed',
+      autoShotSwapChip: 'auto',
+      autoShotSwapTitle: 'Same setup (size + direction) as the previous cut, so the validator moved the size one step. Fix the size manually if it conflicts with the composition.',
+      autoBlockingChip: 'anchored',
+      autoBlockingTitle: 'No movement described, but the character position differed from the previous cut, so it was restored to the earlier position in this set.',
       sceneCollapse: 'Collapse scene',
       commonInfoLabels: {
         topic: 'Topic',
@@ -1431,6 +1439,8 @@
         sceneLocation: firstFilledText(s.sceneLocation, s.location),
         backgroundStyle: firstFilledText(s.backgroundStyle, s.sharedBackgroundStyle),
         decomposeFallback: String(s.decomposeFallback || '').trim(),
+        autoShotTypeSwap: String(s.autoShotTypeSwap || '').trim(),
+        autoBlockingAnchor: !!s.autoBlockingAnchor,
         subtitleText: resolvedSubtitleText,
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),
@@ -2018,6 +2028,8 @@
             ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
             ${s.cameraDirection && s.cameraDirection !== 'front' ? `<span class="card-camera-chip card-camera-direction-chip" title="camera direction">${escapeHtml(s.cameraDirection === 'back' ? 'REV' : s.cameraDirection.toUpperCase())}</span>` : ''}
             ${s.decomposeFallback ? `<span class="card-camera-chip card-fallback-chip" title="${escapeHtml(s.decomposeFallback)}">${escapeHtml(getScenarioUiText().decomposeFallbackChip)}</span>` : ''}
+            ${s.autoShotTypeSwap ? `<span class="card-camera-chip card-auto-chip" title="${escapeHtml(getScenarioUiText().autoShotSwapTitle)}">${escapeHtml(s.autoShotTypeSwap)}→${escapeHtml(s.shotType || '')} ${escapeHtml(getScenarioUiText().autoShotSwapChip)}</span>` : ''}
+            ${s.autoBlockingAnchor ? `<span class="card-camera-chip card-auto-chip" title="${escapeHtml(getScenarioUiText().autoBlockingTitle)}">${escapeHtml(getScenarioUiText().autoBlockingChip)}</span>` : ''}
           </div>
           <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
@@ -2513,6 +2525,13 @@
           : '<p class="scenario-diag-empty">' + escapeHtml(emptyMsg) + '</p>')
       );
     };
+    const DIAG_PENDING_PASS2 = '컷 분해 (Pass 2): 진행 중…';
+    const DIAG_PENDING_LOCATIONS = '장소(세트): 추출 중…';
+    const replaceDiagLine = (lines, placeholder, next) => {
+      const i = lines.indexOf(placeholder);
+      if (i >= 0) lines.splice(i, 1, next); else lines.push(next);
+    };
+
     const showScenarioMetaToast = (text) => {
       try {
         _lastDiagText = text || '';
@@ -3008,6 +3027,10 @@
             m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
             m.perBeatFailures ? `비트 실패: ${m.perBeatFailures} (fallback ${m.perBeatFallbacks || 0})` : '',
             m.elapsedMs ? `소요: ${(m.elapsedMs / 1000).toFixed(1)}s` : '',
+            // 뒤 단계(컷 분해·장소 추출)는 이 패널이 뜬 뒤에 돈다. 자리표시자를 두고 끝나면 바꿔 끼운다 —
+            // 예전엔 패널이 먼저 뜨고 뒤 줄이 조용히 덧붙어, 복사 시점에 따라 내용이 달랐다.
+            DIAG_PENDING_PASS2,
+            DIAG_PENDING_LOCATIONS,
           ].filter(Boolean);
           showScenarioMetaToast(metaLines.join('\n'));
         } catch (_) { /* 진단 표시 실패는 무시 */ }
@@ -3039,7 +3062,7 @@
                   const enforcedLine = (typeof shotsM.tokensEnforcedShots === 'number')
                     ? `@토큰 자동 보정 (Pass 2 컷): ${shotsM.tokensEnforcedShots}회`
                     : '@토큰 자동 보정 (Pass 2 컷): -';
-                  metaLines.push(enforcedLine);
+                  replaceDiagLine(metaLines, DIAG_PENDING_PASS2, enforcedLine);
                   // Pass 2 요약: 씬→컷 수, 성공/폴백, 시퀀스 검증기가 손댄 횟수(서버 meta 가 이미 세고 있다)
                   const p2Total = Number(shotsM.total) || 0;
                   const p2Cuts = Number(shotsM.flatCount) || (Array.isArray(flatScenes) ? flatScenes.length : 0);
@@ -3100,12 +3123,17 @@
               // 세트 수는 플레이트 수(=비용·일관성)와 직결된다 — 진단 패널에 바로 보인다.
               try {
                 if (Array.isArray(metaLines)) {
-                  metaLines.push('장소(세트): ' + epLocs.length + '개 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']');
+                  replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '개 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']');
                   showScenarioMetaToast(metaLines.join('\n'));
                 }
               } catch (_) { /* 진단 갱신 실패는 무시 */ }
             }
-          } catch (epErr) { console.warn('[episode-locations] 추출 실패', epErr); }
+          } catch (epErr) {
+            console.warn('[episode-locations] 추출 실패', epErr);
+            try { if (Array.isArray(metaLines)) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 추출 실패 — ' + String((epErr && epErr.message) || epErr)); showScenarioMetaToast(metaLines.join('\n')); } } catch (_) {}
+          }
+          // 장소가 하나도 안 잡혔으면(추출도 규칙 폴백도 빈 결과) 자리표시자를 남기지 않는다.
+          try { if (Array.isArray(metaLines) && metaLines.indexOf(DIAG_PENDING_LOCATIONS) >= 0) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 0개 — 씬에 장소가 없어 세트를 만들 수 없음'); showScenarioMetaToast(metaLines.join('\n')); } } catch (_) {}
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           // 생성 결과는 메모리(draft)에만 유지한다. 사용자가 '저장' 버튼을 눌러야
           // 로컬(localStorage/IndexedDB)·서버에 영속화된다. 자동 저장을 하면 새로고침·창

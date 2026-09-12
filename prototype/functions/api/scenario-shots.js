@@ -203,6 +203,9 @@ function flattenScenesWithShots(parentScenes, characters) {
         blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
         // 컷 분해가 실패해 폴백된 씬이면 그 사유. 화면에서 '분해 실패' 칩으로 보여 사용자가 알 수 있게.
         decomposeFallback: String(parent.shotsFallback || ""),
+        // 시퀀스 검증기가 손댄 흔적 — 창작자가 보고 되돌릴 수 있게 카드 칩으로 보여 준다.
+        autoShotTypeSwap: String(sh._autoShotTypeSwap || ""),
+        autoBlockingAnchor: !!sh._autoBlockingAnchor,
         // 부모 추적용 (마이그레이션/디버깅)
         parentSceneId: parent.id != null ? parent.id : null,
         shotIndexInParent: j,

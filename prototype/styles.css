@@ -2893,6 +2893,7 @@ textarea::-webkit-scrollbar-corner {
 }
 
 /* 시나리오 카드 헤더의 카메라 칩 (Scene 1 - 1 옆 [3s] 다음에 [EWS] [static]) */
+.scenario-card .card-title-row .card-auto-chip { color: #fbbf24; border-color: rgba(251, 191, 36, 0.6); }
 .scenario-card .card-title-row .card-fallback-chip { color: #f87171; border-color: rgba(248, 113, 113, 0.6); }
 .scenario-card .card-title-row .card-camera-chip {
   display: inline-block;
