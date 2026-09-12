@@ -13,7 +13,7 @@ test('★슬롯 격자 상수: 카드 간격 = 바-카드 간격, 씬 묶음 규
   assert.match(src, /const CARD_GAP = 12;/);
   assert.match(src, /const CELL_W = NODE_W\.cut \+ CARD_GAP;/);
   assert.match(src, /const BAR_SNAP = GRID \* 2;/);
-  assert.match(src, /function deriveLanes\(graph: ProductionGraph \| null\): Lane\[\]/);
+  assert.match(src, /function deriveLanes\(graph: ProductionGraph \| null, heights: Heights = \{\}\): Lane\[\]/);
   assert.match(src, /if \(!last \|\| !loc \|\| loc !== last\.location\) \{/, '시나리오 화면의 Scene N cutM 규칙과 같아야 합니다');
   assert.doesNotMatch(src, /function layoutGraph\(/, '자유 배치 layoutGraph 는 사라져야 합니다');
 });
@@ -31,7 +31,13 @@ test('★세 종류의 바가 있고 색이 구분되며(씬 파랑, 캐릭터 �
   assert.match(src, /kind: "characters", orient: "column"/);
   assert.match(src, /kind: "locations", orient: "column"/);
   assert.match(src, /kind: "scene", orient: "row"/);
-  assert.match(src, /const GROUP_GAP_Y = 24;/);
+  assert.match(src, /const GROUP_GAP_Y = CARD_GAP;/, '씬과 씬 사이 = 카드 간격');
+  // 점선 칸·줄 간격은 추정 높이가 아니라 렌더된 카드 높이를 잰 값으로 맞춘다
+  assert.match(src, /function heightOf\(h: Heights, type: ProductionNode\["type"\]\): number/);
+  assert.match(src, /el\.querySelectorAll<HTMLElement>\("\[data-node-type\]"\)/);
+  assert.match(src, /data-node-type=\{n\.type\}/);
+  assert.match(src, /sceneY \+= BAR_H \+ CARD_GAP \+ l\.cardH \+ GROUP_GAP_Y;/);
+  assert.match(src, /if \(!graph \|\| layoutSourceRef\.current !== "default" \|\| !Object\.keys\(measuredH\)\.length\) return;/, '기본 배치일 때만 측정 후 재정렬');
   assert.match(src, /key: "characters", kind: "characters"/);
   assert.match(src, /key: "locations", kind: "locations"/);
   assert.match(src, /label: "장소 · 배경"/);
@@ -80,7 +86,7 @@ test('★프롬프트 바(호박색) 아래 공통 카드, 캐릭터·장소 바
   assert.match(src, /prompt: \{ bar: "border-amber-500\/80 bg-amber-900\/50/);
   assert.match(src, /if \(type === "common"\) return "prompt";/);
   assert.match(src, /key: "prompt", kind: "prompt", orient: "column"/);
-  assert.match(src, /const promptBottom = 40 \+ BAR_H \+ CARD_GAP \+ NODE_H\.common \+ GROUP_GAP_Y;/);
+  assert.match(src, /const promptBottom = 40 \+ BAR_H \+ CARD_GAP \+ heightOf\(heights, "common"\) \+ GROUP_GAP_Y;/);
   assert.match(src, /bars\[l\.key\] = \{ x: assetX, y: promptBottom \};\s*\n\s*assetX \+= l\.cardW \+ 40;/, '캐릭터·장소 바가 같은 높이에서 옆으로');
   assert.doesNotMatch(src, /nodes\.common = \{ x: 40, y: 40 \};/, '공통 카드는 자유 노드가 아니라 프롬프트 바에 딸린다');
 });

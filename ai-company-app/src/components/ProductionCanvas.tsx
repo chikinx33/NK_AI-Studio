@@ -60,8 +60,10 @@ const SCENE_BAR_GAP = CARD_GAP;
 const BAR_H = 44;                                                 // 바 높이(세 종류 공통)
 const SCENE_BAR_H = BAR_H;
 const CELL_W = NODE_W.cut + CARD_GAP;                             // 컷 슬롯 가로(카드 300 + 간격 12)
-const GROUP_GAP_Y = 24;                                           // 바 그룹 사이 세로 간격(씬과 씬 사이를 좁게)
-const GROUP_PITCH_Y = BAR_H + CARD_GAP + NODE_H.cut + GROUP_GAP_Y;
+const GROUP_GAP_Y = CARD_GAP;                                     // 바 그룹 사이 세로 간격 = 카드 간격(씬과 씬 사이를 한 칸 더 좁게)
+// 카드의 실제 높이. NODE_H 는 추정치라 점선 칸·줄 간격이 카드보다 길어졌다 — 렌더된 카드를 재서 덮어쓴다.
+type Heights = Partial<Record<ProductionNode["type"], number>>;
+function heightOf(h: Heights, type: ProductionNode["type"]): number { return h[type] || NODE_H[type]; }
 const BAR_SNAP = GRID * 2;                                        // 바는 40px 격자로 움직인다
 
 type LaneKind = "prompt" | "scene" | "characters" | "locations";
@@ -85,15 +87,15 @@ function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
 }
 
 /** 그래프를 바(레인)로 묶는다. 컷은 서버 순서대로, 장소가 같은 컷이 연속되면 한 씬(시나리오 화면의 Scene N cutM 과 같은 규칙). */
-function deriveLanes(graph: ProductionGraph | null): Lane[] {
+function deriveLanes(graph: ProductionGraph | null, heights: Heights = {}): Lane[] {
   if (!graph) return [];
   const lanes: Lane[] = [];
   // 프롬프트 바: 공통 프롬프트 카드 하나가 딸린다(제목 바 + 내용 카드 형식으로 통일).
-  if (graph.nodes.some((n) => n.type === "common")) lanes.push({ key: "prompt", kind: "prompt", orient: "column", index: 0, label: "프롬프트", location: "", memberIds: graph.nodes.filter((n) => n.type === "common").map((n) => n.id), cellW: NODE_W.common + CARD_GAP, cardW: NODE_W.common, cardH: NODE_H.common });
+  if (graph.nodes.some((n) => n.type === "common")) lanes.push({ key: "prompt", kind: "prompt", orient: "column", index: 0, label: "프롬프트", location: "", memberIds: graph.nodes.filter((n) => n.type === "common").map((n) => n.id), cellW: NODE_W.common + CARD_GAP, cardW: NODE_W.common, cardH: heightOf(heights, "common") });
   const characters = graph.nodes.filter((n) => n.type === "character");
   const locations = graph.nodes.filter((n) => n.type === "location");
-  if (characters.length) lanes.push({ key: "characters", kind: "characters", orient: "column", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: NODE_H.character });
-  if (locations.length) lanes.push({ key: "locations", kind: "locations", orient: "column", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: NODE_H.location });
+  if (characters.length) lanes.push({ key: "characters", kind: "characters", orient: "column", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: heightOf(heights, "character") });
+  if (locations.length) lanes.push({ key: "locations", kind: "locations", orient: "column", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: heightOf(heights, "location") });
   const cuts = graph.nodes.filter((n) => n.type === "cut").sort((a, b) => Number(a.data.order) - Number(b.data.order));
   let last: Lane | null = null;
   let sceneNo = 0;
@@ -101,7 +103,7 @@ function deriveLanes(graph: ProductionGraph | null): Lane[] {
     const loc = String(n.data.sceneLocation || "").trim();
     if (!last || !loc || loc !== last.location) {
       sceneNo += 1;
-      last = { key: `s${sceneNo}`, kind: "scene", orient: "row", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: NODE_H.cut };
+      last = { key: `s${sceneNo}`, kind: "scene", orient: "row", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: heightOf(heights, "cut") };
       lanes.push(last);
     }
     last.memberIds.push(n.id);
@@ -109,23 +111,23 @@ function deriveLanes(graph: ProductionGraph | null): Lane[] {
   return lanes;
 }
 
-function defaultLayout(graph: ProductionGraph | null): CanvasLayout {
+function defaultLayout(graph: ProductionGraph | null, heights: Heights = {}): CanvasLayout {
   const nodes: PosMap = {};
   const bars: Record<string, Pos> = {};
   const groups: Record<string, string[]> = {};
   if (!graph) return { nodes, bars, groups };
   // 기본 정렬: 왼쪽 위 프롬프트 바, 그 아래 캐릭터 바와 장소 바가 같은 높이로 나란히, 오른쪽에 씬 바들이 위에서 아래로.
-  const promptBottom = 40 + BAR_H + CARD_GAP + NODE_H.common + GROUP_GAP_Y;
+  const promptBottom = 40 + BAR_H + CARD_GAP + heightOf(heights, "common") + GROUP_GAP_Y;
   const leftColW = Math.max(NODE_W.common, NODE_W.character + 40 + NODE_W.location);
   const sceneX = 40 + leftColW + 40;
   let sceneY = 40;
   let assetX = 40;
-  deriveLanes(graph).forEach((l) => {
+  deriveLanes(graph, heights).forEach((l) => {
     if (l.kind === "prompt") {
       bars[l.key] = { x: 40, y: 40 };
     } else if (l.kind === "scene") {
       bars[l.key] = { x: sceneX, y: sceneY };
-      sceneY += GROUP_PITCH_Y;
+      sceneY += BAR_H + CARD_GAP + l.cardH + GROUP_GAP_Y;
     } else {
       bars[l.key] = { x: assetX, y: promptBottom };
       assetX += l.cardW + 40;
@@ -157,8 +159,8 @@ function reconcileLayout(saved: Partial<CanvasLayout> | null, graph: ProductionG
   return { nodes, bars, groups };
 }
 
-function lanesFromLayout(layout: CanvasLayout, graph: ProductionGraph | null): Lane[] {
-  return deriveLanes(graph).map((l) => ({ ...l, memberIds: Array.isArray(layout.groups[l.key]) ? layout.groups[l.key] : l.memberIds }));
+function lanesFromLayout(layout: CanvasLayout, graph: ProductionGraph | null, heights: Heights = {}): Lane[] {
+  return deriveLanes(graph, heights).map((l) => ({ ...l, memberIds: Array.isArray(layout.groups[l.key]) ? layout.groups[l.key] : l.memberIds }));
 }
 
 /** 바·카드의 실제 좌표. 카드는 바 위치 + 슬롯 번호로 정해진다. */
@@ -333,7 +335,11 @@ export default function ProductionCanvas({
   // 끌고 있는 컷의 임시 좌표와, 놓일 슬롯(점선 칸).
   const [dragGhost, setDragGhost] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dropSlot, setDropSlot] = useState<{ key: string; index: number } | null>(null);
-  const lanes = useMemo(() => lanesFromLayout(layout, graph), [layout, graph]);
+  // 렌더된 카드 높이(종류별 최대). 점선 칸·씬 줄 간격이 실제 카드와 같아지도록.
+  const [measuredH, setMeasuredH] = useState<Heights>({});
+  // 지금 배치가 기본 배치인지(저장본이 아닌지). 기본 배치면 카드 높이를 잰 뒤 다시 깔아 줄 간격을 맞춘다.
+  const layoutSourceRef = useRef<"default" | "saved">("default");
+  const lanes = useMemo(() => lanesFromLayout(layout, graph, measuredH), [layout, graph, measuredH]);
   const positions = useMemo(() => computePositions(layout, lanes), [layout, lanes]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.8 });
   const [selectedId, setSelectedId] = useState<string>("");
@@ -385,6 +391,7 @@ export default function ProductionCanvas({
       const saved = readStorage(`canvasLayout:${projectId}`);
       let parsed: Partial<CanvasLayout> | null = null;
       try { parsed = saved ? JSON.parse(saved) : null; } catch { parsed = null; }
+      layoutSourceRef.current = (parsed || fromServer) ? "saved" : "default";
       setLayout(reconcileLayout(parsed || fromServer, g, base));
     } catch (e) {
       setError((e as Error).message);
@@ -654,6 +661,25 @@ export default function ProductionCanvas({
       setMulti(new Set());
     }
   };
+  // 카드 실제 높이 측정(종류별 최대). 값이 바뀔 때만 상태를 갱신하고, 기본 배치 상태면 줄 간격을 다시 맞춘다.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const next: Heights = { ...measuredH };
+    let changed = false;
+    el.querySelectorAll<HTMLElement>("[data-node-type]").forEach((node) => {
+      const t = node.dataset.nodeType as ProductionNode["type"];
+      const h = Math.round(node.offsetHeight);
+      if (h > 0 && (next[t] || 0) < h) { next[t] = h; changed = true; }
+    });
+    if (changed) setMeasuredH(next);
+  });
+  useEffect(() => {
+    if (!graph || layoutSourceRef.current !== "default" || !Object.keys(measuredH).length) return;
+    setLayout(defaultLayout(graph, measuredH));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measuredH]);
+
   const onWheel = (e: React.WheelEvent) => {
     const el = containerRef.current;
     if (!el) return;
@@ -681,7 +707,8 @@ export default function ProductionCanvas({
   };
   const resetLayout = () => {
     if (!graph) return;
-    setLayout(defaultLayout(graph));
+    layoutSourceRef.current = "default";
+    setLayout(defaultLayout(graph, measuredH));
     setView({ x: 0, y: 0, scale: 0.8 });
   };
 
@@ -839,6 +866,7 @@ export default function ProductionCanvas({
                 <div
                   key={n.id}
                   className={`absolute rounded-xl border bg-[#10151d] shadow-lg transition-colors ${isSelected ? selectedClass : "border-edge hover:border-gray-500"}`}
+                  data-node-type={n.type}
                   style={{ left: p.x, top: p.y, width: NODE_W[n.type], zIndex: isGhost ? 30 : undefined, opacity: isGhost ? 0.85 : 1 }}
                   onPointerDown={(e) => onPointerDown(e, n.id)}
                 >
