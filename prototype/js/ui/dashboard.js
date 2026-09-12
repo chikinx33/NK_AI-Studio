@@ -19,10 +19,28 @@
 
   // 삭제된(404) 미디어 objectName 을 기억해 다시 요청하지 않게 한다. 저장소에서 지운 로고/
   // 썸네일이 대시보드에 매 로드마다 불려가 404 를 콘솔에 남기던 문제를 self-heal.
-  var DEAD_MEDIA_KEY = 'nk_dead_media';
+  //
+  // v3.1667 재설계: 예전엔 <img> onerror 만으로 영구 기록했다. 그러면 토큰 미준비(401)·일시 5xx·
+  // 오프라인·배포 중단 같은 순간적 실패도 "죽은 파일"로 굳어, 멀쩡한 썸네일이 전부 빈 칸이 됐다
+  // (2026-09-12 사고). 이제는 (1) 실제로 404 를 받았을 때만 기록하고 (2) 기록에 유효기간을 두며
+  // (3) 저장 키를 바꿔 잘못 굳은 옛 기록을 한 번에 버린다.
+  var DEAD_MEDIA_KEY = 'nk_dead_media_v2';
+  var DEAD_MEDIA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일 뒤엔 다시 확인한다(복구·재업로드 대비)
+  function readDeadMediaMap() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(DEAD_MEDIA_KEY) || '{}');
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+      var now = Date.now();
+      var out = {};
+      Object.keys(raw).forEach(function (k) {
+        var ts = Number(raw[k]);
+        if (Number.isFinite(ts) && now - ts < DEAD_MEDIA_TTL_MS) out[k] = ts;
+      });
+      return out;
+    } catch (_) { return {}; }
+  }
   function getDeadMediaSet() {
-    try { var a = JSON.parse(localStorage.getItem(DEAD_MEDIA_KEY) || '[]'); return new Set(Array.isArray(a) ? a : []); }
-    catch (_) { return new Set(); }
+    return new Set(Object.keys(readDeadMediaMap()));
   }
   function isDeadMedia(objectName) {
     var o = String(objectName || '').trim();
@@ -32,13 +50,40 @@
     var o = String(objectName || '').trim();
     if (!o) return;
     try {
-      var s = getDeadMediaSet();
-      if (s.has(o)) return;
-      s.add(o);
-      var arr = Array.from(s);
-      if (arr.length > 500) arr = arr.slice(arr.length - 500); // 무한 증가 방지
-      localStorage.setItem(DEAD_MEDIA_KEY, JSON.stringify(arr));
+      var map = readDeadMediaMap();
+      if (map[o]) return;
+      map[o] = Date.now();
+      var keys = Object.keys(map);
+      if (keys.length > 500) { // 무한 증가 방지 — 오래된 것부터 버린다
+        keys.sort(function (a, b) { return map[a] - map[b]; }).slice(0, keys.length - 500).forEach(function (k) { delete map[k]; });
+      }
+      localStorage.setItem(DEAD_MEDIA_KEY, JSON.stringify(map));
     } catch (_) {}
+  }
+  // <img> 가 실패했을 때: 같은 URL 을 fetch 해 실제 상태를 본다.
+  //  - 404 → 정말 없는 파일. 기록하고 빈 썸네일로 바꾼다.
+  //  - 그 외(401/403/5xx/네트워크) → 기록하지 않고 1.5초 뒤 한 번 다시 시도한다. 그래도 실패하면
+  //    이번 렌더만 빈 썸네일(다음 렌더에서 다시 요청한다).
+  function handleThumbLoadError(img, swapToEmpty) {
+    var obj = String(img.getAttribute('data-thumb-obj') || '').trim();
+    var src = String(img.getAttribute('src') || '');
+    var retried = img.getAttribute('data-thumb-retried') === '1';
+    var finish = function (dead) {
+      if (dead) markDeadMedia(obj);
+      try { swapToEmpty(); } catch (_) {}
+    };
+    if (!src || typeof fetch !== 'function') { finish(false); return; }
+    fetch(src, { method: 'GET', cache: 'no-store' }).then(function (res) {
+      if (res && res.status === 404) { finish(true); return; }
+      if (!retried) {
+        img.setAttribute('data-thumb-retried', '1');
+        setTimeout(function () {
+          try { img.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 'retry=' + Date.now(); } catch (_) { finish(false); }
+        }, 1500);
+        return;
+      }
+      finish(false);
+    }).catch(function () { finish(false); });
   }
   // 빈 썸네일(이미지 추가) placeholder SVG — 죽은 썸네일 교체/렌더에 공용.
   var THUMB_EMPTY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>';
@@ -1140,13 +1185,14 @@
     try {
       container.querySelectorAll('.draft-thumb.has-image img[data-thumb-obj], .brand-portfolio-logo.has-image img[data-thumb-obj]').forEach(function (img) {
         img.onerror = function () {
-          markDeadMedia(img.getAttribute('data-thumb-obj'));
-          var btn = img.closest('.draft-thumb, .brand-portfolio-logo');
-          if (btn) {
-            btn.classList.remove('has-image');
-            btn.classList.add('empty');
-            btn.innerHTML = THUMB_EMPTY_SVG;
-          }
+          handleThumbLoadError(img, function () {
+            var btn = img.closest('.draft-thumb, .brand-portfolio-logo');
+            if (btn) {
+              btn.classList.remove('has-image');
+              btn.classList.add('empty');
+              btn.innerHTML = THUMB_EMPTY_SVG;
+            }
+          });
         };
       });
     } catch (_) {}
@@ -1615,9 +1661,10 @@
       var sImg = container.querySelector('.draft-thumb.has-image img[data-thumb-obj]');
       if (sImg) {
         sImg.onerror = function () {
-          markDeadMedia(sImg.getAttribute('data-thumb-obj'));
-          var btn = sImg.closest('.draft-thumb');
-          if (btn) { btn.classList.remove('has-image'); btn.classList.add('empty'); btn.innerHTML = THUMB_EMPTY_SVG; }
+          handleThumbLoadError(sImg, function () {
+            var btn = sImg.closest('.draft-thumb');
+            if (btn) { btn.classList.remove('has-image'); btn.classList.add('empty'); btn.innerHTML = THUMB_EMPTY_SVG; }
+          });
         };
       }
     } catch (_) {}
