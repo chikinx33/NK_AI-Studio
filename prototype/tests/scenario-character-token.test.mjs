@@ -20,7 +20,9 @@ function loadEnforceFn() {
     .replace(/^import\s+.*from\s+["']\.\/scenario\/rebalancer\.js["'];\s*$/m,
       'const splitUniformRuns = (s) => ({ scenes: s, splits: 0 }); const padScenesToBeatCount = (s) => ({ scenes: s, padded: 0 });')
     .replace(/^import\s+.*from\s+["']\.\/_shared\/claude-auth\.js["'];\s*$/m,
-      'const claudeAuthHeaders = () => ({ subscription: false, headers: {} }); const buildClaudeSystem = (s, sys) => sys; const anthropicConfigured = () => true;');
+      'const claudeAuthHeaders = () => ({ subscription: false, headers: {} }); const buildClaudeSystem = (s, sys) => sys; const anthropicConfigured = () => true;')
+    .replace(/^import\s+.*from\s+["']\.\/_shared\/location-names\.js["'];\s*$/m,
+      'const canonicalizeSceneLocations = (s) => ({ scenes: s, renamed: 0, names: [] });');
   source += '\nmodule.exports = { enforceCharacterTokenInVisual };';
   const context = vm.createContext({
     console, setTimeout, clearTimeout,

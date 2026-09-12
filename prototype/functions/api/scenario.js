@@ -9,6 +9,7 @@ import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUD
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 import { buildBodyGrammar } from "./_shared/body-grammar.js";
+import { canonicalizeSceneLocations } from "./_shared/location-names.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -19,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1676";
+const SERVER_VERSION = "3.1677";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -1799,6 +1800,9 @@ async function generateScenarioScenesViaBeats(input) {
     }
   } catch (_) { /* 분석 실패 시 원본 유지 */ }
 
+  // 장소 문자열을 세트 이름 하나로 통일 — 세트 판정(플레이트·연속성·라벨)이 이 문자열로 돈다.
+  let locationsRenamed = 0;
+  try { const lc = canonicalizeSceneLocations(normalizedScenes); normalizedScenes = lc.scenes; locationsRenamed = lc.renamed; } catch (_) { /* 통일 실패 시 원본 유지 */ }
   const finalScenes = rebalanceEstSec(normalizedScenes, totalSec);
   const elapsedMs = Date.now() - runStartedAt;
 
@@ -1830,6 +1834,7 @@ async function generateScenarioScenesViaBeats(input) {
       scenesGenerated: finalScenes.length,
       scenesPadded: 0, // per-beat 는 구조적으로 패딩 불필요 (1:1 보장)
       scenesSplit: scenesSplitCount,
+      locationsRenamed,
       perBeatFailures: failures.length,
       perBeatFallbacks: fallbacks,
       elapsedMs,
@@ -2071,6 +2076,8 @@ async function generateScenarioScenes(input) {
     }
   } catch (_) { /* 분석 실패 시 원본 유지 */ }
 
+  let locationsRenamed = 0;
+  try { const lc = canonicalizeSceneLocations(normalizedScenes); normalizedScenes = lc.scenes; locationsRenamed = lc.renamed; } catch (_) { /* 통일 실패 시 원본 유지 */ }
   const finalScenes = rebalanceEstSec(normalizedScenes, Number(input.duration) || 0);
 
   return {
@@ -2091,6 +2098,7 @@ async function generateScenarioScenes(input) {
       scenesGenerated: finalScenes.length,
       scenesPadded: scenesPaddedCount,
       scenesSplit: scenesSplitCount,
+      locationsRenamed,
       // v3.881: 빌드 추적 (legacy 경로)
       serverVersion: SERVER_VERSION,
       generationPath: "single-call",

@@ -3029,6 +3029,7 @@
             m.tokensEnforced ? `@토큰 자동 보정 (Pass 1): ${m.tokensEnforced}회` : '@토큰 자동 보정 (Pass 1): 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
             m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
+            m.locationsRenamed ? `장소 이름 통일 (Pass 1): ${m.locationsRenamed}씬` : '',
             m.perBeatFailures ? `비트 실패: ${m.perBeatFailures} (fallback ${m.perBeatFallbacks || 0})` : '',
             m.elapsedMs ? `소요: ${(m.elapsedMs / 1000).toFixed(1)}s` : '',
             // 뒤 단계(컷 분해·장소 추출)는 이 패널이 뜬 뒤에 돈다. 자리표시자를 두고 끝나면 바꿔 끼운다 —
@@ -3130,10 +3131,23 @@
               }
               draft.payload = Object.assign({}, draft.payload, { episodeLocations: epLocs });
               console.log('[episode-locations] 추출(' + epLocs.length + '개):', epLocs);
+              // 컷의 장소 문자열을 추출된 세트 이름으로 통일한다. 세트 판정(플레이트·연속성·Scene/cut 라벨)은
+              // 이 문자열 일치로 돌아가므로, 표현만 다른 같은 방("소녀의 방 — …" / "…소녀의 방 안")을 하나로 만든다.
+              let locationsUnified = 0;
+              try {
+                const nameById = new Map();
+                epLocs.forEach((l) => (Array.isArray(l && l.sceneIds) ? l.sceneIds : []).forEach((sid) => nameById.set(String(sid), String((l && l.name) || '').trim())));
+                draft.scenes = (draft.scenes || []).map((sc) => {
+                  const nm = nameById.get(String(sc && sc.id));
+                  if (!nm || nm === String((sc && sc.sceneLocation) || '').trim()) return sc;
+                  locationsUnified += 1;
+                  return Object.assign({}, sc, { sceneLocation: nm });
+                });
+              } catch (_) { locationsUnified = 0; }
               // 세트 수는 플레이트 수(=비용·일관성)와 직결된다 — 진단 패널에 바로 보인다.
               try {
                 if (Array.isArray(metaLines)) {
-                  replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '개 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']');
+                  replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '개 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']' + (locationsUnified ? ` · 컷 장소 이름 통일 ${locationsUnified}건` : ''));
                   showScenarioMetaToast(metaLines.join('\n'));
                 }
               } catch (_) { /* 진단 갱신 실패는 무시 */ }
