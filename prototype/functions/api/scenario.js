@@ -1113,6 +1113,10 @@ function buildSingleBeatSystemPromptKo() {
 - visual: 카메라에 실제 찍히는 것을 명사 중심으로 한 문단(3~5문장).
 - 추상 표현 금지("아름다운", "따뜻한", "감동적인", "분위기" 등).
 - 인물의 물리적 행동, 프레임 안 사물, 카메라 앵글/무브를 구체적으로.
+- sceneLocation: 이 씬이 벌어지는 물리적 공간(세트) 이름 하나. "교실", "수영장" 처럼 짧게.
+  직전 비트와 같은 공간이면 같은 이름을 그대로 쓴다(표현을 바꾸지 마라). 공간이 실제로
+  바뀔 때만 다른 이름을 쓴다. 배경은 이 이름으로 만든 세트 플레이트가 그린다.
+- visual 에서 배경(벽·가구·풍경·조명)은 한 구절을 넘기지 않는다. 인물·행동·프레이밍이 중심이다.
 - sceneIntent: 관객의 구체적 반응. "~을 보여준다" 금지. "관객이 ~한다" 허용.
 - 등록된 캐릭터만 사용. 새 인물 추가 금지.
 - coversBeats 에는 받은 비트 ID 하나만.
@@ -1162,6 +1166,12 @@ function buildSingleBeatSystemPromptEn() {
 - visual: noun-centric description of what the camera captures, one paragraph (3-5 sentences).
 - No abstract phrasing ("beautiful", "warm", "dramatic", "atmospheric").
 - Concrete: physical actions, objects in frame, camera angle/move.
+- sceneLocation: ONE short name of the physical space (the set) this scene is filmed in — "classroom", "pool".
+  If it is the same space as the previous beat, reuse the exact same name (do not rephrase it). Use a
+  different name only when the space actually changes. The background is rendered from the set plate
+  built for this name.
+- Keep background description in visual (walls, furniture, scenery, lighting) to one short phrase at most.
+  Characters, action and framing are the substance.
 - sceneIntent: viewer's concrete reaction. Not "shows X". Use "viewer does X".
 - Only registered characters. No new characters.
 - coversBeats contains ONLY the one beat ID you received.

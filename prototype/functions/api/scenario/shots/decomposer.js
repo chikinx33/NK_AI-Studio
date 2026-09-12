@@ -51,6 +51,8 @@ export function buildShotPromptKo() {
 · shotType    : 아래 어휘에서만.
 · cameraMove  : 아래 어휘에서만.
 · composition : 프레임에 보이는 것. 정지 화면으로 설명되는 것만, 명사 중심으로 구체적으로.
+                단, 인물(@토큰)·소품·프레이밍(무엇이 화면을 얼마나 채우는가)만 쓴다.
+                배경(벽·건물·풍경·가구 배치·조명)은 쓰지 않는다 — 배경은 sceneLocation 과 세트 플레이트가 정한다.
 · action      : 그 안에서 일어나는 물리적 움직임. 추상 표현 금지.
 · beats       : 샷 안에서 보이는 것이 시간에 따라 달라질 때의 시간표.
                 cameraMove 가 static 이 아니면 필수. 정적 샷이면 null.
@@ -105,9 +107,19 @@ export function buildShotPromptKo() {
   "back" 으로 명시해야 배경이 반대편 공간으로 그려진다. front 인 채로 두면 컷이 튄다.
 · 입력 씬의 visual 이 이미 샷 사이즈·앵글·프레이밍(로우앵글 와이드, ECU, 오프센터 등)을
   지정했다면 그 씬의 첫 샷은 그것을 따른다. 기본값(MS/아이레벨/정면)으로 평탄화하지 마라.
-· sceneLocation 이 넓으면(예: "우주선", "궁전") 컷별 sub-location 을 composition 에 적어도 된다.
-  예: "우주선 외부 측면, 선체가 프레임을 가로지름" → "에어록 내부, 닫히는 해치" → "함교, 콘솔 LED 클로즈업".
-  한 비트 안에서 sub-location 이 진행돼도 된다.
+
+[배경은 세트가 정한다 — composition 에 배경을 쓰지 마라]
+· 이 씬의 모든 샷은 sceneLocation 이라는 하나의 세트 안에서 찍힌다. 배경은 그 세트의 플레이트
+  (정면·후면·좌·우)가 cameraDirection 에 따라 자동으로 붙는다. 그러므로 composition 에
+  벽·건물·풍경·가구·조명 같은 배경 묘사를 새로 쓰지 마라. 샷마다 배경을 다시 쓰면 컷마다
+  다른 공간이 그려진다.
+· composition 은 "누가(@토큰) 어디쯤(프레임 좌/중/우, 앞/뒤) 어떤 크기로, 어떤 소품과" 만 쓴다.
+  예: "@캐릭터A 가 프레임 왼쪽 근경에 상반신, 오른손에 컵" ⭕ /
+      "햇빛 드는 창가의 나무 테이블 위 @캐릭터A" ❌ (창가·테이블은 세트 플레이트가 그린다)
+· 세트 안의 특정 구역(문 앞, 창가)은 인물 위치를 정하는 데 꼭 필요할 때만 두세 단어로만 쓴다.
+  구역을 바꾸는 것은 cameraDirection 으로 표현한다(창가는 left, 문 앞은 back 처럼).
+· 다른 물리적 공간(우주선 외부 → 함교)이 필요하면 그것은 다른 씬의 몫이다. 이 씬 안에서
+  sub-location 을 옮겨 다니지 마라.
 
 [하지 말 것]
 · 한 샷 안에 여러 컷을 서술하지 마라. 이런 말이 나오면 샷을 나눠야 한다는 뜻이다:
@@ -137,6 +149,9 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 · shotType    : from the vocabulary below only.
 · cameraMove  : from the vocabulary below only.
 · composition : what is visible in frame. Only what a still could show; noun-centric and specific.
+                Write ONLY characters (@tokens), props and framing (what fills the frame and how much).
+                Do NOT describe the background (walls, buildings, scenery, furniture layout, lighting) —
+                the background is defined by sceneLocation and the set plate.
 · action      : the physical motion happening inside it. No abstract phrasing.
 · beats       : the timeline inside the shot, for when what is visible changes over time.
                 REQUIRED whenever cameraMove is not "static". null for a truly static shot.
@@ -196,9 +211,19 @@ Without them the still image is generated from the END state of the move, and th
   "front" makes the cut jump.
 · If the input scene's visual already specifies a shot size / angle / framing (low-angle wide, ECU,
   off-center...), the scene's first shot MUST honor it. Do not flatten it to a default (MS / eye-level / centered).
-· When sceneLocation is broad ("Spaceship", "Palace"), per-shot sub-locations may be written into composition.
-  e.g. "spaceship exterior, hull crossing the frame" → "airlock interior, hatch closing" → "bridge, console LEDs".
-  Shots within one beat may walk through different sub-locations.
+
+[The set defines the background — never write background into composition]
+· Every shot of this scene is filmed inside ONE set, sceneLocation. Its background plates (front / back /
+  left / right) are attached automatically according to cameraDirection. So never re-describe walls,
+  buildings, scenery, furniture or lighting in composition — re-describing the background per shot makes
+  every cut render a different space.
+· composition says only "who (@token), where in frame (left/center/right, near/far), how large, with which props".
+  e.g. "@CharacterA upper body in the left foreground, holding a cup in the right hand" ⭕ /
+       "@CharacterA at a wooden table by a sunlit window" ❌ (the window and table come from the set plate)
+· Name a sub-area of the set (by the door, at the window) only when it is needed to place a character, in
+  two or three words at most. A change of area is expressed with cameraDirection (window = left, door = back).
+· A genuinely different physical space (ship exterior → bridge) belongs to a different scene. Never walk
+  through sub-locations inside this scene.
 
 [Never do this]
 · Never describe multiple cuts inside one shot. If you need phrasing like "cuts intercut", "three quick
