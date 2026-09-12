@@ -147,10 +147,10 @@ export function buildShotCameraHint(shotType, cameraMove, lang) {
   return "Camera: " + parts.join("; ") + ".";
 }
 
-// 이미지 프롬프트에 붙일 방위 한 줄. front 는 기본값이라 빈 문자열(굳이 말하지 않는다).
+// 이미지 프롬프트에 붙일 방위 한 줄. front 도 명시한다 — 비워 두면 기본값으로 떨어진
+// 모든 컷이 방위 문장 없이 같은 카메라 문장만 받아 구도가 평탄해진다.
 export function buildCameraDirectionHint(raw, lang) {
-  const key = normalizeCameraDirection(raw);
-  if (!key || key === "front") return "";
+  const key = normalizeCameraDirection(raw) || "front";
   const v = CAMERA_DIRECTIONS[key];
   if (lang === "ko") return "카메라 방위: " + v.ko + ".";
   return "Camera direction: " + v.enHint + ".";

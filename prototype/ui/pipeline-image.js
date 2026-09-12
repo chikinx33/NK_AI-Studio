@@ -1457,7 +1457,14 @@
           var prevLoc = String(prevSc.sceneLocation || '').trim().toLowerCase();
           if (thisLoc && prevLoc && prevLoc !== thisLoc) break; // 장소가 바뀌면 잇지 않는다
           var prevImg = String(prevSc.imageDataUrl || '').trim();
-          if (!prevImg || prevImg.indexOf('data:') === 0) continue; // 저장 안 된 인라인은 제외
+          // 종횡비 보정을 거친 스틸은 data: URL 이라 그대로 보내면 요청이 비대해진다.
+          // 대신 생성 시 보존해 둔 GCS objectName(imagePath)으로 영속 URL 을 만들어 쓴다.
+          // 예전엔 여기서 그냥 건너뛰어, 보정된 컷 뒤로는 앵커가 조용히 사라졌다.
+          if (prevImg.indexOf('data:') === 0 || prevImg.indexOf('blob:') === 0) {
+            var prevObj = String(prevSc.imagePath || '').trim();
+            prevImg = (prevObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(prevObj) : '';
+          }
+          if (!prevImg) continue; // 영속 참조가 없는 컷은 잇지 않는다
           var autoRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [];
           autoRefs.push({
             referenceId: autoRefs.length + 1,

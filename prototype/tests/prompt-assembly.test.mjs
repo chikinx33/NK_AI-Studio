@@ -101,9 +101,11 @@ test('블로킹은 화면 텍스트에 등장하는 @토큰으로만 제한한�
   assert.ok(!out.includes('세모 —'), '화면 밖 캐릭터는 끌어들이지 않는다');
 });
 
-test('front 방위는 방위 힌트를 내지 않는다', () => {
+test('front 방위도 방위 힌트를 명시한다 (기본값 컷이 방위 없이 평탄해지지 않게)', () => {
   const out = buildSceneImagePrompt({ composition: 'x', cameraDirection: 'front' }, '');
-  assert.ok(!out.includes('Camera direction:'));
+  assert.ok(out.includes('Camera direction: front side of the set'));
+  const none = buildSceneImagePrompt({ composition: 'x' }, '');
+  assert.ok(none.includes('Camera direction: front side of the set'), '방위 미지정도 front 로 명시');
 });
 
 test('buildBeatTimeline 은 "0.0s-2.5s: ..." 형식', () => {

@@ -198,28 +198,33 @@ export function padScenesToBeatCount(scenes, beats) {
 // 3) Shot-level: 인접 동일 cameraMove 자동 치환
 // ---------------------------------------------------------------------------
 
+// 치환 풀은 shots/vocab.js 의 CAMERA_MOVES 키와 정확히 같아야 한다.
+// 과거 "pan-left"·"tilt-up"·"tracking" 같은 비어휘 값을 넣어 두는 바람에, 치환된 샷이
+// 정규화 단계(normalizeCameraMove)에서 null 로 떨어져 카메라 힌트가 통째로 사라졌다.
 const CAMERA_POOL = [
-  "push-in",
-  "pull-out",
-  "pan-left",
-  "pan-right",
-  "tilt-up",
-  "tilt-down",
-  "tracking",
+  "push_in",
+  "pull_out",
+  "pan",
+  "tilt",
+  "dolly",
+  "track",
+  "crane",
   "handheld",
+  "zoom",
   "static",
 ];
 
 const CAMERA_MOVE_DESCRIPTION_KO = {
-  "push-in":   "카메라가 피사체를 향해 천천히 다가간다",
-  "pull-out":  "카메라가 피사체에서 천천히 멀어진다",
-  "pan-left":  "카메라가 왼쪽으로 부드럽게 팬한다",
-  "pan-right": "카메라가 오른쪽으로 부드럽게 팬한다",
-  "tilt-up":   "카메라가 아래에서 위로 천천히 틸트한다",
-  "tilt-down": "카메라가 위에서 아래로 천천히 틸트한다",
-  "tracking":  "카메라가 피사체와 평행 이동하며 따라간다",
-  "handheld":  "핸드헬드 미세 흔들림으로 현장감을 더한다",
-  "static":    "카메라는 고정",
+  "push_in":  "카메라가 피사체를 향해 천천히 다가간다",
+  "pull_out": "카메라가 피사체에서 천천히 멀어진다",
+  "pan":      "카메라가 좌우로 부드럽게 팬한다",
+  "tilt":     "카메라가 상하로 천천히 틸트한다",
+  "dolly":    "카메라 전체가 앞뒤로 이동한다",
+  "track":    "카메라가 피사체와 평행 이동하며 따라간다",
+  "crane":    "카메라가 수직으로 상승 또는 하강한다",
+  "handheld": "핸드헬드 미세 흔들림으로 현장감을 더한다",
+  "zoom":     "위치는 고정한 채 초점거리만 바꾼다",
+  "static":   "카메라는 고정",
 };
 
 /**
@@ -253,7 +258,7 @@ export function diversifyShotCameraMoves(scenes) {
       }
       // 인접 동일 — 풀에서 prevMove와 다른 무브를 라운드로빈으로 선택
       const candidates = CAMERA_POOL.filter((m) => m !== prevMove);
-      const replacement = candidates[(idx + swaps) % candidates.length] || "pan-right";
+      const replacement = candidates[(idx + swaps) % candidates.length] || "pan";
       swaps += 1;
       const desc = CAMERA_MOVE_DESCRIPTION_KO[replacement];
       const newAction = desc

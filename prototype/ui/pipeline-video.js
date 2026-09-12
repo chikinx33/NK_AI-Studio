@@ -124,6 +124,25 @@
     return [];
   }
 
+  // 정방향 체인: 이번 컷에 스틸이 없을 때, 같은 장소의 직전 컷 영상 마지막 프레임을 시작 프레임으로.
+  // 장소가 바뀌면 잇지 않는다(다른 세트의 프레임에서 출발하면 배경이 그대로 새어 들어온다).
+  function pickPrevLastFrameForStart(scenes, idx) {
+    var list = Array.isArray(scenes) ? scenes : [];
+    var cur = list[idx];
+    if (!cur) return '';
+    var thisLoc = String(cur.sceneLocation || '').trim().toLowerCase();
+    for (var i = idx - 1; i >= 0; i--) {
+      var prev = list[i];
+      if (!prev) continue;
+      var prevLoc = String(prev.sceneLocation || '').trim().toLowerCase();
+      if (thisLoc && prevLoc && prevLoc !== thisLoc) return '';
+      var frame = String(prev.lastFrameDataUrl || '').trim();
+      if (frame) return frame;
+      if (String(prev.videoUrl || '').trim()) return ''; // 영상은 있는데 프레임이 없으면 포기(추출 실패)
+    }
+    return '';
+  }
+
   // Kling 선택 시: 브랜드 허브 캐릭터 레퍼런스를 자동 수집해 image_list 로 붙인다.
   // pipeline-image.js 의 _helpers 를 재사용해 동일한 해결 체인을 그대로 따른다.
   // 반환: [{ imageDataUrl, subjectDescription, token }] 또는 빈 배열
@@ -352,6 +371,11 @@
     }
 
     var imageUrl = scene.imageDataUrl || '';
+    // 스틸이 없는 컷은 같은 장소의 직전 컷 영상 마지막 프레임에서 이어 시작한다(정방향 체인).
+    if (!imageUrl && opts.idx > 0) {
+      imageUrl = pickPrevLastFrameForStart(st.scenes, opts.idx);
+      if (imageUrl) { try { console.log('Video start from previous last frame (scene ' + scene.id + ')'); } catch (_) {} }
+    }
     if (!imageUrl) {
       alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
       return;
@@ -389,14 +413,11 @@
         : snapVideoDuration(capped);
       var isKling = opts.videoModel === 'kling-final';
       var klingQuality = isKling ? 'final' : '';
-      // 이전 씬의 마지막 프레임을 이번 씬의 끝 프레임(image_tail)으로 자동 연결 (Kling 전용)
+      // 끝 프레임(image_tail) 자동 연결은 하지 않는다. 예전엔 "이전 씬의 마지막 프레임"을
+      // 이번 씬의 끝 프레임으로 보내 매 컷이 자기 스틸에서 출발해 이전 컷이 끝난 구도로
+      // 되돌아갔다(체인 방향이 거꾸로였다). 컷은 하드 컷이므로 끝 프레임을 강제하지 않고,
+      // 연속성은 위의 "직전 마지막 프레임 → 이번 시작 프레임" 정방향 체인으로만 잇는다.
       var endImageDataUrl = '';
-      if (isKling && opts.idx > 0) {
-        try {
-          var prevScene = st.scenes[opts.idx - 1];
-          endImageDataUrl = (prevScene && (prevScene.lastFrameDataUrl || '')) || '';
-        } catch (_) { endImageDataUrl = ''; }
-      }
       // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
       // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
       // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
@@ -863,11 +884,10 @@
         } catch (aspectErr) {
           console.warn('video aspect normalize skipped (poll):', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
         }
-        // Kling 전용: 다음 씬의 image_tail 연결을 위해 마지막 프레임 추출
+        // 모든 모델: 다음 컷이 스틸 없이 이어 시작할 수 있도록 마지막 프레임을 보관한다.
         var lastFrameDataUrl = '';
-        var isKlingModel = opts.videoModel === 'kling-final';
         try {
-          if (isKlingModel && NK.util && NK.util.extractLastFrame) {
+          if (NK.util && NK.util.extractLastFrame) {
             lastFrameDataUrl = await NK.util.extractLastFrame(playback, { timeoutMs: 12000 });
           }
         } catch (_) { lastFrameDataUrl = ''; }
