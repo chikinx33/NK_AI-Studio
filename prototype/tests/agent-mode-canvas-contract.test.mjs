@@ -111,10 +111,12 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(workspace, /selectedSkill\?\.id === "video_pipeline"[\s\S]*<ProductionCanvas embedded projectId=\{canvasProjectId\}/);
   // 집중 모드: 닫기 옆 확장 버튼이 좌우 패널을 접는다(사용자 요청). 스킬 화면을 떠나면 자동 해제.
   assert.match(workspace, /onToggleFocus[\s\S]*title=\{focusMode \? "패널 다시 열기" : "집중 모드 \(좌우 패널 닫기\)"\}/);
-  assert.match(app, /if \(centerView !== "skills"\) setFocusMode\(false\)/);
+  // 임베드(AI 시네마 셸)에서는 집중 모드가 풀리지 않는다 — 캔버스만 보여야 하므로.
+  assert.match(app, /if \(centerView !== "skills" && !EMBED_MODE\) setFocusMode\(false\)/);
   // 집중 모드에선 복귀 버튼만 남고 상단 메뉴(스킬 헤더·캔버스 상단 바)는 전부 숨는다.
   assert.match(workspace, /\{!focusMode && \(\s*<section className="shrink-0 border-b border-edge/);
-  assert.match(workspace, /hideTopBar=\{focusMode\}/);
+  // 임베드(AI 시네마 셸)에서는 캔버스 상단 바(프로젝트·줌·일괄 생성)를 남긴다.
+  assert.match(workspace, /hideTopBar=\{focusMode && !embed\}/);
   assert.match(canvas, /\{!hideTopBar && \(\s*<section className="flex shrink-0 flex-wrap/);
   // 연결선 곡선·직선 토글: 확장 버튼 옆, 브라우저에 기억, 캔버스가 prop 으로 받는다.
   assert.match(workspace, /writeStorage\("canvasEdgeStyle", next\)/);

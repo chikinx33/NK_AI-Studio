@@ -73,6 +73,8 @@
     // Stage iframe cache: stage name -> iframe element
     // 캐시된 iframe은 DOM에 attach된 채 display:none으로 hidden, 활성화 시 활성 iframe으로 promote
     var __stageIframes = {};
+    // 캔버스가 프로젝트를 바꿨다고 알린 뒤, 아직 다시 불러오지 않은 스테이지.
+    var __dirtyStages = {};
 
     function applyThemeAndLangToFrame(iframe) {
         try {
@@ -201,6 +203,14 @@
             if (iframe) {
                 activateIframe(iframe);
 
+                // 캔버스(에이전트 모드)에서 프로젝트를 바꿨으면 시나리오·제작·포스트 스테이지는 캐시를 버리고
+                // 다시 불러온다. 그 페이지들은 로컬 캐시를 먼저 그리고 stage-revisit 도 듣지 않아, 안 그러면
+                // 캔버스 편집이 화면에 안 보인다.
+                if (__dirtyStages[st]) {
+                    delete __dirtyStages[st];
+                    iframe.__nkUrl = '';
+                    try { if (st === 'scenes' && NK.store && NK.store.clearPipeline) NK.store.clearPipeline(); } catch (_) {}
+                }
                 // 캐시 hit: 같은 stage + 같은 URL이면 src 변경 없이 즉시 표시
                 if (iframe.__nkUrl === url) {
                     __lastResolvedUrl = url;
@@ -330,6 +340,8 @@
     nav.normalizeStageName = function (u) {
         try {
             const raw = String(u || '').toLowerCase().split('#')[0].split('?')[0];
+            // 캔버스 스테이지: React 앱(ai-company/) 을 iframe 으로 연다. basename 이 index 라 options 로 빠지지 않게 먼저 잡는다.
+            if (/(^|[\\\/])ai-company([\\\/]|$)/.test(raw)) return 'canvas';
             // \ 와 / 모두 처리하도록 수정
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
@@ -404,6 +416,16 @@
 
     if (!window.__nkStageReadyBound) {
         window.__nkStageReadyBound = true;
+        window.addEventListener('message', function (evt) {
+            try {
+                var data = evt && evt.data || {};
+                if (!data || data.type !== 'nk-project-changed') return;
+                __dirtyStages.scenario = true;
+                __dirtyStages.scenes = true;
+                __dirtyStages.media = true;
+                try { if (NK.store && NK.store.clearPipeline) NK.store.clearPipeline(); } catch (_) {}
+            } catch (_) { }
+        });
         window.addEventListener('message', function (evt) {
             try {
                 var data = evt && evt.data || {};

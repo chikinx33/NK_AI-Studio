@@ -47,6 +47,15 @@ import {
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
 import { dispatchUiAction, type UiAction } from "./lib/uiActions";
+
+// ── AI 시네마 셸 임베드 ────────────────────────────────────────────────────
+// 셸(ai-video.html)이 스테이지 iframe 으로 이 앱을 열 때 ?view=canvas&embed=1&projectId=… 를 붙인다.
+// 캔버스는 AI 기업과 AI 시네마가 같은 코드를 쓴다(두 벌 아님). 임베드면 좌우 패널·상단 메뉴를 접고
+// 캔버스만 보이며, 셸의 stage-revisit 메시지에 그래프를 다시 읽고, 잡이 끝나면 셸에 변경을 알린다.
+const EMBED_PARAMS = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
+export const EMBED_MODE = EMBED_PARAMS.get("embed") === "1";
+export const EMBED_CANVAS = EMBED_PARAMS.get("view") === "canvas";
+const EMBED_PROJECT_ID = String(EMBED_PARAMS.get("projectId") || EMBED_PARAMS.get("pid") || "").trim();
 import { SpeechInputButton, useSpeechInput } from "./components/SpeechInputControl";
 import { readStorage, writeStorage } from "./lib/safeStorage";
 
@@ -124,11 +133,11 @@ export default function App() {
   const [presentationActive, setPresentationActive] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">("chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">(EMBED_CANVAS ? "skills" : "chat");
   // 제작 캔버스: 채팅(canvas.open/focus)이 가리키는 프로젝트·컷.
-  const [canvasProjectId, setCanvasProjectId] = useState(readStorage("canvasProjectId"));
+  const [canvasProjectId, setCanvasProjectId] = useState(EMBED_PROJECT_ID || readStorage("canvasProjectId"));
   const [canvasFocus, setCanvasFocus] = useState<{ sceneId: string | number | null; nonce: number }>({ sceneId: null, nonce: 0 });
-  const [skillCategoryId, setSkillCategoryId] = useState("design-content");
+  const [skillCategoryId, setSkillCategoryId] = useState(EMBED_CANVAS ? CANVAS_SKILL_CATEGORY_ID : "design-content");
   const [workRevision, setWorkRevision] = useState(0);
   const [workFolderDate, setWorkFolderDate] = useState("");
   const [dashboardProjectId, setDashboardProjectId] = useState("");
@@ -187,8 +196,21 @@ export default function App() {
   });
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   // 집중 모드: 스킬 작업(제작 캔버스 등)에 몰입하도록 좌측 직원 패널·우측 메뉴 패널을 접는다. 스킬 화면을 떠나면 자동 해제.
-  const [focusMode, setFocusMode] = useState(false);
-  useEffect(() => { if (centerView !== "skills") setFocusMode(false); }, [centerView]);
+  const [focusMode, setFocusMode] = useState(EMBED_MODE);
+  useEffect(() => { if (centerView !== "skills" && !EMBED_MODE) setFocusMode(false); }, [centerView]);
+  // 셸과의 통신: stage-revisit(캐시된 iframe 재방문) → 그래프 다시 읽기, nk-canvas-open → 프로젝트 전환.
+  useEffect(() => {
+    if (!EMBED_MODE) return;
+    const onMessage = (evt: MessageEvent) => {
+      const d = (evt && (evt.data as Record<string, unknown>)) || {};
+      const type = String(d.type || "");
+      if (type === "stage-revisit") dispatchUiAction({ action: "canvas.refresh" });
+      else if (type === "nk-canvas-open" && d.projectId) dispatchUiAction({ action: "canvas.open", projectId: String(d.projectId) });
+    };
+    window.addEventListener("message", onMessage);
+    try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: "stage-ready", stage: "canvas" }, "*"); } catch { /* 셸 없음 */ }
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
   const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
@@ -1328,7 +1350,8 @@ export default function App() {
               canvasFocusNonce={canvasFocus.nonce}
               onCanvasProjectChange={setCanvasProjectId}
               focusMode={focusMode}
-              onToggleFocus={() => setFocusMode((v) => !v)}
+              onToggleFocus={EMBED_MODE ? undefined : () => setFocusMode((v) => !v)}
+              embed={EMBED_MODE}
             />
           </Suspense>
         ) : centerView === "settings" ? (

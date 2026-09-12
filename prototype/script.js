@@ -1118,7 +1118,12 @@
         }
         return;
       }
-      if (action === 'sidebar-edit-scenario') {
+      if (action === 'sidebar-edit-canvas') {
+        // 캔버스(에이전트 모드) — AI 기업의 제작 캔버스를 같은 코드로 iframe 에 연다. 세 단계를 한눈에 제어한다.
+        persistCurrentProject();
+        const canvasUrl = 'ai-company/index.html?view=canvas' + (currentProject?.id ? '&projectId=' + encodeURIComponent(currentProject.id) : '');
+        NK.navigation.loadStage(canvasUrl);
+      } else if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
         NK.navigation.loadStage(url);

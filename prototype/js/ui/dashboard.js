@@ -1657,6 +1657,7 @@
       <h4 class="sidebar-card-title" title="${escapeHtml(normalized.title || '제목없음')}">${escapeHtml(truncateEpisodeTitle(normalized.title || '제목없음'))}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
+        ${getHostShell() === 'video' ? `<button class="btn-secondary sidebar-canvas-btn" data-action="sidebar-edit-canvas" data-i18n="sidebar_canvas_fixed">캔버스</button>` : ''}
         <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre-Prod</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes" data-i18n="sidebar_production_fixed">Production</button>
         <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post-Prod</button>

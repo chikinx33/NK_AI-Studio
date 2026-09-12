@@ -290,10 +290,15 @@ export default function ProductionCanvas({
         return { ...p, status };
       }));
       setPending(next);
-      if (changed) void load(true);
+      if (changed) {
+        void load(true);
+        // AI 시네마 셸 안에서 열렸으면 "이 프로젝트가 바뀌었다"를 알려, 시나리오·제작·포스트 스테이지가
+        // 다음 방문 때 캐시 대신 서버를 다시 읽게 한다(캔버스 편집이 세 단계에 그대로 반영되는 경로).
+        try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: "nk-project-changed", projectId }, "*"); } catch { /* 셸 없음 */ }
+      }
     }, 5_000);
     return () => window.clearInterval(timer);
-  }, [pending, load]);
+  }, [pending, load, projectId]);
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
