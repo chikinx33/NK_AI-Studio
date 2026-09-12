@@ -69,6 +69,15 @@
     '같은 상세페이지 안에서 이어 붙였을 때 레이아웃이 반복되지 않도록 카드 구조·타이포·정보 배치를 섹션마다 다르게 한다.',
   ];
 
+  // 고를 수 있는 이미지 모델. imagen 이 받는 provider 값을 그대로 쓴다.
+  // gpt25-* 는 GPT Image 2.5 의 두 갈래로, Flare 는 빠른 기본형 · Sunburst 는 정밀·저속형이다.
+  const DOC_MODELS = ['openai', 'gpt25-flare', 'gpt25-sunburst', 'gemini'];
+
+  function normalizeDocModel(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return DOC_MODELS.indexOf(raw) >= 0 ? raw : 'openai';
+  }
+
   // 상태
   const state = {
     view: 'dashboard',
@@ -78,7 +87,7 @@
     channel: '스마트스토어',
     count: 8,
     ratio: '9:16',
-    model: 'openai',      // 'openai' | 'gemini'
+    model: 'openai',      // DOC_MODELS 중 하나
     useShared: true,
     knowledge: [],        // [{id, name, type, size, text, createdAt}]
     projects: [],         // saved projects
@@ -590,7 +599,7 @@
           const resp = await callImagen({
             prompt,
             aspectRatio,
-            provider: state.model === 'gemini' ? 'gemini' : 'openai',
+            provider: normalizeDocModel(state.model),
             generationMode: 'image-to-image',
             referenceImages: state.referenceDataUrls.map((u, idx) => ({
               referenceId: idx + 1,
@@ -669,7 +678,7 @@
       const resp = await callImagen({
         prompt,
         aspectRatio: project.ratio || '9:16',
-        provider: state.model === 'gemini' ? 'gemini' : 'openai',
+        provider: normalizeDocModel(state.model),
         generationMode: 'image-to-image',
         referenceImages: [{ referenceId: 1, imageDataUrl: compressed, subjectDescription: editTarget.name + ' 원본' }],
         imageSize: '1K',
@@ -913,7 +922,7 @@
           const resp = await callImagen({
             prompt,
             aspectRatio,
-            provider: state.model === 'gemini' ? 'gemini' : 'openai',
+            provider: normalizeDocModel(state.model),
             generationMode: 'image-to-image',
             referenceImages: state.referenceDataUrls.map((u, idx) => ({ referenceId: idx + 1, imageDataUrl: u })),
             imageSize: '1K',
@@ -1157,7 +1166,7 @@
 
     $$('.ai-doc-model-btn[data-model]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        state.model = btn.getAttribute('data-model') === 'gemini' ? 'gemini' : 'openai';
+        state.model = normalizeDocModel(btn.getAttribute('data-model'));
         $$('.ai-doc-model-btn[data-model]').forEach((b) => b.classList.toggle('is-active', b === btn));
         try { localStorage.setItem(STORAGE.lastModel, state.model); } catch (_) {}
       });
@@ -1202,7 +1211,7 @@
     } catch (_) {}
     try {
       const m = localStorage.getItem(STORAGE.lastModel);
-      if (m === 'gemini' || m === 'openai') state.model = m;
+      if (m && DOC_MODELS.indexOf(String(m)) >= 0) state.model = normalizeDocModel(m);
     } catch (_) {}
     state.knowledge = loadKnowledge();
     const _sc = document.getElementById('ai-doc-shared-count');
