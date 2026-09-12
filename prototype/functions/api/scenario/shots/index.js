@@ -19,7 +19,7 @@ import {
   shotsMissingBeats,
   buildBeatsRepairPrompt,
 } from "./decomposer.js";
-import { diversifyShotCameraMoves } from "../rebalancer.js";
+import { diversifyShotCameraMoves, enforceSequenceContinuity } from "../rebalancer.js";
 import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
 import { buildClaudeSystem, claudeFetch } from "../../_shared/claude-auth.js";
 
@@ -116,7 +116,17 @@ export async function decomposeScenes(auth, scenes, opts = {}) {
 
   const tasks = scenes.map(async (scene, idx) => {
     try {
-      const shots = await decomposeScene(auth, scene, opts);
+      // 시퀀스 문맥: 앞·뒤 씬을 알려 줘야 "앞 씬과 같은 세트에서 이어지는가", "첫 샷을 어떻게
+      // 열어야 앞 씬과 안 겹치는가"를 모델이 판단할 수 있다. 병렬 호출이라 앞 씬의 샷 결과는
+      // 못 주지만, 씬 텍스트만으로도 세트 연속·인물 위치 유지 판단은 가능하다.
+      const sceneOpts = {
+        ...opts,
+        prevScene: idx > 0 ? scenes[idx - 1] : null,
+        nextScene: idx < scenes.length - 1 ? scenes[idx + 1] : null,
+        sceneIndex: idx,
+        sceneTotal: scenes.length,
+      };
+      const shots = await decomposeScene(auth, scene, sceneOpts);
       meta.ok++;
       return { ...scene, shots };
     } catch (err) {
@@ -135,7 +145,12 @@ export async function decomposeScenes(auth, scenes, opts = {}) {
   // P2-3-5: 인접 동일 cameraMove 자동 치환 — LLM이 동일 무브를 반복해도 코드로 다양화 보장
   const diversified = diversifyShotCameraMoves(raw);
   meta.cameraSwaps = diversified.swaps;
-  return { scenes: diversified.scenes, meta };
+  // 시퀀스 검증기(씬 경계 포함): 인접 컷 동일 사이즈+방위 금지, 같은 세트 안 인물 위치 고정.
+  // 씬별 병렬 호출은 서로를 모르므로 여기서 한 줄로 이어 보고 코드로 바로잡는다.
+  const sequenced = enforceSequenceContinuity(diversified.scenes);
+  meta.shotTypeSwaps = sequenced.shotSwaps;
+  meta.blockingAnchors = sequenced.blockingAnchors;
+  return { scenes: sequenced.scenes, meta };
 }
 
 export {

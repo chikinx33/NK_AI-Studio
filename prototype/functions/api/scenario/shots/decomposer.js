@@ -261,6 +261,8 @@ export function buildShotUserPromptKo(scene, opts = {}) {
       .join(" / ");
     lines.push(`[scene dialogue] ${dlg}`);
   }
+  const seqKo = buildSequenceContextLines(scene, opts, "ko");
+  if (seqKo.length) { lines.push(""); seqKo.forEach((l) => lines.push(l)); }
   // 몸에 없는 부위로 하는 행동("손가락으로 가리킨다")이 여기서 태어나면
   // 이미지 직전의 네거티브로는 절대 못 막는다. 쓰기 전에 몸부터 알려 준다.
   const bodyKo = buildBodyGrammar(opts.characters, "ko");
@@ -268,6 +270,57 @@ export function buildShotUserPromptKo(scene, opts = {}) {
   lines.push("");
   lines.push("위 한 씬을 콘티 단위 샷들로 분해해 JSON 만 반환하라. id 는 \"" + id + ".1\", \"" + id + ".2\" ... 형식.");
   return lines.join("\n");
+}
+
+/**
+ * 시퀀스 문맥 — 앞·뒤 씬. 씬별 병렬 분해라 앞 씬의 샷 결과는 줄 수 없지만,
+ * 앞 씬의 세트·내용을 알면 "같은 세트에서 이어지는가 → 인물 위치 유지", "첫 샷을 앞 씬과
+ * 다르게 열기" 판단이 가능하다. 사후 검증기(enforceSequenceContinuity)가 코드로 한 번 더 잡는다.
+ */
+function summarizeSceneText(scene, max) {
+  const v = String((scene && (scene.visual || scene.shot)) || "").replace(/\s+/g, " ").trim();
+  return v.length > max ? v.slice(0, max) + "…" : v;
+}
+function sameSet(a, b) {
+  const ka = String((a && (a.sceneLocation || a.location)) || "").trim().toLowerCase();
+  const kb = String((b && (b.sceneLocation || b.location)) || "").trim().toLowerCase();
+  return !!(ka && kb && ka === kb);
+}
+export function buildSequenceContextLines(scene, opts = {}, lang = "ko") {
+  const prev = opts.prevScene || null;
+  const next = opts.nextScene || null;
+  if (!prev && !next) return [];
+  const idx = Number.isFinite(Number(opts.sceneIndex)) ? Number(opts.sceneIndex) + 1 : null;
+  const total = Number(opts.sceneTotal) || null;
+  const lines = [];
+  if (lang === "en") {
+    lines.push(`[sequence] ${idx && total ? `scene ${idx} of ${total}` : "position unknown"}`);
+    if (prev) {
+      lines.push(`[previous scene] set: ${prev.sceneLocation || prev.location || "(unspecified)"} — ${summarizeSceneText(prev, 160)}`);
+      if (sameSet(prev, scene)) {
+        lines.push("· SAME SET as the previous scene: keep every character's stage position (blocking x/depth) unless this scene's action physically moves them. Open this scene with a shot size or cameraDirection that differs from a plain medium/front setup, so the first cut does not look like a jump cut from the previous scene.");
+      } else {
+        lines.push("· New set: this scene may open with an establishing/wider shot before moving closer.");
+      }
+    } else {
+      lines.push("[previous scene] none — this is the opening scene.");
+    }
+    if (next) lines.push(`[next scene] set: ${next.sceneLocation || next.location || "(unspecified)"} — ${summarizeSceneText(next, 100)}`);
+    return lines;
+  }
+  lines.push(`[시퀀스] ${idx && total ? `전체 ${total}씬 중 ${idx}번째` : "위치 미상"}`);
+  if (prev) {
+    lines.push(`[앞 씬] 세트: ${prev.sceneLocation || prev.location || "(미지정)"} — ${summarizeSceneText(prev, 160)}`);
+    if (sameSet(prev, scene)) {
+      lines.push("· 앞 씬과 같은 세트다: 이 씬의 행동이 인물을 실제로 움직이지 않는 한 인물의 무대 위치(blocking x/depth)를 그대로 유지하라. 첫 샷은 평범한 MS·정면 셋업이 아닌 사이즈나 방위로 열어, 앞 씬에서 점프 컷처럼 보이지 않게 하라.");
+    } else {
+      lines.push("· 새 세트다: 이 씬은 설정 샷(넓은 샷)으로 열고 점점 다가가도 좋다.");
+    }
+  } else {
+    lines.push("[앞 씬] 없음 — 첫 씬이다.");
+  }
+  if (next) lines.push(`[뒤 씬] 세트: ${next.sceneLocation || next.location || "(미지정)"} — ${summarizeSceneText(next, 100)}`);
+  return lines;
 }
 
 export function buildShotUserPromptEn(scene, opts = {}) {
@@ -286,6 +339,8 @@ export function buildShotUserPromptEn(scene, opts = {}) {
       .join(" / ");
     lines.push(`[scene dialogue] ${dlg}`);
   }
+  const seqEn = buildSequenceContextLines(scene, opts, "en");
+  if (seqEn.length) { lines.push(""); seqEn.forEach((l) => lines.push(l)); }
   const bodyEn = buildBodyGrammar(opts.characters, "en");
   if (bodyEn) { lines.push(""); lines.push(bodyEn); }
   lines.push("");

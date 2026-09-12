@@ -277,9 +277,124 @@ export function diversifyShotCameraMoves(scenes) {
   return { scenes: next, swaps };
 }
 
+// ---------------------------------------------------------------------------
+// 4) 시퀀스 검증기 — 씬 경계를 넘어 컷을 한 줄로 보고 코드로 바로잡는다
+// ---------------------------------------------------------------------------
+//
+// 씬별 병렬 LLM 호출은 서로를 모른다. 그래서
+//   (a) 씬 3의 마지막 컷과 씬 4의 첫 컷이 똑같은 사이즈·방위(=같은 셋업)로 이어져 점프 컷이 나고,
+//   (b) 같은 세트에 다시 들어온 씬이 인물의 무대 좌표를 새로 지어내 인물이 벽 앞에서 창가로 튄다.
+// 프롬프트 규칙만으로는 재발한다. 여기서 평탄화 전 shots 를 순서대로 훑어 결정적으로 고친다.
+
+// 샷 사이즈 서열(타이트 → 와이드). 특수 샷은 가장 가까운 사이즈로 본다.
+const SIZE_ORDER = ["ECU", "CU", "MCU", "MS", "MLS", "WS", "EWS"];
+const SIZE_ALIAS = { OTS: "MCU", TWO_SHOT: "MS", GROUP: "MLS", POV: "MS", INSERT: "ECU" };
+function sizeIndex(shotType) {
+  const key = SIZE_ALIAS[shotType] || shotType;
+  const i = SIZE_ORDER.indexOf(key);
+  return i < 0 ? 3 : i;
+}
+
+/**
+ * 앞 컷과 같은 셋업인 컷의 사이즈를 한 단계 옮긴다.
+ * 방향: 앞앞 컷이 앞 컷보다 와이드였으면 타이트로, 아니면 와이드로 — 핑퐁(MS→MCU→MS→MCU)을 피한다.
+ */
+export function stepShotType(prevPrevType, prevType) {
+  const i = sizeIndex(prevType);
+  let dir = 1;
+  if (prevPrevType && sizeIndex(prevPrevType) > i) dir = -1;
+  let j = i + dir;
+  if (j < 0 || j >= SIZE_ORDER.length) j = i - dir;
+  return SIZE_ORDER[j];
+}
+
+// "인물이 실제로 이동한다"는 서술. 이게 있으면 무대 좌표가 바뀌는 것을 허용한다.
+const MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서]|앉|눕|넘어|올라|내려|건너|따라가|옮기|밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
+
+function tokenMentioned(text, token) {
+  const t = String(token || "").trim();
+  if (!t) return false;
+  const bare = t.replace(/^@/, "");
+  const hay = String(text || "");
+  return hay.includes(t) || (bare.length >= 2 && hay.includes(bare));
+}
+
+function locKeyOf(scene) {
+  return String((scene && (scene.sceneLocation || scene.location)) || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * @param {Array} scenes  각 scene.shots 가 채워진 배열(평탄화 전)
+ * @returns {{ scenes: Array, shotSwaps: number, blockingAnchors: number }}
+ */
+export function enforceSequenceContinuity(scenes) {
+  if (!Array.isArray(scenes) || !scenes.length) return { scenes, shotSwaps: 0, blockingAnchors: 0 };
+  let shotSwaps = 0;
+  let blockingAnchors = 0;
+  const anchors = {}; // locKey → { token → { x, depth } }
+  let prev = null;     // { shot, locKey }
+  let prevPrev = null;
+
+  const out = scenes.map((scene) => {
+    const shots = Array.isArray(scene?.shots) ? scene.shots : null;
+    if (!shots || !shots.length) return scene;
+    const locKey = locKeyOf(scene);
+    const stage = locKey ? (anchors[locKey] = anchors[locKey] || {}) : null;
+    const sceneText = String(scene.visual || scene.shot || "");
+
+    const newShots = shots.map((shot, idx) => {
+      let s = shot;
+
+      // (a) 같은 셋업 금지: 앞 컷과 같은 세트에서 shotType·cameraDirection 이 모두 같으면 사이즈를 한 단계 옮긴다.
+      //     INSERT 는 대상 자체가 다른 컷이라 제외.
+      if (prev && prev.locKey === locKey && s.shotType !== "INSERT") {
+        const sameType = String(prev.shot.shotType || "") === String(s.shotType || "");
+        const sameDir = String(prev.shot.cameraDirection || "front") === String(s.cameraDirection || "front");
+        if (sameType && sameDir) {
+          const next = stepShotType(prevPrev && prevPrev.shot.shotType, s.shotType);
+          if (next && next !== s.shotType) {
+            s = { ...s, shotType: next, _autoShotTypeSwap: String(shot.shotType || "") };
+            shotSwaps += 1;
+          }
+        }
+      }
+
+      // (b) 같은 세트 안 인물 위치 고정: 이 세트에서 처음 본 위치를 앵커로 삼고,
+      //     이동 서술이 없는 컷에서 좌표가 달라지면 앵커로 되돌린다(facing 은 대화 방향이라 건드리지 않는다).
+      if (stage && Array.isArray(s.blocking) && s.blocking.length) {
+        const moveText = [s.action, ...(Array.isArray(s.beats) ? s.beats.map((b) => b && b.what) : []), idx === 0 ? sceneText : ""]
+          .filter(Boolean).join("\n");
+        const moving = MOVE_RE.test(moveText);
+        let changed = false;
+        const nextBlocking = s.blocking.map((b) => {
+          if (!b || !b.token) return b;
+          const a = stage[b.token];
+          if (!a) { stage[b.token] = { x: b.x, depth: b.depth }; return b; }
+          if (a.x === b.x && a.depth === b.depth) return b;
+          if (moving && tokenMentioned(moveText, b.token)) { stage[b.token] = { x: b.x, depth: b.depth }; return b; }
+          changed = true;
+          return { ...b, x: a.x, depth: a.depth };
+        });
+        if (changed) {
+          s = { ...s, blocking: nextBlocking, _autoBlockingAnchor: true };
+          blockingAnchors += 1;
+        }
+      }
+
+      prevPrev = prev;
+      prev = { shot: s, locKey };
+      return s;
+    });
+    return { ...scene, shots: newShots };
+  });
+  return { scenes: out, shotSwaps, blockingAnchors };
+}
+
 export default {
   splitOneUniformRun,
   splitUniformRuns,
   padScenesToBeatCount,
   diversifyShotCameraMoves,
+  enforceSequenceContinuity,
+  stepShotType,
 };
