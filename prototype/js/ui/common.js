@@ -1863,6 +1863,25 @@
         } catch (_) { return false; }
     }
 
+    // AI 시네마(ai-video.html 셸과 그 안의 스테이지 iframe)에서는 게이지를 아예 그리지 않는다.
+    // 우측 상단 고정 게이지가 스테이지의 저장 등 버튼을 가렸다(사용자 요청, v3.1666).
+    function creditGaugeHiddenForCinema() {
+        try {
+            var own = String((document.documentElement && document.documentElement.className) || '') + ' ' +
+                String((document.body && document.body.className) || '');
+            if (/\bpage-shell-video\b/.test(own)) return true;
+            // 스테이지 페이지(scenes/scenario/dashboard)는 셸의 iframe 안에서 열린다 — 같은 출처라 부모 클래스를 읽을 수 있다.
+            var fe = window.frameElement;
+            var parentDoc = fe && fe.ownerDocument;
+            if (parentDoc) {
+                var parentCls = String((parentDoc.documentElement && parentDoc.documentElement.className) || '') + ' ' +
+                    String((parentDoc.body && parentDoc.body.className) || '');
+                if (/\bpage-shell-video\b/.test(parentCls)) return true;
+            }
+        } catch (_) {}
+        return false;
+    }
+
     function creditLang() {
         try { return String(localStorage.getItem('nk_lang') || 'ko').toLowerCase() === 'en' ? 'en' : 'ko'; } catch (_) { return 'ko'; }
     }
@@ -1959,6 +1978,12 @@
     }
 
     common.refreshCreditGauge = function () {
+        // AI 시네마에서는 어떤 경로(로그인 후 갱신·크레딧 변경 이벤트)로도 게이지를 만들지 않는다.
+        if (creditGaugeHiddenForCinema()) {
+            var hiddenGauge = document.getElementById('nk-credit-gauge');
+            if (hiddenGauge) hiddenGauge.remove();
+            return Promise.resolve(null);
+        }
         if (creditState.loading || !(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) || !(NK.api && NK.api.creditMe)) {
             renderCreditGauge();
             return Promise.resolve(null);
@@ -1978,7 +2003,7 @@
 
     common.initCreditGauge = function () {
         if (document.__nkCreditGaugeBound) return;
-        if (creditGaugeDelegatedToStage()) {
+        if (creditGaugeDelegatedToStage() || creditGaugeHiddenForCinema()) {
             var duplicateGauge = document.getElementById('nk-credit-gauge');
             if (duplicateGauge) duplicateGauge.remove();
             return;

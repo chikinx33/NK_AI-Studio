@@ -82,7 +82,7 @@ test('generation shells delegate the credit gauge to the centered stage UI', asy
   const common = await read('js/ui/common.js');
   assert.match(common, /function creditGaugeDelegatedToStage\(\)/);
   assert.match(common, /page-shell-\(\?:videogen\|image\)/);
-  assert.match(common, /if \(creditGaugeDelegatedToStage\(\)\) \{[\s\S]{0,180}duplicateGauge\.remove\(\);[\s\S]{0,80}return;/);
+  assert.match(common, /if \(creditGaugeDelegatedToStage\(\) \|\| creditGaugeHiddenForCinema\(\)\) \{[\s\S]{0,180}duplicateGauge\.remove\(\);[\s\S]{0,80}return;/);
 });
 
 test('landing page places the live credit gauge inside the subscription status grid', async () => {
