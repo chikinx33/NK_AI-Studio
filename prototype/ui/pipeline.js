@@ -1470,6 +1470,19 @@
       bulkGen.onclick = async function () {
         var st = ctx.getState();
         if (!st || !st.scenes.length) return;
+        // 세트를 먼저 짓는다: 모든 장소의 마스터 + 실제로 쓰이는 방위 플레이트(장소끼리 병렬).
+        // 컷 단위 게이트도 있지만, 여기서 한 번에 준비해야 첫 컷들이 순차 대기하지 않는다.
+        try {
+          if (NK.service && NK.service.setPlates && NK.service.setPlates.ensureAll) {
+            bulkGen.disabled = true;
+            var prepared = await NK.service.setPlates.ensureAll(ctx, {});
+            if (prepared && prepared.failed && prepared.failed.length) {
+              console.warn('[set-plates] 일괄 준비 중 실패한 플레이트:', prepared.failed);
+            }
+          }
+        } catch (e) {
+          console.warn('[set-plates] 일괄 준비 실패(컷 단위 게이트가 다시 시도합니다):', e && e.message);
+        } finally { bulkGen.disabled = false; }
         for (var i = 0; i < st.scenes.length; i++) {
           await ui.generateImageForIdx(i);
         }
@@ -2522,12 +2535,8 @@ function openBackgroundReferenceModal() {
     l._busy = true; render();
     try {
       var st = ctxRef.getState();
-      var prompt = [
-        commonPromptOf(st),
-        l.description || l.name,
-        'Empty location background plate of this place. Wide establishing view of the environment ONLY — no characters, no people, no creatures, nothing held by anyone. Clean background for compositing.',
-        'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood/background lines above. Do not invent or change the art style — match the rest of this episode.'
-      ].filter(Boolean).join('\n');
+      // 프롬프트 단일 원천: js/service/set-plates.js (자동 준비 경로와 같은 문장)
+      var prompt = NK.service.setPlates.buildMasterPlatePrompt(commonPromptOf(st), l);
       var json = await NK.api.imagen({
         prompt: prompt,
         aspectRatio: st.aspectRatio || '16:9',
@@ -2599,23 +2608,8 @@ function openBackgroundReferenceModal() {
   // 순차 생성해 variants 에 dir-back / dir-left / dir-right 로 저장한다.
   // 리버스 샷(cameraDirection: back)의 배경이 "반대편 공간"으로 그려지는 물리적 근거.
   // pipeline-image 의 episodeLocationAsset 이 같은 id 규약으로 플레이트를 선택한다.
-  var DIRECTION_PLATE_SPECS = [
-    {
-      dir: 'back',
-      labelKey: 'dirBack',
-      instruction: 'REVERSE ANGLE of the exact same place: the camera has turned around 180 degrees and now shows the side that was BEHIND the camera in the reference image. Invent that opposite side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing or the wall it shows.'
-    },
-    {
-      dir: 'left',
-      labelKey: 'dirLeft',
-      instruction: 'The camera has turned 90 degrees to the LEFT inside the exact same place, now showing its left side. Invent that side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing.'
-    },
-    {
-      dir: 'right',
-      labelKey: 'dirRight',
-      instruction: 'The camera has turned 90 degrees to the RIGHT inside the exact same place, now showing its right side. Invent that side so it believably belongs to the same room — same architecture language, materials, palette and lighting. Do NOT reproduce the reference framing.'
-    }
-  ];
+  // 사양·프롬프트 단일 원천: js/service/set-plates.js (자동 준비 경로와 같은 문장)
+  var DIRECTION_PLATE_SPECS = NK.service.setPlates.DIRECTION_PLATE_SPECS;
 
   async function generateDirectionPlates(i) {
     var l = locs[i]; if (!l) return;
@@ -2628,14 +2622,7 @@ function openBackgroundReferenceModal() {
     for (var d = 0; d < DIRECTION_PLATE_SPECS.length; d++) {
       var spec = DIRECTION_PLATE_SPECS[d];
       try {
-        var prompt = [
-          commonPromptOf(st),
-          'SUBJECT: the ' + spec.dir + '-facing view of ' + placeName + '.',
-          spec.instruction,
-          'CONTEXT (materials, palette and lighting only): ' + String(l.description || placeName).trim(),
-          'Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
-          'IMPORTANT: Render this in the EXACT SAME art style, medium, and visual look defined by the style/mood lines above and the reference image. Do not invent or change the art style.'
-        ].filter(Boolean).join('\n');
+        var prompt = NK.service.setPlates.buildDirectionPlatePrompt(commonPromptOf(st), l, spec);
         var json = await NK.api.imagen({
           prompt: prompt,
           aspectRatio: st.aspectRatio || '16:9',

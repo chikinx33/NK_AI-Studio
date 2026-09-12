@@ -128,7 +128,14 @@
 
   function buildImageCard(scene, mediaUrlResolver) {
     var imagePlayableUrl = mediaUrlResolver(scene.imageDataUrl || '');
-    if (scene.imgLoading) return '<div class="image-placeholder tall loading"><div class="spinner"></div><span>이미지 생성 중...</span></div>';
+    if (scene.imgLoading) {
+      // 세트 준비 단계(장소 추출·플레이트 생성)면 그 단계를 보여 준다 — 컷 생성이 왜 기다리는지 알 수 있게.
+      var stageText = '';
+      try {
+        if (scene.imgStage && NK.service && NK.service.setPlates && NK.service.setPlates.text) stageText = NK.service.setPlates.text(scene.imgStage);
+      } catch (_) { stageText = ''; }
+      return '<div class="image-placeholder tall loading"><div class="spinner"></div><span>' + (stageText ? (stageText + '...') : '이미지 생성 중...') + '</span></div>';
+    }
     if (scene.imgError) return '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>';
     if (scene.imageDataUrl) {
       return '<div class="image-box"><img class="scene-img" loading="lazy" decoding="async" data-src="' + imagePlayableUrl + '" src="' + imagePlayableUrl + '" alt="scene image" /></div>';
@@ -244,7 +251,11 @@
     var resolvedVid = vidUrl ? mediaUrlResolver(vidUrl) : '';
     var imgHtml;
     if (shot && shot.imgLoading) {
-      imgHtml = '<div class="shot-thumb shot-thumb-img loading"><div class="spinner"></div></div>';
+      var shotStage = '';
+      try {
+        if (shot.imgStage && NK.service && NK.service.setPlates && NK.service.setPlates.text) shotStage = NK.service.setPlates.text(shot.imgStage);
+      } catch (_) { shotStage = ''; }
+      imgHtml = '<div class="shot-thumb shot-thumb-img loading"' + (shotStage ? ' title="' + escapeAttr(shotStage) + '"' : '') + '><div class="spinner"></div></div>';
     } else if (shot && shot.imgError) {
       imgHtml = '<div class="shot-thumb shot-thumb-img error" title="' + escapeAttr(shot.imgError) + '">!</div>';
     } else if (resolvedImg) {

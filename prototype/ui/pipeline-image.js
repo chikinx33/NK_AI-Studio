@@ -1207,6 +1207,50 @@
     } catch (_) {}
   }
 
+  // ── 세트 준비 게이트 ─────────────────────────────────────────────────
+  // 컷 이미지를 만들기 전에 그 컷의 장소 플레이트(마스터 + 쓰이는 방위)를 반드시 준비한다.
+  // 플레이트가 없으면 텍스트만으로 컷마다 공간을 새로 지어 배경이 컷마다 달라지던 근본 원인.
+  // 진행 중에는 컷(또는 샷)의 imgLoading/imgStage 로 "세트 준비 중"을 행에 표시한다.
+  // 반환: { ok, loc } — ok=false 면 호출부는 컷 생성을 멈추고 imgError 를 남긴다.
+  async function ensureSetForCut(ctx, opts, sceneIdx, shotIdx, rowHint) {
+    var sp = NK.service && NK.service.setPlates;
+    if (!sp || !sp.ensureForScene) return { ok: true, loc: null };
+    var hasShot = typeof shotIdx === 'number' && shotIdx >= 0;
+    var setStage = function (stage, errorText) {
+      try {
+        var st = ctx.getState();
+        var sc = st && st.scenes ? st.scenes[sceneIdx] : null;
+        if (!sc) return;
+        var patch = { imgLoading: !!stage, imgStage: stage || '', imgError: errorText || '' };
+        if (hasShot) {
+          var shots = Array.isArray(sc.shots) ? sc.shots.slice() : [];
+          if (!shots[shotIdx]) return;
+          shots[shotIdx] = Object.assign({}, shots[shotIdx], patch);
+          st.scenes[sceneIdx] = Object.assign({}, sc, { shots: shots });
+        } else {
+          st.scenes[sceneIdx] = Object.assign({}, sc, patch);
+        }
+        ctx.setState(st);
+        if (opts.updateSceneRow) opts.updateSceneRow(sceneIdx, st.header || '', rowHint || 'image');
+      } catch (_) {}
+    };
+    var res;
+    try {
+      res = await sp.ensureForScene(ctx, sceneIdx, { onStatus: function (key) { setStage(key); } });
+    } catch (e) {
+      try { console.warn('[set-plates] 세트 준비 중 오류(진행):', e && e.message); } catch (_) {}
+      res = { ok: true, loc: null };
+    }
+    if (res && res.ok === false) {
+      setStage('', sp.text('plateFailed'));
+      try { console.warn('[set-plates] 세트 플레이트 실패로 컷 생성 중단', { sceneIdx: sceneIdx, shotIdx: shotIdx, failed: res.failed }); } catch (_) {}
+      return res;
+    }
+    setStage('');
+    return res || { ok: true, loc: null };
+  }
+  image.ensureSetForCut = ensureSetForCut;
+
   image.generateImageForIdx = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
@@ -1223,6 +1267,13 @@
     st = opts.ensureStateAspectRatio(st, aspectRatio);
     var scene = st.scenes[opts.idx];
     if (!scene || scene.imgLoading) return;
+
+    // 세트 준비(장소 추출 → 마스터 → 쓰이는 방위 플레이트). 실패하면 여기서 멈춘다.
+    var setReady = await ensureSetForCut(ctx, opts, opts.idx, -1, 'image');
+    if (!setReady.ok) return;
+    st = opts.ensureStateAspectRatio(ctx.getState(), aspectRatio);
+    scene = st.scenes[opts.idx];
+    if (!scene) return;
 
     // COMMON 은 컷별(scene.common). 미설정이면 프로젝트 공통(st.header)으로 폴백.
     var sceneCommon = (scene.common != null ? scene.common : (st.header || ''));
@@ -1635,6 +1686,14 @@
     st = opts.ensureStateAspectRatio(st, aspectRatio);
     scene = st.scenes[opts.sceneIdx];
     shot = scene.shots[shotIdx];
+
+    // 세트 준비(장소 추출 → 마스터 → 쓰이는 방위 플레이트). 실패하면 여기서 멈춘다.
+    var setReadyShot = await ensureSetForCut(ctx, opts, opts.sceneIdx, shotIdx, 'shot:' + scene.id + ':' + shot.id);
+    if (!setReadyShot.ok) return;
+    st = opts.ensureStateAspectRatio(ctx.getState(), aspectRatio);
+    scene = st.scenes[opts.sceneIdx];
+    shot = scene && Array.isArray(scene.shots) ? scene.shots[shotIdx] : null;
+    if (!shot) return;
 
     var shotCommon = (scene.common != null ? scene.common : (st.header || ''));
     var basePrompt = buildShotImagePrompt(scene, shot, shotCommon, opts.cleanHeader || function (t) { return String(t || ''); });

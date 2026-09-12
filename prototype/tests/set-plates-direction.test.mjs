@@ -40,7 +40,10 @@ test('bgref 모달: 4방위 플레이트 생성기가 있고 dir-* id 규약을 
   assert.match(src, /function generateDirectionPlates\(/);
   assert.match(src, /DIRECTION_PLATE_SPECS/);
   assert.match(src, /'dir-' \+ spec\.dir/, 'variant id 규약(dir-back 등)이 없습니다');
-  assert.match(src, /REVERSE ANGLE of the exact same place/, '리버스 플레이트 지시문이 없습니다');
+  // 지시문 단일 원천은 js/service/set-plates.js — 모달은 그것을 가져다 쓴다(2단계에서 이전).
+  const svc = read('prototype/js/service/set-plates.js');
+  assert.match(svc, /REVERSE ANGLE of the exact same place/, '리버스 플레이트 지시문이 없습니다');
+  assert.match(src, /NK\.service\.setPlates\.DIRECTION_PLATE_SPECS/, '모달이 서비스 사양을 쓰지 않습니다');
   // 룩만 잇고 구도는 프롬프트가 정하는 environment-detail 로 참조
   const dirGenIdx = src.indexOf('async function generateDirectionPlates');
   const slice = src.slice(dirGenIdx, dirGenIdx + 4000);
