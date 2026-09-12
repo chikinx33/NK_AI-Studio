@@ -1227,8 +1227,8 @@
   }
 
   // ── 연속성 결정 헬퍼(순수) ────────────────────────────────────────────
-  // "인물이 실제로 이동한다"는 서술. 서버 rebalancer.js 의 MOVE_RE 와 같은 목록을 유지한다.
-  var MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서난선]|앉|눕|넘어|올라|내려|건너|따라가|옮기|밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
+  // "인물이 실제로 이동한다"는 서술. 서버 functions/api/_shared/motion-words.js 와 리터럴이 같아야 한다(테스트가 비교).
+  var MOVE_RE = /(걸어|걷|뛰|달리|달려|이동|다가|물러|들어오|들어가|나가|나오|돌아서|돌아보|일어[나서난선]|앉|눕|넘어|올라(?!다보)|내려(?!다보)|건너|따라가|옮기|(?<!내)밀|당기|피하|쓰러|점프|뛰어|자리를|위치를|\bwalk|\brun|\bmove|\bstep|\bapproach|\benter|\bleave|\bexit|\bturn(?:s|ed|ing)?\s+(?:around|away|to)|\bstand(?:s)?\s+up|\bsit(?:s)?\s+down|\brise|\bjump|\bcross|\bclimb|\bback(?:s)?\s+away|\bdash|\brush|\bfall)/i;
 
   // 컷(씬 또는 샷)의 영속 이미지 URL. data:/blob: 이면 생성 시 보존한 imagePath 로 프록시 URL 을 만든다.
   function persistedImageUrlOf(row) {

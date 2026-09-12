@@ -24,6 +24,7 @@ import {
 } from "./vocab.js";
 
 import { buildBodyGrammar } from "../../_shared/body-grammar.js";
+import { hasCharacterMovement } from "../../_shared/motion-words.js";
 
 const MAX_SHOTS_PER_SCENE = 5;
 const MIN_SHOTS_PER_SCENE = 1;
@@ -70,7 +71,12 @@ export function buildShotPromptKo() {
 · composition 120자 이내, action 160자 이내, beats.what 80자 이내, 샷은 4개 이내.
 · 수식어보다 명사·위치·크기. 같은 정보를 두 칸에 반복하지 않는다.
 
-[beats — 카메라가 움직이면 반드시 채운다]
+[composition 은 언제나 t=0 이다]
+· 인물이 샷 안에서 자리를 옮기는 샷(달려 들어옴, 걸어감, 앉음)이라도 composition 은 "출발 순간"만 쓴다.
+  도착 상태("큐브 앞에 쪼그려 앉은")를 composition 에 쓰면 스틸컷이 도착 장면으로 만들어져 영상이 시작부터 끝나 있다.
+· 그런 샷은 카메라가 정지해 있어도 beats 가 필수다: beats[0] = 출발 위치, 마지막 = 도착 위치.
+
+[beats — 카메라가 움직이거나 인물이 자리를 옮기면 반드시 채운다]
 빠뜨리면 스틸컷이 무브의 "끝 상태"로 만들어져, 가려졌다가 드러나는 연출이 통째로 사라진다.
   "beats": [{"at": 0, "what": "프레임 하단에 @캐릭터A·@캐릭터B·@캐릭터C의 발과 하체만 나란히"},
             {"at": 2.5, "what": "틸트업이 끝나 @캐릭터A·@캐릭터B·@캐릭터C 전신과 방 전체가 들어옴"}]
@@ -174,7 +180,12 @@ put every change over time in beats.
 · composition ≤ 120 characters, action ≤ 160, beats.what ≤ 80, at most 4 shots.
 · Nouns, positions and sizes over adjectives. Never repeat the same information in two fields.
 
-[beats — mandatory whenever the camera moves]
+[composition is ALWAYS t=0]
+· Even when characters relocate inside the shot (run in, walk over, sit down), composition describes ONLY the starting instant.
+  Writing the arrival state ("crouched in front of the cube") into composition makes the still show the ending, so the video is over before it starts.
+· Such shots need beats even with a static camera: beats[0] = starting positions, last beat = arrival positions.
+
+[beats — mandatory whenever the camera moves OR a character relocates]
 Without them the still image is generated from the END state of the move, and the reveal disappears.
   "beats": [{"at": 0, "what": "only the feet and lower legs of @CharacterA, @CharacterB and @CharacterC along the bottom of frame"},
             {"at": 2.5, "what": "the tilt-up completes: @CharacterA, @CharacterB and @CharacterC's full bodies and the whole room are in frame"}]
@@ -447,9 +458,12 @@ export function parseShotResponse(text, scene) {
  */
 export function shotsMissingBeats(shots) {
   return (Array.isArray(shots) ? shots : []).filter((shot) => {
+    const hasBeats = Array.isArray(shot?.beats) && shot.beats.length >= 2;
+    if (hasBeats) return false;
     const move = String(shot?.cameraMove || "static").trim().toLowerCase();
-    if (!move || move === "static") return false;
-    return !(Array.isArray(shot?.beats) && shot.beats.length >= 2);
+    if (move && move !== "static") return true;
+    // 카메라가 서 있어도 인물이 자리를 옮기면(달려 들어옴 등) 스틸은 t=0, 영상은 출발→도착이 필요하다.
+    return hasCharacterMovement(shot?.action);
   });
 }
 
@@ -457,9 +471,9 @@ export function shotsMissingBeats(shots) {
 export function buildBeatsRepairPrompt(missing, lang = "ko") {
   const ids = (Array.isArray(missing) ? missing : []).map((s) => s?.id).filter(Boolean).join(", ");
   if (lang === "en") {
-    return `The shots [${ids}] have a camera move but no "beats". A moving shot MUST have beats — otherwise the still image is generated from the end state of the move and the reveal disappears. Return the SAME JSON again, unchanged except that those shots now carry beats: [{"at":0,"what":"<what is visible at the very start>"},{"at":<seconds>,"what":"<what is visible after the move>"}]. beats[0].at must be 0 and the last "at" must be smaller than that shot's duration. Do not change anything else.`;
+    return `The shots [${ids}] have a camera move or a character relocating but no "beats". Such a shot MUST have beats — otherwise the still image is generated from the end state of the move and the reveal disappears. Return the SAME JSON again, unchanged except that those shots now carry beats: [{"at":0,"what":"<what is visible at the very start>"},{"at":<seconds>,"what":"<what is visible after the move>"}]. beats[0].at must be 0 and the last "at" must be smaller than that shot's duration. Do not change anything else.`;
   }
-  return `샷 [${ids}] 은 카메라가 움직이는데 "beats" 가 없다. 움직이는 샷에는 beats 가 반드시 있어야 한다 — 없으면 스틸컷이 무브의 끝 상태로 만들어져 드러나는 연출이 사라진다. 같은 JSON 을 그대로 다시 내되, 그 샷들에만 beats 를 채워라: [{"at":0,"what":"<맨 처음 프레임에 보이는 것>"},{"at":<초>,"what":"<무브가 끝난 뒤 보이는 것>"}]. beats[0].at 은 반드시 0 이고, 마지막 at 은 그 샷의 duration 보다 작아야 한다. 다른 것은 하나도 바꾸지 마라.`;
+  return `샷 [${ids}] 은 카메라가 움직이거나 인물이 자리를 옮기는데 "beats" 가 없다. 그런 샷에는 beats 가 반드시 있어야 한다 — 없으면 스틸컷이 무브의 끝 상태로 만들어져 드러나는 연출이 사라진다. 같은 JSON 을 그대로 다시 내되, 그 샷들에만 beats 를 채워라: [{"at":0,"what":"<맨 처음 프레임에 보이는 것>"},{"at":<초>,"what":"<무브가 끝난 뒤 보이는 것>"}]. beats[0].at 은 반드시 0 이고, 마지막 at 은 그 샷의 duration 보다 작아야 한다. 다른 것은 하나도 바꾸지 마라.`;
 }
 
 /**
