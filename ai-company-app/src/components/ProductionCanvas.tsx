@@ -48,36 +48,60 @@ const GRID = 20;
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
 
-// ── 씬 바 + 슬롯 격자 배치 ─────────────────────────────────────────────
-// 컷 카드는 자유 이동하지 않는다. 씬(연속된 같은 장소) 단위로 "씬 바"가 있고 그 아래 컷이 슬롯(칸)에
-// 놓인다. 컷을 끌어 다른 칸에 놓으면 그 자리에 스냅해 간격을 두고 붙고, 씬 바를 끌면 딸린 컷이 함께 움직인다.
+// ── 바(레인) + 슬롯 격자 배치 ──────────────────────────────────────────
+// 카드는 자유 이동하지 않는다. 바 아래 칸(슬롯)에 놓인다. 바는 세 종류다.
+//  · 씬 바(파랑): 연속된 같은 장소의 컷 묶음. 컷 카드가 딸린다.
+//  · 캐릭터 바(초록): 등록 캐릭터 카드가 딸린다.
+//  · 장소·배경 바(연두): 장소(세트) 카드가 딸린다.
+// 카드를 끌어 같은 종류의 다른 칸에 놓으면 그 자리에 스냅해 간격을 두고 붙고, 바를 끌면 딸린 카드가 함께 움직인다.
 // 배치는 표시용이며 서버의 컷 순서는 바꾸지 않는다(순서 변경은 다음 단계).
-const CELL_W = NODE_W.cut + 40;                                   // 컷 슬롯 가로(카드 300 + 간격 40)
-const SCENE_BAR_H = 44;                                           // 씬 바 높이
-const SCENE_BAR_GAP = 12;                                         // 바와 컷 사이
-const GROUP_GAP_Y = 60;                                           // 씬 그룹 사이 세로 간격
-const GROUP_PITCH_Y = SCENE_BAR_H + SCENE_BAR_GAP + NODE_H.cut + GROUP_GAP_Y;
-const BAR_SNAP = GRID * 2;                                        // 씬 바는 40px 격자로 움직인다
-const CUT_COL_X = 380;                                            // 컷 영역 시작 x(왼쪽은 공통·캐릭터·장소)
+const CARD_GAP = 12;                                              // 바-카드 세로 간격 = 카드-카드 가로 간격(사용자 요청: 같은 값)
+const SCENE_BAR_GAP = CARD_GAP;
+const BAR_H = 44;                                                 // 바 높이(세 종류 공통)
+const SCENE_BAR_H = BAR_H;
+const CELL_W = NODE_W.cut + CARD_GAP;                             // 컷 슬롯 가로(카드 300 + 간격 12)
+const GROUP_GAP_Y = 60;                                           // 바 그룹 사이 세로 간격
+const GROUP_PITCH_Y = BAR_H + CARD_GAP + NODE_H.cut + GROUP_GAP_Y;
+const BAR_SNAP = GRID * 2;                                        // 바는 40px 격자로 움직인다
 
-interface SceneGroup { key: string; index: number; location: string; cutIds: string[] }
+type LaneKind = "scene" | "characters" | "locations";
+interface Lane { key: string; kind: LaneKind; index: number; label: string; location: string; memberIds: string[]; cellW: number; cardW: number; cardH: number }
 interface CanvasLayout { nodes: PosMap; bars: Record<string, Pos>; groups: Record<string, string[]> }
 
-/** 컷을 씬으로 묶는다: 서버 순서대로, 장소가 같은 컷이 연속되면 한 씬(시나리오 화면의 Scene N cutM 과 같은 규칙). */
-function deriveSceneGroups(graph: ProductionGraph | null): SceneGroup[] {
+const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; text: string; label: string }> = {
+  scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", text: "text-sky-100/80", label: "Scene" },
+  characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", text: "text-emerald-100/80", label: "캐릭터" },
+  locations: { bar: "border-lime-500/80 bg-lime-900/50 hover:border-lime-300", barSelected: "border-lime-300 bg-lime-700/70 ring-2 ring-lime-400/40", text: "text-lime-100/80", label: "장소 · 배경" },
+};
+
+function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
+  if (type === "cut") return "scene";
+  if (type === "character") return "characters";
+  if (type === "location") return "locations";
+  return null;
+}
+
+/** 그래프를 바(레인)로 묶는다. 컷은 서버 순서대로, 장소가 같은 컷이 연속되면 한 씬(시나리오 화면의 Scene N cutM 과 같은 규칙). */
+function deriveLanes(graph: ProductionGraph | null): Lane[] {
   if (!graph) return [];
+  const lanes: Lane[] = [];
+  const characters = graph.nodes.filter((n) => n.type === "character");
+  const locations = graph.nodes.filter((n) => n.type === "location");
+  if (characters.length) lanes.push({ key: "characters", kind: "characters", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: NODE_H.character });
+  if (locations.length) lanes.push({ key: "locations", kind: "locations", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: NODE_H.location });
   const cuts = graph.nodes.filter((n) => n.type === "cut").sort((a, b) => Number(a.data.order) - Number(b.data.order));
-  const groups: SceneGroup[] = [];
-  let last: SceneGroup | null = null;
+  let last: Lane | null = null;
+  let sceneNo = 0;
   cuts.forEach((n) => {
     const loc = String(n.data.sceneLocation || "").trim();
     if (!last || !loc || loc !== last.location) {
-      last = { key: String(groups.length + 1), index: groups.length + 1, location: loc, cutIds: [] };
-      groups.push(last);
+      sceneNo += 1;
+      last = { key: `s${sceneNo}`, kind: "scene", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: NODE_H.cut };
+      lanes.push(last);
     }
-    last.cutIds.push(n.id);
+    last.memberIds.push(n.id);
   });
-  return groups;
+  return lanes;
 }
 
 function defaultLayout(graph: ProductionGraph | null): CanvasLayout {
@@ -85,85 +109,95 @@ function defaultLayout(graph: ProductionGraph | null): CanvasLayout {
   const bars: Record<string, Pos> = {};
   const groups: Record<string, string[]> = {};
   if (!graph) return { nodes, bars, groups };
-  const characters = graph.nodes.filter((n) => n.type === "character");
-  const locations = graph.nodes.filter((n) => n.type === "location");
   nodes.common = { x: 40, y: 40 };
-  characters.forEach((n, i) => { nodes[n.id] = { x: 40, y: 200 + i * 120 }; });
-  locations.forEach((n, i) => { nodes[n.id] = { x: 40, y: 200 + characters.length * 120 + 40 + i * 120 }; });
-  deriveSceneGroups(graph).forEach((g, i) => {
-    bars[g.key] = { x: CUT_COL_X, y: 40 + i * GROUP_PITCH_Y };
-    groups[g.key] = g.cutIds.slice();
+  // 위: 공통 프롬프트 오른쪽에 캐릭터 바 → 장소 바. 아래: 씬 바들이 세로로.
+  let assetY = 40;
+  let sceneY = 40 + NODE_H.common + GROUP_GAP_Y;
+  deriveLanes(graph).forEach((l) => {
+    if (l.kind === "scene") {
+      bars[l.key] = { x: 40, y: sceneY };
+      sceneY += GROUP_PITCH_Y;
+    } else {
+      bars[l.key] = { x: 40 + NODE_W.common + 40, y: assetY };
+      assetY += BAR_H + CARD_GAP + l.cardH + GROUP_GAP_Y;
+      sceneY = Math.max(sceneY, assetY);
+    }
+    groups[l.key] = l.memberIds.slice();
   });
   return { nodes, bars, groups };
 }
 
-/** 저장된 배치를 현재 그래프에 맞춘다: 사라진 컷은 버리고, 새 컷은 원래 씬 뒤에 붙인다. */
+/** 저장된 배치를 현재 그래프에 맞춘다: 사라진 카드는 버리고, 새 카드는 원래 바 뒤에 붙인다. */
 function reconcileLayout(saved: Partial<CanvasLayout> | null, graph: ProductionGraph | null, base: CanvasLayout): CanvasLayout {
   const nodes: PosMap = { ...base.nodes, ...((saved && saved.nodes) || {}) };
   const bars: Record<string, Pos> = { ...base.bars };
   Object.keys(bars).forEach((k) => { const sb = saved && saved.bars && saved.bars[k]; if (sb && Number.isFinite(sb.x) && Number.isFinite(sb.y)) bars[k] = { x: sb.x, y: sb.y }; });
-  const valid = new Set((graph ? graph.nodes : []).filter((n) => n.type === "cut").map((n) => n.id));
+  const validKind = new Map<string, LaneKind | null>((graph ? graph.nodes : []).map((n) => [n.id, laneKindForNode(n.type)]));
+  const lanes = deriveLanes(graph);
+  const kindOfLane = new Map(lanes.map((l) => [l.key, l.kind]));
   const placed = new Set<string>();
   const groups: Record<string, string[]> = {};
   Object.keys(base.groups).forEach((k) => {
     const savedList = saved && saved.groups && Array.isArray(saved.groups[k]) ? saved.groups[k] : null;
-    const list = (savedList || base.groups[k]).filter((id) => valid.has(id) && !placed.has(id));
+    const list = (savedList || base.groups[k]).filter((id) => validKind.get(id) === kindOfLane.get(k) && !placed.has(id));
     list.forEach((id) => placed.add(id));
     groups[k] = list;
   });
   Object.keys(base.groups).forEach((k) => {
-    base.groups[k].forEach((id) => { if (valid.has(id) && !placed.has(id)) { groups[k].push(id); placed.add(id); } });
+    base.groups[k].forEach((id) => { if (validKind.has(id) && !placed.has(id)) { groups[k].push(id); placed.add(id); } });
   });
   return { nodes, bars, groups };
 }
 
-function groupsFromLayout(layout: CanvasLayout, graph: ProductionGraph | null): SceneGroup[] {
-  return deriveSceneGroups(graph).map((g) => ({ ...g, cutIds: Array.isArray(layout.groups[g.key]) ? layout.groups[g.key] : g.cutIds }));
+function lanesFromLayout(layout: CanvasLayout, graph: ProductionGraph | null): Lane[] {
+  return deriveLanes(graph).map((l) => ({ ...l, memberIds: Array.isArray(layout.groups[l.key]) ? layout.groups[l.key] : l.memberIds }));
 }
 
-/** 씬 바·컷의 실제 좌표. 컷은 바 위치 + 슬롯 번호로 정해진다. */
-function computePositions(layout: CanvasLayout, groups: SceneGroup[]): PosMap {
+/** 바·카드의 실제 좌표. 카드는 바 위치 + 슬롯 번호로 정해진다. */
+function computePositions(layout: CanvasLayout, lanes: Lane[]): PosMap {
   const pos: PosMap = { ...layout.nodes };
-  groups.forEach((g) => {
-    const b = layout.bars[g.key];
+  lanes.forEach((l) => {
+    const b = layout.bars[l.key];
     if (!b) return;
-    pos[`scene:${g.key}`] = b;
-    g.cutIds.forEach((id, i) => { pos[id] = { x: b.x + i * CELL_W, y: b.y + SCENE_BAR_H + SCENE_BAR_GAP }; });
+    pos[`lane:${l.key}`] = b;
+    l.memberIds.forEach((id, i) => { pos[id] = { x: b.x + i * l.cellW, y: b.y + BAR_H + CARD_GAP }; });
   });
   return pos;
 }
 
-function slotPosition(layout: CanvasLayout, key: string, index: number): Pos | null {
+function slotPosition(layout: CanvasLayout, lanes: Lane[], key: string, index: number): (Pos & { w: number; h: number }) | null {
   const b = layout.bars[key];
-  if (!b) return null;
-  return { x: b.x + index * CELL_W, y: b.y + SCENE_BAR_H + SCENE_BAR_GAP };
+  const l = lanes.find((x) => x.key === key);
+  if (!b || !l) return null;
+  return { x: b.x + index * l.cellW, y: b.y + BAR_H + CARD_GAP, w: l.cardW, h: l.cardH };
 }
 
-/** 끌고 있는 카드(왼쪽 위 x,y)에 가장 가까운 슬롯. 세로로 가장 가까운 씬 줄을 고르고, 가로로 칸 번호를 반올림한다. */
-function slotFromPoint(layout: CanvasLayout, groups: SceneGroup[], x: number, y: number, draggedId: string): { key: string; index: number } | null {
+/** 끌고 있는 카드(왼쪽 위 x,y)에 가장 가까운 같은 종류의 슬롯. 세로로 가장 가까운 줄을 고르고, 가로로 칸 번호를 반올림한다. */
+function slotFromPoint(layout: CanvasLayout, lanes: Lane[], x: number, y: number, draggedId: string, kind: LaneKind | null): { key: string; index: number } | null {
   let best: { key: string; index: number; dist: number } | null = null;
-  for (const g of groups) {
-    const b = layout.bars[g.key];
+  for (const l of lanes) {
+    if (kind && l.kind !== kind) continue;
+    const b = layout.bars[l.key];
     if (!b) continue;
     const top = b.y;
-    const bottom = b.y + SCENE_BAR_H + SCENE_BAR_GAP + NODE_H.cut;
+    const bottom = b.y + BAR_H + CARD_GAP + l.cardH;
     const dy = y < top ? top - y : (y > bottom ? y - bottom : 0);
-    const others = g.cutIds.filter((id) => id !== draggedId);
-    const index = Math.max(0, Math.min(others.length, Math.round((x - b.x) / CELL_W)));
-    const dist = dy * 4 + Math.abs((x - b.x) - index * CELL_W);
-    if (!best || dist < best.dist) best = { key: g.key, index, dist };
+    const others = l.memberIds.filter((id) => id !== draggedId);
+    const index = Math.max(0, Math.min(others.length, Math.round((x - b.x) / l.cellW)));
+    const dist = dy * 4 + Math.abs((x - b.x) - index * l.cellW);
+    if (!best || dist < best.dist) best = { key: l.key, index, dist };
   }
   if (!best) return null;
   const chosen: { key: string; index: number; dist: number } = best;
   return { key: chosen.key, index: chosen.index };
 }
 
-function moveCutToSlot(layout: CanvasLayout, cutId: string, slot: { key: string; index: number }): CanvasLayout {
+function moveCutToSlot(layout: CanvasLayout, cardId: string, slot: { key: string; index: number }): CanvasLayout {
   const groups: Record<string, string[]> = {};
-  Object.keys(layout.groups).forEach((k) => { groups[k] = layout.groups[k].filter((id) => id !== cutId); });
+  Object.keys(layout.groups).forEach((k) => { groups[k] = layout.groups[k].filter((id) => id !== cardId); });
   if (!groups[slot.key]) groups[slot.key] = [];
   const list = groups[slot.key];
-  list.splice(Math.max(0, Math.min(list.length, slot.index)), 0, cutId);
+  list.splice(Math.max(0, Math.min(list.length, slot.index)), 0, cardId);
   return { ...layout, groups };
 }
 
@@ -250,8 +284,8 @@ export default function ProductionCanvas({
   // 끌고 있는 컷의 임시 좌표와, 놓일 슬롯(점선 칸).
   const [dragGhost, setDragGhost] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dropSlot, setDropSlot] = useState<{ key: string; index: number } | null>(null);
-  const sceneGroups = useMemo(() => groupsFromLayout(layout, graph), [layout, graph]);
-  const positions = useMemo(() => computePositions(layout, sceneGroups), [layout, sceneGroups]);
+  const lanes = useMemo(() => lanesFromLayout(layout, graph), [layout, graph]);
+  const positions = useMemo(() => computePositions(layout, lanes), [layout, lanes]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.8 });
   const [selectedId, setSelectedId] = useState<string>("");
   const [multi, setMulti] = useState<Set<string>>(new Set());
@@ -274,8 +308,8 @@ export default function ProductionCanvas({
   positionsRef.current = positions;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
-  const groupsRef = useRef(sceneGroups);
-  groupsRef.current = sceneGroups;
+  const lanesRef = useRef(lanes);
+  lanesRef.current = lanes;
   const dragGhostRef = useRef(dragGhost);
   dragGhostRef.current = dragGhost;
 
@@ -501,7 +535,9 @@ export default function ProductionCanvas({
     el.setPointerCapture(e.pointerId);
     if (nodeId) {
       const p = positionsRef.current[nodeId] || { x: 0, y: 0 };
-      const kind: "node" | "bar" | "cut" = nodeId.startsWith("scene:") ? "bar" : (nodeId.startsWith("cut:") ? "cut" : "node");
+      // bar: 바(씬·캐릭터·장소). cut: 바에 딸린 카드(컷·캐릭터·장소 — 같은 종류의 칸에만 스냅). node: 공통 프롬프트(자유 격자).
+      const laneKind = laneKindForNode((nodeById.get(nodeId)?.type || "common") as ProductionNode["type"]);
+      const kind: "node" | "bar" | "cut" = nodeId.startsWith("lane:") ? "bar" : (laneKind ? "cut" : "node");
       drag.current = { kind, id: nodeId, startX: e.clientX, startY: e.clientY, originX: p.x, originY: p.y, moved: false };
       e.stopPropagation();
     } else {
@@ -524,12 +560,12 @@ export default function ProductionCanvas({
       setLayout((l) => ({ ...l, nodes: { ...l.nodes, [d.id!]: { x: snap(nx), y: snap(ny) } } }));
     } else if (d.kind === "bar") {
       const snap = (v: number) => Math.round(v / BAR_SNAP) * BAR_SNAP;
-      const key = d.id.slice("scene:".length);
+      const key = d.id.slice("lane:".length);
       setLayout((l) => ({ ...l, bars: { ...l.bars, [key]: { x: snap(nx), y: snap(ny) } } }));
     } else if (d.kind === "cut") {
       if (!d.moved) return;
       setDragGhost({ id: d.id, x: nx, y: ny });
-      setDropSlot(slotFromPoint(layoutRef.current, groupsRef.current, nx, ny, d.id));
+      setDropSlot(slotFromPoint(layoutRef.current, lanesRef.current, nx, ny, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"])));
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
@@ -537,7 +573,7 @@ export default function ProductionCanvas({
     drag.current = null;
     if (!d) return;
     if (d.kind === "cut" && d.id && d.moved) {
-      const slot = slotFromPoint(layoutRef.current, groupsRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id);
+      const slot = slotFromPoint(layoutRef.current, lanesRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]));
       if (slot) setLayout((l) => moveCutToSlot(l, d.id!, slot));
       setDragGhost(null);
       setDropSlot(null);
@@ -547,9 +583,9 @@ export default function ProductionCanvas({
     setDropSlot(null);
     if (d.kind === "bar" && d.id && !d.moved) {
       // 씬 바 클릭 = 그 씬의 컷 전부 선택(일괄 생성 대상). 상세 모달은 열지 않는다.
-      const key = d.id.slice("scene:".length);
-      const g = groupsRef.current.find((x) => x.key === key);
-      setMulti(new Set(g ? g.cutIds : []));
+      const key = d.id.slice("lane:".length);
+      const g = lanesRef.current.find((x) => x.key === key);
+      setMulti(new Set(g ? g.memberIds : []));
       setSelectedId("");
       return;
     }
@@ -604,9 +640,10 @@ export default function ProductionCanvas({
   // 시나리오 화면과 같은 라벨: 한 씬에 컷이 둘 이상이면 "Scene N cutM", 하나면 "Scene N".
   const cutLabelById = useMemo(() => {
     const m = new Map<string, string>();
-    sceneGroups.forEach((g) => g.cutIds.forEach((id, i) => m.set(id, g.cutIds.length > 1 ? `Scene ${g.index} cut${i + 1}` : `Scene ${g.index}`)));
+    // 씬 번호는 바가 보여 주므로 카드에는 컷 번호만 쓴다(사용자 요청).
+    lanes.filter((l) => l.kind === "scene").forEach((l) => l.memberIds.forEach((id, i) => m.set(id, `cut${i + 1}`)));
     return m;
-  }, [sceneGroups]);
+  }, [lanes]);
 
   return (
     <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13] ${embedded ? "" : ""}`}>
@@ -679,33 +716,35 @@ export default function ProductionCanvas({
               })}
             </svg>
 
-            {/* 씬 바 — 연속된 같은 장소의 컷을 한 씬으로 묶는다. 바를 끌면 딸린 컷이 함께 움직이고, 클릭하면 그 씬의 컷을 모두 선택한다. */}
-            {sceneGroups.map((g) => {
-              const b = layout.bars[g.key];
+            {/* 바(레인) — 씬(파랑)·캐릭터(초록)·장소(연두). 바를 끌면 딸린 카드가 함께 움직이고, 클릭하면 그 바의 카드를 모두 선택한다. */}
+            {lanes.map((l) => {
+              const b = layout.bars[l.key];
               if (!b) return null;
-              const width = Math.max(1, g.cutIds.length) * CELL_W - 40;
-              const allSelected = g.cutIds.length > 0 && g.cutIds.every((id) => multi.has(id));
-              const totalSec = g.cutIds.reduce((acc, id) => acc + (Number(nodeById.get(id)?.data?.estSec) || 0), 0);
+              const width = Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
+              const allSelected = l.memberIds.length > 0 && l.memberIds.every((id) => multi.has(id));
+              const totalSec = l.kind === "scene" ? l.memberIds.reduce((acc, id) => acc + (Number(nodeById.get(id)?.data?.estSec) || 0), 0) : 0;
+              const st = LANE_STYLE[l.kind];
               return (
                 <div
-                  key={`scene:${g.key}`}
-                  className={`absolute flex cursor-grab items-center gap-2 rounded-lg border px-3 shadow ${allSelected ? "border-emerald-400 bg-emerald-950/40" : "border-edge bg-[#0c1119] hover:border-gray-500"}`}
-                  style={{ left: b.x, top: b.y, width, height: SCENE_BAR_H }}
-                  onPointerDown={(e) => onPointerDown(e, `scene:${g.key}`)}
-                  title={g.location || ""}
+                  key={`lane:${l.key}`}
+                  className={`absolute flex cursor-grab items-center gap-2 rounded-lg border px-3 shadow ${allSelected ? st.barSelected : st.bar}`}
+                  style={{ left: b.x, top: b.y, width, height: BAR_H }}
+                  onPointerDown={(e) => onPointerDown(e, `lane:${l.key}`)}
+                  title={l.location || l.label}
                 >
-                  <span className="text-[12px] font-bold text-white">Scene {g.index}</span>
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-gray-400">{g.location || "장소 미지정"}</span>
-                  <Chip>컷 {g.cutIds.length}</Chip>
+                  <span className="text-[12px] font-bold text-white">{l.label}</span>
+                  {l.kind === "scene" && <span className={`min-w-0 flex-1 truncate text-[11px] ${st.text}`}>{l.location || "장소 미지정"}</span>}
+                  {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
+                  <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
                 </div>
               );
             })}
-            {/* 컷을 끌고 있을 때 놓일 칸 */}
+            {/* 카드를 끌고 있을 때 놓일 칸 */}
             {dropSlot && (() => {
-              const sp = slotPosition(layout, dropSlot.key, dropSlot.index);
+              const sp = slotPosition(layout, lanes, dropSlot.key, dropSlot.index);
               if (!sp) return null;
-              return <div className="pointer-events-none absolute rounded-xl border-2 border-dashed border-emerald-500/70 bg-emerald-500/5" style={{ left: sp.x, top: sp.y, width: NODE_W.cut, height: NODE_H.cut }} />;
+              return <div className="pointer-events-none absolute rounded-xl border-2 border-dashed border-emerald-500/70 bg-emerald-500/5" style={{ left: sp.x, top: sp.y, width: sp.w, height: sp.h }} />;
             })()}
 
             {(graph?.nodes || []).map((n) => {
