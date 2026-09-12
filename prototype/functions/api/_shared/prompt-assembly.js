@@ -339,11 +339,21 @@ export function buildSceneVideoPrompt(scene, header, payload = {}, opts = {}) {
   // 그대로 "0.0s-2.5s / 2.5s-4.0s" 형식으로 실어 보내야 모델이 언제 무엇을 드러낼지 안다.
   var sceneDurationSec = Math.max(Number(sc.estSec) || 0, 1);
   var timeline = buildBeatTimeline(sc, sceneDurationSec);
+  // 카메라·공간 블록: 샷 카메라 힌트 + 방위 + 블로킹. 이미지와 같은 문장을 영상 모델도 받는다
+  // (pipeline-video.js buildVideoCameraLines 이식 — 문장 원천은 vocab/stage-geometry 로 같다).
+  var cameraLines = [];
+  try {
+    var ch = buildShotCameraHint(sc.shotType, sc.cameraMove, 'en');
+    if (ch) cameraLines.push(ch);
+  } catch (_) {}
+  appendStageGeometry(cameraLines, sc);
   var promptBase = [
     'Global',
     sharedContext,
     'Scene Visual',
     (sc.shot || ''),
+    cameraLines.length ? 'Camera' : '',
+    cameraLines.join('\n'),
     timeline ? 'Shot timeline (what is visible over time)' : '',
     timeline,
     'Scene Duration',
@@ -377,7 +387,7 @@ export function buildSceneVideoPrompt(scene, header, payload = {}, opts = {}) {
 /** 프롬프트 종류별 블록 라벨을 조립 순서대로 돌려준다. */
 export function describePromptSections(kind) {
   if (kind === 'video') {
-    return ['Global', 'Scene Visual', 'Shot timeline (what is visible over time)', 'Scene Duration'];
+    return ['Global', 'Scene Visual', 'Camera', 'Shot timeline (what is visible over time)', 'Scene Duration'];
   }
   return ['common', 'Location:', 'Composition:', 'camera', 'direction', 'blocking', 'no-text'];
 }

@@ -98,6 +98,7 @@ test('(b) buildImagePrompt ↔ buildSceneImagePrompt 리터럴·순서 일치', 
 const VIDEO_LITERALS = [
   "'Global'",
   "'Scene Visual'",
+  "'Camera'",
   "'Shot timeline (what is visible over time)'",
   "'Scene Duration'",
 ];

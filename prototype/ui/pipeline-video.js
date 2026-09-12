@@ -124,6 +124,69 @@
     return [];
   }
 
+  // ── 카메라·공간 블록(영상용) ────────────────────────────────────────
+  // 스토리보드가 계산한 방위(cameraDirection)·블로킹(무대 좌표)은 지금까지 이미지 프롬프트에만 붙고
+  // 영상 프롬프트에는 빠져 있었다. 영상 모델도 같은 문장을 받아야 "같은 세트에서 카메라만 옮긴" 컷이 된다.
+  // 씬 경로(shot=null)는 샷 카메라 힌트까지 포함하고, 컷 경로는 호출부가 카메라 힌트를 이미 넣으므로 방위·블로킹만.
+  function buildVideoCameraLines(scene, shot) {
+    var row = shot || scene || {};
+    var lines = [];
+    var sv = window.NK && NK.service && NK.service.shotVocab;
+    var sg = window.NK && NK.service && NK.service.stageGeometry;
+    if (!shot) {
+      try {
+        var hint = (sv && sv.buildShotCameraHint) ? sv.buildShotCameraHint(row.shotType, row.cameraMove, 'en') : '';
+        if (hint) lines.push(hint);
+      } catch (_) {}
+    }
+    var dir = String(row.cameraDirection || 'front');
+    try {
+      var dh = (sv && sv.buildCameraDirectionHint) ? sv.buildCameraDirectionHint(dir, 'en') : '';
+      if (dh) lines.push(dh);
+    } catch (_) {}
+    try {
+      if (row.blocking && sg && sg.buildBlockingLines) {
+        var compSource = String(row.composition || row.shot || (scene && (scene.composition || scene.shot)) || '');
+        var tokens = compSource.match(/@[0-9A-Za-z가-힣_]{1,24}/g);
+        var bl = sg.buildBlockingLines(row.blocking, dir, tokens && tokens.length ? tokens : null);
+        if (bl) lines.push(bl);
+      }
+    } catch (_) {}
+    return lines;
+  }
+
+  // 세트 플레이트 URL(이 컷의 장소, 방위 플레이트 우선). 레퍼런스를 받는 영상 모델에 함께 보낸다.
+  function resolveSetPlateUrl(st, scene, row) {
+    try {
+      var sp = window.NK && NK.service && NK.service.setPlates;
+      var locs = st && st.payload && Array.isArray(st.payload.episodeLocations) ? st.payload.episodeLocations : [];
+      if (!sp || !sp.findLocationForScene || !locs.length) return '';
+      var loc = sp.findLocationForScene(locs, scene);
+      if (!loc) return '';
+      var obj = String(loc.refObjectName || '').trim();
+      var dir = String((row && row.cameraDirection) || (scene && scene.cameraDirection) || 'front').trim().toLowerCase();
+      if (dir && dir !== 'front') {
+        var wantId = (NK.service.stageGeometry && NK.service.stageGeometry.directionVariantId)
+          ? NK.service.stageGeometry.directionVariantId(dir)
+          : ('dir-' + dir);
+        var vs = Array.isArray(loc.variants) ? loc.variants : [];
+        for (var i = 0; i < vs.length; i++) {
+          if (vs[i] && String(vs[i].id || '') === wantId && String(vs[i].refObjectName || '').trim()) { obj = String(vs[i].refObjectName).trim(); break; }
+        }
+      }
+      return (obj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : '';
+    } catch (_) { return ''; }
+  }
+
+  // 플레이트를 레퍼런스 목록에 끼운다. 캐릭터 시트 두 장 뒤(상한 4장인 모델에서도 플레이트가 살아남게).
+  function insertPlateReference(referenceImages, plateUrl) {
+    var list = Array.isArray(referenceImages) ? referenceImages.slice() : [];
+    if (!plateUrl || list.indexOf(plateUrl) >= 0) return list;
+    list.splice(Math.min(2, list.length), 0, plateUrl);
+    return list;
+  }
+  var SET_PLATE_PROMPT_LINE = 'Set plate reference: one of the reference images is the empty background plate of this location. Keep its layout, architecture, materials, colors and lighting as the environment of this shot.';
+
   // 정방향 체인: 이번 컷에 스틸이 없을 때, 같은 장소의 직전 컷 영상 마지막 프레임을 시작 프레임으로.
   // 장소가 바뀌면 잇지 않는다(다른 세트의 프레임에서 출발하면 배경이 그대로 새어 들어온다).
   function pickPrevLastFrameForStart(scenes, idx) {
@@ -301,11 +364,14 @@
     // (없으면 예전처럼 한 줄 설명으로 나가고, 그때는 컷 전체가 한 상태로 뭉개진다.)
     var sceneDurationSec = Math.max(Number(scene.estSec) || 0, 1);
     var timeline = buildBeatTimeline(scene, sceneDurationSec);
+    var cameraLines = buildVideoCameraLines(scene, null);
     var promptBase = [
       'Global',
       sharedContext,
       'Scene Visual',
       (scene.shot || ''),
+      cameraLines.length ? 'Camera' : '',
+      cameraLines.join('\n'),
       timeline ? 'Shot timeline (what is visible over time)' : '',
       timeline,
       'Scene Duration',
@@ -436,7 +502,12 @@
         } catch (refErr) {
           console.warn('reference resolve skipped:', refErr && refErr.message);
           referenceImages = [];
+          var scenePlateUrl = resolveSetPlateUrl(st, scene, null);
+        if (scenePlateUrl) {
+          referenceImages = insertPlateReference(referenceImages, scenePlateUrl);
+          if (finalPrompt.indexOf(SET_PLATE_PROMPT_LINE) === -1) finalPrompt = finalPrompt + '\n' + SET_PLATE_PROMPT_LINE;
         }
+      }
       }
 
       var videoPayload = {
@@ -563,12 +634,14 @@
         cameraHint = NK.service.shotVocab.buildShotCameraHint(shot && shot.shotType, shot && shot.cameraMove, 'en');
       }
     } catch (_) { cameraHint = ''; }
+    var stageLines = buildVideoCameraLines(scene, shot);
     var blocks = [
       'Global', sharedContext,
       sceneLocation ? 'Location' : '', sceneLocation,
       composition ? 'Composition' : '', composition,
       action ? 'Action' : '', action,
       cameraHint ? cameraHint : '',
+      stageLines.join('\n'),
       'Duration', ((Math.max(Number(shot && shot.duration) || 0, 1)) + 's.')
     ].filter(function (x) { return x && String(x).trim(); });
     return blocks.join('\n');
@@ -684,6 +757,11 @@
             .map(function (r) { return (r && r.imageDataUrl) ? String(r.imageDataUrl) : ''; })
             .filter(Boolean);
         } catch (refErr) { referenceImages = []; }
+        var shotPlateUrl = resolveSetPlateUrl(st, scene, shot);
+        if (shotPlateUrl) {
+          referenceImages = insertPlateReference(referenceImages, shotPlateUrl);
+          if (finalPrompt.indexOf(SET_PLATE_PROMPT_LINE) === -1) finalPrompt = finalPrompt + '\n' + SET_PLATE_PROMPT_LINE;
+        }
       }
 
       // sceneId 슬롯에 컷 id 를 합성해 서버 측이 컷 단위로 기록하게
@@ -942,4 +1020,12 @@
   video.getModelMaxDuration = getModelMaxDuration;
   video.getModelLabel = getModelLabel;
   video.getEffectiveDurationCap = getEffectiveDurationCap;
+  video._helpers = {
+    buildVideoCameraLines: buildVideoCameraLines,
+    resolveSetPlateUrl: resolveSetPlateUrl,
+    insertPlateReference: insertPlateReference,
+    buildShotVideoPrompt: buildShotVideoPrompt,
+    pickPrevLastFrameForStart: pickPrevLastFrameForStart,
+    SET_PLATE_PROMPT_LINE: SET_PLATE_PROMPT_LINE
+  };
 })();

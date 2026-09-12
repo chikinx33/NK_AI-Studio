@@ -115,11 +115,12 @@ test('buildBeatTimeline 은 "0.0s-2.5s: ..." 형식', () => {
   assert.equal(firstFrameText(scene), '발만');
 });
 
-test('영상 프롬프트: Global / Scene Visual / Shot timeline / Scene Duration 순서', () => {
+test('영상 프롬프트: Global / Scene Visual / Camera / Shot timeline / Scene Duration 순서', () => {
   const scene = { shot: 'A knight walks', estSec: 4, beats: [{ at: 0, what: '발만' }, { at: 2.5, what: '전신' }] };
   const out = buildSceneVideoPrompt(scene, 'HDR cinematic', { narrationEnabled: false });
   const expected = [
     'Global', 'HDR cinematic', 'Scene Visual', 'A knight walks',
+    'Camera', 'Camera direction: front side of the set (same direction as the master plate).',
     'Shot timeline (what is visible over time)', '0.0s-2.5s: 발만', '2.5s-4.0s: 전신',
     'Scene Duration', '4s.',
     'No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.',
@@ -158,5 +159,5 @@ test('cleanHeader 는 화면비·분량 문구를 지운다', () => {
 
 test('describePromptSections 는 조립 순서를 돌려준다', () => {
   assert.deepEqual(describePromptSections('image'), ['common', 'Location:', 'Composition:', 'camera', 'direction', 'blocking', 'no-text']);
-  assert.deepEqual(describePromptSections('video'), ['Global', 'Scene Visual', 'Shot timeline (what is visible over time)', 'Scene Duration']);
+  assert.deepEqual(describePromptSections('video'), ['Global', 'Scene Visual', 'Camera', 'Shot timeline (what is visible over time)', 'Scene Duration']);
 });
