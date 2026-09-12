@@ -64,18 +64,20 @@ const GROUP_GAP_Y = 24;                                           // 바 그룹 
 const GROUP_PITCH_Y = BAR_H + CARD_GAP + NODE_H.cut + GROUP_GAP_Y;
 const BAR_SNAP = GRID * 2;                                        // 바는 40px 격자로 움직인다
 
-type LaneKind = "scene" | "characters" | "locations";
+type LaneKind = "prompt" | "scene" | "characters" | "locations";
 interface Lane { key: string; kind: LaneKind; orient: "row" | "column"; index: number; label: string; location: string; memberIds: string[]; cellW: number; cardW: number; cardH: number }
 interface CanvasLayout { nodes: PosMap; bars: Record<string, Pos>; groups: Record<string, string[]> }
 
 // 바 색과, 그 바의 카드가 선택됐을 때의 테두리 색을 같은 계열로 맞춘다(씬 파랑 · 캐릭터 초록 · 장소 보라).
 const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; card: string; text: string; label: string }> = {
+  prompt: { bar: "border-amber-500/80 bg-amber-900/50 hover:border-amber-300", barSelected: "border-amber-300 bg-amber-700/70 ring-2 ring-amber-400/40", card: "border-amber-400 ring-2 ring-amber-500/30", text: "text-amber-100/80", label: "프롬프트" },
   scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", card: "border-sky-400 ring-2 ring-sky-500/30", text: "text-sky-100/80", label: "Scene" },
   characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", card: "border-emerald-400 ring-2 ring-emerald-500/30", text: "text-emerald-100/80", label: "캐릭터" },
   locations: { bar: "border-violet-500/80 bg-violet-900/60 hover:border-violet-300", barSelected: "border-violet-300 bg-violet-700/70 ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-violet-100/80", label: "장소 · 배경" },
 };
 
 function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
+  if (type === "common") return "prompt";
   if (type === "cut") return "scene";
   if (type === "character") return "characters";
   if (type === "location") return "locations";
@@ -86,6 +88,8 @@ function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
 function deriveLanes(graph: ProductionGraph | null): Lane[] {
   if (!graph) return [];
   const lanes: Lane[] = [];
+  // 프롬프트 바: 공통 프롬프트 카드 하나가 딸린다(제목 바 + 내용 카드 형식으로 통일).
+  if (graph.nodes.some((n) => n.type === "common")) lanes.push({ key: "prompt", kind: "prompt", orient: "column", index: 0, label: "프롬프트", location: "", memberIds: graph.nodes.filter((n) => n.type === "common").map((n) => n.id), cellW: NODE_W.common + CARD_GAP, cardW: NODE_W.common, cardH: NODE_H.common });
   const characters = graph.nodes.filter((n) => n.type === "character");
   const locations = graph.nodes.filter((n) => n.type === "location");
   if (characters.length) lanes.push({ key: "characters", kind: "characters", orient: "column", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: NODE_H.character });
@@ -110,19 +114,21 @@ function defaultLayout(graph: ProductionGraph | null): CanvasLayout {
   const bars: Record<string, Pos> = {};
   const groups: Record<string, string[]> = {};
   if (!graph) return { nodes, bars, groups };
-  nodes.common = { x: 40, y: 40 };
-  // 왼쪽 세로 열: 공통 프롬프트 → 캐릭터 바(카드 세로) → 장소 바(카드 세로). 오른쪽: 씬 바들이 위에서 아래로.
-  const assetColW = Math.max(NODE_W.character, NODE_W.location, NODE_W.common);
-  let assetY = 40 + NODE_H.common + GROUP_GAP_Y;
+  // 기본 정렬: 왼쪽 위 프롬프트 바, 그 아래 캐릭터 바와 장소 바가 같은 높이로 나란히, 오른쪽에 씬 바들이 위에서 아래로.
+  const promptBottom = 40 + BAR_H + CARD_GAP + NODE_H.common + GROUP_GAP_Y;
+  const leftColW = Math.max(NODE_W.common, NODE_W.character + 40 + NODE_W.location);
+  const sceneX = 40 + leftColW + 40;
   let sceneY = 40;
-  const sceneX = 40 + assetColW + 40;
+  let assetX = 40;
   deriveLanes(graph).forEach((l) => {
-    if (l.kind === "scene") {
+    if (l.kind === "prompt") {
+      bars[l.key] = { x: 40, y: 40 };
+    } else if (l.kind === "scene") {
       bars[l.key] = { x: sceneX, y: sceneY };
       sceneY += GROUP_PITCH_Y;
     } else {
-      bars[l.key] = { x: 40, y: assetY };
-      assetY += BAR_H + CARD_GAP + Math.max(1, l.memberIds.length) * (l.cardH + CARD_GAP) + GROUP_GAP_Y;
+      bars[l.key] = { x: assetX, y: promptBottom };
+      assetX += l.cardW + 40;
     }
     groups[l.key] = l.memberIds.slice();
   });
@@ -262,6 +268,22 @@ function RefreshIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+function MaximizeIcon({ className }: { className?: string }) {
+  // lucide: maximize-2
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M15 3h6v6" /><path d="m21 3-7 7" /><path d="m3 21 7-7" /><path d="M9 21H3v-6" />
+    </svg>
+  );
+}
+function MinimizeIcon({ className }: { className?: string }) {
+  // lucide: minimize-2
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m14 10 7-7" /><path d="M20 10h-6V4" /><path d="m3 21 7-7" /><path d="M4 14h6v6" />
+    </svg>
+  );
+}
 function BotIcon({ className }: { className?: string }) {
   // lucide: bot
   return (
@@ -282,6 +304,8 @@ export default function ProductionCanvas({
   edgeStyle = "curve",
   edgesVisible = true,
   hideTopBar = false,
+  expanded = false,
+  onToggleExpand,
 }: {
   projectId?: string;
   focusSceneId?: string | number | null;
@@ -292,6 +316,9 @@ export default function ProductionCanvas({
   edgesVisible?: boolean;
   // 집중 모드: 상단 바(프로젝트 선택·줌·일괄 생성)도 숨긴다.
   hideTopBar?: boolean;
+  // 확장: AI 시네마 셸에서는 왼쪽 사이드바를 감추고, AI 기업에서는 집중 모드(좌우 패널 접기)다.
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }) {
   const [projects, setProjects] = useState<ProductionProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -701,6 +728,11 @@ export default function ProductionCanvas({
           </div>
         )}
         <div className="ml-auto flex items-center gap-1">
+          {onToggleExpand && (
+            <button type="button" onClick={onToggleExpand} aria-pressed={expanded} className={`grid h-7 w-7 place-items-center rounded border transition ${expanded ? "border-emerald-500 bg-emerald-900/40 text-emerald-200" : "border-edge text-gray-400 hover:bg-edge hover:text-white"}`} title={expanded ? "사이드바 다시 열기" : "확장 (사이드바 감추기)"} aria-label={expanded ? "사이드바 다시 열기" : "확장"}>
+              {expanded ? <MinimizeIcon className="h-3.5 w-3.5" /> : <MaximizeIcon className="h-3.5 w-3.5" />}
+            </button>
+          )}
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.max(MIN_SCALE, v.scale * 0.9) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="축소">−</button>
           <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>
@@ -709,10 +741,10 @@ export default function ProductionCanvas({
             type="button"
             onClick={() => void saveLayout()}
             disabled={!projectId || layoutSaving || !layoutDirty}
-            className={`min-w-[88px] rounded border px-2 py-1 text-[11px] transition disabled:opacity-40 ${layoutDirty ? "border-amber-600/70 text-amber-200 hover:bg-amber-900/30" : "border-edge text-gray-400"}`}
-            title="현재 배치를 프로젝트에 저장해요. 다른 기기와 AI 기업 캔버스에서도 같은 배치로 열려요."
+            className={`min-w-[72px] rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${layoutDirty ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-gray-500"}`}
+            title="캔버스 배치를 프로젝트에 저장해요. 컷 내용은 각 컷의 '저장 요청'으로 저장돼요."
           >
-            {layoutSaving ? "저장 중…" : (layoutDirty ? "배치 저장 •" : "배치 저장됨")}
+            {layoutSaving ? "저장 중…" : (layoutDirty ? "저장" : "저장됨")}
           </button>
           <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button
@@ -783,7 +815,7 @@ export default function ProductionCanvas({
                   <span className="text-[12px] font-bold text-white">{l.label}</span>
                   {l.kind === "scene" && <span className={`min-w-0 flex-1 truncate text-[11px] ${st.text}`}>{l.location || "장소 미지정"}</span>}
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
-                  <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>
+                  {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
                 </div>
               );

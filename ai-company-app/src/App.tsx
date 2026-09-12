@@ -197,6 +197,17 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
   // 집중 모드: 스킬 작업(제작 캔버스 등)에 몰입하도록 좌측 직원 패널·우측 메뉴 패널을 접는다. 스킬 화면을 떠나면 자동 해제.
   const [focusMode, setFocusMode] = useState(EMBED_MODE);
+  // AI 시네마 셸 안(임베드)에서 캔버스의 확장 버튼: 셸의 왼쪽 사이드바를 감춘다(메시지로 요청).
+  const [shellSidebarHidden, setShellSidebarHidden] = useState(false);
+  const toggleCanvasExpand = () => {
+    if (EMBED_MODE) {
+      const next = !shellSidebarHidden;
+      setShellSidebarHidden(next);
+      try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: "nk-shell-sidebar", hidden: next }, "*"); } catch { /* 셸 없음 */ }
+    } else {
+      setFocusMode((v) => !v);
+    }
+  };
   useEffect(() => { if (centerView !== "skills" && !EMBED_MODE) setFocusMode(false); }, [centerView]);
   // 셸과의 통신: stage-revisit(캐시된 iframe 재방문) → 그래프 다시 읽기, nk-canvas-open → 프로젝트 전환.
   useEffect(() => {
@@ -1352,6 +1363,8 @@ export default function App() {
               focusMode={focusMode}
               onToggleFocus={EMBED_MODE ? undefined : () => setFocusMode((v) => !v)}
               embed={EMBED_MODE}
+              canvasExpanded={EMBED_MODE ? shellSidebarHidden : focusMode}
+              onToggleCanvasExpand={toggleCanvasExpand}
             />
           </Suspense>
         ) : centerView === "settings" ? (

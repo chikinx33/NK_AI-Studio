@@ -419,6 +419,12 @@
         window.addEventListener('message', function (evt) {
             try {
                 var data = evt && evt.data || {};
+                if (data && data.type === 'nk-shell-sidebar') {
+                    // 캔버스 확장 버튼: 셸의 왼쪽 사이드바를 감추거나 되살린다.
+                    var appEl = document.querySelector('.app');
+                    if (appEl) appEl.classList.toggle('no-sidebar', !!data.hidden);
+                    return;
+                }
                 if (!data || data.type !== 'nk-project-changed') return;
                 __dirtyStages.scenario = true;
                 __dirtyStages.scenes = true;

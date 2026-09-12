@@ -65,11 +65,35 @@ test('★컷 카드 제목은 컷 번호만(씬 번호는 바가 보여 준다),
 test('★배치 저장 버튼: 로컬은 작업 사본, 프로젝트 저장은 버튼으로(서버 payload.canvasLayout)', () => {
   assert.match(src, /const layoutDirty = useMemo\(\(\) => JSON\.stringify\(layout\) !== JSON\.stringify\(serverLayout\)/);
   assert.match(src, /await saveCanvasLayout\(projectId, layout\);/);
-  assert.match(src, /\{layoutSaving \? "저장 중…" : \(layoutDirty \? "배치 저장 •" : "배치 저장됨"\)\}/);
+  assert.match(src, /\{layoutSaving \? "저장 중…" : \(layoutDirty \? "저장" : "저장됨"\)\}/, '버튼 문구는 저장');
+  assert.match(src, /layoutDirty \? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-gray-500"/, '테마(에메랄드) 스타일');
   assert.match(src, /setLayout\(reconcileLayout\(parsed \|\| fromServer, g, base\)\);/, '로컬 사본 → 서버 배치 → 기본 배치 순');
   const api = fs.readFileSync(path.join(process.cwd(), 'ai-company-app/src/lib/api.ts'), 'utf8').replace(/\r\n/g, '\n');
   assert.match(api, /export async function saveCanvasLayout\(projectId: string, layout: unknown\)/);
   assert.match(api, /body: JSON\.stringify\(\{ projectId, payload: \{ canvasLayout: layout \} \}\)/);
   const graph = fs.readFileSync(path.join(process.cwd(), 'prototype/functions/api/agent/production-graph.ts'), 'utf8').replace(/\r\n/g, '\n');
   assert.match(graph, /canvasLayout: payload\.canvasLayout && typeof payload\.canvasLayout === "object" \? payload\.canvasLayout : null,/);
+});
+
+test('★프롬프트 바(호박색) 아래 공통 카드, 캐릭터·장소 바는 같은 높이로 나란히, 씬은 오른쪽', () => {
+  assert.match(src, /type LaneKind = "prompt" \| "scene" \| "characters" \| "locations";/);
+  assert.match(src, /prompt: \{ bar: "border-amber-500\/80 bg-amber-900\/50/);
+  assert.match(src, /if \(type === "common"\) return "prompt";/);
+  assert.match(src, /key: "prompt", kind: "prompt", orient: "column"/);
+  assert.match(src, /const promptBottom = 40 \+ BAR_H \+ CARD_GAP \+ NODE_H\.common \+ GROUP_GAP_Y;/);
+  assert.match(src, /bars\[l\.key\] = \{ x: assetX, y: promptBottom \};\s*\n\s*assetX \+= l\.cardW \+ 40;/, '캐릭터·장소 바가 같은 높이에서 옆으로');
+  assert.doesNotMatch(src, /nodes\.common = \{ x: 40, y: 40 \};/, '공통 카드는 자유 노드가 아니라 프롬프트 바에 딸린다');
+});
+
+test('★확장 버튼: 임베드(AI 시네마)면 셸 사이드바를 감추고, AI 기업이면 집중 모드', () => {
+  assert.match(src, /onToggleExpand && \(/);
+  assert.match(src, /title=\{expanded \? "사이드바 다시 열기" : "확장 \(사이드바 감추기\)"\}/);
+  const app = fs.readFileSync(path.join(process.cwd(), 'ai-company-app/src/App.tsx'), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(app, /window\.parent\.postMessage\(\{ type: "nk-shell-sidebar", hidden: next \}, "\*"\)/);
+  assert.match(app, /canvasExpanded=\{EMBED_MODE \? shellSidebarHidden : focusMode\}/);
+  const nav = fs.readFileSync(path.join(process.cwd(), 'prototype/js/navigation.js'), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(nav, /data\.type === 'nk-shell-sidebar'/);
+  assert.match(nav, /appEl\.classList\.toggle\('no-sidebar', !!data\.hidden\)/);
+  const css = fs.readFileSync(path.join(process.cwd(), 'prototype/styles.css'), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(css, /body\.layout-fixed \.app\.no-sidebar > \.sidebar \{\s*\n\s*display: none;/);
 });

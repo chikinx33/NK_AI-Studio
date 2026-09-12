@@ -40,6 +40,8 @@ export default function SkillWorkspace({
   focusMode = false,
   onToggleFocus,
   embed = false,
+  canvasExpanded = false,
+  onToggleCanvasExpand,
 }: {
   categoryId: string;
   onClose: () => void;
@@ -51,6 +53,8 @@ export default function SkillWorkspace({
   onToggleFocus?: () => void;
   // AI 시네마 셸 임베드: 스킬 헤더는 숨기되 캔버스 상단 바(프로젝트·줌·일괄 생성)는 남긴다.
   embed?: boolean;
+  canvasExpanded?: boolean;
+  onToggleCanvasExpand?: () => void;
 }) {
   const category = useMemo(() => getCompanySkillCategory(categoryId), [categoryId]);
   const firstAvailable = category.skills.find((skill) => skill.status === "available")?.id || "";
@@ -173,7 +177,7 @@ export default function SkillWorkspace({
       {selectedSkill?.id === "infographic" ? (
         <AgentVideoWorkspace onClose={onClose} embedded />
       ) : selectedSkill?.id === "video_pipeline" ? (
-        <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} edgeStyle={edgeStyle} edgesVisible={edgesVisible} hideTopBar={focusMode && !embed} />
+        <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} edgeStyle={edgeStyle} edgesVisible={edgesVisible} hideTopBar={focusMode && !embed} expanded={canvasExpanded} onToggleExpand={onToggleCanvasExpand} />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div><p className="text-sm font-bold text-gray-300">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-gray-600">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>
