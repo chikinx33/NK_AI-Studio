@@ -201,6 +201,8 @@ function flattenScenesWithShots(parentScenes, characters) {
         beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
         // t=0 무대 배치 (정면 기준 좌표). 이미지 프롬프트의 공간 문장이 여기서 나온다.
         blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
+        // 컷 분해가 실패해 폴백된 씬이면 그 사유. 화면에서 '분해 실패' 칩으로 보여 사용자가 알 수 있게.
+        decomposeFallback: String(parent.shotsFallback || ""),
         // 부모 추적용 (마이그레이션/디버깅)
         parentSceneId: parent.id != null ? parent.id : null,
         shotIndexInParent: j,

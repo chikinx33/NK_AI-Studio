@@ -87,6 +87,7 @@
       emptyScenarioHelp: "왼쪽 패널에서 조건을 입력하고 '시나리오 생성'을 눌러주세요.",
       commonPromptAria: '공통 프롬프트 보기',
       sceneExpand: '씬 펼치기',
+      decomposeFallbackChip: '분해 실패',
       sceneCollapse: '씬 접기',
       commonInfoLabels: {
         topic: '주제',
@@ -150,6 +151,7 @@
       emptyScenarioHelp: "Fill out the overview on the left and click 'Generate scenario'.",
       commonPromptAria: 'View common prompt',
       sceneExpand: 'Expand scene',
+      decomposeFallbackChip: 'Decompose failed',
       sceneCollapse: 'Collapse scene',
       commonInfoLabels: {
         topic: 'Topic',
@@ -1428,6 +1430,7 @@
         dialogue,
         sceneLocation: firstFilledText(s.sceneLocation, s.location),
         backgroundStyle: firstFilledText(s.backgroundStyle, s.sharedBackgroundStyle),
+        decomposeFallback: String(s.decomposeFallback || '').trim(),
         subtitleText: resolvedSubtitleText,
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),
@@ -2014,6 +2017,7 @@
             ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
             ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
             ${s.cameraDirection && s.cameraDirection !== 'front' ? `<span class="card-camera-chip card-camera-direction-chip" title="camera direction">${escapeHtml(s.cameraDirection === 'back' ? 'REV' : s.cameraDirection.toUpperCase())}</span>` : ''}
+            ${s.decomposeFallback ? `<span class="card-camera-chip card-fallback-chip" title="${escapeHtml(s.decomposeFallback)}">${escapeHtml(getScenarioUiText().decomposeFallbackChip)}</span>` : ''}
           </div>
           <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
@@ -3035,6 +3039,9 @@
                     ? `@토큰 자동 보정 (Pass 2 컷): ${shotsM.tokensEnforcedShots}회`
                     : '@토큰 자동 보정 (Pass 2 컷): -';
                   metaLines.push(enforcedLine);
+                  if (Array.isArray(shotsM.fallbackReasons) && shotsM.fallbackReasons.length) {
+                    metaLines.push((payload?.language === 'en' ? 'Cut decomposition fell back: ' : '컷 분해 폴백: ') + shotsM.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));
+                  }
                   showScenarioMetaToast(metaLines.join('\n'));
                   console.log('[scenario meta:pass2]', {
                     tokensEnforcedShots: shotsM.tokensEnforcedShots,

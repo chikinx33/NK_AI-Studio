@@ -66,6 +66,10 @@ export function buildShotPromptKo() {
 세 서술 칸(composition·action·beats)은 서로 다른 것을 쓴다. 같은 문장을 두 칸에 반복하면
 나눈 의미가 없다. composition 은 샷 전체를 한 줄로, 시간에 따른 변화는 beats 로만 쓴다.
 
+[길이 제한 — 응답이 잘리면 이 씬 전체가 자동 폴백(화면=행동, 블로킹·비트 없음)으로 떨어진다]
+· composition 120자 이내, action 160자 이내, beats.what 80자 이내, 샷은 4개 이내.
+· 수식어보다 명사·위치·크기. 같은 정보를 두 칸에 반복하지 않는다.
+
 [beats — 카메라가 움직이면 반드시 채운다]
 빠뜨리면 스틸컷이 무브의 "끝 상태"로 만들어져, 가려졌다가 드러나는 연출이 통째로 사라진다.
   "beats": [{"at": 0, "what": "프레임 하단에 @캐릭터A·@캐릭터B·@캐릭터C의 발과 하체만 나란히"},
@@ -165,6 +169,10 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 The three descriptive fields (composition / action / beats) must say different things. Repeating the
 same sentence in two of them defeats the split. Keep composition to one line for the whole shot and
 put every change over time in beats.
+
+[Length limits — a truncated response drops this WHOLE scene to an automatic fallback (composition = action, no blocking, no beats)]
+· composition ≤ 120 characters, action ≤ 160, beats.what ≤ 80, at most 4 shots.
+· Nouns, positions and sizes over adjectives. Never repeat the same information in two fields.
 
 [beats — mandatory whenever the camera moves]
 Without them the still image is generated from the END state of the move, and the reveal disappears.
@@ -352,6 +360,43 @@ export function buildShotUserPromptEn(scene, opts = {}) {
  * Anthropic 응답 텍스트(JSON) 를 파싱하여 검증된 shots 배열로 변환.
  * 실패 시 null. 실패한 항목은 sanitize 후 살릴 수 있는 만큼 살림.
  */
+/**
+ * max_tokens 에 걸려 잘린 JSON 에서 완성된 샷 객체만 건진다.
+ * 예전엔 한 글자라도 잘리면 파싱 실패 → 씬 전체가 fallbackSingleShot(화면=행동, 블로킹·비트 없음)로
+ * 떨어졌다. 3~4샷 중 앞의 2~3샷이 멀쩡해도 통째로 버리던 것을, 완성된 것만 살린다.
+ * 반환: { shots: [...] } | null
+ */
+export function salvageTruncatedShots(text) {
+  const src = String(text || "");
+  const key = src.indexOf('"shots"');
+  if (key < 0) return null;
+  const arr = src.indexOf("[", key);
+  if (arr < 0) return null;
+  const shots = [];
+  let i = arr + 1;
+  while (i < src.length) {
+    const open = src.indexOf("{", i);
+    if (open < 0) break;
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let j = open; j < src.length; j++) {
+      const ch = src[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") { depth--; if (depth === 0) { end = j; break; } }
+    }
+    if (end < 0) break; // 마지막 객체가 잘렸다 — 여기서 멈춘다
+    try { shots.push(JSON.parse(src.slice(open, end + 1))); } catch (_) { /* 깨진 객체는 건너뛴다 */ }
+    i = end + 1;
+  }
+  return shots.length ? { shots } : null;
+}
+
 export function parseShotResponse(text, scene) {
   const trimmed = String(text || "").trim();
   if (!trimmed) return null;
@@ -364,7 +409,7 @@ export function parseShotResponse(text, scene) {
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/\s*```\s*$/, "")
       .trim();
-    try { parsed = JSON.parse(cleaned); } catch (_e) { return null; }
+    try { parsed = JSON.parse(cleaned); } catch (_e) { parsed = salvageTruncatedShots(cleaned); }
   }
   if (!parsed || !Array.isArray(parsed.shots)) return null;
 

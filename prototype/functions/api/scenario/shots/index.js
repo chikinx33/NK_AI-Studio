@@ -23,9 +23,12 @@ import { diversifyShotCameraMoves, enforceSequenceContinuity } from "../rebalanc
 import { isCreditExhausted } from "../../_shared/credit-exhausted.js";
 import { buildClaudeSystem, claudeFetch } from "../../_shared/claude-auth.js";
 
-const SHOT_TIMEOUT_MS = 22000;
-const SHOT_MAX_TOKENS = 900;
+// 900 토큰은 한국어로 beats+blocking 을 3~4샷 쓰기에 모자라 응답이 잘렸고, 잘리면 씬 전체가 폴백됐다.
+// (2026-09-12 생성 결과에서 5씬 중 2씬이 폴백) 상한을 올리고, 잘려도 완성된 샷은 건진다(salvage).
+const SHOT_TIMEOUT_MS = 25000;
+const SHOT_MAX_TOKENS = 1600;
 const MODEL = "claude-sonnet-4-6";
+let lastStopReason = "";
 
 async function callAnthropicForShots({ auth, env, system, user, signal }) {
   const controller = new AbortController();
@@ -53,6 +56,8 @@ async function callAnthropicForShots({ auth, env, system, user, signal }) {
       .filter((b) => b && b.type === "text")
       .map((b) => b.text || "")
       .join("");
+    // 잘림 진단: 파싱 실패 사유에 stop_reason 을 실어 폴백 원인을 화면까지 보낸다.
+    lastStopReason = String(data?.stop_reason || "");
     return text;
   } finally {
     clearTimeout(timer);
@@ -74,7 +79,7 @@ export async function decomposeScene(auth, scene, opts = {}) {
     signal: opts.signal,
   });
   let shots = parseShotResponse(text, scene);
-  if (!shots || !shots.length) throw new Error("shot_parse_failed");
+  if (!shots || !shots.length) throw new Error("shot_parse_failed" + (lastStopReason ? "(stop=" + lastStopReason + ")" : ""));
 
   // 카메라가 움직이는 샷에 시간표가 빠졌으면 그 샷만 짚어 한 번 더 요청한다.
   // 프롬프트 규칙만으로는 모델이 자주 빼먹는데, 빠지면 스틸컷이 무브의 끝 상태로
@@ -112,7 +117,7 @@ export async function decomposeScenes(auth, scenes, opts = {}) {
     return scenes.map((s) => ({ ...s, shots: fallbackSingleShot(s), shotsFallback: "no_api_key" }));
   }
 
-  const meta = { failed: 0, fallback: 0, ok: 0, total: scenes.length };
+  const meta = { failed: 0, fallback: 0, ok: 0, total: scenes.length, fallbackReasons: [] };
 
   const tasks = scenes.map(async (scene, idx) => {
     try {
@@ -133,10 +138,12 @@ export async function decomposeScenes(auth, scenes, opts = {}) {
       if (err && err.code === "CREDIT_EXHAUSTED") throw err; // 위로 재던짐
       meta.failed++;
       meta.fallback++;
+      const reason = String(err?.message || "decompose_failed");
+      meta.fallbackReasons.push({ sceneId: scene?.id ?? idx + 1, reason });
       return {
         ...scene,
         shots: fallbackSingleShot(scene),
-        shotsFallback: String(err?.message || "decompose_failed"),
+        shotsFallback: reason,
       };
     }
   });
