@@ -839,7 +839,7 @@ export default function ProductionCanvas({
       return;
     }
     if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved) {
-      if (e.shiftKey) {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { // Shift·Ctrl(Cmd)+클릭 = 다중 선택 토글
         setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
       } else {
         setMulti(new Set([d.id]));
