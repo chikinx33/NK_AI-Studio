@@ -317,6 +317,7 @@ function jobStatusText(j: PendingJob): string {
     case "queued": return "대기";
     case "review_pending": return "승인 대기";
     case "running": return "실행 중";
+    case "working": return "실행 중";
     case "approved": return "완료";
     case "error": return `오류${j.error ? `: ${j.error}` : ""}`;
     case "cancelled": return "취소";
@@ -596,11 +597,16 @@ export default function ProductionCanvas({
     setNotice("");
     try {
       const res = await createAgentJob(type, input);
-      // 캔버스 버튼을 누른 것이 곧 확인이다 — 승인 게이트를 여기서 바로 통과시킨다(서버 기록은 그대로).
-      // '생성 전 확인' 설정은 에이전트(채팅)가 스스로 만드는 잡에만 해당한다.
-      await approveItem(res.jobId).catch(() => null);
+      // 잡을 만든 순간부터 진행 표시(스피너)를 그린다 — 승인 응답을 기다린 뒤 그리면 생성이 끝날 때까지 아무 표시가 없다.
       setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: "running", label, target, updatedAt: Date.now() }, ...prev].slice(0, 20));
       setNotice(`${label} — 실행 중`);
+      // 캔버스 버튼을 누른 것이 곧 확인이다 — 승인 게이트를 여기서 바로 통과시킨다(서버 기록은 그대로).
+      // '생성 전 확인' 설정은 에이전트(채팅)가 스스로 만드는 잡에만 해당한다. 이미지 도구는 서버가 백그라운드로 돌리고 폴링이 완료를 잡는다.
+      const approved: any = await approveItem(res.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message, updatedAt: Date.now() } : p))); return null; });
+      const st = String(approved?.job?.status || "");
+      if (JOB_DONE.includes(st) || st === "working") setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: st, error: String(approved?.job?.error || p.error || ""), updatedAt: Date.now() } : p)));
+      if (st === "approved") { setNotice(`${label} — 완료`); void load(true); }
+      else if (st === "error") setNotice(`${label} — 오류: ${String(approved?.job?.error || "")}`);
     } catch (e) {
       setNotice(`실패: ${(e as Error).message}`);
       setPending((prev) => [{ jobId: `local-${Date.now()}`, type, sceneId, status: "error", label, target, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));

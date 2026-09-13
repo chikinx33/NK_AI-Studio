@@ -108,7 +108,7 @@ test('★그래프 장소 노드가 episodeLocations 의 플레이트·변형·�
 test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheetPrompt 단일 원천 · 마스터 플레이트 참조 · storyboardSheets+episodeLocations 저장', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
-  assert.match(shared, /set_sheet: \{ agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool \}/);
+  assert.match(shared, /set_sheet: \{ agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetSheetTool \}/);
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /const name = String\(input\?\.locationName \|\| input\?\.name \|\| input\?\.setName \|\| ""\)\.trim\(\);/);
@@ -325,8 +325,8 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
   assert.match(scen, /layout: \(x\?\.layout && typeof x\.layout === "object"\)/);
   assert.match(scen, /layout: st\.layout \|\| null, refObjectName: "", variants: \[\],/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  assert.match(shared, /set_master: \{ agentId: "pixel", kind: "external", gate: true, run: runSetMasterTool \}/);
-  assert.match(shared, /set_angle: \{ agentId: "pixel", kind: "external", gate: true, run: runSetAngleTool \}/);
+  assert.match(shared, /set_master: \{ agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetMasterTool \}/);
+  assert.match(shared, /set_angle: \{ agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetAngleTool \}/);
   assert.match(shared, /cameraTargetMode: input\?\.cameraTargetMode \|\| undefined,/, 'runImagenTool 이 카메라 재구성 모드를 넘긴다');
   const im = shared.indexOf('async function runSetMasterTool('); const mfn = shared.slice(im, shared.indexOf('\n}\n', im));
   assert.match(mfn, /setVariant\(loc, "angle-top", img\.objectName, "부감\(마스터\)"/);
@@ -375,4 +375,16 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   assert.match(src, /d\.zone === "image" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n\s*\/\/ 컷 카드 스틸 클릭 = 크게 보기/, '카드 스틸 클릭 = 크게');
   // 안내 문구는 잡 상태를 따라간다("실행 중"에 멈추지 않는다)
   assert.match(src, /if \(status === "approved"\) setNotice\(`\$\{p\.label\} — 완료`\);\s*\n\s*else if \(status === "error"\) setNotice\(`\$\{p\.label\} — 오류: \$\{error \|\| "알 수 없음"\}`\);/);
+});
+
+test('★생성 버튼을 누른 순간부터 진행 표시: 잡 생성 직후 pending 등록 → 승인 → 응답 상태(working/approved/error) 반영; 이미지 도구는 서버가 longRunning(승인 POST 논블로킹)', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  const i = src.indexOf('const enqueue = async ('); const fn = src.slice(i, src.indexOf('\n  };\n', i));
+  const iCreate = fn.indexOf('await createAgentJob(type, input)'); const iPending = fn.indexOf('setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: "running"'); const iApprove = fn.indexOf('await approveItem(res.jobId)');
+  assert.ok(iCreate > -1 && iPending > iCreate && iApprove > iPending, '순서: 잡 생성 → 진행 표시 → 승인 (승인을 기다린 뒤 그리면 생성 내내 아무 표시가 없다)');
+  assert.match(fn, /const st = String\(approved\?\.job\?\.status \|\| ""\);/);
+  assert.match(fn, /if \(st === "approved"\) \{ setNotice\(`\$\{label\} — 완료`\); void load\(true\); \}/);
+  assert.match(src, /case "working": return "실행 중";/);
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  for (const t of ['scene_still', 'set_master', 'set_angle', 'set_sheet']) assert.match(shared, new RegExp(`  ${t}: \\{ agentId: "pixel", kind: "external", gate: true, longRunning: true, run: `), `${t} 는 longRunning`);
 });
