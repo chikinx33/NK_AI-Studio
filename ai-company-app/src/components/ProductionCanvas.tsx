@@ -306,7 +306,22 @@ function BotIcon({ className }: { className?: string }) {
   );
 }
 
-interface PendingJob { jobId: string; type: string; sceneId?: string | number; status: string; label: string }
+interface PendingJob { jobId: string; type: string; sceneId?: string | number; status: string; label: string; target?: string; error?: string; updatedAt?: number }
+
+// 잡 상태 → 사용자 문구. 모든 생성 행위는 상태가 보여야 한다(대기·승인 대기·실행 중·완료·오류).
+const JOB_DONE = ["approved", "error", "cancelled", "revise"];
+function jobStatusText(j: PendingJob): string {
+  switch (j.status) {
+    case "queued": return "대기";
+    case "review_pending": return "승인 대기";
+    case "running": return "실행 중";
+    case "approved": return "완료";
+    case "error": return `오류${j.error ? `: ${j.error}` : ""}`;
+    case "cancelled": return "취소";
+    case "revise": return "수정 요청";
+    default: return j.status;
+  }
+}
 
 export default function ProductionCanvas({
   projectId: projectIdProp = "",
@@ -508,6 +523,7 @@ export default function ProductionCanvas({
         if (["approved", "error", "cancelled", "revise"].includes(p.status)) return p;
         const job = await getAgentJob(p.jobId).catch(() => null);
         const status = String(job?.status || job?.review_status || p.status);
+        const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
         if (status !== p.status) {
           changed = true;
           if (p.type === "scene_reorder" && status === "approved") {
@@ -517,7 +533,7 @@ export default function ProductionCanvas({
             setNotice(w.length ? `컷 순서를 바꿨어요 — 경고: ${String(r?.summary || "")}` : "컷 순서를 바꿨어요.");
           }
         }
-        return { ...p, status };
+        return { ...p, status, error: error || p.error, updatedAt: status !== p.status ? Date.now() : p.updatedAt };
       }));
       setPending(next);
       if (changed) {
@@ -554,19 +570,31 @@ export default function ProductionCanvas({
     return () => { alive = false; window.clearInterval(timer); };
   }, [settings.confirmBeforeGenerate, projectId]);
 
-  const enqueue = async (type: string, input: Record<string, unknown>, label: string, sceneId?: string | number) => {
+  const enqueue = async (type: string, input: Record<string, unknown>, label: string, sceneId?: string | number, target?: string) => {
     setSaving(true);
     setNotice("");
     try {
       const res = await createAgentJob(type, input);
-      setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: res.status || "queued", label }, ...prev].slice(0, 20));
+      setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: res.status || "queued", label, target, updatedAt: Date.now() }, ...prev].slice(0, 20));
       setNotice(settings.confirmBeforeGenerate ? `${label} — 승인 패널에서 승인하면 실행돼요.` : `${label} — 자동 승인으로 바로 실행돼요.`);
     } catch (e) {
       setNotice(`실패: ${(e as Error).message}`);
+      setPending((prev) => [{ jobId: `local-${Date.now()}`, type, sceneId, status: "error", label, target, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
     } finally {
       setSaving(false);
     }
   };
+  // 잡 하나를 지금 승인한다(상태 띠의 승인 버튼). 서버 게이트는 그대로, 브라우저가 대신 누르는 것.
+  const approveNow = async (jobId: string) => {
+    try {
+      await approveItem(jobId);
+      setPending((prev) => prev.map((p) => (p.jobId === jobId ? { ...p, status: "running", updatedAt: Date.now() } : p)));
+    } catch (e) {
+      setPending((prev) => prev.map((p) => (p.jobId === jobId ? { ...p, status: "error", error: (e as Error).message, updatedAt: Date.now() } : p)));
+    }
+  };
+  const dismissJob = (jobId: string) => setPending((prev) => prev.filter((p) => p.jobId !== jobId));
+  const setSheetActive = pending.some((p) => p.type === "set_sheet" && !JOB_DONE.includes(p.status));
 
   // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
   // 시트가 이미 있는 장소는 건너뛰고, 없는 장소가 하나도 없으면 전부 다시 만든다(재생성).
@@ -578,7 +606,7 @@ export default function ProductionCanvas({
     const targets = missing.length ? missing : locs;
     if (!missing.length && !window.confirm(`모든 세트에 이미 시트가 있어요. ${locs.length}개 세트의 시트를 다시 만들까요? (크레딧 사용)`)) return;
     for (const n of targets) {
-      await enqueue("set_sheet", { projectId, locationName: String(n.data?.name || n.label), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", provider: settings.image.provider }, `세트 시트 · ${n.label}`);
+      await enqueue("set_sheet", { projectId, locationName: String(n.data?.name || n.label), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", provider: settings.image.provider }, `세트 시트 · ${n.label}`, undefined, String(n.data?.name || n.label));
     }
   };
 
@@ -853,6 +881,26 @@ export default function ProductionCanvas({
       </section>
       )}
 
+      {/* 잡 상태 띠 — 모든 생성 행위의 상태를 컷 선택과 무관하게 보여 준다(대기·승인 대기·실행 중·완료·오류). */}
+      {pending.length > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-edge bg-[#0b1017] px-3 py-1.5" data-testid="job-strip">
+          {pending.slice(0, 6).map((j) => {
+            const done = JOB_DONE.includes(j.status);
+            const tone = j.status === "error" ? "border-red-700/60 text-red-300" : j.status === "approved" ? "border-emerald-700/60 text-emerald-300" : j.status === "review_pending" ? "border-amber-700/60 text-amber-300" : "border-sky-700/60 text-sky-300";
+            return (
+              <span key={j.jobId} className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${tone}`} title={j.error || j.label}>
+                {!done && <RefreshIcon className="h-3 w-3 animate-spin" />}
+                <span className="truncate">{j.label}</span>
+                <span className="opacity-80">· {jobStatusText(j)}</span>
+                {j.status === "review_pending" && <button type="button" onClick={() => void approveNow(j.jobId)} className="rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-black hover:bg-amber-500">승인</button>}
+                {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="text-gray-500 hover:text-white" aria-label="닫기">×</button>}
+              </span>
+            );
+          })}
+          {pending.length > 6 && <span className="text-[11px] text-gray-500">+{pending.length - 6}</span>}
+          {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="ml-auto text-[11px] text-gray-500 hover:text-white">끝난 항목 지우기</button>}
+        </div>
+      )}
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1">
         {/* 캔버스 */}
@@ -916,12 +964,13 @@ export default function ProductionCanvas({
                       type="button"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); void generateSetSheets(); }}
-                      disabled={!projectId || saving}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-violet-300/50 text-violet-100 transition hover:bg-violet-500/30 hover:text-white disabled:opacity-40"
-                      title="세트 시트 생성 — 장소마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요"
+                      disabled={!projectId || saving || setSheetActive}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition disabled:opacity-60 ${setSheetActive ? "border-amber-300/70 text-amber-200" : "border-violet-300/50 text-violet-100 hover:bg-violet-500/30 hover:text-white"}`}
+                      title={setSheetActive ? "세트 시트 생성 중…" : "세트 시트 생성 — 장소마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요"}
                       aria-label="세트 시트 생성"
+                      aria-busy={setSheetActive}
                     >
-                      <SparkleIcon className="h-4 w-4" />
+                      {setSheetActive ? <RefreshIcon className="h-4 w-4 animate-spin" /> : <SparkleIcon className="h-4 w-4" />}
                     </button>
                   )}
                 </div>
@@ -942,6 +991,8 @@ export default function ProductionCanvas({
               const nodeLaneKind = laneKindForNode(n.type);
               const selectedClass = nodeLaneKind ? LANE_STYLE[nodeLaneKind].card : "border-emerald-400 ring-2 ring-emerald-500/30";
               const jobsForNode = n.type === "cut" ? pending.filter((j) => String(j.sceneId) === String(n.data.sceneId) && !["approved", "error", "cancelled"].includes(j.status)) : [];
+              // 배경 카드: 이 장소를 대상으로 한 세트 시트 잡(가장 최근 하나) — 생성 중·승인 대기·오류를 카드에서 바로 본다.
+              const locJob = n.type === "location" ? pending.find((j) => j.type === "set_sheet" && String(j.target || "") === String(n.data.name || n.label)) || null : null;
               return (
                 <div
                   key={n.id}
@@ -966,10 +1017,13 @@ export default function ProductionCanvas({
                         </div>
                       ) : null}
                       <div className="p-3">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <Chip tone="violet">장소</Chip>
                           {n.data.setSheet ? <Chip tone="emerald">시트</Chip> : <Chip>시트 없음</Chip>}
+                          {locJob && !JOB_DONE.includes(locJob.status) && <Chip tone="amber">{locJob.status === "review_pending" ? "승인 대기" : "시트 생성 중"}</Chip>}
+                          {locJob && locJob.status === "error" && <Chip tone="red">오류</Chip>}
                         </div>
+                        {locJob && locJob.status === "error" && locJob.error ? <p className="mt-1 line-clamp-2 text-[10px] text-red-300" title={locJob.error}>{locJob.error}</p> : null}
                         <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
                       </div>
                     </div>

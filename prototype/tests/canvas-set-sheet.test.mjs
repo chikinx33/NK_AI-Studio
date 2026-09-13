@@ -21,8 +21,33 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); void generateSetSheets\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
   assert.match(src, /const generateSetSheets = async \(\) => \{/);
   assert.match(src, /const missing = locs\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
-  assert.match(src, /await enqueue\("set_sheet", \{ projectId, locationName: String\(n\.data\?\.name \|\| n\.label\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K", provider: settings\.image\.provider \}, `세트 시트 · \$\{n\.label\}`\);/);
+  assert.match(src, /await enqueue\("set_sheet", \{ projectId, locationName: String\(n\.data\?\.name \|\| n\.label\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K", provider: settings\.image\.provider \}, `세트 시트 · \$\{n\.label\}`, undefined, String\(n\.data\?\.name \|\| n\.label\)\);/);
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"\];/);
+});
+
+test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승인 대기·실행 중·완료·오류, 승인 버튼) · 별 버튼 스피너 · 배경 카드 칩', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /interface PendingJob \{ jobId: string; type: string; sceneId\?: string \| number; status: string; label: string; target\?: string; error\?: string; updatedAt\?: number \}/);
+  assert.match(src, /function jobStatusText\(j: PendingJob\): string \{/);
+  assert.match(src, /case "review_pending": return "승인 대기";/);
+  assert.match(src, /case "error": return `오류\$\{j\.error \? `: \$\{j\.error\}` : ""\}`;/);
+  assert.match(src, /const error = String\(\(job as any\)\?\.error \|\| \(job as any\)\?\.output\?\.error \|\| ""\)\.trim\(\);/, '서버 오류 문구를 가져온다');
+  assert.match(src, /data-testid="job-strip"/, '컷 선택과 무관한 상단 상태 띠');
+  assert.match(src, /\{!done && <RefreshIcon className="h-3 w-3 animate-spin" \/>\}/);
+  assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
+  assert.match(src, /const approveNow = async \(jobId: string\) => \{/);
+  assert.match(src, /끝난 항목 지우기/);
+  // 잡 생성 자체가 실패해도 상태 띠에 오류로 남는다
+  assert.match(src, /setPending\(\(prev\) => \[\{ jobId: `local-\$\{Date\.now\(\)\}`, type, sceneId, status: "error", label, target, error: \(e as Error\)\.message/);
+  // 별 버튼: 진행 중이면 스피너 + 비활성
+  assert.match(src, /const setSheetActive = pending\.some\(\(p\) => p\.type === "set_sheet" && !JOB_DONE\.includes\(p\.status\)\);/);
+  assert.match(src, /\{setSheetActive \? <RefreshIcon className="h-4 w-4 animate-spin" \/> : <SparkleIcon className="h-4 w-4" \/>\}/);
+  assert.match(src, /aria-busy=\{setSheetActive\}/);
+  // 배경 카드: 그 장소의 잡 상태 칩 + 오류 문구
+  assert.match(src, /const locJob = n\.type === "location" \? pending\.find\(\(j\) => j\.type === "set_sheet" && String\(j\.target \|\| ""\) === String\(n\.data\.name \|\| n\.label\)\)/);
+  assert.match(src, /\{locJob && !JOB_DONE\.includes\(locJob\.status\) && <Chip tone="amber">\{locJob\.status === "review_pending" \? "승인 대기" : "시트 생성 중"\}<\/Chip>\}/);
+  assert.match(src, /\{locJob && locJob\.status === "error" && <Chip tone="red">오류<\/Chip>\}/);
+  assert.match(src, /`세트 시트 · \$\{n\.label\}`, undefined, String\(n\.data\?\.name \|\| n\.label\)\)/, '잡에 대상 장소를 기록');
 });
 
 test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 시트 유무 칩을 단다', () => {
