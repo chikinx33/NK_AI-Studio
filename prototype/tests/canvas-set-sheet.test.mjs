@@ -145,7 +145,8 @@ test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 
   assert.match(src, /\{sheet \? "세트 시트 다시 만들기" : "세트 시트 만들기"\}/);
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\[selected\.id\]\)/, '이 장소만 선택된 채 모달');
   assert.match(src, /아직 세트 시트가 없어요\. 배경 바의 별 버튼으로 만들어요\./);
-  assert.match(src, /className="absolute inset-0 z-50 grid place-items-center bg-black\/85 p-6" onClick=\{\(\) => setLightbox\(null\)\}/);
+  assert.match(src, /style=\{\{ maxHeight: "100%", maxWidth: "100%" \}\}/, '화면보다 크면 화면 안에 맞춰 축소, 작으면 원본');
+  assert.match(src, /className="absolute inset-0 z-50 flex items-center justify-center overflow-hidden bg-black\/85 p-6" onClick=\{\(\) => setLightbox\(null\)\}/);
 });
 
 test('★세트 정체성: 같은 세트로 보이는 장소는 카드에 "중복 의심", 상세에서 핵심 이름으로 합치기(location_merge, 자동 승인)', () => {

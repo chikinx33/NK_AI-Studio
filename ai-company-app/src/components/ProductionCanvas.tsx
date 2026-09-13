@@ -1249,8 +1249,8 @@ export default function ProductionCanvas({
 
           {/* 라이트박스 — 배경 상세의 이미지를 화면 가득. 클릭/ESC 로 닫는다. */}
           {lightbox && (
-            <div className="absolute inset-0 z-50 grid place-items-center bg-black/85 p-6" onClick={() => setLightbox(null)} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} role="dialog" aria-label={lightbox.title}>
-              <img src={lightbox.url} alt="" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" draggable={false} />
+            <div className="absolute inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/85 p-6" onClick={() => setLightbox(null)} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} role="dialog" aria-label={lightbox.title}>
+              <img src={lightbox.url} alt="" className="block h-auto w-auto max-h-full max-w-full rounded-lg object-contain shadow-2xl" style={{ maxHeight: "100%", maxWidth: "100%" }} draggable={false} title="화면보다 크면 화면에 맞춰 줄여 보여 줘요. 작으면 원본 크기예요." />
               <div className="absolute left-4 top-4 flex items-center gap-2">
                 <span className="rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</span>
                 {graph?.styleAnchor && lightbox.objectName && graph.styleAnchor.objectName === lightbox.objectName && <span className="rounded-full bg-amber-400 px-2 py-1 text-[11px] font-black text-black">스타일 기준</span>}
