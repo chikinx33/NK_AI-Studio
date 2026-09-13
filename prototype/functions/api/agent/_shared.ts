@@ -1316,7 +1316,7 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   // "우리 캐릭터로 포스터 그려줘"가 매번 남남인 캐릭터로 나온다.
   // ip_library 가 준 ref("ip:<brandId>:<token>")는 여기서 실제 이미지 경로로 해석한다 —
   // 이미지 URL/data URL 을 프롬프트 마커에 실어 보내지 않아도 되게 하는 우회 경로.
-  const rawRefs = (Array.isArray(input?.referenceImages) ? input.referenceImages : []).slice(0, 4);
+  const rawRefs = (Array.isArray(input?.referenceImages) ? input.referenceImages : []).slice(0, 16);
   const referenceImages: any[] = [];
   for (let i = 0; i < rawRefs.length; i++) {
     const raw = rawRefs[i] && typeof rawRefs[i] === "object" ? rawRefs[i] : { ref: rawRefs[i] };
@@ -3968,9 +3968,31 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   let plateVariant = "";
   const brandId = String(payload0.brandId || payload0.brandRef?.id || "").trim();
   const tokenText = String(scene?.composition || scene?.shot || scene?.visual || "");
-  const tokens = Array.from(new Set((tokenText.match(/@[0-9A-Za-z가-힣_]{1,24}/g) || []).map((t: string) => t.trim()))).slice(0, 2);
-  if (brandId) for (const tk of tokens) refs.push({ ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: tk.replace(/^@+/, ""), referenceKind: "character" });
-  if (tokens.length) refNotes.push(`캐릭터 ${brandId ? tokens.length : 0}`);
+  // 화면에 나오는 @캐릭터 전원(상한 6). 예전 2명 제한이 세 번째 캐릭터의 시트를 통째로 빼먹었다.
+  const tokens = Array.from(new Set((tokenText.match(/@[0-9A-Za-z가-힣_]{1,24}/g) || []).map((t: string) => t.trim()))).slice(0, 6);
+  // 등록 설명(인상착의·크기)을 참조 라벨과 프롬프트에 함께 싣는다 — 시트 이미지만으로는 "25cm" 같은 크기를 모델이 알 수 없다.
+  const charLines: string[] = [];
+  const charNames: string[] = [];
+  if (brandId && tokens.length) {
+    let brand: any = null;
+    try { brand = (await runBrandGetTool({ brandId }, ctx))?.brand || null; } catch { brand = null; }
+    for (const tk of tokens) {
+      const bc = brand ? findBrandCharacter(brand, tk) : null;
+      const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
+      const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
+      refs.push({ ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
+      charNames.push(name);
+      charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}`);
+    }
+    refNotes.push(`캐릭터 ${charNames.length} (${charNames.join("·")})`);
+  } else if (tokens.length) {
+    refNotes.push("캐릭터 0 (브랜드 미연결)");
+  }
+  const charBlock = charLines.length
+    ? ["Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
+       "Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate. Do NOT enlarge characters to fill the frame — choose the camera distance instead."].join("\n")
+    : "";
+  const promptSent = charBlock ? `${prompt}\n${charBlock}` : prompt;
   const direction = normalizeCameraDirection(scene?.cameraDirection) || "front";
   const elevation = normalizeCameraElevation(scene?.cameraElevation) || "eye";
   const locations: any[] = Array.isArray(payload0.episodeLocations) ? payload0.episodeLocations : [];
@@ -4004,7 +4026,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
             : `FRONT PLATE of ${setName} — this shot faces ${plateLabel(direction, elevation, "en")}; keep the architectural style, palette and lighting, reconstruct the ${direction} side consistently` });
       if (!plate.exact) refNotes.push(plate.source === "master" ? "부감 마스터만(플레이트 없음)" : "정면 플레이트 폴백");
       const master = masterOf(loc);
-      if (plate.exact && master && plate.objectName !== master && refs.length < 4) {
+      if (plate.exact && master && plate.objectName !== master && refs.length < 12) {
         refs.push({ imageUrl: gsOf(master), referenceId: refs.length + 1, referenceKind: "environment", subjectDescription: `TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); do not copy its top-down camera` });
         refNotes.push("부감 마스터");
       }
@@ -4013,10 +4035,10 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     refNotes.push("세트 미등록(플레이트 없음)");
   }
   const anchor = (payload0.styleAnchor && typeof payload0.styleAnchor === "object" && payload0.styleAnchor.objectName) ? payload0.styleAnchor : null;
-  if (anchor && bucket && refs.length < 4) { refs.push({ imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
+  if (anchor && bucket && refs.length < 12) { refs.push({ imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
   // 작성기 설정(모델·크기)을 그대로 넘긴다 — 스튜디오 버튼과 같은 경로.
   const img = await runImagenTool({
-    prompt, aspectRatio: input?.aspectRatio || "16:9", projectId,
+    prompt: promptSent, aspectRatio: input?.aspectRatio || "16:9", projectId,
     ...(refs.length ? { referenceImages: refs } : {}),
     ...(input?.provider ? { provider: String(input.provider) } : {}),
     ...(input?.imageSize ? { imageSize: String(input.imageSize) } : {}),
@@ -4034,7 +4056,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const prevLineage = (scene?.lineage && typeof scene.lineage === "object") ? scene.lineage : {};
   const lineage = {
     ...prevLineage,
-    imagePrompt: prompt,
+    imagePrompt: promptSent,
     imagePlate: plateVariant,
     imageRefs: refNotes.join(" · "),
     imageAttempts: (Number(prevLineage.imageAttempts) || 0) + 1,
@@ -4050,7 +4072,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     kind: "scene_still", projectId, sceneId: scene?.id,
     signedUrl: img.signedUrl || "", objectName: img.objectName || "",
     referenceCount: refs.length, references: refNotes, plateVariant,
-    saved: true, promptEcho: prompt,
+    saved: true, promptEcho: promptSent,
   };
 }
 

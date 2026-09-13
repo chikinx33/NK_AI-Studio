@@ -27,7 +27,7 @@ test("ip_library 가 '우리 캐릭터/자산' 요청의 목적지로 명시된�
 
 test("등록 시트를 이미지 생성의 신원 가이드로 넘길 수 있다", () => {
   const src = shared();
-  assert.match(src, /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 4\)/);
+  assert.match(src, /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 16\)/, '상한 4는 임의 제한 — 제작 화면과 같은 16(Gemini 는 imagen.ts 가 14로)');
   // 직접 URL 도, ip_library 가 준 ref 도 받아들인다
   assert.match(src, /raw\?\.imageUrl \|\| raw\?\.url \|\| raw\?\.signedUrl \|\| raw\?\.imageDataUrl/);
   assert.match(src, /if \(ref\.startsWith\("ip:"\)\) \{[\s\S]{0,200}await resolveIpRef\(ref, ctx\)/);

@@ -124,14 +124,21 @@ test('★프롬프트: 방위 다음에 높이 한 줄(서버·브라우저 이�
 test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시트 → 방위×높이 플레이트(없으면 마스터에서 자동 파생·캐시) → 부감 마스터 → 스타일 기준, 계보에 기록', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
-  assert.match(fn, /refs\.push\(\{ ref: `ip:\$\{brandId\}:\$\{tk\}`, referenceId: refs\.length \+ 1, subjectDescription: tk\.replace\(\/\^@\+\/, ""\), referenceKind: "character" \}\)/, '캐릭터 시트는 ip: 참조 키로(서버가 해석)');
+  assert.match(fn, /\.slice\(0, 6\);\s*\n/, '화면의 @캐릭터 전원(2명 제한이 세 번째 시트를 빼먹었다)');
+  assert.match(fn, /refs\.push\(\{ ref: `ip:\$\{brandId\}:\$\{tk\}`, referenceId: refs\.length \+ 1, subjectDescription: desc \? `\$\{name\} — \$\{desc\}` : name, referenceKind: "character" \}\)/, '캐릭터 시트는 ip: 참조 키 + 등록 설명 라벨');
+  assert.match(fn, /const bc = brand \? findBrandCharacter\(brand, tk\) : null;/, '등록 설명(인상착의·크기)을 브랜드에서');
+  assert.match(fn, /Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate\. Do NOT enlarge characters to fill the frame/, '크기는 설명대로, 프레임 채우려 키우지 말 것');
+  assert.match(fn, /const promptSent = charBlock \? `\$\{prompt\}\\n\$\{charBlock\}` : prompt;/);
+  assert.match(fn, /prompt: promptSent, aspectRatio/);
+  assert.match(fn, /imagePrompt: promptSent,/);
+  assert.match(read('prototype/functions/api/agent/_shared.ts'), /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 16\);/, '참조 상한 4는 임의 제한 — 제작 화면과 같은 16');
   assert.match(fn, /let plate = findPlate\(loc, direction, elevation\);/);
   assert.match(fn, /if \(\(!plate \|\| !plate\.exact\) && masterOf\(loc\) && input\?\.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID\) \{/, '플레이트 없고 마스터 있으면 파생');
   assert.match(fn, /await runSetAngleTool\(\{ projectId, locationName: String\(loc\.name \|\| locName\), direction, elevation,/, '방위×높이로 파생');
   assert.match(fn, /plate = findPlate\(loc, direction, elevation\);\s*\n\s*if \(plate && plate\.exact\) refNotes\.push\(`플레이트 \$\{plateLabel\(direction, elevation, "ko"\)\}\(새로 파생\)`\);/);
   assert.match(fn, /refNotes\.push\(`플레이트 \$\{plateLabel\(direction, elevation, "ko"\)\}\(\$\{plate\.source === "front-legacy" \? "기존 정면" : "캐시 재사용"\}\)`\);/, '재사용도 계보에 남긴다');
   assert.match(fn, /referenceKind: "environment",\s*\n\s*subjectDescription: plate\.exact\s*\n\s*\? `SET PLATE of \$\{setName\} for THIS camera/);
-  assert.match(fn, /if \(plate\.exact && master && plate\.objectName !== master && refs\.length < 4\) \{/, '플레이트가 있으면 마스터도 배치 참조로');
+  assert.match(fn, /if \(plate\.exact && master && plate\.objectName !== master && refs\.length < 12\) \{/, '플레이트가 있으면 마스터도 배치 참조로');
   assert.match(fn, /referenceKind: "style", subjectDescription: `STYLE ANCHOR/);
   assert.match(fn, /\.\.\.\(refs\.length \? \{ referenceImages: refs \} : \{\}\),/, '참조가 실제로 imagen 에 간다');
   assert.match(fn, /imagePlate: plateVariant,\s*\n\s*imageRefs: refNotes\.join\(" · "\),/, '계보');
