@@ -557,8 +557,8 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
   align-items: center;
   justify-content: center;
   text-align: center;
-  white-space: normal;
-  line-height: 1.25;
+  white-space: nowrap;
+  line-height: 1.3;
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
@@ -920,10 +920,11 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 }
 
 .draft-actions .canvas-btn {
-  width: var(--draft-btn-h);
-  height: var(--draft-btn-h);
-  min-width: var(--draft-btn-h);
-  box-sizing: border-box;
+  width: var(--draft-btn-h) !important;
+  height: var(--draft-btn-h) !important;
+  min-width: var(--draft-btn-h) !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -961,8 +962,12 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 .draft-actions .btn-primary,
 .draft-actions .btn-secondary {
   min-width: 0;
-  height: var(--draft-btn-h);
-  box-sizing: border-box;
+  height: var(--draft-btn-h) !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
   padding: 0 8px;
   justify-content: center;
   white-space: nowrap;
@@ -1176,7 +1181,11 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
   flex-direction: row;
   align-items: center;
   gap: 14px;
-  padding: 8px 14px;
+  padding: 0 14px;
+  height: var(--list-row-h, auto);
+  min-height: 44px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .draft-card-grid.view-list .draft-top {
@@ -1193,8 +1202,8 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 }
 
 .draft-card-grid.view-list .draft-thumb {
-  width: 48px;
-  height: 48px;
+  width: min(48px, calc(var(--list-row-h, 60px) - 12px));
+  height: min(48px, calc(var(--list-row-h, 60px) - 12px));
   border-radius: 8px;
 }
 
@@ -1305,4 +1314,45 @@ body.page-shell-video .draft-card-grid.view-list .draft-card .draft-actions {
     flex: 1 1 0;
     width: auto;
   }
+}
+
+/* 리스트 페이지 바(10줄 초과일 때만): 번호 · 이전 · 다음 */
+.draft-pagination {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.draft-page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background: color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease;
+}
+
+.draft-page-btn:hover:not(:disabled) {
+  color: #F5F7FD;
+  border-color: rgba(255, 140, 0, 0.55);
+}
+
+.draft-page-btn.active {
+  color: #0b0f1c;
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.9), rgba(255, 110, 0, 0.9));
+  border-color: rgba(255, 140, 0, 0.35);
+}
+
+.draft-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }

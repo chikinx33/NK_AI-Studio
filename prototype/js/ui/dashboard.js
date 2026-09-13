@@ -15,7 +15,34 @@
   })();
   function setViewMode(mode) {
     currentViewMode = mode === 'list' ? 'list' : 'card';
+    currentPage = 1;
     try { localStorage.setItem(VIEW_MODE_KEY, currentViewMode); } catch (_) {}
+  }
+  // 리스트 보기는 페이지 방식(한 페이지 10줄, 세로 스크롤 없음). 카드 보기는 세로 스크롤.
+  var LIST_PAGE_SIZE = 10;
+  var currentPage = 1;
+  var listFitBound = false;
+  /**
+   * 리스트 줄 높이를 화면에 맞춘다: 첫 줄 위치부터 화면 아래까지를 10줄(+페이지 바)로 나눠
+   * 컨테이너 CSS 변수(--list-row-h)에 넣는다. 줄이 10개 미만이어도 같은 높이를 써 줄 간격이 일정하다.
+   */
+  function fitListRows(container) {
+    if (!container) return;
+    if (!container.classList.contains('view-list')) { container.style.removeProperty('--list-row-h'); return; }
+    var first = container.querySelector('.draft-card');
+    if (!first) return;
+    // 카드 보기에서 내려가 있던 스크롤이 남아 있으면 측정이 틀어진다 — 조상 스크롤을 먼저 맨 위로.
+    var el = container.parentElement;
+    while (el && el !== document.body) { if (el.scrollTop) el.scrollTop = 0; el = el.parentElement; }
+    try { if (window.scrollY) window.scrollTo(0, 0); } catch (_) {}
+    var pag = container.querySelector('.draft-pagination');
+    var gap = 8;
+    var top = first.getBoundingClientRect().top;
+    var reserve = 24 + (pag ? pag.offsetHeight + gap : 0);
+    var available = window.innerHeight - top - reserve;
+    var rowH = Math.floor((available - gap * (LIST_PAGE_SIZE - 1)) / LIST_PAGE_SIZE);
+    if (!isFinite(rowH) || rowH < 44) rowH = 44;
+    container.style.setProperty('--list-row-h', rowH + 'px');
   }
   var DASHBOARD_LOADING_TEXT = '프로젝트 불러오는 중...';
 
@@ -1000,8 +1027,8 @@
     // 시리즈 관리(프로젝트 수정·시리즈 삭제)는 별도 바가 아니라 신규 버튼 왼쪽에 같은 크기로 둔다(사용자 요청).
     const manageBarHtml = '';
     const manageBtnsHtml = host === 'video' ? `
-            <button type="button" class="btn-secondary series-manage-btn${selectedSeries ? '' : ' disabled'}" data-action="series-edit" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_edit'))}</button>
-            <button type="button" class="btn-secondary series-manage-btn danger${selectedSeries ? '' : ' disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_delete'))}</button>` : '';
+            <button type="button" class="btn-secondary series-manage-btn${selectedSeries ? '' : ' disabled'}" data-action="series-edit" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_edit')).replace('|', '<br>')}</button>
+            <button type="button" class="btn-secondary series-manage-btn danger${selectedSeries ? '' : ' disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_delete')).replace('|', '<br>')}</button>` : '';
 
     const showCreateButton = host === 'brand' || host === 'video';
 
@@ -1136,7 +1163,19 @@
     const showTitleEdit = (host === 'video' || host === 'brand');
     const showDelete = (host === 'video' || host === 'brand');
 
-    const episodeList = filteredDrafts.map(d => {
+    // 리스트 보기: 10줄씩 페이지. 총 페이지를 넘긴 페이지 번호는 마지막 페이지로 맞춘다.
+    const listPaged = currentViewMode === 'list' && !(host === 'brand' && currentSeriesFilter === '__all__');
+    const totalPages = listPaged ? Math.max(1, Math.ceil(filteredDrafts.length / LIST_PAGE_SIZE)) : 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    const pageDrafts = listPaged ? filteredDrafts.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE) : filteredDrafts;
+    const paginationHtml = (listPaged && totalPages > 1) ? `
+      <nav class="draft-pagination" aria-label="${escapeHtml(dt('dashboard_page_label'))}">
+        <button type="button" class="draft-page-btn" data-action="page-go" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>‹ ${escapeHtml(dt('dashboard_page_prev'))}</button>
+        ${Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => `<button type="button" class="draft-page-btn draft-page-num${n === currentPage ? ' active' : ''}" data-action="page-go" data-page="${n}" aria-current="${n === currentPage ? 'page' : 'false'}">${n}</button>`).join('')}
+        <button type="button" class="draft-page-btn" data-action="page-go" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>${escapeHtml(dt('dashboard_page_next'))} ›</button>
+      </nav>` : '';
+    const episodeList = pageDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
       const dur = fmtDuration(d.payload?.duration || 0);
       const cat = d.payload?.purposeCategory || '';
@@ -1198,8 +1237,15 @@
     }).join('');
     const list = host === 'brand' && currentSeriesFilter === '__all__' ? brandPortfolioCards : episodeList;
 
-    container.classList.toggle('view-list', currentViewMode === 'list' && !(host === 'brand' && currentSeriesFilter === '__all__'));
-    container.innerHTML = filterBar + list;
+    container.classList.toggle('view-list', listPaged);
+    container.innerHTML = filterBar + list + (host === 'brand' && currentSeriesFilter === '__all__' ? '' : paginationHtml);
+    // 리스트 줄 높이를 화면에 맞춘다(렌더 직후 + 다음 프레임 + 창 크기 변경).
+    fitListRows(container);
+    try { requestAnimationFrame(function () { fitListRows(container); }); } catch (_) {}
+    if (!listFitBound) {
+      listFitBound = true;
+      window.addEventListener('resize', function () { fitListRows(document.getElementById('dashboard-drafts')); });
+    }
 
     // 죽은(404) 썸네일 self-heal: 로드 실패 시 그 objectName 을 기록하고 빈 썸네일로 교체한다.
     // 다음 렌더부터는 isDeadMedia 필터에 걸려 아예 요청하지 않으므로 콘솔 404 가 사라진다.
@@ -1350,9 +1396,17 @@
         dashboard.renderDrafts();
         return;
       }
+      if (action === 'page-go') {
+        const n = Number(btn.dataset.page) || 1;
+        if (btn.disabled) return;
+        currentPage = n;
+        dashboard.renderDrafts();
+        return;
+      }
 
       if (action === 'series-filter') {
         markBrandViewSettled();
+        currentPage = 1;
         currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
         if (currentSeriesFilter !== '__all__') {
           const primaryDraft = getPrimaryDraftForSeries(currentSeriesFilter, drafts);
