@@ -3998,7 +3998,8 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     refNotes.push("캐릭터 0 (브랜드 미연결)");
   }
   const charBlock = charLines.length
-    ? ["Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
+    ? [`Exactly ${charLines.length} character${charLines.length > 1 ? "s" : ""} appear in this shot: ${tokens.join(", ")}. ALL of them must be clearly visible in the frame — never omit or merge any of them.`,
+       "Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
        "Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate. Do NOT enlarge characters to fill the frame — choose the camera distance instead."].join("\n")
     : "";
   const promptSent = charBlock ? `${prompt}\n${charBlock}` : prompt;

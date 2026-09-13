@@ -181,3 +181,10 @@ test('★scene_still: 등록 시트가 없는 캐릭터는 계보에 "시트 없
   assert.match(dec, /· composition 의 프레이밍과 shotType·cameraElevation 은 한 카메라여야 한다\./);
   assert.match(dec, /· composition's framing and shotType\/cameraElevation must describe ONE camera\./);
 });
+
+test('★scene_still 프롬프트는 캐릭터 수를 명시하고 전원 보이게 한다(시트 3장을 붙여도 한 명이 빠지던 재현) · 미디어 칸 라벨은 검은 바탕', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /`Exactly \$\{charLines\.length\} character\$\{charLines\.length > 1 \? "s" : ""\} appear in this shot: \$\{tokens\.join\(", "\)\}\. ALL of them must be clearly visible in the frame — never omit or merge any of them\.`/);
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.equal((src.match(/rounded-full bg-black\/80"><Chip tone=\{(st|vd)\.running/g) || []).length, 4, '카드·상세 × 스틸·영상 라벨');
+});

@@ -1231,14 +1231,14 @@ export default function ProductionCanvas({
                             ? <img src={withMediaToken(String(n.data.still.url))} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
                             : !st.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "스틸 없음"}</div>}
                           {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
-                          <span className="absolute left-1 top-1"><Chip tone={st.running ? "amber" : st.failed ? "red" : n.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
+                          <span className="absolute left-1 top-1 rounded-full bg-black/80"><Chip tone={st.running ? "amber" : st.failed ? "red" : n.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                         </div>
                         <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
                           {n.data.clip?.url
                             ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
                             : !vd.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{vd.failed ? <span className="px-1 text-center text-red-300">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
                           {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
-                          <span className="absolute left-1 top-1"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
+                          <span className="absolute left-1 top-1 rounded-full bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                         </div>
                         </>); })()}
                       </div>
@@ -1501,14 +1501,14 @@ export default function ProductionCanvas({
                           ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
                           : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
                         {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-sky-200" /></div>}
-                        <span className="absolute left-2 top-2"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
+                        <span className="absolute left-2 top-2 rounded-full bg-black/80"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                       </div>
                       <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-video-box">
                         {selected.data.clip?.url
                           ? <video src={withMediaToken(String(selected.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} controls muted playsInline preload="metadata" />
                           : !vd.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{vd.failed ? <span className="select-text text-red-300">영상 실패: {String(vd.failed.error || "오류").slice(0, 160)}</span> : selected.data.clip?.error ? `영상 실패: ${String(selected.data.clip.error).slice(0, 60)}` : "영상 없음"}</div>}
                         {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-sky-200" /></div>}
-                        <span className="absolute left-2 top-2"><Chip tone={vd.running ? "amber" : (vd.failed || selected.data.clip?.error) ? "red" : selected.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
+                        <span className="absolute left-2 top-2 rounded-full bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || selected.data.clip?.error) ? "red" : selected.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                       </div>
                     </div>
                     ); })()}
