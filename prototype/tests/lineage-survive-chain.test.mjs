@@ -80,7 +80,7 @@ test("★★normalizeLineage 를 실제로 실행해 정규화 모양을 검증�
   assert.equal(out.videoFromImage, "");
   assert.equal(out.imageAttempts, 3);
   assert.deepEqual(out, {
-    imagePrompt: "", videoPrompt: "", videoFromImage: "", imageContinuity: "", imagePlate: "", imageRefs: "",
+    imagePrompt: "", videoPrompt: "", videoFromImage: "", imageContinuity: "", imagePlate: "", imageRefs: "", videoRefs: "",
     imageAttempts: 3, videoAttempts: 0, agentJobId: "", updatedAt: "",
   });
   assert.equal(normalizeLineage({ videoFromImage: "blob:xyz" }).videoFromImage, "");

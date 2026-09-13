@@ -1436,6 +1436,11 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
       ...(typeof input?.narrationEnabled === "boolean" ? { narrationEnabled: input.narrationEnabled } : {}),
       ...(typeof input?.dubbingEnabled === "boolean" ? { dubbingEnabled: input.dubbingEnabled } : {}),
       ...(input?.resolution ? { resolution: String(input.resolution) } : {}),
+      // 참조→영상 모델(seedance-2.5·seedance-r2v·grok-r2v·vidu-q3)의 참조 묶음: 플레이트·캐릭터 시트·마스터·직전 컷.
+      ...(Array.isArray(input?.referenceImages) && input.referenceImages.length ? { referenceImages: input.referenceImages.map((v: any) => String(v || "")).filter(Boolean) } : {}),
+      ...(Array.isArray(input?.referenceVideos) && input.referenceVideos.length ? { referenceVideos: input.referenceVideos.map((v: any) => String(v || "")).filter(Boolean) } : {}),
+      ...(typeof input?.generateAudio === "boolean" ? { generateAudio: input.generateAudio } : {}),
+      ...(input?.endImageDataUrl ? { endImageDataUrl: String(input.endImageDataUrl) } : {}),
     }),
   });
   const subText = await sub.text();
@@ -3945,6 +3950,61 @@ function findSceneIndex(scenes: any[], ref: any): number {
 
 /** 씬 스틸컷: image 생성 → 해당 scene.imageDataUrl 에 부착 후 project_save. 쓰기 → 승인 게이트.
  *  이미지는 gs:// 영속 경로로 부착(save가 data: URL은 버리고 gs/https만 보존). */
+/** 컷의 @캐릭터 → 브랜드 등록 시트(최대 2장, 대표 먼저) + 등록 설명(인상착의·크기). 스틸(scene_still)·영상(scene_video)이 같은 묶음을 쓴다.
+ *  시트가 없는 캐릭터는 note 에 "시트 없음"으로 남기고 프롬프트에 설명만 넘긴다(조용히 빠지면 왜 안 나왔는지 알 수 없다). */
+async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext): Promise<{ refs: any[]; block: string; note: string; tokens: string[]; names: string[]; missing: string[] }> {
+  const refs: any[] = [];
+  const brandId = String(payload0.brandId || payload0.brandRef?.id || "").trim();
+  const tokenText = String(scene?.composition || scene?.shot || scene?.visual || "");
+  // 화면에 나오는 @캐릭터 전원(상한 6). 예전 2명 제한이 세 번째 캐릭터의 시트를 통째로 빼먹었다.
+  const tokens = Array.from(new Set((tokenText.match(/@[0-9A-Za-z가-힣_]{1,24}/g) || []).map((t: string) => t.trim()))).slice(0, 6);
+  // 등록 설명(인상착의·크기)을 참조 라벨과 프롬프트에 함께 싣는다 — 시트 이미지만으로는 "25cm" 같은 크기를 모델이 알 수 없다.
+  const charLines: string[] = [];
+  const charNames: string[] = [];
+  const charMissing: string[] = [];
+  let note = "";
+  if (brandId && tokens.length) {
+    let brand: any = null;
+    try { brand = (await runBrandGetTool({ brandId }, ctx))?.brand || null; } catch { brand = null; }
+    for (const tk of tokens) {
+      const bc = brand ? findBrandCharacter(brand, tk) : null;
+      const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
+      const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
+      // 등록 시트(이미지)가 있는지 여기서 확인 — 없으면 runImagenTool 이 조용히 빼 버려 "왜 이 캐릭터가 안 나왔나"를 알 수 없었다.
+      const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
+      const sheetEntry = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).find((e: any) => norm(e?.token) === norm(tk) || norm(e?.displayName) === norm(tk) || norm(e?.displayName) === norm(name));
+      const hasSheet = !!(Array.isArray(sheetEntry?.items) && sheetEntry.items.some((it: any) => String(it?.imageDataUrl || "").trim()));
+      if (hasSheet) {
+        // 시트를 최대 2장(대표 먼저) 직접 첨부한다 — 한 장(ip: 키)만 붙이면 세 캐릭터 중 하나가 시트와 다르게 나오는 일이 있었다.
+        const items: any[] = sheetEntry.items.filter((it: any) => String(it?.imageDataUrl || "").trim());
+        const picked = [...items.filter((it: any) => it?.isPrimary), ...items.filter((it: any) => !it?.isPrimary)].slice(0, 2);
+        picked.forEach((it: any, k: number) => refs.push({ role: "character", imageUrl: String(it.imageDataUrl).trim(), subjectDescription: `${desc ? `${name} — ${desc}` : name}${picked.length > 1 ? ` (reference sheet ${k + 1} of ${picked.length})` : ""}`, referenceKind: "character" }));
+        charNames.push(`${name}×${picked.length}`);
+      } else {
+        charMissing.push(name);
+      }
+      charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}${hasSheet ? "" : " — NO reference sheet registered; draw from this description"}`);
+    }
+    note = `캐릭터 ${charNames.length}${charNames.length ? ` (${charNames.join("·")})` : ""}${charMissing.length ? ` · 시트 없음: ${charMissing.join("·")}` : ""}`;
+  } else if (tokens.length) {
+    note = "캐릭터 0 (브랜드 미연결)";
+  }
+  const block = charLines.length
+    ? [`Exactly ${charLines.length} character${charLines.length > 1 ? "s" : ""} appear in this shot: ${tokens.join(", ")}. ALL of them must be clearly visible in the frame — never omit or merge any of them.`,
+       "Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
+       "Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate. Do NOT enlarge characters to fill the frame — choose the camera distance instead."].join("\n")
+    : "";
+  return { refs, block, note, tokens, names: charNames, missing: charMissing };
+}
+
+/** 세트 플레이트 게이트: 세트가 등록돼 있는데 부감 마스터도 정면 플레이트도 없으면 컷을 만들지 않는다(힉스필드의 "자산 잠금" 게이트와 같은 뜻).
+ *  플레이트 없이 만든 컷은 컷마다 다른 방을 상상하므로 일관성 검증 자체가 무의미하다. input.force === true 면 통과. */
+function assertSetPlateReady(loc: any, input: any): void {
+  if (!loc || input?.force === true) return;
+  if (masterOf(loc) || String(loc.refObjectName || "").trim()) return;
+  throw new Error(`세트 "${String(loc.name || "")}"에 배경 플레이트가 없어요. 배경 바의 별 버튼으로 부감 마스터를 먼저 만드세요.`);
+}
+
 async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
   if (!projectId) throw new Error("projectId is required");
@@ -3966,51 +4026,17 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const refs: any[] = [];
   const refNotes: string[] = [];
   let plateVariant = "";
-  const brandId = String(payload0.brandId || payload0.brandRef?.id || "").trim();
-  const tokenText = String(scene?.composition || scene?.shot || scene?.visual || "");
-  // 화면에 나오는 @캐릭터 전원(상한 6). 예전 2명 제한이 세 번째 캐릭터의 시트를 통째로 빼먹었다.
-  const tokens = Array.from(new Set((tokenText.match(/@[0-9A-Za-z가-힣_]{1,24}/g) || []).map((t: string) => t.trim()))).slice(0, 6);
-  // 등록 설명(인상착의·크기)을 참조 라벨과 프롬프트에 함께 싣는다 — 시트 이미지만으로는 "25cm" 같은 크기를 모델이 알 수 없다.
-  const charLines: string[] = [];
-  const charNames: string[] = [];
-  const charMissing: string[] = [];
-  if (brandId && tokens.length) {
-    let brand: any = null;
-    try { brand = (await runBrandGetTool({ brandId }, ctx))?.brand || null; } catch { brand = null; }
-    for (const tk of tokens) {
-      const bc = brand ? findBrandCharacter(brand, tk) : null;
-      const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
-      const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
-      // 등록 시트(이미지)가 있는지 여기서 확인 — 없으면 runImagenTool 이 조용히 빼 버려 "왜 이 캐릭터가 안 나왔나"를 알 수 없었다.
-      const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
-      const sheetEntry = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).find((e: any) => norm(e?.token) === norm(tk) || norm(e?.displayName) === norm(tk) || norm(e?.displayName) === norm(name));
-      const hasSheet = !!(Array.isArray(sheetEntry?.items) && sheetEntry.items.some((it: any) => String(it?.imageDataUrl || "").trim()));
-      if (hasSheet) {
-        // 시트를 최대 2장(대표 먼저) 직접 첨부한다 — 한 장(ip: 키)만 붙이면 세 캐릭터 중 하나가 시트와 다르게 나오는 일이 있었다.
-        const items: any[] = sheetEntry.items.filter((it: any) => String(it?.imageDataUrl || "").trim());
-        const picked = [...items.filter((it: any) => it?.isPrimary), ...items.filter((it: any) => !it?.isPrimary)].slice(0, 2);
-        picked.forEach((it: any, k: number) => refs.push({ role: "character", imageUrl: String(it.imageDataUrl).trim(), referenceId: refs.length + 1, subjectDescription: `${desc ? `${name} — ${desc}` : name}${picked.length > 1 ? ` (reference sheet ${k + 1} of ${picked.length})` : ""}`, referenceKind: "character" }));
-        charNames.push(`${name}×${picked.length}`);
-      } else {
-        charMissing.push(name);
-      }
-      charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}${hasSheet ? "" : " — NO reference sheet registered; draw from this description"}`);
-    }
-    refNotes.push(`캐릭터 ${charNames.length}${charNames.length ? ` (${charNames.join("·")})` : ""}${charMissing.length ? ` · 시트 없음: ${charMissing.join("·")}` : ""}`);
-  } else if (tokens.length) {
-    refNotes.push("캐릭터 0 (브랜드 미연결)");
-  }
-  const charBlock = charLines.length
-    ? [`Exactly ${charLines.length} character${charLines.length > 1 ? "s" : ""} appear in this shot: ${tokens.join(", ")}. ALL of them must be clearly visible in the frame — never omit or merge any of them.`,
-       "Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
-       "Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate. Do NOT enlarge characters to fill the frame — choose the camera distance instead."].join("\n")
-    : "";
+  const chars = await collectCharacterRefs(scene, payload0, ctx);
+  for (const r of chars.refs) refs.push({ ...r, referenceId: refs.length + 1 });
+  if (chars.note) refNotes.push(chars.note);
+  const charBlock = chars.block;
   const promptSent = charBlock ? `${prompt}\n${charBlock}` : prompt;
   const direction = normalizeCameraDirection(scene?.cameraDirection) || "front";
   const elevation = normalizeCameraElevation(scene?.cameraElevation) || "eye";
   const locations: any[] = Array.isArray(payload0.episodeLocations) ? payload0.episodeLocations : [];
   const locName = String(scene?.sceneLocation || scene?.location || "").trim() || (locations.length === 1 ? String(locations[0]?.name || "") : "");
   let loc: any = locName ? (locations.find((l: any) => normLocationKey(l?.name) === normLocationKey(locName) || normLocationKey(l?.id) === normLocationKey(locName)) || null) : null;
+  assertSetPlateReady(loc, input);
   if (loc && bucket) {
     let plate = findPlate(loc, direction, elevation);
     const wantId = plateVariantId(direction, elevation);
@@ -4162,11 +4188,67 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   // 스튜디오 버튼과 같은 파라미터를 넘긴다: 모델(파이프라인 옵션) · 길이(컷의 estSec) · 음성 플래그(payload).
   const payload0: any = cur.payload || {};
   const toBoolFlag = (v: any, fb: boolean) => (typeof v === "boolean" ? v : (v == null ? fb : String(v).toLowerCase() === "true"));
+  const videoModel = String(input?.videoModel || input?.model || payload0.videoModel || "").trim();
+  // ★참조→영상 모델이면 스틸 한 장만 보내지 않는다. 시장조사(2026-09-14) 결론: 일관성은 매 호출에 같은 참조 묶음을 붙이는 데서 나온다.
+  //   묶음 = [첫 프레임(스틸)] → 세트 플레이트(방위×높이) → 캐릭터 시트(최대 2장씩) → 부감 마스터 → 직전 컷(연속성).
+  //   Seedance 2.5 는 직전 컷의 클립을 reference_videos 로, 나머지는 직전 컷 스틸을 이미지로 잇는다. 프롬프트에 순서 매니페스트를 붙인다.
+  const REFS_VIDEO_MODELS = ["seedance-2.5", "seedance-r2v", "grok-r2v", "vidu-q3", "wan"];
+  const REF_CAPS: Record<string, number> = { "seedance-2.5": 30, "seedance-r2v": 9, "grok-r2v": 7, "vidu-q3": 4, "wan": 4 };
+  let referenceImages: string[] = [];
+  let referenceVideos: string[] = [];
+  const videoRefNotes: string[] = [];
+  let promptForVideo = prompt;
+  if (REFS_VIDEO_MODELS.includes(videoModel)) {
+    const bucket = studioBucket(ctx);
+    const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
+    const entries: Array<{ url: string; line: string }> = [];
+    const startInRefs = videoModel === "seedance-2.5" || videoModel === "seedance-r2v";
+    if (startInRefs && videoFromImage) entries.push({ url: videoFromImage, line: "the exact FIRST FRAME of this shot — keep its composition, character placement and framing at t=0" });
+    const direction = normalizeCameraDirection(scene?.cameraDirection) || "front";
+    const elevation = normalizeCameraElevation(scene?.cameraElevation) || "eye";
+    const locations: any[] = Array.isArray(payload0.episodeLocations) ? payload0.episodeLocations : [];
+    const locName = String(scene?.sceneLocation || scene?.location || "").trim() || (locations.length === 1 ? String(locations[0]?.name || "") : "");
+    const loc: any = locName ? (locations.find((l: any) => normLocationKey(l?.name) === normLocationKey(locName) || normLocationKey(l?.id) === normLocationKey(locName)) || null) : null;
+    assertSetPlateReady(loc, input);
+    if (loc && bucket) {
+      const plate = findPlate(loc, direction, elevation);
+      const setName = String(loc.name || locName);
+      if (plate) {
+        entries.push({ url: gsOf(plate.objectName), line: plate.exact
+          ? `the empty SET PLATE of ${setName} for this camera (${plateLabel(direction, elevation, "en")}) — keep its layout, architecture, materials, colors and lighting as the environment of the whole shot`
+          : `the TOP-DOWN MASTER PLATE of ${setName} — layout truth; keep every object on the same wall and position` });
+        videoRefNotes.push(plate.exact ? `플레이트 ${plateLabel(direction, elevation, "ko")}` : "부감 마스터(플레이트 없음)");
+        const master = masterOf(loc);
+        if (plate.exact && master && plate.objectName !== master) { entries.push({ url: gsOf(master), line: `the TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); never copy its top-down camera` }); videoRefNotes.push("부감 마스터"); }
+      }
+    }
+    const chars = await collectCharacterRefs(scene, payload0, ctx);
+    for (const r of chars.refs) entries.push({ url: String(r.imageUrl), line: `the registered character reference for ${String(r.subjectDescription)} — keep that character's design, face, silhouette, colors and proportions; do not copy its pose, crop or background` });
+    if (chars.note) videoRefNotes.push(chars.note);
+    // 연속성: 같은 세트의 직전 컷. 2.5 는 클립 자체를, 나머지는 그 컷의 스틸을 룩 참조로.
+    const thisLocKey = normLocationKey(locName);
+    let prev: any = null;
+    for (let k = idx - 1; k >= 0; k--) { const c = scenes[k]; if (c && normLocationKey(String(c?.sceneLocation || c?.location || "")) === thisLocKey) { prev = c; break; } }
+    const prevClip = String(prev?.videoUrl || prev?.videoPath || "").trim();
+    const prevStill = String(prev?.imageDataUrl || prev?.imagePath || "").trim();
+    if (videoModel === "seedance-2.5" && prevClip && /^(https?:\/\/|gs:\/\/)/i.test(prevClip)) { referenceVideos = [prevClip]; videoRefNotes.push(`직전 컷 ${String(prev?.id ?? "")} 클립(연속성)`); }
+    else if (prevStill && /^(https?:\/\/|gs:\/\/)/i.test(prevStill)) { entries.push({ url: prevStill, line: `the previous shot of this scene (continuity) — reuse its look, lighting and character designs only; do NOT copy its camera, framing or action` }); videoRefNotes.push(`직전 컷 ${String(prev?.id ?? "")} 스틸(연속성)`); }
+    const cap = REF_CAPS[videoModel] || 9;
+    const kept = entries.slice(0, cap);
+    referenceImages = kept.map((e) => e.url);
+    const manifest = kept.length ? ["The input images are provided in this exact order:", ...kept.map((e, i) => `Image ${i + 1}: ${e.line}.`)] : [];
+    if (referenceVideos.length) manifest.push(`Video 1: the previous shot of this scene — continue its look, lighting and character designs; do NOT copy its camera or action.`);
+    const paletteLock = kept.length ? "PALETTE LOCK: use only the colors, materials and background treatment of the reference images. Do not introduce new colors, do not restyle the characters or the set." : "";
+    promptForVideo = [prompt, chars.block, ...manifest, paletteLock].filter(Boolean).join("\n");
+    if (entries.length > cap) videoRefNotes.push(`참조 ${entries.length - cap}장 상한 초과로 생략`);
+  }
   const vid = await runVideoTool({
-    prompt,
+    prompt: promptForVideo,
     imageUrl: videoFromImage || undefined,
     aspectRatio: input?.aspectRatio || payload0.aspectRatio || "16:9",
-    videoModel: String(input?.videoModel || input?.model || payload0.videoModel || "").trim() || undefined,
+    videoModel: videoModel || undefined,
+    ...(referenceImages.length ? { referenceImages } : {}),
+    ...(referenceVideos.length ? { referenceVideos } : {}),
     resolution: String(input?.resolution || "").trim() || undefined,
     durationSeconds: Number(input?.durationSeconds || input?.duration || scene?.estSec) > 0
       ? Number(input?.durationSeconds || input?.duration || scene?.estSec)
@@ -4182,15 +4264,16 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   const prevLineage = (scene?.lineage && typeof scene.lineage === "object") ? scene.lineage : {};
   const lineage = {
     ...prevLineage,
-    videoPrompt: prompt,
+    videoPrompt: promptForVideo,
     videoFromImage,
+    videoRefs: videoRefNotes.join(" · "),
     videoAttempts: (Number(prevLineage.videoAttempts) || 0) + 1,
     agentJobId: String(ctx.jobId || ""),
     updatedAt: new Date().toISOString(),
   };
   scenes[idx] = { ...scene, videoUrl: ref, lineage };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
-  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", videoFromImage, saved: true, promptEcho: prompt };
+  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", videoFromImage, referenceCount: referenceImages.length + referenceVideos.length, references: videoRefNotes, saved: true, promptEcho: promptForVideo };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

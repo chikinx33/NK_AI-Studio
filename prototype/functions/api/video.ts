@@ -17,7 +17,7 @@ import {
   stripDataUrlPrefix,
   type KlingQuality,
 } from "./_shared/kling";
-import {
+import { SEEDANCE_25_RESOLUTIONS,
   IMAGE_SPEC,
   MAX_IMAGE_DATA_URL_CHARS,
   SEEDANCE_RESOLUTIONS,
@@ -71,6 +71,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 클램프만 하던 시절엔 UI 에 없는 값이 그대로 나가 공급자가 400 으로 거부할 수 있었다.
     const seedanceDuration = snapDurationFor("seedance", durationSeconds);
     const seedanceResolution = normalizeSeedanceResolution((body as any)?.resolution);
+    if (videoModel === "seedance-2.5" && !(SEEDANCE_25_RESOLUTIONS as readonly string[]).includes(String((body as any)?.resolution || "720p"))) {
+      return json({ error: "invalid_seedance_25_resolution", resolution: String((body as any)?.resolution || ""), allowedResolutions: SEEDANCE_25_RESOLUTIONS }, 400);
+    }
     if ((videoModel === "seedance" || videoModel === "seedance-r2v") && !seedanceResolution) {
       return json({
         error: "invalid_seedance_resolution",
@@ -89,7 +92,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       : [];
 
     const isKlingModel = String(videoModel || "").startsWith("kling");
-    const isI2vOnlyModel = isKlingModel || videoModel === "seedance" || videoModel === "seedance-r2v" || videoModel === "vidu-q3";
+    const isI2vOnlyModel = isKlingModel || videoModel === "seedance" || videoModel === "seedance-r2v" || videoModel === "seedance-2.5" || videoModel === "vidu-q3";
+    // 참조 영상(직전 컷 클립 등): Seedance 2.5 omni-reference 의 reference_videos. gs:// 는 서명해서 보낸다.
+    const referenceVideos: string[] = Array.isArray((body as any)?.referenceVideos)
+      ? (body as any).referenceVideos.map((v: any) => String(v || "")).filter(Boolean).slice(0, 10)
+      : [];
     if (!safePromptText) {
       return json({ error: "promptText is required" }, 400);
     }
@@ -186,7 +193,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     };
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
-    const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "vidu-q3"];
+    const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "seedance-2.5", "vidu-q3"];
     if (!supportedModels.includes(videoModel) && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
@@ -353,6 +360,49 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       const atlasJson = safeJson(atlasText);
       const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
       return json({ job_id: predictionId ? `seedance-r2v:${predictionId}` : "", status: "processing" }, 202);
+    }
+
+    // Seedance 2.5 branch (bytedance/seedance-2.5/reference-to-video via Atlas Cloud) — omni-reference.
+    // 시작 스틸은 reference_images[0] 으로 들어가고 프롬프트가 "Image 1 = first frame" 이라고 말한다(전용 first-frame 필드 없음).
+    // reference_videos 는 직전 컷 클립(연속성) 등. 4~30초, 480p/720p/1080p, 네이티브 오디오.
+    if (videoModel === "seedance-2.5") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const s25Duration = snapDurationFor("seedance-2.5", durationSeconds);
+      const s25Resolution = String((body as any)?.resolution || "720p");
+      const refResolved: string[] = [];
+      const startResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
+      if (startResolved) refResolved.push(startResolved);
+      for (let i = 0; i < referenceImages.length && refResolved.length < 30; i++) {
+        const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+        if (r && !refResolved.includes(r)) refResolved.push(r);
+      }
+      const vidsResolved: string[] = [];
+      for (const v of referenceVideos) { const u = await signIfGs(v).catch(() => ""); if (u) vidsResolved.push(u); }
+      const atlasBody: any = {
+        model: "bytedance/seedance-2.5/reference-to-video",
+        prompt: safePromptText,
+        duration: s25Duration,
+        resolution: s25Resolution,
+        ratio: aspectFinal,
+        generate_audio: (body as any)?.generateAudio !== false,
+        output_format: "mp4",
+        watermark: false,
+      };
+      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
+      if (vidsResolved.length > 0) atlasBody.reference_videos = vidsResolved;
+      if (audioDataUrl) atlasBody.reference_audios = [audioDataUrl];
+      if ((body as any)?.omniTaskType) atlasBody.omni_reference_task_type = String((body as any).omniTaskType);
+      log('seedance25_request', { duration: s25Duration, resolution: s25Resolution, ratio: aspectFinal, refs: refResolved.length, videos: vidsResolved.length, hasStart: !!startResolved });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "seedance_25_error", status: atlasRes.status, detail: safeJson(atlasText), sent: { duration: s25Duration, resolution: s25Resolution, ratio: aspectFinal, refs: refResolved.length, videos: vidsResolved.length } }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      return json({ job_id: predictionId ? `seedance-2.5:${predictionId}` : "", status: "processing" }, 202);
     }
 
     // Vidu Q3 branch (vidu/q3-mix/reference-to-video via Atlas Cloud)

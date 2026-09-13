@@ -124,9 +124,11 @@ test('★프롬프트: 방위 다음에 높이 한 줄(서버·브라우저 이�
 test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시트 → 방위×높이 플레이트(없으면 마스터에서 자동 파생·캐시) → 부감 마스터 → 스타일 기준, 계보에 기록', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
-  assert.match(fn, /\.slice\(0, 6\);\s*\n/, '화면의 @캐릭터 전원(2명 제한이 세 번째 시트를 빼먹었다)');
-  assert.match(fn, /const picked = \[\.\.\.items\.filter\(\(it: any\) => it\?\.isPrimary\), \.\.\.items\.filter\(\(it: any\) => !it\?\.isPrimary\)\]\.slice\(0, 2\);/, '캐릭터마다 시트 최대 2장(대표 먼저)');
-  assert.match(fn, /refs\.push\(\{ role: "character", imageUrl: String\(it\.imageDataUrl\)\.trim\(\), referenceId: refs\.length \+ 1, subjectDescription: `\$\{desc \? `\$\{name\} — \$\{desc\}` : name\}/, '시트 이미지를 직접 첨부 + 등록 설명 라벨');
+  const ic = shared.indexOf('async function collectCharacterRefs('); const cfn = shared.slice(ic, shared.indexOf('\n}\n', ic));
+  assert.match(cfn, /\.slice\(0, 6\);\s*\n/, '화면의 @캐릭터 전원(2명 제한이 세 번째 시트를 빼먹었다)');
+  assert.match(fn, /const chars = await collectCharacterRefs\(scene, payload0, ctx\);/, '스틸·영상이 같은 캐릭터 묶음을 쓴다');
+  assert.match(cfn, /const picked = \[\.\.\.items\.filter\(\(it: any\) => it\?\.isPrimary\), \.\.\.items\.filter\(\(it: any\) => !it\?\.isPrimary\)\]\.slice\(0, 2\);/, '캐릭터마다 시트 최대 2장(대표 먼저)');
+  assert.match(cfn, /refs\.push\(\{ role: "character", imageUrl: String\(it\.imageDataUrl\)\.trim\(\), subjectDescription: `\$\{desc \? `\$\{name\} — \$\{desc\}` : name\}/, '시트 이미지를 직접 첨부 + 등록 설명 라벨');
   const imagen = read('prototype/functions/api/imagen.ts');
   assert.match(imagen, /if \(inputFidelity\) fd\.append\("input_fidelity", inputFidelity\);/, 'OpenAI edits 입력 충실도 high');
   assert.match(imagen, /let useFidelity: "high" \| null = allRefs\.length \? "high" : null;/);
@@ -137,8 +139,8 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시
   assert.match(fn, /\.\.\.\(orderedRefs\.length \? \{ referenceImages: orderedRefs \} : \{\}\),/);
   const im = shared.indexOf('async function runSetMasterTool('); const mfn2 = shared.slice(im, shared.indexOf('\n}\n', im));
   assert.match(mfn2, /if \(!\(payload\.styleAnchor && payload\.styleAnchor\.objectName && payload\.styleAnchor\.pickedBy === "user"\)\) nextPayload\.styleAnchor = \{ objectName: img\.objectName/, '새 마스터가 스타일 기준(사용자 지정만 예외)');
-  assert.match(fn, /const bc = brand \? findBrandCharacter\(brand, tk\) : null;/, '등록 설명(인상착의·크기)을 브랜드에서');
-  assert.match(fn, /Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate\. Do NOT enlarge characters to fill the frame/, '크기는 설명대로, 프레임 채우려 키우지 말 것');
+  assert.match(cfn, /const bc = brand \? findBrandCharacter\(brand, tk\) : null;/, '등록 설명(인상착의·크기)을 브랜드에서');
+  assert.match(cfn, /Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate\. Do NOT enlarge characters to fill the frame/, '크기는 설명대로, 프레임 채우려 키우지 말 것');
   assert.match(fn, /const promptSent = charBlock \? `\$\{prompt\}\\n\$\{charBlock\}` : prompt;/);
   assert.match(fn, /prompt: promptSent, aspectRatio/);
   assert.match(fn, /imagePrompt: promptSent,/);
@@ -178,7 +180,7 @@ test('★새 부감 마스터를 만들면 옛 마스터에서 파생된 앵글 
 
 test('★scene_still: 등록 시트가 없는 캐릭터는 계보에 "시트 없음"으로 남기고 프롬프트에 설명으로만 그린다 · 분해 규칙: composition 프레이밍 ↔ shotType/높이 한 카메라', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  const ic = shared.indexOf('async function collectCharacterRefs('); const fn = shared.slice(ic, shared.indexOf('\n}\n', ic));
   assert.match(fn, /const hasSheet = !!\(Array\.isArray\(sheetEntry\?\.items\) && sheetEntry\.items\.some\(\(it: any\) => String\(it\?\.imageDataUrl \|\| ""\)\.trim\(\)\)\);/);
   assert.match(fn, /\$\{charMissing\.length \? ` · 시트 없음: \$\{charMissing\.join\("·"\)\}` : ""\}/);
   assert.match(fn, / — NO reference sheet registered; draw from this description/);

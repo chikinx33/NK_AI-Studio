@@ -201,6 +201,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         // 이 스틸이 실제로 받은 참조(플레이트 변형 id · 사람이 읽는 요약) — 캔버스 계보 표시용.
         imagePlate: str(value.imagePlate),
         imageRefs: str(value.imageRefs),
+        // 이 영상이 실제로 받은 참조 요약(플레이트·캐릭터 시트·마스터·직전 컷) — 캔버스 계보 표시용.
+        videoRefs: str(value.videoRefs),
         imageAttempts: count(value.imageAttempts),
         videoAttempts: count(value.videoAttempts),
         agentJobId: str(value.agentJobId),

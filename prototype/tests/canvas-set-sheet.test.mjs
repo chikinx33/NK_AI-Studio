@@ -367,7 +367,7 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   assert.equal((src.match(/<div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-[57] w-[57] animate-spin text-sky-200" \/><\/div>/g) || []).length, 4, '카드·상세 × 스틸·영상 스피너');
   assert.match(src, /data-testid="detail-still-box"/);
   assert.match(src, /<span className="select-text text-red-300">스틸 실패: \{String\(st\.failed\.error \|\| "오류"\)\.slice\(0, 160\)\}<\/span>/, '상세 칸 오류');
-  assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running\}/, '진행 중 버튼 비활성');
+  assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \|\| !!cutPlateMissing\(selected\.id\)\}/, '진행 중 버튼 비활성');
   assert.match(src, /\{cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \? <><RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/>생성 중<\/> : <>스틸 생성/);
   // 컷 스틸 클릭 = 크게 보기(상세·카드 둘 다)
   assert.match(src, /cursor-zoom-in object-cover \$\{st\.running \? "opacity-40" : ""\}`\} title="클릭하면 크게 볼 수 있어요" onClick=\{\(\) => setLightbox\(\{ url: withMediaToken\(String\(selected\.data\.still\.url\)\)/, '상세 스틸 클릭 = 크게');

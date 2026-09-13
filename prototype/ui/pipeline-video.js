@@ -6,7 +6,7 @@
     'veo': 'Veo 3.1 Fast', 'veo-full': 'Veo 3.1 Full',
     'grok': 'Grok Imagine', 'grok-r2v': 'Grok R2V',
     'kling-final': 'Kling Final (v2.6 Pro)',
-    'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference',
+    'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference', 'seedance-2.5': 'Seedance 2.5 Reference',
     'wan': 'Wan 2.7',
     'vidu-q3': 'Vidu Q3-Mix'
   };
@@ -17,7 +17,7 @@
     'veo': 8, 'veo-full': 8,
     'grok': 6, 'grok-r2v': 6,
     'kling-final': 10,
-    'seedance': 15, 'seedance-r2v': 15,
+    'seedance': 15, 'seedance-r2v': 15, 'seedance-2.5': 30,
     'wan': 5,
     'vidu-q3': 8
   };
@@ -473,7 +473,7 @@
     }
 
     try {
-      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
+      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v' || opts.videoModel === 'seedance-2.5';
       // 안정성: AI 자동 처리는 6초 캡, 사용자가 prompt 편집 시에만 모델 max 까지 허용.
       var userOverride = !!scene.promptEdited;
       var cap = getEffectiveDurationCap(opts.videoModel, userOverride);
@@ -495,7 +495,7 @@
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
       // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
       // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
-      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -740,7 +740,7 @@
     } catch (e) { console.warn('shot image aspect normalize skipped:', e && e.message); }
 
     try {
-      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
+      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v' || opts.videoModel === 'seedance-2.5';
       // 컷은 항상 6 초 캡 (decomposer 의 MAX_SHOT_DURATION 와 일치). 모델 max 도 함께 적용.
       var shotCap = Math.min(DEFAULT_DURATION_CAP, getModelMaxDuration(opts.videoModel));
       var shotDur = Math.max(1, Math.min(shotCap, Math.round(Number(shot.duration) || 4)));
@@ -752,7 +752,7 @@
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
       // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
       // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
-      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {

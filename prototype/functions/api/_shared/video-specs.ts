@@ -21,6 +21,8 @@ export const DURATIONS_VEO = [4, 6, 8] as const;
 export const DURATIONS_KLING = [5, 10] as const;
 /** Seedance 2.0 / Wan: 4~15초 정수 전체 (atlascloud.ai 모델 페이지 확인). */
 export const DURATIONS_SEEDANCE = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
+/** Seedance 2.5 (bytedance/seedance-2.5/reference-to-video): 4~30초 정수 (atlascloud.ai 모델 페이지 확인 2026-09-14). */
+export const DURATIONS_SEEDANCE_25 = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30] as const;
 /** Vidu Q3. */
 export const DURATIONS_VIDU = [4, 5, 6, 8, 10] as const;
 
@@ -36,6 +38,7 @@ export const MODEL_DURATIONS: Record<string, readonly number[]> = {
   "kling-final": DURATIONS_KLING,
   "seedance": DURATIONS_SEEDANCE,
   "seedance-r2v": DURATIONS_SEEDANCE,
+  "seedance-2.5": DURATIONS_SEEDANCE_25,
   "wan": DURATIONS_SEEDANCE,
   "vidu-q3": DURATIONS_VIDU,
 };
@@ -45,6 +48,7 @@ export const MODEL_DURATIONS: Record<string, readonly number[]> = {
 // 실제로 쓰는 값만 노출한다. 프론트는 이 표를 미러링하고 테스트가 부분집합임을 검사한다.
 
 export const CHOICES_SEEDANCE = [4, 5, 6, 8, 10, 15] as const;
+export const CHOICES_SEEDANCE_25 = [4, 5, 6, 8, 10, 15, 20, 30] as const;
 
 export const MODEL_DURATION_CHOICES: Record<string, readonly number[]> = {
   "veo": DURATIONS_VEO,
@@ -57,6 +61,7 @@ export const MODEL_DURATION_CHOICES: Record<string, readonly number[]> = {
   "kling-final": DURATIONS_KLING,
   "seedance": CHOICES_SEEDANCE,
   "seedance-r2v": CHOICES_SEEDANCE,
+  "seedance-2.5": CHOICES_SEEDANCE_25,
   "wan": CHOICES_SEEDANCE,
   "vidu-q3": DURATIONS_VIDU,
 };
@@ -127,3 +132,8 @@ export const MAX_IMAGE_DATA_URL_CHARS = 6_000_000;
 
 /** 미러링(원본→GCS 복제)을 포기하는 크기. 초과 시 원본 URL 을 그대로 재생에 쓴다. */
 export const MAX_MIRROR_BYTES = 80 * 1024 * 1024;
+
+/** Seedance 2.5 참조→영상이 받는 출력 해상도(플레인 값만; SR/ESR 변형은 UI 에 내지 않는다). */
+export const SEEDANCE_25_RESOLUTIONS = ["480p", "720p", "1080p"] as const;
+/** 참조→영상 모델의 참조 이미지 상한(공급자 스키마). 프롬프트 매니페스트와 캔버스 게이트가 같은 수를 쓴다. */
+export const REFERENCE_IMAGE_CAPS: Record<string, number> = { "seedance-2.5": 30, "seedance-r2v": 9, "grok-r2v": 7, "vidu-q3": 4, "wan": 4 };

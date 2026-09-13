@@ -14,6 +14,7 @@
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
     { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'], maxRefs: 9 },
+    { id: 'seedance-2.5', label: 'Seedance 2.5 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'], maxRefs: 30 },
     // wan-2.7/image-to-video 는 image·last_image 만 받는다. refs 는 별도 엔드포인트(reference-to-video)라
     // 시작 이미지와 함께 쓸 수 없다 → 여기서 refs 를 빼야 죽은 옵션이 UI 에 뜨지 않는다.
     { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'audio'] },
@@ -56,6 +57,7 @@
   var DURATIONS_VEO      = [4, 6, 8];
   var DURATIONS_KLING    = [5, 10];
   var CHOICES_SEEDANCE   = [4, 5, 6, 8, 10, 15];  // 서버 허용은 4~15 전체, 드롭다운은 이 값만
+  var CHOICES_SEEDANCE_25 = [4, 5, 6, 8, 10, 15, 20, 30];  // Seedance 2.5: 서버 허용 4~30
   var DURATIONS_VIDU     = [4, 5, 6, 8, 10];
 
   var MODEL_DURATION_CHOICES = {
@@ -69,6 +71,7 @@
     'kling-final':  DURATIONS_KLING,
     'seedance':     CHOICES_SEEDANCE,
     'seedance-r2v': CHOICES_SEEDANCE,
+    'seedance-2.5': CHOICES_SEEDANCE_25,
     'wan':          CHOICES_SEEDANCE,
     'vidu-q3':      DURATIONS_VIDU
   };
@@ -84,6 +87,7 @@
       'seedance':     'ByteDance 모델. 자연스러운 움직임, 최대 15초 영상 지원.',
       'wan':          '시작+끝 프레임과 오디오 입력을 지원합니다. 레퍼런스 이미지는 이 모드에서 지원하지 않습니다.',
       'seedance-r2v': '최대 9장 레퍼런스와 오디오·영상 입력으로 일관성, 편집, 연장을 다룹니다.',
+      'seedance-2.5': '최대 30장 참조 이미지·10개 참조 영상, 4~30초 한 테이크, 네이티브 오디오. 스틸·세트 플레이트·캐릭터 시트·직전 컷이 자동으로 참조로 붙습니다.',
       'vidu-q3':      '1~4장 레퍼런스로 인물 일관성을 유지하고 영상과 음향을 함께 생성합니다.'
     },
     en: {
@@ -96,6 +100,7 @@
       'seedance':     'ByteDance model. Smooth motion, up to 15-second video.',
       'wan':          'Supports start/end frames and audio. Reference images are not supported in this mode.',
       'seedance-r2v': 'Use up to 9 references plus audio or video for consistency, editing, and extension.',
+      'seedance-2.5': 'Up to 30 reference images and 10 reference videos, 4–30 s one-take, native audio. The still, set plate, character sheets and previous cut are attached automatically.',
       'vidu-q3':      'Uses 1–4 reference images for subject consistency and generates video with audio.'
     }
   };
@@ -113,6 +118,7 @@
       'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas Cloud · $0.06/회' },
       'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시한 뒤 480p~4K 해상도를 고르세요. SR은 업스케일 출력입니다.', billing: 'Atlas Cloud · 720p 기준 출력 $0.112/초 · 다른 해상도는 공급자 견적 확인' },
       'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 1080p 약 48,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가, SR/4K 배율 적용)' },
+      'seedance-2.5': { best: '컷 간 일관성 · 4~30초 롱테이크 · 네이티브 오디오', how: '스틸을 첫 프레임으로, 세트 플레이트·캐릭터 시트·직전 컷을 참조로 자동 첨부합니다. 프롬프트에는 행동과 카메라만 적으세요.', billing: 'Atlas Cloud · $0.134/초' },
       'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
       'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' }
     },
@@ -125,6 +131,7 @@
       'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas Cloud · $0.06/run' },
       'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image, prompt only changes not already present, and choose an output from 480p to 4K. SR options are upscaled outputs.', billing: 'Atlas Cloud · $0.112/sec at 720p · check provider quote for other resolutions' },
       'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas Cloud · ~48,600 output tokens/sec at 1080p · $11.20/1M image-only · $6.88/1M with video (input video tokens and SR/4K multipliers added)' },
+      'seedance-2.5': { best: 'Shot-to-shot consistency · 4–30 s one-take · native audio', how: 'The still is the first frame; set plate, character sheets and the previous cut are attached as references automatically. Prompt only action and camera.', billing: 'Atlas Cloud · $0.134/sec' },
       'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
       'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' }
     }
@@ -137,7 +144,7 @@
   var MAX_POLL_ATTEMPTS = 120; // ~8 min (veo/grok 기본)
   // 느린 모델은 8분 안에 끝나지 않아 성공한 생성을 timeout 으로 버리는 일이 있었다.
   var MAX_POLL_ATTEMPTS_SLOW = 300; // ~20 min
-  var SLOW_MODELS = ['seedance', 'seedance-r2v', 'wan', 'vidu-q3'];
+  var SLOW_MODELS = ['seedance', 'seedance-r2v', 'seedance-2.5', 'wan', 'vidu-q3'];
 
   function maxPollAttemptsFor(model) {
     return SLOW_MODELS.indexOf(String(model || '')) !== -1
@@ -555,7 +562,7 @@
   }
 
   function isSeedanceModel(modelId) {
-    return modelId === 'seedance' || modelId === 'seedance-r2v';
+    return modelId === 'seedance' || modelId === 'seedance-r2v' || modelId === 'seedance-2.5';
   }
 
   function normalizeSeedanceResolution(value) {
@@ -605,6 +612,7 @@
     if (id === 'vidu-q3') return '$0.106' + suffix;
     if (id === 'veo') return money(duration * 0.08) + suffix;
     if (id === 'veo-full') return money(duration * 0.20) + suffix;
+    if (id === 'seedance-2.5') return money(duration * 0.134) + suffix;
     if (id === 'seedance') {
       if (state.resolution === '720p') return money(duration * 0.112) + suffix;
       return (state.lang === 'en' ? 'Provider quote · ' : '공급자 견적 · ') + resolutionLabel(state.resolution);

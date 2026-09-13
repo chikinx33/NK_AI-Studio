@@ -82,8 +82,9 @@ const handleGet: PagesFunction = async ({ request, env }) => {
 
     const isGrok = jobId.startsWith('grok:') || jobId.startsWith('grok-extend:');
     const isAtlasGrok = jobId.startsWith('grok-atlas:') || jobId.startsWith('grok-extend-atlas:');
-    const isSeedance = jobId.startsWith('seedance:') && !jobId.startsWith('seedance-r2v:');
+    const isSeedance = jobId.startsWith('seedance:') && !jobId.startsWith('seedance-r2v:') && !jobId.startsWith('seedance-2.5:');
     const isSeedanceR2v = jobId.startsWith('seedance-r2v:');
+    const isSeedance25 = jobId.startsWith('seedance-2.5:');
     const isVeo = jobId.startsWith('veo:') && !jobId.startsWith('veo-full:');
     const isVeoFull = jobId.startsWith('veo-full:');
     const isWan = jobId.startsWith('wan:');
@@ -369,7 +370,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     }
 
     // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3, member Grok
-    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isViduQ3 || isAtlasGrok;
+    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isSeedance25 || isViduQ3 || isAtlasGrok;
     if (isAtlasGeneric) {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) {
@@ -379,6 +380,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         'veo-full:': 'veo-full:',
         'wan:': 'wan:',
         'seedance-r2v:': 'seedance-r2v:',
+        'seedance-2.5:': 'seedance-2.5:',
         'vidu-q3:': 'vidu-q3:',
         'grok-extend-atlas:': 'grok-extend-atlas:',
         'grok-atlas:': 'grok-atlas:',

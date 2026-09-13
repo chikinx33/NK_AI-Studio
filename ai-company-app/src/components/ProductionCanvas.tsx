@@ -623,6 +623,13 @@ export default function ProductionCanvas({
   };
   const dismissJob = (jobId: string) => setPending((prev) => prev.filter((p) => p.jobId !== jobId));
   // 컷의 스틸/영상 잡 상태 — 카드·상세의 미디어 칸과 버튼이 이걸로 스피너/오류를 그린다(생성 중인데 아무 표시가 없던 문제).
+  // 세트 플레이트 게이트(캔버스 쪽): 컷의 세트에 부감 마스터도 정면 플레이트도 없으면 생성 버튼을 막고 이유를 보여 준다. 서버도 같은 게이트를 건다.
+  const cutPlateMissing = (cutId: string): string => {
+    const e = (graph?.edges || []).find((x) => x.type === "location" && x.to === cutId);
+    const ln = e ? nodeById.get(e.from) : null;
+    if (!ln) return "";
+    return (ln.data?.topPlateUrl || ln.data?.plateUrl) ? "" : `세트 "${String(ln.data?.name || ln.label)}"에 배경 플레이트가 없어요. 배경 바의 별 버튼으로 부감 마스터를 먼저 만드세요.`;
+  };
   const cutJobState = (sceneId: unknown, type: "scene_still" | "scene_video"): { running: PendingJob | null; failed: PendingJob | null } => {
     const mine = pending.filter((j) => j.type === type && String(j.sceneId) === String(sceneId));
     const running = mine.find((j) => !JOB_DONE.includes(j.status)) || null;
@@ -1512,6 +1519,7 @@ export default function ProductionCanvas({
                       </div>
                     </div>
                     ); })()}
+                    {cutPlateMissing(selected.id) ? <p className="mt-2 rounded-md border border-amber-700/50 bg-amber-900/15 px-2 py-1 text-[11px] text-amber-200">{cutPlateMissing(selected.id)}</p> : null}
                     {Array.isArray(selected.data.still?.history) && selected.data.still.history.length > 0 && (
                       <div className="mt-3">
                         <p className="mb-1 text-[10px] font-bold text-gray-500">스틸 이력 ({selected.data.still.history.length})</p>
@@ -1536,6 +1544,7 @@ export default function ProductionCanvas({
                         <div className="mt-1 space-y-1 text-[10px] text-gray-400">
                           {selected.data.lineage.videoFromImage ? <p>영상 원본 스틸: <span className="break-all text-gray-500">{String(selected.data.lineage.videoFromImage)}</span></p> : null}
                           {selected.data.lineage.imageRefs ? <p>참조: <span className="text-gray-300">{String(selected.data.lineage.imageRefs)}</span>{selected.data.lineage.imagePlate ? <span className="text-gray-500"> · 플레이트 키 {String(selected.data.lineage.imagePlate)}</span> : null}</p> : null}
+                          {selected.data.lineage.videoRefs ? <p>영상 참조: <span className="text-gray-300">{String(selected.data.lineage.videoRefs)}</span></p> : null}
                           {selected.data.lineage.imagePrompt ? <p>마지막 스틸 프롬프트: <span className="text-gray-500">{String(selected.data.lineage.imagePrompt).slice(0, 200)}…</span></p> : null}
                           {selected.data.lineage.agentJobId ? <p>에이전트 잡: {String(selected.data.lineage.agentJobId)}</p> : null}
                           {selected.data.lineage.updatedAt ? <p>갱신: {String(selected.data.lineage.updatedAt)}</p> : null}
@@ -1570,8 +1579,8 @@ export default function ProductionCanvas({
                     </div>
                     <div className="mt-auto flex flex-wrap gap-2 border-t border-edge pt-3">
                       <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
-                      <button type="button" disabled={saving || !!cutJobState(selected.data.sceneId, "scene_still").running} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>{cutJobState(selected.data.sceneId, "scene_still").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</>}</button>
-                      <button type="button" disabled={saving || !selected.data.still?.url || !!cutJobState(selected.data.sceneId, "scene_video").running} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">{cutJobState(selected.data.sceneId, "scene_video").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</>}</button>
+                      <button type="button" disabled={saving || !!cutJobState(selected.data.sceneId, "scene_still").running || !!cutPlateMissing(selected.id)} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={cutPlateMissing(selected.id) || `${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>{cutJobState(selected.data.sceneId, "scene_still").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</>}</button>
+                      <button type="button" disabled={saving || !selected.data.still?.url || !!cutJobState(selected.data.sceneId, "scene_video").running || !!cutPlateMissing(selected.id)} title={cutPlateMissing(selected.id) || (selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요")} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">{cutJobState(selected.data.sceneId, "scene_video").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</>}</button>
                     </div>
                     {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
                   </div>

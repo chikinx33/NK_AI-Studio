@@ -257,7 +257,7 @@ test('프론트는 objectName 이 없는 결과도 원본 URL 로 재생한다',
 test('느린 모델은 폴링 한도를 20분으로 늘린다', () => {
   const source = vgen();
   assert.match(source, /MAX_POLL_ATTEMPTS_SLOW = 300/);
-  assert.match(source, /SLOW_MODELS = \['seedance', 'seedance-r2v', 'wan', 'vidu-q3'\]/);
+  assert.match(source, /SLOW_MODELS = \['seedance', 'seedance-r2v', 'seedance-2\.5', 'wan', 'vidu-q3'\]/);
   assert.match(source, /var maxAttempts = maxPollAttemptsFor\(\(meta && meta\.model\) \|\| ''\)/);
 });
 

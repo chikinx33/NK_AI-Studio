@@ -39,6 +39,9 @@ export const VIDEO_MODELS: Array<{ id: string; label: string; i2vOnly: boolean; 
   { id: "grok", label: "Grok Imagine", i2vOnly: false },
   { id: "kling-final", label: "Kling Final (v2.6 Pro)", i2vOnly: true },
   { id: "seedance", label: "Seedance 2.0", i2vOnly: true, resolutions: ["480p", "720p", "1080p"] },
+  // 참조→영상: 스틸 + 세트 플레이트 + 캐릭터 시트 + 부감 마스터 + 직전 컷을 매 컷 참조로 붙인다(서버 scene_video).
+  { id: "seedance-r2v", label: "Seedance 2.0 Reference (참조)", i2vOnly: true, resolutions: ["480p", "720p", "1080p"] },
+  { id: "seedance-2.5", label: "Seedance 2.5 Reference (참조·30초·오디오)", i2vOnly: true, resolutions: ["480p", "720p", "1080p"] },
   { id: "wan", label: "Wan 2.7", i2vOnly: false },
   { id: "vidu-q3", label: "Vidu Q3-Mix", i2vOnly: true },
 ];
@@ -50,6 +53,8 @@ export const VIDEO_DURATION_CHOICES: Record<string, readonly number[]> = {
   "grok": [4, 6, 8],
   "kling-final": [5, 10],
   "seedance": [4, 5, 6, 8, 10, 15],
+  "seedance-r2v": [4, 5, 6, 8, 10, 15],
+  "seedance-2.5": [4, 5, 6, 8, 10, 15, 20, 30],
   "wan": [4, 5, 6, 8, 10, 15],
   "vidu-q3": [4, 5, 6, 8, 10],
 };
