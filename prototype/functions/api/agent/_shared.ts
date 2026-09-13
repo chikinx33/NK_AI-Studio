@@ -4658,6 +4658,12 @@ async function runSetMasterTool(input: any, ctx: ToolContext): Promise<any> {
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
   const img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: style.refs, generationMode: "text-to-image", ...(["1K", "2K", "4K"].includes(resolution) ? { imageSize: resolution } : {}), ...providerOpt }, ctx);
   if (!img?.objectName) throw new Error("마스터 플레이트 결과에 저장 경로(objectName)가 없어요.");
+  // ★새 마스터 = 새 진실. 옛 마스터(또는 옛 정면 플레이트)에서 파생·준비된 앵글 플레이트(dir-*, angle-*)와 정면 플레이트는 전부 무효.
+  //   남겨 두면 scene_still 이 캐시된 옛 정면 플레이트를 "재사용"해 새 마스터가 무시된다(2026-09-14 재현). 세부 배경(v-*)은 유지.
+  const staleIds = (Array.isArray(loc.variants) ? loc.variants : []).filter((v: any) => v && /^(dir-|angle-)/.test(String(v.id || ""))).map((v: any) => String(v.id));
+  loc.variants = (Array.isArray(loc.variants) ? loc.variants : []).filter((v: any) => v && !/^(dir-|angle-)/.test(String(v.id || "")));
+  const hadFrontPlate = !!String(loc.refObjectName || "").trim();
+  loc.refObjectName = "";
   setVariant(loc, "angle-top", img.objectName, "부감(마스터)", { source: "master", createdAt: new Date().toISOString() });
   loc.masterAngle = "top";
   if (layout && !loc.layout) loc.layout = layout;
@@ -4667,7 +4673,7 @@ async function runSetMasterTool(input: any, ctx: ToolContext): Promise<any> {
   // 새 부감 마스터가 곧 프로젝트 스타일 기준이다. 사용자가 직접 고른 기준만 지킨다 — 옛 2×2 시트가 자동 기준으로 남으면 새 생성이 그 방을 베낀다.
   if (!(payload.styleAnchor && payload.styleAnchor.objectName && payload.styleAnchor.pickedBy === "user")) nextPayload.styleAnchor = { objectName: img.objectName, sheetId: "", setName: String(loc.name || name), createdAt: new Date().toISOString(), pickedBy: "auto-master" };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: nextPayload } });
-  return { kind: "set_master", projectId, locationName: String(loc.name || name), objectName: img.objectName, signedUrl: img.signedUrl || "", styleSource: style.source, hubContextUsed: !!hub, model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", layoutUsed: !!layout, saved: true, promptEcho: prompt, summary: `부감 마스터 플레이트 생성: ${String(loc.name || name)}${layout ? " (평면도 적용)" : " (평면도 없음 — 세트 계획을 다시 하면 생겨요)"}` };
+  return { kind: "set_master", projectId, locationName: String(loc.name || name), objectName: img.objectName, signedUrl: img.signedUrl || "", styleSource: style.source, hubContextUsed: !!hub, model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", layoutUsed: !!layout, invalidatedPlates: staleIds, clearedFrontPlate: hadFrontPlate, saved: true, promptEcho: prompt, summary: `부감 마스터 플레이트 생성: ${String(loc.name || name)}${layout ? " (평면도 적용)" : " (평면도 없음 — 세트 계획을 다시 하면 생겨요)"}${staleIds.length || hadFrontPlate ? ` · 옛 앵글 플레이트 ${staleIds.length + (hadFrontPlate ? 1 : 0)}장 무효화(다음 컷 생성 때 새 마스터에서 다시 파생)` : ""}` };
 }
 
 /** 세트 앵글 플레이트 파생: 마스터(부감) 이미지를 소스로 같은 세트를 다른 앵글로 다시 그린다(카메라 재구성, 편집 모드).

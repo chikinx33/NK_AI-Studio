@@ -162,3 +162,11 @@ test('★제작 화면(거울): 플레이트 선택이 방위×높이 키를 쓰
   assert.match(s, /var wantId = baseId \+ elevSuffix;/);
   assert.match(s, /this reference is an eye-level view; this shot is a ' \+ elev \+ ' angle\. Keep the same walls, props and positions — only the camera height changes\./);
 });
+
+test('★새 부감 마스터를 만들면 옛 마스터에서 파생된 앵글 플레이트(dir-*, angle-*)와 정면 플레이트를 무효화한다 — 캐시가 옛 방을 재사용하던 재현 사고', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const i = shared.indexOf('async function runSetMasterTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /loc\.variants = \(Array\.isArray\(loc\.variants\) \? loc\.variants : \[\]\)\.filter\(\(v: any\) => v && !\/\^\(dir-\|angle-\)\/\.test\(String\(v\.id \|\| ""\)\)\);/, 'dir-*·angle-* 제거(세부 배경 v-* 는 유지)');
+  assert.match(fn, /loc\.refObjectName = "";\s*\n\s*setVariant\(loc, "angle-top", img\.objectName, "부감\(마스터\)"/, '정면 플레이트도 비우고 나서 마스터 저장');
+  assert.match(fn, /invalidatedPlates: staleIds, clearedFrontPlate: hadFrontPlate,/, '무효화 내역을 결과에 남긴다');
+});
