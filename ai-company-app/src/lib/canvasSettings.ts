@@ -17,7 +17,7 @@ export type GenerationKind = "image" | "video";
 export interface CanvasSettings {
   confirmBeforeGenerate: boolean;
   kind: GenerationKind;
-  image: { aspect: ImageAspect; size: ImageSize; count: 1 | 2 | 3 | 4; provider: ImageProvider };
+  image: { aspect: ImageAspect; size: ImageSize; count: 1 | 2 | 3 | 4; provider: ImageProvider; providerExplicit?: boolean };
   video: { aspect: VideoAspect; model: string; durationSec: number; resolution: string; count: 1 | 2 | 3 | 4 };
 }
 
@@ -86,6 +86,9 @@ export function loadCanvasSettings(): CanvasSettings {
       video: { ...DEFAULT_CANVAS_SETTINGS.video, ...(parsed.video || {}) },
     };
     merged.video.durationSec = snapDuration(merged.video.model, merged.video.durationSec);
+    // 마이그레이션: 예전 기본값(gemini)이 저장돼 있어도 사용자가 직접 고른 적이 없으면 "스튜디오 설정 따름"으로.
+    // (제작 화면은 GPT Image 2 인데 캔버스만 gemini 로 그리던 원인 — 저장된 옛 기본값이 새 기본값을 덮었다.)
+    if (!merged.image.providerExplicit && merged.image.provider !== "studio") merged.image.provider = "studio";
     return merged;
   } catch {
     return DEFAULT_CANVAS_SETTINGS;

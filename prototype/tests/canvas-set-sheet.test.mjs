@@ -45,7 +45,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
   assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K", usePlate = false\) => \{/);
   assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\), usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
-  assert.match(src, /<div className="text-\[13px\] font-bold text-white">세트 시트 생성<\/div>/);
+  assert.match(src, /<div className="text-\[15px\] font-bold text-white">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
   assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
   assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
@@ -81,7 +81,7 @@ test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 
   assert.match(src, /setSheetModal\(\{ step: "progress", selected: new Set\(locationNodes\.filter\(\(n\) => names\.has\(String\(n\.data\?\.name \|\| n\.label\)\)\)/);
   assert.match(src, /별 버튼을 다시 누르면 이 진행 화면이 열려요/);
   assert.match(src, /다시 만들기/);
-  assert.match(src, /className="w-\[560px\] max-w-\[94%\] select-text overflow-hidden/, '캔버스의 select-none 을 모달에서 해제');
+  assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden/, '캔버스의 select-none 을 모달에서 해제');
   assert.match(src, /<pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-\[11px\] leading-snug text-red-200">\{text\}<\/pre>/);
   assert.match(src, /void navigator\.clipboard\.writeText\(text\); setNotice\("오류 문구를 복사했어요\."\);/);
   assert.match(src, /flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
@@ -296,5 +296,18 @@ test('★"스튜디오 설정 따름"은 제작 화면의 이미지생성 모델
   assert.match(read('prototype/js/config.js'), /IMAGE_PROVIDER: 'nk_ai_image_provider',/, '스튜디오와 같은 키');
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 3, 'set_sheet + scene_still 두 곳 = 3곳');
-  assert.match(src, /모델: <span className="text-gray-300">/);
+  assert.match(src, /모델: <span className="text-gray-200">/);
+});
+
+test('★저장된 옛 공급자(gemini)는 사용자가 직접 고른 적 없으면 "스튜디오 설정 따름"으로 옮긴다 · 세트 시트 모달은 넓고(820px) 하단이 한 줄', () => {
+  const cs = read('ai-company-app/src/lib/canvasSettings.ts');
+  assert.match(cs, /providerExplicit\?: boolean/);
+  assert.match(cs, /if \(!merged\.image\.providerExplicit && merged\.image\.provider !== "studio"\) merged\.image\.provider = "studio";/);
+  for (const f of ['ai-company-app/src/components/AgentSettingsPanel.tsx', 'ai-company-app/src/components/GenerationSettingsPopover.tsx']) {
+    assert.match(read(f), /providerExplicit: true/, f + ': 직접 고르면 명시 표식');
+  }
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden rounded-3xl/);
+  assert.match(src, /return nm && nm\.length <= 24 \? nm : "지정 이미지";/, '문장 같은 앵커 이름은 표시하지 않는다');
+  assert.match(src, /\(캔버스 설정\)"/);
 });

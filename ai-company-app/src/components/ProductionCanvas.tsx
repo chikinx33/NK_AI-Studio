@@ -1303,34 +1303,44 @@ export default function ProductionCanvas({
           {/* 세트 시트 생성 모달 — 대상 장소·해상도를 고르고 "생성"이 곧 확인. 진행은 같은 모달에서 장소별로 본다. */}
           {sheetModal && (
             <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setSheetModal(null)}>
-              <div className="w-[560px] max-w-[94%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-                  <SparkleIcon className="h-4 w-4 text-violet-300" />
+              <div className="w-[820px] max-w-[92%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start gap-3 border-b border-edge px-5 py-4">
+                  <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-white">세트 시트 생성</div>
-                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. {graph?.styleAnchor ? `그림체 기준: "${graph.styleAnchor.setName || "지정 이미지"}"(스타일 기준)를 모든 시트가 참조해요.` : "그림체 기준이 아직 없어요. 브랜드 캐릭터 시트(없으면 기존 스틸·플레이트)를 그림체 참조로 붙여 만들고, 첫 시트가 기준이 돼요. 기존 이미지를 기준으로 쓰려면 크게 보기에서 '이 이미지를 스타일 기준으로'를 누르세요."}</div>
+                    <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요.</div>
+                    <div className="mt-1.5 flex items-center gap-2 text-[12px] text-gray-400">
+                      {graph?.styleAnchor ? (
+                        <>
+                          {graph.styleAnchor.url ? <img src={withMediaToken(graph.styleAnchor.url)} alt="" className="h-9 w-16 shrink-0 rounded-md border border-amber-400/60 object-cover" /> : null}
+                          <span>그림체 기준: <span className="text-amber-200">{(() => { const nm = String(graph.styleAnchor.setName || ""); return nm && nm.length <= 24 ? nm : "지정 이미지"; })()}</span> — 모든 시트가 이 이미지의 룩을 참조해요.</span>
+                        </>
+                      ) : (
+                        <span>그림체 기준이 아직 없어요. 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙이고, 첫 시트가 기준이 돼요.</span>
+                      )}
+                    </div>
                     {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
                   <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
                 </div>
-                <div className="max-h-[52vh] overflow-y-auto px-4 py-3">
-                  <ul className="space-y-1.5">
+                <div className="max-h-[56vh] overflow-y-auto px-5 py-4">
+                  <ul className="space-y-2">
                     {locationNodes.map((n) => {
                       const name = String(n.data?.name || n.label);
                       const job = pending.find((j) => j.type === "set_sheet" && String(j.target || "") === name) || null;
                       const checked = sheetModal.selected.has(n.id);
                       const thumb = n.data?.setSheet?.url || n.data?.plateUrl || "";
                       return (
-                        <li key={n.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
+                        <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
                           {sheetModal.step === "pick" ? (
                             <input type="checkbox" checked={checked} onChange={(e) => setSheetModal((m) => { if (!m) return m; const next = new Set(m.selected); e.target.checked ? next.add(n.id) : next.delete(n.id); return { ...m, selected: next }; })} className="h-4 w-4 accent-violet-500" />
                           ) : (
                             checked ? (job && !JOB_DONE.includes(job.status) ? <RefreshIcon className="h-4 w-4 animate-spin text-sky-300" /> : <span className={`h-2.5 w-2.5 rounded-full ${job?.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />) : <span className="h-4 w-4" />
                           )}
-                          {thumb ? <img src={withMediaToken(String(thumb))} alt="" className="h-10 w-[71px] shrink-0 rounded-md object-cover" /> : <div className="grid h-10 w-[71px] shrink-0 place-items-center rounded-md bg-[#151b25] text-[10px] text-gray-600">없음</div>}
+                          {thumb ? <img src={withMediaToken(String(thumb))} alt="" className="h-16 w-[114px] shrink-0 rounded-lg object-cover" /> : <div className="grid h-16 w-[114px] shrink-0 place-items-center rounded-lg bg-[#151b25] text-[11px] text-gray-600">없음</div>}
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12px] font-bold text-gray-100">{name}</div>
-                            <div className="truncate text-[10px] text-gray-500">{n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음"}</div>
+                            <div className="truncate text-[13px] font-bold text-gray-100">{name}</div>
+                            <div className="truncate text-[11px] text-gray-500">{n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음"}</div>
                           </div>
                           {sheetModal.step === "progress" && checked && job && (
                             <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : job.status === "approved" ? "text-emerald-300" : "text-sky-300"}`} title={job.error || ""}>{job.status === "approved" ? "완료" : job.status === "error" ? "오류" : "생성 중"}</span>
@@ -1352,22 +1362,23 @@ export default function ProductionCanvas({
                     );
                   })()}
                 </div>
-                <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge px-5 py-3.5">
                   {sheetModal.step === "pick" ? (
                     <>
-                      <label className="flex items-center gap-1.5 text-[11px] text-gray-400">해상도
+                      <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[12px] text-gray-400">해상도
                         <select value={sheetModal.resolution} onChange={(e) => setSheetModal((m) => (m ? { ...m, resolution: e.target.value === "4K" ? "4K" : "2K" } : m))} className="rounded border border-edge bg-[#151b25] px-2 py-1 text-[11px] text-gray-100">
                           <option value="2K">2K</option>
                           <option value="4K">4K</option>
                         </select>
                       </label>
-                      <label className="flex items-center gap-1.5 text-[11px] text-gray-400" title="옛 정면 플레이트가 다른 그림체면 시트 전체가 그쪽으로 끌려가요. 기본은 끔.">
-                        <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-3.5 w-3.5 accent-violet-500" />정면 플레이트 참조
+                      <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[12px] text-gray-400" title="옛 정면 플레이트가 다른 그림체면 시트 전체가 그쪽으로 끌려가요. 기본은 끔.">
+                        <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-4 w-4 accent-violet-500" />정면 플레이트 참조
                       </label>
-                      <span className="text-[11px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용 · 모델: <span className="text-gray-300">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : ""}</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
-                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
-                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[96px] rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
+                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
+                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
                     </>
                   ) : (
                     <>
