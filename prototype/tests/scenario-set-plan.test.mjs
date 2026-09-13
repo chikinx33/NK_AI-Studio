@@ -41,7 +41,7 @@ test('★응답: meta.sets·setPlanSource·setsEnforced + 최상위 sets(episode
   const src = read('prototype/functions/api/scenario.js');
   assert.match(src, /setPlanSource: setPlan\.source,/);
   assert.match(src, /setsEnforced: rawScenes\.filter\(\(sc\) => sc && sc\._setEnforced\)\.length,/);
-  assert.match(src, /const setsForPayload = setPlan\.sets\.map\(\(st\) => \(\{\s*\n\s*id: st\.id, name: st\.name, description: st\.description, refObjectName: "", variants: \[\],/);
+  assert.match(src, /const setsForPayload = setPlan\.sets\.map\(\(st\) => \(\{\s*\n\s*id: st\.id, name: st\.name, description: st\.description, layout: st\.layout \|\| null, refObjectName: "", variants: \[\],/);
   assert.match(src, /let generatedSets = \[\];/);
   assert.match(src, /generatedSets = Array\.isArray\(generated\.sets\) \? generated\.sets : \[\];/);
   assert.match(src, /JSON\.stringify\(\{ scenes, meta: generationMeta, sets: generatedSets \}\)/);

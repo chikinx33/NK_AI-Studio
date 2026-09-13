@@ -77,11 +77,17 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
   const locationAssets = (name: string) => {
     const key = normLoc(name);
     const hit = episodeLocations.find((l) => normLoc(l?.name) === key || normLoc(l?.id) === key) || null;
-    if (!hit) return { description: "", plateUrl: "", plateRef: "", variants: [], setSheet: null };
+    if (!hit) return { description: "", layout: null, masterAngle: "", topPlateUrl: "", topPlateRef: "", plateDiag: null, plateUrl: "", plateRef: "", variants: [], setSheet: null };
     const sheetMeta = hit.setSheet && typeof hit.setSheet === "object" ? hit.setSheet : null;
     const sheet = sheetMeta ? sheetsById.get(String(sheetMeta.sheetId || "")) || null : null;
+    const topVariant = (Array.isArray(hit.variants) ? hit.variants : []).find((v: any) => v && v.id === "angle-top" && v.refObjectName);
     return {
       description: String(hit.description || ""),
+      layout: (hit.layout && typeof hit.layout === "object") ? hit.layout : (typeof hit.layout === "string" ? hit.layout : null),
+      masterAngle: String(hit.masterAngle || ""),
+      topPlateUrl: topVariant ? toDisplayUrl(topVariant.refObjectName) : "",
+      topPlateRef: topVariant ? String(topVariant.refObjectName) : "",
+      plateDiag: (hit.plateDiag && typeof hit.plateDiag === "object") ? hit.plateDiag : null,
       plateUrl: toDisplayUrl(hit.refObjectName || ""),
       plateRef: String(hit.refObjectName || ""),
       variants: (Array.isArray(hit.variants) ? hit.variants : []).filter((v: any) => v && v.refObjectName).map((v: any) => ({ id: String(v.id || ""), label: String(v.label || ""), url: toDisplayUrl(v.refObjectName), objectName: String(v.refObjectName || "") })),

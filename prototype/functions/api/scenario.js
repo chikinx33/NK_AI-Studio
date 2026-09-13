@@ -20,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1714";
+const SERVER_VERSION = "3.1715";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -1712,7 +1712,8 @@ async function planEpisodeSets(input, beats) {
       "- Use the MINIMUM number of sets that the story needs. One set is common for a 30-second piece.",
       "- name: a short place noun (2-6 words). description: a 1-2 sentence empty-set description (architecture, furniture, materials, lighting) with NO characters.",
       "- Assign every beat to exactly one set id.",
-      "Output JSON only: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\"}],\"beatSets\":[{\"beatId\":\"<beat id>\",\"setId\":\"set-1\"}]}",
+      "- layout: the set's floor plan from the entrance camera: back (opposite wall), left, right, front (entrance-side wall), floor (center) — one short phrase each. Every angle must obey this map.",
+      "Output JSON only: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\",\"layout\":{\"back\":\"...\",\"left\":\"...\",\"right\":\"...\",\"front\":\"...\",\"floor\":\"...\"}}],\"beatSets\":[{\"beatId\":\"<beat id>\",\"setId\":\"set-1\"}]}",
     ].join("\n")
     : [
       "너는 프로덕션 디자이너다. 씬을 쓰기 전에 이 에피소드의 세트, 즉 실제로 구분되는 물리적 공간 목록을 먼저 확정한다.",
@@ -1722,7 +1723,8 @@ async function planEpisodeSets(input, beats) {
       "- 이야기에 필요한 최소 개수만 쓴다. 30초짜리는 세트 1개가 보통이다.",
       "- name: 짧은 장소 명사(2~12자). description: 인물 없는 빈 세트 묘사 1~2문장(구조·가구·재질·조명).",
       "- 모든 비트를 정확히 하나의 세트 id 에 배정한다.",
-      "JSON 만 출력: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\"}],\"beatSets\":[{\"beatId\":\"<비트 id>\",\"setId\":\"set-1\"}]}",
+      "- layout: 세트의 평면도. 입구(카메라) 기준으로 back(맞은편 벽)·left·right·front(입구 쪽 벽)·floor(바닥 중앙)에 무엇이 있는지 각각 한 구절. 모든 앵글이 이 지도를 지킨다.",
+      "JSON 만 출력: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\",\"layout\":{\"back\":\"...\",\"left\":\"...\",\"right\":\"...\",\"front\":\"...\",\"floor\":\"...\"}}],\"beatSets\":[{\"beatId\":\"<비트 id>\",\"setId\":\"set-1\"}]}",
     ].join("\n");
   const user = [
     lang === "en" ? "[Story]" : "[이야기]",
@@ -1762,7 +1764,12 @@ async function planEpisodeSets(input, beats) {
     const rawSets = Array.isArray(parsed?.sets) ? parsed.sets : [];
     // 이름은 짧은 장소 명사여야 한다. 문장(화면·행동 묘사)이 오면 버린다 — 세트 시트가 엉뚱한 곳을 그린 원인.
     const sets = rawSets
-      .map((x, i) => ({ id: String(x?.id || `set-${i + 1}`).trim(), name: sanitizeSetName(x?.name), description: String(x?.description || "").trim() }))
+      .map((x, i) => ({
+        id: String(x?.id || `set-${i + 1}`).trim(), name: sanitizeSetName(x?.name), description: String(x?.description || "").trim(),
+        layout: (x?.layout && typeof x.layout === "object")
+          ? Object.fromEntries(["back", "left", "right", "front", "floor"].map((k) => [k, String(x.layout[k] || "").trim().slice(0, 160)]).filter(([, v]) => v))
+          : null,
+      }))
       .filter((x) => x.name);
     if (!sets.length) throw new Error("set_plan_no_sets");
     // 이름 중복(같은 공간을 둘로 냈을 때) → 앞 것으로 합친다
@@ -1976,7 +1983,7 @@ async function generateScenarioScenesViaBeats(input) {
 
   // episodeLocations 형태로 바로 쓸 수 있는 세트 목록(플레이트·시트는 클라이언트가 기존 것에서 물려받는다).
   const setsForPayload = setPlan.sets.map((st) => ({
-    id: st.id, name: st.name, description: st.description, refObjectName: "", variants: [],
+    id: st.id, name: st.name, description: st.description, layout: st.layout || null, refObjectName: "", variants: [],
     sceneIds: finalScenes.filter((sc) => String((sc && sc.sceneLocation) || "").trim() === st.name).map((sc) => sc.id),
   }));
   return {
@@ -2266,7 +2273,7 @@ async function generateScenarioScenes(input) {
   normalizedScenes = normalizedScenes.map((sc) => (sc && typeof sc === "object" && looksLikeSentenceLocation(sc.sceneLocation)) ? { ...sc, sceneLocation: "" } : sc);
   const finalScenes = rebalanceEstSec(normalizedScenes, Number(input.duration) || 0);
   const legacySetsForPayload = (legacySetPlan.sets || []).map((st) => ({
-    id: st.id, name: st.name, description: st.description, refObjectName: "", variants: [],
+    id: st.id, name: st.name, description: st.description, layout: st.layout || null, refObjectName: "", variants: [],
     sceneIds: finalScenes.filter((sc) => String((sc && sc.sceneLocation) || "").trim() === st.name).map((sc) => sc.id),
   }));
 

@@ -218,6 +218,44 @@ export function buildStoryboardSheetPrompt(input) {
 }
 
 /**
+ * 평면도(배치 지도) 텍스트. 세트 계획이 벽 4면·바닥 배치를 정하면 모든 앵글 프롬프트가 같은 지도를 읽는다 —
+ * "같은 장소"라는 말만으로는 모델이 3차원 배치를 지키지 못한다(2026-09-14: 정면엔 창문이 왼쪽 벽인데 리버스에서 침대 옆에 창문).
+ * @param {{left?:string, back?:string, right?:string, front?:string, floor?:string}|string} layout
+ */
+export function layoutText(layout) {
+  if (!layout) return "";
+  if (typeof layout === "string") return t(layout) ? `LAYOUT MAP (fixed for every angle): ${t(layout)}` : "";
+  const parts = [];
+  if (t(layout.back)) parts.push(`BACK wall (facing the entrance camera): ${t(layout.back)}`);
+  if (t(layout.left)) parts.push(`LEFT wall: ${t(layout.left)}`);
+  if (t(layout.right)) parts.push(`RIGHT wall: ${t(layout.right)}`);
+  if (t(layout.front)) parts.push(`FRONT wall (behind the entrance camera): ${t(layout.front)}`);
+  if (t(layout.floor)) parts.push(`FLOOR / center: ${t(layout.floor)}`);
+  if (!parts.length) return "";
+  return `LAYOUT MAP (fixed for every angle — never move objects between walls): ${parts.join("; ")}.`;
+}
+
+/**
+ * 부감 마스터 플레이트(배치의 단일 원천): 세트 전체를 위에서 내려다본 한 장. 인물 없음. 평면도가 있으면 그대로 배치.
+ * 이후 정면·후면·측면·로우는 이 이미지를 편집(카메라 재구성)해 만든다.
+ * @param {{ header:string, hub?:string, set:{name:string, description?:string, layout?:any}, aspect?:string }} input
+ */
+export function buildSetMasterPrompt(input) {
+  const set = (input && input.set) || {};
+  const name = t(set.name) || "the set";
+  return [
+    t(input && input.header),
+    t(input && input.hub),
+    `SET MASTER PLATE — TOP-DOWN VIEW of ${name}: a single high bird's-eye view (camera above, tilted about 60 degrees down) that shows the WHOLE set at once — all four walls' contents, the floor and every prop, like a dollhouse seen from above.`,
+    t(set.description) ? `SET: ${t(set.description).slice(0, 300)}` : "",
+    layoutText(set.layout),
+    "Empty environment ONLY — no characters, no people, no creatures. Clean, evenly lit, nothing cropped. This image is the layout reference every other angle will be derived from, so make the arrangement clear and unambiguous.",
+    "Do not add text, borders, labels or panel numbers.",
+    STYLE_LOCK,
+  ].filter(Boolean).join("\n");
+}
+
+/**
  * 플레이트 앵글 생성(편집 모드, 5.3절): 마스터 플레이트를 "편집"해 다른 앵글을 얻는다. 참조로 정면을 섞지 않는다.
  * @param {{ set:{name:string, description?:string}, angle:'high'|'low'|'top'|'back', header?:string }} input
  */
@@ -226,13 +264,19 @@ export function buildAnglePlateEditPrompt(input) {
   const name = t(set.name) || "this set";
   const angle = t(input && input.angle).toLowerCase() || "high";
   const view = angle === "top" ? "directly from above (top-down view)"
-    : angle === "low" ? "from a low angle near the floor, looking up"
-      : angle === "back" ? "from the reverse angle (camera turned around 180 degrees)"
-        : "from a high angle, looking down at about 45 degrees";
+    : angle === "low" ? "from a low angle near the floor, looking up, eye height about 30 cm"
+      : angle === "back" ? "from the reverse angle: the camera stands at the BACK wall looking toward the FRONT wall (entrance side)"
+        : angle === "left" ? "from the LEFT wall looking across the room toward the RIGHT wall"
+          : angle === "right" ? "from the RIGHT wall looking across the room toward the LEFT wall"
+            : angle === "front" ? "from the entrance side at eye level, a wide establishing view looking at the BACK wall"
+              : "from a high angle, looking down at about 45 degrees";
+  const fromMaster = !!(input && input.fromMaster);
   return [
-    `Show this exact set (${name}) ${view}.`,
-    "Same layout, same props, same materials, same lighting and palette as the source image. Keep every object where it is; only the camera moves.",
+    fromMaster ? `The source image is the TOP-DOWN MASTER PLATE of ${name}. Re-render this exact set ${view}.` : `Show this exact set (${name}) ${view}.`,
+    "Same layout, same props, same materials, same lighting and palette as the source image. Keep every object on the same wall and at the same position; only the camera moves.",
+    layoutText(set.layout),
     "No characters, no people, no creatures. Empty set plate.",
+    t(input && input.hub),
     t(input && input.header) ? `Style: ${t(input.header).slice(0, 300)}` : "",
     "Do not add text, borders or labels.",
   ].filter(Boolean).join("\n");

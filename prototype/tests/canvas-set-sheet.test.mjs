@@ -21,8 +21,8 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
-  assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"\];/);
+  assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K", mode: "master" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"\];/);
 });
 
 test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승인 대기·실행 중·완료·오류, 승인 버튼) · 별 버튼 스피너 · 배경 카드 칩', () => {
@@ -41,22 +41,22 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const approveNow = async \(jobId: string\) => \{/);
   assert.match(src, /끝난 항목 지우기/);
   // 세트 시트 모달: 대상·해상도 선택 → "생성"이 곧 확인(만들자마자 승인) → 같은 모달에서 진행
-  assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K"; usePlate\?: boolean \} \| null>\(null\);/);
+  assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K"; usePlate\?: boolean; mode\?: "master" \| "sheet" \} \| null>\(null\);/);
   assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
   assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K", usePlate = false\) => \{/);
   assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\), usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
   assert.match(src, /<div className="text-\[15px\] font-bold text-white">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
-  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
+  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected\); else void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
   assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
   // 잡 생성 자체가 실패해도 오류로 남는다
   assert.match(src, /setPending\(\(prev\) => \[\{ jobId: `local-\$\{Date\.now\(\)\}`, type, sceneId, status: "error", label, target, error: \(e as Error\)\.message/);
   // 별 버튼: 진행 중이면 스피너 + 비활성
-  assert.match(src, /const setSheetActive = pending\.some\(\(p\) => p\.type === "set_sheet" && !JOB_DONE\.includes\(p\.status\)\);/);
+  assert.match(src, /const setSheetActive = pending\.some\(\(p\) => SET_JOB_TYPES\.includes\(p\.type\) && !JOB_DONE\.includes\(p\.status\)\);/);
   assert.match(src, /\{setSheetActive \? <RefreshIcon className="h-4 w-4 animate-spin" \/> : <SparkleIcon className="h-4 w-4" \/>\}/);
   assert.match(src, /aria-busy=\{setSheetActive\}/);
   // 배경 카드: 그 장소의 잡 상태 칩 + 오류 문구
-  assert.match(src, /const locJob = n\.type === "location" \? pending\.find\(\(j\) => j\.type === "set_sheet" && String\(j\.target \|\| ""\) === String\(n\.data\.name \|\| n\.label\)\)/);
+  assert.match(src, /const locJob = n\.type === "location" \? pending\.find\(\(j\) => SET_JOB_TYPES\.includes\(j\.type\) && String\(j\.target \|\| ""\) === String\(n\.data\.name \|\| n\.label\)\)/);
   assert.match(src, /\{locJob && !JOB_DONE\.includes\(locJob\.status\) && <Chip tone="amber">\{locJob\.status === "review_pending" \? "승인 대기" : "시트 생성 중"\}<\/Chip>\}/);
   assert.match(src, /\{locJob && locJob\.status === "error" && <Chip tone="red">오류<\/Chip>\}/);
   assert.match(src, /label: `세트 시트 · \$\{n\.label\}`, target: name, updatedAt: Date\.now\(\)/, '잡에 대상 장소를 기록');
@@ -77,7 +77,7 @@ test('★Gemini 지역 거부(User location is not supported) → Vertex(global)
 
 test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 진행 화면을 다시 열고, 오류 문구는 선택·복사 가능', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /const running = pending\.filter\(\(j\) => j\.type === "set_sheet" && !JOB_DONE\.includes\(j\.status\)\);\s*\n\s*if \(running\.length\) \{/);
+  assert.match(src, /const running = pending\.filter\(\(j\) => SET_JOB_TYPES\.includes\(j\.type\) && !JOB_DONE\.includes\(j\.status\)\);\s*\n\s*if \(running\.length\) \{/);
   assert.match(src, /setSheetModal\(\{ step: "progress", selected: new Set\(locationNodes\.filter\(\(n\) => names\.has\(String\(n\.data\?\.name \|\| n\.label\)\)\)/);
   assert.match(src, /별 버튼을 다시 누르면 이 진행 화면이 열려요/);
   assert.match(src, /다시 만들기/);
@@ -90,9 +90,9 @@ test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 
 
 test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 시트 유무 칩을 단다', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /\(n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\) \? \(/);
-  assert.match(src, /withMediaToken\(String\(n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\)\)/);
-  assert.match(src, /\{n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
+  assert.match(src, /\(n\.data\.topPlateUrl \|\| n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\) \? \(/);
+  assert.match(src, /withMediaToken\(String\(n\.data\.topPlateUrl \|\| n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\)\)/);
+  assert.match(src, /\{n\.data\.topPlateUrl \? "부감 마스터" : n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
   assert.match(src, /\{n\.data\.setSheet \? <Chip tone="emerald">시트<\/Chip> : <Chip>시트 없음<\/Chip>\}/);
 });
 
@@ -107,7 +107,7 @@ test('★그래프 장소 노드가 episodeLocations 의 플레이트·변형·�
 
 test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheetPrompt 단일 원천 · 마스터 플레이트 참조 · storyboardSheets+episodeLocations 저장', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
+  assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
   assert.match(shared, /set_sheet: \{ agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool \}/);
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));
@@ -138,7 +138,7 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
 test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 라벨), 플레이트 띠, 다시 만들기; 클릭하면 라이트박스', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const \[lightbox, setLightbox\] = useState<\{ url: string; title: string; objectName\?: string \} \| null>\(null\);/);
-  assert.match(src, /const mainUrl = String\(sheet\?\.url \|\| plateUrl \|\| ""\);/);
+  assert.match(src, /const mainUrl = String\(topUrl \|\| sheet\?\.url \|\| plateUrl \|\| ""\);/);
   assert.match(src, /className="block max-h-\[60vh\] w-full cursor-zoom-in object-contain"/);
   assert.match(src, /const angleNames = \["정면", "후면", "부감", "로우"\];/);
   assert.match(src, /\{i \+ 1\} · \{name\}/, '2×2 칸마다 번호·앵글 라벨');
@@ -157,7 +157,7 @@ test('★세트 정체성: 같은 세트로 보이는 장소는 카드에 "중�
   assert.match(src, /for \(const f of from\) await enqueue\("location_merge", \{ projectId, from: f, into \}, `장소 합치기 · \$\{f\} → \$\{into\}`, undefined, into\);/);
   assert.match(src, /<Chip tone="red">중복 의심<\/Chip>/);
   assert.match(src, /같은 세트로 보이는 장소가 있어요<\/div>/);
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"\];/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /location_merge: \{ agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool \}/);
   assert.match(shared, /location_suggest: \{ agentId: "plot", kind: "read", run: runLocationSuggestTool \}/);
@@ -197,7 +197,7 @@ test('★스타일 앵커: 첫 세트 시트가 프로젝트 그림체 기준이
 test('★배경 카드 클릭 흐름: 이미지 영역=크게 보기, 텍스트 영역=선택 토글(여러 장), ⓘ=상세; 2장 이상 선택하면 배경 바에 합치기 → 남길 이름 고르는 모달', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const zone = \(\(e\.target as HTMLElement \| null\)\?\.closest\?\.\("\[data-zone\]"\) as HTMLElement \| null\)\?\.dataset\?\.zone \|\| "";/);
-  assert.match(src, /if \(d\.zone === "image"\) \{\s*\n\s*const url = String\(ln\.data\.setSheet\?\.url \|\| ln\.data\.plateUrl \|\| ""\);\s*\n\s*if \(url\) setLightbox\(/);
+  assert.match(src, /if \(d\.zone === "image"\) \{\s*\n\s*const url = String\(ln\.data\.topPlateUrl \|\| ln\.data\.setSheet\?\.url \|\| ln\.data\.plateUrl \|\| ""\);\s*\n\s*if \(url\) setLightbox\(/);
   assert.match(src, /setMulti\(\(prev\) => \{ const next = new Set\(prev\); next\.has\(d\.id!\) \? next\.delete\(d\.id!\) : next\.add\(d\.id!\); return next; \}\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*if \(\(d\.kind === "node" \|\| d\.kind === "cut"\) && d\.id && !d\.moved\) \{/, '배경 카드는 상세를 열지 않고 선택만 토글');
   assert.match(src, /data-zone="image" title="누르면 크게 볼 수 있어요"/);
   assert.match(src, /data-zone="text" title="누르면 선택돼요/);
@@ -228,7 +228,7 @@ test('★세트 시트 그림체 참조는 허브에서: 앵커 없으면 브랜
   assert.match(src, /const setStyleAnchor = async \(objectName: string, label: string\) => \{/);
   assert.match(src, /await enqueue\("style_anchor_set", \{ projectId, objectName, setName: label \}, `스타일 기준 지정 · \$\{label\}`\);/);
   assert.match(src, />이 이미지를 스타일 기준으로<\/button>/);
-  assert.match(src, /"scene_split", "style_anchor_set"\];/);
+  assert.match(src, /"scene_split", "style_anchor_set", "set_master", "set_angle"\];/);
   const graph = read('prototype/functions/api/agent/production-graph.ts');
   assert.match(graph, /url: toDisplayUrl\(v\.refObjectName\), objectName: String\(v\.refObjectName \|\| ""\)/);
 });
@@ -295,7 +295,7 @@ test('★"스튜디오 설정 따름"은 제작 화면의 이미지생성 모델
   assert.match(cs, /export function providerArg\(s: CanvasSettings\): \{ provider\?: string \}/);
   assert.match(read('prototype/js/config.js'), /IMAGE_PROVIDER: 'nk_ai_image_provider',/, '스튜디오와 같은 키');
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 3, 'set_sheet + scene_still 두 곳 = 3곳');
+  assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 5, 'set_sheet + set_master + set_angle + scene_still 두 곳 = 5곳');
   assert.match(src, /모델: <span className="text-gray-200">/);
 });
 
@@ -310,4 +310,45 @@ test('★저장된 옛 공급자(gemini)는 사용자가 직접 고른 적 없�
   assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden rounded-3xl/);
   assert.match(src, /return nm && nm\.length <= 24 \? nm : "지정 이미지";/, '문장 같은 앵커 이름은 표시하지 않는다');
   assert.match(src, /\(캔버스 설정\)"/);
+});
+
+test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스터에서 파생(순차 대기) · 평면도(layout)를 세트 계획이 만들고 모든 앵글 프롬프트가 읽는다', async () => {
+  const sheet = await import('../functions/api/_shared/storyboard-sheet.js');
+  const master = sheet.buildSetMasterPrompt({ header: 'H', hub: 'HUB', set: { name: '놀이방', description: '장난감', layout: { back: '문', left: '창문', right: '침대', floor: '러그' } } });
+  assert.match(master, /SET MASTER PLATE — TOP-DOWN VIEW of 놀이방/);
+  assert.match(master, /LAYOUT MAP \(fixed for every angle — never move objects between walls\): BACK wall \(facing the entrance camera\): 문; LEFT wall: 창문; RIGHT wall: 침대; FLOOR \/ center: 러그\./);
+  assert.match(master, /no characters, no people, no creatures/);
+  const front = sheet.buildAnglePlateEditPrompt({ set: { name: '놀이방', layout: { left: '창문' } }, angle: 'front', header: 'H', hub: 'HUB', fromMaster: true });
+  assert.match(front, /^The source image is the TOP-DOWN MASTER PLATE of 놀이방\. Re-render this exact set from the entrance side at eye level/);
+  assert.match(front, /LAYOUT MAP/);
+  assert.match(front, /HUB/);
+  assert.equal(sheet.layoutText(null), '');
+  const scen = read('prototype/functions/api/scenario.js');
+  assert.match(scen, /layout: 세트의 평면도\. 입구\(카메라\) 기준으로 back\(맞은편 벽\)·left·right·front\(입구 쪽 벽\)·floor\(바닥 중앙\)/);
+  assert.match(scen, /layout: \(x\?\.layout && typeof x\.layout === "object"\)/);
+  assert.match(scen, /layout: st\.layout \|\| null, refObjectName: "", variants: \[\],/);
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /set_master: \{ agentId: "pixel", kind: "external", gate: true, run: runSetMasterTool \}/);
+  assert.match(shared, /set_angle: \{ agentId: "pixel", kind: "external", gate: true, run: runSetAngleTool \}/);
+  assert.match(shared, /cameraTargetMode: input\?\.cameraTargetMode \|\| undefined,/, 'runImagenTool 이 카메라 재구성 모드를 넘긴다');
+  const im = shared.indexOf('async function runSetMasterTool('); const mfn = shared.slice(im, shared.indexOf('\n}\n', im));
+  assert.match(mfn, /setVariant\(loc, "angle-top", img\.objectName, "부감\(마스터\)"/);
+  assert.match(mfn, /const style = await collectStyleRefs\(payload, locations, idx, cur, bucket, ctx, 2\);/);
+  assert.match(mfn, /nextPayload\.styleAnchor = \{ objectName: img\.objectName/, '앵커가 없으면 마스터가 앵커');
+  const ia = shared.indexOf('async function runSetAngleTool('); const afn = shared.slice(ia, shared.indexOf('\n}\n', ia));
+  assert.match(afn, /generationMode: "image-to-image", cameraTargetMode: "scene",/, '마스터를 소스로 카메라 재구성');
+  assert.match(afn, /if \(angle === "front"\) \{ loc\.refObjectName = img\.objectName;/, '정면은 기존 파이프라인의 정면 플레이트 자리');
+  assert.match(afn, /throw new Error\("마스터 플레이트\(부감\)가 없어요\. 먼저 set_master 로 만드세요\."\);/);
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const SET_JOB_TYPES = \["set_sheet", "set_master", "set_angle"\];/);
+  assert.match(src, /const waitForJob = async \(jobId: string, timeoutMs = 180_000\): Promise<string> => \{/);
+  assert.match(src, /const neededAnglesFor = \(locName: string\): string\[\] => \{/);
+  assert.match(src, /const dirs = new Set<string>\(\["front"\]\);/, '정면은 항상');
+  assert.match(src, /const st = await waitForJob\(m\.jobId\);\s*\n\s*if \(st !== "approved"\) continue;/, '마스터가 끝난 뒤에만 앵글 파생');
+  assert.match(src, /for \(const angle of neededAnglesFor\(name\)\) \{/);
+  assert.match(src, /id: "master", title: "정밀 \(추천\) — 부감 마스터 → 앵글 파생"/);
+  assert.match(src, /if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected\); else void generateSetSheets\(/);
+  assert.match(src, /\{n\.data\.topPlateUrl \? "부감 마스터" : n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
+  assert.match(src, /평면도 \(모든 앵글이 지키는 배치\)/);
+  assert.match(read('prototype/functions/api/agent/production-graph.ts'), /topPlateUrl: topVariant \? toDisplayUrl\(topVariant\.refObjectName\) : "",/);
 });

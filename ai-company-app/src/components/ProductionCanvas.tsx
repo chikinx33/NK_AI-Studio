@@ -385,7 +385,8 @@ export default function ProductionCanvas({
   // 떠 있는 작업 독(캔버스 왼쪽 아래, 레이아웃을 밀지 않는다) 펼침 여부
   const [jobDockOpen, setJobDockOpen] = useState(false);
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
-  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K"; usePlate?: boolean } | null>(null);
+  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K"; usePlate?: boolean; mode?: "master" | "sheet" } | null>(null);
+  const SET_JOB_TYPES = ["set_sheet", "set_master", "set_angle"];
   // 큰 이미지 보기(라이트박스): 배경 상세의 세트 시트·플레이트를 화면 가득 본다.
   const [lightbox, setLightbox] = useState<{ url: string; title: string; objectName?: string } | null>(null);
   // 스타일 기준 이미지 지정(창작자 선택): 어떤 저장 이미지든 프로젝트 그림체 기준으로.
@@ -566,7 +567,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -612,7 +613,7 @@ export default function ProductionCanvas({
     }
   };
   const dismissJob = (jobId: string) => setPending((prev) => prev.filter((p) => p.jobId !== jobId));
-  const setSheetActive = pending.some((p) => p.type === "set_sheet" && !JOB_DONE.includes(p.status));
+  const setSheetActive = pending.some((p) => SET_JOB_TYPES.includes(p.type) && !JOB_DONE.includes(p.status));
 
   // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
   // 시트가 이미 있는 장소는 건너뛰고, 없는 장소가 하나도 없으면 전부 다시 만든다(재생성).
@@ -629,15 +630,66 @@ export default function ProductionCanvas({
     if (!projectId) return;
     if (!locationNodes.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
     // 진행 중(또는 방금 끝난) 세트 시트 잡이 있으면 진행 화면으로 다시 연다 — 닫아도 상태를 잃지 않는다.
-    const running = pending.filter((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status));
+    const running = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status));
     if (running.length) {
       const names = new Set(running.map((j) => String(j.target || "")));
-      setSheetModal({ step: "progress", selected: new Set(locationNodes.filter((n) => names.has(String(n.data?.name || n.label))).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
+      setSheetModal({ step: "progress", selected: new Set(locationNodes.filter((n) => names.has(String(n.data?.name || n.label))).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", mode: "master" });
       return;
     }
     const missing = locationNodes.filter((n) => !n.data?.setSheet);
     // 기본 선택: 시트가 없는 장소. 모두 있으면 전부(재생성).
-    setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
+    setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", mode: "master" });
+  };
+  // 잡이 끝날 때까지 기다린다(마스터 → 앵글 파생은 순서가 있어야 한다).
+  const waitForJob = async (jobId: string, timeoutMs = 180_000): Promise<string> => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const job = await getAgentJob(jobId).catch(() => null);
+      const status = String(job?.status || job?.review_status || "");
+      if (JOB_DONE.includes(status)) {
+        const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
+        setPending((prev) => prev.map((p) => (p.jobId === jobId ? { ...p, status, error: error || p.error, updatedAt: Date.now() } : p)));
+        return status;
+      }
+      await new Promise((r) => window.setTimeout(r, 2500));
+    }
+    return "timeout";
+  };
+  // 이 세트의 컷들이 실제로 쓰는 방위(정면은 항상). 필요한 앵글만 파생해 크레딧을 아낀다.
+  const neededAnglesFor = (locName: string): string[] => {
+    const key = String(locName || "").trim().toLowerCase();
+    const dirs = new Set<string>(["front"]);
+    (graph?.nodes || []).filter((n) => n.type === "cut" && String(n.data?.sceneLocation || "").trim().toLowerCase() === key).forEach((n) => {
+      const d = String(n.data?.cameraDirection || "front").toLowerCase();
+      if (["front", "back", "left", "right"].includes(d)) dirs.add(d);
+      const e = String(n.data?.cameraElevation || "").toLowerCase();
+      if (e === "high" || e === "low") dirs.add(e);
+    });
+    return Array.from(dirs);
+  };
+  // 정밀 모드: 세트마다 부감 마스터 1장 → 컷이 쓰는 앵글을 마스터에서 파생. 잡은 만들자마자 승인하고 끝날 때까지 기다린 뒤 다음으로.
+  const generateMasterPlates = async (ids: Set<string>) => {
+    if (!projectId) return;
+    const targets = locationNodes.filter((n) => ids.has(n.id));
+    for (const n of targets) {
+      const name = String(n.data?.name || n.label);
+      try {
+        const m = await createAgentJob("set_master", { projectId, locationName: name, ...providerArg(settings) });
+        setPending((prev) => [{ jobId: m.jobId, type: "set_master", status: "running", label: `부감 마스터 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
+        await approveItem(m.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === m.jobId ? { ...p, status: "error", error: (e as Error).message } : p))); });
+        const st = await waitForJob(m.jobId);
+        if (st !== "approved") continue;
+        for (const angle of neededAnglesFor(name)) {
+          const a = await createAgentJob("set_angle", { projectId, locationName: name, angle, ...providerArg(settings) });
+          setPending((prev) => [{ jobId: a.jobId, type: "set_angle", status: "running", label: `앵글 파생(${angle}) · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
+          await approveItem(a.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === a.jobId ? { ...p, status: "error", error: (e as Error).message } : p))); });
+          await waitForJob(a.jobId);
+        }
+      } catch (e) {
+        setPending((prev) => [{ jobId: `local-${Date.now()}`, type: "set_master", status: "error", label: `부감 마스터 · ${n.label}`, target: name, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
+      }
+    }
+    void load(true);
   };
   // 모달에서 "생성"을 누른 것이 곧 확인이다 — 잡을 만들고 바로 승인해 승인 대기에 멈추지 않게 한다.
   const generateSetSheets = async (ids: Set<string>, resolution: "2K" | "4K", usePlate = false) => {
@@ -838,8 +890,8 @@ export default function ProductionCanvas({
       // 배경 카드: 이미지 영역 → 크게 보기, 텍스트 영역 → 선택 토글(여러 장 가능). 상세는 카드의 ⓘ 버튼.
       const ln = nodeById.get(d.id)!;
       if (d.zone === "image") {
-        const url = String(ln.data.setSheet?.url || ln.data.plateUrl || "");
-        if (url) setLightbox({ url: withMediaToken(url), title: ln.label });
+        const url = String(ln.data.topPlateUrl || ln.data.setSheet?.url || ln.data.plateUrl || "");
+        if (url) setLightbox({ url: withMediaToken(url), title: ln.label, objectName: String(ln.data.topPlateRef || (ln.data.setSheet as any)?.objectName || ln.data.plateRef || "") });
         return;
       }
       setSelectedId("");
@@ -1124,7 +1176,7 @@ export default function ProductionCanvas({
               const selectedClass = nodeLaneKind ? LANE_STYLE[nodeLaneKind].card : "border-emerald-400 ring-2 ring-emerald-500/30";
               const jobsForNode = n.type === "cut" ? pending.filter((j) => String(j.sceneId) === String(n.data.sceneId) && !["approved", "error", "cancelled"].includes(j.status)) : [];
               // 배경 카드: 이 장소를 대상으로 한 세트 시트 잡(가장 최근 하나) — 생성 중·승인 대기·오류를 카드에서 바로 본다.
-              const locJob = n.type === "location" ? pending.find((j) => j.type === "set_sheet" && String(j.target || "") === String(n.data.name || n.label)) || null : null;
+              const locJob = n.type === "location" ? pending.find((j) => SET_JOB_TYPES.includes(j.type) && String(j.target || "") === String(n.data.name || n.label)) || null : null;
               return (
                 <div
                   key={n.id}
@@ -1141,10 +1193,11 @@ export default function ProductionCanvas({
                   )}
                   {n.type === "location" && (
                     <div>
-                      {(n.data.setSheet?.url || n.data.plateUrl) ? (
+                      {(n.data.topPlateUrl || n.data.setSheet?.url || n.data.plateUrl) ? (
                         <div className="relative cursor-zoom-in border-b border-edge" data-zone="image" title="누르면 크게 볼 수 있어요">
-                          <img src={withMediaToken(String(n.data.setSheet?.url || n.data.plateUrl))} alt="" className="block aspect-video w-full object-cover" draggable={false} />
-                          <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
+                          <img src={withMediaToken(String(n.data.topPlateUrl || n.data.setSheet?.url || n.data.plateUrl))} alt="" className="block aspect-video w-full object-cover" draggable={false} />
+                          <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.topPlateUrl ? "부감 마스터" : n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
+                          {n.data.topPlateUrl && Array.isArray(n.data.variants) && n.data.variants.filter((v: any) => v.id !== "angle-top").length > 0 ? <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">앵글 {n.data.variants.filter((v: any) => v.id !== "angle-top").length}</span> : null}
                           {n.data.setSheet?.resolution ? <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">{String(n.data.setSheet.resolution)}</span> : null}
                         </div>
                       ) : null}
@@ -1334,7 +1387,9 @@ export default function ProductionCanvas({
                   <ul className="space-y-2">
                     {locationNodes.map((n) => {
                       const name = String(n.data?.name || n.label);
-                      const job = pending.find((j) => j.type === "set_sheet" && String(j.target || "") === name) || null;
+                      const jobsHere = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && String(j.target || "") === name);
+                      const job = jobsHere.find((j) => !JOB_DONE.includes(j.status)) || jobsHere[0] || null;
+                      const doneHere = jobsHere.filter((j) => j.status === "approved").length;
                       const checked = sheetModal.selected.has(n.id);
                       const thumb = n.data?.setSheet?.url || n.data?.plateUrl || "";
                       return (
@@ -1350,14 +1405,27 @@ export default function ProductionCanvas({
                             <div className="truncate text-[11px] text-gray-500">{n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음"}</div>
                           </div>
                           {sheetModal.step === "progress" && checked && job && (
-                            <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : job.status === "approved" ? "text-emerald-300" : "text-sky-300"}`} title={job.error || ""}>{job.status === "approved" ? "완료" : job.status === "error" ? "오류" : "생성 중"}</span>
+                            <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : JOB_DONE.includes(job.status) ? "text-emerald-300" : "text-sky-300"}`} title={job.error || job.label}>{JOB_DONE.includes(job.status) ? (job.status === "error" ? "오류" : `완료 ${doneHere}장`) : `${job.label.replace(` · ${n.label}`, "")} 생성 중${doneHere ? ` (${doneHere}장 완료)` : ""}`}</span>
                           )}
                         </li>
                       );
                     })}
                   </ul>
-                  {sheetModal.step === "progress" && pending.some((j) => j.type === "set_sheet" && j.status === "error") && (() => {
-                    const text = pending.filter((j) => j.type === "set_sheet" && j.status === "error").map((j) => `${j.target}: ${j.error || "오류"}`).join("\n");
+                  {sheetModal.step === "pick" && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {([
+                        { id: "master", title: "정밀 (추천) — 부감 마스터 → 앵글 파생", desc: "세트마다 위에서 본 마스터 1장을 만들고, 컷이 쓰는 앵글(정면 등)을 그 마스터에서 편집으로 파생해요. 배치가 이어져요. 이미지 1+앵글 수." },
+                        { id: "sheet", title: "빠른 미리보기 — 2×2 한 장", desc: "네 앵글을 한 장에 동시에 그려요. 빠르고 싸지만 칸끼리 배치가 조금씩 어긋날 수 있어요." },
+                      ] as Array<{ id: "master" | "sheet"; title: string; desc: string }>).map((opt) => (
+                        <label key={opt.id} className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 ${(sheetModal.mode || "master") === opt.id ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
+                          <input type="radio" name="sheet-mode" checked={(sheetModal.mode || "master") === opt.id} onChange={() => setSheetModal((m) => (m ? { ...m, mode: opt.id } : m))} className="mt-0.5 accent-violet-500" />
+                          <span className="min-w-0"><span className="block text-[12px] font-bold text-gray-100">{opt.title}</span><span className="block text-[11px] leading-snug text-gray-500">{opt.desc}</span></span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {sheetModal.step === "progress" && pending.some((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error") && (() => {
+                    const text = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error").map((j) => `${j.label}: ${j.error || "오류"}`).join("\n");
                     return (
                       <div className="mt-2 rounded-lg bg-red-900/20 px-3 py-2">
                         <div className="mb-1 flex items-center justify-between">
@@ -1385,13 +1453,13 @@ export default function ProductionCanvas({
                       <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
-                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
+                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); if ((m.mode || "master") === "master") void generateMasterPlates(m.selected); else void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
                     </>
                   ) : (
                     <>
-                      <span className="text-[11px] text-gray-500">{pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요. 별 버튼을 다시 누르면 이 진행 화면이 열려요." : "끝났어요. 배경 카드에서 시트를 확인하세요."}</span>
+                      <span className="text-[11px] text-gray-500">{pending.some((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요. 별 버튼을 다시 누르면 이 진행 화면이 열려요." : "끝났어요. 배경 카드에서 플레이트를 확인하세요."}</span>
                       <div className="flex-1" />
-                      {!pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) && (
+                      {!pending.some((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status)) && (
                         <button type="button" onClick={() => setSheetModal((m) => (m ? { ...m, step: "pick" } : m))} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">다시 만들기</button>
                       )}
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-500">닫기</button>
@@ -1543,7 +1611,9 @@ export default function ProductionCanvas({
               const styleSourceText: Record<string, string> = { styleAnchor: "스타일 기준 이미지", "other-set-sheet": "다른 세트 시트", "hub-environment-assets": "허브 배경·소품 자산", "brand-character-sheets": "브랜드 캐릭터 시트(그림체만)", "project-still": "이 프로젝트 기존 스틸", "existing-plate": "기존 정면 플레이트" };
               const plateUrl = String(selected.data.plateUrl || "");
               const variants = (Array.isArray(selected.data.variants) ? selected.data.variants : []) as Array<{ id: string; label: string; url: string }>;
-              const mainUrl = String(sheet?.url || plateUrl || "");
+              const topUrl = String(selected.data.topPlateUrl || "");
+              const mainUrl = String(topUrl || sheet?.url || plateUrl || "");
+              const layoutObj = selected.data.layout && typeof selected.data.layout === "object" ? (selected.data.layout as Record<string, string>) : null;
               const angleNames = ["정면", "후면", "부감", "로우"];
               const cutsHere = (graph?.edges || []).filter((e) => e.from === selected.id && e.type === "location").map((e) => e.to.replace("cut:", "#"));
               return (
@@ -1558,7 +1628,7 @@ export default function ProductionCanvas({
                   {mainUrl ? (
                     <div className="relative overflow-hidden rounded-xl border border-edge bg-black">
                       <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label, objectName: String(sheet?.url ? (sheet as any)?.objectName || "" : selected.data.plateRef || "") })} title="클릭하면 크게 볼 수 있어요" />
-                      {sheet?.url && (
+                      {sheet?.url && !topUrl && (
                         <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
                           {angleNames.map((name, i) => (
                             <div key={name} className="relative border border-white/10">
@@ -1567,7 +1637,7 @@ export default function ProductionCanvas({
                           ))}
                         </div>
                       )}
-                      <span className="absolute right-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-black text-black">{sheet?.url ? "바이블 · 세트 시트" : "정면 플레이트"}</span>
+                      <span className="absolute right-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-black text-black">{topUrl ? "부감 마스터 (배치 기준)" : sheet?.url ? "바이블 · 세트 시트" : "정면 플레이트"}</span>
                     </div>
                   ) : (
                     <div className="grid h-40 place-items-center rounded-xl border border-dashed border-edge text-[11px] text-gray-500">아직 세트 시트가 없어요. 배경 바의 별 버튼으로 만들어요.</div>
@@ -1578,6 +1648,14 @@ export default function ProductionCanvas({
                     <div className="flex-1" />
                     <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
                   </div>
+                  {layoutObj && (
+                    <div className="mt-3 rounded-xl border border-edge bg-[#0b1018] p-2.5 text-[11px] text-gray-300">
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">평면도 (모든 앵글이 지키는 배치)</div>
+                      <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                        {[["back", "뒷벽"], ["left", "왼쪽 벽"], ["right", "오른쪽 벽"], ["front", "입구 쪽 벽"], ["floor", "바닥"]].map(([k, lb]) => layoutObj[k] ? <li key={k}><span className="text-gray-500">{lb}:</span> {layoutObj[k]}</li> : null)}
+                      </ul>
+                    </div>
+                  )}
                   {diag && (
                     <div className="mt-3 select-text rounded-xl border border-edge bg-[#0b1018] p-2.5 text-[11px] text-gray-300">
                       <div className="mb-1 flex items-center justify-between">

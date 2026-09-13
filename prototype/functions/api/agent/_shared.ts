@@ -8,7 +8,7 @@ import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/cl
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
-import { buildBibleSetSheetPrompt, buildHubContext, SET_ANGLES } from "../_shared/storyboard-sheet.js";
+import { buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES } from "../_shared/storyboard-sheet.js";
 import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName, looksLikeSentenceLocation } from "../_shared/location-names.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
@@ -1352,6 +1352,8 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     // 회사 에이전트(픽셀)만 다른 모델로 돌릴 수 있게 하기 위함.
     provider: input?.provider || String(ctx.env?.AGENT_IMAGE_PROVIDER || "").trim() || undefined,
     imageSize: input?.imageSize,
+    // 카메라 재구성(image-to-image scene): 0번 참조를 소스로 같은 장소를 다른 앵글로 다시 그린다.
+    cameraTargetMode: input?.cameraTargetMode || undefined,
   };
   const res = await fetch(internalUrl(ctx.request, "/api/imagen"), {
     method: "POST",
@@ -4480,6 +4482,136 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 세트 플레이트용 그림체(style) 참조 수집 — set_sheet 와 같은 우선순위: 스타일 앵커 → 다른 세트 시트/마스터 → 허브 배경·소품 자산 → 브랜드 캐릭터 시트(그림체만) → 기존 스틸. */
+async function collectStyleRefs(payload: any, locations: any[], idx: number, cur: any, bucket: string, ctx: ToolContext, max = 2): Promise<{ refs: any[]; source: string }> {
+  const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
+  const refs: any[] = [];
+  const anchor = (payload.styleAnchor && typeof payload.styleAnchor === "object" && payload.styleAnchor.objectName) ? payload.styleAnchor : null;
+  if (anchor && bucket) { refs.push({ imageUrl: gsOf(anchor.objectName), referenceId: 1, subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})`, referenceKind: "style" }); return { refs, source: "styleAnchor" }; }
+  const other = locations.find((l, i) => i !== idx && (l?.setSheet?.objectName || (Array.isArray(l?.variants) && l.variants.find((v: any) => v?.id === "angle-top" && v?.refObjectName))));
+  if (other && bucket) {
+    const obj = other.setSheet?.objectName || other.variants.find((v: any) => v?.id === "angle-top")?.refObjectName;
+    refs.push({ imageUrl: gsOf(obj), referenceId: 1, subjectDescription: `STYLE ANCHOR — another set of this project (${String(other.name || "")}); match rendering style only`, referenceKind: "style" });
+    return { refs, source: "other-set" };
+  }
+  const envAssets: any[] = Array.isArray(payload.environmentAssets) ? payload.environmentAssets : (Array.isArray(payload.knowledgeEnvironmentAssets) ? payload.knowledgeEnvironmentAssets : []);
+  for (const ea of envAssets) {
+    if (refs.length >= max) break;
+    const url = String(ea?.imageDataUrl || ea?.imageUrl || ea?.refObjectName || ea?.objectName || "").trim();
+    if (!url || /^(data:|blob:)/i.test(url)) continue;
+    refs.push({ imageUrl: /^(gs:|https?:)/i.test(url) ? url : gsOf(url), referenceId: refs.length + 1, subjectDescription: `STYLE ANCHOR — brand hub environment asset "${String(ea?.name || ea?.label || "environment").slice(0, 60)}" (match rendering style, palette, materials and lighting only)`, referenceKind: "style" });
+  }
+  if (refs.length) return { refs, source: "hub-environment-assets" };
+  const brandId = String(payload.brandId || payload.brandRef?.id || "").trim();
+  if (brandId) {
+    try {
+      const got: any = await runBrandGetTool({ brandId }, ctx);
+      const sheets = Array.isArray(got?.brand?.characterSheets) ? got.brand.characterSheets : [];
+      for (const entry of sheets) {
+        if (refs.length >= max) break;
+        const items = Array.isArray(entry?.items) ? entry.items : [];
+        const primary = items.find((it: any) => it?.isPrimary) || items[0];
+        const url = String(primary?.imageDataUrl || "").trim();
+        if (!url || /^(data:|blob:)/i.test(url)) continue;
+        refs.push({ imageUrl: url, referenceId: refs.length + 1, subjectDescription: `STYLE ANCHOR — registered character sheet of ${String(entry?.displayName || entry?.token || "a character").replace(/^@+/, "")} (match the rendering style, palette and lighting ONLY; do NOT draw this character — the set is empty)`, referenceKind: "style" });
+      }
+      if (refs.length) return { refs, source: "brand-character-sheets" };
+    } catch { /* 다음 후보 */ }
+  }
+  const stills: any[] = Array.isArray(cur?.scenes) ? cur.scenes : [];
+  const still = stills.map((sc) => String(sc?.imagePath || sc?.imageDataUrl || "").trim()).find((v) => v && !/^(data:|blob:)/i.test(v));
+  if (still && bucket) { refs.push({ imageUrl: /^(gs:|https?:)/i.test(still) ? still : gsOf(still), referenceId: 1, subjectDescription: "STYLE ANCHOR — an existing still of this project (match rendering style only)", referenceKind: "style" }); return { refs, source: "project-still" }; }
+  return { refs, source: "" };
+}
+
+function findOrCreateLocation(locations: any[], name: string): number {
+  const key = normLocationKey(name);
+  let idx = locations.findIndex((l) => normLocationKey(l?.name) === key || normLocationKey(l?.id) === key);
+  if (idx < 0) { locations.push({ id: key.replace(/[^0-9a-z가-힣]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "set", name, description: "", refObjectName: "", variants: [] }); idx = locations.length - 1; }
+  return idx;
+}
+
+function setVariant(loc: any, id: string, objectName: string, label: string, extra: Record<string, any> = {}) {
+  loc.variants = Array.isArray(loc.variants) ? loc.variants : [];
+  const hit = loc.variants.find((v: any) => v && String(v.id || "") === id);
+  if (hit) { hit.refObjectName = objectName; hit.label = label || hit.label; Object.assign(hit, extra); }
+  else loc.variants.push({ id, label, description: "", refObjectName: objectName, ...extra });
+}
+
+/** 세트 마스터(부감) 플레이트: 배치의 단일 원천. 세트 전체를 위에서 내려다본 한 장(인물 없음), 평면도(layout)를 지킨다.
+ *  variants 'angle-top' 에 저장, 앵커가 없으면 이 이미지가 프로젝트 스타일 앵커. 이후 set_angle 이 이 이미지를 편집해 다른 앵글을 만든다. */
+async function runSetMasterTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const name = String(input?.locationName || input?.name || input?.setName || "").trim();
+  if (!name) throw new Error("locationName(세트 이름)이 필요해요");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const payload: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
+  const header = String(payload.header || cur.header || "");
+  const aspect = String(input?.aspectRatio || payload.aspectRatio || "16:9");
+  const resolution = String(input?.resolution || input?.imageSize || "1K").toUpperCase();
+  const locations: any[] = Array.isArray(payload.episodeLocations) ? payload.episodeLocations.map((l: any) => ({ ...l })) : [];
+  const idx = findOrCreateLocation(locations, name);
+  const loc = locations[idx];
+  const hub = buildHubContext(payload);
+  const layout = (input?.layout && typeof input.layout === "object") ? input.layout : (loc.layout || null);
+  const promptSetName = looksLikeSentenceLocation(String(loc.name || name)) ? (sanitizeSetName(String(loc.name || name)) || "the main set") : String(loc.name || name);
+  const prompt = String(input?.prompt || "").trim() || buildSetMasterPrompt({ header, hub, set: { name: promptSetName, description: String(loc.description || ""), layout }, aspect });
+  const bucket = studioBucket(ctx);
+  const style = await collectStyleRefs(payload, locations, idx, cur, bucket, ctx, 2);
+  const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
+  const img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: style.refs, generationMode: "text-to-image", ...(["1K", "2K", "4K"].includes(resolution) ? { imageSize: resolution } : {}), ...providerOpt }, ctx);
+  if (!img?.objectName) throw new Error("마스터 플레이트 결과에 저장 경로(objectName)가 없어요.");
+  setVariant(loc, "angle-top", img.objectName, "부감(마스터)", { source: "master", createdAt: new Date().toISOString() });
+  loc.masterAngle = "top";
+  if (layout && !loc.layout) loc.layout = layout;
+  loc.plateDiag = { provider: String(img.provider || ""), model: String(img.model || ""), geminiEndpoint: String(img.geminiEndpoint || ""), referenceCount: Number(img.referenceImageCount) || 0, styleSource: style.source, hubContextUsed: !!hub, promptHead: String(prompt).slice(0, 1200) };
+  locations[idx] = loc;
+  const nextPayload: any = { episodeLocations: locations };
+  if (!(payload.styleAnchor && payload.styleAnchor.objectName)) nextPayload.styleAnchor = { objectName: img.objectName, sheetId: "", setName: String(loc.name || name), createdAt: new Date().toISOString(), pickedBy: "auto-master" };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: nextPayload } });
+  return { kind: "set_master", projectId, locationName: String(loc.name || name), objectName: img.objectName, signedUrl: img.signedUrl || "", styleSource: style.source, hubContextUsed: !!hub, model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", layoutUsed: !!layout, saved: true, promptEcho: prompt, summary: `부감 마스터 플레이트 생성: ${String(loc.name || name)}${layout ? " (평면도 적용)" : " (평면도 없음 — 세트 계획을 다시 하면 생겨요)"}` };
+}
+
+/** 세트 앵글 플레이트 파생: 마스터(부감) 이미지를 소스로 같은 세트를 다른 앵글로 다시 그린다(카메라 재구성, 편집 모드).
+ *  angle: front|back|left|right|high|low. front → refObjectName(정면 마스터, 기존 파이프라인 호환), back/left/right → dir-*, high/low → angle-*. */
+async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const name = String(input?.locationName || input?.name || input?.setName || "").trim();
+  if (!name) throw new Error("locationName(세트 이름)이 필요해요");
+  const angle = String(input?.angle || "front").trim().toLowerCase();
+  if (!["front", "back", "left", "right", "high", "low"].includes(angle)) throw new Error(`앵글이 잘못됐어요: ${angle}`);
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const payload: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
+  const header = String(payload.header || cur.header || "");
+  const aspect = String(input?.aspectRatio || payload.aspectRatio || "16:9");
+  const locations: any[] = Array.isArray(payload.episodeLocations) ? payload.episodeLocations.map((l: any) => ({ ...l })) : [];
+  const idx = findOrCreateLocation(locations, name);
+  const loc = locations[idx];
+  const bucket = studioBucket(ctx);
+  const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
+  const master = (Array.isArray(loc.variants) ? loc.variants : []).find((v: any) => v?.id === "angle-top" && v?.refObjectName)?.refObjectName || loc.refObjectName || "";
+  if (!master || !bucket) throw new Error("마스터 플레이트(부감)가 없어요. 먼저 set_master 로 만드세요.");
+  const hub = buildHubContext(payload);
+  const promptSetName = looksLikeSentenceLocation(String(loc.name || name)) ? (sanitizeSetName(String(loc.name || name)) || "the main set") : String(loc.name || name);
+  const prompt = String(input?.prompt || "").trim() || buildAnglePlateEditPrompt({ set: { name: promptSetName, description: String(loc.description || ""), layout: loc.layout || null }, angle, header, hub, fromMaster: true });
+  const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
+  const img = await runImagenTool({
+    prompt, aspectRatio: aspect, projectId, generationMode: "image-to-image", cameraTargetMode: "scene",
+    referenceImages: [{ imageUrl: gsOf(master), referenceId: 1, subjectDescription: `${promptSetName} — top-down master plate (source)`, referenceKind: "environment" }],
+    ...providerOpt,
+  }, ctx);
+  if (!img?.objectName) throw new Error("앵글 플레이트 결과에 저장 경로(objectName)가 없어요.");
+  const label: Record<string, string> = { front: "정면", back: "후면(리버스)", left: "좌측", right: "우측", high: "하이앵글(부감)", low: "로우앵글" };
+  if (angle === "front") { loc.refObjectName = img.objectName; setVariant(loc, "dir-front", img.objectName, label.front, { source: "derived", createdAt: new Date().toISOString() }); }
+  else if (angle === "back" || angle === "left" || angle === "right") setVariant(loc, `dir-${angle}`, img.objectName, label[angle], { source: "derived", createdAt: new Date().toISOString() });
+  else setVariant(loc, `angle-${angle}`, img.objectName, label[angle], { source: "derived", createdAt: new Date().toISOString() });
+  locations[idx] = loc;
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { episodeLocations: locations } } });
+  return { kind: "set_angle", projectId, locationName: String(loc.name || name), angle, objectName: img.objectName, signedUrl: img.signedUrl || "", model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", saved: true, promptEcho: prompt, summary: `${label[angle]} 플레이트를 마스터에서 파생했어요: ${String(loc.name || name)}` };
+}
+
 /** 스타일 앵커 지정: 프로젝트의 그림체 기준 이미지를 창작자가 고른다(기존 스틸·플레이트·시트 어느 것이든).
  *  이후 세트 시트·콘티·스틸컷이 이 이미지를 style 참조로 받는다. 쓰기 → 게이트(캔버스는 자동 승인). */
 async function runStyleAnchorSetTool(input: any, ctx: ToolContext): Promise<any> {
@@ -4875,6 +5007,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_split: { agentId: "plot", kind: "external", gate: true, run: runSceneSplitTool },
   // 스타일 기준 이미지 지정(창작자 선택). 쓰기 → 게이트(캔버스 자동 승인).
   style_anchor_set: { agentId: "pixel", kind: "external", gate: true, run: runStyleAnchorSetTool },
+  // 세트 마스터(부감) 1장 → 컷이 쓰는 앵글만 파생(카메라 재구성). 배치의 단일 원천 = 마스터. 크레딧 사용 → 게이트(캔버스 자동 승인).
+  set_master: { agentId: "pixel", kind: "external", gate: true, run: runSetMasterTool },
+  set_angle: { agentId: "pixel", kind: "external", gate: true, run: runSetAngleTool },
   // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
   set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
   // 장소 합치기(같은 방이 두 이름으로 갈린 것을 하나로) · 합치기 제안(읽기)
