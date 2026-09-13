@@ -1045,7 +1045,7 @@ export default function ProductionCanvas({
             </div>
           )}
           {error && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded border border-red-800/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-300">{error}</div>}
-          {loading && !graph && <div className="absolute inset-0 grid place-items-center text-sm text-gray-500">캔버스를 불러오는 중…</div>}
+          {loading && !graph && <div className="absolute inset-0 z-20 grid place-items-center bg-[#06080c]/55 backdrop-blur-[4px]" data-testid="canvas-loading"><RefreshIcon className="h-9 w-9 animate-spin text-orange-400" /></div>}
 
           <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
             <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>

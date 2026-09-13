@@ -450,10 +450,16 @@ body::-webkit-scrollbar {
   display: none !important;
 }
 
+/* 스테이지(iframe) 로딩 가림막: 흐림 위에 기존 .spinner — 아무것도 없는 빈 화면으로 기다리게 하지 않는다. */
 .stage-overlay {
   position: absolute;
   inset: 0;
-  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   opacity: 0;
   transition: opacity 160ms ease;
   pointer-events: none;
@@ -461,6 +467,7 @@ body::-webkit-scrollbar {
 }
 .stage-overlay.is-active {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar {

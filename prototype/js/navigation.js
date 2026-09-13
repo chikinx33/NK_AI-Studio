@@ -408,6 +408,10 @@
                 ov1 = document.createElement('div');
                 ov1.id = 'stage-overlay';
                 ov1.className = 'stage-overlay';
+                // 기존 .spinner — 스테이지가 뜨기 전까지 흐림 위에서 돈다.
+                var ovSpin = document.createElement('div');
+                ovSpin.className = 'spinner';
+                ov1.appendChild(ovSpin);
                 content.appendChild(ov1);
             }
         } catch (_) {}
