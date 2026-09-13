@@ -594,8 +594,11 @@ export default function ProductionCanvas({
     setNotice("");
     try {
       const res = await createAgentJob(type, input);
-      setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: res.status || "queued", label, target, updatedAt: Date.now() }, ...prev].slice(0, 20));
-      setNotice(settings.confirmBeforeGenerate ? `${label} — 승인 패널에서 승인하면 실행돼요.` : `${label} — 자동 승인으로 바로 실행돼요.`);
+      // 캔버스 버튼을 누른 것이 곧 확인이다 — 승인 게이트를 여기서 바로 통과시킨다(서버 기록은 그대로).
+      // '생성 전 확인' 설정은 에이전트(채팅)가 스스로 만드는 잡에만 해당한다.
+      await approveItem(res.jobId).catch(() => null);
+      setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: "running", label, target, updatedAt: Date.now() }, ...prev].slice(0, 20));
+      setNotice(`${label} — 실행 중`);
     } catch (e) {
       setNotice(`실패: ${(e as Error).message}`);
       setPending((prev) => [{ jobId: `local-${Date.now()}`, type, sceneId, status: "error", label, target, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
@@ -698,7 +701,7 @@ export default function ProductionCanvas({
       }
     }
     const count = kind === "image" ? settings.image.count : settings.video.count;
-    return `컷 ${targets.join(",")}에 ${kind === "image" ? "스틸" : "영상"} ${count > 1 ? `x${count} ` : ""}${settings.confirmBeforeGenerate ? "요청 — 승인 패널에서 승인하면 생성돼요." : "생성 시작 — 자동 승인됐어요."}`;
+    return `컷 ${targets.join(",")}에 ${kind === "image" ? "스틸" : "영상"} ${count > 1 ? `x${count} ` : ""}생성 시작`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, selectedSceneIds, settings, nodeById]);
 
