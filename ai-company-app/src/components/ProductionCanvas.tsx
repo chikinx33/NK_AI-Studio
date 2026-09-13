@@ -544,6 +544,8 @@ export default function ProductionCanvas({
         const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
         if (status !== p.status) {
           changed = true;
+          if (status === "approved") setNotice(`${p.label} — 완료`);
+          else if (status === "error") setNotice(`${p.label} — 오류: ${error || "알 수 없음"}`);
           if (p.type === "scene_split" && status === "approved") reorderResetRef.current = true; // 씬 바가 다시 갈리므로 칸 배치를 서버 순서로
           if (p.type === "scene_reorder" && status === "approved") {
             reorderResetRef.current = true;
@@ -616,6 +618,13 @@ export default function ProductionCanvas({
     }
   };
   const dismissJob = (jobId: string) => setPending((prev) => prev.filter((p) => p.jobId !== jobId));
+  // 컷의 스틸/영상 잡 상태 — 카드·상세의 미디어 칸과 버튼이 이걸로 스피너/오류를 그린다(생성 중인데 아무 표시가 없던 문제).
+  const cutJobState = (sceneId: unknown, type: "scene_still" | "scene_video"): { running: PendingJob | null; failed: PendingJob | null } => {
+    const mine = pending.filter((j) => j.type === type && String(j.sceneId) === String(sceneId));
+    const running = mine.find((j) => !JOB_DONE.includes(j.status)) || null;
+    const failed = running ? null : (mine.find((j) => j.status === "error") || null);
+    return { running, failed };
+  };
   const setSheetActive = pending.some((p) => SET_JOB_TYPES.includes(p.type) && !JOB_DONE.includes(p.status));
 
   // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
@@ -866,6 +875,12 @@ export default function ProductionCanvas({
       setSelectedId("");
       setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
       return;
+    }
+    if (d.kind === "cut" && d.id && !d.moved && d.zone === "image" && nodeById.get(d.id)?.type === "cut") {
+      // 컷 카드 스틸 클릭 = 크게 보기(배경 카드와 같은 규칙). 스틸이 없으면 상세로.
+      const cn = nodeById.get(d.id)!;
+      const url = String(cn.data.still?.url || "");
+      if (url) { setLightbox({ url: withMediaToken(url), title: `${cutLabelById.get(cn.id) || cn.label} 스틸`, objectName: String(cn.data.still?.ref || "").replace(/^gs:\/\/[^/]+\//, "") }); return; }
     }
     if (d.kind === "cut" && d.id && !d.moved && d.zone === "header" && nodeById.get(d.id)?.type === "cut") {
       // 컷 카드 상단 바 클릭 = 선택 토글만(상세는 열지 않는다). 여러 컷을 고르는 기본 방법.
@@ -1206,18 +1221,22 @@ export default function ProductionCanvas({
                         {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
                       </div>
                       <div className="grid grid-cols-2 gap-1 p-2">
-                        <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
+                        {(() => { const st = cutJobState(n.data.sceneId, "scene_still"); const vd = cutJobState(n.data.sceneId, "scene_video"); return (<>
+                        <div className={`relative aspect-video overflow-hidden rounded-md bg-black/40 ${n.data.still?.url ? "cursor-zoom-in" : ""}`} data-zone="image" title={n.data.still?.url ? "누르면 크게 볼 수 있어요" : undefined}>
                           {n.data.still?.url
-                            ? <img src={withMediaToken(String(n.data.still.url))} alt="" className="h-full w-full object-cover" draggable={false} loading="lazy" />
-                            : <div className="grid h-full place-items-center text-[10px] text-gray-600">스틸 없음</div>}
-                          <span className="absolute left-1 top-1"><Chip tone={n.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
+                            ? <img src={withMediaToken(String(n.data.still.url))} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
+                            : !st.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "스틸 없음"}</div>}
+                          {st.running && <div className="absolute inset-0 grid place-items-center gap-1 text-[10px] text-sky-200"><RefreshIcon className="h-5 w-5 animate-spin" /><span>스틸 생성 중…</span></div>}
+                          <span className="absolute left-1 top-1"><Chip tone={st.running ? "amber" : st.failed ? "red" : n.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                         </div>
                         <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
                           {n.data.clip?.url
-                            ? <video src={withMediaToken(String(n.data.clip.url))} className="h-full w-full object-cover" muted playsInline preload="metadata" />
-                            : <div className="grid h-full place-items-center text-[10px] text-gray-600">{n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
-                          <span className="absolute left-1 top-1"><Chip tone={n.data.clip?.url ? "emerald" : (n.data.clip?.error ? "red" : "gray")}>영상</Chip></span>
+                            ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
+                            : !vd.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{vd.failed ? <span className="px-1 text-center text-red-300">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
+                          {vd.running && <div className="absolute inset-0 grid place-items-center gap-1 text-[10px] text-sky-200"><RefreshIcon className="h-5 w-5 animate-spin" /><span>영상 생성 중…</span></div>}
+                          <span className="absolute left-1 top-1"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                         </div>
+                        </>); })()}
                       </div>
                       <div className="px-3 pb-2">
                         <p className="line-clamp-2 text-[11px] leading-snug text-gray-300"><span className="text-gray-500">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-gray-600">—</span>}</p>
@@ -1471,20 +1490,24 @@ export default function ProductionCanvas({
                 <div className="grid min-h-0 flex-1 grid-cols-12 gap-0 overflow-hidden">
                   {/* 왼쪽: 미디어 + 실제 전송 프롬프트 + 계보 */}
                   <div className="col-span-7 min-h-0 overflow-y-auto border-r border-edge p-4">
+                    {(() => { const st = cutJobState(selected.data.sceneId, "scene_still"); const vd = cutJobState(selected.data.sceneId, "scene_video"); return (
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40">
+                      <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-still-box">
                         {selected.data.still?.url
-                          ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className="h-full w-full object-cover" />
-                          : <div className="grid h-full place-items-center text-[11px] text-gray-600">스틸 없음</div>}
-                        <span className="absolute left-2 top-2"><Chip tone={selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
+                          ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
+                          : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
+                        {st.running && <div className="absolute inset-0 grid place-items-center gap-1.5 text-[11px] text-sky-200"><RefreshIcon className="h-6 w-6 animate-spin" /><span>스틸 생성 중… (플레이트 파생이 필요하면 조금 더 걸려요)</span></div>}
+                        <span className="absolute left-2 top-2"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                       </div>
-                      <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40">
+                      <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-video-box">
                         {selected.data.clip?.url
-                          ? <video src={withMediaToken(String(selected.data.clip.url))} className="h-full w-full object-cover" controls muted playsInline preload="metadata" />
-                          : <div className="grid h-full place-items-center text-[11px] text-gray-600">{selected.data.clip?.error ? `영상 실패: ${String(selected.data.clip.error).slice(0, 60)}` : "영상 없음"}</div>}
-                        <span className="absolute left-2 top-2"><Chip tone={selected.data.clip?.url ? "emerald" : (selected.data.clip?.error ? "red" : "gray")}>영상</Chip></span>
+                          ? <video src={withMediaToken(String(selected.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} controls muted playsInline preload="metadata" />
+                          : !vd.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{vd.failed ? <span className="select-text text-red-300">영상 실패: {String(vd.failed.error || "오류").slice(0, 160)}</span> : selected.data.clip?.error ? `영상 실패: ${String(selected.data.clip.error).slice(0, 60)}` : "영상 없음"}</div>}
+                        {vd.running && <div className="absolute inset-0 grid place-items-center gap-1.5 text-[11px] text-sky-200"><RefreshIcon className="h-6 w-6 animate-spin" /><span>영상 생성 중…</span></div>}
+                        <span className="absolute left-2 top-2"><Chip tone={vd.running ? "amber" : (vd.failed || selected.data.clip?.error) ? "red" : selected.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                       </div>
                     </div>
+                    ); })()}
                     {Array.isArray(selected.data.still?.history) && selected.data.still.history.length > 0 && (
                       <div className="mt-3">
                         <p className="mb-1 text-[10px] font-bold text-gray-500">스틸 이력 ({selected.data.still.history.length})</p>
@@ -1543,8 +1566,8 @@ export default function ProductionCanvas({
                     </div>
                     <div className="mt-auto flex flex-wrap gap-2 border-t border-edge pt-3">
                       <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
-                      <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
-                      <button type="button" disabled={saving || !selected.data.still?.url} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</button>
+                      <button type="button" disabled={saving || !!cutJobState(selected.data.sceneId, "scene_still").running} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>{cutJobState(selected.data.sceneId, "scene_still").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</>}</button>
+                      <button type="button" disabled={saving || !selected.data.still?.url || !!cutJobState(selected.data.sceneId, "scene_video").running} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">{cutJobState(selected.data.sceneId, "scene_video").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</>}</button>
                     </div>
                     {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
                   </div>

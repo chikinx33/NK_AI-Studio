@@ -359,3 +359,20 @@ test('★세트 시트 모달은 부감 마스터만: 머리글 한 문장 · �
   assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 크레딧 사용/);
   assert.doesNotMatch(src, /name="sheet-mode"|빠른 미리보기|정면 플레이트 참조|style-anchor-panel|그림체 기준:/);
 });
+
+test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸에 스피너, 버튼은 "생성 중" 비활성, 실패면 칸에 오류 문구(선택 가능)', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const cutJobState = \(sceneId: unknown, type: "scene_still" \| "scene_video"\): \{ running: PendingJob \| null; failed: PendingJob \| null \} => \{/);
+  assert.match(src, /<span>스틸 생성 중…<\/span>/, '카드 칸 스피너');
+  assert.match(src, /<span>영상 생성 중…<\/span>/, '카드 칸 스피너');
+  assert.match(src, /data-testid="detail-still-box"/);
+  assert.match(src, /<span>스틸 생성 중… \(플레이트 파생이 필요하면 조금 더 걸려요\)<\/span>/, '상세 칸 스피너');
+  assert.match(src, /<span className="select-text text-red-300">스틸 실패: \{String\(st\.failed\.error \|\| "오류"\)\.slice\(0, 160\)\}<\/span>/, '상세 칸 오류');
+  assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running\}/, '진행 중 버튼 비활성');
+  assert.match(src, /\{cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \? <><RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/>생성 중<\/> : <>스틸 생성/);
+  // 컷 스틸 클릭 = 크게 보기(상세·카드 둘 다)
+  assert.match(src, /cursor-zoom-in object-cover \$\{st\.running \? "opacity-40" : ""\}`\} title="클릭하면 크게 볼 수 있어요" onClick=\{\(\) => setLightbox\(\{ url: withMediaToken\(String\(selected\.data\.still\.url\)\)/, '상세 스틸 클릭 = 크게');
+  assert.match(src, /d\.zone === "image" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n\s*\/\/ 컷 카드 스틸 클릭 = 크게 보기/, '카드 스틸 클릭 = 크게');
+  // 안내 문구는 잡 상태를 따라간다("실행 중"에 멈추지 않는다)
+  assert.match(src, /if \(status === "approved"\) setNotice\(`\$\{p\.label\} — 완료`\);\s*\n\s*else if \(status === "error"\) setNotice\(`\$\{p\.label\} — 오류: \$\{error \|\| "알 수 없음"\}`\);/);
+});
