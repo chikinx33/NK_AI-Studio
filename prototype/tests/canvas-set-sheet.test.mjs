@@ -132,3 +132,16 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   assert.match(orch, /set_sheet: `\[\[RUN: set_sheet \| \{"projectId"/);
   assert.match(orch, /set_sheet: "세트 시트\(바이블\) 생성"/);
 });
+
+test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 라벨), 플레이트 띠, 다시 만들기; 클릭하면 라이트박스', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const \[lightbox, setLightbox\] = useState<\{ url: string; title: string \} \| null>\(null\);/);
+  assert.match(src, /const mainUrl = String\(sheet\?\.url \|\| plateUrl \|\| ""\);/);
+  assert.match(src, /className="block max-h-\[60vh\] w-full cursor-zoom-in object-contain"/);
+  assert.match(src, /const angleNames = \["정면", "후면", "부감", "로우"\];/);
+  assert.match(src, /\{i \+ 1\} · \{name\}/, '2×2 칸마다 번호·앵글 라벨');
+  assert.match(src, /\{sheet \? "세트 시트 다시 만들기" : "세트 시트 만들기"\}/);
+  assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\[selected\.id\]\)/, '이 장소만 선택된 채 모달');
+  assert.match(src, /아직 세트 시트가 없어요\. 배경 바의 별 버튼으로 만들어요\./);
+  assert.match(src, /className="absolute inset-0 z-50 grid place-items-center bg-black\/85 p-6" onClick=\{\(\) => setLightbox\(null\)\}/);
+});

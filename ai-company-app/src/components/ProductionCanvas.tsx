@@ -384,6 +384,8 @@ export default function ProductionCanvas({
   const [jobDockOpen, setJobDockOpen] = useState(false);
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
   const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K" } | null>(null);
+  // 큰 이미지 보기(라이트박스): 배경 상세의 세트 시트·플레이트를 화면 가득 본다.
+  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -1123,6 +1125,15 @@ export default function ProductionCanvas({
             );
           })()}
 
+          {/* 라이트박스 — 배경 상세의 이미지를 화면 가득. 클릭/ESC 로 닫는다. */}
+          {lightbox && (
+            <div className="absolute inset-0 z-50 grid place-items-center bg-black/85 p-6" onClick={() => setLightbox(null)} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} role="dialog" aria-label={lightbox.title}>
+              <img src={lightbox.url} alt="" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" draggable={false} />
+              <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</div>
+              <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label="닫기">✕</button>
+            </div>
+          )}
+
           {/* 세트 시트 생성 모달 — 대상 장소·해상도를 고르고 "생성"이 곧 확인. 진행은 같은 모달에서 장소별로 본다. */}
           {sheetModal && (
             <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setSheetModal(null)}>
@@ -1338,13 +1349,60 @@ export default function ProductionCanvas({
                 <p className="mt-2 text-[10px] text-gray-500">프로젝트 공통 프롬프트는 스튜디오 프리프로덕션에서 편집해요. 컷별 예외는 컷 노드의 '공통 프롬프트 오버라이드'로 두세요.</p>
               </div>
             )}
-            {selected.type === "location" && (
-              <div className="p-4">
-                <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-white">{selected.label}</h3><button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button></div>
-                <p className="text-[11px] text-gray-400">이 장소를 쓰는 컷: {(graph?.edges || []).filter((e) => e.from === selected.id && e.type === "location").map((e) => e.to.replace("cut:", "#")).join(", ") || "없음"}</p>
-                <p className="mt-2 text-[10px] text-gray-500">같은 장소의 컷은 같은 세트 플레이트(정면·후면·좌·우)를 공유해요. 방위가 다른 컷은 노란 칩으로 표시돼요.</p>
-              </div>
-            )}
+            {selected.type === "location" && (() => {
+              const sheet = selected.data.setSheet as { url?: string; resolution?: string; createdAt?: string; panels?: Array<{ index: number; ref: string; angleLabel: string; status: string; url?: string }> } | null;
+              const plateUrl = String(selected.data.plateUrl || "");
+              const variants = (Array.isArray(selected.data.variants) ? selected.data.variants : []) as Array<{ id: string; label: string; url: string }>;
+              const mainUrl = String(sheet?.url || plateUrl || "");
+              const angleNames = ["정면", "후면", "부감", "로우"];
+              const cutsHere = (graph?.edges || []).filter((e) => e.from === selected.id && e.type === "location").map((e) => e.to.replace("cut:", "#"));
+              return (
+                <div className="flex h-full flex-col p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-bold text-white">{selected.label}</h3>
+                      <p className="text-[11px] text-gray-400">이 장소를 쓰는 컷: {cutsHere.join(", ") || "없음"}</p>
+                    </div>
+                    <button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button>
+                  </div>
+                  {mainUrl ? (
+                    <div className="relative overflow-hidden rounded-xl border border-edge bg-black">
+                      <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label })} title="클릭하면 크게 볼 수 있어요" />
+                      {sheet?.url && (
+                        <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
+                          {angleNames.map((name, i) => (
+                            <div key={name} className="relative border border-white/10">
+                              <span className="absolute left-1.5 top-1.5 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">{i + 1} · {name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <span className="absolute right-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-black text-black">{sheet?.url ? "바이블 · 세트 시트" : "정면 플레이트"}</span>
+                    </div>
+                  ) : (
+                    <div className="grid h-40 place-items-center rounded-xl border border-dashed border-edge text-[11px] text-gray-500">아직 세트 시트가 없어요. 배경 바의 별 버튼으로 만들어요.</div>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
+                    {sheet ? <Chip tone="emerald">시트 {String(sheet.resolution || "")}</Chip> : <Chip>시트 없음</Chip>}
+                    {sheet?.createdAt ? <span>{new Date(sheet.createdAt).toLocaleString()}</span> : null}
+                    <div className="flex-1" />
+                    <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
+                  </div>
+                  {(plateUrl || variants.length > 0) && (
+                    <div className="mt-3">
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">플레이트</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {plateUrl && <button type="button" onClick={() => setLightbox({ url: withMediaToken(plateUrl), title: `${selected.label} · 정면 플레이트` })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(plateUrl)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">정면</span></button>}
+                        {variants.map((v) => (
+                          <button key={v.id} type="button" onClick={() => setLightbox({ url: withMediaToken(v.url), title: `${selected.label} · ${v.label || v.id}` })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(v.url)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">{v.label || v.id}</span></button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-3 text-[10px] text-gray-500">같은 장소의 컷은 이 세트 시트를 배경 기준으로 공유해요. 다음 단계에서 네 칸을 승인하면 각 앵글 플레이트로 잘려 저장돼요.</p>
+                </div>
+              );
+            })()}
             {selected.type === "character" && (
               <div className="p-4">
                 <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-white">{selected.label}</h3><button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button></div>
