@@ -84,7 +84,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
       description: String(hit.description || ""),
       plateUrl: toDisplayUrl(hit.refObjectName || ""),
       plateRef: String(hit.refObjectName || ""),
-      variants: (Array.isArray(hit.variants) ? hit.variants : []).filter((v: any) => v && v.refObjectName).map((v: any) => ({ id: String(v.id || ""), label: String(v.label || ""), url: toDisplayUrl(v.refObjectName) })),
+      variants: (Array.isArray(hit.variants) ? hit.variants : []).filter((v: any) => v && v.refObjectName).map((v: any) => ({ id: String(v.id || ""), label: String(v.label || ""), url: toDisplayUrl(v.refObjectName), objectName: String(v.refObjectName || "") })),
       setSheet: sheetMeta ? {
         sheetId: String(sheetMeta.sheetId || ""), objectName: String(sheetMeta.objectName || ""), url: toDisplayUrl(sheetMeta.objectName || ""),
         resolution: String(sheetMeta.resolution || sheet?.resolution || ""), createdAt: String(sheetMeta.createdAt || ""),

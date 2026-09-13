@@ -87,3 +87,11 @@ test('★세트가 하나면 장소가 지워지지 않는다: 공통 접두어 
   assert.match(graph, /const soleSet = episodeLocations\.length === 1 \? String\(episodeLocations\[0\]\?\.name \|\| ""\)\.trim\(\) : "";/);
   assert.match(graph, /const loc = String\(s\?\.sceneLocation \|\| s\?\.location \|\| ""\)\.trim\(\) \|\| soleSet;/);
 });
+
+test('★세트 계획이 허브를 읽는다: IP 세계관(참고)과 이미 정의된 세트(같은 공간이면 같은 이름·묘사 재사용)', () => {
+  const src = read('prototype/functions/api/scenario.js');
+  assert.match(src, /episodeLocations: Array\.isArray\(body\.episodeLocations\) \? body\.episodeLocations : \[\],/);
+  assert.match(src, /const world = String\(input\.knowledgeHub\?\.worldSetting \|\| ""\)\.trim\(\)\.slice\(0, 400\);/);
+  assert.match(src, /\[이 프로젝트에 이미 정의된 세트 — 같은 공간이면 같은 이름과 묘사를 그대로 재사용한다\]/);
+  assert.match(src, /\.filter\(\(l\) => l\.name && !looksLikeSentenceLocation\(l\.name\)\)\.slice\(0, 8\);/, '문장 이름은 재사용 후보에서 제외');
+});

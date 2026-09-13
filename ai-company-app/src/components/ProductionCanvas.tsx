@@ -387,7 +387,14 @@ export default function ProductionCanvas({
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
   const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K"; usePlate?: boolean } | null>(null);
   // 큰 이미지 보기(라이트박스): 배경 상세의 세트 시트·플레이트를 화면 가득 본다.
-  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; title: string; objectName?: string } | null>(null);
+  // 스타일 기준 이미지 지정(창작자 선택): 어떤 저장 이미지든 프로젝트 그림체 기준으로.
+  const setStyleAnchor = async (objectName: string, label: string) => {
+    if (!projectId || !objectName) return;
+    if (!window.confirm(`"${label}" 이미지를 이 프로젝트의 그림체 기준(스타일 기준)으로 지정할까요?\n이후 세트 시트·콘티·스틸컷이 이 이미지의 룩을 참조해요.`)) return;
+    await enqueue("style_anchor_set", { projectId, objectName, setName: label }, `스타일 기준 지정 · ${label}`);
+    setLightbox(null);
+  };
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -559,7 +566,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -1243,7 +1250,13 @@ export default function ProductionCanvas({
           {lightbox && (
             <div className="absolute inset-0 z-50 grid place-items-center bg-black/85 p-6" onClick={() => setLightbox(null)} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} role="dialog" aria-label={lightbox.title}>
               <img src={lightbox.url} alt="" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" draggable={false} />
-              <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</div>
+              <div className="absolute left-4 top-4 flex items-center gap-2">
+                <span className="rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</span>
+                {graph?.styleAnchor && lightbox.objectName && graph.styleAnchor.objectName === lightbox.objectName && <span className="rounded-full bg-amber-400 px-2 py-1 text-[11px] font-black text-black">스타일 기준</span>}
+                {lightbox.objectName && !(graph?.styleAnchor && graph.styleAnchor.objectName === lightbox.objectName) && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); void setStyleAnchor(lightbox.objectName!, lightbox.title); }} className="rounded-full border border-amber-400/70 bg-black/60 px-3 py-1 text-[11px] font-bold text-amber-200 hover:bg-amber-500/30" title="이후 세트 시트·콘티·스틸컷이 이 이미지의 그림체를 참조해요">이 이미지를 스타일 기준으로</button>
+                )}
+              </div>
               <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label="닫기">✕</button>
             </div>
           )}
@@ -1294,7 +1307,7 @@ export default function ProductionCanvas({
                   <SparkleIcon className="h-4 w-4 text-violet-300" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-bold text-white">세트 시트 생성</div>
-                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. {graph?.styleAnchor ? `그림체 기준: "${graph.styleAnchor.setName}" 시트(스타일 앵커)를 모든 시트가 참조해요.` : "처음 만드는 시트가 프로젝트의 그림체 기준(스타일 앵커)이 되고, 다음 시트들은 그것을 참조해요."}</div>
+                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. {graph?.styleAnchor ? `그림체 기준: "${graph.styleAnchor.setName || "지정 이미지"}"(스타일 기준)를 모든 시트가 참조해요.` : "그림체 기준이 아직 없어요. 브랜드 캐릭터 시트(없으면 기존 스틸·플레이트)를 그림체 참조로 붙여 만들고, 첫 시트가 기준이 돼요. 기존 이미지를 기준으로 쓰려면 크게 보기에서 '이 이미지를 스타일 기준으로'를 누르세요."}</div>
                     {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
                   <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
@@ -1523,7 +1536,7 @@ export default function ProductionCanvas({
                   </div>
                   {mainUrl ? (
                     <div className="relative overflow-hidden rounded-xl border border-edge bg-black">
-                      <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label })} title="클릭하면 크게 볼 수 있어요" />
+                      <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label, objectName: String(sheet?.url ? (sheet as any)?.objectName || "" : selected.data.plateRef || "") })} title="클릭하면 크게 볼 수 있어요" />
                       {sheet?.url && (
                         <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
                           {angleNames.map((name, i) => (
@@ -1548,9 +1561,9 @@ export default function ProductionCanvas({
                     <div className="mt-3">
                       <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">플레이트</div>
                       <div className="flex flex-wrap gap-1.5">
-                        {plateUrl && <button type="button" onClick={() => setLightbox({ url: withMediaToken(plateUrl), title: `${selected.label} · 정면 플레이트` })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(plateUrl)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">정면</span></button>}
+                        {plateUrl && <button type="button" onClick={() => setLightbox({ url: withMediaToken(plateUrl), title: `${selected.label} · 정면 플레이트`, objectName: String(selected.data.plateRef || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(plateUrl)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">정면</span></button>}
                         {variants.map((v) => (
-                          <button key={v.id} type="button" onClick={() => setLightbox({ url: withMediaToken(v.url), title: `${selected.label} · ${v.label || v.id}` })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(v.url)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">{v.label || v.id}</span></button>
+                          <button key={v.id} type="button" onClick={() => setLightbox({ url: withMediaToken(v.url), title: `${selected.label} · ${v.label || v.id}`, objectName: String((v as any).objectName || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(v.url)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">{v.label || v.id}</span></button>
                         ))}
                       </div>
                     </div>

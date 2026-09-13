@@ -100,6 +100,36 @@ export function isSheetStale(sheet, scenes) {
   return false;
 }
 
+/**
+ * 브랜드 허브 컨텍스트 — 톤&매너·세계관/배경·브랜드 스토리·브랜드 규칙·금지 표현·참조/성공 패턴.
+ * 프로젝트 payload 에는 브랜드에서 동기화된 키(brandVoice/brandTone/worldSetting/knowledgeWorld/brandStory/brandRules/
+ * bannedExpressions/referenceContents/successCases)가 있다. 세트 시트·콘티·캐릭터 시트 프롬프트는 반드시 이 블록으로 시작한다 —
+ * 공통 헤더 한 줄만으로는 모델이 세트 묘사(침대·창문)에 끌려 프로젝트 세계와 무관한 룩을 그린다(2026-09-14 실제).
+ * @param {any} payload  프로젝트 payload(또는 브랜드 정의)
+ * @returns {string} 비어 있으면 ""
+ */
+export function buildHubContext(payload) {
+  const p = (payload && typeof payload === "object") ? payload : {};
+  const hub = (p.knowledgeHub && typeof p.knowledgeHub === "object") ? p.knowledgeHub : {};
+  const pick = (...vals) => { for (const v of vals) { const t = String(v == null ? "" : v).replace(/\s+/g, " ").trim(); if (t) return t; } return ""; };
+  const list = (v) => Array.isArray(v) ? v.map((x) => String(x || "").trim()).filter(Boolean) : String(v || "").split(/[\n]/).map((x) => x.trim()).filter(Boolean);
+  const tone = pick(p.brandVoice, hub.brandVoice, p.brandTone, hub.brandTone);
+  const world = pick(p.worldSetting, p.knowledgeWorld, hub.worldSetting, hub.knowledgeWorld);
+  const story = pick(p.brandStory, hub.brandStory);
+  const rules = list(p.brandRules && p.brandRules.length ? p.brandRules : hub.brandRules).slice(0, 12);
+  const banned = list(p.bannedExpressions && p.bannedExpressions.length ? p.bannedExpressions : hub.bannedExpressions).slice(0, 8);
+  const refs = list((p.successCases && p.successCases.length) ? p.successCases : (p.referenceContents && p.referenceContents.length ? p.referenceContents : (hub.successCases || hub.referenceContents))).slice(0, 5);
+  const lines = [];
+  if (world) lines.push(`WORLD / BACKGROUND (the set MUST belong to this world): ${world.slice(0, 500)}`);
+  if (tone) lines.push(`TONE & MANNER: ${tone.slice(0, 300)}`);
+  if (story) lines.push(`BRAND STORY (context): ${story.slice(0, 300)}`);
+  if (rules.length) lines.push(`BRAND RULES (obey): ${rules.map((r) => r.slice(0, 120)).join(" | ")}`);
+  if (banned.length) lines.push(`AVOID: ${banned.join(", ")}`);
+  if (refs.length) lines.push(`REFERENCE / WHAT WORKED: ${refs.map((r) => r.slice(0, 120)).join(" | ")}`);
+  if (!lines.length) return "";
+  return ["[BRAND HUB — this project's identity. Every image must read as part of this world, tone and style.]", ...lines].join("\n");
+}
+
 function gridLine(cols, rows, aspect) {
   return `STORYBOARD SHEET: a ${cols}x${rows} grid of ${cols * rows} panels on a plain white background, every panel exactly ${aspect || "16:9"}, thin white gutters between panels, a small panel number in the top-left corner of each panel, no other text, captions or labels anywhere.`;
 }
@@ -114,7 +144,7 @@ const STYLE_LOCK = "IMPORTANT: Render every panel in the EXACT SAME art style, m
 export function buildBibleCharacterSheetPrompt(input) {
   const chars = (Array.isArray(input && input.characters) ? input.characters : []).filter((c) => t(c && c.name)).slice(0, 3);
   const cols = SHEET_GRID.cols; const rows = SHEET_GRID.rows;
-  const lines = [t(input && input.header), gridLine(cols, rows, input && input.aspect)];
+  const lines = [t(input && input.header), t(input && input.hub), gridLine(cols, rows, input && input.aspect)];
   let n = 1;
   chars.forEach((c) => {
     CHARACTER_ANGLES.forEach((a) => {
@@ -137,6 +167,7 @@ export function buildBibleSetSheetPrompt(input) {
   const name = t(set.name) || "the set";
   const lines = [
     t(input && input.header),
+    t(input && input.hub),
     `SET SHEET: a 2x2 grid of 4 panels on a plain white background, every panel exactly ${(input && input.aspect) || "16:9"}, thin white gutters, a small panel number in the top-left corner of each panel, no other text.`,
     `All four panels show the SAME place: ${name}${t(set.description) ? ` — ${t(set.description).slice(0, 240)}` : ""}. Same architecture, props, materials, palette and lighting in every panel.`,
   ];
@@ -163,7 +194,7 @@ export function buildStoryboardSheetPrompt(input) {
   const cuts = (Array.isArray(input && input.cuts) ? input.cuts : []).slice(0, MAX_CUTS_PER_SHEET);
   const anchor = (input && input.anchor) || { role: "set" };
   const panels = [];
-  const lines = [t(input && input.header), gridLine(cols, rows, input && input.aspect)];
+  const lines = [t(input && input.header), t(input && input.hub), gridLine(cols, rows, input && input.aspect)];
   if (anchor.role === "overlap") {
     lines.push(`Panel 1 (OVERLAP): repeat the previous sheet's last frame exactly (provided as the first reference image) — same set, same characters, same lighting. It anchors tone and lighting for this sheet.`);
     panels.push({ index: 1, role: "overlap", ref: t(anchor.ref), label: "conti" });

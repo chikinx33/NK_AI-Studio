@@ -8,7 +8,7 @@ import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/cl
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
-import { buildBibleSetSheetPrompt, SET_ANGLES } from "../_shared/storyboard-sheet.js";
+import { buildBibleSetSheetPrompt, buildHubContext, SET_ANGLES } from "../_shared/storyboard-sheet.js";
 import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName, looksLikeSentenceLocation } from "../_shared/location-names.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
@@ -4364,7 +4364,9 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   const rawSetName = String(loc.name || name);
   const promptSetName = looksLikeSentenceLocation(rawSetName) ? (sanitizeSetName(rawSetName) || "the main set") : rawSetName;
   const promptSetDesc = String(loc.description || "").trim() || (looksLikeSentenceLocation(rawSetName) ? rawSetName : "");
-  const promptInput = { header, set: { name: promptSetName, description: promptSetDesc }, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation(rawSetName) };
+  // 브랜드 허브(톤&매너·세계관/배경·스토리·규칙·참조)가 프롬프트의 첫 블록이다. 세트 묘사보다 앞에 둔다.
+  const hubContext = buildHubContext(payload);
+  const promptInput = { header, hub: hubContext, set: { name: promptSetName, description: promptSetDesc }, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation(rawSetName) };
   const bucket = studioBucket(ctx);
   const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
   const referenceImages: any[] = [];
@@ -4374,15 +4376,58 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   const anchorFromOther = !anchor ? locations.find((l, i) => i !== idx && l?.setSheet?.objectName) : null;
   const styleRef = anchor ? { objectName: String(anchor.objectName), setName: String(anchor.setName || "") } : (anchorFromOther ? { objectName: String(anchorFromOther.setSheet.objectName), setName: String(anchorFromOther.name || "") } : null);
   const useStyleAnchor = input?.useStyleAnchor !== false && !!(styleRef && bucket);
+  let styleSource = "";
   if (useStyleAnchor && styleRef) {
     referenceImages.push({ imageUrl: gsOf(styleRef.objectName), referenceId: 1, subjectDescription: `STYLE ANCHOR — the approved set sheet of a DIFFERENT set (${styleRef.setName || "another set"}) in this project`, referenceKind: "style" });
+    styleSource = anchor ? "styleAnchor" : "other-set-sheet";
+  } else if (input?.useStyleAnchor !== false) {
+    // 앵커가 아직 없으면 프로젝트 허브의 기존 이미지가 그림체 기준이다 — 텍스트만으로 그리면 프로젝트와 무관한 룩이 나온다
+    // (2026-09-14 실제: 파스텔 실사풍 침실. 컷 생성은 캐릭터 시트를 참조해 원래 룩이 나왔다).
+    // 우선순위: ⓪ 허브 배경·소품 자산 이미지(최대 2) ① 브랜드 등록 캐릭터 시트(주 이미지, 최대 2) ② 이 프로젝트의 기존 스틸(최대 1) ③ 기존 정면 플레이트.
+    const envAssets: any[] = Array.isArray(payload.environmentAssets) ? payload.environmentAssets : (Array.isArray(payload.knowledgeEnvironmentAssets) ? payload.knowledgeEnvironmentAssets : []);
+    for (const ea of envAssets) {
+      if (referenceImages.length >= 2) break;
+      const url = String(ea?.imageDataUrl || ea?.imageUrl || ea?.refObjectName || ea?.objectName || "").trim();
+      if (!url || /^(data:|blob:)/i.test(url)) continue;
+      referenceImages.push({ imageUrl: /^(gs:|https?:)/i.test(url) ? url : gsOf(url), referenceId: referenceImages.length + 1, subjectDescription: `STYLE ANCHOR — brand hub environment asset "${String(ea?.name || ea?.label || "environment").slice(0, 60)}" (match rendering style, palette, materials and lighting; do not copy its layout unless it is this set)`, referenceKind: "style" });
+    }
+    if (referenceImages.length) styleSource = "hub-environment-assets";
+    const brandId = String(payload.brandId || payload.brandRef?.id || "").trim();
+    if (brandId && referenceImages.length < 2) {
+      try {
+        const got: any = await runBrandGetTool({ brandId }, ctx);
+        const sheets = Array.isArray(got?.brand?.characterSheets) ? got.brand.characterSheets : [];
+        for (const entry of sheets) {
+          if (referenceImages.length >= 2) break;
+          const items = Array.isArray(entry?.items) ? entry.items : [];
+          const primary = items.find((it: any) => it?.isPrimary) || items[0];
+          const url = String(primary?.imageDataUrl || "").trim();
+          if (!url || /^(data:|blob:)/i.test(url)) continue;
+          referenceImages.push({ imageUrl: url, referenceId: referenceImages.length + 1, subjectDescription: `STYLE ANCHOR — registered character sheet of ${String(entry?.displayName || entry?.token || "a character").replace(/^@+/, "")} (match the rendering style, palette and lighting ONLY; do NOT draw this character — the set is empty)`, referenceKind: "style" });
+        }
+        if (referenceImages.length && !styleSource) styleSource = "brand-character-sheets";
+      } catch { /* 브랜드를 못 읽으면 다음 후보 */ }
+    }
+    if (!referenceImages.length) {
+      const stills: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
+      const still = stills.map((sc) => String(sc?.imagePath || sc?.imageDataUrl || "").trim()).find((v) => v && !/^(data:|blob:)/i.test(v));
+      if (still && bucket) {
+        referenceImages.push({ imageUrl: /^(gs:|https?:)/i.test(still) ? still : gsOf(still), referenceId: 1, subjectDescription: "STYLE ANCHOR — an existing still of this project (match the rendering style, palette and lighting ONLY; do NOT copy its characters or composition)", referenceKind: "style" });
+        styleSource = "project-still";
+      }
+    }
+    if (!referenceImages.length && loc.refObjectName && bucket) {
+      referenceImages.push({ imageUrl: gsOf(loc.refObjectName), referenceId: 1, subjectDescription: `STYLE ANCHOR — the existing front plate of ${String(loc.name || name)} (match the rendering style ONLY)`, referenceKind: "style" });
+      styleSource = "existing-plate";
+    }
   }
+  const hasStyleRefs = referenceImages.some((r) => r.referenceKind === "style");
   // 정면 플레이트 참조는 선택(기본 끔): 옛 플레이트가 다른 그림체면 시트 전체를 그쪽으로 끌고 간다(실제 사례).
   const usePlate = input?.usePlate === true && !!(loc.refObjectName && bucket);
   if (usePlate) {
     referenceImages.push({ imageUrl: gsOf(loc.refObjectName), referenceId: referenceImages.length + 1, subjectDescription: `${String(loc.name || name)} (front-facing master plate)`, referenceKind: "environment" });
   }
-  promptInput.hasStyleRef = useStyleAnchor; promptInput.hasPlateRef = usePlate;
+  promptInput.hasStyleRef = hasStyleRefs; promptInput.hasPlateRef = usePlate;
   const prompt = String(input?.prompt || "").trim() || buildBibleSetSheetPrompt(promptInput);
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
   let img: any;
@@ -4418,10 +4463,22 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: nextPayload } });
   return {
     kind: "set_sheet", projectId, locationName: String(loc.name || name), sheetId, objectName: img.objectName, signedUrl: img.signedUrl || "",
-    resolution: fallback ? "default" : resolution, requestedResolution: resolution, plateReferenced: !fallback && usePlate, styleAnchored: !fallback && useStyleAnchor, styleAnchorSet: styleRef ? styleRef.setName : "", becameStyleAnchor: !anchor, model: img.model || "", saved: true, promptEcho: prompt,
+    resolution: fallback ? "default" : resolution, requestedResolution: resolution, plateReferenced: !fallback && usePlate, styleAnchored: !fallback && hasStyleRefs, styleSource: fallback ? "" : styleSource, hubContextUsed: !!hubContext, styleAnchorSet: styleRef ? styleRef.setName : "", becameStyleAnchor: !anchor, model: img.model || "", saved: true, promptEcho: prompt,
     fallback, firstError,
     summary: `세트 시트(${fallback ? "기본 크기·참조 없음으로 재시도" : resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.${firstError ? ` (1차 실패: ${firstError.slice(0, 120)})` : ""}`,
   };
+}
+
+/** 스타일 앵커 지정: 프로젝트의 그림체 기준 이미지를 창작자가 고른다(기존 스틸·플레이트·시트 어느 것이든).
+ *  이후 세트 시트·콘티·스틸컷이 이 이미지를 style 참조로 받는다. 쓰기 → 게이트(캔버스는 자동 승인). */
+async function runStyleAnchorSetTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const objectName = String(input?.objectName || "").replace(/^gs:\/\/[^/]+\//, "").trim();
+  if (!objectName || /^(data:|blob:|https?:)/i.test(objectName)) throw new Error("objectName(저장소 경로)이 필요해요");
+  const anchor = { objectName, sheetId: String(input?.sheetId || ""), setName: String(input?.setName || input?.label || ""), createdAt: new Date().toISOString(), pickedBy: "user" };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { styleAnchor: anchor } } });
+  return { kind: "style_anchor_set", projectId, styleAnchor: anchor, saved: true, summary: `스타일 기준 이미지를 바꿨어요${anchor.setName ? ` (${anchor.setName})` : ""}` };
 }
 
 /** 씬 나누기/합치기: 컷의 sceneBreak(이 컷부터 새 씬)를 켜거나 끈다. 같은 세트 안에서 씬을 둘로 나누는 유일한 방법.
@@ -4805,6 +4862,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_reorder: { agentId: "plot", kind: "external", gate: true, run: runSceneReorderTool },
   // 씬 나누기/합치기(sceneBreak) — 같은 세트 안에서 씬 경계를 두는 표시. 쓰기 → 게이트(캔버스는 자동 승인).
   scene_split: { agentId: "plot", kind: "external", gate: true, run: runSceneSplitTool },
+  // 스타일 기준 이미지 지정(창작자 선택). 쓰기 → 게이트(캔버스 자동 승인).
+  style_anchor_set: { agentId: "pixel", kind: "external", gate: true, run: runStyleAnchorSetTool },
   // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
   set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
   // 장소 합치기(같은 방이 두 이름으로 갈린 것을 하나로) · 합치기 제안(읽기)

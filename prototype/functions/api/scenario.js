@@ -20,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1708";
+const SERVER_VERSION = "3.1709";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -696,6 +696,8 @@ export async function onRequestPost(context) {
         characters: activeCharacters,
         sceneCount,
         storyBeats,
+        // 기존 세트 목록(재생성 시 같은 공간이면 같은 이름·묘사를 잇는다 — 이름이 바뀌면 플레이트·시트가 끊긴다)
+        episodeLocations: Array.isArray(body.episodeLocations) ? body.episodeLocations : [],
       });
       scenes = generated.scenes;
       generationMeta = generated.meta;
@@ -1693,6 +1695,14 @@ async function planEpisodeSets(input, beats) {
   const chars = Array.isArray(input.characters) && input.characters.length
     ? input.characters.map((c) => `${c.token}(${c.displayName || ""})`).join(", ")
     : "";
+  // 허브 맥락: IP 세계관(참고)과 이 프로젝트에 이미 정의된 세트(있으면 같은 이름·묘사를 재사용)
+  const world = String(input.knowledgeHub?.worldSetting || "").trim().slice(0, 400);
+  const hubTone = String(input.knowledgeHub?.brandVoice || "").trim().slice(0, 240);
+  const hubStory = String(input.knowledgeHub?.brandStory || "").trim().slice(0, 240);
+  const hubRules = (Array.isArray(input.knowledgeHub?.brandRules) ? input.knowledgeHub.brandRules : []).map((r) => String(r || "").trim()).filter(Boolean).slice(0, 8);
+  const knownSets = (Array.isArray(input.episodeLocations) ? input.episodeLocations : [])
+    .map((l) => ({ name: String(l?.name || "").trim(), description: String(l?.description || "").trim() }))
+    .filter((l) => l.name && !looksLikeSentenceLocation(l.name)).slice(0, 8);
   const sys = lang === "en"
     ? [
       "You are a production designer. Before any scene is written, decide the episode's SETS: the actually distinct PHYSICAL spaces where the story is filmed.",
@@ -1720,8 +1730,16 @@ async function planEpisodeSets(input, beats) {
     "",
     lang === "en" ? "[Beats]" : "[비트]",
     beatLines,
-    chars ? "" : "",
     chars ? (lang === "en" ? `[Characters] ${chars}` : `[등록 캐릭터] ${chars}`) : "",
+    world ? (lang === "en" ? `[Brand hub — world / background (sets MUST belong to this world)] ${world}` : `[브랜드 허브 — 세계관/배경 (세트는 반드시 이 세계 안의 공간)] ${world}`) : "",
+    hubTone ? (lang === "en" ? `[Brand hub — tone & manner] ${hubTone}` : `[브랜드 허브 — 톤&매너] ${hubTone}`) : "",
+    hubStory ? (lang === "en" ? `[Brand hub — story] ${hubStory}` : `[브랜드 허브 — 브랜드 스토리] ${hubStory}`) : "",
+    hubRules.length ? (lang === "en" ? `[Brand hub — rules] ${hubRules.join(" | ")}` : `[브랜드 허브 — 규칙] ${hubRules.join(" | ")}`) : "",
+    knownSets.length
+      ? (lang === "en"
+        ? `[Sets already defined in this project — reuse the SAME name and description if the story happens in the same place]\n${knownSets.map((l) => `- ${l.name}${l.description ? `: ${l.description}` : ""}`).join("\n")}`
+        : `[이 프로젝트에 이미 정의된 세트 — 같은 공간이면 같은 이름과 묘사를 그대로 재사용한다]\n${knownSets.map((l) => `- ${l.name}${l.description ? `: ${l.description}` : ""}`).join("\n")}`)
+      : "",
   ].filter((v) => v !== "").join("\n");
   try {
     const { text } = await streamAnthropicText({

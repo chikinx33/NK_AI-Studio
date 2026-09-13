@@ -22,7 +22,7 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"\];/);
 });
 
 test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승인 대기·실행 중·완료·오류, 승인 버튼) · 별 버튼 스피너 · 배경 카드 칩', () => {
@@ -107,12 +107,12 @@ test('★그래프 장소 노드가 episodeLocations 의 플레이트·변형·�
 
 test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheetPrompt 단일 원천 · 마스터 플레이트 참조 · storyboardSheets+episodeLocations 저장', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  assert.match(shared, /import \{ buildBibleSetSheetPrompt, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
+  assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
   assert.match(shared, /set_sheet: \{ agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool \}/);
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /const name = String\(input\?\.locationName \|\| input\?\.name \|\| input\?\.setName \|\| ""\)\.trim\(\);/);
-  assert.match(fn, /const promptInput = \{ header, set: \{ name: promptSetName, description: promptSetDesc \}, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation\(rawSetName\) \};/);
+  assert.match(fn, /const promptInput = \{ header, hub: hubContext, set: \{ name: promptSetName, description: promptSetDesc \}, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation\(rawSetName\) \};/);
   assert.match(fn, /buildBibleSetSheetPrompt\(promptInput\)/);
   assert.match(fn, /referenceKind: "environment"/, '마스터 플레이트가 있으면 참조');
   assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution/);
@@ -137,7 +137,7 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
 
 test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 라벨), 플레이트 띠, 다시 만들기; 클릭하면 라이트박스', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /const \[lightbox, setLightbox\] = useState<\{ url: string; title: string \} \| null>\(null\);/);
+  assert.match(src, /const \[lightbox, setLightbox\] = useState<\{ url: string; title: string; objectName\?: string \} \| null>\(null\);/);
   assert.match(src, /const mainUrl = String\(sheet\?\.url \|\| plateUrl \|\| ""\);/);
   assert.match(src, /className="block max-h-\[60vh\] w-full cursor-zoom-in object-contain"/);
   assert.match(src, /const angleNames = \["정면", "후면", "부감", "로우"\];/);
@@ -156,7 +156,7 @@ test('★세트 정체성: 같은 세트로 보이는 장소는 카드에 "중�
   assert.match(src, /for \(const f of from\) await enqueue\("location_merge", \{ projectId, from: f, into \}, `장소 합치기 · \$\{f\} → \$\{into\}`, undefined, into\);/);
   assert.match(src, /<Chip tone="red">중복 의심<\/Chip>/);
   assert.match(src, /같은 세트로 보이는 장소가 있어요<\/div>/);
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set"\];/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /location_merge: \{ agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool \}/);
   assert.match(shared, /location_suggest: \{ agentId: "plot", kind: "read", run: runLocationSuggestTool \}/);
@@ -208,4 +208,58 @@ test('★배경 카드 클릭 흐름: 이미지 영역=크게 보기, 텍스트 
   assert.match(src, /placeholder="예: 소녀의 방"/);
   assert.match(src, /setMergeModal\(null\); setMulti\(new Set\(\)\); void mergeLocations\(from, into\);/);
   assert.doesNotMatch(src, /window\.confirm\(`\$\{from\.map/, '합치기는 모달이 곧 확인');
+});
+
+test('★세트 시트 그림체 참조는 허브에서: 앵커 없으면 브랜드 캐릭터 시트 → 기존 스틸 → 기존 플레이트 순으로 style 참조 · 창작자가 스타일 기준 지정(style_anchor_set)', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const i = shared.indexOf('async function runSetSheetTool(');
+  const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /const got: any = await runBrandGetTool\(\{ brandId \}, ctx\);/, '브랜드 캐릭터 시트');
+  assert.match(fn, /do NOT draw this character — the set is empty/);
+  assert.match(fn, /styleSource = "brand-character-sheets";/);
+  assert.match(fn, /styleSource = "project-still";/);
+  assert.match(fn, /styleSource = "existing-plate";/);
+  assert.match(fn, /const hasStyleRefs = referenceImages\.some\(\(r\) => r\.referenceKind === "style"\);/);
+  assert.match(fn, /promptInput\.hasStyleRef = hasStyleRefs;/);
+  assert.match(shared, /style_anchor_set: \{ agentId: "pixel", kind: "external", gate: true, run: runStyleAnchorSetTool \}/);
+  assert.match(shared, /body: \{ projectId, payload: \{ styleAnchor: anchor \} \}/);
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const setStyleAnchor = async \(objectName: string, label: string\) => \{/);
+  assert.match(src, /await enqueue\("style_anchor_set", \{ projectId, objectName, setName: label \}, `스타일 기준 지정 · \$\{label\}`\);/);
+  assert.match(src, />이 이미지를 스타일 기준으로<\/button>/);
+  assert.match(src, /"scene_split", "style_anchor_set"\];/);
+  const graph = read('prototype/functions/api/agent/production-graph.ts');
+  assert.match(graph, /url: toDisplayUrl\(v\.refObjectName\), objectName: String\(v\.refObjectName \|\| ""\)/);
+});
+
+test('★브랜드 허브가 세트 시트 프롬프트의 첫 블록이다: 톤&매너·세계관/배경·스토리·규칙·금지·참조 + 배경·소품 자산 이미지가 최우선 스타일 참조', async () => {
+  const { buildHubContext, buildBibleSetSheetPrompt } = await import('../functions/api/_shared/storyboard-sheet.js');
+  const payload = {
+    brandVoice: '따뜻하고 호기심 많은 어린이 시선의 말투', worldSetting: '도형 생명체가 살아가는 밝은 자연 세계 · 마을, 들판, 숲, 하늘 등 단순하고 상징적인 공간',
+    brandStory: '세상을 이루는 가장 기본적인 요소인 모양과 색이 살아 움직이는 세계', brandRules: ['어려운 단어 대신 직관적 표현', '캐릭터 간 대화 중심'], bannedExpressions: ['폭력'], successCases: ['밝은 원색 팔레트'],
+  };
+  const hub = buildHubContext(payload);
+  assert.match(hub, /^\[BRAND HUB — this project's identity/);
+  assert.match(hub, /WORLD \/ BACKGROUND \(the set MUST belong to this world\): 도형 생명체가 살아가는 밝은 자연 세계/);
+  assert.match(hub, /TONE & MANNER: 따뜻하고 호기심 많은/);
+  assert.match(hub, /BRAND RULES \(obey\): 어려운 단어 대신 직관적 표현 \| 캐릭터 간 대화 중심/);
+  assert.match(hub, /AVOID: 폭력/);
+  assert.match(hub, /REFERENCE \/ WHAT WORKED: 밝은 원색 팔레트/);
+  assert.equal(buildHubContext({}), '', '허브가 비면 블록도 없다');
+  assert.equal(buildHubContext({ knowledgeHub: { worldSetting: '숲' } }).includes('WORLD / BACKGROUND'), true, 'knowledgeHub 중첩도 읽는다');
+  const prompt = buildBibleSetSheetPrompt({ header: 'STYLE: 3D', hub, set: { name: '놀이방', description: '장난감' }, aspect: '16:9' });
+  const iHeader = prompt.indexOf('STYLE: 3D'); const iHub = prompt.indexOf('[BRAND HUB'); const iGrid = prompt.indexOf('SET SHEET:');
+  assert.ok(iHeader < iHub && iHub < iGrid, '헤더 → 허브 블록 → 격자 순');
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const i = shared.indexOf('async function runSetSheetTool(');
+  const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /const hubContext = buildHubContext\(payload\);/);
+  assert.match(fn, /hub: hubContext,/);
+  assert.match(fn, /const envAssets: any\[\] = Array\.isArray\(payload\.environmentAssets\)/, '허브 배경·소품 자산이 최우선 스타일 참조');
+  assert.match(fn, /styleSource = "hub-environment-assets";/);
+  assert.match(fn, /hubContextUsed: !!hubContext,/);
+  const scen = read('prototype/functions/api/scenario.js');
+  assert.match(scen, /\[브랜드 허브 — 세계관\/배경 \(세트는 반드시 이 세계 안의 공간\)\]/);
+  assert.match(scen, /\[브랜드 허브 — 톤&매너\]/);
+  assert.match(scen, /\[브랜드 허브 — 규칙\]/);
 });
