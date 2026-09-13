@@ -13,7 +13,11 @@ test('★서버: planEpisodeSets 가 씬 생성 전에 돌고, 규칙(물리 공
   const src = read('prototype/functions/api/scenario.js');
   assert.match(src, /async function planEpisodeSets\(input, beats\)/);
   assert.match(src, /새 세트는 이야기에서 인물이 실제로 다른 장소로 이동할 때만 생긴다/);
-  assert.match(src, /같은 장소의 카메라 구역\(\\"큐브 주변 바닥\\", \\"방을 넓게\\"\)은 세트가 아니다\. 분위기·화풍·\\"무대 느낌\\"도 세트가 아니다/);
+  assert.match(src, /같은 장소의 카메라 구역\(\\"소품 주변 바닥\\", \\"방을 넓게\\", \\"창가 쪽\\"\)은 세트가 아니다\. 분위기·화풍·\\"무대 느낌\\"·\\"꿈 같은 공간\\"도 세트가 아니다/);
+  // 규칙(프롬프트)에는 특정 에피소드 문구가 없어야 한다 — 주석(사고 기록)은 제외하고 planEpisodeSets 본문만 검사
+  const fnStart = src.indexOf('async function planEpisodeSets(');
+  const fnBody = src.slice(fnStart, src.indexOf('\n}\n', fnStart)).split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  assert.doesNotMatch(fnBody, /큐브|소녀의 방|girl's bedroom|ABC|알파벳/, '특정 에피소드 문구가 규칙에 박히면 안 된다');
   assert.match(src, /A new set exists ONLY when a character physically moves to another place in the story/);
   assert.match(src, /const setPlan = await planEpisodeSets\(input, budgeted\);\s*\n\s*const beatInputWithSets = Object\.assign\(\{\}, beatInput, \{ setPlan \}\);/);
   assert.match(src, /await generateScenesPerBeat\(beatInputWithSets, budgeted\)/);

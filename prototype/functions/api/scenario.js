@@ -20,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1703";
+const SERVER_VERSION = "3.1704";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -1697,7 +1697,7 @@ async function planEpisodeSets(input, beats) {
     ? [
       "You are a production designer. Before any scene is written, decide the episode's SETS: the actually distinct PHYSICAL spaces where the story is filmed.",
       "Rules:",
-      "- A set is a physical place (a girl's bedroom, a school pool, a forest path). Camera areas of the same place (\"the floor near the cube\", \"wide view of the room\") are NOT sets. Mood, art style or \"stage\" feelings are NOT sets.",
+      "- A set is a physical place (a child's bedroom, a school pool, a forest path, an office meeting room). Camera areas of the same place (\"the floor near the props\", \"wide view of the room\", \"by the window\") are NOT sets. Mood, art style, \"stage\" or \"dreamlike\" feelings are NOT sets.",
       "- A new set exists ONLY when a character physically moves to another place in the story. If nobody moves, it is the same set.",
       "- Use the MINIMUM number of sets that the story needs. One set is common for a 30-second piece.",
       "- name: a short place noun (2-6 words). description: a 1-2 sentence empty-set description (architecture, furniture, materials, lighting) with NO characters.",
@@ -1707,7 +1707,7 @@ async function planEpisodeSets(input, beats) {
     : [
       "너는 프로덕션 디자이너다. 씬을 쓰기 전에 이 에피소드의 세트, 즉 실제로 구분되는 물리적 공간 목록을 먼저 확정한다.",
       "규칙:",
-      "- 세트는 물리적 장소다(소녀의 방, 학교 수영장, 숲길). 같은 장소의 카메라 구역(\"큐브 주변 바닥\", \"방을 넓게\")은 세트가 아니다. 분위기·화풍·\"무대 느낌\"도 세트가 아니다.",
+      "- 세트는 물리적 장소다(아이 방, 학교 수영장, 숲길, 사무실 회의실). 같은 장소의 카메라 구역(\"소품 주변 바닥\", \"방을 넓게\", \"창가 쪽\")은 세트가 아니다. 분위기·화풍·\"무대 느낌\"·\"꿈 같은 공간\"도 세트가 아니다.",
       "- 새 세트는 이야기에서 인물이 실제로 다른 장소로 이동할 때만 생긴다. 아무도 이동하지 않으면 같은 세트다.",
       "- 이야기에 필요한 최소 개수만 쓴다. 30초짜리는 세트 1개가 보통이다.",
       "- name: 짧은 장소 명사(2~12자). description: 인물 없는 빈 세트 묘사 1~2문장(구조·가구·재질·조명).",
