@@ -745,7 +745,7 @@
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const action = btn.dataset.action || '';
-        if (!['draft-edit', 'draft-production', 'draft-post'].includes(action)) return;
+        if (!['draft-edit', 'draft-production', 'draft-post', 'draft-canvas'].includes(action)) return;
         try { if (container.onclick) container.onclick(e); } catch (_) { }
       }, true);
     }
@@ -1174,7 +1174,8 @@
             </div>
           </div>
           ${showStageButtons ? `
-            <div class="draft-actions">
+            <div class="draft-actions${host === 'video' ? ' has-canvas' : ''}">
+              ${host === 'video' ? `<button type="button" class="canvas-btn" data-action="draft-canvas" data-id="${escapeHtml(d.id)}" title="${escapeHtml(dt('sidebar_canvas_fixed'))}" aria-label="${escapeHtml(dt('sidebar_canvas_fixed'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></button>` : ''}
               <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre-Prod</button>
               <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
               <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post-Prod</button>
@@ -1487,6 +1488,19 @@
         if (draft) {
           selectProject(draft);
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+          if (isStandaloneStage) {
+            window.location.href = url;
+          } else {
+            NK.navigation.loadStage(url);
+          }
+        }
+      } else if (action === 'draft-canvas') {
+        // 캔버스(에이전트 모드)로 바로 진입 — 사이드바 카드의 '캔버스' 버튼과 같은 React 캔버스(코드 한 벌).
+        const drafts = getViewDrafts();
+        const draft = drafts.find(d => String(d.id) === String(id));
+        if (draft) {
+          selectProject(draft);
+          const url = 'ai-company/index.html?view=canvas' + (draft.id ? '&projectId=' + encodeURIComponent(draft.id) : '');
           if (isStandaloneStage) {
             window.location.href = url;
           } else {

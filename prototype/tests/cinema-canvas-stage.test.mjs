@@ -51,3 +51,23 @@ test('★React 앱은 임베드 파라미터로 캔버스를 바로 열고, stag
   const sw = read('ai-company-app/src/components/SkillWorkspace.tsx');
   assert.match(sw, /hideTopBar=\{focusMode && !embed\}/, '임베드에서는 캔버스 상단 바(프로젝트·줌·일괄 생성)를 남긴다');
 });
+
+test('★대시보드 프로젝트 카드(AI 시네마 셸): Pre-Prod 앞 정사각 캔버스 버튼(봇 아이콘, 휴지통 버튼 표면) → 캔버스 스테이지로 바로 진입', () => {
+  const dash = read('prototype/js/ui/dashboard.js');
+  const start = dash.indexOf("<div class=\"draft-actions${host === 'video' ? ' has-canvas' : ''}\">");
+  assert.ok(start > 0, 'draft-actions 가 has-canvas 클래스를 받아야 합니다');
+  const canvas = dash.indexOf('data-action="draft-canvas"', start);
+  const pre = dash.indexOf('data-action="draft-edit"', start);
+  assert.ok(canvas > start && canvas < pre, '캔버스 버튼이 Pre-Prod 앞에 있어야 합니다');
+  assert.match(dash.slice(start, canvas), /\$\{host === 'video' \? `<button type="button" class="canvas-btn"/, 'AI 시네마 셸에서만');
+  assert.match(dash.slice(canvas, pre), /<path d="M12 8V4H8"><\/path><rect width="16" height="12" x="4" y="8" rx="2"><\/rect>/, 'lucide bot 아이콘(에이전트 모드와 동일)');
+  assert.match(dash.slice(canvas, pre), /title="\$\{escapeHtml\(dt\('sidebar_canvas_fixed'\)\)\}"/, '한/영 문구는 core 사전');
+  assert.match(dash, /\['draft-edit', 'draft-production', 'draft-post', 'draft-canvas'\]\.includes\(action\)/);
+  assert.match(dash, /action === 'draft-canvas'[\s\S]{0,400}'ai-company\/index\.html\?view=canvas' \+ \(draft\.id \? '&projectId=' \+ encodeURIComponent\(draft\.id\) : ''\)/);
+  const css = read('prototype/styles.dashboard-cards.css');
+  assert.match(css, /\.draft-actions\.has-canvas \{\s*\n\s*grid-template-columns: 34px repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.draft-actions \.canvas-btn \{[\s\S]*?border-radius: 10px;/);
+  assert.match(css, /\.draft-actions \.canvas-btn \{[\s\S]*?radial-gradient\(circle at 24% 22%, rgba\(255, 159, 63, 0\.2\), transparent 48%\)/, '휴지통 버튼과 같은 표면');
+  const block = css.slice(css.indexOf('.draft-actions .canvas-btn {'), css.indexOf('.draft-actions .canvas-btn svg'));
+  assert.doesNotMatch(block, /#ff8c00|orange|var\(--accent\)/i, '주황 배경 금지');
+});
