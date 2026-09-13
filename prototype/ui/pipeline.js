@@ -2137,7 +2137,10 @@ function openBackgroundReferenceModal() {
           variants: Array.isArray(l.variants) ? l.variants.map(function (v) {
             return { id: v.id || '', label: v.label || '', description: v.description || '', refObjectName: v.refObjectName || '', _busy: false };
           }) : [],
-          sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false
+          sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false,
+          // 캔버스가 만든 세트 자산(평면도·부감 마스터 각도·세트 시트·플레이트 진단)은 이 화면이 편집하지 않지만
+          // 저장 때 증발하면 안 된다(길목 화이트리스트 회귀 방지).
+          layout: l.layout || null, setSheet: l.setSheet || null, masterAngle: l.masterAngle || '', plateDiag: l.plateDiag || null
         };
       })
     : [];
@@ -2942,7 +2945,12 @@ function openBackgroundReferenceModal() {
         var variants = (Array.isArray(l.variants) ? l.variants : [])
           .filter(function (v) { return v && v.refObjectName; })
           .map(function (v) { return { id: v.id || ('v-' + slug(v.label)), label: String(v.label || '').trim(), description: String(v.description || '').trim(), refObjectName: v.refObjectName }; });
-        return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', variants: variants, sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
+        var out = { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', variants: variants, sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
+        if (l.layout) out.layout = l.layout;
+        if (l.setSheet) out.setSheet = l.setSheet;
+        if (l.masterAngle) out.masterAngle = l.masterAngle;
+        if (l.plateDiag) out.plateDiag = l.plateDiag;
+        return out;
       });
     // 이미지가 아직 없어도 이름을 적어 뒀다면 남긴다(입력이 사라지지 않게).
     var cleanedProps = props

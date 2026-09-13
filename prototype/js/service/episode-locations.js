@@ -115,17 +115,24 @@
       var row = loc && typeof loc === 'object' ? loc : { name: String(loc || '') };
       var prev = prevByKey[normKey(row.name)];
       if (!prev) return row;
-      return {
+      // ★새 계획의 필드(layout 평면도 등)는 모두 지킨다 — 화이트리스트로 다시 조립하면 새 필드가 증발한다
+      //   (v3.1715 에서 세트 계획이 낸 layout 이 이름이 같은 세트에서 통째로 사라졌던 회귀).
+      var merged = Object.assign({}, row, {
         id: row.id || prev.id || '',
         name: row.name || prev.name || '',
         description: String(row.description || '').trim() || prev.description || '',
-        // 만들어 둔 이미지와 세부 배경은 이름이 같으면 그대로 물려받는다.
+        // 만들어 둔 이미지(정면 플레이트·앵글 변형·부감 마스터·세트 시트)는 이름이 같으면 그대로 물려받는다.
         refObjectName: row.refObjectName || prev.refObjectName || '',
         variants: Array.isArray(row.variants) && row.variants.length
           ? row.variants
           : (Array.isArray(prev.variants) ? prev.variants : []),
         sceneIds: Array.isArray(row.sceneIds) ? row.sceneIds : (prev.sceneIds || []),
-      };
+      });
+      if (!merged.layout && prev.layout) merged.layout = prev.layout;
+      if (!merged.setSheet && prev.setSheet) merged.setSheet = prev.setSheet;
+      if (!merged.masterAngle && prev.masterAngle) merged.masterAngle = prev.masterAngle;
+      if (!merged.plateDiag && prev.plateDiag) merged.plateDiag = prev.plateDiag;
+      return merged;
     });
   };
 
