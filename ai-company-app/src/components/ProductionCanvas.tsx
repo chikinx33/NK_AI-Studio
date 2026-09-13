@@ -385,7 +385,7 @@ export default function ProductionCanvas({
   // 떠 있는 작업 독(캔버스 왼쪽 아래, 레이아웃을 밀지 않는다) 펼침 여부
   const [jobDockOpen, setJobDockOpen] = useState(false);
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
-  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K"; usePlate?: boolean; mode?: "master" | "sheet" } | null>(null);
+  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K" } | null>(null);
   const SET_JOB_TYPES = ["set_sheet", "set_master", "set_angle"];
   // 큰 이미지 보기(라이트박스): 배경 상세의 세트 시트·플레이트를 화면 가득 본다.
   const [lightbox, setLightbox] = useState<{ url: string; title: string; objectName?: string } | null>(null);
@@ -395,12 +395,6 @@ export default function ProductionCanvas({
     if (!window.confirm(`"${label}" 이미지를 이 프로젝트의 그림체 기준(스타일 기준)으로 지정할까요?\n이후 세트 시트·콘티·스틸컷이 이 이미지의 룩을 참조해요.`)) return;
     await enqueue("style_anchor_set", { projectId, objectName, setName: label }, `스타일 기준 지정 · ${label}`);
     setLightbox(null);
-  };
-  // 스타일 기준 해제: 결이 다른 옛 시트가 기준으로 잡혀 있으면 새 생성이 전부 그쪽으로 끌려간다. 해제하면 다음 부감 마스터가 새 기준.
-  const clearStyleAnchor = async () => {
-    if (!projectId || !graph?.styleAnchor) return;
-    if (!window.confirm("스타일 기준 이미지를 해제할까요?\n다음에 만드는 부감 마스터가 새 기준이 돼요. 그 전에는 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙여요.")) return;
-    await enqueue("style_anchor_set", { projectId, clear: true }, "스타일 기준 해제");
   };
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -639,12 +633,12 @@ export default function ProductionCanvas({
     const running = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status));
     if (running.length) {
       const names = new Set(running.map((j) => String(j.target || "")));
-      setSheetModal({ step: "progress", selected: new Set(locationNodes.filter((n) => names.has(String(n.data?.name || n.label))).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", mode: "master" });
+      setSheetModal({ step: "progress", selected: new Set(locationNodes.filter((n) => names.has(String(n.data?.name || n.label))).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
       return;
     }
     // 기본 모드는 정밀(부감 마스터). 기본 선택: 마스터가 없는 세트. 모두 있으면 전부(재생성).
     const missing = locationNodes.filter((n) => !n.data?.topPlateUrl);
-    setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", mode: "master" });
+    setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
   };
   // 잡이 끝날 때까지 기다린다(마스터 → 앵글 파생은 순서가 있어야 한다).
   const waitForJob = async (jobId: string, timeoutMs = 180_000): Promise<string> => {
@@ -681,25 +675,6 @@ export default function ProductionCanvas({
       }
     }
     void load(true);
-  };
-  // 모달에서 "생성"을 누른 것이 곧 확인이다 — 잡을 만들고 바로 승인해 승인 대기에 멈추지 않게 한다.
-  const generateSetSheets = async (ids: Set<string>, resolution: "2K" | "4K", usePlate = false) => {
-    if (!projectId) return;
-    const targets = locationNodes.filter((n) => ids.has(n.id));
-    for (const n of targets) {
-      const name = String(n.data?.name || n.label);
-      try {
-        // 순서대로 하나씩(승인 완료를 기다림): 첫 시트가 스타일 앵커가 되고, 다음 시트가 그것을 참조한다.
-        // 공급자는 사용자가 명시했을 때만 보낸다. "스튜디오 기본"이면 서버 기본(예전 배경·스틸과 같은 모델)으로 그려 룩이 이어진다.
-        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, ...providerArg(settings), usePlate });
-        setPending((prev) => [{ jobId: res.jobId, type: "set_sheet", status: "running", label: `세트 시트 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
-        await approveItem(res.jobId).catch((e) => {
-          setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message } : p)));
-        });
-      } catch (e) {
-        setPending((prev) => [{ jobId: `local-${Date.now()}`, type: "set_sheet", status: "error", label: `세트 시트 · ${n.label}`, target: name, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
-      }
-    }
   };
 
   // 생성 개수(x1~x4)만큼 같은 컷에 후보를 만든다. 스틸 이력(imageHistory)이 이전 후보를 보존한다.
@@ -1360,29 +1335,7 @@ export default function ProductionCanvas({
                   <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
-                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">{(sheetModal.mode || "master") === "master" ? "세트마다 부감 마스터 1장을 만들어요. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요."}</div>
-                    {/* 스타일 기준 이미지: 무엇인지·어디서 왔는지·어떻게 바꾸는지를 한 자리에서. 이름만 덜렁 보여 주는 표기는 쓰지 않는다. */}
-                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-900/10 px-3 py-2 text-[12px]" data-testid="style-anchor-panel">
-                      {graph?.styleAnchor ? (() => {
-                        const a = graph.styleAnchor;
-                        const origin = a.sheetId ? "2×2 세트 시트" : "이미지";
-                        const who = a.pickedBy === "user" ? "직접 지정" : a.pickedBy === "auto-master" ? "첫 부감 마스터가 자동 지정" : "첫 세트 시트가 자동 지정";
-                        return (
-                          <div className="flex items-start gap-3">
-                            {a.url ? <img src={withMediaToken(a.url)} alt="" className="h-14 w-24 shrink-0 cursor-zoom-in rounded-md border border-amber-400/60 object-cover" title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(a.url), title: "스타일 기준 이미지", objectName: a.objectName })} /> : null}
-                            <div className="min-w-0 flex-1">
-                              <div className="font-bold text-amber-200">스타일 기준 이미지 <span className="font-normal text-gray-400">— 이 프로젝트의 그림체·팔레트·조명의 기준</span></div>
-                              <div className="mt-0.5 leading-snug text-gray-400">새로 만드는 부감 마스터·앵글 플레이트·컷 스틸이 이 이미지의 룩을 따라요. 내용(장소·구도)은 복사하지 않아요.</div>
-                              <div className="mt-0.5 text-[11px] text-gray-500">출처: {a.setName ? `세트 "${a.setName}"의 ` : ""}{origin} · {who}{a.createdAt ? ` · ${String(a.createdAt).slice(0, 10)}` : ""}</div>
-                              <div className="mt-0.5 text-[11px] text-gray-500">바꾸려면 배경 카드나 컷 이미지를 크게 열어 "이 이미지를 스타일 기준으로"를 누르세요. 결이 다른 이미지가 기준이면 새 생성이 전부 그쪽으로 끌려가요.</div>
-                            </div>
-                            <button type="button" onClick={() => void clearStyleAnchor()} className="min-w-[56px] shrink-0 rounded-md border border-amber-500/40 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-900/30" title="기준을 지워요. 다음 부감 마스터가 새 기준이 돼요.">해제</button>
-                          </div>
-                        );
-                      })() : (
-                        <div className="text-gray-400"><span className="font-bold text-gray-300">스타일 기준 이미지 없음</span> — 첫 부감 마스터가 자동으로 기준이 돼요. 그 전에는 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙여요.</div>
-                      )}
-                    </div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">세트마다 부감 마스터 1장을 만들어요. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요.</div>
                     {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
                   <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
@@ -1395,16 +1348,13 @@ export default function ProductionCanvas({
                       const job = jobsHere.find((j) => !JOB_DONE.includes(j.status)) || jobsHere[0] || null;
                       const doneHere = jobsHere.filter((j) => j.status === "approved").length;
                       const checked = sheetModal.selected.has(n.id);
-                      const masterMode = (sheetModal.mode || "master") === "master";
-                      const thumb = (masterMode ? n.data?.topPlateUrl : "") || n.data?.setSheet?.url || n.data?.topPlateUrl || n.data?.plateUrl || "";
+                      const thumb = n.data?.topPlateUrl || n.data?.setSheet?.url || n.data?.plateUrl || "";
                       const derived = cachedPlatesOf(n);
-                      const stateText = masterMode
-                        ? (n.data?.topPlateUrl ? `부감 마스터 있음 · 캐시된 앵글 플레이트 ${derived.length}장${derived.length ? ` (${derived.join("·")})` : ""} — 다시 만들면 새 마스터로 바뀌고 캐시는 새 마스터에서 다시 채워져요`
-                          : n.data?.plateUrl ? "정면 플레이트만 있음(옛 방식) — 부감 마스터를 만들면 이후 컷 생성이 마스터 기준으로 파생해요"
-                          : n.data?.setSheet ? "2×2 시트만 있음 — 부감 마스터를 새로 만들어요"
-                          : "아직 없음")
-                        : (n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음");
-                      const planText = masterMode ? "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용" : "";
+                      const stateText = n.data?.topPlateUrl ? `부감 마스터 있음 · 캐시된 앵글 플레이트 ${derived.length}장${derived.length ? ` (${derived.join("·")})` : ""} — 다시 만들면 새 마스터로 바뀌고 캐시는 새 마스터에서 다시 채워져요`
+                        : n.data?.plateUrl ? "정면 플레이트만 있음(옛 방식) — 부감 마스터를 만들면 이후 컷 생성이 마스터 기준으로 파생해요"
+                        : n.data?.setSheet ? "2×2 시트만 있음 — 부감 마스터를 새로 만들어요"
+                        : "아직 없음";
+                      const planText = "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용";
                       return (
                         <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
                           {sheetModal.step === "pick" ? (
@@ -1416,7 +1366,7 @@ export default function ProductionCanvas({
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[13px] font-bold text-gray-100">{name}</div>
                             <div className="truncate text-[11px] text-gray-500">{stateText}</div>
-                            {planText && sheetModal.step === "pick" && <div className="truncate text-[11px] text-violet-300/80">{planText}</div>}
+                            {sheetModal.step === "pick" && <div className="truncate text-[11px] text-violet-300/80">{planText}</div>}
                           </div>
                           {sheetModal.step === "progress" && checked && job && (
                             <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : JOB_DONE.includes(job.status) ? "text-emerald-300" : "text-sky-300"}`} title={job.error || job.label}>{JOB_DONE.includes(job.status) ? (job.status === "error" ? "오류" : `완료 ${doneHere}장`) : `${job.label.replace(` · ${n.label}`, "")} 생성 중${doneHere ? ` (${doneHere}장 완료)` : ""}`}</span>
@@ -1425,19 +1375,6 @@ export default function ProductionCanvas({
                       );
                     })}
                   </ul>
-                  {sheetModal.step === "pick" && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {([
-                        { id: "master", title: "정밀 (추천) — 부감 마스터 1장", desc: "세트마다 위에서 본 마스터 1장만 만들어요. 정면·후면 같은 앵글 플레이트는 컷 스틸을 만들 때 필요한 방위×높이만 마스터에서 자동 파생해 재사용해요(캐시)." },
-                        { id: "sheet", title: "빠른 미리보기 — 2×2 한 장", desc: "네 앵글을 한 장에 동시에 그려요. 빠르고 싸지만 칸끼리 배치가 조금씩 어긋날 수 있어요." },
-                      ] as Array<{ id: "master" | "sheet"; title: string; desc: string }>).map((opt) => (
-                        <label key={opt.id} className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 ${(sheetModal.mode || "master") === opt.id ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
-                          <input type="radio" name="sheet-mode" checked={(sheetModal.mode || "master") === opt.id} onChange={() => setSheetModal((m) => (m ? { ...m, mode: opt.id } : m))} className="mt-0.5 accent-violet-500" />
-                          <span className="min-w-0"><span className="block text-[12px] font-bold text-gray-100">{opt.title}</span><span className="block text-[11px] leading-snug text-gray-500">{opt.desc}</span></span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
                   {sheetModal.step === "progress" && pending.some((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error") && (() => {
                     const text = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error").map((j) => `${j.label}: ${j.error || "오류"}`).join("\n");
                     return (
@@ -1460,16 +1397,11 @@ export default function ProductionCanvas({
                           <option value="4K">4K</option>
                         </select>
                       </label>
-                      {(sheetModal.mode || "master") === "sheet" && (
-                        <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[12px] text-gray-400" title="옛 정면 플레이트가 다른 그림체면 시트 전체가 그쪽으로 끌려가요. 기본은 끔.">
-                          <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-4 w-4 accent-violet-500" />정면 플레이트 참조
-                        </label>
-                      )}
                       <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
                       <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
-                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); if ((m.mode || "master") === "master") void generateMasterPlates(m.selected, m.resolution); else void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
+                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateMasterPlates(m.selected, m.resolution); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
                     </>
                   ) : (
                     <>
