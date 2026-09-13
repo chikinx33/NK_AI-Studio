@@ -541,7 +541,10 @@ export default function ProductionCanvas({
       const next = await Promise.all(pending.map(async (p) => {
         if (["approved", "error", "cancelled", "revise"].includes(p.status)) return p;
         const job = await getAgentJob(p.jobId).catch(() => null);
-        const status = String(job?.status || job?.review_status || p.status);
+        let status = String(job?.status || job?.review_status || p.status);
+        // 캔버스가 만든 잡은 만들자마자 승인을 보냈다. 승인 요청이 (동기 실행 중이라) 아직 돌아오지 않은 동안 서버 상태는
+        // review_pending 으로 남는데, 이걸 그대로 그리면 이미 생성 중인 잡에 "승인 대기"가 뜬다. 실행 중으로 본다.
+        if (status === "review_pending" && p.status === "running") status = "running";
         const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
         if (status !== p.status) {
           changed = true;

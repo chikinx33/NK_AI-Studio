@@ -389,3 +389,8 @@ test('★생성 버튼을 누른 순간부터 진행 표시: 잡 생성 직후 p
   for (const t of ['scene_still', 'set_master', 'set_angle', 'set_sheet']) assert.match(shared, new RegExp(`  ${t}: \\{ agentId: "pixel", kind: "external", gate: true, run: `), `${t} 는 동기`);
   assert.doesNotMatch(shared, /(scene_still|set_master|set_angle|set_sheet): \{[^\n]*longRunning: true/);
 });
+
+test('★캔버스가 만든 잡은 승인 응답 전에도 "승인 대기"로 보이지 않는다(폴링이 review_pending 을 running 으로 유지)', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /if \(status === "review_pending" && p\.status === "running"\) status = "running";/);
+});
