@@ -3986,8 +3986,11 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
       const sheetEntry = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).find((e: any) => norm(e?.token) === norm(tk) || norm(e?.displayName) === norm(tk) || norm(e?.displayName) === norm(name));
       const hasSheet = !!(Array.isArray(sheetEntry?.items) && sheetEntry.items.some((it: any) => String(it?.imageDataUrl || "").trim()));
       if (hasSheet) {
-        refs.push({ role: "character", ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
-        charNames.push(name);
+        // 시트를 최대 2장(대표 먼저) 직접 첨부한다 — 한 장(ip: 키)만 붙이면 세 캐릭터 중 하나가 시트와 다르게 나오는 일이 있었다.
+        const items: any[] = sheetEntry.items.filter((it: any) => String(it?.imageDataUrl || "").trim());
+        const picked = [...items.filter((it: any) => it?.isPrimary), ...items.filter((it: any) => !it?.isPrimary)].slice(0, 2);
+        picked.forEach((it: any, k: number) => refs.push({ role: "character", imageUrl: String(it.imageDataUrl).trim(), referenceId: refs.length + 1, subjectDescription: `${desc ? `${name} — ${desc}` : name}${picked.length > 1 ? ` (reference sheet ${k + 1} of ${picked.length})` : ""}`, referenceKind: "character" }));
+        charNames.push(`${name}×${picked.length}`);
       } else {
         charMissing.push(name);
       }

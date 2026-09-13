@@ -125,7 +125,12 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /\.slice\(0, 6\);\s*\n/, '화면의 @캐릭터 전원(2명 제한이 세 번째 시트를 빼먹었다)');
-  assert.match(fn, /refs\.push\(\{ role: "character", ref: `ip:\$\{brandId\}:\$\{tk\}`, referenceId: refs\.length \+ 1, subjectDescription: desc \? `\$\{name\} — \$\{desc\}` : name, referenceKind: "character" \}\)/, '캐릭터 시트는 ip: 참조 키 + 등록 설명 라벨');
+  assert.match(fn, /const picked = \[\.\.\.items\.filter\(\(it: any\) => it\?\.isPrimary\), \.\.\.items\.filter\(\(it: any\) => !it\?\.isPrimary\)\]\.slice\(0, 2\);/, '캐릭터마다 시트 최대 2장(대표 먼저)');
+  assert.match(fn, /refs\.push\(\{ role: "character", imageUrl: String\(it\.imageDataUrl\)\.trim\(\), referenceId: refs\.length \+ 1, subjectDescription: `\$\{desc \? `\$\{name\} — \$\{desc\}` : name\}/, '시트 이미지를 직접 첨부 + 등록 설명 라벨');
+  const imagen = read('prototype/functions/api/imagen.ts');
+  assert.match(imagen, /if \(inputFidelity\) fd\.append\("input_fidelity", inputFidelity\);/, 'OpenAI edits 입력 충실도 high');
+  assert.match(imagen, /let useFidelity: "high" \| null = allRefs\.length \? "high" : null;/);
+  assert.match(imagen, /if \(res\.status === 400 && useFidelity && \/input_fidelity\/i\.test\(bodyText\)\) \{\s*\n\s*useFidelity = null;\s*\n\s*continue;/, '모르는 모델이면 빼고 재시도');
   // 전송 순서: 플레이트 → 캐릭터 → 마스터 → (스타일). 플레이트가 있으면 스타일 기준은 붙이지 않는다(옛 기준 이미지가 방을 덮어쓴 사고).
   assert.match(fn, /const ROLE_ORDER: Record<string, number> = \{ plate: 0, character: 1, master: 2, style: 3 \};/);
   assert.match(fn, /const hasPlateRef = refs\.some\(\(r\) => r\.role === "plate"\);\s*\n\s*if \(anchor && bucket && !hasPlateRef && refs\.length < 12\)/, '플레이트 있으면 스타일 기준 생략');

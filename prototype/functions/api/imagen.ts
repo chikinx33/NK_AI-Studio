@@ -1008,11 +1008,12 @@ async function callOpenAIImage(opts: {
   let res: Response | null = null;
   let bodyText = "";
   let useMask = opts.maskImage || null;
+  let useFidelity: "high" | null = allRefs.length ? "high" : null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       let init: RequestInit;
       if (isEdit) {
-        const editsInit = buildOpenAIEditsRequest(opts.model, promptForCall, size, quality, allRefs, opts.apiKey, useMask);
+        const editsInit = buildOpenAIEditsRequest(opts.model, promptForCall, size, quality, allRefs, opts.apiKey, useMask, useFidelity);
         // FormData 를 그대로 fetch 에 넘기면 Cloudflare Worker 가 청크 전송(chunked, Content-Length
         // 없음)으로 업로드한다. OpenAI 앞단 Cloudflare 엣지가 이런 업로드를 빈 본문 403 으로
         // 차단하는 경우가 있어(x-request-id 없음 = API 도달 전 엣지 차단), 멀티파트 바디를
@@ -1034,6 +1035,11 @@ async function callOpenAIImage(opts: {
       }
       res = await fetch(url, init);
       bodyText = await res.text();
+      // input_fidelity 를 모르는 모델이면(400 에 파라미터명) 그것만 빼고 재시도.
+      if (res.status === 400 && useFidelity && /input_fidelity/i.test(bodyText)) {
+        useFidelity = null;
+        continue;
+      }
       // 마스크가 붙은 편집이 400(파라미터 거부)이면, 마스크 없이 1회 재시도해
       // 지시문 기반 전체 수정으로라도 진행되게 한다(인페인팅 정밀도는 Gemini 권장).
       if (res.status === 400 && useMask) {
@@ -1158,7 +1164,8 @@ function buildOpenAIEditsRequest(
   quality: string,
   refs: Array<{ base64: string; mimeType: string }>,
   apiKey: string,
-  maskImage?: { base64: string; mimeType: string } | null
+  maskImage?: { base64: string; mimeType: string } | null,
+  inputFidelity?: "high" | null
 ): RequestInit {
   const fd = new FormData();
   fd.append("model", model);
@@ -1166,6 +1173,9 @@ function buildOpenAIEditsRequest(
   fd.append("size", size);
   fd.append("quality", quality);
   fd.append("n", "1");
+  // 입력 이미지(캐릭터 시트·플레이트)의 얼굴·디테일·색을 최대한 지킨다. 기본 fidelity 는 시트를 "참고"만 해서
+  // 세 번째 캐릭터가 시트와 다르게 나오는 일이 있었다(2026-09-14).
+  if (inputFidelity) fd.append("input_fidelity", inputFidelity);
   refs.forEach((ref, i) => {
     const bytes = base64ToUint8(ref.base64);
     const mime = ref.mimeType || "image/png";
