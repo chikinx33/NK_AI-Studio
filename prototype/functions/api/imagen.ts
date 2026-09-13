@@ -216,7 +216,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
           // 말고 룩만 가져가라"는 지시는 이미지 바로 옆에 있어야 먹힌다.
           generationMode === "text-to-image" && (
             geminiRefs.length > 1
-            || geminiRefs.some((item) => item.referenceKind === "environment-detail" || item.referenceKind === "prop")
+            || geminiRefs.some((item) => item.referenceKind === "environment-detail" || item.referenceKind === "prop" || item.referenceKind === "style")
           )
         ),
         generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),

@@ -88,6 +88,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
       setSheet: sheetMeta ? {
         sheetId: String(sheetMeta.sheetId || ""), objectName: String(sheetMeta.objectName || ""), url: toDisplayUrl(sheetMeta.objectName || ""),
         resolution: String(sheetMeta.resolution || sheet?.resolution || ""), createdAt: String(sheetMeta.createdAt || ""),
+        diag: (sheet?.diag && typeof sheet.diag === "object") ? sheet.diag : (sheetMeta.diag && typeof sheetMeta.diag === "object" ? sheetMeta.diag : null),
         panels: Array.isArray(sheet?.panels) ? sheet.panels.map((pn: any) => ({ index: Number(pn?.index) || 0, ref: String(pn?.ref || ""), angleLabel: String(pn?.angleLabel || ""), status: String(pn?.status || "pending"), url: toDisplayUrl(pn?.objectName || "") })) : [],
       } : null,
     };

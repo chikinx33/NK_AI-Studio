@@ -10,7 +10,7 @@ import { readStorage, writeStorage } from "./safeStorage";
 
 export type ImageAspect = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 export type ImageSize = "512" | "1K" | "2K";
-export type ImageProvider = "gemini" | "openai";
+export type ImageProvider = "studio" | "gemini" | "openai";
 export type VideoAspect = "16:9" | "9:16";
 export type GenerationKind = "image" | "video";
 
@@ -24,6 +24,8 @@ export interface CanvasSettings {
 export const IMAGE_ASPECTS: ImageAspect[] = ["16:9", "4:3", "1:1", "3:4", "9:16"];
 export const IMAGE_SIZES: ImageSize[] = ["512", "1K", "2K"];
 export const IMAGE_PROVIDERS: Array<{ id: ImageProvider; label: string }> = [
+  // 스튜디오 기본 = 서버 기본 공급자(AI_IMAGE_PROVIDER/AGENT_IMAGE_PROVIDER). 예전 배경·스틸이 만들어진 경로와 같아 룩이 이어진다.
+  { id: "studio", label: "스튜디오 기본 (기존 이미지와 같은 모델)" },
   { id: "gemini", label: "Gemini 3.1 Flash Image" },
   { id: "openai", label: "GPT Image 2" },
 ];
@@ -66,7 +68,7 @@ export function snapDuration(model: string, sec: number): number {
 export const DEFAULT_CANVAS_SETTINGS: CanvasSettings = {
   confirmBeforeGenerate: true,
   kind: "video",
-  image: { aspect: "16:9", size: "1K", count: 1, provider: "gemini" },
+  image: { aspect: "16:9", size: "1K", count: 1, provider: "studio" },
   video: { aspect: "16:9", model: "veo", durationSec: 8, resolution: "720p", count: 1 },
 };
 
@@ -120,7 +122,7 @@ export interface CreditQuote { credits: number; balance: number | null; feature:
 export async function quoteCanvasCredits(s: CanvasSettings): Promise<CreditQuote> {
   const feature = s.kind === "image" ? "image_generation" : "video";
   const input = s.kind === "image"
-    ? { provider: s.image.provider, imageSize: s.image.size }
+    ? { ...(s.image.provider !== "studio" ? { provider: s.image.provider } : {}), imageSize: s.image.size }
     : { videoModel: s.video.model, durationSeconds: s.video.durationSec, resolution: s.video.resolution };
   const res = await fetch("/api/credits/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feature, input }) });
   const data = await res.json().catch(() => ({}));

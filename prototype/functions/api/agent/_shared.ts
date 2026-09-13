@@ -1384,6 +1384,11 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     // 조용히 대체되면 "GPT로 만들었다"고 착각하게 되므로 채팅 결과 문구에 노출한다.
     providerRequested: data.providerRequested || "",
     providerFallbackFrom: data.providerFallbackFrom || "",
+    // 진단: Gemini 가 어느 엔드포인트로 돌았는지(ai-studio | vertex-global)·지역 우회 여부·실제 붙은 참조 수·적용 크기
+    geminiEndpoint: data.geminiEndpoint || "",
+    geminiLocationFallback: data.geminiLocationFallback || "",
+    referenceImageCount: Number(data.referenceImageCount) || 0,
+    imageSizeApplied: data.imageSizeApplied || "",
     fallbackReason: data.openaiError?.message || data.openaiError?.hint || "",
     aspectApplied: data.aspectApplied || payload.aspectRatio,
     promptEcho: data.promptEcho || prompt,
@@ -4451,12 +4456,18 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
     id: sheetId, kind: "bible-set", setId: String(loc.id || ""), setName: String(loc.name || name),
     cutIds: [], resolution: fallback ? "default" : resolution, requestedResolution: resolution, fallback, grid: { cols: 2, rows: 2 }, objectName: img.objectName,
     panels: SET_ANGLES.map((a: any, i: number) => ({ index: i + 1, role: "set", ref: a.id, angleLabel: a.label, objectName: "", status: "pending", label: "bible" })),
-    prompt, referenceMeta: { plate: referenceImages.length > 0 }, model: img.model || "", imageSizeApplied: "",
+    prompt, referenceMeta: { plate: usePlate, styleSource: fallback ? "" : styleSource, hub: !!hubContext }, model: img.model || "", imageSizeApplied: String(img.imageSizeApplied || ""),
+    // 어떻게 만들어졌나(비교·검증용): 모델·공급자·경로·참조 수·스타일 참조 출처·허브 블록 여부·프롬프트 앞부분
+    diag: {
+      provider: String(img.provider || ""), model: String(img.model || ""), geminiEndpoint: String(img.geminiEndpoint || ""), geminiLocationFallback: String(img.geminiLocationFallback || ""),
+      referenceCount: fallback ? 0 : Number(img.referenceImageCount) || 0, styleSource: fallback ? "" : styleSource, hubContextUsed: !!hubContext, requestedResolution: resolution, fallback,
+      promptHead: String(prompt).slice(0, 1200),
+    },
     agentJobId: String(ctx.jobId || ""), createdAt: new Date().toISOString(),
   };
   const sheets: any[] = Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets.slice() : [];
   sheets.push(sheet);
-  locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution: fallback ? "default" : resolution, createdAt: sheet.createdAt } };
+  locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution: fallback ? "default" : resolution, createdAt: sheet.createdAt, diag: sheet.diag } };
   // 첫 세트 시트가 프로젝트의 스타일 앵커가 된다(없을 때만). 바꾸려면 캔버스에서 다른 시트를 기준으로 지정.
   const nextPayload: any = { episodeLocations: locations, storyboardSheets: sheets };
   if (!anchor) nextPayload.styleAnchor = { objectName: img.objectName, sheetId, setName: String(loc.name || name), createdAt: sheet.createdAt };

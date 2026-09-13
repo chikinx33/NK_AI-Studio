@@ -647,7 +647,8 @@ export default function ProductionCanvas({
       const name = String(n.data?.name || n.label);
       try {
         // 순서대로 하나씩(승인 완료를 기다림): 첫 시트가 스타일 앵커가 되고, 다음 시트가 그것을 참조한다.
-        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, provider: settings.image.provider, usePlate });
+        // 공급자는 사용자가 명시했을 때만 보낸다. "스튜디오 기본"이면 서버 기본(예전 배경·스틸과 같은 모델)으로 그려 룩이 이어진다.
+        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), usePlate });
         setPending((prev) => [{ jobId: res.jobId, type: "set_sheet", status: "running", label: `세트 시트 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
         await approveItem(res.jobId).catch((e) => {
           setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message } : p)));
@@ -671,7 +672,7 @@ export default function ProductionCanvas({
     if (!targets.length) return "컷을 먼저 선택하세요. (에이전트 모드에선 말로 지정할 수 있어요)";
     for (const sceneId of targets) {
       if (kind === "image") {
-        await enqueueMany("scene_still", { projectId, sceneId, prompt, aspectRatio: settings.image.aspect, provider: settings.image.provider, imageSize: settings.image.size }, `컷 ${sceneId} 스틸 생성`, sceneId, settings.image.count);
+        await enqueueMany("scene_still", { projectId, sceneId, prompt, aspectRatio: settings.image.aspect, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), imageSize: settings.image.size }, `컷 ${sceneId} 스틸 생성`, sceneId, settings.image.count);
       } else {
         const node = nodeById.get(`cut:${sceneId}`);
         if (!node?.data?.still?.url) return `컷 ${sceneId}에 스틸이 없어요. 스틸을 먼저 만드세요.`;
@@ -1503,7 +1504,7 @@ export default function ProductionCanvas({
                     </div>
                     <div className="mt-auto flex flex-wrap gap-2 border-t border-edge pt-3">
                       <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
-                      <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, provider: settings.image.provider, imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
+                      <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
                       <button type="button" disabled={saving || !selected.data.still?.url} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</button>
                     </div>
                     {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
@@ -1519,7 +1520,9 @@ export default function ProductionCanvas({
               </div>
             )}
             {selected.type === "location" && (() => {
-              const sheet = selected.data.setSheet as { url?: string; resolution?: string; createdAt?: string; panels?: Array<{ index: number; ref: string; angleLabel: string; status: string; url?: string }> } | null;
+              const sheet = selected.data.setSheet as { url?: string; resolution?: string; createdAt?: string; diag?: { provider?: string; model?: string; geminiEndpoint?: string; geminiLocationFallback?: string; referenceCount?: number; styleSource?: string; hubContextUsed?: boolean; requestedResolution?: string; fallback?: string; promptHead?: string } | null; panels?: Array<{ index: number; ref: string; angleLabel: string; status: string; url?: string }> } | null;
+              const diag = sheet?.diag || null;
+              const styleSourceText: Record<string, string> = { styleAnchor: "스타일 기준 이미지", "other-set-sheet": "다른 세트 시트", "hub-environment-assets": "허브 배경·소품 자산", "brand-character-sheets": "브랜드 캐릭터 시트(그림체만)", "project-still": "이 프로젝트 기존 스틸", "existing-plate": "기존 정면 플레이트" };
               const plateUrl = String(selected.data.plateUrl || "");
               const variants = (Array.isArray(selected.data.variants) ? selected.data.variants : []) as Array<{ id: string; label: string; url: string }>;
               const mainUrl = String(sheet?.url || plateUrl || "");
@@ -1557,6 +1560,20 @@ export default function ProductionCanvas({
                     <div className="flex-1" />
                     <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
                   </div>
+                  {diag && (
+                    <div className="mt-3 select-text rounded-xl border border-edge bg-[#0b1018] p-2.5 text-[11px] text-gray-300">
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">이 시트는 어떻게 만들어졌나</span>
+                        {diag.promptHead ? <button type="button" onClick={() => { try { void navigator.clipboard.writeText(String(diag.promptHead || "")); setNotice("프롬프트를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-edge px-1.5 py-px text-[10px] text-gray-400 hover:text-white">프롬프트 복사</button> : null}
+                      </div>
+                      <ul className="space-y-0.5">
+                        <li>모델: <span className="text-gray-100">{diag.model || "?"}</span>{diag.provider ? ` (${diag.provider})` : ""}{diag.geminiEndpoint ? ` · ${diag.geminiEndpoint}` : ""}{diag.geminiLocationFallback ? ` · 지역 우회` : ""}</li>
+                        <li>참조 이미지: <span className="text-gray-100">{Number(diag.referenceCount) || 0}장</span>{diag.styleSource ? ` · 그림체 참조: ${styleSourceText[diag.styleSource] || diag.styleSource}` : " · 그림체 참조 없음"}</li>
+                        <li>허브 블록(톤&매너·세계관·규칙): <span className={diag.hubContextUsed ? "text-emerald-300" : "text-red-300"}>{diag.hubContextUsed ? "포함" : "없음 — 허브 값이 프로젝트에 없어요"}</span>{diag.fallback ? <span className="text-amber-300"> · 1차 실패 후 참조 없이 재시도</span> : null}</li>
+                      </ul>
+                      {diag.promptHead ? <details className="mt-1"><summary className="cursor-pointer text-[10px] text-gray-500">프롬프트 앞부분</summary><pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-snug text-gray-400">{diag.promptHead}</pre></details> : null}
+                    </div>
+                  )}
                   {(plateUrl || variants.length > 0) && (
                     <div className="mt-3">
                       <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">플레이트</div>
