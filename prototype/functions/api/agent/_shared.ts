@@ -3973,6 +3973,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   // 등록 설명(인상착의·크기)을 참조 라벨과 프롬프트에 함께 싣는다 — 시트 이미지만으로는 "25cm" 같은 크기를 모델이 알 수 없다.
   const charLines: string[] = [];
   const charNames: string[] = [];
+  const charMissing: string[] = [];
   if (brandId && tokens.length) {
     let brand: any = null;
     try { brand = (await runBrandGetTool({ brandId }, ctx))?.brand || null; } catch { brand = null; }
@@ -3980,11 +3981,19 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
       const bc = brand ? findBrandCharacter(brand, tk) : null;
       const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
       const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
-      refs.push({ role: "character", ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
-      charNames.push(name);
-      charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}`);
+      // 등록 시트(이미지)가 있는지 여기서 확인 — 없으면 runImagenTool 이 조용히 빼 버려 "왜 이 캐릭터가 안 나왔나"를 알 수 없었다.
+      const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
+      const sheetEntry = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).find((e: any) => norm(e?.token) === norm(tk) || norm(e?.displayName) === norm(tk) || norm(e?.displayName) === norm(name));
+      const hasSheet = !!(Array.isArray(sheetEntry?.items) && sheetEntry.items.some((it: any) => String(it?.imageDataUrl || "").trim()));
+      if (hasSheet) {
+        refs.push({ role: "character", ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
+        charNames.push(name);
+      } else {
+        charMissing.push(name);
+      }
+      charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}${hasSheet ? "" : " — NO reference sheet registered; draw from this description"}`);
     }
-    refNotes.push(`캐릭터 ${charNames.length} (${charNames.join("·")})`);
+    refNotes.push(`캐릭터 ${charNames.length}${charNames.length ? ` (${charNames.join("·")})` : ""}${charMissing.length ? ` · 시트 없음: ${charMissing.join("·")}` : ""}`);
   } else if (tokens.length) {
     refNotes.push("캐릭터 0 (브랜드 미연결)");
   }

@@ -119,6 +119,9 @@ export function buildShotPromptKo() {
   ECU·CU 짧은 컷과 강한 무브(push-in, whip-pan, quick-pan)를 섞는다.
 · 마주보는 인물, 부르고 답하는 장면에는 리버스 샷을 적극 쓴다 — 그 샷의 cameraDirection 을
   "back" 으로 명시해야 배경이 반대편 공간으로 그려진다. front 인 채로 두면 컷이 튄다.
+· composition 의 프레이밍과 shotType·cameraElevation 은 한 카메라여야 한다. "발과 하체만 보인다"는 WS(전신)가 아니라
+  낮은 카메라의 타이트한 프레임(MCU/CU/INSERT + low)이고, "인물이 점처럼 작다"는 EWS 다. 둘이 어긋나면 이미지가 둘 중
+  하나를 무시한다 — composition 을 쓰고 나서 shotType·cameraElevation 이 그 프레임을 실제로 만드는 값인지 확인하라.
 · 입력 씬의 visual 이 이미 샷 사이즈·앵글·프레이밍(로우앵글 와이드, ECU, 오프센터 등)을
   지정했다면 그 씬의 첫 샷은 그것을 따른다. 기본값(MS/아이레벨/정면)으로 평탄화하지 마라.
 
@@ -235,6 +238,10 @@ Without them the still image is generated from the END state of the move, and th
 · For characters facing each other, or call-and-answer beats, use reverse shots deliberately — and set that
   shot's cameraDirection to "back" so the background renders the opposite side of the space. Leaving it
   "front" makes the cut jump.
+· composition's framing and shotType/cameraElevation must describe ONE camera. "only feet and lower bodies visible" is
+  not a WS (full body) but a tight low camera (MCU/CU/INSERT + low); "figures tiny in the space" is EWS. When they
+  disagree the image ignores one of them — after writing composition, check that shotType/cameraElevation are the
+  values that actually produce that frame.
 · If the input scene's visual already specifies a shot size / angle / framing (low-angle wide, ECU,
   off-center...), the scene's first shot MUST honor it. Do not flatten it to a default (MS / eye-level / centered).
 

@@ -170,3 +170,14 @@ test('★새 부감 마스터를 만들면 옛 마스터에서 파생된 앵글 
   assert.match(fn, /loc\.refObjectName = "";\s*\n\s*setVariant\(loc, "angle-top", img\.objectName, "부감\(마스터\)"/, '정면 플레이트도 비우고 나서 마스터 저장');
   assert.match(fn, /invalidatedPlates: staleIds, clearedFrontPlate: hadFrontPlate,/, '무효화 내역을 결과에 남긴다');
 });
+
+test('★scene_still: 등록 시트가 없는 캐릭터는 계보에 "시트 없음"으로 남기고 프롬프트에 설명으로만 그린다 · 분해 규칙: composition 프레이밍 ↔ shotType/높이 한 카메라', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /const hasSheet = !!\(Array\.isArray\(sheetEntry\?\.items\) && sheetEntry\.items\.some\(\(it: any\) => String\(it\?\.imageDataUrl \|\| ""\)\.trim\(\)\)\);/);
+  assert.match(fn, /\$\{charMissing\.length \? ` · 시트 없음: \$\{charMissing\.join\("·"\)\}` : ""\}/);
+  assert.match(fn, / — NO reference sheet registered; draw from this description/);
+  const dec = read('prototype/functions/api/scenario/shots/decomposer.js');
+  assert.match(dec, /· composition 의 프레이밍과 shotType·cameraElevation 은 한 카메라여야 한다\./);
+  assert.match(dec, /· composition's framing and shotType\/cameraElevation must describe ONE camera\./);
+});
