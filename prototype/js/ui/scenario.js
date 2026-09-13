@@ -1449,6 +1449,7 @@
         shotType: String(s.shotType || 'MS'),
         cameraMove: String(s.cameraMove || 'static'),
         cameraDirection: String(s.cameraDirection || 'front'),
+        cameraElevation: String(s.cameraElevation || 'eye'),
         composition: String(s.composition || '').trim(),
         action: String(s.action || '').trim(),
         // ★컷 안의 시간표. 여기서 빠뜨리면 서버가 아무리 잘 만들어 보내도
@@ -1719,6 +1720,7 @@
         // 카메라 방위·블로킹은 화면에 편집칸이 없어 dataset 으로 왕복시킨다
         // (머지를 안 거치는 경로에서도 유실되지 않게 — songSectionId 와 같은 이유).
         cameraDirection: String(card.dataset.cameraDirection || 'front'),
+        cameraElevation: String(card.dataset.cameraElevation || 'eye'),
         blocking: (() => {
           try {
             const raw = JSON.parse(card.dataset.blocking || 'null');
@@ -1760,6 +1762,7 @@
       const beats = (s.beats !== undefined ? s.beats : prev.beats) || null;
       // 카메라 방위·블로킹도 편집칸이 없는 필드 — 새 값이 비어 있으면 이전 값을 지킨다.
       const cameraDirection = String(s.cameraDirection || prev.cameraDirection || 'front');
+      const cameraElevation = String(s.cameraElevation || prev.cameraElevation || 'eye');
       const blocking = (s.blocking != null ? s.blocking : prev.blocking) || null;
       return Object.assign({}, prev, s, {
         lines: subtitleText,
@@ -1778,6 +1781,7 @@
         action,
         beats,
         cameraDirection,
+        cameraElevation,
         blocking
       });
     });
@@ -2030,7 +2034,7 @@
       const hasAction = !!String(s.action || '').trim();
       const hasStructured = hasComposition || hasAction;
       return `
-      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}" data-scene-break="${s.sceneBreak ? '1' : ''}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
+      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}" data-scene-break="${s.sceneBreak ? '1' : ''}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${s.cameraElevation && s.cameraElevation !== 'eye' ? ` data-camera-elevation="${escapeHtml(s.cameraElevation)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
         <div class="card-top">
           <div class="card-title-row">
             <h5 title="${escapeHtml(labelMeta.plain)}">${labelMeta.html}</h5>
@@ -2039,6 +2043,7 @@
             ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
             ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
             ${s.cameraDirection && s.cameraDirection !== 'front' ? `<span class="card-camera-chip card-camera-direction-chip" title="camera direction">${escapeHtml(s.cameraDirection === 'back' ? 'REV' : s.cameraDirection.toUpperCase())}</span>` : ''}
+            ${s.cameraElevation && s.cameraElevation !== 'eye' ? `<span class="card-camera-chip card-camera-direction-chip" title="camera height">${escapeHtml(String(s.cameraElevation).toUpperCase())}</span>` : ''}
             ${s.decomposeFallback ? `<span class="card-camera-chip card-fallback-chip" title="${escapeHtml(s.decomposeFallback)}">${escapeHtml(getScenarioUiText().decomposeFallbackChip)}</span>` : ''}
             ${s.autoShotTypeSwap ? `<span class="card-camera-chip card-auto-chip" title="${escapeHtml(getScenarioUiText().autoShotSwapTitle)}">${escapeHtml(s.autoShotTypeSwap)}→${escapeHtml(s.shotType || '')} ${escapeHtml(getScenarioUiText().autoShotSwapChip)}</span>` : ''}
             ${s.autoBlockingAnchor ? `<span class="card-camera-chip card-auto-chip" title="${escapeHtml(getScenarioUiText().autoBlockingTitle)}">${escapeHtml(getScenarioUiText().autoBlockingChip)}</span>` : ''}
@@ -3517,6 +3522,7 @@
             if (beatsLine) lines.push(`타임라인: ${beatsLine}`);
             // 카메라 방위·블로킹도 왕복 대상 — 리버스 샷 연출이 복사 한 번에 사라지면 안 된다.
             if (s.cameraDirection && s.cameraDirection !== 'front') lines.push(`방위: ${s.cameraDirection}`);
+            if (s.cameraElevation && s.cameraElevation !== 'eye') lines.push(`높이: ${s.cameraElevation}`);
             const blockingLine = blockingToText(s.blocking);
             if (blockingLine) lines.push(`블로킹: ${blockingLine}`);
             if (s.lyricsText || s.lyrics) lines.push(`${s.isRefrain ? '가사(후렴)' : '가사'}: ${String(s.lyricsText || s.lyrics).replace(/\r?\n+/g, ' · ')}`);
@@ -3552,14 +3558,14 @@
       const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
       const headerRe = /^\s*Scene\s+\d+(?:\s+cut\s*\d+)?\s*(?:[·•]\s*([0-9.]+)\s*s)?/i;
       const fieldRe = /^\s*(장소|화면|행동|타임라인|방위|블로킹|시각화|나레이션|대사)\s*[:：]\s*([\s\S]*)$/;
-      const labelMap = { '장소': 'location', '화면': 'composition', '행동': 'action', '타임라인': 'beats', '방위': 'cameraDirection', '블로킹': 'blocking', '시각화': 'shot', '나레이션': 'narration', '대사': 'dialogue' };
+      const labelMap = { '장소': 'location', '화면': 'composition', '행동': 'action', '타임라인': 'beats', '방위': 'cameraDirection', '높이': 'cameraElevation', '블로킹': 'blocking', '시각화': 'shot', '나레이션': 'narration', '대사': 'dialogue' };
       const out = [];
       let cur = null;
       let curField = null;
       for (const raw of lines) {
         const headerMatch = raw.match(headerRe);
         if (headerMatch) {
-          cur = { estSec: headerMatch[1] ? parseEst(headerMatch[1]) : 0, location: '', composition: '', action: '', beats: '', cameraDirection: '', blocking: '', shot: '', narration: '', dialogue: '' };
+          cur = { estSec: headerMatch[1] ? parseEst(headerMatch[1]) : 0, location: '', composition: '', action: '', beats: '', cameraDirection: '', cameraElevation: '', blocking: '', shot: '', narration: '', dialogue: '' };
           out.push(cur);
           curField = null;
           continue;
@@ -3595,6 +3601,7 @@
         // "0s 발만 / 2s 전신" 을 다시 시간표 배열로. 없으면 null.
         beats: textToBeats(String(p.beats || '').replace(/\s+\/\s+/g, '\n')),
         cameraDirection: String(p.cameraDirection || '').trim().toLowerCase() || 'front',
+        cameraElevation: String(p.cameraElevation || '').trim().toLowerCase() || 'eye',
         blocking: textToBlocking(p.blocking),
         shot: visual,
         visual,

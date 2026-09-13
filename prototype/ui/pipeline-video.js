@@ -144,6 +144,11 @@
       var dh = (sv && sv.buildCameraDirectionHint) ? sv.buildCameraDirectionHint(dir, 'en') : '';
       if (dh) lines.push(dh);
     } catch (_) {}
+    // 카메라 높이(eye/high/low/top/worm) — 서버 appendStageGeometry 와 같은 문장, eye 도 명시.
+    try {
+      var eh = (sv && sv.buildCameraElevationHint) ? sv.buildCameraElevationHint(row.cameraElevation, 'en') : '';
+      if (eh) lines.push(eh);
+    } catch (_) {}
     try {
       if (row.blocking && sg && sg.buildBlockingLines) {
         var compSource = String(row.composition || row.shot || (scene && (scene.composition || scene.shot)) || '');

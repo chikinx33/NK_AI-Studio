@@ -9,12 +9,12 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8').rep
 
 test('episodeLocationAsset 이 컷의 cameraDirection 으로 방위 플레이트를 고른다', () => {
   const src = read('prototype/ui/pipeline-image.js');
-  assert.match(src, /function episodeLocationAsset\(row, cameraDirection\)/, '방위 인자가 없습니다');
+  assert.match(src, /function episodeLocationAsset\(row, cameraDirection, cameraElevation\)/, '방위 인자가 없습니다');
   assert.match(src, /directionVariantId/, '방위 variant id 규약을 쓰지 않습니다');
   // 방위 플레이트가 없을 때의 폴백: 마스터를 쓰되 "반대편이다"를 프롬프트로 알린다
   assert.match(src, /this reference shows the FRONT side/, '방위 플레이트 미등록 시 폴백 경고문이 없습니다');
   // 호출부가 scene.cameraDirection 을 넘긴다
-  assert.match(src, /\), scene && scene\.cameraDirection\);/, '호출부가 cameraDirection 을 넘기지 않습니다');
+  assert.match(src, /\), scene && scene\.cameraDirection, scene && scene\.cameraElevation\);/, '호출부가 cameraDirection 을 넘기지 않습니다');
 });
 
 test('이미지 프롬프트에 방위·블로킹 기하가 주입된다 (씬·컷 両경로)', () => {

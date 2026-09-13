@@ -198,6 +198,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         videoFromImage: isInlineUrl(value.videoFromImage) ? "" : str(value.videoFromImage),
         // 이 스틸이 어떤 연속성 경로로 나왔나(camera-reconstruct | plate | look-only | none) — 캔버스 계보 표시용.
         imageContinuity: str(value.imageContinuity),
+        // 이 스틸이 실제로 받은 참조(플레이트 변형 id · 사람이 읽는 요약) — 캔버스 계보 표시용.
+        imagePlate: str(value.imagePlate),
+        imageRefs: str(value.imageRefs),
         imageAttempts: count(value.imageAttempts),
         videoAttempts: count(value.videoAttempts),
         agentJobId: str(value.agentJobId),
@@ -244,6 +247,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             shotType: typeof sh.shotType === "string" ? sh.shotType : "MS",
             cameraMove: typeof sh.cameraMove === "string" ? sh.cameraMove : "static",
             cameraDirection: typeof sh.cameraDirection === "string" ? sh.cameraDirection : "front",
+            cameraElevation: typeof sh.cameraElevation === "string" ? sh.cameraElevation : "eye",
             composition: typeof sh.composition === "string" ? sh.composition : "",
             action: typeof sh.action === "string" ? sh.action : "",
             beats: normalizeBeats(sh.beats),
@@ -307,6 +311,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const shotType = typeof s?.shotType === "string" ? s.shotType : "MS";
       const cameraMove = typeof s?.cameraMove === "string" ? s.cameraMove : "static";
       const cameraDirection = typeof s?.cameraDirection === "string" ? s.cameraDirection : "front";
+      const cameraElevation = typeof s?.cameraElevation === "string" ? s.cameraElevation : "eye";
       const composition = typeof s?.composition === "string" ? s.composition : "";
       const action = typeof s?.action === "string" ? s.action : "";
       return {
@@ -325,6 +330,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         shotType,
         cameraMove,
         cameraDirection,
+        cameraElevation,
         composition,
         action,
         beats: normalizeBeats(s?.beats),

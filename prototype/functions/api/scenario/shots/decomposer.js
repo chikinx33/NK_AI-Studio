@@ -4,7 +4,7 @@
  * Pass 2 — 단일 scene 을 받아 1~5개의 shot 으로 분해한다.
  *
  * 입력: scene { id, estSec, sceneIntent, sceneLocation, narration, dialogue, visual, ... }
- * 출력: shots [{ id, duration, shotType, cameraMove, cameraDirection, composition, action, dialogue, beats, blocking }]
+ * 출력: shots [{ id, duration, shotType, cameraMove, cameraDirection, cameraElevation, composition, action, dialogue, beats, blocking }]
  *
  * 핵심 규칙
  * - Σ shots[].duration ≈ scene.estSec (±20% 허용)
@@ -21,6 +21,7 @@ import {
   normalizeShotType,
   normalizeCameraMove,
   normalizeCameraDirection,
+  normalizeCameraElevation,
 } from "./vocab.js";
 
 import { buildBodyGrammar } from "../../_shared/body-grammar.js";
@@ -59,6 +60,9 @@ export function buildShotPromptKo() {
                 cameraMove 가 static 이 아니면 필수. 정적 샷이면 null.
 · cameraDirection : 카메라 방위 — "front"(정면·기본) / "back"(리버스 샷) / "left" / "right".
                 같은 공간이라도 리버스 샷이면 반드시 "back" 을 쓴다. 배경 플레이트 선택이 이 값을 따른다.
+· cameraElevation : 카메라 높이 — "eye"(아이레벨·기본) / "high"(내려다봄) / "low"(올려다봄) / "top"(수직 부감) / "worm"(극단 앙각).
+                연출상 뜻이 있을 때만 eye 를 벗어난다(위압감·왜소함은 low/high, 바닥 소품 나열은 top).
+                방위와 높이가 함께 배경 플레이트를 고른다 — 사이즈(shotType)는 플레이트를 바꾸지 않는다.
 · blocking    : t=0 순간의 무대 배치. 프레임에 등장하는 캐릭터마다
                 {"token":"@이름","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}.
                 좌표는 카메라가 아니라 "무대를 정면(front)에서 본" 기준으로 적는다 — 방위가 바뀌어도
@@ -143,7 +147,7 @@ export function buildShotPromptKo() {
 ${buildVocabPromptKo()}
 
 [출력 형식 — JSON 만, 마크다운/설명 금지]
-{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","cameraDirection":"front|back|left|right","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null,"beats":[{"at":0,"what":"<t=0 에 보이는 것>"},{"at":<초>,"what":"<그때 보이는 것>"}],"blocking":[{"token":"@이름","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","cameraDirection":"front|back|left|right","cameraElevation":"eye|high|low|top|worm","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null,"beats":[{"at":0,"what":"<t=0 에 보이는 것>"},{"at":<초>,"what":"<그때 보이는 것>"}],"blocking":[{"token":"@이름","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
 
 cameraMove 가 static 이 아닌 샷에 beats 가 없으면 잘못된 응답이다. 내보내기 전에 확인하라.
 응답 첫 글자는 { 마지막 글자는 } 여야 한다.`;
@@ -167,6 +171,9 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
                 REQUIRED whenever cameraMove is not "static". null for a truly static shot.
 · cameraDirection : which way the camera faces — "front" (default) / "back" (REVERSE shot) / "left" / "right".
                 A reverse shot in the same space MUST say "back"; background plate selection follows this value.
+· cameraElevation : camera height — "eye" (default) / "high" (looking down) / "low" (looking up) / "top" (straight down) / "worm" (extreme low).
+                Leave eye unless the height means something (low/high for power or smallness, top for props laid on the floor).
+                Direction and elevation together pick the background plate — shot size never changes the plate.
 · blocking    : the stage layout at t=0. One entry per character in frame:
                 {"token":"@Name","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}.
                 Coordinates are written as seen from the FRONT of the stage, NOT from this shot's camera —
@@ -255,7 +262,7 @@ Without them the still image is generated from the END state of the move, and th
 ${buildVocabPromptEn()}
 
 [Output format — JSON only, no markdown or explanation]
-{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","cameraDirection":"front|back|left|right","composition":"<frame description>","action":"<physical action, no dialogue>","dialogue":null,"beats":[{"at":0,"what":"<visible at t=0>"},{"at":<seconds>,"what":"<visible then>"}],"blocking":[{"token":"@Name","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","cameraDirection":"front|back|left|right","cameraElevation":"eye|high|low|top|worm","composition":"<frame description>","action":"<physical action, no dialogue>","dialogue":null,"beats":[{"at":0,"what":"<visible at t=0>"},{"at":<seconds>,"what":"<visible then>"}],"blocking":[{"token":"@Name","x":"left|center|right","depth":"near|mid|far","facing":"camera|away|left|right"}]}, ...]}
 
 A shot whose cameraMove is not "static" and has no beats is an invalid response. Check before you emit.
 The first character must be { and the last must be }.`;
@@ -440,8 +447,9 @@ export function parseShotResponse(text, scene) {
     const dialogue = normalizeShotDialogue(raw.dialogue);
     const beats = normalizeBeats(raw.beats, duration);
     const cameraDirection = normalizeCameraDirection(raw.cameraDirection) || "front";
+    const cameraElevation = normalizeCameraElevation(raw.cameraElevation) || "eye";
     const blocking = normalizeBlocking(raw.blocking);
-    out.push({ id, duration, shotType, cameraMove, cameraDirection, composition, action, dialogue, beats, blocking });
+    out.push({ id, duration, shotType, cameraMove, cameraDirection, cameraElevation, composition, action, dialogue, beats, blocking });
   });
 
   if (!out.length) return null;

@@ -67,7 +67,7 @@ test('서버 컷 평탄화가 방위·블로킹을 나른다 (본 경로 + legac
   assert.match(src, /cameraDirection: String\(sh\.cameraDirection \|\| "front"\)/);
   assert.match(src, /blocking: Array\.isArray\(sh\.blocking\)/);
   // legacy 폴백 경로에도 기본값이 있어야 한다
-  assert.match(src, /cameraDirection: "front",\n\s+beats: null,\n\s+blocking: null,/);
+  assert.match(src, /cameraDirection: "front",\n\s+cameraElevation: "eye",\n\s+beats: null,\n\s+blocking: null,/);
 });
 
 test('decomposer 가 방위·블로킹을 만들고, 합치기·폴백에서 잃지 않는다', () => {
@@ -75,7 +75,7 @@ test('decomposer 가 방위·블로킹을 만들고, 합치기·폴백에서 잃
   // 파싱 화이트리스트
   assert.match(src, /normalizeCameraDirection\(raw\.cameraDirection\) \|\| "front"/);
   assert.match(src, /const blocking = normalizeBlocking\(raw\.blocking\);/);
-  assert.match(src, /out\.push\(\{ id, duration, shotType, cameraMove, cameraDirection, composition, action, dialogue, beats, blocking \}\);/);
+  assert.match(src, /out\.push\(\{ id, duration, shotType, cameraMove, cameraDirection, cameraElevation, composition, action, dialogue, beats, blocking \}\);/);
   // 컷 합치기(mergeTwoShots)에서 증발 금지
   assert.match(src, /cameraDirection: a\.cameraDirection \|\| b\.cameraDirection \|\| "front"/);
   assert.match(src, /blocking: a\.blocking \|\| b\.blocking \|\| null/);

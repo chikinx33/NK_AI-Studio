@@ -144,6 +144,7 @@ function flattenScenesWithShots(parentScenes, characters) {
         shotType: "MS",
         cameraMove: "static",
         cameraDirection: "front",
+        cameraElevation: "eye",
         beats: null,
         blocking: null,
         estSec: Number(parent.estSec) || 0,
@@ -199,6 +200,8 @@ function flattenScenesWithShots(parentScenes, characters) {
         cameraMove: String(sh.cameraMove || "static"),
         // 카메라 방위(front/back/left/right) — 배경 방위 플레이트 선택과 공간 기하의 축.
         cameraDirection: String(sh.cameraDirection || "front"),
+        // 카메라 높이(eye/high/low/top/worm) — 방위와 함께 세트 플레이트를 고른다.
+        cameraElevation: String(sh.cameraElevation || "eye"),
         estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
         // 한 샷 안의 시간표. 스틸컷은 beats[0](첫 프레임)으로, 영상은 시간 분배로 쓴다.
         beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,

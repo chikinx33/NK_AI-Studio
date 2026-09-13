@@ -10,6 +10,8 @@ import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
 import { buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES } from "../_shared/storyboard-sheet.js";
 import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName, looksLikeSentenceLocation } from "../_shared/location-names.js";
+import { plateVariantId, plateLabel, findPlate, masterOf, plateElevation, MASTER_VARIANT_ID } from "../_shared/set-plates.js";
+import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/shots/vocab.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -3956,13 +3958,69 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const header = String(cur.payload?.header || cur.header || "");
   const prompt = String(input?.prompt || "").trim() || buildSceneImagePrompt(scene, header, {});
   if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 화면/비주얼 필요).");
+  const bucket = studioBucket(ctx);
+  // ★일관성 참조 묶음(제작 화면의 레퍼런스 경로를 캔버스 잡에도): 캐릭터 시트 → 세트 플레이트(방위×높이 캐시) → 부감 마스터 → 스타일 앵커.
+  //   플레이트가 없고 마스터가 있으면 여기서 한 장 파생해 저장한다(캐시 채우기). 같은 방위×높이의 다음 컷은 그것을 재사용한다.
+  const payload0: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
+  const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
+  const refs: any[] = [];
+  const refNotes: string[] = [];
+  let plateVariant = "";
+  const brandId = String(payload0.brandId || payload0.brandRef?.id || "").trim();
+  const tokenText = String(scene?.composition || scene?.shot || scene?.visual || "");
+  const tokens = Array.from(new Set((tokenText.match(/@[0-9A-Za-z가-힣_]{1,24}/g) || []).map((t: string) => t.trim()))).slice(0, 2);
+  if (brandId) for (const tk of tokens) refs.push({ ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: tk.replace(/^@+/, ""), referenceKind: "character" });
+  if (tokens.length) refNotes.push(`캐릭터 ${brandId ? tokens.length : 0}`);
+  const direction = normalizeCameraDirection(scene?.cameraDirection) || "front";
+  const elevation = normalizeCameraElevation(scene?.cameraElevation) || "eye";
+  const locations: any[] = Array.isArray(payload0.episodeLocations) ? payload0.episodeLocations : [];
+  const locName = String(scene?.sceneLocation || scene?.location || "").trim() || (locations.length === 1 ? String(locations[0]?.name || "") : "");
+  let loc: any = locName ? (locations.find((l: any) => normLocationKey(l?.name) === normLocationKey(locName) || normLocationKey(l?.id) === normLocationKey(locName)) || null) : null;
+  if (loc && bucket) {
+    let plate = findPlate(loc, direction, elevation);
+    const wantId = plateVariantId(direction, elevation);
+    if ((!plate || !plate.exact) && masterOf(loc) && input?.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID) {
+      try {
+        await runSetAngleTool({ projectId, locationName: String(loc.name || locName), direction, elevation, ...(input?.provider ? { provider: String(input.provider) } : {}) }, ctx);
+        const again = await runProjectGetTool({ projectId }, ctx);
+        const locs2: any[] = Array.isArray(again?.payload?.episodeLocations) ? again.payload.episodeLocations : [];
+        loc = locs2.find((l: any) => normLocationKey(l?.name) === normLocationKey(String(loc.name || locName))) || loc;
+        plate = findPlate(loc, direction, elevation);
+        if (plate && plate.exact) refNotes.push(`플레이트 ${plateLabel(direction, elevation, "ko")}(새로 파생)`);
+      } catch (e) {
+        refNotes.push(`플레이트 파생 실패: ${String((e as Error)?.message || e).slice(0, 80)}`);
+      }
+    } else if (plate && plate.exact) {
+      refNotes.push(`플레이트 ${plateLabel(direction, elevation, "ko")}(${plate.source === "front-legacy" ? "기존 정면" : "캐시 재사용"})`);
+    }
+    if (plate) {
+      plateVariant = plate.variantId;
+      const setName = String(loc.name || locName);
+      refs.push({ imageUrl: gsOf(plate.objectName), referenceId: refs.length + 1, referenceKind: "environment",
+        subjectDescription: plate.exact
+          ? `SET PLATE of ${setName} for THIS camera (${plateLabel(direction, elevation, "en")}) — this is the background of the shot; keep walls, windows, furniture and props exactly where they are`
+          : plate.source === "master"
+            ? `TOP-DOWN MASTER PLATE of ${setName} — layout truth; keep every object on the same wall and position while the camera is ${plateLabel(direction, elevation, "en")}`
+            : `FRONT PLATE of ${setName} — this shot faces ${plateLabel(direction, elevation, "en")}; keep the architectural style, palette and lighting, reconstruct the ${direction} side consistently` });
+      if (!plate.exact) refNotes.push(plate.source === "master" ? "부감 마스터만(플레이트 없음)" : "정면 플레이트 폴백");
+      const master = masterOf(loc);
+      if (plate.exact && master && plate.objectName !== master && refs.length < 4) {
+        refs.push({ imageUrl: gsOf(master), referenceId: refs.length + 1, referenceKind: "environment", subjectDescription: `TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); do not copy its top-down camera` });
+        refNotes.push("부감 마스터");
+      }
+    }
+  } else if (locName) {
+    refNotes.push("세트 미등록(플레이트 없음)");
+  }
+  const anchor = (payload0.styleAnchor && typeof payload0.styleAnchor === "object" && payload0.styleAnchor.objectName) ? payload0.styleAnchor : null;
+  if (anchor && bucket && refs.length < 4) { refs.push({ imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
   // 작성기 설정(모델·크기)을 그대로 넘긴다 — 스튜디오 버튼과 같은 경로.
   const img = await runImagenTool({
     prompt, aspectRatio: input?.aspectRatio || "16:9", projectId,
+    ...(refs.length ? { referenceImages: refs } : {}),
     ...(input?.provider ? { provider: String(input.provider) } : {}),
     ...(input?.imageSize ? { imageSize: String(input.imageSize) } : {}),
   }, ctx);
-  const bucket = studioBucket(ctx);
   const ref = (img.objectName && bucket) ? `gs://${bucket}/${img.objectName}` : (img.signedUrl || "");
   if (!ref) throw new Error("이미지 생성 결과에 저장할 URL이 없어요.");
   // 이전 이미지는 버전 이력에 보존(되돌리기용). data: 는 영속 금지(OOM 전례) → https/gs 만 보관, 최근 10개.
@@ -3977,15 +4035,21 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const lineage = {
     ...prevLineage,
     imagePrompt: prompt,
+    imagePlate: plateVariant,
+    imageRefs: refNotes.join(" · "),
     imageAttempts: (Number(prevLineage.imageAttempts) || 0) + 1,
     agentJobId: String(ctx.jobId || ""),
     updatedAt: new Date().toISOString(),
   };
-  scenes[idx] = { ...scene, imageDataUrl: ref, imageHistory, lineage };
-  await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
+  // 이 잡 안에서 플레이트를 파생했으면 episodeLocations 가 바뀌어 있다 — 최신 씬 목록을 다시 읽어 덮어쓰지 않게 한다.
+  const latest = await runProjectGetTool({ projectId }, ctx).catch(() => null);
+  const scenesLatest: any[] = Array.isArray(latest?.scenes) && latest.scenes.length === scenes.length ? latest.scenes : scenes;
+  scenesLatest[idx] = { ...(scenesLatest[idx] || scene), imageDataUrl: ref, imageHistory, lineage };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes: scenesLatest } });
   return {
     kind: "scene_still", projectId, sceneId: scene?.id,
     signedUrl: img.signedUrl || "", objectName: img.objectName || "",
+    referenceCount: refs.length, references: refNotes, plateVariant,
     saved: true, promptEcho: prompt,
   };
 }
@@ -4246,7 +4310,7 @@ async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
   // common/promptText/promptEdited/cameraDirection/beats/blocking/cutRef* 는 캔버스·채팅이 프롬프트와
   // 컷↔컷 참조선을 편집하는 필드 — 여기 없으면 에이전트가 고쳐도 저장 전에 증발한다.
   const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec",
-    "common", "promptText", "promptEdited", "cameraDirection", "beats", "blocking", "cutRefId", "cutRefEnabled", "sceneBreak"];
+    "common", "promptText", "promptEdited", "cameraDirection", "cameraElevation", "beats", "blocking", "cutRefId", "cutRefEnabled", "sceneBreak"];
   for (const f of FIELDS) if (input?.[f] !== undefined && patch[f] === undefined) patch[f] = input[f];
   delete patch.id; // id는 매칭·부여 전용, 병합 대상 아님
   const ref = input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex;
@@ -4580,8 +4644,17 @@ async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
   if (!projectId) throw new Error("projectId is required");
   const name = String(input?.locationName || input?.name || input?.setName || "").trim();
   if (!name) throw new Error("locationName(세트 이름)이 필요해요");
-  const angle = String(input?.angle || "front").trim().toLowerCase();
-  if (!["front", "back", "left", "right", "high", "low"].includes(angle)) throw new Error(`앵글이 잘못됐어요: ${angle}`);
+  // 플레이트 키 = 방위 × 높이. 옛 angle(front|back|left|right|high|low) 도 받아 같은 키로 접는다.
+  const angleRaw = String(input?.angle || "").trim().toLowerCase();
+  let direction = normalizeCameraDirection(input?.direction) || "";
+  let elevation = normalizeCameraElevation(input?.elevation) || "";
+  if (!direction && angleRaw) direction = normalizeCameraDirection(angleRaw) || "front";
+  if (!elevation && angleRaw) elevation = (angleRaw === "high" || angleRaw === "low") ? angleRaw : "eye";
+  if (!direction) direction = "front";
+  if (!elevation) elevation = "eye";
+  if (plateElevation(elevation) === "top") throw new Error("부감(top)은 파생하지 않아요 — set_master 가 그 자체예요.");
+  const angle = direction; // 호환용(응답 필드)
+  const variantId = plateVariantId(direction, elevation);
   const cur = await runProjectGetTool({ projectId }, ctx);
   const payload: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
   const header = String(payload.header || cur.header || "");
@@ -4591,11 +4664,11 @@ async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
   const loc = locations[idx];
   const bucket = studioBucket(ctx);
   const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
-  const master = (Array.isArray(loc.variants) ? loc.variants : []).find((v: any) => v?.id === "angle-top" && v?.refObjectName)?.refObjectName || loc.refObjectName || "";
+  const master = masterOf(loc) || loc.refObjectName || "";
   if (!master || !bucket) throw new Error("마스터 플레이트(부감)가 없어요. 먼저 set_master 로 만드세요.");
   const hub = buildHubContext(payload);
   const promptSetName = looksLikeSentenceLocation(String(loc.name || name)) ? (sanitizeSetName(String(loc.name || name)) || "the main set") : String(loc.name || name);
-  const prompt = String(input?.prompt || "").trim() || buildAnglePlateEditPrompt({ set: { name: promptSetName, description: String(loc.description || ""), layout: loc.layout || null }, angle, header, hub, fromMaster: true });
+  const prompt = String(input?.prompt || "").trim() || buildAnglePlateEditPrompt({ set: { name: promptSetName, description: String(loc.description || ""), layout: loc.layout || null }, angle, direction, elevation, header, hub, fromMaster: true });
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
   const img = await runImagenTool({
     prompt, aspectRatio: aspect, projectId, generationMode: "image-to-image", cameraTargetMode: "scene",
@@ -4603,13 +4676,13 @@ async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
     ...providerOpt,
   }, ctx);
   if (!img?.objectName) throw new Error("앵글 플레이트 결과에 저장 경로(objectName)가 없어요.");
-  const label: Record<string, string> = { front: "정면", back: "후면(리버스)", left: "좌측", right: "우측", high: "하이앵글(부감)", low: "로우앵글" };
-  if (angle === "front") { loc.refObjectName = img.objectName; setVariant(loc, "dir-front", img.objectName, label.front, { source: "derived", createdAt: new Date().toISOString() }); }
-  else if (angle === "back" || angle === "left" || angle === "right") setVariant(loc, `dir-${angle}`, img.objectName, label[angle], { source: "derived", createdAt: new Date().toISOString() });
-  else setVariant(loc, `angle-${angle}`, img.objectName, label[angle], { source: "derived", createdAt: new Date().toISOString() });
+  const labelKo = plateLabel(direction, elevation, "ko");
+  // 정면·아이레벨은 기존 파이프라인의 정면 플레이트(refObjectName)와 같은 뜻이라 둘 다 채운다.
+  if (variantId === "dir-front") loc.refObjectName = img.objectName;
+  setVariant(loc, variantId, img.objectName, labelKo, { source: "derived", direction, elevation: plateElevation(elevation), createdAt: new Date().toISOString() });
   locations[idx] = loc;
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { episodeLocations: locations } } });
-  return { kind: "set_angle", projectId, locationName: String(loc.name || name), angle, objectName: img.objectName, signedUrl: img.signedUrl || "", model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", saved: true, promptEcho: prompt, summary: `${label[angle]} 플레이트를 마스터에서 파생했어요: ${String(loc.name || name)}` };
+  return { kind: "set_angle", projectId, locationName: String(loc.name || name), angle, direction, elevation, variantId, objectName: img.objectName, signedUrl: img.signedUrl || "", model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", saved: true, promptEcho: prompt, summary: `${labelKo} 플레이트를 마스터에서 파생했어요: ${String(loc.name || name)}` };
 }
 
 /** 스타일 앵커 지정: 프로젝트의 그림체 기준 이미지를 창작자가 고른다(기존 스틸·플레이트·시트 어느 것이든).

@@ -263,7 +263,18 @@ export function buildAnglePlateEditPrompt(input) {
   const set = (input && input.set) || {};
   const name = t(set.name) || "this set";
   const angle = t(input && input.angle).toLowerCase() || "high";
-  const view = angle === "top" ? "directly from above (top-down view)"
+  // 방위 × 높이(플레이트 캐시 키)로 호출되면 그 조합의 시점을 문장으로 만든다. angle 만 오면 옛 6종 호환.
+  const direction = t(input && input.direction).toLowerCase();
+  const elevation = t(input && input.elevation).toLowerCase() || "eye";
+  const dirView = direction === "back" ? "from the reverse angle: the camera stands at the BACK wall looking toward the FRONT wall (entrance side)"
+    : direction === "left" ? "from the LEFT wall looking across the room toward the RIGHT wall"
+      : direction === "right" ? "from the RIGHT wall looking across the room toward the LEFT wall"
+        : "from the entrance side, a wide establishing view looking at the BACK wall";
+  const elevView = elevation === "high" ? "from a high angle, the camera raised well above head height looking down at about 35 degrees"
+    : elevation === "low" ? "from a low angle near the floor (about 30 cm), looking up"
+      : elevation === "worm" ? "from an extreme worm's-eye position on the floor looking steeply up"
+        : "at eye level (about 150 cm)";
+  const view = direction ? `${dirView}, ${elevView}` : angle === "top" ? "directly from above (top-down view)"
     : angle === "low" ? "from a low angle near the floor, looking up, eye height about 30 cm"
       : angle === "back" ? "from the reverse angle: the camera stands at the BACK wall looking toward the FRONT wall (entrance side)"
         : angle === "left" ? "from the LEFT wall looking across the room toward the RIGHT wall"

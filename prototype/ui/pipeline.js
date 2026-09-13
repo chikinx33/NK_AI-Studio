@@ -888,6 +888,7 @@
                 shotType: String(sh.shotType || 'MS'),
                 cameraMove: String(sh.cameraMove || 'static'),
                 cameraDirection: String(sh.cameraDirection || 'front'),
+                cameraElevation: String(sh.cameraElevation || 'eye'),
                 beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
                 blocking: Array.isArray(sh.blocking) && sh.blocking.length ? sh.blocking : null,
                 estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
@@ -925,6 +926,7 @@
                 shotType: String(sh.shotType || 'MS'),
                 cameraMove: String(sh.cameraMove || 'static'),
                 cameraDirection: String(sh.cameraDirection || 'front'),
+                cameraElevation: String(sh.cameraElevation || 'eye'),
                 composition: String(sh.composition || ''),
                 action: String(sh.action || ''),
                 beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
@@ -962,6 +964,7 @@
               shotType: String(s.shotType || 'MS'),
               cameraMove: String(s.cameraMove || 'static'),
               cameraDirection: String(s.cameraDirection || 'front'),
+              cameraElevation: String(s.cameraElevation || 'eye'),
               composition: String(s.composition || ''),
               action: String(s.action || ''),
               // ★컷 안의 시간표. 여기 없으면 스틸컷 t=0(firstFrame) 로직과 타임라인 UI 가

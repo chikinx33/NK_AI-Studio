@@ -158,6 +158,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         shotType: String(s?.shotType || "MS"),
         cameraMove: String(s?.cameraMove || "static"),
         cameraDirection: String(s?.cameraDirection || "front"),
+        cameraElevation: String(s?.cameraElevation || "eye"),
         composition: String(s?.composition || ""),
         action: String(s?.action || ""),
         visual: String(s?.shot || s?.visual || ""),

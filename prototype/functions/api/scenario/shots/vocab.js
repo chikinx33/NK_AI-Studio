@@ -48,9 +48,20 @@ export const CAMERA_DIRECTIONS = Object.freeze({
   right: { ko: "우측",       en: "Right",  hint: "세트 오른쪽 벽을 바라본다", enHint: "the camera faces the right side of the set" },
 });
 
+// 카메라 높이(앵글) — 방위와 함께 세트 플레이트를 고르는 두 번째 축. 사이즈(shotType)·무브(cameraMove)는 플레이트를 나누지 않는다.
+// top 은 세트의 부감 마스터 자체가 플레이트, worm 은 low 플레이트를 쓰되 프롬프트에 극단 힌트만 더한다.
+export const CAMERA_ELEVATIONS = Object.freeze({
+  eye:  { ko: "아이레벨",       en: "Eye level",   hint: "인물 눈높이 (기본값)",                 enHint: "eye-level camera" },
+  high: { ko: "하이앵글",       en: "High angle",  hint: "위에서 내려다봄 (약 30~45°)",          enHint: "high angle, the camera looks down at the subject from above (about 30-45 degrees)" },
+  low:  { ko: "로우앵글",       en: "Low angle",   hint: "아래에서 올려다봄",                    enHint: "low angle, the camera looks up at the subject from below" },
+  top:  { ko: "부감(탑뷰)",     en: "Top-down",    hint: "바로 위에서 수직으로 내려다봄",         enHint: "top-down bird's-eye view, the camera looks straight down" },
+  worm: { ko: "앙각(웜즈아이)", en: "Worm's-eye",  hint: "바닥에 붙어 극단적으로 올려다봄",       enHint: "extreme low worm's-eye view from the floor looking steeply up" },
+});
+
 export const SHOT_TYPE_KEYS = Object.freeze(Object.keys(SHOT_TYPES));
 export const CAMERA_MOVE_KEYS = Object.freeze(Object.keys(CAMERA_MOVES));
 export const CAMERA_DIRECTION_KEYS = Object.freeze(Object.keys(CAMERA_DIRECTIONS));
+export const CAMERA_ELEVATION_KEYS = Object.freeze(Object.keys(CAMERA_ELEVATIONS));
 
 /**
  * 어휘 표(LLM 프롬프트용 멀티라인 텍스트). KO/EN 두 버전.
@@ -64,11 +75,18 @@ export function buildVocabPromptKo() {
     const v = CAMERA_MOVES[k];
     return `  - ${k} (${v.ko}): ${v.hint}`;
   }).join("\n");
+  const elevLines = CAMERA_ELEVATION_KEYS.map((k) => {
+    const v = CAMERA_ELEVATIONS[k];
+    return `  - ${k} (${v.ko}): ${v.hint}`;
+  }).join("\n");
   return `[허용 shotType — 이 12개 중에서만 선택]
 ${shotLines}
 
 [허용 cameraMove — 이 10개 중에서만 선택]
-${moveLines}`;
+${moveLines}
+
+[허용 cameraElevation — 이 5개 중에서만 선택. 기본 eye]
+${elevLines}`;
 }
 
 export function buildVocabPromptEn() {
@@ -80,11 +98,18 @@ export function buildVocabPromptEn() {
     const v = CAMERA_MOVES[k];
     return `  - ${k} (${v.en}): ${v.hint}`;
   }).join("\n");
+  const elevLines = CAMERA_ELEVATION_KEYS.map((k) => {
+    const v = CAMERA_ELEVATIONS[k];
+    return `  - ${k} (${v.en}): ${v.hint}`;
+  }).join("\n");
   return `[Allowed shotType — pick exactly one from these 12]
 ${shotLines}
 
 [Allowed cameraMove — pick exactly one from these 10]
-${moveLines}`;
+${moveLines}
+
+[Allowed cameraElevation — pick exactly one from these 5. Default eye]
+${elevLines}`;
 }
 
 /**
@@ -109,6 +134,19 @@ export function normalizeCameraDirection(raw) {
   if (CAMERA_DIRECTION_KEYS.includes(key)) return key;
   // LLM 이 쓰기 쉬운 동의어 흡수
   if (key === "reverse" || key === "rear" || key === "behind") return "back";
+  return null;
+}
+
+export function normalizeCameraElevation(raw) {
+  if (!raw) return null;
+  const key = String(raw).trim().toLowerCase().replace(/['’]/g, "").replace(/[\s-]/g, "_");
+  if (CAMERA_ELEVATION_KEYS.includes(key)) return key;
+  // LLM 이 쓰기 쉬운 동의어 흡수
+  if (key === "eye_level" || key === "eyelevel" || key === "level" || key === "normal" || key === "neutral") return "eye";
+  if (key === "high_angle" || key === "above" || key === "down") return "high";
+  if (key === "low_angle" || key === "below" || key === "up") return "low";
+  if (key === "bird" || key === "birds_eye" || key === "bird_s_eye" || key === "top_down" || key === "topdown" || key === "overhead" || key === "aerial") return "top";
+  if (key === "worms_eye" || key === "worm_s_eye" || key === "extreme_low") return "worm";
   return null;
 }
 
@@ -154,4 +192,12 @@ export function buildCameraDirectionHint(raw, lang) {
   const v = CAMERA_DIRECTIONS[key];
   if (lang === "ko") return "카메라 방위: " + v.ko + ".";
   return "Camera direction: " + v.enHint + ".";
+}
+
+// 이미지 프롬프트에 붙일 카메라 높이 한 줄. eye 도 명시한다 — 비워 두면 모델이 컷마다 임의 높이를 고른다.
+export function buildCameraElevationHint(raw, lang) {
+  const key = normalizeCameraElevation(raw) || "eye";
+  const v = CAMERA_ELEVATIONS[key];
+  if (lang === "ko") return "카메라 높이: " + v.ko + ".";
+  return "Camera height: " + v.enHint + ".";
 }

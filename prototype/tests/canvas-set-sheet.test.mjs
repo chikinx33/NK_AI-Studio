@@ -295,7 +295,7 @@ test('★"스튜디오 설정 따름"은 제작 화면의 이미지생성 모델
   assert.match(cs, /export function providerArg\(s: CanvasSettings\): \{ provider\?: string \}/);
   assert.match(read('prototype/js/config.js'), /IMAGE_PROVIDER: 'nk_ai_image_provider',/, '스튜디오와 같은 키');
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 5, 'set_sheet + set_master + set_angle + scene_still 두 곳 = 5곳');
+  assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 4, 'set_sheet + set_master + scene_still 두 곳 = 4곳 (앵글 파생은 서버 scene_still 이 캐시로)');
   assert.match(src, /모델: <span className="text-gray-200">/);
 });
 
@@ -337,16 +337,17 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
   assert.match(mfn, /nextPayload\.styleAnchor = \{ objectName: img\.objectName/, '앵커가 없으면 마스터가 앵커');
   const ia = shared.indexOf('async function runSetAngleTool('); const afn = shared.slice(ia, shared.indexOf('\n}\n', ia));
   assert.match(afn, /generationMode: "image-to-image", cameraTargetMode: "scene",/, '마스터를 소스로 카메라 재구성');
-  assert.match(afn, /if \(angle === "front"\) \{ loc\.refObjectName = img\.objectName;/, '정면은 기존 파이프라인의 정면 플레이트 자리');
+  assert.match(afn, /if \(variantId === "dir-front"\) loc\.refObjectName = img\.objectName;/, '정면·아이레벨은 기존 파이프라인의 정면 플레이트 자리');
+  assert.match(afn, /const variantId = plateVariantId\(direction, elevation\);/, '플레이트 키 = 방위 × 높이');
   assert.match(afn, /throw new Error\("마스터 플레이트\(부감\)가 없어요\. 먼저 set_master 로 만드세요\."\);/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const SET_JOB_TYPES = \["set_sheet", "set_master", "set_angle"\];/);
   assert.match(src, /const waitForJob = async \(jobId: string, timeoutMs = 180_000\): Promise<string> => \{/);
-  assert.match(src, /const neededAnglesFor = \(locName: string\): string\[\] => \{/);
-  assert.match(src, /const dirs = new Set<string>\(\["front"\]\);/, '정면은 항상');
-  assert.match(src, /const st = await waitForJob\(m\.jobId\);\s*\n\s*if \(st !== "approved"\) continue;/, '마스터가 끝난 뒤에만 앵글 파생');
-  assert.match(src, /for \(const angle of neededAnglesFor\(name\)\) \{/);
-  assert.match(src, /id: "master", title: "정밀 \(추천\) — 부감 마스터 → 앵글 파생"/);
+  // 캔버스는 마스터만 만든다 — 앵글 플레이트는 사전 산출물이 아니라 scene_still 이 채우는 캐시(방위×높이).
+  assert.doesNotMatch(src, /neededAnglesFor|createAgentJob\("set_angle"/, '캔버스가 앵글을 미리 만들면 안 된다');
+  assert.match(src, /const cachedPlatesOf = \(n: ProductionNode\): string\[\] =>/);
+  assert.match(src, /await waitForJob\(m\.jobId\);\s*\n\s*\} catch \(e\) \{/, '마스터 완료까지 기다리고 끝');
+  assert.match(src, /id: "master", title: "정밀 \(추천\) — 부감 마스터 1장"/);
   assert.match(src, /if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected, m\.resolution\); else void generateSetSheets\(/);
   assert.match(src, /\{n\.data\.topPlateUrl \? "부감 마스터" : n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
   assert.match(src, /평면도 \(모든 앵글이 지키는 배치\)/);
@@ -356,11 +357,11 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
 test('★세트 시트 모달은 모드를 안다: 정밀이면 머리글·행 상태·썸네일·만들 것·장수가 부감 마스터 기준, 2×2 옵션(정면 플레이트 참조)은 2×2 모드에서만', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.topPlateUrl\);/, '기본 선택은 마스터 없는 세트');
-  assert.match(src, /\(sheetModal\.mode \|\| "master"\) === "master" \? "세트마다 부감 마스터 1장을 만들고, 컷이 쓰는 앵글을 그 마스터에서 파생해요\. 배치는 세트 계획의 평면도를 따라요\." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요\."/);
-  assert.match(src, /부감 마스터 있음 · 파생 앵글 \$\{derived\.length\}장/);
-  assert.match(src, /정면 플레이트만 있음\(옛 방식\) — 부감 마스터를 만들고 정면을 다시 파생해요/);
-  assert.match(src, /const planText = masterMode \? `만들 것: 부감 마스터 \+ \$\{planned\.map\(\(a\) => ANGLE_KO\[a\] \|\| a\)\.join\("·"\)\} \(\$\{1 \+ planned\.length\}장\)` : "";/);
+  assert.match(src, /\(sheetModal\.mode \|\| "master"\) === "master" \? "세트마다 부감 마스터 1장을 만들어요\. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요\." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요\."/);
+  assert.match(src, /부감 마스터 있음 · 캐시된 앵글 플레이트 \$\{derived\.length\}장/);
+  assert.match(src, /정면 플레이트만 있음\(옛 방식\) — 부감 마스터를 만들면 이후 컷 생성이 마스터 기준으로 파생해요/);
+  assert.match(src, /const planText = masterMode \? "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용" : "";/);
   assert.match(src, /\{\(sheetModal\.mode \|\| "master"\) === "sheet" && \(\s*\n\s*<label[^\n]*정면 플레이트가 다른 그림체면/);
-  assert.match(src, /reduce\(\(acc, n\) => acc \+ 1 \+ neededAnglesFor\(String\(n\.data\?\.name \|\| n\.label\)\)\.length, 0\)/, '정밀 장수 = 세트마다 1 + 앵글 수');
+  assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 크레딧 사용/, '정밀 장수 = 세트 수(마스터만)');
   assert.match(src, /createAgentJob\("set_master", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\) \}\)/, '해상도가 마스터에도 간다');
 });

@@ -45,6 +45,36 @@
     right: { ko: '우측',        en: 'Right', enHint: 'the camera faces the right side of the set' },
   };
 
+  // 카메라 높이 — 방위와 함께 세트 플레이트를 고르는 두 번째 축.
+  // functions/api/scenario/shots/vocab.js 의 CAMERA_ELEVATIONS 와 키 셋·영어 문장이 동일해야 한다.
+  var CAMERA_ELEVATIONS = {
+    eye:  { ko: '아이레벨',       en: 'Eye level',  enHint: 'eye-level camera' },
+    high: { ko: '하이앵글',       en: 'High angle', enHint: 'high angle, the camera looks down at the subject from above (about 30-45 degrees)' },
+    low:  { ko: '로우앵글',       en: 'Low angle',  enHint: 'low angle, the camera looks up at the subject from below' },
+    top:  { ko: '부감(탑뷰)',     en: 'Top-down',   enHint: "top-down bird's-eye view, the camera looks straight down" },
+    worm: { ko: '앙각(웜즈아이)', en: "Worm's-eye", enHint: "extreme low worm's-eye view from the floor looking steeply up" },
+  };
+
+  function normalizeCameraElevation(raw) {
+    if (!raw) return null;
+    var key = String(raw).trim().toLowerCase().replace(/['’]/g, '').replace(/[\s-]/g, '_');
+    if (Object.prototype.hasOwnProperty.call(CAMERA_ELEVATIONS, key)) return key;
+    if (key === 'eye_level' || key === 'eyelevel' || key === 'level' || key === 'normal' || key === 'neutral') return 'eye';
+    if (key === 'high_angle' || key === 'above' || key === 'down') return 'high';
+    if (key === 'low_angle' || key === 'below' || key === 'up') return 'low';
+    if (key === 'bird' || key === 'birds_eye' || key === 'bird_s_eye' || key === 'top_down' || key === 'topdown' || key === 'overhead' || key === 'aerial') return 'top';
+    if (key === 'worms_eye' || key === 'worm_s_eye' || key === 'extreme_low') return 'worm';
+    return null;
+  }
+
+  // 이미지 프롬프트에 붙일 카메라 높이 한 줄. eye 도 명시한다 — 비워 두면 모델이 컷마다 임의 높이를 고른다.
+  function buildCameraElevationHint(raw, lang) {
+    var key = normalizeCameraElevation(raw) || 'eye';
+    var v = CAMERA_ELEVATIONS[key];
+    if (lang === 'ko') return '카메라 높이: ' + v.ko + '.';
+    return 'Camera height: ' + v.enHint + '.';
+  }
+
   function normalizeShotType(raw) {
     if (!raw) return null;
     var key = String(raw).trim().toUpperCase().replace(/[\s-]/g, '_');
@@ -135,6 +165,10 @@
     SHOT_TYPE_KEYS: Object.keys(SHOT_TYPES),
     CAMERA_MOVE_KEYS: Object.keys(CAMERA_MOVES),
     CAMERA_DIRECTION_KEYS: Object.keys(CAMERA_DIRECTIONS),
+    CAMERA_ELEVATIONS: CAMERA_ELEVATIONS,
+    CAMERA_ELEVATION_KEYS: Object.keys(CAMERA_ELEVATIONS),
+    normalizeCameraElevation: normalizeCameraElevation,
+    buildCameraElevationHint: buildCameraElevationHint,
     normalizeShotType: normalizeShotType,
     normalizeCameraMove: normalizeCameraMove,
     normalizeCameraDirection: normalizeCameraDirection,

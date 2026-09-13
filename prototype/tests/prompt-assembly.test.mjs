@@ -120,7 +120,7 @@ test('영상 프롬프트: Global / Scene Visual / Camera / Shot timeline / Scen
   const out = buildSceneVideoPrompt(scene, 'HDR cinematic', { narrationEnabled: false });
   const expected = [
     'Global', 'HDR cinematic', 'Scene Visual', 'A knight walks',
-    'Camera', 'Camera direction: front side of the set (same direction as the master plate).',
+    'Camera', 'Camera direction: front side of the set (same direction as the master plate).', 'Camera height: eye-level camera.',
     'Shot timeline (what is visible over time)', '0.0s-2.5s: 발만', '2.5s-4.0s: 전신',
     'Scene Duration', '4s.',
     'No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.',

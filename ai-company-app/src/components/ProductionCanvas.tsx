@@ -655,20 +655,11 @@ export default function ProductionCanvas({
     }
     return "timeout";
   };
-  // 이 세트의 컷들이 실제로 쓰는 방위(정면은 항상). 필요한 앵글만 파생해 크레딧을 아낀다.
-  const neededAnglesFor = (locName: string): string[] => {
-    const key = String(locName || "").trim().toLowerCase();
-    const dirs = new Set<string>(["front"]);
-    (graph?.nodes || []).filter((n) => n.type === "cut" && String(n.data?.sceneLocation || "").trim().toLowerCase() === key).forEach((n) => {
-      const d = String(n.data?.cameraDirection || "front").toLowerCase();
-      if (["front", "back", "left", "right"].includes(d)) dirs.add(d);
-      const e = String(n.data?.cameraElevation || "").toLowerCase();
-      if (e === "high" || e === "low") dirs.add(e);
-    });
-    return Array.from(dirs);
-  };
-  const ANGLE_KO: Record<string, string> = { front: "정면", back: "후면", left: "좌측", right: "우측", high: "하이앵글", low: "로우앵글" };
-  // 정밀 모드: 세트마다 부감 마스터 1장 → 컷이 쓰는 앵글을 마스터에서 파생. 잡은 만들자마자 승인하고 끝날 때까지 기다린 뒤 다음으로.
+  // 이 세트에 캐시된 앵글 플레이트(마스터 제외) 라벨. 앵글 플레이트는 사전 산출물이 아니라 컷 스틸 생성 때 채워지는 캐시다.
+  const cachedPlatesOf = (n: ProductionNode): string[] =>
+    ((n.data?.variants || []) as Array<{ id?: string; label?: string }>).filter((v) => v && v.id !== "angle-top" && v.label).map((v) => String(v.label));
+  // 정밀 모드: 세트마다 부감 마스터 1장만. 정면·후면 같은 앵글 플레이트는 컷 스틸을 만들 때 서버(scene_still)가
+  // 그 컷의 방위×높이에 맞춰 마스터에서 자동 파생·저장하고, 같은 방위×높이의 다음 컷은 재사용한다.
   const generateMasterPlates = async (ids: Set<string>, resolution: "2K" | "4K" = "2K") => {
     if (!projectId) return;
     const targets = locationNodes.filter((n) => ids.has(n.id));
@@ -678,14 +669,7 @@ export default function ProductionCanvas({
         const m = await createAgentJob("set_master", { projectId, locationName: name, resolution, ...providerArg(settings) });
         setPending((prev) => [{ jobId: m.jobId, type: "set_master", status: "running", label: `부감 마스터 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
         await approveItem(m.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === m.jobId ? { ...p, status: "error", error: (e as Error).message } : p))); });
-        const st = await waitForJob(m.jobId);
-        if (st !== "approved") continue;
-        for (const angle of neededAnglesFor(name)) {
-          const a = await createAgentJob("set_angle", { projectId, locationName: name, angle, ...providerArg(settings) });
-          setPending((prev) => [{ jobId: a.jobId, type: "set_angle", status: "running", label: `앵글 파생(${angle}) · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
-          await approveItem(a.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === a.jobId ? { ...p, status: "error", error: (e as Error).message } : p))); });
-          await waitForJob(a.jobId);
-        }
+        await waitForJob(m.jobId);
       } catch (e) {
         setPending((prev) => [{ jobId: `local-${Date.now()}`, type: "set_master", status: "error", label: `부감 마스터 · ${n.label}`, target: name, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
       }
@@ -1235,6 +1219,7 @@ export default function ProductionCanvas({
                         <Chip>{String(n.data.shotType)}</Chip>
                         <Chip>{String(n.data.cameraMove)}</Chip>
                         {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
+                        {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
                       </div>
                       <div className="grid grid-cols-2 gap-1 p-2">
                         <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
@@ -1369,7 +1354,7 @@ export default function ProductionCanvas({
                   <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
-                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">{(sheetModal.mode || "master") === "master" ? "세트마다 부감 마스터 1장을 만들고, 컷이 쓰는 앵글을 그 마스터에서 파생해요. 배치는 세트 계획의 평면도를 따라요." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요."}</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">{(sheetModal.mode || "master") === "master" ? "세트마다 부감 마스터 1장을 만들어요. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요."}</div>
                     <div className="mt-1.5 flex items-center gap-2 text-[12px] text-gray-400">
                       {graph?.styleAnchor ? (
                         <>
@@ -1394,15 +1379,14 @@ export default function ProductionCanvas({
                       const checked = sheetModal.selected.has(n.id);
                       const masterMode = (sheetModal.mode || "master") === "master";
                       const thumb = (masterMode ? n.data?.topPlateUrl : "") || n.data?.setSheet?.url || n.data?.topPlateUrl || n.data?.plateUrl || "";
-                      const derived = ((n.data?.variants || []) as Array<{ id?: string; label?: string }>).filter((v) => v && v.id !== "angle-top" && v.label).map((v) => String(v.label));
-                      const planned = neededAnglesFor(name);
+                      const derived = cachedPlatesOf(n);
                       const stateText = masterMode
-                        ? (n.data?.topPlateUrl ? `부감 마스터 있음 · 파생 앵글 ${derived.length}장${derived.length ? ` (${derived.join("·")})` : ""} — 다시 만들면 새 마스터·앵글로 바뀌어요`
-                          : n.data?.plateUrl ? "정면 플레이트만 있음(옛 방식) — 부감 마스터를 만들고 정면을 다시 파생해요"
-                          : n.data?.setSheet ? "2×2 시트만 있음 — 부감 마스터와 앵글 플레이트를 새로 만들어요"
+                        ? (n.data?.topPlateUrl ? `부감 마스터 있음 · 캐시된 앵글 플레이트 ${derived.length}장${derived.length ? ` (${derived.join("·")})` : ""} — 다시 만들면 새 마스터로 바뀌고 캐시는 새 마스터에서 다시 채워져요`
+                          : n.data?.plateUrl ? "정면 플레이트만 있음(옛 방식) — 부감 마스터를 만들면 이후 컷 생성이 마스터 기준으로 파생해요"
+                          : n.data?.setSheet ? "2×2 시트만 있음 — 부감 마스터를 새로 만들어요"
                           : "아직 없음")
                         : (n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음");
-                      const planText = masterMode ? `만들 것: 부감 마스터 + ${planned.map((a) => ANGLE_KO[a] || a).join("·")} (${1 + planned.length}장)` : "";
+                      const planText = masterMode ? "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용" : "";
                       return (
                         <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
                           {sheetModal.step === "pick" ? (
@@ -1426,7 +1410,7 @@ export default function ProductionCanvas({
                   {sheetModal.step === "pick" && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       {([
-                        { id: "master", title: "정밀 (추천) — 부감 마스터 → 앵글 파생", desc: "세트마다 위에서 본 마스터 1장을 만들고, 컷이 쓰는 앵글(정면 등)을 그 마스터에서 편집으로 파생해요. 배치가 이어져요. 이미지 1+앵글 수." },
+                        { id: "master", title: "정밀 (추천) — 부감 마스터 1장", desc: "세트마다 위에서 본 마스터 1장만 만들어요. 정면·후면 같은 앵글 플레이트는 컷 스틸을 만들 때 필요한 방위×높이만 마스터에서 자동 파생해 재사용해요(캐시)." },
                         { id: "sheet", title: "빠른 미리보기 — 2×2 한 장", desc: "네 앵글을 한 장에 동시에 그려요. 빠르고 싸지만 칸끼리 배치가 조금씩 어긋날 수 있어요." },
                       ] as Array<{ id: "master" | "sheet"; title: string; desc: string }>).map((opt) => (
                         <label key={opt.id} className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 ${(sheetModal.mode || "master") === opt.id ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
@@ -1463,7 +1447,7 @@ export default function ProductionCanvas({
                           <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-4 w-4 accent-violet-500" />정면 플레이트 참조
                         </label>
                       )}
-                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {(sheetModal.mode || "master") === "master" ? locationNodes.filter((n) => sheetModal.selected.has(n.id)).reduce((acc, n) => acc + 1 + neededAnglesFor(String(n.data?.name || n.label)).length, 0) : sheetModal.selected.size}장 · 크레딧 사용</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
                       <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
@@ -1527,6 +1511,7 @@ export default function ProductionCanvas({
                   <Chip>{String(selected.data.shotType)}</Chip>
                   <Chip>{String(selected.data.cameraMove)}</Chip>
                   {selected.data.cameraDirection !== "front" && <Chip tone="amber">{String(selected.data.cameraDirection)}</Chip>}
+                  {selected.data.cameraElevation && selected.data.cameraElevation !== "eye" && <Chip tone="amber">{String(selected.data.cameraElevation)}</Chip>}
                   {selected.data.estSec ? <span className="text-[11px] text-gray-500">{String(selected.data.estSec)}s</span> : null}
                   <button type="button" onClick={() => setSelectedId("")} className="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-edge hover:text-white" aria-label="닫기">✕</button>
                 </div>
@@ -1570,6 +1555,7 @@ export default function ProductionCanvas({
                         <summary className="cursor-pointer text-[11px] font-bold text-gray-400">계보 (스틸 {String(selected.data.lineage.imageAttempts || 0)}회 · 영상 {String(selected.data.lineage.videoAttempts || 0)}회)</summary>
                         <div className="mt-1 space-y-1 text-[10px] text-gray-400">
                           {selected.data.lineage.videoFromImage ? <p>영상 원본 스틸: <span className="break-all text-gray-500">{String(selected.data.lineage.videoFromImage)}</span></p> : null}
+                          {selected.data.lineage.imageRefs ? <p>참조: <span className="text-gray-300">{String(selected.data.lineage.imageRefs)}</span>{selected.data.lineage.imagePlate ? <span className="text-gray-500"> · 플레이트 키 {String(selected.data.lineage.imagePlate)}</span> : null}</p> : null}
                           {selected.data.lineage.imagePrompt ? <p>마지막 스틸 프롬프트: <span className="text-gray-500">{String(selected.data.lineage.imagePrompt).slice(0, 200)}…</span></p> : null}
                           {selected.data.lineage.agentJobId ? <p>에이전트 잡: {String(selected.data.lineage.agentJobId)}</p> : null}
                           {selected.data.lineage.updatedAt ? <p>갱신: {String(selected.data.lineage.updatedAt)}</p> : null}

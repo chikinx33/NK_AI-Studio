@@ -707,27 +707,34 @@
     return null;
   }
 
-  function episodeLocationAsset(row, cameraDirection) {
+  function episodeLocationAsset(row, cameraDirection, cameraElevation) {
     if (!row) return null;
     var name = normalizeText(row.name) || 'this location';
     var objectName = String(row.refObjectName || '').trim();
     var directionNote = '';
+    // 플레이트 키 = 방위 × 높이(서버 _shared/set-plates.js 와 같은 규칙): eye → dir-<dir>, high/low → dir-<dir>-<elev>, worm → low.
+    var elev = String(cameraElevation || 'eye').trim().toLowerCase();
+    if (elev === 'worm') elev = 'low';
+    var elevSuffix = (elev === 'high' || elev === 'low') ? ('-' + elev) : '';
     // 방위별 세트 플레이트: 컷의 cameraDirection 이 front 가 아니고 그 방위의 플레이트
     // (variant id 'dir-back' 등)가 등록돼 있으면 마스터 대신 그 플레이트를 쓴다.
     // 리버스 샷의 배경이 "반대편 벽"이 되는 실제 경로다. 없으면 마스터로 폴백하되,
     // 마스터가 반대 방향임을 프롬프트에 알려 그대로 베끼지 않게 한다.
-    var dir = String(cameraDirection || '').trim().toLowerCase();
-    if (dir && dir !== 'front') {
-      var wantId = (NK.service && NK.service.stageGeometry && NK.service.stageGeometry.directionVariantId)
-        ? NK.service.stageGeometry.directionVariantId(dir)
+    var dir = String(cameraDirection || '').trim().toLowerCase() || 'front';
+    if (dir !== 'front' || elevSuffix) {
+      var baseId = (NK.service && NK.service.stageGeometry && NK.service.stageGeometry.directionVariantId)
+        ? (NK.service.stageGeometry.directionVariantId(dir) || ('dir-' + dir))
         : ('dir-' + dir);
+      var wantId = baseId + elevSuffix;
       var variants = Array.isArray(row.variants) ? row.variants : [];
       var hit = variants.find(function (v) { return v && String(v.id || '') === wantId && String(v.refObjectName || '').trim(); });
       if (hit) {
         objectName = String(hit.refObjectName).trim();
-        directionNote = ' (the ' + dir + '-facing side of this location)';
-      } else {
+        directionNote = ' (the ' + dir + '-facing side of this location' + (elevSuffix ? ', ' + elev + ' angle' : '') + ')';
+      } else if (dir !== 'front') {
         directionNote = ' — NOTE: this reference shows the FRONT side of the location, but this shot faces the ' + dir.toUpperCase() + ' side. Keep only the architectural style, palette and lighting; invent the ' + dir + '-side layout consistently instead of copying the reference framing.';
+      } else {
+        directionNote = ' — NOTE: this reference is an eye-level view; this shot is a ' + elev + ' angle. Keep the same walls, props and positions — only the camera height changes.';
       }
     }
     var url = (objectName && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objectName) : '';
@@ -758,7 +765,7 @@
       scene,
       text,
       options && options.skipEpisodeLocationId
-    ), scene && scene.cameraDirection);
+    ), scene && scene.cameraDirection, scene && scene.cameraElevation);
     if (locAsset) {
       var locKey = String(locAsset.displayName || '').toLowerCase();
       matched = [locAsset].concat(matched.filter(function (a) {
@@ -994,6 +1001,13 @@
       if (NK.service && NK.service.shotVocab && NK.service.shotVocab.buildCameraDirectionHint) {
         var dirHint = NK.service.shotVocab.buildCameraDirectionHint(cameraDirection, 'en');
         if (dirHint) blocks.push(dirHint);
+      }
+    } catch (_) {}
+    // 카메라 높이(eye/high/low/top/worm) — 서버 prompt-assembly 와 같은 문장. eye 도 명시한다.
+    try {
+      if (NK.service && NK.service.shotVocab && NK.service.shotVocab.buildCameraElevationHint) {
+        var elevHint = NK.service.shotVocab.buildCameraElevationHint(row.cameraElevation, 'en');
+        if (elevHint) blocks.push(elevHint);
       }
     } catch (_) {}
     try {

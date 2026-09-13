@@ -10,7 +10,7 @@
  * 규칙: window / NK 전역 참조 금지. 입력은 씬 객체·헤더·payload 뿐.
  */
 
-import { buildShotCameraHint, buildCameraDirectionHint } from "../scenario/shots/vocab.js";
+import { buildShotCameraHint, buildCameraDirectionHint, buildCameraElevationHint } from "../scenario/shots/vocab.js";
 import { buildBlockingLines } from "./stage-geometry.js";
 
 // ── 공통 유틸 ─────────────────────────────────────────────────────────────
@@ -155,6 +155,11 @@ function appendStageGeometry(blocks, scene) {
   try {
     var dirHint = buildCameraDirectionHint(cameraDirection, 'en');
     if (dirHint) blocks.push(dirHint);
+  } catch (_) {}
+  // 카메라 높이(eye/high/low/top/worm) — 방위와 함께 플레이트를 고르는 두 번째 축. eye 도 명시한다.
+  try {
+    var elevHint = buildCameraElevationHint(scene && scene.cameraElevation, 'en');
+    if (elevHint) blocks.push(elevHint);
   } catch (_) {}
   try {
     var blocking = scene && scene.blocking;
