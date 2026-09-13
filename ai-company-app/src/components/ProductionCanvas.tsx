@@ -1047,6 +1047,13 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
+                  {l.kind === "scene" && l.memberIds.length === 0 && (
+                    <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => {
+                      e.stopPropagation();
+                      // 빈 씬 바 = 카드를 옮긴 뒤 화면 배치에만 남은 잔상. 걷어내고 씬 바를 서버 순서로 다시 묶는다(바 위치는 유지).
+                      setLayout((cur) => reconcileLayout({ ...cur, groups: undefined }, graph, defaultLayout(graph, measuredH)));
+                    }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-400/60 text-red-200 transition hover:bg-red-500/30 hover:text-white" title="빈 씬 바 지우기 (씬 바를 서버 순서로 다시 묶어요)" aria-label="빈 씬 바 지우기">−</button>
+                  )}
                   {l.kind === "scene" && (() => {
                     const firstNode = l.memberIds[0] ? nodeById.get(l.memberIds[0]) : null;
                     const canMerge = !!firstNode?.data?.sceneBreak;

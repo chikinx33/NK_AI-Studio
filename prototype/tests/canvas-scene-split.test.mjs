@@ -63,3 +63,10 @@ test('★컷 카드 상단 바 클릭 = 선택 토글(상세 안 열림), 그 �
   assert.match(src, /className="flex cursor-pointer items-center gap-1\.5 border-b border-edge px-3 py-2" data-zone="header"/);
   assert.match(src, /if \(d\.kind === "cut" && d\.id && !d\.moved && d\.zone === "header" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n[\s\S]{0,200}setSelectedId\(""\);\s*\n\s*setMulti\(/);
 });
+
+test('★빈 씬 바(컷 0)에는 − 버튼: 잔상 바를 걷어내고 씬 바를 서버 순서로 다시 묶는다', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /\{l\.kind === "scene" && l\.memberIds\.length === 0 && \(/);
+  assert.match(src, /setLayout\(\(cur\) => reconcileLayout\(\{ \.\.\.cur, groups: undefined \}, graph, defaultLayout\(graph, measuredH\)\)\);/);
+  assert.match(src, /aria-label="빈 씬 바 지우기">−<\/button>/);
+});
