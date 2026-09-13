@@ -173,6 +173,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 진단: 실제로 OpenAI 요청이 어느 COLO 로 나갔는지(성공/실패 모두) 응답에 실어 검증한다.
     let openaiColo = "";
     let openaiEndpoint = "";
+    // Gemini 가 실제로 어느 엔드포인트(ai-studio | vertex-global)·모델로 돌았는지, 지역 거부로 우회했는지.
+    let geminiEndpointUsed = "";
+    let geminiModelUsed = "";
+    let geminiLocationFallback = "";
 
     // Gemini 이미지 생성. else 분기와 OpenAI 폴백에서 공용으로 호출한다.
     // 성공 시 imageOutput / modelUsed 를 채우고 {} 를, 실패 시 {error,status} 를 반환한다.
@@ -219,21 +223,62 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       };
       let geminiRes: Response | null = null;
       let geminiText = "";
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          geminiRes = await fetch(generateUrl, {
-            method: "POST",
-            headers: {
-              "x-goog-api-key": apiKey,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestPayload),
-          });
-          geminiText = await geminiRes.text();
-          if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
-        } catch (_) {
+      // Vertex AI(global) 경로. AI Studio(generativelanguage)는 Cloudflare Worker 가 홍콩(HKG) 등
+      // 미지원 지역에서 송출하면 "User location is not supported for the API use"(FAILED_PRECONDITION 400)로
+      // 거부한다. 같은 모델을 Vertex(global)로 부르면 서비스 계정 토큰으로 지역 제한 없이 통한다
+      // (업스케일 api/upscale.ts 가 같은 경로로 200 확인). GEMINI_IMAGE_VIA_VERTEX=1 이면 처음부터 Vertex.
+      const vertexProjectId = String(env.GOOGLE_CLOUD_PROJECT || env.GCS_PROJECT_ID || "").trim();
+      const vertexModel = String(env.GEMINI_VERTEX_IMAGE_MODEL || "").trim() || geminiModel.replace(/-preview$/i, "");
+      const vertexAvailable = !!(accessToken && vertexProjectId);
+      const vertexFirst = vertexAvailable && /^(1|true|yes)$/i.test(String(env.GEMINI_IMAGE_VIA_VERTEX || ""));
+      const callVertex = async () => {
+        const url = `https://aiplatform.googleapis.com/v1/projects/${vertexProjectId}/locations/global/publishers/google/models/${encodeURIComponent(vertexModel)}:generateContent`;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            geminiRes = await fetch(url, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-goog-user-project": vertexProjectId,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestPayload),
+            });
+            geminiText = await geminiRes.text();
+            if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
+          } catch (_) {
+          }
+          await sleep(400 * Math.pow(2, attempt));
         }
-        await sleep(400 * Math.pow(2, attempt));
+        geminiEndpointUsed = "vertex-global";
+        geminiModelUsed = vertexModel;
+      };
+      if (vertexFirst) {
+        await callVertex();
+      } else {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            geminiRes = await fetch(generateUrl, {
+              method: "POST",
+              headers: {
+                "x-goog-api-key": apiKey,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestPayload),
+            });
+            geminiText = await geminiRes.text();
+            if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
+          } catch (_) {
+          }
+          await sleep(400 * Math.pow(2, attempt));
+        }
+        geminiEndpointUsed = "ai-studio";
+        geminiModelUsed = geminiModel;
+        const locationBlocked = !!geminiRes && !geminiRes.ok && /User location is not supported|FAILED_PRECONDITION/i.test(geminiText);
+        if (locationBlocked && vertexAvailable) {
+          geminiLocationFallback = `ai-studio(${geminiRes?.status}) → vertex-global`;
+          await callVertex();
+        }
       }
 
       if (!geminiRes) {
@@ -241,8 +286,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       }
       if (!geminiRes.ok) {
         const detail = safeJson(geminiText);
-        const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
-        return { error: Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), status: 500 };
+        const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModelUsed || geminiModel });
+        return { error: Object.assign({ error: "Gemini API error", status: geminiRes.status, detail, geminiEndpoint: geminiEndpointUsed, geminiLocationFallback }, mapped), status: 500 };
       }
 
       const geminiJson = safeJson(geminiText) || {};
@@ -251,7 +296,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         return { error: { error: "No image bytes returned", raw: geminiJson }, status: 500 };
       }
       imageOutput = out;
-      modelUsed = geminiModel;
+      modelUsed = geminiModelUsed || geminiModel;
       return {};
     };
 
@@ -387,6 +432,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       providerFallbackFrom: providerFallbackFrom ? `${providerFallbackFrom}-api` : "",
       openaiError: openaiFallbackError,
       openaiColo: openaiColo || (openaiFallbackError && openaiFallbackError.colo) || "",
+      geminiEndpoint: geminiEndpointUsed,
+      geminiLocationFallback,
       openaiEndpoint: openaiEndpoint || (openaiFallbackError && openaiFallbackError.endpoint) || "",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,

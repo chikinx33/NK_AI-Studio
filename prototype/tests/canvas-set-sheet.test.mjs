@@ -34,7 +34,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const error = String\(\(job as any\)\?\.error \|\| \(job as any\)\?\.output\?\.error \|\| ""\)\.trim\(\);/, '서버 오류 문구를 가져온다');
   // 상태는 레이아웃을 밀지 않는 떠 있는 작업 독(absolute, 왼쪽 아래)으로 — 상단 띠는 화면이 튀어 폐기
   assert.doesNotMatch(src, /data-testid="job-strip"/, '상단 상태 띠(레이아웃 밀림) 금지');
-  assert.match(src, /className="absolute bottom-3 left-3 z-30 flex max-w-\[420px\] flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /className="absolute bottom-3 left-3 z-30 flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
   assert.match(src, /const \[jobDockOpen, setJobDockOpen\] = useState\(false\);/);
   assert.match(src, /\{active\.length \? `작업 \$\{active\.length\}개 진행 중` : errors\.length \? `오류 \$\{errors\.length\}` : "작업 완료"\}/);
   assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
@@ -60,6 +60,32 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /\{locJob && !JOB_DONE\.includes\(locJob\.status\) && <Chip tone="amber">\{locJob\.status === "review_pending" \? "승인 대기" : "시트 생성 중"\}<\/Chip>\}/);
   assert.match(src, /\{locJob && locJob\.status === "error" && <Chip tone="red">오류<\/Chip>\}/);
   assert.match(src, /label: `세트 시트 · \$\{n\.label\}`, target: name, updatedAt: Date\.now\(\)/, '잡에 대상 장소를 기록');
+});
+
+test('★Gemini 지역 거부(User location is not supported) → Vertex(global) 우회: 같은 요청을 서비스 계정으로 다시 보내고 응답에 경로를 남긴다', () => {
+  const imagen = read('prototype/functions/api/imagen.ts');
+  assert.match(imagen, /const vertexProjectId = String\(env\.GOOGLE_CLOUD_PROJECT \|\| env\.GCS_PROJECT_ID \|\| ""\)\.trim\(\);/);
+  assert.match(imagen, /const vertexModel = String\(env\.GEMINI_VERTEX_IMAGE_MODEL \|\| ""\)\.trim\(\) \|\| geminiModel\.replace\(\/-preview\$\/i, ""\);/);
+  assert.match(imagen, /https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/\$\{vertexProjectId\}\/locations\/global\/publishers\/google\/models\/\$\{encodeURIComponent\(vertexModel\)\}:generateContent/);
+  assert.match(imagen, /Authorization: `Bearer \$\{accessToken\}`,\s*\n\s*"x-goog-user-project": vertexProjectId,/);
+  assert.match(imagen, /const locationBlocked = !!geminiRes && !geminiRes\.ok && \/User location is not supported\|FAILED_PRECONDITION\/i\.test\(geminiText\);/);
+  assert.match(imagen, /if \(locationBlocked && vertexAvailable\) \{\s*\n\s*geminiLocationFallback = `ai-studio\(\$\{geminiRes\?\.status\}\) → vertex-global`;\s*\n\s*await callVertex\(\);/);
+  assert.match(imagen, /GEMINI_IMAGE_VIA_VERTEX/, '환경변수로 처음부터 Vertex 강제 가능');
+  assert.match(imagen, /geminiEndpoint: geminiEndpointUsed,\s*\n\s*geminiLocationFallback,/, '성공 응답에도 경로를 남긴다');
+  assert.match(imagen, /modelUsed = geminiModelUsed \|\| geminiModel;/);
+});
+
+test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 진행 화면을 다시 열고, 오류 문구는 선택·복사 가능', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const running = pending\.filter\(\(j\) => j\.type === "set_sheet" && !JOB_DONE\.includes\(j\.status\)\);\s*\n\s*if \(running\.length\) \{/);
+  assert.match(src, /setSheetModal\(\{ step: "progress", selected: new Set\(locationNodes\.filter\(\(n\) => names\.has\(String\(n\.data\?\.name \|\| n\.label\)\)\)/);
+  assert.match(src, /별 버튼을 다시 누르면 이 진행 화면이 열려요/);
+  assert.match(src, /다시 만들기/);
+  assert.match(src, /className="w-\[560px\] max-w-\[94%\] select-text overflow-hidden/, '캔버스의 select-none 을 모달에서 해제');
+  assert.match(src, /<pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-\[11px\] leading-snug text-red-200">\{text\}<\/pre>/);
+  assert.match(src, /void navigator\.clipboard\.writeText\(text\); setNotice\("오류 문구를 복사했어요\."\);/);
+  assert.match(src, /flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /title="오류 문구 복사">복사<\/button>/);
 });
 
 test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 시트 유무 칩을 단다', () => {

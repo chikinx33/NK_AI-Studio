@@ -606,6 +606,13 @@ export default function ProductionCanvas({
   const openSetSheetModal = () => {
     if (!projectId) return;
     if (!locationNodes.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
+    // 진행 중(또는 방금 끝난) 세트 시트 잡이 있으면 진행 화면으로 다시 연다 — 닫아도 상태를 잃지 않는다.
+    const running = pending.filter((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status));
+    if (running.length) {
+      const names = new Set(running.map((j) => String(j.target || "")));
+      setSheetModal({ step: "progress", selected: new Set(locationNodes.filter((n) => names.has(String(n.data?.name || n.label))).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
+      return;
+    }
     const missing = locationNodes.filter((n) => !n.data?.setSheet);
     // 기본 선택: 시트가 없는 장소. 모두 있으면 전부(재생성).
     setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
@@ -1082,7 +1089,7 @@ export default function ProductionCanvas({
             const active = pending.filter((j) => !JOB_DONE.includes(j.status));
             const errors = pending.filter((j) => j.status === "error");
             return (
-              <div className="absolute bottom-3 left-3 z-30 flex max-w-[420px] flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+              <div className="absolute bottom-3 left-3 z-30 flex max-w-[420px] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
                 {jobDockOpen && (
                   <div className="max-h-64 w-[400px] overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
                     <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">
@@ -1098,6 +1105,7 @@ export default function ProductionCanvas({
                             {!done ? <RefreshIcon className="h-3 w-3 shrink-0 animate-spin text-sky-300" /> : <span className={`h-2 w-2 shrink-0 rounded-full ${j.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />}
                             <span className="min-w-0 flex-1 truncate text-gray-200">{j.label}</span>
                             <span className={`shrink-0 truncate ${tone}`} style={{ maxWidth: 160 }}>{jobStatusText(j)}</span>
+                            {j.status === "error" && j.error && <button type="button" onClick={() => { try { void navigator.clipboard.writeText(`${j.label}: ${j.error}`); } catch { /* 클립보드 불가 */ } }} className="shrink-0 rounded border border-edge px-1 text-[10px] text-gray-400 hover:text-white" title="오류 문구 복사">복사</button>}
                             {j.status === "review_pending" && <button type="button" onClick={() => void approveNow(j.jobId)} className="shrink-0 rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-black hover:bg-amber-500">승인</button>}
                             {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="shrink-0 text-gray-500 hover:text-white" aria-label="닫기">×</button>}
                           </li>
@@ -1118,7 +1126,7 @@ export default function ProductionCanvas({
           {/* 세트 시트 생성 모달 — 대상 장소·해상도를 고르고 "생성"이 곧 확인. 진행은 같은 모달에서 장소별로 본다. */}
           {sheetModal && (
             <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setSheetModal(null)}>
-              <div className="w-[560px] max-w-[94%] overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="w-[560px] max-w-[94%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
                   <SparkleIcon className="h-4 w-4 text-violet-300" />
                   <div className="min-w-0 flex-1">
@@ -1153,9 +1161,18 @@ export default function ProductionCanvas({
                       );
                     })}
                   </ul>
-                  {sheetModal.step === "progress" && pending.some((j) => j.type === "set_sheet" && j.status === "error") && (
-                    <p className="mt-2 rounded-lg bg-red-900/20 px-3 py-2 text-[11px] text-red-300">{pending.filter((j) => j.type === "set_sheet" && j.status === "error").map((j) => `${j.target}: ${j.error || "오류"}`).join(" / ")}</p>
-                  )}
+                  {sheetModal.step === "progress" && pending.some((j) => j.type === "set_sheet" && j.status === "error") && (() => {
+                    const text = pending.filter((j) => j.type === "set_sheet" && j.status === "error").map((j) => `${j.target}: ${j.error || "오류"}`).join("\n");
+                    return (
+                      <div className="mt-2 rounded-lg bg-red-900/20 px-3 py-2">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-red-300">오류</span>
+                          <button type="button" onClick={() => { try { void navigator.clipboard.writeText(text); setNotice("오류 문구를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-red-700/60 px-1.5 py-px text-[10px] text-red-200 hover:bg-red-900/40">복사</button>
+                        </div>
+                        <pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-[11px] leading-snug text-red-200">{text}</pre>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
                   {sheetModal.step === "pick" ? (
@@ -1173,8 +1190,11 @@ export default function ProductionCanvas({
                     </>
                   ) : (
                     <>
-                      <span className="text-[11px] text-gray-500">{pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요." : "끝났어요. 배경 카드에서 시트를 확인하세요."}</span>
+                      <span className="text-[11px] text-gray-500">{pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요. 별 버튼을 다시 누르면 이 진행 화면이 열려요." : "끝났어요. 배경 카드에서 시트를 확인하세요."}</span>
                       <div className="flex-1" />
+                      {!pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) && (
+                        <button type="button" onClick={() => setSheetModal((m) => (m ? { ...m, step: "pick" } : m))} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">다시 만들기</button>
+                      )}
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-500">닫기</button>
                     </>
                   )}
