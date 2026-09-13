@@ -20,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1700";
+const SERVER_VERSION = "3.1701";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -656,6 +656,7 @@ export async function onRequestPost(context) {
     const sceneCount = calculateSceneCountForDuration(duration);
 
     let scenes;
+    let generatedSets = [];
     let generationMeta = {
       chunked: false,
       chunkCount: 1,
@@ -698,6 +699,7 @@ export async function onRequestPost(context) {
       });
       scenes = generated.scenes;
       generationMeta = generated.meta;
+      generatedSets = Array.isArray(generated.sets) ? generated.sets : [];
     } catch (err) {
       if (isCreditExhaustedError(err)) throw err;
       return jsonError(err?.message || "scenario_generation_failed", 500, origin);
@@ -712,7 +714,7 @@ export async function onRequestPost(context) {
       activeCharactersList: activeCharacters.map((c) => `${c.token}(${c.displayName})`),
     });
 
-    return new Response(JSON.stringify({ scenes, meta: generationMeta }), {
+    return new Response(JSON.stringify({ scenes, meta: generationMeta, sets: generatedSets }), {
       status: 200,
       headers: corsHeaders(origin),
     });
@@ -1260,6 +1262,13 @@ function buildSingleBeatUserPromptKo(input, ctx) {
     `화면 비율: ${input.aspectRatio || "(미지정)"}`,
     `음성 모드: ${describeVoiceModeKo(input)}`,
     `등록 캐릭터: ${chars}`,
+    ...(ctx.setName ? [
+      "",
+      "[세트 (확정 — 바꾸지 않는다)]",
+      `sceneLocation 은 반드시 "${ctx.setName}" 을 글자 그대로 쓴다. 다른 이름을 만들지 않는다.`,
+      ctx.setDescription ? `세트 묘사(참고): ${ctx.setDescription}` : "",
+      ctx.setList && ctx.setList.length > 1 ? `이 에피소드의 세트 목록: ${ctx.setList.join(" / ")}` : "이 에피소드의 세트는 이 하나뿐이다.",
+    ].filter(Boolean) : []),
     ...(buildBodyGrammar(input.characters, "ko") ? ["", buildBodyGrammar(input.characters, "ko")] : []),
     ...(input.songEnabled ? [
       "",
@@ -1309,6 +1318,13 @@ function buildSingleBeatUserPromptEn(input, ctx) {
     `Aspect ratio: ${input.aspectRatio || "(none)"}`,
     `Voice mode: ${describeVoiceModeEn(input)}`,
     `Characters: ${chars}`,
+    ...(ctx.setName ? [
+      "",
+      "[Set (FIXED - do not change)]",
+      `sceneLocation MUST be exactly "${ctx.setName}". Do not invent another name.`,
+      ctx.setDescription ? `Set description (reference): ${ctx.setDescription}` : "",
+      ctx.setList && ctx.setList.length > 1 ? `Sets in this episode: ${ctx.setList.join(" / ")}` : "This episode has only this one set.",
+    ].filter(Boolean) : []),
     ...(buildBodyGrammar(input.characters, "en") ? ["", buildBodyGrammar(input.characters, "en")] : []),
     ...(input.songEnabled ? [
       "",
@@ -1575,6 +1591,11 @@ async function requestSingleBeatScene(input, ctx) {
       ? parsed.coversBeats
       : [beat.id],
   };
+  // 세트 계획이 있으면 장소는 코드가 확정한다 — LLM 이 다른 이름을 써도 계획의 세트 이름으로 되돌린다.
+  if (ctx?.setName) {
+    if (scene.sceneLocation !== ctx.setName) scene._setEnforced = true;
+    scene.sceneLocation = ctx.setName;
+  }
   // v3.878: 음성 모드 코드 레벨 강제 차단 — LLM 이 규칙 어겨도 사용자 설정이 반드시 이긴다.
   // narrationEnabled=false → narration 빈 문자열로 클리어
   // dubbingEnabled=false → dialogue 빈 배열로 클리어
@@ -1633,7 +1654,7 @@ function buildBeatFallbackScene(beat, sceneIndex, input, ctx) {
     title: `Scene ${sceneIndex + 1}`,
     estSec: beat.estSec || 3,
     sceneIntent: `관객이 비트 ${beat.id} 의 행동을 본다`,
-    sceneLocation: "",
+    sceneLocation: String(ctx?.setName || ""),
     visual: `[자동 fallback 씬] ${beat.action}`,
     narration,
     dialogue: [],
@@ -1642,6 +1663,115 @@ function buildBeatFallbackScene(beat, sceneIndex, input, ctx) {
     coversBeats: [beat.id],
     _autoFallback: true,
   };
+}
+
+/**
+ * 세트(장소) 계획 — 씬을 쓰기 전에 에피소드의 물리적 공간 목록을 먼저 확정한다.
+ *
+ * 왜: 비트별 호출은 서로를 못 보므로 같은 방을 "소녀의 방 — 장난감이 …"/"장난감이 흩어진 소녀의 방 안"
+ * 처럼 다르게 써서 세트가 갈렸다(2026-09-13 실제 결과, 세트 시트가 두 벌 생성). 장소는 LLM 이 컷마다
+ * 슬쩍 정하는 값이 아니라 창작자가 보는 "확정 목록"이어야 한다. 여기서 정한 세트 이름을 각 비트에 강제한다.
+ *
+ * 규칙: 물리적 공간만 세트다. 인물이 실제로 이동하는 사건이 있을 때만 세트가 늘어난다.
+ * 카메라 구역("바닥 넓게", "큐브 주변")·분위기·화풍("3D 무대")은 세트가 아니다.
+ *
+ * @returns {Promise<{ sets:Array<{id,name,description}>, beatSets:Object<string,string>, source:'llm'|'fallback', error?:string }>}
+ */
+async function planEpisodeSets(input, beats) {
+  const lang = input.lang === "en" ? "en" : "ko";
+  const list = Array.isArray(beats) ? beats : [];
+  const fallback = () => {
+    const name = lang === "en" ? "Main location" : "메인 공간";
+    const sets = [{ id: "set-1", name, description: "" }];
+    const beatSets = {};
+    list.forEach((b) => { beatSets[String(b.id)] = "set-1"; });
+    return { sets, beatSets, source: "fallback" };
+  };
+  if (!list.length) return fallback();
+  const beatLines = list.map((b, i) => `${i + 1}. [${b.id}] ${String(b.action || "").trim()}`).join("\n");
+  const story = String(input.topic || "").trim().slice(0, 1500);
+  const chars = Array.isArray(input.characters) && input.characters.length
+    ? input.characters.map((c) => `${c.token}(${c.displayName || ""})`).join(", ")
+    : "";
+  const sys = lang === "en"
+    ? [
+      "You are a production designer. Before any scene is written, decide the episode's SETS: the actually distinct PHYSICAL spaces where the story is filmed.",
+      "Rules:",
+      "- A set is a physical place (a girl's bedroom, a school pool, a forest path). Camera areas of the same place (\"the floor near the cube\", \"wide view of the room\") are NOT sets. Mood, art style or \"stage\" feelings are NOT sets.",
+      "- A new set exists ONLY when a character physically moves to another place in the story. If nobody moves, it is the same set.",
+      "- Use the MINIMUM number of sets that the story needs. One set is common for a 30-second piece.",
+      "- name: a short place noun (2-6 words). description: a 1-2 sentence empty-set description (architecture, furniture, materials, lighting) with NO characters.",
+      "- Assign every beat to exactly one set id.",
+      "Output JSON only: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\"}],\"beatSets\":[{\"beatId\":\"<beat id>\",\"setId\":\"set-1\"}]}",
+    ].join("\n")
+    : [
+      "너는 프로덕션 디자이너다. 씬을 쓰기 전에 이 에피소드의 세트, 즉 실제로 구분되는 물리적 공간 목록을 먼저 확정한다.",
+      "규칙:",
+      "- 세트는 물리적 장소다(소녀의 방, 학교 수영장, 숲길). 같은 장소의 카메라 구역(\"큐브 주변 바닥\", \"방을 넓게\")은 세트가 아니다. 분위기·화풍·\"무대 느낌\"도 세트가 아니다.",
+      "- 새 세트는 이야기에서 인물이 실제로 다른 장소로 이동할 때만 생긴다. 아무도 이동하지 않으면 같은 세트다.",
+      "- 이야기에 필요한 최소 개수만 쓴다. 30초짜리는 세트 1개가 보통이다.",
+      "- name: 짧은 장소 명사(2~12자). description: 인물 없는 빈 세트 묘사 1~2문장(구조·가구·재질·조명).",
+      "- 모든 비트를 정확히 하나의 세트 id 에 배정한다.",
+      "JSON 만 출력: {\"sets\":[{\"id\":\"set-1\",\"name\":\"...\",\"description\":\"...\"}],\"beatSets\":[{\"beatId\":\"<비트 id>\",\"setId\":\"set-1\"}]}",
+    ].join("\n");
+  const user = [
+    lang === "en" ? "[Story]" : "[이야기]",
+    story || (lang === "en" ? "(none)" : "(없음)"),
+    "",
+    lang === "en" ? "[Beats]" : "[비트]",
+    beatLines,
+    chars ? "" : "",
+    chars ? (lang === "en" ? `[Characters] ${chars}` : `[등록 캐릭터] ${chars}`) : "",
+  ].filter((v) => v !== "").join("\n");
+  try {
+    const { text } = await streamAnthropicText({
+      env: input.env,
+      auth: input.auth,
+      payload: {
+        model: "claude-sonnet-4-6",
+        max_tokens: 1200,
+        system: sys,
+        messages: [{ role: "user", content: user }],
+        temperature: 0.2,
+        stream: true,
+      },
+      timeoutMs: SINGLE_BEAT_TIMEOUT_MS,
+    });
+    if (!text) throw new Error("set_plan_empty");
+    const cleaned = cleanJsonResponse(text);
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch (_) { parsed = JSON.parse(repairJsonString(cleaned)); }
+    const rawSets = Array.isArray(parsed?.sets) ? parsed.sets : [];
+    const sets = rawSets
+      .map((x, i) => ({ id: String(x?.id || `set-${i + 1}`).trim(), name: String(x?.name || "").replace(/\s+/g, " ").trim(), description: String(x?.description || "").trim() }))
+      .filter((x) => x.name);
+    if (!sets.length) throw new Error("set_plan_no_sets");
+    // 이름 중복(같은 공간을 둘로 냈을 때) → 앞 것으로 합친다
+    const byName = new Map();
+    const uniq = [];
+    const alias = {};
+    sets.forEach((st) => {
+      const k = st.name.toLowerCase();
+      if (byName.has(k)) { alias[st.id] = byName.get(k).id; return; }
+      byName.set(k, st); uniq.push(st);
+    });
+    const validIds = new Set(uniq.map((x) => x.id));
+    const beatSets = {};
+    (Array.isArray(parsed?.beatSets) ? parsed.beatSets : []).forEach((row) => {
+      const bid = String(row?.beatId || "").trim();
+      let sid = String(row?.setId || "").trim();
+      if (alias[sid]) sid = alias[sid];
+      if (bid && validIds.has(sid)) beatSets[bid] = sid;
+    });
+    // 빠진 비트는 앞 비트의 세트(이동 사건 없음) → 없으면 첫 세트
+    let last = uniq[0].id;
+    list.forEach((b) => { const bid = String(b.id); if (beatSets[bid]) last = beatSets[bid]; else beatSets[bid] = last; });
+    return { sets: uniq, beatSets, source: "llm" };
+  } catch (e) {
+    const fb = fallback();
+    fb.error = String(e?.message || e);
+    return fb;
+  }
 }
 
 /**
@@ -1677,6 +1807,10 @@ async function generateScenesPerBeat(input, budgetedBeats) {
     // 가사가 안 실리는 비트도 '지금 무슨 소절이 흐르는지'는 알아야 화면을 맞출 수 있다.
     songSectionText: sectionMap[idx] ? sectionMap[idx].sectionText : "",
     isSectionStart: sectionMap[idx] ? !!sectionMap[idx].isSectionStart : false,
+    // 세트 계획(planEpisodeSets)이 정한 이 비트의 세트 — 씬의 sceneLocation 은 이 이름으로 강제된다.
+    setName: (() => { const sp = input?.setPlan; if (!sp) return ""; const sid = sp.beatSets?.[String(beat.id)]; const st = (sp.sets || []).find((x) => x.id === sid) || (sp.sets || [])[0]; return st ? st.name : ""; })(),
+    setDescription: (() => { const sp = input?.setPlan; if (!sp) return ""; const sid = sp.beatSets?.[String(beat.id)]; const st = (sp.sets || []).find((x) => x.id === sid) || (sp.sets || [])[0]; return st ? st.description : ""; })(),
+    setList: input?.setPlan ? (input.setPlan.sets || []).map((x) => x.name) : [],
   }));
 
   const scenes = new Array(beats.length).fill(null);
@@ -1748,7 +1882,11 @@ async function generateScenarioScenesViaBeats(input) {
     ? Object.assign({}, input, { songRefrain, songMeterNote, beatSectionMap })
     : input;
 
-  const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(beatInput, budgeted);
+  // 세트 계획: 씬을 쓰기 전에 장소 목록을 확정하고, 각 비트에 세트를 배정한다(비트별 호출이 장소를 제각각 짓지 못하게).
+  const setPlan = await planEpisodeSets(input, budgeted);
+  const beatInputWithSets = Object.assign({}, beatInput, { setPlan });
+
+  const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(beatInputWithSets, budgeted);
 
   // 모든 슬롯이 채워졌는지 확인 (실패는 fallback 으로 이미 채워짐)
   // v3.878: 각 씬을 shapeSceneByMode 로 통과 — 음성 모드별 narration/dialogue 제거 +
@@ -1815,8 +1953,14 @@ async function generateScenarioScenesViaBeats(input) {
   // v3.882: 캐릭터가 enforce 까지 도달했는지 디버그 노출
   const charactersDebug = (input.characters || []).map((c) => `${c.token || "?"}(${c.displayName || "?"})`);
 
+  // episodeLocations 형태로 바로 쓸 수 있는 세트 목록(플레이트·시트는 클라이언트가 기존 것에서 물려받는다).
+  const setsForPayload = setPlan.sets.map((st) => ({
+    id: st.id, name: st.name, description: st.description, refObjectName: "", variants: [],
+    sceneIds: finalScenes.filter((sc) => String((sc && sc.sceneLocation) || "").trim() === st.name).map((sc) => sc.id),
+  }));
   return {
     scenes: finalScenes,
+    sets: setsForPayload,
     meta: {
       chunked: false,
       chunkCount: 1,
@@ -1835,6 +1979,11 @@ async function generateScenarioScenesViaBeats(input) {
       scenesPadded: 0, // per-beat 는 구조적으로 패딩 불필요 (1:1 보장)
       scenesSplit: scenesSplitCount,
       locationsRenamed,
+      // 세트 계획(장소 확정): 창작자가 보는 목록. sets 는 응답 최상위에도 실린다.
+      setPlanSource: setPlan.source,
+      setPlanError: setPlan.error || "",
+      sets: setPlan.sets.map((st) => ({ id: st.id, name: st.name, description: st.description })),
+      setsEnforced: rawScenes.filter((sc) => sc && sc._setEnforced).length,
       perBeatFailures: failures.length,
       perBeatFallbacks: fallbacks,
       elapsedMs,

@@ -19,10 +19,10 @@ test('★진단 토스트에 Pass 2 요약(씬→컷·성공/폴백·자동 보�
   const ui = read('prototype/js/ui/scenario.js');
   assert.match(ui, /컷 분해 \(Pass 2\): 씬 \$\{p2Total\} → 컷 \$\{p2Cuts\} \(성공 .* \/ 폴백 /);
   assert.match(ui, /자동 보정 \(Pass 2\): 같은 셋업 사이즈 이동 .*shotTypeSwaps.*인물 위치 앵커 .*blockingAnchors.*카메라 무브 치환 .*cameraSwaps/);
-  const locIdx = ui.indexOf("replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '개");
+  const locIdx = ui.indexOf("replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '곳");
   assert.ok(locIdx > 0, '장소(세트) 줄이 없습니다');
   // 장소 줄은 추출 성공 직후, 토스트를 다시 그린다
-  const after = ui.slice(locIdx, locIdx + 400);
+  const after = ui.slice(locIdx, locIdx + 800);
   assert.match(after, /showScenarioMetaToast\(metaLines\.join\('\\n'\)\)/);
   assert.match(ui, /서버가 이전 배포로 응답 중/);
 });

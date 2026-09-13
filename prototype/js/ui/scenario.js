@@ -3113,7 +3113,13 @@
               ? currentPayload.episodeLocations
               : (Array.isArray(draft.payload?.episodeLocations) ? draft.payload.episodeLocations : []);
             let epLocs = null;
-            if (NK.api && NK.api.scenarioLocations) {
+            // 1순위: 시나리오 생성 단계에서 확정한 세트 목록(res.sets). 장소는 사후 추출이 아니라 생성 전에 정해진 값이다.
+            let setsFromPlan = false;
+            if (Array.isArray(res?.sets) && res.sets.length) {
+              epLocs = res.sets.map((st) => Object.assign({}, st, { variants: Array.isArray(st.variants) ? st.variants : [], sceneIds: Array.isArray(st.sceneIds) ? st.sceneIds : [] }));
+              setsFromPlan = true;
+            }
+            if (!epLocs && NK.api && NK.api.scenarioLocations) {
               try {
                 const r = await NK.api.scenarioLocations(draft.scenes, payload?.language === 'en' ? 'en' : 'ko');
                 if (r && Array.isArray(r.locations) && r.locations.length) epLocs = r.locations;
@@ -3147,7 +3153,7 @@
               // 세트 수는 플레이트 수(=비용·일관성)와 직결된다 — 진단 패널에 바로 보인다.
               try {
                 if (Array.isArray(metaLines)) {
-                  replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '개 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']' + (locationsUnified ? ` · 컷 장소 이름 통일 ${locationsUnified}건` : ''));
+                  replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '곳 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']' + (setsFromPlan ? ' · 생성 단계에서 확정' + (res?.meta?.setsEnforced ? ` (컷 장소 강제 ${res.meta.setsEnforced}건)` : '') : ' · 사후 추출') + (locationsUnified ? ` · 컷 장소 이름 통일 ${locationsUnified}건` : ''));
                   showScenarioMetaToast(metaLines.join('\n'));
                 }
               } catch (_) { /* 진단 갱신 실패는 무시 */ }
