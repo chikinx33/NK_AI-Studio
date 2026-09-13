@@ -186,5 +186,5 @@ test('★scene_still 프롬프트는 캐릭터 수를 명시하고 전원 보이
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /`Exactly \$\{charLines\.length\} character\$\{charLines\.length > 1 \? "s" : ""\} appear in this shot: \$\{tokens\.join\(", "\)\}\. ALL of them must be clearly visible in the frame — never omit or merge any of them\.`/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.equal((src.match(/rounded-full bg-black\/80"><Chip tone=\{(st|vd)\.running/g) || []).length, 4, '카드·상세 × 스틸·영상 라벨');
+  assert.equal((src.match(/inline-flex rounded bg-black\/80"><Chip tone=\{(st|vd)\.running/g) || []).length, 4, '카드·상세 × 스틸·영상 라벨 — 칩과 같은 둥근 네모(rounded), 알약(rounded-full) 아님');
 });
