@@ -391,7 +391,9 @@ export default function ProductionCanvas({
   const [saving, setSaving] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ kind: "pan" | "node" | "bar" | "cut"; id?: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const drag = useRef<{ kind: "pan" | "node" | "bar" | "cut"; id?: string; zone?: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  // 배경 합치기 모달: 선택한 배경 카드들을 이름 하나로.
+  const [mergeModal, setMergeModal] = useState<{ names: string[]; into: string } | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const positionsRef = useRef(positions);
@@ -611,7 +613,6 @@ export default function ProductionCanvas({
   // 여러 이름을 핵심 이름 하나로 합친다(순서대로 잡 하나씩, 각 잡은 자동 승인). 컷 번호는 바뀌지 않는다.
   const mergeLocations = async (from: string[], into: string) => {
     if (!projectId || !from.length) return;
-    if (!window.confirm(`${from.map((f) => `"${f}"`).join(", ")} 의 컷을 "${into}" 로 옮겨 한 세트로 합칠까요?\n플레이트·시트는 "${into}" 에 없는 것만 물려받아요. 컷 번호는 바뀌지 않아요.`)) return;
     for (const f of from) await enqueue("location_merge", { projectId, from: f, into }, `장소 합치기 · ${f} → ${into}`, undefined, into);
     setSelectedId("");
   };
@@ -715,7 +716,9 @@ export default function ProductionCanvas({
       // bar: 바(씬·캐릭터·장소). cut: 바에 딸린 카드(컷·캐릭터·장소 — 같은 종류의 칸에만 스냅). node: 공통 프롬프트(자유 격자).
       const laneKind = laneKindForNode((nodeById.get(nodeId)?.type || "common") as ProductionNode["type"]);
       const kind: "node" | "bar" | "cut" = nodeId.startsWith("lane:") ? "bar" : (laneKind ? "cut" : "node");
-      drag.current = { kind, id: nodeId, startX: e.clientX, startY: e.clientY, originX: p.x, originY: p.y, moved: false };
+      // 카드 안 영역: image(누르면 크게 보기) / text(누르면 선택). 배경 카드의 클릭 흐름에 쓴다.
+      const zone = ((e.target as HTMLElement | null)?.closest?.("[data-zone]") as HTMLElement | null)?.dataset?.zone || "";
+      drag.current = { kind, id: nodeId, zone, startX: e.clientX, startY: e.clientY, originX: p.x, originY: p.y, moved: false };
       e.stopPropagation();
     } else {
       drag.current = { kind: "pan", startX: e.clientX, startY: e.clientY, originX: viewRef.current.x, originY: viewRef.current.y, moved: false };
@@ -780,6 +783,18 @@ export default function ProductionCanvas({
       const g = lanesRef.current.find((x) => x.key === key);
       setMulti(new Set(g ? g.memberIds : []));
       setSelectedId("");
+      return;
+    }
+    if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved && nodeById.get(d.id)?.type === "location") {
+      // 배경 카드: 이미지 영역 → 크게 보기, 텍스트 영역 → 선택 토글(여러 장 가능). 상세는 카드의 ⓘ 버튼.
+      const ln = nodeById.get(d.id)!;
+      if (d.zone === "image") {
+        const url = String(ln.data.setSheet?.url || ln.data.plateUrl || "");
+        if (url) setLightbox({ url: withMediaToken(url), title: ln.label });
+        return;
+      }
+      setSelectedId("");
+      setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
       return;
     }
     if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved) {
@@ -977,6 +992,19 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
+                  {l.kind === "locations" && (() => {
+                    const picked = locationNodes.filter((n) => multi.has(n.id));
+                    if (picked.length < 2) return null;
+                    const names = picked.map((n) => String(n.data?.name || n.label));
+                    // 기본으로 남길 이름: 제안된 핵심 이름이 있으면 그것, 없으면 가장 짧은 이름
+                    const hit = mergeSuggestions.find((m) => names.some((x) => m.from.includes(x) || x === m.into));
+                    const into = hit ? hit.into : names.slice().sort((a, b) => a.length - b.length)[0];
+                    return (
+                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setMergeModal({ names, into }); }} className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-red-400/60 bg-red-900/30 px-2 text-[11px] font-bold text-red-100 hover:bg-red-800/50" title="선택한 배경을 한 세트로 합쳐요">
+                        합치기 {picked.length}
+                      </button>
+                    );
+                  })()}
                   {l.kind === "locations" && (
                     <button
                       type="button"
@@ -1028,15 +1056,17 @@ export default function ProductionCanvas({
                   {n.type === "location" && (
                     <div>
                       {(n.data.setSheet?.url || n.data.plateUrl) ? (
-                        <div className="relative border-b border-edge">
+                        <div className="relative cursor-zoom-in border-b border-edge" data-zone="image" title="누르면 크게 볼 수 있어요">
                           <img src={withMediaToken(String(n.data.setSheet?.url || n.data.plateUrl))} alt="" className="block aspect-video w-full object-cover" draggable={false} />
                           <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
                           {n.data.setSheet?.resolution ? <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">{String(n.data.setSheet.resolution)}</span> : null}
                         </div>
                       ) : null}
-                      <div className="p-3">
+                      <div className="p-3" data-zone="text" title="누르면 선택돼요(여러 장 선택 후 배경 바의 합치기)">
                         <div className="flex flex-wrap items-center gap-1.5">
+                          {multi.has(n.id) && <span className="grid h-4 w-4 place-items-center rounded-full bg-violet-400 text-[10px] font-black text-black">✓</span>}
                           <Chip tone="violet">장소</Chip>
+                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSelectedId(n.id); }} className="ml-auto grid h-5 w-5 place-items-center rounded-full border border-edge text-[10px] text-gray-400 hover:bg-edge hover:text-white" title="상세(플레이트·다시 만들기)" aria-label="상세">i</button>
                           {n.data.setSheet ? <Chip tone="emerald">시트</Chip> : <Chip>시트 없음</Chip>}
                           {graph?.styleAnchor && n.data.setSheet?.objectName === graph.styleAnchor.objectName && <Chip tone="amber">스타일 기준</Chip>}
                           {mergeSuggestions.some((m) => m.from.includes(String(n.data.name || n.label)) || m.into === String(n.data.name || n.label)) && <Chip tone="red">중복 의심</Chip>}
@@ -1144,6 +1174,44 @@ export default function ProductionCanvas({
               <img src={lightbox.url} alt="" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" draggable={false} />
               <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</div>
               <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label="닫기">✕</button>
+            </div>
+          )}
+
+          {/* 배경 합치기 모달 — 선택한 배경 카드들을 이름 하나로. 남길 이름은 고르거나 새로 적는다. */}
+          {mergeModal && (
+            <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setMergeModal(null)}>
+              <div className="w-[520px] max-w-[94%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-bold text-white">배경 합치기</div>
+                    <div className="text-[11px] text-gray-500">같은 공간이 여러 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 이름 하나로 합치면 컷은 그 이름으로 옮겨지고, 플레이트·시트는 남는 쪽에 없는 것만 물려받아요. 컷 번호는 바뀌지 않아요.</div>
+                  </div>
+                  <button type="button" onClick={() => setMergeModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
+                </div>
+                <div className="px-4 py-3">
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">남길 이름</div>
+                  <ul className="space-y-1">
+                    {Array.from(new Set([mergeModal.into, ...mergeModal.names])).map((nm) => (
+                      <li key={nm}>
+                        <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[12px] ${mergeModal.into === nm ? "border-violet-500/60 bg-violet-900/15 text-white" : "border-edge text-gray-300"}`}>
+                          <input type="radio" name="merge-into" checked={mergeModal.into === nm} onChange={() => setMergeModal((m) => (m ? { ...m, into: nm } : m))} className="accent-violet-500" />
+                          <span className="min-w-0 flex-1 truncate">{nm}</span>
+                          {!mergeModal.names.includes(nm) && <Chip tone="amber">새 이름(핵심)</Chip>}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-2 block text-[11px] text-gray-400">직접 적기
+                    <input type="text" value={mergeModal.into} onChange={(e) => setMergeModal((m) => (m ? { ...m, into: e.target.value } : m))} className="mt-1 w-full rounded-lg border border-edge bg-[#151b25] px-2 py-1.5 text-[12px] text-gray-100" placeholder="예: 소녀의 방" />
+                  </label>
+                  <p className="mt-2 text-[11px] text-gray-500">합쳐질 배경: {mergeModal.names.filter((x) => x !== mergeModal.into.trim()).map((x) => `"${x}"`).join(", ") || "없음"}</p>
+                </div>
+                <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
+                  <div className="flex-1" />
+                  <button type="button" onClick={() => setMergeModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
+                  <button type="button" disabled={!mergeModal.into.trim() || !mergeModal.names.some((x) => x !== mergeModal.into.trim())} onClick={() => { const m = mergeModal; const into = m.into.trim(); const from = m.names.filter((x) => x !== into); setMergeModal(null); setMulti(new Set()); void mergeLocations(from, into); }} className="min-w-[96px] rounded-lg bg-red-700 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-red-600 disabled:opacity-40">합치기</button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1428,7 +1496,7 @@ export default function ProductionCanvas({
                           {mine.map((m) => (
                             <li key={`${m.from.join("|")}→${m.into}`} className="flex items-center gap-2 text-[11px] text-gray-200">
                               <span className="min-w-0 flex-1 truncate" title={`${m.from.join(", ")} → ${m.into}`}>{m.from.map((f) => `"${f}"`).join(", ")} → "{m.into}"</span>
-                              <button type="button" disabled={saving} onClick={() => void mergeLocations(m.from, m.into)} className="min-w-[72px] rounded-lg bg-red-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-600 disabled:opacity-50">합치기</button>
+                              <button type="button" disabled={saving} onClick={() => setMergeModal({ names: [...m.from, m.into].filter((x) => locationNodes.some((n) => String(n.data?.name || n.label) === x)), into: m.into })} className="min-w-[72px] rounded-lg bg-red-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-600 disabled:opacity-50">합치기</button>
                               {m.from.length === 1 && m.from[0] !== me && m.into !== me ? null : (m.from.length === 1 && m.into !== me ? <button type="button" disabled={saving} onClick={() => void mergeLocations([m.into], me)} className="min-w-[72px] rounded-lg border border-edge px-2 py-1 text-[11px] text-gray-300 hover:bg-edge disabled:opacity-50" title={`"${me}" 이름을 남기고 반대로 합쳐요`}>이 이름으로</button> : null)}
                             </li>
                           ))}

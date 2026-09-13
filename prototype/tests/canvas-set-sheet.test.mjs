@@ -192,3 +192,20 @@ test('★스타일 앵커: 첫 세트 시트가 프로젝트 그림체 기준이
   assert.match(src, /void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
   assert.match(src, /createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, provider: settings\.image\.provider, usePlate \}\)/);
 });
+
+test('★배경 카드 클릭 흐름: 이미지 영역=크게 보기, 텍스트 영역=선택 토글(여러 장), ⓘ=상세; 2장 이상 선택하면 배경 바에 합치기 → 남길 이름 고르는 모달', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const zone = \(\(e\.target as HTMLElement \| null\)\?\.closest\?\.\("\[data-zone\]"\) as HTMLElement \| null\)\?\.dataset\?\.zone \|\| "";/);
+  assert.match(src, /if \(d\.zone === "image"\) \{\s*\n\s*const url = String\(ln\.data\.setSheet\?\.url \|\| ln\.data\.plateUrl \|\| ""\);\s*\n\s*if \(url\) setLightbox\(/);
+  assert.match(src, /setMulti\(\(prev\) => \{ const next = new Set\(prev\); next\.has\(d\.id!\) \? next\.delete\(d\.id!\) : next\.add\(d\.id!\); return next; \}\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*if \(\(d\.kind === "node" \|\| d\.kind === "cut"\) && d\.id && !d\.moved\) \{/, '배경 카드는 상세를 열지 않고 선택만 토글');
+  assert.match(src, /data-zone="image" title="누르면 크게 볼 수 있어요"/);
+  assert.match(src, /data-zone="text" title="누르면 선택돼요/);
+  assert.match(src, /data-zone="detail" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\} onClick=\{\(e\) => \{ e\.stopPropagation\(\); setSelectedId\(n\.id\); \}\}/);
+  assert.match(src, /const picked = locationNodes\.filter\(\(n\) => multi\.has\(n\.id\)\);\s*\n\s*if \(picked\.length < 2\) return null;/);
+  assert.match(src, /setMergeModal\(\{ names, into \}\)/);
+  assert.match(src, /<div className="text-\[13px\] font-bold text-white">배경 합치기<\/div>/);
+  assert.match(src, /<input type="radio" name="merge-into"/);
+  assert.match(src, /placeholder="예: 소녀의 방"/);
+  assert.match(src, /setMergeModal\(null\); setMulti\(new Set\(\)\); void mergeLocations\(from, into\);/);
+  assert.doesNotMatch(src, /window\.confirm\(`\$\{from\.map/, '합치기는 모달이 곧 확인');
+});
