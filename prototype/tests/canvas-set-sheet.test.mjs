@@ -22,7 +22,7 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"\];/);
 });
 
 test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승인 대기·실행 중·완료·오류, 승인 버튼) · 별 버튼 스피너 · 배경 카드 칩', () => {
@@ -41,13 +41,13 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const approveNow = async \(jobId: string\) => \{/);
   assert.match(src, /끝난 항목 지우기/);
   // 세트 시트 모달: 대상·해상도 선택 → "생성"이 곧 확인(만들자마자 승인) → 같은 모달에서 진행
-  assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K" \} \| null>\(null\);/);
+  assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K"; usePlate\?: boolean \} \| null>\(null\);/);
   assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
-  assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K"\) => \{/);
-  assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, provider: settings\.image\.provider \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
+  assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K", usePlate = false\) => \{/);
+  assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, provider: settings\.image\.provider, usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
   assert.match(src, /<div className="text-\[13px\] font-bold text-white">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
-  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution\);/);
+  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
   assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
   // 잡 생성 자체가 실패해도 오류로 남는다
   assert.match(src, /setPending\(\(prev\) => \[\{ jobId: `local-\$\{Date\.now\(\)\}`, type, sceneId, status: "error", label, target, error: \(e as Error\)\.message/);
@@ -112,7 +112,8 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /const name = String\(input\?\.locationName \|\| input\?\.name \|\| input\?\.setName \|\| ""\)\.trim\(\);/);
-  assert.match(fn, /buildBibleSetSheetPrompt\(\{ header, set: \{ name: String\(loc\.name \|\| name\), description: String\(loc\.description \|\| ""\) \}, aspect \}\)/);
+  assert.match(fn, /const promptInput = \{ header, set: \{ name: String\(loc\.name \|\| name\), description: String\(loc\.description \|\| ""\) \}, aspect, hasStyleRef: false, hasPlateRef: false \};/);
+  assert.match(fn, /buildBibleSetSheetPrompt\(promptInput\)/);
   assert.match(fn, /referenceKind: "environment"/, '마스터 플레이트가 있으면 참조');
   assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution/);
   // 1차 실패 시 해상도 기본값·참조 없이 한 번 더, 두 시도의 오류를 모두 남긴다(원인 분리)
@@ -126,7 +127,8 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   assert.match(fn, /kind: "bible-set"/);
   assert.match(fn, /panels: SET_ANGLES\.map\(/);
   assert.match(fn, /grid: \{ cols: 2, rows: 2 \}/);
-  assert.match(fn, /callInternalJson\(ctx, "\/api\/project\/save", \{ body: \{ projectId, payload: \{ episodeLocations: locations, storyboardSheets: sheets \} \} \}\)/);
+  assert.match(fn, /const nextPayload: any = \{ episodeLocations: locations, storyboardSheets: sheets \};/);
+  assert.match(fn, /callInternalJson\(ctx, "\/api\/project\/save", \{ body: \{ projectId, payload: nextPayload \} \}\)/);
   assert.doesNotMatch(fn, /scenes:/, '컷 데이터는 건드리지 않는다(콘티는 컷 imageDataUrl 에 들어가지 않는다)');
   const orch = read('prototype/functions/api/agent/_orchestrator.ts');
   assert.match(orch, /set_sheet: `\[\[RUN: set_sheet \| \{"projectId"/);
@@ -144,4 +146,49 @@ test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\[selected\.id\]\)/, '이 장소만 선택된 채 모달');
   assert.match(src, /아직 세트 시트가 없어요\. 배경 바의 별 버튼으로 만들어요\./);
   assert.match(src, /className="absolute inset-0 z-50 grid place-items-center bg-black\/85 p-6" onClick=\{\(\) => setLightbox\(null\)\}/);
+});
+
+test('★세트 정체성: 같은 세트로 보이는 장소는 카드에 "중복 의심", 상세에서 핵심 이름으로 합치기(location_merge, 자동 승인)', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /import \{ suggestLocationMerges \} from "\.\.\/lib\/locationNames";/);
+  assert.match(src, /const mergeSuggestions = useMemo\(\(\) => suggestLocationMerges\(locationNodes\.map\(\(n\) => String\(n\.data\?\.name \|\| n\.label\)\)\), \[locationNodes\]\);/);
+  assert.match(src, /const mergeLocations = async \(from: string\[\], into: string\) => \{/);
+  assert.match(src, /for \(const f of from\) await enqueue\("location_merge", \{ projectId, from: f, into \}, `장소 합치기 · \$\{f\} → \$\{into\}`, undefined, into\);/);
+  assert.match(src, /<Chip tone="red">중복 의심<\/Chip>/);
+  assert.match(src, /같은 세트로 보이는 장소가 있어요<\/div>/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"\];/);
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /location_merge: \{ agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool \}/);
+  assert.match(shared, /location_suggest: \{ agentId: "plot", kind: "read", run: runLocationSuggestTool \}/);
+  const i = shared.indexOf('async function runLocationMergeTool(');
+  const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /const merged = applyLocationMerge\(scenes, from, into\);/);
+  assert.match(fn, /if \(!target\.setSheet && src\.setSheet\) \{ target\.setSheet = src\.setSheet; inherited\.push\("setSheet"\); \}/, '남는 쪽에 없는 자산만 물려받는다');
+  assert.match(fn, /locations\.splice\(fi, 1\);/);
+  assert.match(fn, /body: \{ projectId, scenes: merged\.scenes, payload: \{ episodeLocations: locations, storyboardSheets: sheets \} \}/);
+});
+
+test('★스타일 앵커: 첫 세트 시트가 프로젝트 그림체 기준이 되고, 이후 시트는 그것을 style 참조로 받는다 · 정면 플레이트 참조는 선택(기본 끔)', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const i = shared.indexOf('async function runSetSheetTool(');
+  const fn = shared.slice(i, shared.indexOf('\n}\n', i));
+  assert.match(fn, /const anchor = \(payload\.styleAnchor && typeof payload\.styleAnchor === "object" && payload\.styleAnchor\.objectName\) \? payload\.styleAnchor : null;/);
+  assert.match(fn, /referenceKind: "style"/);
+  assert.match(fn, /const usePlate = input\?\.usePlate === true && !!\(loc\.refObjectName && bucket\);/, '플레이트 참조는 명시할 때만');
+  assert.match(fn, /if \(!anchor\) nextPayload\.styleAnchor = \{ objectName: img\.objectName, sheetId, setName: String\(loc\.name \|\| name\), createdAt: sheet\.createdAt \};/);
+  assert.match(fn, /becameStyleAnchor: !anchor/);
+  const sheet = read('prototype/functions/api/_shared/storyboard-sheet.js');
+  assert.match(sheet, /A STYLE ANCHOR image is provided: it is a DIFFERENT set from this project\./);
+  assert.match(sheet, /if \(input && input\.hasPlateRef\) \{/);
+  const imagen = read('prototype/functions/api/imagen.ts');
+  assert.match(imagen, /: \(rkRaw === "style" \|\| rkRaw === "style-anchor"\) \? "style"/);
+  assert.match(imagen, /is the project's STYLE ANCHOR — a different subject\/place\. Match its rendering style/);
+  assert.match(imagen, /One reference image is the project's STYLE ANCHOR \(\$\{subject\}\)\./);
+  const graph = read('prototype/functions/api/agent/production-graph.ts');
+  assert.match(graph, /styleAnchor: \(payload\.styleAnchor && typeof payload\.styleAnchor === "object" && payload\.styleAnchor\.objectName\)/);
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /<Chip tone="amber">스타일 기준<\/Chip>/);
+  assert.match(src, /정면 플레이트 참조\s*\n\s*<\/label>/);
+  assert.match(src, /void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
+  assert.match(src, /createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, provider: settings\.image\.provider, usePlate \}\)/);
 });

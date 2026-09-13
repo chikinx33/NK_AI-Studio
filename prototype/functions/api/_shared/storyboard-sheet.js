@@ -141,7 +141,12 @@ export function buildBibleSetSheetPrompt(input) {
     `All four panels show the SAME place: ${name}${t(set.description) ? ` — ${t(set.description).slice(0, 240)}` : ""}. Same architecture, props, materials, palette and lighting in every panel.`,
   ];
   SET_ANGLES.forEach((a, i) => lines.push(`Panel ${i + 1} (${a.id.toUpperCase()}): ${a.instruction}. Empty environment ONLY — no characters, no people, no creatures.`));
-  lines.push("If a reference image of this place is provided, panel 1 must match it and the other panels must be the same place seen from the other angles.");
+  if (input && input.hasStyleRef) {
+    lines.push("A STYLE ANCHOR image is provided: it is a DIFFERENT set from this project. Copy its rendering style, medium, line/shading treatment, palette saturation and lighting mood EXACTLY so both sets look like one production. Do NOT copy its layout, furniture, props or camera — this sheet shows a different place.");
+  }
+  if (input && input.hasPlateRef) {
+    lines.push("A reference image of THIS place is also provided: panel 1 must match it and the other panels must be the same place seen from the other angles.");
+  }
   lines.push(NO_MERGE, STYLE_LOCK);
   return lines.filter(Boolean).join("\n");
 }

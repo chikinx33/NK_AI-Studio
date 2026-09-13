@@ -9,6 +9,7 @@ import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/cl
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
 import { buildBibleSetSheetPrompt, SET_ANGLES } from "../_shared/storyboard-sheet.js";
+import { applyLocationMerge, suggestLocationMerges, locationKey } from "../_shared/location-names.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -4287,7 +4288,54 @@ async function runSceneReorderTool(input: any, ctx: ToolContext): Promise<any> {
 
 /** 장소 이름 정규화(set-plates.findLocationForScene 과 같은 느슨한 비교). */
 function normLocationKey(v: any): string {
-  return String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return locationKey(v);
+}
+
+/** 장소 합치기: from 장소의 컷을 into 로 옮기고(sceneLocation 재작성), episodeLocations·storyboardSheets 도 into 로 모은다.
+ *  세트의 정체성이 문자열이라 같은 방이 두 이름으로 갈려 각각 따로 생성되던 문제(2026-09-13 "소녀의 방" 2벌)의 수습 도구.
+ *  into 에 플레이트·시트가 없으면 from 것을 물려받는다. 컷 id 는 그대로. 쓰기 → 게이트(캔버스는 자동 승인). */
+async function runLocationMergeTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const from = String(input?.from || input?.fromName || "").trim();
+  const into = String(input?.into || input?.intoName || "").trim();
+  if (!from || !into) throw new Error("from(합칠 장소)과 into(남길 장소)가 필요해요");
+  if (normLocationKey(from) === normLocationKey(into)) throw new Error("같은 장소예요");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
+  const payload: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
+  const merged = applyLocationMerge(scenes, from, into);
+  const locations: any[] = Array.isArray(payload.episodeLocations) ? payload.episodeLocations.map((l: any) => ({ ...l })) : [];
+  const fi = locations.findIndex((l) => normLocationKey(l?.name) === normLocationKey(from));
+  let ti = locations.findIndex((l) => normLocationKey(l?.name) === normLocationKey(into));
+  if (ti < 0) { locations.push({ id: normLocationKey(into).replace(/[^0-9a-z가-힣]+/g, "-").slice(0, 48) || "set", name: into, description: "", refObjectName: "", variants: [] }); ti = locations.length - 1; }
+  const target = locations[ti];
+  let inherited: string[] = [];
+  if (fi >= 0) {
+    const src = locations[fi];
+    if (!target.refObjectName && src.refObjectName) { target.refObjectName = src.refObjectName; inherited.push("plate"); }
+    if (!target.description && src.description) { target.description = src.description; inherited.push("description"); }
+    if (!target.setSheet && src.setSheet) { target.setSheet = src.setSheet; inherited.push("setSheet"); }
+    const have = new Set((Array.isArray(target.variants) ? target.variants : []).map((v: any) => String(v?.id || "")));
+    (Array.isArray(src.variants) ? src.variants : []).forEach((v: any) => { if (v && v.refObjectName && !have.has(String(v.id || ""))) { target.variants = [...(target.variants || []), v]; inherited.push(`variant:${v.id}`); } });
+    target.mergedFrom = [...(Array.isArray(target.mergedFrom) ? target.mergedFrom : []), { name: String(src.name || from), at: new Date().toISOString() }];
+    locations.splice(fi, 1);
+  }
+  const sheets: any[] = (Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets : []).map((sh: any) => (
+    sh && normLocationKey(sh.setName) === normLocationKey(from) ? { ...sh, setName: into, mergedFromSetName: sh.setName } : sh
+  ));
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes: merged.scenes, payload: { episodeLocations: locations, storyboardSheets: sheets } } });
+  return { kind: "location_merge", projectId, from, into, cutsMoved: merged.changed, inherited, saved: true, summary: `장소 합치기: "${from}" → "${into}" (컷 ${merged.changed}개 이동${inherited.length ? `, 물려받음: ${inherited.join(", ")}` : ""})` };
+}
+
+/** 같은 세트로 보이는 장소 쌍(읽기): 캔버스·채팅이 "합칠까요?" 를 물을 근거. */
+async function runLocationSuggestTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const names = (Array.isArray(cur.scenes) ? cur.scenes : []).map((s: any) => String(s?.sceneLocation || s?.location || "").trim()).filter(Boolean);
+  const suggestions = suggestLocationMerges(names);
+  return { kind: "location_suggest", projectId, suggestions, summary: suggestions.length ? suggestions.map((x: any) => `"${x.from}" → "${x.into}"`).join(", ") : "합칠 장소 없음" };
 }
 
 /** 세트 시트(바이블, E2): 장소 하나를 2×2(정면·후면·부감·로우, 인물 없음) 한 장으로 만든다.
@@ -4312,11 +4360,26 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
     idx = locations.length - 1;
   }
   const loc = locations[idx];
-  const prompt = String(input?.prompt || "").trim() || buildBibleSetSheetPrompt({ header, set: { name: String(loc.name || name), description: String(loc.description || "") }, aspect });
+  const promptInput = { header, set: { name: String(loc.name || name), description: String(loc.description || "") }, aspect, hasStyleRef: false, hasPlateRef: false };
   const bucket = studioBucket(ctx);
-  const referenceImages = (loc.refObjectName && bucket)
-    ? [{ imageUrl: `gs://${bucket}/${String(loc.refObjectName).replace(/^gs:\/\/[^/]+\//, "")}`, referenceId: 1, subjectDescription: `${String(loc.name || name)} (front-facing master plate)`, referenceKind: "environment" }]
-    : [];
+  const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
+  const referenceImages: any[] = [];
+  // 스타일 앵커: 프로젝트에서 먼저 만든(승인된) 세트 시트 하나가 이후 모든 시트의 "그림체 기준"이다.
+  // 참조 이미지가 텍스트 스타일을 이기므로(같은 헤더인데 실사/애니로 갈린 실제 사례) 문장이 아니라 이미지로 고정한다.
+  const anchor = (payload.styleAnchor && typeof payload.styleAnchor === "object" && payload.styleAnchor.objectName) ? payload.styleAnchor : null;
+  const anchorFromOther = !anchor ? locations.find((l, i) => i !== idx && l?.setSheet?.objectName) : null;
+  const styleRef = anchor ? { objectName: String(anchor.objectName), setName: String(anchor.setName || "") } : (anchorFromOther ? { objectName: String(anchorFromOther.setSheet.objectName), setName: String(anchorFromOther.name || "") } : null);
+  const useStyleAnchor = input?.useStyleAnchor !== false && !!(styleRef && bucket);
+  if (useStyleAnchor && styleRef) {
+    referenceImages.push({ imageUrl: gsOf(styleRef.objectName), referenceId: 1, subjectDescription: `STYLE ANCHOR — the approved set sheet of a DIFFERENT set (${styleRef.setName || "another set"}) in this project`, referenceKind: "style" });
+  }
+  // 정면 플레이트 참조는 선택(기본 끔): 옛 플레이트가 다른 그림체면 시트 전체를 그쪽으로 끌고 간다(실제 사례).
+  const usePlate = input?.usePlate === true && !!(loc.refObjectName && bucket);
+  if (usePlate) {
+    referenceImages.push({ imageUrl: gsOf(loc.refObjectName), referenceId: referenceImages.length + 1, subjectDescription: `${String(loc.name || name)} (front-facing master plate)`, referenceKind: "environment" });
+  }
+  promptInput.hasStyleRef = useStyleAnchor; promptInput.hasPlateRef = usePlate;
+  const prompt = String(input?.prompt || "").trim() || buildBibleSetSheetPrompt(promptInput);
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
   let img: any;
   let fallback = "";
@@ -4345,10 +4408,13 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   const sheets: any[] = Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets.slice() : [];
   sheets.push(sheet);
   locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution: fallback ? "default" : resolution, createdAt: sheet.createdAt } };
-  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { episodeLocations: locations, storyboardSheets: sheets } } });
+  // 첫 세트 시트가 프로젝트의 스타일 앵커가 된다(없을 때만). 바꾸려면 캔버스에서 다른 시트를 기준으로 지정.
+  const nextPayload: any = { episodeLocations: locations, storyboardSheets: sheets };
+  if (!anchor) nextPayload.styleAnchor = { objectName: img.objectName, sheetId, setName: String(loc.name || name), createdAt: sheet.createdAt };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: nextPayload } });
   return {
     kind: "set_sheet", projectId, locationName: String(loc.name || name), sheetId, objectName: img.objectName, signedUrl: img.signedUrl || "",
-    resolution: fallback ? "default" : resolution, requestedResolution: resolution, plateReferenced: !fallback && referenceImages.length > 0, model: img.model || "", saved: true, promptEcho: prompt,
+    resolution: fallback ? "default" : resolution, requestedResolution: resolution, plateReferenced: !fallback && usePlate, styleAnchored: !fallback && useStyleAnchor, styleAnchorSet: styleRef ? styleRef.setName : "", becameStyleAnchor: !anchor, model: img.model || "", saved: true, promptEcho: prompt,
     fallback, firstError,
     summary: `세트 시트(${fallback ? "기본 크기·참조 없음으로 재시도" : resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.${firstError ? ` (1차 실패: ${firstError.slice(0, 120)})` : ""}`,
   };
@@ -4715,6 +4781,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_reorder: { agentId: "plot", kind: "external", gate: true, run: runSceneReorderTool },
   // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
   set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
+  // 장소 합치기(같은 방이 두 이름으로 갈린 것을 하나로) · 합치기 제안(읽기)
+  location_merge: { agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool },
+  location_suggest: { agentId: "plot", kind: "read", run: runLocationSuggestTool },
 
   // ── STEP 3 (P3): 운영·조회·개인화 ──
   // 코어(총괄): 브랜드/프로젝트 목록·삭제·공유.

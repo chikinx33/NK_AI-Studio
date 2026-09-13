@@ -484,6 +484,9 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
       if (item.referenceKind === "continuity") {
         // 연속성 레퍼런스: 카메라/구도 복제를 명시적으로 금지한다.
         parts.push({ text: `Reference image ${index + 1} (immediately below) is a CONTINUITY reference from a previous cut in the same sequence. Reuse its character designs, colors, materials, world/setting art style, and lighting mood ONLY. Do NOT copy its camera angle, shot size, framing, perspective, or subject placement — the composition must follow the text prompt above.` });
+      } else if (item.referenceKind === "style") {
+        // 스타일 앵커: 프로젝트의 승인된 기준 이미지. 그림체·재질 처리·팔레트·조명만 잇고 내용(장소·구도)은 복제하지 않는다.
+        parts.push({ text: `Reference image ${index + 1} (immediately below) is the project's STYLE ANCHOR — a different subject/place. Match its rendering style, medium, shading, palette saturation and lighting mood EXACTLY so the output looks like the same production. Do NOT copy its layout, objects, characters, camera or composition.` });
       } else if (item.referenceKind === "prop") {
         // 소품: 물건의 정체성만 가져오고 배경·구도는 이 컷의 프롬프트를 따른다.
         const subject = String(item.subjectDescription || "the registered prop").trim() || "the registered prop";
@@ -614,6 +617,9 @@ function buildGeminiImagePrompt(
       if (item.referenceKind === "environment-detail") {
         return `Reference image ${i + 2} (${label}) shows the same location in a wide view. Match its materials, colors, and lighting only; do not copy its layout, framing, or camera.`;
       }
+      if (item.referenceKind === "style") {
+        return `Reference image ${i + 2} (${label}) is the project's style anchor. Match its rendering style, palette and lighting mood only; do not copy its content, layout, or camera.`;
+      }
       if (item.referenceKind === "environment") {
         // 배경·소품 레퍼런스: 캐릭터 신원 가이드와 반대로, 해당 배경/소품을 그릴 때
         // 그 레이아웃·구조·재질·색·조명을 그대로 재현하도록 지시한다.
@@ -695,6 +701,9 @@ function buildGeminiImagePrompt(
     if (item.referenceKind === "environment-detail") {
       // 레이아웃까지 유지하라고 하면 기본 배경과 똑같은 그림이 나온다(세부 배경이 안 나오던 원인).
       return `One reference image shows ${subject} in a wide view. Keep the same art style, materials, colors, textures, and lighting, but render the NEW framing described in the prompt — a closer, tighter shot of the specified detail. Do NOT reproduce the reference's layout, camera angle, or wide composition.`;
+    }
+    if (item.referenceKind === "style") {
+      return `One reference image is the project's STYLE ANCHOR (${subject}). Match its rendering style, medium, shading, palette saturation, and lighting mood exactly so this image belongs to the same production. It governs LOOK ONLY — do not copy its place, objects, characters, layout, or camera.`;
     }
     if (item.referenceKind === "environment") {
       return `Use the provided registered reference image for ${subject} and keep the exact same layout, architecture, props, materials, colors, and lighting. Do not redesign this background or prop.`;
@@ -1267,6 +1276,7 @@ async function normalizeReferenceImages(args: {
       ? "environment-detail"
       : (rkRaw === "prop" || rkRaw === "object") ? "prop"
       : rkRaw === "environment" ? "environment"
+      : (rkRaw === "style" || rkRaw === "style-anchor") ? "style"
       : (rkRaw === "continuity" || rkRaw === "cut") ? "continuity"
       : "character";
     out.push({

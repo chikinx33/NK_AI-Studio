@@ -1822,6 +1822,8 @@ export interface ProductionGraph {
   canvasLayout?: unknown;
   // 노래 구간 목록(payload.songSections 의 id·label·role). 컷 순서 변경 검사에 쓴다.
   songSections?: Array<{ id: string; label: string; role: string }>;
+  // 프로젝트 스타일 앵커(첫 세트 시트). 이후 모든 시트·스틸이 이 이미지의 그림체를 참조한다.
+  styleAnchor?: { objectName: string; sheetId: string; setName: string; url: string } | null;
 }
 
 export async function getProductionGraph(projectId: string): Promise<ProductionGraph> {

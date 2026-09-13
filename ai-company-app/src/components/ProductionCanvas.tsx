@@ -13,6 +13,7 @@ import {
 import ProjectPicker from "./ProjectPicker";
 import { readStorage, writeStorage } from "../lib/safeStorage";
 import { analyzeReorderClient, sameOrder, type OrderCut } from "../lib/sceneOrder";
+import { suggestLocationMerges } from "../lib/locationNames";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
@@ -383,7 +384,7 @@ export default function ProductionCanvas({
   // 떠 있는 작업 독(캔버스 왼쪽 아래, 레이아웃을 밀지 않는다) 펼침 여부
   const [jobDockOpen, setJobDockOpen] = useState(false);
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
-  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K" } | null>(null);
+  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K"; usePlate?: boolean } | null>(null);
   // 큰 이미지 보기(라이트박스): 배경 상세의 세트 시트·플레이트를 화면 가득 본다.
   const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
@@ -554,7 +555,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -605,6 +606,15 @@ export default function ProductionCanvas({
   // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
   // 시트가 이미 있는 장소는 건너뛰고, 없는 장소가 하나도 없으면 전부 다시 만든다(재생성).
   const locationNodes = useMemo(() => (graph?.nodes || []).filter((n) => n.type === "location"), [graph]);
+  // 같은 세트로 보이는 장소 쌍(핵심 이름이 같거나 포함). 서버 location_suggest 와 같은 규칙(lib/locationNames).
+  const mergeSuggestions = useMemo(() => suggestLocationMerges(locationNodes.map((n) => String(n.data?.name || n.label))), [locationNodes]);
+  // 여러 이름을 핵심 이름 하나로 합친다(순서대로 잡 하나씩, 각 잡은 자동 승인). 컷 번호는 바뀌지 않는다.
+  const mergeLocations = async (from: string[], into: string) => {
+    if (!projectId || !from.length) return;
+    if (!window.confirm(`${from.map((f) => `"${f}"`).join(", ")} 의 컷을 "${into}" 로 옮겨 한 세트로 합칠까요?\n플레이트·시트는 "${into}" 에 없는 것만 물려받아요. 컷 번호는 바뀌지 않아요.`)) return;
+    for (const f of from) await enqueue("location_merge", { projectId, from: f, into }, `장소 합치기 · ${f} → ${into}`, undefined, into);
+    setSelectedId("");
+  };
   const openSetSheetModal = () => {
     if (!projectId) return;
     if (!locationNodes.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
@@ -620,13 +630,14 @@ export default function ProductionCanvas({
     setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
   };
   // 모달에서 "생성"을 누른 것이 곧 확인이다 — 잡을 만들고 바로 승인해 승인 대기에 멈추지 않게 한다.
-  const generateSetSheets = async (ids: Set<string>, resolution: "2K" | "4K") => {
+  const generateSetSheets = async (ids: Set<string>, resolution: "2K" | "4K", usePlate = false) => {
     if (!projectId) return;
     const targets = locationNodes.filter((n) => ids.has(n.id));
     for (const n of targets) {
       const name = String(n.data?.name || n.label);
       try {
-        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, provider: settings.image.provider });
+        // 순서대로 하나씩(승인 완료를 기다림): 첫 시트가 스타일 앵커가 되고, 다음 시트가 그것을 참조한다.
+        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, provider: settings.image.provider, usePlate });
         setPending((prev) => [{ jobId: res.jobId, type: "set_sheet", status: "running", label: `세트 시트 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
         await approveItem(res.jobId).catch((e) => {
           setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message } : p)));
@@ -1027,6 +1038,8 @@ export default function ProductionCanvas({
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Chip tone="violet">장소</Chip>
                           {n.data.setSheet ? <Chip tone="emerald">시트</Chip> : <Chip>시트 없음</Chip>}
+                          {graph?.styleAnchor && n.data.setSheet?.objectName === graph.styleAnchor.objectName && <Chip tone="amber">스타일 기준</Chip>}
+                          {mergeSuggestions.some((m) => m.from.includes(String(n.data.name || n.label)) || m.into === String(n.data.name || n.label)) && <Chip tone="red">중복 의심</Chip>}
                           {locJob && !JOB_DONE.includes(locJob.status) && <Chip tone="amber">{locJob.status === "review_pending" ? "승인 대기" : "시트 생성 중"}</Chip>}
                           {locJob && locJob.status === "error" && <Chip tone="red">오류</Chip>}
                         </div>
@@ -1142,7 +1155,8 @@ export default function ProductionCanvas({
                   <SparkleIcon className="h-4 w-4 text-violet-300" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-bold text-white">세트 시트 생성</div>
-                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. 세트 시트가 이후 모든 콘티·스틸컷의 배경 기준이 돼요.</div>
+                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. {graph?.styleAnchor ? `그림체 기준: "${graph.styleAnchor.setName}" 시트(스타일 앵커)를 모든 시트가 참조해요.` : "처음 만드는 시트가 프로젝트의 그림체 기준(스타일 앵커)이 되고, 다음 시트들은 그것을 참조해요."}</div>
+                    {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
                   <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
                 </div>
@@ -1194,10 +1208,13 @@ export default function ProductionCanvas({
                           <option value="4K">4K</option>
                         </select>
                       </label>
+                      <label className="flex items-center gap-1.5 text-[11px] text-gray-400" title="옛 정면 플레이트가 다른 그림체면 시트 전체가 그쪽으로 끌려가요. 기본은 끔.">
+                        <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-3.5 w-3.5 accent-violet-500" />정면 플레이트 참조
+                      </label>
                       <span className="text-[11px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
-                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution); }} className="min-w-[96px] rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
+                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[96px] rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
                     </>
                   ) : (
                     <>
@@ -1399,6 +1416,26 @@ export default function ProductionCanvas({
                       </div>
                     </div>
                   )}
+                  {(() => {
+                    const me = String(selected.data.name || selected.label);
+                    const mine = mergeSuggestions.filter((m) => m.from.includes(me) || m.into === me);
+                    if (!mine.length) return null;
+                    return (
+                      <div className="mt-3 rounded-xl border border-red-700/50 bg-red-900/10 p-2.5">
+                        <div className="mb-1 text-[11px] font-bold text-red-300">같은 세트로 보이는 장소가 있어요</div>
+                        <p className="mb-1.5 text-[10px] text-gray-400">세트가 두 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 하나로 합치면 컷이 옮겨지고 플레이트·시트는 남는 쪽에 없는 것만 물려받아요.</p>
+                        <ul className="space-y-1">
+                          {mine.map((m) => (
+                            <li key={`${m.from.join("|")}→${m.into}`} className="flex items-center gap-2 text-[11px] text-gray-200">
+                              <span className="min-w-0 flex-1 truncate" title={`${m.from.join(", ")} → ${m.into}`}>{m.from.map((f) => `"${f}"`).join(", ")} → "{m.into}"</span>
+                              <button type="button" disabled={saving} onClick={() => void mergeLocations(m.from, m.into)} className="min-w-[72px] rounded-lg bg-red-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-600 disabled:opacity-50">합치기</button>
+                              {m.from.length === 1 && m.from[0] !== me && m.into !== me ? null : (m.from.length === 1 && m.into !== me ? <button type="button" disabled={saving} onClick={() => void mergeLocations([m.into], me)} className="min-w-[72px] rounded-lg border border-edge px-2 py-1 text-[11px] text-gray-300 hover:bg-edge disabled:opacity-50" title={`"${me}" 이름을 남기고 반대로 합쳐요`}>이 이름으로</button> : null)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                   <p className="mt-3 text-[10px] text-gray-500">같은 장소의 컷은 이 세트 시트를 배경 기준으로 공유해요. 다음 단계에서 네 칸을 승인하면 각 앵글 플레이트로 잘려 저장돼요.</p>
                 </div>
               );

@@ -52,3 +52,23 @@ test('★서버는 두 생성 경로 모두에서 통일하고 meta 로 알리�
   assert.match(ui, /컷 장소 이름 통일 \$\{locationsUnified\}건/);
   assert.match(ui, /장소 이름 통일 \(Pass 1\): \$\{m\.locationsRenamed\}씬/);
 });
+
+test('★합치기 제안: 핵심 이름을 남길 이름(into)으로, 그 핵심을 품은 긴 이름들을 from 으로 묶는다(2026-09-13 소녀의 방 2벌)', async () => {
+  const { suggestLocationMerges, applyLocationMerge, locationKey } = await import('../functions/api/_shared/location-names.js');
+  const out = suggestLocationMerges(['소녀의 방 — 장난감이 바닥 가득 흩어진 실내', '장난감이 흩어진 소녀의 방 안', '밝고 넓은 놀이방 바닥, ABC큐브 주변', '밝고 원색적인 3D 무대 — 알파벳 블록들이 배경에 가득 쌓인 공간', '교실', '教室'.length ? '교실 (오후)' : '']);
+  const girl = out.find((g) => g.into === '소녀의 방');
+  assert.ok(girl, '핵심 이름 "소녀의 방" 이 남을 이름');
+  assert.deepEqual(new Set(girl.from), new Set(['소녀의 방 — 장난감이 바닥 가득 흩어진 실내', '장난감이 흩어진 소녀의 방 안']));
+  const cls = out.find((g) => g.into === '교실');
+  assert.deepEqual(cls.from, ['교실 (오후)']);
+  assert.equal(out.some((g) => /놀이방|무대/.test(g.into)), false, '서로 다른 세트는 제안하지 않는다');
+  const merged = applyLocationMerge([{ id: 1, sceneLocation: '장난감이 흩어진 소녀의 방 안' }, { id: 2, sceneLocation: '거실' }], '장난감이 흩어진 소녀의 방 안', '소녀의 방');
+  assert.equal(merged.changed, 1);
+  assert.deepEqual(merged.scenes.map((s) => [s.id, s.sceneLocation]), [[1, '소녀의 방'], [2, '거실']]);
+  assert.equal(locationKey('  소녀의   방 '), '소녀의 방');
+  // 클라이언트(캔버스)도 같은 규칙
+  const cli = read('ai-company-app/src/lib/locationNames.ts');
+  assert.match(cli, /export function suggestLocationMerges\(names: string\[\]\): MergeSuggestion\[\]/);
+  assert.match(cli, /if \(ca && cb && locationKey\(ca\) === locationKey\(cb\)\) \{ reason = "same-core"; core = ca\.length <= cb\.length \? ca : cb; \}/);
+  assert.match(cli, /else if \(cb && cb\.length >= 2 && locationKey\(a\)\.includes\(locationKey\(cb\)\)\) \{ reason = "contains"; core = cb; \}/);
+});
