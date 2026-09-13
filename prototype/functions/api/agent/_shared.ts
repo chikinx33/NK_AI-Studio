@@ -4239,7 +4239,7 @@ async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
   // common/promptText/promptEdited/cameraDirection/beats/blocking/cutRef* 는 캔버스·채팅이 프롬프트와
   // 컷↔컷 참조선을 편집하는 필드 — 여기 없으면 에이전트가 고쳐도 저장 전에 증발한다.
   const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec",
-    "common", "promptText", "promptEdited", "cameraDirection", "beats", "blocking", "cutRefId", "cutRefEnabled"];
+    "common", "promptText", "promptEdited", "cameraDirection", "beats", "blocking", "cutRefId", "cutRefEnabled", "sceneBreak"];
   for (const f of FIELDS) if (input?.[f] !== undefined && patch[f] === undefined) patch[f] = input[f];
   delete patch.id; // id는 매칭·부여 전용, 병합 대상 아님
   const ref = input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex;
@@ -4422,6 +4422,26 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
     fallback, firstError,
     summary: `세트 시트(${fallback ? "기본 크기·참조 없음으로 재시도" : resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.${firstError ? ` (1차 실패: ${firstError.slice(0, 120)})` : ""}`,
   };
+}
+
+/** 씬 나누기/합치기: 컷의 sceneBreak(이 컷부터 새 씬)를 켜거나 끈다. 같은 세트 안에서 씬을 둘로 나누는 유일한 방법.
+ *  캔버스(컷을 아래로 떼어냄 · 씬 바 ＋ · 이전 씬과 합치기)와 채팅("컷 5부터 새 씬")이 쓴다. 컷 순서·장소는 바꾸지 않는다. 쓰기 → 게이트. */
+async function runSceneSplitTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes.slice() : [];
+  const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex);
+  if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? "?"}).`);
+  const split = input?.split !== false && input?.merge !== true;
+  if (split && idx === 0) throw new Error("첫 컷은 이미 첫 씬의 시작이에요.");
+  const before = !!scenes[idx]?.sceneBreak;
+  scenes[idx] = { ...scenes[idx], sceneBreak: split };
+  if (before === split) {
+    return { kind: "scene_split", projectId, sceneId: scenes[idx].id, split, changed: false, saved: false, summary: split ? "이미 새 씬의 시작이에요" : "이미 같은 씬이에요" };
+  }
+  const saved = await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
+  return { kind: "scene_split", projectId, sceneId: scenes[idx].id, split, changed: true, saved: true, objectName: saved?.objectName || "", summary: split ? `컷 ${scenes[idx].id}부터 새 씬으로 나눴어요` : `컷 ${scenes[idx].id}을(를) 앞 씬에 합쳤어요` };
 }
 
 /** 영상 삭제: /api/video/delete (confirm=yes). 되돌리기 어려움 → 승인 게이트. */
@@ -4783,6 +4803,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_upsert: { agentId: "plot", kind: "external", gate: true, run: runSceneUpsertTool },
   // 컷 순서 변경(캔버스 드래그 · "컷 3을 5 뒤로") — 배열 재배열이라 쓰기 → 게이트. 경고는 결과에 싣는다.
   scene_reorder: { agentId: "plot", kind: "external", gate: true, run: runSceneReorderTool },
+  // 씬 나누기/합치기(sceneBreak) — 같은 세트 안에서 씬 경계를 두는 표시. 쓰기 → 게이트(캔버스는 자동 승인).
+  scene_split: { agentId: "plot", kind: "external", gate: true, run: runSceneSplitTool },
   // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
   set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
   // 장소 합치기(같은 방이 두 이름으로 갈린 것을 하나로) · 합치기 제안(읽기)

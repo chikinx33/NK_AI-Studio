@@ -346,6 +346,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         imageHistory: normalizeImageHistory(s?.imageHistory),
         cutRefId: typeof s?.cutRefId === "string" ? s.cutRefId : (s?.cutRefId != null ? String(s.cutRefId) : ""),
         cutRefEnabled: !!s?.cutRefEnabled,
+        // 이 컷부터 새 씬(같은 세트 안에서 씬을 나눈 표시). 캔버스 씬 바·시나리오 Scene N 라벨이 읽는다.
+        sceneBreak: !!s?.sceneBreak,
         lineage: normalizeLineage(s?.lineage),
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,

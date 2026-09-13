@@ -104,7 +104,8 @@ function deriveLanes(graph: ProductionGraph | null, heights: Heights = {}): Lane
   let sceneNo = 0;
   cuts.forEach((n) => {
     const loc = String(n.data.sceneLocation || "").trim();
-    if (!last || !loc || loc !== last.location) {
+    // 새 씬 = 장소가 바뀌거나, "이 컷부터 새 씬"(sceneBreak)으로 나눈 컷.
+    if (!last || !loc || loc !== last.location || !!n.data.sceneBreak) {
       sceneNo += 1;
       last = { key: `s${sceneNo}`, kind: "scene", orient: "row", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: heightOf(heights, "cut") };
       lanes.push(last);
@@ -535,6 +536,7 @@ export default function ProductionCanvas({
         const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
         if (status !== p.status) {
           changed = true;
+          if (p.type === "scene_split" && status === "approved") reorderResetRef.current = true; // 씬 바가 다시 갈리므로 칸 배치를 서버 순서로
           if (p.type === "scene_reorder" && status === "approved") {
             reorderResetRef.current = true;
             const r = (job as any)?.result || (job as any)?.output || null;
@@ -557,7 +559,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -691,6 +693,37 @@ export default function ProductionCanvas({
     }, `컷 ${selected.data.sceneId} 프롬프트 저장`, selected.data.sceneId);
   };
 
+  // 씬 나누기: 그 컷부터 새 씬(sceneBreak). 같은 세트 안에서 씬을 둘로 가르는 유일한 방법. 순서·장소는 그대로.
+  const splitSceneAt = async (cutNodeId: string) => {
+    const n = nodeById.get(cutNodeId);
+    if (!projectId || !n || n.type !== "cut") return;
+    const order = orderOfLayout(layoutRef.current);
+    const pos = order.findIndex((c) => c.id === cutNodeId);
+    if (pos <= 0) { setNotice("첫 컷은 이미 첫 씬의 시작이에요."); return; }
+    if (n.data.sceneBreak) { setNotice(`컷 ${n.data.sceneId}은(는) 이미 새 씬의 시작이에요.`); return; }
+    await enqueue("scene_split", { projectId, sceneId: n.data.sceneId, split: true }, `씬 나누기 · 컷 ${n.data.sceneId}부터`, n.data.sceneId);
+    setMulti(new Set());
+  };
+  // 선택한 컷들(또는 끌던 컷) 중 가장 앞의 컷부터 새 씬으로. 5·6·7을 골라 떼어내면 5부터가 새 씬이 된다.
+  const splitFromSelection = async (draggedId: string, laneKey?: string) => {
+    const order = orderOfLayout(layoutRef.current);
+    const picked = order.filter((c) => multi.has(c.id) || c.id === draggedId).filter((c) => !laneKey || (layoutRef.current.groups[laneKey] || []).includes(c.id));
+    const first = picked[0];
+    if (!first) return;
+    const label = picked.length > 1 ? `컷 ${picked.map((c) => c.sceneId).join("·")}을(를) 새 씬으로 나눌까요? (컷 ${first.sceneId}부터 새 씬이 돼요)` : `컷 ${first.sceneId}부터 새 씬으로 나눌까요?`;
+    if (!window.confirm(label)) return;
+    await splitSceneAt(first.id);
+  };
+  // 이전 씬과 합치기: 이 바의 첫 컷의 sceneBreak 를 끈다(장소가 같을 때만 의미가 있다).
+  const mergeSceneIntoPrev = async (laneKey: string) => {
+    const lane = lanesRef.current.find((l) => l.key === laneKey);
+    const firstId = lane?.memberIds[0];
+    const n = firstId ? nodeById.get(firstId) : null;
+    if (!projectId || !n || !n.data.sceneBreak) return;
+    if (!window.confirm(`Scene ${lane?.index}을(를) 앞 씬과 합칠까요? (컷 ${n.data.sceneId}의 씬 경계를 없애요)`)) return;
+    await enqueue("scene_split", { projectId, sceneId: n.data.sceneId, split: false }, `씬 합치기 · 컷 ${n.data.sceneId}`, n.data.sceneId);
+  };
+
   // 배치(칸 순서)에서 실제 컷 순서를 읽는다: 씬 바 순서 → 각 바의 칸 순서. 서버 scenes 배열과 같은 의미다.
   const orderOfLayout = useCallback((l: CanvasLayout): OrderCut[] => {
     const out: OrderCut[] = [];
@@ -756,9 +789,17 @@ export default function ProductionCanvas({
       const slot = slotFromPoint(layoutRef.current, lanesRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]));
       setDragGhost(null);
       setDropSlot(null);
+      const dropped = nodeById.get(d.id);
+      // 컷 카드를 모든 씬 바 아래 빈 공간으로 떼어내면 "여기서부터 새 씬"이다(칸 이동이 아니라 씬 나누기).
+      if (dropped?.type === "cut" && projectId) {
+        const gy = dragGhostRef.current?.y ?? d.originY;
+        const sceneLanes = lanesRef.current.filter((l) => l.kind === "scene");
+        const bottom = sceneLanes.reduce((acc, l) => { const b = layoutRef.current.bars[l.key]; return b ? Math.max(acc, b.y + BAR_H + CARD_GAP + l.cardH) : acc; }, -Infinity);
+        const fromLane = sceneLanes.find((l) => (layoutRef.current.groups[l.key] || l.memberIds).includes(d.id!));
+        if (Number.isFinite(bottom) && gy > bottom + CARD_GAP * 2) { void splitFromSelection(d.id, fromLane?.key); return; }
+      }
       if (!slot) return;
       const next = moveCutToSlot(layoutRef.current, d.id, slot);
-      const dropped = nodeById.get(d.id);
       if (dropped?.type === "cut" && projectId) {
         // 컷 카드는 놓는 순간 실제 순서가 바뀐다(배치만이 아니라). 세트를 넘어가거나 노래 구간이
         // 어긋나면 먼저 묻고, 취소하면 카드는 원래 칸으로 돌아간다. 저장은 scene_reorder 잡(승인 게이트)으로.
@@ -992,6 +1033,30 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
+                  {l.kind === "scene" && (() => {
+                    const firstNode = l.memberIds[0] ? nodeById.get(l.memberIds[0]) : null;
+                    const canMerge = !!firstNode?.data?.sceneBreak;
+                    const pickedHere = l.memberIds.filter((id) => multi.has(id));
+                    const splitTitle = pickedHere.length ? `선택한 컷(${pickedHere.length})부터 새 씬으로 나눠요` : "컷 번호를 물어 그 컷부터 새 씬으로 나눠요 (컷을 골라 두면 그 컷부터)";
+                    return (
+                      <>
+                        {canMerge && (
+                          <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void mergeSceneIntoPrev(l.key); }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-sky-100 transition hover:bg-sky-500/30 hover:text-white" title="이전 씬과 합치기 (이 씬의 첫 컷 경계를 없애요)" aria-label="이전 씬과 합치기">⇤</button>
+                        )}
+                        <button type="button" disabled={!projectId || saving || l.memberIds.length < 2} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => {
+                          e.stopPropagation();
+                          if (pickedHere.length) { void splitFromSelection(pickedHere[0], l.key); return; }
+                          const ids = l.memberIds.map((id) => String(nodeById.get(id)?.data.sceneId ?? ""));
+                          const def = ids[ids.length - 1] || "";
+                          const ans = window.prompt(`Scene ${l.index}을(를) 나눠요. 몇 번 컷부터 새 씬으로 할까요? (컷 ${ids.slice(1).join(", ")})`, def);
+                          if (ans == null) return;
+                          const hit = l.memberIds.find((id) => String(nodeById.get(id)?.data.sceneId ?? "") === String(ans).trim());
+                          if (!hit) { setNotice("그 컷은 이 씬에 없어요."); return; }
+                          void splitSceneAt(hit);
+                        }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-sky-100 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-40" title={splitTitle} aria-label="씬 나누기">+</button>
+                      </>
+                    );
+                  })()}
                   {l.kind === "locations" && (() => {
                     const picked = locationNodes.filter((n) => multi.has(n.id));
                     if (picked.length < 2) return null;

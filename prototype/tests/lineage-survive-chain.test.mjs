@@ -43,6 +43,7 @@ test("★★서버 저장·불러오기 화이트리스트가 계보 필드를 �
       /imageHistory: normalizeImageHistory\(s\?\.imageHistory\),/,
       /cutRefId: /,
       /cutRefEnabled: !!s\?\.cutRefEnabled,/,
+      /sceneBreak: !!s\?\.sceneBreak,/,
       /lineage: normalizeLineage\(s\?\.lineage\),/,
     ].forEach((re) => assert.match(block, re, `${file}: ${re}`));
   });
@@ -107,6 +108,7 @@ test("★프로덕션 씬 재조립이 계보 필드를 싣는다 (beats 가 여
   assert.match(block, /common: \(typeof s\.common === 'string' \? s\.common : ''\),/);
   assert.match(block, /cutRefId: String\(s\.cutRefId \|\| ''\),/);
   assert.match(block, /cutRefEnabled: !!s\.cutRefEnabled,/);
+  assert.match(block, /sceneBreak: !!s\.sceneBreak,/);
   assert.match(block, /lineage: \(s\.lineage && typeof s\.lineage === 'object'\) \? s\.lineage : null,/);
   // 영상 프롬프트 폴백(Common/Visual 합성)은 그대로 살아 있어야 한다.
   assert.match(block, /promptText: \(s\.promptText \|\| \['Common', hClean, 'Visual', \(s\.shot \|\| ''\)\]\.join\('\\n'\)\),/);

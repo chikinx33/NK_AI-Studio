@@ -986,6 +986,7 @@
               common: (typeof s.common === 'string' ? s.common : ''),
               cutRefId: String(s.cutRefId || ''),
               cutRefEnabled: !!s.cutRefEnabled,
+              sceneBreak: !!s.sceneBreak,
               lineage: (s.lineage && typeof s.lineage === 'object') ? s.lineage : null,
               voiceUrl: s.voiceUrl || '',
               voiceObjectName: s.voiceObjectName || '',

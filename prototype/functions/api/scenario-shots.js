@@ -132,6 +132,7 @@ function flattenScenesWithShots(parentScenes, characters) {
         // v3.1581: 노래 모드 가사. 빠뜨리면 컷 분해 후 가사가 통째로 사라진다.
         lyrics: parent.lyrics || "",
         isRefrain: !!parent.isRefrain,
+        sceneBreak: !!parent.sceneBreak,
         lines: parent.lines || "",
         subtitleText: parent.subtitleText || "",
         videoSpeechPrompt: parent.videoSpeechPrompt || "",
@@ -180,6 +181,8 @@ function flattenScenesWithShots(parentScenes, characters) {
         // v3.1581: 가사도 첫 컷에만. 컷마다 반복되면 같은 소절을 여러 번 부르게 된다.
         lyrics: isFirst ? (parent.lyrics || "") : "",
         isRefrain: isFirst ? !!parent.isRefrain : false,
+        // 씬 나누기 표시는 부모 씬의 첫 컷에만(나머지 컷은 같은 씬).
+        sceneBreak: isFirst ? !!parent.sceneBreak : false,
         // v3.1584: 구간 식별자는 모든 컷이 들고 있어야 한다 — 가사가 실리지 않은 중간 컷도
         // 자기가 어느 소절 구간에 속하는지 알아야 자막 길이를 소절 단위로 계산할 수 있다.
         songSectionId: parent.songSectionId || "",

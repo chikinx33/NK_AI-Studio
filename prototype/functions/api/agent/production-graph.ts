@@ -183,6 +183,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         lineage,
         cutRefId: String(s?.cutRefId || ""),
         cutRefEnabled: !!s?.cutRefEnabled,
+        // 이 컷부터 새 씬(같은 세트 안에서 나눈 씬). 캔버스 씬 바가 장소 변화와 함께 이 값으로 갈린다.
+        sceneBreak: !!s?.sceneBreak,
       },
     });
 

@@ -1474,6 +1474,7 @@
         // 여기서 이름이 갈리면(lyricsText 만 남으면) 저장 한 번에 가사가 끊긴다.
         lyrics: lyricsClean,
         isRefrain: !!s?.isRefrain,
+        sceneBreak: !!s?.sceneBreak,
         songSectionId: String(s?.songSectionId || '').trim(),
         songSectionLabel: String(s?.songSectionLabel || '').trim(),
         songEnabled: boolVal(s?.songEnabled, boolVal(currentPayload?.songEnabled, false))
@@ -1709,6 +1710,8 @@
         dialogue,
         lyrics: lyricsText,
         isRefrain: !!lyricsEl?.closest('.field-block')?.classList.contains('is-refrain'),
+        // 씬 나누기 표시(캔버스에서 켬). 화면에 편집칸이 없어 dataset 으로 왕복시킨다 — 빠지면 저장 한 번에 씬 경계가 사라진다.
+        sceneBreak: String(card.dataset.sceneBreak || '') === '1',
         // v3.1586: 구간 식별자가 없으면 포스트 프로덕션에서 자막이 소절 단위로 안 묶인다.
         // 머지의 prev 폴백에만 기대면 머지를 안 거치는 경로에서 유실된다.
         songSectionId: String(card.dataset.songSectionId || ''),
@@ -1744,6 +1747,7 @@
       const isRefrain = (s.isRefrain !== undefined ? s.isRefrain : prev.isRefrain) || false;
       const visual = s.visual || s.shot || prev.visual || prev.shot || '';
       const sceneLocation = (s.sceneLocation !== undefined ? s.sceneLocation : prev.sceneLocation) || '';
+      const sceneBreak = (s.sceneBreak !== undefined ? !!s.sceneBreak : !!prev.sceneBreak);
       const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
       const videoSpeechPrompt = (s.videoSpeechPrompt !== undefined ? s.videoSpeechPrompt : prev.videoSpeechPrompt) || '';
       const script = (s.script !== undefined ? s.script : prev.script) || '';
@@ -1764,6 +1768,7 @@
         lyrics,
         isRefrain,
         sceneLocation,
+        sceneBreak,
         subtitleText,
         videoSpeechPrompt,
         script,
@@ -1941,7 +1946,8 @@
     const totalByParent = {};
     (Array.isArray(sceneList) ? sceneList : []).forEach((sc) => {
       const loc = String((sc && sc.sceneLocation) || '').trim();
-      if (!loc || loc !== lastLoc) {
+      // 새 씬은 장소가 바뀔 때, 또는 캔버스에서 "이 컷부터 새 씬"(sceneBreak)으로 나눴을 때 시작한다.
+      if (!loc || loc !== lastLoc || !!(sc && sc.sceneBreak)) {
         parentNo += 1;
         cutNo = 1;
         lastLoc = loc;
@@ -2024,7 +2030,7 @@
       const hasAction = !!String(s.action || '').trim();
       const hasStructured = hasComposition || hasAction;
       return `
-      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
+      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}" data-scene-break="${s.sceneBreak ? '1' : ''}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
         <div class="card-top">
           <div class="card-title-row">
             <h5 title="${escapeHtml(labelMeta.plain)}">${labelMeta.html}</h5>

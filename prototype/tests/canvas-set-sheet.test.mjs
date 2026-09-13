@@ -22,7 +22,7 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"\];/);
 });
 
 test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승인 대기·실행 중·완료·오류, 승인 버튼) · 별 버튼 스피너 · 배경 카드 칩', () => {
@@ -156,7 +156,7 @@ test('★세트 정체성: 같은 세트로 보이는 장소는 카드에 "중�
   assert.match(src, /for \(const f of from\) await enqueue\("location_merge", \{ projectId, from: f, into \}, `장소 합치기 · \$\{f\} → \$\{into\}`, undefined, into\);/);
   assert.match(src, /<Chip tone="red">중복 의심<\/Chip>/);
   assert.match(src, /같은 세트로 보이는 장소가 있어요<\/div>/);
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"\];/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /location_merge: \{ agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool \}/);
   assert.match(shared, /location_suggest: \{ agentId: "plot", kind: "read", run: runLocationSuggestTool \}/);
