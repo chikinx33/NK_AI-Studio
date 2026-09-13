@@ -525,6 +525,26 @@
     return j(text);
   };
 
+  // 스토리보드 시트(P0 실험): 서버가 계획·프롬프트만 조립한다(이미지 생성은 api.imagen).
+  api.storyboardSheetPlan = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
+    var res = await fetch(withBase('/api/storyboard/sheet-plan'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'sheet_plan_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.imagenDescribe = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();

@@ -2177,7 +2177,28 @@
   image.buildInlineReferencePrompt = buildInlineReferencePrompt;
   image.buildShotImagePrompt = buildShotImagePrompt;
   // 영상 생성(Kling)에서 동일 레퍼런스 해결 체인을 재사용하기 위해 노출
+  /**
+   * 스토리보드 시트 실험용: 텍스트(@토큰 또는 캐릭터 이름)에서 등록 캐릭터를 해석해 referenceImages 로 만든다.
+   * 컷 이미지 생성 경로(위)와 같은 해석기·시트 선택 규칙을 쓴다.
+   */
+  async function resolveCharacterReferences(st, text, projectId) {
+    var empty = { referenceImages: [], characters: [] };
+    if (!NK.service || !NK.service.characterRegistry || !hasResolvableCharacterContext((st && st.payload) || {})) return empty;
+    var liveDraft = (NK.service.project && NK.service.project.getDraftById) ? NK.service.project.getDraftById(projectId) : null;
+    var payload = liveDraft && liveDraft.payload && typeof liveDraft.payload === 'object' ? liveDraft.payload : ((st && st.payload) || {});
+    var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
+    var hydratedBrand = null;
+    if (brandId && NK.service.brand && NK.service.brand.hydrateFromServer) {
+      try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
+    }
+    var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+    var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, String(text || ''), { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
+    var bundle = buildReferenceBundle(payload, res.characters || [], { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+    return { referenceImages: (bundle && bundle.referenceImages) || [], characters: res.characters || [], promptLines: (bundle && bundle.promptLines) || [] };
+  }
+
   image._helpers = {
+    resolveCharacterReferences: resolveCharacterReferences,
     buildReferenceBundle: buildReferenceBundle,
     buildEnvironmentReferenceBundle: buildEnvironmentReferenceBundle,
     mergeEnvironmentReferences: mergeEnvironmentReferences,

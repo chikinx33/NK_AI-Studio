@@ -1207,6 +1207,7 @@
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
       '<button class="btn-secondary" id="bg-ref-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="이 에피소드의 공간(배경) 레퍼런스를 보고 편집하거나 배경 이미지를 생성">배경 레퍼런스</button>' +
       '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 편집">공통 프롬프트</button>' +
+      '<button class="btn-secondary" id="sb-sheet-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="' + ((NK.uiStoryboardSheet && NK.uiStoryboardSheet.text) ? NK.uiStoryboardSheet.text('openTitle') : '') + '">' + ((NK.uiStoryboardSheet && NK.uiStoryboardSheet.text) ? NK.uiStoryboardSheet.text('openBtn') : 'Storyboard sheet') + '</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
@@ -1400,6 +1401,11 @@
     var bgRefBtn = document.getElementById('bg-ref-btn');
     if (bgRefBtn) {
       bgRefBtn.onclick = function () { openBackgroundReferenceModal(); };
+    }
+    // 스토리보드 시트(P0 실험): 세트별 콘티 시트 생성·패널 승인·스틸컷.
+    var sbSheetBtn = document.getElementById('sb-sheet-btn');
+    if (sbSheetBtn) {
+      sbSheetBtn.onclick = function () { if (NK.uiStoryboardSheet && NK.uiStoryboardSheet.open) NK.uiStoryboardSheet.open(); };
     }
     // 공통 프롬프트 일괄 편집: state.header(모든 씬 공유) 를 한 번에 수정 → 전체 씬 행 재렌더.
     // 개별 씬의 화면/행동/Duration 편집(씬별 "편집" 버튼)과 공존한다.

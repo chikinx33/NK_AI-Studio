@@ -85,7 +85,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 프록시(OPENAI_BASE_URL) 오남용 방지용 공유 시크릿. 프록시로 호출할 때만 헤더로 보낸다.
     const openaiProxySecret = String(env.OPENAI_PROXY_SECRET || "").trim();
     const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
-    const sizeAllowed = new Set(["512", "1K", "2K"]);
+    // 4K 는 스토리보드 시트(3x3 콘티 격자)용 — Gemini 3.x 이미지 모델이 imageConfig.imageSize "4K" 를 받는다
+    // (업스케일 경로 api/upscale.ts 가 같은 모델 계열에 이미 4K 를 보내고 있다). 다른 공급자는 각자 최고 품질로 매핑.
+    const sizeAllowed = new Set(["512", "1K", "2K", "4K"]);
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
     const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
@@ -831,7 +833,8 @@ async function callAtlasMemberImage(opts: {
     body.quality = mapImageSizeToOpenAIQuality(opts.imageSize);
   } else {
     if (opts.aspectRatio !== "free") body.aspect_ratio = opts.aspectRatio;
-    body.resolution = opts.imageSize === "2K" ? "2k" : "1k";
+    // Atlas 경유 모델의 4K 지원은 모델마다 달라 확인되지 않았다 — 4K 요청도 2k 로 보낸다.
+    body.resolution = (opts.imageSize === "2K" || opts.imageSize === "4K") ? "2k" : "1k";
   }
 
   let result = await submitAtlasGeneration(opts.apiKey, "image", body);
@@ -872,7 +875,7 @@ function mapAspectToOpenAISize(aspectRatio: string): string {
 function mapImageSizeToOpenAIQuality(imageSize: string): "low" | "medium" | "high" {
   const v = String(imageSize || "").trim().toUpperCase();
   if (v === "512") return "low";
-  if (v === "2K") return "high";
+  if (v === "2K" || v === "4K") return "high";
   return "medium";
 }
 
