@@ -20,7 +20,7 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /\{l\.kind === "locations" && \([\s\S]*?<SparkleIcon className="h-4 w-4" \/>/);
   assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
-  assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
+  assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.topPlateUrl\);/, '정밀 모드 기본: 마스터 없는 세트');
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K", mode: "master" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"\];/);
 });
@@ -47,7 +47,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\), usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
   assert.match(src, /<div className="text-\[15px\] font-bold text-white">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
-  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected\); else void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
+  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected, m\.resolution\); else void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
   assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
   // 잡 생성 자체가 실패해도 오류로 남는다
   assert.match(src, /setPending\(\(prev\) => \[\{ jobId: `local-\$\{Date\.now\(\)\}`, type, sceneId, status: "error", label, target, error: \(e as Error\)\.message/);
@@ -347,8 +347,20 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
   assert.match(src, /const st = await waitForJob\(m\.jobId\);\s*\n\s*if \(st !== "approved"\) continue;/, '마스터가 끝난 뒤에만 앵글 파생');
   assert.match(src, /for \(const angle of neededAnglesFor\(name\)\) \{/);
   assert.match(src, /id: "master", title: "정밀 \(추천\) — 부감 마스터 → 앵글 파생"/);
-  assert.match(src, /if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected\); else void generateSetSheets\(/);
+  assert.match(src, /if \(\(m\.mode \|\| "master"\) === "master"\) void generateMasterPlates\(m\.selected, m\.resolution\); else void generateSetSheets\(/);
   assert.match(src, /\{n\.data\.topPlateUrl \? "부감 마스터" : n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
   assert.match(src, /평면도 \(모든 앵글이 지키는 배치\)/);
   assert.match(read('prototype/functions/api/agent/production-graph.ts'), /topPlateUrl: topVariant \? toDisplayUrl\(topVariant\.refObjectName\) : "",/);
+});
+
+test('★세트 시트 모달은 모드를 안다: 정밀이면 머리글·행 상태·썸네일·만들 것·장수가 부감 마스터 기준, 2×2 옵션(정면 플레이트 참조)은 2×2 모드에서만', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.topPlateUrl\);/, '기본 선택은 마스터 없는 세트');
+  assert.match(src, /\(sheetModal\.mode \|\| "master"\) === "master" \? "세트마다 부감 마스터 1장을 만들고, 컷이 쓰는 앵글을 그 마스터에서 파생해요\. 배치는 세트 계획의 평면도를 따라요\." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요\."/);
+  assert.match(src, /부감 마스터 있음 · 파생 앵글 \$\{derived\.length\}장/);
+  assert.match(src, /정면 플레이트만 있음\(옛 방식\) — 부감 마스터를 만들고 정면을 다시 파생해요/);
+  assert.match(src, /const planText = masterMode \? `만들 것: 부감 마스터 \+ \$\{planned\.map\(\(a\) => ANGLE_KO\[a\] \|\| a\)\.join\("·"\)\} \(\$\{1 \+ planned\.length\}장\)` : "";/);
+  assert.match(src, /\{\(sheetModal\.mode \|\| "master"\) === "sheet" && \(\s*\n\s*<label[^\n]*정면 플레이트가 다른 그림체면/);
+  assert.match(src, /reduce\(\(acc, n\) => acc \+ 1 \+ neededAnglesFor\(String\(n\.data\?\.name \|\| n\.label\)\)\.length, 0\)/, '정밀 장수 = 세트마다 1 + 앵글 수');
+  assert.match(src, /createAgentJob\("set_master", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\) \}\)/, '해상도가 마스터에도 간다');
 });
