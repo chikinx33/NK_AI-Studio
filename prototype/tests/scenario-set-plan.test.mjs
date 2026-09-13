@@ -51,3 +51,25 @@ test('★클라이언트: 생성 단계에서 확정한 sets 를 episodeLocation
   assert.match(ui, /'곳 \[' \+ epLocs\.map/);
   assert.match(ui, /\(setsFromPlan \? ' · 생성 단계에서 확정'/);
 });
+
+test('★장소 칸의 문장 차단: 세트 이름은 짧은 장소 명사만, 문장(화면·행동 묘사)은 버리거나 비운다 — 2026-09-13 야외 돌문 사고', async () => {
+  const { looksLikeSentenceLocation, sanitizeSetName } = await import('../functions/api/_shared/location-names.js');
+  assert.equal(looksLikeSentenceLocation('바닥에 블록·봉제인형·공이 흩어져 있음 세 캐릭터가 입구에 나란히 멈춰 선 채 좌우로 고개를 두리번거린다'), true);
+  assert.equal(looksLikeSentenceLocation('@네모가 서 있는 곳'), true, '캐릭터 토큰이 있으면 화면 묘사');
+  assert.equal(looksLikeSentenceLocation('소녀의 방'), false);
+  assert.equal(looksLikeSentenceLocation('밝고 넓은 놀이방'), false);
+  assert.equal(looksLikeSentenceLocation('교실 (오후)'), false);
+  assert.equal(sanitizeSetName('소녀의 방 — 장난감이 바닥 가득 흩어진 실내'), '소녀의 방');
+  assert.equal(sanitizeSetName('바닥에 블록·봉제인형·공이 흩어져 있음 세 캐릭터가 입구에 나란히 멈춰 선 채 좌우로 고개를 두리번거린다'), '');
+  assert.equal(sanitizeSetName('아주아주아주아주아주아주아주아주아주아주 긴 이름의 장소 이름이다'), '', '문장으로 판정');
+  const src = read('prototype/functions/api/scenario.js');
+  assert.match(src, /name: sanitizeSetName\(x\?\.name\)/, '계획 이름 정리');
+  assert.match(src, /looksLikeSentenceLocation\(sc\.sceneLocation\)\) \? \{ \.\.\.sc, sceneLocation: "" \} : sc/);
+  // 단일 호출(레거시) 경로에도 세트 계획 적용
+  assert.match(src, /const pseudoBeats = normalizedScenes\.map\(\(sc, i\) => \(\{ id: `s\$\{i \+ 1\}`, action:/);
+  assert.match(src, /legacySetPlan = await planEpisodeSets\(input, pseudoBeats\);/);
+  assert.match(src, /sets: legacySetsForPayload,/);
+  assert.match(src, /setsEnforced: legacySetsEnforced,/);
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /const promptSetName = looksLikeSentenceLocation\(rawSetName\) \? \(sanitizeSetName\(rawSetName\) \|\| "the main set"\) : rawSetName;/, '세트 시트는 문장 이름을 그대로 그리지 않는다');
+});

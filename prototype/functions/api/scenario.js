@@ -9,7 +9,7 @@ import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUD
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 import { buildBodyGrammar } from "./_shared/body-grammar.js";
-import { canonicalizeSceneLocations } from "./_shared/location-names.js";
+import { canonicalizeSceneLocations, looksLikeSentenceLocation, sanitizeSetName } from "./_shared/location-names.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -20,7 +20,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1702";
+const SERVER_VERSION = "3.1703";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -1742,8 +1742,9 @@ async function planEpisodeSets(input, beats) {
     let parsed;
     try { parsed = JSON.parse(cleaned); } catch (_) { parsed = JSON.parse(repairJsonString(cleaned)); }
     const rawSets = Array.isArray(parsed?.sets) ? parsed.sets : [];
+    // 이름은 짧은 장소 명사여야 한다. 문장(화면·행동 묘사)이 오면 버린다 — 세트 시트가 엉뚱한 곳을 그린 원인.
     const sets = rawSets
-      .map((x, i) => ({ id: String(x?.id || `set-${i + 1}`).trim(), name: String(x?.name || "").replace(/\s+/g, " ").trim(), description: String(x?.description || "").trim() }))
+      .map((x, i) => ({ id: String(x?.id || `set-${i + 1}`).trim(), name: sanitizeSetName(x?.name), description: String(x?.description || "").trim() }))
       .filter((x) => x.name);
     if (!sets.length) throw new Error("set_plan_no_sets");
     // 이름 중복(같은 공간을 둘로 냈을 때) → 앞 것으로 합친다
@@ -1941,6 +1942,8 @@ async function generateScenarioScenesViaBeats(input) {
   // 장소 문자열을 세트 이름 하나로 통일 — 세트 판정(플레이트·연속성·라벨)이 이 문자열로 돈다.
   let locationsRenamed = 0;
   try { const lc = canonicalizeSceneLocations(normalizedScenes); normalizedScenes = lc.scenes; locationsRenamed = lc.renamed; } catch (_) { /* 통일 실패 시 원본 유지 */ }
+  // 문장이 장소 칸에 남아 있으면 비운다(세트 계획이 폴백으로 갔을 때의 안전망).
+  normalizedScenes = normalizedScenes.map((sc) => (sc && typeof sc === "object" && looksLikeSentenceLocation(sc.sceneLocation)) ? { ...sc, sceneLocation: "" } : sc);
   const finalScenes = rebalanceEstSec(normalizedScenes, totalSec);
   const elapsedMs = Date.now() - runStartedAt;
 
@@ -2227,11 +2230,36 @@ async function generateScenarioScenes(input) {
 
   let locationsRenamed = 0;
   try { const lc = canonicalizeSceneLocations(normalizedScenes); normalizedScenes = lc.scenes; locationsRenamed = lc.renamed; } catch (_) { /* 통일 실패 시 원본 유지 */ }
+  // 세트 계획(단일 호출 경로): 비트가 없어도 장소는 확정 목록에서만 나온다. 씬을 비트 삼아 계획을 세우고 이름을 강제한다.
+  let legacySetPlan = { sets: [], beatSets: {}, source: "skipped" };
+  let legacySetsEnforced = 0;
+  try {
+    const pseudoBeats = normalizedScenes.map((sc, i) => ({ id: `s${i + 1}`, action: String(sc?.visual || sc?.composition || sc?.action || "").trim() || `scene ${i + 1}`, estSec: Number(sc?.estSec) || 3 }));
+    legacySetPlan = await planEpisodeSets(input, pseudoBeats);
+    normalizedScenes = normalizedScenes.map((sc, i) => {
+      const sid = legacySetPlan.beatSets[`s${i + 1}`];
+      const st = (legacySetPlan.sets || []).find((x) => x.id === sid) || (legacySetPlan.sets || [])[0];
+      if (!st || !sc || typeof sc !== "object") return sc;
+      if (String(sc.sceneLocation || "").trim() !== st.name) legacySetsEnforced += 1;
+      return { ...sc, sceneLocation: st.name };
+    });
+  } catch (_) { /* 계획 실패 시 원본 유지 */ }
+  // 문장이 장소 칸에 남아 있으면(계획 실패 등) 비운다 — 세트 판정에 문장이 들어가면 세트 시트가 엉뚱한 곳을 그린다.
+  normalizedScenes = normalizedScenes.map((sc) => (sc && typeof sc === "object" && looksLikeSentenceLocation(sc.sceneLocation)) ? { ...sc, sceneLocation: "" } : sc);
   const finalScenes = rebalanceEstSec(normalizedScenes, Number(input.duration) || 0);
+  const legacySetsForPayload = (legacySetPlan.sets || []).map((st) => ({
+    id: st.id, name: st.name, description: st.description, refObjectName: "", variants: [],
+    sceneIds: finalScenes.filter((sc) => String((sc && sc.sceneLocation) || "").trim() === st.name).map((sc) => sc.id),
+  }));
 
   return {
     scenes: finalScenes,
+    sets: legacySetsForPayload,
     meta: {
+      setPlanSource: legacySetPlan.source,
+      setPlanError: legacySetPlan.error || "",
+      sets: (legacySetPlan.sets || []).map((st) => ({ id: st.id, name: st.name, description: st.description })),
+      setsEnforced: legacySetsEnforced,
       chunked: chunks.length > 1,
       chunkCount: chunks.length,
       sourceLength: fullTopic.length,

@@ -105,3 +105,26 @@ export function applyLocationMerge(scenes, from, into) {
   });
   return { scenes: out, changed };
 }
+
+/**
+ * 장소 칸에 "문장"이 들어왔는지(화면·행동 묘사가 흘러든 경우). 세트 이름은 짧은 장소 명사여야 한다.
+ * 실제 사례(2026-09-13): "바닥에 블록·봉제인형·공이 흩어져 있음 세 캐릭터가 입구에 나란히 멈춰 선 채 …" 가 장소로 저장돼
+ * 세트 시트가 야외 돌문 입구로 생성됐다.
+ */
+export function looksLikeSentenceLocation(raw) {
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s) return false;
+  if (s.length > 30) return true;
+  if (/[.!?]$/.test(s)) return true;
+  if (/(있음|있다|한다|된다|린다|간다|본다|선다|준다|이다|였다|있는|하는|하며|면서|채로|채 )/.test(s) && s.length > 14) return true;
+  if (/@[0-9A-Za-z가-힣_]/.test(s)) return true; // 캐릭터 토큰이 들어간 장소는 화면 묘사다
+  return false;
+}
+
+/** 세트 이름 정리: 구분자 앞 핵심 이름, 24자 상한. 문장이면 빈 문자열(호출부가 폴백 이름을 쓴다). */
+export function sanitizeSetName(raw, maxLen = 24) {
+  const core = coreLocationName(raw);
+  if (!core) return "";
+  if (looksLikeSentenceLocation(core)) return "";
+  return core.length > maxLen ? core.slice(0, maxLen).trim() : core;
+}

@@ -112,7 +112,7 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /const name = String\(input\?\.locationName \|\| input\?\.name \|\| input\?\.setName \|\| ""\)\.trim\(\);/);
-  assert.match(fn, /const promptInput = \{ header, set: \{ name: String\(loc\.name \|\| name\), description: String\(loc\.description \|\| ""\) \}, aspect, hasStyleRef: false, hasPlateRef: false \};/);
+  assert.match(fn, /const promptInput = \{ header, set: \{ name: promptSetName, description: promptSetDesc \}, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation\(rawSetName\) \};/);
   assert.match(fn, /buildBibleSetSheetPrompt\(promptInput\)/);
   assert.match(fn, /referenceKind: "environment"/, '마스터 플레이트가 있으면 참조');
   assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution/);

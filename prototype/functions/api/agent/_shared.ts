@@ -9,7 +9,7 @@ import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/cl
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
 import { buildBibleSetSheetPrompt, SET_ANGLES } from "../_shared/storyboard-sheet.js";
-import { applyLocationMerge, suggestLocationMerges, locationKey } from "../_shared/location-names.js";
+import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName, looksLikeSentenceLocation } from "../_shared/location-names.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -4360,7 +4360,11 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
     idx = locations.length - 1;
   }
   const loc = locations[idx];
-  const promptInput = { header, set: { name: String(loc.name || name), description: String(loc.description || "") }, aspect, hasStyleRef: false, hasPlateRef: false };
+  // 장소 칸에 문장이 들어온 프로젝트(옛 데이터)면 그대로 그리지 않는다 — 세트 시트가 엉뚱한 장소가 된다. 핵심 이름만 쓰고 원문은 묘사로 돌린다.
+  const rawSetName = String(loc.name || name);
+  const promptSetName = looksLikeSentenceLocation(rawSetName) ? (sanitizeSetName(rawSetName) || "the main set") : rawSetName;
+  const promptSetDesc = String(loc.description || "").trim() || (looksLikeSentenceLocation(rawSetName) ? rawSetName : "");
+  const promptInput = { header, set: { name: promptSetName, description: promptSetDesc }, aspect, hasStyleRef: false, hasPlateRef: false, nameWasSentence: looksLikeSentenceLocation(rawSetName) };
   const bucket = studioBucket(ctx);
   const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
   const referenceImages: any[] = [];
