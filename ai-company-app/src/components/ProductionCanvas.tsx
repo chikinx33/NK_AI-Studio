@@ -77,7 +77,7 @@ const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; card: str
   prompt: { bar: "border-amber-500/80 bg-amber-900/50 hover:border-amber-300", barSelected: "border-amber-300 bg-amber-700/70 ring-2 ring-amber-400/40", card: "border-amber-400 ring-2 ring-amber-500/30", text: "text-amber-100/80", label: "프롬프트" },
   scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", card: "border-sky-400 ring-2 ring-sky-500/30", text: "text-sky-100/80", label: "Scene" },
   characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", card: "border-emerald-400 ring-2 ring-emerald-500/30", text: "text-emerald-100/80", label: "캐릭터" },
-  locations: { bar: "border-violet-500/80 bg-violet-900/60 hover:border-violet-300", barSelected: "border-violet-300 bg-violet-700/70 ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-violet-100/80", label: "장소 · 배경" },
+  locations: { bar: "border-violet-500/80 bg-violet-900/60 hover:border-violet-300", barSelected: "border-violet-300 bg-violet-700/70 ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-violet-100/80", label: "배경" },
 };
 
 function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
@@ -97,7 +97,7 @@ function deriveLanes(graph: ProductionGraph | null, heights: Heights = {}): Lane
   const characters = graph.nodes.filter((n) => n.type === "character");
   const locations = graph.nodes.filter((n) => n.type === "location");
   if (characters.length) lanes.push({ key: "characters", kind: "characters", orient: "column", index: 0, label: "캐릭터", location: "", memberIds: characters.map((n) => n.id), cellW: NODE_W.character + CARD_GAP, cardW: NODE_W.character, cardH: heightOf(heights, "character") });
-  if (locations.length) lanes.push({ key: "locations", kind: "locations", orient: "column", index: 0, label: "장소 · 배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: heightOf(heights, "location") });
+  if (locations.length) lanes.push({ key: "locations", kind: "locations", orient: "column", index: 0, label: "배경", location: "", memberIds: locations.map((n) => n.id), cellW: NODE_W.location + CARD_GAP, cardW: NODE_W.location, cardH: heightOf(heights, "location") });
   const cuts = graph.nodes.filter((n) => n.type === "cut").sort((a, b) => Number(a.data.order) - Number(b.data.order));
   let last: Lane | null = null;
   let sceneNo = 0;
@@ -288,6 +288,15 @@ function MinimizeIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+function SparkleIcon({ className }: { className?: string }) {
+  // lucide: sparkle (다이아몬드 별)
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+    </svg>
+  );
+}
+
 function BotIcon({ className }: { className?: string }) {
   // lucide: bot
   return (
@@ -523,7 +532,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -556,6 +565,20 @@ export default function ProductionCanvas({
       setNotice(`실패: ${(e as Error).message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
+  // 시트가 이미 있는 장소는 건너뛰고, 없는 장소가 하나도 없으면 전부 다시 만든다(재생성).
+  const generateSetSheets = async () => {
+    if (!projectId) return;
+    const locs = (graph?.nodes || []).filter((n) => n.type === "location");
+    if (!locs.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
+    const missing = locs.filter((n) => !n.data?.setSheet);
+    const targets = missing.length ? missing : locs;
+    if (!missing.length && !window.confirm(`모든 세트에 이미 시트가 있어요. ${locs.length}개 세트의 시트를 다시 만들까요? (크레딧 사용)`)) return;
+    for (const n of targets) {
+      await enqueue("set_sheet", { projectId, locationName: String(n.data?.name || n.label), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", provider: settings.image.provider }, `세트 시트 · ${n.label}`);
     }
   };
 
@@ -888,6 +911,19 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
+                  {l.kind === "locations" && (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); void generateSetSheets(); }}
+                      disabled={!projectId || saving}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-violet-300/50 text-violet-100 transition hover:bg-violet-500/30 hover:text-white disabled:opacity-40"
+                      title="세트 시트 생성 — 장소마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요"
+                      aria-label="세트 시트 생성"
+                    >
+                      <SparkleIcon className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -921,9 +957,21 @@ export default function ProductionCanvas({
                     </div>
                   )}
                   {n.type === "location" && (
-                    <div className="p-3">
-                      <Chip tone="violet">장소</Chip>
-                      <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
+                    <div>
+                      {(n.data.setSheet?.url || n.data.plateUrl) ? (
+                        <div className="relative border-b border-edge">
+                          <img src={withMediaToken(String(n.data.setSheet?.url || n.data.plateUrl))} alt="" className="block aspect-video w-full object-cover" draggable={false} />
+                          <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
+                          {n.data.setSheet?.resolution ? <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">{String(n.data.setSheet.resolution)}</span> : null}
+                        </div>
+                      ) : null}
+                      <div className="p-3">
+                        <div className="flex items-center gap-1.5">
+                          <Chip tone="violet">장소</Chip>
+                          {n.data.setSheet ? <Chip tone="emerald">시트</Chip> : <Chip>시트 없음</Chip>}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
+                      </div>
                     </div>
                   )}
                   {n.type === "character" && (

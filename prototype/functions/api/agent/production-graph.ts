@@ -70,6 +70,28 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
   const projectId = String(project.projectId || "");
   const payload = project.payload && typeof project.payload === "object" ? project.payload : {};
   const header = String(project.header || payload.header || "");
+  // 장소(세트) 자산: 마스터 플레이트·방위/앵글 변형·세트 시트(바이블). 캔버스 배경 카드가 보여 준다.
+  const normLoc = (v: unknown) => String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const episodeLocations: any[] = Array.isArray(payload.episodeLocations) ? payload.episodeLocations : [];
+  const sheetsById = new Map<string, any>((Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets : []).map((sh: any) => [String(sh?.id || ""), sh]));
+  const locationAssets = (name: string) => {
+    const key = normLoc(name);
+    const hit = episodeLocations.find((l) => normLoc(l?.name) === key || normLoc(l?.id) === key) || null;
+    if (!hit) return { description: "", plateUrl: "", plateRef: "", variants: [], setSheet: null };
+    const sheetMeta = hit.setSheet && typeof hit.setSheet === "object" ? hit.setSheet : null;
+    const sheet = sheetMeta ? sheetsById.get(String(sheetMeta.sheetId || "")) || null : null;
+    return {
+      description: String(hit.description || ""),
+      plateUrl: toDisplayUrl(hit.refObjectName || ""),
+      plateRef: String(hit.refObjectName || ""),
+      variants: (Array.isArray(hit.variants) ? hit.variants : []).filter((v: any) => v && v.refObjectName).map((v: any) => ({ id: String(v.id || ""), label: String(v.label || ""), url: toDisplayUrl(v.refObjectName) })),
+      setSheet: sheetMeta ? {
+        sheetId: String(sheetMeta.sheetId || ""), objectName: String(sheetMeta.objectName || ""), url: toDisplayUrl(sheetMeta.objectName || ""),
+        resolution: String(sheetMeta.resolution || sheet?.resolution || ""), createdAt: String(sheetMeta.createdAt || ""),
+        panels: Array.isArray(sheet?.panels) ? sheet.panels.map((pn: any) => ({ index: Number(pn?.index) || 0, ref: String(pn?.ref || ""), angleLabel: String(pn?.angleLabel || ""), status: String(pn?.status || "pending"), url: toDisplayUrl(pn?.objectName || "") })) : [],
+      } : null,
+    };
+  };
   const headerClean = cleanHeader(header);
   const scenes: any[] = Array.isArray(project.scenes) ? project.scenes : [];
   const nodes: GraphNode[] = [];
@@ -177,7 +199,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
       if (!locId) {
         locId = `location:${key}`;
         locationNodeByKey.set(key, locId);
-        nodes.push({ id: locId, type: "location", label: loc, data: { name: loc } });
+        nodes.push({ id: locId, type: "location", label: loc, data: { name: loc, ...locationAssets(loc) } });
       }
       edges.push({ id: `${locId}>${nodeId}`, type: "location", from: locId, to: nodeId });
     }

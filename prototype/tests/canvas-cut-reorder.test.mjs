@@ -125,7 +125,7 @@ test('★캔버스: 컷 카드를 놓으면 순서를 비교해 경고를 묻고
   assert.match(src, /if \(warnings\.length && !window\.confirm\(/, '경고가 있으면 먼저 묻는다');
   assert.match(src, /"그래도 컷 순서를 바꿀까요\?"/);
   assert.match(src, /void enqueue\("scene_reorder", \{ projectId, order: after\.map\(\(c\) => c\.sceneId\) \}/);
-  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder"\];/);
+  assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"\];/);
   // 잡이 실행된 뒤의 재로드에서 칸 배치는 서버 순서로 다시 묶는다(바 위치는 유지)
   assert.match(src, /if \(p\.type === "scene_reorder" && status === "approved"\) \{\s*\n\s*reorderResetRef\.current = true;/);
   assert.match(src, /const seed = reorderResetRef\.current && savedLayout \? \{ \.\.\.savedLayout, groups: undefined \} : savedLayout;/);

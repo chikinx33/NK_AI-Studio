@@ -8,6 +8,7 @@ import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/cl
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
+import { buildBibleSetSheetPrompt, SET_ANGLES } from "../_shared/storyboard-sheet.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -4278,6 +4279,59 @@ async function runSceneReorderTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 장소 이름 정규화(set-plates.findLocationForScene 과 같은 느슨한 비교). */
+function normLocationKey(v: any): string {
+  return String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** 세트 시트(바이블, E2): 장소 하나를 2×2(정면·후면·부감·로우, 인물 없음) 한 장으로 만든다.
+ *  캔버스 배경 바의 생성 버튼이 장소마다 이 잡을 하나씩 만든다(이미지 1장 = 30초 한계 안).
+ *  결과는 payload.storyboardSheets(kind 'bible-set') + episodeLocations[].setSheet 에 남고, 패널 승인·크롭은 다음 단계.
+ *  마스터 플레이트가 있으면 참조로 붙여 1번 칸이 그 플레이트를 따르게 한다. 크레딧을 쓰므로 승인 게이트. */
+async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const name = String(input?.locationName || input?.name || input?.setName || "").trim();
+  if (!name) throw new Error("locationName(세트 이름)이 필요해요");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const payload: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
+  const header = String(payload.header || cur.header || "");
+  const aspect = String(input?.aspectRatio || payload.aspectRatio || "16:9");
+  const resolution = String(input?.resolution || input?.imageSize || "2K").toUpperCase() === "4K" ? "4K" : "2K";
+  const locations: any[] = Array.isArray(payload.episodeLocations) ? payload.episodeLocations.map((l: any) => ({ ...l })) : [];
+  const key = normLocationKey(name);
+  let idx = locations.findIndex((l) => normLocationKey(l?.name) === key || normLocationKey(l?.id) === key);
+  if (idx < 0) {
+    locations.push({ id: key.replace(/[^0-9a-z가-힣]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "set", name, description: "", refObjectName: "", variants: [] });
+    idx = locations.length - 1;
+  }
+  const loc = locations[idx];
+  const prompt = String(input?.prompt || "").trim() || buildBibleSetSheetPrompt({ header, set: { name: String(loc.name || name), description: String(loc.description || "") }, aspect });
+  const bucket = studioBucket(ctx);
+  const referenceImages = (loc.refObjectName && bucket)
+    ? [{ imageUrl: `gs://${bucket}/${String(loc.refObjectName).replace(/^gs:\/\/[^/]+\//, "")}`, referenceId: 1, subjectDescription: `${String(loc.name || name)} (front-facing master plate)`, referenceKind: "environment" }]
+    : [];
+  const img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution, ...(input?.provider ? { provider: String(input.provider) } : {}) }, ctx);
+  if (!img.objectName) throw new Error("세트 시트 결과에 저장 경로(objectName)가 없어요.");
+  const sheetId = `sheet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const sheet = {
+    id: sheetId, kind: "bible-set", setId: String(loc.id || ""), setName: String(loc.name || name),
+    cutIds: [], resolution, grid: { cols: 2, rows: 2 }, objectName: img.objectName,
+    panels: SET_ANGLES.map((a: any, i: number) => ({ index: i + 1, role: "set", ref: a.id, angleLabel: a.label, objectName: "", status: "pending", label: "bible" })),
+    prompt, referenceMeta: { plate: referenceImages.length > 0 }, model: img.model || "", imageSizeApplied: "",
+    agentJobId: String(ctx.jobId || ""), createdAt: new Date().toISOString(),
+  };
+  const sheets: any[] = Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets.slice() : [];
+  sheets.push(sheet);
+  locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution, createdAt: sheet.createdAt } };
+  await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { episodeLocations: locations, storyboardSheets: sheets } } });
+  return {
+    kind: "set_sheet", projectId, locationName: String(loc.name || name), sheetId, objectName: img.objectName, signedUrl: img.signedUrl || "",
+    resolution, plateReferenced: referenceImages.length > 0, model: img.model || "", saved: true, promptEcho: prompt,
+    summary: `세트 시트(${resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.`,
+  };
+}
+
 /** 영상 삭제: /api/video/delete (confirm=yes). 되돌리기 어려움 → 승인 게이트. */
 async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
   const single = String(input?.objectName || input?.object || "").trim();
@@ -4637,6 +4691,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_upsert: { agentId: "plot", kind: "external", gate: true, run: runSceneUpsertTool },
   // 컷 순서 변경(캔버스 드래그 · "컷 3을 5 뒤로") — 배열 재배열이라 쓰기 → 게이트. 경고는 결과에 싣는다.
   scene_reorder: { agentId: "plot", kind: "external", gate: true, run: runSceneReorderTool },
+  // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
+  set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
 
   // ── STEP 3 (P3): 운영·조회·개인화 ──
   // 코어(총괄): 브랜드/프로젝트 목록·삭제·공유.

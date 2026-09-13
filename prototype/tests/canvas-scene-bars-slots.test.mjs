@@ -40,7 +40,7 @@ test('★세 종류의 바가 있고 색이 구분되며(씬 파랑, 캐릭터 �
   assert.match(src, /if \(!graph \|\| layoutSourceRef\.current !== "default" \|\| !Object\.keys\(measuredH\)\.length\) return;/, '기본 배치일 때만 측정 후 재정렬');
   assert.match(src, /key: "characters", kind: "characters"/);
   assert.match(src, /key: "locations", kind: "locations"/);
-  assert.match(src, /label: "장소 · 배경"/);
+  assert.match(src, /label: "배경"/);
 });
 
 test('★카드 좌표는 바 + 슬롯 번호로만 정해지고, 드롭 시 같은 종류의 가장 가까운 칸에 스냅한다', () => {
