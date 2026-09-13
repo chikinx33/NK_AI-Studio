@@ -1,4 +1,5 @@
 import { COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, VIDEO_ASPECTS, VIDEO_MODELS, snapDuration, type CanvasSettings } from "../lib/canvasSettings";
+import { readStudioImageProvider, STUDIO_PROVIDER_LABELS } from "../lib/canvasSettings";
 import { Seg } from "./GenerationSettingsPopover";
 
 /**
@@ -44,7 +45,7 @@ export default function AgentSettingsPanel({ settings, onChange, onBack }: { set
         <Seg value={s.image.aspect} options={IMAGE_ASPECTS} onChange={(aspect) => setImage({ aspect })} render={(r) => <><AspectGlyph ratio={r} />{r}</>} />
         <Seg value={s.image.count} options={COUNTS} onChange={(count) => setImage({ count })} render={(n) => `x${n}`} />
         <select value={s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"] })} className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
-          {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.id === "studio" ? `${p.label}${readStudioImageProvider() ? ` · 지금: ${STUDIO_PROVIDER_LABELS[readStudioImageProvider()] || readStudioImageProvider()}` : " · 지금: 서버 기본"}` : p.label}</option>)}
         </select>
       </div>
 

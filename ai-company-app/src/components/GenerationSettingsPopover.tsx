@@ -3,6 +3,7 @@ import {
   COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, IMAGE_SIZES, VIDEO_ASPECTS, VIDEO_MODELS,
   durationChoicesFor, quoteCanvasCredits, snapDuration, type CanvasSettings, type CreditQuote,
 } from "../lib/canvasSettings";
+import { readStudioImageProvider, STUDIO_PROVIDER_LABELS } from "../lib/canvasSettings";
 
 /** 작성기 오른쪽 요약 칩을 누르면 뜨는 생성 설정. 이미지/동영상 탭 · 비율 · 모델 · 해상도 · 길이 · 개수 · 크레딧. */
 
@@ -64,7 +65,7 @@ export default function GenerationSettingsPopover({ settings, onChange, onClose 
           <Seg value={s.image.size} options={IMAGE_SIZES} onChange={(size) => setImage({ size })} render={(v) => (v === "512" ? "512px" : v)} />
           <Seg value={s.image.count} options={COUNTS} onChange={(count) => setImage({ count })} render={(n) => `x${n}`} />
           <select value={s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"] })} className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
-            {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.id === "studio" ? `${p.label}${readStudioImageProvider() ? ` · 지금: ${STUDIO_PROVIDER_LABELS[readStudioImageProvider()] || readStudioImageProvider()}` : " · 지금: 서버 기본"}` : p.label}</option>)}
           </select>
         </div>
       ) : (

@@ -215,7 +215,7 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.match(canvas, /await approveItem\(String\(j\.id\)\)/);
   assert.match(panel, /if \(!autoApprove \|\| !job \|\| job\.approvalState\?\.status !== "pending"/);
   // 설정이 실제 생성 경로에 닿는다: 인스펙터 버튼 → 도구 입력 → /api/imagen·/api/video.
-  assert.match(canvas, /\.\.\.\(settings\.image\.provider !== "studio" \? \{ provider: settings\.image\.provider \} : \{\}\), imageSize: settings\.image\.size/);
+  assert.match(canvas, /\.\.\.providerArg\(settings\), imageSize: settings\.image\.size/);
   assert.match(canvas, /videoModel: settings\.video\.model, durationSeconds: settings\.video\.durationSec, resolution: settings\.video\.resolution/);
   assert.match(shared, /\.\.\.\(input\?\.provider \? \{ provider: String\(input\.provider\) \} : \{\}\)/);
   assert.match(shared, /\.\.\.\(input\?\.resolution \? \{ resolution: String\(input\.resolution\) \} : \{\}\)/);

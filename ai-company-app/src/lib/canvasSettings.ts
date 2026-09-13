@@ -25,7 +25,7 @@ export const IMAGE_ASPECTS: ImageAspect[] = ["16:9", "4:3", "1:1", "3:4", "9:16"
 export const IMAGE_SIZES: ImageSize[] = ["512", "1K", "2K"];
 export const IMAGE_PROVIDERS: Array<{ id: ImageProvider; label: string }> = [
   // 스튜디오 기본 = 서버 기본 공급자(AI_IMAGE_PROVIDER/AGENT_IMAGE_PROVIDER). 예전 배경·스틸이 만들어진 경로와 같아 룩이 이어진다.
-  { id: "studio", label: "스튜디오 기본 (기존 이미지와 같은 모델)" },
+  { id: "studio", label: "스튜디오 설정 따름 (제작 화면의 이미지생성 모델)" },
   { id: "gemini", label: "Gemini 3.1 Flash Image" },
   { id: "openai", label: "GPT Image 2" },
 ];
@@ -122,7 +122,7 @@ export interface CreditQuote { credits: number; balance: number | null; feature:
 export async function quoteCanvasCredits(s: CanvasSettings): Promise<CreditQuote> {
   const feature = s.kind === "image" ? "image_generation" : "video";
   const input = s.kind === "image"
-    ? { ...(s.image.provider !== "studio" ? { provider: s.image.provider } : {}), imageSize: s.image.size }
+    ? { ...providerArg(s), imageSize: s.image.size }
     : { videoModel: s.video.model, durationSeconds: s.video.durationSec, resolution: s.video.resolution };
   const res = await fetch("/api/credits/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feature, input }) });
   const data = await res.json().catch(() => ({}));
@@ -132,3 +132,25 @@ export async function quoteCanvasCredits(s: CanvasSettings): Promise<CreditQuote
   const balanceRaw = data?.summary?.balance ?? data?.summary?.remaining ?? data?.summary?.credits ?? null;
   return { credits: per * count, balance: Number.isFinite(Number(balanceRaw)) && balanceRaw !== null ? Number(balanceRaw) : null, feature };
 }
+
+/**
+ * 제작 화면(스튜디오)의 "이미지생성 모델" 설정. 같은 도메인의 localStorage 키(nk_ai_image_provider)에 저장되며
+ * 스튜디오의 api.imagen 이 이 값을 자동으로 붙인다. 캔버스도 같은 값을 읽어야 같은 모델로 그린다
+ * (2026-09-14: 에피소드는 GPT Image 2 인데 캔버스가 gemini 로 강제해 룩이 갈렸다).
+ */
+export const STUDIO_IMAGE_PROVIDER_KEY = "nk_ai_image_provider";
+export function readStudioImageProvider(): string {
+  try {
+    const raw = String(window.localStorage.getItem(STUDIO_IMAGE_PROVIDER_KEY) || "").trim().toLowerCase();
+    return (raw === "openai" || raw === "gemini" || raw === "gpt25-flare" || raw === "gpt25-sunburst") ? raw : "";
+  } catch { return ""; }
+}
+/** 잡 입력에 넣을 공급자: 캔버스에서 명시했으면 그것, "스튜디오 설정 따름"이면 제작 화면 설정(없으면 서버 기본). */
+export function resolveImageProvider(s: CanvasSettings): string {
+  return s.image.provider === "studio" ? readStudioImageProvider() : s.image.provider;
+}
+export function providerArg(s: CanvasSettings): { provider?: string } {
+  const p = resolveImageProvider(s);
+  return p ? { provider: p } : {};
+}
+export const STUDIO_PROVIDER_LABELS: Record<string, string> = { openai: "GPT Image 2", gemini: "Gemini", "gpt25-flare": "GPT Image 2.5 Flare", "gpt25-sunburst": "GPT Image 2.5 Sunburst" };

@@ -44,7 +44,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K"; usePlate\?: boolean \} \| null>\(null\);/);
   assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
   assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K", usePlate = false\) => \{/);
-  assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.\(settings\.image\.provider !== "studio" \? \{ provider: settings\.image\.provider \} : \{\}\), usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
+  assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\), usePlate \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
   assert.match(src, /<div className="text-\[13px\] font-bold text-white">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
   assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
@@ -190,7 +190,7 @@ test('★스타일 앵커: 첫 세트 시트가 프로젝트 그림체 기준이
   assert.match(src, /<Chip tone="amber">스타일 기준<\/Chip>/);
   assert.match(src, /정면 플레이트 참조\s*\n\s*<\/label>/);
   assert.match(src, /void generateSetSheets\(m\.selected, m\.resolution, !!m\.usePlate\);/);
-  assert.match(src, /createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.\(settings\.image\.provider !== "studio" \? \{ provider: settings\.image\.provider \} : \{\}\), usePlate \}\)/);
+  assert.match(src, /createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\), usePlate \}\)/);
 });
 
 test('★배경 카드 클릭 흐름: 이미지 영역=크게 보기, 텍스트 영역=선택 토글(여러 장), ⓘ=상세; 2장 이상 선택하면 배경 바에 합치기 → 남길 이름 고르는 모달', () => {
@@ -267,10 +267,10 @@ test('★브랜드 허브가 세트 시트 프롬프트의 첫 블록이다: 톤
 test('★모델 차이·검증: 캔버스 기본 공급자는 "스튜디오 기본"(서버 기본 = 예전 이미지와 같은 모델), 시트마다 diag(모델·경로·참조 수·그림체 출처·허브 블록·프롬프트) 기록·표시', () => {
   const cs = read('ai-company-app/src/lib/canvasSettings.ts');
   assert.match(cs, /export type ImageProvider = "studio" \| "gemini" \| "openai";/);
-  assert.match(cs, /\{ id: "studio", label: "스튜디오 기본 \(기존 이미지와 같은 모델\)" \},/);
+  assert.match(cs, /\{ id: "studio", label: "스튜디오 설정 따름 \(제작 화면의 이미지생성 모델\)" \},/);
   assert.match(cs, /image: \{ aspect: "16:9", size: "1K", count: 1, provider: "studio" \},/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /\.\.\.\(settings\.image\.provider !== "studio" \? \{ provider: settings\.image\.provider \} : \{\}\), usePlate \}/, 'set_sheet 는 명시한 공급자만 보낸다');
+  assert.match(src, /\.\.\.providerArg\(settings\), usePlate \}/, 'set_sheet 는 명시한 공급자만 보낸다');
   assert.doesNotMatch(src, /provider: settings\.image\.provider, imageSize/, 'scene_still 도 명시한 공급자만');
   assert.match(src, /이 시트는 어떻게 만들어졌나/);
   assert.match(src, /"brand-character-sheets": "브랜드 캐릭터 시트\(그림체만\)"/);
@@ -284,4 +284,16 @@ test('★모델 차이·검증: 캔버스 기본 공급자는 "스튜디오 기�
   assert.match(fn, /createdAt: sheet\.createdAt, diag: sheet\.diag \} \};/);
   assert.match(read('prototype/functions/api/agent/production-graph.ts'), /diag: \(sheet\?\.diag && typeof sheet\.diag === "object"\) \? sheet\.diag/);
   assert.match(read('prototype/functions/api/imagen.ts'), /item\.referenceKind === "prop" \|\| item\.referenceKind === "style"\)/, 'style 참조에도 이미지별 지시문');
+});
+
+test('★"스튜디오 설정 따름"은 제작 화면의 이미지생성 모델(localStorage nk_ai_image_provider)을 읽어 같은 모델로 보낸다', () => {
+  const cs = read('ai-company-app/src/lib/canvasSettings.ts');
+  assert.match(cs, /export const STUDIO_IMAGE_PROVIDER_KEY = "nk_ai_image_provider";/);
+  assert.match(cs, /raw === "openai" \|\| raw === "gemini" \|\| raw === "gpt25-flare" \|\| raw === "gpt25-sunburst"/);
+  assert.match(cs, /return s\.image\.provider === "studio" \? readStudioImageProvider\(\) : s\.image\.provider;/);
+  assert.match(cs, /export function providerArg\(s: CanvasSettings\): \{ provider\?: string \}/);
+  assert.match(read('prototype/js/config.js'), /IMAGE_PROVIDER: 'nk_ai_image_provider',/, '스튜디오와 같은 키');
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 3, 'set_sheet + scene_still 두 곳 = 3곳');
+  assert.match(src, /모델: <span className="text-gray-300">/);
 });

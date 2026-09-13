@@ -17,7 +17,7 @@ import { suggestLocationMerges } from "../lib/locationNames";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
-import { loadCanvasSettings, saveCanvasSettings, type CanvasSettings } from "../lib/canvasSettings";
+import { loadCanvasSettings, saveCanvasSettings, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
 import { approveItem, saveCanvasLayout } from "../lib/api";
 
 /**
@@ -648,7 +648,7 @@ export default function ProductionCanvas({
       try {
         // 순서대로 하나씩(승인 완료를 기다림): 첫 시트가 스타일 앵커가 되고, 다음 시트가 그것을 참조한다.
         // 공급자는 사용자가 명시했을 때만 보낸다. "스튜디오 기본"이면 서버 기본(예전 배경·스틸과 같은 모델)으로 그려 룩이 이어진다.
-        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), usePlate });
+        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, ...providerArg(settings), usePlate });
         setPending((prev) => [{ jobId: res.jobId, type: "set_sheet", status: "running", label: `세트 시트 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
         await approveItem(res.jobId).catch((e) => {
           setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message } : p)));
@@ -672,7 +672,7 @@ export default function ProductionCanvas({
     if (!targets.length) return "컷을 먼저 선택하세요. (에이전트 모드에선 말로 지정할 수 있어요)";
     for (const sceneId of targets) {
       if (kind === "image") {
-        await enqueueMany("scene_still", { projectId, sceneId, prompt, aspectRatio: settings.image.aspect, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), imageSize: settings.image.size }, `컷 ${sceneId} 스틸 생성`, sceneId, settings.image.count);
+        await enqueueMany("scene_still", { projectId, sceneId, prompt, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${sceneId} 스틸 생성`, sceneId, settings.image.count);
       } else {
         const node = nodeById.get(`cut:${sceneId}`);
         if (!node?.data?.still?.url) return `컷 ${sceneId}에 스틸이 없어요. 스틸을 먼저 만드세요.`;
@@ -1364,7 +1364,7 @@ export default function ProductionCanvas({
                       <label className="flex items-center gap-1.5 text-[11px] text-gray-400" title="옛 정면 플레이트가 다른 그림체면 시트 전체가 그쪽으로 끌려가요. 기본은 끔.">
                         <input type="checkbox" checked={!!sheetModal.usePlate} onChange={(e) => setSheetModal((m) => (m ? { ...m, usePlate: e.target.checked } : m))} className="h-3.5 w-3.5 accent-violet-500" />정면 플레이트 참조
                       </label>
-                      <span className="text-[11px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
+                      <span className="text-[11px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용 · 모델: <span className="text-gray-300">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : ""}</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
                       <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution, !!m.usePlate); }} className="min-w-[96px] rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
@@ -1504,7 +1504,7 @@ export default function ProductionCanvas({
                     </div>
                     <div className="mt-auto flex flex-wrap gap-2 border-t border-edge pt-3">
                       <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
-                      <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...(settings.image.provider !== "studio" ? { provider: settings.image.provider } : {}), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
+                      <button type="button" disabled={saving} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={`${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</button>
                       <button type="button" disabled={saving || !selected.data.still?.url} title={selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요"} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</button>
                     </div>
                     {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
