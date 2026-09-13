@@ -128,6 +128,13 @@
           : (Array.isArray(prev.variants) ? prev.variants : []),
         sceneIds: Array.isArray(row.sceneIds) ? row.sceneIds : (prev.sceneIds || []),
       });
+      // ★부감 마스터가 이미 있으면 그 이미지가 세트의 진실이다. 시나리오를 다시 생성하며 LLM 이 새로 지은 평면도·묘사가
+      //   마스터와 어긋나면 이후 앵글 파생·플레이트 프롬프트가 이미지와 글 사이에서 흔들린다 → 마스터가 있는 세트는 이전 평면도·묘사를 지킨다.
+      var prevHasMaster = Array.isArray(prev.variants) && prev.variants.some(function (v) { return v && v.id === 'angle-top' && v.refObjectName; });
+      if (prevHasMaster) {
+        if (prev.layout) merged.layout = prev.layout;
+        if (prev.description) merged.description = prev.description;
+      }
       if (!merged.layout && prev.layout) merged.layout = prev.layout;
       if (!merged.setSheet && prev.setSheet) merged.setSheet = prev.setSheet;
       if (!merged.masterAngle && prev.masterAngle) merged.masterAngle = prev.masterAngle;

@@ -81,7 +81,10 @@ test("★새 세트 계획의 평면도(layout)는 이름이 같은 세트에서
   }];
   const next = [{ name: "소녀의 방", description: "새 묘사", layout: { back: "창문", left: "침대", right: "책장", front: "문", floor: "러그" } }];
   const merged = svc.mergeWithExisting(next, prev);
-  assert.equal(merged[0].layout.back, "창문", "새 계획의 평면도가 화이트리스트에 걸려 증발하면 안 된다");
+  assert.equal(merged[0].layout.back, "옛 뒷벽", "마스터가 있으면 마스터의 평면도가 진실 — 새 계획이 덮지 않는다");
+  // 마스터가 없으면 새 계획의 평면도가 살아남아야 한다(화이트리스트 재조립에 걸려 증발하던 회귀)
+  const noMaster = svc.mergeWithExisting(next, [{ name: "소녀의 방", refObjectName: "proj/front.png", layout: { back: "옛 뒷벽" } }]);
+  assert.equal(noMaster[0].layout.back, "창문", "새 계획의 평면도가 화이트리스트에 걸려 증발하면 안 된다");
   assert.equal(merged[0].refObjectName, "proj/front.png");
   assert.equal(merged[0].variants[0].refObjectName, "proj/top.png", "부감 마스터도 물려받는다");
   assert.equal(merged[0].setSheet.sheetId, "sh1", "세트 시트도 물려받는다");
@@ -113,4 +116,16 @@ test("★제작 화면(배경 편집기)의 작업용 복사본·저장이 layou
   const src = read("prototype/ui/pipeline.js");
   assert.match(src, /layout: l\.layout \|\| null, setSheet: l\.setSheet \|\| null, masterAngle: l\.masterAngle \|\| '', plateDiag: l\.plateDiag \|\| null/);
   assert.match(src, /if \(l\.layout\) out\.layout = l\.layout;\s*\n\s*if \(l\.setSheet\) out\.setSheet = l\.setSheet;\s*\n\s*if \(l\.masterAngle\) out\.masterAngle = l\.masterAngle;\s*\n\s*if \(l\.plateDiag\) out\.plateDiag = l\.plateDiag;/);
+});
+
+test("★부감 마스터가 있는 세트는 재생성해도 이전 평면도·묘사를 지킨다(마스터 = 세트의 진실; 새 글이 이미지와 어긋나면 안 된다)", () => {
+  const svc = loadService();
+  const prev = [{ name: "소녀의 방", description: "분홍 줄무늬 벽, 책상", layout: { back: "책장", right: "창문" }, variants: [{ id: "angle-top", refObjectName: "p/top.png" }] }];
+  const merged = svc.mergeWithExisting([{ name: "소녀의 방", description: "노란 벽, 침대", layout: { back: "침대", right: "문" } }], prev);
+  assert.equal(merged[0].layout.back, "책장");
+  assert.equal(merged[0].description, "분홍 줄무늬 벽, 책상");
+  // 마스터가 없으면 새 계획을 따른다(기존 규칙)
+  const merged2 = svc.mergeWithExisting([{ name: "옥상", description: "새 묘사", layout: { back: "난간" } }], [{ name: "옥상", description: "옛 묘사", layout: { back: "옛" }, refObjectName: "f.png" }]);
+  assert.equal(merged2[0].layout.back, "난간");
+  assert.equal(merged2[0].description, "새 묘사");
 });
