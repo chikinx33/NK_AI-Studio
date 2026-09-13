@@ -1658,10 +1658,11 @@
         || card.querySelector('.view-location-lines')?.textContent
         || '').trim();
       // 공통 prefix 가 strip 되어 표시 중이면 다시 붙여 원본 형태로 저장
-      const locationText = (__currentLocationPrefix && locationRawInput)
-        ? (locationRawInput.indexOf(__currentLocationPrefix) === 0
-            ? locationRawInput
-            : (__currentLocationPrefix + ' — ' + locationRawInput))
+      // 접두어가 숨겨진 상태에서 입력칸이 비어 있으면 그 씬의 장소는 접두어(세트 이름) 자체다 — 빈 문자열로 저장해 장소를 지우면 안 된다.
+      const locationText = __currentLocationPrefix
+        ? (locationRawInput
+          ? (locationRawInput.indexOf(__currentLocationPrefix) === 0 ? locationRawInput : (__currentLocationPrefix + ' — ' + locationRawInput))
+          : __currentLocationPrefix)
         : locationRawInput;
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
@@ -1853,6 +1854,11 @@
     // 의미 있는 길이 (2 자 이상) 만 인정. 끝에 붙은 구분자/괄호 trim.
     const trimmed = common.replace(/[\s—\-:·、,/(]+$/u, '').trim();
     if (trimmed.length < 2) return '';
+    // ★세트가 하나면(모든 씬의 장소가 같음) 접두어를 떼면 입력칸이 빈칸이 되고, 저장·다시 나누기가 그 빈칸을
+    //   읽어 장소를 전부 지운다(2026-09-14 실제 사고: 세트 계획으로 장소가 하나로 통일되자 캔버스에서 배경이 사라짐).
+    //   접두어는 "접두어 — 고유 부분" 꼴로 나머지가 남는 씬들에만 쓴다. 나머지가 비는 씬이 하나라도 있으면 쓰지 않는다.
+    if (locs.some((l) => l.replace(/^[\s—\-:·、,/(]+|[\s—\-:·、,/)]+$/gu, '') === trimmed)) return '';
+    if (locs.some((l) => !stripLocationPrefix(l, trimmed))) return '';
     return trimmed;
   }
 

@@ -77,3 +77,13 @@ test('★장소 칸의 문장 차단: 세트 이름은 짧은 장소 명사만, 
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /const promptSetName = looksLikeSentenceLocation\(rawSetName\) \? \(sanitizeSetName\(rawSetName\) \|\| "the main set"\) : rawSetName;/, '세트 시트는 문장 이름을 그대로 그리지 않는다');
 });
+
+test('★세트가 하나면 장소가 지워지지 않는다: 공통 접두어 숨기기는 나머지가 남는 씬에만, 빈 입력칸은 접두어(세트 이름)로 저장, 캔버스는 빈 장소 컷을 유일 세트로 본다 — 2026-09-14 사고', () => {
+  const ui = read('prototype/js/ui/scenario.js');
+  assert.match(ui, /if \(locs\.some\(\(l\) => l\.replace\(\/\^\[\\s—\\-:·、,\/\(\]\+\|\[\\s—\\-:·、,\/\)\]\+\$\/gu, ''\) === trimmed\)\) return '';/, '장소 전체가 접두어와 같은 씬이 있으면 접두어를 쓰지 않는다');
+  assert.match(ui, /if \(locs\.some\(\(l\) => !stripLocationPrefix\(l, trimmed\)\)\) return '';/, '나머지가 비는 씬이 있으면 접두어를 쓰지 않는다');
+  assert.match(ui, /const locationText = __currentLocationPrefix\s*\n\s*\? \(locationRawInput\s*\n[\s\S]{0,200}: __currentLocationPrefix\)\s*\n\s*: locationRawInput;/, '빈 입력칸 → 접두어(세트 이름)');
+  const graph = read('prototype/functions/api/agent/production-graph.ts');
+  assert.match(graph, /const soleSet = episodeLocations\.length === 1 \? String\(episodeLocations\[0\]\?\.name \|\| ""\)\.trim\(\) : "";/);
+  assert.match(graph, /const loc = String\(s\?\.sceneLocation \|\| s\?\.location \|\| ""\)\.trim\(\) \|\| soleSet;/);
+});

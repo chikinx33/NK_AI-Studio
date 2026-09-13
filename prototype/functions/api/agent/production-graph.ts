@@ -154,7 +154,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         composition: String(s?.composition || ""),
         action: String(s?.action || ""),
         visual: String(s?.shot || s?.visual || ""),
-        sceneLocation: String(s?.sceneLocation || s?.location || ""),
+        sceneLocation: String(s?.sceneLocation || s?.location || "").trim() || (episodeLocations.length === 1 ? String(episodeLocations[0]?.name || "").trim() : ""),
         narration: String(s?.narration || "").slice(0, 300),
         lyrics: String(s?.lyrics || "").slice(0, 300),
         // 노래 구간(순서 변경 검사용): 구간 순서·가사 시작 컷이 어긋나면 캔버스가 경고한다.
@@ -192,7 +192,9 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     if (common.trim()) {
       edges.push({ id: `common>${nodeId}`, type: "commonOverride", from: "common", to: nodeId, label: "오버라이드" });
     }
-    const loc = String(s?.sceneLocation || s?.location || "").trim();
+    // 세트가 하나뿐인 프로젝트에서 장소가 빈 컷은 그 세트의 컷이다(빈 장소 = 데이터 유실이지 "다른 곳"이 아니다).
+    const soleSet = episodeLocations.length === 1 ? String(episodeLocations[0]?.name || "").trim() : "";
+    const loc = String(s?.sceneLocation || s?.location || "").trim() || soleSet;
     if (loc) {
       const key = slug(loc);
       let locId = locationNodeByKey.get(key);
