@@ -396,6 +396,12 @@ export default function ProductionCanvas({
     await enqueue("style_anchor_set", { projectId, objectName, setName: label }, `스타일 기준 지정 · ${label}`);
     setLightbox(null);
   };
+  // 스타일 기준 해제: 결이 다른 옛 시트가 기준으로 잡혀 있으면 새 생성이 전부 그쪽으로 끌려간다. 해제하면 다음 부감 마스터가 새 기준.
+  const clearStyleAnchor = async () => {
+    if (!projectId || !graph?.styleAnchor) return;
+    if (!window.confirm("스타일 기준 이미지를 해제할까요?\n다음에 만드는 부감 마스터가 새 기준이 돼요. 그 전에는 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙여요.")) return;
+    await enqueue("style_anchor_set", { projectId, clear: true }, "스타일 기준 해제");
+  };
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -1355,14 +1361,26 @@ export default function ProductionCanvas({
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
                     <div className="mt-1 text-[12px] leading-relaxed text-gray-400">{(sheetModal.mode || "master") === "master" ? "세트마다 부감 마스터 1장을 만들어요. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요." : "세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요."}</div>
-                    <div className="mt-1.5 flex items-center gap-2 text-[12px] text-gray-400">
-                      {graph?.styleAnchor ? (
-                        <>
-                          {graph.styleAnchor.url ? <img src={withMediaToken(graph.styleAnchor.url)} alt="" className="h-9 w-16 shrink-0 rounded-md border border-amber-400/60 object-cover" /> : null}
-                          <span>그림체 기준: <span className="text-amber-200">{(() => { const nm = String(graph.styleAnchor.setName || ""); return nm && nm.length <= 24 ? nm : "지정 이미지"; })()}</span> — 모든 시트가 이 이미지의 룩을 참조해요.</span>
-                        </>
-                      ) : (
-                        <span>그림체 기준이 아직 없어요. 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙이고, 첫 시트가 기준이 돼요.</span>
+                    {/* 스타일 기준 이미지: 무엇인지·어디서 왔는지·어떻게 바꾸는지를 한 자리에서. 이름만 덜렁 보여 주는 표기는 쓰지 않는다. */}
+                    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-900/10 px-3 py-2 text-[12px]" data-testid="style-anchor-panel">
+                      {graph?.styleAnchor ? (() => {
+                        const a = graph.styleAnchor;
+                        const origin = a.sheetId ? "2×2 세트 시트" : "이미지";
+                        const who = a.pickedBy === "user" ? "직접 지정" : a.pickedBy === "auto-master" ? "첫 부감 마스터가 자동 지정" : "첫 세트 시트가 자동 지정";
+                        return (
+                          <div className="flex items-start gap-3">
+                            {a.url ? <img src={withMediaToken(a.url)} alt="" className="h-14 w-24 shrink-0 cursor-zoom-in rounded-md border border-amber-400/60 object-cover" title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(a.url), title: "스타일 기준 이미지", objectName: a.objectName })} /> : null}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-amber-200">스타일 기준 이미지 <span className="font-normal text-gray-400">— 이 프로젝트의 그림체·팔레트·조명의 기준</span></div>
+                              <div className="mt-0.5 leading-snug text-gray-400">새로 만드는 부감 마스터·앵글 플레이트·컷 스틸이 이 이미지의 룩을 따라요. 내용(장소·구도)은 복사하지 않아요.</div>
+                              <div className="mt-0.5 text-[11px] text-gray-500">출처: {a.setName ? `세트 "${a.setName}"의 ` : ""}{origin} · {who}{a.createdAt ? ` · ${String(a.createdAt).slice(0, 10)}` : ""}</div>
+                              <div className="mt-0.5 text-[11px] text-gray-500">바꾸려면 배경 카드나 컷 이미지를 크게 열어 "이 이미지를 스타일 기준으로"를 누르세요. 결이 다른 이미지가 기준이면 새 생성이 전부 그쪽으로 끌려가요.</div>
+                            </div>
+                            <button type="button" onClick={() => void clearStyleAnchor()} className="min-w-[56px] shrink-0 rounded-md border border-amber-500/40 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-900/30" title="기준을 지워요. 다음 부감 마스터가 새 기준이 돼요.">해제</button>
+                          </div>
+                        );
+                      })() : (
+                        <div className="text-gray-400"><span className="font-bold text-gray-300">스타일 기준 이미지 없음</span> — 첫 부감 마스터가 자동으로 기준이 돼요. 그 전에는 허브 배경·소품 자산 → 브랜드 캐릭터 시트 → 기존 스틸 순으로 그림체 참조를 붙여요.</div>
                       )}
                     </div>
                     {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}

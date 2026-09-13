@@ -252,7 +252,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     // 노래 구간 목록(id·label 순서). 컷 순서 변경 시 구간 순서 검사에 쓴다.
     // 스타일 앵커(프로젝트 그림체 기준 이미지 — 첫 세트 시트). 배경 카드·상세에 "스타일 기준" 배지로 보인다.
     styleAnchor: (payload.styleAnchor && typeof payload.styleAnchor === "object" && payload.styleAnchor.objectName)
-      ? { objectName: String(payload.styleAnchor.objectName), sheetId: String(payload.styleAnchor.sheetId || ""), setName: String(payload.styleAnchor.setName || ""), url: toDisplayUrl(payload.styleAnchor.objectName) }
+      ? { objectName: String(payload.styleAnchor.objectName), sheetId: String(payload.styleAnchor.sheetId || ""), setName: String(payload.styleAnchor.setName || ""), url: toDisplayUrl(payload.styleAnchor.objectName), pickedBy: String(payload.styleAnchor.pickedBy || ""), createdAt: String(payload.styleAnchor.createdAt || "") }
       : null,
     songSections: Array.isArray(payload.songSections) ? payload.songSections.map((x: any) => ({ id: String(x?.id || ""), label: String(x?.label || ""), role: String(x?.role || "") })) : [],
   };

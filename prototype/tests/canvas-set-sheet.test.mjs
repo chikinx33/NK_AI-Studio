@@ -308,7 +308,7 @@ test('★저장된 옛 공급자(gemini)는 사용자가 직접 고른 적 없�
   }
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden rounded-3xl/);
-  assert.match(src, /return nm && nm\.length <= 24 \? nm : "지정 이미지";/, '문장 같은 앵커 이름은 표시하지 않는다');
+  assert.match(src, /data-testid="style-anchor-panel"/, '스타일 기준은 이름 대신 출처·설명 패널로 보여 준다');
   assert.match(src, /\(캔버스 설정\)"/);
 });
 
@@ -364,4 +364,19 @@ test('★세트 시트 모달은 모드를 안다: 정밀이면 머리글·행 �
   assert.match(src, /\{\(sheetModal\.mode \|\| "master"\) === "sheet" && \(\s*\n\s*<label[^\n]*정면 플레이트가 다른 그림체면/);
   assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 크레딧 사용/, '정밀 장수 = 세트 수(마스터만)');
   assert.match(src, /createAgentJob\("set_master", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\) \}\)/, '해상도가 마스터에도 간다');
+});
+
+test('★스타일 기준 이미지 패널: 무엇인지·출처(세트/시트·자동/직접·날짜)·바꾸는 법·해제 버튼이 한 자리에 — "지정 이미지" 같은 이름 없는 표기 금지', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.doesNotMatch(src, /"지정 이미지"/);
+  assert.match(src, /data-testid="style-anchor-panel"/);
+  assert.match(src, /스타일 기준 이미지 <span className="font-normal text-gray-400">— 이 프로젝트의 그림체·팔레트·조명의 기준<\/span>/);
+  assert.match(src, /const who = a\.pickedBy === "user" \? "직접 지정" : a\.pickedBy === "auto-master" \? "첫 부감 마스터가 자동 지정" : "첫 세트 시트가 자동 지정";/);
+  assert.match(src, /출처: \{a\.setName \? `세트 "\$\{a\.setName\}"의 ` : ""\}\{origin\} · \{who\}/);
+  assert.match(src, /const clearStyleAnchor = async \(\) => \{/);
+  assert.match(src, /await enqueue\("style_anchor_set", \{ projectId, clear: true \}, "스타일 기준 해제"\);/);
+  assert.match(src, /스타일 기준 이미지 없음<\/span> — 첫 부감 마스터가 자동으로 기준이 돼요\./);
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /if \(input\?\.clear === true\) \{\s*\n\s*await callInternalJson\(ctx, "\/api\/project\/save", \{ body: \{ projectId, payload: \{ styleAnchor: null \} \} \}\);/, '서버 해제');
+  assert.match(read('prototype/functions/api/agent/production-graph.ts'), /pickedBy: String\(payload\.styleAnchor\.pickedBy \|\| ""\), createdAt: String\(payload\.styleAnchor\.createdAt \|\| ""\)/, '그래프가 출처를 나른다');
 });

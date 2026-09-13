@@ -4690,6 +4690,11 @@ async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
 async function runStyleAnchorSetTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
   if (!projectId) throw new Error("projectId is required");
+  // clear: 기준 해제. 다음 부감 마스터가 새 기준이 된다(결이 다른 옛 시트가 기준으로 잡혀 있을 때 쓴다).
+  if (input?.clear === true) {
+    await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { styleAnchor: null } } });
+    return { kind: "style_anchor_set", projectId, styleAnchor: null, saved: true, summary: "스타일 기준 이미지를 해제했어요. 다음에 만드는 부감 마스터가 새 기준이 돼요." };
+  }
   const objectName = String(input?.objectName || "").replace(/^gs:\/\/[^/]+\//, "").trim();
   if (!objectName || /^(data:|blob:|https?:)/i.test(objectName)) throw new Error("objectName(저장소 경로)이 필요해요");
   const anchor = { objectName, sheetId: String(input?.sheetId || ""), setName: String(input?.setName || input?.label || ""), createdAt: new Date().toISOString(), pickedBy: "user" };
