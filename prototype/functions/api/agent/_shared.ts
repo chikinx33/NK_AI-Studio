@@ -5097,8 +5097,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   },
   // 시나리오→씬 저장(합성) · 씬 자산 부착 — 쓰기라 전부 승인 게이트.
   scenario_to_project: { agentId: "plot", kind: "external", gate: true, run: runScenarioToProjectTool },
-  // scene_still: 플레이트 자동 파생까지 하면 이미지 2장(수십 초) → longRunning. 승인 POST 가 곧바로 돌아와야 캔버스가 진행 표시를 그린다.
-  scene_still: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSceneStillTool },
+  // scene_still: 동기 실행(승인 POST 가 끝날 때까지 기다림). longRunning(waitUntil)은 응답 후 ~30초면 끊겨 이미지 1~2장 생성이
+  // 끝나기 전에 죽고 잡이 "working" 에 영원히 남았다(2026-09-14 무한 로딩). 진행 표시는 캔버스가 잡 생성 직후 그린다.
+  scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
   // scene_video: 영상 생성이 수분 걸림 → longRunning(승인 시 review.ts가 백그라운드로 실행, POST 논블로킹).
   scene_video: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSceneVideoTool },
   // 에이전트 모드: 파이프라인 SkillJob 을 만든다. 실제 생성은 SkillJob 의 비용 승인 뒤 배치로 돌므로
@@ -5126,10 +5127,10 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 스타일 기준 이미지 지정(창작자 선택). 쓰기 → 게이트(캔버스 자동 승인).
   style_anchor_set: { agentId: "pixel", kind: "external", gate: true, run: runStyleAnchorSetTool },
   // 세트 마스터(부감) 1장 → 컷이 쓰는 앵글만 파생(카메라 재구성). 배치의 단일 원천 = 마스터. 크레딧 사용 → 게이트(캔버스 자동 승인).
-  set_master: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetMasterTool },
-  set_angle: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetAngleTool },
+  set_master: { agentId: "pixel", kind: "external", gate: true, run: runSetMasterTool },
+  set_angle: { agentId: "pixel", kind: "external", gate: true, run: runSetAngleTool },
   // 세트 시트(바이블 E2): 장소 하나 = 2×2 앵글 시트 1장. 크레딧 사용 → 게이트. 캔버스 배경 바의 생성 버튼이 만든다.
-  set_sheet: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSetSheetTool },
+  set_sheet: { agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool },
   // 장소 합치기(같은 방이 두 이름으로 갈린 것을 하나로) · 합치기 제안(읽기)
   location_merge: { agentId: "plot", kind: "external", gate: true, run: runLocationMergeTool },
   location_suggest: { agentId: "plot", kind: "read", run: runLocationSuggestTool },
