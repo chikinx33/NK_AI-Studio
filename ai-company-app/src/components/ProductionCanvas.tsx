@@ -1502,7 +1502,7 @@ export default function ProductionCanvas({
                         {selected.data.still?.url
                           ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
                           : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
-                        {st.running && <div className="absolute inset-0 grid place-items-center gap-1.5 text-[11px] text-sky-200"><RefreshIcon className="h-6 w-6 animate-spin" /><span>스틸 생성 중… (플레이트 파생이 필요하면 조금 더 걸려요)</span></div>}
+                        {st.running && <div className="absolute inset-0 grid place-items-center gap-1.5 text-[11px] text-sky-200"><RefreshIcon className="h-6 w-6 animate-spin" /><span>스틸 생성 중…</span></div>}
                         <span className="absolute left-2 top-2"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                       </div>
                       <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-video-box">

@@ -366,7 +366,7 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   assert.match(src, /<span>스틸 생성 중…<\/span>/, '카드 칸 스피너');
   assert.match(src, /<span>영상 생성 중…<\/span>/, '카드 칸 스피너');
   assert.match(src, /data-testid="detail-still-box"/);
-  assert.match(src, /<span>스틸 생성 중… \(플레이트 파생이 필요하면 조금 더 걸려요\)<\/span>/, '상세 칸 스피너');
+  assert.equal((src.match(/<span>스틸 생성 중…<\/span>/g) || []).length, 2, '카드·상세 칸 스피너 문구는 짧게');
   assert.match(src, /<span className="select-text text-red-300">스틸 실패: \{String\(st\.failed\.error \|\| "오류"\)\.slice\(0, 160\)\}<\/span>/, '상세 칸 오류');
   assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running\}/, '진행 중 버튼 비활성');
   assert.match(src, /\{cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \? <><RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/>생성 중<\/> : <>스틸 생성/);
