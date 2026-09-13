@@ -3980,7 +3980,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
       const bc = brand ? findBrandCharacter(brand, tk) : null;
       const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
       const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
-      refs.push({ ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
+      refs.push({ role: "character", ref: `ip:${brandId}:${tk}`, referenceId: refs.length + 1, subjectDescription: desc ? `${name} — ${desc}` : name, referenceKind: "character" });
       charNames.push(name);
       charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}`);
     }
@@ -4018,7 +4018,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     if (plate) {
       plateVariant = plate.variantId;
       const setName = String(loc.name || locName);
-      refs.push({ imageUrl: gsOf(plate.objectName), referenceId: refs.length + 1, referenceKind: "environment",
+      refs.push({ role: "plate", imageUrl: gsOf(plate.objectName), referenceId: refs.length + 1, referenceKind: "environment",
         subjectDescription: plate.exact
           ? `SET PLATE of ${setName} for THIS camera (${plateLabel(direction, elevation, "en")}) — this is the background of the shot; keep walls, windows, furniture and props exactly where they are`
           : plate.source === "master"
@@ -4027,7 +4027,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
       if (!plate.exact) refNotes.push(plate.source === "master" ? "부감 마스터만(플레이트 없음)" : "정면 플레이트 폴백");
       const master = masterOf(loc);
       if (plate.exact && master && plate.objectName !== master && refs.length < 12) {
-        refs.push({ imageUrl: gsOf(master), referenceId: refs.length + 1, referenceKind: "environment", subjectDescription: `TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); do not copy its top-down camera` });
+        refs.push({ role: "master", imageUrl: gsOf(master), referenceId: refs.length + 1, referenceKind: "environment", subjectDescription: `TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); do not copy its top-down camera` });
         refNotes.push("부감 마스터");
       }
     }
@@ -4035,11 +4035,21 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     refNotes.push("세트 미등록(플레이트 없음)");
   }
   const anchor = (payload0.styleAnchor && typeof payload0.styleAnchor === "object" && payload0.styleAnchor.objectName) ? payload0.styleAnchor : null;
-  if (anchor && bucket && refs.length < 12) { refs.push({ imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
+  // 스타일 기준은 세트 플레이트가 없을 때만 — 플레이트가 이미 그림체를 담고 있고, 다른 방을 찍은 옛 기준 이미지가 붙으면
+  // 모델이 그 방(가구·벽지)을 베껴 플레이트와 충돌한다(2026-09-14 소녀의 방: 부감은 분홍 줄무늬·책상, 스틸은 옛 시트의 노란 벽·침대).
+  const hasPlateRef = refs.some((r) => r.role === "plate");
+  if (anchor && bucket && !hasPlateRef && refs.length < 12) { refs.push({ role: "style", imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
+  // 전송 순서 = 플레이트 → 캐릭터 → 마스터 → (스타일). OpenAI edits 는 image[] 순서만 있어 첫 장이 바탕이 되기 쉽고,
+  // 라벨은 순서대로 매겨진다. 배경의 진실(플레이트)이 1번이어야 캐릭터 시트의 배경이 방을 덮어쓰지 않는다.
+  const ROLE_ORDER: Record<string, number> = { plate: 0, character: 1, master: 2, style: 3 };
+  const orderedRefs = refs
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => ((ROLE_ORDER[a.r.role] ?? 9) - (ROLE_ORDER[b.r.role] ?? 9)) || (a.i - b.i))
+    .map(({ r }, i) => { const { role, ...rest } = r; void role; return { ...rest, referenceId: i + 1 }; });
   // 작성기 설정(모델·크기)을 그대로 넘긴다 — 스튜디오 버튼과 같은 경로.
   const img = await runImagenTool({
     prompt: promptSent, aspectRatio: input?.aspectRatio || "16:9", projectId,
-    ...(refs.length ? { referenceImages: refs } : {}),
+    ...(orderedRefs.length ? { referenceImages: orderedRefs } : {}),
     ...(input?.provider ? { provider: String(input.provider) } : {}),
     ...(input?.imageSize ? { imageSize: String(input.imageSize) } : {}),
   }, ctx);
@@ -4071,7 +4081,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   return {
     kind: "scene_still", projectId, sceneId: scene?.id,
     signedUrl: img.signedUrl || "", objectName: img.objectName || "",
-    referenceCount: refs.length, references: refNotes, plateVariant,
+    referenceCount: orderedRefs.length, references: refNotes, plateVariant,
     saved: true, promptEcho: promptSent,
   };
 }
@@ -4654,7 +4664,8 @@ async function runSetMasterTool(input: any, ctx: ToolContext): Promise<any> {
   loc.plateDiag = { provider: String(img.provider || ""), model: String(img.model || ""), geminiEndpoint: String(img.geminiEndpoint || ""), referenceCount: Number(img.referenceImageCount) || 0, styleSource: style.source, hubContextUsed: !!hub, promptHead: String(prompt).slice(0, 1200) };
   locations[idx] = loc;
   const nextPayload: any = { episodeLocations: locations };
-  if (!(payload.styleAnchor && payload.styleAnchor.objectName)) nextPayload.styleAnchor = { objectName: img.objectName, sheetId: "", setName: String(loc.name || name), createdAt: new Date().toISOString(), pickedBy: "auto-master" };
+  // 새 부감 마스터가 곧 프로젝트 스타일 기준이다. 사용자가 직접 고른 기준만 지킨다 — 옛 2×2 시트가 자동 기준으로 남으면 새 생성이 그 방을 베낀다.
+  if (!(payload.styleAnchor && payload.styleAnchor.objectName && payload.styleAnchor.pickedBy === "user")) nextPayload.styleAnchor = { objectName: img.objectName, sheetId: "", setName: String(loc.name || name), createdAt: new Date().toISOString(), pickedBy: "auto-master" };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: nextPayload } });
   return { kind: "set_master", projectId, locationName: String(loc.name || name), objectName: img.objectName, signedUrl: img.signedUrl || "", styleSource: style.source, hubContextUsed: !!hub, model: img.model || "", provider: img.provider || "", geminiEndpoint: img.geminiEndpoint || "", layoutUsed: !!layout, saved: true, promptEcho: prompt, summary: `부감 마스터 플레이트 생성: ${String(loc.name || name)}${layout ? " (평면도 적용)" : " (평면도 없음 — 세트 계획을 다시 하면 생겨요)"}` };
 }

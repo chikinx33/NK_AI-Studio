@@ -125,7 +125,13 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   assert.match(fn, /\.slice\(0, 6\);\s*\n/, '화면의 @캐릭터 전원(2명 제한이 세 번째 시트를 빼먹었다)');
-  assert.match(fn, /refs\.push\(\{ ref: `ip:\$\{brandId\}:\$\{tk\}`, referenceId: refs\.length \+ 1, subjectDescription: desc \? `\$\{name\} — \$\{desc\}` : name, referenceKind: "character" \}\)/, '캐릭터 시트는 ip: 참조 키 + 등록 설명 라벨');
+  assert.match(fn, /refs\.push\(\{ role: "character", ref: `ip:\$\{brandId\}:\$\{tk\}`, referenceId: refs\.length \+ 1, subjectDescription: desc \? `\$\{name\} — \$\{desc\}` : name, referenceKind: "character" \}\)/, '캐릭터 시트는 ip: 참조 키 + 등록 설명 라벨');
+  // 전송 순서: 플레이트 → 캐릭터 → 마스터 → (스타일). 플레이트가 있으면 스타일 기준은 붙이지 않는다(옛 기준 이미지가 방을 덮어쓴 사고).
+  assert.match(fn, /const ROLE_ORDER: Record<string, number> = \{ plate: 0, character: 1, master: 2, style: 3 \};/);
+  assert.match(fn, /const hasPlateRef = refs\.some\(\(r\) => r\.role === "plate"\);\s*\n\s*if \(anchor && bucket && !hasPlateRef && refs\.length < 12\)/, '플레이트 있으면 스타일 기준 생략');
+  assert.match(fn, /\.\.\.\(orderedRefs\.length \? \{ referenceImages: orderedRefs \} : \{\}\),/);
+  const im = shared.indexOf('async function runSetMasterTool('); const mfn2 = shared.slice(im, shared.indexOf('\n}\n', im));
+  assert.match(mfn2, /if \(!\(payload\.styleAnchor && payload\.styleAnchor\.objectName && payload\.styleAnchor\.pickedBy === "user"\)\) nextPayload\.styleAnchor = \{ objectName: img\.objectName/, '새 마스터가 스타일 기준(사용자 지정만 예외)');
   assert.match(fn, /const bc = brand \? findBrandCharacter\(brand, tk\) : null;/, '등록 설명(인상착의·크기)을 브랜드에서');
   assert.match(fn, /Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate\. Do NOT enlarge characters to fill the frame/, '크기는 설명대로, 프레임 채우려 키우지 말 것');
   assert.match(fn, /const promptSent = charBlock \? `\$\{prompt\}\\n\$\{charBlock\}` : prompt;/);
@@ -140,7 +146,6 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시
   assert.match(fn, /referenceKind: "environment",\s*\n\s*subjectDescription: plate\.exact\s*\n\s*\? `SET PLATE of \$\{setName\} for THIS camera/);
   assert.match(fn, /if \(plate\.exact && master && plate\.objectName !== master && refs\.length < 12\) \{/, '플레이트가 있으면 마스터도 배치 참조로');
   assert.match(fn, /referenceKind: "style", subjectDescription: `STYLE ANCHOR/);
-  assert.match(fn, /\.\.\.\(refs\.length \? \{ referenceImages: refs \} : \{\}\),/, '참조가 실제로 imagen 에 간다');
   assert.match(fn, /imagePlate: plateVariant,\s*\n\s*imageRefs: refNotes\.join\(" · "\),/, '계보');
   assert.match(fn, /const latest = await runProjectGetTool\(\{ projectId \}, ctx\)\.catch\(\(\) => null\);/, '파생으로 바뀐 저장본을 덮어쓰지 않게 최신 씬을 다시 읽는다');
   const ia = shared.indexOf('async function runSetAngleTool('); const afn = shared.slice(ia, shared.indexOf('\n}\n', ia));
