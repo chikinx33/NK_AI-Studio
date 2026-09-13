@@ -1365,7 +1365,13 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {
-    throw new Error(data?.error || data?.message || `imagen 호출 실패 (${res.status})`);
+    const detailMsg = String(data?.message || data?.detail?.error?.message || data?.detail?.message || "").trim();
+    const parts = [String(data?.error || `imagen 호출 실패 (${res.status})`)];
+    if (detailMsg) parts.push(`— ${detailMsg.slice(0, 300)}`);
+    if (data?.code) parts.push(`[${data.code}]`);
+    if (data?.status && Number(data.status) !== res.status) parts.push(`(upstream ${data.status})`);
+    if (data?.hint) parts.push(`· ${String(data.hint).slice(0, 160)}`);
+    throw new Error(parts.join(" "));
   }
   return {
     signedUrl: data.signedUrl || "",
@@ -4311,24 +4317,40 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   const referenceImages = (loc.refObjectName && bucket)
     ? [{ imageUrl: `gs://${bucket}/${String(loc.refObjectName).replace(/^gs:\/\/[^/]+\//, "")}`, referenceId: 1, subjectDescription: `${String(loc.name || name)} (front-facing master plate)`, referenceKind: "environment" }]
     : [];
-  const img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution, ...(input?.provider ? { provider: String(input.provider) } : {}) }, ctx);
-  if (!img.objectName) throw new Error("세트 시트 결과에 저장 경로(objectName)가 없어요.");
+  const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
+  let img: any;
+  let fallback = "";
+  let firstError = "";
+  try {
+    img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution, ...providerOpt }, ctx);
+  } catch (e: any) {
+    // 1차 실패: 해상도 지정·플레이트 참조를 빼고 한 번 더. 어느 쪽이 원인인지 결과에 남겨 다음 시도에 쓴다.
+    firstError = String(e?.message || e);
+    fallback = "default-size-no-reference";
+    try {
+      img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: [], generationMode: "text-to-image", ...providerOpt }, ctx);
+    } catch (e2: any) {
+      throw new Error(`세트 시트 생성 실패 — 1차(${resolution}${referenceImages.length ? "+플레이트 참조" : ""}): ${firstError} / 2차(기본 크기, 참조 없음): ${String(e2?.message || e2)}`);
+    }
+  }
+  if (!img?.objectName) throw new Error("세트 시트 결과에 저장 경로(objectName)가 없어요.");
   const sheetId = `sheet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const sheet = {
     id: sheetId, kind: "bible-set", setId: String(loc.id || ""), setName: String(loc.name || name),
-    cutIds: [], resolution, grid: { cols: 2, rows: 2 }, objectName: img.objectName,
+    cutIds: [], resolution: fallback ? "default" : resolution, requestedResolution: resolution, fallback, grid: { cols: 2, rows: 2 }, objectName: img.objectName,
     panels: SET_ANGLES.map((a: any, i: number) => ({ index: i + 1, role: "set", ref: a.id, angleLabel: a.label, objectName: "", status: "pending", label: "bible" })),
     prompt, referenceMeta: { plate: referenceImages.length > 0 }, model: img.model || "", imageSizeApplied: "",
     agentJobId: String(ctx.jobId || ""), createdAt: new Date().toISOString(),
   };
   const sheets: any[] = Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets.slice() : [];
   sheets.push(sheet);
-  locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution, createdAt: sheet.createdAt } };
+  locations[idx] = { ...loc, setSheet: { sheetId, objectName: img.objectName, resolution: fallback ? "default" : resolution, createdAt: sheet.createdAt } };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, payload: { episodeLocations: locations, storyboardSheets: sheets } } });
   return {
     kind: "set_sheet", projectId, locationName: String(loc.name || name), sheetId, objectName: img.objectName, signedUrl: img.signedUrl || "",
-    resolution, plateReferenced: referenceImages.length > 0, model: img.model || "", saved: true, promptEcho: prompt,
-    summary: `세트 시트(${resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.`,
+    resolution: fallback ? "default" : resolution, requestedResolution: resolution, plateReferenced: !fallback && referenceImages.length > 0, model: img.model || "", saved: true, promptEcho: prompt,
+    fallback, firstError,
+    summary: `세트 시트(${fallback ? "기본 크기·참조 없음으로 재시도" : resolution}) 생성: ${String(loc.name || name)} — 정면·후면·부감·로우 4칸. 패널 승인은 캔버스 배경 카드에서.${firstError ? ` (1차 실패: ${firstError.slice(0, 120)})` : ""}`,
   };
 }
 

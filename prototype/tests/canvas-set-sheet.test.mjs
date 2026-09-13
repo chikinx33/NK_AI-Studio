@@ -18,10 +18,10 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.match(src, /function SparkleIcon\(\{ className \}/);
   assert.match(src, /M9\.937 15\.5A2 2 0 0 0 8\.5 14\.063/, 'lucide sparkle(다이아몬드 별) 경로');
   assert.match(src, /\{l\.kind === "locations" && \([\s\S]*?<SparkleIcon className="h-4 w-4" \/>/);
-  assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); void generateSetSheets\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
-  assert.match(src, /const generateSetSheets = async \(\) => \{/);
-  assert.match(src, /const missing = locs\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
-  assert.match(src, /await enqueue\("set_sheet", \{ projectId, locationName: String\(n\.data\?\.name \|\| n\.label\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K", provider: settings\.image\.provider \}, `세트 시트 · \$\{n\.label\}`, undefined, String\(n\.data\?\.name \|\| n\.label\)\);/);
+  assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
+  assert.match(src, /const openSetSheetModal = \(\) => \{/);
+  assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.setSheet\);/);
+  assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\(missing\.length \? missing : locationNodes\)\.map\(\(n\) => n\.id\)\), resolution: String\(settings\.image\.size\) === "4K" \? "4K" : "2K" \}\);/, '시트 없는 장소가 기본 선택, 모두 있으면 전부(재생성)');
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet"\];/);
 });
 
@@ -32,12 +32,24 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /case "review_pending": return "승인 대기";/);
   assert.match(src, /case "error": return `오류\$\{j\.error \? `: \$\{j\.error\}` : ""\}`;/);
   assert.match(src, /const error = String\(\(job as any\)\?\.error \|\| \(job as any\)\?\.output\?\.error \|\| ""\)\.trim\(\);/, '서버 오류 문구를 가져온다');
-  assert.match(src, /data-testid="job-strip"/, '컷 선택과 무관한 상단 상태 띠');
-  assert.match(src, /\{!done && <RefreshIcon className="h-3 w-3 animate-spin" \/>\}/);
+  // 상태는 레이아웃을 밀지 않는 떠 있는 작업 독(absolute, 왼쪽 아래)으로 — 상단 띠는 화면이 튀어 폐기
+  assert.doesNotMatch(src, /data-testid="job-strip"/, '상단 상태 띠(레이아웃 밀림) 금지');
+  assert.match(src, /className="absolute bottom-3 left-3 z-30 flex max-w-\[420px\] flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /const \[jobDockOpen, setJobDockOpen\] = useState\(false\);/);
+  assert.match(src, /\{active\.length \? `작업 \$\{active\.length\}개 진행 중` : errors\.length \? `오류 \$\{errors\.length\}` : "작업 완료"\}/);
   assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
   assert.match(src, /const approveNow = async \(jobId: string\) => \{/);
   assert.match(src, /끝난 항목 지우기/);
-  // 잡 생성 자체가 실패해도 상태 띠에 오류로 남는다
+  // 세트 시트 모달: 대상·해상도 선택 → "생성"이 곧 확인(만들자마자 승인) → 같은 모달에서 진행
+  assert.match(src, /const \[sheetModal, setSheetModal\] = useState<\{ step: "pick" \| "progress"; selected: Set<string>; resolution: "2K" \| "4K" \} \| null>\(null\);/);
+  assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
+  assert.match(src, /const generateSetSheets = async \(ids: Set<string>, resolution: "2K" \| "4K"\) => \{/);
+  assert.match(src, /const res = await createAgentJob\("set_sheet", \{ projectId, locationName: name, resolution, provider: settings\.image\.provider \}\);\s*\n[\s\S]{0,300}await approveItem\(res\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
+  assert.match(src, /<div className="text-\[13px\] font-bold text-white">세트 시트 생성<\/div>/);
+  assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
+  assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateSetSheets\(m\.selected, m\.resolution\);/);
+  assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
+  // 잡 생성 자체가 실패해도 오류로 남는다
   assert.match(src, /setPending\(\(prev\) => \[\{ jobId: `local-\$\{Date\.now\(\)\}`, type, sceneId, status: "error", label, target, error: \(e as Error\)\.message/);
   // 별 버튼: 진행 중이면 스피너 + 비활성
   assert.match(src, /const setSheetActive = pending\.some\(\(p\) => p\.type === "set_sheet" && !JOB_DONE\.includes\(p\.status\)\);/);
@@ -47,7 +59,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const locJob = n\.type === "location" \? pending\.find\(\(j\) => j\.type === "set_sheet" && String\(j\.target \|\| ""\) === String\(n\.data\.name \|\| n\.label\)\)/);
   assert.match(src, /\{locJob && !JOB_DONE\.includes\(locJob\.status\) && <Chip tone="amber">\{locJob\.status === "review_pending" \? "승인 대기" : "시트 생성 중"\}<\/Chip>\}/);
   assert.match(src, /\{locJob && locJob\.status === "error" && <Chip tone="red">오류<\/Chip>\}/);
-  assert.match(src, /`세트 시트 · \$\{n\.label\}`, undefined, String\(n\.data\?\.name \|\| n\.label\)\)/, '잡에 대상 장소를 기록');
+  assert.match(src, /label: `세트 시트 · \$\{n\.label\}`, target: name, updatedAt: Date\.now\(\)/, '잡에 대상 장소를 기록');
 });
 
 test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 시트 유무 칩을 단다', () => {
@@ -77,6 +89,14 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   assert.match(fn, /buildBibleSetSheetPrompt\(\{ header, set: \{ name: String\(loc\.name \|\| name\), description: String\(loc\.description \|\| ""\) \}, aspect \}\)/);
   assert.match(fn, /referenceKind: "environment"/, '마스터 플레이트가 있으면 참조');
   assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution/);
+  // 1차 실패 시 해상도 기본값·참조 없이 한 번 더, 두 시도의 오류를 모두 남긴다(원인 분리)
+  assert.match(fn, /fallback = "default-size-no-reference";/);
+  assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages: \[\], generationMode: "text-to-image", \.\.\.providerOpt \}, ctx\)/);
+  assert.match(fn, /세트 시트 생성 실패 — 1차\(/);
+  assert.match(fn, /fallback, firstError,/);
+  // imagen 오류는 상세(메시지·코드·힌트)까지 올린다 — "Gemini API error" 한 줄 금지
+  assert.match(shared, /const detailMsg = String\(data\?\.message \|\| data\?\.detail\?\.error\?\.message \|\| data\?\.detail\?\.message \|\| ""\)\.trim\(\);/);
+  assert.match(shared, /if \(data\?\.hint\) parts\.push\(`· \$\{String\(data\.hint\)\.slice\(0, 160\)\}`\);/);
   assert.match(fn, /kind: "bible-set"/);
   assert.match(fn, /panels: SET_ANGLES\.map\(/);
   assert.match(fn, /grid: \{ cols: 2, rows: 2 \}/);

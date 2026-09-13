@@ -380,6 +380,10 @@ export default function ProductionCanvas({
   const [settings, setSettings] = useState<CanvasSettings>(() => loadCanvasSettings());
   const updateSettings = useCallback((next: CanvasSettings) => { setSettings(next); saveCanvasSettings(next); }, []);
   const [notice, setNotice] = useState("");
+  // 떠 있는 작업 독(캔버스 왼쪽 아래, 레이아웃을 밀지 않는다) 펼침 여부
+  const [jobDockOpen, setJobDockOpen] = useState(false);
+  // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
+  const [sheetModal, setSheetModal] = useState<{ step: "pick" | "progress"; selected: Set<string>; resolution: "2K" | "4K" } | null>(null);
   const [draft, setDraft] = useState<{ common: string; composition: string; action: string; promptText: string; cutRefId: string; cutRefEnabled: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -598,15 +602,29 @@ export default function ProductionCanvas({
 
   // 배경 바 "세트 시트 생성": 장소(세트)마다 바이블 세트 시트(2×2 앵글) 잡을 하나씩 만든다.
   // 시트가 이미 있는 장소는 건너뛰고, 없는 장소가 하나도 없으면 전부 다시 만든다(재생성).
-  const generateSetSheets = async () => {
+  const locationNodes = useMemo(() => (graph?.nodes || []).filter((n) => n.type === "location"), [graph]);
+  const openSetSheetModal = () => {
     if (!projectId) return;
-    const locs = (graph?.nodes || []).filter((n) => n.type === "location");
-    if (!locs.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
-    const missing = locs.filter((n) => !n.data?.setSheet);
-    const targets = missing.length ? missing : locs;
-    if (!missing.length && !window.confirm(`모든 세트에 이미 시트가 있어요. ${locs.length}개 세트의 시트를 다시 만들까요? (크레딧 사용)`)) return;
+    if (!locationNodes.length) { setNotice("장소(세트)가 없어요. 컷에 장소 이름이 있어야 배경 카드가 생겨요."); return; }
+    const missing = locationNodes.filter((n) => !n.data?.setSheet);
+    // 기본 선택: 시트가 없는 장소. 모두 있으면 전부(재생성).
+    setSheetModal({ step: "pick", selected: new Set((missing.length ? missing : locationNodes).map((n) => n.id)), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" });
+  };
+  // 모달에서 "생성"을 누른 것이 곧 확인이다 — 잡을 만들고 바로 승인해 승인 대기에 멈추지 않게 한다.
+  const generateSetSheets = async (ids: Set<string>, resolution: "2K" | "4K") => {
+    if (!projectId) return;
+    const targets = locationNodes.filter((n) => ids.has(n.id));
     for (const n of targets) {
-      await enqueue("set_sheet", { projectId, locationName: String(n.data?.name || n.label), resolution: String(settings.image.size) === "4K" ? "4K" : "2K", provider: settings.image.provider }, `세트 시트 · ${n.label}`, undefined, String(n.data?.name || n.label));
+      const name = String(n.data?.name || n.label);
+      try {
+        const res = await createAgentJob("set_sheet", { projectId, locationName: name, resolution, provider: settings.image.provider });
+        setPending((prev) => [{ jobId: res.jobId, type: "set_sheet", status: "running", label: `세트 시트 · ${n.label}`, target: name, updatedAt: Date.now() }, ...prev].slice(0, 20));
+        await approveItem(res.jobId).catch((e) => {
+          setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message } : p)));
+        });
+      } catch (e) {
+        setPending((prev) => [{ jobId: `local-${Date.now()}`, type: "set_sheet", status: "error", label: `세트 시트 · ${n.label}`, target: name, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
+      }
     }
   };
 
@@ -881,26 +899,6 @@ export default function ProductionCanvas({
       </section>
       )}
 
-      {/* 잡 상태 띠 — 모든 생성 행위의 상태를 컷 선택과 무관하게 보여 준다(대기·승인 대기·실행 중·완료·오류). */}
-      {pending.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-edge bg-[#0b1017] px-3 py-1.5" data-testid="job-strip">
-          {pending.slice(0, 6).map((j) => {
-            const done = JOB_DONE.includes(j.status);
-            const tone = j.status === "error" ? "border-red-700/60 text-red-300" : j.status === "approved" ? "border-emerald-700/60 text-emerald-300" : j.status === "review_pending" ? "border-amber-700/60 text-amber-300" : "border-sky-700/60 text-sky-300";
-            return (
-              <span key={j.jobId} className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${tone}`} title={j.error || j.label}>
-                {!done && <RefreshIcon className="h-3 w-3 animate-spin" />}
-                <span className="truncate">{j.label}</span>
-                <span className="opacity-80">· {jobStatusText(j)}</span>
-                {j.status === "review_pending" && <button type="button" onClick={() => void approveNow(j.jobId)} className="rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-black hover:bg-amber-500">승인</button>}
-                {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="text-gray-500 hover:text-white" aria-label="닫기">×</button>}
-              </span>
-            );
-          })}
-          {pending.length > 6 && <span className="text-[11px] text-gray-500">+{pending.length - 6}</span>}
-          {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="ml-auto text-[11px] text-gray-500 hover:text-white">끝난 항목 지우기</button>}
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative flex min-h-0 flex-1">
         {/* 캔버스 */}
@@ -963,7 +961,7 @@ export default function ProductionCanvas({
                     <button
                       type="button"
                       onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); void generateSetSheets(); }}
+                      onClick={(e) => { e.stopPropagation(); openSetSheetModal(); }}
                       disabled={!projectId || saving || setSheetActive}
                       className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition disabled:opacity-60 ${setSheetActive ? "border-amber-300/70 text-amber-200" : "border-violet-300/50 text-violet-100 hover:bg-violet-500/30 hover:text-white"}`}
                       title={setSheetActive ? "세트 시트 생성 중…" : "세트 시트 생성 — 장소마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요"}
@@ -1079,6 +1077,112 @@ export default function ProductionCanvas({
           </div>
 
           {/* 대화 — 작성기(하단 중앙 필) + 세션 패널(오른쪽 오버레이). 작업 공간을 띠로 자르지 않는다. */}
+          {/* 작업 독 — 캔버스 왼쪽 아래에 떠 있다(absolute). 레이아웃을 밀지 않는다. 접힌 알약 → 펼치면 목록. */}
+          {pending.length > 0 && (() => {
+            const active = pending.filter((j) => !JOB_DONE.includes(j.status));
+            const errors = pending.filter((j) => j.status === "error");
+            return (
+              <div className="absolute bottom-3 left-3 z-30 flex max-w-[420px] flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+                {jobDockOpen && (
+                  <div className="max-h-64 w-[400px] overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
+                    <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">
+                      <span className="font-bold text-gray-200">작업</span>
+                      {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="hover:text-white">끝난 항목 지우기</button>}
+                    </div>
+                    <ul className="space-y-1">
+                      {pending.map((j) => {
+                        const done = JOB_DONE.includes(j.status);
+                        const tone = j.status === "error" ? "text-red-300" : j.status === "approved" ? "text-emerald-300" : j.status === "review_pending" ? "text-amber-300" : "text-sky-300";
+                        return (
+                          <li key={j.jobId} className="flex items-center gap-2 rounded-lg bg-[#151b25] px-2 py-1.5 text-[11px]" title={j.error || j.label}>
+                            {!done ? <RefreshIcon className="h-3 w-3 shrink-0 animate-spin text-sky-300" /> : <span className={`h-2 w-2 shrink-0 rounded-full ${j.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />}
+                            <span className="min-w-0 flex-1 truncate text-gray-200">{j.label}</span>
+                            <span className={`shrink-0 truncate ${tone}`} style={{ maxWidth: 160 }}>{jobStatusText(j)}</span>
+                            {j.status === "review_pending" && <button type="button" onClick={() => void approveNow(j.jobId)} className="shrink-0 rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-black hover:bg-amber-500">승인</button>}
+                            {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="shrink-0 text-gray-500 hover:text-white" aria-label="닫기">×</button>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                <button type="button" onClick={() => setJobDockOpen((v) => !v)} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold shadow-lg backdrop-blur transition ${errors.length && !active.length ? "border-red-700/60 bg-[#1a0f12]/95 text-red-200" : active.length ? "border-sky-700/60 bg-[#0c1119]/95 text-sky-200" : "border-edge bg-[#0c1119]/95 text-gray-300"}`} aria-expanded={jobDockOpen}>
+                  {active.length ? <RefreshIcon className="h-3.5 w-3.5 animate-spin" /> : <span className={`h-2 w-2 rounded-full ${errors.length ? "bg-red-400" : "bg-emerald-400"}`} />}
+                  {active.length ? `작업 ${active.length}개 진행 중` : errors.length ? `오류 ${errors.length}` : "작업 완료"}
+                  {pending.some((j) => j.status === "review_pending") && <span className="rounded-full bg-amber-600 px-1.5 text-[10px] text-black">승인 대기</span>}
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* 세트 시트 생성 모달 — 대상 장소·해상도를 고르고 "생성"이 곧 확인. 진행은 같은 모달에서 장소별로 본다. */}
+          {sheetModal && (
+            <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setSheetModal(null)}>
+              <div className="w-[560px] max-w-[94%] overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
+                  <SparkleIcon className="h-4 w-4 text-violet-300" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-bold text-white">세트 시트 생성</div>
+                    <div className="text-[11px] text-gray-500">세트마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요. 세트 시트가 이후 모든 콘티·스틸컷의 배경 기준이 돼요.</div>
+                  </div>
+                  <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
+                </div>
+                <div className="max-h-[52vh] overflow-y-auto px-4 py-3">
+                  <ul className="space-y-1.5">
+                    {locationNodes.map((n) => {
+                      const name = String(n.data?.name || n.label);
+                      const job = pending.find((j) => j.type === "set_sheet" && String(j.target || "") === name) || null;
+                      const checked = sheetModal.selected.has(n.id);
+                      const thumb = n.data?.setSheet?.url || n.data?.plateUrl || "";
+                      return (
+                        <li key={n.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
+                          {sheetModal.step === "pick" ? (
+                            <input type="checkbox" checked={checked} onChange={(e) => setSheetModal((m) => { if (!m) return m; const next = new Set(m.selected); e.target.checked ? next.add(n.id) : next.delete(n.id); return { ...m, selected: next }; })} className="h-4 w-4 accent-violet-500" />
+                          ) : (
+                            checked ? (job && !JOB_DONE.includes(job.status) ? <RefreshIcon className="h-4 w-4 animate-spin text-sky-300" /> : <span className={`h-2.5 w-2.5 rounded-full ${job?.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />) : <span className="h-4 w-4" />
+                          )}
+                          {thumb ? <img src={withMediaToken(String(thumb))} alt="" className="h-10 w-[71px] shrink-0 rounded-md object-cover" /> : <div className="grid h-10 w-[71px] shrink-0 place-items-center rounded-md bg-[#151b25] text-[10px] text-gray-600">없음</div>}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[12px] font-bold text-gray-100">{name}</div>
+                            <div className="truncate text-[10px] text-gray-500">{n.data?.setSheet ? `시트 있음 (${String(n.data.setSheet.resolution || "")}) — 다시 만들면 새 시트로 바뀌어요` : n.data?.plateUrl ? "정면 플레이트만 있음 — 플레이트를 참조해 4앵글을 만들어요" : "시트 없음"}</div>
+                          </div>
+                          {sheetModal.step === "progress" && checked && job && (
+                            <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : job.status === "approved" ? "text-emerald-300" : "text-sky-300"}`} title={job.error || ""}>{job.status === "approved" ? "완료" : job.status === "error" ? "오류" : "생성 중"}</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {sheetModal.step === "progress" && pending.some((j) => j.type === "set_sheet" && j.status === "error") && (
+                    <p className="mt-2 rounded-lg bg-red-900/20 px-3 py-2 text-[11px] text-red-300">{pending.filter((j) => j.type === "set_sheet" && j.status === "error").map((j) => `${j.target}: ${j.error || "오류"}`).join(" / ")}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
+                  {sheetModal.step === "pick" ? (
+                    <>
+                      <label className="flex items-center gap-1.5 text-[11px] text-gray-400">해상도
+                        <select value={sheetModal.resolution} onChange={(e) => setSheetModal((m) => (m ? { ...m, resolution: e.target.value === "4K" ? "4K" : "2K" } : m))} className="rounded border border-edge bg-[#151b25] px-2 py-1 text-[11px] text-gray-100">
+                          <option value="2K">2K</option>
+                          <option value="4K">4K</option>
+                        </select>
+                      </label>
+                      <span className="text-[11px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
+                      <div className="flex-1" />
+                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
+                      <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateSetSheets(m.selected, m.resolution); }} className="min-w-[96px] rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-gray-500">{pending.some((j) => j.type === "set_sheet" && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요." : "끝났어요. 배경 카드에서 시트를 확인하세요."}</span>
+                      <div className="flex-1" />
+                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-500">닫기</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <CanvasChatDock
             projectId={projectId}
             projectTitle={graph?.title || ""}
