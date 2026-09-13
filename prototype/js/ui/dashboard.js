@@ -997,12 +997,11 @@
         episodeListDesc: '에피소드를 선택하면 해당 에피소드의 SNS 세팅 화면이 열립니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 연결'
       };
     const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
-    const manageBarHtml = host === 'video' ? `
-      <div class="series-manage-bar">
-        <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${escapeHtml(selectedSeries.title)}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
-        <button class="btn-secondary compact ${selectedSeries ? '' : 'disabled'}" data-action="series-edit" ${selectedSeries ? '' : 'disabled'}>프로젝트 수정</button>
-        <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
-      </div>` : '';
+    // 시리즈 관리(프로젝트 수정·시리즈 삭제)는 별도 바가 아니라 신규 버튼 왼쪽에 같은 크기로 둔다(사용자 요청).
+    const manageBarHtml = '';
+    const manageBtnsHtml = host === 'video' ? `
+            <button type="button" class="btn-secondary series-manage-btn${selectedSeries ? '' : ' disabled'}" data-action="series-edit" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_edit'))}</button>
+            <button type="button" class="btn-secondary series-manage-btn danger${selectedSeries ? '' : ' disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'} title="${escapeHtml(selectedSeries ? selectedSeries.title : dt('dashboard_series_select_hint'))}">${escapeHtml(dt('dashboard_series_delete'))}</button>` : '';
 
     const showCreateButton = host === 'brand' || host === 'video';
 
@@ -1127,6 +1126,7 @@
               <button type="button" class="view-mode-btn${currentViewMode === 'list' ? ' active' : ''}" data-action="view-mode" data-view="list" title="${escapeHtml(dt('dashboard_view_list'))}" aria-label="${escapeHtml(dt('dashboard_view_list'))}" aria-pressed="${currentViewMode === 'list'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg></button>
             </div>
             ${shareBtnHtml}
+            ${manageBtnsHtml}
             ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">${runtimeLang === 'en' ? 'New' : '신규'}</button>` : ``}
           </div>
         </div>

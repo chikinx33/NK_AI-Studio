@@ -31,18 +31,40 @@ test('★리스트 보기 CSS: 컨테이너 한 열, 카드 가로 배치, 썸�
   assert.match(css, /\.draft-card-grid\.view-list \{\s*\n\s*grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(css, /\.draft-card-grid\.view-list \.draft-card \{\s*\n\s*flex-direction: row;/);
   assert.match(css, /\.draft-card-grid\.view-list \.draft-thumb \{\s*\n\s*width: 48px;\s*\n\s*height: 48px;/);
-  assert.match(css, /\.draft-card-grid\.view-list \.draft-thumb-btns \.trash-btn \{[\s\S]*?width: 28px;/);
+  assert.match(css, /\.draft-card-grid\.view-list \.draft-thumb-btns \.trash-btn \{[\s\S]*?width: 34px;\s*\n\s*height: 34px;/, '편집·복제·삭제 = 스테이지 버튼 높이의 정사각');
   assert.match(css, /\.draft-card-grid\.view-list \.draft-meta \{[\s\S]*?flex-direction: row;/);
   assert.match(css, /\.draft-card-grid\.view-list \.draft-actions,\s*\n\s*html\.page-shell-video \.draft-card-grid\.view-list \.draft-card \.draft-actions,[\s\S]*?display: flex !important;/, '비디오 셸의 display:block 규칙을 이긴다');
   assert.match(css, /\.view-mode-btn\.active \{/);
 });
 
-test('★캔버스 버튼 높이 = 스테이지 버튼 높이: 줄을 flex stretch 로, 버튼은 aspect-ratio 1/1', () => {
+test('★캔버스 버튼 = 스테이지 버튼 높이의 정사각: 한 변수(--draft-btn-h)를 border-box 로 공유한다', () => {
   const css = read('prototype/styles.dashboard-cards.css');
-  assert.match(css, /html\.page-shell-video \.draft-card \.draft-actions\.has-canvas,\s*\n\s*body\.page-shell-video \.draft-card \.draft-actions\.has-canvas \{\s*\n\s*display: flex !important;\s*\n\s*align-items: stretch;/);
+  assert.match(css, /\.draft-actions \{\s*\n\s*--draft-btn-h: 34px;/);
+  assert.match(css, /html\.page-shell-video \.draft-card \.draft-actions\.has-canvas,\s*\n\s*body\.page-shell-video \.draft-card \.draft-actions\.has-canvas \{\s*\n\s*display: flex !important;/);
   const block = css.slice(css.indexOf('.draft-actions .canvas-btn {'), css.indexOf('.draft-actions .canvas-btn svg'));
-  assert.match(block, /aspect-ratio: 1 \/ 1;/);
-  assert.match(block, /align-self: stretch;/);
-  assert.doesNotMatch(block, /height: 34px;/, '고정 높이가 아니라 줄 높이를 따른다');
+  assert.match(block, /width: var\(--draft-btn-h\);\s*\n\s*height: var\(--draft-btn-h\);/);
+  assert.match(block, /box-sizing: border-box;/);
+  assert.match(css, /\.draft-actions \.btn-primary,\s*\n\s*\.draft-actions \.btn-secondary \{\s*\n\s*min-width: 0;\s*\n\s*height: var\(--draft-btn-h\);\s*\n\s*box-sizing: border-box;/);
   assert.match(css, /\.draft-actions\.has-canvas \.btn-primary,\s*\n\s*\.draft-actions\.has-canvas \.btn-secondary \{\s*\n\s*flex: 1 1 0;/);
+});
+
+test('★시리즈 관리 버튼(프로젝트 수정·시리즈 삭제)은 관리 바가 아니라 신규 버튼 왼쪽에 같은 크기(84px)로, 미선택이면 비활성, 한/영', () => {
+  const dash = read('prototype/js/ui/dashboard.js');
+  assert.doesNotMatch(dash, /<div class="series-manage-bar">/, '관리 바는 사라진다');
+  assert.match(dash, /const manageBarHtml = '';/);
+  const i = dash.indexOf('${manageBtnsHtml}');
+  const j = dash.indexOf('<button class="btn-primary series-create-btn"', i);
+  assert.ok(i > 0 && j > i, '관리 버튼이 신규 버튼 바로 앞');
+  assert.match(dash, /class="btn-secondary series-manage-btn\$\{selectedSeries \? '' : ' disabled'\}" data-action="series-edit" \$\{selectedSeries \? '' : 'disabled'\}/);
+  assert.match(dash, /class="btn-secondary series-manage-btn danger\$\{selectedSeries \? '' : ' disabled'\}" data-action="series-delete"/);
+  assert.match(dash, /dt\('dashboard_series_edit'\)/);
+  assert.match(dash, /dt\('dashboard_series_delete'\)/);
+  const core = read('prototype/core.js');
+  for (const k of ['dashboard_series_edit', 'dashboard_series_delete', 'dashboard_series_select_hint']) {
+    assert.equal((core.match(new RegExp(`^\\s+${k}: '`, 'gm')) || []).length, 2, `${k} 는 ko/en 둘 다`);
+  }
+  const css = read('prototype/styles.dashboard-cards.css');
+  assert.match(css, /\.series-manage-btn \{\s*\n\s*width: 84px;\s*\n\s*height: 84px;\s*\n\s*min-width: 84px;/, '신규 버튼(84px)과 같은 크기');
+  assert.match(css, /\.series-manage-btn \{[\s\S]*?border-radius: 24px;/);
+  assert.match(css, /\.series-manage-btn\.danger \{/);
 });

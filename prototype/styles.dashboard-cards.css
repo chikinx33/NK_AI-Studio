@@ -546,6 +546,48 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
   gap: 10px;
 }
 
+/* 시리즈 관리(프로젝트 수정·시리즈 삭제): 신규 버튼 왼쪽, 같은 크기. 시리즈 미선택이면 비활성. */
+.series-manage-btn {
+  width: 84px;
+  height: 84px;
+  min-width: 84px;
+  padding: 0 8px;
+  border-radius: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.series-manage-btn:hover:not(:disabled) {
+  border-color: rgba(255, 140, 0, 0.45);
+  transform: none;
+}
+
+.series-manage-btn.danger {
+  color: #ff8a80;
+  border-color: rgba(255, 99, 71, 0.45);
+}
+
+.series-manage-btn.danger:hover:not(:disabled) {
+  border-color: rgba(255, 99, 71, 0.8);
+  background: rgba(255, 99, 71, 0.1);
+}
+
+.series-manage-btn:disabled,
+.series-manage-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .series-create-btn {
   width: 84px;
   height: 84px;
@@ -854,6 +896,7 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 }
 
 .draft-actions {
+  --draft-btn-h: 34px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -877,11 +920,11 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 }
 
 .draft-actions .canvas-btn {
-  width: auto;
-  height: auto;
-  aspect-ratio: 1 / 1;
+  width: var(--draft-btn-h);
+  height: var(--draft-btn-h);
+  min-width: var(--draft-btn-h);
+  box-sizing: border-box;
   flex: 0 0 auto;
-  align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -918,7 +961,8 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 .draft-actions .btn-primary,
 .draft-actions .btn-secondary {
   min-width: 0;
-  height: 34px;
+  height: var(--draft-btn-h);
+  box-sizing: border-box;
   padding: 0 8px;
   justify-content: center;
   white-space: nowrap;
@@ -1166,21 +1210,22 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
 .draft-card-grid.view-list .draft-thumb-btns .edit-btn,
 .draft-card-grid.view-list .draft-thumb-btns .copy-btn,
 .draft-card-grid.view-list .draft-thumb-btns .trash-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  box-sizing: border-box;
+  border-radius: 10px;
 }
 
 .draft-card-grid.view-list .draft-thumb-btns .edit-btn::before,
 .draft-card-grid.view-list .draft-thumb-btns .trash-btn::before {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .draft-card-grid.view-list .draft-thumb-btns .copy-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
 }
 
 .draft-card-grid.view-list .draft-info {
