@@ -57,3 +57,9 @@ test('★캔버스: 씬 바 아래로 떼어내면 가장 앞 컷부터 새 씬 
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split"\];/);
   assert.match(src, /if \(p\.type === "scene_split" && status === "approved"\) reorderResetRef\.current = true;/);
 });
+
+test('★컷 카드 상단 바 클릭 = 선택 토글(상세 안 열림), 그 외 영역 = 상세', () => {
+  const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(src, /className="flex cursor-pointer items-center gap-1\.5 border-b border-edge px-3 py-2" data-zone="header"/);
+  assert.match(src, /if \(d\.kind === "cut" && d\.id && !d\.moved && d\.zone === "header" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n[\s\S]{0,200}setSelectedId\(""\);\s*\n\s*setMulti\(/);
+});

@@ -838,6 +838,12 @@ export default function ProductionCanvas({
       setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
       return;
     }
+    if (d.kind === "cut" && d.id && !d.moved && d.zone === "header" && nodeById.get(d.id)?.type === "cut") {
+      // 컷 카드 상단 바 클릭 = 선택 토글만(상세는 열지 않는다). 여러 컷을 고르는 기본 방법.
+      setSelectedId("");
+      setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
+      return;
+    }
     if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved) {
       if (e.shiftKey || e.ctrlKey || e.metaKey) { // Shift·Ctrl(Cmd)+클릭 = 다중 선택 토글
         setMulti((prev) => { const next = new Set(prev); next.has(d.id!) ? next.delete(d.id!) : next.add(d.id!); return next; });
@@ -1154,7 +1160,7 @@ export default function ProductionCanvas({
                   )}
                   {n.type === "cut" && (
                     <div>
-                      <div className="flex items-center gap-1.5 border-b border-edge px-3 py-2">
+                      <div className="flex cursor-pointer items-center gap-1.5 border-b border-edge px-3 py-2" data-zone="header" title="상단 바 클릭 = 선택/해제 (여러 컷 고르기). 아래 내용 클릭 = 상세 열기">
                         <span className="text-[12px] font-bold text-white">{cutLabelById.get(n.id) || n.label}</span>
                         <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">#{String(n.data.sceneId)}</span>
                         <Chip>{String(n.data.shotType)}</Chip>
