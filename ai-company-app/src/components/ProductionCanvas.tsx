@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import ProjectPicker from "./ProjectPicker";
 import { readStorage, writeStorage } from "../lib/safeStorage";
+import { analyzeReorderClient, sameOrder, type OrderCut } from "../lib/sceneOrder";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
@@ -54,7 +55,8 @@ const MAX_SCALE = 2;
 //  · 캐릭터 바(초록): 등록 캐릭터 카드가 딸린다.
 //  · 장소·배경 바(연두): 장소(세트) 카드가 딸린다.
 // 카드를 끌어 같은 종류의 다른 칸에 놓으면 그 자리에 스냅해 간격을 두고 붙고, 바를 끌면 딸린 카드가 함께 움직인다.
-// 배치는 표시용이며 서버의 컷 순서는 바꾸지 않는다(순서 변경은 다음 단계).
+// 배치(바·칸 좌표)는 표시용이지만, 컷 카드를 다른 칸에 놓으면 실제 컷 순서도 바뀐다(scene_reorder 잡).
+// 놓기 전에 세트 넘어감·노래 구간 어긋남을 검사해 경고하고, 취소하면 원래 칸으로 돌아간다.
 const CARD_GAP = 12;                                              // 바-카드 세로 간격 = 카드-카드 가로 간격(사용자 요청: 같은 값)
 const SCENE_BAR_GAP = CARD_GAP;
 const BAR_H = 44;                                                 // 바 높이(세 종류 공통)
@@ -339,6 +341,8 @@ export default function ProductionCanvas({
   const [measuredH, setMeasuredH] = useState<Heights>({});
   // 지금 배치가 기본 배치인지(저장본이 아닌지). 기본 배치면 카드 높이를 잰 뒤 다시 깔아 줄 간격을 맞춘다.
   const layoutSourceRef = useRef<"default" | "saved">("default");
+  // 순서 변경 잡이 실행된 뒤의 재로드에서 칸 배치(groups)를 서버 순서로 다시 묶는다(바 위치는 유지).
+  const reorderResetRef = useRef(false);
   const lanes = useMemo(() => lanesFromLayout(layout, graph, measuredH), [layout, graph, measuredH]);
   const positions = useMemo(() => computePositions(layout, lanes), [layout, lanes]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.8 });
@@ -391,8 +395,11 @@ export default function ProductionCanvas({
       const saved = readStorage(`canvasLayout:${projectId}`);
       let parsed: Partial<CanvasLayout> | null = null;
       try { parsed = saved ? JSON.parse(saved) : null; } catch { parsed = null; }
-      layoutSourceRef.current = (parsed || fromServer) ? "saved" : "default";
-      setLayout(reconcileLayout(parsed || fromServer, g, base));
+      const savedLayout = parsed || fromServer;
+      const seed = reorderResetRef.current && savedLayout ? { ...savedLayout, groups: undefined } : savedLayout;
+      reorderResetRef.current = false;
+      layoutSourceRef.current = savedLayout ? "saved" : "default";
+      setLayout(reconcileLayout(seed, g, base));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -492,7 +499,15 @@ export default function ProductionCanvas({
         if (["approved", "error", "cancelled", "revise"].includes(p.status)) return p;
         const job = await getAgentJob(p.jobId).catch(() => null);
         const status = String(job?.status || job?.review_status || p.status);
-        if (status !== p.status) changed = true;
+        if (status !== p.status) {
+          changed = true;
+          if (p.type === "scene_reorder" && status === "approved") {
+            reorderResetRef.current = true;
+            const r = (job as any)?.result || (job as any)?.output || null;
+            const w = Array.isArray(r?.warnings) ? r.warnings : [];
+            setNotice(w.length ? `컷 순서를 바꿨어요 — 경고: ${String(r?.summary || "")}` : "컷 순서를 바꿨어요.");
+          }
+        }
         return { ...p, status };
       }));
       setPending(next);
@@ -508,7 +523,7 @@ export default function ProductionCanvas({
 
   // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
   // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
-  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert"];
+  const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder"];
   useEffect(() => {
     if (settings.confirmBeforeGenerate || !projectId) return;
     let alive = true;
@@ -586,8 +601,21 @@ export default function ProductionCanvas({
     }, `컷 ${selected.data.sceneId} 프롬프트 저장`, selected.data.sceneId);
   };
 
+  // 배치(칸 순서)에서 실제 컷 순서를 읽는다: 씬 바 순서 → 각 바의 칸 순서. 서버 scenes 배열과 같은 의미다.
+  const orderOfLayout = useCallback((l: CanvasLayout): OrderCut[] => {
+    const out: OrderCut[] = [];
+    deriveLanes(graph).filter((ln) => ln.kind === "scene").forEach((ln) => {
+      (Array.isArray(l.groups[ln.key]) ? l.groups[ln.key] : ln.memberIds).forEach((id) => {
+        const n = nodeById.get(id);
+        if (!n || n.type !== "cut") return;
+        out.push({ id, sceneId: String(n.data.sceneId), location: String(n.data.sceneLocation || ""), songSectionId: String(n.data.songSectionId || ""), songSectionLabel: String(n.data.songSectionLabel || ""), lyrics: String(n.data.lyrics || "") });
+      });
+    });
+    return out;
+  }, [graph, nodeById]);
+
   // ── 팬·줌·드래그 ──
-  // node: 공통·캐릭터·장소(20px 격자). bar: 씬 바(40px 격자, 딸린 컷이 함께 이동). cut: 컷(놓으면 슬롯에 스냅).
+  // node: 공통·캐릭터·장소(20px 격자). bar: 씬 바(40px 격자, 딸린 컷이 함께 이동). cut: 컷(놓으면 슬롯에 스냅 + 실제 순서 변경).
   const onPointerDown = (e: React.PointerEvent, nodeId?: string) => {
     if (e.button !== 0) return;
     const el = containerRef.current;
@@ -634,9 +662,25 @@ export default function ProductionCanvas({
     if (!d) return;
     if (d.kind === "cut" && d.id && d.moved) {
       const slot = slotFromPoint(layoutRef.current, lanesRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]));
-      if (slot) setLayout((l) => moveCutToSlot(l, d.id!, slot));
       setDragGhost(null);
       setDropSlot(null);
+      if (!slot) return;
+      const next = moveCutToSlot(layoutRef.current, d.id, slot);
+      const dropped = nodeById.get(d.id);
+      if (dropped?.type === "cut" && projectId) {
+        // 컷 카드는 놓는 순간 실제 순서가 바뀐다(배치만이 아니라). 세트를 넘어가거나 노래 구간이
+        // 어긋나면 먼저 묻고, 취소하면 카드는 원래 칸으로 돌아간다. 저장은 scene_reorder 잡(승인 게이트)으로.
+        const before = orderOfLayout(layoutRef.current);
+        const after = orderOfLayout(next);
+        if (!sameOrder(before, after)) {
+          const warnings = analyzeReorderClient(before, after, d.id, graph?.songSections);
+          if (warnings.length && !window.confirm([...warnings.map((w) => `· ${w.message}`), "", "그래도 컷 순서를 바꿀까요?"].join("\n"))) return;
+          setLayout(next);
+          void enqueue("scene_reorder", { projectId, order: after.map((c) => c.sceneId) }, `컷 ${dropped.data.sceneId} 순서 변경`, dropped.data.sceneId);
+          return;
+        }
+      }
+      setLayout(next);
       return;
     }
     setDragGhost(null);

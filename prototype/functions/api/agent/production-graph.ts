@@ -135,6 +135,10 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         sceneLocation: String(s?.sceneLocation || s?.location || ""),
         narration: String(s?.narration || "").slice(0, 300),
         lyrics: String(s?.lyrics || "").slice(0, 300),
+        // 노래 구간(순서 변경 검사용): 구간 순서·가사 시작 컷이 어긋나면 캔버스가 경고한다.
+        songSectionId: String(s?.songSectionId || ""),
+        songSectionLabel: String(s?.songSectionLabel || ""),
+        isRefrain: !!s?.isRefrain,
         estSec: Number(s?.estSec) || 0,
         beats: Array.isArray(s?.beats) ? s.beats : null,
         common,
@@ -211,6 +215,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     summary: { scenes: scenes.length, stills: done, clips },
     // 캔버스 배치(바·카드 위치). 프로젝트에 저장된 것이 있으면 그대로 돌려준다.
     canvasLayout: payload.canvasLayout && typeof payload.canvasLayout === "object" ? payload.canvasLayout : null,
+    // 노래 구간 목록(id·label 순서). 컷 순서 변경 시 구간 순서 검사에 쓴다.
+    songSections: Array.isArray(payload.songSections) ? payload.songSections.map((x: any) => ({ id: String(x?.id || ""), label: String(x?.label || ""), role: String(x?.role || "") })) : [],
   };
 }
 

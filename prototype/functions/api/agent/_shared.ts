@@ -7,6 +7,7 @@ import { getSql, type SqlFn } from "../knowledge/_shared";
 import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
+import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
 import { refreshAccessToken } from "./_google";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
@@ -4252,6 +4253,31 @@ async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "scene_upsert", projectId, sceneId: targetId, mode, sceneCount: scenes.length, saved: true, objectName: saved?.objectName || "" };
 }
 
+/** 컷 순서 변경: project_get → order(컷 id 순열)대로 scenes 재배열(id 불변) → 경고 검사 → project_save. 쓰기 → 승인 게이트.
+ *  제작 캔버스가 컷 카드를 다른 칸에 놓으면 이 도구로 실제 순서를 바꾼다(배치 canvasLayout 은 표시용).
+ *  경고(set-crossing: 세트 묶음을 넘어감 / song-section: 노래 구간 어긋남)는 막지 않고 결과에 실어 돌려준다. */
+async function runSceneReorderTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const order: any[] = Array.isArray(input?.order) ? input.order : (Array.isArray(input?.sceneIds) ? input.sceneIds : []);
+  if (!order.length) throw new Error("order(컷 id 순열)가 필요해요");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes.slice() : [];
+  const applied = applySceneOrder(scenes, order);
+  if (!applied.ok) throw new Error(applied.error);
+  const warnings = analyzeReorder(scenes, applied.scenes, cur.payload || {});
+  if (!applied.moved.length) {
+    return { kind: "scene_reorder", projectId, changed: false, moved: [], warnings, summary: "순서가 그대로예요", saved: false };
+  }
+  const saved = await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes: applied.scenes } });
+  return {
+    kind: "scene_reorder", projectId, changed: true, moved: applied.moved,
+    order: applied.scenes.map((s, i) => String(s?.id ?? i + 1)),
+    warnings, summary: summarizeWarnings(warnings) || "경고 없음",
+    sceneCount: applied.scenes.length, saved: true, objectName: saved?.objectName || "",
+  };
+}
+
 /** 영상 삭제: /api/video/delete (confirm=yes). 되돌리기 어려움 → 승인 게이트. */
 async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
   const single = String(input?.objectName || input?.object || "").trim();
@@ -4609,6 +4635,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scene_locations: { agentId: "plot", kind: "read", synthesize: true, run: runSceneLocationsTool },
   story_structure: { agentId: "plot", kind: "read", synthesize: true, run: runStoryStructureTool },
   scene_upsert: { agentId: "plot", kind: "external", gate: true, run: runSceneUpsertTool },
+  // 컷 순서 변경(캔버스 드래그 · "컷 3을 5 뒤로") — 배열 재배열이라 쓰기 → 게이트. 경고는 결과에 싣는다.
+  scene_reorder: { agentId: "plot", kind: "external", gate: true, run: runSceneReorderTool },
 
   // ── STEP 3 (P3): 운영·조회·개인화 ──
   // 코어(총괄): 브랜드/프로젝트 목록·삭제·공유.

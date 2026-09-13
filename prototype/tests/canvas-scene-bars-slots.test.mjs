@@ -1,7 +1,7 @@
 // 제작 캔버스: 바(레인) + 슬롯 격자 배치.
 //  - 씬 바(파랑)·캐릭터 바(초록)·장소 바(연두) 아래 카드가 칸(슬롯)에 스냅한다. 카드 간격 = 바-카드 간격(12px).
 //  - 바를 끌면 딸린 카드가 함께 움직이고, 클릭하면 그 바의 카드를 모두 선택한다.
-//  - 카드는 같은 종류의 바에만 놓인다. 배치는 표시용이며 서버 컷 순서는 바꾸지 않는다(에이전트 잡 없음).
+//  - 카드는 같은 종류의 바에만 놓인다. 컷 카드를 놓으면 실제 컷 순서도 바뀐다(scene_reorder 잡, canvas-cut-reorder.test.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -49,7 +49,7 @@ test('★카드 좌표는 바 + 슬롯 번호로만 정해지고, 드롭 시 같
   assert.match(src, /function slotFromPoint\(layout: CanvasLayout, lanes: Lane\[\], x: number, y: number, draggedId: string, kind: LaneKind \| null\)/);
   assert.match(src, /if \(kind && l\.kind !== kind\) continue;/, '캐릭터 카드가 씬 줄에 들어가면 안 된다');
   assert.match(src, /function moveCutToSlot\(/);
-  assert.match(src, /if \(slot\) setLayout\(\(l\) => moveCutToSlot\(l, d\.id!, slot\)\);/);
+  assert.match(src, /const next = moveCutToSlot\(layoutRef\.current, d\.id, slot\);/);
   assert.match(src, /border-dashed border-emerald-500\/70/);
 });
 
@@ -59,10 +59,11 @@ test('★바를 끌면 40px 격자로 움직이고 딸린 카드가 함께 가�
   assert.match(src, /onPointerDown=\{\(e\) => onPointerDown\(e, `lane:\$\{l\.key\}`\)\}/);
 });
 
-test('★컷 카드 제목은 컷 번호만(씬 번호는 바가 보여 준다), 배치는 canvasLayout 키에 저장, 서버 순서는 건드리지 않는다', () => {
+test('★컷 카드 제목은 컷 번호만(씬 번호는 바가 보여 준다), 배치는 canvasLayout 키에 저장, moveCutToSlot 은 순수(잡은 드롭 처리에서)', () => {
   assert.match(src, /lanes\.filter\(\(l\) => l\.kind === "scene"\)\.forEach\(\(l\) => l\.memberIds\.forEach\(\(id, i\) => m\.set\(id, `cut\$\{i \+ 1\}`\)\)\);/);
   assert.match(src, /writeStorage\(`canvasLayout:\$\{projectId\}`, JSON\.stringify\(layout\)\);/);
-  assert.match(src, /reconcileLayout\(parsed \|\| fromServer, g, base\)/);
+  assert.match(src, /const savedLayout = parsed \|\| fromServer;/);
+  assert.match(src, /reconcileLayout\(seed, g, base\)/);
   const i = src.indexOf('function moveCutToSlot(');
   const fn = src.slice(i, src.indexOf('\n}\n', i));
   assert.doesNotMatch(fn, /enqueue|createAgentJob/);
@@ -73,7 +74,7 @@ test('★배치 저장 버튼: 로컬은 작업 사본, 프로젝트 저장은 �
   assert.match(src, /await saveCanvasLayout\(projectId, layout\);/);
   assert.match(src, /\{layoutSaving \? "저장 중…" : \(layoutDirty \? "저장" : "저장됨"\)\}/, '버튼 문구는 저장');
   assert.match(src, /layoutDirty \? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-gray-500"/, '테마(에메랄드) 스타일');
-  assert.match(src, /setLayout\(reconcileLayout\(parsed \|\| fromServer, g, base\)\);/, '로컬 사본 → 서버 배치 → 기본 배치 순');
+  assert.match(src, /const savedLayout = parsed \|\| fromServer;[\s\S]{0,400}setLayout\(reconcileLayout\(seed, g, base\)\);/, '로컬 사본 → 서버 배치 → 기본 배치 순(순서 변경 뒤엔 칸 배치만 서버 순서로)');
   const api = fs.readFileSync(path.join(process.cwd(), 'ai-company-app/src/lib/api.ts'), 'utf8').replace(/\r\n/g, '\n');
   assert.match(api, /export async function saveCanvasLayout\(projectId: string, layout: unknown\)/);
   assert.match(api, /body: JSON\.stringify\(\{ projectId, payload: \{ canvasLayout: layout \} \}\)/);
