@@ -545,8 +545,6 @@ export default function ProductionCanvas({
         const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
         if (status !== p.status) {
           changed = true;
-          if (status === "approved") setNotice(`${p.label} — 완료`);
-          else if (status === "error") setNotice(`${p.label} — 오류: ${error || "알 수 없음"}`);
           if (p.type === "scene_split" && status === "approved") reorderResetRef.current = true; // 씬 바가 다시 갈리므로 칸 배치를 서버 순서로
           if (p.type === "scene_reorder" && status === "approved") {
             reorderResetRef.current = true;
@@ -599,16 +597,13 @@ export default function ProductionCanvas({
       const res = await createAgentJob(type, input);
       // 잡을 만든 순간부터 진행 표시(스피너)를 그린다 — 승인 응답을 기다린 뒤 그리면 생성이 끝날 때까지 아무 표시가 없다.
       setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: "running", label, target, updatedAt: Date.now() }, ...prev].slice(0, 20));
-      setNotice(`${label} — 실행 중`);
       // 캔버스 버튼을 누른 것이 곧 확인이다 — 승인 게이트를 여기서 바로 통과시킨다(서버 기록은 그대로).
       // '생성 전 확인' 설정은 에이전트(채팅)가 스스로 만드는 잡에만 해당한다. 이미지 도구는 서버가 백그라운드로 돌리고 폴링이 완료를 잡는다.
       const approved: any = await approveItem(res.jobId).catch((e) => { setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: "error", error: (e as Error).message, updatedAt: Date.now() } : p))); return null; });
       const st = String(approved?.job?.status || "");
       if (JOB_DONE.includes(st) || st === "working") setPending((prev) => prev.map((p) => (p.jobId === res.jobId ? { ...p, status: st, error: String(approved?.job?.error || p.error || ""), updatedAt: Date.now() } : p)));
-      if (st === "approved") { setNotice(`${label} — 완료`); void load(true); }
-      else if (st === "error") setNotice(`${label} — 오류: ${String(approved?.job?.error || "")}`);
+      if (st === "approved") void load(true);
     } catch (e) {
-      setNotice(`실패: ${(e as Error).message}`);
       setPending((prev) => [{ jobId: `local-${Date.now()}`, type, sceneId, status: "error", label, target, error: (e as Error).message, updatedAt: Date.now() }, ...prev].slice(0, 20));
     } finally {
       setSaving(false);

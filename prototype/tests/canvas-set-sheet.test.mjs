@@ -374,7 +374,7 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   assert.match(src, /cursor-zoom-in object-cover \$\{st\.running \? "opacity-40" : ""\}`\} title="클릭하면 크게 볼 수 있어요" onClick=\{\(\) => setLightbox\(\{ url: withMediaToken\(String\(selected\.data\.still\.url\)\)/, '상세 스틸 클릭 = 크게');
   assert.match(src, /d\.zone === "image" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n\s*\/\/ 컷 카드 스틸 클릭 = 크게 보기/, '카드 스틸 클릭 = 크게');
   // 안내 문구는 잡 상태를 따라간다("실행 중"에 멈추지 않는다)
-  assert.match(src, /if \(status === "approved"\) setNotice\(`\$\{p\.label\} — 완료`\);\s*\n\s*else if \(status === "error"\) setNotice\(`\$\{p\.label\} — 오류: \$\{error \|\| "알 수 없음"\}`\);/);
+  assert.doesNotMatch(src, /setNotice\(`\$\{(p\.)?label\} — (실행 중|완료|오류)/, '잡 상태는 미디어 칸·작업 독이 보여 준다 — 노란 문구 금지(사용자 결정)');
 });
 
 test('★생성 버튼을 누른 순간부터 진행 표시: 잡 생성 직후 pending 등록 → 승인 → 응답 상태(working/approved/error) 반영; 이미지 도구는 서버가 longRunning(승인 POST 논블로킹)', () => {
@@ -383,7 +383,7 @@ test('★생성 버튼을 누른 순간부터 진행 표시: 잡 생성 직후 p
   const iCreate = fn.indexOf('await createAgentJob(type, input)'); const iPending = fn.indexOf('setPending((prev) => [{ jobId: res.jobId, type, sceneId, status: "running"'); const iApprove = fn.indexOf('await approveItem(res.jobId)');
   assert.ok(iCreate > -1 && iPending > iCreate && iApprove > iPending, '순서: 잡 생성 → 진행 표시 → 승인 (승인을 기다린 뒤 그리면 생성 내내 아무 표시가 없다)');
   assert.match(fn, /const st = String\(approved\?\.job\?\.status \|\| ""\);/);
-  assert.match(fn, /if \(st === "approved"\) \{ setNotice\(`\$\{label\} — 완료`\); void load\(true\); \}/);
+  assert.match(fn, /if \(st === "approved"\) void load\(true\);/);
   assert.match(src, /case "working": return "실행 중";/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
   for (const t of ['scene_still', 'set_master', 'set_angle', 'set_sheet']) assert.match(shared, new RegExp(`  ${t}: \\{ agentId: "pixel", kind: "external", gate: true, longRunning: true, run: `), `${t} 는 longRunning`);
