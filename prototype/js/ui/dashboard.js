@@ -8,6 +8,15 @@
   var _initialLoadDone = false;      // 최초 대시보드 로딩(소유+공유) 완료 여부
   var _initialSpinnerActive = false; // 최초 로딩 스피너 표시 중 여부
   var currentSeriesFilter = '__all__';
+  // 보기 방식(카드/리스트). 브라우저별 기억(localStorage) — 카드 마크업은 같고 컨테이너 클래스(view-list)로 배치만 바뀐다.
+  var VIEW_MODE_KEY = 'nk_dashboard_view';
+  var currentViewMode = (function () {
+    try { return String(localStorage.getItem(VIEW_MODE_KEY) || '').trim() === 'list' ? 'list' : 'card'; } catch (_) { return 'card'; }
+  })();
+  function setViewMode(mode) {
+    currentViewMode = mode === 'list' ? 'list' : 'card';
+    try { localStorage.setItem(VIEW_MODE_KEY, currentViewMode); } catch (_) {}
+  }
   var DASHBOARD_LOADING_TEXT = '프로젝트 불러오는 중...';
 
   const escapeHtml = (value) => String(value == null ? '' : value)
@@ -1113,6 +1122,10 @@
             </div>
           </div>
           <div class="series-filter-actions" style="display:flex;align-items:center;gap:8px;">
+            <div class="view-mode-group" role="group" aria-label="${escapeHtml(dt('dashboard_view_label'))}">
+              <button type="button" class="view-mode-btn${currentViewMode === 'card' ? ' active' : ''}" data-action="view-mode" data-view="card" title="${escapeHtml(dt('dashboard_view_card'))}" aria-label="${escapeHtml(dt('dashboard_view_card'))}" aria-pressed="${currentViewMode === 'card'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg></button>
+              <button type="button" class="view-mode-btn${currentViewMode === 'list' ? ' active' : ''}" data-action="view-mode" data-view="list" title="${escapeHtml(dt('dashboard_view_list'))}" aria-label="${escapeHtml(dt('dashboard_view_list'))}" aria-pressed="${currentViewMode === 'list'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg></button>
+            </div>
             ${shareBtnHtml}
             ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">${runtimeLang === 'en' ? 'New' : '신규'}</button>` : ``}
           </div>
@@ -1185,6 +1198,7 @@
     }).join('');
     const list = host === 'brand' && currentSeriesFilter === '__all__' ? brandPortfolioCards : episodeList;
 
+    container.classList.toggle('view-list', currentViewMode === 'list' && !(host === 'brand' && currentSeriesFilter === '__all__'));
     container.innerHTML = filterBar + list;
 
     // 죽은(404) 썸네일 self-heal: 로드 실패 시 그 objectName 을 기록하고 빈 썸네일로 교체한다.
@@ -1328,6 +1342,12 @@
       }
       if (action === 'share-project') { // 단일 프로젝트 공유(호환)
         openShareModal(id, btn.dataset.title || '');
+        return;
+      }
+
+      if (action === 'view-mode') {
+        setViewMode(btn.dataset.view);
+        dashboard.renderDrafts();
         return;
       }
 

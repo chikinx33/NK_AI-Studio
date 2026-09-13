@@ -861,14 +861,27 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
   margin-top: 8px;
 }
 
-/* 캔버스(에이전트 모드) 버튼: Pre-Prod 앞의 정사각 아이콘 버튼. 휴지통 버튼(.trash-btn)과 같은 표면·테두리·호버. */
-.draft-actions.has-canvas {
-  grid-template-columns: 34px repeat(3, minmax(0, 1fr));
+/* 캔버스(에이전트 모드) 버튼: Pre-Prod 앞의 정사각 아이콘 버튼. 휴지통 버튼(.trash-btn)과 같은 표면·테두리·호버.
+   줄 전체를 flex 로 두고 stretch 시켜 세 스테이지 버튼과 높이가 항상 같다(정사각은 aspect-ratio). */
+.draft-actions.has-canvas,
+html.page-shell-video .draft-card .draft-actions.has-canvas,
+body.page-shell-video .draft-card .draft-actions.has-canvas {
+  display: flex !important;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.draft-actions.has-canvas .btn-primary,
+.draft-actions.has-canvas .btn-secondary {
+  flex: 1 1 0;
 }
 
 .draft-actions .canvas-btn {
-  width: 34px;
-  height: 34px;
+  width: auto;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
+  align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1068,4 +1081,183 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 
 .empty-project-card:hover {
   border-color: rgba(255, 122, 0, 0.6);
+}
+
+/* ── 보기 방식 전환(카드/리스트) ─────────────────────────────────────── */
+.view-mode-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.view-mode-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background:
+    radial-gradient(circle at 24% 22%, rgba(255, 159, 63, 0.2), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
+  cursor: pointer;
+  color: var(--muted);
+  transition: border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.view-mode-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.view-mode-btn:hover,
+.view-mode-btn.active {
+  color: #F5F7FD;
+  border-color: rgba(255, 140, 0, 0.55);
+}
+
+.view-mode-btn.active {
+  box-shadow: inset 0 0 0 1px rgba(255, 140, 0, 0.35), 0 0 0 2px rgba(255, 140, 0, 0.12);
+}
+
+/* 리스트 보기: 카드 마크업은 그대로, 한 줄에 썸네일(작게) · 제목 · 시리즈 · 메타 · 도구 · 스테이지 버튼. */
+.draft-card-grid.view-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.draft-card-grid.view-list .draft-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+}
+
+.draft-card-grid.view-list .draft-top {
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.draft-card-grid.view-list .draft-thumb-col {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-card-grid.view-list .draft-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+}
+
+.draft-card-grid.view-list .draft-thumb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.draft-card-grid.view-list .draft-thumb-btns {
+  gap: 4px;
+}
+
+.draft-card-grid.view-list .draft-thumb-btns .edit-btn,
+.draft-card-grid.view-list .draft-thumb-btns .copy-btn,
+.draft-card-grid.view-list .draft-thumb-btns .trash-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 8px;
+}
+
+.draft-card-grid.view-list .draft-thumb-btns .edit-btn::before,
+.draft-card-grid.view-list .draft-thumb-btns .trash-btn::before {
+  width: 16px;
+  height: 16px;
+}
+
+.draft-card-grid.view-list .draft-thumb-btns .copy-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.draft-card-grid.view-list .draft-info {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.draft-card-grid.view-list .draft-title-row {
+  flex: 0 0 220px;
+  min-width: 0;
+  margin: 0;
+}
+
+.draft-card-grid.view-list .draft-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.draft-card-grid.view-list .draft-meta {
+  flex: 1 1 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  min-width: 0;
+}
+
+.draft-card-grid.view-list .draft-meta-project {
+  flex: 0 0 150px;
+  margin: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.draft-card-grid.view-list .draft-actions,
+html.page-shell-video .draft-card-grid.view-list .draft-card .draft-actions,
+body.page-shell-video .draft-card-grid.view-list .draft-card .draft-actions {
+  display: flex !important;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.draft-card-grid.view-list .draft-actions .btn-primary,
+.draft-card-grid.view-list .draft-actions .btn-secondary {
+  flex: 0 0 auto;
+  width: 92px;
+}
+
+@media (max-width: 1100px) {
+  .draft-card-grid.view-list .draft-info {
+    flex-wrap: wrap;
+    gap: 4px 18px;
+  }
+  .draft-card-grid.view-list .draft-title-row {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .draft-card-grid.view-list .draft-card {
+    flex-wrap: wrap;
+  }
+  .draft-card-grid.view-list .draft-actions {
+    width: 100%;
+  }
+  .draft-card-grid.view-list .draft-actions .btn-primary,
+  .draft-card-grid.view-list .draft-actions .btn-secondary {
+    flex: 1 1 0;
+    width: auto;
+  }
 }

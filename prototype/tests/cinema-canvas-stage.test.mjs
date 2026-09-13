@@ -65,7 +65,7 @@ test('★대시보드 프로젝트 카드(AI 시네마 셸): Pre-Prod 앞 정사
   assert.match(dash, /\['draft-edit', 'draft-production', 'draft-post', 'draft-canvas'\]\.includes\(action\)/);
   assert.match(dash, /action === 'draft-canvas'[\s\S]{0,400}'ai-company\/index\.html\?view=canvas' \+ \(draft\.id \? '&projectId=' \+ encodeURIComponent\(draft\.id\) : ''\)/);
   const css = read('prototype/styles.dashboard-cards.css');
-  assert.match(css, /\.draft-actions\.has-canvas \{\s*\n\s*grid-template-columns: 34px repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.draft-actions\.has-canvas,\s*\n\s*html\.page-shell-video \.draft-card \.draft-actions\.has-canvas,/, '줄은 flex(비디오 셸 block 규칙보다 우선)');
   assert.match(css, /\.draft-actions \.canvas-btn \{[\s\S]*?border-radius: 10px;/);
   assert.match(css, /\.draft-actions \.canvas-btn \{[\s\S]*?radial-gradient\(circle at 24% 22%, rgba\(255, 159, 63, 0\.2\), transparent 48%\)/, '휴지통 버튼과 같은 표면');
   const block = css.slice(css.indexOf('.draft-actions .canvas-btn {'), css.indexOf('.draft-actions .canvas-btn svg'));
