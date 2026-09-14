@@ -107,6 +107,8 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
   const [selected, setSelected] = useState("");
   const [selKey, setSelKey] = useState<{ track: string; index: number } | null>(null);
   const [busy, setBusy] = useState<"" | "saving" | "applying" | "exporting" | "staging">("");
+  // 자동 연출 중인 범위 — 누른 버튼에만 스피너를 돌린다.
+  const [stagingScope, setStagingScope] = useState<"" | "scene" | "all">("");
   const [progressText, setProgressText] = useState("");
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -432,6 +434,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
     const overwrite = targets.filter((c) => doc.cuts[c.sceneId]).length;
     if (overwrite && !window.confirm(fmt(T.autoOverwrite, { n: overwrite }))) return;
     setBusy("staging");
+    setStagingScope(scope);
     setNotice("");
     setPlaying(false);
     let next = doc;
@@ -487,6 +490,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
       setNotice(/claude_auth_required/.test(msg) ? T.autoAuthRequired : /CREDIT_EXHAUSTED/.test(msg) ? T.autoCredit : fmt(T.autoFailed, { e: msg }));
     } finally {
       setBusy("");
+      setStagingScope("");
       setProgressText("");
     }
   };
@@ -584,8 +588,8 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
         <div className="ml-auto flex items-center gap-2">
           {progressText && <span className="text-emerald-300">{progressText}</span>}
           <span className={`min-w-[64px] text-right ${dirty ? "text-amber-300" : "text-gray-500"}`}>{dirty ? T.unsaved : ""}</span>
-          <button type="button" disabled={disabled} onClick={() => void autoStage("scene")} className="min-w-[112px] rounded-lg bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-500 disabled:opacity-50">{T.autoScene}</button>
-          <button type="button" disabled={disabled} onClick={() => void autoStage("all")} className="min-w-[112px] rounded-lg border border-indigo-700 px-3 py-1 font-bold text-indigo-300 hover:bg-indigo-900/40 disabled:opacity-50">{T.autoAll}</button>
+          <button type="button" disabled={disabled} aria-busy={stagingScope === "scene"} onClick={() => void autoStage("scene")} className={`inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-500 disabled:cursor-not-allowed ${stagingScope === "scene" ? "" : "disabled:opacity-50"}`}>{stagingScope === "scene" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoScene}</button>
+          <button type="button" disabled={disabled} aria-busy={stagingScope === "all"} onClick={() => void autoStage("all")} className={`inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-lg border border-indigo-700 px-3 py-1 font-bold text-indigo-300 hover:bg-indigo-900/40 disabled:cursor-not-allowed ${stagingScope === "all" ? "" : "disabled:opacity-50"}`}>{stagingScope === "all" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoAll}</button>
           <div className="mx-1 h-5 w-px bg-edge" />
           <button type="button" disabled={disabled} onClick={() => void save()} className="min-w-[72px] rounded-lg border border-edge px-3 py-1 font-bold hover:bg-edge disabled:opacity-50">{busy === "saving" ? T.saving : T.save}</button>
           <button type="button" disabled={disabled} onClick={() => void apply("current")} className="min-w-[104px] rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{T.applyCut}</button>
@@ -752,6 +756,15 @@ function DerivedRow({ label, value, current, changed, T }: { label: string; valu
       <span className={`text-[10px] font-bold ${changed ? "text-amber-300" : "text-gray-500"}`}>{label}</span>
       <span className="truncate text-right text-[11px] text-gray-100">{value}{changed && <span className="ml-1 text-[10px] text-gray-500">({fmt(T.current, { v: current })})</span>}</span>
     </div>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  // lucide: loader-circle
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
   );
 }
 

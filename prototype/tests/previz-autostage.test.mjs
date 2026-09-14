@@ -450,3 +450,14 @@ test('범용성(고정 시드 퍼즈): 인물 수·키·자세·화면비·세�
   assert.ok(total > 100, `검사 컷 ${total}`);
   assert.ok(visible / checked >= 0.97, `주인공이 첫 프레임에 보이는 비율 ${visible}/${checked}`);
 });
+
+test('자동 연출 버튼: 누른 버튼에만 로딩 스피너(lucide loader-circle), 폭 고정', () => {
+  const studio = readSrc('ai-company-app/src/previz/PrevizStudio.tsx');
+  assert.ok(studio.includes('setStagingScope(scope);'));
+  assert.ok(studio.includes('{stagingScope === "scene" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoScene}'));
+  assert.ok(studio.includes('{stagingScope === "all" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoAll}'));
+  assert.ok(studio.includes('<path d="M21 12a9 9 0 1 1-6.219-8.56" />'));
+  const finallyAt = studio.indexOf('setBusy("");\n      setStagingScope("");');
+  assert.ok(finallyAt > studio.indexOf('const autoStage = async'), '끝나면(성공·실패 모두) 스피너를 끈다');
+  assert.equal((studio.match(/inline-flex min-w-\[156px\]/g) || []).length, 2, '상태가 바뀌어도 버튼 폭 고정');
+});
