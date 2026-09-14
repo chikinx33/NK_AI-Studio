@@ -1824,6 +1824,8 @@ export interface ProductionGraph {
   songSections?: Array<{ id: string; label: string; role: string }>;
   // 프로젝트 스타일 앵커(첫 세트 시트). 이후 모든 시트·스틸이 이 이미지의 그림체를 참조한다.
   styleAnchor?: { objectName: string; sheetId: string; setName: string; url: string; pickedBy?: string; createdAt?: string } | null;
+  // 프리비즈 문서(payload.previz — 세트 무대·컷별 인물/카메라 키프레임). 없으면 null.
+  previz?: unknown;
 }
 
 export async function getProductionGraph(projectId: string): Promise<ProductionGraph> {
@@ -1854,6 +1856,18 @@ export async function saveCanvasLayout(projectId: string, layout: unknown): Prom
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "캔버스 배치를 저장하지 못했어요.");
+}
+
+/** 프리비즈 문서를 프로젝트 payload.previz 에 저장한다. 3D 배치는 창작자 작업 데이터이고 씬 필드는 건드리지 않는다
+ *  (컷 필드 반영은 scene_upsert 잡으로 따로 한다). 저장 API 는 payload 를 얕게 병합하므로 다른 키는 보존된다. */
+export async function savePrevizDoc(projectId: string, previz: unknown): Promise<void> {
+  const res = await fetch("/api/project/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, payload: { previz } }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 }
 
 /** 에이전트 도구 잡 생성(승인 게이트 도구는 승인 패널에서 승인해야 실행된다). */

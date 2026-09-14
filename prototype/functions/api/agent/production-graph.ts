@@ -159,6 +159,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         cameraMove: String(s?.cameraMove || "static"),
         cameraDirection: String(s?.cameraDirection || "front"),
         cameraElevation: String(s?.cameraElevation || "eye"),
+        // 정면 기준 블로킹([{token,x,depth,facing}]). 프리비즈가 초기 배치로 읽고, 반영하면 scene_upsert 로 다시 쓴다.
+        blocking: Array.isArray(s?.blocking) ? s.blocking : null,
         composition: String(s?.composition || ""),
         action: String(s?.action || ""),
         visual: String(s?.shot || s?.visual || ""),
@@ -254,6 +256,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     styleAnchor: (payload.styleAnchor && typeof payload.styleAnchor === "object" && payload.styleAnchor.objectName)
       ? { objectName: String(payload.styleAnchor.objectName), sheetId: String(payload.styleAnchor.sheetId || ""), setName: String(payload.styleAnchor.setName || ""), url: toDisplayUrl(payload.styleAnchor.objectName), pickedBy: String(payload.styleAnchor.pickedBy || ""), createdAt: String(payload.styleAnchor.createdAt || "") }
       : null,
+    // 프리비즈 문서(세트 무대·컷별 인물/카메라 키프레임). 프리비즈 화면이 읽고 저장 버튼이 payload.previz 로 쓴다.
+    previz: payload.previz && typeof payload.previz === "object" ? payload.previz : null,
     songSections: Array.isArray(payload.songSections) ? payload.songSections.map((x: any) => ({ id: String(x?.id || ""), label: String(x?.label || ""), role: String(x?.role || "") })) : [],
   };
 }

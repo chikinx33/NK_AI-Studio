@@ -23,6 +23,7 @@ const DICTIONARIES = [
   ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
   ["prototype/js/ui/format-media-spec.js", "var DELIVERY_TEXT = {", "\n  function deliveryText"],
   ["prototype/js/ui/format-media-spec.js", "var CHANNEL_LABEL = {", "\n  /** 라벨이 없으면"],
+  ["ai-company-app/src/previz/i18n.ts", "export const PREVIZ_TEXT = {", "\nexport type PrevizDict"],
 ];
 
 /** `{` 위치부터 짝이 맞는 `}` 까지의 본문을 돌려준다. */

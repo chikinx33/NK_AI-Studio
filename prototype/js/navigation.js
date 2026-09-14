@@ -339,9 +339,14 @@
 
     nav.normalizeStageName = function (u) {
         try {
-            const raw = String(u || '').toLowerCase().split('#')[0].split('?')[0];
+            const full = String(u || '').toLowerCase().split('#')[0];
+            const raw = full.split('?')[0];
             // 캔버스 스테이지: React 앱(ai-company/) 을 iframe 으로 연다. basename 이 index 라 options 로 빠지지 않게 먼저 잡는다.
-            if (/(^|[\\\/])ai-company([\\\/]|$)/.test(raw)) return 'canvas';
+            // 같은 앱의 프리비즈(?view=previz)는 별도 스테이지 — 캔버스 iframe 을 덮어쓰지 않는다.
+            if (/(^|[\\\/])ai-company([\\\/]|$)/.test(raw)) {
+                if (/[?&]view=previz(&|$)/.test(full)) return 'previz';
+                return 'canvas';
+            }
             // \ 와 / 모두 처리하도록 수정
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;

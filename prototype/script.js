@@ -1123,6 +1123,11 @@
         persistCurrentProject();
         const canvasUrl = 'ai-company/index.html?view=canvas' + (currentProject?.id ? '&projectId=' + encodeURIComponent(currentProject.id) : '');
         NK.navigation.loadStage(canvasUrl);
+      } else if (action === 'sidebar-edit-previz') {
+        // 프리비즈: 같은 React 앱의 3D 블로킹·카메라 화면. 세트·컷·캐릭터를 읽고 컷 필드로 반영한다.
+        persistCurrentProject();
+        const previzUrl = 'ai-company/index.html?view=previz' + (currentProject?.id ? '&projectId=' + encodeURIComponent(currentProject.id) : '');
+        NK.navigation.loadStage(previzUrl);
       } else if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';

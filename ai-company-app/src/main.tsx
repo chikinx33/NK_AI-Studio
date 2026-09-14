@@ -50,12 +50,31 @@ import "./index.css";
   if (!nkToken()) goLogin();
 })();
 
+// AI 시네마 프리비즈(?view=previz): 3D 블로킹·카메라 화면만 연다. AI 기업 앱(에이전트·채팅 폴링)은 띄우지 않고,
+// three.js 가 든 화면 코드는 이 경로에서만 내려받는다.
+const LAUNCH = new URLSearchParams(location.search);
+const PrevizStudio = React.lazy(() => import("./previz/PrevizStudio.tsx"));
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ErrorBoundary onReset={() => window.location.reload()}>
-      <AgentVideoWorkspaceProvider>
-        <App />
-      </AgentVideoWorkspaceProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
+  LAUNCH.get("view") === "previz" ? (
+    <React.StrictMode>
+      <ErrorBoundary onReset={() => window.location.reload()}>
+        <React.Suspense fallback={null}>
+          <PrevizStudio
+            projectId={String(LAUNCH.get("projectId") || LAUNCH.get("pid") || readStorage("canvasProjectId") || "").trim()}
+            focusSceneId={String(LAUNCH.get("sceneId") || "").trim()}
+            embedded={LAUNCH.get("embed") === "1"}
+          />
+        </React.Suspense>
+      </ErrorBoundary>
+    </React.StrictMode>
+  ) : (
+    <React.StrictMode>
+      <ErrorBoundary onReset={() => window.location.reload()}>
+        <AgentVideoWorkspaceProvider>
+          <App />
+        </AgentVideoWorkspaceProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  )
 );

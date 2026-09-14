@@ -19,6 +19,7 @@ import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
 import { loadCanvasSettings, saveCanvasSettings, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
 import { approveItem, saveCanvasLayout } from "../lib/api";
+import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -724,6 +725,15 @@ export default function ProductionCanvas({
     return `컷 ${targets.join(",")}에 ${kind === "image" ? "스틸" : "영상"} ${count > 1 ? `x${count} ` : ""}생성 시작`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, selectedSceneIds, settings, nodeById]);
+
+  // 프리비즈(3D 블로킹·카메라)로 이 컷을 연다. AI 시네마 셸 안이면 스테이지를 previz 로 다시 묶게 알린다.
+  const openPreviz = (sceneId: string | number) => {
+    if (!projectId) return;
+    const inShell = window.parent && window.parent !== window;
+    const url = `${location.pathname}?view=previz${inShell ? "&embed=1" : ""}&projectId=${encodeURIComponent(projectId)}&sceneId=${encodeURIComponent(String(sceneId))}`;
+    if (inShell) { try { window.parent.postMessage({ type: "stage-changed", stage: "previz", url }, "*"); } catch { /* 셸 없음 */ } }
+    location.assign(url);
+  };
 
   const saveDraft = async () => {
     if (!selected || selected.type !== "cut" || !draft) return;
@@ -1581,6 +1591,7 @@ export default function ProductionCanvas({
                       <button type="button" disabled={saving} onClick={() => void saveDraft()} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">저장 요청</button>
                       <button type="button" disabled={saving || !!cutJobState(selected.data.sceneId, "scene_still").running || !!cutPlateMissing(selected.id)} onClick={() => void enqueueMany("scene_still", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.image.aspect, ...providerArg(settings), imageSize: settings.image.size }, `컷 ${selected.data.sceneId} 스틸 생성`, selected.data.sceneId, settings.image.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50" title={cutPlateMissing(selected.id) || `${settings.image.aspect} · ${settings.image.size} · x${settings.image.count}`}>{cutJobState(selected.data.sceneId, "scene_still").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>스틸 생성{settings.image.count > 1 ? ` x${settings.image.count}` : ""}</>}</button>
                       <button type="button" disabled={saving || !selected.data.still?.url || !!cutJobState(selected.data.sceneId, "scene_video").running || !!cutPlateMissing(selected.id)} title={cutPlateMissing(selected.id) || (selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요")} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">{cutJobState(selected.data.sceneId, "scene_video").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</>}</button>
+                      <button type="button" onClick={() => openPreviz(selected.data.sceneId)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge">{PREVIZ_TEXT[initialPrevizLang()].title}</button>
                     </div>
                     {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
                   </div>
