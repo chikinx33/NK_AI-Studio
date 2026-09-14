@@ -8,17 +8,18 @@
  *   - 컷 필드: scene_upsert 잡(서버 승인 게이트 기록 유지, 버튼을 누른 것이 곧 확인이라 바로 승인). 컷마다 끝날 때까지 기다린 뒤 다음 컷.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { approveItem, createAgentJob, getAgentJob, getProductionGraph, savePrevizDoc, type ProductionGraph } from "../lib/api";
+import { approveItem, createAgentJob, getAgentJob, getProductionGraph, requestPrevizPlan, savePrevizDoc, type ProductionGraph } from "../lib/api";
 import { LENSES_MM, cameraPitchDeg, parseAspect, sampleActor, sampleCamera, wrapDeg, type ActorKey, type CameraKey, type Vec3 } from "./geometry.ts";
 import {
   MAX_DURATION, MIN_DURATION, PROP_KINDS, addKeyAt, changedFields, deriveCutFields, emptyDoc, ensureSet, initialCut, moveKeyTo,
-  normalizeDoc, normalizeToken, removeKeyAt, setKeyOf, upsertKey,
+  mentionTokens, normalizeDoc, normalizeToken, removeKeyAt, setKeyOf, upsertKey,
   type CutSource, type PrevizCut, type PrevizDoc, type PrevizProp, type PrevizSet, type PropKind,
 } from "./model.ts";
 import { PREVIZ_TEXT, fmt, initialPrevizLang, type PrevizDict, type PrevizLang } from "./i18n.ts";
 import { ACTOR_COLORS, PrevizViewport, loadThree, type FrameState, type ThreeKit, type ViewMode } from "./engine.ts";
 import { exportAnimatic, webCodecsSupported } from "./exportVideo.ts";
 import PrevizTimeline, { type TimelineTrack } from "./PrevizTimeline.tsx";
+import { AUTO_STAGE_CHUNK, carryFromDoc, chunk, groupScenes, knownHeights, normalizePlan, priorForRequest, stageCuts, type StageCarry } from "./autoStage.ts";
 
 const JOB_DONE = ["approved", "error", "cancelled", "revise"];
 const PROP_DEFAULTS: Record<PropKind, Pick<PrevizProp, "w" | "h" | "d" | "color">> = {
@@ -50,6 +51,7 @@ function clampKeysToDuration<K extends { t: number }>(keys: K[], duration: numbe
 
 function readCuts(graph: ProductionGraph): CutSource[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const registered = graph.nodes.filter((n) => n.type === "character").map((n) => normalizeToken(n.data.token)).filter(Boolean);
   return graph.nodes
     .filter((n) => n.type === "cut")
     .sort((a, b) => Number(a.data.order) - Number(b.data.order))
@@ -63,7 +65,12 @@ function readCuts(graph: ProductionGraph): CutSource[] {
       cameraDirection: String(n.data.cameraDirection || "front"),
       cameraElevation: String(n.data.cameraElevation || "eye"),
       blocking: n.data.blocking ?? null,
-      tokens: graph.edges.filter((e) => e.type === "character" && e.to === n.id).map((e) => normalizeToken(byId.get(e.from)?.data?.token)).filter(Boolean),
+      // 등록 캐릭터 연결 + 문장 속 언급(등록 안 된 인물·조사 붙은 언급 포함)
+      tokens: [...new Set([
+        ...graph.edges.filter((e) => e.type === "character" && e.to === n.id).map((e) => normalizeToken(byId.get(e.from)?.data?.token)),
+        ...mentionTokens([n.data.composition, n.data.action, n.data.visual].map((v) => String(v || "")).join("\n"), registered),
+      ].filter(Boolean))],
+      sceneBreak: !!n.data.sceneBreak,
     }));
 }
 
@@ -99,7 +106,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
   const [mode, setMode] = useState<ViewMode>("edit");
   const [selected, setSelected] = useState("");
   const [selKey, setSelKey] = useState<{ track: string; index: number } | null>(null);
-  const [busy, setBusy] = useState<"" | "saving" | "applying" | "exporting">("");
+  const [busy, setBusy] = useState<"" | "saving" | "applying" | "exporting" | "staging">("");
   const [progressText, setProgressText] = useState("");
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -176,7 +183,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
 
   const editCamera = useCallback((patch: Partial<CameraKey>) => {
     const t = timeRef.current;
-    editCut((c) => ({ cut: { ...c, camera: upsertKey(c.camera, t, (b) => ({ ...(b || { t, ...sampleCamera(c.camera, t), ease: "smooth" as const }), ...patch })) } }));
+    editCut((c) => ({ cut: { ...c, moveIntent: undefined, camera: upsertKey(c.camera, t, (b) => ({ ...(b || { t, ...sampleCamera(c.camera, t), ease: "smooth" as const }), ...patch })) } }));
   }, [editCut]);
 
   const editProp = useCallback((id: string, patch: Partial<PrevizProp>) => {
@@ -277,7 +284,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
     const t = timeRef.current;
     const track = selKey?.track || trackOfSelection;
     editCut((c) => (track === "camera"
-      ? { cut: { ...c, camera: addKeyAt(c.camera, t, { t, ...sampleCamera(c.camera, t), ease: "smooth" }) } }
+      ? { cut: { ...c, moveIntent: undefined, camera: addKeyAt(c.camera, t, { t, ...sampleCamera(c.camera, t), ease: "smooth" }) } }
       : { cut: { ...c, actors: c.actors.map((a) => (a.token === track ? { ...a, keys: addKeyAt(a.keys, t, { t, ...sampleActor(a.keys, t), ease: "smooth" }) } : a)) } }));
   }, [cut, selKey, trackOfSelection, editCut]);
 
@@ -287,9 +294,10 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
 
   const deleteKey = useCallback(() => {
     if (!selKey) return;
+    if (selKey.track === "camera") editCut((c) => ({ cut: { ...c, moveIntent: undefined } }));
     mapTrackKeys(selKey.track, (keys) => removeKeyAt(keys, selKey.index));
     setSelKey(null);
-  }, [selKey, mapTrackKeys]);
+  }, [selKey, mapTrackKeys, editCut]);
 
   const toggleEase = useCallback(() => {
     if (!selKey) return;
@@ -414,6 +422,75 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
     }
   };
 
+  // 자동 연출: 씬(같은 세트 연속) 단위로 컷을 4개씩 서버에 보내 연출 계획을 받고, 풀이기로 키프레임을 만든다.
+  // 앞 청크가 끝난 인물 위치·키·카메라 셋업을 다음 청크에 넘겨 연속성을 잇는다. 결과는 저장 전까지 휘발(저장 버튼).
+  const autoStage = async (scope: "scene" | "all") => {
+    if (!source || !projectId) return;
+    const scenes = groupScenes(cuts);
+    const groups = scope === "all" ? scenes : scenes.filter((g) => g.some((c) => c.sceneId === source.sceneId));
+    const targets = groups.flat();
+    const overwrite = targets.filter((c) => doc.cuts[c.sceneId]).length;
+    if (overwrite && !window.confirm(fmt(T.autoOverwrite, { n: overwrite }))) return;
+    setBusy("staging");
+    setNotice("");
+    setPlaying(false);
+    let next = doc;
+    let heights = knownHeights(doc);
+    let done = 0;
+    try {
+      for (const group of groups) {
+        let carry: StageCarry = carryFromDoc(next, cuts, group[0]);
+        const contextIds = group.map((c) => c.sceneId);
+        const run = async (list: CutSource[]): Promise<void> => {
+          const key = setKeyOf(list[0].sceneLocation);
+          const set = next.sets[key] || ensureSet(next, list[0].sceneLocation);
+          setProgressText(fmt(T.autoStaging, { i: Math.min(targets.length, done + list.length), n: targets.length }));
+          let raw: unknown;
+          try {
+            raw = await requestPrevizPlan({
+              projectId,
+              targetIds: list.map((c) => c.sceneId),
+              contextIds,
+              prior: priorForRequest(carry, set.width, set.depth, heights),
+              setSize: next.sets[key] ? [set.width, set.depth] : null,
+            });
+          } catch (e) {
+            const msg = (e as Error).message;
+            // 시간 초과 등은 반으로 나눠 다시(인증·잔액 문제는 나눠도 같다)
+            if (list.length > 1 && !/claude_auth_required|CREDIT_EXHAUSTED/.test(msg)) {
+              const half = Math.ceil(list.length / 2);
+              await run(list.slice(0, half));
+              await run(list.slice(half));
+              return;
+            }
+            throw e;
+          }
+          const plan = normalizePlan(raw, list, characters);
+          const res = stageCuts({ plan, cuts: list, doc: next, aspect, carry, heights });
+          next = res.doc;
+          carry = res.carry;
+          heights = res.heights;
+          done += list.length;
+        };
+        for (const part of chunk(group, AUTO_STAGE_CHUNK)) await run(part);
+      }
+      setDoc(next);
+      editSeq.current += 1;
+      setDirty(true);
+      setTime(0);
+      setSelKey(null);
+      setNotice(fmt(T.autoStaged, { n: done }));
+    } catch (e) {
+      const msg = (e as Error).message;
+      // 이미 푼 컷은 남긴다(휘발 — 저장 버튼을 눌러야 영속)
+      if (done) { setDoc(next); editSeq.current += 1; setDirty(true); }
+      setNotice(/claude_auth_required/.test(msg) ? T.autoAuthRequired : /CREDIT_EXHAUSTED/.test(msg) ? T.autoCredit : fmt(T.autoFailed, { e: msg }));
+    } finally {
+      setBusy("");
+      setProgressText("");
+    }
+  };
+
   const runExport = async () => {
     if (!kit || !source) return;
     if (!webCodecsSupported()) { setNotice(T.exportUnsupported); return; }
@@ -507,6 +584,9 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
         <div className="ml-auto flex items-center gap-2">
           {progressText && <span className="text-emerald-300">{progressText}</span>}
           <span className={`min-w-[64px] text-right ${dirty ? "text-amber-300" : "text-gray-500"}`}>{dirty ? T.unsaved : ""}</span>
+          <button type="button" disabled={disabled} onClick={() => void autoStage("scene")} className="min-w-[112px] rounded-lg bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-500 disabled:opacity-50">{T.autoScene}</button>
+          <button type="button" disabled={disabled} onClick={() => void autoStage("all")} className="min-w-[112px] rounded-lg border border-indigo-700 px-3 py-1 font-bold text-indigo-300 hover:bg-indigo-900/40 disabled:opacity-50">{T.autoAll}</button>
+          <div className="mx-1 h-5 w-px bg-edge" />
           <button type="button" disabled={disabled} onClick={() => void save()} className="min-w-[72px] rounded-lg border border-edge px-3 py-1 font-bold hover:bg-edge disabled:opacity-50">{busy === "saving" ? T.saving : T.save}</button>
           <button type="button" disabled={disabled} onClick={() => void apply("current")} className="min-w-[104px] rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{T.applyCut}</button>
           <button type="button" disabled={disabled} onClick={() => void apply("all")} className="min-w-[104px] rounded-lg border border-emerald-700 px-3 py-1 font-bold text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-50">{T.applyAll}</button>

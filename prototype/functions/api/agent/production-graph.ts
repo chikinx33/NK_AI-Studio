@@ -12,6 +12,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { buildSceneImagePrompt, buildSceneVideoPrompt, cleanHeader } from "../_shared/prompt-assembly.js";
 import { AGENT_TOOLS, corsHeaders, send } from "./_shared";
+import { mentionTokens } from "../_shared/token-match.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -32,8 +33,6 @@ export interface GraphEdge {
   to: string;
   label?: string;
 }
-
-const TOKEN_RE = /@[0-9A-Za-z가-힣_]{1,24}/g;
 
 function slug(text: string): string {
   return String(text || "").trim().toLowerCase().replace(/[^0-9a-z가-힣]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "x";
@@ -57,12 +56,6 @@ function firstText(...values: unknown[]): string {
     if (s) return s;
   }
   return "";
-}
-
-function tokensIn(text: string): string[] {
-  const out = new Set<string>();
-  for (const m of String(text || "").match(TOKEN_RE) || []) out.add(m);
-  return [...out];
 }
 
 /** 순수 함수 — 테스트가 직접 호출한다. */
@@ -217,7 +210,8 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
       }
       edges.push({ id: `${locId}>${nodeId}`, type: "location", from: locId, to: nodeId });
     }
-    const mentioned = tokensIn([s?.composition, s?.shot, s?.visual, s?.action].map((v) => String(v || "")).join("\n"));
+    // 조사가 붙은 언급("@하나가")도 등록 캐릭터로 잇는다.
+    const mentioned = mentionTokens([s?.composition, s?.shot, s?.visual, s?.action].map((v) => String(v || "")).join("\n"), [...characterNodeByToken.keys()]);
     for (const token of mentioned) {
       const chId = characterNodeByToken.get(token);
       if (chId) edges.push({ id: `${chId}>${nodeId}`, type: "character", from: chId, to: nodeId });

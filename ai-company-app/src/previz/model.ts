@@ -8,10 +8,10 @@
  * 카메라 키프레임 전체에서 cameraMove 를 뽑아 scene_upsert 로 쓴다.
  */
 import {
-  DEFAULT_ACTOR_HEIGHT, KEY_EPS,
+  CAMERA_MOVES, DEFAULT_ACTOR_HEIGHT, KEY_EPS, POSE_HEIGHT, normalizePose,
   cameraDirectionOf, cameraElevationOf, cameraFromCutFields, cameraMoveOf, cellPosition, facingOfYaw,
   primarySubject, quantizeDepth, quantizeX, sampleActor, sampleCamera, shotSizeOf, yawOfFacing,
-  type ActorKey, type BlockingEntry, type CameraKey, type Ease, type Vec3,
+  type ActorKey, type BlockingEntry, type CameraKey, type CameraMove, type Ease, type Vec3,
 } from "./geometry.ts";
 
 export type PropKind = "box" | "cylinder" | "sphere" | "tree" | "car";
@@ -20,7 +20,11 @@ export const PROP_KINDS: PropKind[] = ["box", "cylinder", "sphere", "tree", "car
 export interface PrevizProp { id: string; kind: PropKind; label: string; color: string; x: number; z: number; yaw: number; w: number; h: number; d: number }
 export interface PrevizSet { key: string; name: string; width: number; depth: number; props: PrevizProp[] }
 export interface PrevizActor { token: string; height: number; keys: ActorKey[] }
-export interface PrevizCut { sceneId: string; setKey: string; duration: number; actors: PrevizActor[]; camera: CameraKey[] }
+/**
+ * moveIntent: 자동 연출이 계획한 카메라 무브. 움직이는 주인공을 따라가는 카메라는 기하로 되읽으면 다른 무브(트래킹 등)로
+ * 분류되므로, 사람이 카메라 키를 고치기 전까지는 이 의도를 컷 필드로 반영한다. 카메라를 손으로 고치면 지운다.
+ */
+export interface PrevizCut { sceneId: string; setKey: string; duration: number; actors: PrevizActor[]; camera: CameraKey[]; moveIntent?: CameraMove }
 export interface PrevizDoc { version: 1; sets: Record<string, PrevizSet>; cuts: Record<string, PrevizCut>; updatedAt: string }
 
 /** 캔버스 그래프의 컷 노드에서 필요한 값만. */
@@ -35,6 +39,8 @@ export interface CutSource {
   cameraElevation: string;
   blocking: unknown;
   tokens: string[];
+  /** 이 컷부터 새 씬(같은 세트 안에서 나눈 씬). 자동 연출의 180도 선·셋업 기록이 여기서 끊긴다. */
+  sceneBreak?: boolean;
 }
 
 export interface DerivedFields {
@@ -64,6 +70,34 @@ export function setKeyOf(name: unknown): string {
 export function normalizeToken(token: unknown): string {
   const t = String(token || "").trim().replace(/^@+/, "");
   return t ? `@${t}` : "";
+}
+
+const MENTION_RE = /@[0-9A-Za-z가-힣_]{1,24}/g;
+const PARTICLE_RE = /(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로|랑|이랑|하고)$/;
+
+/** "@하나가" → 등록 토큰 "@하나"(서버 _shared/token-match.js resolveMentionToken 과 같은 규칙, 테스트가 대조한다). */
+export function resolveMentionToken(raw: string, registered: string[]): string {
+  const token = String(raw || "").trim();
+  if (!token.startsWith("@")) return token;
+  const exact = registered.find((t) => t.toLowerCase() === token.toLowerCase());
+  if (exact) return exact;
+  const prefixed = registered
+    .filter((t) => t.length > 1 && token.toLowerCase().startsWith(t.toLowerCase()))
+    .filter((t) => /^[가-힣]{1,3}$/.test(token.slice(t.length)))
+    .sort((a, b) => b.length - a.length)[0];
+  if (prefixed) return prefixed;
+  const body = token.slice(1);
+  const stripped = body.replace(PARTICLE_RE, "");
+  return stripped.length >= 2 && stripped !== body ? `@${stripped}` : token;
+}
+
+export function mentionTokens(text: string, registered: string[]): string[] {
+  const out: string[] = [];
+  for (const m of String(text || "").match(MENTION_RE) || []) {
+    const t = resolveMentionToken(m, registered);
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out;
 }
 
 export function emptyDoc(): PrevizDoc {
@@ -101,7 +135,7 @@ export function normalizeDoc(raw: unknown): PrevizDoc {
     const actors = (Array.isArray(cut?.actors) ? cut.actors : []).map((a: any): PrevizActor => ({
       token: normalizeToken(a?.token),
       height: clamp(finite(a?.height, DEFAULT_ACTOR_HEIGHT), 0.2, 10),
-      keys: (Array.isArray(a?.keys) ? a.keys : []).map((k: any): ActorKey => ({ t: Math.max(0, finite(k?.t, 0)), x: finite(k?.x, 0), z: finite(k?.z, 0), yaw: finite(k?.yaw, 0), ease: ease(k?.ease) })),
+      keys: (Array.isArray(a?.keys) ? a.keys : []).map((k: any): ActorKey => ({ t: Math.max(0, finite(k?.t, 0)), x: finite(k?.x, 0), z: finite(k?.z, 0), yaw: finite(k?.yaw, 0), ease: ease(k?.ease), pose: normalizePose(k?.pose) })),
     })).filter((a: PrevizActor) => a.token && a.keys.length);
     if (!camera.length) continue;
     doc.cuts[id] = {
@@ -110,6 +144,7 @@ export function normalizeDoc(raw: unknown): PrevizDoc {
       duration: clamp(finite(cut?.duration, 3), MIN_DURATION, MAX_DURATION),
       actors,
       camera,
+      ...((CAMERA_MOVES as string[]).includes(String(cut?.moveIntent)) ? { moveIntent: cut.moveIntent as CameraMove } : {}),
     };
   }
   return doc;
@@ -160,7 +195,7 @@ export function initialCut(doc: PrevizDoc, source: CutSource, cuts: CutSource[],
     if (prev) {
       const last = sampleActor(prev.keys, prevInSet!.duration);
       const [x, z] = free(last.x, last.z);
-      return { token, height: prev.height, keys: [{ t: 0, x, z, yaw: last.yaw, ease: "smooth" }] };
+      return { token, height: prev.height, keys: [{ t: 0, x, z, yaw: last.yaw, ease: "smooth", pose: last.pose }] };
     }
     const spread = (i - (tokens.length - 1) / 2) * 1.2;
     const [x, z] = free(spread, 0);
@@ -186,14 +221,17 @@ export function deriveCutFields(cut: PrevizCut, set: PrevizSet, aspect: number, 
     const p = sampleActor(a.keys, 0);
     return { token: a.token, x: quantizeX(p.x, set.width), depth: quantizeDepth(p.z, set.depth), facing: facingOfYaw(p.yaw) };
   });
-  const subjects = cut.actors.map((a) => ({ token: a.token, height: a.height, ...sampleActor(a.keys, 0) }));
+  const subjects = cut.actors.map((a) => {
+    const s = sampleActor(a.keys, 0);
+    return { token: a.token, x: s.x, z: s.z, height: a.height * POSE_HEIGHT[s.pose] };
+  });
   const primary = primarySubject(cam, aspect, subjects);
   return {
     blocking,
     cameraDirection: cameraDirectionOf(cam.pos, cam.target),
     cameraElevation: cameraElevationOf(cam.pos, cam.target),
     shotType: primary ? shotSizeOf(primary.distance, cam.focal, aspect, primary.subject.height) : (String(currentShotType || "MS").toUpperCase()),
-    cameraMove: cameraMoveOf(cut.camera),
+    cameraMove: cut.moveIntent ?? cameraMoveOf(cut.camera),
   };
 }
 

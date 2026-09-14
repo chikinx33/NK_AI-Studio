@@ -1870,6 +1870,18 @@ export async function savePrevizDoc(projectId: string, previz: unknown): Promise
   if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 }
 
+/** 프리비즈 자동 연출 계획(서버가 사용자 Claude 자격증명으로 시나리오를 읽어 연출 의도를 JSON 으로). 풀이는 클라이언트 autoStage.ts. */
+export async function requestPrevizPlan(body: { projectId: string; targetIds: string[]; contextIds: string[]; prior: unknown; setSize: [number, number] | null }): Promise<unknown> {
+  const res = await fetch("/api/previz/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.ok) throw new Error(String(data?.error || `HTTP ${res.status}`));
+  return data.plan;
+}
+
 /** 에이전트 도구 잡 생성(승인 게이트 도구는 승인 패널에서 승인해야 실행된다). */
 export async function createAgentJob(type: string, input: Record<string, unknown>): Promise<{ jobId: string; status: string; agentId: string }> {
   const res = await fetch("/api/agent/job", {

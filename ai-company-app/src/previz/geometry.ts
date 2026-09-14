@@ -17,10 +17,18 @@ export type BlockFacing = "camera" | "away" | "left" | "right";
 export type CameraDirection = "front" | "back" | "left" | "right";
 export type CameraElevation = "eye" | "high" | "low" | "top" | "worm";
 export type ShotSize = "ECU" | "CU" | "MCU" | "MS" | "MLS" | "WS" | "EWS";
-export type CameraMove = "static" | "pan" | "tilt" | "track" | "crane" | "zoom" | "push_in" | "pull_out";
+export type CameraMove = "static" | "pan" | "tilt" | "track" | "crane" | "zoom" | "push_in" | "pull_out" | "handheld";
+export const CAMERA_MOVES: CameraMove[] = ["static", "pan", "tilt", "track", "crane", "zoom", "push_in", "pull_out", "handheld"];
+export type Pose = "stand" | "sit" | "crouch" | "lie";
+export const POSES: Pose[] = ["stand", "sit", "crouch", "lie"];
+/** 자세별 몸 높이 비율(서 있을 때 키 대비). 샷 크기·조준 높이 계산에 쓴다. */
+export const POSE_HEIGHT: Record<Pose, number> = { stand: 1, sit: 0.7, crouch: 0.62, lie: 0.28 };
+export function normalizePose(v: unknown): Pose {
+  return (POSES as string[]).includes(String(v)) ? (v as Pose) : "stand";
+}
 
 export interface CameraKey { t: number; pos: Vec3; target: Vec3; focal: number; ease?: Ease }
-export interface ActorKey { t: number; x: number; z: number; yaw: number; ease?: Ease }
+export interface ActorKey { t: number; x: number; z: number; yaw: number; ease?: Ease; pose?: Pose }
 export interface BlockingEntry { token: string; x: BlockX; depth: BlockDepth; facing: BlockFacing }
 
 /** 풀프레임 긴 변(36mm)을 화면의 긴 변에 맞춘다 — 가로·세로 영상 모두 같은 렌즈 감각. */
@@ -96,10 +104,12 @@ export function sampleCamera(keys: CameraKey[], t: number): { pos: Vec3; target:
   return { pos: lerpV(s.a.pos, s.b.pos, s.u), target: lerpV(s.a.target, s.b.target, s.u), focal: lerp(s.a.focal, s.b.focal, s.u) };
 }
 
-export function sampleActor(keys: ActorKey[], t: number): { x: number; z: number; yaw: number } {
+/** 위치·방향은 보간, 자세는 구간 시작 키의 자세(도착 키 시각부터 다음 자세). */
+export function sampleActor(keys: ActorKey[], t: number): { x: number; z: number; yaw: number; pose: Pose } {
   const s = segment(keys, t);
-  if (!s) return { x: 0, z: 0, yaw: 0 };
-  return { x: lerp(s.a.x, s.b.x, s.u), z: lerp(s.a.z, s.b.z, s.u), yaw: lerpAngleDeg(s.a.yaw, s.b.yaw, s.u) };
+  if (!s) return { x: 0, z: 0, yaw: 0, pose: "stand" };
+  const pose = normalizePose(s.u >= 1 ? s.b.pose : s.a.pose);
+  return { x: lerp(s.a.x, s.b.x, s.u), z: lerp(s.a.z, s.b.z, s.u), yaw: lerpAngleDeg(s.a.yaw, s.b.yaw, s.u), pose };
 }
 
 // ── 블로킹 격자(정면 기준 3×3) ───────────────────────────────────────────────
@@ -224,6 +234,10 @@ export function cameraMoveOf(keys: CameraKey[]): CameraMove {
   const yawChange = Math.abs(wrapDeg(Math.atan2(fb[0], -fb[2]) / DEG - Math.atan2(fa[0], -fa[2]) / DEG));
   const pitchChange = Math.abs(Math.asin(clamp(fb[1], -1, 1)) / DEG - Math.asin(clamp(fa[1], -1, 1)) / DEG);
   const focalChange = Math.abs(b.focal - a.focal);
+  // 핸드헬드: 시작·끝은 거의 같은데 그 사이 작은 흔들림 키가 여럿
+  let path = 0;
+  for (let i = 1; i < sorted.length; i++) path += Math.hypot(sorted[i].pos[0] - sorted[i - 1].pos[0], sorted[i].pos[1] - sorted[i - 1].pos[1], sorted[i].pos[2] - sorted[i - 1].pos[2]);
+  if (moved < 0.15 && sorted.length >= 4 && path >= 0.06 && focalChange < 5 && yawChange < 5 && pitchChange < 5) return "handheld";
   if (moved < 0.15) {
     if (focalChange >= 5) return "zoom";
     if (yawChange >= 5 && yawChange >= pitchChange) return "pan";

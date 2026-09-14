@@ -5,7 +5,7 @@
  * three.js 는 저장소에 들어 있는 prototype/lib/three(r170, 카메라 스튜디오와 같은 파일)를 런타임에 불러온다.
  * npm 의존성을 늘리지 않고, 프리비즈를 열 때만 내려받는다.
  */
-import { verticalFovDeg, type Vec3 } from "./geometry.ts";
+import { verticalFovDeg, type Pose, type Vec3 } from "./geometry.ts";
 import type { PrevizProp } from "./model.ts";
 
 const THREE_URL = "/lib/three/three.module.min.js";
@@ -23,7 +23,7 @@ export function loadThree(): Promise<ThreeKit> {
   return kitPromise;
 }
 
-export interface FrameActor { token: string; label: string; height: number; x: number; z: number; yaw: number; color: string }
+export interface FrameActor { token: string; label: string; height: number; x: number; z: number; yaw: number; color: string; pose?: Pose }
 export interface FrameState {
   width: number;
   depth: number;
@@ -229,6 +229,10 @@ export class PrevizScene {
     const body = new THREE.Group();
     const s = a.height / 1.7;
     body.scale.set(s, s, s);
+    // 자세: 앉기·웅크리기는 몸을 낮추고, 눕기는 등을 대고 바닥에 눕힌다(머리는 바라보는 방향의 반대쪽).
+    if (a.pose === "sit") body.scale.y = s * 0.7;
+    else if (a.pose === "crouch") body.scale.y = s * 0.62;
+    else if (a.pose === "lie") { body.rotation.x = -Math.PI / 2; body.position.y = 0.2 * s; }
     const mat = () => std(THREE, a.color, selected);
     const torso = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.9, 6, 14), mat()), pick);
     torso.position.y = 0.67;
@@ -253,7 +257,7 @@ export class PrevizScene {
       arrow.userData.pickId = pick;
       wrap.add(ring, arrow);
       const label = makeLabel(THREE, a.label, selected ? "#6ee7b7" : "#f1f5f9", 0.2);
-      label.position.y = a.height + 0.28;
+      label.position.y = a.height * (a.pose === "lie" ? 0.28 : a.pose === "sit" ? 0.7 : a.pose === "crouch" ? 0.62 : 1) + 0.28;
       wrap.add(label);
     }
     return wrap;
@@ -294,7 +298,7 @@ export class PrevizScene {
     const seenActors = new Set<string>();
     for (const a of f.actors) {
       const selected = f.selectedId === `actor:${a.token}`;
-      const sig = `${a.height}|${a.color}|${a.label}|${selected}|${f.helpers}`;
+      const sig = `${a.height}|${a.color}|${a.label}|${selected}|${f.helpers}|${a.pose || "stand"}`;
       let entry = this.actors.get(a.token);
       if (!entry || entry.sig !== sig) {
         if (entry) { this.actorsGroup.remove(entry.obj); disposeTree(entry.obj); }
