@@ -114,6 +114,18 @@
   white-space: nowrap;
 }
 
+/* AI 시네마 셸: 캔버스·프리비즈를 한 행에 반반 */
+#sidebar-project-card .sidebar-card-actions-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+#sidebar-project-card .sidebar-card-actions-row .btn-secondary {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 [data-theme="light"] #sidebar-stage-actions .btn-secondary,
 [data-theme="light"] #sidebar-project-card .sidebar-card-actions .btn-secondary {
   color: #0b0f1c;

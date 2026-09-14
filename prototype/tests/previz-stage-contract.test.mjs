@@ -14,7 +14,11 @@ test('★사이드바 카드(AI 시네마 셸에서만) 캔버스 아래·Pre-Pr
   const previz = dash.indexOf('data-action="sidebar-edit-previz"', start);
   const pre = dash.indexOf('data-action="sidebar-edit-scenario"', start);
   assert.ok(canvas > start && previz > canvas && previz < pre);
-  assert.match(dash.slice(canvas, pre), /\$\{getHostShell\(\) === 'video' \? `<button class="btn-secondary sidebar-previz-btn" data-action="sidebar-edit-previz" data-i18n="sidebar_previz_fixed">프리비즈<\/button>` : ''\}/);
+  // 캔버스·프리비즈는 한 행(반반)
+  assert.ok(dash.slice(start, pre).includes("${getHostShell() === 'video' ? `<div class=\"sidebar-card-actions-row\"><button class=\"btn-secondary sidebar-canvas-btn\" data-action=\"sidebar-edit-canvas\" data-i18n=\"sidebar_canvas_fixed\">캔버스</button><button class=\"btn-secondary sidebar-previz-btn\" data-action=\"sidebar-edit-previz\" data-i18n=\"sidebar_previz_fixed\">프리비즈</button></div>` : ''}"));
+  const css = read('prototype/styles.dashboard-cards.css');
+  assert.match(css, /#sidebar-project-card \.sidebar-card-actions-row \{\s*display: flex;\s*gap: 8px;/);
+  assert.match(css, /#sidebar-project-card \.sidebar-card-actions-row \.btn-secondary \{\s*flex: 1 1 0;\s*min-width: 0;/);
   const core = read('prototype/core.js');
   assert.match(core, /sidebar_previz_fixed: 'Previz',/);
   assert.match(core, /sidebar_previz_fixed: '프리비즈',/);
