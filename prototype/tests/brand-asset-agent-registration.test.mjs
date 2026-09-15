@@ -101,11 +101,20 @@ test("brand_asset tool resolves the brand, never saves after a failed read, and 
   // 서명 URL 은 gs:// 로
   assert.match(block, /export function brandAssetImageRef\(/);
   assert.match(block, /parsed\.hostname === "storage\.googleapis\.com"/);
-  // 이미지는 이름이 프롬프트에 든 최근 이미지 잡(승인 대기 상태 포함)에서 찾고, "아무 최근 이미지"로 대신하지 않는다
-  assert.match(block, /await findAssetImageObjectName\(ctx, String\(next\.jobId \|\| ""\)\.trim\(\), \[rawName, tokenBody\]\)/);
-  assert.match(block, /status NOT IN \('error', 'cancelled'\)/);
-  assert.doesNotMatch(block, /status = 'done'/);
-  assert.match(block, /이름이 들어간 이미지를 찾지 못했어요\. 최근 이미지:/);
+  // 이미지는 선택: 캐릭터(이름·설명)만 먼저 등록할 수 있고, 지정하지 않은 이미지를 짐작해 붙이지 않는다
+  assert.doesNotMatch(block, /등록할 이미지를 찾지 못했어요/);
+  assert.doesNotMatch(block, /ORDER BY created_at DESC LIMIT 60/);
+  assert.match(block, /if \(jobId\) next\.objectName = await imageJobObjectName\(ctx, jobId\);/);
+  assert.match(block, /if \(!imageRef \|\| items\.some\(/);
+  // 이미 있는 캐릭터면 준 칸만 갱신, 바뀐 게 없으면 저장하지 않음
+  assert.match(block, /if \(description !== null && description !== String\(profile\.description \|\| ""\)\)/);
+  assert.match(block, /if \(!changed\) return \{ \.\.\.result, saved: false, alreadyRegistered: true \};/);
+});
+
+test("brand_asset prompt says character registration does not need an image", () => {
+  const orch = read("prototype/functions/api/agent/_orchestrator.ts");
+  assert.match(orch, /이미지는 선택이다: 캐릭터 등록만 요청받으면 이미지 없이 이름·설명만 등록한다/);
+  assert.match(orch, /지정하지 않은 이미지를 짐작해 붙이지 않는다/);
 });
 
 test("gated brand_asset resolves its image before the approval card is created", () => {
@@ -121,7 +130,7 @@ test("agents can point brand_asset at a generated image by jobId", () => {
   const shared = read("prototype/functions/api/agent/_shared.ts");
   assert.match(shared, /\[산출물: \$\{refs\.join\(", "\)\}\]/);
   const orch = read("prototype/functions/api/agent/_orchestrator.ts");
-  assert.match(orch, /brand_asset: `\[\[RUN: brand_asset \| \{"brandId": "my-brand", "name": "전략가", "kind": "character", "jobId":/);
+  assert.ok(orch.includes('{"jobId": "그 이미지의 jobId(대화의 [산출물: … jobId=…])"}'));
 });
 
 test("brand save keeps environment asset descriptions", () => {
