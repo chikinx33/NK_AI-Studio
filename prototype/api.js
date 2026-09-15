@@ -1367,6 +1367,25 @@
     return j(text);
   };
 
+  // 계정별 스튜디오 브랜드(로그인 카드 제목·로고). AI 기업 사이드바도 같은 값을 읽는다.
+  api.userdataBrandGet = async function () {
+    var res = await fetchWithTimeout(withBase('/api/userdata/brand'), { method: 'GET', headers: buildAuthHeaders() }, 15000);
+    var text = await readTextWithTimeout(res, 10000);
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_brand_get_error')));
+    return j(text);
+  };
+
+  api.userdataBrandSave = async function (brand) {
+    var res = await fetchWithTimeout(withBase('/api/userdata/brand'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(brand || {})
+    }, 25000);
+    var text = await readTextWithTimeout(res, 10000);
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_brand_save_error')));
+    return j(text);
+  };
+
   api.bookmarkIcon = async function (pageUrl) {
     var token = getAuthToken();
     var q = '/api/bookmark/icon?url=' + encodeURIComponent(String(pageUrl || ''));

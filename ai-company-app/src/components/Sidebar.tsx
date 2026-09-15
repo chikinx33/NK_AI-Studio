@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
+import { getStudioBrand, saveStudioBrandIcon, setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
 import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
-import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
+import { readStorage, readUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 interface Props {
   status: StatusInfo | null;
@@ -452,6 +452,32 @@ export default function Sidebar({
   const off = status?.workMode === "off";
   const auto = status?.autonomous === true;
 
+  // 로고: 계정별 스튜디오 브랜드(런처 로그인 카드와 같은 값). 없으면 기본 로고. 누르면 이미지 등록.
+  const [brandIcon, setBrandIcon] = useState("");
+  const [savingLogo, setSavingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const en = readStorage("nk_lang") === "en";
+  useEffect(() => {
+    let alive = true;
+    getStudioBrand().then((b) => { if (alive) setBrandIcon(b.iconDataUrl); }).catch(() => { /* 기본 로고 유지 */ });
+    return () => { alive = false; };
+  }, []);
+
+  async function onLogoFile(file: File | undefined) {
+    if (!file || savingLogo) return;
+    setSavingLogo(true);
+    try {
+      const dataUrl = await resizeLogoToSquare(file, 500);
+      const saved = await saveStudioBrandIcon(dataUrl);
+      setBrandIcon(saved.iconDataUrl);
+    } catch (e) {
+      alert((en ? "Could not register the logo: " : "로고를 등록하지 못했어요: ") + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSavingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
   async function toggleWork() {
     if (!status || toggling) return;
     setToggling(true);
@@ -472,7 +498,27 @@ export default function Sidebar({
     <aside className="w-80 shrink-0 bg-panel border-r border-edge flex flex-col h-full">
       <div className="p-4">
         <div className="flex justify-center">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="NK AI Company" className="h-12 w-auto object-contain" />
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={savingLogo}
+            title={en ? "Register logo image" : "로고 이미지 등록"}
+            aria-label={en ? "Register logo image" : "로고 이미지 등록"}
+            className={`cursor-pointer rounded-lg ${savingLogo ? "opacity-60" : "hover:opacity-80"}`}
+          >
+            <img
+              src={brandIcon || `${import.meta.env.BASE_URL}logo.png`}
+              alt="NK AI Company"
+              className={brandIcon ? "h-12 w-12 rounded-lg object-cover" : "h-12 w-auto object-contain"}
+            />
+          </button>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => onLogoFile(e.target.files?.[0])}
+          />
         </div>
         <div className="text-xs text-gray-400 mt-1 text-center">1인 기업 · AI 에이전트</div>
 
@@ -585,4 +631,33 @@ export default function Sidebar({
       )}
     </aside>
   );
+}
+
+// 런처 로그인 카드와 같은 규칙: 정사각형으로 꽉 채워 자른 PNG data URL.
+function resizeLogoToSquare(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) { reject(new Error("image_only")); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read_failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode_failed"));
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas_unavailable")); return; }
+        const sw = img.naturalWidth || size;
+        const sh = img.naturalHeight || size;
+        const scale = Math.max(size / sw, size / sh);
+        const dw = sw * scale;
+        const dh = sh * scale;
+        ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
 }

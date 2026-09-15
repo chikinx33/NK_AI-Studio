@@ -974,11 +974,61 @@
             });
         return state.promise;
     };
+    // 이 화면이 브랜드를 읽은 뒤 다른 곳(AI 기업 에이전트의 brand_asset, 다른 탭)에서 서버에 추가된 항목.
+    // 저장은 통째 교체라 로컬 사본만 보내면 그 추가분이 지워지므로, "로컬에 없던 것"만 골라 살린다.
+    // 로컬에 있던 항목은 건드리지 않으므로 이 화면에서 지운 시트가 되살아나지 않는다.
+    function entryKey(entry, field) {
+        return String(entry && entry[field] || '').toLowerCase();
+    }
+    function itemKey(item) {
+        return String(item && (item.sheetId || item.imageDataUrl) || '');
+    }
+    function keepRemoteAdditions(nextList, localList, remoteList, field, withItems) {
+        var next = Array.isArray(nextList) ? nextList.slice() : [];
+        var local = Array.isArray(localList) ? localList : [];
+        var remote = Array.isArray(remoteList) ? remoteList : [];
+        remote.forEach(function (remoteEntry) {
+            var key = entryKey(remoteEntry, field);
+            if (!key) return;
+            var localEntry = local.find(function (row) { return entryKey(row, field) === key; });
+            var nextIndex = next.findIndex(function (row) { return entryKey(row, field) === key; });
+            if (!localEntry) {
+                if (nextIndex === -1) next.push(remoteEntry);
+                return;
+            }
+            if (!withItems || nextIndex === -1) return;
+            var localItems = (Array.isArray(localEntry.items) ? localEntry.items : []).map(itemKey);
+            var nextEntry = Object.assign({}, next[nextIndex]);
+            var nextItems = Array.isArray(nextEntry.items) ? nextEntry.items.slice() : [];
+            (Array.isArray(remoteEntry.items) ? remoteEntry.items : []).forEach(function (item) {
+                var k = itemKey(item);
+                if (!k || localItems.indexOf(k) !== -1) return;
+                if (nextItems.some(function (row) { return itemKey(row) === k; })) return;
+                nextItems.push(item);
+            });
+            nextEntry.items = nextItems;
+            next[nextIndex] = nextEntry;
+        });
+        return next;
+    }
+    async function fetchRemoteBrand(targetId) {
+        if (!NK.api || !NK.api.brandGet) return null;
+        try {
+            var resp = await NK.api.brandGet(targetId);
+            var remote = resp && resp.data && resp.data.brand ? resp.data.brand : (resp && resp.brand ? resp.brand : null);
+            return remote ? normalizeBrand(remote) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
     brand.persistShared = async function (brandId, patch) {
         var targetId = normalizeText(brandId);
         if (!targetId) throw new Error('brand_id_required');
         ensureMigrated();
         var existing = brand.getById(targetId);
+        var remoteBrand = await fetchRemoteBrand(targetId);
+        existing = brand.getById(targetId) || existing;
         // Shared knowledge edits are authored from a single UI state, so arrays must replace, not union-merge.
         var patchTouchesSheets = SHEET_LIST_KEYS.concat(ENVIRONMENT_LIST_KEYS).some(function (key) {
             return patch && Object.prototype.hasOwnProperty.call(patch, key);
@@ -991,6 +1041,15 @@
             createdAt: existing && existing.createdAt,
             sheetsUpdatedAt: sheetsUpdatedAt
         }));
+        if (remoteBrand) {
+            var localBefore = existing ? normalizeBrand(existing) : {};
+            nextBrand = normalizeBrand(Object.assign({}, nextBrand, {
+                characterSheets: keepRemoteAdditions(nextBrand.characterSheets, localBefore.characterSheets, remoteBrand.characterSheets, 'token', true),
+                environmentAssets: keepRemoteAdditions(nextBrand.environmentAssets, localBefore.environmentAssets, remoteBrand.environmentAssets, 'token', true),
+                knowledgeCharacters: keepRemoteAdditions(nextBrand.knowledgeCharacters, localBefore.knowledgeCharacters, remoteBrand.knowledgeCharacters, 'token', false),
+                brandCharacters: keepRemoteAdditions(nextBrand.brandCharacters, localBefore.brandCharacters, remoteBrand.brandCharacters, 'trigger', false)
+            }));
+        }
         upsertBrandLocal(nextBrand);
         if (!NK.api || !NK.api.brandSave) return nextBrand;
         var resp = await NK.api.brandSave(targetId, nextBrand);

@@ -1114,8 +1114,15 @@ export async function deleteReminderById(sql: SqlFn, userId: string, id: string)
 export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 12): string {
   const recent = msgs.slice(-maxTurns);
   if (!recent.length) return "(대화 시작)";
+  // 생성 산출물은 잡 id 를 붙여 준다. 모델이 "방금 만든 이미지"를 brand_asset 등에 jobId 로 지목할 수 있게.
+  const generatedRefs = (m: AgentMessage) => {
+    const refs = (Array.isArray(m.files) ? m.files : [])
+      .filter((f: any) => f && f.source === "generated" && f.jobId)
+      .map((f: any) => `${f.name || f.kind || "산출물"} jobId=${f.jobId}`);
+    return refs.length ? ` [산출물: ${refs.join(", ")}]` : "";
+  };
   return recent
-    .map((m) => (m.role === "user" ? `${addr}: ${m.text}` : `${m.name || "직원"}: ${m.text}`))
+    .map((m) => (m.role === "user" ? `${addr}: ${m.text}` : `${m.name || "직원"}: ${m.text}${generatedRefs(m)}`))
     .join("\n");
 }
 
@@ -3247,58 +3254,186 @@ async function runBrandSaveTool(input: any, ctx: ToolContext): Promise<any> {
   const incoming = (input?.brand && typeof input.brand === "object") ? input.brand : {};
   let brand: Record<string, any> = incoming;
   if (input?.merge !== false) {
-    try {
-      const cur = await runBrandGetTool({ brandId }, ctx);
-      if (cur?.exists && cur.brand && typeof cur.brand === "object") brand = { ...cur.brand, ...incoming };
-    } catch { /* 신규 브랜드면 병합 대상 없음 — 그대로 진행 */ }
+    // 조회 실패를 "신규 브랜드"로 보면 안 된다 — /api/brand/save 는 통째 교체라 기존 캐릭터 시트·파일이 지워진다.
+    const cur = await runBrandGetTool({ brandId }, ctx);
+    if (cur?.exists && cur.brand && typeof cur.brand === "object") brand = { ...cur.brand, ...incoming };
   }
   const data = await callInternalJson(ctx, "/api/brand/save", { body: { brandId, brand } });
   return { kind: "brand_save", brandId, saved: true, brand: data?.brand || brand };
 }
 
-/** 캐릭터/환경 자산 등록: 브랜드를 읽어 characterSheets(또는 environmentAssets)에 이미지 항목 추가 후 저장. 쓰기 → 승인 게이트.
- *  imageUrl(서명/https/data URL) 또는 objectName(gs 경로로 변환·영속 권장) 중 하나로 이미지를 지정. */
-async function runBrandAssetTool(input: any, ctx: ToolContext): Promise<any> {
-  const brandId = String(input?.brandId || input?.slug || "").trim();
-  if (!brandId) throw new Error("brandId is required");
-  const displayName = String(input?.name || input?.displayName || input?.token || "").replace(/[<>]/g, "").trim();
-  if (!displayName) throw new Error("name is required (자산 이름, 예: 전략가)");
-  const objectName = String(input?.objectName || "").trim();
-  let imageRef = String(input?.imageUrl || input?.imageDataUrl || input?.url || "").trim();
-  if (objectName) {
-    const bucket = studioBucket(ctx);
-    if (bucket) imageRef = `gs://${bucket}/${objectName}`; // gs 경로 = 서명 URL 만료 걱정 없이 영속 저장
+// 브랜드 허브 UI 규칙과 같게 맞춘다(js/service/brand.js normalizeTrigger · knowledge-hub.js 시트 4장 · 환경 16개).
+const BRAND_SHEETS_PER_CHARACTER = 4;
+const BRAND_ENVIRONMENT_ASSET_LIMIT = 16;
+
+/** 캐릭터 토큰 본문: 허브가 받아들이는 문자(영문·숫자·한글·_)만, 24자 이내. 공백은 _ 로. */
+export function brandCharacterTokenBody(name: string): string {
+  return String(name || "")
+    .replace(/^@+/, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^0-9A-Za-z가-힣_]/g, "")
+    .slice(0, 24);
+}
+
+/**
+ * 등록할 이미지를 영속 경로로 바꾼다. 서명 URL(1시간 만료)을 그대로 저장하면 썸네일·컷 참조가 곧 깨진다.
+ * gs:// · data:image 는 그대로, GCS 서명/공개 URL · /api/media/proxy URL 은 gs:// 로 변환. 그 밖의 링크는 "" (거부).
+ */
+export function brandAssetImageRef(raw: string, bucket: string): string {
+  const u = String(raw || "").trim();
+  if (!u) return "";
+  if (u.startsWith("gs://") || /^data:image\//i.test(u)) return u;
+  let parsed: URL;
+  try { parsed = new URL(u, "https://nkstudio.org/"); } catch { return ""; }
+  if (parsed.pathname.includes("/api/media/proxy")) {
+    const obj = String(parsed.searchParams.get("objectName") || "").trim();
+    return obj && bucket ? `gs://${bucket}/${obj}` : "";
   }
-  if (!imageRef) throw new Error("imageUrl 또는 objectName 중 하나가 필요해요(등록할 이미지).");
+  if (parsed.hostname === "storage.googleapis.com") {
+    const path = parsed.pathname.replace(/^\/+/, "");
+    const slash = path.indexOf("/");
+    return slash > 0 ? `gs://${path.slice(0, slash)}/${decodeURIComponent(path.slice(slash + 1))}` : "";
+  }
+  const sub = parsed.hostname.match(/^(.+)\.storage\.googleapis\.com$/);
+  if (sub) return `gs://${sub[1]}/${decodeURIComponent(parsed.pathname.replace(/^\/+/, ""))}`;
+  return "";
+}
+
+/** 방금 만든 이미지 찾기: jobId 가 있으면 그 잡, 없으면 이 사용자의 가장 최근 이미지 잡 산출물. */
+async function recentImageObjectName(ctx: ToolContext, jobId: string): Promise<string> {
+  const sql = getSql(ctx.env);
+  if (!sql) return "";
+  if (jobId) {
+    const job = await getJob(sql, jobId, ctx.userId).catch(() => null);
+    return String((job as any)?.output?.objectName || "").trim();
+  }
+  const rows = await sql(
+    `SELECT output->>'objectName' AS object_name FROM agent_jobs
+      WHERE user_id = $1 AND type = 'image' AND status = 'done' AND COALESCE(output->>'objectName', '') <> ''
+      ORDER BY updated_at DESC LIMIT 1`,
+    [ctx.userId],
+  ).catch(() => [] as any[]);
+  return String((rows as any[])[0]?.object_name || "").trim();
+}
+
+/** 캐릭터/환경 자산 등록: 브랜드를 읽어 characterSheets(또는 environmentAssets)에 이미지 항목 추가 후 저장. 쓰기 → 승인 게이트.
+ *  이미지는 objectName · jobId(이미지 잡) · imageUrl 중 하나. 아무것도 없으면 가장 최근에 만든 이미지를 쓴다. */
+async function runBrandAssetTool(input: any, ctx: ToolContext): Promise<any> {
+  const givenBrand = String(input?.brandId || input?.slug || input?.brand || "").trim();
+  const { brandId, candidates } = await resolveBrandId(givenBrand, ctx);
+  if (!brandId) throw new Error(`brandId 가 필요해요.${candidates.length ? ` 등록된 브랜드: ${candidates.join(", ")}` : ""}`);
+  // 조회 실패면 저장하지 않는다(통째 교체 저장이라 기존 시트가 지워짐). 없는 브랜드는 허브에 보이지 않으므로 만들지 않는다.
+  const cur = await runBrandGetTool({ brandId }, ctx);
+  if (!cur?.exists || !cur.brand || typeof cur.brand !== "object") {
+    throw new Error(`브랜드 "${brandId}" 를 찾지 못했어요.${candidates.length ? ` 등록된 브랜드: ${candidates.join(", ")}` : " 브랜드 허브에서 브랜드를 먼저 만들어 주세요."}`);
+  }
+  const brand: any = JSON.parse(JSON.stringify(cur.brand));
 
   const kindRaw = String(input?.kind || "character").toLowerCase();
   const isEnv = kindRaw === "environment" || kindRaw === "env" || kindRaw === "background" || kindRaw === "prop";
-  const token = "@" + displayName.replace(/^@+/, "").replace(/\s+/g, "");
-  const item = { imageDataUrl: imageRef, isPrimary: input?.isPrimary === true };
+  const rawName = String(input?.name || input?.displayName || input?.token || "").replace(/[<>]/g, "").replace(/^@+/, "").trim();
+  if (!rawName) throw new Error("name is required (자산 이름, 예: 전략가)");
+  const tokenBody = isEnv ? rawName.replace(/\s+/g, "") : brandCharacterTokenBody(rawName);
+  if (!tokenBody) throw new Error("이름에 쓸 수 있는 글자가 없어요(영문·숫자·한글·_).");
+  const displayName = isEnv ? rawName.replace(/\s+/g, " ") : tokenBody;
+  const token = "@" + tokenBody;
 
-  const cur = await runBrandGetTool({ brandId }, ctx).catch(() => ({ exists: false, brand: {} as any }));
-  const brand: any = (cur?.exists && cur.brand && typeof cur.brand === "object")
-    ? JSON.parse(JSON.stringify(cur.brand)) : {};
+  const bucket = studioBucket(ctx);
+  const objectName = String(input?.objectName || "").trim().replace(/^gs:\/\/[^/]+\//, "");
+  let imageRef = objectName && bucket ? `gs://${bucket}/${objectName}` : "";
+  const rawUrl = String(input?.imageUrl || input?.imageDataUrl || input?.url || "").trim();
+  if (!imageRef && rawUrl) {
+    imageRef = brandAssetImageRef(rawUrl, bucket);
+    if (!imageRef) throw new Error("이 이미지 URL 은 영속 저장할 수 없어요(만료되는 외부 링크). objectName 이나 jobId 로 지정해 주세요.");
+  }
+  if (!imageRef) {
+    const found = await recentImageObjectName(ctx, String(input?.jobId || "").trim());
+    if (found && bucket) imageRef = `gs://${bucket}/${found}`;
+  }
+  if (!imageRef) throw new Error("등록할 이미지를 찾지 못했어요. 이미지를 먼저 만들거나 objectName·jobId 를 지정해 주세요.");
 
+  const sameEntry = (entry: any) =>
+    String(entry?.token || "").toLowerCase() === token.toLowerCase()
+    || String(entry?.displayName || "").toLowerCase() === displayName.toLowerCase();
+  const stamp = Date.now().toString(36);
+  const now = new Date().toISOString();
+  const addItem = (entry: any) => {
+    const items: any[] = Array.isArray(entry.items) ? entry.items : [];
+    if (items.some((it) => String(it?.imageDataUrl || "") === imageRef)) return false;
+    const isPrimary = input?.isPrimary === true || items.length === 0;
+    if (isPrimary) items.forEach((it) => { it.isPrimary = false; });
+    // sheetId 를 주지 않으면 서버가 위치로 sheet_00N 을 매겨, 삭제 뒤 다른 시트와 겹칠 수 있다.
+    items.push({ sheetId: `sheet_${stamp}${Math.random().toString(36).slice(2, 6)}`, imageDataUrl: imageRef, isPrimary, createdAt: now, updatedAt: now });
+    entry.items = items;
+    return true;
+  };
+
+  let added: boolean;
   if (isEnv) {
     const list: any[] = Array.isArray(brand.environmentAssets) ? brand.environmentAssets : [];
-    const found = list.find((a) => (a?.token || "") === token || (a?.displayName || "") === displayName);
-    if (found) found.items = (Array.isArray(found.items) ? found.items : []).concat(item);
-    else list.push({ displayName, token, kind: kindRaw === "prop" ? "prop" : "background", items: [item] });
+    let entry = list.find(sameEntry);
+    if (!entry) {
+      if (list.length >= BRAND_ENVIRONMENT_ASSET_LIMIT) {
+        throw new Error(`환경 자산은 브랜드당 ${BRAND_ENVIRONMENT_ASSET_LIMIT}개까지예요. 브랜드 허브에서 하나를 지운 뒤 다시 등록해 주세요.`);
+      }
+      entry = { assetId: `env_${stamp}`, displayName, token, kind: kindRaw === "prop" ? "prop" : "background", description: String(input?.description || "").slice(0, 2000), items: [] };
+      list.push(entry);
+    }
+    added = addItem(entry);
     brand.environmentAssets = list;
+    delete brand.knowledgeEnvironmentAssets;
   } else {
     const list: any[] = Array.isArray(brand.characterSheets) ? brand.characterSheets : [];
-    const found = list.find((c) => (c?.token || "") === token || (c?.displayName || "") === displayName);
-    if (found) found.items = (Array.isArray(found.items) ? found.items : []).concat(item);
-    else list.push({ displayName, token, items: [item] });
+    let entry = list.find(sameEntry);
+    const duplicate = !!entry && Array.isArray(entry.items) && entry.items.some((it: any) => String(it?.imageDataUrl || "") === imageRef);
+    if (entry && !duplicate && Array.isArray(entry.items) && entry.items.length >= BRAND_SHEETS_PER_CHARACTER) {
+      throw new Error(`"${entry.displayName || displayName}" 캐릭터는 시트가 이미 ${BRAND_SHEETS_PER_CHARACTER}장이에요. 브랜드 허브에서 한 장을 지운 뒤 다시 등록해 주세요.`);
+    }
+    if (!entry) {
+      entry = { characterId: `char_${stamp}`, displayName, token, items: [] };
+      list.push(entry);
+    }
+    added = addItem(entry);
     brand.characterSheets = list;
+    delete brand.knowledgeCharacterSheets;
+
+    // 허브의 "캐릭터 자산" 목록·인원 수는 knowledgeCharacters, 생김새·네거티브는 brandCharacters 를 읽는다.
+    const finalToken = String(entry.token || token);
+    const finalName = String(entry.displayName || displayName);
+    const knowledge: any[] = Array.isArray(brand.knowledgeCharacters) ? brand.knowledgeCharacters : [];
+    if (!knowledge.some((k) => String(k?.token || "").toLowerCase() === finalToken.toLowerCase())) {
+      knowledge.push({ characterId: entry.characterId || `char_${stamp}`, displayName: finalName, token: finalToken, personality: String(input?.personality || "").slice(0, 2000) });
+    }
+    brand.knowledgeCharacters = knowledge;
+    const profiles: any[] = Array.isArray(brand.brandCharacters) ? brand.brandCharacters : [];
+    const profile = profiles.find((p) => String(p?.trigger || "").toLowerCase() === finalToken.toLowerCase());
+    if (!profile) {
+      profiles.push({
+        id: entry.characterId || `char_${stamp}`,
+        trigger: finalToken,
+        name: finalName,
+        description: String(input?.description || "").slice(0, 2000),
+        negativePrompt: String(input?.negativePrompt || "").slice(0, 2000),
+        isActive: true,
+      });
+    } else {
+      if (input?.description && !String(profile.description || "").trim()) profile.description = String(input.description).slice(0, 2000);
+      if (input?.negativePrompt && !String(profile.negativePrompt || "").trim()) profile.negativePrompt = String(input.negativePrompt).slice(0, 2000);
+    }
+    brand.brandCharacters = profiles;
   }
-  const saved = await runBrandSaveTool({ brandId, brand, merge: false }, ctx);
+
+  if (!added) {
+    return { kind: "brand_asset", brandId, saved: false, alreadyRegistered: true, assetName: displayName, assetToken: token, assetKind: isEnv ? "environment" : "character" };
+  }
+  brand.sheetsUpdatedAt = now;
+  await runBrandSaveTool({ brandId, brand, merge: false }, ctx);
   return {
     kind: "brand_asset", brandId, saved: true,
     assetName: displayName, assetToken: token,
     assetKind: isEnv ? "environment" : "character",
-    brand: saved.brand,
+    imageRef,
   };
 }
 

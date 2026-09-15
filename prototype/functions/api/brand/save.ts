@@ -161,6 +161,8 @@ async function normalizeEnvironmentAssets(value: any, ctx: { bucket: string; bra
       displayName,
       token,
       kind: String(raw.kind || "").trim().toLowerCase() === "prop" ? "prop" : "background",
+      // 허브에서 적은 장소·소품 설명. 빠뜨리면 저장할 때마다 지워진다.
+      description: normalizeText(raw.description || raw.personality || raw.note || ""),
       items,
     });
   }

@@ -1286,6 +1286,7 @@
     let apiAuthMode = 'subscription';
     let apiAuthLoaded = false;
     let lastLoginState = false;
+    let lastLoginBrandSyncUser = '';
     let favoriteThemePresets = readThemePresets();
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
@@ -1360,6 +1361,37 @@
       try {
         localStorage.setItem(key, JSON.stringify(payload));
       } catch (_) { }
+    };
+
+    // 로그인 카드 브랜드는 계정별로 서버(api/userdata/brand)에 둔다. 로컬은 첫 화면을 바로 그리는 캐시.
+    // 서버에 아직 없고 이 브라우저에만 등록돼 있던 값은 한 번 올려서 다른 기기·AI 기업 사이드바에도 보이게 한다.
+    const syncLoginBrandFromServer = async (user) => {
+      if (!user || !NK.api || !NK.api.userdataBrandGet) return;
+      try {
+        const res = await NK.api.userdataBrandGet();
+        if (String(NK.auth.getUser() || '') !== String(user)) return;
+        const server = res?.data || {};
+        const local = readLoginBrandLocal(user);
+        const serverHasBrand = !!(String(server.title || '').trim() || String(server.iconDataUrl || '').trim());
+        if (!serverHasBrand) {
+          const localHasBrand = local.iconDataUrl || local.title !== DEFAULT_LOGIN_CARD_TITLE;
+          if (localHasBrand && NK.api.userdataBrandSave) {
+            await NK.api.userdataBrandSave({
+              title: local.title === DEFAULT_LOGIN_CARD_TITLE ? '' : local.title,
+              iconDataUrl: local.iconDataUrl,
+            });
+          }
+          return;
+        }
+        const next = { title: server.title, iconDataUrl: server.iconDataUrl };
+        saveLoginBrandLocal(user, next);
+        applyLoginBrandToUi(next);
+      } catch (_) { /* 서버 실패 시 로컬 캐시로 계속 표시 */ }
+    };
+
+    const saveLoginBrandServer = async (user, patch) => {
+      if (!user || !NK.api || !NK.api.userdataBrandSave) return;
+      await NK.api.userdataBrandSave(patch);
     };
 
     const applyLoginBrandToUi = (brand) => {
@@ -2427,6 +2459,11 @@
         const nextTitle = normalizeLoginCardTitle(nextRaw);
         saveLoginBrandLocal(user, { title: nextTitle, iconDataUrl: current.iconDataUrl });
         applyLoginBrandToUi({ title: nextTitle, iconDataUrl: current.iconDataUrl });
+        try {
+          await saveLoginBrandServer(user, { title: nextTitle === DEFAULT_LOGIN_CARD_TITLE ? '' : nextTitle });
+        } catch (err) {
+          alert('제목은 이 브라우저에만 저장되었습니다. 서버 저장에 실패했습니다: ' + (err?.message || ''));
+        }
       });
     }
 
@@ -2450,6 +2487,7 @@
           const current = readLoginBrandLocal(user);
           saveLoginBrandLocal(user, { title: current.title, iconDataUrl });
           applyLoginBrandToUi({ title: current.title, iconDataUrl });
+          await saveLoginBrandServer(user, { iconDataUrl });
           alert('로그인 아이콘이 등록되었습니다.');
         } catch (err) {
           alert(err?.message || '아이콘 등록에 실패했습니다.');
@@ -2527,9 +2565,14 @@
         const brand = readLoginBrandLocal(user);
         applyLoginBrandToUi(brand);
         setLoginBrandEditable(true);
+        if (lastLoginBrandSyncUser !== user) {
+          lastLoginBrandSyncUser = user;
+          syncLoginBrandFromServer(user);
+        }
       } else {
         applyLoginBrandToUi({ title: DEFAULT_LOGIN_CARD_TITLE, iconDataUrl: '' });
         setLoginBrandEditable(false);
+        lastLoginBrandSyncUser = '';
       }
 
       if (favoriteCard) favoriteCard.classList.toggle('is-locked', !loggedIn);

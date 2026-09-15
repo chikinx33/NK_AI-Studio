@@ -170,6 +170,27 @@ export async function registerCompanySkillJobArtifacts(
   return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
 }
 
+// 계정별 스튜디오 브랜드(런처 로그인 카드의 제목·로고와 같은 값). 로고가 없으면 기본 로고를 쓴다.
+export interface StudioBrand { title: string; iconDataUrl: string }
+
+export async function getStudioBrand(): Promise<StudioBrand> {
+  const res = await fetch("/api/userdata/brand");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "브랜드 정보를 불러오지 못했어요.");
+  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || "") };
+}
+
+export async function saveStudioBrandIcon(iconDataUrl: string): Promise<StudioBrand> {
+  const res = await fetch("/api/userdata/brand", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ iconDataUrl }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || "로고를 저장하지 못했어요.");
+  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || "") };
+}
+
 export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {
   const res = await fetch("/api/agent/work-items");
   const data = await res.json().catch(() => ({}));
