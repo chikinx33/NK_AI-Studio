@@ -98,10 +98,23 @@ test("brand_asset tool resolves the brand, never saves after a failed read, and 
   assert.match(block, /toLowerCase\(\) === token\.toLowerCase\(\)/);
   assert.match(block, /brand\.knowledgeCharacters = knowledge;/);
   assert.match(block, /brand\.brandCharacters = profiles;/);
-  // 서명 URL 은 gs:// 로, 이미지가 없으면 최근 이미지 잡
+  // 서명 URL 은 gs:// 로
   assert.match(block, /export function brandAssetImageRef\(/);
   assert.match(block, /parsed\.hostname === "storage\.googleapis\.com"/);
-  assert.match(block, /await recentImageObjectName\(ctx, String\(input\?\.jobId \|\| ""\)\.trim\(\)\)/);
+  // 이미지는 이름이 프롬프트에 든 최근 이미지 잡(승인 대기 상태 포함)에서 찾고, "아무 최근 이미지"로 대신하지 않는다
+  assert.match(block, /await findAssetImageObjectName\(ctx, String\(next\.jobId \|\| ""\)\.trim\(\), \[rawName, tokenBody\]\)/);
+  assert.match(block, /status NOT IN \('error', 'cancelled'\)/);
+  assert.doesNotMatch(block, /status = 'done'/);
+  assert.match(block, /이름이 들어간 이미지를 찾지 못했어요\. 최근 이미지:/);
+});
+
+test("gated brand_asset resolves its image before the approval card is created", () => {
+  const src = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(src, /brand_asset: \{ agentId: "pixel", agentIds: \["core"\], kind: "external", gate: true, prepare: prepareBrandAssetInput, run: runBrandAssetTool \}/);
+  assert.match(src, /if \(tool\.prepare\) \{\s*const prepared = await tool\.prepare\(input, \{ \.\.\.ctx, jobId \}\);/);
+  assert.match(src, /UPDATE agent_jobs SET input = \$1::jsonb, updated_at = now\(\) WHERE id = \$2 AND user_id = \$3/);
+  // 코어도 이미지 보관함에서 objectName 을 찾을 수 있다
+  assert.match(src, /image_library: \{ agentId: "pixel", agentIds: \["plot", "reach", "core"\]/);
 });
 
 test("agents can point brand_asset at a generated image by jobId", () => {

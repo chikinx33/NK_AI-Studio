@@ -1246,6 +1246,11 @@ export interface ToolDef {
    * 키로 삼아야 마지막 요청 하나만 남는다.
    */
   approvalKey?: (input: any) => string;
+  /**
+   * 승인 게이트 도구의 사전 확정. 승인 대기로 두기 전에 입력을 검증·보강해 잡 입력에 저장한다.
+   * 던지면 승인 카드를 만들지 않고 바로 실패로 알린다(승인 후에야 실패하는 것 방지).
+   */
+  prepare?: (input: any, ctx: ToolContext) => Promise<any>;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -3300,58 +3305,111 @@ export function brandAssetImageRef(raw: string, bucket: string): string {
   return "";
 }
 
-/** 방금 만든 이미지 찾기: jobId 가 있으면 그 잡, 없으면 이 사용자의 가장 최근 이미지 잡 산출물. */
-async function recentImageObjectName(ctx: ToolContext, jobId: string): Promise<string> {
+/**
+ * 자산으로 등록할 이미지 찾기(에이전트가 만든 이미지 잡 산출물).
+ * - jobId 가 있으면 그 잡.
+ * - 없으면 최근 이미지 잡 중 프롬프트에 자산 이름이 들어간 가장 최근 것.
+ *   "가장 최근 이미지" 로 대신하지 않는다 — 여러 캐릭터를 연달아 등록하면 모두 같은 이미지가 붙는다.
+ * 이미지 잡은 승인 전까지 review_pending 으로 남으므로 상태는 오류·취소만 뺀다.
+ */
+async function findAssetImageObjectName(ctx: ToolContext, jobId: string, names: string[]): Promise<{ objectName: string; jobId: string }> {
   const sql = getSql(ctx.env);
-  if (!sql) return "";
+  if (!sql) throw new Error("이미지 기록을 조회할 수 없어요(DB 미설정). objectName 을 지정해 주세요.");
   if (jobId) {
     const job = await getJob(sql, jobId, ctx.userId).catch(() => null);
-    return String((job as any)?.output?.objectName || "").trim();
+    const objectName = String((job as any)?.output?.objectName || "").trim();
+    if (!objectName) throw new Error(`jobId ${jobId} 에서 이미지를 찾지 못했어요. 이미지 작업의 jobId 인지 확인해 주세요.`);
+    return { objectName, jobId };
   }
   const rows = await sql(
-    `SELECT output->>'objectName' AS object_name FROM agent_jobs
-      WHERE user_id = $1 AND type = 'image' AND status = 'done' AND COALESCE(output->>'objectName', '') <> ''
-      ORDER BY updated_at DESC LIMIT 1`,
+    `SELECT id, input, output->>'objectName' AS object_name, output->>'promptEcho' AS prompt_echo
+       FROM agent_jobs
+      WHERE user_id = $1 AND type IN ('image', 'image_edit') AND status NOT IN ('error', 'cancelled')
+        AND COALESCE(output->>'objectName', '') <> ''
+      ORDER BY created_at DESC LIMIT 60`,
     [ctx.userId],
   ).catch(() => [] as any[]);
-  return String((rows as any[])[0]?.object_name || "").trim();
+  const list = (rows as any[]).map((r) => {
+    const input = typeof r.input === "string" ? (() => { try { return JSON.parse(r.input); } catch { return {}; } })() : (r.input || {});
+    return { id: String(r.id), objectName: String(r.object_name || ""), prompt: String(input?.prompt || r.prompt_echo || "") };
+  });
+  const wanted = names.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean);
+  const hit = list.find((r) => wanted.some((n) => r.prompt.toLowerCase().includes(n)));
+  if (hit) return { objectName: hit.objectName, jobId: hit.id };
+  if (!list.length) {
+    throw new Error("에이전트가 만든 이미지가 없어요. 이미지를 먼저 만들거나(image), 이미지 보관함(image_library)에서 objectName 을 찾아 지정해 주세요.");
+  }
+  const recent = list.slice(0, 5).map((r) => `jobId=${r.id} "${r.prompt.replace(/\s+/g, " ").slice(0, 40)}"`).join(" / ");
+  throw new Error(`"${names[0]}" 이름이 들어간 이미지를 찾지 못했어요. 최근 이미지: ${recent} — 맞는 이미지의 jobId 를 지정해 주세요.`);
 }
 
-/** 캐릭터/환경 자산 등록: 브랜드를 읽어 characterSheets(또는 environmentAssets)에 이미지 항목 추가 후 저장. 쓰기 → 승인 게이트.
- *  이미지는 objectName · jobId(이미지 잡) · imageUrl 중 하나. 아무것도 없으면 가장 최근에 만든 이미지를 쓴다. */
-async function runBrandAssetTool(input: any, ctx: ToolContext): Promise<any> {
-  const givenBrand = String(input?.brandId || input?.slug || input?.brand || "").trim();
+/**
+ * 승인 전에 브랜드·이름·이미지를 확정한다. 승인 카드에 무엇이 등록될지 보이고,
+ * 이미지를 못 찾는 요청은 승인까지 가지 않고 바로 이유를 알린다(승인 후 실패 방지).
+ */
+async function prepareBrandAssetInput(input: any, ctx: ToolContext): Promise<any> {
+  const next: any = { ...(input || {}) };
+  const givenBrand = String(next.brandId || next.slug || next.brand || "").trim();
   const { brandId, candidates } = await resolveBrandId(givenBrand, ctx);
   if (!brandId) throw new Error(`brandId 가 필요해요.${candidates.length ? ` 등록된 브랜드: ${candidates.join(", ")}` : ""}`);
-  // 조회 실패면 저장하지 않는다(통째 교체 저장이라 기존 시트가 지워짐). 없는 브랜드는 허브에 보이지 않으므로 만들지 않는다.
   const cur = await runBrandGetTool({ brandId }, ctx);
   if (!cur?.exists || !cur.brand || typeof cur.brand !== "object") {
     throw new Error(`브랜드 "${brandId}" 를 찾지 못했어요.${candidates.length ? ` 등록된 브랜드: ${candidates.join(", ")}` : " 브랜드 허브에서 브랜드를 먼저 만들어 주세요."}`);
   }
+  next.brandId = brandId;
+
+  const kindRaw = String(next.kind || "character").toLowerCase();
+  const isEnv = kindRaw === "environment" || kindRaw === "env" || kindRaw === "background" || kindRaw === "prop";
+  const rawName = String(next.name || next.displayName || next.token || "").replace(/[<>]/g, "").replace(/^@+/, "").trim();
+  if (!rawName) throw new Error("name is required (자산 이름, 예: 전략가)");
+  const tokenBody = isEnv ? rawName.replace(/\s+/g, "") : brandCharacterTokenBody(rawName);
+  if (!tokenBody) throw new Error("이름에 쓸 수 있는 글자가 없어요(영문·숫자·한글·_).");
+
+  const bucket = studioBucket(ctx);
+  const objectName = String(next.objectName || "").trim().replace(/^gs:\/\/[^/]+\//, "");
+  if (objectName) {
+    next.objectName = objectName;
+    return next;
+  }
+  const rawUrl = String(next.imageUrl || next.imageDataUrl || next.url || "").trim();
+  if (rawUrl) {
+    const ref = brandAssetImageRef(rawUrl, bucket);
+    if (!ref) throw new Error("이 이미지 URL 은 영속 저장할 수 없어요(만료되는 외부 링크). objectName 이나 jobId 로 지정해 주세요.");
+    const sameBucket = bucket && ref.startsWith(`gs://${bucket}/`);
+    if (sameBucket) {
+      next.objectName = ref.slice(`gs://${bucket}/`.length);
+      delete next.imageUrl; delete next.imageDataUrl; delete next.url;
+    } else {
+      next.imageUrl = ref;
+    }
+    return next;
+  }
+  const found = await findAssetImageObjectName(ctx, String(next.jobId || "").trim(), [rawName, tokenBody]);
+  next.objectName = found.objectName;
+  next.jobId = found.jobId;
+  return next;
+}
+
+/** 캐릭터/환경 자산 등록: 브랜드를 읽어 characterSheets(또는 environmentAssets)에 이미지 항목 추가 후 저장. 쓰기 → 승인 게이트.
+ *  이미지는 objectName · jobId(이미지 잡) · imageUrl 중 하나. 없으면 이름이 프롬프트에 들어간 최근 이미지 잡. */
+async function runBrandAssetTool(rawInput: any, ctx: ToolContext): Promise<any> {
+  const input = await prepareBrandAssetInput(rawInput, ctx);
+  const brandId = String(input.brandId);
+  // 조회 실패면 저장하지 않는다(통째 교체 저장이라 기존 시트가 지워짐).
+  const cur = await runBrandGetTool({ brandId }, ctx);
+  if (!cur?.exists || !cur.brand || typeof cur.brand !== "object") throw new Error(`브랜드 "${brandId}" 를 찾지 못했어요.`);
   const brand: any = JSON.parse(JSON.stringify(cur.brand));
 
   const kindRaw = String(input?.kind || "character").toLowerCase();
   const isEnv = kindRaw === "environment" || kindRaw === "env" || kindRaw === "background" || kindRaw === "prop";
   const rawName = String(input?.name || input?.displayName || input?.token || "").replace(/[<>]/g, "").replace(/^@+/, "").trim();
-  if (!rawName) throw new Error("name is required (자산 이름, 예: 전략가)");
   const tokenBody = isEnv ? rawName.replace(/\s+/g, "") : brandCharacterTokenBody(rawName);
-  if (!tokenBody) throw new Error("이름에 쓸 수 있는 글자가 없어요(영문·숫자·한글·_).");
   const displayName = isEnv ? rawName.replace(/\s+/g, " ") : tokenBody;
   const token = "@" + tokenBody;
 
   const bucket = studioBucket(ctx);
-  const objectName = String(input?.objectName || "").trim().replace(/^gs:\/\/[^/]+\//, "");
-  let imageRef = objectName && bucket ? `gs://${bucket}/${objectName}` : "";
-  const rawUrl = String(input?.imageUrl || input?.imageDataUrl || input?.url || "").trim();
-  if (!imageRef && rawUrl) {
-    imageRef = brandAssetImageRef(rawUrl, bucket);
-    if (!imageRef) throw new Error("이 이미지 URL 은 영속 저장할 수 없어요(만료되는 외부 링크). objectName 이나 jobId 로 지정해 주세요.");
-  }
-  if (!imageRef) {
-    const found = await recentImageObjectName(ctx, String(input?.jobId || "").trim());
-    if (found && bucket) imageRef = `gs://${bucket}/${found}`;
-  }
-  if (!imageRef) throw new Error("등록할 이미지를 찾지 못했어요. 이미지를 먼저 만들거나 objectName·jobId 를 지정해 주세요.");
+  const imageRef = input.objectName && bucket ? `gs://${bucket}/${input.objectName}` : String(input.imageUrl || "");
+  if (!imageRef) throw new Error("등록할 이미지를 찾지 못했어요. objectName·jobId 를 지정해 주세요.");
 
   const sameEntry = (entry: any) =>
     String(entry?.token || "").toLowerCase() === token.toLowerCase()
@@ -5286,7 +5344,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
     approvalKey: (i) => String(i?.brandId || i?.slug || "").trim().toLowerCase(),
   },
   // 캐릭터/환경 자산 등록: 픽셀(디자인) 주담당 + 코어 공유. 쓰기 → 승인 게이트.
-  brand_asset: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, run: runBrandAssetTool },
+  brand_asset: { agentId: "pixel", agentIds: ["core"], kind: "external", gate: true, prepare: prepareBrandAssetInput, run: runBrandAssetTool },
   // 픽셀(디자인): 이미지 역분석·업스케일·립싱크·자산 라이브러리.
   // precheck: 첨부 이미지는 URL 이 없어 이 도구로 다시 분석할 수 없다. 모델이 자리표시자를
   // 넣어 부르는 경우가 잦아, 시작 전에 걸러 "조회 중 → 실패" 노이즈를 없앤다.
@@ -5299,7 +5357,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   },
   upscale: { agentId: "pixel", kind: "external", run: runUpscaleTool },
   lipsync: { agentId: "pixel", kind: "external", run: runLipsyncTool },
-  image_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runImageLibraryTool },
+  image_library: { agentId: "pixel", agentIds: ["plot", "reach", "core"], kind: "read", synthesize: true, run: runImageLibraryTool },
   video_library: { agentId: "pixel", agentIds: ["plot", "reach"], kind: "read", synthesize: true, run: runVideoLibraryTool },
   ip_library: { agentId: "pixel", agentIds: ["core", "plot"], kind: "read", synthesize: true, run: runIpLibraryTool },
   // 등록된 시트를 '허브센터 맥락과 함께' 분석 → 텍스트 속성 초안. 저장은 하지 않는다.
@@ -5470,6 +5528,13 @@ export async function processJob(
     if (!tool) throw new Error(`unknown tool: ${type}`);
     // 승인 게이트 도구: 승인 전에는 실행하지 않는다. 승인 대기로만 두고, 승인 시 review.ts에서 run 실행.
     if (tool.gate) {
+      if (tool.prepare) {
+        const prepared = await tool.prepare(input, { ...ctx, jobId });
+        if (prepared && typeof prepared === "object") {
+          input = prepared;
+          await sql("UPDATE agent_jobs SET input = $1::jsonb, updated_at = now() WHERE id = $2 AND user_id = $3", [JSON.stringify(prepared), jobId, ctx.userId]);
+        }
+      }
       await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", reviewStatus: "pending" });
       // 같은 일감이 이미 대기 중이면 그 카드를 걷어낸다 — 패널엔 최신 요청 한 장만 남는다.
       const superseded = await supersedePendingApprovals(sql, ctx.userId, type, input, jobId).catch(() => 0);
