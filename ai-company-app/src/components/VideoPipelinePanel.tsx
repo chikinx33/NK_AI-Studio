@@ -8,7 +8,7 @@ import {
   listCompanySkillJobs,
   retryCompanySkillJob,
 } from "../lib/api";
-import { readStorage, writeStorage } from "../lib/safeStorage";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import type { SkillJob } from "../lib/skillJobs";
 
 // 에이전트 모드 = 계획 → 비용·승인 → 배치 실행 → 이어가기. 시장의 에이전트 모드(Higgsfield/Runway/Flow)와 같은 순서다.
@@ -79,14 +79,14 @@ export default function VideoPipelinePanel({
 
   // 새로고침해도 진행 중 파이프라인을 다시 잡는다.
   useEffect(() => {
-    const saved = readStorage(VIDEO_PIPELINE_JOB_KEY);
+    const saved = readUserStorage(VIDEO_PIPELINE_JOB_KEY);
     if (!saved) return;
     try {
       const parsed = JSON.parse(saved) as { jobId: string; projectId: string };
       if (parsed.projectId === projectId && parsed.jobId) {
-        getCompanySkillJob(parsed.jobId).then(setJob).catch(() => writeStorage(VIDEO_PIPELINE_JOB_KEY, ""));
+        getCompanySkillJob(parsed.jobId).then(setJob).catch(() => writeUserStorage(VIDEO_PIPELINE_JOB_KEY, ""));
       }
-    } catch { writeStorage(VIDEO_PIPELINE_JOB_KEY, ""); }
+    } catch { writeUserStorage(VIDEO_PIPELINE_JOB_KEY, ""); }
   }, [projectId]);
 
   // 이 프로젝트의 최신 파이프라인(채팅으로 만든 것 포함)을 서버에서 찾아 붙는다.
@@ -103,7 +103,7 @@ export default function VideoPipelinePanel({
       if (!latest || latest.id === jobIdRef.current) return;
       if (active || !jobIdRef.current) {
         setJob(latest);
-        writeStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: latest.id, projectId }));
+        writeUserStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: latest.id, projectId }));
         onAttached?.(latest);
       }
     }).catch(() => null);
@@ -153,7 +153,7 @@ export default function VideoPipelinePanel({
         costControl: { maxAmountUsd: 0 },
       });
       setJob(created);
-      writeStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: created.id, projectId }));
+      writeUserStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: created.id, projectId }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -189,7 +189,7 @@ export default function VideoPipelinePanel({
 
   const reset = () => {
     setJob(null);
-    writeStorage(VIDEO_PIPELINE_JOB_KEY, "");
+    writeUserStorage(VIDEO_PIPELINE_JOB_KEY, "");
     onGraphChanged();
   };
 

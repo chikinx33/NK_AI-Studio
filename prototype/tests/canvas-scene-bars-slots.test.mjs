@@ -61,7 +61,7 @@ test('★바를 끌면 40px 격자로 움직이고 딸린 카드가 함께 가�
 
 test('★컷 카드 제목은 컷 번호만(씬 번호는 바가 보여 준다), 배치는 canvasLayout 키에 저장, moveCutToSlot 은 순수(잡은 드롭 처리에서)', () => {
   assert.match(src, /lanes\.filter\(\(l\) => l\.kind === "scene"\)\.forEach\(\(l\) => l\.memberIds\.forEach\(\(id, i\) => m\.set\(id, `cut\$\{i \+ 1\}`\)\)\);/);
-  assert.match(src, /writeStorage\(`canvasLayout:\$\{projectId\}`, JSON\.stringify\(layout\)\);/);
+  assert.match(src, /writeUserStorage\(`canvasLayout:\$\{projectId\}`, JSON\.stringify\(layout\)\);/);
   assert.match(src, /const savedLayout = parsed \|\| fromServer;/);
   assert.match(src, /reconcileLayout\(seed, g, base\)/);
   const i = src.indexOf('function moveCutToSlot(');

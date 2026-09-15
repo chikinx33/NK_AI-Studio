@@ -30,7 +30,7 @@ const BYOK_TOOLS: Record<string, {
       },
       {
         key: "app_products", label: "앱별 상품 매핑 JSON (선택)", required: false, secret: false,
-        placeholder: '{"memoment":["상품UUID"]}',
+        placeholder: '{"my-app":["상품UUID"]}',
         hint: "비워두면 상품명으로 자동 매칭해요. 정확히 고정하고 싶을 때만 채우세요 — UUID는 엣지에게 '우리 Polar 상품 목록 보여줘'라고 하면 나와요.",
       },
       {
@@ -182,7 +182,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const parsed = JSON.parse(String(filtered.app_products));
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("object 아님");
       } catch {
-        return send({ ok: false, message: '앱별 상품 매핑이 올바른 JSON이 아니에요. 예: {"memoment":["상품UUID"]}' }, 200, origin);
+        return send({ ok: false, message: '앱별 상품 매핑이 올바른 JSON이 아니에요. 예: {"my-app":["상품UUID"]}' }, 200, origin);
       }
     }
 

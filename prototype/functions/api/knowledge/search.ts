@@ -10,6 +10,7 @@ import {
   getSql,
   isKnowledgeAccessRequired,
   json,
+  knowledgeOwnerClause,
   ragEnabled,
   toVector,
 } from "./_shared";
@@ -41,9 +42,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const embedding = await embedText(env, query);
     const vec = toVector(embedding);
+    // 본인 문서만 검색한다. ivfflat 근사 검색은 목록 몇 개만 훑은 뒤 WHERE 로 걸러
+    // 다른 회원 청크가 많으면 결과가 비므로, 정렬식에 + 0 을 붙여 정확 스캔을 쓴다.
+    const owner = knowledgeOwnerClause(env, auth.userId, "d", 3);
     const rows = await sql(
-      "SELECT source_name, chunk_index, content, 1 - (embedding <=> $1::vector) AS similarity FROM knowledge_chunks ORDER BY embedding <=> $1::vector LIMIT $2",
-      [vec, limit]
+      `SELECT c.source_name, c.chunk_index, c.content, 1 - (c.embedding <=> $1::vector) AS similarity
+         FROM knowledge_chunks c JOIN knowledge_documents d ON d.id = c.document_id
+        WHERE ${owner.clause}
+        ORDER BY (c.embedding <=> $1::vector) + 0 LIMIT $2`,
+      [vec, limit, ...owner.params]
     );
 
     return json({

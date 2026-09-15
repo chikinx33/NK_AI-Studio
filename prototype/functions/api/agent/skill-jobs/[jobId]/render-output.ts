@@ -157,7 +157,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, params }) => 
 
     let finalArtifact = byKind.get("final");
     if (!finalArtifact) {
-      finalArtifact = await storeArtifact(env, job, "final", "raviok-agent-video.mp4", "video/mp4", videoBytes);
+      finalArtifact = await storeArtifact(env, job, "final", "agent-video.mp4", "video/mp4", videoBytes);
       created.push(finalArtifact);
     }
     let sourceArtifact = byKind.get("source");

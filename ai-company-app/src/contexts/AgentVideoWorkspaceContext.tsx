@@ -30,7 +30,7 @@ import {
   type AgentVideoSpec,
 } from "../remotion/spec";
 import type { SkillJob } from "../lib/skillJobs";
-import { readStorage, removeStorage, writeStorage } from "../lib/safeStorage";
+import { readUserStorage, removeUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
 const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
@@ -51,7 +51,7 @@ export interface AgentVideoArchiveStatus {
 
 const loadSavedSpec = () => {
   try {
-    const saved = readStorage(STORAGE_KEY);
+    const saved = readUserStorage(STORAGE_KEY);
     return saved ? normalizeAgentVideoSpec(JSON.parse(saved)) : defaultAgentVideoSpec;
   } catch {
     return defaultAgentVideoSpec;
@@ -89,7 +89,7 @@ interface AgentVideoWorkspaceValue {
 const AgentVideoWorkspaceContext = createContext<AgentVideoWorkspaceValue | null>(null);
 
 export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [prompt, setPrompt] = useState("라비오크의 AI 에이전트들이 협업해 아이디어를 영상으로 완성하는 과정을 소개하는 30초 브랜드 영상");
+  const [prompt, setPrompt] = useState("AI 에이전트들이 협업해 아이디어를 영상으로 완성하는 과정을 소개하는 30초 브랜드 영상");
   const [durationSec, setDurationSec] = useState(30);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
   const [audience, setAudience] = useState("콘텐츠 제작자와 1인 기업");
@@ -111,11 +111,11 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const skillJobPollingRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    writeStorage(STORAGE_KEY, JSON.stringify(spec));
+    writeUserStorage(STORAGE_KEY, JSON.stringify(spec));
   }, [spec]);
 
   useEffect(() => {
-    const savedJobId = readStorage(SKILL_JOB_STORAGE_KEY);
+    const savedJobId = readUserStorage(SKILL_JOB_STORAGE_KEY);
     if (!savedJobId) return;
     meetingLockedRef.current = true;
     setMeetingStatus("running");
@@ -189,7 +189,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         idempotencyKey: `manual-${crypto.randomUUID()}`,
         options: { durationSec, aspectRatio, audience, tone, style },
       });
-      writeStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
+      writeUserStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
       await restoreSkillJob(result.job.id, controller.signal);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -209,16 +209,16 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       return;
     }
     if (job.status === "failed") {
-      removeStorage(SKILL_JOB_STORAGE_KEY);
+      removeUserStorage(SKILL_JOB_STORAGE_KEY);
       throw new Error(job.error?.message || "인포그래픽 제작에 실패했습니다.");
     }
     if (job.status === "cancelled") {
-      removeStorage(SKILL_JOB_STORAGE_KEY);
+      removeUserStorage(SKILL_JOB_STORAGE_KEY);
       throw new Error("인포그래픽 제작이 취소되었습니다.");
     }
     if (!job.workItemId) throw new Error("완료된 인포그래픽의 회사 업무 결과를 찾지 못했습니다.");
     const work = await getCompanyWorkItem(job.workItemId);
-    removeStorage(SKILL_JOB_STORAGE_KEY);
+    removeUserStorage(SKILL_JOB_STORAGE_KEY);
     await openWork(work, job.providerUsage?.renderMode !== "server");
   }
 
@@ -230,7 +230,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const job = await approveCompanySkillJob(pendingApproval.id, decision);
       setPendingApproval(null);
       if (decision === "rejected" || job.status === "cancelled") {
-        removeStorage(SKILL_JOB_STORAGE_KEY);
+        removeUserStorage(SKILL_JOB_STORAGE_KEY);
         setMeetingStatus("idle");
         return;
       }
@@ -279,7 +279,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       const videoChecksum = await sha256Hex(videoBlob);
       const videoItem = await uploadAgentVideoStorageFile(
         new Blob([videoBlob], { type: videoBlob.type || "video/mp4" }),
-        "raviok-agent-video.mp4",
+        "agent-video.mp4",
         workId,
       );
       const sourceBlob = new Blob([JSON.stringify({

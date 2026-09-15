@@ -217,9 +217,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     drive: `[[RUN: drive | {"query": "파일명 검색어(선택)", "fileId": "특정 파일 내용 읽기(선택)"}]]  → Google Drive 파일 목록·검색(query) 또는 특정 파일 내용 읽기(fileId). "내 드라이브/파일 찾아줘"에 사용. (구글 연결 + 드라이브 권한 필요)`,
     github: `[[RUN: github | {"repo": "owner/name", "path": "파일경로(선택)", "query": "레포검색어(repo 없을 때)"}]]  → GitHub 레포 정보·열린 이슈·파일 내용·레포 검색 조회. 공개 레포는 토큰 없이도 됨.`,
     naver_datalab: `[[RUN: naver_datalab | {"keywords": ["키워드1","키워드2"], "timeUnit": "month(선택)"}]]  → 네이버 검색어 트렌드(상대 검색량 추이). 마케팅 키워드·관심도 비교에 사용. (NAVER 키 필요)`,
-    brand_get: `[[RUN: brand_get | {"brandId": "elidus"}]]  → 브랜드 허브에서 그 브랜드 정의(보이스·톤·스토리·캐릭터·키워드·금지표현 등)를 읽어온다. 온브랜드 콘텐츠·카피를 만들기 전에 먼저 조회해 근거로 삼는다.`,
-    brand_save: `[[RUN: brand_save | {"brandId": "elidus", "brand": {"brandTitle": "ELIDUS", "brandVoice": "…", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"]}}]]  → 브랜드 허브에 브랜드를 생성/수정. brand 객체에 채울 필드만 넣으면 기존 정의에 병합된다(부분 수정 안전). ⚠️ 쓰기라 사람 승인 후 반영(승인 패널). "엘리더스를 브랜드 허브에 생성해줘"에 사용.`,
-    brand_asset: `[[RUN: brand_asset | {"brandId": "elidus", "name": "전략가", "kind": "character", "objectName": "생성이미지의 objectName(권장)"}]]  또는 {"imageUrl": "이미지URL"}  → 방금 생성한 이미지를 그 브랜드의 캐릭터(kind:character) 또는 환경(kind:environment) 자산으로 등록. objectName을 주면 영속 저장(권장). ⚠️ 쓰기라 사람 승인 후 반영. "이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
+    brand_get: `[[RUN: brand_get | {"brandId": "my-brand"}]]  → 브랜드 허브에서 그 브랜드 정의(보이스·톤·스토리·캐릭터·키워드·금지표현 등)를 읽어온다. 온브랜드 콘텐츠·카피를 만들기 전에 먼저 조회해 근거로 삼는다.`,
+    brand_save: `[[RUN: brand_save | {"brandId": "my-brand", "brand": {"brandTitle": "MY BRAND", "brandVoice": "…", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"]}}]]  → 브랜드 허브에 브랜드를 생성/수정. brand 객체에 채울 필드만 넣으면 기존 정의에 병합된다(부분 수정 안전). ⚠️ 쓰기라 사람 승인 후 반영(승인 패널). "우리 브랜드를 브랜드 허브에 생성해줘"에 사용.`,
+    brand_asset: `[[RUN: brand_asset | {"brandId": "my-brand", "name": "전략가", "kind": "character", "objectName": "생성이미지의 objectName(권장)"}]]  또는 {"imageUrl": "이미지URL"}  → 방금 생성한 이미지를 그 브랜드의 캐릭터(kind:character) 또는 환경(kind:environment) 자산으로 등록. objectName을 주면 영속 저장(권장). ⚠️ 쓰기라 사람 승인 후 반영. "이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
     imagen_describe: `[[RUN: imagen_describe | {"imageUrl": "https://... 또는 gs://... 실제 주소", "lang": "ko"}]]  → 저장된 이미지를 분석해 재현용 프롬프트를 역생성. ⚠️ 실제 주소가 있는 이미지에만 사용. 사용자가 방금 첨부한 이미지는 이미 눈에 보이므로 이 도구를 쓰지 말고 바로 답할 것(첨부에는 URL 이 없어 반드시 실패한다).`,
     upscale: `[[RUN: upscale | {"imageUrl": "이미지URL"}]]  또는 {"objectName": "GCS objectName"}  → 이미지를 2배 고해상도로 업스케일. 발행/썸네일 전 품질 향상에 사용.`,
     lipsync: `[[RUN: lipsync | {"videoUrl": "영상URL", "mode": "text2video", "text": "대사(최대 120자)", "voiceLanguage": "ko"}]]  → 기존 영상 인물의 입모양을 대사/오디오에 맞춰 립싱크(수분 소요). audio2video면 {"mode":"audio2video","audioUrl":"오디오URL"}.`,
@@ -227,46 +227,46 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ip_text_save: `[[RUN: ip_text_save | {"character": "네모", "description": "생김새 서술", "negativePrompt": "안 나오게 할 것", "brandId": "선택"}]]  → IP 라이브러리의 텍스트 속성을 실제로 저장. 사용자가 "저장해줘/반영해줘"라고 했을 때만 실행하고, 사용자가 손으로 다듬어 둔 값을 덮어쓰므로 승인 절차를 거친다. 둘 중 하나만 보내도 되고(보낸 것만 갱신), 보통 ip_describe 결과를 사용자에게 보여 확인받은 뒤 실행한다.`,
     image_library: `[[RUN: image_library | {"projectId": "ai-company"}]]  → 그 프로젝트에서 **생성해 저장한 결과 이미지** 목록만 조회. ⚠️ 브랜드 허브에 등록된 캐릭터 시트·IP 자산은 여기에 없다 — "우리 캐릭터/자산 확인해줘"는 ip_library를 써야 한다(여기서 비었다고 자산이 없다고 결론짓지 말 것).`,
     video_library: `[[RUN: video_library | {"projectId": "ai-company"}]]  → 그 프로젝트에 생성해 둔 영상 자산 목록을 조회.`,
-    ip_library: `[[RUN: ip_library | {"brandId": "elidus"}]]  → 브랜드에 등록된 캐릭터/IP 자산(캐릭터 시트) 목록 조회. "우리 캐릭터", "스튜디오/브랜드 자산", "모양새 친구들처럼 등록된 캐릭터"는 전부 여기다. brandId 대소문자·표기가 달라도 자동으로 맞춰 찾고, 비어 있으면 등록된 브랜드 목록(brandCandidates)을 함께 돌려주니 그걸 보고 다시 조회한다. 결과 characters[].ref 를 image의 referenceImages에 그대로 넣으면 그 캐릭터 디자인이 유지된다. 결과에는 hub(브랜드 세계관·스토리·톤·규칙·금칙어)와 캐릭터별 현재 텍스트 속성(description=생김새, negativePrompt=안 나오게 할 것)도 함께 온다 — 프롬프트를 쓰기 전에 이걸 먼저 읽어 이 IP 의 세계관에 맞춰 서술할 것.`,
+    ip_library: `[[RUN: ip_library | {"brandId": "my-brand"}]]  → 브랜드에 등록된 캐릭터/IP 자산(캐릭터 시트) 목록 조회. "우리 캐릭터", "스튜디오/브랜드 자산", "브랜드에 등록된 캐릭터들"는 전부 여기다. brandId 대소문자·표기가 달라도 자동으로 맞춰 찾고, 비어 있으면 등록된 브랜드 목록(brandCandidates)을 함께 돌려주니 그걸 보고 다시 조회한다. 결과 characters[].ref 를 image의 referenceImages에 그대로 넣으면 그 캐릭터 디자인이 유지된다. 결과에는 hub(브랜드 세계관·스토리·톤·규칙·금칙어)와 캐릭터별 현재 텍스트 속성(description=생김새, negativePrompt=안 나오게 할 것)도 함께 온다 — 프롬프트를 쓰기 전에 이걸 먼저 읽어 이 IP 의 세계관에 맞춰 서술할 것.`,
     narration: `[[RUN: narration | {"script": "읽어줄 대본 전체", "voiceId": "kr_female_narration"}]]  → 대본을 음성(나레이션)으로 생성(Google TTS). 숏폼 내레이션·더빙에 사용.`,
-    hashtags: `[[RUN: hashtags | {"brandTitle": "ELIDUS", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"], "caption": "게시글(선택)"}]]  → 브랜드 정보 기반 SNS 해시태그 5~8개 생성. brand_get 결과를 넣으면 더 온브랜드.`,
-    project_create: `[[RUN: project_create | {"projectId": "elidus-ep1", "seriesTitle": "ELIDUS", "episodeTitle": "1화 각성", "projectType": "웹드라마", "brandSummary": "브랜드/콘텐츠 한 줄 소개", "coreMessage": "시청자에게 남길 핵심 메시지"}]]  → 새 프로젝트(에피소드) 생성(GCS 폴더 초기화 + '프로젝트 생성' 폼 항목 저장). projectId=폴더 식별자(영문/숫자/._-), seriesTitle=프로젝트 이름, episodeTitle=에피소드 이름, projectType=프로젝트 유형, brandSummary=브랜드 요약, coreMessage=핵심 메시지. 카드 이름은 에피소드 이름>프로젝트 이름 순으로 뜬다. 사용자가 말한 항목만 채우고 나머지는 생략 가능(projectId만 필수). ⚠️ 쓰기라 사람 승인 후 생성.`,
-    project_add_episode: `[[RUN: project_add_episode | {"parentProjectId": "elidus-ep1", "episodeTitle": "2화 재회", "projectType": "(선택·미지정 시 부모 상속)", "brandSummary": "(선택)", "coreMessage": "(선택)"}]]  → 기존 프로젝트(시리즈)에 새 에피소드 추가. 부모의 시리즈·브랜드 컨텍스트(유형·브랜드요약·핵심메시지·톤·월드 등)를 자동 상속하고 새 projectId(-ep2, -ep3…)를 부여. "elidus에 2화 추가해줘"에 사용. parentProjectId는 project_list로 확인. ⚠️ 쓰기라 사람 승인 후 생성.`,
-    project_rename: `[[RUN: project_rename | {"projectId": "elidus", "title": "ELIDUS"}]]  → 기존 프로젝트의 표시 이름(title)을 변경(payload·씬은 그대로 보존). "프로젝트 이름 ELIDUS로 바꿔"·카드가 "프로젝트"로 잘못 떠 있을 때 사용. projectId는 project_list로 확인. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    hashtags: `[[RUN: hashtags | {"brandTitle": "MY BRAND", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"], "caption": "게시글(선택)"}]]  → 브랜드 정보 기반 SNS 해시태그 5~8개 생성. brand_get 결과를 넣으면 더 온브랜드.`,
+    project_create: `[[RUN: project_create | {"projectId": "series-ep1", "seriesTitle": "새 시리즈", "episodeTitle": "1화 각성", "projectType": "웹드라마", "brandSummary": "브랜드/콘텐츠 한 줄 소개", "coreMessage": "시청자에게 남길 핵심 메시지"}]]  → 새 프로젝트(에피소드) 생성(GCS 폴더 초기화 + '프로젝트 생성' 폼 항목 저장). projectId=폴더 식별자(영문/숫자/._-), seriesTitle=프로젝트 이름, episodeTitle=에피소드 이름, projectType=프로젝트 유형, brandSummary=브랜드 요약, coreMessage=핵심 메시지. 카드 이름은 에피소드 이름>프로젝트 이름 순으로 뜬다. 사용자가 말한 항목만 채우고 나머지는 생략 가능(projectId만 필수). ⚠️ 쓰기라 사람 승인 후 생성.`,
+    project_add_episode: `[[RUN: project_add_episode | {"parentProjectId": "series-ep1", "episodeTitle": "2화 재회", "projectType": "(선택·미지정 시 부모 상속)", "brandSummary": "(선택)", "coreMessage": "(선택)"}]]  → 기존 프로젝트(시리즈)에 새 에피소드 추가. 부모의 시리즈·브랜드 컨텍스트(유형·브랜드요약·핵심메시지·톤·월드 등)를 자동 상속하고 새 projectId(-ep2, -ep3…)를 부여. "우리 시리즈에 2화 추가해줘"에 사용. parentProjectId는 project_list로 확인. ⚠️ 쓰기라 사람 승인 후 생성.`,
+    project_rename: `[[RUN: project_rename | {"projectId": "series-ep1", "title": "새 시리즈"}]]  → 기존 프로젝트의 표시 이름(title)을 변경(payload·씬은 그대로 보존). "프로젝트 이름 새 시리즈로 바꿔"·카드가 "프로젝트"로 잘못 떠 있을 때 사용. projectId는 project_list로 확인. ⚠️ 쓰기라 사람 승인 후 반영.`,
     project_list: `[[RUN: project_list | {}]]  → 내 프로젝트(에피소드) id 목록과 공유받은 프로젝트를 조회. "내 프로젝트 뭐 있어?"에 사용.`,
-    project_get: `[[RUN: project_get | {"projectId": "elidus-ep1"}]]  → 프로젝트의 현재 상태(payload·씬 목록)를 조회. "ep1 지금 상태 보여줘"·씬 수/제목 확인에 사용.`,
-    project_save: `[[RUN: project_save | {"projectId": "elidus-ep1", "payload": {…선택}, "scenes": [{…선택}], "title": "제목(선택)"}]]  → 프로젝트에 payload(병합)·scenes(통째 대체)를 저장. 보통은 scenario_to_project·scene_still·scene_video가 대신 저장하므로 직접 쓸 일은 드묾. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "elidus-ep1", "topic": "에피소드 주제", "story": "이야기 흐름(선택)", "purposeCategory": "장르", "purposeTags": ["세부 장르"], "target": "시청 타겟", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing"}]]  → 시나리오를 생성하고 그 씬들 + 프리프로덕션 설정(장르·타겟·목적·길이·비율·음성모드)을 곧바로 그 프로젝트에 저장(카드 메타에도 반영). scenario와 같은 항목을 모두 지정 가능. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scene_still: `[[RUN: scene_still | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. 캐릭터 시트·세트 플레이트(컷의 방위×높이, 없으면 부감 마스터에서 자동 파생·캐시)·부감 마스터·스타일 기준을 참조로 자동 첨부. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scene_video: `[[RUN: scene_video | {"projectId": "elidus-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    render_final: `[[RUN: render_final | {"projectId": "elidus-ep1", "sources": ["씬1 영상 objectName", "씬2 영상 objectName", …]}]]  또는 단일 {"sourceObjectName": "합본 영상 objectName", "sourceDurationSec": 60}  → 최종 렌더링(final-render.mp4). sources[] 여러 개면 순서대로 이어붙여(concat) 렌더. 제출 즉시 다운로드 링크(완료되면 유효)를 반환하고 백그라운드에서 렌더(수분). 세부 편집설정은 기본값.`,
+    project_get: `[[RUN: project_get | {"projectId": "series-ep1"}]]  → 프로젝트의 현재 상태(payload·씬 목록)를 조회. "ep1 지금 상태 보여줘"·씬 수/제목 확인에 사용.`,
+    project_save: `[[RUN: project_save | {"projectId": "series-ep1", "payload": {…선택}, "scenes": [{…선택}], "title": "제목(선택)"}]]  → 프로젝트에 payload(병합)·scenes(통째 대체)를 저장. 보통은 scenario_to_project·scene_still·scene_video가 대신 저장하므로 직접 쓸 일은 드묾. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "series-ep1", "topic": "에피소드 주제", "story": "이야기 흐름(선택)", "purposeCategory": "장르", "purposeTags": ["세부 장르"], "target": "시청 타겟", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing"}]]  → 시나리오를 생성하고 그 씬들 + 프리프로덕션 설정(장르·타겟·목적·길이·비율·음성모드)을 곧바로 그 프로젝트에 저장(카드 메타에도 반영). scenario와 같은 항목을 모두 지정 가능. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_still: `[[RUN: scene_still | {"projectId": "series-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. 캐릭터 시트·세트 플레이트(컷의 방위×높이, 없으면 부감 마스터에서 자동 파생·캐시)·부감 마스터·스타일 기준을 참조로 자동 첨부. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_video: `[[RUN: scene_video | {"projectId": "series-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    render_final: `[[RUN: render_final | {"projectId": "series-ep1", "sources": ["씬1 영상 objectName", "씬2 영상 objectName", …]}]]  또는 단일 {"sourceObjectName": "합본 영상 objectName", "sourceDurationSec": 60}  → 최종 렌더링(final-render.mp4). sources[] 여러 개면 순서대로 이어붙여(concat) 렌더. 제출 즉시 다운로드 링크(완료되면 유효)를 반환하고 백그라운드에서 렌더(수분). 세부 편집설정은 기본값.`,
     asset_download: `[[RUN: asset_download | {"objectName": "GCS objectName"}]]  또는 {"signedUrl": "이미 있는 서명URL"}  → 최종렌더/이미지/영상/오디오의 다운로드 링크를 사람에게 제공. "완성본 다운로드 링크 줘"에 사용.`,
     video_delete: `[[RUN: video_delete | {"objectName": "삭제할 영상 objectName"}]]  또는 {"objectNames": ["...","..."]}  → 영상 자산 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     voice_generate: `[[RUN: voice_generate | {"segments": [{"text": "대사", "voiceId": "목소리ID(voices_list에서)", "speaker": "화자(선택)"}]}]]  또는 단일 {"text": "대사", "voiceId": "…"}  → 캐릭터별 더빙 음성 생성(ElevenLabs). voiceId는 voices_list로 먼저 확인.`,
     voices_list: `[[RUN: voices_list | {"source": "elevenlabs(기본) 또는 tts", "gender": "female(선택)", "q": "검색(선택)"}]]  → 더빙에 쓸 수 있는 목소리 목록(id 포함)을 조회. voice_generate 전에 사용.`,
     sound_assets: `[[RUN: sound_assets | {"brandId": "(선택)", "type": "voice|bgm|sfx(선택)"}]]  → 생성해 둔 사운드 자산(더빙·BGM·효과음) 목록 조회.`,
-    scene_shots: `[[RUN: scene_shots | {"projectId": "elidus-ep1"}]]  또는 {"scenes": [...]}  → 프로젝트 씬들을 샷(컷) 단위로 분해. "씬을 샷으로 나눠"에 사용.`,
-    scene_locations: `[[RUN: scene_locations | {"projectId": "elidus-ep1"}]]  또는 {"scenes": [...]}  → 씬들에서 장소(로케이션) 목록을 뽑아준다.`,
+    scene_shots: `[[RUN: scene_shots | {"projectId": "series-ep1"}]]  또는 {"scenes": [...]}  → 프로젝트 씬들을 샷(컷) 단위로 분해. "씬을 샷으로 나눠"에 사용.`,
+    scene_locations: `[[RUN: scene_locations | {"projectId": "series-ep1"}]]  또는 {"scenes": [...]}  → 씬들에서 장소(로케이션) 목록을 뽑아준다.`,
     story_structure: `[[RUN: story_structure | {"topic": "이야기 주제", "duration": 60, "tones": ["감동"]}]]  → 스토리 구조(스토리라인 + 비트/긴장도)를 짜준다. 시나리오 생성 전 뼈대 잡기에 사용.`,
-    scene_upsert: `[[RUN: scene_upsert | {"projectId": "elidus-ep1", "sceneId": 3, "scene": {"title": "새 제목", "narration": "바뀐 나레이션", "dialogue": [{"speaker": "A", "line": "대사"}]}}]]  → 그 씬의 내용을 수정(sceneId 없거나 못 찾으면 새 씬 추가). "씬3 대사 바꿔"·"씬 추가"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scene_reorder: `[[RUN: scene_reorder | {"projectId": "elidus-ep1", "order": [1, 2, 4, 3, 5]}]]  → 컷 순서를 order(컷 id 전체 순열)대로 바꿈(id 는 그대로, 배열만 재배열). "컷 4를 3 앞으로"·"마지막 컷을 맨 앞으로"에 사용. 결과의 warnings(세트 넘어감·노래 구간 어긋남)를 사용자에게 그대로 전해 주세요. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scene_split: `[[RUN: scene_split | {"projectId": "elidus-ep1", "sceneId": 5, "split": true}]]  → 그 컷부터 새 씬으로 나눔(같은 세트 안에서 씬 경계). split=false 면 앞 씬에 합침. "컷 5부터 새 씬으로"·"씬 2를 씬 1에 합쳐"에 사용. 순서·장소는 바꾸지 않음. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    style_anchor_set: `[[RUN: style_anchor_set | {"projectId": "elidus-ep1", "objectName": "<저장소 경로>", "setName": "거실"}]]  → 그 이미지를 프로젝트 그림체 기준(스타일 앵커)으로. 이후 세트 시트·콘티·스틸이 이 룩을 참조. "이 이미지 느낌으로 통일해" 에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    set_master: `[[RUN: set_master | {"projectId": "elidus-ep1", "locationName": "거실"}]]  → 그 세트를 위에서 내려다본 부감 마스터 플레이트 1장(인물 없음, 평면도 준수). 배치의 기준. 이어서 set_angle 로 앵글을 파생. ⚠️ 크레딧 사용, 승인 후 실행.`,
-    set_angle: `[[RUN: set_angle | {"projectId": "elidus-ep1", "locationName": "거실", "direction": "front", "elevation": "eye"}]]  → 마스터(부감)를 소스로 같은 세트를 방위(front|back|left|right) × 높이(eye|high|low) 로 다시 그림(카메라 재구성). 보통은 scene_still 이 필요할 때 자동으로 파생·캐시하므로 직접 부를 일은 드묾. ⚠️ 크레딧 사용, 승인 후 실행.`,
-    set_sheet: `[[RUN: set_sheet | {"projectId": "elidus-ep1", "locationName": "거실", "resolution": "2K"}]]  → 그 세트(장소)의 바이블 세트 시트(2×2: 정면·후면·부감·로우, 인물 없음) 1장을 만들어 payload.storyboardSheets 와 episodeLocations[].setSheet 에 저장. "거실 세트 시트 만들어"에 사용. 장소마다 잡 하나. ⚠️ 크레딧 사용이라 사람 승인 후 실행.`,
-    location_merge: `[[RUN: location_merge | {"projectId": "elidus-ep1", "from": "장난감이 흩어진 소녀의 방 안", "into": "소녀의 방"}]]  → from 장소의 컷을 into 로 옮기고 플레이트·시트를 물려받아 세트를 하나로. "이 두 장소는 같은 방이야, 합쳐" 에 사용. 먼저 location_suggest 로 제안을 보여 주고 사람이 고른 뒤 실행. ⚠️ 쓰기라 사람 승인 후 반영.`,
-    location_suggest: `[[RUN: location_suggest | {"projectId": "elidus-ep1"}]]  → 같은 세트로 보이는 장소 쌍(핵심 이름이 같거나 포함) 목록. 합치기 전에 보여 준다.`,
+    scene_upsert: `[[RUN: scene_upsert | {"projectId": "series-ep1", "sceneId": 3, "scene": {"title": "새 제목", "narration": "바뀐 나레이션", "dialogue": [{"speaker": "A", "line": "대사"}]}}]]  → 그 씬의 내용을 수정(sceneId 없거나 못 찾으면 새 씬 추가). "씬3 대사 바꿔"·"씬 추가"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_reorder: `[[RUN: scene_reorder | {"projectId": "series-ep1", "order": [1, 2, 4, 3, 5]}]]  → 컷 순서를 order(컷 id 전체 순열)대로 바꿈(id 는 그대로, 배열만 재배열). "컷 4를 3 앞으로"·"마지막 컷을 맨 앞으로"에 사용. 결과의 warnings(세트 넘어감·노래 구간 어긋남)를 사용자에게 그대로 전해 주세요. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_split: `[[RUN: scene_split | {"projectId": "series-ep1", "sceneId": 5, "split": true}]]  → 그 컷부터 새 씬으로 나눔(같은 세트 안에서 씬 경계). split=false 면 앞 씬에 합침. "컷 5부터 새 씬으로"·"씬 2를 씬 1에 합쳐"에 사용. 순서·장소는 바꾸지 않음. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    style_anchor_set: `[[RUN: style_anchor_set | {"projectId": "series-ep1", "objectName": "<저장소 경로>", "setName": "거실"}]]  → 그 이미지를 프로젝트 그림체 기준(스타일 앵커)으로. 이후 세트 시트·콘티·스틸이 이 룩을 참조. "이 이미지 느낌으로 통일해" 에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    set_master: `[[RUN: set_master | {"projectId": "series-ep1", "locationName": "거실"}]]  → 그 세트를 위에서 내려다본 부감 마스터 플레이트 1장(인물 없음, 평면도 준수). 배치의 기준. 이어서 set_angle 로 앵글을 파생. ⚠️ 크레딧 사용, 승인 후 실행.`,
+    set_angle: `[[RUN: set_angle | {"projectId": "series-ep1", "locationName": "거실", "direction": "front", "elevation": "eye"}]]  → 마스터(부감)를 소스로 같은 세트를 방위(front|back|left|right) × 높이(eye|high|low) 로 다시 그림(카메라 재구성). 보통은 scene_still 이 필요할 때 자동으로 파생·캐시하므로 직접 부를 일은 드묾. ⚠️ 크레딧 사용, 승인 후 실행.`,
+    set_sheet: `[[RUN: set_sheet | {"projectId": "series-ep1", "locationName": "거실", "resolution": "2K"}]]  → 그 세트(장소)의 바이블 세트 시트(2×2: 정면·후면·부감·로우, 인물 없음) 1장을 만들어 payload.storyboardSheets 와 episodeLocations[].setSheet 에 저장. "거실 세트 시트 만들어"에 사용. 장소마다 잡 하나. ⚠️ 크레딧 사용이라 사람 승인 후 실행.`,
+    location_merge: `[[RUN: location_merge | {"projectId": "series-ep1", "from": "장난감이 흩어진 소녀의 방 안", "into": "소녀의 방"}]]  → from 장소의 컷을 into 로 옮기고 플레이트·시트를 물려받아 세트를 하나로. "이 두 장소는 같은 방이야, 합쳐" 에 사용. 먼저 location_suggest 로 제안을 보여 주고 사람이 고른 뒤 실행. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    location_suggest: `[[RUN: location_suggest | {"projectId": "series-ep1"}]]  → 같은 세트로 보이는 장소 쌍(핵심 이름이 같거나 포함) 목록. 합치기 전에 보여 준다.`,
     brand_list: `[[RUN: brand_list | {}]]  → 브랜드 허브에 등록된 내 브랜드 id 목록 조회. "브랜드 뭐뭐 있어?"에 사용.`,
-    brand_delete: `[[RUN: brand_delete | {"brandId": "elidus"}]]  → 브랜드를 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
-    project_delete: `[[RUN: project_delete | {"projectId": "elidus-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
-    project_share: `[[RUN: project_share | {"projectId": "elidus-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
+    brand_delete: `[[RUN: brand_delete | {"brandId": "my-brand"}]]  → 브랜드를 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
+    project_delete: `[[RUN: project_delete | {"projectId": "series-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
+    project_share: `[[RUN: project_share | {"projectId": "series-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
     knowledge_search: `[[RUN: knowledge_search | {"query": "찾을 내용"}]]  → 지식 허브(RAG)에서 관련 문서 조각을 검색해 근거로 답한다. "우리 자료에서 ~ 찾아줘"에 사용.`,
     knowledge_audit: `[[RUN: knowledge_audit | {}]]  → 축적된 회사 지식 전체 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
     sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
     media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
-    video_pipeline: `[[RUN: video_pipeline | {"projectId": "elidus-ep1", "stages": ["still", "video"], "sceneIds": [], "aspectRatio": "16:9", "videoModel": "veo", "regenerate": false}]]  → ★에이전트 모드. 프로젝트의 비어 있는 컷을 스틸→영상 순으로 자동 생성하는 파이프라인 업무를 만든다. 먼저 계획(몇 컷·예상 크레딧)을 세워 사람 승인을 기다리고, 승인되면 배치로 생성한다. "이 프로젝트 영상 전부 만들어줘", "빈 컷 채워줘", "에이전트 모드로 돌려줘"에 사용. sceneIds 를 주면 그 컷만, stages 에 "still" 만 주면 스틸만. 이미 있는 자산은 건너뛰고 regenerate:true 면 다시 만든다. 결과는 제작 캔버스(canvas.open)에서 보여준다.`,
+    video_pipeline: `[[RUN: video_pipeline | {"projectId": "series-ep1", "stages": ["still", "video"], "sceneIds": [], "aspectRatio": "16:9", "videoModel": "veo", "regenerate": false}]]  → ★에이전트 모드. 프로젝트의 비어 있는 컷을 스틸→영상 순으로 자동 생성하는 파이프라인 업무를 만든다. 먼저 계획(몇 컷·예상 크레딧)을 세워 사람 승인을 기다리고, 승인되면 배치로 생성한다. "이 프로젝트 영상 전부 만들어줘", "빈 컷 채워줘", "에이전트 모드로 돌려줘"에 사용. sceneIds 를 주면 그 컷만, stages 에 "still" 만 주면 스틸만. 이미 있는 자산은 건너뛰고 regenerate:true 면 다시 만든다. 결과는 제작 캔버스(canvas.open)에서 보여준다.`,
     profile_get: `[[RUN: profile_get | {}]]  → 내(사용자) 프로필을 조회해 개인화(톤·우선순위)의 근거로 삼는다.`,
     profile_save: `[[RUN: profile_save | {"profile": {"key": "value"}}]]  → 내 프로필을 저장/수정. ⚠️ 계정 정보라 사람 승인 후 반영.`,
     favorites_get: `[[RUN: favorites_get | {}]]  → 내 즐겨찾기(선호) 목록 조회.`,
@@ -276,9 +276,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     subscription_get: `[[RUN: subscription_get | {}]]  → 구독·크레딧 잔량 조회. "크레딧 얼마 남았어?"에 사용.`,
     image_edit: `[[RUN: image_edit | {"imageUrl": "원본 이미지URL", "prompt": "수정 지시(예: 배경만 노을로 바꿔줘)"}]]  → 기존 이미지를 채팅형으로 수정(image-to-image, Gemini). "이 이미지 배경 바꿔"에 사용. ※ 마스크로 특정 영역만 정밀 수정하는 인페인트는 사용자가 UI에서 마스크를 그려야 해요(도구 아님).`,
     reminders_list: `[[RUN: reminders_list | {}]]  → 다가올 알람(예약) 목록 조회. "예약/알람 뭐 있어?"에 사용. (예약발행 목록이 아니라 앱 알람)`,
-    polar_metrics: `[[RUN: polar_metrics | {"period": "today", "app": "memoment"}]]  → Polar 결제 지표 조회(매출·MRR·구독수·해지율·전환율). 매출/수익/MRR/구독/해지/전환 관련 질문이면 추측하지 말고 반드시 이 도구로 먼저 조회한다. period는 today·yesterday·this_week·last_week·this_month·last_month·7d·30d·90d·this_year 중 하나, 또는 {"start_date":"2026-07-01","end_date":"2026-07-29"}. app은 앱 이름(예: memoment) — 생략하면 조직 전체.`,
-    polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "memoment"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
-    polar_subscriptions: `[[RUN: polar_subscriptions | {"active": true, "app": "memoment"}]]  → 구독 목록. active:true=현재 유료 구독자, active:false=해지·만료 건. "구독자 몇 명?", "이번 주 해지한 사람?"에 사용.`,
+    polar_metrics: `[[RUN: polar_metrics | {"period": "today", "app": "my-app"}]]  → Polar 결제 지표 조회(매출·MRR·구독수·해지율·전환율). 매출/수익/MRR/구독/해지/전환 관련 질문이면 추측하지 말고 반드시 이 도구로 먼저 조회한다. period는 today·yesterday·this_week·last_week·this_month·last_month·7d·30d·90d·this_year 중 하나, 또는 {"start_date":"2026-07-01","end_date":"2026-07-29"}. app은 앱별 상품 매핑에 등록한 앱 이름(예: my-app) — 생략하면 조직 전체.`,
+    polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "my-app"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
+    polar_subscriptions: `[[RUN: polar_subscriptions | {"active": true, "app": "my-app"}]]  → 구독 목록. active:true=현재 유료 구독자, active:false=해지·만료 건. "구독자 몇 명?", "이번 주 해지한 사람?"에 사용.`,
     polar_products: `[[RUN: polar_products | {}]]  → Polar 상품·가격 구성과 상품 UUID 조회. 앱별 매핑을 설정·점검할 때 사용.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
@@ -391,7 +391,7 @@ ${teamToolMap}
 여러 동작이면 실행 순서대로 여러 줄 출력하세요. 사용자가 요청하지 않은 화면 조작은 하지 마세요.
 
 - 화면 이동: {"action":"navigate","view":"dashboard|chat|knowledge|agents|works|skills|canvas|settings"}
-- 제작 캔버스(노드 UI): {"action":"canvas.open","projectId":"elidus-ep1"} / {"action":"canvas.focus","projectId":"elidus-ep1","sceneId":3} / {"action":"canvas.select","projectId":"elidus-ep1","sceneIds":[2,3]} / {"action":"canvas.refresh"}
+- 제작 캔버스(노드 UI): {"action":"canvas.open","projectId":"series-ep1"} / {"action":"canvas.focus","projectId":"series-ep1","sceneId":3} / {"action":"canvas.select","projectId":"series-ep1","sceneIds":[2,3]} / {"action":"canvas.refresh"}
   ★씬·컷·스틸·영상·프롬프트 이야기를 하면서 프로젝트를 알고 있으면 canvas.open 으로 캔버스를 열고, 특정 컷을 언급하면 canvas.focus 로 그 컷을 가리키세요. 컷 내용 변경은 scene_upsert 도구로만 하고(캔버스는 그 결과를 보여줄 뿐), 스틸·영상 생성은 scene_still/scene_video 또는 video_pipeline 으로만 합니다.
 - 우측 카드: {"action":"panel.set","panel":"projects|approvals|results|reservations","open":true}
 - 대화·채팅 표시: {"action":"conversation.open","date":"2026-07-25"} / {"action":"chat.mode","mode":"normal|vn"} / {"action":"chat.log","open":true} / {"action":"chat.messages","operation":"expand_all|collapse_all"}
@@ -1548,7 +1548,7 @@ export async function runGroupChat(
           });
         } finally {
           // 성공·실패 어느 쪽이든 결과 메시지가 붙었으므로 진행 안내는 해제한다.
-          await resolvePendingMessage(sql, String((notice as any)?.id || ""));
+          await resolvePendingMessage(sql, userId, String((notice as any)?.id || ""));
         }
         continue;
       }

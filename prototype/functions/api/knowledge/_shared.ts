@@ -3,6 +3,8 @@
 // Neon Postgres + pgvector + OpenAI Embeddings 기반.
 // raw fetch 사용 — npm 패키지 의존성 없음 (Cloudflare Pages 번들 호환).
 
+import { primaryAdminId } from "../_shared/admin-users";
+
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1536;
 const CHUNK_SIZE = 1400;
@@ -52,6 +54,19 @@ export function getSql(env: any): SqlFn | null {
   const url = String(env && env.DATABASE_URL || "").trim();
   if (!url) return null;
   return (sql: string, params?: any[]) => neonQuery(url, sql, params || []);
+}
+
+/**
+ * 지식 문서 소유 조건. 문서는 올린 회원 것만 보이고 지워진다.
+ * user_id 가 비어 있는 과거 행(사용자 분리 이전 적재분)은 1차 관리자 소유로 본다.
+ * 반환: SQL 조각(문서 테이블 별칭 alias 기준)과 그 자리표시자에 들어갈 값 2개.
+ */
+export function knowledgeOwnerClause(env: any, userId: string, alias: string, firstParam: number): { clause: string; params: any[] } {
+  const col = alias ? `${alias}.user_id` : "user_id";
+  return {
+    clause: `(${col} = $${firstParam} OR ($${firstParam + 1}::boolean AND COALESCE(${col}, '') = ''))`,
+    params: [userId, userId === primaryAdminId(env)],
+  };
 }
 
 export function isKnowledgeAdminRequired(env: any): boolean {

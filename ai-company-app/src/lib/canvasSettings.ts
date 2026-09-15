@@ -1,4 +1,4 @@
-import { readStorage, writeStorage } from "./safeStorage";
+import { readUserStorage, writeUserStorage } from "./safeStorage";
 
 /**
  * 제작 캔버스 작성기 설정 — 에이전트 설정(생성 전 확인) + 이미지/영상 생성 기본값.
@@ -81,7 +81,7 @@ const KEY = "canvasComposerSettings";
 
 export function loadCanvasSettings(): CanvasSettings {
   try {
-    const raw = readStorage(KEY);
+    const raw = readUserStorage(KEY);
     if (!raw) return DEFAULT_CANVAS_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
     const merged: CanvasSettings = {
@@ -101,7 +101,7 @@ export function loadCanvasSettings(): CanvasSettings {
 }
 
 export function saveCanvasSettings(s: CanvasSettings): void {
-  writeStorage(KEY, JSON.stringify(s));
+  writeUserStorage(KEY, JSON.stringify(s));
 }
 
 export function videoModelLabel(id: string): string {

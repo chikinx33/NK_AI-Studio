@@ -42,7 +42,7 @@ test('★React 앱은 임베드 파라미터로 캔버스를 바로 열고, stag
   const app = read('ai-company-app/src/App.tsx');
   assert.match(app, /const EMBED_MODE = EMBED_PARAMS\.get\("embed"\) === "1";/);
   assert.match(app, /const EMBED_CANVAS = EMBED_PARAMS\.get\("view"\) === "canvas";/);
-  assert.match(app, /useState\(EMBED_PROJECT_ID \|\| readStorage\("canvasProjectId"\)\)/);
+  assert.match(app, /useState\(EMBED_PROJECT_ID \|\| readUserStorage\("canvasProjectId"\)\)/);
   assert.match(app, /EMBED_CANVAS \? "skills" : "chat"/);
   assert.match(app, /EMBED_CANVAS \? CANVAS_SKILL_CATEGORY_ID : "design-content"/);
   assert.match(app, /if \(type === "stage-revisit"\) dispatchUiAction\(\{ action: "canvas\.refresh" \}\);/);

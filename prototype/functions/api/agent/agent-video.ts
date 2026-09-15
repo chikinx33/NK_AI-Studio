@@ -206,7 +206,7 @@ function normalizeSpec(raw: any, request: {
 
   return {
     version: "1.0",
-    title: cleanText(raw?.title, "Raviok Agent Video", 100),
+    title: cleanText(raw?.title, "Agent Video", 100),
     objective: cleanText(raw?.objective, request.prompt, 300),
     audience: cleanText(raw?.audience, request.audience, 80),
     tone: cleanText(raw?.tone, request.tone, 80),
@@ -350,7 +350,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       ),
     ]);
 
-    const synthesisSystem = `당신은 라비오크 총괄 오케스트레이터 코어입니다. 플롯·잉크·픽셀·비트의 결과를 충돌 없이 통합해 Remotion이 즉시 렌더할 수 있는 JSON 하나를 만드세요.
+    const synthesisSystem = `당신은 이 회사의 총괄 오케스트레이터 코어입니다. 플롯·잉크·픽셀·비트의 결과를 충돌 없이 통합해 Remotion이 즉시 렌더할 수 있는 JSON 하나를 만드세요.
 
 반드시 아래 스키마의 JSON만 출력하고 마크다운·설명은 금지합니다.
 {

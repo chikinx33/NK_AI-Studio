@@ -140,17 +140,12 @@ export function sanitizeUserId(raw) {
   return normalized;
 }
 
-function readSecret(env) {
+// 서명 키는 비밀인 값만 쓴다. 저장소가 공개라 코드에 박힌 문자열·공개 프로젝트 ID 로 서명하면
+// 누구나 임의 사용자 토큰을 만들 수 있다.
+export function readSecret(env) {
   const direct = String(env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET) || "").trim();
   if (direct) return direct;
-  const derived = String(
-    env && (
-      env.AUTH_PW ||
-      env.GOOGLE_PRIVATE_KEY ||
-      env.GOOGLE_PROJECT_ID ||
-      "nk_studio_legacy_session_secret_v1"
-    ) || ""
-  ).trim();
+  const derived = String(env && (env.AUTH_PW || env.GOOGLE_PRIVATE_KEY) || "").trim();
   if (!derived) throw new Error("AUTH_SESSION_SECRET missing");
   return derived;
 }
@@ -243,9 +238,6 @@ function candidateSecrets(env) {
   if (pw) arr.push(pw);
   const gpk = String(env && env.GOOGLE_PRIVATE_KEY || "").trim();
   if (gpk) arr.push(gpk);
-  const gid = String(env && env.GOOGLE_PROJECT_ID || "").trim();
-  if (gid) arr.push(gid);
-  arr.push("nk_studio_legacy_session_secret_v1");
   const set = new Set();
   const out = [];
   for (let i = 0; i < arr.length; i++) {

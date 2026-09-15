@@ -101,8 +101,11 @@ async function cleanupDatabase(env: any, userId: string): Promise<number> {
 
   if (await tableExists(sql, "sound_assets")) {
     await sql("ALTER TABLE sound_assets ADD COLUMN IF NOT EXISTS owner_id text");
-    const pathToken = `%/users/${userId}/%`;
-    const encodedPathToken = `%2Fusers%2F${userId}%2F`;
+    // LIKE 에서 _ 는 한 글자 와일드카드라 a_b 삭제가 axb 경로까지 지우지 않게 이스케이프한다.
+    // URL 인코딩 경로의 %2F 도 LIKE 에선 와일드카드라 같이 이스케이프한다.
+    const likeId = userId.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    const pathToken = `%/users/${likeId}/%`;
+    const encodedPathToken = `%\\%2Fusers\\%2F${likeId}\\%2F%`;
     const rows = await sql(
       `DELETE FROM sound_assets
        WHERE owner_id = $1

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 import CollapsibleSection from "./CollapsibleSection";
 import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
+import { readUserStorage } from "../lib/safeStorage";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -120,7 +121,7 @@ export default function Approvals({
   const [projects, setProjects] = useState<Project[]>([]);
   const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
     try {
-      const s = localStorage.getItem("nk_project_sidebar_hidden");
+      const s = readUserStorage("nk_project_sidebar_hidden");
       return s ? new Set(JSON.parse(s)) : new Set();
     } catch { return new Set(); }
   });
@@ -223,7 +224,7 @@ export default function Approvals({
       }
     }
     try {
-      const s = localStorage.getItem("nk_project_sidebar_hidden");
+      const s = readUserStorage("nk_project_sidebar_hidden");
       setSidebarHidden(s ? new Set(JSON.parse(s)) : new Set());
     } catch {}
     // pending에서 빠진(=처리 완료된) 항목의 잠금 기록 정리

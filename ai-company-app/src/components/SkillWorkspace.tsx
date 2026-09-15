@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { readStorage, writeStorage } from "../lib/safeStorage";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import AgentVideoWorkspace from "./AgentVideoWorkspace";
 import ProductionCanvas from "./ProductionCanvas";
 import { getCompanySkillCategory } from "../lib/companySkills";
@@ -64,16 +64,16 @@ export default function SkillWorkspace({
 
   const selectedSkill = category.skills.find((skill) => skill.id === selectedSkillId);
   // 캔버스 연결선 스타일 — 브라우저에 기억한다.
-  const [edgeStyle, setEdgeStyle] = useState<"curve" | "straight">(readStorage("canvasEdgeStyle") === "straight" ? "straight" : "curve");
+  const [edgeStyle, setEdgeStyle] = useState<"curve" | "straight">(readUserStorage("canvasEdgeStyle") === "straight" ? "straight" : "curve");
   const toggleEdgeStyle = () => setEdgeStyle((v) => {
     const next = v === "curve" ? "straight" : "curve";
-    writeStorage("canvasEdgeStyle", next);
+    writeUserStorage("canvasEdgeStyle", next);
     return next;
   });
   // 연결선 보기·숨기기 — 노드만 보고 싶을 때(스틸·프롬프트 검토) 선을 걷는다.
-  const [edgesVisible, setEdgesVisible] = useState(readStorage("canvasEdgesVisible") !== "0");
+  const [edgesVisible, setEdgesVisible] = useState(readUserStorage("canvasEdgesVisible") !== "0");
   const toggleEdgesVisible = () => setEdgesVisible((v) => {
-    writeStorage("canvasEdgesVisible", v ? "0" : "1");
+    writeUserStorage("canvasEdgesVisible", v ? "0" : "1");
     return !v;
   });
 

@@ -68,8 +68,8 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
-  assert.match(workspaceContext, /writeStorage\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
-  assert.match(workspaceContext, /readStorage\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(workspaceContext, /writeUserStorage\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
+  assert.match(workspaceContext, /readUserStorage\(SKILL_JOB_STORAGE_KEY\)/);
   assert.match(workspaceContext, /restoreSkillJob/);
 });
 
@@ -79,7 +79,7 @@ test("Agent Video 업무 화면은 간결한 미리보기·업무 보고·다운
   assert.match(workspace, />업무 보고<\/h2>/);
   assert.match(workspace, />\s*대기중\s*</);
   assert.match(workspace, /async function downloadVideo\(\)/);
-  assert.match(workspace, /link\.download = "raviok-agent-video\.mp4"/);
+  assert.match(workspace, /link\.download = "agent-video\.mp4"/);
   assert.match(workspace, />\s*다운로드\s*<\/button>/);
   assert.doesNotMatch(workspace, /item\.emoji|협업 보고서|자동 렌더·클라우드 저장|Remotion MP4 · GCS 소스 보관|로컬 MP4 다운로드/);
 });
@@ -91,7 +91,7 @@ test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴
   ]);
   assert.match(workspaceContext, /await beginRender\(nextSpec\)/);
   assert.match(workspaceContext, /uploadAgentVideoStorageFile/);
-  assert.match(workspaceContext, /raviok-agent-video\.mp4/);
+  assert.match(workspaceContext, /"agent-video\.mp4"/);
   assert.match(workspaceContext, /"source\.json"/);
   assert.match(workspaceContext, /"report\.json"/);
   assert.match(workspaceContext, /"manifest\.json"/);

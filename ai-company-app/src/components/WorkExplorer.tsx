@@ -14,6 +14,7 @@ import {
   downloadCompanyFile,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFileExplorer from "./CompanyFileExplorer";
 
 type ViewMode = "cards" | "list";
@@ -185,12 +186,12 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   const [sourceWork, setSourceWork] = useState<CompanyWorkItem | null>(null);
   const [sources, setSources] = useState<AgentVideoStorageItem[]>([]);
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>(() => window.localStorage.getItem("company-work-view") === "list" ? "list" : "cards");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readUserStorage("company-work-view") === "list" ? "list" : "cards");
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>(() => {
-    const saved = window.localStorage.getItem("company-work-sort");
+    const saved = readUserStorage("company-work-sort");
     return saved === "oldest" || saved === "name-asc" || saved === "name-desc" ? saved : "newest";
   });
   const [folderMenu, setFolderMenu] = useState("");
@@ -214,8 +215,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
 
   useEffect(() => { void refresh(); }, [revision]);
   useEffect(() => { if (initialDate) setDate(initialDate); }, [initialDate]);
-  useEffect(() => { window.localStorage.setItem("company-work-view", viewMode); }, [viewMode]);
-  useEffect(() => { window.localStorage.setItem("company-work-sort", sortMode); }, [sortMode]);
+  useEffect(() => { writeUserStorage("company-work-view", viewMode); }, [viewMode]);
+  useEffect(() => { writeUserStorage("company-work-sort", sortMode); }, [sortMode]);
   useEffect(() => {
     if (!folderMenu && !documentMenu) return;
     const close = (event: PointerEvent) => {

@@ -10,6 +10,7 @@ import {
   type CompanyFileEntry,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFilePreview from "./CompanyFilePreview";
 
 type ViewMode = "cards" | "list";
@@ -85,7 +86,7 @@ export default function CompanyFileExplorer({
   const [entries, setEntries] = useState<CompanyFileEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>(() => window.localStorage.getItem("company-files-view") === "list" ? "list" : "cards");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readUserStorage("company-files-view") === "list" ? "list" : "cards");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -109,7 +110,7 @@ export default function CompanyFileExplorer({
   }
 
   useEffect(() => { void refresh(path); }, [path, revision]);
-  useEffect(() => { window.localStorage.setItem("company-files-view", viewMode); }, [viewMode]);
+  useEffect(() => { writeUserStorage("company-files-view", viewMode); }, [viewMode]);
 
   useUiAction((action) => {
     if (action.action === "company_files.view") {

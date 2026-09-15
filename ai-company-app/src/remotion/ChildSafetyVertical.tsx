@@ -67,7 +67,7 @@ function SceneShell({ sceneIndex, duration, kicker, title, body, accent, titleSi
         {children}
       </div>
       <div style={{ marginTop: 34, display: "flex", justifyContent: "space-between", alignItems: "center", color: "rgba(255,255,255,.46)", fontSize: 22, fontWeight: 750, letterSpacing: "0.12em" }}>
-        <span>RAVIOK · KIDS SAFETY LAB</span><span>30 SEC</span>
+        <span>KIDS SAFETY LAB</span><span>30 SEC</span>
       </div>
     </AbsoluteFill>
   );

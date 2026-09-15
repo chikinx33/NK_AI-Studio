@@ -16,6 +16,7 @@
  * 를 URL prefix 로 등록하고 ownership 인증을 1회 완료해야 한다.
  * (전환 기간엔 기존 nk-ai-studio.pages.dev prefix 도 함께 등록해 둘 수 있다.)
  */
+import { readSecret } from "../_shared/auth.js";
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
   const without = String(uri || "").replace(/^gs:\/\//, "");
@@ -29,12 +30,10 @@ function gcsObjectPath(objectName: string): string {
   return encodeURIComponent(String(objectName || ""));
 }
 
+// 세션 토큰과 같은 서명 키(_shared/auth.js readSecret). 비밀 값이 없으면 던진다 —
+// 공개 저장소에 박힌 기본 문자열로 서명하면 누구나 버킷 객체 URL 을 만들 수 있다.
 function readMediaSecret(env: any): string {
-  return String(
-    (env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET)) ||
-    (env && (env.AUTH_PW || env.GOOGLE_PRIVATE_KEY || env.GOOGLE_PROJECT_ID)) ||
-    "nk_studio_legacy_session_secret_v1"
-  ).trim();
+  return readSecret(env);
 }
 
 async function hmacSha256B64url(secret: string, message: string): Promise<string> {
@@ -120,7 +119,8 @@ async function serveMedia(request: Request, env: any, method: "GET" | "HEAD"): P
     return new Response("link expired", { status: 403 });
   }
 
-  const secret = readMediaSecret(env);
+  let secret = "";
+  try { secret = readMediaSecret(env); } catch (_) { return new Response("server misconfigured", { status: 500 }); }
   const expected = await hmacSha256B64url(secret, `${objectName}|${exp}`);
   if (!timingSafeEqual(sig, expected)) {
     return new Response("forbidden", { status: 403 });

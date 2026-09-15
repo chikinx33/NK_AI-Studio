@@ -11,6 +11,7 @@ import {
   ensureSchema,
   getSql,
   json,
+  knowledgeOwnerClause,
   ragEnabled,
   sha256Hex,
   toVector,
@@ -109,9 +110,10 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     const sql = getSql(env);
     if (!sql) return json({ deleted: false, reason: "DATABASE_URL 없음" });
     await ensureSchema(sql);
+    const owner = knowledgeOwnerClause(env, auth.userId, "", 2);
     const rows = await sql(
-      "DELETE FROM knowledge_documents WHERE id = $1 RETURNING id",
-      [documentId]
+      `DELETE FROM knowledge_documents WHERE id = $1 AND ${owner.clause} RETURNING id`,
+      [documentId, ...owner.params]
     );
     return json({ deleted: rows.length > 0 });
   } catch (e: any) {

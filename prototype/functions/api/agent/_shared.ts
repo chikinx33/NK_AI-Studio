@@ -13,6 +13,7 @@ import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName
 import { plateVariantId, plateLabel, findPlate, masterOf, plateElevation, MASTER_VARIANT_ID } from "../_shared/set-plates.js";
 import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/shots/vocab.js";
 import { refreshAccessToken } from "./_google";
+import { requireMaster } from "../_shared/admin-users";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import {
   assertRenderable,
@@ -965,10 +966,10 @@ export async function fileJobAsWorkItem(
 }
 
 /** 진행 안내 해제 — 결과(또는 실패) 메시지를 붙인 뒤 호출. */
-export async function resolvePendingMessage(sql: SqlFn, id: string): Promise<void> {
-  if (!id) return;
+export async function resolvePendingMessage(sql: SqlFn, userId: string, id: string): Promise<void> {
+  if (!id || !userId) return;
   try {
-    await sql("UPDATE agent_messages SET pending = false WHERE id = $1", [id]);
+    await sql("UPDATE agent_messages SET pending = false WHERE id = $1 AND user_id = $2", [id, userId]);
   } catch (_) {}
 }
 
@@ -2496,9 +2497,12 @@ async function runSheetsReadTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "sheets_read", range: data.range || range, values: (data.values || []).slice(0, 100) };
 }
 
-/** 엔지(개발) GitHub: 공개 레포는 토큰 없이도 조회(60회/시 한도). GITHUB_TOKEN 있으면 사설·한도↑. */
+/**
+ * 엔지(개발) GitHub: 공개 레포는 토큰 없이도 조회(60회/시 한도).
+ * GITHUB_TOKEN 은 운영자 계정 토큰이라 사설 레포까지 열리므로 1차 관리자에게만 붙인다.
+ */
 async function runGithubTool(input: any, ctx: ToolContext): Promise<any> {
-  const token = String(ctx.env?.GITHUB_TOKEN || ctx.env?.GH_TOKEN || "").trim();
+  const token = requireMaster(ctx.env, ctx.userId) ? String(ctx.env?.GITHUB_TOKEN || ctx.env?.GH_TOKEN || "").trim() : "";
   const headers: Record<string, string> = { "User-Agent": "NK-Studio", Accept: "application/vnd.github+json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const repo = String(input?.repo || "").trim();
@@ -3740,14 +3744,14 @@ async function runHashtagsTool(input: any, ctx: ToolContext): Promise<any> {
 
 // ────────────────────────────────────────────────────────────────────────────
 // STEP 1 (P0) — 프로덕션 엔드투엔드 뼈대: 프로젝트/에피소드 + 시나리오→씬 + 씬 자산 부착.
-// "에피소드 = 별도 projectId"(예: elidus-ep1). 기존 GCS 데이터 모델(project/get·save의
+// "에피소드 = 별도 projectId"(예: series-ep1). 기존 GCS 데이터 모델(project/get·save의
 // {payload, scenes[]}) 그대로 사용. 소유 데이터 쓰기는 전부 gate:true(승인 후 review.ts가 실행).
 // ────────────────────────────────────────────────────────────────────────────
 
 /** 프로젝트(에피소드) 생성: /api/project/init. GCS 폴더·빈 data.json 초기화. 쓰기 → 승인 게이트. */
 async function runProjectCreateTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
-  if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
+  if (!projectId) throw new Error("projectId is required (예: series-ep1)");
   if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("projectId 형식이 올바르지 않아요(영문/숫자/._- 만 허용).");
   const data = await callInternalJson(ctx, "/api/project/init", { body: { projectId } });
   // '프로젝트 생성' 폼 필드: 프로젝트 이름(seriesTitle)·에피소드 이름(episodeTitle)·
@@ -3901,7 +3905,7 @@ async function runProjectSaveTool(input: any, ctx: ToolContext): Promise<any> {
 /** 시나리오 생성 → 그 씬들을 프로젝트에 저장(합성). 엔드투엔드 연결 고리. 쓰기 → 승인 게이트. */
 async function runScenarioToProjectTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
-  if (!projectId) throw new Error("projectId is required (예: elidus-ep1)");
+  if (!projectId) throw new Error("projectId is required (예: series-ep1)");
   const scenario = await runScenarioTool(input, ctx);
   const scenes = Array.isArray(scenario?.scenes) ? scenario.scenes : [];
   if (!scenes.length) throw new Error("시나리오에서 씬이 생성되지 않았어요.");

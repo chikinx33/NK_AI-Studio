@@ -11,7 +11,7 @@ import {
   type ProductionProjectSummary,
 } from "../lib/api";
 import ProjectPicker from "./ProjectPicker";
-import { readStorage, writeStorage } from "../lib/safeStorage";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { analyzeReorderClient, sameOrder, type OrderCut } from "../lib/sceneOrder";
 import { suggestLocationMerges } from "../lib/locationNames";
 import { actionString, useUiAction } from "../lib/uiActions";
@@ -354,7 +354,7 @@ export default function ProductionCanvas({
 }) {
   const [projects, setProjects] = useState<ProductionProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
-  const [projectId, setProjectId] = useState(projectIdProp || readStorage("canvasProjectId"));
+  const [projectId, setProjectId] = useState(projectIdProp || readUserStorage("canvasProjectId"));
   const [graph, setGraph] = useState<ProductionGraph | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -436,7 +436,7 @@ export default function ProductionCanvas({
       const fromServer = g.canvasLayout && typeof g.canvasLayout === "object" ? (g.canvasLayout as Partial<CanvasLayout>) : null;
       setServerLayout(fromServer ? reconcileLayout(fromServer, g, base) : null);
       // 로컬 작업 사본이 있으면 그것을, 없으면 프로젝트에 저장된 배치를, 둘 다 없으면 기본 배치를 쓴다.
-      const saved = readStorage(`canvasLayout:${projectId}`);
+      const saved = readUserStorage(`canvasLayout:${projectId}`);
       let parsed: Partial<CanvasLayout> | null = null;
       try { parsed = saved ? JSON.parse(saved) : null; } catch { parsed = null; }
       const savedLayout = parsed || fromServer;
@@ -453,7 +453,7 @@ export default function ProductionCanvas({
 
   useEffect(() => {
     if (!projectId) return;
-    writeStorage("canvasProjectId", projectId);
+    writeUserStorage("canvasProjectId", projectId);
     onProjectChange?.(projectId);
     setSelectedId("");
     setMulti(new Set());
@@ -463,7 +463,7 @@ export default function ProductionCanvas({
 
   useEffect(() => {
     if (!projectId || (!Object.keys(layout.bars).length && !Object.keys(layout.nodes).length)) return;
-    writeStorage(`canvasLayout:${projectId}`, JSON.stringify(layout));
+    writeUserStorage(`canvasLayout:${projectId}`, JSON.stringify(layout));
   }, [layout, projectId]);
 
   const nodeById = useMemo(() => new Map((graph?.nodes || []).map((n) => [n.id, n])), [graph]);

@@ -27,5 +27,5 @@ test("시작 시 사용하는 브라우저 저장소는 접근 실패와 잘못�
   assert.match(storage, /export function writeStorage/);
   assert.match(storage, /catch \{[\s\S]*return fallback/);
   assert.match(sidebar, /Array\.isArray\(parsed\)/);
-  assert.match(workspace, /readStorage\(SKILL_JOB_STORAGE_KEY\)/);
+  assert.match(workspace, /readUserStorage\(SKILL_JOB_STORAGE_KEY\)/);
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAgents, getConversationMessages, streamChat, type AgentInfo, type HistoryTurn } from "../lib/api";
-import { readStorage, writeStorage } from "../lib/safeStorage";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { dispatchUiAction } from "../lib/uiActions";
 import { describeSettingsForAgent, summarizeSettings, type CanvasSettings } from "../lib/canvasSettings";
 import GenerationSettingsPopover from "./GenerationSettingsPopover";
@@ -68,7 +68,7 @@ export default function CanvasChatDock({
   onDirectGenerate: (kind: "image" | "video", prompt: string) => Promise<string>;
   onJobReady: (payload: unknown) => void;
 }) {
-  const [mode, setMode] = useState<ComposerMode>(readStorage(MODE_KEY) === "agent" ? "agent" : "normal");
+  const [mode, setMode] = useState<ComposerMode>(readUserStorage(MODE_KEY) === "agent" ? "agent" : "normal");
   const [popover, setPopover] = useState<"none" | "settings" | "agent">("none");
   const [turns, setTurns] = useState<DockTurn[]>([]);
   const [draft, setDraft] = useState("");
@@ -78,7 +78,7 @@ export default function CanvasChatDock({
   const [generating, setGenerating] = useState(false);
   const [notice, setNotice] = useState("");
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [sessionSuffix, setSessionSuffix] = useState(() => readStorage(sessionKey(projectId)) || "");
+  const [sessionSuffix, setSessionSuffix] = useState(() => readUserStorage(sessionKey(projectId)) || "");
   const turnsRef = useRef<DockTurn[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -87,10 +87,10 @@ export default function CanvasChatDock({
   const conversationId = projectId ? `canvas-${projectId}${sessionSuffix}` : "";
 
   const commit = (next: DockTurn[]) => { turnsRef.current = next; setTurns(next); };
-  const switchMode = (next: ComposerMode) => { setMode(next); writeStorage(MODE_KEY, next); setPopover("none"); setNotice(""); };
+  const switchMode = (next: ComposerMode) => { setMode(next); writeUserStorage(MODE_KEY, next); setPopover("none"); setNotice(""); };
 
   useEffect(() => { getAgents().then(setAgents).catch(() => setAgents([])); }, []);
-  useEffect(() => { setSessionSuffix(readStorage(sessionKey(projectId)) || ""); setAttachments([]); setNotice(""); }, [projectId]);
+  useEffect(() => { setSessionSuffix(readUserStorage(sessionKey(projectId)) || ""); setAttachments([]); setNotice(""); }, [projectId]);
 
   const loadThread = useCallback(async () => {
     if (!conversationId) { commit([]); return; }
@@ -107,7 +107,7 @@ export default function CanvasChatDock({
   const newSession = () => {
     if (streaming) { stoppedByUser.current = true; abortRef.current?.abort(); }
     const suffix = `-${Date.now().toString(36)}`;
-    writeStorage(sessionKey(projectId), suffix);
+    writeUserStorage(sessionKey(projectId), suffix);
     setSessionSuffix(suffix);
     commit([]);
   };

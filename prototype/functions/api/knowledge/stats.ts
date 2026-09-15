@@ -1,19 +1,23 @@
 // prototype/functions/api/knowledge/stats.ts
-// GET = RAG 활성화 상태 + 등록 문서/청크 수 + 관리자/접근 키 필요 여부
+// GET = RAG 활성화 상태 + 로그인 회원 본인의 문서/청크 수 + 관리자/접근 키 필요 여부
 
+import { authorizeRequest } from "../_shared/auth.js";
 import {
   ensureSchema,
   getSql,
   isKnowledgeAccessRequired,
   isKnowledgeAdminRequired,
   json,
+  knowledgeOwnerClause,
   ragEnabled,
 } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-export const onRequestGet: PagesFunction = async ({ env }) => {
+export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
     const adminRequired = isKnowledgeAdminRequired(env);
     const accessRequired = isKnowledgeAccessRequired(env);
 
@@ -31,8 +35,11 @@ export const onRequestGet: PagesFunction = async ({ env }) => {
     const sql = getSql(env);
     if (!sql) return json({ configured: false, documents: 0, chunks: 0, adminRequired, accessRequired });
     await ensureSchema(sql);
+    const owner = knowledgeOwnerClause(env, auth.userId, "d", 1);
     const rows = await sql(
-      "SELECT (SELECT count(*)::int FROM knowledge_documents) AS documents, (SELECT count(*)::int FROM knowledge_chunks) AS chunks"
+      `SELECT (SELECT count(*)::int FROM knowledge_documents d WHERE ${owner.clause}) AS documents,
+              (SELECT count(*)::int FROM knowledge_chunks c JOIN knowledge_documents d ON d.id = c.document_id WHERE ${owner.clause}) AS chunks`,
+      owner.params
     );
 
     return json({

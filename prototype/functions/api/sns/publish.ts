@@ -1,5 +1,5 @@
 import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
-import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
+import { authorizeRequest, readSecret, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
 import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
@@ -27,12 +27,10 @@ function parseGcsUri(uri: string): { bucket: string; object: string } {
 }
 
 // ── TikTok Photo 프록시 URL 서명 (api/sns/tiktok-media 와 공유하는 규칙) ──────
+// 세션 토큰과 같은 서명 키(_shared/auth.js readSecret). 비밀 값이 없으면 던진다 —
+// 공개 저장소에 박힌 기본 문자열로 서명하면 누구나 버킷 객체 URL 을 만들 수 있다.
 function readMediaSecret(env: any): string {
-  return String(
-    (env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET)) ||
-    (env && (env.AUTH_PW || env.GOOGLE_PRIVATE_KEY || env.GOOGLE_PROJECT_ID)) ||
-    "nk_studio_legacy_session_secret_v1"
-  ).trim();
+  return readSecret(env);
 }
 
 async function hmacSha256B64url(secret: string, message: string): Promise<string> {

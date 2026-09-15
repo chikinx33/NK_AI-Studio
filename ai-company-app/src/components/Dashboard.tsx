@@ -10,6 +10,7 @@ import {
   type Conversation,
 } from "../lib/api";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 const SIDEBAR_HIDDEN_KEY = "nk_project_sidebar_hidden";
 
@@ -175,7 +176,7 @@ export default function Dashboard({
   const projectsReady = projects !== null;
   const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
     try {
-      const s = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+      const s = readUserStorage(SIDEBAR_HIDDEN_KEY);
       return s ? new Set(JSON.parse(s)) : new Set();
     } catch { return new Set(); }
   });
@@ -184,7 +185,7 @@ export default function Dashboard({
     setSidebarHidden((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch {}
+      try { writeUserStorage(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch {}
       return next;
     });
   };
@@ -226,7 +227,7 @@ export default function Dashboard({
     setSidebarHidden((previous) => {
       const next = new Set(previous);
       visible ? next.delete(target.id) : next.add(target.id);
-      try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      try { writeUserStorage(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
   }, "dashboard.projects");

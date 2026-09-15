@@ -92,7 +92,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     if (render.status === "done" && render.downloadUrl) {
       const link = document.createElement("a");
       link.href = render.downloadUrl;
-      link.download = "raviok-agent-video.mp4";
+      link.download = "agent-video.mp4";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -130,7 +130,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
       {!embedded ? <header className="shrink-0 border-b border-edge bg-panel/70 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-400">Raviok × Remotion</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-400">NK AI Company × Remotion</div>
             <h1 className="mt-1 max-w-xl truncate text-xl font-bold text-white" title={activeWork?.title || "Agent Video"}>{activeWork?.title || "Agent Video"}</h1>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">

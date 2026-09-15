@@ -12,7 +12,7 @@
  * 스코프를 데모로 증명"을 요구하므로, 이 흐름을 지우려면 connect/tiktok.ts 의 scope
  * 문자열에서 video.upload 도 같이 빼야 한다.
  */
-import { authorizeRequest, sanitizeUserId } from "../../_shared/auth.js";
+import { authorizeRequest, readSecret, sanitizeUserId } from "../../_shared/auth.js";
 import { loadShares, getGrantRole } from "../../_shared/shares";
 import { getTikTokAccessToken, waitForTikTokStatus } from "../../_shared/tiktok-token";
 
@@ -102,12 +102,10 @@ async function buildSignedUrl(
   return `https://${host}${canonicalUri}?${canonicalQuery}&X-Goog-Signature=${b64urlToHex(sig)}`;
 }
 
+// 세션 토큰과 같은 서명 키(_shared/auth.js readSecret). 비밀 값이 없으면 던진다 —
+// 공개 저장소에 박힌 기본 문자열로 서명하면 누구나 버킷 객체 URL 을 만들 수 있다.
 function readMediaSecret(env: any): string {
-  return String(
-    (env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET)) ||
-    (env && (env.AUTH_PW || env.GOOGLE_PRIVATE_KEY || env.GOOGLE_PROJECT_ID)) ||
-    "nk_studio_legacy_session_secret_v1"
-  ).trim();
+  return readSecret(env);
 }
 
 async function hmacSha256B64url(secret: string, message: string): Promise<string> {

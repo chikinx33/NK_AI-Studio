@@ -20,8 +20,9 @@ test("login.ts keeps the primary admin un-lockable (active ignored, role forced)
   assert.match(src, /const isPrimary = id === envId/);
   // 최고 관리자는 active 무시
   assert.match(src, /!isPrimary && !user\.active/);
-  // 레지스트리 미등록(부트스트랩) 시 env 비번 허용
-  assert.match(src, /if \(isPrimary && pw === envPw\)/);
+  // 레지스트리 미등록(부트스트랩) 시 env 비번 허용 — env AUTH_PW 가 설정된 경우에만
+  assert.match(src, /if \(isPrimary && envPw && pw === envPw\)/);
+  assert.match(src, /const envPw = String\(env\.AUTH_PW \|\| ""\)\.trim\(\)/);
   // 레지스트리 비번 불일치여도 최고 관리자는 잠기지 않도록 env 부트스트랩으로 폴백
   assert.match(src, /if \(!isPrimary\) return json\(\{ error: 'Invalid credentials' \}, 401/);
 });
@@ -40,14 +41,22 @@ test("admin users endpoint forces primary admin to stay admin/active", () => {
   assert.match(src, /user\.active = true;/);
 });
 
-test("login.ts migrates legacy users into the registry on first login", () => {
+test("login.ts has no hardcoded passwords or seed accounts (public repo)", () => {
   const src = read("prototype/functions/api/login.ts");
-  assert.match(src, /LEGACY_USERS/);
-  assert.match(src, /createUserRecord\(/);
-  assert.match(src, /reg\.users\.push\(record\)/);
-  assert.match(src, /saveRegistry\(env, reg\)/);
-  // GCS 장애 시 레거시 폴백이 동작하도록 try/catch 처리
-  assert.match(src, /registryLoaded/);
+  assert.doesNotMatch(src, /limfactory1234/);
+  assert.doesNotMatch(src, /LEGACY_USERS|LEGACY_AUTH_PW/);
+  assert.doesNotMatch(src, /hongdaeitacademy/);
+});
+
+test("session tokens are only signed/verified with secret env values", () => {
+  const src = read("prototype/functions/api/_shared/auth.js");
+  assert.doesNotMatch(src, /nk_studio_legacy_session_secret/);
+  assert.doesNotMatch(src, /GOOGLE_PROJECT_ID/);
+  for (const rel of ["prototype/functions/api/sns/publish.ts", "prototype/functions/api/sns/tiktok-media.ts", "prototype/functions/api/sns/tiktok/inbox.ts"]) {
+    const sns = read(rel);
+    assert.doesNotMatch(sns, /nk_studio_legacy_session_secret/, rel);
+    assert.match(sns, /return readSecret\(env\);/, rel);
+  }
 });
 
 test("auth.js stores role and exposes isAdmin/getRole", () => {

@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 // 우측 사이드바 패널 공용 접기/펼침 카드.
 // header = 헤더 좌측(아이콘+제목+개수 등, 호출부가 스타일링), right = 헤더 우측 액션(선택).
-// 접힘 상태는 storageKey로 localStorage에 기억(새로고침해도 유지).
+// 접힘 상태는 storageKey로 계정별 localStorage에 기억(새로고침해도 유지).
 export default function CollapsibleSection({
   storageKey,
   header,
@@ -19,8 +20,8 @@ export default function CollapsibleSection({
 }) {
   const [open, setOpen] = useState<boolean>(() => {
     try {
-      const v = localStorage.getItem(storageKey);
-      return v === null ? defaultOpen : v === "1";
+      const v = readUserStorage(storageKey, "");
+      return v === "" ? defaultOpen : v === "1";
     } catch {
       return defaultOpen;
     }
@@ -28,7 +29,7 @@ export default function CollapsibleSection({
   const toggle = () =>
     setOpen((o) => {
       const n = !o;
-      try { localStorage.setItem(storageKey, n ? "1" : "0"); } catch { /* ignore */ }
+      writeUserStorage(storageKey, n ? "1" : "0");
       return n;
     });
 
@@ -44,7 +45,7 @@ export default function CollapsibleSection({
     const next = actionBoolean(action, "open");
     if (next === undefined) return;
     setOpen(next);
-    try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch { /* ignore */ }
+    writeUserStorage(storageKey, next ? "1" : "0");
   }, `panel:${storageKey}`);
 
   return (

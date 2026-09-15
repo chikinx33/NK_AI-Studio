@@ -3,6 +3,7 @@ import { setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
 import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 interface Props {
   status: StatusInfo | null;
@@ -390,7 +391,7 @@ export default function Sidebar({
     if (!nonCoreIds.length) return;
     let stored: string[] = [];
     try {
-      const raw = localStorage.getItem(ORDER_KEY);
+      const raw = readUserStorage(ORDER_KEY);
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
         stored = Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
@@ -428,7 +429,7 @@ export default function Sidebar({
     ];
     if (!next.length) return;
     setOrder(next);
-    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    try { writeUserStorage(ORDER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   }, "sidebar");
 
   // 드래그한 아바타와 드롭 대상 아바타의 자리를 맞바꿈
@@ -441,7 +442,7 @@ export default function Sidebar({
       if (i < 0 || j < 0 || i === j) return prev;
       [arr[i], arr[j]] = [arr[j], arr[i]];
       try {
-        localStorage.setItem(ORDER_KEY, JSON.stringify(arr));
+        writeUserStorage(ORDER_KEY, JSON.stringify(arr));
       } catch {
         /* ignore */
       }
@@ -471,7 +472,7 @@ export default function Sidebar({
     <aside className="w-80 shrink-0 bg-panel border-r border-edge flex flex-col h-full">
       <div className="p-4">
         <div className="flex justify-center">
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="라비오크" className="h-12 w-auto object-contain" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="NK AI Company" className="h-12 w-auto object-contain" />
         </div>
         <div className="text-xs text-gray-400 mt-1 text-center">1인 기업 · AI 에이전트</div>
 

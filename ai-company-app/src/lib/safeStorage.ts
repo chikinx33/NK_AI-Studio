@@ -52,3 +52,79 @@ export function readStorageJson<T>(
     return fallback;
   }
 }
+
+// ── 계정별 저장소 ──
+// 같은 브라우저에서 여러 계정이 번갈아 쓰므로, 이 앱이 소유한 상태(프로젝트·배치·잡·UI 선호)는
+// 로그인 사용자 id 로 키를 나눈다: `u:<userId>:<key>`.
+// 부모 사이트가 소유한 기기 단위 키(nk_auth_token·nk_is_logged_in·nk_lang·nk_ai_image_provider 등)는 여기에 넣지 않는다.
+// 사용자 id 는 부모 사이트(js/auth.js)가 저장한 세션 토큰의 payload.sub(서버 userId 와 동일)에서 읽는다.
+const AUTH_TOKEN_KEY = "nk_auth_token";
+const LOGIN_USER_KEY = "nk_login_user";
+
+let cachedToken: string | null = null;
+let cachedUserId = "";
+
+function userIdFromToken(token: string): string {
+  try {
+    const encoded = String(token || "").trim().replace(/^"|"$/g, "").split(".")[0];
+    if (!encoded) return "";
+    const raw = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(raw + "=".repeat((4 - (raw.length % 4)) % 4));
+    const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0))));
+    return String(payload?.sub || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** 현재 로그인 사용자 id. 토큰이 바뀌면(다른 계정 로그인) 다시 읽는다. 알 수 없으면 "anon". */
+export function storageUserId(): string {
+  const token = readStorage(AUTH_TOKEN_KEY);
+  if (token !== cachedToken) {
+    cachedToken = token;
+    cachedUserId = userIdFromToken(token) || String(readStorage(LOGIN_USER_KEY) || "").trim();
+  }
+  return encodeURIComponent(cachedUserId || "anon");
+}
+
+export function userStorageKey(key: string): string {
+  return `u:${storageUserId()}:${key}`;
+}
+
+// 계정 구분 전의 전역 키는 누가 쓴 값인지 알 수 없으므로 옮기지 않고 지운다(캐시일 뿐이다).
+const clearedLegacyKeys = new Set<string>();
+function dropLegacyKey(key: string, kind: StorageKind) {
+  const id = `${kind}:${key}`;
+  if (clearedLegacyKeys.has(id)) return;
+  clearedLegacyKeys.add(id);
+  removeStorage(key, kind);
+}
+
+export function readUserStorage(key: string, fallback = "", kind: StorageKind = "local") {
+  dropLegacyKey(key, kind);
+  return readStorage(userStorageKey(key), fallback, kind);
+}
+
+export function writeUserStorage(key: string, value: string, kind: StorageKind = "local") {
+  dropLegacyKey(key, kind);
+  return writeStorage(userStorageKey(key), value, kind);
+}
+
+export function removeUserStorage(key: string, kind: StorageKind = "local") {
+  dropLegacyKey(key, kind);
+  return removeStorage(userStorageKey(key), kind);
+}
+
+/** 다른 탭에서 다른 계정으로 로그인해 사용자 id 가 바뀌면 콜백(로그아웃·같은 계정 토큰 갱신은 무시). */
+export function onStorageUserChange(callback: () => void) {
+  let current = userIdFromToken(readStorage(AUTH_TOKEN_KEY));
+  const handler = (event: StorageEvent) => {
+    if (event.key !== AUTH_TOKEN_KEY && event.key !== null) return;
+    const next = userIdFromToken(readStorage(AUTH_TOKEN_KEY));
+    if (!next || next === current) return;
+    current = next;
+    callback();
+  };
+  try { window.addEventListener("storage", handler); } catch { /* ignore */ }
+  return () => { try { window.removeEventListener("storage", handler); } catch { /* ignore */ } };
+}

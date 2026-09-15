@@ -46,7 +46,7 @@ test("진행 안내는 pending 으로 표시되고 결과가 붙으면 해제된
   const src = orch();
   assert.match(src, /const notice = await emit\(\{[\s\S]{0,260}pending: true,/);
   // 성공·실패 어느 경로로 끝나도 해제된다(finally)
-  assert.match(src, /\} finally \{[\s\S]{0,200}resolvePendingMessage\(sql, String\(\(notice as any\)\?\.id \|\| ""\)\)/);
+  assert.match(src, /\} finally \{[\s\S]{0,200}resolvePendingMessage\(sql, userId, String\(\(notice as any\)\?\.id \|\| ""\)\)/);
 });
 
 test("끊긴 진행 안내는 폴링·다음 턴에서 마무리 문구로 정리된다", () => {

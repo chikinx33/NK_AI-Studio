@@ -1,5 +1,5 @@
 import { dispatchUiAction } from "./uiActions";
-import { readStorage } from "./safeStorage";
+import { readStorage, readUserStorage, writeUserStorage } from "./safeStorage";
 import type { AgentVideoContribution, AgentVideoSpec } from "../remotion/spec";
 import type { SkillArtifact, SkillJob, SkillJobInput } from "./skillJobs";
 
@@ -647,15 +647,10 @@ export async function loadAgentVoiceSettings(force = false) {
       selections: sanitizeVoiceSelections(settings?.agentVoice?.selections || {}),
       speeds: sanitizeVoiceSpeeds(settings?.agentVoice?.speeds || {}),
     };
-    const legacySettings = readLegacyAgentVoiceSettings();
-    if (!hasVoiceSettings(serverSettings) && hasVoiceSettings(legacySettings)) {
-      applyAgentVoiceSettings(legacySettings);
-      await saveAgentVoiceSettings();
-      clearLegacyAgentVoiceSettings();
-    } else {
-      applyAgentVoiceSettings(serverSettings);
-      if (hasVoiceSettings(legacySettings)) clearLegacyAgentVoiceSettings();
-    }
+    // 예전 전역 localStorage 음성 설정은 어느 계정 것인지 알 수 없어 서버로 옮기지 않고 지운다
+    // (옮기면 같은 브라우저의 다른 계정 설정에 섞인다).
+    applyAgentVoiceSettings(serverSettings);
+    if (hasVoiceSettings(readLegacyAgentVoiceSettings())) clearLegacyAgentVoiceSettings();
     agentVoiceSettingsLoaded = true;
   })().finally(() => {
     agentVoiceSettingsLoading = null;
@@ -723,12 +718,12 @@ export function getAgentVoicePreset(agentId?: string, voiceKey?: string): AgentV
 }
 
 // 무료 브라우저 TTS(speechSynthesis) 직원별 음성 선택.
-// 브라우저 음성은 기기마다 voiceURI가 달라서 서버가 아닌 localStorage(기기 단위)에 저장한다.
+// 브라우저 음성은 기기마다 voiceURI가 달라서 서버가 아닌 localStorage(기기·계정 단위)에 저장한다.
 const BROWSER_VOICE_LS_KEY = "agentBrowserVoices";
 
 function readBrowserVoiceMap(): Record<string, string> {
   try {
-    const raw = JSON.parse(localStorage.getItem(BROWSER_VOICE_LS_KEY) || "{}");
+    const raw = JSON.parse(readUserStorage(BROWSER_VOICE_LS_KEY) || "{}");
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       const out: Record<string, string> = {};
       for (const [k, v] of Object.entries(raw)) if (typeof v === "string") out[k] = v;
@@ -746,7 +741,7 @@ export function setAgentBrowserVoiceURI(agentId: string, voiceURI: string) {
   const map = readBrowserVoiceMap();
   if (voiceURI) map[agentId] = voiceURI;
   else delete map[agentId];
-  try { localStorage.setItem(BROWSER_VOICE_LS_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+  writeUserStorage(BROWSER_VOICE_LS_KEY, JSON.stringify(map));
 }
 
 // 무료 브라우저 TTS용 파라미터.

@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AgentVideoWorkspaceProvider } from "./contexts/AgentVideoWorkspaceContext";
-import { readStorage, removeStorage, writeStorage } from "./lib/safeStorage";
+import { onStorageUserChange, readStorage, readUserStorage, removeStorage, writeStorage } from "./lib/safeStorage";
 import "./index.css";
 
 // ── NK 통합: 모든 /api 호출에 도메인(API_BASE)과 인증(Bearer) 자동 주입 ──
@@ -48,6 +48,11 @@ import "./index.css";
 
   // 진입 시 토큰이 아예 없으면(로그아웃 상태) 즉시 로그인 화면으로 — 검은 화면 방지.
   if (!nkToken()) goLogin();
+
+  // 다른 탭에서 다른 계정으로 로그인하면, 이전 계정의 화면 상태(계정별 저장소·메모리)가 남지 않게 새로 연다.
+  onStorageUserChange(() => {
+    try { location.reload(); } catch { /* ignore */ }
+  });
 })();
 
 // AI 시네마 프리비즈(?view=previz): 3D 블로킹·카메라 화면만 연다. AI 기업 앱(에이전트·채팅 폴링)은 띄우지 않고,
@@ -61,7 +66,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ErrorBoundary onReset={() => window.location.reload()}>
         <React.Suspense fallback={null}>
           <PrevizStudio
-            projectId={String(LAUNCH.get("projectId") || LAUNCH.get("pid") || readStorage("canvasProjectId") || "").trim()}
+            projectId={String(LAUNCH.get("projectId") || LAUNCH.get("pid") || readUserStorage("canvasProjectId") || "").trim()}
             focusSceneId={String(LAUNCH.get("sceneId") || "").trim()}
             embedded={LAUNCH.get("embed") === "1"}
           />
