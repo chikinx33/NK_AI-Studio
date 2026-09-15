@@ -51,3 +51,10 @@ test("user write requests mark activity and hidden studio stages pause", () => {
   const nav = read("prototype/js/navigation.js");
   assert.match(nav, /f\.contentWindow\.postMessage\(\{ type: 'stage-hidden' \}, '\*'\)/);
 });
+
+test("studio credit gauge does not poll the credit DB on a timer", () => {
+  const common = read("prototype/js/ui/common.js");
+  assert.doesNotMatch(common, /setInterval\(common\.refreshCreditGauge, 30000\)/);
+  assert.match(common, /window\.addEventListener\('nk:credits-changed'/);
+  assert.match(common, /if \(document\.visibilityState === 'visible'\) common\.refreshCreditGauge\(\);/);
+});

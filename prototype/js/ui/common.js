@@ -2027,6 +2027,11 @@
             else if ((document.getElementById('subscription-credit-host') || document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills')) && gauge.classList.contains('is-floating')) placeCreditGauge();
         });
         creditState.observer.observe(document.body, { childList: true, subtree: true });
-        creditState.timer = setInterval(common.refreshCreditGauge, 30000);
+        // 30초마다 조회하지 않는다 — 열어 둔 화면마다 크레딧 DB 를 계속 불러 전송 한도를 소모했다.
+        // 크레딧이 바뀌는 요청(X-NK-Credit-Operation 응답)은 nk:credits-changed 로 알리고,
+        // 창 포커스·탭 복귀 때 한 번 갱신한다.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') common.refreshCreditGauge();
+        });
     };
 })();
