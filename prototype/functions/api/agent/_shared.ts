@@ -119,11 +119,56 @@ export interface CompanyWorkItem {
 }
 
 let agentSchemaReady = false;
+let agentSchemaPromise: Promise<void> | null = null;
 
-/** agent_jobs 스키마 보장 (Neon). knowledge 스키마와 같은 DB, 첫 호출 시 1회 생성. */
+/**
+ * agent_jobs 스키마 보장 (Neon). knowledge 스키마와 같은 DB.
+ *
+ * 예전엔 새 isolate 마다 DDL 33개를 하나씩 보냈고, 준비 완료 표시가 끝에야 켜져
+ * 동시에 들어온 요청(화면이 폴링하는 jobs·지식·스킬 등)이 저마다 같은 DDL 을 또 보냈다.
+ * 배포 직후·유휴 뒤 첫 로딩이 수 초씩 걸리던 원인이다.
+ * 이제 ① 한 isolate 안에서는 진행 중인 준비를 함께 기다리고 ② DDL 코드 지문이 DB 에 기록된
+ * 것과 같으면 DDL 없이 쿼리 1번으로 끝낸다(스키마 코드가 바뀐 배포에서만 DDL 이 한 번 돈다).
+ */
 export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   if (agentSchemaReady) return;
-  const schemaStartedAt = Date.now();
+  if (!agentSchemaPromise) {
+    agentSchemaPromise = prepareAgentSchema(sql).catch((error) => {
+      agentSchemaPromise = null;
+      throw error;
+    });
+  }
+  return agentSchemaPromise;
+}
+
+async function agentSchemaFingerprint(): Promise<string> {
+  const source = String(runAgentSchemaDdl) + String(ensureCompanySkillJobSchema);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function prepareAgentSchema(sql: SqlFn): Promise<void> {
+  const startedAt = Date.now();
+  const fingerprint = await agentSchemaFingerprint();
+  try {
+    const rows = await sql("SELECT fingerprint FROM nk_schema_marks WHERE name = $1", ["agent"]);
+    if (String((rows as any[])[0]?.fingerprint || "") === fingerprint) {
+      agentSchemaReady = true;
+      return;
+    }
+  } catch (_) { /* 표시 테이블이 아직 없으면 DDL 을 돌린다 */ }
+  await runAgentSchemaDdl(sql);
+  await sql("CREATE TABLE IF NOT EXISTS nk_schema_marks (name text PRIMARY KEY, fingerprint text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())");
+  await sql(
+    "INSERT INTO nk_schema_marks (name, fingerprint) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, updated_at = now()",
+    ["agent", fingerprint],
+  );
+  agentSchemaReady = true;
+  // [perf] 스키마 코드가 바뀐 뒤 첫 요청에서만 도는 DDL 묶음.
+  try { console.log(`[perf] ensureAgentSchema ran DDL in ${Date.now() - startedAt}ms`); } catch (_) { /* noop */ }
+}
+
+async function runAgentSchemaDdl(sql: SqlFn): Promise<void> {
   await sql("CREATE EXTENSION IF NOT EXISTS pgcrypto");
   await sql(`
     CREATE TABLE IF NOT EXISTS agent_jobs (
@@ -339,9 +384,6 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   await ensureCompanySkillJobSchema(sql);
-  agentSchemaReady = true;
-  // [perf] 새 isolate 마다 한 번 도는 DDL 묶음. 지식·그래프 첫 로딩 지연 진단용.
-  try { console.log(`[perf] ensureAgentSchema ran DDL in ${Date.now() - schemaStartedAt}ms`); } catch (_) { /* noop */ }
 }
 
 // ── 싱크 구글 연동 토큰 (전부 user_id 격리) ──────────────────────────────────

@@ -34,14 +34,33 @@ import "./index.css";
 
   if (typeof window.fetch !== "function") return;
   const orig = window.fetch.bind(window);
+  // 여러 패널(검수·승인·실시간 상태·캔버스·지식·그래프)이 같은 목록을 각자 주기적으로 불러,
+  // 같은 GET 이 한 순간에 4개씩 나갔다. 진행 중인 같은 요청은 한 번만 보내고 응답을 복제해 나눈다.
+  // (진행 중일 때만 공유 — 끝난 응답을 캐시하지 않으므로 오래된 목록을 보여 주지 않는다.)
+  const SHARED_GET = /^\/api\/agent\/(jobs|company-knowledge|knowledge-graph|skills|projects)(\?|$)/;
+  const inflight = new Map<string, Promise<Response>>();
+  const send = async (url: string, init: RequestInit) => {
+    const headers = new Headers(init.headers || undefined);
+    if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + nkToken());
+    const res = await orig(API_BASE + url, { ...init, headers });
+    if (res.status === 401) goLogin(); // 인증 만료 → 로그인 화면
+    return res;
+  };
   window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
     if (typeof url === "string" && url.startsWith("/api/")) {
-      const headers = new Headers(init.headers || undefined);
-      if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + nkToken());
-      const res = await orig(API_BASE + url, { ...init, headers });
-      if (res.status === 401) goLogin(); // 인증 만료 → 로그인 화면
-      return res;
+      const method = String(init.method || "GET").toUpperCase();
+      if (typeof input === "string" && method === "GET" && !init.signal && SHARED_GET.test(url)) {
+        let pending = inflight.get(url);
+        if (!pending) {
+          pending = send(url, init);
+          inflight.set(url, pending);
+          const clear = () => { if (inflight.get(url) === pending) inflight.delete(url); };
+          pending.then(clear, clear);
+        }
+        return (await pending).clone();
+      }
+      return send(url, init);
     }
     return orig(input as any, init);
   };

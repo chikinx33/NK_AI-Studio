@@ -265,7 +265,29 @@ export async function deleteGcsPrefix(env, prefix) {
 
 // ─── OAuth (서비스 계정 JWT → access token) ──────────────────────────
 
+// 서비스 계정 토큰은 1시간 유효하다. 요청마다 RS256 서명 + 토큰 교환(수백 ms)을 하지 않도록
+// isolate 안에서 재사용한다(만료 5분 전까지). 동시에 들어온 요청은 진행 중인 발급을 함께 기다린다.
+const accessTokenCache = new Map();
+
 export async function getGoogleAccessToken(opts) {
+  const key = `${opts.clientEmail}|${opts.scope || GCS_SCOPE}`;
+  const cached = accessTokenCache.get(key);
+  if (cached && cached.token && cached.expiresAtMs - Date.now() > 5 * 60 * 1000) return cached.token;
+  if (cached && cached.pending) return cached.pending;
+  const pending = issueGoogleAccessToken(opts)
+    .then((token) => {
+      accessTokenCache.set(key, { token, expiresAtMs: Date.now() + 55 * 60 * 1000 });
+      return token;
+    })
+    .catch((error) => {
+      accessTokenCache.delete(key);
+      throw error;
+    });
+  accessTokenCache.set(key, { token: "", expiresAtMs: 0, pending });
+  return pending;
+}
+
+async function issueGoogleAccessToken(opts) {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 3600;
   const aud = "https://oauth2.googleapis.com/token";
