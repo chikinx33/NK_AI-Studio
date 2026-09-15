@@ -6,7 +6,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import {
   send, corsHeaders, getSql, ensureAgentSchema,
-  listSkills, getSkill, deleteSkill, setPinSkill, restoreSkill, listArchivedSkills,
+  listSkills, getSkill, deleteSkill, setPinSkill, restoreSkill, listArchivedSkills, pollCached,
 } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -27,11 +27,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const skill = await getSkill(sql, auth.userId, name);
     return send({ skill }, 200, origin);
   }
-  const [active, archived] = await Promise.all([
-    listSkills(sql, auth.userId),
-    listArchivedSkills(sql, auth.userId),
-  ]);
-  return send({ active, archived }, 200, origin);
+  const body = await pollCached(sql, "skills", `skills:${auth.userId}`, [auth.userId], async () => {
+    const [active, archived] = await Promise.all([
+      listSkills(sql, auth.userId),
+      listArchivedSkills(sql, auth.userId),
+    ]);
+    return { active, archived };
+  });
+  return send(body, 200, origin);
 };
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {

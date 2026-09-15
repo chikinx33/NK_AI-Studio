@@ -1210,6 +1210,48 @@ export async function getJob(sql: SqlFn, id: string, userId: string): Promise<Ag
   return (rows[0] as AgentJob) || null;
 }
 
+// ── 폴링 목록 DB 전송량 절감 ────────────────────────────────────────────────
+// AI 기업 화면은 작업·지식·그래프·스킬·프로젝트 목록을 2~8초마다 다시 부른다. 매번 전체 행을 받으면
+// Neon 데이터 전송 한도를 넘긴다(2026-09-16: 한도 초과로 DB 를 쓰는 API 전부 500).
+// DB 안에서 계산한 짧은 지문(md5)만 받아 지난번과 같으면 이 isolate 가 기억한 결과를 돌려준다.
+// 쓰기 경로는 그대로 두므로 바뀌면 지문이 달라져 바로 새로 읽는다. 기억은 최대 60초.
+const POLL_MARKER_SQL: Record<string, string> = {
+  jobs: `SELECT md5(COALESCE(string_agg(id::text || status || review_status || updated_at::text, ',' ORDER BY created_at DESC), '')) AS m
+           FROM (SELECT id, status, review_status, updated_at, created_at FROM agent_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2) t`,
+  knowledge: `SELECT md5(COALESCE(string_agg(id::text || type || source || md5(text), ',' ORDER BY id), '')) AS m
+                FROM company_knowledge WHERE user_id = $1`,
+  skills: `SELECT md5(COALESCE(string_agg(id::text || name || category || pinned::text || archived::text || use_count::text || updated_at::text || md5(description), ',' ORDER BY id), '')) AS m
+             FROM company_skills WHERE user_id = $1`,
+  projects: `SELECT md5(COALESCE(string_agg(id || updated_at::text || md5(data::text), ',' ORDER BY id), '')) AS m
+               FROM company_projects WHERE user_id = $1`,
+};
+const POLL_CACHE_MAX_AGE_MS = 60_000;
+const pollCache = new Map<string, { marker: string; value: any; at: number }>();
+
+export async function pollCached<T>(
+  sql: SqlFn,
+  marker: keyof typeof POLL_MARKER_SQL | string,
+  cacheKey: string,
+  params: any[],
+  load: () => Promise<T>,
+): Promise<T> {
+  const markerSql = POLL_MARKER_SQL[marker];
+  if (!markerSql) return load();
+  let current = "";
+  try {
+    const rows = await sql(markerSql, params);
+    current = String((rows as any[])[0]?.m || "");
+  } catch (_) {
+    return load();
+  }
+  const hit = pollCache.get(cacheKey);
+  if (hit && current && hit.marker === current && Date.now() - hit.at < POLL_CACHE_MAX_AGE_MS) return hit.value as T;
+  const value = await load();
+  if (pollCache.size > 500) pollCache.clear();
+  pollCache.set(cacheKey, { marker: current, value, at: Date.now() });
+  return value;
+}
+
 export async function listJobs(sql: SqlFn, userId: string, limit = 30): Promise<AgentJob[]> {
   const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
   const rows = await sql(

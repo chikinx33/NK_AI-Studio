@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/projects.ts
 // GET /api/agent/projects — 프로젝트 보드 목록. ★ user_id 격리.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, listProjects } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, listProjects, pollCached } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -16,5 +16,5 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const sql = getSql(env);
   if (!sql) return send([], 200, origin);
   await ensureAgentSchema(sql);
-  return send(await listProjects(sql, auth.userId), 200, origin);
+  return send(await pollCached(sql, "projects", `projects:${auth.userId}`, [auth.userId], () => listProjects(sql, auth.userId)), 200, origin);
 };

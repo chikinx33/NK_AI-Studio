@@ -39,6 +39,7 @@ import "./index.css";
   // (진행 중일 때만 공유 — 끝난 응답을 캐시하지 않으므로 오래된 목록을 보여 주지 않는다.)
   const SHARED_GET = /^\/api\/agent\/(jobs|company-knowledge|knowledge-graph|skills|projects)(\?|$)/;
   const inflight = new Map<string, Promise<Response>>();
+  const lastOk = new Map<string, Response>();
   const send = async (url: string, init: RequestInit) => {
     const headers = new Headers(init.headers || undefined);
     if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + nkToken());
@@ -51,9 +52,16 @@ import "./index.css";
     if (typeof url === "string" && url.startsWith("/api/")) {
       const method = String(init.method || "GET").toUpperCase();
       if (typeof input === "string" && method === "GET" && !init.signal && SHARED_GET.test(url)) {
+        // 탭을 보고 있지 않으면 폴링이 DB 를 부르지 않게 마지막 응답을 돌려준다(보이면 바로 다시 불러온다).
+        // 백그라운드 탭 하나가 하루 종일 목록을 받아 DB 데이터 전송 한도를 소진했다.
+        const last = lastOk.get(url);
+        if (last && document.visibilityState === "hidden") return last.clone();
         let pending = inflight.get(url);
         if (!pending) {
-          pending = send(url, init);
+          pending = send(url, init).then((res) => {
+            if (res.ok) lastOk.set(url, res.clone());
+            return res;
+          });
           inflight.set(url, pending);
           const clear = () => { if (inflight.get(url) === pending) inflight.delete(url); };
           pending.then(clear, clear);

@@ -25,3 +25,18 @@ test("identical in-flight polling GETs share one request in the AI company app",
   assert.match(src, /const SHARED_GET = \/\^\\\/api\\\/agent\\\/\(jobs\|company-knowledge\|knowledge-graph\|skills\|projects\)/);
   assert.match(src, /return \(await pending\)\.clone\(\);/);
 });
+
+test("polled list endpoints return a remembered result when the DB fingerprint is unchanged", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /export async function pollCached<T>\(/);
+  assert.match(shared, /if \(hit && current && hit\.marker === current && Date\.now\(\) - hit\.at < POLL_CACHE_MAX_AGE_MS\) return hit\.value as T;/);
+  for (const [rel, kind] of [["jobs.ts", "jobs"], ["company-knowledge.ts", "knowledge"], ["knowledge-graph.ts", "knowledge"], ["projects.ts", "projects"], ["skills.ts", "skills"]]) {
+    const src = read(`prototype/functions/api/agent/${rel}`);
+    assert.ok(src.includes(`pollCached(sql, "${kind}"`), rel);
+  }
+});
+
+test("hidden AI company tabs do not poll the DB", () => {
+  const src = read("ai-company-app/src/main.tsx");
+  assert.match(src, /if \(last && document\.visibilityState === "hidden"\) return last\.clone\(\);/);
+});

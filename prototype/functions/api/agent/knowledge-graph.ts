@@ -2,7 +2,7 @@
 // GET /api/agent/knowledge-graph — 회사 지식을 그래프(옵시디언식)로. ★ user_id 격리.
 // 엣지 = 공유 키워드 기반(관련 항목 연결). 임베딩 없이 무료·즉시(매 요청 폴링 대응).
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, listCompanyKnowledge, perfTimer } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, listCompanyKnowledge, perfTimer, pollCached } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -31,7 +31,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   if (!sql) return send({ nodes: [], edges: [] }, 200, origin);
   await ensureAgentSchema(sql);
   perf.mark("schema");
-  const items = await listCompanyKnowledge(sql, auth.userId);
+  const items = await pollCached(sql, "knowledge", `knowledge:${auth.userId}`, [auth.userId], () => listCompanyKnowledge(sql, auth.userId));
   perf.mark("db");
 
   // 각 항목의 키워드 집합 → 공유 키워드 2개 이상이면 관련(엣지). 옵시디언식 연결망.
