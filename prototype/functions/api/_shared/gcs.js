@@ -55,7 +55,9 @@ export function resolveGcsEnv(env) {
  */
 export async function readGcsJson(env, objectName) {
   const ctx = resolveGcsEnv(env);
+  const perfStartedAt = Date.now();
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
+  const perfTokenMs = Date.now() - perfStartedAt;
   const fetchOnce = async (useUserProject) => {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}?alt=media${useUserProject && ctx.userProject ? `&userProject=${encodeURIComponent(ctx.userProject)}` : ""}`;
     const res = await fetch(url, {
@@ -71,6 +73,9 @@ export async function readGcsJson(env, objectName) {
   if (!res.ok && ctx.userProject && (res.status === 400 || res.status === 403)) {
     ({ res, text } = await fetchOnce(false));
   }
+  // [perf] 요청마다 OAuth 토큰을 새로 받는다 — 느린 요청의 원인 진단용.
+  const perfTotalMs = Date.now() - perfStartedAt;
+  if (perfTotalMs >= 500) { try { console.log(`[perf] gcs read ${String(objectName).split("/").slice(-2).join("/")} token=${perfTokenMs}ms total=${perfTotalMs}ms`); } catch (_) { /* noop */ } }
   if (res.status === 404) return { found: false, data: null };
   if (!res.ok) throw new Error(text || "gcs_read_failed");
   try {

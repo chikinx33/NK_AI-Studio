@@ -2,7 +2,7 @@
 // GET /api/agent/knowledge-graph — 회사 지식을 그래프(옵시디언식)로. ★ user_id 격리.
 // 엣지 = 공유 키워드 기반(관련 항목 연결). 임베딩 없이 무료·즉시(매 요청 폴링 대응).
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, listCompanyKnowledge } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, listCompanyKnowledge, perfTimer } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -23,12 +23,16 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
+  const perf = perfTimer("GET knowledge-graph");
   const auth = await authorizeRequest(request, env);
+  perf.mark("auth");
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
   const sql = getSql(env);
   if (!sql) return send({ nodes: [], edges: [] }, 200, origin);
   await ensureAgentSchema(sql);
+  perf.mark("schema");
   const items = await listCompanyKnowledge(sql, auth.userId);
+  perf.mark("db");
 
   // 각 항목의 키워드 집합 → 공유 키워드 2개 이상이면 관련(엣지). 옵시디언식 연결망.
   const toks = items.map((k) => new Set(tokenize(k.text)));
@@ -46,5 +50,6 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
   }
   const nodes = items.map((k, i) => ({ id: i, text: k.text, origin: k.source, type: k.type, degree: degree[i] }));
-  return send({ nodes, edges }, 200, origin);
+  perf.mark("graph");
+  return perf.send({ nodes, edges }, 200, origin);
 };

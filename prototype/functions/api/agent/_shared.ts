@@ -64,6 +64,25 @@ export function send(data: any, status = 200, origin: string | null = null) {
   return new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 }
 
+/** [perf] 구간별 소요 시간. Server-Timing 헤더(브라우저 개발자도구 Timing 탭)와 느린 요청 로그로 남긴다. */
+export function perfTimer(label: string) {
+  const startedAt = Date.now();
+  let last = startedAt;
+  const marks: string[] = [];
+  return {
+    mark(name: string) { const now = Date.now(); marks.push(`${name};dur=${now - last}`); last = now; },
+    send(data: any, status = 200, origin: string | null = null) {
+      const total = Date.now() - startedAt;
+      const timing = [...marks, `total;dur=${total}`].join(", ");
+      if (total >= 800) { try { console.log(`[perf] ${label} ${timing}`); } catch (_) { /* noop */ } }
+      const headers = new Headers(corsHeaders(origin));
+      headers.set("Server-Timing", timing);
+      headers.set("Access-Control-Expose-Headers", "Server-Timing");
+      return new Response(JSON.stringify(data), { status, headers });
+    },
+  };
+}
+
 // ── 잡 상태/모델 ─────────────────────────────────────────────────────────────
 export type JobStatus = "queued" | "working" | "review_pending" | "approved" | "revise" | "error" | "cancelled";
 export type ReviewStatus = "pending" | "approved" | "revise";
@@ -104,6 +123,7 @@ let agentSchemaReady = false;
 /** agent_jobs 스키마 보장 (Neon). knowledge 스키마와 같은 DB, 첫 호출 시 1회 생성. */
 export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   if (agentSchemaReady) return;
+  const schemaStartedAt = Date.now();
   await sql("CREATE EXTENSION IF NOT EXISTS pgcrypto");
   await sql(`
     CREATE TABLE IF NOT EXISTS agent_jobs (
@@ -320,6 +340,8 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   `);
   await ensureCompanySkillJobSchema(sql);
   agentSchemaReady = true;
+  // [perf] 새 isolate 마다 한 번 도는 DDL 묶음. 지식·그래프 첫 로딩 지연 진단용.
+  try { console.log(`[perf] ensureAgentSchema ran DDL in ${Date.now() - schemaStartedAt}ms`); } catch (_) { /* noop */ }
 }
 
 // ── 싱크 구글 연동 토큰 (전부 user_id 격리) ──────────────────────────────────

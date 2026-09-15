@@ -3,7 +3,7 @@
 // GET → KnowledgeItem[] / POST {text,type} / PUT {oldText,newText} / DELETE {text}
 import { authorizeRequest } from "../_shared/auth.js";
 import {
-  send, corsHeaders, getSql, ensureAgentSchema,
+  send, corsHeaders, getSql, ensureAgentSchema, perfTimer,
   listCompanyKnowledge, addCompanyKnowledge, updateCompanyKnowledge, deleteCompanyKnowledge,
   dedupeCompanyKnowledge,
 } from "./_shared";
@@ -16,12 +16,17 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
+  const perf = perfTimer("GET company-knowledge");
   const auth = await authorizeRequest(request, env);
+  perf.mark("auth");
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
   const sql = getSql(env);
   if (!sql) return send([], 200, origin);
   await ensureAgentSchema(sql);
-  return send(await listCompanyKnowledge(sql, auth.userId), 200, origin);
+  perf.mark("schema");
+  const items = await listCompanyKnowledge(sql, auth.userId);
+  perf.mark("db");
+  return perf.send(items, 200, origin);
 };
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
