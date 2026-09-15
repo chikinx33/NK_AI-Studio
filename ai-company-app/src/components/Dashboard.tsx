@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
+import { useLiveRefresh } from "../lib/liveSync";
 
 const SIDEBAR_HIDDEN_KEY = "nk_project_sidebar_hidden";
 
@@ -81,11 +82,7 @@ function ConversationList({
   ];
 
   const load = () => getConversations().then(setConvs).catch(() => {});
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 6000);
-    return () => clearInterval(t);
-  }, []);
+  useLiveRefresh(load, 6000);
 
   useUiAction((action) => {
     if (action.action !== "dashboard.calendar") return;
@@ -191,11 +188,7 @@ export default function Dashboard({
   };
 
   const load = () => getProjects().then(setProjects).catch(() => setProjects([]));
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 6000);
-    return () => clearInterval(t);
-  }, []);
+  useLiveRefresh(load, 6000);
 
   useEffect(() => {
     if (!focusProjectId || projects === null || handledProjectRef.current === focusProjectId) return;

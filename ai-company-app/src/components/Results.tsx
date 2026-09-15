@@ -19,6 +19,7 @@ import {
   formState,
 } from "./FormDocumentView";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { useLiveRefresh } from "../lib/liveSync";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
 function ListTodoIcon({ className }: { className?: string }) {
@@ -471,11 +472,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
       /* ignore */
     }
   }
-  useEffect(() => {
-    refresh();
-    const t = setInterval(() => refresh(), 4000);
-    return () => clearInterval(t);
-  }, []);
+  useLiveRefresh(refresh, 4000);
 
   useEffect(() => {
     if (refreshKey) refresh();

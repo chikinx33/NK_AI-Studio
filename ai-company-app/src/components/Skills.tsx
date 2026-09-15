@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSkills, getSkillDetail, skillAction, type AgentSkill, type AgentSkillDetail } from "../lib/api";
 import Markdown from "./Markdown";
+import { useLiveRefresh } from "../lib/liveSync";
 
 function WrenchIcon({ className }: { className?: string }) {
   return (
@@ -78,7 +79,7 @@ export default function Skills() {
   function refresh() {
     getSkills().then((d) => { setActive(d.active ?? []); setArchived(d.archived ?? []); }).catch(() => {});
   }
-  useEffect(() => { refresh(); const t = setInterval(refresh, 5000); return () => clearInterval(t); }, []);
+  useLiveRefresh(refresh, 5000);
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-3 mb-3">

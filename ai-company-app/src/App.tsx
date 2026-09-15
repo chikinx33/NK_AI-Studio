@@ -18,7 +18,6 @@ import {
   getStatus,
   getAgents,
   getConversationMessages,
-  ping,
   streamChat,
   getEvents,
   getApprovals,
@@ -58,6 +57,7 @@ export const EMBED_CANVAS = EMBED_PARAMS.get("view") === "canvas";
 const EMBED_PROJECT_ID = String(EMBED_PARAMS.get("projectId") || EMBED_PARAMS.get("pid") || "").trim();
 import { SpeechInputButton, useSpeechInput } from "./components/SpeechInputControl";
 import { readUserStorage, writeUserStorage } from "./lib/safeStorage";
+import { markActive, useLiveRefresh } from "./lib/liveSync";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
 type VoiceMode = "browser" | "server" | "cloud";
@@ -882,13 +882,6 @@ export default function App() {
     }
   }, [turns, voiceEnabled, voiceMode]);
 
-  // 하트비트: 브라우저가 열려 있는 동안 서버에 생존 신호 전송
-  // (백그라운드 런처로 켰을 때, 브라우저를 닫으면 서버가 스스로 종료됨)
-  useEffect(() => {
-    ping();
-    const id = setInterval(ping, 10_000);
-    return () => clearInterval(id);
-  }, []);
 
   // 사이드바에서 아바타 클릭 → 입력창의 @이름 토글 (한 번 호출, 다시 누르면 해제)
   function mention(name: string) {
@@ -1061,22 +1054,20 @@ export default function App() {
     setWorkingIds(new Set()); // 누락된 busy=false 대비 안전 정리
     setBusy(false);
     setResultsRefreshKey((k) => k + 1); // 스트림 종료 시에도 결과 패널 갱신
+    markActive(); // 대화 뒤 이어지는 도구 작업·승인 요청을 따라가도록 활동 연장
     refreshStatus();
   }
 
   // 서버 백그라운드 작업 폴링: 보고 메시지를 대화에 추가 + 작업중 직원(아바타 시계) 갱신
-  useEffect(() => {
-    let stopped = false;
-    getEvents(-1).then((r) => { lastSeqRef.current = r.seq; }).catch(() => {});
-    const t = setInterval(async () => {
+  // 활동 중(사용자 요청 직후·진행 중 작업 있음)일 때만 2초 주기. 진행 중 작업이 보이면 활동을 연장한다.
+  useLiveRefresh(async () => {
+    {
       try {
         let r = await getEvents(lastSeqRef.current);
-        if (stopped) return;
         // 서버 재시작 시 seq가 리셋됨 → 커서가 앞서 있으면 outbox 처음부터(since=0) 다시 받아 누락 방지
         if (r.seq < lastSeqRef.current) {
           lastSeqRef.current = 0;
           r = await getEvents(0);
-          if (stopped) return;
         }
         if (r.messages?.length) {
           // 백그라운드 보고는 오늘 대화에 적재됨 → 오늘 대화를 보고 있을 때만 화면에 추가.
@@ -1095,6 +1086,7 @@ export default function App() {
           }
           lastSeqRef.current = r.messages[r.messages.length - 1].seq;
         }
+        if ((r.working ?? []).length) markActive();
         setServerWorking((prev) => {
           const next = new Set(r.working ?? []);
           if (prev.size === next.size && [...next].every((x) => prev.has(x))) return prev;
@@ -1103,17 +1095,14 @@ export default function App() {
       } catch {
         /* 서버 미응답 — 무시 */
       }
-    }, 2000);
-    return () => { stopped = true; clearInterval(t); };
-  }, []);
+    }
+  }, 2000);
 
-  // 승인 대기 폴링: 직원 id 집합(아바타 하이라이트) 갱신 + 새 승인 요청 시 '승인 대기' 탭 자동 열기
-  useEffect(() => {
-    let stopped = false;
-    const poll = async () => {
+  // 승인 대기 확인: 직원 id 집합(아바타 하이라이트) 갱신. 활동 중일 때만 주기 확인.
+  useLiveRefresh(async () => {
+    {
       try {
         const data = await getApprovals();
-        if (stopped) return;
         const pending: { id?: string; agentId?: string }[] = data.pending ?? [];
 
         // 승인 대기 중인 직원 id 집합 → 사이드바 아바타 하이라이트
@@ -1128,54 +1117,70 @@ export default function App() {
       } catch {
         /* 서버 미응답 — 무시 */
       }
-    };
-    poll();
-    const t = setInterval(poll, 4000);
-    return () => { stopped = true; clearInterval(t); };
-  }, []);
+    }
+  }, 4000);
 
-  // 알람(리마인더) 폴링: 발화 시각이 된 알람을 받아 채팅·브라우저 알림·소리로 알린다.
-  // 앱이 열려 있는 동안 동작(브라우저 닫으면 울리지 않음 — 서버 푸시는 별도 작업).
+  // 알람(리마인더)·엣지 일일 브리핑: 정해진 시각에 채팅·브라우저 알림·소리로 알린다.
+  // 서버(Cloudflare Pages)에는 예약 실행이 없어 앱이 열려 있는 동안 브라우저가 시각을 챙긴다.
+  // 몇 초마다 묻지 않고 ① 예약된 알람의 발화 시각에 맞춰 타이머를 걸고 ② 매시 정각 직후 한 번 확인한다
+  // (다른 기기에서 새로 잡은 알람·브리핑 시각 대비). 활동 중·화면 복귀 때도 목록을 갱신한다.
+  const reminderPollRef = useRef<() => Promise<void>>(async () => {});
+  reminderPollRef.current = async () => {
+    const { due, upcoming } = await getReminders().catch(() => ({ due: [], upcoming: [] }));
+    setReminders(upcoming); // 예약 패널 갱신
+    scheduleNextReminder(upcoming);
+
+    // 엣지 일일 수익 브리핑 — 그날 브리핑 시각 이후 첫 확인 때 1회. 시각·중복 판단은 전부 서버(KST 기준)가 하고,
+    // 서버가 대화에도 저장하므로 새로고침해도 중복되지 않는다. Polar 미등록이면 아무것도 안 온다.
+    const brief = await getEdgeBrief(activeConvRef.current).catch(() => null);
+    if (brief) {
+      commit([
+        ...turnsRef.current,
+        { role: "agent", agentId: brief.agentId, name: brief.name, emoji: brief.emoji, text: brief.text, ts: Date.now() },
+      ]);
+    }
+
+    // 최근(3분 이내) 도래분만 울린다. 앱이 닫혀 한참 지난 건은 서버에서 이미 삭제됐고 늦게 울리지 않음.
+    const fresh = due.filter((r) => {
+      const ms = Date.parse(r.fire_at);
+      return Number.isFinite(ms) && Date.now() - ms <= 180000;
+    });
+    if (!fresh.length) return;
+    for (const r of fresh) {
+      const text = r.text || "알람";
+      commit([
+        ...turnsRef.current,
+        { role: "agent", agentId: "sync", name: "싱크", emoji: "⏰", text: `⏰ 알람이에요! "${text}"`, ts: Date.now() },
+      ]);
+      notifyAlarm(text);
+    }
+    playAlarmBeep();
+  };
+  const nextReminderTimerRef = useRef<number>(0);
+  function scheduleNextReminder(upcoming: { fire_at: string }[]) {
+    if (nextReminderTimerRef.current) window.clearTimeout(nextReminderTimerRef.current);
+    nextReminderTimerRef.current = 0;
+    const next = upcoming.map((r) => Date.parse(r.fire_at)).filter((ms) => Number.isFinite(ms)).sort((a, b) => a - b)[0];
+    if (!next) return;
+    // 발화 시각 1초 뒤에 확인(서버는 fire_at <= now 인 것을 돌려준다). setTimeout 최대치 이내로 자른다.
+    const wait = Math.min(Math.max(next - Date.now() + 1000, 1000), 2_000_000_000);
+    nextReminderTimerRef.current = window.setTimeout(() => { void reminderPollRef.current(); }, wait);
+  }
   useEffect(() => {
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
-    let stopped = false;
-    const poll = async () => {
-      const { due, upcoming } = await getReminders().catch(() => ({ due: [], upcoming: [] }));
-      if (stopped) return;
-      setReminders(upcoming); // 예약 패널 갱신
-
-      // 엣지 일일 수익 브리핑 — 그날 첫 접속 시 1회. 시각·중복 판단은 전부 서버(KST 기준)가 하고,
-      // 서버가 대화에도 저장하므로 새로고침해도 중복되지 않는다. Polar 미등록이면 아무것도 안 온다.
-      const brief = await getEdgeBrief(activeConvRef.current).catch(() => null);
-      if (stopped) return;
-      if (brief) {
-        commit([
-          ...turnsRef.current,
-          { role: "agent", agentId: brief.agentId, name: brief.name, emoji: brief.emoji, text: brief.text, ts: Date.now() },
-        ]);
-      }
-
-      // 최근(3분 이내) 도래분만 울린다. 앱이 닫혀 한참 지난 건은 서버에서 이미 삭제됐고 늦게 울리지 않음.
-      const fresh = due.filter((r) => {
-        const ms = Date.parse(r.fire_at);
-        return Number.isFinite(ms) && Date.now() - ms <= 180000;
-      });
-      if (!fresh.length) return;
-      for (const r of fresh) {
-        const text = r.text || "알람";
-        commit([
-          ...turnsRef.current,
-          { role: "agent", agentId: "sync", name: "싱크", emoji: "⏰", text: `⏰ 알람이에요! "${text}"`, ts: Date.now() },
-        ]);
-        notifyAlarm(text);
-      }
-      playAlarmBeep();
+    let hourTimer = 0;
+    const scheduleHourly = () => {
+      const now = new Date();
+      const nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 5).getTime();
+      hourTimer = window.setTimeout(() => { void reminderPollRef.current(); scheduleHourly(); }, nextHour - now.getTime());
     };
-    poll();
-    const t = setInterval(poll, 15000);
-    return () => { stopped = true; clearInterval(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    scheduleHourly();
+    return () => {
+      window.clearTimeout(hourTimer);
+      if (nextReminderTimerRef.current) window.clearTimeout(nextReminderTimerRef.current);
+    };
   }, []);
+  useLiveRefresh(() => reminderPollRef.current(), 15000);
 
   // 예약 직접 삭제(사용자 삭제 지시) — 즉시 목록에서 제거 후 서버 반영.
   async function removeReminder(id: string) {
@@ -1189,7 +1194,8 @@ export default function App() {
   useEffect(() => {
     if (!autonomousOn) return;
     let stopped = false;
-    const step = () => { if (!stopped) autonomousStep(activeConvRef.current).catch(() => {}); };
+    // 자율 근무는 켜 둔 동안 실제로 일을 하므로 활동 중으로 유지한다(보고·승인 패널이 따라 갱신).
+    const step = () => { if (!stopped) { markActive(); autonomousStep(activeConvRef.current).catch(() => {}); } };
     const t = setInterval(step, 60_000);
     step(); // 켜자마자 1회
     return () => { stopped = true; clearInterval(t); };

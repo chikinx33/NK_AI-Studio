@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getKnowledgeGraph, getSkills, type GraphEdge, type GraphNode } from "../lib/api";
+import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
 
 interface PNode extends GraphNode {
   x: number;
@@ -123,18 +124,21 @@ export default function GraphView({
       return { nodes: [...g.nodes, ...skillNodes], edges: g.edges };
     };
     loadMerged().then((g) => mounted && apply(g)).catch(() => setLoading(false));
-    // 그래프가 열려 있는 동안 지식·스킬이 삭제/추가되면(노드 변화) 실시간으로 다시 그린다.
-    const t = setInterval(async () => {
+    // 지식·스킬이 삭제/추가되면(노드 변화) 다시 그린다. 활동 중일 때만 3초 주기, 평소엔 화면 복귀 때 한 번.
+    const reload = async () => {
       try {
         const g = await loadMerged();
         if (mounted && sig(g.nodes) !== sig(nodesRef.current)) apply(g);
       } catch {
         /* 무시 */
       }
-    }, 3000);
+    };
+    const t = setInterval(() => { if (isLiveActive()) void reload(); }, 3000);
+    const offRevisit = onLiveRevisit(() => { void reload(); });
     return () => {
       mounted = false;
       clearInterval(t);
+      offRevisit();
     };
   }, []);
 

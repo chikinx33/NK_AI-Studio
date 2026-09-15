@@ -115,6 +115,11 @@
                     f.removeAttribute('id');
                     f.style.display = 'none';
                 } catch (_) { }
+                // 숨긴 스테이지에 알린다. 캐시로 남은 캔버스(AI 기업 앱)가 뒤에서 목록 새로고침을 멈추게 한다
+                // (다시 보여 줄 때는 아래 캐시 hit 경로가 stage-revisit 을 보낸다).
+                try {
+                    if (f.contentWindow) f.contentWindow.postMessage({ type: 'stage-hidden' }, '*');
+                } catch (_) { }
             }
         });
         try {

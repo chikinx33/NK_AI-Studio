@@ -20,6 +20,7 @@ import CanvasChatDock from "./CanvasChatDock";
 import { loadCanvasSettings, saveCanvasSettings, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
 import { approveItem, saveCanvasLayout } from "../lib/api";
 import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
+import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -590,8 +591,10 @@ export default function ProductionCanvas({
       } catch { /* 다음 틱에 다시 */ }
     };
     void tick();
-    const timer = window.setInterval(() => { void tick(); }, 5_000);
-    return () => { alive = false; window.clearInterval(timer); };
+    // 자동 승인할 잡은 대화·작업 중에만 생긴다 — 활동 중일 때만 5초 주기, 평소엔 화면 복귀 때 한 번.
+    const timer = window.setInterval(() => { if (isLiveActive()) void tick(); }, 5_000);
+    const offRevisit = onLiveRevisit(() => { void tick(); });
+    return () => { alive = false; window.clearInterval(timer); offRevisit(); };
   }, [settings.confirmBeforeGenerate, projectId]);
 
   const enqueue = async (type: string, input: Record<string, unknown>, label: string, sceneId?: string | number, target?: string) => {

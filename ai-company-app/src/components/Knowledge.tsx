@@ -12,6 +12,7 @@ import {
 import { SortAscIcon, SortDescIcon } from "./icons";
 import { SkillPopup } from "./Skills";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
+import { useLiveRefresh } from "../lib/liveSync";
 
 // 📋 복사 — Lucide copy (채팅 복사 버튼과 동일 도형)
 function CopyIcon({ className }: { className?: string }) {
@@ -351,11 +352,7 @@ export default function Knowledge({
     setInput("");
     refresh();
   }
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 8000);
-    return () => clearInterval(t);
-  }, []);
+  useLiveRefresh(refresh, 8000);
 
   // 외부(우측 사이드바 칩)에서 카테고리를 선택하면 그 분류로 필터 적용
   useEffect(() => {

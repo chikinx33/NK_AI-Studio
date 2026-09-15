@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AgentVideoWorkspaceProvider } from "./contexts/AgentVideoWorkspaceContext";
+import { markActive } from "./lib/liveSync";
 import { onStorageUserChange, readStorage, readUserStorage, removeStorage, writeStorage } from "./lib/safeStorage";
 import "./index.css";
 
@@ -51,6 +52,8 @@ import "./index.css";
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
     if (typeof url === "string" && url.startsWith("/api/")) {
       const method = String(init.method || "GET").toUpperCase();
+      // 사용자가 무언가를 보냈다(채팅·승인·생성 등) → 이어지는 작업을 따라가도록 목록 새로고침을 잠시 켠다.
+      if (method !== "GET") markActive();
       if (typeof input === "string" && method === "GET" && !init.signal && SHARED_GET.test(url)) {
         // 탭을 보고 있지 않으면 폴링이 DB 를 부르지 않게 마지막 응답을 돌려준다(보이면 바로 다시 불러온다).
         // 백그라운드 탭 하나가 하루 종일 목록을 받아 DB 데이터 전송 한도를 소진했다.
