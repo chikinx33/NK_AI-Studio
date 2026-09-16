@@ -107,6 +107,8 @@ test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉�
     assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`));
   }
   assert.match(orchestrator, /\[\[RUN: company_files_mkdir/);
+  // 날짜 폴더(@work/…)는 DB 업무라 company-files DELETE 가 거부한다 → 승인 실행이 업무 삭제 API로 보내야 한다
+  assert.match(shared, /runCompanyFilesDeleteTool[\s\S]+\/api\/agent\/work-items", \{ method: "DELETE"[\s\S]+\/api\/agent\/work-folders", \{ method: "DELETE"/);
   assert.match(orchestrator, /\.project\.json 파일에 \{"kind":"project","projectId":"프로젝트 ID"\}/);
   assert.match(orchestrator, /inferCompanyFolderCreateRun/);
   assert.match(orchestrator, /result\.runs\.push\(inferred\)/);

@@ -193,7 +193,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 업무 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
-    company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
+    company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 날짜 폴더·업무는 목록의 path(@work/YYYY-MM-DD 등)를 그대로 넣으면 안의 업무까지 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
     image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9", "provider": "gemini|openai(선택)", "referenceImages": [{"ref": "ip_library characters[].ref", "subjectDescription": "네모"}]}]]  → 이미지 생성. 기본은 서버 설정 모델(Gemini 3.1 Flash Image). 사용자가 "GPT로", "지피티 이미지로"처럼 지정하면 provider:"openai"(GPT Image)로 호출(막히면 Gemini로 자동 대체·결과에 실제 모델 표기). ★우리 캐릭터가 등장하는 그림이면 반드시 ip_library로 등록 시트를 먼저 조회해 referenceImages(최대 4개)로 넘긴다 — 넘기지 않으면 전혀 다른 캐릭터가 그려진다. 구도는 프롬프트가 정하고 시트는 캐릭터 디자인 유지에만 쓰인다.`,
     sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
     video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,

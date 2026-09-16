@@ -106,7 +106,8 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     // 승인된 산출물을 '회사 업무'로 등록 → 업무 파일의 날짜 폴더에 실제로 나타난다.
     // (이 등록이 없어서 승인해도 폴더가 안 생기고 '폴더 열기'가 갈 곳이 없었다.)
     let filed: { workId: string; dateKey: string } | null = null;
-    if (decision === "approved" && executedOutput) {
+    // 회사 파일 조작(삭제·이동 등)은 산출물이 아니다. 등록하면 날짜 폴더를 지운 직후 오늘 폴더가 다시 생긴다.
+    if (decision === "approved" && executedOutput && !job.type.startsWith("company_files_")) {
       filed = await fileJobAsWorkItem(sql, auth.userId, job, executedOutput);
       // 새로고침 후에도 '폴더 열기'가 동작하도록 잡 출력에 위치를 남긴다.
       if (filed) {
@@ -171,6 +172,14 @@ function approvalDoneText(type: string, output: any, input: any): string {
   if (type === "project_delete") {
     const name = o.projectId || inp.projectId || "프로젝트";
     return `✅ 승인 확인! '${name}' 프로젝트를 삭제했어요(폴더·하위 파일 전체).`;
+  }
+  if (type === "company_files_delete") {
+    const parts: string[] = [];
+    if (Array.isArray(o.deletedWorkFolders) && o.deletedWorkFolders.length) parts.push(`날짜 폴더 ${o.deletedWorkFolders.join(", ")}`);
+    if (Number(o.deletedWorkItems) > 0) parts.push(`업무 ${o.deletedWorkItems}건`);
+    if (Number(o.deletedCount) > 0) parts.push(`파일 ${o.deletedCount}개`);
+    const missing = Array.isArray(o.missing) && o.missing.length ? ` 찾지 못한 경로: ${o.missing.join(", ")}` : "";
+    return `✅ 승인 확인! ${parts.length ? `${parts.join(" · ")}를 삭제했어요.` : "삭제할 항목이 없었어요."}${missing}`;
   }
   return "✅ 승인 확인! 요청하신 작업을 실행했어요.";
 }

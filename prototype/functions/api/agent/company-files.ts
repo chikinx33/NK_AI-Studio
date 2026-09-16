@@ -445,14 +445,16 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     const ctx = await accessContext(env);
     const rootPrefix = workspacePrefix(ctx.basePrefix, auth.userId);
     const names = new Set<string>();
+    const missing: string[] = [];
     for (const path of paths) {
       const resolved = await resolveObjects(ctx, rootPrefix, path);
       if (resolved) for (const objectName of resolved.objects) names.add(objectName);
+      else missing.push(path);
     }
-    if (!names.size) return send({ error: "삭제할 파일 또는 폴더를 찾지 못했습니다." }, 404, origin);
+    if (!names.size) return send({ error: `삭제할 파일 또는 폴더를 찾지 못했습니다: ${missing.join(", ")}`, missing }, 404, origin);
     if (names.size > MAX_OPERATION_OBJECTS) return send({ error: `한 번에 삭제할 수 있는 파일은 ${MAX_OPERATION_OBJECTS}개까지입니다.` }, 400, origin);
     for (const objectName of names) await deleteObject(ctx, objectName);
-    return send({ ok: true, deletedCount: names.size, paths }, 200, origin);
+    return send({ ok: true, deletedCount: names.size, paths, missing }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 삭제에 실패했습니다.") }, 500, origin);
   }

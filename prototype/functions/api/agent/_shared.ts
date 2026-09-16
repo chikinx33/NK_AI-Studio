@@ -3298,10 +3298,58 @@ async function runCompanyFilesTransferTool(action: "copy" | "move", input: any, 
   return { kind: `company_files_${action}`, ...(await callInternalJson(ctx, "/api/agent/company-files", { body: { action, source, destination } })) };
 }
 
+const WORK_ENTRY_PATH = /^@work\/(\d{4}-\d{2}-\d{2})(?:\/([0-9a-f-]{36}))?$/i;
+
 async function runCompanyFilesDeleteTool(input: any, ctx: ToolContext): Promise<any> {
-  const paths = (Array.isArray(input?.paths) ? input.paths : [input?.path]).map((value: any) => String(value || "").trim()).filter(Boolean);
+  const rawPaths = Array.isArray(input?.paths) ? input.paths : [input?.paths ?? input?.path];
+  const paths: string[] = [...new Set<string>(rawPaths.map((value: any) => String(value || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean))];
   if (!paths.length) throw new Error("삭제할 회사 파일 또는 폴더 경로가 필요해요.");
-  return { kind: "company_files_delete", ...(await callInternalJson(ctx, "/api/agent/company-files", { method: "DELETE", body: { paths } })) };
+
+  // '업무 파일' 루트의 날짜 폴더(@work/YYYY-MM-DD)와 그 안의 업무는 GCS 객체가 아니라 DB 업무라서
+  // company-files DELETE 가 거부한다. 목록에 보이는 경로·날짜·폴더 이름으로 지정해도 업무 삭제 API로 보낸다.
+  const needsRoot = paths.some((path) => !WORK_ENTRY_PATH.test(path));
+  const root = needsRoot ? await callInternalJson(ctx, "/api/agent/company-files") : { entries: [] };
+  const rootEntries: any[] = Array.isArray(root?.entries) ? root.entries : [];
+  const workDates = new Set<string>();
+  const workIds = new Set<string>();
+  const filePaths: string[] = [];
+  for (const path of paths) {
+    const match = WORK_ENTRY_PATH.exec(path);
+    if (match) {
+      if (match[2]) workIds.add(match[2].toLowerCase());
+      else workDates.add(match[1]);
+      continue;
+    }
+    const stored = rootEntries.some((entry) => (entry?.kind === "file" || entry?.kind === "folder") && entry?.path === path);
+    const workFolder = stored ? null : rootEntries.find((entry) => entry?.kind === "work-folder" && (entry?.dateKey === path || entry?.name === path));
+    if (workFolder?.dateKey) workDates.add(String(workFolder.dateKey));
+    else filePaths.push(path);
+  }
+
+  for (const dateKey of workDates) {
+    const listed = await callInternalJson(ctx, `/api/agent/company-files?path=${encodeURIComponent(`@work/${dateKey}`)}`);
+    for (const entry of Array.isArray(listed?.entries) ? listed.entries : []) if (entry?.workId) workIds.add(String(entry.workId));
+  }
+  const ids = [...workIds];
+  let deletedWorkItems = 0;
+  for (let index = 0; index < ids.length; index += 100) {
+    const removed = await callInternalJson(ctx, "/api/agent/work-items", { method: "DELETE", body: { ids: ids.slice(index, index + 100) } });
+    deletedWorkItems += Number(removed?.deletedCount || 0);
+  }
+  for (const dateKey of workDates) await callInternalJson(ctx, "/api/agent/work-folders", { method: "DELETE", body: { dateKey } });
+
+  const files = filePaths.length
+    ? await callInternalJson(ctx, "/api/agent/company-files", { method: "DELETE", body: { paths: filePaths } })
+    : { deletedCount: 0, paths: [], missing: [] };
+  return {
+    kind: "company_files_delete",
+    ok: true,
+    paths,
+    deletedCount: Number(files?.deletedCount || 0),
+    missing: Array.isArray(files?.missing) ? files.missing : [],
+    deletedWorkFolders: [...workDates],
+    deletedWorkItems,
+  };
 }
 
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
