@@ -68,21 +68,11 @@ test('credit UI and account deletion cleanup are connected', async () => {
   assert.match(cleanup, /"credit_accounts"/);
 });
 
-test('credit gauge restores its rendered summary after a generation page redraw', async () => {
+test('게이지는 구독 현황 항목 밖에서는 아예 만들어지지 않는다', async () => {
   const common = await read('js/ui/common.js');
-  assert.match(
-    common,
-    /if \(!gauge \|\| !gauge\.isConnected\) renderCreditGauge\(\);/,
-    'a removed gauge must be rendered with the cached summary, not only repositioned',
-  );
+  assert.match(common, /function creditGaugeHost\(\)/);
+  assert.match(common, /if \(!gauge\) \{ removeCreditGauge\(\); return; \}/);
   assert.doesNotMatch(common, /관리자 검증용 테스트 크레딧 기준/);
-});
-
-test('generation shells delegate the credit gauge to the centered stage UI', async () => {
-  const common = await read('js/ui/common.js');
-  assert.match(common, /function creditGaugeDelegatedToStage\(\)/);
-  assert.match(common, /page-shell-\(\?:videogen\|image\)/);
-  assert.match(common, /if \(creditGaugeDelegatedToStage\(\) \|\| creditGaugeHiddenForCinema\(\)\) \{[\s\S]{0,180}duplicateGauge\.remove\(\);[\s\S]{0,80}return;/);
 });
 
 test('landing page places the live credit gauge inside the subscription status grid', async () => {
@@ -94,7 +84,7 @@ test('landing page places the live credit gauge inside the subscription status g
   ]);
   assert.match(app, /class="subscription-grid"[\s\S]{0,800}id="subscription-credit-host"/);
   assert.match(common, /getElementById\('subscription-credit-host'\)/);
-  assert.match(common, /gauge\.classList\.add\('is-subscription'\)/);
+  assert.match(common, /gauge\.className = 'nk-credit-gauge is-subscription';/);
   assert.match(script, /NK\.ui\.common\.refreshCreditGauge\(\);/);
   assert.match(styles, /\.nk-credit-gauge\.is-subscription\s*\{/);
 });

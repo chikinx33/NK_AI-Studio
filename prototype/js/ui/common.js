@@ -1850,36 +1850,22 @@
         if (!sidebar) return;
     };
 
-    // ── 전역 크레딧 게이지 ────────────────────────────────────
-    var creditState = { summary: null, transactions: [], loading: false, timer: null, observer: null };
+    // ── 크레딧 게이지 ────────────────────────────────────────
+    // 크레딧은 런처(app.html)의 '구독 현황' 항목에서만 확인한다. 예전에는 모든 화면
+    // 우측 상단에 고정 게이지를 띄웠는데, 작업 화면의 버튼을 가리고 화면마다 크레딧
+    // DB 를 다시 불러 전송량을 소모했다(사용자 요청, v3.1752). 이제 게이지는
+    // #subscription-credit-host 가 있는 페이지에서만 만들어진다.
+    var creditState = { summary: null, transactions: [], loading: false };
 
-    function creditGaugeDelegatedToStage() {
-        try {
-            var cls = String((document.documentElement && document.documentElement.className) || '') + ' ' +
-                String((document.body && document.body.className) || '');
-            // 영상·이미지 셸은 실제 생성 화면을 iframe 스테이지로 연다. 셸까지
-            // 게이지를 만들면 스테이지의 중앙 게이지와 우측 상단 고정 게이지가 중복된다.
-            return /\bpage-shell-(?:videogen|image)\b/.test(cls);
-        } catch (_) { return false; }
+    function creditGaugeHost() {
+        return document.getElementById('subscription-credit-host');
     }
 
-    // AI 시네마(ai-video.html 셸과 그 안의 스테이지 iframe)에서는 게이지를 아예 그리지 않는다.
-    // 우측 상단 고정 게이지가 스테이지의 저장 등 버튼을 가렸다(사용자 요청, v3.1666).
-    function creditGaugeHiddenForCinema() {
-        try {
-            var own = String((document.documentElement && document.documentElement.className) || '') + ' ' +
-                String((document.body && document.body.className) || '');
-            if (/\bpage-shell-video\b/.test(own)) return true;
-            // 스테이지 페이지(scenes/scenario/dashboard)는 셸의 iframe 안에서 열린다 — 같은 출처라 부모 클래스를 읽을 수 있다.
-            var fe = window.frameElement;
-            var parentDoc = fe && fe.ownerDocument;
-            if (parentDoc) {
-                var parentCls = String((parentDoc.documentElement && parentDoc.documentElement.className) || '') + ' ' +
-                    String((parentDoc.body && parentDoc.body.className) || '');
-                if (/\bpage-shell-video\b/.test(parentCls)) return true;
-            }
-        } catch (_) {}
-        return false;
+    function removeCreditGauge() {
+        var gauge = document.getElementById('nk-credit-gauge');
+        if (gauge) gauge.remove();
+        var pop = document.getElementById('nk-credit-popover');
+        if (pop) pop.remove();
     }
 
     function creditLang() {
@@ -1891,42 +1877,26 @@
     }
 
     function creditGaugeElement() {
+        var host = creditGaugeHost();
+        if (!host) return null;
         var gauge = document.getElementById('nk-credit-gauge');
-        if (gauge) return gauge;
+        if (gauge) {
+            if (gauge.parentNode !== host) host.appendChild(gauge);
+            return gauge;
+        }
         gauge = document.createElement('button');
         gauge.type = 'button';
         gauge.id = 'nk-credit-gauge';
-        gauge.className = 'nk-credit-gauge is-floating';
+        gauge.className = 'nk-credit-gauge is-subscription';
         gauge.setAttribute('aria-label', '크레딧 사용량');
         gauge.addEventListener('click', function (event) { event.stopPropagation(); toggleCreditPopover(false); });
-        document.body.appendChild(gauge);
+        host.appendChild(gauge);
         return gauge;
-    }
-
-    function placeCreditGauge() {
-        var gauge = creditGaugeElement();
-        var subscriptionHost = document.getElementById('subscription-credit-host');
-        var host = document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills');
-        if (subscriptionHost) {
-            gauge.classList.remove('is-floating');
-            gauge.classList.add('is-subscription');
-            if (gauge.parentNode !== subscriptionHost) subscriptionHost.appendChild(gauge);
-        } else if (host && host.parentNode) {
-            gauge.classList.remove('is-floating');
-            gauge.classList.remove('is-subscription');
-            host.parentNode.insertBefore(gauge, host);
-        } else if (gauge.parentNode !== document.body) {
-            gauge.classList.remove('is-subscription');
-            gauge.classList.add('is-floating');
-            document.body.appendChild(gauge);
-        } else {
-            gauge.classList.remove('is-subscription');
-            gauge.classList.add('is-floating');
-        }
     }
 
     function renderCreditGauge() {
         var gauge = creditGaugeElement();
+        if (!gauge) { removeCreditGauge(); return; }
         var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();
         gauge.classList.toggle('hidden', !authed);
         if (!authed) return;
@@ -1944,10 +1914,10 @@
             '<strong>' + creditNumber(s.available) + ' C</strong>' +
             '<span class="nk-credit-track"><i style="width:' + pct + '%"></i></span>' +
             '<small>' + (creditLang() === 'en' ? (pct + '% used') : ('사용 ' + pct + '%')) + '</small>';
-        placeCreditGauge();
     }
 
     function toggleCreditPopover(forceClose) {
+        if (!creditGaugeElement()) return;
         var old = document.getElementById('nk-credit-popover');
         if (old) { old.remove(); if (!forceClose) return; }
         if (forceClose) return;
@@ -1978,10 +1948,9 @@
     }
 
     common.refreshCreditGauge = function () {
-        // AI 시네마에서는 어떤 경로(로그인 후 갱신·크레딧 변경 이벤트)로도 게이지를 만들지 않는다.
-        if (creditGaugeHiddenForCinema()) {
-            var hiddenGauge = document.getElementById('nk-credit-gauge');
-            if (hiddenGauge) hiddenGauge.remove();
+        // 구독 현황 항목이 없는 화면(작업 화면 전부)에서는 게이지를 만들지도, 조회하지도 않는다.
+        if (!creditGaugeHost()) {
+            removeCreditGauge();
             return Promise.resolve(null);
         }
         if (creditState.loading || !(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) || !(NK.api && NK.api.creditMe)) {
@@ -2003,30 +1972,20 @@
 
     common.initCreditGauge = function () {
         if (document.__nkCreditGaugeBound) return;
-        if (creditGaugeDelegatedToStage() || creditGaugeHiddenForCinema()) {
-            var duplicateGauge = document.getElementById('nk-credit-gauge');
-            if (duplicateGauge) duplicateGauge.remove();
+        // 구독 현황 항목이 없는 페이지에서는 크레딧을 표시하지 않는다.
+        if (!creditGaugeHost()) {
+            removeCreditGauge();
             return;
         }
         document.__nkCreditGaugeBound = true;
-        placeCreditGauge();
         common.refreshCreditGauge();
         window.addEventListener('nk:credits-changed', function () { setTimeout(common.refreshCreditGauge, 120); });
         window.addEventListener('focus', common.refreshCreditGauge);
         window.addEventListener('nk:lang-changed', renderCreditGauge);
         document.addEventListener('click', function (event) {
             var pop = document.getElementById('nk-credit-popover');
-            if (pop && !pop.contains(event.target) && event.target !== creditGaugeElement()) pop.remove();
+            if (pop && !pop.contains(event.target) && event.target !== document.getElementById('nk-credit-gauge')) pop.remove();
         });
-        creditState.observer = new MutationObserver(function () {
-            var gauge = document.getElementById('nk-credit-gauge');
-            // 영상/이미지 생성 화면은 옵션 변경 시 화면 루트를 통째로 다시 그린다.
-            // 그 안에 배치된 게이지도 제거되므로, 새 요소의 위치뿐 아니라 저장된
-            // 크레딧 요약까지 다시 그려 빈 게이지만 남지 않게 한다.
-            if (!gauge || !gauge.isConnected) renderCreditGauge();
-            else if ((document.getElementById('subscription-credit-host') || document.querySelector('.vgen-status-pills, .ai-image-status-pills, .snd-status-pills')) && gauge.classList.contains('is-floating')) placeCreditGauge();
-        });
-        creditState.observer.observe(document.body, { childList: true, subtree: true });
         // 30초마다 조회하지 않는다 — 열어 둔 화면마다 크레딧 DB 를 계속 불러 전송 한도를 소모했다.
         // 크레딧이 바뀌는 요청(X-NK-Credit-Operation 응답)은 nk:credits-changed 로 알리고,
         // 창 포커스·탭 복귀 때 한 번 갱신한다.

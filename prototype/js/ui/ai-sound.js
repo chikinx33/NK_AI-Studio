@@ -84,7 +84,7 @@
       gender_all: '전체', gender_male: '남', gender_female: '여',
       sessionLabel: '세션', projectLabel: '현재 에피소드', brandLabel: '현재 브랜드',
       noProject: '에피소드 없음', noBrand: '브랜드 없음', noneLabel: '없음',
-      no_text: '대사를 입력해주세요.', no_prompt: '효과음 프롬프트를 입력해주세요.', char_unit: '자', credit_unit: '크레딧',
+      no_text: '대사를 입력해주세요.', no_prompt: '효과음 프롬프트를 입력해주세요.', char_unit: '자',
       r2v_none: '레퍼런스 없음', r2v_generating: '레퍼런스 생성중', r2v_ready: '레퍼런스 준비됨',
       confirm_clear: '생성된 사운드 자산을 전체 삭제할까요?'
     },
@@ -112,7 +112,7 @@
       gender_all: 'All', gender_male: 'M', gender_female: 'F',
       sessionLabel: 'Session', projectLabel: 'Current episode', brandLabel: 'Current brand',
       noProject: 'No episode', noBrand: 'No brand', noneLabel: 'None',
-      no_text: 'Please enter dialogue text.', no_prompt: 'Please enter an SFX prompt.', char_unit: 'chars', credit_unit: 'credits',
+      no_text: 'Please enter dialogue text.', no_prompt: 'Please enter an SFX prompt.', char_unit: 'chars',
       r2v_none: 'No reference', r2v_generating: 'Generating ref', r2v_ready: 'Ref ready',
       confirm_clear: 'Delete all generated sound assets?'
     }
@@ -511,9 +511,7 @@
     var m = root && root.querySelector('[data-snd-meter]');
     if (!m) return;
     var chars = totalChars();
-    var credits = Math.max(1, Math.ceil(chars / 100));
     m.querySelector('[data-meter-chars]').textContent = chars + ' / ' + CHAR_LIMIT;
-    m.querySelector('[data-meter-credits]').textContent = credits + ' ' + t('credit_unit');
   }
 
   // ── Voice field: 보이스 선택 + 속도 + 미리듣기 (설정 패널 최상단) ──
@@ -618,10 +616,8 @@
     // meter
     var meter = el('div', 'snd-meter', { 'data-snd-meter': '1' });
     var chars = totalChars();
-    var credits = Math.max(1, Math.ceil(chars / 100));
     var cspan = el('span'); cspan.appendChild(el('strong', '', { 'data-meter-chars': '1', textContent: chars + ' / ' + CHAR_LIMIT })); cspan.appendChild(document.createTextNode(' ' + t('char_unit')));
     meter.appendChild(cspan);
-    meter.appendChild(el('strong', '', { 'data-meter-credits': '1', textContent: credits + ' ' + t('credit_unit') }));
     panel.appendChild(meter);
 
     // generate
@@ -740,7 +736,6 @@
     var metaParts = [];
     if (a.model) metaParts.push(a.model);
     if (a.durationSeconds) metaParts.push(a.durationSeconds + 's');
-    if (a.creditsUsed != null) metaParts.push(a.creditsUsed + ' ' + t('credit_unit'));
     if (metaParts.length) card.appendChild(el('div', 'snd-asset-meta', { textContent: metaParts.join(' · ') }));
 
     if (a.outputUrl && a.status !== 'processing') {
