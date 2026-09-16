@@ -4,6 +4,7 @@
 // - 도구 어댑터: 라비오크의 "도구=python spawn" 모델을 NK API fetch 로 전환.
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
+import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
 import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
@@ -261,6 +262,24 @@ async function runAgentSchemaDdl(sql: SqlFn): Promise<void> {
   `);
   try {
     await sql("CREATE INDEX IF NOT EXISTS company_knowledge_user_idx ON company_knowledge (user_id)");
+  } catch (_) {}
+  // 회사 지식 색인(_knowledge-index.ts): 프로젝트 범위·단어 조각·의미 벡터·사용 기록.
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS project_id text");
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms text[] NOT NULL DEFAULT '{}'::text[]");
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms_hash text");
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding_hash text");
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS use_count integer NOT NULL DEFAULT 0");
+  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS last_used_at timestamptz");
+  try {
+    await sql("CREATE INDEX IF NOT EXISTS company_knowledge_scope_idx ON company_knowledge (user_id, project_id, type)");
+  } catch (_) {}
+  try {
+    await sql("CREATE INDEX IF NOT EXISTS company_knowledge_terms_idx ON company_knowledge USING gin (terms)");
+  } catch (_) {}
+  try {
+    // pgvector 가 없으면 의미 색인만 빠지고 단어 색인으로 동작한다.
+    await sql("CREATE EXTENSION IF NOT EXISTS vector");
+    await sql(`ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding vector(${KNOWLEDGE_EMBED_DIM})`);
   } catch (_) {}
   // 프로젝트 보드(Phase 3). data=jsonb{name,summary,status,goal,stages[],nextAction}. 멀티테넌시.
   await sql(`
@@ -748,14 +767,14 @@ export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<
   }));
 }
 /** 반영된 행 수를 돌려준다(0 = 같은 내용이 이미 있어 추가하지 않음). */
-export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<number> {
-  // 같은 내용이 이미 있으면 추가하지 않는다(중복 방지).
+export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동", projectId?: string): Promise<number> {
+  // 같은 내용이 이미 있으면 추가하지 않는다(중복 방지). 단어 색인은 쓰는 순간 함께 채운다(의미 벡터는 대화 끝에 채움).
   const rows = await sql(
-    `INSERT INTO company_knowledge (user_id, text, type, source)
-     SELECT $1, $2, $3, $4
+    `INSERT INTO company_knowledge (user_id, text, type, source, project_id, terms, terms_hash)
+     SELECT $1, $2, $3, $4, $5, $6::text[], md5($2)
      WHERE NOT EXISTS (SELECT 1 FROM company_knowledge WHERE user_id = $1 AND text = $2)
      RETURNING id`,
-    [userId, text, type || "사실", source]
+    [userId, text, type || "사실", source, projectId || null, knowledgeTerms(text)]
   );
   return Array.isArray(rows) ? rows.length : 0;
 }
@@ -771,7 +790,10 @@ export async function dedupeCompanyKnowledge(sql: SqlFn, userId: string): Promis
   return Array.isArray(rows) ? rows.length : 0;
 }
 export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText: string, newText: string): Promise<number> {
-  const rows = await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND text = $2 RETURNING id", [userId, oldText, newText]);
+  const rows = await sql(
+    "UPDATE company_knowledge SET text = $3, terms = $4::text[], terms_hash = md5($3) WHERE user_id = $1 AND text = $2 RETURNING id",
+    [userId, oldText, newText, knowledgeTerms(newText)],
+  );
   return Array.isArray(rows) ? rows.length : 0;
 }
 export async function deleteCompanyKnowledge(sql: SqlFn, userId: string, text: string): Promise<number> {
@@ -5353,6 +5375,27 @@ async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any>
   };
 }
 
+/** 회사 지식 검색(색인): 프롬프트에 안 들어간 지식을 단어·의미로 찾아 근거로 쓴다. read+synthesize. */
+async function runCompanyKnowledgeSearchTool(input: any, ctx: ToolContext): Promise<any> {
+  const query = String(input?.query || input?.prompt || "").trim();
+  if (!query) throw new Error("찾을 내용(query)이 필요해요.");
+  const sql = getSql(ctx.env);
+  if (!sql) throw new Error("DATABASE_URL 미설정");
+  const types = (Array.isArray(input?.types) ? input.types : input?.type ? [input.type] : [])
+    .map((value: any) => (/규칙|원칙/.test(String(value)) ? "원칙" : /결정/.test(String(value)) ? "결정" : /사실/.test(String(value)) ? "사실" : ""))
+    .filter(Boolean);
+  const limit = Math.min(30, Math.max(1, Number(input?.limit) || 10));
+  const hits = await searchCompanyKnowledge(ctx.env, sql, ctx.userId, query, {
+    projectId: String(input?.projectId || "").trim() || undefined, types, limit, embedTimeoutMs: 6000,
+  });
+  return {
+    kind: "company_knowledge_search",
+    query,
+    count: hits.length,
+    items: hits.map((hit) => ({ id: shortKnowledgeId(hit.id), type: hit.type, date: hit.createdAt.slice(0, 10), projectId: hit.projectId, text: hit.text, via: hit.via })),
+  };
+}
+
 /** SNS 채널 연결 상태: /api/agent/integrations. read. (연결 개설/해제는 사람 직접) */
 async function runSnsChannelsStatusTool(_input: any, ctx: ToolContext): Promise<any> {
   const data = await callInternalJson(ctx, "/api/agent/integrations");
@@ -5475,6 +5518,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 코어가 대화만으로 에이전트 협업→Remotion 명세→업무 등록까지 완료한다.
   infographic: { agentId: "core", kind: "read", run: runInfographicTool },
   // 회사 공용 파일: 모든 직원이 같은 폴더를 인지한다. 조회는 즉시, 변경은 사람 승인 후 실행한다.
+  company_knowledge_search: { agentId: "core", agentIds: ["edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach", "sync"], kind: "read", synthesize: true, run: runCompanyKnowledgeSearchTool },
   company_files_list: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesListTool },
   company_files_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesReadTool },
   company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesWriteTool },

@@ -2,6 +2,7 @@
 // 회사 지식 AI 정리: 전체를 읽혀 병합·삭제·수정 정리안을 만들고(plan), 사람이 고른 것만 적용(apply)한다.
 // 예전 '중복 정리'는 글자까지 똑같은 항목만 지웠는데, 추가 단계에서 이미 똑같은 문장을 막으므로 사실상 할 일이 없었다.
 import type { SqlFn } from "./_shared";
+import { knowledgeTerms } from "./_knowledge-index";
 
 export type TidyOpKind = "merge" | "delete" | "edit";
 export interface TidyItem { id: string; n: number; type: string; date: string; text: string }
@@ -43,18 +44,22 @@ export function normalizeTidyType(value: unknown, fallback = "사실"): string {
 }
 
 export async function loadTidyItems(sql: SqlFn, userId: string): Promise<{ items: TidyItem[]; truncated: boolean }> {
-  const rows = await sql(
-    "SELECT id, text, type, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC, id ASC",
-    [userId]
-  ) as any[];
-  const items = rows.slice(0, MAX_ITEMS).map((row, index) => ({
+  // 지식이 수십만 개여도 필요한 만큼만 읽는다(전체를 DB 밖으로 가져오지 않음).
+  const [counted, rows] = await Promise.all([
+    sql("SELECT count(*)::int AS total FROM company_knowledge WHERE user_id = $1", [userId]) as Promise<any[]>,
+    sql(
+      "SELECT id, text, type, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2",
+      [userId, MAX_ITEMS]
+    ) as Promise<any[]>,
+  ]);
+  const items = rows.map((row, index) => ({
     id: String(row.id),
     n: index + 1,
     type: normalizeTidyType(row.type),
     date: row.created_at ? String(row.created_at).slice(0, 10) : "",
     text: String(row.text || ""),
   }));
-  return { items, truncated: rows.length > MAX_ITEMS };
+  return { items, truncated: Number(counted[0]?.total || 0) > MAX_ITEMS };
 }
 
 export function buildTidyRequest(items: TidyItem[]): string {
@@ -141,7 +146,10 @@ export async function applyTidyOps(sql: SqlFn, userId: string, input: any[]): Pr
     if (duplicate.length) {
       await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND id = ANY($2::uuid[])", [userId, ids]);
     } else {
-      await sql("UPDATE company_knowledge SET text = $3, type = $4 WHERE user_id = $1 AND id = $2", [userId, keepId, text, type]);
+      await sql(
+        "UPDATE company_knowledge SET text = $3, type = $4, terms = $5::text[], terms_hash = md5($3) WHERE user_id = $1 AND id = $2",
+        [userId, keepId, text, type, knowledgeTerms(text)],
+      );
       if (others.length) await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND id = ANY($2::uuid[])", [userId, others]);
     }
     result.applied[op] += 1;

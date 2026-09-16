@@ -11,7 +11,11 @@ const read = (path) => readFileSync(resolve(root, path), "utf8");
 // AI 정리안 해석·적용을 실제로 돌려 본다(DB는 메모리 흉내).
 async function loadTidy() {
   const esbuild = createRequire(import.meta.url)(resolve(root, "ai-company-app/node_modules/esbuild"));
-  const js = esbuild.transformSync(read("prototype/functions/api/agent/_knowledge-tidy.ts"), { loader: "ts", format: "esm" }).code;
+  // 색인 모듈(_knowledge-index)을 import 하므로 하나로 묶어서 불러온다.
+  const js = esbuild.buildSync({
+    entryPoints: [resolve(root, "prototype/functions/api/agent/_knowledge-tidy.ts")],
+    bundle: true, write: false, format: "esm", platform: "neutral",
+  }).outputFiles[0].text;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 }
 

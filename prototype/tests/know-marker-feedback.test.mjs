@@ -16,17 +16,24 @@ function loadKnowApply() {
   const endMarker = orchestrator.indexOf("export async function knowFailureNote");
   const end = orchestrator.indexOf("\n}\n", endMarker) + 3;
   const js = esbuild.transformSync(orchestrator.slice(start, end).replace(/export /g, ""), { loader: "ts" }).code;
-  return new Function("addCompanyKnowledge", "companyKnowledgeCounts", `${js}\nreturn { applyKnows, knowFailureNote };`);
+  // 대상 찾기는 단어 색인 후보를 쓰므로 knowledgeTerms 도 함께 넘긴다(여기선 후보를 전부 돌려주는 흉내 DB).
+  return new Function("addCompanyKnowledge", "companyKnowledgeCounts", "knowledgeTerms", `${js}\nreturn { applyKnows, knowFailureNote };`);
 }
 
 function fakeDb(rows) {
   const sql = async (query, params) => {
-    if (query.startsWith("SELECT id, text FROM company_knowledge")) return rows.map((row) => ({ ...row }));
-    if (query.startsWith("DELETE FROM company_knowledge WHERE user_id = $1 AND id = $2")) {
+    const q = query.replace(/\s+/g, " ").trim();
+    if (q.includes("replace(id::text, '-', '') LIKE $2")) {
+      const prefix = String(params[1]).replace(/%$/, "");
+      return rows.filter((row) => row.id.replace(/-/g, "").startsWith(prefix)).map((row) => ({ ...row }));
+    }
+    if (q.startsWith("SELECT id, text FROM company_knowledge WHERE user_id = $1 AND text = $2")) return rows.filter((row) => row.text === params[1]).map((row) => ({ ...row }));
+    if (q.startsWith("SELECT id, text FROM company_knowledge WHERE user_id = $1 AND (terms &&")) return rows.map((row) => ({ ...row }));
+    if (q.startsWith("DELETE FROM company_knowledge WHERE user_id = $1 AND id = $2")) {
       const index = rows.findIndex((row) => row.id === params[1]);
       return index < 0 ? [] : rows.splice(index, 1);
     }
-    if (query.startsWith("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND id = $2")) {
+    if (q.startsWith("UPDATE company_knowledge SET text = $3, terms = $4::text[], terms_hash = md5($3) WHERE user_id = $1 AND id = $2")) {
       const row = rows.find((candidate) => candidate.id === params[1]);
       if (!row) return [];
       row.text = params[2];
@@ -49,7 +56,7 @@ test("KNOW 반영은 항목별 실제 결과(ok/skipped/error, affected, id)를 
     { id: "9f8e7d6c-0000-0000-0000-000000000002", text: "브랜드 색은 초록" },
   ];
   const db = fakeDb(rows);
-  const { applyKnows, knowFailureNote } = loadKnowApply()(db.add, db.counts);
+  const { applyKnows, knowFailureNote } = loadKnowApply()(db.add, db.counts, () => []);
   const results = await applyKnows(db.sql, "u1", [
     { action: "del", text: "  회의는 월요일마다 한다  " },        // 공백·마침표 차이 → 정규화로 찾음
     { action: "edit", text: "id:9f8e7d6c", newText: "브랜드 색은 청록" }, // 짧은 id 로 지정
@@ -75,7 +82,7 @@ test("여러 항목과 일치하면 임의로 지우지 않는다", async () => 
     { id: "aaaa0002-0000-0000-0000-000000000002", text: "중복 규칙 " },
   ];
   const db = fakeDb(rows);
-  const { applyKnows } = loadKnowApply()(db.add, db.counts);
+  const { applyKnows } = loadKnowApply()(db.add, db.counts, () => []);
   const [result] = await applyKnows(db.sql, "u1", [{ action: "del", text: "중복 규칙." }], "코어");
   assert.equal(result.status, "error");
   assert.match(result.reason, /2개 항목과 일치/);

@@ -23,7 +23,6 @@ import {
   listAgentKnowledge,
   addCompanyKnowledge,
   companyKnowledgeCounts,
-  listCompanyKnowledge,
   listPendingReviewJobs,
   upsertProject,
   listProjects,
@@ -48,6 +47,7 @@ import {
   restoreSkill,
   approvalIdentity,
 } from "./_shared";
+import { knowledgeTerms, projectIdFromMessage, selectCompanyKnowledgeForPrompt } from "./_knowledge-index";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
 import { claudeAuthHeaders, resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
 import { isAnthropicProvider, normalizeModelChoice, resolveAgentModel } from "../_shared/cloud-models.js";
@@ -137,6 +137,9 @@ interface BuildSystemOpts {
   personaOverride?: string; // 사용자가 직원관리에서 편집한 페르소나(우선)
   agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
   companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
+  // 지식이 많아 검색으로 골라 넣었을 때: 전체 개수(모델이 '여기 없는 지식'을 검색 도구로 찾게 알린다)
+  companyKnowledgeTotal?: number;
+  companyKnowledgeRetrieved?: boolean;
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
   companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[]; collapsed?: boolean; order?: number }[]; // 현재 프로젝트 목록
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
@@ -156,7 +159,11 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     : "";
   const companyKnow = opts.companyKnowledge || [];
   const companyKnowBlock = companyKnow.length
-    ? `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다.\n` +
+    ? (opts.companyKnowledgeRetrieved
+        ? `\n\n## 🧠 회사 지식·규칙 (전체 ${opts.companyKnowledgeTotal ?? companyKnow.length}개 중 항상 지킬 원칙 + 이번 대화와 관련된 것 ${companyKnow.length}개)\n` +
+          `회사 지식이 많아 색인으로 골라 넣었습니다. 여기에 없는 과거 사실·결정이 필요하면 추측하지 말고 [[RUN: company_knowledge_search | {"query": "찾을 내용"}]]로 찾아본 뒤 답하고, 찾지 못하면 기록에 없다고 말하세요.\n`
+        : `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n`) +
+      `아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다.\n` +
       `⚠️ 그중 호칭·말투·금지사항 같은 '행동 규칙'(특히 [원칙] 분류)은 배경 참고가 아니라 **매 답변에서 예외 없이 반드시 지켜야 하는 지침**입니다. 예: 사용자에게 존댓말로 답하라는 규칙이 있으면 항상 존댓말을 쓰고, 정해진 호칭을 씁니다. 사실·결정 같은 정보성 지식만 자연스럽게 녹여 쓰고, 직접 묻지 않으면 목록을 그대로 나열하지 마세요.\n${companyKnow.map((k) => `- ${k}`).join("\n")}`
     : "";
   const skillsList = opts.companySkills || [];
@@ -261,6 +268,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     project_delete: `[[RUN: project_delete | {"projectId": "series-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     project_share: `[[RUN: project_share | {"projectId": "series-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
     knowledge_search: `[[RUN: knowledge_search | {"query": "찾을 내용"}]]  → 지식 허브(RAG)에서 관련 문서 조각을 검색해 근거로 답한다. "우리 자료에서 ~ 찾아줘"에 사용.`,
+    company_knowledge_search: `[[RUN: company_knowledge_search | {"query": "찾을 내용", "projectId": "(선택) 프로젝트 id", "types": ["원칙|사실|결정"], "limit": 10}]]  → 쌓인 회사 지식을 색인(단어 조각 + 의미 벡터)으로 검색. 프롬프트의 회사 지식 목록에 없는 과거 사실·결정·설정(예: "마리가 수학여행 간 곳")을 물으면 추측하지 말고 먼저 실행. 결과의 id:xxxxxxxx 는 KNOW del/edit 대상 지정에 그대로 쓸 수 있음.`,
     knowledge_audit: `[[RUN: knowledge_audit | {"offset": 0, "limit": 20}]]  → 축적된 회사 지식 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 결과는 {items, total, hasMore, nextOffset} 페이지이며 서버가 남은 페이지를 자동으로 이어 받아 합쳐 준다. 그래도 hasMore=true면 {"offset": nextOffset}로 다시 호출. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
     sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
@@ -299,7 +307,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     voice_generate: "캐릭터 더빙(음성)", voices_list: "목소리 목록", sound_assets: "사운드 자산 목록",
     scene_shots: "씬→샷 분해", scene_locations: "장소 추출", story_structure: "스토리 구조 생성", scene_upsert: "씬 수정/추가", scene_reorder: "컷 순서 변경", scene_split: "씬 나누기/합치기", style_anchor_set: "스타일 기준 이미지 지정", set_master: "세트 부감 마스터 플레이트", set_angle: "세트 앵글 플레이트 파생", set_sheet: "세트 시트(바이블) 생성", location_merge: "장소(세트) 합치기", location_suggest: "같은 세트로 보이는 장소 제안",
     brand_list: "브랜드 목록", brand_delete: "브랜드 삭제", project_delete: "프로젝트 삭제", project_share: "프로젝트 공유",
-    knowledge_search: "지식 검색(RAG)", knowledge_audit: "지식 감사·정리", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
+    knowledge_search: "지식 검색(RAG)", company_knowledge_search: "회사 지식 검색", knowledge_audit: "지식 감사·정리", knowledge_stats: "지식 허브 통계", sns_channels_status: "SNS 채널 상태", media_library: "미디어 라이브러리",
     profile_get: "프로필 조회", profile_save: "프로필 저장", favorites_get: "즐겨찾기 조회", favorites_save: "즐겨찾기 저장",
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
     image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
@@ -851,10 +859,16 @@ export async function speak(
     }
   }
   // 회사 지식·규칙을 모든 직원 두뇌에 주입 — 무엇이 몇 개 등록됐는지 인지하고 중복도 짚을 수 있게.
+  // 지식이 많으면 전체 대신 색인으로 이번 지시와 관련된 것만 고른다(_knowledge-index.ts).
   let companyKnowledge = opts.companyKnowledge;
+  let companyKnowledgeTotal = opts.companyKnowledgeTotal;
+  let companyKnowledgeRetrieved = opts.companyKnowledgeRetrieved;
   if (companyKnowledge === undefined && opts.sql && opts.userId) {
-    const ck = await listCompanyKnowledge(opts.sql, opts.userId).catch(() => []);
-    companyKnowledge = ck.map((k) => `[${k.type || "사실"}] ${k.text}`);
+    const picked = await selectCompanyKnowledgeForPrompt(env, opts.sql, opts.userId, instruction, { projectId: projectIdFromMessage(instruction) })
+      .catch(() => null);
+    companyKnowledge = picked?.lines || [];
+    companyKnowledgeTotal = picked?.total;
+    companyKnowledgeRetrieved = picked?.retrieved;
   }
   // 보유 스킬(절차적 기억) 목록 주입 — 비슷한 일에 재사용(progressive disclosure Level 0).
   let companySkills = opts.companySkills;
@@ -866,7 +880,7 @@ export async function speak(
   if (companyProjects === undefined && opts.sql && opts.userId) {
     companyProjects = await listProjects(opts.sql, opts.userId).catch(() => []);
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects, hasAttachments });
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companyKnowledgeTotal, companyKnowledgeRetrieved, companySkills, companyProjects, hasAttachments });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
@@ -1235,25 +1249,38 @@ const knowTextKey = (value: string) => String(value || "")
  */
 async function resolveKnowledgeTarget(sql: SqlFn, userId: string, target: string): Promise<{ id?: string; reason?: string }> {
   const idMatch = /^id\s*:\s*([0-9a-f]{6,32})$/i.exec(target.trim());
-  const rows = await sql("SELECT id, text FROM company_knowledge WHERE user_id = $1", [userId]) as any[];
-  const shortId = (row: any) => String(row.id || "").replace(/-/g, "").toLowerCase();
-  let hits = idMatch
-    ? rows.filter((row) => shortId(row).startsWith(idMatch[1].toLowerCase()))
-    : rows.filter((row) => String(row.text) === target);
-  if (!idMatch && !hits.length) hits = rows.filter((row) => knowTextKey(row.text) === knowTextKey(target));
+  // 지식이 수십만 개여도 전체를 읽지 않는다: id 앞자리 → 원문 일치 → 단어 색인으로 좁힌 후보 안에서 정규화 비교.
+  let hits: any[];
+  if (idMatch) {
+    hits = await sql(
+      "SELECT id, text FROM company_knowledge WHERE user_id = $1 AND replace(id::text, '-', '') LIKE $2 LIMIT 5",
+      [userId, `${idMatch[1].toLowerCase()}%`],
+    ) as any[];
+  } else {
+    hits = await sql("SELECT id, text FROM company_knowledge WHERE user_id = $1 AND text = $2 LIMIT 5", [userId, target]) as any[];
+    if (!hits.length) {
+      const candidates = await sql(
+        `SELECT id, text FROM company_knowledge
+          WHERE user_id = $1 AND (terms && $2::text[] OR terms_hash IS NULL)
+          LIMIT 1000`,
+        [userId, knowledgeTerms(target)],
+      ) as any[];
+      hits = candidates.filter((row) => knowTextKey(row.text) === knowTextKey(target));
+    }
+  }
   if (hits.length === 1) return { id: String(hits[0].id) };
   if (hits.length > 1) return { reason: `${hits.length}개 항목과 일치해 대상을 특정하지 못함(knowledge_audit 의 id:로 지정)` };
   return { reason: "item not found — 일치하는 회사 지식이 없음" };
 }
 
 /** KNOW 마커를 반영하고 항목별 실제 반영 결과(RETURNING 행 수 기준)를 돌려준다. */
-export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | undefined, who: string): Promise<KnowResult[]> {
+export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | undefined, who: string, projectId?: string): Promise<KnowResult[]> {
   const results: KnowResult[] = [];
   for (const k of knows || []) {
     const base = { action: k.action, target: k.text };
     try {
       if (k.action === "add") {
-        const affected = await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
+        const affected = await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`, projectId);
         results.push(affected ? { ...base, status: "ok", affected } : { ...base, status: "skipped", affected: 0, reason: "같은 내용이 이미 있음" });
         continue;
       }
@@ -1268,7 +1295,10 @@ export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | u
       }
       const rows = k.action === "del"
         ? await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND id = $2 RETURNING id", [userId, found.id])
-        : await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND id = $2 RETURNING id", [userId, found.id, k.newText]);
+        : await sql(
+          "UPDATE company_knowledge SET text = $3, terms = $4::text[], terms_hash = md5($3) WHERE user_id = $1 AND id = $2 RETURNING id",
+          [userId, found.id, k.newText, knowledgeTerms(k.newText || "")],
+        );
       const affected = Array.isArray(rows) ? rows.length : 0;
       const id = `id:${found.id.replace(/-/g, "").slice(0, 8)}`;
       results.push(affected ? { ...base, status: "ok", affected, id } : { ...base, status: "error", affected: 0, id, reason: "DB 반영 0건" });
@@ -1483,10 +1513,14 @@ export async function runGroupChat(
   // 이전 턴에서 결과가 못 붙은 진행 안내가 남아 있으면 먼저 마무리 문구로 정리한다.
   await sweepDanglingMessages(sql, userId, conversationId).catch(() => 0);
 
+  // 캔버스 안 대화면 그 프로젝트 — 지식 검색 범위와 새 지식의 소속에 쓴다(다른 작품의 같은 이름이 섞이지 않게).
+  const turnProjectId = projectIdFromMessage(deps.firstMessage);
   // DB 선취 캐시 — company knowledge·skills·projects·auth·pendingJobs를 한 번만 읽고 전 직원이 공유.
   // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
   const [cachedCompanyKnowledge, cachedSkills, cachedProjects, cachedPendingJobsRaw] = await Promise.all([
-    listCompanyKnowledge(sql, userId).catch(() => []).then((ck: any[]) => ck.map((k) => `[${k.type || "사실"}] ${k.text}`)),
+    // 지식이 많으면 사용자 메시지와 관련된 것만(색인 검색). 이 턴의 모든 직원이 공유한다.
+    selectCompanyKnowledgeForPrompt(env, sql, userId, (deps.firstMessage || opts.autoTrigger || "").replace(/^\s*\[캔버스 프로젝트[^\]]*\]\s*/, ""), { projectId: turnProjectId })
+      .catch(() => ({ lines: [] as string[], total: 0, retrieved: false })),
     listSkills(sql, userId).catch(() => [] as any[]),
     listProjects(sql, userId).catch(() => [] as any[]),
     listPendingReviewJobs(sql, userId).catch(() => [] as any[]),
@@ -1503,7 +1537,9 @@ export async function runGroupChat(
     desc: String(j.input?.prompt || j.input?.topic || j.type).slice(0, 100),
   }));
   const sharedOpts = {
-    companyKnowledge: cachedCompanyKnowledge as string[],
+    companyKnowledge: cachedCompanyKnowledge.lines,
+    companyKnowledgeTotal: cachedCompanyKnowledge.total,
+    companyKnowledgeRetrieved: cachedCompanyKnowledge.retrieved,
     companySkills: cachedSkills as any[],
     companyProjects: cachedProjects as any[],
     pendingJobs: pendingJobsCtx,
@@ -1741,7 +1777,7 @@ export async function runGroupChat(
   // KNOW 반영 결과를 확인해, 실패가 있으면 보고 문구를 돌려준다. speakerId 를 주면(이미 발언을 내보낸 뒤) 그 직원 이름으로 바로 알린다.
   const _applyKnows = async (knows: KnowOp[] | undefined, who: string, speakerId?: string): Promise<string> => {
     if (!knows?.length) return "";
-    const note = await knowFailureNote(sql, userId, await applyKnows(sql, userId, knows, who)).catch(() => "");
+    const note = await knowFailureNote(sql, userId, await applyKnows(sql, userId, knows, who, turnProjectId)).catch(() => "");
     if (note && speakerId) {
       await emit({ userId, conversationId, role: "agent", agentId: speakerId, name: getAgent(speakerId)?.name || who, text: note });
     }
