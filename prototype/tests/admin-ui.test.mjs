@@ -109,3 +109,19 @@ test("행이 두 줄로 늘어나지 않는다 (줄바꿈 마크업 제거 + now
   assert.match(html, /\.admin-credit-cell \{ display:flex;[^}]*white-space:nowrap;/);
   assert.match(html, /\.admin-pager \{ display:flex;/);
 });
+
+// 검색·필터를 표 위에 두면 그만큼 표가 밀려 10행이 한 화면에 안 들어갔다.
+test("검색·필터가 표 아래 페이지 줄 왼쪽에 함께 놓인다", () => {
+  const src = read("prototype/js/ui/admin-users.js");
+  const html = read("prototype/admin.html");
+  // 표(admin-table-wrap) 다음에 하단 줄이 오고, 그 안에 검색·필터 → 페이저 순
+  assert.match(src, /admin-table-wrap[\s\S]*admin-list-foot[\s\S]{0,1600}admin-search[\s\S]{0,1600}admin-pager-host/);
+  // 표 위에는 더 이상 툴바가 없다
+  assert.doesNotMatch(src, /admin-toolbar[\s\S]{0,400}admin-table-wrap/);
+  // 좌: 검색·필터 / 우: 페이저
+  assert.match(html, /\.admin-list-foot \{[^}]*justify-content:space-between;/);
+  assert.match(html, /\.admin-list-foot \.admin-pager-host \{ margin-left:auto; \}/);
+  // 가로로 나란히 놓이도록 입력 폭을 고정(예전엔 width:100% 로 한 줄씩 차지했다)
+  assert.match(html, /\.admin-toolbar \.admin-search input \{ width:220px; \}/);
+  assert.doesNotMatch(html, /\.admin-toolbar input, \.admin-toolbar select \{[\s\S]{0,40}width:100%;/);
+});

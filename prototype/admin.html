@@ -17,11 +17,17 @@
     .admin-page { max-width:1080px; margin:0 auto; padding:36px 16px 48px; }
     /* 카드 내부 여백: 검색/카테고리/리스트가 박스 모서리에 붙지 않도록 */
     .admin-list-card .admin-card-inner { padding:20px 22px 22px; }
-    .admin-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:0 0 16px; }
-    .admin-toolbar .admin-search { flex:1 1 220px; min-width:200px; }
+    /* 검색·필터는 표 아래 페이지 줄 왼쪽에 함께 놓는다(위에 두면 표가 밀려 세로 스크롤이 생긴다) */
+    .admin-list-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px; }
+    .admin-list-foot .admin-pager-host { margin-left:auto; }
+    .admin-list-foot .admin-pager { margin-top:0; }
+    .admin-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0; }
+    .admin-toolbar .admin-search { flex:0 0 auto; }
+    .admin-toolbar .admin-search input { width:220px; }
+    .admin-toolbar select { width:132px; }
     .admin-toolbar input, .admin-toolbar select {
-      width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
-      background:var(--studio-input-bg, var(--panel)); color:var(--text); font-size:14px;
+      padding:7px 10px; border-radius:9px; border:1px solid var(--border);
+      background:var(--studio-input-bg, var(--panel)); color:var(--text); font-size:13px;
     }
     .admin-toolbar input::placeholder { color:var(--muted); }
     .admin-toolbar select option { color:#111; background:#fff; }
@@ -153,23 +159,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1755" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1755" />
-  <script src="core.js?v=3.1755" defer></script>
-  <script src="js/config.js?v=3.1755" defer></script>
-  <script src="js/utils.js?v=3.1755" defer></script>
-  <script src="store.js?v=3.1755" defer></script>
-  <script src="api.js?v=3.1755" defer></script>
-  <script src="js/state.js?v=3.1755" defer></script>
-  <script src="js/auth.js?v=3.1755" defer></script>
-  <script src="js/navigation.js?v=3.1755" defer></script>
-  <script src="js/service/media.js?v=3.1755" defer></script>
-  <script src="js/service/project.js?v=3.1755" defer></script>
-  <script src="js/service/character-traits.js?v=3.1755" defer></script>
-  <script src="js/service/brand.js?v=3.1755" defer></script>
-  <script src="js/ui/common.js?v=3.1755" defer></script>
-  <script src="js/ui/admin-users.js?v=3.1755" defer></script>
-  <script src="script.js?v=3.1755" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1756" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1756" />
+  <script src="core.js?v=3.1756" defer></script>
+  <script src="js/config.js?v=3.1756" defer></script>
+  <script src="js/utils.js?v=3.1756" defer></script>
+  <script src="store.js?v=3.1756" defer></script>
+  <script src="api.js?v=3.1756" defer></script>
+  <script src="js/state.js?v=3.1756" defer></script>
+  <script src="js/auth.js?v=3.1756" defer></script>
+  <script src="js/navigation.js?v=3.1756" defer></script>
+  <script src="js/service/media.js?v=3.1756" defer></script>
+  <script src="js/service/project.js?v=3.1756" defer></script>
+  <script src="js/service/character-traits.js?v=3.1756" defer></script>
+  <script src="js/service/brand.js?v=3.1756" defer></script>
+  <script src="js/ui/common.js?v=3.1756" defer></script>
+  <script src="js/ui/admin-users.js?v=3.1756" defer></script>
+  <script src="script.js?v=3.1756" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>
