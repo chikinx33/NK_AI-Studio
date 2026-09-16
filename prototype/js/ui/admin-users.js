@@ -20,6 +20,7 @@
     primaryAdminId: '',     // 최고(슈퍼) 관리자 ID — 서버 응답에서 받음
     search: '',
     filter: 'all',          // all | admin | member | active | inactive
+    page: 1,                // 목록 페이지(1부터). 검색·필터가 바뀌면 1로 되돌린다.
     modalOpen: false,
     modalMode: 'create',    // create | edit
     modalError: '',
@@ -110,6 +111,26 @@
   }
 
   // ─── 필터링 ────────────────────────────────────────────────
+  // 한 화면에 10명씩. 행은 한 줄로 고정하고 나머지는 페이지로 넘긴다.
+  var PAGE_SIZE = 10;
+
+  function totalPages(count) {
+    return Math.max(1, Math.ceil(Math.max(0, count) / PAGE_SIZE));
+  }
+
+  // 목록이 줄어(삭제·검색) 현재 페이지가 비면 마지막 페이지로 당긴다.
+  function clampPage(count) {
+    var last = totalPages(count);
+    if (state.page > last) state.page = last;
+    if (state.page < 1) state.page = 1;
+    return state.page;
+  }
+
+  function pagedUsers(list) {
+    var page = clampPage(list.length);
+    return list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }
+
   function visibleUsers() {
     var q = String(state.search || '').trim().toLowerCase();
     return state.users.filter(function (u) {
@@ -150,11 +171,7 @@
     } else if (state.error) {
       rows = '<tr><td colspan="6"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
     } else {
-      var list = visibleUsers();
-      var primaryRow = buildPrimaryAdminRowIfNeeded();
-      var listRows = list.length ? list.map(buildRow).join('') : '';
-      rows = primaryRow + listRows;
-      if (!rows) rows = '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
+      rows = buildTableRows();
     }
 
     root.innerHTML = [
@@ -199,6 +216,7 @@
                 '<tbody>', rows, '</tbody>',
               '</table>',
             '</div>',
+            '<div class="admin-pager-host">' + (state.loading || state.error ? '' : buildPager()) + '</div>',
           '</div>',
         '</div>',
 
@@ -210,6 +228,59 @@
     ].join('');
 
     bindEvents(root);
+  }
+
+  // 현재 페이지의 행들. 마스터 비밀번호 안내 행은 첫 페이지에만 붙인다.
+  function buildTableRows() {
+    var list = visibleUsers();
+    var primaryRow = (clampPage(list.length) === 1) ? buildPrimaryAdminRowIfNeeded() : '';
+    var listRows = pagedUsers(list).map(buildRow).join('');
+    var rows = primaryRow + listRows;
+    return rows || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
+  }
+
+  // 하단 페이지 이동. ‹ 이전 · 번호 · 다음 › — 번호는 현재 쪽 주변 5개까지만 띄우고
+  // 양 끝은 첫/마지막 쪽을 항상 남겨 어디쯤인지 알 수 있게 한다.
+  function buildPager() {
+    var count = visibleUsers().length;
+    var last = totalPages(count);
+    if (last <= 1) return '';
+    var cur = clampPage(count);
+    var en = curLang() === 'en';
+
+    var nums = [];
+    var from = Math.max(1, cur - 2);
+    var to = Math.min(last, from + 4);
+    from = Math.max(1, to - 4);
+    if (from > 1) {
+      nums.push(1);
+      if (from > 2) nums.push('…');
+    }
+    for (var i = from; i <= to; i++) nums.push(i);
+    if (to < last) {
+      if (to < last - 1) nums.push('…');
+      nums.push(last);
+    }
+
+    var btn = function (page, label, disabled, ariaLabel, isCurrent) {
+      if (page == null) return '<span class="admin-pager-gap">' + label + '</span>';
+      return '<button type="button" class="admin-pager-btn' + (isCurrent ? ' is-current' : '') + '"' +
+        ' data-action="go-page" data-page="' + page + '"' +
+        (disabled ? ' disabled' : '') +
+        (isCurrent ? ' aria-current="page"' : '') +
+        (ariaLabel ? ' aria-label="' + escapeHtml(ariaLabel) + '"' : '') +
+        '>' + label + '</button>';
+    };
+
+    return [
+      '<nav class="admin-pager" aria-label="' + escapeHtml(en ? 'Pagination' : '페이지 이동') + '">',
+        btn(cur - 1, '&lsaquo;', cur <= 1, en ? 'Previous page' : '이전 페이지', false),
+        nums.map(function (n) {
+          return n === '…' ? btn(null, '…') : btn(n, String(n), false, '', n === cur);
+        }).join(''),
+        btn(cur + 1, '&rsaquo;', cur >= last, en ? 'Next page' : '다음 페이지', false),
+      '</nav>'
+    ].join('');
   }
 
   function isPrimaryRegistered() {
@@ -235,20 +306,36 @@
     ].join('');
   }
 
+  // 권한 칩은 한 줄을 넘기지 않게 앞의 몇 개만 보이고 나머지는 '+N' 으로 접는다.
+  // 접힌 것도 확인할 수 있게 전체 목록을 title 로 붙인다.
+  var PERM_CHIPS_VISIBLE = 3;
+  function buildPermChips(labels) {
+    if (!labels.length) return '';
+    var shown = labels.slice(0, PERM_CHIPS_VISIBLE);
+    var rest = labels.length - shown.length;
+    var html = shown.map(function (label) {
+      return '<span class="admin-perm-chip">' + escapeHtml(label) + '</span>';
+    }).join('');
+    if (rest > 0) {
+      html += '<span class="admin-perm-chip admin-perm-chip--more" title="' + escapeHtml(labels.join(', ')) + '">+' + rest + '</span>';
+    }
+    return html;
+  }
+
   function buildRow(u) {
     var master = isMasterUser(u);
     var permHtml = master
       ? '<span class="admin-perm-chip">' + escapeHtml(t('admin_full_perm')) + '</span>'
       : (Array.isArray(u.permissions) && u.permissions.length
-          ? u.permissions.map(function (p) { return '<span class="admin-perm-chip">' + escapeHtml(permLabel(p)) + '</span>'; }).join('')
+          ? buildPermChips(u.permissions.map(permLabel))
           : '<span class="admin-perm-chip">' + escapeHtml(t('admin_no_perm')) + '</span>');
     var roleBadge = master
       ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
       : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
     var deleteAfterLabel = formatDeleteAfter(u.deleteAfter);
     var stateBadge = u.deletionRequestedAt
-      ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(u.deleteAfter || '') + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
-        + (deleteAfterLabel ? '<br><span class="admin-row-email">' + escapeHtml(t('admin_delete_at')) + ' ' + escapeHtml(deleteAfterLabel) + '</span>' : '')
+      ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(deleteAfterLabel ? (t('admin_delete_at') + ' ' + deleteAfterLabel) : (u.deleteAfter || '')) + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
+        + (deleteAfterLabel ? '<span class="admin-row-sub">' + escapeHtml(deleteAfterLabel) + '</span>' : '')
       : (u.active === false)
       ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_inactive')) + '</span>'
       : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
@@ -257,8 +344,10 @@
     var deleteBtn = (master || u.deletionRequestedAt) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
     var editBtn = u.deletionRequestedAt ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
     var restoreBtn = u.deletionRequestedAt ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="restore-user" data-id="' + id + '">' + escapeHtml(t('admin_restore')) + '</button>' : '';
-    var nameCell = escapeHtml(u.name || '-')
-      + (u.email ? '<br><span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '');
+    var nameCell = '<span class="admin-name-cell" title="' + escapeHtml((u.name || '-') + (u.email ? ' · ' + u.email : '')) + '">'
+      + '<span class="admin-row-name">' + escapeHtml(u.name || '-') + '</span>'
+      + (u.email ? '<span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '')
+      + '</span>';
     return [
       '<tr data-id="' + id + '">',
         '<td><strong>' + id + '</strong></td>',
@@ -277,13 +366,13 @@
 
   function buildCreditCell(userId) {
     if (state.creditLoadError) {
-      return '<div class="admin-credit-cell"><strong>' + (curLang() === 'en' ? 'Unavailable' : '확인 불가') + '</strong><small>' + (curLang() === 'en' ? 'Refresh to retry.' : '새로고침 후 다시 확인해 주세요.') + '</small></div>';
+      return '<div class="admin-credit-cell"><strong title="' + (curLang() === 'en' ? 'Refresh to retry.' : '새로고침 후 다시 확인해 주세요.') + '">' + (curLang() === 'en' ? 'Unavailable' : '확인 불가') + '</strong></div>';
     }
     var credit = state.creditMap[String(userId || '')] || {};
     var available = Math.max(0, Number(credit.available || 0));
     var reserved = Math.max(0, Number(credit.reserved || 0));
     return '<div class="admin-credit-cell"><strong>' + available.toLocaleString() + ' C</strong>' +
-      (reserved ? '<small>' + (curLang() === 'en' ? 'Reserved ' : '예약 ') + reserved.toLocaleString() + ' C</small>' : '') +
+      (reserved ? '<small title="' + (curLang() === 'en' ? 'Reserved' : '예약 중') + '">+' + reserved.toLocaleString() + '</small>' : '') +
       '<div class="admin-credit-actions">' +
         '<button type="button" data-action="credit-grant" data-id="' + escapeHtml(userId) + '">' + (curLang() === 'en' ? 'Grant' : '지급') + '</button>' +
         '<button type="button" data-action="credit-revoke" data-id="' + escapeHtml(userId) + '">' + (curLang() === 'en' ? 'Revoke' : '회수') + '</button>' +
@@ -391,19 +480,13 @@
     if (search) {
       search.addEventListener('input', function () {
         state.search = search.value;
-        // 입력 중 포커스 유지를 위해 테이블 본문만 갱신
-        var tbody = root.querySelector('table.admin-table tbody');
-        if (tbody) {
-          var list = visibleUsers();
-          var primaryRow = buildPrimaryAdminRowIfNeeded();
-          var listRows = list.length ? list.map(buildRow).join('') : '';
-          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
-          bindRowActions(root);
-        }
+        state.page = 1;
+        // 입력 중 포커스 유지를 위해 테이블 본문·페이저만 갱신
+        refreshList(root);
       });
     }
     var filter = root.querySelector('#admin-filter');
-    if (filter) filter.addEventListener('change', function () { state.filter = filter.value; render(); });
+    if (filter) filter.addEventListener('change', function () { state.filter = filter.value; state.page = 1; render(); });
 
     root.querySelectorAll('[data-action]').forEach(function (el) {
       el.addEventListener('click', onAction);
@@ -411,9 +494,18 @@
   }
 
   function bindRowActions(root) {
-    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"], [data-action^="credit-"]').forEach(function (el) {
+    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"], [data-action^="credit-"], [data-action="go-page"]').forEach(function (el) {
       el.addEventListener('click', onAction);
     });
+  }
+
+  // 화면 전체를 다시 그리지 않고 목록(본문+페이저)만 교체한다. 검색 입력 포커스가 유지된다.
+  function refreshList(root) {
+    var tbody = root.querySelector('table.admin-table tbody');
+    if (tbody) tbody.innerHTML = buildTableRows();
+    var pagerHost = root.querySelector('.admin-pager-host');
+    if (pagerHost) pagerHost.innerHTML = buildPager();
+    bindRowActions(root);
   }
 
   function onAction(e) {
@@ -423,6 +515,13 @@
     else if (action === 'new-user') { openModal('create'); }
     else if (action === 'set-primary-pw') { openPrimaryPwModal(); }
     else if (action === 'reload') { loadUsers(); }
+    else if (action === 'go-page') {
+      var next = Number(el.getAttribute('data-page')) || 1;
+      if (next === state.page) return;
+      state.page = next;
+      var host = document.querySelector('.content');
+      if (host) refreshList(host);
+    }
     else if (action === 'edit-user') { openModal('edit', el.getAttribute('data-id')); }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
     else if (action === 'restore-user') { restoreUser(el.getAttribute('data-id')); }

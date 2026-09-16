@@ -27,7 +27,11 @@
     .admin-toolbar select option { color:#111; background:#fff; }
     .admin-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
     table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
-    table.admin-table th, table.admin-table td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--border); color:var(--text); }
+    /* 행은 항상 한 줄 — 넘치는 내용은 줄이거나(…) 접고, 전체는 title 로 확인한다. */
+    table.admin-table th, table.admin-table td {
+      padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:var(--text);
+      white-space:nowrap; vertical-align:middle;
+    }
     table.admin-table th { font-weight:600; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
     table.admin-table tr:last-child td { border-bottom:none; }
     table.admin-table tbody tr:hover { background:var(--layer-strong); }
@@ -37,7 +41,8 @@
     .admin-badge--member { background:rgba(96,165,250,.16); color:#93c5fd; }
     .admin-badge--on { background:rgba(34,197,94,.18); color:#4ade80; }
     .admin-badge--off { background:rgba(148,163,184,.18); color:#cbd5e1; }
-    .admin-perm-chip { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.16); color:var(--text); }
+    .admin-perm-chip { display:inline-block; margin:0 4px 0 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.16); color:var(--text); }
+    .admin-perm-chip--more { cursor:help; color:var(--muted); }
 
     /* 라이트 테마: 라벨/칩 가독성 보정 (어두운 글씨 + 적당한 배경) */
     [data-theme="light"] .admin-badge--admin { background:rgba(245,158,11,.18); color:#b45309; }
@@ -46,7 +51,11 @@
     [data-theme="light"] .admin-badge--off { background:rgba(100,116,139,.16); color:#475569; }
     [data-theme="light"] .admin-perm-chip { background:rgba(100,116,139,.14); color:#334155; }
 
-    .admin-row-email { font-size:12px; color:var(--muted, #94a3b8); }
+    /* 이름 + 이메일을 한 줄에. 좁아지면 이메일부터 … 로 줄인다. */
+    .admin-name-cell { display:inline-flex; align-items:baseline; gap:8px; max-width:280px; }
+    .admin-row-name { flex:0 0 auto; }
+    .admin-row-email { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:12px; color:var(--muted, #94a3b8); }
+    .admin-row-sub { margin-left:8px; font-size:12px; color:var(--muted, #94a3b8); }
 
     .admin-row-actions { display:flex; flex-wrap:nowrap; gap:8px; }
 
@@ -70,6 +79,19 @@
     .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#ef4444; border-color:rgba(239,68,68,.45); }
     .admin-empty, .admin-error { padding:28px; text-align:center; color:var(--muted); }
     .admin-error { color:#ef4444; }
+    /* 하단 페이지 이동 */
+    .admin-pager-host:empty { display:none; }
+    .admin-pager { display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin-top:16px; }
+    .admin-pager-btn {
+      min-width:34px; height:34px; padding:0 10px; border:1px solid var(--border); border-radius:9px;
+      background:var(--panel); color:var(--text); font-size:13px; line-height:1; cursor:pointer;
+      transition:background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .admin-pager-btn:hover:not(:disabled) { background:var(--layer-strong); border-color:var(--accent); }
+    .admin-pager-btn.is-current { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+    .admin-pager-btn:disabled { opacity:.35; cursor:not-allowed; }
+    .admin-pager-gap { min-width:20px; text-align:center; color:var(--muted); font-size:13px; }
+
     .admin-version { text-align:center; color:var(--muted); font-size:12px; opacity:.75; margin-top:18px; }
 
     /* 모달 */
@@ -111,11 +133,11 @@
     .admin-hint { font-size:12px; color:var(--muted); margin-top:4px; }
     .admin-modal-error { color:#ef4444; font-size:13px; margin-top:10px; min-height:18px; }
     .admin-status { font-size:13px; color:#16a34a; }
-    .admin-credit-cell { min-width:190px; }
+    .admin-credit-cell { display:flex; align-items:center; gap:8px; white-space:nowrap; }
     .admin-credit-load-error { margin:0 0 14px; padding:12px 14px; border:1px solid rgba(239,68,68,.35); border-radius:10px; background:rgba(239,68,68,.08); }
-    .admin-credit-cell > strong { display:block; color:#fbbf24; font-size:14px; }
-    .admin-credit-cell > small { display:block; margin-top:2px; color:var(--muted); font-size:10px; }
-    .admin-credit-actions { display:flex; gap:4px; margin-top:6px; }
+    .admin-credit-cell > strong { color:#fbbf24; font-size:14px; }
+    .admin-credit-cell > small { color:var(--muted); font-size:11px; cursor:help; }
+    .admin-credit-actions { display:flex; gap:4px; }
     .admin-credit-actions button { border:1px solid var(--border); border-radius:6px; padding:3px 6px; background:transparent; color:var(--muted); font-size:10px; cursor:pointer; }
     .admin-credit-actions button:hover { color:var(--text); border-color:var(--accent); }
     .admin-credit-modal { max-width:860px; }
@@ -131,23 +153,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1754" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1754" />
-  <script src="core.js?v=3.1754" defer></script>
-  <script src="js/config.js?v=3.1754" defer></script>
-  <script src="js/utils.js?v=3.1754" defer></script>
-  <script src="store.js?v=3.1754" defer></script>
-  <script src="api.js?v=3.1754" defer></script>
-  <script src="js/state.js?v=3.1754" defer></script>
-  <script src="js/auth.js?v=3.1754" defer></script>
-  <script src="js/navigation.js?v=3.1754" defer></script>
-  <script src="js/service/media.js?v=3.1754" defer></script>
-  <script src="js/service/project.js?v=3.1754" defer></script>
-  <script src="js/service/character-traits.js?v=3.1754" defer></script>
-  <script src="js/service/brand.js?v=3.1754" defer></script>
-  <script src="js/ui/common.js?v=3.1754" defer></script>
-  <script src="js/ui/admin-users.js?v=3.1754" defer></script>
-  <script src="script.js?v=3.1754" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1755" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1755" />
+  <script src="core.js?v=3.1755" defer></script>
+  <script src="js/config.js?v=3.1755" defer></script>
+  <script src="js/utils.js?v=3.1755" defer></script>
+  <script src="store.js?v=3.1755" defer></script>
+  <script src="api.js?v=3.1755" defer></script>
+  <script src="js/state.js?v=3.1755" defer></script>
+  <script src="js/auth.js?v=3.1755" defer></script>
+  <script src="js/navigation.js?v=3.1755" defer></script>
+  <script src="js/service/media.js?v=3.1755" defer></script>
+  <script src="js/service/project.js?v=3.1755" defer></script>
+  <script src="js/service/character-traits.js?v=3.1755" defer></script>
+  <script src="js/service/brand.js?v=3.1755" defer></script>
+  <script src="js/ui/common.js?v=3.1755" defer></script>
+  <script src="js/ui/admin-users.js?v=3.1755" defer></script>
+  <script src="script.js?v=3.1755" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>

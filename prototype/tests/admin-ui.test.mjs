@@ -72,3 +72,40 @@ test("admin-users.js maps server errors to friendly messages", () => {
   assert.match(src, /conflict/);
   assert.match(src, /cannot_delete_primary_admin/);
 });
+
+// 회원 목록은 한 화면에 10명씩, 각 행은 한 줄로 고정하고 하단 페이지 버튼으로 넘긴다.
+test("회원 목록이 10명씩 페이지로 끊기고 하단에 이전·번호·다음 버튼이 붙는다", () => {
+  const src = read("prototype/js/ui/admin-users.js");
+  assert.match(src, /var PAGE_SIZE = 10;/);
+  assert.match(src, /list\.slice\(\(page - 1\) \* PAGE_SIZE, page \* PAGE_SIZE\)/);
+  // 목록이 줄어 현재 페이지가 비면 마지막 페이지로 당긴다(삭제·검색 후 빈 화면 방지)
+  assert.match(src, /function clampPage\(count\)[\s\S]{0,200}if \(state\.page > last\) state\.page = last;/);
+  // 검색·필터를 바꾸면 1쪽부터
+  assert.match(src, /state\.search = search\.value;\s*\n\s*state\.page = 1;/);
+  assert.match(src, /state\.filter = filter\.value; state\.page = 1;/);
+  // 페이저: 이전(‹) · 번호 · 다음(›), 양 끝에서는 비활성
+  assert.match(src, /btn\(cur - 1, '&lsaquo;', cur <= 1/);
+  assert.match(src, /btn\(cur \+ 1, '&rsaquo;', cur >= last/);
+  assert.match(src, /data-action="go-page" data-page="/);
+  assert.match(src, /else if \(action === 'go-page'\)/);
+  // 한 쪽뿐이면 페이저를 그리지 않는다
+  assert.match(src, /if \(last <= 1\) return '';/);
+  // 마스터 비밀번호 안내 행은 1쪽에만
+  assert.match(src, /clampPage\(list\.length\) === 1\) \? buildPrimaryAdminRowIfNeeded\(\)/);
+});
+
+test("행이 두 줄로 늘어나지 않는다 (줄바꿈 마크업 제거 + nowrap)", () => {
+  const src = read("prototype/js/ui/admin-users.js");
+  const html = read("prototype/admin.html");
+  // 이름/상태 셀에 있던 <br> 이 사라졌다
+  assert.doesNotMatch(src, /<br><span class="admin-row-email"/);
+  assert.doesNotMatch(src, /<br><span class="admin-row-sub"/);
+  // 권한 칩은 3개까지만 보이고 나머지는 +N (전체는 title)
+  assert.match(src, /var PERM_CHIPS_VISIBLE = 3;/);
+  assert.match(src, /admin-perm-chip--more" title="' \+ escapeHtml\(labels\.join\(', '\)\)/);
+  // 표 셀 자체가 줄바꿈하지 않는다
+  assert.match(html, /table\.admin-table th, table\.admin-table td \{[^}]*white-space:nowrap;/s);
+  // 크레딧 셀은 잔액·예약·버튼을 한 줄에 놓는다
+  assert.match(html, /\.admin-credit-cell \{ display:flex;[^}]*white-space:nowrap;/);
+  assert.match(html, /\.admin-pager \{ display:flex;/);
+});
