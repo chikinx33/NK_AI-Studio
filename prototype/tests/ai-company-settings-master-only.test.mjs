@@ -27,7 +27,8 @@ test("★마스터 판별은 부모 사이트가 저장한 등급을 읽는다 (
 
 test("★일반 회원에게는 톱니 버튼도 설정 화면도 열리지 않는다", () => {
   const app = read(`${SRC}/App.tsx`);
-  assert.match(app, /const canUseSettings = useMemo\(\(\) => isMasterUser\(\), \[\]\);/);
+  assert.match(app, /const isMaster = useMemo\(\(\) => isMasterUser\(\), \[\]\);/);
+  assert.match(app, /const canUseSettings = isMaster;/);
   // 상단바·우측 패널 두 곳 모두 게이트를 통과한 경우에만 핸들러를 넘긴다
   const handed = app.match(/onSettings=\{canUseSettings \? openSettings : undefined\}/g) || [];
   assert.equal(handed.length, 2, "모바일 상단바와 데스크톱 우측 패널 두 곳 모두 막아야 한다");
@@ -42,4 +43,36 @@ test("핸들러가 없으면 RightMenu 가 톱니 버튼을 그리지 않는다"
   const menu = read(`${SRC}/components/RightMenu.tsx`);
   assert.match(menu, /onSettings\?: \(\) => void;/);
   assert.match(menu, /\{onSettings \? \(\s*\n\s*<IconBtn active=\{centerView === "settings"\}/);
+});
+
+test("★자율 근무 버튼도 마스터에게만 보이고, 회원 계정에서는 돌지 않는다", () => {
+  const sidebar = read(`${SRC}/components/Sidebar.tsx`);
+  assert.match(sidebar, /const canUseAutonomous = isMasterUser\(\);/);
+  assert.match(sidebar, /\{canUseAutonomous && \([\s\S]{0,60}<button[\s\S]{0,60}onClick=\{toggleAuto\}/);
+
+  const app = read(`${SRC}/App.tsx`);
+  // 에이전트가 도구로 켜는 것도 막는다
+  assert.match(app, /name === "work\.autonomous"[\s\S]{0,120}if \(isMaster\) void setAutonomous/);
+  // 예전에 켜 둔 상태가 남아 있어도 60초 스텝 폴링이 돌지 않는다
+  assert.match(app, /const autonomousOn = isMaster && status\?\.workMode === "on" && !!status\?\.autonomous;/);
+});
+
+test("★직원 페르소나·규칙·지식은 서버에서 계정별로 저장된다", () => {
+  // 화면에서 고친 내용이 다른 계정에 새지 않는다는 보장 — user_id 가 키의 일부여야 한다.
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /INSERT INTO agent_personas \(user_id, agent_id, prompt\)[\s\S]{0,120}ON CONFLICT \(user_id, agent_id\)/);
+  assert.match(shared, /INSERT INTO agent_knowledge \(user_id, agent_id, text, type\)/);
+  assert.match(shared, /FROM agent_knowledge WHERE user_id = \$1 AND agent_id = \$2/);
+  assert.match(shared, /DELETE FROM agent_knowledge WHERE user_id = \$1 AND agent_id = \$2/);
+
+  // 엔드포인트가 세션의 userId 로만 읽고 쓴다(요청 본문의 사용자 id 를 믿지 않는다).
+  for (const [file, fns] of [
+    ["persona.ts", [/setAgentPersona\(sql, auth\.userId/]],
+    ["knowledge.ts", [/listAgentKnowledge\(sql, auth\.userId/, /addAgentKnowledgeRow\(sql, auth\.userId/, /removeAgentKnowledgeRow\(sql, auth\.userId/]],
+    ["detail.ts", [/getAgentPersona\(sql, auth\.userId/, /listAgentKnowledge\(sql, auth\.userId/]],
+  ]) {
+    const src = read(`prototype/functions/api/agent/${file}`);
+    assert.match(src, /authorizeRequest\(request, env\)/, file);
+    for (const fn of fns) assert.match(src, fn, `${file}: ${fn}`);
+  }
 });

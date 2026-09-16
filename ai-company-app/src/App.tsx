@@ -136,7 +136,9 @@ export default function App() {
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">(EMBED_CANVAS ? "skills" : "chat");
   // 옵션(설정)은 두뇌 모드·Claude 인증·직원별 모델을 다뤄 마스터만 연다.
   // 일반 회원은 톱니 버튼도, 에이전트의 ui.navigate 도 설정 화면에 닿지 않는다.
-  const canUseSettings = useMemo(() => isMasterUser(), []);
+  // 자율 근무도 같은 기준 — 켜 두면 직원들이 60초마다 스스로 일해 토큰을 계속 쓴다.
+  const isMaster = useMemo(() => isMasterUser(), []);
+  const canUseSettings = isMaster;
   const openSettings = useCallback(() => { if (canUseSettings) setCenterView("settings"); }, [canUseSettings]);
   // 제작 캔버스: 채팅(canvas.open/focus)이 가리키는 프로젝트·컷.
   const [canvasProjectId, setCanvasProjectId] = useState(EMBED_PROJECT_ID || readUserStorage("canvasProjectId"));
@@ -348,7 +350,7 @@ export default function App() {
     } else if (name === "work.mode" && (action.mode === "on" || action.mode === "off")) {
       void setWork(action.mode).then(refreshStatus);
     } else if (name === "work.autonomous" && typeof action.enabled === "boolean") {
-      void setAutonomous(action.enabled).then(refreshStatus);
+      if (isMaster) void setAutonomous(action.enabled).then(refreshStatus);
     } else if (name === "knowledge.view") {
       const filter = action.filter;
       openKnowledgeCategory(filter === "원칙" || filter === "사실" || filter === "결정" || filter === "스킬" ? filter : null);
@@ -1195,7 +1197,7 @@ export default function App() {
 
   // 자율 근무 진행: 출근(workMode=on) + 자율(autonomous) 상태일 때만, 60초마다 한 스텝씩
   // 코어가 프로젝트를 실제로 진행시킨다(브라우저가 열려 있는 동안). 보고는 events 폴링으로 화면에 반영.
-  const autonomousOn = status?.workMode === "on" && !!status?.autonomous;
+  const autonomousOn = isMaster && status?.workMode === "on" && !!status?.autonomous;
   useEffect(() => {
     if (!autonomousOn) return;
     let stopped = false;

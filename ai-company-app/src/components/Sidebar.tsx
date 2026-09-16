@@ -3,7 +3,7 @@ import { getStudioBrand, saveStudioBrandIcon, setWork, setAutonomous, type Agent
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
 import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
-import { readStorage, readUserStorage, writeUserStorage } from "../lib/safeStorage";
+import { isMasterUser, readStorage, readUserStorage, writeUserStorage } from "../lib/safeStorage";
 
 interface Props {
   status: StatusInfo | null;
@@ -451,6 +451,9 @@ export default function Sidebar({
   }
   const off = status?.workMode === "off";
   const auto = status?.autonomous === true;
+  // 자율 근무는 켜 두면 직원들이 60초마다 스스로 한 스텝씩 일해 토큰을 계속 쓴다.
+  // 옵션(설정) 화면과 같은 기준으로 마스터에게만 버튼을 보인다.
+  const canUseAutonomous = isMasterUser();
 
   // 로고: 계정별 스튜디오 브랜드(런처 로그인 카드와 같은 값). 없으면 기본 로고. 누르면 이미지 등록.
   const [brandIcon, setBrandIcon] = useState("");
@@ -610,18 +613,20 @@ export default function Sidebar({
             onClick={toggleWork}
             title={off ? "출근시키면 모델을 다시 불러옵니다" : "퇴근하면 모델을 VRAM에서 내려 컴퓨터가 가벼워집니다"}
           />
-          <button
-            onClick={toggleAuto}
-            disabled={toggling || off}
-            title="자율 근무(Free) — 켜면 한가할 때 직원들이 스스로 한 스텝씩 일합니다"
-            className={`grid h-7 w-7 place-items-center rounded-full bg-emerald-600 text-white shadow transition hover:bg-emerald-500 disabled:cursor-not-allowed ${
-              auto ? "opacity-100" : "opacity-40"
-            }`}
-          >
-            <RefreshCwIcon
-              className={`h-4 w-4 ${auto ? "animate-spin [animation-duration:2.5s]" : ""}`}
-            />
-          </button>
+          {canUseAutonomous && (
+            <button
+              onClick={toggleAuto}
+              disabled={toggling || off}
+              title="자율 근무(Free) — 켜면 한가할 때 직원들이 스스로 한 스텝씩 일합니다"
+              className={`grid h-7 w-7 place-items-center rounded-full bg-emerald-600 text-white shadow transition hover:bg-emerald-500 disabled:cursor-not-allowed ${
+                auto ? "opacity-100" : "opacity-40"
+              }`}
+            >
+              <RefreshCwIcon
+                className={`h-4 w-4 ${auto ? "animate-spin [animation-duration:2.5s]" : ""}`}
+              />
+            </button>
+          )}
         </div>
       </div>
 
