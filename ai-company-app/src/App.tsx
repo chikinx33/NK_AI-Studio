@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
@@ -56,7 +56,7 @@ export const EMBED_MODE = EMBED_PARAMS.get("embed") === "1";
 export const EMBED_CANVAS = EMBED_PARAMS.get("view") === "canvas";
 const EMBED_PROJECT_ID = String(EMBED_PARAMS.get("projectId") || EMBED_PARAMS.get("pid") || "").trim();
 import { SpeechInputButton, useSpeechInput } from "./components/SpeechInputControl";
-import { readUserStorage, writeUserStorage } from "./lib/safeStorage";
+import { isMasterUser, readUserStorage, writeUserStorage } from "./lib/safeStorage";
 import { markActive, useLiveRefresh } from "./lib/liveSync";
 
 // 음성 방식: browser=무료 브라우저 읽기(speechSynthesis) / server=자체 호스팅 MeloTTS / cloud=Gemini 고품질
@@ -134,6 +134,10 @@ export default function App() {
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">(EMBED_CANVAS ? "skills" : "chat");
+  // 옵션(설정)은 두뇌 모드·Claude 인증·직원별 모델을 다뤄 마스터만 연다.
+  // 일반 회원은 톱니 버튼도, 에이전트의 ui.navigate 도 설정 화면에 닿지 않는다.
+  const canUseSettings = useMemo(() => isMasterUser(), []);
+  const openSettings = useCallback(() => { if (canUseSettings) setCenterView("settings"); }, [canUseSettings]);
   // 제작 캔버스: 채팅(canvas.open/focus)이 가리키는 프로젝트·컷.
   const [canvasProjectId, setCanvasProjectId] = useState(EMBED_PROJECT_ID || readUserStorage("canvasProjectId"));
   const [canvasFocus, setCanvasFocus] = useState<{ sceneId: string | number | null; nonce: number }>({ sceneId: null, nonce: 0 });
@@ -293,7 +297,8 @@ export default function App() {
     }
     if (name === "navigate") {
       const view = String(action.view || "");
-      const allowed = new Set(["chat", "dashboard", "settings", "knowledge", "agents", "works", "skills", "canvas"]);
+      const allowed = new Set(["chat", "dashboard", "knowledge", "agents", "works", "skills", "canvas"]);
+      if (canUseSettings) allowed.add("settings");
       if (view === "canvas") {
         // 캔버스는 스킬 화면의 한 분류 — navigate 로도 같은 곳에 닿게 한다.
         setSkillCategoryId(CANVAS_SKILL_CATEGORY_ID);
@@ -1327,7 +1332,7 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onSettings={() => setCenterView("settings")}
+              onSettings={canUseSettings ? openSettings : undefined}
             />
           </div>
         </div>
@@ -1373,7 +1378,7 @@ export default function App() {
               onToggleCanvasExpand={toggleCanvasExpand}
             />
           </Suspense>
-        ) : centerView === "settings" ? (
+        ) : centerView === "settings" && canUseSettings ? (
           <Settings
             status={status}
             agents={agents}
@@ -1437,7 +1442,7 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onSettings={() => setCenterView("settings")}
+              onSettings={canUseSettings ? openSettings : undefined}
             />
             <SkillBox
               activeCategoryId={centerView === "skills" ? skillCategoryId : undefined}

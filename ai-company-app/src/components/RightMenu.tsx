@@ -107,7 +107,8 @@ interface Props {
   onKnowledge: () => void;
   onAgents: () => void;
   onWorks: () => void;
-  onSettings: () => void;
+  /** 옵션(설정) 진입. 일반 회원에게는 넘기지 않으며, 없으면 톱니 버튼 자체를 그리지 않는다. */
+  onSettings?: () => void;
 }
 
 export default function RightMenu({
@@ -137,9 +138,11 @@ export default function RightMenu({
         <UsersIcon className="h-4 w-4" />
       </IconBtn>
       <div className="ml-auto" />
-      <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
-        <SettingsIcon className="h-4 w-4" />
-      </IconBtn>
+      {onSettings ? (
+        <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
+          <SettingsIcon className="h-4 w-4" />
+        </IconBtn>
+      ) : null}
       <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }} danger>
         <PowerIcon className="h-4 w-4" />
       </IconBtn>
