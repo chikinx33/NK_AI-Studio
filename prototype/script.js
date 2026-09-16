@@ -297,7 +297,24 @@
       if (!NK.api || !NK.api.projectList) return;
       const list = await NK.api.projectList();
       const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
-      if (!ids.length) return;
+      if (!ids.length) {
+        // 서버에 프로젝트가 없는 계정(신규 가입 등)인데 로컬에 카드가 남아 있으면
+        // 그건 이 계정 것이 아니다. 로컬 캐시와 선택 상태를 비우고 사이드바 카드도 내린다.
+        const stale = NK.store.getDrafts();
+        if (stale && stale.length) {
+          if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts([]);
+          else NK.store.saveDrafts([]);
+        }
+        // 공유받은 프로젝트를 보고 있는 중이면 선택 상태는 유지한다.
+        const sharedIds = new Set((Array.isArray(list?.shared) ? list.shared : []).map(s => String(s && s.projectId || '')));
+        const curId = String(NK.service?.project?.getCurrentProjectId?.() || '');
+        if (!curId || !sharedIds.has(curId)) {
+          try { if (NK.service?.project?.clearCurrent) NK.service.project.clearCurrent(); } catch (_) { }
+          if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) NK.ui.dashboard.renderSidebarProjectCard(null);
+        }
+        if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) NK.ui.dashboard.renderDrafts();
+        return;
+      }
       let drafts = NK.store.getDrafts();
       let changed = false;
       const idSet = new Set(ids.map(id => String(id)));

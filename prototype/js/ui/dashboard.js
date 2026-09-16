@@ -819,6 +819,14 @@
           drafts = [];
           if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
           else NK.store.saveDrafts(drafts);
+          // 소유 프로젝트가 0개인 계정인데 사이드바 카드가 떠 있으면 이전 계정 잔여물이다.
+          // 공유받은 프로젝트를 보고 있는 경우만 예외로 둔다.
+          const sharedIds = new Set((Array.isArray(list?.shared) ? list.shared : []).map(s => String(s && s.projectId || '')));
+          const curId = String(NK.service?.project?.getCurrentProjectId?.() || '');
+          if (!curId || !sharedIds.has(curId)) {
+            try { if (NK.service?.project?.clearCurrent) NK.service.project.clearCurrent(); } catch (_) { }
+            dashboard.renderSidebarProjectCard(null);
+          }
           serverMerged = true;
           return;
         }

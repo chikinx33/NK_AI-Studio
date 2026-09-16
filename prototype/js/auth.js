@@ -66,6 +66,10 @@
                 auth.setRememberDevice(options.rememberDevice !== false);
             }
         } catch (_) { }
+        // 계정이 바뀌었으면(로그인/로그아웃 포함) 이전 계정의 로컬 컨텍스트 캐시를 즉시 정리한다.
+        // 페이지 이동 없이 로그인하는 경로(런처)에서도 이전 계정 카드가 남지 않게 하기 위함.
+        try { if (NK.config && NK.config.ensureAccountScope) NK.config.ensureAccountScope(); } catch (_) { }
+        try { if (NK.store && NK.store.ready) NK.store.ready(); } catch (_) { }
     };
 
     auth.getRole = function () {
