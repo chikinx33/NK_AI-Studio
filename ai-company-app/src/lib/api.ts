@@ -1283,16 +1283,45 @@ export async function deleteKnowledge(text: string) {
   ).json();
 }
 
-// 회사 지식의 똑같은 중복 항목을 1개만 남기고 정리.
-export async function consolidateDecisions(): Promise<{ removed: number; keptSnapshots: number }> {
-  const d = await (
-    await fetch("/api/agent/company-knowledge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "dedupe" }),
-    })
-  ).json();
-  return { removed: d?.removed ?? 0, keptSnapshots: 0 };
+// 회사 지식 AI 정리 — 정리안(병합·삭제·수정)을 받아 사람이 고른 것만 적용한다.
+export type KnowledgeTidyKind = "merge" | "delete" | "edit";
+export interface KnowledgeTidyOp {
+  op: KnowledgeTidyKind;
+  ids: string[];
+  before: { id: string; n: number; type: string; text: string }[];
+  text?: string;
+  type?: string;
+  reason: string;
+}
+export interface KnowledgeCounts { total: number; knowledgeOnly: number; breakdown: { rules: number; facts: number; decisions: number; skills: number } }
+export interface KnowledgeTidyApplyResult {
+  applied: { merge: number; delete: number; edit: number };
+  skipped: { index: number; reason: string }[];
+  before: KnowledgeCounts;
+  after: KnowledgeCounts;
+}
+
+async function postKnowledgeAction(body: Record<string, unknown>) {
+  const res = await fetch("/api/agent/company-knowledge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.error) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
+}
+
+export async function planKnowledgeTidy(): Promise<{ ops: KnowledgeTidyOp[]; itemCount: number; truncated: boolean }> {
+  const data = await postKnowledgeAction({ action: "tidy_plan" });
+  return { ops: Array.isArray(data.ops) ? data.ops : [], itemCount: Number(data.itemCount || 0), truncated: !!data.truncated };
+}
+
+export async function applyKnowledgeTidy(ops: KnowledgeTidyOp[]): Promise<KnowledgeTidyApplyResult> {
+  return postKnowledgeAction({
+    action: "tidy_apply",
+    ops: ops.map(({ op, ids, text, type }) => ({ op, ids, text, type })),
+  });
 }
 
 // 진행 중 프로젝트 보드 (홈)

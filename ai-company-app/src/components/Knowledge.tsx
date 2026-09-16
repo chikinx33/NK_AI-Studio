@@ -4,7 +4,6 @@ import {
   addKnowledge,
   updateKnowledge,
   deleteKnowledge,
-  consolidateDecisions,
   getSkills,
   type KnowledgeItem,
   type AgentSkill,
@@ -13,6 +12,7 @@ import { SortAscIcon, SortDescIcon } from "./icons";
 import { SkillPopup } from "./Skills";
 import { actionBoolean, actionString, useUiAction } from "../lib/uiActions";
 import { useLiveRefresh } from "../lib/liveSync";
+import KnowledgeTidyModal, { useTidyText } from "./KnowledgeTidyModal";
 
 // 📋 복사 — Lucide copy (채팅 복사 버튼과 동일 도형)
 function CopyIcon({ className }: { className?: string }) {
@@ -189,8 +189,10 @@ export default function Knowledge({
   // 인라인 편집: 편집 중인 항목의 원본 텍스트 + 편집 버퍼
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [tidying, setTidying] = useState(false);
+  // AI 정리 확인 창(정리안 생성 → 체크한 것만 적용)
+  const [tidyOpen, setTidyOpen] = useState(false);
   const [tidyMsg, setTidyMsg] = useState<string | null>(null);
+  const tidyText = useTidyText();
   // 복사 피드백: 개별 항목은 그 항목 텍스트, 목록 전체 복사는 "__list__"
   const [copied, setCopied] = useState<string | null>(null);
   // 그래프에서 노드 클릭 시 해당 항목으로 스크롤·하이라이트 (행 ref 맵)
@@ -238,27 +240,15 @@ export default function Knowledge({
     }
     const nextSort = actionString(action, "sort");
     if (nextSort === "asc" || nextSort === "desc") setSortDir(nextSort);
-    if (actionBoolean(action, "dedupe") === true) void tidyDecisions();
+    if (actionBoolean(action, "dedupe") === true) setTidyOpen(true);
     // useUiAction 은 handlerRef 를 매 렌더 갱신하므로 이 핸들러는 항상 최신 items 를 본다.
   }, "knowledge");
 
-  async function tidyDecisions() {
-    setTidying(true);
-    setTidyMsg(null);
-    try {
-      const r = await consolidateDecisions();
-      setTidyMsg(
-        r.removed > 0
-          ? `🧹 중복 진행 스냅샷 ${r.removed}건 정리 (프로젝트별 최신만 유지)`
-          : "정리할 중복 결정이 없어요"
-      );
-      await refresh();
-    } catch {
-      setTidyMsg("정리 실패 — 다시 시도해 주세요");
-    } finally {
-      setTidying(false);
-      setTimeout(() => setTidyMsg(null), 4000);
-    }
+  async function onTidyApplied(message: string) {
+    setTidyOpen(false);
+    setTidyMsg(`🧹 ${message}`);
+    await refresh();
+    setTimeout(() => setTidyMsg(null), 10000);
   }
 
   // 클립보드 복사 — 에이전트에게 "이 지식 이렇게 고쳐줘"로 붙여넣기 위한 용도.
@@ -561,15 +551,15 @@ export default function Knowledge({
                 </button>
               );
             })}
-            {/* 중복 결정 정리 — 보드 진행 스냅샷을 프로젝트별 최신 1건만 남기고 제거 (스킬 분류에선 숨김) */}
+            {/* AI 정리 — 전체 지식을 검토해 병합·삭제·수정 정리안을 보여주고 고른 것만 적용 (스킬 분류에선 숨김) */}
             {filter !== "스킬" && (
               <button
-                onClick={tidyDecisions}
-                disabled={tidying}
-                title="중복된 보드 진행 스냅샷(결정)을 프로젝트별 최신 1건만 남기고 정리합니다. 단계완료·사용확정 같은 진짜 기록은 그대로 둡니다."
-                className="ml-auto shrink-0 rounded-full border border-amber-700/50 bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
+                onClick={() => setTidyOpen(true)}
+                disabled={tidyOpen}
+                title={tidyText.buttonTitle}
+                className="ml-auto min-w-[88px] shrink-0 rounded-full border border-amber-700/50 bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
               >
-                {tidying ? "정리 중…" : "🧹 중복 정리"}
+                {tidyOpen ? tidyText.buttonBusy : tidyText.button}
               </button>
             )}
             {/* 목록 복사 — 지금 보이는 분류를 전부 복사해서 에이전트에게 수정 지시 */}
@@ -731,6 +721,8 @@ export default function Knowledge({
       {openSkill && <SkillPopup name={openSkill} onClose={() => setOpenSkill(null)} onChanged={refresh} />}
 
       {/* 삭제 확인 팝업 — 실수 방지 */}
+      {tidyOpen && <KnowledgeTidyModal onClose={() => setTidyOpen(false)} onApplied={onTidyApplied} />}
+
       {pendingDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"

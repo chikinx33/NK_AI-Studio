@@ -5,8 +5,12 @@ import { authorizeRequest } from "../_shared/auth.js";
 import {
   send, corsHeaders, getSql, ensureAgentSchema, perfTimer, pollCached,
   listCompanyKnowledge, addCompanyKnowledge, updateCompanyKnowledge, deleteCompanyKnowledge,
-  dedupeCompanyKnowledge,
+  dedupeCompanyKnowledge, companyKnowledgeCounts,
 } from "./_shared";
+import { callClaude } from "./_orchestrator";
+import { TIDY_SYSTEM, loadTidyItems, buildTidyRequest, parseTidyPlan, applyTidyOps } from "./_knowledge-tidy";
+import { getAgentModelSelections } from "../_shared/claude-auth.js";
+import { resolveAgentModel } from "../_shared/cloud-models.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -38,7 +42,31 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
   await ensureAgentSchema(sql);
 
-  // 중복 정리: 같은 내용 1개만 남기고 제거
+  // AI 정리안: 전체 지식을 읽혀 병합·삭제·수정 제안만 만든다(DB는 건드리지 않음).
+  if (body?.action === "tidy_plan") {
+    try {
+      const { items, truncated } = await loadTidyItems(sql, auth.userId);
+      if (items.length < 2) return send({ ok: true, ops: [], itemCount: items.length, truncated }, 200, origin);
+      const selections = await getAgentModelSelections(sql, auth.userId).catch(() => ({}));
+      const raw = await callClaude(env, TIDY_SYSTEM, [{ role: "user", content: buildTidyRequest(items) }], {
+        sql, userId: auth.userId, maxTokens: 8000,
+        modelChoice: resolveAgentModel("core", selections, undefined, "claude-sonnet-4-6"),
+      });
+      return send({ ok: true, ops: parseTidyPlan(raw, items), itemCount: items.length, truncated }, 200, origin);
+    } catch (error: any) {
+      return send({ error: `정리안을 만들지 못했어요: ${String(error?.message || error)}` }, 500, origin);
+    }
+  }
+
+  // 사람이 고른 정리안만 적용하고 전후 개수를 돌려준다.
+  if (body?.action === "tidy_apply") {
+    const before = await companyKnowledgeCounts(sql, auth.userId);
+    const result = await applyTidyOps(sql, auth.userId, body?.ops);
+    const after = await companyKnowledgeCounts(sql, auth.userId);
+    return send({ ok: true, ...result, before, after }, 200, origin);
+  }
+
+  // 중복 정리(구버전): 같은 내용 1개만 남기고 제거
   if (body?.action === "dedupe") {
     const removed = await dedupeCompanyKnowledge(sql, auth.userId);
     return send({ ok: true, removed }, 200, origin);
