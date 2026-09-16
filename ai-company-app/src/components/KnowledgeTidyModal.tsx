@@ -143,7 +143,15 @@ export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: ()
         </div>
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-3">
-          {!ops && !error && <p className="py-8 text-center text-xs text-gray-400">{t.loading}</p>}
+          {!ops && !error && (
+            <div className="flex flex-col items-center gap-3 py-8" role="status" aria-live="polite">
+              {/* Lucide loader-circle */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 animate-spin text-amber-300" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              <p className="text-center text-xs text-gray-400">{t.loading}</p>
+            </div>
+          )}
           {ops && ops.length === 0 && <p className="py-8 text-center text-xs text-gray-400">{t.empty}</p>}
           {ops?.map((op, index) => (
             <label key={index} className={`flex cursor-pointer gap-3 rounded-xl border px-3 py-2.5 transition ${checked.has(index) ? "border-edge bg-ink/60" : "border-edge/50 opacity-50"}`}>
