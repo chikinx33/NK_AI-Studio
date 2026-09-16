@@ -262,7 +262,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     project_delete: `[[RUN: project_delete | {"projectId": "series-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     project_share: `[[RUN: project_share | {"projectId": "series-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
     knowledge_search: `[[RUN: knowledge_search | {"query": "찾을 내용"}]]  → 지식 허브(RAG)에서 관련 문서 조각을 검색해 근거로 답한다. "우리 자료에서 ~ 찾아줘"에 사용.`,
-    knowledge_audit: `[[RUN: knowledge_audit | {}]]  → 축적된 회사 지식 전체 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
+    knowledge_audit: `[[RUN: knowledge_audit | {"offset": 0, "limit": 20}]]  → 축적된 회사 지식 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 결과는 {items, total, hasMore, nextOffset} 페이지이며 서버가 남은 페이지를 자동으로 이어 받아 합쳐 준다. 그래도 hasMore=true면 {"offset": nextOffset}로 다시 호출. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
     sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
     media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
@@ -446,6 +446,7 @@ ${persona}${knowledgeBlock}
 - **단순 알람("9시에/5분 뒤 알람")은 승인이 필요 없다.** 캘린더가 아니라 reminder_set 도구로 즉시 설정된다. 알람 요청에 "승인하세요"라고 하지 마라.
 - **조회 결과를 미리 단정하지 마라.** "반영됐는지/등록됐는지" 확인은 반드시 [[RUN: ...]] 도구로 실제 조회한 뒤, 그 도구 결과 그대로 보고한다. 조회하기도 전에 "정상 반영됐습니다 ✅"처럼 성공을 단정하지 마라. (✗ "캘린더에 정상 반영됐습니다!"라고 먼저 말하고 그 뒤 조회 → ✓ 먼저 [[RUN: calendar_list ...]] 조회 → 결과에 있으면 "반영됐어요", 없으면 "아직 안 보여요"라고 사실대로) 도구 결과와 모순되는 성공 보고는 거짓 보고다.
 - **말투 = 실행 의사와 일치시켜라.** "다음 액션"이나 다른 직원에게 시키는 일을 말할 때: 이번 턴에 실제로 [[CALL]]·마커로 실행하는 경우에만 "~할게요/~했어요"처럼 단정형으로 말한다. 실제로 실행하지 않고 제안·예고만 하는 경우엔 반드시 조건부·제안형으로 말한다. (✗ "싱크한테 보드 반영 확인 요청할게요" → ✓ "필요하면 싱크한테 보드 반영 확인을 요청할게요" / "원하시면 싱크에게 확인 요청할까요?") 실행 안 할 일을 한다고 단정하지 마라(거짓 예고 금지).
+- **실행 예고 = 같은 턴의 마커.** "~할게요/다시 돌려볼게요/확인해볼게요/조회해볼게요"처럼 실행 의도를 말하면 반드시 그 답 안에 [[RUN]]·[[CALL]] 마커를 함께 출력한다. 마커 없이 실행 예고만 하는 것은 거짓 보고다. 지금 실행할 수 없으면(결과 잘림·파라미터 미확정 등) "~할게요"를 쓰지 말고 "지금 실행하지 못했어요. [이유]. 다시 요청해 주세요"라고 솔직하게 말한다.
 
 ## 🧠 회사 지식·규칙 관리 (당신은 권한이 있음)
 사용자가 "기억해 / 규칙으로 정해 / 회사 방침이야 / 이건 삭제해 / 고쳐줘" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
@@ -912,6 +913,30 @@ export async function speak(
     }
   }
 
+  // 실행 예고("다시 돌려볼게요/조회해볼게요")만 하고 RUN 마커를 빠뜨리면 아무것도 실행되지 않는다.
+  // 프롬프트 규칙만으론 불안정해, 같은 턴에 RUN 마커만 한 번 더 받아 실제로 실행한다.
+  const promisedRun = /(돌려\s?볼게|다시\s?(돌려|실행|조회|호출)|실행(해\s?볼|할)게|조회(해\s?볼|할)게|호출(해\s?볼|할)게|확인해\s?볼게|검색(해\s?볼|할)게|불러(와\s?볼|올)게|가져(와\s?볼|올)게)/.test(result.text);
+  if (promisedRun && !companyFileMutationIntent && result.runs.length === 0 && result.calls.length === 0) {
+    const fixRaw = await callClaude(
+      env,
+      system,
+      [
+        { role: "user", content: userContent },
+        { role: "assistant", content: raw },
+        { role: "user", content: "방금 답에서 실행하겠다고 말했지만 [[RUN]] 마커가 빠져 실제로는 아무것도 실행되지 않았어요. 말한 그 실행을 하는 정확한 [[RUN: 도구 | {...}]] 마커 줄만 출력하세요. 설명 없이 마커만. 파라미터를 확정할 수 없거나 실행할 게 없으면 빈 줄로 답하세요." },
+      ],
+      { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: 300, resolvedAuth: opts.resolvedAuth }
+    ).catch(() => "");
+    for (const run of extractMarkers(fixRaw).runs) {
+      const tool = AGENT_TOOLS[run.tool];
+      if (tool && toolOwnedBy(tool, agentId)) result.runs.push(run);
+    }
+    if (result.runs.length === 0) {
+      console.log(`run_promise_without_marker: ${agentId}`);
+      result.text = `${result.text}\n\n⚠️ 방금 말씀드린 실행은 이번 턴에 시작되지 않았어요. 다시 요청해 주시면 바로 실행할게요.`;
+    }
+  }
+
   // ── 한 번에 실행 보정 ─────────────────────────────────────────────────────────
   // 문제: 모델이 "바꿀게요/반영할게요"처럼 변경을 말로만 하고 마커를 빠뜨리면 그 턴이 헛돈다
   //       (사용자가 "바꿨어?"라고 다시 물어야 그제서야 마커를 출력 → 한 번에 안 됨).
@@ -1300,6 +1325,44 @@ export interface OrchestratorDeps {
 // ② 턴 전체 예산을 보고 남은 시간이 부족하면 조회를 시작하지 않고 다음 턴으로 미룬다.
 const TOOL_RUN_TIMEOUT_MS = 30000; // 조회 도구 1건
 const SYNTH_TIMEOUT_MS = 30000;    // 조회 결과 재추론(자연스러운 답 만들기)
+
+// 페이지 단위로 돌려주는 조회 도구: hasMore 면 서버가 다음 offset 을 이어 받아 합친 뒤 한 번에 합성한다.
+const PAGED_READ_TOOLS = new Set(["knowledge_audit"]);
+const PAGED_RESULT_LIMIT = 40000;
+const PAGED_MAX_PAGES = 20;
+
+/** 페이지 결과(items·hasMore·nextOffset)를 끝까지 모으고, 합성 한도를 넘으면 항목 경계에서 잘라 이어볼 위치를 남긴다. */
+export async function collectPagedOutput(
+  first: any,
+  fetchPage: (offset: number) => Promise<any>,
+  canContinue: () => boolean,
+  limit: number,
+): Promise<any> {
+  const merged: any = { ...first };
+  const items: any[] = Array.isArray(first?.items) ? [...first.items] : [];
+  for (let page = 1; merged.hasMore && page < PAGED_MAX_PAGES && canContinue(); page += 1) {
+    let next: any;
+    try { next = await fetchPage(Number(merged.nextOffset) || items.length); } catch { break; }
+    const nextItems = Array.isArray(next?.items) ? next.items : [];
+    if (!nextItems.length) break;
+    items.push(...nextItems);
+    merged.total = next.total ?? merged.total;
+    merged.hasMore = !!next.hasMore;
+    merged.nextOffset = next.nextOffset;
+  }
+  const startOffset = Number(first?.offset) || 0;
+  let kept = items.length;
+  while (kept > 1 && JSON.stringify({ ...merged, items: items.slice(0, kept) }).length > limit) {
+    kept -= Math.max(1, Math.ceil(kept * 0.1));
+  }
+  if (kept < items.length) {
+    merged.hasMore = true;
+    merged.nextOffset = startOffset + kept;
+  }
+  merged.items = items.slice(0, kept);
+  merged.limit = kept;
+  return merged;
+}
 const TURN_BUDGET_MS = 80000;      // 한 턴 전체 예산
 const RUN_MIN_MS = 20000;          // 조회 1건을 끝내는 데 필요한 최소 여유
 
@@ -1485,13 +1548,21 @@ export async function runGroupChat(
         });
         try {
           const runBudget = Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs()));
-          const output = await withTimeout(tool.run(parsedInput, toolCtx), runBudget, `${r.tool} 조회`);
+          let output = await withTimeout(tool.run(parsedInput, toolCtx), runBudget, `${r.tool} 조회`);
+          const toolResultLimit = r.tool === "company_files_read" ? 20000 : PAGED_READ_TOOLS.has(r.tool) ? PAGED_RESULT_LIMIT : 4500;
+          if (PAGED_READ_TOOLS.has(r.tool)) {
+            output = await collectPagedOutput(output, (offset) =>
+              withTimeout(tool.run({ ...parsedInput, offset }, toolCtx), Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs())), `${r.tool} 조회`),
+            () => remainingMs() > RUN_MIN_MS + SYNTH_TIMEOUT_MS, toolResultLimit);
+          }
           if (tool.synthesize) {
             const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
-            const toolResultLimit = r.tool === "company_files_read" ? 20000 : 4500;
+            const pagedNote = PAGED_READ_TOOLS.has(r.tool) && output?.hasMore
+              ? `결과는 ${output.total}건 중 ${output.nextOffset}번까지만 담겼어요(hasMore=true). 이어서 보려면 같은 도구를 {"offset": ${output.nextOffset}}로 이번 답에 RUN 마커로 호출하고, 호출하지 않을 거면 몇 번까지 점검했는지 사실대로만 말하세요.\n`
+              : "";
             const synth =
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
-              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
+              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n${pagedNote}\n` +
               `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, toolResultLimit)}`;
             let res2: SpeakResult | null = null;
             try {

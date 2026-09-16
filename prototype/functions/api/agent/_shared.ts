@@ -5267,44 +5267,56 @@ async function runKnowledgeStatsTool(_input: any, ctx: ToolContext): Promise<any
  * 능력 카탈로그가 핵심 — 이게 없으면 "싱크는 드라이브 권한 없음" 같은 '기능 추가로 거짓이 된' 지식을 못 잡는다.
  * read+synthesize. 실제 삭제·수정은 코어가 보고→사람 승인 후 KNOW del/edit 마커로 반영.
  */
-async function runKnowledgeAuditTool(_input: any, ctx: ToolContext): Promise<any> {
+async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any> {
   const sql = getSql(ctx.env);
-  let knowledge: { n: number; type: string; source: string; date: string; text: string }[] = [];
+  // 한 번에 전부 돌려주면 모델에 넘기는 결과가 잘려 뒤 항목이 사라진다 → 페이지 단위로 돌려준다.
+  const offset = Math.max(0, Math.floor(Number(input?.offset) || 0));
+  const limit = Math.min(50, Math.max(1, Math.floor(Number(input?.limit) || 20)));
+  let items: { n: number; type: string; source: string; date: string; text: string }[] = [];
+  let total = 0;
   let exactDuplicates: { text: string; count: number }[] = [];
   if (sql) {
     try {
+      const counted = await sql("SELECT count(*)::int AS total FROM company_knowledge WHERE user_id = $1", [ctx.userId]) as any[];
+      total = Number(counted[0]?.total || 0);
       const rows = await sql(
-        "SELECT text, type, source, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC",
-        [ctx.userId]
+        "SELECT text, type, source, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2 OFFSET $3",
+        [ctx.userId, limit, offset]
       ) as any[];
-      knowledge = rows.map((r, i) => ({
-        n: i + 1,
+      items = rows.map((r, i) => ({
+        n: offset + i + 1,
         type: r.type || "사실",
         source: r.source || "",
         date: r.created_at ? String(r.created_at).slice(0, 10) : "",
         text: String(r.text || ""),
       }));
-      const seen = new Map<string, number>();
-      for (const k of knowledge) seen.set(k.text, (seen.get(k.text) || 0) + 1);
-      exactDuplicates = [...seen.entries()].filter(([, c]) => c > 1).map(([text, count]) => ({ text, count }));
-    } catch (_) { knowledge = []; }
+      if (offset === 0) {
+        const dups = await sql(
+          "SELECT text, count(*)::int AS count FROM company_knowledge WHERE user_id = $1 GROUP BY text HAVING count(*) > 1 ORDER BY count(*) DESC LIMIT 50",
+          [ctx.userId]
+        ) as any[];
+        exactDuplicates = dups.map((r) => ({ text: String(r.text || ""), count: Number(r.count || 0) }));
+      }
+    } catch (_) { items = []; }
   }
-  // 현재 능력 카탈로그 — 도구명(담당 직원, 쓰기여부). 지식이 이 능력과 모순되면 낡은 것.
-  const capabilities = Object.entries(AGENT_TOOLS).map(([tool, def]: [string, any]) => {
-    const agents = [def.agentId, ...((def.agentIds as string[]) || [])].filter(Boolean);
-    return `${tool} — 담당:${agents.join("/")}${def.gate ? " (쓰기·승인)" : ""}`;
-  });
-  // 지식이 아주 많으면 출력이 잘릴 수 있어 상한을 두고 신호를 남긴다(배치 감사로 확장 여지).
-  const CAP = 120;
-  const truncated = knowledge.length > CAP;
+  const nextOffset = offset + items.length;
+  const hasMore = items.length > 0 && nextOffset < total;
+  // 현재 능력 카탈로그 — 도구명(담당 직원, 쓰기여부). 지식이 이 능력과 모순되면 낡은 것. 첫 페이지에만 싣는다.
+  const capabilities = offset === 0
+    ? Object.entries(AGENT_TOOLS).map(([tool, def]: [string, any]) => {
+      const agents = [def.agentId, ...((def.agentIds as string[]) || [])].filter(Boolean);
+      return `${tool} — 담당:${agents.join("/")}${def.gate ? " (쓰기·승인)" : ""}`;
+    })
+    : [];
   return {
     kind: "knowledge_audit",
-    knowledgeCount: knowledge.length,
-    knowledge: knowledge.slice(0, CAP),
-    truncated,
-    exactDuplicates,
-    capabilityCount: capabilities.length,
-    capabilities,
+    total,
+    offset,
+    limit,
+    items,
+    hasMore,
+    nextOffset,
+    ...(offset === 0 ? { exactDuplicates, capabilityCount: capabilities.length, capabilities } : {}),
   };
 }
 
