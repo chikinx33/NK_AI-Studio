@@ -747,14 +747,17 @@ export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<
     createdAt: row.created_at ? String(row.created_at) : "",
   }));
 }
-export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<void> {
+/** 반영된 행 수를 돌려준다(0 = 같은 내용이 이미 있어 추가하지 않음). */
+export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<number> {
   // 같은 내용이 이미 있으면 추가하지 않는다(중복 방지).
-  await sql(
+  const rows = await sql(
     `INSERT INTO company_knowledge (user_id, text, type, source)
      SELECT $1, $2, $3, $4
-     WHERE NOT EXISTS (SELECT 1 FROM company_knowledge WHERE user_id = $1 AND text = $2)`,
+     WHERE NOT EXISTS (SELECT 1 FROM company_knowledge WHERE user_id = $1 AND text = $2)
+     RETURNING id`,
     [userId, text, type || "사실", source]
   );
+  return Array.isArray(rows) ? rows.length : 0;
 }
 /** 같은 내용이 여러 개면 1개만 남기고 삭제(기존 중복 정리). 삭제된 개수 반환. */
 export async function dedupeCompanyKnowledge(sql: SqlFn, userId: string): Promise<number> {
@@ -767,11 +770,35 @@ export async function dedupeCompanyKnowledge(sql: SqlFn, userId: string): Promis
   );
   return Array.isArray(rows) ? rows.length : 0;
 }
-export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText: string, newText: string): Promise<void> {
-  await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND text = $2", [userId, oldText, newText]);
+export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText: string, newText: string): Promise<number> {
+  const rows = await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND text = $2 RETURNING id", [userId, oldText, newText]);
+  return Array.isArray(rows) ? rows.length : 0;
 }
-export async function deleteCompanyKnowledge(sql: SqlFn, userId: string, text: string): Promise<void> {
-  await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND text = $2", [userId, text]);
+export async function deleteCompanyKnowledge(sql: SqlFn, userId: string, text: string): Promise<number> {
+  const rows = await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND text = $2 RETURNING id", [userId, text]);
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+/**
+ * 회사 지식 개수 — 화면('회사 지식 N')과 knowledge_audit 가 같은 기준을 쓴다.
+ * total = 지식(원칙·사실·결정) + 활성 스킬, knowledgeOnly = 지식만.
+ */
+export async function companyKnowledgeCounts(sql: SqlFn, userId: string): Promise<{
+  total: number; knowledgeOnly: number; breakdown: { rules: number; facts: number; decisions: number; skills: number };
+}> {
+  const [typeRows, skillRows] = await Promise.all([
+    sql("SELECT type, count(*)::int AS count FROM company_knowledge WHERE user_id = $1 GROUP BY type", [userId]),
+    sql("SELECT count(*)::int AS count FROM company_skills WHERE user_id = $1 AND archived = false", [userId]).catch(() => [{ count: 0 }]),
+  ]);
+  const breakdown = { rules: 0, facts: 0, decisions: 0, skills: Number((skillRows as any[])[0]?.count || 0) };
+  for (const row of typeRows as any[]) {
+    const count = Number(row.count || 0);
+    if (row.type === "원칙") breakdown.rules += count;
+    else if (row.type === "결정") breakdown.decisions += count;
+    else breakdown.facts += count; // 화면도 분류가 비면 '사실'로 센다
+  }
+  const knowledgeOnly = breakdown.rules + breakdown.facts + breakdown.decisions;
+  return { total: knowledgeOnly + breakdown.skills, knowledgeOnly, breakdown };
 }
 
 // ── 헤르메스 스킬(절차적 기억) — 전부 user_id 격리 ──────────────────────────
@@ -5272,19 +5299,20 @@ async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any>
   // 한 번에 전부 돌려주면 모델에 넘기는 결과가 잘려 뒤 항목이 사라진다 → 페이지 단위로 돌려준다.
   const offset = Math.max(0, Math.floor(Number(input?.offset) || 0));
   const limit = Math.min(50, Math.max(1, Math.floor(Number(input?.limit) || 20)));
-  let items: { n: number; type: string; source: string; date: string; text: string }[] = [];
-  let total = 0;
+  let items: { n: number; id: string; type: string; source: string; date: string; text: string }[] = [];
+  let counts = { total: 0, knowledgeOnly: 0, breakdown: { rules: 0, facts: 0, decisions: 0, skills: 0 } };
   let exactDuplicates: { text: string; count: number }[] = [];
   if (sql) {
     try {
-      const counted = await sql("SELECT count(*)::int AS total FROM company_knowledge WHERE user_id = $1", [ctx.userId]) as any[];
-      total = Number(counted[0]?.total || 0);
+      counts = await companyKnowledgeCounts(sql, ctx.userId);
       const rows = await sql(
-        "SELECT text, type, source, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2 OFFSET $3",
+        "SELECT id, text, type, source, created_at FROM company_knowledge WHERE user_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2 OFFSET $3",
         [ctx.userId, limit, offset]
       ) as any[];
       items = rows.map((r, i) => ({
         n: offset + i + 1,
+        // KNOW del/edit 대상 지정용 짧은 id — 번호(n)는 삭제 뒤 밀리므로 대상 지정에 쓰지 않는다.
+        id: `id:${String(r.id || "").replace(/-/g, "").slice(0, 8)}`,
         type: r.type || "사실",
         source: r.source || "",
         date: r.created_at ? String(r.created_at).slice(0, 10) : "",
@@ -5300,7 +5328,8 @@ async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any>
     } catch (_) { items = []; }
   }
   const nextOffset = offset + items.length;
-  const hasMore = items.length > 0 && nextOffset < total;
+  // 페이지는 지식만 넘긴다(스킬은 항목에 없음) → 이어보기 판단도 knowledgeOnly 기준.
+  const hasMore = items.length > 0 && nextOffset < counts.knowledgeOnly;
   // 현재 능력 카탈로그 — 도구명(담당 직원, 쓰기여부). 지식이 이 능력과 모순되면 낡은 것. 첫 페이지에만 싣는다.
   const capabilities = offset === 0
     ? Object.entries(AGENT_TOOLS).map(([tool, def]: [string, any]) => {
@@ -5310,7 +5339,11 @@ async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any>
     : [];
   return {
     kind: "knowledge_audit",
-    total,
+    // total = 화면 '회사 지식 N'과 같은 기준(지식 + 활성 스킬). 지식 삭제 전후 비교는 knowledgeOnly 로 한다.
+    total: counts.total,
+    knowledgeOnly: counts.knowledgeOnly,
+    breakdown: counts.breakdown,
+    countBasis: "total=지식(원칙·사실·결정)+스킬 = 화면 '회사 지식 N' / knowledgeOnly=지식만(KNOW 마커 전후 비교 기준) / items는 지식만",
     offset,
     limit,
     items,

@@ -301,7 +301,8 @@ export default function Approvals({
       {(knowledge.length > 0 || skills.length > 0) && (
         <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
-            <BrainIcon className="h-3.5 w-3.5" /> 회사 지식 ({knowledge.length})
+            {/* 지식 페이지·knowledge_audit total 과 같은 기준: 지식(규칙·사실·결정) + 스킬 */}
+            <BrainIcon className="h-3.5 w-3.5" /> 회사 지식 ({knowledge.length + skills.length})
           </div>
           <div className="flex flex-wrap items-center gap-1">
             {KNOW_CHIPS.map(({ key, label, c }) => {

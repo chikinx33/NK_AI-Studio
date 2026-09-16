@@ -12,7 +12,7 @@ import {
   addMessage,
   AGENT_META,
 } from "./_shared";
-import { speak, applyKnows } from "./_orchestrator";
+import { speak, applyKnows, knowFailureNote } from "./_orchestrator";
 
 type PagesFunction = (ctx: {
   request: Request;
@@ -57,11 +57,13 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       `사용자가 "${job.type}" 작업(주제: "${inputDesc}")의 결과물을 취소·철회했습니다.\n` +
       `자연스럽게 1~2문장으로 취소를 확인하는 멘트를 해주세요. 불필요한 사과 없이 간결하게.\n` +
       `회사 지식 중 이 작업과 직접 관련된 항목이 있다면 ` +
-      `[[KNOW: del | 결정 | 항목내용]] 마커로 삭제하거나 ` +
-      `[[KNOW: mod | 결정 | 수정된 내용]] 마커로 업데이트할 수 있습니다.`;
+      `[[KNOW: del | 기존 항목의 정확한 내용]] 마커로 삭제하거나 ` +
+      `[[KNOW: edit | 기존 항목의 정확한 내용 | 수정된 내용]] 마커로 업데이트할 수 있습니다.`;
 
     const agentRes = await speak(env, agentId, cancelTrigger, "", { sql, userId: auth.userId });
-    await applyKnows(sql, auth.userId, agentRes.knows, meta.name);
+    const knowNote = agentRes.knows.length
+      ? await knowFailureNote(sql, auth.userId, await applyKnows(sql, auth.userId, agentRes.knows, meta.name)).catch(() => "")
+      : "";
 
     // 오늘 대화에 에이전트 메시지 저장 (클라이언트가 직접 표시)
     const today = new Date().toISOString().slice(0, 10);
@@ -71,7 +73,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       role: "agent",
       agentId,
       name: meta.name,
-      text: agentRes.text,
+      text: knowNote ? `${agentRes.text}\n\n${knowNote}` : agentRes.text,
     });
 
     // 코어: 백그라운드로 관련 지식 추가 검토 (waitUntil — 응답 후 비동기 처리)

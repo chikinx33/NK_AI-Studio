@@ -22,7 +22,7 @@ import {
   getAgentPersona,
   listAgentKnowledge,
   addCompanyKnowledge,
-  deleteCompanyKnowledge,
+  companyKnowledgeCounts,
   listCompanyKnowledge,
   listPendingReviewJobs,
   upsertProject,
@@ -37,7 +37,6 @@ import {
   setProjectCollapsedByName,
   setAllProjectsCollapsed,
   reorderProjectsByNames,
-  updateCompanyKnowledge,
   addAgentKnowledgeRow,
   removeAgentKnowledgeRow,
   listSkills,
@@ -457,8 +456,10 @@ ${persona}${knowledgeBlock}
 - 이미 비슷한 지식이 있으면 새로 add 하지 말고 그 항목을 edit로 갱신한다(중복 축적 방지).
 - 운영 노하우·우회법(예: "날씨는 기상청에서 확인")은 지식보다 스킬로 저장을 고려한다.
 - 등록: [[KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
-- 삭제: [[KNOW: del | 기존에 등록된 정확한 내용]]
-- 수정: [[KNOW: edit | 기존내용 | 새내용]]
+- 삭제: [[KNOW: del | 기존에 등록된 정확한 내용 또는 knowledge_audit 의 id:xxxxxxxx]]
+- 수정: [[KNOW: edit | 기존내용 또는 id:xxxxxxxx | 새내용]]
+- 반영 결과는 서버가 실제 DB 행 수로 확인한다. 실패하면 "⚠️ 회사 지식 반영 실패"가 대화에 붙는다 — 그 항목은 바뀌지 않은 것이니 완료라고 말하지 말고 실패를 그대로 보고한다.
+- 개수 기준: 화면의 '회사 지식 N'과 knowledge_audit 의 total 은 지식+스킬 합산이다. 지식을 삭제·추가한 전후 비교는 반드시 knowledgeOnly(지식만)로 한다.
 예) [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
 예) [[KNOW: edit | 회의는 월요일마다 | 회의는 화요일마다]]
 이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
@@ -634,6 +635,8 @@ function parseUiAction(raw: string): UiAction | null {
 }
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
+const KNOW_TYPE_WORD = /^(원칙|규칙|사실|결정|rule|principle|fact|decision)$/i;
+
 function normalizeKnowType(t: string): string {
   const s = String(t || "").trim();
   if (/규칙|원칙|rule|principle/i.test(s)) return "원칙";
@@ -670,10 +673,13 @@ function extractMarkers(raw: string): SpeakResult {
       const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
       if (text) knows.push({ action: "add", type, text });
     } else if (/^(del|delete|remove|삭제|제거)$/.test(action)) {
-      const text = parts.slice(1).join(" | ");
+      // "del | 결정 | 내용"처럼 분류를 끼워 써도 분류는 버린다(그대로 두면 '결정 | 내용'을 찾다가 0건 반영).
+      const body = parts.length >= 3 && KNOW_TYPE_WORD.test(parts[1]) ? parts.slice(2) : parts.slice(1);
+      const text = body.join(" | ");
       if (text) knows.push({ action: "del", text });
-    } else if (/^(edit|update|수정|변경)$/.test(action) && parts[1] && parts[2]) {
-      knows.push({ action: "edit", text: parts[1], newText: parts.slice(2).join(" | ") });
+    } else if (/^(edit|update|mod|modify|수정|변경)$/.test(action)) {
+      const body = parts.length >= 4 && KNOW_TYPE_WORD.test(parts[1]) ? parts.slice(2) : parts.slice(1);
+      if (body[0] && body[1]) knows.push({ action: "edit", text: body[0], newText: body.slice(1).join(" | ") });
     }
   }
   PROJECT_RE.lastIndex = 0;
@@ -1208,14 +1214,82 @@ export function formatReadResult(toolName: string, out: any): string {
 const SYNTH_CUE = /종합|취합|정리해서|합쳐서|모아서|모아|취합해|종합해|결론을/;
 
 // ── 마커 적용 — worker-step.ts에서도 재사용하므로 모듈 레벨로 추출 ─────────────────
-export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | undefined, who: string) {
+export interface KnowResult {
+  action: KnowOp["action"];
+  target: string;
+  status: "ok" | "skipped" | "error";
+  affected: number;
+  id?: string;
+  reason?: string;
+}
+
+const knowTextKey = (value: string) => String(value || "")
+  .normalize("NFC")
+  .replace(/^[\s"'“”‘’「」『』]+|[\s"'“”‘’「」『』.。]+$/g, "")
+  .replace(/\s+/g, " ")
+  .toLocaleLowerCase("ko-KR");
+
+/**
+ * KNOW del/edit 대상 찾기: 짧은 id(id:xxxxxxxx, knowledge_audit 결과) → 원문 일치 → 공백·따옴표·마침표를 무시한 일치.
+ * 원문과 한 글자만 달라도 0건 반영인데 완료라고 말하던 문제를 막는다. 여러 개가 걸리면 임의로 고르지 않는다.
+ */
+async function resolveKnowledgeTarget(sql: SqlFn, userId: string, target: string): Promise<{ id?: string; reason?: string }> {
+  const idMatch = /^id\s*:\s*([0-9a-f]{6,32})$/i.exec(target.trim());
+  const rows = await sql("SELECT id, text FROM company_knowledge WHERE user_id = $1", [userId]) as any[];
+  const shortId = (row: any) => String(row.id || "").replace(/-/g, "").toLowerCase();
+  let hits = idMatch
+    ? rows.filter((row) => shortId(row).startsWith(idMatch[1].toLowerCase()))
+    : rows.filter((row) => String(row.text) === target);
+  if (!idMatch && !hits.length) hits = rows.filter((row) => knowTextKey(row.text) === knowTextKey(target));
+  if (hits.length === 1) return { id: String(hits[0].id) };
+  if (hits.length > 1) return { reason: `${hits.length}개 항목과 일치해 대상을 특정하지 못함(knowledge_audit 의 id:로 지정)` };
+  return { reason: "item not found — 일치하는 회사 지식이 없음" };
+}
+
+/** KNOW 마커를 반영하고 항목별 실제 반영 결과(RETURNING 행 수 기준)를 돌려준다. */
+export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | undefined, who: string): Promise<KnowResult[]> {
+  const results: KnowResult[] = [];
   for (const k of knows || []) {
+    const base = { action: k.action, target: k.text };
     try {
-      if (k.action === "add") await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
-      else if (k.action === "del") await deleteCompanyKnowledge(sql, userId, k.text);
-      else if (k.action === "edit" && k.newText) await updateCompanyKnowledge(sql, userId, k.text, k.newText);
-    } catch {}
+      if (k.action === "add") {
+        const affected = await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
+        results.push(affected ? { ...base, status: "ok", affected } : { ...base, status: "skipped", affected: 0, reason: "같은 내용이 이미 있음" });
+        continue;
+      }
+      if (k.action === "edit" && !k.newText) {
+        results.push({ ...base, status: "error", affected: 0, reason: "새 내용이 비어 있음" });
+        continue;
+      }
+      const found = await resolveKnowledgeTarget(sql, userId, k.text);
+      if (!found.id) {
+        results.push({ ...base, status: "error", affected: 0, reason: found.reason });
+        continue;
+      }
+      const rows = k.action === "del"
+        ? await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND id = $2 RETURNING id", [userId, found.id])
+        : await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND id = $2 RETURNING id", [userId, found.id, k.newText]);
+      const affected = Array.isArray(rows) ? rows.length : 0;
+      const id = `id:${found.id.replace(/-/g, "").slice(0, 8)}`;
+      results.push(affected ? { ...base, status: "ok", affected, id } : { ...base, status: "error", affected: 0, id, reason: "DB 반영 0건" });
+    } catch (e: any) {
+      results.push({ ...base, status: "error", affected: 0, reason: String(e?.message || e || "DB 오류") });
+    }
   }
+  if (results.length) console.log(`know_results: ${JSON.stringify(results)}`);
+  return results;
+}
+
+/** 반영 실패가 있으면 사용자에게 보일 한 줄 보고(없으면 빈 문자열). 완료 단정을 바로잡는다. */
+export async function knowFailureNote(sql: SqlFn, userId: string, results: KnowResult[]): Promise<string> {
+  const failed = results.filter((r) => r.status === "error");
+  if (!failed.length) return "";
+  const label = { add: "추가", del: "삭제", edit: "수정" } as const;
+  const lines = failed.map((r) => `- ${label[r.action]} '${r.target.slice(0, 60)}' — ${r.reason || "실패"}`);
+  const ok = results.filter((r) => r.status === "ok").length;
+  const counts = await companyKnowledgeCounts(sql, userId).catch(() => null);
+  const countLine = counts ? `\n현재 회사 지식 ${counts.total}개(지식 ${counts.knowledgeOnly} · 스킬 ${counts.breakdown.skills})` : "";
+  return `⚠️ 회사 지식 반영 실패 ${failed.length}건${ok ? ` (성공 ${ok}건)` : ""} — 이 항목은 실제로 바뀌지 않았어요.\n${lines.join("\n")}${countLine}`;
 }
 
 export async function applySkills(sql: SqlFn, userId: string, skills: SkillOp[] | undefined) {
@@ -1558,7 +1632,7 @@ export async function runGroupChat(
           if (tool.synthesize) {
             const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
             const pagedNote = PAGED_READ_TOOLS.has(r.tool) && output?.hasMore
-              ? `결과는 ${output.total}건 중 ${output.nextOffset}번까지만 담겼어요(hasMore=true). 이어서 보려면 같은 도구를 {"offset": ${output.nextOffset}}로 이번 답에 RUN 마커로 호출하고, 호출하지 않을 거면 몇 번까지 점검했는지 사실대로만 말하세요.\n`
+              ? `결과는 지식 ${output.knowledgeOnly ?? output.total}건 중 ${output.nextOffset}번까지만 담겼어요(hasMore=true). 이어서 보려면 같은 도구를 {"offset": ${output.nextOffset}}로 이번 답에 RUN 마커로 호출하고, 호출하지 않을 거면 몇 번까지 점검했는지 사실대로만 말하세요.\n`
               : "";
             const synth =
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
@@ -1585,7 +1659,7 @@ export async function runGroupChat(
               files: messageFiles(r.tool, output),
             });
             await _emitUiActions(res2.uiActions, agentId);
-            await _applyKnows(res2.knows, meta.name);
+            await _applyKnows(res2.knows, meta.name, agentId);
             await _applyProjects(res2.projects);
             await _applySkills(res2.skills);
             await _applyCancel(res2.cancels);
@@ -1664,7 +1738,15 @@ export async function runGroupChat(
   };
 
   // 마커 적용 — 모듈 레벨 함수에 sql/userId를 미리 바인딩한 단축 alias
-  const _applyKnows    = (knows: KnowOp[]    | undefined, who: string) => applyKnows   (sql, userId, knows,    who);
+  // KNOW 반영 결과를 확인해, 실패가 있으면 보고 문구를 돌려준다. speakerId 를 주면(이미 발언을 내보낸 뒤) 그 직원 이름으로 바로 알린다.
+  const _applyKnows = async (knows: KnowOp[] | undefined, who: string, speakerId?: string): Promise<string> => {
+    if (!knows?.length) return "";
+    const note = await knowFailureNote(sql, userId, await applyKnows(sql, userId, knows, who)).catch(() => "");
+    if (note && speakerId) {
+      await emit({ userId, conversationId, role: "agent", agentId: speakerId, name: getAgent(speakerId)?.name || who, text: note });
+    }
+    return note;
+  };
   const _applySkills   = (skills: SkillOp[]  | undefined)              => applySkills  (sql, userId, skills       );
   const _applyProjects = (projects: ProjectOp[]| undefined)            => applyProjects(sql, userId, projects    );
   const _emitUiActions = async (actions: UiAction[] | undefined, agentId: string) => {
@@ -1720,7 +1802,7 @@ export async function runGroupChat(
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await _emitUiActions(res.uiActions, workerId);
     await runTools(res.runs, workerId);
-    await _applyKnows(res.knows, meta.name);
+    await _applyKnows(res.knows, meta.name, workerId);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
     await _applyCancel(res.cancels);
@@ -1742,10 +1824,12 @@ export async function runGroupChat(
     // 첨부는 이 발언자에게 먼저 주고, 이어서 발언하는 직원들에게도 같은 첨부를 준다(§8.2).
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), modelHint: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
-    await _applyKnows(res.knows, meta.name);
+    const knowNote = await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
     await _applyCancel(res.cancels);
+    // 발언보다 반영을 먼저 하므로, 실패했으면 완료 문구 뒤에 바로 바로잡는다.
+    if (knowNote) res.text = `${res.text}\n\n${knowNote}`;
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
     await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -1783,7 +1867,7 @@ export async function runGroupChat(
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
     await _emitUiActions(wrap.uiActions, "core");
-    await _applyKnows(wrap.knows, "코어");
+    await _applyKnows(wrap.knows, "코어", "core");
     await _applyProjects(wrap.projects);
     await _applySkills(wrap.skills);
     await _applyCancel(wrap.cancels);
