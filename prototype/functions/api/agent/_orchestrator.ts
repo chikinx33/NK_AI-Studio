@@ -187,7 +187,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   // 이 에이전트가 실행 가능한 도구 목록 (AGENT_TOOLS 기준)
   const MY_TOOL_DESCRIPTIONS: Record<string, string> = {
     infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
-    company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → 통합 '업무 파일'의 생성 업무·폴더·파일 목록 조회. 파일 위치를 모르면 먼저 실행. 조회된 파일은 채팅 말풍선에 열기 아이콘으로 자동 첨부됨.`,
+    company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → 통합 '업무 파일'의 생성 업무·폴더·파일 목록 조회. 파일 위치를 모르면 먼저 실행. 날짜 폴더는 이름(name)을 바꿔도 내부 path가 @work/YYYY-MM-DD 그대로이며, 이름으로 조회해도 찾아지지만 다음 호출에는 결과의 path를 쓸 것. notFound면 hint·candidates의 후보 경로를 사용자에게 알릴 것. 조회된 파일은 채팅 말풍선에 열기 아이콘으로 자동 첨부됨.`,
     company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 업무 파일의 텍스트·JSON·CSV·Markdown·코드 내용을 읽고 채팅에 파일 열기 아이콘을 첨부(1MB 이하). 사용자가 '파일 보여줘/열어줘/읽어줘'라고 하면 반드시 실행. 확장자를 모르더라도 사용자가 말한 파일명을 path에 넣으면 서버가 단일 일치 파일을 찾음. hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
     company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀. 프로젝트 바로가기는 .project.json 파일에 {"kind":"project","projectId":"프로젝트 ID"} 형식으로 작성. 사람 승인 후 실행.`,
     company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 업무 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,

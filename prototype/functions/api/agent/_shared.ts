@@ -3321,7 +3321,9 @@ async function runCompanyFilesDeleteTool(input: any, ctx: ToolContext): Promise<
       continue;
     }
     const stored = rootEntries.some((entry) => (entry?.kind === "file" || entry?.kind === "folder") && entry?.path === path);
-    const workFolder = stored ? null : rootEntries.find((entry) => entry?.kind === "work-folder" && (entry?.dateKey === path || entry?.name === path));
+    const wanted = (path.startsWith("@work/") ? path.slice("@work/".length) : path).normalize("NFC").toLocaleLowerCase("ko-KR");
+    const workFolder = stored ? null : rootEntries.find((entry) => entry?.kind === "work-folder"
+      && (String(entry?.dateKey || "") === wanted || String(entry?.name || "").normalize("NFC").toLocaleLowerCase("ko-KR") === wanted));
     if (workFolder?.dateKey) workDates.add(String(workFolder.dateKey));
     else filePaths.push(path);
   }

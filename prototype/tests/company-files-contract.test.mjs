@@ -130,6 +130,11 @@ test("에이전트는 확장자를 생략한 파일을 찾아 읽고 채팅에 �
   assert.match(endpoint, /pathWithoutExtension\(normalizedBase\) === wantedBaseStem/);
   assert.match(endpoint, /파일이 여러 개입니다\. 전체 경로를 지정해 주세요/);
   assert.match(endpoint, /wantsRead[\s\S]+resolveReadableFile/);
+  // 이름을 바꾼 날짜 폴더(표시명 ≠ @work/날짜 경로)도 표시명으로 조회되고, 못 찾으면 후보 경로를 돌려준다
+  assert.match(endpoint, /async function findWorkFolder/);
+  assert.match(endpoint, /nameKey\(folder\.name\) === wanted/);
+  assert.match(endpoint, /requestedPath: path, displayName: folder\.name/);
+  assert.match(endpoint, /notFound: true[\s\S]+candidates/);
   assert.match(shared, /files jsonb NOT NULL DEFAULT '\[\]'::jsonb/);
   assert.match(shared, /ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS files jsonb/);
   assert.match(shared, /messageFilesFromToolOutput/);

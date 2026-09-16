@@ -115,6 +115,36 @@ async function listVirtualWorkItems(sql: any, userId: string, dateKey: string) {
   }));
 }
 
+const nameKey = (value: unknown) => String(value || "").normalize("NFC").trim().toLocaleLowerCase("ko-KR");
+
+// 날짜 폴더는 이름을 바꿔도 내부 경로가 @work/생성일 그대로다(업무가 생성일로 묶이므로 경로를 옮기지 않는다).
+// 대신 표시명·날짜 어느 쪽으로 불러도 같은 폴더를 찾는다.
+async function findWorkFolder(sql: any, userId: string, requested: string) {
+  const wanted = nameKey(requested.startsWith(WORK_PATH_PREFIX) ? requested.slice(WORK_PATH_PREFIX.length) : requested);
+  if (!wanted) return null;
+  const folders = await listVirtualWorkFolders(sql, userId);
+  return folders.find((folder: any) => nameKey(folder.dateKey) === wanted)
+    || folders.find((folder: any) => nameKey(folder.name) === wanted)
+    || null;
+}
+
+async function pathCandidates(ctx: any, sql: any, userId: string, rootPrefix: string, requested: string) {
+  const wanted = nameKey(requested.split("/").pop());
+  const [root, workFolders] = await Promise.all([
+    listObjects(ctx, rootPrefix, "/"),
+    listVirtualWorkFolders(sql, userId).catch(() => []),
+  ]);
+  const entries = [
+    ...workFolders.map((folder: any) => ({ name: folder.name, path: folder.path })),
+    ...root.prefixes.map((prefix) => {
+      const relative = prefix.slice(rootPrefix.length).replace(/\/$/, "");
+      return { name: baseName(relative), path: relative };
+    }),
+  ];
+  const similar = wanted ? entries.filter((entry) => nameKey(entry.name).includes(wanted) || wanted.includes(nameKey(entry.name))) : [];
+  return (similar.length ? similar : entries).slice(0, 20);
+}
+
 async function accessContext(env: any) {
   const ctx = resolveGcsEnv(env);
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
@@ -282,9 +312,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const wantsRead = url.searchParams.get("read") === "1";
 
     if (!wantsDownload && !wantsPreview && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
-      const dateKey = requestedPath.slice(WORK_PATH_PREFIX.length).split("/")[0];
-      const entries = await listVirtualWorkItems(getSql(env), auth.userId, dateKey);
-      return send({ path: `${WORK_PATH_PREFIX}${dateKey}`, parentPath: "", entries, unified: true }, 200, origin);
+      const requestedKey = requestedPath.slice(WORK_PATH_PREFIX.length).split("/")[0];
+      const sql = getSql(env);
+      const folder = /^\d{4}-\d{2}-\d{2}$/.test(requestedKey) ? null : await findWorkFolder(sql, auth.userId, requestedKey);
+      const dateKey = folder?.dateKey || requestedKey;
+      const entries = await listVirtualWorkItems(sql, auth.userId, dateKey);
+      return send({
+        path: `${WORK_PATH_PREFIX}${dateKey}`, parentPath: "", entries, unified: true,
+        ...(folder ? { requestedPath, displayName: folder.name } : {}),
+      }, 200, origin);
     }
 
     if (wantsDownload || wantsPreview || wantsRead) {
@@ -295,7 +331,21 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       filePath = resolved.path;
       const objectName = `${rootPrefix}${filePath}`;
       const metadataResponse = resolved.metadataResponse;
-      if (metadataResponse.status === 404) return send({ error: "파일을 찾지 못했습니다." }, 404, origin);
+      if (metadataResponse.status === 404) {
+        const sql = getSql(env);
+        const folder = await findWorkFolder(sql, auth.userId, filePath.startsWith(WORK_PATH_PREFIX) ? filePath : filePath.split("/")[0]).catch(() => null);
+        if (folder) {
+          return send({
+            error: `'${filePath}'는 업무 날짜 폴더 '${folder.name}'(내부 경로 ${folder.path})에 속한 항목이라 파일로 읽을 수 없습니다. company_files_list 로 ${folder.path} 목록을 조회하세요.`,
+            workFolder: { displayName: folder.name, path: folder.path },
+          }, 404, origin);
+        }
+        const candidates = await pathCandidates(ctx, sql, auth.userId, rootPrefix, filePath).catch(() => []);
+        return send({
+          error: `'${filePath}' 파일을 찾지 못했습니다.${candidates.length ? ` 후보 경로: ${candidates.map((entry: any) => `${entry.name}(${entry.path})`).join(", ")}` : ""}`,
+          candidates,
+        }, 404, origin);
+      }
       const metadata: any = await metadataResponse.json().catch(() => ({}));
       if (!metadataResponse.ok) return send({ error: metadata?.error?.message || "파일 정보를 읽지 못했습니다." }, metadataResponse.status, origin);
       const size = Number(metadata.size || 0);
@@ -332,6 +382,22 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const listPrefix = `${rootPrefix}${path ? `${path}/` : ""}`;
     const listed = await listObjects(ctx, listPrefix, "/");
+    if (path && !listed.items.length && !listed.prefixes.length) {
+      // 저장소에 없는 경로 — 날짜 폴더의 표시명(예: 이름을 바꾼 "log")이면 그 폴더를 연다.
+      const sql = getSql(env);
+      const folder = await findWorkFolder(sql, auth.userId, path);
+      if (folder) {
+        const entries = await listVirtualWorkItems(sql, auth.userId, folder.dateKey);
+        return send({ path: folder.path, parentPath: "", entries, unified: true, requestedPath: path, displayName: folder.name }, 200, origin);
+      }
+      // 빈 목록으로 조용히 끝내지 않고 원인과 후보 경로를 함께 돌려준다(탐색기 화면은 그대로 빈 폴더로 보인다).
+      const candidates = await pathCandidates(ctx, sql, auth.userId, rootPrefix, path).catch(() => []);
+      return send({
+        path, parentPath: parentPath(path), entries: [], unified: true, notFound: true,
+        hint: `'${path}' 폴더를 찾지 못했습니다.${candidates.length ? ` 후보 경로: ${candidates.map((entry: any) => `${entry.name}(${entry.path})`).join(", ")}` : ""}`,
+        candidates,
+      }, 200, origin);
+    }
     const folders = listed.prefixes.map((prefix) => {
       const relative = prefix.slice(rootPrefix.length).replace(/\/$/, "");
       return { kind: "folder", name: baseName(relative), path: relative, parentPath: path };
