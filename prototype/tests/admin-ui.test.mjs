@@ -125,3 +125,19 @@ test("검색·필터가 표 아래 페이지 줄 왼쪽에 함께 놓인다", ()
   assert.match(html, /\.admin-toolbar \.admin-search input \{ width:220px; \}/);
   assert.doesNotMatch(html, /\.admin-toolbar input, \.admin-toolbar select \{[\s\S]{0,40}width:100%;/);
 });
+
+// 6열(ID·이름·권한·상태·크레딧·관리)이 잘려 '관리' 버튼이 가로 스크롤 뒤로 숨었다.
+test("표가 가로 스크롤 없이 들어가도록 페이지 폭을 넓히고 열 폭을 줄였다", () => {
+  const html = read("prototype/admin.html");
+  assert.match(html, /\.admin-page \{ width:100%; max-width:1440px;/);
+  // 셀 여백·행 버튼 간격을 줄여 표의 최소 폭을 낮춘다
+  assert.match(html, /table\.admin-table th, table\.admin-table td \{[^}]*padding:9px 10px;/s);
+  assert.match(html, /\.admin-icon-btn \{[^}]*padding:5px 10px;/s);
+  // 긴 이메일이 표를 밀지 않도록 이름 열 폭을 묶는다(td 가 아니라 내부 span 에)
+  assert.match(html, /\.admin-name-cell \{ display:inline-flex;[^}]*max-width:240px;/);
+  // 삭제 예정일은 표에 날짜만, 시각까지는 title 로
+  const src = read("prototype/js/ui/admin-users.js");
+  assert.match(src, /function formatDeleteAfter\(value, withTime\)/);
+  assert.match(src, /if \(withTime\) \{ opts\.hour = '2-digit'; opts\.minute = '2-digit'; \}/);
+  assert.match(src, /var deleteAfterFull = formatDeleteAfter\(u\.deleteAfter, true\);/);
+});

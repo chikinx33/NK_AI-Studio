@@ -14,7 +14,8 @@
     html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
 
     /* 회원 관리 전용 스타일 (페이지 스코프) — 테마 변수 사용으로 라이트/다크 모두 대응 */
-    .admin-page { max-width:1080px; margin:0 auto; padding:36px 16px 48px; }
+    /* 표(6열)가 가로 스크롤 없이 들어가도록 넓게. 화면이 좁으면 화면 폭을 그대로 쓴다. */
+    .admin-page { width:100%; max-width:1440px; margin:0 auto; padding:28px 16px 40px; box-sizing:border-box; }
     /* 카드 내부 여백: 검색/카테고리/리스트가 박스 모서리에 붙지 않도록 */
     .admin-list-card .admin-card-inner { padding:20px 22px 22px; }
     /* 검색·필터는 표 아래 페이지 줄 왼쪽에 함께 놓는다(위에 두면 표가 밀려 세로 스크롤이 생긴다) */
@@ -35,7 +36,7 @@
     table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
     /* 행은 항상 한 줄 — 넘치는 내용은 줄이거나(…) 접고, 전체는 title 로 확인한다. */
     table.admin-table th, table.admin-table td {
-      padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:var(--text);
+      padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); color:var(--text);
       white-space:nowrap; vertical-align:middle;
     }
     table.admin-table th { font-weight:600; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
@@ -47,7 +48,7 @@
     .admin-badge--member { background:rgba(96,165,250,.16); color:#93c5fd; }
     .admin-badge--on { background:rgba(34,197,94,.18); color:#4ade80; }
     .admin-badge--off { background:rgba(148,163,184,.18); color:#cbd5e1; }
-    .admin-perm-chip { display:inline-block; margin:0 4px 0 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.16); color:var(--text); }
+    .admin-perm-chip { display:inline-block; margin:0 3px 0 0; padding:2px 7px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.16); color:var(--text); }
     .admin-perm-chip--more { cursor:help; color:var(--muted); }
 
     /* 라이트 테마: 라벨/칩 가독성 보정 (어두운 글씨 + 적당한 배경) */
@@ -58,12 +59,14 @@
     [data-theme="light"] .admin-perm-chip { background:rgba(100,116,139,.14); color:#334155; }
 
     /* 이름 + 이메일을 한 줄에. 좁아지면 이메일부터 … 로 줄인다. */
-    .admin-name-cell { display:inline-flex; align-items:baseline; gap:8px; max-width:280px; }
+    /* 이름 열은 폭을 묶어 둔다 — 긴 이메일이 표 전체를 밀어 가로 스크롤을 만들었다.
+       (td 의 max-width 는 table-layout:auto 에서 무시되므로 내부 span 에 건다) */
+    .admin-name-cell { display:inline-flex; align-items:baseline; gap:8px; max-width:240px; }
     .admin-row-name { flex:0 0 auto; }
     .admin-row-email { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:12px; color:var(--muted, #94a3b8); }
     .admin-row-sub { margin-left:8px; font-size:12px; color:var(--muted, #94a3b8); }
 
-    .admin-row-actions { display:flex; flex-wrap:nowrap; gap:8px; }
+    .admin-row-actions { display:flex; flex-wrap:nowrap; gap:6px; }
 
     /* 정사각형 아이콘 버튼 (홈/신규/새로고침/행 액션 공용) */
     .admin-sq-btn {
@@ -79,7 +82,7 @@
     /* 행 내 수정/삭제 버튼(텍스트형) */
     .admin-icon-btn {
       border:1px solid var(--border); background:var(--panel); color:var(--text);
-      border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; flex:0 0 auto;
+      border-radius:8px; padding:5px 10px; cursor:pointer; font-size:13px; white-space:nowrap; flex:0 0 auto;
     }
     .admin-icon-btn:hover { background:var(--layer-strong); }
     .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#ef4444; border-color:rgba(239,68,68,.45); }
@@ -139,7 +142,7 @@
     .admin-hint { font-size:12px; color:var(--muted); margin-top:4px; }
     .admin-modal-error { color:#ef4444; font-size:13px; margin-top:10px; min-height:18px; }
     .admin-status { font-size:13px; color:#16a34a; }
-    .admin-credit-cell { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+    .admin-credit-cell { display:flex; align-items:center; gap:6px; white-space:nowrap; }
     .admin-credit-load-error { margin:0 0 14px; padding:12px 14px; border:1px solid rgba(239,68,68,.35); border-radius:10px; background:rgba(239,68,68,.08); }
     .admin-credit-cell > strong { color:#fbbf24; font-size:14px; }
     .admin-credit-cell > small { color:var(--muted); font-size:11px; cursor:help; }
@@ -159,23 +162,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.1756" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1756" />
-  <script src="core.js?v=3.1756" defer></script>
-  <script src="js/config.js?v=3.1756" defer></script>
-  <script src="js/utils.js?v=3.1756" defer></script>
-  <script src="store.js?v=3.1756" defer></script>
-  <script src="api.js?v=3.1756" defer></script>
-  <script src="js/state.js?v=3.1756" defer></script>
-  <script src="js/auth.js?v=3.1756" defer></script>
-  <script src="js/navigation.js?v=3.1756" defer></script>
-  <script src="js/service/media.js?v=3.1756" defer></script>
-  <script src="js/service/project.js?v=3.1756" defer></script>
-  <script src="js/service/character-traits.js?v=3.1756" defer></script>
-  <script src="js/service/brand.js?v=3.1756" defer></script>
-  <script src="js/ui/common.js?v=3.1756" defer></script>
-  <script src="js/ui/admin-users.js?v=3.1756" defer></script>
-  <script src="script.js?v=3.1756" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1757" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1757" />
+  <script src="core.js?v=3.1757" defer></script>
+  <script src="js/config.js?v=3.1757" defer></script>
+  <script src="js/utils.js?v=3.1757" defer></script>
+  <script src="store.js?v=3.1757" defer></script>
+  <script src="api.js?v=3.1757" defer></script>
+  <script src="js/state.js?v=3.1757" defer></script>
+  <script src="js/auth.js?v=3.1757" defer></script>
+  <script src="js/navigation.js?v=3.1757" defer></script>
+  <script src="js/service/media.js?v=3.1757" defer></script>
+  <script src="js/service/project.js?v=3.1757" defer></script>
+  <script src="js/service/character-traits.js?v=3.1757" defer></script>
+  <script src="js/service/brand.js?v=3.1757" defer></script>
+  <script src="js/ui/common.js?v=3.1757" defer></script>
+  <script src="js/ui/admin-users.js?v=3.1757" defer></script>
+  <script src="script.js?v=3.1757" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>

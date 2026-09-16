@@ -59,13 +59,14 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function formatDeleteAfter(value) {
+  // 표에는 날짜만(한 줄 폭 절약), 시각까지 포함한 전체 값은 옵션으로 받아 title 에 쓴다.
+  function formatDeleteAfter(value, withTime) {
     var d = new Date(String(value || ''));
     if (!Number.isFinite(d.getTime())) return '';
+    var opts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+    if (withTime) { opts.hour = '2-digit'; opts.minute = '2-digit'; }
     try {
-      return d.toLocaleString(curLang() === 'en' ? 'en-US' : 'ko-KR', {
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-      });
+      return d.toLocaleString(curLang() === 'en' ? 'en-US' : 'ko-KR', opts);
     } catch (_) { return d.toISOString(); }
   }
 
@@ -337,9 +338,10 @@
       ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
       : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
     var deleteAfterLabel = formatDeleteAfter(u.deleteAfter);
+    var deleteAfterFull = formatDeleteAfter(u.deleteAfter, true);
     var stateBadge = u.deletionRequestedAt
-      ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(deleteAfterLabel ? (t('admin_delete_at') + ' ' + deleteAfterLabel) : (u.deleteAfter || '')) + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
-        + (deleteAfterLabel ? '<span class="admin-row-sub">' + escapeHtml(deleteAfterLabel) + '</span>' : '')
+      ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(deleteAfterFull ? (t('admin_delete_at') + ' ' + deleteAfterFull) : (u.deleteAfter || '')) + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
+        + (deleteAfterLabel ? '<span class="admin-row-sub" title="' + escapeHtml(deleteAfterFull) + '">' + escapeHtml(deleteAfterLabel) + '</span>' : '')
       : (u.active === false)
       ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_inactive')) + '</span>'
       : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
