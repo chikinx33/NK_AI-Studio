@@ -118,8 +118,13 @@ test('서버 카드 삭제도 같은 롤백 규칙을 쓴다', () => {
   const start = source.indexOf('function deleteServerItem(objectName)');
   assert.ok(start >= 0, 'deleteServerItem 를 찾지 못했습니다');
   const fn = source.slice(start, source.indexOf('\n  // ─── Generation', start));
-  assert.match(fn, /delete state\.deletedSet\[objectName\];/);
-  assert.match(fn, /state\.serverItems = prevServerItems;/);
+  // 같은 결과의 복제본 묶음을 순차 삭제한다: tombstone 은 각 파일 삭제 성공 콜백에서만, 실패한 파일은 목록에 되살린다.
+  const deleteAt = fn.indexOf('return NK.api.videoDelete(name).then(function () {');
+  const tombstoneAt = fn.indexOf('state.deletedSet[name] = true;');
+  assert.ok(deleteAt >= 0 && tombstoneAt > deleteAt, 'tombstone 이 성공 콜백 안에 있지 않습니다');
+  assert.match(fn, /failedNames\.push\(name\);/);
+  assert.match(fn, /state\.serverItems = prevServerItems\.filter\(function \(s\) \{\s*return names\.indexOf\(s\.name\) < 0 \|\| failedNames\.indexOf\(s\.name\) >= 0;/);
+  assert.match(fn, /return failedNames\.length === 0;/);
   // 예전의 "실패해도 tombstone 유지" 경로가 남아 있지 않다
   assert.doesNotMatch(source, /\.catch\(function \(\) \{ \/\* deletedSet으로 클라이언트에서 필터링됨 \*\/ \}\)/);
 });

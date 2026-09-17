@@ -138,6 +138,26 @@ const handleGet: PagesFunction = async ({ request, env }) => {
           return await signAsStorageUrl(sourceParsed.bucket, sourceParsed.object);
         }
 
+        // ★ 같은 작업은 같은 이름으로 한 번만 복제한다. 예전엔 이름에 현재 시각을 붙여, 완료 뒤 상태 조회가 겹치거나
+        //   반복될 때마다(큰 영상은 복제가 폴링 간격보다 오래 걸린다) 같은 영상이 새 이름으로 또 저장돼
+        //   생성 결과 목록에 동일한 영상이 여러 개 떴다(2026-09-17 Seedance 2.5).
+        const sceneSafe = String(sceneId || 'scene').replace(/[^\w.-]+/g, '_').slice(0, 80);
+        const jobKey = (await sha256Hex(jobId || playbackUrl)).slice(0, 16);
+        const objectName = `${targetPrefix}${sceneSafe}-${jobKey}.mp4`;
+        const accessTokenUpload = await getGoogleAccessToken({
+          clientEmail,
+          privateKeyPem: privateKeyRaw,
+          scope: "https://www.googleapis.com/auth/cloud-platform",
+        });
+        const existing = await fetch(
+          `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?fields=name`,
+          { headers: { Authorization: `Bearer ${accessTokenUpload}` } },
+        );
+        if (existing.ok) {
+          log('flatten_reused', { objectName });
+          return await signAsStorageUrl(outParsed.bucket, objectName);
+        }
+
         const bufRes = await fetch(sourceUrl);
         if (!bufRes.ok) {
           log('flatten_source_failed', {
@@ -155,15 +175,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
           return sourceUrl;
         }
         const buf = await bufRes.arrayBuffer();
-        const stamp = Date.now();
-        const sceneSafe = sceneId || 'scene';
-        const objectName = `${targetPrefix}${stamp}-${sceneSafe}.mp4`;
         const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-        const accessTokenUpload = await getGoogleAccessToken({
-          clientEmail,
-          privateKeyPem: privateKeyRaw,
-          scope: "https://www.googleapis.com/auth/cloud-platform",
-        });
         const upRes = await fetch(uploadUrl, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" },

@@ -799,6 +799,30 @@
       || ((NK.api && NK.api.objectNameFromUrl) ? NK.api.objectNameFromUrl(r.videoUrl || r.rawVideoUrl || '') : '');
   }
 
+  // 같은 생성 결과(resultId)의 서버 영상 묶음 키. 예전 서버는 완료 뒤 상태 조회마다 같은 영상을
+  // 시각만 다른 이름으로 또 저장해, 목록에 동일한 결과가 여러 개 떴다(2026-09-17). 묶어서 한 장만 보여준다.
+  function serverGroupKey(s) {
+    var meta = (s && s.metadata) || {};
+    if (meta.resultId) return 'r:' + String(meta.resultId);
+    var fileName = String((s && s.name) || '').split('/').pop();
+    var m = /(vg-\d+-[a-z0-9]+)/i.exec(fileName);
+    return m ? 'r:' + m[1] : 'n:' + String((s && s.name) || '');
+  }
+
+  function serverGroupNames(key) {
+    return state.serverItems
+      .filter(function (s) { return serverGroupKey(s) === key; })
+      .map(function (s) { return s.name; });
+  }
+
+  // 생성 날짜·시각: 2026-09-17 14:05
+  function formatCreatedAt(value) {
+    var d = new Date(typeof value === 'number' ? value : String(value || ''));
+    if (isNaN(d.getTime())) return '';
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
   function loadDeletedSet() {
     try { state.deletedSet = JSON.parse(localStorage.getItem(DELETED_KEY) || '{}') || {}; } catch (_) {}
   }
@@ -1191,9 +1215,15 @@
         var n = resultObjectName(r);
         if (n) localObjects[n] = true;
       });
+      // 같은 결과의 복제본은 가장 최근 것 한 장만 보인다(serverItems 는 최신순).
+      var shownGroups = {};
       state.serverItems.filter(function (s) {
         if (state.deletedSet[s.name] || localObjects[s.name]) return false;
-        return !localIds.some(function (id) { return s.name.indexOf(id) !== -1; });
+        if (localIds.some(function (id) { return s.name.indexOf(id) !== -1 || serverGroupKey(s) === 'r:' + id; })) return false;
+        var key = serverGroupKey(s);
+        if (shownGroups[key]) return false;
+        shownGroups[key] = true;
+        return true;
       }).forEach(function (s) { list.appendChild(renderServerCard(s)); });
     }
     panel.appendChild(list);
@@ -1230,6 +1260,8 @@
         r.duration ? (String(r.duration) + (state.lang === 'ko' ? '초' : 's')) : ''
       ].filter(Boolean).join(' · ')
     }));
+    var localDate = formatCreatedAt(r.createdAt);
+    if (localDate) info.appendChild(el('p', 'vgen-result-date', { textContent: localDate }));
     info.appendChild(el('span', 'vgen-result-status vgen-status--' + (r.status || 'processing'), { textContent: t('status_' + (r.status || 'processing')) }));
     // 실패 사유를 카드에 직접 노출한다. 전문은 title(툴팁)로.
     if (r.status === 'error') {
@@ -1322,9 +1354,9 @@
     } else {
       info.appendChild(el('p', 'vgen-result-prompt', { textContent: fileName }));
     }
-    info.appendChild(el('p', 'vgen-result-meta', {
-      textContent: metaLine || new Date(s.timeCreated || s.updated || '').toLocaleDateString()
-    }));
+    if (metaLine) info.appendChild(el('p', 'vgen-result-meta', { textContent: metaLine }));
+    var serverDate = formatCreatedAt(s.timeCreated || s.updated);
+    if (serverDate) info.appendChild(el('p', 'vgen-result-date', { textContent: serverDate }));
     info.appendChild(el('span', 'vgen-result-status vgen-status--done', { textContent: t('server_item') }));
     card.appendChild(info);
 
@@ -2125,7 +2157,9 @@
         state.deletedSet[objectName] = true;
         saveDeletedSet();
         if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
-        return true;
+        // 같은 결과의 서버 복제본(예전 중복 저장분)도 지운다. 남겨 두면 로컬 카드가 사라진 뒤 서버 카드로 다시 나타난다.
+        var sibling = state.serverItems.find(function (s) { return s.name !== objectName && serverGroupKey(s) === 'r:' + id; });
+        return sibling ? deleteServerItem(sibling.name).then(function () { return true; }) : true;
       })
       .catch(function (err) {
         console.error('[vgen] delete failed', objectName, err);
@@ -2226,29 +2260,39 @@
 
   // 서버 카드 삭제도 로컬 카드와 같은 규칙: tombstone 은 성공 후에만, 실패하면 원위치.
   function deleteServerItem(objectName) {
-    if (!objectName) return Promise.resolve(true);
+    if (!objectName || state.deletedSet[objectName]) return Promise.resolve(true);
     if (!(NK.api && NK.api.videoDelete)) return Promise.resolve(false);
 
+    // 목록엔 한 장만 보이는 같은 결과의 복제본을 함께 지운다(하나만 지우면 숨어 있던 복제본이 다시 나타난다).
+    var item = state.serverItems.find(function (s) { return s.name === objectName; });
+    var names = item ? serverGroupNames(serverGroupKey(item)) : [];
+    if (names.indexOf(objectName) < 0) names.push(objectName);
+
     var prevServerItems = state.serverItems;
-    state.serverItems = state.serverItems.filter(function (s) { return s.name !== objectName; });
+    state.serverItems = state.serverItems.filter(function (s) { return names.indexOf(s.name) < 0; });
     render();
 
-    return NK.api.videoDelete(objectName)
-      .then(function () {
-        state.deletedSet[objectName] = true;
-        saveDeletedSet();
-        if (state.projectId) clearProjectVideoRef(state.projectId, objectName);
-        render();
-        return true;
-      })
-      .catch(function (err) {
-        console.error('[vgen] delete failed', objectName, err);
-        delete state.deletedSet[objectName];
-        saveDeletedSet();
-        state.serverItems = prevServerItems;
-        render();
-        return false;
+    var failedNames = [];
+    return names.reduce(function (chain, name) {
+      return chain.then(function () {
+        return NK.api.videoDelete(name).then(function () {
+          state.deletedSet[name] = true;
+          if (state.projectId) clearProjectVideoRef(state.projectId, name);
+        }, function (err) {
+          console.error('[vgen] delete failed', name, err);
+          failedNames.push(name);
+        });
       });
+    }, Promise.resolve()).then(function () {
+      saveDeletedSet();
+      if (failedNames.length) {
+        state.serverItems = prevServerItems.filter(function (s) {
+          return names.indexOf(s.name) < 0 || failedNames.indexOf(s.name) >= 0;
+        });
+      }
+      render();
+      return failedNames.length === 0;
+    });
   }
 
   // ─── Generation ───────────────────────────────────────────
@@ -2403,13 +2447,19 @@
     var attempts = 0;
     var consecutiveErrors = 0;
     var maxAttempts = maxPollAttemptsFor((meta && meta.model) || '');
+    // 앞선 상태 조회가 끝나기 전엔 다음 조회를 보내지 않는다. 완료 직후 서버가 큰 영상을 복제하는 동안
+    // 조회가 겹치면 조회마다 복제가 한 번씩 더 일어나 같은 영상이 여러 개 저장됐다.
+    var inFlight = false;
+    var stopped = false;
 
     function stop() {
+      stopped = true;
       clearInterval(state.polls[resultId]);
       delete state.polls[resultId];
     }
 
     function check() {
+      if (stopped || inFlight) return;
       if (attempts >= maxAttempts) {
         stop();
         var mins = Math.round((maxAttempts * POLL_INTERVAL_MS) / 60000);
@@ -2425,9 +2475,12 @@
         return;
       }
       attempts++;
+      inFlight = true;
 
       NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen', meta: meta })
         .then(function (data) {
+          inFlight = false;
+          if (stopped) return;
           consecutiveErrors = 0;
           var s = String((data && (data.status || data.state)) || '').toLowerCase();
           var done = /^(done|succeeded|success|completed)$/.test(s);
@@ -2465,6 +2518,8 @@
           }
         })
         .catch(function (err) {
+          inFlight = false;
+          if (stopped) return;
           // 조용히 삼키면 카드가 영원히 'processing' 으로 남는다. 연속 3회면 실패로 확정.
           consecutiveErrors++;
           console.error('[vgen] status poll error', resultId, consecutiveErrors, err && err.message);
