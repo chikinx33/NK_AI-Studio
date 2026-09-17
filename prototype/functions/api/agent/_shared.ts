@@ -264,23 +264,30 @@ async function runAgentSchemaDdl(sql: SqlFn): Promise<void> {
     await sql("CREATE INDEX IF NOT EXISTS company_knowledge_user_idx ON company_knowledge (user_id)");
   } catch (_) {}
   // 회사 지식 색인(_knowledge-index.ts): 프로젝트 범위·단어 조각·의미 벡터·사용 기록.
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS project_id text");
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms text[] NOT NULL DEFAULT '{}'::text[]");
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms_hash text");
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding_hash text");
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS use_count integer NOT NULL DEFAULT 0");
-  await sql("ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS last_used_at timestamptz");
-  try {
-    await sql("CREATE INDEX IF NOT EXISTS company_knowledge_scope_idx ON company_knowledge (user_id, project_id, type)");
-  } catch (_) {}
-  try {
-    await sql("CREATE INDEX IF NOT EXISTS company_knowledge_terms_idx ON company_knowledge USING gin (terms)");
-  } catch (_) {}
-  try {
-    // pgvector 가 없으면 의미 색인만 빠지고 단어 색인으로 동작한다.
-    await sql("CREATE EXTENSION IF NOT EXISTS vector");
-    await sql(`ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding vector(${KNOWLEDGE_EMBED_DIM})`);
-  } catch (_) {}
+  // ★ DB 쿼리 1번 = Worker 서브요청 1번이고 무료 플랜 한도는 요청당 50번이다. 이 DDL 묶음을 문장마다 따로 보내면
+  //   스키마 준비만으로 한도를 넘어(2026-09-17 v3.1765, 43→53번) 완료 표시를 못 남기고 모든 요청이 실패했다.
+  //   그래서 한 번의 DO 블록으로 보낸다. 새 DDL 도 여기에 합칠 것.
+  await sql(`
+    DO $nk$
+    BEGIN
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS project_id text;
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms text[] NOT NULL DEFAULT '{}'::text[];
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS terms_hash text;
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding_hash text;
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS use_count integer NOT NULL DEFAULT 0;
+      ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
+      CREATE INDEX IF NOT EXISTS company_knowledge_scope_idx ON company_knowledge (user_id, project_id, type);
+      CREATE INDEX IF NOT EXISTS company_knowledge_terms_idx ON company_knowledge USING gin (terms);
+      -- pgvector 가 없으면 의미 색인만 빠지고 단어 색인으로 동작한다.
+      BEGIN
+        CREATE EXTENSION IF NOT EXISTS vector;
+        ALTER TABLE company_knowledge ADD COLUMN IF NOT EXISTS embedding vector(${KNOWLEDGE_EMBED_DIM});
+      EXCEPTION WHEN others THEN
+        RAISE NOTICE 'company_knowledge embedding skipped: %', SQLERRM;
+      END;
+    END
+    $nk$
+  `);
   // 프로젝트 보드(Phase 3). data=jsonb{name,summary,status,goal,stages[],nextAction}. 멀티테넌시.
   await sql(`
     CREATE TABLE IF NOT EXISTS company_projects (

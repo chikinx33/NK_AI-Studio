@@ -267,24 +267,29 @@ export async function selectCompanyKnowledgeForPrompt(
 ): Promise<{ lines: string[]; total: number; retrieved: boolean }> {
   const scope = opts.projectId ? "AND (project_id IS NULL OR project_id = $2)" : "";
   const scopeParams = opts.projectId ? [opts.projectId] : [];
-  const counted = await sql(`SELECT count(*)::int AS total FROM company_knowledge WHERE user_id = $1 ${scope}`, [userId, ...scopeParams]) as any[];
-  const total = Number(counted[0]?.total || 0);
   const format = (row: { type?: string; text?: string }) => `[${row.type || "사실"}] ${row.text}`;
-  if (total <= PROMPT_ALL_LIMIT) {
-    const rows = await sql(
-      `SELECT text, type FROM company_knowledge WHERE user_id = $1 ${scope} ORDER BY created_at DESC`,
-      [userId, ...scopeParams],
-    ) as any[];
-    return { lines: rows.map(format), total, retrieved: false };
-  }
-  const rules = await sql(
-    `SELECT id, text, type FROM company_knowledge WHERE user_id = $1 ${scope} AND type = '원칙'
-      ORDER BY use_count DESC, created_at DESC LIMIT ${ALWAYS_RULES_LIMIT}`,
+  // 쿼리 1번으로 ① 전체 개수 ② 최신 PROMPT_ALL_LIMIT+1 개 ③ 항상 넣을 원칙 상위 개수를 함께 받는다.
+  // DB 쿼리 1번 = Worker 서브요청 1번(무료 플랜 요청당 50번) — 대화 한 턴에서 예전(목록 1번)보다 늘리지 않는다.
+  const rows = await sql(
+    `SELECT id, text, type, total, recent_rank, rule_rank FROM (
+       SELECT id, text, type, created_at,
+              count(*) OVER () AS total,
+              row_number() OVER (ORDER BY created_at DESC, id) AS recent_rank,
+              CASE WHEN type = '원칙' THEN row_number() OVER (PARTITION BY type = '원칙' ORDER BY use_count DESC, created_at DESC, id) END AS rule_rank
+         FROM company_knowledge WHERE user_id = $1 ${scope}
+     ) t
+     WHERE recent_rank <= ${PROMPT_ALL_LIMIT + 1} OR rule_rank <= ${ALWAYS_RULES_LIMIT}
+     ORDER BY recent_rank`,
     [userId, ...scopeParams],
   ) as any[];
+  const total = Number(rows[0]?.total || 0);
+  if (total <= PROMPT_ALL_LIMIT) {
+    return { lines: rows.map(format), total, retrieved: false };
+  }
+  const rules = rows.filter((row) => row.rule_rank != null && Number(row.rule_rank) <= ALWAYS_RULES_LIMIT)
+    .sort((a, b) => Number(a.rule_rank) - Number(b.rule_rank));
   const hits = query.trim()
     ? await searchCompanyKnowledge(env, sql, userId, query, { projectId: opts.projectId, excludeIds: rules.map((row) => String(row.id)) })
     : [];
-  await markKnowledgeUsed(sql, userId, hits.map((hit) => hit.id)).catch(() => {});
   return { lines: [...rules.map(format), ...hits.map(format)], total, retrieved: true };
 }

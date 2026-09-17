@@ -12,7 +12,6 @@ import {
   getRuntime,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
-import { indexStaleCompanyKnowledge } from "./_knowledge-index";
 
 type PagesFunction = (ctx: {
   request: Request;
@@ -114,9 +113,14 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       } finally {
         try { writer.close(); } catch {}
       }
-      // 응답을 다 보낸 뒤, 이번 턴에 쌓이거나 바뀐 회사 지식의 색인(단어 조각·의미 벡터)을 채운다.
-      // 사용자 대기 시간에 끼지 않고, 실패해도 다음 턴에 다시 채운다.
-      try { await indexStaleCompanyKnowledge(env, sql, auth.userId, { limit: 100, timeoutMs: 8000 }); } catch {}
+      // 응답을 다 보낸 뒤, 밀린 회사 지식 색인(의미 벡터 등)을 '별도 요청'으로 채운다.
+      // 이 대화 요청 안에서 하면 DB·임베딩 호출이 대화의 서브요청 한도(무료 플랜 50번)를 함께 깎는다. 호출 1번만 쓰고 넘긴다.
+      try {
+        await fetch(new URL("/api/agent/knowledge-index", request.url).toString(), {
+          method: "POST",
+          headers: { Authorization: String(request.headers.get("Authorization") || "") },
+        });
+      } catch {}
     })();
 
     // readable 스트림이 연결을 유지하고, waitUntil이 CF 함수 수명도 연장한다.
