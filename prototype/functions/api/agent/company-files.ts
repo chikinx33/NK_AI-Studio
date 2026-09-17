@@ -13,6 +13,8 @@ const MAX_TEXT_BYTES = 1024 * 1024;
 const MAX_OPERATION_OBJECTS = 2000;
 const FOLDER_MARKER = ".raviok-folder";
 const WORK_PATH_PREFIX = "@work/";
+// 날짜 폴더에 끌어다 넣은 파일·폴더의 실제 저장 위치(.work-files/날짜/...). 루트 목록에는 숨긴다.
+const WORK_FILES_ROOT = ".work-files";
 
 const corsHeaders = (origin: string | null) => ({
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -71,7 +73,8 @@ function assertMutablePath(path: string) {
   }
 }
 
-async function listVirtualWorkFolders(sql: any, userId: string) {
+// parent: 이 일반 폴더 안에 놓인 날짜 폴더만(''=루트), null 이면 위치와 상관없이 전부.
+async function listVirtualWorkFolders(sql: any, userId: string, parent: string | null = null) {
   if (!sql) return [];
   await ensureAgentSchema(sql);
   const rows = await sql(`
@@ -83,6 +86,7 @@ async function listVirtualWorkFolders(sql: any, userId: string) {
     )
     SELECT item.date_key,
            COALESCE(MAX(folder.title), item.date_key) AS title,
+           COALESCE(MAX(folder.parent_path), '') AS parent_path,
            COUNT(*)::int AS item_count,
            MAX(item.updated_at) AS updated_at
       FROM normalized_items item
@@ -90,12 +94,35 @@ async function listVirtualWorkFolders(sql: any, userId: string) {
         ON folder.user_id = $1
        AND folder.date_key = item.date_key
      GROUP BY item.date_key
-     ORDER BY item.date_key DESC`, [userId]);
+    HAVING $2::text IS NULL OR COALESCE(MAX(folder.parent_path), '') = $2::text
+     ORDER BY item.date_key DESC`, [userId, parent]);
   return rows.map((row: any) => ({
     kind: "work-folder", source: "work", name: String(row.title || row.date_key),
-    path: `${WORK_PATH_PREFIX}${row.date_key}`, parentPath: "", dateKey: String(row.date_key),
+    path: `${WORK_PATH_PREFIX}${row.date_key}`, parentPath: String(row.parent_path || ""), dateKey: String(row.date_key),
     itemCount: Number(row.item_count || 0), updatedAt: String(row.updated_at || ""),
   }));
+}
+
+// 지운 폴더들 안에 있던 날짜 폴더를 루트로 되돌린다. 폴더가 많아도 쿼리 1번(서브요청 한도).
+async function releaseWorkFolders(env: any, userId: string, paths: string[]) {
+  const sql = getSql(env);
+  if (!sql || !paths.length) return;
+  await ensureAgentSchema(sql);
+  await sql(`UPDATE company_work_folders SET parent_path = '', updated_at = now()
+              WHERE user_id = $1 AND (parent_path = ANY($2::text[]) OR parent_path LIKE ANY($3::text[]))`,
+    [userId, paths, paths.map((path) => `${path.replace(/[\\%_]/g, "\\$&")}/%`)]);
+}
+
+// 일반 폴더를 옮기거나 지우면 그 안에 넣어 둔 날짜 폴더의 위치도 따라간다(지우면 루트로 되돌린다 — 업무 기록은 지우지 않는다).
+async function relocateWorkFolders(env: any, userId: string, source: string, destination: string) {
+  const sql = getSql(env);
+  if (!sql) return;
+  await ensureAgentSchema(sql);
+  await sql(`UPDATE company_work_folders
+                SET parent_path = CASE WHEN $3::text = '' THEN '' ELSE $3::text || substr(parent_path, length($2::text) + 1) END,
+                    updated_at = now()
+              WHERE user_id = $1 AND (parent_path = $2::text OR parent_path LIKE $2::text || '/%')`,
+    [userId, source, destination]);
 }
 
 async function listVirtualWorkItems(sql: any, userId: string, dateKey: string) {
@@ -385,6 +412,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (path && !listed.items.length && !listed.prefixes.length) {
       // 저장소에 없는 경로 — 날짜 폴더의 표시명(예: 이름을 바꾼 "log")이면 그 폴더를 연다.
       const sql = getSql(env);
+      // 파일은 다 비웠어도 날짜 폴더를 넣어 둔 폴더라면 그 날짜 폴더들을 보여준다.
+      const nestedWorkFolders = await listVirtualWorkFolders(sql, auth.userId, path).catch(() => []);
+      if (nestedWorkFolders.length) return send({ path, parentPath: parentPath(path), entries: nestedWorkFolders, unified: true }, 200, origin);
       const folder = await findWorkFolder(sql, auth.userId, path);
       if (folder) {
         const entries = await listVirtualWorkItems(sql, auth.userId, folder.dateKey);
@@ -401,7 +431,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const folders = listed.prefixes.map((prefix) => {
       const relative = prefix.slice(rootPrefix.length).replace(/\/$/, "");
       return { kind: "folder", name: baseName(relative), path: relative, parentPath: path };
-    });
+    }).filter((folder) => folder.path !== WORK_FILES_ROOT);
     const files = listed.items
       .filter((item) => baseName(String(item.name || "")) !== FOLDER_MARKER)
       .map((item) => {
@@ -412,7 +442,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
         };
       });
-    const workFolders = path ? [] : await listVirtualWorkFolders(getSql(env), auth.userId);
+    // 날짜 폴더 파일 저장소 안에는 날짜 폴더를 두지 않는다.
+    const workFolders = path === WORK_FILES_ROOT || path.startsWith(`${WORK_FILES_ROOT}/`)
+      ? [] : await listVirtualWorkFolders(getSql(env), auth.userId, path);
     const entries = [...workFolders, ...folders, ...files].sort((a: any, b: any) => {
       const aFolder = a.kind === "folder" || a.kind === "work-folder";
       const bFolder = b.kind === "folder" || b.kind === "work-folder";
@@ -450,6 +482,32 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const body: any = await request.json().catch(() => ({}));
     const action = String(body.action || "").trim();
+    if (action === "move_work_folder") {
+      // 날짜 폴더를 일반 폴더(또는 루트) 안으로 옮긴다. 업무 기록의 날짜·경로(@work/날짜)는 바뀌지 않고 보이는 위치만 바뀐다.
+      const dateKey = String(body.dateKey || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return send({ error: "옮길 날짜 폴더를 확인해 주세요." }, 400, origin);
+      const parent = normalizePath(body.parentPath, true);
+      if (parent) {
+        assertMutablePath(parent);
+        if (parent === WORK_FILES_ROOT || parent.startsWith(`${WORK_FILES_ROOT}/`)) return send({ error: "날짜 폴더는 다른 날짜 폴더 안에 넣을 수 없습니다." }, 400, origin);
+        const target = await resolveObjects(ctx, rootPrefix, parent);
+        if (target?.kind !== "folder") return send({ error: `'${parent}' 폴더를 찾지 못했습니다.` }, 404, origin);
+      }
+      const sql = getSql(env);
+      if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
+      await ensureAgentSchema(sql);
+      const exists = await sql(
+        "SELECT 1 FROM company_work_items WHERE user_id = $1 AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $2::date LIMIT 1",
+        [auth.userId, dateKey],
+      );
+      if (!exists.length) return send({ error: "이 날짜의 업무 폴더를 찾지 못했습니다." }, 404, origin);
+      await sql(
+        `INSERT INTO company_work_folders (user_id, date_key, title, parent_path) VALUES ($1, $2, $2, $3)
+         ON CONFLICT (user_id, date_key) DO UPDATE SET parent_path = EXCLUDED.parent_path, updated_at = now()`,
+        [auth.userId, dateKey, parent],
+      );
+      return send({ ok: true, action, dateKey, parentPath: parent }, 200, origin);
+    }
     if (action === "mkdir") {
       const path = normalizePath(body.path, false);
       assertMutablePath(path);
@@ -491,6 +549,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         await copyObject(ctx, objectName, target);
       }
       if (action === "move") for (const objectName of resolved.objects) await deleteObject(ctx, objectName);
+      if (action === "move" && resolved.kind === "folder") await relocateWorkFolders(env, auth.userId, source, destination);
       return send({ ok: true, action, kind: resolved.kind, source, destination, affectedCount: resolved.objects.length }, 200, origin);
     }
     return send({ error: "지원하지 않는 파일 작업입니다." }, 400, origin);
@@ -520,6 +579,7 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     if (!names.size) return send({ error: `삭제할 파일 또는 폴더를 찾지 못했습니다: ${missing.join(", ")}`, missing }, 404, origin);
     if (names.size > MAX_OPERATION_OBJECTS) return send({ error: `한 번에 삭제할 수 있는 파일은 ${MAX_OPERATION_OBJECTS}개까지입니다.` }, 400, origin);
     for (const objectName of names) await deleteObject(ctx, objectName);
+    await releaseWorkFolders(env, auth.userId, paths.filter((path: string) => !missing.includes(path))).catch(() => {});
     return send({ ok: true, deletedCount: names.size, paths, missing }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 삭제에 실패했습니다.") }, 500, origin);

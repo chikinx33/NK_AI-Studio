@@ -3,6 +3,7 @@ import {
   deleteAgentVideoStorageFiles,
   deleteCompanyWorkFolderMeta,
   deleteCompanyWorkItems,
+  deleteCompanyFiles,
   downloadAgentVideoStorageFile,
   listAgentVideoStorage,
   listCompanyWorkFolders,
@@ -18,7 +19,7 @@ import {
 import { GeneratedFilePreview } from "./ChatFileAttachments";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
-import CompanyFileExplorer from "./CompanyFileExplorer";
+import CompanyFileExplorer, { workFilesPath } from "./CompanyFileExplorer";
 
 type ViewMode = "cards" | "list";
 type SearchScope = "title" | "content" | "all";
@@ -193,6 +194,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
   const [sourceWork, setSourceWork] = useState<CompanyWorkItem | null>(null);
+  // 날짜 폴더를 일반 폴더 안에 넣어 둔 경우, 날짜 폴더에서 돌아올 때 그 폴더로 돌아간다.
+  const [companyPath, setCompanyPath] = useState("");
   // 검수 승인된 이미지는 업무 소스 폴더가 아니라 생성 저장소에 있다. 소스 목록 대신 이미지 미리보기로 연다.
   const [imagePreview, setImagePreview] = useState<ChatFileReference | null>(null);
   const [sources, setSources] = useState<AgentVideoStorageItem[]>([]);
@@ -318,6 +321,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     try {
       await inChunks(works.map((work) => work.id), 100, (chunk) => deleteCompanyWorkItems(chunk));
       await deleteCompanyWorkFolderMeta(dateKey);
+      // 날짜 폴더에 넣어 둔 파일도 함께 지운다(없으면 404 — 무시)
+      await deleteCompanyFiles([workFilesPath(dateKey)]).catch(() => {});
       if (date === dateKey) setDate("");
       await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "폴더 삭제에 실패했습니다."); }
@@ -475,6 +480,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     }}
     onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)}
     onOpenProject={onOpenProject}
+    initialPath={companyPath}
+    onPathChange={setCompanyPath}
   />;
 
   const folderGridClass = viewMode === "cards" ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid gap-2";
@@ -521,8 +528,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           {sourceWork && <WorkDocumentFiles work={sourceWork} />}
           {visibleSources.length ? viewMode === "list" ? <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleSources.map((source) => <tr key={source.objectName} className="border-t border-edge hover:bg-panel/60"><td className="p-3 text-center"><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="accent-emerald-500" /></td><td className="max-w-md p-3"><div className="flex min-w-0 items-center gap-2"><SourceIcon type={source.type} className="h-7 w-7 shrink-0" /><span className="truncate font-medium text-gray-200" title={source.fileName}>{source.fileName}</span></div></td><td className="p-3 text-gray-500">{source.type}</td><td className="p-3 text-gray-500">{formatBytes(source.size)}</td><td className="p-3 text-gray-500">{new Date(source.updatedAt).toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleSources.map((source) => <label key={source.objectName} className={`relative cursor-pointer rounded-2xl border p-4 transition hover:border-gray-600 ${selectedSources.has(source.objectName) ? "border-emerald-600 bg-emerald-950/20 ring-1 ring-emerald-800" : "border-edge bg-panel"}`}><input type="checkbox" checked={selectedSources.has(source.objectName)} onChange={() => toggleSource(source.objectName)} className="absolute right-3 top-3 accent-emerald-500" /><SourceIcon type={source.type} /><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={source.fileName}>{source.fileName}</h2><div className="mt-2 flex items-center justify-between text-[10px] text-gray-500"><span>{source.type}</span><span>{formatBytes(source.size)}</span></div><p className="mt-2 text-[10px] text-gray-600">{new Date(source.updatedAt).toLocaleString("ko-KR")}</p></label>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "영상·이미지 소스는 없어요. 만든 문서는 위에 있어요."}</div>}
           </>
-        ) : date ? (
-          visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
+        ) : date ? (<>
+          {visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
               : imageWorkObject(work) ? <img src={withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(imageWorkObject(work))}`)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
               : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
@@ -531,7 +538,9 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
               {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
             </div>
-          </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>
+          </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>}
+          <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject} /></div>
+          </>
         ) : dates.length ? (
           <div className={folderGridClass}>{dates.map(([folderDate, count]) => {
             const title = folderTitles.get(folderDate) || folderDate;

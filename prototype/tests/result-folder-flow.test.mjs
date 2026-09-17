@@ -97,10 +97,31 @@ test("화면 안 버튼이 보낸 폴더 열기 명령도 업무 파일 화면�
   assert.match(app, /routedUiActions\.current\.add\(action\)/);
 });
 
-test("업무 파일은 드래그로 파일·폴더를 폴더에 넣는다", () => {
+test("업무 파일은 드래그로 파일·폴더·날짜 폴더를 폴더에 넣는다", () => {
   const explorer = read("ai-company-app/src/components/CompanyFileExplorer.tsx");
-  assert.match(explorer, /const movable = \(entry: CompanyFileEntry\) => entry\.kind === "file" \|\| entry\.kind === "folder"/);
+  assert.match(explorer, /const movable = \(entry: CompanyFileEntry\) => entry\.kind === "file" \|\| entry\.kind === "folder" \|\| \(entry\.kind === "work-folder" && !!entry\.dateKey\)/);
   // 자기 자신·하위 폴더·제자리로는 옮기지 않는다
-  assert.match(explorer, /sourceParent !== targetPath && targetPath !== source && !targetPath\.startsWith\(`\$\{source\}\/`\)/);
-  assert.match(explorer, /await moveCompanyFile\(source, joinPath\(targetPath, source\.split\("\/"\)\.pop\(\) \|\| source\)\)/);
+  assert.match(explorer, /return item\.parentPath !== target\.path && target\.path !== item\.path && !target\.path\.startsWith\(`\$\{item\.path\}\/`\)/);
+  // 날짜 폴더 안에는 파일·일반 폴더만, 실제 저장은 .work-files/날짜
+  assert.match(explorer, /if \(item\.kind !== "file" && item\.kind !== "folder"\) return false;/);
+  assert.match(explorer, /return `\.work-files\/\$\{dateKey\}`;/);
+  assert.match(explorer, /await moveCompanyWorkFolder\(item\.dateKey, target\.path\)/);
+  const work = read("ai-company-app/src/components/WorkExplorer.tsx");
+  // 날짜 폴더를 열면 넣어 둔 파일 영역이 업무 기록 아래에 보인다
+  assert.match(work, /<CompanyFileExplorer key=\{date\} embedded basePath=\{workFilesPath\(date\)\}/);
+  assert.match(work, /await deleteCompanyFiles\(\[workFilesPath\(dateKey\)\]\)\.catch/);
+});
+
+test("날짜 폴더 위치(parent_path)는 서버에 저장되고 폴더 이동·삭제를 따라간다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /ALTER TABLE company_work_folders ADD COLUMN IF NOT EXISTS parent_path text NOT NULL DEFAULT ''/);
+  const files = read("prototype/functions/api/agent/company-files.ts");
+  assert.match(files, /if \(action === "move_work_folder"\)/);
+  assert.match(files, /HAVING \$2::text IS NULL OR COALESCE\(MAX\(folder\.parent_path\), ''\) = \$2::text/);
+  assert.match(files, /if \(action === "move" && resolved\.kind === "folder"\) await relocateWorkFolders\(env, auth\.userId, source, destination\)/);
+  // 여러 폴더를 지워도 날짜 폴더 되돌리기는 쿼리 1번(Worker 서브요청 한도)
+  assert.match(files, /await releaseWorkFolders\(env, auth\.userId, paths\.filter/);
+  assert.match(files, /parent_path = ANY\(\$2::text\[\]\) OR parent_path LIKE ANY\(\$3::text\[\]\)/);
+  // 날짜 폴더 파일 저장소는 루트 목록에 드러내지 않는다
+  assert.match(files, /\.filter\(\(folder\) => folder\.path !== WORK_FILES_ROOT\)/);
 });

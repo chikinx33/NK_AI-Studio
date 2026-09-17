@@ -337,6 +337,14 @@ export async function copyCompanyFile(source: string, destination: string): Prom
   await readCompanyFileResponse(res, "파일 또는 폴더를 복사하지 못했어요.");
 }
 
+/** 날짜 폴더를 일반 폴더(''=루트) 안으로 옮긴다. 업무 기록의 날짜는 그대로다. */
+export async function moveCompanyWorkFolder(dateKey: string, parentPath: string): Promise<void> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move_work_folder", dateKey, parentPath }),
+  });
+  await readCompanyFileResponse(res, "날짜 폴더를 옮기지 못했어요.");
+}
+
 export async function moveCompanyFile(source: string, destination: string): Promise<void> {
   const res = await fetch("/api/agent/company-files", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", source, destination }),
