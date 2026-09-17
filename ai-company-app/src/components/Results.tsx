@@ -122,25 +122,22 @@ const workerLabel = (it: ResultItem) => `${it.agentName}${JOB[it.agentId] ? `(${
 function ImagePopup({
   item,
   onClose,
-  onReview,
+  onApprove,
+  onRevise,
 }: {
   item: ResultItem;
   onClose: () => void;
-  onReview: (action: "approve" | "revise", note?: string) => Promise<void>;
+  onApprove: () => Promise<void>;
+  onRevise: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [folderHint, setFolderHint] = useState("");
+  // 이미 처리된(사용 확정·재검토) 산출물은 다시 검토할 게 없다 — 상태와 폴더만 보여준다.
+  const reviewable = item.reviewStatus === "pending";
 
-  async function review(action: "approve" | "revise") {
-    let note: string | undefined;
-    if (action === "revise") {
-      const ans = window.prompt("어떤 부분을 수정할까요? (비워두면 픽셀이 직접 물어봐요)", "");
-      if (ans === null) return; // 취소
-      note = ans.trim() || undefined;
-    }
+  async function approve() {
     setBusy(true);
-    await onReview(action, note);
-    setBusy(false);
+    try { await onApprove(); } finally { setBusy(false); }
   }
 
   return (
@@ -205,23 +202,72 @@ function ImagePopup({
             <span className={`text-xs ${STATUS[item.reviewStatus]?.c ?? "text-gray-400"}`}>
               {STATUS[item.reviewStatus]?.t ?? item.reviewStatus}
             </span>
+            {reviewable && <>
             <button
               disabled={busy}
-              onClick={() => review("revise")}
+              onClick={onRevise}
               className="rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60 disabled:opacity-40"
             >
               재검토
             </button>
             <button
               disabled={busy}
-              onClick={() => review("approve")}
+              onClick={() => void approve()}
               className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:opacity-40"
             >
-              검토 승인
+              {busy ? "처리 중…" : "검토 승인"}
             </button>
+            </>}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 재검토 요청 입력(브라우저 prompt 대신 앱 안 모달). 내용을 적으면 그 내용을 반영해 다시 만든다.
+function ReviseDialog({ item, onSubmit, onClose }: {
+  item: ResultItem;
+  onSubmit: (note: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape" && !busy) onClose(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [busy, onClose]);
+  async function submit() {
+    setBusy(true); setError("");
+    try { await onSubmit(note.trim()); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "재검토 요청에 실패했어요."); setBusy(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+      <form onSubmit={(event) => { event.preventDefault(); void submit(); }} role="dialog" aria-modal="true" aria-label="재검토 요청" className="w-full max-w-md rounded-2xl border border-edge bg-panel p-5 shadow-2xl">
+        <div className="flex items-center gap-2">
+          <img src={`/avatars/${item.agentId}.png`} alt="" className="h-8 w-8 rounded-md object-cover" />
+          <h2 className="text-sm font-bold text-gray-100">어떤 부분을 수정할까요?</h2>
+        </div>
+        <textarea
+          autoFocus
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={2000}
+          rows={4}
+          placeholder="예: 분위기를 새벽으로 바꿔줘"
+          className="mt-4 w-full resize-none rounded-lg border border-edge bg-ink px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-sky-600"
+        />
+        {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 transition hover:bg-edge disabled:opacity-40">취소</button>
+          <button type="submit" disabled={busy} className="inline-flex min-w-16 items-center justify-center gap-1 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-600 disabled:opacity-60">
+            {busy ? <><Spinner className="h-3.5 w-3.5" /> 요청 중…</> : "확인"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -463,6 +509,8 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<"approve" | "revise" | null>(null);
+  const [reviseTarget, setReviseTarget] = useState<ResultItem | null>(null);
+  const [reviewError, setReviewError] = useState("");
 
   async function refresh() {
     try {
@@ -484,24 +532,23 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
   async function applyReview(item: ResultItem, action: "approve" | "revise", note?: string) {
     setBusy(item.id);
     setBusyAction(action);
+    setReviewError("");
     try {
       const r = await reviewResult(item.id, action, note);
-      if (r?.ok && r.message) onAgentSay?.(r.message); // 픽셀이 대화창에 응답
+      if (r.message) onAgentSay?.(r.message); // 담당 직원이 대화창에 응답(승인 완료·다시 만드는 중)
       await refresh();
-      if (action === "approve") setOpenId(null);
+      setOpenId(null);
+    } catch (caught) {
+      setReviewError(caught instanceof Error ? caught.message : "검수 처리에 실패했어요.");
+      throw caught;
     } finally {
       setBusy(null);
       setBusyAction(null);
     }
   }
   async function reviewInline(it: ResultItem, action: "approve" | "revise") {
-    let note: string | undefined;
-    if (action === "revise") {
-      const ans = window.prompt("어떤 부분을 수정할까요? (비워두면 픽셀이 직접 물어봐요)", "");
-      if (ans === null) return; // 취소
-      note = ans.trim() || undefined;
-    }
-    await applyReview(it, action, note);
+    if (action === "revise") { setReviseTarget(it); return; }
+    await applyReview(it, action).catch(() => {});
   }
 
   async function cancelInline(it: ResultItem) {
@@ -529,7 +576,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
       const label = decision === "approve" ? "검토 승인" : "재수정 요청";
       if (!window.confirm(`'${item.prompt || item.kind}' 결과를 ${label}할까요?`)) return;
       const note = actionString(action, "note") || undefined;
-      void applyReview(item, decision, note);
+      void applyReview(item, decision, note).catch(() => {});
     } else if (action.action === "result.cancel") {
       if (window.confirm(`'${item.prompt || item.kind}' 작업 지시를 취소할까요?`)) void cancelInline(item);
     }
@@ -569,6 +616,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
       {pending.length === 0 && (
         <div className="text-xs text-gray-500 mb-2">검토할 보고가 없어요.</div>
       )}
+      {reviewError && <div className="mb-2 text-[11px] text-red-300">{reviewError}</div>}
 
       <div className="space-y-2">
         {pending.map((it) => {
@@ -631,14 +679,6 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
                 >
                   {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
                 </button>
-                <button
-                  onClick={() => openResultFolder(it)}
-                  disabled={!it.workDateKey}
-                  title={it.workDateKey ? `업무 파일 ${it.workDateKey} 폴더 열기` : "검토 승인하면 업무 파일에 정리돼요"}
-                  className="ml-auto inline-flex items-center gap-1 rounded border border-edge px-2 py-1 text-gray-300 transition hover:bg-edge hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <FolderIcon className="h-3.5 w-3.5" /> 폴더
-                </button>
               </div>
             </div>
           );
@@ -673,7 +713,18 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
         <ImagePopup
           item={open}
           onClose={() => setOpenId(null)}
-          onReview={(action, note) => applyReview(open, action, note)}
+          onApprove={() => applyReview(open, "approve").catch(() => {})}
+          onRevise={() => setReviseTarget(open)}
+        />
+      )}
+      {reviseTarget && (
+        <ReviseDialog
+          item={reviseTarget}
+          onClose={() => setReviseTarget(null)}
+          onSubmit={async (note) => {
+            await applyReview(reviseTarget, "revise", note || undefined);
+            setReviseTarget(null);
+          }}
         />
       )}
     </>

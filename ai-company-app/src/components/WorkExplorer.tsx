@@ -11,8 +11,11 @@ import {
   renameCompanyWorkItem,
   type AgentVideoStorageItem,
   type CompanyWorkItem,
+  type ChatFileReference,
   downloadCompanyFile,
+  withMediaToken,
 } from "../lib/api";
+import { GeneratedFilePreview } from "./ChatFileAttachments";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFileExplorer from "./CompanyFileExplorer";
@@ -21,6 +24,12 @@ type ViewMode = "cards" | "list";
 type SearchScope = "title" | "content" | "all";
 type SortMode = "newest" | "oldest" | "name-asc" | "name-desc";
 type StatusFilter = "all" | CompanyWorkItem["status"];
+
+/** 검수 승인으로 등록된 이미지 업무의 저장 위치(없으면 빈 문자열). */
+function imageWorkObject(work: CompanyWorkItem): string {
+  if (work.work_type !== "image") return "";
+  return String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+}
 
 function koreaDate(value: string) {
   const date = new Date(value);
@@ -184,6 +193,8 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
   const [sourceWork, setSourceWork] = useState<CompanyWorkItem | null>(null);
+  // 검수 승인된 이미지는 업무 소스 폴더가 아니라 생성 저장소에 있다. 소스 목록 대신 이미지 미리보기로 연다.
+  const [imagePreview, setImagePreview] = useState<ChatFileReference | null>(null);
   const [sources, setSources] = useState<AgentVideoStorageItem[]>([]);
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>(() => readUserStorage("company-work-view") === "list" ? "list" : "cards");
@@ -324,6 +335,10 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
 
   function openWorkItem(work: CompanyWorkItem) {
     if (work.work_type === "infographic") onOpenWork(work);
+    else if (imageWorkObject(work) && work.metadata?.jobId) {
+      setImagePreview({ source: "generated", name: `${work.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "image"}.png`,
+        contentType: "image/png", jobId: String(work.metadata.jobId) });
+    }
     else void openSources(work);
   }
 
@@ -508,7 +523,9 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           </>
         ) : date ? (
           visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
-            {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} /> : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
+            {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
+              : imageWorkObject(work) ? <img src={withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(imageWorkObject(work))}`)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
+              : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
             <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDone(work.status) ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{isDone(work.status) ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
@@ -529,6 +546,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           })}</div>
         ) : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{searchTerm ? "검색 결과가 없습니다." : <>아직 완료된 회사 업무가 없습니다.<br />채팅에서 코어에게 업무를 지시하면 날짜별로 자동 정리됩니다.</>}</div>}
       </main>
+      {imagePreview && <GeneratedFilePreview file={imagePreview} onClose={() => setImagePreview(null)} />}
       {renameTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRenameTarget(null); }}><form onSubmit={(event) => { event.preventDefault(); void saveName(); }} className="w-full max-w-sm rounded-2xl border border-edge bg-[#111722] p-5 shadow-2xl"><h2 className="text-sm font-bold text-gray-100">{renameTarget.kind === "folder" ? "폴더" : "문서"} 이름 변경</h2>{renameTarget.kind === "folder" && <p className="mt-1 text-xs text-gray-500">원래 날짜: {renameTarget.key}</p>}<input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} maxLength={60} className="mt-4 w-full rounded-lg border border-edge bg-[#090d13] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-emerald-600" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setRenameTarget(null)} disabled={!!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-40">취소</button><button type="submit" disabled={!renameValue.trim() || !!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">{busy === "rename-item" ? "저장 중..." : "저장"}</button></div></form></div>}
     </div>
   );

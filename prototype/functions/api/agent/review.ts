@@ -15,6 +15,8 @@ import {
   messageFilesFromToolOutput,
   fileJobAsWorkItem,
   persistPendingImage,
+  createJob,
+  processJob,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -130,6 +132,39 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       }
     }
 
+    // 재검토 + 수정 내용이 있는 이미지 산출물: 그 내용을 반영해 이전 결과를 바탕으로 다시 만든다.
+    // (예전엔 상태만 '재검토'로 바꾸고 끝나서, 내용을 적고 확인해도 아무 변화가 없었다.)
+    // 새 결과는 새 잡으로 만들어 다시 '보고'에 검토 대기로 올라온다.
+    let regenerated: { jobId: string } | null = null;
+    if (decision === "revise" && note && note.trim() && job.type === "image") {
+      const prevInput: any = typeof job.input === "string"
+        ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })()
+        : { ...(job.input || {}) };
+      const basePrompt = String(prevInput.prompt || "").trim();
+      const bucket = String(env?.VIDEO_OUTPUT_GCS_URI || "").match(/^gs:\/\/([^/]+)\//)?.[1] || "";
+      const objectName = String(job.output?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+      const previousRefs = Array.isArray(prevInput.referenceImages) ? prevInput.referenceImages : [];
+      const input: any = {
+        ...prevInput,
+        prompt: `${basePrompt}\n\nRevision request: ${note.trim()}`.trim(),
+        // 이전 결과를 1번 참조(구도 기준)로 두고, 원래 쓰던 캐릭터 참조는 뒤에 그대로 유지한다.
+        ...(bucket && objectName ? {
+          referenceImages: [
+            { imageUrl: `gs://${bucket}/${objectName}`, referenceKind: "continuity", subjectDescription: "previous result to revise" },
+            ...previousRefs,
+          ].slice(0, 16),
+          generationMode: "image-to-image",
+        } : {}),
+      };
+      delete input._imageStageKey;
+      const conversationId = String(prevInput._conversationId || (job as any).conversation_id || "main");
+      const next = await createJob(sql, { userId: auth.userId, type: "image", agentId: job.agent_id, input, parentJobId: job.id });
+      const authHeader = String(request.headers.get("Authorization") || "");
+      waitUntil(processJob({ request, env, authHeader, userId: auth.userId, conversationId }, sql, next.id, "image", input)
+        .catch(() => {}));
+      regenerated = { jobId: next.id };
+    }
+
     // 담당 직원(예: 싱크)이 채팅으로 결과를 답하도록 메시지를 함께 반환 (프런트가 alert 대신 채팅에 표시).
     const meta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
     const message = {
@@ -139,10 +174,12 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       files: decision === "approved" ? messageFilesFromToolOutput(job.type, executedOutput, job.id) : [],
       text: decision === "approved"
         ? approvalDoneText(job.type, executedOutput, job.input)
-        : "재검토로 돌릴게요. 어떤 점을 고칠지 알려주시면 다시 해볼게요.",
+        : regenerated
+          ? `🎨 재검토 요청을 반영해 다시 만들고 있어요 — "${String(note).trim().slice(0, 80)}". 완성되면 보고에 새 결과가 올라와요.`
+          : "재검토로 돌릴게요. 어떤 점을 고칠지 알려주시면 다시 해볼게요.",
     };
 
-    return send({ ok: true, job: updated, message, filed }, 200, origin);
+    return send({ ok: true, job: updated, message, filed, regenerated }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "검수 처리 중 오류" }, 500, origin);
   }

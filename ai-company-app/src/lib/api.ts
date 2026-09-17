@@ -1517,7 +1517,20 @@ export async function reviewResult(
       body: JSON.stringify({ id, decision: action === "approve" ? "approved" : "revise", note }),
     })
   ).json();
-  return { ok: !!d.ok, reviewStatus: d.job?.review_status };
+  if (!d.ok) throw new Error(d.error || "검수 처리에 실패했어요.");
+  // 담당 직원의 답(승인 완료·재생성 시작 안내)을 채팅에 띄우도록 메시지를 함께 돌려준다.
+  const raw = d.message;
+  const message: AgentMessage | undefined = raw
+    ? {
+        role: "agent",
+        agentId: raw.agent_id || raw.agentId,
+        name: raw.name,
+        emoji: AGENT_EMOJI[raw.agent_id || raw.agentId] || raw.emoji,
+        text: raw.text,
+        files: Array.isArray(raw.files) ? raw.files : undefined,
+      }
+    : undefined;
+  return { ok: true, reviewStatus: d.job?.review_status, message };
 }
 
 export async function cancelResult(id: string): Promise<{ ok: boolean; message?: AgentMessage }> {

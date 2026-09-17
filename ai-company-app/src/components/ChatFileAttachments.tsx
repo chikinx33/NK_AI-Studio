@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   downloadCompanyFile,
   getAgentJob,
+  withMediaToken,
   type ChatFileReference,
   type CompanyFileEntry,
 } from "../lib/api";
@@ -63,9 +64,10 @@ async function downloadCompanyEntry(entry: CompanyFileEntry) {
   window.setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onClose: () => void }) {
+export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onClose: () => void }) {
   const [job, setJob] = useState<any>(null);
   const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
   useEffect(() => {
     let active = true;
     if (!file.jobId) { setError("생성 작업 ID가 없어 파일을 열 수 없습니다."); return; }
@@ -82,6 +84,9 @@ function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onCl
   const output = job?.output || {};
   const kind = fileKind(file);
   const url = String(output.signedUrl || output.imageUrl || output.videoUrl || output.audioUrl || output.dataUrl || "");
+  // 서명 URL 은 1시간 뒤 만료되고 CORS 로 내려받기도 막힌다. 저장 위치(objectName)가 있으면 같은 오리진 프록시를 쓴다.
+  const objectName = String(output.objectName || output.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  const proxyUrl = objectName ? withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`) : "";
   const blocks = useMemo(() => {
     const source = kind === "presentation" ? output.slides : output.sections;
     return Array.isArray(source) ? source : [];
@@ -96,39 +101,41 @@ function GeneratedFilePreview({ file, onClose }: { file: ChatFileReference; onCl
       downloadPdfViaPrint(String(output.title || file.name), output.subtitle, blocks);
       return;
     }
-    if (!url) return;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("download_failed");
-      const objectUrl = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = file.name;
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
-    } catch {
-      // 일부 외부 생성 URL은 CORS 다운로드를 막으므로 새 탭 열기로 저장 기능을 보존한다.
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.name;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      anchor.click();
+    // 서명 URL(storage.googleapis.com)은 CORS 로 fetch 가 막혀 새 탭으로만 열렸다.
+    // 저장 위치(objectName)가 있으면 같은 오리진 미디어 프록시로 받아 실제 파일로 내려받는다.
+    const sources = [proxyUrl, url].filter(Boolean);
+    if (!sources.length) return;
+    setDownloadError("");
+    for (const source of sources) {
+      try {
+        const response = await fetch(source);
+        if (!response.ok) continue;
+        const objectUrl = URL.createObjectURL(await response.blob());
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = file.name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+        return;
+      } catch { /* 다음 경로로 */ }
     }
+    setDownloadError("다운로드하지 못했어요. 잠시 후 다시 눌러 주세요.");
   }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section role="dialog" aria-modal="true" aria-label={`${file.name} 미리보기`} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-[#0d131c] shadow-2xl">
       <header className="flex items-center gap-3 border-b border-edge px-5 py-3.5">
         <FileIcon kind={kind} />
-        <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold text-gray-100">{file.name}</h2><p className="mt-0.5 text-[10px] text-gray-500">생성된 {KIND_LABEL[kind] || "파일"}</p></div>
-        {output.kind !== "form" && <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900/40 disabled:opacity-40">다운로드</button>}
+        <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold text-gray-100">{file.name}</h2><p className="mt-0.5 text-[10px] text-gray-500">{downloadError ? <span className="text-red-300">{downloadError}</span> : `생성된 ${KIND_LABEL[kind] || "파일"}`}</p></div>
+        {output.kind !== "form" && <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !proxyUrl && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900/40 disabled:opacity-40">다운로드</button>}
         <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-gray-400 transition hover:bg-edge hover:text-white" aria-label="미리보기 닫기">×</button>
       </header>
       <div className="min-h-0 flex-1 overflow-auto bg-[#080c12] p-5">
         {!job && !error && <div className="grid min-h-72 place-items-center text-sm text-emerald-400">생성 파일을 여는 중…</div>}
         {error && <div className="grid min-h-72 place-items-center text-sm text-red-300">{error}</div>}
-        {job && kind === "image" && url && <div className="grid min-h-72 place-items-center"><img src={url} alt={file.name} className="max-h-[76vh] max-w-full rounded-lg object-contain" /></div>}
+        {job && kind === "image" && (proxyUrl || url) && <div className="grid min-h-72 place-items-center"><img src={proxyUrl || url} alt={file.name} className="max-h-[76vh] max-w-full rounded-lg object-contain" /></div>}
         {job && kind === "video" && url && <div className="grid min-h-72 place-items-center"><video src={url} controls autoPlay className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
         {job && kind === "audio" && url && <div className="grid min-h-72 place-items-center"><audio src={url} controls autoPlay className="w-full max-w-2xl" /></div>}
         {job && kind === "pdf" && url && <iframe src={url} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}

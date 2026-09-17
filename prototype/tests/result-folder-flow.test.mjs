@@ -26,7 +26,7 @@ test("검수 승인 시 등록하고 위치를 잡에 남긴다", () => {
   assert.match(review, /filed = await fileJobAsWorkItem\(sql, auth\.userId, job, executedOutput\)/);
   // 새로고침 후에도 폴더 열기가 되도록 output 에 위치를 심는다
   assert.match(review, /workItemId: filed\.workId, workDateKey: filed\.dateKey/);
-  assert.match(review, /return send\(\{ ok: true, job: updated, message, filed \}/);
+  assert.match(review, /return send\(\{ ok: true, job: updated, message, filed, regenerated \}/);
 });
 
 test("폴더 열기는 실제로 업무 파일 폴더를 연다", () => {
@@ -48,7 +48,40 @@ test("승인 전에는 버튼이 이유를 알려준다", () => {
   const results = read("ai-company-app/src/components/Results.tsx");
   // 조용한 무반응 대신 비활성 + 안내
   assert.match(results, /disabled=\{!item\.workDateKey\}/);
-  assert.match(results, /disabled=\{!it\.workDateKey\}/);
+  // 검토 대기 카드에는 갈 폴더가 없어 늘 비활성이던 '폴더' 버튼을 두지 않는다
+  assert.doesNotMatch(results, /disabled=\{!it\.workDateKey\}/);
   assert.match(results, /검토 승인하면 업무 파일에 정리돼요/);
   assert.match(results, /const r = openResultFolder\(item\);[\s\S]{0,120}setFolderHint\(r\.message\)/);
+});
+
+// 증상: 재검토 창(브라우저 prompt)에 내용을 적고 확인해도 아무 변화가 없었다.
+// 원인: 서버는 상태만 '재검토'로 바꿨고, 클라이언트는 담당 직원 답 메시지를 버렸다.
+test("재검토는 앱 안 모달로 받고, 이미지면 그 내용을 반영해 다시 만든다", () => {
+  const results = read("ai-company-app/src/components/Results.tsx");
+  assert.doesNotMatch(results, /window\.prompt\(/);
+  assert.match(results, /function ReviseDialog/);
+  // 이미 처리된 산출물 팝업에는 검토 버튼을 다시 띄우지 않는다
+  assert.match(results, /const reviewable = item\.reviewStatus === "pending"/);
+  const api = read("ai-company-app/src/lib/api.ts");
+  const reviewFn = api.slice(api.indexOf("export async function reviewResult"), api.indexOf("export async function cancelResult"));
+  assert.match(reviewFn, /return \{ ok: true, reviewStatus: d\.job\?\.review_status, message \}/);
+  const review = read("prototype/functions/api/agent/review.ts");
+  assert.match(review, /decision === "revise" && note && note\.trim\(\) && job\.type === "image"/);
+  assert.match(review, /createJob\(sql, \{ userId: auth\.userId, type: "image", agentId: job\.agent_id, input, parentJobId: job\.id \}\)/);
+  assert.match(review, /referenceKind: "continuity", subjectDescription: "previous result to revise"/);
+});
+
+// 증상: 업무 파일 날짜 폴더의 이미지 업무가 문서 아이콘으로 보이고, 열면 빈 소스 목록이었다.
+test("업무 파일의 이미지 업무는 썸네일로 보이고 이미지 미리보기로 열린다", () => {
+  const explorer = read("ai-company-app/src/components/WorkExplorer.tsx");
+  assert.match(explorer, /function imageWorkObject\(work: CompanyWorkItem\)/);
+  assert.match(explorer, /setImagePreview\(\{ source: "generated"/);
+  assert.match(explorer, /<GeneratedFilePreview file=\{imagePreview\}/);
+});
+
+// 증상: 생성 이미지 '다운로드'가 새 창으로 이미지만 열었다(서명 URL CORS).
+test("생성 파일 다운로드는 같은 오리진 미디어 프록시로 실제 파일을 받는다", () => {
+  const preview = read("ai-company-app/src/components/ChatFileAttachments.tsx");
+  assert.match(preview, /const sources = \[proxyUrl, url\]\.filter\(Boolean\)/);
+  assert.doesNotMatch(preview, /anchor\.target = "_blank"/);
 });
