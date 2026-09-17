@@ -15952,7 +15952,7 @@ textarea.bsf-skeleton {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(6, 8, 12, 0.55);
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -15961,10 +15961,10 @@ body.codex-connect-open { overflow: hidden; }
 .codex-connect-dialog {
   position: relative;
   width: min(100%, 560px);
-  border: 1px solid #2b3750;
+  border: 1px solid var(--border);
   border-radius: 18px;
-  background: #161c28;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  background: var(--card);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 .codex-connect-dialog iframe {
@@ -15975,7 +15975,6 @@ body.codex-connect-open { overflow: hidden; }
   max-height: calc(100dvh - 32px);
   border: 0;
   background: transparent;
-  color-scheme: dark;
 }
 .codex-connect-close {
   position: absolute;
@@ -15991,8 +15990,8 @@ body.codex-connect-open { overflow: hidden; }
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #9caac3;
+  color: var(--muted);
   cursor: pointer;
 }
 .codex-connect-close:hover,
-.codex-connect-close:focus-visible { background: rgba(255, 255, 255, 0.08); color: #e6edf8; }
+.codex-connect-close:focus-visible { background: var(--layer-strong); color: var(--text); }
