@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { getStudioBrand, saveStudioBrandIcon, setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
+import { getStudioBrand, saveStudioBrandIcon, saveCompanyTagline, setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
 import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
@@ -458,16 +458,57 @@ export default function Sidebar({
   // 로고: 계정별 스튜디오 브랜드(런처 로그인 카드와 같은 값). 없으면 기본 로고. 누르면 이미지 등록.
   const [brandIcon, setBrandIcon] = useState("");
   const [savingLogo, setSavingLogo] = useState(false);
+  const [companyTagline, setCompanyTagline] = useState("");
+  const [taglineDraft, setTaglineDraft] = useState("");
+  const [editingTagline, setEditingTagline] = useState(false);
+  const [savingTagline, setSavingTagline] = useState(false);
+  const [brandLoading, setBrandLoading] = useState(true);
+  const [taglineError, setTaglineError] = useState("");
+  const taglineInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const en = readStorage("nk_lang") === "en";
+  const displayedTagline = companyTagline || (en ? "Solo company · AI agents" : "1인 기업 · AI 에이전트");
   useEffect(() => {
     let alive = true;
-    getStudioBrand().then((b) => { if (alive) setBrandIcon(b.iconDataUrl); }).catch(() => { /* 기본 로고 유지 */ });
+    getStudioBrand().then((b) => {
+      if (alive) {
+        setBrandIcon(b.iconDataUrl);
+        setCompanyTagline(b.companyTagline);
+      }
+    }).catch(() => { /* 기본 브랜드 유지. 저장 시 서버에서 기존 값을 다시 읽는다. */ })
+      .finally(() => { if (alive) setBrandLoading(false); });
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if (editingTagline) {
+      taglineInputRef.current?.focus();
+      taglineInputRef.current?.select();
+    }
+  }, [editingTagline]);
+
+  async function applyTagline() {
+    if (savingTagline || savingLogo || brandLoading) return;
+    const text = taglineDraft.trim();
+    if (!text || text.length > 80) {
+      setTaglineError(en ? "Enter a caption of 1–80 characters." : "문구를 1~80자로 입력해 주세요.");
+      return;
+    }
+    setSavingTagline(true);
+    setTaglineError("");
+    try {
+      const saved = await saveCompanyTagline(text);
+      setCompanyTagline(saved.companyTagline);
+      setEditingTagline(false);
+    } catch {
+      setTaglineError(en ? "Could not save the caption. Please try again." : "문구를 저장하지 못했어요. 다시 시도해 주세요.");
+    } finally {
+      setSavingTagline(false);
+    }
+  }
+
   async function onLogoFile(file: File | undefined) {
-    if (!file || savingLogo) return;
+    if (!file || savingLogo || savingTagline || brandLoading) return;
     setSavingLogo(true);
     try {
       const dataUrl = await resizeLogoToSquare(file, 500);
@@ -504,7 +545,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => logoInputRef.current?.click()}
-            disabled={savingLogo}
+            disabled={savingLogo || savingTagline || brandLoading}
             title={en ? "Register logo image" : "로고 이미지 등록"}
             aria-label={en ? "Register logo image" : "로고 이미지 등록"}
             className={`cursor-pointer rounded-lg ${savingLogo ? "opacity-60" : "hover:opacity-80"}`}
@@ -523,7 +564,52 @@ export default function Sidebar({
             onChange={(e) => onLogoFile(e.target.files?.[0])}
           />
         </div>
-        <div className="text-xs text-gray-400 mt-1 text-center">1인 기업 · AI 에이전트</div>
+        <div className="text-xs text-gray-400 mt-1 text-center">
+          {editingTagline ? (
+            <form onSubmit={(e) => { e.preventDefault(); void applyTagline(); }} className="space-y-2">
+              <input
+                ref={taglineInputRef}
+                value={taglineDraft}
+                onChange={(e) => { setTaglineDraft(e.target.value); setTaglineError(""); }}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                    if (e.key === "Enter") e.preventDefault();
+                    return;
+                  }
+                  if (e.key === "Escape" && !savingTagline) {
+                    e.preventDefault();
+                    setEditingTagline(false);
+                    setTaglineError("");
+                  }
+                }}
+                maxLength={80}
+                disabled={savingTagline}
+                aria-label={en ? "Company caption" : "회사 문구"}
+                className="w-full rounded border border-edge bg-panel px-2 py-1.5 text-center text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+              />
+              <div className="flex justify-center gap-2">
+                <button type="submit" disabled={savingTagline || savingLogo} className="rounded bg-emerald-700 px-3 py-1 text-white hover:bg-emerald-600 disabled:opacity-50">
+                  {savingTagline ? (en ? "Saving…" : "저장 중…") : (en ? "Apply" : "적용")}
+                </button>
+                <button type="button" disabled={savingTagline} onClick={() => { setEditingTagline(false); setTaglineError(""); }} className="rounded border border-edge px-3 py-1 hover:text-white disabled:opacity-50">
+                  {en ? "Cancel" : "취소"}
+                </button>
+              </div>
+              {taglineError && <p role="alert" className="text-red-400">{taglineError}</p>}
+            </form>
+          ) : (
+            <button
+              type="button"
+              disabled={brandLoading || savingLogo}
+              title={en ? "Edit company caption" : "회사 문구 수정"}
+              aria-label={en ? "Edit company caption" : "회사 문구 수정"}
+              onClick={() => { setTaglineDraft(displayedTagline); setTaglineError(""); setEditingTagline(true); }}
+              className="max-w-full break-words rounded px-1 py-0.5 hover:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+            >
+              {displayedTagline}
+            </button>
+          )}
+        </div>
 
         {/* 모델 상태·설정·Work/Free 토글은 모두 코어 아바타 박스 안으로 이동 */}
       </div>

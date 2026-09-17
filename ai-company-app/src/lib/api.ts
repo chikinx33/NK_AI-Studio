@@ -170,14 +170,14 @@ export async function registerCompanySkillJobArtifacts(
   return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
 }
 
-// 계정별 스튜디오 브랜드(런처 로그인 카드의 제목·로고와 같은 값). 로고가 없으면 기본 로고를 쓴다.
-export interface StudioBrand { title: string; iconDataUrl: string }
+// 계정별 스튜디오 브랜드와 AI 기업 문구. 로고가 없으면 기본 로고를 쓴다.
+export interface StudioBrand { title: string; iconDataUrl: string; companyTagline: string }
 
 export async function getStudioBrand(): Promise<StudioBrand> {
   const res = await fetch("/api/userdata/brand");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "브랜드 정보를 불러오지 못했어요.");
-  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || "") };
+  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
 }
 
 export async function saveStudioBrandIcon(iconDataUrl: string): Promise<StudioBrand> {
@@ -188,7 +188,18 @@ export async function saveStudioBrandIcon(iconDataUrl: string): Promise<StudioBr
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || data?.error || "로고를 저장하지 못했어요.");
-  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || "") };
+  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
+}
+
+export async function saveCompanyTagline(companyTagline: string): Promise<StudioBrand> {
+  const res = await fetch("/api/userdata/brand", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companyTagline }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || "문구를 저장하지 못했어요.");
+  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
 }
 
 export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {

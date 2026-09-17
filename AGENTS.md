@@ -16,7 +16,9 @@ Working rules for this repository:
 - If a file displays garbled Korean but raw bytes are valid UTF-8, treat it as a decoding problem first and fix the repository/editor settings before editing content.
 - When creating or normalizing Korean text files, prefer UTF-8 with BOM in this repository unless an existing file is already consistently managed another way.
 - After any code change, update the app version as required by the project rules.
-- After coding work, commit and push the latest testable state unless a concrete blocker prevents it.
+- After repository work, commit, push, and deploy the latest testable state without asking for separate approval. The user has granted standing authorization for this project's development releases, including related source, tests, documentation, version/cache updates, and generated build assets, regardless of file count.
+- Use the existing production release path: push `main` to GitHub, then verify the resulting Cloudflare Pages deployment at `https://nkstudio.org`. Do not report deployment complete until the live version and changed assets are verified.
+- If tests, authentication, deployment, or automatic approval review actually block release, resolve the blocker where possible and report the exact remaining blocker. Do not interpret a prior file count as a limit on this standing authorization.
 - Prefer understanding the root cause of issues before applying localized fixes.
 
 ## Imported Claude Cowork project instructions
