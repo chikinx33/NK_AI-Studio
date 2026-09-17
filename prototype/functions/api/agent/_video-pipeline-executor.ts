@@ -32,6 +32,7 @@ export interface VideoPipelineStep {
   stillUrl?: string;
   videoUrl?: string;
   updatedAt?: string;
+  subscriptionImage?: { id: string; key: string; results: Record<string, any> };
 }
 
 export interface VideoPipelinePlan {
@@ -43,7 +44,7 @@ export interface VideoPipelinePlan {
   videoModel: string;
   maxScenesPerRun: number;
   steps: VideoPipelineStep[];
-  summary: { scenes: number; pendingStills: number; pendingVideos: number; credits: number; videoModel: string };
+  summary: { scenes: number; pendingStills: number; pendingVideos: number; credits: number; videoModel: string; imageBillingSource?: string };
   runs: number;
   createdAt: string;
   updatedAt: string;
@@ -77,7 +78,7 @@ export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: 
   for (const step of steps) {
     if (step.still === "pending") {
       pendingStills += 1;
-      credits += quoteCredits("image_generation", {}, env).credits;
+      if (!env.USER_IMAGE_AUTH) credits += quoteCredits("image_generation", {}, env).credits;
     }
     if (step.video === "pending") {
       pendingVideos += 1;
@@ -86,7 +87,8 @@ export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: 
       credits += quoteCredits("video", { videoModel: videoModel || "veo", durationSeconds }, env).credits;
     }
   }
-  return { scenes: steps.length, pendingStills, pendingVideos, credits, videoModel: videoModel || "" };
+  return { scenes: steps.length, pendingStills, pendingVideos, credits, videoModel: videoModel || "",
+    ...(env.USER_IMAGE_AUTH ? { imageBillingSource: env.USER_IMAGE_AUTH_MODE === 'api_key' ? 'user-api' : 'user-subscription' } : {}) };
 }
 
 /** 프로젝트 씬 → 스텝 목록. 이미 있는 자산은 skipped (regenerate 옵션이면 pending). */
@@ -176,12 +178,29 @@ export async function runVideoPipelineBatch(
     scenesTouched += 1;
     if (step.still === "pending") {
       try {
-        const out = await AGENT_TOOLS.scene_still.run(sceneInput(step), ctx as any);
+        let imageResults: Record<string, any> = {};
+        if (step.subscriptionImage) {
+          const response = await fetch(new URL('/api/codex-images?jobId=' + encodeURIComponent(step.subscriptionImage.id), ctx.request.url),
+            { headers: { Authorization: ctx.authHeader } });
+          const image: any = await response.json();
+          if (!response.ok) throw new Error(image.error || 'subscription_image_status_failed');
+          if (['queued','working','uploading'].includes(image.status)) break;
+          if (image.status !== 'done') throw new Error(image.error || 'subscription_image_failed');
+          imageResults = { ...step.subscriptionImage.results, [step.subscriptionImage.key]: image.result };
+        }
+        const out = await AGENT_TOOLS.scene_still.run(sceneInput(step), { ...ctx, imageResults } as any);
         step.still = "done";
+        delete step.subscriptionImage;
         step.stillUrl = String(out?.signedUrl || out?.objectName || "");
         step.stillError = "";
         events.push({ stage: "running", status: "completed", summary: `컷 ${step.sceneId} 스틸 생성 완료`, details: { sceneId: step.sceneId, promptEcho: out?.promptEcho || "" }, eventKey: `run${runIndex}:still:${step.sceneId}:done` });
       } catch (e: any) {
+        if (e.imageJobId) {
+          step.subscriptionImage = { id: e.imageJobId, key: e.imageRequestKey, results: e.imageResults };
+          events.push({ stage: 'running', status: 'queued', summary: `컷 ${step.sceneId}: 본인 ChatGPT 구독 이미지 생성·저장 대기`,
+            details: { sceneId: step.sceneId }, eventKey: `run${runIndex}:still:${step.sceneId}:subscription-pending` });
+          break;
+        }
         step.still = "failed";
         step.stillError = String(e?.message || e || "still failed").slice(0, 400);
         events.push({ stage: "running", status: "failed", summary: `컷 ${step.sceneId} 스틸 실패: ${step.stillError}`, details: { sceneId: step.sceneId }, eventKey: `run${runIndex}:still:${step.sceneId}:failed` });

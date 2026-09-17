@@ -1999,17 +1999,18 @@
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('providerLabel')) + '</div>' +
             '<div class="ai-image-size-row">' +
-              '<select id="ai-image-provider" class="btn-secondary ai-image-select">' +
+              '<select id="ai-image-provider" class="btn-secondary ai-image-select"' + (state.generationSettings?.imageEnabled ? ' disabled' : '') + '>' +
                 providerOptions.map(function (opt) {
-                  return '<option value="' + opt.id + '"' +
+                  return '<option value="' + opt.id + '"' + (opt.id === 'chatgpt-subscription' && state.generationSettings && !state.generationSettings.imageEnabled ? ' disabled' : '') +
                     (normalizeProviderValue(state.provider) === opt.id ? ' selected' : '') + '>' +
                     escapeHtml(opt.label) + '</option>';
                 }).join('') +
               '</select>' +
             '</div>' +
-            '<p id="ai-image-subscription-status" class="muted small" role="status"' + (state.provider === 'chatgpt-subscription' ? '' : ' hidden') + '>' +
+            '<p id="ai-image-subscription-status" class="muted small" role="status"' + (state.generationSettings || state.provider === 'chatgpt-subscription' ? '' : ' hidden') + '>' +
+              (state.generationSettings ? imageAccountStatusMarkup() :
               escapeHtml(state.subscriptionConnector && state.subscriptionConnector.online ? t('subscriptionReady') + ' · ' + state.subscriptionConnector.email : state.subscriptionConnector && state.subscriptionConnector.configured ? t('subscriptionOffline') : t('subscriptionMissing')) +
-              ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a></p>' +
+              ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a>') + '</p>' +
           '</div>' +
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
@@ -4298,6 +4299,7 @@
     resolveSessionScope();
     state.provider = readStoredProvider();
     state.subscriptionConnector = null;
+    state.generationSettings = null;
     loadHistory();
     try {
       NK.core.APP_VERSION = NK.config.APP_VERSION;
@@ -4342,20 +4344,46 @@
     }
   }
 
+  function imageAccountStatusMarkup() {
+    var generation = state.generationSettings || {};
+    var connector = state.subscriptionConnector || {};
+    var en = state.lang === 'en';
+    var status = !generation.imageEnabled ? (en ? 'Using master image settings' : '마스터 이미지 설정 사용 중')
+      : generation.imageMode === 'api_key' ? (generation.imageApiKeySet ? (en ? 'Using your OpenAI API key' : '본인 OpenAI API 키 사용 중')
+        : (en ? 'Your OpenAI API key is missing' : '본인 OpenAI API 키 입력 필요'))
+      : connector.online ? t('subscriptionReady') + ' · ' + connector.email : connector.configured ? t('subscriptionOffline') : t('subscriptionMissing');
+    return escapeHtml(status) + ' <a href="app.html">' + (en ? 'Account settings' : '사용자 설정') + '</a>';
+  }
   async function refreshSubscriptionConnector() {
     if (!NK.api || !NK.api.codexImageRequest || !document.getElementById('ai-image-root')) return;
     var user = NK.auth && NK.auth.getUser ? NK.auth.getUser() : '';
     try {
-      var connector = await NK.api.codexImageRequest();
+      var settings = await NK.api.agentSettings();
+      var generation = settings.generation || {};
+      var connector = generation.connector || {};
       if ((NK.auth && NK.auth.getUser ? NK.auth.getUser() : '') !== user) return;
+      var effectiveProvider = generation.imageEnabled ? (generation.imageMode === 'api_key' ? 'openai' : 'chatgpt-subscription')
+        : (state.provider === 'chatgpt-subscription' ? 'gemini' : state.provider);
+      state.provider = effectiveProvider;
+      state.generationSettings = generation;
+      var providerSelect = document.getElementById('ai-image-provider');
+      if (providerSelect) {
+        providerSelect.value = effectiveProvider;
+        providerSelect.disabled = !!generation.imageEnabled;
+        // Subscription choice is available only through the account setting.
+        var subscriptionOption = providerSelect.querySelector('option[value="chatgpt-subscription"]');
+        if (subscriptionOption) subscriptionOption.disabled = !generation.imageEnabled;
+      }
       state.subscriptionConnector = connector;
       var box = document.getElementById('ai-image-subscription-status');
       if (box) {
-        box.hidden = state.provider !== 'chatgpt-subscription';
-        box.innerHTML = escapeHtml(connector.online ? t('subscriptionReady') + ' · ' + connector.email : connector.configured ? t('subscriptionOffline') : t('subscriptionMissing')) +
-          ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a>';
+        box.hidden = false;
+        box.innerHTML = imageAccountStatusMarkup();
       }
-    } catch (_) { /* Existing providers remain available if status is unavailable. */ }
+    } catch (_) {
+      var box = document.getElementById('ai-image-subscription-status');
+      if (box) { box.hidden = false; box.textContent = state.lang === 'en' ? 'Could not verify account settings. Refresh before generating.' : '사용자 설정을 확인하지 못했습니다. 새로고침해 주세요.'; }
+    }
   }
   window.addEventListener('focus', refreshSubscriptionConnector);
 

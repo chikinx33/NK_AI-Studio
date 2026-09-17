@@ -118,7 +118,7 @@ test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheet
   assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution/);
   // 1차 실패 시 해상도 기본값·참조 없이 한 번 더, 두 시도의 오류를 모두 남긴다(원인 분리)
   assert.match(fn, /fallback = "default-size-no-reference";/);
-  assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages: \[\], generationMode: "text-to-image", \.\.\.providerOpt \}, ctx\)/);
+  assert.match(fn, /runImagenTool\(\{ prompt, aspectRatio: aspect, projectId, referenceImages: \[\], generationMode: "text-to-image", _imageStageKey: `set_sheet:\$\{projectId\}:\$\{name\}:fallback`, \.\.\.providerOpt \}, ctx\)/);
   assert.match(fn, /세트 시트 생성 실패 — 1차\(/);
   assert.match(fn, /fallback, firstError,/);
   // imagen 오류는 상세(메시지·코드·힌트)까지 올린다 — "Gemini API error" 한 줄 금지
@@ -356,7 +356,7 @@ test('★세트 시트 모달은 부감 마스터만: 머리글 한 문장 · �
   assert.match(src, /<div className="mt-1 text-\[12px\] leading-relaxed text-gray-400">세트마다 부감 마스터 1장을 만들어요\. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요\.<\/div>/);
   assert.match(src, /const stateText = n\.data\?\.topPlateUrl \? `부감 마스터 있음 · 캐시된 앵글 플레이트 \$\{derived\.length\}장/);
   assert.match(src, /const planText = "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용";/);
-  assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 크레딧 사용/);
+  assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 사용자 설정 적용/);
   assert.doesNotMatch(src, /name="sheet-mode"|빠른 미리보기|정면 플레이트 참조|style-anchor-panel|그림체 기준:/);
 });
 

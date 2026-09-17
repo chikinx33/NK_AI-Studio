@@ -4,6 +4,7 @@ import {
   durationChoicesFor, quoteCanvasCredits, snapDuration, type CanvasSettings, type CreditQuote,
 } from "../lib/canvasSettings";
 import { readStudioImageProvider, STUDIO_PROVIDER_LABELS } from "../lib/canvasSettings";
+import { readStorage } from '../lib/safeStorage';
 
 /** 작성기 오른쪽 요약 칩을 누르면 뜨는 생성 설정. 이미지/동영상 탭 · 비율 · 모델 · 해상도 · 길이 · 개수 · 크레딧. */
 
@@ -35,6 +36,8 @@ export function Seg<T extends string | number>({ value, options, onChange, rende
 export default function GenerationSettingsPopover({ settings, onChange, onClose }: { settings: CanvasSettings; onChange: (next: CanvasSettings) => void; onClose: () => void }) {
   const [quote, setQuote] = useState<CreditQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
+  const en = readStorage("nk_lang") === 'en';
+  const personalImage = settings.kind === 'image' && !!quote?.billingSource;
 
   useEffect(() => {
     let alive = true;
@@ -64,7 +67,10 @@ export default function GenerationSettingsPopover({ settings, onChange, onClose 
           <Seg value={s.image.aspect} options={IMAGE_ASPECTS} onChange={(aspect) => setImage({ aspect })} render={(r) => <><AspectGlyph ratio={r} />{r}</>} />
           <Seg value={s.image.size} options={IMAGE_SIZES} onChange={(size) => setImage({ size })} render={(v) => (v === "512" ? "512px" : v)} />
           <Seg value={s.image.count} options={COUNTS} onChange={(count) => setImage({ count })} render={(n) => `x${n}`} />
-          <select value={s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"], providerExplicit: true })} className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
+          <select disabled={personalImage} value={personalImage ? 'user' : s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"], providerExplicit: true })} className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
+            {personalImage && <option value="user">{quote?.billingSource === 'user-subscription'
+              ? (en ? 'GPT Image · my ChatGPT subscription' : 'GPT 이미지 · 내 ChatGPT 구독')
+              : (en ? 'GPT Image · my OpenAI API key' : 'GPT 이미지 · 내 OpenAI API 키')}</option>}
             {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.id === "studio" ? `${p.label}${readStudioImageProvider() ? ` · 지금: ${STUDIO_PROVIDER_LABELS[readStudioImageProvider()] || readStudioImageProvider()}` : " · 지금: 서버 기본"}` : p.label}</option>)}
           </select>
         </div>
@@ -88,7 +94,11 @@ export default function GenerationSettingsPopover({ settings, onChange, onClose 
 
       <div className="mt-3 border-t border-edge pt-2 text-center text-[11px] text-gray-400">
         {quote
-          ? <>생성 시 <span className="font-bold text-white underline decoration-dotted underline-offset-2">{quote.credits} 크레딧</span>이 사용됩니다{quote.balance != null ? <span className="text-gray-600"> · 잔여 {quote.balance} C</span> : null}</>
+          ? personalImage ? <span>{quote.billingSource === 'user-subscription'
+              ? (en ? 'Uses your ChatGPT subscription limits' : '본인 ChatGPT 구독 한도 사용')
+              : (en ? 'Billed to your OpenAI API account' : '본인 OpenAI API 계정의 사용량 과금')}
+              {en ? ' · No NK credit charge' : ' · NK 크레딧 차감 없음'}</span>
+            : <>생성 시 <span className="font-bold text-white underline decoration-dotted underline-offset-2">{quote.credits} 크레딧</span>이 사용됩니다{quote.balance != null ? <span className="text-gray-600"> · 잔여 {quote.balance} C</span> : null}</>
           : (quoteError ? <span className="text-amber-300">{quoteError}</span> : "크레딧 계산 중…")}
       </div>
       <div className="mt-2 text-right">

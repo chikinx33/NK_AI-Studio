@@ -1267,6 +1267,11 @@
     const apiSettingsStateEl = document.getElementById('api-settings-state');
     const apiSettingsSaveBtn = document.getElementById('api-settings-save');
     const apiSettingsDiagnoseBtn = document.getElementById('api-settings-diagnose');
+    const userChatEnabled = document.getElementById('user-chat-enabled');
+    const userImageEnabled = document.getElementById('user-image-enabled');
+    const userImageMode = document.getElementById('user-image-auth-mode');
+    const userImageApiKey = document.getElementById('user-image-api-key');
+    let generationSettingsDirty = false;
     const themeDarkOptionsEl = document.getElementById('theme-dark-options');
     const themeLightOptionsEl = document.getElementById('theme-light-options');
     const subscriptionManageBtn = document.getElementById('subscription-manage-btn');
@@ -2020,6 +2025,13 @@
 
     const renderApiAuthMode = () => {
       if (!canUseApiSettingsUI()) return;
+      if (userChatEnabled) {
+        document.getElementById('user-chat-credentials').disabled = !userChatEnabled.checked;
+        document.getElementById('user-image-credentials').disabled = !userImageEnabled.checked;
+        userImageApiKey.hidden = userImageMode.value !== 'api_key';
+        document.getElementById('user-image-connect').hidden = !userImageEnabled.checked || userImageMode.value !== 'subscription';
+        apiSettingsDiagnoseBtn.disabled = !userChatEnabled.checked;
+      }
       apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
         const on = b.dataset.authMode === apiAuthMode;
         b.classList.toggle('is-active', on);
@@ -2038,11 +2050,11 @@
     // 적용 범위는 한 줄만 보여주고 전체 목록은 툴팁에 둔다(카드 높이 고정)
     const renderApiScopeLine = () => {
       if (!apiSettingsScopeEl) return;
-      apiSettingsScopeEl.textContent = translateUiText('적용: Claude 텍스트 AI · 이미지/음악/영상 제외');
+      apiSettingsScopeEl.textContent = translateUiText('적용: 스튜디오·AI 기업의 텍스트와 이미지 전체');
       // 사전 키에 개행을 넣지 않으려고 두 줄을 따로 번역해 합친다
       apiSettingsScopeEl.title = [
-        translateUiText('적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업의 Claude 에이전트·문서 도구.'),
-        translateUiText('적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.'),
+        translateUiText('이미지 적용: AI 이미지·AI 문서 삽화·캐릭터/배경·장면 스틸·스토리보드·편집·카메라 변경·업스케일·AI 기업 에이전트.'),
+        translateUiText('음악·음성·영상 생성은 기존 설정을 사용합니다. 본인 인증 오류 시 마스터로 자동 전환하지 않습니다.'),
       ].join('\n');
     };
 
@@ -2051,16 +2063,33 @@
       const user = NK.auth.getUser();
       const seq = ++apiAuthRequestSeq;
       setApiSettingsState('불러오는 중…');
+      apiAuthLoaded = false;
+      apiSettingsSaveBtn.disabled = true;
+      userChatEnabled.disabled = userImageEnabled.disabled = true;
       try {
         const data = await NK.api.agentSettings();
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         const claudeAuth = (data && data.claudeAuth) || {};
-        apiAuthMode = claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription';
+        const generation = data.generation || {};
+        apiAuthMode = generation.chatMode || (claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription');
+        userChatEnabled.checked = !!generation.chatEnabled;
+        userImageEnabled.checked = !!generation.imageEnabled;
+        userImageMode.value = generation.imageMode || 'subscription';
+        generationSettingsDirty = false;
+        userChatEnabled.disabled = userImageEnabled.disabled = false;
+        apiSettingsSaveBtn.disabled = false;
+        const imageState = document.getElementById('user-image-auth-state');
+        imageState.textContent = translateUiText(!generation.imageEnabled ? '이미지: 마스터 설정 사용'
+          : generation.imageMode === 'api_key' ? (generation.imageApiKeySet ? '이미지: 본인 OpenAI API 키 사용' : '이미지: 본인 OpenAI API 키 입력 필요')
+          : generation.connector?.online ? '이미지: 본인 ChatGPT 구독 연결 정상'
+          : generation.connector?.configured ? '이미지: 연결 프로그램을 실행해 주세요' : '이미지: 본인 ChatGPT 계정 연결 필요');
+        if (generation.imageEnabled && generation.connector?.online && generation.imageMode !== 'api_key') imageState.textContent += ' · ' + generation.connector.email;
         apiAuthLoaded = true;
         renderApiAuthMode();
-        const set = apiAuthMode === 'api_key' ? claudeAuth.apiKeySet : claudeAuth.oauthSet;
+        const set = typeof claudeAuth.configured === 'boolean' ? claudeAuth.configured
+          : (apiAuthMode === 'api_key' ? claudeAuth.apiKeySet : claudeAuth.oauthSet);
         setApiSettingsState(set
-          ? (claudeAuth.source === 'user' ? '본인 인증 사용 중 — 본인 구독·API 한도 사용' : '마스터 인증 사용 중 — 본인 인증 등록 시 전환')
+          ? (claudeAuth.source === 'user' ? '본인 인증 사용 중 — 본인 구독·API 한도 사용' : '마스터 인증 사용 중 — 본인 사용 체크 시 전환')
           : (claudeAuth.source === 'user' ? '선택한 본인 인증이 없습니다 — 설정을 확인해 주세요' : '마스터 인증이 없습니다 — 관리자에게 문의해 주세요'), set ? 'ok' : 'error');
       } catch (err) {
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
@@ -2079,19 +2108,24 @@
       apiSettingsSaveBtn.disabled = true;
       try {
         await NK.api.agentSettingsSave({
-          kind: 'claudeAuth',
+          kind: 'generation',
+          chatEnabled: userChatEnabled.checked,
+          imageEnabled: userImageEnabled.checked,
+          imageMode: userImageMode.value,
+          imageApiKey: userImageApiKey.value.trim(),
           authMode: apiAuthMode,
           oauthToken: apiAuthMode === 'subscription' ? value : '',
           apiKey: apiAuthMode === 'api_key' ? value : '',
         });
         if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         apiSettingsTokenInput.value = '';
+        userImageApiKey.value = '';
         await loadApiSettings();
       } catch (err) {
         if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
       } finally {
-        apiSettingsSaveBtn.disabled = false;
+        apiSettingsSaveBtn.disabled = !apiAuthLoaded;
       }
     };
 
@@ -2635,6 +2669,12 @@
           apiAuthUser = loggedIn ? user : '';
           apiAuthRequestSeq += 1;
           apiSettingsTokenInput.value = '';
+          userImageApiKey.value = '';
+          userChatEnabled.checked = userImageEnabled.checked = false;
+          userChatEnabled.disabled = userImageEnabled.disabled = true;
+          apiSettingsSaveBtn.disabled = true;
+          generationSettingsDirty = false;
+          document.getElementById('user-image-auth-state').textContent = '';
           setApiSettingsCollapsed(true);
           apiAuthLoaded = false;
           setApiSettingsState('');
@@ -2922,11 +2962,19 @@
       apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
         b.addEventListener('click', () => {
           apiAuthMode = b.dataset.authMode === 'api_key' ? 'api_key' : 'subscription';
+          generationSettingsDirty = true;
           renderApiAuthMode();
           setApiSettingsState('');
         });
       });
       apiSettingsSaveBtn.addEventListener('click', saveApiSettings);
+      [userChatEnabled, userImageEnabled, userImageMode, apiSettingsTokenInput, userImageApiKey].forEach((el) => {
+        if (!el) return;
+        el.addEventListener('input', () => { generationSettingsDirty = true; renderApiAuthMode(); });
+      });
+      window.addEventListener('focus', () => {
+        if (!apiSettingsCollapsed && !generationSettingsDirty && NK.auth.isAuthed()) loadApiSettings();
+      });
       if (apiSettingsDiagnoseBtn) apiSettingsDiagnoseBtn.addEventListener('click', diagnoseApiSettings);
       renderApiAuthMode();
       renderApiScopeLine();

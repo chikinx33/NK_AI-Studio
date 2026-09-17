@@ -14,6 +14,7 @@ import {
   AGENT_TOOLS,
   messageFilesFromToolOutput,
   fileJobAsWorkItem,
+  persistPendingImage,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -47,6 +48,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
 
     const job = await getJob(sql, id, auth.userId);
     if (!job) return send({ error: "not_found" }, 404, origin); // 타인 잡 숨김
+    if (job.status === 'working' && job.output?.subscriptionPending) return send({ error: 'job_still_generating' }, 409, origin);
 
     // 승인 게이트 도구(gate)는 승인 전에는 실행되지 않은 상태(output 없음)다.
     // → 승인된 지금 비로소 실제로 실행한다("승인 후 실제 업무 추진").
@@ -54,6 +56,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     let updated;
     let executedOutput: any = job.output;
     if (decision === "approved" && tool?.gate && !job.output) {
+      const [claimed] = await sql(`UPDATE agent_jobs SET status='working',review_status='approved',review_note=$3,updated_at=now()
+        WHERE user_id=$1 AND id=$2 AND status='review_pending' AND output IS NULL RETURNING id`, [auth.userId, id, note]);
+      if (!claimed) return send({ error: 'job_already_running' }, 409, origin);
       const authHeader = String(request.headers.get("Authorization") || "");
       const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
       // 오래 걸리는 도구(예: scene_video, 수분)는 POST를 블로킹하지 않고 waitUntil 백그라운드로 실행.
@@ -79,11 +84,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
         }, 200, origin);
       }
       try {
-        executedOutput = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
+        executedOutput = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId, jobId: id });
         updated = await setJobStatus(sql, id, auth.userId, {
           status: "approved", output: executedOutput, reviewStatus: "approved", reviewNote: note,
         });
       } catch (e: any) {
+        if (e.imageJobId) {
+          await persistPendingImage({ request, env, authHeader, userId: auth.userId,
+            runApproved: true, conversationId: toolInput._conversationId || 'main' }, sql, id, e);
+          const meta = AGENT_META[job.agent_id] || { name: job.agent_id };
+          return send({ ok: true, job: await getJob(sql, id, auth.userId), message: {
+            role: 'agent', agentId: job.agent_id, name: meta.name,
+            text: '🎨 승인 확인! 본인 ChatGPT 구독으로 이미지 생성·저장 중입니다. 완료 후 결과가 표시됩니다.' } }, 200, origin);
+        }
         await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
         return send({ error: `승인 실행 중 오류: ${e?.message || e}` }, 500, origin);
       }

@@ -5,6 +5,7 @@ import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
 import { onRequestPost as subscriptionImageRequest } from "./codex-images";
+import { imageAuth } from './_shared/generation-auth';
 import {
   atlasImageOutput,
   atlasOutputs,
@@ -41,7 +42,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     }
     // 결제 주체 격리: 마스터가 아닌 계정은 클라이언트 provider 값과 무관하게
     // 마스터의 Atlas Cloud 크레딧만 사용한다. 이 판정은 반드시 서버 인증 ID로 한다.
-    const atlasOnly = !requireMaster(env, auth.userId);
+    const atlasOnly = !env.USER_IMAGE_AUTH && !requireMaster(env, auth.userId);
 
     const body = await request.json().catch(() => ({} as any));
     const prompt = normalizePrompt((body?.prompt ?? "").toString().trim());
@@ -351,7 +352,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         // 폴백해 생성이 항상 완료되게 한다(스핀 종료). GPT 품질을 유지하려면 OPENAI_BASE_URL 로
         // 지원 지역 프록시/AI Gateway 를 설정해야 한다(폴백 사실은 응답·콘솔에 노출).
         const isRegionBlocked = oErr?.code === "openai_region_blocked" || oErr?.retriable === true;
-        const geminiConfigured = !!apiKey;
+        const geminiConfigured = !env.USER_IMAGE_AUTH && !!apiKey;
         if (isAccountError && geminiConfigured) {
           const fb = await runGeminiGeneration();
           if (fb.error) {
@@ -455,10 +456,62 @@ export const onRequestPost: PagesFunction = async (context) => {
   const auth = await authorizeRequest(context.request, context.env);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   const body: any = await context.request.clone().json().catch(() => ({}));
-  if (body.provider === 'chatgpt-subscription') {
+  let selected;
+  try { selected = await imageAuth(context.env, auth.userId); }
+  catch { return json({ error: 'generation_settings_unavailable' }, 503); }
+  if (selected.enabled && selected.mode === 'subscription') {
+    if (!String(body.prompt || '').trim()) return json({ error: 'invalid_image_prompt' }, 400);
+    if (!selected.connector.configured) return json({ error: 'chatgpt_connector_required' }, 412);
+    if (!selected.connector.online) return json({ error: 'chatgpt_connector_offline' }, 409);
+    try {
+      const items = (Array.isArray(body.referenceImages) ? body.referenceImages : []).map((item: any) =>
+        typeof item === 'string' ? { imageDataUrl: item } : item);
+      for (const item of items) {
+        const value = String(item?.imageUrl || item?.imageDataUrl || item?.url || '');
+        if (/^data:image\/(png|jpeg|webp);base64,/.test(value)) continue;
+        if (value.startsWith('gs://')) {
+          const bucket = String(context.env.VIDEO_OUTPUT_GCS_URI || '').match(/^gs:\/\/([^/]+)/)?.[1];
+          if (!bucket || !value.startsWith(`gs://${bucket}/`)) return json({ error: 'invalid_reference_image_url' }, 400);
+        } else {
+          const url = new URL(value, context.request.url);
+          if (url.protocol !== 'https:' || !['storage.googleapis.com', new URL(context.request.url).hostname].includes(url.hostname)
+              || url.username || url.password || (url.port && url.port !== '443')) return json({ error: 'invalid_reference_image_url' }, 400);
+        }
+      }
+      const accessToken = items.some((item: any) => /^(gs:\/\/|https:\/\/storage\.googleapis\.com\/)/.test(String(item.imageUrl || item.imageDataUrl || item.url)))
+        ? await getGoogleAccessToken({ clientEmail: context.env.GOOGLE_CLIENT_EMAIL,
+          privateKeyPem: context.env.GOOGLE_PRIVATE_KEY, scope: 'https://www.googleapis.com/auth/cloud-platform' }) : '';
+      const refs = await normalizeReferenceImages({ items, accessToken, requestUrl: context.request.url,
+        authHeader: context.request.headers.get('Authorization') || '' });
+      if (refs.length !== items.length) return json({ error: 'source_image_reference_unavailable' }, 400);
+      body.prompt = buildGeminiImagePrompt(normalizePrompt(String(body.prompt || '').trim()), refs,
+        normalizeGenerationMode(body.generationMode, refs.length > 0), normalizeGenerationStyle(body.generationStyle),
+        (body.conversationHistory || []).length, normalizeCameraTargetMode(body.cameraTargetMode), !!body.maskDataUrl,
+        body.editInPlace === true, body.aspectRatio || '1:1');
+      body.referenceImages = refs.map(ref => ({ imageDataUrl: `data:${ref.mimeType};base64,${ref.base64}` }));
+      if (body.maskDataUrl) {
+        body.referenceImages.push({ imageDataUrl: body.maskDataUrl });
+        body.prompt += '\nThe last reference is the edit mask. Change only the marked area; preserve all unmarked pixels and composition.';
+      }
+    } catch { return json({ error: 'subscription_image_reference_unavailable' }, 400); }
     const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
       body: JSON.stringify({ operation: 'create', requestId: body.requestId, payload: body }) });
     return subscriptionImageRequest({ ...context, request });
+  }
+  if (selected.enabled) {
+    if (!selected.apiKey) return json({ error: 'own_image_api_key_required' }, 412);
+    const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
+      body: JSON.stringify({ ...body, provider: 'openai' }) });
+    const response = await handlePost({ request, env: { ...context.env, USER_IMAGE_AUTH: true,
+      OPENAI_API_KEY: selected.apiKey, GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ATLASCLOUD_API_KEY: '' } });
+    if (!response.ok) return json({ ...await response.json() as any, authSource: 'user' }, response.status);
+    return json({ ...await response.json() as any, authSource: 'user' });
+  }
+  // A per-page saved provider cannot override the unchecked account switch.
+  if (body.provider === 'chatgpt-subscription') {
+    const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
+      body: JSON.stringify({ ...body, provider: context.env.AI_IMAGE_PROVIDER || 'gemini' }) });
+    return withCreditCharge({ ...context, request }, { feature: 'image_generation' }, handlePost);
   }
   return withCreditCharge(context, { feature: "image_generation" }, handlePost);
 };

@@ -26,8 +26,15 @@ export async function connectorSql(env: any): Promise<SqlFn> {
       payload JSONB NOT NULL, status TEXT NOT NULL DEFAULT 'queued', result JSONB,
       error TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
-    await sql(`CREATE UNIQUE INDEX IF NOT EXISTS nk_subscription_image_active
-      ON nk_subscription_image_jobs (user_id) WHERE status IN ('queued','working','uploading')`);
+    // Accept batch requests, but the companion executes only one image per owner.
+    await sql(`DO $$ BEGIN
+      IF to_regclass('nk_subscription_image_running') IS NULL THEN
+        LOCK TABLE nk_subscription_image_jobs IN SHARE ROW EXCLUSIVE MODE;
+        DROP INDEX IF EXISTS nk_subscription_image_active;
+        CREATE UNIQUE INDEX IF NOT EXISTS nk_subscription_image_running ON nk_subscription_image_jobs (user_id)
+          WHERE status IN ('working','uploading');
+      END IF;
+    END $$`);
     await sql(`CREATE INDEX IF NOT EXISTS nk_subscription_image_owner
       ON nk_subscription_image_jobs (user_id, created_at DESC)`);
   })().catch(error => { schemaReady.delete(key); throw error; }));
@@ -52,7 +59,8 @@ export async function authorizeConnector(request: Request, env: any, sql: SqlFn)
 }
 
 export function connectorStatus(row: any) {
-  return { configured: !!row, online: !!row?.ready && Date.parse(row.last_seen || '') > Date.now() - ONLINE_MS,
+  return { configured: !!row, online: !!row?.ready && Date.parse(row.expires_at || '') > Date.now()
+      && Date.parse(row.last_seen || '') > Date.now() - ONLINE_MS,
     email: row?.email || '', plan: row?.plan || '', expiresAt: row?.expires_at || '', source: row ? 'user-subscription' : 'unregistered' };
 }
 
@@ -62,7 +70,7 @@ export function validateImagePayload(raw: any) {
   const references = Array.isArray(raw.referenceImages) ? raw.referenceImages : [];
   if (references.length > 16) throw new Error('too_many_reference_images');
   const referenceImages = references.map((item: any) => {
-    const url = String(item?.imageDataUrl || '');
+    const url = String(typeof item === 'string' ? item : item?.imageDataUrl || item?.imageUrl || item?.url || '');
     if (url.length > 8 * 1024 * 1024) throw new Error('reference_image_too_large');
     if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=\r\n]+$/.test(url)) {
       const parsed = new URL(url);
@@ -80,8 +88,9 @@ export function validateImagePayload(raw: any) {
     sessionId: String(raw.sessionId || 'default').slice(0, 180),
     ownerId: String(raw.ownerId || ''),
     aspectRatio: ['1:1','16:9','9:16','free'].includes(raw.aspectRatio) ? raw.aspectRatio : '1:1',
-    imageSize: ['512','1K','2K'].includes(raw.imageSize) ? raw.imageSize : '1K',
+    imageSize: ['512','1K','2K','4K'].includes(raw.imageSize) ? raw.imageSize : '1K',
     generationMode: references.length ? 'image-to-image' : 'text-to-image',
+    operation: raw.operation === 'upscale' ? 'upscale' : 'image',
     conversationHistory: (Array.isArray(raw.conversationHistory) ? raw.conversationHistory : []).slice(-3)
       .map((item: any) => ({ prompt: String(item?.prompt || '').slice(0, 4000) })) };
 }
@@ -118,6 +127,7 @@ export async function storeSubscriptionImage(env: any, job: any, file: File) {
   return { signedUrl, objectName, projectObjectName: projectObject, savedToProject: !!projectObject,
     provider: 'chatgpt-subscription', authSource: 'user', model: 'codex-built-in-image',
     aspectApplied: payload.aspectRatio, imageSizeRequested: payload.imageSize,
+    imageSizeApplied: payload.operation === 'upscale' ? payload.imageSize : undefined,
     sessionId: payload.sessionId, promptEcho: payload.prompt, storageService: payload.storageService };
 }
 

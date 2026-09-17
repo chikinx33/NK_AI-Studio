@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/messages.ts
 // GET /api/agent/messages?conversationId=main — 단톡방 메시지 폴링. ★ user_id 격리.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, listMessages, sweepDanglingMessages } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, listMessages, sweepDanglingMessages, reconcileSubscriptionJobs } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -18,6 +18,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const sql = getSql(env);
     if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
     await ensureAgentSchema(sql);
+    await reconcileSubscriptionJobs({ request, env, userId: auth.userId,
+      authHeader: request.headers.get('Authorization') || '' }, sql);
 
     const conversationId = (new URL(request.url).searchParams.get("conversationId") || "main").trim() || "main";
     // 결과가 못 붙은 진행 안내("…조회 중이에요…")를 먼저 마무리 문구로 정리 — 히스토리가 미완으로 남지 않게.

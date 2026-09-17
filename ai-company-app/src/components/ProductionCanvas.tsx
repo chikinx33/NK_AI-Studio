@@ -672,6 +672,7 @@ export default function ProductionCanvas({
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const job = await getAgentJob(jobId).catch(() => null);
+      if (job?.output?.subscriptionPending) timeoutMs = 20 * 60 * 1000;
       const status = String(job?.status || job?.review_status || "");
       if (JOB_DONE.includes(status)) {
         const error = String((job as any)?.error || (job as any)?.output?.error || "").trim();
@@ -1443,7 +1444,7 @@ export default function ProductionCanvas({
                           <option value="4K">4K</option>
                         </select>
                       </label>
-                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 크레딧 사용</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 사용자 설정 적용</span>
                       <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>

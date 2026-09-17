@@ -1,6 +1,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { quoteCredits, publicCreditRates } from "../_shared/credit-rates.js";
 import { getCreditSummary } from "../_shared/credits";
+import { imageAuth } from '../_shared/generation-auth';
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -18,6 +19,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const body: any = await request.json().catch(() => ({}));
   const quote = quoteCredits(String(body.feature || ""), body.input || {}, env);
   try {
+    if (['image_generation', 'image_upscale'].includes(String(body.feature))) {
+      const image = await imageAuth(env, auth.userId);
+      if (image.enabled) return new Response(JSON.stringify({ quote: { ...quote, credits: 0, authSource: 'user',
+        provider: image.mode === 'subscription' ? 'chatgpt-subscription' : 'openai',
+        billingSource: image.mode === 'subscription' ? 'user-subscription' : 'user-api' }, summary: null }),
+        { status: 200, headers: responseHeaders(origin) });
+    }
     const summary = await getCreditSummary(env, auth.userId);
     return new Response(JSON.stringify({ quote, summary, rateCard: publicCreditRates(env) }), { status: 200, headers: responseHeaders(origin) });
   } catch (e: any) {

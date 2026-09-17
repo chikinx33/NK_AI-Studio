@@ -11,6 +11,7 @@ import {
   type CompanySkillJobRow,
 } from "./_skill-jobs";
 import { AGENT_TOOLS } from "./_shared";
+import { imageAuth } from '../_shared/generation-auth';
 import {
   buildVideoPipelinePlan,
   describePlanProgress,
@@ -135,7 +136,9 @@ async function prepareVideoPipelinePlan(job: CompanySkillJobRow, context: Compan
   if (!Array.isArray(project?.scenes) || !project.scenes.length) {
     throw new Error("프로젝트에 씬이 없어요. 먼저 시나리오를 만들어 씬을 저장하세요.");
   }
-  const plan = buildVideoPipelinePlan(job, project, context.env);
+  const image = await imageAuth(context.env, context.userId);
+  const plan = buildVideoPipelinePlan(job, project, { ...context.env, USER_IMAGE_AUTH: image.enabled,
+    USER_IMAGE_AUTH_MODE: image.mode });
   const next = await transitionCompanySkillJob(context.sql, context.userId, job.id, "planning", {
     progress: 10,
     currentStage: "planning",

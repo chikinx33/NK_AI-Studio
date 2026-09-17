@@ -15609,7 +15609,15 @@ textarea.bsf-skeleton {
 }
 
 /* 저장 중에도 버튼 폭이 흔들리지 않게 고정한다 */
-#api-settings-save { min-width: 64px; }
+#api-settings-save { min-width: 64px; width: 100%; }
+.generation-choice { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 8px 0; cursor: pointer; }
+.generation-choice input { width: 16px; height: 16px; accent-color: #3b82f6; }
+.generation-credentials { margin: 0; padding: 8px; border: 1px solid var(--border, #263249); border-radius: 8px; display: grid; gap: 8px; min-width: 0; }
+.generation-credentials legend { font-size: 12px; }
+.generation-credentials:disabled { opacity: .45; }
+.generation-credentials input, .generation-credentials select { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; background: var(--panel, #101827); color: inherit; border: 1px solid var(--border, #263249); border-radius: 8px; }
+.generation-help, .generation-status { font-size: 12px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
+.generation-credentials [hidden] { display: none; }
 #api-settings-diagnose { min-width: 100%; }
 
 .api-settings-state {

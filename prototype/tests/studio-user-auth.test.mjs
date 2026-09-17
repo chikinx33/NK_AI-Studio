@@ -157,8 +157,8 @@ test("/app 에 API 설정 위젯이 있고 기존 위젯과 같은 접기 구조
   // 전체 목록은 툴팁으로 내렸지만, 안내 자체가 사라지면 안 된다.
   assert.match(html, /id="api-settings-scope"/, "적용 범위 안내 자리가 없다");
   const js = read("prototype/script.js");
-  assert.match(js, /적용: Claude 텍스트 AI/, "적용 범위 요약 문구가 없다");
-  assert.match(js, /적용 안 됨 — 이미지 생성/, "미적용 목록 안내가 사라졌다");
+  assert.match(js, /적용: 스튜디오·AI 기업의 텍스트와 이미지 전체/, "적용 범위 요약 문구가 없다");
+  assert.match(js, /이미지 적용: AI 이미지/, "이미지 적용 목록 안내가 없다");
 });
 
 test("인증 미설정 응답이 사용자 안내로 이어진다", () => {

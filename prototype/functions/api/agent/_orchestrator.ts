@@ -50,7 +50,7 @@ import {
 } from "./_shared";
 import { knowledgeTerms, projectIdFromMessage, selectCompanyKnowledgeForPrompt } from "./_knowledge-index";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
-import { resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
+import { resolvedAuthHeaders, getAgentModelSelections, resolveAuth, authHeadersFor } from "../_shared/claude-auth.js";
 import { isAnthropicProvider, normalizeModelChoice, resolveAgentModel } from "../_shared/cloud-models.js";
 import { callLLM } from "../_shared/llm.js";
 
@@ -553,16 +553,24 @@ export async function callClaude(
     resolvedAuth?: any;
   } = {}
 ): Promise<string> {
-  const choice =
+  let choice =
     opts.modelChoice ||
     normalizeModelChoice(opts.model) ||
     { provider: "anthropic", model: "claude-sonnet-4-6" };
+
+  // A user's own Claude choice must cover GPT/Atlas model overrides too.
+  // Fail closed on settings errors rather than consuming a master credential.
+  if (!opts.userId) throw new Error('claude_auth_user_required');
+  const resolved = opts.resolvedAuth ? null : await resolveAuth(opts.sql || getSql(env), opts.userId, env, { allowMissing: true });
+  if ((opts.resolvedAuth?.source || resolved?.source) === 'user' && !isAnthropicProvider(choice.provider)) {
+    choice = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+  }
 
   let auth: any = null;
   if (isAnthropicProvider(choice.provider)) {
     // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
     if (!opts.userId) throw new Error("claude_auth_user_required");
-    auth = opts.resolvedAuth || await resolvedAuthHeaders(opts.sql || getSql(env), opts.userId, env);
+    auth = opts.resolvedAuth || authHeadersFor(resolved);
   }
 
   const out = await callLLM(env, {
@@ -1747,6 +1755,11 @@ export async function runGroupChat(
         text: `🛠️ ${r.tool} 작업을 시작했어요. 잠시 기다려주세요…`,
       });
       const result = await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
+      if (result.pending) {
+        await emit({ userId, conversationId, role: 'agent', agentId, name: meta.name,
+          text: '🎨 본인 ChatGPT 구독으로 이미지 생성 중입니다. 저장까지 완료되면 결과를 알려드릴게요.' });
+        continue;
+      }
       if (result.ok) {
         const doneText = result.gated
           ? `🔐 이 작업은 승인이 필요해요. 오른쪽 **승인 패널**에서 승인하면 그때 실제로 실행할게요.`

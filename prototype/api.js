@@ -413,6 +413,8 @@
 
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
+    var queueSession = { token: getAuthToken(), user: resolveUserId() };
+    payload.requestId = payload.requestId || window.crypto.randomUUID();
     if (!payload.userId) payload.userId = resolveUserId();
     var imagenProjectId = payload.projectId || payload.projTag;
     if (!payload.ownerId && imagenProjectId && api.getSharedOwner) payload.ownerId = api.getSharedOwner(imagenProjectId);
@@ -423,7 +425,6 @@
         if (stored === 'openai' || stored === 'gemini' || stored === 'gpt25-flare' || stored === 'gpt25-sunburst' || stored === 'chatgpt-subscription') payload.provider = stored;
       } catch (_) {}
     }
-    if (payload.provider === 'chatgpt-subscription') return api.codexImageGenerate(payload, opts);
     var timeoutMs = getImagenTimeoutMs(payload, opts);
     var res = await fetchWithTimeout(withBase('/api/imagen'), {
       method: 'POST',
@@ -436,9 +437,12 @@
       var err = new Error(e(text) || 'imagen_error');
       err.status = res.status;
       err.detail = text;
+      err.subscriptionImage = j(text).authSource === 'user' || /chatgpt_|subscription_|own_image_|generation_settings/.test(err.message);
       throw err;
     }
-    return j(text);
+    var imageResponse = j(text);
+    if (res.status === 202 && imageResponse.id && imageResponse.status) return api.codexImageWait(imageResponse, opts, queueSession);
+    return imageResponse;
   };
 
   api.codexImageRequest = async function (body, jobId, token) {
@@ -457,9 +461,13 @@
     return data;
   };
   api.codexImageGenerate = async function (payload, opts) {
-    var token = getAuthToken();
-    var user = resolveUserId();
-    var requestId = window.crypto.randomUUID();
+    var session = { token: getAuthToken(), user: resolveUserId() };
+    var job = await api.codexImageRequest({ operation: 'create', requestId: window.crypto.randomUUID(), payload: payload });
+    return api.codexImageWait(job, opts, session);
+  };
+  api.codexImageWait = async function (initialJob, opts, session) {
+    var token = session ? session.token : getAuthToken();
+    var user = session ? session.user : resolveUserId();
     var deadline = Date.now() + 20 * 60 * 1000;
     var assertSession = function () {
       if (getAuthToken() !== token || resolveUserId() !== user) throw new Error('subscription_image_account_changed');
@@ -467,7 +475,7 @@
     };
     try {
       assertSession();
-      var job = await api.codexImageRequest({ operation: 'create', requestId: requestId, payload: payload }, null, token);
+      var job = initialJob;
       while (Date.now() < deadline) {
         assertSession();
         if (job.status === 'done') return job.result;
@@ -485,6 +493,7 @@
 
   api.upscale = async function (body, opts) {
     var payload = Object.assign({}, body || {});
+    var queueSession = { token: getAuthToken(), user: resolveUserId() };
     var res = await fetchWithTimeout(withBase('/api/upscale'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -498,7 +507,9 @@
       err.detail = text;
       throw err;
     }
-    return j(text);
+    var result = j(text);
+    if (res.status === 202 && result.id && result.status) return api.codexImageWait(result, opts, queueSession);
+    return result;
   };
 
   // ── AI 문서 / Knowledge RAG ──────────────────────────────

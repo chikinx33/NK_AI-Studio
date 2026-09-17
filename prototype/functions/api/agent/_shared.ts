@@ -16,6 +16,7 @@ import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/
 import { refreshAccessToken } from "./_google";
 import { requireMaster } from "../_shared/admin-users";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
+import { connectorSql, expireImageJobs } from '../_shared/codex-images';
 import {
   assertRenderable,
   buildQuoteView,
@@ -1393,6 +1394,8 @@ export interface ToolContext {
   // 실행 중인 잡 id. 도구가 스스로 업무를 등록할 때 이 값으로 중복 등록을 막는다
   // (검수 승인 시 fileJobAsWorkItem 이 metadata->>'jobId' 로 같은 잡을 다시 등록하지 않는다).
   jobId?: string;
+  imageResults?: Record<string, any>;
+  runApproved?: boolean;
 }
 
 export interface ToolDef {
@@ -1552,6 +1555,9 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     // 카메라 재구성(image-to-image scene): 0번 참조를 소스로 같은 장소를 다른 앵글로 다시 그린다.
     cameraTargetMode: input?.cameraTargetMode || undefined,
   };
+  const imageKey = await imageRequestKey('/api/imagen', input?._imageStageKey ? { stage: input._imageStageKey } : input);
+  if (ctx.imageResults?.[imageKey]) return ctx.imageResults[imageKey];
+  if (ctx.jobId) (payload as any).requestId = await agentImageRequestId(ctx.jobId, imageKey);
   const res = await fetch(internalUrl(ctx.request, "/api/imagen"), {
     method: "POST",
     headers: {
@@ -1571,8 +1577,11 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     if (data?.code) parts.push(`[${data.code}]`);
     if (data?.status && Number(data.status) !== res.status) parts.push(`(upstream ${data.status})`);
     if (data?.hint) parts.push(`· ${String(data.hint).slice(0, 160)}`);
-    throw new Error(parts.join(" "));
+    const error: any = new Error(parts.join(' '));
+    error.subscriptionImage = data?.authSource === 'user' || /chatgpt_|subscription_|own_image_|generation_settings/.test(String(data?.error));
+    throw error;
   }
+  if (res.status === 202 && data.id) await throwPendingImage(data, payload, ctx, '/api/imagen', imageKey);
   return {
     signedUrl: data.signedUrl || "",
     objectName: data.objectName || "",
@@ -3318,6 +3327,10 @@ async function callInternalJson(
   init: { method?: string; body?: any } = {}
 ): Promise<any> {
   const method = init.method || (init.body !== undefined ? "POST" : "GET");
+  const imageRequest = method === 'POST' && ['/api/imagen', '/api/upscale'].includes(path);
+  const imageKey = imageRequest ? await imageRequestKey(path, init.body) : '';
+  if (imageKey && ctx.imageResults?.[imageKey]) return ctx.imageResults[imageKey];
+  if (imageKey && ctx.jobId) init.body = { ...init.body, requestId: await agentImageRequestId(ctx.jobId, imageKey) };
   const headers: Record<string, string> = { Authorization: ctx.authHeader };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(internalUrl(ctx.request, path), {
@@ -3328,8 +3341,31 @@ async function callInternalJson(
   const text = await res.text();
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data?.error || data?.message || `${path} 호출 실패 (${res.status})`);
+  if (!res.ok) {
+    const error: any = new Error(data?.error || data?.message || `${path} 호출 실패 (${res.status})`);
+    error.subscriptionImage = imageRequest && (data?.authSource === 'user' || /chatgpt_|subscription_|own_image_|generation_settings/.test(error.message));
+    throw error;
+  }
+  if (imageRequest && res.status === 202 && data.id) await throwPendingImage(data, init.body, ctx, path, imageKey);
   return data;
+}
+
+async function imageRequestKey(path: string, body: any) {
+  const { requestId, ...stableBody } = body;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path + JSON.stringify(stableBody)));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+async function agentImageRequestId(jobId: string, imageKey: string) {
+  const key = await imageRequestKey(jobId, { imageKey });
+  return `${key.slice(0,8)}-${key.slice(8,12)}-${key.slice(12,16)}-${key.slice(16,20)}-${key.slice(20,32)}`;
+}
+async function throwPendingImage(job: any, payload: any, ctx: ToolContext, path = '/api/imagen', imageKey?: string): Promise<never> {
+  const error: any = new Error('subscription_image_pending');
+  error.subscriptionImage = true;
+  error.imageJobId = job.id;
+  error.imageRequestKey = imageKey || await imageRequestKey(path, payload);
+  error.imageResults = ctx.imageResults || {};
+  throw error;
 }
 
 /** AI 회사 공용 파일 공간. 사용자와 모든 직원이 같은 상대 경로를 본다. */
@@ -4466,6 +4502,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
         plate = findPlate(loc, direction, elevation);
         if (plate && plate.exact) refNotes.push(`플레이트 ${plateLabel(direction, elevation, "ko")}(새로 파생)`);
       } catch (e) {
+        if ((e as any)?.subscriptionImage) throw e;
         refNotes.push(`플레이트 파생 실패: ${String((e as Error)?.message || e).slice(0, 80)}`);
       }
     } else if (plate && plate.exact) {
@@ -4505,6 +4542,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   // 작성기 설정(모델·크기)을 그대로 넘긴다 — 스튜디오 버튼과 같은 경로.
   const img = await runImagenTool({
     prompt: promptSent, aspectRatio: input?.aspectRatio || "16:9", projectId,
+    _imageStageKey: `scene_still:${projectId}:${scene?.id ?? idx}`,
     ...(orderedRefs.length ? { referenceImages: orderedRefs } : {}),
     ...(input?.provider ? { provider: String(input.provider) } : {}),
     ...(input?.imageSize ? { imageSize: String(input.imageSize) } : {}),
@@ -5050,13 +5088,14 @@ async function runSetSheetTool(input: any, ctx: ToolContext): Promise<any> {
   let fallback = "";
   let firstError = "";
   try {
-    img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution, ...providerOpt }, ctx);
+    img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages, generationMode: "text-to-image", imageSize: resolution, _imageStageKey: `set_sheet:${projectId}:${name}`, ...providerOpt }, ctx);
   } catch (e: any) {
     // 1차 실패: 해상도 지정·플레이트 참조를 빼고 한 번 더. 어느 쪽이 원인인지 결과에 남겨 다음 시도에 쓴다.
+    if (e?.subscriptionImage) throw e;
     firstError = String(e?.message || e);
     fallback = "default-size-no-reference";
     try {
-      img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: [], generationMode: "text-to-image", ...providerOpt }, ctx);
+      img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: [], generationMode: "text-to-image", _imageStageKey: `set_sheet:${projectId}:${name}:fallback`, ...providerOpt }, ctx);
     } catch (e2: any) {
       throw new Error(`세트 시트 생성 실패 — 1차(${resolution}${referenceImages.length ? "+플레이트 참조" : ""}): ${firstError} / 2차(기본 크기, 참조 없음): ${String(e2?.message || e2)}`);
     }
@@ -5169,7 +5208,7 @@ async function runSetMasterTool(input: any, ctx: ToolContext): Promise<any> {
   const bucket = studioBucket(ctx);
   const style = await collectStyleRefs(payload, locations, idx, cur, bucket, ctx, 2);
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
-  const img = await runImagenTool({ prompt, aspectRatio: aspect, projectId, referenceImages: style.refs, generationMode: "text-to-image", ...(["1K", "2K", "4K"].includes(resolution) ? { imageSize: resolution } : {}), ...providerOpt }, ctx);
+  const img = await runImagenTool({ _imageStageKey: `set_master:${projectId}:${name}`, prompt, aspectRatio: aspect, projectId, referenceImages: style.refs, generationMode: "text-to-image", ...(["1K", "2K", "4K"].includes(resolution) ? { imageSize: resolution } : {}), ...providerOpt }, ctx);
   if (!img?.objectName) throw new Error("마스터 플레이트 결과에 저장 경로(objectName)가 없어요.");
   // ★새 마스터 = 새 진실. 옛 마스터(또는 옛 정면 플레이트)에서 파생·준비된 앵글 플레이트(dir-*, angle-*)와 정면 플레이트는 전부 무효.
   //   남겨 두면 scene_still 이 캐시된 옛 정면 플레이트를 "재사용"해 새 마스터가 무시된다(2026-09-14 재현). 세부 배경(v-*)은 유지.
@@ -5224,6 +5263,7 @@ async function runSetAngleTool(input: any, ctx: ToolContext): Promise<any> {
   const providerOpt = input?.provider ? { provider: String(input.provider) } : {};
   const img = await runImagenTool({
     prompt, aspectRatio: aspect, projectId, generationMode: "image-to-image", cameraTargetMode: "scene",
+    _imageStageKey: `set_angle:${projectId}:${name}:${variantId}`,
     referenceImages: [{ imageUrl: gsOf(master), referenceId: 1, subjectDescription: `${promptSetName} — top-down master plate (source)`, referenceKind: "environment" }],
     ...providerOpt,
   }, ctx);
@@ -5782,12 +5822,12 @@ export async function processJob(
   jobId: string,
   type: string,
   input: any
-): Promise<{ ok: boolean; error?: string; gated?: boolean; output?: any; superseded?: number }> {
+): Promise<{ ok: boolean; error?: string; gated?: boolean; pending?: boolean; output?: any; superseded?: number }> {
   try {
     const tool = AGENT_TOOLS[type];
     if (!tool) throw new Error(`unknown tool: ${type}`);
     // 승인 게이트 도구: 승인 전에는 실행하지 않는다. 승인 대기로만 두고, 승인 시 review.ts에서 run 실행.
-    if (tool.gate) {
+    if (tool.gate && !ctx.runApproved) {
       if (tool.prepare) {
         const prepared = await tool.prepare(input, { ...ctx, jobId });
         if (prepared && typeof prepared === "object") {
@@ -5795,6 +5835,8 @@ export async function processJob(
           await sql("UPDATE agent_jobs SET input = $1::jsonb, updated_at = now() WHERE id = $2 AND user_id = $3", [JSON.stringify(prepared), jobId, ctx.userId]);
         }
       }
+      input = { ...input, _conversationId: ctx.conversationId || input?._conversationId || 'main' };
+      await sql('UPDATE agent_jobs SET input = $1::jsonb, updated_at = now() WHERE id = $2 AND user_id = $3', [JSON.stringify(input), jobId, ctx.userId]);
       await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", reviewStatus: "pending" });
       // 같은 일감이 이미 대기 중이면 그 카드를 걷어낸다 — 패널엔 최신 요청 한 장만 남는다.
       const superseded = await supersedePendingApprovals(sql, ctx.userId, type, input, jobId).catch(() => 0);
@@ -5802,12 +5844,67 @@ export async function processJob(
     }
     await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const output = await tool.run(input, { ...ctx, jobId });
-    await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
+    await setJobStatus(sql, jobId, ctx.userId, { status: ctx.runApproved ? 'approved' : 'review_pending', output,
+      reviewStatus: ctx.runApproved ? 'approved' : 'pending' });
     return { ok: true, output };
   } catch (e: any) {
+    if (e.imageJobId) {
+      const output = await persistPendingImage(ctx, sql, jobId, e);
+      return { ok: true, pending: true, output };
+    }
     const error = String(e?.message || e || "tool_failed");
     await setJobStatus(sql, jobId, ctx.userId, { status: "error", error });
     return { ok: false, error };
+  }
+}
+
+export async function persistPendingImage(ctx: ToolContext, sql: SqlFn, jobId: string, error: any) {
+  const output = { subscriptionPending: true, imageJobId: error.imageJobId, imageRequestKey: error.imageRequestKey,
+    imageResults: error.imageResults, conversationId: ctx.conversationId || 'main', runApproved: ctx.runApproved === true };
+  await setJobStatus(sql, jobId, ctx.userId, { status: 'working', output,
+    ...(ctx.runApproved ? { reviewStatus: 'approved' as const } : {}) });
+  return output;
+}
+
+// Resume from a persisted queue result on short authenticated polling requests.
+// No long waitUntil, no second generation, and no success card for an empty URL.
+export async function reconcileSubscriptionJobs(ctx: ToolContext, sql: SqlFn) {
+  const pending = await sql(`SELECT * FROM agent_jobs WHERE user_id=$1 AND status='working'
+    AND output->>'subscriptionPending'='true' ORDER BY created_at LIMIT 10`, [ctx.userId]);
+  if (!pending.length) return;
+  await connectorSql(ctx.env);
+  await expireImageJobs(sql, ctx.userId);
+  for (const job of pending) {
+    const [image] = await sql('SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2',
+      [ctx.userId, job.output.imageJobId]);
+    if (image && !['done', 'error', 'cancelled'].includes(image.status)) continue;
+    const [claimed] = await sql(`UPDATE agent_jobs SET output=jsonb_set(output,'{resuming}','true'),updated_at=now()
+      WHERE user_id=$1 AND id=$2 AND status='working' AND output->>'imageJobId'=$3
+      AND (COALESCE(output->>'resuming','false')='false' OR updated_at<now()-interval '1 minute') RETURNING *`,
+      [ctx.userId, job.id, job.output.imageJobId]);
+    if (!claimed) continue;
+    const conversationId = job.output.conversationId || 'main';
+    let result: any;
+    if (!image || image.status !== 'done') {
+      const error = image?.error || 'subscription_image_result_missing';
+      await setJobStatus(sql, job.id, ctx.userId, { status: 'error', error });
+      result = { ok: false, error };
+    } else {
+      result = await processJob({ ...ctx, conversationId, runApproved: job.output.runApproved === true, imageResults: {
+        ...job.output.imageResults, [job.output.imageRequestKey]: image.result } }, sql, job.id, job.type, job.input);
+    }
+    if (result.pending) continue;
+    const output = result.output;
+    if (result.ok && job.output.runApproved) {
+      const filed = await fileJobAsWorkItem(sql, ctx.userId, job, output);
+      if (filed) await setJobStatus(sql, job.id, ctx.userId, { output: { ...output, workItemId: filed.workId, workDateKey: filed.dateKey } });
+    }
+    await addMessage(sql, { userId: ctx.userId, conversationId, role: 'agent', agentId: job.agent_id,
+      name: AGENT_META[job.agent_id]?.name || job.agent_id,
+      text: result.ok ? `✅ ${job.type} 작업 완료. 본인 ChatGPT 구독으로 생성·저장했습니다. 검수 패널에서 확인하세요.`
+        : `❌ ${job.type} 실패: ${result.error}. 마스터 인증으로 전환하지 않았습니다.`,
+      files: result.ok && output?.signedUrl ? [{ source: 'generated', jobId: job.id,
+        name: 'image.png', contentType: 'image/png', kind: 'image' }] : [] });
   }
 }
 

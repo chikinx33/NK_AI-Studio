@@ -7,6 +7,8 @@ import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
+import { imageAuth } from './_shared/generation-auth';
+import { onRequestPost as imageRequest } from './imagen';
 import {
   atlasImageOutput,
   atlasOutputs,
@@ -385,8 +387,26 @@ const handlePost: PagesFunction = async ({ request, env }) => {
   }
 };
 
-export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "image_upscale" }, handlePost);
+export const onRequestPost: PagesFunction = async (context) => {
+  const auth = await authorizeRequest(context.request, context.env);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+  let selected;
+  try { selected = await imageAuth(context.env, auth.userId); }
+  catch { return json({ error: 'generation_settings_unavailable' }, 503); }
+  if (selected.enabled) {
+    const body: any = await context.request.json();
+    const imageUrl = String(body.imageUrl || '').trim() || (body.objectName
+      ? new URL('/api/media/proxy?objectName=' + encodeURIComponent(body.objectName), context.request.url).toString() : '');
+    if (!imageUrl) return json({ error: 'source_image_url_required' }, 400);
+    const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
+      body: JSON.stringify({ ...body, prompt: 'Enhance the supplied image at higher resolution. Preserve every subject, color, composition and existing text. Do not add or remove content.',
+        storageService: body.storageService || 'ai-image', generationMode: 'image-to-image',
+        referenceImages: [{ imageDataUrl: imageUrl }], aspectRatio: 'free', imageSize: body.imageSize === '4K' ? '4K' : '2K',
+        operation: 'upscale' }) });
+    return imageRequest({ ...context, request });
+  }
+  return withCreditCharge(context, { feature: 'image_upscale' }, handlePost);
+};
 
 function safeJson(text: string): any {
   try { return JSON.parse(text); } catch { return {}; }

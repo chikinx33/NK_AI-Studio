@@ -124,7 +124,7 @@ export function describeSettingsForAgent(s: CanvasSettings): string {
   return `기본값: ${img} / ${vid} / 생성 전 확인 ${s.confirmBeforeGenerate ? "항상" : "안 함"}`;
 }
 
-export interface CreditQuote { credits: number; balance: number | null; feature: string }
+export interface CreditQuote { credits: number; balance: number | null; feature: string; billingSource?: string }
 
 /** 서버 요율표로 견적 — 프론트에 단가를 복사하지 않는다(요율이 바뀌면 서버만 고친다). */
 export async function quoteCanvasCredits(s: CanvasSettings): Promise<CreditQuote> {
@@ -138,7 +138,8 @@ export async function quoteCanvasCredits(s: CanvasSettings): Promise<CreditQuote
   const count = s.kind === "image" ? s.image.count : s.video.count;
   const per = Number(data?.quote?.credits) || 0;
   const balanceRaw = data?.summary?.balance ?? data?.summary?.remaining ?? data?.summary?.credits ?? null;
-  return { credits: per * count, balance: Number.isFinite(Number(balanceRaw)) && balanceRaw !== null ? Number(balanceRaw) : null, feature };
+  return { credits: per * count, balance: Number.isFinite(Number(balanceRaw)) && balanceRaw !== null ? Number(balanceRaw) : null, feature,
+    billingSource: data?.quote?.billingSource };
 }
 
 /**

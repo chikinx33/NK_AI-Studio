@@ -8,6 +8,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema } from "./_shared";
 import { authStatus, authDiagnose, getSettingsRow, saveAgentModelSettings, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
 import { CLOUD_MODELS, MODEL_CATALOG, sanitizeModelSelections } from "../_shared/cloud-models.js";
+import { generationStatus, saveGenerationSettings } from '../_shared/generation-auth';
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -49,6 +50,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         defaults: CLOUD_MODELS,
       },
       claudeAuth,
+      generation: await generationStatus(env, auth.userId, row),
       agentVoice: {
         selections: (row && row.agent_voice_selections) || {},
         speeds: (row && row.agent_voice_speeds) || {},
@@ -66,6 +68,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const sql = getSql(env);
   if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
   const body = await request.json().catch(() => ({} as any));
+
+  if (body?.kind === 'generation') {
+    try {
+      await saveGenerationSettings(env, auth.userId, body);
+      return send({ ok: true }, 200, origin);
+    } catch (error: any) {
+      return send({ error: /^invalid_/.test(error?.message) ? error.message : 'generation_settings_save_failed' },
+        /^invalid_/.test(error?.message) ? 400 : 503, origin);
+    }
+  }
 
   if (body?.kind === "mode") {
     await saveLlmMode(sql, auth.userId, String(body.llmMode || "cloud"));

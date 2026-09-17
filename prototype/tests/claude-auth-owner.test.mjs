@@ -30,14 +30,15 @@ function harness(initial = {}) {
     },
   });
   vm.runInContext(read("_shared/claude-auth.js").replace(/^import .*$/gm, "").replace(/^export /gm, "") +
-    "\nglobalThis.auth = {resolveAuth, resolvedAuthHeaders, studioAuth, authStatus, authDiagnose, saveClaudeAuth, getSettingsRow, claudeFetch, buildClaudeSystem};", ctx);
+    "\nglobalThis.auth = {resolveAuth, authHeadersFor, resolvedAuthHeaders, studioAuth, authStatus, authDiagnose, saveClaudeAuth, getSettingsRow, claudeFetch, buildClaudeSystem};", ctx);
   const auth = ctx.auth;
   const settingsSrc = read("agent/settings.ts").replace(/^import .*$/gm, "").replace(/^export /gm, "");
   const deps = { ...auth, authorizeRequest: async (request) => {
     const userId = request.headers.get("x-test-user");
     return userId ? { ok: true, userId } : { ok: false, error: "unauthorized", status: 401 };
   }, getSql: () => sql, send: (body, status) => new Response(JSON.stringify(body), { status }),
-    corsHeaders: () => ({}), CLOUD_MODELS: {}, MODEL_CATALOG: {} };
+    corsHeaders: () => ({}), CLOUD_MODELS: {}, MODEL_CATALOG: {},
+    generationStatus: async () => ({}), saveGenerationSettings: async () => {} };
   const settings = new Function(...Object.keys(deps), esbuild.transformSync(settingsSrc, { loader: "ts" }).code +
     "\nreturn {onRequestGet, onRequestPost};")(...Object.values(deps));
   const ownEnv = { ...env, __sql: sql };
@@ -171,7 +172,7 @@ test("AI 기업 대화 호출은 SQL 인자를 생략해도 로그인 계정의 
   const h = harness({ u: ownKey });
   const src = read("agent/_orchestrator.ts");
   const js = esbuild.transformSync(src.slice(src.indexOf("export async function callClaude("), src.indexOf("export interface KnowOp")).replace(/^export /gm, ""), { loader: "ts" }).code;
-  const deps = { getSql: () => h.sql, resolvedAuthHeaders: h.auth.resolvedAuthHeaders,
+  const deps = { getSql: () => h.sql, ...h.auth,
     normalizeModelChoice: () => null, isAnthropicProvider: () => true, stripThink: (s) => s,
     callLLM: async (_env, opts) => { h.calls.push(opts); return "ok"; } };
   const call = new Function(...Object.keys(deps), js + "\nreturn callClaude;")(...Object.values(deps));
@@ -219,8 +220,10 @@ function launcherHarness(agentSettings) {
   const start = script.indexOf("    const loadApiSettings = async () => {");
   const end = script.indexOf("    const saveApiSettings = async () => {", start);
   const deps = { canUseApiSettingsUI: () => true, NK: { auth: { isAuthed: () => !!user, getUser: () => user }, api: { agentSettings } },
-    setApiSettingsState: (text, kind) => states.push({ text, kind }), renderApiAuthMode: () => {}, translateUiText: (s) => s };
-  const run = new Function(...Object.keys(deps), "let apiAuthRequestSeq = 0, apiAuthMode, apiAuthLoaded;\n" +
+    setApiSettingsState: (text, kind) => states.push({ text, kind }), renderApiAuthMode: () => {}, translateUiText: (s) => s,
+    apiSettingsSaveBtn: {}, userChatEnabled: {}, userImageEnabled: {}, userImageMode: {},
+    document: { getElementById: () => ({}) } };
+  const run = new Function(...Object.keys(deps), "let apiAuthRequestSeq = 0, apiAuthMode, apiAuthLoaded, generationSettingsDirty;\n" +
     script.slice(start, end) + "\nreturn loadApiSettings;")(...Object.values(deps));
   return { run, states, switchUser: (next) => { user = next; } };
 }

@@ -1,6 +1,7 @@
 import { authorizeRequest } from './_shared/auth.js';
 import { hasPagePermission } from './_shared/admin-users';
 import { resolveProjectStorageOwner } from './_shared/shares';
+import { imageAuth, selectImageSubscription } from './_shared/generation-auth';
 import { CONNECTOR_HEADER, connectorSql, authorizeConnector, connectorStatus,
   validateImagePayload, storeSubscriptionImage, expireImageJobs } from './_shared/codex-images';
 
@@ -74,8 +75,11 @@ export async function onRequestPost({ request, env }: Context) {
         await expireImageJobs(sql, userId);
         if (body.busy === true) return send({ userId, job: null });
         if (!ready) return send({ userId, job: null });
+        const selected = await imageAuth(env, userId);
+        if (!selected.enabled || selected.mode !== 'subscription') return send({ userId, job: null });
         const [job] = await sql(`UPDATE nk_subscription_image_jobs SET status='working',updated_at=now()
           WHERE id=(SELECT id FROM nk_subscription_image_jobs WHERE user_id=$1 AND token_hash=$2 AND status='queued'
+            AND NOT EXISTS (SELECT 1 FROM nk_subscription_image_jobs active WHERE active.user_id=$1 AND active.status IN ('working','uploading'))
             ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED) AND user_id=$1 AND token_hash=$2 AND status='queued' RETURNING *`, [userId, tokenHash]);
         return send({ userId, job: job ? { id: job.id, payload: job.payload } : null });
       }
@@ -105,6 +109,7 @@ export async function onRequestPost({ request, env }: Context) {
       if (prior && prior.token_hash === tokenHash) {
         await sql(`UPDATE nk_image_connectors SET connected_at=now(),expires_at=now()+interval '30 days'
           WHERE user_id=$1 AND token_hash=$2`, [auth.userId, tokenHash]);
+        await selectImageSubscription(env, auth.userId);
         return send({ ok: true, userId: auth.userId });
       }
       await sql(`UPDATE nk_subscription_image_jobs SET status='cancelled',error='connector_replaced',updated_at=now()
@@ -112,6 +117,7 @@ export async function onRequestPost({ request, env }: Context) {
       await sql(`INSERT INTO nk_image_connectors (user_id,token_hash) VALUES ($1,$2)
         ON CONFLICT (user_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,email='',plan='',ready=false,
         connected_at=now(),last_seen=NULL,expires_at=now()+interval '30 days'`, [auth.userId, tokenHash]);
+      await selectImageSubscription(env, auth.userId);
       return send({ ok: true, userId: auth.userId });
     }
     if (body.operation === 'disconnect') {
@@ -121,6 +127,8 @@ export async function onRequestPost({ request, env }: Context) {
       return send({ ok: true });
     }
     if (body.operation === 'create') {
+      const selected = await imageAuth(env, auth.userId);
+      if (!selected.enabled || selected.mode !== 'subscription') return send({ error: 'own_image_subscription_not_selected' }, 412);
       const payload = validateImagePayload(body.payload);
       if (payload.projectId) await resolveProjectStorageOwner(env, auth.userId, payload.ownerId, payload.projectId);
       const [connector] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [auth.userId]);
@@ -129,7 +137,7 @@ export async function onRequestPost({ request, env }: Context) {
       await expireImageJobs(sql, auth.userId);
       const id = String(body.requestId || crypto.randomUUID());
       if (!validJob(id)) return send({ error: 'invalid_job_id' }, 400);
-      // One active generation per owner. A repeated requestId retrieves the same
+      // Jobs queue per owner and the worker executes them serially. A repeated requestId retrieves the same
       // job; disconnects and timeouts never retry paid generation automatically.
       try {
         await sql(`INSERT INTO nk_subscription_image_jobs (id,user_id,token_hash,payload)

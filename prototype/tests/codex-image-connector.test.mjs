@@ -33,7 +33,7 @@ async function harness() {
   let revoked = false;
   const sql = async (q, p = []) => {
     q = q.replace(/\s+/g, ' ').trim();
-    if (/^CREATE/.test(q)) return [];
+    if (/^(CREATE|DO)/.test(q)) return [];
     if (/^SELECT .* FROM nk_image_connectors/.test(q)) {
       return [...connectors.values()].filter(row => q.includes('WHERE token_hash') ? row.token_hash === p[0] : row.user_id === p[0]);
     }
@@ -42,7 +42,6 @@ async function harness() {
     }
     if (/^INSERT INTO nk_subscription_image_jobs/.test(q)) {
       if (jobs.has(p[0])) return [];
-      if ([...jobs.values()].some(row => row.user_id === p[1] && ['queued','working','uploading'].includes(row.status))) throw new Error('active_job_constraint');
       jobs.set(p[0], { id: p[0], user_id: p[1], token_hash: p[2], payload: JSON.parse(p[3]), status: 'queued', error: '', result: null, created_at: new Date().toISOString() });
       return [];
     }
@@ -52,6 +51,7 @@ async function harness() {
       return [];
     }
     if (/^UPDATE nk_subscription_image_jobs SET status='working',updated_at=now\(\) WHERE id=/.test(q)) {
+      if ([...jobs.values()].some(row => row.user_id === p[0] && ['working','uploading'].includes(row.status))) return [];
       const row = [...jobs.values()].find(row => row.user_id === p[0] && row.token_hash === p[1] && row.status === 'queued');
       if (row) { row.status = 'working'; return [row]; } return [];
     }
@@ -82,6 +82,7 @@ async function harness() {
     connected_at: new Date().toISOString(), expires_at: new Date(Date.now()+86400000).toISOString(), last_seen: new Date().toISOString(),
   });
   const api = evaluate('prototype/functions/api/codex-images.ts', {
+    imageAuth: async () => ({ enabled: true, mode: 'subscription' }),
     ...helpers, authorizeRequest: async request => request.headers.get('x-user') ? { ok: true, userId: request.headers.get('x-user') } : { ok: false, error: 'auth_required', status: 401 },
     hasPagePermission: async () => true, resolveProjectStorageOwner: async (_, user) => user,
     storeSubscriptionImage: async (_, job) => { saves.push(job.user_id); return { signedUrl: 'https://example.test/' + job.id, objectName: 'users/' + job.user_id + '/image.png' }; },
@@ -144,12 +145,17 @@ test('generated image storage uses the job owner session and authorized project 
   await assert.rejects(helpers.storeSubscriptionImage({}, job, new File([Buffer.from('not-an-image-file')], 'fake.png')), /invalid_generated_image/);
   assert.equal(uploads.length, 2);
 });
-test('requestId is idempotent and a second concurrent generation is rejected', async () => {
+test('requestId is idempotent and batch requests queue for serial execution', async () => {
   const h = await harness();
   assert.equal((await h.create('alice')).status, 202);
   assert.equal((await h.create('alice')).status, 202);
-  assert.equal((await h.create('alice', another)).status, 409);
-  assert.equal(h.jobs.size, 1);
+  assert.equal((await h.create('alice', another)).status, 202);
+  assert.equal(h.jobs.size, 2);
+  await h.heartbeat(tokenA);
+  await h.heartbeat(tokenA, { busy: true });
+  assert.equal((await (await h.heartbeat(tokenA)).json()).job, null);
+  assert.equal(h.jobs.get(uuid).status, 'working');
+  assert.equal(h.jobs.get(another).status, 'queued');
 });
 test('another NKStudio account cannot pair an already owned connector', async () => {
   const h = await harness();
@@ -247,7 +253,7 @@ test('image quota failure is surfaced without repeated generation', async () => 
   try { await assert.rejects(h.client.generate({ prompt: 'test' }), /chatgpt_image_usage_limit/); assert.equal(h.requests.filter(item=>item.method==='turn/start').length, 1); }
   finally { h.cleanup(); }
 });
-test('browser subscription request follows queue to saved result and never calls shared imagen', async () => {
+test('browser image request follows the server account decision to a saved subscription result', async () => {
   const calls = [];
   const storage = new Map([['nk_auth_token','own-session'],['nk_login_user','alice'],['nk_ai_image_provider','chatgpt-subscription']]);
   const window = { NK: { config: { KEYS: {} } }, crypto };
@@ -260,7 +266,8 @@ test('browser subscription request follows queue to saved result and never calls
   const result = await window.NK.api.imagen({ prompt: 'blue circle', storageService: 'ai-image' });
   assert.equal(result.objectName, 'users/alice/result.png');
   assert.equal(calls.length, 2);
-  assert.ok(calls.every(call=>call.url.includes('/api/codex-images')));
-  assert.equal(JSON.parse(calls[0].body).operation, 'create');
+  assert.ok(calls[0].url.includes('/api/imagen'));
+  assert.ok(calls[1].url.includes('/api/codex-images'));
+  assert.equal(JSON.parse(calls[0].body).provider, 'chatgpt-subscription');
   assert.ok(calls.every(call=>call.headers.Authorization==='Bearer own-session'));
 });

@@ -60,6 +60,13 @@ export async function ensureSettingsSchema(sql) {
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_voice_speeds jsonb NOT NULL DEFAULT '{}'::jsonb`);
   // 에이전트별 두뇌 모델 선택 { agentId: {provider, model} }. 비어 있으면 CLOUD_MODELS 기본값.
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS agent_model_selections jsonb NOT NULL DEFAULT '{}'::jsonb`);
+  // NULL preserves the choice of accounts already registered before this switch existed.
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS user_chat_enabled boolean`);
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS user_image_enabled boolean`);
+  await sql(`ALTER TABLE app_settings ALTER COLUMN user_chat_enabled SET DEFAULT false`);
+  await sql(`ALTER TABLE app_settings ALTER COLUMN user_image_enabled SET DEFAULT false`);
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS image_auth_mode text NOT NULL DEFAULT 'subscription'`);
+  await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS image_openai_api_key text`);
   settingsSchemaReady = true;
 }
 
@@ -176,12 +183,13 @@ export async function resolveAuth(sql, userId, env, opts) {
   const oauth = String(row?.claude_oauth_token || "").trim() || null;
   const key = String(row?.claude_api_key || "").trim() || null;
   const userConfigured = !!(oauth || key);
-  if (userConfigured || !allowEnvFallback) {
+  const enabled = typeof row?.user_chat_enabled === 'boolean' ? row.user_chat_enabled : userConfigured;
+  if (enabled || !allowEnvFallback) {
     const mode = row?.claude_auth_mode === "api_key" ? "api_key" : "subscription";
     if (!(mode === "api_key" ? key : oauth) && !opts?.allowMissing) throw claudeAuthRequiredError();
-    return { mode, oauthToken: oauth, apiKey: key, source: "user", userConfigured };
+    return { mode, oauthToken: oauth, apiKey: key, source: "user", userConfigured, enabled };
   }
-  return { ...resolveEnvOnly(env), source: "master", userConfigured: false };
+  return { ...resolveEnvOnly(env), source: "master", userConfigured, enabled: false };
 }
 
 /**
@@ -210,6 +218,7 @@ export function authHeadersFor(resolved) {
   if (resolved.mode === "subscription") {
     if (!resolved.oauthToken) throw new Error("구독 토큰(CLAUDE_CODE_OAUTH_TOKEN)이 설정되지 않았어요.");
     return {
+      source: resolved.source,
       subscription: true,
       headers: {
         "Content-Type": "application/json",
@@ -221,7 +230,7 @@ export function authHeadersFor(resolved) {
     };
   }
   if (!resolved.apiKey) throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았어요.");
-  return apiKeyAuth(resolved.apiKey);
+  return { ...apiKeyAuth(resolved.apiKey), source: resolved.source };
 }
 
 /** 구독 토큰이 막혔을 때 넘어갈 곳이 준비돼 있는가. */
@@ -331,6 +340,7 @@ export async function authStatus(sql, userId, env) {
   return {
     mode: r.mode,
     source: r.source,
+    enabled: r.enabled,
     userConfigured: r.userConfigured,
     configured: r.mode === "subscription" ? !!r.oauthToken : !!r.apiKey,
     oauthSet: !!r.oauthToken,

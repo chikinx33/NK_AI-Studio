@@ -5,9 +5,9 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-test("회원 이미지 생성은 서버 인증 ID로 Atlas 전용 경로에 고정된다", () => {
+test("본인 이미지 인증을 선택하지 않은 회원은 Atlas 마스터 경로를 사용한다", () => {
   const src = read("prototype/functions/api/imagen.ts");
-  assert.match(src, /const atlasOnly = !requireMaster\(env, auth\.userId\)/);
+  assert.match(src, /const atlasOnly = !env\.USER_IMAGE_AUTH && !requireMaster\(env, auth\.userId\)/);
   // atlasOnly 가 참이면 어떤 모델을 골라도 Atlas 경로로 간다(결제 주체 격리).
   assert.match(src, /const useAtlasPath = atlasOnly \|\| isGpt25Provider\(provider\)/);
   assert.match(src, /if \(useAtlasPath\) \{[\s\S]*?callAtlasMemberImage/);
