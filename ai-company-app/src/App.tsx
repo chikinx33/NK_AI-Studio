@@ -45,7 +45,7 @@ import {
 } from "./lib/api";
 import { useAgentVideoWorkspace } from "./contexts/AgentVideoWorkspaceContext";
 import { speakBrowserTts, cancelBrowserTts, ensureVoicesLoaded, browserTtsSupported, type BrowserSpeakHandle } from "./lib/browserTts";
-import { dispatchUiAction, type UiAction } from "./lib/uiActions";
+import { dispatchUiAction, UI_ACTION_EVENT, type UiAction } from "./lib/uiActions";
 
 // ── AI 시네마 셸 임베드 ────────────────────────────────────────────────────
 // 셸(ai-video.html)이 스테이지 iframe 으로 이 앱을 열 때 ?view=canvas&embed=1&projectId=… 를 붙인다.
@@ -274,7 +274,22 @@ export default function App() {
   const activeConvRef = useRef<string>(activeConvId);
   activeConvRef.current = activeConvId;
 
+  // 채팅 서버가 보낸 명령은 handleUiAction 이 화면을 바꾼 뒤 컴포넌트로 다시 뿌린다. 그 재방송은 아래 로컬 구독이 건너뛴다.
+  const routedUiActions = useRef(new WeakSet<UiAction>());
+  useEffect(() => {
+    // 화면 안 버튼(보고 팝업의 '폴더 열기' 등)이 직접 보낸 폴더 열기 명령도 업무 파일 화면으로 전환한다.
+    // (예전엔 서버 명령만 화면을 바꿔서, 채팅 화면에서 '폴더 열기'를 눌러도 아무 일도 없었다.)
+    const listener = (event: Event) => {
+      const action = (event as CustomEvent<UiAction>).detail;
+      if (!action || routedUiActions.current.has(action)) return;
+      if (action.action === "company_files.view" || action.action === "work_explorer.view") setCenterView("works");
+    };
+    window.addEventListener(UI_ACTION_EVENT, listener);
+    return () => window.removeEventListener(UI_ACTION_EVENT, listener);
+  }, []);
+
   function handleUiAction(action: UiAction) {
+    routedUiActions.current.add(action);
     const name = String(action.action || "");
     if (name.startsWith("work_explorer.") || name.startsWith("company_files.")) setCenterView("works");
     else if (name === "dashboard.calendar" || name === "project.sidebar") setCenterView("dashboard");

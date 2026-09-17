@@ -85,3 +85,21 @@ test("생성 파일 다운로드는 같은 오리진 미디어 프록시로 실�
   assert.match(preview, /const sources = \[proxyUrl, url\]\.filter\(Boolean\)/);
   assert.doesNotMatch(preview, /anchor\.target = "_blank"/);
 });
+
+// 증상: 채팅 화면에서 보고 팝업의 '폴더 열기'를 눌러도 업무 파일 화면으로 넘어가지 않았다.
+// 원인: 화면 전환(handleUiAction)은 채팅 서버가 보낸 명령에만 반응했고, 화면 안 버튼이 보낸 명령은 듣지 않았다.
+test("화면 안 버튼이 보낸 폴더 열기 명령도 업무 파일 화면으로 전환한다", () => {
+  const app = read("ai-company-app/src/App.tsx");
+  assert.match(app, /window\.addEventListener\(UI_ACTION_EVENT, listener\)/);
+  assert.match(app, /action\.action === "company_files\.view" \|\| action\.action === "work_explorer\.view"\) setCenterView\("works"\)/);
+  // 서버 명령의 재방송은 두 번 처리하지 않는다
+  assert.match(app, /routedUiActions\.current\.add\(action\)/);
+});
+
+test("업무 파일은 드래그로 파일·폴더를 폴더에 넣는다", () => {
+  const explorer = read("ai-company-app/src/components/CompanyFileExplorer.tsx");
+  assert.match(explorer, /const movable = \(entry: CompanyFileEntry\) => entry\.kind === "file" \|\| entry\.kind === "folder"/);
+  // 자기 자신·하위 폴더·제자리로는 옮기지 않는다
+  assert.match(explorer, /sourceParent !== targetPath && targetPath !== source && !targetPath\.startsWith\(`\$\{source\}\/`\)/);
+  assert.match(explorer, /await moveCompanyFile\(source, joinPath\(targetPath, source\.split\("\/"\)\.pop\(\) \|\| source\)\)/);
+});

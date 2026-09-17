@@ -15,6 +15,9 @@ import CompanyFilePreview from "./CompanyFilePreview";
 
 type ViewMode = "cards" | "list";
 
+// 드래그 중인 항목 경로(JSON 배열). 외부 파일 드롭과 구분하려고 전용 형식을 쓴다.
+const DRAG_TYPE = "application/x-nk-company-paths";
+
 function joinPath(parent: string, name: string) {
   return [parent.replace(/^\/+|\/+$/g, ""), name.replace(/^\/+|\/+$/g, "")].filter(Boolean).join("/");
 }
@@ -93,6 +96,9 @@ export default function CompanyFileExplorer({
   const [revision, setRevision] = useState(0);
   const [previewEntry, setPreviewEntry] = useState<CompanyFileEntry | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 드래그 앤 드롭 이동: 끌고 있는 항목 경로와, 지금 올려 둔 폴더(루트는 "")
+  const [dragPaths, setDragPaths] = useState<string[]>([]);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   async function refresh(targetPath = path) {
     setLoading(true);
@@ -221,6 +227,64 @@ export default function CompanyFileExplorer({
     finally { setBusy(""); }
   }
 
+  // 일반 파일·폴더만 옮길 수 있다. 날짜 폴더(work-folder)는 업무 기록을 날짜로 묶어 보여주는 가상 폴더라 대상이 아니다.
+  const movable = (entry: CompanyFileEntry) => entry.kind === "file" || entry.kind === "folder";
+
+  function canDropInto(targetPath: string, paths = dragPaths) {
+    if (!paths.length) return false;
+    return paths.every((source) => {
+      const sourceParent = source.split("/").slice(0, -1).join("/");
+      // 제자리, 자기 자신, 자기 하위 폴더로는 옮길 수 없다
+      return sourceParent !== targetPath && targetPath !== source && !targetPath.startsWith(`${source}/`);
+    });
+  }
+
+  function dragStart(event: React.DragEvent, entry: CompanyFileEntry) {
+    if (!movable(entry) || busy) { event.preventDefault(); return; }
+    // 선택된 항목을 끌면 선택 전체를, 아니면 그 항목만 옮긴다
+    const paths = selected.has(entry.path) ? selectedFileEntries.map((item) => item.path) : [entry.path];
+    event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(paths));
+    event.dataTransfer.effectAllowed = "move";
+    setDragPaths(paths);
+  }
+
+  function dragEnd() { setDragPaths([]); setDropTarget(null); }
+
+  function dropZone(targetPath: string) {
+    return {
+      onDragOver: (event: React.DragEvent) => {
+        if (!event.dataTransfer.types.includes(DRAG_TYPE) || !canDropInto(targetPath)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        if (dropTarget !== targetPath) setDropTarget(targetPath);
+      },
+      onDragLeave: (event: React.DragEvent) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        if (dropTarget === targetPath) setDropTarget(null);
+      },
+      onDrop: (event: React.DragEvent) => {
+        event.preventDefault();
+        let paths: string[] = [];
+        try { paths = JSON.parse(event.dataTransfer.getData(DRAG_TYPE) || "[]"); } catch { paths = []; }
+        dragEnd();
+        if (paths.length && canDropInto(targetPath, paths)) void moveInto(targetPath, paths);
+      },
+    };
+  }
+
+  async function moveInto(targetPath: string, paths: string[]) {
+    setBusy("move"); setError("");
+    try {
+      for (const source of paths) await moveCompanyFile(source, joinPath(targetPath, source.split("/").pop() || source));
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "이동에 실패했습니다.");
+      await refresh();
+    } finally { setBusy(""); }
+  }
+
+  const dropHighlight = (targetPath: string) => dropTarget === targetPath ? "ring-2 ring-emerald-400 bg-emerald-950/40" : "";
+
   function openEntry(entry: CompanyFileEntry) {
     if (entry.kind === "work-folder" && entry.dateKey) onOpenWorkFolder(entry.dateKey);
     else if (entry.kind === "folder") setPath(entry.path);
@@ -233,9 +297,9 @@ export default function CompanyFileExplorer({
       <span className="text-sm font-bold text-gray-300">업무 파일</span>
     </header>
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0b1018] px-5 py-2.5">
-      <button type="button" disabled={!path} onClick={() => setPath(path.split("/").slice(0, -1).join("/"))} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-30">← 뒤로</button>
-      <button type="button" onClick={() => setPath("")} className="text-xs font-bold text-emerald-300">업무 파일</button>
-      {breadcrumbs.map((part, index) => <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-2"><span className="text-gray-700">›</span><button type="button" onClick={() => setPath(breadcrumbs.slice(0, index + 1).join("/"))} className="max-w-36 truncate text-xs text-gray-300">{part}</button></span>)}
+      <button type="button" disabled={!path} onClick={() => setPath(path.split("/").slice(0, -1).join("/"))} {...(path ? dropZone(path.split("/").slice(0, -1).join("/")) : {})} className={`rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 disabled:opacity-30 ${path ? dropHighlight(path.split("/").slice(0, -1).join("/")) : ""}`}>← 뒤로</button>
+      <button type="button" onClick={() => setPath("")} {...dropZone("")} className={`rounded-md px-1.5 py-1 text-xs font-bold text-emerald-300 ${dropHighlight("")}`}>업무 파일</button>
+      {breadcrumbs.map((part, index) => { const crumbPath = breadcrumbs.slice(0, index + 1).join("/"); return <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-2"><span className="text-gray-700">›</span><button type="button" onClick={() => setPath(crumbPath)} {...dropZone(crumbPath)} className={`max-w-36 truncate rounded-md px-1.5 py-1 text-xs text-gray-300 ${dropHighlight(crumbPath)}`}>{part}</button></span>; })}
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="현재 폴더 검색" className="h-9 w-40 rounded-lg border border-edge bg-[#090d13] px-3 text-xs text-gray-200 outline-none focus:border-emerald-800" />
         {!!selected.size && <span className="rounded-full border border-emerald-900/80 bg-emerald-950/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">{selected.size}개 선택</span>}
@@ -254,8 +318,8 @@ export default function CompanyFileExplorer({
     {busy && <div className="mx-5 mt-3 text-[11px] text-emerald-400">{busy === "upload" ? "파일을 업로드하는 중…" : "파일 작업을 처리하는 중…"}</div>}
     <main className="min-h-0 flex-1 overflow-y-auto p-5">
       {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">회사 파일을 불러오는 중…</div> : visibleEntries.length ? viewMode === "list" ?
-        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} className={`border-t border-edge transition ${selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.name}</span></button></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td></tr>)}</tbody></table></div> :
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} className={`relative rounded-2xl border p-4 transition ${selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div><button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
+        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...(entry.kind === "folder" ? dropZone(entry.path) : {})} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${entry.kind === "folder" && dropTarget === entry.path ? "bg-emerald-900/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.name}</span></button></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td></tr>)}</tbody></table></div> :
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...(entry.kind === "folder" ? dropZone(entry.path) : {})} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${entry.kind === "folder" && dropTarget === entry.path ? "border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div><button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
         <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{query ? "검색 결과가 없습니다." : <>이 폴더가 비어 있습니다.<br/>새 폴더를 만들거나 파일을 추가해 주세요.</>}</div>}
     </main>
     <CompanyFilePreview entry={previewEntry} onClose={() => setPreviewEntry(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />
