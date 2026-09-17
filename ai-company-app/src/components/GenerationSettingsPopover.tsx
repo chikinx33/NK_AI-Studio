@@ -69,7 +69,7 @@ export default function GenerationSettingsPopover({ settings, onChange, onClose 
           <Seg value={s.image.count} options={COUNTS} onChange={(count) => setImage({ count })} render={(n) => `x${n}`} />
           <select disabled={personalImage} value={personalImage ? 'user' : s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"], providerExplicit: true })} className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
             {personalImage && <option value="user">{quote?.billingSource === 'user-subscription'
-              ? (en ? 'GPT Image · my ChatGPT subscription' : 'GPT 이미지 · 내 ChatGPT 구독')
+              ? (en ? 'GPT Subscription' : 'GPT구독')
               : (en ? 'GPT Image · my OpenAI API key' : 'GPT 이미지 · 내 OpenAI API 키')}</option>}
             {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.id === "studio" ? `${p.label}${readStudioImageProvider() ? ` · 지금: ${STUDIO_PROVIDER_LABELS[readStudioImageProvider()] || readStudioImageProvider()}` : " · 지금: 서버 기본"}` : p.label}</option>)}
           </select>

@@ -99,9 +99,7 @@
       providerLabel: '이미지 모델',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
-      providerSubscription: 'GPT 이미지 · 내 ChatGPT 구독',
-      subscriptionConnect: 'ChatGPT 구독 연결',
-      subscriptionReady: '본인 구독 연결 정상 · 자동 저장',
+      providerSubscription: 'GPT구독',
       subscriptionOffline: '연결 프로그램을 실행해 주세요 · 다른 계정으로 전환하지 않습니다',
       subscriptionMissing: '처음 한 번 본인 ChatGPT 계정을 연결해 주세요',
       // GPT Image 2.5 는 같은 모델의 두 갈래 — Flare 는 빠른 기본형, Sunburst 는 정밀·저속형.
@@ -267,9 +265,7 @@
       providerLabel: 'Image model',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
-      providerSubscription: 'GPT images · my ChatGPT subscription',
-      subscriptionConnect: 'Connect ChatGPT subscription',
-      subscriptionReady: 'My subscription connected · automatic save',
+      providerSubscription: 'GPT Subscription',
       subscriptionOffline: 'Start your connector · no switch to another account',
       subscriptionMissing: 'Connect your own ChatGPT account once to get started',
       providerGpt25Flare: 'GPT Image 2.5 Flare — fast',
@@ -2007,10 +2003,6 @@
                 }).join('') +
               '</select>' +
             '</div>' +
-            '<p id="ai-image-subscription-status" class="muted small" role="status"' + (state.generationSettings || state.provider === 'chatgpt-subscription' ? '' : ' hidden') + '>' +
-              (state.generationSettings ? imageAccountStatusMarkup() :
-              escapeHtml(state.subscriptionConnector && state.subscriptionConnector.online ? t('subscriptionReady') + ' · ' + state.subscriptionConnector.email : state.subscriptionConnector && state.subscriptionConnector.configured ? t('subscriptionOffline') : t('subscriptionMissing')) +
-              ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a>') + '</p>' +
           '</div>' +
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
@@ -4252,8 +4244,6 @@
           localStorage.setItem(providerKey, nextProvider);
         } catch (_) {}
         refreshSubscriptionConnector();
-        var subscriptionBox = document.getElementById('ai-image-subscription-status');
-        if (subscriptionBox) subscriptionBox.hidden = nextProvider !== 'chatgpt-subscription';
         return;
       }
     });
@@ -4344,16 +4334,6 @@
     }
   }
 
-  function imageAccountStatusMarkup() {
-    var generation = state.generationSettings || {};
-    var connector = state.subscriptionConnector || {};
-    var en = state.lang === 'en';
-    var status = !generation.imageEnabled ? (en ? 'Using master image settings' : '마스터 이미지 설정 사용 중')
-      : generation.imageMode === 'api_key' ? (generation.imageApiKeySet ? (en ? 'Using your OpenAI API key' : '본인 OpenAI API 키 사용 중')
-        : (en ? 'Your OpenAI API key is missing' : '본인 OpenAI API 키 입력 필요'))
-      : connector.online ? t('subscriptionReady') + ' · ' + connector.email : connector.configured ? t('subscriptionOffline') : t('subscriptionMissing');
-    return escapeHtml(status) + ' <a href="app.html">' + (en ? 'Account settings' : '사용자 설정') + '</a>';
-  }
   async function refreshSubscriptionConnector() {
     if (!NK.api || !NK.api.codexImageRequest || !document.getElementById('ai-image-root')) return;
     var user = NK.auth && NK.auth.getUser ? NK.auth.getUser() : '';
@@ -4375,14 +4355,8 @@
         if (subscriptionOption) subscriptionOption.disabled = !generation.imageEnabled;
       }
       state.subscriptionConnector = connector;
-      var box = document.getElementById('ai-image-subscription-status');
-      if (box) {
-        box.hidden = false;
-        box.innerHTML = imageAccountStatusMarkup();
-      }
     } catch (_) {
-      var box = document.getElementById('ai-image-subscription-status');
-      if (box) { box.hidden = false; box.textContent = state.lang === 'en' ? 'Could not verify account settings. Refresh before generating.' : '사용자 설정을 확인하지 못했습니다. 새로고침해 주세요.'; }
+      // Generation requests still validate the account settings on the server.
     }
   }
   window.addEventListener('focus', refreshSubscriptionConnector);
