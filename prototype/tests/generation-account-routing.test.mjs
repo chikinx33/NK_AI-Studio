@@ -282,3 +282,22 @@ test('client polling receives the saved image event after reconciling jobs and k
   const retry = await api.getEvents(7, 'private-chat');
   assert.equal(retry.seq, 7); assert.equal(retry.messages.length, 0);
 });
+test('overlapping chat polls present one completion and a stale response cannot rewind its durable cursor', async () => {
+  const source = read('ai-company-app/src/App.tsx');
+  const start = source.indexOf('  useLiveRefresh(async () => {', source.indexOf('// 서버 백그라운드 작업 폴링:'));
+  const body = source.slice(start + '  useLiveRefresh(async () => {'.length, source.indexOf('  }, 2000);', start));
+  const waiting = [], presented = [];
+  const cursor = { current: 0 };
+  const api = evaluate('export async function poll() {' + body + '}', {
+    lastSeqRef: cursor, activeConvRef: { current: 'private-chat' },
+    getEvents: () => new Promise(resolve => waiting.push(resolve)),
+    presentCompletedAgentTurns: messages => presented.push(...messages), markActive: () => {}, setServerWorking: () => {},
+  });
+  const event = { seq: 1, messages: [{ seq: 1, turn: { text: 'saved', agentId: 'pixel' } }], working: [] };
+  const a = api.poll(), b = api.poll();
+  waiting[0](event); await a;
+  waiting[1](event); await b;
+  assert.equal(presented.length, 1); assert.equal(cursor.current, 1);
+  const stale = api.poll(); waiting[2]({ seq: 0, messages: [], working: [] }); await stale;
+  assert.equal(cursor.current, 1); assert.equal(waiting.length, 3);
+});

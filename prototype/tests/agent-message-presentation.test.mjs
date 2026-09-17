@@ -25,7 +25,7 @@ test("실시간 발언과 일괄 도착 보고도 동일한 순차 표시 경로
   const app = await read("ai-company-app/src/App.tsx");
 
   assert.match(app, /case "turn_end"[\s\S]*enqueueAgentPresentation\(reveal\)/);
-  assert.match(app, /if \(r\.messages\?\.length\)[\s\S]*presentCompletedAgentTurns\(add\)/);
+  assert.match(app, /if \(freshMessages\.length\)[\s\S]*presentCompletedAgentTurns\(add\)/);
   assert.match(app, /onAgentSay=\{\(m\) => \{[\s\S]*presentCompletedAgentTurns\(\[/);
   assert.doesNotMatch(app, /commit\(\[\.\.\.turnsRef\.current, \.\.\.add\]\)/);
 });

@@ -1076,18 +1076,15 @@ export default function App() {
     {
       try {
         const conversationId = activeConvRef.current;
-        let r = await getEvents(lastSeqRef.current, conversationId);
+        const r = await getEvents(lastSeqRef.current, conversationId);
         if (conversationId !== activeConvRef.current) return;
-        // 서버 재시작 시 seq가 리셋됨 → 커서가 앞서 있으면 outbox 처음부터(since=0) 다시 받아 누락 방지
-        if (r.seq < lastSeqRef.current) {
-          lastSeqRef.current = 0;
-          r = await getEvents(0, conversationId);
-          if (conversationId !== activeConvRef.current) return;
-        }
-        if (r.messages?.length) {
+        const freshMessages = (r.messages || []).filter((message) => message.seq > lastSeqRef.current);
+        if (freshMessages.length) {
+          // Advance before presenting; concurrent polls may return the same persisted event.
+          lastSeqRef.current = freshMessages[freshMessages.length - 1].seq;
           // 현재 사용자·대화의 저장된 완료 메시지만 순번 커서로 수신한다.
           if (activeConvRef.current === conversationId) {
-            const add: Turn[] = r.messages.map((m) => ({
+            const add: Turn[] = freshMessages.map((m) => ({
               role: "agent",
               agentId: m.turn.agentId,
               name: m.turn.name,
@@ -1098,7 +1095,6 @@ export default function App() {
             }));
             presentCompletedAgentTurns(add);
           }
-          lastSeqRef.current = r.messages[r.messages.length - 1].seq;
         }
         if ((r.working ?? []).length) markActive();
         setServerWorking((prev) => {
