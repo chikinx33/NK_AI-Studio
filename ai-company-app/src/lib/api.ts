@@ -974,6 +974,7 @@ export async function getConversationMessages(id: string): Promise<HistoryTurn[]
     role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined, text: m.text,
     files: Array.isArray(m.files) ? m.files : undefined,
     ts: m.created_at ? (Date.parse(m.created_at) || undefined) : undefined,
+    backgroundSeq: Number(m.background_seq) || 0,
   }));
 }
 export async function ensureDateConversation(date: string): Promise<Conversation> {
@@ -1562,7 +1563,7 @@ export interface LiveEvents {
   messages: { seq: number; turn: HistoryTurn }[];
   working: string[];
 }
-export async function getEvents(since: number): Promise<LiveEvents> {
+export async function getEvents(since: number, conversationId = "main"): Promise<LiveEvents> {
   // agent_jobs에서 queued/working 상태 잡의 agent_id를 working 목록으로 반환
   try {
     const d = await (await fetch("/api/agent/jobs?limit=20")).json();
@@ -1575,7 +1576,14 @@ export async function getEvents(since: number): Promise<LiveEvents> {
           .filter(Boolean)
       ),
     ];
-    return { seq: since, messages: [], working };
+    if (since < 0) return { seq: since, messages: [], working };
+    const response = await fetch(`/api/agent/events?conversationId=${encodeURIComponent(conversationId)}&since=${since}`);
+    if (!response.ok) return { seq: since, messages: [], working };
+    const events = await response.json();
+    return { seq: Number(events.seq) || since, working, messages: (events.items || []).map((m: any) => ({
+      seq: Number(m.background_seq), turn: { role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined,
+        text: m.text, files: Array.isArray(m.files) ? m.files : [], ts: Date.parse(m.created_at) || undefined },
+    })) };
   } catch {
     return { seq: since, messages: [], working: [] };
   }
@@ -1724,6 +1732,7 @@ export interface HistoryTurn {
   text: string;
   files?: ChatFileReference[];
   ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
+  backgroundSeq?: number;
 }
 
 // 브라우저 로컬 현재시각을 시간대 오프셋 포함 ISO8601로. (예: 2026-06-20T11:30:00-05:00)

@@ -249,3 +249,36 @@ test('video production batches persist an image wait and resume the same generat
   assert.equal(batch3.plan.steps[0].still, 'done'); assert.equal(batch3.plan.steps[0].stillUrl, 'saved-image');
   assert.equal(batch3.continueRunning, false); assert.equal(runs, 1);
 });
+test('background image completion events are isolated by owner and conversation, and acknowledged by cursor', async () => {
+  const stored = { user_id: 'alice', conversation_id: 'private-chat', background_seq: '7',
+    role: 'agent', agent_id: 'pixel', text: 'saved', files: [{ jobId: 'agent1' }], created_at: '2026-09-17T00:00:00Z' };
+  const api = evaluate(read('prototype/functions/api/agent/events.ts'), {
+    authorizeRequest: async request => ({ ok: true, userId: request.headers.get('user') }),
+    ensureAgentSchema: async () => {}, getSql: () => async (_, args) =>
+      stored.user_id === args[0] && stored.conversation_id === args[1] && Number(stored.background_seq) > args[2] ? [stored] : [],
+    send: (body, status = 200) => Response.json(body, { status }), corsHeaders: () => ({}),
+  });
+  const get = async (user, conversationId, since) => (await api.onRequestGet({ env: {},
+    request: new Request(`https://nkstudio.org/api/agent/events?conversationId=${conversationId}&since=${since}`, { headers: { user } }) })).json();
+  assert.equal((await get('bob', 'private-chat', 0)).items.length, 0);
+  assert.equal((await get('alice', 'another-chat', 0)).items.length, 0);
+  const first = await get('alice', 'private-chat', 0);
+  assert.equal(first.seq, 7); assert.equal(first.items[0].files[0].jobId, 'agent1');
+  assert.equal((await get('alice', 'private-chat', first.seq)).items.length, 0);
+});
+test('client polling receives the saved image event after reconciling jobs and keeps its cursor on network errors', async () => {
+  const source = read('ai-company-app/src/lib/api.ts');
+  let fail = false;
+  const calls = [];
+  const api = evaluate(source.slice(source.indexOf('export async function getEvents('), source.indexOf('// 산출물(이미지', source.indexOf('export async function getEvents('))), {
+    fetch: async url => { calls.push(url); if (url.includes('/jobs')) return Response.json({ items: [] });
+      if (fail) throw new Error('offline');
+      return Response.json({ seq: 7, items: [{ background_seq: 7, text: 'saved', agent_id: 'pixel', files: [{ jobId: 'agent1' }] }] }); },
+  });
+  const events = await api.getEvents(0, 'private-chat');
+  assert.match(calls[0], /\/jobs/); assert.match(calls[1], /conversationId=private-chat&since=0/);
+  assert.equal(events.messages[0].turn.files[0].jobId, 'agent1'); assert.equal(events.seq, 7);
+  fail = true;
+  const retry = await api.getEvents(7, 'private-chat');
+  assert.equal(retry.seq, 7); assert.equal(retry.messages.length, 0);
+});

@@ -870,13 +870,18 @@ export default function App() {
   // 활성 대화가 바뀌면 그 대화의 메시지를 불러온다 (전환·복원)
   useEffect(() => {
     cancelAgentPresentations();
+    lastSeqRef.current = -1;
+    let stopped = false;
     getConversationMessages(activeConvId)
       .then((h) => {
+        if (stopped) return;
+        lastSeqRef.current = Math.max(0, ...h.map((turn) => turn.backgroundSeq || 0));
         const loaded = h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, files: t.files, ts: t.ts }));
         markSpoken(loaded);
         commit(loaded);
       })
       .catch(() => {});
+    return () => { stopped = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConvId]);
 
@@ -1070,16 +1075,18 @@ export default function App() {
   useLiveRefresh(async () => {
     {
       try {
-        let r = await getEvents(lastSeqRef.current);
+        const conversationId = activeConvRef.current;
+        let r = await getEvents(lastSeqRef.current, conversationId);
+        if (conversationId !== activeConvRef.current) return;
         // 서버 재시작 시 seq가 리셋됨 → 커서가 앞서 있으면 outbox 처음부터(since=0) 다시 받아 누락 방지
         if (r.seq < lastSeqRef.current) {
           lastSeqRef.current = 0;
-          r = await getEvents(0);
+          r = await getEvents(0, conversationId);
+          if (conversationId !== activeConvRef.current) return;
         }
         if (r.messages?.length) {
-          // 백그라운드 보고는 오늘 대화에 적재됨 → 오늘 대화를 보고 있을 때만 화면에 추가.
-          // (다른 대화를 보는 중이면 커서만 전진시켜, 복귀 시 중복 추가 방지 — 이미 영속돼 로드됨)
-          if (activeConvRef.current === localToday()) {
+          // 현재 사용자·대화의 저장된 완료 메시지만 순번 커서로 수신한다.
+          if (activeConvRef.current === conversationId) {
             const add: Turn[] = r.messages.map((m) => ({
               role: "agent",
               agentId: m.turn.agentId,

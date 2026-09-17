@@ -212,7 +212,13 @@ async function runAgentSchemaDdl(sql: SqlFn): Promise<void> {
   await sql("ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb");
   // pending=true 는 "…조회 중이에요…" 같은 진행 안내. 결과가 붙으면 false 로 내리고,
   // 오래 남아 있으면(=중간에 끊김) 안내 문구를 마무리로 고쳐 대화가 미완으로 남지 않게 한다.
-  await sql("ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS pending boolean NOT NULL DEFAULT false");
+  await sql(`DO $$ BEGIN
+    ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS pending boolean NOT NULL DEFAULT false;
+    CREATE SEQUENCE IF NOT EXISTS nk_agent_background_seq;
+    ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS background_seq bigint, ADD COLUMN IF NOT EXISTS background_job_id text;
+    CREATE UNIQUE INDEX IF NOT EXISTS agent_messages_background_job ON agent_messages (user_id,background_job_id) WHERE background_job_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS agent_messages_background_cursor ON agent_messages (user_id,conversation_id,background_seq) WHERE background_seq IS NOT NULL;
+  END $$`);
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
   } catch (_) {}
@@ -1028,8 +1034,15 @@ export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""
 
 export async function addMessage(
   sql: SqlFn,
-  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string; files?: MessageFileReference[]; pending?: boolean }
+  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string; files?: MessageFileReference[]; pending?: boolean; backgroundJobId?: string }
 ): Promise<AgentMessage> {
+  if (m.backgroundJobId) {
+    const rows = await sql(`INSERT INTO agent_messages (user_id,conversation_id,role,agent_id,name,text,files,pending,background_seq,background_job_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,false,nextval('nk_agent_background_seq'),$8)
+      ON CONFLICT (user_id,background_job_id) WHERE background_job_id IS NOT NULL DO NOTHING RETURNING *`,
+      [m.userId,m.conversationId,m.role,m.agentId ?? null,m.name ?? null,m.text,JSON.stringify((m.files || []).slice(0,20)),m.backgroundJobId]);
+    return rows[0] as AgentMessage;
+  }
   const rows = await sql(
     `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text, files, pending)
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8) RETURNING *`,
@@ -5899,7 +5912,7 @@ export async function reconcileSubscriptionJobs(ctx: ToolContext, sql: SqlFn) {
       const filed = await fileJobAsWorkItem(sql, ctx.userId, job, output);
       if (filed) await setJobStatus(sql, job.id, ctx.userId, { output: { ...output, workItemId: filed.workId, workDateKey: filed.dateKey } });
     }
-    await addMessage(sql, { userId: ctx.userId, conversationId, role: 'agent', agentId: job.agent_id,
+    await addMessage(sql, { userId: ctx.userId, conversationId, role: 'agent', agentId: job.agent_id, backgroundJobId: job.id,
       name: AGENT_META[job.agent_id]?.name || job.agent_id,
       text: result.ok ? `✅ ${job.type} 작업 완료. 본인 ChatGPT 구독으로 생성·저장했습니다. 검수 패널에서 확인하세요.`
         : `❌ ${job.type} 실패: ${result.error}. 마스터 인증으로 전환하지 않았습니다.`,
