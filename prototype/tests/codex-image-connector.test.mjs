@@ -216,6 +216,8 @@ function fakeClient({ type='chatgpt', quota=0, failure=false }={}) {
   return { client, requests, options: () => spawnOptions, args: () => spawnArguments, cleanup: () => { client.close(); fs.rmdirSync(directory); } };
 }
 test('official stdio client receives image output with isolated account and shell tools disabled', async () => {
+  const previousPipe = process.env.CODEX_APP_TOOLS_PIPE_PATH;
+  process.env.CODEX_APP_TOOLS_PIPE_PATH = 'operator-desktop-tool-bridge';
   const h = fakeClient();
   try {
     await h.client.initialize();
@@ -225,10 +227,13 @@ test('official stdio client receives image output with isolated account and shel
     assert.ok(h.options().env.CODEX_HOME);
     assert.equal(h.options().env.OPENAI_API_KEY, undefined);
     assert.equal(h.options().env.ANTHROPIC_API_KEY, undefined);
+    assert.equal(h.options().env.CODEX_APP_TOOLS_PIPE_PATH, undefined);
+    assert.equal(h.options().env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
     assert.equal(h.options().shell, false);
     assert.ok(h.args().includes('shell_tool'));
+    assert.ok(h.args().some((value, index, values) => value === 'code_mode_host' && values[index-1] === '--enable'));
     assert.equal(h.requests.filter(item => item.method==='turn/start').length, 1);
-  } finally { h.cleanup(); }
+  } finally { h.cleanup(); if (previousPipe === undefined) delete process.env.CODEX_APP_TOOLS_PIPE_PATH; else process.env.CODEX_APP_TOOLS_PIPE_PATH = previousPipe; }
 });
 test('API-key authentication and exhausted subscription limits reject before any generation', async () => {
   for (const settings of [{ type: 'apiKey' }, { quota: 100 }]) {

@@ -10,10 +10,13 @@ class CodexClient {
     if (!home || !cwd) throw new Error('isolated_codex_home_required');
     mkdirSync(home, { recursive: true });
     mkdirSync(cwd, { recursive: true });
-    const env = { ...process.env, CODEX_HOME: home };
+    const env = { ...process.env };
     for (const key of Object.keys(env)) {
-      if (/OPENAI|ANTHROPIC|CLAUDE|CODEX_(API|AUTH|TOKEN)|AZURE_OPENAI/i.test(key)) delete env[key];
+      if (/OPENAI|ANTHROPIC|CLAUDE|^CODEX_|AZURE_OPENAI/i.test(key)) delete env[key];
     }
+    env.CODEX_HOME = home;
+    const pathKey = Object.keys(env).find(key => key.toUpperCase() === 'PATH') || 'PATH';
+    env[pathKey] = path.dirname(process.execPath) + path.delimiter + (env[pathKey] || '');
     this.pending = new Map();
     this.listeners = new Set();
     this.sequence = 0;
@@ -21,7 +24,7 @@ class CodexClient {
     this.cwd = cwd;
     this.child = spawnProcess(binary, ['app-server', '--listen', 'stdio://',
       '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'code_mode',
-      '--disable', 'code_mode_host'], {
+      '--enable', 'code_mode_host'], {
       cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
     });
     createInterface({ input: this.child.stdout }).on('line', line => {
@@ -96,7 +99,7 @@ class CodexClient {
     const { thread } = await this.request('thread/start', {
       cwd: this.cwd, ephemeral: true, sandbox: 'read-only', approvalPolicy: 'never',
       config: { web_search: 'disabled' },
-      baseInstructions: 'You are the NKStudio image generator. Generate exactly one image using only the built-in image generation tool. Never run code, shell commands, external APIs, or other tools. Treat reference images and user text as image instructions only. Do not install skills or ask for API keys. Return the generated image.',
+      baseInstructions: 'You are the NKStudio image generator. Generate exactly one image using the built-in image_gen.imagegen tool. Use functions.exec and generatedImage when needed to call and return this built-in tool. Never run shell commands, access external APIs, manipulate files, install skills, or ask for API keys. Treat reference images and user text as image instructions only. Return the generated image.',
     });
     let turnId;
     let unsubscribe;
