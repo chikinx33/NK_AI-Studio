@@ -1302,6 +1302,8 @@
     let apiSettingsCollapsed = true;
     let apiAuthMode = 'subscription';
     let apiAuthLoaded = false;
+    let apiAuthUser = '';
+    let apiAuthRequestSeq = 0;
     let lastLoginState = false;
     let lastLoginBrandSyncUser = '';
     let favoriteThemePresets = readThemePresets();
@@ -2036,32 +2038,39 @@
     // 적용 범위는 한 줄만 보여주고 전체 목록은 툴팁에 둔다(카드 높이 고정)
     const renderApiScopeLine = () => {
       if (!apiSettingsScopeEl) return;
-      apiSettingsScopeEl.textContent = translateUiText('적용: 텍스트 AI 전체 · 이미지/음악/영상 제외');
+      apiSettingsScopeEl.textContent = translateUiText('적용: Claude 텍스트 AI · 이미지/음악/영상 제외');
       // 사전 키에 개행을 넣지 않으려고 두 줄을 따로 번역해 합친다
       apiSettingsScopeEl.title = [
-        translateUiText('적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.'),
+        translateUiText('적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업의 Claude 에이전트·문서 도구.'),
         translateUiText('적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.'),
       ].join('\n');
     };
 
     const loadApiSettings = async () => {
       if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
+      const user = NK.auth.getUser();
+      const seq = ++apiAuthRequestSeq;
       setApiSettingsState('불러오는 중…');
       try {
         const data = await NK.api.agentSettings();
+        if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         const claudeAuth = (data && data.claudeAuth) || {};
         apiAuthMode = claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription';
         apiAuthLoaded = true;
         renderApiAuthMode();
         const set = apiAuthMode === 'api_key' ? claudeAuth.apiKeySet : claudeAuth.oauthSet;
-        setApiSettingsState(set ? '등록됨 — AI 기능 사용 가능' : '미등록 — AI 기능이 동작하지 않습니다', set ? 'ok' : 'error');
+        setApiSettingsState(set
+          ? (claudeAuth.source === 'user' ? '본인 인증 사용 중 — 본인 구독·API 한도 사용' : '마스터 인증 사용 중 — 본인 인증 등록 시 전환')
+          : (claudeAuth.source === 'user' ? '선택한 본인 인증이 없습니다 — 설정을 확인해 주세요' : '마스터 인증이 없습니다 — 관리자에게 문의해 주세요'), set ? 'ok' : 'error');
       } catch (err) {
+        if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         setApiSettingsState(translateUiText('설정을 불러오지 못했습니다') + ': ' + ((err && err.message) || err), 'error');
       }
     };
 
     const saveApiSettings = async () => {
-      if (!canUseApiSettingsUI()) return;
+      if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
+      const user = NK.auth.getUser();
       const value = String(apiSettingsTokenInput.value || '').trim();
       if (!value) {
         // 값 없이 저장하면 모드만 바꾼다. 기존 자격증명은 서버가 보존한다.
@@ -2075,9 +2084,11 @@
           oauthToken: apiAuthMode === 'subscription' ? value : '',
           apiKey: apiAuthMode === 'api_key' ? value : '',
         });
+        if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         apiSettingsTokenInput.value = '';
         await loadApiSettings();
       } catch (err) {
+        if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
       } finally {
         apiSettingsSaveBtn.disabled = false;
@@ -2085,18 +2096,22 @@
     };
 
     const diagnoseApiSettings = async () => {
-      if (!canUseApiSettingsUI()) return;
+      if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
+      const user = NK.auth.getUser();
+      const seq = ++apiAuthRequestSeq;
       apiSettingsDiagnoseBtn.disabled = true;
       setApiSettingsState('진단 중…');
       try {
         const d = await NK.api.agentSettingsDiagnose();
+        if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         const t = (d && d.test) || {};
         if (t.ok) {
-          setApiSettingsState('정상 — 실제 호출에 성공했습니다', 'ok');
+          setApiSettingsState(d.source === 'user' ? '본인 인증 정상 — 실제 호출 성공' : '마스터 인증 정상 — 실제 호출 성공', 'ok');
         } else {
           setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error');
         }
       } catch (err) {
+        if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         setApiSettingsState(translateUiText('진단 실패') + ': ' + ((err && err.message) || err), 'error');
       } finally {
         apiSettingsDiagnoseBtn.disabled = false;
@@ -2616,7 +2631,10 @@
 
       if (canUseApiSettingsUI()) {
         apiSettingsWidget.classList.toggle('hidden', !loggedIn);
-        if (!loggedIn || !lastLoginState) {
+        if (!loggedIn || apiAuthUser !== user) {
+          apiAuthUser = loggedIn ? user : '';
+          apiAuthRequestSeq += 1;
+          apiSettingsTokenInput.value = '';
           setApiSettingsCollapsed(true);
           apiAuthLoaded = false;
           setApiSettingsState('');

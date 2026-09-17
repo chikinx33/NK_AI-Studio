@@ -5,6 +5,7 @@
 // - Phase 1a: 코어 단일 응답(speak). Phase 1b: 위임·통솔(runGroupChat, waitUntil 멀티 호출).
 import {
   type SqlFn,
+  getSql,
   type ToolContext,
   AGENT_TOOLS,
   toolOwnedBy,
@@ -49,7 +50,7 @@ import {
 } from "./_shared";
 import { knowledgeTerms, projectIdFromMessage, selectCompanyKnowledgeForPrompt } from "./_knowledge-index";
 import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장자 포함 — 번들러와 Node 테스트 양쪽에서 해석된다
-import { claudeAuthHeaders, resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
+import { resolvedAuthHeaders, getAgentModelSelections } from "../_shared/claude-auth.js";
 import { isAnthropicProvider, normalizeModelChoice, resolveAgentModel } from "../_shared/cloud-models.js";
 import { callLLM } from "../_shared/llm.js";
 
@@ -560,9 +561,8 @@ export async function callClaude(
   let auth: any = null;
   if (isAnthropicProvider(choice.provider)) {
     // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
-    auth = opts.resolvedAuth || (opts.sql && opts.userId
-      ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
-      : claudeAuthHeaders(env));
+    if (!opts.userId) throw new Error("claude_auth_user_required");
+    auth = opts.resolvedAuth || await resolvedAuthHeaders(opts.sql || getSql(env), opts.userId, env);
   }
 
   const out = await callLLM(env, {

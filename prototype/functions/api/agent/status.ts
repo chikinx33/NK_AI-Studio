@@ -5,6 +5,7 @@ import { send, corsHeaders, getSql, ensureAgentSchema, getRuntime } from "./_sha
 import { ROSTER } from "./_orchestrator";
 import { CLOUD_MODELS } from "../_shared/cloud-models.js";
 import { hasPagePermission } from "../_shared/admin-users.js";
+import { authStatus } from "../_shared/claude-auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -20,10 +21,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   if (!(await hasPagePermission(env, auth.userId, "ai_company"))) {
     return send({ error: "forbidden", reason: "ai_company" }, 403, origin);
   }
-  const cloudReady = Boolean(String(env?.ANTHROPIC_API_KEY || "").trim());
   let workMode: "on" | "off" = "on";
   let autonomous = false;
   const sql = getSql(env);
+  if (!sql) return send({ error: "db_missing" }, 503, origin);
+  const claude = await authStatus(sql, auth.userId, env);
+  const cloudReady = claude.configured;
   if (sql) {
     await ensureAgentSchema(sql);
     const rt = await getRuntime(sql, auth.userId);
@@ -36,10 +39,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     workMode,
     autonomous,
     resolvedBackend: "cloud",
-    reason: cloudReady ? "NK Claude" : "ANTHROPIC_API_KEY 없음",
+    reason: cloudReady ? (claude.source === "user" ? "본인 Claude 인증" : "마스터 Claude 인증") : "Claude 자격증명 없음",
     localModel: "auto",
     ollama: { up: false, models: [], chatModels: [], loaded: [], autoModel: null },
-    cloud: { configured: cloudReady },
+    cloud: { configured: cloudReady, authSource: claude.source },
     ceoModel: CLOUD_MODELS.core, // 실제 코어(오케스트레이터) 모델 — 클라우드 모델 매핑과 일치
     agentCount: ROSTER.length,
   }, 200, origin);

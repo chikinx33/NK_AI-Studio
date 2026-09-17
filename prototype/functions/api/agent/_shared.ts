@@ -5,7 +5,7 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
-import { claudeAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
+import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
@@ -1794,9 +1794,9 @@ const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청과 대화
 - JSON만 출력`;
 
 /** Claude를 직접 호출해 JSON 응답을 파싱. HTTP 중간 홉 없이 _shared에서 바로 호출. */
-async function callClaudeForJson(env: any, system: string, userMsg: string): Promise<any> {
-  const auth = claudeAuthHeaders(env);
-  const res = await claudeFetch(env, auth, (sub: boolean) => ({
+async function callClaudeForJson(ctx: ToolContext, system: string, userMsg: string): Promise<any> {
+  const auth = await resolvedAuthHeaders(getSql(ctx.env), ctx.userId, ctx.env);
+  const res = await claudeFetch(ctx.env, auth, (sub: boolean) => ({
     model: "claude-sonnet-4-6",
     max_tokens: 4000,
     system: buildClaudeSystem(sub, system),
@@ -1852,7 +1852,7 @@ async function runPptTool(input: any, ctx: ToolContext): Promise<any> {
   if (!prompt) throw new Error("prompt is required");
   refuseFormDocument("ppt", prompt, String(input?.title || ""));
   const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
-  const parsed = await callClaudeForJson(ctx.env, PPT_SYSTEM, userMsg);
+  const parsed = await callClaudeForJson(ctx, PPT_SYSTEM, userMsg);
   return { ...parsed, kind: "ppt", promptEcho: prompt };
 }
 
@@ -1862,7 +1862,7 @@ async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
   if (!prompt) throw new Error("prompt is required");
   refuseFormDocument("pdf", prompt, String(input?.title || ""));
   const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
-  const parsed = await callClaudeForJson(ctx.env, PDF_SYSTEM, userMsg);
+  const parsed = await callClaudeForJson(ctx, PDF_SYSTEM, userMsg);
   return { ...parsed, kind: "pdf", promptEcho: prompt };
 }
 
@@ -2190,7 +2190,7 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
     for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete (baseData as any)[key];
     parts.push(`기존 내용(이 내용을 수정):\n${JSON.stringify(baseData)}`);
   }
-  const parsed = await callClaudeForJson(ctx.env, systemPrompt, parts.join("\n\n"));
+  const parsed = await callClaudeForJson(ctx, systemPrompt, parts.join("\n\n"));
 
   // 4. ★서버 소유 키 삭제 — 모델이 채워 보냈어도 여기서 사라진다.
   for (const key of ["totals", "missing", "docNo", "issuedAt", "supplier"]) delete parsed?.[key];

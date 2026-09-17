@@ -1133,6 +1133,8 @@ export async function setApiKey(_apiKey: string) {
 export type ClaudeAuthMode = "subscription" | "api_key";
 export interface ClaudeAuthStatus {
   mode: ClaudeAuthMode;
+  source?: "user" | "master";
+  userConfigured?: boolean;
   configured: boolean;
   oauthSet: boolean;
   apiKeySet: boolean;

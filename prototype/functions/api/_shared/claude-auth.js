@@ -164,43 +164,31 @@ export function isClaudeAuthRequired(err) {
 }
 
 /**
- * DB 설정 우선, 없으면 env 폴백 → 해석된 인증 {mode, oauthToken, apiKey}.
- *
- * opts.allowEnvFallback=false 면 env 를 보지 않는다. 스튜디오 기능이 이 모드를 쓴다.
- * 사용자가 자기 구독/키를 등록하지 않았는데 조용히 운영자 키로 넘어가면, 크레딧은
- * 운영자가 내면서 사용자는 그 사실을 모른 채 쓰게 된다. 그래서 폴백 대신 차단한다.
- * AI 기업(agent/) 콘솔은 운영자 본인 도구라 기존대로 env 폴백을 유지한다.
+ * 본인 자격증명이 하나라도 등록돼 있으면 본인 인증만 사용한다.
+ * 미등록 계정만 기존 마스터 인증을 사용한다. DB 장애는 미등록으로 간주하지 않는다.
+ * allowEnvFallback=false 는 명시적으로 본인 인증만 요구하는 호출용이다.
  */
 export async function resolveAuth(sql, userId, env, opts) {
   const allowEnvFallback = !opts || opts.allowEnvFallback !== false;
-  let mode, oauth, key;
-  if (sql && userId) {
-    const row = await getSettingsRow(sql, userId).catch(() => null);
-    if (row) {
-      mode = row.claude_auth_mode;
-      oauth = row.claude_oauth_token;
-      key = row.claude_api_key;
-    }
+  if (!userId) throw new Error("claude_auth_user_required");
+  if (!sql) throw new Error("claude_auth_settings_unavailable");
+  const row = await getSettingsRow(sql, userId);
+  const oauth = String(row?.claude_oauth_token || "").trim() || null;
+  const key = String(row?.claude_api_key || "").trim() || null;
+  const userConfigured = !!(oauth || key);
+  if (userConfigured || !allowEnvFallback) {
+    const mode = row?.claude_auth_mode === "api_key" ? "api_key" : "subscription";
+    if (!(mode === "api_key" ? key : oauth) && !opts?.allowMissing) throw claudeAuthRequiredError();
+    return { mode, oauthToken: oauth, apiKey: key, source: "user", userConfigured };
   }
-  if (!allowEnvFallback) {
-    const m = mode === "api_key" ? "api_key" : "subscription";
-    const cred = m === "api_key" ? key : oauth;
-    if (!String(cred || "").trim()) throw claudeAuthRequiredError();
-    return { mode: m, oauthToken: oauth || null, apiKey: key || null };
-  }
-  if (!mode) mode = String((env && env.CLAUDE_AUTH_MODE) || "").toLowerCase() === "api_key" ? "api_key" : "subscription";
-  if (!oauth) oauth = String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim() || null;
-  if (!key) key = String((env && env.ANTHROPIC_API_KEY) || "").trim() || null;
-  return { mode: mode === "api_key" ? "api_key" : "subscription", oauthToken: oauth, apiKey: key };
+  return { ...resolveEnvOnly(env), source: "master", userConfigured: false };
 }
 
 /**
- * 스튜디오 AI 기능이 쓰는 단 하나의 인증 진입점. 사용자가 등록한 자격증명만 쓴다.
- * 미등록이면 claude_auth_required 를 던지므로, 호출부는 그대로 위로 올려
- * 화면이 "API 설정에서 등록하세요" 로 안내하게 한다.
+ * 스튜디오 AI 인증 진입점. 등록 계정은 본인 인증, 미등록 계정은 마스터 인증.
  */
 export async function studioAuth(env, userId) {
-  return authHeadersFor(await resolveAuth(getSql(env), userId, env, { allowEnvFallback: false }));
+  return resolvedAuthHeaders(getSql(env), userId, env);
 }
 
 /** API 키 인증 한 벌. 폴백의 종착지라 자기 자신은 더 이상 폴백하지 않는다. */
@@ -215,9 +203,8 @@ function apiKeyAuth(apiKey) {
 /**
  * 해석된 인증 → fetch 헤더 + subscription 여부 (+ 구독일 때 예비 자격증명).
  *
- * fallback 에는 '같은 resolveAuth 가 해석한' API 키만 들어간다. 스튜디오 경로는
- * allowEnvFallback:false 라 사용자가 직접 등록한 키만 오고, 운영자 env 키로 몰래
- * 새는 일은 없다. 사용자가 키를 등록하지 않았으면 fallback 은 null 이다.
+ * fallback 에는 같은 인증 주체의 API 키만 들어간다.
+ * 본인 구독 토큰만 등록한 계정에는 마스터 API 키를 예비 키로 붙이지 않는다.
  */
 export function authHeadersFor(resolved) {
   if (resolved.mode === "subscription") {
@@ -340,9 +327,11 @@ function resolveEnvOnly(env) {
 
 /** 설정 UI용 상태(비밀값 미노출). */
 export async function authStatus(sql, userId, env) {
-  const r = await resolveAuth(sql, userId, env);
+  const r = await resolveAuth(sql, userId, env, { allowMissing: true });
   return {
     mode: r.mode,
+    source: r.source,
+    userConfigured: r.userConfigured,
     configured: r.mode === "subscription" ? !!r.oauthToken : !!r.apiKey,
     oauthSet: !!r.oauthToken,
     apiKeySet: !!r.apiKey,
@@ -381,11 +370,10 @@ function credKind(v) {
 
 /** 설정 UI '진단' 버튼용: 현재 해석된 인증 + 라이브 테스트 호출 결과. 비밀값 미노출. */
 export async function authDiagnose(sql, userId, env) {
-  const r = await resolveAuth(sql, userId, env);
-  const dbRow = sql && userId ? await getSettingsRow(sql, userId).catch(() => null) : null;
+  const r = await resolveAuth(sql, userId, env, { allowMissing: true });
   const out = {
     mode: r.mode,
-    source: dbRow ? "db(설정)" : "env(환경변수)",
+    source: r.source,
     oauthSet: !!r.oauthToken,
     apiKeySet: !!r.apiKey,
     apiKeyKind: credKind(r.apiKey),

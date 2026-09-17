@@ -40,6 +40,7 @@ import {
   StatusText,
 } from "./icons";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { readStorage } from "../lib/safeStorage";
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -106,6 +107,7 @@ const MODES: { id: string; label: string; Icon?: (p: { className?: string }) => 
 ];
 
 export default function Settings({ status, agents, hiddenAgents, onToggleAgent, onClose, onChanged }: Props) {
+  const en = readStorage("nk_lang") === "en";
   const [mode, setModeState] = useState<string>("auto");
   const [localModel, setLocalModelState] = useState<string>("auto");
   const [cloudModels, setCloudModels] = useState<Record<string, string>>({});
@@ -499,6 +501,11 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               )}
             </div>
             {/* 모드 라디오 */}
+            <p className="mb-3 text-xs text-gray-400">
+              {authStatus && (authStatus.source === "user"
+                ? (en ? "Using your credentials and subscription/API limits. No switch to master credentials." : "본인 인증 사용 중 — 본인 구독·API 한도를 사용합니다. 마스터 인증으로 전환하지 않습니다.")
+                : (en ? "Using master credentials. Register your subscription token or API key to switch to yours." : "마스터 인증 사용 중 — 본인 구독 토큰이나 API 키를 등록하면 본인 인증으로 전환됩니다."))}
+            </p>
             <div className="grid grid-cols-2 gap-2">
               {([
                 { id: "subscription", label: "구독(OAuth)", Icon: BadgeCheckIcon },
@@ -525,8 +532,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               <div className="mt-3">
                 <p className="mb-1.5 text-xs text-gray-500">
                   터미널에서 <code className="text-gray-400">claude setup-token</code> 으로 발급한 구독 토큰
-                  (<code className="text-gray-400">sk-ant-oat…</code>) · server/.env에만 저장 (git 제외)
-                  {authStatus?.oauthSet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
+                  (<code className="text-gray-400">sk-ant-oat…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
+                  {authStatus?.source === "user" && authStatus.oauthSet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -549,8 +556,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               <div className="mt-3">
                 <p className="mb-1.5 text-xs text-gray-500">
                   <code className="text-gray-400">console.anthropic.com</code> 발급 키
-                  (<code className="text-gray-400">sk-ant…</code>) · server/.env에만 저장 (git 제외)
-                  {authStatus?.apiKeySet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
+                  (<code className="text-gray-400">sk-ant…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
+                  {authStatus?.source === "user" && authStatus.apiKeySet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
                 </p>
                 <div className="flex gap-2">
                   <input

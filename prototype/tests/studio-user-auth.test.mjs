@@ -5,7 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 
 /**
- * 스튜디오의 AI 기능은 "사용자가 등록한" Claude 자격증명으로만 돌아야 한다.
+ * 본인 인증 등록 계정은 본인 Claude 자격증명만, 미등록 계정은 마스터 인증을 쓴다.
  *
  * 예전에는 엔드포인트들이 env.ANTHROPIC_API_KEY 를 직접 읽었다. 그래서 /app 에
  * 인증 설정을 붙여도 화면만 바뀌고 실제 호출은 그대로 운영자 키를 썼을 것이다.
@@ -87,7 +87,7 @@ const fakeSql = (row) => {
 };
 const ENV_WITH_ADMIN_KEY = { ANTHROPIC_API_KEY: "sk-ant-api-ADMIN", CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-ADMIN" };
 
-test("미설정 사용자는 운영자 키로 넘어가지 않고 차단된다", async () => {
+test("본인 인증만 명시적으로 요구하면 미설정 사용자는 차단된다", async () => {
   const env = { ...ENV_WITH_ADMIN_KEY, __sql: fakeSql(null) };
   await assert.rejects(
     () => M.resolveAuth(env.__sql, "nobody", env, { allowEnvFallback: false }),
@@ -128,8 +128,7 @@ test("모드는 등록됐지만 값이 비면 차단한다", async () => {
   await assert.rejects(() => M.studioAuth(env, "someone"), (err) => M.isClaudeAuthRequired(err));
 });
 
-test("AI 기업 콘솔 경로는 기존대로 env 폴백을 유지한다", async () => {
-  // 운영자 본인 도구라 동작을 바꾸지 않았다. 폴백이 사라지면 이 테스트가 알려준다.
+test("본인 인증 미등록 계정은 기존 마스터 인증을 유지한다", async () => {
   const env = { ...ENV_WITH_ADMIN_KEY, __sql: fakeSql(null) };
   const r = await M.resolveAuth(env.__sql, "nobody", env);
   assert.equal(r.apiKey, "sk-ant-api-ADMIN");
@@ -158,7 +157,7 @@ test("/app 에 API 설정 위젯이 있고 기존 위젯과 같은 접기 구조
   // 전체 목록은 툴팁으로 내렸지만, 안내 자체가 사라지면 안 된다.
   assert.match(html, /id="api-settings-scope"/, "적용 범위 안내 자리가 없다");
   const js = read("prototype/script.js");
-  assert.match(js, /적용: 텍스트 AI 전체/, "적용 범위 요약 문구가 없다");
+  assert.match(js, /적용: Claude 텍스트 AI/, "적용 범위 요약 문구가 없다");
   assert.match(js, /적용 안 됨 — 이미지 생성/, "미적용 목록 안내가 사라졌다");
 });
 

@@ -254,6 +254,9 @@
         '터미널에서 claude setup-token 으로 발급한 구독 토큰': 'Subscription token from running claude setup-token in a terminal',
         'Anthropic 콘솔에서 발급한 API 키': 'API key issued from the Anthropic console',
         '적용: 텍스트 AI 전체 · 이미지/음악/영상 제외': 'Applies to all text AI · excludes image/music/video',
+        '적용: Claude 텍스트 AI · 이미지/음악/영상 제외': 'Applies to Claude text AI · excludes image/music/video',
+        '적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업의 Claude 에이전트·문서 도구.':
+          'Applies to — scenario generation, shot breakdown, locations, story structure, overview suggestions, SNS drafts and AI refine, hashtags, and Claude agents and document tools in the AI company.',
         '적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.':
           'Applies to — scenario generation, shot breakdown, location extraction, story structure, overview suggestions, SNS drafts and AI refine, hashtags, and the AI company agents.',
         '적용 안 됨 — 이미지 생성·설명, 음악·효과음, 음성(TTS), 영상 생성, 지식 임베딩. OpenAI·Gemini·Kling 크레딧을 쓰므로 이 설정과 무관합니다.':
@@ -265,6 +268,12 @@
         '저장 중…': 'Saving…',
         '진단 중…': 'Testing…',
         '등록됨 — AI 기능 사용 가능': 'Registered — AI features are available',
+        '본인 인증 사용 중 — 본인 구독·API 한도 사용': 'Using your credentials — your subscription/API usage',
+        '마스터 인증 사용 중 — 본인 인증 등록 시 전환': 'Using master credentials — add yours to switch',
+        '선택한 본인 인증이 없습니다 — 설정을 확인해 주세요': 'Your selected credentials are missing — check settings',
+        '마스터 인증이 없습니다 — 관리자에게 문의해 주세요': 'Master credentials are missing — contact the administrator',
+        '본인 인증 정상 — 실제 호출 성공': 'Your credentials work — live call succeeded',
+        '마스터 인증 정상 — 실제 호출 성공': 'Master credentials work — live call succeeded',
         '미등록 — AI 기능이 동작하지 않습니다': 'Not registered — AI features will not run',
         '정상 — 실제 호출에 성공했습니다': 'Working — the live call succeeded',
         '테마 선택 펼치기': 'Expand theme presets',
