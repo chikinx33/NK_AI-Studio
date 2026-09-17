@@ -35,8 +35,6 @@
   set('connect-consent', '이 PC의 ChatGPT 계정으로 현재 NKStudio 계정의 이미지 생성 요청을 처리합니다. 생성한 이미지는 NKStudio 작업에 자동 저장됩니다.', 'This PC will process image requests for the current NKStudio account using its ChatGPT account. Images will save to your NKStudio work automatically.');
   set('connect-approve', '이 계정에 연결', 'Connect this account');
   set('connect-limits', '연결 프로그램이 실행 중인 PC에서 생성합니다. ChatGPT 구독 한도를 사용하며, 한도 초과·인증 오류 시 다른 계정이나 API로 전환하지 않습니다. 연결은 30일 뒤 다시 확인합니다.', 'Generation runs on a PC with the connector running and uses ChatGPT subscription limits. Quota or authentication errors never switch to another account or API. Reconnect after 30 days.');
-  set('connect-open-images', '이미지 생성 열기', 'Open image generation');
-  set('connect-refresh', '연결 확인', 'Check connection');
   set('connect-disconnect', '연결 해제', 'Disconnect');
   // 연결 프로그램 메시지는 '한국어 / English' 한 줄이다.
   var localMessage = function (value) {
@@ -137,14 +135,12 @@
     catch (error) { status.textContent = error.message; }
     finally { busy = false; refresh(); }
   });
-  $('connect-refresh').addEventListener('click', function () { refresh(); probeLocal(); });
-  // 랜딩 모달(iframe) 안에서 열렸을 때: 높이를 부모에 알리고, Esc 로 닫고, 이동 링크는 부모 창에서 연다.
+  // 랜딩 모달(iframe) 안에서 열렸을 때: 높이를 부모에 알리고, Esc 로 닫는다.
   if (document.documentElement.classList.contains('is-embed') && window.parent !== window) {
     var post = function (data) { window.parent.postMessage(data, location.origin); };
     var sendHeight = function () { post({ type: 'nk-codex-connect-height', height: document.documentElement.scrollHeight }); };
     new ResizeObserver(sendHeight).observe(document.body);
     sendHeight();
-    $('connect-open-images').target = '_top';
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') post({ type: 'nk-codex-connect-close' }); });
   }
   render();
