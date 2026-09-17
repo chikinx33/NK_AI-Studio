@@ -3008,8 +3008,34 @@
         });
       });
       document.getElementById('user-image-api-connect').addEventListener('click', saveApiSettings);
+      // 구독 연결 화면은 새 창 대신 랜딩 위 모달(배경 흐림)로 띄운다.
+      // iframe 은 닫을 때 비워서 연결 화면의 상태 확인 주기도 함께 멈춘다.
+      const codexConnectModal = document.getElementById('codex-connect-modal');
+      const codexConnectFrame = document.getElementById('codex-connect-frame');
+      const closeCodexConnect = () => {
+        if (codexConnectModal.hidden) return;
+        codexConnectModal.hidden = true;
+        codexConnectFrame.src = 'about:blank';
+        codexConnectFrame.style.height = '';
+        document.body.classList.remove('codex-connect-open');
+        if (!generationSettingsDirty && NK.auth.isAuthed()) loadApiSettings();
+      };
       document.getElementById('user-image-connect').addEventListener('click', (e) => {
-        if (!userImageEnabled.checked) e.preventDefault();
+        e.preventDefault();
+        if (!userImageEnabled.checked) return;
+        codexConnectFrame.src = 'codex-connect.html?embed=1';
+        codexConnectModal.hidden = false;
+        document.body.classList.add('codex-connect-open');
+        document.getElementById('codex-connect-close').focus();
+      });
+      document.getElementById('codex-connect-close').addEventListener('click', closeCodexConnect);
+      codexConnectModal.addEventListener('click', (e) => { if (e.target === codexConnectModal) closeCodexConnect(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCodexConnect(); });
+      window.addEventListener('message', (e) => {
+        if (e.origin !== location.origin || e.source !== codexConnectFrame.contentWindow) return;
+        const data = e.data || {};
+        if (data.type === 'nk-codex-connect-height') codexConnectFrame.style.height = Math.ceil(Number(data.height) || 0) + 'px';
+        if (data.type === 'nk-codex-connect-close') closeCodexConnect();
       });
       apiSettingsSaveBtn.addEventListener('click', saveApiSettings);
       [userChatEnabled, userImageEnabled, userImageMode, apiSettingsTokenInput, userImageApiKey].forEach((el) => {

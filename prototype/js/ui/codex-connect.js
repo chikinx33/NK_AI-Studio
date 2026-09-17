@@ -69,6 +69,15 @@
     finally { busy = false; refresh(); }
   });
   document.getElementById('connect-refresh').addEventListener('click', refresh);
+  // 랜딩 모달(iframe) 안에서 열렸을 때: 높이를 부모에 알리고, Esc 로 닫고, 이동 링크는 부모 창에서 연다.
+  if (document.documentElement.classList.contains('is-embed') && window.parent !== window) {
+    var post = function (data) { window.parent.postMessage(data, location.origin); };
+    var sendHeight = function () { post({ type: 'nk-codex-connect-height', height: document.documentElement.scrollHeight }); };
+    new ResizeObserver(sendHeight).observe(document.body);
+    sendHeight();
+    document.getElementById('connect-open-images').target = '_top';
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') post({ type: 'nk-codex-connect-close' }); });
+  }
   refresh();
   setInterval(refresh, 8000);
 })();

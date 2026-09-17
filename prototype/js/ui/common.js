@@ -209,6 +209,7 @@
         '시나리오 복사': 'Copy scenario',
         '원본/AI 전환': 'Toggle original/AI view',
         '닫기': 'Close',
+        'ChatGPT 구독 연결': 'ChatGPT subscription connection',
         '옵션': 'Options',
         '이름': 'Name',
         '확인': 'Confirm',

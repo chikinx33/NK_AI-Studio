@@ -15942,3 +15942,57 @@ textarea.bsf-skeleton {
 .generation-diagnostics[open] { display: grid; gap: 8px; }
 
 .api-settings-widget .api-settings-body { overflow-y: auto; scrollbar-width: thin; }
+
+/* ChatGPT 구독 연결: 랜딩 위 모달(배경 흐림) — 내용은 codex-connect.html?embed=1 한 벌을 iframe 으로 쓴다 */
+.codex-connect-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(6, 8, 12, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.codex-connect-modal[hidden] { display: none; }
+body.codex-connect-open { overflow: hidden; }
+.codex-connect-dialog {
+  position: relative;
+  width: min(100%, 560px);
+  border: 1px solid #2b3750;
+  border-radius: 18px;
+  background: #161c28;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.codex-connect-dialog iframe {
+  display: block;
+  width: 100%;
+  height: 520px;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  border: 0;
+  background: transparent;
+  color-scheme: dark;
+}
+.codex-connect-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #9caac3;
+  cursor: pointer;
+}
+.codex-connect-close:hover,
+.codex-connect-close:focus-visible { background: rgba(255, 255, 255, 0.08); color: #e6edf8; }
