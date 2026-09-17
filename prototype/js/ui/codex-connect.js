@@ -24,6 +24,9 @@
   var local = null;
   var localKey = '';
   var loginPending = false;
+  var sawOffline = false;
+  var closeScheduled = false;
+  var embedded = document.documentElement.classList.contains('is-embed') && window.parent !== window;
   set('connect-title', '내 ChatGPT 구독으로 이미지 생성', 'Generate images with my ChatGPT subscription');
   set('connect-description', '최초 연결 후 NKStudio의 생성 버튼으로 이미지를 만들고 자동 저장할 수 있습니다.', 'After setup, generate and automatically save images with one button in NKStudio.');
   set('install-step-one', '연결 프로그램을 내려받아 압축을 푼 뒤 Start-NKStudio-Images.cmd를 실행해 주세요.', 'Download and extract the connector, then run Start-NKStudio-Images.cmd.');
@@ -71,6 +74,13 @@
       var result = await NK.api.codexImageRequest();
       if (user() !== originalUser) throw new Error('account_changed');
       server = result; serverError = '';
+      if (!server.online) sawOffline = true;
+      // 모달에서 연결을 마친 순간(연결 안 됨 → 연결 정상)에만 '연결 정상'을 잠깐 보여 준 뒤 모달을 닫는다.
+      // 이미 연결된 상태로 연 모달은 연결 해제를 할 수 있게 그대로 둔다.
+      else if (sawOffline && embedded && !closeScheduled) {
+        closeScheduled = true;
+        setTimeout(function () { window.parent.postMessage({ type: 'nk-codex-connect-close' }, location.origin); }, 1500);
+      }
     } catch (error) {
       serverError = !localStorage.getItem('nk_auth_token')
         ? text('NKStudio에 로그인한 뒤 다시 연결해 주세요.', 'Sign in to NKStudio, then connect again.')
@@ -136,7 +146,7 @@
     finally { busy = false; refresh(); }
   });
   // 랜딩 모달(iframe) 안에서 열렸을 때: 높이를 부모에 알리고, Esc 로 닫는다.
-  if (document.documentElement.classList.contains('is-embed') && window.parent !== window) {
+  if (embedded) {
     var post = function (data) { window.parent.postMessage(data, location.origin); };
     var sendHeight = function () { post({ type: 'nk-codex-connect-height', height: document.documentElement.scrollHeight }); };
     new ResizeObserver(sendHeight).observe(document.body);
