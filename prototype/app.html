@@ -18,25 +18,25 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1785" />
-  <link rel="stylesheet" href="styles.landing.css?v=3.1785" />
-  <script src="core.js?v=3.1785" defer></script>
-  <script src="js/config.js?v=3.1785" defer></script>
-  <script src="js/utils.js?v=3.1785" defer></script>
-  <script src="js/util/last-frame.js?v=3.1785" defer></script>
-  <script src="store.js?v=3.1785" defer></script>
-  <script src="api.js?v=3.1785" defer></script>
-  <script src="js/state.js?v=3.1785" defer></script>
-  <script src="js/auth.js?v=3.1785" defer></script>
-  <script src="js/navigation.js?v=3.1785" defer></script>
-  <script src="js/service/media.js?v=3.1785" defer></script>
-  <script src="js/service/project.js?v=3.1785" defer></script>
-  <script src="js/service/content-library.js?v=3.1785" defer></script>
-  <script src="js/ui/common.js?v=3.1785" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1785" defer></script>
-  <script src="js/ui/scenario.js?v=3.1785" defer></script>
-  <script src="js/ui/production.js?v=3.1785" defer></script>
-  <script src="script.js?v=3.1785" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1786" />
+  <link rel="stylesheet" href="styles.landing.css?v=3.1786" />
+  <script src="core.js?v=3.1786" defer></script>
+  <script src="js/config.js?v=3.1786" defer></script>
+  <script src="js/utils.js?v=3.1786" defer></script>
+  <script src="js/util/last-frame.js?v=3.1786" defer></script>
+  <script src="store.js?v=3.1786" defer></script>
+  <script src="api.js?v=3.1786" defer></script>
+  <script src="js/state.js?v=3.1786" defer></script>
+  <script src="js/auth.js?v=3.1786" defer></script>
+  <script src="js/navigation.js?v=3.1786" defer></script>
+  <script src="js/service/media.js?v=3.1786" defer></script>
+  <script src="js/service/project.js?v=3.1786" defer></script>
+  <script src="js/service/content-library.js?v=3.1786" defer></script>
+  <script src="js/ui/common.js?v=3.1786" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1786" defer></script>
+  <script src="js/ui/scenario.js?v=3.1786" defer></script>
+  <script src="js/ui/production.js?v=3.1786" defer></script>
+  <script src="script.js?v=3.1786" defer></script>
 </head>
 
 <body class="layout-fixed">
@@ -237,42 +237,53 @@
                   <h4 data-i18n="API 연결">API 연결</h4>
                   <button type="button" class="api-settings-toggle" id="api-settings-toggle" aria-expanded="false" aria-label="API 연결 펼치기"></button>
                 </div>
-                <!-- 줄 수를 고정해 접었다 펼 때 카드 높이가 흔들리지 않게 한다.
-                     긴 설명은 title 툴팁으로 내렸다. -->
                 <div class="api-settings-body">
-                  <label class="generation-choice"><input type="checkbox" id="user-chat-enabled" disabled />
-                    <span data-i18n="AI 채팅 — 내 구독·API 사용">AI 채팅 — 내 구독·API 사용</span></label>
-                  <fieldset id="user-chat-credentials" class="generation-credentials">
-                  <legend data-i18n="Claude 인증">Claude 인증</legend>
-                  <div class="api-auth-modes" role="group" aria-label="인증 방식">
-                    <button type="button" class="api-auth-mode is-active" data-auth-mode="subscription" aria-pressed="true" data-i18n="구독(OAuth)">구독(OAuth)</button>
-                    <button type="button" class="api-auth-mode" data-auth-mode="api_key" aria-pressed="false" data-i18n="API 키">API 키</button>
-                  </div>
-
-                  <div class="api-settings-row">
-                    <input type="password" id="api-settings-token" autocomplete="off" spellcheck="false" />
-                  </div>
-                  </fieldset>
-
-                  <label class="generation-choice"><input type="checkbox" id="user-image-enabled" disabled />
-                    <span data-i18n="이미지 생성 — 내 구독·API 사용">이미지 생성 — 내 구독·API 사용</span></label>
-                  <fieldset id="user-image-credentials" class="generation-credentials">
-                    <legend data-i18n="이미지 인증">이미지 인증</legend>
-                    <select id="user-image-auth-mode" aria-label="Image authentication">
-                      <option value="subscription" data-i18n="내 ChatGPT 구독">내 ChatGPT 구독</option>
-                      <option value="api_key" data-i18n="내 OpenAI API 키">내 OpenAI API 키</option>
-                    </select>
-                    <input type="password" id="user-image-api-key" placeholder="sk-…" autocomplete="off" spellcheck="false" aria-label="OpenAI API key" hidden />
-                    <a class="btn-secondary" id="user-image-connect" href="codex-connect.html" target="_blank" rel="noopener noreferrer" data-i18n="내 ChatGPT 이미지 구독 연결">내 ChatGPT 이미지 구독 연결</a>
-                  </fieldset>
-                  <p class="generation-status" id="user-image-auth-state" aria-live="polite"></p>
-                  <button type="button" class="btn-primary" id="api-settings-save" data-i18n="저장" disabled>저장</button>
-
-                  <p class="api-settings-state" id="api-settings-state" aria-live="polite"></p>
-
-                  <button type="button" class="btn-secondary" id="api-settings-diagnose" data-i18n="인증 진단">인증 진단</button>
-
-                  <p class="muted api-settings-scope" id="api-settings-scope"></p>
+                  <section class="generation-account" aria-label="AI chat">
+                    <div class="generation-account-head">
+                      <label class="generation-choice"><input type="checkbox" id="user-chat-enabled" disabled />
+                        <span data-i18n="AI 채팅">AI 채팅</span></label>
+                      <span class="generation-connection" id="user-chat-auth-state" role="status"></span>
+                    </div>
+                    <fieldset id="user-chat-credentials" class="generation-credentials">
+                      <div class="generation-provider-row">
+                        <span class="generation-provider">Claude</span>
+                        <div class="api-auth-modes" role="group" aria-label="Claude authentication">
+                          <button type="button" class="api-auth-mode is-active" data-auth-mode="subscription" aria-pressed="true" data-i18n="구독">구독</button>
+                          <button type="button" class="api-auth-mode" data-auth-mode="api_key" aria-pressed="false">API</button>
+                        </div>
+                      </div>
+                      <input type="password" id="api-settings-token" autocomplete="off" spellcheck="false" aria-label="Claude token or API key" />
+                    </fieldset>
+                  </section>
+                  <section class="generation-account" aria-label="Image generation">
+                    <div class="generation-account-head">
+                      <label class="generation-choice"><input type="checkbox" id="user-image-enabled" disabled />
+                        <span data-i18n="이미지 생성">이미지 생성</span></label>
+                      <span class="generation-connection" id="user-image-auth-state" role="status"></span>
+                    </div>
+                    <fieldset id="user-image-credentials" class="generation-credentials">
+                      <div class="generation-provider-row">
+                        <span class="generation-provider">ChatGPT</span>
+                        <div class="api-auth-modes" role="group" aria-label="Image authentication">
+                          <button type="button" class="api-image-auth-mode is-active" data-image-auth-mode="subscription" aria-pressed="true" data-i18n="구독">구독</button>
+                          <button type="button" class="api-image-auth-mode" data-image-auth-mode="api_key" aria-pressed="false">API</button>
+                        </div>
+                      </div>
+                      <select id="user-image-auth-mode" hidden aria-label="Image authentication">
+                        <option value="subscription">subscription</option><option value="api_key">api_key</option>
+                      </select>
+                      <input type="password" id="user-image-api-key" placeholder="sk-…" autocomplete="off" spellcheck="false" aria-label="OpenAI API key" hidden />
+                      <a class="btn-secondary" id="user-image-connect" href="codex-connect.html" target="_blank" rel="noopener noreferrer" data-i18n="연결">연결</a>
+                      <button type="button" class="btn-secondary" id="user-image-api-connect" data-i18n="연결" hidden>연결</button>
+                    </fieldset>
+                  </section>
+                  <button type="button" class="btn-primary" id="api-settings-save" data-i18n="적용" disabled>적용</button>
+                  <details class="generation-diagnostics">
+                    <summary data-i18n="연결 진단">연결 진단</summary>
+                    <p class="api-settings-state" id="api-settings-state" aria-live="polite"></p>
+                    <button type="button" class="btn-secondary" id="api-settings-diagnose" data-i18n="인증 진단">인증 진단</button>
+                    <p class="muted api-settings-scope" id="api-settings-scope"></p>
+                  </details>
                 </div>
               </section>
             </section>

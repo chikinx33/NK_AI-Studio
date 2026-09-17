@@ -36,7 +36,10 @@ test("★스크롤이 생기지 않도록 세로를 화면 높이로 묶는다",
   assert.match(box, /max-height:\s*9\d vh|max-height:\s*9\dvh/);
   assert.match(box, /overflow:\s*hidden/);
   // 표나 본문에 세로 스크롤을 허용하는 선언이 없어야 한다
-  const modalCss = src.slice(src.indexOf("/* ── 영상 모델 가이드 모달"));
+  const modalStart = src.indexOf("/* ── 영상 모델 가이드 모달");
+  const modalEnd = src.indexOf("/* ── 회원 크레딧 게이지", modalStart);
+  assert.ok(modalStart >= 0 && modalEnd > modalStart, "모달 CSS 구간이 없다");
+  const modalCss = src.slice(modalStart, modalEnd);
   assert.doesNotMatch(modalCss, /overflow-y:\s*(auto|scroll)/);
   assert.doesNotMatch(modalCss, /overflow:\s*(auto|scroll)/);
   // 낮은 화면에서 더 압축하는 규칙이 있어야 한 화면에 들어간다

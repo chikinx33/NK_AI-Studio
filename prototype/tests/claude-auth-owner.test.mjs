@@ -220,10 +220,10 @@ function launcherHarness(agentSettings) {
   const start = script.indexOf("    const loadApiSettings = async () => {");
   const end = script.indexOf("    const saveApiSettings = async () => {", start);
   const deps = { canUseApiSettingsUI: () => true, NK: { auth: { isAuthed: () => !!user, getUser: () => user }, api: { agentSettings } },
-    setApiSettingsState: (text, kind) => states.push({ text, kind }), renderApiAuthMode: () => {}, translateUiText: (s) => s,
+    setApiSettingsState: (text, kind) => states.push({ text, kind }), renderApiAuthMode: () => {}, renderGenerationConnectionStatus: () => {}, translateUiText: (s) => s,
     apiSettingsSaveBtn: {}, userChatEnabled: {}, userImageEnabled: {}, userImageMode: {},
     document: { getElementById: () => ({}) } };
-  const run = new Function(...Object.keys(deps), "let apiAuthRequestSeq = 0, apiAuthMode, apiAuthLoaded, generationSettingsDirty;\n" +
+  const run = new Function(...Object.keys(deps), "let apiAuthRequestSeq = 0, apiAuthMode, apiAuthLoaded, generationSettingsDirty, apiConnectionSettings;\n" +
     script.slice(start, end) + "\nreturn loadApiSettings;")(...Object.values(deps));
   return { run, states, switchUser: (next) => { user = next; } };
 }

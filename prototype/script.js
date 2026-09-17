@@ -1307,6 +1307,7 @@
     let apiSettingsCollapsed = true;
     let apiAuthMode = 'subscription';
     let apiAuthLoaded = false;
+    let apiConnectionSettings = null;
     let apiAuthUser = '';
     let apiAuthRequestSeq = 0;
     let lastLoginState = false;
@@ -2021,6 +2022,29 @@
       apiSettingsStateEl.title = full;   // 한 줄로 잘리므로 전체는 툴팁에
       apiSettingsStateEl.classList.toggle('is-ok', kind === 'ok');
       apiSettingsStateEl.classList.toggle('is-error', kind === 'error');
+      if (kind === 'error' && apiSettingsStateEl.closest('details')) apiSettingsStateEl.closest('details').open = true;
+    };
+
+    const renderGenerationConnectionStatus = () => {
+      const saved = apiConnectionSettings?.generation || {};
+      const claude = apiConnectionSettings?.claudeAuth || {};
+      const update = (id, enabled, configured, pending, online, title) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const active = apiAuthLoaded && enabled && configured && !pending && online;
+        el.textContent = translateUiText(active ? '연결 활성' : '연결 비활성');
+        el.classList.toggle('is-active', !!active);
+        el.title = translateUiText(!apiAuthLoaded ? '불러오는 중…' : !enabled ? '마스터 설정 사용'
+          : pending ? '적용 후 연결 상태를 확인하세요' : !configured ? '인증을 등록해 주세요'
+          : !online ? '연결 프로그램을 실행해 주세요' : title);
+      };
+      update('user-chat-auth-state', userChatEnabled.checked, claude.source === 'user' && !!claude.configured,
+        userChatEnabled.checked !== !!saved.chatEnabled || apiAuthMode !== saved.chatMode || !!apiSettingsTokenInput.value.trim(),
+        true, 'Claude 인증 등록됨');
+      const sub = userImageMode.value === 'subscription';
+      update('user-image-auth-state', userImageEnabled.checked, sub ? !!saved.connector?.configured : !!saved.imageApiKeySet,
+        userImageEnabled.checked !== !!saved.imageEnabled || userImageMode.value !== saved.imageMode || !!userImageApiKey.value.trim(),
+        !sub || !!saved.connector?.online, sub ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : 'OpenAI API 키 등록됨');
     };
 
     const renderApiAuthMode = () => {
@@ -2029,7 +2053,12 @@
         document.getElementById('user-chat-credentials').disabled = !userChatEnabled.checked;
         document.getElementById('user-image-credentials').disabled = !userImageEnabled.checked;
         userImageApiKey.hidden = userImageMode.value !== 'api_key';
-        document.getElementById('user-image-connect').hidden = !userImageEnabled.checked || userImageMode.value !== 'subscription';
+        const imageConnect = document.getElementById('user-image-connect');
+        imageConnect.hidden = userImageMode.value !== 'subscription';
+        imageConnect.setAttribute('aria-disabled', userImageEnabled.checked ? 'false' : 'true');
+        imageConnect.classList.toggle('is-disabled', !userImageEnabled.checked);
+        imageConnect.tabIndex = userImageEnabled.checked ? 0 : -1;
+        document.getElementById('user-image-api-connect').hidden = userImageMode.value !== 'api_key';
         apiSettingsDiagnoseBtn.disabled = !userChatEnabled.checked;
       }
       apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
@@ -2037,6 +2066,12 @@
         b.classList.toggle('is-active', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
+      apiSettingsWidget.querySelectorAll('.api-image-auth-mode').forEach((b) => {
+        const on = b.dataset.imageAuthMode === userImageMode.value;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      renderGenerationConnectionStatus();
       // 발급 방법 안내는 본문에 줄을 늘리지 않도록 placeholder 와 툴팁으로만 준다
       const isSub = apiAuthMode === 'subscription';
       apiSettingsTokenInput.placeholder = isSub ? 'sk-ant-oat…' : 'sk-ant-api…';
@@ -2066,6 +2101,7 @@
       apiAuthLoaded = false;
       apiSettingsSaveBtn.disabled = true;
       userChatEnabled.disabled = userImageEnabled.disabled = true;
+      renderGenerationConnectionStatus();
       try {
         const data = await NK.api.agentSettings();
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
@@ -2078,12 +2114,7 @@
         generationSettingsDirty = false;
         userChatEnabled.disabled = userImageEnabled.disabled = false;
         apiSettingsSaveBtn.disabled = false;
-        const imageState = document.getElementById('user-image-auth-state');
-        imageState.textContent = translateUiText(!generation.imageEnabled ? '이미지: 마스터 설정 사용'
-          : generation.imageMode === 'api_key' ? (generation.imageApiKeySet ? '이미지: 본인 OpenAI API 키 사용' : '이미지: 본인 OpenAI API 키 입력 필요')
-          : generation.connector?.online ? 'ChatGPT(이미지) 구독 연결 정상'
-          : generation.connector?.configured ? '이미지: 연결 프로그램을 실행해 주세요' : '이미지: 본인 ChatGPT 계정 연결 필요');
-        if (generation.imageEnabled && generation.connector?.online && generation.imageMode !== 'api_key') imageState.appendChild(document.createTextNode(' · ' + generation.connector.email));
+        apiConnectionSettings = { generation, claudeAuth };
         apiAuthLoaded = true;
         renderApiAuthMode();
         const set = typeof claudeAuth.configured === 'boolean' ? claudeAuth.configured
@@ -2674,7 +2705,9 @@
           userChatEnabled.disabled = userImageEnabled.disabled = true;
           apiSettingsSaveBtn.disabled = true;
           generationSettingsDirty = false;
+          apiConnectionSettings = null;
           document.getElementById('user-image-auth-state').textContent = '';
+          document.getElementById('user-chat-auth-state').textContent = '';
           setApiSettingsCollapsed(true);
           apiAuthLoaded = false;
           setApiSettingsState('');
@@ -2966,6 +2999,17 @@
           renderApiAuthMode();
           setApiSettingsState('');
         });
+      });
+      apiSettingsWidget.querySelectorAll('.api-image-auth-mode').forEach((b) => {
+        b.addEventListener('click', () => {
+          userImageMode.value = b.dataset.imageAuthMode === 'api_key' ? 'api_key' : 'subscription';
+          generationSettingsDirty = true;
+          renderApiAuthMode();
+        });
+      });
+      document.getElementById('user-image-api-connect').addEventListener('click', saveApiSettings);
+      document.getElementById('user-image-connect').addEventListener('click', (e) => {
+        if (!userImageEnabled.checked) e.preventDefault();
       });
       apiSettingsSaveBtn.addEventListener('click', saveApiSettings);
       [userChatEnabled, userImageEnabled, userImageMode, apiSettingsTokenInput, userImageApiKey].forEach((el) => {
