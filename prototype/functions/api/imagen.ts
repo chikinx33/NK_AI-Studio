@@ -53,7 +53,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const allowed = new Set(["16:9", "9:16", "1:1", "free"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
     const incomingReferenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages : [];
-    const incomingConversationHistory = Array.isArray(body?.conversationHistory) ? body.conversationHistory : [];
+    const incomingConversationHistory = selectConversationHistory(body);
     const storageService = normalizeStorageService(body?.storageService || body?.service);
     const generationMode = normalizeGenerationMode(body?.generationMode || body?.mode, incomingReferenceImages.length > 0);
     const generationStyle = normalizeGenerationStyle(body?.generationStyle || body?.conversationMode);
@@ -456,6 +456,8 @@ export const onRequestPost: PagesFunction = async (context) => {
   const auth = await authorizeRequest(context.request, context.env);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   const body: any = await context.request.clone().json().catch(() => ({}));
+  body.generationStyle = normalizeGenerationStyle(body.generationStyle || body.conversationMode);
+  body.conversationHistory = selectConversationHistory(body);
   let selected;
   try { selected = await imageAuth(context.env, auth.userId); }
   catch { return json({ error: 'generation_settings_unavailable' }, 503); }
@@ -466,7 +468,14 @@ export const onRequestPost: PagesFunction = async (context) => {
     try {
       const items = (Array.isArray(body.referenceImages) ? body.referenceImages : []).map((item: any) =>
         typeof item === 'string' ? { imageDataUrl: item } : item);
-      for (const item of items) {
+      body.conversationHistory = body.conversationHistory.filter((item: any) => String(item?.prompt || '').trim()
+        && String(item?.imageDataUrl || item?.imageUrl || item?.url || '').trim());
+      const historyItems = body.conversationHistory.map((item: any) => ({
+          imageDataUrl: item.imageDataUrl || item.imageUrl || item.url,
+          referenceKind: 'continuity', subjectDescription: 'previous conversation result'
+        }));
+      const allItems = items.concat(historyItems);
+      for (const item of allItems) {
         const value = String(item?.imageUrl || item?.imageDataUrl || item?.url || '');
         if (/^data:image\/(png|jpeg|webp);base64,/.test(value)) continue;
         if (value.startsWith('gs://')) {
@@ -478,17 +487,24 @@ export const onRequestPost: PagesFunction = async (context) => {
               || url.username || url.password || (url.port && url.port !== '443')) return json({ error: 'invalid_reference_image_url' }, 400);
         }
       }
-      const accessToken = items.some((item: any) => /^(gs:\/\/|https:\/\/storage\.googleapis\.com\/)/.test(String(item.imageUrl || item.imageDataUrl || item.url)))
+      const accessToken = allItems.some((item: any) => /^(gs:\/\/|https:\/\/storage\.googleapis\.com\/)/.test(String(item.imageUrl || item.imageDataUrl || item.url)))
         ? await getGoogleAccessToken({ clientEmail: context.env.GOOGLE_CLIENT_EMAIL,
           privateKeyPem: context.env.GOOGLE_PRIVATE_KEY, scope: 'https://www.googleapis.com/auth/cloud-platform' }) : '';
-      const refs = await normalizeReferenceImages({ items, accessToken, requestUrl: context.request.url,
+      const normalized = await normalizeReferenceImages({ items: allItems, accessToken, requestUrl: context.request.url,
         authHeader: context.request.headers.get('Authorization') || '' });
-      if (refs.length !== items.length) return json({ error: 'source_image_reference_unavailable' }, 400);
+      if (normalized.length !== allItems.length) return json({ error: 'source_image_reference_unavailable' }, 400);
+      const refs = normalized.slice(0, items.length);
+      const historyRefs = normalized.slice(items.length);
       body.prompt = buildGeminiImagePrompt(normalizePrompt(String(body.prompt || '').trim()), refs,
         normalizeGenerationMode(body.generationMode, refs.length > 0), normalizeGenerationStyle(body.generationStyle),
-        (body.conversationHistory || []).length, normalizeCameraTargetMode(body.cameraTargetMode), !!body.maskDataUrl,
+        historyRefs.length, normalizeCameraTargetMode(body.cameraTargetMode), !!body.maskDataUrl,
         body.editInPlace === true, body.aspectRatio || '1:1');
-      body.referenceImages = refs.map(ref => ({ imageDataUrl: `data:${ref.mimeType};base64,${ref.base64}` }));
+      if (historyRefs.length) {
+        body.prompt += '\nPrevious conversation result images follow the explicitly selected source images, from oldest to newest. The latest user instruction takes priority over earlier instructions.';
+        body.prompt += historyRefs.map((_, index) => '\nReference image ' + (items.length + index + 1)
+          + ' is previous conversation result ' + (index + 1) + '. Preserve its visual identity only where the latest instruction does not change it.').join('');
+      }
+      body.referenceImages = refs.concat(historyRefs).map(ref => ({ imageDataUrl: `data:${ref.mimeType};base64,${ref.base64}` }));
       if (body.maskDataUrl) {
         body.referenceImages.push({ imageDataUrl: body.maskDataUrl });
         body.prompt += '\nThe last reference is the edit mask. Change only the marked area; preserve all unmarked pixels and composition.';
@@ -651,12 +667,16 @@ function buildGeminiImagePrompt(
   const aspectLine = targetAspect && targetAspect !== "free"
     ? `The output image MUST use aspect ratio exactly ${targetAspect}, identical to the source. Do not change the canvas shape or proportions.`
     : "";
+  const independentLines = generationStyle === "single"
+    ? ["This is an independent image request. Use only the current instruction and explicitly attached reference images. Do not carry over any previous generated face, outfit, subject identity or composition unless the current instruction or attached references request it."]
+    : [];
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
     ? [
+      "The latest user instruction takes priority over earlier conversation instructions.",
       "Build on the established visual continuity from the previous conversation turns.",
       "Preserve the existing subject identity, styling, and composition language unless this prompt explicitly changes them."
     ]
-    : [];
+    : independentLines;
   // 인페인팅 마스크 지시문: 마지막에 제공된 마스크 이미지의 흰색 영역만 수정한다.
   const maskLines = hasMask
     ? [
@@ -1270,6 +1290,11 @@ function normalizeGenerationMode(value: unknown, hasReferences: boolean): "text-
   if (raw === "image-to-image" || raw === "img2img") return "image-to-image";
   if (raw === "text-to-image" || raw === "txt2img") return "text-to-image";
   return hasReferences ? "image-to-image" : "text-to-image";
+}
+
+function selectConversationHistory(body: any): any[] {
+  return normalizeGenerationStyle(body?.generationStyle || body?.conversationMode) === "conversation" && Array.isArray(body?.conversationHistory)
+    ? body.conversationHistory.slice(-3) : [];
 }
 
 function normalizeGenerationStyle(value: unknown): "single" | "conversation" {

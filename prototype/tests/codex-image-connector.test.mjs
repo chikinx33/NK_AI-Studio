@@ -221,6 +221,25 @@ function fakeClient({ type='chatgpt', quota=0, failure=false }={}) {
   const client = new CodexClient({ binary: 'official-codex', home: directory, cwd: directory, spawnProcess });
   return { client, requests, options: () => spawnOptions, args: () => spawnArguments, cleanup: () => { client.close(); fs.rmdirSync(directory); } };
 }
+test('repeated single requests start fresh Codex threads with no previous prompt context', async () => {
+  const h = fakeClient();
+  try {
+    await h.client.initialize();
+    const payload = { prompt: 'a person', generationStyle: 'single', conversationHistory: [], imageSize: '1K', aspectRatio: '1:1' };
+    await h.client.generate(payload);
+    await h.client.generate(payload);
+    assert.equal(h.requests.filter(item => item.method === 'thread/start').length, 2);
+    assert.equal(h.requests.filter(item => item.method === 'thread/resume').length, 0);
+    const turns = h.requests.filter(item => item.method === 'turn/start');
+    assert.equal(turns.length, 2);
+    for (const turn of turns) {
+      assert.equal(turn.params.input.length, 1);
+      assert.match(turn.params.input[0].text, /a person/);
+      assert.doesNotMatch(turn.params.input[0].text, /Previous image instructions/);
+    }
+  } finally { h.cleanup(); }
+});
+
 test('official stdio client receives image output with isolated account and shell tools disabled', async () => {
   const previousPipe = process.env.CODEX_APP_TOOLS_PIPE_PATH;
   process.env.CODEX_APP_TOOLS_PIPE_PATH = 'operator-desktop-tool-bridge';

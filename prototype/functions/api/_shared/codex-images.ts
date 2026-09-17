@@ -91,7 +91,8 @@ export function validateImagePayload(raw: any) {
     imageSize: ['512','1K','2K','4K'].includes(raw.imageSize) ? raw.imageSize : '1K',
     generationMode: references.length ? 'image-to-image' : 'text-to-image',
     operation: raw.operation === 'upscale' ? 'upscale' : 'image',
-    conversationHistory: (Array.isArray(raw.conversationHistory) ? raw.conversationHistory : []).slice(-3)
+    generationStyle: raw.generationStyle === 'conversation' ? 'conversation' : 'single',
+    conversationHistory: (raw.generationStyle === 'conversation' && Array.isArray(raw.conversationHistory) ? raw.conversationHistory : []).slice(-3)
       .map((item: any) => ({ prompt: String(item?.prompt || '').slice(0, 4000) })) };
 }
 

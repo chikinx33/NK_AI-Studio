@@ -75,7 +75,8 @@ test('checking chat without credentials fails closed; malformed settings never o
 
 test('every image request uses server account choice, including explicit Gemini/Atlas page or agent requests', async () => {
   const src = read('prototype/functions/api/imagen.ts');
-  const dispatch = src.slice(src.indexOf('export const onRequestPost:'), src.indexOf('\nfunction json('));
+  const dispatch = src.slice(src.indexOf('export const onRequestPost:'), src.indexOf('\nfunction json('))
+    + src.slice(src.indexOf('function selectConversationHistory('), src.indexOf('function normalizeCameraTargetMode('));
   for (const mode of ['subscription', 'api_key', 'master', 'missing-key', 'settings-down']) {
     const calls = [];
     const env = { OPENAI_API_KEY: 'MASTER-OPENAI', GEMINI_API_KEY: 'MASTER-GEMINI', GOOGLE_API_KEY: 'MASTER-GOOGLE', ATLASCLOUD_API_KEY: 'MASTER-ATLAS' };
