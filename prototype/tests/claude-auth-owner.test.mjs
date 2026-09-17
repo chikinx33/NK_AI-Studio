@@ -217,7 +217,7 @@ function launcherHarness(agentSettings) {
   let user = "alice";
   const states = [];
   const script = readFileSync(resolve(root, "prototype/script.js"), "utf8");
-  const start = script.indexOf("    const loadApiSettings = async () => {");
+  const start = script.indexOf("    const loadApiSettings = async (");
   const end = script.indexOf("    const saveApiSettings = async () => {", start);
   const deps = { canUseApiSettingsUI: () => true, NK: { auth: { isAuthed: () => !!user, getUser: () => user }, api: { agentSettings } },
     setApiSettingsState: (text, kind) => states.push({ text, kind }), renderApiAuthMode: () => {}, renderGenerationConnectionStatus: () => {}, translateUiText: (s) => s,

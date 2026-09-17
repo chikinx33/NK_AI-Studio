@@ -2093,9 +2093,11 @@
       ].join('\n');
     };
 
-    const loadApiSettings = async () => {
+    // keepEdits: 연결 상태만 새로 받고, 사용자가 아직 적용하지 않은 체크·모드 선택은 덮어쓰지 않는다.
+    const loadApiSettings = async ({ keepEdits = false } = {}) => {
       if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
       const user = NK.auth.getUser();
+      const keepFormValues = keepEdits && generationSettingsDirty;
       const seq = ++apiAuthRequestSeq;
       setApiSettingsState('불러오는 중…');
       apiAuthLoaded = false;
@@ -2107,11 +2109,13 @@
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         const claudeAuth = (data && data.claudeAuth) || {};
         const generation = data.generation || {};
-        apiAuthMode = generation.chatMode || (claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription');
-        userChatEnabled.checked = !!generation.chatEnabled;
-        userImageEnabled.checked = !!generation.imageEnabled;
-        userImageMode.value = generation.imageMode || 'subscription';
-        generationSettingsDirty = false;
+        if (!keepFormValues) {
+          apiAuthMode = generation.chatMode || (claudeAuth.mode === 'api_key' ? 'api_key' : 'subscription');
+          userChatEnabled.checked = !!generation.chatEnabled;
+          userImageEnabled.checked = !!generation.imageEnabled;
+          userImageMode.value = generation.imageMode || 'subscription';
+          generationSettingsDirty = false;
+        }
         userChatEnabled.disabled = userImageEnabled.disabled = false;
         apiSettingsSaveBtn.disabled = false;
         apiConnectionSettings = { generation, claudeAuth };
@@ -3018,7 +3022,8 @@
         codexConnectFrame.src = 'about:blank';
         codexConnectFrame.style.height = '';
         document.body.classList.remove('codex-connect-open');
-        if (!generationSettingsDirty && NK.auth.isAuthed()) loadApiSettings();
+        // 연결은 서버에 바로 저장되므로, 적용 전 편집이 있어도 연결 상태는 새로 받아 표시한다.
+        if (NK.auth.isAuthed()) loadApiSettings({ keepEdits: true });
       };
       document.getElementById('user-image-connect').addEventListener('click', (e) => {
         e.preventDefault();
