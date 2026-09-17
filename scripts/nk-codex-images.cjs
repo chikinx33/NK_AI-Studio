@@ -129,11 +129,14 @@ async function main() {
     server.once('error', error => reject(new Error(error.code === 'EADDRINUSE' ? 'connector_already_running' : 'connector_port_unavailable')));
     server.listen(LOCAL_PORT, '127.0.0.1', resolve);
   });
-  console.log('NKStudio 이미지 연결 프로그램 실행 중 · NKStudio 이미지 생성의 \'연결\' 창에서 계속해 주세요.');
-  console.log('NKStudio image connector is running. Continue in the Connect dialog on NKStudio. Keep this window open.');
+  console.log('NKStudio 이미지 연결 프로그램 실행 중 · 이 창을 열어 두면 됩니다. 연결 설정은 처음 한 번만 하면 돼요.');
+  console.log('NKStudio image connector is running. Keep this window open. Setup is only needed the first time.');
   client = new CodexClient({ binary: process.env.NK_CODEX_BINARY || 'codex', home, cwd: workRoot });
   await client.initialize();
   ready = true;
+  // 지금 상태를 콘솔에도 한 줄로 보여 준다(바뀔 때만). 연결을 마친 뒤에는 로그인·연결을 다시 할 필요가 없다.
+  let loggedMessage = '';
+  const logStatus = () => { if (message !== loggedMessage) { loggedMessage = message; console.log(message); } };
   let stopping = false;
   const stop = () => { stopping = true; client.close(); server.close(); };
   process.on('SIGINT', stop);
@@ -209,6 +212,7 @@ async function main() {
         ? 'NKStudio 계정에 연결해 주세요 / Connect your NKStudio account'
         : '플랫폼 연결 대기 중 / Waiting for NKStudio connection';
     }
+    logStatus();
     await sleep(4000);
   }
 }
