@@ -4,6 +4,7 @@ import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
+import { onRequestPost as subscriptionImageRequest } from "./codex-images";
 import {
   atlasImageOutput,
   atlasOutputs,
@@ -450,8 +451,17 @@ const handlePost: PagesFunction = async ({ request, env }) => {
   }
 };
 
-export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "image_generation" }, handlePost);
+export const onRequestPost: PagesFunction = async (context) => {
+  const auth = await authorizeRequest(context.request, context.env);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+  const body: any = await context.request.clone().json().catch(() => ({}));
+  if (body.provider === 'chatgpt-subscription') {
+    const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
+      body: JSON.stringify({ operation: 'create', requestId: body.requestId, payload: body }) });
+    return subscriptionImageRequest({ ...context, request });
+  }
+  return withCreditCharge(context, { feature: "image_generation" }, handlePost);
+};
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {

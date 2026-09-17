@@ -123,7 +123,7 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b)
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")
 }
-async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
+export async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
   const now = new Date()
   const pad = (n: number) => `${n}`.padStart(2, "0")
   const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`

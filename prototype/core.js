@@ -827,6 +827,7 @@
       'API 키': 'API key',
       '저장': 'Save',
       '인증 진단': 'Test credentials',
+      '내 ChatGPT 이미지 구독 연결': 'Connect my ChatGPT image subscription',
       '테마 선택': 'Theme presets',
       '다크': 'Dark',
       '라이트': 'Light',

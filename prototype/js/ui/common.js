@@ -255,6 +255,7 @@
         'Anthropic 콘솔에서 발급한 API 키': 'API key issued from the Anthropic console',
         '적용: 텍스트 AI 전체 · 이미지/음악/영상 제외': 'Applies to all text AI · excludes image/music/video',
         '적용: Claude 텍스트 AI · 이미지/음악/영상 제외': 'Applies to Claude text AI · excludes image/music/video',
+        '내 ChatGPT 이미지 구독 연결': 'Connect my ChatGPT image subscription',
         '적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업의 Claude 에이전트·문서 도구.':
           'Applies to — scenario generation, shot breakdown, locations, story structure, overview suggestions, SNS drafts and AI refine, hashtags, and Claude agents and document tools in the AI company.',
         '적용됨 — 시나리오 생성, 샷 분해, 공간 추출, 이야기 구조, 개요 제안, SNS 초안·AI 보완, 해시태그, AI 기업 에이전트.':

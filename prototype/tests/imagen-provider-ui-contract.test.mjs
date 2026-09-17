@@ -63,6 +63,8 @@ test('AI image page offers both GPT Image 2.5 tunings with ko/en labels', () => 
   // ko/en 사전 양쪽에 있어야 한다.
   assert.equal((source.match(/providerGpt25Flare:/g) || []).length, 2);
   assert.equal((source.match(/providerGpt25Sunburst:/g) || []).length, 2);
-  assert.match(source, /var PROVIDER_VALUES = \['gemini', 'gpt25-flare', 'gpt25-sunburst', 'openai'\]/);
+  assert.match(source, /var PROVIDER_VALUES = \['gemini', 'gpt25-flare', 'gpt25-sunburst', 'openai', 'chatgpt-subscription'\]/);
+  assert.match(source, /providerSubscription: 'GPT 이미지 · 내 ChatGPT 구독'/);
+  assert.match(source, /providerSubscription: 'GPT images · my ChatGPT subscription'/);
   assert.match(source, /providerOptions\.map\(/);
 });

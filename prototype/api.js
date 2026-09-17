@@ -420,9 +420,10 @@
       try {
         var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
         var stored = String(localStorage.getItem(providerKey) || '').trim().toLowerCase();
-        if (stored === 'openai' || stored === 'gemini' || stored === 'gpt25-flare' || stored === 'gpt25-sunburst') payload.provider = stored;
+        if (stored === 'openai' || stored === 'gemini' || stored === 'gpt25-flare' || stored === 'gpt25-sunburst' || stored === 'chatgpt-subscription') payload.provider = stored;
       } catch (_) {}
     }
+    if (payload.provider === 'chatgpt-subscription') return api.codexImageGenerate(payload, opts);
     var timeoutMs = getImagenTimeoutMs(payload, opts);
     var res = await fetchWithTimeout(withBase('/api/imagen'), {
       method: 'POST',
@@ -438,6 +439,48 @@
       throw err;
     }
     return j(text);
+  };
+
+  api.codexImageRequest = async function (body, jobId, token) {
+    var res = await fetchWithTimeout(withBase('/api/codex-images' + (jobId ? '?jobId=' + encodeURIComponent(jobId) : '')), {
+      method: body ? 'POST' : 'GET',
+      headers: Object.assign(buildAuthHeaders({ 'Content-Type': 'application/json' }), token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(body ? { body: JSON.stringify(body) } : {})
+    }, 30000);
+    var data = j(await res.text());
+    if (!res.ok) {
+      var error = new Error(data.error || 'subscription_image_error');
+      error.status = res.status;
+      error.subscriptionImage = true;
+      throw error;
+    }
+    return data;
+  };
+  api.codexImageGenerate = async function (payload, opts) {
+    var token = getAuthToken();
+    var user = resolveUserId();
+    var requestId = window.crypto.randomUUID();
+    var deadline = Date.now() + 20 * 60 * 1000;
+    var assertSession = function () {
+      if (getAuthToken() !== token || resolveUserId() !== user) throw new Error('subscription_image_account_changed');
+      if (opts && opts.signal && opts.signal.aborted) throw new Error('subscription_image_wait_cancelled');
+    };
+    try {
+      assertSession();
+      var job = await api.codexImageRequest({ operation: 'create', requestId: requestId, payload: payload }, null, token);
+      while (Date.now() < deadline) {
+        assertSession();
+        if (job.status === 'done') return job.result;
+        if (job.status === 'error' || job.status === 'cancelled') throw new Error(job.error || 'subscription_image_failed');
+        await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+        assertSession();
+        // Polling can retry a temporary network error; the generation itself is
+        // never submitted again. Server requestId makes create idempotent too.
+        try { job = await api.codexImageRequest(null, job.id, token); }
+        catch (error) { if (![500,502,503,504].includes(error.status) && error.message !== 'request_timeout' && error.name !== 'TypeError') throw error; }
+      }
+      throw new Error('subscription_image_wait_timeout');
+    } catch (error) { error.subscriptionImage = true; throw error; }
   };
 
   api.upscale = async function (body, opts) {

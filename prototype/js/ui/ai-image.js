@@ -15,6 +15,7 @@
     aspectRatio: '1:1',
     imageSize: '1K',
     provider: 'gemini',
+    subscriptionConnector: null,
     sourceImages: [],
     selectedSourceId: '',
     projectLibraryItems: [],
@@ -98,6 +99,11 @@
       providerLabel: '이미지 모델',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      providerSubscription: 'GPT 이미지 · 내 ChatGPT 구독',
+      subscriptionConnect: 'ChatGPT 구독 연결',
+      subscriptionReady: '본인 구독 연결 정상 · 자동 저장',
+      subscriptionOffline: '연결 프로그램을 실행해 주세요 · 다른 계정으로 전환하지 않습니다',
+      subscriptionMissing: '처음 한 번 본인 ChatGPT 계정을 연결해 주세요',
       // GPT Image 2.5 는 같은 모델의 두 갈래 — Flare 는 빠른 기본형, Sunburst 는 정밀·저속형.
       providerGpt25Flare: 'GPT Image 2.5 Flare — 빠름',
       providerGpt25Sunburst: 'GPT Image 2.5 Sunburst — 정밀',
@@ -261,6 +267,11 @@
       providerLabel: 'Image model',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      providerSubscription: 'GPT images · my ChatGPT subscription',
+      subscriptionConnect: 'Connect ChatGPT subscription',
+      subscriptionReady: 'My subscription connected · automatic save',
+      subscriptionOffline: 'Start your connector · no switch to another account',
+      subscriptionMissing: 'Connect your own ChatGPT account once to get started',
       providerGpt25Flare: 'GPT Image 2.5 Flare — fast',
       providerGpt25Sunburst: 'GPT Image 2.5 Sunburst — precise',
       clearPreview: 'Clear preview',
@@ -773,6 +784,7 @@
   }
 
   function shouldRetryImagenRequest(err) {
+    if (err && err.subscriptionImage) return false;
     var status = Number(err && err.status) || 0;
     return status >= 500 || isTimeoutLikeImagenError(err);
   }
@@ -1074,6 +1086,8 @@
     return [
       state.lang,
       detached ? '1' : '0',
+      normalizeProviderValue(state.provider),
+      JSON.stringify(state.subscriptionConnector || {}),
       String(project && project.id || ''),
       String(state.currentBrand && state.currentBrand.brandId || ''),
       String(state.mode || ''),
@@ -1130,7 +1144,7 @@
   }
 
   // 선택 가능한 이미지 모델. gpt25-* 는 Atlas Cloud 경유 전용이다.
-  var PROVIDER_VALUES = ['gemini', 'gpt25-flare', 'gpt25-sunburst', 'openai'];
+  var PROVIDER_VALUES = ['gemini', 'gpt25-flare', 'gpt25-sunburst', 'openai', 'chatgpt-subscription'];
 
   function normalizeProviderValue(value) {
     var raw = String(value || '').trim().toLowerCase();
@@ -1959,7 +1973,8 @@
       { id: 'gemini', label: geminiProviderLabel },
       { id: 'gpt25-flare', label: t('providerGpt25Flare') },
       { id: 'gpt25-sunburst', label: t('providerGpt25Sunburst') },
-      { id: 'openai', label: openaiProviderLabel }
+      { id: 'openai', label: openaiProviderLabel },
+      { id: 'chatgpt-subscription', label: t('providerSubscription') }
     ];
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
@@ -1992,6 +2007,9 @@
                 }).join('') +
               '</select>' +
             '</div>' +
+            '<p id="ai-image-subscription-status" class="muted small" role="status"' + (state.provider === 'chatgpt-subscription' ? '' : ' hidden') + '>' +
+              escapeHtml(state.subscriptionConnector && state.subscriptionConnector.online ? t('subscriptionReady') + ' · ' + state.subscriptionConnector.email : state.subscriptionConnector && state.subscriptionConnector.configured ? t('subscriptionOffline') : t('subscriptionMissing')) +
+              ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a></p>' +
           '</div>' +
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
@@ -3276,6 +3294,7 @@
       prompt: finalPrompt,
       aspectRatio: state.aspectRatio,
       storageService: 'ai-image',
+      projectId: state.currentProject && state.currentProject.id || '',
       sessionId: state.sessionId,
       generationMode: state.mode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
@@ -3310,7 +3329,7 @@
         conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
         aspectRatio: state.aspectRatio,
         createdAt: new Date().toISOString(),
-        savedToProject: false,
+        savedToProject: !!(response && response.savedToProject),
         sessionId: state.sessionId
       };
       if (!result.url) throw new Error('image_result_missing');
@@ -3347,6 +3366,17 @@
         hint = state.lang === 'en'
           ? 'The request took too long, so we retried once with a lighter generation payload. Please try again shortly if it still fails.'
           : '생성이 오래 걸려 한 번 더 가벼운 설정으로 자동 재시도했습니다. 계속 실패하면 잠시 후 다시 시도해 주세요.';
+      }
+      if (err && err.subscriptionImage) {
+        var subscriptionHints = {
+          chatgpt_connector_required: t('subscriptionMissing'),
+          chatgpt_connector_offline: t('subscriptionOffline'),
+          chatgpt_image_usage_limit: state.lang === 'en' ? 'Your ChatGPT usage limit was reached. Try again after it resets.' : '본인 ChatGPT 구독 한도에 도달했습니다. 한도 갱신 후 다시 시도해 주세요.',
+          subscription_image_already_running: state.lang === 'en' ? 'An image is already being generated for this account.' : '이 계정에서 이미 이미지 생성이 진행 중입니다.',
+          subscription_image_account_changed: state.lang === 'en' ? 'The account changed. This result belongs to the original account.' : '계정이 변경되었습니다. 결과는 요청한 원래 계정에 저장됩니다.'
+        };
+        msg = subscriptionHints[msg] || msg;
+        hint = '';
       }
       alert(t('generationFailed') + msg + (hint ? ('\n힌트: ' + hint) : ''));
     } finally {
@@ -3406,6 +3436,7 @@
       prompt: cameraPrompt,
       aspectRatio: state.aspectRatio,
       storageService: 'ai-image',
+      projectId: state.currentProject && state.currentProject.id || '',
       sessionId: state.sessionId,
       generationMode: effectiveMode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
@@ -3433,7 +3464,7 @@
         conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
         aspectRatio: state.aspectRatio,
         createdAt: new Date().toISOString(),
-        savedToProject: false,
+        savedToProject: !!(response && response.savedToProject),
         sessionId: state.sessionId
       };
       if (!result.url) throw new Error('image_result_missing');
@@ -4219,6 +4250,9 @@
           var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
           localStorage.setItem(providerKey, nextProvider);
         } catch (_) {}
+        refreshSubscriptionConnector();
+        var subscriptionBox = document.getElementById('ai-image-subscription-status');
+        if (subscriptionBox) subscriptionBox.hidden = nextProvider !== 'chatgpt-subscription';
         return;
       }
     });
@@ -4263,6 +4297,7 @@
     // 프로젝트/인스턴스별 분리. 과거 랜덤 세션은 legacy 로 보존해 기존 이미지도 계속 표시.
     resolveSessionScope();
     state.provider = readStoredProvider();
+    state.subscriptionConnector = null;
     loadHistory();
     try {
       NK.core.APP_VERSION = NK.config.APP_VERSION;
@@ -4279,6 +4314,7 @@
     updateAuthState();
     bindStaticEvents();
     render();
+    refreshSubscriptionConnector();
     hydrateSessionHistory();
     // 외부 기기 대응: 로컬 프로젝트가 stale 하면 legacy 세션 목록을 모른다. 서버 권위 payload 를
     // 받아 세션 스코프를 재계산하고(다른 기기가 기록한 legacy 포함) 히스토리를 다시 불러온다.
@@ -4305,6 +4341,23 @@
       });
     }
   }
+
+  async function refreshSubscriptionConnector() {
+    if (!NK.api || !NK.api.codexImageRequest || !document.getElementById('ai-image-root')) return;
+    var user = NK.auth && NK.auth.getUser ? NK.auth.getUser() : '';
+    try {
+      var connector = await NK.api.codexImageRequest();
+      if ((NK.auth && NK.auth.getUser ? NK.auth.getUser() : '') !== user) return;
+      state.subscriptionConnector = connector;
+      var box = document.getElementById('ai-image-subscription-status');
+      if (box) {
+        box.hidden = state.provider !== 'chatgpt-subscription';
+        box.innerHTML = escapeHtml(connector.online ? t('subscriptionReady') + ' · ' + connector.email : connector.configured ? t('subscriptionOffline') : t('subscriptionMissing')) +
+          ' <a href="codex-connect.html" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('subscriptionConnect')) + '</a>';
+      }
+    } catch (_) { /* Existing providers remain available if status is unavailable. */ }
+  }
+  window.addEventListener('focus', refreshSubscriptionConnector);
 
   async function registerImageToProject(projectId, result) {
     var file = await resultToFile(result);

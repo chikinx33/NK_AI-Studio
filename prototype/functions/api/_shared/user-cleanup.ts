@@ -60,6 +60,7 @@ async function deleteFromUserTable(sql: SqlFn, table: string, column: string, us
   if (!(await tableExists(sql, table))) return 0;
   const safeTables = new Set([
     "app_settings", "agent_jobs", "agent_messages", "agent_ui_actions", "agent_personas",
+    "nk_image_connectors", "nk_subscription_image_jobs",
     "agent_knowledge", "company_knowledge", "company_projects", "company_work_items",
     "company_work_folders", "company_runtime", "company_skills", "agent_google_oauth",
     "agent_conversation_meta", "agent_reminders", "agent_credentials", "agent_daily_brief",
@@ -87,6 +88,7 @@ async function cleanupDatabase(env: any, userId: string): Promise<number> {
   deleted += await deleteFromUserTable(sql, "credit_accounts", "user_id", userId);
 
   for (const table of [
+    "nk_subscription_image_jobs", "nk_image_connectors",
     "app_settings", "agent_jobs", "agent_messages", "agent_ui_actions", "agent_personas",
     "agent_knowledge", "company_knowledge", "company_projects", "company_work_items",
     "company_work_folders", "company_runtime", "company_skills", "agent_google_oauth",
