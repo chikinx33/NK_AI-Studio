@@ -75,6 +75,7 @@ async function main() {
   let ready = false;
   let account;
   let paired = false;
+  let busy = false;
   let message = 'ChatGPT 계정 확인 중 / Checking your ChatGPT account';
   const server = http.createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
@@ -95,6 +96,21 @@ async function main() {
     if (request.method === 'GET' && request.url === '/status') {
       return response.end(JSON.stringify({ ready, signedIn: !!account, email: account?.email || '',
         plan: account?.planType || '', tokenHash: account ? tokenHash : '', paired, message }));
+    }
+    // 랜딩 연결 창의 'ChatGPT 계정 변경': 이 연결 프로그램의 ChatGPT 로그인만 지운다.
+    // NKStudio 계정 연결(프로필 토큰)은 그대로라 다른 ChatGPT 계정으로 로그인하면 바로 이어서 쓴다.
+    if (request.method === 'POST' && request.url === '/logout') {
+      if (!ready) { response.writeHead(503); return response.end(JSON.stringify({ error: 'connector_starting' })); }
+      if (busy) { response.writeHead(409); return response.end(JSON.stringify({ error: 'connector_busy' })); }
+      try {
+        await client.request('account/logout');
+        account = null;
+        paired = false;
+        message = 'ChatGPT 로그인이 필요합니다 / ChatGPT sign-in is required';
+        return response.end(JSON.stringify({ ok: true }));
+      } catch {
+        response.writeHead(502); return response.end(JSON.stringify({ error: 'codex_logout_unavailable' }));
+      }
     }
     if (request.method === 'POST' && request.url === '/login') {
       if (!ready) { response.writeHead(503); return response.end(JSON.stringify({ error: 'connector_starting' })); }
@@ -141,6 +157,7 @@ async function main() {
       message = `연결 완료 · NKStudio ${profile.userId} / Connected. Images will save automatically.`;
       const job = heartbeat.job;
       if (job) {
+        busy = true;
         const heartbeatTimer = setInterval(() => connectorRequest(profile.token, { operation: 'heartbeat', busy: true,
           authMode: 'chatgpt', email: account?.email || '', plan: account?.planType || '' }).catch(() => {}), 15000);
         try {
@@ -183,7 +200,7 @@ async function main() {
         } else {
           message = '저장 연결 오류 · 생성 이미지는 이 PC에 보존했습니다 / Image retained on this PC after a storage error';
         }
-        } finally { clearInterval(heartbeatTimer); }
+        } finally { clearInterval(heartbeatTimer); busy = false; }
       }
     } catch (error) {
       paired = false;

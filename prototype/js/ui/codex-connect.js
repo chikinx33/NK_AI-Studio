@@ -39,6 +39,7 @@
   set('connect-approve', '이 계정에 연결', 'Connect this account');
   set('connect-limits', '연결 프로그램이 실행 중인 PC에서 생성합니다. ChatGPT 구독 한도를 사용하며, 한도 초과·인증 오류 시 다른 계정이나 API로 전환하지 않습니다. 연결은 30일 뒤 다시 확인합니다.', 'Generation runs on a PC with the connector running and uses ChatGPT subscription limits. Quota or authentication errors never switch to another account or API. Reconnect after 30 days.');
   set('connect-disconnect', '연결 해제', 'Disconnect');
+  set('connect-switch-account', 'ChatGPT 계정 변경', 'Change ChatGPT account');
   // 연결 프로그램 메시지는 '한국어 / English' 한 줄이다.
   var localMessage = function (value) {
     var parts = String(value || '').split(' / ');
@@ -49,7 +50,8 @@
     return local && local.signedIn && /^[a-f0-9]{64}$/.test(local.tokenHash || '') ? local.tokenHash : '';
   }
   function render() {
-    var online = !!(server && server.online);
+    // 이 PC의 연결 프로그램이 로그아웃 상태면(계정 변경 중) 서버의 이전 '연결 정상'보다 로그인 단계를 먼저 보여 준다.
+    var online = !!(server && server.online) && !(local && local.ready && !local.signedIn);
     var chatgpt = online ? server.email + ' · ' + server.plan
       : local && local.signedIn ? local.email + ' · ' + local.plan
         : hashEmail ? hashEmail + ' · ' + hashPlan : '';
@@ -61,6 +63,8 @@
     $('connect-install').hidden = online || confirmStep || loginStep;
     $('connect-login-button').disabled = busy || !(local && local.ready);
     disconnect.hidden = !(server && server.configured);
+    $('connect-switch-account').hidden = !(local && local.signedIn);
+    $('connect-switch-account').disabled = busy;
     if (serverError) { status.textContent = serverError; return; }
     if (online) status.textContent = text('연결 정상 · ', 'Connected · ') + server.email + ' · ' + server.plan;
     else if (confirmStep) status.textContent = text('ChatGPT 로그인 완료 · 이 계정에 연결해 주세요.', 'Signed in to ChatGPT. Connect this account.');
@@ -97,6 +101,7 @@
     } catch (_) { }
     local = next;
     if (local && local.signedIn) loginPending = false;
+    if (local && local.ready && !local.signedIn) sawOffline = true;
     var key = local ? [local.signedIn, local.paired].join(':') : 'off';
     if (key !== localKey) { localKey = key; refresh(); } else render();
   }
@@ -136,6 +141,23 @@
       if (!(server && server.online)) status.textContent = text('등록 완료 · 연결 프로그램의 응답을 확인 중입니다.', 'Registered. Waiting for your connector.');
     } catch (error) { status.textContent = text('연결 실패: ', 'Connection failed: ') + error.message; }
     finally { busy = false; approve.disabled = false; }
+  });
+  $('connect-switch-account').addEventListener('click', async function () {
+    if (busy || !local) return;
+    busy = true; render();
+    try {
+      var response = await fetch(LOCAL + '/logout', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'codex_logout_unavailable');
+      local = Object.assign({}, local, { signedIn: false, email: '', plan: '', tokenHash: '', paired: false });
+      localKey = 'false:false';
+      sawOffline = true;
+    } catch (error) {
+      serverError = error.message === 'connector_busy'
+        ? text('이미지 생성 중에는 계정을 바꿀 수 없습니다. 생성이 끝난 뒤 다시 눌러 주세요.', 'You cannot change accounts while an image is generating. Try again when it finishes.')
+        : text('계정 변경 실패: ', 'Could not change account: ') + error.message;
+      setTimeout(function () { serverError = ''; render(); }, 6000);
+    } finally { busy = false; render(); }
   });
   disconnect.addEventListener('click', async function () {
     if (busy || user() !== originalUser) return;
