@@ -2009,7 +2009,7 @@
         apiSettingsToggleBtn.setAttribute('aria-expanded', apiSettingsCollapsed ? 'false' : 'true');
         apiSettingsToggleBtn.setAttribute(
           'aria-label',
-          translateUiText(apiSettingsCollapsed ? 'API 설정 펼치기' : 'API 설정 접기')
+          translateUiText(apiSettingsCollapsed ? 'API 연결 펼치기' : 'API 연결 접기')
         );
       }
     };
@@ -2081,7 +2081,7 @@
         const imageState = document.getElementById('user-image-auth-state');
         imageState.textContent = translateUiText(!generation.imageEnabled ? '이미지: 마스터 설정 사용'
           : generation.imageMode === 'api_key' ? (generation.imageApiKeySet ? '이미지: 본인 OpenAI API 키 사용' : '이미지: 본인 OpenAI API 키 입력 필요')
-          : generation.connector?.online ? '이미지: 본인 ChatGPT 구독 연결 정상'
+          : generation.connector?.online ? 'ChatGPT(이미지) 구독 연결 정상'
           : generation.connector?.configured ? '이미지: 연결 프로그램을 실행해 주세요' : '이미지: 본인 ChatGPT 계정 연결 필요');
         if (generation.imageEnabled && generation.connector?.online && generation.imageMode !== 'api_key') imageState.appendChild(document.createTextNode(' · ' + generation.connector.email));
         apiAuthLoaded = true;
