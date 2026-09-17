@@ -153,12 +153,13 @@ test("/app 에 API 설정 위젯이 있고 기존 위젯과 같은 접기 구조
   for (const mode of ["subscription", "api_key"]) {
     assert.ok(html.includes(`data-auth-mode="${mode}"`), `${mode} 선택 버튼이 없다`);
   }
-  // 적용 범위 자리는 남겨 둔다. 카드 높이 고정을 위해 한 줄 요약만 넣고
-  // 전체 목록은 툴팁으로 내렸지만, 안내 자체가 사라지면 안 된다.
-  assert.match(html, /id="api-settings-scope"/, "적용 범위 안내 자리가 없다");
-  const js = read("prototype/script.js");
-  assert.match(js, /적용: 스튜디오·AI 기업의 텍스트와 이미지 전체/, "적용 범위 요약 문구가 없다");
-  assert.match(js, /이미지 적용: AI 이미지/, "이미지 적용 목록 안내가 없다");
+  // 설명 문구 줄·펼침 메뉴 없이 인증 진단(왼쪽)과 적용(오른쪽)이 한 줄에 반씩 놓인다.
+  const actions = html.match(/<div class="api-settings-actions">([\s\S]*?)<\/div>/);
+  assert.ok(actions, "인증 진단·적용 버튼 줄이 없다");
+  assert.ok(actions[1].indexOf('id="api-settings-diagnose"') >= 0 && actions[1].indexOf('id="api-settings-diagnose"') < actions[1].indexOf('id="api-settings-save"'), "인증 진단이 왼쪽, 적용이 오른쪽이어야 한다");
+  for (const removed of ["api-settings-scope", "api-settings-state", "generation-diagnostics"]) {
+    assert.ok(!html.includes(removed), `${removed} 설명 줄/펼침 메뉴가 남아 있다`);
+  }
 });
 
 test("인증 미설정 응답이 사용자 안내로 이어진다", () => {
@@ -195,22 +196,15 @@ test("API 설정 접기 버튼은 다른 위젯과 같은 스타일 규칙을 �
   for (const sib of SIBLINGS) assert.ok(css.includes(sib), `${sib} 규칙이 사라졌다`);
 });
 
-test("상태·적용 범위 줄은 한 줄로 잘려 카드 높이를 흔들지 않는다", () => {
+test("API 연결 버튼 줄은 반씩 고정 폭이고 본문에 세로 스크롤이 생기지 않는다", () => {
   const css = read("prototype/styles.css");
-  const at = css.indexOf(".api-settings-state,");
-  assert.ok(at > 0, "상태/적용 범위 줄 고정 규칙이 없다");
-  const rule = css.slice(at, css.indexOf("}", at));
-  for (const prop of ["white-space: nowrap", "overflow: hidden", "text-overflow: ellipsis", "min-height"]) {
-    assert.ok(rule.includes(prop), `${prop} 이 없다 — 문구 길이에 따라 높이가 변한다`);
-  }
+  assert.match(css, /\.api-settings-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr/, "인증 진단·적용이 반씩 나뉘지 않는다");
+  assert.ok(!/\.api-settings-body\s*\{[^}]*overflow-y:\s*auto/.test(css), "API 연결 본문에 세로 스크롤이 생긴다");
   // 본문 높이 상한을 따로 키우면 다른 위젯과 접힘 높이가 어긋난다
   assert.ok(!/\.api-settings-body\s*\{[^}]*max-height/.test(css), "api-settings-body 가 별도 max-height 를 갖는다");
 });
 
 test("JS 로 넣는 문구는 언어 변경 때 다시 그린다", () => {
   const src = read("prototype/script.js");
-  const at = src.indexOf("renderApiScopeLine();");
-  assert.ok(at > 0);
-  const after = src.slice(at, at + 700);
-  assert.match(after, /nk:lang-changed/, "언어를 바꿔도 툴팁·상태 문구가 한국어로 남는다");
+  assert.match(src, /addEventListener\('nk:lang-changed', \(\) => \{\s*renderApiAuthMode\(\);/, "언어를 바꿔도 API 연결 상태 문구가 한국어로 남는다");
 });

@@ -833,7 +833,6 @@
       '구독': 'Subscription',
       '연결': 'Connect',
       '적용': 'Apply',
-      '연결 진단': 'Connection diagnostics',
       '연결 활성': 'Connection active',
       '연결 비활성': 'Connection inactive',
       '마스터 설정 사용': 'Using master settings',

@@ -5511,7 +5511,7 @@ html.page-shell-image #sidebar-project-card {
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
-  max-height: 420px;
+  max-height: 560px;
   opacity: 1;
   transform: translateY(0);
   visibility: visible;
@@ -15608,8 +15608,6 @@ textarea.bsf-skeleton {
   font-size: 13px;
 }
 
-/* 저장 중에도 버튼 폭이 흔들리지 않게 고정한다 */
-#api-settings-save { min-width: 64px; width: 100%; }
 .generation-choice { display: flex; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; font-size: 13px; margin: 8px 0; cursor: pointer; }
 .option-card .generation-choice input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #3b82f6; }
 .generation-credentials { margin: 0; padding: 0; border: 0; display: grid; gap: 8px; min-width: 0; }
@@ -15618,34 +15616,12 @@ textarea.bsf-skeleton {
 .generation-credentials input, .generation-credentials select { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; background: var(--panel, #101827); color: inherit; border: 1px solid var(--border, #263249); border-radius: 8px; }
 .generation-status { font-size: 12px; line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }
 .generation-credentials [hidden] { display: none; }
-#api-settings-diagnose { min-width: 100%; }
 
-.api-settings-state {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.api-settings-state.is-ok    { color: #4ade80; }
-.api-settings-state.is-error { color: #f87171; }
-
-/* 상태 문구·적용 범위는 한 줄로 잘라 카드 높이를 고정한다.
-   전체 내용은 title 툴팁으로 볼 수 있다. */
-.api-settings-state,
-.api-settings-scope {
-  min-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.api-settings-scope {
-  margin: 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-}
+/* 인증 진단(왼쪽) · 적용(오른쪽)을 반씩. 결과는 버튼 글자로 잠깐 보여 주므로 폭은 고정한다. */
+.api-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.api-settings-actions button { width: 100%; min-width: 0; }
+.api-settings-actions button.is-ok { color: #4ade80; }
+.api-settings-actions button.is-error { color: #f87171; }
 
 /* ═══════════════════════════════════════
    전역 알림(토스트)
@@ -15937,11 +15913,6 @@ textarea.bsf-skeleton {
 .generation-connection.is-active { color: #4ade80; }
 .generation-credentials .is-disabled { opacity: .45; cursor: not-allowed; }
 .generation-credentials [hidden] { display: none; }
-.generation-diagnostics { font-size: 12px; color: var(--muted); }
-.generation-diagnostics summary { cursor: pointer; }
-.generation-diagnostics[open] { display: grid; gap: 8px; }
-
-.api-settings-widget .api-settings-body { overflow-y: auto; scrollbar-width: thin; }
 
 /* ChatGPT 구독 연결: 랜딩 위 모달(배경 흐림) — 내용은 codex-connect.html?embed=1 한 벌을 iframe 으로 쓴다 */
 .codex-connect-modal {

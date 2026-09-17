@@ -1263,8 +1263,6 @@
     const apiSettingsWidget = document.getElementById('api-settings-widget');
     const apiSettingsToggleBtn = document.getElementById('api-settings-toggle');
     const apiSettingsTokenInput = document.getElementById('api-settings-token');
-    const apiSettingsScopeEl = document.getElementById('api-settings-scope');
-    const apiSettingsStateEl = document.getElementById('api-settings-state');
     const apiSettingsSaveBtn = document.getElementById('api-settings-save');
     const apiSettingsDiagnoseBtn = document.getElementById('api-settings-diagnose');
     const userChatEnabled = document.getElementById('user-chat-enabled');
@@ -2015,14 +2013,22 @@
       }
     };
 
-    const setApiSettingsState = (text, kind) => {
-      if (!apiSettingsStateEl) return;
-      var full = translateUiText(text || '');
-      apiSettingsStateEl.textContent = full;
-      apiSettingsStateEl.title = full;   // 한 줄로 잘리므로 전체는 툴팁에
-      apiSettingsStateEl.classList.toggle('is-ok', kind === 'ok');
-      apiSettingsStateEl.classList.toggle('is-error', kind === 'error');
-      if (kind === 'error' && apiSettingsStateEl.closest('details')) apiSettingsStateEl.closest('details').open = true;
+    // 설명 문구 줄은 두지 않는다. 오류와 진단 결과만 해당 버튼 글자로 잠깐 보여 주고, 전체 내용은 버튼 툴팁에 둔다.
+    // 불러오기 성공 같은 평상시 상태는 표시하지 않는다(진행 중은 버튼 비활성으로 드러난다).
+    const apiSettingsFlashTimers = new Map();
+    const setApiSettingsState = (text, kind, button) => {
+      const target = button || (kind === 'error' ? apiSettingsSaveBtn : null);
+      if (!target || !kind) return;
+      clearTimeout(apiSettingsFlashTimers.get(target));
+      target.textContent = translateUiText(kind === 'ok' ? '정상' : '실패');
+      target.title = translateUiText(text || '');
+      target.classList.toggle('is-ok', kind === 'ok');
+      target.classList.toggle('is-error', kind === 'error');
+      apiSettingsFlashTimers.set(target, setTimeout(() => {
+        target.textContent = translateUiText(target.dataset.i18n || '');
+        target.title = '';
+        target.classList.remove('is-ok', 'is-error');
+      }, 4000));
     };
 
     const renderGenerationConnectionStatus = () => {
@@ -2080,17 +2086,6 @@
           ? '터미널에서 claude setup-token 으로 발급한 구독 토큰'
           : 'Anthropic 콘솔에서 발급한 API 키'
       );
-    };
-
-    // 적용 범위는 한 줄만 보여주고 전체 목록은 툴팁에 둔다(카드 높이 고정)
-    const renderApiScopeLine = () => {
-      if (!apiSettingsScopeEl) return;
-      apiSettingsScopeEl.textContent = translateUiText('적용: 스튜디오·AI 기업의 텍스트와 이미지 전체');
-      // 사전 키에 개행을 넣지 않으려고 두 줄을 따로 번역해 합친다
-      apiSettingsScopeEl.title = [
-        translateUiText('이미지 적용: AI 이미지·AI 문서 삽화·캐릭터/배경·장면 스틸·스토리보드·편집·카메라 변경·업스케일·AI 기업 에이전트.'),
-        translateUiText('음악·음성·영상 생성은 기존 설정을 사용합니다. 본인 인증 오류 시 마스터로 자동 전환하지 않습니다.'),
-      ].join('\n');
     };
 
     // keepEdits: 연결 상태만 새로 받고, 사용자가 아직 적용하지 않은 체크·모드 선택은 덮어쓰지 않는다.
@@ -2175,13 +2170,13 @@
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         const t = (d && d.test) || {};
         if (t.ok) {
-          setApiSettingsState(d.source === 'user' ? '본인 인증 정상 — 실제 호출 성공' : '마스터 인증 정상 — 실제 호출 성공', 'ok');
+          setApiSettingsState(d.source === 'user' ? '본인 인증 정상 — 실제 호출 성공' : '마스터 인증 정상 — 실제 호출 성공', 'ok', apiSettingsDiagnoseBtn);
         } else {
-          setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error');
+          setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error', apiSettingsDiagnoseBtn);
         }
       } catch (err) {
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
-        setApiSettingsState(translateUiText('진단 실패') + ': ' + ((err && err.message) || err), 'error');
+        setApiSettingsState(translateUiText('진단 실패') + ': ' + ((err && err.message) || err), 'error', apiSettingsDiagnoseBtn);
       } finally {
         apiSettingsDiagnoseBtn.disabled = false;
       }
@@ -3052,12 +3047,10 @@
       });
       if (apiSettingsDiagnoseBtn) apiSettingsDiagnoseBtn.addEventListener('click', diagnoseApiSettings);
       renderApiAuthMode();
-      renderApiScopeLine();
       // data-i18n 은 applyI18n 이 처리하지만, JS 로 넣은 문구(툴팁·상태·접기 라벨)는
       // 언어가 바뀔 때 직접 다시 그려야 한다.
       window.addEventListener('nk:lang-changed', () => {
         renderApiAuthMode();
-        renderApiScopeLine();
         setApiSettingsCollapsed(apiSettingsCollapsed);
         if (apiAuthLoaded) loadApiSettings();
       });
