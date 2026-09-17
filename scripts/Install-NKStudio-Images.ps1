@@ -40,5 +40,4 @@ Copy-Item -LiteralPath $connectorBundle -Destination (Join-Path $connectorInstal
 $env:NK_CODEX_BINARY = $connectorBinary
 $connectorArguments = @((Join-Path $connectorInstallRoot 'nk-image-connector.cjs'))
 if ($args -contains '--new-profile') { $connectorArguments += '--new-profile' }
-if ($args -contains '--no-browser') { $connectorArguments += '--no-browser' }
 & $connectorNode @connectorArguments

@@ -3,12 +3,13 @@ const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
 const { CodexClient, imageMime } = require('./lib/codex-client.cjs');
 
-const API = 'https://nkstudio.org/api/codex-images';
+const NK_ORIGIN = 'https://nkstudio.org';
+const API = NK_ORIGIN + '/api/codex-images';
+// 랜딩의 연결 모달이 이 PC의 연결 프로그램을 찾는 고정 주소. 연결 프로그램은 별도 창을 띄우지 않는다.
+const LOCAL_PORT = 47831;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const escapeHtml = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function connectorRequest(token, body, multipart = false) {
   const response = await fetch(API, { method: 'POST', signal: AbortSignal.timeout(90000),
@@ -69,57 +70,61 @@ async function main() {
   }
   const home = path.join(root, 'profiles', profile.id, 'auth');
   const workRoot = path.join(root, 'profiles', profile.id, 'images');
-  const client = new CodexClient({ binary: process.env.NK_CODEX_BINARY || 'codex', home, cwd: workRoot });
-  await client.initialize();
-  let account;
-  let loginUrl = '';
-  let message = 'ChatGPT 계정 확인 중 / Checking your ChatGPT account';
-  try { account = await client.subscriptionAccount(); } catch {
-    const login = await client.request('account/login/start', { type: 'chatgpt', useHostedLoginSuccessPage: true });
-    loginUrl = login.authUrl;
-    if (!loginUrl || !/^https:\/\/(auth\.openai\.com|chatgpt\.com)\//.test(loginUrl)) throw new Error('invalid_codex_login_url');
-    message = '본인 ChatGPT 구독 계정으로 로그인해 주세요 / Sign in with your own ChatGPT subscription';
-  }
   const tokenHash = crypto.createHash('sha256').update(profile.token).digest('hex');
-  const nonce = crypto.randomBytes(24).toString('hex');
+  let client;
+  let ready = false;
+  let account;
   let paired = false;
-  const server = http.createServer((request, response) => {
+  let message = 'ChatGPT 계정 확인 중 / Checking your ChatGPT account';
+  const server = http.createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('X-Content-Type-Options', 'nosniff');
-    if (request.method !== 'GET' || ![`/${nonce}`, `/${nonce}/status`].includes(request.url)) {
-      response.writeHead(404); return response.end();
+    // Host 는 루프백 고정 주소만(DNS 리바인딩 차단), 응답은 NKStudio 페이지에만 준다.
+    // tokenHash 가 다른 사이트로 새면 남의 NKStudio 계정에 이 PC의 구독이 묶일 수 있다.
+    if (request.headers.host !== `127.0.0.1:${LOCAL_PORT}` || request.headers.origin !== NK_ORIGIN) {
+      response.writeHead(403); return response.end();
     }
-    const nkUrl = `https://nkstudio.org/codex-connect.html#connector=${tokenHash}&email=${encodeURIComponent(account?.email || '')}&plan=${encodeURIComponent(account?.planType || '')}`;
-    if (request.url.endsWith('/status')) {
-      response.setHeader('Content-Type', 'application/json');
-      return response.end(JSON.stringify({ email: account?.email || '', plan: account?.planType || '', loginUrl, nkUrl: account ? nkUrl : '', paired, message }));
+    response.setHeader('Access-Control-Allow-Origin', NK_ORIGIN);
+    response.setHeader('Vary', 'Origin');
+    if (request.method === 'OPTIONS') {
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+      response.setHeader('Access-Control-Allow-Private-Network', 'true');
+      response.writeHead(204); return response.end();
     }
-    const scriptNonce = crypto.randomBytes(16).toString('hex');
-    response.setHeader('Content-Type', 'text/html; charset=utf-8');
-    response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${scriptNonce}'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'`);
-    response.end(`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NKStudio 이미지 구독 연결</title>
-      <style>[hidden]{display:none!important}body{background:#10141d;color:#e6edf8;font:16px system-ui;max-width:560px;margin:9vh auto;padding:24px}h1{font-size:25px}a{display:block;background:#1367d8;color:white;padding:14px;border-radius:10px;margin:18px 0;text-decoration:none}p{line-height:1.7}.muted{color:#9caac3}</style>
-      <h1>NKStudio · ChatGPT 이미지 연결</h1><p id="state">${escapeHtml(message)}</p><p id="account"></p>
-      <a id="login" href="${escapeHtml(loginUrl || '#')}" target="_blank" rel="noopener noreferrer" ${account ? 'hidden' : ''}>① 내 ChatGPT로 로그인 / Sign in</a>
-      <a id="connect" href="${escapeHtml(account ? nkUrl : '#')}" target="_blank" rel="noopener noreferrer" ${account ? '' : 'hidden'}>② NKStudio 계정에 연결 / Connect NKStudio</a>
-      <p class="muted">최초 연결 후 NKStudio에서 생성 버튼을 누르면 이미지가 자동 저장됩니다. 연결 프로그램이 실행 중이어야 합니다.<br>After setup, generate and save images from NKStudio. Keep this connector running.</p>
-      <script nonce="${scriptNonce}">setInterval(async()=>{try{const r=await fetch(location.pathname+'/status');const s=await r.json();document.getElementById('state').textContent=s.message;document.getElementById('account').textContent=s.email?(s.email+' · '+s.plan):'';document.getElementById('login').hidden=!!s.email;document.getElementById('connect').hidden=!s.nkUrl;document.getElementById('connect').href=s.nkUrl||'#';if(s.paired)document.getElementById('connect').textContent='연결 완료 · NKStudio 열기 / Open NKStudio';}catch{}},2000)</script></html>`);
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'GET' && request.url === '/status') {
+      return response.end(JSON.stringify({ ready, signedIn: !!account, email: account?.email || '',
+        plan: account?.planType || '', tokenHash: account ? tokenHash : '', paired, message }));
+    }
+    if (request.method === 'POST' && request.url === '/login') {
+      if (!ready) { response.writeHead(503); return response.end(JSON.stringify({ error: 'connector_starting' })); }
+      if (account) return response.end(JSON.stringify({ signedIn: true }));
+      try {
+        const login = await client.request('account/login/start', { type: 'chatgpt', useHostedLoginSuccessPage: true });
+        if (!login.authUrl || !/^https:\/\/(auth\.openai\.com|chatgpt\.com)\//.test(login.authUrl)) throw new Error('invalid_codex_login_url');
+        return response.end(JSON.stringify({ authUrl: login.authUrl }));
+      } catch {
+        response.writeHead(502); return response.end(JSON.stringify({ error: 'codex_login_unavailable' }));
+      }
+    }
+    response.writeHead(404); return response.end();
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const setupUrl = `http://127.0.0.1:${server.address().port}/${nonce}`;
-  // Setup URL contains no OpenAI credential or worker token.
-  console.log('NKSTUDIO_SETUP_URL=' + setupUrl);
-  if (!process.argv.includes('--no-browser')) {
-    if (process.platform === 'win32') spawn('rundll32.exe', ['url.dll,FileProtocolHandler', setupUrl], { windowsHide: true, stdio: 'ignore' }).unref();
-  }
+  await new Promise((resolve, reject) => {
+    server.once('error', error => reject(new Error(error.code === 'EADDRINUSE' ? 'connector_already_running' : 'connector_port_unavailable')));
+    server.listen(LOCAL_PORT, '127.0.0.1', resolve);
+  });
+  console.log('NKStudio 이미지 연결 프로그램 실행 중 · NKStudio 이미지 생성의 \'연결\' 창에서 계속해 주세요.');
+  console.log('NKStudio image connector is running. Continue in the Connect dialog on NKStudio. Keep this window open.');
+  client = new CodexClient({ binary: process.env.NK_CODEX_BINARY || 'codex', home, cwd: workRoot });
+  await client.initialize();
+  ready = true;
   let stopping = false;
   const stop = () => { stopping = true; client.close(); server.close(); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
   while (!stopping) {
     try {
-      try { account = await client.subscriptionAccount(); loginUrl = ''; } catch (error) {
+      try { account = await client.subscriptionAccount(); } catch (error) {
         account = null;
         message = error.message === 'chatgpt_image_plan_required'
           ? '이미지 생성을 지원하는 ChatGPT 구독이 필요합니다 / A supported ChatGPT subscription is required'
@@ -192,6 +197,7 @@ async function main() {
 }
 if (require.main === module) main().catch(error => {
   console.error('NKStudio image connector could not start: ' + (/^[a-z0-9_]+$/.test(error.message) ? error.message : 'connector_start_failed'));
-  process.exitCode = 1;
+  // 로컬 주소를 열어 둔 채 남으면 모달이 멈춘 연결 프로그램을 실행 중으로 본다.
+  process.exit(1);
 });
 module.exports = { referencePaths, connectorRequest };
