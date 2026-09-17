@@ -113,7 +113,7 @@ function Spinner({ className }: { className?: string }) {
 const STATUS: Record<string, { t: string; c: string; pill: string }> = {
   pending: { t: "검토 대기", c: "text-amber-300", pill: "bg-amber-900/40 text-amber-300 border-amber-700/50" },
   approved: { t: "사용 확정", c: "text-emerald-300", pill: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
-  revise: { t: "재검토", c: "text-sky-300", pill: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
+  revise: { t: "재검토 요청됨", c: "text-sky-300", pill: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
 };
 
 const workerLabel = (it: ResultItem) => `${it.agentName}${JOB[it.agentId] ? `(${JOB[it.agentId]})` : ""}`;
@@ -132,8 +132,9 @@ function ImagePopup({
 }) {
   const [busy, setBusy] = useState(false);
   const [folderHint, setFolderHint] = useState("");
-  // 이미 처리된(사용 확정·재검토) 산출물은 다시 검토할 게 없다 — 상태와 폴더만 보여준다.
-  const reviewable = item.reviewStatus === "pending";
+  // 재검토는 몇 번이든 할 수 있다(누를 때마다 이 결과를 바탕으로 새로 만든다).
+  // 검토 승인은 아직 사용 확정하지 않은 산출물에서만 보인다.
+  const approvable = item.reviewStatus !== "approved";
 
   async function approve() {
     setBusy(true);
@@ -176,7 +177,7 @@ function ImagePopup({
           )}
           {item.note && (
             <div className="mt-2 rounded-lg border border-sky-800/50 bg-sky-900/20 px-3 py-2 text-[12px] leading-relaxed text-sky-200">
-              <span className="text-sky-400">재검토 요청 · </span>
+              <span className="text-sky-400">마지막 재검토 요청 · </span>
               {item.note}
             </div>
           )}
@@ -199,10 +200,10 @@ function ImagePopup({
           </button>
           {folderHint && <span className="text-[11px] text-gray-500">{folderHint}</span>}
           <div className="ml-auto flex items-center gap-2">
-            <span className={`text-xs ${STATUS[item.reviewStatus]?.c ?? "text-gray-400"}`}>
+            {/* 상태는 버튼과 헷갈리지 않게 알약 모양 표시로 둔다 */}
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS[item.reviewStatus]?.pill ?? "border-edge text-gray-400"}`}>
               {STATUS[item.reviewStatus]?.t ?? item.reviewStatus}
             </span>
-            {reviewable && <>
             <button
               disabled={busy}
               onClick={onRevise}
@@ -210,14 +211,13 @@ function ImagePopup({
             >
               재검토
             </button>
-            <button
+            {approvable && <button
               disabled={busy}
               onClick={() => void approve()}
-              className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:opacity-40"
+              className="min-w-[5.5rem] rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:opacity-40"
             >
               {busy ? "처리 중…" : "검토 승인"}
-            </button>
-            </>}
+            </button>}
           </div>
         </div>
       </div>
@@ -263,7 +263,7 @@ function ReviseDialog({ item, onSubmit, onClose }: {
         {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 transition hover:bg-edge disabled:opacity-40">취소</button>
-          <button type="submit" disabled={busy} className="inline-flex min-w-16 items-center justify-center gap-1 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-600 disabled:opacity-60">
+          <button type="submit" disabled={busy || (item.kind === "image" && !note.trim())} className="inline-flex min-w-16 items-center justify-center gap-1 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-600 disabled:opacity-60">
             {busy ? <><Spinner className="h-3.5 w-3.5" /> 요청 중…</> : "확인"}
           </button>
         </div>

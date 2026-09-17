@@ -60,8 +60,9 @@ test("재검토는 앱 안 모달로 받고, 이미지면 그 내용을 반영�
   const results = read("ai-company-app/src/components/Results.tsx");
   assert.doesNotMatch(results, /window\.prompt\(/);
   assert.match(results, /function ReviseDialog/);
-  // 이미 처리된 산출물 팝업에는 검토 버튼을 다시 띄우지 않는다
-  assert.match(results, /const reviewable = item\.reviewStatus === "pending"/);
+  // 재검토는 상태와 상관없이 반복할 수 있고, 검토 승인은 사용 확정 전까지만 보인다
+  assert.match(results, /const approvable = item\.reviewStatus !== "approved"/);
+  assert.doesNotMatch(results, /reviewable && </);
   const api = read("ai-company-app/src/lib/api.ts");
   const reviewFn = api.slice(api.indexOf("export async function reviewResult"), api.indexOf("export async function cancelResult"));
   assert.match(reviewFn, /return \{ ok: true, reviewStatus: d\.job\?\.review_status, message \}/);

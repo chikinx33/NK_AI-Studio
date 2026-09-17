@@ -102,6 +102,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
         await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
         return send({ error: `승인 실행 중 오류: ${e?.message || e}` }, 500, origin);
       }
+    } else if (decision === "revise" && job.review_status === "approved") {
+      // 이미 사용 확정한 산출물의 재검토: 확정·업무 파일 등록은 유지하고, 아래에서 수정본만 새로 만든다.
+      updated = job;
     } else {
       updated = await setJobStatus(sql, id, auth.userId, {
         status: decision === "approved" ? "approved" : "revise",
