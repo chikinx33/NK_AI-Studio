@@ -516,6 +516,7 @@ ${persona}${knowledgeBlock}
 - 등록: [[SELF_KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
 - 삭제: [[SELF_KNOW: del | 기존에 등록된 정확한 내용]]
 예) 픽셀이 "이미지는 항상 16:9로"라는 지시를 받으면 → [[SELF_KNOW: add | 원칙 | 이미지 생성 시 기본 비율은 16:9]]
+사용자가 저장을 명시적으로 지시하거나 제안한 문구의 저장을 승인했으면 같은 답변에 마커를 한 번만 쓰세요. 단순히 문구를 다듬어 보여주거나 저장 여부를 물을 때는 마커를 쓰지 마세요. 이미 보유한 같은 규칙은 다시 등록하지 마세요.
 이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.${uiControlBlock}
 
 ## ❌ 작업 취소 (CANCEL 마커)
@@ -650,6 +651,26 @@ function normalizeKnowType(t: string): string {
   if (/규칙|원칙|rule|principle/i.test(s)) return "원칙";
   if (/결정|decision/i.test(s)) return "결정";
   return "사실";
+}
+
+interface SelfKnowOp { action: "add" | "del"; text: string; type?: string; }
+
+function extractSelfKnows(raw: string): SelfKnowOp[] {
+  const ops: SelfKnowOp[] = [];
+  // 전역 정규식의 lastIndex를 공유하지 않아 동시 발언도 서로 영향을 주지 않는다.
+  for (const match of raw.matchAll(new RegExp(SELF_KNOW_RE.source, "gi"))) {
+    const parts = match[1].split("|").map((part) => part.trim()).filter(Boolean);
+    const action = (parts[0] || "").toLowerCase();
+    if (/^(add|remember|등록|추가)$/.test(action)) {
+      const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
+      const text = (parts.length >= 3 ? parts.slice(2) : parts.slice(1)).join(" | ");
+      if (text) ops.push({ action: "add", text, type });
+    } else if (/^(del|delete|remove|삭제|제거)$/.test(action)) {
+      const text = (parts.length >= 3 && KNOW_TYPE_WORD.test(parts[1]) ? parts.slice(2) : parts.slice(1)).join(" | ");
+      if (text) ops.push({ action: "del", text });
+    }
+  }
+  return ops;
 }
 
 /** 마커 추출 + 본문에서 숨김. (CALL 위임 · RUN 도구 · KNOW 회사지식 관리 · CANCEL 작업취소) */
@@ -883,25 +904,8 @@ export async function speak(
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companyKnowledgeTotal, companyKnowledgeRetrieved, companySkills, companyProjects, hasAttachments });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
-  // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
-  if (opts.sql && opts.userId) {
-    SELF_KNOW_RE.lastIndex = 0;
-    let sm: RegExpExecArray | null;
-    while ((sm = SELF_KNOW_RE.exec(raw))) {
-      const parts = String(sm[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
-      const act = (parts[0] || "").toLowerCase();
-      try {
-        if (/^(add|remember|등록|추가)$/.test(act)) {
-          const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
-          const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
-          if (text) await addAgentKnowledgeRow(opts.sql, opts.userId, agentId, text, type);
-        } else if (/^(del|delete|remove|삭제|제거)$/.test(act)) {
-          const text = parts.slice(1).join(" | ");
-          if (text) await removeAgentKnowledgeRow(opts.sql, opts.userId, agentId, text);
-        }
-      } catch { /* 개인 지식 반영 실패는 대화 흐름에 영향 없음 */ }
-    }
-  }
+  // 개인 지식도 보정 판단에 포함하고, 원본·보정 마커를 아래 한 경로에서만 반영한다.
+  const selfKnows = extractSelfKnows(raw);
   const result = extractMarkers(raw);
 
   // 회사 파일 변경은 말뿐인 완료 보고가 되면 안 된다. 특히 따옴표로 폴더명을 준 생성 명령은
@@ -964,8 +968,8 @@ export async function speak(
   //       한 번 더 강제로 받아 즉시 반영한다. (프롬프트 규칙만으론 불안정해 서버에서 보정)
   if (opts.sql && opts.userId) {
     const claimedChange = /(바꿨|바꿀게|바꾸겠|수정했|수정할게|수정하겠|변경했|변경할게|변경하겠|반영했|반영할게|반영하겠|등록했|등록할게|등록하겠|저장했|저장할게|저장하겠)/.test(result.text);
-    const hasDbMarker = result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0 || result.uiActions.length > 0;
-    if (claimedChange && !hasDbMarker && !companyFileMutationIntent) {
+    const hasDbMarker = selfKnows.length > 0 || result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0 || result.uiActions.length > 0;
+    if (claimedChange && !hasDbMarker && result.calls.length === 0 && !companyFileMutationIntent) {
       const fixRaw = await callClaude(
         env,
         system,
@@ -977,29 +981,24 @@ export async function speak(
         { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: 400, resolvedAuth: opts.resolvedAuth }
       ).catch(() => "");
       if (fixRaw) {
-        // SELF_KNOW(개인 지식)는 extractMarkers가 다루지 않으므로 보정분에서도 직접 처리.
-        SELF_KNOW_RE.lastIndex = 0;
-        let sm2: RegExpExecArray | null;
-        while ((sm2 = SELF_KNOW_RE.exec(fixRaw))) {
-          const parts = String(sm2[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
-          const act = (parts[0] || "").toLowerCase();
-          try {
-            if (/^(add|remember|등록|추가)$/.test(act)) {
-              const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
-              const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
-              if (text) await addAgentKnowledgeRow(opts.sql, opts.userId, agentId, text, type);
-            } else if (/^(del|delete|remove|삭제|제거)$/.test(act)) {
-              const text = parts.slice(1).join(" | ");
-              if (text) await removeAgentKnowledgeRow(opts.sql, opts.userId, agentId, text);
-            }
-          } catch { /* 개인 지식 반영 실패는 대화 흐름에 영향 없음 */ }
-        }
+        selfKnows.push(...extractSelfKnows(fixRaw));
         // 회사 지식·프로젝트·스킬 마커만 보강(위임 CALL·도구 RUN은 보정 대상 아님 — 변경 누락만 메움).
         const extra = extractMarkers(fixRaw);
         result.knows.push(...extra.knows);
         result.projects.push(...extra.projects);
         result.skills.push(...extra.skills);
         result.uiActions.push(...extra.uiActions);
+      }
+    }
+  }
+  if (opts.sql && opts.userId) {
+    for (const op of selfKnows) {
+      try {
+        if (op.action === "add") await addAgentKnowledgeRow(opts.sql, opts.userId, agentId, op.text, op.type || "사실");
+        else await removeAgentKnowledgeRow(opts.sql, opts.userId, agentId, op.text);
+      } catch {
+        // 저장 실패를 숨긴 채 '저장했어요'만 반환하지 않는다.
+        result.text += "\n\n⚠️ 개인 규칙·지식을 반영하지 못했어요. 잠시 후 다시 시도해 주세요.";
       }
     }
   }

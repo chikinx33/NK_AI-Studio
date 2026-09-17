@@ -120,7 +120,7 @@ test("회사 업무 탐색기는 날짜·업무·소스 계층과 확인 링크�
   assert.doesNotMatch(rightMenu, /VideoIcon/);
   assert.match(
     rightMenu,
-    /title="채팅"[\s\S]*title="홈 \(대시보드\)"[\s\S]*title="회사 업무 탐색기"[\s\S]*title="회사 지식/,
+    /title=\{t\.chat\}[\s\S]*title=\{t\.home\}[\s\S]*title=\{t\.works\}[\s\S]*title=\{t\.knowledge\}/,
   );
   assert.doesNotMatch(explorer, /onDoubleClick/);
   assert.match(explorer, /onClick=\{\(\) => openDateFolder\(folderDate\)\}/);

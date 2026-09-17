@@ -57,7 +57,7 @@ export async function downloadPpt(title: string, slides: PptSlide[]) {
       // ── 내용 슬라이드 ──────────────────────────────────────────────────────
       s.background = { color: "f8f9fc" };
       // 상단 타이틀 바
-      s.addShape(pptxgen.ShapeType.rect, {
+      s.addShape(pptx.ShapeType.rect, {
         x: 0, y: 0, w: "100%", h: 1.15,
         fill: { color: BRAND_DARK },
         line: { color: BRAND_DARK },

@@ -1,4 +1,52 @@
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { readStorage } from "../lib/safeStorage";
+
+export const MENU_TEXT = {
+  ko: {
+    chat: "채팅",
+    home: "홈 (대시보드)",
+    works: "회사 업무 탐색기",
+    knowledge: "회사 지식 (그래프 + 리스트)",
+    agents: "직원 관리 (페르소나·규칙)",
+    settings: "옵션",
+    studio: "스튜디오로 돌아가기",
+  },
+  en: {
+    chat: "Chat",
+    home: "Home (dashboard)",
+    works: "Company work explorer",
+    knowledge: "Company knowledge (graph + list)",
+    agents: "Employee management (personas and rules)",
+    settings: "Options",
+    studio: "Back to Studio",
+  },
+};
+
+type MenuLang = keyof typeof MENU_TEXT;
+const currentLang = (): MenuLang => String(readStorage("nk_lang")).replace(/^"|"$/g, "") === "en" ? "en" : "ko";
+
+function useMenuText() {
+  const [lang, setLang] = useState(currentLang);
+  useEffect(() => {
+    const sync = () => setLang(currentLang());
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin && event.data?.type === "lang-apply") {
+        setLang(event.data.lang === "en" ? "en" : "ko");
+      }
+    };
+    const onStorage = (event: StorageEvent) => { if (event.key === "nk_lang" || event.key === null) sync(); };
+    window.addEventListener("message", onMessage);
+    window.addEventListener("nk:lang-changed", sync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("nk:lang-changed", sync);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+  return MENU_TEXT[lang];
+}
 
 type IconProps = { className?: string };
 const SVG = (props: IconProps & { children: ReactNode }) => (
@@ -83,10 +131,48 @@ function IconBtn({
   danger?: boolean;
   children: ReactNode;
 }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const tooltipId = useId();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [position, setPosition] = useState({ left: 0, top: 0 });
+  const visible = (hovered || focused) && !dismissed;
+
+  const show = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const halfWidth = Math.min(140, (window.innerWidth - 16) / 2);
+    setPosition({ left: Math.max(8 + halfWidth, Math.min(rect.left + rect.width / 2, window.innerWidth - 8 - halfWidth)), top: rect.bottom + 8 });
+    setDismissed(false);
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    const dismiss = () => setDismissed(true);
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [visible]);
+
   return (
+    <>
     <button
-      onClick={onClick}
-      title={title}
+      ref={buttonRef}
+      type="button"
+      onClick={() => { setDismissed(true); onClick(); }}
+      aria-label={title}
+      aria-describedby={visible ? tooltipId : undefined}
+      onMouseEnter={() => { show(); setHovered(true); }}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => { show(); setFocused(true); }}
+      onBlur={() => setFocused(false)}
       className={`grid h-9 w-9 place-items-center rounded-lg transition ${
         danger
           ? "text-red-400 hover:bg-red-900/40 hover:text-red-300"
@@ -97,6 +183,18 @@ function IconBtn({
     >
       {children}
     </button>
+    {visible && createPortal(
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none fixed z-[100] w-max max-w-[min(280px,calc(100vw-16px))] -translate-x-1/2 rounded-lg border border-edge bg-[#111820] px-3 py-2 text-center text-xs leading-relaxed text-gray-100 shadow-xl"
+        style={position}
+      >
+        {title}
+      </span>,
+      document.body,
+    )}
+    </>
   );
 }
 
@@ -120,30 +218,31 @@ export default function RightMenu({
   onWorks,
   onSettings,
 }: Props) {
+  const t = useMenuText();
   return (
     <div className="mb-3 flex items-center gap-1 rounded-xl border border-edge bg-panel p-1">
-      <IconBtn active={centerView === "chat"} title="채팅" onClick={onChat}>
+      <IconBtn active={centerView === "chat"} title={t.chat} onClick={onChat}>
         <MessagesSquareIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "dashboard"} title="홈 (대시보드)" onClick={onHome}>
+      <IconBtn active={centerView === "dashboard"} title={t.home} onClick={onHome}>
         <HouseIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "works" || centerView === "video"} title="회사 업무 탐색기" onClick={onWorks}>
+      <IconBtn active={centerView === "works" || centerView === "video"} title={t.works} onClick={onWorks}>
         <FolderIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "knowledge"} title="회사 지식 (그래프 + 리스트)" onClick={onKnowledge}>
+      <IconBtn active={centerView === "knowledge"} title={t.knowledge} onClick={onKnowledge}>
         <BrainIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn active={centerView === "agents"} title="직원 관리 (페르소나·규칙)" onClick={onAgents}>
+      <IconBtn active={centerView === "agents"} title={t.agents} onClick={onAgents}>
         <UsersIcon className="h-4 w-4" />
       </IconBtn>
       <div className="ml-auto" />
       {onSettings ? (
-        <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
+        <IconBtn active={centerView === "settings"} title={t.settings} onClick={onSettings}>
           <SettingsIcon className="h-4 w-4" />
         </IconBtn>
       ) : null}
-      <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }} danger>
+      <IconBtn title={t.studio} onClick={() => { window.location.href = "/app.html"; }} danger>
         <PowerIcon className="h-4 w-4" />
       </IconBtn>
     </div>

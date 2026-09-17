@@ -19,6 +19,7 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 // [파일, 사전 시작 표식, 사전 끝 표식]
 const DICTIONARIES = [
+  ["ai-company-app/src/components/RightMenu.tsx", "export const MENU_TEXT = {", "\ntype MenuLang"],
   ["prototype/js/ui/sns-settings.js", "var T = {", "\n  function _lang"],
   ["prototype/js/ui/format-media-spec.js", "var LOCK_TEXT = {", "\n  function lockLabel"],
   ["prototype/js/ui/format-media-spec.js", "var DELIVERY_TEXT = {", "\n  function deliveryText"],

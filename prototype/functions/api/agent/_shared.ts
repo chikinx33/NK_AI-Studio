@@ -246,9 +246,24 @@ async function runAgentSchemaDdl(sql: SqlFn): Promise<void> {
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
-  try {
-    await sql("CREATE INDEX IF NOT EXISTS agent_knowledge_idx ON agent_knowledge (user_id, agent_id)");
-  } catch (_) {}
+  await sql(`DO $$ BEGIN
+    CREATE INDEX IF NOT EXISTS agent_knowledge_idx ON agent_knowledge (user_id, agent_id);
+    IF to_regclass('agent_knowledge_identity_idx') IS NULL THEN
+      -- 같은 사용자·직원·분류·본문의 기존 중복만 정리하고 가장 먼저 저장한 행을 보존한다.
+      -- 준비와 동시에 들어오는 쓰기를 막아 정리와 유일 인덱스 생성을 한 트랜잭션에서 보장한다.
+      LOCK TABLE agent_knowledge IN SHARE ROW EXCLUSIVE MODE;
+      DELETE FROM agent_knowledge WHERE id IN (
+        SELECT id FROM (
+          SELECT id, row_number() OVER (
+            PARTITION BY user_id, agent_id, type, text ORDER BY created_at ASC, id ASC
+          ) AS duplicate_rank FROM agent_knowledge
+        ) ranked WHERE duplicate_rank > 1
+      );
+      -- 긴 규칙도 인덱스 길이 제한에 걸리지 않도록 고정 길이 SHA-256을 사용한다.
+      CREATE UNIQUE INDEX IF NOT EXISTS agent_knowledge_identity_idx
+        ON agent_knowledge (user_id, agent_id, type, (digest(text, 'sha256')));
+    END IF;
+  END $$`);
   // 회사 지식(Phase 3 그래프): 전사 공용 지식. 멀티테넌시(user_id).
   await sql(`
     CREATE TABLE IF NOT EXISTS company_knowledge (
@@ -925,8 +940,13 @@ export async function listAgentKnowledge(sql: SqlFn, userId: string, agentId: st
   );
   return rows as { text: string; type: string }[];
 }
-export async function addAgentKnowledgeRow(sql: SqlFn, userId: string, agentId: string, text: string, type: string): Promise<void> {
-  await sql("INSERT INTO agent_knowledge (user_id, agent_id, text, type) VALUES ($1, $2, $3, $4)", [userId, agentId, text, type || "사실"]);
+export async function addAgentKnowledgeRow(sql: SqlFn, userId: string, agentId: string, text: string, type: string): Promise<number> {
+  const rows = await sql(
+    `INSERT INTO agent_knowledge (user_id, agent_id, text, type) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, agent_id, type, (digest(text, 'sha256'))) DO NOTHING RETURNING id`,
+    [userId, agentId, text.trim(), type || "사실"]
+  );
+  return rows.length;
 }
 export async function removeAgentKnowledgeRow(sql: SqlFn, userId: string, agentId: string, text: string): Promise<void> {
   await sql("DELETE FROM agent_knowledge WHERE user_id = $1 AND agent_id = $2 AND text = $3", [userId, agentId, text]);
