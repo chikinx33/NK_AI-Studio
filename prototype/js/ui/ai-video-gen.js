@@ -2288,7 +2288,9 @@
 
     state.results.push(newResult);
     state.selectedId = resultId;
-    state.generating = false;
+    // ★ 생성 잠금(state.generating)은 서버가 작업을 접수할 때까지 유지한다(아래 finally 에서 푼다).
+    //   예전엔 여기서 바로 풀어, 참조 업로드로 접수가 수십 초 걸리는 Seedance 2.5 에서 버튼이 다시 눌려
+    //   누른 횟수만큼 영상이 생성되고 크레딧이 빠졌다(2026-09-17 한 번에 4개).
     // 실패 시 같은 입력으로 재시도할 수 있도록 스냅샷을 남긴다(메모리 전용).
     _retryInputs[resultId] = {
       startImageUrl: state.startImageUrl,
@@ -2373,6 +2375,9 @@
         errorStatus: (err && err.status) || 0
       });
       saveResults();
+    } finally {
+      // 접수(성공·실패) 뒤에야 다음 생성을 받는다. 진행 상태는 결과 카드의 폴링이 이어서 보여준다.
+      state.generating = false;
       render();
     }
   }
