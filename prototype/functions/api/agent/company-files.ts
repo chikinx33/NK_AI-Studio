@@ -442,9 +442,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
         };
       });
-    // 날짜 폴더 파일 저장소 안에는 날짜 폴더를 두지 않는다.
-    const workFolders = path === WORK_FILES_ROOT || path.startsWith(`${WORK_FILES_ROOT}/`)
-      ? [] : await listVirtualWorkFolders(getSql(env), auth.userId, path);
+    // 이 경로에 넣어 둔 날짜 폴더(날짜 폴더 안의 날짜 폴더는 .work-files/<날짜> 경로에 놓인다).
+    const workFolders = path === WORK_FILES_ROOT ? [] : await listVirtualWorkFolders(getSql(env), auth.userId, path);
     const entries = [...workFolders, ...folders, ...files].sort((a: any, b: any) => {
       const aFolder = a.kind === "folder" || a.kind === "work-folder";
       const bFolder = b.kind === "folder" || b.kind === "work-folder";
@@ -483,19 +482,34 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body: any = await request.json().catch(() => ({}));
     const action = String(body.action || "").trim();
     if (action === "move_work_folder") {
-      // 날짜 폴더를 일반 폴더(또는 루트) 안으로 옮긴다. 업무 기록의 날짜·경로(@work/날짜)는 바뀌지 않고 보이는 위치만 바뀐다.
+      // 날짜 폴더를 일반 폴더·다른 날짜 폴더(또는 루트) 안으로 옮긴다. 업무 기록의 날짜·경로(@work/날짜)는 바뀌지 않고 보이는 위치만 바뀐다.
+      // 다른 날짜 폴더 안에 넣으면 그 날짜 폴더의 파일 영역(.work-files/<날짜>)에 놓인다.
       const dateKey = String(body.dateKey || "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return send({ error: "옮길 날짜 폴더를 확인해 주세요." }, 400, origin);
       const parent = normalizePath(body.parentPath, true);
-      if (parent) {
-        assertMutablePath(parent);
-        if (parent === WORK_FILES_ROOT || parent.startsWith(`${WORK_FILES_ROOT}/`)) return send({ error: "날짜 폴더는 다른 날짜 폴더 안에 넣을 수 없습니다." }, 400, origin);
-        const target = await resolveObjects(ctx, rootPrefix, parent);
-        if (target?.kind !== "folder") return send({ error: `'${parent}' 폴더를 찾지 못했습니다.` }, 404, origin);
-      }
       const sql = getSql(env);
       if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
       await ensureAgentSchema(sql);
+      const dateFolderArea = /^\.work-files\/(\d{4}-\d{2}-\d{2})(?:\/|$)/;
+      if (parent) {
+        assertMutablePath(parent);
+        if (parent === WORK_FILES_ROOT) return send({ error: "넣을 폴더를 확인해 주세요." }, 400, origin);
+        const direct = /^\.work-files\/\d{4}-\d{2}-\d{2}$/.test(parent);
+        if (!direct) {
+          const target = await resolveObjects(ctx, rootPrefix, parent);
+          if (target?.kind !== "folder") return send({ error: `'${parent}' 폴더를 찾지 못했습니다.` }, 404, origin);
+        }
+        // 자기 자신이나 자기 안에 든 날짜 폴더 안으로는 넣을 수 없다(서로를 품는 끝없는 고리). 위치 전체를 한 번에 읽어 거슬러 올라간다.
+        const placements = await sql("SELECT date_key, parent_path FROM company_work_folders WHERE user_id = $1", [auth.userId]);
+        const parentOf = new Map((placements as any[]).map((row) => [String(row.date_key), String(row.parent_path || "")]));
+        let cursor = parent;
+        for (let depth = 0; depth < 200 && cursor; depth += 1) {
+          const owner = cursor.match(dateFolderArea)?.[1];
+          if (!owner) break;
+          if (owner === dateKey) return send({ error: "날짜 폴더를 자기 자신이나 자기 안에 든 폴더로 옮길 수 없습니다." }, 400, origin);
+          cursor = parentOf.get(owner) || "";
+        }
+      }
       const exists = await sql(
         "SELECT 1 FROM company_work_items WHERE user_id = $1 AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $2::date LIMIT 1",
         [auth.userId, dateKey],
@@ -540,6 +554,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const resolved = await resolveObjects(ctx, rootPrefix, source);
       if (!resolved) return send({ error: "복사하거나 이동할 파일 또는 폴더를 찾지 못했습니다." }, 404, origin);
       if (resolved.kind === "folder" && destination.startsWith(`${source}/`)) return send({ error: "폴더를 자기 하위 경로로 복사하거나 이동할 수 없습니다." }, 400, origin);
+      // 날짜 폴더를 품은 폴더를 그 날짜 폴더(또는 그 안) 영역으로 옮기면 날짜 폴더가 자기 안에 갇혀 사라진다.
+      if (action === "move" && resolved.kind === "folder" && /^\.work-files\/\d{4}-\d{2}-\d{2}(\/|$)/.test(destination)) {
+        const sql = getSql(env);
+        if (sql) {
+          await ensureAgentSchema(sql);
+          const placements = await sql("SELECT date_key, parent_path FROM company_work_folders WHERE user_id = $1", [auth.userId]);
+          const parentOf = new Map((placements as any[]).map((row) => [String(row.date_key), String(row.parent_path || "")]));
+          let cursor = destination;
+          for (let depth = 0; depth < 200 && cursor; depth += 1) {
+            const owner = cursor.match(/^\.work-files\/(\d{4}-\d{2}-\d{2})(?:\/|$)/)?.[1];
+            if (!owner) break;
+            const ownerParent = parentOf.get(owner) || "";
+            if (ownerParent === source || ownerParent.startsWith(`${source}/`)) {
+              return send({ error: "이 폴더 안에 든 날짜 폴더 안으로는 옮길 수 없습니다." }, 400, origin);
+            }
+            cursor = ownerParent;
+          }
+        }
+      }
       await ensureDestinationAvailable(ctx, rootPrefix, destination);
       const sourceObject = `${rootPrefix}${source}`;
       const destinationObject = `${rootPrefix}${destination}`;
@@ -576,10 +609,11 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
       if (resolved) for (const objectName of resolved.objects) names.add(objectName);
       else missing.push(path);
     }
+    // 파일이 없어도 그 경로에 넣어 둔 날짜 폴더는 루트로 되돌린다(날짜 폴더를 지울 때 안에 든 날짜 폴더가 사라지지 않게).
+    await releaseWorkFolders(env, auth.userId, paths).catch(() => {});
     if (!names.size) return send({ error: `삭제할 파일 또는 폴더를 찾지 못했습니다: ${missing.join(", ")}`, missing }, 404, origin);
     if (names.size > MAX_OPERATION_OBJECTS) return send({ error: `한 번에 삭제할 수 있는 파일은 ${MAX_OPERATION_OBJECTS}개까지입니다.` }, 400, origin);
     for (const objectName of names) await deleteObject(ctx, objectName);
-    await releaseWorkFolders(env, auth.userId, paths.filter((path: string) => !missing.includes(path))).catch(() => {});
     return send({ ok: true, deletedCount: names.size, paths, missing }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 삭제에 실패했습니다.") }, 500, origin);

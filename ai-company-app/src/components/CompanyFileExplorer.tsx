@@ -250,20 +250,19 @@ export default function CompanyFileExplorer({
     finally { setBusy(""); }
   }
 
-  // 끌 수 있는 것: 파일·일반 폴더·날짜 폴더(날짜 폴더 안의 파일 영역에서는 날짜 폴더가 보이지 않는다).
+  // 끌 수 있는 것: 파일·일반 폴더·날짜 폴더.
   const movable = (entry: CompanyFileEntry) => entry.kind === "file" || entry.kind === "folder" || (entry.kind === "work-folder" && !!entry.dateKey);
-  const isWorkFilesPath = (value: string) => value === ".work-files" || value.startsWith(".work-files/");
 
   // target.kind: "folder" = 일반 폴더·루트·상위 경로, "work-folder" = 날짜 폴더(안의 파일 영역으로 들어간다)
   function canDropInto(target: { path: string; kind: "folder" | "work-folder"; dateKey?: string }, items = dragItems) {
     if (!items.length) return false;
     return items.every((item) => {
       if (target.kind === "work-folder") {
-        // 날짜 폴더 안에는 파일·일반 폴더만 넣는다(날짜 폴더끼리는 넣지 않는다)
-        if (item.kind !== "file" && item.kind !== "folder") return false;
-        return !!target.dateKey && item.parentPath !== workFilesPath(target.dateKey);
+        // 날짜 폴더 안에는 무엇이든 넣는다(자기 자신 제외). 자기 안에 든 날짜 폴더로 넣는 고리는 서버가 막는다.
+        if (!target.dateKey || (item.kind === "work-folder" && item.dateKey === target.dateKey)) return false;
+        return item.parentPath !== workFilesPath(target.dateKey);
       }
-      if (item.kind === "work-folder") return !isWorkFilesPath(target.path) && item.parentPath !== target.path;
+      if (item.kind === "work-folder") return item.parentPath !== target.path && (!item.dateKey || !target.path.startsWith(workFilesPath(item.dateKey)));
       // 제자리, 자기 자신, 자기 하위 폴더로는 옮길 수 없다
       return item.parentPath !== target.path && target.path !== item.path && !target.path.startsWith(`${item.path}/`);
     });
@@ -312,7 +311,7 @@ export default function CompanyFileExplorer({
     try {
       const destinationFolder = target.kind === "work-folder" && target.dateKey ? workFilesPath(target.dateKey) : target.path;
       for (const item of items) {
-        if (item.kind === "work-folder" && item.dateKey) await moveCompanyWorkFolder(item.dateKey, target.path);
+        if (item.kind === "work-folder" && item.dateKey) await moveCompanyWorkFolder(item.dateKey, destinationFolder);
         else await moveCompanyFile(item.path, joinPath(destinationFolder, item.name));
       }
       await refresh();
