@@ -3,6 +3,7 @@
 // - 잡(agent_jobs) 스키마/저장소: 기존 Neon Postgres 재사용(knowledge/_shared 의 getSql).
 // - 도구 어댑터: 라비오크의 "도구=python spawn" 모델을 NK API fetch 로 전환.
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
+import { overviewOptions, matchOption, matchSubgenre, PURPOSE_CATEGORIES, NEEDS_LIST, TONE_LIST, STYLE_LIST, TARGET_OPTIONS, DURATION_OPTIONS, ASPECT_RATIOS } from "../_shared/overview-options.js";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
 import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
@@ -4028,6 +4029,141 @@ async function runJobsStatusTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+// ── 개요(프리프로덕션) ─────────────────────────────────────────────────────
+// 개요는 프로젝트 payload 에 그대로 산다(폼·캔버스·시나리오가 같은 자리를 본다).
+// 직원이 이 값을 읽고 채울 수 있어야 캔버스에서 에피소드를 시작할 수 있다.
+const OVERVIEW_FIELDS = ["topic", "story", "purposeCategory", "purposeTag", "target", "need", "tone", "style", "duration", "aspectRatio", "voiceMode", "characters"] as const;
+
+function readOverview(project: any) {
+  const payload = project?.payload && typeof project.payload === "object" ? project.payload : {};
+  const first = (value: any) => (Array.isArray(value) ? String(value[0] || "") : String(value || ""));
+  const characters = (Array.isArray(payload.characters) ? payload.characters : [])
+    .map((ch: any) => String(ch?.trigger || ch?.token || ch?.name || "").trim())
+    .filter(Boolean)
+    .map((name: string) => (name.startsWith("@") ? name : `@${name}`));
+  return {
+    topic: String(project?.title || payload.topic || ""),
+    story: String(payload.story || ""),
+    purposeCategory: String(payload.purposeCategory || ""),
+    purposeTag: first(payload.purposeTags),
+    target: String(payload.target || ""),
+    need: first(payload.needs),
+    tone: first(payload.tones),
+    style: first(payload.styles),
+    duration: String(payload.duration || ""),
+    aspectRatio: String(payload.aspectRatio || project?.aspectRatio || ""),
+    voiceMode: payload.dubbingEnabled ? "dubbing" : payload.narrationEnabled ? "narration" : "none",
+    characters,
+  };
+}
+
+/** 지금 개요가 어디까지 채워졌는지 + 고를 수 있는 값. read+synthesize. */
+async function runProjectOverviewGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("프로젝트 ID(projectId)가 필요해요. project_list 로 먼저 찾으세요.");
+  const project = await callInternalJson(ctx, `/api/project/get?projectId=${encodeURIComponent(projectId)}`);
+  const overview = readOverview(project?.project || project);
+  const missing = OVERVIEW_FIELDS.filter((field) => {
+    const value = (overview as any)[field];
+    return Array.isArray(value) ? !value.length : !String(value || "").trim() || (field === "voiceMode" && value === "none" ? false : false);
+  });
+  const options = overviewOptions();
+  return {
+    kind: "project_overview_get", projectId, overview,
+    missing, ready: !missing.length,
+    sceneCount: Array.isArray((project?.project || project)?.scenes) ? (project?.project || project).scenes.length : 0,
+    // 값을 지어내지 않도록 고를 수 있는 것을 함께 준다(세부 장르는 고른 장르 것만).
+    options: {
+      purposeCategories: Object.keys(options.purposeCategories),
+      purposeTags: (options.purposeCategories as any)[overview.purposeCategory] || [],
+      targets: options.targets.map((t: any) => t.value),
+      needs: options.needs, tones: options.tones, styles: options.styles,
+      durations: options.durations.map((d: any) => `${d.value}(${d.ko})`),
+      aspectRatios: options.aspectRatios,
+      voiceModes: options.voiceModes.map((v: any) => v.value),
+    },
+  };
+}
+
+/** 개요에서 준 항목만 고쳐 쓴다(나머지는 그대로). 창작자 데이터라 승인 게이트. */
+async function runProjectOverviewSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.id || "").trim();
+  if (!projectId) throw new Error("프로젝트 ID(projectId)가 필요해요.");
+  const payload: any = {};
+  const rejected: string[] = [];
+  const text = (value: any) => String(value ?? "").trim();
+
+  if (input?.topic !== undefined) payload.topic = text(input.topic).slice(0, 120);
+  if (input?.story !== undefined) payload.story = text(input.story).slice(0, 4000);
+
+  if (input?.purposeCategory !== undefined) {
+    const value = matchOption(Object.keys(PURPOSE_CATEGORIES), input.purposeCategory);
+    if (value) payload.purposeCategory = value;
+    else rejected.push(`장르 "${text(input.purposeCategory)}" — 고를 수 있는 값: ${Object.keys(PURPOSE_CATEGORIES).join(", ")}`);
+  }
+  if (input?.purposeTag !== undefined) {
+    const category = payload.purposeCategory || text(input.purposeCategory);
+    const value = matchSubgenre(category, input.purposeTag);
+    if (value) payload.purposeTags = [value];
+    else rejected.push(`세부 장르 "${text(input.purposeTag)}" — 장르를 먼저 정하고 그 안의 값을 고르세요.`);
+  }
+  const single: Array<[string, any, any[], string]> = [
+    ["target", input?.target, TARGET_OPTIONS, "시청 타겟"],
+    ["needs", input?.need ?? input?.needs, NEEDS_LIST, "시청 목적"],
+    ["tones", input?.tone ?? input?.tones, TONE_LIST, "톤"],
+    ["styles", input?.style ?? input?.styles, STYLE_LIST, "스타일"],
+  ];
+  for (const [key, raw, list, label] of single) {
+    if (raw === undefined) continue;
+    const wanted = Array.isArray(raw) ? raw[0] : raw;
+    const value = matchOption(list as any[], wanted);
+    if (!value) { rejected.push(`${label} "${text(wanted)}" — 고를 수 있는 값: ${(list as any[]).map((i: any) => (typeof i === "string" ? i : i.value)).join(", ")}`); continue; }
+    if (key === "target") payload.target = value;
+    else payload[key] = [value];
+  }
+  if (input?.duration !== undefined) {
+    const raw = text(input.duration).replace(/[^0-9]/g, "");
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds > 0) payload.duration = String(Math.floor(seconds));
+    else rejected.push(`영상 길이 "${text(input.duration)}" — 초 단위 숫자로 주세요(예: ${DURATION_OPTIONS.map((d: any) => d.value).join(", ")}).`);
+  }
+  if (input?.aspectRatio !== undefined) {
+    const value = matchOption(ASPECT_RATIOS, input.aspectRatio);
+    if (value) payload.aspectRatio = value;
+    else rejected.push(`화면 비율 "${text(input.aspectRatio)}" — ${ASPECT_RATIOS.join(", ")} 중 하나`);
+  }
+  if (input?.voiceMode !== undefined) {
+    const mode = text(input.voiceMode).toLowerCase();
+    if (["none", "narration", "dubbing"].includes(mode)) {
+      payload.narrationEnabled = mode === "narration";
+      payload.dubbingEnabled = mode === "dubbing";
+    } else rejected.push(`음성 모드 "${text(input.voiceMode)}" — none · narration · dubbing 중 하나`);
+  }
+  // 캐릭터는 브랜드 허브(IP 라이브러리)가 원본이다. 여기서는 이번 에피소드에 쓸 사람만 골라 적는다.
+  if (input?.characters !== undefined) {
+    const list = (Array.isArray(input.characters) ? input.characters : [input.characters])
+      .map((ch: any) => text(typeof ch === "string" ? ch : ch?.trigger || ch?.token || ch?.name))
+      .filter(Boolean)
+      .map((name: string) => (name.startsWith("@") ? name : `@${name}`));
+    payload.characters = list.map((trigger: string) => ({ trigger, name: trigger.slice(1) }));
+  }
+
+  if (!Object.keys(payload).length) {
+    throw new Error(`고칠 항목이 없어요.${rejected.length ? ` ${rejected.join(" / ")}` : " topic·story·purposeCategory·purposeTag·target·need·tone·style·duration·aspectRatio·voiceMode·characters 중에서 주세요."}`);
+  }
+  const body: any = { projectId, payload };
+  if (payload.topic) body.title = payload.topic;
+  if (payload.aspectRatio) body.aspectRatio = payload.aspectRatio;
+  const saved = await callInternalJson(ctx, "/api/project/save", { body });
+  const project = await callInternalJson(ctx, `/api/project/get?projectId=${encodeURIComponent(projectId)}`).catch(() => null);
+  const overview = project ? readOverview(project?.project || project) : null;
+  return {
+    kind: "project_overview_save", projectId, saved: true,
+    changed: Object.keys(payload), rejected, overview,
+    objectName: saved?.objectName || "",
+  };
+}
+
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
@@ -6445,6 +6581,12 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   edge_brief: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runEdgeBriefTool },
   // "왜 아직 안 나와?" — 막힌 지점을 사실로 답한다(추측 금지).
   jobs_status: { agentId: "core", agentIds: ["sync", "pixel", "plot", "beat", "ink", "reach"], kind: "read", synthesize: true, run: runJobsStatusTool },
+  // 개요(프리프로덕션): 캔버스에서 에피소드를 시작하는 입구. 저장은 창작자 데이터라 게이트.
+  project_overview_get: { agentId: "plot", agentIds: ["core", "pixel", "ink"], kind: "read", synthesize: true, run: runProjectOverviewGetTool },
+  project_overview_save: {
+    agentId: "plot", agentIds: ["core"], kind: "external", gate: true, run: runProjectOverviewSaveTool,
+    approvalKey: (i) => String(i?.projectId || i?.id || "").trim().toLowerCase(),
+  },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 

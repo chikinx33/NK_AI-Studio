@@ -101,7 +101,23 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     id: "common",
     type: "common",
     label: "공통 프롬프트",
-    data: { text: headerClean, raw: header, aspectRatio: String(payload.aspectRatio || project.payload?.aspectRatio || "") },
+    data: {
+      text: headerClean, raw: header, aspectRatio: String(payload.aspectRatio || project.payload?.aspectRatio || ""),
+      // 개요(프리프로덕션)를 함께 실어 캔버스가 따로 조회하지 않고 바로 보여준다.
+      overview: {
+        topic: String(project.title || payload.topic || ""),
+        story: String(payload.story || ""),
+        purposeCategory: String(payload.purposeCategory || ""),
+        purposeTag: String((Array.isArray(payload.purposeTags) ? payload.purposeTags[0] : payload.purposeTags) || ""),
+        target: String(payload.target || ""),
+        need: String((Array.isArray(payload.needs) ? payload.needs[0] : payload.needs) || ""),
+        tone: String((Array.isArray(payload.tones) ? payload.tones[0] : payload.tones) || ""),
+        style: String((Array.isArray(payload.styles) ? payload.styles[0] : payload.styles) || ""),
+        duration: String(payload.duration || ""),
+        voiceMode: payload.dubbingEnabled ? "dubbing" : payload.narrationEnabled ? "narration" : "none",
+        characterCount: Array.isArray(payload.characters) ? payload.characters.length : 0,
+      },
+    },
   });
 
   // 캐릭터 노드: payload.characters[] 의 트리거 토큰(@이름)을 노드로 만든다.
