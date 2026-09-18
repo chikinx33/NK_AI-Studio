@@ -85,6 +85,7 @@ export default function CanvasChatDock({
   const turnsRef = useRef<DockTurn[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const agentInputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const stoppedByUser = useRef(false);
   const conversationId = projectId ? `canvas-${projectId}${sessionSuffix}` : "";
@@ -97,8 +98,12 @@ export default function CanvasChatDock({
   useEffect(() => {
     if (!seed?.text) return;
     setDraft(seed.text);
+    switchMode("agent");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed?.nonce]);
+  useEffect(() => {
+    if (mode === "agent" && seed?.text) agentInputRef.current?.focus();
+  }, [mode, seed?.nonce]);
   useEffect(() => { setSessionSuffix(readUserStorage(sessionKey(projectId)) || ""); setAttachments([]); setNotice(""); }, [projectId]);
 
   const loadThread = useCallback(async () => {
@@ -295,7 +300,7 @@ export default function CanvasChatDock({
                 ))}
               </div>
             )}
-            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} onKeyUp={onKeyUp((v) => void sendToAgent(v))} onPaste={onPaste} rows={1} disabled={!projectId}
+            <textarea ref={agentInputRef} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} onKeyUp={onKeyUp((v) => void sendToAgent(v))} onPaste={onPaste} rows={1} disabled={!projectId}
               placeholder={projectId ? "무엇을 만들고 싶으신가요?" : "프로젝트를 먼저 선택하세요"}
               className="max-h-28 min-h-[26px] w-full resize-none bg-transparent text-[13px] text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-50" />
             <div className="mt-1.5 flex items-center gap-1.5">
