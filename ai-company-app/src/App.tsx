@@ -3,7 +3,7 @@ import Sidebar from "./components/Sidebar";
 import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
 import Results, { PendingFormRequests } from "./components/Results";
-import type { ResultItem } from "./lib/api";
+import type { AgentMessage, ResultItem } from "./lib/api";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
 import Dashboard from "./components/Dashboard";
@@ -144,6 +144,15 @@ export default function App() {
   const [canvasProjectId, setCanvasProjectId] = useState(EMBED_PROJECT_ID || readUserStorage("canvasProjectId"));
   const [canvasFocus, setCanvasFocus] = useState<{ sceneId: string | number | null; nonce: number }>({ sceneId: null, nonce: 0 });
   const [skillCategoryId, setSkillCategoryId] = useState(EMBED_CANVAS ? CANVAS_SKILL_CATEGORY_ID : "design-content");
+  // 지금 제작 캔버스를 보고 있는가 — 캔버스는 스킬 화면의 한 분류이고, 임베드(AI 시네마 셸)로도 열린다.
+  const onCanvas = EMBED_CANVAS || (centerView === "skills" && skillCategoryId === CANVAS_SKILL_CATEGORY_ID);
+  /** 직원의 답을 띄운다. 캔버스에서 작업 중이면 화면을 바꾸지 않는다(하던 자리를 잃지 않게). */
+  const sayAndFocusChat = (m: AgentMessage) => {
+    presentCompletedAgentTurns([
+      { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
+    ]);
+    if (!onCanvas) setCenterView("chat");
+  };
   const [workRevision, setWorkRevision] = useState(0);
   const [workFolderDate, setWorkFolderDate] = useState("");
   const [dashboardProjectId, setDashboardProjectId] = useState("");
@@ -1469,6 +1478,7 @@ export default function App() {
               onOpenCategory={openSkillCategory}
             />
             <Approvals
+              dock={onCanvas}
               centerView={centerView}
               extraPendingCount={pendingFormRequests.length}
               extraPending={
@@ -1483,12 +1493,7 @@ export default function App() {
                 />
               }
               onPickCategory={openKnowledgeCategory}
-              onAgentSay={(m) => {
-                presentCompletedAgentTurns([
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
-                ]);
-                setCenterView("chat");
-              }}
+              onAgentSay={sayAndFocusChat}
             />
           </div>
           {/* 결과 목록만 스크롤 */}
@@ -1496,12 +1501,7 @@ export default function App() {
             <Results
               refreshKey={resultsRefreshKey}
               onPendingRequests={setPendingFormRequests}
-              onAgentSay={(m) => {
-                presentCompletedAgentTurns([
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, files: m.files, ts: Date.now() },
-                ]);
-                setCenterView("chat");
-              }}
+              onAgentSay={sayAndFocusChat}
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}

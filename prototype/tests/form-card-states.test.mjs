@@ -154,6 +154,13 @@ test("★'정보 필요' 카드는 보고가 아니라 승인 쪽으로 올라�
   // 승인은 왼쪽 아래 도크로 옮겼다(오른쪽 대화창이 덮어 승인할 것이 있는지도 안 보였다).
   assert.match(approvals, /count=\{pending\.length \+ extraPendingCount\}/);
   assert.match(approvals, /function ApprovalDock/);
+  // 도크는 사이드바가 없는 제작 캔버스에서만 — 채팅 화면에도 겹쳐 뜨면 같은 승인이 두 번 보인다
+  assert.match(approvals, /if \(!dock\) \{/);
+  assert.match(app, /dock=\{onCanvas\}/);
+  assert.match(app, /const onCanvas = EMBED_CANVAS \|\| \(centerView === "skills"/);
+  // 캔버스에서 승인해도 화면이 채팅으로 튀지 않는다(하던 자리를 잃지 않게)
+  assert.match(app, /if \(!onCanvas\) setCenterView\("chat"\)/);
+  assert.match(app, /onAgentSay=\{sayAndFocusChat\}/);
   assert.match(approvals, /\{extraPending\}/);
 });
 

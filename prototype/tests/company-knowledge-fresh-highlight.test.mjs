@@ -33,7 +33,8 @@ test("다른 페이지로 이동하면 강조가 해제된다", () => {
   assert.match(src, /centerView\?: string/);
   assert.match(src, /setFreshTypes\(\(prev\) => \(prev\.size \? new Set<KnowKey>\(\) : prev\)\);[\s\S]{0,40}\}, \[centerView\]\)/);
   // App 이 현재 화면을 내려줘야 위 해제가 동작한다
-  assert.match(read("ai-company-app/src/App.tsx"), /<Approvals\s*\n\s*centerView=\{centerView\}/);
+  // 속성 순서는 자유 — centerView 를 내려주는지만 본다(dock 같은 속성이 앞에 붙어도 통과).
+  assert.match(read("ai-company-app/src/App.tsx"), /<Approvals\s*\n[\s\S]{0,160}centerView=\{centerView\}/);
 });
 
 test("해당 분류 칩을 누르면 그 강조가 해제된다", () => {

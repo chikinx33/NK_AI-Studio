@@ -99,20 +99,33 @@ interface ApprovalItem {
 }
 
 /**
- * 승인 도크 — 화면 왼쪽 아래에 떠 있는 승인 대기함.
+ * 승인 대기함을 어디에 그릴지 고른다.
  *
- * 사이드바 안에 있을 땐 오른쪽 대화창(작성기)이 덮어서, 승인할 것이 있는지조차 보이지 않았다.
- * 접기 버튼은 카드 오른쪽 위 모서리에 작게 둬서 평소에는 화면을 방해하지 않는다.
+ * · 제작 캔버스: 오른쪽 사이드바가 없고 대화창이 화면을 덮는다 → 왼쪽 아래에 떠 있는 도크.
+ * · 그 밖의 화면: 오른쪽 사이드바에 그대로 둔다. 두 자리에 동시에 띄우면 같은 승인이
+ *   두 번 보여 어느 것을 눌러야 할지 헷갈린다(채팅 화면에 도크가 겹쳐 보이던 문제).
  */
 function ApprovalDock({
-  count, open, onToggle, right, children,
+  dock, count, open, onToggle, right, children,
 }: {
+  dock: boolean;
   count: number;
   open: boolean;
   onToggle: () => void;
   right?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  if (!dock) {
+    return (
+      <CollapsibleSection
+        storageKey="nk_collapse_approvals"
+        header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({count})</span>}
+        right={right}
+      >
+        {children}
+      </CollapsibleSection>
+    );
+  }
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="pointer-events-none fixed bottom-3 left-3 z-40 w-[320px] max-w-[92vw]" data-testid="approval-dock">
@@ -147,6 +160,7 @@ export default function Approvals({
   centerView,
   extraPending,
   extraPendingCount = 0,
+  dock = false,
 }: {
   onPickCategory?: (key: KnowKey | null) => void;
   onAgentSay?: (m: AgentMessage) => void;
@@ -158,6 +172,8 @@ export default function Approvals({
    */
   extraPending?: React.ReactNode;
   extraPendingCount?: number;
+  /** 제작 캔버스처럼 사이드바가 없는 화면에서 true — 승인함을 왼쪽 아래 도크로 띄운다. */
+  dock?: boolean;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   // 승인은 화면 왼쪽 아래에 떠 있다 — 오른쪽 대화창이 덮어 버리면 승인할 것이 있는지조차 보이지 않았다.
@@ -412,6 +428,7 @@ export default function Approvals({
       })()}
 
     <ApprovalDock
+      dock={dock}
       count={pending.length + extraPendingCount}
       open={dockOpen}
       onToggle={toggleDock}
