@@ -147,3 +147,14 @@ test("P3·P4 · 직원이 지식을 쌓고 성과·운영을 다룬다", async (
   assert.match(shared, /action: "tidy_plan"/);
   assert.match(shared, /company_knowledge_tidy: \{[^\n]*kind: "read"/);
 });
+
+test("P5 · 남은 구멍(산출물·렌더 상태·직원 기억·목소리·브리핑)도 닿는다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  for (const tool of ["skill_job_artifacts", "transcode_status", "agent_knowledge_list", "agent_knowledge_delete", "voice_update", "edge_brief"]) {
+    assert.match(shared, new RegExp(`\\n  ${tool}: \\{`), `${tool} 가 AGENT_TOOLS 에 없다`);
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
+  }
+});

@@ -3906,6 +3906,64 @@ async function runAdminCreditsGrantTool(input: any, ctx: ToolContext): Promise<a
   })) };
 }
 
+// ── P5 남은 구멍: 산출물 · 렌더 상태 · 직원 개인 지식 · 목소리 · 브리핑 ────────
+/** 파이프라인이 만든 산출물 목록. 결과를 확인하고 이어서 쓰려면 필요하다. read. */
+async function runSkillJobArtifactsTool(input: any, ctx: ToolContext): Promise<any> {
+  const jobId = String(input?.jobId || input?.id || "").trim();
+  if (!jobId) throw new Error("SkillJob ID(jobId)가 필요해요. skill_jobs_list 로 먼저 찾으세요.");
+  return { kind: "skill_job_artifacts", jobId, ...(await callInternalJson(ctx, `/api/agent/skill-jobs/${encodeURIComponent(jobId)}/artifacts`)) };
+}
+
+/** 최종 렌더(트랜스코딩)가 끝났는지 확인한다. render_final 뒤에 쓴다. read. */
+async function runTranscodeStatusTool(input: any, ctx: ToolContext): Promise<any> {
+  const jobName = String(input?.jobName || "").trim();
+  const outputObjectName = String(input?.outputObjectName || "").trim();
+  if (!jobName && !outputObjectName) throw new Error("렌더 작업 이름(jobName) 또는 결과 경로(outputObjectName)가 필요해요.");
+  const params = new URLSearchParams();
+  if (jobName) params.set("jobName", jobName);
+  if (outputObjectName) params.set("outputObjectName", outputObjectName);
+  if (input?.projectId) params.set("projectId", String(input.projectId));
+  return { kind: "transcode_status", ...(await callInternalJson(ctx, `/api/postprod/transcode/status?${params}`)) };
+}
+
+/** 직원 한 명이 스스로 쌓아 둔 기억 목록. read. */
+async function runAgentKnowledgeListTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.agentId || input?.id || "").trim();
+  if (!id) throw new Error("직원 ID(agentId)가 필요해요.");
+  const data = await callInternalJson(ctx, `/api/agent/knowledge?id=${encodeURIComponent(id)}`);
+  const items: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+  return { kind: "agent_knowledge_list", agentId: id, count: items.length, items: items.slice(0, 100) };
+}
+
+/** 직원의 기억 한 줄을 지운다(잘못 외운 것 정리). local. */
+async function runAgentKnowledgeDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.agentId || input?.id || "").trim();
+  const text = String(input?.text || "").trim();
+  if (!id) throw new Error("직원 ID(agentId)가 필요해요.");
+  if (!text) throw new Error("지울 기억(text)을 그대로 적어 주세요. agent_knowledge_list 로 먼저 확인하세요.");
+  return { kind: "agent_knowledge_delete", agentId: id, ...(await callInternalJson(ctx, "/api/agent/knowledge", {
+    method: "DELETE", body: { id, text },
+  })) };
+}
+
+/** 목소리 이름 변경·즐겨찾기. local. */
+async function runVoiceUpdateTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.voiceId || input?.id || "").trim();
+  if (!id) throw new Error("목소리 ID(voiceId)가 필요해요. voices_list 로 먼저 찾으세요.");
+  const body: any = {};
+  if (input?.name !== undefined) body.name = String(input.name);
+  if (input?.favorite !== undefined) body.favorite = input.favorite === true;
+  if (!Object.keys(body).length) throw new Error("바꿀 항목(name 또는 favorite)이 필요해요.");
+  return { kind: "voice_update", voiceId: id, ...(await callInternalJson(ctx, `/api/voices/${encodeURIComponent(id)}`, { method: "PATCH", body })) };
+}
+
+/** 엣지(전략)의 정기 브리핑 상태·내용. read+synthesize. */
+async function runEdgeBriefTool(input: any, ctx: ToolContext): Promise<any> {
+  const conversationId = String(input?.conversationId || ctx.conversationId || "").trim();
+  const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : "";
+  return { kind: "edge_brief", ...(await callInternalJson(ctx, `/api/agent/edge-brief${query}`)) };
+}
+
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
@@ -6289,6 +6347,14 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   admin_user_update: { agentId: "core", kind: "external", gate: true, run: runAdminUserUpdateTool, approvalKey: (i) => String(i?.id || i?.userId || "").trim().toLowerCase() },
   admin_credits_get: { agentId: "core", agentIds: ["edge"], kind: "read", run: runAdminCreditsGetTool },
   admin_credits_grant: { agentId: "core", kind: "external", gate: true, run: runAdminCreditsGrantTool },
+
+  // ── P5 남은 구멍 ──────────────────────────────────────────────────────
+  skill_job_artifacts: { agentId: "plot", agentIds: ["core", "pixel", "sync"], kind: "read", synthesize: true, run: runSkillJobArtifactsTool },
+  transcode_status: { agentId: "pixel", agentIds: ["core", "plot"], kind: "read", run: runTranscodeStatusTool },
+  agent_knowledge_list: { agentId: "core", agentIds: ["sync"], kind: "read", run: runAgentKnowledgeListTool },
+  agent_knowledge_delete: { agentId: "core", agentIds: ["sync"], kind: "local", run: runAgentKnowledgeDeleteTool },
+  voice_update: { agentId: "beat", agentIds: ["core"], kind: "local", run: runVoiceUpdateTool },
+  edge_brief: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runEdgeBriefTool },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 
