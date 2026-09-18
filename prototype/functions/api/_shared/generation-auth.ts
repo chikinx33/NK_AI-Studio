@@ -14,7 +14,12 @@ export async function imageAuth(env: any, userId: string) {
   }
   const apiKey = String(row?.image_openai_api_key || '').trim();
   const enabled = typeof row?.user_image_enabled === 'boolean' ? row.user_image_enabled : !!(apiKey || connector);
-  return { enabled, mode: row?.image_auth_mode === 'api_key' ? 'api_key' : 'subscription', apiKey,
+  // 구독(이미지)과 API(그 밖의 생성)는 함께 켤 수 있다. 'both' 면 이미지는 구독, 영상·업스케일은 Atlas 키.
+  const stored = String(row?.image_auth_mode || 'subscription');
+  const mode = ['subscription', 'api_key', 'both'].includes(stored) ? stored : 'subscription';
+  return { enabled, mode, apiKey,
+    subscriptionOn: enabled && (mode === 'subscription' || mode === 'both'),
+    apiOn: enabled && (mode === 'api_key' || mode === 'both'),
     source: enabled ? 'user' : 'master', connector: connectorStatus(connector) };
 }
 
@@ -26,7 +31,7 @@ export async function atlasKeyFor(env: any, userId: string): Promise<{ key: stri
   const master = String(env?.ATLASCLOUD_API_KEY || '').trim();
   try {
     const image = await imageAuth(env, userId);
-    if (image.enabled && image.apiKey) return { key: image.apiKey, source: 'user' };
+    if (image.apiOn && image.apiKey) return { key: image.apiKey, source: 'user' };
   } catch (_) { /* 설정을 못 읽으면 마스터 키로 진행 */ }
   return { key: master, source: 'master' };
 }
@@ -37,6 +42,7 @@ export async function generationStatus(env: any, userId: string, row: any) {
       : !!(row?.claude_oauth_token || row?.claude_api_key),
     chatMode: row?.claude_auth_mode === 'api_key' ? 'api_key' : 'subscription',
     imageEnabled: image.enabled, imageMode: image.mode, imageApiKeySet: !!image.apiKey,
+    imageSubscriptionOn: image.subscriptionOn, imageApiOn: image.apiOn,
     imageSource: image.source, connector: image.connector };
 }
 
@@ -50,7 +56,8 @@ export async function selectImageSubscription(env: any, userId: string) {
 
 export async function saveGenerationSettings(env: any, userId: string, body: any) {
   if (typeof body.chatEnabled !== 'boolean' || typeof body.imageEnabled !== 'boolean') throw new Error('invalid_generation_choice');
-  if (!['subscription', 'api_key'].includes(body.authMode) || !['subscription', 'api_key'].includes(body.imageMode)) throw new Error('invalid_auth_mode');
+  if (!['subscription', 'api_key'].includes(body.authMode)
+      || !['subscription', 'api_key', 'both', 'none'].includes(body.imageMode)) throw new Error('invalid_auth_mode');
   const token = String(body.oauthToken || '').trim();
   const key = String(body.apiKey || '').trim();
   const imageKey = String(body.imageApiKey || '').trim();

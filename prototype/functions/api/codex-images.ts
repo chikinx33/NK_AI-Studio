@@ -76,7 +76,7 @@ export async function onRequestPost({ request, env }: Context) {
         if (body.busy === true) return send({ userId, job: null });
         if (!ready) return send({ userId, job: null });
         const selected = await imageAuth(env, userId);
-        if (!selected.enabled || selected.mode !== 'subscription') return send({ userId, job: null });
+        if (!subscriptionSelected(selected)) return send({ userId, job: null });
         const [job] = await sql(`UPDATE nk_subscription_image_jobs SET status='working',updated_at=now()
           WHERE id=(SELECT id FROM nk_subscription_image_jobs WHERE user_id=$1 AND token_hash=$2 AND status='queued'
             AND NOT EXISTS (SELECT 1 FROM nk_subscription_image_jobs active WHERE active.user_id=$1 AND active.status IN ('working','uploading'))
@@ -128,7 +128,7 @@ export async function onRequestPost({ request, env }: Context) {
     }
     if (body.operation === 'create') {
       const selected = await imageAuth(env, auth.userId);
-      if (!selected.enabled || selected.mode !== 'subscription') return send({ error: 'own_image_subscription_not_selected' }, 412);
+      if (!subscriptionSelected(selected)) return send({ error: 'own_image_subscription_not_selected' }, 412);
       const payload = validateImagePayload(body.payload);
       if (payload.projectId) await resolveProjectStorageOwner(env, auth.userId, payload.ownerId, payload.projectId);
       const [connector] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [auth.userId]);
@@ -153,4 +153,11 @@ export async function onRequestPost({ request, env }: Context) {
     if (/^invalid_|^too_many_|^reference_images?_too_large|^project_required$/.test(message)) return send({ error: message }, 400);
     return send({ error: 'subscription_image_service_unavailable' }, 503);
   }
+}
+
+/** 이미지 구독이 켜져 있는지. 구독·API 를 함께 켠 경우('both')도 참이다. */
+function subscriptionSelected(selected: any) {
+  if (!selected) return false;
+  if (typeof selected.subscriptionOn === 'boolean') return selected.subscriptionOn;
+  return !!selected.enabled && selected.mode !== 'api_key';
 }

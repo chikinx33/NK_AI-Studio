@@ -463,7 +463,12 @@ export const onRequestPost: PagesFunction = async (context) => {
   let selected;
   try { selected = await imageAuth(context.env, auth.userId); }
   catch { return json({ error: 'generation_settings_unavailable' }, 503); }
-  if (selected.enabled && selected.mode === 'subscription') {
+  // 이미지는 구독이 켜져 있으면 구독으로(둘 다 켜 둔 경우 포함), 아니면 Atlas 키로 만든다.
+  const subscriptionOn = typeof selected.subscriptionOn === 'boolean' ? selected.subscriptionOn
+    : (!!selected.enabled && selected.mode !== 'api_key');
+  const apiOn = typeof selected.apiOn === 'boolean' ? selected.apiOn
+    : (!!selected.enabled && selected.mode !== 'subscription');
+  if (subscriptionOn) {
     if (!String(body.prompt || '').trim()) return json({ error: 'invalid_image_prompt' }, 400);
     if (!selected.connector.configured) return json({ error: 'chatgpt_connector_required' }, 412);
     if (!selected.connector.online) return json({ error: 'chatgpt_connector_offline' }, 409);
@@ -516,7 +521,7 @@ export const onRequestPost: PagesFunction = async (context) => {
       body: JSON.stringify({ operation: 'create', requestId: body.requestId, payload: body }) });
     return subscriptionImageRequest({ ...context, request });
   }
-  if (selected.enabled) {
+  if (apiOn) {
     if (!selected.apiKey) return json({ error: 'own_image_api_key_required' }, 412);
     // 등록한 Atlas Cloud 키로만 만든다(OpenAI·Gemini 직접 호출 경로는 쓰지 않는다).
     const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,

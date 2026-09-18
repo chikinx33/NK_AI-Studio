@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync('prototype/script.js', 'utf8');
-const start = source.indexOf('    const renderGenerationConnectionStatus = () => {');
+// 이미지 인증 토글 도우미(imageSubOn/imageApiOn)도 함께 평가해야 한다
+const start = source.indexOf('    // 이미지 인증 선택은');
 const end = source.indexOf('    const renderApiAuthMode = () => {', start);
 function harness() {
   const elements = {};
@@ -30,6 +31,20 @@ test('connection indicators use persisted owner settings, not master credentials
   assert.equal(h.elements['user-image-auth-state'].classes['is-active'], true);
 });
 // 구독·API 를 모두 등록해 뒀으면 어느 쪽을 골라도 바로 '연결 활성'이어야 한다(선택은 즉시 저장된다).
+test('구독·API 를 함께 켜면 둘 다 준비돼야 활성 (이미지=구독, 영상=Atlas)', () => {
+  const h = harness();
+  h.state.userImageMode.value = 'both';
+  h.state.apiConnectionSettings.generation.imageApiKeySet = false; h.render();
+  assert.equal(h.elements['user-image-auth-state'].classes['is-active'], false); // Atlas 키 미등록
+  h.state.apiConnectionSettings.generation.imageApiKeySet = true; h.render();
+  assert.equal(h.elements['user-image-auth-state'].classes['is-active'], true);
+  h.state.apiConnectionSettings.generation.connector.online = false; h.render();
+  assert.equal(h.elements['user-image-auth-state'].classes['is-active'], false); // 연결 프로그램 꺼짐
+  h.state.userImageMode.value = 'api_key'; h.render();
+  assert.equal(h.elements['user-image-auth-state'].classes['is-active'], true); // 영상만 Atlas 로 쓰는 경우
+  h.state.userImageMode.value = 'none'; h.render();
+  assert.equal(h.elements['user-image-auth-state'].classes['is-active'], false);
+});
 test('등록된 인증이 있으면 구독·API 어느 쪽을 골라도 활성', () => {
   const h = harness();
   h.state.apiConnectionSettings.generation.imageApiKeySet = true;

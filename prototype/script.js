@@ -2041,6 +2041,13 @@
       }, 8000));
     };
 
+    // 이미지 인증 선택은 'subscription' | 'api_key' | 'both' | 'none' 한 값에 담는다(서버 저장 값과 같다).
+    const imageSubOn = () => userImageMode.value === 'subscription' || userImageMode.value === 'both';
+    const imageApiOn = () => userImageMode.value === 'api_key' || userImageMode.value === 'both';
+    const setImageModes = (sub, api) => {
+      userImageMode.value = sub && api ? 'both' : sub ? 'subscription' : api ? 'api_key' : 'none';
+    };
+
     const renderGenerationConnectionStatus = () => {
       const saved = apiConnectionSettings?.generation || {};
       const claude = apiConnectionSettings?.claudeAuth || {};
@@ -2061,10 +2068,16 @@
         claude.source === 'user' && (chatSub ? !!claude.oauthSet : !!claude.apiKeySet),
         userChatEnabled.checked !== !!saved.chatEnabled || !!apiSettingsTokenInput.value.trim(),
         true, chatSub ? 'Claude 구독 토큰 등록됨' : 'Claude API 키 등록됨');
-      const sub = userImageMode.value === 'subscription';
-      update('user-image-auth-state', userImageEnabled.checked, sub ? !!saved.connector?.configured : !!saved.imageApiKeySet,
+      const subOn = imageSubOn();
+      const apiOn = imageApiOn();
+      const configured = (subOn || apiOn)
+        && (!subOn || !!saved.connector?.configured)
+        && (!apiOn || !!saved.imageApiKeySet);
+      update('user-image-auth-state', userImageEnabled.checked, configured,
         userImageEnabled.checked !== !!saved.imageEnabled || !!userImageApiKey.value.trim(),
-        !sub || !!saved.connector?.online, sub ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : 'Atlas Cloud API 키 등록됨');
+        !subOn || !!saved.connector?.online,
+        [subOn ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : '', apiOn ? 'Atlas Cloud API 키 등록됨' : '']
+          .filter(Boolean).join(' · '));
     };
 
     const renderApiAuthMode = () => {
@@ -2072,7 +2085,7 @@
       if (userChatEnabled) {
         document.getElementById('user-chat-credentials').disabled = !userChatEnabled.checked;
         document.getElementById('user-image-credentials').disabled = !userImageEnabled.checked;
-        userImageApiKey.hidden = userImageMode.value !== 'api_key';
+        userImageApiKey.hidden = !imageApiOn();
         // API 키는 이미지뿐 아니라 영상 생성에도 쓰이므로 선택에 따라 이름을 바꾼다
         const imageLabel = document.querySelector('label[for="user-image-enabled"] span, #user-image-enabled + span');
         if (imageLabel) {
@@ -2080,11 +2093,14 @@
           imageLabel.dataset.i18n = labelKey;
           imageLabel.textContent = translateUiText(labelKey);
         }
-        // 이미지는 ChatGPT 구독, 그 밖의 생성(이미지 API·영상·업스케일)은 Atlas Cloud 로만 만든다.
+        // 이미지는 ChatGPT 구독, 그 밖의 생성(영상·업스케일)은 Atlas Cloud. 둘 다 켤 수 있다.
         const imageProvider = document.getElementById('user-image-provider');
-        if (imageProvider) imageProvider.textContent = userImageMode.value === 'api_key' ? 'Atlas Cloud' : 'ChatGPT';
+        if (imageProvider) {
+          imageProvider.textContent = imageSubOn() && imageApiOn() ? 'ChatGPT · Atlas Cloud'
+            : imageApiOn() ? 'Atlas Cloud' : 'ChatGPT';
+        }
         const imageConnect = document.getElementById('user-image-connect');
-        imageConnect.hidden = userImageMode.value !== 'subscription';
+        imageConnect.hidden = !imageSubOn();
         imageConnect.setAttribute('aria-disabled', userImageEnabled.checked ? 'false' : 'true');
         imageConnect.classList.toggle('is-disabled', !userImageEnabled.checked);
         imageConnect.tabIndex = userImageEnabled.checked ? 0 : -1;
@@ -2096,7 +2112,7 @@
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       apiSettingsWidget.querySelectorAll('.api-image-auth-mode').forEach((b) => {
-        const on = b.dataset.imageAuthMode === userImageMode.value;
+        const on = b.dataset.imageAuthMode === 'api_key' ? imageApiOn() : imageSubOn();
         b.classList.toggle('is-active', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
@@ -3057,7 +3073,9 @@
       });
       apiSettingsWidget.querySelectorAll('.api-image-auth-mode').forEach((b) => {
         b.addEventListener('click', () => {
-          userImageMode.value = b.dataset.imageAuthMode === 'api_key' ? 'api_key' : 'subscription';
+          // 구독(이미지)과 API(영상·업스케일)는 각각 켜고 끈다 — 둘 다 켜면 이미지는 구독, 나머지는 Atlas.
+          const isApi = b.dataset.imageAuthMode === 'api_key';
+          setImageModes(isApi ? imageSubOn() : !imageSubOn(), isApi ? !imageApiOn() : imageApiOn());
           applyModeChoice();
         });
       });

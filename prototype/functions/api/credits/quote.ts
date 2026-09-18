@@ -22,8 +22,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (['image_generation', 'image_upscale'].includes(String(body.feature))) {
       const image = await imageAuth(env, auth.userId);
       if (image.enabled) return new Response(JSON.stringify({ quote: { ...quote, credits: 0, authSource: 'user',
-        provider: image.mode === 'subscription' ? 'chatgpt-subscription' : 'openai',
-        billingSource: image.mode === 'subscription' ? 'user-subscription' : 'user-api' }, summary: null }),
+        provider: image.subscriptionOn !== false && image.mode !== 'api_key' ? 'chatgpt-subscription' : 'atlas-cloud',
+        billingSource: image.subscriptionOn !== false && image.mode !== 'api_key' ? 'user-subscription' : 'user-api' }, summary: null }),
         { status: 200, headers: responseHeaders(origin) });
     }
     const summary = await getCreditSummary(env, auth.userId);
