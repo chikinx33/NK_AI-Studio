@@ -84,7 +84,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
       // 클라이언트 Range 를 GCS 로 그대로 전달해 206 부분 응답을 지원한다(영상 seek).
       const range = request.headers.get("Range");
-      const gcsResp = await fetch(signed, { method: "GET", headers: range ? { Range: range } : {} });
+      let gcsResp = await fetch(signed, { method: "GET", headers: range ? { Range: range } : {} });
+      // A billing project may reject an otherwise readable object. Retry the same
+      // bucket without billing, as the other storage endpoints already do.
+      if (userProject && (gcsResp.status === 400 || gcsResp.status === 403)) {
+        await gcsResp.body?.cancel();
+        signed = await signGcsUrl({ bucket: t.bucket, object: objectName,
+          clientEmail: t.email, privateKeyPem: t.key, expiresInSec: 3600 });
+        gcsResp = await fetch(signed, { method: "GET", headers: range ? { Range: range } : {} });
+      }
       if (gcsResp.ok) {
         const contentRange = gcsResp.headers.get("Content-Range");
         const contentLength = gcsResp.headers.get("Content-Length");
