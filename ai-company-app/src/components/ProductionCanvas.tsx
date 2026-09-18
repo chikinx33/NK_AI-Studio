@@ -850,6 +850,8 @@ export default function ProductionCanvas({
   // node: 공통·캐릭터·장소(20px 격자). bar: 씬 바(40px 격자, 딸린 컷이 함께 이동). cut: 컷(놓으면 슬롯에 스냅 + 실제 순서 변경).
   const onPointerDown = (e: React.PointerEvent, nodeId?: string) => {
     if (e.button !== 0) return;
+    // Controls keep their own pointer sequence; canvas capture would swallow their click.
+    if ((e.target as HTMLElement).closest("button, input, textarea, select, a, [role='button']")) return;
     const el = containerRef.current;
     if (!el) return;
     el.setPointerCapture(e.pointerId);
@@ -1333,7 +1335,7 @@ export default function ProductionCanvas({
           {/* 컷이 하나도 없는 프로젝트 — 여기서 바로 시작할 수 있게 길을 보여 준다(예전엔 빈 화면이었다). */}
           {!loading && graph && cutNodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">
-              <div className="pointer-events-auto w-[420px] max-w-[92vw] rounded-2xl border border-edge bg-[#0c1119]/95 p-5 text-center shadow-2xl backdrop-blur">
+              <div onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} className="pointer-events-auto w-[420px] max-w-[92vw] rounded-2xl border border-edge bg-[#0c1119]/95 p-5 text-center shadow-2xl backdrop-blur">
                 <div className="text-[14px] font-bold text-gray-100">아직 컷이 없어요</div>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-gray-400">
                   대화로 시나리오를 만들거나, 빈 컷을 하나 만들어 직접 채워도 돼요.
