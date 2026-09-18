@@ -48,6 +48,16 @@ const SUGGESTIONS = [
   { emoji: "🎬", label: "빈 컷 전부 채워 줘", text: "이 프로젝트의 비어 있는 컷을 스틸→영상 순으로 전부 만들어줘. 에이전트 모드(video_pipeline)로 계획부터 세워줘." },
 ];
 
+function DockAvatar({ agentId, name, emoji }: { agentId?: string; name: string; emoji: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const avatarId = agentId === "_tool" ? "aibot" : agentId && /^[a-z][a-z0-9_-]*$/i.test(agentId) && !agentId.startsWith("_") ? agentId : null;
+  const src = avatarId ? `${import.meta.env.BASE_URL}avatars/${avatarId}.png` : null;
+  return (
+    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-[#151b25] text-[13px]">
+      {src && failedSrc !== src ? <img src={src} alt={`${name} 아바타`} className="h-7 w-7 object-contain" onError={() => setFailedSrc(src)} /> : emoji}
+    </span>
+  );
+}
 function sessionKey(projectId: string) { return `canvasSession:${projectId}`; }
 
 export default function CanvasChatDock({
@@ -268,7 +278,7 @@ export default function CanvasChatDock({
                   </div>
                 ) : (
                   <div key={t.id} className="flex items-start gap-2">
-                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#151b25] text-[13px]">{t.emoji || a?.emoji || "🤖"}</span>
+                    <DockAvatar agentId={t.agentId} name={t.name || a?.name || "에이전트"} emoji={t.emoji || a?.emoji || "🤖"} />
                     <div className="min-w-0 max-w-[88%]">
                       <div className="mb-0.5 text-[10px] text-gray-500">{t.name || a?.name || t.agentId || "에이전트"}</div>
                       <div className="text-[13px] leading-relaxed text-gray-200">
