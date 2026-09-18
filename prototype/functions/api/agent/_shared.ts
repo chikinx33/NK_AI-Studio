@@ -3598,6 +3598,128 @@ async function runWorkFolderMoveTool(input: any, ctx: ToolContext): Promise<any>
   })) };
 }
 
+// ── P1 자기 작업 운영: 스킬잡 · 크레딧 · 알람 · 대화 · 직원 설정 ──────────────
+/** 파이프라인(SkillJob) 목록. 멈춘 작업을 직원이 직접 찾는다. read. */
+async function runSkillJobsListTool(input: any, ctx: ToolContext): Promise<any> {
+  const params = new URLSearchParams();
+  if (input?.skillId) params.set("skillId", String(input.skillId));
+  if (input?.projectId) params.set("projectId", String(input.projectId));
+  params.set("limit", String(Math.min(50, Math.max(1, Number(input?.limit) || 20))));
+  const data = await callInternalJson(ctx, `/api/agent/skill-jobs?${params}`);
+  const jobs: any[] = Array.isArray(data?.jobs) ? data.jobs : Array.isArray(data?.items) ? data.items : [];
+  return {
+    kind: "skill_jobs_list", count: jobs.length,
+    jobs: jobs.map((job: any) => ({
+      id: job?.id, skillId: job?.skillId || job?.skill_id, status: job?.status,
+      title: job?.title || job?.request || "", updatedAt: job?.updatedAt || job?.updated_at,
+      pendingApproval: job?.approval?.status === "pending" || job?.status === "awaiting_approval",
+    })),
+  };
+}
+
+/** 파이프라인 하나의 상태·단계·이벤트. read+synthesize. */
+async function runSkillJobGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const jobId = String(input?.jobId || input?.id || "").trim();
+  if (!jobId) throw new Error("SkillJob ID(jobId)가 필요해요. skill_jobs_list 로 먼저 찾으세요.");
+  return { kind: "skill_job_get", ...(await callInternalJson(ctx, `/api/agent/skill-jobs/${encodeURIComponent(jobId)}`)) };
+}
+
+/** 파이프라인의 비용·계획 승인(또는 반려). 크레딧을 쓰므로 사람 승인 게이트. */
+async function runSkillJobApproveTool(input: any, ctx: ToolContext): Promise<any> {
+  const jobId = String(input?.jobId || input?.id || "").trim();
+  if (!jobId) throw new Error("SkillJob ID(jobId)가 필요해요.");
+  const decision = String(input?.decision || "approved") === "rejected" ? "rejected" : "approved";
+  return { kind: "skill_job_approve", jobId, decision, ...(await callInternalJson(ctx, `/api/agent/skill-jobs/${encodeURIComponent(jobId)}/approve`, {
+    body: { decision, action: String(input?.action || "") },
+  })) };
+}
+
+/** 멈춘 파이프라인을 되살리거나(retry·continue) 끝낸다(cancel). */
+async function runSkillJobActionTool(action: "cancel" | "retry" | "continue", input: any, ctx: ToolContext): Promise<any> {
+  const jobId = String(input?.jobId || input?.id || "").trim();
+  if (!jobId) throw new Error("SkillJob ID(jobId)가 필요해요.");
+  return { kind: `skill_job_${action}`, jobId, ...(await callInternalJson(ctx, `/api/agent/skill-jobs/${encodeURIComponent(jobId)}/${action}`, { body: {} })) };
+}
+
+/** 남은 크레딧과 최근 사용 내역. 비용을 말할 수 있어야 계획을 세운다. read. */
+async function runCreditsGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/credits/me");
+  const transactions: any[] = Array.isArray(data?.transactions) ? data.transactions.slice(0, 10) : [];
+  return {
+    kind: "credits_get", summary: data?.summary || null,
+    recent: transactions.map((row: any) => ({
+      feature: row?.feature || row?.reason || "", credits: row?.credits ?? row?.amount, at: row?.created_at || row?.createdAt,
+    })),
+  };
+}
+
+/** 이 작업에 크레딧이 얼마나 드는지 미리 본다. read. */
+async function runCreditsQuoteTool(input: any, ctx: ToolContext): Promise<any> {
+  const feature = String(input?.feature || "").trim();
+  if (!feature) throw new Error("견적을 낼 기능 이름(feature)이 필요해요. 예: image_generation, video_generation.");
+  return { kind: "credits_quote", ...(await callInternalJson(ctx, "/api/credits/quote", { body: { feature, input: input?.input || {} } })) };
+}
+
+/** 걸어 둔 알람을 지운다. local. */
+async function runReminderDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.id || input?.reminderId || "").trim();
+  if (!id) throw new Error("지울 알람 ID(id)가 필요해요. reminders_list 로 먼저 찾으세요.");
+  return { kind: "reminder_delete", id, ...(await callInternalJson(ctx, "/api/agent/reminder-delete", { body: { id } })) };
+}
+
+/** 대화방 목록. read. */
+async function runConversationsListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/agent/conversations");
+  const rows: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+  return {
+    kind: "conversations_list", count: rows.length,
+    conversations: rows.slice(0, 50).map((row: any) => ({
+      id: row?.id || row?.conversation_id, title: row?.title || "", updatedAt: row?.updated_at || row?.updatedAt,
+    })),
+  };
+}
+
+/** 대화방 이름을 바꾼다. local. */
+async function runConversationRenameTool(input: any, ctx: ToolContext): Promise<any> {
+  const conversationId = String(input?.conversationId || input?.id || ctx.conversationId || "").trim();
+  const title = String(input?.title || "").trim();
+  if (!conversationId) throw new Error("대화방 ID(conversationId)가 필요해요.");
+  if (!title) throw new Error("새 이름(title)이 필요해요.");
+  return { kind: "conversation_rename", ...(await callInternalJson(ctx, "/api/agent/conversation-title", { body: { conversationId, title } })) };
+}
+
+/** 직원 명단과 각자가 가진 도구. 누구에게 맡길지 정할 때. read. */
+async function runAgentsListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/agent/agents");
+  const rows: any[] = Array.isArray(data) ? data : [];
+  return { kind: "agents_list", count: rows.length, agents: rows.map((row: any) => ({ id: row?.id, name: row?.name, role: row?.role, tools: row?.tools || [] })) };
+}
+
+/** 회사 운영 설정 조회(모델 모드·생성 설정). 민감한 키 값은 서버가 가려서 준다. read. */
+async function runAgentSettingsGetTool(_input: any, ctx: ToolContext): Promise<any> {
+  return { kind: "agent_settings_get", ...(await callInternalJson(ctx, "/api/agent/settings")) };
+}
+
+/** 회사 운영 설정 변경. 모델·생성 설정만 — 인증 키는 사람이 직접. 쓰기 → 승인 게이트. */
+async function runAgentSettingsSaveTool(input: any, ctx: ToolContext): Promise<any> {
+  const kind = String(input?.kind || "").trim();
+  if (!["mode", "generation"].includes(kind)) {
+    throw new Error("바꿀 수 있는 설정은 mode(모델 모드)와 generation(생성 설정)이에요. 인증 키는 사용자가 설정 화면에서 직접 등록해요.");
+  }
+  const body: any = { ...(input?.value && typeof input.value === "object" ? input.value : input), kind };
+  delete body.value;
+  return { kind: "agent_settings_save", settingKind: kind, ...(await callInternalJson(ctx, "/api/agent/settings", { body })) };
+}
+
+/** 직원의 성격·지침(페르소나)을 고쳐 쓴다. 사람의 말투 설정을 덮어쓰므로 승인 게이트. */
+async function runPersonaUpdateTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.id || input?.agentId || "").trim();
+  const prompt = String(input?.prompt || input?.persona || "");
+  if (!id) throw new Error("직원 ID(id)가 필요해요. agents_list 로 확인하세요.");
+  if (!prompt.trim()) throw new Error("새 지침(prompt)이 필요해요.");
+  return { kind: "persona_update", agentId: id, ...(await callInternalJson(ctx, "/api/agent/persona", { method: "PUT", body: { id, prompt } })) };
+}
+
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
@@ -5934,6 +6056,26 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
 
   // ── 후속 마무리: 이미지 채팅형 수정 · 다가올 알람(예약) 목록 ──
   image_edit: { agentId: "pixel", kind: "external", run: runImageEditTool },
+
+  // ── P1 자기 작업 운영 ──────────────────────────────────────────────────
+  // 멈춘 파이프라인을 직원이 찾아 되살린다. 크레딧이 드는 승인·재시도만 게이트.
+  skill_jobs_list: { agentId: "plot", agentIds: ["core", "pixel", "sync"], kind: "read", synthesize: true, run: runSkillJobsListTool },
+  skill_job_get: { agentId: "plot", agentIds: ["core", "pixel", "sync"], kind: "read", synthesize: true, run: runSkillJobGetTool },
+  skill_job_approve: { agentId: "plot", agentIds: ["core"], kind: "external", gate: true, run: runSkillJobApproveTool },
+  skill_job_retry: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", gate: true, run: (i, c) => runSkillJobActionTool("retry", i, c) },
+  skill_job_cancel: { agentId: "plot", agentIds: ["core", "pixel"], kind: "local", run: (i, c) => runSkillJobActionTool("cancel", i, c) },
+  skill_job_continue: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", run: (i, c) => runSkillJobActionTool("continue", i, c) },
+  // 비용을 말할 수 있어야 계획이 선다.
+  credits_get: { agentId: "edge", agentIds: ["core", "sync", "pixel", "plot"], kind: "read", synthesize: true, run: runCreditsGetTool },
+  credits_quote: { agentId: "edge", agentIds: ["core", "sync", "pixel", "plot"], kind: "read", synthesize: true, run: runCreditsQuoteTool },
+  // 알람은 걸기만 하고 못 지웠다.
+  reminder_delete: { agentId: "sync", agentIds: ["core"], kind: "local", run: runReminderDeleteTool },
+  conversations_list: { agentId: "sync", agentIds: ["core"], kind: "read", run: runConversationsListTool },
+  conversation_rename: { agentId: "sync", agentIds: ["core"], kind: "local", run: runConversationRenameTool },
+  agents_list: { agentId: "core", agentIds: ["sync"], kind: "read", run: runAgentsListTool },
+  agent_settings_get: { agentId: "core", agentIds: ["sync", "engi"], kind: "read", synthesize: true, run: runAgentSettingsGetTool },
+  agent_settings_save: { agentId: "core", kind: "external", gate: true, run: runAgentSettingsSaveTool, approvalKey: (i) => String(i?.kind || "").trim().toLowerCase() },
+  persona_update: { agentId: "core", kind: "external", gate: true, run: runPersonaUpdateTool, approvalKey: (i) => String(i?.id || i?.agentId || "").trim().toLowerCase() },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 

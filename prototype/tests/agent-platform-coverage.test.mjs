@@ -80,3 +80,26 @@ test("P0 · 직원이 업무(일감)를 열고 고치고 들여다본다", async
   // 업무 상세는 그 업무가 만든 파일까지 함께 돌려준다
   assert.match(shared, /agent-video-storage\?date=/);
 });
+
+test("P1 · 직원이 멈춘 파이프라인을 살리고 비용을 말한다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  const tools = [
+    "skill_jobs_list", "skill_job_get", "skill_job_approve", "skill_job_retry", "skill_job_cancel", "skill_job_continue",
+    "credits_get", "credits_quote", "reminder_delete",
+    "conversations_list", "conversation_rename", "agents_list", "agent_settings_get", "agent_settings_save", "persona_update",
+  ];
+  for (const tool of tools) {
+    assert.match(shared, new RegExp(`\\n  ${tool}: \\{`), `${tool} 가 AGENT_TOOLS 에 없다`);
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
+  }
+  // 크레딧이 나가거나 사람 설정을 덮어쓰는 것만 승인 게이트
+  for (const gated of ["skill_job_approve", "skill_job_retry", "agent_settings_save", "persona_update"]) {
+    assert.match(shared, new RegExp(`${gated}: \\{[^\\n]*gate: true`), `${gated} 는 승인 게이트여야 한다`);
+  }
+  assert.match(shared, /skill_job_cancel: \{[^\n]*kind: "local"/);
+  // 인증 키는 직원이 못 바꾼다(사람이 설정 화면에서 직접)
+  assert.match(shared, /\["mode", "generation"\]\.includes\(kind\)/);
+});
