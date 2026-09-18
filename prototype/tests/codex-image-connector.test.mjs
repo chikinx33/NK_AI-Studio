@@ -290,3 +290,12 @@ test('browser image request follows the server account decision to a saved subsc
   assert.equal(JSON.parse(calls[0].body).provider, 'chatgpt-subscription');
   assert.ok(calls.every(call=>call.headers.Authorization==='Bearer own-session'));
 });
+
+// 증상: 회사 PC가 연결된 상태로 집 PC 브라우저에서 연결 창을 열면 '연결 정상'만 보이고
+// 이 PC로 연결을 가져올 버튼이 없었다(연결은 NKStudio 계정당 PC 한 대).
+test('다른 PC가 연결돼 있어도 이 PC로 연결을 가져올 수 있다', () => {
+  const ui = read('prototype/js/ui/codex-connect.js');
+  assert.match(ui, /var otherDevice = online && !!local && local\.ready && local\.signedIn && !local\.paired;/);
+  assert.match(ui, /var confirmStep = \(!online \|\| otherDevice\) && !!pairingHash\(\);/);
+  assert.match(ui, /다른 PC가 연결돼 있어요/);
+});

@@ -52,11 +52,15 @@
   function render() {
     // 이 PC의 연결 프로그램이 로그아웃 상태면(계정 변경 중) 서버의 이전 '연결 정상'보다 로그인 단계를 먼저 보여 준다.
     var online = !!(server && server.online) && !(local && local.ready && !local.signedIn);
-    var chatgpt = online ? server.email + ' · ' + server.plan
+    // 연결은 NKStudio 계정당 PC 한 대다. 다른 PC가 연결돼 있는데 이 PC도 준비돼 있으면(로그인됨·연결 안 됨)
+    // '연결 정상'만 보여 주고 끝내면 이 PC로 가져올 방법이 사라진다.
+    var otherDevice = online && !!local && local.ready && local.signedIn && !local.paired;
+    var chatgpt = otherDevice ? local.email + ' · ' + local.plan
+      : online ? server.email + ' · ' + server.plan
       : local && local.signedIn ? local.email + ' · ' + local.plan
         : hashEmail ? hashEmail + ' · ' + hashPlan : '';
     $('connect-account').textContent = text('현재 NKStudio 계정: ', 'Current NKStudio account: ') + (originalUser || text('로그인 필요', 'Sign-in required')) + (chatgpt ? '\nChatGPT: ' + chatgpt : '');
-    var confirmStep = !online && !!pairingHash();
+    var confirmStep = (!online || otherDevice) && !!pairingHash();
     var loginStep = !online && !confirmStep && !!local;
     $('connect-confirm').hidden = !confirmStep;
     $('connect-login').hidden = !loginStep;
@@ -66,7 +70,9 @@
     $('connect-switch-account').hidden = !(local && local.signedIn);
     $('connect-switch-account').disabled = busy;
     if (serverError) { status.textContent = serverError; return; }
-    if (online) status.textContent = text('연결 정상 · ', 'Connected · ') + server.email + ' · ' + server.plan;
+    if (otherDevice) status.textContent = text('다른 PC가 연결돼 있어요 · ', 'Another PC is connected · ') + server.email + ' · ' + server.plan
+      + text('\n이 PC로 바꾸려면 아래 \'이 계정에 연결\'을 눌러 주세요.', "\nChoose Connect this account below to switch to this PC.");
+    else if (online) status.textContent = text('연결 정상 · ', 'Connected · ') + server.email + ' · ' + server.plan;
     else if (confirmStep) status.textContent = text('ChatGPT 로그인 완료 · 이 계정에 연결해 주세요.', 'Signed in to ChatGPT. Connect this account.');
     else if (loginStep) status.textContent = loginPending ? text('ChatGPT 창에서 로그인을 마쳐 주세요.', 'Finish signing in in the ChatGPT window.') : localMessage(local.message);
     else if (server && server.configured) status.textContent = text('등록됨 · 연결 프로그램을 실행해 주세요.', 'Registered. Start your connector on the PC.');
@@ -78,7 +84,7 @@
       var result = await NK.api.codexImageRequest();
       if (user() !== originalUser) throw new Error('account_changed');
       server = result; serverError = '';
-      if (!server.online) sawOffline = true;
+      if (!server.online || (local && local.ready && local.signedIn && !local.paired)) sawOffline = true;
       // 모달에서 연결을 마친 순간(연결 안 됨 → 연결 정상)에만 '연결 정상'을 잠깐 보여 준 뒤 모달을 닫는다.
       // 이미 연결된 상태로 연 모달은 연결 해제를 할 수 있게 그대로 둔다.
       else if (sawOffline && embedded && !closeScheduled) {
