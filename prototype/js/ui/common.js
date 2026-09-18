@@ -255,8 +255,10 @@
         '정상': 'OK',
         '완료': 'Done',
         '연결 중…': 'Connecting…',
-        '키 형식이 올바르지 않아요 — Claude 구독은 sk-ant-oat…, Claude API 키는 sk-ant-api…, 이미지·영상 키는 sk-… 로 시작해야 해요':
-          'Key format is wrong — Claude subscription starts with sk-ant-oat…, Claude API key with sk-ant-api…, image/video key with sk-…',
+        '키 형식이 올바르지 않아요 — Claude 구독은 sk-ant-oat…, Claude API 키는 sk-ant-api…, 이미지·영상은 Atlas Cloud API 키를 넣어 주세요':
+          'Key format is wrong — Claude subscription starts with sk-ant-oat…, Claude API key with sk-ant-api…, image/video takes an Atlas Cloud API key',
+        'Atlas Cloud API 키': 'Atlas Cloud API key',
+        'Atlas Cloud API 키 등록됨': 'Atlas Cloud API key registered',
         '설정 값을 확인해 주세요 (구독/API 선택)': 'Check the settings (subscription/API choice)',
         '서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요': 'Could not save on the server. Please try again shortly',
         '적용했습니다': 'Applied',

@@ -7,7 +7,9 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 test("본인 이미지 인증을 선택하지 않은 회원은 Atlas 마스터 경로를 사용한다", () => {
   const src = read("prototype/functions/api/imagen.ts");
-  assert.match(src, /const atlasOnly = !env\.USER_IMAGE_AUTH && !requireMaster\(env, auth\.userId\)/);
+  // 2026-09 공급자 단일화: 구독 경로가 아니면 계정과 무관하게 Atlas 로만 만든다
+  assert.match(src, /const atlasOnly = true;/);
+  assert.match(src, /atlasKeyFor\(env, auth\.userId\)/);
   // atlasOnly 가 참이면 어떤 모델을 골라도 Atlas 경로로 간다(결제 주체 격리).
   assert.match(src, /const useAtlasPath = atlasOnly \|\| isGpt25Provider\(provider\)/);
   assert.match(src, /if \(useAtlasPath\) \{[\s\S]*?callAtlasMemberImage/);
@@ -35,7 +37,8 @@ test("GPT Image 2.5 는 Atlas 모델 ID 로만 나가고 동기 모드 파라미
 
 test("회원 Grok 영상은 Atlas 모델로 생성하고 xAI 직접 분기는 마스터로 제한된다", () => {
   const src = read("prototype/functions/api/video.ts");
-  assert.match(src, /const atlasOnly = !requireMaster\(env, auth\.userId\)/);
+  assert.match(src, /const atlasOnly = true;/);
+  assert.match(src, /atlasKeyFor\(env, auth\.userId\)/);
   assert.match(src, /xai\/grok-imagine-video\/text-to-video/);
   assert.match(src, /xai\/grok-imagine-video\/image-to-video/);
   assert.match(src, /xai\/grok-imagine-video\/reference-to-video/);
@@ -47,7 +50,7 @@ test("회원 Grok 영상은 Atlas 모델로 생성하고 xAI 직접 분기는 �
 
 test("회원은 조작한 직접 xAI 작업 ID를 상태 조회에 사용할 수 없다", () => {
   const src = read("prototype/functions/api/video/status.ts");
-  assert.match(src, /const atlasOnly = !requireMaster\(env, auth\.userId\)/);
+  assert.match(src, /const atlasOnly = true;/);
   assert.match(src, /if \(isGrok\) \{[\s\S]*?if \(atlasOnly\)[\s\S]*?provider_forbidden/);
   assert.match(src, /grok-extend-atlas:/);
   assert.match(src, /grok-atlas:/);

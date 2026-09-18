@@ -40,7 +40,8 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) {
       return corsJson({ ok: false, job_id: '', done: false, error: { code: auth.status, message: auth.error }, response: null, rawOperation: null, playback: null }, auth.status);
     }
-    const atlasOnly = !requireMaster(env, auth.userId);
+    // 생성 공급자 단일화(2026-09): 직접 xAI 작업 ID 는 누구도 조회할 수 없다(모두 Atlas 경유).
+  const atlasOnly = true;
     const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
     const projectTag = (url.searchParams.get('projectId') || '').trim();
     const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();

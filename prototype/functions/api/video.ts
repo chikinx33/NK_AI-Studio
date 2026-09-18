@@ -8,6 +8,7 @@ import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
+import { atlasKeyFor } from './_shared/generation-auth';
 import {
   callKlingApi,
   klingEndpoints,
@@ -54,9 +55,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, isVideoGen ? "videogen" : "video"))) {
       return json({ error: "permission_denied" }, 403);
     }
-    // 마스터가 아닌 회원은 어떤 모델을 골라도 Atlas Cloud 크레딧만 사용한다.
-    // 클라이언트 값이 아니라 인증된 서버 userId로 판정해 직접 xAI 우회를 막는다.
-    const atlasOnly = !requireMaster(env, auth.userId);
+    // 생성 공급자 단일화(2026-09): 영상은 계정과 무관하게 Atlas Cloud 로만 만든다.
+    // Veo·Grok(xAI) 직접 호출 경로는 코드만 남기고 쓰지 않는다.
+    const atlasOnly = true;
+    // 사용자가 등록한 Atlas 키가 있으면 그 크레딧, 없으면 마스터 키를 쓴다.
+    const atlasUserKey = (await atlasKeyFor(env, auth.userId)).key;
     const aspectFinal = normalizeAspectRatio(aspectRatio);
     const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
@@ -200,7 +203,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Kling branch (via Atlas Cloud AI)
     if (isKling) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
 
       const quality: KlingQuality =
@@ -264,7 +267,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Veo Full branch (google/veo3.1/image-to-video via Atlas Cloud)
     if (videoModel === "veo-full") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
       const atlasBody: any = {
@@ -291,7 +294,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Wan branch (alibaba/wan-2.7/image-to-video via Atlas Cloud)
     if (videoModel === "wan") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const wanDuration = snapDurationFor("wan", durationSeconds);
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
@@ -332,7 +335,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Seedance R2V branch (bytedance/seedance-2.0/reference-to-video via Atlas Cloud)
     if (videoModel === "seedance-r2v") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const r2vDuration = snapDurationFor("seedance-r2v", durationSeconds);
       const refResolved: string[] = [];
@@ -366,7 +369,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 시작 스틸은 reference_images[0] 으로 들어가고 프롬프트가 "Image 1 = first frame" 이라고 말한다(전용 first-frame 필드 없음).
     // reference_videos 는 직전 컷 클립(연속성) 등. 4~30초, 480p/720p/1080p, 네이티브 오디오.
     if (videoModel === "seedance-2.5") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const s25Duration = snapDurationFor("seedance-2.5", durationSeconds);
       const s25Resolution = String((body as any)?.resolution || "720p");
@@ -407,7 +410,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Vidu Q3 branch (vidu/q3-mix/reference-to-video via Atlas Cloud)
     if (videoModel === "vidu-q3") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const viduDuration = snapDurationFor("vidu-q3", durationSeconds);
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
@@ -450,7 +453,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // 회원용 Grok Extend — Atlas Cloud에서만 실행한다.
     if (videoModel === "grok-extend" && atlasOnly) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       if (!videoDataUrl) return json({ error: "videoDataUrl is required for grok-extend" }, 400);
       const sourceVideoUrl = await (async () => {
@@ -492,7 +495,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // 회원용 Grok T2V/I2V/R2V — 모두 Atlas Cloud에서만 실행한다.
     if ((videoModel === "grok" || videoModel === "grok-r2v") && atlasOnly) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const refResolved: string[] = [];
       if (videoModel === "grok-r2v") {
@@ -631,7 +634,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Seedance branch (Atlas Cloud AI)
     if (videoModel === "seedance") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
 
       const imageUrl = imageDataUrl
@@ -695,7 +698,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     // Veo branch (via Atlas Cloud AI)
     {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      const atlasKey = atlasUserKey;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const veoAtlasModel = (env.VEO_ATLAS_MODEL_ID as string | undefined) || "google/veo3.1-fast/image-to-video";
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); }) : "";

@@ -18,6 +18,19 @@ export async function imageAuth(env: any, userId: string) {
     source: enabled ? 'user' : 'master', connector: connectorStatus(connector) };
 }
 
+/**
+ * 이미지·영상 생성에 쓸 Atlas Cloud 키.
+ * 사용자가 등록해 두면 사용자 크레딧, 없으면 마스터(ATLASCLOUD_API_KEY) 크레딧을 쓴다(AI 채팅과 같은 방식).
+ */
+export async function atlasKeyFor(env: any, userId: string): Promise<{ key: string; source: 'user' | 'master' }> {
+  const master = String(env?.ATLASCLOUD_API_KEY || '').trim();
+  try {
+    const image = await imageAuth(env, userId);
+    if (image.enabled && image.apiKey) return { key: image.apiKey, source: 'user' };
+  } catch (_) { /* 설정을 못 읽으면 마스터 키로 진행 */ }
+  return { key: master, source: 'master' };
+}
+
 export async function generationStatus(env: any, userId: string, row: any) {
   const image = await imageAuth(env, userId);
   return { chatEnabled: typeof row?.user_chat_enabled === 'boolean' ? row.user_chat_enabled
@@ -42,7 +55,7 @@ export async function saveGenerationSettings(env: any, userId: string, body: any
   const key = String(body.apiKey || '').trim();
   const imageKey = String(body.imageApiKey || '').trim();
   if ((token && !/^sk-ant-oat[^\s]{10,4096}$/.test(token)) || (key && !/^sk-ant-api[^\s]{10,4096}$/.test(key))
-      || (imageKey && !/^sk-[^\s]{10,4096}$/.test(imageKey))) throw new Error('invalid_credential_format');
+      || (imageKey && !/^[A-Za-z0-9._\-]{20,4096}$/.test(imageKey))) throw new Error('invalid_credential_format');
   const sql = getSql(env);
   if (!sql) throw new Error('generation_settings_unavailable');
   await getSettingsRow(sql, userId);

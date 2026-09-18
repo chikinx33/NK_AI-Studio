@@ -2064,7 +2064,7 @@
       const sub = userImageMode.value === 'subscription';
       update('user-image-auth-state', userImageEnabled.checked, sub ? !!saved.connector?.configured : !!saved.imageApiKeySet,
         userImageEnabled.checked !== !!saved.imageEnabled || !!userImageApiKey.value.trim(),
-        !sub || !!saved.connector?.online, sub ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : 'OpenAI API 키 등록됨');
+        !sub || !!saved.connector?.online, sub ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : 'Atlas Cloud API 키 등록됨');
     };
 
     const renderApiAuthMode = () => {
@@ -2080,6 +2080,9 @@
           imageLabel.dataset.i18n = labelKey;
           imageLabel.textContent = translateUiText(labelKey);
         }
+        // 이미지는 ChatGPT 구독, 그 밖의 생성(이미지 API·영상·업스케일)은 Atlas Cloud 로만 만든다.
+        const imageProvider = document.getElementById('user-image-provider');
+        if (imageProvider) imageProvider.textContent = userImageMode.value === 'api_key' ? 'Atlas Cloud' : 'ChatGPT';
         const imageConnect = document.getElementById('user-image-connect');
         imageConnect.hidden = userImageMode.value !== 'subscription';
         imageConnect.setAttribute('aria-disabled', userImageEnabled.checked ? 'false' : 'true');
@@ -2151,7 +2154,7 @@
     const describeSettingsError = (message) => {
       const code = String((message && message.message) || message || '');
       if (/invalid_credential_format/.test(code)) {
-        return '키 형식이 올바르지 않아요 — Claude 구독은 sk-ant-oat…, Claude API 키는 sk-ant-api…, 이미지·영상 키는 sk-… 로 시작해야 해요';
+        return '키 형식이 올바르지 않아요 — Claude 구독은 sk-ant-oat…, Claude API 키는 sk-ant-api…, 이미지·영상은 Atlas Cloud API 키를 넣어 주세요';
       }
       if (/invalid_auth_mode|invalid_generation_choice/.test(code)) return '설정 값을 확인해 주세요 (구독/API 선택)';
       if (/generation_settings_save_failed|generation_settings_unavailable/.test(code)) return '서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요';

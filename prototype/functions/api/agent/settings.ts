@@ -106,7 +106,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           : "연결 프로그램이 실행 중이 아닙니다" });
     }
     if (image?.apiKey) {
-      checks.push({ id: "image_api", label: "OpenAI API 키", ...await testOpenAiKey(env, image.apiKey) });
+      checks.push({ id: "image_api", label: "Atlas API 키", ...await testAtlasKey(image.apiKey) });
     }
     return send({ ok: true, diag, checks }, 200, origin);
   }
@@ -192,20 +192,22 @@ function sanitizeSpeedMap(raw: unknown): Record<string, number> {
   return out;
 }
 
-/** OpenAI API 키 검사: 모델 목록을 한 번 읽어 키가 살아 있는지만 본다(생성 비용 없음). */
-async function testOpenAiKey(env: any, apiKey: string) {
-  const base = String(env.OPENAI_BASE_URL || "https://api.openai.com").trim().replace(/\/+$/, "");
-  const secret = String(env.OPENAI_PROXY_SECRET || "").trim();
+/**
+ * Atlas Cloud API 키 검사: 없는 작업 번호를 조회해 본다.
+ * 키가 살아 있으면 '없는 작업'(4xx)으로 답하고, 키가 틀리면 401/403 이 온다. 생성 비용은 들지 않는다.
+ */
+async function testAtlasKey(apiKey: string) {
   try {
-    const res = await fetch(`${base}/v1/models?limit=1`, {
-      headers: { Authorization: `Bearer ${apiKey}`, ...(base !== "https://api.openai.com" && secret ? { "x-nk-proxy-secret": secret } : {}) },
+    const res = await fetch("https://api.atlascloud.ai/api/v1/model/prediction/nk-auth-check", {
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
+    const ok = res.status !== 401 && res.status !== 403;
     let detail = "";
-    if (!res.ok) {
+    if (!ok) {
       const text = await res.text().catch(() => "");
-      try { detail = JSON.parse(text)?.error?.message || text.slice(0, 160); } catch { detail = text.slice(0, 160); }
+      try { detail = JSON.parse(text)?.message || JSON.parse(text)?.error || text.slice(0, 160); } catch { detail = text.slice(0, 160); }
     }
-    return { ok: res.ok, status: res.status, detail };
+    return { ok, status: res.status, detail };
   } catch (error: any) {
     return { ok: false, status: 0, detail: String(error?.message || error).slice(0, 160) };
   }

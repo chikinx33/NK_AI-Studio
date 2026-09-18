@@ -96,8 +96,9 @@ test('every image request uses server account choice, including explicit Gemini/
       { method: 'POST', headers: { Authorization: 'Bearer own' }, body: JSON.stringify({ prompt: 'glass marble', provider: 'gpt25-flare' }) }) });
     if (mode === 'subscription') { assert.equal(response.status, 202); assert.equal(calls[0].kind, 'subscription'); }
     if (mode === 'api_key') {
-      assert.equal(calls[0].body.provider, 'openai'); assert.equal(calls[0].env.OPENAI_API_KEY, ownImage);
-      for (const key of ['GEMINI_API_KEY','GOOGLE_API_KEY','ATLASCLOUD_API_KEY']) assert.equal(calls[0].env[key], '');
+      // 2026-09 공급자 단일화: 본인 키는 Atlas Cloud 키다. OpenAI·Gemini 직접 호출 키는 넘기지 않는다.
+      assert.equal(calls[0].env.ATLASCLOUD_API_KEY, ownImage);
+      for (const key of ['OPENAI_API_KEY','GEMINI_API_KEY','GOOGLE_API_KEY']) assert.equal(calls[0].env[key], '');
       assert.equal(calls[0].env.USER_IMAGE_AUTH, true); assert.equal((await response.json()).authSource, 'user');
     }
     if (mode === 'master') { assert.equal(calls[0].kind, 'credits'); assert.equal(calls[1].env.OPENAI_API_KEY, 'MASTER-OPENAI'); }

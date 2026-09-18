@@ -5,7 +5,7 @@ import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
 import { onRequestPost as subscriptionImageRequest } from "./codex-images";
-import { imageAuth } from './_shared/generation-auth';
+import { imageAuth, atlasKeyFor } from './_shared/generation-auth';
 import {
   atlasImageOutput,
   atlasOutputs,
@@ -40,9 +40,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, "image"))) {
       return json({ error: "permission_denied" }, 403);
     }
-    // 결제 주체 격리: 마스터가 아닌 계정은 클라이언트 provider 값과 무관하게
-    // 마스터의 Atlas Cloud 크레딧만 사용한다. 이 판정은 반드시 서버 인증 ID로 한다.
-    const atlasOnly = !env.USER_IMAGE_AUTH && !requireMaster(env, auth.userId);
+    // 생성 공급자 단일화(2026-09): ChatGPT 구독으로 만드는 경우가 아니면 이미지는 언제나 Atlas Cloud 로 만든다.
+    // Gemini·OpenAI 직접 호출 경로는 코드만 남기고 쓰지 않는다(되살릴 때를 위해 남겨 둠).
+    const atlasOnly = true;
 
     const body = await request.json().catch(() => ({} as any));
     const prompt = normalizePrompt((body?.prompt ?? "").toString().trim());
@@ -78,7 +78,9 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
     const openaiApiKey = String(env.OPENAI_API_KEY || "").trim();
-    const atlasApiKey = String(env.ATLASCLOUD_API_KEY || "").trim();
+    // 사용자가 등록한 Atlas 키가 있으면 그 크레딧, 없으면 마스터 키를 쓴다.
+    const atlasAuth = await atlasKeyFor(env, auth.userId);
+    const atlasApiKey = atlasAuth.key;
     const openaiModel = String(env.OPENAI_IMAGE_MODEL || "").trim() || "gpt-image-2";
     // OpenAI 베이스 URL 오버라이드. OpenAI 는 홍콩(HKG) 등 미지원 지역의 Cloudflare Worker
     // 송출을 403 으로 차단한다. 지원 지역의 프록시나 Cloudflare AI Gateway 엔드포인트를
@@ -516,10 +518,11 @@ export const onRequestPost: PagesFunction = async (context) => {
   }
   if (selected.enabled) {
     if (!selected.apiKey) return json({ error: 'own_image_api_key_required' }, 412);
+    // 등록한 Atlas Cloud 키로만 만든다(OpenAI·Gemini 직접 호출 경로는 쓰지 않는다).
     const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
-      body: JSON.stringify({ ...body, provider: 'openai' }) });
+      body: JSON.stringify({ ...body }) });
     const response = await handlePost({ request, env: { ...context.env, USER_IMAGE_AUTH: true,
-      OPENAI_API_KEY: selected.apiKey, GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ATLASCLOUD_API_KEY: '' } });
+      OPENAI_API_KEY: '', GEMINI_API_KEY: '', GOOGLE_API_KEY: '', ATLASCLOUD_API_KEY: selected.apiKey } });
     if (!response.ok) return json({ ...await response.json() as any, authSource: 'user' }, response.status);
     return json({ ...await response.json() as any, authSource: 'user' });
   }

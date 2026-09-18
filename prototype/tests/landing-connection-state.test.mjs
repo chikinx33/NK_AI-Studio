@@ -60,7 +60,7 @@ test('진단은 등록해 둔 인증을 모두 검사한다', () => {
   for (const id of ['claude_subscription', 'claude_api', 'image_subscription', 'image_api']) {
     assert.ok(settings.includes(`id: "${id}"`), `${id} 검사가 없다`);
   }
-  assert.match(settings, /async function testOpenAiKey/);
+  assert.match(settings, /async function testAtlasKey/);
   const script = fs.readFileSync('prototype/script.js', 'utf8');
   assert.match(script, /const checks = Array\.isArray\(d && d\.checks\) \? d\.checks : \[\]/);
   const api = fs.readFileSync('prototype/api.js', 'utf8');

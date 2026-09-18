@@ -7,6 +7,7 @@ import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
+import { atlasKeyFor } from './_shared/generation-auth';
 import { imageAuth } from './_shared/generation-auth';
 import { onRequestPost as imageRequest } from './imagen';
 import {
@@ -50,7 +51,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!(await hasPagePermission(env, auth.userId, "image"))) {
       return json({ error: "permission_denied" }, 403, origin);
     }
-    const atlasOnly = !requireMaster(env, auth.userId);
+    // 생성 공급자 단일화(2026-09): 업스케일도 Atlas Cloud 로만 실행한다.
+    const atlasOnly = true;
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
@@ -88,7 +90,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 회원 업스케일은 Atlas Cloud 전용 모델로 실행한다. Google 자격증명은 결과를
     // 회원별 GCS 폴더에 저장하는 데만 사용하며, 생성 공급자 호출에는 쓰지 않는다.
     if (atlasOnly) {
-      const atlasKey = String(env.ATLASCLOUD_API_KEY || "").trim();
+      const atlasKey = (await atlasKeyFor(env, auth.userId)).key;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY 미설정" }, 500, origin);
       let atlasSourceUrl = "";
       if (objectName) {
