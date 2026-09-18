@@ -63,8 +63,6 @@
       generationStyleLabel: '생성 흐름',
       generationStyleSingle: '단일',
       generationStyleConversation: '대화형',
-      generationStyleSingleHelp: '이전 결과 없이 새로 생성',
-      generationStyleConversationHelp: '선택 결과까지 최근 3개를 이어서 생성',
       generationStyleSingleTip: '현재 프롬프트와 직접 지정한 소스 이미지만 사용합니다. 같은 프롬프트는 비슷한 결과가 나올 수 있습니다.',
       generationStyleConversationTip: '이전 프롬프트와 이미지를 함께 참고합니다. 이번 지시에서 바꾸지 않은 인물과 스타일을 유지합니다.',
       generationStyleSingleShort: '단일',
@@ -233,8 +231,6 @@
       generationStyleLabel: 'Generation flow',
       generationStyleSingle: 'Single',
       generationStyleConversation: 'Conversational',
-      generationStyleSingleHelp: 'New image without previous results',
-      generationStyleConversationHelp: 'Continue from up to 3 results through the selection',
       generationStyleSingleTip: 'Uses only the current prompt and explicitly selected source images. The same prompt can produce similar results.',
       generationStyleConversationTip: 'Uses previous prompts and images together. Keeps the identity and style unless this instruction changes them.',
       generationStyleSingleShort: 'Single',
@@ -2024,12 +2020,11 @@
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
             '<div class="ai-image-size-row">' +
-              '<select id="ai-image-generation-style" class="btn-secondary ai-image-select" aria-describedby="ai-image-generation-style-help" title="' + escapeHtml(t(normalizeGenerationStyle(state.generationStyle) === 'conversation' ? 'generationStyleConversationTip' : 'generationStyleSingleTip')) + '">' +
+              '<select id="ai-image-generation-style" class="btn-secondary ai-image-select" title="' + escapeHtml(t(normalizeGenerationStyle(state.generationStyle) === 'conversation' ? 'generationStyleConversationTip' : 'generationStyleSingleTip')) + '">' +
                 '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
                 '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
               '</select>' +
             '</div>' +
-            '<p id="ai-image-generation-style-help" class="muted small">' + escapeHtml(t(normalizeGenerationStyle(state.generationStyle) === 'conversation' ? 'generationStyleConversationHelp' : 'generationStyleSingleHelp')) + '</p>' +
           '</div>' +
         '</div>' +
         '<div class="ai-image-ratio-row">' +
@@ -4245,8 +4240,6 @@
         state.generationStyle = normalizeGenerationStyle(target.value || 'single');
         var isConversation = state.generationStyle === 'conversation';
         target.title = t(isConversation ? 'generationStyleConversationTip' : 'generationStyleSingleTip');
-        var flowHelp = document.getElementById('ai-image-generation-style-help');
-        if (flowHelp) flowHelp.textContent = t(isConversation ? 'generationStyleConversationHelp' : 'generationStyleSingleHelp');
         return;
       }
       if (target.id === 'ai-image-provider') {
