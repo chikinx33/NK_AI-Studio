@@ -211,7 +211,10 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.match(settingsLib, /fetch\("\/api\/credits\/quote"/);
   // 에이전트 설정: 생성 전 확인 항상/안 함 + 기본값. '안 함' 은 브라우저가 승인 게이트를 대신 누른다.
   assert.match(agentPanel, /에이전트가 미디어를 생성하고 자동으로 크레딧을 사용합니다\./);
-  assert.match(canvas, /if \(settings\.confirmBeforeGenerate \|\| !projectId\) return;/);
+  // 잡 감시는 설정과 무관하게 돌고(채팅이 만든 잡도 캔버스에 보여야 한다),
+  // 대신 눌러 주는 것만 '확인 안 함' 일 때 한다.
+  assert.match(canvas, /if \(!projectId\) return;/);
+  assert.match(canvas, /if \(!settings\.confirmBeforeGenerate\) \{/);
   assert.match(canvas, /await approveItem\(String\(j\.id\)\)/);
   assert.match(panel, /if \(!autoApprove \|\| !job \|\| job\.approvalState\?\.status !== "pending"/);
   // 설정이 실제 생성 경로에 닿는다: 인스펙터 버튼 → 도구 입력 → /api/imagen·/api/video.

@@ -307,7 +307,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     scene_shots: `[[RUN: scene_shots | {"projectId": "series-ep1"}]]  또는 {"scenes": [...]}  → 프로젝트 씬들을 샷(컷) 단위로 분해. "씬을 샷으로 나눠"에 사용.`,
     scene_locations: `[[RUN: scene_locations | {"projectId": "series-ep1"}]]  또는 {"scenes": [...]}  → 씬들에서 장소(로케이션) 목록을 뽑아준다.`,
     story_structure: `[[RUN: story_structure | {"topic": "이야기 주제", "duration": 60, "tones": ["감동"]}]]  → 스토리 구조(스토리라인 + 비트/긴장도)를 짜준다. 시나리오 생성 전 뼈대 잡기에 사용.`,
-    scene_upsert: `[[RUN: scene_upsert | {"projectId": "series-ep1", "sceneId": 3, "scene": {"title": "새 제목", "narration": "바뀐 나레이션", "dialogue": [{"speaker": "A", "line": "대사"}]}}]]  → 그 씬의 내용을 수정(sceneId 없거나 못 찾으면 새 씬 추가). "씬3 대사 바꿔"·"씬 추가"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_upsert: `[[RUN: scene_upsert | {"projectId": "series-ep1", "sceneId": 3, "scene": {"title": "컷 제목", "composition": "화면에 보이는 것(인물·배치·앵글·빛)", "action": "이 컷에서 일어나는 움직임", "sceneLocation": "장소 이름", "narration": "나레이션", "dialogue": [{"speaker": "A", "line": "대사"}], "estSec": 5}}]]  → 그 컷(씬)의 내용을 수정(sceneId 없거나 못 찾으면 새로 추가). "씬3 대사 바꿔"·"컷 카드 채워줘"·"씬 추가"에 사용.
+★제작 캔버스의 컷 카드는 composition(화면)과 action(행동)을 읽는다 — 표로 정리해 보여 주기만 하고 이 두 칸을 비우면 승인해도 카드가 그대로 비어 있다. 화면은 '보이는 것'만, 행동은 '움직임'만 쓴다(이미지는 화면, 영상은 행동을 쓴다).
+프롬프트 문장을 직접 넣으려면 promptText(+promptEdited:true), 카메라 지시는 cameraDirection, 컷 길이는 estSec 를 쓴다. 컷마다 한 번씩 부른다(여러 컷을 한 번에 담지 않는다). ⚠️ 쓰기라 사람 승인 후 반영 — 승인 전에는 캔버스가 바뀌지 않는다.`,
     scene_reorder: `[[RUN: scene_reorder | {"projectId": "series-ep1", "order": [1, 2, 4, 3, 5]}]]  → 컷 순서를 order(컷 id 전체 순열)대로 바꿈(id 는 그대로, 배열만 재배열). "컷 4를 3 앞으로"·"마지막 컷을 맨 앞으로"에 사용. 결과의 warnings(세트 넘어감·노래 구간 어긋남)를 사용자에게 그대로 전해 주세요. ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_split: `[[RUN: scene_split | {"projectId": "series-ep1", "sceneId": 5, "split": true}]]  → 그 컷부터 새 씬으로 나눔(같은 세트 안에서 씬 경계). split=false 면 앞 씬에 합침. "컷 5부터 새 씬으로"·"씬 2를 씬 1에 합쳐"에 사용. 순서·장소는 바꾸지 않음. ⚠️ 쓰기라 사람 승인 후 반영.`,
     style_anchor_set: `[[RUN: style_anchor_set | {"projectId": "series-ep1", "objectName": "<저장소 경로>", "setName": "거실"}]]  → 그 이미지를 프로젝트 그림체 기준(스타일 앵커)으로. 이후 세트 시트·콘티·스틸이 이 룩을 참조. "이 이미지 느낌으로 통일해" 에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,

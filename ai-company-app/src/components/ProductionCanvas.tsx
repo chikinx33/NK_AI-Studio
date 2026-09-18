@@ -312,6 +312,13 @@ function BotIcon({ className }: { className?: string }) {
 
 interface PendingJob { jobId: string; type: string; sceneId?: string | number; status: string; label: string; target?: string; error?: string; updatedAt?: number }
 
+/** 작업 독에 보여 줄 도구 이름 — 채팅이 만든 잡도 무엇을 하는 중인지 읽히게. */
+const TOOL_LABEL: Record<string, string> = {
+  scene_upsert: "컷 내용 수정", scene_still: "스틸 생성", scene_video: "영상 생성", scene_reorder: "컷 순서 변경",
+  scene_split: "씬 나누기", set_sheet: "세트 시트", set_master: "세트 마스터", set_angle: "세트 앵글",
+  location_merge: "장소 합치기", style_anchor_set: "스타일 기준 지정",
+};
+
 // 잡 상태 → 사용자 문구. 모든 생성 행위는 상태가 보여야 한다(대기·승인 대기·실행 중·완료·오류).
 const JOB_DONE = ["approved", "error", "cancelled", "revise"];
 function jobStatusText(j: PendingJob): string {
@@ -571,27 +578,48 @@ export default function ProductionCanvas({
     return () => window.clearInterval(timer);
   }, [pending, load, projectId]);
 
-  // 에이전트 설정 '생성 전 확인: 안 함' — 이 프로젝트를 대상으로 한 스틸·영상·씬 수정 잡을 자동 승인한다.
-  // 서버 승인 게이트(기록·감사)는 그대로 두고 브라우저가 대신 누르는 것뿐이다.
+  // 이 프로젝트를 바꾸는 잡(캔버스 버튼이든 채팅이든)을 캔버스가 지켜본다.
+  //
+  // 예전에는 캔버스가 자기 버튼으로 만든 잡만 봤다. 그래서 채팅으로 "컷 카드 채워줘"를 시키면
+  // 승인 대기가 캔버스에 보이지도 않고, 승인 패널에서 승인해도 화면이 그대로였다("아무것도 안 만들어졌다").
+  // 이제 채팅이 만든 잡도 작업 독에 올라오고, 승인 버튼이 붙고, 끝나면 그래프를 다시 읽는다.
   const AUTO_APPROVE_TYPES = ["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"];
   useEffect(() => {
-    if (settings.confirmBeforeGenerate || !projectId) return;
+    if (!projectId) return;
     let alive = true;
     const tick = async () => {
       try {
         const d = await (await fetch("/api/agent/jobs?limit=20")).json();
         const items: any[] = Array.isArray(d?.items) ? d.items : [];
-        for (const j of items) {
-          if (!alive) return;
-          if (j?.status !== "review_pending" || j?.review_status !== "pending") continue;
-          if (!AUTO_APPROVE_TYPES.includes(String(j?.type))) continue;
-          if (String(j?.input?.projectId || "") !== projectId) continue;
-          await approveItem(String(j.id)).catch(() => null);
+        const mine = items.filter((j) => AUTO_APPROVE_TYPES.includes(String(j?.type)) && String(j?.input?.projectId || "") === projectId);
+        if (!alive) return;
+        // '생성 전 확인: 안 함' 이면 승인 대기를 브라우저가 대신 눌러 준다(서버 기록·감사는 그대로).
+        if (!settings.confirmBeforeGenerate) {
+          for (const j of mine) {
+            if (!alive) return;
+            if (j?.status === "review_pending" && j?.review_status === "pending") await approveItem(String(j.id)).catch(() => null);
+          }
         }
+        if (!alive) return;
+        setPending((prev) => {
+          const known = new Set(prev.map((p) => p.jobId));
+          // 캔버스가 만든 잡은 자기 상태를 쓰고(승인 응답을 이미 받았다), 처음 보는 잡만 새로 올린다.
+          const added = mine
+            .filter((j) => !known.has(String(j.id)))
+            .map((j) => ({
+              jobId: String(j.id),
+              type: String(j.type),
+              sceneId: j?.input?.sceneId ?? j?.input?.scene?.id,
+              status: String(j?.status || "queued"),
+              label: `${TOOL_LABEL[String(j.type)] || String(j.type)} · 채팅`,
+              updatedAt: Date.now(),
+            }));
+          return added.length ? [...added, ...prev].slice(0, 20) : prev;
+        });
       } catch { /* 다음 틱에 다시 */ }
     };
     void tick();
-    // 자동 승인할 잡은 대화·작업 중에만 생긴다 — 활동 중일 때만 5초 주기, 평소엔 화면 복귀 때 한 번.
+    // 대화·작업 중에만 5초 주기, 평소엔 화면 복귀 때 한 번(상시 폴링은 DB 전송량을 태운다).
     const timer = window.setInterval(() => { if (isLiveActive()) void tick(); }, 5_000);
     const offRevisit = onLiveRevisit(() => { void tick(); });
     return () => { alive = false; window.clearInterval(timer); offRevisit(); };

@@ -247,3 +247,20 @@ test("결과물이 안 나올 때 직원이 원인을 답한다", async () => {
   assert.match(orchestrator, /\[\[RUN: jobs_status/);
   assert.match(orchestrator, /추측해서 답하지 말고 반드시 먼저 실행/);
 });
+
+test("채팅이 시킨 씬 수정도 캔버스가 지켜보고 화면에 반영한다", async () => {
+  const [canvas, orchestrator] = await Promise.all([
+    read("ai-company-app/src/components/ProductionCanvas.tsx"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  // 캔버스가 만든 잡만 보던 것을 이 프로젝트 대상 잡 전부로 넓힌다(채팅이 만든 것 포함)
+  assert.match(canvas, /const mine = items\.filter\(\(j\) => AUTO_APPROVE_TYPES\.includes/);
+  assert.match(canvas, /const TOOL_LABEL: Record<string, string>/);
+  assert.match(canvas, /· 채팅/);
+  // '확인 안 함' 일 때만 대신 승인한다(설정을 뒤집지 않는다)
+  assert.match(canvas, /if \(!settings\.confirmBeforeGenerate\) \{/);
+  // 처음 보는 잡만 새로 올린다(캔버스가 만든 잡의 상태를 덮어쓰지 않게)
+  assert.match(canvas, /const known = new Set\(prev\.map\(\(p\) => p\.jobId\)\)/);
+  // 컷 카드가 읽는 칸을 프롬프트가 알려 준다 — 표만 그리고 비우면 승인해도 카드가 빈 채로 남는다
+  assert.match(orchestrator, /composition\(화면\)과 action\(행동\)을 읽는다/);
+});
