@@ -158,3 +158,24 @@ test("P5 · 남은 구멍(산출물·렌더 상태·직원 기억·목소리·�
     assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
   }
 });
+
+test("이미지 생성 → 브랜드 허브 캐릭터 시트 등록이 한 턴에 이어진다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  // 방금 만든 그림의 잡 id 를 같은 턴 안에서 다음 도구로 넘긴다
+  assert.match(shared, /lastImageJobId\?: string/);
+  assert.match(shared, /export const IMAGE_PRODUCING_TOOLS/);
+  assert.match(orchestrator, /IMAGE_PRODUCING_TOOLS\.has\(r\.tool\)\) toolCtx\.lastImageJobId = job\.id/);
+  // gate 로 멈춘(아직 안 만든) 작업은 "방금 만든 그림"이 아니다
+  assert.match(orchestrator, /result\.ok && !result\.gated && IMAGE_PRODUCING_TOOLS/);
+  // jobId: "last" → 같은 턴 것 우선, 없으면 이 사용자의 최근 이미지 잡
+  assert.match(shared, /const LAST_IMAGE_ALIASES/);
+  assert.match(shared, /async function latestImageJobId/);
+  assert.match(shared, /ctx\.lastImageJobId \|\| ""\)\.trim\(\) \|\| await latestImageJobId\(ctx\)/);
+  // 못 찾으면 아무 그림이나 붙이지 않고 사실대로 말한다
+  assert.match(shared, /방금 만든 그림을 찾지 못했어요/);
+  // 모델이 두 RUN 을 순서대로 쓰도록 프롬프트가 알려준다
+  assert.match(orchestrator, /\[\[RUN: brand_asset \| \{"jobId": "last"/);
+});

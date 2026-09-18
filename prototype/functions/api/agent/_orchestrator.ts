@@ -8,6 +8,7 @@ import {
   getSql,
   type ToolContext,
   AGENT_TOOLS,
+  IMAGE_PRODUCING_TOOLS,
   toolOwnedBy,
   parseToolInput,
   addMessage,
@@ -274,7 +275,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     naver_datalab: `[[RUN: naver_datalab | {"keywords": ["키워드1","키워드2"], "timeUnit": "month(선택)"}]]  → 네이버 검색어 트렌드(상대 검색량 추이). 마케팅 키워드·관심도 비교에 사용. (NAVER 키 필요)`,
     brand_get: `[[RUN: brand_get | {"brandId": "my-brand"}]]  → 브랜드 허브에서 그 브랜드 정의(보이스·톤·스토리·캐릭터·키워드·금지표현 등)를 읽어온다. 온브랜드 콘텐츠·카피를 만들기 전에 먼저 조회해 근거로 삼는다.`,
     brand_save: `[[RUN: brand_save | {"brandId": "my-brand", "brand": {"brandTitle": "MY BRAND", "brandVoice": "…", "coreMessage": "…", "targetAudience": "…", "brandKeywords": ["…"]}}]]  → 브랜드 허브에 브랜드를 생성/수정. brand 객체에 채울 필드만 넣으면 기존 정의에 병합된다(부분 수정 안전). ⚠️ 쓰기라 사람 승인 후 반영(승인 패널). "우리 브랜드를 브랜드 허브에 생성해줘"에 사용.`,
-    brand_asset: `[[RUN: brand_asset | {"brandId": "my-brand", "name": "전략가", "kind": "character", "description": "생김새(선택)", "personality": "성격·역할(선택)", "negativePrompt": "안 나오게 할 것(선택)"}]]  → 브랜드 허브에 캐릭터(kind:character) 또는 환경(kind:background|prop) 자산을 등록. 이미지는 선택이다: 캐릭터 등록만 요청받으면 이미지 없이 이름·설명만 등록한다(이미지는 사용자가 허브에서 올리거나 나중에 붙임). 이미지를 붙이라고 할 때만 {"jobId": "그 이미지의 jobId(대화의 [산출물: … jobId=…])"} 또는 {"objectName": "저장소 경로(image_library)"}·{"imageUrl": "…"} 를 함께 준다 — 지정하지 않은 이미지를 짐작해 붙이지 않는다. 이미 있는 캐릭터에 부르면 준 칸만 갱신·이미지 추가. 한 번에 한 자산이므로 캐릭터가 여러 명이면 이름마다 따로 부른다. brandId 는 모르면 ip_library 로 확인(없는 브랜드는 만들지 않음). 이름은 영문·숫자·한글·_ 24자 이내, 캐릭터당 시트 4장·환경 자산 16개까지. ⚠️ 쓰기라 사람 승인 후 반영. "캐릭터 등록해줘"·"이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
+    brand_asset: `[[RUN: brand_asset | {"brandId": "my-brand", "name": "전략가", "kind": "character", "description": "생김새(선택)", "personality": "성격·역할(선택)", "negativePrompt": "안 나오게 할 것(선택)"}]]  → 브랜드 허브에 캐릭터(kind:character) 또는 환경(kind:background|prop) 자산을 등록. 이미지는 선택이다: 캐릭터 등록만 요청받으면 이미지 없이 이름·설명만 등록한다(이미지는 사용자가 허브에서 올리거나 나중에 붙임). 이미지를 붙이라고 할 때만 {"jobId": "그 이미지의 jobId(대화의 [산출물: … jobId=…])"} 또는 {"objectName": "저장소 경로(image_library)"}·{"imageUrl": "…"} 를 함께 준다 — 지정하지 않은 이미지를 짐작해 붙이지 않는다. ★"그려서 캐릭터로 등록해"처럼 한 번에 시키면 같은 답변에 [[RUN: image …]] 를 먼저 쓰고 이어서 [[RUN: brand_asset | {"jobId": "last", …}]] 를 쓴다 — "last" 는 그 답변에서 방금 만든 그림(없으면 가장 최근 생성 이미지)을 가리킨다. 이미 있는 캐릭터에 부르면 준 칸만 갱신·이미지 추가. 한 번에 한 자산이므로 캐릭터가 여러 명이면 이름마다 따로 부른다. brandId 는 모르면 ip_library 로 확인(없는 브랜드는 만들지 않음). 이름은 영문·숫자·한글·_ 24자 이내, 캐릭터당 시트 4장·환경 자산 16개까지. ⚠️ 쓰기라 사람 승인 후 반영. "캐릭터 등록해줘"·"이 이미지를 우리 캐릭터 자산으로 등록해줘"에 사용.`,
     imagen_describe: `[[RUN: imagen_describe | {"imageUrl": "https://... 또는 gs://... 실제 주소", "lang": "ko"}]]  → 저장된 이미지를 분석해 재현용 프롬프트를 역생성. ⚠️ 실제 주소가 있는 이미지에만 사용. 사용자가 방금 첨부한 이미지는 이미 눈에 보이므로 이 도구를 쓰지 말고 바로 답할 것(첨부에는 URL 이 없어 반드시 실패한다). 회사 파일에 저장된 이미지는 {"path": "폴더/그림.png"} 로 부르면 그 그림을 직접 보고 설명한다.`,
     upscale: `[[RUN: upscale | {"imageUrl": "이미지URL"}]]  또는 {"objectName": "GCS objectName"}  → 이미지를 2배 고해상도로 업스케일. 발행/썸네일 전 품질 향상에 사용.`,
     lipsync: `[[RUN: lipsync | {"videoUrl": "영상URL", "mode": "text2video", "text": "대사(최대 120자)", "voiceLanguage": "ko"}]]  → 기존 영상 인물의 입모양을 대사/오디오에 맞춰 립싱크(수분 소요). audio2video면 {"mode":"audio2video","audioUrl":"오디오URL"}.`,
@@ -1820,6 +1821,8 @@ export async function runGroupChat(
         text: `🛠️ ${r.tool} 작업을 시작했어요. 잠시 기다려주세요…`,
       });
       const result = await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
+      // "그려서 캐릭터로 등록해" — 같은 답변의 다음 RUN 이 방금 만든 그림을 jobId:"last" 로 가리킬 수 있게 한다.
+      if (result.ok && !result.gated && IMAGE_PRODUCING_TOOLS.has(r.tool)) toolCtx.lastImageJobId = job.id;
       if (result.pending) {
         await emit({ userId, conversationId, role: 'agent', agentId, name: meta.name,
           text: '🎨 본인 ChatGPT 구독으로 이미지 생성 중입니다. 저장까지 완료되면 결과를 알려드릴게요.' });

@@ -1410,6 +1410,9 @@ export interface ToolContext {
   // 실행 중인 잡 id. 도구가 스스로 업무를 등록할 때 이 값으로 중복 등록을 막는다
   // (검수 승인 시 fileJobAsWorkItem 이 metadata->>'jobId' 로 같은 잡을 다시 등록하지 않는다).
   jobId?: string;
+  // 같은 턴에서 방금 만든 이미지의 잡 id. "그려서 캐릭터로 등록해"처럼 한 번에 시킨 일을
+  // 두 도구로 이어 붙일 때, 두 번째 도구가 그 그림을 가리킬 수 있게 한다(jobId: "last").
+  lastImageJobId?: string;
   imageResults?: Record<string, any>;
   runApproved?: boolean;
 }
@@ -4071,6 +4074,24 @@ export function brandAssetImageRef(raw: string, bucket: string): string {
   return "";
 }
 
+/** 이미지를 만드는 도구들. 이 잡의 산출물은 다른 도구가 "방금 그 그림"으로 가리킬 수 있다. */
+export const IMAGE_PRODUCING_TOOLS = new Set(["image", "image_edit", "upscale", "set_master", "set_angle", "set_sheet", "scene_still"]);
+
+/** jobId 자리에 "last"(방금 만든 그림)를 쓸 수 있다. 같은 턴에 만든 것이 우선. */
+const LAST_IMAGE_ALIASES = new Set(["last", "latest", "recent", "방금", "마지막"]);
+
+async function latestImageJobId(ctx: ToolContext): Promise<string> {
+  const sql = getSql(ctx.env);
+  if (!sql) return "";
+  const rows = await sql(
+    `SELECT id FROM agent_jobs
+      WHERE user_id = $1 AND type = ANY($2::text[]) AND COALESCE(output->>'objectName', '') <> ''
+      ORDER BY created_at DESC LIMIT 1`,
+    [ctx.userId, [...IMAGE_PRODUCING_TOOLS]],
+  ).catch(() => [] as any[]);
+  return String((rows as any[])[0]?.id || "");
+}
+
 /** jobId 로 지목한 이미지 잡의 산출물 경로. 이미지 잡은 승인 전까지 review_pending 이라 상태로 거르지 않는다. */
 async function imageJobObjectName(ctx: ToolContext, jobId: string): Promise<string> {
   const sql = getSql(ctx.env);
@@ -4120,7 +4141,13 @@ async function prepareBrandAssetInput(input: any, ctx: ToolContext): Promise<any
     else next.imageUrl = ref;
     return next;
   }
-  const jobId = String(next.jobId || "").trim();
+  let jobId = String(next.jobId || "").trim();
+  if (next.useLastImage === true && !jobId) jobId = "last";
+  if (jobId && LAST_IMAGE_ALIASES.has(jobId.toLowerCase())) {
+    jobId = String(ctx.lastImageJobId || "").trim() || await latestImageJobId(ctx);
+    if (!jobId) throw new Error("방금 만든 그림을 찾지 못했어요. 이미지를 먼저 만들거나 jobId·objectName 을 지정해 주세요.");
+    next.jobId = jobId;
+  }
   if (jobId) next.objectName = await imageJobObjectName(ctx, jobId);
   return next;
 }
