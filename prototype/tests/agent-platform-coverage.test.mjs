@@ -264,3 +264,25 @@ test("채팅이 시킨 씬 수정도 캔버스가 지켜보고 화면에 반영�
   // 컷 카드가 읽는 칸을 프롬프트가 알려 준다 — 표만 그리고 비우면 승인해도 카드가 빈 채로 남는다
   assert.match(orchestrator, /composition\(화면\)과 action\(행동\)을 읽는다/);
 });
+
+test("컷이 없는 프로젝트도 캔버스에서 시작할 수 있다", async () => {
+  const [canvas, dock, executor] = await Promise.all([
+    read("ai-company-app/src/components/ProductionCanvas.tsx"),
+    read("ai-company-app/src/components/CanvasChatDock.tsx"),
+    read("prototype/functions/api/agent/_company-skill-executors.ts"),
+  ]);
+  // 컷을 만드는 수단이 캔버스 안에 있다(예전엔 시나리오 화면으로 나가야 했다)
+  assert.match(canvas, /const addCut = async/);
+  assert.match(canvas, /컷 추가<\/button>/);
+  // 비어 있으면 무엇을 할 수 있는지 보여 준다
+  assert.match(canvas, /cutNodes\.length === 0 &&/);
+  assert.match(canvas, /아직 컷이 없어요/);
+  assert.match(canvas, /대화로 시나리오 만들기/);
+  assert.match(canvas, /빈 컷 하나 만들기/);
+  // 대화 버튼은 첫 문장을 입력칸에 올려 두고, 보내기는 사용자가 누른다
+  assert.match(canvas, /setChatSeed\(\{ text:/);
+  assert.match(dock, /seed\?: \{ text: string; nonce: number \} \| null/);
+  assert.match(dock, /setDraft\(seed\.text\)/);
+  // 막혔을 때 어디로 가야 하는지 오류가 알려 준다
+  assert.match(executor, /제작 캔버스 위쪽 '컷 추가'/);
+});

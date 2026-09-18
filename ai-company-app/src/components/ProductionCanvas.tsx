@@ -385,6 +385,8 @@ export default function ProductionCanvas({
   const [selectedId, setSelectedId] = useState<string>("");
   const [multi, setMulti] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingJob[]>([]);
+  // 빈 캔버스에서 "대화로 시나리오 만들기"를 누르면 대화 독 입력칸에 첫 문장을 올려 준다.
+  const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
   const [pipelineNonce, setPipelineNonce] = useState(0);
@@ -767,6 +769,22 @@ export default function ProductionCanvas({
     location.assign(url);
   };
 
+  /**
+   * 빈 컷을 하나 만든다(맨 뒤에 붙는다).
+   *
+   * 캔버스에는 컷을 새로 만드는 수단이 없어서, 씬이 하나도 없는 프로젝트는 아무것도 시작할 수 없었다
+   * (일괄 생성은 "프로젝트에 씬이 없어요"로 막히고, 시나리오 화면으로 나가야 했다).
+   * 내용은 비워 두고 자리만 만든다 — 채우는 것은 사용자가 카드에서 하거나 대화로 시킨다.
+   */
+  const addCut = async (sceneLocation = "") => {
+    const next = cutNodes.length + 1;
+    await enqueue(
+      "scene_upsert",
+      { projectId, scene: { title: `컷 ${next}`, composition: "", action: "", ...(sceneLocation ? { sceneLocation } : {}) } },
+      `컷 ${next} 추가`,
+    );
+  };
+
   const saveDraft = async () => {
     if (!selected || selected.type !== "cut" || !draft) return;
     await enqueue("scene_upsert", {
@@ -1055,6 +1073,7 @@ export default function ProductionCanvas({
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.max(MIN_SCALE, v.scale * 0.9) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="축소">−</button>
           <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>
+          <button type="button" onClick={() => void addCut()} disabled={!projectId || saving} className="min-w-[72px] rounded border border-sky-700/70 bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-200 transition hover:bg-sky-900/50 disabled:opacity-40" title="빈 컷을 하나 만들어요 — 내용은 카드에서 채우거나 대화로 시키세요">컷 추가</button>
           <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-gray-400 hover:bg-edge hover:text-white">정렬 초기화</button>
           <button
             type="button"
@@ -1311,6 +1330,35 @@ export default function ProductionCanvas({
 
           {/* 대화 — 작성기(하단 중앙 필) + 세션 패널(오른쪽 오버레이). 작업 공간을 띠로 자르지 않는다. */}
           {/* 작업 독 — 캔버스 왼쪽 아래에 떠 있다(absolute). 레이아웃을 밀지 않는다. 접힌 알약 → 펼치면 목록. */}
+          {/* 컷이 하나도 없는 프로젝트 — 여기서 바로 시작할 수 있게 길을 보여 준다(예전엔 빈 화면이었다). */}
+          {!loading && graph && cutNodes.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">
+              <div className="pointer-events-auto w-[420px] max-w-[92vw] rounded-2xl border border-edge bg-[#0c1119]/95 p-5 text-center shadow-2xl backdrop-blur">
+                <div className="text-[14px] font-bold text-gray-100">아직 컷이 없어요</div>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-gray-400">
+                  대화로 시나리오를 만들거나, 빈 컷을 하나 만들어 직접 채워도 돼요.
+                </p>
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChatSeed({ text: "이 에피소드의 시나리오를 만들어 컷으로 저장해 줘. 개요가 비어 있으면 무엇을 정해야 하는지 먼저 물어봐 줘.", nonce: Date.now() })}
+                    className="rounded-xl bg-emerald-700 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-emerald-600"
+                  >
+                    대화로 시나리오 만들기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addCut()}
+                    disabled={!projectId || saving}
+                    className="rounded-xl border border-sky-700/70 bg-sky-950/40 px-3 py-2 text-[12px] font-semibold text-sky-200 transition hover:bg-sky-900/50 disabled:opacity-40"
+                  >
+                    빈 컷 하나 만들기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {pending.length > 0 && (() => {
             const active = pending.filter((j) => !JOB_DONE.includes(j.status));
             const errors = pending.filter((j) => j.status === "error");
@@ -1494,6 +1542,7 @@ export default function ProductionCanvas({
           )}
 
           <CanvasChatDock
+            seed={chatSeed}
             projectId={projectId}
             projectTitle={graph?.title || ""}
             selectedSceneIds={selectedSceneIds}

@@ -134,7 +134,7 @@ async function prepareVideoPipelinePlan(job: CompanySkillJobRow, context: Compan
   if (!projectId) throw new Error("영상 파이프라인에는 projectId 가 필요합니다.");
   const project = await AGENT_TOOLS.project_get.run({ projectId }, toolContext(job, context) as any);
   if (!Array.isArray(project?.scenes) || !project.scenes.length) {
-    throw new Error("프로젝트에 씬이 없어요. 먼저 시나리오를 만들어 씬을 저장하세요.");
+    throw new Error("프로젝트에 컷이 없어요. 제작 캔버스 위쪽 '컷 추가'로 빈 컷을 만들거나, 대화로 ‘시나리오를 만들어 컷으로 저장해 줘’라고 하세요.");
   }
   const image = await imageAuth(context.env, context.userId);
   const plan = buildVideoPipelinePlan(job, project, { ...context.env, USER_IMAGE_AUTH: image.enabled,

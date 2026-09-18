@@ -5212,7 +5212,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   if (!projectId) throw new Error("projectId is required");
   const cur = await runProjectGetTool({ projectId }, ctx);
   const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
-  if (!scenes.length) throw new Error("프로젝트에 씬이 없어요. 먼저 scenario_to_project로 씬을 저장하세요.");
+  if (!scenes.length) throw new Error("프로젝트에 컷이 없어요. scenario_to_project 로 시나리오를 저장하거나, scene_upsert 로 컷을 하나 만들고 다시 부르세요(사용자에게는 캔버스 '컷 추가' 버튼도 있어요).");
   const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
   if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
   const scene = scenes[idx];
@@ -5375,7 +5375,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   if (!projectId) throw new Error("projectId is required");
   const cur = await runProjectGetTool({ projectId }, ctx);
   const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
-  if (!scenes.length) throw new Error("프로젝트에 씬이 없어요. 먼저 scenario_to_project로 씬을 저장하세요.");
+  if (!scenes.length) throw new Error("프로젝트에 컷이 없어요. scenario_to_project 로 시나리오를 저장하거나, scene_upsert 로 컷을 하나 만들고 다시 부르세요(사용자에게는 캔버스 '컷 추가' 버튼도 있어요).");
   const idx = findSceneIndex(scenes, input?.sceneId ?? input?.scene ?? input?.sceneIndex);
   if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${input?.sceneId ?? input?.scene ?? "?"}).`);
   const scene = scenes[idx];

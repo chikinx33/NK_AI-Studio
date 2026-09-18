@@ -58,6 +58,7 @@ export default function CanvasChatDock({
   onSettingsChange,
   onDirectGenerate,
   onJobReady,
+  seed,
 }: {
   projectId: string;
   projectTitle: string;
@@ -67,6 +68,8 @@ export default function CanvasChatDock({
   /** 일반 모드: 대화 없이 선택 컷에 바로 생성. 결과 안내 문구를 돌려준다. */
   onDirectGenerate: (kind: "image" | "video", prompt: string) => Promise<string>;
   onJobReady: (payload: unknown) => void;
+  /** 캔버스가 건넨 첫 문장 — 입력칸에 채워 두고 보내기는 사용자가 누른다(내용을 고칠 여지를 남긴다). */
+  seed?: { text: string; nonce: number } | null;
 }) {
   const [mode, setMode] = useState<ComposerMode>(readUserStorage(MODE_KEY) === "agent" ? "agent" : "normal");
   const [popover, setPopover] = useState<"none" | "settings" | "agent">("none");
@@ -90,6 +93,12 @@ export default function CanvasChatDock({
   const switchMode = (next: ComposerMode) => { setMode(next); writeUserStorage(MODE_KEY, next); setPopover("none"); setNotice(""); };
 
   useEffect(() => { getAgents().then(setAgents).catch(() => setAgents([])); }, []);
+  // 캔버스의 "대화로 시나리오 만들기" 같은 버튼이 건넨 문장을 입력칸에 올린다.
+  useEffect(() => {
+    if (!seed?.text) return;
+    setDraft(seed.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce]);
   useEffect(() => { setSessionSuffix(readUserStorage(sessionKey(projectId)) || ""); setAttachments([]); setNotice(""); }, [projectId]);
 
   const loadThread = useCallback(async () => {
