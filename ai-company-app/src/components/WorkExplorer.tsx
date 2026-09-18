@@ -14,8 +14,9 @@ import {
   type CompanyWorkItem,
   type ChatFileReference,
   downloadCompanyFile,
-  withMediaToken,
+
 } from "../lib/api";
+import StoredImage from "./StoredImage";
 import { GeneratedFilePreview } from "./ChatFileAttachments";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
@@ -556,7 +557,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
         ) : date ? (<>
           {visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
-              : imageWorkObject(work) ? <img src={withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(imageWorkObject(work))}`)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
+              : imageWorkObject(work) ? <StoredImage objectName={imageWorkObject(work)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
               : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
             <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDone(work.status) ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{isDone(work.status) ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
