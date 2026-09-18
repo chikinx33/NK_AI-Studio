@@ -2020,12 +2020,15 @@
       const target = button || (kind === 'error' ? apiSettingsSaveBtn : null);
       if (!target || !kind) return;
       clearTimeout(apiSettingsFlashTimers.get(target));
+      // 돌아갈 글자를 먼저 기억해 둔다(사전에 없으면 원래 글자가 사라져 빈 버튼이 됐다)
+      if (!target.dataset.restoreLabel) target.dataset.restoreLabel = target.textContent || '';
       target.textContent = translateUiText(label || (kind === 'ok' ? '정상' : '실패'));
       target.title = translateUiText(text || '');
       target.classList.toggle('is-ok', kind === 'ok');
       target.classList.toggle('is-error', kind === 'error');
       apiSettingsFlashTimers.set(target, setTimeout(() => {
-        target.textContent = translateUiText(target.dataset.i18n || '');
+        target.textContent = translateUiText(target.dataset.i18n || '') || target.dataset.restoreLabel || '';
+        delete target.dataset.restoreLabel;
         target.title = '';
         target.classList.remove('is-ok', 'is-error');
       }, 4000));

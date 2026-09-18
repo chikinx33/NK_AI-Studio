@@ -15620,6 +15620,9 @@ textarea.bsf-skeleton {
 /* 인증 진단(왼쪽) · 적용(오른쪽)을 반씩. 결과는 버튼 글자로 잠깐 보여 주므로 폭은 고정한다. */
 .api-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .api-settings-actions button { width: 100%; min-width: 0; }
+/* 비활성일 때도 글자가 읽히게: 주황 배경에 어두운 글자가 흐려져 빈 버튼처럼 보였다 */
+.api-settings-actions .btn-primary:disabled { opacity: 1; background: linear-gradient(135deg, #b45a12, #b8722c); color: #f8fafc; }
+.api-settings-actions .btn-secondary:disabled { opacity: .55; }
 .api-settings-actions button.is-ok { color: #4ade80; }
 .api-settings-actions button.is-error { color: #f87171; }
 
