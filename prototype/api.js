@@ -249,7 +249,10 @@
       throw err;
     }
     var data = j(text);
-    return (data && data.diag) || data;
+    // 등록해 둔 인증을 모두 검사한 결과(checks)도 함께 넘긴다.
+    var diag = (data && data.diag) || data || {};
+    if (data && data.checks) diag.checks = data.checks;
+    return diag;
   };
 
   api.scenario = async function (payload) {

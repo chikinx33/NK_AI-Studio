@@ -2027,8 +2027,9 @@
       target.title = translateUiText(text || '');
       target.classList.toggle('is-ok', kind === 'ok');
       target.classList.toggle('is-error', kind === 'error');
-      if (kind === 'error' && apiSettingsErrorEl) {
-        apiSettingsErrorEl.textContent = translateUiText(text || '');
+      if (apiSettingsErrorEl && text) {
+        apiSettingsErrorEl.textContent = translateUiText(text);
+        apiSettingsErrorEl.classList.toggle('is-ok', kind === 'ok');
         apiSettingsErrorEl.hidden = false;
       }
       apiSettingsFlashTimers.set(target, setTimeout(() => {
@@ -2155,6 +2156,8 @@
         setApiSettingsState('저장 중…');
       }
       apiSettingsSaveBtn.disabled = true;
+      if (!apiSettingsSaveBtn.dataset.restoreLabel) apiSettingsSaveBtn.dataset.restoreLabel = apiSettingsSaveBtn.textContent || '';
+      apiSettingsSaveBtn.textContent = translateUiText('연결 중…');
       try {
         await NK.api.agentSettingsSave({
           kind: 'generation',
@@ -2176,6 +2179,11 @@
         setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
       } finally {
         apiSettingsSaveBtn.disabled = !apiAuthLoaded;
+        // 결과 표시가 붙지 않은 경우(중간 이탈 등)에도 '연결 중…'이 남지 않게 되돌린다
+        if (apiSettingsSaveBtn.textContent === translateUiText('연결 중…')) {
+          apiSettingsSaveBtn.textContent = translateUiText(apiSettingsSaveBtn.dataset.i18n || '') || apiSettingsSaveBtn.dataset.restoreLabel || '';
+          delete apiSettingsSaveBtn.dataset.restoreLabel;
+        }
       }
     };
 
@@ -2188,11 +2196,20 @@
       try {
         const d = await NK.api.agentSettingsDiagnose();
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
-        const t = (d && d.test) || {};
-        if (t.ok) {
-          setApiSettingsState(d.source === 'user' ? '본인 인증 정상 — 실제 호출 성공' : '마스터 인증 정상 — 실제 호출 성공', 'ok', apiSettingsDiagnoseBtn);
+        const checks = Array.isArray(d && d.checks) ? d.checks : [];
+        if (checks.length) {
+          // 등록해 둔 인증(Claude 구독·API 키, ChatGPT 구독 연결·OpenAI API 키)을 모두 검사한 결과
+          const failed = checks.filter((c) => !c.ok);
+          const summary = checks.map((c) => c.label + ' ' + translateUiText(c.ok ? '정상' : '실패') + (!c.ok && c.status ? '(' + c.status + ')' : '')).join(' · ');
+          const reason = failed.length && failed[0].detail ? ' — ' + failed[0].detail : '';
+          setApiSettingsState(summary + reason, failed.length ? 'error' : 'ok', apiSettingsDiagnoseBtn);
         } else {
-          setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error', apiSettingsDiagnoseBtn);
+          const t = (d && d.test) || {};
+          if (t.ok) {
+            setApiSettingsState(d.source === 'user' ? '본인 인증 정상 — 실제 호출 성공' : '마스터 인증 정상 — 실제 호출 성공', 'ok', apiSettingsDiagnoseBtn);
+          } else {
+            setApiSettingsState(translateUiText('실패') + '(' + (t.status || 0) + ') ' + (t.detail || ''), 'error', apiSettingsDiagnoseBtn);
+          }
         }
       } catch (err) {
         if (seq !== apiAuthRequestSeq || !NK.auth.isAuthed() || NK.auth.getUser() !== user) return;

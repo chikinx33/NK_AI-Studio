@@ -391,9 +391,17 @@ export async function authDiagnose(sql, userId, env) {
     gateway: usingGateway(env), // AI Gateway 경유 여부
     test: null,
   };
-  // 라이브 테스트 (최소 토큰). 어떤 에러가 나는지 그대로 보고.
+  out.test = await testClaudeCredential(env, r);
+  // 도달성 검사: 자격증명 없이 GET 해서 '경로가 살아 있는지'만 본다.
+  // 구독·API 키가 똑같이 403 이면 자격증명이 아니라 경로 문제인데, 그걸 이걸로 가른다.
+  out.reach = await probeReach(env);
+  return out;
+}
+
+/** 자격증명 한 벌을 실제로 호출해 본다(최소 토큰). 구독·API 키를 따로 검사할 때 쓴다. */
+export async function testClaudeCredential(env, resolved) {
   try {
-    const auth = authHeadersFor(r);
+    const auth = authHeadersFor(resolved);
     const res = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
       // 프록시 경유 시 공유 시크릿이 없으면 프록시가 403 invalid_proxy_secret 을 낸다.
@@ -417,7 +425,7 @@ export async function authDiagnose(sql, userId, env) {
         detail = t.slice(0, 160);
       }
     }
-    out.test = {
+    return {
       ok: res.ok,
       status: res.status,
       detail,
@@ -426,12 +434,8 @@ export async function authDiagnose(sql, userId, env) {
       cfRay: String(res.headers.get("cf-ray") || ""),
     };
   } catch (e) {
-    out.test = { ok: false, status: 0, detail: String((e && e.message) || e).slice(0, 160) };
+    return { ok: false, status: 0, detail: String((e && e.message) || e).slice(0, 160) };
   }
-  // 도달성 검사: 자격증명 없이 GET 해서 '경로가 살아 있는지'만 본다.
-  // 구독·API 키가 똑같이 403 이면 자격증명이 아니라 경로 문제인데, 그걸 이걸로 가른다.
-  out.reach = await probeReach(env);
-  return out;
 }
 
 /** claudeFetch 의 trace 를 오류 메시지에 붙일 한 줄로. 무엇을 시도했는지가 드러나야 한다. */

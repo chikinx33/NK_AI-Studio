@@ -53,3 +53,16 @@ test('image indicator distinguishes offline subscription, unsaved mode, and regi
   h.state.apiAuthLoaded = false; h.render();
   assert.equal(h.elements['user-chat-auth-state'].classes['is-active'], false);
 });
+
+// 증상: '인증 진단'이 Claude 의, 그것도 지금 고른 방식 하나만 검사했다.
+test('진단은 등록해 둔 인증을 모두 검사한다', () => {
+  const settings = fs.readFileSync('prototype/functions/api/agent/settings.ts', 'utf8');
+  for (const id of ['claude_subscription', 'claude_api', 'image_subscription', 'image_api']) {
+    assert.ok(settings.includes(`id: "${id}"`), `${id} 검사가 없다`);
+  }
+  assert.match(settings, /async function testOpenAiKey/);
+  const script = fs.readFileSync('prototype/script.js', 'utf8');
+  assert.match(script, /const checks = Array\.isArray\(d && d\.checks\) \? d\.checks : \[\]/);
+  const api = fs.readFileSync('prototype/api.js', 'utf8');
+  assert.match(api, /if \(data && data\.checks\) diag\.checks = data\.checks;/);
+});

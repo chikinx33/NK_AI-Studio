@@ -6,9 +6,9 @@
 // 비밀값(토큰/키)은 Neon에 저장하되 응답엔 절대 노출하지 않음(oauthSet/apiKeySet boolean만).
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema } from "./_shared";
-import { authStatus, authDiagnose, getSettingsRow, saveAgentModelSettings, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
+import { authStatus, authDiagnose, testClaudeCredential, getSettingsRow, saveAgentModelSettings, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
 import { CLOUD_MODELS, MODEL_CATALOG, sanitizeModelSelections } from "../_shared/cloud-models.js";
-import { generationStatus, saveGenerationSettings } from '../_shared/generation-auth';
+import { generationStatus, imageAuth, saveGenerationSettings } from '../_shared/generation-auth';
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -86,7 +86,29 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
   if (body?.kind === "diag") {
     const diag = await authDiagnose(sql, auth.userId, env);
-    return send({ ok: true, diag }, 200, origin);
+    // 사용자가 등록해 둔 인증을 모두 검사한다(고른 것 하나만 보면 다른 쪽 문제를 못 찾는다).
+    const checks: any[] = [];
+    const row: any = await getSettingsRow(sql, auth.userId).catch(() => null);
+    const claudeOauth = String(row?.claude_oauth_token || "").trim();
+    const claudeKey = String(row?.claude_api_key || "").trim();
+    if (claudeOauth) {
+      const test = await testClaudeCredential(env, { mode: "subscription", oauthToken: claudeOauth, apiKey: null });
+      checks.push({ id: "claude_subscription", label: "Claude 구독", ...test });
+    }
+    if (claudeKey) {
+      const test = await testClaudeCredential(env, { mode: "api_key", oauthToken: null, apiKey: claudeKey });
+      checks.push({ id: "claude_api", label: "Claude API 키", ...test });
+    }
+    const image = await imageAuth(env, auth.userId).catch(() => null);
+    if (image?.connector?.configured) {
+      checks.push({ id: "image_subscription", label: "ChatGPT 구독", ok: !!image.connector.online, status: 0,
+        detail: image.connector.online ? `${image.connector.email || ""} ${image.connector.plan || ""}`.trim()
+          : "연결 프로그램이 실행 중이 아닙니다" });
+    }
+    if (image?.apiKey) {
+      checks.push({ id: "image_api", label: "OpenAI API 키", ...await testOpenAiKey(env, image.apiKey) });
+    }
+    return send({ ok: true, diag, checks }, 200, origin);
   }
 
   if (body?.kind === "agentVoice") {
@@ -168,4 +190,23 @@ function sanitizeSpeedMap(raw: unknown): Record<string, number> {
     if (/^[a-z0-9_-]{1,32}$/i.test(id) && allowed.has(value)) out[id] = value;
   }
   return out;
+}
+
+/** OpenAI API 키 검사: 모델 목록을 한 번 읽어 키가 살아 있는지만 본다(생성 비용 없음). */
+async function testOpenAiKey(env: any, apiKey: string) {
+  const base = String(env.OPENAI_BASE_URL || "https://api.openai.com").trim().replace(/\/+$/, "");
+  const secret = String(env.OPENAI_PROXY_SECRET || "").trim();
+  try {
+    const res = await fetch(`${base}/v1/models?limit=1`, {
+      headers: { Authorization: `Bearer ${apiKey}`, ...(base !== "https://api.openai.com" && secret ? { "x-nk-proxy-secret": secret } : {}) },
+    });
+    let detail = "";
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      try { detail = JSON.parse(text)?.error?.message || text.slice(0, 160); } catch { detail = text.slice(0, 160); }
+    }
+    return { ok: res.ok, status: res.status, detail };
+  } catch (error: any) {
+    return { ok: false, status: 0, detail: String(error?.message || error).slice(0, 160) };
+  }
 }

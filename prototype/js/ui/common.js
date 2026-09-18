@@ -254,6 +254,7 @@
         '진단 실패': 'Test failed',
         '정상': 'OK',
         '완료': 'Done',
+        '연결 중…': 'Connecting…',
         '적용했습니다': 'Applied',
         '실패': 'Failed',
         '터미널에서 claude setup-token 으로 발급한 구독 토큰': 'Subscription token from running claude setup-token in a terminal',
