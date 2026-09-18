@@ -3428,6 +3428,27 @@ async function runCompanyFilesTransferTool(action: "copy" | "move", input: any, 
 
 const WORK_ENTRY_PATH = /^@work\/(\d{4}-\d{2}-\d{2})(?:\/([0-9a-f-]{36}))?$/i;
 
+/** 회사 파일에서 이름·내용으로 찾는다. 폴더를 하나씩 열지 않아도 되게. read. */
+async function runCompanyFilesSearchTool(input: any, ctx: ToolContext): Promise<any> {
+  const query = String(input?.query || input?.q || input?.keyword || "").trim();
+  if (!query) throw new Error("찾을 말(query)이 필요해요.");
+  const path = String(input?.path || input?.scope || "").trim();
+  const content = input?.content === false ? "" : "&content=1";
+  const scope = path ? `&path=${encodeURIComponent(path)}` : "";
+  return { kind: "company_files_search", ...(await callInternalJson(ctx, `/api/agent/company-files?search=${encodeURIComponent(query)}${scope}${content}`)) };
+}
+
+/** 긴 문서를 통째로 다시 쓰지 않고 고칠 데만 바꾼다. 쓰기 → 승인 게이트. */
+async function runCompanyFilesEditTool(input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || input?.file || "").trim();
+  const find = String(input?.find ?? input?.old ?? "");
+  if (!path) throw new Error("편집할 회사 파일 경로(path)가 필요해요.");
+  if (!find) throw new Error("바꿀 대상 문장(find)이 필요해요.");
+  return { kind: "company_files_edit", ...(await callInternalJson(ctx, "/api/agent/company-files", {
+    body: { action: "edit", path, find, replace: String(input?.replace ?? input?.new ?? ""), all: input?.all === true },
+  })) };
+}
+
 async function runCompanyFilesDeleteTool(input: any, ctx: ToolContext): Promise<any> {
   const rawPaths = Array.isArray(input?.paths) ? input.paths : [input?.paths ?? input?.path];
   const paths: string[] = [...new Set<string>(rawPaths.map((value: any) => String(value || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean))];
@@ -3480,6 +3501,101 @@ async function runCompanyFilesDeleteTool(input: any, ctx: ToolContext): Promise<
     deletedWorkFolders: [...workDates],
     deletedWorkItems,
   };
+}
+
+/** 업무(일감)를 연다. 업무 폴더(날짜)는 이 기록이 생기면서 함께 나타난다. local. */
+async function runWorkCreateTool(input: any, ctx: ToolContext): Promise<any> {
+  const title = String(input?.title || input?.name || "").trim();
+  if (!title) throw new Error("업무 이름(title)이 필요해요.");
+  const created = await callInternalJson(ctx, "/api/agent/work-items", {
+    body: {
+      title,
+      workType: String(input?.workType || input?.type || "task"),
+      status: String(input?.status || "working"),
+      requestText: String(input?.request || input?.requestText || ""),
+      summary: String(input?.summary || ""),
+      conversationId: ctx.conversationId || "main",
+    },
+  });
+  return { kind: "work_create", ...created };
+}
+
+/** 업무의 이름·상태·요약을 고친다(진행 보고). local. */
+async function runWorkUpdateTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.id || input?.workId || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("업무 ID(id)가 필요해요. work_list 로 먼저 찾으세요.");
+  const body: any = { id };
+  if (input?.title !== undefined) body.title = String(input.title);
+  if (input?.status !== undefined) body.status = String(input.status);
+  if (input?.summary !== undefined) body.summary = String(input.summary);
+  return { kind: "work_update", ...(await callInternalJson(ctx, "/api/agent/work-items", { method: "PATCH", body })) };
+}
+
+/** 업무 목록(최근순). 날짜를 주면 그 날의 업무만. read. */
+async function runWorkListTool(input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/agent/work-items");
+  const items: any[] = Array.isArray(data?.items) ? data.items : [];
+  const dateKey = String(input?.date || input?.dateKey || "").trim();
+  const status = String(input?.status || "").trim();
+  const filtered = items.filter((item) => {
+    const created = String(item?.created_at || "");
+    const matchesDate = !dateKey || created.slice(0, 10) === dateKey;
+    return matchesDate && (!status || String(item?.status || "") === status);
+  });
+  const limit = Math.min(100, Math.max(1, Number(input?.limit) || 30));
+  return {
+    kind: "work_list", count: filtered.length,
+    items: filtered.slice(0, limit).map((item) => ({
+      id: item.id, title: item.title, workType: item.work_type, status: item.status,
+      summary: item.result_summary || item.request_text || "", createdAt: item.created_at, updatedAt: item.updated_at,
+    })),
+  };
+}
+
+/** 업무 하나의 상세와 그 업무가 만든 파일. read+synthesize. */
+async function runWorkGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.id || input?.workId || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("업무 ID(id)가 필요해요. work_list 로 먼저 찾으세요.");
+  const data = await callInternalJson(ctx, `/api/agent/work-items?id=${encodeURIComponent(id)}`);
+  const item = Array.isArray(data?.items) ? data.items[0] : null;
+  if (!item) throw new Error("그 업무를 찾지 못했어요.");
+  const dateKey = String(item.created_at || "").slice(0, 10);
+  let files: any[] = [];
+  if (input?.files !== false && dateKey) {
+    const stored = await callInternalJson(ctx, `/api/agent/agent-video-storage?date=${encodeURIComponent(dateKey)}&workId=${encodeURIComponent(id)}&sign=0`).catch(() => ({}));
+    files = (Array.isArray(stored?.items) ? stored.items : []).map((file: any) => ({
+      name: String(file?.name || file?.objectName || "").split("/").pop(),
+      objectName: String(file?.objectName || ""), size: Number(file?.size || 0), contentType: String(file?.contentType || ""),
+    }));
+  }
+  return {
+    kind: "work_get",
+    work: {
+      id: item.id, title: item.title, workType: item.work_type, status: item.status,
+      request: item.request_text || "", summary: item.result_summary || "",
+      createdAt: item.created_at, updatedAt: item.updated_at, dateKey,
+      metadata: typeof item.metadata === "string" ? item.metadata.slice(0, 4000) : item.metadata,
+    },
+    files, fileCount: files.length,
+  };
+}
+
+/** 업무 폴더(날짜)의 표시 이름을 바꾼다. local. */
+async function runWorkFolderRenameTool(input: any, ctx: ToolContext): Promise<any> {
+  const dateKey = String(input?.dateKey || input?.date || "").trim();
+  const title = String(input?.title || input?.name || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error("날짜 폴더(dateKey, YYYY-MM-DD)가 필요해요.");
+  if (!title) throw new Error("새 이름(title)이 필요해요.");
+  return { kind: "work_folder_rename", ...(await callInternalJson(ctx, "/api/agent/work-folders", { method: "PATCH", body: { dateKey, title } })) };
+}
+
+/** 업무 폴더(날짜)를 일반 폴더 안으로 옮긴다(빈 값이면 루트). local. */
+async function runWorkFolderMoveTool(input: any, ctx: ToolContext): Promise<any> {
+  const dateKey = String(input?.dateKey || input?.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error("날짜 폴더(dateKey, YYYY-MM-DD)가 필요해요.");
+  return { kind: "work_folder_move", ...(await callInternalJson(ctx, "/api/agent/company-files", {
+    body: { action: "move_work_folder", dateKey, parentPath: String(input?.parentPath ?? input?.destination ?? "") },
+  })) };
 }
 
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
@@ -3769,12 +3885,39 @@ async function runBrandAssetTool(rawInput: any, ctx: ToolContext): Promise<any> 
 
 /** 이미지 역분석: /api/imagen-describe. 이미지 URL → 재현용 프롬프트/설명. read+synthesize. */
 async function runImagenDescribeTool(input: any, ctx: ToolContext): Promise<any> {
-  const imageUrl = String(input?.imageUrl || input?.url || input?.image || "").trim();
-  if (!imageUrl) throw new Error("imageUrl is required");
+  // 회사 파일에 있는 이미지도 직접 본다(비공개 저장소라 URL 로는 못 넘긴다 → 바이트를 실어 보낸다).
+  const companyPath = String(input?.path || input?.companyPath || "").trim();
+  const imageUrl = companyPath
+    ? await readCompanyImageDataUrl(ctx, companyPath)
+    : String(input?.imageUrl || input?.url || input?.image || "").trim();
+  if (!imageUrl) throw new Error("imageUrl 또는 회사 파일 경로(path)가 필요해요.");
   const data = await callInternalJson(ctx, "/api/imagen-describe", {
     body: { imageUrl, lang: input?.lang === "en" ? "en" : "ko" },
   });
   return { prompt: data.prompt || "", model: data.model || "", lang: data.lang || "" };
+}
+
+/** 회사 파일의 이미지를 data URL 로 읽는다. 비전 모델에 그림 자체를 넘기기 위한 것. */
+const MAX_VIEWABLE_IMAGE_BYTES = 8 * 1024 * 1024;
+
+async function readCompanyImageDataUrl(ctx: ToolContext, path: string): Promise<string> {
+  const response = await fetch(
+    internalUrl(ctx.request, `/api/agent/company-files?path=${encodeURIComponent(path)}&preview=1`),
+    { headers: { Authorization: ctx.authHeader } },
+  );
+  if (!response.ok) {
+    const detail: any = await response.json().catch(() => ({}));
+    throw new Error(String(detail?.error || `'${path}' 이미지를 열지 못했어요 (HTTP ${response.status}).`));
+  }
+  const contentType = String(response.headers.get("Content-Type") || "").split(";")[0].trim();
+  if (!contentType.startsWith("image/")) throw new Error(`'${path}'는 이미지 파일이 아니에요(${contentType || "형식 불명"}).`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_VIEWABLE_IMAGE_BYTES) throw new Error("8MB 이하 이미지만 볼 수 있어요.");
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 8192));
+  }
+  return `data:${contentType};base64,${btoa(binary)}`;
 }
 
 /** 이미지 업스케일: /api/upscale (Vertex Imagen 2X). external(즉시 실행·검수 패널). */
@@ -5609,6 +5752,16 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   company_files_copy: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("copy", input, ctx) },
   company_files_move: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("move", input, ctx) },
   company_files_delete: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesDeleteTool },
+  // 이름·내용으로 찾기(폴더를 하나씩 열지 않아도 된다) · 긴 문서의 고칠 데만 바꾸기.
+  company_files_search: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesSearchTool },
+  company_files_edit: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesEditTool },
+  // 업무(일감) 자체를 열고·고치고·들여다본다. 업무 폴더는 이 기록을 따라 생긴다.
+  work_create: { agentId: "sync", agentIds: ["core"], kind: "local", run: runWorkCreateTool },
+  work_update: { agentId: "sync", agentIds: ["core"], kind: "local", run: runWorkUpdateTool },
+  work_list: { agentId: "sync", agentIds: ["core", "plot", "pixel"], kind: "read", synthesize: true, run: runWorkListTool },
+  work_get: { agentId: "sync", agentIds: ["core", "plot", "pixel"], kind: "read", synthesize: true, run: runWorkGetTool },
+  work_folder_rename: { agentId: "sync", agentIds: ["core"], kind: "local", run: runWorkFolderRenameTool },
+  work_folder_move: { agentId: "sync", agentIds: ["core"], kind: "local", run: runWorkFolderMoveTool },
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
   video: { agentId: "pixel", kind: "external", run: runVideoTool },

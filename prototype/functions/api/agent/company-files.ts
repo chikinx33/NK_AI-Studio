@@ -4,12 +4,15 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { ensureAgentSchema, getSql } from "./_shared";
+import { DOCUMENT_EXTENSIONS, extractDocumentText } from "./_doc-text";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const GCS_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_TEXT_BYTES = 1024 * 1024;
+// .xlsx·.docx 같은 문서는 눌려 있어 원본이 크다. 편 텍스트는 아래 읽기 한도가 다시 자른다.
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const MAX_OPERATION_OBJECTS = 2000;
 const FOLDER_MARKER = ".raviok-folder";
 const WORK_PATH_PREFIX = "@work/";
@@ -192,6 +195,58 @@ async function listStoredEntries(ctx: any, rootPrefix: string, path: string) {
       };
     });
   return { folders, files, empty: !listed.items.length && !listed.prefixes.length };
+}
+
+// 이름으로 파일을 찾고, 필요하면 텍스트 파일 안까지 들여다본다.
+// 내용 검색은 파일 하나가 GCS 요청 한 번이라 Worker 서브요청 한도 안에서만 연다.
+const SEARCH_CONTENT_FILE_LIMIT = 20;
+const SEARCH_TEXT_PATTERN = /\.(txt|md|mdx|json|csv|tsv|xml|ya?ml|js|ts|tsx|jsx|css|html)$/i;
+
+async function searchFiles(ctx: any, rootPrefix: string, scope: string, query: string, withContent: boolean) {
+  const prefix = `${rootPrefix}${scope ? `${scope}/` : ""}`;
+  const listed = await listObjects(ctx, prefix);
+  const wanted = query.normalize("NFC").toLocaleLowerCase("ko-KR");
+  const all = listed.items
+    .map((item) => ({ item, path: String(item.name || "").slice(rootPrefix.length) }))
+    .filter((entry) => entry.path && baseName(entry.path) !== FOLDER_MARKER);
+  const nameMatches = all.filter((entry) => entry.path.normalize("NFC").toLocaleLowerCase("ko-KR").includes(wanted));
+  const matches = nameMatches.map((entry) => ({
+    kind: "file", name: baseName(entry.path), path: entry.path, parentPath: parentPath(entry.path),
+    matchedBy: "name", contentType: String(entry.item.contentType || "application/octet-stream"),
+    size: Number(entry.item.size || 0), updatedAt: String(entry.item.updated || ""),
+  }));
+
+  let scanned = 0;
+  let truncated = false;
+  if (withContent) {
+    const found = new Set(matches.map((entry) => entry.path));
+    for (const entry of all) {
+      if (found.has(entry.path) || !SEARCH_TEXT_PATTERN.test(entry.path) || Number(entry.item.size || 0) > MAX_TEXT_BYTES) continue;
+      if (scanned >= SEARCH_CONTENT_FILE_LIMIT) { truncated = true; break; }
+      scanned += 1;
+      const media = await getObject(ctx, `${rootPrefix}${entry.path}`, true).catch(() => null);
+      if (!media?.ok) continue;
+      const text = await media.text().catch(() => "");
+      const lines = text.split(/\r?\n/);
+      const hits: Array<{ line: number; text: string }> = [];
+      for (let index = 0; index < lines.length && hits.length < 5; index += 1) {
+        if (lines[index].normalize("NFC").toLocaleLowerCase("ko-KR").includes(wanted)) {
+          hits.push({ line: index + 1, text: lines[index].trim().slice(0, 200) });
+        }
+      }
+      if (hits.length) {
+        matches.push({
+          kind: "file", name: baseName(entry.path), path: entry.path, parentPath: parentPath(entry.path),
+          matchedBy: "content", contentType: String(entry.item.contentType || "application/octet-stream"),
+          size: Number(entry.item.size || 0), updatedAt: String(entry.item.updated || ""), lines: hits,
+        } as any);
+      }
+    }
+  }
+  return {
+    query, scope, searched: all.length, scannedFiles: scanned, truncated,
+    matches: matches.slice(0, 50), matchCount: matches.length,
+  };
 }
 
 async function pathCandidates(ctx: any, sql: any, userId: string, rootPrefix: string, requested: string) {
@@ -377,6 +432,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const wantsPreview = url.searchParams.get("preview") === "1";
     const wantsRead = url.searchParams.get("read") === "1";
 
+    const searchQuery = String(url.searchParams.get("search") || "").trim();
+    if (searchQuery) {
+      const scope = path.startsWith(WORK_PATH_PREFIX)
+        ? workFilesPath((await resolveWorkDateKey(getSql(env), auth.userId, splitWorkPath(path)!.head)).dateKey, splitWorkPath(path)!.inner)
+        : path;
+      const withContent = url.searchParams.get("content") === "1";
+      return send(await searchFiles(ctx, rootPrefix, scope, searchQuery, withContent), 200, origin);
+    }
+
     if (!wantsDownload && !wantsPreview && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
       const parts = splitWorkPath(path) || { head: "", inner: "" };
       const sql = getSql(env);
@@ -425,21 +489,34 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const metadata: any = await metadataResponse.json().catch(() => ({}));
       if (!metadataResponse.ok) return send({ error: metadata?.error?.message || "파일 정보를 읽지 못했습니다." }, metadataResponse.status, origin);
       const size = Number(metadata.size || 0);
-      if (wantsRead && size > MAX_TEXT_BYTES) return send({ error: "에이전트가 읽을 수 있는 텍스트 파일은 1MB 이하입니다." }, 413, origin);
+      const isDocument = DOCUMENT_EXTENSIONS.test(filePath);
+      const readLimit = isDocument ? MAX_DOCUMENT_BYTES : MAX_TEXT_BYTES;
+      if (wantsRead && size > readLimit) return send({ error: `에이전트가 읽을 수 있는 ${isDocument ? "문서는 20MB" : "텍스트 파일은 1MB"} 이하입니다.` }, 413, origin);
       const range = wantsPreview ? String(request.headers.get("Range") || "") : "";
       const media = await getObject(ctx, objectName, true, range);
       if (!media.ok) return send({ error: `파일 다운로드 실패 (HTTP ${media.status})` }, media.status, origin);
       if (wantsRead) {
         const contentType = String(metadata.contentType || "application/octet-stream");
-        if (!contentType.startsWith("text/") && !/(json|xml|yaml|javascript|csv|markdown|raviok-project|x-project)/i.test(contentType) && !/\.(txt|md|mdx|json|csv|tsv|xml|ya?ml|js|ts|tsx|jsx|css|html|nkproject|nkproj|raviok-project|project)$/i.test(filePath)) {
+        const plainText = contentType.startsWith("text/") || /(json|xml|yaml|javascript|csv|markdown|raviok-project|x-project)/i.test(contentType) || /\.(txt|md|mdx|json|csv|tsv|xml|ya?ml|js|ts|tsx|jsx|css|html|nkproject|nkproj|raviok-project|project)$/i.test(filePath);
+        if (!plainText && !isDocument) {
           return send({ error: "텍스트로 읽을 수 없는 파일 형식입니다." }, 415, origin);
         }
-        const text = await media.text();
+        // 직원이 만든 견적서·기획서를 다시 열어 이어서 일할 수 있어야 한다.
+        let documentFormat = "";
+        let text = "";
+        if (plainText) text = await media.text();
+        else {
+          const extracted = await extractDocumentText(filePath, new Uint8Array(await media.arrayBuffer()))
+            .catch((error: any) => { throw new Error(String(error?.message || "문서를 텍스트로 읽지 못했습니다.")); });
+          if (!extracted) return send({ error: "텍스트로 읽을 수 없는 파일 형식입니다." }, 415, origin);
+          text = extracted.text;
+          documentFormat = extracted.format;
+        }
         const offset = Math.max(0, Number(url.searchParams.get("offset") || 0) || 0);
         const limit = Math.min(16000, Math.max(1000, Number(url.searchParams.get("limit") || 12000) || 12000));
         const content = text.slice(offset, offset + limit);
         const nextOffset = offset + content.length;
-        return send({ path: filePath, contentType, size, content, offset, nextOffset, hasMore: nextOffset < text.length, totalCharacters: text.length }, 200, origin);
+        return send({ path: filePath, contentType, size, content, offset, nextOffset, hasMore: nextOffset < text.length, totalCharacters: text.length, ...(documentFormat ? { documentFormat } : {}) }, 200, origin);
       }
       const headers = new Headers(corsHeaders(origin));
       headers.set("Content-Type", String(metadata.contentType || media.headers.get("Content-Type") || "application/octet-stream"));
@@ -580,6 +657,43 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const type = String(body.contentType || "text/plain; charset=utf-8").slice(0, 120);
       const stored = await uploadObject(ctx, `${rootPrefix}${path}`, bytes.buffer, type);
       return send({ ok: true, entry: { kind: "file", name: baseName(path), path, size: bytes.byteLength, contentType: type, updatedAt: stored.updated || new Date().toISOString() } }, 201, origin);
+    }
+    // 긴 문서를 통째로 다시 쓰지 않고 고친 데만 바꾼다(찾는 문장이 하나일 때만 실행).
+    if (action === "edit") {
+      const path = normalizePath(body.path, false);
+      assertMutablePath(path);
+      const find = String(body.find ?? body.old ?? "");
+      const replacement = String(body.replace ?? body.new ?? "");
+      const all = body.all === true;
+      if (!find) return send({ error: "바꿀 대상 문장(find)이 필요합니다." }, 400, origin);
+      if (find === replacement) return send({ error: "찾는 문장과 바꿀 문장이 같습니다." }, 400, origin);
+      const metadataResponse = await getObject(ctx, `${rootPrefix}${path}`);
+      if (metadataResponse.status === 404) return send({ error: `'${path}' 파일을 찾지 못했습니다.` }, 404, origin);
+      const metadata: any = await metadataResponse.json().catch(() => ({}));
+      if (!metadataResponse.ok) return send({ error: metadata?.error?.message || "파일 정보를 읽지 못했습니다." }, metadataResponse.status, origin);
+      const type = String(metadata.contentType || "text/plain; charset=utf-8");
+      if (Number(metadata.size || 0) > MAX_TEXT_BYTES) return send({ error: "부분 편집은 1MB 이하 텍스트 파일만 가능합니다." }, 413, origin);
+      if (!type.startsWith("text/") && !/(json|xml|yaml|javascript|csv|markdown)/i.test(type) && !SEARCH_TEXT_PATTERN.test(path)) {
+        return send({ error: "부분 편집은 텍스트 파일에만 할 수 있습니다." }, 415, origin);
+      }
+      const media = await getObject(ctx, `${rootPrefix}${path}`, true);
+      if (!media.ok) return send({ error: `파일을 읽지 못했습니다 (HTTP ${media.status})` }, media.status, origin);
+      const before = await media.text();
+      const occurrences = before.split(find).length - 1;
+      if (!occurrences) return send({ error: `'${path}' 안에서 그 문장을 찾지 못했습니다. company-files 읽기로 실제 내용을 먼저 확인해 주세요.`, occurrences: 0 }, 409, origin);
+      if (occurrences > 1 && !all) {
+        return send({ error: `그 문장이 ${occurrences}군데 있습니다. 앞뒤를 더 붙여 한 군데만 가리키거나 all: true 로 전부 바꾸세요.`, occurrences }, 409, origin);
+      }
+      const after = all ? before.split(find).join(replacement) : before.replace(find, replacement);
+      const bytes = new TextEncoder().encode(after);
+      if (bytes.byteLength > MAX_TEXT_BYTES) return send({ error: "편집 결과가 1MB를 넘습니다." }, 413, origin);
+      const stored = await uploadObject(ctx, `${rootPrefix}${path}`, bytes.buffer, type);
+      const at = before.indexOf(find);
+      return send({
+        ok: true, path, replacedCount: all ? occurrences : 1, contentType: type, size: bytes.byteLength,
+        updatedAt: stored.updated || new Date().toISOString(),
+        preview: after.slice(Math.max(0, at - 120), at + replacement.length + 120),
+      }, 200, origin);
     }
     if (action === "copy" || action === "move") {
       const source = normalizePath(body.source, false);

@@ -25,6 +25,42 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   }
 };
 
+// 직원이 스스로 일감을 연다. 업무 폴더(날짜)는 이 레코드가 생기면 함께 나타난다.
+export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
+  try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+    const body: any = await request.json().catch(() => ({}));
+    const title = String(body?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!title) return send({ error: "업무 이름(title)이 필요합니다." }, 400, origin);
+    const workType = String(body?.workType || body?.work_type || "task").trim().slice(0, 40) || "task";
+    const status = ["working", "completed", "error"].includes(String(body?.status || "")) ? String(body.status) : "working";
+    const sql = getSql(env);
+    if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
+    await ensureAgentSchema(sql);
+    const rows = await sql(
+      `INSERT INTO company_work_items
+         (user_id, conversation_id, title, work_type, status, request_text, result_summary, metadata, completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, CASE WHEN $5 = 'completed' THEN now() ELSE NULL END)
+       RETURNING *, to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key`,
+      [
+        auth.userId,
+        String(body?.conversationId || body?.conversation_id || "main").slice(0, 120),
+        title,
+        workType,
+        status,
+        String(body?.requestText || body?.request || "").slice(0, 2000),
+        String(body?.summary || body?.resultSummary || "").slice(0, 2000),
+        JSON.stringify(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+      ],
+    );
+    return send({ item: rows[0] || null }, 201, origin);
+  } catch (error: any) {
+    return send({ error: String(error?.message || error || "업무 생성 실패") }, 500, origin);
+  }
+};
+
 export const onRequestPatch: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
@@ -34,15 +70,23 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     const id = String(body?.id || "").trim();
     const title = String(body?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
     const status = ["working", "completed", "error"].includes(String(body?.status || "")) ? String(body.status) : "";
-    if (!/^[0-9a-f-]{36}$/i.test(id) || (!title && !status)) return send({ error: "변경할 업무 정보가 필요합니다." }, 400, origin);
+    const summary = body?.summary === undefined && body?.resultSummary === undefined
+      ? null : String(body?.summary ?? body?.resultSummary ?? "").slice(0, 2000);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || (!title && !status && summary === null)) return send({ error: "변경할 업무 정보가 필요합니다." }, 400, origin);
     const sql = getSql(env);
     if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
     await ensureAgentSchema(sql);
-    const rows = title && status
-      ? await sql("UPDATE company_work_items SET title = $3, status = $4, completed_at = CASE WHEN $4 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END, updated_at = now() WHERE user_id = $1 AND id = $2 RETURNING *", [auth.userId, id, title, status])
-      : title
-        ? await sql("UPDATE company_work_items SET title = $3, updated_at = now() WHERE user_id = $1 AND id = $2 RETURNING *", [auth.userId, id, title])
-        : await sql("UPDATE company_work_items SET status = $3, completed_at = CASE WHEN $3 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END, updated_at = now() WHERE user_id = $1 AND id = $2 RETURNING *", [auth.userId, id, status]);
+    // 준 값만 바꾼다(빈 값은 그대로 둔다). 쿼리 하나로 처리해 서브요청을 아낀다.
+    const rows = await sql(
+      `UPDATE company_work_items
+          SET title = COALESCE(NULLIF($3, ''), title),
+              status = COALESCE(NULLIF($4, ''), status),
+              result_summary = COALESCE($5, result_summary),
+              completed_at = CASE WHEN $4 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END,
+              updated_at = now()
+        WHERE user_id = $1 AND id = $2
+      RETURNING *`,
+      [auth.userId, id, title, status, summary]);
     if (!rows.length) return send({ error: "업무 문서를 찾지 못했습니다." }, 404, origin);
     return send({ item: rows[0] }, 200, origin);
   } catch (error: any) {

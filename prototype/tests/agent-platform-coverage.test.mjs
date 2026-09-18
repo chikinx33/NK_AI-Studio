@@ -1,0 +1,82 @@
+// 직원이 플랫폼을 실제로 다룰 수 있는지 — 도구가 있어야 할 자리에 있는지 지킨다.
+// (전수조사 2026-09-18: 업무 폴더 P0)
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
+
+test("P0 · 직원이 회사 파일의 문서(엑셀·워드·PPT·PDF)를 읽는다", async () => {
+  const [endpoint, extractor, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/company-files.ts"),
+    read("prototype/functions/api/agent/_doc-text.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(extractor, /export const DOCUMENT_EXTENSIONS/);
+  assert.match(extractor, /case "xlsx"/);
+  assert.match(extractor, /case "docx"/);
+  assert.match(extractor, /case "pptx"/);
+  assert.match(extractor, /case "pdf"/);
+  // 브라우저 첨부와 같은 규칙(200행·40열)으로 편다
+  assert.match(extractor, /MAX_ROWS = 200/);
+  assert.match(extractor, /MAX_COLUMNS = 40/);
+  // 읽지 못하는 PDF 는 조용히 빈 값을 주지 않고 사실대로 말한다
+  assert.match(extractor, /서버에서 본문을 읽을 수 없어요/);
+  assert.match(endpoint, /extractDocumentText/);
+  assert.match(endpoint, /MAX_DOCUMENT_BYTES = 20 \* 1024 \* 1024/);
+  assert.match(endpoint, /documentFormat/);
+  assert.match(orchestrator, /엑셀\(\.xlsx\)·워드\(\.docx\)/);
+});
+
+test("P0 · 직원이 회사 파일을 찾고, 긴 파일의 고칠 데만 바꾼다", async () => {
+  const [endpoint, shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/company-files.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  // 검색: 이름 + (선택) 내용. 내용 검색은 Worker 서브요청 한도 안에서만 연다
+  assert.match(endpoint, /async function searchFiles/);
+  assert.match(endpoint, /SEARCH_CONTENT_FILE_LIMIT = 20/);
+  assert.match(endpoint, /matchedBy: "content"/);
+  // 부분 편집: 못 찾거나 여러 군데면 덮어쓰지 않고 멈춘다
+  assert.match(endpoint, /action === "edit"/);
+  assert.match(endpoint, /그 문장을 찾지 못했습니다/);
+  assert.match(endpoint, /all: true 로 전부 바꾸세요/);
+  assert.match(shared, /company_files_search:[^\n]+kind: "read"/);
+  assert.match(shared, /company_files_edit:[^\n]+kind: "external", gate: true/);
+  assert.match(orchestrator, /\[\[RUN: company_files_search/);
+  assert.match(orchestrator, /\[\[RUN: company_files_edit/);
+});
+
+test("P0 · 직원이 회사 파일의 그림을 직접 본다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  // 비공개 저장소라 URL 로는 못 넘긴다 → 바이트를 data URL 로 실어 보낸다
+  assert.match(shared, /async function readCompanyImageDataUrl/);
+  assert.match(shared, /preview=1/);
+  assert.match(shared, /MAX_VIEWABLE_IMAGE_BYTES/);
+  assert.match(shared, /companyPath\s*\n?\s*\? await readCompanyImageDataUrl/);
+  assert.match(orchestrator, /회사 파일에 저장된 이미지는/);
+});
+
+test("P0 · 직원이 업무(일감)를 열고 고치고 들여다본다", async () => {
+  const [items, shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/work-items.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(items, /export const onRequestPost/);
+  assert.match(items, /INSERT INTO company_work_items/);
+  // 준 값만 바꾼다(빈 값이 기존 내용을 지우지 않는다)
+  assert.match(items, /COALESCE\(NULLIF\(\$3, ''\), title\)/);
+  assert.match(items, /result_summary = COALESCE\(\$5, result_summary\)/);
+  for (const tool of ["work_create", "work_update", "work_list", "work_get", "work_folder_rename", "work_folder_move"]) {
+    assert.match(shared, new RegExp(`${tool}: \\{`), `${tool} 가 AGENT_TOOLS 에 없다`);
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
+  }
+  assert.match(shared, /work_get:[^\n]+kind: "read"/);
+  // 업무 상세는 그 업무가 만든 파일까지 함께 돌려준다
+  assert.match(shared, /agent-video-storage\?date=/);
+});
