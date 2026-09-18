@@ -67,6 +67,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     let lastStatus = 0;
     let lastDetail = "";
+    let accessFailure: { status: number; detail: string } | null = null;
     for (const t of tries) {
       let signed = "";
       try {
@@ -111,8 +112,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
       lastStatus = gcsResp.status;
       lastDetail = await gcsResp.text().catch(() => "");
+      if (lastStatus === 403 && !accessFailure) accessFailure = { status: lastStatus, detail: lastDetail };
     }
     // 모든 버킷에서 실패: 없음/권한은 실제 코드(404/403)로, 그 외는 502 로 전달.
+    if (accessFailure) { lastStatus = accessFailure.status; lastDetail = accessFailure.detail; }
     const outStatus = (lastStatus === 404 || lastStatus === 403 || lastStatus === 416) ? lastStatus : 502;
     return send({ error: "gcs_fetch_failed", status: lastStatus, detail: lastDetail }, outStatus, origin);
   } catch (e: any) {

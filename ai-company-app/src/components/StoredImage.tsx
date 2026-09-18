@@ -15,7 +15,11 @@ export default function StoredImage({ objectName, fallbackUrl = "", alt, classNa
     void (async () => {
       try {
         const response = await fetch(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`, { signal: controller.signal });
-        if (!response.ok) throw new Error(response.status === 404 ? "저장된 이미지를 찾을 수 없습니다." : `이미지를 불러오지 못했습니다 (HTTP ${response.status}).`);
+        if (!response.ok) {
+          const failure = await response.json().catch(() => ({}));
+          const code = String(failure.detail || "").match(/<Code>([^<]+)<\/Code>/)?.[1] || "";
+          throw new Error(response.status === 404 ? "저장된 이미지를 찾을 수 없습니다." : `이미지를 불러오지 못했습니다 (HTTP ${response.status}${code ? ` · ${code}` : ""}).`);
+        }
         const blob = await response.blob();
         if (!blob.type.startsWith("image/")) throw new Error("이미지 응답을 받지 못했습니다.");
         if (controller.signal.aborted) return;

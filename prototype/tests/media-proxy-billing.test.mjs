@@ -40,3 +40,11 @@ test('missing images are not retried as billing failures', async () => {
   assert.equal(calls, 1);
   assert.equal(response.status, 404);
 });
+test('a missing fallback bucket does not hide the primary storage permission error', async () => {
+  const handler = load(async (url) => new URL(url).pathname.startsWith('/images/')
+    ? new Response('<Error><Code>AccessDenied</Code></Error>', { status: 403 })
+    : new Response('missing in audio bucket', { status: 404 }));
+  const response = await handler({ env: { ...env, AUDIO_OUTPUT_GCS_URI: 'gs://audio/root' }, request: new Request('https://test/api/media/proxy?objectName=root/image.png') });
+  assert.equal(response.status, 403);
+  assert.match((await response.json()).detail, /AccessDenied/);
+});
