@@ -1,5 +1,5 @@
 // prototype/functions/api/agent/review.ts
-// POST /api/agent/review { id, decision: "approved"|"revise", note? }
+// POST /api/agent/review { id, decision: "approved"|"revise"|"discarded", note? }
 // 사람(엔케)의 검수 게이트. 승인 시 회사 지식에 "결정" 1줄 적재(맛보기, best-effort).
 // ★ 멀티테넌시: 본인 잡만 검수 가능(getJob 이 user_id 격리).
 import { authorizeRequest } from "../_shared/auth.js";
@@ -44,13 +44,34 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const decision = String(body?.decision || "").trim();
     const note = body?.note != null ? String(body.note).slice(0, 2000) : null;
     if (!id) return send({ error: "id is required" }, 400, origin);
-    if (decision !== "approved" && decision !== "revise") {
-      return send({ error: 'decision must be "approved" or "revise"' }, 400, origin);
+    if (decision !== "approved" && decision !== "revise" && decision !== "discarded") {
+      return send({ error: 'decision must be "approved", "revise" or "discarded"' }, 400, origin);
     }
 
     const job = await getJob(sql, id, auth.userId);
     if (!job) return send({ error: "not_found" }, 404, origin); // 타인 잡 숨김
     if (job.status === 'working' && job.output?.subscriptionPending) return send({ error: 'job_still_generating' }, 409, origin);
+
+    // 폐기: 이 산출물은 쓰지 않는다. 다시 만들지 않고, 업무 파일에도 넣지 않는다.
+    // 이미 사용 확정한 것은 업무 파일에 정리돼 있으므로 여기서 지우지 않는다(거기서 지워야 기록이 맞는다).
+    if (decision === "discarded") {
+      if (job.review_status === "approved") {
+        return send({ error: "이미 사용 확정한 산출물이에요. 업무 파일에서 삭제해 주세요." }, 409, origin);
+      }
+      const discarded = await setJobStatus(sql, id, auth.userId, {
+        status: "cancelled", reviewStatus: "discarded", reviewNote: note,
+      });
+      const discardMeta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+      return send({
+        ok: true, job: discarded, filed: null, regenerated: null,
+        message: {
+          role: "agent", agentId: job.agent_id, name: discardMeta.name, files: [],
+          text: note && note.trim()
+            ? `🗑️ 이 결과는 폐기했어요 — "${note.trim().slice(0, 80)}". 업무 파일에는 넣지 않을게요.`
+            : "🗑️ 이 결과는 폐기했어요. 업무 파일에는 넣지 않을게요.",
+        },
+      }, 200, origin);
+    }
 
     // 승인 게이트 도구(gate)는 승인 전에는 실행되지 않은 상태(output 없음)다.
     // → 승인된 지금 비로소 실제로 실행한다("승인 후 실제 업무 추진").

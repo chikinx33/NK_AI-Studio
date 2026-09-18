@@ -1440,7 +1440,7 @@ export interface ResultItem {
   prompt?: string;
   provider?: string;
   note?: string;
-  reviewStatus: "pending" | "approved" | "revise";
+  reviewStatus: "pending" | "approved" | "revise" | "discarded";
   createdAt: number;
   /** 검수 승인 시 등록된 '회사 업무' 위치 — 업무 파일에서 이 날짜 폴더를 열면 산출물이 있다. */
   workDateKey?: string;
@@ -1515,14 +1515,18 @@ export async function getAgentJob(id: string): Promise<any> {
 }
 export async function reviewResult(
   id: string,
-  action: "approve" | "revise",
+  action: "approve" | "revise" | "discard",
   note?: string
 ): Promise<{ ok: boolean; reviewStatus?: string; message?: AgentMessage }> {
   const d = await (
     await fetch("/api/agent/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, decision: action === "approve" ? "approved" : "revise", note }),
+      body: JSON.stringify({
+        id,
+        decision: action === "approve" ? "approved" : action === "discard" ? "discarded" : "revise",
+        note,
+      }),
     })
   ).json();
   if (!d.ok) throw new Error(d.error || "검수 처리에 실패했어요.");

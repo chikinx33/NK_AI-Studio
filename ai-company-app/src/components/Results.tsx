@@ -114,6 +114,7 @@ const STATUS: Record<string, { t: string; c: string; pill: string }> = {
   pending: { t: "검토 대기", c: "text-amber-300", pill: "bg-amber-900/40 text-amber-300 border-amber-700/50" },
   approved: { t: "사용 확정", c: "text-emerald-300", pill: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
   revise: { t: "재검토 요청됨", c: "text-sky-300", pill: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
+  discarded: { t: "폐기됨", c: "text-gray-400", pill: "bg-gray-800/60 text-gray-400 border-gray-600/50" },
 };
 
 const workerLabel = (it: ResultItem) => `${it.agentName}${JOB[it.agentId] ? `(${JOB[it.agentId]})` : ""}`;
@@ -124,11 +125,13 @@ function ImagePopup({
   onClose,
   onApprove,
   onRevise,
+  onDiscard,
 }: {
   item: ResultItem;
   onClose: () => void;
   onApprove: () => Promise<void>;
   onRevise: () => void;
+  onDiscard: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [folderHint, setFolderHint] = useState("");
@@ -204,6 +207,14 @@ function ImagePopup({
             <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS[item.reviewStatus]?.pill ?? "border-edge text-gray-400"}`}>
               {STATUS[item.reviewStatus]?.t ?? item.reviewStatus}
             </span>
+            {approvable && <button
+              disabled={busy}
+              onClick={onDiscard}
+              title="이 결과를 쓰지 않고 버려요(업무 파일에 넣지 않아요)"
+              className="rounded-lg border border-rose-800/70 bg-rose-950/30 px-3 py-1.5 text-sm text-rose-300 transition hover:bg-rose-900/50 disabled:opacity-40"
+            >
+              폐기
+            </button>}
             <button
               disabled={busy}
               onClick={onRevise}
@@ -508,7 +519,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
   const [items, setItems] = useState<ResultItem[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"approve" | "revise" | null>(null);
+  const [busyAction, setBusyAction] = useState<"approve" | "revise" | "discard" | null>(null);
   const [reviseTarget, setReviseTarget] = useState<ResultItem | null>(null);
   const [reviewError, setReviewError] = useState("");
 
@@ -529,7 +540,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
   const open = items.find((x) => x.id === openId) ?? null;
 
   // 검토 적용 — 버튼 클릭 즉시 처리중 표시(승인 대기와 동일)
-  async function applyReview(item: ResultItem, action: "approve" | "revise", note?: string) {
+  async function applyReview(item: ResultItem, action: "approve" | "revise" | "discard", note?: string) {
     setBusy(item.id);
     setBusyAction(action);
     setReviewError("");
@@ -546,8 +557,10 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
       setBusyAction(null);
     }
   }
-  async function reviewInline(it: ResultItem, action: "approve" | "revise") {
+  async function reviewInline(it: ResultItem, action: "approve" | "revise" | "discard") {
     if (action === "revise") { setReviseTarget(it); return; }
+    // 폐기는 되돌릴 수 없다(다시 만들지 않고 업무 파일에도 안 들어간다) → 한 번 묻는다.
+    if (action === "discard" && !window.confirm(`'${it.prompt || it.kind}' 결과를 폐기할까요? 업무 파일에는 들어가지 않아요.`)) return;
     await applyReview(it, action).catch(() => {});
   }
 
@@ -679,6 +692,14 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
                 >
                   {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
                 </button>
+                <button
+                  disabled={busy === it.id}
+                  onClick={() => reviewInline(it, "discard")}
+                  title="이 결과를 쓰지 않고 버려요"
+                  className="inline-flex items-center gap-1 rounded border border-rose-800/70 bg-rose-950/40 px-2 py-1 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {busy === it.id && busyAction === "discard" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "폐기"}
+                </button>
               </div>
             </div>
           );
@@ -698,7 +719,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
                   title={it.prompt}
                   className="flex w-full items-center gap-1 text-left text-[11px] text-gray-400 transition hover:text-gray-200"
                 >
-                  <span className={st?.c ?? "text-gray-400"}>{it.reviewStatus === "approved" ? "✅" : "↻"}</span>
+                  <span className={st?.c ?? "text-gray-400"}>{it.reviewStatus === "approved" ? "✅" : it.reviewStatus === "discarded" ? "🗑️" : "↻"}</span>
                   <span className="shrink-0 text-gray-300">{it.agentName}</span>
                   <span className="shrink-0 text-gray-600">· {st?.t ?? it.reviewStatus}</span>
                   <span className="min-w-0 flex-1 truncate text-gray-500">{it.prompt}</span>
@@ -715,6 +736,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
           onClose={() => setOpenId(null)}
           onApprove={() => applyReview(open, "approve").catch(() => {})}
           onRevise={() => setReviseTarget(open)}
+          onDiscard={() => void reviewInline(open, "discard")}
         />
       )}
       {reviseTarget && (

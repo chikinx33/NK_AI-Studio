@@ -179,3 +179,29 @@ test("이미지 생성 → 브랜드 허브 캐릭터 시트 등록이 한 턴�
   // 모델이 두 RUN 을 순서대로 쓰도록 프롬프트가 알려준다
   assert.match(orchestrator, /\[\[RUN: brand_asset \| \{"jobId": "last"/);
 });
+
+test("보고의 산출물을 폐기할 수 있다", async () => {
+  const [review, shared, results, api] = await Promise.all([
+    read("prototype/functions/api/agent/review.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("ai-company-app/src/components/Results.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+  ]);
+  // 서버: 폐기는 다시 만들지도, 업무 파일에 넣지도 않는다
+  assert.match(shared, /ReviewStatus = "pending" \| "approved" \| "revise" \| "discarded"/);
+  assert.match(review, /decision !== "discarded"/);
+  assert.match(review, /if \(decision === "discarded"\)/);
+  assert.match(review, /reviewStatus: "discarded"/);
+  assert.match(review, /이 결과는 폐기했어요/);
+  // 이미 사용 확정한 것은 업무 파일 쪽에서 지워야 기록이 맞는다
+  assert.match(review, /이미 사용 확정한 산출물이에요/);
+  // 폐기는 승인·재검토보다 뒤에 오는 결정이므로 업무 등록 분기에 걸리지 않는다
+  assert.match(review, /decision === "approved" && executedOutput/);
+  // 화면: 카드와 팝업 양쪽에 폐기, 되돌릴 수 없으니 한 번 묻는다
+  assert.match(api, /"approve" \| "revise" \| "discard"/);
+  assert.match(api, /action === "discard" \? "discarded"/);
+  assert.match(results, /discarded: \{ t: "폐기됨"/);
+  assert.match(results, /action === "discard" && !window\.confirm/);
+  assert.match(results, /reviewInline\(it, "discard"\)/);
+  assert.match(results, /onDiscard/);
+});

@@ -87,7 +87,8 @@ export function perfTimer(label: string) {
 
 // ── 잡 상태/모델 ─────────────────────────────────────────────────────────────
 export type JobStatus = "queued" | "working" | "review_pending" | "approved" | "revise" | "error" | "cancelled";
-export type ReviewStatus = "pending" | "approved" | "revise";
+// discarded = 사람이 결과를 보고 버린 것. 다시 만들지도, 업무 파일에 넣지도 않는다.
+export type ReviewStatus = "pending" | "approved" | "revise" | "discarded";
 
 export interface AgentJob {
   id: string;
