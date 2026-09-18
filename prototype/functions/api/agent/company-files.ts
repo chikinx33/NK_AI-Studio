@@ -155,6 +155,45 @@ async function findWorkFolder(sql: any, userId: string, requested: string) {
     || null;
 }
 
+// '@work/<날짜 또는 폴더 이름>[/안쪽 경로]'를 날짜 폴더와 그 안의 상대 경로로 나눈다.
+function splitWorkPath(path: string) {
+  if (!path.startsWith(WORK_PATH_PREFIX)) return null;
+  const [head, ...rest] = path.slice(WORK_PATH_PREFIX.length).split("/");
+  return { head, inner: rest.join("/") };
+}
+
+// 날짜 폴더에 끌어다 넣은 파일·폴더의 실제 저장 경로.
+function workFilesPath(dateKey: string, inner = "") {
+  return `${WORK_FILES_ROOT}/${dateKey}${inner ? `/${inner}` : ""}`;
+}
+
+// 날짜 폴더는 표시 이름으로 불러도 같은 날짜로 해석한다.
+async function resolveWorkDateKey(sql: any, userId: string, head: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) return { dateKey: head, folder: null as any };
+  const folder = await findWorkFolder(sql, userId, head).catch(() => null);
+  return { dateKey: String(folder?.dateKey || head), folder };
+}
+
+// 저장소 한 폴더의 하위 폴더·파일 목록(가상 날짜 폴더는 넣지 않는다).
+async function listStoredEntries(ctx: any, rootPrefix: string, path: string) {
+  const listed = await listObjects(ctx, `${rootPrefix}${path ? `${path}/` : ""}`, "/");
+  const folders = listed.prefixes.map((prefix) => {
+    const relative = prefix.slice(rootPrefix.length).replace(/\/$/, "");
+    return { kind: "folder", name: baseName(relative), path: relative, parentPath: path };
+  });
+  const files = listed.items
+    .filter((item) => baseName(String(item.name || "")) !== FOLDER_MARKER)
+    .map((item) => {
+      const relative = String(item.name || "").slice(rootPrefix.length);
+      return {
+        kind: "file", name: baseName(relative), path: relative, parentPath: path,
+        contentType: String(item.contentType || "application/octet-stream"), size: Number(item.size || 0),
+        createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
+      };
+    });
+  return { folders, files, empty: !listed.items.length && !listed.prefixes.length };
+}
+
 async function pathCandidates(ctx: any, sql: any, userId: string, rootPrefix: string, requested: string) {
   const wanted = nameKey(requested.split("/").pop());
   const [root, workFolders] = await Promise.all([
@@ -339,19 +378,29 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const wantsRead = url.searchParams.get("read") === "1";
 
     if (!wantsDownload && !wantsPreview && !wantsRead && requestedPath.startsWith(WORK_PATH_PREFIX)) {
-      const requestedKey = requestedPath.slice(WORK_PATH_PREFIX.length).split("/")[0];
+      const parts = splitWorkPath(path) || { head: "", inner: "" };
       const sql = getSql(env);
-      const folder = /^\d{4}-\d{2}-\d{2}$/.test(requestedKey) ? null : await findWorkFolder(sql, auth.userId, requestedKey);
-      const dateKey = folder?.dateKey || requestedKey;
-      const entries = await listVirtualWorkItems(sql, auth.userId, dateKey);
+      const { dateKey, folder } = await resolveWorkDateKey(sql, auth.userId, parts.head);
+      // 업무 기록(DB)뿐 아니라 이 날짜 폴더에 끌어다 넣은 파일·폴더(.work-files/<날짜>)도 화면과 똑같이 함께 돌려준다.
+      const storedArea = workFilesPath(dateKey, parts.inner);
+      const stored = await listStoredEntries(ctx, rootPrefix, storedArea).catch(() => ({ folders: [], files: [], empty: true }));
+      const workItems = parts.inner ? [] : await listVirtualWorkItems(sql, auth.userId, dateKey);
       return send({
-        path: `${WORK_PATH_PREFIX}${dateKey}`, parentPath: "", entries, unified: true,
+        path: `${WORK_PATH_PREFIX}${dateKey}${parts.inner ? `/${parts.inner}` : ""}`,
+        parentPath: parts.inner ? `${WORK_PATH_PREFIX}${dateKey}${parts.inner.includes("/") ? `/${parentPath(parts.inner)}` : ""}` : "",
+        entries: [...workItems, ...stored.folders, ...stored.files], unified: true, storedPath: storedArea,
         ...(folder ? { requestedPath, displayName: folder.name } : {}),
       }, 200, origin);
     }
 
     if (wantsDownload || wantsPreview || wantsRead) {
       let filePath = normalizePath(path, false);
+      // 날짜 폴더 안의 파일은 .work-files/<날짜> 아래에 저장된다. 업무 기록(UUID)이 아니면 그 실제 경로로 바꿔 읽는다.
+      const workParts = splitWorkPath(filePath);
+      if (workParts?.inner && !/^[0-9a-f-]{36}$/i.test(workParts.inner)) {
+        const { dateKey } = await resolveWorkDateKey(getSql(env), auth.userId, workParts.head);
+        filePath = workFilesPath(dateKey, workParts.inner);
+      }
       const resolved = wantsRead
         ? await resolveReadableFile(ctx, rootPrefix, filePath)
         : { path: filePath, metadataResponse: await getObject(ctx, `${rootPrefix}${filePath}`) };
@@ -407,9 +456,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return new Response(media.body, { status: media.status === 206 ? 206 : 200, headers });
     }
 
-    const listPrefix = `${rootPrefix}${path ? `${path}/` : ""}`;
-    const listed = await listObjects(ctx, listPrefix, "/");
-    if (path && !listed.items.length && !listed.prefixes.length) {
+    const stored = await listStoredEntries(ctx, rootPrefix, path);
+    if (path && stored.empty) {
       // 저장소에 없는 경로 — 날짜 폴더의 표시명(예: 이름을 바꾼 "log")이면 그 폴더를 연다.
       const sql = getSql(env);
       // 파일은 다 비웠어도 날짜 폴더를 넣어 둔 폴더라면 그 날짜 폴더들을 보여준다.
@@ -428,20 +476,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         candidates,
       }, 200, origin);
     }
-    const folders = listed.prefixes.map((prefix) => {
-      const relative = prefix.slice(rootPrefix.length).replace(/\/$/, "");
-      return { kind: "folder", name: baseName(relative), path: relative, parentPath: path };
-    }).filter((folder) => folder.path !== WORK_FILES_ROOT);
-    const files = listed.items
-      .filter((item) => baseName(String(item.name || "")) !== FOLDER_MARKER)
-      .map((item) => {
-        const relative = String(item.name || "").slice(rootPrefix.length);
-        return {
-          kind: "file", name: baseName(relative), path: relative, parentPath: path,
-          contentType: String(item.contentType || "application/octet-stream"), size: Number(item.size || 0),
-          createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
-        };
-      });
+    const folders = stored.folders.filter((folder) => folder.path !== WORK_FILES_ROOT);
+    const files = stored.files;
     // 이 경로에 넣어 둔 날짜 폴더(날짜 폴더 안의 날짜 폴더는 .work-files/<날짜> 경로에 놓인다).
     const workFolders = path === WORK_FILES_ROOT ? [] : await listVirtualWorkFolders(getSql(env), auth.userId, path);
     const entries = [...workFolders, ...folders, ...files].sort((a: any, b: any) => {

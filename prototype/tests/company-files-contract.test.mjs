@@ -201,3 +201,23 @@ test("업무 삭제는 서버가 산출물과 SkillJob 정리를 함께 수행�
   assert.doesNotMatch(explorer, /async function removeWork[\s\S]{0,500}deleteAgentVideoStorageFiles/);
   assert.match(storage, /includeSignedUrl/);
 });
+
+test("에이전트는 업무 날짜 폴더 안의 파일도 목록에서 보고 읽는다", async () => {
+  const [endpoint, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/company-files.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  // 날짜 폴더 조회는 업무 기록과 .work-files/<날짜> 아래 실제 파일·폴더를 함께 돌려준다
+  assert.match(endpoint, /function splitWorkPath/);
+  assert.match(endpoint, /function workFilesPath/);
+  assert.match(endpoint, /async function listStoredEntries/);
+  assert.match(endpoint, /const stored = await listStoredEntries\(ctx, rootPrefix, storedArea\)/);
+  assert.match(endpoint, /entries: \[\.\.\.workItems, \.\.\.stored\.folders, \.\.\.stored\.files\]/);
+  // @work/<날짜>/파일.md 로 읽으면 실제 저장 경로로 바꿔 읽는다(업무 기록 UUID는 제외)
+  assert.match(endpoint, /const workParts = splitWorkPath\(filePath\)/);
+  assert.match(endpoint, /workParts\?\.inner && !\/\^\[0-9a-f-\]\{36\}\$\/i\.test\(workParts\.inner\)/);
+  assert.match(endpoint, /filePath = workFilesPath\(dateKey, workParts\.inner\)/);
+  // md 를 포함한 텍스트 확장자는 읽기가 허용된다
+  assert.match(endpoint, /\\.\(txt\|md\|mdx\|json/);
+  assert.match(orchestrator, /\.work-files\/날짜\/파일\.md/);
+});
