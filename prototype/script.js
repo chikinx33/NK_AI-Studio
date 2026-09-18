@@ -1264,6 +1264,7 @@
     const apiSettingsToggleBtn = document.getElementById('api-settings-toggle');
     const apiSettingsTokenInput = document.getElementById('api-settings-token');
     const apiSettingsSaveBtn = document.getElementById('api-settings-save');
+    const apiSettingsErrorEl = document.getElementById('api-settings-error');
     const apiSettingsDiagnoseBtn = document.getElementById('api-settings-diagnose');
     const userChatEnabled = document.getElementById('user-chat-enabled');
     const userImageEnabled = document.getElementById('user-image-enabled');
@@ -2026,12 +2027,17 @@
       target.title = translateUiText(text || '');
       target.classList.toggle('is-ok', kind === 'ok');
       target.classList.toggle('is-error', kind === 'error');
+      if (kind === 'error' && apiSettingsErrorEl) {
+        apiSettingsErrorEl.textContent = translateUiText(text || '');
+        apiSettingsErrorEl.hidden = false;
+      }
       apiSettingsFlashTimers.set(target, setTimeout(() => {
         target.textContent = translateUiText(target.dataset.i18n || '') || target.dataset.restoreLabel || '';
         delete target.dataset.restoreLabel;
         target.title = '';
         target.classList.remove('is-ok', 'is-error');
-      }, 4000));
+        if (apiSettingsErrorEl) { apiSettingsErrorEl.hidden = true; apiSettingsErrorEl.textContent = ''; }
+      }, 8000));
     };
 
     const renderGenerationConnectionStatus = () => {
@@ -2047,12 +2053,16 @@
           : pending ? '적용 후 연결 상태를 확인하세요' : !configured ? '인증을 등록해 주세요'
           : !online ? '연결 프로그램을 실행해 주세요' : title);
       };
-      update('user-chat-auth-state', userChatEnabled.checked, claude.source === 'user' && !!claude.configured,
-        userChatEnabled.checked !== !!saved.chatEnabled || apiAuthMode !== saved.chatMode || !!apiSettingsTokenInput.value.trim(),
-        true, 'Claude 인증 등록됨');
+      // 구독·API 를 모두 등록해 뒀으면, 고른 쪽에 등록된 인증이 있는 한 바로 '연결 활성'으로 본다.
+      // (고른 값은 아래 토글 핸들러가 즉시 저장하므로 실제 동작과 표시가 어긋나지 않는다.)
+      const chatSub = apiAuthMode === 'subscription';
+      update('user-chat-auth-state', userChatEnabled.checked,
+        claude.source === 'user' && (chatSub ? !!claude.oauthSet : !!claude.apiKeySet),
+        userChatEnabled.checked !== !!saved.chatEnabled || !!apiSettingsTokenInput.value.trim(),
+        true, chatSub ? 'Claude 구독 토큰 등록됨' : 'Claude API 키 등록됨');
       const sub = userImageMode.value === 'subscription';
       update('user-image-auth-state', userImageEnabled.checked, sub ? !!saved.connector?.configured : !!saved.imageApiKeySet,
-        userImageEnabled.checked !== !!saved.imageEnabled || userImageMode.value !== saved.imageMode || !!userImageApiKey.value.trim(),
+        userImageEnabled.checked !== !!saved.imageEnabled || !!userImageApiKey.value.trim(),
         !sub || !!saved.connector?.online, sub ? (saved.connector?.email || 'ChatGPT 구독 연결 정상') : 'OpenAI API 키 등록됨');
     };
 
@@ -3001,19 +3011,22 @@
         // 펼칠 때 처음 한 번만 불러온다(닫아둔 사용자에게 불필요한 요청을 보내지 않는다)
         if (!apiSettingsCollapsed && !apiAuthLoaded) loadApiSettings();
       });
+      // 구독·API 선택은 누른 즉시 저장한다 — '적용'은 새 토큰·키를 넣을 때만 필요하다.
+      const applyModeChoice = () => {
+        renderApiAuthMode();
+        if (apiSettingsTokenInput.value.trim() || userImageApiKey.value.trim()) { generationSettingsDirty = true; return; }
+        void saveApiSettings();
+      };
       apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
         b.addEventListener('click', () => {
           apiAuthMode = b.dataset.authMode === 'api_key' ? 'api_key' : 'subscription';
-          generationSettingsDirty = true;
-          renderApiAuthMode();
-          setApiSettingsState('');
+          applyModeChoice();
         });
       });
       apiSettingsWidget.querySelectorAll('.api-image-auth-mode').forEach((b) => {
         b.addEventListener('click', () => {
           userImageMode.value = b.dataset.imageAuthMode === 'api_key' ? 'api_key' : 'subscription';
-          generationSettingsDirty = true;
-          renderApiAuthMode();
+          applyModeChoice();
         });
       });
       // 구독 연결 화면은 새 창 대신 랜딩 위 모달(배경 흐림)로 띄운다.

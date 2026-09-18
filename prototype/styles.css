@@ -15623,8 +15623,12 @@ textarea.bsf-skeleton {
 /* 비활성일 때도 글자가 읽히게: 주황 배경에 어두운 글자가 흐려져 빈 버튼처럼 보였다 */
 .api-settings-actions .btn-primary:disabled { opacity: 1; background: linear-gradient(135deg, #b45a12, #b8722c); color: #f8fafc; }
 .api-settings-actions .btn-secondary:disabled { opacity: .55; }
-.api-settings-actions button.is-ok { color: #4ade80; }
-.api-settings-actions button.is-error { color: #f87171; }
+.api-settings-actions .btn-secondary.is-ok { color: #4ade80; }
+.api-settings-actions .btn-secondary.is-error { color: #f87171; }
+.api-settings-actions .btn-primary.is-ok { background: linear-gradient(135deg, #15803d, #16a34a); color: #f8fafc; }
+.api-settings-actions .btn-primary.is-error { background: linear-gradient(135deg, #b91c1c, #dc2626); color: #f8fafc; }
+.api-settings-error { margin: 0; font-size: 11px; line-height: 1.5; color: #f87171; overflow-wrap: anywhere; }
+.api-settings-error[hidden] { display: none; }
 
 /* ═══════════════════════════════════════
    전역 알림(토스트)
