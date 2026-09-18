@@ -103,3 +103,47 @@ test("P1 · 직원이 멈춘 파이프라인을 살리고 비용을 말한다", 
   // 인증 키는 직원이 못 바꾼다(사람이 설정 화면에서 직접)
   assert.match(shared, /\["mode", "generation"\]\.includes\(kind\)/);
 });
+
+test("P2 · 직원이 제작 영역을 끝까지 다룬다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  for (const tool of ["previz_plan", "storyboard_sheet", "production_graph", "brand_rename", "image_upload", "video_upload"]) {
+    assert.match(shared, new RegExp(`\\n  ${tool}: \\{`), `${tool} 가 AGENT_TOOLS 에 없다`);
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
+  }
+  // 프리비즈는 계획만 낸다 — 적용은 scene_upsert(창작자 데이터 한 곳)
+  assert.match(shared, /previz_plan: \{[^\n]*kind: "read"/);
+  assert.match(orchestrator, /적용은 scene_upsert/);
+  // 업로드는 회사 파일에서 읽어 올린다(형식이 다르면 올리지 않는다)
+  assert.match(shared, /async function runProjectUploadTool/);
+  assert.match(shared, /이미지" : "영상"\} 파일이 아니에요/);
+  for (const gated of ["brand_rename", "image_upload", "video_upload"]) {
+    assert.match(shared, new RegExp(`${gated}: \\{[^\\n]*gate: true`), `${gated} 는 승인 게이트여야 한다`);
+  }
+});
+
+test("P3·P4 · 직원이 지식을 쌓고 성과·운영을 다룬다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  const tools = [
+    "company_knowledge_add", "company_knowledge_update", "company_knowledge_delete", "company_knowledge_tidy",
+    "knowledge_graph", "knowledge_index_add", "knowledge_index_delete",
+    "sns_analytics_sync", "tiktok_publish_status",
+    "admin_users_list", "admin_user_update", "admin_credits_get", "admin_credits_grant",
+  ];
+  for (const tool of tools) {
+    assert.match(shared, new RegExp(`\\n  ${tool}: \\{`), `${tool} 가 AGENT_TOOLS 에 없다`);
+    assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
+  }
+  // 되살릴 수 없거나 남의 계정·돈이 걸린 것은 반드시 승인 게이트
+  for (const gated of ["company_knowledge_delete", "knowledge_index_add", "knowledge_index_delete", "admin_user_update", "admin_credits_grant"]) {
+    assert.match(shared, new RegExp(`${gated}: \\{[^\\n]*gate: true`), `${gated} 는 승인 게이트여야 한다`);
+  }
+  // 정리안은 제안만 만들고 DB 를 건드리지 않는다
+  assert.match(shared, /action: "tidy_plan"/);
+  assert.match(shared, /company_knowledge_tidy: \{[^\n]*kind: "read"/);
+});

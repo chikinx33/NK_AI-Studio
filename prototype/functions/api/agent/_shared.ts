@@ -3720,6 +3720,192 @@ async function runPersonaUpdateTool(input: any, ctx: ToolContext): Promise<any> 
   return { kind: "persona_update", agentId: id, ...(await callInternalJson(ctx, "/api/agent/persona", { method: "PUT", body: { id, prompt } })) };
 }
 
+// ── P2 제작 영역: 프리비즈 · 스토리보드 시트 · 제작 현황 · 자산 등록 ──────────
+/** 프리비즈 자동 배치 계획(LLM 의도 → 결정론 풀이기). 계획만 내고 적용은 scene_upsert. read+synthesize. */
+async function runPrevizPlanTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.project || "").trim();
+  if (!projectId) throw new Error("프로젝트 ID(projectId)가 필요해요. project_list 로 먼저 찾으세요.");
+  const targetIds = (Array.isArray(input?.targetIds) ? input.targetIds : [input?.cutId, input?.sceneId].filter(Boolean)).map(String);
+  if (!targetIds.length) throw new Error("배치를 계획할 컷 ID(targetIds)가 필요해요.");
+  return { kind: "previz_plan", ...(await callInternalJson(ctx, "/api/previz/plan", {
+    body: {
+      projectId, targetIds,
+      contextIds: Array.isArray(input?.contextIds) ? input.contextIds.map(String) : [],
+      prior: input?.prior && typeof input.prior === "object" ? input.prior : {},
+      setSize: Array.isArray(input?.setSize) ? input.setSize : null,
+    },
+  })) };
+}
+
+/** 스토리보드 시트: 시트 나누기(plan) · 바이블 · 보드 · 앵글 플레이트 · 칸 분해. read+synthesize. */
+async function runStoryboardSheetTool(input: any, ctx: ToolContext): Promise<any> {
+  const kind = String(input?.kind || "plan").trim();
+  const allowed = ["plan", "bible-characters", "bible-set", "board", "angle-plate", "cells"];
+  if (!allowed.includes(kind)) throw new Error(`kind 는 ${allowed.join(" · ")} 중 하나예요.`);
+  const body: any = { ...(input && typeof input === "object" ? input : {}), kind };
+  return { kind: "storyboard_sheet", sheetKind: kind, ...(await callInternalJson(ctx, "/api/storyboard/sheet-plan", { body })) };
+}
+
+/** 프로젝트의 제작 현황 그래프(씬·컷·자산이 어디까지 됐는지). read+synthesize. */
+async function runProductionGraphTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.project || "").trim();
+  if (!projectId) throw new Error("프로젝트 ID(projectId)가 필요해요.");
+  return { kind: "production_graph", ...(await callInternalJson(ctx, `/api/agent/production-graph?projectId=${encodeURIComponent(projectId)}`)) };
+}
+
+/** 브랜드 ID·이름 변경. 참조가 따라 바뀌므로 승인 게이트. */
+async function runBrandRenameTool(input: any, ctx: ToolContext): Promise<any> {
+  const brandId = String(input?.brandId || input?.id || "").trim();
+  if (!brandId) throw new Error("브랜드 ID(brandId)가 필요해요. brand_list 로 먼저 확인하세요.");
+  return { kind: "brand_rename", ...(await callInternalJson(ctx, "/api/brand/rename", {
+    body: {
+      brandId,
+      brandTitle: String(input?.title || input?.brandTitle || ""),
+      newBrandId: String(input?.newBrandId || ""),
+      confirm: "yes",
+      deleteOld: input?.deleteOld === true,
+    },
+  })) };
+}
+
+/** 회사 파일의 이미지·영상을 프로젝트 저장소에 올린다(제작에서 쓰려면 프로젝트 자산이어야 한다). */
+async function runProjectUploadTool(target: "image" | "video", input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || input?.project || "").trim();
+  const path = String(input?.path || input?.file || "").trim();
+  if (!projectId) throw new Error("프로젝트 ID(projectId)가 필요해요.");
+  if (!path) throw new Error("올릴 회사 파일 경로(path)가 필요해요.");
+  const source = await fetch(
+    internalUrl(ctx.request, `/api/agent/company-files?path=${encodeURIComponent(path)}&preview=1`),
+    { headers: { Authorization: ctx.authHeader } },
+  );
+  if (!source.ok) {
+    const detail: any = await source.json().catch(() => ({}));
+    throw new Error(String(detail?.error || `'${path}' 파일을 열지 못했어요 (HTTP ${source.status}).`));
+  }
+  const contentType = String(source.headers.get("Content-Type") || "").split(";")[0].trim();
+  const expected = target === "image" ? "image/" : "video/";
+  if (!contentType.startsWith(expected)) throw new Error(`'${path}'는 ${target === "image" ? "이미지" : "영상"} 파일이 아니에요(${contentType || "형식 불명"}).`);
+  const name = path.split("/").pop() || (target === "image" ? "image.png" : "video.mp4");
+  const form = new FormData();
+  form.set("projectId", projectId);
+  form.set("file", new File([await source.arrayBuffer()], name, { type: contentType }));
+  if (target === "image" && input?.kind) form.set("kind", String(input.kind));
+  const response = await fetch(internalUrl(ctx.request, `/api/${target}/upload`), {
+    method: "POST", headers: { Authorization: ctx.authHeader }, body: form,
+  });
+  const data: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(data?.error || `업로드에 실패했어요 (HTTP ${response.status}).`));
+  return { kind: `${target}_upload`, projectId, sourcePath: path, ...data };
+}
+
+// ── P3 지식 쓰기 · P4 배포·운영 ────────────────────────────────────────────
+/** 회사 지식에 한 줄 더한다(사용자가 "이거 기억해"라고 할 때). local. */
+async function runCompanyKnowledgeAddTool(input: any, ctx: ToolContext): Promise<any> {
+  const text = String(input?.text || input?.content || "").trim();
+  if (!text) throw new Error("기억할 내용(text)이 필요해요.");
+  return { kind: "company_knowledge_add", text, ...(await callInternalJson(ctx, "/api/agent/company-knowledge", {
+    body: { text, type: String(input?.type || "사실") },
+  })) };
+}
+
+/** 회사 지식 한 줄을 고쳐 쓴다. local. */
+async function runCompanyKnowledgeUpdateTool(input: any, ctx: ToolContext): Promise<any> {
+  const oldText = String(input?.oldText || input?.from || "").trim();
+  const newText = String(input?.newText || input?.to || "").trim();
+  if (!oldText || !newText) throw new Error("바꿀 내용(oldText)과 새 내용(newText)이 모두 필요해요.");
+  return { kind: "company_knowledge_update", ...(await callInternalJson(ctx, "/api/agent/company-knowledge", {
+    method: "PUT", body: { oldText, newText },
+  })) };
+}
+
+/** 회사 지식 한 줄을 지운다. 지식은 되살릴 수 없어 승인 게이트. */
+async function runCompanyKnowledgeDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const text = String(input?.text || "").trim();
+  if (!text) throw new Error("지울 내용(text)을 정확히 적어 주세요. company_knowledge_search 로 먼저 확인하세요.");
+  return { kind: "company_knowledge_delete", text, ...(await callInternalJson(ctx, "/api/agent/company-knowledge", {
+    method: "DELETE", body: { text },
+  })) };
+}
+
+/** 회사 지식 정리안(병합·수정·삭제 제안)만 만든다. DB는 건드리지 않는다. read+synthesize. */
+async function runCompanyKnowledgeTidyTool(_input: any, ctx: ToolContext): Promise<any> {
+  return { kind: "company_knowledge_tidy", ...(await callInternalJson(ctx, "/api/agent/company-knowledge", { body: { action: "tidy_plan" } })) };
+}
+
+/** 지식 그래프(무엇이 무엇과 이어져 있는지). read+synthesize. */
+async function runKnowledgeGraphTool(_input: any, ctx: ToolContext): Promise<any> {
+  return { kind: "knowledge_graph", ...(await callInternalJson(ctx, "/api/agent/knowledge-graph")) };
+}
+
+/** 지식 허브에 문서를 등록한다(RAG 색인). 공용 지식이라 승인 게이트. */
+async function runKnowledgeIndexAddTool(input: any, ctx: ToolContext): Promise<any> {
+  const text = String(input?.text || input?.content || "").trim();
+  if (!text) throw new Error("색인할 본문(text)이 필요해요. 회사 파일이라면 company_files_read 로 읽어 넘기세요.");
+  return { kind: "knowledge_index_add", ...(await callInternalJson(ctx, "/api/knowledge/index", {
+    body: { name: String(input?.name || "knowledge-file"), text, adminKey: String(input?.adminKey || "") },
+  })) };
+}
+
+/** 지식 허브 문서를 내린다. 승인 게이트. */
+async function runKnowledgeIndexDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const documentId = String(input?.documentId || input?.id || "").trim();
+  if (!documentId) throw new Error("내릴 문서 ID(documentId)가 필요해요. knowledge_stats 로 먼저 확인하세요.");
+  return { kind: "knowledge_index_delete", ...(await callInternalJson(ctx, "/api/knowledge/index", {
+    method: "DELETE", body: { documentId, adminKey: String(input?.adminKey || "") },
+  })) };
+}
+
+/** SNS 성과(조회수·좋아요)를 채널에서 새로 받아 온다. external. */
+async function runSnsAnalyticsSyncTool(input: any, ctx: ToolContext): Promise<any> {
+  return { kind: "sns_analytics_sync", ...(await callInternalJson(ctx, "/api/sns/analytics/sync", {
+    body: { projectId: String(input?.projectId || "") },
+  })) };
+}
+
+/** 틱톡 발행 상태 확인(초안함으로 보낸 뒤 어떻게 됐는지). read. */
+async function runTiktokPublishStatusTool(input: any, ctx: ToolContext): Promise<any> {
+  const publishId = String(input?.publishId || input?.id || "").trim();
+  const query = publishId ? `?publish_id=${encodeURIComponent(publishId)}` : "";
+  return { kind: "tiktok_publish_status", ...(await callInternalJson(ctx, `/api/sns/tiktok/publish-status${query}`)) };
+}
+
+/** 회원 목록(마스터 계정만). read. */
+async function runAdminUsersListTool(_input: any, ctx: ToolContext): Promise<any> {
+  const data = await callInternalJson(ctx, "/api/admin/users");
+  const users: any[] = Array.isArray(data?.users) ? data.users : [];
+  return { kind: "admin_users_list", count: users.length, users: users.slice(0, 200) };
+}
+
+/** 회원 권한·활성 상태 변경(마스터 계정만). 남의 계정을 건드리므로 승인 게이트. */
+async function runAdminUserUpdateTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(input?.id || input?.userId || "").trim();
+  if (!id) throw new Error("회원 ID(id)가 필요해요. admin_users_list 로 먼저 확인하세요.");
+  const body: any = { id };
+  for (const field of ["role", "active", "note", "restoreDeletion"]) {
+    if (input?.[field] !== undefined) body[field] = input[field];
+  }
+  if (Object.keys(body).length === 1) throw new Error("바꿀 항목(role·active·note 중 하나)이 필요해요.");
+  return { kind: "admin_user_update", ...(await callInternalJson(ctx, "/api/admin/users", { method: "PATCH", body })) };
+}
+
+/** 회원 크레딧 조회. read. */
+async function runAdminCreditsGetTool(input: any, ctx: ToolContext): Promise<any> {
+  const userId = String(input?.userId || "").trim();
+  if (!userId) throw new Error("조회할 회원 ID(userId)가 필요해요.");
+  return { kind: "admin_credits_get", ...(await callInternalJson(ctx, `/api/admin/credits?userId=${encodeURIComponent(userId)}`)) };
+}
+
+/** 회원 크레딧 지급·차감(마스터 계정만). 돈이 걸린 일이라 승인 게이트. */
+async function runAdminCreditsGrantTool(input: any, ctx: ToolContext): Promise<any> {
+  const userId = String(input?.userId || "").trim();
+  const amount = Math.trunc(Number(input?.amount) || 0);
+  if (!userId) throw new Error("대상 회원 ID(userId)가 필요해요.");
+  if (!amount) throw new Error("지급하거나 차감할 크레딧 수(amount)가 필요해요.");
+  return { kind: "admin_credits_grant", ...(await callInternalJson(ctx, "/api/admin/credits", {
+    body: { userId, amount, action: String(input?.action || "grant"), reason: String(input?.reason || "") },
+  })) };
+}
+
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
 async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.request || "").trim();
@@ -6076,6 +6262,33 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   agent_settings_get: { agentId: "core", agentIds: ["sync", "engi"], kind: "read", synthesize: true, run: runAgentSettingsGetTool },
   agent_settings_save: { agentId: "core", kind: "external", gate: true, run: runAgentSettingsSaveTool, approvalKey: (i) => String(i?.kind || "").trim().toLowerCase() },
   persona_update: { agentId: "core", kind: "external", gate: true, run: runPersonaUpdateTool, approvalKey: (i) => String(i?.id || i?.agentId || "").trim().toLowerCase() },
+
+  // ── P2 제작 영역 ──────────────────────────────────────────────────────
+  // 계획만 내는 조회(적용은 scene_upsert) · 제작 현황 · 자산 등록.
+  previz_plan: { agentId: "plot", agentIds: ["core", "pixel"], kind: "read", synthesize: true, run: runPrevizPlanTool },
+  storyboard_sheet: { agentId: "pixel", agentIds: ["plot", "core"], kind: "read", synthesize: true, run: runStoryboardSheetTool },
+  production_graph: { agentId: "plot", agentIds: ["core", "pixel"], kind: "read", synthesize: true, run: runProductionGraphTool },
+  brand_rename: { agentId: "core", kind: "external", gate: true, run: runBrandRenameTool, approvalKey: (i) => String(i?.brandId || i?.id || "").trim().toLowerCase() },
+  image_upload: { agentId: "pixel", agentIds: ["core", "plot"], kind: "external", gate: true, run: (i, c) => runProjectUploadTool("image", i, c) },
+  video_upload: { agentId: "pixel", agentIds: ["core", "plot"], kind: "external", gate: true, run: (i, c) => runProjectUploadTool("video", i, c) },
+
+  // ── P3 지식 쓰기 ──────────────────────────────────────────────────────
+  // 읽기만 되던 지식을 직원이 쌓고 고친다. 지우는 것만 되돌릴 수 없어 게이트.
+  company_knowledge_add: { agentId: "core", agentIds: ["sync", "radar", "edge"], kind: "local", run: runCompanyKnowledgeAddTool },
+  company_knowledge_update: { agentId: "core", agentIds: ["sync", "radar", "edge"], kind: "local", run: runCompanyKnowledgeUpdateTool },
+  company_knowledge_delete: { agentId: "core", agentIds: ["sync"], kind: "external", gate: true, run: runCompanyKnowledgeDeleteTool },
+  company_knowledge_tidy: { agentId: "core", kind: "read", synthesize: true, run: runCompanyKnowledgeTidyTool },
+  knowledge_graph: { agentId: "radar", agentIds: ["core"], kind: "read", synthesize: true, run: runKnowledgeGraphTool },
+  knowledge_index_add: { agentId: "radar", agentIds: ["core"], kind: "external", gate: true, run: runKnowledgeIndexAddTool },
+  knowledge_index_delete: { agentId: "radar", agentIds: ["core"], kind: "external", gate: true, run: runKnowledgeIndexDeleteTool },
+
+  // ── P4 배포 성과 · 운영(마스터 계정) ───────────────────────────────────
+  sns_analytics_sync: { agentId: "reach", agentIds: ["maki", "core"], kind: "external", run: runSnsAnalyticsSyncTool },
+  tiktok_publish_status: { agentId: "reach", agentIds: ["core"], kind: "read", run: runTiktokPublishStatusTool },
+  admin_users_list: { agentId: "core", kind: "read", synthesize: true, run: runAdminUsersListTool },
+  admin_user_update: { agentId: "core", kind: "external", gate: true, run: runAdminUserUpdateTool, approvalKey: (i) => String(i?.id || i?.userId || "").trim().toLowerCase() },
+  admin_credits_get: { agentId: "core", agentIds: ["edge"], kind: "read", run: runAdminCreditsGetTool },
+  admin_credits_grant: { agentId: "core", kind: "external", gate: true, run: runAdminCreditsGrantTool },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 
