@@ -2147,6 +2147,17 @@
       }
     };
 
+    // 서버가 돌려준 코드를 사람이 읽는 문구로. 콘솔 400 만 보고 원인을 알 수 없던 문제.
+    const describeSettingsError = (message) => {
+      const code = String((message && message.message) || message || '');
+      if (/invalid_credential_format/.test(code)) {
+        return '키 형식이 올바르지 않아요 — Claude 구독은 sk-ant-oat…, Claude API 키는 sk-ant-api…, 이미지·영상 키는 sk-… 로 시작해야 해요';
+      }
+      if (/invalid_auth_mode|invalid_generation_choice/.test(code)) return '설정 값을 확인해 주세요 (구독/API 선택)';
+      if (/generation_settings_save_failed|generation_settings_unavailable/.test(code)) return '서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요';
+      return code;
+    };
+
     const saveApiSettings = async () => {
       if (!canUseApiSettingsUI() || !NK.auth.isAuthed()) return;
       const user = NK.auth.getUser();
@@ -2176,7 +2187,8 @@
         setApiSettingsState('적용했습니다', 'ok', apiSettingsSaveBtn, '완료');
       } catch (err) {
         if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
-        setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
+        try { console.warn('[api-settings] save failed:', (err && err.message) || err); } catch (_) { }
+        setApiSettingsState(translateUiText('저장 실패') + ': ' + describeSettingsError(err), 'error');
       } finally {
         apiSettingsSaveBtn.disabled = !apiAuthLoaded;
         // 결과 표시가 붙지 않은 경우(중간 이탈 등)에도 '연결 중…'이 남지 않게 되돌린다
