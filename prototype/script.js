@@ -2016,11 +2016,11 @@
     // 설명 문구 줄은 두지 않는다. 오류와 진단 결과만 해당 버튼 글자로 잠깐 보여 주고, 전체 내용은 버튼 툴팁에 둔다.
     // 불러오기 성공 같은 평상시 상태는 표시하지 않는다(진행 중은 버튼 비활성으로 드러난다).
     const apiSettingsFlashTimers = new Map();
-    const setApiSettingsState = (text, kind, button) => {
+    const setApiSettingsState = (text, kind, button, label) => {
       const target = button || (kind === 'error' ? apiSettingsSaveBtn : null);
       if (!target || !kind) return;
       clearTimeout(apiSettingsFlashTimers.get(target));
-      target.textContent = translateUiText(kind === 'ok' ? '정상' : '실패');
+      target.textContent = translateUiText(label || (kind === 'ok' ? '정상' : '실패'));
       target.title = translateUiText(text || '');
       target.classList.toggle('is-ok', kind === 'ok');
       target.classList.toggle('is-error', kind === 'error');
@@ -2071,7 +2071,6 @@
         imageConnect.setAttribute('aria-disabled', userImageEnabled.checked ? 'false' : 'true');
         imageConnect.classList.toggle('is-disabled', !userImageEnabled.checked);
         imageConnect.tabIndex = userImageEnabled.checked ? 0 : -1;
-        document.getElementById('user-image-api-connect').hidden = userImageMode.value !== 'api_key';
         apiSettingsDiagnoseBtn.disabled = !userChatEnabled.checked;
       }
       apiSettingsWidget.querySelectorAll('.api-auth-mode').forEach((b) => {
@@ -2158,6 +2157,7 @@
         apiSettingsTokenInput.value = '';
         userImageApiKey.value = '';
         await loadApiSettings();
+        setApiSettingsState('적용했습니다', 'ok', apiSettingsSaveBtn, '완료');
       } catch (err) {
         if (!NK.auth.isAuthed() || NK.auth.getUser() !== user) return;
         setApiSettingsState(translateUiText('저장 실패') + ': ' + ((err && err.message) || err), 'error');
@@ -3013,7 +3013,6 @@
           renderApiAuthMode();
         });
       });
-      document.getElementById('user-image-api-connect').addEventListener('click', saveApiSettings);
       // 구독 연결 화면은 새 창 대신 랜딩 위 모달(배경 흐림)로 띄운다.
       // iframe 은 닫을 때 비워서 연결 화면의 상태 확인 주기도 함께 멈춘다.
       const codexConnectModal = document.getElementById('codex-connect-modal');
