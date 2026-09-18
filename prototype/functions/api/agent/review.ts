@@ -14,6 +14,7 @@ import {
   AGENT_TOOLS,
   messageFilesFromToolOutput,
   fileJobAsWorkItem,
+  hasDeliverableOutput,
   persistPendingImage,
   createJob,
   processJob,
@@ -146,7 +147,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     // (이 등록이 없어서 승인해도 폴더가 안 생기고 '폴더 열기'가 갈 곳이 없었다.)
     let filed: { workId: string; dateKey: string } | null = null;
     // 회사 파일 조작(삭제·이동 등)은 산출물이 아니다. 등록하면 날짜 폴더를 지운 직후 오늘 폴더가 다시 생긴다.
-    if (decision === "approved" && executedOutput && !job.type.startsWith("company_files_")) {
+    // 브랜드 자산 등록·일정 추가처럼 남을 파일이 없는 일도 등록하지 않는다(빈 업무가 쌓였다).
+    if (decision === "approved" && executedOutput && !job.type.startsWith("company_files_")
+        && hasDeliverableOutput(executedOutput)) {
       filed = await fileJobAsWorkItem(sql, auth.userId, job, executedOutput);
       // 새로고침 후에도 '폴더 열기'가 동작하도록 잡 출력에 위치를 남긴다.
       if (filed) {

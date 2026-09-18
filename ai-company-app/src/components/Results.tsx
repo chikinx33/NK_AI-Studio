@@ -135,6 +135,8 @@ function ImagePopup({
 }) {
   const [busy, setBusy] = useState(false);
   const [folderHint, setFolderHint] = useState("");
+  // 그림이 안 뜨는 이유를 빈 화면 대신 말해 준다(예전 결과는 링크가 만료돼 깨진 아이콘만 보였다).
+  const [imageFailed, setImageFailed] = useState(false);
   // 재검토는 몇 번이든 할 수 있다(누를 때마다 이 결과를 바탕으로 새로 만든다).
   // 검토 승인은 아직 사용 확정하지 않은 산출물에서만 보인다.
   const approvable = item.reviewStatus !== "approved";
@@ -169,9 +171,13 @@ function ImagePopup({
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-ink/60 p-3">
-          {item.url
-            ? <img src={item.url} alt={item.file} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
-            : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">미리볼 이미지가 없는 산출물이에요. 아래 '폴더 열기'나 채팅의 파일에서 확인해 주세요.</p>}
+          {item.url && !imageFailed
+            ? <img src={item.url} alt={item.file} onError={() => setImageFailed(true)} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
+            : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">
+                {item.url
+                  ? "이 그림을 불러오지 못했어요. 저장이 끝나기 전에 만료된 링크이거나 저장소에 올라가지 않은 결과일 수 있어요 — 담당 직원에게 '왜 안 나와?'라고 물으면 원인을 확인해 줘요."
+                  : "미리볼 이미지가 없는 산출물이에요. 아래 '폴더 열기'나 채팅의 파일에서 확인해 주세요."}
+              </p>}
           {item.prompt && (
             <div className="mt-3 rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[12px] leading-relaxed text-gray-300">
               <span className="text-gray-500">프롬프트 · </span>

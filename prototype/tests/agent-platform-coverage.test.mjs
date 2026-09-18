@@ -205,3 +205,45 @@ test("보고의 산출물을 폐기할 수 있다", async () => {
   assert.match(results, /reviewInline\(it, "discard"\)/);
   assert.match(results, /onDiscard/);
 });
+
+test("빈 업무가 쌓이지 않고, 산출물 그림은 시간이 지나도 열린다", async () => {
+  const [shared, review, imagen, api, explorer, results] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/review.ts"),
+    read("prototype/functions/api/imagen.ts"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("ai-company-app/src/components/Results.tsx"),
+  ]);
+  // 남을 파일이 없는 일(브랜드 자산 등록·일정 추가)은 업무로 등록하지 않는다
+  assert.match(shared, /export function hasDeliverableOutput/);
+  assert.match(review, /&& hasDeliverableOutput\(executedOutput\)/);
+  // 서명 URL 은 1시간이면 죽는다 → 저장 위치가 있으면 같은 오리진 프록시로 연다
+  assert.match(api, /export function mediaUrlFromOutput/);
+  assert.match(api, /url: mediaUrlFromOutput\(out\)/);
+  // objectName 만 남은(서명 URL 만료) 산출물도 보고 목록에서 사라지지 않는다
+  assert.match(api, /return o\.objectName \|\| o\.signedUrl/);
+  // 저장에 실패하면 조용히 넘기지 않고 사실을 알린다
+  assert.match(imagen, /storageError/);
+  assert.match(shared, /저장소에 올리지 못했어요/);
+  // 업무를 열면 그 업무가 만든 그림이 보인다(영상 보관함에 없더라도)
+  assert.match(explorer, /function mergeWorkOutput/);
+  assert.match(explorer, /setSources\(mergeWorkOutput\(work, result\.items\)\)/);
+  // 그림이 안 열리면 빈 화면 대신 이유를 적는다
+  assert.match(results, /onError=\{\(\) => setImageFailed\(true\)\}/);
+});
+
+test("결과물이 안 나올 때 직원이 원인을 답한다", async () => {
+  const [shared, orchestrator] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(shared, /\n  jobs_status: \{/);
+  assert.match(shared, /async function runJobsStatusTool/);
+  // 사람 승인 대기와 사람 검토 대기는 사용자에게 전혀 다른 이야기다
+  assert.match(shared, /사람 승인\(승인 패널\)/);
+  assert.match(shared, /사람 검토\(보고\)/);
+  assert.match(shared, /status === "error"/);
+  assert.match(orchestrator, /\[\[RUN: jobs_status/);
+  assert.match(orchestrator, /추측해서 답하지 말고 반드시 먼저 실행/);
+});

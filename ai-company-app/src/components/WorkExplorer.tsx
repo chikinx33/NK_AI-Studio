@@ -32,6 +32,31 @@ function imageWorkObject(work: CompanyWorkItem): string {
   return String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
 }
 
+/**
+ * 업무가 남긴 산출물을 소스 목록에 합친다.
+ *
+ * 이미지·영상 생성물은 영상 보관함(agent-video-storage)이 아니라 프로젝트 저장소에 놓인다.
+ * 그래서 승인한 그림이 있는데도 업무를 열면 "소스는 없어요"만 보였다.
+ */
+function mergeWorkOutput(work: CompanyWorkItem, items: AgentVideoStorageItem[]): AgentVideoStorageItem[] {
+  const objectName = String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  if (!objectName || items.some((item) => item.objectName === objectName)) return items;
+  const fileName = objectName.split("/").pop() || "산출물";
+  const video = /\.(mp4|mov|webm|m4v)$/i.test(fileName);
+  const audio = /\.(mp3|wav|m4a|aac|flac)$/i.test(fileName);
+  return [{
+    objectName,
+    fileName,
+    dateFolder: koreaDate(work.created_at),
+    workId: work.id,
+    contentType: video ? "video/mp4" : audio ? "audio/mpeg" : "image/png",
+    type: (video ? "video" : audio ? "audio" : "image") as AgentVideoStorageItem["type"],
+    size: 0,
+    createdAt: work.created_at,
+    updatedAt: work.updated_at || work.created_at,
+  }, ...items];
+}
+
 function koreaDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 10);
@@ -333,7 +358,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     setBusy("sources"); setError("");
     try {
       const result = await listAgentVideoStorage({ date: koreaDate(work.created_at), workId: work.id });
-      setSources(result.items); setSourceWork(work); setSelectedSources(new Set()); setSearchQuery("");
+      setSources(mergeWorkOutput(work, result.items)); setSourceWork(work); setSelectedSources(new Set()); setSearchQuery("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "업무 소스를 불러오지 못했습니다."); }
     finally { setBusy(""); }
   }

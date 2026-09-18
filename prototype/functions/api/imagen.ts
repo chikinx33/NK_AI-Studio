@@ -394,6 +394,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";
     let objectName = "";
+    // 저장이 왜 안 됐는지 호출자에게 알린다(그림은 보여도 나중에 못 여는 상태를 조용히 넘기지 않게).
+    let storageError = "";
+    if (!outParsed) storageError = "VIDEO_OUTPUT_GCS_URI 미설정";
+    else if (!accessToken) storageError = "저장소 접근 토큰 없음";
     if (outParsed && accessToken) {
       const basePrefix = outParsed.object.replace(/\/$/, "");
       const stamp = Date.now();
@@ -421,6 +425,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
       } else {
         objectName = "";
+        storageError = `업로드 실패 (HTTP ${upRes.status}) ${String(await upRes.text().catch(() => "")).slice(0, 200)}`.trim();
       }
     }
 
@@ -429,6 +434,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       dataUrl: `data:${imageOutput?.mimeType || "image/png"};base64,${bytesBase64Encoded}`,
       signedUrl,
       objectName,
+      ...(storageError ? { storageError } : {}),
       model: modelUsed,
       imageSizeApplied: geminiImageSize,
       provider: providerUsed === "atlas-cloud" ? "atlas-cloud" : (providerUsed === "openai" ? "openai-api" : "gemini-api"),

@@ -83,6 +83,8 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
 
   const output = job?.output || {};
   const kind = fileKind(file);
+  // 그림이 안 뜨면 빈 자리 대신 이유를 적는다.
+  const [imageFailed, setImageFailed] = useState(false);
   const url = String(output.signedUrl || output.imageUrl || output.videoUrl || output.audioUrl || output.dataUrl || "");
   // 서명 URL 은 1시간 뒤 만료되고 CORS 로 내려받기도 막힌다. 저장 위치(objectName)가 있으면 같은 오리진 프록시를 쓴다.
   const objectName = String(output.objectName || output.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
@@ -135,7 +137,9 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
       <div className="min-h-0 flex-1 overflow-auto bg-[#080c12] p-5">
         {!job && !error && <div className="grid min-h-72 place-items-center text-sm text-emerald-400">생성 파일을 여는 중…</div>}
         {error && <div className="grid min-h-72 place-items-center text-sm text-red-300">{error}</div>}
-        {job && kind === "image" && (proxyUrl || url) && <div className="grid min-h-72 place-items-center"><img src={proxyUrl || url} alt={file.name} className="max-h-[76vh] max-w-full rounded-lg object-contain" /></div>}
+        {job && kind === "image" && (proxyUrl || url) && <div className="grid min-h-72 place-items-center">{imageFailed
+          ? <p className="max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">이 그림을 불러오지 못했어요. 링크가 만료됐거나 저장소에 올라가지 않은 결과예요 — 담당 직원에게 "왜 안 나와?"라고 물으면 원인을 확인해 줘요.</p>
+          : <img src={proxyUrl || url} alt={file.name} onError={() => setImageFailed(true)} className="max-h-[76vh] max-w-full rounded-lg object-contain" />}</div>}
         {job && kind === "video" && url && <div className="grid min-h-72 place-items-center"><video src={url} controls autoPlay className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
         {job && kind === "audio" && url && <div className="grid min-h-72 place-items-center"><audio src={url} controls autoPlay className="w-full max-w-2xl" /></div>}
         {job && kind === "pdf" && url && <iframe src={url} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}

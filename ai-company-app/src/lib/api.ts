@@ -1458,7 +1458,8 @@ export async function getResults(limit = 30): Promise<{ items: ResultItem[]; tot
     // 실패한 서식 작업도 보여준다 — 이유를 보고 다시 시도할 수 있어야 한다(§6.5 C).
     if (!j.output) return j.type === "form_fill" && j.status === "error";
     const o = j.output;
-    return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf" || o.kind === "form";
+    // objectName 만 있고 서명 URL 이 만료된 산출물도 보고에 남아야 한다(그 경우 프록시로 연다).
+    return o.objectName || o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf" || o.kind === "form";
   });
   const items: ResultItem[] = all.map((j: any) => {
     const out = j.output || {};
@@ -1468,7 +1469,9 @@ export async function getResults(limit = 30): Promise<{ items: ResultItem[]; tot
     return {
       id: j.id, agentId: j.agent_id, agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
       file: j.type,
-      url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
+      // 서명 URL 은 1시간이면 죽는다. 저장 위치가 있으면 같은 오리진 프록시를 먼저 쓴다
+      // (예전엔 만료된 서명 URL 을 그대로 써서 시간이 지나면 보고의 그림이 전부 깨졌다).
+      url: mediaUrlFromOutput(out),
       kind: (out.kind === "form" ? "form" : out.kind === "ppt" ? "ppt" : out.kind === "pdf" ? "pdf" : out.audioUrl ? "audio" : out.videoUrl ? "video" : "image") as ResultItem["kind"],
       docData: isDoc ? { title: out.title, subtitle: out.subtitle, slides: out.slides, sections: out.sections } : undefined,
       formData: isForm
@@ -1513,6 +1516,13 @@ export async function getAgentJob(id: string): Promise<any> {
   if (!res.ok || !data?.job) throw new Error(data?.error || "생성 파일 정보를 불러오지 못했어요.");
   return data.job;
 }
+/** 산출물을 여는 주소 — 저장 위치(프록시) 우선, 없으면 그때 받은 URL. */
+export function mediaUrlFromOutput(output: any): string {
+  const objectName = String(output?.objectName || output?.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  if (objectName) return withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`);
+  return String(output?.signedUrl || output?.imageUrl || output?.videoUrl || output?.audioUrl || output?.dataUrl || "");
+}
+
 export async function reviewResult(
   id: string,
   action: "approve" | "revise" | "discard",

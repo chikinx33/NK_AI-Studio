@@ -1070,6 +1070,20 @@ const TOOL_LABELS: Record<string, string> = {
  * 이미 등록된 잡이면 기존 항목을 그대로 돌려준다(중복 폴더 방지).
  * dataUrl 같은 큰 값은 metadata 에 넣지 않는다 — 목록 조회가 무거워진다.
  */
+/**
+ * 이 잡이 '업무 파일에 남길 산출물'을 실제로 만들었는가.
+ *
+ * 브랜드 자산 등록·일정 추가·프로젝트 저장처럼 남을 파일이 없는 일까지 업무로 등록하던 탓에,
+ * 같은 이름의 빈 업무가 승인할 때마다 쌓이고 열면 아무것도 없었다.
+ */
+export function hasDeliverableOutput(output: any): boolean {
+  if (!output || typeof output !== "object") return false;
+  const kind = String(output.kind || "");
+  if (kind === "form" || kind === "ppt" || kind === "pdf") return true;
+  if (Array.isArray(output.files) && output.files.length) return true;
+  return !!(output.objectName || output.signedUrl || output.imageUrl || output.videoUrl || output.audioUrl || output.dataUrl);
+}
+
 export async function fileJobAsWorkItem(
   sql: SqlFn,
   userId: string,
@@ -1602,9 +1616,16 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
     throw error;
   }
   if (res.status === 202 && data.id) await throwPendingImage(data, payload, ctx, '/api/imagen', imageKey);
+  // 저장(GCS 업로드)이 실패하면 objectName 이 비어 돌아온다. 그림은 보여도 나중에 다시 열 수 없으므로
+  // 조용히 넘기지 않고 사실을 결과에 실어 채팅에 띄운다(notice 는 오케스트레이터가 ⚠️ 로 붙인다).
+  const storageMissing = !data.objectName;
   return {
     signedUrl: data.signedUrl || "",
     objectName: data.objectName || "",
+    ...(storageMissing ? {
+      notice: `이미지를 만들었지만 저장소에 올리지 못했어요${data.storageError ? ` (${String(data.storageError).slice(0, 160)})` : ""}. 지금은 보이지만 나중에는 다시 열 수 없어요 — 필요하면 바로 내려받고, 다시 만들어 주세요.`,
+      storageFailed: true,
+    } : {}),
     dataUrl: data.signedUrl ? "" : (data.dataUrl || ""), // signedUrl 있으면 무거운 dataUrl 미저장
     model: data.model || "",
     provider: data.provider || "",
@@ -3966,6 +3987,45 @@ async function runEdgeBriefTool(input: any, ctx: ToolContext): Promise<any> {
   const conversationId = String(input?.conversationId || ctx.conversationId || "").trim();
   const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : "";
   return { kind: "edge_brief", ...(await callInternalJson(ctx, `/api/agent/edge-brief${query}`)) };
+}
+
+/**
+ * 지금 내 작업들이 어디서 멈춰 있는지. "왜 아직 안 나와?"에 추측 대신 사실로 답하기 위한 도구.
+ * 승인 대기·진행 중·실패(사유 포함)를 한 번에 본다. read+synthesize.
+ */
+async function runJobsStatusTool(input: any, ctx: ToolContext): Promise<any> {
+  const limit = Math.min(50, Math.max(1, Number(input?.limit) || 20));
+  const data = await callInternalJson(ctx, `/api/agent/jobs?limit=${limit}`);
+  const items: any[] = Array.isArray(data?.items) ? data.items : [];
+  const view = items.map((job: any) => ({
+    id: job?.id,
+    tool: job?.type,
+    agentId: job?.agent_id,
+    status: job?.status,
+    reviewStatus: job?.review_status,
+    error: job?.error ? String(job.error).slice(0, 300) : "",
+    // 승인 패널에서 기다리는 중인지, 결과가 나와 검토를 기다리는지 구분한다(사용자에겐 전혀 다른 이야기다).
+    waitingFor: job?.status === "review_pending" && !job?.output
+      ? "사람 승인(승인 패널)"
+      : job?.review_status === "pending" && job?.output
+        ? "사람 검토(보고)"
+        : job?.status === "working"
+          ? "작업 진행 중"
+          : job?.status === "error"
+            ? "실패"
+            : "",
+    createdAt: job?.created_at,
+    updatedAt: job?.updated_at,
+  }));
+  const blocked = view.filter((job) => job.waitingFor && job.waitingFor !== "작업 진행 중");
+  return {
+    kind: "jobs_status", count: view.length,
+    needsApproval: view.filter((job) => job.waitingFor === "사람 승인(승인 패널)").length,
+    needsReview: view.filter((job) => job.waitingFor === "사람 검토(보고)").length,
+    working: view.filter((job) => job.status === "working").length,
+    failed: view.filter((job) => job.status === "error").length,
+    blocked, jobs: view.slice(0, 20),
+  };
 }
 
 /** 독립 인포그래픽 제작: 에이전트 협업 명세를 만들고 회사 업무 라이브러리에 등록한다. */
@@ -6383,6 +6443,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   agent_knowledge_delete: { agentId: "core", agentIds: ["sync"], kind: "local", run: runAgentKnowledgeDeleteTool },
   voice_update: { agentId: "beat", agentIds: ["core"], kind: "local", run: runVoiceUpdateTool },
   edge_brief: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runEdgeBriefTool },
+  // "왜 아직 안 나와?" — 막힌 지점을 사실로 답한다(추측 금지).
+  jobs_status: { agentId: "core", agentIds: ["sync", "pixel", "plot", "beat", "ink", "reach"], kind: "read", synthesize: true, run: runJobsStatusTool },
   reminders_list: { agentId: "sync", kind: "read", run: runRemindersListTool },
 };
 
