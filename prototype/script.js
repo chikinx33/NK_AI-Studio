@@ -2059,6 +2059,13 @@
         document.getElementById('user-chat-credentials').disabled = !userChatEnabled.checked;
         document.getElementById('user-image-credentials').disabled = !userImageEnabled.checked;
         userImageApiKey.hidden = userImageMode.value !== 'api_key';
+        // API 키는 이미지뿐 아니라 영상 생성에도 쓰이므로 선택에 따라 이름을 바꾼다
+        const imageLabel = document.querySelector('label[for="user-image-enabled"] span, #user-image-enabled + span');
+        if (imageLabel) {
+          const labelKey = userImageMode.value === 'api_key' ? '이미지·영상 생성' : '이미지 생성';
+          imageLabel.dataset.i18n = labelKey;
+          imageLabel.textContent = translateUiText(labelKey);
+        }
         const imageConnect = document.getElementById('user-image-connect');
         imageConnect.hidden = userImageMode.value !== 'subscription';
         imageConnect.setAttribute('aria-disabled', userImageEnabled.checked ? 'false' : 'true');

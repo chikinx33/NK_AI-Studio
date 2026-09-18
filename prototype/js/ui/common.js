@@ -165,6 +165,7 @@
         '저장소': 'Library',
         '영상 생성': 'Generate video',
         '이미지 생성': 'Generate image',
+        '이미지·영상 생성': 'Image and video generation',
         '이미지 생성중...': 'Generating image...',
         '영상 생성중...': 'Generating video...',
         '음성 생성': 'Generate voice',
