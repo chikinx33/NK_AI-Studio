@@ -34,7 +34,8 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const error = String\(\(job as any\)\?\.error \|\| \(job as any\)\?\.output\?\.error \|\| ""\)\.trim\(\);/, '서버 오류 문구를 가져온다');
   // 상태는 레이아웃을 밀지 않는 떠 있는 작업 독(absolute, 왼쪽 아래)으로 — 상단 띠는 화면이 튀어 폐기
   assert.doesNotMatch(src, /data-testid="job-strip"/, '상단 상태 띠(레이아웃 밀림) 금지');
-  assert.match(src, /className="absolute bottom-3 left-3 z-30 flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  // 왼쪽 아래는 승인 도크가 쓴다 — 작업 독은 그 위에 쌓인다(겹치면 둘 다 못 읽는다).
+  assert.match(src, /className="absolute bottom-\[4\.5rem\] left-3 z-30 flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
   assert.match(src, /const \[jobDockOpen, setJobDockOpen\] = useState\(false\);/);
   assert.match(src, /\{active\.length \? `작업 \$\{active\.length\}개 진행 중` : errors\.length \? `오류 \$\{errors\.length\}` : "작업 완료"\}/);
   assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
@@ -266,7 +267,10 @@ test('★브랜드 허브가 세트 시트 프롬프트의 첫 블록이다: 톤
 test('★모델 차이·검증: 캔버스 기본 공급자는 "스튜디오 기본"(서버 기본 = 예전 이미지와 같은 모델), 시트마다 diag(모델·경로·참조 수·그림체 출처·허브 블록·프롬프트) 기록·표시', () => {
   const cs = read('ai-company-app/src/lib/canvasSettings.ts');
   assert.match(cs, /export type ImageProvider = "studio" \| "gemini" \| "openai";/);
-  assert.match(cs, /\{ id: "studio", label: "스튜디오 설정 따름 \(제작 화면의 이미지생성 모델\)" \},/);
+  assert.match(cs, /\{ id: "studio", label: "스튜디오 설정 따름" \},/);
+  // 무엇을 따르는지는 선택 상자 밖 설명 줄에 남는다(상자 안에 넣으면 좁은 화면에서 잘린다).
+  const panel = read("ai-company-app/src/components/AgentSettingsPanel.tsx");
+  assert.match(panel, /제작 화면의 이미지생성 모델을 따라요/);
   assert.match(cs, /image: \{ aspect: "16:9", size: "1K", count: 1, provider: "studio" \},/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /createAgentJob\("set_master", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\) \}\)/, 'set_master 는 명시한 공급자만 보낸다');

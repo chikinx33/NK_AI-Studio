@@ -1287,7 +1287,7 @@ export default function ProductionCanvas({
             const active = pending.filter((j) => !JOB_DONE.includes(j.status));
             const errors = pending.filter((j) => j.status === "error");
             return (
-              <div className="absolute bottom-3 left-3 z-30 flex max-w-[420px] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+              <div className="absolute bottom-[4.5rem] left-3 z-30 flex max-w-[420px] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
                 {jobDockOpen && (
                   <div className="max-h-64 w-[400px] overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
                     <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">

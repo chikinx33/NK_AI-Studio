@@ -25,7 +25,8 @@ export const IMAGE_ASPECTS: ImageAspect[] = ["16:9", "4:3", "1:1", "3:4", "9:16"
 export const IMAGE_SIZES: ImageSize[] = ["512", "1K", "2K"];
 export const IMAGE_PROVIDERS: Array<{ id: ImageProvider; label: string }> = [
   // 스튜디오 기본 = 서버 기본 공급자(AI_IMAGE_PROVIDER/AGENT_IMAGE_PROVIDER). 예전 배경·스틸이 만들어진 경로와 같아 룩이 이어진다.
-  { id: "studio", label: "스튜디오 설정 따름 (제작 화면의 이미지생성 모델)" },
+  // 라벨이 길면 좁은 패널에서 잘린다. 자세한 설명은 선택 상자 밑줄로 따로 보여 준다.
+  { id: "studio", label: "스튜디오 설정 따름" },
   { id: "gemini", label: "Gemini 3.1 Flash Image" },
   { id: "openai", label: "GPT Image 2" },
 ];

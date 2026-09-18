@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
+import { createPortal } from "react-dom";
 import CollapsibleSection from "./CollapsibleSection";
 import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
-import { readUserStorage } from "../lib/safeStorage";
+import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { useLiveRefresh } from "../lib/liveSync";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
@@ -97,6 +98,49 @@ interface ApprovalItem {
   result?: string;
 }
 
+/**
+ * 승인 도크 — 화면 왼쪽 아래에 떠 있는 승인 대기함.
+ *
+ * 사이드바 안에 있을 땐 오른쪽 대화창(작성기)이 덮어서, 승인할 것이 있는지조차 보이지 않았다.
+ * 접기 버튼은 카드 오른쪽 위 모서리에 작게 둬서 평소에는 화면을 방해하지 않는다.
+ */
+function ApprovalDock({
+  count, open, onToggle, right, children,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  right?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="pointer-events-none fixed bottom-3 left-3 z-40 w-[320px] max-w-[92vw]" data-testid="approval-dock">
+      <div className="pointer-events-auto relative rounded-2xl border border-amber-700/40 bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          title={open ? "승인 접기" : "승인 펼치기"}
+          className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-md border border-edge bg-[#151b25] text-[12px] leading-none text-gray-400 transition hover:text-white"
+        >
+          {open ? "−" : "+"}
+        </button>
+        <div className="flex items-center gap-1.5 pr-7 text-sm font-semibold text-amber-300">
+          <ListTodoIcon className="h-4 w-4" /> 승인 ({count})
+        </div>
+        {open && (
+          <>
+            {right && <div className="mt-1">{right}</div>}
+            <div className="mt-2 max-h-[46vh] overflow-y-auto pr-0.5">{children}</div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function Approvals({
   onPickCategory,
   onAgentSay,
@@ -116,6 +160,15 @@ export default function Approvals({
   extraPendingCount?: number;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
+  // 승인은 화면 왼쪽 아래에 떠 있다 — 오른쪽 대화창이 덮어 버리면 승인할 것이 있는지조차 보이지 않았다.
+  // 접어 두면 개수만 남아 화면을 가리지 않는다(브라우저마다 기억한다).
+  const [dockOpen, setDockOpen] = useState<boolean>(() => {
+    try { return readUserStorage("nk_approval_dock_open") !== "0"; } catch { return true; }
+  });
+  const toggleDock = () => setDockOpen((open) => {
+    try { writeUserStorage("nk_approval_dock_open", open ? "0" : "1"); } catch { /* 저장 불가여도 이번 화면에서는 동작한다 */ }
+    return !open;
+  });
   const [history, setHistory] = useState<ApprovalItem[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [skills, setSkills] = useState<AgentSkill[]>([]);
@@ -358,9 +411,10 @@ export default function Approvals({
         );
       })()}
 
-    <CollapsibleSection
-      storageKey="nk_collapse_approvals"
-      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length + extraPendingCount})</span>}
+    <ApprovalDock
+      count={pending.length + extraPendingCount}
+      open={dockOpen}
+      onToggle={toggleDock}
       right={pending.length > 0 ? (
         <button
           onClick={async () => {
@@ -473,7 +527,7 @@ export default function Approvals({
           </div>
         </div>
       )}
-    </CollapsibleSection>
+    </ApprovalDock>
     </>
   );
 }

@@ -151,7 +151,9 @@ test("★'정보 필요' 카드는 보고가 아니라 승인 쪽으로 올라�
   assert.match(app, /onPendingRequests=\{setPendingFormRequests\}/);
 
   const approvals = read("ai-company-app/src/components/Approvals.tsx");
-  assert.match(approvals, /승인 \(\{pending\.length \+ extraPendingCount\}\)/);
+  // 승인은 왼쪽 아래 도크로 옮겼다(오른쪽 대화창이 덮어 승인할 것이 있는지도 안 보였다).
+  assert.match(approvals, /count=\{pending\.length \+ extraPendingCount\}/);
+  assert.match(approvals, /function ApprovalDock/);
   assert.match(approvals, /\{extraPending\}/);
 });
 
