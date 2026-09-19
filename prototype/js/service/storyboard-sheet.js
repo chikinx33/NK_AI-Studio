@@ -1,4 +1,4 @@
-// 스토리보드 시트(P0 실험) 서비스 — 시트 계획·생성·격자 크롭(콘티)·저장·패널→스틸컷.
+// 스토리보드 제작 서비스 — 씬별 시트 계획·생성·격자 크롭(콘티)·저장·패널→스틸컷.
 // 프롬프트는 서버(/api/storyboard/sheet-plan → _shared/storyboard-sheet.js)가 조립한다. 이 파일은 실행(브라우저 의존)만 담당.
 // 라벨 규칙: 시트에서 잘라낸 패널은 "콘티", 컷을 정식 생성한 이미지는 "스틸컷"(설계서 2.0절).
 // 시트는 payload.storyboardSheets 에 저장한다(설계서 3.2). 컷의 imageDataUrl(스틸컷 자리)에는 콘티를 넣지 않는다.
@@ -189,7 +189,7 @@
   /** 시트 저장(추가/갱신) → 상태 + 서버. */
   mod.persistSheet = function (ctx, sheet) {
     var st = ctx.getState();
-    if (!st) return;
+    if (!st) return Promise.resolve(null);
     st.payload = st.payload || {};
     var list = Array.isArray(st.payload.storyboardSheets) ? st.payload.storyboardSheets.slice() : [];
     var idx = -1;
@@ -200,18 +200,27 @@
     try { if (ctx.persistPipeline) ctx.persistPipeline(); } catch (_) {}
     try {
       var pid = st.draftId;
-      if (pid && NK.api && NK.api.projectSave) NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' }).catch(function () {});
-    } catch (_) {}
+      if (pid && NK.api && NK.api.projectSave) return NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' });
+    } catch (e) { return Promise.reject(e); }
+    return Promise.resolve(null);
   };
 
   /** 시트 stale 판정(순서 변경 뒤): cutIds 가 현재 scenes 에 연속·같은 순서로 없으면 stale. 서버 isSheetStale 과 같은 규칙. */
   mod.isStale = function (sheet, scenes) {
-    var ids = (Array.isArray(scenes) ? scenes : []).map(function (s, i) { return String(s && s.id != null && s.id !== '' ? s.id : i + 1); });
+    var list = Array.isArray(scenes) ? scenes : [];
+    var ids = list.map(function (s, i) { return String(s && s.id != null && s.id !== '' ? s.id : i + 1); });
     var want = (sheet && Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map(String);
     if (!want.length) return false;
     var start = ids.indexOf(want[0]);
     if (start < 0) return true;
-    for (var k = 0; k < want.length; k++) if (ids[start + k] !== want[k]) return true;
+    for (var k = 0; k < want.length; k++) {
+      if (ids[start + k] !== want[k]) return true;
+      if (k > 0) {
+        var prevLoc = String((list[start + k - 1] && (list[start + k - 1].sceneLocation || list[start + k - 1].location)) || '').trim();
+        var loc = String((list[start + k] && (list[start + k].sceneLocation || list[start + k].location)) || '').trim();
+        if ((list[start + k] && list[start + k].sceneBreak) || (prevLoc && loc && prevLoc !== loc)) return true;
+      }
+    }
     return false;
   };
 
@@ -264,7 +273,7 @@
   mod.applyStillToScene = function (ctx, sceneIdx, result, sheetRef) {
     var st = ctx.getState();
     var scene = st && st.scenes && st.scenes[sceneIdx];
-    if (!scene) return;
+    if (!scene) return Promise.resolve(null);
     var prevImg = String(scene.imageDataUrl || '').trim();
     var hist = Array.isArray(scene.imageHistory) ? scene.imageHistory.slice() : [];
     if (prevImg && prevImg !== result.imageRef) { hist.push(prevImg); if (hist.length > 10) hist = hist.slice(hist.length - 10); }
@@ -286,5 +295,10 @@
     ctx.setState(st);
     try { if (ctx.persistPipeline) ctx.persistPipeline(); } catch (_) {}
     try { if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render(); } catch (_) {}
+    try {
+      var pid = st.draftId;
+      if (pid && NK.api && NK.api.projectSave) return NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' });
+    } catch (e) { return Promise.reject(e); }
+    return Promise.resolve(null);
   };
 })();

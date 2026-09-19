@@ -10,7 +10,7 @@ import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
-import { buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES } from "../_shared/storyboard-sheet.js";
+import { buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, isSheetStale, layoutText, SET_ANGLES } from "../_shared/storyboard-sheet.js";
 import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName, looksLikeSentenceLocation } from "../_shared/location-names.js";
 import { plateVariantId, plateLabel, findPlate, masterOf, plateElevation, MASTER_VARIANT_ID } from "../_shared/set-plates.js";
 import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/shots/vocab.js";
@@ -5207,6 +5207,19 @@ function assertSetPlateReady(loc: any, input: any): void {
   throw new Error(`세트 "${String(loc.name || "")}"에 배경 플레이트가 없어요. 배경 바의 별 버튼으로 부감 마스터를 먼저 만드세요.`);
 }
 
+/** 최신 유효 스토리보드에서 이 컷의 승인된 콘티 패널을 찾는다. 씬 경계/순서가 바뀐 시트는 참조하지 않는다. */
+function approvedContiPanel(payload: any, scenes: any[], sceneId: unknown): { sheetId: string; panelIndex: number; objectName: string } | null {
+  const sheets: any[] = Array.isArray(payload?.storyboardSheets) ? payload.storyboardSheets.slice() : [];
+  sheets.sort((a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+  for (const sheet of sheets) {
+    if (!sheet || sheet.kind !== "board" || isSheetStale(sheet, scenes)) continue;
+    const panel = (Array.isArray(sheet.panels) ? sheet.panels : []).find((p: any) =>
+      p?.role === "cut" && p?.status === "approved" && String(p?.ref) === String(sceneId) && String(p?.objectName || "").trim());
+    if (panel) return { sheetId: String(sheet.id || ""), panelIndex: Number(panel.index) || 0, objectName: String(panel.objectName) };
+  }
+  return null;
+}
+
 async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || input?.id || "").trim();
   if (!projectId) throw new Error("projectId is required");
@@ -5221,18 +5234,30 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || "").trim() || buildSceneImagePrompt(scene, header, {});
   if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 화면/비주얼 필요).");
   const bucket = studioBucket(ctx);
-  // ★일관성 참조 묶음(제작 화면의 레퍼런스 경로를 캔버스 잡에도): 캐릭터 시트 → 세트 플레이트(방위×높이 캐시) → 부감 마스터 → 스타일 앵커.
+  // ★일관성 참조 묶음(제작 화면의 레퍼런스 경로를 캔버스 잡에도): 승인 콘티 → 세트 플레이트(방위×높이 캐시) → 캐릭터 시트 → 부감 마스터 → 스타일 앵커.
   //   플레이트가 없고 마스터가 있으면 여기서 한 장 파생해 저장한다(캐시 채우기). 같은 방위×높이의 다음 컷은 그것을 재사용한다.
   const payload0: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
   const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
   const refs: any[] = [];
   const refNotes: string[] = [];
   let plateVariant = "";
+  const conti = approvedContiPanel(payload0, scenes, scene?.id ?? idx + 1);
+  if (input?.requireStoryboard === true && !conti) {
+    throw new Error(`컷 ${String(scene?.id ?? idx + 1)}에 승인된 스토리보드 콘티가 없어요. 스토리보드를 생성·검토하고 이 컷을 승인한 뒤 스틸컷을 만드세요.`);
+  }
+  if (conti && bucket) {
+    refs.push({ role: "storyboard", imageUrl: gsOf(conti.objectName), referenceId: 1, referenceKind: "conti-panel",
+      subjectDescription: `APPROVED STORYBOARD PANEL for cut ${String(scene?.id ?? idx + 1)} — composition, camera, staging and character placement must match exactly` });
+    refNotes.push(`승인 콘티 ${conti.sheetId}#${conti.panelIndex}`);
+  }
   const chars = await collectCharacterRefs(scene, payload0, ctx);
   for (const r of chars.refs) refs.push({ ...r, referenceId: refs.length + 1 });
   if (chars.note) refNotes.push(chars.note);
   const charBlock = chars.block;
-  const promptSent = charBlock ? `${prompt}\n${charBlock}` : prompt;
+  const contiBlock = conti
+    ? "The first reference is the approved storyboard panel. Reproduce its composition, camera angle, framing and staging exactly as a finished frame. Do not reframe it."
+    : "";
+  const promptSent = [prompt, contiBlock, charBlock].filter(Boolean).join("\n");
   const direction = normalizeCameraDirection(scene?.cameraDirection) || "front";
   const elevation = normalizeCameraElevation(scene?.cameraElevation) || "eye";
   const locations: any[] = Array.isArray(payload0.episodeLocations) ? payload0.episodeLocations : [];
@@ -5281,9 +5306,9 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   // 모델이 그 방(가구·벽지)을 베껴 플레이트와 충돌한다(2026-09-14 소녀의 방: 부감은 분홍 줄무늬·책상, 스틸은 옛 시트의 노란 벽·침대).
   const hasPlateRef = refs.some((r) => r.role === "plate");
   if (anchor && bucket && !hasPlateRef && refs.length < 12) { refs.push({ role: "style", imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
-  // 전송 순서 = 플레이트 → 캐릭터 → 마스터 → (스타일). OpenAI edits 는 image[] 순서만 있어 첫 장이 바탕이 되기 쉽고,
-  // 라벨은 순서대로 매겨진다. 배경의 진실(플레이트)이 1번이어야 캐릭터 시트의 배경이 방을 덮어쓰지 않는다.
-  const ROLE_ORDER: Record<string, number> = { plate: 0, character: 1, master: 2, style: 3 };
+  // 전송 순서 = 승인 콘티 → 플레이트 → 캐릭터 → 마스터 → (스타일). OpenAI edits 는 image[] 순서만 있어 첫 장이 바탕이 되기 쉽다.
+  // 콘티가 있으면 구도·배치를 먼저 잠그고, 없을 때는 플레이트가 1번이 되어 캐릭터 시트의 배경이 방을 덮어쓰지 않게 한다.
+  const ROLE_ORDER: Record<string, number> = { storyboard: 0, plate: 1, character: 2, master: 3, style: 4 };
   const orderedRefs = refs
     .map((r, i) => ({ r, i }))
     .sort((a, b) => ((ROLE_ORDER[a.r.role] ?? 9) - (ROLE_ORDER[b.r.role] ?? 9)) || (a.i - b.i))
@@ -5325,6 +5350,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
     kind: "scene_still", projectId, sceneId: scene?.id,
     signedUrl: img.signedUrl || "", objectName: img.objectName || "",
     referenceCount: orderedRefs.length, references: refNotes, plateVariant,
+    storyboardRef: conti,
     saved: true, promptEcho: promptSent,
   };
 }

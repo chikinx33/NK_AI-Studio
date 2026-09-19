@@ -13,6 +13,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { buildSceneImagePrompt, buildSceneVideoPrompt, cleanHeader } from "../_shared/prompt-assembly.js";
 import { AGENT_TOOLS, corsHeaders, send } from "./_shared";
 import { mentionTokens } from "../_shared/token-match.js";
+import { isSheetStale } from "../_shared/storyboard-sheet.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -94,6 +95,19 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
   };
   const headerClean = cleanHeader(header);
   const scenes: any[] = Array.isArray(project.scenes) ? project.scenes : [];
+  const boardSheets: any[] = (Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets : [])
+    .filter((sheet: any) => sheet?.kind === "board" && !isSheetStale(sheet, scenes))
+    .sort((a: any, b: any) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")));
+  const storyboardFor = (sceneId: unknown) => {
+    for (const sheet of boardSheets) {
+      const panel = (Array.isArray(sheet?.panels) ? sheet.panels : []).find((p: any) => p?.role === "cut" && String(p?.ref) === String(sceneId));
+      if (panel) return {
+        sheetId: String(sheet.id || ""), sceneNo: Number(sheet.sceneNo) || 0, panelIndex: Number(panel.index) || 0,
+        status: String(panel.status || "pending"), url: toDisplayUrl(panel.objectName || ""), objectName: String(panel.objectName || ""),
+      };
+    }
+    return null;
+  };
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
@@ -157,6 +171,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     const lineage = s?.lineage && typeof s.lineage === "object" ? s.lineage : null;
     const stillUrl = toDisplayUrl(s?.imageDataUrl || s?.imagePath || "");
     const clipUrl = toDisplayUrl(s?.videoUrl || s?.videoPath || "");
+    const storyboard = storyboardFor(s?.id ?? idx + 1);
     nodes.push({
       id: nodeId,
       type: "cut",
@@ -204,6 +219,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         cutRefEnabled: !!s?.cutRefEnabled,
         // 이 컷부터 새 씬(같은 세트 안에서 나눈 씬). 캔버스 씬 바가 장소 변화와 함께 이 값으로 갈린다.
         sceneBreak: !!s?.sceneBreak,
+        storyboard,
       },
     });
 
@@ -252,13 +268,15 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
 
   const done = scenes.filter((s) => s?.imageDataUrl || s?.imagePath).length;
   const clips = scenes.filter((s) => s?.videoUrl || s?.videoPath).length;
+  const storyboards = scenes.filter((s, idx) => !!storyboardFor(s?.id ?? idx + 1)).length;
+  const approvedStoryboards = scenes.filter((s, idx) => storyboardFor(s?.id ?? idx + 1)?.status === "approved").length;
   return {
     projectId,
     title: String(project.title || payload.episodeTitle || payload.topic || projectId),
     header: headerClean,
     nodes,
     edges,
-    summary: { scenes: scenes.length, stills: done, clips },
+    summary: { scenes: scenes.length, storyboards, approvedStoryboards, stills: done, clips },
     // 캔버스 배치(바·카드 위치). 프로젝트에 저장된 것이 있으면 그대로 돌려준다.
     canvasLayout: payload.canvasLayout && typeof payload.canvasLayout === "object" ? payload.canvasLayout : null,
     // 노래 구간 목록(id·label 순서). 컷 순서 변경 시 구간 순서 검사에 쓴다.

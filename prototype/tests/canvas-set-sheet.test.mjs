@@ -108,7 +108,7 @@ test('★그래프 장소 노드가 episodeLocations 의 플레이트·변형·�
 
 test('★서버 set_sheet 도구: 게이트 · 장소 1개 · buildBibleSetSheetPrompt 단일 원천 · 마스터 플레이트 참조 · storyboardSheets+episodeLocations 저장', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, layoutText, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
+  assert.match(shared, /import \{ buildBibleSetSheetPrompt, buildHubContext, buildSetMasterPrompt, buildAnglePlateEditPrompt, isSheetStale, layoutText, SET_ANGLES \} from "\.\.\/_shared\/storyboard-sheet\.js";/);
   assert.match(shared, /set_sheet: \{ agentId: "pixel", kind: "external", gate: true, run: runSetSheetTool \}/);
   const i = shared.indexOf('async function runSetSheetTool(');
   const fn = shared.slice(i, shared.indexOf('\n}\n', i));

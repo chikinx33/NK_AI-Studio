@@ -24,8 +24,8 @@ test('★sceneBreak 가 길목을 모두 통과한다 (save/get · 컷 분해 �
 });
 
 test('★씬 경계 규칙이 캔버스 씬 바와 시나리오 Scene N 라벨에서 같다: 장소 변화 또는 sceneBreak', () => {
-  assert.match(read('ai-company-app/src/components/ProductionCanvas.tsx'), /if \(!last \|\| !loc \|\| loc !== last\.location \|\| !!n\.data\.sceneBreak\) \{/);
-  assert.match(read('prototype/js/ui/scenario.js'), /if \(!loc \|\| loc !== lastLoc \|\| !!\(sc && sc\.sceneBreak\)\) \{/);
+  assert.match(read('ai-company-app/src/components/ProductionCanvas.tsx'), /if \(!last \|\| \(!!rawLoc && !!last\.location && rawLoc !== last\.location\) \|\| !!n\.data\.sceneBreak\) \{/);
+  assert.match(read('prototype/js/ui/scenario.js'), /if \(parentNo === 0 \|\| \(!!rawLoc && !!lastLoc && rawLoc !== lastLoc\) \|\| !!\(sc && sc\.sceneBreak\)\) \{/);
 });
 
 test('★서버 scene_split 도구: 게이트 · sceneBreak 만 바꿈(순서·장소 불변) · 첫 컷은 거부 · scene_upsert FIELDS 포함', () => {

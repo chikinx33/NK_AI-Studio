@@ -444,6 +444,16 @@
                 __dirtyStages.scenes = true;
                 __dirtyStages.media = true;
                 try { if (NK.store && NK.store.clearPipeline) NK.store.clearPipeline(); } catch (_) {}
+                // 변경을 일으킨 화면 외에도 현재 캐시된 모든 화면에 즉시 전파한다.
+                // 각 화면은 같은 서버 프로젝트를 다시 읽고, 캔버스 전용 배치만 로컬 UI 상태로 유지한다.
+                Object.keys(__stageIframes).forEach(function (key) {
+                    var frame = __stageIframes[key];
+                    try {
+                        if (frame && frame.contentWindow && frame.contentWindow !== evt.source) {
+                            frame.contentWindow.postMessage({ type: 'nk-project-changed', projectId: String(data.projectId || ''), source: String(data.source || 'stage') }, '*');
+                        }
+                    } catch (_) {}
+                });
             } catch (_) { }
         });
         window.addEventListener('message', function (evt) {

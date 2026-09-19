@@ -105,12 +105,15 @@ function deriveLanes(graph: ProductionGraph | null, heights: Heights = {}): Lane
   let last: Lane | null = null;
   let sceneNo = 0;
   cuts.forEach((n) => {
-    const loc = String(n.data.sceneLocation || "").trim();
+    const rawLoc = String(n.data.sceneLocation || "").trim();
+    const loc = rawLoc || (last?.location || "");
     // 새 씬 = 장소가 바뀌거나, "이 컷부터 새 씬"(sceneBreak)으로 나눈 컷.
-    if (!last || !loc || loc !== last.location || !!n.data.sceneBreak) {
+    if (!last || (!!rawLoc && !!last.location && rawLoc !== last.location) || !!n.data.sceneBreak) {
       sceneNo += 1;
       last = { key: `s${sceneNo}`, kind: "scene", orient: "row", index: sceneNo, label: `Scene ${sceneNo}`, location: loc, memberIds: [], cellW: CELL_W, cardW: NODE_W.cut, cardH: heightOf(heights, "cut") };
       lanes.push(last);
+    } else if (!last.location && rawLoc) {
+      last.location = rawLoc;
     }
     last.memberIds.push(n.id);
   });
@@ -451,6 +454,7 @@ export default function ProductionCanvas({
   // 빈 캔버스에서 "대화로 시나리오 만들기"를 누르면 대화 독 입력칸에 첫 문장을 올려 준다.
   const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [storyboardOpen, setStoryboardOpen] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
   const [pipelineNonce, setPipelineNonce] = useState(0);
   // 작성기 설정(생성 전 확인 · 이미지/영상 기본값). 인스펙터 버튼과 채팅 맥락이 같은 값을 쓴다.
@@ -595,6 +599,10 @@ export default function ProductionCanvas({
     const name = String(action.action || "");
     if (!name.startsWith("canvas.")) return;
     const pid = actionString(action, "projectId");
+    if (name === "canvas.refresh") {
+      if (!pid || pid === projectId) void load(true);
+      return;
+    }
     if (pid && pid !== projectId) setProjectId(pid);
     if (name === "canvas.focus") window.setTimeout(() => focusScene(action.sceneId as string | number), pid && pid !== projectId ? 800 : 0);
     else if (name === "canvas.select") {
@@ -603,7 +611,7 @@ export default function ProductionCanvas({
       setMulti(set);
       const first = [...set][0];
       if (first) { setSelectedId(first); centerOn(first); }
-    } else if (name === "canvas.refresh") void load(true);
+    }
   }, "canvas");
 
   // 승인 대기·실행 중인 도구 잡을 지켜보다가 끝나면 그래프를 다시 읽는다.
@@ -1018,6 +1026,11 @@ export default function ProductionCanvas({
       const url = String(cn.data.still?.url || "");
       if (url) { setLightbox({ url: withMediaToken(url), title: `${cutLabelById.get(cn.id) || cn.label} 스틸`, objectName: String(cn.data.still?.ref || "").replace(/^gs:\/\/[^/]+\//, "") }); return; }
     }
+    if (d.kind === "cut" && d.id && !d.moved && d.zone === "storyboard" && nodeById.get(d.id)?.type === "cut") {
+      const cn = nodeById.get(d.id)!;
+      const url = String(cn.data.storyboard?.url || "");
+      if (url) { setLightbox({ url: withMediaToken(url), title: `${cutLabelById.get(cn.id) || cn.label} 콘티`, objectName: String(cn.data.storyboard?.objectName || "") }); return; }
+    }
     if (d.kind === "cut" && d.id && !d.moved && d.zone === "header" && nodeById.get(d.id)?.type === "cut") {
       // 컷 카드 상단 바 클릭 = 선택 토글만(상세는 열지 않는다). 여러 컷을 고르는 기본 방법.
       setSelectedId("");
@@ -1125,6 +1138,7 @@ export default function ProductionCanvas({
           <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
             <span className="truncate text-gray-300" title={graph.title}>{graph.title}</span>
             <Chip>컷 {graph.summary.scenes}</Chip>
+            <Chip tone={graph.summary.approvedStoryboards === graph.summary.scenes ? "emerald" : "gray"}>콘티 {graph.summary.approvedStoryboards || 0}/{graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.stills === graph.summary.scenes ? "emerald" : "gray"}>스틸 {graph.summary.stills}</Chip>
             <Chip tone={graph.summary.clips === graph.summary.scenes ? "emerald" : "gray"}>영상 {graph.summary.clips}</Chip>
           </div>
@@ -1379,8 +1393,14 @@ export default function ProductionCanvas({
                         {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
                         {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
                       </div>
-                      <div className="grid grid-cols-2 gap-1 p-2">
+                      <div className="grid grid-cols-3 gap-1 p-2">
                         {(() => { const st = cutJobState(n.data.sceneId, "scene_still"); const vd = cutJobState(n.data.sceneId, "scene_video"); return (<>
+                        <div className={`relative aspect-video overflow-hidden rounded-md bg-black/40 ${n.data.storyboard?.url ? "cursor-zoom-in" : ""}`} data-zone="storyboard" title={n.data.storyboard?.url ? "승인용 콘티" : "스토리보드 일괄 생성에서 만들어요"}>
+                          {n.data.storyboard?.url
+                            ? <img src={withMediaToken(String(n.data.storyboard.url))} alt="" className="h-full w-full object-cover" draggable={false} loading="lazy" />
+                            : <div className="grid h-full place-items-center text-[10px] text-gray-600">콘티 없음</div>}
+                          <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={n.data.storyboard?.status === "approved" ? "emerald" : n.data.storyboard?.status === "rejected" ? "red" : "gray"}>콘티</Chip></span>
+                        </div>
                         <div className={`relative aspect-video overflow-hidden rounded-md bg-black/40 ${n.data.still?.url ? "cursor-zoom-in" : ""}`} data-zone="image" title={n.data.still?.url ? "누르면 크게 볼 수 있어요" : undefined}>
                           {n.data.still?.url
                             ? <img src={withMediaToken(String(n.data.still.url))} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
@@ -1643,10 +1663,16 @@ export default function ProductionCanvas({
             }}
           />
 
-          {/* 일괄 생성(파이프라인) 패널 — 비어 있는 컷을 계획→승인→배치로 자동 생성 */}
+          {/* 일괄 생성 패널 — 씬별 스토리보드 승인 뒤에만 정식 스틸·영상을 만든다. */}
           {agentOpen && projectId && (
             <div className="absolute right-3 top-3 w-[360px] max-w-[calc(100%-24px)] rounded-xl border border-emerald-800/60 bg-[#0c1119]/95 p-3 shadow-xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-              <div className="mb-2 flex items-center gap-2"><BotIcon className="h-4 w-4 text-emerald-400" /><span className="text-[12px] font-bold text-white">빈 컷 일괄 생성</span><span className="text-[10px] text-gray-500">계획 → 승인 → 배치 생성</span></div>
+              <div className="mb-2 flex items-center gap-2"><BotIcon className="h-4 w-4 text-emerald-400" /><span className="text-[12px] font-bold text-white">일괄 제작</span><span className="text-[10px] text-gray-500">콘티 → 승인 → 스틸 → 영상</span></div>
+              <div className="mb-3 rounded-lg border border-violet-800/60 bg-violet-950/20 p-2">
+                <div className="mb-1 text-[11px] font-bold text-violet-200">1. 씬별 스토리보드 생성·검토</div>
+                <p className="mb-2 text-[10px] leading-relaxed text-gray-400">다른 씬의 컷은 한 시트에 섞지 않아요. 패널을 승인하거나 부분 수정한 뒤 정식 스틸을 만드세요.</p>
+                <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 만들기·검토</button>
+              </div>
+              <div className="mb-1 text-[11px] font-bold text-emerald-200">2. 승인 콘티 기반 스틸·영상 파이프라인</div>
               <VideoPipelinePanel
                 projectId={projectId}
                 selectedSceneIds={selectedSceneIds}
@@ -1656,6 +1682,15 @@ export default function ProductionCanvas({
                 autoApprove={!settings.confirmBeforeGenerate}
                 onAttached={(job) => { if (job.approvalState?.status === "pending") setAgentOpen(true); }}
               />
+            </div>
+          )}
+          {storyboardOpen && projectId && (
+            <div className="absolute inset-0 z-50 flex flex-col bg-black/80 p-3 backdrop-blur-sm" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between rounded-t-xl border border-edge bg-[#0c1119] px-4 py-2 text-[12px] font-bold text-white">
+                <span>스토리보드 제작 · {graph?.title || projectId}</span>
+                <button type="button" onClick={() => { setStoryboardOpen(false); void load(true); }} className="rounded border border-edge px-3 py-1 text-gray-300 hover:bg-edge">캔버스로 돌아가기</button>
+              </div>
+              <iframe title="스토리보드 제작" src={`/scenes.html?embed=1&projectId=${encodeURIComponent(projectId)}&storyboard=1`} className="min-h-0 flex-1 rounded-b-xl border border-edge bg-[#0c1119]" />
             </div>
           )}
         </div>

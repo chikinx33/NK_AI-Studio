@@ -52,11 +52,13 @@ export function screenTextOf(scene) {
 }
 
 /**
- * 세트별 시트 계획. 연속 같은 장소를 한 세트 묶음으로 보고(시나리오 화면 Scene N 규칙과 같음),
- * 묶음마다 컷을 perSheet(기본 6)씩 나눈다. 나머지가 2 이하면 앞 시트에 붙여 최대 8까지 채운다.
+ * 씬별 시트 계획. sceneBreak 또는 장소 변화는 절대로 넘지 않는 하드 경계다.
+ * 장소가 비어 있는 컷은 이전 컷의 장소를 이어받는다. 장소 누락을 새 씬으로 오인해 컷마다
+ * 시트가 생기는 회귀를 막고, 명시적인 sceneBreak 만으로 같은 장소 안의 씬도 분리한다.
+ * 각 씬 묶음마다 컷을 perSheet(기본 6)씩 나눈다. 나머지가 2 이하면 앞 시트에 붙여 최대 8까지 채운다.
  * 첫 시트의 1번 칸은 세트 플레이트, 이어지는 시트의 1번 칸은 앞 시트의 마지막 컷(겹침 패널).
- * 시트는 세트를 넘지 않는다.
- * @returns {Array<{ index:number, setName:string, cutIds:string[], anchor:{role:'set'|'overlap', ref:string} }>}
+ * 겹침 패널도 같은 씬 안에서만 가져오며 시트는 씬 경계를 넘지 않는다.
+ * @returns {Array<{ index:number, sceneNo:number, sceneKey:string, setName:string, cutIds:string[], anchor:{role:'set'|'overlap', ref:string} }>}
  */
 export function planSheets(scenes, opts = {}) {
   const per = Math.max(1, Math.min(MAX_CUTS_PER_SHEET, Number(opts.perSheet) || DEFAULT_CUTS_PER_SHEET));
@@ -64,8 +66,15 @@ export function planSheets(scenes, opts = {}) {
   const groups = [];
   let last = null;
   list.forEach((s, i) => {
-    const loc = locOf(s);
-    if (!last || !loc || loc !== last.setName) { last = { setName: loc, ids: [] }; groups.push(last); }
+    const rawLoc = locOf(s);
+    const loc = rawLoc || (last ? last.setName : "");
+    const locationChanged = !!(last && rawLoc && last.setName && rawLoc !== last.setName);
+    if (!last || !!(s && s.sceneBreak) || locationChanged) {
+      last = { sceneNo: groups.length + 1, sceneKey: `scene-${groups.length + 1}`, setName: loc, ids: [] };
+      groups.push(last);
+    } else if (!last.setName && rawLoc) {
+      last.setName = rawLoc;
+    }
     last.ids.push(idOf(s, i));
   });
   const sheets = [];
@@ -80,6 +89,8 @@ export function planSheets(scenes, opts = {}) {
     chunks.forEach((ids, ci) => {
       sheets.push({
         index: sheets.length + 1,
+        sceneNo: g.sceneNo,
+        sceneKey: g.sceneKey,
         setName: g.setName,
         cutIds: ids,
         anchor: ci === 0 ? { role: "set", ref: g.setName } : { role: "overlap", ref: chunks[ci - 1][chunks[ci - 1].length - 1] },
@@ -91,12 +102,20 @@ export function planSheets(scenes, opts = {}) {
 
 /** 시트가 현재 순서와 어긋났는지(순서 변경 뒤 stale 판정, 2.0.1절): cutIds 가 scenes 에 연속·같은 순서로 나타나야 fresh. */
 export function isSheetStale(sheet, scenes) {
-  const ids = (Array.isArray(scenes) ? scenes : []).map((s, i) => idOf(s, i));
+  const list = Array.isArray(scenes) ? scenes : [];
+  const ids = list.map((s, i) => idOf(s, i));
   const want = (sheet && Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map((v) => t(v));
   if (!want.length) return false;
   const start = ids.indexOf(want[0]);
   if (start < 0) return true;
-  for (let k = 0; k < want.length; k++) if (ids[start + k] !== want[k]) return true;
+  for (let k = 0; k < want.length; k++) {
+    if (ids[start + k] !== want[k]) return true;
+    if (k > 0) {
+      const prevLoc = locOf(list[start + k - 1]);
+      const loc = locOf(list[start + k]);
+      if (list[start + k]?.sceneBreak || (prevLoc && loc && prevLoc !== loc)) return true;
+    }
+  }
   return false;
 }
 

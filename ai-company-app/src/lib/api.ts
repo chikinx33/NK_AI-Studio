@@ -1919,7 +1919,7 @@ export interface ProductionGraph {
   header: string;
   nodes: ProductionNode[];
   edges: ProductionEdge[];
-  summary: { scenes: number; stills: number; clips: number };
+  summary: { scenes: number; storyboards?: number; approvedStoryboards?: number; stills: number; clips: number };
   // 프로젝트에 저장된 캔버스 배치(payload.canvasLayout). 없으면 null.
   canvasLayout?: unknown;
   // 노래 구간 목록(payload.songSections 의 id·label·role). 컷 순서 변경 검사에 쓴다.

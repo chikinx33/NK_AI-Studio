@@ -121,7 +121,7 @@ test('★프롬프트: 방위 다음에 높이 한 줄(서버·브라우저 이�
   assert.match(legacy, /from the reverse angle/, 'angle 만 와도 옛 6종 호환');
 });
 
-test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시트 → 방위×높이 플레이트(없으면 마스터에서 자동 파생·캐시) → 부감 마스터 → 스타일 기준, 계보에 기록', () => {
+test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 승인 콘티 → 플레이트 → 캐릭터 시트 → 부감 마스터 → 스타일 기준, 계보에 기록', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneStillTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
   const ic = shared.indexOf('async function collectCharacterRefs('); const cfn = shared.slice(ic, shared.indexOf('\n}\n', ic));
@@ -133,15 +133,15 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 캐릭터 시
   assert.match(imagen, /if \(inputFidelity\) fd\.append\("input_fidelity", inputFidelity\);/, 'OpenAI edits 입력 충실도 high');
   assert.match(imagen, /let useFidelity: "high" \| null = allRefs\.length \? "high" : null;/);
   assert.match(imagen, /if \(res\.status === 400 && useFidelity && \/input_fidelity\/i\.test\(bodyText\)\) \{\s*\n\s*useFidelity = null;\s*\n\s*continue;/, '모르는 모델이면 빼고 재시도');
-  // 전송 순서: 플레이트 → 캐릭터 → 마스터 → (스타일). 플레이트가 있으면 스타일 기준은 붙이지 않는다(옛 기준 이미지가 방을 덮어쓴 사고).
-  assert.match(fn, /const ROLE_ORDER: Record<string, number> = \{ plate: 0, character: 1, master: 2, style: 3 \};/);
+  // 전송 순서: 승인 콘티 → 플레이트 → 캐릭터 → 마스터 → (스타일). 플레이트가 있으면 스타일 기준은 붙이지 않는다.
+  assert.match(fn, /const ROLE_ORDER: Record<string, number> = \{ storyboard: 0, plate: 1, character: 2, master: 3, style: 4 \};/);
   assert.match(fn, /const hasPlateRef = refs\.some\(\(r\) => r\.role === "plate"\);\s*\n\s*if \(anchor && bucket && !hasPlateRef && refs\.length < 12\)/, '플레이트 있으면 스타일 기준 생략');
   assert.match(fn, /\.\.\.\(orderedRefs\.length \? \{ referenceImages: orderedRefs \} : \{\}\),/);
   const im = shared.indexOf('async function runSetMasterTool('); const mfn2 = shared.slice(im, shared.indexOf('\n}\n', im));
   assert.match(mfn2, /if \(!\(payload\.styleAnchor && payload\.styleAnchor\.objectName && payload\.styleAnchor\.pickedBy === "user"\)\) nextPayload\.styleAnchor = \{ objectName: img\.objectName/, '새 마스터가 스타일 기준(사용자 지정만 예외)');
   assert.match(cfn, /const bc = brand \? findBrandCharacter\(brand, tk\) : null;/, '등록 설명(인상착의·크기)을 브랜드에서');
   assert.match(cfn, /Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate\. Do NOT enlarge characters to fill the frame/, '크기는 설명대로, 프레임 채우려 키우지 말 것');
-  assert.match(fn, /const promptSent = charBlock \? `\$\{prompt\}\\n\$\{charBlock\}` : prompt;/);
+  assert.match(fn, /const promptSent = \[prompt, contiBlock, charBlock\]\.filter\(Boolean\)\.join\("\\n"\);/);
   assert.match(fn, /prompt: promptSent, aspectRatio/);
   assert.match(fn, /imagePrompt: promptSent,/);
   assert.match(read('prototype/functions/api/agent/_shared.ts'), /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 16\);/, '참조 상한 4는 임의 제한 — 제작 화면과 같은 16');

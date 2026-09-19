@@ -168,6 +168,8 @@ export async function runVideoPipelineBatch(
   const sceneInput = (step: VideoPipelineStep) => ({
     projectId: plan.projectId,
     sceneId: step.sceneId,
+    // 일괄 스틸은 승인된 콘티를 반드시 거친다. 개별 컷 수동 생성만 기존 직접 경로를 허용한다.
+    requireStoryboard: true,
     ...(plan.aspectRatio ? { aspectRatio: plan.aspectRatio } : {}),
     ...(plan.videoModel ? { videoModel: plan.videoModel, model: plan.videoModel } : {}),
   });

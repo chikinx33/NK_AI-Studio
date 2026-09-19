@@ -31,6 +31,46 @@ test('★시트 계획: 세트별로 6컷씩, 나머지 2 이하는 앞 시트�
   assert.ok(sheets.every((s) => s.cutIds.length <= MAX_CUTS_PER_SHEET));
 });
 
+test('★시트 계획: sceneBreak 는 같은 장소여도 하드 경계이며 서로 다른 씬의 컷을 한 시트에 섞지 않는다', () => {
+  const scenes = [];
+  const add = (sceneNo, count) => {
+    for (let cut = 1; cut <= count; cut++) scenes.push({
+      id: `S${sceneNo}C${cut}`,
+      sceneLocation: '같은 방',
+      sceneBreak: cut === 1 && sceneNo > 1,
+    });
+  };
+  add(1, 3); add(2, 7); add(3, 10);
+  const sheets = planSheets(scenes);
+  assert.deepEqual(sheets.map((s) => ({ sceneNo: s.sceneNo, cuts: s.cutIds, anchor: s.anchor })), [
+    { sceneNo: 1, cuts: ['S1C1', 'S1C2', 'S1C3'], anchor: { role: 'set', ref: '같은 방' } },
+    { sceneNo: 2, cuts: ['S2C1', 'S2C2', 'S2C3', 'S2C4', 'S2C5', 'S2C6', 'S2C7'], anchor: { role: 'set', ref: '같은 방' } },
+    { sceneNo: 3, cuts: ['S3C1', 'S3C2', 'S3C3', 'S3C4', 'S3C5', 'S3C6'], anchor: { role: 'set', ref: '같은 방' } },
+    { sceneNo: 3, cuts: ['S3C7', 'S3C8', 'S3C9', 'S3C10'], anchor: { role: 'overlap', ref: 'S3C6' } },
+  ]);
+  assert.equal(sheets.some((sheet) => new Set(sheet.cutIds.map((id) => id.slice(0, 2))).size > 1), false);
+});
+
+test('★시트 계획: 장소 누락은 컷마다 새 시트를 만들지 않고 sceneBreak 전까지 같은 씬으로 유지한다', () => {
+  const scenes = [
+    { id: 1, sceneLocation: '' },
+    { id: 2, sceneLocation: '' },
+    { id: 3, sceneLocation: '교실' },
+    { id: 4, sceneLocation: '', sceneBreak: true },
+    { id: 5, sceneLocation: '' },
+  ];
+  const sheets = planSheets(scenes);
+  assert.deepEqual(sheets.map((s) => s.cutIds), [['1', '2', '3'], ['4', '5']]);
+  assert.equal(sheets[0].setName, '교실');
+});
+
+test('★시트 stale: 기존 시트 중간에 sceneBreak 또는 장소 변화가 생기면 다시 생성 대상으로 판정한다', () => {
+  const sheet = { cutIds: ['1', '2', '3'] };
+  assert.equal(isSheetStale(sheet, [S(1, '방'), S(2, '방'), S(3, '방')]), false);
+  assert.equal(isSheetStale(sheet, [S(1, '방'), S(2, '방', { sceneBreak: true }), S(3, '방')]), true);
+  assert.equal(isSheetStale(sheet, [S(1, '방'), S(2, '거리'), S(3, '거리')]), true);
+});
+
 test('★시트는 순서의 스냅샷: cutIds 가 현재 scenes 에 연속·같은 순서로 없으면 stale', () => {
   const scenes = [S(1, 'A'), S(2, 'A'), S(3, 'A'), S(4, 'B')];
   const sheet = { cutIds: ['1', '2', '3'] };
@@ -143,7 +183,7 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.match(svc, /helpers\.resolveCharacterReferences\(st, text, projectId\)/);
 });
 
-test('★UI: 제작 화면 버튼 → 모달(실험 4종·세트·시트·해상도 2K/4K·프롬프트 수정) · 패널 배지 콘티/스틸컷/바이블 · 승인 패널만 스틸컷 · stale 표시', () => {
+test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승인 콘티 일괄 스틸 · 패널 배지 · stale 표시', () => {
   const uiSrc = read('prototype/ui/pipeline-storyboard-sheet.js');
   const pipeline = read('prototype/ui/pipeline.js');
   const html = read('prototype/scenes.html');
@@ -154,6 +194,9 @@ test('★UI: 제작 화면 버튼 → 모달(실험 4종·세트·시트·해상
   assert.match(uiSrc, /<option value="2K"[\s\S]*<option value="4K"/);
   for (const k of ['board', 'bible-characters', 'bible-set', 'angle-plate']) assert.match(uiSrc, new RegExp(`\\['${k}', `));
   assert.match(uiSrc, /id="sb-prompt"/, '서버 조립 프롬프트를 보고 고칠 수 있다');
+  assert.match(uiSrc, /id="sb-generate-all"/);
+  assert.match(uiSrc, /class="btn-ghost compact sb-revise"/);
+  assert.match(uiSrc, /id="sb-still-batch"/);
   assert.match(uiSrc, /function badge\(kind\)/);
   assert.match(uiSrc, /kind === 'still' \? T\(\)\.stillBadge : kind === 'bible' \? T\(\)\.bibleBadge : T\(\)\.contiBadge/);
   assert.match(uiSrc, /isCut && p\.status === 'approved' \?[\s\S]*sb-still/, '승인한 컷 패널에만 스틸컷 버튼');
@@ -180,6 +223,6 @@ test('★UI 문구는 한/영 사전(SB_TEXT)만 쓴다: 키 동일 · 본문에
   const svc = read('prototype/js/service/storyboard-sheet.js');
   const sko = svc.match(/ko: \{([\s\S]*?)\n    \},\n    en: \{/); const sen = svc.match(/en: \{([\s\S]*?)\n    \}\n  \};/);
   assert.deepEqual(keys(sko[1]), keys(sen[1]));
-  assert.match(uiSrc, /openBtn: 'Storyboard sheet'/);
-  assert.match(uiSrc, /openBtn: '스토리보드 시트'/);
+  assert.match(uiSrc, /openBtn: 'Storyboard production'/);
+  assert.match(uiSrc, /openBtn: '스토리보드 제작'/);
 });

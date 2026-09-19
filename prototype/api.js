@@ -1317,6 +1317,12 @@
           NK.service.project.markModified(body.projectId);
         }
       } catch (_) {}
+      // 프로젝트 저장은 프리/메인/캔버스가 공유하는 단일 변경 지점이다.
+      // 성공한 저장만 셸에 알리고, 셸은 열려 있는 모든 스테이지에 같은 신호를 중계한다.
+      try {
+        if (NK.state && NK.state.broadcast) NK.state.broadcast('nk-project-changed', { projectId: body.projectId, source: 'project-save' });
+        else if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'nk-project-changed', projectId: body.projectId, source: 'project-save' }, '*');
+      } catch (_) {}
       return j(text);
     } catch (err) {
       if (err && /timeout/i.test(String(err.message || ''))) {

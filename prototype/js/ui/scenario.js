@@ -1958,14 +1958,16 @@
     const seq = [];
     const totalByParent = {};
     (Array.isArray(sceneList) ? sceneList : []).forEach((sc) => {
-      const loc = String((sc && sc.sceneLocation) || '').trim();
+      const rawLoc = String((sc && sc.sceneLocation) || '').trim();
+      const loc = rawLoc || lastLoc || '';
       // 새 씬은 장소가 바뀔 때, 또는 캔버스에서 "이 컷부터 새 씬"(sceneBreak)으로 나눴을 때 시작한다.
-      if (!loc || loc !== lastLoc || !!(sc && sc.sceneBreak)) {
+      if (parentNo === 0 || (!!rawLoc && !!lastLoc && rawLoc !== lastLoc) || !!(sc && sc.sceneBreak)) {
         parentNo += 1;
         cutNo = 1;
         lastLoc = loc;
       } else {
         cutNo += 1;
+        if (!lastLoc && rawLoc) lastLoc = rawLoc;
       }
       seq.push({ parentNo, cutNo });
       totalByParent[parentNo] = cutNo;

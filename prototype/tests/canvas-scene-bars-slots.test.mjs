@@ -14,7 +14,7 @@ test('★슬롯 격자 상수: 카드 간격 = 바-카드 간격, 씬 묶음 규
   assert.match(src, /const CELL_W = NODE_W\.cut \+ CARD_GAP;/);
   assert.match(src, /const BAR_SNAP = GRID \* 2;/);
   assert.match(src, /function deriveLanes\(graph: ProductionGraph \| null, heights: Heights = \{\}\): Lane\[\]/);
-  assert.match(src, /if \(!last \|\| !loc \|\| loc !== last\.location \|\| !!n\.data\.sceneBreak\) \{/, '시나리오 화면의 Scene N cutM 규칙과 같아야 합니다');
+  assert.match(src, /if \(!last \|\| \(!!rawLoc && !!last\.location && rawLoc !== last\.location\) \|\| !!n\.data\.sceneBreak\) \{/, '시나리오 화면의 Scene N cutM 규칙과 같아야 합니다');
   assert.doesNotMatch(src, /function layoutGraph\(/, '자유 배치 layoutGraph 는 사라져야 합니다');
 });
 

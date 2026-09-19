@@ -231,6 +231,13 @@ export default function App() {
       const d = (evt && (evt.data as Record<string, unknown>)) || {};
       const type = String(d.type || "");
       if (type === "stage-revisit") dispatchUiAction({ action: "canvas.refresh" });
+      else if (type === "nk-project-changed") {
+        dispatchUiAction({ action: "canvas.refresh", projectId: d.projectId ? String(d.projectId) : undefined });
+        // 캔버스 안에 임베드된 제작 화면(스토리보드)이 저장한 변경도 바깥 AI 시네마 셸까지 올린다.
+        if (window.parent && window.parent !== window && evt.source !== window.parent) {
+          window.parent.postMessage({ type: "nk-project-changed", projectId: d.projectId ? String(d.projectId) : "", source: "canvas-embedded-production" }, "*");
+        }
+      }
       else if (type === "nk-canvas-open" && d.projectId) dispatchUiAction({ action: "canvas.open", projectId: String(d.projectId) });
     };
     window.addEventListener("message", onMessage);
