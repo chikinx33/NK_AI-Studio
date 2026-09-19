@@ -88,3 +88,15 @@ test('★일괄 생성 카드는 생성·진행·결과·실패 사유만 간결
   assert.match(panel, /영상: \{s\.videoError\}/);
   assert.doesNotMatch(panel, /job\.title|파이프라인을 마쳤어요|비어 있는 컷을 스틸→영상 순으로 자동 생성해요/);
 });
+
+test('★스토리보드 재생성은 종료된 옛 스틸·영상 기록을 현재 카드에 되살리지 않는다', () => {
+  const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  const panel = read('ai-company-app/src/components/VideoPipelinePanel.tsx');
+  assert.match(panel, /TERMINAL_JOB_STATUSES[\s\S]*?"completed"[\s\S]*?"failed"[\s\S]*?"cancelled"/);
+  assert.match(panel, /getCompanySkillJob\(parsed\.jobId\)[\s\S]*?if \(isTerminalJob\(savedJob\)\)[\s\S]*?writeUserStorage\(VIDEO_PIPELINE_JOB_KEY, ""\)/, '새로고침 때 종료된 로컬 포인터를 제거한다');
+  assert.match(panel, /const active = jobs\.find\(\(candidate\) => !isTerminalJob\(candidate\)\);[\s\S]*?if \(!active \|\| active\.id === jobIdRef\.current\) return;/, '서버 목록에서는 진행 중 작업만 현재 카드에 붙인다');
+  assert.doesNotMatch(panel, /const latest = active \|\| jobs\[0\]/, '종료된 최신 이력을 현재 작업으로 되살리지 않는다');
+  assert.match(canvas, /setPipelineResetNonce\(\(n\) => n \+ 1\); setStoryboardOpen\(true\)/, '새 스토리보드를 시작하면 종료된 이전 작업 포인터를 정리한다');
+  assert.match(canvas, /resetNonce=\{pipelineResetNonce\}/);
+  assert.match(panel, /if \(current && !isTerminalJob\(current\)\) return current;/, '진행 중 작업은 숨기지 않는다');
+});

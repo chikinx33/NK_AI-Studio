@@ -15,6 +15,8 @@ import type { SkillJob } from "../lib/skillJobs";
 // 이 패널은 SkillJob 하나의 생애를 보여주고, 배치가 멈추면(running + continueRunning) continue 를 눌러 주는 주체다.
 
 export const VIDEO_PIPELINE_JOB_KEY = "canvasVideoPipelineJob";
+const TERMINAL_JOB_STATUSES = new Set<SkillJob["status"]>(["completed", "failed", "cancelled"]);
+const isTerminalJob = (job: SkillJob): boolean => TERMINAL_JOB_STATUSES.has(job.status);
 const VIDEO_MODELS = [
   { id: "", label: "기본 모델" },
   { id: "veo", label: "Veo" },
@@ -54,6 +56,7 @@ export default function VideoPipelinePanel({
   onGraphChanged,
   onFocusScene,
   attachNonce = 0,
+  resetNonce = 0,
   autoApprove = false,
   onAttached,
 }: {
@@ -63,6 +66,8 @@ export default function VideoPipelinePanel({
   onFocusScene: (sceneId: string | number) => void;
   // 채팅(video_pipeline 도구)이 파이프라인을 만들면 캔버스가 이 값을 올려 최신 잡을 다시 찾게 한다.
   attachNonce?: number;
+  // 새 스토리보드 작업을 시작하면 종료된 이전 스틸·영상 결과를 현재 카드에서 분리한다.
+  resetNonce?: number;
   // 에이전트 설정 '생성 전 확인: 안 함' — 비용 승인 대기를 브라우저가 자동으로 승인한다.
   autoApprove?: boolean;
   onAttached?: (job: SkillJob) => void;
@@ -76,18 +81,41 @@ export default function VideoPipelinePanel({
   const [error, setError] = useState("");
   const lastContinueAt = useRef(0);
   const lastRefreshKey = useRef("");
+  const lastResetNonce = useRef(resetNonce);
 
-  // 새로고침해도 진행 중 파이프라인을 다시 잡는다.
+  // 새로고침 뒤에는 진행 중인 작업만 복원한다. 완료·실패 이력은 현재 작업 카드가 아니다.
   useEffect(() => {
     const saved = readUserStorage(VIDEO_PIPELINE_JOB_KEY);
     if (!saved) return;
+    let alive = true;
     try {
       const parsed = JSON.parse(saved) as { jobId: string; projectId: string };
       if (parsed.projectId === projectId && parsed.jobId) {
-        getCompanySkillJob(parsed.jobId).then(setJob).catch(() => writeUserStorage(VIDEO_PIPELINE_JOB_KEY, ""));
+        getCompanySkillJob(parsed.jobId).then((savedJob) => {
+          if (!alive) return;
+          if (isTerminalJob(savedJob)) {
+            writeUserStorage(VIDEO_PIPELINE_JOB_KEY, "");
+            return;
+          }
+          setJob(savedJob);
+        }).catch(() => writeUserStorage(VIDEO_PIPELINE_JOB_KEY, ""));
       }
     } catch { writeUserStorage(VIDEO_PIPELINE_JOB_KEY, ""); }
+    return () => { alive = false; };
   }, [projectId]);
+
+  useEffect(() => {
+    if (lastResetNonce.current === resetNonce) return;
+    lastResetNonce.current = resetNonce;
+    setError("");
+    setJob((current) => {
+      if (current && !isTerminalJob(current)) return current;
+      writeUserStorage(VIDEO_PIPELINE_JOB_KEY, "");
+      lastContinueAt.current = 0;
+      lastRefreshKey.current = "";
+      return null;
+    });
+  }, [resetNonce]);
 
   // 이 프로젝트의 최신 파이프라인(채팅으로 만든 것 포함)을 서버에서 찾아 붙는다.
   // 진행 중(승인 대기·실행 중)인 잡이 있으면 지금 보고 있는 것보다 우선한다 — 승인 버튼이 여기 있어야 한다.
@@ -98,14 +126,11 @@ export default function VideoPipelinePanel({
     let alive = true;
     listCompanySkillJobs({ skillId: "video_pipeline", projectId, limit: 5 }).then((jobs) => {
       if (!alive || !jobs.length) return;
-      const active = jobs.find((j) => !["completed", "failed", "cancelled"].includes(j.status));
-      const latest = active || jobs[0];
-      if (!latest || latest.id === jobIdRef.current) return;
-      if (active || !jobIdRef.current) {
-        setJob(latest);
-        writeUserStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: latest.id, projectId }));
-        onAttached?.(latest);
-      }
+      const active = jobs.find((candidate) => !isTerminalJob(candidate));
+      if (!active || active.id === jobIdRef.current) return;
+      setJob(active);
+      writeUserStorage(VIDEO_PIPELINE_JOB_KEY, JSON.stringify({ jobId: active.id, projectId }));
+      onAttached?.(active);
     }).catch(() => null);
     return () => { alive = false; };
   }, [projectId, attachNonce, onAttached]);

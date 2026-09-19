@@ -461,6 +461,7 @@ export default function ProductionCanvas({
   const [storyboardView, setStoryboardView] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
   const [pipelineNonce, setPipelineNonce] = useState(0);
+  const [pipelineResetNonce, setPipelineResetNonce] = useState(0);
   // 작성기 설정(생성 전 확인 · 이미지/영상 기본값). 인스펙터 버튼과 채팅 맥락이 같은 값을 쓴다.
   const [settings, setSettings] = useState<CanvasSettings>(() => loadCanvasSettings());
   const updateSettings = useCallback((next: CanvasSettings) => { setSettings(next); saveCanvasSettings(next); }, []);
@@ -1725,13 +1726,14 @@ export default function ProductionCanvas({
                 tone="emerald"
               >
                 <div className="space-y-2 p-3">
-                  <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 생성</button>
+                  <button type="button" onClick={() => { setPipelineResetNonce((n) => n + 1); setStoryboardOpen(true); }} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 생성</button>
                   <VideoPipelinePanel
                     projectId={projectId}
                     selectedSceneIds={selectedSceneIds}
                     onGraphChanged={() => void load(true)}
                     onFocusScene={(id) => focusScene(id)}
                     attachNonce={pipelineNonce}
+                    resetNonce={pipelineResetNonce}
                     autoApprove={!settings.confirmBeforeGenerate}
                     onAttached={(job) => { if (job.approvalState?.status === "pending") { setAgentOpen(true); setBatchDockOpen(true); } }}
                   />
