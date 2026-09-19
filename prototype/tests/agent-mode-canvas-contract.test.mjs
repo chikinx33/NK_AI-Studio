@@ -122,9 +122,11 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(canvas, /writeUserStorage\("canvasEdgeStyle", next\)/);
   assert.match(canvas, /title=\{edgeStyle === "curve" \? "연결선: 곡선 \(누르면 직각선\)" : "연결선: 직각선 \(누르면 곡선\)"\}/);
   assert.doesNotMatch(workspace, /edgeStyle=\{edgeStyle\}/);
-  // 직선 모드는 대각선이 아니라 직각(수직·수평) 경로다(사용자 요청).
+  // 직선 모드는 대각선이 아니라 둥근 모서리의 직각(수직·수평) 경로다(사용자 요청).
   assert.match(canvas, /edgeStyle === "straight"[\s\S]*orthogonalPath\(a, b\)/);
-  assert.match(canvas, /L \$\{mx\} \$\{a\.y\} L \$\{mx\} \$\{b\.y\} L \$\{b\.x\} \$\{b\.y\}/);
+  assert.match(canvas, /function roundedOrthogonalPath\(points: Pos\[\], radius = 12\)/);
+  assert.match(canvas, /commands\.push\(`L \$\{before\.x\} \$\{before\.y\}`, `Q \$\{corner\.x\} \$\{corner\.y\} \$\{after\.x\} \$\{after\.y\}`\)/);
+  assert.match(canvas, /return roundedOrthogonalPath\(\[a, \{ x: mx, y: a\.y \}, \{ x: mx, y: b\.y \}, b\]\)/);
   assert.doesNotMatch(canvas, /`M \$\{a\.x\} \$\{a\.y\} L \$\{b\.x\} \$\{b\.y\}`/);
   // 연결선 보기·숨기기(눈 아이콘) — 기억하고, 캔버스는 숨김이면 선을 그리지 않는다.
   assert.match(canvas, /writeUserStorage\("canvasEdgesVisible", next \? "1" : "0"\)/);

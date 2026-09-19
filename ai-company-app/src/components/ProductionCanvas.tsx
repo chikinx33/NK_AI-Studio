@@ -234,15 +234,56 @@ function moveCutToSlot(layout: CanvasLayout, cardId: string, slot: { key: string
   return { ...layout, groups };
 }
 
-/** 직각 경로. 도착이 오른쪽이면 가운데서 한 번 꺾고, 왼쪽(역방향)이면 밖으로 나갔다가 위아래 통로로 돌아 들어온다. */
+/** 수직·수평 경로의 꺾이는 지점을 짧은 2차 베지어 곡선으로 둥글게 만든다. */
+function roundedOrthogonalPath(points: Pos[], radius = 12): string {
+  const compact = points.filter((point, index) => index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y);
+  const corners = compact.filter((point, index) => {
+    if (index === 0 || index === compact.length - 1) return true;
+    const previous = compact[index - 1];
+    const next = compact[index + 1];
+    return !((previous.x === point.x && point.x === next.x) || (previous.y === point.y && point.y === next.y));
+  });
+  if (corners.length < 2) return "";
+
+  const commands = [`M ${corners[0].x} ${corners[0].y}`];
+  for (let index = 1; index < corners.length - 1; index += 1) {
+    const previous = corners[index - 1];
+    const corner = corners[index];
+    const next = corners[index + 1];
+    const incomingLength = Math.hypot(corner.x - previous.x, corner.y - previous.y);
+    const outgoingLength = Math.hypot(next.x - corner.x, next.y - corner.y);
+    const cornerRadius = Math.min(radius, incomingLength / 2, outgoingLength / 2);
+    const before = {
+      x: corner.x + ((previous.x - corner.x) / incomingLength) * cornerRadius,
+      y: corner.y + ((previous.y - corner.y) / incomingLength) * cornerRadius,
+    };
+    const after = {
+      x: corner.x + ((next.x - corner.x) / outgoingLength) * cornerRadius,
+      y: corner.y + ((next.y - corner.y) / outgoingLength) * cornerRadius,
+    };
+    commands.push(`L ${before.x} ${before.y}`, `Q ${corner.x} ${corner.y} ${after.x} ${after.y}`);
+  }
+  const last = corners[corners.length - 1];
+  commands.push(`L ${last.x} ${last.y}`);
+  return commands.join(" ");
+}
+
+/** 둥근 직각 경로. 도착이 오른쪽이면 가운데서 꺾고, 왼쪽(역방향)이면 바깥 통로로 돌아 들어온다. */
 function orthogonalPath(a: Pos, b: Pos): string {
   const stub = 32;
   if (b.x - a.x >= stub * 2) {
     const mx = Math.round((a.x + b.x) / 2);
-    return `M ${a.x} ${a.y} L ${mx} ${a.y} L ${mx} ${b.y} L ${b.x} ${b.y}`;
+    return roundedOrthogonalPath([a, { x: mx, y: a.y }, { x: mx, y: b.y }, b]);
   }
   const my = Math.round((a.y + b.y) / 2);
-  return `M ${a.x} ${a.y} L ${a.x + stub} ${a.y} L ${a.x + stub} ${my} L ${b.x - stub} ${my} L ${b.x - stub} ${b.y} L ${b.x} ${b.y}`;
+  return roundedOrthogonalPath([
+    a,
+    { x: a.x + stub, y: a.y },
+    { x: a.x + stub, y: my },
+    { x: b.x - stub, y: my },
+    { x: b.x - stub, y: b.y },
+    b,
+  ]);
 }
 
 function anchorOut(node: ProductionNode, p: Pos): Pos { return { x: p.x + NODE_W[node.type], y: p.y + Math.min(NODE_H[node.type], 140) / 2 }; }
