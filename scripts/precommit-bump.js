@@ -32,6 +32,11 @@ function bumpHtmlAssetVersions(next) {
   try {
     htmlFiles = fs.readdirSync(dir).filter((f) => f.endsWith('.html')).map((f) => `${dir}/${f}`);
   } catch (_) { return; }
+  // Vite 진입 HTML은 prototype 루트 밖에 있고 빌드 결과도 하위 폴더에 있다.
+  // 둘을 빼면 새 번들이 배포돼도 AI 회사가 예전 config.js(앱 버전·설정)를 계속 읽는다.
+  ['ai-company-app/index.html', 'prototype/ai-company/index.html'].forEach((file) => {
+    if (fs.existsSync(file)) htmlFiles.push(file);
+  });
   htmlFiles.forEach((file) => {
     let txt = fs.readFileSync(file, 'utf8');
     if (!/\?v=\d+\.\d+/.test(txt)) return; // 버전 쿼리를 쓰는 페이지만 갱신
