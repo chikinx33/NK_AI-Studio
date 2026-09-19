@@ -21,10 +21,25 @@ test('★진단 토스트에 Pass 2 요약(씬→컷·성공/폴백·자동 보�
   assert.match(ui, /자동 보정 \(Pass 2\): 같은 셋업 사이즈 이동 .*shotTypeSwaps.*인물 위치 앵커 .*blockingAnchors.*카메라 무브 치환 .*cameraSwaps/);
   const locIdx = ui.indexOf("replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '곳");
   assert.ok(locIdx > 0, '장소(세트) 줄이 없습니다');
-  // 장소 줄은 추출 성공 직후, 토스트를 다시 그린다
+  // 장소 줄은 추출 성공 직후 내용만 갱신한다. 생성 중 모달을 강제로 열면 안 된다.
   const after = ui.slice(locIdx, locIdx + 800);
-  assert.match(after, /showScenarioMetaToast\(metaLines\.join\('\\n'\)\)/);
+  assert.match(after, /updateScenarioMetaText\(metaLines\.join\('\\n'\)\)/);
+  assert.doesNotMatch(after, /showScenarioMetaToast\(metaLines\.join\('\\n'\)\)/);
   assert.match(ui, /서버가 이전 배포로 응답 중/);
+});
+
+test('★생성 진단 모달은 완료 알림 확인 후, 로딩 해제가 가능한 다음 이벤트 루프에 열린다', () => {
+  const ui = read('prototype/js/ui/scenario.js');
+  const start = ui.indexOf('form.onsubmit = async (e) =>');
+  const end = ui.indexOf('// 저장 버튼', start);
+  const generate = ui.slice(start, end);
+  const alertIdx = generate.indexOf("alert(`시나리오를 생성했습니다.");
+  const showIdx = generate.indexOf('setTimeout(() => showScenarioMetaToast(finalDiagText), 0)');
+  assert.ok(alertIdx >= 0, '완료 알림이 없습니다');
+  assert.ok(showIdx > alertIdx, '진단 모달은 완료 알림 확인 뒤에 예약돼야 합니다');
+  assert.equal((generate.match(/showScenarioMetaToast\(/g) || []).length, 1, '생성 도중 진단 모달을 여는 호출이 남아 있습니다');
+  assert.ok((generate.match(/updateScenarioMetaText\(/g) || []).length >= 5, 'Pass 1·Pass 2·장소 진단은 내용만 누적해야 합니다');
+  assert.match(generate, /document\.getElementById\('scenario-diag-modal'\)\?\.classList\.add\('hidden'\)/);
 });
 
 test('★진단 패널은 뒤 단계를 자리표시자로 예고하고 끝나면 바꿔 끼운다(복사 시점과 무관하게 같은 내용)', () => {

@@ -2562,6 +2562,18 @@
       if (i >= 0) lines.splice(i, 1, ...nextLines); else nextLines.forEach((l) => lines.push(l));
     };
 
+    // 생성 중에는 진단 내용만 누적한다. 이미 사용자가 진단 버튼으로 창을 연 경우에만
+    // 열린 본문을 갱신하고, 이 함수 자체는 절대 모달을 열지 않는다.
+    const updateScenarioMetaText = (text) => {
+      try {
+        _lastDiagText = text || '';
+        const modal = document.getElementById('scenario-diag-modal');
+        const body = document.getElementById('scenario-diag-modal-body');
+        if (!modal || !body || modal.classList.contains('hidden')) return;
+        body.innerHTML = renderScenarioDiagBody('진단 정보가 없습니다.');
+      } catch (_) { /* 갱신 실패는 무시 */ }
+    };
+
     const showScenarioMetaToast = (text) => {
       try {
         _lastDiagText = text || '';
@@ -2954,6 +2966,9 @@
     // 시나리오 생성
     form.onsubmit = async (e) => {
       e.preventDefault();
+      // 이전 생성의 진단창이 열린 채 새 생성을 시작하지 않도록 닫고, 이번 진단을 새로 쌓는다.
+      _lastDiagText = '';
+      try { document.getElementById('scenario-diag-modal')?.classList.add('hidden'); } catch (_) {}
       const errEl = document.getElementById('scenario-error');
       if (errEl) errEl.classList.add('hidden');
       const uiLangPre = getUiLang();
@@ -3065,7 +3080,7 @@
             DIAG_PENDING_PASS2,
             DIAG_PENDING_LOCATIONS,
           ].filter(Boolean);
-          showScenarioMetaToast(metaLines.join('\n'));
+          updateScenarioMetaText(metaLines.join('\n'));
         } catch (_) { /* 진단 표시 실패는 무시 */ }
         const headerText = (NK.service?.project?.buildVisualHeader)
           ? NK.service.project.buildVisualHeader(payload)
@@ -3113,7 +3128,7 @@
                     pass2Lines.push((payload?.language === 'en' ? 'Cut decomposition fell back: ' : '컷 분해 폴백: ') + shotsM.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));
                   }
                   replaceDiagLines(metaLines, DIAG_PENDING_PASS2, pass2Lines);
-                  showScenarioMetaToast(metaLines.join('\n'));
+                  updateScenarioMetaText(metaLines.join('\n'));
                   console.log('[scenario meta:pass2]', {
                     tokensEnforcedShots: shotsM.tokensEnforcedShots,
                     flatCount: shotsM.flatCount,
@@ -3185,16 +3200,16 @@
               try {
                 if (Array.isArray(metaLines)) {
                   replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '곳 [' + epLocs.map((l) => String((l && l.name) || '').trim()).filter(Boolean).join(', ') + ']' + (setsFromPlan ? ' · 생성 단계에서 확정' + (res?.meta?.setsEnforced ? ` (컷 장소 강제 ${res.meta.setsEnforced}건)` : '') : ' · 사후 추출') + (locationsUnified ? ` · 컷 장소 이름 통일 ${locationsUnified}건` : ''));
-                  showScenarioMetaToast(metaLines.join('\n'));
+                  updateScenarioMetaText(metaLines.join('\n'));
                 }
               } catch (_) { /* 진단 갱신 실패는 무시 */ }
             }
           } catch (epErr) {
             console.warn('[episode-locations] 추출 실패', epErr);
-            try { if (Array.isArray(metaLines)) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 추출 실패 — ' + String((epErr && epErr.message) || epErr)); showScenarioMetaToast(metaLines.join('\n')); } } catch (_) {}
+            try { if (Array.isArray(metaLines)) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 추출 실패 — ' + String((epErr && epErr.message) || epErr)); updateScenarioMetaText(metaLines.join('\n')); } } catch (_) {}
           }
           // 장소가 하나도 안 잡혔으면(추출도 규칙 폴백도 빈 결과) 자리표시자를 남기지 않는다.
-          try { if (Array.isArray(metaLines) && metaLines.indexOf(DIAG_PENDING_LOCATIONS) >= 0) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 0개 — 씬에 장소가 없어 세트를 만들 수 없음'); showScenarioMetaToast(metaLines.join('\n')); } } catch (_) {}
+          try { if (Array.isArray(metaLines) && metaLines.indexOf(DIAG_PENDING_LOCATIONS) >= 0) { replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): 0개 — 씬에 장소가 없어 세트를 만들 수 없음'); updateScenarioMetaText(metaLines.join('\n')); } } catch (_) {}
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           // 생성 결과는 메모리(draft)에만 유지한다. 사용자가 '저장' 버튼을 눌러야
           // 로컬(localStorage/IndexedDB)·서버에 영속화된다. 자동 저장을 하면 새로고침·창
@@ -3221,6 +3236,13 @@
             alert(`시나리오를 생성했습니다. 긴 입력을 ${res.meta.chunkCount}개 파트로 나누어 처리했습니다.${saveWarning ? (' ' + saveWarning) : ''}`);
           } else {
             alert(`시나리오를 생성했습니다.${saveWarning ? (' ' + saveWarning) : ''}`);
+          }
+          // alert 확인이 반환된 뒤 현재 호출 스택을 끝낸다. 그러면 finally 가 로딩을 먼저
+          // 해제하고, 다음 이벤트 루프에서 완성된 진단만 별도 모달로 열린다.
+          const finalDiagText = Array.isArray(metaLines) ? metaLines.join('\n') : '';
+          if (finalDiagText) {
+            updateScenarioMetaText(finalDiagText);
+            setTimeout(() => showScenarioMetaToast(finalDiagText), 0);
           }
         }
       } catch (err) {
