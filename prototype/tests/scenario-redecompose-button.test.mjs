@@ -28,7 +28,7 @@ test('★핸들러는 평탄화 응답(meta.flattened)을 그대로 씬 목록�
   assert.doesNotMatch(body, /fresh\.shots/, '옛 API 모양(scene.shots)을 기대하면 안 됩니다');
   // 컷 하나를 씬 하나로 넘긴다(컷 경계·가사 구간 유지) — visual 을 화면/행동에서 만들어 준다
   assert.match(body, /visual: String\(c\.visual \|\| c\.shot \|\| \[c\.composition, c\.action\]\.filter\(Boolean\)\.join\(' \/ '\)/);
-  assert.match(body, /if \(!confirm\(ask\)\) return;/);
+  assert.match(body, /if \(!\(await NK\.ui\.dialog\.confirm\(ask/);
   assert.match(body, /아직 저장되지 않았어요/);
   assert.match(body, /showScenarioMetaToast\(lines\.join/);
 });

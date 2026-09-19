@@ -14,6 +14,7 @@ import AgentManager from "./components/AgentManager";
 import RightMenu from "./components/RightMenu";
 import SkillBox from "./components/SkillBox";
 import { CANVAS_SKILL_CATEGORY_ID } from "./lib/companySkills";
+import { appDialog } from "./lib/appDialog";
 import {
   getStatus,
   getAgents,
@@ -304,7 +305,7 @@ export default function App() {
     return () => window.removeEventListener(UI_ACTION_EVENT, listener);
   }, []);
 
-  function handleUiAction(action: UiAction) {
+  async function handleUiAction(action: UiAction) {
     routedUiActions.current.add(action);
     const name = String(action.action || "");
     if (name.startsWith("work_explorer.") || name.startsWith("company_files.")) setCenterView("works");
@@ -412,7 +413,7 @@ export default function App() {
     } else if (name === "reminder.delete") {
       const id = String(action.id || "");
       const target = reminders.find((reminder) => reminder.id === id || reminder.text === action.text);
-      if (target && window.confirm(`'${target.text || "알람"}' 예약을 삭제할까요?`)) void removeReminder(target.id);
+      if (target && await appDialog.confirm(`'${target.text || "알람"}' 예약을 삭제할까요?`, { title: "예약 삭제" })) void removeReminder(target.id);
     }
     window.setTimeout(() => dispatchUiAction(action), 0);
   }

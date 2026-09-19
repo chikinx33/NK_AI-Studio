@@ -783,7 +783,7 @@
     root.innerHTML = '<section class="analytics-page analytics-dashboard-v2 analytics-editorial" data-analytics-scope="' + escapeHtml(scope) + '">' + headerHtml + settingsHtml + contentHtml + goalModalHtml(goal, filters, scopeLabel) + '</section>';
     applyCurrentLocale();
 
-    root.onclick = function (event) {
+    root.onclick = async function (event) {
       var button = event.target && event.target.closest ? event.target.closest('[data-action]') : null;
       if (!button) return;
       var action = String(button.dataset.action || '').trim();
@@ -798,7 +798,7 @@
       }
       if (action === 'analytics-assign-all-brand') {
         if (!brandId || !NK.service.brand || !NK.service.brand.persistShared) return;
-        if (!window.confirm('분류되지 않은 게시물 ' + unassignedRows.length + '건을 이 브랜드의 공통 성과로 연결할까요?')) return;
+        if (!(await NK.ui.dialog.confirm('분류되지 않은 게시물 ' + unassignedRows.length + '건을 이 브랜드의 공통 성과로 연결할까요?', { title: '공통 성과 연결' }))) return;
         var bulkBrand = NK.service.brand.getById ? NK.service.brand.getById(brandId) || brand : brand;
         var bulkRows = bulkBrand && Array.isArray(bulkBrand.brandStudioPublishResults) ? bulkBrand.brandStudioPublishResults.slice() : [];
         var bulkNow = new Date().toISOString();

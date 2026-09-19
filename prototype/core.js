@@ -96,11 +96,6 @@
   };
 
   (function initDialogSystem() {
-    // core.js 로드 시점의 진짜 네이티브 confirm 을 잡아둔다. 이후 다른 스크립트가
-    // window.confirm 을 감싸도 폴백 경로는 원본을 쓴다.
-    var nativeConfirm = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-      ? window.confirm.bind(window)
-      : null;
     var ui = NK.ui || (NK.ui = {});
     var dialog = ui.dialog || (ui.dialog = {});
 
@@ -351,11 +346,14 @@
       refs.root.classList.add('is-open');
       refs.root.setAttribute('aria-hidden', 'false');
 
-      // 열린 뒤 취소 버튼이 실제로 보이는지 확인한다. 어떤 이유로든 안 보이면
-      // "취소할 수 없는 확인창"이 되므로, 이 다이얼로그를 버리고 네이티브로 넘긴다.
+      // 열린 뒤 취소 버튼이 실제로 보이는지 확인한다. 브라우저 기본 창으로
+      // 폴백하지 않고 이 테마 모달의 표시를 강제해 서비스 UI 밖으로 새지 않게 한다.
       if (wantsCancel && !isVisible(refs.cancel)) {
-        console.error('[dialog] confirm/prompt 인데 취소 버튼이 보이지 않는다 → 네이티브로 대체');
-        return false;
+        console.error('[dialog] confirm/prompt 취소 버튼 표시를 복구한다');
+        refs.cancel.style.setProperty('display', 'inline-flex', 'important');
+        refs.cancel.style.setProperty('visibility', 'visible', 'important');
+        refs.cancel.style.setProperty('opacity', '1', 'important');
+        refs.cancel.hidden = false;
       }
 
       if (useInput && refs.input && refs.input.focus) refs.input.focus();
@@ -436,22 +434,7 @@
       // (연결 성공 알림 자리에 지난 해제 확인창이 뜨는 식).
       var item = queue.shift();
       showing = item;
-      if (renderCurrent(item) === false) {
-        // 확인창을 신뢰할 수 없다 → 즉시 닫고 네이티브로 물어본다.
-        showing = null;
-        refs.root.classList.remove('is-open');
-        refs.root.setAttribute('aria-hidden', 'true');
-        busy = false;
-        var msg = toText(item.message || '');
-        var answer = false;
-        try {
-          answer = (typeof nativeConfirm === 'function') ? nativeConfirm(msg) : window.confirm(msg);
-        } catch (_) { answer = false; }
-        if (item.mode === 'prompt') item.resolve(answer ? '' : null);
-        else item.resolve(!!answer);
-        flushQueue();
-        return;
-      }
+      renderCurrent(item);
     }
 
     function enqueue(mode, message, opts) {

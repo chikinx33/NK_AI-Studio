@@ -117,7 +117,7 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
   assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraTargetMode = 'scene';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
   assert.match(source, /function clearAllHistoryResults\(project\)/);
-  assert.match(source, /window\.confirm\(t\('deleteAllConfirm'\)\)/);
+  assert.match(source, /await NK\.ui\.dialog\.confirm\(t\('deleteAllConfirm'\)/);
 });
 
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {

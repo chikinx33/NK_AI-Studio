@@ -6,6 +6,7 @@ import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { useLiveRefresh } from "../lib/liveSync";
 import CanvasFloatingDock from "./CanvasFloatingDock";
+import { appDialog } from "../lib/appDialog";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -342,18 +343,18 @@ export default function Approvals({
     }, 0);
   }
 
-  useUiAction((action) => {
+  useUiAction(async (action) => {
     if (action.action === "approval.decide") {
       const id = actionString(action, "id");
       const decision = actionString(action, "decision");
       const target = pending.find((item) => item.id === id);
       if (!target || (decision !== "approve" && decision !== "reject")) return;
       const label = decision === "approve" ? "승인하고 실행" : "거절";
-      if (window.confirm(`${target.agentName || target.agentId}의 '${target.tool || target.command}' 작업을 ${label}할까요?`)) {
+      if (await appDialog.confirm(`${target.agentName || target.agentId}의 '${target.tool || target.command}' 작업을 ${label}할까요?`, { title: "승인 확인" })) {
         void act(id, decision);
       }
     } else if (action.action === "approval.clear") {
-      if (!pending.length || !window.confirm(`대기 중인 승인 ${pending.length}건을 모두 취소할까요?`)) return;
+      if (!pending.length || !await appDialog.confirm(`대기 중인 승인 ${pending.length}건을 모두 취소할까요?`, { title: "승인 대기 정리" })) return;
       void clearApprovals().then(refresh);
     }
   }, "approvals");
@@ -430,7 +431,7 @@ export default function Approvals({
       right={pending.length > 0 ? (
         <button
           onClick={async () => {
-            if (!confirm("대기 중인 승인을 모두 정리(취소)할까요?\n이미 실행·생성된 작업에는 영향이 없어요.")) return;
+            if (!await appDialog.confirm("대기 중인 승인을 모두 정리(취소)할까요?\n이미 실행·생성된 작업에는 영향이 없어요.", { title: "승인 대기 정리" })) return;
             try {
               const r = await clearApprovals();
               await refresh();

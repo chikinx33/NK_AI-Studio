@@ -137,7 +137,7 @@ test('삭제 실패는 사용자에게 안내한다', () => {
 
 test('전체 삭제는 2단계 확인 후 순차 처리하며 실패분을 남긴다', () => {
   const source = vgen();
-  assert.match(source, /window\.prompt\(t\('confirm_delete_all_typed'\)/);
+  assert.match(source, /await NK\.ui\.dialog\.prompt\(t\('confirm_delete_all_typed'\)/);
   assert.match(source, /!== t\('confirm_delete_all_word'\)/);
   assert.match(source, /function clearAllResults\(\)/);
   // 실패해도 중단하지 않고 끝까지 진행한 뒤 건수를 돌려준다

@@ -24,6 +24,7 @@ import {
   type ModelProvider,
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
+import { appDialog } from "../lib/appDialog";
 import { ToolCard } from "./Integrations";
 import {
   MonitorIcon,
@@ -290,7 +291,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
   const chatModels = status?.ollama.chatModels ?? [];
   const embedModels = allModels.filter((m) => !chatModels.includes(m));
 
-  useUiAction((action) => {
+  useUiAction(async (action) => {
     if (action.action === "settings.open") {
       const nextTab = actionString(action, "tab");
       if (nextTab === "basic" || nextTab === "agents" || nextTab === "logs") setTab(nextTab);
@@ -315,9 +316,9 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
         const days = Number(action.days);
         if (![0, 7, 30, 90, 180, 365].includes(days)) return;
         const warning = days > 0 ? `${days}일보다 오래된 대화 로그를 지금 정리하고 보존 정책을 적용할까요?` : "대화 로그 자동 정리를 끌까요?";
-        if (window.confirm(warning)) void changeRetention(days);
+        if (await appDialog.confirm(warning, { title: "대화 로그 보존" })) void changeRetention(days);
       } else if (operation === "cleanup") {
-        if (window.confirm("현재 보존 정책보다 오래된 대화 로그를 지금 정리할까요?")) void doCleanup();
+        if (await appDialog.confirm("현재 보존 정책보다 오래된 대화 로그를 지금 정리할까요?", { title: "대화 로그 정리" })) void doCleanup();
       }
     } else if (action.action === "integration.open") {
       const agentId = actionString(action, "agentId");

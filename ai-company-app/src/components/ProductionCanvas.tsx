@@ -22,6 +22,7 @@ import { approveItem, saveCanvasLayout } from "../lib/api";
 import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
 import CanvasFloatingDock from "./CanvasFloatingDock";
+import { appDialog } from "../lib/appDialog";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -476,7 +477,7 @@ export default function ProductionCanvas({
   // 스타일 기준 이미지 지정(창작자 선택): 어떤 저장 이미지든 프로젝트 그림체 기준으로.
   const setStyleAnchor = async (objectName: string, label: string) => {
     if (!projectId || !objectName) return;
-    if (!window.confirm(`"${label}" 이미지를 이 프로젝트의 그림체 기준(스타일 기준)으로 지정할까요?\n이후 세트 시트·콘티·스틸컷이 이 이미지의 룩을 참조해요.`)) return;
+    if (!await appDialog.confirm(`"${label}" 이미지를 이 프로젝트의 그림체 기준(스타일 기준)으로 지정할까요?\n이후 세트 시트·콘티·스틸컷이 이 이미지의 룩을 참조해요.`, { title: "스타일 기준 지정" })) return;
     await enqueue("style_anchor_set", { projectId, objectName, setName: label }, `스타일 기준 지정 · ${label}`);
     setLightbox(null);
   };
@@ -896,7 +897,7 @@ export default function ProductionCanvas({
     const first = picked[0];
     if (!first) return;
     const label = picked.length > 1 ? `컷 ${picked.map((c) => c.sceneId).join("·")}을(를) 새 씬으로 나눌까요? (컷 ${first.sceneId}부터 새 씬이 돼요)` : `컷 ${first.sceneId}부터 새 씬으로 나눌까요?`;
-    if (!window.confirm(label)) return;
+    if (!await appDialog.confirm(label, { title: "씬 나누기" })) return;
     await splitSceneAt(first.id);
   };
   // 이전 씬과 합치기: 이 바의 첫 컷의 sceneBreak 를 끈다(장소가 같을 때만 의미가 있다).
@@ -905,7 +906,7 @@ export default function ProductionCanvas({
     const firstId = lane?.memberIds[0];
     const n = firstId ? nodeById.get(firstId) : null;
     if (!projectId || !n || !n.data.sceneBreak) return;
-    if (!window.confirm(`Scene ${lane?.index}을(를) 앞 씬과 합칠까요? (컷 ${n.data.sceneId}의 씬 경계를 없애요)`)) return;
+    if (!await appDialog.confirm(`Scene ${lane?.index}을(를) 앞 씬과 합칠까요? (컷 ${n.data.sceneId}의 씬 경계를 없애요)`, { title: "씬 합치기" })) return;
     await enqueue("scene_split", { projectId, sceneId: n.data.sceneId, split: false }, `씬 합치기 · 컷 ${n.data.sceneId}`, n.data.sceneId);
   };
 
@@ -968,7 +969,7 @@ export default function ProductionCanvas({
       setDropSlot(slotFromPoint(layoutRef.current, lanesRef.current, nx, ny, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"])));
     }
   };
-  const onPointerUp = (e: React.PointerEvent) => {
+  const onPointerUp = async (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
@@ -994,7 +995,7 @@ export default function ProductionCanvas({
         const after = orderOfLayout(next);
         if (!sameOrder(before, after)) {
           const warnings = analyzeReorderClient(before, after, d.id, graph?.songSections);
-          if (warnings.length && !window.confirm([...warnings.map((w) => `· ${w.message}`), "", "그래도 컷 순서를 바꿀까요?"].join("\n"))) return;
+          if (warnings.length && !await appDialog.confirm([...warnings.map((w) => `· ${w.message}`), "", "그래도 컷 순서를 바꿀까요?"].join("\n"), { title: "컷 순서 변경" })) return;
           setLayout(next);
           void enqueue("scene_reorder", { projectId, order: after.map((c) => c.sceneId) }, `컷 ${dropped.data.sceneId} 순서 변경`, dropped.data.sceneId);
           return;
@@ -1314,12 +1315,12 @@ export default function ProductionCanvas({
                         {canMerge && (
                           <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void mergeSceneIntoPrev(l.key); }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-sky-100 transition hover:bg-sky-500/30 hover:text-white" title="이전 씬과 합치기 (이 씬의 첫 컷 경계를 없애요)" aria-label="이전 씬과 합치기">⇤</button>
                         )}
-                        <button type="button" disabled={!projectId || saving || l.memberIds.length < 2} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => {
+                        <button type="button" disabled={!projectId || saving || l.memberIds.length < 2} onPointerDown={(e) => e.stopPropagation()} onClick={async (e) => {
                           e.stopPropagation();
                           if (pickedHere.length) { void splitFromSelection(pickedHere[0], l.key); return; }
                           const ids = l.memberIds.map((id) => String(nodeById.get(id)?.data.sceneId ?? ""));
                           const def = ids[ids.length - 1] || "";
-                          const ans = window.prompt(`Scene ${l.index}을(를) 나눠요. 몇 번 컷부터 새 씬으로 할까요? (컷 ${ids.slice(1).join(", ")})`, def);
+                          const ans = await appDialog.prompt(`Scene ${l.index}을(를) 나눠요. 몇 번 컷부터 새 씬으로 할까요? (컷 ${ids.slice(1).join(", ")})`, def, { title: "씬 나누기" });
                           if (ans == null) return;
                           const hit = l.memberIds.find((id) => String(nodeById.get(id)?.data.sceneId ?? "") === String(ans).trim());
                           if (!hit) { setNotice("그 컷은 이 씬에 없어요."); return; }

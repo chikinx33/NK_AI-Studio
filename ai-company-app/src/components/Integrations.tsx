@@ -3,6 +3,7 @@ import { getIntegrations, saveIntegration, testIntegration, type ToolIntegration
 import { JOB } from "../lib/jobs";
 import { CircleIcon, LogInIcon, KeyRoundIcon, PlugIcon, StatusText, LabelText, stripEmoji } from "./icons";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { appDialog } from "../lib/appDialog";
 
 const inputCls =
   "mt-0.5 w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600";
@@ -122,7 +123,7 @@ export function ToolCard({
     onSaved();
   }
 
-  useUiAction((action) => {
+  useUiAction(async (action) => {
     if (!action.action.startsWith("integration.")) return;
     const agentId = actionString(action, "agentId");
     const tool = actionString(action, "tool");
@@ -130,9 +131,9 @@ export function ToolCard({
     if ((agentId && agentId !== it.agentId) || (tool && tool !== it.tool && !googleAlias)) return;
     if (action.action === "integration.test") void runTest();
     else if (action.action === "integration.connect" && it.oauth === "google") {
-      if (window.confirm(`${it.agentName}의 Google 계정 연결을 시작할까요? 로그인은 직접 완료해야 합니다.`)) void connectGoogle();
+      if (await appDialog.confirm(`${it.agentName}의 Google 계정 연결을 시작할까요? 로그인은 직접 완료해야 합니다.`, { title: "Google 연결" })) void connectGoogle();
     } else if (action.action === "integration.disconnect" && it.oauth === "google") {
-      if (window.confirm(`${it.agentName}의 Google 연결을 해제할까요?`)) void disconnectGoogle();
+      if (await appDialog.confirm(`${it.agentName}의 Google 연결을 해제할까요?`, { title: "Google 연결 해제" })) void disconnectGoogle();
     }
   }, `integration:${it.agentId}:${it.tool}`);
 

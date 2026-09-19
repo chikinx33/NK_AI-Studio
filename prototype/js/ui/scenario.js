@@ -3280,7 +3280,7 @@
         );
         if (hasProductionMedia) {
           const t = getScenarioUiText();
-          if (!confirm(t.saveConfirmProductionReset)) return;
+          if (!(await NK.ui.dialog.confirm(t.saveConfirmProductionReset, { title: '프로덕션 초기화 확인' }))) return;
         }
         NK.core.setLoading(true, '저장중...');
         try {
@@ -3347,7 +3347,7 @@
           const ask = lang === 'en'
             ? `Re-cut ${mergedBase.length} cuts with the latest rules? Cut boundaries and lyrics stay; composition, action, timeline and blocking are rewritten. Nothing is saved until you press Save.`
             : `지금 ${mergedBase.length}개 컷의 화면·행동·타임라인·블로킹을 최신 규칙으로 다시 쓸까요? 컷 경계와 가사는 그대로예요. 결과는 저장하기를 눌러야 남아요.`;
-          if (!confirm(ask)) return;
+          if (!(await NK.ui.dialog.confirm(ask, { title: lang === 'en' ? 'Re-cut shots' : '컷 다시 나누기' }))) return;
           // 컷 → 분해 입력(씬) 모양으로. 서버는 visual 을 읽으므로 화면/행동에서 만들어 준다.
           const asScenes = mergedBase.map((c, i) => Object.assign({}, c, {
             id: c.id != null ? c.id : (i + 1),

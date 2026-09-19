@@ -362,7 +362,7 @@
       if (!m.plan || !m.plan.length) await plan();
       var total = (m.plan || []).length;
       if (!total) return;
-      if (!window.confirm(T().batchConfirm.replace(/\{count\}/g, String(total)))) return;
+      if (!(await NK.ui.dialog.confirm(T().batchConfirm.replace(/\{count\}/g, String(total)), { title: T().generateAll }))) return;
       m.batchBusy = true; m.batchDone = 0; m.batchTotal = total; m.error = ''; render();
       try {
         for (var i = 0; i < total; i++) {
@@ -401,7 +401,7 @@
 
     async function revisePanel(sheetId, panel) {
       if (!panel || !panel.objectName || m.busy) return;
-      var instruction = window.prompt(T().reviseAsk, '');
+      var instruction = await NK.ui.dialog.prompt(T().reviseAsk, { title: T().revise, defaultValue: '' });
       if (!String(instruction || '').trim()) return;
       var s = state();
       var sceneIdx = (s.scenes || []).findIndex(function (sc) { return String(sc && sc.id) === String(panel.ref); });
@@ -440,7 +440,7 @@
         });
       });
       if (!targets.length) return;
-      if (!window.confirm(T().stillBatchConfirm.replace(/\{count\}/g, String(targets.length)))) return;
+      if (!(await NK.ui.dialog.confirm(T().stillBatchConfirm.replace(/\{count\}/g, String(targets.length)), { title: T().approvedBatch }))) return;
       m.stillBatchBusy = true; m.stillBatchDone = 0; m.stillBatchTotal = targets.length; m.error = ''; render();
       try {
         for (var i = 0; i < targets.length; i++) {

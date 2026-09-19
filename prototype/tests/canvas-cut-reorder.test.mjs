@@ -122,7 +122,7 @@ test('★캔버스: 컷 카드를 놓으면 순서를 비교해 경고를 묻고
   assert.match(src, /if \(dropped\?\.type === "cut" && projectId\) \{/, '캐릭터·장소 카드는 순서 변경 대상이 아니다');
   assert.match(src, /if \(!sameOrder\(before, after\)\) \{/);
   assert.match(src, /const warnings = analyzeReorderClient\(before, after, d\.id, graph\?\.songSections\);/);
-  assert.match(src, /if \(warnings\.length && !window\.confirm\(/, '경고가 있으면 먼저 묻는다');
+  assert.match(src, /if \(warnings\.length && !await appDialog\.confirm\(/, '경고가 있으면 먼저 묻는다');
   assert.match(src, /"그래도 컷 순서를 바꿀까요\?"/);
   assert.match(src, /void enqueue\("scene_reorder", \{ projectId, order: after\.map\(\(c\) => c\.sceneId\) \}/);
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"\];/);

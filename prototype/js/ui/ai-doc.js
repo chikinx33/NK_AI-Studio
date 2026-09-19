@@ -744,7 +744,7 @@
         spans[2].textContent = p.ratio || '9:16';
         div.querySelector('[data-action="open"]').addEventListener('click', () => { state.activeProject = p; setView('results'); });
         div.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-          if (!confirm('이 프로젝트를 삭제할까요?')) return;
+          if (!(await NK.ui.dialog.confirm('이 프로젝트를 삭제할까요?', { title: '프로젝트 삭제' }))) return;
           await deleteProjectFromDb(p.id);
           renderDashboard();
         });

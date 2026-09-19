@@ -10,6 +10,7 @@ import {
 } from "../remotion/spec";
 import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { appDialog } from "../lib/appDialog";
 
 function FieldLabel({ children }: { children: string }) {
   return <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">{children}</label>;
@@ -101,7 +102,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     await renderVideo();
   }
 
-  useUiAction((action) => {
+  useUiAction(async (action) => {
     if (action.action === "video.configure") {
       if (typeof action.prompt === "string") setPrompt(action.prompt.slice(0, 2000));
       if (typeof action.durationSec === "number" && action.durationSec >= 5 && action.durationSec <= 300) setDurationSec(action.durationSec);
@@ -115,7 +116,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
       const decision = actionString(action, "decision");
       if (decision !== "approve" && decision !== "reject") return;
       const label = decision === "approve" ? "비용을 승인하고 실행" : "비용 요청을 거절";
-      if (window.confirm(`이 영상 작업의 ${label}할까요?`)) void decideCostApproval(decision === "approve" ? "approved" : "rejected");
+      if (await appDialog.confirm(`이 영상 작업의 ${label}할까요?`, { title: "영상 작업 승인" })) void decideCostApproval(decision === "approve" ? "approved" : "rejected");
     } else if (action.action === "video.render") {
       if (!renderInProgress && !archiveInProgress) void renderVideo();
     } else if (action.action === "video.storage") {

@@ -331,7 +331,7 @@
           const confirmMessage = names.length > 1
             ? (kindLabel + ' ' + names.length + '개를 삭제하시겠습니까?')
             : ('이 ' + kindLabel + '를 삭제하시겠습니까?');
-          if (!window.confirm(confirmMessage)) return;
+          if (!(await NK.ui.dialog.confirm(confirmMessage, { title: kindLabel + ' 삭제' }))) return;
           deleting = true;
           syncActionState();
           try {

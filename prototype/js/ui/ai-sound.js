@@ -703,8 +703,8 @@
     head.appendChild(el('span', 'snd-panel-title', { textContent: t('assets_title') }));
     if (state.assets.length) {
       var clr = el('button', 'snd-clear-btn', { type: 'button', textContent: t('clear_all') });
-      clr.addEventListener('click', function () {
-        if (!confirm(t('confirm_clear'))) return;
+      clr.addEventListener('click', async function () {
+        if (!(await NK.ui.dialog.confirm(t('confirm_clear'), { title: t('clear_all') }))) return;
         state.assets = []; render();
       });
       head.appendChild(clr);

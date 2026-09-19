@@ -13,6 +13,7 @@ import {
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFilePreview from "./CompanyFilePreview";
+import { appDialog } from "../lib/appDialog";
 
 type ViewMode = "cards" | "list";
 
@@ -169,7 +170,7 @@ export default function CompanyFileExplorer({
   }
 
   async function createFolder() {
-    const name = window.prompt("새 폴더 이름을 입력해 주세요.", "새 폴더")?.replace(/\s+/g, " ").trim();
+    const name = (await appDialog.prompt("새 폴더 이름을 입력해 주세요.", "새 폴더", { title: "새 폴더" }))?.replace(/\s+/g, " ").trim();
     if (!name) return;
     setBusy("mkdir"); setError("");
     try { await createCompanyFolder(joinPath(path, name)); await refresh(); }
@@ -189,7 +190,7 @@ export default function CompanyFileExplorer({
 
   async function transfer(operation: "copy" | "move") {
     if (!selectedFileEntries.length || selectedWorkFolders.length) return;
-    const destinationFolder = window.prompt(`${operation === "copy" ? "복사" : "이동"}할 대상 폴더 경로를 입력해 주세요. 루트는 비워 두세요.`, path);
+    const destinationFolder = await appDialog.prompt(`${operation === "copy" ? "복사" : "이동"}할 대상 폴더 경로를 입력해 주세요. 루트는 비워 두세요.`, path, { title: operation === "copy" ? "복사 위치" : "이동 위치" });
     if (destinationFolder == null) return;
     const normalizedDestination = destinationFolder.replace(/^\/+|\/+$/g, "");
     setBusy(operation); setError("");
@@ -226,7 +227,7 @@ export default function CompanyFileExplorer({
   async function renameSelected() {
     const entry = selectedEntries[0];
     if (!entry || selectedEntries.length !== 1) return;
-    const nextName = window.prompt("새 이름을 입력해 주세요.", entry.name)?.replace(/\s+/g, " ").trim();
+    const nextName = (await appDialog.prompt("새 이름을 입력해 주세요.", entry.name, { title: "이름 변경" }))?.replace(/\s+/g, " ").trim();
     if (!nextName || nextName === entry.name) return;
     setBusy("rename"); setError("");
     try {
@@ -239,7 +240,7 @@ export default function CompanyFileExplorer({
   }
 
   async function removeSelected() {
-    if (!selectedEntries.length || !window.confirm(`선택한 ${selectedEntries.length}개 항목과 폴더 내부 파일을 삭제할까요?`)) return;
+    if (!selectedEntries.length || !await appDialog.confirm(`선택한 ${selectedEntries.length}개 항목과 폴더 내부 파일을 삭제할까요?`, { title: "파일 삭제" })) return;
     setBusy("delete"); setError("");
     try {
       if (selectedFileEntries.length) await deleteCompanyFiles(selectedFileEntries.map((entry) => entry.path));

@@ -20,6 +20,7 @@ import {
 } from "./FormDocumentView";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { useLiveRefresh } from "../lib/liveSync";
+import { appDialog } from "../lib/appDialog";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
 function ListTodoIcon({ className }: { className?: string }) {
@@ -566,7 +567,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
   async function reviewInline(it: ResultItem, action: "approve" | "revise" | "discard") {
     if (action === "revise") { setReviseTarget(it); return; }
     // 폐기는 되돌릴 수 없다(다시 만들지 않고 업무 파일에도 안 들어간다) → 한 번 묻는다.
-    if (action === "discard" && !window.confirm(`'${it.prompt || it.kind}' 결과를 폐기할까요? 업무 파일에는 들어가지 않아요.`)) return;
+    if (action === "discard" && !await appDialog.confirm(`'${it.prompt || it.kind}' 결과를 폐기할까요? 업무 파일에는 들어가지 않아요.`, { title: "결과 폐기" })) return;
     await applyReview(it, action).catch(() => {});
   }
 
@@ -582,7 +583,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
     }
   }
 
-  useUiAction((action) => {
+  useUiAction(async (action) => {
     const id = actionString(action, "id");
     const query = id || actionString(action, "title");
     const item = items.find((candidate) => candidate.id === query || candidate.prompt === query);
@@ -593,11 +594,11 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
       const decision = actionString(action, "decision");
       if (decision !== "approve" && decision !== "revise") return;
       const label = decision === "approve" ? "검토 승인" : "재수정 요청";
-      if (!window.confirm(`'${item.prompt || item.kind}' 결과를 ${label}할까요?`)) return;
+      if (!await appDialog.confirm(`'${item.prompt || item.kind}' 결과를 ${label}할까요?`, { title: "결과 검토" })) return;
       const note = actionString(action, "note") || undefined;
       void applyReview(item, decision, note).catch(() => {});
     } else if (action.action === "result.cancel") {
-      if (window.confirm(`'${item.prompt || item.kind}' 작업 지시를 취소할까요?`)) void cancelInline(item);
+      if (await appDialog.confirm(`'${item.prompt || item.kind}' 작업 지시를 취소할까요?`, { title: "작업 취소" })) void cancelInline(item);
     }
   }, "results");
 

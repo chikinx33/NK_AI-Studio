@@ -167,7 +167,7 @@
   });
   disconnect.addEventListener('click', async function () {
     if (busy || user() !== originalUser) return;
-    if (!confirm(text('현재 계정의 ChatGPT 이미지 연결을 해제할까요?', 'Disconnect ChatGPT images for the current account?'))) return;
+    if (!(await NK.ui.dialog.confirm(text('현재 계정의 ChatGPT 이미지 연결을 해제할까요?', 'Disconnect ChatGPT images for the current account?'), { title: text('연결 해제', 'Disconnect') }))) return;
     busy = true;
     try { await NK.api.codexImageRequest({ operation: 'disconnect' }); }
     catch (error) { status.textContent = error.message; }

@@ -201,7 +201,7 @@ test("보고의 산출물을 폐기할 수 있다", async () => {
   assert.match(api, /"approve" \| "revise" \| "discard"/);
   assert.match(api, /action === "discard" \? "discarded"/);
   assert.match(results, /discarded: \{ t: "폐기됨"/);
-  assert.match(results, /action === "discard" && !window\.confirm/);
+  assert.match(results, /action === "discard" && !await appDialog\.confirm/);
   assert.match(results, /reviewInline\(it, "discard"\)/);
   assert.match(results, /onDiscard/);
 });

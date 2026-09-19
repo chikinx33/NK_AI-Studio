@@ -389,14 +389,14 @@
 
   // 인앱 다이얼로그 래퍼. 네이티브 alert/confirm 은 브라우저 자동화 세션을 막고
   // (자동화 도구가 프롬프트에서 멈춘다) 테마와도 어긋나므로 core.js 의 NK.ui.dialog 를 쓴다.
-  // dialog 가 아직 없으면 네이티브로 폴백한다.
+  // dialog 가 아직 없더라도 네이티브 창으로 폴백하지 않는다.
   function snsAlert(message) {
     try {
       if (NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
         return NK.ui.dialog.alert(String(message == null ? '' : message), { title: t('title') || 'SNS' });
       }
     } catch (_) {}
-    alert(String(message == null ? '' : message));
+    console.error('[SNS] 공통 알림 모달을 찾지 못했습니다:', message);
     return Promise.resolve();
   }
 
@@ -405,20 +405,13 @@
     try {
       if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
         return Promise.resolve(NK.ui.dialog.confirm(msg, { title: t('disconnect') || 'Confirm' }))
-          .then(function (ok) {
-            if (typeof ok === 'boolean') return ok;
-            // 인앱 다이얼로그가 boolean 을 돌려주지 않은 경우(예: confirm 요청이 alert
-            // 모드로 그려짐, 오래된 core.js 캐시). 그대로 두면 사용자가 확인을 눌러도
-            // 아무 일도 일어나지 않으므로, 네이티브로 한 번 더 물어 진행을 막지 않는다.
-            console.error('[SNS] 인앱 confirm 이 boolean 을 반환하지 않음:', ok, '→ 네이티브 confirm 폴백');
-            return confirm(msg);
-          });
+          .then(function (ok) { return ok === true; });
       }
-      console.warn('[SNS] NK.ui.dialog.confirm 을 찾지 못함 → 네이티브 confirm 사용');
+      console.error('[SNS] NK.ui.dialog.confirm 을 찾지 못함');
     } catch (e) {
-      console.error('[SNS] confirm 처리 중 오류 → 네이티브 confirm 폴백:', e);
+      console.error('[SNS] confirm 처리 중 오류:', e);
     }
-    return Promise.resolve(confirm(msg));
+    return Promise.resolve(false);
   }
 
   function onAction(e) {

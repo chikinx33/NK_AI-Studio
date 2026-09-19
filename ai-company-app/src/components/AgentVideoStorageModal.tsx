@@ -6,6 +6,7 @@ import {
   type AgentVideoStorageItem,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
+import { appDialog } from "../lib/appDialog";
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -126,7 +127,7 @@ export default function AgentVideoStorageModal({
   }
 
   async function deleteSelected() {
-    if (!selectedItems.length || !window.confirm(`선택한 ${selectedItems.length}개 소스 파일을 저장소에서 삭제할까요?`)) return;
+    if (!selectedItems.length || !await appDialog.confirm(`선택한 ${selectedItems.length}개 소스 파일을 저장소에서 삭제할까요?`, { title: "소스 파일 삭제" })) return;
     setBusy("delete");
     setError("");
     try {

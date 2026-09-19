@@ -1305,7 +1305,13 @@
     var text = String(message || '').trim();
     var dlg = ensureConfirmDialog();
     if (!dlg || !dlg.root) {
-      if (window.confirm(text) && typeof onConfirm === 'function') onConfirm();
+      if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
+        NK.ui.dialog.confirm(text, { title: String(title || '확인') }).then(function (confirmed) {
+          if (confirmed && typeof onConfirm === 'function') onConfirm();
+        });
+      } else {
+        console.error('[post-production] 공통 확인 모달을 사용할 수 없습니다.');
+      }
       return;
     }
     if (dlg.titleEl) dlg.titleEl.textContent = String(title || '확인');
@@ -1531,11 +1537,11 @@
   // 프로덕션에서 저장된 상태로 타임라인 초기화.
   // 모든 postprod 편집(이동/리사이즈/삭제/분할/모션/오버레이)을 제거하고
   // buildTimelineModel이 raw scene 데이터로 재구성하도록 한다.
-  function resetToProductionState() {
+  async function resetToProductionState() {
     if (state.saveBusy) return;
     var msg = '타임라인을 프로덕션 저장 시점으로 초기화합니다.\n\n' +
       '이 작업은 모든 편집(이동·리사이즈·자르기·삭제·모션·오버레이)을 되돌립니다.\n계속할까요?';
-    if (typeof window !== 'undefined' && window.confirm && !window.confirm(msg)) return;
+    if (!(await NK.ui.dialog.confirm(msg, { title: '타임라인 초기화' }))) return;
 
     // 1) in-memory 세션 편집 초기화
     state.sessionEdits = {};

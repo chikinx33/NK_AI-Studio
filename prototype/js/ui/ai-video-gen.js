@@ -387,7 +387,7 @@
     reader.onload = function (ev) {
       var src = ev.target.result;
       var img = new Image();
-      img.onload = function () {
+      img.onload = async function () {
         var w = img.naturalWidth, h = img.naturalHeight;
         if (!w || !h) { cb(src); return; }
 
@@ -405,7 +405,7 @@
         var scale = targetScale(w, h);
         if (scale > UPSCALE_WARN_FACTOR) {
           // 너무 작은 원본을 크게 늘리면 화질이 무너진다 → 진행 여부를 묻는다.
-          if (!window.confirm(t('image_upscale_confirm').replace('%s', scale.toFixed(1)))) {
+          if (!(await NK.ui.dialog.confirm(t('image_upscale_confirm').replace('%s', scale.toFixed(1)), { title: t('upload_image') || '이미지 확대' }))) {
             cb('');
             return;
           }
@@ -1877,7 +1877,7 @@
 
     // Action buttons (play / download / delete)
     root.querySelectorAll('[data-action]').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
+      btn.addEventListener('click', async function (e) {
         e.stopPropagation();
         var action = btn.dataset.action;
         // 클릭하는 "그 순간" 최신 토큰으로 URL을 만든다 (저장된 URL은 만료돼 있을 수 있음).
@@ -1898,7 +1898,7 @@
         } else if (action === 'retry-result') {
           retryResult(btn.dataset.id);
         } else if (action === 'delete-result') {
-          if (!window.confirm(t('confirm_delete'))) return;
+          if (!(await NK.ui.dialog.confirm(t('confirm_delete'), { title: t('delete') || '삭제 확인' }))) return;
           btn.disabled = true;
           deleteResult(btn.dataset.id).then(function (ok) {
             if (!ok) window.alert(t('delete_failed'));
@@ -1907,7 +1907,7 @@
           var src = btn.getAttribute('data-src') || btn.getAttribute('src') || '';
           if (src) openImageModal(src);
         } else if (action === 'delete-server') {
-          if (!window.confirm(t('confirm_delete'))) return;
+          if (!(await NK.ui.dialog.confirm(t('confirm_delete'), { title: t('delete') || '삭제 확인' }))) return;
           var name = btn.dataset.name;
           if (name) {
             btn.disabled = true;
@@ -1925,11 +1925,11 @@
     // Clear all
     var clearAllBtn = root.querySelector('#vgen-clear-all');
     if (clearAllBtn) {
-      clearAllBtn.addEventListener('click', function () {
-        if (!window.confirm(t('confirm_delete_all'))) return;
+      clearAllBtn.addEventListener('click', async function () {
+        if (!(await NK.ui.dialog.confirm(t('confirm_delete_all'), { title: t('clear_all') || '전체 삭제' }))) return;
         // 되돌릴 수 없는 전체 삭제라 2단계 확인을 둔다.
         var count = visibleResultCount();
-        var typed = window.prompt(t('confirm_delete_all_typed').replace('{n}', String(count)));
+        var typed = await NK.ui.dialog.prompt(t('confirm_delete_all_typed').replace('{n}', String(count)), { title: t('clear_all') || '전체 삭제 확인', defaultValue: '' });
         if (String(typed || '').trim() !== t('confirm_delete_all_word')) return;
         clearAllBtn.disabled = true;
         clearAllResults().then(function (failedCount) {

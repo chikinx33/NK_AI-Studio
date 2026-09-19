@@ -3609,7 +3609,7 @@
     var root = document.getElementById('ai-image-root');
     if (root && !root.dataset.bound) {
       root.dataset.bound = '1';
-      root.addEventListener('click', function (evt) {
+      root.addEventListener('click', async function (evt) {
         var btn = evt.target.closest('[data-action]');
         if (!btn) return;
         try {
@@ -3913,12 +3913,7 @@
         if (action === 'delete-result') {
           var deleteId = String(btn.getAttribute('data-id') || '');
           if (!deleteId) return;
-          try {
-            var ok = window.confirm(t('deleteConfirm'));
-            if (!ok) return;
-          } catch (_) {
-            // fall through if confirm not available
-          }
+          if (!(await NK.ui.dialog.confirm(t('deleteConfirm'), { title: t('delete') || '이미지 삭제' }))) return;
           var idx = state.results.findIndex(function (r) { return String(r.id || '') === deleteId; });
           if (idx >= 0) {
             var toDelete = state.results[idx];
@@ -3988,12 +3983,7 @@
         }
         if (action === 'delete-all-results') {
           if (!state.results.length) return;
-          try {
-            var okAll = window.confirm(t('deleteAllConfirm'));
-            if (!okAll) return;
-          } catch (_) {
-            // fall through if confirm not available
-          }
+          if (!(await NK.ui.dialog.confirm(t('deleteAllConfirm'), { title: t('deleteAll') || '전체 삭제' }))) return;
           clearAllHistoryResults(project);
           try {
             if (NK.api && typeof NK.api.aiImageSessionDelete === 'function') {

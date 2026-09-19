@@ -20,6 +20,7 @@ import { ACTOR_COLORS, PrevizViewport, loadThree, type FrameState, type ThreeKit
 import { exportAnimatic, webCodecsSupported } from "./exportVideo.ts";
 import PrevizTimeline, { type TimelineTrack } from "./PrevizTimeline.tsx";
 import { AUTO_STAGE_CHUNK, carryFromDoc, chunk, groupScenes, knownHeights, normalizePlan, priorForRequest, stageCuts, type StageCarry } from "./autoStage.ts";
+import { appDialog } from "../lib/appDialog";
 
 const JOB_DONE = ["approved", "error", "cancelled", "revise"];
 const PROP_DEFAULTS: Record<PropKind, Pick<PrevizProp, "w" | "h" | "d" | "color">> = {
@@ -432,7 +433,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
     const groups = scope === "all" ? scenes : scenes.filter((g) => g.some((c) => c.sceneId === source.sceneId));
     const targets = groups.flat();
     const overwrite = targets.filter((c) => doc.cuts[c.sceneId]).length;
-    if (overwrite && !window.confirm(fmt(T.autoOverwrite, { n: overwrite }))) return;
+    if (overwrite && !await appDialog.confirm(fmt(T.autoOverwrite, { n: overwrite }), { title: "자동 연출" })) return;
     setBusy("staging");
     setStagingScope(scope);
     setNotice("");

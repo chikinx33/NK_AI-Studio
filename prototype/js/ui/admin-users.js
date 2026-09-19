@@ -699,10 +699,10 @@
     });
   }
 
-  function deleteUser(id) {
+  async function deleteUser(id) {
     var u = state.users.find(function (x) { return String(x.id) === String(id); });
     if (!u) return;
-    if (!window.confirm(t('admin_confirm_delete') + ' (' + (u.name || u.id) + ')')) return;
+    if (!(await NK.ui.dialog.confirm(t('admin_confirm_delete') + ' (' + (u.name || u.id) + ')', { title: t('admin_delete') || '사용자 삭제' }))) return;
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_deleting'));
     NK.api.adminUserDelete(id)
       .then(function () {
@@ -718,10 +718,10 @@
       .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
   }
 
-  function restoreUser(id) {
+  async function restoreUser(id) {
     var u = state.users.find(function (x) { return String(x.id) === String(id); });
     if (!u || !u.deletionRequestedAt) return;
-    if (!window.confirm(t('admin_confirm_restore') + ' (' + (u.name || u.id) + ')')) return;
+    if (!(await NK.ui.dialog.confirm(t('admin_confirm_restore') + ' (' + (u.name || u.id) + ')', { title: t('admin_restore') || '사용자 복구' }))) return;
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_restoring'));
     NK.api.adminUserRestore(id)
       .then(function () {

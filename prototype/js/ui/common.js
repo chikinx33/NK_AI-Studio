@@ -8,12 +8,6 @@
     var localeObserver = null;
     var localeApplying = false;
     var originalTextNodeMap = (typeof WeakMap === 'function') ? new WeakMap() : null;
-    var nativeAlert = (typeof window !== 'undefined' && typeof window.alert === 'function')
-        ? window.alert.bind(window)
-        : null;
-    var nativeConfirm = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-        ? window.confirm.bind(window)
-        : null;
 
     // SNS 설정과 성과 분석에서 함께 쓰는 공식 플랫폼 아이콘 원본입니다.
     // 화면별 약자나 별도 SVG가 생기지 않도록 이 함수만 공개합니다.
@@ -1138,16 +1132,13 @@
 
     function setupDialogLocalization() {
         if (typeof window === 'undefined' || window.__nkDialogLocaleWrapped) return;
-        if (nativeAlert) {
-            window.alert = function (message) {
-                return nativeAlert(common.translateText(message, getRuntimeLang()));
-            };
-        }
-        if (nativeConfirm) {
-            window.confirm = function (message) {
-                return nativeConfirm(common.translateText(message, getRuntimeLang()));
-            };
-        }
+        window.alert = function (message) {
+            var translated = common.translateText(message, getRuntimeLang());
+            if (NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
+                return NK.ui.dialog.alert(translated, { title: common.translateText('알림', getRuntimeLang()) });
+            }
+            console.error('[common] 공통 알림 모달을 사용할 수 없습니다:', translated);
+        };
         window.__nkDialogLocaleWrapped = true;
     }
 

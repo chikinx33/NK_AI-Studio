@@ -262,8 +262,7 @@
         return;
       }
     } catch (_) { }
-    try { window.prompt(title + '\n아래 내용을 복사하세요:', msg); return; } catch (_) { }
-    alert(msg);
+    console.error('[pipeline-media] 공통 모달을 찾지 못해 화면 알림을 생략합니다:', msg);
   }
 
   media.pickValidAspectRatio = pickValidAspectRatio;

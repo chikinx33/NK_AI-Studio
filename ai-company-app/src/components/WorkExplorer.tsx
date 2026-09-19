@@ -21,6 +21,7 @@ import { GeneratedFilePreview } from "./ChatFileAttachments";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFileExplorer, { workFilesPath } from "./CompanyFileExplorer";
+import { appDialog } from "../lib/appDialog";
 
 type ViewMode = "cards" | "list";
 type SearchScope = "title" | "content" | "all";
@@ -342,7 +343,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   async function removeDateFolder(dateKey: string, confirmed = false) {
     const works = items.filter((item) => koreaDate(item.created_at) === dateKey);
     const label = folderTitles.get(dateKey) || dateKey;
-    if (!confirmed && !window.confirm(`'${label}' 폴더의 업무 ${works.length}개와 보관된 소스를 모두 삭제할까요?`)) return;
+    if (!confirmed && !await appDialog.confirm(`'${label}' 폴더의 업무 ${works.length}개와 보관된 소스를 모두 삭제할까요?`, { title: "업무 폴더 삭제" })) return;
     setFolderMenu(""); setBusy("delete-folder"); setError("");
     try {
       await inChunks(works.map((work) => work.id), 100, (chunk) => deleteCompanyWorkItems(chunk));
@@ -374,7 +375,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   }
 
   async function removeWork(work: CompanyWorkItem) {
-    if (!window.confirm(`'${work.title}' 업무와 보관된 소스를 모두 삭제할까요?`)) return;
+    if (!await appDialog.confirm(`'${work.title}' 업무와 보관된 소스를 모두 삭제할까요?`, { title: "업무 삭제" })) return;
     setBusy("delete-work"); setError("");
     try {
       await deleteCompanyWorkItems([work.id]);
@@ -400,7 +401,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
 
   async function removeSources() {
     const names = [...selectedSources];
-    if (!names.length || !window.confirm(`선택한 ${names.length}개 소스를 삭제할까요?`)) return;
+    if (!names.length || !await appDialog.confirm(`선택한 ${names.length}개 소스를 삭제할까요?`, { title: "소스 삭제" })) return;
     setBusy("delete-source");
     try {
       await inChunks(names, 100, (chunk) => deleteAgentVideoStorageFiles(chunk));

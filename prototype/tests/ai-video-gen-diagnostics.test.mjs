@@ -113,7 +113,7 @@ test('과도한 업스케일은 진행 여부를 묻는다', () => {
   const source = vgen();
   assert.match(source, /UPSCALE_WARN_FACTOR = 2/);
   assert.match(source, /if \(scale > UPSCALE_WARN_FACTOR\)/);
-  assert.match(source, /window\.confirm\(t\('image_upscale_confirm'\)/);
+  assert.match(source, /await NK\.ui\.dialog\.confirm\(t\('image_upscale_confirm'\)/);
 });
 
 test('이미지 검사는 함수 하나로 두고 슬롯이 그것만 호출한다', () => {

@@ -1451,11 +1451,11 @@
         const targetCount = Number(targetSeries.count || 0);
         const message = `시리즈 "${targetSeries.title}"의 에피소드 ${targetCount}개를 모두 삭제합니다.\n계속하시겠습니까?`;
         (async () => {
-          var ok = true;
+          var ok = false;
           if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
             ok = await NK.ui.dialog.confirm(message, { title: '시리즈 삭제 확인' });
           } else {
-            ok = confirm(message);
+            console.error('[dashboard] 공통 확인 모달을 사용할 수 없습니다.');
           }
           if (!ok) return;
           setDashLoading(true, '시리즈 삭제 중...');
@@ -1649,11 +1649,11 @@
         })();
       } else if (action === 'draft-delete') {
         (async () => {
-          var ok = true;
+          var ok = false;
           if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
             ok = await NK.ui.dialog.confirm('해당 에피소드를 삭제하시겠습니까?', { title: '삭제 확인' });
           } else {
-            ok = confirm('해당 에피소드를 삭제하시겠습니까?');
+            console.error('[dashboard] 공통 확인 모달을 사용할 수 없습니다.');
           }
           if (!ok) return;
           setDashLoading(true, '삭제 중...');

@@ -38,10 +38,10 @@ test("삭제·승인·외부 연결 UI action은 사람 확인 게이트를 유�
   const results = read("ai-company-app/src/components/Results.tsx");
   const integrations = read("ai-company-app/src/components/Integrations.tsx");
   const work = read("ai-company-app/src/components/WorkExplorer.tsx");
-  assert.match(approvals, /window\.confirm/);
-  assert.match(results, /window\.confirm/);
+  assert.match(approvals, /await appDialog\.confirm/);
+  assert.match(results, /await appDialog\.confirm/);
   assert.match(integrations, /Google 연결을 해제할까요/);
-  assert.match(work, /window\.confirm\(`'\$\{work\.title\}' 업무와 보관된 소스를 모두 삭제할까요/);
+  assert.match(work, /await appDialog\.confirm\(`'\$\{work\.title\}' 업무와 보관된 소스를 모두 삭제할까요/);
 });
 
 test("대화 로그 통계·보존·정리는 더 이상 성공만 반환하는 빈 구현이 아니다", () => {

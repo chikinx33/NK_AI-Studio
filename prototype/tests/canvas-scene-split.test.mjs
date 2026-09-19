@@ -53,7 +53,7 @@ test('★캔버스: 씬 바 아래로 떼어내면 가장 앞 컷부터 새 씬 
   assert.match(src, /aria-label="씬 나누기">\+<\/button>/);
   assert.match(src, /aria-label="이전 씬과 합치기">⇤<\/button>/);
   assert.match(src, /const canMerge = !!firstNode\?\.data\?\.sceneBreak;/);
-  assert.match(src, /window\.prompt\(`Scene \$\{l\.index\}을\(를\) 나눠요\. 몇 번 컷부터 새 씬으로 할까요\?/);
+  assert.match(src, /await appDialog\.prompt\(`Scene \$\{l\.index\}을\(를\) 나눠요\. 몇 번 컷부터 새 씬으로 할까요\?/);
   assert.match(src, /const AUTO_APPROVE_TYPES = \["scene_still", "scene_video", "scene_upsert", "scene_reorder", "set_sheet", "location_merge", "scene_split", "style_anchor_set", "set_master", "set_angle"\];/);
   assert.match(src, /if \(p\.type === "scene_split" && status === "approved"\) reorderResetRef\.current = true;/);
 });

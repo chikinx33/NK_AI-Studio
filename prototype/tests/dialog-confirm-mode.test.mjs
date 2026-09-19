@@ -27,16 +27,18 @@ test("dialog.confirm 은 boolean 이 아닌 값을 절대 반환하지 않는다
   assert.match(core, /return false;/);
 });
 
-test("confirm·prompt 는 취소 버튼을 display 와 hidden 양쪽으로 보장한다", () => {
+test("confirm·prompt 는 취소 버튼을 display 와 hidden 양쪽으로 보장하고 테마 모달 안에서 복구한다", () => {
   const core = read("prototype/core.js");
   assert.match(core, /var wantsCancel = \(mode === 'confirm' \|\| mode === 'prompt'\);/);
   // CSS 가 덮지 못하도록 !important 로 강제한다
   assert.match(core, /setProperty\('display', wantsCancel \? 'inline-flex' : 'none', 'important'\)/);
   assert.match(core, /refs\.cancel\.hidden = !wantsCancel;/);
-  // 그래도 안 보이면 그 확인창을 버리고 네이티브로 대체한다
+  // 그래도 안 보이면 브라우저 기본 창으로 빠지지 않고 테마 모달 안에서 복구한다
   assert.match(core, /wantsCancel && !isVisible\(refs\.cancel\)/);
-  assert.match(core, /네이티브로 대체/);
-  assert.match(core, /nativeConfirm\(msg\) : window\.confirm\(msg\)/);
+  assert.match(core, /confirm\/prompt 취소 버튼 표시를 복구한다/);
+  assert.match(core, /setProperty\('visibility', 'visible', 'important'\)/);
+  assert.doesNotMatch(core, /nativeConfirm/);
+  assert.doesNotMatch(core, /window\.confirm/);
 });
 
 test("가운데 큰 버튼 스타일(is-simple)은 alert 에만 붙는다", () => {
@@ -132,11 +134,12 @@ test("렌더된 모드와 요청 모드가 어긋나면 감지하고, 반환은 
   assert.match(core, /if \(mode === 'confirm'\) item\.resolve\(!!ok\);/);
 });
 
-test("sns-settings 는 confirm 이 boolean 을 못 주면 네이티브로 폴백한다", () => {
+test("sns-settings 는 공통 모달을 쓸 수 없어도 브라우저 기본 창으로 폴백하지 않는다", () => {
   const s = read("prototype/js/ui/sns-settings.js");
-  assert.match(s, /if \(typeof ok === 'boolean'\) return ok;/);
-  assert.match(s, /네이티브 confirm 폴백/);
-  assert.match(s, /return confirm\(msg\);/);
+  assert.match(s, /NK\.ui\.dialog\.confirm\(msg/);
+  assert.match(s, /return Promise\.resolve\(false\);/);
+  assert.doesNotMatch(s, /window\.confirm/);
+  assert.doesNotMatch(s, /return confirm\(msg\)/);
   // 눌렀는데 반응이 없을 때 추적할 로그
   assert.match(s, /연결 해제 확인 결과/);
   assert.match(s, /연결 해제 저장 결과/);
