@@ -17,7 +17,7 @@ test('★배경 바: 제목 "배경", 숫자 옆 sparkle 버튼 → 장소마다
   assert.doesNotMatch(src, /장소 · 배경/);
   assert.match(src, /function SparkleIcon\(\{ className \}/);
   assert.match(src, /M9\.937 15\.5A2 2 0 0 0 8\.5 14\.063/, 'lucide sparkle(다이아몬드 별) 경로');
-  assert.match(src, /\{l\.kind === "locations" && \([\s\S]*?<SparkleIcon className="h-4 w-4" \/>/);
+  assert.match(src, /\{!isCollapsed && l\.kind === "locations" && \([\s\S]*?<SparkleIcon className="h-4 w-4" \/>/);
   assert.match(src, /onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}\s*\n\s*onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '바 드래그·전체 선택과 겹치지 않게');
   assert.match(src, /const openSetSheetModal = \(\) => \{/);
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.topPlateUrl\);/, '정밀 모드 기본: 마스터 없는 세트');

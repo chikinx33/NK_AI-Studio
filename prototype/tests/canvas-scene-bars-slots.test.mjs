@@ -46,7 +46,7 @@ test('★세 종류의 바가 있고 색이 구분되며(씬 파랑, 캐릭터 �
 test('★카드 좌표는 바 + 슬롯 번호로만 정해지고, 드롭 시 같은 종류의 가장 가까운 칸에 스냅한다', () => {
   assert.match(src, /: \{ x: b\.x \+ i \* l\.cellW, y: b\.y \+ BAR_H \+ CARD_GAP \};/, '가로 레인(씬)');
   assert.match(src, /\? \{ x: b\.x, y: b\.y \+ BAR_H \+ CARD_GAP \+ i \* \(l\.cardH \+ CARD_GAP\) \}/, '세로 레인(캐릭터·장소)');
-  assert.match(src, /function slotFromPoint\(layout: CanvasLayout, lanes: Lane\[\], x: number, y: number, draggedId: string, kind: LaneKind \| null\)/);
+  assert.match(src, /function slotFromPoint\(layout: CanvasLayout, lanes: Lane\[\], x: number, y: number, draggedId: string, kind: LaneKind \| null, collapsed: ReadonlySet<string>/);
   assert.match(src, /if \(kind && l\.kind !== kind\) continue;/, '캐릭터 카드가 씬 줄에 들어가면 안 된다');
   assert.match(src, /function moveCutToSlot\(/);
   assert.match(src, /const next = moveCutToSlot\(layoutRef\.current, d\.id, slot\);/);
@@ -90,6 +90,24 @@ test('★프롬프트 바(호박색) 아래 공통 카드, 캐릭터·장소 바
   assert.match(src, /const promptBottom = 40 \+ BAR_H \+ CARD_GAP \+ heightOf\(heights, "common"\) \+ GROUP_GAP_Y;/);
   assert.match(src, /bars\[l\.key\] = \{ x: assetX, y: promptBottom \};\s*\n\s*assetX \+= l\.cardW \+ 40;/, '캐릭터·장소 바가 같은 높이에서 옆으로');
   assert.doesNotMatch(src, /nodes\.common = \{ x: 40, y: 40 \};/, '공통 카드는 자유 노드가 아니라 프롬프트 바에 딸린다');
+});
+
+test('★모든 바는 개별 접기·펼치기를 지원하고 펼칠 때 다른 바와 겹치지 않는다', () => {
+  assert.match(src, /const \[collapsedLanes, setCollapsedLanes\] = useState<Set<string>>\(new Set\(\)\);/);
+  assert.match(src, /canvasCollapsedLanes:\$\{projectId\}/, '프로젝트별 접기 상태 기억');
+  assert.match(src, /function laneHeight\(lane: Lane, collapsed: ReadonlySet<string>\)/);
+  assert.match(src, /function resolveLaneCollisions\(layout: CanvasLayout, lanes: Lane\[\], collapsed: ReadonlySet<string>, anchorKey: string\)/);
+  assert.match(src, /if \(ownerLaneKey && collapsedLanes\.has\(ownerLaneKey\)\) return null;/, '접힌 바의 카드는 렌더링하지 않음');
+  assert.match(src, /aria-expanded=\{!isCollapsed\}/);
+  assert.match(src, /\{isCollapsed \? "\+" : "−"\}/);
+  assert.match(src, /if \(expanding\) setLayout\(\(currentLayout\) => resolveLaneCollisions/, '펼친 바를 기준으로 충돌 자동 보정');
+});
+
+test('★공통 프롬프트는 카드에 전문을 표시하고 클릭해도 읽기 전용 모달을 열지 않는다', () => {
+  assert.match(src, /whitespace-pre-wrap break-words text-\[11px\] leading-relaxed text-gray-300/);
+  assert.doesNotMatch(src, /line-clamp-3 text-\[11px\][^\n]*n\.data\.text/);
+  assert.match(src, /nodeById\.get\(d\.id\)\?\.type === "common"[\s\S]{0,260}setSelectedId\(""\);[\s\S]{0,120}return;/);
+  assert.match(src, /\{selected && selected\.type !== "common" && \(/, '공통 프롬프트는 상세 모달 대상에서 제외');
 });
 
 test('★확장 버튼: 임베드(AI 시네마)면 셸 사이드바를 감추고, AI 기업이면 집중 모드', () => {

@@ -66,7 +66,7 @@ test('★컷 카드 상단 바 클릭 = 선택 토글(상세 안 열림), 그 �
 
 test('★빈 씬 바(컷 0)에는 − 버튼: 잔상 바를 걷어내고 씬 바를 서버 순서로 다시 묶는다', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /\{!storyboardView && l\.kind === "scene" && l\.memberIds\.length === 0 && \(/);
+  assert.match(src, /\{!isCollapsed && !storyboardView && l\.kind === "scene" && l\.memberIds\.length === 0 && \(/);
   assert.match(src, /setLayout\(\(cur\) => reconcileLayout\(\{ \.\.\.cur, groups: undefined \}, graph, defaultLayout\(graph, measuredH\)\)\);/);
   assert.match(src, /aria-label="빈 씬 바 지우기">−<\/button>/);
 });

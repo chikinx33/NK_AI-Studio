@@ -188,12 +188,55 @@ function lanesFromLayout(layout: CanvasLayout, graph: ProductionGraph | null, he
 }
 
 /** 바·카드의 실제 좌표. 카드는 바 위치 + 슬롯 번호로 정해진다. */
-function computePositions(layout: CanvasLayout, lanes: Lane[]): PosMap {
+function laneWidth(lane: Lane): number {
+  return lane.orient === "column" ? lane.cardW : Math.max(1, lane.memberIds.length) * lane.cellW - CARD_GAP;
+}
+
+function laneHeight(lane: Lane, collapsed: ReadonlySet<string>): number {
+  if (collapsed.has(lane.key) || lane.memberIds.length === 0) return BAR_H;
+  return lane.orient === "row"
+    ? BAR_H + CARD_GAP + lane.cardH
+    : BAR_H + CARD_GAP + lane.memberIds.length * lane.cardH + Math.max(0, lane.memberIds.length - 1) * CARD_GAP;
+}
+
+/** 펼친 바가 기존 바·카드를 덮으면 펼친 바는 고정하고 충돌하는 바부터 아래로 밀어 낸다. */
+function resolveLaneCollisions(layout: CanvasLayout, lanes: Lane[], collapsed: ReadonlySet<string>, anchorKey: string): CanvasLayout {
+  const bars = { ...layout.bars };
+  const anchor = lanes.find((lane) => lane.key === anchorKey);
+  const rest = lanes
+    .filter((lane) => lane.key !== anchorKey)
+    .sort((a, b) => (bars[a.key]?.y || 0) - (bars[b.key]?.y || 0) || (bars[a.key]?.x || 0) - (bars[b.key]?.x || 0));
+  const ordered = anchor ? [anchor, ...rest] : rest;
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => (
+    a.x < b.x + b.w + CARD_GAP && a.x + a.w + CARD_GAP > b.x
+    && a.y < b.y + b.h + CARD_GAP && a.y + a.h + CARD_GAP > b.y
+  );
+
+  ordered.forEach((lane) => {
+    const current = bars[lane.key];
+    if (!current) return;
+    const rect = { x: current.x, y: current.y, w: laneWidth(lane), h: laneHeight(lane, collapsed) };
+    let blockers = placed.filter((other) => overlaps(rect, other));
+    let guard = 0;
+    while (blockers.length && guard < placed.length + 2) {
+      rect.y = Math.ceil(Math.max(...blockers.map((other) => other.y + other.h + CARD_GAP)) / BAR_SNAP) * BAR_SNAP;
+      blockers = placed.filter((other) => overlaps(rect, other));
+      guard += 1;
+    }
+    bars[lane.key] = { x: rect.x, y: rect.y };
+    placed.push(rect);
+  });
+  return { ...layout, bars };
+}
+
+function computePositions(layout: CanvasLayout, lanes: Lane[], collapsed: ReadonlySet<string> = new Set()): PosMap {
   const pos: PosMap = { ...layout.nodes };
   lanes.forEach((l) => {
     const b = layout.bars[l.key];
     if (!b) return;
     pos[`lane:${l.key}`] = b;
+    if (collapsed.has(l.key)) return;
     l.memberIds.forEach((id, i) => {
       pos[id] = l.orient === "column"
         ? { x: b.x, y: b.y + BAR_H + CARD_GAP + i * (l.cardH + CARD_GAP) }
@@ -203,19 +246,20 @@ function computePositions(layout: CanvasLayout, lanes: Lane[]): PosMap {
   return pos;
 }
 
-function slotPosition(layout: CanvasLayout, lanes: Lane[], key: string, index: number): (Pos & { w: number; h: number }) | null {
+function slotPosition(layout: CanvasLayout, lanes: Lane[], key: string, index: number, collapsed: ReadonlySet<string> = new Set()): (Pos & { w: number; h: number }) | null {
   const b = layout.bars[key];
   const l = lanes.find((x) => x.key === key);
-  if (!b || !l) return null;
+  if (!b || !l || collapsed.has(key)) return null;
   if (l.orient === "column") return { x: b.x, y: b.y + BAR_H + CARD_GAP + index * (l.cardH + CARD_GAP), w: l.cardW, h: l.cardH };
   return { x: b.x + index * l.cellW, y: b.y + BAR_H + CARD_GAP, w: l.cardW, h: l.cardH };
 }
 
 /** 끌고 있는 카드(왼쪽 위 x,y)에 가장 가까운 같은 종류의 슬롯. 세로로 가장 가까운 줄을 고르고, 가로로 칸 번호를 반올림한다. */
-function slotFromPoint(layout: CanvasLayout, lanes: Lane[], x: number, y: number, draggedId: string, kind: LaneKind | null): { key: string; index: number } | null {
+function slotFromPoint(layout: CanvasLayout, lanes: Lane[], x: number, y: number, draggedId: string, kind: LaneKind | null, collapsed: ReadonlySet<string> = new Set()): { key: string; index: number } | null {
   let best: { key: string; index: number; dist: number } | null = null;
   for (const l of lanes) {
     if (kind && l.kind !== kind) continue;
+    if (collapsed.has(l.key)) continue;
     const b = layout.bars[l.key];
     if (!b) continue;
     const others = l.memberIds.filter((id) => id !== draggedId);
@@ -448,7 +492,14 @@ export default function ProductionCanvas({
   // 순서 변경 잡이 실행된 뒤의 재로드에서 칸 배치(groups)를 서버 순서로 다시 묶는다(바 위치는 유지).
   const reorderResetRef = useRef(false);
   const lanes = useMemo(() => lanesFromLayout(layout, graph, measuredH), [layout, graph, measuredH]);
-  const positions = useMemo(() => computePositions(layout, lanes), [layout, lanes]);
+  // 바마다 접기 상태를 따로 기억한다. 접힌 바는 카드와 연결선 종점을 모두 숨긴다.
+  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set());
+  const laneKeyByNode = useMemo(() => {
+    const map = new Map<string, string>();
+    lanes.forEach((lane) => lane.memberIds.forEach((id) => map.set(id, lane.key)));
+    return map;
+  }, [lanes]);
+  const positions = useMemo(() => computePositions(layout, lanes, collapsedLanes), [layout, lanes, collapsedLanes]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.8 });
   // 연결선 설정은 캔버스 자체가 소유한다. AI 회사·AI 시네마 임베드 중 어느 경로로 열어도 같은 버튼과 저장값을 쓴다.
   const [edgeStyle, setEdgeStyle] = useState<"curve" | "straight">(() => readUserStorage("canvasEdgeStyle") === "straight" ? "straight" : "curve");
@@ -520,6 +571,8 @@ export default function ProductionCanvas({
   layoutRef.current = layout;
   const lanesRef = useRef(lanes);
   lanesRef.current = lanes;
+  const collapsedLanesRef = useRef(collapsedLanes);
+  collapsedLanesRef.current = collapsedLanes;
   const dragGhostRef = useRef(dragGhost);
   dragGhostRef.current = dragGhost;
 
@@ -621,6 +674,13 @@ export default function ProductionCanvas({
   useEffect(() => {
     if (!projectId) return;
     writeUserStorage("canvasProjectId", projectId);
+    const savedCollapsed = readUserStorage(`canvasCollapsedLanes:${projectId}`);
+    try {
+      const keys = savedCollapsed ? JSON.parse(savedCollapsed) : [];
+      setCollapsedLanes(new Set(Array.isArray(keys) ? keys.map(String) : []));
+    } catch {
+      setCollapsedLanes(new Set());
+    }
     onProjectChange?.(projectId);
     setSelectedId("");
     setMulti(new Set());
@@ -628,6 +688,16 @@ export default function ProductionCanvas({
     setStoryboardRun(null);
     void load();
   }, [projectId, load, onProjectChange]);
+
+  const toggleLaneCollapsed = useCallback((laneKey: string) => {
+    const next = new Set(collapsedLanesRef.current);
+    const expanding = next.delete(laneKey);
+    if (!expanding) next.add(laneKey);
+    setCollapsedLanes(next);
+    // 펼쳐진 카드 영역과 다른 바가 겹치면 다른 바를 아래로 이동시켜 둘 다 보이게 한다.
+    if (expanding) setLayout((currentLayout) => resolveLaneCollisions(currentLayout, lanesRef.current, next, laneKey));
+    if (projectId) writeUserStorage(`canvasCollapsedLanes:${projectId}`, JSON.stringify([...next]));
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || (!Object.keys(layout.bars).length && !Object.keys(layout.nodes).length)) return;
@@ -1051,7 +1121,7 @@ export default function ProductionCanvas({
     } else if (d.kind === "cut") {
       if (!d.moved) return;
       setDragGhost({ id: d.id, x: nx, y: ny });
-      setDropSlot(slotFromPoint(layoutRef.current, lanesRef.current, nx, ny, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"])));
+      setDropSlot(slotFromPoint(layoutRef.current, lanesRef.current, nx, ny, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]), collapsedLanesRef.current));
     }
   };
   const onPointerUp = async (e: React.PointerEvent) => {
@@ -1059,7 +1129,7 @@ export default function ProductionCanvas({
     drag.current = null;
     if (!d) return;
     if (d.kind === "cut" && d.id && d.moved) {
-      const slot = slotFromPoint(layoutRef.current, lanesRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]));
+      const slot = slotFromPoint(layoutRef.current, lanesRef.current, dragGhostRef.current?.x ?? d.originX, dragGhostRef.current?.y ?? d.originY, d.id, laneKindForNode((nodeById.get(d.id)?.type || "common") as ProductionNode["type"]), collapsedLanesRef.current);
       setDragGhost(null);
       setDropSlot(null);
       const dropped = nodeById.get(d.id);
@@ -1097,6 +1167,12 @@ export default function ProductionCanvas({
       const g = lanesRef.current.find((x) => x.key === key);
       setMulti(new Set(g ? g.memberIds : []));
       setSelectedId("");
+      return;
+    }
+    if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved && nodeById.get(d.id)?.type === "common") {
+      // 공통 프롬프트는 카드 안에서 전문을 읽는다. 편집 기능이 없는 상세 모달은 열지 않는다.
+      setSelectedId("");
+      setMulti(new Set());
       return;
     }
     if ((d.kind === "node" || d.kind === "cut") && d.id && !d.moved && nodeById.get(d.id)?.type === "location") {
@@ -1158,6 +1234,11 @@ export default function ProductionCanvas({
     setLayout(defaultLayout(graph, measuredH));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measuredH]);
+  useEffect(() => {
+    if (!graph || layoutSourceRef.current !== "saved" || !Object.keys(measuredH).length) return;
+    // 저장된 자유 배치도 전문 표시로 카드가 높아졌다면 겹치는 다음 바만 아래로 보정한다.
+    setLayout((current) => resolveLaneCollisions(current, lanesFromLayout(current, graph, measuredH), collapsedLanesRef.current, ""));
+  }, [graph, measuredH]);
 
   const onWheel = (e: React.WheelEvent) => {
     const el = containerRef.current;
@@ -1201,16 +1282,16 @@ export default function ProductionCanvas({
     sceneLanes.forEach((l) => {
       const b = layout.bars[l.key];
       if (!b) return;
-      const width = Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
+      const width = laneWidth(l);
       minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
-      maxX = Math.max(maxX, b.x + width); maxY = Math.max(maxY, b.y + BAR_H + CARD_GAP + l.cardH);
+      maxX = Math.max(maxX, b.x + width); maxY = Math.max(maxY, b.y + laneHeight(l, collapsedLanes));
     });
     if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
     const pad = 28;
     const contentW = Math.max(1, maxX - minX); const contentH = Math.max(1, maxY - minY);
     const scale = Math.max(MIN_SCALE, Math.min(1, (el.clientWidth - pad * 2) / contentW, (el.clientHeight - pad * 2) / contentH));
     setView({ scale, x: pad - minX * scale, y: pad - minY * scale });
-  }, [lanes, layout.bars]);
+  }, [lanes, layout.bars, collapsedLanes]);
 
   const edgesToDraw = useMemo(() => (graph?.edges || []).map((e) => {
     const from = nodeById.get(e.from);
@@ -1389,7 +1470,8 @@ export default function ProductionCanvas({
             {lanes.filter((l) => !storyboardView || l.kind === "scene").map((l) => {
               const b = layout.bars[l.key];
               if (!b) return null;
-              const width = l.orient === "column" ? l.cardW : Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
+              const width = laneWidth(l);
+              const isCollapsed = collapsedLanes.has(l.key);
               const allSelected = l.memberIds.length > 0 && l.memberIds.every((id) => multi.has(id));
               const totalSec = l.kind === "scene" ? l.memberIds.reduce((acc, id) => acc + (Number(nodeById.get(id)?.data?.estSec) || 0), 0) : 0;
               const st = LANE_STYLE[l.kind];
@@ -1406,14 +1488,14 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
-                  {!storyboardView && l.kind === "scene" && l.memberIds.length === 0 && (
+                  {!isCollapsed && !storyboardView && l.kind === "scene" && l.memberIds.length === 0 && (
                     <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => {
                       e.stopPropagation();
                       // 빈 씬 바 = 카드를 옮긴 뒤 화면 배치에만 남은 잔상. 걷어내고 씬 바를 서버 순서로 다시 묶는다(바 위치는 유지).
                       setLayout((cur) => reconcileLayout({ ...cur, groups: undefined }, graph, defaultLayout(graph, measuredH)));
                     }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-400/60 text-red-200 transition hover:bg-red-500/30 hover:text-white" title="빈 씬 바 지우기 (씬 바를 서버 순서로 다시 묶어요)" aria-label="빈 씬 바 지우기">−</button>
                   )}
-                  {!storyboardView && l.kind === "scene" && (() => {
+                  {!isCollapsed && !storyboardView && l.kind === "scene" && (() => {
                     const firstNode = l.memberIds[0] ? nodeById.get(l.memberIds[0]) : null;
                     const canMerge = !!firstNode?.data?.sceneBreak;
                     const pickedHere = l.memberIds.filter((id) => multi.has(id));
@@ -1437,7 +1519,7 @@ export default function ProductionCanvas({
                       </>
                     );
                   })()}
-                  {l.kind === "locations" && (() => {
+                  {!isCollapsed && l.kind === "locations" && (() => {
                     const picked = locationNodes.filter((n) => multi.has(n.id));
                     if (picked.length < 2) return null;
                     const names = picked.map((n) => String(n.data?.name || n.label));
@@ -1450,7 +1532,7 @@ export default function ProductionCanvas({
                       </button>
                     );
                   })()}
-                  {l.kind === "locations" && (
+                  {!isCollapsed && l.kind === "locations" && (
                     <button
                       type="button"
                       onPointerDown={(e) => e.stopPropagation()}
@@ -1464,18 +1546,31 @@ export default function ProductionCanvas({
                       {setSheetActive ? <RefreshIcon className="h-4 w-4 animate-spin" /> : <SparkleIcon className="h-4 w-4" />}
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); toggleLaneCollapsed(l.key); }}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/25 bg-black/20 text-[15px] font-bold leading-none text-white transition hover:border-white/50 hover:bg-white/10"
+                    title={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
+                    aria-label={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
+                    aria-expanded={!isCollapsed}
+                  >
+                    {isCollapsed ? "+" : "−"}
+                  </button>
                 </div>
               );
             })}
             {/* 카드를 끌고 있을 때 놓일 칸 */}
             {!storyboardView && dropSlot && (() => {
-              const sp = slotPosition(layout, lanes, dropSlot.key, dropSlot.index);
+              const sp = slotPosition(layout, lanes, dropSlot.key, dropSlot.index, collapsedLanes);
               if (!sp) return null;
               return <div className="pointer-events-none absolute rounded-xl border-2 border-dashed border-emerald-500/70 bg-emerald-500/5" style={{ left: sp.x, top: sp.y, width: sp.w, height: sp.h }} />;
             })()}
 
             {(graph?.nodes || []).map((n) => {
               if (storyboardView && n.type !== "cut") return null;
+              const ownerLaneKey = laneKeyByNode.get(n.id);
+              if (ownerLaneKey && collapsedLanes.has(ownerLaneKey)) return null;
               const p = (dragGhost && dragGhost.id === n.id) ? { x: dragGhost.x, y: dragGhost.y } : positions[n.id];
               if (!p) return null;
               const isGhost = !!(dragGhost && dragGhost.id === n.id);
@@ -1496,7 +1591,7 @@ export default function ProductionCanvas({
                   {n.type === "common" && (
                     <div className="p-3">
                       <div className="mb-1 flex items-center gap-1.5"><Chip tone="emerald">공통 프롬프트</Chip>{n.data.aspectRatio ? <Chip>{String(n.data.aspectRatio)}</Chip> : null}</div>
-                      <p className="line-clamp-3 text-[11px] leading-snug text-gray-300">{String(n.data.text || "") || <span className="text-gray-600">비어 있음 — 프리프로덕션에서 설정</span>}</p>
+                      <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-gray-300">{String(n.data.text || "") || <span className="text-gray-600">비어 있음 — 프리프로덕션에서 설정</span>}</p>
                     </div>
                   )}
                   {n.type === "location" && (
@@ -1885,7 +1980,7 @@ export default function ProductionCanvas({
         </div>
 
         {/* 노드 상세 모달 — 우측에 붙이지 않고 가운데 4:3 카드로, 뒤 캔버스는 흐리게 */}
-        {selected && (
+        {selected && selected.type !== "common" && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onPointerDown={() => setSelectedId("")}>
           <aside className="flex aspect-[4/3] max-h-full w-[min(1100px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-[#0c1119] text-[12px] text-gray-300 shadow-2xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
             {selected.type === "cut" && draft && (
@@ -1989,13 +2084,6 @@ export default function ProductionCanvas({
                   </div>
                 </div>
               </>
-            )}
-            {selected.type === "common" && (
-              <div className="p-4">
-                <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-white">공통 프롬프트</h3><button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button></div>
-                <pre className="whitespace-pre-wrap rounded border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-300">{String(selected.data.text || "") || "비어 있음"}</pre>
-                <p className="mt-2 text-[10px] text-gray-500">프로젝트 공통 프롬프트는 스튜디오 프리프로덕션에서 편집해요. 컷별 예외는 컷 노드의 '공통 프롬프트 오버라이드'로 두세요.</p>
-              </div>
             )}
             {selected.type === "location" && (() => {
               const sheet = selected.data.setSheet as { url?: string; resolution?: string; createdAt?: string; diag?: { provider?: string; model?: string; geminiEndpoint?: string; geminiLocationFallback?: string; referenceCount?: number; styleSource?: string; hubContextUsed?: boolean; requestedResolution?: string; fallback?: string; promptHead?: string } | null; panels?: Array<{ index: number; ref: string; angleLabel: string; status: string; url?: string }> } | null;
