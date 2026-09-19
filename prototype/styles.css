@@ -3108,6 +3108,175 @@ textarea::-webkit-scrollbar-corner {
   gap: 8px;
   margin-top: 14px;
 }
+
+/* 스토리보드 제작: 기본 회색 폼 대신 캔버스의 남색·보라·주황 테마를 사용한다. */
+#sb-sheet-modal .sb-modal {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(124, 58, 237, 0.12), transparent 34%),
+    linear-gradient(180deg, #0d1530 0%, #091122 100%);
+  border-color: #304574;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(99, 102, 241, 0.08) inset;
+}
+
+#sb-sheet-modal .sb-guide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 2px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 139, 196, 0.26);
+  border-radius: 12px;
+  background: rgba(9, 18, 39, 0.72);
+  color: #b9c6e8;
+  font-size: 11px;
+}
+
+#sb-sheet-modal .sb-guide strong {
+  margin-right: 3px;
+  color: #f2f5ff;
+}
+
+#sb-sheet-modal .sb-guide span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#sb-sheet-modal .sb-guide span:not(:last-child)::after {
+  content: '›';
+  margin-left: 3px;
+  color: #66739b;
+}
+
+#sb-sheet-modal .sb-guide b {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.24);
+  color: #cbb8ff;
+  font-size: 10px;
+}
+
+#sb-sheet-modal .sb-toolbar {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(250px, 1.5fr) minmax(132px, 0.65fr);
+  gap: 10px;
+  align-items: start;
+}
+
+#sb-sheet-modal .sb-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: #e7edff;
+  font-size: 11px;
+}
+
+#sb-sheet-modal .sb-field-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #dce5ff;
+}
+
+#sb-sheet-modal .sb-field small,
+#sb-sheet-modal .sb-generate-help {
+  color: #8290b5;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+#sb-sheet-modal .sb-field select,
+#sb-sheet-modal .sb-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  color: #f3f6ff;
+  background: linear-gradient(180deg, #151f3a 0%, #10182e 100%);
+  border: 1px solid #3a4d79;
+  border-radius: 10px;
+  outline: none;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 22px rgba(0, 0, 0, 0.14);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+#sb-sheet-modal .sb-field select {
+  min-height: 38px;
+  padding: 8px 34px 8px 11px;
+  color-scheme: dark;
+}
+
+#sb-sheet-modal .sb-field select option {
+  color: #f3f6ff;
+  background: #111a31;
+}
+
+#sb-sheet-modal .sb-field textarea {
+  min-height: 112px;
+  padding: 11px 12px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#sb-sheet-modal .sb-field select:hover,
+#sb-sheet-modal .sb-field textarea:hover {
+  border-color: #6075aa;
+  background: linear-gradient(180deg, #192542 0%, #121c35 100%);
+}
+
+#sb-sheet-modal .sb-field select:focus,
+#sb-sheet-modal .sb-field textarea:focus {
+  border-color: #ff8a1f;
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+#sb-sheet-modal .sb-cut-summary {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 8px 0 0;
+  padding: 4px 9px;
+  border: 1px solid rgba(124, 58, 237, 0.34);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  color: #c8b9f4;
+  font-size: 10px;
+}
+
+#sb-sheet-modal .sb-prompt-field {
+  margin-top: 10px;
+}
+
+#sb-sheet-modal .sb-generate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#sb-sheet-modal .sb-generate-help {
+  flex: 1 1 auto;
+  padding-right: 10px;
+}
+
+#sb-sheet-modal .sb-generate-row .btn-primary,
+#sb-sheet-modal .sb-generate-row .btn-secondary {
+  min-width: 128px;
+}
+
+@media (max-width: 760px) {
+  #sb-sheet-modal .sb-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  #sb-sheet-modal .sb-generate-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 .scenario-diag-titlebar {
   display: flex;
   align-items: center;

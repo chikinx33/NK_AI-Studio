@@ -190,8 +190,9 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.match(svc, /helpers\.resolveCharacterReferences\(st, text, projectId\)/);
 });
 
-test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승인 콘티 일괄 스틸 · 패널 배지 · stale 표시', () => {
+test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승인 콘티 일괄 스틸 · 패널 배지', () => {
   const uiSrc = read('prototype/ui/pipeline-storyboard-sheet.js');
+  const styles = read('prototype/styles.css');
   const pipeline = read('prototype/ui/pipeline.js');
   const html = read('prototype/scenes.html');
   assert.match(pipeline, /id="sb-sheet-btn"/);
@@ -208,7 +209,16 @@ test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승
   assert.match(uiSrc, /kind === 'still' \? T\(\)\.stillBadge : kind === 'bible' \? T\(\)\.bibleBadge : T\(\)\.contiBadge/);
   assert.match(uiSrc, /isCut && p\.status === 'approved' \?[\s\S]*sb-still/, '승인한 컷 패널에만 스틸컷 버튼');
   assert.match(uiSrc, /svc\.applyStillToScene\(ctx, r\.sceneIdx, r, \{ sheetId: r\.sheetId, panelIndex: r\.panelIndex \}\)/, '컷 데이터는 "스틸컷으로 쓰기"에서만 바뀐다');
-  assert.match(uiSrc, /svc\.isStale\(sh, s\.scenes\)/);
+  assert.doesNotMatch(uiSrc, /historyHtml|T\(\)\.history/, '이전 시트 기록 목록은 제작 모달에 남기지 않는다');
+  assert.match(uiSrc, /class="cpbm-box sb-modal"/);
+  assert.match(uiSrc, /class="sb-guide"/);
+  assert.match(uiSrc, /class="sb-toolbar"/);
+  for (const k of ['kindGuide', 'sheetGuide', 'resolutionGuide', 'promptGuide', 'generateGuide']) {
+    assert.match(uiSrc, new RegExp(`T\\(\\)\\.${k}`), `${k} 메뉴 안내가 표시된다`);
+  }
+  assert.doesNotMatch(uiSrc, /E[1235] ·/, '사용자에게 내부 단계 코드(E1/E2/E3/E5)를 노출하지 않는다');
+  assert.match(styles, /#sb-sheet-modal \.sb-field select,[\s\S]*#sb-sheet-modal \.sb-field textarea/);
+  assert.match(styles, /#sb-sheet-modal \.sb-field select:focus,[\s\S]*border-color: #ff8a1f/);
   // 부감 플레이트: 마스터가 0번 소스, 정면 참조를 섞지 않는다
   assert.match(uiSrc, /refs = \[Object\.assign\(\{\}, plateRef, \{ referenceId: 1 \}\)\];/);
   assert.match(uiSrc, /var vid = 'angle-' \+ m\.angle;/);

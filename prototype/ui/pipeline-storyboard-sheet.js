@@ -10,23 +10,39 @@
       openBtn: '스토리보드 제작',
       openTitle: '씬 경계를 지키며 여러 컷을 한 장의 콘티로 생성하고 승인 후 정식 스틸컷을 만들어요',
       title: '스토리보드 제작',
-      help: '각 씬은 별도 시트로 생성되며 다른 씬의 컷은 한 장에 섞이지 않아요. 부감 마스터를 공간 기준으로 고정하고, 승인한 콘티 패널과 캐릭터·배경 시트를 함께 참조해 정식 스틸컷을 만들어요.',
-      kind: '작업',
-      kindChars: 'E1 · 바이블 캐릭터 시트 (3×3)',
-      kindSet: 'E2 · 바이블 세트 시트 (2×2, 앵글 4종)',
-      kindBoard: 'E3 · 스토리보드 시트 (씬별 컷 6~8)',
-      kindAngle: 'E5 · 부감 플레이트 (편집 모드)',
-      set: '세트',
-      sheet: '시트',
+      help: '한 씬씩 콘티를 만들고, 패널 승인 후 정식 스틸컷으로 전환합니다.',
+      guideTitle: '사용 순서',
+      guideStep1: '만들 항목 선택',
+      guideStep2: '대상·해상도 선택',
+      guideStep3: '프롬프트 확인',
+      guideStep4: '생성 후 패널 승인',
+      kind: '만들 항목',
+      kindGuide: '필요한 시트 종류를 선택하세요.',
+      kindChars: '캐릭터 시트 · 3×3',
+      kindSet: '배경 시트 · 2×2',
+      kindBoard: '스토리보드 시트 · 씬별 6~8컷',
+      kindAngle: '앵글 플레이트',
+      kindHelpBoard: '선택한 씬의 여러 컷을 한 장의 격자 콘티로 만듭니다.',
+      kindHelpCharacters: '등록 캐릭터의 정면·측면 등 일관성 기준 이미지를 만듭니다.',
+      kindHelpSet: '배경 세트의 정면·후면·부감·로우 앵글 기준 이미지를 만듭니다.',
+      kindHelpAngle: '기존 부감 마스터를 선택한 카메라 방향으로 변형합니다.',
+      set: '배경 세트',
+      setGuide: '기준으로 사용할 배경을 선택하세요.',
+      sheet: '대상 씬',
+      sheetGuide: '한 장에 묶을 씬과 컷을 선택하세요. 다른 씬은 섞이지 않습니다.',
       resolution: '해상도',
+      resolutionGuide: '요청 해상도입니다. 실제 적용값은 생성 결과에 표시됩니다.',
       angle: '앵글',
+      angleGuide: '부감 마스터에서 파생할 카메라 방향을 선택하세요.',
       angleHigh: '하이앵글(부감)',
       angleLow: '로우앵글',
       angleTop: '수직 부감',
       angleBack: '후면(리버스)',
-      prompt: '프롬프트(서버 조립 · 수정 가능)',
-      generate: '생성',
+      prompt: '생성 프롬프트',
+      promptGuide: '자동으로 조립됩니다. 꼭 필요한 내용만 직접 수정하세요.',
+      generate: '현재 시트 생성',
       generateAll: '전체 시트 생성',
+      generateGuide: '현재 시트 생성은 선택한 1장만, 전체 시트 생성은 모든 씬을 순서대로 만듭니다.',
       approveAll: '현재 시트 모두 승인',
       approvedBatch: '승인 콘티 일괄 스틸 생성',
       revise: '부분 수정',
@@ -49,9 +65,6 @@
       toStill: '스틸컷 만들기',
       applyStill: '이 컷의 스틸컷으로 쓰기',
       stillDone: '스틸컷을 컷에 적용했어요.',
-      history: '지금까지 만든 시트',
-      stale: '순서 바뀜',
-      fresh: '최신',
       cutLabel: '컷',
       setPanel: '세트',
       overlapPanel: '겹침',
@@ -64,7 +77,7 @@
       contiBadge: '콘티',
       stillBadge: '스틸컷',
       bibleBadge: '바이블',
-      saveNote: '시트와 콘티 패널은 프로젝트에 저장돼요(payload.storyboardSheets).',
+      saveNote: '생성 결과는 프로젝트에 자동 저장됩니다.',
       anglePlateDone: '앵글 플레이트를 이 세트의 변형으로 저장했어요.',
       cutsInSheet: '이 시트의 컷'
     },
@@ -72,23 +85,39 @@
       openBtn: 'Storyboard production',
       openTitle: 'Generate scene-bounded storyboard sheets, approve panels, then render final stills',
       title: 'Storyboard production',
-      help: 'Each scene is generated on separate sheets, so cuts from different scenes never mix. The top-down master is locked as spatial truth, then approved panels are combined with character and set sheets to render final stills.',
-      kind: 'Workflow',
-      kindChars: 'E1 · Bible character sheet (3×3)',
-      kindSet: 'E2 · Bible set sheet (2×2, 4 angles)',
-      kindBoard: 'E3 · Storyboard sheet (6–8 cuts per scene)',
-      kindAngle: 'E5 · High-angle plate (edit mode)',
-      set: 'Set',
-      sheet: 'Sheet',
+      help: 'Build one scene at a time, approve its panels, then promote them to final stills.',
+      guideTitle: 'How to use',
+      guideStep1: 'Choose an item',
+      guideStep2: 'Choose target and size',
+      guideStep3: 'Review the prompt',
+      guideStep4: 'Generate and approve',
+      kind: 'Create',
+      kindGuide: 'Choose the type of sheet you need.',
+      kindChars: 'Character sheet · 3×3',
+      kindSet: 'Set sheet · 2×2',
+      kindBoard: 'Storyboard sheet · 6–8 cuts per scene',
+      kindAngle: 'Angle plate',
+      kindHelpBoard: 'Combines the selected scene’s cuts into one storyboard grid.',
+      kindHelpCharacters: 'Creates consistent front and side reference views for registered characters.',
+      kindHelpSet: 'Creates front, rear, high, and low-angle references for the set.',
+      kindHelpAngle: 'Derives the selected camera angle from the existing top-down master.',
+      set: 'Background set',
+      setGuide: 'Choose the background to use as the reference.',
+      sheet: 'Target scene',
+      sheetGuide: 'Choose the scene and cuts for this sheet. Different scenes are never mixed.',
       resolution: 'Resolution',
+      resolutionGuide: 'Requested size. The actual applied size appears with the result.',
       angle: 'Angle',
+      angleGuide: 'Choose the camera direction derived from the top-down master.',
       angleHigh: 'High angle',
       angleLow: 'Low angle',
       angleTop: 'Top-down',
       angleBack: 'Reverse',
-      prompt: 'Prompt (assembled by the server · editable)',
-      generate: 'Generate',
+      prompt: 'Generation prompt',
+      promptGuide: 'Built automatically. Edit only what you need to change.',
+      generate: 'Generate this sheet',
       generateAll: 'Generate all sheets',
+      generateGuide: 'Generate this sheet makes one selected sheet; Generate all sheets processes every scene in order.',
       approveAll: 'Approve current sheet',
       approvedBatch: 'Render approved stills',
       revise: 'Revise panel',
@@ -111,9 +140,6 @@
       toStill: 'Make still',
       applyStill: 'Use as this cut’s still',
       stillDone: 'Applied the still to the cut.',
-      history: 'Sheets made so far',
-      stale: 'Order changed',
-      fresh: 'Current',
       cutLabel: 'Cut',
       setPanel: 'Set',
       overlapPanel: 'Overlap',
@@ -126,7 +152,7 @@
       contiBadge: 'Conti',
       stillBadge: 'Still',
       bibleBadge: 'Bible',
-      saveNote: 'Sheets and conti panels are saved with the project (payload.storyboardSheets).',
+      saveNote: 'Generated results are saved with the project automatically.',
       anglePlateDone: 'Saved the angle plate as a variant of this set.',
       cutsInSheet: 'Cuts on this sheet'
     }
@@ -476,6 +502,7 @@
       var sheetOptions = (m.plan || []).map(function (x, i) { return '<option value="' + i + '"' + (i === m.sheetIdx ? ' selected' : '') + '>' + esc('Scene ' + (x.sceneNo || '?') + ' · ' + (x.setName || '—') + ' · ' + T().cutLabel + ' ' + x.cutIds.join(', ')) + '</option>'; }).join('');
       var kindOptions = [['board', T().kindBoard], ['bible-characters', T().kindChars], ['bible-set', T().kindSet], ['angle-plate', T().kindAngle]].map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === m.kind ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join('');
       var angleOptions = [['high', T().angleHigh], ['low', T().angleLow], ['top', T().angleTop], ['back', T().angleBack]].map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === m.angle ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join('');
+      var kindHelp = m.kind === 'board' ? T().kindHelpBoard : m.kind === 'bible-characters' ? T().kindHelpCharacters : m.kind === 'bible-set' ? T().kindHelpSet : T().kindHelpAngle;
 
       var resultHtml = '';
       if (m.result) {
@@ -507,37 +534,27 @@
           (panelsHtml ? '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">' + esc(T().panels) + '</div><div style="display:flex;flex-wrap:wrap;gap:6px;">' + panelsHtml + '</div>' : '');
       }
 
-      var history = svc.listSheets(s);
-      var historyHtml = history.length ? history.slice().reverse().map(function (sh) {
-        var stale = sh.kind === 'board' && svc.isStale(sh, s.scenes);
-        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--line,#222);font-size:11px;">' +
-          '<img src="' + esc(svc.proxyUrl(sh.objectName)) + '" style="width:64px;aspect-ratio:16/9;object-fit:cover;border-radius:4px;">' +
-          '<span style="flex:1;">' + esc((sh.kind === 'board' ? T().kindBoard : sh.kind === 'bible-characters' ? T().kindChars : T().kindSet).split(' · ')[0] + (sh.kind === 'board' && sh.sceneNo ? ' · Scene ' + sh.sceneNo : '') + ' · ' + (sh.setName || '') + (sh.cutIds && sh.cutIds.length ? ' · ' + T().cutLabel + ' ' + sh.cutIds.join(', ') : '') + ' · ' + (sh.resolution || '')) + '</span>' +
-          '<span style="font-weight:800;color:' + (stale ? '#f59e0b' : '#10b981') + ';">' + esc(stale ? T().stale : T().fresh) + '</span>' +
-        '</div>';
-      }).join('') : '';
-
       overlay.innerHTML =
-        '<div class="cpbm-box" style="max-width:960px;width:94vw;max-height:90vh;display:flex;flex-direction:column;">' +
+        '<div class="cpbm-box sb-modal" style="max-width:960px;width:94vw;max-height:90vh;display:flex;flex-direction:column;">' +
           '<h3 class="cpbm-title">' + esc(T().title) + '</h3>' +
           '<p class="cpbm-help">' + esc(T().help) + '</p>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
-            '<label style="font-size:11px;">' + esc(T().kind) + '<br><select id="sb-kind">' + kindOptions + '</select></label>' +
-            (m.kind === 'board' ? '' : '<label style="font-size:11px;">' + esc(T().set) + '<br><select id="sb-set">' + (setOptions || '<option value="0">—</option>') + '</select></label>') +
-            (m.kind === 'board' ? '<label style="font-size:11px;">' + esc(T().sheet) + '<br><select id="sb-sheet">' + (sheetOptions || '<option value="0">—</option>') + '</select></label>' : '') +
-            (m.kind === 'angle-plate' ? '<label style="font-size:11px;">' + esc(T().angle) + '<br><select id="sb-angle">' + angleOptions + '</select></label>' : '') +
-            '<label style="font-size:11px;">' + esc(T().resolution) + '<br><select id="sb-res"><option value="2K"' + (m.resolution === '2K' ? ' selected' : '') + '>2K</option><option value="4K"' + (m.resolution === '4K' ? ' selected' : '') + '>4K</option></select></label>' +
-            '<button type="button" class="btn-primary" id="sb-generate" ' + (m.busy || !m.prompt ? 'disabled' : '') + ' style="min-width:96px;">' + esc(m.busy ? (m.status || T().generating) : T().generate) + '</button>' +
-            (m.kind === 'board' ? '<button type="button" class="btn-secondary" id="sb-generate-all" ' + (m.busy || m.batchBusy || !(m.plan || []).length ? 'disabled' : '') + ' style="min-width:120px;">' + esc(m.batchBusy ? (T().generating + ' ' + m.batchDone + '/' + m.batchTotal) : T().generateAll) + '</button>' : '') +
+          '<div class="sb-guide"><strong>' + esc(T().guideTitle) + '</strong><span><b>1</b>' + esc(T().guideStep1) + '</span><span><b>2</b>' + esc(T().guideStep2) + '</span><span><b>3</b>' + esc(T().guideStep3) + '</span><span><b>4</b>' + esc(T().guideStep4) + '</span></div>' +
+          '<div class="sb-toolbar">' +
+            '<label class="sb-field sb-field-kind"><span class="sb-field-label">' + esc(T().kind) + '</span><select id="sb-kind">' + kindOptions + '</select><small>' + esc(T().kindGuide + ' ' + kindHelp) + '</small></label>' +
+            (m.kind === 'board' ? '' : '<label class="sb-field"><span class="sb-field-label">' + esc(T().set) + '</span><select id="sb-set">' + (setOptions || '<option value="0">—</option>') + '</select><small>' + esc(T().setGuide) + '</small></label>') +
+            (m.kind === 'board' ? '<label class="sb-field sb-field-target"><span class="sb-field-label">' + esc(T().sheet) + '</span><select id="sb-sheet">' + (sheetOptions || '<option value="0">—</option>') + '</select><small>' + esc(T().sheetGuide) + '</small></label>' : '') +
+            (m.kind === 'angle-plate' ? '<label class="sb-field"><span class="sb-field-label">' + esc(T().angle) + '</span><select id="sb-angle">' + angleOptions + '</select><small>' + esc(T().angleGuide) + '</small></label>' : '') +
+            '<label class="sb-field sb-field-resolution"><span class="sb-field-label">' + esc(T().resolution) + '</span><select id="sb-res"><option value="2K"' + (m.resolution === '2K' ? ' selected' : '') + '>2K</option><option value="4K"' + (m.resolution === '4K' ? ' selected' : '') + '>4K</option></select><small>' + esc(T().resolutionGuide) + '</small></label>' +
           '</div>' +
-          (m.kind === 'board' && set ? '<p class="muted" style="font-size:11px;margin:4px 0 0;">' + esc(T().cutsInSheet + ': ' + ((m.planned && m.planned.target) ? m.planned.target.cutIds.join(', ') : scenesHere.map(function (x) { return x.id; }).join(', '))) + '</p>' : '') +
-          '<label style="font-size:11px;margin-top:8px;display:block;">' + esc(T().prompt) + '<br><textarea id="sb-prompt" rows="6" style="width:100%;font-size:11px;font-family:monospace;">' + esc(m.prompt) + '</textarea></label>' +
+          (m.kind === 'board' && set ? '<p class="sb-cut-summary">' + esc(T().cutsInSheet + ': ' + ((m.planned && m.planned.target) ? m.planned.target.cutIds.join(', ') : scenesHere.map(function (x) { return x.id; }).join(', '))) + '</p>' : '') +
+          '<label class="sb-field sb-prompt-field"><span class="sb-field-label">' + esc(T().prompt) + '</span><textarea id="sb-prompt" rows="6">' + esc(m.prompt) + '</textarea><small>' + esc(T().promptGuide) + '</small></label>' +
+          '<div class="sb-generate-row"><div class="sb-generate-help">' + esc(T().generateGuide) + '</div><button type="button" class="btn-primary" id="sb-generate" ' + (m.busy || !m.prompt ? 'disabled' : '') + '>' + esc(m.busy ? (m.status || T().generating) : T().generate) + '</button>' +
+            (m.kind === 'board' ? '<button type="button" class="btn-secondary" id="sb-generate-all" ' + (m.busy || m.batchBusy || !(m.plan || []).length ? 'disabled' : '') + '>' + esc(m.batchBusy ? (T().generating + ' ' + m.batchDone + '/' + m.batchTotal) : T().generateAll) + '</button>' : '') + '</div>' +
           (m.error ? '<p style="color:#ef4444;font-size:12px;margin:6px 0 0;">' + esc(m.error) + '</p>' : '') +
           (m.notice ? '<p style="color:#10b981;font-size:12px;margin:6px 0 0;">' + esc(m.notice) + '</p>' : '') +
           '<div style="overflow-y:auto;flex:1;min-height:80px;">' +
             resultHtml +
             (m.result && m.kind === 'board' ? '<div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn-secondary" id="sb-approve-all">' + esc(T().approveAll) + '</button><button type="button" class="btn-primary" id="sb-still-batch" ' + (m.stillBatchBusy ? 'disabled' : '') + '>' + esc(m.stillBatchBusy ? (T().generating + ' ' + m.stillBatchDone + '/' + m.stillBatchTotal) : T().approvedBatch) + '</button></div>' : '') +
-            (historyHtml ? '<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">' + esc(T().history) + '</div>' + historyHtml : '') +
           '</div>' +
           '<p class="muted" style="font-size:11px;margin:6px 0 0;">' + esc(T().saveNote) + '</p>' +
           '<div class="cpbm-actions"><button type="button" class="btn-ghost" id="sb-close">' + esc(T().close) + '</button></div>' +
