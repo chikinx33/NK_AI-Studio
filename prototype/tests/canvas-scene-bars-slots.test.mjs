@@ -100,6 +100,7 @@ test('★모든 바는 개별 접기·펼치기를 지원하고 펼칠 때 다�
   assert.match(src, /if \(ownerLaneKey && collapsedLanes\.has\(ownerLaneKey\)\) return null;/, '접힌 바의 카드는 렌더링하지 않음');
   assert.match(src, /aria-expanded=\{!isCollapsed\}/);
   assert.match(src, /\{isCollapsed \? "\+" : "−"\}/);
+  assert.match(src, /aria-expanded=\{!isCollapsed\}[\s\S]{0,180}\{isCollapsed \? "\+" : "−"\}[\s\S]{0,180}<span className="text-\[12px\] font-bold text-white">\{l\.label\}<\/span>/, '접기·펼치기 버튼이 바 이름 왼쪽에 위치');
   assert.match(src, /if \(expanding\) setLayout\(\(currentLayout\) => resolveLaneCollisions/, '펼친 바를 기준으로 충돌 자동 보정');
 });
 

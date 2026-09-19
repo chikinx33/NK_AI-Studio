@@ -1483,6 +1483,17 @@ export default function ProductionCanvas({
                   onPointerDown={(e) => onPointerDown(e, `lane:${l.key}`)}
                   title={l.location || l.label}
                 >
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); toggleLaneCollapsed(l.key); }}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/25 bg-black/20 text-[15px] font-bold leading-none text-white transition hover:border-white/50 hover:bg-white/10"
+                    title={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
+                    aria-label={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
+                    aria-expanded={!isCollapsed}
+                  >
+                    {isCollapsed ? "+" : "−"}
+                  </button>
                   <span className="text-[12px] font-bold text-white">{l.label}</span>
                   {l.kind === "scene" && <span className={`min-w-0 flex-1 truncate text-[11px] ${st.text}`}>{l.location || "장소 미지정"}</span>}
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
@@ -1546,17 +1557,6 @@ export default function ProductionCanvas({
                       {setSheetActive ? <RefreshIcon className="h-4 w-4 animate-spin" /> : <SparkleIcon className="h-4 w-4" />}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); toggleLaneCollapsed(l.key); }}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/25 bg-black/20 text-[15px] font-bold leading-none text-white transition hover:border-white/50 hover:bg-white/10"
-                    title={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
-                    aria-label={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
-                    aria-expanded={!isCollapsed}
-                  >
-                    {isCollapsed ? "+" : "−"}
-                  </button>
                 </div>
               );
             })}
