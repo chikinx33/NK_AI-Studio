@@ -21,6 +21,7 @@ import { loadCanvasSettings, saveCanvasSettings, providerArg, resolveImageProvid
 import { approveItem, saveCanvasLayout } from "../lib/api";
 import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
+import CanvasFloatingDock from "./CanvasFloatingDock";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -1710,17 +1711,21 @@ export default function ProductionCanvas({
           {/* 일괄 생성 패널 — 왼쪽 아래 작업/승인 독 바로 위에 같은 폭으로 쌓는다. 에이전트 대화창과 겹치지 않는다. */}
           {agentOpen && projectId && (
             <div
-              className="absolute left-3 z-30 w-[400px] max-w-[calc(100%-24px)] overflow-hidden rounded-2xl border border-emerald-800/60 bg-[#0c1119]/95 shadow-2xl backdrop-blur transition-[bottom]"
+              className={`absolute left-3 z-30 transition-[bottom,width] ${batchDockOpen ? "w-[400px] max-w-[calc(100%-24px)]" : "w-fit"}`}
               style={{ bottom: pending.length ? (jobDockOpen ? 376 : 112) : 72 }}
               data-testid="batch-dock"
               onPointerDown={(e) => e.stopPropagation()}
               onWheel={(e) => e.stopPropagation()}
             >
-              <button type="button" onClick={() => setBatchDockOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-emerald-950/30" aria-expanded={batchDockOpen}>
-                <BotIcon className="h-4 w-4 text-emerald-400" /><span className="text-[12px] font-bold text-white">일괄 제작</span><span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">콘티 → 승인 → 스틸 → 영상</span><span className="text-[12px] text-gray-400">{batchDockOpen ? "▾" : "▴"}</span>
-              </button>
-              {batchDockOpen && (
-                <div className="border-t border-edge p-3">
+              <CanvasFloatingDock
+                open={batchDockOpen}
+                onToggle={() => setBatchDockOpen((v) => !v)}
+                icon={<BotIcon className="h-4 w-4 text-emerald-400" />}
+                title="일괄 제작"
+                subtitle="콘티 → 승인 → 스틸 → 영상"
+                tone="emerald"
+              >
+                <div className="p-3">
                   <div className="mb-3 rounded-lg border border-violet-800/60 bg-violet-950/20 p-2">
                     <div className="mb-1 text-[11px] font-bold text-violet-200">1. 씬별 스토리보드 생성·검토</div>
                     <p className="mb-2 text-[10px] leading-relaxed text-gray-400">부감 마스터를 공간 기준으로 사용하고 다른 씬의 컷은 한 시트에 섞지 않아요. 패널을 승인하거나 부분 수정한 뒤 정식 스틸을 만드세요.</p>
@@ -1737,7 +1742,7 @@ export default function ProductionCanvas({
                     onAttached={(job) => { if (job.approvalState?.status === "pending") { setAgentOpen(true); setBatchDockOpen(true); } }}
                   />
                 </div>
-              )}
+              </CanvasFloatingDock>
             </div>
           )}
           {storyboardOpen && projectId && (

@@ -5,6 +5,7 @@ import CollapsibleSection from "./CollapsibleSection";
 import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { useLiveRefresh } from "../lib/liveSync";
+import CanvasFloatingDock from "./CanvasFloatingDock";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -128,26 +129,20 @@ function ApprovalDock({
   }
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="pointer-events-none fixed bottom-3 left-3 z-40 w-[320px] max-w-[92vw]" data-testid="approval-dock">
-      <div className="pointer-events-auto relative rounded-2xl border border-amber-700/40 bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          title={open ? "승인 접기" : "승인 펼치기"}
-          className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-md border border-edge bg-[#151b25] text-[12px] leading-none text-gray-400 transition hover:text-white"
+    <div className={`pointer-events-none fixed bottom-3 left-3 z-40 transition-[width] ${open ? "w-[400px] max-w-[calc(100vw-24px)]" : "w-fit"}`} data-testid="approval-dock">
+      <div className="pointer-events-auto">
+        <CanvasFloatingDock
+          open={open}
+          onToggle={onToggle}
+          icon={<ListTodoIcon className="h-4 w-4 text-amber-300" />}
+          title={`승인 (${count})`}
+          tone="amber"
         >
-          {open ? "−" : "+"}
-        </button>
-        <div className="flex items-center gap-1.5 pr-7 text-sm font-semibold text-amber-300">
-          <ListTodoIcon className="h-4 w-4" /> 승인 ({count})
-        </div>
-        {open && (
-          <>
-            {right && <div className="mt-1">{right}</div>}
-            <div className="mt-2 max-h-[46vh] overflow-y-auto pr-0.5">{children}</div>
-          </>
-        )}
+          <div className="p-2">
+            {right && <div className="mb-1">{right}</div>}
+            <div className="max-h-[46vh] overflow-y-auto pr-0.5">{children}</div>
+          </div>
+        </CanvasFloatingDock>
       </div>
     </div>,
     document.body,
