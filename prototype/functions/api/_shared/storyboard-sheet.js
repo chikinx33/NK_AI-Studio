@@ -218,7 +218,9 @@ export function buildStoryboardSheetPrompt(input) {
     lines.push(`Panel 1 (OVERLAP): repeat the previous sheet's last frame exactly (provided as the first reference image) — same set, same characters, same lighting. It anchors tone and lighting for this sheet.`);
     panels.push({ index: 1, role: "overlap", ref: t(anchor.ref), label: "conti" });
   } else {
-    lines.push(`Panel 1 (SET): ${setName}${t(set.description) ? ` — ${t(set.description).slice(0, 200)}` : ""}. Empty set plate, front view at eye level, no characters. Every other panel takes place inside this exact set.`);
+    lines.push(input && input.hasTopMaster
+      ? `Panel 1 (SET MASTER): copy the provided TOP-DOWN MASTER PLATE of ${setName} exactly — same walls, openings, furniture, props, materials, colors and lighting, no characters. It is the spatial truth for every other panel.`
+      : `Panel 1 (SET): ${setName}${t(set.description) ? ` — ${t(set.description).slice(0, 200)}` : ""}. Empty set plate, front view at eye level, no characters. Every other panel takes place inside this exact set.`);
     panels.push({ index: 1, role: "set", ref: setName, label: "conti" });
   }
   cuts.forEach((c, i) => {
@@ -231,6 +233,10 @@ export function buildStoryboardSheetPrompt(input) {
   });
   for (let n = cuts.length + 2; n <= cols * rows; n++) { lines.push(`Panel ${n}: leave empty (plain white).`); panels.push({ index: n, role: "empty", ref: "", label: "conti" }); }
   const names = (Array.isArray(input && input.characterNames) ? input.characterNames : []).map(t).filter(Boolean);
+  if (input && input.hasTopMaster) {
+    lines.push(`BACKGROUND LOCK: the provided TOP-DOWN MASTER PLATE is the single source of truth for ${setName}. Reconstruct each cut camera inside that exact space. Never replace it with another room, move furniture or props, swap walls, change openings, or invent a different background.`);
+    lines.push(layoutText(set.layout));
+  }
   lines.push(`References: registered character images = identity only (face, silhouette, colors, costume)${names.length ? ` for ${names.join(", ")}` : ""}. The set plate image = layout, materials and lighting of ${setName}. Do not copy the reference framing into the cut panels — each cut panel follows its own camera line.`);
   lines.push(NO_MERGE, STYLE_LOCK);
   return { prompt: lines.filter(Boolean).join("\n"), panels };

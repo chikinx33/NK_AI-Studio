@@ -454,7 +454,10 @@ export default function ProductionCanvas({
   // 빈 캔버스에서 "대화로 시나리오 만들기"를 누르면 대화 독 입력칸에 첫 문장을 올려 준다.
   const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [batchDockOpen, setBatchDockOpen] = useState(true);
   const [storyboardOpen, setStoryboardOpen] = useState(false);
+  // 스토리보드 보기: 프롬프트·캐릭터·배경 자산을 감추고 씬 바와 컷의 최종 이미지 흐름만 본다.
+  const [storyboardView, setStoryboardView] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
   const [pipelineNonce, setPipelineNonce] = useState(0);
   // 작성기 설정(생성 전 확인 · 이미지/영상 기본값). 인스펙터 버튼과 채팅 맥락이 같은 값을 쓴다.
@@ -1100,6 +1103,27 @@ export default function ProductionCanvas({
     setView({ x: 0, y: 0, scale: 0.8 });
   };
 
+  /** 씬 바와 컷 카드만 화면 안에 맞춘다. 저장된 캔버스 배치는 바꾸지 않고 카메라만 이동한다. */
+  const fitStoryboardView = useCallback(() => {
+    const el = containerRef.current;
+    const sceneLanes = lanes.filter((l) => l.kind === "scene" && l.memberIds.length > 0);
+    if (!el || !sceneLanes.length) return;
+    let minX = Number.POSITIVE_INFINITY; let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY; let maxY = Number.NEGATIVE_INFINITY;
+    sceneLanes.forEach((l) => {
+      const b = layout.bars[l.key];
+      if (!b) return;
+      const width = Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + width); maxY = Math.max(maxY, b.y + BAR_H + CARD_GAP + l.cardH);
+    });
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
+    const pad = 28;
+    const contentW = Math.max(1, maxX - minX); const contentH = Math.max(1, maxY - minY);
+    const scale = Math.max(MIN_SCALE, Math.min(1, (el.clientWidth - pad * 2) / contentW, (el.clientHeight - pad * 2) / contentH));
+    setView({ scale, x: pad - minX * scale, y: pad - minY * scale });
+  }, [lanes, layout.bars]);
+
   const edgesToDraw = useMemo(() => (graph?.edges || []).map((e) => {
     const from = nodeById.get(e.from);
     const to = nodeById.get(e.to);
@@ -1188,11 +1212,26 @@ export default function ProductionCanvas({
           <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button
             type="button"
-            onClick={() => setAgentOpen((v) => !v)}
+            onClick={() => setAgentOpen((v) => { if (!v) setBatchDockOpen(true); return !v; })}
             disabled={!projectId}
             className={`ml-1 flex min-w-[112px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${agentOpen ? "bg-emerald-600 text-white" : "border border-emerald-700/60 text-emerald-300 hover:bg-emerald-900/30"}`}
           >
             <BotIcon className="h-4 w-4" /> 일괄 생성
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !storyboardView;
+              setStoryboardView(next);
+              setSelectedId(""); setMulti(new Set());
+              if (next) window.setTimeout(fitStoryboardView, 0);
+            }}
+            disabled={!projectId}
+            aria-pressed={storyboardView}
+            className={`flex min-w-[92px] items-center justify-center rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${storyboardView ? "bg-violet-600 text-white" : "border border-violet-700/60 text-violet-300 hover:bg-violet-900/30"}`}
+            title={storyboardView ? "전체 캔버스로 돌아가기" : "씬 바와 콘티·스틸컷만 보기"}
+          >
+            스토리보드
           </button>
         </div>
       </section>
@@ -1221,7 +1260,7 @@ export default function ProductionCanvas({
 
           <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
             <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
-              {edgesVisible && edgesToDraw.map(({ edge, d, mid }) => {
+              {edgesVisible && !storyboardView && edgesToDraw.map(({ edge, d, mid }) => {
                 const st = EDGE_STYLE[edge.type];
                 const highlighted = selectedId && (edge.from === selectedId || edge.to === selectedId);
                 return (
@@ -1236,7 +1275,7 @@ export default function ProductionCanvas({
             </svg>
 
             {/* 바(레인) — 씬(파랑)·캐릭터(초록)·장소(연두). 바를 끌면 딸린 카드가 함께 움직이고, 클릭하면 그 바의 카드를 모두 선택한다. */}
-            {lanes.map((l) => {
+            {lanes.filter((l) => !storyboardView || l.kind === "scene").map((l) => {
               const b = layout.bars[l.key];
               if (!b) return null;
               const width = l.orient === "column" ? l.cardW : Math.max(1, l.memberIds.length) * l.cellW - CARD_GAP;
@@ -1256,14 +1295,14 @@ export default function ProductionCanvas({
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
                   {totalSec ? <Chip>{Math.round(totalSec * 10) / 10}s</Chip> : null}
-                  {l.kind === "scene" && l.memberIds.length === 0 && (
+                  {!storyboardView && l.kind === "scene" && l.memberIds.length === 0 && (
                     <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => {
                       e.stopPropagation();
                       // 빈 씬 바 = 카드를 옮긴 뒤 화면 배치에만 남은 잔상. 걷어내고 씬 바를 서버 순서로 다시 묶는다(바 위치는 유지).
                       setLayout((cur) => reconcileLayout({ ...cur, groups: undefined }, graph, defaultLayout(graph, measuredH)));
                     }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-400/60 text-red-200 transition hover:bg-red-500/30 hover:text-white" title="빈 씬 바 지우기 (씬 바를 서버 순서로 다시 묶어요)" aria-label="빈 씬 바 지우기">−</button>
                   )}
-                  {l.kind === "scene" && (() => {
+                  {!storyboardView && l.kind === "scene" && (() => {
                     const firstNode = l.memberIds[0] ? nodeById.get(l.memberIds[0]) : null;
                     const canMerge = !!firstNode?.data?.sceneBreak;
                     const pickedHere = l.memberIds.filter((id) => multi.has(id));
@@ -1318,13 +1357,14 @@ export default function ProductionCanvas({
               );
             })}
             {/* 카드를 끌고 있을 때 놓일 칸 */}
-            {dropSlot && (() => {
+            {!storyboardView && dropSlot && (() => {
               const sp = slotPosition(layout, lanes, dropSlot.key, dropSlot.index);
               if (!sp) return null;
               return <div className="pointer-events-none absolute rounded-xl border-2 border-dashed border-emerald-500/70 bg-emerald-500/5" style={{ left: sp.x, top: sp.y, width: sp.w, height: sp.h }} />;
             })()}
 
             {(graph?.nodes || []).map((n) => {
+              if (storyboardView && n.type !== "cut") return null;
               const p = (dragGhost && dragGhost.id === n.id) ? { x: dragGhost.x, y: dragGhost.y } : positions[n.id];
               if (!p) return null;
               const isGhost = !!(dragGhost && dragGhost.id === n.id);
@@ -1383,53 +1423,56 @@ export default function ProductionCanvas({
                       </div>
                     </div>
                   )}
-                  {n.type === "cut" && (
-                    <div>
-                      <div className="flex cursor-pointer items-center gap-1.5 border-b border-edge px-3 py-2" data-zone="header" title="상단 바 클릭 = 선택/해제 (여러 컷 고르기). 아래 내용 클릭 = 상세 열기">
-                        <span className="text-[12px] font-bold text-white">{cutLabelById.get(n.id) || n.label}</span>
-                        <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">#{String(n.data.sceneId)}</span>
-                        <Chip>{String(n.data.shotType)}</Chip>
-                        <Chip>{String(n.data.cameraMove)}</Chip>
-                        {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
-                        {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
+                  {n.type === "cut" && (() => {
+                    const st = cutJobState(n.data.sceneId, "scene_still"); const vd = cutJobState(n.data.sceneId, "scene_video");
+                    const stillUrl = String(n.data.still?.url || ""); const contiUrl = String(n.data.storyboard?.url || "");
+                    const frameUrl = stillUrl || contiUrl; const frameZone = stillUrl ? "image" : "storyboard";
+                    const frameLabel = stillUrl ? "스틸" : st.running ? "스틸 생성 중" : "콘티";
+                    const frameTone = st.running ? "amber" : st.failed && !frameUrl ? "red" : stillUrl || n.data.storyboard?.status === "approved" ? "emerald" : n.data.storyboard?.status === "rejected" ? "red" : "gray";
+                    const frame = (
+                      <div className={`relative aspect-video overflow-hidden bg-black/40 ${frameUrl ? "cursor-zoom-in" : ""}`} data-zone={frameZone} title={frameUrl ? (stillUrl ? "정식 스틸컷" : "승인용 콘티") : "스토리보드 일괄 생성에서 만들어요"}>
+                        {frameUrl
+                          ? <img src={withMediaToken(frameUrl)} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
+                          : !st.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "콘티 없음"}</div>}
+                        {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
+                        {!storyboardView && <span className="absolute left-1.5 top-1.5 inline-flex rounded bg-black/80"><Chip tone={frameTone}>{frameLabel}</Chip></span>}
                       </div>
-                      <div className="grid grid-cols-3 gap-1 p-2">
-                        {(() => { const st = cutJobState(n.data.sceneId, "scene_still"); const vd = cutJobState(n.data.sceneId, "scene_video"); return (<>
-                        <div className={`relative aspect-video overflow-hidden rounded-md bg-black/40 ${n.data.storyboard?.url ? "cursor-zoom-in" : ""}`} data-zone="storyboard" title={n.data.storyboard?.url ? "승인용 콘티" : "스토리보드 일괄 생성에서 만들어요"}>
-                          {n.data.storyboard?.url
-                            ? <img src={withMediaToken(String(n.data.storyboard.url))} alt="" className="h-full w-full object-cover" draggable={false} loading="lazy" />
-                            : <div className="grid h-full place-items-center text-[10px] text-gray-600">콘티 없음</div>}
-                          <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={n.data.storyboard?.status === "approved" ? "emerald" : n.data.storyboard?.status === "rejected" ? "red" : "gray"}>콘티</Chip></span>
-                        </div>
-                        <div className={`relative aspect-video overflow-hidden rounded-md bg-black/40 ${n.data.still?.url ? "cursor-zoom-in" : ""}`} data-zone="image" title={n.data.still?.url ? "누르면 크게 볼 수 있어요" : undefined}>
-                          {n.data.still?.url
-                            ? <img src={withMediaToken(String(n.data.still.url))} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
-                            : !st.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "스틸 없음"}</div>}
-                          {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
-                          <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={st.running ? "amber" : st.failed ? "red" : n.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
-                        </div>
-                        <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
-                          {n.data.clip?.url
-                            ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
-                            : !vd.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{vd.failed ? <span className="px-1 text-center text-red-300">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
-                          {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
-                          <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
-                        </div>
-                        </>); })()}
+                    );
+                    if (storyboardView) return (
+                      <div>
+                        {frame}
+                        <p className="line-clamp-2 min-h-[42px] border-t border-edge px-3 py-2 text-[11px] leading-snug text-gray-300">{String(n.data.action || "") || <span className="text-gray-600">—</span>}</p>
                       </div>
-                      <div className="px-3 pb-2">
-                        <p className="line-clamp-2 text-[11px] leading-snug text-gray-300"><span className="text-gray-500">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-gray-600">—</span>}</p>
-                        <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-gray-400"><span className="text-gray-500">행동 </span>{String(n.data.action || "") || <span className="text-gray-600">—</span>}</p>
-                        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-gray-500">
-                          {n.data.estSec ? <span>{String(n.data.estSec)}s</span> : null}
-                          {n.data.common ? <Chip tone="emerald">공통 오버라이드</Chip> : null}
-                          {n.data.cutRefEnabled && n.data.cutRefId ? <Chip tone="amber">참조 {String(n.data.cutRefId)}</Chip> : null}
-                          {n.data.lineage?.videoAttempts ? <span title="영상 시도 횟수">v×{String(n.data.lineage.videoAttempts)}</span> : null}
-                          {jobsForNode.length > 0 && <Chip tone="amber">{jobsForNode[0].status === "review_pending" ? "승인 대기" : "진행 중"}</Chip>}
+                    );
+                    return (
+                      <div>
+                        <div className="flex cursor-pointer items-center gap-1.5 border-b border-edge px-3 py-2" data-zone="header" title="상단 바 클릭 = 선택/해제 (여러 컷 고르기). 아래 내용 클릭 = 상세 열기">
+                          <span className="text-[12px] font-bold text-white">{cutLabelById.get(n.id) || n.label}</span>
+                          <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">#{String(n.data.sceneId)}</span>
+                          <Chip>{String(n.data.shotType)}</Chip><Chip>{String(n.data.cameraMove)}</Chip>
+                          {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
+                          {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 p-2">
+                          <div className="overflow-hidden rounded-md">{frame}</div>
+                          <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
+                            {n.data.clip?.url
+                              ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
+                              : !vd.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{vd.failed ? <span className="px-1 text-center text-red-300">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
+                            {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
+                            <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
+                          </div>
+                        </div>
+                        <div className="px-3 pb-2">
+                          <p className="line-clamp-2 text-[11px] leading-snug text-gray-300"><span className="text-gray-500">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-gray-600">—</span>}</p>
+                          <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-gray-400"><span className="text-gray-500">행동 </span>{String(n.data.action || "") || <span className="text-gray-600">—</span>}</p>
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-gray-500">
+                            {n.data.estSec ? <span>{String(n.data.estSec)}s</span> : null}{n.data.common ? <Chip tone="emerald">공통 오버라이드</Chip> : null}{n.data.cutRefEnabled && n.data.cutRefId ? <Chip tone="amber">참조 {String(n.data.cutRefId)}</Chip> : null}{n.data.lineage?.videoAttempts ? <span title="영상 시도 횟수">v×{String(n.data.lineage.videoAttempts)}</span> : null}{jobsForNode.length > 0 && <Chip tone="amber">{jobsForNode[0].status === "review_pending" ? "승인 대기" : "진행 중"}</Chip>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -1470,9 +1513,9 @@ export default function ProductionCanvas({
             const active = pending.filter((j) => !JOB_DONE.includes(j.status));
             const errors = pending.filter((j) => j.status === "error");
             return (
-              <div className="absolute bottom-[4.5rem] left-3 z-30 flex max-w-[420px] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+              <div className="absolute bottom-[4.5rem] left-3 z-30 flex w-[400px] max-w-[calc(100%-24px)] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
                 {jobDockOpen && (
-                  <div className="max-h-64 w-[400px] overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
+                  <div className="max-h-64 w-full overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
                     <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">
                       <span className="font-bold text-gray-200">작업</span>
                       {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="hover:text-white">끝난 항목 지우기</button>}
@@ -1660,28 +1703,41 @@ export default function ProductionCanvas({
               void load(true);
               setPipelineNonce((n) => n + 1);
               setAgentOpen(true);
+              setBatchDockOpen(true);
             }}
           />
 
-          {/* 일괄 생성 패널 — 씬별 스토리보드 승인 뒤에만 정식 스틸·영상을 만든다. */}
+          {/* 일괄 생성 패널 — 왼쪽 아래 작업/승인 독 바로 위에 같은 폭으로 쌓는다. 에이전트 대화창과 겹치지 않는다. */}
           {agentOpen && projectId && (
-            <div className="absolute right-3 top-3 w-[360px] max-w-[calc(100%-24px)] rounded-xl border border-emerald-800/60 bg-[#0c1119]/95 p-3 shadow-xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-              <div className="mb-2 flex items-center gap-2"><BotIcon className="h-4 w-4 text-emerald-400" /><span className="text-[12px] font-bold text-white">일괄 제작</span><span className="text-[10px] text-gray-500">콘티 → 승인 → 스틸 → 영상</span></div>
-              <div className="mb-3 rounded-lg border border-violet-800/60 bg-violet-950/20 p-2">
-                <div className="mb-1 text-[11px] font-bold text-violet-200">1. 씬별 스토리보드 생성·검토</div>
-                <p className="mb-2 text-[10px] leading-relaxed text-gray-400">다른 씬의 컷은 한 시트에 섞지 않아요. 패널을 승인하거나 부분 수정한 뒤 정식 스틸을 만드세요.</p>
-                <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 만들기·검토</button>
-              </div>
-              <div className="mb-1 text-[11px] font-bold text-emerald-200">2. 승인 콘티 기반 스틸·영상 파이프라인</div>
-              <VideoPipelinePanel
-                projectId={projectId}
-                selectedSceneIds={selectedSceneIds}
-                onGraphChanged={() => void load(true)}
-                onFocusScene={(id) => focusScene(id)}
-                attachNonce={pipelineNonce}
-                autoApprove={!settings.confirmBeforeGenerate}
-                onAttached={(job) => { if (job.approvalState?.status === "pending") setAgentOpen(true); }}
-              />
+            <div
+              className="absolute left-3 z-30 w-[400px] max-w-[calc(100%-24px)] overflow-hidden rounded-2xl border border-emerald-800/60 bg-[#0c1119]/95 shadow-2xl backdrop-blur transition-[bottom]"
+              style={{ bottom: pending.length ? (jobDockOpen ? 376 : 112) : 72 }}
+              data-testid="batch-dock"
+              onPointerDown={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              <button type="button" onClick={() => setBatchDockOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-emerald-950/30" aria-expanded={batchDockOpen}>
+                <BotIcon className="h-4 w-4 text-emerald-400" /><span className="text-[12px] font-bold text-white">일괄 제작</span><span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">콘티 → 승인 → 스틸 → 영상</span><span className="text-[12px] text-gray-400">{batchDockOpen ? "▾" : "▴"}</span>
+              </button>
+              {batchDockOpen && (
+                <div className="border-t border-edge p-3">
+                  <div className="mb-3 rounded-lg border border-violet-800/60 bg-violet-950/20 p-2">
+                    <div className="mb-1 text-[11px] font-bold text-violet-200">1. 씬별 스토리보드 생성·검토</div>
+                    <p className="mb-2 text-[10px] leading-relaxed text-gray-400">부감 마스터를 공간 기준으로 사용하고 다른 씬의 컷은 한 시트에 섞지 않아요. 패널을 승인하거나 부분 수정한 뒤 정식 스틸을 만드세요.</p>
+                    <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 만들기·검토</button>
+                  </div>
+                  <div className="mb-1 text-[11px] font-bold text-emerald-200">2. 승인 콘티 기반 스틸·영상 파이프라인</div>
+                  <VideoPipelinePanel
+                    projectId={projectId}
+                    selectedSceneIds={selectedSceneIds}
+                    onGraphChanged={() => void load(true)}
+                    onFocusScene={(id) => focusScene(id)}
+                    attachNonce={pipelineNonce}
+                    autoApprove={!settings.confirmBeforeGenerate}
+                    onAttached={(job) => { if (job.approvalState?.status === "pending") { setAgentOpen(true); setBatchDockOpen(true); } }}
+                  />
+                </div>
+              )}
             </div>
           )}
           {storyboardOpen && projectId && (

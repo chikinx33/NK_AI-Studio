@@ -62,16 +62,33 @@
     return list.filter(function (l) { return l && (String(l.name || '').trim() || String(l.description || '').trim()); });
   };
 
-  /** 세트 마스터 플레이트 참조(있으면). 시트의 1번 칸(세트 플레이트)이 이 이미지를 따른다. */
+  /** 배경의 단일 기준인 부감 마스터(angle-top). 옛 프로젝트만 정면 refObjectName 으로 폴백한다. */
+  function topMasterOf(loc) {
+    var variants = Array.isArray(loc && loc.variants) ? loc.variants : [];
+    for (var i = 0; i < variants.length; i++) {
+      if (variants[i] && String(variants[i].id || '') === 'angle-top' && String(variants[i].refObjectName || '').trim()) {
+        return String(variants[i].refObjectName).trim();
+      }
+    }
+    return '';
+  }
+  mod.topMasterOf = topMasterOf;
+
+  /** 스토리보드의 배경 참조. 부감 마스터를 우선해 공간 배치의 진실을 고정한다. */
   mod.plateReference = function (loc, referenceId) {
-    var url = proxyUrl(loc && loc.refObjectName);
+    var master = topMasterOf(loc);
+    var objectName = master || String((loc && loc.refObjectName) || '').trim();
+    var url = proxyUrl(objectName);
     if (!url) return null;
     return {
       referenceId: referenceId || 1,
-      referenceType: 'REFERENCE_TYPE_STYLE',
+      // 부감 마스터는 분위기 참고가 아니라 공간·사물 배치를 보존할 피사체 기준이다.
+      referenceType: master ? 'REFERENCE_TYPE_SUBJECT' : 'REFERENCE_TYPE_STYLE',
       referenceKind: 'environment',
       imageDataUrl: url,
-      subjectDescription: String((loc && loc.name) || 'the set') + ' (front-facing master plate)',
+      subjectDescription: String((loc && loc.name) || 'the set') + (master
+        ? ' (TOP-DOWN MASTER PLATE — layout truth; preserve every wall, prop and object position while reconstructing each storyboard camera)'
+        : ' (legacy front-facing set plate — preserve its architecture, props, materials and lighting)'),
       subjectType: 'SUBJECT_TYPE_DEFAULT'
     };
   };
@@ -222,6 +239,30 @@
       }
     }
     return false;
+  };
+
+  /** 이어지는 시트의 1번 참조: 최신 유효 시트에서 앞 시트의 마지막 콘티 패널을 찾는다. */
+  mod.overlapReference = function (st, cutId, referenceId) {
+    var sheets = mod.listSheets(st).slice().reverse();
+    for (var i = 0; i < sheets.length; i++) {
+      var sheet = sheets[i];
+      if (!sheet || sheet.kind !== 'board' || mod.isStale(sheet, st && st.scenes)) continue;
+      var panels = Array.isArray(sheet.panels) ? sheet.panels : [];
+      for (var k = 0; k < panels.length; k++) {
+        var panel = panels[k];
+        if (panel && panel.role === 'cut' && String(panel.ref) === String(cutId) && String(panel.objectName || '').trim()) {
+          return {
+            referenceId: referenceId || 1,
+            referenceType: 'REFERENCE_TYPE_SUBJECT',
+            referenceKind: 'conti-panel',
+            imageDataUrl: proxyUrl(panel.objectName),
+            subjectDescription: 'previous storyboard sheet final panel — repeat this frame exactly as panel 1',
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          };
+        }
+      }
+    }
+    return null;
   };
 
   /**

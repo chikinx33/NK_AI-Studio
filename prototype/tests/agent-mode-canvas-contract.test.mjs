@@ -132,7 +132,7 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(canvas, /writeUserStorage\("canvasEdgesVisible", next \? "1" : "0"\)/);
   assert.match(canvas, /title=\{edgesVisible \? "연결선 숨기기" : "연결선 보이기"\}/);
   assert.doesNotMatch(workspace, /edgesVisible=\{edgesVisible\}/);
-  assert.match(canvas, /edgesVisible && edgesToDraw\.map/);
+  assert.match(canvas, /edgesVisible && !storyboardView && edgesToDraw\.map/);
   assert.match(app, /focusMode \? "lg:hidden"/);
   assert.match(app, /\$\{focusMode \? "" : "lg:flex lg:flex-col"\}/);
   // 버튼 폭 고정 규칙(상태 변화에 폭이 흔들리지 않게).
@@ -162,7 +162,7 @@ test("★에이전트 모드는 캔버스 안에서 대화한다: 대화 독 + �
   assert.match(list, /input\?\.options\?\.projectId/);
   assert.match(api, /export async function listCompanySkillJobs/);
   assert.match(panel, /listCompanySkillJobs\(\{ skillId: "video_pipeline", projectId, limit: 5 \}\)/);
-  assert.match(canvas, /onAttached=\{\(job\) => \{ if \(job\.approvalState\?\.status === "pending"\) setAgentOpen\(true\); \}\}/);
+  assert.match(canvas, /onAttached=\{\(job\) => \{ if \(job\.approvalState\?\.status === "pending"\) \{ setAgentOpen\(true\); setBatchDockOpen\(true\); \} \}\}/);
   // 코어가 캔버스 맥락 접두를 이해한다.
   assert.match(orch, /\[캔버스 프로젝트 <id> …\]/);
 });

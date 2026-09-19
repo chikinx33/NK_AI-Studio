@@ -1,5 +1,5 @@
 // prototype/functions/api/storyboard/sheet-plan.ts
-// 스토리보드 시트(P0 실험) 계획·프롬프트 조립 엔드포인트.
+// 스토리보드 제작 계획·프롬프트 조립 엔드포인트.
 // 이미지 생성은 하지 않는다 — 브라우저가 여기서 받은 prompt·panels 로 /api/imagen 을 부르고(30초 제한 동일),
 // 결과 시트를 격자로 잘라(콘티) 보여 준다. 프롬프트의 단일 원천은 _shared/storyboard-sheet.js.
 import { authorizeRequest } from "../_shared/auth.js";
@@ -69,7 +69,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scenes.forEach((s, i) => byId.set(String(s?.id ?? i + 1), s));
       const cuts = wantIds.length ? wantIds.map((id: string) => byId.get(id)).filter(Boolean) : scenes;
       if (!cuts.length) return send({ error: "cuts are required (cutIds or scenes)" }, 400, origin);
-      const built = buildStoryboardSheetPrompt({ header, set, cuts, anchor: body?.anchor, aspect, characterNames: body?.characterNames });
+      const built = buildStoryboardSheetPrompt({ header, set, cuts, anchor: body?.anchor, aspect, characterNames: body?.characterNames, hasTopMaster: body?.hasTopMaster === true });
       return send({ ok: true, kind, prompt: built.prompt, panels: built.panels, resolution, grid: SHEET_GRID, cell: approxCellSize(resolution), label: "conti" }, 200, origin);
     }
     if (kind === "angle-plate") {

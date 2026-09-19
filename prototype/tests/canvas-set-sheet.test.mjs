@@ -35,7 +35,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   // 상태는 레이아웃을 밀지 않는 떠 있는 작업 독(absolute, 왼쪽 아래)으로 — 상단 띠는 화면이 튀어 폐기
   assert.doesNotMatch(src, /data-testid="job-strip"/, '상단 상태 띠(레이아웃 밀림) 금지');
   // 왼쪽 아래는 승인 도크가 쓴다 — 작업 독은 그 위에 쌓인다(겹치면 둘 다 못 읽는다).
-  assert.match(src, /className="absolute bottom-\[4\.5rem\] left-3 z-30 flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /className="absolute bottom-\[4\.5rem\] left-3 z-30 flex w-\[400px\] max-w-\[calc\(100%-24px\)\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
   assert.match(src, /const \[jobDockOpen, setJobDockOpen\] = useState\(false\);/);
   assert.match(src, /\{active\.length \? `작업 \$\{active\.length\}개 진행 중` : errors\.length \? `오류 \$\{errors\.length\}` : "작업 완료"\}/);
   assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
@@ -85,7 +85,7 @@ test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 
   assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden/, '캔버스의 select-none 을 모달에서 해제');
   assert.match(src, /<pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-\[11px\] leading-snug text-red-200">\{text\}<\/pre>/);
   assert.match(src, /void navigator\.clipboard\.writeText\(text\); setNotice\("오류 문구를 복사했어요\."\);/);
-  assert.match(src, /flex max-w-\[420px\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /flex w-\[400px\] max-w-\[calc\(100%-24px\)\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
   assert.match(src, /title="오류 문구 복사">복사<\/button>/);
 });
 

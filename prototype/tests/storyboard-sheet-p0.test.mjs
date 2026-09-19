@@ -82,18 +82,20 @@ test('★시트는 순서의 스냅샷: cutIds 가 현재 scenes 에 연속·같
   assert.match(cli, /mod\.isStale = function \(sheet, scenes\)/, '브라우저 쪽도 같은 규칙');
 });
 
-test('★스토리보드 시트 프롬프트: 3×3·16:9·번호만, 1번 칸 세트 플레이트(또는 겹침), 컷마다 [카메라] 화면, 병합 금지·스타일 고정', () => {
+test('★스토리보드 시트 프롬프트: 부감 마스터를 공간 기준으로 잠그고, 3×3·16:9·번호만, 컷마다 [카메라] 화면, 병합 금지·스타일 고정', () => {
   const cuts = [S(3, '거실', { shotType: 'CU', cameraDirection: 'back', cameraElevation: 'high' }), S(4, '거실', { composition: '아이가 창가에서 웃는다' })];
-  const { prompt, panels } = buildStoryboardSheetPrompt({ header: 'STYLE: soft 2D', set: { name: '거실', description: '햇살 드는 거실' }, cuts, aspect: '16:9', characterNames: ['아리'] });
+  const { prompt, panels } = buildStoryboardSheetPrompt({ header: 'STYLE: soft 2D', set: { name: '거실', description: '햇살 드는 거실', layout: '창문은 북쪽, 소파는 서쪽 벽' }, cuts, aspect: '16:9', characterNames: ['아리'], hasTopMaster: true });
   assert.match(prompt, /^STYLE: soft 2D\n/);
   assert.match(prompt, /STORYBOARD SHEET: a 3x3 grid of 9 panels/);
   assert.match(prompt, /every panel exactly 16:9/);
   assert.match(prompt, /small panel number in the top-left corner/);
-  assert.match(prompt, /Panel 1 \(SET\): 거실 — 햇살 드는 거실\. Empty set plate/);
+  assert.match(prompt, /Panel 1 \(SET MASTER\): copy the provided TOP-DOWN MASTER PLATE of 거실 exactly/);
   assert.match(prompt, /Panel 2 \(CUT 3\): \[close-up, reverse angle \(camera facing the back wall\), high angle looking down\] cut 3 screen/);
   assert.match(prompt, /Panel 3 \(CUT 4\): \[medium shot, camera facing the front of the set, eye level\] 아이가 창가에서 웃는다/);
   assert.match(prompt, /Panel 4: leave empty/);
   assert.match(prompt, /identity only[\s\S]*for 아리/);
+  assert.match(prompt, /BACKGROUND LOCK:[\s\S]*single source of truth[\s\S]*Never replace it with another room/);
+  assert.match(prompt, /창문은 북쪽, 소파는 서쪽 벽/);
   assert.match(prompt, /Do not merge panels/);
   assert.match(prompt, /EXACT SAME art style/);
   assert.deepEqual(panels.slice(0, 3).map((p) => [p.index, p.role, p.ref, p.label]), [[1, 'set', '거실', 'conti'], [2, 'cut', '3', 'conti'], [3, 'cut', '4', 'conti']]);
@@ -101,6 +103,8 @@ test('★스토리보드 시트 프롬프트: 3×3·16:9·번호만, 1번 칸 �
   const overlap = buildStoryboardSheetPrompt({ header: '', set: { name: '거실' }, cuts, anchor: { role: 'overlap', ref: '2' } });
   assert.match(overlap.prompt, /Panel 1 \(OVERLAP\): repeat the previous sheet's last frame/);
   assert.equal(overlap.panels[0].role, 'overlap');
+  const legacy = buildStoryboardSheetPrompt({ header: '', set: { name: '거실', description: '햇살 드는 거실' }, cuts });
+  assert.match(legacy.prompt, /Panel 1 \(SET\): 거실 — 햇살 드는 거실\. Empty set plate/, '옛 프로젝트의 정면 플레이트 프롬프트도 유지');
   assert.equal(cameraHintOf({}), 'eye level', '어휘가 없으면 아이레벨만');
 });
 
@@ -156,6 +160,9 @@ test('★엔드포인트 /api/storyboard/sheet-plan: 인증 · kind 별(plan/bib
 
 test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 크롭(여백선 보정, 실패 시 고정 격자) · 콘티는 업로드(objectName) · payload.storyboardSheets 저장', () => {
   const svc = read('prototype/js/service/storyboard-sheet.js');
+  assert.match(svc, /String\(variants\[i\]\.id \|\| ''\) === 'angle-top'/, '배경 참조는 부감 마스터를 우선한다');
+  assert.match(svc, /referenceType: master \? 'REFERENCE_TYPE_SUBJECT' : 'REFERENCE_TYPE_STYLE'/, '부감 마스터는 스타일이 아니라 공간 배치를 지킬 subject 참조다');
+  assert.match(svc, /mod\.overlapReference = function \(st, cutId, referenceId\)/, '후속 시트는 앞 시트 마지막 콘티를 실제 참조로 찾는다');
   assert.match(svc, /imageSize: spec\.resolution \|\| '2K'/);
   assert.match(svc, /function refineBoundaries\(img, cols, rows\)/);
   assert.match(svc, /bestB >= 240 \? best : expect/, '여백선이 흰색(240 이상)일 때만 채택');
@@ -175,7 +182,7 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.ok(svc.indexOf('st.scenes[sceneIdx] = Object.assign') > i);
   // 나머지 imageDataUrl 은 referenceImages 항목(참조 이미지)뿐
   const otherWrites = (svc.match(/imageDataUrl: (?!result\.imageRef)[a-zA-Z]+/g) || []);
-  assert.deepEqual(otherWrites.sort(), ['imageDataUrl: panelUrl', 'imageDataUrl: url']);
+  assert.deepEqual(otherWrites.sort(), ['imageDataUrl: panelUrl', 'imageDataUrl: proxyUrl', 'imageDataUrl: url']);
   // 캐릭터 참조는 컷 생성 경로의 해석기를 그대로 쓴다
   const pi = read('prototype/ui/pipeline-image.js');
   assert.match(pi, /async function resolveCharacterReferences\(st, text, projectId\)/);
@@ -205,6 +212,9 @@ test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승
   // 부감 플레이트: 마스터가 0번 소스, 정면 참조를 섞지 않는다
   assert.match(uiSrc, /refs = \[Object\.assign\(\{\}, plateRef, \{ referenceId: 1 \}\)\];/);
   assert.match(uiSrc, /var vid = 'angle-' \+ m\.angle;/);
+  assert.match(uiSrc, /hasTopMaster: hasTopMaster/);
+  assert.match(uiSrc, /if \(m\.kind === 'board' && !plateRef\) throw new Error\(T\(\)\.needPlate\)/, '배경 참조 없이 잘못된 공간의 콘티를 만들지 않는다');
+  assert.match(uiSrc, /refs\.push\(overlapRef\)[\s\S]*plateRef = set \? svc\.plateReference\(set, refs\.length \+ 1\)/, '후속 시트는 겹침 패널 뒤에 부감 마스터를 함께 첨부한다');
 });
 
 test('★UI 문구는 한/영 사전(SB_TEXT)만 쓴다: 키 동일 · 본문에 한국어 리터럴 없음 · 언어 변경 구독', () => {

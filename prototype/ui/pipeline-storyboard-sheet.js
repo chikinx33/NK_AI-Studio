@@ -10,7 +10,7 @@
       openBtn: '스토리보드 제작',
       openTitle: '씬 경계를 지키며 여러 컷을 한 장의 콘티로 생성하고 승인 후 정식 스틸컷을 만들어요',
       title: '스토리보드 제작',
-      help: '각 씬은 별도 시트로 생성되며 다른 씬의 컷은 한 장에 섞이지 않아요. 승인한 콘티 패널과 캐릭터·배경 시트를 함께 참조해 정식 스틸컷을 만들어요.',
+      help: '각 씬은 별도 시트로 생성되며 다른 씬의 컷은 한 장에 섞이지 않아요. 부감 마스터를 공간 기준으로 고정하고, 승인한 콘티 패널과 캐릭터·배경 시트를 함께 참조해 정식 스틸컷을 만들어요.',
       kind: '작업',
       kindChars: 'E1 · 바이블 캐릭터 시트 (3×3)',
       kindSet: 'E2 · 바이블 세트 시트 (2×2, 앵글 4종)',
@@ -33,10 +33,11 @@
       reviseAsk: '이 콘티에서 수정할 내용을 입력해 주세요.',
       batchConfirm: '스토리보드 시트 {count}장을 순서대로 생성합니다. 이미지 생성 호출도 {count}회 발생합니다. 계속할까요?',
       stillBatchConfirm: '승인된 콘티 {count}개로 정식 스틸컷을 생성하고 각 컷에 바로 적용합니다. 이미지 생성 호출도 {count}회 발생합니다. 계속할까요?',
+      needOverlap: '이 시트는 이전 시트의 마지막 콘티가 필요해요. 앞 시트를 먼저 생성해 주세요.',
       generating: '생성 중…',
       close: '닫기',
       noSets: '세트(장소)가 없어요. 먼저 "배경 레퍼런스"에서 장소를 추출·생성해 주세요.',
-      needPlate: '이 세트의 정면 플레이트가 없어요. "배경 레퍼런스"에서 먼저 만들어 주세요.',
+      needPlate: '이 세트의 부감 마스터 또는 배경 플레이트가 없어요. "배경 레퍼런스"에서 먼저 만들어 주세요.',
       needProject: '프로젝트를 먼저 저장해 주세요.',
       planFailed: '계획을 만들지 못했어요: ',
       genFailed: '생성 실패: ',
@@ -71,7 +72,7 @@
       openBtn: 'Storyboard production',
       openTitle: 'Generate scene-bounded storyboard sheets, approve panels, then render final stills',
       title: 'Storyboard production',
-      help: 'Each scene is generated on separate sheets, so cuts from different scenes never mix. Approved panels are combined with character and set sheets to render final stills.',
+      help: 'Each scene is generated on separate sheets, so cuts from different scenes never mix. The top-down master is locked as spatial truth, then approved panels are combined with character and set sheets to render final stills.',
       kind: 'Workflow',
       kindChars: 'E1 · Bible character sheet (3×3)',
       kindSet: 'E2 · Bible set sheet (2×2, 4 angles)',
@@ -94,10 +95,11 @@
       reviseAsk: 'Describe what to change in this storyboard panel.',
       batchConfirm: 'Generate {count} storyboard sheets in sequence. This also makes {count} image-generation calls. Continue?',
       stillBatchConfirm: 'Render and apply {count} final stills from approved panels. This also makes {count} image-generation calls. Continue?',
+      needOverlap: 'This sheet needs the previous sheet’s final conti panel. Generate the preceding sheet first.',
       generating: 'Generating…',
       close: 'Close',
       noSets: 'No sets (locations) yet. Extract or create them in "Background references" first.',
-      needPlate: 'This set has no front plate. Create it in "Background references" first.',
+      needPlate: 'This set has no top-down master or background plate. Create one in "Background references" first.',
       needProject: 'Save the project first.',
       planFailed: 'Could not build the plan: ',
       genFailed: 'Generation failed: ',
@@ -217,7 +219,8 @@
           var target = targetSheet();
           if (!target) { m.error = T().noSets; render(); return; }
           set = setByName(target.setName) || { id: '', name: target.setName || 'Unspecified set', description: '' };
-          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description }, cutIds: target.cutIds, anchor: target.anchor, characterNames: characterNames(), resolution: m.resolution });
+          var hasTopMaster = !!svc.topMasterOf(set);
+          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description, layout: set.layout }, hasTopMaster: hasTopMaster, cutIds: target.cutIds, anchor: target.anchor, characterNames: characterNames(), resolution: m.resolution });
           m.planned = Object.assign({ target: target }, res);
         } else if (m.kind === 'bible-characters') {
           var resC = await svc.requestPlan({ kind: 'bible-characters', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', characters: characterEntries(), resolution: m.resolution });
@@ -266,6 +269,13 @@
           }
           m.result = { objectName: outA.objectName, url: svc.proxyUrl(outA.objectName), panels: [], meta: outA, note: T().anglePlateDone };
         } else {
+          if (m.kind === 'board' && !plateRef) throw new Error(T().needPlate);
+          if (m.kind === 'board' && m.planned && m.planned.target && m.planned.target.anchor && m.planned.target.anchor.role === 'overlap') {
+            var overlapRef = svc.overlapReference(s, m.planned.target.anchor.ref, 1);
+            if (!overlapRef) throw new Error(T().needOverlap);
+            refs.push(overlapRef);
+            plateRef = set ? svc.plateReference(set, refs.length + 1) : null;
+          }
           if (m.kind !== 'bible-set' && m.kind !== 'bible-characters' && plateRef) refs.push(plateRef);
           if (m.kind === 'bible-set' && plateRef) refs.push(plateRef);
           if (m.kind !== 'bible-set') {
@@ -273,7 +283,7 @@
             var cr = await svc.characterReferences(s, text, s.draftId);
             (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
           }
-          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment'; }) };
+          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment'; }), overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
           var out = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', referenceImages: refs, resolution: m.resolution });
           if (!out.objectName) throw new Error(svc.text('noObjectName'));
           var url = svc.proxyUrl(out.objectName);

@@ -193,5 +193,7 @@ test('★scene_still 프롬프트는 캐릭터 수를 명시하고 전원 보이
   const shared = read('prototype/functions/api/agent/_shared.ts');
   assert.match(shared, /`Exactly \$\{charLines\.length\} character\$\{charLines\.length > 1 \? "s" : ""\} appear in this shot: \$\{tokens\.join\(", "\)\}\. ALL of them must be clearly visible in the frame — never omit or merge any of them\.`/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.equal((src.match(/inline-flex rounded bg-black\/80"><Chip tone=\{(st|vd)\.running/g) || []).length, 4, '카드·상세 × 스틸·영상 라벨 — 칩과 같은 둥근 네모(rounded), 알약(rounded-full) 아님');
+  assert.match(src, /!storyboardView && <span className="absolute left-1\.5 top-1\.5 inline-flex rounded bg-black\/80"><Chip tone=\{frameTone\}>\{frameLabel\}<\/Chip><\/span>/, '공용 콘티·스틸 슬롯 라벨은 일반 보기에서만 검은 둥근 네모');
+  assert.ok((src.match(/inline-flex rounded bg-black\/80"><Chip tone=\{vd\.running/g) || []).length >= 2, '카드·상세 영상 라벨은 검은 둥근 네모');
+  assert.doesNotMatch(src, /inline-flex rounded-full bg-black\/80/, '미디어 라벨은 알약 모양을 쓰지 않는다');
 });

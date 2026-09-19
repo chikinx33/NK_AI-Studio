@@ -40,7 +40,7 @@ test('★프로젝트 저장 성공은 셸의 모든 화면으로 중계되고 �
   assert.match(canvas, /if \(name === "canvas\.refresh"\)[\s\S]*if \(!pid \|\| pid === projectId\) void load\(true\)/);
 });
 
-test('★캔버스 그래프는 컷별 콘티 상태와 콘티-스틸-영상 요약을 같은 프로젝트 데이터에서 제공한다', () => {
+test('★캔버스 그래프는 같은 프로젝트의 콘티를 스틸로 승격하고 스토리보드 전용 보기를 제공한다', () => {
   const graph = read('prototype/functions/api/agent/production-graph.ts');
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(graph, /const boardSheets:[\s\S]*isSheetStale\(sheet, scenes\)/);
@@ -48,4 +48,22 @@ test('★캔버스 그래프는 컷별 콘티 상태와 콘티-스틸-영상 요
   assert.match(graph, /summary: \{ scenes: scenes\.length, storyboards, approvedStoryboards, stills: done, clips \}/);
   assert.match(canvas, /콘티 \{graph\.summary\.approvedStoryboards \|\| 0\}\/\{graph\.summary\.scenes\}/);
   assert.match(canvas, /n\.data\.storyboard\?\.url/);
+  assert.match(canvas, /const frameUrl = stillUrl \|\| contiUrl/, '정식 스틸이 생기면 같은 이미지 슬롯의 콘티를 대체한다');
+  assert.match(canvas, /grid grid-cols-2 gap-1 p-2/, '일반 컷 카드는 공용 이미지 슬롯과 영상 슬롯만 둔다');
+  assert.doesNotMatch(canvas, /grid grid-cols-3 gap-1 p-2/, '콘티·스틸·영상을 서로 다른 세 칸으로 나누지 않는다');
+  assert.match(canvas, />\s*스토리보드\s*<\/button>/, '일괄 생성 오른쪽에 전용 보기 버튼을 둔다');
+  assert.match(canvas, /lanes\.filter\(\(l\) => !storyboardView \|\| l\.kind === "scene"\)/, '전용 보기는 씬 바만 남긴다');
+  assert.match(canvas, /if \(storyboardView && n\.type !== "cut"\) return null/, '전용 보기는 컷 카드만 남긴다');
+  assert.match(canvas, /if \(storyboardView\) return \([\s\S]*?\{frame\}[\s\S]*?n\.data\.action/, '전용 컷 카드에는 이미지와 행동 구문만 둔다');
+  assert.match(canvas, /!storyboardView && <span className="absolute left-1\.5 top-1\.5/, '전용 보기에서는 콘티·스틸 배지도 감춘다');
+});
+
+test('★일괄 제작 카드는 승인 카드와 같은 왼쪽 독에 쌓이고 접을 수 있다', () => {
+  const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  assert.match(canvas, /w-\[400px\][^\n]*data-testid="job-dock"/);
+  assert.match(canvas, /data-testid="batch-dock"/);
+  assert.match(canvas, /absolute left-3 z-30 w-\[400px\]/, '에이전트 대화창 반대편의 승인 독 폭을 공유한다');
+  assert.match(canvas, /style=\{\{ bottom: pending\.length \? \(jobDockOpen \? 376 : 112\) : 72 \}\}/, '승인 카드의 펼침 상태만큼 위로 배치한다');
+  assert.match(canvas, /aria-expanded=\{batchDockOpen\}/);
+  assert.match(canvas, /\{batchDockOpen && \(/);
 });
