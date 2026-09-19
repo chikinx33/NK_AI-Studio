@@ -24,6 +24,31 @@
         return 'dashboard.html';
     }
 
+    /**
+     * 셸 안에서 연 내부 화면을 새로고침 가능한 주소로 정규화한다.
+     * embed와 빌드 버전은 재진입 때 다시 붙이고, 프로젝트·브랜드·화면·씬 문맥은 보존한다.
+     */
+    nav.canonicalStageTarget = function (raw) {
+        var value = String(raw || '').trim();
+        if (!value) return '';
+        try {
+            var u = new URL(value, window.location.href);
+            if (u.origin !== window.location.origin) return '';
+            var qp = new URLSearchParams(String(u.search || ''));
+            ['embed', 'v', 'stage', 'stageHref'].forEach(function (key) { qp.delete(key); });
+            var path = String(u.pathname || '').replace(/\\/g, '/');
+            var lower = path.toLowerCase();
+            var aiCompanyAt = lower.lastIndexOf('/ai-company/');
+            var targetPath = aiCompanyAt >= 0
+                ? path.slice(aiCompanyAt + 1)
+                : (path.split('/').pop() || '');
+            if (!targetPath) return '';
+            return targetPath + (qp.toString() ? ('?' + qp.toString()) : '') + String(u.hash || '');
+        } catch (_) {
+            return '';
+        }
+    };
+
     function readCurrentContext() {
         var projectId = '';
         var brandId = '';
@@ -146,8 +171,9 @@
         if (st && st !== 'options') {
             try {
                 var hrefKey = getStageHrefKey();
-                sessionStorage.setItem(hrefKey, targetName);
-                localStorage.setItem(hrefKey, targetName);
+                var rememberedTarget = nav.canonicalStageTarget(targetName) || targetName;
+                sessionStorage.setItem(hrefKey, rememberedTarget);
+                localStorage.setItem(hrefKey, rememberedTarget);
             } catch (_) { }
         }
         var context = readCurrentContext();
@@ -278,22 +304,35 @@
                 }
             }
             nav.setStage(st);
-            try {
-                const pageUrl = new URL(window.location.href);
-                if (st && st !== 'dashboard') {
-                    pageUrl.searchParams.set('stageHref', targetName);
-                    if (pid) pageUrl.searchParams.set('projectId', String(pid));
-                    else pageUrl.searchParams.delete('projectId');
-                    if (brandId) pageUrl.searchParams.set('brandId', String(brandId));
-                    else pageUrl.searchParams.delete('brandId');
-                } else {
-                    pageUrl.searchParams.delete('stageHref');
-                    pageUrl.searchParams.delete('projectId');
-                    pageUrl.searchParams.delete('brandId');
-                }
-                window.history.replaceState({}, '', pageUrl.toString());
-            } catch (_) { }
+            nav.syncShellLocation(st, targetName);
         }
+    };
+
+    /** 부모 셸 주소에 현재 iframe 화면을 기록한다. iframe 자체 이동도 부모가 이 함수를 호출한다. */
+    nav.syncShellLocation = function (stage, rawTarget) {
+        if (window.self !== window.top) return;
+        try {
+            var st = String(stage || '').trim();
+            var pageUrl = new URL(window.location.href);
+            if (st && st !== 'dashboard') {
+                var target = nav.canonicalStageTarget(rawTarget);
+                if (!target) return;
+                var targetUrl = new URL(target, window.location.href);
+                var context = readCurrentContext();
+                var pid = String(targetUrl.searchParams.get('projectId') || targetUrl.searchParams.get('pid') || context.projectId || '').trim();
+                var brandId = String(targetUrl.searchParams.get('brandId') || targetUrl.searchParams.get('bid') || context.brandId || '').trim();
+                pageUrl.searchParams.set('stageHref', target);
+                if (pid) pageUrl.searchParams.set('projectId', pid);
+                else pageUrl.searchParams.delete('projectId');
+                if (brandId) pageUrl.searchParams.set('brandId', brandId);
+                else pageUrl.searchParams.delete('brandId');
+            } else {
+                pageUrl.searchParams.delete('stageHref');
+                pageUrl.searchParams.delete('projectId');
+                pageUrl.searchParams.delete('brandId');
+            }
+            window.history.replaceState({}, '', pageUrl.toString());
+        } catch (_) { }
     };
 
     nav.setStage = function (stage) {

@@ -58,6 +58,8 @@
     scenes: 'scenes.html',
     'ai-image-stage': 'ai-image-stage.html',
     'ai-video-gen-stage': 'ai-video-gen-stage.html',
+    canvas: 'ai-company/index.html?view=canvas',
+    previz: 'ai-company/index.html?view=previz',
     library: 'library.html',
     brand: 'brand.html',
     knowledge: 'knowledge.html',
@@ -65,7 +67,7 @@
     media: 'media.html',
     publish: 'publish.html'
   };
-  const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
+  const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'canvas', 'previz', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
   const LOGIN_RETURN_PARAM = 'returnTo';
@@ -445,23 +447,18 @@
   const normalizeStageTarget = (raw) => {
     var candidate = String(raw || '').trim();
     if (!candidate) return '';
-    try {
-      var u = new URL(candidate, window.location.href);
-      var parts = String(u.pathname || '').split('/');
-      var file = parts.pop() || '';
-      var qp = new URLSearchParams(String(u.search || ''));
-      qp.delete('embed');
-      qp.delete('stage');
-      qp.delete('stageHref');
-      if (file) {
-        candidate = file + (qp.toString() ? ('?' + qp.toString()) : '');
-      }
-    } catch (_) { }
+    if (NK.navigation && NK.navigation.canonicalStageTarget) {
+      candidate = NK.navigation.canonicalStageTarget(candidate);
+    }
+    if (!candidate) return '';
 
     var norm = NK.navigation.normalizeStageName(candidate);
     if (!norm || norm === 'options') return '';
     if (norm === 'dashboard') return 'dashboard.html';
     if (STAGE_HTML_MAP[norm]) {
+      if (norm === 'canvas' || norm === 'previz') {
+        return /(^|[\\/])ai-company([\\/]|$)/i.test(candidate) ? candidate : STAGE_HTML_MAP[norm];
+      }
       if (norm === 'ai-image-stage') return STAGE_HTML_MAP[norm];
       if (/\.html?(\?|$)/i.test(candidate) && !/ai-video\.html/i.test(candidate)) return candidate;
       return STAGE_HTML_MAP[norm];
@@ -626,7 +623,6 @@
     const isSelfContainedPage = document.documentElement.classList.contains('page-shell-ai-doc')
       || document.documentElement.classList.contains('page-shell-ai-sound');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts') && !isSelfContainedPage;
-    const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath || isAiVideoGenShellPath;
     const _pagePermMap = [
       { test: isAiVideoGenShellPath || isAiVideoGenStagePath, perm: 'videogen', href: 'ai-video-gen.html' },
       { test: isAiImageShellPath || isAiImageStagePath, perm: 'image', href: 'ai-image.html' },
@@ -655,13 +651,11 @@
       }
     }
 
-    const stageParamRaw = urlParams.get('stage');
-    const hasExplicitShellTarget = urlParams.has('stageHref') || (urlParams.has('stage') && String(stageParamRaw || '').toLowerCase() !== 'dashboard');
     const defaultDashboardForShell = isBrandShellPath
       ? 'brand-dashboard.html'
       : (isAiImageShellPath ? 'image-dashboard.html' : (isAiVideoGenShellPath ? 'video-gen-dashboard.html' : 'dashboard.html'));
     const initialTargetRaw = (isAiVideoShellPath || isAiVideoGenShellPath || isShellPage)
-      ? (isKnownShellPath && !hasExplicitShellTarget ? defaultDashboardForShell : resolveInitialStageTarget(urlParams))
+      ? resolveInitialStageTarget(urlParams)
       : '';
     const initialTarget = isBrandShellPath
       ? (initialTargetRaw || 'brand-dashboard.html')
@@ -1190,6 +1184,7 @@
         // 이후 사이드바 클릭이 stale 캐시 hit 로 무시되지 않는다.
         NK.navigation.adoptStageIframe?.(data.stage, data.url);
         NK.navigation.setStage(data.stage);
+        if (data.url) NK.navigation.syncShellLocation?.(data.stage, data.url);
       }
       if (data.type === 'stage-loading') {
         // iframe이 스스로 다른 stage로 이동 중 - overlay로 빈 폼 flash 방지
