@@ -88,3 +88,26 @@ test('characterRegistry falls back to project payload characters when brand cach
   assert.equal(resolved.characters[0].trigger, '@네모');
   assert.equal(resolved.characters[0].description, '의리가 강한 파란 네모');
 });
+
+test('project body snapshot feeds the same appearance and negative constraints to image/video prompts', () => {
+  const ctx = createContext();
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+
+  const registry = ctx.NK.service.characterRegistry;
+  const resolved = registry.resolveCharactersFromPrompt('missing-brand', '@네모가 바닥의 큐브를 가리킨다.', {
+    allowNameFallback: true,
+    payload: {
+      characters: [{
+        characterId: 'char_009', displayName: '네모', token: '@네모',
+        personality: '차분함', appearance: '파란 큐브형 몸과 뭉툭한 팔 끝',
+        negative: '손가락 없음, 사람 손 없음'
+      }]
+    }
+  });
+  assert.equal(resolved.characters.length, 1);
+  assert.equal(resolved.characters[0].description, '파란 큐브형 몸과 뭉툭한 팔 끝');
+  assert.equal(resolved.characters[0].negativePrompt, '손가락 없음, 사람 손 없음');
+  const built = registry.buildResolvedPrompt({ rawPrompt: '장면', characters: resolved.characters });
+  assert.match(built.resolvedPrompt, /파란 큐브형 몸과 뭉툭한 팔 끝/);
+  assert.equal(built.negativePromptText, '손가락 없음, 사람 손 없음');
+});

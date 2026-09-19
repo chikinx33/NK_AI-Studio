@@ -232,7 +232,9 @@
       }
 
       var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, finalPrompt);
-      var trustSceneTokens = resolveTrustSceneTokens(st && st.scenes);
+      // 이 헬퍼에는 전역 state(st)가 없다. 이전 코드는 여기서 ReferenceError가 나 모든
+      // 레퍼런스 지원 영상 모델의 캐릭터 시트 수집을 조용히 빈 배열로 만들었다.
+      var trustSceneTokens = resolveTrustSceneTokens([scene]);
       var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: !trustSceneTokens, payload: payload });
       var characters = res.characters || [];
       try { console.log('Character parse (video/kling):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, count: characters.length }); } catch (_) {}
@@ -507,12 +509,13 @@
         } catch (refErr) {
           console.warn('reference resolve skipped:', refErr && refErr.message);
           referenceImages = [];
-          var scenePlateUrl = resolveSetPlateUrl(st, scene, null);
+        }
+        // 캐릭터 레퍼런스 해결 성공 여부와 무관하게 같은 세트 플레이트를 함께 유지한다.
+        var scenePlateUrl = resolveSetPlateUrl(st, scene, null);
         if (scenePlateUrl) {
           referenceImages = insertPlateReference(referenceImages, scenePlateUrl);
           if (finalPrompt.indexOf(SET_PLATE_PROMPT_LINE) === -1) finalPrompt = finalPrompt + '\n' + SET_PLATE_PROMPT_LINE;
         }
-      }
       }
 
       var videoPayload = {
@@ -1031,6 +1034,7 @@
     insertPlateReference: insertPlateReference,
     buildShotVideoPrompt: buildShotVideoPrompt,
     pickPrevLastFrameForStart: pickPrevLastFrameForStart,
+    resolveKlingReferenceImages: resolveKlingReferenceImages,
     SET_PLATE_PROMPT_LINE: SET_PLATE_PROMPT_LINE
   };
 })();

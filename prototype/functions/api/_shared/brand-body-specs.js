@@ -169,29 +169,75 @@ export function mergeCharacterBodySpecsFromBrand(characters = [], brand = null) 
   };
 }
 
-export async function resolveServerCharacterBodySpecs({ env, userId, brandId, characters = [] }) {
+function requestSnapshotResult(characters, source, warnings = []) {
+  const selected = Array.isArray(characters) ? characters : [];
+  const matchedTokens = [];
+  const incompleteTokens = [];
+  selected.forEach((character) => {
+    const token = normalizeToken(character?.token || character?.trigger || character?.displayName || character?.name);
+    const appearance = normalizeText(character?.appearance || character?.description);
+    const negative = normalizeText(character?.negative || character?.negativePrompt);
+    if (appearance || negative) matchedTokens.push(token);
+    if (!appearance || !negative) incompleteTokens.push(token);
+  });
+  const bodySpecWarnings = Array.from(new Set(
+    (Array.isArray(warnings) ? warnings : []).concat(
+      incompleteTokens.length ? [`character_body_spec_snapshot_incomplete:${incompleteTokens.filter(Boolean).join(",")}`] : []
+    )
+  ));
+  return {
+    characters: selected,
+    source,
+    matchedTokens: Array.from(new Set(matchedTokens.filter(Boolean))),
+    missingRequired: [],
+    incompleteTokens: Array.from(new Set(incompleteTokens.filter(Boolean))),
+    bodySpecWarnings,
+  };
+}
+
+/**
+ * 브랜드 원본을 찾지 못해도 요청에 실린 프로젝트 스냅샷으로 이어 간다.
+ * 저장된 브랜드 원본이 실제로 존재하는 경우에만 시트-텍스트 누락을 하드 오류로 본다.
+ * 이 구분이 없으면 예전 프로젝트나 아직 브랜드 레코드가 없는 프로젝트가 생성 자체를 못 한다.
+ */
+export function resolveCharacterBodySpecsFromRecord(characters = [], loaded = null) {
+  const selected = Array.isArray(characters) ? characters : [];
+  if (!loaded?.found) {
+    const fallback = requestSnapshotResult(
+      selected,
+      selected.some((character) => character?.appearance || character?.description || character?.negative || character?.negativePrompt)
+        ? "request-snapshot"
+        : "legacy-no-body-spec",
+      loaded?.source === "server-not-found" ? ["brand_body_spec_record_not_found"] : []
+    );
+    return fallback;
+  }
+  const merged = mergeCharacterBodySpecsFromBrand(selected, loaded.brand);
+  return { ...merged, source: loaded.source, incompleteTokens: [], bodySpecWarnings: [] };
+}
+
+export async function resolveServerCharacterBodySpecs({ env, userId, brandId, characters = [], loadRecord = loadBrandRecord }) {
   const selected = Array.isArray(characters) ? characters : [];
   if (!selected.length) return { characters: selected, source: "no-characters", matchedTokens: [], missingRequired: [] };
   if (!normalizeText(brandId)) {
-    return {
-      characters: selected,
-      source: "client-no-brand-id",
-      matchedTokens: selected.filter((character) => character?.appearance || character?.negative || character?.negativePrompt).map((character) => normalizeToken(character?.token)),
-      missingRequired: [],
-    };
+    return requestSnapshotResult(selected, "client-no-brand-id");
   }
-  const loaded = await loadBrandRecord(env, userId, brandId);
-  if (!loaded.found) {
-    const error = new Error("brand_body_spec_record_not_found");
-    error.code = "BODY_SPEC_SOURCE_NOT_FOUND";
+  let loaded;
+  try {
+    loaded = await loadRecord(env, userId, brandId);
+  } catch (error) {
+    // GCS가 일시적으로 불가해도 완전한 프로젝트 스냅샷이 있으면 생성 흐름을 살린다.
+    // 스냅샷도 없을 때만 기존 503을 유지해 일관성 정보 없이 조용히 생성하지 않는다.
+    const snapshot = requestSnapshotResult(selected, "request-snapshot", [String(error?.message || "brand_body_spec_load_failed")]);
+    if (snapshot.matchedTokens.length && snapshot.incompleteTokens.length === 0) return snapshot;
     throw error;
   }
-  const merged = mergeCharacterBodySpecsFromBrand(selected, loaded.brand);
+  const merged = resolveCharacterBodySpecsFromRecord(selected, loaded);
   if (merged.missingRequired.length) {
     const error = new Error(`character_body_spec_required:${merged.missingRequired.join(",")}`);
     error.code = "CHARACTER_BODY_SPEC_REQUIRED";
     error.tokens = merged.missingRequired;
     throw error;
   }
-  return { ...merged, source: loaded.source };
+  return merged;
 }

@@ -115,10 +115,12 @@
         trigger: trigger,
         name: raw.displayName || raw.name || trigger.replace(/^@/, ''),
         aliases: raw.aliases || [],
-        description: raw.personality || raw.description || raw.profile || raw.note || '',
+        // 지식 허브와 프로젝트 payload 모두 appearance/negative 이름의 신체 스펙을 쓸 수 있다.
+        // 브랜드 캐시가 비어도 이미지·영상 프롬프트가 같은 값을 소비하도록 표준 필드로 합친다.
+        description: raw.appearance || raw.description || raw.personality || raw.profile || raw.note || '',
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
-        negativePrompt: raw.negativePrompt || '',
+        negativePrompt: raw.negative || raw.negativePrompt || '',
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false
@@ -141,10 +143,10 @@
         trigger: trigger,
         name: raw.displayName || raw.name || trigger.replace(/^@/, ''),
         aliases: raw.aliases || [],
-        description: raw.personality || raw.description || raw.profile || raw.note || '',
+        description: raw.appearance || raw.description || raw.personality || raw.profile || raw.note || '',
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
-        negativePrompt: raw.negativePrompt || '',
+        negativePrompt: raw.negative || raw.negativePrompt || '',
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false

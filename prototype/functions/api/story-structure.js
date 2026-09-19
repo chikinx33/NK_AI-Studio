@@ -88,7 +88,7 @@ export async function onRequestPost(context) {
         beats: fallbackBeats,
         fallback: true,
         error: who.ok ? CLAUDE_AUTH_REQUIRED : who.error,
-        meta: { bodySpecSource: bodySpecResolution.source, bodyConstraintRepairs: fallbackAudit.repairs },
+        meta: { bodySpecSource: bodySpecResolution.source, bodySpecWarnings: bodySpecResolution.bodySpecWarnings || [], bodyConstraintRepairs: fallbackAudit.repairs },
       },
       200,
       origin
@@ -151,6 +151,7 @@ export async function onRequestPost(context) {
       meta: {
         bodySpecSource: bodySpecResolution.source,
         bodySpecTokens: bodySpecResolution.matchedTokens || [],
+        bodySpecWarnings: bodySpecResolution.bodySpecWarnings || [],
         bodyConstraintViolations: bodyAudit.violations.length,
         bodyConstraintRepairs: bodyAudit.repairs,
       },
@@ -161,7 +162,7 @@ export async function onRequestPost(context) {
       beats: fallbackBeats,
       fallback: true,
       error: err?.message || "story_structure_failed",
-      meta: { bodySpecSource: bodySpecResolution.source, bodyConstraintRepairs: fallbackAudit.repairs },
+      meta: { bodySpecSource: bodySpecResolution.source, bodySpecWarnings: bodySpecResolution.bodySpecWarnings || [], bodyConstraintRepairs: fallbackAudit.repairs },
     }, 200, origin);
   }
 }

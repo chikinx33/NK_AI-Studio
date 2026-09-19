@@ -674,6 +674,10 @@
         displayName,
         token,
         personality: normalizeCharacterPersonality(c?.personality || c?.description || c?.profile || c?.note || ''),
+        // 개요에서 확정된 신체 스펙은 이후 시나리오·이미지·영상이 함께 읽는 프로젝트 스냅샷이다.
+        // 화면을 다시 열거나 브랜드 캐시가 비어도 이 두 필드를 떨어뜨리면 안 된다.
+        appearance: sanitizeText(c?.appearance || c?.bodyAppearance || '').trim(),
+        negative: sanitizeText(c?.negative || c?.negativePrompt || '').trim(),
         isActive: boolVal(c?.isActive, defaultActive)
       });
     });
@@ -1018,8 +1022,10 @@
       try { brandChar = registry.getCharacterByTrigger(brandId, c.token); } catch (_) { brandChar = null; }
       if (!brandChar) return c;
       return Object.assign({}, c, {
-        appearance: sanitizeText(brandChar.description || '').trim(),
-        negative: sanitizeText(brandChar.negativePrompt || '').trim()
+        // 서버/브랜드 레지스트리를 우선하되 빈 값으로 프로젝트 스냅샷을 지우지는 않는다.
+        appearance: sanitizeText(brandChar.description || c.appearance || '').trim(),
+        negative: sanitizeText(brandChar.negativePrompt || c.negative || c.negativePrompt || '').trim(),
+        bodySpecSource: 'brand-registry'
       });
     });
   };
@@ -1251,8 +1257,11 @@
       characterId: c.characterId,
       displayName: c.displayName,
       token: c.token,
-      personality: c.personality || ''
+      personality: c.personality || '',
+      appearance: c.appearance || '',
+      negative: c.negative || ''
     })));
+    payload.characterContinuityVersion = '1';
     // v3.1581: 세부 장르가 동요·율동인데 음성 모드가 노래가 아니면 여기서 맞춘다.
     // 세부 장르를 이미 골라 둔 채 저장된 프로젝트는 change 이벤트가 다시 뜨지 않아
     // 자동 전환이 걸리지 않는다. 그 상태로 생성하면 가사 필드가 없어 또 일반 시나리오가 나온다.
@@ -3039,6 +3048,7 @@
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
             `신체 스펙: ${m.bodySpecSource || '-'} / 위반 감지 ${Number(m.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(m.bodyConstraintRepairs) || 0}회`,
+            Array.isArray(m.bodySpecWarnings) && m.bodySpecWarnings.length ? `신체 스펙 주의: ${m.bodySpecWarnings.join(', ')}` : '',
             m.songEnabled ? `노래 모드: 가사 ${m.songRefrainSource === 'prewritten' ? '개요에서 작사됨' : (m.songRefrainSource === 'composed' ? '생성 단계에서 작곡됨' : '없음')} / 강제 교정 ${m.refrainEnforced || 0}회` : '',
             m.songEnabled && Array.isArray(m.songSections) && m.songSections.length
               ? `가사 구간: ${m.songSections.length}개 · 합 ${m.songSectionSeconds || 0}초\n`
@@ -3096,6 +3106,7 @@
                     `컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})${p2Elapsed}`,
                     `자동 보정 (Pass 2): 같은 셋업 사이즈 이동 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
                     `신체 일관성 (Pass 2): ${shotsM.bodySpecSource || '-'} / 위반 감지 ${Number(shotsM.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(shotsM.bodyConstraintRepairs) || 0}회`,
+                    Array.isArray(shotsM.bodySpecWarnings) && shotsM.bodySpecWarnings.length ? `신체 스펙 주의 (Pass 2): ${shotsM.bodySpecWarnings.join(', ')}` : '',
                     enforcedLine,
                   ];
                   if (Array.isArray(shotsM.fallbackReasons) && shotsM.fallbackReasons.length) {

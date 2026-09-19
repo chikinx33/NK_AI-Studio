@@ -312,6 +312,7 @@ export async function onRequestPost(context) {
         tokensEnforcedShots,
         bodySpecSource: bodySpecResolution.source,
         bodySpecTokens: bodySpecResolution.matchedTokens || [],
+        bodySpecWarnings: bodySpecResolution.bodySpecWarnings || [],
         bodyConstraintViolations: bodyAudit.violations.length,
         bodyConstraintRepairs: bodyAudit.repairs,
       },

@@ -11,7 +11,11 @@ import {
   stripNegationSuffix,
   validateCharacterBodyText,
 } from "../functions/api/_shared/body-grammar.js";
-import { mergeCharacterBodySpecsFromBrand } from "../functions/api/_shared/brand-body-specs.js";
+import {
+  mergeCharacterBodySpecsFromBrand,
+  resolveCharacterBodySpecsFromRecord,
+  resolveServerCharacterBodySpecs,
+} from "../functions/api/_shared/brand-body-specs.js";
 import { buildShotUserPromptKo, buildShotUserPromptEn } from "../functions/api/scenario/shots/decomposer.js";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8").split("\r\n").join("\n");
@@ -115,6 +119,31 @@ test("★서버 브랜드 레코드가 클라이언트 캐시보다 우선하고
   assert.deepEqual(missing.missingRequired, ["@네모"]);
 });
 
+test("★브랜드 레코드가 없어도 프로젝트 신체 스냅샷으로 생성 흐름을 이어 간다", async () => {
+  const resolved = await resolveServerCharacterBodySpecs({
+    env: {}, userId: "user", brandId: "legacy-brand", characters: [NEMO],
+    loadRecord: async () => ({ found: false, brand: null, source: "server-not-found" }),
+  });
+  assert.equal(resolved.source, "request-snapshot");
+  assert.deepEqual(resolved.matchedTokens, ["@네모"]);
+  assert.deepEqual(resolved.incompleteTokens, []);
+  assert.ok(resolved.bodySpecWarnings.includes("brand_body_spec_record_not_found"));
+  assert.equal(resolved.characters[0].negative, NEMO.negative);
+});
+
+test("★브랜드 원본이 존재할 때만 시트-신체 스펙 누락을 하드 오류로 분류한다", () => {
+  const legacy = resolveCharacterBodySpecsFromRecord([{ token: "@네모" }], { found: false, source: "server-not-found" });
+  assert.equal(legacy.source, "legacy-no-body-spec");
+  assert.deepEqual(legacy.missingRequired, []);
+  assert.deepEqual(legacy.incompleteTokens, ["@네모"]);
+
+  const persisted = resolveCharacterBodySpecsFromRecord(
+    [{ token: "@네모" }],
+    { found: true, source: "server", brand: { characterSheets: [{ token: "@네모" }], brandCharacters: [] } }
+  );
+  assert.deepEqual(persisted.missingRequired, ["@네모"]);
+});
+
 test("★컷 분해(Pass 2) 프롬프트에 신체 문법이 실린다", () => {
   const ko = buildShotUserPromptKo({ id: 1, estSec: 8, visual: "v" }, { characters: [NEMO] });
   assert.match(ko, /몸에 없는 것: .*손가락/);
@@ -155,8 +184,11 @@ test("★클라이언트가 브랜드 허브의 신체 스펙을 캐릭터에 �
   const src = read("prototype/js/ui/scenario.js");
   assert.match(src, /const withBodySpecs = \(list = \[\]\) =>/);
   assert.match(src, /registry\.getCharacterByTrigger\(brandId, c\.token\)/);
-  assert.match(src, /appearance: sanitizeText\(brandChar\.description \|\| ''\)\.trim\(\),/);
-  assert.match(src, /negative: sanitizeText\(brandChar\.negativePrompt \|\| ''\)\.trim\(\)/);
+  assert.match(src, /appearance: sanitizeText\(brandChar\.description \|\| c\.appearance \|\| ''\)\.trim\(\),/);
+  assert.match(src, /negative: sanitizeText\(brandChar\.negativePrompt \|\| c\.negative \|\| c\.negativePrompt \|\| ''\)\.trim\(\),/);
+  assert.match(src, /appearance: c\.appearance \|\| '',/);
+  assert.match(src, /negative: c\.negative \|\| ''/);
+  assert.match(src, /payload\.characterContinuityVersion = '1'/);
   // 생성 payload 와 컷 분해 호출 모두 스펙을 싣는다.
   assert.match(src, /payload\.characters = withBodySpecs\(/);
   assert.match(src, /characters: withBodySpecs\(Array\.isArray\(currentPayload\?\.characters\)/);

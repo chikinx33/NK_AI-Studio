@@ -87,3 +87,26 @@ test('★레퍼런스 모델 경로(씬·컷) 모두 플레이트를 끼우고 �
   assert.match(sceneBlock, /SET_PLATE_PROMPT_LINE/);
   assert.match(shotBlock, /SET_PLATE_PROMPT_LINE/);
 });
+
+test('★영상 캐릭터 레퍼런스 해결은 미정의 전역 state 없이 실제 시트를 반환한다', async () => {
+  const NK = loadVideo();
+  NK.service.characterRegistry = {
+    projectUsesCharacterTokens() { return true; },
+    resolveCharactersFromPrompt() {
+      return { characters: [{ trigger: '@네모', name: '네모' }], triggers: ['@네모'], missing: [] };
+    }
+  };
+  NK.uiPipelineImage = { _helpers: {
+    buildReferenceBundle() {
+      return { referenceImages: [{ imageDataUrl: '/nemo-sheet.png', subjectDescription: '네모' }] };
+    }
+  } };
+  const refs = await NK.uiPipelineVideo._helpers.resolveKlingReferenceImages(
+    { id: '1', shot: '@네모가 걷는다' },
+    { brandId: 'shape-brand', characters: [{ token: '@네모' }] },
+    'project-1',
+    '@네모가 걷는다'
+  );
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].imageDataUrl, '/nemo-sheet.png');
+});
