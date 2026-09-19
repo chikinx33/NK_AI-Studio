@@ -1721,17 +1721,11 @@ export default function ProductionCanvas({
                 open={batchDockOpen}
                 onToggle={() => setBatchDockOpen((v) => !v)}
                 icon={<BotIcon className="h-4 w-4 text-emerald-400" />}
-                title="일괄 제작"
-                subtitle="콘티 → 승인 → 스틸 → 영상"
+                title="일괄 생성"
                 tone="emerald"
               >
-                <div className="p-3">
-                  <div className="mb-3 rounded-lg border border-violet-800/60 bg-violet-950/20 p-2">
-                    <div className="mb-1 text-[11px] font-bold text-violet-200">1. 씬별 스토리보드 생성·검토</div>
-                    <p className="mb-2 text-[10px] leading-relaxed text-gray-400">부감 마스터를 공간 기준으로 사용하고 다른 씬의 컷은 한 시트에 섞지 않아요. 패널을 승인하거나 부분 수정한 뒤 정식 스틸을 만드세요.</p>
-                    <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 만들기·검토</button>
-                  </div>
-                  <div className="mb-1 text-[11px] font-bold text-emerald-200">2. 승인 콘티 기반 스틸·영상 파이프라인</div>
+                <div className="space-y-2 p-3">
+                  <button type="button" onClick={() => setStoryboardOpen(true)} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 생성</button>
                   <VideoPipelinePanel
                     projectId={projectId}
                     selectedSceneIds={selectedSceneIds}

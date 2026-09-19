@@ -194,6 +194,10 @@ export default function VideoPipelinePanel({
   };
 
   const plan = readPlan(job);
+  const visibleSteps = plan?.steps.filter((s) => s.still !== "skipped" || s.video !== "skipped") || [];
+  const stageStates = visibleSteps.flatMap((s) => [s.still, s.video]).filter((state) => state !== "skipped");
+  const successCount = stageStates.filter((state) => state === "done").length;
+  const failureCount = stageStates.filter((state) => state === "failed").length;
   const pending = job?.approvalState?.status === "pending";
   const finished = !!job && ["completed", "failed", "cancelled"].includes(job.status);
   // 상태 표시는 사람 말로. 취소·완료 뒤에도 서버 current_stage 는 마지막 단계(awaiting-approval 등)로 남아 있어
@@ -215,64 +219,52 @@ export default function VideoPipelinePanel({
   const credits = Number(job?.costEstimate?.basis?.credits ?? plan?.summary?.credits ?? 0);
 
   return (
-    <div className="flex flex-col gap-3 text-[12px] text-gray-300">
+    <div className="flex flex-col gap-2 text-[12px] text-gray-300">
       {!job && (
         <>
-          <p className="text-gray-500">비어 있는 컷을 스틸→영상 순으로 자동 생성해요. 실행 전에 계획과 예상 크레딧을 보여주고 승인을 받아요.</p>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={stages.still} onChange={(e) => setStages({ ...stages, still: e.target.checked })} /> 스틸</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={stages.video} onChange={(e) => setStages({ ...stages, video: e.target.checked })} /> 영상</label>
-            <label className="flex items-center gap-1.5"><input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} /> 이미 있는 것도 다시</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} /> 다시 생성</label>
             <label className="flex items-center gap-1.5" title={selectedSceneIds.length ? `선택 컷: ${selectedSceneIds.join(", ")}` : "캔버스에서 컷을 선택하면 켤 수 있어요"}>
-              <input type="checkbox" disabled={!selectedSceneIds.length} checked={onlySelected && selectedSceneIds.length > 0} onChange={(e) => setOnlySelected(e.target.checked)} /> 선택 컷만{selectedSceneIds.length ? ` (${selectedSceneIds.length})` : ""}
+              <input type="checkbox" disabled={!selectedSceneIds.length} checked={onlySelected && selectedSceneIds.length > 0} onChange={(e) => setOnlySelected(e.target.checked)} /> 선택만{selectedSceneIds.length ? ` (${selectedSceneIds.length})` : ""}
             </label>
             <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} className="rounded border border-edge bg-[#0b1018] px-2 py-1 text-[11px]">
               {VIDEO_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </div>
-          <button type="button" disabled={busy} onClick={() => void start()} className="min-w-[132px] rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
-            {busy ? "계획 세우는 중…" : "계획 세우기"}
+          <button type="button" disabled={busy} onClick={() => void start()} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+            {busy ? "준비 중…" : "스틸·영상 생성"}
           </button>
         </>
       )}
 
       {job && (
         <>
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="truncate font-bold text-white">{job.title}</div>
-              <div className="text-[11px] text-gray-500">{statusLabel} · {job.progress}%</div>
+          <div>
+            <div className="mb-1 flex items-center justify-between text-[11px]">
+              <span className="font-bold text-white">{statusLabel}</span>
+              <span className="text-gray-400">{job.progress}%</span>
             </div>
-            <div className="h-1.5 w-28 shrink-0 overflow-hidden rounded bg-gray-800"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${job.progress}%` }} /></div>
+            <div className="h-1.5 w-full overflow-hidden rounded bg-gray-800"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${job.progress}%` }} /></div>
           </div>
 
-          {job.status === "cancelled" && (
-            <div className="rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">
-              {spentSteps === 0
-                ? "승인 전에 취소돼 크레딧이 소비되지 않았어요. 생성은 승인 뒤에만 시작돼요."
-                : `취소됐어요. 이미 완료된 ${spentSteps}개 스텝의 크레딧만 사용됐고, 남은 컷은 만들지 않아요.`}
-            </div>
-          )}
-          {job.status === "completed" && plan && (
-            <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 p-2 text-[11px] text-emerald-200">
-              파이프라인을 마쳤어요. 캔버스에서 각 컷의 스틸·영상과 프롬프트 계보를 확인하세요.
-            </div>
-          )}
           {plan && !(job.status === "cancelled" && spentSteps === 0) && (
             <div className="rounded-lg border border-edge bg-[#0b1018] p-2">
-              <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
-                <span>컷 {plan.summary.scenes}</span>
-                <span>스틸 {plan.summary.pendingStills}</span>
-                <span>영상 {plan.summary.pendingVideos}</span>
-                <span className="text-amber-300">예상 {credits} 크레딧</span>
-                {plan.summary.videoModel && <span>{plan.summary.videoModel}</span>}
+              <div className="mb-1.5 flex gap-3 text-[11px] font-bold">
+                <span className="text-emerald-300">성공 {successCount}</span>
+                <span className={failureCount ? "text-red-300" : "text-gray-600"}>실패 {failureCount}</span>
               </div>
               <ul className="max-h-40 space-y-0.5 overflow-y-auto">
-                {plan.steps.filter((s) => s.still !== "skipped" || s.video !== "skipped").map((s) => (
-                  <li key={String(s.sceneId)} className="flex items-center gap-2">
-                    <button type="button" onClick={() => onFocusScene(s.sceneId)} className="w-20 shrink-0 truncate text-left text-gray-300 hover:text-emerald-300" title={s.title}>컷 {String(s.sceneId)}</button>
-                    <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.still] || ""}`} title={s.stillError || ""}>{s.still === "skipped" ? "" : `스틸 ${stepLabel(s.still, job.status)}`}</span>
-                    <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.video] || ""}`} title={s.videoError || ""}>{s.video === "skipped" ? "" : `영상 ${stepLabel(s.video, job.status)}`}</span>
+                {visibleSteps.map((s) => (
+                  <li key={String(s.sceneId)} className="border-t border-edge/60 py-1 first:border-t-0">
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => onFocusScene(s.sceneId)} className="w-20 shrink-0 truncate text-left text-gray-300 hover:text-emerald-300" title={s.title}>컷 {String(s.sceneId)}</button>
+                      <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.still] || ""}`}>{s.still === "skipped" ? "" : `스틸 ${stepLabel(s.still, job.status)}`}</span>
+                      <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.video] || ""}`}>{s.video === "skipped" ? "" : `영상 ${stepLabel(s.video, job.status)}`}</span>
+                    </div>
+                    {s.stillError && <div className="mt-1 break-words pl-[88px] text-[10px] text-red-300">스틸: {s.stillError}</div>}
+                    {s.videoError && <div className="mt-1 break-words pl-[88px] text-[10px] text-red-300">영상: {s.videoError}</div>}
                   </li>
                 ))}
               </ul>
@@ -281,28 +273,28 @@ export default function VideoPipelinePanel({
 
           {pending && (
             <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-2">
-              <div className="mb-2 text-amber-200">{job.approvalState?.action || "실행 승인이 필요해요."}</div>
+              <div className="mb-2 text-amber-200">예상 {credits} 크레딧</div>
               <div className="flex gap-2">
-                <button type="button" disabled={busy} onClick={() => void decide("approved")} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">승인·실행</button>
-                <button type="button" disabled={busy} onClick={() => void decide("rejected")} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-gray-300 hover:bg-edge disabled:opacity-50">거절</button>
+                <button type="button" disabled={busy} onClick={() => void decide("approved")} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">생성</button>
+                <button type="button" disabled={busy} onClick={() => void decide("rejected")} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-gray-300 hover:bg-edge disabled:opacity-50">취소</button>
               </div>
             </div>
           )}
 
-          {job.error && <div className="rounded border border-red-800/60 bg-red-950/30 p-2 text-red-300">{String((job.error as any)?.message || job.error)}</div>}
+          {job.error && <div className="rounded border border-red-800/60 bg-red-950/30 p-2 text-red-300">실패 사유: {String((job.error as any)?.message || job.error)}</div>}
 
           <div className="flex flex-wrap gap-2">
             {job.status === "running" && plan?.continueRunning && (
-              <button type="button" disabled={busy} onClick={() => void act(async (id) => (await continueCompanySkillJob(id)).job)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">다음 배치</button>
+              <button type="button" disabled={busy} onClick={() => void act(async (id) => (await continueCompanySkillJob(id)).job)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">계속</button>
             )}
             {job.status === "failed" && (
-              <button type="button" disabled={busy} onClick={() => void act(retryCompanySkillJob)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">다시 시도</button>
+              <button type="button" disabled={busy} onClick={() => void act(retryCompanySkillJob)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">다시 생성</button>
             )}
             {!finished && (
               <button type="button" disabled={busy} onClick={() => void act(cancelCompanySkillJob)} className="min-w-[96px] rounded-lg border border-red-900/60 px-3 py-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50">취소</button>
             )}
             {finished && (
-              <button type="button" onClick={reset} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge">새 파이프라인</button>
+              <button type="button" onClick={reset} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge">새로 생성</button>
             )}
           </div>
         </>

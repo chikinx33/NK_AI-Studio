@@ -12,7 +12,7 @@ test('★일괄 제작은 컷별 스틸 직행 대신 동일한 스토리보드 
   assert.match(pipeline, /id="bulk-generate"[\s\S]*스토리보드 일괄 생성/);
   assert.match(pipeline, /bulkGen\.onclick = function \(\) \{ if \(NK\.uiStoryboardSheet/);
   assert.doesNotMatch(pipeline.slice(pipeline.indexOf("var bulkGen"), pipeline.indexOf("var bulkVid")), /generateImageForIdx/);
-  assert.match(canvas, /스토리보드 만들기·검토/);
+  assert.match(canvas, /스토리보드 생성/);
   assert.match(canvas, /src=\{`\/scenes\.html\?embed=1&projectId=\$\{encodeURIComponent\(projectId\)\}&storyboard=1`\}/);
   assert.match(executor, /requireStoryboard: true/);
 });
@@ -66,11 +66,25 @@ test('★일괄 제작·승인 카드는 같은 왼쪽 독 스타일을 쓰고 �
   assert.match(canvas, /data-testid="batch-dock"/);
   assert.match(canvas, /batchDockOpen \? "w-\[400px\] max-w-\[calc\(100%-24px\)\]" : "w-fit"/, '일괄 제작은 펼칠 때만 전체 폭을 쓴다');
   assert.match(approvals, /open \? "w-\[400px\] max-w-\[calc\(100vw-24px\)\]" : "w-fit"/, '승인도 같은 400px 폭과 최소화 규칙을 쓴다');
-  assert.match(canvas, /<CanvasFloatingDock[\s\S]*?title="일괄 제작"[\s\S]*?tone="emerald"/);
+  assert.match(canvas, /<CanvasFloatingDock[\s\S]*?title="일괄 생성"[\s\S]*?tone="emerald"/);
   assert.match(approvals, /<CanvasFloatingDock[\s\S]*?title=\{`승인 \(\$\{count\}\)`\}[\s\S]*?tone="amber"/);
   assert.match(dock, /\{open && \([\s\S]*?\{title\}[\s\S]*?\)\}/, '접힌 상태에서는 제목·개수를 렌더링하지 않는다');
   assert.match(dock, /\{open \? "−" : "\+"\}/, '두 도크가 동일한 +/- 표기를 쓴다');
   assert.match(dock, /open \? "w-full gap-2 px-3 py-2" : "h-9 w-auto gap-1\.5 px-2"/, '접힌 버튼은 아이콘과 +/-에 필요한 폭만 차지한다');
   assert.match(canvas, /style=\{\{ bottom: pending\.length \? \(jobDockOpen \? 376 : 112\) : 72 \}\}/, '승인 카드의 펼침 상태만큼 위로 배치한다');
   assert.match(dock, /aria-expanded=\{open\}/);
+});
+
+test('★일괄 생성 카드는 생성·진행·결과·실패 사유만 간결하게 보여준다', () => {
+  const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
+  const panel = read('ai-company-app/src/components/VideoPipelinePanel.tsx');
+  assert.match(canvas, />스토리보드 생성<\/button>/);
+  assert.doesNotMatch(canvas, /씬별 스토리보드 생성·검토|승인 콘티 기반 스틸·영상 파이프라인|부감 마스터를 공간 기준/);
+  assert.match(panel, /busy \? "준비 중…" : "스틸·영상 생성"/);
+  assert.match(panel, /성공 \{successCount\}/);
+  assert.match(panel, /실패 \{failureCount\}/);
+  assert.match(panel, /실패 사유:/);
+  assert.match(panel, /스틸: \{s\.stillError\}/);
+  assert.match(panel, /영상: \{s\.videoError\}/);
+  assert.doesNotMatch(panel, /job\.title|파이프라인을 마쳤어요|비어 있는 컷을 스틸→영상 순으로 자동 생성해요/);
 });

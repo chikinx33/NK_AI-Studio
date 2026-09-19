@@ -188,8 +188,8 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.match(canvas, /aspect-\[4\/3\] max-h-full w-\[min\(1100px,100%\)\]/);
   assert.match(canvas, /const snap = \(v: number\) => Math\.round\(v \/ GRID\) \* GRID;/);
   assert.doesNotMatch(canvas, /Shift\+클릭 다중 선택/);
-  assert.match(canvas, /일괄 제작/);
-  assert.match(canvas, /콘티 → 승인 → 스틸 → 영상/);
+  assert.match(canvas, /일괄 생성/);
+  assert.match(canvas, /스토리보드 생성/);
   assert.match(canvas, /storyboard=1/);
   // 일반 모드는 대화 없이 선택 컷에 바로 생성하고, '에이전트' 칩이 모드를 바꾼다.
   assert.match(normalBranch, /onClick=\{\(\) => switchMode\("agent"\)\}/);
