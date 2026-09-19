@@ -268,6 +268,19 @@ function WorkflowIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+// AI 회사 캔버스와 같은 Lucide 아이콘을 캔버스 자체 상단 바에서도 사용한다.
+function SplineIcon({ className }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M5 17A12 12 0 0 1 17 5" /></svg>;
+}
+function StraightIcon({ className }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M5 17v-5h14V7" /></svg>;
+}
+function EyeIcon({ className }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></svg>;
+}
+function EyeOffIcon({ className }: { className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></svg>;
+}
 function RefreshIcon({ className }: { className?: string }) {
   // lucide: refresh-cw
   return (
@@ -341,8 +354,6 @@ export default function ProductionCanvas({
   focusNonce = 0,
   embedded = false,
   onProjectChange,
-  edgeStyle = "curve",
-  edgesVisible = true,
   hideTopBar = false,
   expanded = false,
   onToggleExpand,
@@ -352,8 +363,6 @@ export default function ProductionCanvas({
   focusNonce?: number;
   embedded?: boolean;
   onProjectChange?: (projectId: string) => void;
-  edgeStyle?: "curve" | "straight";
-  edgesVisible?: boolean;
   // 집중 모드: 상단 바(프로젝트 선택·줌·일괄 생성)도 숨긴다.
   hideTopBar?: boolean;
   // 확장: AI 시네마 셸에서는 왼쪽 사이드바를 감추고, AI 기업에서는 집중 모드(좌우 패널 접기)다.
@@ -382,6 +391,19 @@ export default function ProductionCanvas({
   const lanes = useMemo(() => lanesFromLayout(layout, graph, measuredH), [layout, graph, measuredH]);
   const positions = useMemo(() => computePositions(layout, lanes), [layout, lanes]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.8 });
+  // 연결선 설정은 캔버스 자체가 소유한다. AI 회사·AI 시네마 임베드 중 어느 경로로 열어도 같은 버튼과 저장값을 쓴다.
+  const [edgeStyle, setEdgeStyle] = useState<"curve" | "straight">(() => readUserStorage("canvasEdgeStyle") === "straight" ? "straight" : "curve");
+  const [edgesVisible, setEdgesVisible] = useState(() => readUserStorage("canvasEdgesVisible") !== "0");
+  const toggleEdgeStyle = () => setEdgeStyle((current) => {
+    const next = current === "curve" ? "straight" : "curve";
+    writeUserStorage("canvasEdgeStyle", next);
+    return next;
+  });
+  const toggleEdgesVisible = () => setEdgesVisible((current) => {
+    const next = !current;
+    writeUserStorage("canvasEdgesVisible", next ? "1" : "0");
+    return next;
+  });
   const [selectedId, setSelectedId] = useState<string>("");
   const [multi, setMulti] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingJob[]>([]);
@@ -1072,6 +1094,28 @@ export default function ProductionCanvas({
               {expanded ? <MinimizeIcon className="h-3.5 w-3.5" /> : <MaximizeIcon className="h-3.5 w-3.5" />}
             </button>
           )}
+          <button
+            type="button"
+            onClick={toggleEdgesVisible}
+            aria-pressed={!edgesVisible}
+            className={`grid h-7 w-7 place-items-center rounded border transition ${edgesVisible
+              ? "border-edge text-gray-400 hover:bg-edge hover:text-white"
+              : "border-amber-600/70 bg-amber-900/30 text-amber-200 hover:bg-amber-900/50"
+            }`}
+            title={edgesVisible ? "연결선 숨기기" : "연결선 보이기"}
+            aria-label={edgesVisible ? "연결선 숨기기" : "연결선 보이기"}
+          >
+            {edgesVisible ? <EyeIcon className="h-3.5 w-3.5" /> : <EyeOffIcon className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={toggleEdgeStyle}
+            className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 transition hover:bg-edge hover:text-white"
+            title={edgeStyle === "curve" ? "연결선: 곡선 (누르면 직각선)" : "연결선: 직각선 (누르면 곡선)"}
+            aria-label={edgeStyle === "curve" ? "연결선을 직각선으로" : "연결선을 곡선으로"}
+          >
+            {edgeStyle === "curve" ? <SplineIcon className="h-3.5 w-3.5" /> : <StraightIcon className="h-3.5 w-3.5" />}
+          </button>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.max(MIN_SCALE, v.scale * 0.9) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="축소">−</button>
           <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>

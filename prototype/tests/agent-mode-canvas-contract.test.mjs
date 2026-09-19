@@ -118,16 +118,18 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   // 임베드(AI 시네마 셸)에서는 캔버스 상단 바(프로젝트·줌·일괄 생성)를 남긴다.
   assert.match(workspace, /hideTopBar=\{focusMode && !embed\}/);
   assert.match(canvas, /\{!hideTopBar && \(\s*<section className="flex shrink-0 flex-wrap/);
-  // 연결선 곡선·직선 토글: 확장 버튼 옆, 브라우저에 기억, 캔버스가 prop 으로 받는다.
-  assert.match(workspace, /writeUserStorage\("canvasEdgeStyle", next\)/);
-  assert.match(workspace, /edgeStyle=\{edgeStyle\}/);
+  // 연결선 곡선·직선 토글: 캔버스 자체 상단 바에 있어 AI 회사·AI 시네마 임베드 양쪽에서 보이고, 브라우저에 기억한다.
+  assert.match(canvas, /writeUserStorage\("canvasEdgeStyle", next\)/);
+  assert.match(canvas, /title=\{edgeStyle === "curve" \? "연결선: 곡선 \(누르면 직각선\)" : "연결선: 직각선 \(누르면 곡선\)"\}/);
+  assert.doesNotMatch(workspace, /edgeStyle=\{edgeStyle\}/);
   // 직선 모드는 대각선이 아니라 직각(수직·수평) 경로다(사용자 요청).
   assert.match(canvas, /edgeStyle === "straight"[\s\S]*orthogonalPath\(a, b\)/);
   assert.match(canvas, /L \$\{mx\} \$\{a\.y\} L \$\{mx\} \$\{b\.y\} L \$\{b\.x\} \$\{b\.y\}/);
   assert.doesNotMatch(canvas, /`M \$\{a\.x\} \$\{a\.y\} L \$\{b\.x\} \$\{b\.y\}`/);
   // 연결선 보기·숨기기(눈 아이콘) — 기억하고, 캔버스는 숨김이면 선을 그리지 않는다.
-  assert.match(workspace, /writeUserStorage\("canvasEdgesVisible"/);
-  assert.match(workspace, /edgesVisible=\{edgesVisible\}/);
+  assert.match(canvas, /writeUserStorage\("canvasEdgesVisible", next \? "1" : "0"\)/);
+  assert.match(canvas, /title=\{edgesVisible \? "연결선 숨기기" : "연결선 보이기"\}/);
+  assert.doesNotMatch(workspace, /edgesVisible=\{edgesVisible\}/);
   assert.match(canvas, /edgesVisible && edgesToDraw\.map/);
   assert.match(app, /focusMode \? "lg:hidden"/);
   assert.match(app, /\$\{focusMode \? "" : "lg:flex lg:flex-col"\}/);
