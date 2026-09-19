@@ -2,6 +2,8 @@ import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUD
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
 import { normalizeSongSections, SYLLABLES_PER_SEC } from "./_shared/song-sections.js";
+import { buildBodyGrammar, repairCharacterBodyText } from "./_shared/body-grammar.js";
+import { resolveServerCharacterBodySpecs } from "./_shared/brand-body-specs.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -31,14 +33,14 @@ export async function onRequestPost(context) {
     return json({ error: "Invalid JSON body" }, 400, origin);
   }
 
-  const input = normalizeInput(body);
+  let input = normalizeInput(body);
   if (!input.story) {
     return json({ error: input.language === "en" ? "story is required" : "이야기 입력이 필요합니다." }, 400, origin);
   }
 
-  const fallbackBeatList = buildFallbackBeats(input.story, input);
-  const fallbackStory = finalizeFallbackStory(fallbackBeatList);
-  const fallbackBeats = normalizeBeats(
+  let fallbackBeatList = buildFallbackBeats(input.story, input);
+  let fallbackStory = finalizeFallbackStory(fallbackBeatList);
+  let fallbackBeats = normalizeBeats(
     fallbackBeatList.map((action, idx) => ({ action, isClimax: idx === fallbackBeatList.length - 1 })),
     fallbackStory,
     input
@@ -46,6 +48,32 @@ export async function onRequestPost(context) {
   // 인증이 없으면 규칙 기반 폴백으로 답한다. 이 경로는 Claude 를 부르지 않아
   // 크레딧을 쓰지 않으므로 차단하지 않고, error 코드로 설정만 안내한다.
   const who = await authorizeRequest(request, env);
+  let bodySpecResolution = { source: "client-unauthenticated", matchedTokens: [] };
+  if (who.ok) {
+    try {
+      bodySpecResolution = await resolveServerCharacterBodySpecs({
+        env,
+        userId: who.userId,
+        brandId: body?.brandId || body?.seriesId || "",
+        characters: input.characters,
+      });
+      input = { ...input, characters: normalizeCharacters(bodySpecResolution.characters) };
+      fallbackBeatList = buildFallbackBeats(input.story, input);
+      fallbackStory = finalizeFallbackStory(fallbackBeatList);
+      fallbackBeats = normalizeBeats(
+        fallbackBeatList.map((action, idx) => ({ action, isClimax: idx === fallbackBeatList.length - 1 })),
+        fallbackStory,
+        input
+      );
+    } catch (error) {
+      const status = error?.code === "CHARACTER_BODY_SPEC_REQUIRED" ? 422
+        : (error?.code === "BODY_SPEC_SOURCE_NOT_FOUND" ? 409 : 503);
+      return json({ error: error?.message || "character_body_spec_resolution_failed" }, status, origin);
+    }
+  }
+  const fallbackAudit = enforceStoryBodyConstraints(fallbackStory, fallbackBeats, input.characters);
+  fallbackStory = fallbackAudit.story;
+  fallbackBeats = fallbackAudit.beats;
   let auth = null;
   if (who.ok) {
     auth = await studioAuth(env, who.userId).catch((e) => {
@@ -55,7 +83,13 @@ export async function onRequestPost(context) {
   }
   if (!auth) {
     return json(
-      { story: fallbackStory, beats: fallbackBeats, fallback: true, error: who.ok ? CLAUDE_AUTH_REQUIRED : who.error },
+      {
+        story: fallbackStory,
+        beats: fallbackBeats,
+        fallback: true,
+        error: who.ok ? CLAUDE_AUTH_REQUIRED : who.error,
+        meta: { bodySpecSource: bodySpecResolution.source, bodyConstraintRepairs: fallbackAudit.repairs },
+      },
       200,
       origin
     );
@@ -97,17 +131,29 @@ export async function onRequestPost(context) {
     const structured = restoreCharacterTokenHints(sanitizeStory(parsed?.story), input);
     if (!structured) throw new Error("No structured story generated");
     const beats = normalizeBeats(parsed?.beats, structured, input);
+    const bodyAudit = enforceStoryBodyConstraints(structured, beats, input.characters);
+    if (bodyAudit.remainingViolations.length) {
+      const error = new Error("character_body_constraint_unresolved");
+      error.code = "CHARACTER_BODY_CONSTRAINT_UNRESOLVED";
+      throw error;
+    }
     // v3.1584: 가사는 비트가 아니라 '구간'이다. 구간마다 자기 길이를 갖고 여러 씬에 걸친다.
     const songSections = input.songMode
       ? normalizeSongSections(parsed?.lyrics, { durationSec: input.durationSeconds, lang: input.language })
       : [];
 
     return json({
-      story: structured,
-      beats,
+      story: bodyAudit.story,
+      beats: bodyAudit.beats,
       songSections,
       songMode: !!input.songMode,
       fallback: false,
+      meta: {
+        bodySpecSource: bodySpecResolution.source,
+        bodySpecTokens: bodySpecResolution.matchedTokens || [],
+        bodyConstraintViolations: bodyAudit.violations.length,
+        bodyConstraintRepairs: bodyAudit.repairs,
+      },
     }, 200, origin);
   } catch (err) {
     return json({
@@ -115,6 +161,7 @@ export async function onRequestPost(context) {
       beats: fallbackBeats,
       fallback: true,
       error: err?.message || "story_structure_failed",
+      meta: { bodySpecSource: bodySpecResolution.source, bodyConstraintRepairs: fallbackAudit.repairs },
     }, 200, origin);
   }
 }
@@ -320,6 +367,7 @@ function buildUserPrompt(input) {
       `World setting: ${input.worldSetting || "(none)"}`,
       `Brand rules: ${input.brandRules.join(", ") || "(none)"}`,
       `Banned expressions: ${input.bannedExpressions.join(", ") || "(none)"}`,
+      buildBodyGrammar(input.characters, "en"),
       ...(input.songMode ? [
         `[Video length] ${input.durationSeconds || 0}s - every durationSec in "lyrics" MUST sum to exactly this.`,
         `[Total syllable budget] about ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)} syllables max. ${SYLLABLES_PER_SEC} syllables per second is the ceiling for a 3-6 year old to sing along. Going over makes some passage unsingable - write fewer words, not more.`,
@@ -349,6 +397,7 @@ function buildUserPrompt(input) {
     `세계관/배경: ${input.worldSetting || "(없음)"}`,
     `브랜드 규칙: ${input.brandRules.join(", ") || "(없음)"}`,
     `금지 표현: ${input.bannedExpressions.join(", ") || "(없음)"}`,
+    buildBodyGrammar(input.characters, "ko"),
     ...(input.songMode ? [
       `[영상 길이] ${input.durationSeconds || 0}초 — "lyrics" 의 durationSec 합이 정확히 이 값이어야 한다.`,
       `[총 음절 예산] 약 ${Math.round((input.durationSeconds || 0) * SYLLABLES_PER_SEC)}음절 이내. 3~6세가 따라 부르려면 초당 ${SYLLABLES_PER_SEC}음절이 상한이다. 예산을 넘기면 어느 소절이든 못 부를 속도가 된다 — 가사를 늘리지 말고 줄여라.`,
@@ -364,6 +413,31 @@ function buildFallbackStory(input) {
   if (!story) return "";
   const beats = buildFallbackBeats(story, input);
   return finalizeFallbackStory(beats);
+}
+
+function enforceStoryBodyConstraints(story, beats, characters) {
+  let repairs = 0;
+  const violations = [];
+  const remainingViolations = [];
+  const storyResult = repairCharacterBodyText(story, characters);
+  if (storyResult.changed) repairs += 1;
+  storyResult.violations.forEach((item) => violations.push({ ...item, field: "story" }));
+  storyResult.remainingViolations.forEach((item) => remainingViolations.push({ ...item, field: "story" }));
+  const nextBeats = (Array.isArray(beats) ? beats : []).map((beat, index) => {
+    if (!beat || typeof beat !== "object") return beat;
+    const result = repairCharacterBodyText(beat.action, characters);
+    if (result.changed) repairs += 1;
+    result.violations.forEach((item) => violations.push({ ...item, field: `beats[${index}].action` }));
+    result.remainingViolations.forEach((item) => remainingViolations.push({ ...item, field: `beats[${index}].action` }));
+    return result.changed ? { ...beat, action: result.text } : beat;
+  });
+  return {
+    story: storyResult.text,
+    beats: nextBeats,
+    repairs,
+    violations,
+    remainingViolations,
+  };
 }
 
 function normalizeTextList(value) {
@@ -407,7 +481,9 @@ function normalizeCharacters(list) {
       const displayName = sanitizeText(raw.displayName || raw.name || token.replace(/^@/, ""));
       return {
         token,
-        displayName: displayName || token.replace(/^@/, "")
+        displayName: displayName || token.replace(/^@/, ""),
+        appearance: sanitizeText(raw.appearance || raw.description || ""),
+        negative: sanitizeText(raw.negative || raw.negativePrompt || ""),
       };
     })
     .filter(Boolean)

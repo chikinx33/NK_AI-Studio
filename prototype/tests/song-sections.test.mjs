@@ -385,7 +385,7 @@ test("★회귀: 컷 분해가 등록 캐릭터로 @토큰을 보정한다", () 
   const src = read("prototype/functions/api/scenario-shots.js");
   assert.match(src, /function buildTokenMapFromCharacters\(characters\)/);
   assert.match(src, /\.\.\.buildTokenMapFromCharacters\(characters\)/);
-  assert.match(src, /const characters = Array\.isArray\(body\?\.characters\) \? body\.characters : \[\]/);
+  assert.match(src, /let characters = Array\.isArray\(body\?\.characters\) \? body\.characters : \[\]/);
   // 클라이언트가 실제로 캐릭터를 보낸다
   const ui = read("prototype/js/ui/scenario.js");
   assert.match(ui, /characters: Array\.isArray\(payload\?\.characters\) \? payload\.characters : \[\]/);

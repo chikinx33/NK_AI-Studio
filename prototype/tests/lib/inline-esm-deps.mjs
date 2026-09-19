@@ -54,7 +54,15 @@ export function inlineBodyGrammar(source) {
   return source.replace(/^import\s+.*from\s+["'].*_shared\/body-grammar\.js["'];\s*$/m, () => helper);
 }
 
+/** 서버 브랜드 조회는 GCS 네트워크 의존이므로 VM 단위 테스트에서는 입력을 그대로 돌려준다. */
+export function stubBrandBodySpecs(source) {
+  return source.replace(
+    /^import\s+.*from\s+["'].*_shared\/brand-body-specs\.js["'];\s*$/m,
+    () => 'const resolveServerCharacterBodySpecs = async ({ characters = [] }) => ({ characters, source: "test", matchedTokens: [], missingRequired: [] });'
+  );
+}
+
 /** 엔드포인트 소스를 vm 에서 돌릴 수 있게 준비한다. */
 export function prepareEndpointSource(source) {
-  return stubRequestAuth(inlineCreditHelper(inlineSongSections(inlineBodyGrammar(source))));
+  return stubBrandBodySpecs(stubRequestAuth(inlineCreditHelper(inlineSongSections(inlineBodyGrammar(source)))));
 }

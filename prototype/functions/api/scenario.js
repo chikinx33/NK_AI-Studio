@@ -8,7 +8,8 @@ import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js
 import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
-import { buildBodyGrammar } from "./_shared/body-grammar.js";
+import { buildBodyGrammar, enforceBodyConstraintsInScenes } from "./_shared/body-grammar.js";
+import { resolveServerCharacterBodySpecs } from "./_shared/brand-body-specs.js";
 import { canonicalizeSceneLocations, looksLikeSentenceLocation, sanitizeSetName } from "./_shared/location-names.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
@@ -20,7 +21,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1834";
+const SERVER_VERSION = "3.1835";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -635,7 +636,14 @@ export async function onRequestPost(context) {
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
     const storyBeats = normalizeStoryBeatsInput(body.storyBeats, Number(duration) || 0);
-    const characters = normalizeCharacters(body.characters || []);
+    const clientCharacters = normalizeCharacters(body.characters || []);
+    const bodySpecResolution = await resolveServerCharacterBodySpecs({
+      env,
+      userId: who.userId,
+      brandId: body.brandId || body.seriesId || "",
+      characters: clientCharacters,
+    });
+    const characters = normalizeCharacters(bodySpecResolution.characters);
     const characterGenerationDisabled = isCharacterGenerationDisabled(body.charactersEnabled, characters);
     const knowledgeHub = normalizeKnowledgeHubInput(body, { characterGenerationDisabled });
     const activeCharacters = characterGenerationDisabled ? [] : characters;
@@ -707,6 +715,17 @@ export async function onRequestPost(context) {
       return jsonError(err?.message || "scenario_generation_failed", 500, origin);
     }
 
+    // 프롬프트 지시는 확률적이므로 저장 직전 물리 행동 필드를 결정적으로 검사한다.
+    // 알려진 관용구는 신체 스펙 안의 표현으로 바꾸고, 남은 위반은 결과로 내보내지 않는다.
+    const bodyAudit = enforceBodyConstraintsInScenes(scenes, activeCharacters);
+    if (bodyAudit.remainingViolations.length) {
+      const error = new Error("character_body_constraint_unresolved");
+      error.code = "CHARACTER_BODY_CONSTRAINT_UNRESOLVED";
+      error.violations = bodyAudit.remainingViolations;
+      throw error;
+    }
+    scenes = bodyAudit.scenes;
+
     // v3.882: 클라이언트 raw body → 정규화 → activeCharacters 흐름 추적
     generationMeta = Object.assign({}, generationMeta || {}, {
       rawBodyCharactersCount: Array.isArray(body.characters) ? body.characters.length : 0,
@@ -714,6 +733,10 @@ export async function onRequestPost(context) {
       characterGenerationDisabled,
       activeCharactersCount: activeCharacters.length,
       activeCharactersList: activeCharacters.map((c) => `${c.token}(${c.displayName})`),
+      bodySpecSource: bodySpecResolution.source,
+      bodySpecTokens: bodySpecResolution.matchedTokens || [],
+      bodyConstraintViolations: bodyAudit.violations.length,
+      bodyConstraintRepairs: bodyAudit.repairs,
     });
 
     return new Response(JSON.stringify({ scenes, meta: generationMeta, sets: generatedSets }), {
@@ -723,6 +746,18 @@ export async function onRequestPost(context) {
   } catch (err) {
     if (isCreditExhaustedError(err)) {
       return jsonError("CREDIT_EXHAUSTED", 402, origin);
+    }
+    if (err?.code === "CHARACTER_BODY_SPEC_REQUIRED") {
+      return jsonError(err.message, 422, origin);
+    }
+    if (err?.code === "BODY_SPEC_SOURCE_NOT_FOUND") {
+      return jsonError(err.message, 409, origin);
+    }
+    if (err?.code === "BODY_SPEC_SOURCE_UNAVAILABLE") {
+      return jsonError(err.message, 503, origin);
+    }
+    if (err?.code === "CHARACTER_BODY_CONSTRAINT_UNRESOLVED") {
+      return jsonError(err.message, 422, origin);
     }
     return jsonError(err?.message || "unexpected_error", 500, origin);
   }

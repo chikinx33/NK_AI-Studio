@@ -21,6 +21,8 @@
 import { decomposeScenes } from "./scenario/shots/index.js";
 import { studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
+import { enforceBodyConstraintsInScenes } from "./_shared/body-grammar.js";
+import { resolveServerCharacterBodySpecs } from "./_shared/brand-body-specs.js";
 
 /**
  * 분해 결과를 평탄화. 부모 씬의 narration/dialogue 는 첫 sub-scene 에만 두고,
@@ -255,7 +257,7 @@ export async function onRequestPost(context) {
 
   const scenes = Array.isArray(body?.scenes) ? body.scenes : null;
   // v3.1586: 등록 캐릭터를 받아 @토큰 보정의 1차 출처로 쓴다.
-  const characters = Array.isArray(body?.characters) ? body.characters : [];
+  let characters = Array.isArray(body?.characters) ? body.characters : [];
   if (!scenes || !scenes.length) {
     return jsonError("scenes[] is required", 400, origin);
   }
@@ -263,6 +265,21 @@ export async function onRequestPost(context) {
 
   const who = await authorizeRequest(request, env);
   if (!who.ok) return jsonError(who.error, who.status, origin);
+
+  let bodySpecResolution;
+  try {
+    bodySpecResolution = await resolveServerCharacterBodySpecs({
+      env,
+      userId: who.userId,
+      brandId: body?.brandId || body?.seriesId || "",
+      characters,
+    });
+    characters = bodySpecResolution.characters;
+  } catch (error) {
+    const status = error?.code === "CHARACTER_BODY_SPEC_REQUIRED" ? 422
+      : (error?.code === "BODY_SPEC_SOURCE_NOT_FOUND" ? 409 : 503);
+    return jsonError(error?.message || "character_body_spec_resolution_failed", status, origin);
+  }
 
   let auth;
   try {
@@ -281,14 +298,22 @@ export async function onRequestPost(context) {
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };
     // 평탄화: 각 shot 을 top-level scene 으로
     const { flat: flatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed, characters);
+    const bodyAudit = enforceBodyConstraintsInScenes(flatScenes, characters);
+    if (bodyAudit.remainingViolations.length) {
+      return jsonError("character_body_constraint_unresolved", 422, origin);
+    }
     return new Response(JSON.stringify({
-      scenes: flatScenes,
+      scenes: bodyAudit.scenes,
       meta: {
         ...meta,
         flattened: true,
         flatCount: flatScenes.length,
         // v3.883: Pass 2 컷 단위 @토큰 자동 보정 횟수
         tokensEnforcedShots,
+        bodySpecSource: bodySpecResolution.source,
+        bodySpecTokens: bodySpecResolution.matchedTokens || [],
+        bodyConstraintViolations: bodyAudit.violations.length,
+        bodyConstraintRepairs: bodyAudit.repairs,
       },
     }), {
       status: 200,

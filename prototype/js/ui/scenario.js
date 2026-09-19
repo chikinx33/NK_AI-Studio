@@ -3038,6 +3038,7 @@
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
+            `신체 스펙: ${m.bodySpecSource || '-'} / 위반 감지 ${Number(m.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(m.bodyConstraintRepairs) || 0}회`,
             m.songEnabled ? `노래 모드: 가사 ${m.songRefrainSource === 'prewritten' ? '개요에서 작사됨' : (m.songRefrainSource === 'composed' ? '생성 단계에서 작곡됨' : '없음')} / 강제 교정 ${m.refrainEnforced || 0}회` : '',
             m.songEnabled && Array.isArray(m.songSections) && m.songSections.length
               ? `가사 구간: ${m.songSections.length}개 · 합 ${m.songSectionSeconds || 0}초\n`
@@ -3069,6 +3070,7 @@
               const shotsRes = await NK.api.scenarioShots({
                 scenes: res.scenes,
                 language: payload?.language === 'en' ? 'en' : 'ko',
+                brandId: payload?.brandId || payload?.seriesId || '',
                 // v3.1586: 컷 분해도 @토큰 보정을 해야 하는데, 등록 캐릭터를 모르면
                 // 부모 visual 에 토큰이 없는 씬을 통째로 건너뛴다.
                 characters: Array.isArray(payload?.characters) ? payload.characters : []
@@ -3093,6 +3095,7 @@
                   const pass2Lines = [
                     `컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})${p2Elapsed}`,
                     `자동 보정 (Pass 2): 같은 셋업 사이즈 이동 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
+                    `신체 일관성 (Pass 2): ${shotsM.bodySpecSource || '-'} / 위반 감지 ${Number(shotsM.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(shotsM.bodyConstraintRepairs) || 0}회`,
                     enforcedLine,
                   ];
                   if (Array.isArray(shotsM.fallbackReasons) && shotsM.fallbackReasons.length) {
@@ -3316,7 +3319,12 @@
             visual: String(c.visual || c.shot || [c.composition, c.action].filter(Boolean).join(' / ') || '').trim(),
           }));
           NK.core.setLoading(true, lang === 'en' ? 'Re-cutting shots…' : '컷을 최신 규칙으로 다시 나누는 중...');
-          const shotsRes = await NK.api.scenarioShots({ scenes: asScenes, language: lang, characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : []) });
+          const shotsRes = await NK.api.scenarioShots({
+            scenes: asScenes,
+            language: lang,
+            brandId: currentPayload?.brandId || currentPayload?.seriesId || '',
+            characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : [])
+          });
           const flat = (shotsRes && Array.isArray(shotsRes.scenes) && shotsRes.meta?.flattened) ? shotsRes.scenes : null;
           if (!flat || !flat.length) {
             alert('컷 분해 응답이 비었습니다.');
