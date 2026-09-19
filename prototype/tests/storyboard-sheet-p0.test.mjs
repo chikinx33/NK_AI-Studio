@@ -164,6 +164,7 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.match(svc, /referenceType: master \? 'REFERENCE_TYPE_SUBJECT' : 'REFERENCE_TYPE_STYLE'/, '부감 마스터는 스타일이 아니라 공간 배치를 지킬 subject 참조다');
   assert.match(svc, /mod\.overlapReference = function \(st, cutId, referenceId\)/, '후속 시트는 앞 시트 마지막 콘티를 실제 참조로 찾는다');
   assert.match(svc, /imageSize: spec\.resolution \|\| '2K'/);
+  assert.match(svc, /provider: spec\.provider \|\| undefined/, '캔버스 상단의 이미지 모델을 시트 생성 호출에 전달한다');
   assert.match(svc, /function refineBoundaries\(img, cols, rows\)/);
   assert.match(svc, /bestB >= 240 \? best : expect/, '여백선이 흰색(240 이상)일 때만 채택');
   assert.match(svc, /mod\.cropPanels = async function \(imageUrl, grid, opts\)/);

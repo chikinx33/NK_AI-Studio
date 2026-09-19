@@ -75,6 +75,8 @@ export const COMPANY_SKILL_INPUT_SCHEMAS: Record<string, CompanySkillJsonSchema>
           stages: { type: "array", maxItems: 2, items: { type: "string", enum: ["still", "video"] } },
           sceneIds: { type: "array", maxItems: 200, items: { type: "string", maxLength: 40 } },
           aspectRatio: { type: "string", enum: ["", "16:9", "9:16", "1:1", "4:3", "3:4"] },
+          imageProvider: { type: "string", maxLength: 40 },
+          imageSize: { type: "string", enum: ["", "512", "1K", "2K", "4K"] },
           videoModel: { type: "string", maxLength: 40 },
           maxScenesPerRun: { type: "integer", minimum: 1, maximum: 20 },
           regenerate: { type: "boolean" },

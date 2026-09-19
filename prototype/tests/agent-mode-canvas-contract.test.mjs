@@ -174,6 +174,7 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   const popover = read("ai-company-app/src/components/GenerationSettingsPopover.tsx");
   const agentPanel = read("ai-company-app/src/components/AgentSettingsPanel.tsx");
   const panel = read("ai-company-app/src/components/VideoPipelinePanel.tsx");
+  const pipeline = read("prototype/functions/api/agent/_video-pipeline-executor.ts");
   const shared = read("prototype/functions/api/agent/_shared.ts");
   const specs = read("prototype/functions/api/_shared/video-specs.ts");
   // 두 모드가 한 자리를 번갈아 쓴다(동시에 뜨지 않는다): 에이전트 모드 = 세션 패널(안에 입력창)만, 일반 모드 = 떠 있는 작성기만.
@@ -190,7 +191,7 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.doesNotMatch(canvas, /Shift\+클릭 다중 선택/);
   assert.match(canvas, /일괄 생성/);
   assert.match(canvas, /스토리보드 생성/);
-  assert.match(canvas, /storyboard=1/);
+  assert.match(canvas, /storyboard=auto/);
   // 일반 모드는 대화 없이 선택 컷에 바로 생성하고, '에이전트' 칩이 모드를 바꾼다.
   assert.match(normalBranch, /onClick=\{\(\) => switchMode\("agent"\)\}/);
   assert.match(normalBranch, /generateNow\(draft\)/);
@@ -226,6 +227,12 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   // 설정이 실제 생성 경로에 닿는다: 인스펙터 버튼 → 도구 입력 → /api/imagen·/api/video.
   assert.match(canvas, /\.\.\.providerArg\(settings\), imageSize: settings\.image\.size/);
   assert.match(canvas, /videoModel: settings\.video\.model, durationSeconds: settings\.video\.durationSec, resolution: settings\.video\.resolution/);
+  assert.match(canvas, /aria-label="이미지 모델"/);
+  assert.match(canvas, /aria-label="영상 모델"/);
+  assert.doesNotMatch(canvas, /title=\{graph\.title\}>\{graph\.title\}<\/span>/, '프로젝트 선택기 뒤에 에피소드 제목을 중복 표시하지 않는다');
+  assert.match(panel, /options: \{ projectId, stages: stageList, sceneIds, videoModel, imageProvider, imageSize/);
+  assert.match(pipeline, /\.\.\.\(plan\.imageProvider \? \{ provider: plan\.imageProvider \} : \{\}\)/);
+  assert.match(pipeline, /\.\.\.\(plan\.imageSize \? \{ imageSize: plan\.imageSize \} : \{\}\)/);
   assert.match(shared, /\.\.\.\(input\?\.provider \? \{ provider: String\(input\.provider\) \} : \{\}\)/);
   assert.match(shared, /\.\.\.\(input\?\.resolution \? \{ resolution: String\(input\.resolution\) \} : \{\}\)/);
   // 코어에게 기본값을 맥락으로 넘긴다.

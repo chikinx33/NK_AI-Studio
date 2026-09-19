@@ -168,7 +168,9 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 
-  ui.open = function () {
+  ui.open = function (options) {
+    options = options || {};
+    var auto = options.auto === true;
     var ctx = (NK.uiPipeline && NK.uiPipeline.__ctx) || null;
     var svc = NK.service && NK.service.storyboardSheet;
     if (!ctx || !ctx.getState || !svc) return;
@@ -180,11 +182,12 @@
     var overlay = document.createElement('div');
     overlay.id = 'sb-sheet-modal';
     overlay.className = 'cpbm-overlay';
-    document.body.appendChild(overlay);
+    if (!auto) document.body.appendChild(overlay);
 
     // 모달 상태(입력값·결과). 언어를 바꿔도 다시 그릴 때 유지된다.
     var m = {
-      kind: 'board', setIdx: 0, sheetIdx: 0, resolution: '2K', angle: 'high',
+      kind: 'board', setIdx: 0, sheetIdx: 0, resolution: options.resolution === '4K' ? '4K' : '2K', angle: 'high',
+      provider: String(options.provider || '').trim(),
       prompt: '', planned: null, plan: null, busy: false, status: '', error: '',
       batchBusy: false, batchDone: 0, batchTotal: 0,
       stillBatchBusy: false, stillBatchDone: 0, stillBatchTotal: 0,
@@ -192,6 +195,21 @@
       stillBusy: {},      // sceneId → true
       stills: {}          // sceneId → { objectName, imageRef, prompt }
     };
+
+    function notify(status, extra) {
+      if (!auto || !window.parent || window.parent === window) return;
+      try {
+        window.parent.postMessage(Object.assign({
+          type: 'nk:storyboard-batch',
+          projectId: String(state().draftId || ''),
+          runId: String(options.runId || ''),
+          status: status,
+          done: m.batchDone,
+          total: m.batchTotal,
+          error: m.error || ''
+        }, extra || {}), window.location.origin);
+      } catch (_) {}
+    }
 
     var onLangChanged = function () { try { render(); } catch (_) {} };
     var close = function () {
@@ -280,7 +298,7 @@
           if (!plateRef) throw new Error(T().needPlate);
           // 편집 모드: 마스터 플레이트가 0번 소스, 정면 참조는 섞지 않는다(설계서 5.3).
           refs = [Object.assign({}, plateRef, { referenceId: 1 })];
-          var outA = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', generationMode: 'image-to-image', cameraTargetMode: 'scene', referenceImages: refs, resolution: m.resolution });
+          var outA = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', generationMode: 'image-to-image', cameraTargetMode: 'scene', referenceImages: refs, resolution: m.resolution, provider: m.provider });
           if (!outA.objectName) throw new Error(svc.text('noObjectName'));
           if (NK.service.setPlates && NK.service.setPlates.setDirectionPlate) {
             // 앵글 변형은 angle-<id> 로 기록(방위 dir-* 와 구분).
@@ -310,7 +328,7 @@
             (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
           }
           m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment'; }), overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
-          var out = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', referenceImages: refs, resolution: m.resolution });
+          var out = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', referenceImages: refs, resolution: m.resolution, provider: m.provider });
           if (!out.objectName) throw new Error(svc.text('noObjectName'));
           var url = svc.proxyUrl(out.objectName);
           m.status = svc.text('cropping'); render();
@@ -357,22 +375,24 @@
       }
     }
 
-    async function generateAll() {
+    async function generateAll(skipConfirm) {
       if (m.batchBusy || m.busy || m.kind !== 'board') return;
       if (!m.plan || !m.plan.length) await plan();
       var total = (m.plan || []).length;
-      if (!total) return;
-      if (!(await NK.ui.dialog.confirm(T().batchConfirm.replace(/\{count\}/g, String(total)), { title: T().generateAll }))) return;
+      if (!total) { m.error = m.error || T().noSets; notify('failed'); return; }
+      if (!skipConfirm && !(await NK.ui.dialog.confirm(T().batchConfirm.replace(/\{count\}/g, String(total)), { title: T().generateAll }))) return;
       m.batchBusy = true; m.batchDone = 0; m.batchTotal = total; m.error = ''; render();
+      notify('running');
       try {
         for (var i = 0; i < total; i++) {
           m.sheetIdx = i; m.planned = null; m.prompt = '';
           await plan();
           if (!m.planned || !(await generate())) break;
-          m.batchDone = i + 1; render();
+          m.batchDone = i + 1; render(); notify('running');
         }
       } finally {
         m.batchBusy = false; render();
+        if (auto) notify(m.batchDone === total ? 'completed' : 'failed', { error: m.error || (m.batchDone + '/' + total + ' sheets completed') });
       }
     }
 
@@ -417,7 +437,7 @@
         (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
         var plate = set ? svc.plateReference(set, refs.length + 1) : null; if (plate) refs.push(plate);
         var prompt = ['Revise only this storyboard panel according to the correction below.', 'Preserve the same character identities, set, art style and all details not mentioned.', 'Keep it as one clean 16:9 storyboard frame with no text, number, border or gutter.', 'Correction: ' + String(instruction).trim()].join('\n');
-        var out = await svc.generateSheet(s, { prompt: prompt, aspect: s.aspectRatio || '16:9', generationMode: 'image-to-image', cameraTargetMode: 'scene', referenceImages: refs, resolution: m.resolution });
+        var out = await svc.generateSheet(s, { prompt: prompt, aspect: s.aspectRatio || '16:9', generationMode: 'image-to-image', cameraTargetMode: 'scene', referenceImages: refs, resolution: m.resolution, provider: m.provider });
         if (!out.objectName) throw new Error(svc.text('noObjectName'));
         sheet.panels = (sheet.panels || []).map(function (p) { return Number(p.index) === Number(panel.index) ? Object.assign({}, p, { objectName: out.objectName, status: 'pending', revisedAt: new Date().toISOString(), revisionPrompt: String(instruction).trim() }) : p; });
         await svc.persistSheet(ctx, sheet);
@@ -494,6 +514,7 @@
     }
 
     function render() {
+      if (auto) return;
       var s = state();
       var setList = sets();
       var set = activeSet();
@@ -582,7 +603,15 @@
       overlay.querySelectorAll('.sb-apply').forEach(function (b) { b.onclick = function () { void applyStill(b.getAttribute('data-sid')); }; });
     }
 
-    render();
-    plan();
+    if (auto) {
+      notify('starting');
+      plan().then(function () { return generateAll(true); }).catch(function (e) {
+        m.error = String((e && e.message) || e || T().genFailed);
+        notify('failed');
+      });
+    } else {
+      render();
+      plan();
+    }
   };
 })();

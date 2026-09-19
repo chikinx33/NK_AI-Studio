@@ -17,7 +17,7 @@ import { suggestLocationMerges } from "../lib/locationNames";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
-import { loadCanvasSettings, saveCanvasSettings, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
+import { IMAGE_PROVIDERS, VIDEO_MODELS, loadCanvasSettings, quoteCanvasCredits, saveCanvasSettings, snapDuration, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
 import { approveItem, saveCanvasLayout } from "../lib/api";
 import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
@@ -77,6 +77,18 @@ const BAR_SNAP = GRID * 2;                                        // 바는 40px
 type LaneKind = "prompt" | "scene" | "characters" | "locations";
 interface Lane { key: string; kind: LaneKind; orient: "row" | "column"; index: number; label: string; location: string; memberIds: string[]; cellW: number; cardW: number; cardH: number }
 interface CanvasLayout { nodes: PosMap; bars: Record<string, Pos>; groups: Record<string, string[]> }
+
+type StoryboardRun = { runId: string; provider: string; status: "starting" | "running" | "completed" | "failed"; done: number; total: number; error: string };
+
+/** 서버 planSheets 와 같은 6컷 기본·최대 8컷 꼬리 병합 규칙. 씬 레인끼리는 절대 합치지 않는다. */
+function storyboardSheetCount(lanes: Lane[]): number {
+  return lanes.filter((lane) => lane.kind === "scene" && lane.memberIds.length > 0).reduce((sum, lane) => {
+    const chunks: number[] = [];
+    for (let left = lane.memberIds.length; left > 0; left -= 6) chunks.push(Math.min(6, left));
+    if (chunks.length > 1 && chunks[chunks.length - 1] <= 2 && chunks[chunks.length - 2] + chunks[chunks.length - 1] <= 8) chunks.pop();
+    return sum + chunks.length;
+  }, 0);
+}
 
 // 바 색과, 그 바의 카드가 선택됐을 때의 테두리 색을 같은 계열로 맞춘다(씬 파랑 · 캐릭터 초록 · 장소 보라).
 const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; card: string; text: string; label: string }> = {
@@ -459,7 +471,7 @@ export default function ProductionCanvas({
   const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
   const [batchDockOpen, setBatchDockOpen] = useState(true);
-  const [storyboardOpen, setStoryboardOpen] = useState(false);
+  const [storyboardRun, setStoryboardRun] = useState<StoryboardRun | null>(null);
   // 스토리보드 보기: 프롬프트·캐릭터·배경 자산을 감추고 씬 바와 컷의 최종 이미지 흐름만 본다.
   const [storyboardView, setStoryboardView] = useState(false);
   // 채팅 도구가 파이프라인·스틸·영상을 만들었을 때 패널과 그래프를 다시 읽게 하는 카운터.
@@ -513,6 +525,40 @@ export default function ProductionCanvas({
 
   useEffect(() => { if (projectIdProp) setProjectId(projectIdProp); }, [projectIdProp]);
 
+  const startStoryboardBatch = useCallback(async () => {
+    if (!projectId || storyboardRun?.status === "starting" || storyboardRun?.status === "running") return;
+    const total = storyboardSheetCount(lanes);
+    if (!total) { await appDialog.alert("생성할 컷이 없어요.", { title: "스토리보드 생성" }); return; }
+    const provider = resolveImageProvider(settings);
+    const providerLabel = settings.image.provider === "studio"
+      ? `스튜디오 설정 (${STUDIO_PROVIDER_LABELS[provider] || provider || "서버 기본"})`
+      : (IMAGE_PROVIDERS.find((item) => item.id === settings.image.provider)?.label || settings.image.provider);
+    let credits = 0;
+    let balance: number | null = null;
+    let billingSource = "";
+    try {
+      const quote = await quoteCanvasCredits({ ...settings, kind: "image", image: { ...settings.image, size: "2K", count: 1 } });
+      credits = quote.credits * total;
+      balance = quote.balance;
+      billingSource = quote.billingSource || "";
+    } catch (error) {
+      await appDialog.alert(`생성 비용을 확인하지 못해 시작하지 않았어요.\n${(error as Error).message}`, { title: "스토리보드 생성" });
+      return;
+    }
+    const billingLine = billingSource === "user-subscription"
+      ? "본인 ChatGPT 구독 한도를 사용합니다."
+      : billingSource === "user-api"
+        ? "본인 OpenAI API 계정에 과금됩니다."
+        : `예상 ${credits} 크레딧${balance != null ? ` · 잔여 ${balance} C` : ""}`;
+    if (settings.confirmBeforeGenerate && !await appDialog.confirm(
+      `씬 경계를 유지해 스토리보드 시트 ${total}장을 생성합니다.\n이미지 생성 호출: ${total}회\n이미지 모델: ${providerLabel}\n해상도: 2K\n${billingLine}`,
+      { title: "스토리보드 생성", okText: "생성" },
+    )) return;
+    setPipelineResetNonce((n) => n + 1);
+    setNotice("");
+    setStoryboardRun({ runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, provider, status: "starting", done: 0, total, error: "" });
+  }, [lanes, projectId, settings, storyboardRun?.status]);
+
   const reloadProjects = useCallback(() => {
     setProjectsLoading(true);
     listProductionProjects().then(setProjects).catch(() => setProjects([])).finally(() => setProjectsLoading(false));
@@ -547,12 +593,39 @@ export default function ProductionCanvas({
   }, [projectId]);
 
   useEffect(() => {
+    const onStoryboardMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as Partial<StoryboardRun> & { type?: string; projectId?: string };
+      if (data?.type !== "nk:storyboard-batch" || data.projectId !== projectId || !data.runId) return;
+      setStoryboardRun((current) => {
+        if (!current || current.runId !== data.runId) return current;
+        return {
+          runId: current.runId,
+          provider: current.provider,
+          status: data.status || current.status,
+          done: Number(data.done) || 0,
+          total: Number(data.total) || current.total,
+          error: String(data.error || ""),
+        };
+      });
+      if (data.status === "completed" || data.status === "failed") {
+        if (data.status === "completed") setNotice("스토리보드를 생성했어요.");
+        void load(true);
+        reloadProjects();
+      }
+    };
+    window.addEventListener("message", onStoryboardMessage);
+    return () => window.removeEventListener("message", onStoryboardMessage);
+  }, [load, projectId, reloadProjects]);
+
+  useEffect(() => {
     if (!projectId) return;
     writeUserStorage("canvasProjectId", projectId);
     onProjectChange?.(projectId);
     setSelectedId("");
     setMulti(new Set());
     setDraft(null);
+    setStoryboardRun(null);
     void load();
   }, [projectId, load, onProjectChange]);
 
@@ -1175,13 +1248,36 @@ export default function ProductionCanvas({
         <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
         {graph && (
           <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-            <span className="truncate text-gray-300" title={graph.title}>{graph.title}</span>
             <Chip>컷 {graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.approvedStoryboards === graph.summary.scenes ? "emerald" : "gray"}>콘티 {graph.summary.approvedStoryboards || 0}/{graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.stills === graph.summary.scenes ? "emerald" : "gray"}>스틸 {graph.summary.stills}</Chip>
             <Chip tone={graph.summary.clips === graph.summary.scenes ? "emerald" : "gray"}>영상 {graph.summary.clips}</Chip>
           </div>
         )}
+        <div className="flex items-center gap-1.5" data-testid="top-generation-models">
+          <label className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span>이미지</span>
+            <select
+              aria-label="이미지 모델"
+              value={settings.image.provider}
+              onChange={(event) => updateSettings({ ...settings, image: { ...settings.image, provider: event.target.value as CanvasSettings["image"]["provider"], providerExplicit: true } })}
+              className="max-w-[150px] rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[10px] text-gray-300"
+            >
+              {IMAGE_PROVIDERS.map((item) => <option key={item.id} value={item.id}>{item.id === "studio" ? "스튜디오 설정" : item.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span>영상</span>
+            <select
+              aria-label="영상 모델"
+              value={settings.video.model}
+              onChange={(event) => { const model = event.target.value; updateSettings({ ...settings, video: { ...settings.video, model, durationSec: snapDuration(model, settings.video.durationSec) } }); }}
+              className="max-w-[150px] rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[10px] text-gray-300"
+            >
+              {VIDEO_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+        </div>
         <div className="ml-auto flex items-center gap-1">
           {onToggleExpand && (
             <button type="button" onClick={onToggleExpand} aria-pressed={expanded} className={`grid h-7 w-7 place-items-center rounded border transition ${expanded ? "border-emerald-500 bg-emerald-900/40 text-emerald-200" : "border-edge text-gray-400 hover:bg-edge hover:text-white"}`} title={expanded ? "사이드바 다시 열기" : "확장 (사이드바 감추기)"} aria-label={expanded ? "사이드바 다시 열기" : "확장"}>
@@ -1739,7 +1835,28 @@ export default function ProductionCanvas({
                 tone="emerald"
               >
                 <div className="space-y-2 p-3">
-                  <button type="button" onClick={() => { setPipelineResetNonce((n) => n + 1); setStoryboardOpen(true); }} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500">스토리보드 생성</button>
+                  <section className="rounded-xl border border-violet-800/60 bg-violet-950/10 p-2" data-testid="storyboard-generation-group">
+                    <button
+                      type="button"
+                      onClick={() => void startStoryboardBatch()}
+                      disabled={storyboardRun?.status === "starting" || storyboardRun?.status === "running"}
+                      className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      {storyboardRun?.status === "starting" || storyboardRun?.status === "running" ? "스토리보드 생성 중…" : "스토리보드 생성"}
+                    </button>
+                    {storyboardRun && (
+                      <div className="mt-2 text-[11px]">
+                        <div className="flex items-center justify-between text-gray-400">
+                          <span>{storyboardRun.status === "completed" ? "완료" : storyboardRun.status === "failed" ? "실패" : "생성 중"}</span>
+                          <span>{storyboardRun.done}/{storyboardRun.total}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#1d2633]">
+                          <div className={`h-full transition-all ${storyboardRun.status === "failed" ? "bg-red-500" : "bg-violet-500"}`} style={{ width: `${storyboardRun.total ? Math.round((storyboardRun.done / storyboardRun.total) * 100) : 4}%` }} />
+                        </div>
+                        {storyboardRun.status === "failed" && <p className="mt-1 break-words text-red-300">실패 사유: {storyboardRun.error || "생성에 실패했어요."}</p>}
+                      </div>
+                    )}
+                  </section>
                   <VideoPipelinePanel
                     projectId={projectId}
                     selectedSceneIds={selectedSceneIds}
@@ -1748,20 +1865,22 @@ export default function ProductionCanvas({
                     attachNonce={pipelineNonce}
                     resetNonce={pipelineResetNonce}
                     autoApprove={!settings.confirmBeforeGenerate}
+                    imageProvider={resolveImageProvider(settings)}
+                    imageSize={settings.image.size}
+                    videoModel={settings.video.model}
                     onAttached={(job) => { if (job.approvalState?.status === "pending") { setAgentOpen(true); setBatchDockOpen(true); } }}
                   />
                 </div>
               </CanvasFloatingDock>
             </div>
           )}
-          {storyboardOpen && projectId && (
-            <div className="absolute inset-0 z-50 flex flex-col bg-black/80 p-3 backdrop-blur-sm" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-              <div className="mb-2 flex items-center justify-between rounded-t-xl border border-edge bg-[#0c1119] px-4 py-2 text-[12px] font-bold text-white">
-                <span>스토리보드 제작 · {graph?.title || projectId}</span>
-                <button type="button" onClick={() => { setStoryboardOpen(false); void load(true); }} className="rounded border border-edge px-3 py-1 text-gray-300 hover:bg-edge">캔버스로 돌아가기</button>
-              </div>
-              <iframe title="스토리보드 제작" src={`/scenes.html?embed=1&projectId=${encodeURIComponent(projectId)}&storyboard=1`} className="min-h-0 flex-1 rounded-b-xl border border-edge bg-[#0c1119]" />
-            </div>
+          {(storyboardRun?.status === "starting" || storyboardRun?.status === "running") && projectId && (
+            <iframe
+              key={storyboardRun.runId}
+              title="스토리보드 백그라운드 생성"
+              src={`/scenes.html?embed=1&projectId=${encodeURIComponent(projectId)}&storyboard=auto&imageProvider=${encodeURIComponent(storyboardRun.provider)}&resolution=2K&run=${encodeURIComponent(storyboardRun.runId)}`}
+              className="hidden"
+            />
           )}
         </div>
 

@@ -13,7 +13,9 @@ test('★일괄 제작은 컷별 스틸 직행 대신 동일한 스토리보드 
   assert.match(pipeline, /bulkGen\.onclick = function \(\) \{ if \(NK\.uiStoryboardSheet/);
   assert.doesNotMatch(pipeline.slice(pipeline.indexOf("var bulkGen"), pipeline.indexOf("var bulkVid")), /generateImageForIdx/);
   assert.match(canvas, /스토리보드 생성/);
-  assert.match(canvas, /src=\{`\/scenes\.html\?embed=1&projectId=\$\{encodeURIComponent\(projectId\)\}&storyboard=1`\}/);
+  assert.match(canvas, /storyboard=auto&imageProvider=/, '캔버스는 제작 화면을 열지 않고 같은 엔진을 숨은 프레임에서 실행한다');
+  assert.match(canvas, /title="스토리보드 백그라운드 생성"[\s\S]*className="hidden"/);
+  assert.match(pipeline, /storyboardMode === 'auto'[\s\S]*auto: true/);
   assert.match(executor, /requireStoryboard: true/);
 });
 
@@ -83,7 +85,7 @@ test('★일괄 제작·승인 카드는 같은 왼쪽 독 스타일을 쓰고 �
 test('★일괄 생성 카드는 생성·진행·결과·실패 사유만 간결하게 보여준다', () => {
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
   const panel = read('ai-company-app/src/components/VideoPipelinePanel.tsx');
-  assert.match(canvas, />스토리보드 생성<\/button>/);
+  assert.match(canvas, /"스토리보드 생성"\}\s*<\/button>/);
   assert.doesNotMatch(canvas, /씬별 스토리보드 생성·검토|승인 콘티 기반 스틸·영상 파이프라인|부감 마스터를 공간 기준/);
   assert.match(panel, /busy \? "준비 중…" : "스틸·영상 생성"/);
   assert.match(panel, /성공 \{successCount\}/);
@@ -91,6 +93,8 @@ test('★일괄 생성 카드는 생성·진행·결과·실패 사유만 간결
   assert.match(panel, /실패 사유:/);
   assert.match(panel, /스틸: \{s\.stillError\}/);
   assert.match(panel, /영상: \{s\.videoError\}/);
+  assert.match(canvas, /data-testid="storyboard-generation-group"/);
+  assert.match(panel, /data-testid="still-video-generation-group"[\s\S]*스틸·영상 생성[\s\S]*type="checkbox"/, '체크 항목은 스틸·영상 생성 그룹 아래에 둔다');
   assert.doesNotMatch(panel, /job\.title|파이프라인을 마쳤어요|비어 있는 컷을 스틸→영상 순으로 자동 생성해요/);
 });
 
@@ -101,7 +105,7 @@ test('★스토리보드 재생성은 종료된 옛 스틸·영상 기록을 현
   assert.match(panel, /getCompanySkillJob\(parsed\.jobId\)[\s\S]*?if \(isTerminalJob\(savedJob\)\)[\s\S]*?writeUserStorage\(VIDEO_PIPELINE_JOB_KEY, ""\)/, '새로고침 때 종료된 로컬 포인터를 제거한다');
   assert.match(panel, /const active = jobs\.find\(\(candidate\) => !isTerminalJob\(candidate\)\);[\s\S]*?if \(!active \|\| active\.id === jobIdRef\.current\) return;/, '서버 목록에서는 진행 중 작업만 현재 카드에 붙인다');
   assert.doesNotMatch(panel, /const latest = active \|\| jobs\[0\]/, '종료된 최신 이력을 현재 작업으로 되살리지 않는다');
-  assert.match(canvas, /setPipelineResetNonce\(\(n\) => n \+ 1\); setStoryboardOpen\(true\)/, '새 스토리보드를 시작하면 종료된 이전 작업 포인터를 정리한다');
+  assert.match(canvas, /setPipelineResetNonce\(\(n\) => n \+ 1\)[\s\S]*setStoryboardRun\(/, '새 스토리보드를 시작하면 종료된 이전 작업 포인터를 정리한다');
   assert.match(canvas, /resetNonce=\{pipelineResetNonce\}/);
   assert.match(panel, /if \(current && !isTerminalJob\(current\)\) return current;/, '진행 중 작업은 숨기지 않는다');
 });

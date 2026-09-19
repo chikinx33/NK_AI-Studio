@@ -60,11 +60,13 @@ export function normalizeVideoPipelineOptions(value: unknown): { options: Record
     ? String(input.aspectRatio)
     : "";
   const videoModel = cleanText(input.videoModel, 40);
+  const imageProvider = cleanText(input.imageProvider, 40);
+  const imageSize = ["512", "1K", "2K", "4K"].includes(String(input.imageSize)) ? String(input.imageSize) : "";
   const requestedMax = Number(input.maxScenesPerRun);
   const maxScenesPerRun = Number.isFinite(requestedMax) ? Math.min(20, Math.max(1, Math.round(requestedMax))) : 3;
   const regenerate = input.regenerate === true;
   return {
-    options: { projectId, stages: resolvedStages, sceneIds, aspectRatio, videoModel, maxScenesPerRun, regenerate },
+    options: { projectId, stages: resolvedStages, sceneIds, aspectRatio, imageProvider, imageSize, videoModel, maxScenesPerRun, regenerate },
     warnings,
   };
 }

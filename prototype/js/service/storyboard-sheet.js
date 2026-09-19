@@ -109,6 +109,7 @@
       generationMode: spec.generationMode || 'text-to-image',
       cameraTargetMode: spec.cameraTargetMode || undefined,
       imageSize: spec.resolution || '2K',
+      provider: spec.provider || undefined,
       referenceImages: Array.isArray(spec.referenceImages) ? spec.referenceImages : []
     });
     var obj = String((json && json.objectName) || '').trim();

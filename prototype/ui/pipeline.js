@@ -1634,11 +1634,21 @@
       __pipelineSpinnerAt = 0;
       setTimeout(function () { setPipelinePageLoading(false); }, _spinDelay);
     }
-    // 캔버스의 일괄 생성 모달이 같은 제작 기능을 임베드할 때 자동으로 동일 워크플로를 연다.
+    // 캔버스는 같은 제작 엔진을 숨은 프레임에서 실행한다. detail(1)은 메인 프로덕션의 설정 화면,
+    // auto 는 화면 전환 없이 씬 경계별 스토리보드 시트를 즉시 일괄 생성한다.
     try {
-      if (!ui._autoStoryboardOpened && new URLSearchParams(window.location.search).get('storyboard') === '1') {
+      var storyboardParams = new URLSearchParams(window.location.search);
+      var storyboardMode = storyboardParams.get('storyboard');
+      if (!ui._autoStoryboardOpened && (storyboardMode === '1' || storyboardMode === 'auto')) {
         ui._autoStoryboardOpened = true;
-        setTimeout(function () { if (NK.uiStoryboardSheet && NK.uiStoryboardSheet.open) NK.uiStoryboardSheet.open(); }, 0);
+        setTimeout(function () {
+          if (NK.uiStoryboardSheet && NK.uiStoryboardSheet.open) NK.uiStoryboardSheet.open(storyboardMode === 'auto' ? {
+            auto: true,
+            provider: storyboardParams.get('imageProvider') || '',
+            resolution: storyboardParams.get('resolution') || '2K',
+            runId: storyboardParams.get('run') || ''
+          } : {});
+        }, 0);
       }
     } catch (_) {}
   };

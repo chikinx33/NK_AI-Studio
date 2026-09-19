@@ -41,6 +41,8 @@ export interface VideoPipelinePlan {
   projectId: string;
   stages: string[];
   aspectRatio: string;
+  imageProvider: string;
+  imageSize: string;
   videoModel: string;
   maxScenesPerRun: number;
   steps: VideoPipelineStep[];
@@ -69,7 +71,7 @@ function sceneKey(scene: any, idx: number): string {
   return scene?.id != null ? String(scene.id) : String(idx + 1);
 }
 
-export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: string, scenes: any[] = []): VideoPipelinePlan["summary"] {
+export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: string, scenes: any[] = [], imageProvider = "", imageSize = ""): VideoPipelinePlan["summary"] {
   let pendingStills = 0;
   let pendingVideos = 0;
   let credits = 0;
@@ -78,7 +80,7 @@ export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: 
   for (const step of steps) {
     if (step.still === "pending") {
       pendingStills += 1;
-      if (!env.USER_IMAGE_AUTH) credits += quoteCredits("image_generation", {}, env).credits;
+      if (!env.USER_IMAGE_AUTH) credits += quoteCredits("image_generation", { provider: imageProvider, imageSize }, env).credits;
     }
     if (step.video === "pending") {
       pendingVideos += 1;
@@ -120,16 +122,20 @@ export function buildVideoPipelinePlan(
   });
   const now = new Date().toISOString();
   const videoModel = String(options.videoModel || "");
+  const imageProvider = String(options.imageProvider || "");
+  const imageSize = String(options.imageSize || "");
   return {
     executorId: VIDEO_PIPELINE_EXECUTOR_ID,
     kind: "video_pipeline",
     projectId: String(options.projectId || ""),
     stages,
     aspectRatio: String(options.aspectRatio || ""),
+    imageProvider,
+    imageSize,
     videoModel,
     maxScenesPerRun: Math.min(20, Math.max(1, Number(options.maxScenesPerRun) || 3)),
     steps,
-    summary: summarizePlan(steps, env, videoModel, scenes),
+    summary: summarizePlan(steps, env, videoModel, scenes, imageProvider, imageSize),
     runs: 0,
     createdAt: now,
     updatedAt: now,
@@ -171,6 +177,8 @@ export async function runVideoPipelineBatch(
     // 일괄 스틸은 승인된 콘티를 반드시 거친다. 개별 컷 수동 생성만 기존 직접 경로를 허용한다.
     requireStoryboard: true,
     ...(plan.aspectRatio ? { aspectRatio: plan.aspectRatio } : {}),
+    ...(plan.imageProvider ? { provider: plan.imageProvider } : {}),
+    ...(plan.imageSize ? { imageSize: plan.imageSize } : {}),
     ...(plan.videoModel ? { videoModel: plan.videoModel, model: plan.videoModel } : {}),
   });
 

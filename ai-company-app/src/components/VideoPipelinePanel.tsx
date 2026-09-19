@@ -17,16 +17,6 @@ import type { SkillJob } from "../lib/skillJobs";
 export const VIDEO_PIPELINE_JOB_KEY = "canvasVideoPipelineJob";
 const TERMINAL_JOB_STATUSES = new Set<SkillJob["status"]>(["completed", "failed", "cancelled"]);
 const isTerminalJob = (job: SkillJob): boolean => TERMINAL_JOB_STATUSES.has(job.status);
-const VIDEO_MODELS = [
-  { id: "", label: "기본 모델" },
-  { id: "veo", label: "Veo" },
-  { id: "kling-final", label: "Kling" },
-  { id: "seedance", label: "Seedance" },
-  { id: "grok", label: "Grok" },
-  { id: "wan", label: "Wan" },
-  { id: "vidu-q3", label: "Vidu Q3" },
-];
-
 interface PlanStep { sceneId: string | number; order: number; title: string; still: string; video: string; stillError?: string; videoError?: string }
 interface Plan { steps: PlanStep[]; summary: { scenes: number; pendingStills: number; pendingVideos: number; credits: number; videoModel: string }; continueRunning?: boolean; runs?: number }
 
@@ -58,6 +48,9 @@ export default function VideoPipelinePanel({
   attachNonce = 0,
   resetNonce = 0,
   autoApprove = false,
+  imageProvider = "",
+  imageSize = "1K",
+  videoModel = "",
   onAttached,
 }: {
   projectId: string;
@@ -70,11 +63,13 @@ export default function VideoPipelinePanel({
   resetNonce?: number;
   // 에이전트 설정 '생성 전 확인: 안 함' — 비용 승인 대기를 브라우저가 자동으로 승인한다.
   autoApprove?: boolean;
+  imageProvider?: string;
+  imageSize?: string;
+  videoModel?: string;
   onAttached?: (job: SkillJob) => void;
 }) {
   const [stages, setStages] = useState<{ still: boolean; video: boolean }>({ still: true, video: true });
   const [regenerate, setRegenerate] = useState(false);
-  const [videoModel, setVideoModel] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
   const [job, setJob] = useState<SkillJob | null>(null);
   const [busy, setBusy] = useState(false);
@@ -174,7 +169,7 @@ export default function VideoPipelinePanel({
         invocationMode: "manual",
         request: label,
         conversationId: "main",
-        options: { projectId, stages: stageList, sceneIds, videoModel, regenerate, maxScenesPerRun: 3 },
+        options: { projectId, stages: stageList, sceneIds, videoModel, imageProvider, imageSize, regenerate, maxScenesPerRun: 3 },
         costControl: { maxAmountUsd: 0 },
       });
       setJob(created);
@@ -246,22 +241,19 @@ export default function VideoPipelinePanel({
   return (
     <div className="flex flex-col gap-2 text-[12px] text-gray-300">
       {!job && (
-        <>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/10 p-2" data-testid="still-video-generation-group">
+          <button type="button" disabled={busy} onClick={() => void start()} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+            {busy ? "준비 중…" : "스틸·영상 생성"}
+          </button>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-emerald-900/50 pt-2">
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={stages.still} onChange={(e) => setStages({ ...stages, still: e.target.checked })} /> 스틸</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={stages.video} onChange={(e) => setStages({ ...stages, video: e.target.checked })} /> 영상</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} /> 다시 생성</label>
             <label className="flex items-center gap-1.5" title={selectedSceneIds.length ? `선택 컷: ${selectedSceneIds.join(", ")}` : "캔버스에서 컷을 선택하면 켤 수 있어요"}>
               <input type="checkbox" disabled={!selectedSceneIds.length} checked={onlySelected && selectedSceneIds.length > 0} onChange={(e) => setOnlySelected(e.target.checked)} /> 선택만{selectedSceneIds.length ? ` (${selectedSceneIds.length})` : ""}
             </label>
-            <select value={videoModel} onChange={(e) => setVideoModel(e.target.value)} className="rounded border border-edge bg-[#0b1018] px-2 py-1 text-[11px]">
-              {VIDEO_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
           </div>
-          <button type="button" disabled={busy} onClick={() => void start()} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
-            {busy ? "준비 중…" : "스틸·영상 생성"}
-          </button>
-        </>
+        </div>
       )}
 
       {job && (
