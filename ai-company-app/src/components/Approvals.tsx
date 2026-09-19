@@ -7,6 +7,7 @@ import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import { useLiveRefresh } from "../lib/liveSync";
 import CanvasFloatingDock from "./CanvasFloatingDock";
 import { appDialog } from "../lib/appDialog";
+import { APPROVAL_DOCK_HEIGHT_VAR, observeCanvasDockHeight } from "../lib/canvasDockStack";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -117,6 +118,12 @@ function ApprovalDock({
   right?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  const dockRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!dock || !dockRef.current) return;
+    return observeCanvasDockHeight(dockRef.current, APPROVAL_DOCK_HEIGHT_VAR);
+  }, [dock]);
+
   if (!dock) {
     return (
       <CollapsibleSection
@@ -130,7 +137,7 @@ function ApprovalDock({
   }
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className={`pointer-events-none fixed bottom-3 left-3 z-40 transition-[width] ${open ? "w-[400px] max-w-[calc(100vw-24px)]" : "w-fit"}`} data-testid="approval-dock">
+    <div ref={dockRef} className={`pointer-events-none fixed bottom-3 left-3 z-40 transition-[width] ${open ? "w-[400px] max-w-[calc(100vw-24px)]" : "w-fit"}`} data-testid="approval-dock">
       <div className="pointer-events-auto">
         <CanvasFloatingDock
           open={open}

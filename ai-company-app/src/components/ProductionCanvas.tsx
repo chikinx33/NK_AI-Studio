@@ -23,6 +23,7 @@ import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
 import CanvasFloatingDock from "./CanvasFloatingDock";
 import { appDialog } from "../lib/appDialog";
+import { APPROVAL_DOCK_HEIGHT_VAR, JOB_DOCK_HEIGHT_VAR, canvasDockBottom, observeCanvasDockHeight } from "../lib/canvasDockStack";
 
 /**
  * 제작 캔버스 — 스토리보드·영상·프롬프트를 노드로 관리하는 화면.
@@ -453,6 +454,7 @@ export default function ProductionCanvas({
   const [selectedId, setSelectedId] = useState<string>("");
   const [multi, setMulti] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingJob[]>([]);
+  const jobDockRef = useRef<HTMLDivElement>(null);
   // 빈 캔버스에서 "대화로 시나리오 만들기"를 누르면 대화 독 입력칸에 첫 문장을 올려 준다.
   const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
@@ -467,6 +469,16 @@ export default function ProductionCanvas({
   const [settings, setSettings] = useState<CanvasSettings>(() => loadCanvasSettings());
   const updateSettings = useCallback((next: CanvasSettings) => { setSettings(next); saveCanvasSettings(next); }, []);
   const [notice, setNotice] = useState("");
+
+  // 승인 도크는 body 포털, 작업/일괄 생성 도크는 캔버스 안에 렌더링된다.
+  // 작업 도크의 실제 높이를 공유해 세 카드가 펼침 상태와 무관하게 8px 간격으로 쌓이게 한다.
+  useEffect(() => {
+    if (!pending.length || !jobDockRef.current) {
+      document.documentElement.style.removeProperty(JOB_DOCK_HEIGHT_VAR);
+      return;
+    }
+    return observeCanvasDockHeight(jobDockRef.current, JOB_DOCK_HEIGHT_VAR);
+  }, [pending.length]);
   // 떠 있는 작업 독(캔버스 왼쪽 아래, 레이아웃을 밀지 않는다) 펼침 여부
   const [jobDockOpen, setJobDockOpen] = useState(false);
   // 세트 시트 생성 모달: pick(대상·해상도 고르기) → progress(장소별 진행)
@@ -1516,7 +1528,7 @@ export default function ProductionCanvas({
             const active = pending.filter((j) => !JOB_DONE.includes(j.status));
             const errors = pending.filter((j) => j.status === "error");
             return (
-              <div className="absolute bottom-[4.5rem] left-3 z-30 flex w-[400px] max-w-[calc(100%-24px)] select-text flex-col items-start gap-1.5" data-testid="job-dock" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+              <div className="absolute left-3 z-30 transition-[bottom] flex w-[400px] max-w-[calc(100%-24px)] select-text flex-col items-start gap-1.5" data-testid="job-dock" ref={jobDockRef} style={{ bottom: canvasDockBottom(APPROVAL_DOCK_HEIGHT_VAR) }} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
                 {jobDockOpen && (
                   <div className="max-h-64 w-full overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
                     <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">
@@ -1714,7 +1726,7 @@ export default function ProductionCanvas({
           {agentOpen && projectId && (
             <div
               className={`absolute left-3 z-30 transition-[bottom,width] ${batchDockOpen ? "w-[400px] max-w-[calc(100%-24px)]" : "w-fit"}`}
-              style={{ bottom: pending.length ? (jobDockOpen ? 376 : 112) : 72 }}
+              style={{ bottom: canvasDockBottom(APPROVAL_DOCK_HEIGHT_VAR, ...(pending.length ? [JOB_DOCK_HEIGHT_VAR] : [])) }}
               data-testid="batch-dock"
               onPointerDown={(e) => e.stopPropagation()}
               onWheel={(e) => e.stopPropagation()}

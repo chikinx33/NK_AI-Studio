@@ -62,6 +62,7 @@ test('★일괄 제작·승인 카드는 같은 왼쪽 독 스타일을 쓰고 �
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
   const approvals = read('ai-company-app/src/components/Approvals.tsx');
   const dock = read('ai-company-app/src/components/CanvasFloatingDock.tsx');
+  const stack = read('ai-company-app/src/lib/canvasDockStack.ts');
   assert.match(canvas, /w-\[400px\][^\n]*data-testid="job-dock"/);
   assert.match(canvas, /data-testid="batch-dock"/);
   assert.match(canvas, /batchDockOpen \? "w-\[400px\] max-w-\[calc\(100%-24px\)\]" : "w-fit"/, '일괄 제작은 펼칠 때만 전체 폭을 쓴다');
@@ -71,7 +72,11 @@ test('★일괄 제작·승인 카드는 같은 왼쪽 독 스타일을 쓰고 �
   assert.match(dock, /\{open && \([\s\S]*?\{title\}[\s\S]*?\)\}/, '접힌 상태에서는 제목·개수를 렌더링하지 않는다');
   assert.match(dock, /\{open \? "−" : "\+"\}/, '두 도크가 동일한 +/- 표기를 쓴다');
   assert.match(dock, /open \? "w-full gap-2 px-3 py-2" : "h-9 w-auto gap-1\.5 px-2"/, '접힌 버튼은 아이콘과 +/-에 필요한 폭만 차지한다');
-  assert.match(canvas, /style=\{\{ bottom: pending\.length \? \(jobDockOpen \? 376 : 112\) : 72 \}\}/, '승인 카드의 펼침 상태만큼 위로 배치한다');
+  assert.match(approvals, /observeCanvasDockHeight\(dockRef\.current, APPROVAL_DOCK_HEIGHT_VAR\)/, '승인 카드의 실제 높이를 공유한다');
+  assert.match(canvas, /style=\{\{ bottom: canvasDockBottom\(APPROVAL_DOCK_HEIGHT_VAR\) \}\}/, '작업 카드는 승인 카드의 실제 높이 위에 놓인다');
+  assert.match(canvas, /canvasDockBottom\(APPROVAL_DOCK_HEIGHT_VAR, \.\.\.\(pending\.length \? \[JOB_DOCK_HEIGHT_VAR\] : \[\]\)\)/, '일괄 생성 카드는 승인·작업 카드의 실제 높이 위에 놓인다');
+  assert.match(stack, /ResizeObserver\(publish\)/, '도크를 펼치거나 내용이 바뀌면 높이를 다시 측정한다');
+  assert.match(stack, /CANVAS_DOCK_GAP_PX = 8/, '각 카드 사이에는 8px 간격을 둔다');
   assert.match(dock, /aria-expanded=\{open\}/);
 });
 

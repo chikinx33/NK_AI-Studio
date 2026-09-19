@@ -34,8 +34,9 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /const error = String\(\(job as any\)\?\.error \|\| \(job as any\)\?\.output\?\.error \|\| ""\)\.trim\(\);/, '서버 오류 문구를 가져온다');
   // 상태는 레이아웃을 밀지 않는 떠 있는 작업 독(absolute, 왼쪽 아래)으로 — 상단 띠는 화면이 튀어 폐기
   assert.doesNotMatch(src, /data-testid="job-strip"/, '상단 상태 띠(레이아웃 밀림) 금지');
-  // 왼쪽 아래는 승인 도크가 쓴다 — 작업 독은 그 위에 쌓인다(겹치면 둘 다 못 읽는다).
-  assert.match(src, /className="absolute bottom-\[4\.5rem\] left-3 z-30 flex w-\[400px\] max-w-\[calc\(100%-24px\)\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  // 왼쪽 아래는 승인 도크가 쓴다 — 작업 독은 실제 승인 도크 높이를 측정해 그 위에 쌓인다.
+  assert.match(src, /className="absolute left-3 z-30 transition-\[bottom\] flex w-\[400px\] max-w-\[calc\(100%-24px\)\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
+  assert.match(src, /style=\{\{ bottom: canvasDockBottom\(APPROVAL_DOCK_HEIGHT_VAR\) \}\}/);
   assert.match(src, /const \[jobDockOpen, setJobDockOpen\] = useState\(false\);/);
   assert.match(src, /\{active\.length \? `작업 \$\{active\.length\}개 진행 중` : errors\.length \? `오류 \$\{errors\.length\}` : "작업 완료"\}/);
   assert.match(src, /\{j\.status === "review_pending" && <button type="button" onClick=\{\(\) => void approveNow\(j\.jobId\)\}/, '승인 대기면 그 자리에서 승인');
