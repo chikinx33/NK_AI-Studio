@@ -340,6 +340,21 @@
     (Array.isArray(payload.episodeLocations) ? payload.episodeLocations : []).forEach(function (location) {
       if (!location || typeof location !== 'object') return;
       if (location.refObjectName) roots.push(location.refObjectName);
+      // 배경 카드가 현재 표시하는 바이블 시트도 등록 자산이다. 이 경로를 빼면
+      // 부감 마스터가 없는 옛 프로젝트의 시트가 "미사용"으로 잘못 선택된다.
+      if (location.setSheet && location.setSheet.objectName) roots.push(location.setSheet.objectName);
+      var linkedSheetId = String(location.setSheet && location.setSheet.sheetId || '').trim();
+      if (linkedSheetId) {
+        var linkedSheet = (Array.isArray(payload.storyboardSheets) ? payload.storyboardSheets : []).find(function (sheet) {
+          return String(sheet && sheet.id || '') === linkedSheetId;
+        });
+        if (linkedSheet) {
+          if (linkedSheet.objectName) roots.push(linkedSheet.objectName);
+          (Array.isArray(linkedSheet.panels) ? linkedSheet.panels : []).forEach(function (panel) {
+            if (panel && panel.objectName) roots.push(panel.objectName);
+          });
+        }
+      }
       (Array.isArray(location.variants) ? location.variants : []).forEach(function (variant) {
         if (variant && variant.refObjectName) roots.push(variant.refObjectName);
       });
@@ -355,6 +370,8 @@
         if (panel && panel.objectName) roots.push(panel.objectName);
       });
     });
+
+    if (payload.styleAnchor && payload.styleAnchor.objectName) roots.push(payload.styleAnchor.objectName);
 
     pushRegisteredAssetLists(roots, payload);
     pushRegisteredAssetLists(roots, brandLike);

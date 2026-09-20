@@ -20,6 +20,8 @@ test("미사용 판정은 현재 등록 슬롯만 보호하고 이미지 이력�
   const cut = "users/u/ai-video/projects/p/images/cut-current.png";
   const history = "users/u/ai-video/projects/p/images/cut-old.png";
   const background = "users/u/ai-video/projects/p/images/background.png";
+  const setSheet = "users/u/ai-video/projects/p/images/set-sheet.png";
+  const styleAnchor = "users/u/ai-video/projects/p/images/style-anchor.png";
   const boardOld = "users/u/ai-video/projects/p/images/board-old.png";
   const boardCurrent = "users/u/ai-video/projects/p/images/board-current.png";
   const panelCurrent = "users/u/ai-video/projects/p/images/panel-current.png";
@@ -28,20 +30,24 @@ test("미사용 판정은 현재 등록 슬롯만 보호하고 이미지 이력�
   const project = {
     scenes: [{ id: 1, sceneLocation: "방", imagePath: cut, imageHistory: [history] }],
     payload: {
-      episodeLocations: [{ name: "방", refObjectName: background }],
+      episodeLocations: [{ name: "방", refObjectName: background, setSheet: { sheetId: "bible-1", objectName: setSheet } }],
       storyboardSheets: [
+        { id: "bible-1", kind: "bible-set", objectName: setSheet, panels: [] },
         { kind: "board", status: "fresh", cutIds: [1], objectName: boardOld, panels: [] },
         { kind: "board", status: "fresh", cutIds: [1], objectName: boardCurrent, panels: [{ objectName: panelCurrent }] }
       ],
       characterSheets: [{ token: "@A", items: [{ imageDataUrl: `/api/media/proxy?objectName=${encodeURIComponent(character)}` }] }],
-      imageLibraryItems: [{ objectName: cacheOnly }]
+      imageLibraryItems: [{ objectName: cacheOnly }],
+      styleAnchor: { objectName: styleAnchor }
     }
   };
-  const candidates = [cut, history, background, boardOld, boardCurrent, panelCurrent, character, cacheOnly];
+  const candidates = [cut, history, background, setSheet, styleAnchor, boardOld, boardCurrent, panelCurrent, character, cacheOnly];
 
   const referenced = new Set(media.collectRegisteredImageObjectNames(project, null, candidates));
   assert.equal(referenced.has(cut), true);
   assert.equal(referenced.has(background), true);
+  assert.equal(referenced.has(setSheet), true);
+  assert.equal(referenced.has(styleAnchor), true);
   assert.equal(referenced.has(boardCurrent), true);
   assert.equal(referenced.has(panelCurrent), true);
   assert.equal(referenced.has(character), true);

@@ -1937,6 +1937,50 @@ export async function getProductionGraph(projectId: string): Promise<ProductionG
   return data as ProductionGraph;
 }
 
+export interface ProjectImageAsset {
+  name: string;
+  size: number;
+  contentType: string;
+  timeCreated: string;
+  updated: string;
+  signedUrl: string;
+}
+
+/** 프로젝트 이미지 저장소. signedUrl은 목록 미리보기용이고, 등록 시에는 만료되지 않는 objectName만 저장한다. */
+export async function listProjectImages(projectId: string): Promise<ProjectImageAsset[]> {
+  const res = await fetch(`/api/image/library?projectId=${encodeURIComponent(projectId)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "이미지 저장소를 불러오지 못했어요.");
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+/** 사용자가 고른 로컬 이미지를 프로젝트 저장소의 image/ 경로에 업로드한다. */
+export async function uploadProjectImage(projectId: string, file: File): Promise<{ objectName: string; signedUrl: string }> {
+  const body = new FormData();
+  body.set("projectId", projectId);
+  body.set("kind", "image");
+  body.set("file", file);
+  const res = await fetch("/api/image/upload", { method: "POST", body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.objectName) throw new Error(data?.error || "이미지를 추가하지 못했어요.");
+  return { objectName: String(data.objectName), signedUrl: String(data.signedUrl || "") };
+}
+
+export type ProductionImageTarget =
+  | { type: "cut"; sceneId: string | number }
+  | { type: "location"; locationName: string };
+
+/** 저장소 이미지를 현재 컷 스틸 또는 장소의 부감 마스터로 등록한다. */
+export async function assignProductionImage(projectId: string, target: ProductionImageTarget, objectName: string): Promise<void> {
+  const res = await fetch("/api/agent/production-assets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, target, objectName }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "이미지를 등록하지 못했어요.");
+}
+
 export interface StudioProjectRef { id: string; title: string; shared: boolean }
 export async function listStudioProjects(): Promise<StudioProjectRef[]> {
   const res = await fetch("/api/project/list");

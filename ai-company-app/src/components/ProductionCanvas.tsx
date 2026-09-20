@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createAgentJob,
+  assignProductionImage,
   getAgentJob,
   getProductionGraph,
+  listProjectImages,
   listProductionProjects,
+  uploadProjectImage,
   withMediaToken,
+  type ProjectImageAsset,
+  type ProductionImageTarget,
   type ProductionEdge,
   type ProductionGraph,
   type ProductionNode,
@@ -79,6 +84,7 @@ interface Lane { key: string; kind: LaneKind; orient: "row" | "column"; index: n
 interface CanvasLayout { nodes: PosMap; bars: Record<string, Pos>; groups: Record<string, string[]> }
 
 type StoryboardRun = { runId: string; provider: string; status: "starting" | "running" | "completed" | "failed"; done: number; total: number; error: string };
+type AssetPickerState = { target: ProductionImageTarget; title: string };
 
 /** 서버 planSheets 와 같은 6컷 기본·최대 8컷 꼬리 병합 규칙. 씬 레인끼리는 절대 합치지 않는다. */
 function storyboardSheetCount(lanes: Lane[]): number {
@@ -532,6 +538,15 @@ export default function ProductionCanvas({
   const [settings, setSettings] = useState<CanvasSettings>(() => loadCanvasSettings());
   const updateSettings = useCallback((next: CanvasSettings) => { setSettings(next); saveCanvasSettings(next); }, []);
   const [notice, setNotice] = useState("");
+  // 저장소 이미지/로컬 파일을 컷 스틸 또는 배경 부감 마스터에 직접 등록한다.
+  const [assetPicker, setAssetPicker] = useState<AssetPickerState | null>(null);
+  const [assetItems, setAssetItems] = useState<ProjectImageAsset[]>([]);
+  const [assetLoading, setAssetLoading] = useState(false);
+  const [assetSaving, setAssetSaving] = useState(false);
+  const [assetError, setAssetError] = useState("");
+  const [assetSelected, setAssetSelected] = useState("");
+  const [failedMediaRefs, setFailedMediaRefs] = useState<Set<string>>(new Set());
+  const assetFileRef = useRef<HTMLInputElement>(null);
 
   // 승인 도크는 body 포털, 작업/일괄 생성 도크는 캔버스 안에 렌더링된다.
   // 작업 도크의 실제 높이를 공유해 세 카드가 펼침 상태와 무관하게 8px 간격으로 쌓이게 한다.
@@ -645,6 +660,59 @@ export default function ProductionCanvas({
     }
   }, [projectId]);
 
+  const openAssetPicker = useCallback((target: ProductionImageTarget, title: string) => {
+    setAssetPicker({ target, title });
+    setAssetSelected("");
+    setAssetError("");
+    setAssetLoading(true);
+    listProjectImages(projectId)
+      .then(setAssetItems)
+      .catch((err) => { setAssetItems([]); setAssetError((err as Error).message); })
+      .finally(() => setAssetLoading(false));
+  }, [projectId]);
+
+  const registerAsset = useCallback(async (objectName: string) => {
+    if (!assetPicker || !projectId || !objectName || assetSaving) return;
+    setAssetSaving(true);
+    setAssetError("");
+    try {
+      await assignProductionImage(projectId, assetPicker.target, objectName);
+      setFailedMediaRefs((current) => { const next = new Set(current); next.delete(objectName); return next; });
+      setNotice(`${assetPicker.title}에 이미지를 등록했어요.`);
+      setAssetPicker(null);
+      setAssetSelected("");
+      await load(true);
+    } catch (err) {
+      setAssetError((err as Error).message);
+    } finally {
+      setAssetSaving(false);
+    }
+  }, [assetPicker, assetSaving, load, projectId]);
+
+  const uploadAndRegisterAsset = useCallback(async (file: File | null) => {
+    if (!file || !assetPicker || !projectId || assetSaving) return;
+    setAssetSaving(true);
+    setAssetError("");
+    try {
+      const uploaded = await uploadProjectImage(projectId, file);
+      await assignProductionImage(projectId, assetPicker.target, uploaded.objectName);
+      setNotice(`${assetPicker.title}에 새 파일을 추가하고 등록했어요.`);
+      setAssetPicker(null);
+      setAssetSelected("");
+      await load(true);
+    } catch (err) {
+      setAssetError((err as Error).message);
+    } finally {
+      setAssetSaving(false);
+      if (assetFileRef.current) assetFileRef.current.value = "";
+    }
+  }, [assetPicker, assetSaving, load, projectId]);
+
+  const markMediaMissing = useCallback((ref: string) => {
+    if (!ref) return;
+    setFailedMediaRefs((current) => current.has(ref) ? current : new Set(current).add(ref));
+  }, []);
+
   useEffect(() => {
     const onStoryboardMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -747,13 +815,17 @@ export default function ProductionCanvas({
 
   useEffect(() => { if (focusNonce) focusScene(focusSceneId); }, [focusNonce, focusSceneId, focusScene]);
 
-  // Esc 로 상세 모달 닫기.
+  // Esc 로 가장 위의 이미지 선택창부터 닫고, 그 다음 상세 모달을 닫는다.
   useEffect(() => {
-    if (!selectedId) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSelectedId(""); };
+    if (!selectedId && !assetPicker) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (assetPicker) setAssetPicker(null);
+      else setSelectedId("");
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId]);
+  }, [assetPicker, selectedId]);
 
   // 채팅(코어)이 캔버스를 조종하는 UI 액션. 데이터 변경은 여기서 하지 않는다 — 도구 결과를 다시 읽을 뿐.
   useUiAction((action) => {
@@ -1580,6 +1652,9 @@ export default function ProductionCanvas({
               const jobsForNode = n.type === "cut" ? pending.filter((j) => String(j.sceneId) === String(n.data.sceneId) && !["approved", "error", "cancelled"].includes(j.status)) : [];
               // 배경 카드: 이 장소를 대상으로 한 세트 시트 잡(가장 최근 하나) — 생성 중·승인 대기·오류를 카드에서 바로 본다.
               const locJob = n.type === "location" ? pending.find((j) => SET_JOB_TYPES.includes(j.type) && String(j.target || "") === String(n.data.name || n.label)) || null : null;
+              const locationMediaUrl = n.type === "location" ? String(n.data.topPlateUrl || n.data.setSheet?.url || n.data.plateUrl || "") : "";
+              const locationMediaRef = n.type === "location" ? String(n.data.topPlateRef || n.data.setSheet?.objectName || n.data.plateRef || locationMediaUrl) : "";
+              const locationMediaMissing = !!(locationMediaRef && failedMediaRefs.has(locationMediaRef));
               return (
                 <div
                   key={n.id}
@@ -1596,12 +1671,16 @@ export default function ProductionCanvas({
                   )}
                   {n.type === "location" && (
                     <div>
-                      {(n.data.topPlateUrl || n.data.setSheet?.url || n.data.plateUrl) ? (
+                      {locationMediaUrl && !locationMediaMissing ? (
                         <div className="relative cursor-zoom-in border-b border-edge" data-zone="image" title="누르면 크게 볼 수 있어요">
-                          <img src={withMediaToken(String(n.data.topPlateUrl || n.data.setSheet?.url || n.data.plateUrl))} alt="" className="block aspect-video w-full object-cover" draggable={false} />
+                          <img src={withMediaToken(locationMediaUrl)} alt="" className="block aspect-video w-full object-cover" draggable={false} onError={() => markMediaMissing(locationMediaRef)} />
                           <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.topPlateUrl ? "부감 마스터" : n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
                           {n.data.topPlateUrl && Array.isArray(n.data.variants) && n.data.variants.filter((v: any) => v.id !== "angle-top").length > 0 ? <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">앵글 {n.data.variants.filter((v: any) => v.id !== "angle-top").length}</span> : null}
                           {n.data.setSheet?.resolution ? <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">{String(n.data.setSheet.resolution)}</span> : null}
+                        </div>
+                      ) : locationMediaRef ? (
+                        <div className="grid aspect-video place-items-center border-b border-edge bg-black/30 px-3 text-center text-[10px] text-red-300">
+                          저장소에서 이미지 파일을 찾을 수 없어요.
                         </div>
                       ) : null}
                       <div className="p-3" data-zone="text" title="누르면 선택돼요(여러 장 선택 후 배경 바의 합치기)">
@@ -1617,6 +1696,9 @@ export default function ProductionCanvas({
                         </div>
                         {locJob && locJob.status === "error" && locJob.error ? <p className="mt-1 line-clamp-2 text-[10px] text-red-300" title={locJob.error}>{locJob.error}</p> : null}
                         <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
+                        {(!locationMediaUrl || locationMediaMissing) && (
+                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); openAssetPicker({ type: "location", locationName: String(n.data.name || n.label) }, `${n.label} 배경`); }} className="mt-2 w-full rounded-md border border-violet-500/50 px-2 py-1 text-[10px] font-bold text-violet-200 hover:bg-violet-500/20">이미지 등록</button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1632,14 +1714,16 @@ export default function ProductionCanvas({
                   {n.type === "cut" && (() => {
                     const st = cutJobState(n.data.sceneId, "scene_still"); const vd = cutJobState(n.data.sceneId, "scene_video");
                     const stillUrl = String(n.data.still?.url || ""); const contiUrl = String(n.data.storyboard?.url || "");
-                    const frameUrl = stillUrl || contiUrl; const frameZone = stillUrl ? "image" : "storyboard";
+                    const rawFrameUrl = stillUrl || contiUrl;
+                    const frameRef = String(stillUrl ? (n.data.still?.ref || stillUrl) : (n.data.storyboard?.objectName || contiUrl));
+                    const frameUrl = failedMediaRefs.has(frameRef) ? "" : rawFrameUrl; const frameZone = stillUrl ? "image" : "storyboard";
                     const frameLabel = stillUrl ? "스틸" : st.running ? "스틸 생성 중" : "콘티";
                     const frameTone = st.running ? "amber" : st.failed && !frameUrl ? "red" : stillUrl || n.data.storyboard?.status === "approved" ? "emerald" : n.data.storyboard?.status === "rejected" ? "red" : "gray";
                     const frame = (
                       <div className={`relative aspect-video overflow-hidden bg-black/40 ${frameUrl ? "cursor-zoom-in" : ""}`} data-zone={frameZone} title={frameUrl ? (stillUrl ? "정식 스틸컷" : "승인용 콘티") : "스토리보드 일괄 생성에서 만들어요"}>
                         {frameUrl
-                          ? <img src={withMediaToken(frameUrl)} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" />
-                          : !st.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "콘티 없음"}</div>}
+                          ? <img src={withMediaToken(frameUrl)} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" onError={() => markMediaMissing(frameRef)} />
+                          : !st.running && <div className="grid h-full place-items-center px-2 text-center text-[10px] text-gray-600">{rawFrameUrl ? <span className="text-red-300">이미지 파일 없음</span> : st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "콘티 없음"}</div>}
                         {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
                         {!storyboardView && <span className="absolute left-1.5 top-1.5 inline-flex rounded bg-black/80"><Chip tone={frameTone}>{frameLabel}</Chip></span>}
                       </div>
@@ -2000,12 +2084,12 @@ export default function ProductionCanvas({
                 <div className="grid min-h-0 flex-1 grid-cols-12 gap-0 overflow-hidden">
                   {/* 왼쪽: 미디어 + 실제 전송 프롬프트 + 계보 */}
                   <div className="col-span-7 min-h-0 overflow-y-auto border-r border-edge p-4">
-                    {(() => { const st = cutJobState(selected.data.sceneId, "scene_still"); const vd = cutJobState(selected.data.sceneId, "scene_video"); return (
+                    {(() => { const st = cutJobState(selected.data.sceneId, "scene_still"); const vd = cutJobState(selected.data.sceneId, "scene_video"); const stillRef = String(selected.data.still?.ref || selected.data.still?.url || ""); const stillMissing = !!(stillRef && failedMediaRefs.has(stillRef)); return (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-still-box">
-                        {selected.data.still?.url
-                          ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
-                          : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
+                        {selected.data.still?.url && !stillMissing
+                          ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onError={() => markMediaMissing(stillRef)} onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
+                          : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{stillMissing ? <span className="text-red-300">저장소에서 이미지 파일을 찾을 수 없어요.</span> : st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
                         {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-sky-200" /></div>}
                         <span className="absolute left-2 top-2 inline-flex rounded bg-black/80"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                       </div>
@@ -2018,6 +2102,11 @@ export default function ProductionCanvas({
                       </div>
                     </div>
                     ); })()}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`)} className="rounded-lg border border-sky-500/50 px-3 py-1.5 text-[11px] font-bold text-sky-200 hover:bg-sky-500/15">저장소에서 선택</button>
+                      <button type="button" onClick={() => { openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] text-gray-200 hover:bg-edge">파일 추가</button>
+                      <span className="text-[10px] text-gray-500">등록하면 이 컷의 현재 스틸로 바로 사용합니다.</span>
+                    </div>
                     {cutPlateMissing(selected.id) ? <p className="mt-2 rounded-md border border-amber-700/50 bg-amber-900/15 px-2 py-1 text-[11px] text-amber-200">{cutPlateMissing(selected.id)}</p> : null}
                     {Array.isArray(selected.data.still?.history) && selected.data.still.history.length > 0 && (
                       <div className="mt-3">
@@ -2095,6 +2184,8 @@ export default function ProductionCanvas({
               const variants = (Array.isArray(selected.data.variants) ? selected.data.variants : []) as Array<{ id: string; label: string; url: string }>;
               const topUrl = String(selected.data.topPlateUrl || "");
               const mainUrl = String(topUrl || sheet?.url || plateUrl || "");
+              const mainRef = String(selected.data.topPlateRef || (sheet as any)?.objectName || selected.data.plateRef || mainUrl);
+              const mainMissing = !!(mainRef && failedMediaRefs.has(mainRef));
               const layoutObj = selected.data.layout && typeof selected.data.layout === "object" ? (selected.data.layout as Record<string, string>) : null;
               const angleNames = ["정면", "후면", "부감", "로우"];
               const cutsHere = (graph?.edges || []).filter((e) => e.from === selected.id && e.type === "location").map((e) => e.to.replace("cut:", "#"));
@@ -2107,9 +2198,9 @@ export default function ProductionCanvas({
                     </div>
                     <button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button>
                   </div>
-                  {mainUrl ? (
+                  {mainUrl && !mainMissing ? (
                     <div className="relative overflow-hidden rounded-xl border border-edge bg-black">
-                      <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label, objectName: String(sheet?.url ? (sheet as any)?.objectName || "" : selected.data.plateRef || "") })} title="클릭하면 크게 볼 수 있어요" />
+                      <img src={withMediaToken(mainUrl)} alt="" className="block max-h-[60vh] w-full cursor-zoom-in object-contain" draggable={false} onError={() => markMediaMissing(mainRef)} onClick={() => setLightbox({ url: withMediaToken(mainUrl), title: selected.label, objectName: mainRef })} title="클릭하면 크게 볼 수 있어요" />
                       {sheet?.url && !topUrl && (
                         <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
                           {angleNames.map((name, i) => (
@@ -2122,12 +2213,14 @@ export default function ProductionCanvas({
                       <span className="absolute right-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-black text-black">{topUrl ? "부감 마스터 (배치 기준)" : sheet?.url ? "바이블 · 세트 시트" : "정면 플레이트"}</span>
                     </div>
                   ) : (
-                    <div className="grid h-40 place-items-center rounded-xl border border-dashed border-edge text-[11px] text-gray-500">아직 세트 시트가 없어요. 배경 바의 별 버튼으로 만들어요.</div>
+                    <div className={`grid h-40 place-items-center rounded-xl border border-dashed px-4 text-center text-[11px] ${mainMissing ? "border-red-800/70 text-red-300" : "border-edge text-gray-500"}`}>{mainMissing ? "프로젝트에는 경로가 남아 있지만 저장소에서 이미지 파일을 찾을 수 없어요. 아래에서 다시 등록해 주세요." : "아직 배경 이미지가 없어요. 저장소 이미지 또는 파일을 등록할 수 있어요."}</div>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
                     {sheet ? <Chip tone="emerald">시트 {String(sheet.resolution || "")}</Chip> : <Chip>시트 없음</Chip>}
                     {sheet?.createdAt ? <span>{new Date(sheet.createdAt).toLocaleString()}</span> : null}
                     <div className="flex-1" />
+                    <button type="button" onClick={() => openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`)} className="min-w-[96px] rounded-lg border border-sky-500/50 px-3 py-1 text-[11px] font-bold text-sky-200 hover:bg-sky-500/15">저장소에서 선택</button>
+                    <button type="button" onClick={() => { openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="min-w-[76px] rounded-lg border border-edge px-3 py-1 text-[11px] text-gray-200 hover:bg-edge">파일 추가</button>
                     <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
                   </div>
                   {layoutObj && (
@@ -2196,6 +2289,46 @@ export default function ProductionCanvas({
               </div>
             )}
           </aside>
+          </div>
+        )}
+        {assetPicker && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onPointerDown={() => { if (!assetSaving) setAssetPicker(null); }}>
+            <section className="flex max-h-[82vh] w-[min(980px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-[#0c1119] shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+              <header className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-bold text-white">이미지 등록 · {assetPicker.title}</h3>
+                  <p className="mt-0.5 text-[11px] text-gray-500">저장소에서 한 장을 고르거나 새 이미지 파일을 추가하세요.</p>
+                </div>
+                <input ref={assetFileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => void uploadAndRegisterAsset(event.target.files?.[0] || null)} />
+                <button type="button" disabled={assetSaving} onClick={() => assetFileRef.current?.click()} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] font-bold text-gray-200 hover:bg-edge disabled:opacity-50">파일 추가</button>
+                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-edge hover:text-white disabled:opacity-50" aria-label="닫기">✕</button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {assetLoading ? (
+                  <div className="grid h-48 place-items-center text-sm text-gray-400"><span className="inline-flex items-center gap-2"><RefreshIcon className="h-5 w-5 animate-spin" />저장소 불러오는 중</span></div>
+                ) : assetItems.length ? (
+                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+                    {assetItems.map((item) => {
+                      const active = assetSelected === item.name;
+                      return (
+                        <button key={item.name} type="button" disabled={assetSaving} onClick={() => setAssetSelected(item.name)} className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-black/30 text-left transition ${active ? "border-sky-400 ring-2 ring-sky-400/30" : "border-edge hover:border-gray-500"}`} title={item.name}>
+                          <img src={`/api/media/proxy?objectName=${encodeURIComponent(item.name)}`} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          {active && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-sky-400 text-xs font-black text-black">✓</span>}
+                          <span className="absolute bottom-0 left-0 right-0 truncate bg-black/70 px-1.5 py-1 text-[9px] text-gray-300">{item.name.split("/").pop()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid h-48 place-items-center rounded-xl border border-dashed border-edge text-center text-[12px] text-gray-500">저장된 이미지가 없습니다.<br />‘파일 추가’로 먼저 올려 주세요.</div>
+                )}
+                {assetError && <p className="mt-3 rounded-lg border border-red-800/60 bg-red-950/30 px-3 py-2 text-[11px] text-red-300">{assetError}</p>}
+              </div>
+              <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-edge px-4 py-3">
+                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="min-w-[76px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge disabled:opacity-50">취소</button>
+                <button type="button" disabled={!assetSelected || assetSaving} onClick={() => void registerAsset(assetSelected)} className="inline-flex min-w-[112px] items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-sky-500 disabled:opacity-40">{assetSaving ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />등록 중</> : "선택 이미지 등록"}</button>
+              </footer>
+            </section>
           </div>
         )}
       </div>

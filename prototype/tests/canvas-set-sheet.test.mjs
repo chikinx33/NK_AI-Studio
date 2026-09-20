@@ -90,12 +90,14 @@ test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 
   assert.match(src, /title="오류 문구 복사">복사<\/button>/);
 });
 
-test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 시트 유무 칩을 단다', () => {
+test('★배경 카드: 세트 시트(바이블 배지·해상도) → 마스터 플레이트 → 없음 순으로 보여 주고 깨진 파일은 복구 상태로 바꾼다', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /\(n\.data\.topPlateUrl \|\| n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\) \? \(/);
-  assert.match(src, /withMediaToken\(String\(n\.data\.topPlateUrl \|\| n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl\)\)/);
+  assert.match(src, /const locationMediaUrl = n\.type === "location" \? String\(n\.data\.topPlateUrl \|\| n\.data\.setSheet\?\.url \|\| n\.data\.plateUrl \|\| ""\) : "";/);
+  assert.match(src, /<img src=\{withMediaToken\(locationMediaUrl\)\}[^>]*onError=\{\(\) => markMediaMissing\(locationMediaRef\)\}/);
   assert.match(src, /\{n\.data\.topPlateUrl \? "부감 마스터" : n\.data\.setSheet\?\.url \? "바이블" : "플레이트"\}/);
   assert.match(src, /\{n\.data\.setSheet \? <Chip tone="emerald">시트<\/Chip> : <Chip>시트 없음<\/Chip>\}/);
+  assert.match(src, /저장소에서 이미지 파일을 찾을 수 없어요/);
+  assert.match(src, />이미지 등록<\/button>/);
 });
 
 test('★그래프 장소 노드가 episodeLocations 의 플레이트·변형·세트 시트(패널 상태 포함)를 싣는다', () => {
@@ -146,7 +148,9 @@ test('★배경 카드 선택 → 상세에 세트 시트를 크게(2×2 앵글 
   assert.match(src, /\{i \+ 1\} · \{name\}/, '2×2 칸마다 번호·앵글 라벨');
   assert.match(src, /\{sheet \? "세트 시트 다시 만들기" : "세트 시트 만들기"\}/);
   assert.match(src, /setSheetModal\(\{ step: "pick", selected: new Set\(\[selected\.id\]\)/, '이 장소만 선택된 채 모달');
-  assert.match(src, /아직 세트 시트가 없어요\. 배경 바의 별 버튼으로 만들어요\./);
+  assert.match(src, /아직 배경 이미지가 없어요\. 저장소 이미지 또는 파일을 등록할 수 있어요\./);
+  assert.match(src, />저장소에서 선택<\/button>/);
+  assert.match(src, />파일 추가<\/button>/);
   assert.match(src, /style=\{\{ maxHeight: "100%", maxWidth: "100%" \}\}/, '화면보다 크면 화면 안에 맞춰 축소, 작으면 원본');
   assert.match(src, /className="absolute inset-0 z-50 flex items-center justify-center overflow-hidden bg-black\/85 p-6" onClick=\{\(\) => setLightbox\(null\)\}/);
 });
@@ -375,7 +379,7 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \|\| !!cutPlateMissing\(selected\.id\)\}/, '진행 중 버튼 비활성');
   assert.match(src, /\{cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \? <><RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/>생성 중<\/> : <>스틸 생성/);
   // 컷 스틸 클릭 = 크게 보기(상세·카드 둘 다)
-  assert.match(src, /cursor-zoom-in object-cover \$\{st\.running \? "opacity-40" : ""\}`\} title="클릭하면 크게 볼 수 있어요" onClick=\{\(\) => setLightbox\(\{ url: withMediaToken\(String\(selected\.data\.still\.url\)\)/, '상세 스틸 클릭 = 크게');
+  assert.match(src, /cursor-zoom-in object-cover \$\{st\.running \? "opacity-40" : ""\}`\} title="클릭하면 크게 볼 수 있어요" onError=\{\(\) => markMediaMissing\(stillRef\)\} onClick=\{\(\) => setLightbox\(\{ url: withMediaToken\(String\(selected\.data\.still\.url\)\)/, '상세 스틸 클릭 = 크게');
   assert.match(src, /d\.zone === "image" && nodeById\.get\(d\.id\)\?\.type === "cut"\) \{\s*\n\s*\/\/ 컷 카드 스틸 클릭 = 크게 보기/, '카드 스틸 클릭 = 크게');
   // 안내 문구는 잡 상태를 따라간다("실행 중"에 멈추지 않는다)
   assert.doesNotMatch(src, /setNotice\(`\$\{(p\.)?label\} — (실행 중|완료|오류)/, '잡 상태는 미디어 칸·작업 독이 보여 준다 — 노란 문구 금지(사용자 결정)');

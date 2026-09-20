@@ -50,7 +50,7 @@ test('★캔버스 그래프는 같은 프로젝트의 콘티를 스틸로 승�
   assert.match(graph, /summary: \{ scenes: scenes\.length, storyboards, approvedStoryboards, stills: done, clips \}/);
   assert.match(canvas, /콘티 \{graph\.summary\.approvedStoryboards \|\| 0\}\/\{graph\.summary\.scenes\}/);
   assert.match(canvas, /n\.data\.storyboard\?\.url/);
-  assert.match(canvas, /const frameUrl = stillUrl \|\| contiUrl/, '정식 스틸이 생기면 같은 이미지 슬롯의 콘티를 대체한다');
+  assert.match(canvas, /const rawFrameUrl = stillUrl \|\| contiUrl/, '정식 스틸이 생기면 같은 이미지 슬롯의 콘티를 대체한다');
   assert.match(canvas, /grid grid-cols-2 gap-1 p-2/, '일반 컷 카드는 공용 이미지 슬롯과 영상 슬롯만 둔다');
   assert.doesNotMatch(canvas, /grid grid-cols-3 gap-1 p-2/, '콘티·스틸·영상을 서로 다른 세 칸으로 나누지 않는다');
   assert.match(canvas, />\s*스토리보드\s*<\/button>/, '일괄 생성 오른쪽에 전용 보기 버튼을 둔다');

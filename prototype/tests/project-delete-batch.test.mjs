@@ -47,12 +47,22 @@ test("GCS object deletion batches large selections and treats 404 as idempotent 
 
 test("project delete endpoint uses the shared batch deletion path", () => {
   const source = read("prototype/functions/api/project/delete.ts");
-  assert.match(source, /deleteGcsObjects\(env, deleteTargets\)/);
+  assert.match(source, /deleteGcsObjects\(env, safeTargets\)/);
   assert.match(source, /deleteGcsObjects\(env, names\)/);
   assert.match(source, /listGcsObjects\(env, prefix\)/);
   assert.doesNotMatch(source, /for \(const name of deleteTargets\)/);
   assert.doesNotMatch(source, /storage\.googleapis\.com\/storage\/v1/);
   assert.doesNotMatch(source, /function getGoogleAccessToken/);
+});
+
+test("project image deletion protects assets currently registered to cuts and background masters", () => {
+  const source = read("prototype/functions/api/project/delete.ts");
+  assert.match(source, /readGcsJson\(env, `\$\{projectPrefix\}\/reference\/data\.json`\)/);
+  assert.match(source, /collectProtectedImageObjects\(projectRecord\.data\)/);
+  assert.match(source, /protectedObjects\.has\(name\)/);
+  assert.match(source, /현재 컷·배경·시트에 등록된 이미지는 먼저 교체하거나 연결을 해제해야 삭제할 수 있어요/);
+  assert.match(source, /add\(location\?\.setSheet\?\.objectName\)/);
+  assert.match(source, /add\(payload\?\.styleAnchor\?\.objectName\)/);
 });
 
 test("library UI accepts idempotent deletes and reconciles after an interrupted response", () => {
