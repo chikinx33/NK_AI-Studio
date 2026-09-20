@@ -20,13 +20,6 @@ export const SET_ANGLES = [
   { id: "high", label: "하이앵글(부감)", instruction: "high angle looking down at the set from above, about 45 degrees" },
   { id: "low", label: "로우앵글", instruction: "low angle looking up from near the floor" },
 ];
-/** 스토리보드용 4방향 앵글 시트. 한 번에 뽑아 같은 세트의 벽면 관계를 한 이미지 안에서 고정한다. */
-export const DIRECTION_SHEET_ANGLES = [
-  { id: "front", label: "정면", instruction: "camera at the entrance/front side looking toward the back wall" },
-  { id: "back", label: "후면", instruction: "reverse angle, camera at the back wall looking toward the entrance/front wall" },
-  { id: "left", label: "좌측", instruction: "camera at the left wall looking across toward the right wall" },
-  { id: "right", label: "우측", instruction: "camera at the right wall looking across toward the left wall" },
-];
 export const CHARACTER_ANGLES = [
   { id: "front", instruction: "front view, neutral standing pose, full body" },
   { id: "three-quarter", instruction: "three-quarter view, same pose" },
@@ -63,9 +56,10 @@ export function screenTextOf(scene) {
  * 장소가 비어 있는 컷은 이전 컷의 장소를 이어받는다. 장소 누락을 새 씬으로 오인해 컷마다
  * 시트가 생기는 회귀를 막고, 명시적인 sceneBreak 만으로 같은 장소 안의 씬도 분리한다.
  * 각 씬 묶음마다 컷을 perSheet(기본 6)씩 나눈다. 나머지가 2 이하면 앞 시트에 붙여 최대 8까지 채운다.
- * 첫 시트의 1번 칸은 세트 플레이트, 이어지는 시트의 1번 칸은 앞 시트의 마지막 컷(겹침 패널).
- * 겹침 패널도 같은 씬 안에서만 가져오며 시트는 씬 경계를 넘지 않는다.
- * @returns {Array<{ index:number, sceneNo:number, sceneKey:string, setName:string, cutIds:string[], anchor:{role:'set'|'overlap', ref:string} }>}
+ * 모든 시트의 1번 칸은 부감 마스터다. 같은 장소의 첫 시트는 부감을 컷과 동시에 만들고,
+ * 후속 시트는 승인된 부감을 그대로 복제한다. 앞 시트의 마지막 컷은 칸을 차지하지 않고
+ * previousCutRef 로만 전달해 인물 위치·동작·조명 연속성을 잇는다.
+ * @returns {Array<{ index:number, sceneNo:number, sceneKey:string, setName:string, cutIds:string[], anchor:{role:'set', ref:string}, previousCutRef:string, masterCandidate:boolean, masterSourceKey:string }>}
  */
 export function planSheets(scenes, opts = {}) {
   const per = Math.max(1, Math.min(MAX_CUTS_PER_SHEET, Number(opts.perSheet) || DEFAULT_CUTS_PER_SHEET));
@@ -85,6 +79,7 @@ export function planSheets(scenes, opts = {}) {
     last.ids.push(idOf(s, i));
   });
   const sheets = [];
+  const seenSets = new Set();
   groups.forEach((g) => {
     const chunks = [];
     for (let i = 0; i < g.ids.length; i += per) chunks.push(g.ids.slice(i, i + per));
@@ -94,13 +89,19 @@ export function planSheets(scenes, opts = {}) {
       if (tail.length <= 2 && prev.length + tail.length <= MAX_CUTS_PER_SHEET) { prev.push(...tail); chunks.pop(); }
     }
     chunks.forEach((ids, ci) => {
+      const setKey = t(g.setName).toLowerCase();
+      const masterCandidate = !seenSets.has(setKey);
+      if (setKey) seenSets.add(setKey);
       sheets.push({
         index: sheets.length + 1,
         sceneNo: g.sceneNo,
         sceneKey: g.sceneKey,
         setName: g.setName,
         cutIds: ids,
-        anchor: ci === 0 ? { role: "set", ref: g.setName } : { role: "overlap", ref: chunks[ci - 1][chunks[ci - 1].length - 1] },
+        anchor: { role: "set", ref: g.setName },
+        previousCutRef: ci === 0 ? "" : chunks[ci - 1][chunks[ci - 1].length - 1],
+        masterCandidate,
+        masterSourceKey: `${g.sceneKey}:${ids[0] || "empty"}`,
       });
     });
   });
@@ -109,6 +110,7 @@ export function planSheets(scenes, opts = {}) {
 
 /** 시트가 현재 순서와 어긋났는지(순서 변경 뒤 stale 판정, 2.0.1절): cutIds 가 scenes 에 연속·같은 순서로 나타나야 fresh. */
 export function isSheetStale(sheet, scenes) {
+  if (sheet && sheet.status === "stale") return true;
   const list = Array.isArray(scenes) ? scenes : [];
   const ids = list.map((s, i) => idOf(s, i));
   const want = (sheet && Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map((v) => t(v));
@@ -209,30 +211,8 @@ export function buildBibleSetSheetPrompt(input) {
 }
 
 /**
- * 부감 마스터에서 스토리보드용 정면·후면·좌측·우측 플레이트를 한 장으로 파생한다.
- * 네 방향을 같은 호출에서 생성해야 벽·가구·출입구의 대응 관계가 유지된다.
- */
-export function buildDirectionSheetPrompt(input) {
-  const set = (input && input.set) || {};
-  const name = t(set.name) || "the set";
-  const lines = [
-    t(input && input.header),
-    t(input && input.hub),
-    `DIRECTION PLATE SHEET: a 2x2 grid of four clean 16:9 environment plates for the EXACT SAME set (${name}), with thin white gutters. No text, labels or panel numbers anywhere.`,
-    `The supplied reference is the TOP-DOWN MASTER and is the spatial truth. Preserve every wall, opening, shelf, window, door, furniture item and prop at its fixed world position. Move only the camera.`,
-    t(set.description) ? `SET: ${t(set.description).slice(0, 300)}` : "",
-    layoutText(set.layout),
-  ];
-  DIRECTION_SHEET_ANGLES.forEach((angle, index) => {
-    lines.push(`Panel ${index + 1} (${angle.id.toUpperCase()}): ${angle.instruction}, eye level, wide empty-set plate. Show the wall that this camera physically faces; never repeat the front wall in the reverse panel.`);
-  });
-  lines.push("All panels are the same room in one coordinate system. Opposite cameras must show opposite walls. Left/right object positions must transform consistently with the camera turn.");
-  lines.push("Empty environment only — no characters, people or creatures.", NO_MERGE, STYLE_LOCK);
-  return lines.filter(Boolean).join("\n");
-}
-
-/**
- * 스토리보드 시트(3×3): 1번 칸 = 세트 플레이트 또는 겹침 패널, 2~9번 = 컷(기본 6·최대 8).
+ * 부감 포함 스토리보드 시트(3×3): 1번 칸 = 부감 마스터, 2~9번 = 실제 컷(기본 6·최대 8).
+ * 첫 시트는 부감과 컷을 같은 생성 안에서 확정하고, 후속 시트는 저장된 부감을 복제한다.
  * @param {{ header:string, set:{name:string, description?:string}, cuts:any[], anchor?:{role:'set'|'overlap', ref?:string}, aspect?:string, characterNames?:string[] }} input
  * @returns {{ prompt:string, panels:Array<{index:number, role:'set'|'overlap'|'cut'|'empty', ref:string, label:'conti'}> }}
  */
@@ -241,43 +221,29 @@ export function buildStoryboardSheetPrompt(input) {
   const set = (input && input.set) || {};
   const setName = t(set.name) || "the set";
   const cuts = (Array.isArray(input && input.cuts) ? input.cuts : []).slice(0, MAX_CUTS_PER_SHEET);
-  const anchor = (input && input.anchor) || { role: "set" };
   const panels = [];
-  const plateManifest = Array.isArray(input && input.plateManifest) ? input.plateManifest : [];
-  const plateRefFor = (cut) => {
-    const dir = t(cut && cut.cameraDirection).toLowerCase() || "front";
-    return plateManifest.find((entry) => t(entry && entry.direction).toLowerCase() === dir) || null;
-  };
   const lines = [t(input && input.header), t(input && input.hub), gridLine(cols, rows, input && input.aspect)];
-  if (anchor.role === "overlap") {
-    lines.push(`Panel 1 (OVERLAP): repeat the previous sheet's last frame exactly (provided as the first reference image) — same set, same characters, same lighting. It anchors tone and lighting for this sheet.`);
-    panels.push({ index: 1, role: "overlap", ref: t(anchor.ref), label: "conti" });
-  } else {
-    lines.push(input && input.hasTopMaster
-      ? `Panel 1 (SET MASTER): copy the provided TOP-DOWN MASTER PLATE of ${setName} exactly — same walls, openings, furniture, props, materials, colors and lighting, no characters. It is the spatial truth for every other panel.`
-      : `Panel 1 (SET): ${setName}${t(set.description) ? ` — ${t(set.description).slice(0, 200)}` : ""}. Empty set plate, front view at eye level, no characters. Every other panel takes place inside this exact set.`);
-    panels.push({ index: 1, role: "set", ref: setName, label: "conti" });
-  }
+  const createTopMaster = input && input.createTopMaster === true;
+  lines.push(createTopMaster || !(input && input.hasTopMaster)
+    ? `Panel 1 (NEW TOP-DOWN MASTER): ${setName}${t(set.description) ? ` — ${t(set.description).slice(0, 240)}` : ""}. Create one clear high bird's-eye view, camera tilted about 60 degrees down, showing the whole empty set, all four walls, openings, furniture and props. This panel and Panels 2–9 must be designed as the SAME place in this single generation.`
+    : `Panel 1 (LOCKED TOP-DOWN MASTER): copy the provided TOP-DOWN MASTER reference of ${setName} exactly — same walls, openings, furniture, props, materials, colors and lighting, no characters. Do not redesign or reinterpret it.`);
+  panels.push({ index: 1, role: "set", ref: setName, label: "master" });
   cuts.forEach((c, i) => {
     const n = i + 2;
     const id = idOf(c, i);
     const hint = cameraHintOf(c);
     const screen = screenTextOf(c);
-    const plateRef = plateRefFor(c);
-    const plateLock = plateRef ? ` Use environment Reference ${plateRef.referenceId} (${t(plateRef.direction).toUpperCase()} wall view) as this panel's background geometry.` : "";
-    lines.push(`Panel ${n} (CUT ${id}): [${hint || "medium shot, eye level"}] ${screen || "the characters in the set"}. Set: ${setName}.${plateLock}`);
+    lines.push(`Panel ${n} (CUT ${id}): [${hint || "medium shot, eye level"}] ${screen || "the characters in the set"}. Reconstruct this camera inside the exact room fixed by Panel 1. Objects on opposite walls must change correctly when the camera reverses; never repeat the same recognizable wall for incompatible directions.`);
     panels.push({ index: n, role: "cut", ref: id, label: "conti" });
   });
   for (let n = cuts.length + 2; n <= cols * rows; n++) { lines.push(`Panel ${n}: leave empty (plain white).`); panels.push({ index: n, role: "empty", ref: "", label: "conti" }); }
   const names = (Array.isArray(input && input.characterNames) ? input.characterNames : []).map(t).filter(Boolean);
-  if (input && input.hasTopMaster) {
-    lines.push(`BACKGROUND LOCK: the provided TOP-DOWN MASTER PLATE is the single source of truth for ${setName}. Reconstruct each cut camera inside that exact space. Never replace it with another room, move furniture or props, swap walls, change openings, or invent a different background.`);
-    lines.push(layoutText(set.layout));
+  lines.push(`BACKGROUND LOCK: Panel 1 is the spatial source of truth for every cut in this sheet. Never replace it with another room, move furniture or props, swap walls, change openings, or invent a different background.`);
+  lines.push(layoutText(set.layout));
+  if (t(input && input.previousCutRef)) {
+    lines.push(`CONTINUITY REFERENCE: the supplied previous-cut image (${t(input.previousCutRef)}) is not a panel to repeat. Use it only to continue character position, pose, screen direction, lighting and action timing into this sheet. Panel 1 must remain the top-down master.`);
   }
-  if (plateManifest.length) {
-    lines.push(`DIRECTION LOCK: each cut panel must use its assigned FRONT/BACK/LEFT/RIGHT environment reference. A BACK cut shows the wall opposite a FRONT cut. Never reuse the most recognizable wall merely for visual similarity. Character facing and screen position must be transformed for that camera direction.`);
-  }
-  lines.push(`References: registered character images = identity only (face, silhouette, colors, costume)${names.length ? ` for ${names.join(", ")}` : ""}. Environment references = fixed wall geometry, furniture and lighting of ${setName}. Do not copy their wide framing; preserve their wall identity while following each cut's shot size and elevation.`);
+  lines.push(`References: registered character images = identity only (face, silhouette, colors, costume)${names.length ? ` for ${names.join(", ")}` : ""}. A supplied environment reference is the locked top-down master. Preserve its geometry while following each cut's shot size, direction and elevation.`);
   lines.push(NO_MERGE, STYLE_LOCK);
   return { prompt: lines.filter(Boolean).join("\n"), panels };
 }

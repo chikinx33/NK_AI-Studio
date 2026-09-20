@@ -314,7 +314,7 @@ test('★저장된 옛 공급자(gemini)는 사용자가 직접 고른 적 없�
   assert.match(src, /\(캔버스 설정\)"/);
 });
 
-test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스터에서 파생(순차 대기) · 평면도(layout)를 세트 계획이 만들고 모든 앵글 프롬프트가 읽는다', async () => {
+test('★부감 마스터 도구는 선택 기능으로 유지하고, 표준 승인 콘티 경로는 별도 앵글을 만들지 않는다', async () => {
   const sheet = await import('../functions/api/_shared/storyboard-sheet.js');
   const master = sheet.buildSetMasterPrompt({ header: 'H', hub: 'HUB', set: { name: '놀이방', description: '장난감', layout: { back: '문', left: '창문', right: '침대', floor: '러그' } } });
   assert.match(master, /SET MASTER PLATE — TOP-DOWN VIEW of 놀이방/);
@@ -345,7 +345,7 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const SET_JOB_TYPES = \["set_sheet", "set_master", "set_angle"\];/);
   assert.match(src, /const waitForJob = async \(jobId: string, timeoutMs = 180_000\): Promise<string> => \{/);
-  // 캔버스는 마스터만 만든다 — 앵글 플레이트는 사전 산출물이 아니라 scene_still 이 채우는 캐시(방위×높이).
+  // 캔버스의 별 버튼은 선택 기능으로 마스터만 만든다. 표준 경로는 부감 포함 스토리보드다.
   assert.doesNotMatch(src, /neededAnglesFor|createAgentJob\("set_angle"/, '캔버스가 앵글을 미리 만들면 안 된다');
   assert.match(src, /const cachedPlatesOf = \(n: ProductionNode\): string\[\] =>/);
   assert.match(src, /await waitForJob\(m\.jobId\);\s*\n\s*\} catch \(e\) \{/, '마스터 완료까지 기다리고 끝');
@@ -358,9 +358,9 @@ test('★정밀 모드: 부감 마스터 1장 → 컷이 쓰는 앵글만 마스
 test('★세트 시트 모달은 부감 마스터만: 머리글 한 문장 · 행 상태·만들 것 · 해상도·장수·모델 — 2×2 미리보기·스타일 기준 패널 없음(사용자 결정 2026-09-14)', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const missing = locationNodes\.filter\(\(n\) => !n\.data\?\.topPlateUrl\);/);
-  assert.match(src, /<div className="mt-1 text-\[12px\] leading-relaxed text-gray-400">세트마다 부감 마스터 1장을 만들어요\. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요\.<\/div>/);
+  assert.match(src, /일반 작업에서는 스토리보드 1번 칸에서 부감과 실제 컷을 함께 생성하므로 이 단계는 선택사항입니다/);
   assert.match(src, /const stateText = n\.data\?\.topPlateUrl \? `부감 마스터 있음 · 캐시된 앵글 플레이트 \$\{derived\.length\}장/);
-  assert.match(src, /const planText = "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용";/);
+  assert.match(src, /const planText = "만들 것: 부감 마스터 1장 — 스토리보드와 함께 만들지 않고 별도로 준비할 때만 사용";/);
   assert.match(src, /이미지 \{sheetModal\.selected\.size\}장 · 사용자 설정 적용/);
   assert.doesNotMatch(src, /name="sheet-mode"|빠른 미리보기|정면 플레이트 참조|style-anchor-panel|그림체 기준:/);
 });

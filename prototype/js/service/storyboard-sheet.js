@@ -62,17 +62,56 @@
     return list.filter(function (l) { return l && (String(l.name || '').trim() || String(l.description || '').trim()); });
   };
 
-  /** 배경의 단일 기준인 부감 마스터(angle-top). 옛 프로젝트만 정면 refObjectName 으로 폴백한다. */
-  function topMasterOf(loc) {
+  /** 배경의 단일 기준인 부감 마스터(angle-top). */
+  function topMasterVariant(loc) {
     var variants = Array.isArray(loc && loc.variants) ? loc.variants : [];
     for (var i = 0; i < variants.length; i++) {
       if (variants[i] && String(variants[i].id || '') === 'angle-top' && String(variants[i].refObjectName || '').trim()) {
-        return String(variants[i].refObjectName).trim();
+        return variants[i];
       }
     }
-    return '';
+    return null;
+  }
+  function topMasterOf(loc) {
+    var hit = topMasterVariant(loc);
+    return hit ? String(hit.refObjectName || '').trim() : '';
   }
   mod.topMasterOf = topMasterOf;
+
+  /**
+   * 같은 장소의 첫 스토리보드 시트는 부감을 컷과 함께 만든다.
+   * 그 시트 자체를 다시 생성할 때만 부감도 함께 교체하고, 다른 시트는 잠긴 부감을 재사용한다.
+   */
+  mod.storyboardMasterMode = function (loc, target) {
+    var master = topMasterVariant(loc);
+    if (!master) return 'create';
+    var sourceKey = String((target && target.masterSourceKey) || '').trim();
+    if (target && target.masterCandidate && String(master.source || '') === 'storyboard-sheet' && String(master.masterSourceKey || '') === sourceKey) return 'create';
+    return 'reuse';
+  };
+
+  /** 새 부감이 생기면 옛 파생 앵글을 폐기하고 이 시트 패널을 장소의 단일 공간 원본으로 승격한다. */
+  mod.applyStoryboardMaster = function (loc, objectName, meta) {
+    if (!loc || !String(objectName || '').trim()) return loc;
+    var keep = (Array.isArray(loc.variants) ? loc.variants : []).filter(function (v) {
+      var id = String((v && v.id) || '');
+      return id === 'angle-top' || !/^(dir-|angle-)/.test(id);
+    });
+    var hit = null;
+    for (var i = 0; i < keep.length; i++) if (keep[i] && keep[i].id === 'angle-top') { hit = keep[i]; break; }
+    if (!hit) { hit = { id: 'angle-top' }; keep.push(hit); }
+    hit.label = '부감(마스터)';
+    hit.refObjectName = String(objectName).trim();
+    hit.source = 'storyboard-sheet';
+    hit.masterSourceKey = String((meta && meta.masterSourceKey) || '');
+    hit.sheetId = String((meta && meta.sheetId) || '');
+    hit.createdAt = new Date().toISOString();
+    loc.variants = keep;
+    loc.refObjectName = '';
+    loc.masterAngle = 'top';
+    loc.directionSheet = null;
+    return loc;
+  };
 
   /** 스토리보드의 배경 참조. 부감 마스터를 우선해 공간 배치의 진실을 고정한다. */
   mod.plateReference = function (loc, referenceId) {
@@ -93,77 +132,9 @@
     };
   };
 
-  function cameraDirectionOf(scene) {
-    var d = String((scene && scene.cameraDirection) || 'front').trim().toLowerCase();
-    return ['front', 'back', 'left', 'right'].indexOf(d) >= 0 ? d : 'front';
-  }
-
-  function directionPlateObject(loc, direction) {
-    var want = 'dir-' + String(direction || 'front').toLowerCase();
-    var variants = Array.isArray(loc && loc.variants) ? loc.variants : [];
-    for (var i = 0; i < variants.length; i++) {
-      if (variants[i] && String(variants[i].id || '') === want && String(variants[i].refObjectName || '').trim()) return String(variants[i].refObjectName).trim();
-    }
-    return '';
-  }
-
-  mod.requiredDirections = function (cuts) {
-    var seen = {}; var out = [];
-    (Array.isArray(cuts) ? cuts : []).forEach(function (cut) {
-      var dir = cameraDirectionOf(cut);
-      if (!seen[dir]) { seen[dir] = 1; out.push(dir); }
-    });
-    return out;
-  };
-
-  /** 프롬프트 조립 시 사용할 고정 참조 번호. startId 는 부감 마스터 번호다. */
-  mod.storyboardPlateManifest = function (cuts, startId) {
-    var next = Number(startId) || 1;
-    return mod.requiredDirections(cuts).map(function (direction) {
-      next += 1;
-      return { direction: direction, referenceId: next };
-    });
-  };
-
-  /** 부감 마스터 + 현재 시트가 실제로 쓰는 방향 플레이트. manifest 와 같은 순서/번호를 유지한다. */
-  mod.storyboardPlateReferences = function (loc, cuts, startId) {
-    var base = Number(startId) || 1;
-    var refs = [];
-    var master = mod.plateReference(loc, base);
-    if (master) refs.push(master);
-    mod.storyboardPlateManifest(cuts, base).forEach(function (entry) {
-      var objectName = directionPlateObject(loc, entry.direction);
-      if (!objectName) return;
-      refs.push({
-        referenceId: entry.referenceId,
-        referenceType: 'REFERENCE_TYPE_SUBJECT',
-        referenceKind: 'environment-direction',
-        imageDataUrl: proxyUrl(objectName),
-        subjectDescription: String((loc && loc.name) || 'the set') + ' — exact ' + entry.direction.toUpperCase() + ' wall view; preserve this wall and its fixed objects for cuts assigned to this direction',
-        subjectType: 'SUBJECT_TYPE_DEFAULT'
-      });
-    });
-    return refs;
-  };
-
-  /** 정식 스틸은 해당 컷의 방향 플레이트를 우선 사용하고, 없을 때만 부감으로 폴백한다. */
+  /** 정식 스틸은 승인 콘티가 구도를, 부감 마스터가 전체 공간 배치를 담당한다. */
   mod.plateReferenceForScene = function (loc, scene, referenceId) {
-    var direction = cameraDirectionOf(scene);
-    var objectName = directionPlateObject(loc, direction);
-    if (!objectName) return mod.plateReference(loc, referenceId);
-    return {
-      referenceId: referenceId || 1,
-      referenceType: 'REFERENCE_TYPE_SUBJECT',
-      referenceKind: 'environment-direction',
-      imageDataUrl: proxyUrl(objectName),
-      subjectDescription: String((loc && loc.name) || 'the set') + ' — exact ' + direction.toUpperCase() + ' wall view for this cut',
-      subjectType: 'SUBJECT_TYPE_DEFAULT'
-    };
-  };
-
-  mod.needsDirectionSheet = function (loc, cuts) {
-    if (!topMasterOf(loc)) return false;
-    return mod.requiredDirections(cuts).some(function (direction) { return !directionPlateObject(loc, direction); });
+    return mod.plateReference(loc, referenceId);
   };
 
   /** 등록 캐릭터 참조 — pipeline-image 의 해석기(캐릭터 시트 → referenceImages)를 그대로 쓴다. */
@@ -271,66 +242,6 @@
     return obj;
   };
 
-  var directionSheetInFlight = {};
-
-  /**
-   * 부감 마스터 한 장에서 정면·후면·좌측·우측을 2×2 한 장으로 만든 뒤 각 방향 캐시에 저장한다.
-   * 개별 방향을 따로 생성하지 않아 네 벽의 관계와 렌더링 스타일을 한 호출 안에서 고정한다.
-   */
-  mod.ensureDirectionSheet = async function (ctx, loc, cuts, opts) {
-    var o = opts || {};
-    if (!loc || !mod.requiredDirections(cuts).length || !mod.needsDirectionSheet(loc, cuts)) return { loc: loc, generated: false, objectName: '' };
-    var master = topMasterOf(loc);
-    if (!master) throw new Error(mod.text('noObjectName'));
-    var key = String(loc.id || loc.name || '').trim().toLowerCase();
-    if (directionSheetInFlight[key]) return directionSheetInFlight[key];
-    directionSheetInFlight[key] = (async function () {
-      var st = ctx.getState();
-      if (o.onStatus) o.onStatus('directionSheet');
-      var planned = await mod.requestPlan({
-        kind: 'direction-sheet',
-        header: commonPromptOf(st),
-        aspect: (st && st.aspectRatio) || '16:9',
-        set: { name: loc.name, description: loc.description, layout: loc.layout },
-        resolution: o.resolution || '2K'
-      });
-      var masterRef = mod.plateReference(loc, 1);
-      var out = await mod.generateSheet(st, {
-        prompt: planned.prompt,
-        aspect: (st && st.aspectRatio) || '16:9',
-        generationMode: 'image-to-image',
-        cameraTargetMode: 'scene',
-        referenceImages: masterRef ? [masterRef] : [],
-        resolution: o.resolution || '2K',
-        provider: o.provider
-      });
-      if (!out.objectName) throw new Error(mod.text('noObjectName'));
-      var crops = await mod.cropPanels(proxyUrl(out.objectName), { cols: 2, rows: 2 });
-      var directions = ['front', 'back', 'left', 'right'];
-      loc.variants = Array.isArray(loc.variants) ? loc.variants : [];
-      for (var i = 0; i < directions.length; i++) {
-        var crop = crops[i];
-        if (!crop || !crop.dataUrl) throw new Error('direction sheet crop failed: ' + directions[i]);
-        var objectName = await mod.uploadPanel(st.draftId, crop.dataUrl, 'direction-' + directions[i] + '-' + Date.now().toString(36) + '.png');
-        if (NK.service.setPlates && NK.service.setPlates.setDirectionPlate) NK.service.setPlates.setDirectionPlate(loc, directions[i], objectName, directions[i]);
-        else {
-          var id = 'dir-' + directions[i]; var hit = null;
-          for (var v = 0; v < loc.variants.length; v++) if (loc.variants[v] && loc.variants[v].id === id) { hit = loc.variants[v]; break; }
-          if (!hit) { hit = { id: id, label: directions[i], description: '', refObjectName: '' }; loc.variants.push(hit); }
-          hit.refObjectName = objectName;
-        }
-      }
-      loc.directionSheet = { objectName: out.objectName, createdAt: new Date().toISOString(), source: 'angle-top' };
-      var locations = mod.locations(st).map(function (entry) {
-        var same = String(entry.id || entry.name || '').trim().toLowerCase() === key;
-        return same ? loc : entry;
-      });
-      if (NK.service.setPlates && NK.service.setPlates.persistLocations) NK.service.setPlates.persistLocations(ctx, locations);
-      return { loc: loc, generated: true, objectName: out.objectName };
-    })();
-    try { return await directionSheetInFlight[key]; } finally { delete directionSheetInFlight[key]; }
-  };
-
   /** 시트 목록(payload.storyboardSheets). */
   mod.listSheets = function (st) {
     var list = st && st.payload && Array.isArray(st.payload.storyboardSheets) ? st.payload.storyboardSheets : [];
@@ -343,6 +254,13 @@
     if (!st) return Promise.resolve(null);
     st.payload = st.payload || {};
     var list = Array.isArray(st.payload.storyboardSheets) ? st.payload.storyboardSheets.slice() : [];
+    if (sheet && sheet.masterReplaced) {
+      var setKey = String(sheet.setName || '').trim().toLowerCase();
+      list = list.map(function (old) {
+        if (!old || old.kind !== 'board' || old.id === sheet.id || String(old.setName || '').trim().toLowerCase() !== setKey) return old;
+        return Object.assign({}, old, { status: 'stale', staleReason: 'master-replaced' });
+      });
+    }
     var idx = -1;
     for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === sheet.id) { idx = i; break; }
     if (idx >= 0) list[idx] = sheet; else list.push(sheet);
@@ -358,6 +276,7 @@
 
   /** 시트 stale 판정(순서 변경 뒤): cutIds 가 현재 scenes 에 연속·같은 순서로 없으면 stale. 서버 isSheetStale 과 같은 규칙. */
   mod.isStale = function (sheet, scenes) {
+    if (sheet && sheet.status === 'stale') return true;
     var list = Array.isArray(scenes) ? scenes : [];
     var ids = list.map(function (s, i) { return String(s && s.id != null && s.id !== '' ? s.id : i + 1); });
     var want = (sheet && Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map(String);
@@ -390,7 +309,7 @@
             referenceType: 'REFERENCE_TYPE_SUBJECT',
             referenceKind: 'conti-panel',
             imageDataUrl: proxyUrl(panel.objectName),
-            subjectDescription: 'previous storyboard sheet final panel — repeat this frame exactly as panel 1',
+            subjectDescription: 'previous storyboard sheet final panel — continuity reference only; continue pose, screen direction and lighting, never use it as Panel 1',
             subjectType: 'SUBJECT_TYPE_DEFAULT'
           };
         }
@@ -401,7 +320,7 @@
 
   /**
    * E4: 승인한 콘티 패널을 1번 참조로 컷의 스틸컷을 만든다(image-to-image, 카메라 재구성 경로 재사용).
-   * 참조 2~ = 캐릭터 시트(화면의 캐릭터만), 세트 플레이트(목표 앵글).
+   * 참조 2~ = 캐릭터 시트(화면의 캐릭터만), 부감 마스터(공간 기준).
    */
   mod.renderStillFromPanel = async function (ctx, sceneIdx, panelObjectName, opts) {
     var st = ctx.getState();

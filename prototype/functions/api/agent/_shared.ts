@@ -5234,8 +5234,9 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || "").trim() || buildSceneImagePrompt(scene, header, {});
   if (!prompt) throw new Error("이미지 프롬프트가 없어요(prompt 또는 씬 화면/비주얼 필요).");
   const bucket = studioBucket(ctx);
-  // ★일관성 참조 묶음(제작 화면의 레퍼런스 경로를 캔버스 잡에도): 승인 콘티 → 세트 플레이트(방위×높이 캐시) → 캐릭터 시트 → 부감 마스터 → 스타일 앵커.
-  //   플레이트가 없고 마스터가 있으면 여기서 한 장 파생해 저장한다(캐시 채우기). 같은 방위×높이의 다음 컷은 그것을 재사용한다.
+  // ★표준 일관성 참조 묶음: 승인 콘티 → 캐릭터 시트 → 부감 마스터.
+  // 승인 콘티가 이미 실제 컷의 카메라·배경을 고정하므로 별도 방위 플레이트를 만들지 않는다.
+  // 콘티 없이 직접 스틸을 만드는 옛 경로만 방위×높이 플레이트 캐시를 하위 호환으로 사용한다.
   const payload0: any = (cur.payload && typeof cur.payload === "object") ? cur.payload : {};
   const gsOf = (obj: any) => `gs://${bucket}/${String(obj || "").replace(/^gs:\/\/[^/]+\//, "")}`;
   const refs: any[] = [];
@@ -5265,9 +5266,12 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   let loc: any = locName ? (locations.find((l: any) => normLocationKey(l?.name) === normLocationKey(locName) || normLocationKey(l?.id) === normLocationKey(locName)) || null) : null;
   assertSetPlateReady(loc, input);
   if (loc && bucket) {
-    let plate = findPlate(loc, direction, elevation);
+    const lockedMaster = masterOf(loc);
+    let plate = conti && lockedMaster
+      ? { objectName: lockedMaster, variantId: MASTER_VARIANT_ID, exact: false, source: "master" as const }
+      : findPlate(loc, direction, elevation);
     const wantId = plateVariantId(direction, elevation);
-    if ((!plate || !plate.exact) && masterOf(loc) && input?.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID) {
+    if (!conti && (!plate || !plate.exact) && lockedMaster && input?.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID) {
       try {
         await runSetAngleTool({ projectId, locationName: String(loc.name || locName), direction, elevation, ...(input?.provider ? { provider: String(input.provider) } : {}) }, ctx);
         const again = await runProjectGetTool({ projectId }, ctx);
@@ -5293,7 +5297,7 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
             : `FRONT PLATE of ${setName} — this shot faces ${plateLabel(direction, elevation, "en")}; keep the architectural style, palette and lighting, reconstruct the ${direction} side consistently` });
       if (!plate.exact) refNotes.push(plate.source === "master" ? "부감 마스터만(플레이트 없음)" : "정면 플레이트 폴백");
       const master = masterOf(loc);
-      if (plate.exact && master && plate.objectName !== master && refs.length < 12) {
+      if (!conti && plate.exact && master && plate.objectName !== master && refs.length < 12) {
         refs.push({ role: "master", imageUrl: gsOf(master), referenceId: refs.length + 1, referenceKind: "environment", subjectDescription: `TOP-DOWN MASTER PLATE of ${setName} — layout truth (where each piece of furniture stands); do not copy its top-down camera` });
         refNotes.push("부감 마스터");
       }
@@ -5306,8 +5310,8 @@ async function runSceneStillTool(input: any, ctx: ToolContext): Promise<any> {
   // 모델이 그 방(가구·벽지)을 베껴 플레이트와 충돌한다(2026-09-14 소녀의 방: 부감은 분홍 줄무늬·책상, 스틸은 옛 시트의 노란 벽·침대).
   const hasPlateRef = refs.some((r) => r.role === "plate");
   if (anchor && bucket && !hasPlateRef && refs.length < 12) { refs.push({ role: "style", imageUrl: gsOf(anchor.objectName), referenceId: refs.length + 1, referenceKind: "style", subjectDescription: `STYLE ANCHOR — the project's approved style image (${String(anchor.setName || "")})` }); refNotes.push("스타일 기준"); }
-  // 전송 순서 = 승인 콘티 → 플레이트 → 캐릭터 → 마스터 → (스타일). OpenAI edits 는 image[] 순서만 있어 첫 장이 바탕이 되기 쉽다.
-  // 콘티가 있으면 구도·배치를 먼저 잠그고, 없을 때는 플레이트가 1번이 되어 캐릭터 시트의 배경이 방을 덮어쓰지 않게 한다.
+  // 전송 순서 = 승인 콘티 → 부감 마스터/레거시 플레이트 → 캐릭터 → (스타일).
+  // 콘티가 있으면 구도를 먼저 잠그고 부감은 공간 배치만 보강한다.
   const ROLE_ORDER: Record<string, number> = { storyboard: 0, plate: 1, character: 2, master: 3, style: 4 };
   const orderedRefs = refs
     .map((r, i) => ({ r, i }))

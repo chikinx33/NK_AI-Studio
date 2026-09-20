@@ -133,7 +133,7 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 승인 콘티
   assert.match(imagen, /if \(inputFidelity\) fd\.append\("input_fidelity", inputFidelity\);/, 'OpenAI edits 입력 충실도 high');
   assert.match(imagen, /let useFidelity: "high" \| null = allRefs\.length \? "high" : null;/);
   assert.match(imagen, /if \(res\.status === 400 && useFidelity && \/input_fidelity\/i\.test\(bodyText\)\) \{\s*\n\s*useFidelity = null;\s*\n\s*continue;/, '모르는 모델이면 빼고 재시도');
-  // 전송 순서: 승인 콘티 → 플레이트 → 캐릭터 → 마스터 → (스타일). 플레이트가 있으면 스타일 기준은 붙이지 않는다.
+  // 전송 순서: 승인 콘티 → 부감/레거시 플레이트 → 캐릭터 → 마스터 → (스타일).
   assert.match(fn, /const ROLE_ORDER: Record<string, number> = \{ storyboard: 0, plate: 1, character: 2, master: 3, style: 4 \};/);
   assert.match(fn, /const hasPlateRef = refs\.some\(\(r\) => r\.role === "plate"\);\s*\n\s*if \(anchor && bucket && !hasPlateRef && refs\.length < 12\)/, '플레이트 있으면 스타일 기준 생략');
   assert.match(fn, /\.\.\.\(orderedRefs\.length \? \{ referenceImages: orderedRefs \} : \{\}\),/);
@@ -145,13 +145,13 @@ test('★scene_still(캔버스 잡)이 참조 묶음을 붙인다: 승인 콘티
   assert.match(fn, /prompt: promptSent, aspectRatio/);
   assert.match(fn, /imagePrompt: promptSent,/);
   assert.match(read('prototype/functions/api/agent/_shared.ts'), /const rawRefs = \(Array\.isArray\(input\?\.referenceImages\) \? input\.referenceImages : \[\]\)\.slice\(0, 16\);/, '참조 상한 4는 임의 제한 — 제작 화면과 같은 16');
-  assert.match(fn, /let plate = findPlate\(loc, direction, elevation\);/);
-  assert.match(fn, /if \(\(!plate \|\| !plate\.exact\) && masterOf\(loc\) && input\?\.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID\) \{/, '플레이트 없고 마스터 있으면 파생');
+  assert.match(fn, /let plate = conti && lockedMaster[\s\S]*\? \{ objectName: lockedMaster, variantId: MASTER_VARIANT_ID, exact: false, source: "master" as const \}[\s\S]*: findPlate\(loc, direction, elevation\);/, '승인 콘티는 방향 플레이트 대신 부감 마스터를 쓴다');
+  assert.match(fn, /if \(!conti && \(!plate \|\| !plate\.exact\) && lockedMaster && input\?\.autoDerivePlate !== false && wantId !== MASTER_VARIANT_ID\) \{/, '콘티 없는 옛 직접 스틸 경로만 앵글을 파생한다');
   assert.match(fn, /await runSetAngleTool\(\{ projectId, locationName: String\(loc\.name \|\| locName\), direction, elevation,/, '방위×높이로 파생');
   assert.match(fn, /plate = findPlate\(loc, direction, elevation\);\s*\n\s*if \(plate && plate\.exact\) refNotes\.push\(`플레이트 \$\{plateLabel\(direction, elevation, "ko"\)\}\(새로 파생\)`\);/);
   assert.match(fn, /refNotes\.push\(`플레이트 \$\{plateLabel\(direction, elevation, "ko"\)\}\(\$\{plate\.source === "front-legacy" \? "기존 정면" : "캐시 재사용"\}\)`\);/, '재사용도 계보에 남긴다');
   assert.match(fn, /referenceKind: "environment",\s*\n\s*subjectDescription: plate\.exact\s*\n\s*\? `SET PLATE of \$\{setName\} for THIS camera/);
-  assert.match(fn, /if \(plate\.exact && master && plate\.objectName !== master && refs\.length < 12\) \{/, '플레이트가 있으면 마스터도 배치 참조로');
+  assert.match(fn, /if \(!conti && plate\.exact && master && plate\.objectName !== master && refs\.length < 12\) \{/, '옛 직접 경로의 정확 플레이트에만 마스터를 추가한다');
   assert.match(fn, /referenceKind: "style", subjectDescription: `STYLE ANCHOR/);
   assert.match(fn, /imagePlate: plateVariant,\s*\n\s*imageRefs: refNotes\.join\(" · "\),/, '계보');
   assert.match(fn, /const latest = await runProjectGetTool\(\{ projectId \}, ctx\)\.catch\(\(\) => null\);/, '파생으로 바뀐 저장본을 덮어쓰지 않게 최신 씬을 다시 읽는다');

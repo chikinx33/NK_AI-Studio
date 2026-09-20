@@ -31,7 +31,7 @@ import { APPROVAL_DOCK_HEIGHT_VAR, JOB_DOCK_HEIGHT_VAR, canvasDockBottom, observ
  * 노드 종류는 자유 배선이 아니라 연출 문법으로 고정한다(공통 프롬프트 / 장소 / 캐릭터 / 컷).
  * 엣지도 정해진 관계만 그린다(컷 순서 · 컷 참조 · 장소 사용 · 캐릭터 등장 · 공통 프롬프트 오버라이드).
  * 사용자가 임의 모델 노드를 잇는 캔버스는 학습 곡선이 가파르고(시장의 Weavy/ComfyUI 불만),
- * 우리 연속성 보장(stage-geometry·body-grammar·방위 플레이트)이 배선 하나에 무너지기 때문이다.
+ * 우리 연속성 보장(stage-geometry·body-grammar·부감 포함 스토리보드)이 배선 하나에 무너지기 때문이다.
  *
  * 데이터는 서버(/api/agent/production-graph)가 단일 조립기로 만든 그래프이고,
  * 변경은 전부 에이전트 도구(scene_upsert / scene_still / scene_video / video_pipeline)를 거친다.
@@ -945,11 +945,11 @@ export default function ProductionCanvas({
     }
     return "timeout";
   };
-  // 이 세트에 캐시된 앵글 플레이트(마스터 제외) 라벨. 앵글 플레이트는 사전 산출물이 아니라 컷 스틸 생성 때 채워지는 캐시다.
+  // 옛 직접 스틸 경로에서 남은 앵글 플레이트(마스터 제외) 라벨. 표준 경로는 승인 콘티+부감 마스터를 사용한다.
   const cachedPlatesOf = (n: ProductionNode): string[] =>
     ((n.data?.variants || []) as Array<{ id?: string; label?: string }>).filter((v) => v && v.id !== "angle-top" && v.label).map((v) => String(v.label));
-  // 정밀 모드: 세트마다 부감 마스터 1장만. 정면·후면 같은 앵글 플레이트는 컷 스틸을 만들 때 서버(scene_still)가
-  // 그 컷의 방위×높이에 맞춰 마스터에서 자동 파생·저장하고, 같은 방위×높이의 다음 컷은 재사용한다.
+  // 선택 기능: 스토리보드 전에 부감만 별도로 만들고 싶을 때 사용한다.
+  // 표준 경로에서는 스토리보드의 1번 패널이 부감 마스터가 되므로 선행 생성이 필요하지 않다.
   const generateMasterPlates = async (ids: Set<string>, resolution: "2K" | "4K" = "2K") => {
     if (!projectId) return;
     const targets = locationNodes.filter((n) => ids.has(n.id));
@@ -1814,7 +1814,7 @@ export default function ProductionCanvas({
                   <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
-                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">세트마다 부감 마스터 1장을 만들어요. 배치는 세트 계획의 평면도를 따르고, 앵글 플레이트는 컷 스틸을 만들 때 자동으로 파생·재사용돼요.</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">필요할 때 부감 마스터만 별도로 만들어요. 일반 작업에서는 스토리보드 1번 칸에서 부감과 실제 컷을 함께 생성하므로 이 단계는 선택사항입니다.</div>
                     {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
                   <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
@@ -1833,7 +1833,7 @@ export default function ProductionCanvas({
                         : n.data?.plateUrl ? "정면 플레이트만 있음(옛 방식) — 부감 마스터를 만들면 이후 컷 생성이 마스터 기준으로 파생해요"
                         : n.data?.setSheet ? "2×2 시트만 있음 — 부감 마스터를 새로 만들어요"
                         : "아직 없음";
-                      const planText = "만들 것: 부감 마스터 1장 — 앵글 플레이트는 컷 스틸 생성 때 필요한 방위×높이만 자동 파생·재사용";
+                      const planText = "만들 것: 부감 마스터 1장 — 스토리보드와 함께 만들지 않고 별도로 준비할 때만 사용";
                       return (
                         <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
                           {sheetModal.step === "pick" ? (

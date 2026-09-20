@@ -8,7 +8,7 @@
   var SB_TEXT = {
     ko: {
       openBtn: '스토리보드 제작',
-      openTitle: '씬 경계를 지키며 여러 컷을 한 장의 콘티로 생성하고 승인 후 정식 스틸컷을 만들어요',
+      openTitle: '부감 마스터와 같은 씬의 컷을 한 장에서 만들고 승인 후 정식 스틸컷을 만들어요',
       title: '스토리보드 제작',
       help: '한 씬씩 콘티를 만들고, 패널 승인 후 정식 스틸컷으로 전환합니다.',
       guideTitle: '사용 순서',
@@ -20,9 +20,9 @@
       kindGuide: '필요한 시트 종류를 선택하세요.',
       kindChars: '캐릭터 시트 · 3×3',
       kindSet: '배경 시트 · 2×2',
-      kindBoard: '스토리보드 시트 · 씬별 6~8컷',
+      kindBoard: '부감 포함 스토리보드 · 씬별 6~8컷',
       kindAngle: '앵글 플레이트',
-      kindHelpBoard: '선택한 씬의 여러 컷을 한 장의 격자 콘티로 만듭니다.',
+      kindHelpBoard: '1번 칸의 부감 마스터와 선택한 씬의 실제 컷을 한 장에서 함께 만듭니다.',
       kindHelpCharacters: '등록 캐릭터의 정면·측면 등 일관성 기준 이미지를 만듭니다.',
       kindHelpSet: '배경 세트의 정면·후면·부감·로우 앵글 기준 이미지를 만듭니다.',
       kindHelpAngle: '기존 부감 마스터를 선택한 카메라 방향으로 변형합니다.',
@@ -47,14 +47,13 @@
       approvedBatch: '승인 콘티 일괄 스틸 생성',
       revise: '부분 수정',
       reviseAsk: '이 콘티에서 수정할 내용을 입력해 주세요.',
-      batchConfirm: '스토리보드 {count}장과 빠진 4방향 앵글 시트 {angleCount}장을 생성합니다. 이미지 생성은 총 {total}회입니다. 계속할까요?',
+      batchConfirm: '부감 포함 스토리보드 {count}장을 생성합니다. 이미지 생성은 총 {count}회입니다. 계속할까요?',
       stillBatchConfirm: '승인된 콘티 {count}개로 정식 스틸컷을 생성하고 각 컷에 바로 적용합니다. 이미지 생성 호출도 {count}회 발생합니다. 계속할까요?',
       needOverlap: '이 시트는 이전 시트의 마지막 콘티가 필요해요. 앞 시트를 먼저 생성해 주세요.',
       generating: '생성 중…',
-      directionSheet: '4방향 앵글 시트 생성 중…',
       close: '닫기',
       noSets: '세트(장소)가 없어요. 먼저 "배경 레퍼런스"에서 장소를 추출·생성해 주세요.',
-      needPlate: '이 세트의 부감 마스터가 없어요. "배경 레퍼런스"에서 먼저 만들어 주세요.',
+      needPlate: '앵글 변형에 사용할 부감 마스터가 없어요. 먼저 스토리보드나 배경 레퍼런스에서 만들어 주세요.',
       needProject: '프로젝트를 먼저 저장해 주세요.',
       planFailed: '계획을 만들지 못했어요: ',
       genFailed: '생성 실패: ',
@@ -67,7 +66,7 @@
       applyStill: '이 컷의 스틸컷으로 쓰기',
       stillDone: '스틸컷을 컷에 적용했어요.',
       cutLabel: '컷',
-      setPanel: '세트',
+      setPanel: '부감 마스터',
       overlapPanel: '겹침',
       emptyPanel: '빈 칸',
       meta: '모델 · 적용 해상도',
@@ -76,6 +75,7 @@
       refsPlate: '플레이트',
       refsNone: '없음',
       contiBadge: '콘티',
+      masterBadge: '부감',
       stillBadge: '스틸컷',
       bibleBadge: '바이블',
       saveNote: '생성 결과는 프로젝트에 자동 저장됩니다.',
@@ -84,7 +84,7 @@
     },
     en: {
       openBtn: 'Storyboard production',
-      openTitle: 'Generate scene-bounded storyboard sheets, approve panels, then render final stills',
+      openTitle: 'Generate the top-down master and scene cuts together, approve panels, then render final stills',
       title: 'Storyboard production',
       help: 'Build one scene at a time, approve its panels, then promote them to final stills.',
       guideTitle: 'How to use',
@@ -96,9 +96,9 @@
       kindGuide: 'Choose the type of sheet you need.',
       kindChars: 'Character sheet · 3×3',
       kindSet: 'Set sheet · 2×2',
-      kindBoard: 'Storyboard sheet · 6–8 cuts per scene',
+      kindBoard: 'Storyboard with top-down master · 6–8 cuts per scene',
       kindAngle: 'Angle plate',
-      kindHelpBoard: 'Combines the selected scene’s cuts into one storyboard grid.',
+      kindHelpBoard: 'Creates the top-down master in Panel 1 and the selected scene cuts in the same grid.',
       kindHelpCharacters: 'Creates consistent front and side reference views for registered characters.',
       kindHelpSet: 'Creates front, rear, high, and low-angle references for the set.',
       kindHelpAngle: 'Derives the selected camera angle from the existing top-down master.',
@@ -123,14 +123,13 @@
       approvedBatch: 'Render approved stills',
       revise: 'Revise panel',
       reviseAsk: 'Describe what to change in this storyboard panel.',
-      batchConfirm: 'Generate {count} storyboard sheets plus {angleCount} missing four-direction angle sheets. Total image-generation calls: {total}. Continue?',
+      batchConfirm: 'Generate {count} storyboard sheets with their top-down masters. Total image-generation calls: {count}. Continue?',
       stillBatchConfirm: 'Render and apply {count} final stills from approved panels. This also makes {count} image-generation calls. Continue?',
       needOverlap: 'This sheet needs the previous sheet’s final conti panel. Generate the preceding sheet first.',
       generating: 'Generating…',
-      directionSheet: 'Generating four-direction angle sheet…',
       close: 'Close',
       noSets: 'No sets (locations) yet. Extract or create them in "Background references" first.',
-      needPlate: 'This set has no top-down master. Create one in "Background references" first.',
+      needPlate: 'This set has no top-down master for angle editing. Create one from a storyboard or Background references first.',
       needProject: 'Save the project first.',
       planFailed: 'Could not build the plan: ',
       genFailed: 'Generation failed: ',
@@ -143,7 +142,7 @@
       applyStill: 'Use as this cut’s still',
       stillDone: 'Applied the still to the cut.',
       cutLabel: 'Cut',
-      setPanel: 'Set',
+      setPanel: 'Top-down master',
       overlapPanel: 'Overlap',
       emptyPanel: 'Empty',
       meta: 'Model · applied size',
@@ -152,6 +151,7 @@
       refsPlate: 'plate',
       refsNone: 'none',
       contiBadge: 'Conti',
+      masterBadge: 'Top-down',
       stillBadge: 'Still',
       bibleBadge: 'Bible',
       saveNote: 'Generated results are saved with the project automatically.',
@@ -265,12 +265,10 @@
           var target = targetSheet();
           if (!target) { m.error = T().noSets; render(); return; }
           set = setByName(target.setName) || { id: '', name: target.setName || 'Unspecified set', description: '' };
-          var hasTopMaster = !!svc.topMasterOf(set);
-          var targetCuts = scenesOfTarget();
-          var masterRefId = target.anchor && target.anchor.role === 'overlap' ? 2 : 1;
-          var plateManifest = svc.storyboardPlateManifest(targetCuts, masterRefId);
-          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description, layout: set.layout }, hasTopMaster: hasTopMaster, cutIds: target.cutIds, anchor: target.anchor, characterNames: characterNames(), plateManifest: plateManifest, resolution: m.resolution });
-          m.planned = Object.assign({ target: target }, res);
+          var masterMode = svc.storyboardMasterMode(set, target);
+          var hasTopMaster = masterMode === 'reuse' && !!svc.topMasterOf(set);
+          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description, layout: set.layout }, hasTopMaster: hasTopMaster, createTopMaster: masterMode === 'create', previousCutRef: target.previousCutRef || '', cutIds: target.cutIds, characterNames: characterNames(), resolution: m.resolution });
+          m.planned = Object.assign({ target: target, masterMode: masterMode }, res);
         } else if (m.kind === 'bible-characters') {
           var resC = await svc.requestPlan({ kind: 'bible-characters', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', characters: characterEntries(), resolution: m.resolution });
           m.planned = resC;
@@ -298,7 +296,6 @@
       m.busy = true; m.error = ''; m.result = null; m.status = svc.text('generating'); render();
       try {
         var refs = [];
-        var targetScenes = m.kind === 'board' ? scenesOfTarget() : [];
         var plateRef = set ? svc.plateReference(set, 1) : null;
         if (m.kind === 'angle-plate') {
           if (!plateRef) throw new Error(T().needPlate);
@@ -319,31 +316,20 @@
           }
           m.result = { objectName: outA.objectName, url: svc.proxyUrl(outA.objectName), panels: [], meta: outA, note: T().anglePlateDone };
         } else {
-          if (m.kind === 'board' && (!set || !svc.topMasterOf(set))) throw new Error(T().needPlate);
-          if (m.kind === 'board') {
-            await svc.ensureDirectionSheet(ctx, set, targetScenes, {
-              resolution: m.resolution,
-              provider: m.provider,
-              onStatus: function () { m.status = T().directionSheet; render(); }
-            });
-            set = activeSet();
-            plateRef = set ? svc.plateReference(set, 1) : null;
-          }
-          if (m.kind === 'board' && m.planned && m.planned.target && m.planned.target.anchor && m.planned.target.anchor.role === 'overlap') {
-            var overlapRef = svc.overlapReference(s, m.planned.target.anchor.ref, 1);
+          if (m.kind === 'board' && m.planned && m.planned.masterMode === 'reuse' && plateRef) refs.push(Object.assign({}, plateRef, { referenceId: refs.length + 1 }));
+          if (m.kind === 'board' && m.planned && m.planned.target && m.planned.target.previousCutRef) {
+            var overlapRef = svc.overlapReference(s, m.planned.target.previousCutRef, refs.length + 1);
             if (!overlapRef) throw new Error(T().needOverlap);
             refs.push(overlapRef);
           }
-          if (m.kind === 'board') {
-            svc.storyboardPlateReferences(set, targetScenes, refs.length + 1).forEach(function (r) { refs.push(r); });
-          } else if (m.kind !== 'bible-set' && m.kind !== 'bible-characters' && plateRef) refs.push(plateRef);
+          if (m.kind !== 'board' && m.kind !== 'bible-set' && m.kind !== 'bible-characters' && plateRef) refs.push(plateRef);
           if (m.kind === 'bible-set' && plateRef) refs.push(plateRef);
           if (m.kind !== 'bible-set') {
             var text = m.kind === 'bible-characters' ? characterNames().map(function (n) { return '@' + n; }).join(' ') : (m.kind === 'board' ? scenesOfTarget() : scenesOfSet(set)).map(function (sc) { return [sc.composition, sc.shot, sc.visual, sc.action].filter(Boolean).join(' '); }).join('\n');
             var cr = await svc.characterReferences(s, text, s.draftId);
             (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
           }
-          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'environment-direction' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment' || r.referenceKind === 'environment-direction'; }), plateCount: refs.filter(function (r) { return r.referenceKind === 'environment' || r.referenceKind === 'environment-direction'; }).length, overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
+          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment'; }), plateCount: refs.filter(function (r) { return r.referenceKind === 'environment'; }).length, overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
           var out = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', referenceImages: refs, resolution: m.resolution, provider: m.provider });
           if (!out.objectName) throw new Error(svc.text('noObjectName'));
           var url = svc.proxyUrl(out.objectName);
@@ -353,14 +339,26 @@
           var panelSpecs = (m.planned && m.planned.panels) || crops.map(function (c) { return { index: c.index, role: 'cut', ref: '', label: 'conti' }; });
           var panels = crops.map(function (c) {
             var spec = panelSpecs[c.index - 1] || { role: 'cut', ref: '' };
-            return { index: c.index, role: spec.role, ref: spec.ref, dataUrl: c.dataUrl, objectName: '', status: 'pending', label: m.kind === 'board' ? 'conti' : 'bible' };
+            return { index: c.index, role: spec.role, ref: spec.ref, dataUrl: c.dataUrl, objectName: '', status: 'pending', label: m.kind === 'board' ? (spec.label || 'conti') : 'bible' };
           }).filter(function (p) { return p.role !== 'empty'; });
           m.status = svc.text('uploading'); render();
           for (var k = 0; k < panels.length; k++) {
             try { panels[k].objectName = await svc.uploadPanel(s.draftId, panels[k].dataUrl, 'sheet-' + out.objectName.split('/').pop().replace(/\.[a-z]+$/i, '') + '-p' + panels[k].index + '.png'); } catch (_) {}
           }
+          var sheetId = 'sheet_' + Date.now().toString(36);
+          var masterPanel = m.kind === 'board' ? panels.filter(function (p) { return p.role === 'set' && Number(p.index) === 1; })[0] : null;
+          if (m.kind === 'board' && (!masterPanel || !masterPanel.objectName)) throw new Error(svc.text('noObjectName'));
+          var replacesMaster = m.kind === 'board' && m.planned && m.planned.masterMode === 'create';
+          if (replacesMaster) {
+            svc.applyStoryboardMaster(set, masterPanel.objectName, { sheetId: sheetId, masterSourceKey: m.planned.target.masterSourceKey });
+            s.payload = s.payload || {};
+            var knownLocations = Array.isArray(s.payload.episodeLocations) ? s.payload.episodeLocations : [];
+            var setKey = String((set && (set.id || set.name)) || '').trim().toLowerCase();
+            if (!knownLocations.some(function (loc) { return String((loc && (loc.id || loc.name)) || '').trim().toLowerCase() === setKey; })) knownLocations.push(set);
+            s.payload.episodeLocations = knownLocations;
+          }
           var sheet = {
-            id: 'sheet_' + Date.now().toString(36),
+            id: sheetId,
             kind: m.kind,
             setId: set ? String(set.id || set.name || '') : '',
             setName: set ? String(set.name || '') : '',
@@ -368,6 +366,12 @@
             sceneNo: m.kind === 'board' && m.planned.target ? Number(m.planned.target.sceneNo) || 0 : 0,
             sceneKey: m.kind === 'board' && m.planned.target ? String(m.planned.target.sceneKey || '') : '',
             anchor: m.kind === 'board' && m.planned.target ? m.planned.target.anchor : null,
+            previousCutRef: m.kind === 'board' && m.planned.target ? String(m.planned.target.previousCutRef || '') : '',
+            masterSourceKey: m.kind === 'board' && m.planned.target ? String(m.planned.target.masterSourceKey || '') : '',
+            masterMode: m.kind === 'board' && m.planned ? String(m.planned.masterMode || '') : '',
+            masterObjectName: m.kind === 'board' ? (replacesMaster ? masterPanel.objectName : svc.topMasterOf(set)) : '',
+            masterReplaced: !!replacesMaster,
+            status: 'fresh',
             resolution: m.resolution,
             grid: grid,
             objectName: out.objectName,
@@ -396,14 +400,7 @@
       if (!m.plan || !m.plan.length) await plan();
       var total = (m.plan || []).length;
       if (!total) { m.error = m.error || T().noSets; notify('failed'); return; }
-      var missingSets = {};
-      (m.plan || []).forEach(function (sheet) {
-        var set = setByName(sheet.setName); var ids = new Set((sheet.cutIds || []).map(String));
-        var cuts = (state().scenes || []).filter(function (sc, idx) { return ids.has(String(sc && sc.id != null ? sc.id : idx + 1)); });
-        if (set && svc.needsDirectionSheet(set, cuts)) missingSets[String(set.id || set.name || '').toLowerCase()] = 1;
-      });
-      var angleCount = Object.keys(missingSets).length;
-      var confirmText = T().batchConfirm.replace(/\{count\}/g, String(total)).replace(/\{angleCount\}/g, String(angleCount)).replace(/\{total\}/g, String(total + angleCount));
+      var confirmText = T().batchConfirm.replace(/\{count\}/g, String(total));
       if (!skipConfirm && !(await NK.ui.dialog.confirm(confirmText, { title: T().generateAll }))) return;
       m.batchBusy = true; m.batchDone = 0; m.batchTotal = total; m.error = ''; render();
       notify('running');
@@ -437,8 +434,8 @@
       var list = svc.listSheets(state());
       var sheet = list.filter(function (x) { return x && x.id === m.result.sheetId; })[0];
       if (!sheet) return;
-      sheet.panels = (sheet.panels || []).map(function (p) { return p.role === 'cut' ? Object.assign({}, p, { status: 'approved' }) : p; });
-      m.result.panels.forEach(function (p) { if (p.role === 'cut') p.status = 'approved'; });
+      sheet.panels = (sheet.panels || []).map(function (p) { return p.role === 'cut' || p.role === 'set' ? Object.assign({}, p, { status: 'approved' }) : p; });
+      m.result.panels.forEach(function (p) { if (p.role === 'cut' || p.role === 'set') p.status = 'approved'; });
       await svc.persistSheet(ctx, sheet);
       render();
     }
@@ -532,8 +529,8 @@
     }
 
     function badge(kind) {
-      var label = kind === 'still' ? T().stillBadge : kind === 'bible' ? T().bibleBadge : T().contiBadge;
-      var color = kind === 'still' ? '#10b981' : kind === 'bible' ? '#a78bfa' : '#f59e0b';
+      var label = kind === 'still' ? T().stillBadge : kind === 'bible' ? T().bibleBadge : kind === 'master' ? T().masterBadge : T().contiBadge;
+      var color = kind === 'still' ? '#10b981' : kind === 'bible' ? '#a78bfa' : kind === 'master' ? '#38bdf8' : '#f59e0b';
       return '<span style="position:absolute;left:4px;top:4px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:800;color:#111;background:' + color + ';">' + esc(label) + '</span>';
     }
 
@@ -558,7 +555,7 @@
           var title = p.role === 'set' ? T().setPanel : p.role === 'overlap' ? T().overlapPanel : (T().cutLabel + ' ' + p.ref);
           var still = m.stills[sid];
           return '<div style="width:calc(33.33% - 6px);position:relative;border:1px solid ' + (p.status === 'approved' ? '#10b981' : p.status === 'rejected' ? '#ef4444' : 'var(--line, #333)') + ';border-radius:8px;overflow:hidden;">' +
-            '<div style="position:relative;"><img src="' + esc(p.dataUrl || svc.proxyUrl(p.objectName)) + '" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;">' + badge(p.label === 'bible' ? 'bible' : 'conti') + '</div>' +
+            '<div style="position:relative;"><img src="' + esc(p.dataUrl || svc.proxyUrl(p.objectName)) + '" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover;">' + badge(p.label === 'bible' ? 'bible' : p.label === 'master' ? 'master' : 'conti') + '</div>' +
             '<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;font-size:11px;">' +
               '<span style="flex:1;font-weight:700;">' + esc('#' + p.index + ' ' + title) + '</span>' +
               (isCut ? '<button type="button" class="btn-secondary compact sb-approve" data-i="' + p.index + '" data-s="' + (p.status === 'approved' ? 'pending' : 'approved') + '" style="min-width:56px;">' + esc(p.status === 'approved' ? T().approved : T().approve) + '</button>' +
