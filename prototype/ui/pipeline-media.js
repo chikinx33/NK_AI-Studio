@@ -210,9 +210,10 @@
     return '';
   }
 
-  // 프로젝트·브랜드 데이터 안에서 현재 저장소 객체를 참조하는 모든 위치를 찾는다.
-  // 필드명을 열거하지 않고 실제 objectName 후보와 대조하므로 새 이미지 필드가 추가돼도
-  // 미사용 정리 기능이 등록 이미지를 잘못 선택하지 않는다.
+  // 전달받은 값 안에서 현재 저장소 객체를 참조하는 위치를 찾는다.
+  // 주의: 프로젝트 전체를 roots 로 넘기면 imageHistory·생성 기록까지 "사용 중"으로
+  // 오판한다. 라이브러리 미사용 판정은 아래 collectRegisteredImageObjectNames 가
+  // 현재 등록 슬롯만 골라낸 뒤 이 저수준 함수를 사용한다.
   function collectReferencedObjectNames(roots, candidateNames) {
     var candidates = new Set((Array.isArray(candidateNames) ? candidateNames : [])
       .map(function (name) { return String(name || '').trim(); })
@@ -243,6 +244,127 @@
 
     visit(Array.isArray(roots) ? roots : [roots]);
     return Array.from(referenced);
+  }
+
+  var CURRENT_IMAGE_FIELDS = [
+    'imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+    'image', 'image_url', 'init_image', 'source_image'
+  ];
+
+  function pushImageFields(roots, row) {
+    if (!row || typeof row !== 'object') return;
+    CURRENT_IMAGE_FIELDS.forEach(function (key) {
+      var value = row[key];
+      if (typeof value === 'string' && value.trim()) roots.push(value);
+    });
+  }
+
+  function storyboardSheetIsCurrent(sheet, scenes) {
+    if (!sheet || sheet.kind !== 'board' || sheet.status === 'stale') return false;
+    var ids = (Array.isArray(scenes) ? scenes : []).map(function (scene, index) {
+      return String(scene && scene.id != null && scene.id !== '' ? scene.id : index + 1);
+    });
+    var want = (Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map(String);
+    if (!want.length) return false;
+    var start = ids.indexOf(want[0]);
+    if (start < 0) return false;
+    for (var i = 0; i < want.length; i++) {
+      if (ids[start + i] !== want[i]) return false;
+      if (i > 0) {
+        var prev = scenes[start + i - 1] || {};
+        var cur = scenes[start + i] || {};
+        var prevLocation = String(prev.sceneLocation || prev.location || '').trim();
+        var location = String(cur.sceneLocation || cur.location || '').trim();
+        if (cur.sceneBreak || (prevLocation && location && prevLocation !== location)) return false;
+      }
+    }
+    return true;
+  }
+
+  // 최신 유효 시트가 같은 컷 묶음의 이전 생성 결과를 대체한다. 이전 시트를 모두
+  // 보호하면 사용자가 다시 생성한 스토리보드 찌꺼기가 영원히 "사용 중"으로 남는다.
+  function currentStoryboardSheets(sheets, scenes) {
+    var list = Array.isArray(sheets) ? sheets : [];
+    var seenCutGroups = new Set();
+    var out = [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      var sheet = list[i];
+      if (!storyboardSheetIsCurrent(sheet, scenes)) continue;
+      var group = (Array.isArray(sheet.cutIds) ? sheet.cutIds : []).map(String).join(',');
+      if (!group || seenCutGroups.has(group)) continue;
+      seenCutGroups.add(group);
+      out.push(sheet);
+    }
+    return out;
+  }
+
+  function pushRegisteredAssetLists(roots, source) {
+    if (!source || typeof source !== 'object') return;
+    [
+      'characterSheets', 'knowledgeCharacterSheets',
+      'environmentAssets', 'knowledgeEnvironmentAssets'
+    ].forEach(function (key) {
+      if (Array.isArray(source[key])) roots.push(source[key]);
+    });
+    var hub = source.knowledgeHub;
+    if (hub && typeof hub === 'object') {
+      if (Array.isArray(hub.characterSheets)) roots.push(hub.characterSheets);
+      if (Array.isArray(hub.environmentAssets)) roots.push(hub.environmentAssets);
+    }
+  }
+
+  // "미사용"은 프로젝트 객체 전체가 아니라 현재 화면/시트/레퍼런스 슬롯에 등록된
+  // 이미지만 사용 중으로 본다. imageHistory, 생성 응답, 라이브러리 캐시 등은 의도적으로
+  // 읽지 않아 교체된 결과를 정리 후보로 선택할 수 있게 한다.
+  function collectRegisteredImageObjectNames(projectLike, brandLike, candidateNames) {
+    var project = projectLike && typeof projectLike === 'object' ? projectLike : {};
+    var payload = project.payload && typeof project.payload === 'object' ? project.payload : {};
+    var scenes = Array.isArray(project.scenes)
+      ? project.scenes
+      : (Array.isArray(payload.scenes) ? payload.scenes : []);
+    var roots = [];
+
+    scenes.forEach(function (scene) {
+      pushImageFields(roots, scene);
+      (Array.isArray(scene && scene.shots) ? scene.shots : []).forEach(function (shot) {
+        pushImageFields(roots, shot);
+      });
+    });
+
+    // 프로젝트/브랜드 대표 이미지도 실제 등록 슬롯이다.
+    ['thumbnailObjectName', 'brandLogoObjectName', 'thumbnailUrl', 'brandLogoUrl'].forEach(function (key) {
+      var value = payload[key] || project[key];
+      if (typeof value === 'string' && value.trim()) roots.push(value);
+    });
+
+    (Array.isArray(payload.episodeLocations) ? payload.episodeLocations : []).forEach(function (location) {
+      if (!location || typeof location !== 'object') return;
+      if (location.refObjectName) roots.push(location.refObjectName);
+      (Array.isArray(location.variants) ? location.variants : []).forEach(function (variant) {
+        if (variant && variant.refObjectName) roots.push(variant.refObjectName);
+      });
+    });
+    (Array.isArray(payload.episodeProps) ? payload.episodeProps : []).forEach(function (prop) {
+      if (prop && prop.refObjectName) roots.push(prop.refObjectName);
+    });
+
+    currentStoryboardSheets(payload.storyboardSheets, scenes).forEach(function (sheet) {
+      if (sheet.objectName) roots.push(sheet.objectName);
+      if (sheet.masterObjectName) roots.push(sheet.masterObjectName);
+      (Array.isArray(sheet.panels) ? sheet.panels : []).forEach(function (panel) {
+        if (panel && panel.objectName) roots.push(panel.objectName);
+      });
+    });
+
+    pushRegisteredAssetLists(roots, payload);
+    pushRegisteredAssetLists(roots, brandLike);
+    if (brandLike && typeof brandLike === 'object') {
+      ['brandLogoObjectName', 'thumbnailObjectName', 'brandLogoUrl', 'thumbnailUrl'].forEach(function (key) {
+        if (typeof brandLike[key] === 'string' && brandLike[key].trim()) roots.push(brandLike[key]);
+      });
+    }
+
+    return collectReferencedObjectNames(roots, candidateNames);
   }
 
   async function transcodeVideoObjectToAspect(projectId, sourceObjectName, rawRatio) {
@@ -312,6 +434,7 @@
   media.readVideoMeta = readVideoMeta;
   media.extractObjectNameFromMediaRef = extractObjectNameFromMediaRef;
   media.collectReferencedObjectNames = collectReferencedObjectNames;
+  media.collectRegisteredImageObjectNames = collectRegisteredImageObjectNames;
   media.transcodeVideoObjectToAspect = transcodeVideoObjectToAspect;
   media.enforceVideoAspectRatio = enforceVideoAspectRatio;
   media.toPlayableMediaUrl = toPlayableMediaUrl;

@@ -217,8 +217,10 @@
       // 프로젝트 데이터를 읽지 못한 상태에서 전부 미사용으로 간주하면 등록 이미지까지
       // 삭제 후보가 될 수 있으므로 반드시 실패로 닫는다.
       if (!state && !draft) throw new Error('project_state_unavailable');
-      if (!media || !media.collectReferencedObjectNames) throw new Error('usage_checker_unavailable');
-      return new Set(media.collectReferencedObjectNames([state, draft, brandRecord], candidates));
+      if (!media || !media.collectRegisteredImageObjectNames) throw new Error('usage_checker_unavailable');
+      // 화면의 현재 state가 최신 원천이다. state와 이전 draft를 함께 훑으면 draft에 남은
+      // imageHistory/교체 전 이미지까지 사용 중으로 오판한다. draft는 state가 없을 때만 폴백한다.
+      return new Set(media.collectRegisteredImageObjectNames(state || draft, brandRecord, candidates));
     }
 
     function syncActionState() {
@@ -340,7 +342,7 @@
         '<span class="lib-selection-count muted" id="lib-selection-count"></span>' +
         '<div class="lib-header-spacer"></div>' +
         '<div class="lib-toolbar">' +
-        '<button class="btn-secondary" id="lib-unused-btn" title="현재 프로젝트와 등록 시트에서 사용하지 않는 항목만 선택">미사용</button>' +
+        (kind === 'image' ? '<button class="btn-secondary" id="lib-unused-btn" title="현재 프로젝트와 등록 시트에서 사용하지 않는 항목만 선택">미사용</button>' : '') +
         '<button class="btn-primary" id="lib-use-btn"' + (hasItems ? '' : ' disabled') + '>사용</button>' +
         '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
         '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
