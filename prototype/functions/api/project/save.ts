@@ -179,6 +179,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return out.length ? out : null;
     };
 
+    const normalizeSongCues = (value: any) => (Array.isArray(value) ? value : [])
+      .map((cue: any) => ({
+        sectionId: typeof cue?.sectionId === "string" ? cue.sectionId.trim() : "",
+        sectionLabel: typeof cue?.sectionLabel === "string" ? cue.sectionLabel.trim() : "",
+        sectionRole: typeof cue?.sectionRole === "string" ? cue.sectionRole.trim() : "",
+        text: typeof cue?.text === "string" ? cue.text.trim() : "",
+        isRefrain: !!cue?.isRefrain,
+        isSectionStart: !!cue?.isSectionStart,
+        startOffsetSec: Math.max(0, Math.round((Number(cue?.startOffsetSec) || 0) * 10) / 10),
+        durationSec: Math.max(0, Math.round((Number(cue?.durationSec) || 0) * 10) / 10),
+      }))
+      .filter((cue: any) => cue.sectionId && cue.durationSec > 0);
+
     // 컷↔레퍼런스 컷 참조·프롬프트 계보. 노드 캔버스가 컷↔컷 참조선과
     // "어떤 프롬프트·어떤 이미지에서 이 영상이 나왔나" 를 그리려면 서버 왕복에서 살아남아야 한다.
     // (씬을 고정 목록으로 다시 만드는 구조라 여기 없으면 저장 한 번에 통째로 사라진다.)
@@ -344,6 +357,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         isRefrain: !!s?.isRefrain,
         songSectionId: typeof s?.songSectionId === "string" ? s.songSectionId : "",
         songSectionLabel: typeof s?.songSectionLabel === "string" ? s.songSectionLabel : "",
+        songCues: normalizeSongCues(s?.songCues),
         // 사용자가 더빙 대본을 비운 것도 뜻이 있는 편집이다(빈 값 영속 보존).
         scriptEdited: !!s?.scriptEdited,
         // 컷별 공통 프롬프트 덮어쓰기·영상 프롬프트 편집본·컷 참조·계보.

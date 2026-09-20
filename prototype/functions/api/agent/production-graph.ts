@@ -194,6 +194,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         // 노래 구간(순서 변경 검사용): 구간 순서·가사 시작 컷이 어긋나면 캔버스가 경고한다.
         songSectionId: String(s?.songSectionId || ""),
         songSectionLabel: String(s?.songSectionLabel || ""),
+        songCues: Array.isArray(s?.songCues) ? s.songCues : [],
         isRefrain: !!s?.isRefrain,
         estSec: Number(s?.estSec) || 0,
         beats: Array.isArray(s?.beats) ? s.beats : null,

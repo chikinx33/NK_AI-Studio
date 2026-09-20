@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   normalizeSongSections,
   mapScenesToSections,
+  mapTimelineItemsToSectionCues,
   sectionsToSongChunks,
   fitSectionDurations,
   cleanLyricText,
@@ -199,6 +200,25 @@ test("컷이 구간보다 적어도 (컷 하나가 여러 소절에 걸쳐도) �
   mapped.forEach((m) => assert.ok(m && m.sectionId, "모든 컷은 어떤 구간엔가 속해야 한다"));
 });
 
+test("★최종 컷 하나가 여러 소절에 걸쳐도 모든 구간을 cue로 보존한다", () => {
+  const sections = normalizeSongSections([
+    { label: "[1절]", text: "가", durationSec: 6 },
+    { label: "[후렴]", text: "나", durationSec: 5 },
+    { label: "[2절]", text: "다", durationSec: 6 },
+    { label: "[후렴]", text: "라", durationSec: 5 },
+    { label: "[브릿지]", text: "마", durationSec: 3 },
+    { label: "[후렴]", text: "바", durationSec: 5 },
+  ], { durationSec: 30, lang: "ko" });
+  const cues = mapTimelineItemsToSectionCues(
+    [5, 4, 4, 5, 4, 4, 4].map((estSec) => ({ estSec })),
+    sections
+  );
+  const ids = new Set(cues.flatMap((row) => row.map((cue) => cue.sectionId)));
+  assert.equal(ids.size, sections.length);
+  assert.ok(cues.some((row) => row.length > 1), "소절 경계를 가로지르는 컷은 다중 cue를 가져야 한다");
+  assert.equal(cues.flat().filter((cue) => cue.isSectionStart).length, sections.length);
+});
+
 test("씬 총합과 구간 총합이 어긋나도 시간축이 무너지지 않는다", () => {
   // 시나리오 리밸런스로 씬 합이 조금 달라질 수 있다.
   const sections = normalizeSongSections(
@@ -388,7 +408,7 @@ test("★회귀: 컷 분해가 등록 캐릭터로 @토큰을 보정한다", () 
   assert.match(src, /let characters = Array\.isArray\(body\?\.characters\) \? body\.characters : \[\]/);
   // 클라이언트가 실제로 캐릭터를 보낸다
   const ui = read("prototype/js/ui/scenario.js");
-  assert.match(ui, /characters: Array\.isArray\(payload\?\.characters\) \? payload\.characters : \[\]/);
+  assert.match(ui, /characters: withBodySpecs\(Array\.isArray\(payload\?\.characters\) \? payload\.characters : \[\], payload\)/);
 });
 
 test("컷 분해가 한 샷에 여러 컷을 몰아넣지 못하게 막는다", () => {

@@ -1271,6 +1271,7 @@
         'isRefrain',
         'songSectionId',
         'songSectionLabel',
+        'songCues',
         'estSec',
         'duration',
         'script',

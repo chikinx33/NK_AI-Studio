@@ -21,7 +21,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1854";
+const SERVER_VERSION = "3.1855";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -2881,6 +2881,8 @@ function buildScenarioSpec(input = {}) {
     hasNarrativeStory,
   });
   requiredOutputsKo.push("각 visual은 추상적인 장면 설명 대신 실제로 연출 가능한 공간, 배경, 행동, 프롭을 모두 포함해야 한다.");
+  requiredOutputsKo.push("씬 경계에서도 지속 소품의 소유자와 위치를 이어야 한다. 소품이 손·바닥·테이블 사이를 이동하거나 다른 인물에게 넘어가면 그 전환 행동을 visual에 명시한다.");
+  requiredOutputsEn.push("Across scene boundaries, preserve each persistent prop's holder and position. If a prop moves between a hand, floor, table, or another character, show that transition explicitly in the visual.");
   if (hasNarrativeStory) {
     requiredOutputsKo.push("씬 배경과 장소는 이야기가 결정한다. 이야기에 명시된 장소를 그대로 사용하고, 명시되지 않은 경우에만 이전 씬과 자연스럽게 이어지는 공간을 유지한다.");
   } else {
@@ -5450,6 +5452,11 @@ function normalizeCharacters(list = []) {
         // 신체 스펙. 여기서 떨어뜨리면 작가 AI 가 사람 관용구("손가락으로 가리킨다")를 쓴다.
         appearance: String(c?.appearance || "").trim(),
         negative: String(c?.negative || c?.negativePrompt || "").trim(),
+        bodySpecKnown: c?.bodySpecKnown === true || !!String(c?.appearance || "").trim(),
+        bodySpecSource: String(c?.bodySpecSource || "").trim(),
+        bodySpecRequired: c?.bodySpecRequired === true,
+        mainAssetId: String(c?.mainAssetId || "").trim(),
+        referenceAssetIds: Array.isArray(c?.referenceAssetIds) ? c.referenceAssetIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
       };
     })
     .filter(Boolean)

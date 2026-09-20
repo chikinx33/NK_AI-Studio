@@ -22,6 +22,8 @@ import { decomposeScenes } from "./scenario/shots/index.js";
 import { studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { enforceBodyConstraintsInScenes } from "./_shared/body-grammar.js";
+import { mapTimelineItemsToSectionCues } from "./_shared/song-sections.js";
+import { fitFlatTimelineDurations } from "./_shared/timeline-durations.js";
 import { resolveServerCharacterBodySpecs } from "./_shared/brand-body-specs.js";
 
 /**
@@ -204,7 +206,7 @@ function flattenScenesWithShots(parentScenes, characters) {
         cameraDirection: String(sh.cameraDirection || "front"),
         // 카메라 높이(eye/high/low/top/worm) — 방위와 함께 세트 플레이트를 고른다.
         cameraElevation: String(sh.cameraElevation || "eye"),
-        estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
+        estSec: Math.max(1, Math.round((Number(sh.duration) || 0) * 10) / 10),
         // 한 샷 안의 시간표. 스틸컷은 beats[0](첫 프레임)으로, 영상은 시간 분배로 쓴다.
         beats: Array.isArray(sh.beats) && sh.beats.length ? sh.beats : null,
         // t=0 무대 배치 (정면 기준 좌표). 이미지 프롬프트의 공간 문장이 여기서 나온다.
@@ -221,6 +223,25 @@ function flattenScenesWithShots(parentScenes, characters) {
     });
   }
   return { flat, tokensEnforcedShots: totalTokensEnforced };
+}
+
+export function attachSongSectionCues(scenes, songSections) {
+  const list = Array.isArray(scenes) ? scenes : [];
+  const cuesByScene = mapTimelineItemsToSectionCues(list, songSections, "estSec");
+  return list.map((scene, index) => {
+    const songCues = cuesByScene[index] || [];
+    if (!songCues.length) return scene;
+    const primary = songCues.slice().sort((a, b) => b.durationSec - a.durationSec)[0] || songCues[0];
+    const startingLyrics = songCues.filter((cue) => cue.isSectionStart && cue.text).map((cue) => cue.text);
+    return {
+      ...scene,
+      songCues,
+      songSectionId: primary.sectionId,
+      songSectionLabel: primary.sectionLabel,
+      isRefrain: songCues.some((cue) => cue.isRefrain),
+      lyrics: startingLyrics.join("\n"),
+    };
+  });
 }
 
 const corsHeaders = (origin) => ({
@@ -297,7 +318,12 @@ export async function onRequestPost(context) {
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };
     // 평탄화: 각 shot 을 top-level scene 으로
-    const { flat: flatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed, characters);
+    const { flat: rawFlatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed, characters);
+    const requestedDuration = Number(body?.targetDurationSec)
+      || (Array.isArray(body?.songSections) ? body.songSections.reduce((sum, section) => sum + (Number(section?.durationSec) || 0), 0) : 0)
+      || scenes.reduce((sum, scene) => sum + (Number(scene?.estSec) || 0), 0);
+    const durationFit = fitFlatTimelineDurations(rawFlatScenes, requestedDuration);
+    const flatScenes = attachSongSectionCues(durationFit.scenes, body?.songSections);
     const bodyAudit = enforceBodyConstraintsInScenes(flatScenes, characters);
     if (bodyAudit.remainingViolations.length) {
       return jsonError("character_body_constraint_unresolved", 422, origin);
@@ -315,6 +341,12 @@ export async function onRequestPost(context) {
         bodySpecWarnings: bodySpecResolution.bodySpecWarnings || [],
         bodyConstraintViolations: bodyAudit.violations.length,
         bodyConstraintRepairs: bodyAudit.repairs,
+        durationRequested: requestedDuration,
+        durationBefore: durationFit.before,
+        durationActual: durationFit.after,
+        durationAdjustedCuts: durationFit.adjusted,
+        durationFeasible: durationFit.feasible,
+        songCueSections: new Set(flatScenes.flatMap((scene) => (Array.isArray(scene.songCues) ? scene.songCues.map((cue) => cue.sectionId) : []))).size,
       },
     }), {
       status: 200,

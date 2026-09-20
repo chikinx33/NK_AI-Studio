@@ -956,6 +956,7 @@
               isRefrain: !!s.isRefrain,
               songSectionId: s.songSectionId || '',
               songSectionLabel: s.songSectionLabel || '',
+              songCues: Array.isArray(s.songCues) ? s.songCues : [],
               script: s.script || '',
               // 사용자가 더빙 대본을 명시적으로 편집/삭제했는지(빈 값 영속 보존용)
               scriptEdited: !!s.scriptEdited,

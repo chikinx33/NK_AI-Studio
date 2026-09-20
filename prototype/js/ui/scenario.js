@@ -678,6 +678,11 @@
         // 화면을 다시 열거나 브랜드 캐시가 비어도 이 두 필드를 떨어뜨리면 안 된다.
         appearance: sanitizeText(c?.appearance || c?.bodyAppearance || '').trim(),
         negative: sanitizeText(c?.negative || c?.negativePrompt || '').trim(),
+        bodySpecKnown: c?.bodySpecKnown === true || !!sanitizeText(c?.appearance || c?.bodyAppearance || '').trim(),
+        bodySpecSource: sanitizeText(c?.bodySpecSource || '').trim(),
+        bodySpecRequired: c?.bodySpecRequired === true,
+        mainAssetId: sanitizeText(c?.mainAssetId || '').trim(),
+        referenceAssetIds: Array.isArray(c?.referenceAssetIds) ? c.referenceAssetIds.map((id) => sanitizeText(id)).filter(Boolean) : [],
         isActive: boolVal(c?.isActive, defaultActive)
       });
     });
@@ -1011,21 +1016,46 @@
   // 브랜드 허브의 신체 스펙(생김새 appearance · 없는 부위 negative)을 캐릭터에 얹는다.
   // 이 스펙이 없으면 시나리오·컷 분해 AI 는 이름·성격만 보고 사람 관용구
   // ("손가락으로 가리킨다", "코를 박고", "고개를 돌려")를 쓴다 — 손가락 없는 캐릭터에게.
-  const withBodySpecs = (list = []) => {
+  const withBodySpecs = (list = [], payloadContext = currentPayload || {}) => {
     const registry = NK.service && NK.service.characterRegistry;
     if (!registry || typeof registry.getCharacterByTrigger !== 'function') return list;
     const brandId = (NK.service.project && NK.service.project.getBrandId)
-      ? NK.service.project.getBrandId(currentPayload || {})
+      ? NK.service.project.getBrandId(payloadContext)
       : '';
+    const sheetRows = []
+      .concat(Array.isArray(payloadContext?.characterSheets) ? payloadContext.characterSheets : [])
+      .concat(Array.isArray(payloadContext?.knowledgeCharacterSheets) ? payloadContext.knowledgeCharacterSheets : [])
+      .concat(Array.isArray(payloadContext?.knowledgeHub?.characterSheets) ? payloadContext.knowledgeHub.characterSheets : []);
+    const registeredSheetRows = sheetRows.filter((sheet) => (Array.isArray(sheet?.items) && sheet.items.length > 0)
+      || !!sanitizeText(sheet?.mainAssetId || sheet?.assetId || sheet?.objectName || sheet?.url || ''));
+    const sheetTokens = new Set(registeredSheetRows.map((sheet) => {
+      const raw = sanitizeText(sheet?.token || sheet?.trigger || sheet?.displayName || sheet?.name || '').replace(/^@+/, '').replace(/\s+/g, '');
+      return raw ? `@${raw}`.toLowerCase() : '';
+    }).filter(Boolean));
+    const sheetCharacterIds = new Set(registeredSheetRows.map((sheet) => sanitizeText(sheet?.characterId || sheet?.id || '')).filter(Boolean));
     return (Array.isArray(list) ? list : []).map((c) => {
       let brandChar = null;
-      try { brandChar = registry.getCharacterByTrigger(brandId, c.token); } catch (_) { brandChar = null; }
-      if (!brandChar) return c;
+      // 브랜드 캐시뿐 아니라 현재 프로젝트 스냅샷도 조회한다. 서버의 브랜드 JSON이 아직
+      // 없더라도 사용자가 지금 선택한 캐릭터의 구조화된 신체 스펙을 잃지 않게 한다.
+      try { brandChar = registry.getCharacterByTrigger(brandId, c.token, { payload: payloadContext }); } catch (_) { brandChar = null; }
+      const tokenKey = String(c?.token || '').toLowerCase();
+      const hasSheet = sheetTokens.has(tokenKey)
+        || sheetCharacterIds.has(sanitizeText(c?.characterId || c?.id || ''))
+        || !!sanitizeText(c?.mainAssetId || '')
+        || (Array.isArray(c?.referenceAssetIds) && c.referenceAssetIds.length > 0)
+        || !!brandChar?.bodySpecRequired;
+      if (!brandChar) return Object.assign({}, c, { bodySpecRequired: !!hasSheet });
+      const appearance = sanitizeText(brandChar.description || c.appearance || '').trim();
+      const negative = sanitizeText(brandChar.negativePrompt || c.negative || c.negativePrompt || '').trim();
       return Object.assign({}, c, {
         // 서버/브랜드 레지스트리를 우선하되 빈 값으로 프로젝트 스냅샷을 지우지는 않는다.
-        appearance: sanitizeText(brandChar.description || c.appearance || '').trim(),
-        negative: sanitizeText(brandChar.negativePrompt || c.negative || c.negativePrompt || '').trim(),
-        bodySpecSource: 'brand-registry'
+        appearance,
+        negative,
+        bodySpecKnown: brandChar.bodySpecKnown === true || (c?.bodySpecKnown === true && !!appearance),
+        bodySpecRequired: !!hasSheet,
+        bodySpecSource: brandChar.bodySpecSource || 'brand-registry',
+        mainAssetId: sanitizeText(brandChar.mainAssetId || c.mainAssetId || '').trim(),
+        referenceAssetIds: Array.isArray(brandChar.referenceAssetIds) ? brandChar.referenceAssetIds.slice() : (Array.isArray(c.referenceAssetIds) ? c.referenceAssetIds.slice() : [])
       });
     });
   };
@@ -1259,8 +1289,13 @@
       token: c.token,
       personality: c.personality || '',
       appearance: c.appearance || '',
-      negative: c.negative || ''
-    })));
+      negative: c.negative || '',
+      bodySpecKnown: c.bodySpecKnown === true,
+      bodySpecSource: c.bodySpecSource || '',
+      bodySpecRequired: c.bodySpecRequired === true,
+      mainAssetId: c.mainAssetId || '',
+      referenceAssetIds: Array.isArray(c.referenceAssetIds) ? c.referenceAssetIds : []
+    })), payload);
     payload.characterContinuityVersion = '1';
     // v3.1581: 세부 장르가 동요·율동인데 음성 모드가 노래가 아니면 여기서 맞춘다.
     // 세부 장르를 이미 골라 둔 채 저장된 프로젝트는 change 이벤트가 다시 뜨지 않아
@@ -1394,6 +1429,17 @@
     return out.length ? out : null;
   };
 
+  const normalizeSongCues = (raw) => (Array.isArray(raw) ? raw : []).map((cue) => ({
+    sectionId: String(cue?.sectionId || '').trim(),
+    sectionLabel: String(cue?.sectionLabel || '').trim(),
+    sectionRole: String(cue?.sectionRole || '').trim(),
+    text: String(cue?.text || '').trim(),
+    isRefrain: !!cue?.isRefrain,
+    isSectionStart: !!cue?.isSectionStart,
+    startOffsetSec: Math.max(0, Math.round((Number(cue?.startOffsetSec) || 0) * 10) / 10),
+    durationSec: Math.max(0, Math.round((Number(cue?.durationSec) || 0) * 10) / 10)
+  })).filter((cue) => cue.sectionId && cue.durationSec > 0);
+
   const normalizeScenes = (scenes = []) => {
     const activeCharacters = getActiveCharactersForPayload(currentPayload || {});
     const flags = getScenarioFlags(currentPayload || {});
@@ -1487,6 +1533,7 @@
         sceneBreak: !!s?.sceneBreak,
         songSectionId: String(s?.songSectionId || '').trim(),
         songSectionLabel: String(s?.songSectionLabel || '').trim(),
+        songCues: normalizeSongCues(s?.songCues),
         songEnabled: boolVal(s?.songEnabled, boolVal(currentPayload?.songEnabled, false))
       };
     });
@@ -1726,6 +1773,9 @@
         // 머지의 prev 폴백에만 기대면 머지를 안 거치는 경로에서 유실된다.
         songSectionId: String(card.dataset.songSectionId || ''),
         songSectionLabel: String(card.dataset.songSectionLabel || ''),
+        songCues: (() => {
+          try { return normalizeSongCues(JSON.parse(card.dataset.songCues || '[]')); } catch (_) { return []; }
+        })(),
         // 카메라 방위·블로킹은 화면에 편집칸이 없어 dataset 으로 왕복시킨다
         // (머지를 안 거치는 경로에서도 유실되지 않게 — songSectionId 와 같은 이유).
         cameraDirection: String(card.dataset.cameraDirection || 'front'),
@@ -2045,7 +2095,7 @@
       const hasAction = !!String(s.action || '').trim();
       const hasStructured = hasComposition || hasAction;
       return `
-      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}" data-scene-break="${s.sceneBreak ? '1' : ''}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${s.cameraElevation && s.cameraElevation !== 'eye' ? ` data-camera-elevation="${escapeHtml(s.cameraElevation)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
+      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}"${s.songSectionId ? ` data-song-section-id="${escapeHtml(s.songSectionId)}" data-scene-break="${s.sceneBreak ? '1' : ''}"` : ''}${s.songSectionLabel ? ` data-song-section-label="${escapeHtml(s.songSectionLabel)}"` : ''}${Array.isArray(s.songCues) && s.songCues.length ? ` data-song-cues="${escapeHtml(JSON.stringify(s.songCues))}"` : ''}${s.cameraDirection && s.cameraDirection !== 'front' ? ` data-camera-direction="${escapeHtml(s.cameraDirection)}"` : ''}${s.cameraElevation && s.cameraElevation !== 'eye' ? ` data-camera-elevation="${escapeHtml(s.cameraElevation)}"` : ''}${Array.isArray(s.blocking) && s.blocking.length ? ` data-blocking="${escapeHtml(JSON.stringify(s.blocking))}"` : ''}>
         <div class="card-top">
           <div class="card-title-row">
             <h5 title="${escapeHtml(labelMeta.plain)}">${labelMeta.html}</h5>
@@ -3062,7 +3112,7 @@
             `클라이언트: ${clientVer} / 서버: ${serverVer} ${versionMatch}`,
             `생성 경로: ${m.generationPath || '단일 호출 (legacy)'}`,
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
-            `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
+            `Pass 1 이야기 구간: ${m.scenesGenerated || (res.scenes?.length || 0)}개 (최종 Scene 수가 아님)`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
             `신체 스펙: ${m.bodySpecSource || '-'} / 위반 감지 ${Number(m.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(m.bodyConstraintRepairs) || 0}회`,
             Array.isArray(m.bodySpecWarnings) && m.bodySpecWarnings.length ? `신체 스펙 주의: ${m.bodySpecWarnings.join(', ')}` : '',
@@ -3100,7 +3150,9 @@
                 brandId: payload?.brandId || payload?.seriesId || '',
                 // v3.1586: 컷 분해도 @토큰 보정을 해야 하는데, 등록 캐릭터를 모르면
                 // 부모 visual 에 토큰이 없는 씬을 통째로 건너뛴다.
-                characters: Array.isArray(payload?.characters) ? payload.characters : []
+                characters: withBodySpecs(Array.isArray(payload?.characters) ? payload.characters : [], payload),
+                targetDurationSec: Number(payload?.duration) || 0,
+                songSections: Array.isArray(payload?.songSections) ? payload.songSections : []
               });
               // v2.702 부터 서버가 flat scenes 반환 (각 shot → top-level scene).
               // meta.flattened 가 true 인 경우만 채택. 안전.
@@ -3123,6 +3175,8 @@
                     `컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})${p2Elapsed}`,
                     `자동 보정 (Pass 2): 유사 구도 커버리지 변경 ${Number(shotsM.coverageFixes) || 0}회 · 배경 방위 보정 ${Number(shotsM.directionFixes) || 0}회 · 화면 크기 보정 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
                     `신체 일관성 (Pass 2): ${shotsM.bodySpecSource || '-'} / 위반 감지 ${Number(shotsM.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(shotsM.bodyConstraintRepairs) || 0}회`,
+                    `최종 컷 시간축: 요청 ${Number(shotsM.durationRequested) || 0}초 / 결과 ${Number(shotsM.durationActual) || 0}초 / 보정 ${Number(shotsM.durationAdjustedCuts) || 0}컷${shotsM.durationFeasible === false ? ' (모델 길이 범위 초과)' : ''}`,
+                    Number(shotsM.songCueSections) > 0 ? `가사 타임라인: ${Number(shotsM.songCueSections)}개 구간을 최종 컷에 보존` : '',
                     Array.isArray(shotsM.bodySpecWarnings) && shotsM.bodySpecWarnings.length ? `신체 스펙 주의 (Pass 2): ${shotsM.bodySpecWarnings.join(', ')}` : '',
                     enforcedLine,
                   ];
@@ -3249,12 +3303,18 @@
         }
       } catch (err) {
         const isCreditErr = err?.creditExhausted || /CREDIT_EXHAUSTED/.test(err?.message || '');
+        const bodySpecMatch = String(err?.message || '').match(/character_body_spec_required:([^\s"}]+)/i);
         if (isCreditErr) {
           if (errEl) {
             errEl.innerHTML = '크레딧이 소진되었습니다. <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Anthropic 콘솔</a>에서 충전 후 다시 시도해 주세요.';
             errEl.classList.remove('hidden');
           }
           alert('크레딧이 소진되었습니다.\n\nconsole.anthropic.com/settings/billing 에서 충전 후 다시 시도해 주세요.');
+        } else if (bodySpecMatch) {
+          const tokens = bodySpecMatch[1].split(',').filter(Boolean).join(', ');
+          const message = `캐릭터 신체 스펙이 없어 생성을 중단했습니다: ${tokens}\n캐릭터 시트의 생김새와 없는 신체 부위를 먼저 확인해 주세요. 없는 부위가 없다면 네거티브는 비워도 됩니다.`;
+          if (errEl) { errEl.textContent = message; errEl.classList.remove('hidden'); }
+          else alert(message);
         } else if (errEl) {
           errEl.textContent = '시나리오 생성 실패: ' + (err?.message || err);
           errEl.classList.remove('hidden');
@@ -3358,7 +3418,9 @@
             scenes: asScenes,
             language: lang,
             brandId: currentPayload?.brandId || currentPayload?.seriesId || '',
-            characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : [])
+            characters: withBodySpecs(Array.isArray(currentPayload?.characters) ? currentPayload.characters : [], currentPayload || {}),
+            targetDurationSec: Number(currentPayload?.duration) || 0,
+            songSections: Array.isArray(currentPayload?.songSections) ? currentPayload.songSections : []
           });
           const flat = (shotsRes && Array.isArray(shotsRes.scenes) && shotsRes.meta?.flattened) ? shotsRes.scenes : null;
           if (!flat || !flat.length) {
@@ -3569,6 +3631,9 @@
             const blockingLine = blockingToText(s.blocking);
             if (blockingLine) lines.push(`블로킹: ${blockingLine}`);
             if (s.lyricsText || s.lyrics) lines.push(`${s.isRefrain ? '가사(후렴)' : '가사'}: ${String(s.lyricsText || s.lyrics).replace(/\r?\n+/g, ' · ')}`);
+            if (Array.isArray(s.songCues) && s.songCues.length > 1) {
+              lines.push(`가사 타임라인: ${s.songCues.map((cue) => `${cue.sectionLabel || cue.sectionId} +${cue.startOffsetSec}초/${cue.durationSec}초`).join(' · ')}`);
+            }
             if (s.narrationText || s.narration) lines.push(`나레이션: ${String(s.narrationText || s.narration).replace(/\r?\n+/g, ' · ')}`);
             const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
             // 카드 UI 의 대사 표시와 동일하게 한 줄(여러 대사는 ' · ' 구분)로 출력 → 재주입 시 동일 파싱.

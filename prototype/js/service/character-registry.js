@@ -88,6 +88,12 @@
       negativePrompt: negativePrompt,
       defaultPromptPrefix: defaultPromptPrefix || 'Keep character identity consistent.',
       styleGuide: '',
+      // 신체 문법의 출처와 시트 존재 여부를 함께 보존한다. negativePrompt 가 빈 문자열인
+      // 정상 인간형 캐릭터도 유효한 스펙일 수 있으므로 "네거티브가 비었는가"로 완전성을
+      // 판단하지 않는다.
+      bodySpecKnown: typeof src.bodySpecKnown === 'boolean' ? src.bodySpecKnown : (!!description || !!negativePrompt),
+      bodySpecSource: normText(src.bodySpecSource),
+      bodySpecRequired: src.bodySpecRequired === true || !!mainAssetId || referenceAssetIds.length > 0,
       isActive: !!isActive,
       createdAt: createdAt,
       updatedAt: updatedAt
@@ -138,19 +144,28 @@
       var raw = item && typeof item === 'object' ? item : {};
       var trigger = normTrigger(raw.token || raw.trigger || raw.displayName || raw.name);
       if (!trigger) return null;
-      return normalizeCharacter({
+      var normalized = normalizeCharacter({
         id: raw.characterId || raw.id || ('char_' + String(index + 1).padStart(3, '0')),
         trigger: trigger,
         name: raw.displayName || raw.name || trigger.replace(/^@/, ''),
         aliases: raw.aliases || [],
-        description: raw.appearance || raw.description || raw.personality || raw.profile || raw.note || '',
+        description: raw.appearance || raw.bodyAppearance || raw.description || raw.personality || raw.profile || raw.note || '',
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
         negativePrompt: raw.negative || raw.negativePrompt || '',
+        mainAssetId: raw.mainAssetId || '',
+        referenceAssetIds: raw.referenceAssetIds || [],
+        bodySpecKnown: raw.bodySpecKnown === true || !!normText(
+          raw.appearance || raw.bodyAppearance || raw.negative || raw.negativePrompt
+          || ((raw.description && !raw.personality && !raw.profile && !raw.note) ? raw.description : '')
+        ),
+        bodySpecSource: raw.bodySpecSource || '',
+        bodySpecRequired: raw.bodySpecRequired === true,
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false
       }, index);
+      return normalized;
     }).filter(Boolean);
   }
   function ensureBrandId(brandId, options) {

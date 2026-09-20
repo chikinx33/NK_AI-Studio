@@ -23,6 +23,7 @@ test("★서버 저장·불러오기가 소절 정보를 지킨다", () => {
     assert.match(src, /isRefrain: !!s\?\.isRefrain,/, file);
     assert.match(src, /songSectionId: typeof s\?\.songSectionId === "string"/, file);
     assert.match(src, /songSectionLabel: typeof s\?\.songSectionLabel === "string"/, file);
+    assert.match(src, /songCues: normalizeSongCues\(s\?\.songCues\),/, file);
     // 사용자가 대본을 비운 것도 뜻이 있는 편집이다.
     assert.match(src, /scriptEdited: !!s\?\.scriptEdited,/, file);
   });
@@ -35,6 +36,7 @@ test("★시나리오 정규화가 lyrics 와 lyricsText 를 함께 내보낸다
   assert.match(src, /const lyricsClean = String\(s\?\.lyrics \|\| s\?\.lyricsText \|\| ''\)\.replace\(\/@\+\/g, ''\)\.trim\(\);/);
   assert.match(src, /lyricsText: lyricsClean,/);
   assert.match(src, /\n        lyrics: lyricsClean,/);
+  assert.match(src, /songCues: normalizeSongCues\(s\?\.songCues\),/);
 });
 
 test("★프로덕션 씬 재조립이 가사·자막을 함께 싣는다", () => {
@@ -46,6 +48,7 @@ test("★프로덕션 씬 재조립이 가사·자막을 함께 싣는다", () =
   // 가사 폴백(scene.lyrics || scene.subtitleText)이 죽지 않도록 자막 원문도 싣는다.
   assert.match(block, /subtitleText: s\.subtitleText \|\| '',/);
   assert.match(block, /songSectionLabel: s\.songSectionLabel \|\| '',/);
+  assert.match(block, /songCues: Array\.isArray\(s\.songCues\) \? s\.songCues : \[\],/);
 });
 
 test("★컷 분해가 가사를 첫 컷에만 싣고 구간 식별자는 모든 컷에 남긴다", () => {

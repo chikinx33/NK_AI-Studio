@@ -80,14 +80,16 @@ test("prompt: 시스템 프롬프트에 핵심 룰들이 포함", () => {
   const ko = buildShotPromptKo();
   assert.ok(ko.includes("1~5 샷"));
   assert.ok(ko.includes("≤ 6초"));
-  assert.ok(ko.includes("±20%"));
+  assert.ok(ko.includes("임의로 총 길이를 늘리거나 줄이지 않는다"));
   assert.ok(ko.includes("CU"));
   assert.ok(ko.includes("static"));
+  assert.ok(ko.includes("소품은 컷 경계에서도 연속된다"));
 
   const en = buildShotPromptEn();
   assert.ok(en.includes("1-5 shots"));
   assert.ok(en.includes("≤ 6 seconds"));
-  assert.ok(en.includes("±20%"));
+  assert.ok(en.includes("exactly"));
+  assert.ok(en.includes("Props remain continuous across cut boundaries"));
 });
 
 test("prompt: user 프롬프트는 scene 의 핵심 필드를 포함", () => {
@@ -214,14 +216,14 @@ test("parser: id 누락 시 sceneId.idx 로 자동 생성", () => {
 
 // ─── reconcileDurations ────────────────────────────────────────────────
 
-test("reconcile: 합이 estSec 와 ±20% 안이면 그대로", () => {
-  // 10초 씬이면 4초 컷 2개가 들어간다 — 컷 수를 건드릴 이유가 없고 길이도 그대로 둔다.
+test("★reconcile: 허용 오차로 넘기지 않고 합을 estSec 와 정확히 맞춘다", () => {
   const shots = [
     { id: "1.1", duration: 4, shotType: "CU", cameraMove: "static", composition: "a", action: "a" },
     { id: "1.2", duration: 5, shotType: "MS", cameraMove: "static", composition: "b", action: "b" },
   ];
   const out = reconcileDurations(shots, { estSec: 10 });
-  assert.deepEqual(out.map((s) => s.duration), [4, 5]);
+  assert.equal(out.reduce((sum, shot) => sum + shot.duration, 0), 10);
+  assert.deepEqual(out.map((s) => s.duration), [4, 6]);
 });
 
 test("★4초 씬에 2컷은 만들 수 없다 — 컷을 합쳐 시간표로 잇는다", () => {

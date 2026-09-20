@@ -7,7 +7,7 @@
  * 출력: shots [{ id, duration, shotType, cameraMove, cameraDirection, cameraElevation, composition, action, dialogue, beats, blocking }]
  *
  * 핵심 규칙
- * - Σ shots[].duration ≈ scene.estSec (±20% 허용)
+ * - Σ shots[].duration = scene.estSec
  * - 각 shot duration ≤ 6초
  * - 1 scene 당 1~5 shots
  * - shotType / cameraMove 는 통제 어휘 내에서만
@@ -37,7 +37,6 @@ const MAX_SHOT_DURATION = 6;
 const MIN_SHOT_DURATION = 4;
 // 한 샷 안의 시간 비트. 스틸컷은 beats[0](t=0)이고, 영상은 이 표를 시간 분배로 받는다.
 const MAX_BEATS_PER_SHOT = 4;
-const DURATION_TOLERANCE = 0.2; // ±20%
 
 /**
  * Pass 2 시스템 프롬프트.
@@ -102,7 +101,7 @@ export function buildShotPromptKo() {
 · 한 씬은 1~5 샷. 정적 비트(독백 한 마디, 인서트 단독)는 1샷도 좋다.
 · 각 샷은 4초 이상, ≤ 6초. 영상 생성 모델이 4초 미만을 만들지 못한다(Kling 은 5초).
   4초를 못 채울 비트는 쪼개지 말고 인접 샷에 흡수한다.
-· 모든 샷의 duration 합 = 씬의 estSec (오차 ±20% 이내).
+· 모든 샷의 duration 합 = 씬의 estSec. 임의로 총 길이를 늘리거나 줄이지 않는다.
 · 쪼갤지 합칠지는 "카메라 셋업이 바뀌는가" 하나로 판단한다.
     쪼갠다 — (a) 앵글이 확 바뀐다(얼굴↔손) (b) 장소가 바뀐다(외부↔내부) (c) 피사체가 바뀐다
     합친다 — 같은 장소·같은 피사체에서 거리나 무브만 달라진다. cameraMove 로 표현한다.
@@ -112,6 +111,9 @@ export function buildShotPromptKo() {
   한 샷의 beats 로 합친다. 길이 때문에 반드시 나눠야 한다면 단순히 WS→GROUP, zoom→pull-out처럼
   이름만 바꾸지 말고 방위(front/back/left/right) 또는 피사체를 바꾼 실제 새 카메라 셋업을 만든다.
 · 예: "전사가 칼을 뽑는다(10초)" → CU 얼굴(5초) + MS 뒷모습 실루엣(5초)
+· 소품은 컷 경계에서도 연속된다. 앞 컷 끝에 누군가 들고 있던 소품은 다음 컷 첫 프레임에도
+  같은 인물이 같은 상태로 들고 있어야 한다. 바닥·손·테이블 등 위치나 소유자가 바뀐다면
+  그 이동·건네기·놓기를 action 또는 beats 로 화면에 보이게 적는다. 소품 종류와 무관한 규칙이다.
 
 [카메라 어휘 다양성]
 · 2샷 이상이면 shotType 을 2종 이상 쓴다. 모든 샷이 같은 shotType 이면 안 된다.
@@ -229,7 +231,7 @@ Without them the still image is generated from the END state of the move, and th
 · A scene becomes 1-5 shots. A static beat (one line of monologue, a solo insert) can be a single shot.
 · Each shot is at least 4 seconds and ≤ 6 seconds. Video models cannot render less than 4s (Kling: 5s).
   A beat that cannot fill 4s must be absorbed into an adjacent shot instead of split off.
-· The sum of all durations must equal the scene's estSec (±20% tolerance).
+· The sum of all durations must equal the scene's estSec exactly. Never inflate or shrink the timeline.
 · Split or merge based on one question: does the camera setup change?
     Split  — (a) the angle changes clearly (face ↔ hand) (b) the location changes (exterior ↔ interior)
              (c) the subject itself changes.
@@ -241,6 +243,9 @@ Without them the still image is generated from the END state of the move, and th
   one shot as beats. If duration forces a split, do not merely rename WS to GROUP or zoom to pull-out;
   create a genuinely new setup by changing the set-facing direction or the primary subject.
 · e.g. "the warrior draws his sword (10s)" → CU face (5s) + MS silhouette from behind (5s).
+· Props remain continuous across cut boundaries. A prop held by someone at the end of one shot must still
+  be held by that person in the opening frame of the next. If its holder or position changes, show the
+  transfer, placement or pickup explicitly in action or beats. This rule applies to every kind of prop.
 
 [Camera variety]
 · With 2+ shots use at least 2 different shotTypes. Never make them all the same.
@@ -306,7 +311,7 @@ export function buildShotUserPromptKo(scene, opts = {}) {
   const estSec = Number(scene.estSec) || 4;
   const lines = [];
   lines.push(`[scene id] ${id}`);
-  lines.push(`[scene estSec] ${estSec}초 — 모든 샷 duration 합이 이 값과 일치(±20%) 해야 함`);
+  lines.push(`[scene estSec] ${estSec}초 — 모든 샷 duration 합이 이 값과 정확히 일치해야 함`);
   if (scene.sceneIntent)   lines.push(`[scene sceneIntent] ${scene.sceneIntent}`);
   if (scene.sceneLocation) lines.push(`[scene sceneLocation] ${scene.sceneLocation}`);
   if (scene.visual)        lines.push(`[scene visual / 비트 설명]\n${scene.visual}`);
@@ -354,7 +359,7 @@ export function buildSequenceContextLines(scene, opts = {}, lang = "ko") {
     if (prev) {
       lines.push(`[previous scene] set: ${prev.sceneLocation || prev.location || "(unspecified)"} — ${summarizeSceneText(prev, 160)}`);
       if (sameSet(prev, scene)) {
-        lines.push("· SAME SET as the previous scene: keep every character's stage position (blocking x/depth) unless this scene's action physically moves them. Open this scene with a shot size or cameraDirection that differs from a plain medium/front setup, so the first cut does not look like a jump cut from the previous scene.");
+        lines.push("· SAME SET as the previous scene: keep every character's stage position (blocking x/depth) unless this scene's action physically moves them. Preserve every persistent prop's holder and position from the previous scene's ending; if either changes, show the transfer/pickup/placement in action or beats. Open this scene with a shot size or cameraDirection that differs from a plain medium/front setup, so the first cut does not look like a jump cut from the previous scene.");
       } else {
         lines.push("· New set: this scene may open with an establishing/wider shot before moving closer.");
       }
@@ -368,7 +373,7 @@ export function buildSequenceContextLines(scene, opts = {}, lang = "ko") {
   if (prev) {
     lines.push(`[앞 씬] 세트: ${prev.sceneLocation || prev.location || "(미지정)"} — ${summarizeSceneText(prev, 160)}`);
     if (sameSet(prev, scene)) {
-      lines.push("· 앞 씬과 같은 세트다: 이 씬의 행동이 인물을 실제로 움직이지 않는 한 인물의 무대 위치(blocking x/depth)를 그대로 유지하라. 첫 샷은 평범한 MS·정면 셋업이 아닌 사이즈나 방위로 열어, 앞 씬에서 점프 컷처럼 보이지 않게 하라.");
+      lines.push("· 앞 씬과 같은 세트다: 이 씬의 행동이 인물을 실제로 움직이지 않는 한 인물의 무대 위치(blocking x/depth)를 그대로 유지하라. 앞 씬 끝에 보인 모든 지속 소품의 소유자와 위치도 첫 프레임에 그대로 이어라. 소유자나 위치가 바뀌면 건네기·집기·놓기 동작을 action 또는 beats 에 명시하라. 첫 샷은 평범한 MS·정면 셋업이 아닌 사이즈나 방위로 열어, 앞 씬에서 점프 컷처럼 보이지 않게 하라.");
     } else {
       lines.push("· 새 세트다: 이 씬은 설정 샷(넓은 샷)으로 열고 점점 다가가도 좋다.");
     }
@@ -384,7 +389,7 @@ export function buildShotUserPromptEn(scene, opts = {}) {
   const estSec = Number(scene.estSec) || 4;
   const lines = [];
   lines.push(`[scene id] ${id}`);
-  lines.push(`[scene estSec] ${estSec}s — all shot durations must sum to this value (±20%)`);
+  lines.push(`[scene estSec] ${estSec}s — all shot durations must sum to this value exactly`);
   if (scene.sceneIntent)   lines.push(`[scene sceneIntent] ${scene.sceneIntent}`);
   if (scene.sceneLocation) lines.push(`[scene sceneLocation] ${scene.sceneLocation}`);
   if (scene.visual)        lines.push(`[scene visual / beat description]\n${scene.visual}`);
@@ -579,8 +584,7 @@ export function fitShotCount(shots, targetSec) {
 }
 
 /**
- * shots 배열의 duration 합이 scene.estSec 와 일치하도록 ±20% 허용 안에서 보정.
- * 합이 너무 어긋나면 비례 스케일링.
+ * shots 배열의 duration 합이 scene.estSec 와 정확히 일치하도록 보정.
  *
  * 스케일링 전에 컷 수부터 씬 길이에 맞춘다. 최소 4초 바닥이 있으므로 컷이 너무 많으면
  * 아무리 줄여도 합이 목표를 넘는다 — 그때는 길이가 아니라 컷 수가 틀린 것이다.
@@ -592,16 +596,31 @@ export function reconcileDurations(shots, scene) {
   shots = fitShotCount(shots, target);
   const sum = shots.reduce((acc, s) => acc + (Number(s.duration) || 0), 0);
   if (!sum) return shots;
-  const ratio = sum / target;
-  if (ratio >= 1 - DURATION_TOLERANCE && ratio <= 1 + DURATION_TOLERANCE) return shots;
-
-  const scale = target / sum;
-  return shots.map((s) => {
-    let d = Math.round(Number(s.duration) * scale * 10) / 10;
-    if (d < MIN_SHOT_DURATION) d = MIN_SHOT_DURATION;
-    if (d > MAX_SHOT_DURATION) d = MAX_SHOT_DURATION;
-    // 길이가 바뀌면 비트 시각도 같은 비율로 따라가야 한다.
-    // (여기서 시각을 그대로 두면 뒤쪽 비트가 샷 밖으로 밀려나 통째로 사라진다)
+  const minTotal = shots.length * MIN_SHOT_DURATION;
+  const maxTotal = shots.length * MAX_SHOT_DURATION;
+  if (target < minTotal || target > maxTotal) return shots;
+  const desired = shots.map((s) => Math.max(
+    MIN_SHOT_DURATION,
+    Math.min(MAX_SHOT_DURATION, (Number(s.duration) || MIN_SHOT_DURATION) * target / sum)
+  ));
+  const durations = desired.map((value) => Math.floor(value));
+  let remainder = Math.round(target - durations.reduce((acc, value) => acc + value, 0));
+  const order = desired.map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  let guard = 0;
+  while (remainder > 0 && guard < 1000) {
+    const index = order[guard % order.length].index;
+    if (durations[index] < MAX_SHOT_DURATION) { durations[index] += 1; remainder -= 1; }
+    guard += 1;
+  }
+  guard = 0;
+  while (remainder < 0 && guard < 1000) {
+    const index = durations.length - 1 - (guard % durations.length);
+    if (durations[index] > MIN_SHOT_DURATION) { durations[index] -= 1; remainder += 1; }
+    guard += 1;
+  }
+  return shots.map((s, index) => {
+    const d = durations[index];
     const beatScale = (Number(s.duration) || 0) > 0 ? d / Number(s.duration) : 1;
     return { ...s, duration: d, beats: normalizeBeats(scaleBeats(s.beats, beatScale), d) };
   });
@@ -733,5 +752,4 @@ export const __testables = {
   MAX_SHOT_DURATION,
   MIN_SHOT_DURATION,
   MAX_BEATS_PER_SHOT,
-  DURATION_TOLERANCE,
 };

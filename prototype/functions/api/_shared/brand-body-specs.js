@@ -107,6 +107,7 @@ function bodySpecFromBrandCharacter(row) {
     token: normalizeToken(raw.trigger || raw.token || raw.name || raw.displayName),
     appearance: mergePhrases([raw.description, raw.fixedTraits, raw.styleGuide]),
     negative: mergePhrases([raw.negativePrompt, raw.bannedTraits]),
+    known: !!mergePhrases([raw.description, raw.fixedTraits, raw.styleGuide, raw.negativePrompt, raw.bannedTraits]),
   };
 }
 
@@ -116,6 +117,7 @@ function bodySpecFromKnowledgeCharacter(row) {
     token: normalizeToken(raw.token || raw.trigger || raw.displayName || raw.name),
     appearance: mergePhrases([raw.appearance, raw.description, raw.fixedTraits, raw.styleGuide]),
     negative: mergePhrases([raw.negative, raw.negativePrompt, raw.bannedTraits]),
+    known: !!mergePhrases([raw.appearance, raw.description, raw.fixedTraits, raw.styleGuide, raw.negative, raw.negativePrompt, raw.bannedTraits]),
   };
 }
 
@@ -131,16 +133,26 @@ export function mergeCharacterBodySpecsFromBrand(characters = [], brand = null) 
   knowledge.concat(primary).forEach((spec) => {
     if (!spec.token) return;
     const key = spec.token.toLowerCase();
-    const previous = specs.get(key) || { token: spec.token, appearance: "", negative: "" };
+    const previous = specs.get(key) || { token: spec.token, appearance: "", negative: "", known: false };
     specs.set(key, {
       token: spec.token,
       appearance: spec.appearance || previous.appearance,
       negative: spec.negative || previous.negative,
+      known: spec.known || previous.known,
     });
   });
+  const registeredSheets = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).filter((sheet) =>
+    (Array.isArray(sheet?.items) && sheet.items.length > 0)
+    || !!normalizeText(sheet?.mainAssetId || sheet?.assetId || sheet?.objectName || sheet?.url)
+  );
   const sheetTokens = new Set(
-    (Array.isArray(brand?.characterSheets) ? brand.characterSheets : [])
+    registeredSheets
       .map((sheet) => normalizeToken(sheet?.token || sheet?.trigger || sheet?.displayName || sheet?.name).toLowerCase())
+      .filter(Boolean)
+  );
+  const sheetCharacterIds = new Set(
+    registeredSheets
+      .map((sheet) => normalizeText(sheet?.characterId || sheet?.id))
       .filter(Boolean)
   );
   const missingRequired = [];
@@ -148,18 +160,33 @@ export function mergeCharacterBodySpecsFromBrand(characters = [], brand = null) 
     const token = normalizeToken(character?.token || character?.trigger || character?.displayName || character?.name);
     const key = token.toLowerCase();
     const server = specs.get(key);
+    const required = sheetTokens.has(key)
+      || sheetCharacterIds.has(normalizeText(character?.characterId || character?.id))
+      || character?.bodySpecRequired === true
+      || !!normalizeText(character?.mainAssetId)
+      || (Array.isArray(character?.referenceAssetIds) && character.referenceAssetIds.length > 0);
     if (!server) {
-      if (sheetTokens.has(key)) missingRequired.push(token);
-      return { ...character, token };
+      const appearance = normalizeText(character?.appearance || character?.description);
+      const known = character?.bodySpecKnown === true && !!appearance;
+      if (required && !known) missingRequired.push(token);
+      return { ...character, token, bodySpecRequired: required, bodySpecKnown: known };
     }
     const appearance = normalizeText(server.appearance);
     const negative = normalizeText(server.negative);
-    if (sheetTokens.has(key) && (!appearance || !negative)) missingRequired.push(token);
+    const fallbackAppearance = normalizeText(character?.appearance || character?.description);
+    const resolvedAppearance = appearance || fallbackAppearance;
+    const known = !!server.known || (character?.bodySpecKnown === true && !!fallbackAppearance);
+    // 네거티브가 비어 있는 것은 "금지할 신체 부위가 없음"일 수 있다. 시트가 있는 캐릭터는
+    // 출처가 확인된 몸 설명(appearance)만 필수로 하고, 전역 금지어를 만들어 내지 않는다.
+    if (required && (!known || !resolvedAppearance)) missingRequired.push(token);
     return {
       ...character,
       token,
-      appearance: appearance || normalizeText(character?.appearance),
+      appearance: resolvedAppearance,
       negative: negative || normalizeText(character?.negative || character?.negativePrompt),
+      bodySpecKnown: known,
+      bodySpecRequired: required,
+      bodySpecSource: "server-brand-record",
     };
   });
   return {
@@ -173,12 +200,18 @@ function requestSnapshotResult(characters, source, warnings = []) {
   const selected = Array.isArray(characters) ? characters : [];
   const matchedTokens = [];
   const incompleteTokens = [];
+  const missingRequired = [];
   selected.forEach((character) => {
     const token = normalizeToken(character?.token || character?.trigger || character?.displayName || character?.name);
     const appearance = normalizeText(character?.appearance || character?.description);
     const negative = normalizeText(character?.negative || character?.negativePrompt);
-    if (appearance || negative) matchedTokens.push(token);
-    if (!appearance || !negative) incompleteTokens.push(token);
+    const required = character?.bodySpecRequired === true
+      || !!normalizeText(character?.mainAssetId)
+      || (Array.isArray(character?.referenceAssetIds) && character.referenceAssetIds.length > 0);
+    const known = character?.bodySpecKnown !== false && !!appearance;
+    if (known) matchedTokens.push(token);
+    if (!known) incompleteTokens.push(token);
+    if (required && !known) missingRequired.push(token);
   });
   const bodySpecWarnings = Array.from(new Set(
     (Array.isArray(warnings) ? warnings : []).concat(
@@ -186,10 +219,16 @@ function requestSnapshotResult(characters, source, warnings = []) {
     )
   ));
   return {
-    characters: selected,
+    characters: selected.map((character) => ({
+      ...character,
+      bodySpecRequired: character?.bodySpecRequired === true
+        || !!normalizeText(character?.mainAssetId)
+        || (Array.isArray(character?.referenceAssetIds) && character.referenceAssetIds.length > 0),
+      bodySpecKnown: character?.bodySpecKnown !== false && !!normalizeText(character?.appearance || character?.description),
+    })),
     source,
     matchedTokens: Array.from(new Set(matchedTokens.filter(Boolean))),
-    missingRequired: [],
+    missingRequired: Array.from(new Set(missingRequired.filter(Boolean))),
     incompleteTokens: Array.from(new Set(incompleteTokens.filter(Boolean))),
     bodySpecWarnings,
   };
@@ -220,7 +259,14 @@ export async function resolveServerCharacterBodySpecs({ env, userId, brandId, ch
   const selected = Array.isArray(characters) ? characters : [];
   if (!selected.length) return { characters: selected, source: "no-characters", matchedTokens: [], missingRequired: [] };
   if (!normalizeText(brandId)) {
-    return requestSnapshotResult(selected, "client-no-brand-id");
+    const snapshot = requestSnapshotResult(selected, "client-no-brand-id");
+    if (snapshot.missingRequired.length) {
+      const error = new Error(`character_body_spec_required:${snapshot.missingRequired.join(",")}`);
+      error.code = "CHARACTER_BODY_SPEC_REQUIRED";
+      error.tokens = snapshot.missingRequired;
+      throw error;
+    }
+    return snapshot;
   }
   let loaded;
   try {
@@ -229,6 +275,12 @@ export async function resolveServerCharacterBodySpecs({ env, userId, brandId, ch
     // GCS가 일시적으로 불가해도 완전한 프로젝트 스냅샷이 있으면 생성 흐름을 살린다.
     // 스냅샷도 없을 때만 기존 503을 유지해 일관성 정보 없이 조용히 생성하지 않는다.
     const snapshot = requestSnapshotResult(selected, "request-snapshot", [String(error?.message || "brand_body_spec_load_failed")]);
+    if (snapshot.missingRequired.length) {
+      const requiredError = new Error(`character_body_spec_required:${snapshot.missingRequired.join(",")}`);
+      requiredError.code = "CHARACTER_BODY_SPEC_REQUIRED";
+      requiredError.tokens = snapshot.missingRequired;
+      throw requiredError;
+    }
     if (snapshot.matchedTokens.length && snapshot.incompleteTokens.length === 0) return snapshot;
     throw error;
   }

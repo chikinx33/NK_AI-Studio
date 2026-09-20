@@ -485,6 +485,11 @@ function normalizeCharacters(list) {
         displayName: displayName || token.replace(/^@/, ""),
         appearance: sanitizeText(raw.appearance || raw.description || ""),
         negative: sanitizeText(raw.negative || raw.negativePrompt || ""),
+        bodySpecKnown: raw.bodySpecKnown === true || !!sanitizeText(raw.appearance || raw.description || ""),
+        bodySpecSource: sanitizeText(raw.bodySpecSource || ""),
+        bodySpecRequired: raw.bodySpecRequired === true,
+        mainAssetId: sanitizeText(raw.mainAssetId || ""),
+        referenceAssetIds: Array.isArray(raw.referenceAssetIds) ? raw.referenceAssetIds.map(sanitizeText).filter(Boolean) : [],
       };
     })
     .filter(Boolean)

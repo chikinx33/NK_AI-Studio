@@ -117,6 +117,26 @@ test("★서버 브랜드 레코드가 클라이언트 캐시보다 우선하고
     { characterSheets: [{ token: "@네모", items: [{ sheetId: "sheet_1" }] }], brandCharacters: [] }
   );
   assert.deepEqual(missing.missingRequired, ["@네모"]);
+
+  const placeholderOnly = mergeCharacterBodySpecsFromBrand(
+    [{ token: "@미등록" }],
+    { characterSheets: [{ token: "@미등록", items: [] }], brandCharacters: [] }
+  );
+  assert.deepEqual(placeholderOnly.missingRequired, [], "빈 자리표시자 행은 실제 등록 시트가 아니다");
+});
+
+test("★네거티브가 빈 일반 캐릭터는 유효하다 — 손가락 금지를 전역 추론하지 않는다", () => {
+  const merged = mergeCharacterBodySpecsFromBrand(
+    [{ token: "@사람", bodySpecRequired: true }],
+    {
+      brandCharacters: [{ trigger: "@사람", description: "사람형 캐릭터, 두 손과 다섯 손가락", negativePrompt: "" }],
+      characterSheets: [{ token: "@사람", items: [{ sheetId: "human-sheet" }] }],
+    }
+  );
+  assert.deepEqual(merged.missingRequired, []);
+  assert.equal(merged.characters[0].negative, "");
+  assert.equal(merged.characters[0].bodySpecKnown, true);
+  assert.equal(validateCharacterBodyText("@사람이 검지로 버튼을 누른다.", merged.characters).length, 0);
 });
 
 test("★브랜드 레코드가 없어도 프로젝트 신체 스냅샷으로 생성 흐름을 이어 간다", async () => {
@@ -131,7 +151,7 @@ test("★브랜드 레코드가 없어도 프로젝트 신체 스냅샷으로 �
   assert.equal(resolved.characters[0].negative, NEMO.negative);
 });
 
-test("★브랜드 원본이 존재할 때만 시트-신체 스펙 누락을 하드 오류로 분류한다", () => {
+test("★시트 등록 표시가 없는 레거시 캐릭터만 호환 모드로 허용한다", () => {
   const legacy = resolveCharacterBodySpecsFromRecord([{ token: "@네모" }], { found: false, source: "server-not-found" });
   assert.equal(legacy.source, "legacy-no-body-spec");
   assert.deepEqual(legacy.missingRequired, []);
@@ -139,9 +159,20 @@ test("★브랜드 원본이 존재할 때만 시트-신체 스펙 누락을 하
 
   const persisted = resolveCharacterBodySpecsFromRecord(
     [{ token: "@네모" }],
-    { found: true, source: "server", brand: { characterSheets: [{ token: "@네모" }], brandCharacters: [] } }
+    { found: true, source: "server", brand: { characterSheets: [{ token: "@네모", items: [{ sheetId: "sheet_1" }] }], brandCharacters: [] } }
   );
   assert.deepEqual(persisted.missingRequired, ["@네모"]);
+});
+
+test("★서버 원본이 없어도 시트가 있는 캐릭터의 구조화 신체 스펙 누락은 생성 전에 중단한다", async () => {
+  await assert.rejects(
+    resolveServerCharacterBodySpecs({
+      env: {}, userId: "user", brandId: "missing-brand",
+      characters: [{ token: "@미정", bodySpecRequired: true }],
+      loadRecord: async () => ({ found: false, brand: null, source: "server-not-found" }),
+    }),
+    (error) => error?.code === "CHARACTER_BODY_SPEC_REQUIRED" && error?.tokens?.includes("@미정")
+  );
 });
 
 test("★컷 분해(Pass 2) 프롬프트에 신체 문법이 실린다", () => {
@@ -182,10 +213,11 @@ test("★컷 분해 API 가 캐릭터를 분해 프롬프트까지 넘긴다", (
 
 test("★클라이언트가 브랜드 허브의 신체 스펙을 캐릭터에 얹어 보낸다", () => {
   const src = read("prototype/js/ui/scenario.js");
-  assert.match(src, /const withBodySpecs = \(list = \[\]\) =>/);
-  assert.match(src, /registry\.getCharacterByTrigger\(brandId, c\.token\)/);
-  assert.match(src, /appearance: sanitizeText\(brandChar\.description \|\| c\.appearance \|\| ''\)\.trim\(\),/);
-  assert.match(src, /negative: sanitizeText\(brandChar\.negativePrompt \|\| c\.negative \|\| c\.negativePrompt \|\| ''\)\.trim\(\),/);
+  assert.match(src, /const withBodySpecs = \(list = \[\], payloadContext = currentPayload \|\| \{\}\) =>/);
+  assert.match(src, /registry\.getCharacterByTrigger\(brandId, c\.token, \{ payload: payloadContext \}\)/);
+  assert.match(src, /const appearance = sanitizeText\(brandChar\.description \|\| c\.appearance \|\| ''\)\.trim\(\);/);
+  assert.match(src, /const negative = sanitizeText\(brandChar\.negativePrompt \|\| c\.negative \|\| c\.negativePrompt \|\| ''\)\.trim\(\);/);
+  assert.match(src, /bodySpecRequired: !!hasSheet/);
   assert.match(src, /appearance: c\.appearance \|\| '',/);
   assert.match(src, /negative: c\.negative \|\| ''/);
   assert.match(src, /payload\.characterContinuityVersion = '1'/);

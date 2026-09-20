@@ -311,6 +311,48 @@ export function mapScenesToSections(scenes, sections) {
   });
 }
 
+/**
+ * 최종 컷 타임라인과 모든 노래 구간의 실제 겹침을 보존한다.
+ *
+ * 기존 mapScenesToSections 는 생성 프롬프트용 대표 구간 하나를 고른다. 컷 하나가 두 소절의
+ * 경계를 가로지르면 나머지 소절이 사라질 수 있으므로, 최종 컷에는 이 다중 cue 배열을 별도로
+ * 기록한다. 이를 통해 컷 수가 소절 수보다 적어도 어느 소절도 유실되지 않는다.
+ */
+export function mapTimelineItemsToSectionCues(items, sections, durationKey = "estSec") {
+  const itemList = Array.isArray(items) ? items : [];
+  const sectionList = Array.isArray(sections) ? sections : [];
+  if (!sectionList.length) return itemList.map(() => []);
+  const totalItems = itemList.reduce((sum, item) => sum + Math.max(0, Number(item?.[durationKey]) || 0), 0);
+  const totalSections = sectionList.reduce((sum, section) => sum + Math.max(0, Number(section?.durationSec) || 0), 0);
+  const scale = totalItems > 0 && totalSections > 0 ? totalSections / totalItems : 1;
+  let cursor = 0;
+  return itemList.map((item) => {
+    const rawDuration = Math.max(0, Number(item?.[durationKey]) || 0);
+    const start = cursor * scale;
+    const end = (cursor + rawDuration) * scale;
+    cursor += rawDuration;
+    const cues = [];
+    sectionList.forEach((section) => {
+      const sectionStart = Number(section?.startSec) || 0;
+      const sectionEnd = sectionStart + Math.max(0, Number(section?.durationSec) || 0);
+      const overlapStart = Math.max(start, sectionStart);
+      const overlapEnd = Math.min(end, sectionEnd);
+      if (overlapEnd - overlapStart <= 1e-6) return;
+      cues.push({
+        sectionId: String(section?.id || ""),
+        sectionLabel: String(section?.label || ""),
+        sectionRole: String(section?.role || ""),
+        text: String(section?.text || ""),
+        isRefrain: !!section?.isRefrain,
+        isSectionStart: sectionStart >= start - 1e-6 && sectionStart < end - 1e-6,
+        startOffsetSec: Math.round(((overlapStart - start) / scale) * 10) / 10,
+        durationSec: Math.round(((overlapEnd - overlapStart) / scale) * 10) / 10,
+      });
+    });
+    return cues;
+  });
+}
+
 /** 음악 엔진에 넘길 청크. 구간 하나가 청크 하나 — 경계가 자막 경계와 같아진다. */
 export function sectionsToSongChunks(sections) {
   return (Array.isArray(sections) ? sections : [])
