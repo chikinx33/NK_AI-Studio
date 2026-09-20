@@ -7,9 +7,9 @@
 
   var SB_TEXT = {
     ko: {
-      openBtn: '스토리보드 제작',
+      openBtn: '스토리보드',
       openTitle: '부감 마스터와 같은 씬의 컷을 한 장에서 만들고 승인 후 정식 스틸컷을 만들어요',
-      title: '스토리보드 제작',
+      title: '스토리보드',
       help: '한 씬씩 콘티를 만들고, 패널 승인 후 정식 스틸컷으로 전환합니다.',
       guideTitle: '사용 순서',
       guideStep1: '만들 항목 선택',
@@ -40,10 +40,10 @@
       angleBack: '후면(리버스)',
       prompt: '생성 프롬프트',
       promptGuide: '자동으로 조립됩니다. 꼭 필요한 내용만 직접 수정하세요.',
-      generate: '현재 시트 생성',
-      generateAll: '전체 시트 생성',
-      generateGuide: '현재 시트 생성은 선택한 1장만, 전체 시트 생성은 모든 씬을 순서대로 만듭니다.',
-      approveAll: '현재 시트 모두 승인',
+      generate: '선택 만들기',
+      generateAll: '모두 만들기',
+      generateGuide: '선택 만들기: 고른 컷 묶음만 · 모두 만들기: 전체 컷 묶음',
+      approveAll: '보이는 컷 모두 승인',
       approvedBatch: '승인 콘티 일괄 스틸 생성',
       revise: '부분 수정',
       reviseAsk: '이 콘티에서 수정할 내용을 입력해 주세요.',
@@ -80,12 +80,12 @@
       bibleBadge: '바이블',
       saveNote: '생성 결과는 프로젝트에 자동 저장됩니다.',
       anglePlateDone: '앵글 플레이트를 이 세트의 변형으로 저장했어요.',
-      cutsInSheet: '이 시트의 컷'
+      cutsInSheet: '선택한 컷'
     },
     en: {
-      openBtn: 'Storyboard production',
+      openBtn: 'Storyboard',
       openTitle: 'Generate the top-down master and scene cuts together, approve panels, then render final stills',
-      title: 'Storyboard production',
+      title: 'Storyboard',
       help: 'Build one scene at a time, approve its panels, then promote them to final stills.',
       guideTitle: 'How to use',
       guideStep1: 'Choose an item',
@@ -116,10 +116,10 @@
       angleBack: 'Reverse',
       prompt: 'Generation prompt',
       promptGuide: 'Built automatically. Edit only what you need to change.',
-      generate: 'Generate this sheet',
-      generateAll: 'Generate all sheets',
-      generateGuide: 'Generate this sheet makes one selected sheet; Generate all sheets processes every scene in order.',
-      approveAll: 'Approve current sheet',
+      generate: 'Create selected',
+      generateAll: 'Create all',
+      generateGuide: 'Selected: chosen cut group · All: every cut group',
+      approveAll: 'Approve visible cuts',
       approvedBatch: 'Render approved stills',
       revise: 'Revise panel',
       reviseAsk: 'Describe what to change in this storyboard panel.',
@@ -156,7 +156,7 @@
       bibleBadge: 'Bible',
       saveNote: 'Generated results are saved with the project automatically.',
       anglePlateDone: 'Saved the angle plate as a variant of this set.',
-      cutsInSheet: 'Cuts on this sheet'
+      cutsInSheet: 'Selected cuts'
     }
   };
   function T() {

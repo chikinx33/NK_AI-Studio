@@ -90,12 +90,13 @@ test('★컷 이미지 생성 두 경로 모두 세트 준비 게이트를 먼�
   assert.match(src, /sp\.text\('plateFailed'\)/);
 });
 
-test('★일괄 생성은 컷 스틸 직행을 제거하고 씬별 스토리보드 검토로 진입한다', () => {
+test('★스토리보드 단일 메뉴는 컷 스틸 직행 없이 씬별 스토리보드 검토로 진입한다', () => {
   const src = read('prototype/ui/pipeline.js');
-  const start = src.indexOf("var bulkGen = document.getElementById('bulk-generate')");
-  const end = src.indexOf("var bulkVid", start);
+  const start = src.indexOf("var sbSheetBtn = document.getElementById('sb-sheet-btn')");
+  const end = src.indexOf("var commonBatchBtn", start);
   const block = src.slice(start, end);
   assert.match(block, /NK\.uiStoryboardSheet\.open\(\)/);
+  assert.doesNotMatch(src, /bulk-generate|스토리보드 일괄 생성/, '동일 모달 중복 버튼을 제거합니다');
   assert.doesNotMatch(block, /generateImageForIdx|ensureAll/, '스토리보드 승인 전에 컷별 생성이나 플레이트 일괄 생성을 시작하지 않습니다');
 });
 

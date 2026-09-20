@@ -9,9 +9,9 @@ test('★일괄 제작은 컷별 스틸 직행 대신 동일한 스토리보드 
   const pipeline = read('prototype/ui/pipeline.js');
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
   const executor = read('prototype/functions/api/agent/_video-pipeline-executor.ts');
-  assert.match(pipeline, /id="bulk-generate"[\s\S]*스토리보드 일괄 생성/);
-  assert.match(pipeline, /bulkGen\.onclick = function \(\) \{ if \(NK\.uiStoryboardSheet/);
-  assert.doesNotMatch(pipeline.slice(pipeline.indexOf("var bulkGen"), pipeline.indexOf("var bulkVid")), /generateImageForIdx/);
+  assert.match(pipeline, /id="sb-sheet-btn"/);
+  assert.doesNotMatch(pipeline, /id="bulk-generate"|스토리보드 일괄 생성|var bulkGen/, '같은 모달을 여는 중복 메뉴를 두지 않는다');
+  assert.match(pipeline, /sbSheetBtn\.onclick = function \(\) \{ if \(NK\.uiStoryboardSheet/);
   assert.match(canvas, /스토리보드 생성/);
   assert.match(canvas, /storyboard=auto&imageProvider=/, '캔버스는 제작 화면을 열지 않고 같은 엔진을 숨은 프레임에서 실행한다');
   assert.match(canvas, /title="스토리보드 백그라운드 생성"[\s\S]*className="hidden"/);

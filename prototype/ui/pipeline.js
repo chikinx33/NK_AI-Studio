@@ -1316,7 +1316,6 @@
       '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 편집">공통 프롬프트</button>' +
       '<button class="btn-secondary" id="sb-sheet-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="' + ((NK.uiStoryboardSheet && NK.uiStoryboardSheet.text) ? NK.uiStoryboardSheet.text('openTitle') : '') + '">' + ((NK.uiStoryboardSheet && NK.uiStoryboardSheet.text) ? NK.uiStoryboardSheet.text('openBtn') : 'Storyboard sheet') + '</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
-      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>스토리보드 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
       '</div>' +
       '</div>'
@@ -1592,11 +1591,6 @@
       };
     }
 
-    var bulkGen = document.getElementById('bulk-generate');
-    if (bulkGen) {
-      // 일괄 이미지는 컷별 스틸 직행이 아니라 씬별 스토리보드 → 승인 → 정식 스틸 순서로만 진행한다.
-      bulkGen.onclick = function () { if (NK.uiStoryboardSheet && NK.uiStoryboardSheet.open) NK.uiStoryboardSheet.open(); };
-    }
     var bulkVid = document.getElementById('bulk-video');
     if (bulkVid) {
       bulkVid.onclick = async function () {

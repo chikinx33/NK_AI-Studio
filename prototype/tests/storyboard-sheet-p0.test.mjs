@@ -218,6 +218,9 @@ test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승
   for (const k of ['board', 'bible-characters', 'bible-set', 'angle-plate']) assert.match(uiSrc, new RegExp(`\\['${k}', `));
   assert.match(uiSrc, /id="sb-prompt"/, '서버 조립 프롬프트를 보고 고칠 수 있다');
   assert.match(uiSrc, /id="sb-generate-all"/);
+  assert.match(uiSrc, /generate: '선택 만들기'/);
+  assert.match(uiSrc, /generateAll: '모두 만들기'/);
+  assert.doesNotMatch(uiSrc, /현재 시트 생성|전체 시트 생성|현재 시트 모두 승인/);
   assert.match(uiSrc, /class="btn-ghost compact sb-revise"/);
   assert.match(uiSrc, /id="sb-still-batch"/);
   assert.match(uiSrc, /function badge\(kind\)/);
@@ -261,6 +264,6 @@ test('★UI 문구는 한/영 사전(SB_TEXT)만 쓴다: 키 동일 · 본문에
   const svc = read('prototype/js/service/storyboard-sheet.js');
   const sko = svc.match(/ko: \{([\s\S]*?)\n    \},\n    en: \{/); const sen = svc.match(/en: \{([\s\S]*?)\n    \}\n  \};/);
   assert.deepEqual(keys(sko[1]), keys(sen[1]));
-  assert.match(uiSrc, /openBtn: 'Storyboard production'/);
-  assert.match(uiSrc, /openBtn: '스토리보드 제작'/);
+  assert.match(uiSrc, /openBtn: 'Storyboard'/);
+  assert.match(uiSrc, /openBtn: '스토리보드'/);
 });
