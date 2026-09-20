@@ -297,6 +297,73 @@ function sizeIndex(shotType) {
   return i < 0 ? 3 : i;
 }
 
+const REVERSE_VIEW_RE = /(뒷모습|등을\s*(?:보이|보여|향하)|뒤에서|후면|역방향|반대편\s*(?:벽|공간|방향)|back\s*view|from\s+behind|rear\s*view|reverse\s*shot)/i;
+
+function shotText(shot) {
+  return [shot?.composition, shot?.action, ...(Array.isArray(shot?.beats) ? shot.beats.map((b) => b?.what) : [])]
+    .filter(Boolean).join(" ");
+}
+
+function explicitDirectionOf(shot) {
+  const text = shotText(shot);
+  if (REVERSE_VIEW_RE.test(text)) return "back";
+  return "";
+}
+
+function subjectTokensOf(shot) {
+  const tokens = new Set();
+  (Array.isArray(shot?.blocking) ? shot.blocking : []).forEach((b) => {
+    const token = String(b?.token || "").trim().toLowerCase();
+    if (token) tokens.add(token.startsWith("@") ? token : `@${token}`);
+  });
+  const matches = shotText(shot).match(/@[\p{L}\p{N}_-]+/gu) || [];
+  matches.forEach((token) => tokens.add(token.toLowerCase()));
+  return [...tokens].sort();
+}
+
+function blockingKeyOf(shot) {
+  return (Array.isArray(shot?.blocking) ? shot.blocking : [])
+    .filter((b) => b && b.token)
+    .map((b) => `${String(b.token).toLowerCase()}:${b.x || "center"}:${b.depth || "mid"}`)
+    .sort().join("|");
+}
+
+function sameList(a, b) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/**
+ * 배지가 아니라 실제 첫 프레임이 얼마나 같은지를 판정한다.
+ * WS↔GROUP 처럼 명칭이 달라도 같은 인물·같은 위치·같은 벽면이면 점프컷 위험으로 본다.
+ */
+export function setupSimilarity(a, b) {
+  if (!a || !b || a.shotType === "INSERT" || b.shotType === "INSERT") return 0;
+  let score = 0;
+  const dirA = String(a.cameraDirection || "front");
+  const dirB = String(b.cameraDirection || "front");
+  if (dirA === dirB) score += 0.35;
+  const subjectsA = subjectTokensOf(a); const subjectsB = subjectTokensOf(b);
+  if (subjectsA.length && sameList(subjectsA, subjectsB)) score += 0.25;
+  const blockA = blockingKeyOf(a); const blockB = blockingKeyOf(b);
+  if (blockA && blockA === blockB) score += 0.25;
+  if (Math.abs(sizeIndex(a.shotType) - sizeIndex(b.shotType)) <= 1) score += 0.15;
+  return Math.round(score * 100) / 100;
+}
+
+function coverageDirection(prevDirection, sequenceIndex) {
+  const dir = String(prevDirection || "front");
+  // 180도 선을 한 번에 건너지 않는다. 정면/후면의 반복은 좌·우 측면으로,
+  // 측면 반복은 가까운 정면으로 옮겨 화면 방향을 다시 정립한다.
+  if (dir === "front" || dir === "back") return sequenceIndex % 2 ? "left" : "right";
+  return "front";
+}
+
+function coverageShotType(prevType) {
+  const i = sizeIndex(prevType);
+  const j = i >= 3 ? Math.max(0, i - 2) : Math.min(SIZE_ORDER.length - 1, i + 2);
+  return SIZE_ORDER[j];
+}
+
 /**
  * 앞 컷과 같은 셋업인 컷의 사이즈를 한 단계 옮긴다.
  * 방향: 앞앞 컷이 앞 컷보다 와이드였으면 타이트로, 아니면 와이드로 — 핑퐁(MS→MCU→MS→MCU)을 피한다.
@@ -329,41 +396,84 @@ function locKeyOf(scene) {
 
 /**
  * @param {Array} scenes  각 scene.shots 가 채워진 배열(평탄화 전)
- * @returns {{ scenes: Array, shotSwaps: number, blockingAnchors: number }}
+ * @returns {{ scenes: Array, shotSwaps: number, blockingAnchors: number, directionFixes: number, coverageFixes: number }}
  */
 export function enforceSequenceContinuity(scenes) {
-  if (!Array.isArray(scenes) || !scenes.length) return { scenes, shotSwaps: 0, blockingAnchors: 0 };
+  if (!Array.isArray(scenes) || !scenes.length) return { scenes, shotSwaps: 0, blockingAnchors: 0, directionFixes: 0, coverageFixes: 0 };
   let shotSwaps = 0;
   let blockingAnchors = 0;
+  let directionFixes = 0;
+  let coverageFixes = 0;
   const anchors = {}; // locKey → { token → { x, depth } }
   let prev = null;     // { shot, locKey }
   let prevPrev = null;
+  let directionRunLoc = "";
+  let frontRunCount = 0;
 
   const out = scenes.map((scene) => {
     const shots = Array.isArray(scene?.shots) ? scene.shots : null;
     if (!shots || !shots.length) return scene;
     const locKey = locKeyOf(scene);
+    if (locKey !== directionRunLoc) { directionRunLoc = locKey; frontRunCount = 0; }
     const stage = locKey ? (anchors[locKey] = anchors[locKey] || {}) : null;
     const sceneText = String(scene.visual || scene.shot || "");
 
     const newShots = shots.map((shot, idx) => {
       let s = shot;
 
-      // (a) 같은 셋업 금지: 앞 컷과 같은 세트에서 shotType·cameraDirection 이 모두 같으면 사이즈를 한 단계 옮긴다.
-      //     INSERT 는 대상 자체가 다른 컷이라 제외.
+      // (a) 화면 서술과 방위의 충돌을 먼저 고친다. "뒷모습"인데 front 이면 같은 책장 벽이
+      // 다시 나오는 근본 원인이 되므로, 모델 응답과 무관하게 후면 플레이트를 선택한다.
+      const explicitDirection = explicitDirectionOf(s);
+      if (explicitDirection && String(s.cameraDirection || "front") !== explicitDirection) {
+        s = { ...s, cameraDirection: explicitDirection, _autoDirectionFix: String(shot.cameraDirection || "front") };
+        directionFixes += 1;
+      }
+
+      // 같은 세트의 3개 연속 컷이 모두 정면이면 세 번째 컷부터 측면 커버리지로 돌린다.
+      // 프롬프트가 실패해도 특징적인 한 벽만 모든 컷에 반복되는 결과를 코드로 차단한다.
+      const threeFronts = !explicitDirection && s.shotType !== "INSERT"
+        && frontRunCount >= 2 && String(s.cameraDirection || "front") === "front";
+      if (threeFronts) {
+        const nextDirection = coverageDirection("front", coverageFixes + idx);
+        s = { ...s, cameraDirection: nextDirection, _autoDirectionCoverage: "front-run" };
+        directionFixes += 1;
+        coverageFixes += 1;
+      }
+
+      // (b) 같은 셋업 금지: 배지 이름이 아니라 실제 첫 프레임의 유사도를 본다.
+      //     같은 인물·무대 위치·벽면·비슷한 크기면 방향과 크기를 모두 바꿔 진짜 커버리지 컷으로 만든다.
       if (prev && prev.locKey === locKey && s.shotType !== "INSERT") {
-        const sameType = String(prev.shot.shotType || "") === String(s.shotType || "");
-        const sameDir = String(prev.shot.cameraDirection || "front") === String(s.cameraDirection || "front");
-        if (sameType && sameDir) {
-          const next = stepShotType(prevPrev && prevPrev.shot.shotType, s.shotType);
-          if (next && next !== s.shotType) {
-            s = { ...s, shotType: next, _autoShotTypeSwap: String(shot.shotType || "") };
-            shotSwaps += 1;
+        const similarity = setupSimilarity(prev.shot, s);
+        if (similarity >= 0.75) {
+          const nextDirection = explicitDirection || coverageDirection(prev.shot.cameraDirection, coverageFixes + idx);
+          const nextType = coverageShotType(prev.shot.shotType);
+          s = {
+            ...s,
+            cameraDirection: nextDirection,
+            shotType: nextType,
+            _autoCoverageChange: {
+              similarity,
+              fromDirection: String(shot.cameraDirection || "front"),
+              fromShotType: String(shot.shotType || "MS"),
+            },
+          };
+          coverageFixes += 1;
+          directionFixes += nextDirection !== String(shot.cameraDirection || "front") ? 1 : 0;
+          shotSwaps += nextType !== String(shot.shotType || "") ? 1 : 0;
+        } else {
+          const sameType = String(prev.shot.shotType || "") === String(s.shotType || "");
+          const sameDir = String(prev.shot.cameraDirection || "front") === String(s.cameraDirection || "front");
+          if (sameType && sameDir) {
+            const next = stepShotType(prevPrev && prevPrev.shot.shotType, s.shotType);
+            if (next && next !== s.shotType) {
+              s = { ...s, shotType: next, _autoShotTypeSwap: String(shot.shotType || "") };
+              shotSwaps += 1;
+            }
           }
         }
       }
 
-      // (b) 같은 세트 안 인물 위치 고정: 이 세트에서 처음 본 위치를 앵커로 삼고,
+      // (c) 같은 세트 안 인물 위치 고정: 이 세트에서 처음 본 위치를 앵커로 삼고,
       //     이동 서술이 없는 컷에서 좌표가 달라지면 앵커로 되돌린다(facing 은 대화 방향이라 건드리지 않는다).
       if (stage && Array.isArray(s.blocking) && s.blocking.length) {
         const moveText = [s.action, ...(Array.isArray(s.beats) ? s.beats.map((b) => b && b.what) : []), idx === 0 ? sceneText : ""]
@@ -385,13 +495,16 @@ export function enforceSequenceContinuity(scenes) {
         }
       }
 
+      if (s.shotType !== "INSERT") {
+        frontRunCount = String(s.cameraDirection || "front") === "front" ? frontRunCount + 1 : 0;
+      }
       prevPrev = prev;
       prev = { shot: s, locKey };
       return s;
     });
     return { ...scene, shots: newShots };
   });
-  return { scenes: out, shotSwaps, blockingAnchors };
+  return { scenes: out, shotSwaps, blockingAnchors, directionFixes, coverageFixes };
 }
 
 export default {

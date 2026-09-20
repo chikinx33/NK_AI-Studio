@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   planSheets, isSheetStale, buildBibleCharacterSheetPrompt, buildBibleSetSheetPrompt, buildStoryboardSheetPrompt,
-  buildAnglePlateEditPrompt, gridCells, approxCellSize, cameraHintOf, SHEET_GRID, MAX_CUTS_PER_SHEET, DEFAULT_CUTS_PER_SHEET,
+  buildAnglePlateEditPrompt, buildDirectionSheetPrompt, gridCells, approxCellSize, cameraHintOf, SHEET_GRID, MAX_CUTS_PER_SHEET, DEFAULT_CUTS_PER_SHEET,
 } from '../functions/api/_shared/storyboard-sheet.js';
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8').replace(/\r\n/g, '\n');
@@ -84,7 +84,7 @@ test('★시트는 순서의 스냅샷: cutIds 가 현재 scenes 에 연속·같
 
 test('★스토리보드 시트 프롬프트: 부감 마스터를 공간 기준으로 잠그고, 3×3·16:9·번호만, 컷마다 [카메라] 화면, 병합 금지·스타일 고정', () => {
   const cuts = [S(3, '거실', { shotType: 'CU', cameraDirection: 'back', cameraElevation: 'high' }), S(4, '거실', { composition: '아이가 창가에서 웃는다' })];
-  const { prompt, panels } = buildStoryboardSheetPrompt({ header: 'STYLE: soft 2D', set: { name: '거실', description: '햇살 드는 거실', layout: '창문은 북쪽, 소파는 서쪽 벽' }, cuts, aspect: '16:9', characterNames: ['아리'], hasTopMaster: true });
+  const { prompt, panels } = buildStoryboardSheetPrompt({ header: 'STYLE: soft 2D', set: { name: '거실', description: '햇살 드는 거실', layout: '창문은 북쪽, 소파는 서쪽 벽' }, cuts, aspect: '16:9', characterNames: ['아리'], hasTopMaster: true, plateManifest: [{ direction: 'back', referenceId: 2 }, { direction: 'front', referenceId: 3 }] });
   assert.match(prompt, /^STYLE: soft 2D\n/);
   assert.match(prompt, /STORYBOARD SHEET: a 3x3 grid of 9 panels/);
   assert.match(prompt, /every panel exactly 16:9/);
@@ -92,6 +92,9 @@ test('★스토리보드 시트 프롬프트: 부감 마스터를 공간 기준�
   assert.match(prompt, /Panel 1 \(SET MASTER\): copy the provided TOP-DOWN MASTER PLATE of 거실 exactly/);
   assert.match(prompt, /Panel 2 \(CUT 3\): \[close-up, reverse angle \(camera facing the back wall\), high angle looking down\] cut 3 screen/);
   assert.match(prompt, /Panel 3 \(CUT 4\): \[medium shot, camera facing the front of the set, eye level\] 아이가 창가에서 웃는다/);
+  assert.match(prompt, /Reference 2 \(BACK wall view\)/);
+  assert.match(prompt, /Reference 3 \(FRONT wall view\)/);
+  assert.match(prompt, /A BACK cut shows the wall opposite a FRONT cut/);
   assert.match(prompt, /Panel 4: leave empty/);
   assert.match(prompt, /identity only[\s\S]*for 아리/);
   assert.match(prompt, /BACKGROUND LOCK:[\s\S]*single source of truth[\s\S]*Never replace it with another room/);
@@ -121,6 +124,10 @@ test('★바이블 시트: 캐릭터(3×3, 정면·3/4·측면) · 세트(2×2, 
   assert.match(a, /^Show this exact set \(부엌\) from a high angle/);
   assert.match(a, /only the camera moves/);
   assert.doesNotMatch(a, /front/i, '부감 컷엔 정면 참조·정면 지시를 섞지 않는다(설계서 5.3)');
+  const directions = buildDirectionSheetPrompt({ header: 'H', set: { name: '부엌', layout: { back: '찬장', front: '문', left: '창문', right: '식탁' } } });
+  assert.match(directions, /DIRECTION PLATE SHEET: a 2x2 grid/);
+  assert.match(directions, /Panel 1 \(FRONT\)[\s\S]*Panel 2 \(BACK\)[\s\S]*Panel 3 \(LEFT\)[\s\S]*Panel 4 \(RIGHT\)/);
+  assert.match(directions, /never repeat the front wall in the reverse panel/);
 });
 
 test('★격자 좌표와 셀 해상도: 2K 시트(16:9) 셀 약 670×370, 4K 셀 약 1340×750 (설계서 2.2.1)', () => {
@@ -145,11 +152,11 @@ test('★4K: 생성 경로가 4K 를 허용하고(Gemini 3.x 만 imageSize 전�
   assert.match(up, /\["1K", "2K", "4K"\]\.includes\(sizeIncoming\)/, '업스케일 경로의 4K 선례');
 });
 
-test('★엔드포인트 /api/storyboard/sheet-plan: 인증 · kind 별(plan/bible-characters/bible-set/board/angle-plate/cells) · 이미지 생성은 하지 않는다', () => {
+test('★엔드포인트 /api/storyboard/sheet-plan: 인증 · kind 별(plan/bible-characters/bible-set/board/direction-sheet/angle-plate/cells) · 이미지 생성은 하지 않는다', () => {
   const ep = read('prototype/functions/api/storyboard/sheet-plan.ts');
   assert.match(ep, /import \{ authorizeRequest \} from "\.\.\/_shared\/auth\.js";/);
   assert.match(ep, /from "\.\.\/_shared\/storyboard-sheet\.js";/);
-  for (const k of ['plan', 'bible-characters', 'bible-set', 'board', 'angle-plate', 'cells']) assert.match(ep, new RegExp(`kind === "${k}"`));
+  for (const k of ['plan', 'bible-characters', 'bible-set', 'board', 'direction-sheet', 'angle-plate', 'cells']) assert.match(ep, new RegExp(`kind === "${k}"`));
   assert.match(ep, /label: "conti"/);
   assert.match(ep, /generationMode: "image-to-image", cameraTargetMode: "scene"/, '부감 플레이트는 편집 모드');
   assert.doesNotMatch(ep, /generateContent|fetch\(/, '조립만 하고 생성은 브라우저가 api.imagen 으로');
@@ -169,6 +176,9 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.match(svc, /bestB >= 240 \? best : expect/, '여백선이 흰색(240 이상)일 때만 채택');
   assert.match(svc, /mod\.cropPanels = async function \(imageUrl, grid, opts\)/);
   assert.match(svc, /mod\.uploadPanel = async function \(projectId, dataUrl, name\)/);
+  assert.match(svc, /mod\.ensureDirectionSheet = async function \(ctx, loc, cuts, opts\)/, '스토리보드 전에 부감에서 4방향 앵글 시트를 자동 파생한다');
+  assert.match(svc, /var directions = \['front', 'back', 'left', 'right'\]/);
+  assert.match(svc, /mod\.plateReferenceForScene = function \(loc, scene, referenceId\)/, '정식 스틸도 컷 방향 플레이트를 사용한다');
   assert.match(svc, /NK\.api\.imageUpload\(projectId, dataUrlToFile\(dataUrl, name\), \{ kind: 'image' \}\)/);
   assert.match(svc, /st\.payload\.storyboardSheets = list;/);
   // E4: 승인 콘티 = 1번 참조, image-to-image(scene) 카메라 재구성 경로, lineage.imageContinuity = 'sheet-panel'
@@ -183,7 +193,7 @@ test('★서비스: 시트 생성은 api.imagen(imageSize=해상도) · 격자 �
   assert.ok(svc.indexOf('st.scenes[sceneIdx] = Object.assign') > i);
   // 나머지 imageDataUrl 은 referenceImages 항목(참조 이미지)뿐
   const otherWrites = (svc.match(/imageDataUrl: (?!result\.imageRef)[a-zA-Z]+/g) || []);
-  assert.deepEqual(otherWrites.sort(), ['imageDataUrl: panelUrl', 'imageDataUrl: proxyUrl', 'imageDataUrl: url']);
+  assert.ok(otherWrites.length >= 3 && otherWrites.every((value) => ['imageDataUrl: panelUrl', 'imageDataUrl: proxyUrl', 'imageDataUrl: url'].includes(value)), '그 밖의 imageDataUrl 은 참조 이미지 항목뿐');
   // 캐릭터 참조는 컷 생성 경로의 해석기를 그대로 쓴다
   const pi = read('prototype/ui/pipeline-image.js');
   assert.match(pi, /async function resolveCharacterReferences\(st, text, projectId\)/);
@@ -224,8 +234,9 @@ test('★UI: 제작 화면 버튼 → 씬별 스토리보드·부분 수정·승
   assert.match(uiSrc, /refs = \[Object\.assign\(\{\}, plateRef, \{ referenceId: 1 \}\)\];/);
   assert.match(uiSrc, /var vid = 'angle-' \+ m\.angle;/);
   assert.match(uiSrc, /hasTopMaster: hasTopMaster/);
-  assert.match(uiSrc, /if \(m\.kind === 'board' && !plateRef\) throw new Error\(T\(\)\.needPlate\)/, '배경 참조 없이 잘못된 공간의 콘티를 만들지 않는다');
-  assert.match(uiSrc, /refs\.push\(overlapRef\)[\s\S]*plateRef = set \? svc\.plateReference\(set, refs\.length \+ 1\)/, '후속 시트는 겹침 패널 뒤에 부감 마스터를 함께 첨부한다');
+  assert.match(uiSrc, /if \(m\.kind === 'board' && \(!set \|\| !svc\.topMasterOf\(set\)\)\) throw new Error\(T\(\)\.needPlate\)/, '부감 마스터 없이 잘못된 공간의 콘티를 만들지 않는다');
+  assert.match(uiSrc, /svc\.ensureDirectionSheet\(ctx, set, targetScenes/, '스토리보드 직전에 빠진 4방향 앵글 시트를 준비한다');
+  assert.match(uiSrc, /svc\.storyboardPlateReferences\(set, targetScenes, refs\.length \+ 1\)/, '후속 시트는 겹침 패널 뒤에 부감과 컷별 방향 플레이트를 첨부한다');
 });
 
 test('★UI 문구는 한/영 사전(SB_TEXT)만 쓴다: 키 동일 · 본문에 한국어 리터럴 없음 · 언어 변경 구독', () => {

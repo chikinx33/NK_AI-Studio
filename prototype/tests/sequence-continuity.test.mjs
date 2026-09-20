@@ -21,14 +21,14 @@ test('★stepShotType: 한 단계 옮기되 핑퐁을 피한다', () => {
   assert.equal(stepShotType(null, 'OTS'), 'MS', '특수 샷은 가장 가까운 사이즈 기준');
 });
 
-test('★씬 경계를 넘어 같은 셋업이면 뒤 컷의 사이즈를 바꾼다 (방위가 다르면 그대로)', () => {
+test('★씬 경계를 넘어 정면 3연속이면 뒤 컷을 측면 커버리지로 바꾼다 (방위가 다르면 그대로)', () => {
   const scenes = [
     { id: 1, sceneLocation: '거실', shots: [
       { id: '1.1', shotType: 'WS', cameraMove: 'static', cameraDirection: 'front' },
       { id: '1.2', shotType: 'MS', cameraMove: 'pan', cameraDirection: 'front' },
     ] },
     { id: 2, sceneLocation: '거실', shots: [
-      { id: '2.1', shotType: 'MS', cameraMove: 'static', cameraDirection: 'front' },   // 1.2 와 같은 셋업 → 바뀐다
+      { id: '2.1', shotType: 'MS', cameraMove: 'static', cameraDirection: 'front' },   // 정면 3연속 → 측면 커버리지
       { id: '2.2', shotType: 'MS', cameraMove: 'static', cameraDirection: 'back' },    // 방위가 다르면 리버스 → 그대로
       { id: '2.3', shotType: 'INSERT', cameraMove: 'static', cameraDirection: 'back' },
       { id: '2.4', shotType: 'INSERT', cameraMove: 'static', cameraDirection: 'back' }, // INSERT 는 제외
@@ -38,10 +38,11 @@ test('★씬 경계를 넘어 같은 셋업이면 뒤 컷의 사이즈를 바꾼
     ] },
   ];
   const res = enforceSequenceContinuity(scenes);
-  assert.equal(res.shotSwaps, 1);
+  assert.equal(res.coverageFixes, 1);
   const s2 = res.scenes[1].shots;
-  assert.equal(s2[0].shotType, 'MCU', '앞앞(1.1=WS)이 더 와이드였으니 타이트로');
-  assert.equal(s2[0]._autoShotTypeSwap, 'MS');
+  assert.equal(s2[0].shotType, 'MS');
+  assert.notEqual(s2[0].cameraDirection, 'front', '특징적인 같은 벽면이 세 컷 연속 반복되지 않는다');
+  assert.equal(s2[0]._autoDirectionCoverage, 'front-run');
   assert.equal(s2[1].shotType, 'MS');
   assert.equal(s2[3].shotType, 'INSERT');
   assert.equal(res.scenes[2].shots[0].shotType, 'INSERT');

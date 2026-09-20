@@ -18,7 +18,7 @@ test('★SERVER_VERSION 이 config.js APP_VERSION 과 같고, pre-commit 훅이 
 test('★진단 토스트에 Pass 2 요약(씬→컷·성공/폴백·자동 보정 3종)과 장소(세트) 수가 들어간다', () => {
   const ui = read('prototype/js/ui/scenario.js');
   assert.match(ui, /컷 분해 \(Pass 2\): 씬 \$\{p2Total\} → 컷 \$\{p2Cuts\} \(성공 .* \/ 폴백 /);
-  assert.match(ui, /자동 보정 \(Pass 2\): 같은 셋업 사이즈 이동 .*shotTypeSwaps.*인물 위치 앵커 .*blockingAnchors.*카메라 무브 치환 .*cameraSwaps/);
+  assert.match(ui, /자동 보정 \(Pass 2\): 유사 구도 커버리지 변경 .*coverageFixes.*배경 방위 보정 .*directionFixes.*화면 크기 보정 .*shotTypeSwaps.*인물 위치 앵커 .*blockingAnchors.*카메라 무브 치환 .*cameraSwaps/);
   const locIdx = ui.indexOf("replaceDiagLine(metaLines, DIAG_PENDING_LOCATIONS, '장소(세트): ' + epLocs.length + '곳");
   assert.ok(locIdx > 0, '장소(세트) 줄이 없습니다');
   // 장소 줄은 추출 성공 직후 내용만 갱신한다. 생성 중 모달을 강제로 열면 안 된다.

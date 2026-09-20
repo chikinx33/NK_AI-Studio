@@ -108,6 +108,9 @@ export function buildShotPromptKo() {
     합친다 — 같은 장소·같은 피사체에서 거리나 무브만 달라진다. cameraMove 로 표현한다.
              예: "창틀 위 인형 정지" + "인형 얼굴로 다가옴" → 1샷, cameraMove="push-in"
     같은 인물을 같은 장소에서 두 컷으로 나누면 컷마다 새로 그려져 실루엣·디테일이 흔들린다.
+· 같은 장소·같은 인물·같은 좌우 배치에서 행동만 달라지는 비트는 별도 샷으로 나누지 말고
+  한 샷의 beats 로 합친다. 길이 때문에 반드시 나눠야 한다면 단순히 WS→GROUP, zoom→pull-out처럼
+  이름만 바꾸지 말고 방위(front/back/left/right) 또는 피사체를 바꾼 실제 새 카메라 셋업을 만든다.
 · 예: "전사가 칼을 뽑는다(10초)" → CU 얼굴(5초) + MS 뒷모습 실루엣(5초)
 
 [카메라 어휘 다양성]
@@ -119,6 +122,14 @@ export function buildShotPromptKo() {
   ECU·CU 짧은 컷과 강한 무브(push-in, whip-pan, quick-pan)를 섞는다.
 · 마주보는 인물, 부르고 답하는 장면에는 리버스 샷을 적극 쓴다 — 그 샷의 cameraDirection 을
   "back" 으로 명시해야 배경이 반대편 공간으로 그려진다. front 인 채로 두면 컷이 튄다.
+· cameraDirection 은 인물이 카메라를 보는 방향이 아니라 카메라가 세트의 어느 벽을 보는지다.
+  정면 컷 뒤에 인물의 뒷모습이 보이면 그 컷은 반드시 back 이며, 앞 컷과 같은 벽·책장·창문이
+  배경에 다시 나오면 공간적으로 잘못된 결과다.
+· 같은 장소의 3샷 이상을 모두 front 로 두지 않는다. 이야기상 정면 고정이 필수가 아니라면
+  left/right/back 커버리지를 섞되, 180도 선을 건널 때는 측면 또는 공간 재정립 샷을 사이에 둔다.
+· 인접 컷의 실제 구도가 같은지 shotType 이름만으로 판단하지 않는다. 등장 인물 조합, 좌·중·우
+  블로킹, 중심 소품, 배경 면, 화면 점유율이 같으면 같은 구도다. 그 경우 한 샷으로 합치거나
+  위 항목 중 최소 두 가지가 달라지는 커버리지로 바꾼다.
 · composition 의 프레이밍과 shotType·cameraElevation 은 한 카메라여야 한다. "발과 하체만 보인다"는 WS(전신)가 아니라
   낮은 카메라의 타이트한 프레임(MCU/CU/INSERT + low)이고, "인물이 점처럼 작다"는 EWS 다. 둘이 어긋나면 이미지가 둘 중
   하나를 무시한다 — composition 을 쓰고 나서 shotType·cameraElevation 이 그 프레임을 실제로 만드는 값인지 확인하라.
@@ -226,6 +237,9 @@ Without them the still image is generated from the END state of the move, and th
              e.g. "doll sitting on the sill" + "camera pushes in to its face" → 1 shot, cameraMove="push-in".
     Splitting one subject in the same location across shots makes it re-generated each time, so its
     silhouette and details drift.
+· If only the action changes while the set, cast and left/center/right blocking stay the same, keep it in
+  one shot as beats. If duration forces a split, do not merely rename WS to GROUP or zoom to pull-out;
+  create a genuinely new setup by changing the set-facing direction or the primary subject.
 · e.g. "the warrior draws his sword (10s)" → CU face (5s) + MS silhouette from behind (5s).
 
 [Camera variety]
@@ -238,6 +252,15 @@ Without them the still image is generated from the END state of the move, and th
 · For characters facing each other, or call-and-answer beats, use reverse shots deliberately — and set that
   shot's cameraDirection to "back" so the background renders the opposite side of the space. Leaving it
   "front" makes the cut jump.
+· cameraDirection describes which wall of the SET the camera sees, not whether a character faces the lens.
+  If a front view is followed by the characters' backs, that next shot MUST be "back" and must show the
+  opposite wall; repeating the same shelf/window wall is spatially wrong.
+· Do not leave every shot in a 3+ shot location at "front" unless the story explicitly requires a locked
+  frontal camera. Mix left/right/back coverage, and use a side or neutral establishing shot before crossing
+  the 180-degree line.
+· Judge adjacent setup duplication by the rendered frame, not the shotType label: cast ensemble, blocking,
+  hero prop, visible wall and frame occupancy. If these match, merge the actions into beats or change at
+  least two of those visual dimensions.
 · composition's framing and shotType/cameraElevation must describe ONE camera. "only feet and lower bodies visible" is
   not a WS (full body) but a tight low camera (MCU/CU/INSERT + low); "figures tiny in the space" is EWS. When they
   disagree the image ignores one of them — after writing composition, check that shotType/cameraElevation are the

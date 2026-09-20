@@ -93,6 +93,79 @@
     };
   };
 
+  function cameraDirectionOf(scene) {
+    var d = String((scene && scene.cameraDirection) || 'front').trim().toLowerCase();
+    return ['front', 'back', 'left', 'right'].indexOf(d) >= 0 ? d : 'front';
+  }
+
+  function directionPlateObject(loc, direction) {
+    var want = 'dir-' + String(direction || 'front').toLowerCase();
+    var variants = Array.isArray(loc && loc.variants) ? loc.variants : [];
+    for (var i = 0; i < variants.length; i++) {
+      if (variants[i] && String(variants[i].id || '') === want && String(variants[i].refObjectName || '').trim()) return String(variants[i].refObjectName).trim();
+    }
+    return '';
+  }
+
+  mod.requiredDirections = function (cuts) {
+    var seen = {}; var out = [];
+    (Array.isArray(cuts) ? cuts : []).forEach(function (cut) {
+      var dir = cameraDirectionOf(cut);
+      if (!seen[dir]) { seen[dir] = 1; out.push(dir); }
+    });
+    return out;
+  };
+
+  /** 프롬프트 조립 시 사용할 고정 참조 번호. startId 는 부감 마스터 번호다. */
+  mod.storyboardPlateManifest = function (cuts, startId) {
+    var next = Number(startId) || 1;
+    return mod.requiredDirections(cuts).map(function (direction) {
+      next += 1;
+      return { direction: direction, referenceId: next };
+    });
+  };
+
+  /** 부감 마스터 + 현재 시트가 실제로 쓰는 방향 플레이트. manifest 와 같은 순서/번호를 유지한다. */
+  mod.storyboardPlateReferences = function (loc, cuts, startId) {
+    var base = Number(startId) || 1;
+    var refs = [];
+    var master = mod.plateReference(loc, base);
+    if (master) refs.push(master);
+    mod.storyboardPlateManifest(cuts, base).forEach(function (entry) {
+      var objectName = directionPlateObject(loc, entry.direction);
+      if (!objectName) return;
+      refs.push({
+        referenceId: entry.referenceId,
+        referenceType: 'REFERENCE_TYPE_SUBJECT',
+        referenceKind: 'environment-direction',
+        imageDataUrl: proxyUrl(objectName),
+        subjectDescription: String((loc && loc.name) || 'the set') + ' — exact ' + entry.direction.toUpperCase() + ' wall view; preserve this wall and its fixed objects for cuts assigned to this direction',
+        subjectType: 'SUBJECT_TYPE_DEFAULT'
+      });
+    });
+    return refs;
+  };
+
+  /** 정식 스틸은 해당 컷의 방향 플레이트를 우선 사용하고, 없을 때만 부감으로 폴백한다. */
+  mod.plateReferenceForScene = function (loc, scene, referenceId) {
+    var direction = cameraDirectionOf(scene);
+    var objectName = directionPlateObject(loc, direction);
+    if (!objectName) return mod.plateReference(loc, referenceId);
+    return {
+      referenceId: referenceId || 1,
+      referenceType: 'REFERENCE_TYPE_SUBJECT',
+      referenceKind: 'environment-direction',
+      imageDataUrl: proxyUrl(objectName),
+      subjectDescription: String((loc && loc.name) || 'the set') + ' — exact ' + direction.toUpperCase() + ' wall view for this cut',
+      subjectType: 'SUBJECT_TYPE_DEFAULT'
+    };
+  };
+
+  mod.needsDirectionSheet = function (loc, cuts) {
+    if (!topMasterOf(loc)) return false;
+    return mod.requiredDirections(cuts).some(function (direction) { return !directionPlateObject(loc, direction); });
+  };
+
   /** 등록 캐릭터 참조 — pipeline-image 의 해석기(캐릭터 시트 → referenceImages)를 그대로 쓴다. */
   mod.characterReferences = async function (st, text, projectId) {
     var helpers = NK.uiPipelineImage && NK.uiPipelineImage._helpers;
@@ -196,6 +269,66 @@
     var obj = String((res && res.objectName) || '').trim();
     if (!obj) throw new Error(mod.text('noObjectName'));
     return obj;
+  };
+
+  var directionSheetInFlight = {};
+
+  /**
+   * 부감 마스터 한 장에서 정면·후면·좌측·우측을 2×2 한 장으로 만든 뒤 각 방향 캐시에 저장한다.
+   * 개별 방향을 따로 생성하지 않아 네 벽의 관계와 렌더링 스타일을 한 호출 안에서 고정한다.
+   */
+  mod.ensureDirectionSheet = async function (ctx, loc, cuts, opts) {
+    var o = opts || {};
+    if (!loc || !mod.requiredDirections(cuts).length || !mod.needsDirectionSheet(loc, cuts)) return { loc: loc, generated: false, objectName: '' };
+    var master = topMasterOf(loc);
+    if (!master) throw new Error(mod.text('noObjectName'));
+    var key = String(loc.id || loc.name || '').trim().toLowerCase();
+    if (directionSheetInFlight[key]) return directionSheetInFlight[key];
+    directionSheetInFlight[key] = (async function () {
+      var st = ctx.getState();
+      if (o.onStatus) o.onStatus('directionSheet');
+      var planned = await mod.requestPlan({
+        kind: 'direction-sheet',
+        header: commonPromptOf(st),
+        aspect: (st && st.aspectRatio) || '16:9',
+        set: { name: loc.name, description: loc.description, layout: loc.layout },
+        resolution: o.resolution || '2K'
+      });
+      var masterRef = mod.plateReference(loc, 1);
+      var out = await mod.generateSheet(st, {
+        prompt: planned.prompt,
+        aspect: (st && st.aspectRatio) || '16:9',
+        generationMode: 'image-to-image',
+        cameraTargetMode: 'scene',
+        referenceImages: masterRef ? [masterRef] : [],
+        resolution: o.resolution || '2K',
+        provider: o.provider
+      });
+      if (!out.objectName) throw new Error(mod.text('noObjectName'));
+      var crops = await mod.cropPanels(proxyUrl(out.objectName), { cols: 2, rows: 2 });
+      var directions = ['front', 'back', 'left', 'right'];
+      loc.variants = Array.isArray(loc.variants) ? loc.variants : [];
+      for (var i = 0; i < directions.length; i++) {
+        var crop = crops[i];
+        if (!crop || !crop.dataUrl) throw new Error('direction sheet crop failed: ' + directions[i]);
+        var objectName = await mod.uploadPanel(st.draftId, crop.dataUrl, 'direction-' + directions[i] + '-' + Date.now().toString(36) + '.png');
+        if (NK.service.setPlates && NK.service.setPlates.setDirectionPlate) NK.service.setPlates.setDirectionPlate(loc, directions[i], objectName, directions[i]);
+        else {
+          var id = 'dir-' + directions[i]; var hit = null;
+          for (var v = 0; v < loc.variants.length; v++) if (loc.variants[v] && loc.variants[v].id === id) { hit = loc.variants[v]; break; }
+          if (!hit) { hit = { id: id, label: directions[i], description: '', refObjectName: '' }; loc.variants.push(hit); }
+          hit.refObjectName = objectName;
+        }
+      }
+      loc.directionSheet = { objectName: out.objectName, createdAt: new Date().toISOString(), source: 'angle-top' };
+      var locations = mod.locations(st).map(function (entry) {
+        var same = String(entry.id || entry.name || '').trim().toLowerCase() === key;
+        return same ? loc : entry;
+      });
+      if (NK.service.setPlates && NK.service.setPlates.persistLocations) NK.service.setPlates.persistLocations(ctx, locations);
+      return { loc: loc, generated: true, objectName: out.objectName };
+    })();
+    try { return await directionSheetInFlight[key]; } finally { delete directionSheetInFlight[key]; }
   };
 
   /** 시트 목록(payload.storyboardSheets). */

@@ -152,11 +152,14 @@ export async function decomposeScenes(auth, scenes, opts = {}) {
   // P2-3-5: 인접 동일 cameraMove 자동 치환 — LLM이 동일 무브를 반복해도 코드로 다양화 보장
   const diversified = diversifyShotCameraMoves(raw);
   meta.cameraSwaps = diversified.swaps;
-  // 시퀀스 검증기(씬 경계 포함): 인접 컷 동일 사이즈+방위 금지, 같은 세트 안 인물 위치 고정.
+  // 시퀀스 검증기(씬 경계 포함): 실제 첫 프레임 유사도 기반 커버리지 변경,
+  // 화면의 뒷모습↔세트 방위 충돌 보정, 같은 세트 안 인물 위치 고정.
   // 씬별 병렬 호출은 서로를 모르므로 여기서 한 줄로 이어 보고 코드로 바로잡는다.
   const sequenced = enforceSequenceContinuity(diversified.scenes);
   meta.shotTypeSwaps = sequenced.shotSwaps;
   meta.blockingAnchors = sequenced.blockingAnchors;
+  meta.directionFixes = sequenced.directionFixes;
+  meta.coverageFixes = sequenced.coverageFixes;
   return { scenes: sequenced.scenes, meta };
 }
 

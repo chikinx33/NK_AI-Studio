@@ -20,6 +20,13 @@ export const SET_ANGLES = [
   { id: "high", label: "하이앵글(부감)", instruction: "high angle looking down at the set from above, about 45 degrees" },
   { id: "low", label: "로우앵글", instruction: "low angle looking up from near the floor" },
 ];
+/** 스토리보드용 4방향 앵글 시트. 한 번에 뽑아 같은 세트의 벽면 관계를 한 이미지 안에서 고정한다. */
+export const DIRECTION_SHEET_ANGLES = [
+  { id: "front", label: "정면", instruction: "camera at the entrance/front side looking toward the back wall" },
+  { id: "back", label: "후면", instruction: "reverse angle, camera at the back wall looking toward the entrance/front wall" },
+  { id: "left", label: "좌측", instruction: "camera at the left wall looking across toward the right wall" },
+  { id: "right", label: "우측", instruction: "camera at the right wall looking across toward the left wall" },
+];
 export const CHARACTER_ANGLES = [
   { id: "front", instruction: "front view, neutral standing pose, full body" },
   { id: "three-quarter", instruction: "three-quarter view, same pose" },
@@ -202,6 +209,29 @@ export function buildBibleSetSheetPrompt(input) {
 }
 
 /**
+ * 부감 마스터에서 스토리보드용 정면·후면·좌측·우측 플레이트를 한 장으로 파생한다.
+ * 네 방향을 같은 호출에서 생성해야 벽·가구·출입구의 대응 관계가 유지된다.
+ */
+export function buildDirectionSheetPrompt(input) {
+  const set = (input && input.set) || {};
+  const name = t(set.name) || "the set";
+  const lines = [
+    t(input && input.header),
+    t(input && input.hub),
+    `DIRECTION PLATE SHEET: a 2x2 grid of four clean 16:9 environment plates for the EXACT SAME set (${name}), with thin white gutters. No text, labels or panel numbers anywhere.`,
+    `The supplied reference is the TOP-DOWN MASTER and is the spatial truth. Preserve every wall, opening, shelf, window, door, furniture item and prop at its fixed world position. Move only the camera.`,
+    t(set.description) ? `SET: ${t(set.description).slice(0, 300)}` : "",
+    layoutText(set.layout),
+  ];
+  DIRECTION_SHEET_ANGLES.forEach((angle, index) => {
+    lines.push(`Panel ${index + 1} (${angle.id.toUpperCase()}): ${angle.instruction}, eye level, wide empty-set plate. Show the wall that this camera physically faces; never repeat the front wall in the reverse panel.`);
+  });
+  lines.push("All panels are the same room in one coordinate system. Opposite cameras must show opposite walls. Left/right object positions must transform consistently with the camera turn.");
+  lines.push("Empty environment only — no characters, people or creatures.", NO_MERGE, STYLE_LOCK);
+  return lines.filter(Boolean).join("\n");
+}
+
+/**
  * 스토리보드 시트(3×3): 1번 칸 = 세트 플레이트 또는 겹침 패널, 2~9번 = 컷(기본 6·최대 8).
  * @param {{ header:string, set:{name:string, description?:string}, cuts:any[], anchor?:{role:'set'|'overlap', ref?:string}, aspect?:string, characterNames?:string[] }} input
  * @returns {{ prompt:string, panels:Array<{index:number, role:'set'|'overlap'|'cut'|'empty', ref:string, label:'conti'}> }}
@@ -213,6 +243,11 @@ export function buildStoryboardSheetPrompt(input) {
   const cuts = (Array.isArray(input && input.cuts) ? input.cuts : []).slice(0, MAX_CUTS_PER_SHEET);
   const anchor = (input && input.anchor) || { role: "set" };
   const panels = [];
+  const plateManifest = Array.isArray(input && input.plateManifest) ? input.plateManifest : [];
+  const plateRefFor = (cut) => {
+    const dir = t(cut && cut.cameraDirection).toLowerCase() || "front";
+    return plateManifest.find((entry) => t(entry && entry.direction).toLowerCase() === dir) || null;
+  };
   const lines = [t(input && input.header), t(input && input.hub), gridLine(cols, rows, input && input.aspect)];
   if (anchor.role === "overlap") {
     lines.push(`Panel 1 (OVERLAP): repeat the previous sheet's last frame exactly (provided as the first reference image) — same set, same characters, same lighting. It anchors tone and lighting for this sheet.`);
@@ -228,7 +263,9 @@ export function buildStoryboardSheetPrompt(input) {
     const id = idOf(c, i);
     const hint = cameraHintOf(c);
     const screen = screenTextOf(c);
-    lines.push(`Panel ${n} (CUT ${id}): [${hint || "medium shot, eye level"}] ${screen || "the characters in the set"}. Set: ${setName}.`);
+    const plateRef = plateRefFor(c);
+    const plateLock = plateRef ? ` Use environment Reference ${plateRef.referenceId} (${t(plateRef.direction).toUpperCase()} wall view) as this panel's background geometry.` : "";
+    lines.push(`Panel ${n} (CUT ${id}): [${hint || "medium shot, eye level"}] ${screen || "the characters in the set"}. Set: ${setName}.${plateLock}`);
     panels.push({ index: n, role: "cut", ref: id, label: "conti" });
   });
   for (let n = cuts.length + 2; n <= cols * rows; n++) { lines.push(`Panel ${n}: leave empty (plain white).`); panels.push({ index: n, role: "empty", ref: "", label: "conti" }); }
@@ -237,7 +274,10 @@ export function buildStoryboardSheetPrompt(input) {
     lines.push(`BACKGROUND LOCK: the provided TOP-DOWN MASTER PLATE is the single source of truth for ${setName}. Reconstruct each cut camera inside that exact space. Never replace it with another room, move furniture or props, swap walls, change openings, or invent a different background.`);
     lines.push(layoutText(set.layout));
   }
-  lines.push(`References: registered character images = identity only (face, silhouette, colors, costume)${names.length ? ` for ${names.join(", ")}` : ""}. The set plate image = layout, materials and lighting of ${setName}. Do not copy the reference framing into the cut panels — each cut panel follows its own camera line.`);
+  if (plateManifest.length) {
+    lines.push(`DIRECTION LOCK: each cut panel must use its assigned FRONT/BACK/LEFT/RIGHT environment reference. A BACK cut shows the wall opposite a FRONT cut. Never reuse the most recognizable wall merely for visual similarity. Character facing and screen position must be transformed for that camera direction.`);
+  }
+  lines.push(`References: registered character images = identity only (face, silhouette, colors, costume)${names.length ? ` for ${names.join(", ")}` : ""}. Environment references = fixed wall geometry, furniture and lighting of ${setName}. Do not copy their wide framing; preserve their wall identity while following each cut's shot size and elevation.`);
   lines.push(NO_MERGE, STYLE_LOCK);
   return { prompt: lines.filter(Boolean).join("\n"), panels };
 }

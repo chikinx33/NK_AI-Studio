@@ -243,7 +243,10 @@
           description: String(l.description || '').trim(),
           refObjectName: l.refObjectName || '',
           variants: variants,
-          sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : []
+          sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [],
+          // 부감에서 확정한 벽·바닥 배치와 4방향 시트 계보를 저장 과정에서 잃지 않는다.
+          layout: (l.layout && typeof l.layout === 'object') ? Object.assign({}, l.layout) : (l.layout || null),
+          directionSheet: (l.directionSheet && typeof l.directionSheet === 'object') ? Object.assign({}, l.directionSheet) : null
         };
       });
   }

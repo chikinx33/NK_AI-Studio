@@ -7,6 +7,7 @@ import {
   planSheets,
   buildBibleCharacterSheetPrompt,
   buildBibleSetSheetPrompt,
+  buildDirectionSheetPrompt,
   buildStoryboardSheetPrompt,
   buildAnglePlateEditPrompt,
   gridCells,
@@ -69,8 +70,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scenes.forEach((s, i) => byId.set(String(s?.id ?? i + 1), s));
       const cuts = wantIds.length ? wantIds.map((id: string) => byId.get(id)).filter(Boolean) : scenes;
       if (!cuts.length) return send({ error: "cuts are required (cutIds or scenes)" }, 400, origin);
-      const built = buildStoryboardSheetPrompt({ header, set, cuts, anchor: body?.anchor, aspect, characterNames: body?.characterNames, hasTopMaster: body?.hasTopMaster === true });
+      const built = buildStoryboardSheetPrompt({ header, set, cuts, anchor: body?.anchor, aspect, characterNames: body?.characterNames, hasTopMaster: body?.hasTopMaster === true, plateManifest: body?.plateManifest });
       return send({ ok: true, kind, prompt: built.prompt, panels: built.panels, resolution, grid: SHEET_GRID, cell: approxCellSize(resolution), label: "conti" }, 200, origin);
+    }
+    if (kind === "direction-sheet") {
+      const set = body?.set || {};
+      if (!String(set?.name || "").trim()) return send({ error: "set.name is required" }, 400, origin);
+      const prompt = buildDirectionSheetPrompt({ header, set, aspect, hub: body?.hub });
+      return send({ ok: true, kind, prompt, resolution, grid: { cols: 2, rows: 2 }, generationMode: "image-to-image", cameraTargetMode: "scene", label: "direction-sheet" }, 200, origin);
     }
     if (kind === "angle-plate") {
       const set = body?.set || {};

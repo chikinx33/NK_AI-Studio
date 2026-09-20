@@ -47,13 +47,14 @@
       approvedBatch: '승인 콘티 일괄 스틸 생성',
       revise: '부분 수정',
       reviseAsk: '이 콘티에서 수정할 내용을 입력해 주세요.',
-      batchConfirm: '스토리보드 시트 {count}장을 순서대로 생성합니다. 이미지 생성 호출도 {count}회 발생합니다. 계속할까요?',
+      batchConfirm: '스토리보드 {count}장과 빠진 4방향 앵글 시트 {angleCount}장을 생성합니다. 이미지 생성은 총 {total}회입니다. 계속할까요?',
       stillBatchConfirm: '승인된 콘티 {count}개로 정식 스틸컷을 생성하고 각 컷에 바로 적용합니다. 이미지 생성 호출도 {count}회 발생합니다. 계속할까요?',
       needOverlap: '이 시트는 이전 시트의 마지막 콘티가 필요해요. 앞 시트를 먼저 생성해 주세요.',
       generating: '생성 중…',
+      directionSheet: '4방향 앵글 시트 생성 중…',
       close: '닫기',
       noSets: '세트(장소)가 없어요. 먼저 "배경 레퍼런스"에서 장소를 추출·생성해 주세요.',
-      needPlate: '이 세트의 부감 마스터 또는 배경 플레이트가 없어요. "배경 레퍼런스"에서 먼저 만들어 주세요.',
+      needPlate: '이 세트의 부감 마스터가 없어요. "배경 레퍼런스"에서 먼저 만들어 주세요.',
       needProject: '프로젝트를 먼저 저장해 주세요.',
       planFailed: '계획을 만들지 못했어요: ',
       genFailed: '생성 실패: ',
@@ -122,13 +123,14 @@
       approvedBatch: 'Render approved stills',
       revise: 'Revise panel',
       reviseAsk: 'Describe what to change in this storyboard panel.',
-      batchConfirm: 'Generate {count} storyboard sheets in sequence. This also makes {count} image-generation calls. Continue?',
+      batchConfirm: 'Generate {count} storyboard sheets plus {angleCount} missing four-direction angle sheets. Total image-generation calls: {total}. Continue?',
       stillBatchConfirm: 'Render and apply {count} final stills from approved panels. This also makes {count} image-generation calls. Continue?',
       needOverlap: 'This sheet needs the previous sheet’s final conti panel. Generate the preceding sheet first.',
       generating: 'Generating…',
+      directionSheet: 'Generating four-direction angle sheet…',
       close: 'Close',
       noSets: 'No sets (locations) yet. Extract or create them in "Background references" first.',
-      needPlate: 'This set has no top-down master or background plate. Create one in "Background references" first.',
+      needPlate: 'This set has no top-down master. Create one in "Background references" first.',
       needProject: 'Save the project first.',
       planFailed: 'Could not build the plan: ',
       genFailed: 'Generation failed: ',
@@ -264,7 +266,10 @@
           if (!target) { m.error = T().noSets; render(); return; }
           set = setByName(target.setName) || { id: '', name: target.setName || 'Unspecified set', description: '' };
           var hasTopMaster = !!svc.topMasterOf(set);
-          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description, layout: set.layout }, hasTopMaster: hasTopMaster, cutIds: target.cutIds, anchor: target.anchor, characterNames: characterNames(), resolution: m.resolution });
+          var targetCuts = scenesOfTarget();
+          var masterRefId = target.anchor && target.anchor.role === 'overlap' ? 2 : 1;
+          var plateManifest = svc.storyboardPlateManifest(targetCuts, masterRefId);
+          var res = await svc.requestPlan({ kind: 'board', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', scenes: s.scenes || [], set: { name: set.name, description: set.description, layout: set.layout }, hasTopMaster: hasTopMaster, cutIds: target.cutIds, anchor: target.anchor, characterNames: characterNames(), plateManifest: plateManifest, resolution: m.resolution });
           m.planned = Object.assign({ target: target }, res);
         } else if (m.kind === 'bible-characters') {
           var resC = await svc.requestPlan({ kind: 'bible-characters', header: svc.commonPromptOf(s), aspect: s.aspectRatio || '16:9', characters: characterEntries(), resolution: m.resolution });
@@ -293,6 +298,7 @@
       m.busy = true; m.error = ''; m.result = null; m.status = svc.text('generating'); render();
       try {
         var refs = [];
+        var targetScenes = m.kind === 'board' ? scenesOfTarget() : [];
         var plateRef = set ? svc.plateReference(set, 1) : null;
         if (m.kind === 'angle-plate') {
           if (!plateRef) throw new Error(T().needPlate);
@@ -313,21 +319,31 @@
           }
           m.result = { objectName: outA.objectName, url: svc.proxyUrl(outA.objectName), panels: [], meta: outA, note: T().anglePlateDone };
         } else {
-          if (m.kind === 'board' && !plateRef) throw new Error(T().needPlate);
+          if (m.kind === 'board' && (!set || !svc.topMasterOf(set))) throw new Error(T().needPlate);
+          if (m.kind === 'board') {
+            await svc.ensureDirectionSheet(ctx, set, targetScenes, {
+              resolution: m.resolution,
+              provider: m.provider,
+              onStatus: function () { m.status = T().directionSheet; render(); }
+            });
+            set = activeSet();
+            plateRef = set ? svc.plateReference(set, 1) : null;
+          }
           if (m.kind === 'board' && m.planned && m.planned.target && m.planned.target.anchor && m.planned.target.anchor.role === 'overlap') {
             var overlapRef = svc.overlapReference(s, m.planned.target.anchor.ref, 1);
             if (!overlapRef) throw new Error(T().needOverlap);
             refs.push(overlapRef);
-            plateRef = set ? svc.plateReference(set, refs.length + 1) : null;
           }
-          if (m.kind !== 'bible-set' && m.kind !== 'bible-characters' && plateRef) refs.push(plateRef);
+          if (m.kind === 'board') {
+            svc.storyboardPlateReferences(set, targetScenes, refs.length + 1).forEach(function (r) { refs.push(r); });
+          } else if (m.kind !== 'bible-set' && m.kind !== 'bible-characters' && plateRef) refs.push(plateRef);
           if (m.kind === 'bible-set' && plateRef) refs.push(plateRef);
           if (m.kind !== 'bible-set') {
             var text = m.kind === 'bible-characters' ? characterNames().map(function (n) { return '@' + n; }).join(' ') : (m.kind === 'board' ? scenesOfTarget() : scenesOfSet(set)).map(function (sc) { return [sc.composition, sc.shot, sc.visual, sc.action].filter(Boolean).join(' '); }).join('\n');
             var cr = await svc.characterReferences(s, text, s.draftId);
             (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
           }
-          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment'; }), overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
+          m.refsUsed = { chars: refs.filter(function (r) { return r.referenceKind !== 'environment' && r.referenceKind !== 'environment-direction' && r.referenceKind !== 'conti-panel'; }).length, plate: refs.some(function (r) { return r.referenceKind === 'environment' || r.referenceKind === 'environment-direction'; }), plateCount: refs.filter(function (r) { return r.referenceKind === 'environment' || r.referenceKind === 'environment-direction'; }).length, overlap: refs.some(function (r) { return r.referenceKind === 'conti-panel'; }) };
           var out = await svc.generateSheet(s, { prompt: m.prompt, aspect: s.aspectRatio || '16:9', referenceImages: refs, resolution: m.resolution, provider: m.provider });
           if (!out.objectName) throw new Error(svc.text('noObjectName'));
           var url = svc.proxyUrl(out.objectName);
@@ -380,7 +396,15 @@
       if (!m.plan || !m.plan.length) await plan();
       var total = (m.plan || []).length;
       if (!total) { m.error = m.error || T().noSets; notify('failed'); return; }
-      if (!skipConfirm && !(await NK.ui.dialog.confirm(T().batchConfirm.replace(/\{count\}/g, String(total)), { title: T().generateAll }))) return;
+      var missingSets = {};
+      (m.plan || []).forEach(function (sheet) {
+        var set = setByName(sheet.setName); var ids = new Set((sheet.cutIds || []).map(String));
+        var cuts = (state().scenes || []).filter(function (sc, idx) { return ids.has(String(sc && sc.id != null ? sc.id : idx + 1)); });
+        if (set && svc.needsDirectionSheet(set, cuts)) missingSets[String(set.id || set.name || '').toLowerCase()] = 1;
+      });
+      var angleCount = Object.keys(missingSets).length;
+      var confirmText = T().batchConfirm.replace(/\{count\}/g, String(total)).replace(/\{angleCount\}/g, String(angleCount)).replace(/\{total\}/g, String(total + angleCount));
+      if (!skipConfirm && !(await NK.ui.dialog.confirm(confirmText, { title: T().generateAll }))) return;
       m.batchBusy = true; m.batchDone = 0; m.batchTotal = total; m.error = ''; render();
       notify('running');
       try {
@@ -435,7 +459,7 @@
         var refs = [{ referenceId: 1, referenceType: 'REFERENCE_TYPE_SUBJECT', referenceKind: 'conti-panel', imageDataUrl: svc.proxyUrl(panel.objectName), subjectDescription: 'current storyboard panel to revise', subjectType: 'SUBJECT_TYPE_DEFAULT' }];
         var cr = await svc.characterReferences(s, [scene.composition, scene.shot, scene.visual, scene.action].filter(Boolean).join(' '), s.draftId);
         (cr.referenceImages || []).forEach(function (r) { refs.push(Object.assign({}, r, { referenceId: refs.length + 1 })); });
-        var plate = set ? svc.plateReference(set, refs.length + 1) : null; if (plate) refs.push(plate);
+        var plate = set ? svc.plateReferenceForScene(set, scene, refs.length + 1) : null; if (plate) refs.push(plate);
         var prompt = ['Revise only this storyboard panel according to the correction below.', 'Preserve the same character identities, set, art style and all details not mentioned.', 'Keep it as one clean 16:9 storyboard frame with no text, number, border or gutter.', 'Correction: ' + String(instruction).trim()].join('\n');
         var out = await svc.generateSheet(s, { prompt: prompt, aspect: s.aspectRatio || '16:9', generationMode: 'image-to-image', cameraTargetMode: 'scene', referenceImages: refs, resolution: m.resolution, provider: m.provider });
         if (!out.objectName) throw new Error(svc.text('noObjectName'));
@@ -469,7 +493,7 @@
           if (sceneIdx < 0) continue;
           var scene = s.scenes[sceneIdx]; var set = setByName(target.sheet.setName);
           var cr = await svc.characterReferences(s, [scene.composition, scene.shot, scene.visual, scene.action].filter(Boolean).join(' '), s.draftId);
-          var res = await svc.renderStillFromPanel(ctx, sceneIdx, panel.objectName, { characterReferences: cr.referenceImages || [], plateReference: set ? svc.plateReference(set) : null, resolution: m.resolution === '4K' ? '2K' : m.resolution });
+          var res = await svc.renderStillFromPanel(ctx, sceneIdx, panel.objectName, { characterReferences: cr.referenceImages || [], plateReference: set ? svc.plateReferenceForScene(set, scene) : null, resolution: m.resolution === '4K' ? '2K' : m.resolution });
           m.stills[String(panel.ref)] = Object.assign({ sheetId: target.sheet.id, panelIndex: panel.index, sceneIdx: sceneIdx }, res);
           await svc.applyStillToScene(ctx, sceneIdx, res, { sheetId: target.sheet.id, panelIndex: panel.index });
           s = state(); m.stillBatchDone = i + 1; render();
@@ -489,7 +513,7 @@
         var set = activeSet();
         var scene = s.scenes[sceneIdx];
         var cr = await svc.characterReferences(s, [scene.composition, scene.shot, scene.visual].filter(Boolean).join(' '), s.draftId);
-        var res = await svc.renderStillFromPanel(ctx, sceneIdx, panel.objectName, { characterReferences: cr.referenceImages || [], plateReference: set ? svc.plateReference(set) : null, resolution: m.resolution === '4K' ? '2K' : m.resolution });
+        var res = await svc.renderStillFromPanel(ctx, sceneIdx, panel.objectName, { characterReferences: cr.referenceImages || [], plateReference: set ? svc.plateReferenceForScene(set, scene) : null, resolution: m.resolution === '4K' ? '2K' : m.resolution });
         m.stills[sid] = Object.assign({ sheetId: sheetId, panelIndex: panel.index, sceneIdx: sceneIdx }, res);
       } catch (e) {
         m.error = T().genFailed + ((e && e.message) || e);

@@ -3121,7 +3121,7 @@
                   const p2Elapsed = (typeof p2StartedAt === 'number') ? ` · 소요 ${((Date.now() - p2StartedAt) / 1000).toFixed(1)}s` : '';
                   const pass2Lines = [
                     `컷 분해 (Pass 2): 씬 ${p2Total} → 컷 ${p2Cuts} (성공 ${Number(shotsM.ok) || 0} / 폴백 ${Number(shotsM.fallback) || 0})${p2Elapsed}`,
-                    `자동 보정 (Pass 2): 같은 셋업 사이즈 이동 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
+                    `자동 보정 (Pass 2): 유사 구도 커버리지 변경 ${Number(shotsM.coverageFixes) || 0}회 · 배경 방위 보정 ${Number(shotsM.directionFixes) || 0}회 · 화면 크기 보정 ${Number(shotsM.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(shotsM.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(shotsM.cameraSwaps) || 0}회`,
                     `신체 일관성 (Pass 2): ${shotsM.bodySpecSource || '-'} / 위반 감지 ${Number(shotsM.bodyConstraintViolations) || 0}건 / 자동 교정 ${Number(shotsM.bodyConstraintRepairs) || 0}회`,
                     Array.isArray(shotsM.bodySpecWarnings) && shotsM.bodySpecWarnings.length ? `신체 스펙 주의 (Pass 2): ${shotsM.bodySpecWarnings.join(', ')}` : '',
                     enforcedLine,
@@ -3373,7 +3373,7 @@
           const meta = shotsRes.meta || {};
           const lines = [
             `컷 다시 나누기 완료: 씬 ${Number(meta.total) || asScenes.length} → 컷 ${flat.length} (성공 ${Number(meta.ok) || 0} / 폴백 ${Number(meta.fallback) || 0})`,
-            `자동 보정: 같은 셋업 사이즈 이동 ${Number(meta.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(meta.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(meta.cameraSwaps) || 0}회`,
+            `자동 보정: 유사 구도 커버리지 변경 ${Number(meta.coverageFixes) || 0}회 · 배경 방위 보정 ${Number(meta.directionFixes) || 0}회 · 화면 크기 보정 ${Number(meta.shotTypeSwaps) || 0}회 · 인물 위치 앵커 ${Number(meta.blockingAnchors) || 0}회 · 카메라 무브 치환 ${Number(meta.cameraSwaps) || 0}회`,
           ];
           if (Array.isArray(meta.fallbackReasons) && meta.fallbackReasons.length) {
             lines.push('컷 분해 폴백: ' + meta.fallbackReasons.map((r) => `Scene ${r.sceneId} (${r.reason})`).join(', '));

@@ -6,6 +6,8 @@ import {
   splitUniformRuns,
   padScenesToBeatCount,
   diversifyShotCameraMoves,
+  enforceSequenceContinuity,
+  setupSimilarity,
 } from '../functions/api/scenario/rebalancer.js';
 
 test('splitOneUniformRun: 3개 연속 동일 estSec 구간을 한 번 분할', () => {
@@ -126,4 +128,43 @@ test('diversifyShotCameraMoves: 인접 다른 무브는 그대로 유지', () =>
   assert.equal(res.scenes[0].shots[0].cameraMove, 'static');
   assert.equal(res.scenes[0].shots[1].cameraMove, 'push-in');
   assert.equal(res.scenes[0].shots[2].cameraMove, 'pan-left');
+});
+
+test('★연속 구도 검사: WS와 GROUP이어도 같은 인물·배치·정면이면 점프컷 위험으로 판정해 실제 커버리지로 변경', () => {
+  const blocking = [
+    { token: '@동그라미', x: 'left', depth: 'near', facing: 'camera' },
+    { token: '@네모', x: 'center', depth: 'mid', facing: 'camera' },
+    { token: '@세모', x: 'right', depth: 'near', facing: 'camera' },
+  ];
+  const a = { id: '1.6', shotType: 'WS', cameraMove: 'zoom', cameraDirection: 'front', composition: '@동그라미 @네모 @세모와 중앙의 ABC큐브', action: '@네모가 큐브를 들어 올린다', blocking };
+  const b = { id: '1.7', shotType: 'GROUP', cameraMove: 'pull-out', cameraDirection: 'front', composition: '@동그라미 @네모 @세모와 중앙의 ABC큐브', action: '셋이 춤을 춘다', blocking };
+  assert.ok(setupSimilarity(a, b) >= 0.75);
+  const out = enforceSequenceContinuity([{ id: 1, sceneLocation: '소녀의 방', shots: [a, b] }]);
+  const fixed = out.scenes[0].shots[1];
+  assert.notEqual(fixed.cameraDirection, 'front', '같은 책장 벽을 반복하지 않도록 카메라 방위를 바꾼다');
+  assert.ok(Math.abs(['ECU', 'CU', 'MCU', 'MS', 'MLS', 'WS', 'EWS'].indexOf(fixed.shotType) - 5) >= 2, '화면 크기도 두 단계 이상 바꾼다');
+  assert.equal(out.coverageFixes, 1);
+  assert.ok(fixed._autoCoverageChange);
+});
+
+test('★방향 충돌 검사: 뒷모습 서술은 모델이 front를 내도 back 플레이트로 보정', () => {
+  const out = enforceSequenceContinuity([{ id: 1, sceneLocation: '교실', shots: [{
+    id: '1.1', shotType: 'MS', cameraMove: 'static', cameraDirection: 'front',
+    composition: '@네모의 뒷모습이 화면 중앙에 보인다', action: '@네모가 반대편 벽을 바라본다',
+    blocking: [{ token: '@네모', x: 'center', depth: 'mid', facing: 'camera' }],
+  }] }]);
+  assert.equal(out.scenes[0].shots[0].cameraDirection, 'back');
+  assert.equal(out.directionFixes, 1);
+});
+
+test('★방향 다양성 검사: 같은 세트의 3개 연속 컷을 모두 front 배경으로 두지 않는다', () => {
+  const out = enforceSequenceContinuity([{ id: 1, sceneLocation: '방', shots: [
+    { id: '1.1', shotType: 'WS', cameraDirection: 'front', composition: '@네모 전신', action: '걷는다' },
+    { id: '1.2', shotType: 'CU', cameraDirection: 'front', composition: '@세모 얼굴', action: '웃는다' },
+    { id: '1.3', shotType: 'INSERT', cameraDirection: 'front', composition: 'ABC큐브', action: '빛난다' },
+    { id: '1.4', shotType: 'MS', cameraDirection: 'front', composition: '@동그라미 상반신', action: '박수친다' },
+  ] }]);
+  // INSERT 는 방향 다양성 대상이 아니므로 앞선 두 인물 컷 뒤의 다음 인물 컷이 측면으로 바뀐다.
+  assert.notEqual(out.scenes[0].shots[3].cameraDirection, 'front');
+  assert.equal(out.scenes[0].shots[3]._autoDirectionCoverage, 'front-run');
 });
