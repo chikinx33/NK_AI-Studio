@@ -526,6 +526,10 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
+    if (!NK.core || !NK.config) {
+      if (typeof window.__nkReportBootFailure === 'function') window.__nkReportBootFailure();
+      return;
+    }
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -817,6 +821,7 @@
         NK.ui.postProduction.init();
       }
     }
+    if (typeof window.__nkMarkAppReady === 'function') window.__nkMarkAppReady();
   };
 
   const setupSyncMessageHandlers = () => {

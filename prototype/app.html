@@ -9,6 +9,12 @@
   <style>
     html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
     html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
+    #nk-boot-recovery-modal { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; padding:24px; background:rgba(2,6,23,.86); backdrop-filter:blur(12px); }
+    #nk-boot-recovery-modal .nk-boot-recovery-card { width:min(440px,100%); border:1px solid rgba(56,189,248,.35); border-radius:18px; padding:24px; background:linear-gradient(145deg,#111a31,#0b1222); box-shadow:0 24px 80px rgba(0,0,0,.48); color:#e2e8f0; font-family:"Space Grotesk",sans-serif; }
+    #nk-boot-recovery-modal h1 { margin:0 0 10px; font-size:18px; }
+    #nk-boot-recovery-modal p { margin:0 0 18px; color:#94a3b8; font-size:14px; line-height:1.65; }
+    #nk-boot-recovery-modal button { width:100%; min-height:42px; border:1px solid rgba(56,189,248,.65); border-radius:10px; background:#0891b2; color:white; font:700 14px/1 "Space Grotesk",sans-serif; cursor:pointer; }
+    #nk-boot-recovery-modal button:hover { background:#06b6d4; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,25 +24,111 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1850" />
-  <link rel="stylesheet" href="styles.landing.css?v=3.1850" />
-  <script src="core.js?v=3.1850" defer></script>
-  <script src="js/config.js?v=3.1850" defer></script>
-  <script src="js/utils.js?v=3.1850" defer></script>
-  <script src="js/util/last-frame.js?v=3.1850" defer></script>
-  <script src="store.js?v=3.1850" defer></script>
-  <script src="api.js?v=3.1850" defer></script>
-  <script src="js/state.js?v=3.1850" defer></script>
-  <script src="js/auth.js?v=3.1850" defer></script>
-  <script src="js/navigation.js?v=3.1850" defer></script>
-  <script src="js/service/media.js?v=3.1850" defer></script>
-  <script src="js/service/project.js?v=3.1850" defer></script>
-  <script src="js/service/content-library.js?v=3.1850" defer></script>
-  <script src="js/ui/common.js?v=3.1850" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1850" defer></script>
-  <script src="js/ui/scenario.js?v=3.1850" defer></script>
-  <script src="js/ui/production.js?v=3.1850" defer></script>
-  <script src="script.js?v=3.1850" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.1851" />
+  <link rel="stylesheet" href="styles.landing.css?v=3.1851" />
+  <script>
+    (function () {
+      var RETRY_KEY = 'nk_boot_retry_at';
+      var RETRY_PARAM = 'nkBootRetry';
+      var RETRY_WINDOW_MS = 60000;
+      var finished = false;
+      var retryScheduled = false;
+
+      function readRetryAt() {
+        try { return Number(sessionStorage.getItem(RETRY_KEY) || 0); } catch (_) { return 0; }
+      }
+
+      function writeRetryAt(value) {
+        try { sessionStorage.setItem(RETRY_KEY, String(value)); } catch (_) { }
+      }
+
+      function clearRetryState() {
+        try { sessionStorage.removeItem(RETRY_KEY); } catch (_) { }
+        try {
+          var cleanUrl = new URL(window.location.href);
+          if (cleanUrl.searchParams.has(RETRY_PARAM)) {
+            cleanUrl.searchParams.delete(RETRY_PARAM);
+            history.replaceState(history.state, '', cleanUrl.toString());
+          }
+        } catch (_) { }
+      }
+
+      function renderRecoveryModal() {
+        function render() {
+          if (!document.body || document.getElementById('nk-boot-recovery-modal')) return;
+          document.documentElement.classList.remove('preload-veiled');
+          var modal = document.createElement('div');
+          modal.id = 'nk-boot-recovery-modal';
+          modal.setAttribute('role', 'alertdialog');
+          modal.setAttribute('aria-modal', 'true');
+          modal.setAttribute('aria-labelledby', 'nk-boot-recovery-title');
+          modal.innerHTML = '<section class="nk-boot-recovery-card"><h1 id="nk-boot-recovery-title">사이트를 시작하지 못했습니다</h1><p>시작 파일을 불러오는 중 연결이 끊겼습니다. 잠시 후 다시 시도해 주세요.</p><button type="button">다시 시도</button></section>';
+          modal.querySelector('button').addEventListener('click', function () {
+            clearRetryState();
+            var retryUrl = new URL(window.location.href);
+            retryUrl.searchParams.set(RETRY_PARAM, String(Date.now()));
+            window.location.replace(retryUrl.toString());
+          });
+          document.body.appendChild(modal);
+          modal.querySelector('button').focus();
+        }
+        if (document.body) render();
+        else document.addEventListener('DOMContentLoaded', render, { once: true });
+      }
+
+      function recoverBoot() {
+        if (finished || retryScheduled) return;
+        var now = Date.now();
+        var queryRetry = 0;
+        try { queryRetry = Number(new URL(window.location.href).searchParams.get(RETRY_PARAM) || 0); } catch (_) { }
+        var previousRetry = Math.max(readRetryAt(), queryRetry);
+        if (!previousRetry || now - previousRetry > RETRY_WINDOW_MS) {
+          retryScheduled = true;
+          writeRetryAt(now);
+          window.setTimeout(function () {
+            var retryUrl = new URL(window.location.href);
+            retryUrl.searchParams.set(RETRY_PARAM, String(now));
+            window.location.replace(retryUrl.toString());
+          }, 650);
+          return;
+        }
+        renderRecoveryModal();
+      }
+
+      window.__nkReportBootFailure = recoverBoot;
+      window.__nkMarkAppReady = function () {
+        finished = true;
+        clearRetryState();
+      };
+      window.addEventListener('error', function (event) {
+        var target = event && event.target;
+        if (target && target.tagName === 'SCRIPT' && target.hasAttribute('data-nk-critical')) recoverBoot();
+      }, true);
+      window.addEventListener('unhandledrejection', function () {
+        if (!finished) recoverBoot();
+      });
+      window.setTimeout(function () {
+        if (!finished) recoverBoot();
+      }, 15000);
+    })();
+  </script>
+  <script data-nk-critical src="core.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/config.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/utils.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/util/last-frame.js?v=3.1851" defer></script>
+  <script data-nk-critical src="store.js?v=3.1851" defer></script>
+  <script data-nk-critical src="api.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/state.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/auth.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/navigation.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/service/media.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/service/project.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/service/content-library.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/ui/common.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/ui/dashboard.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/ui/scenario.js?v=3.1851" defer></script>
+  <script data-nk-critical src="js/ui/production.js?v=3.1851" defer></script>
+  <script data-nk-critical src="script.js?v=3.1851" defer></script>
 </head>
 
 <body class="layout-fixed">
