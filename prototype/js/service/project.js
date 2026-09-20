@@ -182,11 +182,22 @@
             var key = token.toLowerCase();
             if (seen.has(key)) return;
             seen.add(key);
+            var appearance = normalizeText(raw.appearance || raw.bodyAppearance || '');
+            var negative = normalizeText(raw.negative || raw.negativePrompt || '');
+            var mainAssetId = normalizeText(raw.mainAssetId || '');
+            var referenceAssetIds = normalizeTextList(raw.referenceAssetIds);
             out.push({
                 characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
                 displayName: displayName,
                 token: token,
-                personality: normalizeCharacterPersonality(raw.personality || raw.description || raw.profile || raw.note || '')
+                personality: normalizeCharacterPersonality(raw.personality || raw.description || raw.profile || raw.note || ''),
+                appearance: appearance,
+                negative: negative,
+                bodySpecKnown: typeof raw.bodySpecKnown === 'boolean' ? raw.bodySpecKnown : !!appearance,
+                bodySpecSource: normalizeText(raw.bodySpecSource || ''),
+                bodySpecRequired: raw.bodySpecRequired === true || !!mainAssetId || referenceAssetIds.length > 0,
+                mainAssetId: mainAssetId,
+                referenceAssetIds: referenceAssetIds
             });
         });
         if (out.length) return out;
@@ -195,7 +206,14 @@
                 characterId: 'char_' + String(index + 1).padStart(3, '0'),
                 displayName: item.displayName,
                 token: '@' + item.displayName,
-                personality: item.personality
+                personality: item.personality,
+                appearance: '',
+                negative: '',
+                bodySpecKnown: false,
+                bodySpecSource: '',
+                bodySpecRequired: false,
+                mainAssetId: '',
+                referenceAssetIds: []
             };
         });
     }
@@ -268,6 +286,72 @@
         });
         return Array.from(map.values()).filter(function (item) {
             return item.token;
+        });
+    }
+
+    function mergeCharacterBodySnapshots(characters, fallbackCharacters, characterSheets) {
+        var primary = normalizeCharacterEntries(characters);
+        var fallback = normalizeCharacterEntries(fallbackCharacters);
+        var fallbackMap = new Map();
+        fallback.forEach(function (item) {
+            fallbackMap.set(String(item.token || '').toLowerCase(), item);
+        });
+        var registeredSheetTokens = new Set();
+        (Array.isArray(characterSheets) ? characterSheets : []).forEach(function (sheet) {
+            var hasActualSheet = (Array.isArray(sheet && sheet.items) && sheet.items.some(function (item) {
+                return !!normalizeText(item && (item.imageDataUrl || item.imageUrl || item.url || item.src));
+            })) || !!normalizeText(sheet && (sheet.mainAssetId || sheet.assetId || sheet.objectName || sheet.url));
+            if (!hasActualSheet) return;
+            var token = '@' + normalizeCharacterName(sheet.token || sheet.trigger || sheet.displayName || sheet.name);
+            if (token !== '@') registeredSheetTokens.add(token.toLowerCase());
+        });
+        return primary.map(function (item) {
+            var matched = fallbackMap.get(String(item.token || '').toLowerCase()) || {};
+            var appearance = normalizeText(item.appearance || matched.appearance || '');
+            var negative = normalizeText(item.negative || matched.negative || '');
+            var mainAssetId = normalizeText(item.mainAssetId || matched.mainAssetId || '');
+            var referenceAssetIds = Array.from(new Set(
+                normalizeTextList(item.referenceAssetIds).concat(normalizeTextList(matched.referenceAssetIds))
+            ));
+            var required = item.bodySpecRequired === true
+                || matched.bodySpecRequired === true
+                || registeredSheetTokens.has(String(item.token || '').toLowerCase())
+                || !!mainAssetId
+                || referenceAssetIds.length > 0;
+            return Object.assign({}, item, {
+                appearance: appearance,
+                negative: negative,
+                bodySpecKnown: !!appearance,
+                bodySpecSource: normalizeText(item.bodySpecSource || matched.bodySpecSource || (appearance ? 'brand-project-snapshot' : '')),
+                bodySpecRequired: required,
+                mainAssetId: mainAssetId,
+                referenceAssetIds: referenceAssetIds
+            });
+        });
+    }
+
+    function bodyCharactersFromBrand(value) {
+        return (Array.isArray(value) ? value : []).map(function (row, index) {
+            var raw = row && typeof row === 'object' ? row : {};
+            var appearance = [raw.description, raw.fixedTraits, raw.styleGuide]
+                .reduce(function (parts, entry) { return parts.concat(normalizeTextList(entry)); }, [])
+                .filter(Boolean).join(', ');
+            var negative = [raw.negativePrompt, raw.bannedTraits]
+                .reduce(function (parts, entry) { return parts.concat(normalizeTextList(entry)); }, [])
+                .filter(Boolean).join(', ');
+            return {
+                characterId: normalizeText(raw.id || raw.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: normalizeCharacterName(raw.name || raw.displayName || raw.trigger || raw.token),
+                token: raw.trigger || raw.token || raw.name || raw.displayName,
+                personality: '',
+                appearance: appearance,
+                negative: negative,
+                bodySpecKnown: !!appearance,
+                bodySpecSource: appearance ? 'brand-record' : '',
+                bodySpecRequired: raw.bodySpecRequired === true,
+                mainAssetId: normalizeText(raw.mainAssetId || ''),
+                referenceAssetIds: normalizeTextList(raw.referenceAssetIds)
+            };
         });
     }
 
@@ -571,6 +655,13 @@
         if (!safeBrandId || !NK.service || !NK.service.brand || !NK.service.brand.getById) return {};
         var src = NK.service.brand.getById(safeBrandId);
         if (!src) return {};
+        var inheritedCharacters = normalizeCharacterEntries(src.knowledgeCharacters, src.brandCharacter);
+        var inheritedSheets = normalizeCharacterSheets(src.knowledgeCharacterSheets || src.characterSheets, inheritedCharacters);
+        inheritedCharacters = mergeCharacterBodySnapshots(
+            inheritedCharacters,
+            bodyCharactersFromBrand(src.brandCharacters),
+            inheritedSheets
+        );
         return {
             brandSummary: normalizeText(src.brandSummary),
             coreMessage: normalizeText(src.coreMessage),
@@ -582,8 +673,8 @@
             worldSetting: normalizeText(src.worldSetting),
             brandKeywords: normalizeTextList(src.brandKeywords),
             brandRules: normalizeTextList(src.brandRules),
-            knowledgeCharacters: normalizeCharacterEntries(src.knowledgeCharacters, src.brandCharacter),
-            knowledgeCharacterSheets: normalizeCharacterSheets(src.knowledgeCharacterSheets || src.characterSheets, src.knowledgeCharacters || src.brandCharacter),
+            knowledgeCharacters: inheritedCharacters,
+            knowledgeCharacterSheets: inheritedSheets,
             knowledgeEnvironmentAssets: normalizeEnvironmentAssets(src.knowledgeEnvironmentAssets || src.environmentAssets),
             connectedChannels: (Array.isArray(src.connectedChannels) ? src.connectedChannels : []).map(function (item) {
                 return normalizeText(item && item.channelType || item);
@@ -620,6 +711,11 @@
         var mergedWithBrand = Object.assign({}, inheritedBrand, merged);
         var core = normalizeProjectCore(mergedWithBrand);
         var knowledge = normalizeKnowledgeHub(mergedWithBrand);
+        knowledge.characters = mergeCharacterBodySnapshots(
+            knowledge.characters,
+            inheritedBrand.knowledgeCharacters,
+            knowledge.characterSheets
+        );
         var publishResults = normalizePublishResults(merged.brandStudioPublishResults || merged.publishResults);
         var analyticsSnapshots = normalizeAnalyticsSnapshots(merged);
         var nextPayload = Object.assign({}, payload || {}, core);

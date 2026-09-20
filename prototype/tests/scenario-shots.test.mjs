@@ -181,6 +181,18 @@ test("parser: composition + action 둘 다 비면 그 샷은 버린다", () => {
   assert.equal(out[0].id, "1.2");
 });
 
+test("parser: 관객 반응을 촬영 action 으로 사용한 샷은 버린다", () => {
+  const text = JSON.stringify({
+    shots: [
+      { id: "1.1", duration: 4, shotType: "MS", cameraMove: "static", composition: "", action: "관객이 다음 행동을 기대한다" },
+      { id: "1.2", duration: 4, shotType: "WS", cameraMove: "static", composition: "@네모가 큐브 앞에 선 전신", action: "@네모가 팔 끝을 큐브 쪽으로 뻗는다" },
+    ],
+  });
+  const out = parseShotResponse(text, { id: 1 });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].id, "1.2");
+});
+
 test("parser: 6개 이상이면 5개로 잘림", () => {
   const text = JSON.stringify({
     shots: Array.from({ length: 7 }, (_, i) => ({

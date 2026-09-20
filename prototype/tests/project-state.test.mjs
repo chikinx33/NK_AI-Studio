@@ -330,6 +330,82 @@ test('project.getKnowledgeHub keeps top-level character sheets when nested knowl
   assert.equal(knowledge.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
 });
 
+test('project normalization preserves and backfills character body specs from the shared brand record', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+  loadScript(ctx, 'prototype/js/service/brand.js');
+
+  ctx.NK.service.brand.create({
+    brandId: 'shape-brand',
+    brandTitle: '모양새 친구들',
+    knowledgeCharacters: [
+      { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '호기심 많음' }
+    ],
+    brandCharacters: [
+      {
+        id: 'char_001', trigger: '@네모', name: '네모',
+        description: '파란 큐브형 몸, 손가락 없는 짧고 뭉툭한 팔',
+        negativePrompt: '손가락, 사람 손'
+      }
+    ],
+    characterSheets: [
+      { characterId: 'char_001', token: '@네모', items: [{ sheetId: 's1', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }] }
+    ]
+  });
+
+  const normalized = ctx.NK.service.project.normalizeDraft({
+    id: 'episode-1',
+    title: 'ABC 배우기',
+    payload: {
+      brandId: 'shape-brand',
+      brandRef: { id: 'shape-brand', title: '모양새 친구들' },
+      knowledgeCharacters: [
+        { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '호기심 많음' }
+      ],
+      characterSheets: [
+        { characterId: 'char_001', token: '@네모', items: [{ sheetId: 's1', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }] }
+      ]
+    },
+    scenes: []
+  });
+
+  const character = normalized.payload.knowledgeCharacters[0];
+  assert.equal(character.appearance, '파란 큐브형 몸, 손가락 없는 짧고 뭉툭한 팔');
+  assert.equal(character.negative, '손가락, 사람 손');
+  assert.equal(character.bodySpecKnown, true);
+  assert.equal(character.bodySpecRequired, true);
+  assert.equal(character.bodySpecSource, 'brand-record');
+  assert.equal(normalized.payload.knowledgeHub.characters[0].appearance, character.appearance);
+});
+
+test('project normalization never drops an existing character body snapshot', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const normalized = ctx.NK.service.project.normalizeDraft({
+    id: 'snapshot-episode',
+    title: '스냅샷',
+    payload: {
+      knowledgeCharacters: [{
+        characterId: 'char_001', displayName: '사람', token: '@사람', personality: '차분함',
+        appearance: '사람형 캐릭터, 두 손과 다섯 손가락', negative: '',
+        bodySpecKnown: true, bodySpecRequired: true, bodySpecSource: 'request-snapshot'
+      }],
+      characterSheets: [
+        { characterId: 'char_001', token: '@사람', items: [{ sheetId: 's1', imageDataUrl: 'gs://bucket/human.png', isPrimary: true }] }
+      ]
+    },
+    scenes: []
+  });
+
+  const character = normalized.payload.knowledgeCharacters[0];
+  assert.equal(character.appearance, '사람형 캐릭터, 두 손과 다섯 손가락');
+  assert.equal(character.negative, '');
+  assert.equal(character.bodySpecKnown, true);
+  assert.equal(character.bodySpecRequired, true);
+  assert.equal(character.bodySpecSource, 'request-snapshot');
+});
+
 test('project.normalizeDraft restores legacy scene location from visual prefix', () => {
   const ctx = createContext([]);
   loadScript(ctx, 'prototype/js/service/project.js');

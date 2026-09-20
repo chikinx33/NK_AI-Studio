@@ -725,6 +725,17 @@
       return Object.assign({}, matched, item, {
         characterId: item.characterId || matched.characterId,
         personality: normalizeCharacterPersonality(item.personality || matched.personality || ''),
+        appearance: sanitizeText(item.appearance || matched.appearance || ''),
+        negative: sanitizeText(item.negative || matched.negative || ''),
+        bodySpecKnown: !!sanitizeText(item.appearance || matched.appearance || ''),
+        bodySpecSource: sanitizeText(item.bodySpecSource || matched.bodySpecSource || ''),
+        bodySpecRequired: item.bodySpecRequired === true || matched.bodySpecRequired === true,
+        mainAssetId: sanitizeText(item.mainAssetId || matched.mainAssetId || ''),
+        referenceAssetIds: Array.from(new Set(
+          (Array.isArray(item.referenceAssetIds) ? item.referenceAssetIds : [])
+            .concat(Array.isArray(matched.referenceAssetIds) ? matched.referenceAssetIds : [])
+            .map(id => sanitizeText(id)).filter(Boolean)
+        )),
         isActive: boolVal(item.isActive, true)
       });
     });
@@ -3123,7 +3134,7 @@
               : '',
             m.tokensEnforced ? `@토큰 자동 보정 (Pass 1): ${m.tokensEnforced}회` : '@토큰 자동 보정 (Pass 1): 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
-            m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
+            m.scenesSplit ? `강제 이야기 구간 분할: ${m.scenesSplit}` : '',
             m.locationsRenamed ? `장소 이름 통일 (Pass 1): ${m.locationsRenamed}씬` : '',
             m.perBeatFailures ? `비트 실패: ${m.perBeatFailures} (fallback ${m.perBeatFallbacks || 0})` : '',
             m.elapsedMs ? `소요: ${(m.elapsedMs / 1000).toFixed(1)}s` : '',

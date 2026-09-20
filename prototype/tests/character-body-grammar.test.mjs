@@ -13,6 +13,7 @@ import {
 } from "../functions/api/_shared/body-grammar.js";
 import {
   mergeCharacterBodySpecsFromBrand,
+  buildBrandBodySpecObjectName,
   resolveCharacterBodySpecsFromRecord,
   resolveServerCharacterBodySpecs,
 } from "../functions/api/_shared/brand-body-specs.js";
@@ -36,6 +37,17 @@ const NEMO = {
   appearance: "파란 큐브형 몸, 짧은 육면체 팔, 짧은 두 발",
   negative: "삼각형 팔로 해석 금지, 귀 없음, 목 없음, 손가락 없음, 코 없음",
 };
+
+test("★브랜드 신체 스펙은 브랜드 저장 API와 동일한 GCS 경로를 사용한다", () => {
+  assert.equal(
+    buildBrandBodySpecObjectName("videos", "Owner@Example.com", "shape-brand"),
+    "users/owner_example.com/ai-video/brands/shape-brand/reference/data.json"
+  );
+  assert.equal(
+    buildBrandBodySpecObjectName("production/videos", "artist", "shape-brand"),
+    "production/users/artist/ai-video/brands/shape-brand/reference/data.json"
+  );
+});
 
 test("★이중부정을 편다 — '손가락 없음' 은 명사 '손가락' 이 된다", () => {
   assert.equal(stripNegationSuffix("손가락 없음"), "손가락");
@@ -200,6 +212,7 @@ test("★시나리오(Pass 1) 서버가 신체 스펙을 받고 프롬프트에 
   assert.match(src, /buildBodyGrammar\(input\.characters, "en"\)/);
   assert.match(src, /const bodyAudit = enforceBodyConstraintsInScenes\(scenes, activeCharacters\);/);
   assert.match(src, /bodyConstraintRepairs: bodyAudit\.repairs/);
+  assert.doesNotMatch(src, /splitUniformRuns\(normalizedScenes\)/, "이야기 구간을 균등 길이라는 이유로 기계 분할하면 안 된다");
 });
 
 test("★컷 분해 API 가 캐릭터를 분해 프롬프트까지 넘긴다", () => {

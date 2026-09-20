@@ -91,7 +91,8 @@
       // 신체 문법의 출처와 시트 존재 여부를 함께 보존한다. negativePrompt 가 빈 문자열인
       // 정상 인간형 캐릭터도 유효한 스펙일 수 있으므로 "네거티브가 비었는가"로 완전성을
       // 판단하지 않는다.
-      bodySpecKnown: typeof src.bodySpecKnown === 'boolean' ? src.bodySpecKnown : (!!description || !!negativePrompt),
+      // 없는 부위만 있고 몸 설명이 없는 레코드는 완전한 신체 스펙이 아니다.
+      bodySpecKnown: typeof src.bodySpecKnown === 'boolean' ? src.bodySpecKnown : !!description,
       bodySpecSource: normText(src.bodySpecSource),
       bodySpecRequired: src.bodySpecRequired === true || !!mainAssetId || referenceAssetIds.length > 0,
       isActive: !!isActive,
@@ -127,6 +128,11 @@
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
         negativePrompt: raw.negative || raw.negativePrompt || '',
+        mainAssetId: raw.mainAssetId || '',
+        referenceAssetIds: raw.referenceAssetIds || [],
+        bodySpecKnown: raw.bodySpecKnown === true || !!normText(raw.appearance || raw.bodyAppearance),
+        bodySpecSource: raw.bodySpecSource || '',
+        bodySpecRequired: raw.bodySpecRequired === true,
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false

@@ -4,6 +4,7 @@
  */
 
 import { readGcsJson, resolveGcsEnv } from "./gcs.js";
+import { buildAiVideoBrandPrefix } from "./storage.ts";
 
 const brandRecordCache = new Map();
 const BRAND_CACHE_TTL_MS = 3000;
@@ -44,15 +45,12 @@ function sanitizeUserId(raw, env) {
   return configured || "owner";
 }
 
-function normalizeBasePrefix(value) {
-  return normalizeText(value).replace(/^\/+|\/+$/g, "");
-}
-
-function buildBrandObjectName(basePrefix, userId, brandId) {
-  const root = normalizeBasePrefix(basePrefix);
-  const safeBrandId = normalizeText(brandId).replace(/[^a-zA-Z0-9._-]+/g, "_") || "brand";
-  const userRoot = `${root ? `${root}/` : ""}users/${sanitizeUserId(userId)}`;
-  return `${userRoot}/ai-video/brands/${safeBrandId}/reference/data.json`;
+export function buildBrandBodySpecObjectName(basePrefix, userId, brandId) {
+  // 브랜드 저장 API와 반드시 같은 공용 경로 생성기를 쓴다. VIDEO_OUTPUT_GCS_URI가
+  // gs://bucket/videos 처럼 서비스 폴더로 끝날 때 수동 조립하면
+  // `videos/users/...`를 읽게 되어 실제 저장 위치 `users/...`를 영원히 못 찾는다.
+  const brandPrefix = buildAiVideoBrandPrefix(basePrefix, sanitizeUserId(userId), brandId);
+  return `${brandPrefix}/reference/data.json`;
 }
 
 /** 저장된 브랜드 JSON을 사용자 범위에서 직접 읽는다. */
@@ -72,7 +70,7 @@ export async function loadBrandRecord(env, userId, brandId) {
     error.code = "BODY_SPEC_SOURCE_UNAVAILABLE";
     throw error;
   }
-  const objectName = buildBrandObjectName(gcs.basePrefix, sanitizeUserId(userId, env), id);
+  const objectName = buildBrandBodySpecObjectName(gcs.basePrefix, sanitizeUserId(userId, env), id);
   const cacheKey = `${gcs.bucket}/${objectName}`;
   const cached = brandRecordCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;

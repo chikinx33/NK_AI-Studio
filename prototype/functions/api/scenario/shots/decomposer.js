@@ -476,7 +476,12 @@ export function parseShotResponse(text, scene) {
     if (!Number.isFinite(duration) || duration < MIN_SHOT_DURATION) duration = MIN_SHOT_DURATION;
     if (duration > MAX_SHOT_DURATION) duration = MAX_SHOT_DURATION;
     const composition = String(raw.composition || "").trim();
-    const action = String(raw.action || "").trim();
+    let action = String(raw.action || "").trim();
+    // sceneIntent(관객 반응)가 action으로 새어 나온 응답은 촬영 지시가 아니다.
+    // composition도 비어 있으면 이 샷을 버려 호출자가 원본 visual 폴백을 쓰게 한다.
+    if (/(관객이|시청자가|보는 사람이|다음 (?:장면|행동)을 기대|viewer|audience)/i.test(action)) {
+      action = "";
+    }
     if (!composition && !action) return; // 둘 다 비면 의미 없는 샷
     const id = String(raw.id || `${sceneId}.${idx + 1}`).trim() || `${sceneId}.${idx + 1}`;
     const dialogue = normalizeShotDialogue(raw.dialogue);

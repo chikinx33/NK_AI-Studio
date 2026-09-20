@@ -409,7 +409,9 @@ export function validateScenes(scenes, spec, language = "ko") {
   checkRepetition(scenes, safeSpec, violations);
   checkSceneCountVsBeats(scenes, safeSpec, violations);
   checkStoryBeatCoverage(scenes, safeSpec, violations);
-  checkShotRhythm(scenes, safeSpec, violations);
+  // 이 검증기는 Pass 1 이야기 구간을 검사한다. 이야기 구간의 길이 분산을 촬영 컷 리듬으로
+  // 오인하면 의미가 완결된 구간을 1~2초 조각으로 다시 쓰게 된다. 샷 길이·커버리지 리듬은
+  // Pass 2 전용 검증/보정에서 처리한다.
 
   const byLevel = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const v of violations) {

@@ -4,7 +4,7 @@
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { normalizeSongSections, mapScenesToSections } from "./_shared/song-sections.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
-import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
+import { padScenesToBeatCount } from "./scenario/rebalancer.js";
 import { buildClaudeSystem, claudeFetch, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
@@ -21,7 +21,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.1855";
+const SERVER_VERSION = "3.1856";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -1985,20 +1985,11 @@ async function generateScenarioScenesViaBeats(input) {
     });
 
   // 후처리 — 기존 단일 경로와 동일한 안전망 재사용
-  let scenesSplitCount = 0;
-  try {
-    const language = input.lang === "en" ? "en" : "ko";
-    const preCheckSpec = { storyBeats: budgeted };
-    const preCheck = validateScenesDirect(normalizedScenes, preCheckSpec, language);
-    const hasUniformRun = preCheck.violations.some(
-      (v) => v.key === "shotRhythm.uniformRun" || v.key === "shotRhythm.lowVariance",
-    );
-    if (hasUniformRun) {
-      const splitRes = splitUniformRuns(normalizedScenes);
-      normalizedScenes = splitRes.scenes;
-      scenesSplitCount = splitRes.splits;
-    }
-  } catch (_) { /* 분석 실패 시 원본 유지 */ }
+  // Pass 1의 항목은 촬영 컷이 아니라 이야기 구간이다. 동일 길이가 연속된다는 이유만으로
+  // 문장을 기계적으로 반으로 자르면 sceneIntent(관객 반응)가 action으로 복사되고,
+  // 8초 행동이 5초/3초의 촬영 불가능한 가짜 컷으로 변한다. 실제 컷 리듬은 Pass 2가
+  // 카메라 셋업을 기준으로 결정하므로 여기서는 의미 단위를 절대 분할하지 않는다.
+  const scenesSplitCount = 0;
 
   // 장소 문자열을 세트 이름 하나로 통일 — 세트 판정(플레이트·연속성·라벨)이 이 문자열로 돈다.
   let locationsRenamed = 0;
@@ -2267,7 +2258,7 @@ async function generateScenarioScenes(input) {
   // LLM 의 retry 만으로 해결 못 한 구조적 문제를 코드 레이어에서 강제.
   const beatsForPost = Array.isArray(input.storyBeats) ? input.storyBeats : [];
   let scenesPaddedCount = 0;
-  let scenesSplitCount = 0;
+  const scenesSplitCount = 0;
 
   // (1) 씬 수가 비트 수보다 적으면 누락 비트를 빈 슬롯으로 보충
   if (beatsForPost.length && normalizedScenes.length < beatsForPost.length) {
@@ -2276,18 +2267,7 @@ async function generateScenarioScenes(input) {
     scenesPaddedCount = padRes.padded;
   }
 
-  // (2) uniformRun 검출 시 코드로 직접 분할 — LLM retry 한 번 더 돌리는 대신 결정적 처리
-  try {
-    const language = input.lang === "en" ? "en" : "ko";
-    const preCheckSpec = Object.assign({}, ruleValidatorSpec || {}, { storyBeats: beatsForPost });
-    const preCheck = validateScenesDirect(normalizedScenes, preCheckSpec, language);
-    const hasUniformRun = preCheck.violations.some((v) => v.key === "shotRhythm.uniformRun" || v.key === "shotRhythm.lowVariance");
-    if (hasUniformRun) {
-      const splitRes = splitUniformRuns(normalizedScenes);
-      normalizedScenes = splitRes.scenes;
-      scenesSplitCount = splitRes.splits;
-    }
-  } catch (_) { /* 분석 실패 시 원본 유지 */ }
+  // Pass 1 이야기 구간의 균등 길이는 오류가 아니다. 카메라 컷 리듬은 Pass 2에서만 다룬다.
 
   let locationsRenamed = 0;
   try { const lc = canonicalizeSceneLocations(normalizedScenes); normalizedScenes = lc.scenes; locationsRenamed = lc.renamed; } catch (_) { /* 통일 실패 시 원본 유지 */ }
