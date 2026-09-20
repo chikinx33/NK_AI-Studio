@@ -82,6 +82,7 @@
 
     let selectedNames = new Set();
     let deleting = false;
+    let classifyingUnused = false;
 
     // 라이브러리(저장소)에서 미디어를 삭제하면, 그 객체를 참조하던 씬/컷의 미디어 필드도 비운다.
     // 안 그러면 GCS 에서 지워졌는데도 컷에는 삭제된 영상/이미지가 계속 표시되는 회귀가 생긴다.
@@ -180,11 +181,52 @@
       });
     }
 
+    async function collectRegisteredLibraryNames() {
+      var state = null;
+      var draft = null;
+      var brandRecord = null;
+      try { state = ctx && ctx.getState ? ctx.getState() : null; } catch (_) {}
+      try {
+        if (projectId && NK.service && NK.service.project && NK.service.project.getDraftById) {
+          draft = NK.service.project.getDraftById(projectId);
+        }
+      } catch (_) {}
+
+      var brandId = '';
+      try {
+        if (NK.service && NK.service.project && NK.service.project.getBrandId) {
+          brandId = NK.service.project.getBrandId(draft || (state && state.payload) || state || {});
+        }
+      } catch (_) {}
+      if (!brandId) {
+        brandId = String((state && state.payload && (state.payload.brandId || (state.payload.brandRef && state.payload.brandRef.id))) || '').trim();
+      }
+      try {
+        if (brandId && NK.service && NK.service.brand) {
+          if (NK.service.brand.hydrateFromServer) {
+            brandRecord = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 5000 });
+          }
+          if (!brandRecord && NK.service.brand.getById) brandRecord = NK.service.brand.getById(brandId);
+        }
+      } catch (_) {}
+
+      var candidates = currentItems
+        .map(function (it) { return String(it && it.name || '').trim(); })
+        .filter(Boolean);
+      var media = NK.uiPipelineMedia;
+      // 프로젝트 데이터를 읽지 못한 상태에서 전부 미사용으로 간주하면 등록 이미지까지
+      // 삭제 후보가 될 수 있으므로 반드시 실패로 닫는다.
+      if (!state && !draft) throw new Error('project_state_unavailable');
+      if (!media || !media.collectReferencedObjectNames) throw new Error('usage_checker_unavailable');
+      return new Set(media.collectReferencedObjectNames([state, draft, brandRecord], candidates));
+    }
+
     function syncActionState() {
       const selectedItems = getSelectedItems();
       const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
       const useBtn = box.querySelector('#lib-use-btn');
       const deleteBtn = box.querySelector('#lib-delete-btn');
+      const unusedBtn = box.querySelector('#lib-unused-btn');
       const countEl = box.querySelector('#lib-selection-count');
       // 사용: 정확히 1개 선택 시에만(다중 선택이면 비활성). 삭제: 1개 이상.
       const canUse = !deleting && !!(singleSelected && singleSelected.name);
@@ -198,6 +240,11 @@
         deleteBtn.disabled = !canDelete;
         deleteBtn.classList.toggle('disabled', !canDelete);
         deleteBtn.textContent = deleting ? '삭제 중...' : '삭제';
+      }
+      if (unusedBtn) {
+        unusedBtn.disabled = deleting || classifyingUnused || currentItems.length === 0;
+        unusedBtn.classList.toggle('disabled', unusedBtn.disabled);
+        unusedBtn.textContent = classifyingUnused ? '확인 중...' : '미사용';
       }
       if (countEl) {
         countEl.textContent = selectedItems.length ? ('선택 ' + selectedItems.length + '개') : '';
@@ -293,6 +340,7 @@
         '<span class="lib-selection-count muted" id="lib-selection-count"></span>' +
         '<div class="lib-header-spacer"></div>' +
         '<div class="lib-toolbar">' +
+        '<button class="btn-secondary" id="lib-unused-btn" title="현재 프로젝트와 등록 시트에서 사용하지 않는 항목만 선택">미사용</button>' +
         '<button class="btn-primary" id="lib-use-btn"' + (hasItems ? '' : ' disabled') + '>사용</button>' +
         '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
         '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
@@ -305,8 +353,32 @@
       const closeBtn = box.querySelector('#lib-close');
       const useBtn = box.querySelector('#lib-use-btn');
       const deleteBtn = box.querySelector('#lib-delete-btn');
+      const unusedBtn = box.querySelector('#lib-unused-btn');
 
       if (closeBtn) closeBtn.onclick = function () { closeModals(); };
+      if (unusedBtn) {
+        unusedBtn.onclick = async function () {
+          if (deleting || classifyingUnused) return;
+          classifyingUnused = true;
+          syncActionState();
+          try {
+            var registeredNames = await collectRegisteredLibraryNames();
+            var unusedNames = currentItems
+              .map(function (it) { return String(it && it.name || '').trim(); })
+              .filter(function (name) { return name && !registeredNames.has(name); });
+            selectedNames = new Set(unusedNames);
+            renderGridState();
+            if (!unusedNames.length) alert('미사용 ' + kindLabel + '가 없습니다.');
+          } catch (err) {
+            selectedNames = new Set();
+            renderGridState();
+            alert('미사용 ' + kindLabel + ' 확인 실패: ' + (err && err.message ? err.message : err));
+          } finally {
+            classifyingUnused = false;
+            syncActionState();
+          }
+        };
+      }
       if (useBtn) {
         useBtn.onclick = function () {
           const selectedItems = getSelectedItems();

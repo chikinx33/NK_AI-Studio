@@ -210,6 +210,41 @@
     return '';
   }
 
+  // 프로젝트·브랜드 데이터 안에서 현재 저장소 객체를 참조하는 모든 위치를 찾는다.
+  // 필드명을 열거하지 않고 실제 objectName 후보와 대조하므로 새 이미지 필드가 추가돼도
+  // 미사용 정리 기능이 등록 이미지를 잘못 선택하지 않는다.
+  function collectReferencedObjectNames(roots, candidateNames) {
+    var candidates = new Set((Array.isArray(candidateNames) ? candidateNames : [])
+      .map(function (name) { return String(name || '').trim(); })
+      .filter(Boolean));
+    var referenced = new Set();
+    var visited = typeof WeakSet === 'function' ? new WeakSet() : null;
+
+    function visit(value) {
+      if (typeof value === 'string') {
+        var raw = value.trim();
+        if (!raw) return;
+        if (candidates.has(raw)) referenced.add(raw);
+        var extracted = extractObjectNameFromMediaRef(raw);
+        if (extracted && candidates.has(extracted)) referenced.add(extracted);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      if (visited) {
+        if (visited.has(value)) return;
+        visited.add(value);
+      }
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      Object.keys(value).forEach(function (key) { visit(value[key]); });
+    }
+
+    visit(Array.isArray(roots) ? roots : [roots]);
+    return Array.from(referenced);
+  }
+
   async function transcodeVideoObjectToAspect(projectId, sourceObjectName, rawRatio) {
     if (!NK || !NK.api || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) return '';
     var ratio = normalizeAspectRatio(rawRatio);
@@ -276,6 +311,7 @@
   media.enforceImageAspectRatio = enforceImageAspectRatio;
   media.readVideoMeta = readVideoMeta;
   media.extractObjectNameFromMediaRef = extractObjectNameFromMediaRef;
+  media.collectReferencedObjectNames = collectReferencedObjectNames;
   media.transcodeVideoObjectToAspect = transcodeVideoObjectToAspect;
   media.enforceVideoAspectRatio = enforceVideoAspectRatio;
   media.toPlayableMediaUrl = toPlayableMediaUrl;
