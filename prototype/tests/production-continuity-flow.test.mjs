@@ -86,6 +86,8 @@ test('★일괄 생성 카드는 생성·진행·결과·실패 사유만 간결
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
   const panel = read('ai-company-app/src/components/VideoPipelinePanel.tsx');
   assert.match(canvas, /"스토리보드 생성"\}\s*<\/button>/);
+  assert.match(canvas, /<RefreshIcon className="h-3\.5 w-3\.5 shrink-0 animate-spin" \/>스토리보드 생성 중…/, '스토리보드 생성 중에는 문구 옆에 로딩 스피너를 표시한다');
+  assert.match(canvas, /inline-flex w-full items-center justify-center gap-1\.5/, '스피너와 생성 중 문구를 버튼 중앙에 나란히 정렬한다');
   assert.doesNotMatch(canvas, /씬별 스토리보드 생성·검토|승인 콘티 기반 스틸·영상 파이프라인|부감 마스터를 공간 기준/);
   assert.match(panel, /busy \? "준비 중…" : "스틸·영상 생성"/);
   assert.match(panel, /성공 \{successCount\}/);

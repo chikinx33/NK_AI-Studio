@@ -1935,9 +1935,11 @@ export default function ProductionCanvas({
                       type="button"
                       onClick={() => void startStoryboardBatch()}
                       disabled={storyboardRun?.status === "starting" || storyboardRun?.status === "running"}
-                      className="w-full rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-bold text-white hover:bg-violet-500 disabled:opacity-50"
                     >
-                      {storyboardRun?.status === "starting" || storyboardRun?.status === "running" ? "스토리보드 생성 중…" : "스토리보드 생성"}
+                      {storyboardRun?.status === "starting" || storyboardRun?.status === "running"
+                        ? <><RefreshIcon className="h-3.5 w-3.5 shrink-0 animate-spin" />스토리보드 생성 중…</>
+                        : "스토리보드 생성"}
                     </button>
                     {storyboardRun && (
                       <div className="mt-2 text-[11px]">
