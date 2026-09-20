@@ -181,7 +181,7 @@ export async function listGcsObjects(env, prefix) {
  * GCS JSON 배치 API로 여러 객체를 한 HTTP 요청(=서브요청 1건)으로 삭제한다.
  * 객체 하나당 DELETE 한 건씩 보내면 파일 많은 회원 삭제 시 Cloudflare Worker의
  * 서브요청 한도("Too many subrequests")를 초과하므로, 최대 100건씩 묶어 보낸다.
- * @returns {Promise<{ deleted:number, failures:string[] }>}
+ * @returns {Promise<{ deleted:number, failures:string[], results:Array<{name:string,status:number}> }>}
  */
 async function batchDeleteObjects(ctx, token, names, useUserProject) {
   const boundary = `batch_nkstudio_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -221,11 +221,65 @@ async function batchDeleteObjects(ctx, token, names, useUserProject) {
   if (statuses.length !== names.length) {
     failures.push(`batch_response_count_mismatch:${statuses.length}/${names.length}`);
   }
-  statuses.forEach((code, i) => {
-    if (code === 204 || code === 200 || code === 404) deleted += 1; // 404 = 이미 없음(성공 취급)
-    else failures.push(`${names[i] || `#${i}`}:${code}`);
+  const results = names.map((name, i) => ({ name, status: Number(statuses[i] || 0) }));
+  results.forEach(({ name, status }) => {
+    if (status === 204 || status === 200 || status === 404) deleted += 1; // 404 = 이미 없음(멱등 성공)
+    else failures.push(`${name}:${status || "missing_status"}`);
   });
-  return { deleted, failures };
+  return { deleted, failures, results };
+}
+
+/**
+ * 여러 GCS 객체를 최대 100건씩 JSON 배치 API로 삭제한다.
+ * 개별 DELETE를 반복하지 않아 대량 삭제에서도 Worker 서브요청/CPU 한도를 보호한다.
+ * 동일 요청을 재시도할 때 이미 삭제된 객체(404)는 성공으로 취급한다.
+ * @returns {Promise<{ requestedCount:number, deletedCount:number, failedCount:number, failures:string[], results:Array<{name:string,status:number}> }>}
+ */
+export async function deleteGcsObjects(env, objectNames) {
+  const ctx = resolveGcsEnv(env);
+  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
+  return deleteGcsObjectsWithToken(ctx, token, objectNames);
+}
+
+/** 인증이 끝난 컨텍스트로 배치 삭제한다. 공용 삭제 경로와 회귀 테스트가 같은 구현을 사용한다. */
+export async function deleteGcsObjectsWithToken(ctx, token, objectNames) {
+  const names = Array.from(new Set(
+    (Array.isArray(objectNames) ? objectNames : [])
+      .map((name) => String(name || "").trim())
+      .filter(Boolean)
+  ));
+  if (names.length === 0) {
+    return { requestedCount: 0, deletedCount: 0, failedCount: 0, failures: [], results: [] };
+  }
+  const BATCH_SIZE = 100;
+  const results = [];
+  const failures = [];
+
+  for (let i = 0; i < names.length; i += BATCH_SIZE) {
+    const chunk = names.slice(i, i + BATCH_SIZE);
+    let result;
+    try {
+      result = await batchDeleteObjects(ctx, token, chunk, true);
+    } catch (error) {
+      // requester-pays 설정이 거부된 경우에만 userProject 없이 같은 배치를 재시도한다.
+      if (ctx.userProject && (error.status === 400 || error.status === 403)) {
+        result = await batchDeleteObjects(ctx, token, chunk, false);
+      } else {
+        throw error;
+      }
+    }
+    results.push(...result.results);
+    failures.push(...result.failures);
+  }
+
+  const deletedCount = results.filter(({ status }) => status === 200 || status === 204 || status === 404).length;
+  return {
+    requestedCount: names.length,
+    deletedCount,
+    failedCount: names.length - deletedCount,
+    failures,
+    results,
+  };
 }
 
 /**
@@ -234,33 +288,12 @@ async function batchDeleteObjects(ctx, token, names, useUserProject) {
  * @returns {Promise<number>} 삭제한 객체 수.
  */
 export async function deleteGcsPrefix(env, prefix) {
-  const ctx = resolveGcsEnv(env);
   const names = await listGcsObjects(env, prefix);
   if (names.length === 0) return 0;
-  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
-
-  const BATCH = 100;
-  let deleted = 0;
-  const failures = [];
-  for (let i = 0; i < names.length; i += BATCH) {
-    const chunk = names.slice(i, i + BATCH);
-    let result;
-    try {
-      result = await batchDeleteObjects(ctx, token, chunk, true);
-    } catch (e) {
-      // requester-pays 등으로 userProject가 거부되면(400/403) userProject 없이 재시도.
-      if (ctx.userProject && (e.status === 400 || e.status === 403)) {
-        result = await batchDeleteObjects(ctx, token, chunk, false);
-      } else {
-        throw e;
-      }
-    }
-    deleted += result.deleted;
-    if (result.failures.length) failures.push(...result.failures);
-  }
+  const result = await deleteGcsObjects(env, names);
   // 실패가 있으면 throw — 호출부(회원 삭제)가 레지스트리를 보존해 재시도할 수 있게 한다(고아 데이터 방지).
-  if (failures.length) throw new Error(`gcs_delete_failed: ${failures.slice(0, 10).join(", ")}`);
-  return deleted;
+  if (result.failures.length) throw new Error(`gcs_delete_failed: ${result.failures.slice(0, 10).join(", ")}`);
+  return result.deletedCount;
 }
 
 // ─── OAuth (서비스 계정 JWT → access token) ──────────────────────────

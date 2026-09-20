@@ -341,7 +341,10 @@
             }
             const results = Array.isArray(res.data && res.data.results) ? res.data.results : [];
             const deletedSet = new Set(results
-              .filter(function (item) { return Number(item && item.status) === 204; })
+              .filter(function (item) {
+                var status = Number(item && item.status);
+                return status === 200 || status === 204 || status === 404;
+              })
               .map(function (item) { return String(item && item.name || ''); })
               .filter(Boolean));
             if (!deletedSet.size) {
@@ -358,7 +361,32 @@
               alert(kindLabel + ' 일부만 삭제되었습니다.');
             }
           } catch (err) {
-            alert(kindLabel + ' 삭제 실패: ' + (err && err.message ? err.message : err));
+            // 서버 응답이 중간에 끊겨도 GCS에서는 일부/전체 삭제가 완료됐을 수 있다.
+            // 저장소를 다시 조회해 실제 상태를 기준으로 UI와 씬 참조를 복구한다.
+            var refreshed = false;
+            var confirmedMissing = new Set();
+            try {
+              var library = await NK.api.library(kind, projectId);
+              var refreshedItems = Array.isArray(library && library.items) ? library.items : [];
+              var remainingNames = new Set(refreshedItems
+                .map(function (it) { return String(it && it.name || ''); })
+                .filter(Boolean));
+              confirmedMissing = new Set(names.filter(function (name) { return !remainingNames.has(name); }));
+              currentItems = applyInitialOrder(refreshedItems);
+              selectedNames = new Set(names.filter(function (name) { return remainingNames.has(name); }));
+              purgeDeletedMediaFromScenes(confirmedMissing);
+              render();
+              refreshed = true;
+            } catch (_) {}
+
+            if (confirmedMissing.size === names.length) {
+              alert(kindLabel + ' 삭제가 완료되었습니다.');
+            } else if (confirmedMissing.size > 0) {
+              alert(kindLabel + ' 일부만 삭제되었습니다. 남은 항목을 다시 시도해 주세요.');
+            } else {
+              alert(kindLabel + ' 삭제 실패: ' + (err && err.message ? err.message : err)
+                + (refreshed ? '\n저장소 상태를 다시 확인했습니다.' : ''));
+            }
           } finally {
             deleting = false;
             syncActionState();

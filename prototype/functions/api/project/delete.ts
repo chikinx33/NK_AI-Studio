@@ -4,6 +4,7 @@
 import { buildAiVideoProjectPrefix, buildAiVideoUserRoot } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { loadSharesStrict, saveShares, removeProjectShares, removeAllOwnerShares } from "../_shared/shares";
+import { deleteGcsObjects, listGcsObjects, resolveGcsEnv } from "../_shared/gcs.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -36,15 +37,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!projectId || !confirm) {
       return send({ error: "projectId and confirm=yes are required" }, 400, origin);
     }
-    const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
-    const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
-    const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
-    if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin);
-    }
-    const outParsed = parseGcsUri(baseOutput);
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
-    const basePrefix = outParsed.object.replace(/\/$/, "");
+
+    const { basePrefix } = resolveGcsEnv(env);
     const userRoot = buildAiVideoUserRoot(basePrefix, userId);
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const prefix = deleteAll ? `${userRoot}/projects` : `${projectPrefix}/`;
@@ -53,16 +47,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!deleteAll && !/^[a-zA-Z0-9._-]+$/.test(projectId)) {
       return send({ error: "Invalid projectId format" }, 400, origin);
     }
-
-    const token = await getGoogleAccessToken({
-      clientEmail,
-      privateKeyPem: privateKeyRaw,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    });
-    const userProject =
-      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
-      (env.GOOGLE_PROJECT_ID as string | undefined) ||
-      "";
 
     const objectName = String((body.objectName || body.object || "")).trim();
     const objectNames = Array.isArray(body.objectNames)
@@ -74,60 +58,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (deleteTargets.some((name) => !name.startsWith(allowedPrefix))) {
         return send({ error: "Invalid objectName for project" }, 400, origin);
       }
-      const results: Array<{ name: string; status: number }> = [];
-      for (const name of deleteTargets) {
-        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
-        const dres = await fetch(delUrl, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            ...(userProject ? { "X-Goog-User-Project": userProject } : {})
-          }
-        });
-        results.push({ name, status: dres.status });
-      }
+      const result = await deleteGcsObjects(env, deleteTargets);
       return send({
-        deletedCount: results.filter((item) => item.status === 204).length,
-        results,
+        ...result,
         single: deleteTargets.length === 1,
-        requestedCount: deleteTargets.length,
       }, 200, origin);
     }
 
-    // List and delete objects with pagination
-    let pageToken = "";
-    const results: Array<{ name: string; status: number }> = [];
-    let listedCount = 0;
-    do {
-      const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
-      const res = await fetch(listUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...(userProject ? { "X-Goog-User-Project": userProject } : {})
-        }
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status, origin);
-      }
-      const json = safeJson(text);
-      const items = Array.isArray(json.items) ? json.items : [];
-      listedCount += items.length;
-      for (const it of items) {
-        const name = String(it.name || "");
-        if (!name.startsWith(prefix)) continue;
-        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
-        const dres = await fetch(delUrl, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            ...(userProject ? { "X-Goog-User-Project": userProject } : {})
-          }
-        });
-        results.push({ name, status: dres.status });
-      }
-      pageToken = String((json as any)?.nextPageToken || "");
-    } while (pageToken);
+    // 프로젝트 전체 삭제도 같은 배치 경로를 사용해 객체 수와 무관하게 서브요청을 제한한다.
+    const names = (await listGcsObjects(env, prefix)).filter((name: string) => name.startsWith(prefix));
+    const result = await deleteGcsObjects(env, names);
 
     // 프로젝트(또는 전체) 삭제 시, 해당 프로젝트의 공유 grant도 정리한다.
     // (남아있으면 공유받은 계정 화면에 유령 카드가 보임)
@@ -138,68 +78,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       await saveShares(env, sreg);
     } catch (_) { /* 공유 정리 실패는 삭제 자체를 막지 않음 */ }
 
-    return send({ deletedCount: results.filter(r => r.status === 204).length, listedCount, results, prefix, deleteAll }, 200, origin);
+    return send({ ...result, listedCount: names.length, prefix, deleteAll }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }
 };
-
-function safeJson(text: string) { try { return JSON.parse(text); } catch { return text; } }
-function parseGcsUri(uri: string): { bucket: string; object: string } | null {
-  if (!uri.startsWith("gs://")) return null;
-  const rest = uri.slice(5);
-  const slash = rest.indexOf("/");
-  if (slash === -1) return null;
-  const bucket = rest.slice(0, slash);
-  const object = rest.slice(slash + 1);
-  return { bucket, object };
-}
-async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string; }) {
-  const now = Math.floor(Date.now() / 1000);
-  const exp = now + 3600;
-  const aud = "https://oauth2.googleapis.com/token";
-  const header = { alg: "RS256", typ: "JWT" };
-  const claimSet = { iss: opts.clientEmail, scope: opts.scope, aud, iat: now, exp };
-  const jwtUnsigned = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claimSet))}`;
-  const signature = await signRS256(jwtUnsigned, opts.privateKeyPem);
-  const assertion = `${jwtUnsigned}.${signature}`;
-  const form = new URLSearchParams();
-  form.set("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer");
-  form.set("assertion", assertion);
-  const res = await fetch(aud, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString() });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`OAuth token error (${res.status}): ${text}`);
-  const json = JSON.parse(text);
-  if (!json.access_token) throw new Error("No access_token in OAuth response");
-  return json.access_token as string;
-}
-function base64url(input: string) {
-  const bytes = new TextEncoder().encode(input);
-  let str = "";
-  for (const b of bytes) str += String.fromCharCode(b);
-  const b64 = btoa(str);
-  return b64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-async function signRS256(message: string, privateKeyPem: string) {
-  const pem = privateKeyPem.replace(/\\n/g, "\n").trim();
-  const pkcs8Der = pemToArrayBuffer(pem);
-  const key = await crypto.subtle.importKey("pkcs8", pkcs8Der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
-  const sigBuf = await crypto.subtle.sign({ name: "RSASSA-PKCS1-v1_5" }, key, new TextEncoder().encode(message));
-  return bufferToBase64Url(sigBuf);
-}
-function pemToArrayBuffer(pem: string) {
-  const lines = pem.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").split(/\s+/).join("");
-  const raw = atob(lines);
-  const buf = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-  return buf.buffer;
-}
-function bufferToBase64Url(buf: ArrayBuffer) {
-  let bin = "";
-  const bytes = new Uint8Array(buf);
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   const origin = request.headers.get("Origin");
