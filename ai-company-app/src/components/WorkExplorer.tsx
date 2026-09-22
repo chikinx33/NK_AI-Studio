@@ -502,8 +502,9 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
   if (!date && !sourceWork) return <CompanyFileExplorer
     onOpenWorkFolder={openDateFolder}
     onRenameWorkFolder={async (dateKey, title) => {
-      await renameCompanyWorkFolder(dateKey, title);
-      setFolderTitles((current) => new Map(current).set(dateKey, title));
+      const renamed = await renameCompanyWorkFolder(dateKey, title);
+      setFolderTitles((current) => new Map(current).set(dateKey, renamed.title));
+      return renamed;
     }}
     onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)}
     onOpenProject={onOpenProject}
@@ -568,7 +569,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>}
           <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject}
             onOpenWorkFolder={openDateFolder}
-            onRenameWorkFolder={async (dateKey, title) => { await renameCompanyWorkFolder(dateKey, title); setFolderTitles((current) => new Map(current).set(dateKey, title)); }}
+            onRenameWorkFolder={async (dateKey, title) => { const renamed = await renameCompanyWorkFolder(dateKey, title); setFolderTitles((current) => new Map(current).set(dateKey, renamed.title)); return renamed; }}
             onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)} /></div>
           </>
         ) : dates.length ? (

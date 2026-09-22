@@ -260,7 +260,7 @@ export async function listCompanyWorkFolders(): Promise<CompanyWorkFolder[]> {
   return Array.isArray(data?.folders) ? data.folders : [];
 }
 
-export async function renameCompanyWorkFolder(dateKey: string, title: string): Promise<void> {
+export async function renameCompanyWorkFolder(dateKey: string, title: string): Promise<CompanyWorkFolder> {
   const res = await fetch("/api/agent/work-folders", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -268,6 +268,7 @@ export async function renameCompanyWorkFolder(dateKey: string, title: string): P
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "회사 업무 폴더 이름을 변경하지 못했어요.");
+  return data.folder as CompanyWorkFolder;
 }
 
 export async function deleteCompanyWorkFolderMeta(dateKey: string): Promise<void> {

@@ -9,6 +9,7 @@ import {
   moveCompanyWorkFolder,
   uploadCompanyFile,
   type CompanyFileEntry,
+  type CompanyWorkFolder,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
@@ -93,7 +94,7 @@ export default function CompanyFileExplorer({
   embedded = false,
 }: {
   onOpenWorkFolder?: (dateKey: string) => void;
-  onRenameWorkFolder?: (dateKey: string, title: string) => Promise<void>;
+  onRenameWorkFolder?: (dateKey: string, title: string) => Promise<CompanyWorkFolder>;
   onDeleteWorkFolder?: (dateKey: string) => Promise<void>;
   onOpenProject: (projectId: string) => void;
   /** 이 경로 위로는 올라가지 않는다(날짜 폴더 안의 파일 영역). */
@@ -114,23 +115,28 @@ export default function CompanyFileExplorer({
   const [revision, setRevision] = useState(0);
   const [previewEntry, setPreviewEntry] = useState<CompanyFileEntry | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 느린 저장소 목록 응답이 더 최신 화면 상태를 덮지 못하게 요청 순서를 추적한다.
+  const refreshSequenceRef = useRef(0);
   // 드래그 앤 드롭 이동: 끌고 있는 항목 경로와, 지금 올려 둔 폴더(루트는 "")
   const [dragItems, setDragItems] = useState<DragItem[]>([]);
   const dragPaths = dragItems.map((item) => item.path);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   async function refresh(targetPath = path) {
+    const sequence = ++refreshSequenceRef.current;
     setLoading(true);
     setError("");
     try {
       const result = await listCompanyFiles(targetPath);
+      if (sequence !== refreshSequenceRef.current) return;
       setPath(result.path);
       setEntries(result.entries);
       setSelected(new Set());
     } catch (caught) {
+      if (sequence !== refreshSequenceRef.current) return;
       setError(caught instanceof Error ? caught.message : "회사 파일을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (sequence === refreshSequenceRef.current) setLoading(false);
     }
   }
 
@@ -231,9 +237,20 @@ export default function CompanyFileExplorer({
     if (!nextName || nextName === entry.name) return;
     setBusy("rename"); setError("");
     try {
-      if (entry.kind === "work-folder" && entry.dateKey) await onRenameWorkFolder?.(entry.dateKey, nextName);
-      else if (entry.kind === "folder" || entry.kind === "file") await moveCompanyFile(entry.path, joinPath(path, nextName));
-      await refresh();
+      if (entry.kind === "work-folder" && entry.dateKey) {
+        if (!onRenameWorkFolder) throw new Error("업무 폴더 이름 변경 기능을 사용할 수 없습니다.");
+        const renamed = await onRenameWorkFolder(entry.dateKey, nextName);
+        // PATCH 응답이 저장 완료를 보장한다. GCS 전체 목록을 다시 기다리지 않고 그 결과를 즉시 반영한다.
+        refreshSequenceRef.current += 1;
+        setLoading(false);
+        setEntries((current) => current.map((item) => item.kind === "work-folder" && item.dateKey === entry.dateKey
+          ? { ...item, name: renamed.title, updatedAt: renamed.updated_at }
+          : item));
+        setSelected(new Set());
+      } else if (entry.kind === "folder" || entry.kind === "file") {
+        await moveCompanyFile(entry.path, joinPath(path, nextName));
+        await refresh();
+      }
     }
     catch (caught) { setError(caught instanceof Error ? caught.message : "이름 변경에 실패했습니다."); }
     finally { setBusy(""); }

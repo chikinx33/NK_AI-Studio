@@ -52,12 +52,13 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
       [auth.userId, dateKey],
     );
     if (!exists.length) return send({ error: "이 날짜의 업무 폴더를 찾지 못했습니다." }, 404, origin);
-    await sql(
+    const rows = await sql(
       `INSERT INTO company_work_folders (user_id, date_key, title) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, date_key) DO UPDATE SET title = EXCLUDED.title, updated_at = now()`,
+       ON CONFLICT (user_id, date_key) DO UPDATE SET title = EXCLUDED.title, updated_at = now()
+       RETURNING date_key, title, updated_at`,
       [auth.userId, dateKey, title],
     );
-    return send({ folder: { date_key: dateKey, title } }, 200, origin);
+    return send({ folder: rows[0] }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "업무 폴더 이름 변경 실패") }, 500, origin);
   }

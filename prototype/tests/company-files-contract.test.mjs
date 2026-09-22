@@ -91,6 +91,22 @@ test("통합 업무 파일 화면은 생성 업무와 일반 파일을 한 루�
   assert.match(api, /moveCompanyFile/);
 });
 
+test("업무 폴더 이름 변경은 저장 응답을 즉시 반영하고 늦은 목록 응답을 무시한다", async () => {
+  const [explorer, api, endpoint] = await Promise.all([
+    read("ai-company-app/src/components/CompanyFileExplorer.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("prototype/functions/api/agent/work-folders.ts"),
+  ]);
+  assert.match(api, /renameCompanyWorkFolder[\s\S]+Promise<CompanyWorkFolder>/);
+  assert.match(api, /return data\.folder as CompanyWorkFolder/);
+  assert.match(endpoint, /RETURNING date_key, title, updated_at/);
+  assert.match(explorer, /const sequence = \+\+refreshSequenceRef\.current/);
+  assert.match(explorer, /if \(sequence !== refreshSequenceRef\.current\) return/);
+  assert.match(explorer, /const renamed = await onRenameWorkFolder/);
+  assert.match(explorer, /name: renamed\.title, updatedAt: renamed\.updated_at/);
+  assert.doesNotMatch(explorer, /if \(entry\.kind === "work-folder"[\s\S]{0,500}await refresh\(\)/);
+});
+
 test("모든 에이전트는 회사 파일을 공유하고 폴더 생성은 즉시 검증하며 위험 변경은 승인받는다", async () => {
   const [shared, orchestrator, app, approvals] = await Promise.all([
     read("prototype/functions/api/agent/_shared.ts"),
