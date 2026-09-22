@@ -27,9 +27,12 @@ test('작업 화면에 게이지를 심던 경로가 남아 있지 않다', () =
   assert.doesNotMatch(read('styles.css'), /\.nk-credit-gauge\.is-floating/);
 });
 
-test('생성 화면의 예상 크레딧 비용 표기도 남기지 않는다', () => {
+test('고정 게이지는 없지만 AI 영상은 생성 전 필요·보유 크레딧을 인라인으로 확인한다', () => {
   assert.doesNotMatch(read('js/ui/ai-image.js'), /예상 .{0,40}C|nk-generation-credit-cost|creditQuote/);
-  assert.doesNotMatch(read('js/ui/ai-video-gen.js'), /예상 .{0,40}C|nk-generation-credit-cost|creditQuote/);
+  const video = read('js/ui/ai-video-gen.js');
+  assert.match(video, /NK\.api\.creditQuote\('video'/);
+  assert.match(video, /vgen-credit-status/);
+  assert.match(video, /state\.credit\.available < state\.credit\.required/);
   // 사운드는 글자수 제한 미터만 남기고 크레딧 단위를 뺀다
   const snd = read('js/ui/ai-sound.js');
   assert.doesNotMatch(snd, /credit_unit/);

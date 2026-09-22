@@ -68,6 +68,25 @@ test('credit UI and account deletion cleanup are connected', async () => {
   assert.match(cleanup, /"credit_accounts"/);
 });
 
+test('AI video checks the live quote before generation and blocks insufficient credit in the panel', async () => {
+  const [videoUi, stage] = await Promise.all([
+    read('js/ui/ai-video-gen.js'),
+    read('ai-video-gen-stage.html'),
+  ]);
+  assert.match(videoUi, /NK\.api\.creditQuote\('video', creditQuoteInput\(\)\)/);
+  assert.match(videoUi, /var creditOk = await ensureCreditQuote\(true\);/);
+  assert.match(videoUi, /if \(!creditOk\) \{[\s\S]{0,160}showCreditNotice/);
+  assert.ok(
+    videoUi.indexOf('var creditOk = await ensureCreditQuote(true);') < videoUi.indexOf('var resultId = generateId();'),
+    'credit preflight must happen before a processing result or provider request is created',
+  );
+  assert.match(videoUi, /state\.credit\.available < state\.credit\.required/);
+  assert.match(videoUi, /button\.disabled = blocked/);
+  assert.match(videoUi, /window\.addEventListener\('nk:credits-changed'/);
+  assert.match(stage, /\.vgen-credit-status\.is-insufficient/);
+  assert.match(stage, /\.vgen-gen-btn\.is-credit-blocked/);
+});
+
 test('게이지는 구독 현황 항목 밖에서는 아예 만들어지지 않는다', async () => {
   const common = await read('js/ui/common.js');
   assert.match(common, /function creditGaugeHost\(\)/);

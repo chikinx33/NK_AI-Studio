@@ -170,6 +170,15 @@
       camera_label:      '카메라 무브먼트',
       generate_btn:      '영상 생성',
       generating:        '생성 중...',
+      credit_loading:    '크레딧 확인 중...',
+      credit_ready:      '필요 {required} C · 사용 가능 {available} C',
+      credit_insufficient:'크레딧 부족 · 필요 {required} C / 사용 가능 {available} C',
+      credit_unavailable:'크레딧을 확인할 수 없어 생성을 시작할 수 없습니다.',
+      credit_btn_loading:'크레딧 확인 중...',
+      credit_btn_insufficient:'크레딧 부족',
+      credit_notice_title:'크레딧 부족',
+      credit_service_title:'크레딧 확인 실패',
+      credit_notice:     '이 작업은 {required} C가 필요하지만 현재 {available} C를 사용할 수 있습니다.',
       results_title:     '생성 결과',
       results_empty:     '아직 생성된 영상이 없습니다.\n오른쪽 패널에서 영상을 생성해보세요.',
       status_processing: '생성 중',
@@ -235,6 +244,15 @@
       camera_label:      'Camera Movement',
       generate_btn:      'Generate',
       generating:        'Generating...',
+      credit_loading:    'Checking credits...',
+      credit_ready:      'Required {required} C · Available {available} C',
+      credit_insufficient:'Insufficient credits · Required {required} C / Available {available} C',
+      credit_unavailable:'Credits could not be checked, so generation cannot start.',
+      credit_btn_loading:'Checking credits...',
+      credit_btn_insufficient:'Insufficient credits',
+      credit_notice_title:'Insufficient credits',
+      credit_service_title:'Credit check failed',
+      credit_notice:     'This job requires {required} C, but only {available} C is currently available.',
       results_title:     'Results',
       results_empty:     'No videos generated yet.\nUse the panel on the right to get started.',
       status_processing: 'Processing',
@@ -307,6 +325,8 @@
     deletedSet:     {},   // 삭제된 항목 tombstone (objectName → true)
     selectedId:     null,
     generating:     false,
+    creditChecking: false,
+    credit:         { status: 'idle', key: '', required: 0, available: 0, reserved: 0, error: '' },
     historyLoading: false,
     lang:           'ko',
     polls:          {},
@@ -344,6 +364,127 @@
 
   function generateId() {
     return 'vg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  var _creditQuoteSeq = 0;
+  var _creditEventsBound = false;
+
+  function creditQuoteInput() {
+    var referenceCount = hasCap('refs')
+      ? (state.referenceUrls || []).filter(Boolean).length
+      : 0;
+    return {
+      videoModel: state.model,
+      durationSeconds: state.duration,
+      // 견적 서버는 배열 길이만 사용한다. 큰 data URL을 견적 요청에 중복 전송하지 않는다.
+      referenceImages: Array(referenceCount).fill('reference'),
+      aspectRatio: state.aspectRatio,
+      resolution: isSeedanceModel(state.model) ? state.resolution : ''
+    };
+  }
+
+  function creditQuoteKey() {
+    var input = creditQuoteInput();
+    return [input.videoModel, input.durationSeconds, input.referenceImages.length, input.aspectRatio, input.resolution].join('|');
+  }
+
+  function creditIsInsufficient() {
+    return state.credit.status === 'ready' && state.credit.available < state.credit.required;
+  }
+
+  function creditMessage(key) {
+    return t(key)
+      .replace('{required}', String(state.credit.required || 0))
+      .replace('{available}', String(state.credit.available || 0));
+  }
+
+  function creditStatusText() {
+    if (state.credit.status === 'ready') {
+      return creditMessage(creditIsInsufficient() ? 'credit_insufficient' : 'credit_ready');
+    }
+    return t(state.credit.status === 'error' ? 'credit_unavailable' : 'credit_loading');
+  }
+
+  function creditButtonText() {
+    if (state.generating) return t('generating');
+    if (creditIsInsufficient()) return t('credit_btn_insufficient');
+    if (state.credit.status !== 'ready') return t('credit_btn_loading');
+    return t('generate_btn');
+  }
+
+  function updateCreditControls() {
+    if (!root) return;
+    var statusEl = root.querySelector('#vgen-credit-status');
+    var insufficient = creditIsInsufficient();
+    if (statusEl) {
+      statusEl.textContent = creditStatusText();
+      statusEl.classList.toggle('is-loading', state.credit.status === 'idle' || state.credit.status === 'loading');
+      statusEl.classList.toggle('is-insufficient', insufficient);
+      statusEl.classList.toggle('is-error', state.credit.status === 'error');
+      statusEl.setAttribute('role', insufficient || state.credit.status === 'error' ? 'alert' : 'status');
+      statusEl.setAttribute('aria-live', insufficient || state.credit.status === 'error' ? 'assertive' : 'polite');
+    }
+    var button = root.querySelector('#vgen-generate-btn');
+    if (button) {
+      var blocked = state.generating || state.creditChecking || state.credit.status !== 'ready' || insufficient;
+      button.disabled = blocked;
+      button.textContent = creditButtonText();
+      button.classList.toggle('is-loading', state.generating || state.creditChecking || state.credit.status === 'loading');
+      button.classList.toggle('is-credit-blocked', insufficient || state.credit.status === 'error');
+      button.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+      button.title = insufficient ? creditMessage('credit_notice') : (state.credit.status === 'error' ? t('credit_unavailable') : '');
+    }
+  }
+
+  function ensureCreditQuote(force) {
+    var key = creditQuoteKey();
+    if (!force && state.credit.key === key && (state.credit.status === 'loading' || state.credit.status === 'ready')) {
+      updateCreditControls();
+      return Promise.resolve(state.credit.status === 'ready' && !creditIsInsufficient());
+    }
+
+    var seq = ++_creditQuoteSeq;
+    state.credit = { status: 'loading', key: key, required: 0, available: 0, reserved: 0, error: '' };
+    updateCreditControls();
+
+    if (!(NK.api && typeof NK.api.creditQuote === 'function')) {
+      state.credit.status = 'error';
+      state.credit.error = 'credit_quote_unavailable';
+      updateCreditControls();
+      return Promise.resolve(false);
+    }
+
+    return NK.api.creditQuote('video', creditQuoteInput()).then(function (data) {
+      if (seq !== _creditQuoteSeq) return false;
+      var quote = data && data.quote || {};
+      var summary = data && data.summary || {};
+      state.credit = {
+        status: 'ready',
+        key: key,
+        required: Math.max(0, Number(quote.credits) || 0),
+        available: Math.max(0, Number(summary.available) || 0),
+        reserved: Math.max(0, Number(summary.reserved) || 0),
+        error: ''
+      };
+      updateCreditControls();
+      return !creditIsInsufficient();
+    }).catch(function (err) {
+      if (seq !== _creditQuoteSeq) return false;
+      state.credit = {
+        status: 'error', key: key, required: 0, available: 0, reserved: 0,
+        error: String(err && err.message || 'credit_quote_error')
+      };
+      updateCreditControls();
+      return false;
+    });
+  }
+
+  function showCreditNotice(message) {
+    var title = creditIsInsufficient() ? t('credit_notice_title') : t('credit_service_title');
+    var text = message || (creditIsInsufficient() ? creditMessage('credit_notice') : t('credit_unavailable'));
+    if (NK.ui && NK.ui.dialog && NK.ui.dialog.alert) return NK.ui.dialog.alert(text, { title: title });
+    window.alert(text);
+    return Promise.resolve();
   }
 
   // ─── Image intake ─────────────────────────────────────────
@@ -1223,6 +1364,8 @@
 
     root.appendChild(wrap);
     bindEvents();
+    // 모델·길이·참조 수가 바뀌었을 때만 새 견적을 받고, 결과 목록은 다시 렌더하지 않는다.
+    ensureCreditQuote(false);
   }
 
   // ── Left: Results ──────────────────────────────────────────
@@ -1715,14 +1858,26 @@
       panel.appendChild(camSection);
     }
 
+    // 서버와 동일한 요율로 계산한 필요 크레딧과 실제 사용 가능 잔액을 생성 전에 보여준다.
+    var creditStatus = el('div', 'vgen-credit-status', {
+      id: 'vgen-credit-status',
+      textContent: creditStatusText(),
+      role: 'status',
+      'aria-live': 'polite'
+    });
+    panel.appendChild(creditStatus);
+
     // Generate button
-    var genBtn = el('button', 'btn-primary vgen-gen-btn' + (state.generating ? ' is-loading' : ''), {
+    var genBtn = el('button', 'btn-primary vgen-gen-btn', {
       id: 'vgen-generate-btn',
       type: 'button',
-      textContent: state.generating ? t('generating') : t('generate_btn')
+      textContent: creditButtonText()
     });
-    if (state.generating) genBtn.disabled = true;
     panel.appendChild(genBtn);
+    // root에 붙기 전에도 버튼이 잘못 활성화되는 순간이 없도록 초기 상태를 직접 적용한다.
+    var creditBlocked = state.credit.status !== 'ready' || creditIsInsufficient();
+    genBtn.disabled = state.generating || state.creditChecking || creditBlocked;
+    genBtn.setAttribute('aria-disabled', genBtn.disabled ? 'true' : 'false');
 
     return panel;
   }
@@ -1828,11 +1983,17 @@
 
     // Aspect
     var aspectSel = root.querySelector('#vgen-aspect');
-    if (aspectSel) aspectSel.addEventListener('change', function () { state.aspectRatio = aspectSel.value; });
+    if (aspectSel) aspectSel.addEventListener('change', function () {
+      state.aspectRatio = aspectSel.value;
+      ensureCreditQuote(false);
+    });
 
     // Duration
     var durSel = root.querySelector('#vgen-duration');
-    if (durSel) durSel.addEventListener('change', function () { state.duration = parseInt(durSel.value, 10); });
+    if (durSel) durSel.addEventListener('change', function () {
+      state.duration = parseInt(durSel.value, 10);
+      ensureCreditQuote(false);
+    });
 
     // Seedance resolution (4K는 공급자 제약에 맞춰 16:9로 전환)
     var resolutionSel = root.querySelector('#vgen-resolution');
@@ -2355,7 +2516,7 @@
   // ─── Generation ───────────────────────────────────────────
 
   async function startGeneration() {
-    if (state.generating) return;
+    if (state.generating || state.creditChecking) return;
 
     var prompt = (root.querySelector('#vgen-prompt') && root.querySelector('#vgen-prompt').value || state.prompt || '').trim();
     if (!prompt) { alert(t('no_prompt_alert')); return; }
@@ -2365,6 +2526,18 @@
     if (missingKey) { alert(t(missingKey)); return; }
 
     state.prompt = prompt;
+    // 표시 중인 잔액이 다른 탭/기기에서 이미 바뀌었을 수 있으므로 접수 직전에 다시 확인한다.
+    // 견적 확인 실패도 fail-closed로 처리해 공급자 요청 및 과금이 먼저 나가지 않게 한다.
+    state.creditChecking = true;
+    updateCreditControls();
+    var creditOk = await ensureCreditQuote(true);
+    state.creditChecking = false;
+    updateCreditControls();
+    if (!creditOk) {
+      await showCreditNotice();
+      return;
+    }
+
     state.generating = true;
     render();
 
@@ -2470,6 +2643,11 @@
         detail = typeof (err && err.detail) === 'string' ? err.detail : JSON.stringify((err && err.detail) || '');
       } catch (_) { detail = ''; }
       console.error('[vgen] start failed', err && err.status, msg, detail);
+      if (/credit_(?:insufficient|service_unavailable)/.test(detail)) {
+        // 견적 직후 다른 탭에서 잔액을 사용한 경합도 서버가 최종 차단한다.
+        // 최신 잔액으로 버튼을 즉시 잠그고 사람이 읽을 수 있는 모달을 함께 보여준다.
+        ensureCreditQuote(true).then(function () { showCreditNotice(msg); });
+      }
       updateResult(resultId, {
         status: 'error',
         errorMessage: msg,
@@ -2702,6 +2880,12 @@
       });
     });
     syncServerHistory();
+
+    // 다른 기능/탭에서 크레딧이 예약·정산되면 현재 설정의 생성 가능 여부를 즉시 다시 계산한다.
+    if (!_creditEventsBound) {
+      window.addEventListener('nk:credits-changed', function () { ensureCreditQuote(true); });
+      _creditEventsBound = true;
+    }
 
     window.addEventListener('message', function (evt) {
       try {

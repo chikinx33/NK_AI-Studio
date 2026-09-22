@@ -13,7 +13,8 @@ test("영상 생성 잠금은 서버가 작업을 접수한 뒤(finally)에만 �
   const end = source.indexOf("\n  }\n", source.indexOf("} finally {", start));
   const body = source.slice(start, end);
 
-  assert.match(body, /if \(state\.generating\) return;/);
+  assert.match(body, /if \(state\.generating \|\| state\.creditChecking\) return;/);
+  assert.match(body, /state\.creditChecking = true;[\s\S]*await ensureCreditQuote\(true\);[\s\S]*state\.creditChecking = false;/);
   const lockAt = body.indexOf("state.generating = true;");
   const requestAt = body.indexOf("await NK.api.videoStart(payload)");
   const finallyAt = body.indexOf("} finally {");

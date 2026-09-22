@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1863" />
+  <link rel="stylesheet" href="styles.css?v=3.1864" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -464,11 +464,27 @@
     .vgen-prompt:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
     .vgen-prompt::placeholder { color: var(--muted); }
 
+    .vgen-credit-status {
+      display: flex; align-items: center; min-height: 38px;
+      padding: 9px 11px; border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-2, var(--bg)));
+      color: var(--text); font-size: 0.78rem; font-weight: 650; line-height: 1.4;
+    }
+    .vgen-credit-status.is-loading { color: var(--muted); }
+    .vgen-credit-status.is-insufficient,
+    .vgen-credit-status.is-error {
+      border-color: color-mix(in srgb, #ef4444 48%, var(--border));
+      background: color-mix(in srgb, #ef4444 10%, var(--bg-2, var(--bg)));
+      color: #ef4444;
+    }
+
     .vgen-gen-btn {
       width: 100%; padding: 13px; font-size: 0.9rem; font-weight: 700;
       border-radius: 10px; letter-spacing: 0.02em; margin-top: 4px;
     }
     .vgen-gen-btn.is-loading { opacity: 0.65; cursor: not-allowed; }
+    .vgen-gen-btn.is-credit-blocked { opacity: 0.58; cursor: not-allowed; }
 
     /* Model description */
     .vgen-model-desc {
@@ -643,18 +659,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1863" defer></script>
-  <script src="js/config.js?v=3.1863" defer></script>
-  <script src="js/utils.js?v=3.1863" defer></script>
-  <script src="store.js?v=3.1863" defer></script>
-  <script src="api.js?v=3.1863" defer></script>
-  <script src="js/state.js?v=3.1863" defer></script>
-  <script src="js/auth.js?v=3.1863" defer></script>
-  <script src="js/navigation.js?v=3.1863" defer></script>
-  <script src="js/service/project.js?v=3.1863" defer></script>
-  <script src="js/ui/common.js?v=3.1863" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1863" defer></script>
-  <script src="script.js?v=3.1863" defer></script>
+  <script src="core.js?v=3.1864" defer></script>
+  <script src="js/config.js?v=3.1864" defer></script>
+  <script src="js/utils.js?v=3.1864" defer></script>
+  <script src="store.js?v=3.1864" defer></script>
+  <script src="api.js?v=3.1864" defer></script>
+  <script src="js/state.js?v=3.1864" defer></script>
+  <script src="js/auth.js?v=3.1864" defer></script>
+  <script src="js/navigation.js?v=3.1864" defer></script>
+  <script src="js/service/project.js?v=3.1864" defer></script>
+  <script src="js/ui/common.js?v=3.1864" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1864" defer></script>
+  <script src="script.js?v=3.1864" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">
