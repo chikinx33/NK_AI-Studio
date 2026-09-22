@@ -1598,15 +1598,23 @@ export interface LiveEvents {
   messages: { seq: number; turn: HistoryTurn }[];
   working: string[];
 }
+
 export async function getEvents(since: number, conversationId = "main"): Promise<LiveEvents> {
-  // agent_jobs에서 queued/working 상태 잡의 agent_id를 working 목록으로 반환
+  // queued 는 실행 직전의 짧은 과도 상태다. 오래된 queued 를 업무 중으로 표시하면
+  // waitUntil 유실 한 건이 아바타를 영구 점등하므로 서버 정리와 별도로 5분 상한을 둔다.
+  const isActiveAgentJob = (job: any): boolean => {
+    if (job?.status === "working") return true;
+    if (job?.status !== "queued") return false;
+    const createdAt = Date.parse(String(job?.created_at || ""));
+    return Number.isFinite(createdAt) && Date.now() - createdAt < 5 * 60 * 1000;
+  };
   try {
     const d = await (await fetch("/api/agent/jobs?limit=20")).json();
     const jobs: any[] = d?.items ?? [];
     const working = [
       ...new Set(
         jobs
-          .filter((j) => j.status === "queued" || j.status === "working")
+          .filter(isActiveAgentJob)
           .map((j) => j.agent_id)
           .filter(Boolean)
       ),

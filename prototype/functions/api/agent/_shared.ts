@@ -1370,6 +1370,26 @@ export async function listJobs(sql: SqlFn, userId: string, limit = 30): Promise<
   return rows as AgentJob[];
 }
 
+/**
+ * waitUntil 실행이 시작되기 전에 런타임이 종료되면 잡이 queued 에 영구 잔류할 수 있다.
+ * queued 는 실행 대기열이 아니라 "곧 processJob 이 가져갈 짧은 과도 상태"이므로,
+ * 5분 넘게 한 번도 시작되지 않은 행은 실패로 닫아 무한 작업 표시를 막는다.
+ */
+export async function expireStaleQueuedAgentJobs(sql: SqlFn, userId: string): Promise<number> {
+  const rows = await sql(
+    `UPDATE agent_jobs
+        SET status = 'error',
+            error = COALESCE(NULLIF(error, ''), '작업 실행이 시작되지 않아 자동 종료되었습니다. 다시 요청해 주세요.'),
+            updated_at = now()
+      WHERE user_id = $1
+        AND status = 'queued'
+        AND created_at < now() - interval '5 minutes'
+      RETURNING id`,
+    [userId],
+  );
+  return (rows as any[]).length;
+}
+
 /** 승인 대기(실행 전 = output 없음) 잡을 일괄 취소. 테스트로 쌓인 잔여 승인 정리용.
  *  산출물 있는 잡(보고/검수 대상)은 건드리지 않는다. */
 export async function clearPendingApprovals(sql: SqlFn, userId: string): Promise<number> {
@@ -3667,6 +3687,35 @@ async function runSkillJobActionTool(action: "cancel" | "retry" | "continue", in
   return { kind: `skill_job_${action}`, jobId, ...(await callInternalJson(ctx, `/api/agent/skill-jobs/${encodeURIComponent(jobId)}/${action}`, { body: {} })) };
 }
 
+/** 일반 에이전트 작업(agent_jobs) 한 건을 취소한다. SkillJob과 ID 체계가 다르므로 별도 도구로 유지한다. */
+async function runAgentJobCancelTool(input: any, ctx: ToolContext): Promise<any> {
+  const requestedId = String(input?.jobId || input?.id || "").trim();
+  if (!/^[0-9a-f-]{8,36}$/i.test(requestedId)) {
+    throw new Error("일반 작업 ID(jobId)가 필요해요. jobs_status가 돌려준 전체 ID 또는 앞 8자 이상을 사용하세요.");
+  }
+  const sql = getSql(ctx.env);
+  if (!sql) throw new Error("작업 기록을 조회할 수 없어요(DB 미설정).");
+  const rows = await sql(
+    `SELECT * FROM agent_jobs
+      WHERE user_id = $1 AND id::text LIKE $2
+      ORDER BY created_at DESC LIMIT 2`,
+    [ctx.userId, `${requestedId}%`],
+  );
+  if (!rows.length) throw new Error(`일반 작업 ${requestedId}을(를) 찾지 못했어요. jobs_status로 다시 확인해 주세요.`);
+  if (rows.length > 1) throw new Error("같은 앞자리의 작업이 둘 이상이에요. jobs_status가 돌려준 전체 ID를 사용해 주세요.");
+  const job = rows[0] as AgentJob;
+  if (["approved", "cancelled", "error"].includes(job.status)) {
+    throw new Error(`이 일반 작업은 이미 ${job.status} 상태라 취소할 수 없어요.`);
+  }
+  const cancelled = await setJobStatus(sql, job.id, ctx.userId, { status: "cancelled" });
+  if (!cancelled) throw new Error("작업 취소 상태를 저장하지 못했어요.");
+  return {
+    kind: "job_cancel",
+    ok: true,
+    job: { id: cancelled.id, type: cancelled.type, agentId: cancelled.agent_id, status: cancelled.status },
+  };
+}
+
 /** 남은 크레딧과 최근 사용 내역. 비용을 말할 수 있어야 계획을 세운다. read. */
 async function runCreditsGetTool(_input: any, ctx: ToolContext): Promise<any> {
   const data = await callInternalJson(ctx, "/api/credits/me");
@@ -4000,6 +4049,9 @@ async function runJobsStatusTool(input: any, ctx: ToolContext): Promise<any> {
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
   const view = items.map((job: any) => ({
     id: job?.id,
+    shortId: String(job?.id || "").slice(0, 8),
+    jobKind: "agent_job",
+    cancelTool: ["queued", "working", "review_pending", "revise"].includes(String(job?.status || "")) ? "job_cancel" : "",
     tool: job?.type,
     agentId: job?.agent_id,
     status: job?.status,
@@ -6563,6 +6615,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   skill_job_retry: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", gate: true, run: (i, c) => runSkillJobActionTool("retry", i, c) },
   skill_job_cancel: { agentId: "plot", agentIds: ["core", "pixel"], kind: "local", run: (i, c) => runSkillJobActionTool("cancel", i, c) },
   skill_job_continue: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", run: (i, c) => runSkillJobActionTool("continue", i, c) },
+  job_cancel: { agentId: "core", agentIds: ["sync", "pixel", "plot", "beat", "ink", "reach"], kind: "local", run: runAgentJobCancelTool },
   // 비용을 말할 수 있어야 계획이 선다.
   credits_get: { agentId: "edge", agentIds: ["core", "sync", "pixel", "plot"], kind: "read", synthesize: true, run: runCreditsGetTool },
   credits_quote: { agentId: "edge", agentIds: ["core", "sync", "pixel", "plot"], kind: "read", synthesize: true, run: runCreditsQuoteTool },

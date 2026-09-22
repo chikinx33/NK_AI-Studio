@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/jobs.ts
 // GET /api/agent/jobs?limit=30 — 본인 잡 목록(검수 대기/내역). ★ user_id 격리.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, listJobs, pollCached, reconcileSubscriptionJobs } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, expireStaleQueuedAgentJobs, listJobs, pollCached, reconcileSubscriptionJobs } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -18,6 +18,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const sql = getSql(env);
     if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
     await ensureAgentSchema(sql);
+    await expireStaleQueuedAgentJobs(sql, auth.userId);
     await reconcileSubscriptionJobs({ request, env, userId: auth.userId,
       authHeader: request.headers.get('Authorization') || '' }, sql);
 
