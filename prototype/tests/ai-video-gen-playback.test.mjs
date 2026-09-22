@@ -67,6 +67,17 @@ test('서버 카드는 GCS metadata 가 있으면 로컬 카드와 같은 정보
   assert.match(read('prototype/functions/api/video/status.ts'), /async function patchObjectMetadata\(/);
 });
 
+test('로컬·서버 결과 카드를 선택하면 해당 생성 프롬프트를 입력란 상태로 복원한다', () => {
+  const source = vgen();
+  // 로컬 결과는 localStorage에 보존된 원문 프롬프트를 사용한다.
+  assert.match(source, /if \(r\) state\.prompt = String\(r\.prompt \|\| ''\);/);
+  // 다른 기기나 새로고침 뒤 보이는 서버 결과는 GCS metadata의 프롬프트를 사용한다.
+  assert.match(source, /state\.prompt = String\(\(serverItem\.metadata && serverItem\.metadata\.prompt\) \|\| ''\);/);
+  // 서버 카드도 선택 강조가 유지되어 어떤 결과의 프롬프트인지 확인할 수 있어야 한다.
+  assert.match(source, /state\.selectedId === serverSelectionId\(objectName\)/);
+  assert.match(source, /vgen-result-card vgen-server-card' \+ \(isSelected \? ' is-selected' : ''\)/);
+});
+
 test('재생·다운로드 실패는 침묵하지 않고 안내 문구를 띄운다', () => {
   const source = vgen();
   assert.match(source, /function expiredMessage\(\)/);

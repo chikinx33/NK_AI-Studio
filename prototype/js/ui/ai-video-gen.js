@@ -815,6 +815,12 @@
       .map(function (s) { return s.name; });
   }
 
+  // 로컬 결과 ID와 GCS objectName은 서로 다른 식별자 공간이므로 서버 선택값에 접두사를 붙인다.
+  // 그래야 어느 출처의 카드를 눌러도 같은 selectedId 하나로 선택 표시와 프롬프트 복원을 처리할 수 있다.
+  function serverSelectionId(objectName) {
+    return 'server:' + String(objectName || '');
+  }
+
   // 생성 날짜·시각: 2026-09-17 14:05
   function formatCreatedAt(value) {
     var d = new Date(typeof value === 'number' ? value : String(value || ''));
@@ -1311,7 +1317,8 @@
 
   function renderServerCard(s) {
     var objectName = String(s.name || '');
-    var card = el('div', 'vgen-result-card vgen-server-card');
+    var isSelected = state.selectedId === serverSelectionId(objectName);
+    var card = el('div', 'vgen-result-card vgen-server-card' + (isSelected ? ' is-selected' : ''));
     card.dataset.serverName = objectName;
 
     // signedUrl(1h 만료) 대신 objectName 기반 프록시 URL을 매 렌더마다 새로 만든다.
@@ -1862,14 +1869,26 @@
     if (genBtn) genBtn.addEventListener('click', startGeneration);
 
     // Result card click (select / deselect + copy prompt to input)
+    // 로컬 결과와 서버 이력은 저장 위치만 다를 뿐 같은 결과 카드이므로 둘 다 동일하게 복원한다.
     root.querySelectorAll('.vgen-result-card').forEach(function (card) {
       card.addEventListener('click', function (e) {
         if (e.target.closest('[data-action]')) return;
         var id = card.dataset.id;
         if (id) {
           var r = state.results.find(function (x) { return x.id === id; });
-          if (r && r.prompt) state.prompt = r.prompt;
+          if (r) state.prompt = String(r.prompt || '');
           state.selectedId = (state.selectedId === id) ? null : id;
+          render();
+          return;
+        }
+
+        var serverName = card.dataset.serverName;
+        if (serverName) {
+          var serverItem = state.serverItems.find(function (s) { return s.name === serverName; });
+          if (!serverItem) return;
+          state.prompt = String((serverItem.metadata && serverItem.metadata.prompt) || '');
+          var selectionId = serverSelectionId(serverName);
+          state.selectedId = (state.selectedId === selectionId) ? null : selectionId;
           render();
         }
       });
@@ -2269,7 +2288,11 @@
     if (names.indexOf(objectName) < 0) names.push(objectName);
 
     var prevServerItems = state.serverItems;
+    var selectedServerName = names.find(function (name) {
+      return state.selectedId === serverSelectionId(name);
+    }) || '';
     state.serverItems = state.serverItems.filter(function (s) { return names.indexOf(s.name) < 0; });
+    if (selectedServerName) state.selectedId = null;
     render();
 
     var failedNames = [];
@@ -2289,6 +2312,9 @@
         state.serverItems = prevServerItems.filter(function (s) {
           return names.indexOf(s.name) < 0 || failedNames.indexOf(s.name) >= 0;
         });
+        if (selectedServerName && failedNames.indexOf(selectedServerName) >= 0) {
+          state.selectedId = serverSelectionId(selectedServerName);
+        }
       }
       render();
       return failedNames.length === 0;
