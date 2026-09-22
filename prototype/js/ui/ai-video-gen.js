@@ -821,6 +821,43 @@
     return 'server:' + String(objectName || '');
   }
 
+  // 결과 카드를 다시 열 때 생성 당시의 폼 선택값을 한 곳에서 복원한다.
+  // 저장된 값이 현재 지원 목록에 없으면 임의로 추측하지 않고 현재 값을 유지한다.
+  function restoreGenerationSettings(snapshot) {
+    if (!snapshot) return;
+
+    state.prompt = String(snapshot.prompt || '');
+
+    var requestedModel = String(snapshot.model || '');
+    var model = ALL_MODELS.find(function (m) { return m.id === requestedModel; });
+    if (model) state.model = model.id;
+
+    var requestedMode = snapshot.mode === 't2v' || snapshot.mode === 'i2v' ? snapshot.mode : '';
+    var activeModel = currentModelObj();
+    if (requestedMode && activeModel[requestedMode]) {
+      state.mode = requestedMode;
+    } else if (!activeModel.t2v && activeModel.i2v) {
+      // 과거 메타에 mode가 없어도 I2V 전용 모델은 선택 가능한 모드가 하나뿐이다.
+      state.mode = 'i2v';
+    }
+
+    var aspectRatio = String(snapshot.aspectRatio || '');
+    if (ASPECT_RATIOS.indexOf(aspectRatio) !== -1) state.aspectRatio = aspectRatio;
+
+    if (isSeedanceModel(state.model) && snapshot.resolution) {
+      state.resolution = normalizeSeedanceResolution(snapshot.resolution);
+    }
+
+    var duration = Number(snapshot.duration);
+    if (durations().indexOf(duration) !== -1) state.duration = duration;
+  }
+
+  function renderPreservingResultsScroll(scrollTop) {
+    render();
+    var list = root && root.querySelector('.vgen-results-list');
+    if (list) list.scrollTop = Number(scrollTop) || 0;
+  }
+
   // 생성 날짜·시각: 2026-09-17 14:05
   function formatCreatedAt(value) {
     var d = new Date(typeof value === 'number' ? value : String(value || ''));
@@ -1873,12 +1910,14 @@
     root.querySelectorAll('.vgen-result-card').forEach(function (card) {
       card.addEventListener('click', function (e) {
         if (e.target.closest('[data-action]')) return;
+        var resultsList = card.closest('.vgen-results-list');
+        var resultsScrollTop = resultsList ? resultsList.scrollTop : 0;
         var id = card.dataset.id;
         if (id) {
           var r = state.results.find(function (x) { return x.id === id; });
-          if (r) state.prompt = String(r.prompt || '');
+          if (r) restoreGenerationSettings(r);
           state.selectedId = (state.selectedId === id) ? null : id;
-          render();
+          renderPreservingResultsScroll(resultsScrollTop);
           return;
         }
 
@@ -1886,10 +1925,10 @@
         if (serverName) {
           var serverItem = state.serverItems.find(function (s) { return s.name === serverName; });
           if (!serverItem) return;
-          state.prompt = String((serverItem.metadata && serverItem.metadata.prompt) || '');
+          restoreGenerationSettings(serverItem.metadata || {});
           var selectionId = serverSelectionId(serverName);
           state.selectedId = (state.selectedId === selectionId) ? null : selectionId;
-          render();
+          renderPreservingResultsScroll(resultsScrollTop);
         }
       });
     });
@@ -2079,15 +2118,7 @@
     var r = state.results.find(function (x) { return x.id === id; });
     if (!r) return;
     // 설정을 폼으로 되돌린다.
-    if (r.prompt) state.prompt = r.prompt;
-    if (r.model) state.model = r.model;
-    if (r.aspectRatio) state.aspectRatio = r.aspectRatio;
-    if (r.resolution) state.resolution = normalizeSeedanceResolution(r.resolution);
-    if (r.mode) state.mode = r.mode;
-    // 모델 허용 집합이 바뀌었을 수 있으니 되돌린 길이를 다시 검사한다.
-    if (r.duration) {
-      state.duration = durations().indexOf(r.duration) !== -1 ? r.duration : durations()[0];
-    }
+    restoreGenerationSettings(r);
 
     var snap = _retryInputs[id];
     if (snap) {
@@ -2206,7 +2237,7 @@
       source: 'video-gen',
       meta: {
         prompt: r.prompt, model: r.model, modelLabel: r.modelLabel,
-        aspectRatio: r.aspectRatio, resolution: r.resolution, duration: r.duration, resultId: r.id
+        mode: r.mode, aspectRatio: r.aspectRatio, resolution: r.resolution, duration: r.duration, resultId: r.id
       }
     }).then(function (data) {
       var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || '';
@@ -2425,6 +2456,7 @@
         prompt:      prompt,
         model:       state.model,
         modelLabel:  modelInfo.label,
+        mode:        state.mode,
         aspectRatio: state.aspectRatio,
         resolution:  isSeedanceModel(state.model) ? state.resolution : '',
         duration:    state.duration,
@@ -2662,6 +2694,7 @@
         prompt:      r.prompt,
         model:       r.model,
         modelLabel:  r.modelLabel,
+        mode:        r.mode,
         aspectRatio: r.aspectRatio,
         resolution:  r.resolution,
         duration:    r.duration,

@@ -69,13 +69,38 @@ test('서버 카드는 GCS metadata 가 있으면 로컬 카드와 같은 정보
 
 test('로컬·서버 결과 카드를 선택하면 해당 생성 프롬프트를 입력란 상태로 복원한다', () => {
   const source = vgen();
-  // 로컬 결과는 localStorage에 보존된 원문 프롬프트를 사용한다.
-  assert.match(source, /if \(r\) state\.prompt = String\(r\.prompt \|\| ''\);/);
-  // 다른 기기나 새로고침 뒤 보이는 서버 결과는 GCS metadata의 프롬프트를 사용한다.
-  assert.match(source, /state\.prompt = String\(\(serverItem\.metadata && serverItem\.metadata\.prompt\) \|\| ''\);/);
+  // 로컬 결과와 다른 기기·새로고침 뒤 보이는 서버 결과가 같은 복원기를 사용한다.
+  assert.match(source, /if \(r\) restoreGenerationSettings\(r\);/);
+  assert.match(source, /restoreGenerationSettings\(serverItem\.metadata \|\| \{\}\);/);
   // 서버 카드도 선택 강조가 유지되어 어떤 결과의 프롬프트인지 확인할 수 있어야 한다.
   assert.match(source, /state\.selectedId === serverSelectionId\(objectName\)/);
   assert.match(source, /vgen-result-card vgen-server-card' \+ \(isSelected \? ' is-selected' : ''\)/);
+});
+
+test('결과 선택은 생성 당시 모드·모델·비율·길이와 해상도를 안전하게 복원한다', () => {
+  const source = vgen();
+  assert.match(source, /function restoreGenerationSettings\(snapshot\)/);
+  assert.match(source, /state\.prompt = String\(snapshot\.prompt \|\| ''\);/);
+  assert.match(source, /snapshot\.mode === 't2v' \|\| snapshot\.mode === 'i2v'/);
+  assert.match(source, /if \(model\) state\.model = model\.id;/);
+  assert.match(source, /ASPECT_RATIOS\.indexOf\(aspectRatio\) !== -1/);
+  assert.match(source, /if \(durations\(\)\.indexOf\(duration\) !== -1\) state\.duration = duration;/);
+  assert.match(source, /state\.resolution = normalizeSeedanceResolution\(snapshot\.resolution\);/);
+});
+
+test('서버 결과 메타데이터에 T2V\/I2V 모드를 저장한다', () => {
+  const source = vgen();
+  assert.match(source, /mode:\s+state\.mode,/);
+  assert.match(source, /mode:\s+r\.mode,/);
+  assert.match(read('prototype/functions/api/video/upload.ts'), /"modelLabel", "mode", "aspectRatio"/);
+});
+
+test('하단 결과를 선택해도 결과 패널의 스크롤 위치를 유지한다', () => {
+  const source = vgen();
+  assert.match(source, /var resultsScrollTop = resultsList \? resultsList\.scrollTop : 0;/);
+  assert.match(source, /function renderPreservingResultsScroll\(scrollTop\) \{\s*render\(\);/);
+  assert.match(source, /list\.scrollTop = Number\(scrollTop\) \|\| 0;/);
+  assert.equal((source.match(/renderPreservingResultsScroll\(resultsScrollTop\);/g) || []).length, 2);
 });
 
 test('재생·다운로드 실패는 침묵하지 않고 안내 문구를 띄운다', () => {
