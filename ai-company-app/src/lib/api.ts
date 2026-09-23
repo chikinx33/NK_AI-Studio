@@ -1511,6 +1511,30 @@ export interface ChatFileReference {
   autoOpen?: boolean;
 }
 
+/**
+ * 채팅에서 '지목한 항목'. 보고의 최근 처리·업무 폴더 항목에서 말풍선/채팅을 누르면 입력창에 칩으로 붙고,
+ * 보낼 때 서버로 함께 간다. 서버는 그 잡·업무를 읽어 사용자 메시지에 산출물 카드와
+ * "[참조 산출물: … jobId=…]" 줄을 붙여, 직원이 "이걸로 영상 만들어줘" 를 알아듣게 한다.
+ */
+export interface ChatReference {
+  kind: "job" | "work";
+  jobId?: string;
+  workId?: string;
+  title: string;
+  mediaKind?: string;
+  url?: string;
+  objectName?: string;
+  dateKey?: string;
+}
+
+/** 지목한 항목을 사용자 말풍선에 그릴 파일 카드로(서버가 붙여 주는 것과 같은 모양). */
+export function referenceFileCard(ref: ChatReference): ChatFileReference | null {
+  if (!ref.jobId) return null;
+  const mk = String(ref.mediaKind || "image");
+  const contentType = mk === "video" ? "video/mp4" : mk === "audio" ? "audio/mpeg" : mk === "pdf" ? "application/pdf" : mk === "ppt" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "image/png";
+  return { source: "generated", jobId: ref.jobId, name: ref.title.slice(0, 80), contentType, kind: mk };
+}
+
 export async function getAgentJob(id: string): Promise<any> {
   const res = await fetch(`/api/agent/job?id=${encodeURIComponent(id)}`);
   const data = await res.json().catch(() => ({}));
@@ -1807,6 +1831,7 @@ export async function streamChat(
     imageBase64?: string;
     imageMimeType?: string;
     images?: { base64: string; mimeType: string }[];
+    reference?: ChatReference | null;
   } = {}
 ): Promise<void> {
   const convId = opts.conversationId || "main";
@@ -1826,6 +1851,8 @@ export async function streamChat(
       conversationId: convId,
       focusAgent: opts.focusAgent,
       images,
+      // 지목한 항목(보고·업무 폴더에서 고른 산출물) — 서버가 잡·업무를 읽어 직원에게 알려준다.
+      reference: opts.reference ? { kind: opts.reference.kind, jobId: opts.reference.jobId, workId: opts.reference.workId, title: opts.reference.title } : undefined,
       // 하위호환: 서버가 아직 단일 필드만 읽어도 첫 첨부는 전달되도록 유지
       imageBase64: images[0]?.base64,
       imageMimeType: images[0]?.mimeType,

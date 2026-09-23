@@ -10,6 +10,7 @@ import {
   ensureAgentSchema,
   addMessage,
   getRuntime,
+  resolveChatReference,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
 
@@ -63,9 +64,15 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const clientNow = typeof body?.clientNow === "string" && body.clientNow ? body.clientNow : undefined; // 브라우저 로컬 현재시각(시간대 포함)
     if (!message && !images.length) return send({ error: "message is required" }, 400, origin);
 
-    const displayText = message + (images.length ? (message ? "\n" : "") + "[이미지 첨부됨]" : "");
+    // 보고·업무 폴더에서 지목한 항목: 말풍선엔 "📎 참조: …" + 카드, 직원에겐 "[참조 산출물: … jobId=…]" 한 줄.
+    const reference = await resolveChatReference(sql, auth.userId, body?.reference).catch(() => null);
+    const displayText = message
+      + (reference ? (message ? "\n" : "") + `📎 참조: ${reference.label}` : "")
+      + (images.length ? (message || reference ? "\n" : "") + "[이미지 첨부됨]" : "");
+    const modelText = reference ? `${displayText}\n${reference.line}` : displayText;
     const userMsg = await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: displayText,
+      files: reference?.files?.length ? reference.files : undefined,
     });
 
     const rt = await getRuntime(sql, auth.userId).catch(() => ({ workMode: "on", autonomous: false }));
@@ -97,7 +104,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       try {
         await runGroupChat(env, {
           sql, userId: auth.userId, conversationId, toolCtx,
-          firstMessage: displayText, focusAgent: focusAgent || undefined, images, clientNow,
+          firstMessage: modelText, focusAgent: focusAgent || undefined, images, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: (payload?: any) => sse({ type: "job_ready", payload }),
           onUiAction: (action: any) => sse({ type: "ui_action", action }),

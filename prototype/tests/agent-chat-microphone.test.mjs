@@ -59,7 +59,7 @@ test("마이크 모드는 화면 전환과 무관하게 유지되고 채팅 밖�
   assert.match(app, /const \[speechModeEnabled, setSpeechModeEnabled\] = useState\(false\)/);
   assert.match(app, /const speechInput = useSpeechInput\(/);
   assert.match(app, /draft: centerView === "chat" \? draft : ""/);
-  assert.match(app, /void send\(text, undefined, today\)/);
+  assert.match(app, /void send\(text, undefined, undefined, today\)/);
   assert.match(app, /conversationId === activeConvRef\.current/);
   assert.match(app, /conversationId, signal: controller\.signal/);
   assert.match(app, /coreOverlay=\{centerView !== "chat" \? \(/);

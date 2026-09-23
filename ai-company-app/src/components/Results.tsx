@@ -6,10 +6,21 @@ import {
   cancelResult,
   type ResultItem,
   type AgentMessage,
+  type ChatReference,
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
+
+/** lucide "message-square" — 이 항목을 채팅에서 지목한다. */
+function MessageSquareIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 import {
   FormDownloadButtons,
   FormError,
@@ -514,9 +525,17 @@ export function PendingFormRequests({
   );
 }
 
-export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
+/** 보고 항목 → 채팅에서 지목할 참조. 이미지는 미리보기 주소를 같이 넘겨 칩에 썸네일이 보인다. */
+function resultReference(it: ResultItem): ChatReference {
+  const label = it.kind === "image" ? "이미지" : it.kind === "video" ? "영상" : it.kind === "audio" ? "오디오" : it.kind === "form" ? "서식" : "문서";
+  return { kind: "job", jobId: it.id, title: `${label} · ${it.prompt || it.file}`, mediaKind: it.kind, url: it.kind === "image" ? it.url : undefined, dateKey: it.workDateKey || undefined };
+}
+
+export default function Results({ onAgentSay, refreshKey, onPendingRequests, onChatAbout }: {
   onAgentSay?: (m: AgentMessage) => void;
   refreshKey?: number;
+  /** 최근 처리 항목의 말풍선 — 그 항목을 채팅에서 지목한다("이걸로 영상 만들어줘"). */
+  onChatAbout?: (ref: ChatReference) => void;
   /**
    * '아직 만들지 않았고 사람 입력을 기다리는' 항목을 위로 올려보낸다.
    * ★보고에는 끝난 결과물만 남긴다 — 만들기 전 단계는 승인 쪽에서 다룬다.
@@ -720,17 +739,29 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests }: {
             {recent.map((it) => {
               const st = STATUS[it.reviewStatus];
               return (
-                <button
-                  key={it.id}
-                  onClick={() => setOpenId(it.id)}
-                  title={it.prompt}
-                  className="flex w-full items-center gap-1 text-left text-[11px] text-gray-400 transition hover:text-gray-200"
-                >
-                  <span className={st?.c ?? "text-gray-400"}>{it.reviewStatus === "approved" ? "✅" : it.reviewStatus === "discarded" ? "🗑️" : "↻"}</span>
-                  <span className="shrink-0 text-gray-300">{it.agentName}</span>
-                  <span className="shrink-0 text-gray-600">· {st?.t ?? it.reviewStatus}</span>
-                  <span className="min-w-0 flex-1 truncate text-gray-500">{it.prompt}</span>
-                </button>
+                <div key={it.id} className="flex items-center gap-1">
+                  <button
+                    onClick={() => setOpenId(it.id)}
+                    title={it.prompt}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-[11px] text-gray-400 transition hover:text-gray-200"
+                  >
+                    <span className={st?.c ?? "text-gray-400"}>{it.reviewStatus === "approved" ? "✅" : it.reviewStatus === "discarded" ? "🗑️" : "↻"}</span>
+                    <span className="shrink-0 text-gray-300">{it.agentName}</span>
+                    <span className="shrink-0 text-gray-600">· {st?.t ?? it.reviewStatus}</span>
+                    <span className="min-w-0 flex-1 truncate text-gray-500">{it.prompt}</span>
+                  </button>
+                  {onChatAbout && (
+                    <button
+                      type="button"
+                      onClick={() => onChatAbout(resultReference(it))}
+                      title="채팅에서 이 항목 지목하기 — 예: '이걸로 영상 만들어줘'"
+                      aria-label="채팅에서 이 항목 지목하기"
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-500 transition hover:bg-edge hover:text-sky-300"
+                    >
+                      <MessageSquareIcon className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

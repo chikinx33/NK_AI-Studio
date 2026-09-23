@@ -1296,8 +1296,83 @@ export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 1
     return refs.length ? ` [산출물: ${refs.join(", ")}]` : "";
   };
   return recent
-    .map((m) => (m.role === "user" ? `${addr}: ${m.text}` : `${m.name || "직원"}: ${m.text}${generatedRefs(m)}`))
+    .map((m) => (m.role === "user" ? `${addr}: ${m.text}${generatedRefs(m)}` : `${m.name || "직원"}: ${m.text}${generatedRefs(m)}`))
     .join("\n");
+}
+
+// ── 채팅에서 지목한 항목(참조) ────────────────────────────────────────────────
+// 보고의 최근 처리·업무 폴더에서 말풍선/채팅을 누르면 클라이언트가 { kind, jobId | workId, title } 를 메시지와 함께 보낸다.
+// 서버는 그 잡·업무를 읽어 (1) 사용자 말풍선에 붙일 파일 카드, (2) 직원이 도구에 넘길 수 있는 한 줄
+// "[참조 산출물: 이미지 · 제목 jobId=… objectName=…]" 을 만든다. 그래서 "이걸로 영상 만들어줘" 가 통한다.
+export interface ResolvedChatReference {
+  label: string;                 // 말풍선에 보이는 짧은 이름(📎 뒤)
+  line: string;                  // 모델이 읽는 기계용 한 줄
+  files: MessageFileReference[]; // 사용자 메시지에 붙일 카드
+}
+
+function outputMediaLabel(out: any): string {
+  if (!out || typeof out !== "object") return "산출물";
+  if (out.videoUrl || out.kind === "video" || out.kind === "scene_video") return "영상";
+  if (out.audioUrl || out.kind === "audio") return "오디오";
+  if (out.kind === "form") return "서식";
+  if (out.kind === "ppt" || out.kind === "pdf") return "문서";
+  return "이미지";
+}
+
+export async function resolveChatReference(sql: SqlFn, userId: string, raw: any): Promise<ResolvedChatReference | null> {
+  if (!raw || typeof raw !== "object") return null;
+  const jobId = String(raw.jobId || "").trim();
+  const workId = String(raw.workId || "").trim();
+  const givenTitle = String(raw.title || "").replace(/[\[\]\n]/g, " ").trim().slice(0, 120);
+  const uuid = /^[0-9a-f-]{36}$/i;
+
+  const fromJob = async (id: string, extra = ""): Promise<ResolvedChatReference | null> => {
+    if (!uuid.test(id)) return null;
+    const job = await getJob(sql, id, userId).catch(() => null);
+    if (!job) return null;
+    const out: any = (job as any).output && typeof (job as any).output === "object" ? (job as any).output : {};
+    const input: any = typeof (job as any).input === "string" ? (() => { try { return JSON.parse((job as any).input); } catch { return {}; } })() : ((job as any).input || {});
+    const media = outputMediaLabel(out);
+    const title = givenTitle || String(input?.prompt || out.promptEcho || out.title || (job as any).type || "").trim().slice(0, 120);
+    const objectName = String(out.objectName || out.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+    const parts = [`${media} · ${title}`, `jobId=${(job as any).id}`];
+    if (objectName) parts.push(`objectName=${objectName}`);
+    if (out.videoUrl) parts.push(`videoUrl=${String(out.videoUrl)}`);
+    if (extra) parts.push(extra);
+    const files = messageFilesFromToolOutput(String((job as any).type || ""), out, (job as any).id);
+    return { label: `${media} · ${title}`, line: `[참조 산출물: ${parts.join(" ")}]`, files: files.slice(0, 1) };
+  };
+
+  if (jobId) {
+    const ref = await fromJob(jobId, workId && uuid.test(workId) ? `workId=${workId}` : "");
+    if (ref) return ref;
+  }
+  if (workId && uuid.test(workId)) {
+    const rows = await sql(
+      "SELECT id, title, work_type, metadata, created_at FROM company_work_items WHERE user_id = $1 AND id = $2 LIMIT 1",
+      [userId, workId],
+    ).catch(() => [] as any[]);
+    const work: any = (rows as any[])[0];
+    if (!work) return null;
+    const meta: any = typeof work.metadata === "string" ? (() => { try { return JSON.parse(work.metadata); } catch { return {}; } })() : (work.metadata || {});
+    const metaJob = String(meta?.jobId || "").trim();
+    if (metaJob) {
+      const ref = await fromJob(metaJob, `workId=${work.id}`);
+      if (ref) return ref;
+    }
+    const title = givenTitle || String(work.title || "").trim().slice(0, 120);
+    const paths: string[] = Array.isArray(meta?.paths) ? meta.paths.map((p: any) => String(p || "")).filter(Boolean).slice(0, 5) : [];
+    const objectName = String(meta?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+    const parts = [`${title}`, `workId=${work.id}`, `workType=${String(work.work_type || "")}`];
+    if (objectName) parts.push(`objectName=${objectName}`);
+    if (paths.length) parts.push(`paths=${paths.join(",")}`);
+    const files: MessageFileReference[] = paths.slice(0, 1).map((p) => ({
+      source: "company-file" as const, name: p.split("/").pop() || "문서", path: p,
+      contentType: inferredFileType(p.split(".").pop() || "", {}).contentType,
+    }));
+    return { label: `업무 · ${title}`, line: `[참조 업무: ${parts.join(" ")}]`, files };
+  }
+  return null;
 }
 
 // ── 잡 CRUD (전부 user_id 격리) ──────────────────────────────────────────────
@@ -1758,8 +1833,31 @@ export async function checkVideoJob(ctx: ToolContext, videoJobId: string): Promi
 
 /** 픽셀 영상 도구: /api/video 에 제출만 하고 VideoPendingSignal 을 던진다(완료는 reconcileVideoJobs). */
 async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
-  const sub = await submitVideoJob(input, ctx);
+  const sub = await submitVideoJob(await withVideoSourceImage(input, ctx), ctx);
   return throwPendingVideo(sub);
+}
+
+/**
+ * imageUrl 이 없고 jobId("last" 포함)·objectName 으로 이미지를 지목했으면 그 저장 경로(gs://)를 첫 프레임으로 넣는다.
+ * /api/video 는 gs:// 를 스스로 서명하므로 만료되는 서명 URL 을 주고받을 필요가 없다.
+ * (사용자가 보고·업무 폴더에서 지목한 "[참조 산출물: … jobId=…]" 를 그대로 넘길 수 있게.)
+ */
+async function withVideoSourceImage(input: any, ctx: ToolContext): Promise<any> {
+  const given = String(input?.imageUrl || input?.imageDataUrl || "").trim();
+  if (given) return input;
+  let jobId = String(input?.jobId || input?.imageJobId || "").trim();
+  let objectName = String(input?.objectName || "").trim();
+  if (!objectName && jobId) {
+    if (LAST_IMAGE_ALIASES.has(jobId.toLowerCase())) jobId = String(ctx.lastImageJobId || "").trim() || await latestImageJobId(ctx);
+    if (!jobId) throw new Error("첫 프레임으로 쓸 이미지를 찾지 못했어요(jobId).");
+    objectName = await imageJobObjectName(ctx, jobId);
+  }
+  if (!objectName) return input;
+  const bucket = studioBucket(ctx);
+  const plain = objectName.replace(/^gs:\/\/[^/]+\//, "");
+  const imageUrl = objectName.startsWith("gs://") ? objectName : (bucket ? `gs://${bucket}/${plain}` : "");
+  if (!imageUrl) throw new Error("이미지 저장소 버킷이 설정되지 않아 지목한 이미지를 첫 프레임으로 쓸 수 없어요.");
+  return { ...input, imageUrl };
 }
 
 /** /api/video 제출(비동기) → 공급자 job_id. 스튜디오 버튼과 같은 파라미터를 넘긴다. */

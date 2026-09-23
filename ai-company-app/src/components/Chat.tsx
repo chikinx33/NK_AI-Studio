@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
-import { addKnowledge, type ChatFileReference } from "../lib/api";
+import { addKnowledge, type ChatFileReference, type ChatReference } from "../lib/api";
 import Markdown from "./Markdown";
 import { importSpreadsheet, isSpreadsheetFile, type SheetImportResult } from "../lib/xlsxImport";
 import ChatFileAttachments from "./ChatFileAttachments";
@@ -58,7 +58,10 @@ interface Props {
   onStop?: () => void;
   draft: string;
   setDraft: (s: string) => void;
-  onSend: (text: string, attachments?: Attachment[]) => void;
+  onSend: (text: string, attachments?: Attachment[], reference?: ChatReference | null) => void;
+  /** 보고·업무 폴더에서 지목한 항목 — 입력창 위 칩으로 보이고 다음 메시지와 함께 간다. */
+  reference?: ChatReference | null;
+  onClearReference?: () => void;
   onToggleMode?: () => void;
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
@@ -230,6 +233,15 @@ function RepeatIcon({ className }: { className?: string }) {
   );
 }
 
+/** lucide "message-square" — 이 항목을 채팅에서 지목한다. */
+function MessageSquareIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function ListTodoIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -328,7 +340,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject }: Props) {
+export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject, reference, onClearReference }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -535,7 +547,8 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     if ((!t && !attachments.length && !sheets.length) || busy || speechInput.enabled) return;
     // 스프레드시트는 본문 끝에 텍스트로 붙는다 — 그 턴에 말하는 모든 직원이 같은 내용을 본다.
     const body = [t, ...sheets.map((sheet) => sheet.text)].filter(Boolean).join("\n\n");
-    onSend(body, attachments.length ? attachments : undefined);
+    onSend(body, attachments.length ? attachments : undefined, reference || undefined);
+    onClearReference?.();
     setDraft("");
     setAttachments([]);
     setSheets([]);
@@ -681,6 +694,8 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                         </div>
                       )}
                       {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !hasAttachment ? t.text : null}
+                      {/* 지목한 산출물 카드 — 직원 말풍선과 같은 카드로 보인다 */}
+                      {t.files?.length ? <ChatFileAttachments files={t.files} onOpenProject={onOpenProject} /> : null}
                     </div>
                   );
                 })()}
@@ -839,6 +854,26 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         </div>
       ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
+        {/* 지목한 항목 칩 — "이걸로 …" 라고 말하면 직원이 이 항목을 알아듣는다 */}
+        {reference && (
+          <div className="mb-2 flex flex-wrap items-center gap-2" data-chat-reference>
+            <div className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
+              {reference.url
+                ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
+                : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
+              <div className="min-w-0">
+                <div className="text-[10px] text-sky-400">지목한 항목 · "이걸로 …" 라고 말하면 직원이 알아들어요</div>
+                <div className="max-w-[280px] truncate" title={reference.title}>{reference.title}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onClearReference?.()}
+                className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gray-800 text-[10px] leading-none text-gray-300 ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                title="지목 해제"
+              >✕</button>
+            </div>
+          </div>
+        )}
         {/* 스프레드시트 칩 — 읽은 행 수를 보여준다(조용히 잘린 게 아닌지 사용자가 바로 안다) */}
         {sheets.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2">

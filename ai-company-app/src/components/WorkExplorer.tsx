@@ -13,6 +13,8 @@ import {
   type AgentVideoStorageItem,
   type CompanyWorkItem,
   type ChatFileReference,
+  type ChatReference,
+  mediaUrlFromOutput,
   downloadCompanyFile,
 
 } from "../lib/api";
@@ -216,7 +218,20 @@ function WorkDocumentFiles({ work }: { work: CompanyWorkItem }) {
   );
 }
 
-export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork, onOpenProject }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void; onOpenProject: (projectId: string) => void }) {
+/** 업무 항목 → 채팅에서 지목할 참조. 이미지 업무는 잡·저장 경로를, 그 밖은 업무 ID 를 넘긴다(직원은 work_get 으로 상세를 본다). */
+function workReference(work: CompanyWorkItem): ChatReference {
+  const objectName = imageWorkObject(work);
+  const jobId = work.metadata?.jobId ? String(work.metadata.jobId) : undefined;
+  const mediaKind = objectName ? "image" : work.work_type === "infographic" ? "video" : "doc";
+  return {
+    kind: "work", workId: work.id, jobId, title: work.title, mediaKind,
+    objectName: objectName || undefined,
+    url: objectName ? mediaUrlFromOutput({ objectName }) : undefined,
+    dateKey: koreaDate(work.created_at),
+  };
+}
+
+export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWork, onOpenProject, onChatAbout }: { revision?: number; initialDate?: string; onOpenWork: (work: CompanyWorkItem) => void; onOpenProject: (projectId: string) => void; onChatAbout?: (ref: ChatReference) => void }) {
   const [items, setItems] = useState<CompanyWorkItem[]>([]);
   const [folderTitles, setFolderTitles] = useState<Map<string, string>>(new Map());
   const [date, setDate] = useState(initialDate);
@@ -564,7 +579,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
             <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDone(work.status) ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{isDone(work.status) ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>
               <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu((current) => current === work.id ? "" : work.id); setFolderMenu(""); }} className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-gray-400 hover:bg-edge hover:text-white" title="문서 메뉴" aria-label={`${work.title} 문서 메뉴`} aria-expanded={documentMenu === work.id}>•••</button>
-              {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl"><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
+              {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl">{onChatAbout && <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); onChatAbout(workReference(work)); }} className="block w-full px-3 py-2 text-left text-xs text-emerald-300 hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅</button>}<button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
             </div>
           </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>}
           <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject}

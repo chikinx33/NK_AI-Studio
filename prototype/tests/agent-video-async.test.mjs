@@ -17,7 +17,7 @@ const fnBody = (src, head) => {
 test("video·scene_video 도구는 제출만 하고 VideoPendingSignal 을 던진다(도구 안 폴링 금지)", async () => {
   const shared = await read("prototype/functions/api/agent/_shared.ts");
   const runVideo = fnBody(shared, "async function runVideoTool(");
-  assert.match(runVideo, /await submitVideoJob\(input, ctx\)/);
+  assert.match(runVideo, /await submitVideoJob\(await withVideoSourceImage\(input, ctx\), ctx\)/);
   assert.match(runVideo, /throwPendingVideo\(sub\)/);
   assert.doesNotMatch(runVideo, /setTimeout|\/api\/video\/status/, "도구 안에서 폴링하지 않는다");
   const submit = fnBody(shared, "async function submitVideoJob(");

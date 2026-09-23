@@ -3,7 +3,8 @@ import Sidebar from "./components/Sidebar";
 import Chat, { type Turn, type Attachment } from "./components/Chat";
 import Approvals from "./components/Approvals";
 import Results, { PendingFormRequests } from "./components/Results";
-import type { AgentMessage, ResultItem } from "./lib/api";
+import type { AgentMessage, ResultItem, ChatReference } from "./lib/api";
+import { referenceFileCard } from "./lib/api";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
 import Dashboard from "./components/Dashboard";
@@ -135,6 +136,12 @@ export default function App() {
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">(EMBED_CANVAS ? "skills" : "chat");
+  // 보고·업무 폴더에서 지목한 항목. 채팅으로 옮겨 칩으로 보이고, 다음 메시지와 함께 서버로 간다.
+  const [chatReference, setChatReference] = useState<ChatReference | null>(null);
+  const chatAbout = (ref: ChatReference) => {
+    setChatReference(ref);
+    setCenterView("chat");
+  };
   // 옵션(설정)은 두뇌 모드·Claude 인증·직원별 모델을 다뤄 마스터만 연다.
   // 일반 회원은 톱니 버튼도, 에이전트의 ui.navigate 도 설정 화면에 닿지 않는다.
   // 자율 근무도 같은 기준 — 켜 두면 직원들이 60초마다 스스로 일해 토큰을 계속 쓴다.
@@ -944,7 +951,7 @@ export default function App() {
     abortRef.current?.abort();
   }
 
-  async function send(text: string, attachments?: Attachment[], conversationId = activeConvId) {
+  async function send(text: string, attachments?: Attachment[], reference?: ChatReference | null, conversationId = activeConvId) {
     // 사용자가 새로 말하면 대기 중이던 발언은 즉시 완성해 대화 순서를 보존한다.
     finishAgentPresentations();
     const atts = attachments ?? [];
@@ -954,9 +961,11 @@ export default function App() {
       text: text || (atts.length ? "[이미지 첨부됨]" : ""),
       imagePreview: previews[0],
       imagePreviews: previews.length ? previews : undefined,
+      files: reference ? [referenceFileCard(reference)].filter((f): f is NonNullable<typeof f> => !!f) : undefined,
       ts: Date.now(),
     };
     commit([...turnsRef.current, userTurn]);
+    if (reference) setChatReference(null);
     setBusy(true);
     // 보내는 즉시 수신자를 '활동 중'으로 — 텍스트에서 가장 먼저 등장하는 이름이 수신자
     // (코어 직접 호명 시 코어로 고정; 단순 언급은 수신자로 취급 안 함)
@@ -1075,7 +1084,7 @@ export default function App() {
             }
           }
         },
-        { history, focusAgent: focusAgentId ?? undefined, conversationId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })) }
+        { history, focusAgent: focusAgentId ?? undefined, conversationId, signal: controller.signal, images: atts.map((a) => ({ base64: a.base64, mimeType: a.mimeType })), reference: reference || undefined }
       );
     } catch (e) {
       presentCompletedAgentTurns([
@@ -1258,7 +1267,7 @@ export default function App() {
       const today = localToday();
       if (activeConvRef.current !== today) setActiveConvId(today);
       setDraft("");
-      void send(text, undefined, today);
+      void send(text, undefined, undefined, today);
     },
   });
 
@@ -1393,7 +1402,7 @@ export default function App() {
           <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
-            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} />
+            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} />
           </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
@@ -1465,6 +1474,8 @@ export default function App() {
             onToggleVoiceMode={toggleVoiceMode}
             speechInput={speechInput}
             onOpenProject={openCompanyProject}
+            reference={chatReference}
+            onClearReference={() => setChatReference(null)}
           />
         )}
         </ErrorBoundary>
@@ -1510,6 +1521,7 @@ export default function App() {
               refreshKey={resultsRefreshKey}
               onPendingRequests={setPendingFormRequests}
               onAgentSay={sayAndFocusChat}
+              onChatAbout={chatAbout}
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
