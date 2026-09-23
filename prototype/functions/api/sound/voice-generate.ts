@@ -19,8 +19,7 @@ import {
   corsHeaders, send, getSql, ensureSoundSchema,
   resolveGcsEnv, buildSoundObjectName, uploadToGcs, signGcsUrl,
   elevenLabsTts, concatMp3, bytesToDataUrl,
-  geminiTts, geminiApiTts, pickGeminiVoiceName, normalizeGeminiTtsModel, splitEmotionTags,
-  buildDirectedPrompt, groupSegmentsByVoice, joinPcm, pcmToWav, GEMINI_TTS_API_MODEL, TTS_PCM_RATE,
+  normalizeGeminiTtsModel, synthesizeGeminiDirected, TTS_PCM_RATE,
 } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -45,63 +44,6 @@ async function synthesizeSegments(opts: {
     parts.push(bytes);
   }
   return concatMp3(parts);
-}
-
-// Gemini TTS 연출 합성.
-// - 연속된 같은 보이스 세그먼트는 한 번의 호출로 묶어 대본 전체의 감정 흐름을 모델이 이어서 연기하게 한다.
-// - 연출 지시문 + 대본을 한 프롬프트로 Gemini API(3.1 Flash TTS)에 보낸다. 감정 태그는 대본 안에 그대로 둔다.
-// - Gemini API 키가 없거나 호출이 실패하면 Cloud Gemini-TTS 로 폴백(태그는 지시문으로 옮김).
-// - 결과는 PCM 을 이어 WAV 하나로 만든다(재인코딩 없음).
-async function synthesizeGeminiDirected(opts: {
-  env: any; apiKey: string; direction: string;
-  cloud: { clientEmail: string; privateKeyPem: string; userProject: string; modelName: string } | null;
-  segments: Array<{ providerVoiceId: string; text: string }>;
-}): Promise<{ wav: Uint8Array; durationSeconds: number; engine: string; fallbackReason: string }> {
-  const groups = groupSegmentsByVoice(opts.segments);
-  const parts: Uint8Array[] = [];
-  let sampleRate = TTS_PCM_RATE;
-  let engine = opts.apiKey ? GEMINI_TTS_API_MODEL : "";
-  let fallbackReason = opts.apiKey ? "" : "gemini_api_key_missing";
-  for (const g of groups) {
-    const voiceName = pickGeminiVoiceName(g.providerVoiceId);
-    let out: { pcm: Uint8Array; sampleRate: number } | null = null;
-    if (opts.apiKey && !fallbackReason) {
-      try {
-        out = await geminiApiTts({
-          env: opts.env, apiKey: opts.apiKey, model: GEMINI_TTS_API_MODEL, voiceName,
-          prompt: buildDirectedPrompt(opts.direction, g.text),
-        });
-      } catch (e: any) {
-        fallbackReason = String(e?.message || e || "gemini_api_tts_failed").slice(0, 300);
-        if (!opts.cloud) throw e;
-        try { console.warn("gemini_api_tts_fallback_to_cloud", fallbackReason); } catch (_) {}
-      }
-    }
-    if (!out) {
-      if (!opts.cloud) throw new Error("TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY not configured");
-      const { clean, tags } = splitEmotionTags(g.text);
-      const base = buildDirectedPrompt(opts.direction, "").trim();
-      out = await geminiTts({
-        clientEmail: opts.cloud.clientEmail,
-        privateKeyPem: opts.cloud.privateKeyPem,
-        userProject: opts.cloud.userProject || undefined,
-        text: clean,
-        prompt: tags.length ? `${base} Emotional cues for this passage: ${tags.join(", ")}.` : base,
-        voiceName,
-        modelName: opts.cloud.modelName,
-      });
-      engine = `cloud:${opts.cloud.modelName}`;
-    }
-    sampleRate = out.sampleRate || sampleRate;
-    parts.push(out.pcm);
-  }
-  const pcm = joinPcm(parts, sampleRate);
-  return {
-    wav: pcmToWav(pcm, sampleRate),
-    durationSeconds: Math.round((pcm.byteLength / (sampleRate * 2)) * 10) / 10,
-    engine,
-    fallbackReason,
-  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

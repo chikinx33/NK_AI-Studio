@@ -41,15 +41,6 @@
   });
 
   var VOICE_SPEEDS = [0.5, 1, 1.2, 1.5];
-  // 톤을 비교해 들어볼 수 있도록 감정 폭이 다른 멘트를 준비 — 미리듣기마다 순환한다.
-  var PREVIEW_LINES = [
-    '안녕하세요, 오늘은 이 목소리로 이야기를 들려드릴게요.',
-    '조용한 새벽, 창밖에는 비가 조금씩 내리고 있었어요.',
-    '자, 그럼 지금부터 핵심만 차분하게 정리해 볼게요.',
-    '정말요? 그건 생각도 못 했는데, 완전 신기하네요!',
-    '괜찮아요. 천천히 해도 늦지 않으니까, 한 걸음씩 가요.',
-    '경고합니다. 지금 멈추지 않으면 되돌릴 수 없습니다.'
-  ];
   var FORMATS = [
     { id: 'mp3_44100_128', label: 'MP3 44.1kHz 128kbps' },
     { id: 'mp3_44100_192', label: 'MP3 44.1kHz 192kbps' },
@@ -190,8 +181,7 @@
     direction: '',         // Gemini TTS 연출 지시문 (프롬프트로 그대로 전달)
     directionPreset: '',   // 마지막으로 고른 연출 프리셋 id ('' = 직접 작성)
     speed: 1,              // 미리듣기·자산 재생 속도 (playbackRate)
-    previewLine: '',       // 마지막으로 미리듣기한 멘트
-    previewLineIdx: 0,
+    previewLine: '',       // 미리듣기 샘플 멘트(서버가 돌려준 고정 문장)
     sfxPrompt: '',
     sfxDuration: 2,
     sfxLooping: false,
@@ -1075,38 +1065,28 @@
     } catch (_) {}
   }
 
-  // 미리듣기할 때마다 다음 멘트로 순환 — 톤별로 여러 문장을 비교해 들을 수 있다.
-  function nextPreviewLine() {
-    var line = PREVIEW_LINES[state.previewLineIdx % PREVIEW_LINES.length];
-    state.previewLineIdx = (state.previewLineIdx + 1) % PREVIEW_LINES.length;
-    return line;
-  }
-  // 보이스 미리듣기: 선택한 멘트를 현재 모델(ElevenLabs / Gemini TTS)로 즉석 합성·캐시 후 재생.
+  // 보이스 미리듣기: 서버가 보이스마다 한 번만 합성해 저장해 둔 고정 멘트 샘플을 재생한다.
+  // 누를 때마다 새로 생성하지 않는다(서버 공용 캐시 + 이 탭의 메모리 캐시).
   function previewVoice(v) {
     if (!v) return;
     if (state.previewBusyId) return; // 동시 1건만
-    if (!NK.api || !NK.api.soundVoiceGenerate) return;
-
-    var line = nextPreviewLine();
-    state.previewLine = line;
-    var cache = v._previewCache || (v._previewCache = {});
-    if (cache[line]) { playPreview(cache[line]); renderPreviewControls(); return; }
+    if (!NK.api || !NK.api.soundVoicePreview) return;
+    if (v._previewUrl) { state.previewLine = v._previewLine || ''; playPreview(v._previewUrl); renderPreviewControls(); return; }
 
     state.previewBusyId = String(v.id);
     renderPreviewControls();
     refreshModalIfOpen();
-    NK.api.soundVoiceGenerate({
-      mode: 'instance',
-      sessionId: state.sessionId,
-      preview: true,
-      model: isGeminiModel() ? 'gemini_tts' : 'eleven_multilingual_v2',
-      format: 'mp3_44100_128',
-      stability: 0.5,
-      direction: isGeminiModel() ? state.direction : '',
-      segments: [{ voiceId: (String(v.id).indexOf('seed-') === 0 || isGeminiModel() ? '' : v.id), providerVoiceId: v.providerVoiceId || '', text: line }]
+    NK.api.soundVoicePreview({
+      provider: v.provider === 'gemini' ? 'gemini' : 'elevenlabs',
+      voice: v.providerVoiceId || v.name || ''
     }).then(function (res) {
       state.previewBusyId = '';
-      if (res && res.outputUrl) { cache[line] = res.outputUrl; playPreview(res.outputUrl); }
+      if (res && res.url) {
+        v._previewUrl = res.url;
+        v._previewLine = res.line || '';
+        state.previewLine = v._previewLine;
+        playPreview(res.url);
+      }
       renderPreviewControls();
       refreshModalIfOpen();
     }).catch(function (err) {

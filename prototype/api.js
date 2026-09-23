@@ -962,6 +962,18 @@
     return j(text);
   };
 
+  // 보이스 미리듣기 샘플 — 서버가 보이스마다 한 번만 합성해 저장해 둔 파일의 URL 을 돌려준다.
+  api.soundVoicePreview = async function (body) {
+    var res = await fetchWithTimeout(withToken('/api/sound/voice-preview'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {})
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
+    if (!res.ok) { var err = new Error(e(text) || 'voice_preview_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
   api.soundSfxGenerate = async function (body, opts) {
     var res = await fetchWithTimeout(withToken('/api/sound/sfx-generate'), {
       method: 'POST',
