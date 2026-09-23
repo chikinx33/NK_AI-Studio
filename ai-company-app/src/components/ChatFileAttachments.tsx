@@ -3,6 +3,7 @@ import {
   downloadCompanyFile,
   getAgentJob,
   outputObjectName,
+  withMediaToken,
 
   type ChatFileReference,
   type CompanyFileEntry,
@@ -92,6 +93,9 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
   // objectName 이 없는 옛 영상 잡도 서명 URL 에서 경로를 되찾아 프록시로 연다(서명 URL 은 만료돼 재생이 안 됐다).
   const objectName = outputObjectName(output);
   const proxyUrl = objectName ? `/api/media/proxy?objectName=${encodeURIComponent(objectName)}` : "";
+  // <video>·<audio>·<iframe> 은 헤더를 못 붙이므로 토큰이 붙은 프록시 주소를 쓴다. 전엔 만료된 서명 URL(url)을 그대로 넣어
+  // 승인한 영상이 한 시간 뒤부터 0:00 에서 멈췄다(이미지는 StoredImage 가 프록시를 써서 멀쩡했다).
+  const mediaSrc = proxyUrl ? withMediaToken(proxyUrl) : url;
   const blocks = useMemo(() => {
     const source = kind === "presentation" ? output.slides : output.sections;
     return Array.isArray(source) ? source : [];
@@ -141,9 +145,9 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
         {!job && !error && <div className="grid min-h-72 place-items-center text-sm text-emerald-400">생성 파일을 여는 중…</div>}
         {error && <div className="grid min-h-72 place-items-center text-sm text-red-300">{error}</div>}
         {job && kind === "image" && (objectName || url) && <div className="grid min-h-72 place-items-center"><StoredImage objectName={objectName} fallbackUrl={url} alt={file.name} className="max-h-[76vh] max-w-full rounded-lg object-contain" /></div>}
-        {job && kind === "video" && url && <div className="grid min-h-72 place-items-center"><video src={url} controls autoPlay className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
-        {job && kind === "audio" && url && <div className="grid min-h-72 place-items-center"><audio src={url} controls autoPlay className="w-full max-w-2xl" /></div>}
-        {job && kind === "pdf" && url && <iframe src={url} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}
+        {job && kind === "video" && mediaSrc && <div className="grid min-h-72 place-items-center"><video src={mediaSrc} controls autoPlay playsInline className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
+        {job && kind === "audio" && mediaSrc && <div className="grid min-h-72 place-items-center"><audio src={mediaSrc} controls autoPlay className="w-full max-w-2xl" /></div>}
+        {job && kind === "pdf" && mediaSrc && <iframe src={mediaSrc} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}
         {/* 서식 문서(form_fill): 표·합계 미리보기 + 포맷별 내려받기. 파일은 서버가 이미 만들어 뒀다. */}
         {job && output.kind === "form" && <FormDocumentView output={output} />}
         {job && output.kind !== "form" && (kind === "pdf" || kind === "presentation") && !url && <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-[#0d131c] p-7 text-sm leading-7 text-gray-200"><h1 className="mb-2 text-2xl font-bold">{output.title || file.name}</h1>{output.subtitle && <p className="mb-6 text-gray-400">{output.subtitle}</p>}{blocks.map((block: any, index: number) => <section key={index} className="mb-5 border-t border-edge pt-4"><h2 className="mb-2 text-lg font-semibold text-emerald-200">{block?.title || `${kind === "presentation" ? "슬라이드" : "섹션"} ${index + 1}`}</h2><div className="whitespace-pre-wrap text-gray-300">{Array.isArray(block?.bullets) ? block.bullets.map((item: any) => `• ${String(item)}`).join("\n") : String(block?.content || block?.body || block?.text || block?.description || "")}</div></section>)}</article>}

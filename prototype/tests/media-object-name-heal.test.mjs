@@ -32,3 +32,12 @@ test("클라이언트: 미리보기·보고는 objectName 이 없어도 GCS 서�
   assert.match(api, /export function mediaUrlFromOutput\(output: any\): string \{\s*const objectName = outputObjectName\(output\);/);
   assert.match(preview, /const objectName = outputObjectName\(output\);\s*const proxyUrl = objectName \? `\/api\/media\/proxy\?objectName=\$\{encodeURIComponent\(objectName\)\}` : "";/);
 });
+
+test("미리보기의 <video>·<audio>·<iframe> 은 만료되는 서명 URL 이 아니라 토큰 붙은 프록시 주소를 쓴다", async () => {
+  const preview = await read("ai-company-app/src/components/ChatFileAttachments.tsx");
+  assert.match(preview, /const mediaSrc = proxyUrl \? withMediaToken\(proxyUrl\) : url;/);
+  assert.match(preview, /kind === "video" && mediaSrc && <div[^>]*><video src=\{mediaSrc\}/);
+  assert.match(preview, /kind === "audio" && mediaSrc && <div[^>]*><audio src=\{mediaSrc\}/);
+  assert.match(preview, /kind === "pdf" && mediaSrc && <iframe src=\{mediaSrc\}/);
+  assert.doesNotMatch(preview, /<video src=\{url\}/, "만료되는 서명 URL 을 <video> 에 직접 넣지 않는다");
+});
