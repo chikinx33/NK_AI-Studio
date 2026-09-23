@@ -4,6 +4,8 @@
 // - 스키마 lazy 생성 (voices / voice_favorites / sound_assets)
 // - GCS 업로드 + V4 서명 URL (tts.ts / sfx.ts 헬퍼 재사용)
 // - ElevenLabs TTS / SFX 호출
+// - Gemini TTS 연출 합성 (Gemini API generateContent → PCM → WAV)
+import { geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────
 export const corsHeaders = (origin?: string | null) => ({
@@ -294,12 +296,12 @@ export function resolveGcsEnv(env: any): {
 }
 
 // 사운드 자산 GCS 경로: {basePrefix}/sound/{kind}/{scopeKey}/{assetId}.mp3
-export function buildSoundObjectName(basePrefix: string, kind: "voices" | "sfx" | "voice-previews" | "music", scopeKey: string, assetId: string): string {
+export function buildSoundObjectName(basePrefix: string, kind: "voices" | "sfx" | "voice-previews" | "music", scopeKey: string, assetId: string, ext: "mp3" | "wav" = "mp3"): string {
   const safeScope = String(scopeKey || "instance").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "instance";
   const safeId = String(assetId).replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
   const root = basePrefix ? `${basePrefix}/sound` : "sound";
-  if (kind === "voice-previews") return `${root}/voice-previews/${safeId}.mp3`;
-  return `${root}/${kind}/${safeScope}/${safeId}.mp3`;
+  if (kind === "voice-previews") return `${root}/voice-previews/${safeId}.${ext}`;
+  return `${root}/${kind}/${safeScope}/${safeId}.${ext}`;
 }
 
 // ─── ElevenLabs ───────────────────────────────────────────────────────────
@@ -350,8 +352,15 @@ export async function elevenLabsSfx(opts: {
   return new Uint8Array(buf);
 }
 
-// ─── Gemini TTS (Cloud Text-to-Speech, tts.ts와 동일 경로) ─────────────────
-// AI 기업 에이전트 페이지(/api/tts)에서 검증된 Cloud Gemini-TTS 호출을 사운드 스튜디오에서도 재사용한다.
+// ─── Gemini TTS ─────────────────────────────────────────────────────────────
+// 주 경로: Gemini API generateContent(gemini-3.1-flash-tts-preview).
+//   연출 지시문 + 대본을 한 프롬프트로 보내 모델이 대본 전체의 감정 흐름을 설계하게 한다.
+//   (Google AI Studio 'Emotional Voice Studio' 와 같은 호출 방식)
+// 폴백: Cloud Text-to-Speech Gemini-TTS(서비스 계정). API 키가 없거나 Gemini API 가 실패할 때만.
+// 두 경로 모두 24kHz 16bit mono PCM 으로 받아 WAV 하나로 조립한다 — MP3 재인코딩·바이트 이어붙이기 없음.
+export const GEMINI_TTS_API_MODEL = "gemini-3.1-flash-tts-preview";
+export const TTS_PCM_RATE = 24000;
+
 export const GEMINI_TTS_VOICES = [
   "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
   "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
@@ -375,11 +384,115 @@ export function normalizeGeminiTtsModel(model: string): string {
   return raw;
 }
 
+// 연출 지시문이 비었을 때의 기본 디렉션. 화풍이 아니라 '읽는 방식'만 정한다.
+export const DEFAULT_VOICE_DIRECTION =
+  "Perform the following Korean script as a professional Korean voice actor. Read it with natural, sincere emotion that fits the meaning of each line, treat line breaks as natural breathing pauses, and never sound like flat text-to-speech. Clean close-mic studio sound:";
+
+// Google AI Studio 앱과 같은 형식: `지시문\n\n대본`.
+export function buildDirectedPrompt(direction: string, script: string): string {
+  const d = String(direction || "").trim() || DEFAULT_VOICE_DIRECTION;
+  return `${d}\n\n${String(script || "").trim()}`;
+}
+
+// 연속된 같은 보이스 세그먼트를 한 번의 호출로 묶는다 — 모델이 여러 줄의 감정 흐름을 이어서 연기하도록.
+// 빈 줄은 Google 앱 대본처럼 줄 사이 호흡(정적)으로 읽힌다.
+export function groupSegmentsByVoice<T extends { providerVoiceId: string; text: string }>(segments: T[]): Array<{ providerVoiceId: string; text: string }> {
+  const groups: Array<{ providerVoiceId: string; text: string }> = [];
+  for (const seg of segments) {
+    const text = String(seg.text || "").trim();
+    if (!text) continue;
+    const last = groups[groups.length - 1];
+    if (last && last.providerVoiceId === seg.providerVoiceId) last.text += "\n\n" + text;
+    else groups.push({ providerVoiceId: seg.providerVoiceId, text });
+  }
+  return groups;
+}
+
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(String(b64 || ""));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+// WAV(RIFF) 로 오면 data 청크만 떼어 PCM 으로 만든다. 이미 PCM 이면 그대로.
+export function extractPcm(bytes: Uint8Array): { pcm: Uint8Array; sampleRate: number | null } {
+  const tag = (o: number) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
+  if (bytes.length < 12 || tag(0) !== "RIFF" || tag(8) !== "WAVE") return { pcm: bytes, sampleRate: null };
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let sampleRate: number | null = null;
+  let off = 12;
+  while (off + 8 <= bytes.length) {
+    const id = tag(off);
+    const size = view.getUint32(off + 4, true);
+    if (id === "fmt ") sampleRate = view.getUint32(off + 12, true);
+    if (id === "data") return { pcm: bytes.subarray(off + 8, Math.min(bytes.length, off + 8 + size)), sampleRate };
+    off += 8 + size + (size % 2);
+  }
+  return { pcm: bytes.subarray(44), sampleRate };
+}
+
+export function pcmToWav(pcm: Uint8Array, sampleRate = TTS_PCM_RATE): Uint8Array {
+  const header = new ArrayBuffer(44);
+  const v = new DataView(header);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + pcm.byteLength, true); w(8, "WAVE");
+  w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, pcm.byteLength, true);
+  const out = new Uint8Array(44 + pcm.byteLength);
+  out.set(new Uint8Array(header), 0);
+  out.set(pcm, 44);
+  return out;
+}
+
+// 화자가 바뀌는 지점에만 짧은 정적을 넣어 PCM 을 잇는다(같은 화자 안의 호흡은 모델이 만든다).
+export function joinPcm(parts: Uint8Array[], sampleRate = TTS_PCM_RATE, gapSec = 0.35): Uint8Array {
+  const gap = parts.length > 1 ? Math.round(sampleRate * gapSec) * 2 : 0;
+  const total = parts.reduce((n, p) => n + p.byteLength, 0) + gap * Math.max(0, parts.length - 1);
+  const out = new Uint8Array(total);
+  let off = 0;
+  parts.forEach((p, i) => { if (i > 0) off += gap; out.set(p, off); off += p.byteLength; });
+  return out;
+}
+
+// Gemini API generateContent 로 음성 합성 → 16bit PCM.
+export async function geminiApiTts(opts: {
+  env: any; apiKey: string; model: string; prompt: string; voiceName: string;
+}): Promise<{ pcm: Uint8Array; sampleRate: number }> {
+  const body = JSON.stringify({
+    contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: opts.voiceName } } },
+    },
+  });
+  const call = () => fetch(geminiGenerateUrl(opts.env, opts.model), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": opts.apiKey, ...geminiProxyHeaders(opts.env) },
+    body,
+  });
+  let res = await call();
+  // 일시적 한도·과부하는 한 번만 다시 시도한다(Google 앱과 같은 방식).
+  if (res.status === 429 || res.status === 500 || res.status === 503) {
+    await new Promise((r) => setTimeout(r, 2500));
+    res = await call();
+  }
+  const text = await res.text();
+  if (!res.ok) throw new Error(`gemini_api_tts_failed::${res.status}::${text.slice(0, 300)}`);
+  let json: any = {};
+  try { json = JSON.parse(text); } catch { throw new Error("gemini_api_tts_bad_response"); }
+  const parts: any[] = json?.candidates?.[0]?.content?.parts || [];
+  const inline = parts.map((p) => p?.inlineData || p?.inline_data).find((d) => d && d.data);
+  if (!inline) {
+    const reason = json?.candidates?.[0]?.finishReason || json?.promptFeedback?.blockReason || "no_audio";
+    throw new Error(`gemini_api_tts_empty_audio::${reason}`);
+  }
+  const raw = base64ToBytes(String(inline.data));
+  const mime = String(inline.mimeType || inline.mime_type || "");
+  const rateMatch = mime.match(/rate=(\d+)/);
+  const { pcm, sampleRate } = extractPcm(raw);
+  return { pcm, sampleRate: sampleRate || (rateMatch ? Number(rateMatch[1]) : TTS_PCM_RATE) };
 }
 
 async function geminiTtsRequest(opts: {
@@ -396,9 +509,9 @@ async function geminiTtsRequest(opts: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      input: { text: opts.text, prompt: opts.prompt || "Say the following in a natural Korean voice." },
+      input: { text: opts.text, prompt: opts.prompt || DEFAULT_VOICE_DIRECTION },
       voice,
-      audioConfig: { audioEncoding: "MP3" },
+      audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: TTS_PCM_RATE },
     }),
   });
   const text = await res.text();
@@ -410,40 +523,39 @@ async function geminiTtsRequest(opts: {
   return base64ToBytes(audio);
 }
 
+// Cloud Text-to-Speech Gemini-TTS (폴백 경로) → 16bit PCM.
 // model_name 필드가 거부되면 modelName으로 1회 재시도 (tts.ts와 동일 폴백).
 export async function geminiTts(opts: {
   clientEmail: string; privateKeyPem: string; userProject?: string;
   text: string; prompt: string; voiceName: string; modelName: string;
-}): Promise<Uint8Array> {
+}): Promise<{ pcm: Uint8Array; sampleRate: number }> {
   const token = await getGoogleAccessToken({
     clientEmail: opts.clientEmail,
     privateKeyPem: opts.privateKeyPem,
     scope: "https://www.googleapis.com/auth/cloud-platform",
   });
   const req = { token, text: opts.text, prompt: opts.prompt, voiceName: opts.voiceName, modelName: opts.modelName, userProject: opts.userProject };
+  let bytes: Uint8Array;
   try {
-    return await geminiTtsRequest(req, "model_name");
+    bytes = await geminiTtsRequest(req, "model_name");
   } catch (firstError: any) {
     const msg = String(firstError?.message || firstError || "");
     if (!/modelName|model_name|Unknown name|INVALID_ARGUMENT|400/i.test(msg)) throw firstError;
-    return await geminiTtsRequest(req, "modelName");
+    bytes = await geminiTtsRequest(req, "modelName");
   }
+  const { pcm, sampleRate } = extractPcm(bytes);
+  return { pcm, sampleRate: sampleRate || TTS_PCM_RATE };
 }
 
-// [calm] [warmly] 형태의 감정 태그를 본문에서 떼어 Gemini 스타일 프롬프트로 변환.
+// Cloud 폴백은 input.text 를 그대로 읽으므로 [calm] 같은 태그를 본문에서 떼어 지시문 쪽으로 옮긴다.
+// (Gemini API 경로는 태그를 대본 안에 그대로 두어 줄 단위 연출로 쓴다)
 export function splitEmotionTags(text: string): { clean: string; tags: string[] } {
   const tags: string[] = [];
   const clean = String(text || "").replace(/\[([a-zA-Z가-힣 _-]{1,24})\]/g, (_m, tag) => {
     tags.push(String(tag).trim());
     return "";
-  }).replace(/\s{2,}/g, " ").trim();
+  }).replace(/[ \t]{2,}/g, " ").trim();
   return { clean: clean || String(text || "").trim(), tags };
-}
-
-export function buildGeminiPrompt(tags: string[]): string {
-  const base = "Say the following in a natural Korean voice.";
-  if (!tags.length) return base;
-  return `${base} Speak in a ${tags.join(", ")} tone.`;
 }
 
 // MP3 바이트 단순 이어붙이기 (방식 ① — 세그먼트별 합성 후 병합)
@@ -455,11 +567,11 @@ export function concatMp3(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-export function bytesToDataUrl(bytes: Uint8Array): string {
+export function bytesToDataUrl(bytes: Uint8Array, mime = "audio/mpeg"): string {
   let bin = "";
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
     bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
   }
-  return `data:audio/mpeg;base64,${btoa(bin)}`;
+  return `data:${mime};base64,${btoa(bin)}`;
 }

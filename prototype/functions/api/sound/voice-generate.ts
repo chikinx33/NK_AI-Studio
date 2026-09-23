@@ -1,12 +1,14 @@
 /**
  * POST /api/sound/voice-generate
- * 다중 세그먼트 TTS 생성 → 세그먼트별 ElevenLabs 호출 후 병합(방식 ①) → GCS 업로드 → sound_assets 레코드.
+ * 다중 세그먼트 TTS 생성 → GCS 업로드 → sound_assets 레코드.
+ *  - ElevenLabs: 세그먼트별 호출 후 MP3 병합(방식 ①).
+ *  - Gemini: 같은 보이스 연속 구간을 묶어 연출 지시문과 함께 한 번에 합성 → WAV(24kHz PCM).
  *
  * Request:
- *   { mode, brandId?, episodeId?, sessionId?, model, format, stability,
+ *   { mode, brandId?, episodeId?, sessionId?, model, format, stability, direction?,
  *     segments: [{ voiceId?, providerVoiceId?, text, speaker? }] }
  * Response:
- *   { assetId, status, outputUrl, creditsUsed }
+ *   { assetId, status, outputUrl, creditsUsed, format, durationSeconds, engine }
  *
  * 다중 세그먼트 합성 방식은 추후 ElevenLabs Dialogue/Studio로 교체 가능하도록 synthesizeSegments()로 분리.
  */
@@ -17,7 +19,8 @@ import {
   corsHeaders, send, getSql, ensureSoundSchema,
   resolveGcsEnv, buildSoundObjectName, uploadToGcs, signGcsUrl,
   elevenLabsTts, concatMp3, bytesToDataUrl,
-  geminiTts, pickGeminiVoiceName, normalizeGeminiTtsModel, splitEmotionTags, buildGeminiPrompt,
+  geminiTts, geminiApiTts, pickGeminiVoiceName, normalizeGeminiTtsModel, splitEmotionTags,
+  buildDirectedPrompt, groupSegmentsByVoice, joinPcm, pcmToWav, GEMINI_TTS_API_MODEL, TTS_PCM_RATE,
 } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -44,26 +47,61 @@ async function synthesizeSegments(opts: {
   return concatMp3(parts);
 }
 
-// Gemini TTS(Cloud Text-to-Speech) 세그먼트별 합성 + 병합. 감정 태그는 스타일 프롬프트로 전달.
-async function synthesizeSegmentsGemini(opts: {
-  clientEmail: string; privateKeyPem: string; userProject: string; modelName: string;
+// Gemini TTS 연출 합성.
+// - 연속된 같은 보이스 세그먼트는 한 번의 호출로 묶어 대본 전체의 감정 흐름을 모델이 이어서 연기하게 한다.
+// - 연출 지시문 + 대본을 한 프롬프트로 Gemini API(3.1 Flash TTS)에 보낸다. 감정 태그는 대본 안에 그대로 둔다.
+// - Gemini API 키가 없거나 호출이 실패하면 Cloud Gemini-TTS 로 폴백(태그는 지시문으로 옮김).
+// - 결과는 PCM 을 이어 WAV 하나로 만든다(재인코딩 없음).
+async function synthesizeGeminiDirected(opts: {
+  env: any; apiKey: string; direction: string;
+  cloud: { clientEmail: string; privateKeyPem: string; userProject: string; modelName: string } | null;
   segments: Array<{ providerVoiceId: string; text: string }>;
-}): Promise<Uint8Array> {
+}): Promise<{ wav: Uint8Array; durationSeconds: number; engine: string; fallbackReason: string }> {
+  const groups = groupSegmentsByVoice(opts.segments);
   const parts: Uint8Array[] = [];
-  for (const seg of opts.segments) {
-    const { clean, tags } = splitEmotionTags(seg.text);
-    const bytes = await geminiTts({
-      clientEmail: opts.clientEmail,
-      privateKeyPem: opts.privateKeyPem,
-      userProject: opts.userProject || undefined,
-      text: clean,
-      prompt: buildGeminiPrompt(tags),
-      voiceName: pickGeminiVoiceName(seg.providerVoiceId),
-      modelName: opts.modelName,
-    });
-    parts.push(bytes);
+  let sampleRate = TTS_PCM_RATE;
+  let engine = opts.apiKey ? GEMINI_TTS_API_MODEL : "";
+  let fallbackReason = opts.apiKey ? "" : "gemini_api_key_missing";
+  for (const g of groups) {
+    const voiceName = pickGeminiVoiceName(g.providerVoiceId);
+    let out: { pcm: Uint8Array; sampleRate: number } | null = null;
+    if (opts.apiKey && !fallbackReason) {
+      try {
+        out = await geminiApiTts({
+          env: opts.env, apiKey: opts.apiKey, model: GEMINI_TTS_API_MODEL, voiceName,
+          prompt: buildDirectedPrompt(opts.direction, g.text),
+        });
+      } catch (e: any) {
+        fallbackReason = String(e?.message || e || "gemini_api_tts_failed").slice(0, 300);
+        if (!opts.cloud) throw e;
+        try { console.warn("gemini_api_tts_fallback_to_cloud", fallbackReason); } catch (_) {}
+      }
+    }
+    if (!out) {
+      if (!opts.cloud) throw new Error("TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY not configured");
+      const { clean, tags } = splitEmotionTags(g.text);
+      const base = buildDirectedPrompt(opts.direction, "").trim();
+      out = await geminiTts({
+        clientEmail: opts.cloud.clientEmail,
+        privateKeyPem: opts.cloud.privateKeyPem,
+        userProject: opts.cloud.userProject || undefined,
+        text: clean,
+        prompt: tags.length ? `${base} Emotional cues for this passage: ${tags.join(", ")}.` : base,
+        voiceName,
+        modelName: opts.cloud.modelName,
+      });
+      engine = `cloud:${opts.cloud.modelName}`;
+    }
+    sampleRate = out.sampleRate || sampleRate;
+    parts.push(out.pcm);
   }
-  return concatMp3(parts);
+  const pcm = joinPcm(parts, sampleRate);
+  return {
+    wav: pcmToWav(pcm, sampleRate),
+    durationSeconds: Math.round((pcm.byteLength / (sampleRate * 2)) * 10) / 10,
+    engine,
+    fallbackReason,
+  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -92,7 +130,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       .filter((s) => s.text);
     if (!segIn.length) return send({ error: "at least one non-empty segment required" }, 400, origin);
 
-    // 모델 접두사로 프로바이더 결정 — gemini_tts는 Cloud Gemini-TTS, 그 외는 ElevenLabs.
+    // 모델 접두사로 프로바이더 결정 — gemini_tts는 Gemini TTS(Gemini API, Cloud 폴백), 그 외는 ElevenLabs.
     const isGemini = model.toLowerCase().startsWith("gemini");
     const provider = isGemini ? "gemini" : "elevenlabs";
 
@@ -101,9 +139,13 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     const googleClientEmail = String(env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL || "").trim();
     const googlePrivateKey = String(env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY || "").trim();
-    if (isGemini && (!googleClientEmail || !googlePrivateKey)) {
-      return send({ error: "TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY not configured" }, 500, origin);
+    // Gemini API(generativelanguage) 키 — imagen/music/sfx 와 같은 규칙.
+    const geminiApiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
+    if (isGemini && !geminiApiKey && (!googleClientEmail || !googlePrivateKey)) {
+      return send({ error: "GEMINI_API_KEY or TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY not configured" }, 500, origin);
     }
+    // 연출 지시문(감정·템포·호흡·전체 흐름). Gemini 전용.
+    const direction = String(body.direction || "").trim().slice(0, 4000);
 
     const sql = getSql(env);
     if (sql) { try { await ensureSoundSchema(sql); } catch (_) {} }
@@ -132,16 +174,36 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const totalChars = segments.reduce((n, s) => n + s.text.length, 0);
     const creditsUsed = totalChars; // ElevenLabs는 문자 기준 과금 — 대략값으로 문자 수 사용
 
-    // 합성
-    const merged = isGemini
-      ? await synthesizeSegmentsGemini({
+    // 합성 — Gemini 는 WAV(24kHz PCM), ElevenLabs 는 MP3.
+    let merged: Uint8Array;
+    let outFormat = format;
+    let contentType = "audio/mpeg";
+    let durationSeconds: number | null = null;
+    let engine = model;
+    let fallbackReason = "";
+    if (isGemini) {
+      const g = await synthesizeGeminiDirected({
+        env,
+        apiKey: geminiApiKey,
+        direction,
+        cloud: (googleClientEmail && googlePrivateKey) ? {
           clientEmail: googleClientEmail,
           privateKeyPem: googlePrivateKey,
           userProject: String(env.GCS_BILLING_PROJECT_ID || env.GOOGLE_PROJECT_ID || "").trim(),
           modelName: normalizeGeminiTtsModel(String(env.GEMINI_TTS_MODEL || "").trim()),
-          segments,
-        })
-      : await synthesizeSegments({ apiKey: elevenLabsKey, segments, model, stability: stabilityVal, format });
+        } : null,
+        segments,
+      });
+      merged = g.wav;
+      outFormat = `wav_${TTS_PCM_RATE}`;
+      contentType = "audio/wav";
+      durationSeconds = g.durationSeconds;
+      engine = g.engine;
+      fallbackReason = g.fallbackReason;
+    } else {
+      merged = await synthesizeSegments({ apiKey: elevenLabsKey, segments, model, stability: stabilityVal, format });
+    }
+    const ext: "mp3" | "wav" = contentType === "audio/wav" ? "wav" : "mp3";
 
     // GCS 업로드
     const assetId = "snd_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
@@ -153,10 +215,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (gcs) {
       const userRoot = buildUserRoot(gcs.basePrefix, userId);
       const scopeKey = mode === "project" ? (brandId || "project") : (sessionId || "instance");
-      objectName = buildSoundObjectName(userRoot, "voices", scopeKey, assetId);
+      objectName = buildSoundObjectName(userRoot, "voices", scopeKey, assetId, ext);
       try {
         uploaded = await uploadToGcs({
-          bucket: gcs.bucket, object: objectName, bytes: merged, contentType: "audio/mpeg",
+          bucket: gcs.bucket, object: objectName, bytes: merged, contentType,
           clientEmail: gcs.clientEmail, privateKeyPem: gcs.privateKey, userProject: gcs.userProject || undefined,
         });
         if (uploaded) {
@@ -164,7 +226,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         }
       } catch (_) {}
     }
-    if (!outputUrl) outputUrl = bytesToDataUrl(merged); // 업로드 실패/미구성 폴백
+    if (!outputUrl) outputUrl = bytesToDataUrl(merged, contentType); // 업로드 실패/미구성 폴백
 
     // sound_assets 레코드 (preview 샘플은 히스토리에 남기지 않음)
     const isPreview = !!body.preview;
@@ -174,8 +236,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         const textContent = segIn.map((s) => s.text).join("\n").slice(0, 4000);
         const rows = await sql(
           `INSERT INTO sound_assets
-             (owner_id, type, scope, brand_id, episode_id, session_id, title, text_content, segments, voice_id, provider, model, params, output_url, output_format, credits_used, status)
-           VALUES ($1, 'voice', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, 'ready')
+             (owner_id, type, scope, brand_id, episode_id, session_id, title, text_content, segments, voice_id, provider, model, params, output_url, output_format, credits_used, duration_seconds, status)
+           VALUES ($1, 'voice', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, 'ready')
            RETURNING id`,
           [
             userId, mode, brandId, episodeId, sessionId,
@@ -184,16 +246,16 @@ const handlePost: PagesFunction = async ({ request, env }) => {
             JSON.stringify(segIn),
             (segIn[0] && UUID_RE.test(segIn[0].voiceId)) ? segIn[0].voiceId : null,
             provider,
-            model,
-            JSON.stringify({ stability: stabilityVal, format, objectName }),
-            outputUrl, format, creditsUsed,
+            isGemini ? engine : model,
+            JSON.stringify({ stability: stabilityVal, format: outFormat, objectName, engine, direction: direction || null, fallbackReason: fallbackReason || null }),
+            outputUrl, outFormat, creditsUsed, durationSeconds,
           ]
         );
         if (rows && rows[0]) recordId = String(rows[0].id);
       } catch (_) {}
     }
 
-    return send({ assetId: recordId, status: "ready", outputUrl, creditsUsed }, 200, origin);
+    return send({ assetId: recordId, status: "ready", outputUrl, creditsUsed, format: outFormat, durationSeconds, engine, fallbackReason: fallbackReason || undefined }, 200, origin);
   } catch (e: any) {
     return send({ error: String(e?.message || e || "voice_generate_error") }, 500, origin);
   }

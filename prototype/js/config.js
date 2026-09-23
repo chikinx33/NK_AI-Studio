@@ -84,6 +84,7 @@
         'nk_sns_states',
         'nk_sound_session_id',
         'nk_sound_segments_v1',
+        'nk_sound_direction_v1',
         'nk_ai_image_session_id',
         'nk_video_gen_session_id',
         'nk_video_gen_deleted_v1',

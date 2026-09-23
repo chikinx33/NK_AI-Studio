@@ -6,19 +6,21 @@
   var MODELS = [
     { id: 'eleven_v3',             ko: 'ElevenLabs v3 (표현력)',        en: 'ElevenLabs v3' },
     { id: 'eleven_multilingual_v2', ko: 'Multilingual v2 (음색 일관성)', en: 'Multilingual v2' },
-    { id: 'gemini_tts',            ko: 'Gemini TTS (자연스러운 한국어)', en: 'Gemini TTS' }
+    { id: 'gemini_tts',            ko: 'Gemini 3.1 TTS (감정 연출)',    en: 'Gemini 3.1 TTS (directed)' }
   ];
 
-  // Gemini TTS 프리셋 보이스 — AI 기업 에이전트 페이지와 동일한 16종.
-  // providerVoiceId = Cloud Text-to-Speech의 Gemini 보이스 이름.
+  // Gemini TTS 프리셋 보이스.
+  // providerVoiceId = Gemini TTS 보이스 이름 (연출 프리셋의 추천 보이스를 모두 포함).
   var GEMINI_VOICES = [
     { n: 'Achird',       g: 'male',   d: '친근하고 편안한 톤' },
     { n: 'Algenib',      g: 'male',   d: '거칠고 묵직한 저음' },
     { n: 'Algieba',      g: 'male',   d: '부드럽고 매끄러운 음색' },
     { n: 'Alnilam',      g: 'male',   d: '단단하고 확고한 전달' },
+    { n: 'Charon',       g: 'male',   d: '단단하고 절제된 지적 중음' },
     { n: 'Enceladus',    g: 'male',   d: '숨결이 섞인 나직한 음색' },
-    { n: 'Fenrir',       g: 'male',   d: '활기차고 힘 있는 톤' },
+    { n: 'Fenrir',       g: 'male',   d: '묵직하고 깊은 중저음' },
     { n: 'Orus',         g: 'male',   d: '단호하고 또렷한 진행' },
+    { n: 'Puck',         g: 'male',   d: '에너지 넘치는 명료한 청년음' },
     { n: 'Sadachbia',    g: 'male',   d: '생동감 있고 경쾌한 톤' },
     { n: 'Achernar',     g: 'female', d: '부드럽고 섬세한 음색' },
     { n: 'Aoede',        g: 'female', d: '가볍고 산뜻한 톤' },
@@ -26,6 +28,8 @@
     { n: 'Callirrhoe',   g: 'female', d: '여유롭고 차분한 톤' },
     { n: 'Gacrux',       g: 'female', d: '성숙하고 안정적인 음색' },
     { n: 'Kore',         g: 'female', d: '확신에 찬 명료한 전달' },
+    { n: 'Pulcherrima',  g: 'female', d: '당당하고 세련된 직진형 음색' },
+    { n: 'Sulafat',      g: 'female', d: '포근하고 자상한 온기' },
     { n: 'Vindemiatrix', g: 'female', d: '온화하고 다정한 톤' },
     { n: 'Zephyr',       g: 'female', d: '맑고 경쾌한 캐릭터 보이스' }
   ].map(function (v) {
@@ -51,6 +55,51 @@
     { id: 'mp3_44100_192', label: 'MP3 44.1kHz 192kbps' },
     { id: 'mp3_22050_32',  label: 'MP3 22kHz 32kbps' }
   ];
+  // Gemini TTS 는 모델 원본(24kHz 16bit PCM)을 재인코딩 없이 WAV 로 저장한다.
+  var GEMINI_FORMATS = [{ id: 'wav_24000', label: 'WAV 24kHz 16bit' }];
+
+  // 연출 지시문 프리셋 — Google AI Studio 'Emotional Voice Studio' 의 장르 프리셋 지시문 원문.
+  // 지시문은 모델에 그대로 보내는 영문 디렉션이고, voice 는 추천 보이스(라벨에 표시만 한다).
+  var DIRECTION_PRESETS = [
+    { id: "cf-commercial-narrator-40s", genre: { ko: "광고 / CF", en: "Ad / CF" }, ko: "40대 진중한 공익·금융 광고", en: "Sincere public-service / finance ad (40s)", voice: "Fenrir",
+      text: "Say this in a calm, serious, low and steady voice, like a seasoned Korean TV commercial narrator in his mid-forties speaking sincerely to one listener. Do not perform or dramatize: no theatrical emphasis, no rising intonation at sentence ends, no smiling tone. Keep an even, unhurried pace of about 4.5 to 5 Korean syllables per second, and end every sentence with a firm, settled downward close. Pause for about one second between lines. Keep the first four lines slightly graver; from the fifth line, let the voice ease very slightly warmer while staying restrained, and finish the last line with quiet, trustworthy warmth. Clean close-mic studio sound:" },
+    { id: "cf-premium-tech", genre: { ko: "광고 / CF", en: "Ad / CF" }, ko: "미니멀 럭셔리 & 테크 브랜드", en: "Minimal luxury & tech brand", voice: "Charon",
+      text: "Deliver this in an ultra-clean, minimalist, and intimate whisper-tone commercial style (like an iconic Apple or luxury Scandinavian design film). Speak close to the microphone with subtle breathiness, quiet confidence, and zero theatrical salesmanship. Every word is deliberate, modern, and effortless. Generous pauses between key statements. A calm, intelligent downward cadence:" },
+    { id: "cf-food-sale", genre: { ko: "광고 / CF", en: "Ad / CF" }, ko: "침샘을 자극하는 F&B & 파격 세일", en: "Mouth-watering F&B & flash sale", voice: "Sadachbia",
+      text: "Say this with mouth-watering excitement, snappy crisp consonants, and high-energy sales charm. Fast-paced, bright, and inviting, like an appetizing gourmet food commercial or a flash discount announcement. Punchy rhythm, cheerful rising inflections on highlights, and an irresistible, irresistible smile in the tone:" },
+    { id: "cf-warm-family", genre: { ko: "광고 / CF", en: "Ad / CF" }, ko: "가슴 뭉클한 감성 가족·기업 PR", en: "Heartwarming family / corporate PR", voice: "Kore",
+      text: "Speak in a deeply heartfelt, tender, and empathetic tone, like a loving family member speaking from the heart in a heartwarming documentary PR commercial. Soft vocal fry, gentle warm cadence, slight smile audible in the breath, compassionate and emotionally grounding:" },
+    { id: "anime-shonen-hero", genre: { ko: "애니메이션", en: "Animation" }, ko: "열혈 소년만화 주인공의 결전", en: "Shonen hero's final battle", voice: "Puck",
+      text: "Perform as a fierce, passionate shonen anime protagonist in the climax of a desperate battle! Speak with raw determination, gritted teeth, adrenaline, and explosive conviction. Fast tempo with rising emotional intensity, breathing heavily between passionate declarations:" },
+    { id: "anime-cool-rival", genre: { ko: "애니메이션", en: "Animation" }, ko: "냉철한 천재 엘리트 라이벌", en: "Cold genius elite rival", voice: "Charon",
+      text: "Voice an icy, razor-sharp anime rival genius. Deliver each line with cold intellectual arrogance, slight quiet mockery, and absolute calculated composure. No shouting; the power comes from deadpan precision, chilly pauses, and a subtle smirk in the tone:" },
+    { id: "anime-magical-heroine", genre: { ko: "애니메이션", en: "Animation" }, ko: "발랄한 마법소녀 & 히로인", en: "Bubbly magical-girl heroine", voice: "Zephyr",
+      text: "Voice a cheerful, sparkling anime magical girl full of courage, innocence, and radiant optimism! High, melodious pitch with bouncy rhythm, adorable gasps of joy, and a triumphant, lovely chant at the finale:" },
+    { id: "anime-epic-villain", genre: { ko: "애니메이션", en: "Animation" }, ko: "어둠의 대마왕 / 심연의 빌런", en: "Dark lord / abyssal villain", voice: "Fenrir",
+      text: "Perform as an ancient, omnipotent dark lord or supreme anime villain. Deep cavernous chest resonance, slow sinister cadence, arrogant chuckles, and chilling theatrical malice. Every syllable carries the weight of impending doom:" },
+    { id: "anime-mascot-fairy", genre: { ko: "애니메이션", en: "Animation" }, ko: "깜찍한 마스코트 요정", en: "Cute mascot fairy", voice: "Zephyr",
+      text: "Voice a cute, tiny magical pet mascot (like a talking fairy or fantasy creature). High squeaky pitch, lively chatter, cute exaggerated reactions, breathing enthusiastically with adorable gasps:" },
+    { id: "cinema-blockbuster-trailer", genre: { ko: "영화 / 트레일러", en: "Film / Trailer" }, ko: "헐리우드 블록버스터 예고편", en: "Hollywood blockbuster trailer", voice: "Fenrir",
+      text: "Epic cinematic movie trailer voiceover (classic 'In a world' trailer style). Sub-bass chest resonance, tremendous gravity, pregnant dramatic pauses of 1.5 seconds between epochal statements. Build tension toward an explosive climax:" },
+    { id: "cinema-thriller-suspense", genre: { ko: "영화 / 트레일러", en: "Film / Trailer" }, ko: "심리 스릴러 & 미스터리 범죄", en: "Psychological thriller & crime mystery", voice: "Enceladus",
+      text: "Chilling, psychological thriller film narration. Very close to mic, muted breathy undertones, eerie quiet calmness with unsettling subtle paranoia. Every pause builds goosebumps and suspense:" },
+    { id: "cinema-indie-melodrama", genre: { ko: "영화 / 트레일러", en: "Film / Trailer" }, ko: "서정적인 독립영화 독백", en: "Lyrical indie-film monologue", voice: "Aoede",
+      text: "Poetic, melancholic indie cinema voiceover monologue. Fragile, gentle pacing, thoughtful sighs, reflective and deeply honest as if reading from a handwritten personal diary late at night:" },
+    { id: "drama-historical-king", genre: { ko: "드라마 / 오디오북", en: "Drama / Audiobook" }, ko: "정통 대하사극 왕의 어명", en: "Historical drama: the king's decree", voice: "Fenrir",
+      text: "Deliver as an authoritative Korean historical Joseon king in a royal drama court scene. Resonant dignified voice, stern royal majesty, traditional cadence, commanding deep presence with firm unyielding stops:" },
+    { id: "drama-romantic-confession", genre: { ko: "드라마 / 오디오북", en: "Drama / Audiobook" }, ko: "정통 멜로 드라마의 눈물 고백", en: "Melodrama tearful confession", voice: "Kore",
+      text: "Perform an emotional, heartbreaking romantic melodrama confession scene. The voice quivers with suppressed tears, soft emotional cracks, tender desperation, speaking right into the listener's heart:" },
+    { id: "drama-hardboiled-noir", genre: { ko: "드라마 / 오디오북", en: "Drama / Audiobook" }, ko: "하드보일드 느와르 형사의 독백", en: "Hard-boiled noir detective monologue", voice: "Charon",
+      text: "Grit-soaked hardboiled noir detective monologue. Gravelly, weary, disillusioned tone, cigarette smoke rasp, speak with cynical honesty under neon rain:" },
+    { id: "drama-midnight-radio", genre: { ko: "드라마 / 오디오북", en: "Drama / Audiobook" }, ko: "심야 라디오 DJ의 따뜻한 위로", en: "Late-night radio DJ comfort", voice: "Kore",
+      text: "Late-night soothing radio host voice. Cozy, mellow, empathetic close-mic warmth. Speaking softly as if sitting across the table with a cup of hot tea for someone who had a hard day:" },
+    { id: "shorts-hook-knowledge", genre: { ko: "숏츠 / 숏폼", en: "Shorts" }, ko: "3초 후킹 지식·정보 숏츠", en: "3-second hook knowledge Shorts", voice: "Puck",
+      text: "Super high-retention viral YouTube Shorts narration style! Rapid-fire 6.5 to 7.0 syllables per second, crisp punchy consonants, zero hesitation, breathless momentum, sharp question hooks, ending with an energetic punch:" },
+    { id: "shorts-viral-storytelling", genre: { ko: "숏츠 / 숏폼", en: "Shorts" }, ko: "몰입도 100% 썰 & 괴담 스토리텔러", en: "Immersive story & ghost-tale teller", voice: "Achird",
+      text: "Dynamic, captivating conversational storyteller for viral story shorts. Expressive pitch swings, dramatic tension building, sudden gasps and hushed whispering followed by fast punchlines:" },
+    { id: "shorts-comic-reaction", genre: { ko: "숏츠 / 숏폼", en: "Shorts" }, ko: "텐션 폭발 밈 & 코믹 리뷰", en: "High-tension meme & comic review", voice: "Pulcherrima",
+      text: "Hilarious, sassy, super-expressive Korean comedy reaction and meme dubbing voice! Playful sarcasm, lively bounce, rapid-fire punchy delivery with witty, confident flair:" }
+  ];
   var EMOTION_TAGS = ['calm', 'warmly', 'cheerfully', 'sadly', 'excited', 'whispering', 'angry', 'nervous'];
   var SFX_CATEGORIES = ['Animals', 'Bass', 'Booms', 'Braams', 'Brass', 'Cymbals', 'Foley', 'Nature', 'Sci-Fi', 'UI', 'Whoosh'];
   var SFX_DURATIONS = [1, 2, 3, 5, 8, 10];
@@ -58,6 +107,7 @@
 
   var STORAGE_SESSION_KEY = 'nk_sound_session_id';
   var STORAGE_SEGMENTS_KEY = 'nk_sound_segments_v1';
+  var STORAGE_DIRECTION_KEY = 'nk_sound_direction_v1';
 
   var i18n = {
     ko: {
@@ -76,6 +126,9 @@
       model_label: '모델', stability_label: 'Stability', creative: 'Creative', robust: 'Robust',
       speed_label: '재생 속도', preview_line: '테스트 멘트', preview_pick_first: '먼저 보이스를 선택해주세요.',
       format_label: '출력 포맷', generate_voice: '음성 생성', generating: '생성 중…',
+      direction_label: '연출 지시문', direction_preset: '연출 프리셋', direction_preset_custom: '직접 작성',
+      direction_placeholder: '감정·템포·호흡·전체 흐름을 성우에게 디렉팅하듯 적어주세요.\n예: 처음 네 줄은 무겁게, 다섯째 줄부터 조금씩 따뜻하게. 문장 끝은 내려서 닫고, 줄 사이 1초 쉼.\n비워두면 기본 디렉션으로 읽어요.',
+      direction_voice_hint: '추천 보이스',
       sfx_title: '효과음', sfx_placeholder: '효과음 프롬프트 입력…  (예: heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: '영향도', generate_sfx: '효과음 생성',
       assets_title: '오디오 자산', assets_empty: '아직 생성된 사운드가 없습니다.\n오른쪽 패널에서 생성해보세요.',
@@ -104,6 +157,9 @@
       model_label: 'Model', stability_label: 'Stability', creative: 'Creative', robust: 'Robust',
       speed_label: 'Playback speed', preview_line: 'Test line', preview_pick_first: 'Select a voice first.',
       format_label: 'Output format', generate_voice: 'Generate voice', generating: 'Generating…',
+      direction_label: 'Voice direction', direction_preset: 'Direction preset', direction_preset_custom: 'Custom',
+      direction_placeholder: 'Direct the voice actor: emotion, tempo, breathing, and the arc across the script.\ne.g. First four lines graver, then slightly warmer from line five. Close each sentence downward, 1-second pause between lines.\nLeave empty to use the default direction.',
+      direction_voice_hint: 'Suggested voice',
       sfx_title: 'Sound Effects', sfx_placeholder: 'Enter SFX prompt…  (e.g. heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: 'Influence', generate_sfx: 'Generate SFX',
       assets_title: 'Audio Assets', assets_empty: 'No sounds generated yet.\nUse the panel on the right.',
@@ -131,6 +187,8 @@
     model: 'gemini_tts',   // 기본값: 별도 구독 없이 Google 자격증명으로 동작하는 Gemini TTS
     stability: 0.5,
     format: 'mp3_44100_128',
+    direction: '',         // Gemini TTS 연출 지시문 (프롬프트로 그대로 전달)
+    directionPreset: '',   // 마지막으로 고른 연출 프리셋 id ('' = 직접 작성)
     speed: 1,              // 미리듣기·자산 재생 속도 (playbackRate)
     previewLine: '',       // 마지막으로 미리듣기한 멘트
     previewLineIdx: 0,
@@ -192,6 +250,16 @@
   }
   function saveSegments() {
     try { localStorage.setItem(STORAGE_SEGMENTS_KEY, JSON.stringify(state.segments)); } catch (_) {}
+  }
+  function saveDirection() {
+    try { localStorage.setItem(STORAGE_DIRECTION_KEY, JSON.stringify({ text: state.direction, preset: state.directionPreset })); } catch (_) {}
+  }
+  function loadDirection() {
+    try {
+      var raw = localStorage.getItem(STORAGE_DIRECTION_KEY);
+      var d = raw ? JSON.parse(raw) : null;
+      if (d && typeof d.text === 'string') { state.direction = d.text; state.directionPreset = String(d.preset || ''); }
+    } catch (_) {}
   }
   function loadSegments() {
     try {
@@ -562,6 +630,56 @@
     return vf;
   }
 
+  // ── Direction field: 연출 프리셋 + 지시문 (Gemini TTS 전용) ──
+  function renderDirectionField() {
+    var en = state.lang === 'en';
+    var df = el('div', 'snd-field');
+    df.appendChild(el('span', 'snd-label', { textContent: t('direction_label') }));
+
+    var psel = el('select', 'snd-select', { 'aria-label': t('direction_preset') });
+    var custom = el('option', '', { value: '', textContent: t('direction_preset') + ' · ' + t('direction_preset_custom') });
+    psel.appendChild(custom);
+    var groups = {};
+    DIRECTION_PRESETS.forEach(function (p) {
+      var gl = en ? p.genre.en : p.genre.ko;
+      if (!groups[gl]) { groups[gl] = el('optgroup', '', { label: gl }); psel.appendChild(groups[gl]); }
+      var o = el('option', '', { value: p.id, textContent: (en ? p.en : p.ko) + ' · ' + p.voice });
+      if (p.id === state.directionPreset) o.selected = true;
+      groups[gl].appendChild(o);
+    });
+    df.appendChild(psel);
+
+    var ta = el('textarea', 'snd-seg-text', { placeholder: t('direction_placeholder'), rows: '6' });
+    ta.style.minHeight = '120px';
+    ta.value = state.direction || '';
+    df.appendChild(ta);
+
+    var hint = el('div', 'snd-preview-line');
+    function updateHint() {
+      var p = DIRECTION_PRESETS.find(function (x) { return x.id === state.directionPreset; });
+      hint.textContent = p ? (t('direction_voice_hint') + ': ' + p.voice) : '';
+      hint.style.display = p ? '' : 'none';
+    }
+    updateHint();
+    df.appendChild(hint);
+
+    psel.addEventListener('change', function () {
+      var p = DIRECTION_PRESETS.find(function (x) { return x.id === psel.value; });
+      state.directionPreset = p ? p.id : '';
+      if (p) { state.direction = p.text; ta.value = p.text; }
+      updateHint();
+      saveDirection();
+    });
+    ta.addEventListener('input', function () {
+      state.direction = ta.value;
+      // 프리셋 원문에서 손으로 고치면 '직접 작성'으로 표시한다.
+      var p = DIRECTION_PRESETS.find(function (x) { return x.id === state.directionPreset; });
+      if (p && p.text !== ta.value) { state.directionPreset = ''; psel.value = ''; updateHint(); }
+      saveDirection();
+    });
+    return df;
+  }
+
   // ── Voice settings panel (VOICE right) ──
   function renderVoiceSettingsPanel() {
     var panel = el('div', 'snd-gen-panel');
@@ -586,6 +704,9 @@
     mf.appendChild(msel);
     panel.appendChild(mf);
 
+    // 연출 지시문 — Gemini TTS 는 이 문단을 대본 앞에 붙여 한 프롬프트로 연기한다.
+    if (isGeminiModel()) panel.appendChild(renderDirectionField());
+
     // stability slider — ElevenLabs 전용 파라미터라 Gemini TTS에서는 숨긴다.
     if (!isGeminiModel()) {
       var sf = el('div', 'snd-field');
@@ -604,11 +725,12 @@
     var ff = el('div', 'snd-field');
     ff.appendChild(el('span', 'snd-label', { textContent: t('format_label') }));
     var fsel = el('select', 'snd-select');
-    FORMATS.forEach(function (f) {
+    (isGeminiModel() ? GEMINI_FORMATS : FORMATS).forEach(function (f) {
       var o = el('option', '', { value: f.id, textContent: f.label });
       if (f.id === state.format) o.selected = true;
       fsel.appendChild(o);
     });
+    if (isGeminiModel()) fsel.disabled = true;
     fsel.addEventListener('change', function () { state.format = fsel.value; });
     ff.appendChild(fsel);
     panel.appendChild(ff);
@@ -744,7 +866,7 @@
       audio.addEventListener('loadedmetadata', function () { applyPlaybackRate(audio); });
       card.appendChild(audio);
       var actions = el('div', 'snd-asset-actions');
-      var dl = el('a', 'snd-mini-btn', { href: a.outputUrl, download: (a.title || 'sound') + '.mp3', target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
+      var dl = el('a', 'snd-mini-btn', { href: a.outputUrl, download: (a.title || 'sound') + (/^wav/i.test(String(a.outputFormat || '')) ? '.wav' : '.mp3'), target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
       dl.appendChild(document.createTextNode(t('download')));
       actions.appendChild(dl);
       card.appendChild(actions);
@@ -980,6 +1102,7 @@
       model: isGeminiModel() ? 'gemini_tts' : 'eleven_multilingual_v2',
       format: 'mp3_44100_128',
       stability: 0.5,
+      direction: isGeminiModel() ? state.direction : '',
       segments: [{ voiceId: (String(v.id).indexOf('seed-') === 0 || isGeminiModel() ? '' : v.id), providerVoiceId: v.providerVoiceId || '', text: line }]
     }).then(function (res) {
       state.previewBusyId = '';
@@ -1079,6 +1202,7 @@
       model: state.model,
       format: state.format,
       stability: state.stability,
+      direction: isGeminiModel() ? state.direction : '',
       segments: valid.map(function (s) { return { voiceId: s.voiceId || '', providerVoiceId: s.providerVoiceId || '', text: s.text, speaker: s.voiceName || '' }; })
     };
     if (isProjectMode()) { payload.brandId = brandId(); payload.episodeId = episodeId(); }
@@ -1088,7 +1212,7 @@
       state.generating = false;
       // replace pending with result
       state.assets = state.assets.filter(function (a) { return a.id !== localId; });
-      state.assets.unshift({ id: res.assetId || localId, type: 'voice', status: 'ready', title: preview, model: state.model, outputUrl: res.outputUrl, creditsUsed: res.creditsUsed });
+      state.assets.unshift({ id: res.assetId || localId, type: 'voice', status: 'ready', title: preview, model: res.engine || state.model, outputUrl: res.outputUrl, outputFormat: res.format || state.format, durationSeconds: res.durationSeconds || null, creditsUsed: res.creditsUsed });
       render();
       loadAssets();
     }).catch(function (err) {
@@ -1160,6 +1284,7 @@
     state.currentBrand = readCurrentBrand();
     detectLang();
     loadSegments();
+    loadDirection();
     if (!state.segments.length) state.segments = [{ id: genId(), voiceId: '', providerVoiceId: '', voiceName: '', voiceInitial: '?', text: '' }];
 
     // 초기 뷰 결정(다른 앱과 동일 — 파라미터 없이 진입하면 무조건 대시보드가 첫 화면):
