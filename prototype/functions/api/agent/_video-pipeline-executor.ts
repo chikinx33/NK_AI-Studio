@@ -11,13 +11,15 @@
 //    /skill-jobs/:id/continue 가 남은 스텝을 이어간다. 실패한 컷은 failed 로 표시하고 다음 컷으로 넘어간다
 //    (브라우저 bulk 루프처럼 조용히 넘어가지 않고 스텝에 오류를 남긴다).
 import { quoteCredits } from "../_shared/credit-rates.js";
-import { AGENT_TOOLS } from "./_shared";
+import { AGENT_TOOLS, attachSceneVideo, checkVideoJob } from "./_shared";
 import type { CompanySkillJobRow } from "./_skill-jobs";
 
 export const VIDEO_PIPELINE_EXECUTOR_ID = "video-pipeline-adapter-v1";
-// 한 배치의 시간 예산. scene_video 도구가 내부에서 최대 3분 폴링하므로 영상 1개 + 스틸 몇 개가 한 배치다.
+// 한 배치의 시간 예산. 영상은 제출만 하고(pendingVideo) 다음 배치에서 완료를 확인하므로 폴링에 예산을 쓰지 않는다.
 export const VIDEO_PIPELINE_RUN_BUDGET_MS = 150_000;
 const DEFAULT_CLIP_SECONDS = 6;
+// 외부 영상 모델이 이보다 오래 걸리면 그 컷은 실패로 표시한다.
+const VIDEO_PIPELINE_VIDEO_MAX_MS = 30 * 60 * 1000;
 
 export type StepState = "pending" | "done" | "skipped" | "failed";
 
@@ -33,6 +35,8 @@ export interface VideoPipelineStep {
   videoUrl?: string;
   updatedAt?: string;
   subscriptionImage?: { id: string; key: string; results: Record<string, any> };
+  // 제출해 둔 영상(공급자 job_id + 완료 시 컷에 붙일 정보). 다음 배치가 /api/video/status 로 확인해 마무리한다.
+  pendingVideo?: { jobId: string; model: string; durationSeconds: number; attach: any; submittedAt: string };
 }
 
 export interface VideoPipelinePlan {
@@ -223,12 +227,38 @@ export async function runVideoPipelineBatch(
     if (step.video === "pending") {
       if (now() - startedAt > budgetMs) break;
       try {
+        if (step.pendingVideo) {
+          // 제출해 둔 영상의 완료 확인. 아직이면 이 배치는 여기서 멈추고 continue 가 다시 본다.
+          const check = await checkVideoJob(ctx as any, step.pendingVideo.jobId);
+          if (check.state === "processing") {
+            const started = Date.parse(step.pendingVideo.submittedAt || "");
+            if (Number.isFinite(started) && Date.now() - started > VIDEO_PIPELINE_VIDEO_MAX_MS) throw new Error(`영상 생성이 ${Math.round(VIDEO_PIPELINE_VIDEO_MAX_MS / 60000)}분 넘게 끝나지 않아 종료(${step.pendingVideo.model})`);
+            break;
+          }
+          if (check.state === "error") throw new Error(check.error);
+          const out = await attachSceneVideo(ctx as any, step.pendingVideo.attach, check.videoUrl);
+          step.video = "done";
+          delete step.pendingVideo;
+          step.videoUrl = String(out?.videoUrl || "");
+          step.videoError = "";
+          events.push({ stage: "running", status: "completed", summary: `컷 ${step.sceneId} 영상 생성 완료`, details: { sceneId: step.sceneId, promptEcho: out?.promptEcho || "" }, eventKey: `run${runIndex}:video:${step.sceneId}:done` });
+          step.updatedAt = stamp();
+          continue;
+        }
         const out = await AGENT_TOOLS.scene_video.run(sceneInput(step), ctx as any);
         step.video = "done";
         step.videoUrl = String(out?.videoUrl || "");
         step.videoError = "";
         events.push({ stage: "running", status: "completed", summary: `컷 ${step.sceneId} 영상 생성 완료`, details: { sceneId: step.sceneId, promptEcho: out?.promptEcho || "" }, eventKey: `run${runIndex}:video:${step.sceneId}:done` });
       } catch (e: any) {
+        if (e.videoJobId) {
+          step.pendingVideo = { jobId: e.videoJobId, model: String(e.videoModel || ""), durationSeconds: Number(e.durationSeconds) || 0, attach: e.attach, submittedAt: new Date().toISOString() };
+          events.push({ stage: "running", status: "queued", summary: `컷 ${step.sceneId}: 영상 제출(${e.videoModel || "video"} · ${e.durationSeconds || "?"}초) — 완료 대기`,
+            details: { sceneId: step.sceneId, videoJobId: e.videoJobId }, eventKey: `run${runIndex}:video:${step.sceneId}:submitted` });
+          step.updatedAt = stamp();
+          break;
+        }
+        delete step.pendingVideo;
         step.video = "failed";
         step.videoError = String(e?.message || e || "video failed").slice(0, 400);
         events.push({ stage: "running", status: "failed", summary: `컷 ${step.sceneId} 영상 실패: ${step.videoError}`, details: { sceneId: step.sceneId }, eventKey: `run${runIndex}:video:${step.sceneId}:failed` });

@@ -136,9 +136,12 @@ test('(d) 에이전트 씬 도구가 조립기를 부르고 옛 폴백 체인을
   assert.match(still, /imagePrompt: prompt/);
   assert.match(still, /imageAttempts: \(Number\(prevLineage\.imageAttempts\) \|\| 0\) \+ 1/);
   assert.match(still, /imageHistory/);
-  assert.match(video, /videoPrompt: prompt/);
-  assert.match(video, /videoFromImage/);
-  assert.match(video, /videoAttempts: \(Number\(prevLineage\.videoAttempts\) \|\| 0\) \+ 1/);
+  // 영상은 제출만 하고(비동기) 완료 시 attachSceneVideo 가 계보를 쓴다 — 조립한 프롬프트가 그대로 계보에 남아야 한다.
+  assert.match(video, /throwPendingVideo\(sub, \{\s*projectId, sceneId: scene\?\.id, promptForVideo, videoFromImage/);
+  const attach = functionBody(src, 'attachSceneVideo');
+  assert.match(attach, /videoPrompt: attach\.promptForVideo/);
+  assert.match(attach, /videoFromImage: attach\.videoFromImage/);
+  assert.match(attach, /videoAttempts: \(Number\(prevLineage\.videoAttempts\) \|\| 0\) \+ 1/);
   // header 가 project_get 결과에 실린다
   const get = functionBody(src, 'runProjectGetTool');
   assert.match(get, /header:/);

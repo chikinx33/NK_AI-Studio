@@ -16,6 +16,7 @@ import {
   fileJobAsWorkItem,
   hasDeliverableOutput,
   persistPendingImage,
+  persistPendingVideo,
   createJob,
   processJob,
 } from "./_shared";
@@ -91,9 +92,14 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
         await setJobStatus(sql, id, auth.userId, { status: "working", reviewStatus: "approved", reviewNote: note });
         waitUntil((async () => {
           try {
-            const out = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
+            const out = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId, jobId: id });
             await setJobStatus(sql, id, auth.userId, { status: "approved", output: out, reviewStatus: "approved" });
           } catch (e: any) {
+            if (e.videoJobId) {
+              await persistPendingVideo({ request, env, authHeader, userId: auth.userId, runApproved: true,
+                conversationId: toolInput._conversationId || 'main' }, sql, id, e);
+              return;
+            }
             await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
           }
         })());
@@ -120,6 +126,15 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
           return send({ ok: true, job: await getJob(sql, id, auth.userId), message: {
             role: 'agent', agentId: job.agent_id, name: meta.name,
             text: '🎨 승인 확인! 본인 ChatGPT 구독으로 이미지 생성·저장 중입니다. 완료 후 결과가 표시됩니다.' } }, 200, origin);
+        }
+        if (e.videoJobId) {
+          // 영상은 제출만 하고 돌아온다(응답 30초 한계). 완료·컷 부착은 폴링 때 reconcileVideoJobs 가 한다.
+          await persistPendingVideo({ request, env, authHeader, userId: auth.userId,
+            runApproved: true, conversationId: toolInput._conversationId || 'main' }, sql, id, e);
+          const meta = AGENT_META[job.agent_id] || { name: job.agent_id };
+          return send({ ok: true, job: await getJob(sql, id, auth.userId), message: {
+            role: 'agent', agentId: job.agent_id, name: meta.name,
+            text: `🎬 승인 확인! 영상 생성을 제출했어요(${e.videoModel || "video"} · ${e.durationSeconds || "?"}초). 외부 모델이 만드는 동안 기다렸다가 완료되면 결과를 알려드릴게요(수분 소요).` } }, 200, origin);
         }
         await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
         return send({ error: `승인 실행 중 오류: ${e?.message || e}` }, 500, origin);

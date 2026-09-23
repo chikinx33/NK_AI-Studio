@@ -13,6 +13,7 @@ import {
   getJob,
   processJob,
   reconcileSubscriptionJobs,
+  reconcileVideoJobs,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -76,8 +77,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const job = await getJob(sql, id, auth.userId);
     if (!job) return send({ error: "not_found" }, 404, origin); // 타인 잡도 404로 숨김
-    await reconcileSubscriptionJobs({ request, env, userId: auth.userId,
-      authHeader: request.headers.get('Authorization') || '' }, sql);
+    const pollCtx = { request, env, userId: auth.userId, authHeader: request.headers.get('Authorization') || '' };
+    await reconcileSubscriptionJobs(pollCtx, sql);
+    await reconcileVideoJobs(pollCtx, sql);
     return send({ ok: true, job: await getJob(sql, id, auth.userId) }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "잡 조회 중 오류" }, 500, origin);

@@ -18,6 +18,7 @@ import { refreshAccessToken } from "./_google";
 import { requireMaster } from "../_shared/admin-users";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import { connectorSql, expireImageJobs } from '../_shared/codex-images';
+import { snapDurationFor } from "../_shared/video-specs";
 import {
   assertRenderable,
   buildQuoteView,
@@ -1390,6 +1391,30 @@ export async function expireStaleQueuedAgentJobs(sql: SqlFn, userId: string): Pr
   return (rows as any[]).length;
 }
 
+/**
+ * 실행 중(working)인데 오래 갱신되지 않은 잡을 실패로 닫는다.
+ *
+ * 도구는 waitUntil 백그라운드에서 돌고 그건 응답 후 ~30초면 끊긴다. 끊기면 아무도 상태를 바꾸지 않아
+ * 잡이 'working' 으로 영원히 남고, 아바타·검수 패널은 "진행 중" 을 계속 그린다. 외부 대기 표식
+ * (subscriptionPending·videoPending)이 있는 잡은 각자의 reconcile 이 닫으므로 건드리지 않는다.
+ */
+export async function expireStaleWorkingAgentJobs(sql: SqlFn, userId: string): Promise<number> {
+  const rows = await sql(
+    `UPDATE agent_jobs
+        SET status = 'error',
+            error = COALESCE(NULLIF(error, ''), '서버 실행이 중간에 끊겨 자동 종료되었습니다(백그라운드 실행 30초 제한). 다시 요청해 주세요.'),
+            updated_at = now()
+      WHERE user_id = $1
+        AND status = 'working'
+        AND updated_at < now() - interval '10 minutes'
+        AND COALESCE(output->>'subscriptionPending', '') <> 'true'
+        AND COALESCE(output->>'videoPending', '') <> 'true'
+      RETURNING id`,
+    [userId],
+  );
+  return (rows as any[]).length;
+}
+
 /** 승인 대기(실행 전 = output 없음) 잡을 일괄 취소. 테스트로 쌓인 잔여 승인 정리용.
  *  산출물 있는 잡(보고/검수 대상)은 건드리지 않는다. */
 export async function clearPendingApprovals(sql: SqlFn, userId: string): Promise<number> {
@@ -1681,8 +1706,64 @@ async function runSoundTool(input: any, ctx: ToolContext): Promise<any> {
   return { audioUrl: data.outputUrl || "", kind: "audio", model: "elevenlabs", promptEcho: prompt };
 }
 
-/** 픽셀 영상 도구: /api/video 제출(비동기) → /api/video/status 폴링 → 재생 URL. */
+// ── 영상 생성은 "제출 후 반환" 이다 ─────────────────────────────────────────
+// 전엔 runVideoTool 이 /api/video 에 제출한 뒤 같은 실행 안에서 최대 3분 폴링했다. 도구는 waitUntil
+// 백그라운드에서 돌고 그건 응답 후 ~30초면 끊기므로, 폴링이 중간에 죽고 잡은 'working' 으로 영원히
+// 남았다(2026-09-24 새벽 8b922d2e). 이제 도구는 제출 직후 VideoPendingSignal 을 던지고, processJob·
+// review.ts·파이프라인 실행기가 그걸 받아 잡을 '외부 대기(videoPending)' 로 남긴다. 완료 확인은
+// reconcileVideoJobs(패널·채팅 폴링 요청마다) 가 /api/video/status 로 한다 — 이미지 구독 경로와 같은 구조.
+export interface SceneVideoAttach {
+  projectId: string;
+  sceneId: any;
+  promptForVideo: string;
+  videoFromImage: string;
+  videoRefNotes: string[];
+  referenceCount: number;
+  agentJobId: string;
+}
+export interface VideoPendingSignal extends Error {
+  videoJobId: string;
+  videoModel: string;
+  durationSeconds: number;
+  promptEcho: string;
+  attach?: SceneVideoAttach;
+}
+export interface VideoSubmission { videoJobId: string; videoModel: string; durationSeconds: number; promptEcho: string }
+
+export function throwPendingVideo(sub: VideoSubmission, attach?: SceneVideoAttach): never {
+  const error: any = new Error("video_pending");
+  error.videoJobId = sub.videoJobId;
+  error.videoModel = sub.videoModel;
+  error.durationSeconds = sub.durationSeconds;
+  error.promptEcho = sub.promptEcho;
+  if (attach) error.attach = attach;
+  throw error;
+}
+
+/** /api/video/status 한 번 조회. 네트워크 오류는 던진다(호출자가 다음 폴링에 다시 본다). */
+export async function checkVideoJob(ctx: ToolContext, videoJobId: string): Promise<{ state: "processing" | "done" | "error"; videoUrl: string; error: string }> {
+  const st = await fetch(internalUrl(ctx.request, `/api/video/status?job_id=${encodeURIComponent(videoJobId)}`), {
+    headers: { Authorization: ctx.authHeader },
+  });
+  const stData: any = await st.json().catch(() => ({}));
+  if (stData.status === "error" || (stData.done && stData.error)) {
+    return { state: "error", videoUrl: "", error: String(stData.error?.message || stData.error?.code || "video 생성 실패") };
+  }
+  if (stData.done) {
+    const url = String(stData.playback || stData.playbackUrl || "").trim();
+    return url ? { state: "done", videoUrl: url, error: "" } : { state: "error", videoUrl: "", error: "영상은 끝났지만 재생 URL 이 없어요(done_no_output)." };
+  }
+  return { state: "processing", videoUrl: "", error: "" };
+}
+
+/** 픽셀 영상 도구: /api/video 에 제출만 하고 VideoPendingSignal 을 던진다(완료는 reconcileVideoJobs). */
 async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
+  const sub = await submitVideoJob(input, ctx);
+  return throwPendingVideo(sub);
+}
+
+/** /api/video 제출(비동기) → 공급자 job_id. 스튜디오 버튼과 같은 파라미터를 넘긴다. */
+export async function submitVideoJob(input: any, ctx: ToolContext): Promise<VideoSubmission> {
   const promptText = String(input?.prompt || "").trim();
   if (!promptText) throw new Error("prompt is required");
   const sub = await fetch(internalUrl(ctx.request, "/api/video"), {
@@ -1713,23 +1794,13 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
   let subData: any = {};
   try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
   if (!sub.ok) throw new Error(subData?.error || `video 제출 실패 (${sub.status})`);
-  const jobId = subData.job_id;
+  const jobId = String(subData.job_id || "").trim();
   if (!jobId) throw new Error("video job_id 없음");
-  // 비동기 폴링(최대 약 3분). 영상 생성은 수십초~수분.
-  for (let i = 0; i < 36; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
-    const st = await fetch(internalUrl(ctx.request, `/api/video/status?job_id=${encodeURIComponent(jobId)}`), {
-      headers: { Authorization: ctx.authHeader },
-    });
-    const stData: any = await st.json().catch(() => ({}));
-    if (stData.status === "error" || (stData.done && stData.error)) {
-      throw new Error(stData.error?.message || "video 생성 실패");
-    }
-    if (stData.done) {
-      return { videoUrl: stData.playback || stData.playbackUrl || "", kind: "video", model: "veo/kling", promptEcho: promptText };
-    }
-  }
-  throw new Error("video 생성 시간 초과");
+  // 실제로 적용되는 모델·길이(/api/video 와 같은 스냅 규칙). 보고 문구·jobs_status 가 이 값을 보여준다.
+  const videoModel = String(input?.videoModel || input?.model || "veo").trim() || "veo";
+  const requested = Number(input?.durationSeconds || input?.duration);
+  const durationSeconds = snapDurationFor(videoModel, requested > 0 ? requested : 6);
+  return { videoJobId: jobId, videoModel: String(subData.model || videoModel), durationSeconds, promptEcho: promptText };
 }
 
 /** 배열 정규화: 문자열 하나로 와도 배열로. (톤·스타일·시청목적·세부장르 공통) */
@@ -4047,7 +4118,10 @@ async function runJobsStatusTool(input: any, ctx: ToolContext): Promise<any> {
   const limit = Math.min(50, Math.max(1, Number(input?.limit) || 20));
   const data = await callInternalJson(ctx, `/api/agent/jobs?limit=${limit}`);
   const items: any[] = Array.isArray(data?.items) ? data.items : [];
-  const view = items.map((job: any) => ({
+  const IN_PROGRESS = new Set(["작업 진행 중", "외부 영상 모델 생성 중(완료되면 자동 보고)", "본인 구독 이미지 생성 중(완료되면 자동 보고)"]);
+  const view = items.map((job: any) => {
+    const out: any = job?.output && typeof job.output === "object" ? job.output : {};
+    return {
     id: job?.id,
     shortId: String(job?.id || "").slice(0, 8),
     jobKind: "agent_job",
@@ -4058,19 +4132,29 @@ async function runJobsStatusTool(input: any, ctx: ToolContext): Promise<any> {
     reviewStatus: job?.review_status,
     error: job?.error ? String(job.error).slice(0, 300) : "",
     // 승인 패널에서 기다리는 중인지, 결과가 나와 검토를 기다리는지 구분한다(사용자에겐 전혀 다른 이야기다).
-    waitingFor: job?.status === "review_pending" && !job?.output
-      ? "사람 승인(승인 패널)"
-      : job?.review_status === "pending" && job?.output
-        ? "사람 검토(보고)"
-        : job?.status === "working"
-          ? "작업 진행 중"
-          : job?.status === "error"
-            ? "실패"
-            : "",
+    // 외부 대기(영상 모델·구독 이미지)는 output 이 있어도 '검토 대기' 가 아니다 — 먼저 가려낸다.
+    waitingFor: job?.status === "working" && out.videoPending
+      ? "외부 영상 모델 생성 중(완료되면 자동 보고)"
+      : job?.status === "working" && out.subscriptionPending
+        ? "본인 구독 이미지 생성 중(완료되면 자동 보고)"
+        : job?.status === "review_pending" && !job?.output
+          ? "사람 승인(승인 패널)"
+          : job?.review_status === "pending" && job?.output
+            ? "사람 검토(보고)"
+            : job?.status === "working"
+              ? "작업 진행 중"
+              : job?.status === "error"
+                ? "실패"
+                : "",
+    // 어떤 모델·몇 초로 돌고 있는지("어떤 API 쓰는 거야?"에 답할 수 있게).
+    detail: out.videoPending
+      ? `model=${out.videoModel || "?"} · ${out.durationSeconds || "?"}초 · videoJobId=${out.videoJobId || "?"}`
+      : out.model ? `model=${out.model}${out.durationSeconds ? ` · ${out.durationSeconds}초` : ""}` : "",
     createdAt: job?.created_at,
     updatedAt: job?.updated_at,
-  }));
-  const blocked = view.filter((job) => job.waitingFor && job.waitingFor !== "작업 진행 중");
+    };
+  });
+  const blocked = view.filter((job) => job.waitingFor && !IN_PROGRESS.has(job.waitingFor));
   return {
     kind: "jobs_status", count: view.length,
     needsApproval: view.filter((job) => job.waitingFor === "사람 승인(승인 패널)").length,
@@ -5528,7 +5612,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
     promptForVideo = [prompt, chars.block, ...manifest, paletteLock].filter(Boolean).join("\n");
     if (entries.length > cap) videoRefNotes.push(`참조 ${entries.length - cap}장 상한 초과로 생략`);
   }
-  const vid = await runVideoTool({
+  const sub = await submitVideoJob({
     prompt: promptForVideo,
     imageUrl: videoFromImage || undefined,
     aspectRatio: input?.aspectRatio || payload0.aspectRatio || "16:9",
@@ -5544,22 +5628,39 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
     narrationEnabled: toBoolFlag(payload0.narrationEnabled, false),
     dubbingEnabled: toBoolFlag(payload0.dubbingEnabled, false),
   }, ctx);
-  const ref = String(vid.videoUrl || "").trim();
+  // 제출만 하고 돌아온다. 완료되면 reconcileVideoJobs 가 attachSceneVideo 로 이 컷에 붙여 저장한다.
+  return throwPendingVideo(sub, {
+    projectId, sceneId: scene?.id, promptForVideo, videoFromImage, videoRefNotes,
+    referenceCount: referenceImages.length + referenceVideos.length, agentJobId: String(ctx.jobId || ""),
+  });
+}
+
+/** 완성된 영상을 컷에 부착·저장(scene_video 의 뒷부분). 완료 시점의 프로젝트를 다시 읽어 다른 컷의 변경을 덮지 않는다. */
+export async function attachSceneVideo(ctx: ToolContext, attach: SceneVideoAttach, videoUrl: string): Promise<any> {
+  const ref = String(videoUrl || "").trim();
   if (!ref) throw new Error("영상 생성 결과 URL이 없어요.");
+  const projectId = String(attach?.projectId || "").trim();
+  if (!projectId) throw new Error("projectId is required");
+  const cur = await runProjectGetTool({ projectId }, ctx);
+  const scenes: any[] = Array.isArray(cur.scenes) ? cur.scenes : [];
+  const idx = findSceneIndex(scenes, attach.sceneId);
+  if (idx < 0) throw new Error(`씬을 찾지 못했어요(sceneId=${attach.sceneId ?? "?"}).`);
+  const scene = scenes[idx];
+  const videoRefNotes = Array.isArray(attach.videoRefNotes) ? attach.videoRefNotes : [];
   // 프롬프트 계보: 어떤 프롬프트·어떤 스틸에서 이 영상이 나왔는지(노드 캔버스가 그린다).
   const prevLineage = (scene?.lineage && typeof scene.lineage === "object") ? scene.lineage : {};
   const lineage = {
     ...prevLineage,
-    videoPrompt: promptForVideo,
-    videoFromImage,
+    videoPrompt: attach.promptForVideo,
+    videoFromImage: attach.videoFromImage,
     videoRefs: videoRefNotes.join(" · "),
     videoAttempts: (Number(prevLineage.videoAttempts) || 0) + 1,
-    agentJobId: String(ctx.jobId || ""),
+    agentJobId: String(attach.agentJobId || ctx.jobId || ""),
     updatedAt: new Date().toISOString(),
   };
   scenes[idx] = { ...scene, videoUrl: ref, lineage };
   await callInternalJson(ctx, "/api/project/save", { body: { projectId, scenes } });
-  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: vid.videoUrl || "", videoFromImage, referenceCount: referenceImages.length + referenceVideos.length, references: videoRefNotes, saved: true, promptEcho: promptForVideo };
+  return { kind: "scene_video", projectId, sceneId: scene?.id, videoUrl: ref, videoFromImage: attach.videoFromImage, referenceCount: Number(attach.referenceCount) || 0, references: videoRefNotes, saved: true, promptEcho: attach.promptForVideo };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -6534,8 +6635,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // scene_still: 동기 실행(승인 POST 가 끝날 때까지 기다림). longRunning(waitUntil)은 응답 후 ~30초면 끊겨 이미지 1~2장 생성이
   // 끝나기 전에 죽고 잡이 "working" 에 영원히 남았다(2026-09-14 무한 로딩). 진행 표시는 캔버스가 잡 생성 직후 그린다.
   scene_still: { agentId: "pixel", kind: "external", gate: true, run: runSceneStillTool },
-  // scene_video: 영상 생성이 수분 걸림 → longRunning(승인 시 review.ts가 백그라운드로 실행, POST 논블로킹).
-  scene_video: { agentId: "pixel", kind: "external", gate: true, longRunning: true, run: runSceneVideoTool },
+  // scene_video: /api/video 에 제출만 하고 VideoPendingSignal 을 던진다(승인 POST 안에서 끝남). 완료·부착은 reconcileVideoJobs.
+  scene_video: { agentId: "pixel", kind: "external", gate: true, run: runSceneVideoTool },
   // 에이전트 모드: 파이프라인 SkillJob 을 만든다. 실제 생성은 SkillJob 의 비용 승인 뒤 배치로 돌므로
   // 이 도구 자체는 게이트가 없다(계획·크레딧을 보여주고 승인을 기다리는 것이 결과물).
   video_pipeline: { agentId: "plot", agentIds: ["core", "pixel"], kind: "external", run: runVideoPipelineTool },
@@ -6757,6 +6858,10 @@ export async function processJob(
       const output = await persistPendingImage(ctx, sql, jobId, e);
       return { ok: true, pending: true, output };
     }
+    if (e.videoJobId) {
+      const output = await persistPendingVideo(ctx, sql, jobId, e);
+      return { ok: true, pending: true, output };
+    }
     const error = String(e?.message || e || "tool_failed");
     await setJobStatus(sql, jobId, ctx.userId, { status: "error", error });
     return { ok: false, error };
@@ -6769,6 +6874,97 @@ export async function persistPendingImage(ctx: ToolContext, sql: SqlFn, jobId: s
   await setJobStatus(sql, jobId, ctx.userId, { status: 'working', output,
     ...(ctx.runApproved ? { reviewStatus: 'approved' as const } : {}) });
   return output;
+}
+
+/** 영상 제출 신호를 잡에 남긴다: status=working, output.videoPending=true. 완료는 reconcileVideoJobs 가 닫는다. */
+export async function persistPendingVideo(ctx: ToolContext, sql: SqlFn, jobId: string, signal: any) {
+  const output = {
+    videoPending: true,
+    videoJobId: String(signal.videoJobId || ""),
+    videoModel: String(signal.videoModel || ""),
+    durationSeconds: Number(signal.durationSeconds) || 0,
+    promptEcho: String(signal.promptEcho || ""),
+    ...(signal.attach ? { attach: signal.attach } : {}),
+    conversationId: ctx.conversationId || 'main',
+    runApproved: ctx.runApproved === true,
+    submittedAt: new Date().toISOString(),
+  };
+  await setJobStatus(sql, jobId, ctx.userId, { status: 'working', output,
+    ...(ctx.runApproved ? { reviewStatus: 'approved' as const } : {}) });
+  return output;
+}
+
+/** 외부 영상 모델이 이보다 오래 걸리면 실패로 닫는다(무한 '진행 중' 방지). */
+export const VIDEO_PENDING_MAX_MS = 30 * 60 * 1000;
+// 패널이 4초마다 폴링하므로 공급자 상태 조회는 이 간격으로만 한다(서브요청·Neon 전송량 절약).
+const VIDEO_CHECK_INTERVAL_SQL = "8 seconds";
+
+/**
+ * 제출해 둔 영상 잡의 완료를 확인해 마무리한다(짧은 인증 폴링 요청마다 호출: jobs·job·messages).
+ *  - 완료: 결과 URL 을 output 에 넣고, scene_video 면 컷에 부착·저장. 승인 후 실행이었으면 approved+업무 등록, 아니면 검수 대기.
+ *  - 실패·시간 초과: error 로 닫고 이유를 채팅에 남긴다.
+ *  - 진행 중: 아무것도 하지 않는다(리스만 갱신).
+ */
+export async function reconcileVideoJobs(ctx: ToolContext, sql: SqlFn) {
+  const pending = await sql(`SELECT id FROM agent_jobs WHERE user_id=$1 AND status='working'
+    AND output->>'videoPending'='true' ORDER BY created_at LIMIT 10`, [ctx.userId]);
+  if (!pending.length) return;
+  for (const row of pending) {
+    const [job] = await sql(`UPDATE agent_jobs SET output=jsonb_set(output,'{checkedAt}',to_jsonb(now()::text)),updated_at=now()
+      WHERE user_id=$1 AND id=$2 AND status='working' AND output->>'videoPending'='true'
+      AND (output->>'checkedAt' IS NULL OR (output->>'checkedAt')::timestamptz < now()-interval '${VIDEO_CHECK_INTERVAL_SQL}') RETURNING *`,
+      [ctx.userId, row.id]);
+    if (!job) continue;
+    const out: any = job.output && typeof job.output === "object" ? job.output : {};
+    const conversationId = out.conversationId || 'main';
+    const runApproved = out.runApproved === true;
+    const meta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+    const label = `${out.videoModel || "video"} · ${out.durationSeconds || "?"}초`;
+    const say = (text: string, files: MessageFileReference[] = []) => addMessage(sql, {
+      userId: ctx.userId, conversationId, role: 'agent', agentId: job.agent_id, backgroundJobId: job.id,
+      name: meta.name, text, files,
+    });
+    let check: { state: "processing" | "done" | "error"; videoUrl: string; error: string };
+    try { check = await checkVideoJob(ctx, out.videoJobId); }
+    catch { continue; } // 상태 서버 일시 오류 — 다음 폴링에 다시 본다.
+    if (check.state === "processing") {
+      const started = Date.parse(String(out.submittedAt || job.created_at || ""));
+      if (Number.isFinite(started) && Date.now() - started > VIDEO_PENDING_MAX_MS) {
+        const error = `영상 생성이 ${Math.round(VIDEO_PENDING_MAX_MS / 60000)}분 넘게 끝나지 않아 종료했어요(${label}, videoJobId=${out.videoJobId}).`;
+        await setJobStatus(sql, job.id, ctx.userId, { status: 'error', error });
+        await say(`❌ ${error}`);
+      }
+      continue;
+    }
+    if (check.state === "error") {
+      const error = `영상 생성 실패(${label}): ${check.error}`;
+      await setJobStatus(sql, job.id, ctx.userId, { status: 'error', error });
+      await say(`❌ ${error}`);
+      continue;
+    }
+    let output: any;
+    try {
+      output = out.attach
+        ? await attachSceneVideo(ctx, out.attach, check.videoUrl)
+        : { kind: "video", videoUrl: check.videoUrl, promptEcho: out.promptEcho };
+    } catch (e: any) {
+      const error = `영상은 완성됐지만 컷에 붙이지 못했어요: ${String(e?.message || e)} (videoUrl=${check.videoUrl})`;
+      await setJobStatus(sql, job.id, ctx.userId, { status: 'error', error });
+      await say(`❌ ${error}`);
+      continue;
+    }
+    output = { ...output, model: out.videoModel || output.model || "", durationSeconds: out.durationSeconds || 0, videoJobId: out.videoJobId };
+    await setJobStatus(sql, job.id, ctx.userId, {
+      status: runApproved ? 'approved' : 'review_pending', output,
+      reviewStatus: runApproved ? 'approved' : 'pending',
+    });
+    if (runApproved && hasDeliverableOutput(output)) {
+      const filed = await fileJobAsWorkItem(sql, ctx.userId, job, output).catch(() => null);
+      if (filed) await setJobStatus(sql, job.id, ctx.userId, { output: { ...output, workItemId: filed.workId, workDateKey: filed.dateKey } });
+    }
+    const where = out.attach ? ` 컷 ${out.attach.sceneId} 에 붙여 저장했어요.` : " 검수 패널에서 확인하세요.";
+    await say(`🎬 영상 생성 완료 (${label}).${where}`, messageFilesFromToolOutput(job.type, output, job.id));
+  }
 }
 
 // Resume from a persisted queue result on short authenticated polling requests.

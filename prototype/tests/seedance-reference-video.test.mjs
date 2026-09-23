@@ -40,9 +40,12 @@ test('★scene_video: 참조→영상 모델이면 첫 프레임 → 플레이�
   assert.match(fn, /the previous shot of this scene \(continuity\) — reuse its look, lighting and character designs only; do NOT copy its camera, framing or action/);
   assert.match(fn, /"The input images are provided in this exact order:", \.\.\.kept\.map\(\(e, i\) => `Image \$\{i \+ 1\}: \$\{e\.line\}\.`\)/, '순서 매니페스트');
   assert.match(fn, /PALETTE LOCK: use only the colors, materials and background treatment of the reference images\./);
-  assert.match(fn, /videoRefs: videoRefNotes\.join\(" · "\),/, '계보');
-  const rv = shared.slice(shared.indexOf('async function runVideoTool('), shared.indexOf('\n}\n', shared.indexOf('async function runVideoTool(')));
-  assert.match(rv, /referenceImages: input\.referenceImages\.map/, 'runVideoTool 이 참조를 /api/video 로 넘긴다');
+  // 계보는 완료 시점에 attachSceneVideo 가 쓴다(영상은 제출만 하고 돌아온다).
+  assert.match(fn, /throwPendingVideo\(sub, \{[\s\S]*videoRefNotes,/, '참조 메모가 부착 정보로 넘어간다');
+  const attach = shared.slice(shared.indexOf('export async function attachSceneVideo('), shared.indexOf('\n}\n', shared.indexOf('export async function attachSceneVideo(')));
+  assert.match(attach, /videoRefs: videoRefNotes\.join\(" · "\),/, '계보');
+  const rv = shared.slice(shared.indexOf('async function submitVideoJob('), shared.indexOf('\n}\n', shared.indexOf('async function submitVideoJob(')));
+  assert.match(rv, /referenceImages: input\.referenceImages\.map/, 'submitVideoJob 이 참조를 /api/video 로 넘긴다');
   assert.match(rv, /referenceVideos: input\.referenceVideos\.map/);
   for (const f of ['prototype/functions/api/project/save.ts', 'prototype/functions/api/project/get.ts']) assert.match(read(f), /videoRefs: str\(value\.videoRefs\),/, f);
 });

@@ -256,7 +256,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     project_overview_save: `[[RUN: project_overview_save | {"projectId": "프로젝트 ID", "purposeCategory": "스토리 · 서사", "purposeTag": "창작", "target": "전 연령", "need": "스토리", "tone": "스토리", "style": "실사", "duration": "1800", "aspectRatio": "16:9", "voiceMode": "dubbing", "topic": "에피소드 1", "story": "이야기 흐름", "characters": ["@차자준"]}]]  → 개요에서 준 항목만 고쳐 쓴다(나머지는 그대로 둔다). ★사용자가 말한 것만 채우고 나머지는 비워 둘 것 — 창작자의 선택을 짐작해 메우지 말 것. 값은 project_overview_get 이 준 목록에서 그대로 고른다(지어낸 값은 서버가 거절한다). 캐릭터는 브랜드 허브에 등록된 이름을 쓰고, 없으면 brand_asset 으로 먼저 등록할 것. 사람 승인 후 반영.`,
     image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9", "provider": "gemini|openai(선택)", "referenceImages": [{"ref": "ip_library characters[].ref", "subjectDescription": "네모"}]}]]  → 이미지 생성. 기본은 서버 설정 모델(Gemini 3.1 Flash Image). 사용자가 "GPT로", "지피티 이미지로"처럼 지정하면 provider:"openai"(GPT Image)로 호출(막히면 Gemini로 자동 대체·결과에 실제 모델 표기). ★우리 캐릭터가 등장하는 그림이면 반드시 ip_library로 등록 시트를 먼저 조회해 referenceImages(최대 4개)로 넘긴다 — 넘기지 않으면 전혀 다른 캐릭터가 그려진다. 구도는 프롬프트가 정하고 시트는 캐릭터 디자인 유지에만 쓰인다.`,
     sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
-    video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
+    video: `[[RUN: video | {"prompt": "장면 설명(화면·분위기·카메라 움직임)", "imageUrl": "기존 이미지 URL(선택 · 있으면 그 그림을 첫 프레임으로 움직임)", "aspectRatio": "16:9", "durationSeconds": 6, "videoModel": "veo"}]]  → 영상 생성을 외부 모델에 제출(비동기). 제출 즉시 돌아오고 완료되면 채팅·검수 패널로 자동 보고된다(수분 소요). ★모델별 허용 길이(초): veo·veo-full·grok 4/6/8 · kling 5/10 · seedance·wan 4~15 · seedance-2.5 4~30 · vidu-q3 4/5/6/8/10. 길이는 모델 허용값으로 자동 스냅되므로, 사용자가 말한 길이(예: 15초)를 veo 로 보내면 8초로 잘린다 — 그 길이를 낼 수 있는 모델(15초→seedance, 20~30초→seedance-2.5)을 골라 durationSeconds 와 videoModel 을 반드시 함께 넣는다. ★실행 전에 "어떤 장면·분위기·카메라 움직임으로, 어떤 모델·몇 초·어느 이미지에서 만들겠다" 를 먼저 한 문단으로 보고한다. 길이·소스 이미지가 불분명하거나 원하는 길이를 한 모델이 못 내면 실행하지 말고 먼저 묻는다.`,
     scenario: `[[RUN: scenario | {"topic": "주제", "story": "원하는 이야기 흐름·사건·감정선(선택)", "purposeCategory": "장르(예: 키즈·영유아)", "purposeTags": ["세부 장르"], "target": "시청 타겟(예: 영유아·학습/놀이/감성 발달)", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing", "characters": []}]]  → 시나리오 생성(씬분해·대사·카메라 지시). 프리프로덕션 폼의 모든 항목을 지정할 수 있다 — 장르=purposeCategory, 세부장르=purposeTags, 시청목적=needs, 음성모드=voiceMode. topic만 필수, 나머지는 사용자가 말한 것만 채우고 생략 가능.`,
     music: `[[RUN: music | {"topic": "음악 컨셉·분위기", "genre": "ambient", "duration": 60}]]  → BGM 생성 (ElevenLabs)`,
     publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL", "scheduledAt": "2026-07-10T19:00:00+09:00(선택·예약발행)"}]]  → 소유 SNS 채널에 발행. scheduledAt(ISO8601)을 주면 그 시각 예약발행. ⚠️ 항상 사람 승인 필요`,
@@ -298,7 +298,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     project_save: `[[RUN: project_save | {"projectId": "series-ep1", "payload": {…선택}, "scenes": [{…선택}], "title": "제목(선택)"}]]  → 프로젝트에 payload(병합)·scenes(통째 대체)를 저장. 보통은 scenario_to_project·scene_still·scene_video가 대신 저장하므로 직접 쓸 일은 드묾. ⚠️ 쓰기라 사람 승인 후 반영.`,
     scenario_to_project: `[[RUN: scenario_to_project | {"projectId": "series-ep1", "topic": "에피소드 주제", "story": "이야기 흐름(선택)", "purposeCategory": "장르", "purposeTags": ["세부 장르"], "target": "시청 타겟", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing"}]]  → 시나리오를 생성하고 그 씬들 + 프리프로덕션 설정(장르·타겟·목적·길이·비율·음성모드)을 곧바로 그 프로젝트에 저장(카드 메타에도 반영). scenario와 같은 항목을 모두 지정 가능. ⚠️ 쓰기라 사람 승인 후 반영.`,
     scene_still: `[[RUN: scene_still | {"projectId": "series-ep1", "sceneId": 1, "prompt": "이미지 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 스틸컷 이미지를 생성해 해당 씬에 부착·저장. 캐릭터 시트·세트 플레이트(컷의 방위×높이, 없으면 부감 마스터에서 자동 파생·캐시)·부감 마스터·스타일 기준을 참조로 자동 첨부. "씬1 스틸컷 만들어"에 사용. sceneId는 씬 id 또는 순번(1부터). ⚠️ 쓰기라 사람 승인 후 반영.`,
-    scene_video: `[[RUN: scene_video | {"projectId": "series-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9"}]]  → 그 씬의 영상을 생성해 해당 씬에 부착·저장(수분 소요). "씬1 영상 만들어"에 사용. ⚠️ 쓰기라 사람 승인 후 반영.`,
+    scene_video: `[[RUN: scene_video | {"projectId": "series-ep1", "sceneId": 1, "prompt": "장면 설명(생략 시 씬 visual 사용)", "aspectRatio": "16:9", "durationSeconds": 6, "videoModel": "veo"}]]  → 그 씬의 영상 생성을 제출하고, 완료되면 해당 씬에 자동 부착·저장(비동기 · 수분 소요). "씬1 영상 만들어"에 사용. 길이·모델 규칙은 video 도구와 같다(생략 시 길이는 컷 estSec, 모델은 프로젝트 설정). ⚠️ 쓰기라 사람 승인 후 반영.`,
     render_final: `[[RUN: render_final | {"projectId": "series-ep1", "sources": ["씬1 영상 objectName", "씬2 영상 objectName", …]}]]  또는 단일 {"sourceObjectName": "합본 영상 objectName", "sourceDurationSec": 60}  → 최종 렌더링(final-render.mp4). sources[] 여러 개면 순서대로 이어붙여(concat) 렌더. 제출 즉시 다운로드 링크(완료되면 유효)를 반환하고 백그라운드에서 렌더(수분). 세부 편집설정은 기본값.`,
     asset_download: `[[RUN: asset_download | {"objectName": "GCS objectName"}]]  또는 {"signedUrl": "이미 있는 서명URL"}  → 최종렌더/이미지/영상/오디오의 다운로드 링크를 사람에게 제공. "완성본 다운로드 링크 줘"에 사용.`,
     video_delete: `[[RUN: video_delete | {"objectName": "삭제할 영상 objectName"}]]  또는 {"objectNames": ["...","..."]}  → 영상 자산 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
@@ -1831,8 +1831,11 @@ export async function runGroupChat(
       // "그려서 캐릭터로 등록해" — 같은 답변의 다음 RUN 이 방금 만든 그림을 jobId:"last" 로 가리킬 수 있게 한다.
       if (result.ok && !result.gated && IMAGE_PRODUCING_TOOLS.has(r.tool)) toolCtx.lastImageJobId = job.id;
       if (result.pending) {
+        const out: any = result.output || {};
         await emit({ userId, conversationId, role: 'agent', agentId, name: meta.name,
-          text: '🎨 본인 ChatGPT 구독으로 이미지 생성 중입니다. 저장까지 완료되면 결과를 알려드릴게요.' });
+          text: out.videoPending
+            ? `🎬 영상 생성을 제출했어요(${out.videoModel || "video"} · ${out.durationSeconds || "?"}초). 외부 모델이 만드는 동안 기다렸다가 완료되면 결과를 알려드릴게요(수분 소요).`
+            : '🎨 본인 ChatGPT 구독으로 이미지 생성 중입니다. 저장까지 완료되면 결과를 알려드릴게요.' });
         continue;
       }
       if (result.ok) {

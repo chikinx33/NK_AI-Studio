@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/jobs.ts
 // GET /api/agent/jobs?limit=30 — 본인 잡 목록(검수 대기/내역). ★ user_id 격리.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, expireStaleQueuedAgentJobs, listJobs, pollCached, reconcileSubscriptionJobs } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, expireStaleQueuedAgentJobs, expireStaleWorkingAgentJobs, listJobs, pollCached, reconcileSubscriptionJobs, reconcileVideoJobs } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -19,8 +19,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
     await ensureAgentSchema(sql);
     await expireStaleQueuedAgentJobs(sql, auth.userId);
-    await reconcileSubscriptionJobs({ request, env, userId: auth.userId,
-      authHeader: request.headers.get('Authorization') || '' }, sql);
+    await expireStaleWorkingAgentJobs(sql, auth.userId);
+    const pollCtx = { request, env, userId: auth.userId, authHeader: request.headers.get('Authorization') || '' };
+    await reconcileSubscriptionJobs(pollCtx, sql);
+    await reconcileVideoJobs(pollCtx, sql);
 
     const limit = Math.min(Math.max(Number(new URL(request.url).searchParams.get("limit") || "30") || 30, 1), 100);
     const items = await pollCached(sql, "jobs", `jobs:${auth.userId}:${limit}`, [auth.userId, limit], () => listJobs(sql, auth.userId, limit));
