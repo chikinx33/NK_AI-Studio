@@ -14,6 +14,7 @@ import {
   processJob,
   reconcileSubscriptionJobs,
   reconcileVideoJobs,
+  healMediaObjectNames,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -80,7 +81,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const pollCtx = { request, env, userId: auth.userId, authHeader: request.headers.get('Authorization') || '' };
     await reconcileSubscriptionJobs(pollCtx, sql);
     await reconcileVideoJobs(pollCtx, sql);
-    return send({ ok: true, job: await getJob(sql, id, auth.userId) }, 200, origin);
+    const fresh = await getJob(sql, id, auth.userId);
+    // 서명 URL 만 남은 옛 영상 잡은 여기서 경로를 되찾아 준다(미리보기가 프록시로 열리게).
+    if (fresh) await healMediaObjectNames(sql, auth.userId, [fresh]);
+    return send({ ok: true, job: fresh }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "잡 조회 중 오류" }, 500, origin);
   }

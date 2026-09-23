@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   downloadCompanyFile,
   getAgentJob,
+  outputObjectName,
 
   type ChatFileReference,
   type CompanyFileEntry,
@@ -88,7 +89,8 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
 
   const url = String(output.signedUrl || output.imageUrl || output.videoUrl || output.audioUrl || output.dataUrl || "");
   // 서명 URL 은 1시간 뒤 만료되고 CORS 로 내려받기도 막힌다. 저장 위치(objectName)가 있으면 같은 오리진 프록시를 쓴다.
-  const objectName = String(output.objectName || output.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  // objectName 이 없는 옛 영상 잡도 서명 URL 에서 경로를 되찾아 프록시로 연다(서명 URL 은 만료돼 재생이 안 됐다).
+  const objectName = outputObjectName(output);
   const proxyUrl = objectName ? `/api/media/proxy?objectName=${encodeURIComponent(objectName)}` : "";
   const blocks = useMemo(() => {
     const source = kind === "presentation" ? output.slides : output.sections;

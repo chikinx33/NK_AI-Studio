@@ -4581,6 +4581,31 @@ export function mediaObjectNameFromUrl(raw: string): string {
   return ref.startsWith("gs://") ? ref.replace(/^gs:\/\/[^/]+\//, "") : "";
 }
 
+/**
+ * objectName 없이 서명 URL 만 남은 옛 잡(v3.1874 이전 영상 등)을 조회 때 한 번 고친다.
+ * 서명 URL 은 1시간이면 죽어 보고·미리보기·업무 폴더가 전부 "재생 안 됨" 이 됐다. 파일은 GCS 에 그대로 있으므로
+ * URL 에서 경로를 되찾아 output.objectName 에 남기면 이후엔 같은 오리진 프록시로 열린다. 고친 잡 수를 돌려준다.
+ */
+export async function healMediaObjectNames(sql: SqlFn, userId: string, jobs: any[]): Promise<number> {
+  let healed = 0;
+  for (const job of jobs) {
+    const out: any = job?.output && typeof job.output === "object" ? job.output : null;
+    if (!out || String(out.objectName || "").trim()) continue;
+    const url = String(out.videoUrl || out.audioUrl || out.signedUrl || "").trim();
+    if (!url) continue;
+    const objectName = mediaObjectNameFromUrl(url);
+    if (!objectName) continue;
+    const next = { ...out, objectName };
+    const rows = await sql(
+      `UPDATE agent_jobs SET output = $1::jsonb, updated_at = now()
+        WHERE id = $2 AND user_id = $3 AND COALESCE(output->>'objectName', '') = '' RETURNING id`,
+      [JSON.stringify(next), job.id, userId],
+    ).catch(() => [] as any[]);
+    if ((rows as any[]).length) { job.output = next; healed += 1; }
+  }
+  return healed;
+}
+
 /** 이미지를 만드는 도구들. 이 잡의 산출물은 다른 도구가 "방금 그 그림"으로 가리킬 수 있다. */
 export const IMAGE_PRODUCING_TOOLS = new Set(["image", "image_edit", "upscale", "set_master", "set_angle", "set_sheet", "scene_still"]);
 

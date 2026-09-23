@@ -1542,8 +1542,28 @@ export async function getAgentJob(id: string): Promise<any> {
   return data.job;
 }
 /** 산출물을 여는 주소 — 저장 위치(프록시) 우선, 없으면 그때 받은 URL. */
+/** GCS 서명/공개 URL 에서 저장 경로(버킷 제외)를 되찾는다. 못 찾으면 "". */
+export function objectNameFromStorageUrl(raw: string): string {
+  try {
+    const u = new URL(String(raw || ""));
+    if (u.hostname === "storage.googleapis.com") {
+      const p = u.pathname.replace(/^\/+/, "");
+      const i = p.indexOf("/");
+      return i > 0 ? decodeURIComponent(p.slice(i + 1)) : "";
+    }
+    if (/^.+\.storage\.googleapis\.com$/.test(u.hostname)) return decodeURIComponent(u.pathname.replace(/^\/+/, ""));
+  } catch { /* URL 아님 */ }
+  return "";
+}
+
+/** 산출물의 저장 경로. objectName 이 없으면(옛 영상 잡) 서명 URL 에서 되찾는다. */
+export function outputObjectName(output: any): string {
+  const direct = String(output?.objectName || output?.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  return direct || objectNameFromStorageUrl(String(output?.videoUrl || output?.audioUrl || output?.signedUrl || ""));
+}
+
 export function mediaUrlFromOutput(output: any): string {
-  const objectName = String(output?.objectName || output?.projectObjectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  const objectName = outputObjectName(output);
   if (objectName) return withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`);
   return String(output?.signedUrl || output?.imageUrl || output?.videoUrl || output?.audioUrl || output?.dataUrl || "");
 }
