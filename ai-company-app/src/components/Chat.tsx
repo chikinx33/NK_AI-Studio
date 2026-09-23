@@ -233,6 +233,25 @@ function RepeatIcon({ className }: { className?: string }) {
   );
 }
 
+/** lucide "video" — 지목한 영상 칩. */
+function VideoIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </svg>
+  );
+}
+/** lucide "music" — 지목한 오디오 칩. */
+function MusicIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
 /** lucide "message-square" — 이 항목을 채팅에서 지목한다. */
 function MessageSquareIcon({ className }: { className?: string }) {
   return (
@@ -858,9 +877,14 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         {reference && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-chat-reference>
             <div className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
-              {reference.url
-                ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
-                : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
+              {/* 영상·오디오 주소를 <img> 에 넣으면 깨진 그림이 뜬다 → 종류를 먼저 보고 아이콘 */}
+              {reference.mediaKind === "video"
+                ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
+                : reference.mediaKind === "audio"
+                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
+                  : reference.url
+                    ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
+                    : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
               <div className="min-w-0">
                 <div className="text-[10px] text-sky-400">지목한 항목 · "이걸로 …" 라고 말하면 직원이 알아들어요</div>
                 <div className="max-w-[280px] truncate" title={reference.title}>{reference.title}</div>
