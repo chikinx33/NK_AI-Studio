@@ -156,9 +156,14 @@ test("일괄 배포 경로에서 TikTok 은 곧장 초안 전송으로 간다", 
   assert.match(src, /reason: 'tiktok_no_media'/);
 });
 
-test("에이전트 경로로는 TikTok 을 게시할 수 없다 (확인 화면이 없으므로)", () => {
+test("에이전트 경로의 TikTok 은 Direct Post(확인 화면 필요)가 아니라 초안함 전송으로만 간다", () => {
+  // 2026-08-31 Direct Post 포기 이후: 에이전트 발행 도구도 브랜드 스튜디오와 같은 /api/sns/tiktok/inbox 를 쓴다.
+  // Direct Post 엔드포인트(/api/sns/publish 의 tiktok 분기)로는 보내지 않는다 — 확인 화면 요건은 초안 전송에 적용되지 않는다.
   const src = read("prototype/functions/api/agent/_shared.ts");
-  assert.match(src, /=== "tiktok"/);
+  const start = src.indexOf("async function runPublishTool(");
+  const fn = src.slice(start, src.indexOf("\n}\n", start));
+  assert.match(fn, /\/api\/sns\/tiktok\/inbox/);
+  assert.match(fn, /platforms\.filter\(\(p\) => p !== "tiktok"\)/, "Direct Post 분기(/api/sns/publish)에는 tiktok 을 넘기지 않는다");
 });
 
 test("공개 페이지 2장이 존재하고 서로 링크된다", () => {

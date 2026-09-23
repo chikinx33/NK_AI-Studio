@@ -244,7 +244,21 @@ function approvalDoneText(type: string, output: any, input: any): string {
     const to = o.to || inp.to || "";
     return `✅ 승인 확인! ${to ? `'${to}'에게 ` : ""}메일을 발송했어요${o.subject || inp.subject ? ` — 제목: "${o.subject || inp.subject}"` : ""}.`;
   }
-  if (type === "publish") return "✅ 승인 확인! 발행을 진행했어요.";
+  if (type === "publish") {
+    // TikTok 은 초안함 전송이라 "발행 완료" 가 아니다 — 사용자가 앱에서 마무리해야 한다는 걸 그대로 말한다.
+    const list: any[] = Array.isArray(o.published) ? o.published : [];
+    const others = list.map((p: any) => String(p?.platform || p || "")).filter((p: string) => p && p !== "tiktok");
+    const parts: string[] = [];
+    if (others.length) parts.push(`${others.join(", ")} 발행을 진행했어요.`);
+    if (o.tiktok) {
+      parts.push(o.tiktok.status === "sent_to_inbox"
+        ? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요 — 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요."
+        : `TikTok 초안함 전송이 처리 중이에요(publishId ${o.tiktok.publishId || "?"}). 잠시 뒤 틱톡 앱 초안함을 확인해 주세요.`);
+    } else if (o.notice && !others.length) {
+      parts.push(String(o.notice));
+    }
+    return `✅ 승인 확인! ${parts.join(" ") || "발행을 진행했어요."}`;
+  }
   if (type === "project_create") {
     const series = o.seriesTitle || inp.seriesTitle || inp.projectName || "";
     const ep = o.episodeTitle || inp.episodeTitle || "";

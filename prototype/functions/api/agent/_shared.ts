@@ -2591,45 +2591,111 @@ export async function runFormFillTool(input: any, ctx: ToolContext): Promise<any
   };
 }
 
-/** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
+/**
+ * 발행할 미디어의 저장 경로(objectName, 버킷 제외). objectName/mediaGcsPath > jobId(잡 결과) > mediaUrl(GCS 서명·프록시 URL).
+ * 사용자가 채팅에서 지목한 "[참조 산출물: … jobId=… objectName=…]" 를 그대로 넘길 수 있게 한다.
+ */
+async function publishMediaObjectName(input: any, ctx: ToolContext): Promise<string> {
+  const strip = (v: any) => String(v || "").trim().replace(/^gs:\/\/[^/]+\//, "");
+  const direct = strip(input?.objectName || input?.mediaGcsPath);
+  if (direct) return direct;
+  const jobId = String(input?.jobId || input?.mediaJobId || "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(jobId)) {
+    const sql = getSql(ctx.env);
+    const job: any = sql ? await getJob(sql, jobId, ctx.userId).catch(() => null) : null;
+    const out: any = job?.output && typeof job.output === "object" ? job.output : {};
+    const fromJob = strip(out.objectName) || mediaObjectNameFromUrl(String(out.videoUrl || out.signedUrl || out.audioUrl || ""));
+    if (fromJob) return fromJob;
+  }
+  const url = String(input?.mediaUrl || input?.videoUrl || input?.imageUrl || "").trim();
+  if (!url) return "";
+  try {
+    const parsed = new URL(url, "https://nkstudio.org/");
+    if (parsed.pathname.includes("/api/media/proxy")) return strip(parsed.searchParams.get("objectName"));
+  } catch { /* URL 아님 */ }
+  return mediaObjectNameFromUrl(url);
+}
+
+/** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요)
+ *  ★TikTok 은 2026-08-31 부터 Direct Post 가 아니라 '초안함(inbox) 전송' 이다(브랜드 스튜디오 배포 버튼과 같은 /api/sns/tiktok/inbox).
+ *    초안 전송은 video.upload 스코프만 쓰고 확인 모달 요건 대상이 아니므로, 예전의 "확인 화면이 없어 막는다" 차단은 근거가 사라져 제거했다.
+ *    사용자는 틱톡 앱 초안함에서 공개 범위를 고르고 직접 게시한다 — 결과 문구가 반드시 그렇게 말해야 한다. */
 async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
-  const platforms = Array.isArray(input?.platforms)
+  const platformsRaw = Array.isArray(input?.platforms)
     ? input.platforms
     : (input?.platform ? [input.platform] : ["instagram"]);
+  const platforms: string[] = platformsRaw.map((p: any) => String(p || "").toLowerCase().trim()).filter(Boolean);
   const caption = String(input?.caption || input?.prompt || "").trim();
   if (!caption) throw new Error("caption is required");
-  // TikTok Direct Post 는 게시 전 확인 화면에서 사용자가 공개 범위·상호작용·상업적 콘텐츠
-  // 고지를 직접 골라야 한다(TikTok 가이드라인). 에이전트 경로에는 그 화면이 없으므로
-  // 여기서 막고 브랜드 스튜디오의 게시 버튼으로 유도한다.
-  if (platforms.some((p: any) => String(p || "").toLowerCase() === "tiktok")) {
-    throw new Error(
-      "TikTok 게시는 브랜드 스튜디오의 'TikTok에 게시' 버튼에서 진행해 주세요. TikTok 정책상 공개 범위·상호작용·상업적 콘텐츠 고지를 게시 전 확인 화면에서 직접 선택해야 해요."
-    );
-  }
-  const body: any = {
-    platforms,
-    caption,
-    mediaUrl: String(input?.mediaUrl || input?.imageUrl || input?.videoUrl || "").trim(),
-    hashtags: Array.isArray(input?.hashtags) ? input.hashtags : [],
-  };
+  const hashtags: string[] = (Array.isArray(input?.hashtags) ? input.hashtags : []).map((h: any) => String(h || "").trim()).filter(Boolean);
   // 예약 발행: scheduledAt(ISO8601) 주면 예약. (YouTube 등은 백엔드가 privacyStatus=scheduled+publishAt 으로 처리)
   const scheduledAt = String(input?.scheduledAt || input?.publishAt || "").trim();
+  let publishAtIso = "";
   if (scheduledAt) {
     const ms = Date.parse(scheduledAt);
     if (Number.isNaN(ms)) throw new Error("scheduledAt 형식이 올바르지 않아요(ISO8601 필요).");
-    body.publishAt = new Date(ms).toISOString();
-    body.privacyStatus = "scheduled";
+    publishAtIso = new Date(ms).toISOString();
   }
-  const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let data: any = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data?.error || `publish 호출 실패 (${res.status})`);
-  return { published: data.published || [], kind: "publish", platforms, caption, scheduledAt: scheduledAt || undefined };
+  const wantsTikTok = platforms.includes("tiktok");
+  const others = platforms.filter((p) => p !== "tiktok");
+  const published: any[] = [];
+  const notices: string[] = [];
+  let tiktok: any = null;
+
+  if (wantsTikTok) {
+    if (publishAtIso) {
+      // TikTok 예약은 "안내 후 skip"(초안함에는 예약 개념이 없다).
+      notices.push("TikTok 은 초안함 전송이라 예약이 없어요 — 이번엔 보내지 않았어요. 예약 없이 다시 요청하면 바로 초안함으로 보낼게요.");
+    } else {
+      const mediaGcsPath = await publishMediaObjectName(input, ctx);
+      if (!mediaGcsPath) throw new Error("TikTok 초안함으로 보낼 영상의 저장 경로를 찾지 못했어요. 지목한 산출물의 jobId 또는 objectName 을 함께 주세요.");
+      const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+      const description = tagLine && !caption.includes(tagLine) ? `${caption}\n${tagLine}` : caption;
+      const res = await fetch(internalUrl(ctx.request, "/api/sns/tiktok/inbox"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+        body: JSON.stringify({ mediaGcsPath, caption: description }),
+      });
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      if (!res.ok) throw new Error(`TikTok 초안함 전송 실패: ${data?.error || data?.message || res.status}`);
+      const r: any = data?.result || {};
+      const status = String(r.status || "processing");
+      if (status === "status_reported_failed") throw new Error(`TikTok 초안함 전송 실패: ${r.failReason || "TikTok 이 이유 없이 거절했어요"}`);
+      tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath };
+      published.push({ platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId });
+      notices.push(status === "sent_to_inbox"
+        ? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요. 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요."
+        : `TikTok 초안함 전송이 아직 처리 중이에요(publishId ${tiktok.publishId}). 잠시 뒤 틱톡 앱 초안함을 확인해 주세요.`);
+    }
+  }
+
+  if (others.length) {
+    const body: any = {
+      platforms: others,
+      caption,
+      mediaUrl: String(input?.mediaUrl || input?.imageUrl || input?.videoUrl || "").trim(),
+      hashtags,
+    };
+    if (publishAtIso) { body.publishAt = publishAtIso; body.privacyStatus = "scheduled"; }
+    const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    if (!res.ok) throw new Error(data?.error || `publish 호출 실패 (${res.status})`);
+    published.push(...(Array.isArray(data.published) ? data.published : []));
+  }
+
+  return {
+    published, kind: "publish", platforms, caption, scheduledAt: scheduledAt || undefined,
+    ...(tiktok ? { tiktok } : {}),
+    ...(notices.length ? { notice: notices.join(" ") } : {}),
+  };
 }
 
 // ── 싱크(비서) 구글 도구 — 사용자별 refresh_token(Neon)으로 access token 갱신 후 API 호출 ──
