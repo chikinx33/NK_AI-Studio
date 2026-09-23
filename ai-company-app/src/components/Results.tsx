@@ -12,6 +12,25 @@ import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 import CollapsibleSection from "./CollapsibleSection";
 
+/** lucide "video" — 영상 산출물 썸네일 자리(영상 주소를 <img> 에 넣으면 깨진 그림이 떴다). */
+function VideoIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </svg>
+  );
+}
+/** lucide "music" — 오디오 산출물 썸네일 자리. */
+function MusicIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
 /** lucide "message-square" — 이 항목을 채팅에서 지목한다. */
 function MessageSquareIcon({ className }: { className?: string }) {
   return (
@@ -183,7 +202,11 @@ function ImagePopup({
           </button>
         </div>
         <div className="flex-1 overflow-auto bg-ink/60 p-3">
-          {item.url && !imageFailed
+          {item.url && item.kind === "video"
+            ? <video src={item.url} controls playsInline preload="metadata" className="mx-auto max-h-[56vh] w-full rounded-lg bg-black object-contain" />
+            : item.url && item.kind === "audio"
+              ? <audio src={item.url} controls preload="metadata" className="mx-auto w-full" />
+              : item.url && !imageFailed
             ? <img src={item.url} alt={item.file} onError={() => setImageFailed(true)} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
             : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">
                 {item.url
@@ -688,10 +711,14 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                   title="크게 보기"
                   className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-lg ring-2 ring-amber-500/60"
                 >
-                  {/* 이미지 주소가 없는 산출물(문서 등)에서 깨진 이미지 아이콘이 뜨던 자리 */}
-                  {it.url
-                    ? <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
-                    : <span className="grid h-full w-full place-items-center bg-amber-900/30 text-[10px] font-semibold text-amber-200">문서</span>}
+                  {/* 이미지 주소가 없는 산출물(문서 등)에서 깨진 이미지 아이콘이 뜨던 자리. 영상·오디오 주소도 <img> 에 넣으면 깨진다 → 아이콘 */}
+                  {it.kind === "video"
+                    ? <span className="grid h-full w-full place-items-center bg-amber-900/30 text-amber-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
+                    : it.kind === "audio"
+                      ? <span className="grid h-full w-full place-items-center bg-amber-900/30 text-amber-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
+                      : it.url
+                        ? <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
+                        : <span className="grid h-full w-full place-items-center bg-amber-900/30 text-[10px] font-semibold text-amber-200">문서</span>}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">

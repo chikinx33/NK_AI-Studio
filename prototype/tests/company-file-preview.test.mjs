@@ -51,7 +51,8 @@ test("못 여는 형식이면 무엇을 하라고 알려준다", () => {
 
 test("이미지가 없는 산출물에 깨진 이미지가 뜨지 않는다", () => {
   const results = readFileSync(join(repoRoot, "ai-company-app/src/components/Results.tsx"), "utf8");
-  assert.match(results, /\{it\.url\s*\?\s*<img/, "썸네일에 이미지 유무 확인이 없다");
+  // 영상·오디오는 그 앞 분기에서 아이콘으로 빠지고, 그 다음에야 이미지 유무를 본다.
+  assert.match(results, /:\s*it\.url\s*\?\s*<img/, "썸네일에 이미지 유무 확인이 없다");
   // 링크가 만료돼 로드에 실패한 경우도 깨진 아이콘 대신 안내를 띄운다(imageFailed).
-  assert.match(results, /\{item\.url && !imageFailed\s*\n?\s*\?\s*<img/, "크게 보기에 이미지 유무 확인이 없다");
+  assert.match(results, /:\s*item\.url && !imageFailed\s*\n?\s*\?\s*<img/, "크게 보기에 이미지 유무 확인이 없다");
 });
