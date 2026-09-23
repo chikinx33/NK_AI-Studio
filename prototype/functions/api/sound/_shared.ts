@@ -6,6 +6,7 @@
 // - ElevenLabs TTS / SFX 호출
 // - Gemini TTS 연출 합성 (Gemini API generateContent → PCM → WAV)
 import { geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
+import { resolveCharacterVoice } from "./_character-voices";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────
 export const corsHeaders = (origin?: string | null) => ({
@@ -400,23 +401,38 @@ export const DEFAULT_VOICE_DIRECTION =
   "Perform the following Korean script as a professional Korean voice actor. Read it with natural, sincere emotion that fits the meaning of each line, treat line breaks as natural breathing pauses, and never sound like flat text-to-speech. Clean close-mic studio sound:";
 
 // Google AI Studio 앱과 같은 형식: `지시문\n\n대본`.
-export function buildDirectedPrompt(direction: string, script: string): string {
-  const d = String(direction || "").trim() || DEFAULT_VOICE_DIRECTION;
-  return `${d}\n\n${String(script || "").trim()}`;
+// 대화(여러 캐릭터)일 때는 공통 지시문 뒤에 이 구간의 캐릭터 보이스(persona)와 대사별 연출(lineDirection)을 덧붙여,
+// 호출마다 모델이 '지금 누구를 어떻게 연기하는지' 알게 한다.
+export function buildDirectedPrompt(direction: string, script: string, extra?: { persona?: string; lineDirection?: string }): string {
+  const parts = [String(direction || "").trim() || DEFAULT_VOICE_DIRECTION];
+  const persona = String(extra?.persona || "").trim();
+  const line = String(extra?.lineDirection || "").trim();
+  if (persona) parts.push(`Voice character for these lines: ${persona}`);
+  if (line) parts.push(`Delivery for these lines: ${line}`);
+  return `${parts.join("\n")}\n\n${String(script || "").trim()}`;
 }
 
-// 연속된 같은 보이스 세그먼트를 한 번의 호출로 묶는다 — 모델이 여러 줄의 감정 흐름을 이어서 연기하도록.
+// 연속된 세그먼트를 한 번의 호출로 묶는다 — 모델이 여러 줄의 감정 흐름을 이어서 연기하도록.
+// 보이스가 같아도 대사별 연출이 다르면 따로 합성한다(지시가 섞이지 않게).
 // 빈 줄은 Google 앱 대본처럼 줄 사이 호흡(정적)으로 읽힌다.
-export function groupSegmentsByVoice<T extends { providerVoiceId: string; text: string }>(segments: T[]): Array<{ providerVoiceId: string; text: string }> {
-  const groups: Array<{ providerVoiceId: string; text: string }> = [];
+export function groupSegmentsByVoice<T extends { providerVoiceId: string; text: string; direction?: string }>(segments: T[]): Array<{ providerVoiceId: string; text: string; direction: string }> {
+  const groups: Array<{ providerVoiceId: string; text: string; direction: string }> = [];
   for (const seg of segments) {
     const text = String(seg.text || "").trim();
     if (!text) continue;
+    const direction = String(seg.direction || "").trim();
     const last = groups[groups.length - 1];
-    if (last && last.providerVoiceId === seg.providerVoiceId) last.text += "\n\n" + text;
-    else groups.push({ providerVoiceId: seg.providerVoiceId, text });
+    if (last && last.providerVoiceId === seg.providerVoiceId && last.direction === direction) last.text += "\n\n" + text;
+    else groups.push({ providerVoiceId: seg.providerVoiceId, text, direction });
   }
   return groups;
+}
+
+// providerVoiceId 해석: 일반 보이스 이름 또는 `char:<id>`(여아·남아·캐릭터 = 기본 보이스 + 고정 지시문).
+export function resolveGeminiVoice(providerVoiceId: string): { voiceName: string; persona: string } {
+  const c = resolveCharacterVoice(providerVoiceId);
+  if (c) return { voiceName: pickGeminiVoiceName(c.base), persona: c.persona };
+  return { voiceName: pickGeminiVoiceName(providerVoiceId), persona: "" };
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -570,14 +586,15 @@ export function splitEmotionTags(text: string): { clean: string; tags: string[] 
 }
 
 // Gemini TTS 연출 합성.
-// - 연속된 같은 보이스 세그먼트는 한 번의 호출로 묶어 대본 전체의 감정 흐름을 모델이 이어서 연기하게 한다.
+// - 연속된 같은 보이스·같은 대사별 연출 세그먼트는 한 번의 호출로 묶어 감정 흐름을 모델이 이어서 연기하게 한다.
+// - 호출마다 공통 지시문 + 캐릭터 보이스 지시문(여아·남아·캐릭터) + 대사별 연출을 붙인다.
 // - 연출 지시문 + 대본을 한 프롬프트로 Gemini API(3.1 Flash TTS)에 보낸다. 감정 태그는 대본 안에 그대로 둔다.
 // - Gemini API 키가 없거나 호출이 실패하면 Cloud Gemini-TTS 로 폴백(태그는 지시문으로 옮김).
 // - 결과는 PCM 을 이어 WAV 하나로 만든다(재인코딩 없음).
 export async function synthesizeGeminiDirected(opts: {
   env: any; apiKey: string; direction: string;
   cloud: { clientEmail: string; privateKeyPem: string; userProject: string; modelName: string } | null;
-  segments: Array<{ providerVoiceId: string; text: string }>;
+  segments: Array<{ providerVoiceId: string; text: string; direction?: string }>;
 }): Promise<{ wav: Uint8Array; durationSeconds: number; engine: string; fallbackReason: string }> {
   const groups = groupSegmentsByVoice(opts.segments);
   const parts: Uint8Array[] = [];
@@ -585,13 +602,14 @@ export async function synthesizeGeminiDirected(opts: {
   let engine = opts.apiKey ? GEMINI_TTS_API_MODEL : "";
   let fallbackReason = opts.apiKey ? "" : "gemini_api_key_missing";
   for (const g of groups) {
-    const voiceName = pickGeminiVoiceName(g.providerVoiceId);
+    const { voiceName, persona } = resolveGeminiVoice(g.providerVoiceId);
+    const extra = { persona, lineDirection: g.direction };
     let out: { pcm: Uint8Array; sampleRate: number } | null = null;
     if (opts.apiKey && !fallbackReason) {
       try {
         out = await geminiApiTts({
           env: opts.env, apiKey: opts.apiKey, model: GEMINI_TTS_API_MODEL, voiceName,
-          prompt: buildDirectedPrompt(opts.direction, g.text),
+          prompt: buildDirectedPrompt(opts.direction, g.text, extra),
         });
       } catch (e: any) {
         fallbackReason = String(e?.message || e || "gemini_api_tts_failed").slice(0, 300);
@@ -602,7 +620,7 @@ export async function synthesizeGeminiDirected(opts: {
     if (!out) {
       if (!opts.cloud) throw new Error("TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY not configured");
       const { clean, tags } = splitEmotionTags(g.text);
-      const base = buildDirectedPrompt(opts.direction, "").trim();
+      const base = buildDirectedPrompt(opts.direction, "", extra).trim();
       out = await geminiTts({
         clientEmail: opts.cloud.clientEmail,
         privateKeyPem: opts.cloud.privateKeyPem,

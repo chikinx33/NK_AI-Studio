@@ -3,7 +3,7 @@
  * 보이스 미리듣기 샘플. 보이스마다 고정 멘트 하나를 한 번만 합성해 GCS 공용 경로에 저장하고,
  * 이후 요청은 저장된 파일의 서명 URL 만 돌려준다(재생성·크레딧 차감 없음).
  *
- * Request:  { provider: "gemini" | "elevenlabs", voice: <Gemini 보이스 이름 | ElevenLabs voice id> }
+ * Request:  { provider: "gemini" | "elevenlabs", voice: <Gemini 보이스 이름 | char:<캐릭터 id> | ElevenLabs voice id> }
  * Response: { url, line, cached }
  *
  * 샘플은 사용자와 무관하게 보이스마다 같으므로 사용자 경로가 아닌 {basePrefix}/sound/voice-previews/ 에 둔다.
@@ -15,6 +15,7 @@ import {
   resolveGcsEnv, buildSoundObjectName, uploadToGcs, signGcsUrl, gcsObjectExists, bytesToDataUrl,
   elevenLabsTts, pickGeminiVoiceName, normalizeGeminiTtsModel, synthesizeGeminiDirected, GEMINI_TTS_API_MODEL,
 } from "./_shared";
+import { resolveCharacterVoice, CHARACTER_PREFIX } from "./_character-voices";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -22,6 +23,12 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const PREVIEW_LINE = "안녕하세요, 오늘은 이 목소리로 이야기를 들려드릴게요.";
 const PREVIEW_REV = "v1";
 const SIGN_TTL_SEC = 6 * 3600;
+
+// 캐릭터 지시문을 고치면 캐시 이름이 바뀌어 새 샘플이 만들어지도록 짧은 해시를 붙인다.
+async function shortHash(text: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(d)).slice(0, 4).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
@@ -40,8 +47,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     let cacheId = "";
     let ext: "mp3" | "wav" = "wav";
     if (provider === "gemini") {
-      voice = pickGeminiVoiceName(rawVoice);
-      cacheId = `gemini_${voice}_${GEMINI_TTS_API_MODEL}_${PREVIEW_REV}`;
+      const ch = resolveCharacterVoice(rawVoice);
+      if (rawVoice.startsWith(CHARACTER_PREFIX) && !ch) return send({ error: "unknown voice" }, 404, origin);
+      voice = ch ? rawVoice : pickGeminiVoiceName(rawVoice);
+      const tag = ch ? `char-${ch.id}-${await shortHash(ch.base + "|" + ch.persona)}` : voice;
+      cacheId = `gemini_${tag}_${GEMINI_TTS_API_MODEL}_${PREVIEW_REV}`;
     } else {
       // 임의 ID 로 합성을 반복시키지 못하게 등록된 보이스만 허용한다.
       const sql = getSql(env);

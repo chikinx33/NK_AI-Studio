@@ -34,11 +34,42 @@
     { n: 'Zephyr',       g: 'female', d: '맑고 경쾌한 캐릭터 보이스' }
   ].map(function (v) {
     return {
-      id: 'gemini-' + v.n, name: v.n, gender: v.g, language: 'ko',
+      id: 'gemini-' + v.n, name: v.n, gender: v.g, language: 'ko', category: 'adult',
       description: v.d, styleTags: [], scope: 'global',
       provider: 'gemini', providerVoiceId: v.n, previewUrl: ''
     };
   });
+
+  // 여아·남아·캐릭터 보이스 — Gemini TTS 에는 아이 보이스가 없어 '기본 보이스 + 고정 연기 지시문' 조합으로 만든다.
+  // 연기 지시문은 서버(functions/api/sound/_character-voices.ts)에만 있다. 여기 id 는 그 목록과 같아야 한다.
+  // providerVoiceId = 'char:<id>' — 서버가 기본 보이스와 지시문으로 풀어 합성한다.
+  var CHARACTER_VOICES = [
+    { id: 'girl-5',        c: 'girl',      g: 'female', ko: '아기 여아 (5세)',       en: 'Little girl (5)',        dk: '작고 달콤한 고음, 또박또박 말 배우는 아이',       de: 'Tiny, sweet high voice of a small child' },
+    { id: 'girl-8',        c: 'girl',      g: 'female', ko: '명랑한 여아 (8세)',     en: 'Cheerful girl (8)',      dk: '밝고 맑은 초등학생, 통통 튀는 리듬',            de: 'Bright, bouncy elementary-school girl' },
+    { id: 'girl-shy',      c: 'girl',      g: 'female', ko: '수줍은 여아 (7세)',     en: 'Shy girl (7)',           dk: '작고 조용한 목소리, 살짝 머뭇거림',             de: 'Soft, quiet and a little hesitant' },
+    { id: 'girl-teen',     c: 'girl',      g: 'female', ko: '10대 소녀 (15세)',      en: 'Teen girl (15)',         dk: '발랄하고 가벼운 청소년 톤',                     de: 'Lively, light teenage tone' },
+    { id: 'boy-5',         c: 'boy',       g: 'male',   ko: '아기 남아 (5세)',       en: 'Little boy (5)',         dk: '작고 살짝 허스키한 아이 목소리, 서툴고 순수함', de: 'Small, slightly husky, innocent child voice' },
+    { id: 'boy-8',         c: 'boy',       g: 'male',   ko: '개구쟁이 남아 (8세)',   en: 'Mischievous boy (8)',    dk: '에너지 넘치고 장난스러운 초등학생',             de: 'Energetic, cheeky elementary-school boy' },
+    { id: 'boy-smart',     c: 'boy',       g: 'male',   ko: '똑똑한 남아 (10세)',    en: 'Smart boy (10)',         dk: '또렷하고 차분한, 조금 진지한 아이',             de: 'Clear, calm and a little serious' },
+    { id: 'boy-teen',      c: 'boy',       g: 'male',   ko: '10대 소년 (변성기)',    en: 'Teen boy (voice breaking)', dk: '가볍고 풋풋한 변성기 소년',                 de: 'Light, youthful voice just breaking' },
+    { id: 'char-rabbit',   c: 'character', g: 'female', ko: '토끼 · 들뜬 잘난척쟁이', en: 'Rabbit · boastful',     dk: '높고 빠르게 통통 튀는 뽐내는 말투',             de: 'High, fast, springy and cocky' },
+    { id: 'char-turtle',   c: 'character', g: 'male',   ko: '거북이 · 느긋한 현자',   en: 'Turtle · calm sage',     dk: '느리고 따뜻하게, 구절마다 여유',                de: 'Slow, warm, long easy pauses' },
+    { id: 'char-mascot',   c: 'character', g: 'female', ko: '마스코트 요정',          en: 'Mascot fairy',           dk: '아주 높고 귀여운 재잘거림',                     de: 'Very high, cute and chattery' },
+    { id: 'char-robot',    c: 'character', g: 'male',   ko: '친근한 로봇',            en: 'Friendly robot',         dk: '또박또박 끊기는 기계적 말투',                   de: 'Even, clipped, slightly mechanical' },
+    { id: 'char-grandpa',  c: 'character', g: 'male',   ko: '할아버지 이야기꾼',      en: 'Grandpa storyteller',    dk: '나이 든 거친 저음, 느리고 다정하게',            de: 'Aged, raspy, slow and warm' },
+    { id: 'char-grandma',  c: 'character', g: 'female', ko: '할머니 이야기꾼',        en: 'Grandma storyteller',    dk: '포근하고 떨리는 노년 목소리',                   de: 'Gentle, slightly shaky, soothing' },
+    { id: 'char-princess', c: 'character', g: 'female', ko: '공주 · 우아한 히로인',   en: 'Princess heroine',       dk: '맑고 기품 있는 선율적인 목소리',                de: 'Clear, elegant and melodic' },
+    { id: 'char-hero',     c: 'character', g: 'male',   ko: '열혈 주인공',            en: 'Hot-blooded hero',       dk: '밝고 힘찬 젊은 남성, 결연함',                   de: 'Bright, energetic, determined' },
+    { id: 'char-witch',    c: 'character', g: 'female', ko: '마녀 · 음흉한 악당',     en: 'Wicked witch',           dk: '비꼬는 듯 음흉하게, 늘어지는 말끝',             de: 'Sly, mocking, playful menace' },
+    { id: 'char-villain',  c: 'character', g: 'male',   ko: '마왕 · 보스 악당',       en: 'Demon lord villain',     dk: '깊고 음산한 위압감, 느린 말투',                 de: 'Deep, slow, sinister and heavy' }
+  ].map(function (v) {
+    return {
+      id: 'gemini-char-' + v.id, name: v.ko, nameEn: v.en, gender: v.g, language: 'ko', category: v.c,
+      description: v.dk, descriptionEn: v.de, styleTags: [], scope: 'global',
+      provider: 'gemini', providerVoiceId: 'char:' + v.id, previewUrl: ''
+    };
+  });
+  var VOICE_CATEGORIES = ['', 'adult', 'girl', 'boy', 'character'];
 
   var VOICE_SPEEDS = [0.5, 1, 1.2, 1.5];
   var FORMATS = [
@@ -120,6 +151,8 @@
       direction_label: '연출 지시문', direction_preset: '연출 프리셋', direction_preset_custom: '직접 작성',
       direction_placeholder: '감정·템포·호흡·전체 흐름을 성우에게 디렉팅하듯 적어주세요.\n예: 처음 네 줄은 무겁게, 다섯째 줄부터 조금씩 따뜻하게. 문장 끝은 내려서 닫고, 줄 사이 1초 쉼.\n비워두면 기본 디렉션으로 읽어요.',
       direction_voice_hint: '추천 보이스',
+      seg_direction_placeholder: '이 대사의 캐릭터·감정 연출 (선택) — 예: 느리고 차분하게, 단어마다 여유를 두고',
+      cat_all: '전체 분류', cat_adult: '성인', cat_girl: '여아', cat_boy: '남아', cat_character: '캐릭터',
       sfx_title: '효과음', sfx_placeholder: '효과음 프롬프트 입력…  (예: heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: '영향도', generate_sfx: '효과음 생성',
       assets_title: '오디오 자산', assets_empty: '아직 생성된 사운드가 없습니다.\n오른쪽 패널에서 생성해보세요.',
@@ -151,6 +184,8 @@
       direction_label: 'Voice direction', direction_preset: 'Direction preset', direction_preset_custom: 'Custom',
       direction_placeholder: 'Direct the voice actor: emotion, tempo, breathing, and the arc across the script.\ne.g. First four lines graver, then slightly warmer from line five. Close each sentence downward, 1-second pause between lines.\nLeave empty to use the default direction.',
       direction_voice_hint: 'Suggested voice',
+      seg_direction_placeholder: 'Character / emotion direction for this line (optional) — e.g. slow and calm, leisurely on every word',
+      cat_all: 'All types', cat_adult: 'Adult', cat_girl: 'Girl', cat_boy: 'Boy', cat_character: 'Character',
       sfx_title: 'Sound Effects', sfx_placeholder: 'Enter SFX prompt…  (e.g. heavy rain on a tin roof)',
       looping: 'Looping', duration: 'Duration', influence: 'Influence', generate_sfx: 'Generate SFX',
       assets_title: 'Audio Assets', assets_empty: 'No sounds generated yet.\nUse the panel on the right.',
@@ -201,6 +236,7 @@
     modalSegmentId: null,  // null = setting default voice; else target segment
     modalTab: 'all',
     modalGender: '',
+    modalCategory: '',     // '' | adult | girl | boy | character
     modalSearch: '',
     _previewAudio: null
   };
@@ -297,7 +333,9 @@
 
   // 선택한 모델에 맞는 보이스 목록. Gemini TTS는 서버 voices 테이블이 아닌 프리셋을 쓴다.
   function isGeminiModel() { return String(state.model || '').indexOf('gemini') === 0; }
-  function availableVoices() { return isGeminiModel() ? GEMINI_VOICES : state.voices; }
+  function availableVoices() { return isGeminiModel() ? GEMINI_VOICES.concat(CHARACTER_VOICES) : state.voices; }
+  function voiceLabel(v) { return (state.lang === 'en' && v && v.nameEn) || (v && v.name) || ''; }
+  function voiceDesc(v) { return (state.lang === 'en' && v && v.descriptionEn) || (v && v.description) || ''; }
   function voiceMatchesModel(v) { return !!v && (v.provider === 'gemini') === isGeminiModel(); }
 
   // 모델을 바꾸면 다른 프로바이더의 보이스가 남지 않도록 기본 보이스·세그먼트를 재배정.
@@ -317,8 +355,8 @@
   function assignVoiceToSegment(seg, voice) {
     seg.voiceId = voice.id;
     seg.providerVoiceId = voice.providerVoiceId || '';
-    seg.voiceName = voice.name;
-    seg.voiceInitial = initialOf(voice.name);
+    seg.voiceName = voiceLabel(voice);
+    seg.voiceInitial = initialOf(voiceLabel(voice));
   }
 
   // ─── Segments ─────────────────────────────────────────────
@@ -542,6 +580,15 @@
     ta.addEventListener('input', function () { seg.text = ta.value; saveSegments(); updateMeter(); });
     card.appendChild(ta);
 
+    // 대사별 연출 — 공통 연출 지시문 뒤에 이 대사에만 붙는다(대화에서 캐릭터마다 다르게 연기시키기).
+    if (isGeminiModel()) {
+      var dir = el('input', 'snd-seg-text snd-seg-direction', { type: 'text', placeholder: t('seg_direction_placeholder') });
+      dir.style.minHeight = '0';
+      dir.value = seg.direction || '';
+      dir.addEventListener('input', function () { seg.direction = dir.value; saveSegments(); });
+      card.appendChild(dir);
+    }
+
     // emotion tag chips — insert at caret
     var chips = el('div', 'snd-chips');
     EMOTION_TAGS.forEach(function (tag) {
@@ -579,9 +626,9 @@
     var pick = el('button', 'snd-voice-pick', { type: 'button' });
     var dv = state.defaultVoice;
     var info = el('div');
-    info.appendChild(el('div', 'snd-voice-pick-name', { textContent: dv ? dv.name : t('voice_pick') }));
-    info.appendChild(el('div', 'snd-voice-pick-sub', { textContent: dv ? ((dv.gender || '').toUpperCase() + ' · ' + (dv.description || '')) : t('voice_none') }));
-    pick.appendChild(el('span', 'snd-speaker-avatar', { textContent: dv ? initialOf(dv.name) : '🎙' }));
+    info.appendChild(el('div', 'snd-voice-pick-name', { textContent: dv ? voiceLabel(dv) : t('voice_pick') }));
+    info.appendChild(el('div', 'snd-voice-pick-sub', { textContent: dv ? ((dv.gender || '').toUpperCase() + ' · ' + voiceDesc(dv)) : t('voice_none') }));
+    pick.appendChild(el('span', 'snd-speaker-avatar', { textContent: dv ? initialOf(voiceLabel(dv)) : '🎙' }));
     pick.appendChild(info);
     pick.appendChild(el('span', 'snd-voice-pick-arrow', { innerHTML: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' }));
     pick.addEventListener('click', function () { openVoiceModal(null); });
@@ -870,6 +917,7 @@
     state.modalSegmentId = segmentId;
     state.modalTab = 'all';
     state.modalGender = '';
+    state.modalCategory = '';
     state.modalSearch = '';
     render();
   }
@@ -919,6 +967,20 @@
       segTabs.appendChild(gt);
     });
     filters.appendChild(segTabs);
+    // 분류(성인·여아·남아·캐릭터) — Gemini 보이스에만 있다.
+    if (isGeminiModel()) {
+      var catTabs = el('div', 'snd-seg-tabs');
+      VOICE_CATEGORIES.forEach(function (c) {
+        var ct = el('button', 'snd-seg-tab' + (state.modalCategory === c ? ' is-active' : ''), { type: 'button', textContent: t(c ? 'cat_' + c : 'cat_all'), 'data-category': c });
+        ct.addEventListener('click', function () {
+          state.modalCategory = c;
+          catTabs.querySelectorAll('[data-category]').forEach(function (x) { x.classList.toggle('is-active', x.getAttribute('data-category') === c); });
+          refreshModalBody(modal);
+        });
+        catTabs.appendChild(ct);
+      });
+      filters.appendChild(catTabs);
+    }
     modal.appendChild(filters);
 
     var body = el('div', 'snd-modal-body');
@@ -949,8 +1011,9 @@
       if (state.modalTab === 'user' && v.scope !== 'user') return false;
       if (state.modalTab === 'all' && v.scope === 'brand' && !isProjectMode()) return false;
       if (state.modalGender && v.gender !== state.modalGender) return false;
+      if (state.modalCategory && (v.category || 'adult') !== state.modalCategory) return false;
       if (q) {
-        var hay = (v.name + ' ' + (v.description || '') + ' ' + (v.styleTags || []).join(' ')).toLowerCase();
+        var hay = (v.name + ' ' + (v.nameEn || '') + ' ' + (v.description || '') + ' ' + (v.descriptionEn || '') + ' ' + (v.category ? t('cat_' + v.category) : '') + ' ' + (v.styleTags || []).join(' ')).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -975,17 +1038,17 @@
   function renderVoiceCard(v, selected) {
     var card = el('div', 'snd-voice-card' + (selected ? ' is-selected' : ''));
     var head = el('div', 'snd-vc-head');
-    head.appendChild(el('span', 'snd-vc-avatar', { textContent: initialOf(v.name) }));
+    head.appendChild(el('span', 'snd-vc-avatar', { textContent: initialOf(voiceLabel(v)) }));
     var nb = el('div');
-    nb.appendChild(el('div', 'snd-vc-name', { textContent: v.name }));
-    nb.appendChild(el('div', 'snd-vc-sub', { textContent: (v.gender || 'neutral').toUpperCase() + ' · ' + (v.language || 'ko').toUpperCase() + (v.scope === 'brand' ? ' · 브랜드' : (v.scope === 'user' ? ' · 내 보이스' : '')) }));
+    nb.appendChild(el('div', 'snd-vc-name', { textContent: voiceLabel(v) }));
+    nb.appendChild(el('div', 'snd-vc-sub', { textContent: (v.gender || 'neutral').toUpperCase() + ' · ' + (v.language || 'ko').toUpperCase() + (v.category && v.category !== 'adult' ? ' · ' + t('cat_' + v.category) : '') + (v.scope === 'brand' ? ' · 브랜드' : (v.scope === 'user' ? ' · 내 보이스' : '')) }));
     head.appendChild(nb);
     var fav = el('button', 'snd-vc-fav' + (v.favorite ? ' is-fav' : ''), { type: 'button', textContent: v.favorite ? '★' : '☆', title: '즐겨찾기' });
     fav.addEventListener('click', function (e) { e.stopPropagation(); toggleFavorite(v, fav); });
     head.appendChild(fav);
     card.appendChild(head);
 
-    if (v.description) card.appendChild(el('div', 'snd-vc-desc', { textContent: v.description }));
+    if (voiceDesc(v)) card.appendChild(el('div', 'snd-vc-desc', { textContent: voiceDesc(v) }));
     if (v.styleTags && v.styleTags.length) {
       var tags = el('div', 'snd-vc-tags');
       v.styleTags.slice(0, 5).forEach(function (tg) { tags.appendChild(el('span', 'snd-vc-tag', { textContent: tg })); });
@@ -1183,7 +1246,7 @@
       format: state.format,
       stability: state.stability,
       direction: isGeminiModel() ? state.direction : '',
-      segments: valid.map(function (s) { return { voiceId: s.voiceId || '', providerVoiceId: s.providerVoiceId || '', text: s.text, speaker: s.voiceName || '' }; })
+      segments: valid.map(function (s) { return { voiceId: s.voiceId || '', providerVoiceId: s.providerVoiceId || '', text: s.text, speaker: s.voiceName || '', direction: isGeminiModel() ? (s.direction || '') : '' }; })
     };
     if (isProjectMode()) { payload.brandId = brandId(); payload.episodeId = episodeId(); }
     else { payload.sessionId = state.sessionId; }

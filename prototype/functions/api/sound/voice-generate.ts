@@ -24,7 +24,7 @@ import {
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-interface SegIn { voiceId?: string; providerVoiceId?: string; text?: string; speaker?: string; }
+interface SegIn { voiceId?: string; providerVoiceId?: string; text?: string; speaker?: string; direction?: string; }
 
 // 세그먼트별 합성 + 병합. (추후 ElevenLabs Dialogue 엔드포인트로 교체 가능)
 async function synthesizeSegments(opts: {
@@ -68,7 +68,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     const rawSegments: SegIn[] = Array.isArray(body.segments) ? body.segments : [];
     const segIn = rawSegments
-      .map((s) => ({ voiceId: String(s.voiceId || "").trim(), providerVoiceId: String(s.providerVoiceId || "").trim(), text: String(s.text || "").trim(), speaker: String(s.speaker || "").trim() }))
+      .map((s) => ({ voiceId: String(s.voiceId || "").trim(), providerVoiceId: String(s.providerVoiceId || "").trim(), text: String(s.text || "").trim(), speaker: String(s.speaker || "").trim(), direction: String(s.direction || "").trim().slice(0, 1000) }))
       .filter((s) => s.text);
     if (!segIn.length) return send({ error: "at least one non-empty segment required" }, 400, origin);
 
@@ -111,6 +111,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         ? (s.providerVoiceId || "Kore")
         : ((s.voiceId && idToProvider[s.voiceId]) || s.providerVoiceId || "21m00Tcm4TlvDq8ikWAM"),
       text: s.text,
+      // 대사별 연출(캐릭터·감정). Gemini 전용 — 공통 지시문 뒤에 이 구간에만 붙는다.
+      direction: isGemini ? s.direction : "",
     }));
 
     const totalChars = segments.reduce((n, s) => n + s.text.length, 0);
