@@ -1,10 +1,13 @@
 const fs = require('fs');
 const cp = require('child_process');
 
-function isStaged(path) {
+// config.js 가 스테이징됐다는 것만으로 '버전을 손으로 올렸다'고 보면 안 된다.
+// 계정 스코프 키 등록처럼 다른 줄만 고친 커밋에서 버전 증가가 통째로 빠졌다.
+// 스테이징된 변경에 APP_VERSION 줄 자체가 들어 있을 때만 이미 올린 것으로 본다.
+function isVersionStaged(path) {
   try {
-    const out = cp.execSync('git diff --name-only --cached', { encoding: 'utf8' });
-    return out.split(/\r?\n/).some((l) => l.trim() === path);
+    const out = cp.execSync(`git diff --cached -U0 -- "${path}"`, { encoding: 'utf8' });
+    return out.split(/\r?\n/).some((l) => /^\+\s*config\.APP_VERSION\s*=/.test(l));
   } catch (_) { return false; }
 }
 
@@ -71,7 +74,7 @@ function main() {
   const target = 'prototype/js/config.js';
   try {
     if (!fs.existsSync(target)) return;
-    if (!isStaged(target)) {
+    if (!isVersionStaged(target)) {
       const next = bumpVersion(target);
       if (next) { bumpHtmlAssetVersions(next); bumpServerVersion(next); }
     }
