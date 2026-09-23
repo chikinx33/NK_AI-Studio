@@ -122,7 +122,18 @@
     { id: "shorts-comic-reaction", genre: { ko: "숏츠 / 숏폼", en: "Shorts" }, ko: "텐션 폭발 밈 & 코믹 리뷰", en: "High-tension meme & comic review", voice: "Pulcherrima",
       text: "Hilarious, sassy, super-expressive Korean comedy reaction and meme dubbing voice! Playful sarcasm, lively bounce, rapid-fire punchy delivery with witty, confident flair:" }
   ];
-  var EMOTION_TAGS = ['calm', 'warmly', 'cheerfully', 'sadly', 'excited', 'whispering', 'angry', 'nervous'];
+  // 감정 태그 — 버튼 라벨만 UI 언어로 보이고, 대사에 넣는 태그는 항상 영어다
+  // (Gemini TTS 문서: 한국어 대본이라도 태그는 영어로 쓰는 편이 결과가 좋다).
+  var EMOTION_TAGS = [
+    { tag: 'calm',       ko: '차분하게' },
+    { tag: 'warmly',     ko: '따뜻하게' },
+    { tag: 'cheerfully', ko: '밝게' },
+    { tag: 'sadly',      ko: '슬프게' },
+    { tag: 'excited',    ko: '신나게' },
+    { tag: 'whispering', ko: '속삭이듯' },
+    { tag: 'angry',      ko: '화나게' },
+    { tag: 'nervous',    ko: '긴장하며' }
+  ];
   var SFX_CATEGORIES = ['Animals', 'Bass', 'Booms', 'Braams', 'Brass', 'Cymbals', 'Foley', 'Nature', 'Sci-Fi', 'UI', 'Whoosh'];
   var SFX_DURATIONS = [1, 2, 3, 5, 8, 10];
   var CHAR_LIMIT = 5000;
@@ -591,9 +602,10 @@
 
     // emotion tag chips — insert at caret
     var chips = el('div', 'snd-chips');
-    EMOTION_TAGS.forEach(function (tag) {
-      var c = el('button', 'snd-chip', { type: 'button', textContent: '[' + tag + ']' });
-      c.addEventListener('click', function () { insertTag(ta, seg, '[' + tag + '] '); });
+    EMOTION_TAGS.forEach(function (et) {
+      var label = state.lang === 'en' ? et.tag : et.ko;
+      var c = el('button', 'snd-chip', { type: 'button', textContent: '[' + label + ']', title: '[' + et.tag + ']' });
+      c.addEventListener('click', function () { insertTag(ta, seg, '[' + et.tag + '] '); });
       chips.appendChild(c);
     });
     card.appendChild(chips);

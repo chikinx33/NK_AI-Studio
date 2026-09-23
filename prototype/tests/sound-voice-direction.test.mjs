@@ -44,3 +44,10 @@ test('캐릭터·대사 연출 UI 문구는 한/영 짝이 있다', async () => 
     assert.equal((client.match(new RegExp(`\\b${key}:`, 'g')) || []).length, 2, key);
   }
 });
+
+test('감정 태그 칩: 라벨은 UI 언어로 보이고, 대사에 넣는 태그는 항상 영어다', async () => {
+  const client = await read('js/ui/ai-sound.js');
+  assert.match(client, /\{ tag: 'calm',\s+ko: '차분하게' \}/);
+  assert.match(client, /var label = state\.lang === 'en' \? et\.tag : et\.ko;/);
+  assert.match(client, /insertTag\(ta, seg, '\[' \+ et\.tag \+ '\] '\)/);
+});
