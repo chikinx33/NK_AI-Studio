@@ -30,10 +30,36 @@ type SearchScope = "title" | "content" | "all";
 type SortMode = "newest" | "oldest" | "name-asc" | "name-desc";
 type StatusFilter = "all" | CompanyWorkItem["status"];
 
+/** GCS 서명/공개 URL 에서 저장 경로(버킷 제외)를 되찾는다. 예전에 등록된 영상 업무는 objectName 없이 서명 URL 만 남아 있다. */
+function objectNameFromStorageUrl(raw: string): string {
+  try {
+    const u = new URL(String(raw || ""));
+    if (u.hostname === "storage.googleapis.com") {
+      const p = u.pathname.replace(/^\/+/, "");
+      const i = p.indexOf("/");
+      return i > 0 ? decodeURIComponent(p.slice(i + 1)) : "";
+    }
+    if (/^.+\.storage\.googleapis\.com$/.test(u.hostname)) return decodeURIComponent(u.pathname.replace(/^\/+/, ""));
+  } catch { /* URL 아님 */ }
+  return "";
+}
+
+/** 검수 승인으로 등록된 업무의 산출물 저장 위치(없으면 빈 문자열). objectName 이 없으면 서명 URL 에서 되찾는다. */
+function mediaWorkObject(work: CompanyWorkItem): string {
+  const direct = String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  return direct || objectNameFromStorageUrl(String(work.metadata?.signedUrl || ""));
+}
+
 /** 검수 승인으로 등록된 이미지 업무의 저장 위치(없으면 빈 문자열). */
 function imageWorkObject(work: CompanyWorkItem): string {
   if (work.work_type !== "image") return "";
-  return String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  return mediaWorkObject(work);
+}
+
+/** 영상 업무인가(video·scene_video 잡, 또는 저장 파일이 동영상). 카드에 비디오 아이콘을 그리고 열면 플레이어로 본다. */
+function isVideoWork(work: CompanyWorkItem): boolean {
+  if (work.work_type === "video" || work.work_type === "scene_video") return true;
+  return /\.(mp4|mov|webm|m4v)$/i.test(mediaWorkObject(work));
 }
 
 /**
@@ -43,7 +69,7 @@ function imageWorkObject(work: CompanyWorkItem): string {
  * 그래서 승인한 그림이 있는데도 업무를 열면 "소스는 없어요"만 보였다.
  */
 function mergeWorkOutput(work: CompanyWorkItem, items: AgentVideoStorageItem[]): AgentVideoStorageItem[] {
-  const objectName = String(work.metadata?.objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+  const objectName = mediaWorkObject(work);
   if (!objectName || items.some((item) => item.objectName === objectName)) return items;
   const fileName = objectName.split("/").pop() || "산출물";
   const video = /\.(mp4|mov|webm|m4v)$/i.test(fileName);
@@ -220,9 +246,9 @@ function WorkDocumentFiles({ work }: { work: CompanyWorkItem }) {
 
 /** 업무 항목 → 채팅에서 지목할 참조. 이미지 업무는 잡·저장 경로를, 그 밖은 업무 ID 를 넘긴다(직원은 work_get 으로 상세를 본다). */
 function workReference(work: CompanyWorkItem): ChatReference {
-  const objectName = imageWorkObject(work);
+  const objectName = mediaWorkObject(work);
   const jobId = work.metadata?.jobId ? String(work.metadata.jobId) : undefined;
-  const mediaKind = objectName ? "image" : work.work_type === "infographic" ? "video" : "doc";
+  const mediaKind = imageWorkObject(work) ? "image" : (isVideoWork(work) || work.work_type === "infographic") ? "video" : "doc";
   return {
     kind: "work", workId: work.id, jobId, title: work.title, mediaKind,
     objectName: objectName || undefined,
@@ -385,6 +411,11 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     else if (imageWorkObject(work) && work.metadata?.jobId) {
       setImagePreview({ source: "generated", name: `${work.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "image"}.png`,
         contentType: "image/png", jobId: String(work.metadata.jobId) });
+    }
+    else if (isVideoWork(work) && work.metadata?.jobId) {
+      // 영상은 플레이어로 연다(생성 잡의 objectName 프록시 → 서명 URL 만료와 무관).
+      setImagePreview({ source: "generated", name: `${work.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "video"}.mp4`,
+        contentType: "video/mp4", kind: "video", jobId: String(work.metadata.jobId) });
     }
     else void openSources(work);
   }
@@ -575,6 +606,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           {visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-emerald-950/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
               : imageWorkObject(work) ? <StoredImage objectName={imageWorkObject(work)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
+              : isVideoWork(work) ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
               : <DocumentIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />}
             <div className={`min-w-0 pr-8 ${viewMode === "list" ? "flex flex-1 items-center gap-4" : "mt-3"}`}><div className={viewMode === "list" ? "min-w-0 flex-1" : "min-w-0"}><div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-100" title={work.title}>{work.title}</h2><span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDone(work.status) ? "bg-emerald-950 text-emerald-300" : work.status === "error" ? "bg-red-950 text-red-300" : "bg-amber-950 text-amber-300"}`}>{isDone(work.status) ? "완료" : work.status === "error" ? "오류" : "진행 중"}</span></div><p className="mt-1 text-[10px] text-gray-500">{work.work_type === "infographic" ? "Remotion 인포그래픽" : work.work_type}</p></div><p className={`${viewMode === "cards" ? "mt-3 line-clamp-2" : "hidden max-w-md flex-1 truncate lg:block"} text-[11px] leading-5 text-gray-500`}>{work.result_summary || work.request_text}</p></div>
             <div className="absolute right-3 top-3" data-item-menu>

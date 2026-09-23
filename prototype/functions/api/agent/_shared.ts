@@ -1127,7 +1127,7 @@ export async function fileJobAsWorkItem(
           agentId: job.agent_id || "",
           model: output?.model || "",
           provider: output?.provider || "",
-          objectName: output?.objectName || "",
+          objectName: output?.objectName || mediaObjectNameFromUrl(output?.videoUrl || output?.audioUrl || ""),
           signedUrl: output?.signedUrl || output?.videoUrl || output?.audioUrl || "",
         }),
       ]
@@ -4505,6 +4505,16 @@ export function brandAssetImageRef(raw: string, bucket: string): string {
   return "";
 }
 
+/**
+ * 미디어 주소(GCS 서명/공개 URL)에서 저장 경로(objectName, 버킷 제외)를 되찾는다. 못 찾으면 "".
+ * 영상 잡의 결과는 1시간짜리 서명 URL 뿐이라, 이걸로 objectName 을 남겨야 업무 폴더·보고·미리보기가
+ * 만료되지 않는 같은 오리진 프록시로 열 수 있다(전엔 업무 폴더에서 "소스는 없어요" 만 보였다).
+ */
+export function mediaObjectNameFromUrl(raw: string): string {
+  const ref = brandAssetImageRef(String(raw || ""), "");
+  return ref.startsWith("gs://") ? ref.replace(/^gs:\/\/[^/]+\//, "") : "";
+}
+
 /** 이미지를 만드는 도구들. 이 잡의 산출물은 다른 도구가 "방금 그 그림"으로 가리킬 수 있다. */
 export const IMAGE_PRODUCING_TOOLS = new Set(["image", "image_edit", "upscale", "set_master", "set_angle", "set_sheet", "scene_still"]);
 
@@ -7051,7 +7061,9 @@ export async function reconcileVideoJobs(ctx: ToolContext, sql: SqlFn) {
       await say(`❌ ${error}`);
       continue;
     }
-    output = { ...output, model: out.videoModel || output.model || "", durationSeconds: out.durationSeconds || 0, videoJobId: out.videoJobId };
+    const objectName = String(output.objectName || "").trim() || mediaObjectNameFromUrl(check.videoUrl);
+    output = { ...output, model: out.videoModel || output.model || "", durationSeconds: out.durationSeconds || 0, videoJobId: out.videoJobId,
+      ...(objectName ? { objectName } : {}) };
     await setJobStatus(sql, job.id, ctx.userId, {
       status: runApproved ? 'approved' : 'review_pending', output,
       reviewStatus: runApproved ? 'approved' : 'pending',
