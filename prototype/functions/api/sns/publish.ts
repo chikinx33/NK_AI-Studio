@@ -236,6 +236,49 @@ async function refreshTikTokToken(opts: {
   };
 }
 
+/** sns-settings.json 의 한 플랫폼 항목을 병합 저장(needsReconnect·갱신 토큰). */
+async function saveSnsPlatformPatch(opts: { bucket: string; objectName: string; googleToken: string; platform: string; patch: Record<string, unknown> }): Promise<void> {
+  const readName = gcsObjectPath(opts.objectName);
+  const writeName = opts.objectName.split("/").map(encodeURIComponent).join("/");
+  const readRes = await fetch(`https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${readName}?alt=media`, { headers: { Authorization: `Bearer ${opts.googleToken}` } });
+  let existing: any = { sns: {}, deployDefaults: {} };
+  if (readRes.ok) { try { existing = await readRes.json(); } catch { /* keep default */ } }
+  existing.sns = existing.sns || {};
+  existing.sns[opts.platform] = Object.assign({}, existing.sns[opts.platform], opts.patch);
+  existing.updatedAt = new Date().toISOString();
+  const upRes = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${writeName}`, {
+    method: "POST", headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" }, body: JSON.stringify(existing),
+  });
+  if (!upRes.ok) throw new Error(`GCS save error: ${upRes.status}`);
+}
+
+/** 인스타그램 만료 토큰 오류인가(Graph API code 190 계열). */
+function isInstagramTokenError(message: string): boolean {
+  return /session has expired|error validating access token|invalid oauth access token|access token.*(expired|invalid)|\(#190\)|code":\s*190/i.test(String(message || ""));
+}
+
+/**
+ * 연결된 인스타그램 계정의 토큰. 만료 7일 전부터 ig_refresh_token 으로 갱신해 저장한다(성과 동기화와 같은 규칙).
+ * 이미 만료됐거나 갱신이 거절되면 needsReconnect 를 기록하고 던진다 — 재연결이 유일한 해법이다.
+ */
+async function ensureInstagramPublishToken(entry: any, store: { bucket: string; objectName: string; googleToken: string }): Promise<string> {
+  const current = String(entry?.accessToken || "").trim();
+  if (!current) throw new Error("instagram_reconnect_required");
+  const expiresAt = Date.parse(String(entry?.tokenExpiresAt || ""));
+  if (Number.isFinite(expiresAt) && expiresAt - Date.now() > 7 * 24 * 3600 * 1000) return current;
+  const url = new URL("https://graph.instagram.com/refresh_access_token");
+  url.search = new URLSearchParams({ grant_type: "ig_refresh_token", access_token: current }).toString();
+  const res = await fetch(url.toString());
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.access_token) {
+    await saveSnsPlatformPatch({ ...store, platform: "instagram", patch: { needsReconnect: true } }).catch(() => {});
+    throw new Error(`instagram_reconnect_required: ${String(data?.error?.message || res.status)}`);
+  }
+  const tokenExpiresAt = new Date(Date.now() + (Number(data.expires_in) > 0 ? Number(data.expires_in) : 60 * 24 * 3600) * 1000).toISOString();
+  await saveSnsPlatformPatch({ ...store, platform: "instagram", patch: { accessToken: data.access_token, tokenExpiresAt, needsReconnect: false } }).catch(() => {});
+  return String(data.access_token);
+}
+
 async function saveTikTokTokenPatch(opts: {
   bucket: string;
   objectName: string;
@@ -1192,11 +1235,33 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     }
 
     if (platform === "instagram") {
-      const accessToken = env.IG_ACCESS_TOKEN;
-      const igUserId = env.IG_USER_ID;
-      if (!accessToken || !igUserId) {
-        return send({ error: "Instagram 환경변수(IG_ACCESS_TOKEN, IG_USER_ID)가 설정되지 않았습니다." }, 400);
+      // ★연결된 계정(SNS 설정의 @계정)으로 게시한다. 전엔 환경변수의 마스터 토큰(IG_ACCESS_TOKEN)만 써서, 화면엔
+      //   "연결됨 @shapes.ko" 인데 게시는 만료된 마스터 토큰으로 나가 "Session has expired" 가 났다(2026-09-24).
+      //   연결된 계정이 없을 때만 환경변수로 폴백한다.
+      const igBasePrefix = outParsed.object.replace(/\/$/, "");
+      const igSettingsName = buildUserDataObject(igBasePrefix, publishUserId, "sns-settings.json");
+      const igSettings = await loadSnsSettings(bucket, igSettingsName, googleToken).catch(() => null);
+      const igEntry = igSettings?.sns?.instagram;
+      const igStore = { bucket, objectName: igSettingsName, googleToken };
+      let accessToken = "";
+      let igUserId = "";
+      if (igEntry?.connected && igEntry?.accessToken) {
+        if (igEntry.enabled === false) return send({ error: "instagram_paused", message: "인스타그램 계정이 연결돼 있지만 사용 중지 상태예요. SNS 설정에서 켜 주세요." }, 412);
+        try {
+          accessToken = await ensureInstagramPublishToken(igEntry, igStore);
+        } catch (e: any) {
+          return send({ error: "instagram_reconnect_required", needsReconnect: true,
+            message: `인스타그램 연결이 만료됐어요(@${String(igEntry.username || "")}). SNS 설정에서 '연결 해제' 후 다시 연결한 뒤 재시도해 주세요. (${String(e?.message || "").slice(0, 120)})` }, 412);
+        }
+        igUserId = String(igEntry.igUserId || igEntry.userId || "");
+      } else {
+        accessToken = String(env.IG_ACCESS_TOKEN || "");
+        igUserId = String(env.IG_USER_ID || "");
       }
+      if (!accessToken || !igUserId) {
+        return send({ error: "instagram_not_connected", needsReconnect: true, message: "인스타그램이 연결돼 있지 않아요. SNS 설정에서 인스타그램을 연결해 주세요." }, 412);
+      }
+      try {
 
       if (isCarousel) {
         // 캐러셀 포스트: 각 아이템에 대해 서명 URL 생성 후 업로드
@@ -1242,7 +1307,16 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
         }
 
-        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString() } });
+        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString() } });
+      }
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (isInstagramTokenError(msg)) {
+          if (igEntry?.connected) await saveSnsPlatformPatch({ ...igStore, platform: "instagram", patch: { needsReconnect: true } }).catch(() => {});
+          return send({ error: "instagram_reconnect_required", needsReconnect: true,
+            message: `인스타그램 토큰이 만료됐어요. SNS 설정에서 인스타그램을 '연결 해제' 후 다시 연결한 뒤 재시도해 주세요. (${msg.slice(0, 160)})` }, 412);
+        }
+        throw e;
       }
     }
 

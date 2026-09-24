@@ -2727,9 +2727,10 @@ async function resolvePublishMedia(input: any, ctx: ToolContext, preferVideo: bo
 /** 승인 전 확정: 미디어를 미리 찾아 잡 입력에 박는다. 못 찾으면 승인 카드를 만들지 않고 바로 알린다(승인 뒤에 실패하지 않게). */
 async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
   const platformsRaw = Array.isArray(input?.platforms) ? input.platforms : (input?.platform ? [input.platform] : ["instagram"]);
-  const platforms: string[] = platformsRaw.map((p: any) => String(p || "").toLowerCase().trim()).filter(Boolean);
+  const platforms: string[] = platformsRaw.map((p: any) => normalizePublishPlatform(p)).filter(Boolean);
+  const drafts0: Record<string, any> = input?.drafts && typeof input.drafts === "object" ? input.drafts : {};
   const caption = String(input?.caption || input?.prompt || "").trim();
-  if (!caption) throw new Error("caption 이 필요해요(게시글 본문).");
+  if (!caption && !platforms.some((pl) => String((drafts0[pl] || drafts0[pl.replace(/-shorts$/, "")] || {}).caption || "").trim())) throw new Error("caption 이 필요해요(게시글 본문 · 공통 또는 채널별 drafts).");
   const wantsTikTok = platforms.includes("tiktok");
   const needsMedia = platforms.some((p) => p !== "threads" && p !== "x");
   const media = await resolvePublishMedia(input, ctx, wantsTikTok || String(input?.mediaType || "").toLowerCase() === "video");
@@ -2749,6 +2750,17 @@ async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 채널 이름 정규화: "YouTube Shorts"·"youtube_shorts"·"쇼츠" → youtube-shorts, 한글 이름도 받는다. */
+function normalizePublishPlatform(raw: any): string {
+  const v = String(raw || "").toLowerCase().trim().replace(/\s+/g, "-").replace(/_/g, "-");
+  const map: Record<string, string> = {
+    "인스타": "instagram", "인스타그램": "instagram", "ig": "instagram",
+    "유튜브": "youtube", "유튜브-쇼츠": "youtube-shorts", "쇼츠": "youtube-shorts", "youtube-short": "youtube-shorts", "shorts": "youtube-shorts",
+    "틱톡": "tiktok", "스레드": "threads", "스레즈": "threads", "엑스": "x", "트위터": "x", "twitter": "x", "페이스북": "facebook", "fb": "facebook",
+  };
+  return map[v] || v;
+}
+
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요)
  *  ★TikTok 은 2026-08-31 부터 Direct Post 가 아니라 '초안함(inbox) 전송' 이다(브랜드 스튜디오 배포 버튼과 같은 /api/sns/tiktok/inbox).
  *    초안 전송은 video.upload 스코프만 쓰고 확인 모달 요건 대상이 아니므로, 예전의 "확인 화면이 없어 막는다" 차단은 근거가 사라져 제거했다.
@@ -2757,9 +2769,11 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   const platformsRaw = Array.isArray(input?.platforms)
     ? input.platforms
     : (input?.platform ? [input.platform] : ["instagram"]);
-  const platforms: string[] = platformsRaw.map((p: any) => String(p || "").toLowerCase().trim()).filter(Boolean);
+  const platforms: string[] = platformsRaw.map((p: any) => normalizePublishPlatform(p)).filter(Boolean);
   const caption = String(input?.caption || input?.prompt || "").trim();
-  if (!caption) throw new Error("caption is required");
+  const drafts: Record<string, any> = input?.drafts && typeof input.drafts === "object" ? input.drafts : {};
+  const draftFor = (platform: string): any => drafts[platform] || drafts[platform.replace(/-shorts$/, "")] || {};
+  if (!caption && !platforms.some((pl) => String(draftFor(pl)?.caption || "").trim())) throw new Error("caption 이 필요해요(공통 또는 채널별 drafts.<채널>.caption).");
   const hashtags: string[] = (Array.isArray(input?.hashtags) ? input.hashtags : []).map((h: any) => String(h || "").trim()).filter(Boolean);
   // 예약 발행: scheduledAt(ISO8601) 주면 예약. (YouTube 등은 백엔드가 privacyStatus=scheduled+publishAt 으로 처리)
   const scheduledAt = String(input?.scheduledAt || input?.publishAt || "").trim();
@@ -2785,8 +2799,11 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       const mediaGcsPath = media.mediaGcsPath;
       if (!mediaGcsPath) throw new Error("TikTok 초안함으로 보낼 영상을 찾지 못했어요 — 이 대화에 지목·생성된 영상이 없어요. 보고의 최근 처리나 업무 폴더에서 영상을 지목(💬)한 뒤 다시 요청해 주세요.");
       if (media.mediaType !== "video") throw new Error(`TikTok 초안함에는 영상만 보낼 수 있는데 찾은 산출물이 이미지예요(${media.source}).`);
-      const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
-      const description = tagLine && !caption.includes(tagLine) ? `${caption}\n${tagLine}` : caption;
+      const tkDraft = draftFor("tiktok");
+      const tkCaption = String(tkDraft.caption || caption).trim();
+      const tkTags = (Array.isArray(tkDraft.hashtags) ? tkDraft.hashtags : hashtags).map((h: any) => String(h || "").trim()).filter(Boolean);
+      const tagLine = tkTags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+      const description = tagLine && !tkCaption.includes(tagLine) ? `${tkCaption}\n${tagLine}` : tkCaption;
       const res = await fetch(internalUrl(ctx.request, "/api/sns/tiktok/inbox"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
@@ -2812,26 +2829,37 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     // /api/sns/publish 는 채널 하나씩 받는다: { platform, caption, mediaType, mediaGcsPath | mediaDirectUrl, … }.
     // 전엔 platforms 배열 + mediaUrl 로 한 번에 보내 "필수 필드 누락: platform, caption" 으로 늘 실패했다(2026-09-24).
     const { mediaGcsPath, mediaDirectUrl, mediaType } = media;
-    const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
-    const captionWithTags = tagLine && !caption.includes(tagLine) ? `${caption}\n\n${tagLine}` : caption;
     const failures: string[] = [];
+    const reconnect: string[] = [];
     for (const platform of others) {
+      // 채널별 초안(브랜드 스튜디오 '초안' 페이지와 같은 칸): caption·hashtags·firstComment·linkUrl·replySetting·title·tags·categoryKey·privacyStatus
+      const d = draftFor(platform);
+      const pCaption = String(d.caption || caption).trim();
+      const pTags: string[] = (Array.isArray(d.hashtags) ? d.hashtags : hashtags).map((h: any) => String(h || "").trim()).filter(Boolean);
+      const tagLine = pTags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+      const captionWithTags = tagLine && !pCaption.includes(tagLine) ? `${pCaption}\n\n${tagLine}` : pCaption;
+      const isYouTube = platform === "youtube" || platform === "youtube-shorts";
       const needsMedia = platform !== "threads" && platform !== "x";
       if (needsMedia && !mediaGcsPath && !mediaDirectUrl) {
         failures.push(`${platform}: 올릴 이미지/영상이 없어요(jobId·objectName·mediaUrl 중 하나 필요)`);
         continue;
       }
+      if (isYouTube && mediaType !== "video") { failures.push(`${platform}: 유튜브에는 영상만 올릴 수 있어요(찾은 산출물은 이미지).`); continue; }
       const body: any = {
         platform,
         caption: captionWithTags,
         ...(needsMedia ? { mediaType, ...(mediaGcsPath ? { mediaGcsPath } : { mediaDirectUrl }) } : {}),
-        ...(platform === "youtube" ? {
-          title: String(input?.title || caption.split("\n")[0] || "").trim().slice(0, 100),
-          tags: hashtags.map((h) => h.replace(/^#/, "")),
-          isShorts: mediaType === "video" && input?.isShorts !== false,
+        ...(isYouTube ? {
+          title: String(d.title || input?.title || pCaption.split("\n")[0] || "").trim().slice(0, 100),
+          tags: (Array.isArray(d.tags) ? d.tags : pTags).map((h: any) => String(h).replace(/^#/, "")),
+          categoryKey: String(d.categoryKey || input?.categoryKey || "entertainment"),
+          privacyStatus: publishAtIso ? "scheduled" : String(d.privacyStatus || input?.privacyStatus || "public"),
+          isShorts: platform === "youtube-shorts" || (mediaType === "video" && (d.isShorts ?? input?.isShorts) !== false),
         } : {}),
-        ...(publishAtIso ? { publishAt: publishAtIso, privacyStatus: "scheduled" } : {}),
-        ...(input?.replySetting ? { replySetting: String(input.replySetting) } : {}),
+        ...(publishAtIso ? { publishAt: publishAtIso, ...(isYouTube ? {} : { privacyStatus: "scheduled" }) } : {}),
+        ...((platform === "threads" || platform === "x") && (d.replySetting || input?.replySetting) ? { replySetting: String(d.replySetting || input.replySetting) } : {}),
+        ...((platform === "instagram" || platform === "facebook") && (d.firstComment || input?.firstComment) ? { firstComment: String(d.firstComment || input.firstComment) } : {}),
+        ...(platform === "facebook" && (d.linkUrl || input?.linkUrl) ? { linkUrl: String(d.linkUrl || input.linkUrl) } : {}),
       };
       const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
         method: "POST",
@@ -2842,13 +2870,19 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       let data: any = {};
       try { data = JSON.parse(text); } catch { data = { raw: text }; }
       if (!res.ok || data?.ok === false) {
-        failures.push(`${platform}: ${String(data?.error || data?.message || `HTTP ${res.status}`).slice(0, 200)}`);
+        if (res.status === 412 || data?.needsReconnect || /reconnect_required|not_connected/.test(String(data?.error || ""))) {
+          reconnect.push(platform);
+          failures.push(`${platform}: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 220)}`);
+          continue;
+        }
+        failures.push(`${platform}: ${String(data?.message || data?.error || `HTTP ${res.status}`).slice(0, 200)}`);
         continue;
       }
       const r: any = data?.result || {};
       published.push({ platform, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || new Date().toISOString() });
     }
-    if (failures.length && !published.length && !tiktok) throw new Error(`발행 실패 — ${failures.join(" / ")}`);
+    if (reconnect.length) notices.push(`🔌 ${reconnect.join(", ")} 은(는) 연결이 만료돼 다시 연결해야 해요 — 브랜드 스튜디오 → SNS 설정(/sns-settings.html)에서 '연결 해제' 후 다시 연결한 뒤 "다시 발행해줘" 라고 해 주세요.`);
+    if (failures.length && !published.length && !tiktok) throw new Error(`발행 실패 — ${failures.join(" / ")}${reconnect.length ? ` · 재연결 필요: ${reconnect.join(", ")} (브랜드 스튜디오 → SNS 설정)` : ""}`);
     if (failures.length) notices.push(`일부 채널 실패: ${failures.join(" / ")}`);
   }
 

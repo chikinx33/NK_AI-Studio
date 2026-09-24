@@ -55,7 +55,7 @@ test("TikTok 외 채널은 /api/sns/publish 계약대로 채널 하나씩(platfo
   assert.match(fn, /for \(const platform of others\) \{/);
   assert.match(fn, /const needsMedia = platform !== "threads" && platform !== "x";/);
   assert.match(fn, /\.\.\.\(needsMedia \? \{ mediaType, \.\.\.\(mediaGcsPath \? \{ mediaGcsPath \} : \{ mediaDirectUrl \}\) \} : \{\}\),/);
-  assert.match(fn, /platform === "youtube" \? \{\s*title:/);
+  assert.match(fn, /isYouTube \? \{\s*title:/, "유튜브(쇼츠 포함)는 제목·태그·카테고리·공개 범위");
   assert.match(fn, /if \(failures\.length && !published\.length && !tiktok\) throw new Error\(`발행 실패 — /);
   assert.match(fn, /notices\.push\(`일부 채널 실패: /);
 });
@@ -121,4 +121,40 @@ test("'올라갔어?' 는 publish_history(읽기·합성) 로 답한다 — 채�
   const doc = orch.slice(orch.indexOf("    publish_history: `[[RUN: publish_history |"), orch.indexOf("`,", orch.indexOf("    publish_history: `[[RUN: publish_history |")));
   assert.match(doc, /"올라갔어\?"·"등록됐는지 확인해줘"·"발행 됐어\?"에는 반드시 이 도구/);
   assert.match(doc, /sns_analytics_sync\(성과 숫자 동기화\)로 대신하지 말 것/);
+});
+
+test("인스타그램 발행은 연결된 계정 토큰(만료 전 갱신)으로 나가고, 만료면 412 + needsReconnect 로 재연결을 안내한다", async () => {
+  const src = await read("prototype/functions/api/sns/publish.ts");
+  assert.match(src, /async function ensureInstagramPublishToken\(entry: any, store:/);
+  assert.match(src, /grant_type: "ig_refresh_token"/);
+  assert.match(src, /const igEntry = igSettings\?\.sns\?\.instagram;/);
+  assert.match(src, /igUserId = String\(igEntry\.igUserId \|\| igEntry\.userId \|\| ""\);/);
+  assert.match(src, /accessToken = String\(env\.IG_ACCESS_TOKEN \|\| ""\);/, "연결된 계정이 없을 때만 환경변수 폴백");
+  assert.match(src, /function isInstagramTokenError\(message: string\): boolean/);
+  assert.match(src, /error: "instagram_reconnect_required", needsReconnect: true,/);
+  assert.match(src, /patch: \{ needsReconnect: true \}/);
+});
+
+test("발행 도구는 채널별 초안(drafts)·유튜브 쇼츠·재연결 안내를 다룬다", async () => {
+  const [shared, orch, review] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("prototype/functions/api/agent/review.ts"),
+  ]);
+  assert.match(shared, /function normalizePublishPlatform\(raw: any\): string/);
+  assert.match(shared, /"쇼츠": "youtube-shorts"/);
+  const fn = fnBody(shared, "async function runPublishTool(");
+  assert.match(fn, /const draftFor = \(platform: string\): any => drafts\[platform\] \|\| drafts\[platform\.replace\(\/-shorts\$\/, ""\)\] \|\| \{\};/);
+  assert.match(fn, /const isYouTube = platform === "youtube" \|\| platform === "youtube-shorts";/);
+  assert.match(fn, /categoryKey: String\(d\.categoryKey \|\| input\?\.categoryKey \|\| "entertainment"\),/);
+  assert.match(fn, /\(platform === "threads" \|\| platform === "x"\) && \(d\.replySetting \|\| input\?\.replySetting\)/);
+  assert.match(fn, /\(platform === "instagram" \|\| platform === "facebook"\) && \(d\.firstComment \|\| input\?\.firstComment\)/);
+  assert.match(fn, /platform === "facebook" && \(d\.linkUrl \|\| input\?\.linkUrl\)/);
+  assert.match(fn, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
+  assert.match(fn, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
+  const doc = orch.slice(orch.indexOf("    publish: `[[RUN: publish |"), orch.indexOf("`,", orch.indexOf("    publish: `[[RUN: publish |")));
+  assert.match(doc, /"drafts": \{"instagram": \{"caption"/);
+  assert.match(doc, /채널별 문체가 다르므로 drafts 를 채널마다 따로 쓰고\(복붙 금지\)/);
+  assert.match(doc, /네이버 블로그·카카오·밴드는 직접 올리기 채널이라 발행 대상이 아님/);
+  assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
 });
