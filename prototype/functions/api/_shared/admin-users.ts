@@ -77,6 +77,22 @@ export async function loadRegistry(env: any): Promise<UsersRegistry> {
   }
 }
 
+// 권한 판정(hasPagePermission)은 인증된 요청마다 명부를 GCS 에서 다시 읽었다(8곳). 앱 부팅 한 번에 같은 문서를
+// 수십 번 읽어 느렸다(2026-09-24). 판정용 읽기만 아이솔레이트별로 15초 캐시한다 — 권한 변경은 15초 안에 반영되고,
+// 이 아이솔레이트에서 저장(saveRegistry)하면 즉시 비운다.
+const PERMISSION_REGISTRY_CACHE_MS = 15_000;
+let permissionRegistryCache: { registry: UsersRegistry; at: number } | null = null;
+let permissionRegistryPending: Promise<UsersRegistry> | null = null;
+export async function loadRegistryForPermission(env: any): Promise<UsersRegistry> {
+  if (permissionRegistryCache && Date.now() - permissionRegistryCache.at < PERMISSION_REGISTRY_CACHE_MS) return permissionRegistryCache.registry;
+  if (!permissionRegistryPending) {
+    permissionRegistryPending = loadRegistry(env)
+      .then((registry) => { permissionRegistryCache = { registry, at: Date.now() }; return registry; })
+      .finally(() => { permissionRegistryPending = null; });
+  }
+  return permissionRegistryPending;
+}
+
 /** 레지스트리를 저장한다(updatedAt 갱신). */
 export async function saveRegistry(env: any, registry: UsersRegistry): Promise<void> {
   const payload: UsersRegistry = {
@@ -85,6 +101,7 @@ export async function saveRegistry(env: any, registry: UsersRegistry): Promise<v
     users: (registry.users || []).map(normalizeUser).filter((u) => !!u.id),
   };
   await writeGcsJson(env, adminObjectName(env), payload);
+  permissionRegistryCache = null; // 권한 변경은 이 아이솔레이트에서 즉시 반영
 }
 
 /** ID로 회원을 찾는다(없으면 null). */
@@ -130,7 +147,7 @@ export async function getUserPermissions(env: any, userId: string): Promise<stri
   if (!uid) return null;
   if (uid === primaryAdminId(env)) return null;
   try {
-    const reg = await loadRegistry(env);
+    const reg = await loadRegistryForPermission(env);
     const user = findUser(reg, uid);
     if (!user) return null;            // 미등록 → 전체 접근(현행 동작 유지)
     if (user.role === "admin") return null;

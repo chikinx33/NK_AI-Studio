@@ -5,6 +5,8 @@ import type { SkillArtifact, SkillJob, SkillJobInput } from "./skillJobs";
 
 export interface StatusInfo {
   forbidden?: boolean; // AI 회사 이용 권한 없음(403)
+  /** 서버가 잰 소요 시간(ms). 느린 부팅의 원인(파일 저장소 vs DB)을 화면에서 바로 볼 수 있게 한다. */
+  timing?: { totalMs: number; authMs: number; permMs: number; claudeMs: number; dbMs: number };
   company: string;
   llmMode: "auto" | "cloud" | "local";
   workMode: "on" | "off";
@@ -507,6 +509,8 @@ export interface AgentInfo {
 export async function getStatus(): Promise<StatusInfo> {
   const r = await fetch("/api/agent/status");
   if (r.status === 403) return { forbidden: true } as unknown as StatusInfo; // AI 회사 권한 없음
+  // 5xx/빈 본문이면 예외로 올려 호출자가 재시도·실패 표시를 하게 한다(전엔 조용히 삼켜 "대기 중…" 이 영원히 남았다).
+  if (!r.ok) throw new Error(`status_${r.status}`);
   return r.json();
 }
 

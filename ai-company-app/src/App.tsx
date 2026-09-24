@@ -127,6 +127,9 @@ function companyWorkDate(value: string) {
 export default function App() {
   const { openWork } = useAgentVideoWorkspace();
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  // 서버 상태 확인의 진행 상태. 전엔 실패를 조용히 삼켜 "서버 연결 대기 중…" 이 영원히 남았다(2026-09-24).
+  const [statusPhase, setStatusPhase] = useState<"loading" | "ready" | "failed">("loading");
+  const [statusElapsedMs, setStatusElapsedMs] = useState(0);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   // 세션이 끊긴 상태 — 빈 화면 대신 로그인으로 가는 길을 보여준다.
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -893,12 +896,23 @@ export default function App() {
   }
 
   async function refreshStatus() {
-    try {
-      setStatus(await getStatus());
-    } catch {
-      /* 서버 미기동 */
+    // 일시 오류(DB 깨어나는 중·5xx)는 1.5초·3초 뒤 두 번 더 시도하고, 그래도 안 되면 실패로 표시해 다시 시도할 수 있게 한다.
+    setStatusPhase("loading");
+    const startedAt = Date.now();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 1500));
+      try {
+        const next = await getStatus();
+        setStatus(next);
+        setStatusElapsedMs(Date.now() - startedAt);
+        setStatusPhase("ready");
+        return;
+      } catch { /* 다음 시도 */ }
     }
+    setStatusElapsedMs(Date.now() - startedAt);
+    setStatusPhase("failed");
   }
+  const sec = (ms: number) => `${(ms / 1000).toFixed(1)}초`;
 
   useEffect(() => {
     refreshStatus();
@@ -1529,7 +1543,18 @@ export default function App() {
               onChatAbout={chatAbout}
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
-            {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
+            {statusPhase === "loading" && <div className="text-xs text-gray-500">서버 상태 확인 중…</div>}
+            {statusPhase === "failed" && (
+              <div className="text-xs text-amber-400">
+                서버 상태 확인 실패 ({sec(statusElapsedMs)} 동안 3회) ·{" "}
+                <button type="button" className="underline" onClick={() => { void refreshStatus(); }}>다시 시도</button>
+              </div>
+            )}
+            {statusPhase === "ready" && statusElapsedMs >= 2000 && status?.timing && (
+              <div className="text-[11px] text-gray-600" title="서버가 잰 시간. DB=Neon, 파일=권한 명부(GCS)">
+                서버 응답 {sec(statusElapsedMs)} (DB {sec(Math.max(status.timing.claudeMs, status.timing.dbMs))} · 파일 {sec(status.timing.permMs)})
+              </div>
+            )}
           </div>
           <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">
             {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}
