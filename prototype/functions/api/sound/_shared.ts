@@ -5,6 +5,7 @@
 // - GCS 업로드 + V4 서명 URL (tts.ts / sfx.ts 헬퍼 재사용)
 // - ElevenLabs TTS / SFX 호출
 // - Gemini TTS 연출 합성 (Gemini API generateContent → PCM → WAV)
+import { describeNeonError } from "../_shared/neon-error";
 import { geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { resolveCharacterVoice } from "./_character-voices";
 
@@ -31,7 +32,7 @@ function parseDbHost(rawUrl: string): string {
 
 async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promise<any[]> {
   const host = parseDbHost(dbUrl);
-  const res = await fetch(`https://${host}/sql`, {
+  const call = () => fetch(`https://${host}/sql`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -39,15 +40,18 @@ async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promis
     },
     body: JSON.stringify({ query: sql, params }),
   });
+  let res = await call();
+  // 5xx(520 등) 는 대부분 일시 오류 — 한 번만 짧게 쉬고 재시도(knowledge/_shared 와 같은 규칙).
+  if (res.status >= 500 && res.status !== 500) {
+    await new Promise((r) => setTimeout(r, 350));
+    res = await call();
+  }
   const body = await res.text();
   if (!res.ok) {
-    let msg = `Neon SQL 오류 ${res.status}`;
-    try {
-      const d = JSON.parse(body);
-      if (d?.message) msg = d.message;
-      else if (d?.error) msg = d.error;
-    } catch (_) {}
-    throw new Error(`${msg}: ${body.slice(0, 300)}`);
+    const info = describeNeonError(res.status, body);
+    const err: any = new Error(info.message);
+    err.neon = { status: info.status, kind: info.kind, detail: info.raw };
+    throw err;
   }
   const data = JSON.parse(body);
   return (data as any).rows || [];

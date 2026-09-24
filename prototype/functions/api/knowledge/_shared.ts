@@ -3,6 +3,7 @@
 // Neon Postgres + pgvector + OpenAI Embeddings 기반.
 // raw fetch 사용 — npm 패키지 의존성 없음 (Cloudflare Pages 번들 호환).
 
+import { describeNeonError } from "../_shared/neon-error";
 import { primaryAdminId } from "../_shared/admin-users";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -44,13 +45,11 @@ async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promis
   }
   const body = await res.text();
   if (!res.ok) {
-    let msg = `Neon SQL 오류 ${res.status}`;
-    try {
-      const d = JSON.parse(body);
-      if (d?.message) msg = d.message;
-      else if (d?.error) msg = d.error;
-    } catch (_) {}
-    throw new Error(`${msg}: ${body.slice(0, 300)}`);
+    // 사람이 읽는 문구 + 코드. 원문은 상세(detail)에 남긴다.
+    const info = describeNeonError(res.status, body);
+    const err: any = new Error(info.message);
+    err.neon = { status: info.status, kind: info.kind, detail: info.raw };
+    throw err;
   }
   const data = JSON.parse(body);
   return (data as any).rows || [];
