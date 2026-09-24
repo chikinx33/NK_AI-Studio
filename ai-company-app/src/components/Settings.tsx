@@ -218,6 +218,16 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
     });
   }
 
+  /** 한 드롭다운에서 "제공사::모델" 을 고른다. 빈 값 = 기본값 복귀, "::__custom__" = 직접 입력. */
+  function pickModel(agentId: string, raw: string) {
+    setModelMsg("");
+    if (!raw) { changeProvider(agentId, ""); return; }
+    const sep = raw.indexOf("::");
+    const provider = (sep >= 0 ? raw.slice(0, sep) : raw) as ModelProvider;
+    const model = sep >= 0 ? raw.slice(sep + 2) : "";
+    changeModel(agentId, provider, model || "__custom__");
+  }
+
   function changeModel(agentId: string, provider: ModelProvider, model: string) {
     setModelMsg("");
     setModelSelections((cur) => ({
@@ -669,34 +679,29 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                       {agent ? `${agent.emoji} ${agent.name}` : agentId}
                     </span>
 
+                    {/* 제공사 → 모델 2단 선택이었을 때는 첫 칸에 제공사 이름만 보여 "Opus 가 없다" 로 읽혔다.
+                        한 드롭다운에 제공사별 그룹으로 모든 모델을 펼치고, 최상위·추천 등급을 앞에 붙인다.
+                        option 은 브라우저 기본(회색 배경·흰 글씨)이라 안 보였다 → 어두운 테마 색을 직접 준다. */}
                     <select
-                      className="rounded border border-edge bg-black/30 px-1.5 py-1 text-[11px] text-gray-200"
-                      value={picked ? provider : ""}
-                      onChange={(e) => changeProvider(agentId, e.target.value)}
+                      className="min-w-0 flex-1 rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[11px] text-gray-100"
+                      value={picked ? `${provider}::${isCustom ? "__custom__" : picked.model}` : ""}
+                      onChange={(e) => pickModel(agentId, e.target.value)}
                     >
-                      <option value="">기본 ({shortModel(def)})</option>
+                      <option value="" className="bg-[#111722] text-gray-100">기본 ({shortModel(def)})</option>
                       {modelCatalog &&
                         (Object.keys(modelCatalog) as ModelProvider[]).map((p) => (
-                          <option key={p} value={p}>
-                            {modelCatalog[p].label}
-                          </option>
+                          <optgroup key={p} label={modelCatalog[p].label} className="bg-[#111722] text-gray-400">
+                            {modelCatalog[p].models.map((m) => (
+                              <option key={m.id} value={`${p}::${m.id}`} className="bg-[#111722] text-gray-100">
+                                {m.tier === "top" ? "⭐ 최상위 · " : m.tier === "recommended" ? "✅ 추천 · " : ""}{m.label}
+                              </option>
+                            ))}
+                            {modelCatalog[p].allowCustom && (
+                              <option value={`${p}::__custom__`} className="bg-[#111722] text-gray-100">직접 입력…</option>
+                            )}
+                          </optgroup>
                         ))}
                     </select>
-
-                    {picked && entry && (
-                      <select
-                        className="min-w-0 flex-1 rounded border border-edge bg-black/30 px-1.5 py-1 text-[11px] text-gray-200"
-                        value={isCustom ? "__custom__" : picked.model}
-                        onChange={(e) => changeModel(agentId, provider, e.target.value)}
-                      >
-                        {entry.models.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                        {entry.allowCustom && <option value="__custom__">직접 입력…</option>}
-                      </select>
-                    )}
 
                     {picked && isCustom && (
                       <input

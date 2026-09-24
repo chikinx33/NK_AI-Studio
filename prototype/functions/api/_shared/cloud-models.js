@@ -38,8 +38,9 @@ export const MODEL_CATALOG = {
     keyLabel: "구독 토큰 또는 ANTHROPIC_API_KEY",
     allowCustom: false,
     models: [
-      { id: "claude-opus-4-8", label: "Opus 4.8 — 최상위 판단, 가장 비쌈" },
-      { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — 기본 균형" },
+      // tier: "top" = 이 제공사에서 가장 똑똑한 모델, "recommended" = 품질·속도·비용 균형의 추천값. 설정 화면이 표시에 쓴다.
+      { id: "claude-opus-4-8", label: "Opus 4.8 — 최상위 판단, 가장 비쌈", tier: "top" },
+      { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — 기본 균형", tier: "recommended" },
       { id: "claude-haiku-4-5", label: "Haiku 4.5 — 빠르고 저렴" },
     ],
   },
@@ -48,9 +49,9 @@ export const MODEL_CATALOG = {
     keyLabel: "ATLASCLOUD_API_KEY",
     allowCustom: false,
     models: [
-      { id: "openai/gpt-5.6-sol", label: "GPT 5.6 Sol — 심층 추론" },
+      { id: "openai/gpt-5.6-sol", label: "GPT 5.6 Sol — 심층 추론", tier: "top" },
       { id: "openai/gpt-5.6-terra", label: "GPT 5.6 Terra — 실무·분석 ($2.5/$15 per M)" },
-      { id: "openai/gpt-5.6-luna", label: "GPT 5.6 Luna — 창작·대화 ($1/$6 per M)" },
+      { id: "openai/gpt-5.6-luna", label: "GPT 5.6 Luna — 창작·대화 ($1/$6 per M)", tier: "recommended" },
       { id: "openai/gpt-5.5", label: "GPT 5.5 — 범용" },
       { id: "openai/gpt-5.4", label: "GPT 5.4 — 범용, 400K 컨텍스트" },
     ],
@@ -60,9 +61,9 @@ export const MODEL_CATALOG = {
     keyLabel: "OPENAI_API_KEY",
     allowCustom: true,
     models: [
-      { id: "gpt-5.6-sol", label: "GPT 5.6 Sol" },
+      { id: "gpt-5.6-sol", label: "GPT 5.6 Sol", tier: "top" },
       { id: "gpt-5.6-terra", label: "GPT 5.6 Terra" },
-      { id: "gpt-5.6-luna", label: "GPT 5.6 Luna" },
+      { id: "gpt-5.6-luna", label: "GPT 5.6 Luna", tier: "recommended" },
       { id: "gpt-5.5", label: "GPT 5.5" },
       { id: "gpt-5.4", label: "GPT 5.4" },
     ],

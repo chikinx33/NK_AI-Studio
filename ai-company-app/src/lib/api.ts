@@ -1163,7 +1163,7 @@ export interface ModelCatalogEntry {
   keyLabel: string;
   /** 목록에 없는 모델 ID 를 직접 입력할 수 있는가(OpenAI 직접 호출용). */
   allowCustom: boolean;
-  models: { id: string; label: string }[];
+  models: { id: string; label: string; tier?: "top" | "recommended" }[];
 }
 export type ModelCatalog = Record<ModelProvider, ModelCatalogEntry>;
 
