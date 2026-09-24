@@ -23,7 +23,11 @@ test("직원별 모델은 한 드롭다운(제공사 그룹)에서 고르고, op
   const src = await read("ai-company-app/src/components/Settings.tsx");
   assert.match(src, /function pickModel\(agentId: string, raw: string\)/);
   assert.match(src, /onChange=\{\(e\) => pickModel\(agentId, e\.target\.value\)\}/);
-  assert.match(src, /<optgroup key=\{p\} label=\{modelCatalog\[p\]\.label\} className="bg-\[#111722\] text-gray-400">/);
+  assert.match(src, /<optgroup key=\{p\} label=\{`\$\{modelCatalog\[p\]\.label\} · \$\{billingOf\(p\)\}`\} className="bg-\[#111722\] text-gray-400">/);
+  // 구독 vs API 과금 구분: Claude 는 등록된 인증 모드에 따라, OpenAI 계열은 항상 과금
+  assert.match(src, /const claudeBilling = \(authStatus\?\.mode \?\? authMode\) === "subscription" \? "🟢 구독 · 추가 과금 없음" : "💳 API 키 · 토큰당 과금";/);
+  assert.match(src, /p === "atlas" \? "💳 API 과금 · Atlas 크레딧" : "💳 API 과금"/);
+  assert.match(src, /기본 \(\{shortModel\(def\)\}\) · \{billingOf\("anthropic"\)\}/);
   assert.match(src, /<option key=\{m\.id\} value=\{`\$\{p\}::\$\{m\.id\}`\} className="bg-\[#111722\] text-gray-100">/);
   assert.match(src, /m\.tier === "top" \? "⭐ 최상위 · " : m\.tier === "recommended" \? "✅ 추천 · " : ""/);
   assert.match(src, /value=\{`\$\{p\}::__custom__`\} className="bg-\[#111722\] text-gray-100">직접 입력…/);

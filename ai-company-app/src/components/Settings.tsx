@@ -218,6 +218,11 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
     });
   }
 
+  // 과금 방식 표시. Claude 는 등록된 인증이 구독 토큰이면 추가 과금이 없고, API 키면 토큰당 과금이다.
+  // OpenAI 계열은 어느 경로든 토큰당 과금(Atlas 는 Atlas 크레딧).
+  const claudeBilling = (authStatus?.mode ?? authMode) === "subscription" ? "🟢 구독 · 추가 과금 없음" : "💳 API 키 · 토큰당 과금";
+  const billingOf = (p: ModelProvider) => (p === "anthropic" ? claudeBilling : p === "atlas" ? "💳 API 과금 · Atlas 크레딧" : "💳 API 과금");
+
   /** 한 드롭다운에서 "제공사::모델" 을 고른다. 빈 값 = 기본값 복귀, "::__custom__" = 직접 입력. */
   function pickModel(agentId: string, raw: string) {
     setModelMsg("");
@@ -660,6 +665,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               </p>
             </div>
 
+            <p className="mb-2 text-[11px] text-gray-500">
+              🟢 구독 = Claude 그룹(등록한 구독 토큰으로 실행 · 추가 과금 없음) / 💳 API 과금 = 토큰당 요금이 붙는 경로(OpenAI 계열, Claude 도 API 키로 등록했을 때).
+              구독을 쓰려면 위 'Claude 인증'에서 구독(OAuth) 토큰이 등록돼 있어야 해요.
+            </p>
             <div className="space-y-1.5">
               {Object.keys(cloudModels).map((agentId) => {
                 const agent = agents.find((a) => a.id === agentId);
@@ -687,10 +696,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                       value={picked ? `${provider}::${isCustom ? "__custom__" : picked.model}` : ""}
                       onChange={(e) => pickModel(agentId, e.target.value)}
                     >
-                      <option value="" className="bg-[#111722] text-gray-100">기본 ({shortModel(def)})</option>
+                      <option value="" className="bg-[#111722] text-gray-100">기본 ({shortModel(def)}) · {billingOf("anthropic")}</option>
                       {modelCatalog &&
                         (Object.keys(modelCatalog) as ModelProvider[]).map((p) => (
-                          <optgroup key={p} label={modelCatalog[p].label} className="bg-[#111722] text-gray-400">
+                          <optgroup key={p} label={`${modelCatalog[p].label} · ${billingOf(p)}`} className="bg-[#111722] text-gray-400">
                             {modelCatalog[p].models.map((m) => (
                               <option key={m.id} value={`${p}::${m.id}`} className="bg-[#111722] text-gray-100">
                                 {m.tier === "top" ? "⭐ 최상위 · " : m.tier === "recommended" ? "✅ 추천 · " : ""}{m.label}
