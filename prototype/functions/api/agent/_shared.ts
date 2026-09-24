@@ -5556,7 +5556,15 @@ async function runProjectListTool(_input: any, ctx: ToolContext): Promise<any> {
   const data = await callInternalJson(ctx, "/api/project/list");
   const ids = Array.isArray(data?.ids) ? data.ids : [];
   const shared = Array.isArray(data?.shared) ? data.shared : [];
-  return { kind: "project_list", count: ids.length, ids, shared };
+  // id 만 주면 모델이 "SHAPES 시리즈" 를 못 찾는다(2026-09-24: 숫자 id 13개만 보고 흐름이 멈춤).
+  // 제작 캔버스 선택기와 같은 요약(시리즈·에피소드 제목·컷 수)을 붙인다.
+  const summary = await callInternalJson(ctx, "/api/agent/production-projects").catch(() => null);
+  const projects = (Array.isArray(summary?.projects) ? summary.projects : []).map((p: any) => ({
+    id: String(p?.id || ""), seriesId: String(p?.seriesId || ""), seriesTitle: String(p?.seriesTitle || ""),
+    episodeTitle: String(p?.episodeTitle || ""), title: String(p?.title || ""), projectType: String(p?.projectType || ""),
+    sceneCount: Number(p?.sceneCount) || 0, stills: Number(p?.stills) || 0, clips: Number(p?.clips) || 0, shared: !!p?.shared,
+  })).filter((p: any) => p.id);
+  return { kind: "project_list", count: ids.length, ids, shared, projects };
 }
 
 /** 프로젝트 상태 조회: /api/project/get?projectId=. {payload, scenes[]} 반환. read+synthesize. */
@@ -6183,8 +6191,34 @@ async function runSceneUpsertTool(input: any, ctx: ToolContext): Promise<any> {
   // common/promptText/promptEdited/cameraDirection/beats/blocking/cutRef* 는 캔버스·채팅이 프롬프트와
   // 컷↔컷 참조선을 편집하는 필드 — 여기 없으면 에이전트가 고쳐도 저장 전에 증발한다.
   const FIELDS = ["title", "lines", "narration", "dialogue", "sceneLocation", "backgroundStyle", "subtitleText", "videoSpeechPrompt", "script", "visual", "shot", "shotType", "cameraMove", "composition", "action", "estSec",
-    "common", "promptText", "promptEdited", "cameraDirection", "cameraElevation", "beats", "blocking", "cutRefId", "cutRefEnabled", "sceneBreak"];
+    "common", "promptText", "promptEdited", "cameraDirection", "cameraElevation", "beats", "blocking", "cutRefId", "cutRefEnabled", "sceneBreak",
+    // 이미 만들어 둔 산출물을 컷에 붙이는 필드(저장 경로). save 가 gs:// 로 정규화한다.
+    "imagePath", "imageDataUrl", "videoUrl"];
   for (const f of FIELDS) if (input?.[f] !== undefined && patch[f] === undefined) patch[f] = input[f];
+  // 지목한 산출물(jobId)·저장 경로(objectName)를 컷의 스틸/영상으로 부착. "이 이미지와 영상을 에피소드에 넣어줘" 가 통하게.
+  const bucketForAssets = studioBucket(ctx);
+  const gsFor = (objectName: string) => {
+    const plain = String(objectName || "").replace(/^gs:\/\/[^/]+\//, "");
+    if (!plain) return "";
+    if (!bucketForAssets) throw new Error("이미지 저장소 버킷이 설정되지 않아 산출물을 컷에 붙일 수 없어요.");
+    return `gs://${bucketForAssets}/${plain}`;
+  };
+  const assetFromJob = async (jobId: string): Promise<string> => {
+    const sql = getSql(ctx.env);
+    const job: any = sql ? await getJob(sql, jobId, ctx.userId).catch(() => null) : null;
+    const out: any = job?.output && typeof job.output === "object" ? job.output : {};
+    const objectName = String(out.objectName || "").trim() || mediaObjectNameFromUrl(String(out.videoUrl || out.signedUrl || ""));
+    if (!objectName) throw new Error(`jobId ${jobId.slice(0, 8)} 에서 산출물 저장 경로를 찾지 못했어요.`);
+    return gsFor(objectName);
+  };
+  const stillJob = String(input?.stillJobId || input?.imageJobId || "").trim();
+  const videoJob = String(input?.videoJobId || "").trim();
+  const stillObj = String(input?.imageObjectName || input?.stillObjectName || "").trim();
+  const videoObj = String(input?.videoObjectName || "").trim();
+  if (stillJob) { const gs = await assetFromJob(stillJob); patch.imagePath = gs; patch.imageDataUrl = gs; }
+  else if (stillObj) { const gs = gsFor(stillObj); patch.imagePath = gs; patch.imageDataUrl = gs; }
+  if (videoJob) patch.videoUrl = await assetFromJob(videoJob);
+  else if (videoObj) patch.videoUrl = gsFor(videoObj);
   delete patch.id; // id는 매칭·부여 전용, 병합 대상 아님
   const ref = input?.sceneId ?? input?.scene?.id ?? input?.sceneIndex;
   const idx = findSceneIndex(scenes, ref);
@@ -7019,7 +7053,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   project_create: { agentId: "core", kind: "external", gate: true, run: runProjectCreateTool },
   project_add_episode: { agentId: "core", kind: "external", gate: true, run: runProjectAddEpisodeTool },
   project_rename: { agentId: "core", kind: "external", gate: true, run: runProjectRenameTool },
-  project_list: { agentId: "core", kind: "read", run: runProjectListTool },
+  project_list: { agentId: "core", kind: "read", synthesize: true, run: runProjectListTool },
   // 조회는 기획(플롯)이 상태를 파악하는 근거 + 코어 공유. read+synthesize.
   project_get: { agentId: "plot", agentIds: ["core"], kind: "read", synthesize: true, run: runProjectGetTool },
   // 프로젝트 하나를 덮어쓴다.
@@ -7069,7 +7103,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
 
   // ── STEP 3 (P3): 운영·조회·개인화 ──
   // 코어(총괄): 브랜드/프로젝트 목록·삭제·공유.
-  brand_list: { agentId: "core", kind: "read", run: runBrandListTool },
+  brand_list: { agentId: "core", kind: "read", synthesize: true, run: runBrandListTool },
   brand_delete: { agentId: "core", kind: "external", gate: true, run: runBrandDeleteTool },
   project_delete: { agentId: "core", kind: "external", gate: true, run: runProjectDeleteTool },
   project_share: { agentId: "core", kind: "external", gate: true, run: runProjectShareTool },

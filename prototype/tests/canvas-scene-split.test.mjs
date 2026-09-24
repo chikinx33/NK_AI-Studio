@@ -37,7 +37,8 @@ test('★서버 scene_split 도구: 게이트 · sceneBreak 만 바꿈(순서·�
   assert.match(fn, /scenes\[idx\] = \{ \.\.\.scenes\[idx\], sceneBreak: split \};/);
   assert.match(fn, /callInternalJson\(ctx, "\/api\/project\/save", \{ body: \{ projectId, scenes \} \}\)/);
   assert.doesNotMatch(fn, /sceneLocation|applySceneOrder/, '순서·장소는 건드리지 않는다');
-  assert.match(shared, /"cutRefId", "cutRefEnabled", "sceneBreak"\];/);
+  // FIELDS 는 sceneBreak 뒤에 자산 부착 필드(imagePath·imageDataUrl·videoUrl)가 이어진다.
+  assert.match(shared, /"cutRefId", "cutRefEnabled", "sceneBreak",\s*\/\/[^\n]*\n\s*"imagePath", "imageDataUrl", "videoUrl"\];/);
   assert.match(read('prototype/functions/api/agent/_orchestrator.ts'), /scene_split: "씬 나누기\/합치기"/);
 });
 
