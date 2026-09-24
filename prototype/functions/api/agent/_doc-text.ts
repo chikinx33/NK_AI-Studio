@@ -4,6 +4,7 @@
 // 직원이 스스로 만든 견적서·기획서를 다시 열어보지 못하면 이어서 일할 수가 없다.
 // 브라우저 첨부 경로(ai-company-app/src/lib/xlsxImport.ts)와 같은 결과를 서버에서도 낸다.
 import { unzipSync, strFromU8 } from "./vendor/fflate.bundle.js";
+import { extractPdfText } from "./_pdf-text.js";
 
 export const DOCUMENT_EXTENSIONS = /\.(xlsx|xlsm|xltx|docx|dotx|pptx|potx|pdf)$/i;
 
@@ -91,61 +92,16 @@ async function readSpreadsheet(bytes: Uint8Array) {
   return chunks.join("\n\n");
 }
 
-/** zlib(deflate) 스트림을 푼다. PDF 본문은 대부분 FlateDecode 로 눌려 있다. */
-async function inflate(bytes: Uint8Array) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-/** PDF 콘텐츠 연산자에서 문자열만 뽑는다. */
-function pdfStringsOf(content: string) {
-  const out: string[] = [];
-  const re = /\((?:\\.|[^\\()])*\)|TJ|Tj|T\*|Td|TD|ET/g;
-  let match: RegExpExecArray | null;
-  let line = "";
-  while ((match = re.exec(content))) {
-    const token = match[0];
-    if (token.startsWith("(")) {
-      line += token.slice(1, -1)
-        .replace(/\\([nrt])/g, (_, code) => (code === "n" ? "\n" : code === "r" ? "" : "\t"))
-        .replace(/\\(\d{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-        .replace(/\\(.)/g, "$1");
-    } else if (token === "T*" || token === "Td" || token === "TD" || token === "ET") {
-      if (line.trim()) out.push(line.trim());
-      line = "";
-    }
-  }
-  if (line.trim()) out.push(line.trim());
-  return out;
-}
-
 /**
- * .pdf — 텍스트 레이어만 최선으로 뽑는다. 스캔 이미지 PDF나 한글 CID 폰트로
- * 만든 PDF는 글자가 깨져 나오므로, 알아볼 수 있는 글자 비율을 보고 솔직히 실패를 알린다.
+ * .pdf — 글꼴의 ToUnicode 표까지 읽는 추출기(_pdf-text.js)로 본문을 편다.
+ * 옛 구현은 "(…)" 문자열만 보고 글꼴 표를 안 읽어, 한글 PDF 의 일반 형태(Type0 글꼴 + 16진 문자열)를
+ * 통째로 놓치고 "글꼴이 묶여 읽을 수 없다" 고 답했다(2026-09-25 Shapes 소개서). 이제 글이 하나도 없는
+ * 스캔본만 실패로 알린다.
  */
 async function readPdf(bytes: Uint8Array) {
-  const latin = strFromU8(bytes, true);
-  const chunks: string[] = [];
-  const streamRe = /stream\r?\n?([\s\S]*?)endstream/g;
-  let match: RegExpExecArray | null;
-  while ((match = streamRe.exec(latin))) {
-    const raw = match[1];
-    const start = match.index + match[0].indexOf(raw);
-    const slice = bytes.subarray(start, start + raw.length);
-    let content = "";
-    try {
-      content = strFromU8(await inflate(slice), true);
-    } catch {
-      content = raw;
-    }
-    if (!/\bTJ\b|\bTj\b/.test(content)) continue;
-    const lines = pdfStringsOf(content);
-    if (lines.length) chunks.push(lines.join("\n"));
-  }
-  const text = trimBlankLines(chunks.join("\n"));
-  const readable = (text.match(/[\p{L}\p{N}\s.,!?;:'"()\-]/gu) || []).length;
-  if (!text || readable < text.length * 0.8) {
-    throw new Error("이 PDF는 글자가 그림으로 들어 있거나 글꼴이 묶여 있어 서버에서 본문을 읽을 수 없어요. 채팅에 파일을 첨부해 주시면 그 내용은 읽을 수 있어요.");
+  const text = trimBlankLines(await extractPdfText(bytes));
+  if (!text) {
+    throw new Error("이 PDF는 글이 그림으로만 들어 있어(스캔본) 서버에서 읽을 본문이 없어요. 채팅에 파일을 첨부해 주시면 그림에서 글자를 읽어 드릴 수 있어요.");
   }
   return text;
 }

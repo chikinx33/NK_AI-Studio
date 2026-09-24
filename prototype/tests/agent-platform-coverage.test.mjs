@@ -21,7 +21,7 @@ test("P0 · 직원이 회사 파일의 문서(엑셀·워드·PPT·PDF)를 읽�
   assert.match(extractor, /MAX_ROWS = 200/);
   assert.match(extractor, /MAX_COLUMNS = 40/);
   // 읽지 못하는 PDF 는 조용히 빈 값을 주지 않고 사실대로 말한다
-  assert.match(extractor, /서버에서 본문을 읽을 수 없어요/);
+  assert.match(extractor, /서버에서 읽을 본문이 없어요/);
   assert.match(endpoint, /extractDocumentText/);
   assert.match(endpoint, /MAX_DOCUMENT_BYTES = 20 \* 1024 \* 1024/);
   assert.match(endpoint, /documentFormat/);
