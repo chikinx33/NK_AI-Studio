@@ -115,13 +115,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
 
     const streamWork = (async () => {
       try {
-        await runGroupChat(env, {
+        const deps = {
           sql, userId: auth.userId, conversationId, toolCtx,
           firstMessage: modelText, focusAgent: focusAgent || undefined, images, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: (payload?: any) => sse({ type: "job_ready", payload }),
           onUiAction: (action: any) => sse({ type: "ui_action", action }),
-        });
+        };
+        let produced: any = await runGroupChat(env, deps);
+        // 시간 부족으로 미룬 조회가 있으면 같은 스트림 안에서 새 예산으로 이어서 실행한다(최대 2회).
+        // 전엔 "계속" 이라고 쳐 달라고 사용자에게 떠넘겼다(2026-09-24).
+        for (let round = 0; round < 2 && Array.isArray(produced?.deferred) && produced.deferred.length; round++) {
+          produced = await runGroupChat(env, deps, { resumeRuns: produced.deferred });
+        }
         await sse({ type: "done", conversationId, userMessageId: userMsg.id });
       } catch (e: any) {
         const errMsg = await addMessage(sql, {

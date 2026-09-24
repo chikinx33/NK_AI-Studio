@@ -69,7 +69,8 @@ test("imagen_describe 는 부를 수 없는 호출을 precheck 로 걸러낸다"
 
 test("precheck 에 걸리면 '조회 중' 안내조차 내지 않고 건너뛴다", () => {
   const src = orch();
-  const runTools = src.slice(src.indexOf("const runTools = async"), src.indexOf("const runTools = async") + 2500);
+  // 예산 부족 시 미루기(deferredRuns) 코드가 앞에 늘어나 창을 넓힌다.
+  const runTools = src.slice(src.indexOf("const runTools = async"), src.indexOf("const runTools = async") + 4500);
   const precheckAt = runTools.indexOf("tool.precheck");
   const noticeAt = runTools.indexOf("조회 중이에요");
   assert.ok(precheckAt > 0, "runTools 에 precheck 처리가 없음");

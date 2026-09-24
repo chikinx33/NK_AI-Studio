@@ -31,7 +31,9 @@ test("턴 예산이 부족하면 조회를 시작하지 않고 다음 턴으로 
   const src = orch();
   assert.match(src, /const remainingMs = \(\) => TURN_BUDGET_MS - \(Date\.now\(\) - turnStartedAt\)/);
   assert.match(src, /if \(remainingMs\(\) < RUN_MIN_MS\) \{/);
-  assert.match(src, /⏸️ \$\{r\.tool\} 조회는 이번 턴에 시간이 부족해 시작하지 않았어요/);
+  // 미룬 조회는 사용자에게 "계속" 을 요구하지 않고 서버가 같은 스트림에서 이어서 실행한다(resumeRuns).
+  assert.match(src, /⏳ \$\{r\.tool\} 조회는 이번 턴 시간이 다 돼서 바로 이어서 할게요…/);
+  assert.match(src, /deferredRuns\.push\(\{ tool: r\.tool, reason: r\.reason, agentId \}\);/);
   // '조회 중' 안내는 예산 확인을 통과한 뒤에만 나간다
   const budgetAt = src.indexOf("if (remainingMs() < RUN_MIN_MS)");
   const noticeAt = src.indexOf("${r.tool} 조회 중이에요…");

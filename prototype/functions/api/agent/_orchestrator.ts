@@ -1763,8 +1763,8 @@ export async function collectPagedOutput(
   merged.limit = kept;
   return merged;
 }
-const TURN_BUDGET_MS = 80000;      // 한 턴 전체 예산
-const RUN_MIN_MS = 20000;          // 조회 1건을 끝내는 데 필요한 최소 여유
+const TURN_BUDGET_MS = 100000;     // 한 턴 전체 예산(스트리밍 응답이라 벽시계 제한은 없다 — UX 상한)
+const RUN_MIN_MS = 12000;          // 조회 1건을 시작할 최소 여유(부족하면 미뤄 두고 서버가 스스로 이어서 한다)
 
 /**
  * 생성 결과에 실제 사용된 모델을 덧붙인다. 프로바이더가 자동 대체(폴백)되면 그 사실도 함께 알린다.
@@ -1796,10 +1796,12 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * 단톡방 한 턴 처리: 1차 응답 → 위임(CALL) → 직원 작업·보고(+RUN 도구) → 코어 통솔 마무리.
  * waitUntil 백그라운드에서 멀티 Claude 호출(30초 응답 제약 회피). 각 발언은 agent_messages 로 영속.
  */
+export type DeferredRun = { tool: string; reason: string; agentId: string };
 export async function runGroupChat(
   env: any,
   deps: OrchestratorDeps,
-  opts: { autoTrigger?: string } = {}
+  // resumeRuns: 앞 턴에서 시간 부족으로 미룬 조회들 — 새 예산으로 그 도구만 바로 실행한다(직원 재발화 없음).
+  opts: { autoTrigger?: string; resumeRuns?: DeferredRun[] } = {}
 ): Promise<any[]> {
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
@@ -1849,6 +1851,9 @@ export async function runGroupChat(
 
   // 생성된 에이전트 발언을 모은다 — 동기 호출 시 chat 응답에 직접 실어 보내 조회 의존을 없앤다.
   const produced: any[] = [];
+  // 시간 부족으로 미룬 조회. chat.ts 가 같은 스트림 안에서 새 예산으로 이어서 실행한다(사용자가 "계속" 을 칠 필요 없음).
+  const deferredRuns: DeferredRun[] = [];
+  const finish = () => { (produced as any).deferred = deferredRuns; return produced; };
   const emit = async (msg: any) => {
     const r = await addMessage(sql, msg);
     produced.push(r);
@@ -1943,9 +1948,11 @@ export async function runGroupChat(
       if (tool.kind === "read" || tool.kind === "local") {
         // 남은 예산이 부족하면 아예 시작하지 않는다 — "조회 중" 안내만 남고 끊기는 흐름을 막는다.
         if (remainingMs() < RUN_MIN_MS) {
+          // 전엔 "계속" 을 쳐 달라고 사용자에게 떠넘겼다(2026-09-24). 미뤄 두면 chat.ts 가 바로 이어서 실행한다.
+          deferredRuns.push({ tool: r.tool, reason: r.reason, agentId });
           await emit({
             userId, conversationId, role: "agent", agentId, name: meta.name,
-            text: `⏸️ ${r.tool} 조회는 이번 턴에 시간이 부족해 시작하지 않았어요. "계속"이라고 말씀해 주시면 이어서 조회할게요.`,
+            text: `⏳ ${r.tool} 조회는 이번 턴 시간이 다 돼서 바로 이어서 할게요…`,
           });
           continue;
         }
@@ -2164,6 +2171,21 @@ export async function runGroupChat(
     await _applyCancel(res.cancels);
   };
 
+  // 0) 미룬 조회 이어서 실행(새 예산). 직원을 다시 말하게 하지 않고 그 도구만 돌린다 — 결과 합성(synthesize)은 도구 흐름이 알아서 한다.
+  if (opts.resumeRuns?.length) {
+    const byAgent = new Map<string, { tool: string; reason: string }[]>();
+    for (const r of opts.resumeRuns.slice(0, 6)) {
+      const list = byAgent.get(r.agentId) || [];
+      list.push({ tool: r.tool, reason: r.reason });
+      byAgent.set(r.agentId, list);
+    }
+    for (const [agentId, runs] of byAgent) {
+      if (!getAgent(agentId)) continue;
+      try { await runTools(runs, agentId); } catch { /* 개별 실패는 도구 흐름이 채팅에 남긴다 */ }
+    }
+    return finish();
+  }
+
   // 1) 1차 응답자
   for (const agentId of primary) {
     const canDelegate = !soloAgent && agentId === "core"; // 단독 모드면 위임 금지
@@ -2250,5 +2272,5 @@ export async function runGroupChat(
       // review.text(회고 내용)는 produced에 넣지 않음 — 사용자 화면에는 표시하지 않는다.
     } catch { /* 회고 실패는 대화 흐름에 영향 없음 */ }
   }
-  return produced;
+  return finish();
 }

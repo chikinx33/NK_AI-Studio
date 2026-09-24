@@ -66,3 +66,17 @@ test("조회 결과를 본 코어의 위임(CALL)도 같은 턴에 실행된다 
   assert.match(orch, /if \(agentId === "core" && !soloAgent && depth < 2 && res2\.calls\.length > 0\) \{\s*const calls = res2\.calls\.slice\(0, 3\);\s*coreDelegateCount \+= calls\.length;/);
   assert.match(orch, /try \{ await runWorker\(c\.agentId, c\.instruction\); \} catch \{ \/\* 개별 직원 실패 시 다음으로 \*\/ \}/);
 });
+
+test("시간 부족으로 미룬 조회는 사용자가 '계속' 을 치지 않아도 같은 스트림에서 서버가 이어서 실행한다", async () => {
+  const [orch, chat] = await Promise.all([
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("prototype/functions/api/agent/chat.ts"),
+  ]);
+  assert.doesNotMatch(orch, /"계속"이라고 말씀해 주시면 이어서 조회할게요/, "사용자에게 떠넘기는 문구가 사라졌다");
+  assert.match(orch, /deferredRuns\.push\(\{ tool: r\.tool, reason: r\.reason, agentId \}\);/);
+  assert.match(orch, /opts: \{ autoTrigger\?: string; resumeRuns\?: DeferredRun\[\] \} = \{\}/);
+  assert.match(orch, /if \(opts\.resumeRuns\?\.length\) \{[\s\S]*await runTools\(runs, agentId\);[\s\S]*return finish\(\);/);
+  assert.match(orch, /const TURN_BUDGET_MS = 100000;/);
+  assert.match(orch, /const RUN_MIN_MS = 12000;/);
+  assert.match(chat, /for \(let round = 0; round < 2 && Array\.isArray\(produced\?\.deferred\) && produced\.deferred\.length; round\+\+\) \{\s*produced = await runGroupChat\(env, deps, \{ resumeRuns: produced\.deferred \}\);/);
+});
