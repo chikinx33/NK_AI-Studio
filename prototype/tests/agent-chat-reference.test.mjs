@@ -17,7 +17,7 @@ test("보고 최근 처리·업무 폴더 항목에서 채팅으로 지목할 �
     read("ai-company-app/src/App.tsx"),
     read("ai-company-app/src/lib/api.ts"),
   ]);
-  assert.match(api, /export interface ChatReference \{\s*kind: "job" \| "work" \| "folder";/);
+  assert.match(api, /export interface ChatReference \{\s*kind: "job" \| "work" \| "folder" \| "file";/);
   assert.match(api, /references\?: ChatReference\[\];\s*\} = \{\}/, "streamChat 옵션(여러 개)");
   assert.match(api, /references: \(opts\.references \|\| \[\]\)\.slice\(0, 10\)\.map\(\(r\) => \(\{ kind: r\.kind, jobId: r\.jobId, workId: r\.workId, title: r\.title, path: r\.path, dateKey: r\.dateKey \}\)\),/);
   // 보고: 최근 처리 행마다 말풍선(lucide message-square)
@@ -89,19 +89,19 @@ test("업무 파일의 폴더(일반·날짜)도 채팅에 담을 수 있고, �
     read("prototype/functions/api/agent/_orchestrator.ts"),
   ]);
   // 타입·전송: kind "folder" + path
-  assert.match(api, /export interface ChatReference \{\s*kind: "job" \| "work" \| "folder";/);
+  assert.match(api, /export interface ChatReference \{\s*kind: "job" \| "work" \| "folder" \| "file";/);
   assert.match(api, /path\?: string;\s*\}/);
   assert.match(api, /title: r\.title, path: r\.path, dateKey: r\.dateKey \}\)\),/);
   // 탐색기: 폴더에만 말풍선 아이콘(lucide message-square), 담기면 켜짐
   assert.match(explorer, /export function folderReference\(entry: CompanyFileEntry\): ChatReference \{\s*return \{ kind: "folder", path: entry\.path, dateKey: entry\.dateKey, title: entry\.name, mediaKind: "folder" \};/);
-  assert.match(explorer, /if \(!onAddChatReference \|\| !\(entry\.kind === "folder" \|\| entry\.kind === "work-folder"\)\) return null;/);
+  assert.match(explorer, /if \(!onAddChatReference \|\| !referenceable\(entry\)\) return null;/);
   assert.match(explorer, /const added = chatReferenceKeys\.includes\(entry\.path\);/);
   assert.match(explorer, /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/);
-  assert.match(explorer, /<\/button>\{chatButton\(entry\)\}<\/div><\/td>/, "목록 보기 이름 칸");
+  assert.match(explorer, /<\/button>\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div><\/td>/, "목록 보기 이름 칸");
   assert.match(explorer, /\{chatButton\(entry, "absolute right-9 top-1\.5 z-10"\)\}/, "카드 보기");
   // 업무 폴더 화면이 콜백을 탐색기(루트·날짜 폴더 안)에 넘긴다
-  assert.equal((work.match(/onAddChatReference=\{onAddChatReference\} chatReferenceKeys=\{chatReferenceKeys\}/g) || []).length, 1);
-  assert.match(work, /onAddChatReference=\{onAddChatReference\}\s*chatReferenceKeys=\{chatReferenceKeys\}\s*\/>;/);
+  assert.equal((work.match(/onAddChatReference=\{onAddChatReference\} onChatAbout=\{onChatAbout\} chatReferenceKeys=\{chatReferenceKeys\}/g) || []).length, 1, "날짜 폴더 안 탐색기");
+  assert.match(work, /onAddChatReference=\{onAddChatReference\}\s*onChatAbout=\{onChatAbout\}\s*chatReferenceKeys=\{chatReferenceKeys\}\s*\/>;/, "루트 탐색기");
   // App: 같은 폴더는 한 번만, 켜짐 표시 키에 path 포함
   assert.match(app, /\|\| \(a\.path && a\.path === b\.path\);/);
   assert.match(app, /\[r\.workId, r\.jobId, r\.path\]\.filter/);
@@ -109,13 +109,55 @@ test("업무 파일의 폴더(일반·날짜)도 채팅에 담을 수 있고, �
   assert.match(chat, /reference\.kind === "folder"\s*\? <span[^>]*title="폴더"><FolderIcon className="h-5 w-5" \/><\/span>/);
   assert.match(chat, /M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7\.9a2 2 0 0 1-1\.69-\.9L9\.6 3\.9A2 2 0 0 0 7\.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z/);
   // 서버: 폴더 목록을 업무 파일 API 로 읽어 "[참조 폴더: …]" 한 줄
-  assert.match(shared, /ctx\?: \{ request: Request; authHeader: string \},\s*\): Promise<ResolvedChatReference \| null>/);
+  assert.match(shared, /ctx\?: \{ request: Request; authHeader: string; env\?: any \},\s*\): Promise<ResolvedChatReference \| null>/);
   assert.match(shared, /if \(raw\.kind === "folder" \|\| \(raw\.path && !jobId && !workId\)\) \{/);
   assert.match(shared, /internalUrl\(ctx\.request, `\/api\/agent\/company-files\?path=\$\{encodeURIComponent\(path\)\}`\)/);
   assert.match(shared, /const line = `\[참조 폴더: \$\{name\} path=\$\{path\} 항목 \$\{entries\.length\}개\$\{listing\}\]`\.slice\(0, 2400\);/);
   assert.match(shared, /return \{ label: `폴더 · \$\{name\}`, line, files: \[\] \};/);
-  assert.match(chatTs, /resolveChatReference\(sql, auth\.userId, raw, \{ request, authHeader: String\(request\.headers\.get\("Authorization"\) \|\| ""\) \}\)/);
+  assert.match(chatTs, /resolveChatReference\(sql, auth\.userId, raw, \{ request, env, authHeader: String\(request\.headers\.get\("Authorization"\) \|\| ""\) \}\)/);
   // 직원 규칙: 폴더 줄의 항목으로 바로 일한다(work_get·company_files_read·company_files_list)
   assert.match(orch, /"\[참조 폴더: … path=… 항목 N개: …\]" 줄은 사용자가 업무 파일의 폴더를 지목한 것입니다/);
   assert.match(orch, /company_files_read \{"path": "<path>"\}/);
+});
+
+test("업무 파일에 추가한 파일도 지목·더보기 메뉴가 붙고, 서버가 경로·형식·저장 이름을 직원에게 준다(2026-09-25)", async () => {
+  const [explorer, work, chat, api, shared, chatTs, orch] = await Promise.all([
+    read("ai-company-app/src/components/CompanyFileExplorer.tsx"),
+    read("ai-company-app/src/components/WorkExplorer.tsx"),
+    read("ai-company-app/src/components/Chat.tsx"),
+    read("ai-company-app/src/lib/api.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/chat.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(api, /kind: "job" \| "work" \| "folder" \| "file";/);
+  // 탐색기: 파일 지목(이미지는 미리보기 url), 폴더·파일 모두 말풍선 + ••• 메뉴(채팅·열기/다운로드·이름 변경·삭제)
+  assert.match(explorer, /export function fileReference\(entry: CompanyFileEntry\): ChatReference \{/);
+  assert.match(explorer, /return \{ kind: "file", path: entry\.path, title: entry\.name, mediaKind, \.\.\.\(mediaKind === "image" \? \{ url: getCompanyFilePreviewUrl\(entry\) \} : \{\}\) \};/);
+  assert.match(explorer, /const referenceable = \(entry: CompanyFileEntry\) => entry\.kind === "folder" \|\| entry\.kind === "work-folder" \|\| entry\.kind === "file";/);
+  assert.match(explorer, /if \(!onAddChatReference \|\| !referenceable\(entry\)\) return null;/);
+  assert.match(explorer, /function menuButton\(entry: CompanyFileEntry, className = ""\)/);
+  assert.match(explorer, /aria-label=\{`\$\{entry\.name\} 더보기 메뉴`\} aria-expanded=\{open\}>•••<\/button>/);
+  assert.match(explorer, /hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅<\/button>/);
+  assert.match(explorer, /\{entry\.kind === "file" \? "열기" : "폴더 열기"\}<\/button>/);
+  assert.match(explorer, /void downloadEntry\(entry\); \}\}[^>]*>다운로드<\/button>/);
+  assert.match(explorer, /void renameEntry\(entry\); \}\}[^>]*>이름 변경<\/button>/);
+  assert.match(explorer, /void removeEntries\(\[entry\]\); \}\}[^>]*>삭제<\/button>/);
+  assert.match(explorer, /\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div><\/td>/, "목록 보기");
+  assert.match(explorer, /\{menuButton\(entry, "absolute right-\[4\.25rem\] top-1\.5 z-10"\)\}/, "카드 보기");
+  // 선택 툴바의 이름 변경·삭제는 같은 항목 함수를 쓴다(중복 없음)
+  assert.match(explorer, /async function renameSelected\(\) \{[\s\S]*?await renameEntry\(entry\);/);
+  assert.match(explorer, /async function removeSelected\(\) \{ await removeEntries\(selectedEntries\); \}/);
+  // 업무 폴더 화면이 onChatAbout 도 넘긴다
+  assert.match(work, /onAddChatReference=\{onAddChatReference\}\s*onChatAbout=\{onChatAbout\}\s*chatReferenceKeys=\{chatReferenceKeys\}/);
+  // 칩: 파일 아이콘(lucide file)
+  assert.match(chat, /reference\.kind === "file"\s*\? <span[^>]*title="파일"><FileIcon className="h-5 w-5" \/><\/span>/);
+  // 서버: 파일 줄 + 카드, objectName 은 업무 파일 저장 접두사
+  assert.match(shared, /if \(raw\.kind === "file" && raw\.path\) \{/);
+  assert.match(shared, /objectName = `\$\{buildCompanyProjectPrefix\(resolveCompanyGcsEnv\(ctx\.env\)\.basePrefix, userId, "ai-company"\)\}\/company-files\/\$\{path\}`;/);
+  assert.match(shared, /line: `\[참조 파일: \$\{parts\.join\(" "\)\}\]`, files \}/);
+  assert.match(shared, /source: "company-file", name: name\.slice\(0, 80\), path, contentType:/);
+  assert.match(chatTs, /resolveChatReference\(sql, auth\.userId, raw, \{ request, env, authHeader:/);
+  assert.match(orch, /"\[참조 파일: 이미지 · 이름 path=… type=… objectName=…\]" 줄은/);
+  assert.match(orch, /company_files_read \{"path": "<path>"\} 로 내용을 읽은 뒤 일합니다/);
 });

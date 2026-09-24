@@ -32,3 +32,20 @@ test("페이스북 게시 확인은 full_picture 대신 attachments 로 대표 �
   assert.doesNotMatch(src, /fields: "[^"]*full_picture/);
   assert.match(src, /const imageUrl = text\(att\?\.media\?\.image\?\.src \|\| sub\?\.media\?\.image\?\.src\);/);
 });
+
+test("회사 파일 목록은 저장소(GCS)·날짜 폴더(DB)를 동시에 읽고 timing 을 응답하며, 탐색기는 기다린 시간·서버 시간을 보여 준다(2026-09-25)", async () => {
+  const [server, explorer, api] = await Promise.all([
+    readFile("prototype/functions/api/agent/company-files.ts", "utf8"),
+    readFile("ai-company-app/src/components/CompanyFileExplorer.tsx", "utf8"),
+    readFile("ai-company-app/src/lib/api.ts", "utf8"),
+  ]);
+  assert.match(server, /const \[\{ v: stored, ms: gcsMs \}, \{ v: workFoldersHere, ms: dbMs \}\] = await Promise\.all\(\[timedGcs, timedDb\]\);/);
+  assert.doesNotMatch(server, /const workFolders = path === WORK_FILES_ROOT \? \[\] : await listVirtualWorkFolders/, "차례 대기는 사라졌다");
+  assert.match(server, /entries, unified: true, timing: \{ totalMs, gcsMs, dbMs \} \}, 200, origin\);/);
+  assert.match(server, /\[perf\] company-files list path=/);
+  assert.match(api, /timing\?: \{ totalMs: number; gcsMs: number; dbMs: number \} \}> \{/);
+  assert.match(explorer, /회사 파일을 불러오는 중…\{loadElapsedMs >= 2000 \? ` \$\{\(loadElapsedMs \/ 1000\)\.toFixed\(0\)\}초` : ""\}/);
+  assert.match(explorer, /목록 불러오기 \{\(loadTiming\.clientMs \/ 1000\)\.toFixed\(1\)\}초 \(저장소 \{\(loadTiming\.gcsMs \/ 1000\)\.toFixed\(1\)\}초 · DB \{\(loadTiming\.dbMs \/ 1000\)\.toFixed\(1\)\}초\)/);
+  assert.match(explorer, /window\.clearInterval\(ticker\);/);
+  assert.match(explorer, /\{error\} <button type="button" className="underline" onClick=\{\(\) => \{ void refresh\(\); \}\}>다시 시도<\/button>/);
+});

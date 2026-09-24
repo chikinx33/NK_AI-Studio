@@ -307,7 +307,7 @@ async function readCompanyFileResponse(res: Response, fallback: string): Promise
   return data;
 }
 
-export async function listCompanyFiles(path = ""): Promise<{ path: string; parentPath: string; entries: CompanyFileEntry[] }> {
+export async function listCompanyFiles(path = ""): Promise<{ path: string; parentPath: string; entries: CompanyFileEntry[]; timing?: { totalMs: number; gcsMs: number; dbMs: number } }> {
   const query = new URLSearchParams();
   if (path) query.set("path", path);
   const res = await fetch(`/api/agent/company-files${query.size ? `?${query}` : ""}`);
@@ -1522,7 +1522,7 @@ export interface ChatFileReference {
  * "[참조 산출물: … jobId=…]" 줄을 붙여, 직원이 "이걸로 영상 만들어줘" 를 알아듣게 한다.
  */
 export interface ChatReference {
-  kind: "job" | "work" | "folder";
+  kind: "job" | "work" | "folder" | "file";
   jobId?: string;
   workId?: string;
   title: string;
@@ -1530,7 +1530,7 @@ export interface ChatReference {
   url?: string;
   objectName?: string;
   dateKey?: string;
-  /** 폴더 지목(업무 파일의 폴더·날짜 폴더): 서버가 그 안 항목 목록을 직원에게 알려준다. */
+  /** 폴더·파일 지목(업무 파일): 폴더는 그 안 항목 목록을, 파일은 경로·형식·저장 이름을 직원에게 알려준다. */
   path?: string;
 }
 

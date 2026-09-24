@@ -536,7 +536,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return new Response(media.body, { status: media.status === 206 ? 206 : 200, headers });
     }
 
-    const stored = await listStoredEntries(ctx, rootPrefix, path);
+    // 전엔 저장소 목록(GCS) → 날짜 폴더(DB) 를 차례로 기다렸다. 서로 의존이 없으니 동시에 읽고, 걸린 시간을 응답에 담는다(2026-09-25).
+    const listStartedAt = Date.now();
+    const timedGcs = listStoredEntries(ctx, rootPrefix, path).then((v) => ({ v, ms: Date.now() - listStartedAt }));
+    const timedDb = (path === WORK_FILES_ROOT ? Promise.resolve([] as any[]) : listVirtualWorkFolders(getSql(env), auth.userId, path))
+      .then((v) => ({ v, ms: Date.now() - listStartedAt }), (): { v: any[]; ms: number } => ({ v: [], ms: Date.now() - listStartedAt }));
+    const [{ v: stored, ms: gcsMs }, { v: workFoldersHere, ms: dbMs }] = await Promise.all([timedGcs, timedDb]);
     if (path && stored.empty) {
       // 저장소에 없는 경로 — 날짜 폴더의 표시명(예: 이름을 바꾼 "log")이면 그 폴더를 연다.
       const sql = getSql(env);
@@ -559,13 +564,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const folders = stored.folders.filter((folder) => folder.path !== WORK_FILES_ROOT);
     const files = stored.files;
     // 이 경로에 넣어 둔 날짜 폴더(날짜 폴더 안의 날짜 폴더는 .work-files/<날짜> 경로에 놓인다).
-    const workFolders = path === WORK_FILES_ROOT ? [] : await listVirtualWorkFolders(getSql(env), auth.userId, path);
+    const workFolders = workFoldersHere;
     const entries = [...workFolders, ...folders, ...files].sort((a: any, b: any) => {
       const aFolder = a.kind === "folder" || a.kind === "work-folder";
       const bFolder = b.kind === "folder" || b.kind === "work-folder";
       return aFolder === bFolder ? a.name.localeCompare(b.name, "ko") : aFolder ? -1 : 1;
     });
-    return send({ path, parentPath: parentPath(path), entries, unified: true }, 200, origin);
+    const totalMs = Date.now() - listStartedAt;
+    if (totalMs >= 1500) { try { console.log(`[perf] company-files list path="${path}" total=${totalMs}ms gcs=${gcsMs}ms db=${dbMs}ms entries=${entries.length}`); } catch (_) { /* noop */ } }
+    return send({ path, parentPath: parentPath(path), entries, unified: true, timing: { totalMs, gcsMs, dbMs } }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 조회에 실패했습니다.") }, 500, origin);
   }

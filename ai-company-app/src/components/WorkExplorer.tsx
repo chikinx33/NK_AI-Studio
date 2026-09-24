@@ -572,6 +572,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
     initialPath={companyPath}
     onPathChange={setCompanyPath}
     onAddChatReference={onAddChatReference}
+    onChatAbout={onChatAbout}
     chatReferenceKeys={chatReferenceKeys}
   />;
 
@@ -637,7 +638,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
               {documentMenu === work.id && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-[#111722] py-1 shadow-2xl">{onChatAbout && <button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); onChatAbout(workReference(work)); }} className="block w-full px-3 py-2 text-left text-xs text-emerald-300 hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅</button>}<button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void openSources(work); }} className="block w-full px-3 py-2 text-left text-xs text-sky-300 hover:bg-edge">소스 보기</button><button type="button" onClick={(event) => { event.stopPropagation(); beginRenameDocument(work); }} className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-edge">이름 변경</button><button type="button" onClick={(event) => { event.stopPropagation(); setDocumentMenu(""); void removeWork(work); }} className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-950/40">삭제</button></div>}
             </div>
           </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-gray-500">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>}
-          <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject} onAddChatReference={onAddChatReference} chatReferenceKeys={chatReferenceKeys}
+          <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject} onAddChatReference={onAddChatReference} onChatAbout={onChatAbout} chatReferenceKeys={chatReferenceKeys}
             onOpenWorkFolder={openDateFolder}
             onRenameWorkFolder={async (dateKey, title) => { const renamed = await renameCompanyWorkFolder(dateKey, title); setFolderTitles((current) => new Map(current).set(dateKey, renamed.title)); return renamed; }}
             onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)} /></div>

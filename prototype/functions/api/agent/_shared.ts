@@ -4,6 +4,8 @@
 // - 도구 어댑터: 라비오크의 "도구=python spawn" 모델을 NK API fetch 로 전환.
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { overviewOptions, matchOption, matchSubgenre, PURPOSE_CATEGORIES, NEEDS_LIST, TONE_LIST, STYLE_LIST, TARGET_OPTIONS, DURATION_OPTIONS, ASPECT_RATIOS } from "../_shared/overview-options.js";
+import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
+import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix } from "../_shared/storage";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
 import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
@@ -1345,13 +1347,39 @@ function outputMediaLabel(out: any): string {
 export async function resolveChatReference(
   sql: SqlFn, userId: string, raw: any,
   // 폴더 지목은 업무 파일 API(/api/agent/company-files)로 목록을 읽어야 해서 요청·인증 헤더가 필요하다.
-  ctx?: { request: Request; authHeader: string },
+  ctx?: { request: Request; authHeader: string; env?: any },
 ): Promise<ResolvedChatReference | null> {
   if (!raw || typeof raw !== "object") return null;
   const jobId = String(raw.jobId || "").trim();
   const workId = String(raw.workId || "").trim();
   const givenTitle = String(raw.title || "").replace(/[\[\]\n]/g, " ").trim().slice(0, 120);
   const uuid = /^[0-9a-f-]{36}$/i;
+
+  // 파일 지목(업무 파일에 추가한 파일): 경로·형식·크기와 저장 이름(objectName)을 주고 카드도 붙인다.
+  // 이미지면 image_edit·video·publish 가 objectName 으로 바로 쓰고, 문서·텍스트는 company_files_read 로 읽는다(2026-09-25).
+  if (raw.kind === "file" && raw.path) {
+    const path = String(raw.path || "").replace(/[\n\r]/g, "").replace(/^\/+|\/+$/g, "").trim().slice(0, 300);
+    if (!path || !ctx?.request) return null;
+    const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+    const res = await fetch(internalUrl(ctx.request, `/api/agent/company-files?path=${encodeURIComponent(parent)}`), {
+      headers: { Authorization: ctx.authHeader },
+    }).catch(() => null);
+    const data: any = res && res.ok ? await res.json().catch(() => null) : null;
+    const entry: any = (Array.isArray(data?.entries) ? data.entries : []).find((e: any) => e?.kind === "file" && String(e?.path || "") === path) || null;
+    const name = givenTitle || String(entry?.name || path.split("/").pop() || path);
+    const contentType = String(entry?.contentType || raw.contentType || "").trim();
+    const size = Number(entry?.size || 0);
+    let objectName = "";
+    try { if (ctx.env) objectName = `${buildCompanyProjectPrefix(resolveCompanyGcsEnv(ctx.env).basePrefix, userId, "ai-company")}/company-files/${path}`; } catch { objectName = ""; }
+    const kind = contentType.startsWith("image/") ? "이미지" : contentType.startsWith("video/") ? "영상" : contentType.startsWith("audio/") ? "오디오" : /pdf/.test(contentType) ? "PDF" : "파일";
+    const parts = [`${kind} · ${name}`, `path=${path}`];
+    if (contentType) parts.push(`type=${contentType}`);
+    if (size) parts.push(`size=${(size / 1024 / 1024).toFixed(1)}MB`);
+    if (objectName) parts.push(`objectName=${objectName}`);
+    if (!entry) parts.push("(목록에서 못 찾음 — 경로가 바뀌었을 수 있음)");
+    const files: MessageFileReference[] = [{ source: "company-file", name: name.slice(0, 80), path, contentType: contentType || inferredFileType(path.split(".").pop() || "", {}).contentType, ...(size ? { size } : {}) }];
+    return { label: `${kind} · ${name}`, line: `[참조 파일: ${parts.join(" ")}]`, files };
+  }
 
   // 폴더 지목(업무 파일의 일반 폴더·날짜 폴더): 그 안 항목(업무·폴더·파일)을 한 줄로 직원에게 준다.
   // "이 폴더 정리해줘"·"이 폴더 이미지들로 캐러셀 올려줘" 가 폴더 이름만으로 통하게(2026-09-25).
