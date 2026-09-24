@@ -36,7 +36,7 @@ test("채팅 첨부가 도구 컨텍스트에 실리고, 직원에게 attachment
   ]);
   assert.match(chat, /const toolCtx = \{ request, env, authHeader, userId: auth\.userId, conversationId, attachments: images \};/);
   assert.match(chat, /\[첨부 이미지 \$\{images\.length\}장: \$\{images\.map\(\(_: any, i: number\) => `attachment:\$\{i \+ 1\}`\)\.join\(", "\)\}/);
-  assert.match(chat, /const modelText = \[displayText, reference\?\.line \|\| "", attachLine\]\.filter\(Boolean\)\.join\("\\n"\);/);
+  assert.match(chat, /const modelText = \[displayText, \.\.\.references\.map\(\(r\) => r\.line\), attachLine\]\.filter\(Boolean\)\.join\("\\n"\);/);
   const doc = orch.slice(orch.indexOf("    image_edit: `[[RUN: image_edit |"), orch.indexOf("`,", orch.indexOf("    image_edit: `[[RUN: image_edit |")));
   assert.match(doc, /지목한 산출물의 jobId · objectName · 첨부라면 \\"attachment:1\\"/);
   assert.match(doc, /image 로 새로 그리지 말고 반드시 이 도구로 그 원본을 고친다/);

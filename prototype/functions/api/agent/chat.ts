@@ -64,19 +64,27 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const clientNow = typeof body?.clientNow === "string" && body.clientNow ? body.clientNow : undefined; // 브라우저 로컬 현재시각(시간대 포함)
     if (!message && !images.length) return send({ error: "message is required" }, 400, origin);
 
-    // 보고·업무 폴더에서 지목한 항목: 말풍선엔 "📎 참조: …" + 카드, 직원에겐 "[참조 산출물: … jobId=…]" 한 줄.
-    const reference = await resolveChatReference(sql, auth.userId, body?.reference).catch(() => null);
+    // 보고·업무 폴더에서 지목한 항목들(여러 개): 말풍선엔 "📎 참조: …" + 카드들, 직원에겐 항목마다 "[참조 산출물: … jobId=…]" 한 줄.
+    const rawRefs: any[] = Array.isArray(body?.references) ? body.references.slice(0, 10) : (body?.reference ? [body.reference] : []);
+    const references: NonNullable<Awaited<ReturnType<typeof resolveChatReference>>>[] = [];
+    for (const raw of rawRefs) {
+      const r = await resolveChatReference(sql, auth.userId, raw).catch(() => null);
+      if (r) references.push(r);
+    }
+    const reference = references[0] || null;
+    const refLabel = references.map((r) => r.label).join(" · ");
     const displayText = message
-      + (reference ? (message ? "\n" : "") + `📎 참조: ${reference.label}` : "")
+      + (references.length ? (message ? "\n" : "") + `📎 참조${references.length > 1 ? ` ${references.length}개` : ""}: ${refLabel}` : "")
       + (images.length ? (message || reference ? "\n" : "") + "[이미지 첨부됨]" : "");
     // 첨부는 모델 눈에 보일 뿐 아니라 도구가 가리킬 수 있는 이름(attachment:N)으로도 알려준다.
     const attachLine = images.length
       ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다]`
       : "";
-    const modelText = [displayText, reference?.line || "", attachLine].filter(Boolean).join("\n");
+    const modelText = [displayText, ...references.map((r) => r.line), attachLine].filter(Boolean).join("\n");
+    const refFiles = references.flatMap((r) => r.files || []);
     const userMsg = await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: displayText,
-      files: reference?.files?.length ? reference.files : undefined,
+      files: refFiles.length ? refFiles : undefined,
     });
 
     const rt = await getRuntime(sql, auth.userId).catch(() => ({ workMode: "on", autonomous: false }));

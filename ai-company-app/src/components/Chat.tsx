@@ -58,10 +58,11 @@ interface Props {
   onStop?: () => void;
   draft: string;
   setDraft: (s: string) => void;
-  onSend: (text: string, attachments?: Attachment[], reference?: ChatReference | null) => void;
-  /** 보고·업무 폴더에서 지목한 항목 — 입력창 위 칩으로 보이고 다음 메시지와 함께 간다. */
-  reference?: ChatReference | null;
-  onClearReference?: () => void;
+  onSend: (text: string, attachments?: Attachment[], references?: ChatReference[]) => void;
+  /** 보고·업무 폴더에서 지목한 항목들 — 입력창 위 칩으로 보이고 다음 메시지와 함께 간다(여러 개 가능). */
+  references?: ChatReference[];
+  onRemoveReference?: (index: number) => void;
+  onClearReferences?: () => void;
   onToggleMode?: () => void;
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
@@ -359,7 +360,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject, reference, onClearReference }: Props) {
+export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject, references, onRemoveReference, onClearReferences }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -566,8 +567,8 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     if ((!t && !attachments.length && !sheets.length) || busy || speechInput.enabled) return;
     // 스프레드시트는 본문 끝에 텍스트로 붙는다 — 그 턴에 말하는 모든 직원이 같은 내용을 본다.
     const body = [t, ...sheets.map((sheet) => sheet.text)].filter(Boolean).join("\n\n");
-    onSend(body, attachments.length ? attachments : undefined, reference || undefined);
-    onClearReference?.();
+    onSend(body, attachments.length ? attachments : undefined, references?.length ? references : undefined);
+    onClearReferences?.();
     setDraft("");
     setAttachments([]);
     setSheets([]);
@@ -873,29 +874,34 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         </div>
       ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
-        {/* 지목한 항목 칩 — "이걸로 …" 라고 말하면 직원이 이 항목을 알아듣는다 */}
-        {reference && (
+        {/* 지목한 항목 칩(여러 개) — "이걸로 …" 라고 말하면 직원이 이 항목들을 알아듣는다 */}
+        {!!references?.length && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-chat-reference>
-            <div className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
-              {/* 영상·오디오 주소를 <img> 에 넣으면 깨진 그림이 뜬다 → 종류를 먼저 보고 아이콘 */}
-              {reference.mediaKind === "video"
-                ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
-                : reference.mediaKind === "audio"
-                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
-                  : reference.url
-                    ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
-                    : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
-              <div className="min-w-0">
-                <div className="text-[10px] text-sky-400">지목한 항목 · "이걸로 …" 라고 말하면 직원이 알아들어요</div>
-                <div className="max-w-[280px] truncate" title={reference.title}>{reference.title}</div>
+            {references.map((reference, i) => (
+              <div key={`${reference.kind}-${reference.jobId || reference.workId || i}`} className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
+                {/* 영상·오디오 주소를 <img> 에 넣으면 깨진 그림이 뜬다 → 종류를 먼저 보고 아이콘 */}
+                {reference.mediaKind === "video"
+                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
+                  : reference.mediaKind === "audio"
+                    ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
+                    : reference.url
+                      ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
+                      : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
+                <div className="min-w-0">
+                  <div className="text-[10px] text-sky-400">{i === 0 ? `지목한 항목${references.length > 1 ? ` ${references.length}개` : ""} · "이걸로 …" 라고 말하면 직원이 알아들어요` : `지목 ${i + 1}`}</div>
+                  <div className="max-w-[240px] truncate" title={reference.title}>{reference.title}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveReference?.(i)}
+                  className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gray-800 text-[10px] leading-none text-gray-300 ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  title="이 항목 지목 해제"
+                >✕</button>
               </div>
-              <button
-                type="button"
-                onClick={() => onClearReference?.()}
-                className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gray-800 text-[10px] leading-none text-gray-300 ring-1 ring-edge hover:bg-gray-700 hover:text-white"
-                title="지목 해제"
-              >✕</button>
-            </div>
+            ))}
+            {references.length > 1 && (
+              <button type="button" onClick={() => onClearReferences?.()} className="text-[11px] text-gray-500 hover:text-gray-300" title="전부 해제">전부 해제</button>
+            )}
           </div>
         )}
         {/* 스프레드시트 칩 — 읽은 행 수를 보여준다(조용히 잘린 게 아닌지 사용자가 바로 안다) */}

@@ -18,8 +18,8 @@ test("보고 최근 처리·업무 폴더 항목에서 채팅으로 지목할 �
     read("ai-company-app/src/lib/api.ts"),
   ]);
   assert.match(api, /export interface ChatReference \{\s*kind: "job" \| "work";/);
-  assert.match(api, /reference\?: ChatReference \| null;\s*\} = \{\}/, "streamChat 옵션");
-  assert.match(api, /reference: opts\.reference \? \{ kind: opts\.reference\.kind, jobId: opts\.reference\.jobId, workId: opts\.reference\.workId, title: opts\.reference\.title \} : undefined,/);
+  assert.match(api, /references\?: ChatReference\[\];\s*\} = \{\}/, "streamChat 옵션(여러 개)");
+  assert.match(api, /references: \(opts\.references \|\| \[\]\)\.slice\(0, 10\)\.map\(\(r\) => \(\{ kind: r\.kind, jobId: r\.jobId, workId: r\.workId, title: r\.title \}\)\),/);
   // 보고: 최근 처리 행마다 말풍선(lucide message-square)
   assert.match(results, /function MessageSquareIcon/);
   assert.match(results, /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/, "lucide message-square 경로");
@@ -29,15 +29,19 @@ test("보고 최근 처리·업무 폴더 항목에서 채팅으로 지목할 �
   assert.match(work, /onChatAbout\(workReference\(work\)\); \}\}[^>]*>채팅<\/button>/);
   assert.match(work, /kind: "work", workId: work\.id, jobId, title: work\.title, mediaKind,/);
   // 입력창 칩 + 전송 시 동봉 + 해제
-  assert.match(chat, /reference\?: ChatReference \| null;\s*onClearReference\?: \(\) => void;/);
+  assert.match(chat, /references\?: ChatReference\[\];\s*onRemoveReference\?: \(index: number\) => void;\s*onClearReferences\?: \(\) => void;/);
   assert.match(chat, /data-chat-reference/);
-  assert.match(chat, /onSend\(body, attachments\.length \? attachments : undefined, reference \|\| undefined\);\s*onClearReference\?\.\(\);/);
+  assert.match(chat, /\{references\.map\(\(reference, i\) => \(/, "칩을 여러 개 그린다");
+  assert.match(chat, /onSend\(body, attachments\.length \? attachments : undefined, references\?\.length \? references : undefined\);\s*onClearReferences\?\.\(\);/);
   assert.match(chat, /\{t\.files\?\.length \? <ChatFileAttachments files=\{t\.files\} onOpenProject=\{onOpenProject\} \/> : null\}/, "사용자 말풍선에도 카드");
   // App: 지목 → 채팅 화면으로, 보낼 때 reference 동봉, 보낸 뒤 해제
-  assert.match(app, /const chatAbout = \(ref: ChatReference\) => \{\s*setChatReference\(ref\);\s*setCenterView\("chat"\);/);
-  assert.match(app, /reference: reference \|\| undefined \}/);
-  assert.match(app, /if \(reference\) setChatReference\(null\);/);
+  assert.match(app, /const addChatReference = \(ref: ChatReference, navigate = true\) => \{/);
+  assert.match(app, /cur\.some\(\(r\) => sameRef\(r, ref\)\) \? cur : \[\.\.\.cur, ref\]\.slice\(-MAX_CHAT_REFERENCES\)/, "같은 항목은 한 번만, 최대 10개");
+  assert.match(app, /references: references\?\.length \? references : undefined \}/);
+  assert.match(app, /if \(references\?\.length\) setChatReferences\(\[\]\);/);
   assert.match(app, /onChatAbout=\{chatAbout\}/);
+  assert.match(app, /onAddChatReference=\{\(ref\) => addChatReference\(ref, false\)\}/, "업무 폴더의 '채팅에 추가'는 이동 없이 담는다");
+  assert.match(work, />채팅에 추가<\/button>/);
 });
 
 test("서버는 지목한 잡·업무를 읽어 사용자 메시지에 카드와 '[참조 산출물: … jobId=…]' 줄을 붙이고, video 도구는 jobId 로 첫 프레임을 찾는다", async () => {
@@ -53,11 +57,11 @@ test("서버는 지목한 잡·업무를 읽어 사용자 메시지에 카드와
   // 트랜스크립트: 사용자 메시지에 붙은 산출물도 jobId 로 보인다(다음 턴에서도 지목이 유지됨)
   assert.match(shared, /m\.role === "user" \? `\$\{addr\}: \$\{clipTranscriptText\(m\.text\)\}\$\{generatedRefs\(m\)\}`/);
   // chat.ts: 말풍선엔 📎, 모델에겐 참조 줄
-  assert.match(chat, /const reference = await resolveChatReference\(sql, auth\.userId, body\?\.reference\)\.catch\(\(\) => null\);/);
-  assert.match(chat, /`📎 참조: \$\{reference\.label\}`/);
+  assert.match(chat, /const rawRefs: any\[\] = Array\.isArray\(body\?\.references\) \? body\.references\.slice\(0, 10\) : \(body\?\.reference \? \[body\.reference\] : \[\]\);/, "여러 개 + 하위호환");
+  assert.match(chat, /`📎 참조\$\{references\.length > 1 \? ` \$\{references\.length\}개` : ""\}: \$\{refLabel\}`/);
   // 참조 줄과 첨부 줄(attachment:N)을 함께 붙인다.
-  assert.match(chat, /const modelText = \[displayText, reference\?\.line \|\| "", attachLine\]\.filter\(Boolean\)\.join\("\\n"\);/);
-  assert.match(chat, /files: reference\?\.files\?\.length \? reference\.files : undefined,/);
+  assert.match(chat, /const modelText = \[displayText, \.\.\.references\.map\(\(r\) => r\.line\), attachLine\]\.filter\(Boolean\)\.join\("\\n"\);/, "항목마다 참조 줄");
+  assert.match(chat, /files: refFiles\.length \? refFiles : undefined,/);
   assert.match(chat, /firstMessage: modelText,/);
   // video 도구: jobId("last")·objectName → gs:// 첫 프레임
   assert.match(shared, /const sub = await submitVideoJob\(await withVideoSourceImage\(input, ctx\), ctx\);/);

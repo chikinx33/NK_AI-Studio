@@ -1851,7 +1851,7 @@ export async function streamChat(
     imageBase64?: string;
     imageMimeType?: string;
     images?: { base64: string; mimeType: string }[];
-    reference?: ChatReference | null;
+    references?: ChatReference[];
   } = {}
 ): Promise<void> {
   const convId = opts.conversationId || "main";
@@ -1871,8 +1871,8 @@ export async function streamChat(
       conversationId: convId,
       focusAgent: opts.focusAgent,
       images,
-      // 지목한 항목(보고·업무 폴더에서 고른 산출물) — 서버가 잡·업무를 읽어 직원에게 알려준다.
-      reference: opts.reference ? { kind: opts.reference.kind, jobId: opts.reference.jobId, workId: opts.reference.workId, title: opts.reference.title } : undefined,
+      // 지목한 항목들(보고·업무 폴더에서 고른 산출물, 여러 개 가능) — 서버가 잡·업무를 읽어 직원에게 알려준다.
+      references: (opts.references || []).slice(0, 10).map((r) => ({ kind: r.kind, jobId: r.jobId, workId: r.workId, title: r.title })),
       // 하위호환: 서버가 아직 단일 필드만 읽어도 첫 첨부는 전달되도록 유지
       imageBase64: images[0]?.base64,
       imageMimeType: images[0]?.mimeType,
