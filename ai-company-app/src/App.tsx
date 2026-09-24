@@ -1406,7 +1406,7 @@ export default function App() {
           <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
-            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} onAddChatReference={(ref) => addChatReference(ref, false)} chatReferenceCount={chatReferences.length} />
+            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} onAddChatReference={(ref) => addChatReference(ref, false)} chatReferenceKeys={chatReferences.flatMap((r) => [r.workId, r.jobId].filter((v): v is string => !!v))} />
           </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>

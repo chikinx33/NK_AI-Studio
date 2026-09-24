@@ -40,8 +40,11 @@ test("보고 최근 처리·업무 폴더 항목에서 채팅으로 지목할 �
   assert.match(app, /references: references\?\.length \? references : undefined \}/);
   assert.match(app, /if \(references\?\.length\) setChatReferences\(\[\]\);/);
   assert.match(app, /onChatAbout=\{chatAbout\}/);
-  assert.match(app, /onAddChatReference=\{\(ref\) => addChatReference\(ref, false\)\}/, "업무 폴더의 '채팅에 추가'는 이동 없이 담는다");
-  assert.match(work, />채팅에 추가<\/button>/);
+  assert.match(app, /onAddChatReference=\{\(ref\) => addChatReference\(ref, false\)\}/, "업무 폴더의 말풍선 아이콘은 이동 없이 담는다");
+  assert.match(work, /onAddChatReference\(workReference\(work\)\); \}\} className=\{`grid h-8 w-8 place-items-center rounded-lg transition \$\{added/, "••• 옆 말풍선 아이콘");
+  assert.match(work, /aria-pressed=\{added\}/, "담긴 항목은 아이콘이 켜진다");
+  assert.doesNotMatch(work, />채팅에 추가<\/button>/, "메뉴 항목·안내 문구 대신 아이콘");
+  assert.doesNotMatch(work, /채팅에 담았어요 \(/);
 });
 
 test("서버는 지목한 잡·업무를 읽어 사용자 메시지에 카드와 '[참조 산출물: … jobId=…]' 줄을 붙이고, video 도구는 jobId 로 첫 프레임을 찾는다", async () => {
