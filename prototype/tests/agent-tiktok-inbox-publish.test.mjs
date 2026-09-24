@@ -45,3 +45,15 @@ test("승인 완료 문구와 도구 설명서가 TikTok 을 '초안함 전송' 
   assert.match(doc, /"게시했다"고 하지 말 것/);
   assert.match(doc, /"jobId": "지목한 산출물의 잡 ID\(선택 · mediaUrl 대신/);
 });
+
+test("TikTok 외 채널은 /api/sns/publish 계약대로 채널 하나씩(platform·mediaType·mediaGcsPath) 보낸다", async () => {
+  const shared = await read("prototype/functions/api/agent/_shared.ts");
+  const fn = fnBody(shared, "async function runPublishTool(");
+  assert.doesNotMatch(fn, /platforms: others,/, "platforms 배열로 한 번에 보내던 잘못된 계약이 사라졌다");
+  assert.match(fn, /for \(const platform of others\) \{/);
+  assert.match(fn, /const needsMedia = platform !== "threads" && platform !== "x";/);
+  assert.match(fn, /\.\.\.\(needsMedia \? \{ mediaType, \.\.\.\(mediaGcsPath \? \{ mediaGcsPath \} : \{ mediaDirectUrl \}\) \} : \{\}\),/);
+  assert.match(fn, /platform === "youtube" \? \{\s*title:/);
+  assert.match(fn, /if \(failures\.length && !published\.length && !tiktok\) throw new Error\(`발행 실패 — /);
+  assert.match(fn, /notices\.push\(`일부 채널 실패: /);
+});

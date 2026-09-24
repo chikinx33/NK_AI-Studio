@@ -2679,23 +2679,51 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   }
 
   if (others.length) {
-    const body: any = {
-      platforms: others,
-      caption,
-      mediaUrl: String(input?.mediaUrl || input?.imageUrl || input?.videoUrl || "").trim(),
-      hashtags,
-    };
-    if (publishAtIso) { body.publishAt = publishAtIso; body.privacyStatus = "scheduled"; }
-    const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    let data: any = {};
-    try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    if (!res.ok) throw new Error(data?.error || `publish 호출 실패 (${res.status})`);
-    published.push(...(Array.isArray(data.published) ? data.published : []));
+    // /api/sns/publish 는 채널 하나씩 받는다: { platform, caption, mediaType, mediaGcsPath | mediaDirectUrl, … }.
+    // 전엔 platforms 배열 + mediaUrl 로 한 번에 보내 "필수 필드 누락: platform, caption" 으로 늘 실패했다(2026-09-24).
+    const mediaGcsPath = await publishMediaObjectName(input, ctx);
+    const directUrl = String(input?.mediaUrl || input?.videoUrl || input?.imageUrl || "").trim();
+    const mediaDirectUrl = !mediaGcsPath && /^https?:\/\//i.test(directUrl) ? directUrl : "";
+    const mediaType: "image" | "video" = String(input?.mediaType || "").toLowerCase() === "video"
+      || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(mediaGcsPath || mediaDirectUrl) ? "video" : "image";
+    const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+    const captionWithTags = tagLine && !caption.includes(tagLine) ? `${caption}\n\n${tagLine}` : caption;
+    const failures: string[] = [];
+    for (const platform of others) {
+      const needsMedia = platform !== "threads" && platform !== "x";
+      if (needsMedia && !mediaGcsPath && !mediaDirectUrl) {
+        failures.push(`${platform}: 올릴 이미지/영상이 없어요(jobId·objectName·mediaUrl 중 하나 필요)`);
+        continue;
+      }
+      const body: any = {
+        platform,
+        caption: captionWithTags,
+        ...(needsMedia ? { mediaType, ...(mediaGcsPath ? { mediaGcsPath } : { mediaDirectUrl }) } : {}),
+        ...(platform === "youtube" ? {
+          title: String(input?.title || caption.split("\n")[0] || "").trim().slice(0, 100),
+          tags: hashtags.map((h) => h.replace(/^#/, "")),
+          isShorts: mediaType === "video" && input?.isShorts !== false,
+        } : {}),
+        ...(publishAtIso ? { publishAt: publishAtIso, privacyStatus: "scheduled" } : {}),
+        ...(input?.replySetting ? { replySetting: String(input.replySetting) } : {}),
+      };
+      const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      if (!res.ok || data?.ok === false) {
+        failures.push(`${platform}: ${String(data?.error || data?.message || `HTTP ${res.status}`).slice(0, 200)}`);
+        continue;
+      }
+      const r: any = data?.result || {};
+      published.push({ platform, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || new Date().toISOString() });
+    }
+    if (failures.length && !published.length && !tiktok) throw new Error(`발행 실패 — ${failures.join(" / ")}`);
+    if (failures.length) notices.push(`일부 채널 실패: ${failures.join(" / ")}`);
   }
 
   return {
