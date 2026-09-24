@@ -13,12 +13,70 @@
         return String(Date.now() + Math.floor(Math.random() * 1000));
     }
 
+    // ── ROMANIZE_START (브라우저 복사본과 동일해야 함) ──
+    const HANGUL_INITIALS = ["g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h"];
+    const HANGUL_MEDIALS = ["a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we", "wi", "yu", "eu", "ui", "i"];
+    const HANGUL_FINALS = ["", "k", "k", "k", "n", "n", "n", "t", "l", "k", "m", "l", "l", "l", "p", "l", "m", "p", "p", "t", "t", "ng", "t", "t", "k", "t", "p", "t"];
+
+    /** 한글 음절을 로마자로. 한글이 아닌 글자는 그대로 둔다. */
+    function romanizeHangul(text) {
+      var out = "";
+      var s = String(text || "");
+      for (var i = 0; i < s.length; i++) {
+        var code = s.charCodeAt(i);
+        if (code < 0xac00 || code > 0xd7a3) { out += s[i]; continue; }
+        var idx = code - 0xac00;
+        var ini = Math.floor(idx / 588);
+        var med = Math.floor((idx % 588) / 28);
+        var fin = idx % 28;
+        out += HANGUL_INITIALS[ini] + HANGUL_MEDIALS[med] + HANGUL_FINALS[fin];
+      }
+      return out;
+    }
+
+    /** 제목 → 폴더 슬러그(소문자 영문·숫자·하이픈, 최대 max 자). 쓸 글자가 없으면 "". */
+    function toSlug(text, max) {
+      var limit = Number(max) > 0 ? Number(max) : 40;
+      return romanizeHangul(text).toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/-{2,}/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, limit)
+        .replace(/-+$/g, "");
+    }
+    // ── ROMANIZE_END ──
+
+    /** 예전 방식의 자동 생성 id(일련번호). 정렬 폴백에만 쓴다. */
+    function draftTime(d) {
+        var t = Date.parse(String((d && (d.updatedAt || d.savedAt || d.createdAt)) || ''));
+        if (isFinite(t) && t > 0) return t;
+        var n = Number(d && d.id);
+        return isFinite(n) ? n : 0;
+    }
+
+    /**
+     * 에피소드 폴더 이름 = "<시리즈>-<에피소드>" 슬러그(한글은 로마자). 같은 이름이 있으면 -2, -3.
+     * 예전엔 항상 타임스탬프(1771052245118)라 사람이 어떤 프로젝트인지 알 수 없었다(2026-09-24).
+     * 쓸 글자가 하나도 없을 때만 타임스탬프로 떨어진다.
+     */
+    function episodeIdFor(seriesId, episodeTitle) {
+        var base = [toSlug(seriesId, 24), toSlug(episodeTitle, 24)].filter(Boolean).join('-');
+        if (!base) return uniqueEpisodeId();
+        var taken = {};
+        try {
+            NK.store.getDrafts().forEach(function (d) { var key = String(d && d.id || '').trim().toLowerCase(); if (key) taken[key] = true; });
+        } catch (_) { /* 저장소 미초기화 */ }
+        if (!taken[base]) return base;
+        for (var i = 2; i < 100; i++) if (!taken[base + '-' + i]) return base + '-' + i;
+        return base + '-' + Date.now().toString(36);
+    }
+
     // 사용자가 입력한 프로젝트 이름을 그대로 폴더명(seriesId)으로 쓴다.
     // GCS 경로가 ASCII만 허용해서 영문/숫자/.-_ 만 남긴다 — 쓸 글자가 없으면(순한글 등) 빈 문자열을
     // 돌려주고 호출부가 기존 방식(projects+타임스탬프)으로 떨어진다.
     // 같은 이름이 이미 있으면 -2, -3 을 붙여 폴더가 섞이지 않게 한다.
     function slugifySeriesId(title, takenIds) {
-        var slug = String(title || '').trim().toLowerCase()
+        var slug = romanizeHangul(String(title || '')).trim().toLowerCase()
             .replace(/[\s_]+/g, '-')
             .replace(/[^a-z0-9.-]+/g, '')
             .replace(/-{2,}/g, '-')
@@ -794,10 +852,10 @@
             }
             var row = map.get(d.seriesId);
             row.count += 1;
-            if (Number(d.id) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = d.id;
+            if (draftTime(d) > draftTime({ id: row.latestEpisodeId, updatedAt: row.latestEpisodeAt })) { row.latestEpisodeId = d.id; row.latestEpisodeAt = d.updatedAt || d.savedAt || d.createdAt || ''; }
         });
         return Array.from(map.values()).sort(function (a, b) {
-            return Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0);
+            return draftTime({ id: b.latestEpisodeId, updatedAt: b.latestEpisodeAt }) - draftTime({ id: a.latestEpisodeId, updatedAt: a.latestEpisodeAt });
         });
     }
 
@@ -1031,7 +1089,7 @@
             if (!episodeTitle) episodeTitle = seriesTitle + ' EP1';
         }
 
-        var id = uniqueEpisodeId();
+        var id = episodeIdFor(seriesId, episodeTitle);
         var ratio = NK.store.getAspectRatio();
         var parentProjectTitle = normalizeText(parentDraft && parentDraft.title || (parentProjectId && inheritedPayload.episodeTitle) || '');
         var basePayload = Object.assign({}, inheritedPayload, requestedCore, {
@@ -1411,9 +1469,9 @@
         var srcPayload = source.payload || {};
         var prePayload = pickFields(srcPayload, PREPRODUCTION_PAYLOAD_FIELDS);
 
-        var newId = uniqueEpisodeId();
         var baseTitle = String(source.title || srcPayload.episodeTitle || '제목없음').trim() || '제목없음';
         var newTitle = baseTitle + ' (복제)';
+        var newId = episodeIdFor(source.seriesId, newTitle);
 
         // Keep title fields in sync. We also overwrite payload.topic so that
         // any fallback path (data.title → episodeTitle → topic) sees a

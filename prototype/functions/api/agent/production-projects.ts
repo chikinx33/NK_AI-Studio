@@ -41,7 +41,10 @@ export function summarizeProject(id: string, project: any, extra: { shared?: boo
   const seriesId = text(extra.sharedSeriesId || payload.seriesId || payload.brandId || id);
   const seriesTitle = text(extra.sharedSeriesTitle || payload.seriesTitle || payload.brandTitle || project?.seriesTitle) || seriesId;
   const episodeTitle = text(payload.episodeTitle || project?.title || extra.sharedTitle);
-  const title = episodeTitle || seriesTitle || id;
+  // 일련번호(projects123·숫자)뿐인 옛 프로젝트는 주제·첫 컷 제목으로라도 이름을 붙인다 — 목록에서 무엇인지 알 수 있게.
+  const autoId = (v: string) => /^projects\d+$/i.test(v) || /^\d+$/.test(v);
+  const namedSeries = autoId(seriesTitle) ? "" : seriesTitle;
+  const title = episodeTitle || namedSeries || text(payload.topic || payload.title) || text(scenes[0]?.title) || id;
   const firstStill = scenes.find((s) => hasMedia(s?.imageDataUrl) || hasMedia(s?.imagePath));
   const thumb = text(payload.thumbnailUrl || payload.coverImage || payload.representativeImage) || text(firstStill?.imageDataUrl || firstStill?.imagePath);
   const duration = Number(payload.duration || payload.durationSec || payload.targetDuration) || scenes.reduce((sum, s) => sum + (Number(s?.estSec) || 0), 0);
