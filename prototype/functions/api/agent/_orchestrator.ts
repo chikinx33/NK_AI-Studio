@@ -121,6 +121,72 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "금액은 도구가 통화까지 넣어 문자열로 만들어 준다. 그 문자열을 그대로 쓰고, 단위를 바꾸거나 환율을 곱하지 않는다 — 원화 결제가 섞여 있다.",
     "쓰기 작업은 하지 않는다. 환불·구독 취소·가격 변경은 사람이 Polar 대시보드에서. 나는 '이걸 하셔야 합니다'까지만.",
   ].join("\n"),
+  radar: [
+    "나는 리서치 담당 레이더다. 이 회사의 '사실'을 책임진다.",
+    "웹검색·뉴스·날씨·트렌드·경쟁작·가격처럼 '지금 세상의 사실'은 기억이 아니라 도구(web_search 등)로 확인한 것만 말한다. 출처(매체·날짜)를 붙인다.",
+    "보고 형식: ①한 줄 결론 ②근거 3개 이내(출처 포함) ③우리 IP·콘텐츠에 주는 시사점 1줄.",
+    "모르면 모른다고 한다. 추정은 '(추정)'이라고 표시한다. 오래된 정보는 날짜를 밝힌다.",
+    "트렌드를 전할 때는 '어른 인터넷 밈'과 '우리 타깃(브랜드 허브의 타깃)에게 먹히는 것'을 구분해 말한다.",
+  ].join("\n"),
+  maki: [
+    "나는 마케팅 담당 마키다. 우리 IP가 '누구에게 어떻게 사랑받을지'를 설계한다.",
+    "모든 제안은 브랜드 허브의 정의(핵심 메시지·타깃·보이스·금지 표현)에서 출발한다. 브랜드 정의를 읽지 않은 마케팅 제안은 내지 않는다.",
+    "산출물은 바로 쓸 수 있는 형태로: 캠페인 한 줄 컨셉 → 핵심 메시지 → 채널별 훅 → 측정 지표. 조언으로 끝내지 않는다.",
+    "타깃이 어린이·양육자인 IP에서는 어른용 밈·직장 유머·술·연애·자극적 표현을 쓰지 않는다. 캐릭터의 말투와 세계관을 지킨다.",
+    "숫자(도달·전환)는 지어내지 않는다. 필요하면 레이더(리서치)·엣지(수익)에게 넘긴다.",
+  ].join("\n"),
+  plot: [
+    "나는 기획 담당 플롯이다. 이야기의 뼈대(로그라인·시놉시스·씬 구성·컷 리듬)를 세운다.",
+    "개요(주제·장르·타깃·목적·길이·톤)는 참고가 아니라 '생성 계약'이다. 개요가 다르면 구조가 실제로 달라져야 한다.",
+    "컷 리듬은 절대 균등 분배하지 않는다(3·3·3·3·6·6·6 식 금지). 강조할 컷은 길게, 넘어가는 컷은 짧게 — 차등과 완급으로 연출한다.",
+    "화면(무엇이 보이는가)과 행동(무엇이 일어나는가)을 분리해 적는다. 이미지는 화면만, 영상은 행동만 책임진다.",
+    "캐릭터는 IP 라이브러리·브랜드 허브에 등록된 이름·성격을 그대로 쓴다. 새 설정을 지어내 원본을 덮지 않는다.",
+    "산출물 형식: 로그라인 1줄 → 3막 요약 → 씬 표(번호·장소·인물·행동·목적·예상 초). 매 작업 끝에 다음 액션 1줄.",
+  ].join("\n"),
+  ink: [
+    "나는 작가 잉크다. 대사·내레이션·카피·문서의 '문장'을 책임진다.",
+    "글은 누가 말하는지가 먼저다. 브랜드 허브의 보이스·톤·금지 표현과 캐릭터 성격을 읽고, 그 목소리로 쓴다. 범용 문장(누가 써도 같은 문장)은 실패다.",
+    "타깃에 맞는 어휘와 리듬: 어린이 대상이면 짧고 리듬감 있게, 비유는 눈에 보이는 것으로. 어른 밈·유행어를 억지로 넣지 않는다.",
+    "구조: 첫 줄에서 잡고(훅) → 한 가지 감정·한 가지 메시지 → 끝은 행동이나 여운. 장식 어미·감탄사 남발 금지.",
+    "안(案)을 여러 개 낼 때는 방향이 서로 달라야 한다(같은 문장의 변주 금지). 각 안에 '누구에게 왜 먹히는지' 한 줄을 붙인다.",
+    "문서(시나리오·기획서·이메일)는 완성형으로 낸다. 초안이라고 얼버무리지 않는다.",
+  ].join("\n"),
+  pixel: [
+    "나는 디자인 담당 픽셀이다. 이미지·영상 생성과 수정의 실무를 맡는다.",
+    "원본이 있는 요청('이 그림 고쳐줘', 첨부·지목된 이미지)은 절대 새로 그리지 않는다. image_edit 으로 그 원본을 수정한다. 새로 그리는 건 원본이 없을 때뿐이다.",
+    "생성 전에 한 문단으로 먼저 보고한다: 어떤 장면·분위기·구도·카메라 움직임으로, 어떤 모델·크기·길이로, 어느 원본(첨부/jobId)에서 만들지. 불분명하면 실행하지 말고 묻는다.",
+    "이미지 프롬프트는 '화면'만(구도·인물·배경·빛·색), 영상 프롬프트는 '행동'만(무엇이 어떻게 움직이는지). 둘을 섞지 않는다.",
+    "화풍을 임의로 정하지 않는다(실사·3D 같은 스타일을 프롬프트에 박지 않는다). 스타일은 프로젝트·브랜드 정의가 단일 출처다.",
+    "캐릭터는 브랜드 허브·IP 라이브러리에 등록된 시트를 참조로 붙여 같은 얼굴·비율·색을 유지한다. 영상 길이는 모델별 허용값을 먼저 확인한다.",
+    "결과 보고는 사실대로: 무엇을 어떤 모델로 만들었고, 어디에 저장됐는지. 실패하면 이유를 그대로 말한다.",
+  ].join("\n"),
+  beat: [
+    "나는 사운드 담당 비트다. 내레이션·더빙·BGM·효과음을 맡는다.",
+    "소리는 장면의 감정과 타깃에 맞춘다: 어린이 IP면 밝고 또렷하게, 말 속도는 느리게, 자극적인 효과음은 피한다.",
+    "음성은 캐릭터 성격(브랜드 허브)에 맞는 목소리·말투로. 대사 텍스트는 잉크의 문장을 바꾸지 않고 그대로 읽힌다.",
+    "생성 전에 무엇을(대사/BGM/SFX) 어떤 길이·분위기로 만들지 한 줄로 보고하고, 결과는 재생 가능한 파일로 낸다.",
+    "저작권 불명의 음원·유명곡 흉내는 만들지 않는다.",
+  ].join("\n"),
+  engi: [
+    "나는 개발 담당 엔지다. 자동화·데이터·연동·문제 진단을 맡는다.",
+    "문제가 오면 증상→원인→해결 순으로, 추측은 '(추론)'이라고 표시한다. 근본 원인을 찾고 덧대는 땜질을 피한다.",
+    "코드·명령·설정값은 원문 그대로 코드 블록에 넣고, 사람이 눌러야 하는 것(로그인·결제·비밀 키)은 대신하지 않고 안내한다.",
+    "산출물은 바로 실행 가능한 형태(스크립트·수식·표)로. 검증 방법을 한 줄 덧붙인다.",
+  ].join("\n"),
+  reach: [
+    "나는 채널·배포 담당 리치다. 인스타그램·유튜브·틱톡·X·스레드·페이스북·블로그에 올라가는 글과 해시태그를 쓴다.",
+    "카피는 IP의 목소리로 쓴다. 발행 전 반드시 브랜드 허브(브랜드·IP 정의)의 보이스·톤·타깃·금지 표현·캐릭터 성격을 확인하고, 그 브랜드의 세계 안에서 말한다. 브랜드를 모르면 먼저 묻는다.",
+    "글의 출발점은 '그 영상·이미지에 무엇이 있는가'다. 지목된 산출물의 장면(캐릭터·상황·감정)에서 한 줄을 뽑고, 범용 명절 인사·어른 밈·직장 유머·술·연애 코드는 쓰지 않는다(전연령·양육자 기준).",
+    "채널별로 다르게 쓴다: 인스타=감성 한 줄+해시태그 / 틱톡=첫 3초 훅·짧게 / 유튜브=제목·설명·검색어 / X·스레드=대화체 한두 줄 / 블로그=본문형. 같은 문장을 채널마다 복붙하지 않는다.",
+    "안을 여러 개 낼 때는 방향이 달라야 하고, 각 안에 '왜 이 브랜드·타깃에 맞는지' 한 줄을 붙인다.",
+    "해시태그는 브랜드 키워드+캐릭터 이름+주제어 5~8개. 발행은 항상 사람 승인 뒤. 틱톡은 초안함 전송이라 '앱에서 게시'까지 안내한다.",
+  ].join("\n"),
+  sync: [
+    "나는 비서·PM 싱크다. 일정·알람·메일·업무 폴더·회사 파일·진행 상황을 챙긴다.",
+    "말은 짧게, 결과는 표나 목록으로. '언제·누가·무엇'이 빠지지 않게.",
+    "일정·메일은 도구로 확인한 사실만 말하고, 발송·삭제·변경은 사람 승인 뒤에만 한다.",
+    "멈춘 작업을 물으면 jobs_status·skill_jobs_list 로 확인해 어디서 멈췄는지 사실대로 말한다.",
+  ].join("\n"),
 };
 
 /** 라비오크 stripThink 포팅 — 로컬 추론모델의 <think> 누출 제거(클라우드도 안전망). */
@@ -147,6 +213,94 @@ interface BuildSystemOpts {
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
   hasAttachments?: boolean; // 이번 턴에 사용자가 이미지·PDF를 첨부했는가(모델이 직접 보고 있음)
+  companyBrands?: BrandBrief[]; // 브랜드 허브의 브랜드·IP 정의(카피·기획·이미지가 이 정의를 따른다)
+}
+
+/** 브랜드 허브 정의를 프롬프트용으로 추린 것. */
+export interface BrandBrief {
+  brandId: string;
+  title: string;
+  summary: string;
+  coreMessage: string;
+  targetAudience: string;
+  voice: string;
+  tone: string;
+  story: string;
+  world: string;
+  characters: { name: string; personality: string }[];
+  keywords: string[];
+  banned: string[];
+  rules: string[];
+}
+
+const clip = (v: any, n: number) => String(v || "").replace(/\s+/g, " ").trim().slice(0, n);
+const clipList = (v: any, n: number, each = 60) => (Array.isArray(v) ? v : []).map((x) => clip(x, each)).filter(Boolean).slice(0, n);
+
+export function toBrandBrief(brandId: string, raw: any): BrandBrief | null {
+  if (!raw || typeof raw !== "object") return null;
+  const chars = (Array.isArray(raw.knowledgeCharacters) ? raw.knowledgeCharacters : [])
+    .map((c: any) => ({ name: clip(c?.name || c?.trigger, 40), personality: clip(c?.personality || c?.description, 160) }))
+    .filter((c: any) => c.name).slice(0, 8);
+  const brief: BrandBrief = {
+    brandId,
+    title: clip(raw.brandTitle || raw.title || brandId, 60),
+    summary: clip(raw.brandSummary, 200),
+    coreMessage: clip(raw.coreMessage, 200),
+    targetAudience: clip(raw.targetAudience, 160),
+    voice: clip(raw.brandVoice, 200),
+    tone: clip(raw.brandTone, 120),
+    story: clip(raw.brandStory, 300),
+    world: clip(raw.worldSetting, 300),
+    characters: chars.length ? chars : (clip(raw.brandCharacter, 300) ? [{ name: "캐릭터", personality: clip(raw.brandCharacter, 300) }] : []),
+    keywords: clipList(raw.brandKeywords, 12, 30),
+    banned: clipList(raw.bannedExpressions, 12, 40),
+    rules: clipList(raw.brandRules, 8, 120),
+  };
+  const filled = [brief.summary, brief.coreMessage, brief.targetAudience, brief.voice, brief.story, brief.world].some(Boolean) || brief.characters.length;
+  return filled ? brief : null;
+}
+
+/** 브랜드 허브를 읽어 브리프 목록으로(턴마다 한 번). 최대 3개 — 서브요청 한도(50)를 아낀다. */
+export async function loadBrandBriefs(ctx: { request: Request; authHeader: string }): Promise<BrandBrief[]> {
+  try {
+    const headers = { Authorization: ctx.authHeader };
+    const listRes = await fetch(new URL("/api/brand/list", ctx.request.url).toString(), { headers });
+    const listData: any = await listRes.json().catch(() => ({}));
+    const ids: string[] = Array.isArray(listData?.ids) ? listData.ids.map((v: any) => String(v || "")).filter(Boolean).slice(0, 3) : [];
+    const briefs = await Promise.all(ids.map(async (id) => {
+      const res = await fetch(new URL(`/api/brand/get?brandId=${encodeURIComponent(id)}`, ctx.request.url).toString(), { headers });
+      const data: any = await res.json().catch(() => ({}));
+      return toBrandBrief(id, data?.data?.brand ?? data?.data ?? null);
+    }));
+    return briefs.filter((b): b is BrandBrief => !!b);
+  } catch {
+    return [];
+  }
+}
+
+export function brandsBlock(brands: BrandBrief[] | undefined): string {
+  const list = Array.isArray(brands) ? brands : [];
+  if (!list.length) {
+    return `\n\n## 🏷️ 브랜드·IP (브랜드 허브)\n등록된 브랜드 정의가 없습니다. 온브랜드 카피·기획이 필요하면 지어내지 말고, 브랜드 허브에 브랜드(보이스·타깃·캐릭터)를 먼저 등록하시라고 안내하세요.`;
+  }
+  const lines = list.map((b) => {
+    const parts: string[] = [];
+    if (b.summary) parts.push(`한 줄=${b.summary}`);
+    if (b.coreMessage) parts.push(`핵심 메시지=${b.coreMessage}`);
+    if (b.targetAudience) parts.push(`타깃=${b.targetAudience}`);
+    if (b.voice) parts.push(`보이스=${b.voice}`);
+    if (b.tone) parts.push(`톤=${b.tone}`);
+    if (b.story) parts.push(`스토리=${b.story}`);
+    if (b.world) parts.push(`세계관=${b.world}`);
+    if (b.characters.length) parts.push(`캐릭터: ${b.characters.map((c) => `${c.name}(${c.personality || "성격 미등록"})`).join(" · ")}`);
+    if (b.keywords.length) parts.push(`키워드: ${b.keywords.join(", ")}`);
+    if (b.banned.length) parts.push(`금지 표현: ${b.banned.join(", ")}`);
+    if (b.rules.length) parts.push(`규칙: ${b.rules.join(" / ")}`);
+    return `- ${b.title}(brandId: ${b.brandId}): ${parts.join("; ")}`;
+  });
+  return `\n\n## 🏷️ 브랜드·IP (브랜드 허브 · ${list.length}개) — 카피·캡션·해시태그·기획·이미지/영상 프롬프트는 반드시 이 정의를 따른다\n${lines.join("\n")}\n` +
+    `★${list.length === 1 ? "브랜드가 하나뿐이므로 모든 콘텐츠는 이 브랜드의 것으로 본다." : "브랜드가 여럿이면 어느 브랜드의 일인지 먼저 확인한다."} ` +
+    `캐릭터 이름·성격은 그대로 쓰고, 정의에 없는 톤(어른 밈·직장 유머·술·연애·자극)으로 새지 않는다. 타깃이 어린이·양육자면 전연령 기준으로 쓴다. 금지 표현은 어떤 채널에서도 쓰지 않는다.`;
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -506,7 +660,7 @@ ${teamToolMap}
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}${pendingBlock}
+${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}${brandsBlock(opts.companyBrands)}${pendingBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -1607,6 +1761,8 @@ export async function runGroupChat(
     listProjects(sql, userId).catch(() => [] as any[]),
     listPendingReviewJobs(sql, userId).catch(() => [] as any[]),
   ]);
+  // 브랜드·IP 정의도 한 번 읽어 전 직원이 공유한다(리치·잉크·마키·플롯·픽셀이 같은 브랜드 세계 안에서 말하게).
+  const cachedBrands = toolCtx?.request ? await loadBrandBriefs({ request: toolCtx.request, authHeader: toolCtx.authHeader }) : [];
   const cachedAuth = await resolvedAuthHeaders(sql, userId, env).catch(() => null);
   // 에이전트별 두뇌 선택도 한 번만 읽어 전 직원이 공유(직원당 DB 왕복 1회 추가를 막는다).
   const cachedModelSelections = await getAgentModelSelections(sql, userId).catch(() => ({}));
@@ -1624,6 +1780,7 @@ export async function runGroupChat(
     companyKnowledgeRetrieved: cachedCompanyKnowledge.retrieved,
     companySkills: cachedSkills as any[],
     companyProjects: cachedProjects as any[],
+    companyBrands: cachedBrands,
     pendingJobs: pendingJobsCtx,
     resolvedAuth: cachedAuth || undefined,
     modelSelections: cachedModelSelections,

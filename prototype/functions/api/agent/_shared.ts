@@ -1338,6 +1338,9 @@ export async function resolveChatReference(sql: SqlFn, userId: string, raw: any)
     const parts = [`${media} · ${title}`, `jobId=${(job as any).id}`];
     if (objectName) parts.push(`objectName=${objectName}`);
     if (out.videoUrl) parts.push(`videoUrl=${String(out.videoUrl)}`);
+    // 장면 설명(그 산출물을 만든 프롬프트): 카피·기획이 "그 장면에 무엇이 있는가"에서 출발하게.
+    const scene = String(input?.prompt || out.promptEcho || "").replace(/\s+/g, " ").trim().slice(0, 400);
+    if (scene) parts.push(`장면="${scene.replace(/"/g, "'")}"`);
     if (extra) parts.push(extra);
     const files = messageFilesFromToolOutput(String((job as any).type || ""), out, (job as any).id);
     return { label: `${media} · ${title}`, line: `[참조 산출물: ${parts.join(" ")}]`, files: files.slice(0, 1) };
