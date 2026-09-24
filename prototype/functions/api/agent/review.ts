@@ -253,7 +253,7 @@ function approvalDoneText(type: string, output: any, input: any): string {
     if (o.tiktok) {
       parts.push(o.tiktok.status === "sent_to_inbox"
         ? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요 — 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요."
-        : `TikTok 초안함 전송이 처리 중이에요(publishId ${o.tiktok.publishId || "?"}). 잠시 뒤 틱톡 앱 초안함을 확인해 주세요.`);
+        : `TikTok 초안함 전송이 처리 중이에요(publishId ${o.tiktok.publishId || "?"}). 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요.`);
     } else if (o.notice && !others.length) {
       parts.push(String(o.notice));
     }

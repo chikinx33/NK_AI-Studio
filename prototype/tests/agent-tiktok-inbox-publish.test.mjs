@@ -76,3 +76,29 @@ test("발행 미디어는 모델이 jobId 를 빠뜨려도 서버가 대화의 �
   assert.match(run, /const media = await resolvePublishMedia\(input, ctx, wantsTikTok/);
   assert.match(run, /const mediaGcsPath = media\.mediaGcsPath;/);
 });
+
+test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 추적해 도착·실패·시간 초과를 채팅에 알린다", async () => {
+  const [shared, jobs, job, messages, review] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/jobs.ts"),
+    read("prototype/functions/api/agent/job.ts"),
+    read("prototype/functions/api/agent/messages.ts"),
+    read("prototype/functions/api/agent/review.ts"),
+  ]);
+  const fn = fnBody(shared, "export async function reconcileTikTokJobs(");
+  assert.match(fn, /output->'tiktok'->>'status'='processing'/);
+  assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
+  assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
+  assert.match(fn, /TikTok 초안함에 영상이 도착했어요/);
+  assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
+  assert.match(fn, /Date\.now\(\) - started > TIKTOK_PENDING_MAX_MS/);
+  assert.match(fn, /tiktok_reconnect_required/);
+  for (const [name, src] of [["jobs.ts", jobs], ["job.ts", job], ["messages.ts", messages]]) {
+    assert.match(src, /await reconcileTikTokJobs\(pollCtx, sql\)\.catch\(\(\) => \{\}\);/, `${name} 폴링마다 추적`);
+  }
+  // 상태 조회 도구의 쿼리 이름 버그(publish_id → publishId)
+  const tool = fnBody(shared, "async function runTiktokPublishStatusTool(");
+  assert.match(tool, /\/api\/sns\/tiktok\/publish-status\?publishId=\$\{encodeURIComponent\(publishId\)\}/);
+  assert.doesNotMatch(tool, /publish_id=/);
+  assert.match(review, /제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요/);
+});

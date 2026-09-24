@@ -2800,6 +2800,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       const status = String(r.status || "processing");
       if (status === "status_reported_failed") throw new Error(`TikTok 초안함 전송 실패: ${r.failReason || "TikTok 이 이유 없이 거절했어요"}`);
       tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath };
+      if (status === "processing") notices.push("TikTok 처리 상태는 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요.");
       published.push({ platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId });
       notices.push(status === "sent_to_inbox"
         ? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요. 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요."
@@ -2853,6 +2854,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
 
   return {
     published, kind: "publish", platforms, caption, scheduledAt: scheduledAt || undefined,
+    conversationId: ctx.conversationId || input?._conversationId || "main",
     ...(tiktok ? { tiktok } : {}),
     ...(notices.length ? { notice: notices.join(" ") } : {}),
   };
@@ -4335,8 +4337,9 @@ async function runSnsAnalyticsSyncTool(input: any, ctx: ToolContext): Promise<an
 /** 틱톡 발행 상태 확인(초안함으로 보낸 뒤 어떻게 됐는지). read. */
 async function runTiktokPublishStatusTool(input: any, ctx: ToolContext): Promise<any> {
   const publishId = String(input?.publishId || input?.id || "").trim();
-  const query = publishId ? `?publish_id=${encodeURIComponent(publishId)}` : "";
-  return { kind: "tiktok_publish_status", ...(await callInternalJson(ctx, `/api/sns/tiktok/publish-status${query}`)) };
+  // API 는 publishId(카멜)를 읽는다 — 전엔 publish_id 로 보내 항상 "publishId required" 로 실패했다(2026-09-24).
+  if (!publishId) throw new Error("publishId 가 필요해요(발행 결과의 tiktok.publishId).");
+  return { kind: "tiktok_publish_status", ...(await callInternalJson(ctx, `/api/sns/tiktok/publish-status?publishId=${encodeURIComponent(publishId)}`)) };
 }
 
 /** 회원 목록(마스터 계정만). read. */
@@ -7471,6 +7474,64 @@ export async function reconcileVideoJobs(ctx: ToolContext, sql: SqlFn) {
     }
     const where = out.attach ? ` 컷 ${out.attach.sceneId} 에 붙여 저장했어요.` : " 검수 패널에서 확인하세요.";
     await say(`🎬 영상 생성 완료 (${label}).${where}`, messageFilesFromToolOutput(job.type, output, job.id));
+  }
+}
+
+/** TikTok 초안함 전송이 이보다 오래 "processing" 이면 추적을 멈추고 앱에서 직접 확인하라고 알린다. */
+export const TIKTOK_PENDING_MAX_MS = 30 * 60 * 1000;
+
+/**
+ * 승인 실행된 TikTok 초안함 전송(publish 잡 output.tiktok.status === "processing")의 뒤를 잇는다.
+ * 서버는 제출 뒤 6초만 기다리고 "처리 중" 으로 돌려주는데, 그 뒤를 아무도 보지 않아 사용자가 앱을 열어도
+ * 영상이 없을 때 원인을 알 수 없었다(2026-09-24). 폴링 요청마다 publish-status 를 물어 완료·실패·시간 초과를 채팅에 알린다.
+ */
+export async function reconcileTikTokJobs(ctx: ToolContext, sql: SqlFn) {
+  const rows = await sql(`SELECT id FROM agent_jobs WHERE user_id=$1 AND type='publish'
+    AND output->'tiktok'->>'status'='processing' AND created_at > now() - interval '2 days' ORDER BY created_at DESC LIMIT 5`, [ctx.userId])
+    .catch(() => [] as any[]);
+  if (!(rows as any[]).length) return;
+  for (const row of rows as any[]) {
+    const [job] = await sql(`UPDATE agent_jobs SET output=jsonb_set(output,'{tiktok,checkedAt}',to_jsonb(now()::text)),updated_at=now()
+      WHERE user_id=$1 AND id=$2 AND output->'tiktok'->>'status'='processing'
+      AND (output->'tiktok'->>'checkedAt' IS NULL OR (output->'tiktok'->>'checkedAt')::timestamptz < now()-interval '${VIDEO_CHECK_INTERVAL_SQL}') RETURNING *`,
+      [ctx.userId, row.id]).catch(() => [] as any[]);
+    if (!job) continue;
+    const out: any = job.output && typeof job.output === "object" ? job.output : {};
+    const tk: any = out.tiktok || {};
+    const conversationId = String((typeof job.input === "object" && job.input?._conversationId) || out.conversationId || "main");
+    const meta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+    const say = (text: string) => addMessage(sql, { userId: ctx.userId, conversationId, role: 'agent', agentId: job.agent_id, backgroundJobId: job.id, name: meta.name, text });
+    const finish = async (status: string, extra: Record<string, any> = {}) => {
+      await setJobStatus(sql, job.id, ctx.userId, { output: { ...out, tiktok: { ...tk, ...extra, status, checkedAt: new Date().toISOString() } } });
+    };
+    let data: any = null;
+    try {
+      const res = await fetch(internalUrl(ctx.request, `/api/sns/tiktok/publish-status?publishId=${encodeURIComponent(String(tk.publishId || ""))}`), { headers: { Authorization: ctx.authHeader } });
+      data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        if (res.status === 412 || data?.error === "tiktok_reconnect_required") {
+          await finish("reconnect_required", { failReason: "tiktok_reconnect_required" });
+          await say("❌ TikTok 초안함 전송 상태를 확인하려다 연결이 끊긴 걸 발견했어요. 브랜드 스튜디오에서 TikTok 을 다시 연결한 뒤 다시 보내주세요.");
+        }
+        continue; // 일시 오류는 다음 폴링에
+      }
+    } catch { continue; }
+    const status = String(data.status || "processing");
+    if (status === "complete") {
+      await finish("sent_to_inbox", { postId: data.postId || "", completedAt: new Date().toISOString() });
+      await say("✅ TikTok 초안함에 영상이 도착했어요. 틱톡 앱 → 프로필 → 초안(Drafts)에서 공개 범위를 고르고 '게시' 를 누르면 올라가요.");
+      continue;
+    }
+    if (status === "failed") {
+      await finish("status_reported_failed", { failReason: String(data.failReason || "") });
+      await say(`⚠️ TikTok 이 초안함 전송을 실패로 보고했어요${data.failReason ? ` (${data.failReason})` : ""}. 다만 실패로 보고돼도 실제로는 들어가 있는 경우가 있어 앱 초안함을 한 번 확인해 주시고, 없으면 다시 보내 달라고 해 주세요.`);
+      continue;
+    }
+    const started = Date.parse(String(tk.sentAt || job.created_at || ""));
+    if (Number.isFinite(started) && Date.now() - started > TIKTOK_PENDING_MAX_MS) {
+      await finish("timeout");
+      await say(`⏱️ TikTok 초안함 전송이 ${Math.round(TIKTOK_PENDING_MAX_MS / 60000)}분째 "처리 중" 으로만 나와요(publishId ${tk.publishId}). 틱톡 앱 초안함에 없으면 영상 형식·길이 문제일 수 있으니 다시 보내 달라고 해 주세요.`);
+    }
   }
 }
 
