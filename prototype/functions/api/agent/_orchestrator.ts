@@ -337,7 +337,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     sns_prefs_get: `[[RUN: sns_prefs_get | {}]]  → SNS 발행 기본값·채널 선호(환경설정) 조회. (OAuth 연결 상태와는 별개)`,
     sns_prefs_save: `[[RUN: sns_prefs_save | {"deployDefaults": {…}}]]  → SNS 발행 기본값·채널 선호를 저장(머지). ⚠️ 사람 승인 후 반영. (OAuth 연결 개설/해제는 사람 직접)`,
     subscription_get: `[[RUN: subscription_get | {}]]  → 구독·크레딧 잔량 조회. "크레딧 얼마 남았어?"에 사용.`,
-    image_edit: `[[RUN: image_edit | {"imageUrl": "원본 이미지URL", "prompt": "수정 지시(예: 배경만 노을로 바꿔줘)"}]]  → 기존 이미지를 채팅형으로 수정(image-to-image, Gemini). "이 이미지 배경 바꿔"에 사용. ※ 마스크로 특정 영역만 정밀 수정하는 인페인트는 사용자가 UI에서 마스크를 그려야 해요(도구 아님).`,
+    image_edit: `[[RUN: image_edit | {"imageUrl": "원본: 이미지URL · 지목한 산출물의 jobId · objectName · 첨부라면 \"attachment:1\" · 방금 만든 그림은 \"last\"", "prompt": "수정 지시(예: 배경만 노을로 바꿔줘)", "aspectRatio": "1:1(선택)"}]]  → 기존 이미지를 채팅형으로 수정(image-to-image, Gemini). "이 이미지 배경 바꿔"·"여기에 글씨 넣어줘"에 사용. ★사용자가 그림을 첨부하거나 지목하고 '수정·고쳐·넣어·바꿔' 라고 하면 image 로 새로 그리지 말고 반드시 이 도구로 그 원본을 고친다(첨부는 [첨부 이미지 …] 줄의 attachment:N, 지목은 [참조 산출물 …] 의 jobId). ※ 마스크로 특정 영역만 정밀 수정하는 인페인트는 사용자가 UI에서 마스크를 그려야 해요(도구 아님).`,
     reminders_list: `[[RUN: reminders_list | {}]]  → 다가올 알람(예약) 목록 조회. "예약/알람 뭐 있어?"에 사용. (예약발행 목록이 아니라 앱 알람)`,
     polar_metrics: `[[RUN: polar_metrics | {"period": "today", "app": "my-app"}]]  → Polar 결제 지표 조회(매출·MRR·구독수·해지율·전환율). 매출/수익/MRR/구독/해지/전환 관련 질문이면 추측하지 말고 반드시 이 도구로 먼저 조회한다. period는 today·yesterday·this_week·last_week·this_month·last_month·7d·30d·90d·this_year 중 하나, 또는 {"start_date":"2026-07-01","end_date":"2026-07-29"}. app은 앱별 상품 매핑에 등록한 앱 이름(예: my-app) — 생략하면 조직 전체.`,
     polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "my-app"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
@@ -501,7 +501,7 @@ ${teamToolMap}
 
   return `${hardState}
 
-★사용자 메시지에 "[참조 산출물: … jobId=…]" 또는 "[참조 업무: … workId=…]" 줄이 있으면, 사용자가 보고·업무 폴더에서 그 항목을 직접 지목해 보낸 것입니다. "이걸로"·"이 이미지로"·"이 항목"·"방금 그거" 는 그 항목을 뜻하므로 어느 것인지 되묻지 말고 그대로 쓰세요: 영상은 [[RUN: video | {"jobId": "<그 jobId>", …}]](길이·모델 규칙은 video 도구 설명대로 먼저 보고), 캐릭터 등록(brand_asset)·업스케일(upscale)은 {"jobId"} 또는 {"objectName"}, 업무 상세가 필요하면 work_get {"id": "<workId>"} 로 읽으세요. 참조 줄 자체를 사용자에게 되풀이해 보여 주지는 마세요.
+★사용자 메시지에 "[참조 산출물: … jobId=…]" 또는 "[참조 업무: … workId=…]" 줄이 있으면, 사용자가 보고·업무 폴더에서 그 항목을 직접 지목해 보낸 것입니다. "이걸로"·"이 이미지로"·"이 항목"·"방금 그거" 는 그 항목을 뜻하므로 어느 것인지 되묻지 말고 그대로 쓰세요: 영상은 [[RUN: video | {"jobId": "<그 jobId>", …}]](길이·모델 규칙은 video 도구 설명대로 먼저 보고), 이미지 수정(image_edit)·캐릭터 등록(brand_asset)·업스케일(upscale)은 {"jobId": "<그 jobId>"} 또는 {"objectName"}, 업무 상세가 필요하면 work_get {"id": "<workId>"} 로 읽으세요. 사용자가 채팅에 그림을 첨부했으면 "[첨부 이미지 …: attachment:1 …]" 줄이 있고, 그 그림을 고치라는 요청은 image_edit 의 imageUrl 에 "attachment:1" 을 넣어 원본을 수정합니다(새로 그리지 않음). 참조 줄 자체를 사용자에게 되풀이해 보여 주지는 마세요.
 
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}

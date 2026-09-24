@@ -1551,6 +1551,9 @@ export interface ToolContext {
   lastImageJobId?: string;
   imageResults?: Record<string, any>;
   runApproved?: boolean;
+  // 그 턴에 사용자가 채팅에 붙인 이미지(base64). 도구 입력의 "attachment:N" 이 이걸 가리킨다.
+  // 전엔 첨부가 모델 눈에만 보이고 도구엔 닿지 않아 "이 그림 고쳐줘" 가 새 그림 생성으로 흘렀다.
+  attachments?: { base64: string; mimeType: string }[];
 }
 
 export interface ToolDef {
@@ -1844,6 +1847,7 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
  */
 async function withVideoSourceImage(input: any, ctx: ToolContext): Promise<any> {
   const given = String(input?.imageUrl || input?.imageDataUrl || "").trim();
+  if (/^attachment:\d+$/i.test(given)) return { ...input, imageUrl: await resolveImageSourceRef(given, ctx) };
   if (given) return input;
   let jobId = String(input?.jobId || input?.imageJobId || "").trim();
   let objectName = String(input?.objectName || "").trim();
@@ -6676,13 +6680,52 @@ async function runSubscriptionGetTool(_input: any, ctx: ToolContext): Promise<an
 
 /** 이미지 채팅형 수정: /api/imagen (provider gemini · image-to-image · referenceImages). external.
  *  ※ 마스크 없는 '채팅형 수정'만 노출. 정밀 인페인트(maskDataUrl)는 사용자가 마스크를 그려야 해 UI/사람 전용. */
+/**
+ * 도구 입력의 이미지 참조 한 개를 /api/imagen·/api/video 가 받는 주소로 푼다.
+ *  - "attachment:N"(그 턴의 채팅 첨부 N번째) → data:image URL
+ *  - jobId(UUID · "last") → 그 잡 결과의 저장 경로 → gs://버킷/경로
+ *  - objectName(버킷 없는 경로) → gs://버킷/경로
+ *  - 그 밖(https·gs://·data:)은 그대로.
+ */
+async function resolveImageSourceRef(raw: any, ctx: ToolContext): Promise<string> {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  const att = /^attachment:(\d+)$/i.exec(value) || /^첨부:?(\d+)$/.exec(value);
+  if (att) {
+    const idx = Number(att[1]) - 1;
+    const list = Array.isArray(ctx.attachments) ? ctx.attachments : [];
+    const hit = list[idx];
+    if (!hit?.base64) throw new Error(`첨부 이미지 ${att[1]}번을 찾지 못했어요. 첨부는 그 메시지를 보낸 턴에서만 쓸 수 있어요 — 다시 첨부해 주세요.`);
+    return `data:${hit.mimeType || "image/jpeg"};base64,${hit.base64}`;
+  }
+  if (/^(https?:\/\/|gs:\/\/|data:image\/)/i.test(value)) return value;
+  const bucket = studioBucket(ctx);
+  const gsOf = (objectName: string) => {
+    const plain = objectName.replace(/^gs:\/\/[^/]+\//, "");
+    if (!bucket) throw new Error("이미지 저장소 버킷이 설정되지 않아 저장된 이미지를 참조할 수 없어요.");
+    return `gs://${bucket}/${plain}`;
+  };
+  if (LAST_IMAGE_ALIASES.has(value.toLowerCase())) {
+    const jobId = String(ctx.lastImageJobId || "").trim() || await latestImageJobId(ctx);
+    if (!jobId) throw new Error("방금 만든 이미지를 찾지 못했어요.");
+    return gsOf(await imageJobObjectName(ctx, jobId));
+  }
+  if (/^[0-9a-f-]{36}$/i.test(value)) return gsOf(await imageJobObjectName(ctx, value));
+  // 나머지는 저장 경로(objectName)로 본다.
+  return gsOf(value);
+}
+
 async function runImageEditTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.instruction || "").trim();
   if (!prompt) throw new Error("수정 지시(prompt)가 필요해요. 예: '배경만 노을로 바꿔줘'");
-  const refs = Array.isArray(input?.referenceImages) ? input.referenceImages.map((v: any) => String(v || "").trim()).filter(Boolean) : [];
-  const single = String(input?.imageUrl || input?.image || input?.sourceImage || "").trim();
-  const referenceImages = refs.length ? refs : (single ? [single] : []);
-  if (!referenceImages.length) throw new Error("수정할 원본 이미지(imageUrl 또는 referenceImages)가 필요해요.");
+  // 원본 지목: referenceImages > imageUrl/image/sourceImage > jobId > objectName > attachment:N. 전엔 imageUrl 계열만 읽어
+  // 코어가 넘긴 jobId 를 통째로 무시하고 "원본이 필요해요" 로 실패했다(2026-09-24).
+  const rawRefs = Array.isArray(input?.referenceImages) ? input.referenceImages : [];
+  const single = String(input?.imageUrl || input?.image || input?.sourceImage || input?.jobId || input?.imageJobId || input?.objectName || input?.attachment || "").trim();
+  const wanted = rawRefs.length ? rawRefs : (single ? [single] : []);
+  const referenceImages: string[] = [];
+  for (const v of wanted) { const r = await resolveImageSourceRef(v, ctx); if (r) referenceImages.push(r); }
+  if (!referenceImages.length) throw new Error("수정할 원본 이미지가 필요해요 — imageUrl, jobId(지목한 산출물), objectName, 또는 첨부라면 \"attachment:1\" 을 주세요.");
   const data = await callInternalJson(ctx, "/api/imagen", {
     body: {
       prompt,

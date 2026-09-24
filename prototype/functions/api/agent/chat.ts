@@ -69,7 +69,11 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const displayText = message
       + (reference ? (message ? "\n" : "") + `📎 참조: ${reference.label}` : "")
       + (images.length ? (message || reference ? "\n" : "") + "[이미지 첨부됨]" : "");
-    const modelText = reference ? `${displayText}\n${reference.line}` : displayText;
+    // 첨부는 모델 눈에 보일 뿐 아니라 도구가 가리킬 수 있는 이름(attachment:N)으로도 알려준다.
+    const attachLine = images.length
+      ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다]`
+      : "";
+    const modelText = [displayText, reference?.line || "", attachLine].filter(Boolean).join("\n");
     const userMsg = await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: displayText,
       files: reference?.files?.length ? reference.files : undefined,
@@ -89,7 +93,8 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     }
 
     const authHeader = String(request.headers.get("Authorization") || "");
-    const toolCtx = { request, env, authHeader, userId: auth.userId, conversationId };
+    // 첨부 이미지를 도구도 쓸 수 있게 컨텍스트에 싣는다("attachment:N").
+    const toolCtx = { request, env, authHeader, userId: auth.userId, conversationId, attachments: images };
 
     // TransformStream: SSE 이벤트를 writer에 쓰고 readable을 Response body로 반환.
     // 에이전트가 발언을 완료할 때마다 onMessage 콜백 → SSE 즉시 전송 → 실시간 순차 대화.

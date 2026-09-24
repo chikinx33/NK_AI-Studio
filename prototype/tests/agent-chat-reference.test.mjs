@@ -55,7 +55,8 @@ test("서버는 지목한 잡·업무를 읽어 사용자 메시지에 카드와
   // chat.ts: 말풍선엔 📎, 모델에겐 참조 줄
   assert.match(chat, /const reference = await resolveChatReference\(sql, auth\.userId, body\?\.reference\)\.catch\(\(\) => null\);/);
   assert.match(chat, /`📎 참조: \$\{reference\.label\}`/);
-  assert.match(chat, /const modelText = reference \? `\$\{displayText\}\\n\$\{reference\.line\}` : displayText;/);
+  // 참조 줄과 첨부 줄(attachment:N)을 함께 붙인다.
+  assert.match(chat, /const modelText = \[displayText, reference\?\.line \|\| "", attachLine\]\.filter\(Boolean\)\.join\("\\n"\);/);
   assert.match(chat, /files: reference\?\.files\?\.length \? reference\.files : undefined,/);
   assert.match(chat, /firstMessage: modelText,/);
   // video 도구: jobId("last")·objectName → gs:// 첫 프레임
