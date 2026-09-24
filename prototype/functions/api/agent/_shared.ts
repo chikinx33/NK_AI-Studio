@@ -2752,7 +2752,7 @@ async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요)
  *  ★TikTok 은 2026-08-31 부터 Direct Post 가 아니라 '초안함(inbox) 전송' 이다(브랜드 스튜디오 배포 버튼과 같은 /api/sns/tiktok/inbox).
  *    초안 전송은 video.upload 스코프만 쓰고 확인 모달 요건 대상이 아니므로, 예전의 "확인 화면이 없어 막는다" 차단은 근거가 사라져 제거했다.
- *    사용자는 틱톡 앱 초안함에서 공개 범위를 고르고 직접 게시한다 — 결과 문구가 반드시 그렇게 말해야 한다. */
+ *    영상은 틱톡 앱 '받은 알림함(Inbox)' 탭에 알림으로 도착하고(프로필의 자물쇠 탭·초안 카드가 아님), 사용자가 그 알림에서 공개 범위를 고르고 직접 게시한다 — 결과 문구가 반드시 그렇게 말해야 한다. */
 async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   const platformsRaw = Array.isArray(input?.platforms)
     ? input.platforms
@@ -2803,7 +2803,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       if (status === "processing") notices.push("TikTok 처리 상태는 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요.");
       published.push({ platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId });
       notices.push(status === "sent_to_inbox"
-        ? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요. 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요."
+        ? "TikTok 은 초안함(inbox)으로 보냈어요. " + "틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)."
         : `TikTok 초안함 전송이 아직 처리 중이에요(publishId ${tiktok.publishId}). 잠시 뒤 틱톡 앱 초안함을 확인해 주세요.`);
     }
   }
@@ -7528,7 +7528,7 @@ export async function reconcileTikTokJobs(ctx: ToolContext, sql: SqlFn) {
     const status = String(data.status || "processing");
     if (status === "complete") {
       await finish("sent_to_inbox", { postId: data.postId || "", completedAt: new Date().toISOString() });
-      await say("✅ TikTok 초안함에 영상이 도착했어요. 틱톡 앱 → 프로필 → 초안(Drafts)에서 공개 범위를 고르고 '게시' 를 누르면 올라가요.");
+      await say("✅ TikTok 초안함에 영상이 도착했어요. " + "틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요).");
       continue;
     }
     if (status === "failed") {

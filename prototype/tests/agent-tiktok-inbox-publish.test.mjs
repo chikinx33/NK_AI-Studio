@@ -24,7 +24,9 @@ test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트
   assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath, caption: description \}\)/);
   assert.match(fn, /const others = platforms\.filter\(\(p\) => p !== "tiktok"\);/, "다른 채널은 기존 /api/sns/publish 로");
   assert.match(fn, /status === "status_reported_failed"\) throw new Error\(`TikTok 초안함 전송 실패/, "TikTok 이 실패로 보고하면 실패로 닫는다");
-  assert.match(fn, /"TikTok 은 틱톡 앱 '초안함' 으로 보냈어요\. 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요\."/);
+  // 도착 위치는 프로필의 자물쇠 탭(비공개)·초안 카드가 아니라 '받은 알림함(Inbox)' 탭의 알림이다(2026-09-24 사용자 확인).
+  assert.match(fn, /TikTok 은 초안함\(inbox\)으로 보냈어요\. " \+ "틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로 와요/);
+  assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
   assert.match(fn, /TikTok 은 초안함 전송이라 예약이 없어요/, "예약은 안내 후 skip");
   // 영상 저장 경로: objectName > jobId(잡 결과) > mediaUrl
   const resolver = fnBody(shared, "async function publishMediaObjectName(");
@@ -39,7 +41,7 @@ test("승인 완료 문구와 도구 설명서가 TikTok 을 '초안함 전송' 
     read("prototype/functions/api/agent/_orchestrator.ts"),
   ]);
   assert.doesNotMatch(review, /if \(type === "publish"\) return "✅ 승인 확인! 발행을 진행했어요\.";/);
-  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? "TikTok 은 틱톡 앱 '초안함' 으로 보냈어요 — 앱에서 공개 범위를 고르고 '게시' 를 눌러야 올라가요\."/);
+  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? "TikTok 은 초안함\(inbox\)으로 보냈어요 — 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
   const doc = orch.slice(orch.indexOf("    publish: `[[RUN: publish |"), orch.indexOf("`,", orch.indexOf("    publish: `[[RUN: publish |")));
   assert.match(doc, /TikTok 은 바로 게시가 아니라 틱톡 앱 '초안함' 전송이다/);
   assert.match(doc, /"게시했다"고 하지 말 것/);
@@ -89,7 +91,8 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.match(fn, /output->'tiktok'->>'status'='processing'/);
   assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
   assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
-  assert.match(fn, /TikTok 초안함에 영상이 도착했어요/);
+  assert.match(fn, /TikTok 초안함에 영상이 도착했어요\. " \+ "틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
+  assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/, "잘못된 위치 안내가 남아 있으면 안 된다");
   assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
   assert.match(fn, /Date\.now\(\) - started > TIKTOK_PENDING_MAX_MS/);
   assert.match(fn, /tiktok_reconnect_required/);
