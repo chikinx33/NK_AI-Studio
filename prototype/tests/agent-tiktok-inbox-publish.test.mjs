@@ -105,3 +105,20 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.doesNotMatch(tool, /publish_id=/);
   assert.match(review, /제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요/);
 });
+
+test("'올라갔어?' 는 publish_history(읽기·합성) 로 답한다 — 채널 실제 게시물 + 에이전트 발행 기록", async () => {
+  const [shared, orch] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(shared, /publish_history: \{ agentId: "reach", agentIds: \["core", "maki"\], kind: "read", synthesize: true, run: runPublishHistoryTool \}/);
+  const fn = fnBody(shared, "async function runPublishHistoryTool(");
+  assert.match(fn, /callInternalJson\(ctx, "\/api\/sns\/analytics\/sync", \{ body: \{ projectId \} \}\)/, "채널 실제 게시물");
+  assert.match(fn, /withDeadline\(/, "채널 API 는 기한 안에서만");
+  assert.match(fn, /WHERE user_id = \$1 AND type = 'publish'/, "에이전트 발행 기록");
+  assert.match(fn, /"승인 대기\(실행 안 됨\)"/);
+  assert.match(fn, /matchedLive: livePosts\.filter\(\(p: any\) => p\.matched\)\.length,/);
+  const doc = orch.slice(orch.indexOf("    publish_history: `[[RUN: publish_history |"), orch.indexOf("`,", orch.indexOf("    publish_history: `[[RUN: publish_history |")));
+  assert.match(doc, /"올라갔어\?"·"등록됐는지 확인해줘"·"발행 됐어\?"에는 반드시 이 도구/);
+  assert.match(doc, /sns_analytics_sync\(성과 숫자 동기화\)로 대신하지 말 것/);
+});

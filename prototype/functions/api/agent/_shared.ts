@@ -4327,6 +4327,71 @@ async function runKnowledgeIndexDeleteTool(input: any, ctx: ToolContext): Promis
   })) };
 }
 
+/**
+ * 게시 이력 조회(읽기 전용): "인스타에 올라갔어?" 에 답한다.
+ *  ① 채널 실제 게시물 — /api/sns/analytics/sync 가 각 채널 API 에서 최근 게시물을 받아 온다(권위 있는 답: 실제로 올라갔는가).
+ *  ② 에이전트 발행 기록 — publish 잡의 output.published / tiktok(승인·실행 여부, 초안함 상태).
+ * query(키워드)·platform·days 로 걸러 준다. 전엔 이 도구가 없어 리치가 sns_analytics_sync(성과 동기화·승인 게이트)로 흘러가
+ * "작업을 실행했어요" 만 남기고 답을 못 했다(2026-09-24).
+ */
+async function runPublishHistoryTool(input: any, ctx: ToolContext): Promise<any> {
+  const platform = String(input?.platform || "").toLowerCase().trim();
+  const query = String(input?.query || input?.keyword || "").trim();
+  const days = Math.min(Math.max(Number(input?.days) || 14, 1), 90);
+  const since = Date.now() - days * 86400000;
+  const projectId = String(input?.projectId || "").trim();
+  const q = query.toLowerCase().replace(/\s+/g, "");
+  const hit = (...fields: any[]) => !q || fields.some((f) => String(f || "").toLowerCase().replace(/\s+/g, "").includes(q));
+
+  // ① 채널 실제 게시물(기한 20초 — 채널 API 가 느릴 수 있다)
+  const live: any = await withDeadline(callInternalJson(ctx, "/api/sns/analytics/sync", { body: { projectId } }).catch(() => null), 20000, null as any);
+  const livePosts = (Array.isArray(live?.posts) ? live.posts : [])
+    .filter((p: any) => !platform || String(p?.channelType || "").toLowerCase() === platform)
+    .filter((p: any) => { const t = Date.parse(String(p?.publishedAt || "")); return !Number.isFinite(t) || t >= since; })
+    .map((p: any) => ({
+      channel: String(p?.channelType || ""), account: String(p?.accountName || ""), publishedAt: String(p?.publishedAt || ""),
+      url: String(p?.remoteUrl || ""), postId: String(p?.remotePostId || ""), title: String(p?.title || "").slice(0, 120),
+      caption: String(p?.caption || "").slice(0, 200), contentType: String(p?.contentType || ""),
+      matched: hit(p?.caption, p?.title, ...(Array.isArray(p?.hashtags) ? p.hashtags : [])),
+    }))
+    .sort((a: any, b: any) => String(b.publishedAt).localeCompare(String(a.publishedAt)))
+    .slice(0, 30);
+  const platformStates = (Array.isArray(live?.platforms) ? live.platforms : [])
+    .filter((st: any) => !platform || String(st?.platform || "").toLowerCase() === platform)
+    .map((st: any) => ({ platform: st?.platform, state: st?.state, account: st?.accountName, collected: st?.collected, message: String(st?.message || "").slice(0, 160) }));
+
+  // ② 에이전트 발행 잡(승인 전·실행·실패 구분)
+  const sql = getSql(ctx.env);
+  const rows = sql ? await sql(
+    `SELECT id, status, review_status, error, input, output, created_at FROM agent_jobs
+      WHERE user_id = $1 AND type = 'publish' AND created_at > now() - make_interval(days => $2::int) ORDER BY created_at DESC LIMIT 20`,
+    [ctx.userId, days]).catch(() => [] as any[]) : [];
+  const agentPublishes = (rows as any[]).map((j) => {
+    const inp: any = typeof j.input === "string" ? (() => { try { return JSON.parse(j.input); } catch { return {}; } })() : (j.input || {});
+    const out: any = j.output && typeof j.output === "object" ? j.output : {};
+    const platforms: string[] = Array.isArray(inp?.platforms) ? inp.platforms.map((v: any) => String(v).toLowerCase()) : (inp?.platform ? [String(inp.platform).toLowerCase()] : []);
+    const stage = j.status === "review_pending" && !j.output ? "승인 대기(실행 안 됨)"
+      : j.status === "cancelled" ? "취소됨"
+      : j.status === "error" ? `실패: ${String(j.error || "").slice(0, 160)}`
+      : (j.status === "approved" || j.output) ? "실행됨" : String(j.status || "");
+    return {
+      jobId: String(j.id), createdAt: j.created_at, platforms, stage,
+      caption: String(inp?.caption || "").slice(0, 160),
+      matched: hit(inp?.caption, ...(Array.isArray(inp?.hashtags) ? inp.hashtags : [])),
+      results: Array.isArray(out?.published) ? out.published : [],
+      tiktok: out?.tiktok ? { status: out.tiktok.status, publishId: out.tiktok.publishId, failReason: out.tiktok.failReason || "" } : undefined,
+    };
+  }).filter((j) => !platform || j.platforms.includes(platform));
+
+  return {
+    kind: "publish_history", platform: platform || "all", query, days,
+    liveAvailable: !!live, platformStates, livePosts, agentPublishes,
+    matchedLive: livePosts.filter((p: any) => p.matched).length,
+    matchedAgent: agentPublishes.filter((j) => j.matched).length,
+    note: !live ? "채널 실제 게시물 조회가 20초 안에 끝나지 않아 에이전트 발행 기록만 실었어요." : "",
+  };
+}
+
 /** SNS 성과(조회수·좋아요)를 채널에서 새로 받아 온다. external. */
 async function runSnsAnalyticsSyncTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "sns_analytics_sync", ...(await callInternalJson(ctx, "/api/sns/analytics/sync", {
@@ -7267,6 +7332,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
 
   // ── P4 배포 성과 · 운영(마스터 계정) ───────────────────────────────────
   sns_analytics_sync: { agentId: "reach", agentIds: ["maki", "core"], kind: "external", run: runSnsAnalyticsSyncTool },
+  publish_history: { agentId: "reach", agentIds: ["core", "maki"], kind: "read", synthesize: true, run: runPublishHistoryTool },
   tiktok_publish_status: { agentId: "reach", agentIds: ["core"], kind: "read", run: runTiktokPublishStatusTool },
   admin_users_list: { agentId: "core", kind: "read", synthesize: true, run: runAdminUsersListTool },
   admin_user_update: { agentId: "core", kind: "external", gate: true, run: runAdminUserUpdateTool, approvalKey: (i) => String(i?.id || i?.userId || "").trim().toLowerCase() },
