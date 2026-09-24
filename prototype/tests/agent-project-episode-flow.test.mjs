@@ -60,3 +60,9 @@ test("프로젝트 요약 API 는 project_list 도구를 되부르지 않고(재
   assert.match(shared, /withDeadline\(callInternalJson\(ctx, "\/api\/brand\/list\?full=1"\), SUMMARY_DEADLINE_MS, null as any\)/);
   assert.match(orch, /const timer = setTimeout\(\(\) => ac\.abort\(\), 8000\);/, "브리프 로더는 8초 기한");
 });
+
+test("조회 결과를 본 코어의 위임(CALL)도 같은 턴에 실행된다 — '리치에게 시키기' 배지만 남고 멈추지 않는다", async () => {
+  const orch = await read("prototype/functions/api/agent/_orchestrator.ts");
+  assert.match(orch, /if \(agentId === "core" && !soloAgent && depth < 2 && res2\.calls\.length > 0\) \{\s*const calls = res2\.calls\.slice\(0, 3\);\s*coreDelegateCount \+= calls\.length;/);
+  assert.match(orch, /try \{ await runWorker\(c\.agentId, c\.instruction\); \} catch \{ \/\* 개별 직원 실패 시 다음으로 \*\/ \}/);
+});

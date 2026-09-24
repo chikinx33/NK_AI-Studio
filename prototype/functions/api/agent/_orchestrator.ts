@@ -1974,6 +1974,15 @@ export async function runGroupChat(
             if (depth < 3 && res2.runs.length > 0) {
               await runTools(res2.runs, agentId, depth + 1, seenRuns);
             }
+            // 조회 결과를 본 코어가 직원에게 위임하면(예: 채널 확인 뒤 "리치, 발행해줘") 그 위임도 같은 턴에 실행한다.
+            // 전엔 합성 응답의 CALL 이 버려져 "리치에게 시키기" 배지만 남고 아무도 움직이지 않았다(2026-09-24).
+            if (agentId === "core" && !soloAgent && depth < 2 && res2.calls.length > 0) {
+              const calls = res2.calls.slice(0, 3);
+              coreDelegateCount += calls.length;
+              for (const c of calls) {
+                try { await runWorker(c.agentId, c.instruction); } catch { /* 개별 직원 실패 시 다음으로 */ }
+              }
+            }
             }
           } else {
             await emit({
