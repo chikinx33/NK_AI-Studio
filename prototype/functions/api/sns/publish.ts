@@ -791,6 +791,32 @@ async function postFacebookComment(opts: {
 const THREADS_API = "https://graph.threads.net/v1.0";
 
 /**
+ * Threads API 응답을 안전하게 읽는다. 메타는 일시 오류(5xx) 때 본문을 아예 비워서 보내는 일이 있어
+ * res.json() 을 바로 부르면 "Unexpected end of JSON input" 으로 터지고 원인(HTTP 상태)이 사라졌다(2026-09-24).
+ * 비었거나 JSON 이 아니면 { __empty: true } 와 상태·원문 앞부분을 돌려주고, 호출자가 재시도/오류 문구를 정한다.
+ */
+async function readThreadsJson(res: Response, what: string): Promise<any> {
+  const text = await res.text();
+  try {
+    const parsed = text ? JSON.parse(text) : null;
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch { /* 아래에서 처리 */ }
+  console.log(`[threads] ${what}: HTTP ${res.status} 응답 본문이 JSON 이 아님:`, text.slice(0, 300));
+  return { __empty: true, __status: res.status, __raw: text.slice(0, 200) };
+}
+/** 메타 일시 오류(빈 응답·5xx·"please retry") 인지 — 재시도 대상 */
+function isThreadsTransient(data: any, status: number): boolean {
+  if (data?.__empty) return true;
+  if (status >= 500) return true;
+  const msg = String(data?.error?.message || "");
+  return /unexpected error|please retry|temporarily|try again later|rate ?limit|reduce the amount|internal/i.test(msg);
+}
+function threadsErrorText(data: any, status: number): string {
+  if (data?.__empty) return `메타 서버가 HTTP ${status} 로 빈 응답을 보냈어요(일시 오류일 수 있어요 — 잠시 후 다시 발행해 주세요)${data.__raw ? `: ${data.__raw}` : ""}`;
+  return String(data?.error?.message || status);
+}
+
+/**
  * Threads 미디어 컨테이너 생성. media_type 에 따라 image_url/video_url/children 을 받는다.
  * 캐러셀 자식은 is_carousel_item=true 로 만든다. creation id 를 반환.
  */
@@ -801,14 +827,21 @@ async function createThreadsContainer(opts: {
 }): Promise<string> {
   const { threadsUserId, accessToken, params } = opts;
   const body = new URLSearchParams({ ...params, access_token: accessToken });
-  const res = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  const data = (await res.json()) as { id?: string; error?: { message?: string } };
-  if (!data.id) throw new Error(`Threads 컨테이너 생성 실패: ${data.error?.message || res.status}`);
-  return data.id;
+  // 영상 컨테이너는 메타가 일시 오류(빈 응답/5xx)를 자주 낸다 → 3회까지 재시도. 영구 오류는 즉시 실패.
+  let lastText = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+    const res = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const data = await readThreadsJson(res, `컨테이너 생성(${params.media_type || "?"})`);
+    if (data.id) return String(data.id);
+    lastText = threadsErrorText(data, res.status);
+    if (!isThreadsTransient(data, res.status)) break;
+  }
+  throw new Error(`Threads 컨테이너 생성 실패: ${lastText}`);
 }
 
 /**
@@ -827,8 +860,12 @@ async function waitForThreadsContainer(
       `${THREADS_API}/${containerId}?` +
       new URLSearchParams({ fields: "status,error_message", access_token: accessToken }).toString()
     );
-    const d = (await r.json()) as { status?: string; error_message?: string };
+    const d = await readThreadsJson(r, "컨테이너 상태 조회");
     if (d.status === "FINISHED") return;
+    if (d.__empty && r.status < 500 && r.status !== 200) {
+      // 4xx 인데 본문이 없으면 계속 물어봐도 답이 없다 — 상태와 함께 바로 실패
+      throw new Error(`Threads 미디어 상태 조회 실패: ${threadsErrorText(d, r.status)}`);
+    }
     if (d.status === "ERROR" || d.status === "EXPIRED") {
       throw new Error(`Threads 미디어 처리 실패: ${d.error_message || d.status}`);
     }
@@ -864,9 +901,10 @@ async function publishThreadsContainer(opts: {
       lastMsg = e instanceof Error ? e.message : String(e);
       continue;
     }
-    const data = (await res.json()) as { id?: string; error?: { message?: string } };
-    if (data.id) return { postId: data.id };
-    lastMsg = data.error?.message || String(res.status);
+    const data = await readThreadsJson(res, "게시(threads_publish)");
+    if (data.id) return { postId: String(data.id) };
+    lastMsg = threadsErrorText(data, res.status);
+    if (data.__empty) continue; // 빈 응답 = 일시 오류로 보고 재시도(같은 creation_id 라 중복 게시 없음)
     // 이미 게시된 컨테이너 → 게시 성공으로 간주 (직전 시도가 서버측에서 성공한 경우)
     if (/already.*publish|has already been published|already exists/i.test(lastMsg)) {
       return { postId: "" };

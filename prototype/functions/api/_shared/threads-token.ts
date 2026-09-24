@@ -76,9 +76,12 @@ export async function refreshThreadsToken(accessToken: string): Promise<{ access
     `https://graph.threads.net/refresh_access_token?` +
     new URLSearchParams({ grant_type: "th_refresh_token", access_token: accessToken }).toString()
   );
-  const data = (await res.json()) as { access_token?: string; expires_in?: number; error?: { message?: string } };
+  // 빈 본문이면 res.json() 이 "Unexpected end of JSON input" 으로 터져 HTTP 상태가 사라진다 → 텍스트로 읽고 안전 파싱
+  const raw = await res.text();
+  let data: { access_token?: string; expires_in?: number; error?: { message?: string } } = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = {}; }
   if (!data.access_token) {
-    throw new Error(`Threads 토큰 갱신 실패: ${data.error?.message || res.status}`);
+    throw new Error(`Threads 토큰 갱신 실패: ${data.error?.message || `HTTP ${res.status} ${raw.slice(0, 120)}`.trim()}`);
   }
   return {
     accessToken: data.access_token,
