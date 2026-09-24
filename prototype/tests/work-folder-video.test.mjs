@@ -28,3 +28,12 @@ test("업무 폴더: 영상 업무는 비디오 아이콘·플레이어로 열�
   assert.match(work, /: isVideoWork\(work\) \? <VideoWorkIcon className=/);
   assert.match(work, /const mediaKind = imageWorkObject\(work\) \? "image" : \(isVideoWork\(work\) \|\| work\.work_type === "infographic"\) \? "video" : "doc";/);
 });
+
+test("업무 폴더: 수정(image_edit)·업스케일·컷 스틸 업무도 이미지 썸네일로 보인다", async () => {
+  const work = await read("ai-company-app/src/components/WorkExplorer.tsx");
+  assert.match(work, /const IMAGE_WORK_TYPES = new Set\(\["image", "image_edit", "upscale", "scene_still", "set_master", "set_angle", "set_sheet"\]\);/);
+  const fn = work.slice(work.indexOf("function imageWorkObject("), work.indexOf("\n}\n", work.indexOf("function imageWorkObject(")));
+  assert.match(fn, /IMAGE_WORK_TYPES\.has\(String\(work\.work_type \|\| ""\)\)/);
+  assert.match(fn, /\/\\\.\(png\|jpe\?g\|webp\|gif\)\$\/i\.test\(objectName\)/, "종류를 몰라도 파일 확장자가 그림이면 썸네일");
+  assert.doesNotMatch(fn, /work\.work_type !== "image"\) return ""/);
+});

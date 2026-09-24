@@ -50,10 +50,16 @@ function mediaWorkObject(work: CompanyWorkItem): string {
   return direct || objectNameFromStorageUrl(String(work.metadata?.signedUrl || ""));
 }
 
-/** 검수 승인으로 등록된 이미지 업무의 저장 위치(없으면 빈 문자열). */
+/** 이미지를 만드는 도구들. work_type 이 "image" 하나가 아니다 — 수정(image_edit)·업스케일·컷 스틸·세트 시트도 결과는 그림이다. */
+const IMAGE_WORK_TYPES = new Set(["image", "image_edit", "upscale", "scene_still", "set_master", "set_angle", "set_sheet"]);
+
+/** 검수 승인으로 등록된 이미지 업무의 저장 위치(없으면 빈 문자열).
+ *  전엔 work_type === "image" 만 봐서, 원본을 수정해 만든 image_edit 업무가 문서 아이콘으로 보였다(2026-09-24). */
 function imageWorkObject(work: CompanyWorkItem): string {
-  if (work.work_type !== "image") return "";
-  return mediaWorkObject(work);
+  const objectName = mediaWorkObject(work);
+  if (!objectName) return "";
+  if (IMAGE_WORK_TYPES.has(String(work.work_type || ""))) return objectName;
+  return /\.(png|jpe?g|webp|gif)$/i.test(objectName) ? objectName : "";
 }
 
 /** 영상 업무인가(video·scene_video 잡, 또는 저장 파일이 동영상). 카드에 비디오 아이콘을 그리고 열면 플레이어로 본다. */
