@@ -1,7 +1,7 @@
 // prototype/functions/api/brand/list.ts
 // List brand IDs under: {basePrefix}/users/{userId}/ai-video/brands/{brandId}/
 // (프로젝트 목록 list.ts 를 브랜드 프리픽스에 맞춰 미러링. brand_list 도구용 신규 API.)
-import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
+import { buildAiVideoUserRoot, buildAiVideoBrandPrefix, resolveUserId } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -76,7 +76,26 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       .map((p) => p.replace(prefix, "").replace(/^\/+/, "").replace(/\/$/, ""))
       .filter(Boolean)
       .slice(0, 500);
-    return send({ ok: true, ids }, 200, origin);
+    // ?full=1 — 브랜드 정의(reference/data.json)까지 한 번에. 에이전트가 브랜드마다 get 을 부르지 않게(서브요청 절약).
+    const full = new URL(request.url).searchParams.get("full") === "1";
+    if (!full) return send({ ok: true, ids }, 200, origin);
+    const PICK = ["brandTitle", "title", "brandSummary", "coreMessage", "targetAudience", "brandVoice", "brandTone", "brandStory", "worldSetting",
+      "brandCharacter", "knowledgeCharacters", "brandKeywords", "bannedExpressions", "brandRules", "brandLogoObjectName", "seriesId", "updatedAt"];
+    const brands = await Promise.all(ids.slice(0, 30).map(async (id) => {
+      try {
+        const brandPrefix = buildAiVideoBrandPrefix(basePrefix, userId, id);
+        const objectName = `${brandPrefix}/reference/data.json`;
+        const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`,
+          { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) return { id, empty: true };
+        const raw = safeJson(await r.text());
+        const data = raw && typeof raw.brand === "object" && raw.brand ? raw.brand : raw;
+        const out: Record<string, unknown> = { id };
+        for (const key of PICK) if (data && data[key] !== undefined) out[key] = data[key];
+        return out;
+      } catch { return { id, empty: true }; }
+    }));
+    return send({ ok: true, ids, brands }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

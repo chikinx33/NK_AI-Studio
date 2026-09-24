@@ -26,7 +26,7 @@ test("브랜드 허브 정의가 턴마다 한 번 읽혀 모든 직원의 시�
   assert.match(orch, /export function toBrandBrief\(brandId: string, raw: any\): BrandBrief \| null/);
   assert.match(orch, /knowledgeCharacters/);
   assert.match(orch, /export async function loadBrandBriefs\(ctx: \{ request: Request; authHeader: string \}\)/);
-  assert.match(orch, /\.slice\(0, 3\)/, "브랜드 최대 3개(서브요청 한도)");
+  assert.match(orch, /brands\.slice\(0, 8\)/, "브랜드 최대 8개(full 목록 한 번이라 서브요청 부담 없음)");
   assert.match(orch, /export function brandsBlock\(brands: BrandBrief\[\] \| undefined\): string/);
   assert.match(orch, /등록된 브랜드 정의가 없습니다\. 온브랜드 카피·기획이 필요하면 지어내지 말고/);
   assert.match(orch, /카피·캡션·해시태그·기획·이미지\/영상 프롬프트는 반드시 이 정의를 따른다/);

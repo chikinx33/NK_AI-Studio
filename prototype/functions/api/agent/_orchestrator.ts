@@ -231,6 +231,7 @@ export interface BrandBrief {
   keywords: string[];
   banned: string[];
   rules: string[];
+  aliases?: string[]; // 프로젝트 시리즈에서 쓰는 다른 이름(예: 허브 SHAPES ↔ 시리즈 '모양새 친구들')
 }
 
 const clip = (v: any, n: number) => String(v || "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -264,14 +265,26 @@ export function toBrandBrief(brandId: string, raw: any): BrandBrief | null {
 export async function loadBrandBriefs(ctx: { request: Request; authHeader: string }): Promise<BrandBrief[]> {
   try {
     const headers = { Authorization: ctx.authHeader };
-    const listRes = await fetch(new URL("/api/brand/list", ctx.request.url).toString(), { headers });
+    // 한 번에 정의까지(?full=1) — 브랜드마다 get 을 부르지 않는다. 시리즈 이름은 프로젝트 요약에서 별칭으로 붙인다.
+    const [listRes, projRes] = await Promise.all([
+      fetch(new URL("/api/brand/list?full=1", ctx.request.url).toString(), { headers }),
+      fetch(new URL("/api/agent/production-projects", ctx.request.url).toString(), { headers }).catch(() => null),
+    ]);
     const listData: any = await listRes.json().catch(() => ({}));
-    const ids: string[] = Array.isArray(listData?.ids) ? listData.ids.map((v: any) => String(v || "")).filter(Boolean).slice(0, 3) : [];
-    const briefs = await Promise.all(ids.map(async (id) => {
-      const res = await fetch(new URL(`/api/brand/get?brandId=${encodeURIComponent(id)}`, ctx.request.url).toString(), { headers });
-      const data: any = await res.json().catch(() => ({}));
-      return toBrandBrief(id, data?.data?.brand ?? data?.data ?? null);
-    }));
+    const projData: any = projRes ? await projRes.json().catch(() => ({})) : {};
+    const seriesTitleOf = new Map<string, string>();
+    for (const p of (Array.isArray(projData?.projects) ? projData.projects : [])) {
+      const sid = String(p?.seriesId || "").trim(); const st = String(p?.seriesTitle || "").trim();
+      if (sid && st && !/^projects\d+$/i.test(st) && !seriesTitleOf.has(sid)) seriesTitleOf.set(sid, st);
+    }
+    const brands: any[] = Array.isArray(listData?.brands) ? listData.brands : [];
+    const briefs = brands.slice(0, 8).map((b) => {
+      const brief = toBrandBrief(String(b?.id || ""), b);
+      if (!brief) return null;
+      const alias = seriesTitleOf.get(brief.brandId);
+      if (alias && alias !== brief.title) brief.aliases = [alias];
+      return brief;
+    });
     return briefs.filter((b): b is BrandBrief => !!b);
   } catch {
     return [];
@@ -296,7 +309,8 @@ export function brandsBlock(brands: BrandBrief[] | undefined): string {
     if (b.keywords.length) parts.push(`키워드: ${b.keywords.join(", ")}`);
     if (b.banned.length) parts.push(`금지 표현: ${b.banned.join(", ")}`);
     if (b.rules.length) parts.push(`규칙: ${b.rules.join(" / ")}`);
-    return `- ${b.title}(brandId: ${b.brandId}): ${parts.join("; ")}`;
+    const alias = b.aliases?.length ? ` · 프로젝트 시리즈명: ${b.aliases.join(", ")}` : "";
+    return `- ${b.title}(brandId: ${b.brandId}${alias}): ${parts.join("; ")}`;
   });
   return `\n\n## 🏷️ 브랜드·IP (브랜드 허브 · ${list.length}개) — 카피·캡션·해시태그·기획·이미지/영상 프롬프트는 반드시 이 정의를 따른다\n${lines.join("\n")}\n` +
     `★${list.length === 1 ? "브랜드가 하나뿐이므로 모든 콘텐츠는 이 브랜드의 것으로 본다." : "브랜드가 여럿이면 어느 브랜드의 일인지 먼저 확인한다."} ` +
@@ -473,7 +487,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     set_sheet: `[[RUN: set_sheet | {"projectId": "series-ep1", "locationName": "거실", "resolution": "2K"}]]  → 그 세트(장소)의 바이블 세트 시트(2×2: 정면·후면·부감·로우, 인물 없음) 1장을 만들어 payload.storyboardSheets 와 episodeLocations[].setSheet 에 저장. "거실 세트 시트 만들어"에 사용. 장소마다 잡 하나. ⚠️ 크레딧 사용이라 사람 승인 후 실행.`,
     location_merge: `[[RUN: location_merge | {"projectId": "series-ep1", "from": "장난감이 흩어진 소녀의 방 안", "into": "소녀의 방"}]]  → from 장소의 컷을 into 로 옮기고 플레이트·시트를 물려받아 세트를 하나로. "이 두 장소는 같은 방이야, 합쳐" 에 사용. 먼저 location_suggest 로 제안을 보여 주고 사람이 고른 뒤 실행. ⚠️ 쓰기라 사람 승인 후 반영.`,
     location_suggest: `[[RUN: location_suggest | {"projectId": "series-ep1"}]]  → 같은 세트로 보이는 장소 쌍(핵심 이름이 같거나 포함) 목록. 합치기 전에 보여 준다.`,
-    brand_list: `[[RUN: brand_list | {}]]  → 브랜드 허브에 등록된 내 브랜드 id 목록 조회. "브랜드 뭐뭐 있어?"에 사용.`,
+    brand_list: `[[RUN: brand_list | {}]]  → 브랜드(IP) 목록: 대시보드 BRAND 카드와 같은 눈높이 — 브랜드 허브 정의 ∪ 프로젝트 시리즈. 항목마다 title(사용자가 보는 이름)·brandId·허브 정의 유무·에피소드 수·최근 에피소드. "브랜드 뭐뭐 있어?"에 사용. 사용자에게는 title 로 말하고 brandId 는 괄호로만; 허브 정의가 없는 시리즈는 "정의 미등록" 이라고 알려 준다.`,
     brand_delete: `[[RUN: brand_delete | {"brandId": "my-brand"}]]  → 브랜드를 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     project_delete: `[[RUN: project_delete | {"projectId": "series-ep1"}]]  → 프로젝트(에피소드) 삭제. ⚠️ 되돌릴 수 없어 사람 승인 후 실행.`,
     project_share: `[[RUN: project_share | {"projectId": "series-ep1", "targetUserId": "공유대상 userId", "role": "viewer 또는 editor"}]]  → 프로젝트를 다른 사용자와 공유. ⚠️ 사람 승인 후 반영.`,
@@ -1345,9 +1359,16 @@ export function formatReadResult(toolName: string, out: any): string {
     return `🎧 사운드 자산 ${assets.length}개예요.\n${lines.join("\n")}${more}`;
   }
   if (toolName === "brand_list") {
-    const ids: string[] = Array.isArray(out?.ids) ? out.ids : [];
-    if (!ids.length) return "🏷️ 브랜드 허브에 등록된 브랜드가 아직 없어요.";
-    return `🏷️ 브랜드 ${ids.length}개예요.\n${ids.map((id, i) => `${i + 1}. ${id}`).join("\n")}`;
+    const items: any[] = Array.isArray(out?.items) ? out.items : [];
+    if (!items.length) return "🏷️ 등록된 브랜드(IP)가 아직 없어요.";
+    const line = (b: any, i: number) => {
+      const bits: string[] = [];
+      if (b.episodes) bits.push(`에피소드 ${b.episodes}${b.latestEpisode ? ` · 최근 ${b.latestEpisode}` : ""}`);
+      if (b.hubTitle && b.hubTitle !== b.title) bits.push(`허브명 ${b.hubTitle}`);
+      if (!b.hasHub) bits.push("허브 정의 미등록");
+      return `${i + 1}. ${b.title} (${b.brandId})${bits.length ? ` — ${bits.join(" · ")}` : ""}`;
+    };
+    return `🏷️ 브랜드(IP) ${items.length}개예요 — 대시보드 BRAND 카드와 같아요.\n${items.map(line).join("\n")}`;
   }
   if (toolName === "knowledge_stats") {
     if (!out?.configured) return "📚 지식 허브(RAG)가 아직 설정되지 않았어요.";

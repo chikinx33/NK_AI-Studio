@@ -6683,10 +6683,56 @@ async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
 // ────────────────────────────────────────────────────────────────────────────
 
 /** 브랜드 목록: /api/brand/list(신규 API). 내 브랜드 id 목록. read. */
+/**
+ * 브랜드 목록 = 브랜드 허브(정의 폴더) ∪ 프로젝트 시리즈(대시보드 BRAND 카드가 그리는 것).
+ * 전엔 허브 id 만 돌려줘 "projects1771052244218" 같은 폴더명이 나왔고, 허브 정의가 없는 시리즈(BeautyAI·판관 포청천)는 빠졌으며
+ * 허브 제목(SHAPES)과 시리즈 제목(모양새 친구들)이 달라 사용자가 보는 화면과 어긋났다(2026-09-24).
+ */
 async function runBrandListTool(_input: any, ctx: ToolContext): Promise<any> {
-  const data = await callInternalJson(ctx, "/api/brand/list");
-  const ids = Array.isArray(data?.ids) ? data.ids : [];
-  return { kind: "brand_list", count: ids.length, ids };
+  const [hub, summary] = await Promise.all([
+    callInternalJson(ctx, "/api/brand/list?full=1").catch(() => null),
+    callInternalJson(ctx, "/api/agent/production-projects").catch(() => null),
+  ]);
+  const ids: string[] = Array.isArray(hub?.ids) ? hub.ids.map((v: any) => String(v || "")) : [];
+  const hubBrands: any[] = Array.isArray(hub?.brands) ? hub.brands : ids.map((id) => ({ id, empty: true }));
+  const projects: any[] = Array.isArray(summary?.projects) ? summary.projects : [];
+  const autoId = (v: string) => /^projects\d+$/i.test(v) || /^\d+$/.test(v);
+  // 시리즈 묶음(프로젝트 payload.seriesId 기준)
+  const series = new Map<string, { seriesId: string; seriesTitle: string; episodes: number; latestEpisode: string; projectIds: string[] }>();
+  for (const p of projects) {
+    const sid = String(p?.seriesId || "").trim(); if (!sid) continue;
+    const row = series.get(sid) || { seriesId: sid, seriesTitle: "", episodes: 0, latestEpisode: "", projectIds: [] };
+    const st = String(p?.seriesTitle || "").trim();
+    if (st && !autoId(st) && !row.seriesTitle) row.seriesTitle = st;
+    row.episodes += 1; row.projectIds.push(String(p.id));
+    if (!row.latestEpisode) row.latestEpisode = String(p?.episodeTitle || p?.title || "");
+    series.set(sid, row);
+  }
+  const items: any[] = [];
+  const seen = new Set<string>();
+  for (const b of hubBrands) {
+    const id = String(b?.id || ""); if (!id) continue;
+    seen.add(id);
+    const sr = series.get(id);
+    const hubTitle = String(b?.brandTitle || b?.title || "").trim();
+    const title = (sr?.seriesTitle || hubTitle || id);
+    items.push({
+      brandId: id, title, hubTitle: hubTitle || "", seriesTitle: sr?.seriesTitle || "",
+      hasHub: !b?.empty, hasProjects: !!sr, episodes: sr?.episodes || 0, latestEpisode: sr?.latestEpisode || "",
+      summary: String(b?.brandSummary || "").trim().slice(0, 160),
+      note: !b?.empty && !sr ? "허브 정의만 있고 프로젝트 없음" : (b?.empty ? "허브 폴더는 있는데 정의(보이스·타깃)가 비어 있음" : ""),
+    });
+  }
+  for (const sr of series.values()) {
+    if (seen.has(sr.seriesId)) continue;
+    items.push({
+      brandId: sr.seriesId, title: sr.seriesTitle || sr.seriesId, hubTitle: "", seriesTitle: sr.seriesTitle,
+      hasHub: false, hasProjects: true, episodes: sr.episodes, latestEpisode: sr.latestEpisode, summary: "",
+      note: "프로젝트 시리즈만 있고 브랜드 허브 정의 없음(brand_save 로 등록 가능)",
+    });
+  }
+  items.sort((a, b) => (b.episodes - a.episodes) || String(a.title).localeCompare(String(b.title), "ko"));
+  return { kind: "brand_list", count: items.length, items, ids };
 }
 
 /** 브랜드 삭제: /api/brand/delete (confirm=yes). 비가역 → 승인 게이트. */
