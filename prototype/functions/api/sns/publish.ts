@@ -811,6 +811,34 @@ function isThreadsTransient(data: any, status: number): boolean {
   const msg = String(data?.error?.message || "");
   return /unexpected error|please retry|temporarily|try again later|rate ?limit|reduce the amount|internal/i.test(msg);
 }
+/**
+ * 컨테이너 생성이 빈 500 으로 끝났을 때(2026-09-24: 영상·캐러셀 모두 같은 증상) 원인을 가르는 진단.
+ * 메타는 토큰·계정·미디어 어느 쪽이 문제여도 같은 빈 500 을 내므로, 실패 순간에
+ *  (1) 이 토큰으로 계정 조회(/me)가 되는지 → 토큰·계정·API 경로 문제인지
+ *  (2) 우리가 준 미디어 주소를 외부에서 실제로 받을 수 있는지(HTTP 상태·형식·크기) → 미디어 문제인지
+ * 를 확인해 오류 문구에 붙인다. 스레드는 이미지 JPEG/PNG·영상 MP4/MOV 만 받는다.
+ */
+async function diagnoseThreadsFailure(accessToken: string, params: Record<string, string>): Promise<string> {
+  const parts: string[] = [];
+  try {
+    const meRes = await fetch(`${THREADS_API}/me?${new URLSearchParams({ fields: "id,username", access_token: accessToken }).toString()}`);
+    const me = await readThreadsJson(meRes, "진단 /me");
+    parts.push(me.id ? `계정 조회 OK(@${me.username || me.id})` : `계정 조회 실패 HTTP ${meRes.status}${me.error?.message ? `: ${me.error.message}` : (me.__empty ? " 빈 응답" : "")}`);
+  } catch (e) { parts.push(`계정 조회 예외: ${e instanceof Error ? e.message : String(e)}`); }
+  const mediaUrl = params.image_url || params.video_url || "";
+  if (mediaUrl) {
+    try {
+      let r = await fetch(mediaUrl, { method: "HEAD" });
+      if (!r.ok) r = await fetch(mediaUrl, { headers: { Range: "bytes=0-0" } });
+      const type = r.headers.get("content-type") || "?";
+      const len = Number(r.headers.get("content-length") || 0);
+      const size = len ? `${(len / 1024 / 1024).toFixed(1)}MB` : "크기 미상";
+      const okType = params.image_url ? /^image\/(jpeg|jpg|png)/i.test(type) : /^video\/(mp4|quicktime)/i.test(type);
+      parts.push(`미디어 ${r.ok ? "받기 OK" : `받기 실패 HTTP ${r.status}`} ${type} ${size}${r.ok && !okType ? " ← 스레드가 받지 않는 형식(이미지는 JPEG/PNG, 영상은 MP4/MOV)" : ""}`);
+    } catch (e) { parts.push(`미디어 확인 예외: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+  return parts.join(" · ");
+}
 function threadsErrorText(data: any, status: number): string {
   if (data?.__empty) return `메타 서버가 HTTP ${status} 로 빈 응답을 보냈어요(일시 오류일 수 있어요 — 잠시 후 다시 발행해 주세요)${data.__raw ? `: ${data.__raw}` : ""}`;
   return String(data?.error?.message || status);
@@ -829,6 +857,7 @@ async function createThreadsContainer(opts: {
   const body = new URLSearchParams({ ...params, access_token: accessToken });
   // 영상 컨테이너는 메타가 일시 오류(빈 응답/5xx)를 자주 낸다 → 3회까지 재시도. 영구 오류는 즉시 실패.
   let lastText = "";
+  let opaque = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
     const res = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
@@ -839,9 +868,12 @@ async function createThreadsContainer(opts: {
     const data = await readThreadsJson(res, `컨테이너 생성(${params.media_type || "?"})`);
     if (data.id) return String(data.id);
     lastText = threadsErrorText(data, res.status);
+    opaque = !!data.__empty;
     if (!isThreadsTransient(data, res.status)) break;
   }
-  throw new Error(`Threads 컨테이너 생성 실패: ${lastText}`);
+  // 빈 응답이면 메타가 원인을 안 알려준 것 — 토큰/계정/미디어 중 어디가 문제인지 우리가 직접 가른다.
+  const diag = opaque ? await diagnoseThreadsFailure(accessToken, params) : "";
+  throw new Error(`Threads 컨테이너 생성 실패: ${lastText}${diag ? ` [진단] ${diag}` : ""}`);
 }
 
 /**

@@ -25,7 +25,7 @@ test("컨테이너 생성은 빈 응답·5xx 를 3회까지 재시도하고, 오
   const fn = src.slice(src.indexOf("async function createThreadsContainer"), src.indexOf("async function waitForThreadsContainer"));
   assert.match(fn, /for \(let attempt = 0; attempt < 3; attempt\+\+\)/);
   assert.match(fn, /if \(!isThreadsTransient\(data, res\.status\)\) break;/);
-  assert.match(fn, /throw new Error\(`Threads 컨테이너 생성 실패: \$\{lastText\}`\);/);
+  assert.match(fn, /throw new Error\(`Threads 컨테이너 생성 실패: \$\{lastText\}\$\{diag \? ` \[진단\] \$\{diag\}` : ""\}`\);/);
   assert.match(src, /메타 서버가 HTTP \$\{status\} 로 빈 응답을 보냈어요/);
   assert.match(src, /if \(data\?\.__empty\) return true;\s*if \(status >= 500\) return true;/);
 });
@@ -45,4 +45,15 @@ test("토큰 갱신도 빈 본문을 안전하게 읽는다", async () => {
   assert.doesNotMatch(fn, /await res\.json\(\)/);
   assert.match(fn, /const raw = await res\.text\(\);/);
   assert.match(fn, /HTTP \$\{res\.status\}/);
+});
+
+test("빈 500 이면 실패 순간에 계정 조회(/me)·미디어 받기(HTTP·형식·크기)를 진단해 문구에 붙인다", async () => {
+  const src = await read("prototype/functions/api/sns/publish.ts");
+  assert.match(src, /async function diagnoseThreadsFailure\(accessToken: string, params: Record<string, string>\): Promise<string>/);
+  assert.match(src, /\$\{THREADS_API\}\/me\?\$\{new URLSearchParams\(\{ fields: "id,username", access_token: accessToken \}\)/);
+  assert.match(src, /await fetch\(mediaUrl, \{ method: "HEAD" \}\)/);
+  assert.match(src, /스레드가 받지 않는 형식\(이미지는 JPEG\/PNG, 영상은 MP4\/MOV\)/);
+  const fn = src.slice(src.indexOf("async function createThreadsContainer"), src.indexOf("async function waitForThreadsContainer"));
+  assert.match(fn, /const diag = opaque \? await diagnoseThreadsFailure\(accessToken, params\) : "";/);
+  assert.match(fn, /\[진단\] \$\{diag\}/);
 });
