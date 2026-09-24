@@ -19,7 +19,7 @@ test("서버: 서명 URL 만 남은 잡은 조회(job·jobs) 때 objectName 을 
   assert.match(fn, /const objectName = mediaObjectNameFromUrl\(url\);/);
   assert.match(fn, /COALESCE\(output->>'objectName', ''\) = ''/, "경쟁 갱신에도 한 번만 쓴다");
   assert.match(job, /if \(fresh\) await healMediaObjectNames\(sql, auth\.userId, \[fresh\]\);/);
-  assert.match(jobs, /await healMediaObjectNames\(sql, auth\.userId, items as any\[\]\)\.catch\(\(\) => 0\);/);
+  assert.match(jobs, /await runJobMaintenance\(pollCtx, sql, \{ items: items as any\[\] \}\);/, "목록 조회의 경로 복원은 정비 묶음에서");
 });
 
 test("클라이언트: 미리보기·보고는 objectName 이 없어도 GCS 서명 URL 에서 경로를 되찾아 프록시로 연다", async () => {

@@ -67,9 +67,16 @@ test("완료 확인(reconcileVideoJobs)은 폴링 요청마다 돌고, 완료·�
   assert.match(reconcile, /fileJobAsWorkItem\(sql, ctx\.userId, job, output\)/, "승인 후 실행이면 업무로 등록");
   assert.match(reconcile, /🎬 영상 생성 완료/);
   assert.match(shared, /export const VIDEO_PENDING_MAX_MS = 30 \* 60 \* 1000;/);
+  // 폴링 엔드포인트는 정비 묶음(runJobMaintenance)만 부른다 — 사용자별 20초 간격(Neon 부하).
   for (const [name, src] of [["jobs.ts", jobs], ["job.ts", job], ["messages.ts", messages]]) {
-    assert.match(src, /await reconcileVideoJobs\(pollCtx, sql\);/, `${name} 폴링마다 영상 완료를 확인한다`);
+    assert.match(src, /await runJobMaintenance\(pollCtx, sql/, `${name} 폴링은 정비 묶음으로`);
+    assert.doesNotMatch(src, /await reconcileVideoJobs\(pollCtx, sql\);/, `${name} 에서 정비를 따로 부르지 않는다`);
   }
+  const maint = fnBody(shared, "export async function runJobMaintenance(");
+  assert.match(maint, /if \(!opts\.force && Date\.now\(\) - last < MAINTENANCE_INTERVAL_MS\) return false;/);
+  assert.match(maint, /await reconcileVideoJobs\(ctx, sql\)\.catch/);
+  assert.match(maint, /await reconcileTikTokJobs\(ctx, sql\)\.catch/);
+  assert.match(shared, /const MAINTENANCE_INTERVAL_MS = 20_000;/);
 });
 
 test("갱신이 끊긴 working 잡은 자동 종료되고, 외부 대기 잡은 건드리지 않는다", async () => {
@@ -82,7 +89,9 @@ test("갱신이 끊긴 working 잡은 자동 종료되고, 외부 대기 잡은 
   assert.match(expire, /COALESCE\(output->>'subscriptionPending', ''\) <> 'true'/);
   assert.match(expire, /COALESCE\(output->>'videoPending', ''\) <> 'true'/);
   assert.match(expire, /백그라운드 실행 30초 제한/);
-  assert.match(jobs, /await expireStaleWorkingAgentJobs\(sql, auth\.userId\);/);
+  const maint2 = fnBody(shared, "export async function runJobMaintenance(");
+  assert.match(maint2, /await expireStaleWorkingAgentJobs\(sql, ctx\.userId\)\.catch/);
+  assert.match(jobs, /runJobMaintenance\(pollCtx, sql, \{ items: items as any\[\] \}\)/);
 });
 
 test("픽셀은 길이·모델을 알고 먼저 보고한다: 도구 설명서와 jobs_status 가 모델·길이를 드러낸다", async () => {

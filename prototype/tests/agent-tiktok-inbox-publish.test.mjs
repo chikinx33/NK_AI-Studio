@@ -114,7 +114,7 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.match(fn, /Date\.now\(\) - started > TIKTOK_PENDING_MAX_MS/);
   assert.match(fn, /tiktok_reconnect_required/);
   for (const [name, src] of [["jobs.ts", jobs], ["job.ts", job], ["messages.ts", messages]]) {
-    assert.match(src, /await reconcileTikTokJobs\(pollCtx, sql\)\.catch\(\(\) => \{\}\);/, `${name} 폴링마다 추적`);
+    assert.match(src, /await runJobMaintenance\(pollCtx, sql/, `${name} 폴링은 정비 묶음(20초 간격)으로 추적`);
   }
   const tool = fnBody(shared, "async function runTiktokPublishStatusTool(");
   assert.match(tool, /\/api\/sns\/tiktok\/publish-status\?publishId=\$\{encodeURIComponent\(publishId\)\}/);
@@ -201,6 +201,7 @@ test("직원이 도구 결과를 흉내 내어 지어낸 블록은 발언에서 
   assert.ok(out.includes("도구를 실제로 부르지 않은 채 결과를 흉내 낸 부분을 지웠어요"));
   assert.equal(stripFabricatedToolResults("정상 발언이에요."), "정상 발언이에요.");
   assert.match(orch, /게시 결과·링크·계정명·오류 문구는 절대 지어내지 않는다/);
-  assert.match(orch, /페이스북은 사진 여러 장은 한 게시물로 묶이지만 영상은 사진과 한 게시물에 못 넣는다/);
+  assert.match(orch, /facts: \[[\s\S]*페이스북: 사진 여러 장은 한 게시물로 묶인다\. 영상은 사진과 같은 게시물에 넣을 수 없다/, "채널 규격은 페르소나가 아니라 회사 공통 사실");
+  assert.match(orch, /\$\{DEFAULT_COMPANY\.goals\}\n\n\$\{DEFAULT_COMPANY\.facts\}/);
   assert.match(orch, /채널을 열거하지 말고 반드시 platforms:\["all"\] 로/);
 });

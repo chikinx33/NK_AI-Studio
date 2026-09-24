@@ -14,7 +14,9 @@ test("오래된 queued 일반 작업은 실패로 닫혀 아바타를 영구 점
   assert.match(shared, /export async function expireStaleQueuedAgentJobs/);
   assert.match(shared, /status = 'queued'[\s\S]*interval '5 minutes'/);
   assert.match(shared, /status = 'error'/);
-  assert.match(jobs, /await expireStaleQueuedAgentJobs\(sql, auth\.userId\)/);
+  // 만료 정비는 폴링마다가 아니라 runJobMaintenance(사용자별 20초) 안에서 돈다.
+  assert.match(shared, /await expireStaleQueuedAgentJobs\(sql, ctx\.userId\)\.catch/);
+  assert.match(jobs, /await runJobMaintenance\(pollCtx, sql/);
   assert.match(api, /const isActiveAgentJob = \(job: any\): boolean/);
   assert.match(api, /Date\.now\(\) - createdAt < 5 \* 60 \* 1000/);
   assert.match(api, /\.filter\(isActiveAgentJob\)/);

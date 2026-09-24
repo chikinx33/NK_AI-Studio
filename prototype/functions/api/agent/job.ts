@@ -12,9 +12,7 @@ import {
   createJob,
   getJob,
   processJob,
-  reconcileSubscriptionJobs,
-  reconcileVideoJobs,
-  reconcileTikTokJobs,
+  runJobMaintenance,
   healMediaObjectNames,
 } from "./_shared";
 
@@ -80,9 +78,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const job = await getJob(sql, id, auth.userId);
     if (!job) return send({ error: "not_found" }, 404, origin); // 타인 잡도 404로 숨김
     const pollCtx = { request, env, userId: auth.userId, authHeader: request.headers.get('Authorization') || '' };
-    await reconcileSubscriptionJobs(pollCtx, sql);
-    await reconcileVideoJobs(pollCtx, sql);
-    await reconcileTikTokJobs(pollCtx, sql).catch(() => {});
+    await runJobMaintenance(pollCtx, sql);
     const fresh = await getJob(sql, id, auth.userId);
     // 서명 URL 만 남은 옛 영상 잡은 여기서 경로를 되찾아 준다(미리보기가 프록시로 열리게).
     if (fresh) await healMediaObjectNames(sql, auth.userId, [fresh]);

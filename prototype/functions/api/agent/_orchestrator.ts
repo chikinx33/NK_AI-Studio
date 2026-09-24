@@ -87,6 +87,16 @@ export const DEFAULT_COMPANY = {
     "- 브랜드 톤: 친근하고 캐주얼. 쉽고 따뜻하게.",
     "- 브랜드 안전: 폭력·선정성·혐오·차별·과장광고 금지(전연령 기준).",
   ].join("\n"),
+  // 회사 공통 사실(모든 직원이 같은 사실을 안다). 페르소나(말투·역할)가 아니라 지식이므로 여기 둔다.
+  facts: [
+    "# 회사 공통 사실 — SNS 채널 규격(발행 도구·API 기준, 추측 금지)",
+    "- 페이스북: 사진 여러 장은 한 게시물로 묶인다. 영상은 사진과 같은 게시물에 넣을 수 없다 → 영상은 별도 게시가 정상이다.",
+    "- 인스타그램: 이미지·영상·캐러셀(이미지+영상 섞어 2~10장). 릴스는 영상 1개.",
+    "- 스레드: 글만 / 미디어 1개 / 캐러셀. X: 글만 / 미디어 1개.",
+    "- 유튜브(쇼츠)·틱톡: 영상만. 틱톡은 초안함(inbox) 전송이라 사용자가 앱 '받은 알림함' 알림에서 직접 게시한다.",
+    "- 네이버 블로그·카카오·네이버 포스트·BAND: 직접 올리기 채널(자동 발행 없음).",
+    "- 게시 결과·링크·계정명·오류 문구는 도구(publish_history·publish_proof)로 확인한 것만 말한다.",
+  ].join("\n"),
   goals: [
     "# 공동 목표",
     "- 콘텐츠로 실제 산출물을 끝까지 완성하고 수익화를 검증한다.",
@@ -181,7 +191,6 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "안을 여러 개 낼 때는 방향이 달라야 하고, 각 안에 '왜 이 브랜드·타깃에 맞는지' 한 줄을 붙인다.",
     "해시태그는 브랜드 키워드+캐릭터 이름+주제어 5~8개. 발행은 항상 사람 승인 뒤. 틱톡은 초안함 전송이라 '앱에서 게시'까지 안내한다.",
     "★게시 결과·링크·계정명·오류 문구는 절대 지어내지 않는다. 확인이 필요하면 publish_history·publish_proof 를 [[RUN]] 으로 실제로 부르고, 결과가 오기 전엔 '확인 중' 이라고만 말한다. 도구 결과를 흉내 내어 '[… 결과] {…}' 처럼 쓰는 것은 금지.",
-    "채널 규격 사실: 페이스북은 사진 여러 장은 한 게시물로 묶이지만 영상은 사진과 한 게시물에 못 넣는다(별도 게시가 정상). X 는 미디어 한 개. 유튜브·틱톡은 영상만. 이걸 '가능하다'고 말하지 않는다.",
   ].join("\n"),
   sync: [
     "나는 비서·PM 싱크다. 일정·알람·메일·업무 폴더·회사 파일·진행 상황을 챙긴다.",
@@ -682,7 +691,9 @@ ${teamToolMap}
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}${brandsBlock(opts.companyBrands)}${pendingBlock}
+${DEFAULT_COMPANY.goals}
+
+${DEFAULT_COMPANY.facts}${companyKnowBlock}${skillsBlock}${projectsBlock}${brandsBlock(opts.companyBrands)}${pendingBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.

@@ -28,7 +28,7 @@ function parseDbHost(rawUrl: string): string {
 
 async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promise<any[]> {
   const host = parseDbHost(dbUrl);
-  const res = await fetch(`https://${host}/sql`, {
+  const call = () => fetch(`https://${host}/sql`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -36,6 +36,12 @@ async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promis
     },
     body: JSON.stringify({ query: sql, params }),
   });
+  let res = await call();
+  // 520/502/503/504 는 Neon 프록시·컴퓨트 깨어나기 같은 일시 오류가 대부분이다. 한 번만 짧게 쉬고 재시도(2026-09-24 화면에 "Neon SQL 오류 520").
+  if (res.status >= 500 && res.status !== 500) {
+    await new Promise((r) => setTimeout(r, 350));
+    res = await call();
+  }
   const body = await res.text();
   if (!res.ok) {
     let msg = `Neon SQL 오류 ${res.status}`;

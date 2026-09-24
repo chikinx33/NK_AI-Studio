@@ -7810,6 +7810,28 @@ export async function reconcileVideoJobs(ctx: ToolContext, sql: SqlFn) {
   }
 }
 
+/**
+ * 폴링마다 도는 정비 작업(만료·완료 확인·경로 복원)을 한 곳에서, 사용자별 20초에 한 번만 돈다.
+ * 오늘(2026-09-24) 영상·틱톡 추적, 경로 복원, working 만료를 하나씩 붙이면서 4초 폴링 한 번에 Neon 쿼리가 2회 → 6~8회로 늘었다.
+ * Neon 은 전송량·컴퓨트 한도가 있어(9/16 5GB 초과 사고) 이런 상시 쿼리가 곧 "Neon SQL 오류 520/500" 으로 돌아온다.
+ * 결과 반영 지연은 최대 20초 — 사람이 체감할 수준이 아니다. 이 함수 밖에서 정비 작업을 따로 부르지 말 것.
+ */
+const MAINTENANCE_INTERVAL_MS = 20_000;
+const maintenanceLastRun = new Map<string, number>();
+export async function runJobMaintenance(ctx: ToolContext, sql: SqlFn, opts: { items?: any[]; force?: boolean } = {}): Promise<boolean> {
+  const last = maintenanceLastRun.get(ctx.userId) || 0;
+  if (!opts.force && Date.now() - last < MAINTENANCE_INTERVAL_MS) return false;
+  maintenanceLastRun.set(ctx.userId, Date.now());
+  if (maintenanceLastRun.size > 500) maintenanceLastRun.clear();
+  await expireStaleQueuedAgentJobs(sql, ctx.userId).catch(() => 0);
+  await expireStaleWorkingAgentJobs(sql, ctx.userId).catch(() => 0);
+  await reconcileSubscriptionJobs(ctx, sql).catch(() => {});
+  await reconcileVideoJobs(ctx, sql).catch(() => {});
+  await reconcileTikTokJobs(ctx, sql).catch(() => {});
+  if (opts.items?.length) await healMediaObjectNames(sql, ctx.userId, opts.items).catch(() => 0);
+  return true;
+}
+
 /** TikTok 초안함 전송이 이보다 오래 "processing" 이면 추적을 멈추고 앱에서 직접 확인하라고 알린다. */
 export const TIKTOK_PENDING_MAX_MS = 30 * 60 * 1000;
 
