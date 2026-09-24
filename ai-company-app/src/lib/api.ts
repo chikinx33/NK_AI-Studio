@@ -371,7 +371,8 @@ export async function downloadCompanyFile(entry: CompanyFileEntry): Promise<Blob
 }
 
 export function getCompanyFilePreviewUrl(entry: CompanyFileEntry): string {
-  return `/api/agent/company-files?path=${encodeURIComponent(entry.path)}&preview=1`;
+  // <img src> 로 열리므로 토큰을 쿼리에 싣는다(전역 fetch 패치는 태그 로딩에 적용되지 않는다).
+  return withMediaToken(`/api/agent/company-files?path=${encodeURIComponent(entry.path)}&preview=1`);
 }
 
 export async function readCompanyTextFile(entry: CompanyFileEntry): Promise<{ content: string; contentType: string }> {
@@ -2105,7 +2106,8 @@ export async function continueCompanySkillJob(jobId: string): Promise<{ job: Ski
 
 /** <img>/<video> 는 Authorization 헤더를 못 붙이므로 프록시 URL 에 토큰을 쿼리로 싣는다. */
 export function withMediaToken(url: string): string {
-  if (!url || !url.startsWith("/api/media/proxy")) return url;
+  // 미디어 프록시와 회사 파일 미리보기/다운로드(<img>/<video>/<iframe> src) 모두 헤더 대신 쿼리 토큰을 쓴다.
+  if (!url || !(url.startsWith("/api/media/proxy") || url.startsWith("/api/agent/company-files"))) return url;
   let token = "";
   try { token = String(readStorage("nk_auth_token") || "").replace(/^"|"$/g, ""); } catch { token = ""; }
   if (!token) return url;

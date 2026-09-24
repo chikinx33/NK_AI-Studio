@@ -66,10 +66,16 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (platform === "facebook") {
       const { pageToken } = await getFacebookPageToken(env, userId);
       const url = new URL(`https://graph.facebook.com/${ver}/${encodeURIComponent(postId)}`);
-      url.search = new URLSearchParams({ fields: "id,permalink_url,full_picture,message,created_time", access_token: pageToken }).toString();
+      // 영상 게시물은 full_picture 필드가 (#100) 오류를 내므로 attachments 의 미디어 이미지를 쓴다. 사진 게시물도 같은 필드로 나온다.
+      url.search = new URLSearchParams({ fields: "id,permalink_url,message,created_time,attachments{media,type,subattachments{media,type}}", access_token: pageToken }).toString();
       const res = await fetch(url.toString()); const data = await readJson(res);
       if (!res.ok) return send({ ok: false, error: text(data?.error?.message || `facebook_${res.status}`) }, 502);
-      return send({ ok: true, proof: { ...base, permalink: text(data.permalink_url), imageUrl: text(data.full_picture), mediaType: data.full_picture ? "image" : "", caption: text(data.message).slice(0, 300), publishedAt: text(data.created_time) } });
+      const att = Array.isArray(data?.attachments?.data) ? data.attachments.data[0] : null;
+      const sub = Array.isArray(att?.subattachments?.data) ? att.subattachments.data[0] : null;
+      const imageUrl = text(att?.media?.image?.src || sub?.media?.image?.src);
+      const attType = text(att?.type).toLowerCase();
+      const mediaType = /video/.test(attType) ? "video" : (/album|photo|share/.test(attType) || imageUrl ? "image" : "");
+      return send({ ok: true, proof: { ...base, permalink: text(data.permalink_url), imageUrl, mediaType, caption: text(data.message).slice(0, 300), publishedAt: text(data.created_time) } });
     }
     if (platform === "threads") {
       const { accessToken } = await getThreadsToken(env, userId);
