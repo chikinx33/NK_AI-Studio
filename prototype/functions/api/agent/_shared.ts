@@ -2623,6 +2623,116 @@ async function publishMediaObjectName(input: any, ctx: ToolContext): Promise<str
   return mediaObjectNameFromUrl(url);
 }
 
+/** 발행할 미디어(저장 경로·종류)와 그 출처. */
+interface PublishMedia { mediaGcsPath: string; mediaDirectUrl: string; mediaType: "image" | "video"; source: string }
+
+const VIDEO_EXT = /\.(mp4|mov|webm|m4v)(\?|$)/i;
+const VIDEO_JOB_TYPES = ["video", "scene_video"];
+
+/**
+ * 이 대화에서 가장 최근에 지목(📎)·생성된 산출물의 잡. 사용자 말풍선 카드와 직원 결과 카드(files[].jobId)를 최신순으로 훑는다.
+ * preferVideo 면 영상 잡을 먼저 찾고 없으면 아무 미디어나. 모델이 jobId 를 빠뜨려도 서버가 "방금 그 영상" 을 안다.
+ */
+async function latestConversationMediaJob(ctx: ToolContext, conversationId: string, preferVideo: boolean): Promise<{ jobId: string; objectName: string; isVideo: boolean; title: string } | null> {
+  const sql = getSql(ctx.env);
+  if (!sql || !conversationId) return null;
+  const rows = await sql(
+    `SELECT files FROM agent_messages WHERE user_id = $1 AND conversation_id = $2 AND files IS NOT NULL AND files::text <> '[]'
+      ORDER BY created_at DESC LIMIT 40`,
+    [ctx.userId, conversationId],
+  ).catch(() => [] as any[]);
+  const seen = new Set<string>();
+  const candidates: { jobId: string; objectName: string; isVideo: boolean; title: string }[] = [];
+  for (const row of rows as any[]) {
+    const files = typeof row.files === "string" ? (() => { try { return JSON.parse(row.files); } catch { return []; } })() : (row.files || []);
+    for (const f of Array.isArray(files) ? files : []) {
+      const jobId = String(f?.jobId || "").trim();
+      if (!jobId || seen.has(jobId) || f?.source !== "generated") continue;
+      seen.add(jobId);
+      const job: any = await getJob(sql, jobId, ctx.userId).catch(() => null);
+      const out: any = job?.output && typeof job.output === "object" ? job.output : null;
+      if (!out) continue;
+      const objectName = String(out.objectName || "").replace(/^gs:\/\/[^/]+\//, "") || mediaObjectNameFromUrl(String(out.videoUrl || out.signedUrl || out.audioUrl || ""));
+      if (!objectName) continue;
+      const isVideo = !!out.videoUrl || VIDEO_JOB_TYPES.includes(String(job.type || "")) || VIDEO_EXT.test(objectName);
+      const title = String(f?.name || out.promptEcho || job.type || "").slice(0, 80);
+      const hit = { jobId, objectName, isVideo, title };
+      if (!preferVideo || isVideo) return hit;
+      candidates.push(hit);
+      if (candidates.length >= 6) break;
+    }
+  }
+  return candidates[0] || null;
+}
+
+/** 사용자의 가장 최근 완료 영상 잡(대화에 카드가 없을 때의 마지막 폴백). */
+async function latestVideoJob(ctx: ToolContext): Promise<{ jobId: string; objectName: string; title: string } | null> {
+  const sql = getSql(ctx.env);
+  if (!sql) return null;
+  const rows = await sql(
+    `SELECT id, type, output FROM agent_jobs WHERE user_id = $1 AND type = ANY($2::text[]) AND status IN ('approved','review_pending')
+       AND (COALESCE(output->>'objectName','') <> '' OR COALESCE(output->>'videoUrl','') <> '') ORDER BY created_at DESC LIMIT 1`,
+    [ctx.userId, VIDEO_JOB_TYPES],
+  ).catch(() => [] as any[]);
+  const job: any = (rows as any[])[0];
+  if (!job) return null;
+  const out: any = job.output && typeof job.output === "object" ? job.output : {};
+  const objectName = String(out.objectName || "").replace(/^gs:\/\/[^/]+\//, "") || mediaObjectNameFromUrl(String(out.videoUrl || ""));
+  return objectName ? { jobId: String(job.id), objectName, title: String(out.promptEcho || "").slice(0, 80) } : null;
+}
+
+/**
+ * 발행 미디어 해석(순서): 입력의 objectName/mediaGcsPath·jobId·mediaUrl → 이 대화에서 마지막으로 지목·생성된 산출물
+ * → (영상이 필요하면) 사용자의 최근 완료 영상. 어디서 찾았는지 source 에 남겨 승인 카드·보고에 보인다.
+ */
+async function resolvePublishMedia(input: any, ctx: ToolContext, preferVideo: boolean): Promise<PublishMedia> {
+  const explicitType = String(input?.mediaType || "").toLowerCase();
+  const typeOf = (path: string, hintVideo: boolean): "image" | "video" =>
+    explicitType === "video" || hintVideo || VIDEO_EXT.test(path) ? "video" : (explicitType === "image" ? "image" : "image");
+  const explicit = await publishMediaObjectName(input, ctx);
+  if (explicit) {
+    return { mediaGcsPath: explicit, mediaDirectUrl: "", mediaType: typeOf(explicit, false), source: input?.jobId ? `jobId ${String(input.jobId).slice(0, 8)}` : "objectName" };
+  }
+  const directUrl = String(input?.mediaUrl || input?.videoUrl || input?.imageUrl || "").trim();
+  if (/^https?:\/\//i.test(directUrl)) return { mediaGcsPath: "", mediaDirectUrl: directUrl, mediaType: typeOf(directUrl, false), source: "mediaUrl" };
+  const conversationId = String(ctx.conversationId || input?._conversationId || "").trim();
+  const fromChat = await latestConversationMediaJob(ctx, conversationId, preferVideo);
+  if (fromChat && (!preferVideo || fromChat.isVideo)) {
+    return { mediaGcsPath: fromChat.objectName, mediaDirectUrl: "", mediaType: typeOf(fromChat.objectName, fromChat.isVideo), source: `이 대화의 최근 산출물(${fromChat.title || fromChat.jobId.slice(0, 8)})` };
+  }
+  if (preferVideo) {
+    const recent = await latestVideoJob(ctx);
+    if (recent) return { mediaGcsPath: recent.objectName, mediaDirectUrl: "", mediaType: "video", source: `최근 완료 영상(${recent.title || recent.jobId.slice(0, 8)})` };
+  }
+  if (fromChat) return { mediaGcsPath: fromChat.objectName, mediaDirectUrl: "", mediaType: typeOf(fromChat.objectName, fromChat.isVideo), source: `이 대화의 최근 산출물(${fromChat.title || fromChat.jobId.slice(0, 8)})` };
+  return { mediaGcsPath: "", mediaDirectUrl: "", mediaType: explicitType === "video" ? "video" : "image", source: "" };
+}
+
+/** 승인 전 확정: 미디어를 미리 찾아 잡 입력에 박는다. 못 찾으면 승인 카드를 만들지 않고 바로 알린다(승인 뒤에 실패하지 않게). */
+async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
+  const platformsRaw = Array.isArray(input?.platforms) ? input.platforms : (input?.platform ? [input.platform] : ["instagram"]);
+  const platforms: string[] = platformsRaw.map((p: any) => String(p || "").toLowerCase().trim()).filter(Boolean);
+  const caption = String(input?.caption || input?.prompt || "").trim();
+  if (!caption) throw new Error("caption 이 필요해요(게시글 본문).");
+  const wantsTikTok = platforms.includes("tiktok");
+  const needsMedia = platforms.some((p) => p !== "threads" && p !== "x");
+  const media = await resolvePublishMedia(input, ctx, wantsTikTok || String(input?.mediaType || "").toLowerCase() === "video");
+  if (needsMedia && !media.mediaGcsPath && !media.mediaDirectUrl) {
+    throw new Error(`${platforms.join(", ")} 에 올릴 이미지/영상을 찾지 못했어요 — 이 대화에 지목·생성된 산출물이 없어요. 보고의 최근 처리나 업무 폴더에서 항목을 지목(💬)한 뒤 다시 요청해 주세요.`);
+  }
+  if (wantsTikTok && media.mediaType !== "video") {
+    throw new Error(`TikTok 초안함에는 영상만 보낼 수 있는데 찾은 산출물이 이미지예요(${media.source}). 영상을 지목해 주세요.`);
+  }
+  return {
+    ...input,
+    platforms,
+    ...(media.mediaGcsPath ? { mediaGcsPath: media.mediaGcsPath } : {}),
+    ...(media.mediaDirectUrl ? { mediaDirectUrl: media.mediaDirectUrl } : {}),
+    mediaType: media.mediaType,
+    mediaSource: media.source,
+  };
+}
+
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요)
  *  ★TikTok 은 2026-08-31 부터 Direct Post 가 아니라 '초안함(inbox) 전송' 이다(브랜드 스튜디오 배포 버튼과 같은 /api/sns/tiktok/inbox).
  *    초안 전송은 video.upload 스코프만 쓰고 확인 모달 요건 대상이 아니므로, 예전의 "확인 화면이 없어 막는다" 차단은 근거가 사라져 제거했다.
@@ -2648,14 +2758,17 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   const published: any[] = [];
   const notices: string[] = [];
   let tiktok: any = null;
+  // prepare 가 이미 찾아 둔 mediaGcsPath 가 입력에 있으면 그대로, 없으면 여기서 같은 순서로 찾는다.
+  const media = await resolvePublishMedia(input, ctx, wantsTikTok || String(input?.mediaType || "").toLowerCase() === "video");
 
   if (wantsTikTok) {
     if (publishAtIso) {
       // TikTok 예약은 "안내 후 skip"(초안함에는 예약 개념이 없다).
       notices.push("TikTok 은 초안함 전송이라 예약이 없어요 — 이번엔 보내지 않았어요. 예약 없이 다시 요청하면 바로 초안함으로 보낼게요.");
     } else {
-      const mediaGcsPath = await publishMediaObjectName(input, ctx);
-      if (!mediaGcsPath) throw new Error("TikTok 초안함으로 보낼 영상의 저장 경로를 찾지 못했어요. 지목한 산출물의 jobId 또는 objectName 을 함께 주세요.");
+      const mediaGcsPath = media.mediaGcsPath;
+      if (!mediaGcsPath) throw new Error("TikTok 초안함으로 보낼 영상을 찾지 못했어요 — 이 대화에 지목·생성된 영상이 없어요. 보고의 최근 처리나 업무 폴더에서 영상을 지목(💬)한 뒤 다시 요청해 주세요.");
+      if (media.mediaType !== "video") throw new Error(`TikTok 초안함에는 영상만 보낼 수 있는데 찾은 산출물이 이미지예요(${media.source}).`);
       const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
       const description = tagLine && !caption.includes(tagLine) ? `${caption}\n${tagLine}` : caption;
       const res = await fetch(internalUrl(ctx.request, "/api/sns/tiktok/inbox"), {
@@ -2681,11 +2794,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   if (others.length) {
     // /api/sns/publish 는 채널 하나씩 받는다: { platform, caption, mediaType, mediaGcsPath | mediaDirectUrl, … }.
     // 전엔 platforms 배열 + mediaUrl 로 한 번에 보내 "필수 필드 누락: platform, caption" 으로 늘 실패했다(2026-09-24).
-    const mediaGcsPath = await publishMediaObjectName(input, ctx);
-    const directUrl = String(input?.mediaUrl || input?.videoUrl || input?.imageUrl || "").trim();
-    const mediaDirectUrl = !mediaGcsPath && /^https?:\/\//i.test(directUrl) ? directUrl : "";
-    const mediaType: "image" | "video" = String(input?.mediaType || "").toLowerCase() === "video"
-      || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(mediaGcsPath || mediaDirectUrl) ? "video" : "image";
+    const { mediaGcsPath, mediaDirectUrl, mediaType } = media;
     const tagLine = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
     const captionWithTags = tagLine && !caption.includes(tagLine) ? `${caption}\n\n${tagLine}` : caption;
     const failures: string[] = [];
@@ -6813,7 +6922,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   video: { agentId: "pixel", kind: "external", run: runVideoTool },
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
-  publish: { agentId: "reach", kind: "external", gate: true, run: runPublishTool },
+  publish: { agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   // 서식 문서 엔진(§7). 서식은 회사 파일 `_서식/<폴더>/` 의 데이터라 코드 수정 없이 늘어난다.

@@ -57,3 +57,22 @@ test("TikTok 외 채널은 /api/sns/publish 계약대로 채널 하나씩(platfo
   assert.match(fn, /if \(failures\.length && !published\.length && !tiktok\) throw new Error\(`발행 실패 — /);
   assert.match(fn, /notices\.push\(`일부 채널 실패: /);
 });
+
+test("발행 미디어는 모델이 jobId 를 빠뜨려도 서버가 대화의 최근 산출물에서 찾고, 승인 전에 미리 확정한다", async () => {
+  const shared = await read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /async function latestConversationMediaJob\(ctx: ToolContext, conversationId: string, preferVideo: boolean\)/);
+  assert.match(shared, /SELECT files FROM agent_messages WHERE user_id = \$1 AND conversation_id = \$2/);
+  assert.match(shared, /async function latestVideoJob\(ctx: ToolContext\)/);
+  const resolve = fnBody(shared, "async function resolvePublishMedia(");
+  assert.match(resolve, /const explicit = await publishMediaObjectName\(input, ctx\);/, "입력이 우선");
+  assert.match(resolve, /const fromChat = await latestConversationMediaJob\(ctx, conversationId, preferVideo\);/, "대화의 최근 산출물");
+  assert.match(resolve, /const recent = await latestVideoJob\(ctx\);/, "최근 완료 영상");
+  const prepare = fnBody(shared, "async function preparePublishInput(");
+  assert.match(prepare, /에 올릴 이미지\/영상을 찾지 못했어요 — 이 대화에 지목·생성된 산출물이 없어요/);
+  assert.match(prepare, /TikTok 초안함에는 영상만 보낼 수 있는데/);
+  assert.match(prepare, /mediaSource: media\.source,/);
+  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
+  const run = fnBody(shared, "async function runPublishTool(");
+  assert.match(run, /const media = await resolvePublishMedia\(input, ctx, wantsTikTok/);
+  assert.match(run, /const mediaGcsPath = media\.mediaGcsPath;/);
+});
