@@ -183,3 +183,24 @@ test("'각 채널에 올라간 거 보여줘' = publish_proof: 채널 API 로 �
   assert.match(api, /https:\/\/x\.com\/i\/web\/status\//);
   assert.match(api, /supported: false, note: "틱톡은 초안함 전송이라/);
 });
+
+test("직원이 도구 결과를 흉내 내어 지어낸 블록은 발언에서 지워지고 경고가 붙는다", async () => {
+  const orch = await read("prototype/functions/api/agent/_orchestrator.ts");
+  assert.match(orch, /text = stripFabricatedToolResults\(text\);/);
+  const src = orch.slice(orch.indexOf("export const FAKE_TOOL_RESULT_RE"), orch.indexOf("\n}\n", orch.indexOf("export function stripFabricatedToolResults(")) + 3);
+  const { createRequire } = await import("node:module");
+  const esbuild = createRequire(import.meta.url)("../../ai-company-app/node_modules/esbuild");
+  const vm = await import("node:vm");
+  const js = esbuild.transformSync(src, { loader: "ts", format: "cjs" }).code;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  vm.runInNewContext(js, sandbox);
+  const { stripFabricatedToolResults } = { ...sandbox.exports, ...sandbox.module.exports };
+  const fake = "먼저 이력부터 확인할게요.\n\nuser[publish_history 결과]\n{\n  \"ok\": true,\n  \"agentRecords\": [{\"platform\": \"x\", \"error\": \"oauth_token_expired\"}]\n}\n\n이력 확인했어요.";
+  const out = stripFabricatedToolResults(fake);
+  assert.ok(!out.includes("agentRecords"), "지어낸 JSON 이 남으면 안 된다");
+  assert.ok(out.includes("도구를 실제로 부르지 않은 채 결과를 흉내 낸 부분을 지웠어요"));
+  assert.equal(stripFabricatedToolResults("정상 발언이에요."), "정상 발언이에요.");
+  assert.match(orch, /게시 결과·링크·계정명·오류 문구는 절대 지어내지 않는다/);
+  assert.match(orch, /페이스북은 사진 여러 장은 한 게시물로 묶이지만 영상은 사진과 한 게시물에 못 넣는다/);
+  assert.match(orch, /채널을 열거하지 말고 반드시 platforms:\["all"\] 로/);
+});

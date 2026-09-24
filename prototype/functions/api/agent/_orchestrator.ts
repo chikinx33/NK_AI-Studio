@@ -180,6 +180,8 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "채널별로 다르게 쓴다: 인스타=감성 한 줄+해시태그 / 틱톡=첫 3초 훅·짧게 / 유튜브=제목·설명·검색어 / X·스레드=대화체 한두 줄 / 블로그=본문형. 같은 문장을 채널마다 복붙하지 않는다.",
     "안을 여러 개 낼 때는 방향이 달라야 하고, 각 안에 '왜 이 브랜드·타깃에 맞는지' 한 줄을 붙인다.",
     "해시태그는 브랜드 키워드+캐릭터 이름+주제어 5~8개. 발행은 항상 사람 승인 뒤. 틱톡은 초안함 전송이라 '앱에서 게시'까지 안내한다.",
+    "★게시 결과·링크·계정명·오류 문구는 절대 지어내지 않는다. 확인이 필요하면 publish_history·publish_proof 를 [[RUN]] 으로 실제로 부르고, 결과가 오기 전엔 '확인 중' 이라고만 말한다. 도구 결과를 흉내 내어 '[… 결과] {…}' 처럼 쓰는 것은 금지.",
+    "채널 규격 사실: 페이스북은 사진 여러 장은 한 게시물로 묶이지만 영상은 사진과 한 게시물에 못 넣는다(별도 게시가 정상). X 는 미디어 한 개. 유튜브·틱톡은 영상만. 이걸 '가능하다'고 말하지 않는다.",
   ].join("\n"),
   sync: [
     "나는 비서·PM 싱크다. 일정·알람·메일·업무 폴더·회사 파일·진행 상황을 챙긴다.",
@@ -433,7 +435,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     video: `[[RUN: video | {"prompt": "장면 설명(화면·분위기·카메라 움직임)", "imageUrl": "기존 이미지 URL(선택 · 있으면 그 그림을 첫 프레임으로 움직임)", "jobId": "그 이미지의 잡 ID(선택 · imageUrl 대신 · 사용자가 지목한 [참조 산출물 … jobId=…] 또는 방금 만든 그림은 \"last\")", "aspectRatio": "16:9", "durationSeconds": 6, "videoModel": "veo"}]]  → 영상 생성을 외부 모델에 제출(비동기). 제출 즉시 돌아오고 완료되면 채팅·검수 패널로 자동 보고된다(수분 소요). ★모델별 허용 길이(초): veo·veo-full·grok 4/6/8 · kling 5/10 · seedance·wan 4~15 · seedance-2.5 4~30 · vidu-q3 4/5/6/8/10. 길이는 모델 허용값으로 자동 스냅되므로, 사용자가 말한 길이(예: 15초)를 veo 로 보내면 8초로 잘린다 — 그 길이를 낼 수 있는 모델(15초→seedance, 20~30초→seedance-2.5)을 골라 durationSeconds 와 videoModel 을 반드시 함께 넣는다. ★실행 전에 "어떤 장면·분위기·카메라 움직임으로, 어떤 모델·몇 초·어느 이미지에서 만들겠다" 를 먼저 한 문단으로 보고한다. 길이·소스 이미지가 불분명하거나 원하는 길이를 한 모델이 못 내면 실행하지 말고 먼저 묻는다.`,
     scenario: `[[RUN: scenario | {"topic": "주제", "story": "원하는 이야기 흐름·사건·감정선(선택)", "purposeCategory": "장르(예: 키즈·영유아)", "purposeTags": ["세부 장르"], "target": "시청 타겟(예: 영유아·학습/놀이/감성 발달)", "needs": ["시청 목적"], "duration": 15, "aspectRatio": "16:9", "tones": ["톤"], "styles": ["스타일"], "voiceMode": "none|narration|dubbing", "characters": []}]]  → 시나리오 생성(씬분해·대사·카메라 지시). 프리프로덕션 폼의 모든 항목을 지정할 수 있다 — 장르=purposeCategory, 세부장르=purposeTags, 시청목적=needs, 음성모드=voiceMode. topic만 필수, 나머지는 사용자가 말한 것만 채우고 생략 가능.`,
     music: `[[RUN: music | {"topic": "음악 컨셉·분위기", "genre": "ambient", "duration": 60}]]  → BGM 생성 (ElevenLabs)`,
-    publish: `[[RUN: publish | {"platforms": ["all"], "exclude": ["tiktok(선택 · 빼고 싶은 채널)"], "caption": "공통 게시글(채널별 drafts 가 없을 때)", "hashtags": ["태그1", "태그2"], "jobId": "지목한 산출물의 잡 ID(선택 · mediaUrl 대신 · [참조 산출물 … jobId=…])", "mediaUrl": "이미지/영상URL(선택)", "drafts": {"instagram": {"caption": "감성 한 줄", "hashtags": ["…"], "firstComment": "첫 댓글(선택)"}, "youtube-shorts": {"title": "제목(100자)", "caption": "설명", "tags": ["…"], "categoryKey": "entertainment|education|gaming|music|etc", "privacyStatus": "public|unlisted"}, "threads": {"caption": "대화체", "replySetting": "public|followers|mentioned"}, "x": {"caption": "한두 줄", "replySetting": "public|followers|mentioned"}, "facebook": {"caption": "본문", "linkUrl": "링크(선택)"}, "tiktok": {"caption": "첫 3초 훅", "hashtags": ["…"]}}, "scheduledAt": "2026-07-10T19:00:00+09:00(선택·예약발행)"}]]  → 연결된 SNS 채널에 발행. ★platforms 는 "all"(기본) 로 두면 서버가 연결·사용 중·재연결 불필요 채널을 스스로 고르고, exclude 로 뺀다("틱톡은 이미 올렸으니 예외"). 지목한 산출물은 전부(이미지·영상 섞여도) 받아 채널 규격대로 서버가 자동 배분한다 — 인스타 캐러셀/단일, 페이스북 사진묶음+영상, 스레드 캐러셀/단일, X 단일, 유튜브·틱톡 영상만(없으면 건너뜀). 실행 전 계획(📋 발행 계획)이 승인 안내에 붙으니 사용자에게 그대로 보이고, 승인 뒤 채널별 결과·건너뜀·재연결 필요를 구분해 보고한다. ★브랜드 스튜디오 '초안' 페이지와 같은 칸을 채널마다 채운다 — 채널별 문체가 다르므로 drafts 를 채널마다 따로 쓰고(복붙 금지), 승인 요청 전에 채널별 초안 전문을 사용자에게 보여 준다. 유튜브·틱톡은 영상만, 스레드·X 는 글만으로도 가능. 채널 이름은 SNS 설정 카드의 이름(instagram·youtube-shorts·tiktok·threads·x·facebook)을 그대로. 연결이 만료된 채널은 결과에 "재연결 필요" 로 오니 그대로 안내한다(네이버 블로그·카카오·밴드는 직접 올리기 채널이라 발행 대상이 아님). scheduledAt(ISO8601)을 주면 그 시각 예약발행. ★TikTok 은 바로 게시가 아니라 틱톡 앱 '초안함' 전송이다 — 사용자가 앱에서 공개 범위를 고르고 직접 게시한다. 제안·보고할 때 반드시 "초안함으로 보낸다"고 말하고 "게시했다"고 하지 말 것. TikTok 에는 예약이 없다(예약을 주면 TikTok 만 건너뛰고 안내). 영상은 jobId 또는 objectName 으로 지목한다. ⚠️ 항상 사람 승인 필요`,
+    publish: `[[RUN: publish | {"platforms": ["all"], "exclude": ["tiktok(선택 · 빼고 싶은 채널)"], "caption": "공통 게시글(채널별 drafts 가 없을 때)", "hashtags": ["태그1", "태그2"], "jobId": "지목한 산출물의 잡 ID(선택 · mediaUrl 대신 · [참조 산출물 … jobId=…])", "mediaUrl": "이미지/영상URL(선택)", "drafts": {"instagram": {"caption": "감성 한 줄", "hashtags": ["…"], "firstComment": "첫 댓글(선택)"}, "youtube-shorts": {"title": "제목(100자)", "caption": "설명", "tags": ["…"], "categoryKey": "entertainment|education|gaming|music|etc", "privacyStatus": "public|unlisted"}, "threads": {"caption": "대화체", "replySetting": "public|followers|mentioned"}, "x": {"caption": "한두 줄", "replySetting": "public|followers|mentioned"}, "facebook": {"caption": "본문", "linkUrl": "링크(선택)"}, "tiktok": {"caption": "첫 3초 훅", "hashtags": ["…"]}}, "scheduledAt": "2026-07-10T19:00:00+09:00(선택·예약발행)"}]]  → 연결된 SNS 채널에 발행. ★사용자가 "연결된 채널 전부/모두" 라고 하면 채널을 열거하지 말고 반드시 platforms:["all"] 로(열거하면 빠진 채널은 영원히 안 올라간다). platforms 는 "all"(기본) 로 두면 서버가 연결·사용 중·재연결 불필요 채널을 스스로 고르고, exclude 로 뺀다("틱톡은 이미 올렸으니 예외"). 지목한 산출물은 전부(이미지·영상 섞여도) 받아 채널 규격대로 서버가 자동 배분한다 — 인스타 캐러셀/단일, 페이스북 사진묶음+영상, 스레드 캐러셀/단일, X 단일, 유튜브·틱톡 영상만(없으면 건너뜀). 실행 전 계획(📋 발행 계획)이 승인 안내에 붙으니 사용자에게 그대로 보이고, 승인 뒤 채널별 결과·건너뜀·재연결 필요를 구분해 보고한다. ★브랜드 스튜디오 '초안' 페이지와 같은 칸을 채널마다 채운다 — 채널별 문체가 다르므로 drafts 를 채널마다 따로 쓰고(복붙 금지), 승인 요청 전에 채널별 초안 전문을 사용자에게 보여 준다. 유튜브·틱톡은 영상만, 스레드·X 는 글만으로도 가능. 채널 이름은 SNS 설정 카드의 이름(instagram·youtube-shorts·tiktok·threads·x·facebook)을 그대로. 연결이 만료된 채널은 결과에 "재연결 필요" 로 오니 그대로 안내한다(네이버 블로그·카카오·밴드는 직접 올리기 채널이라 발행 대상이 아님). scheduledAt(ISO8601)을 주면 그 시각 예약발행. ★TikTok 은 바로 게시가 아니라 틱톡 앱 '초안함' 전송이다 — 사용자가 앱에서 공개 범위를 고르고 직접 게시한다. 제안·보고할 때 반드시 "초안함으로 보낸다"고 말하고 "게시했다"고 하지 말 것. TikTok 에는 예약이 없다(예약을 주면 TikTok 만 건너뛰고 안내). 영상은 jobId 또는 objectName 으로 지목한다. ⚠️ 항상 사람 승인 필요`,
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드). ★견적서·계약서 같은 서식 문서에는 쓰지 말 것 — form_list → form_fill.`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → 줄글 PDF 문서 생성(보고서·안내문 등, 브라우저 프린트로 저장). ★견적서·계약서·거래명세서·청구서·발주서 같은 서식 문서는 이 도구로 만들지 말 것 — 표·소계·부가세 계산이 없어 빈칸투성이 줄글이 된다. 그런 문서는 form_list → form_fill 을 쓴다.`,
     form_list: `[[RUN: form_list | {}]]  → 회사에 등록된 문서 서식 목록 조회. 사용자가 견적서·계약서 등 서식 작업을 요청하면 먼저 실행해 어떤 서식이 있는지 확인.`,
@@ -1061,8 +1063,23 @@ function extractMarkers(raw: string): SpeakResult {
     const action = parseUiAction(m[1]);
     if (action) uiActions.push(action);
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").replace(CANCEL_RE, "").replace(UI_ACTION_RE, "").trim();
+  let text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").replace(CANCEL_RE, "").replace(UI_ACTION_RE, "").trim();
+  text = stripFabricatedToolResults(text);
   return { text, calls, runs, knows, projects, skills, cancels, uiActions };
+}
+
+/**
+ * 모델이 도구를 부르지 않고 "[publish_history 결과] { … }" 처럼 결과를 흉내 내어 쓴 블록을 지운다.
+ * 2026-09-24 리치가 가짜 게시물 링크·계정명(@shapes_official)·오류 문구를 지어내 사용자가 실제 상황으로 오해했다.
+ * 서버가 주는 도구 결과는 이 형식으로 발언에 실리지 않으므로, 발언 안의 이런 블록은 전부 지어낸 것이다.
+ */
+export const FAKE_TOOL_RESULT_RE = /(?:^|\n)[ \t]*(?:user|assistant|system)?\s*\[\s*[a-z_]+\s*(?:결과|result)\s*\][ \t]*\n?\s*(\{[\s\S]*?\n\}|\[[\s\S]*?\n\])?/gi;
+export function stripFabricatedToolResults(text: string): string {
+  const src = String(text || "");
+  if (!FAKE_TOOL_RESULT_RE.test(src)) return src;
+  FAKE_TOOL_RESULT_RE.lastIndex = 0;
+  const cleaned = src.replace(FAKE_TOOL_RESULT_RE, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return `${cleaned}\n\n⚠️ (도구를 실제로 부르지 않은 채 결과를 흉내 낸 부분을 지웠어요 — 실제 확인이 필요하면 도구로 다시 조회할게요.)`.trim();
 }
 
 function hasCompanyFileMutationIntent(text: string): boolean {
