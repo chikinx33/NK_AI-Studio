@@ -114,6 +114,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     };
 
     const streamWork = (async () => {
+      // 긴 문서 정리(최대 3분)처럼 모델이 오래 생각하는 동안 이벤트가 없으면 중간 프록시·브라우저가 연결을 끊을 수 있다.
+      // 15초마다 무해한 ping 이벤트를 흘려 스트림을 살아 있게 한다(클라이언트는 모르는 type 을 무시한다).
+      const heartbeat = setInterval(() => { void sse({ type: "ping", t: Date.now() }); }, 15000);
       try {
         const deps = {
           sql, userId: auth.userId, conversationId, toolCtx,
@@ -137,6 +140,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
         if (errMsg) await sse({ type: "msg", msg: errMsg });
         await sse({ type: "done", conversationId, userMessageId: userMsg.id });
       } finally {
+        clearInterval(heartbeat);
         try { writer.close(); } catch {}
       }
       // 응답을 다 보낸 뒤, 밀린 회사 지식 색인(의미 벡터 등)을 '별도 요청'으로 채운다.

@@ -1725,6 +1725,11 @@ export interface OrchestratorDeps {
 // ② 턴 전체 예산을 보고 남은 시간이 부족하면 조회를 시작하지 않고 다음 턴으로 미룬다.
 const TOOL_RUN_TIMEOUT_MS = 30000; // 조회 도구 1건
 const SYNTH_TIMEOUT_MS = 30000;    // 조회 결과 재추론(자연스러운 답 만들기)
+// 회사 파일(문서) 읽기 뒤의 정리는 다르다 — 7천 자 PDF 를 구조화 MD 로 옮기면 한국어 5천 토큰 넘게 쓰는 데 2~3분 걸린다.
+// 30초·1500토큰이면 "결과 정리가 지연돼 원문으로 대신" 폴백이 뜨거나 MD 가 중간에 잘렸다(2026-09-25 Shapes 소개서).
+const DOC_SYNTH_TIMEOUT_MS = 180000;
+const DOC_SYNTH_MAX_TOKENS = 12000;
+const DOC_READ_TOOLS = new Set(["company_files_read"]);
 
 // 페이지 단위로 돌려주는 조회 도구: hasMore 면 서버가 다음 offset 을 이어 받아 합친 뒤 한 번에 합성한다.
 const PAGED_READ_TOOLS = new Set(["knowledge_audit"]);
@@ -1976,15 +1981,19 @@ export async function runGroupChat(
             const pagedNote = PAGED_READ_TOOLS.has(r.tool) && output?.hasMore
               ? `결과는 지식 ${output.knowledgeOnly ?? output.total}건 중 ${output.nextOffset}번까지만 담겼어요(hasMore=true). 이어서 보려면 같은 도구를 {"offset": ${output.nextOffset}}로 이번 답에 RUN 마커로 호출하고, 호출하지 않을 거면 몇 번까지 점검했는지 사실대로만 말하세요.\n`
               : "";
+            const isDocRead = DOC_READ_TOOLS.has(r.tool);
+            const docNote = isDocRead
+              ? `문서 작업 규칙: 사용자가 이 문서로 파일(MD 등)을 만들라고 했으면 요약하지 말고 원문 정보를 최대한 보존해 한 번에 끝까지 쓰세요 — 내용 전문을 company_files_write 의 content 에 그대로 넣어 [[RUN: company_files_write | {…}]] 로 호출하고(미리보기를 따로 길게 반복하지 않음), 결과에 hasMore=true 가 있으면 먼저 같은 도구를 {"offset": nextOffset} 로 이어서 읽어 전문을 확보한 뒤 씁니다. 출력이 길어도 중간에 끊거나 "이하 생략" 하지 마세요.\n`
+              : "";
             const synth =
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
-              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n${pagedNote}\n` +
+              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n${pagedNote}${docNote}\n` +
               `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, toolResultLimit)}`;
             let res2: SpeakResult | null = null;
             try {
               res2 = await withTimeout(
-                speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts }),
-                SYNTH_TIMEOUT_MS,
+                speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts, ...(isDocRead ? { maxTokens: DOC_SYNTH_MAX_TOKENS } : {}) }),
+                isDocRead ? DOC_SYNTH_TIMEOUT_MS : SYNTH_TIMEOUT_MS,
                 "결과 정리"
               );
             } catch {

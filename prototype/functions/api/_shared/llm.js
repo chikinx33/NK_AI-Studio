@@ -35,6 +35,10 @@ export async function callLLM(env, opts) {
     : callOpenAICompatible(env, provider, opts);
 }
 
+// 출력 토큰 기본 상한. 전엔 1500 이라 직원이 문서를 정리하거나 구조화 MD 를 쓰면 중간에 잘렸다(2026-09-25).
+// 상한은 "최대" 일 뿐 짧은 답의 비용·속도는 그대로다. 긴 문서 작업은 호출자가 더 크게 준다.
+const DEFAULT_MAX_TOKENS = 6000;
+
 // ── Anthropic Messages ─────────────────────────────────────────────────────
 async function callAnthropic(env, opts) {
   const auth = opts.auth;
@@ -47,7 +51,7 @@ async function callAnthropic(env, opts) {
     const trace = {};
     const res = await claudeFetch(env, auth, (sub) => ({
       model: opts.model,
-      max_tokens: opts.maxTokens || 1500,
+      max_tokens: opts.maxTokens || DEFAULT_MAX_TOKENS,
       system: buildClaudeSystem(sub, opts.system),
       messages,
     }), {}, trace);
@@ -96,7 +100,7 @@ async function callOpenAICompatible(env, provider, opts) {
   let tokenField = "max_tokens";
   for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES + 1; attempt++) {
     const body = { model: opts.model, messages };
-    body[tokenField] = opts.maxTokens || 1500;
+    body[tokenField] = opts.maxTokens || DEFAULT_MAX_TOKENS;
 
     const res = await fetch(target.url, {
       method: "POST",
