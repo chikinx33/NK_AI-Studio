@@ -825,6 +825,13 @@ async function diagnoseThreadsFailure(accessToken: string, params: Record<string
     const me = await readThreadsJson(meRes, "진단 /me");
     parts.push(me.id ? `계정 조회 OK(@${me.username || me.id})` : `계정 조회 실패 HTTP ${meRes.status}${me.error?.message ? `: ${me.error.message}` : (me.__empty ? " 빈 응답" : "")}`);
   } catch (e) { parts.push(`계정 조회 예외: ${e instanceof Error ? e.message : String(e)}`); }
+  // 미디어가 없는 요청(캐러셀 상위·텍스트)은 본문·설정이 원인 후보라 그 정보를 남긴다.
+  const shape: string[] = [];
+  if (params.media_type) shape.push(`종류 ${params.media_type}`);
+  if (typeof params.text === "string") shape.push(`본문 ${Array.from(params.text).length}자`);
+  if (params.reply_control) shape.push(`답글설정 ${params.reply_control}`);
+  if (params.children) shape.push(`자식 ${params.children.split(",").filter(Boolean).length}개`);
+  if (shape.length) parts.push(shape.join("/"));
   const mediaUrl = params.image_url || params.video_url || "";
   if (mediaUrl) {
     try {
@@ -838,6 +845,24 @@ async function diagnoseThreadsFailure(accessToken: string, params: Record<string
     } catch (e) { parts.push(`미디어 확인 예외: ${e instanceof Error ? e.message : String(e)}`); }
   }
   return parts.join(" · ");
+}
+/**
+ * Threads 본문 정리. 코드포인트 단위로 자르고(이모지 반쪽 방지), 홀로 남은 서로게이트·제어문자(개행 제외)를 뺀다.
+ * strict 면 변형 선택자·제로폭 문자·특수 공백까지 걷어낸다(메타가 빈 500 을 낼 때의 2차 시도용).
+ */
+function sanitizeThreadsText(input: string, maxChars: number, strict = false): string {
+  const chars = Array.from(String(input || ""));
+  const kept = chars.filter((ch) => {
+    const code = ch.codePointAt(0) || 0;
+    if (code >= 0xd800 && code <= 0xdfff) return false;               // 홀로 남은 서로게이트
+    if (code < 0x20 && ch !== "\n") return false;                     // 제어문자(개행 제외)
+    if (code === 0x7f) return false;
+    if (strict && (code === 0xfe0f || code === 0xfe0e)) return false;  // 변형 선택자
+    if (strict && (code === 0x200b || code === 0x200c || code === 0x200d || code === 0xfeff)) return false; // 제로폭
+    if (strict && code === 0x2028) return false;
+    return true;
+  });
+  return kept.slice(0, maxChars).join("").replace(/\n{3,}/g, "\n\n").trim();
 }
 function threadsErrorText(data: any, status: number): string {
   if (data?.__empty) return `메타 서버가 HTTP ${status} 로 빈 응답을 보냈어요(일시 오류일 수 있어요 — 잠시 후 다시 발행해 주세요)${data.__raw ? `: ${data.__raw}` : ""}`;
@@ -873,7 +898,9 @@ async function createThreadsContainer(opts: {
   }
   // 빈 응답이면 메타가 원인을 안 알려준 것 — 토큰/계정/미디어 중 어디가 문제인지 우리가 직접 가른다.
   const diag = opaque ? await diagnoseThreadsFailure(accessToken, params) : "";
-  throw new Error(`Threads 컨테이너 생성 실패: ${lastText}${diag ? ` [진단] ${diag}` : ""}`);
+  const err = new Error(`Threads 컨테이너 생성 실패: ${lastText}${diag ? ` [진단] ${diag}` : ""}`);
+  (err as any).opaque = opaque;
+  throw err;
 }
 
 /**
@@ -1752,7 +1779,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: msg }, 500);
       }
       const { accessToken, threadsUserId, username } = th;
-      const text = caption.slice(0, 500);
+      // 500자 제한은 코드포인트 단위로 자른다. caption.slice(0, 500) 은 이모지(서로게이트 쌍)를 반쪽으로 잘라
+      // 깨진 문자를 만들 수 있고, 메타는 그런 본문에 이유 없는 빈 500 을 낸다(2026-09-25 의심 원인).
+      const text = sanitizeThreadsText(caption, 500);
 
       // 답글 허용 범위 (Threads: reply_control). 최상위 컨테이너에만 붙이고
       // 캐러셀 자식에는 붙이지 않는다 — 게시물 단위 설정이기 때문.
@@ -1779,6 +1808,33 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       }
 
       let creationId: string;
+      const fallbackNotes: string[] = [];
+      /**
+       * 상위(게시될) 컨테이너 생성 사다리. 2026-09-25 진단: 이미지 자식 컨테이너는 되는데 본문·답글설정이 붙는
+       * 상위 요청만 메타가 빈 500 을 냈다. 메타가 원인을 안 알려주므로, 빈 500 이면 답글설정을 빼고 → 본문을
+       * 정리(깨진 문자·제어문자 제거, 480자)해서 차례로 다시 시도한다. 무엇을 뺐는지는 결과 note 로 알린다.
+       */
+      async function createTopLevel(params: Record<string, string>): Promise<string> {
+        try {
+          return await createThreadsContainer({ threadsUserId, accessToken, params });
+        } catch (e: any) {
+          if (!e?.opaque) throw e;
+          let lastErr: any = e;
+          if (params.reply_control) {
+            const { reply_control: _rc, ...rest } = params;
+            try { const id = await createThreadsContainer({ threadsUserId, accessToken, params: rest }); fallbackNotes.push("답글 설정은 메타가 거부해 기본값(모두 답글 가능)으로 올렸어요."); return id; }
+            catch (e2: any) { if (!e2?.opaque) throw e2; lastErr = e2; params = rest; }
+          }
+          if (typeof params.text === "string" && params.text.trim()) {
+            const cleaned = sanitizeThreadsText(params.text, 480, true);
+            if (cleaned !== params.text) {
+              try { const id = await createThreadsContainer({ threadsUserId, accessToken, params: { ...params, text: cleaned } }); fallbackNotes.push("본문에 메타가 거부하는 문자가 있어 정리한 본문으로 올렸어요."); return id; }
+              catch (e3: any) { if (!e3?.opaque) throw e3; lastErr = e3; }
+            }
+          }
+          throw lastErr;
+        }
+      }
 
       if (isCarousel) {
         const rawItems = body.mediaItems!;
@@ -1789,7 +1845,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           const p: Record<string, string> = it.mediaType === "video"
             ? { media_type: "VIDEO", video_url: url, text }
             : { media_type: "IMAGE", image_url: url, text };
-          creationId = await createThreadsContainer({ threadsUserId, accessToken, params: withReplyControl(p) });
+          creationId = await createTopLevel(withReplyControl(p));
           await waitForThreadsContainer(accessToken, creationId);
         } else {
           // 캐러셀(2~20장): 자식 컨테이너 생성 → CAROUSEL 컨테이너로 묶기
@@ -1803,10 +1859,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             await waitForThreadsContainer(accessToken, childId);
             childIds.push(childId);
           }
-          creationId = await createThreadsContainer({
-            threadsUserId, accessToken,
-            params: withReplyControl({ media_type: "CAROUSEL", children: childIds.join(","), text }),
-          });
+          creationId = await createTopLevel(withReplyControl({ media_type: "CAROUSEL", children: childIds.join(","), text }));
           await waitForThreadsContainer(accessToken, creationId);
         }
       } else if (body.mediaType === "video" || body.mediaType === "image") {
@@ -1814,15 +1867,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const p: Record<string, string> = body.mediaType === "video"
           ? { media_type: "VIDEO", video_url: url, text }
           : { media_type: "IMAGE", image_url: url, text };
-        creationId = await createThreadsContainer({ threadsUserId, accessToken, params: withReplyControl(p) });
+        creationId = await createTopLevel(withReplyControl(p));
         await waitForThreadsContainer(accessToken, creationId);
       } else {
         // 텍스트 전용 게시
         if (!text.trim()) return send({ error: "Threads 텍스트 게시에는 캡션이 필요합니다." }, 400);
-        creationId = await createThreadsContainer({
-          threadsUserId, accessToken,
-          params: withReplyControl({ media_type: "TEXT", text }),
-        });
+        creationId = await createTopLevel(withReplyControl({ media_type: "TEXT", text }));
       }
 
       const { postId } = await publishThreadsContainer({ threadsUserId, accessToken, creationId });
@@ -1835,6 +1885,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           username,
           status: "published",
           publishedAt: new Date().toISOString(),
+          ...(fallbackNotes.length ? { note: fallbackNotes.join(" ") } : {}),
         },
       });
     }

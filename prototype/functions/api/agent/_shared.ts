@@ -3013,6 +3013,7 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     }
     const r: any = data?.result || {};
     published.push({ platform, what: plan.note, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || new Date().toISOString() });
+    if (r.note) notices.push(`${platform}: ${String(r.note).slice(0, 200)}`); // 예: 스레드가 답글 설정·본문을 빼고 올린 경우
   }
 
   if (reconnect.length) notices.push(`🔌 ${Array.from(new Set(reconnect)).join(", ")} 은(는) 연결이 만료돼 다시 연결해야 해요 — 브랜드 스튜디오 → SNS 설정(/sns-settings.html)에서 '연결 해제' 후 다시 연결한 뒤 "다시 발행해줘" 라고 해 주세요.`);
