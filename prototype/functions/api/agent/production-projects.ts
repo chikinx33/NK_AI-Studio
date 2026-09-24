@@ -30,6 +30,10 @@ export interface ProductionProjectSummary {
 
 const MAX_PROJECTS = 80;
 const CONCURRENCY = 6;
+// 사용자별 짧은 캐시. brand_list·project_list·브랜드 브리프(턴마다)가 같은 요약을 연달아 부르는데, 프로젝트마다 data.json 을
+// 읽는 무거운 작업이라 매번 하면 30초 도구 예산을 넘긴다(2026-09-24). ?fresh=1 이면 무시한다.
+const SUMMARY_TTL_MS = 20_000;
+const summaryCache = new Map<string, { at: number; projects: ProductionProjectSummary[] }>();
 
 function text(v: unknown): string { return String(v ?? "").trim(); }
 function hasMedia(v: unknown): boolean { const s = text(v); return !!s && !s.startsWith("data:") && !s.startsWith("blob:"); }
@@ -89,7 +93,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const ctx = { request, env, authHeader: String(request.headers.get("Authorization") || ""), userId: auth.userId };
-    const list = await AGENT_TOOLS.project_list.run({}, ctx as any);
+    const fresh = new URL(request.url).searchParams.get("fresh") === "1";
+    const cached = summaryCache.get(auth.userId);
+    if (!fresh && cached && Date.now() - cached.at < SUMMARY_TTL_MS) return send({ ok: true, projects: cached.projects, cached: true }, 200, origin);
+    // ★ project_list 도구를 부르지 않는다 — 그 도구가 이 요약을 다시 부르므로(제목을 붙이려고) 재귀가 돼 30초 안에 끝나지 않았다.
+    const listRes = await fetch(new URL("/api/project/list", request.url).toString(), { headers: { Authorization: ctx.authHeader } });
+    const list: any = await listRes.json().catch(() => ({}));
     const own: string[] = (Array.isArray(list?.ids) ? list.ids : []).map((v: unknown) => String(v)).filter(Boolean).slice(0, MAX_PROJECTS);
     const shared: any[] = (Array.isArray(list?.shared) ? list.shared : []).slice(0, MAX_PROJECTS);
     const targets = [
@@ -110,6 +119,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     });
     // 최근 저장 순. savedAt 이 없는 것은 뒤로.
     projects.sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || ""));
+    summaryCache.set(auth.userId, { at: Date.now(), projects });
+    if (summaryCache.size > 200) summaryCache.clear();
     return send({ ok: true, projects }, 200, origin);
   } catch (e: any) {
     return send({ error: String(e?.message || e || "production projects failed") }, 500, origin);

@@ -44,3 +44,19 @@ test("scene_upsert 가 지목한 이미지·영상(jobId·objectName)을 컷의 
   const doc = orch.slice(orch.indexOf("    scene_upsert: `[[RUN: scene_upsert |"), orch.indexOf("`,", orch.indexOf("    scene_upsert: `[[RUN: scene_upsert |")));
   assert.match(doc, /"stillJobId": "지목한 이미지 jobId\(선택 · 컷 스틸로 부착\)", "videoJobId": "지목한 영상 jobId\(선택 · 컷 영상으로 부착\)"/);
 });
+
+test("프로젝트 요약 API 는 project_list 도구를 되부르지 않고(재귀), 20초 캐시를 가지며, 도구는 15초 기한으로만 기다린다", async () => {
+  const [pp, shared, orch] = await Promise.all([
+    read("prototype/functions/api/agent/production-projects.ts"),
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.doesNotMatch(pp, /AGENT_TOOLS\.project_list\.run\(/, "project_list → 요약 → project_list 재귀가 30초 도구 예산을 넘겼다");
+  assert.match(pp, /fetch\(new URL\("\/api\/project\/list", request\.url\)\.toString\(\)/);
+  assert.match(pp, /const SUMMARY_TTL_MS = 20_000;/);
+  assert.match(pp, /summaryCache\.set\(auth\.userId, \{ at: Date\.now\(\), projects \}\);/);
+  assert.match(shared, /function withDeadline<T>\(p: Promise<T>, ms: number, fallback: T\): Promise<T>/);
+  assert.match(shared, /withDeadline\(callInternalJson\(ctx, "\/api\/agent\/production-projects"\), SUMMARY_DEADLINE_MS, null as any\)/);
+  assert.match(shared, /withDeadline\(callInternalJson\(ctx, "\/api\/brand\/list\?full=1"\), SUMMARY_DEADLINE_MS, null as any\)/);
+  assert.match(orch, /const timer = setTimeout\(\(\) => ac\.abort\(\), 8000\);/, "브리프 로더는 8초 기한");
+});

@@ -38,7 +38,7 @@ test("brand_list 도구는 허브 ∪ 프로젝트 시리즈를 합쳐 사용자
 test("브랜드 브리프 로더는 full 목록 한 번으로 읽고 시리즈 이름을 별칭으로 붙인다", async () => {
   const orch = await read("prototype/functions/api/agent/_orchestrator.ts");
   const fn = fnBody(orch, "export async function loadBrandBriefs(");
-  assert.match(fn, /fetch\(new URL\("\/api\/brand\/list\?full=1", ctx\.request\.url\)\.toString\(\), \{ headers \}\)/);
+  assert.match(fn, /timed\("\/api\/brand\/list\?full=1"\)/, "full 목록을 기한 있는 fetch 로 한 번");
   assert.doesNotMatch(fn, /\/api\/brand\/get\?brandId=/, "브랜드마다 get 을 부르지 않는다");
   assert.match(fn, /brands\.slice\(0, 8\)/);
   assert.match(fn, /if \(alias && alias !== brief\.title\) brief\.aliases = \[alias\];/);

@@ -5583,13 +5583,22 @@ async function runProjectRenameTool(input: any, ctx: ToolContext): Promise<any> 
 }
 
 /** 프로젝트 목록: /api/project/list. 내 프로젝트 id + 공유받은 프로젝트. read. */
+/** 기한 안에 안 끝나면 fallback. 조회 도구는 30초 예산이라, 무거운 보조 조회(프로젝트 요약)는 15초까지만 기다린다. */
+function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, () => { clearTimeout(timer); resolve(fallback); });
+  });
+}
+const SUMMARY_DEADLINE_MS = 15000;
+
 async function runProjectListTool(_input: any, ctx: ToolContext): Promise<any> {
   const data = await callInternalJson(ctx, "/api/project/list");
   const ids = Array.isArray(data?.ids) ? data.ids : [];
   const shared = Array.isArray(data?.shared) ? data.shared : [];
   // id 만 주면 모델이 "SHAPES 시리즈" 를 못 찾는다(2026-09-24: 숫자 id 13개만 보고 흐름이 멈춤).
   // 제작 캔버스 선택기와 같은 요약(시리즈·에피소드 제목·컷 수)을 붙인다.
-  const summary = await callInternalJson(ctx, "/api/agent/production-projects").catch(() => null);
+  const summary = await withDeadline(callInternalJson(ctx, "/api/agent/production-projects"), SUMMARY_DEADLINE_MS, null as any);
   const projects = (Array.isArray(summary?.projects) ? summary.projects : []).map((p: any) => ({
     id: String(p?.id || ""), seriesId: String(p?.seriesId || ""), seriesTitle: String(p?.seriesTitle || ""),
     episodeTitle: String(p?.episodeTitle || ""), title: String(p?.title || ""), projectType: String(p?.projectType || ""),
@@ -6693,8 +6702,8 @@ async function runVideoDeleteTool(input: any, ctx: ToolContext): Promise<any> {
  */
 async function runBrandListTool(_input: any, ctx: ToolContext): Promise<any> {
   const [hub, summary] = await Promise.all([
-    callInternalJson(ctx, "/api/brand/list?full=1").catch(() => null),
-    callInternalJson(ctx, "/api/agent/production-projects").catch(() => null),
+    withDeadline(callInternalJson(ctx, "/api/brand/list?full=1"), SUMMARY_DEADLINE_MS, null as any),
+    withDeadline(callInternalJson(ctx, "/api/agent/production-projects"), SUMMARY_DEADLINE_MS, null as any),
   ]);
   const ids: string[] = Array.isArray(hub?.ids) ? hub.ids.map((v: any) => String(v || "")) : [];
   const hubBrands: any[] = Array.isArray(hub?.brands) ? hub.brands : ids.map((id) => ({ id, empty: true }));

@@ -266,10 +266,14 @@ export async function loadBrandBriefs(ctx: { request: Request; authHeader: strin
   try {
     const headers = { Authorization: ctx.authHeader };
     // 한 번에 정의까지(?full=1) — 브랜드마다 get 을 부르지 않는다. 시리즈 이름은 프로젝트 요약에서 별칭으로 붙인다.
-    const [listRes, projRes] = await Promise.all([
-      fetch(new URL("/api/brand/list?full=1", ctx.request.url).toString(), { headers }),
-      fetch(new URL("/api/agent/production-projects", ctx.request.url).toString(), { headers }).catch(() => null),
-    ]);
+    // 턴마다 도는 로더라 오래 기다리지 않는다(8초). 요약 API 는 20초 캐시가 있어 보통 즉시 온다.
+    const timed = (url: string) => {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 8000);
+      return fetch(new URL(url, ctx.request.url).toString(), { headers, signal: ac.signal }).finally(() => clearTimeout(timer)).catch(() => null);
+    };
+    const [listRes, projRes] = await Promise.all([timed("/api/brand/list?full=1"), timed("/api/agent/production-projects")]);
+    if (!listRes) return [];
     const listData: any = await listRes.json().catch(() => ({}));
     const projData: any = projRes ? await projRes.json().catch(() => ({})) : {};
     const seriesTitleOf = new Map<string, string>();
