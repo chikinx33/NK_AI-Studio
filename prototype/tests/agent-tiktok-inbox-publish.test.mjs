@@ -159,3 +159,27 @@ test("sns_channels_status 는 SNS 설정과 같은 목록(계정·발행 가능/
   assert.match(orch, /★발행하려는 거면 이 조회 없이 바로 publish\(platforms:\["all"\]\)/);
   assert.match(orch, /지금 자동 발행 가능한 채널: \$\{publishable\.join\(", "\)\}/);
 });
+
+test("'각 채널에 올라간 거 보여줘' = publish_proof: 채널 API 로 게시물 대표 이미지·링크를 받아 업무 폴더에 저장하고 카드로 보여 준다", async () => {
+  const [shared, orch, api] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+    read("prototype/functions/api/sns/post-proof.ts"),
+  ]);
+  assert.match(shared, /publish_proof: \{ agentId: "reach", agentIds: \["core", "maki"\], kind: "read", synthesize: true, run: runPublishProofTool \}/);
+  const fn = fnBody(shared, "async function runPublishProofTool(");
+  assert.match(fn, /internalUrl\(ctx\.request, "\/api\/sns\/post-proof"\)/);
+  assert.match(fn, /const path = `\.work-files\/\$\{dateKey\}\/발행 확인\/\$\{platform\}-/, "업무 폴더 '발행 확인' 에 저장");
+  assert.match(fn, /\/api\/agent\/company-files\?path=\$\{encodeURIComponent\(path\)\}/);
+  assert.match(fn, /tiktok: 초안함 전송이라 앱에서 게시하기 전엔 공개 게시물이 없어요/);
+  assert.match(shared, /if \(Array\.isArray\(output\.proofFiles\) && output\.proofFiles\.length\) \{/, "카드 렌더");
+  assert.match(orch, /publish_proof: `\[\[RUN: publish_proof \|/);
+  assert.match(orch, /화면 캡처가 아니라 채널이 돌려준 게시물 이미지라고 말한다/);
+  // 엔드포인트: 채널별 조회
+  assert.match(api, /graph\.instagram\.com\/\$\{ver\}\/\$\{encodeURIComponent\(postId\)\}/);
+  assert.match(api, /graph\.facebook\.com\/\$\{ver\}\/\$\{encodeURIComponent\(postId\)\}/);
+  assert.match(api, /graph\.threads\.net\/v1\.0\/\$\{encodeURIComponent\(postId\)\}/);
+  assert.match(api, /i\.ytimg\.com\/vi\//);
+  assert.match(api, /https:\/\/x\.com\/i\/web\/status\//);
+  assert.match(api, /supported: false, note: "틱톡은 초안함 전송이라/);
+});

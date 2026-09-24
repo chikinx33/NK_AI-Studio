@@ -1013,6 +1013,13 @@ export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""
       size: Math.max(0, Number(file?.size || 0) || 0),
     })).filter((file: MessageFileReference) => !!file.path);
   }
+  // 발행 확인(publish_proof): 채널에서 받아 업무 폴더에 저장한 대표 이미지들을 카드로.
+  if (Array.isArray(output.proofFiles) && output.proofFiles.length) {
+    return output.proofFiles.slice(0, 12).map((f: any) => ({
+      source: "company-file" as const, name: String(f?.name || String(f?.path || "").split("/").pop() || "확인 이미지"),
+      path: String(f?.path || ""), contentType: String(f?.contentType || "image/jpeg"), size: Math.max(0, Number(f?.size || 0) || 0),
+    })).filter((f: MessageFileReference) => !!f.path);
+  }
   const companyEntries = output.kind === "company_files_list" && Array.isArray(output.entries)
     ? output.entries.filter((entry: any) => entry?.kind === "file")
     : output.entry?.kind === "file"
@@ -4555,6 +4562,78 @@ async function runPublishHistoryTool(input: any, ctx: ToolContext): Promise<any>
   };
 }
 
+/**
+ * 발행 확인(1단계): 최근 발행 잡의 채널별 게시물을 채널 API 로 조회해 대표 이미지·링크·캡션을 받고, 이미지는 업무 폴더
+ * (.work-files/<날짜>/발행 확인/) 에 저장해 채팅 카드로 붙인다. "각 채널에 올라간 거 보여줘" 에 답한다(2026-09-24).
+ * 화면 캡처(스크린샷)가 아니라 채널이 돌려주는 게시물 대표 이미지다. 틱톡은 초안함이라 없고, X 는 링크만.
+ */
+async function runPublishProofTool(input: any, ctx: ToolContext): Promise<any> {
+  const sql = getSql(ctx.env);
+  if (!sql) throw new Error("발행 기록을 읽을 수 없어요(DB 미설정).");
+  const wantJob = String(input?.jobId || "").trim();
+  const platformFilter = normalizePublishPlatform(input?.platform || "");
+  const limit = Math.min(Math.max(Number(input?.limit) || 1, 1), 5);
+  const rows = wantJob
+    ? await sql(`SELECT id, output, created_at FROM agent_jobs WHERE user_id = $1 AND type = 'publish' AND id::text LIKE $2 LIMIT 1`, [ctx.userId, `${wantJob}%`]).catch(() => [] as any[])
+    : await sql(`SELECT id, output, created_at FROM agent_jobs WHERE user_id = $1 AND type = 'publish' AND status = 'approved'
+        AND output->'published' IS NOT NULL AND created_at > now() - interval '7 days' ORDER BY created_at DESC LIMIT $2`, [ctx.userId, limit]).catch(() => [] as any[]);
+  if (!(rows as any[]).length) return { kind: "publish_proof", count: 0, proofs: [], proofFiles: [], note: "최근 7일 안에 실행된 발행 기록이 없어요." };
+  const proofs: any[] = [];
+  const proofFiles: any[] = [];
+  const skipped: string[] = [];
+  const seen = new Set<string>();
+  for (const job of rows as any[]) {
+    const out: any = job.output && typeof job.output === "object" ? job.output : {};
+    const dateKey = (() => { try { return new Date(new Date(job.created_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); } })();
+    const published: any[] = Array.isArray(out.published) ? out.published : [];
+    for (const pub of published) {
+      const platform = normalizePublishPlatform(pub?.platform || "");
+      const postId = String(pub?.postId || pub?.videoId || pub?.id || "").trim();
+      if (!platform || (platformFilter && platform !== platformFilter)) continue;
+      if (platform === "tiktok") { if (!seen.has("tiktok")) { seen.add("tiktok"); skipped.push("tiktok: 초안함 전송이라 앱에서 게시하기 전엔 공개 게시물이 없어요"); } continue; }
+      if (!postId) { skipped.push(`${platform}: 게시물 ID 가 없어요`); continue; }
+      const key = `${platform}:${postId}`; if (seen.has(key)) continue; seen.add(key);
+      let data: any = null;
+      try {
+        const res = await fetch(internalUrl(ctx.request, "/api/sns/post-proof"), {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: ctx.authHeader }, body: JSON.stringify({ platform, postId }),
+        });
+        data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok) { skipped.push(`${platform}: ${String(data?.error || `HTTP ${res.status}`).slice(0, 120)}${data?.reconnect ? " (재연결 필요)" : ""}`); continue; }
+      } catch (e: any) { skipped.push(`${platform}: ${String(e?.message || e).slice(0, 120)}`); continue; }
+      const proof: any = data.proof || {};
+      if (proof.supported === false) { skipped.push(`${platform}: ${proof.note || "확인 불가"}`); continue; }
+      const entry: any = { platform, postId, permalink: proof.permalink || "", caption: proof.caption || "", publishedAt: proof.publishedAt || pub?.publishedAt || "", mediaType: proof.mediaType || "", what: pub?.what || "", note: proof.note || "" };
+      // 대표 이미지를 업무 폴더에 저장 → 채팅 카드·업무 폴더에서 보인다(채널 CDN 주소는 곧 만료된다).
+      const imageUrl = String(proof.imageUrl || "").trim();
+      if (imageUrl) {
+        try {
+          const img = await fetch(imageUrl);
+          if (img.ok) {
+            const bytes = await img.arrayBuffer();
+            const ct = String(img.headers.get("Content-Type") || "image/jpeg").split(";")[0] || "image/jpeg";
+            const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg";
+            const path = `.work-files/${dateKey}/발행 확인/${platform}-${postId.replace(/[^\w.-]+/g, "_").slice(0, 60)}.${ext}`;
+            const up = await fetch(internalUrl(ctx.request, `/api/agent/company-files?path=${encodeURIComponent(path)}`), {
+              method: "POST", headers: { "Content-Type": ct, Authorization: ctx.authHeader }, body: bytes,
+            });
+            const upData: any = await up.json().catch(() => ({}));
+            if (up.ok && upData?.entry?.path) {
+              entry.file = { path: upData.entry.path, name: `${platform} 게시 확인`, contentType: ct, size: bytes.byteLength };
+              proofFiles.push(entry.file);
+            } else entry.note = `이미지 저장 실패: ${String(upData?.error || up.status).slice(0, 80)}`;
+          } else entry.note = `대표 이미지를 받지 못했어요(${img.status})`;
+        } catch (e: any) { entry.note = `이미지 저장 실패: ${String(e?.message || e).slice(0, 80)}`; }
+      }
+      proofs.push(entry);
+    }
+  }
+  return {
+    kind: "publish_proof", count: proofs.length, proofs, proofFiles, skipped,
+    note: proofs.length ? "채널이 돌려준 게시물 대표 이미지예요(화면 캡처가 아님). 카드는 업무 폴더 '발행 확인' 에도 저장됐어요." : "확인할 수 있는 게시물이 없어요.",
+  };
+}
+
 /** SNS 성과(조회수·좋아요)를 채널에서 새로 받아 온다. external. */
 async function runSnsAnalyticsSyncTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "sns_analytics_sync", ...(await callInternalJson(ctx, "/api/sns/analytics/sync", {
@@ -7511,6 +7590,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // ── P4 배포 성과 · 운영(마스터 계정) ───────────────────────────────────
   sns_analytics_sync: { agentId: "reach", agentIds: ["maki", "core"], kind: "external", run: runSnsAnalyticsSyncTool },
   publish_history: { agentId: "reach", agentIds: ["core", "maki"], kind: "read", synthesize: true, run: runPublishHistoryTool },
+  publish_proof: { agentId: "reach", agentIds: ["core", "maki"], kind: "read", synthesize: true, run: runPublishProofTool },
   tiktok_publish_status: { agentId: "reach", agentIds: ["core"], kind: "read", run: runTiktokPublishStatusTool },
   admin_users_list: { agentId: "core", kind: "read", synthesize: true, run: runAdminUsersListTool },
   admin_user_update: { agentId: "core", kind: "external", gate: true, run: runAdminUserUpdateTool, approvalKey: (i) => String(i?.id || i?.userId || "").trim().toLowerCase() },
