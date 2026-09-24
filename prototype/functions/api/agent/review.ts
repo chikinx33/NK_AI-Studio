@@ -247,7 +247,7 @@ function approvalDoneText(type: string, output: any, input: any): string {
   if (type === "publish") {
     // TikTok 은 초안함 전송이라 "발행 완료" 가 아니다 — 사용자가 앱에서 마무리해야 한다는 걸 그대로 말한다.
     const list: any[] = Array.isArray(o.published) ? o.published : [];
-    const others = list.map((p: any) => String(p?.platform || p || "")).filter((p: string) => p && p !== "tiktok");
+    const others = list.filter((p: any) => String(p?.platform || p || "") !== "tiktok").map((p: any) => `${String(p?.platform || p || "")}${p?.what ? `(${p.what})` : ""}`).filter(Boolean);
     const parts: string[] = [];
     if (others.length) parts.push(`${others.join(", ")} 발행을 진행했어요.`);
     if (o.tiktok) {

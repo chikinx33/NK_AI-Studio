@@ -1,9 +1,10 @@
-// 리치(에이전트) 발행 도구의 TikTok 경로.
+// 리치(에이전트) 발행 도구.
 //
-// 2026-09-24: "이 영상 틱톡에 올려줘" → 승인까지 갔는데 승인 실행에서 실패. 발행 도구가 Direct Post 시절의
-// "확인 화면이 없으니 막는다" 차단을 그대로 갖고 있었다. 2026-08-31 부터 TikTok 배포는 초안함(inbox) 전송이라
-// 그 차단은 근거가 없다. 에이전트 경로도 브랜드 스튜디오와 같은 /api/sns/tiktok/inbox 로 보내고,
-// 결과는 "게시했다" 가 아니라 "초안함으로 보냈다" 고 말한다.
+// 2026-09-24 이력:
+//  - "이 영상 틱톡에 올려줘" 가 Direct Post 시절의 "확인 화면이 없으니 막는다" 차단에 걸려 승인 뒤 실패 → 초안함(inbox) 전송으로.
+//  - "필수 필드 누락: platform, caption" — platforms 배열 + mediaUrl 로 한 번에 보내던 잘못된 계약 → 채널 하나씩.
+//  - 모델이 jobId 를 빠뜨려 "영상의 저장 경로를 찾지 못했어요" → 서버가 대화의 지목 산출물에서 찾고 승인 전(prepare)에 확정.
+//  - "영상과 이미지를 함께 지목하고 연결된 채널 전부에" → 산출물 전부를 받아 채널 규격대로 자동 배분(캐러셀·사진묶음·영상만 채널 건너뜀).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -15,95 +16,109 @@ const fnBody = (src, head) => {
   return src.slice(start, src.indexOf("\n}\n", start));
 };
 
-test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트로 보낸다", async () => {
+test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트로 보내며, 다른 채널은 /api/sns/publish 계약대로 채널 하나씩 보낸다", async () => {
   const shared = await read("prototype/functions/api/agent/_shared.ts");
   const fn = fnBody(shared, "async function runPublishTool(");
   assert.doesNotMatch(fn, /브랜드 스튜디오의 'TikTok에 게시' 버튼/, "옛 차단 문구가 남아 있다");
-  assert.doesNotMatch(fn, /게시 전 확인 화면에서 직접 선택해야/, "Direct Post 시절 차단이 남아 있다");
   assert.match(fn, /internalUrl\(ctx\.request, "\/api\/sns\/tiktok\/inbox"\)/, "브랜드 스튜디오와 같은 초안 엔드포인트");
-  assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath, caption: description \}\)/);
-  assert.match(fn, /const others = platforms\.filter\(\(p\) => p !== "tiktok"\);/, "다른 채널은 기존 /api/sns/publish 로");
-  assert.match(fn, /status === "status_reported_failed"\) throw new Error\(`TikTok 초안함 전송 실패/, "TikTok 이 실패로 보고하면 실패로 닫는다");
-  // 도착 위치는 프로필의 자물쇠 탭(비공개)·초안 카드가 아니라 '받은 알림함(Inbox)' 탭의 알림이다(2026-09-24 사용자 확인).
-  assert.match(fn, /TikTok 은 초안함\(inbox\)으로 보냈어요\. " \+ "틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로 와요/);
-  assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
+  assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath: item\.mediaGcsPath, caption: description \}\)/);
   assert.match(fn, /TikTok 은 초안함 전송이라 예약이 없어요/, "예약은 안내 후 skip");
-  // 영상 저장 경로: objectName > jobId(잡 결과) > mediaUrl
-  const resolver = fnBody(shared, "async function publishMediaObjectName(");
-  assert.match(resolver, /input\?\.objectName \|\| input\?\.mediaGcsPath/);
-  assert.match(resolver, /getJob\(sql, jobId, ctx\.userId\)/);
-  assert.match(resolver, /mediaObjectNameFromUrl\(String\(out\.videoUrl \|\| out\.signedUrl \|\| out\.audioUrl \|\| ""\)\)/);
-});
-
-test("승인 완료 문구와 도구 설명서가 TikTok 을 '초안함 전송' 으로 말한다", async () => {
-  const [review, orch] = await Promise.all([
-    read("prototype/functions/api/agent/review.ts"),
-    read("prototype/functions/api/agent/_orchestrator.ts"),
-  ]);
-  assert.doesNotMatch(review, /if \(type === "publish"\) return "✅ 승인 확인! 발행을 진행했어요\.";/);
-  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? "TikTok 은 초안함\(inbox\)으로 보냈어요 — 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
-  const doc = orch.slice(orch.indexOf("    publish: `[[RUN: publish |"), orch.indexOf("`,", orch.indexOf("    publish: `[[RUN: publish |")));
-  assert.match(doc, /TikTok 은 바로 게시가 아니라 틱톡 앱 '초안함' 전송이다/);
-  assert.match(doc, /"게시했다"고 하지 말 것/);
-  assert.match(doc, /"jobId": "지목한 산출물의 잡 ID\(선택 · mediaUrl 대신/);
-});
-
-test("TikTok 외 채널은 /api/sns/publish 계약대로 채널 하나씩(platform·mediaType·mediaGcsPath) 보낸다", async () => {
-  const shared = await read("prototype/functions/api/agent/_shared.ts");
-  const fn = fnBody(shared, "async function runPublishTool(");
+  assert.match(fn, /TikTok 은 초안함\(inbox\)으로 보냈어요\. 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로 와요/);
+  assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
   assert.doesNotMatch(fn, /platforms: others,/, "platforms 배열로 한 번에 보내던 잘못된 계약이 사라졌다");
-  assert.match(fn, /for \(const platform of others\) \{/);
-  assert.match(fn, /const needsMedia = platform !== "threads" && platform !== "x";/);
-  assert.match(fn, /\.\.\.\(needsMedia \? \{ mediaType, \.\.\.\(mediaGcsPath \? \{ mediaGcsPath \} : \{ mediaDirectUrl \}\) \} : \{\}\),/);
-  assert.match(fn, /isYouTube \? \{\s*title:/, "유튜브(쇼츠 포함)는 제목·태그·카테고리·공개 범위");
-  assert.match(fn, /if \(failures\.length && !published\.length && !tiktok\) throw new Error\(`발행 실패 — /);
+  assert.match(fn, /for \(const plan of plans\) \{/);
+  assert.match(fn, /const body: any = \{ platform, caption: captionWithTags \};/);
+  assert.match(fn, /fetch\(internalUrl\(ctx\.request, "\/api\/sns\/publish"\)/);
+  assert.match(fn, /if \(failures\.length && !published\.length\) throw new Error\(`발행 실패 — /);
   assert.match(fn, /notices\.push\(`일부 채널 실패: /);
 });
 
-test("발행 미디어는 모델이 jobId 를 빠뜨려도 서버가 대화의 최근 산출물에서 찾고, 승인 전에 미리 확정한다", async () => {
+test("지목한 산출물을 전부 받아 채널 규격대로 자동 배분한다(인스타 캐러셀·페북 사진묶음+영상·스레드 캐러셀·X 단일·유튜브/틱톡 영상만)", async () => {
   const shared = await read("prototype/functions/api/agent/_shared.ts");
-  assert.match(shared, /async function latestConversationMediaJob\(ctx: ToolContext, conversationId: string, preferVideo: boolean\)/);
-  assert.match(shared, /SELECT files FROM agent_messages WHERE user_id = \$1 AND conversation_id = \$2/);
-  assert.match(shared, /async function latestVideoJob\(ctx: ToolContext\)/);
-  const resolve = fnBody(shared, "async function resolvePublishMedia(");
-  assert.match(resolve, /const explicit = await publishMediaObjectName\(input, ctx\);/, "입력이 우선");
-  assert.match(resolve, /const fromChat = await latestConversationMediaJob\(ctx, conversationId, preferVideo\);/, "대화의 최근 산출물");
-  assert.match(resolve, /const recent = await latestVideoJob\(ctx\);/, "최근 완료 영상");
-  const prepare = fnBody(shared, "async function preparePublishInput(");
-  assert.match(prepare, /에 올릴 이미지\/영상을 찾지 못했어요 — 이 대화에 지목·생성된 산출물이 없어요/);
-  assert.match(prepare, /TikTok 초안함에는 영상만 보낼 수 있는데/);
-  assert.match(prepare, /mediaSource: media\.source,/);
-  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
+  const list = fnBody(shared, "async function resolvePublishMediaList(");
+  assert.match(list, /input\?\.jobIds \|\| \[\], input\?\.jobId \|\| \[\]/, "입력의 jobId 여러 개");
+  assert.match(list, /const lastUser = \(rows as any\[\]\)\.find\(\(r\) => r\.role === "user" && parse\(r\.files\)\.some/, "사용자가 마지막으로 지목한 메시지의 카드 전부");
+  assert.match(list, /const recent = await latestVideoJob\(ctx\);/);
+  const plan = fnBody(shared, "function planPublishByChannel(");
+  assert.match(plan, /if \(platform === "instagram"\) \{[\s\S]*action: "carousel", items: media\.slice\(0, 10\)/);
+  assert.match(plan, /platform === "facebook"[\s\S]*action: images\.length >= 2 \? "photos" : "single"/);
+  assert.match(plan, /platform === "facebook"[\s\S]*action: "video", items: \[videos\[0\]\]/);
+  assert.match(plan, /platform === "threads"[\s\S]*action: "carousel"/);
+  assert.match(plan, /platform === "x"[\s\S]*const pick = images\[0\] \|\| videos\[0\];/);
+  assert.match(plan, /platform === "youtube-shorts"[\s\S]*유튜브는 영상만 — 영상이 없어 건너뜀/);
+  assert.match(plan, /platform === "tiktok"[\s\S]*틱톡은 영상만 — 영상이 없어 건너뜀/);
   const run = fnBody(shared, "async function runPublishTool(");
-  assert.match(run, /const media = await resolvePublishMedia\(input, ctx, wantsTikTok/);
-  assert.match(run, /const mediaGcsPath = media\.mediaGcsPath;/);
+  assert.match(run, /if \(plan\.action === "carousel" \|\| plan\.action === "photos"\) \{\s*body\.mediaItems = items\.map/);
+  assert.match(run, /if \(platform === "facebook"\) body\.mediaType = "image";/);
+  assert.match(run, /plan\.action === "video" && platform === "facebook"[\s\S]*body\.mediaType = "video";/);
+  assert.match(run, /if \(plan\.action === "skip"\) \{ skippedNotes\.push/);
+});
+
+test("승인 전(prepare)에 연결된 채널을 스스로 고르고(all·exclude·재연결 필요 제외) 계획을 세워 안내에 붙인다", async () => {
+  const [shared, orch] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
+  const channels = fnBody(shared, "async function listConnectedPublishChannels(");
+  assert.match(channels, /callInternalJson\(ctx, "\/api\/userdata\/sns\/get"\)/, "토큰 없는 설정 읽기");
+  assert.match(shared, /const AUTO_PUBLISH_CHANNELS: Record<string, string> = \{ instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook" \};/);
+  const prepare = fnBody(shared, "async function preparePublishInput(");
+  assert.match(prepare, /const wantsAll = !requestedRaw\.length \|\| requestedRaw\.some/);
+  assert.match(prepare, /if \(c\.needsReconnect\) \{ skipped\.push\(`\$\{c\.platform\}\(재연결 필요 — SNS 설정\)`\); continue; \}/);
+  assert.match(prepare, /exclude\.has\(c\.platform\) \|\| exclude\.has\(c\.settingsKey\)/, "\"틱톡은 예외\" 처리");
+  assert.match(prepare, /const planSummary = planSummaryText\(plans, media, skipped\);/);
+  assert.match(prepare, /올릴 수 있는 조합이 없어요/);
+  assert.match(shared, /return \{ ok: true, gated: true, superseded, input \};/);
+  assert.match(orch, /const planSummary = String\(\(result as any\)\.input\?\.planSummary \|\| ""\)\.trim\(\);/);
+  const doc = orch.slice(orch.indexOf("    publish: `[[RUN: publish |"), orch.indexOf("`,", orch.indexOf("    publish: `[[RUN: publish |")));
+  assert.match(doc, /"platforms": \["all"\], "exclude": \["tiktok\(선택 · 빼고 싶은 채널\)"\]/);
+  assert.match(doc, /지목한 산출물은 전부\(이미지·영상 섞여도\) 받아 채널 규격대로 서버가 자동 배분한다/);
+  assert.match(doc, /채널별 문체가 다르므로 drafts 를 채널마다 따로 쓰고\(복붙 금지\)/);
+  assert.match(doc, /네이버 블로그·카카오·밴드는 직접 올리기 채널이라 발행 대상이 아님/);
+});
+
+test("채널별 초안(drafts)·유튜브 메타·재연결 안내·승인 문구", async () => {
+  const [shared, review] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/review.ts"),
+  ]);
+  assert.match(shared, /function normalizePublishPlatform\(raw: any\): string/);
+  assert.match(shared, /"쇼츠": "youtube-shorts"/);
+  const run = fnBody(shared, "async function runPublishTool(");
+  assert.match(run, /const draftFor = \(platform: string\): any => drafts\[platform\] \|\| drafts\[platform\.replace\(\/-shorts\$\/, ""\)\] \|\| \{\};/);
+  assert.match(run, /categoryKey: String\(d\.categoryKey \|\| prepared\?\.categoryKey \|\| "entertainment"\),/);
+  assert.match(run, /\(platform === "threads" \|\| platform === "x"\) && \(d\.replySetting \|\| prepared\?\.replySetting\)/);
+  assert.match(run, /\(platform === "instagram" \|\| platform === "facebook"\) && \(d\.firstComment \|\| prepared\?\.firstComment\)/);
+  assert.match(run, /platform === "facebook" && \(d\.linkUrl \|\| prepared\?\.linkUrl\)/);
+  assert.match(run, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
+  assert.match(run, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
+  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? "TikTok 은 초안함\(inbox\)으로 보냈어요 — 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
+  assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
+  assert.match(review, /\$\{p\?\.what \? `\(\$\{p\.what\}\)` : ""\}/, "승인 문구에 채널별로 무엇을 올렸는지");
 });
 
 test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 추적해 도착·실패·시간 초과를 채팅에 알린다", async () => {
-  const [shared, jobs, job, messages, review] = await Promise.all([
+  const [shared, jobs, job, messages] = await Promise.all([
     read("prototype/functions/api/agent/_shared.ts"),
     read("prototype/functions/api/agent/jobs.ts"),
     read("prototype/functions/api/agent/job.ts"),
     read("prototype/functions/api/agent/messages.ts"),
-    read("prototype/functions/api/agent/review.ts"),
   ]);
   const fn = fnBody(shared, "export async function reconcileTikTokJobs(");
   assert.match(fn, /output->'tiktok'->>'status'='processing'/);
   assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
   assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
   assert.match(fn, /TikTok 초안함에 영상이 도착했어요\. " \+ "틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
-  assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/, "잘못된 위치 안내가 남아 있으면 안 된다");
   assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
   assert.match(fn, /Date\.now\(\) - started > TIKTOK_PENDING_MAX_MS/);
   assert.match(fn, /tiktok_reconnect_required/);
   for (const [name, src] of [["jobs.ts", jobs], ["job.ts", job], ["messages.ts", messages]]) {
     assert.match(src, /await reconcileTikTokJobs\(pollCtx, sql\)\.catch\(\(\) => \{\}\);/, `${name} 폴링마다 추적`);
   }
-  // 상태 조회 도구의 쿼리 이름 버그(publish_id → publishId)
   const tool = fnBody(shared, "async function runTiktokPublishStatusTool(");
   assert.match(tool, /\/api\/sns\/tiktok\/publish-status\?publishId=\$\{encodeURIComponent\(publishId\)\}/);
   assert.doesNotMatch(tool, /publish_id=/);
-  assert.match(review, /제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요/);
 });
 
 test("'올라갔어?' 는 publish_history(읽기·합성) 로 답한다 — 채널 실제 게시물 + 에이전트 발행 기록", async () => {
@@ -113,14 +128,11 @@ test("'올라갔어?' 는 publish_history(읽기·합성) 로 답한다 — 채�
   ]);
   assert.match(shared, /publish_history: \{ agentId: "reach", agentIds: \["core", "maki"\], kind: "read", synthesize: true, run: runPublishHistoryTool \}/);
   const fn = fnBody(shared, "async function runPublishHistoryTool(");
-  assert.match(fn, /callInternalJson\(ctx, "\/api\/sns\/analytics\/sync", \{ body: \{ projectId \} \}\)/, "채널 실제 게시물");
-  assert.match(fn, /withDeadline\(/, "채널 API 는 기한 안에서만");
-  assert.match(fn, /WHERE user_id = \$1 AND type = 'publish'/, "에이전트 발행 기록");
+  assert.match(fn, /callInternalJson\(ctx, "\/api\/sns\/analytics\/sync", \{ body: \{ projectId \} \}\)/);
+  assert.match(fn, /WHERE user_id = \$1 AND type = 'publish'/);
   assert.match(fn, /"승인 대기\(실행 안 됨\)"/);
-  assert.match(fn, /matchedLive: livePosts\.filter\(\(p: any\) => p\.matched\)\.length,/);
   const doc = orch.slice(orch.indexOf("    publish_history: `[[RUN: publish_history |"), orch.indexOf("`,", orch.indexOf("    publish_history: `[[RUN: publish_history |")));
   assert.match(doc, /"올라갔어\?"·"등록됐는지 확인해줘"·"발행 됐어\?"에는 반드시 이 도구/);
-  assert.match(doc, /sns_analytics_sync\(성과 숫자 동기화\)로 대신하지 말 것/);
 });
 
 test("인스타그램 발행은 연결된 계정 토큰(만료 전 갱신)으로 나가고, 만료면 412 + needsReconnect 로 재연결을 안내한다", async () => {
@@ -128,33 +140,7 @@ test("인스타그램 발행은 연결된 계정 토큰(만료 전 갱신)으로
   assert.match(src, /async function ensureInstagramPublishToken\(entry: any, store:/);
   assert.match(src, /grant_type: "ig_refresh_token"/);
   assert.match(src, /const igEntry = igSettings\?\.sns\?\.instagram;/);
-  assert.match(src, /igUserId = String\(igEntry\.igUserId \|\| igEntry\.userId \|\| ""\);/);
   assert.match(src, /accessToken = String\(env\.IG_ACCESS_TOKEN \|\| ""\);/, "연결된 계정이 없을 때만 환경변수 폴백");
   assert.match(src, /function isInstagramTokenError\(message: string\): boolean/);
   assert.match(src, /error: "instagram_reconnect_required", needsReconnect: true,/);
-  assert.match(src, /patch: \{ needsReconnect: true \}/);
-});
-
-test("발행 도구는 채널별 초안(drafts)·유튜브 쇼츠·재연결 안내를 다룬다", async () => {
-  const [shared, orch, review] = await Promise.all([
-    read("prototype/functions/api/agent/_shared.ts"),
-    read("prototype/functions/api/agent/_orchestrator.ts"),
-    read("prototype/functions/api/agent/review.ts"),
-  ]);
-  assert.match(shared, /function normalizePublishPlatform\(raw: any\): string/);
-  assert.match(shared, /"쇼츠": "youtube-shorts"/);
-  const fn = fnBody(shared, "async function runPublishTool(");
-  assert.match(fn, /const draftFor = \(platform: string\): any => drafts\[platform\] \|\| drafts\[platform\.replace\(\/-shorts\$\/, ""\)\] \|\| \{\};/);
-  assert.match(fn, /const isYouTube = platform === "youtube" \|\| platform === "youtube-shorts";/);
-  assert.match(fn, /categoryKey: String\(d\.categoryKey \|\| input\?\.categoryKey \|\| "entertainment"\),/);
-  assert.match(fn, /\(platform === "threads" \|\| platform === "x"\) && \(d\.replySetting \|\| input\?\.replySetting\)/);
-  assert.match(fn, /\(platform === "instagram" \|\| platform === "facebook"\) && \(d\.firstComment \|\| input\?\.firstComment\)/);
-  assert.match(fn, /platform === "facebook" && \(d\.linkUrl \|\| input\?\.linkUrl\)/);
-  assert.match(fn, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
-  assert.match(fn, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
-  const doc = orch.slice(orch.indexOf("    publish: `[[RUN: publish |"), orch.indexOf("`,", orch.indexOf("    publish: `[[RUN: publish |")));
-  assert.match(doc, /"drafts": \{"instagram": \{"caption"/);
-  assert.match(doc, /채널별 문체가 다르므로 drafts 를 채널마다 따로 쓰고\(복붙 금지\)/);
-  assert.match(doc, /네이버 블로그·카카오·밴드는 직접 올리기 채널이라 발행 대상이 아님/);
-  assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
 });

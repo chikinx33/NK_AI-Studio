@@ -163,7 +163,8 @@ test("에이전트 경로의 TikTok 은 Direct Post(확인 화면 필요)가 아
   const start = src.indexOf("async function runPublishTool(");
   const fn = src.slice(start, src.indexOf("\n}\n", start));
   assert.match(fn, /\/api\/sns\/tiktok\/inbox/);
-  assert.match(fn, /platforms\.filter\(\(p\) => p !== "tiktok"\)/, "Direct Post 분기(/api/sns/publish)에는 tiktok 을 넘기지 않는다");
+  // tiktok 계획은 inbox 로 보내고 continue — 그 아래의 /api/sns/publish(Direct Post 분기)에는 닿지 않는다.
+  assert.match(fn, /if \(platform === "tiktok"\) \{[\s\S]*?\/api\/sns\/tiktok\/inbox[\s\S]*?continue;\s*\}/, "Direct Post 분기(/api/sns/publish)에는 tiktok 을 넘기지 않는다");
 });
 
 test("공개 페이지 2장이 존재하고 서로 링크된다", () => {
