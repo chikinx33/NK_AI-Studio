@@ -97,7 +97,8 @@ test("업무 파일의 폴더(일반·날짜)도 채팅에 담을 수 있고, �
   assert.match(explorer, /if \(!onAddChatReference \|\| !referenceable\(entry\)\) return null;/);
   assert.match(explorer, /const added = chatReferenceKeys\.includes\(entry\.path\);/);
   assert.match(explorer, /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/);
-  assert.match(explorer, /<\/button><div className="ml-auto flex shrink-0 items-center gap-1 pl-3">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div><\/div><\/td>/, "목록 보기: 아이콘은 이름 칸 오른쪽 끝 정렬");
+  assert.match(explorer, /<td className="p-3"><div className="flex items-center justify-end gap-1">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div><\/td><\/tr>\)\}<\/tbody>/, "목록 보기: 아이콘은 행 오른쪽 끝 칸(업무 폴더·보고와 같은 위치)");
+  assert.match(explorer, /<th className="p-3">수정일<\/th><th className="w-24 p-3"><\/th><\/tr><\/thead>/);
   assert.match(explorer, /\{chatButton\(entry, "absolute right-9 top-1\.5 z-10"\)\}/, "카드 보기");
   // 업무 폴더 화면이 콜백을 탐색기(루트·날짜 폴더 안)에 넘긴다
   assert.equal((work.match(/onAddChatReference=\{onAddChatReference\} onChatAbout=\{onChatAbout\} chatReferenceKeys=\{chatReferenceKeys\}/g) || []).length, 1, "날짜 폴더 안 탐색기");
@@ -143,7 +144,7 @@ test("업무 파일에 추가한 파일도 지목·더보기 메뉴가 붙고, �
   assert.match(explorer, /void downloadEntry\(entry\); \}\}[^>]*>다운로드<\/button>/);
   assert.match(explorer, /void renameEntry\(entry\); \}\}[^>]*>이름 변경<\/button>/);
   assert.match(explorer, /void removeEntries\(\[entry\]\); \}\}[^>]*>삭제<\/button>/);
-  assert.match(explorer, /<div className="ml-auto flex shrink-0 items-center gap-1 pl-3">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div>/, "목록 보기");
+  assert.match(explorer, /<div className="flex items-center justify-end gap-1">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div>/, "목록 보기");
   assert.match(explorer, /\{menuButton\(entry, "absolute right-\[4\.25rem\] top-1\.5 z-10"\)\}/, "카드 보기");
   // 선택 툴바의 이름 변경·삭제는 같은 항목 함수를 쓴다(중복 없음)
   assert.match(explorer, /async function renameSelected\(\) \{[\s\S]*?await renameEntry\(entry\);/);
