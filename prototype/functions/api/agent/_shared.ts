@@ -1285,8 +1285,23 @@ export async function deleteReminderById(sql: SqlFn, userId: string, id: string)
 }
 
 /** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */
-export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 12): string {
-  const recent = msgs.slice(-maxTurns);
+/** 진행 안내성 잡음("🔎 … 조회 중", "🛠️ … 시작했어요", "🔐 승인이 필요해요"). 내용이 없어 트랜스크립트 창만 잡아먹는다. */
+export const TRANSCRIPT_NOISE = /^(🔎 .{0,40}(조회|검색) 중이에요|🛠️ .{0,60}(시작했어요|실행 중이에요)|🔐 이 작업은 승인이 필요해요|🎨 본인 ChatGPT 구독으로 이미지 생성 중|🎬 영상 생성을 제출했어요)/;
+export const TRANSCRIPT_MAX_TURNS = 24;
+export const TRANSCRIPT_MAX_CHARS = 900;
+
+/** 긴 발언은 앞 700자 + 뒤 150자만(가운데 생략). 세 가지 안(案)처럼 내용이 긴 제안이 통째로 잘리지 않게. */
+function clipTranscriptText(text: string): string {
+  const t = String(text || "");
+  if (t.length <= TRANSCRIPT_MAX_CHARS) return t;
+  return `${t.slice(0, 700)} …(중략)… ${t.slice(-150)}`;
+}
+
+export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = TRANSCRIPT_MAX_TURNS): string {
+  // 전엔 최근 12턴을 잡음까지 세어 잘라, 리치가 낸 세 가지 안이 "🛠️ 시작했어요·🔐 승인 필요·실패" 몇 줄에 밀려나
+  // 코어가 "캡션이 대화에 안 남아 있다"고 했다(2026-09-24). 잡음은 빼고, 내용 있는 발언을 더 길게 남긴다.
+  const meaningful = msgs.filter((m) => !(m.role === "agent" && TRANSCRIPT_NOISE.test(String(m.text || "").trim())));
+  const recent = meaningful.slice(-maxTurns);
   if (!recent.length) return "(대화 시작)";
   // 생성 산출물은 잡 id 를 붙여 준다. 모델이 "방금 만든 이미지"를 brand_asset 등에 jobId 로 지목할 수 있게.
   const generatedRefs = (m: AgentMessage) => {
@@ -1296,7 +1311,7 @@ export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 1
     return refs.length ? ` [산출물: ${refs.join(", ")}]` : "";
   };
   return recent
-    .map((m) => (m.role === "user" ? `${addr}: ${m.text}${generatedRefs(m)}` : `${m.name || "직원"}: ${m.text}${generatedRefs(m)}`))
+    .map((m) => (m.role === "user" ? `${addr}: ${clipTranscriptText(m.text)}${generatedRefs(m)}` : `${m.name || "직원"}: ${clipTranscriptText(m.text)}${generatedRefs(m)}`))
     .join("\n");
 }
 

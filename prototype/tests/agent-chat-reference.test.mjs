@@ -51,7 +51,7 @@ test("서버는 지목한 잡·업무를 읽어 사용자 메시지에 카드와
   assert.match(shared, /line: `\[참조 업무: \$\{parts\.join\(" "\)\}\]`/);
   assert.match(shared, /messageFilesFromToolOutput\(String\(\(job as any\)\.type \|\| ""\), out, \(job as any\)\.id\)/, "사용자 말풍선 카드는 직원 카드와 같은 생성기");
   // 트랜스크립트: 사용자 메시지에 붙은 산출물도 jobId 로 보인다(다음 턴에서도 지목이 유지됨)
-  assert.match(shared, /m\.role === "user" \? `\$\{addr\}: \$\{m\.text\}\$\{generatedRefs\(m\)\}`/);
+  assert.match(shared, /m\.role === "user" \? `\$\{addr\}: \$\{clipTranscriptText\(m\.text\)\}\$\{generatedRefs\(m\)\}`/);
   // chat.ts: 말풍선엔 📎, 모델에겐 참조 줄
   assert.match(chat, /const reference = await resolveChatReference\(sql, auth\.userId, body\?\.reference\)\.catch\(\(\) => null\);/);
   assert.match(chat, /`📎 참조: \$\{reference\.label\}`/);
