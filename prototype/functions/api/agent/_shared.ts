@@ -7102,10 +7102,25 @@ async function runCompanyKnowledgeSearchTool(input: any, ctx: ToolContext): Prom
 }
 
 /** SNS 채널 연결 상태: /api/agent/integrations. read. (연결 개설/해제는 사람 직접) */
+/**
+ * SNS 채널 상태 = 브랜드 스튜디오 SNS 설정과 같은 눈높이(자동 발행 채널 6 + 직접 올리기 채널 4).
+ * 전엔 직원 연동 목록(/api/agent/integrations: Gmail·캘린더 …)을 읽어 이름 없는 "채널" 12줄만 찍고 끝났다(2026-09-24).
+ */
 async function runSnsChannelsStatusTool(_input: any, ctx: ToolContext): Promise<any> {
-  const data = await callInternalJson(ctx, "/api/agent/integrations");
-  const channels = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-  return { kind: "sns_channels_status", count: channels.length, channels };
+  const auto = await listConnectedPublishChannels(ctx);
+  const LABEL: Record<string, string> = { instagram: "Instagram", "youtube-shorts": "YouTube(쇼츠)", tiktok: "TikTok", threads: "Threads", x: "X", facebook: "Facebook" };
+  const channels = auto.map((c) => ({
+    platform: c.platform, name: LABEL[c.platform] || c.platform, account: c.account, mode: "auto",
+    connected: c.connected, enabled: c.enabled, needsReconnect: c.needsReconnect,
+    publishable: c.connected && c.enabled && !c.needsReconnect,
+    status: !c.connected ? "미연결" : c.needsReconnect ? "재연결 필요(SNS 설정)" : !c.enabled ? "사용 중지" : "발행 가능",
+  }));
+  const manual = ["네이버 블로그", "카카오", "네이버 포스트", "BAND"].map((name) => ({ platform: name, name, account: "", mode: "manual", connected: false, enabled: true, needsReconnect: false, publishable: false, status: "직접 올리기(자동 발행 없음)" }));
+  return {
+    kind: "sns_channels_status", count: channels.length + manual.length, channels: [...channels, ...manual],
+    publishable: channels.filter((c) => c.publishable).map((c) => c.platform),
+    note: "publish 도구는 platforms:[\"all\"] 이면 발행 가능한 채널을 스스로 고르므로, 발행 전에 이 조회를 따로 할 필요는 없다.",
+  };
 }
 
 /** 미디어 라이브러리 통합 조회: image_library + video_library 합산. read+synthesize. */
@@ -7426,7 +7441,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   knowledge_audit: { agentId: "core", kind: "read", synthesize: true, run: runKnowledgeAuditTool },
   knowledge_stats: { agentId: "radar", kind: "read", run: runKnowledgeStatsTool },
   // 리치(배포): SNS 채널 연결 상태 조회(연결 개설/해제는 사람 직접).
-  sns_channels_status: { agentId: "reach", kind: "read", run: runSnsChannelsStatusTool },
+  sns_channels_status: { agentId: "reach", agentIds: ["core", "maki"], kind: "read", synthesize: true, run: runSnsChannelsStatusTool },
   // 픽셀(디자인): 미디어 라이브러리 통합 조회.
   media_library: { agentId: "pixel", kind: "read", synthesize: true, run: runMediaLibraryTool },
   // 싱크(비서) 중심 userdata — 조회는 즉시(개인화 근거), 변경은 승인 게이트.

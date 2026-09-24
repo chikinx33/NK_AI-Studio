@@ -144,3 +144,18 @@ test("인스타그램 발행은 연결된 계정 토큰(만료 전 갱신)으로
   assert.match(src, /function isInstagramTokenError\(message: string\): boolean/);
   assert.match(src, /error: "instagram_reconnect_required", needsReconnect: true,/);
 });
+
+test("sns_channels_status 는 SNS 설정과 같은 목록(계정·발행 가능/재연결/직접 올리기)을 주고, 결과를 본 직원이 이어서 행동한다", async () => {
+  const [shared, orch] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/_orchestrator.ts"),
+  ]);
+  const fn = fnBody(shared, "async function runSnsChannelsStatusTool(");
+  assert.match(fn, /const auto = await listConnectedPublishChannels\(ctx\);/);
+  assert.doesNotMatch(fn, /\/api\/agent\/integrations/, "직원 연동 목록(Gmail 등)을 SNS 채널로 찍던 버그");
+  assert.match(fn, /status: !c\.connected \? "미연결" : c\.needsReconnect \? "재연결 필요\(SNS 설정\)" : !c\.enabled \? "사용 중지" : "발행 가능",/);
+  assert.match(fn, /직접 올리기\(자동 발행 없음\)/);
+  assert.match(shared, /sns_channels_status: \{ agentId: "reach", agentIds: \["core", "maki"\], kind: "read", synthesize: true, run: runSnsChannelsStatusTool \}/);
+  assert.match(orch, /★발행하려는 거면 이 조회 없이 바로 publish\(platforms:\["all"\]\)/);
+  assert.match(orch, /지금 자동 발행 가능한 채널: \$\{publishable\.join\(", "\)\}/);
+});

@@ -500,7 +500,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     company_knowledge_search: `[[RUN: company_knowledge_search | {"query": "찾을 내용", "projectId": "(선택) 프로젝트 id", "types": ["원칙|사실|결정"], "limit": 10}]]  → 쌓인 회사 지식을 색인(단어 조각 + 의미 벡터)으로 검색. 프롬프트의 회사 지식 목록에 없는 과거 사실·결정·설정(예: "마리가 수학여행 간 곳")을 물으면 추측하지 말고 먼저 실행. 결과의 id:xxxxxxxx 는 KNOW del/edit 대상 지정에 그대로 쓸 수 있음.`,
     knowledge_audit: `[[RUN: knowledge_audit | {"offset": 0, "limit": 20}]]  → 축적된 회사 지식 + 현재 능력 카탈로그(존재하는 도구·담당)를 함께 조회. 결과는 {items, total, hasMore, nextOffset} 페이지이며 서버가 남은 페이지를 자동으로 이어 받아 합쳐 준다. 그래도 hasMore=true면 {"offset": nextOffset}로 다시 호출. 능력과 모순되는 낡은 지식·중복·모순을 찾아 정리 제안하는 근거. "지식 정리/낡은 규칙 점검"에 사용. 삭제·수정은 사람 승인 후 KNOW 마커로.`,
     knowledge_stats: `[[RUN: knowledge_stats | {}]]  → 지식 허브에 쌓인 문서·조각 수 통계 조회.`,
-    sns_channels_status: `[[RUN: sns_channels_status | {}]]  → 어떤 SNS 채널이 연결돼 있는지 상태 조회. (연결 개설/해제는 사람이 직접 — 조회만)`,
+    sns_channels_status: `[[RUN: sns_channels_status | {}]]  → SNS 채널 상태(SNS 설정과 같은 목록): 채널마다 계정·발행 가능/미연결/재연결 필요/사용 중지, 직접 올리기 채널 구분. "어떤 채널 연결돼 있어?" 에만 쓴다. ★발행하려는 거면 이 조회 없이 바로 publish(platforms:["all"]) — publish 가 발행 가능한 채널을 스스로 고르고 계획을 보여 준다. (연결 개설/해제는 사람이 직접)`,
     media_library: `[[RUN: media_library | {"projectId": "ai-company"}]]  → 그 프로젝트의 이미지+영상 자산을 통합 조회. "자산 뭐 있어?"에 사용.`,
     video_pipeline: `[[RUN: video_pipeline | {"projectId": "series-ep1", "stages": ["still", "video"], "sceneIds": [], "aspectRatio": "16:9", "videoModel": "veo", "regenerate": false}]]  → ★에이전트 모드. 프로젝트의 비어 있는 컷을 스틸→영상 순으로 자동 생성하는 파이프라인 업무를 만든다. 먼저 계획(몇 컷·예상 크레딧)을 세워 사람 승인을 기다리고, 승인되면 배치로 생성한다. "이 프로젝트 영상 전부 만들어줘", "빈 컷 채워줘", "에이전트 모드로 돌려줘"에 사용. sceneIds 를 주면 그 컷만, stages 에 "still" 만 주면 스틸만. 이미 있는 자산은 건너뛰고 regenerate:true 면 다시 만든다. 결과는 제작 캔버스(canvas.open)에서 보여준다.`,
     profile_get: `[[RUN: profile_get | {}]]  → 내(사용자) 프로필을 조회해 개인화(톤·우선순위)의 근거로 삼는다.`,
@@ -1384,11 +1384,13 @@ export function formatReadResult(toolName: string, out: any): string {
     if (!channels.length) return "📡 연결된 SNS 채널 정보가 없어요.";
     const lines = channels.slice(0, 12).map((c, i) => {
       const name = c?.name || c?.platform || c?.id || "채널";
-      const connected = c?.connected ?? c?.active ?? c?.status;
-      const mark = connected === true ? "✅ 연결됨" : connected === false ? "⚪ 미연결" : (connected ? `· ${connected}` : "");
-      return `${i + 1}. ${name} ${mark}`.trim();
+      const account = c?.account ? ` @${String(c.account).replace(/^@/, "")}` : "";
+      const status = c?.status ? String(c.status) : (c?.connected === true ? "발행 가능" : c?.connected === false ? "미연결" : "");
+      const mark = status === "발행 가능" ? "✅" : /재연결/.test(status) ? "🔌" : /직접/.test(status) ? "✋" : /중지/.test(status) ? "⏸" : "⚪";
+      return `${i + 1}. ${mark} ${name}${account} — ${status}`.trim();
     });
-    return `📡 SNS 채널 상태 ${channels.length}개예요.\n${lines.join("\n")}`;
+    const publishable: string[] = Array.isArray(out?.publishable) ? out.publishable : [];
+    return `📡 SNS 채널 상태예요(SNS 설정 기준).\n${lines.join("\n")}${publishable.length ? `\n\n지금 자동 발행 가능한 채널: ${publishable.join(", ")}` : "\n\n지금 자동 발행 가능한 채널이 없어요."}`;
   }
   if (toolName === "favorites_get") {
     const items: any[] = Array.isArray(out?.items) ? out.items : [];
