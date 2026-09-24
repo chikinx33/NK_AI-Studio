@@ -1342,12 +1342,42 @@ function outputMediaLabel(out: any): string {
   return "이미지";
 }
 
-export async function resolveChatReference(sql: SqlFn, userId: string, raw: any): Promise<ResolvedChatReference | null> {
+export async function resolveChatReference(
+  sql: SqlFn, userId: string, raw: any,
+  // 폴더 지목은 업무 파일 API(/api/agent/company-files)로 목록을 읽어야 해서 요청·인증 헤더가 필요하다.
+  ctx?: { request: Request; authHeader: string },
+): Promise<ResolvedChatReference | null> {
   if (!raw || typeof raw !== "object") return null;
   const jobId = String(raw.jobId || "").trim();
   const workId = String(raw.workId || "").trim();
   const givenTitle = String(raw.title || "").replace(/[\[\]\n]/g, " ").trim().slice(0, 120);
   const uuid = /^[0-9a-f-]{36}$/i;
+
+  // 폴더 지목(업무 파일의 일반 폴더·날짜 폴더): 그 안 항목(업무·폴더·파일)을 한 줄로 직원에게 준다.
+  // "이 폴더 정리해줘"·"이 폴더 이미지들로 캐러셀 올려줘" 가 폴더 이름만으로 통하게(2026-09-25).
+  if (raw.kind === "folder" || (raw.path && !jobId && !workId)) {
+    const path = String(raw.path || "").replace(/[\n\r]/g, "").replace(/^\/+|\/+$/g, "").trim().slice(0, 300);
+    if (!path || !ctx?.request) return null;
+    const res = await fetch(internalUrl(ctx.request, `/api/agent/company-files?path=${encodeURIComponent(path)}`), {
+      headers: { Authorization: ctx.authHeader },
+    }).catch(() => null);
+    if (!res || !res.ok) return null;
+    const data: any = await res.json().catch(() => null);
+    const entries: any[] = Array.isArray(data?.entries) ? data.entries : [];
+    const name = givenTitle || String(data?.displayName || path.split("/").pop() || path);
+    const describe = (e: any): string => {
+      const n = String(e?.name || "").replace(/[\[\]\n]/g, " ").trim().slice(0, 60);
+      if (e?.kind === "work") return `업무 "${n}"(workId=${e.workId}${e.workType ? `, ${e.workType}` : ""})`;
+      if (e?.kind === "folder" || e?.kind === "work-folder") return `폴더 "${n}"(path=${e.path})`;
+      const size = Number(e?.size || 0);
+      return `파일 "${n}"(path=${e.path}${e?.contentType ? `, ${e.contentType}` : ""}${size ? `, ${(size / 1024 / 1024).toFixed(1)}MB` : ""})`;
+    };
+    const shown = entries.slice(0, 40).map(describe);
+    const more = entries.length > 40 ? ` … 외 ${entries.length - 40}개` : "";
+    const listing = shown.length ? `: ${shown.join(" · ")}${more}` : ": (비어 있음)";
+    const line = `[참조 폴더: ${name} path=${path} 항목 ${entries.length}개${listing}]`.slice(0, 2400);
+    return { label: `폴더 · ${name}`, line, files: [] };
+  }
 
   const fromJob = async (id: string, extra = ""): Promise<ResolvedChatReference | null> => {
     if (!uuid.test(id)) return null;

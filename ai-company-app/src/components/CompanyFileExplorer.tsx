@@ -8,6 +8,7 @@ import {
   moveCompanyFile,
   moveCompanyWorkFolder,
   uploadCompanyFile,
+  type ChatReference,
   type CompanyFileEntry,
   type CompanyWorkFolder,
 } from "../lib/api";
@@ -17,6 +18,20 @@ import CompanyFilePreview from "./CompanyFilePreview";
 import { appDialog } from "../lib/appDialog";
 
 type ViewMode = "cards" | "list";
+
+/** lucide "message-square" — 채팅에 담기(업무 폴더 항목과 같은 아이콘). */
+function MessageSquareIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+/** 폴더(일반 폴더·날짜 폴더)를 채팅 지목으로. 서버가 그 안 항목 목록을 직원에게 알려준다. */
+export function folderReference(entry: CompanyFileEntry): ChatReference {
+  return { kind: "folder", path: entry.path, dateKey: entry.dateKey, title: entry.name, mediaKind: "folder" };
+}
 
 // 드래그 중인 항목(JSON 배열). 외부 파일 드롭과 구분하려고 전용 형식을 쓴다.
 const DRAG_TYPE = "application/x-nk-company-paths";
@@ -92,7 +107,12 @@ export default function CompanyFileExplorer({
   initialPath,
   onPathChange,
   embedded = false,
+  onAddChatReference,
+  chatReferenceKeys = [],
 }: {
+  /** 폴더를 채팅에 담는다(화면 이동 없음). 담긴 폴더는 아이콘이 켜진다. */
+  onAddChatReference?: (ref: ChatReference) => void;
+  chatReferenceKeys?: string[];
   onOpenWorkFolder?: (dateKey: string) => void;
   onRenameWorkFolder?: (dateKey: string, title: string) => Promise<CompanyWorkFolder>;
   onDeleteWorkFolder?: (dateKey: string) => Promise<void>;
@@ -343,6 +363,19 @@ export default function CompanyFileExplorer({
 
   const dropHighlight = (targetPath: string) => dropTarget === targetPath ? "ring-2 ring-emerald-400 bg-emerald-950/40" : "";
 
+  /** 폴더 행·카드의 '채팅에 담기' 버튼. 폴더(일반·날짜)에만 붙는다. */
+  function chatButton(entry: CompanyFileEntry, className = "") {
+    if (!onAddChatReference || !(entry.kind === "folder" || entry.kind === "work-folder")) return null;
+    const added = chatReferenceKeys.includes(entry.path);
+    return (
+      <button type="button" onClick={(event) => { event.stopPropagation(); onAddChatReference(folderReference(entry)); }}
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${added ? "bg-sky-900/50 text-sky-300" : "text-gray-400 hover:bg-edge hover:text-sky-300"} ${className}`}
+        title={added ? "채팅에 담겨 있어요" : "채팅에 담기 — 이 폴더를 지목하면 직원이 폴더 안 항목을 알아요"} aria-label={`${entry.name} 폴더 채팅에 담기`} aria-pressed={added}>
+        <MessageSquareIcon className="h-4 w-4" />
+      </button>
+    );
+  }
+
   function openEntry(entry: CompanyFileEntry) {
     if (entry.kind === "work-folder" && entry.dateKey) onOpenWorkFolder?.(entry.dateKey);
     else if (entry.kind === "folder") setPath(entry.path);
@@ -397,8 +430,8 @@ export default function CompanyFileExplorer({
     >
       {fileDragOver && <div className="mb-3 rounded-xl border border-emerald-700 bg-emerald-950/40 p-3 text-center text-xs text-emerald-200">여기에 놓으면 이 폴더에 업로드돼요</div>}
       {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">회사 파일을 불러오는 중…</div> : visibleEntries.length ? viewMode === "list" ?
-        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "bg-emerald-900/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.name}</span></button></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td></tr>)}</tbody></table></div> :
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div><button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
+        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "bg-emerald-900/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><div className="flex min-w-0 items-center gap-1"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.name}</span></button>{chatButton(entry)}</div></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td></tr>)}</tbody></table></div> :
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div>{chatButton(entry, "absolute right-9 top-1.5 z-10")}<button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
         <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{query ? "검색 결과가 없습니다." : embedded ? "넣어 둔 파일이 없습니다. 파일을 여기에 끌어다 놓거나, 파일을 이 날짜 폴더로 끌어다 놓거나 파일 추가로 올려 주세요." : <>이 폴더가 비어 있습니다.<br/>새 폴더를 만들거나 파일을 추가해 주세요.</>}</div>}
     </main>
     <CompanyFilePreview entry={previewEntry} onClose={() => setPreviewEntry(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />

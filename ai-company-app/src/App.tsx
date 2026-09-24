@@ -142,7 +142,7 @@ export default function App() {
   // 보고·업무 폴더에서 지목한 항목들(여러 개). 채팅 입력창 위 칩으로 보이고, 다음 메시지와 함께 서버로 간다.
   const [chatReferences, setChatReferences] = useState<ChatReference[]>([]);
   const MAX_CHAT_REFERENCES = 10;
-  const sameRef = (a: ChatReference, b: ChatReference) => (a.jobId && a.jobId === b.jobId) || (a.workId && a.workId === b.workId);
+  const sameRef = (a: ChatReference, b: ChatReference) => (a.jobId && a.jobId === b.jobId) || (a.workId && a.workId === b.workId) || (a.path && a.path === b.path);
   /** 칩에 담는다(같은 항목은 한 번만, 최대 10개). navigate=true 면 채팅 화면으로 이동. */
   const addChatReference = (ref: ChatReference, navigate = true) => {
     setChatReferences((cur) => (cur.some((r) => sameRef(r, ref)) ? cur : [...cur, ref].slice(-MAX_CHAT_REFERENCES)));
@@ -1420,7 +1420,7 @@ export default function App() {
           <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
-            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} onAddChatReference={(ref) => addChatReference(ref, false)} chatReferenceKeys={chatReferences.flatMap((r) => [r.workId, r.jobId].filter((v): v is string => !!v))} />
+            <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} onAddChatReference={(ref) => addChatReference(ref, false)} chatReferenceKeys={chatReferences.flatMap((r) => [r.workId, r.jobId, r.path].filter((v): v is string => !!v))} />
           </Suspense>
         ) : centerView === "video" ? (
           <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>

@@ -19,5 +19,5 @@ test("보고 카드 썸네일과 크게 보기가 영상·오디오를 <img> 로
 test("채팅 입력창의 지목 칩도 영상·오디오는 아이콘으로 그린다", async () => {
   const chat = await readFile("ai-company-app/src/components/Chat.tsx", "utf8");
   assert.match(chat, /function VideoIcon\(/);
-  assert.match(chat, /\{reference\.mediaKind === "video"\s*\? <span[^>]*title="영상"><VideoIcon className="h-5 w-5" \/><\/span>\s*: reference\.mediaKind === "audio"\s*\? <span[^>]*title="오디오"><MusicIcon className="h-5 w-5" \/><\/span>\s*: reference\.url\s*\? <img src=\{reference\.url\}/);
+  assert.match(chat, /: reference\.mediaKind === "video"\s*\? <span[^>]*title="영상"><VideoIcon className="h-5 w-5" \/><\/span>\s*: reference\.mediaKind === "audio"\s*\? <span[^>]*title="오디오"><MusicIcon className="h-5 w-5" \/><\/span>\s*: reference\.url\s*\? <img src=\{reference\.url\}/);
 });

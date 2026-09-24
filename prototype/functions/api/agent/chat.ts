@@ -68,7 +68,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const rawRefs: any[] = Array.isArray(body?.references) ? body.references.slice(0, 10) : (body?.reference ? [body.reference] : []);
     const references: NonNullable<Awaited<ReturnType<typeof resolveChatReference>>>[] = [];
     for (const raw of rawRefs) {
-      const r = await resolveChatReference(sql, auth.userId, raw).catch(() => null);
+      const r = await resolveChatReference(sql, auth.userId, raw, { request, authHeader: String(request.headers.get("Authorization") || "") }).catch(() => null);
       if (r) references.push(r);
     }
     const reference = references[0] || null;

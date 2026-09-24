@@ -1522,7 +1522,7 @@ export interface ChatFileReference {
  * "[참조 산출물: … jobId=…]" 줄을 붙여, 직원이 "이걸로 영상 만들어줘" 를 알아듣게 한다.
  */
 export interface ChatReference {
-  kind: "job" | "work";
+  kind: "job" | "work" | "folder";
   jobId?: string;
   workId?: string;
   title: string;
@@ -1530,6 +1530,8 @@ export interface ChatReference {
   url?: string;
   objectName?: string;
   dateKey?: string;
+  /** 폴더 지목(업무 파일의 폴더·날짜 폴더): 서버가 그 안 항목 목록을 직원에게 알려준다. */
+  path?: string;
 }
 
 /** 지목한 항목을 사용자 말풍선에 그릴 파일 카드로(서버가 붙여 주는 것과 같은 모양). */
@@ -1877,7 +1879,7 @@ export async function streamChat(
       focusAgent: opts.focusAgent,
       images,
       // 지목한 항목들(보고·업무 폴더에서 고른 산출물, 여러 개 가능) — 서버가 잡·업무를 읽어 직원에게 알려준다.
-      references: (opts.references || []).slice(0, 10).map((r) => ({ kind: r.kind, jobId: r.jobId, workId: r.workId, title: r.title })),
+      references: (opts.references || []).slice(0, 10).map((r) => ({ kind: r.kind, jobId: r.jobId, workId: r.workId, title: r.title, path: r.path, dateKey: r.dateKey })),
       // 하위호환: 서버가 아직 단일 필드만 읽어도 첫 첨부는 전달되도록 유지
       imageBase64: images[0]?.base64,
       imageMimeType: images[0]?.mimeType,

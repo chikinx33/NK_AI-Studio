@@ -253,6 +253,15 @@ function MusicIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+/** lucide "folder" — 지목한 폴더 칩. */
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  );
+}
+
 /** lucide "message-square" — 이 항목을 채팅에서 지목한다. */
 function MessageSquareIcon({ className }: { className?: string }) {
   return (
@@ -878,9 +887,11 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         {!!references?.length && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-chat-reference>
             {references.map((reference, i) => (
-              <div key={`${reference.kind}-${reference.jobId || reference.workId || i}`} className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
+              <div key={`${reference.kind}-${reference.jobId || reference.workId || reference.path || i}`} className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
                 {/* 영상·오디오 주소를 <img> 에 넣으면 깨진 그림이 뜬다 → 종류를 먼저 보고 아이콘 */}
-                {reference.mediaKind === "video"
+                {reference.kind === "folder"
+                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-amber-300" title="폴더"><FolderIcon className="h-5 w-5" /></span>
+                  : reference.mediaKind === "video"
                   ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
                   : reference.mediaKind === "audio"
                     ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
