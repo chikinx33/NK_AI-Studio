@@ -1,4 +1,4 @@
-import { sweepExpiredUserDeletions } from "../_shared/user-cleanup";
+import { sweepExpiredUserDeletions, conciseError } from "../_shared/user-cleanup";
 
 function json(body: any, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -22,7 +22,13 @@ export const onRequest: PagesFunction = async ({ request, env }: any) => {
   if (!supplied || (await sha256(supplied)) !== (await sha256(expected))) {
     return json({ error: "unauthorized" }, 401);
   }
-  const result = await sweepExpiredUserDeletions(env);
+  // 처리 안 된 예외는 Cloudflare 1101(본문 없음)로 끝나 원인을 못 본다. 항상 JSON 으로 이유를 돌려준다.
+  let result: Awaited<ReturnType<typeof sweepExpiredUserDeletions>>;
+  try {
+    result = await sweepExpiredUserDeletions(env);
+  } catch (error: any) {
+    return json({ error: "cleanup_crashed", detail: conciseError(error) }, 500);
+  }
   const totals = result.summaries.reduce(
     (sum, row) => ({
       storageRoots: sum.storageRoots + row.storageRoots,
@@ -31,6 +37,14 @@ export const onRequest: PagesFunction = async ({ request, env }: any) => {
     }),
     { storageRoots: 0, storageObjects: 0, databaseRows: 0 },
   );
-  const payload = { processed: result.processed, completed: result.completed, failed: result.failed, totals };
+  const payload = {
+    processed: result.processed,
+    completed: result.completed,
+    failed: result.failed,
+    inProgress: result.inProgress,
+    waiting: result.waiting,
+    errors: result.errors,
+    totals,
+  };
   return result.failed ? json({ error: "cleanup_incomplete", ...payload }, 500) : json(payload);
 };

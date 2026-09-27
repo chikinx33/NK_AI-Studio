@@ -55,3 +55,16 @@ test('보호된 정리 엔드포인트를 15분 간격으로 실행하고 실패
   assert.match(workflow, /secrets\.ACCOUNT_CLEANUP_TOKEN/);
   assert.match(workflow, /--fail-with-body/);
 });
+
+test('만료 정리는 Worker 서브요청 50번 한도 안에서 끝나고 예외도 JSON 으로 돌려준다', () => {
+  const knowledge = read('../functions/api/knowledge/_shared.ts');
+  // 테이블마다 존재 확인·삭제를 따로 보내면 약 60건이라 한도를 넘어 1101 로 죽었다(2026-09-22~27).
+  assert.doesNotMatch(cleanup, /for \([^)]*\)\s*\{[^}]*await sql\(/);
+  assert.match(cleanup, /getSqlBatch\(env\)/);
+  assert.match(knowledge, /queries: queries\.map/);
+  assert.match(knowledge, /\.results/);
+  assert.match(cleanup, /const MAX_DELETIONS_PER_RUN = 1;/);
+  assert.match(cleanup, /const MAX_GCS_DELETES_PER_RUN = 1000;/);
+  assert.match(cleanup, /storage_in_progress/);
+  assert.match(endpoint, /cleanup_crashed/);
+});

@@ -27,7 +27,7 @@ function parseDbHost(rawUrl: string): string {
   return new URL(url).hostname;
 }
 
-async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promise<any[]> {
+async function neonPost(dbUrl: string, payload: any): Promise<any> {
   const host = parseDbHost(dbUrl);
   const call = () => fetch(`https://${host}/sql`, {
     method: "POST",
@@ -35,7 +35,7 @@ async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promis
       "Content-Type": "application/json",
       "Neon-Connection-String": dbUrl,
     },
-    body: JSON.stringify({ query: sql, params }),
+    body: JSON.stringify(payload),
   });
   let res = await call();
   // 520/502/503/504 는 Neon 프록시·컴퓨트 깨어나기 같은 일시 오류가 대부분이다. 한 번만 짧게 쉬고 재시도(2026-09-24 화면에 "Neon SQL 오류 520").
@@ -51,7 +51,11 @@ async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promis
     err.neon = { status: info.status, kind: info.kind, detail: info.raw };
     throw err;
   }
-  const data = JSON.parse(body);
+  return JSON.parse(body);
+}
+
+async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promise<any[]> {
+  const data = await neonPost(dbUrl, { query: sql, params });
   return (data as any).rows || [];
 }
 
@@ -59,6 +63,25 @@ export function getSql(env: any): SqlFn | null {
   const url = String(env && env.DATABASE_URL || "").trim();
   if (!url) return null;
   return (sql: string, params?: any[]) => neonQuery(url, sql, params || []);
+}
+
+export type SqlBatchFn = (queries: Array<{ query: string; params?: any[] }>) => Promise<any[][]>;
+
+/**
+ * 여러 쿼리를 Neon HTTP 한 번(=Worker 서브요청 1건)에 한 트랜잭션으로 실행한다.
+ * 쿼리마다 요청을 보내면 회원 정리처럼 수십 번 쓰는 작업이 서브요청 50번 한도를 넘는다.
+ * 반환: 쿼리 순서대로 각 결과의 rows.
+ */
+export function getSqlBatch(env: any): SqlBatchFn | null {
+  const url = String(env && env.DATABASE_URL || "").trim();
+  if (!url) return null;
+  return async (queries) => {
+    if (!queries.length) return [];
+    const data = await neonPost(url, { queries: queries.map((q) => ({ query: q.query, params: q.params || [] })) });
+    const results = Array.isArray((data as any)?.results) ? (data as any).results : [];
+    if (results.length !== queries.length) throw new Error(`neon_batch_result_mismatch:${results.length}/${queries.length}`);
+    return results.map((r: any) => r?.rows || []);
+  };
 }
 
 /**
