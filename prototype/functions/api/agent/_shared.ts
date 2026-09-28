@@ -2073,6 +2073,9 @@ async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
     tones: Array.isArray(input?.tones) ? input.tones : (input?.tones ? [input.tones] : []),
     styles: Array.isArray(input?.styles) ? input.styles : (input?.styles ? [input.styles] : []),
     durationSec: Number(input?.duration) || 60,
+    // /api/music 은 projectId 가 없으면 400 으로 거절한다 — 전엔 이 칸을 빠뜨려 비트의 BGM 생성이 늘 실패했다(2026-09-29).
+    // 다른 이미지 도구와 같은 기본값("ai-company")을 쓴다.
+    projectId: String(input?.projectId || "ai-company").trim() || "ai-company",
   };
   const res = await fetch(internalUrl(ctx.request, "/api/music"), {
     method: "POST",
@@ -2083,7 +2086,8 @@ async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(data?.error || `music 호출 실패 (${res.status})`);
-  return { musicUrl: data.musicUrl || "", kind: "music", topic: topic || "배경음악", model: "elevenlabs" };
+  // 실제로 만든 엔진(Lyria 3 / Eleven Music / 효과음 폴백)을 그대로 알린다. 저장 경로(objectName)는 서명 주소가 만료된 뒤에도 파일을 다시 찾는 데 쓴다.
+  return { musicUrl: data.musicUrl || "", objectName: data.objectName || "", kind: "music", topic: topic || "배경음악", model: data.providerUsed || "" };
 }
 
 const PPT_SYSTEM = `당신은 프레젠테이션 전문가입니다. 요청과 대화 컨텍스트를 바탕으로 PowerPoint 슬라이드 구조를 순수 JSON으로 생성하세요.
@@ -6545,7 +6549,10 @@ async function runVoicesListTool(input: any, ctx: ToolContext): Promise<any> {
 async function runSoundAssetsTool(input: any, ctx: ToolContext): Promise<any> {
   const qs: string[] = [];
   for (const k of ["scope", "brandId", "episodeId", "sessionId", "type"]) {
-    if (input?.[k]) qs.push(`${k}=${encodeURIComponent(String(input[k]))}`);
+    if (!input?.[k]) continue;
+    // DB 의 음악 종류는 'music' 이다. 예전 안내문의 'bgm' 으로 부르면 0건이 나왔다.
+    const v = k === "type" && String(input[k]).toLowerCase() === "bgm" ? "music" : String(input[k]);
+    qs.push(`${k}=${encodeURIComponent(v)}`);
   }
   const data = await callInternalJson(ctx, `/api/sound/assets${qs.length ? `?${qs.join("&")}` : ""}`);
   const assets = (Array.isArray(data?.assets) ? data.assets : []).slice(0, 40);

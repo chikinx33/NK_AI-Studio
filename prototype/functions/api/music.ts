@@ -215,11 +215,11 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-// Lyria 3 Pro 로 BGM 생성. preview 단계라 막혀있거나 실패하면 null 반환 → 상위에서 ElevenLabs 로 폴백.
+// Lyria 3 Pro 로 BGM 생성. (오디오 스튜디오 MUSIC 탭 /api/sound/music-generate 도 이 엔진들을 함께 쓴다) preview 단계라 막혀있거나 실패하면 null 반환 → 상위에서 ElevenLabs 로 폴백.
 // 응답은 WAV 로 요청한다. MP3 는 Xing/Info VBR 헤더가 없으면 HTMLAudioElement 의 currentTime
 // 시킹이 프레임 중간으로 점프해 "삐비비" 노이즈를 내는데, Lyria preview 가 만드는 MP3 가
 // 그런 경향이 있다. WAV(PCM) 는 바이트↔시간이 정확히 매핑돼 시킹이 안정적이다.
-async function generateLyriaMusic(
+export async function generateLyriaMusic(
   apiKey: string,
   prompt: string,
   env?: any
@@ -256,7 +256,7 @@ async function generateLyriaMusic(
   }
 }
 
-async function generateElevenLabsMusic(
+export async function generateElevenLabsMusic(
   apiKey: string,
   prompt: string,
   durationSec: number,
@@ -297,7 +297,7 @@ async function generateElevenLabsMusic(
  *
  * 엔진 교체 가능성을 남겨둔다: 이 함수만 갈아끼우면 다른 노래 엔진으로 바꿀 수 있다.
  */
-type SongChunk = { text: string; durationMs: number; isRefrain?: boolean; section?: string };
+export type SongChunk = { text: string; durationMs: number; isRefrain?: boolean; section?: string };
 
 const ELEVEN_MUSIC_MIN_CHUNK_MS = 3000;
 const ELEVEN_MUSIC_MAX_TOTAL_MS = 300000;
@@ -314,7 +314,7 @@ function buildCompositionPlan(chunks: SongChunk[], styles: string[]): any {
   };
 }
 
-async function generateElevenSong(
+export async function generateElevenSong(
   apiKey: string,
   chunks: SongChunk[],
   styles: string[],
@@ -351,7 +351,7 @@ async function generateElevenSong(
  * 씬 단위로 자르면 한 소절이 컷 개수만큼 쪼개져 같은 가사를 여러 번 부르게 된다.
  * 구간 1개 = 청크 1개라서 청크 경계가 곧 자막 경계이기도 하다.
  */
-function buildSongChunksFromSections(rawSections: any, durationSec: number): SongChunk[] {
+export function buildSongChunksFromSections(rawSections: any, durationSec: number): SongChunk[] {
   const sections = normalizeSongSections(rawSections, { durationSec, lang: "ko" });
   const chunks = sectionsToSongChunks(sections) as SongChunk[];
   let totalMs = 0;

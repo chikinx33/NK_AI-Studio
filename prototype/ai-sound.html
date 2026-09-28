@@ -17,8 +17,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1939" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1939" />
+  <link rel="stylesheet" href="styles.css?v=3.1940" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.1940" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -126,6 +126,14 @@
 
     .snd-scene-btn { width: 100%; padding: 9px; font-size: 0.8rem; font-weight: 600; border-radius: 9px; }
 
+    /* ── MUSIC: 종류 토글 · 입력칸 · 예상 크레딧 ─────────────── */
+    .snd-kind-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .snd-kind-btn { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2, var(--bg)); color: var(--muted); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .snd-kind-btn.is-active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .snd-prompt--short { min-height: 64px; }
+    .snd-prompt--lyrics { min-height: 140px; }
+    .snd-quote { font-size: 0.74rem; color: var(--muted); text-align: right; }
+
     /* ── Inline row ──────────────────────────────────────────── */
     .snd-row { display: flex; gap: 12px; }
     .snd-row > .snd-field { flex: 1; min-width: 0; }
@@ -146,6 +154,7 @@
     .snd-asset-top { display: flex; align-items: center; gap: 8px; }
     .snd-asset-type { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
     .snd-asset-type--sfx { background: color-mix(in srgb, #22c55e 16%, transparent); color: #4ade80; }
+    .snd-asset-type--music { background: color-mix(in srgb, #a855f7 18%, transparent); color: #c084fc; }
     .snd-asset-title { font-size: 0.82rem; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .snd-asset-meta { font-size: 0.7rem; color: var(--muted); }
     .snd-asset audio { width: 100%; height: 34px; }
@@ -191,23 +200,23 @@
     .snd-modal-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 36px 12px; font-size: 0.84rem; }
   </style>
 
-  <script src="core.js?v=3.1939" defer></script>
-  <script src="js/config.js?v=3.1939" defer></script>
-  <script src="js/utils.js?v=3.1939" defer></script>
-  <script src="store.js?v=3.1939" defer></script>
-  <script src="api.js?v=3.1939" defer></script>
-  <script src="js/state.js?v=3.1939" defer></script>
-  <script src="js/auth.js?v=3.1939" defer></script>
-  <script src="js/navigation.js?v=3.1939" defer></script>
-  <script src="js/service/media.js?v=3.1939" defer></script>
-  <script src="js/service/project.js?v=3.1939" defer></script>
-  <script src="js/service/character-traits.js?v=3.1939" defer></script>
-  <script src="js/service/brand.js?v=3.1939" defer></script>
-  <script src="js/service/content-library.js?v=3.1939" defer></script>
-  <script src="js/ui/common.js?v=3.1939" defer></script>
-  <script src="js/ui/dashboard.js?v=3.1939" defer></script>
-  <script src="js/ui/ai-sound.js?v=3.1939" defer></script>
-  <script src="script.js?v=3.1939" defer></script>
+  <script src="core.js?v=3.1940" defer></script>
+  <script src="js/config.js?v=3.1940" defer></script>
+  <script src="js/utils.js?v=3.1940" defer></script>
+  <script src="store.js?v=3.1940" defer></script>
+  <script src="api.js?v=3.1940" defer></script>
+  <script src="js/state.js?v=3.1940" defer></script>
+  <script src="js/auth.js?v=3.1940" defer></script>
+  <script src="js/navigation.js?v=3.1940" defer></script>
+  <script src="js/service/media.js?v=3.1940" defer></script>
+  <script src="js/service/project.js?v=3.1940" defer></script>
+  <script src="js/service/character-traits.js?v=3.1940" defer></script>
+  <script src="js/service/brand.js?v=3.1940" defer></script>
+  <script src="js/service/content-library.js?v=3.1940" defer></script>
+  <script src="js/ui/common.js?v=3.1940" defer></script>
+  <script src="js/ui/dashboard.js?v=3.1940" defer></script>
+  <script src="js/ui/ai-sound.js?v=3.1940" defer></script>
+  <script src="script.js?v=3.1940" defer></script>
 </head>
 
 <body class="layout-fixed page-sound page-shell-ai-sound">
@@ -225,6 +234,7 @@
       <nav class="nav">
         <a class="nav-item active" href="#" data-snd-view="dashboard"><span data-i18n="nav_dashboard">대시보드</span></a>
         <a class="nav-item" href="#" data-snd-view="voice"><span>VOICE</span></a>
+        <a class="nav-item" href="#" data-snd-view="music"><span>MUSIC</span></a>
         <a class="nav-item" href="#" data-snd-view="sfx"><span>SFX</span></a>
       </nav>
       <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>

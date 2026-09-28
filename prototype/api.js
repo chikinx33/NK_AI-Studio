@@ -1013,6 +1013,19 @@
     return j(text);
   };
 
+  // 오디오 스튜디오 MUSIC 탭: 배경음악(Lyria 3)·노래(Eleven Music). 곡 길이에 따라 1~3분 걸릴 수 있다.
+  api.soundMusicGenerate = async function (body, opts) {
+    var res = await fetchWithTimeout(withToken('/api/sound/music-generate'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {}),
+      signal: opts && opts.signal
+    }, 300000);
+    var text = await readTextWithTimeout(res, 300000);
+    if (!res.ok) { var err = new Error(e(text) || 'music_generate_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
   api.soundAssets = async function (query) {
     var q = new URLSearchParams();
     if (query) {

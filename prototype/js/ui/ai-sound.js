@@ -136,6 +136,26 @@
   ];
   var SFX_CATEGORIES = ['Animals', 'Bass', 'Booms', 'Braams', 'Brass', 'Cymbals', 'Foley', 'Nature', 'Sci-Fi', 'UI', 'Whoosh'];
   var SFX_DURATIONS = [1, 2, 3, 5, 8, 10];
+  // MUSIC 칩: 버튼은 UI 언어로, 엔진에 보내는 값은 영어(Lyria·Eleven Music 이 영어 스타일어를 더 잘 따른다).
+  var MUSIC_GENRES = [
+    { v: 'children song', ko: '동요', en: 'Kids song' }, { v: 'K-pop', ko: 'K-pop', en: 'K-pop' },
+    { v: 'dance pop', ko: '댄스', en: 'Dance' }, { v: 'lo-fi hip hop', ko: '로파이', en: 'Lo-fi' },
+    { v: 'cinematic orchestral', ko: '시네마틱', en: 'Cinematic' }, { v: 'acoustic', ko: '어쿠스틱', en: 'Acoustic' },
+    { v: 'jazz', ko: '재즈', en: 'Jazz' }, { v: 'electronic', ko: '일렉트로닉', en: 'Electronic' },
+    { v: 'rock', ko: '록', en: 'Rock' }, { v: 'solo piano', ko: '피아노', en: 'Piano' }
+  ];
+  var MUSIC_MOODS = [
+    { v: 'bright', ko: '밝게', en: 'Bright' }, { v: 'energetic', ko: '신나게', en: 'Energetic' },
+    { v: 'cute and playful', ko: '귀엽게', en: 'Cute' }, { v: 'calm', ko: '잔잔하게', en: 'Calm' },
+    { v: 'warm', ko: '따뜻하게', en: 'Warm' }, { v: 'dreamy', ko: '몽환적으로', en: 'Dreamy' },
+    { v: 'epic', ko: '웅장하게', en: 'Epic' }, { v: 'tense', ko: '긴장감 있게', en: 'Tense' },
+    { v: 'sad', ko: '슬프게', en: 'Sad' }
+  ];
+  var MUSIC_VOCALS = [
+    { v: 'bright child vocals', ko: '밝은 아이 목소리', en: 'Bright child' }, { v: 'female vocals', ko: '여성 보컬', en: 'Female' },
+    { v: 'male vocals', ko: '남성 보컬', en: 'Male' }, { v: 'choir', ko: '합창', en: 'Choir' }
+  ];
+  var MUSIC_DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
   var CHAR_LIMIT = 5000;
 
   var STORAGE_SESSION_KEY = 'nk_sound_session_id';
@@ -147,12 +167,20 @@
       title: 'AI 오디오 생성',
       nav_dashboard: '대시보드',
       dash_title: 'AI 오디오',
-      dash_hint: '프로젝트(에피소드)를 선택하면 해당 브랜드·에피소드와 연동돼요.\n프로젝트 없이 좌측 VOICE·SFX를 누르면 단독 모드로 열려요.',
-      dash_empty: '연동할 프로젝트가 아직 없어요.\n좌측 VOICE·SFX로 단독 생성을 시작할 수 있어요.',
+      dash_hint: '프로젝트(에피소드)를 선택하면 해당 브랜드·에피소드와 연동돼요.\n프로젝트 없이 좌측 VOICE·MUSIC·SFX를 누르면 단독 모드로 열려요.',
+      dash_empty: '연동할 프로젝트가 아직 없어요.\n좌측 VOICE·MUSIC·SFX로 단독 생성을 시작할 수 있어요.',
       dash_standalone: '단독으로 시작',
       dash_open_voice: 'VOICE 단독', dash_open_sfx: 'SFX 단독',
       mode_label: '모드', mode_project: '프로젝트', mode_instance: '단독',
-      tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX', music_badge: '준비중',
+      tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX',
+      music_title: '음악', music_kind: '종류', music_kind_bgm: '배경음악', music_kind_song: '노래(가사)',
+      music_prompt_label: '어떤 음악인가요', music_prompt_placeholder: '예: 아이들이 따라 추기 좋은 통통 튀는 댄스 챌린지 음악',
+      music_genre: '장르', music_mood: '분위기', music_duration: '길이', music_loop: '반복 재생',
+      music_lyrics: '가사', music_lyrics_placeholder: '빈 줄로 구간을 나눠요. 구간 첫 줄에 [1절] [후렴]처럼 적으면 그 구간으로 불러요.\n\n[1절]\n오늘도 신나게 춤을 춰요\n\n[후렴]\n다 같이 빙글빙글',
+      music_vocal: '보컬', music_fill: '에피소드 내용으로 채우기', music_fill_empty: '이 에피소드에서 가져올 내용이 없어요.',
+      music_quote: '예상 {n} 크레딧', music_quote_loading: '예상 크레딧 계산 중…', generate_music: '음악 생성',
+      no_music_prompt: '어떤 음악인지 적거나 장르·분위기를 골라주세요.', no_lyrics: '가사를 입력해주세요.',
+      music_kind_badge_bgm: 'BGM', music_kind_badge_song: 'SONG',
       segments_title: '대화 세그먼트', add_segment: '＋ 세그먼트', seg_placeholder: '대사 텍스트 입력…  (감정 태그: [calm] [warmly])',
       scene_import: '씬 대사 불러오기',
       settings_title: '설정', voice_label: '보이스', voice_pick: '보이스 선택', voice_none: '보이스를 선택하세요',
@@ -180,12 +208,20 @@
       title: 'AI Audio',
       nav_dashboard: 'Dashboard',
       dash_title: 'AI Audio',
-      dash_hint: 'Pick a project (episode) to bind its brand & episode.\nOpen VOICE·SFX on the left without a project for standalone mode.',
-      dash_empty: 'No projects to bind yet.\nUse VOICE·SFX on the left to start standalone.',
+      dash_hint: 'Pick a project (episode) to bind its brand & episode.\nOpen VOICE·MUSIC·SFX on the left without a project for standalone mode.',
+      dash_empty: 'No projects to bind yet.\nUse VOICE·MUSIC·SFX on the left to start standalone.',
       dash_standalone: 'Start standalone',
       dash_open_voice: 'VOICE solo', dash_open_sfx: 'SFX solo',
       mode_label: 'Mode', mode_project: 'Project', mode_instance: 'Standalone',
-      tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX', music_badge: 'Soon',
+      tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX',
+      music_title: 'Music', music_kind: 'Type', music_kind_bgm: 'Background music', music_kind_song: 'Song (lyrics)',
+      music_prompt_label: 'What kind of music', music_prompt_placeholder: 'e.g. bouncy dance-challenge music kids can follow along to',
+      music_genre: 'Genre', music_mood: 'Mood', music_duration: 'Length', music_loop: 'Loop',
+      music_lyrics: 'Lyrics', music_lyrics_placeholder: 'Separate sections with a blank line. Start a section with [Verse 1] or [Chorus] to sing it as that section.\n\n[Verse 1]\nLet us dance again today\n\n[Chorus]\nSpin around together',
+      music_vocal: 'Vocals', music_fill: 'Fill from episode', music_fill_empty: 'Nothing to import from this episode.',
+      music_quote: 'Estimated {n} credits', music_quote_loading: 'Estimating credits…', generate_music: 'Generate music',
+      no_music_prompt: 'Describe the music or pick a genre or mood.', no_lyrics: 'Please enter lyrics.',
+      music_kind_badge_bgm: 'BGM', music_kind_badge_song: 'SONG',
       segments_title: 'Dialogue Segments', add_segment: '+ Segment', seg_placeholder: 'Enter dialogue…  (emotion tags: [calm] [warmly])',
       scene_import: 'Import scene lines',
       settings_title: 'Settings', voice_label: 'Voice', voice_pick: 'Select voice', voice_none: 'Please select a voice',
@@ -233,6 +269,16 @@
     sfxLooping: false,
     sfxInfluence: 0.3,
     sfxCategory: '',
+    musicKind: 'bgm',      // 'bgm' | 'song'
+    musicPrompt: '',
+    musicGenres: [],       // 영어 값
+    musicMoods: [],
+    musicDuration: 30,
+    musicLooping: true,
+    musicLyrics: '',
+    musicVocal: '',
+    musicQuote: null,      // 예상 크레딧 숫자 | null
+    musicQuoteKey: '',
     voices: [],
     assets: [],
     generating: false,
@@ -432,9 +478,7 @@
     var tabbar = el('div', 'snd-tabbar');
     var tabs = el('div', 'snd-tabs');
     tabs.appendChild(makeTab('voice', t('tab_voice')));
-    var musicTab = makeTab('music', t('tab_music'), true);
-    musicTab.appendChild(el('span', 'snd-tab-badge', { textContent: t('music_badge') }));
-    tabs.appendChild(musicTab);
+    tabs.appendChild(makeTab('music', t('tab_music')));
     tabs.appendChild(makeTab('sfx', t('tab_sfx')));
     tabbar.appendChild(tabs);
     wrap.appendChild(tabbar);
@@ -445,7 +489,7 @@
     if (state.tab === 'voice') left.appendChild(renderSegmentsPanel());
     left.appendChild(renderAssetsPanel());
     layout.appendChild(left);
-    layout.appendChild(state.tab === 'sfx' ? renderSfxPanel() : renderVoiceSettingsPanel());
+    layout.appendChild(state.tab === 'sfx' ? renderSfxPanel() : (state.tab === 'music' ? renderMusicPanel() : renderVoiceSettingsPanel()));
     wrap.appendChild(layout);
 
     root.appendChild(wrap);
@@ -496,7 +540,7 @@
     state.currentProject = null;
     state.currentBrand = null;
     state.view = 'studio';
-    state.tab = (tab === 'sfx') ? 'sfx' : 'voice';
+    state.tab = normalizeTab(tab);
     render();
     loadVoices();
     loadAssets();
@@ -526,14 +570,16 @@
   }
   snd.setView = function (v) {
     if (v === 'dashboard') { openDashboard(); return; }
-    if (v === 'voice' || v === 'sfx') { openStudioInstance(v); return; }
+    if (v === 'voice' || v === 'music' || v === 'sfx') { openStudioInstance(v); return; }
   };
   snd.setTab = function (tab) {
-    if (tab !== 'voice' && tab !== 'sfx') return;
+    if (tab !== 'voice' && tab !== 'music' && tab !== 'sfx') return;
     state.view = 'studio';
     state.tab = tab;
     render();
   };
+
+  function normalizeTab(tab) { return (tab === 'sfx' || tab === 'music') ? tab : 'voice'; }
 
   function makeTab(id, label, disabled) {
     var b = el('button', 'snd-tab' + (state.tab === id ? ' is-active' : '') + (disabled ? ' is-disabled' : ''), { type: 'button', textContent: label });
@@ -866,6 +912,159 @@
     return panel;
   }
 
+  // ── MUSIC panel (MUSIC right) ──
+  function chipLabel(c) { return state.lang === 'en' ? c.en : c.ko; }
+  function toggleIn(list, v) {
+    var i = list.indexOf(v);
+    if (i === -1) list.push(v); else list.splice(i, 1);
+  }
+  function renderChipField(label, items, isActive, onToggle) {
+    var f = el('div', 'snd-field');
+    f.appendChild(el('span', 'snd-label', { textContent: label }));
+    var chips = el('div', 'snd-cat-chips');
+    items.forEach(function (c) {
+      var b = el('button', 'snd-cat-chip' + (isActive(c.v) ? ' is-active' : ''), { type: 'button', textContent: chipLabel(c) });
+      b.addEventListener('click', function () { onToggle(c.v); render(); });
+      chips.appendChild(b);
+    });
+    f.appendChild(chips);
+    return f;
+  }
+
+  function durationLabel(d) {
+    var en = state.lang === 'en';
+    var m = Math.floor(d / 60), sec = d % 60;
+    if (!m) return sec + (en ? 's' : '초');
+    return m + (en ? ' min' : '분') + (sec ? ' ' + sec + (en ? 's' : '초') : '');
+  }
+
+  function renderMusicPanel() {
+    var panel = el('div', 'snd-gen-panel');
+    panel.appendChild(el('div', 'snd-panel-title', { textContent: t('music_title') }));
+
+    // 종류: 배경음악 / 노래(가사)
+    var kf = el('div', 'snd-field');
+    kf.appendChild(el('span', 'snd-label', { textContent: t('music_kind') }));
+    var seg = el('div', 'snd-kind-toggle');
+    ['bgm', 'song'].forEach(function (k) {
+      var b = el('button', 'snd-kind-btn' + (state.musicKind === k ? ' is-active' : ''), { type: 'button', textContent: t(k === 'bgm' ? 'music_kind_bgm' : 'music_kind_song') });
+      b.addEventListener('click', function () { state.musicKind = k; render(); });
+      seg.appendChild(b);
+    });
+    kf.appendChild(seg);
+    panel.appendChild(kf);
+
+    // 어떤 음악인가요
+    var pf = el('div', 'snd-field');
+    pf.appendChild(el('span', 'snd-label', { textContent: t('music_prompt_label') }));
+    var ta = el('textarea', 'snd-prompt snd-prompt--short', { placeholder: t('music_prompt_placeholder') });
+    ta.value = state.musicPrompt;
+    ta.addEventListener('input', function () { state.musicPrompt = ta.value; });
+    pf.appendChild(ta);
+    panel.appendChild(pf);
+
+    panel.appendChild(renderChipField(t('music_genre'), MUSIC_GENRES,
+      function (v) { return state.musicGenres.indexOf(v) !== -1; }, function (v) { toggleIn(state.musicGenres, v); }));
+    panel.appendChild(renderChipField(t('music_mood'), MUSIC_MOODS,
+      function (v) { return state.musicMoods.indexOf(v) !== -1; }, function (v) { toggleIn(state.musicMoods, v); }));
+
+    // 노래일 때만: 가사 + 보컬
+    if (state.musicKind === 'song') {
+      var lf = el('div', 'snd-field');
+      lf.appendChild(el('span', 'snd-label', { textContent: t('music_lyrics') }));
+      var lta = el('textarea', 'snd-prompt snd-prompt--lyrics', { placeholder: t('music_lyrics_placeholder') });
+      lta.value = state.musicLyrics;
+      lta.addEventListener('input', function () { state.musicLyrics = lta.value; });
+      lf.appendChild(lta);
+      panel.appendChild(lf);
+      panel.appendChild(renderChipField(t('music_vocal'), MUSIC_VOCALS,
+        function (v) { return state.musicVocal === v; }, function (v) { state.musicVocal = (state.musicVocal === v) ? '' : v; }));
+    }
+
+    // 길이 + 반복 재생(배경음악만)
+    var row = el('div', 'snd-row');
+    var df = el('div', 'snd-field');
+    df.appendChild(el('span', 'snd-label', { textContent: t('music_duration') }));
+    var dsel = el('select', 'snd-select');
+    MUSIC_DURATIONS.forEach(function (d) {
+      var o = el('option', '', { value: String(d), textContent: durationLabel(d) });
+      if (d === state.musicDuration) o.selected = true;
+      dsel.appendChild(o);
+    });
+    dsel.addEventListener('change', function () { state.musicDuration = Number(dsel.value); refreshMusicQuote(); });
+    df.appendChild(dsel);
+    row.appendChild(df);
+    if (state.musicKind === 'bgm') {
+      var lpf = el('div', 'snd-field');
+      lpf.appendChild(el('span', 'snd-label', { textContent: t('music_loop') }));
+      var lbtn = el('button', 'snd-toggle-btn' + (state.musicLooping ? ' is-on' : ''), { type: 'button', textContent: state.musicLooping ? 'On' : 'Off' });
+      lbtn.addEventListener('click', function () { state.musicLooping = !state.musicLooping; render(); });
+      lpf.appendChild(lbtn);
+      row.appendChild(lpf);
+    }
+    panel.appendChild(row);
+
+    // 에피소드 내용으로 채우기(에피소드 모드)
+    if (isProjectMode()) {
+      var fill = el('button', 'btn-secondary snd-scene-btn', { type: 'button', textContent: t('music_fill') });
+      fill.addEventListener('click', fillMusicFromEpisode);
+      panel.appendChild(fill);
+    }
+
+    // 예상 크레딧 + 생성
+    panel.appendChild(el('div', 'snd-quote', { textContent: state.musicQuote == null ? t('music_quote_loading') : t('music_quote').replace('{n}', String(state.musicQuote)) }));
+    var gen = el('button', 'btn-primary snd-gen-btn' + (state.generating ? ' is-loading' : ''), { type: 'button', textContent: state.generating ? t('generating') : t('generate_music') });
+    if (state.generating) gen.disabled = true;
+    gen.addEventListener('click', generateMusic);
+    panel.appendChild(gen);
+    if (state.musicQuoteKey !== String(state.musicDuration)) refreshMusicQuote();
+    return panel;
+  }
+
+  // 예상 크레딧: 서버 요금표(quoteCredits 'music')를 그대로 쓴다. 실제 차감은 사용량 정산으로 이보다 적을 수 있다.
+  var _musicQuoteSeq = 0;
+  function refreshMusicQuote() {
+    var key = String(state.musicDuration);
+    state.musicQuoteKey = key;
+    if (!NK.api || !NK.api.creditQuote) return;
+    var seq = ++_musicQuoteSeq;
+    NK.api.creditQuote('music', { durationSec: state.musicDuration }).then(function (data) {
+      if (seq !== _musicQuoteSeq) return;
+      var n = Number(data && data.quote && data.quote.credits);
+      state.musicQuote = isFinite(n) ? n : null;
+      var q = root && root.querySelector('.snd-quote');
+      if (q && state.tab === 'music') q.textContent = state.musicQuote == null ? '' : t('music_quote').replace('{n}', String(state.musicQuote));
+    }).catch(function () {});
+  }
+
+  // 에피소드의 주제·장르·톤으로 설명을 채우고, 노래면 시나리오 가사도 가져온다.
+  function fillMusicFromEpisode() {
+    var p = (state.currentProject && state.currentProject.payload) || {};
+    var topic = String(p.topic || p.episodeTitle || (state.currentProject && state.currentProject.title) || '').trim();
+    var cat = Array.isArray(p.purposeCategory) ? p.purposeCategory[0] : p.purposeCategory;
+    var tones = Array.isArray(p.tones) ? p.tones.filter(Boolean) : [];
+    var parts = [];
+    if (topic) parts.push(state.lang === 'en' ? ('Music for "' + topic + '"') : ('"' + topic + '"에 어울리는 음악'));
+    if (cat) parts.push((state.lang === 'en' ? 'genre feel: ' : '장르 느낌: ') + cat);
+    if (tones.length) parts.push((state.lang === 'en' ? 'tone: ' : '분위기: ') + tones.join(', '));
+    var lyrics = '';
+    if (state.musicKind === 'song') {
+      var scenes = Array.isArray(p.scenes) ? p.scenes : [];
+      var seen = {};
+      lyrics = scenes.map(function (sc) {
+        var txt = String((sc && (sc.lyrics || sc.lyricsText)) || '').replace(/@+/g, '').trim();
+        if (!txt || seen[txt]) return '';
+        seen[txt] = true;
+        var label = String((sc && sc.songSectionLabel) || '').trim();
+        return (label ? label + '\n' : '') + txt;
+      }).filter(Boolean).join('\n\n');
+    }
+    if (!parts.length && !lyrics) { alert(t('music_fill_empty')); return; }
+    if (parts.length) state.musicPrompt = parts.join(' · ');
+    if (lyrics) state.musicLyrics = lyrics;
+    render();
+  }
+
   // ── Assets / history panel (left-bottom) ──
   function renderAssetsPanel() {
     var panel = el('div', 'snd-panel');
@@ -884,8 +1083,7 @@
 
     var body = el('div', 'snd-panel-body');
     var list = state.assets;
-    if (state.tab === 'sfx') list = list.filter(function (a) { return a.type === 'sfx'; });
-    else if (state.tab === 'voice') list = list.filter(function (a) { return a.type === 'voice'; });
+    list = list.filter(function (a) { return a.type === state.tab; });
 
     if (!list.length) {
       body.appendChild(el('div', 'snd-empty', { textContent: state.assetsLoading ? (state.lang === 'en' ? 'Loading…' : '불러오는 중…') : t('assets_empty') }));
@@ -896,10 +1094,21 @@
     return panel;
   }
 
+  function assetBadge(a) {
+    if (a.type === 'music') return t(((a.params && a.params.kind) || a.kind) === 'song' ? 'music_kind_badge_song' : 'music_kind_badge_bgm');
+    return a.type === 'sfx' ? 'SFX' : 'VOICE';
+  }
+  // 음악은 저장 경로로 매번 새 주소를 만든다 — 저장해 둔 서명 주소는 1시간 뒤 만료돼 재생이 끊긴다.
+  function assetPlayUrl(a) {
+    var obj = a.type === 'music' ? String((a.params && a.params.objectName) || a.objectName || '') : '';
+    if (obj && NK.api && NK.api.mediaProxyObjectUrl) return NK.api.mediaProxyObjectUrl(obj);
+    return a.outputUrl || '';
+  }
+
   function renderAsset(a) {
     var card = el('div', 'snd-asset' + (a.status === 'processing' ? ' is-processing' : ''));
     var top = el('div', 'snd-asset-top');
-    top.appendChild(el('span', 'snd-asset-type' + (a.type === 'sfx' ? ' snd-asset-type--sfx' : ''), { textContent: a.type === 'sfx' ? 'SFX' : 'VOICE' }));
+    top.appendChild(el('span', 'snd-asset-type' + (a.type === 'voice' ? '' : ' snd-asset-type--' + a.type), { textContent: assetBadge(a) }));
     top.appendChild(el('span', 'snd-asset-title', { textContent: a.title || a.prompt || a.textContent || '사운드' }));
     if (a.status === 'processing') top.appendChild(el('span', 'snd-spinner'));
     card.appendChild(top);
@@ -909,13 +1118,14 @@
     if (a.durationSeconds) metaParts.push(a.durationSeconds + 's');
     if (metaParts.length) card.appendChild(el('div', 'snd-asset-meta', { textContent: metaParts.join(' · ') }));
 
-    if (a.outputUrl && a.status !== 'processing') {
-      var audio = el('audio', '', { controls: '1', preload: 'none', src: a.outputUrl });
+    var playUrl = assetPlayUrl(a);
+    if (playUrl && a.status !== 'processing') {
+      var audio = el('audio', '', { controls: '1', preload: 'none', src: playUrl });
       applyPlaybackRate(audio);
       audio.addEventListener('loadedmetadata', function () { applyPlaybackRate(audio); });
       card.appendChild(audio);
       var actions = el('div', 'snd-asset-actions');
-      var dl = el('a', 'snd-mini-btn', { href: a.outputUrl, download: (a.title || 'sound') + (/^wav/i.test(String(a.outputFormat || '')) ? '.wav' : '.mp3'), target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
+      var dl = el('a', 'snd-mini-btn', { href: playUrl, download: (a.title || 'sound') + (/^wav/i.test(String(a.outputFormat || '')) ? '.wav' : '.mp3'), target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
       dl.appendChild(document.createTextNode(t('download')));
       actions.appendChild(dl);
       card.appendChild(actions);
@@ -1316,6 +1526,49 @@
     });
   }
 
+  function generateMusic() {
+    var kind = state.musicKind === 'song' ? 'song' : 'bgm';
+    var prompt = (state.musicPrompt || '').trim();
+    if (kind === 'song' && !(state.musicLyrics || '').trim()) { alert(t('no_lyrics')); return; }
+    if (kind === 'bgm' && !prompt && !state.musicGenres.length && !state.musicMoods.length) { alert(t('no_music_prompt')); return; }
+    state.generating = true;
+
+    var title = (prompt || state.musicGenres.concat(state.musicMoods).join(' · ') || t(kind === 'song' ? 'music_kind_song' : 'music_kind_bgm')).slice(0, 60);
+    var localId = genId('asset');
+    state.assets.unshift({ id: localId, _local: true, type: 'music', kind: kind, status: 'processing', title: title, outputUrl: '' });
+    render();
+
+    var payload = {
+      mode: isProjectMode() ? 'project' : 'instance',
+      kind: kind,
+      prompt: prompt,
+      genres: state.musicGenres.slice(),
+      moods: state.musicMoods.slice(),
+      durationSec: state.musicDuration,
+      looping: kind === 'bgm' && state.musicLooping,
+      lyrics: kind === 'song' ? state.musicLyrics : '',
+      vocal: kind === 'song' ? state.musicVocal : ''
+    };
+    if (isProjectMode()) { payload.brandId = brandId(); payload.episodeId = episodeId(); }
+    else { payload.sessionId = state.sessionId; }
+
+    NK.api.soundMusicGenerate(payload).then(function (res) {
+      state.generating = false;
+      state.assets = state.assets.filter(function (a) { return a.id !== localId; });
+      state.assets.unshift({ id: res.assetId || localId, type: 'music', kind: kind, status: 'ready', title: title, model: res.provider || '',
+        objectName: res.objectName || '', params: { kind: kind, objectName: res.objectName || '' },
+        outputUrl: res.outputUrl, outputFormat: res.outputFormat || '', durationSeconds: res.durationSeconds || state.musicDuration });
+      render();
+      loadAssets();
+      try { window.dispatchEvent(new CustomEvent('nk:credits-changed')); } catch (_) {}
+    }).catch(function (err) {
+      state.generating = false;
+      state.assets = state.assets.filter(function (a) { return a.id !== localId; });
+      render();
+      alert((state.lang === 'en' ? 'Generation failed: ' : '생성 실패: ') + explainError(err));
+    });
+  }
+
   function detectLang() {
     try {
       var l = String(localStorage.getItem('nk_lang') || 'ko').toLowerCase();
@@ -1346,10 +1599,10 @@
     //  ?projectId → 프로젝트 스튜디오 / ?detached·?tab → 단독 스튜디오 / 그 외 → 대시보드
     if (state.projectId) {
       state.view = 'studio';
-      state.tab = (tabParam === 'sfx') ? 'sfx' : 'voice';
+      state.tab = normalizeTab(tabParam);
     } else if (det || tabParam) {
       state.view = 'studio';
-      state.tab = (tabParam === 'sfx') ? 'sfx' : 'voice';
+      state.tab = normalizeTab(tabParam);
       state.currentProject = null; state.currentBrand = null;
     } else {
       state.view = 'dashboard';
