@@ -17,7 +17,7 @@ test("서버: 완성 영상 복제본 이름은 작업 기준으로 고정하고
   assert.match(body, /const objectName = `\$\{targetPrefix\}\$\{sceneSafe\}-\$\{jobKey\}\.mp4`/);
   assert.doesNotMatch(body, /Date\.now\(\)/, "이름에 현재 시각을 쓰지 않는다");
   const existsAt = body.indexOf("if (existing.ok)");
-  const downloadAt = body.indexOf("const bufRes = await fetch(sourceUrl)");
+  const downloadAt = body.indexOf("const bufRes = await fetch(sourceUrl");
   assert.ok(existsAt > 0 && downloadAt > existsAt, "원본을 내려받기 전에 이미 복제된 파일이 있는지 본다");
 });
 
@@ -25,7 +25,7 @@ test("화면: 앞선 상태 조회가 끝나기 전엔 다음 조회를 보내�
   const start = client.indexOf("function pollVideoStatus(");
   const body = client.slice(start, client.indexOf("state.polls[resultId] = setInterval(check", start));
   assert.match(body, /if \(stopped \|\| inFlight\) return;/);
-  assert.match(body, /inFlight = true;\s*\n\s*NK\.api\.videoStatus\(/);
+  assert.match(body, /inFlight = true;[\s\S]*?NK\.api\.videoStatus\(/);
   assert.match(body, /var inFlight = false;/);
   assert.equal((body.match(/\n\s+inFlight = false;/g) || []).length, 2, "성공·실패 양쪽에서 조회 잠금을 푼다");
 });
@@ -68,4 +68,24 @@ test("생성 결과 카드에 생성 날짜·시각을 표시한다", () => {
   assert.match(client, /var localDate = formatCreatedAt\(r\.createdAt\);/);
   assert.match(client, /var serverDate = formatCreatedAt\(s\.timeCreated \|\| s\.updated\);/);
   assert.match(read("ai-video-gen-stage.html"), /\.vgen-result-date \{/);
+});
+
+// 2026-09-29: 모션 컨트롤 영상이 완료됐는데 새로고침 전엔 '생성 중'에 머물렀다.
+// 완료 직후 조회가 영상 복제로 멈추면 inFlight 가 풀리지 않아 폴링이 통째로 멈췄다.
+test("화면: 멈춘 상태 조회는 시간 한도로 끊고, 실패로 치지 않고 다음 차례에 다시 묻는다", () => {
+  const start = client.indexOf("function pollVideoStatus(");
+  const body = client.slice(start, client.indexOf("state.polls[resultId] = setInterval(check", start));
+  assert.match(client, /var STATUS_REQUEST_TIMEOUT_MS = \d+;/);
+  assert.match(body, /setTimeout\(function \(\) \{ ctrl\.abort\(\); \}, STATUS_REQUEST_TIMEOUT_MS\)/);
+  assert.match(body, /ctrl \? \{ signal: ctrl\.signal \} : undefined/);
+  const abortAt = body.indexOf("err.name === 'AbortError'");
+  const countAt = body.indexOf("consecutiveErrors++");
+  assert.ok(abortAt > 0 && countAt > abortAt, "시간 초과는 연속 오류로 세기 전에 걸러 낸다");
+});
+
+test("서버: 완료 영상 복제의 받기·올리기는 시간 한도가 있다", () => {
+  const start = status.indexOf("const flattenPlayback = async");
+  const body = status.slice(start, status.indexOf("if (isGrok)", start));
+  assert.equal((body.match(/signal: AbortSignal\.timeout\(MIRROR_STEP_TIMEOUT_MS\)/g) || []).length, 2);
+  assert.match(status, /const MIRROR_STEP_TIMEOUT_MS = \d/);
 });

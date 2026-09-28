@@ -5,6 +5,9 @@ import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjec
 import { authorizeRequest } from "../_shared/auth.js";
 import { requireMaster } from "../_shared/admin-users";
 import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
+
+// 완료 영상 복제의 받기·올리기 단계별 최대 대기(화면의 조회 한도 90초 안에 둘 다 끝나거나 끊기게).
+const MIRROR_STEP_TIMEOUT_MS = 40_000;
 import { resolveProjectStorageOwner } from "../_shared/shares";
 import { settleDeferredCreditFromResponse } from "../_shared/credits";
 import {
@@ -170,7 +173,9 @@ const handleGet: PagesFunction = async ({ request, env }) => {
           return await signAsStorageUrl(outParsed.bucket, objectName);
         }
 
-        const bufRes = await fetch(sourceUrl);
+        // 원본 받기·올리기에 시간 한도를 둔다. 멈추면 이 조회가 끝나지 않아 화면 폴링까지 멈췄다(2026-09-29 모션 컨트롤).
+        // 끊기면 '' → 'processing' 으로 답하고, 다음 조회가 같은 이름으로 다시 복제한다.
+        const bufRes = await fetch(sourceUrl, { signal: AbortSignal.timeout(MIRROR_STEP_TIMEOUT_MS) });
         if (!bufRes.ok) {
           log('flatten_source_failed', {
             host: safeHost(sourceUrl),
@@ -191,7 +196,8 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         const upRes = await fetch(uploadUrl, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" },
-          body: buf
+          body: buf,
+          signal: AbortSignal.timeout(MIRROR_STEP_TIMEOUT_MS),
         });
         const upTxt = await upRes.text();
         if (!upRes.ok) {

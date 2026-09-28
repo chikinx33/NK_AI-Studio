@@ -212,6 +212,8 @@
   var STORAGE_SESSION_KEY = 'nk_video_gen_session_id';
   var MAX_RESULTS  = 50;
   var POLL_INTERVAL_MS = 4000;
+  // 상태 조회 한 번의 최대 대기. 완료 직후엔 서버가 영상을 받아 복제하느라 길어질 수 있어 넉넉히 둔다.
+  var STATUS_REQUEST_TIMEOUT_MS = 90000;
   var MAX_POLL_ATTEMPTS = 120; // ~8 min (veo/grok 기본)
   // 느린 모델은 8분 안에 끝나지 않아 성공한 생성을 timeout 으로 버리는 일이 있었다.
   var MAX_POLL_ATTEMPTS_SLOW = 300; // ~20 min
@@ -3307,9 +3309,15 @@
       }
       attempts++;
       inFlight = true;
+      // 조회 하나가 응답 없이 멈추면 inFlight 가 풀리지 않아 폴링이 통째로 멈췄다 — 완료돼도 새로고침 전엔
+      // 카드가 '생성 중'에 머물렀다(2026-09-29 모션 컨트롤). 오래 걸리는 조회는 끊고 다음 차례에 다시 묻는다.
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var abortTimer = ctrl ? setTimeout(function () { ctrl.abort(); }, STATUS_REQUEST_TIMEOUT_MS) : null;
 
-      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen', meta: meta })
+      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen', meta: meta },
+        ctrl ? { signal: ctrl.signal } : undefined)
         .then(function (data) {
+          if (abortTimer) clearTimeout(abortTimer);
           inFlight = false;
           if (stopped) return;
           consecutiveErrors = 0;
@@ -3349,8 +3357,14 @@
           }
         })
         .catch(function (err) {
+          if (abortTimer) clearTimeout(abortTimer);
           inFlight = false;
           if (stopped) return;
+          // 시간 초과로 끊은 조회는 실패가 아니다(서버가 완료 영상을 복제하는 중일 수 있다). 다음 차례에 다시 묻는다.
+          if (err && err.name === 'AbortError') {
+            console.warn('[vgen] status poll timed out, retrying', resultId);
+            return;
+          }
           // 조용히 삼키면 카드가 영원히 'processing' 으로 남는다. 연속 3회면 실패로 확정.
           consecutiveErrors++;
           console.error('[vgen] status poll error', resultId, consecutiveErrors, err && err.message);
