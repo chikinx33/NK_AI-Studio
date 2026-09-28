@@ -997,37 +997,7 @@
       };
 
       // M1 트랙 클립으로 저장 (project.payload.musicUrl 업데이트 → buildTimelineModel이 반영)
-      var proj2 = getProjectByStateId();
-      if (proj2) {
-        if (!proj2.payload) proj2.payload = {};
-        proj2.payload.musicUrl = data.musicUrl;
-        proj2.payload.musicMeta = musicMeta;
-        proj2.musicUrl = data.musicUrl;
-        proj2.musicMeta = musicMeta;
-        // 이전에 music-0 클립을 삭제한 적 있으면 deleted 플래그를 제거해야 새 클립이 표시됨
-        if (proj2.postTimelineEdits && proj2.postTimelineEdits['music-0']) {
-          delete proj2.postTimelineEdits['music-0'];
-        }
-        if (proj2.payload.postTimelineEdits && proj2.payload.postTimelineEdits['music-0']) {
-          delete proj2.payload.postTimelineEdits['music-0'];
-        }
-      }
-      if (state.sessionEdits && state.sessionEdits['music-0']) {
-        delete state.sessionEdits['music-0'];
-      }
-      // CRITICAL: musicUrl/musicMeta 를 storage에도 즉시 영구 반영
-      // (이후 다른 svc 호출이 storage를 다시 읽어 in-memory 변경을 덮어쓰는 것 방지)
-      try {
-        var svcMusic = getPostprodStateService();
-        if (svcMusic && svcMusic.applySavedPostProductionPayload && state.projectId) {
-          svcMusic.applySavedPostProductionPayload(state.projectId, {
-            musicUrl: data.musicUrl,
-            musicMeta: musicMeta
-          });
-        }
-      } catch (_) { }
-      setDirty(true);
-      post.render();
+      setProjectMusic(data.musicUrl, musicMeta);
 
       // 사용된 음악 생성 엔진 및 22초 클램프 안내 (ElevenLabs 폴백일 때만 적용).
       var providerLabel = data.providerUsed === 'lyria-3-pro-preview'
@@ -3361,6 +3331,117 @@
     return { label: fb || stripped, ext: ext.toUpperCase(), base: base };
   }
 
+  // M1(배경음악) 트랙에 음악을 올린다: project.payload.musicUrl/musicMeta → buildTimelineModel 이 music-0 클립으로 그린다.
+  function setProjectMusic(url, meta) {
+    var proj = getProjectByStateId();
+    if (proj) {
+      if (!proj.payload) proj.payload = {};
+      proj.payload.musicUrl = url;
+      proj.payload.musicMeta = meta;
+      proj.musicUrl = url;
+      proj.musicMeta = meta;
+      // 이전에 music-0 클립을 삭제한 적 있으면 deleted 플래그를 제거해야 새 클립이 표시됨
+      if (proj.postTimelineEdits && proj.postTimelineEdits['music-0']) delete proj.postTimelineEdits['music-0'];
+      if (proj.payload.postTimelineEdits && proj.payload.postTimelineEdits['music-0']) delete proj.payload.postTimelineEdits['music-0'];
+    }
+    if (state.sessionEdits && state.sessionEdits['music-0']) delete state.sessionEdits['music-0'];
+    // CRITICAL: musicUrl/musicMeta 를 storage에도 즉시 영구 반영
+    // (이후 다른 svc 호출이 storage를 다시 읽어 in-memory 변경을 덮어쓰는 것 방지)
+    try {
+      var svcMusic = getPostprodStateService();
+      if (svcMusic && svcMusic.applySavedPostProductionPayload && state.projectId) {
+        svcMusic.applySavedPostProductionPayload(state.projectId, { musicUrl: url, musicMeta: meta });
+      }
+    } catch (_) { }
+    setDirty(true);
+    post.render();
+  }
+
+  // ── 음악 저장소 (M1 트랙 '저장소 불러오기') ──────────────────────────────
+  // 오디오 스튜디오 MUSIC 탭에서 이 에피소드로 만들었거나 '브랜드에 보관'한 음악(sound_assets type=music)을 고른다.
+  // 재생 주소는 저장 경로로 매번 새로 만든다 — 저장해 둔 서명 주소는 1시간 뒤 만료된다.
+  var musicLibModal = null;
+  function musicAssetUrl(a) {
+    var obj = String((a && a.params && a.params.objectName) || '').trim();
+    if (obj && NK.api && NK.api.mediaProxyObjectUrl) return NK.api.mediaProxyObjectUrl(obj);
+    return String((a && a.outputUrl) || '');
+  }
+  function closeMusicLibrary() {
+    if (!musicLibModal) return;
+    musicLibModal.querySelectorAll('audio').forEach(function (au) { try { au.pause(); } catch (_) {} });
+    musicLibModal.classList.remove('is-open');
+    musicLibModal.setAttribute('aria-hidden', 'true');
+  }
+  function openMusicLibrary() {
+    var en = currentLang() === 'en';
+    if (!musicLibModal || !musicLibModal.parentNode) {
+      musicLibModal = document.createElement('div');
+      musicLibModal.className = 'postprod-storage-overlay';
+      musicLibModal.setAttribute('aria-hidden', 'true');
+      musicLibModal.innerHTML =
+        '<div class="postprod-storage-dialog postprod-music-lib-dialog" role="dialog" aria-modal="true">' +
+        '<div class="postprod-storage-header">' +
+        '<h4 class="postprod-storage-title"></h4>' +
+        '<button type="button" class="postprod-storage-close" aria-label="close">✕</button>' +
+        '</div>' +
+        '<div class="postprod-storage-body"></div>' +
+        '</div>';
+      document.body.appendChild(musicLibModal);
+      musicLibModal.querySelector('.postprod-storage-close').onclick = closeMusicLibrary;
+      musicLibModal.addEventListener('click', function (e) { if (e.target === musicLibModal) closeMusicLibrary(); });
+    }
+    musicLibModal.querySelector('.postprod-storage-title').textContent = en ? 'Music library' : '음악 저장소';
+    musicLibModal.classList.add('is-open');
+    musicLibModal.setAttribute('aria-hidden', 'false');
+    var body = musicLibModal.querySelector('.postprod-storage-body');
+    body.innerHTML = '<p class="postprod-storage-loading">' + (en ? 'Loading…' : '불러오는 중...') + '</p>';
+    if (!state.projectId || !NK.api || !NK.api.soundAssets) {
+      body.innerHTML = '<p class="postprod-storage-empty">' + (en ? 'Music library is unavailable.' : '음악 저장소를 사용할 수 없습니다.') + '</p>';
+      return;
+    }
+    NK.api.soundAssets({ scope: 'project', episodeId: state.projectId, type: 'music' }).then(function (data) {
+      var items = ((data && data.assets) || []).filter(function (a) { return a && a.status !== 'failed' && musicAssetUrl(a); });
+      if (!items.length) {
+        body.innerHTML = '<p class="postprod-storage-empty">' + (en
+          ? 'No music in this episode yet.\nMake one in AI Audio → MUSIC while this episode is open, or use "Keep in brand".'
+          : '이 에피소드에 저장된 음악이 없습니다.\nAI 오디오 생성 → MUSIC 에서 이 에피소드를 연 채로 만들거나 \'브랜드에 보관\'을 해 주세요.') + '</p>';
+        return;
+      }
+      var html = '<ul class="postprod-storage-list">';
+      items.forEach(function (a, idx) {
+        var kind = (a.params && a.params.kind) === 'song' ? 'SONG' : 'BGM';
+        var meta = [kind, a.model || '', a.durationSeconds ? Math.round(a.durationSeconds) + (en ? 's' : '초') : ''].filter(Boolean).join(' · ');
+        html +=
+          '<li class="postprod-storage-item postprod-music-lib-item">' +
+          '<div class="postprod-storage-item-info">' +
+          '<span class="postprod-storage-item-name">' + escapeHtml(a.title || a.prompt || (en ? 'Music' : '음악')) + '</span>' +
+          '<span class="postprod-storage-item-meta">' + escapeHtml(meta) + '</span>' +
+          '<audio controls preload="none" src="' + escapeHtml(musicAssetUrl(a)) + '"></audio>' +
+          '</div>' +
+          '<div class="postprod-storage-item-actions">' +
+          '<button type="button" class="btn-secondary compact postprod-music-lib-use" data-idx="' + idx + '">' + (en ? 'Use' : '사용') + '</button>' +
+          '</div>' +
+          '</li>';
+      });
+      body.innerHTML = html + '</ul>';
+      body.querySelectorAll('.postprod-music-lib-use').forEach(function (btn) {
+        btn.onclick = function () {
+          var a = items[parseInt(btn.getAttribute('data-idx'), 10)];
+          if (!a) return;
+          setProjectMusic(musicAssetUrl(a), {
+            musicPrompt: String(a.prompt || ''), providerUsed: String(a.model || a.provider || ''),
+            durationGenerated: Number(a.durationSeconds || 0), soundAssetId: String(a.id || ''),
+            objectName: String((a.params && a.params.objectName) || ''), generatedAt: String(a.createdAt || '')
+          });
+          closeMusicLibrary();
+          showPostprodToast(en ? 'Music added to M1 track' : '음악이 M1 트랙에 추가됐습니다');
+        };
+      });
+    }).catch(function (err) {
+      body.innerHTML = '<p class="postprod-storage-empty">' + (en ? 'Load failed: ' : '불러오기 실패: ') + escapeHtml(String(err && err.message || err)) + '</p>';
+    });
+  }
+
   function ensureStorageModal() {
     if (storageModal && storageModal.root && storageModal.root.parentNode) return storageModal;
     if (typeof document === 'undefined' || !document.body) return null;
@@ -4899,6 +4980,9 @@
     var btns = '';
     if (track.key === 'music') {
       btns += '<button type="button" class="postprod-track-action-btn is-gen" data-action="generate-music" title="' + (lang === 'en' ? 'Generate Music' : '음악 생성') + '">✦</button>';
+      // 저장소 불러오기: 오디오 스튜디오(MUSIC)에서 이 에피소드로 만든·보관한 음악을 고른다. 아이콘 lucide folder-open.
+      btns += '<button type="button" class="postprod-track-action-btn is-library" data-action="library-music" title="' + (lang === 'en' ? 'Load from library' : '저장소 불러오기') + '">' +
+        '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg></button>';
       btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-music" title="' + (lang === 'en' ? 'Add Music' : '음악 추가') + '">+</button>';
     } else if (track.key === 'audio') {
       btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-audio" title="' + (lang === 'en' ? 'Add Audio' : '오디오 추가') + '">+</button>';
@@ -7288,6 +7372,13 @@
       btn.onclick = function (evt) {
         evt.stopPropagation();
         generateMusicForProject();
+      };
+    });
+    // 음악 저장소 불러오기
+    root.querySelectorAll('[data-action="library-music"]').forEach(function (btn) {
+      btn.onclick = function (evt) {
+        evt.stopPropagation();
+        openMusicLibrary();
       };
     });
 

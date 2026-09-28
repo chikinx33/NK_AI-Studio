@@ -8467,6 +8467,12 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   color: rgba(168, 85, 247, 1);
 }
 
+/* M1 '저장소 불러오기' — 오디오 스튜디오에서 이 에피소드로 만든 음악 목록 */
+.postprod-music-lib-dialog { width: min(560px, 100%); }
+.postprod-music-lib-item .postprod-storage-item-info { gap: 6px; flex: 1 1 auto; }
+.postprod-music-lib-dialog .postprod-storage-empty { white-space: pre-line; line-height: 1.6; }
+.postprod-music-lib-item audio { width: 100%; height: 32px; }
+
 [data-theme="light"] .postprod-track-action-btn {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.14);
