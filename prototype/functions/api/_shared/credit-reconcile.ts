@@ -29,8 +29,10 @@ export interface ReconcileItem {
 }
 
 async function fetchAtlasPrediction(key: string, predictionId: string): Promise<{ httpStatus: number; body: any }> {
+  // 공급자가 늦으면 정산 전체가 Cloudflare 제한(100초)에 걸려 아무것도 못 한다 → 한 건당 10초.
   const res = await fetch(`https://api.atlascloud.ai/api/v1/model/prediction/${encodeURIComponent(predictionId)}`, {
     headers: { Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(10_000),
   });
   const text = await res.text();
   let body: any = null;
@@ -47,7 +49,12 @@ async function fetchAtlasPrediction(key: string, predictionId: string): Promise<
 export async function reconcileReservedCredits(env: any, opts: { userId?: string; limit?: number; minAgeSec?: number; orphanAgeSec?: number } = {}): Promise<{ checked: number; committed: number; released: number; pending: number; items: ReconcileItem[] }> {
   const sql = getSql(env);
   if (!sql) throw new Error("credit_database_unavailable");
+  // 단계별 소요 시간을 남긴다(정산이 멈춘 자리를 로그로 찾기 위해). 한 번 실행은 25초 안에서 끊는다.
+  const t0 = Date.now();
+  const lap = (label: string, extra?: any) => console.log('[credit-reconcile]', label, `${Date.now() - t0}ms`, extra ?? '');
+  const budgetMs = 25_000;
   await ensureCreditSchema(sql);
+  lap('schema_ready');
   const limit = Math.max(1, Math.min(20, Math.trunc(Number(opts.limit) || 8)));
   const minAgeSec = Math.max(0, Math.trunc(Number(opts.minAgeSec ?? 60)));
   const orphanAgeSec = Math.max(60, Math.trunc(Number(opts.orphanAgeSec ?? 1800)));
@@ -59,11 +66,13 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
        FROM credit_operations WHERE ${where} ORDER BY created_at ASC LIMIT $2`,
     params,
   );
+  lap('reserved_rows', rows.length);
 
   const keyCache = new Map<string, string>();
   const master = String(env?.ATLASCLOUD_API_KEY || "").trim();
   const items: ReconcileItem[] = [];
   for (const row of rows) {
+    if (Date.now() - t0 > budgetMs) { lap('budget_exhausted', items.length); break; }
     const item: ReconcileItem = {
       operationId: String(row.id),
       userId: String(row.user_id),
@@ -114,6 +123,7 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
       item.action = "pending";
       item.reason = `error: ${String(e?.message || e).slice(0, 200)}`;
     }
+    lap('item', { op: item.operationId, job: item.providerJobId, action: item.action, status: item.providerStatus, reason: item.reason });
     items.push(item);
   }
   return {
