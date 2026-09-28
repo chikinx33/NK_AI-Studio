@@ -5399,17 +5399,19 @@ async function runUpscaleTool(input: any, ctx: ToolContext): Promise<any> {
 
 /** 립싱크 영상: /api/video/lipsync 제출(비동기) → /api/video/status 폴링 → 재생 URL. external. */
 async function runLipsyncTool(input: any, ctx: ToolContext): Promise<any> {
-  const videoId = String(input?.videoId || "").trim();
+  // Atlas 립싱크(기본 VEED, 고급 Sync.so). 예전 Kling videoId(작업 번호)는 받지 않는다 — 영상 URL 이 필요하다.
   const videoUrl = String(input?.videoUrl || "").trim();
-  if (!videoId && !videoUrl) throw new Error("videoId 또는 videoUrl 필요");
-  const mode = String(input?.mode || (input?.audioUrl ? "audio2video" : "text2video")).trim();
-  const body: any = { mode, videoId: videoId || undefined, videoUrl: videoUrl || undefined };
+  if (!videoUrl) throw new Error("videoUrl 필요(입을 맞출 인물 영상)");
+  const mode = String(input?.mode || (input?.audioUrl || input?.audioDataUrl ? "audio2video" : "text2video")).trim();
+  const model = String(input?.model || "veed").trim().toLowerCase() === "sync" ? "sync" : "veed";
+  const body: any = { mode, videoUrl, model };
+  if (model === "sync" && input?.syncMode) body.syncMode = String(input.syncMode);
   if (mode === "text2video") {
     body.text = String(input?.text || "").trim();
     if (!body.text) throw new Error("text required for text2video (대사, 최대 120자)");
-    body.voiceId = String(input?.voiceId || "");
-    body.voiceLanguage = String(input?.voiceLanguage || "ko");
-    body.voiceSpeed = Number(input?.voiceSpeed || 1.0);
+    // 텍스트 방식은 우리 TTS(Gemini 보이스 이름: Kore·Puck 등)로 음성을 먼저 만든다.
+    body.voiceId = String(input?.voiceId || "Kore");
+    if (input?.direction) body.direction = String(input.direction);
   } else {
     body.audioUrl = String(input?.audioUrl || "").trim() || undefined;
     body.audioDataUrl = String(input?.audioDataUrl || "").trim() || undefined;
@@ -5428,7 +5430,7 @@ async function runLipsyncTool(input: any, ctx: ToolContext): Promise<any> {
       throw new Error(stData.error?.message || "lipsync 생성 실패");
     }
     if (stData.done) {
-      return { videoUrl: stData.playback || stData.playbackUrl || "", kind: "video", model: "kling-lipsync", promptEcho: body.text || "audio2video" };
+      return { videoUrl: stData.playback || stData.playbackUrl || "", kind: "video", model: sub.model || (model === "sync" ? "sync/lipsync-v3" : "veed/lipsync"), promptEcho: body.text || "audio2video" };
     }
   }
   throw new Error("lipsync 생성 시간 초과");

@@ -132,7 +132,7 @@ test('서버: 규격 검사 → 업로드 → 공급자 호출, 상태 조회는
   // 다른 모델용 '입 다물기' 지시를 붙이지 않는다
   assert.match(branch, /const motionPrompt = String\(promptText \|\| ""\)\.trim\(\);/);
   assert.match(statusTs, /'kling-motion:': 'kling-motion:'/);
-  assert.match(statusTs, /isMinimax \|\| isKlingMotion \|\| isAtlasGrok/);
+  assert.match(statusTs, /isMinimax \|\| isKlingMotion \|\| isAtlasLipsync \|\| isAtlasGrok/);
 });
 
 test('Atlas 가 실패 작업 조회에 HTTP 500 을 줘도 본문 상태(failed)로 처리해 이유를 보이고 크레딧 예약을 푼다', () => {

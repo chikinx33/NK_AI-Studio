@@ -4,6 +4,7 @@
 // 서버는 요청 옵션을 정규화한 뒤 항상 다시 계산한다.
 
 import { videoCost, videoCostInputFromBody, creditsForUsd, IMAGE_UPSCALE_USD, USD_PER_CREDIT, CREDIT_MARGIN, PRICE_TABLE_DATE } from "./video-pricing.ts";
+import { LIPSYNC_MODELS, LIPSYNC_MAX_BILLED_SECONDS, lipsyncModelOf } from "./usage-cost.ts";
 
 const DEFAULT_TEST_RATES = Object.freeze({
   image_generation: 20,
@@ -113,7 +114,25 @@ export function quoteCredits(feature, body, env) {
   } else if (key === "image_upscale") {
     credits = scalarRate(rates, "image_upscale");
   } else if (key === "video_lipsync") {
-    credits = scalarRate(rates, "video_lipsync");
+    // Atlas 립싱크: 음성 길이(초) × 모델 단가(VEED $0.0132, Sync.so $0.22 — 2026-09-29 견적 실측), 최대 300초.
+    // 오디오 방식은 서버가 잰 음성 길이로 정확히, 텍스트 방식은 TTS 상한(대사 120자 × 0.5초/자)으로 예약하고
+    // 접수 때 Atlas 견적(보낸 요청 그대로)으로 예약액을 줄인다.
+    const lip = LIPSYNC_MODELS[lipsyncModelOf(input.model || input.quality)];
+    if (String(input.mode || "") === "text2video") {
+      const chars = Math.min(120, String(input.text || "").length);
+      const seconds = Math.min(LIPSYNC_MAX_BILLED_SECONDS, chars * 0.5 + 2);
+      const usd = chars * 0.00015 + 0.005 + lip.perSecond * seconds;
+      credits = creditsForUsd(usd);
+      basis = { model: lip.atlasModel, mode: "text2video", maxAudioSeconds: seconds, maxUsd: usd, metered: true };
+    } else {
+      const seconds = Number(input.inputAudioSeconds);
+      if (!(seconds > 0)) {
+        return { feature: key, credits: 0, error: "pricing_input_audio_unmeasured", message: "립싱크: 음성 길이를 읽지 못해 요금을 계산할 수 없어요(MP3·WAV·M4A).", basis: { model: lip.atlasModel }, rateCard: "cost-plus-v1", testRate: false };
+      }
+      const usd = lip.perSecond * Math.min(LIPSYNC_MAX_BILLED_SECONDS, seconds);
+      credits = creditsForUsd(usd);
+      basis = { model: lip.atlasModel, mode: "audio2video", audioSeconds: seconds, providerUsd: usd, metered: true };
+    }
   } else if (key === "voice" || key === "tts") {
     // 예약 최대 = 글자당 $0.00015(ElevenLabs $0.00008·Gemini TTS 출력 오디오보다 넉넉히) + 지시문 입력 + $0.005.
     // 실제는 공급자 사용량(ElevenLabs 과금 문자·Gemini usageMetadata·Cloud TTS 오디오 길이)으로 정산.

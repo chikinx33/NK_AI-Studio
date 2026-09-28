@@ -4,7 +4,7 @@ import { quoteCredits } from "./credit-rates.js";
 import { ensureSchemaOnce } from "./schema-marks.js";
 import { dataUrlVideoSeconds, mp4DurationSeconds } from "./motion-control.js";
 import { videoInputSourcesFor, creditsForUsd } from "./video-pricing.ts";
-import { createCostMeter, withCostMeter, type CostMeter } from "./usage-cost.ts";
+import { audioDurationSeconds, createCostMeter, withCostMeter, type CostMeter } from "./usage-cost.ts";
 import { getGoogleAccessToken, parseGcsUri } from "./gcs.js";
 
 
@@ -191,6 +191,31 @@ async function runCreditSchemaDdl(sql: SqlFn): Promise<void> {
       RETURN QUERY SELECT true,'settled_actual',a.available_credits,a.reserved_credits,CASE WHEN used>0 THEN 'committed' ELSE 'released' END,used,back;
     END $$
   `);
+  // 비동기 작업(립싱크 등): 접수 때 공급자 가격이 확정되면 예약액을 그만큼으로 줄이고 차액은 바로 돌려준다.
+  // 작업이 끝나면 줄어든 예약액을 확정(commit)하거나 전액 환불(release)한다.
+  await sql(`
+    CREATE OR REPLACE FUNCTION nk_credit_reduce_reservation(p_user_id text, p_operation_id text, p_new_cost bigint, p_usage jsonb DEFAULT '{}'::jsonb)
+    RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint, refunded bigint)
+    LANGUAGE plpgsql AS $$
+    DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE; newc bigint; back bigint; meta jsonb;
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
+      SELECT * INTO o FROM credit_operations WHERE id=p_operation_id AND user_id=p_user_id LIMIT 1;
+      IF NOT FOUND THEN RETURN QUERY SELECT false,'operation_not_found',0::bigint,0::bigint,0::bigint; RETURN; END IF;
+      SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+      IF o.status <> 'reserved' THEN RETURN QUERY SELECT true,'already_settled',a.available_credits,a.reserved_credits,0::bigint; RETURN; END IF;
+      newc := LEAST(GREATEST(COALESCE(p_new_cost,0),1), o.credit_cost);
+      back := o.credit_cost - newc;
+      IF back <= 0 THEN RETURN QUERY SELECT true,'unchanged',a.available_credits,a.reserved_credits,0::bigint; RETURN; END IF;
+      meta := o.metadata || jsonb_build_object('usage', COALESCE(p_usage,'{}'::jsonb), 'reservedCredits', o.credit_cost, 'actualCredits', newc);
+      UPDATE credit_accounts SET available_credits=available_credits+back, reserved_credits=reserved_credits-back,
+        lifetime_refunded=lifetime_refunded+back, updated_at=now() WHERE user_id=p_user_id RETURNING * INTO a;
+      UPDATE credit_operations SET credit_cost=newc, actual_cost=newc, metadata=meta, updated_at=now() WHERE id=o.id;
+      INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+        VALUES(p_user_id,o.id,'refund',back,-back,a.available_credits,a.reserved_credits,meta);
+      RETURN QUERY SELECT true,'reduced',a.available_credits,a.reserved_credits,back;
+    END $$
+  `);
   await sql(`
     CREATE OR REPLACE FUNCTION nk_credit_adjust(p_user_id text, p_actor text, p_delta bigint, p_reason text, p_metadata jsonb)
     RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint)
@@ -315,6 +340,13 @@ export async function settleCreditOperationActual(env: any, userId: string, oper
  * 래퍼는 이 헤더를 읽고 지운 뒤 예약액 안에서 실제 크레딧만 차감한다. 헤더가 없으면 예약액 그대로 확정(옛 방식).
  */
 export const PROVIDER_COST_HEADER = "X-NK-Provider-Cost";
+export async function reduceCreditReservation(env: any, userId: string, operationIdValue: string, newCredits: number, usage: any = {}): Promise<any> {
+  const sql = requireSql(env);
+  await ensureCreditSchema(sql);
+  const rows = await sql("SELECT * FROM nk_credit_reduce_reservation($1,$2,$3,$4::jsonb)", [userId, operationIdValue, Math.max(1, Math.trunc(newCredits)), JSON.stringify(usage || {})]);
+  return rows[0] || { ok: false, reason: "reduce_failed" };
+}
+
 export function withProviderCost(response: Response, usd: number, usage: Record<string, unknown> = {}): Response {
   const headers = new Headers(response.headers);
   headers.set(PROVIDER_COST_HEADER, JSON.stringify({ usd: Math.max(0, Number(usd) || 0), usage }));
@@ -370,27 +402,42 @@ function withCreditHeaders(response: Response, operation: any): Response {
 // 입력 영상 1개를 받아 길이를 잰다(요금이 입력 길이에 달린 모델: 모션 컨트롤·Grok 연장·Seedance/MiniMax 참조 영상).
 // 공급자에게 보낼 바로 그 파일이다. 못 재면 0 을 돌려 요금 계산이 과금·생성을 막게 한다(싸게 잡지 않는다).
 const MAX_MEASURE_BYTES = 80 * 1024 * 1024;
-async function measureVideoSeconds(src: string, env: any): Promise<number> {
+// 입력 미디어(data:·gs://·https) 바이트를 받는다. 너무 크거나 못 받으면 null.
+async function fetchMediaBytes(src: string, env: any): Promise<Uint8Array | null> {
   const s = String(src || "").trim();
-  if (!s) return 0;
-  if (s.startsWith("data:")) return dataUrlVideoSeconds(s);
+  if (!s) return null;
+  if (s.startsWith("data:")) {
+    const comma = s.indexOf(",");
+    if (comma < 0) return null;
+    const bin = atob(s.slice(comma + 1));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
   let url = s;
   const headers: Record<string, string> = {};
   if (s.startsWith("gs://")) {
     const parsed = parseGcsUri(s);
-    if (!parsed) return 0;
+    if (!parsed) return null;
     const token = await getGoogleAccessToken({ clientEmail: env.GOOGLE_CLIENT_EMAIL, privateKeyPem: env.GOOGLE_PRIVATE_KEY, scope: "https://www.googleapis.com/auth/devstorage.read_only" });
     url = `https://storage.googleapis.com/download/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o/${encodeURIComponent(parsed.object)}?alt=media`;
     headers.Authorization = `Bearer ${token}`;
   } else if (!/^https:\/\//i.test(s)) {
-    return 0;
+    return null;
   }
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) return 0;
+  if (!res.ok) return null;
   const size = Number(res.headers.get("content-length") || 0);
-  if (size > MAX_MEASURE_BYTES) return 0;
+  if (size > MAX_MEASURE_BYTES) return null;
   const bytes = new Uint8Array(await res.arrayBuffer());
-  return bytes.byteLength > MAX_MEASURE_BYTES ? 0 : mp4DurationSeconds(bytes);
+  return bytes.byteLength > MAX_MEASURE_BYTES ? null : bytes;
+}
+
+async function measureVideoSeconds(src: string, env: any): Promise<number> {
+  const s = String(src || "").trim();
+  if (s.startsWith("data:")) return dataUrlVideoSeconds(s);
+  const bytes = await fetchMediaBytes(s, env);
+  return bytes ? mp4DurationSeconds(bytes) : 0;
 }
 
 /**
@@ -398,7 +445,16 @@ async function measureVideoSeconds(src: string, env: any): Promise<number> {
  * 클라이언트가 적은 길이는 믿지 않는다.
  */
 export async function withMeasuredVideoInputs(feature: string, body: any, env: any): Promise<any> {
-  if (String(feature || "") !== "video" || !body || typeof body !== "object") return body;
+  if (!body || typeof body !== "object") return body;
+  if (String(feature || "") === "video_lipsync") {
+    // 립싱크는 음성 길이로 과금된다(Atlas). 오디오 방식이면 올라온 음성 파일 길이를 서버가 잰다.
+    const { inputAudioSeconds: _x, ...cleanLip } = body;
+    const audioSrc = String(cleanLip.audioDataUrl || cleanLip.audioUrl || "").trim();
+    if (String(cleanLip.mode || "") === "text2video" || !audioSrc) return cleanLip;
+    const bytes = await fetchMediaBytes(audioSrc, env).catch(() => null);
+    return { ...cleanLip, inputAudioSeconds: bytes ? audioDurationSeconds(bytes) : 0 };
+  }
+  if (String(feature || "") !== "video") return body;
   const { inputVideoSeconds: _s, referenceVideoCount: _c, hasStartImage: _a, hasEndImage: _b, hasAudio: _d, ...clean } = body;
   const sources = videoInputSourcesFor(clean);
   if (!sources.length) return clean;
@@ -459,8 +515,18 @@ export async function withCreditCharge(
         providerJobId = String(data?.jobId || data?.job_id || data?.id || data?.operationName || "");
       } catch (_) {}
       // 작업 번호가 없으면 공급자에 과금될 작업이 없다(접수 실패·검열 거부 포함) → 확정하지 않고 환불한다.
-      if (providerJobId) await attachProviderJob(env, auth.userId, String(reservation.operation_id), providerJobId);
-      else await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
+      if (providerJobId) {
+        await attachProviderJob(env, auth.userId, String(reservation.operation_id), providerJobId);
+        // 계량하는 비동기 작업: 접수 때 공급자 가격이 확정됐으면 예약액을 그만큼으로 줄인다(차액 즉시 환불).
+        // 작업 완료 시 줄어든 금액이 확정되고, 실패하면 전액 환불된다(상태 조회·서버 정산).
+        if (meter && !meter.unpriced && meter.usd > 0) {
+          const actual = creditsForUsd(meter.usd);
+          const reduced = await reduceCreditReservation(env, auth.userId, String(reservation.operation_id), actual, { calls: meter.items, providerUsd: meter.usd });
+          reservation = { ...reservation, available: reduced?.available ?? reservation.available, reserved: reduced?.reserved ?? reservation.reserved, charged: actual };
+        }
+      } else {
+        await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
+      }
     } else if (!response.ok) {
       await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
     } else {

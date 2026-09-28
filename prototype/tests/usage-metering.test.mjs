@@ -81,3 +81,32 @@ test('기능별 연결: 공급자 응답을 받는 자리에서 실제 사용량
   const imagen = read('prototype/functions/api/imagen.ts');
   assert.ok(imagen.indexOf('const output = await atlasImageOutput(result);') < imagen.indexOf('recordCost(opts.env, "atlas_image", quotedUsd'));
 });
+
+test('립싱크: Atlas(기본 VEED·고급 Sync.so), 음성 길이로 예약 → 접수 때 Atlas 견적으로 예약액 축소 → 완료 확정·실패 환불', async () => {
+  const { LIPSYNC_MODELS, lipsyncModelOf, audioDurationSeconds } = await import('../functions/api/_shared/usage-cost.ts');
+  const { quoteCredits } = await import('../functions/api/_shared/credit-rates.js');
+  assert.equal(lipsyncModelOf(undefined), 'veed');
+  assert.equal(lipsyncModelOf('sync'), 'sync');
+  assert.equal(LIPSYNC_MODELS.veed.perSecond, 0.0132);
+  assert.equal(LIPSYNC_MODELS.sync.perSecond, 0.22);
+  // 오디오 10초: VEED $0.132 → 18C, Sync.so $2.2 → 286C
+  assert.equal(quoteCredits('video_lipsync', { mode: 'audio2video', inputAudioSeconds: 10 }, {}).credits, 18);
+  assert.equal(quoteCredits('video_lipsync', { mode: 'audio2video', model: 'sync', inputAudioSeconds: 10 }, {}).credits, 286);
+  // 음성 길이를 모르면 막는다
+  assert.equal(quoteCredits('video_lipsync', { mode: 'audio2video' }, {}).error, 'pricing_input_audio_unmeasured');
+  // WAV 길이: 24kHz 16bit mono 2초
+  const pcm = Buffer.alloc(24000 * 2 * 2); const h = Buffer.alloc(44);
+  h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVE', 8); h.write('fmt ', 12); h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(24000, 24); h.writeUInt32LE(48000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+  h.write('data', 36); h.writeUInt32LE(pcm.length, 40);
+  assert.equal(audioDurationSeconds(new Uint8Array(Buffer.concat([h, pcm]))), 2);
+  const lip = read('prototype/functions/api/video/lipsync.ts');
+  assert.doesNotMatch(lip, /callKlingApi|klingEndpoints/);
+  assert.match(lip, /const quotedUsd = await atlasCalculateUsd\(atlasKey, atlasBody\);/);
+  assert.match(lip, /feature: "video_lipsync", deferAccepted: true, metered: true/);
+  assert.match(lip, /job_id: `lipsync-atlas:\$\{predictionId\}`/);
+  const credits = read('prototype/functions/api/_shared/credits.ts');
+  assert.match(credits, /CREATE OR REPLACE FUNCTION nk_credit_reduce_reservation\(/);
+  assert.match(credits, /if \(meter && !meter\.unpriced && meter\.usd > 0\) \{\s*const actual = creditsForUsd\(meter\.usd\);\s*const reduced = await reduceCreditReservation\(/);
+  assert.match(read('prototype/functions/api/video/status.ts'), /'lipsync-atlas:': 'lipsync-atlas:'/);
+});

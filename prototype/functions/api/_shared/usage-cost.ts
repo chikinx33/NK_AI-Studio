@@ -15,6 +15,8 @@
 //  ElevenLabs https://elevenlabs.io/pricing/api ("API usage is billed in US dollars ... $0.08 per 1,000 characters (multilingual models) or $0.04 (Flash/Turbo)", "Music ... $0.15 Price per minute")
 //  Atlas   https://www.atlascloud.ai/docs/billing/model-billing (calculate: "get the exact price of an image, video, or audio request")
 
+import { mp4DurationSeconds } from "./motion-control.js";
+
 export interface CostItem { label: string; usd: number | null; detail?: Record<string, unknown> }
 export interface CostMeter { usd: number; items: CostItem[]; unpriced: boolean }
 
@@ -182,4 +184,39 @@ export function mp3DurationSeconds(bytes: Uint8Array): number {
     o += frameLen;
   }
   return frames > 0 ? seconds : 0;
+}
+
+// ── 립싱크(Atlas) ─────────────────────────────────────────────
+// 2026-09-29 Atlas 견적(calculate) 실측: 음성 길이(초) 기준, 영상 길이와 무관.
+//  veed/lipsync $0.0132/초, sync/lipsync-v3 $0.22/초(음성 300초에서 $66 — 5분 상한으로 보임).
+export const LIPSYNC_MODELS: Record<string, { atlasModel: string; perSecond: number; label: string }> = {
+  veed: { atlasModel: "veed/lipsync", perSecond: 0.0132, label: "VEED Lipsync" },
+  sync: { atlasModel: "sync/lipsync-v3", perSecond: 0.22, label: "Sync.so Lipsync v3" },
+};
+export const LIPSYNC_MAX_BILLED_SECONDS = 300;
+
+export function lipsyncModelOf(raw: unknown): "veed" | "sync" {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v === "sync" || v === "sync-v3" || v === "sync/lipsync-v3" || v === "premium" ? "sync" : "veed";
+}
+
+/** 음성 파일 길이(초): WAV 헤더, MP4/M4A(moov/mvhd), MP3 프레임 순으로 읽는다. 못 읽으면 0. */
+export function audioDurationSeconds(bytes: Uint8Array): number {
+  const b = bytes;
+  if (b.length > 44 && String.fromCharCode(b[0], b[1], b[2], b[3]) === "RIFF" && String.fromCharCode(b[8], b[9], b[10], b[11]) === "WAVE") {
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    let byteRate = 0;
+    let o = 12;
+    while (o + 8 <= b.length) {
+      const id = String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
+      const size = dv.getUint32(o + 4, true);
+      if (id === "fmt " && o + 20 <= b.length) byteRate = dv.getUint32(o + 16, true);
+      if (id === "data") return byteRate > 0 ? Math.min(size, b.length - o - 8) / byteRate : 0;
+      o += 8 + size + (size % 2);
+    }
+    return 0;
+  }
+  const mp4 = mp4DurationSeconds(b);
+  if (mp4 > 0) return mp4;
+  return mp3DurationSeconds(b);
 }
