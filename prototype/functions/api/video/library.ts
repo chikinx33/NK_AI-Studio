@@ -95,16 +95,27 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
       return send({ inputsFor, inputs: pickGenerationInputs(names, inputsFor) }, 200, origin);
     }
-    const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=500${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
-    const res = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) },
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status, origin);
+    const listPrefix = async (p: string) => {
+      const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(p)}&maxResults=500${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
+      const res = await fetch(listUrl, {
+        headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) },
+      });
+      const text = await res.text();
+      return { res, text, json: safeJson(text) };
+    };
+    const primary = await listPrefix(prefix);
+    if (!primary.res.ok) {
+      return send({ error: "List objects failed", status: primary.res.status, detail: primary.json }, primary.res.status, origin);
     }
-    const json = safeJson(text);
-    const items = Array.isArray(json.items) ? json.items : [];
+    const items: any[] = Array.isArray(primary.json?.items) ? primary.json.items : [];
+    // 메인 프로덕션 저장소는 같은 에피소드의 AI 영상생성 폴더도 함께 보여준다.
+    // AI 영상생성에서 그 에피소드로 만든 영상·'브랜드에 보관'한 영상이 이 폴더에 있는데,
+    // 전엔 브랜드 스튜디오 '01 자산'에서만 보이고 저장소엔 비어 보였다(2026-09-29). 복사하지 않고 목록만 합친다.
+    if (!isVideoGen && projectId) {
+      const genPrefix = `${buildAiVideoGenProjectPrefix(basePrefix, userId, projectId)}/videos/`;
+      const gen = await listPrefix(genPrefix).catch(() => null);
+      if (gen && gen.res.ok && Array.isArray(gen.json?.items)) items.push(...gen.json.items);
+    }
 
     const result: Array<{ name: string; size: number; contentType: string; timeCreated: string; updated: string; signedUrl: string; metadata: Record<string, string> | null }> = [];
     for (const it of items) {

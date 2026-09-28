@@ -1,7 +1,7 @@
 // prototype/functions/api/project/delete.ts
 // Delete objects under:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
-import { buildAiVideoProjectPrefix, buildAiVideoUserRoot } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { loadSharesStrict, saveShares, removeProjectShares, removeAllOwnerShares } from "../_shared/shares";
 import { deleteGcsObjects, listGcsObjects, readGcsJson, resolveGcsEnv } from "../_shared/gcs.js";
@@ -111,8 +111,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       : [];
     if (objectName || objectNames.length) {
       const allowedPrefix = `${projectPrefix}/`;
+      // 저장소 목록에 함께 보이는 같은 에피소드의 AI 영상생성 영상도 저장소에서 지울 수 있게 한다(video/library.ts).
+      const genVideosPrefix = `${buildAiVideoGenProjectPrefix(basePrefix, userId, projectId)}/videos/`;
       const deleteTargets = objectNames.length ? objectNames : [objectName];
-      if (deleteTargets.some((name) => !name.startsWith(allowedPrefix))) {
+      if (deleteTargets.some((name) => !name.startsWith(allowedPrefix) && !name.startsWith(genVideosPrefix))) {
         return send({ error: "Invalid objectName for project" }, 400, origin);
       }
       // 현재 등록된 자산을 직접 지우면 data.json 참조만 남아 깨진 썸네일이 된다.

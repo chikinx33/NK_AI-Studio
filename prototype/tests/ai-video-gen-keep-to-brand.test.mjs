@@ -68,3 +68,13 @@ test("보관 창: '+ 새 에피소드 만들기' → 이름 입력 → project.c
   }
   assert.match(page, /\.vgen-pick-actions \.btn-primary \{ min-width: \d+px;/, "글자가 바뀌어도 버튼 폭 고정");
 });
+
+// 2026-09-29: 보관한 영상이 메인 프로덕션 '저장소'에선 비어 보였다(브랜드 스튜디오 '01 자산'만 AI 영상생성 폴더를 읽음).
+test("메인 프로덕션 저장소: 같은 에피소드의 AI 영상생성 폴더도 합쳐 보이고, 거기서 지울 수도 있다", () => {
+  const library = read("functions/api/video/library.ts");
+  const del = read("functions/api/project/delete.ts");
+  assert.match(library, /if \(!isVideoGen && projectId\) \{\s*const genPrefix = `\$\{buildAiVideoGenProjectPrefix\(basePrefix, userId, projectId\)\}\/videos\/`;/);
+  assert.match(library, /items\.push\(\.\.\.gen\.json\.items\)/);
+  assert.match(del, /const genVideosPrefix = `\$\{buildAiVideoGenProjectPrefix\(basePrefix, userId, projectId\)\}\/videos\/`;/);
+  assert.match(del, /!name\.startsWith\(allowedPrefix\) && !name\.startsWith\(genVideosPrefix\)/);
+});
