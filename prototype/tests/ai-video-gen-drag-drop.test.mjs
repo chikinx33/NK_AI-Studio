@@ -20,7 +20,8 @@ test('드래그 상태를 표시하고 드롭 시 브라우저 기본 동작을 
   assert.match(js, /\['dragenter', 'dragover'\]/);
   assert.match(js, /function hasDraggedImage\(dataTransfer\)/);
   assert.match(js, /dataTransfer && dataTransfer\.items/);
-  assert.match(js, /if \(!hasDraggedImage\(event\.dataTransfer\)\) return/);
+  assert.match(js, /if \(!hasDragged\(event\.dataTransfer\)\) return/);
+  assert.match(js, /bindDropTarget\(target, onFiles, hasDraggedImage, droppedImageFiles\)/);
   assert.match(js, /event\.dataTransfer\.dropEffect = 'copy'/);
   assert.match(js, /target\.classList\.add\('is-dragover'\)/);
   assert.match(js, /target\.addEventListener\('dragleave'/);
@@ -45,4 +46,14 @@ test('드롭 이미지도 기존 이미지 검증 관문을 통과하며 오디�
   assert.match(js, /downscaleImageFile\(file/);
   assert.match(js, /\.vgen-ref-file\[data-ref-idx\]/);
   assert.doesNotMatch(js, /querySelectorAll\('\.vgen-ref-file'\)/);
+});
+
+test('모션 컨트롤 동작 영상 칸도 드롭 대상이고, 드롭 영상은 업로드와 같은 검사 관문을 지난다', () => {
+  assert.match(js, /function hasDraggedVideo\(dataTransfer\)/);
+  assert.match(js, /bindDropTarget\(target, onFiles, hasDraggedVideo, droppedVideoFiles\)/);
+  assert.match(js, /'data-drop-label': t\('drop_video'\)/);
+  assert.match(js, /bindVideoDropTarget\(root\.querySelector\('#vgen-img-preview-motion'\), function \(files\) \{\s*acceptMotionVideoFile\(files\[0\]\);/);
+  // 형식이 빈 파일은 확장자로
+  assert.match(js, /!t && \/\\.\(mp4\|mov\)\$\/i\.test/);
+  assert.equal((js.match(/drop_video:/g) || []).length, 2, '한/영');
 });

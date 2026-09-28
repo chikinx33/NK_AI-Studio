@@ -297,6 +297,7 @@
       no_ref_alert:      'Reference to Video 모드에서는 참조 이미지나 참조 영상이 하나 이상 필요합니다.',
       upload_image:      '이미지 업로드',
       drop_image:        '이미지를 여기에 놓으세요',
+      drop_video:        '영상을 여기에 놓으세요',
       remove_image:      '제거',
       download:          '다운로드',
       delete_result:     '삭제',
@@ -393,6 +394,7 @@
       no_ref_alert:      'Reference to Video mode needs at least one reference image or video.',
       upload_image:      'Upload Image',
       drop_image:        'Drop images here',
+      drop_video:        'Drop video here',
       remove_image:      'Remove',
       download:          'Download',
       delete_result:     'Delete',
@@ -738,12 +740,45 @@
     return droppedImageFiles(dataTransfer).length > 0;
   }
 
+  // 모션 컨트롤 동작 영상. 형식·용량·길이 검사는 acceptMotionVideoFile 이 한다(여기선 영상 파일인지만).
+  // 형식이 비어 오는 파일은 확장자로 판단한다.
+  function isVideoFile(type, name) {
+    var t = String(type || '').toLowerCase();
+    return t.indexOf('video/') === 0 || (!t && /\.(mp4|mov)$/i.test(String(name || '')));
+  }
+
+  function droppedVideoFiles(dataTransfer) {
+    return Array.prototype.slice.call((dataTransfer && dataTransfer.files) || []).filter(function (file) {
+      return file && isVideoFile(file.type, file.name);
+    });
+  }
+
+  function hasDraggedVideo(dataTransfer) {
+    var items = Array.prototype.slice.call((dataTransfer && dataTransfer.items) || []);
+    if (items.length) {
+      // dragover 단계에선 파일 이름을 볼 수 없다. 형식이 빈 파일도 일단 받고 drop 에서 확장자로 거른다.
+      return items.some(function (item) {
+        var type = String(item.type || '').toLowerCase();
+        return item.kind === 'file' && (type.indexOf('video/') === 0 || !type);
+      });
+    }
+    return droppedVideoFiles(dataTransfer).length > 0;
+  }
+
   function bindImageDropTarget(target, onFiles) {
+    bindDropTarget(target, onFiles, hasDraggedImage, droppedImageFiles);
+  }
+
+  function bindVideoDropTarget(target, onFiles) {
+    bindDropTarget(target, onFiles, hasDraggedVideo, droppedVideoFiles);
+  }
+
+  function bindDropTarget(target, onFiles, hasDragged, dropped) {
     if (!target) return;
     ['dragenter', 'dragover'].forEach(function (eventName) {
       target.addEventListener(eventName, function (event) {
         // dragover 단계에서는 브라우저가 files를 숨길 수 있어 items의 MIME을 먼저 본다.
-        if (!hasDraggedImage(event.dataTransfer)) return;
+        if (!hasDragged(event.dataTransfer)) return;
         event.preventDefault();
         event.stopPropagation();
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
@@ -755,7 +790,7 @@
       target.classList.remove('is-dragover');
     });
     target.addEventListener('drop', function (event) {
-      var files = droppedImageFiles(event.dataTransfer);
+      var files = dropped(event.dataTransfer);
       target.classList.remove('is-dragover');
       if (!files.length) return;
       event.preventDefault();
@@ -2268,7 +2303,7 @@
   // 모션 컨트롤 동작 영상 칸: 캐릭터 이미지 칸과 같은 크기로 나란히 둔다(미리보기 + 길이·용량).
   function renderMotionVideoSlot() {
     var slot = el('div', 'vgen-image-slot vgen-image-slot--required');
-    var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-motion' });
+    var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-motion', 'data-drop-label': t('drop_video') });
     if (state.videoUrl) {
       var vid = el('video', 'vgen-image-thumb vgen-motion-thumb', {
         src: state.motionPreviewUrl || state.videoUrl, muted: 'muted', loop: 'loop', autoplay: 'autoplay', playsinline: 'playsinline'
@@ -2695,6 +2730,9 @@
       });
     });
     // 모션 컨트롤: 동작 영상·방향·원본 소리
+    bindVideoDropTarget(root.querySelector('#vgen-img-preview-motion'), function (files) {
+      acceptMotionVideoFile(files[0]);
+    });
     var motionFile = root.querySelector('#vgen-file-motion');
     if (motionFile) motionFile.addEventListener('change', function () {
       acceptMotionVideoFile(motionFile.files && motionFile.files[0]);
