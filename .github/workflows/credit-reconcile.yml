@@ -1,0 +1,26 @@
+name: Credit reservation reconcile
+
+# 브라우저 조회가 끊겨 '예약' 상태로 남은 크레딧을 서버가 공급자 결과로 정산한다(실패=환불, 완료=확정).
+# 토큰은 계정 정리와 같은 비밀값을 쓴다(Cloudflare 변수 한도 때문에 새 변수를 늘리지 않는다).
+# 공개 저장소라 실행 로그에는 건수만 남는다.
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Settle reserved credits by provider result
+        env:
+          ACCOUNT_CLEANUP_TOKEN: ${{ secrets.ACCOUNT_CLEANUP_TOKEN }}
+        run: |
+          test -n "$ACCOUNT_CLEANUP_TOKEN"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $ACCOUNT_CLEANUP_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            https://nkstudio.org/api/credits/reconcile

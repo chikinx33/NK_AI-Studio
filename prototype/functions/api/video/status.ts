@@ -639,7 +639,9 @@ export const onRequestGet: PagesFunction = async (context) => {
   if (auth.ok) {
     const url = new URL(context.request.url);
     const jobId = String(url.searchParams.get("job_id") || url.searchParams.get("jobId") || "");
-    await settleDeferredCreditFromResponse(context.env, auth.userId, jobId, response).catch(() => null);
+    // 정산 실패를 삼키면 예약이 남은 이유를 알 수 없다(2026-09-28). 로그로 남기고, 남은 예약은 /api/credits/reconcile 이 정산한다.
+    await settleDeferredCreditFromResponse(context.env, auth.userId, jobId, response)
+      .catch((e: any) => console.error('[credit] settle_from_status_failed', jobId, String(e?.message || e)));
   }
   return response;
 };

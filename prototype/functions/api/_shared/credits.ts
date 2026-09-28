@@ -276,7 +276,13 @@ async function settleByProviderJob(env: any, userId: string, providerJobId: stri
   const sql = requireSql(env);
   await ensureCreditSchema(sql);
   const rows = await sql("SELECT id FROM credit_operations WHERE user_id=$1 AND provider_job_id=$2 AND status='reserved' ORDER BY created_at DESC LIMIT 1", [userId, providerJobId]);
-  if (rows[0]?.id) await settleCreditOperation(env, userId, String(rows[0].id), action, providerJobId);
+  if (rows[0]?.id) {
+    const r = await settleCreditOperation(env, userId, String(rows[0].id), action, providerJobId);
+    if (!r?.ok) console.error('[credit] settle_rejected', providerJobId, action, r?.reason);
+  } else {
+    // 이미 정산됐거나 작업 번호가 붙지 않은 예약이다. 후자는 reconcile 이 시간이 지나면 환불한다.
+    console.log('[credit] no_reserved_operation_for_job', providerJobId, action);
+  }
 }
 
 function withCreditHeaders(response: Response, operation: any): Response {

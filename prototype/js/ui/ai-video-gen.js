@@ -3448,6 +3448,15 @@
       });
     });
     syncServerHistory();
+    // 조회가 끊겨 예약된 채 남은 크레딧을 서버가 공급자 결과로 정산한다(실패=환불, 완료=확정). 결과는 콘솔에 남긴다.
+    if (NK.api && typeof NK.api.creditReconcile === 'function') {
+      NK.api.creditReconcile().then(function (r) {
+        console.info('[vgen] credit reconcile', r);
+        ensureCreditQuote(true);
+      }).catch(function (err) {
+        console.warn('[vgen] credit reconcile failed', err && err.status, err && err.detail);
+      });
+    }
 
     // 다른 기능/탭에서 크레딧이 예약·정산되면 현재 설정의 생성 가능 여부를 즉시 다시 계산한다.
     if (!_creditEventsBound) {

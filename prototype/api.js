@@ -1596,6 +1596,18 @@
     return j(text);
   };
 
+  // 브라우저 조회가 끊겨 남은 예약을 서버가 공급자 결과로 정산한다(실패=환불, 완료=확정).
+  api.creditReconcile = async function () {
+    var res = await fetch(withBase('/api/credits/reconcile'), { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
+    var text = await res.text();
+    if (!res.ok) { var err = new Error(e(text) || 'credit_reconcile_error'); err.status = res.status; err.detail = text; throw err; }
+    var data = j(text) || {};
+    if (data.released || data.committed) {
+      try { window.dispatchEvent(new CustomEvent('nk:credits-changed')); } catch (_) { }
+    }
+    return data;
+  };
+
   api.creditQuote = async function (feature, input) {
     var res = await fetch(withBase('/api/credits/quote'), {
       method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
