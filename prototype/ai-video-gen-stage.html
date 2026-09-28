@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1936" />
+  <link rel="stylesheet" href="styles.css?v=3.1937" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -274,6 +274,8 @@
       border: 1px solid var(--border); background: var(--bg-2, var(--bg)); color: var(--text); font-size: 0.85rem;
     }
     .vgen-pick-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+    /* '보관' ↔ '만들고 보관' 으로 글자가 바뀌어도 버튼 폭은 그대로 */
+    .vgen-pick-actions .btn-primary { min-width: 104px; justify-content: center; }
 
     /* ── Video modal popup ───────────────────────────────────── */
     .vgen-modal-overlay {
@@ -710,18 +712,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1936" defer></script>
-  <script src="js/config.js?v=3.1936" defer></script>
-  <script src="js/utils.js?v=3.1936" defer></script>
-  <script src="store.js?v=3.1936" defer></script>
-  <script src="api.js?v=3.1936" defer></script>
-  <script src="js/state.js?v=3.1936" defer></script>
-  <script src="js/auth.js?v=3.1936" defer></script>
-  <script src="js/navigation.js?v=3.1936" defer></script>
-  <script src="js/service/project.js?v=3.1936" defer></script>
-  <script src="js/ui/common.js?v=3.1936" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1936" defer></script>
-  <script src="script.js?v=3.1936" defer></script>
+  <script src="core.js?v=3.1937" defer></script>
+  <script src="js/config.js?v=3.1937" defer></script>
+  <script src="js/utils.js?v=3.1937" defer></script>
+  <script src="store.js?v=3.1937" defer></script>
+  <script src="api.js?v=3.1937" defer></script>
+  <script src="js/state.js?v=3.1937" defer></script>
+  <script src="js/auth.js?v=3.1937" defer></script>
+  <script src="js/navigation.js?v=3.1937" defer></script>
+  <script src="js/service/project.js?v=3.1937" defer></script>
+  <script src="js/ui/common.js?v=3.1937" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1937" defer></script>
+  <script src="script.js?v=3.1937" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">

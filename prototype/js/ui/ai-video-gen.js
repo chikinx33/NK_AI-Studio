@@ -314,6 +314,12 @@
       keep_no_brands:    '보관할 브랜드가 없어요. 브랜드와 에피소드를 먼저 만들어 주세요.',
       keep_done:         '"{b}" 브랜드의 "{e}" 에피소드에 보관했어요.',
       keep_failed:       '보관하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      keep_new_episode:  '+ 새 에피소드 만들기',
+      keep_new_title:    '새 에피소드 이름',
+      keep_new_default_suffix: ' 새 에피소드',
+      keep_create_confirm: '만들고 보관',
+      keep_create_failed: '새 에피소드를 만들지 못했어요.',
+      keep_done_new:     '"{b}" 브랜드에 "{e}" 에피소드를 만들고 보관했어요.',
       delete_all:        '전체 삭제',
       confirm_delete:    '이 영상을 서버에서 완전히 삭제합니다.\n다른 기기에서도 사라지며 되돌릴 수 없습니다. 계속할까요?',
       confirm_delete_all:'생성된 영상 전체를 서버에서 완전히 삭제합니다.\n모든 기기에서 사라지며 되돌릴 수 없습니다. 계속할까요?',
@@ -429,6 +435,12 @@
       keep_no_brands:    'No brand to keep it in. Create a brand and an episode first.',
       keep_done:         'Kept in episode "{e}" of brand "{b}".',
       keep_failed:       'Could not keep the video. Please try again shortly.',
+      keep_new_episode:  '+ Create new episode',
+      keep_new_title:    'New episode name',
+      keep_new_default_suffix: ' new episode',
+      keep_create_confirm: 'Create and keep',
+      keep_create_failed: 'Could not create the new episode.',
+      keep_done_new:     'Created episode "{e}" in brand "{b}" and kept the video.',
       delete_all:        'Clear All',
       confirm_delete:    'This permanently deletes the video from the server.\nIt will disappear on all your devices and cannot be undone. Continue?',
       confirm_delete_all:'This permanently deletes ALL generated videos from the server.\nThey will disappear on all your devices and cannot be undone. Continue?',
@@ -1988,11 +2000,13 @@
         var p = d.payload || {};
         return { id: String(d.id), title: String(d.title || p.episodeTitle || d.id) };
       });
-      return { id: String(s.id), title: String(s.title || s.id), episodes: episodes };
+      return { id: String(s.id), title: String(s.title || s.id), latestEpisodeId: String(s.latestEpisodeId || ''), episodes: episodes };
     }).filter(function (b) { return b.episodes.length; });
   }
 
-  // 브랜드 → 에피소드를 고르는 작은 창. 고르면 {brand, episode}, 닫으면 null.
+  var KEEP_NEW_EPISODE = '__new__';
+
+  // 브랜드 → 에피소드를 고르는 작은 창. 고르면 {brand, episode} 또는 {brand, newTitle}(새 에피소드), 닫으면 null.
   function pickKeepTarget() {
     return new Promise(function (resolve) {
       var brands = listKeepTargets();
@@ -2016,9 +2030,25 @@
         var b = brands.find(function (x) { return x.id === brandSel.value; }) || brands[0];
         epSel.innerHTML = '';
         b.episodes.forEach(function (ep) { epSel.appendChild(el('option', '', { value: ep.id, textContent: ep.title })); });
+        epSel.appendChild(el('option', '', { value: KEEP_NEW_EPISODE, textContent: t('keep_new_episode') }));
+        newInput.value = b.title + t('keep_new_default_suffix');
+        syncNewField();
       }
-      fillEpisodes();
+      // 새 에피소드 이름 칸: 목록에서 '+ 새 에피소드 만들기'를 골랐을 때만 보인다.
+      var newInput = el('input', 'vgen-pick-select', { type: 'text', maxlength: '80' });
+      var newLabel = el('label', 'vgen-pick-field');
+      newLabel.appendChild(el('span', '', { textContent: t('keep_new_title') }));
+      newLabel.appendChild(newInput);
+      function syncNewField() {
+        var isNew = epSel.value === KEEP_NEW_EPISODE;
+        newLabel.style.display = isNew ? '' : 'none';
+        okBtn.textContent = isNew ? t('keep_create_confirm') : t('keep_confirm');
+      }
       brandSel.addEventListener('change', fillEpisodes);
+      epSel.addEventListener('change', function () {
+        syncNewField();
+        if (epSel.value === KEEP_NEW_EPISODE) { newInput.focus(); newInput.select(); }
+      });
       var brandLabel = el('label', 'vgen-pick-field');
       brandLabel.appendChild(el('span', '', { textContent: t('keep_brand') }));
       brandLabel.appendChild(brandSel);
@@ -2027,9 +2057,11 @@
       epLabel.appendChild(epSel);
       panel.appendChild(brandLabel);
       panel.appendChild(epLabel);
+      panel.appendChild(newLabel);
       var row = el('div', 'vgen-pick-actions');
       var cancelBtn = el('button', 'btn-secondary compact', { type: 'button', textContent: t('keep_cancel') });
       var okBtn = el('button', 'btn-primary compact', { type: 'button', textContent: t('keep_confirm') });
+      fillEpisodes();
       row.appendChild(cancelBtn);
       row.appendChild(okBtn);
       panel.appendChild(row);
@@ -2046,6 +2078,11 @@
       cancelBtn.addEventListener('click', function () { close(null); });
       okBtn.addEventListener('click', function () {
         var b = brands.find(function (x) { return x.id === brandSel.value; });
+        if (b && epSel.value === KEEP_NEW_EPISODE) {
+          var title = String(newInput.value || '').trim() || (b.title + t('keep_new_default_suffix'));
+          close({ brand: b, newTitle: title });
+          return;
+        }
         var ep = b && b.episodes.find(function (x) { return x.id === epSel.value; });
         close(b && ep ? { brand: b, episode: ep } : null);
       });
@@ -2058,9 +2095,31 @@
     if (!target) return;
     btn.disabled = true;
     try {
+      var created = false;
+      if (target.newTitle) {
+        // 브랜드 허브의 '새 에피소드'와 같은 경로: 그 브랜드의 최근 에피소드에서 브랜드 설정을 이어받는다.
+        // 같은 이름이 있으면 id 에 -2, -3 이 붙어 기존 에피소드를 덮지 않는다(project.js episodeIdFor).
+        var draft;
+        try {
+          draft = await NK.service.project.create({
+            mode: 'episode',
+            parentProjectId: target.brand.latestEpisodeId,
+            seriesId: target.brand.id,
+            seriesTitle: target.brand.title,
+            episodeTitle: target.newTitle
+          });
+        } catch (createErr) {
+          console.error('[vgen] create episode failed', createErr && createErr.message);
+          NK.ui.dialog.alert(t('keep_create_failed') + (createErr && createErr.message ? '\n' + createErr.message : ''), { title: t('keep_pick_title') });
+          return;
+        }
+        if (NK.state && NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
+        target.episode = { id: String(draft.id), title: String(draft.title || target.newTitle) };
+        created = true;
+      }
       var owner = NK.api.getSharedOwner ? NK.api.getSharedOwner(target.episode.id) : '';
       await NK.api.videoCopyToProject(objectName, target.episode.id, owner || '');
-      var msg = t('keep_done').replace('{b}', target.brand.title).replace('{e}', target.episode.title);
+      var msg = t(created ? 'keep_done_new' : 'keep_done').replace('{b}', target.brand.title).replace('{e}', target.episode.title);
       if (NK.ui.toast) NK.ui.toast(msg, { tone: 'ok' }); else window.alert(msg);
     } catch (err) {
       console.error('[vgen] keep to brand failed', err && err.message);

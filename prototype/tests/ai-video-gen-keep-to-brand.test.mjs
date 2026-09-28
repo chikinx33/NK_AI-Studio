@@ -47,3 +47,21 @@ test("서버: 본인 원본만, 대상은 본인 또는 편집 공유 에피소�
   assert.match(server, /\/rewriteTo\/b\//);
   assert.doesNotMatch(server, /, 50[24], origin\)/, "Function 은 502/504 를 돌려주지 않는다");
 });
+
+// 2026-09-29: 보관 창에서 새 에피소드를 만들어 바로 담는다(브랜드 허브의 '새 에피소드'와 같은 경로).
+test("보관 창: '+ 새 에피소드 만들기' → 이름 입력 → project.create(episode) 후 그 에피소드로 복사", () => {
+  const picker = client.slice(client.indexOf("function pickKeepTarget("), client.indexOf("async function keepToBrand("));
+  assert.match(picker, /epSel\.appendChild\(el\('option', '', \{ value: KEEP_NEW_EPISODE, textContent: t\('keep_new_episode'\) \}\)\);/);
+  assert.match(picker, /newLabel\.style\.display = isNew \? '' : 'none';/);
+  assert.match(picker, /close\(\{ brand: b, newTitle: title \}\);/);
+  const keep = client.slice(client.indexOf("async function keepToBrand("), client.indexOf("function renderServerCard("));
+  assert.match(keep, /NK\.service\.project\.create\(\{\s*mode: 'episode',\s*parentProjectId: target\.brand\.latestEpisodeId,\s*seriesId: target\.brand\.id,/);
+  const createAt = keep.indexOf("NK.service.project.create(");
+  const copyAt = keep.indexOf("NK.api.videoCopyToProject(");
+  assert.ok(createAt > 0 && copyAt > createAt, "에피소드를 먼저 만들고 복사한다");
+  assert.match(keep, /target\.episode = \{ id: String\(draft\.id\)/);
+  for (const key of ["keep_new_episode", "keep_new_title", "keep_new_default_suffix", "keep_create_confirm", "keep_create_failed", "keep_done_new"]) {
+    assert.equal((client.match(new RegExp(`\\n\\s+${key}:\\s+'`, "g")) || []).length, 2, `${key} 한/영`);
+  }
+  assert.match(page, /\.vgen-pick-actions \.btn-primary \{ min-width: \d+px;/, "글자가 바뀌어도 버튼 폭 고정");
+});
