@@ -3385,6 +3385,16 @@
     });
     if (_settled) saveResults();
 
+    // '조회 실패'는 작업의 결말이 아니다(공급자에선 이미 완료·실패로 끝났을 수 있다). 다시 열면 조회를 재개해
+    // 실제 결과를 받고, 서버가 그 결과로 크레딧 예약을 확정·환불하게 한다(예약이 묶인 채 남지 않도록).
+    var _repoll = false;
+    state.results.forEach(function (r) {
+      if (!r || r.status !== 'error' || r.errorMessage !== 'status_polling_failed' || !r.jobId) return;
+      updateResult(r.id, { status: 'processing', errorMessage: '', errorDetail: '' });
+      _repoll = true;
+    });
+    if (_repoll) saveResults();
+
     loadDeletedSet();
     render();
     // 기존 완료 결과 중 썸네일 없는 것 캡처 시도

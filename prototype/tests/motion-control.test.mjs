@@ -133,3 +133,16 @@ test('서버: 규격 검사 → 업로드 → 공급자 호출, 상태 조회는
   assert.match(statusTs, /'kling-motion:': 'kling-motion:'/);
   assert.match(statusTs, /isMinimax \|\| isKlingMotion \|\| isAtlasGrok/);
 });
+
+test('Atlas 가 실패 작업 조회에 HTTP 500 을 줘도 본문 상태(failed)로 처리해 이유를 보이고 크레딧 예약을 푼다', () => {
+  assert.match(statusTs, /function atlasPredictionStatus\(body: any\): string \{/);
+  // Seedance·Kling·Veo·공용(Atlas 계열) 네 조회 모두. 직접 xAI 조회는 대상이 아니다.
+  assert.equal((statusTs.match(/if \(!res\.ok && !atlasPredictionStatus\((?:json|jsonBody)\)\) \{/g) || []).length, 4);
+  const atlasLookups = statusTs.split('api.atlascloud.ai/api/v1/model/prediction/').slice(1);
+  assert.equal(atlasLookups.length, 4);
+  for (const chunk of atlasLookups) {
+    assert.match(chunk.slice(0, 400), /if \(!res\.ok && !atlasPredictionStatus\(/, 'Atlas 조회는 본문 상태를 먼저 본다');
+  }
+  // 앱: '조회 실패' 카드는 다시 열면 조회를 재개한다(결말이 아니므로)
+  assert.match(front, /r\.errorMessage !== 'status_polling_failed' \|\| !r\.jobId\) return;\s*updateResult\(r\.id, \{ status: 'processing'/);
+});

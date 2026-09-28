@@ -32,6 +32,13 @@ const corsJson = (data: any, status = 200) =>
 
 const log = (...args: any[]) => console.log('[video-status]', ...args);
 
+// Atlas 는 실패한 작업을 조회해도 HTTP 500 을 준다(본문 data.status='failed' + 거부 이유).
+// 본문에 작업 상태가 있으면 전송 오류가 아니라 그 상태로 처리한다 — 전송 오류로 돌려주면 앱은 이유 대신
+// '조회 실패'만 보이고, 실패 확정이 없어 크레딧 예약도 풀리지 않는다(2026-09-28 모션 컨트롤 거부 건).
+function atlasPredictionStatus(body: any): string {
+  return String(body?.data?.status || body?.status || '').toLowerCase();
+}
+
 const handleGet: PagesFunction = async ({ request, env }) => {
   let jobId = '';
   try {
@@ -252,7 +259,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const json = safeJson(txt);
-      if (!res.ok) {
+      if (!res.ok && !atlasPredictionStatus(json)) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
       }
       const status = (json?.data?.status || json?.status || '').toLowerCase();
@@ -304,7 +311,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const jsonBody = safeJson(txt);
-      if (!res.ok) {
+      if (!res.ok && !atlasPredictionStatus(jsonBody)) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: jsonBody?.error || txt }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
       }
       const status = (jsonBody?.data?.status || jsonBody?.status || '').toLowerCase();
@@ -349,7 +356,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const jsonBody = safeJson(txt);
-      if (!res.ok) {
+      if (!res.ok && !atlasPredictionStatus(jsonBody)) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: jsonBody?.error || txt }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
       }
       const status = (jsonBody?.data?.status || jsonBody?.status || '').toLowerCase();
@@ -410,7 +417,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const jsonBody = safeJson(txt);
-      if (!res.ok) {
+      if (!res.ok && !atlasPredictionStatus(jsonBody)) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: jsonBody?.error || txt }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
       }
       const status = (jsonBody?.data?.status || jsonBody?.status || '').toLowerCase();
