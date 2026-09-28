@@ -73,6 +73,8 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
   const items: ReconcileItem[] = [];
   for (const row of rows) {
     if (Date.now() - t0 > budgetMs) { lap('budget_exhausted', items.length); break; }
+    // 한 건이 DB·공급자 응답을 무한정 기다리면 전체가 Cloudflare 100초 제한에 걸린다 → 한 건당 15초.
+    const itemDeadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("item_timeout_15s")), 15_000));
     const item: ReconcileItem = {
       operationId: String(row.id),
       userId: String(row.user_id),
@@ -84,46 +86,48 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
       reason: "",
     };
     try {
-      if (!item.providerJobId) {
-        if (Number(row.age_sec) >= orphanAgeSec) {
-          item.action = "release";
-          item.reason = "no_provider_job";
-        } else {
-          item.reason = "waiting_for_provider_job";
-        }
-      } else {
-        const predictionId = atlasPredictionIdOf(item.providerJobId);
-        if (!predictionId) {
-          item.reason = "not_atlas_job";
-        } else {
-          // 생성 때 쓴 키(회원 등록 키가 있으면 그것)로 먼저 묻고, 안 되면 마스터 키로.
-          if (!keyCache.has(item.userId)) keyCache.set(item.userId, (await atlasKeyFor(env, item.userId)).key || master);
-          const keys = [keyCache.get(item.userId) || "", master].filter((k, i, arr) => k && arr.indexOf(k) === i);
-          let found: { action: ReconcileAction; status: string } | null = null;
-          let lastHttp = 0;
-          for (const key of keys) {
-            const r = await fetchAtlasPrediction(key, predictionId);
-            lastHttp = r.httpStatus;
-            const c = classifyAtlasPrediction(r.body);
-            if (c.status !== "unknown") { found = c; break; }
-          }
-          if (found) {
-            item.action = found.action;
-            item.providerStatus = found.status;
+      await Promise.race([(async () => {
+        if (!item.providerJobId) {
+          if (Number(row.age_sec) >= orphanAgeSec) {
+            item.action = "release";
+            item.reason = "no_provider_job";
           } else {
-            item.reason = `provider_lookup_failed_http_${lastHttp}`;
+            item.reason = "waiting_for_provider_job";
+          }
+        } else {
+          const predictionId = atlasPredictionIdOf(item.providerJobId);
+          if (!predictionId) {
+            item.reason = "not_atlas_job";
+          } else {
+            // 생성 때 쓴 키(회원 등록 키가 있으면 그것)로 먼저 묻고, 안 되면 마스터 키로.
+            if (!keyCache.has(item.userId)) keyCache.set(item.userId, (await atlasKeyFor(env, item.userId)).key || master);
+            const keys = [keyCache.get(item.userId) || "", master].filter((k, i, arr) => k && arr.indexOf(k) === i);
+            let found: { action: ReconcileAction; status: string } | null = null;
+            let lastHttp = 0;
+            for (const key of keys) {
+              const r = await fetchAtlasPrediction(key, predictionId);
+              lastHttp = r.httpStatus;
+              const c = classifyAtlasPrediction(r.body);
+              if (c.status !== "unknown") { found = c; break; }
+            }
+            if (found) {
+              item.action = found.action;
+              item.providerStatus = found.status;
+            } else {
+              item.reason = `provider_lookup_failed_http_${lastHttp}`;
+            }
           }
         }
-      }
-      if (item.action !== "pending") {
-        const settled = await settleCreditOperation(env, item.userId, item.operationId, item.action, item.providerJobId);
-        if (!settled?.ok) { item.reason = `settle_${settled?.reason || "failed"}`; item.action = "pending"; }
-      }
+        if (item.action !== "pending") {
+          const settled = await settleCreditOperation(env, item.userId, item.operationId, item.action, item.providerJobId);
+          if (!settled?.ok) { item.reason = `settle_${settled?.reason || "failed"}`; item.action = "pending"; }
+        }
+      })(), itemDeadline]);
     } catch (e: any) {
       item.action = "pending";
       item.reason = `error: ${String(e?.message || e).slice(0, 200)}`;
     }
-    lap('item', { op: item.operationId, job: item.providerJobId, action: item.action, status: item.providerStatus, reason: item.reason });
+    lap('item', { op: item.operationId, job: item.providerJobId, ageMin: Math.round(Number(row.age_sec) / 60), credits: item.credits, action: item.action, status: item.providerStatus, reason: item.reason });
     items.push(item);
   }
   return {
