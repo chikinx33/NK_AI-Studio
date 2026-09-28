@@ -29,7 +29,7 @@ interface SegIn { voiceId?: string; providerVoiceId?: string; text?: string; spe
 // 세그먼트별 합성 + 병합. (추후 ElevenLabs Dialogue 엔드포인트로 교체 가능)
 async function synthesizeSegments(opts: {
   apiKey: string; segments: Array<{ providerVoiceId: string; text: string }>;
-  model: string; stability: number; format: string;
+  model: string; stability: number; format: string; env?: any;
 }): Promise<Uint8Array> {
   const parts: Uint8Array[] = [];
   for (const seg of opts.segments) {
@@ -40,6 +40,7 @@ async function synthesizeSegments(opts: {
       modelId: opts.model,
       stability: opts.stability,
       outputFormat: opts.format,
+      env: opts.env,
     });
     parts.push(bytes);
   }
@@ -145,7 +146,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       engine = g.engine;
       fallbackReason = g.fallbackReason;
     } else {
-      merged = await synthesizeSegments({ apiKey: elevenLabsKey, segments, model, stability: stabilityVal, format });
+      merged = await synthesizeSegments({ apiKey: elevenLabsKey, segments, model, stability: stabilityVal, format, env });
     }
     const ext: "mp3" | "wav" = contentType === "audio/wav" ? "wav" : "mp3";
 
@@ -206,7 +207,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "voice" }, handlePost);
+  withCreditCharge(context, { feature: "voice", metered: true }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

@@ -15,8 +15,11 @@ test('credit rate card calculates deterministic server quotes', async () => {
   // Kling Final(v2.6 Pro, 소리 기본 켜짐) 10초 $1.19 → 155C
   assert.equal(module.quoteCredits('video', { videoModel: 'kling-final', durationSeconds: 10 }, {}).credits, 155);
   assert.equal(module.quoteCredits('image_upscale', {}, {}).credits, 2);
-  assert.equal(module.quoteCredits('image_generation', {}, {}).credits, 20);
-  assert.equal(module.quoteCredits('voice', { segments: [{ text: 'a'.repeat(101) }] }, {}).credits, 2);
+  // 이미지 생성 예약 최대: 기본 nano-banana-2 1k $0.08 → 11C, 2K $0.12 → 16C (실제는 Atlas 견적으로 정산)
+  assert.equal(module.quoteCredits('image_generation', {}, {}).credits, 11);
+  assert.equal(module.quoteCredits('image_generation', { imageSize: '2K' }, {}).credits, 16);
+  // 음성은 실제 사용량 정산 — 예약 최대 = 101자 × $0.00015 + $0.005 = $0.02015 → 3C
+  assert.equal(module.quoteCredits('voice', { segments: [{ text: 'a'.repeat(101) }] }, {}).credits, 3);
   assert.equal(module.quoteCredits('sfx', { duration: 2 }, {}).credits, 8);
 });
 

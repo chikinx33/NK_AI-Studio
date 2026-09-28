@@ -1,3 +1,4 @@
+import { geminiTtsUsd, mp3DurationSeconds, recordCost, recordGemini, recordUnpriced } from "./_shared/usage-cost.ts";
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
@@ -97,6 +98,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         userProject,
       });
       audioInfo = { data: cloud.base64, mime: cloud.mime };
+      // 실제 사용량 정산: Cloud TTS 응답엔 사용량이 없다 → 출력 = MP3 길이 × 25 토큰/초(공식), 입력 = 글자 수를 토큰 상한으로.
+      const cloudSeconds = mp3DurationSeconds(base64ToBytes(cloud.base64));
+      const cloudUsd = cloudSeconds > 0 ? geminiTtsUsd(cloudModel, script.length + String(finalPrompt || "").length, cloudSeconds) : null;
+      if (cloudUsd === null) recordUnpriced(env, "cloud_gemini_tts", { model: cloudModel, reason: cloudSeconds > 0 ? "unknown_model_price" : "audio_length_unreadable" });
+      else recordCost(env, "cloud_gemini_tts", cloudUsd, { model: cloudModel, audioSeconds: Math.round(cloudSeconds * 100) / 100 });
     } catch (e: any) {
       cloudTtsError = e;
       try {
@@ -168,6 +174,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       if (synthRes.ok) {
         const synthJson = safeJson(synthText) || {};
         audioInfo = extractGeminiAudio(synthJson);
+        // 실제 사용량 정산: usageMetadata × 공식 단가(성공 응답만 과금).
+        if (audioInfo && audioInfo.data) recordGemini(env, "gemini_tts", chosenModel, synthJson);
       }
       if (!synthRes.ok || !audioInfo || !audioInfo.data) {
         const status = synthRes?.status || 502;
@@ -183,6 +191,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
             pitch: pitchNum
           });
           audioInfo = { data: v1.base64, mime: v1.mime };
+          // Neural2 폴백: 공식 단가를 아직 확인하지 않았다 → 미확정(예약액 확정).
+          recordUnpriced(env, "google_tts_neural2", { voice: vmap.name, chars: script.length });
         } catch (fallbackErr: any) {
           return send({
             error: "tts_failed",
@@ -206,6 +216,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
           pitch: pitchNum
         });
         audioInfo = { data: v1.base64, mime: v1.mime };
+        // Neural2 폴백: 공식 단가를 아직 확인하지 않았다 → 미확정(예약액 확정).
+        recordUnpriced(env, "google_tts_neural2", { voice: vmap.name, chars: script.length });
       } catch (fallbackErr: any) {
         return send({ error: "tts_failed", fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, 500, origin);
       }
@@ -299,7 +311,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "tts" }, handlePost);
+  withCreditCharge(context, { feature: "tts", metered: true }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

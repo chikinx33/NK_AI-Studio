@@ -15,7 +15,8 @@
  */
 
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
-import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
+import { geminiGenerateUrl, geminiProxyHeaders, geminiTextModel } from "./_shared/gemini-models.js";
+import { recordGemini, recordUnpriced } from "./_shared/usage-cost.ts";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
@@ -59,6 +60,8 @@ async function callGemini(env: any, apiKey: string, body: object): Promise<strin
   });
   if (!res.ok) return "";
   const json: any = await res.json();
+  // 실제 사용량 정산: 성공 응답의 usageMetadata × 공식 단가.
+  recordGemini(env, "sfx_prompt", geminiTextModel(env), json);
   return String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 }
 
@@ -312,6 +315,8 @@ async function generateElevenLabsSfx(
     const errText = await res.text().catch(() => "");
     throw new Error(`elevenlabs_sfx_failed::${res.status}::${errText.slice(0, 200)}`);
   }
+  // 효과음의 USD 과금 단위는 공식 문서가 엇갈린다("$0.12 per minute" vs "billed per generation") → 추측하지 않고 미확정.
+  recordUnpriced(env, "elevenlabs_sfx", { durationSec: body.duration_seconds, characterCost: res.headers.get("character-cost") });
   const buf = await res.arrayBuffer();
   return new Uint8Array(buf);
 }
@@ -571,7 +576,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "sfx" }, handlePost);
+  withCreditCharge(context, { feature: "sfx", metered: true }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

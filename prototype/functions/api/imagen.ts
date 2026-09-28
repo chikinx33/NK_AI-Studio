@@ -1,4 +1,5 @@
 // prototype/functions/api/imagen.ts
+import { atlasCalculateUsd, recordCost, recordUnpriced } from "./_shared/usage-cost.ts";
 import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
@@ -307,6 +308,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (useAtlasPath) {
       try {
         const atlasResult = await callAtlasMemberImage({
+          env,
           apiKey: atlasApiKey,
           requestedProvider: provider,
           prompt: finalPrompt,
@@ -541,9 +543,9 @@ export const onRequestPost: PagesFunction = async (context) => {
   if (body.provider === 'chatgpt-subscription') {
     const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,
       body: JSON.stringify({ ...body, provider: context.env.AI_IMAGE_PROVIDER || 'gemini' }) });
-    return withCreditCharge({ ...context, request }, { feature: 'image_generation' }, handlePost);
+    return withCreditCharge({ ...context, request }, { feature: 'image_generation', metered: true }, handlePost);
   }
-  return withCreditCharge(context, { feature: "image_generation" }, handlePost);
+  return withCreditCharge(context, { feature: "image_generation", metered: true }, handlePost);
 };
 
 function json(data: any, status = 200) {
@@ -900,6 +902,7 @@ function isGpt25Provider(provider: ImageProvider): boolean {
 }
 
 async function callAtlasMemberImage(opts: {
+  env?: any;
   apiKey: string;
   requestedProvider: ImageProvider;
   prompt: string;
@@ -990,6 +993,9 @@ async function callAtlasMemberImage(opts: {
     body.resolution = (opts.imageSize === "2K" || opts.imageSize === "4K") ? "2k" : "1k";
   }
 
+  // 실제 사용량 정산: 보낼 요청 본문 그대로 Atlas 공식 견적(calculate)에 물어 청구 가격을 받는다.
+  // 입력 이미지 크기·장수·품질·크기까지 반영된 값이다(과금·작업 생성 없음). 성공한 뒤에만 기록한다.
+  const quotedUsd = await atlasCalculateUsd(opts.apiKey, body);
   let result = await submitAtlasGeneration(opts.apiKey, "image", body);
   if (atlasOutputs(result).length === 0) {
     const predictionId = atlasPredictionId(result);
@@ -1001,7 +1007,10 @@ async function callAtlasMemberImage(opts: {
       useGpt25Model ? { maxAttempts: 105, delayMs: 2000 } : undefined
     );
   }
-  return { output: await atlasImageOutput(result), model };
+  const output = await atlasImageOutput(result);
+  if (quotedUsd === null) recordUnpriced(opts.env, "atlas_image", { model, reason: "calculate_unavailable" });
+  else recordCost(opts.env, "atlas_image", quotedUsd, { model });
+  return { output, model };
 }
 
 function extensionForMime(mimeType: string): string {

@@ -6,6 +6,7 @@
 // 왜 필요한가: 이미지 모델은 '없어야 하는 것'을 레퍼런스 이미지에서 배울 수 없다. 시트에 손가락이
 // 안 보이면 "이 각도에선 안 보인다"로 읽고 자기 사전지식으로 손가락을 그린다. 금지 정보는 텍스트로만
 // 전달되므로, 그 텍스트를 사람이 전부 적는 부담을 줄이는 것이 이 엔드포인트의 목적이다.
+import { recordGemini } from "../_shared/usage-cost.ts";
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { authorizeRequest } from "../_shared/auth.js";
 import { withCreditCharge } from "../_shared/credits";
@@ -212,7 +213,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
           }),
           signal: controller.signal,
         });
-        return { res, text: await res.text(), timedOut: false };
+        const text = await res.text();
+        // 실제 사용량 정산: 성공한 호출만 과금된다(4xx 거절은 과금 없음) → 성공 응답의 usageMetadata 를 기록.
+        if (res.ok) recordGemini(env, `ip_analyze:${mode}`, geminiModel, safeJson(text));
+        return { res, text, timedOut: false };
       } catch (err: any) {
         const aborted = err?.name === "AbortError";
         return { res: null as any, text: String(err?.message || err), timedOut: aborted };
@@ -311,7 +315,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "ip_analyze" }, handlePost);
+  withCreditCharge(context, { feature: "ip_analyze", metered: true }, handlePost);
 
 // 스키마를 못 쓰는 경우를 위한 지시 — 순수 JSON만 받도록 못박는다.
 const JSON_ONLY_HINT = [

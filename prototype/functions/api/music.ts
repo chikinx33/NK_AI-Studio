@@ -13,8 +13,9 @@
  *   GOOGLE_PRIVATE_KEY / TTS_GOOGLE_PRIVATE_KEY
  */
 
+import { elevenLabsMusicUsd, LYRIA_USD, recordCost, recordGemini, recordUnpriced } from "./_shared/usage-cost.ts";
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
-import { geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
+import { geminiGenerateUrl, geminiProxyHeaders, geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { normalizeSongSections, sectionsToSongChunks } from "./_shared/song-sections.js";
@@ -114,6 +115,8 @@ async function callGemini(env: any, apiKey: string, body: object): Promise<strin
   });
   if (!res.ok) return "";
   const json: any = await res.json();
+  // 실제 사용량 정산: 성공 응답의 usageMetadata × 공식 단가.
+  recordGemini(env, "music_analysis", geminiTextModel(env), json);
   return String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 }
 
@@ -218,7 +221,8 @@ function base64ToBytes(b64: string): Uint8Array {
 // 그런 경향이 있다. WAV(PCM) 는 바이트↔시간이 정확히 매핑돼 시킹이 안정적이다.
 async function generateLyriaMusic(
   apiKey: string,
-  prompt: string
+  prompt: string,
+  env?: any
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -241,6 +245,8 @@ async function generateLyriaMusic(
       const inline = (p && (p.inlineData || p.inline_data)) || null;
       if (inline && inline.data) {
         const mime = String(inline.mimeType || inline.mime_type || "audio/wav");
+        // 실제 사용량 정산: Lyria 는 곡(요청)당 과금 — 오디오를 받은 경우만.
+        recordCost(env, "lyria", LYRIA_USD["lyria-3-pro-preview"], { model: "lyria-3-pro-preview" });
         return { bytes: base64ToBytes(String(inline.data)), mimeType: mime };
       }
     }
@@ -253,7 +259,8 @@ async function generateLyriaMusic(
 async function generateElevenLabsMusic(
   apiKey: string,
   prompt: string,
-  durationSec: number
+  durationSec: number,
+  env?: any
 ): Promise<Uint8Array> {
   const clampedDur = Math.min(22, Math.max(3, durationSec));
   const body = {
@@ -274,6 +281,8 @@ async function generateElevenLabsMusic(
     const errText = await res.text().catch(() => "");
     throw new Error(`elevenlabs_music_failed::${res.status}::${errText.slice(0, 200)}`);
   }
+  // 효과음 엔드포인트로 만든 배경음: USD 과금 단위가 공식 문서에서 엇갈린다 → 미확정.
+  recordUnpriced(env, "elevenlabs_sfx_music", { durationSec: body.duration_seconds });
   return new Uint8Array(await res.arrayBuffer());
 }
 
@@ -308,7 +317,8 @@ function buildCompositionPlan(chunks: SongChunk[], styles: string[]): any {
 async function generateElevenSong(
   apiKey: string,
   chunks: SongChunk[],
-  styles: string[]
+  styles: string[],
+  env?: any
 ): Promise<{ bytes: Uint8Array; mimeType: string }> {
   const plan = buildCompositionPlan(chunks, styles);
   const res = await fetch("https://api.elevenlabs.io/v1/music", {
@@ -329,7 +339,11 @@ async function generateElevenSong(
     // 요금제·권한 문제를 상위에서 구분할 수 있도록 상태코드를 그대로 실어 보낸다.
     throw new Error(`eleven_music_failed::${res.status}::${errText.slice(0, 300)}`);
   }
-  return { bytes: new Uint8Array(await res.arrayBuffer()), mimeType: "audio/mpeg" };
+  const songBytes = new Uint8Array(await res.arrayBuffer());
+  // 실제 사용량 정산: Eleven Music 분당 $0.15 × 작곡 계획 길이(구간 합).
+  const planMs = (plan.chunks || []).reduce((n: number, c: any) => n + (Number(c.duration_ms) || 0), 0);
+  recordCost(env, "eleven_music", elevenLabsMusicUsd(planMs), { model: "music_v2", milliseconds: planMs });
+  return { bytes: songBytes, mimeType: "audio/mpeg" };
 }
 
 /**
@@ -501,7 +515,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         return send({ error: "song_mode_requires_elevenlabs_key", detail: "ELEVENLABS_API_KEY 가 필요합니다." }, 500, origin);
       }
       try {
-        const song = await generateElevenSong(elevenLabsKey, songChunks, styles);
+        const song = await generateElevenSong(elevenLabsKey, songChunks, styles, env);
         audioBytes = song.bytes;
         audioMimeType = song.mimeType;
         providerUsed = "eleven-music-v2";
@@ -519,7 +533,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     }
 
     if (!audioBytes && googleApiKey) {
-      const lyria = await generateLyriaMusic(googleApiKey, musicPrompt);
+      const lyria = await generateLyriaMusic(googleApiKey, musicPrompt, env);
       if (lyria && lyria.bytes && lyria.bytes.length > 0) {
         audioBytes = lyria.bytes;
         audioMimeType = lyria.mimeType || "audio/mp3";
@@ -539,7 +553,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       }
       // ElevenLabs 는 22초가 한계라 별도로 클램프.
       const fallbackDur = Math.min(22, Math.max(3, durationSec));
-      audioBytes = await generateElevenLabsMusic(elevenLabsKey, musicPrompt, fallbackDur);
+      audioBytes = await generateElevenLabsMusic(elevenLabsKey, musicPrompt, fallbackDur, env);
       audioMimeType = "audio/mpeg";
       providerUsed = "elevenlabs";
     }
@@ -627,7 +641,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "music" }, handlePost);
+  withCreditCharge(context, { feature: "music", metered: true }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

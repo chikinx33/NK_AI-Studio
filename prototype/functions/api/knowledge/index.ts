@@ -87,7 +87,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "knowledge_index" }, handlePost);
+  withCreditCharge(context, { feature: "knowledge_index", metered: true }, handlePost);
 
 export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   try {

@@ -41,7 +41,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     if (!elevenLabsKey) return send({ error: "ELEVENLABS_API_KEY not configured" }, 500, origin);
 
     // ElevenLabs SFX 생성
-    const audioBytes = await elevenLabsSfx({ apiKey: elevenLabsKey, prompt, durationSec: duration, promptInfluence: influence, looping });
+    const audioBytes = await elevenLabsSfx({ apiKey: elevenLabsKey, prompt, durationSec: duration, promptInfluence: influence, looping, env });
     const creditsUsed = Math.round(duration * 40); // 대략값(초당 ~40 크레딧)
 
     // GCS 업로드
@@ -93,7 +93,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "sfx" }, handlePost);
+  withCreditCharge(context, { feature: "sfx", metered: true }, handlePost);
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

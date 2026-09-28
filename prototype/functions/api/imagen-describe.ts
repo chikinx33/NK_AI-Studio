@@ -1,3 +1,4 @@
+import { recordGemini } from "./_shared/usage-cost.ts";
 import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
@@ -95,6 +96,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     }
 
     const geminiJson = safeJson(geminiText) || {};
+    // 실제 사용량 정산: 응답의 usageMetadata(입력·출력·thinking 토큰) × 공식 단가.
+    recordGemini(env, "image_describe", geminiModel, geminiJson);
     const prompt = extractGeminiText(geminiJson);
     if (!prompt) {
       return json({ error: "No prompt text returned", raw: geminiJson }, 500);
@@ -111,7 +114,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction = async (context) =>
-  withCreditCharge(context, { feature: "image_describe" }, handlePost);
+  withCreditCharge(context, { feature: "image_describe", metered: true }, handlePost);
 
 function normalizeLang(value: unknown) {
   return String(value || "").trim().toLowerCase() === "en" ? "en" : "ko";

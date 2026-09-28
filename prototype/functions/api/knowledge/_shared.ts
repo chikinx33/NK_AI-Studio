@@ -5,6 +5,7 @@
 
 import { describeNeonError } from "../_shared/neon-error";
 import { ensureSchemaOnce } from "../_shared/schema-marks.js";
+import { openaiEmbeddingUsd, recordCost, recordUnpriced } from "../_shared/usage-cost.ts";
 import { primaryAdminId } from "../_shared/admin-users";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -201,6 +202,10 @@ export async function embedText(env: any, input: string): Promise<number[]> {
     throw new Error(msg);
   }
   const data = JSON.parse(body);
+  // 실제 사용량 정산(지식 색인 등 계량 중일 때만 기록): usage.total_tokens × 공식 단가.
+  const embedUsd = openaiEmbeddingUsd(EMBEDDING_MODEL, data?.usage?.total_tokens ?? data?.usage?.prompt_tokens);
+  if (embedUsd === null || !(Number(data?.usage?.total_tokens ?? data?.usage?.prompt_tokens) > 0)) recordUnpriced(env, "openai_embedding", { model: EMBEDDING_MODEL, reason: "no_usage" });
+  else recordCost(env, "openai_embedding", embedUsd, { model: EMBEDDING_MODEL, tokens: data.usage.total_tokens ?? data.usage.prompt_tokens });
   const embedding = data && data.data && data.data[0] && data.data[0].embedding;
   if (!Array.isArray(embedding)) throw new Error("Embedding 응답이 비어 있습니다.");
   return embedding as number[];

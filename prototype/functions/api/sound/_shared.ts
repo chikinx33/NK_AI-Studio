@@ -5,6 +5,7 @@
 // - GCS 업로드 + V4 서명 URL (tts.ts / sfx.ts 헬퍼 재사용)
 // - ElevenLabs TTS / SFX 호출
 // - Gemini TTS 연출 합성 (Gemini API generateContent → PCM → WAV)
+import { elevenLabsTtsUsd, geminiTtsUsd, recordCost, recordGemini, recordUnpriced } from "../_shared/usage-cost.ts";
 import { ensureSchemaOnce } from "../_shared/schema-marks.js";
 import { describeNeonError } from "../_shared/neon-error";
 import { geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
@@ -324,7 +325,7 @@ export function buildSoundObjectName(basePrefix: string, kind: "voices" | "sfx" 
 
 // ─── ElevenLabs ───────────────────────────────────────────────────────────
 export async function elevenLabsTts(opts: {
-  apiKey: string; voiceId: string; text: string; modelId: string; stability: number; outputFormat: string;
+  apiKey: string; voiceId: string; text: string; modelId: string; stability: number; outputFormat: string; env?: any;
 }): Promise<Uint8Array> {
   const fmt = opts.outputFormat || "mp3_44100_128";
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(opts.voiceId)}?output_format=${encodeURIComponent(fmt)}`;
@@ -346,11 +347,17 @@ export async function elevenLabsTts(opts: {
     throw new Error(`elevenlabs_tts_failed::${res.status}::${errText.slice(0, 200)}`);
   }
   const buf = await res.arrayBuffer();
+  // 실제 사용량 정산: 과금 문자 수(character-cost 헤더, 없으면 보낸 글자 수 = 공식 "문자당" 기준) × 모델 단가.
+  const model = String(body.model_id);
+  const billed = Number(res.headers.get("character-cost"));
+  const usd = elevenLabsTtsUsd(model, Number.isFinite(billed) && billed >= 0 ? billed : String(opts.text || "").length);
+  if (usd === null) recordUnpriced(opts.env, "elevenlabs_tts", { model, reason: "unknown_model_price" });
+  else recordCost(opts.env, "elevenlabs_tts", usd, { model, characters: Number.isFinite(billed) ? billed : String(opts.text || "").length, header: Number.isFinite(billed) });
   return new Uint8Array(buf);
 }
 
 export async function elevenLabsSfx(opts: {
-  apiKey: string; prompt: string; durationSec: number; promptInfluence: number; looping: boolean;
+  apiKey: string; prompt: string; durationSec: number; promptInfluence: number; looping: boolean; env?: any;
 }): Promise<Uint8Array> {
   const body: any = { text: opts.prompt.slice(0, 450) };
   const clampedDur = Math.min(22, Math.max(0.5, opts.durationSec));
@@ -367,6 +374,8 @@ export async function elevenLabsSfx(opts: {
     throw new Error(`elevenlabs_sfx_failed::${res.status}::${errText.slice(0, 200)}`);
   }
   const buf = await res.arrayBuffer();
+  // 효과음의 USD 과금 단위는 공식 문서가 엇갈린다("$0.12 per minute" vs "billed per generation") → 추측하지 않고 미확정.
+  recordUnpriced(opts.env, "elevenlabs_sfx", { durationSec: body.duration_seconds, characterCost: res.headers.get("character-cost") });
   return new Uint8Array(buf);
 }
 
@@ -521,6 +530,8 @@ export async function geminiApiTts(opts: {
     const reason = json?.candidates?.[0]?.finishReason || json?.promptFeedback?.blockReason || "no_audio";
     throw new Error(`gemini_api_tts_empty_audio::${reason}`);
   }
+  // 실제 사용량 정산: usageMetadata(입력 텍스트·출력 오디오 토큰) × 공식 단가.
+  recordGemini(opts.env, "gemini_tts", opts.model, json);
   const raw = base64ToBytes(String(inline.data));
   const mime = String(inline.mimeType || inline.mime_type || "");
   const rateMatch = mime.match(/rate=(\d+)/);
@@ -560,7 +571,7 @@ async function geminiTtsRequest(opts: {
 // model_name 필드가 거부되면 modelName으로 1회 재시도 (tts.ts와 동일 폴백).
 export async function geminiTts(opts: {
   clientEmail: string; privateKeyPem: string; userProject?: string;
-  text: string; prompt: string; voiceName: string; modelName: string;
+  text: string; prompt: string; voiceName: string; modelName: string; env?: any;
 }): Promise<{ pcm: Uint8Array; sampleRate: number }> {
   const token = await getGoogleAccessToken({
     clientEmail: opts.clientEmail,
@@ -577,7 +588,15 @@ export async function geminiTts(opts: {
     bytes = await geminiTtsRequest(req, "modelName");
   }
   const { pcm, sampleRate } = extractPcm(bytes);
-  return { pcm, sampleRate: sampleRate || TTS_PCM_RATE };
+  const rate = sampleRate || TTS_PCM_RATE;
+  // 실제 사용량 정산: Cloud TTS 응답엔 사용량이 없다. 출력 = 오디오 길이 × 25 토큰/초(공식), 입력 = 글자 수를
+  // 토큰 수 상한으로 센다(토큰 수 ≤ 글자 수, 입력 단가 $0.50/1M 이라 5,000자여도 $0.0025 이하).
+  const seconds = pcm.byteLength / (rate * 2);
+  const inputChars = String(opts.text || "").length + String(opts.prompt || "").length;
+  const usd = geminiTtsUsd(opts.modelName, inputChars, seconds);
+  if (usd === null) recordUnpriced(opts.env, "cloud_gemini_tts", { model: opts.modelName, reason: "unknown_model_price" });
+  else recordCost(opts.env, "cloud_gemini_tts", usd, { model: opts.modelName, audioSeconds: Math.round(seconds * 100) / 100, inputCharsAsTokens: inputChars });
+  return { pcm, sampleRate: rate };
 }
 
 // Cloud 폴백은 input.text 를 그대로 읽으므로 [calm] 같은 태그를 본문에서 떼어 지시문 쪽으로 옮긴다.
@@ -635,6 +654,7 @@ export async function synthesizeGeminiDirected(opts: {
         prompt: tags.length ? `${base} Emotional cues for this passage: ${tags.join(", ")}.` : base,
         voiceName,
         modelName: opts.cloud.modelName,
+        env: opts.env,
       });
       engine = `cloud:${opts.cloud.modelName}`;
     }

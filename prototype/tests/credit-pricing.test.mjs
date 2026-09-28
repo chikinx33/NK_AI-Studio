@@ -107,7 +107,11 @@ test('video.ts 분기가 요금 계산이 가정한 값을 그대로 보낸다',
 test('환불: 공급자 작업이 없으면(접수 실패·검열 거부) 확정하지 않고 환불, 요금 계산 불가는 차단', () => {
   const credits = read('prototype/functions/api/_shared/credits.ts');
   assert.match(credits, /if \(providerJobId\) await attachProviderJob\(env, auth\.userId, String\(reservation\.operation_id\), providerJobId\);\s*else await settleCreditOperation\(env, auth\.userId, String\(reservation\.operation_id\), "release"\);/);
-  assert.match(credits, /settleCreditOperation\(env, auth\.userId, String\(reservation\.operation_id\), response\.ok \? "commit" : "release"\)/);
+  assert.match(credits, /\} else if \(!response\.ok\) \{\s*await settleCreditOperation\(env, auth\.userId, String\(reservation\.operation_id\), "release"\);/);
+  // 실제 사용량 헤더가 있으면 그 원가로 정산(차액 환불), 없으면 예약액 확정
+  assert.match(credits, /const cost = meter && !meter\.unpriced \? \{ usd: meter\.usd, usage: \{ calls: meter\.items \} \} : \(meter \? null : readProviderCost\(response\)\);/);
+  assert.match(credits, /if \(cost\) \{\s*const actual = creditsForUsd\(cost\.usd\);/);
+  assert.match(credits, /used := LEAST\(GREATEST\(COALESCE\(p_actual,0\),0\), o\.credit_cost\);/);
   assert.match(credits, /if \(quote\.error\) \{\s*return json\(\{ error: quote\.error/);
   // 공급자 실패 상태(검열 거부 포함)는 상태 조회·서버 정산 모두 환불
   const statusTs = read('prototype/functions/api/_shared/atlas-prediction.js');

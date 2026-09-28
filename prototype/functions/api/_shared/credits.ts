@@ -3,7 +3,8 @@ import { getSql, type SqlFn } from "../knowledge/_shared";
 import { quoteCredits } from "./credit-rates.js";
 import { ensureSchemaOnce } from "./schema-marks.js";
 import { dataUrlVideoSeconds, mp4DurationSeconds } from "./motion-control.js";
-import { videoInputSourcesFor } from "./video-pricing.ts";
+import { videoInputSourcesFor, creditsForUsd } from "./video-pricing.ts";
+import { createCostMeter, withCostMeter, type CostMeter } from "./usage-cost.ts";
 import { getGoogleAccessToken, parseGcsUri } from "./gcs.js";
 
 
@@ -87,6 +88,8 @@ async function runCreditSchemaDdl(sql: SqlFn): Promise<void> {
   await sql("CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx ON credit_transactions (user_id, created_at DESC)");
   await sql("CREATE INDEX IF NOT EXISTS credit_operations_user_created_idx ON credit_operations (user_id, created_at DESC)");
   await sql("CREATE INDEX IF NOT EXISTS credit_operations_provider_job_idx ON credit_operations (user_id, provider_job_id) WHERE provider_job_id <> ''");
+  // 실제 사용량 정산: 예약(최대치) 중 실제로 쓴 크레딧. NULL 이면 예약액 그대로 확정된 옛 방식.
+  await sql("ALTER TABLE credit_operations ADD COLUMN IF NOT EXISTS actual_cost bigint");
 
   await sql(`
     CREATE OR REPLACE FUNCTION nk_credit_reserve(
@@ -152,6 +155,40 @@ async function runCreditSchemaDdl(sql: SqlFn): Promise<void> {
           VALUES(p_user_id,o.id,'spend',0,-o.credit_cost,a.available_credits,a.reserved_credits,o.metadata);
         RETURN QUERY SELECT true,'committed',a.available_credits,a.reserved_credits,'committed';
       END IF;
+    END $$
+  `);
+  // 실제 사용량 정산: 예약액 안에서 실제 크레딧만 차감(spend)하고 나머지는 돌려준다(refund).
+  // 실제가 예약보다 크면 예약액까지만 받는다 — 생성 전에 보여 준 금액을 넘겨 받지 않는다.
+  await sql(`
+    CREATE OR REPLACE FUNCTION nk_credit_settle_actual(p_user_id text, p_operation_id text, p_actual bigint, p_provider_job_id text DEFAULT '', p_usage jsonb DEFAULT '{}'::jsonb)
+    RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint, operation_status text, spent bigint, refunded bigint)
+    LANGUAGE plpgsql AS $$
+    DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE; used bigint; back bigint; meta jsonb;
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
+      SELECT * INTO o FROM credit_operations WHERE id=p_operation_id AND user_id=p_user_id LIMIT 1;
+      IF NOT FOUND THEN RETURN QUERY SELECT false,'operation_not_found',0::bigint,0::bigint,'missing',0::bigint,0::bigint; RETURN; END IF;
+      IF o.status <> 'reserved' THEN
+        SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+        RETURN QUERY SELECT true,'already_settled',a.available_credits,a.reserved_credits,o.status,0::bigint,0::bigint; RETURN;
+      END IF;
+      used := LEAST(GREATEST(COALESCE(p_actual,0),0), o.credit_cost);
+      back := o.credit_cost - used;
+      meta := o.metadata || jsonb_build_object('usage', COALESCE(p_usage,'{}'::jsonb), 'reservedCredits', o.credit_cost, 'actualCredits', used);
+      UPDATE credit_accounts SET reserved_credits=reserved_credits-o.credit_cost, available_credits=available_credits+back,
+        lifetime_spent=lifetime_spent+used, lifetime_refunded=lifetime_refunded+back, updated_at=now()
+        WHERE user_id=p_user_id RETURNING * INTO a;
+      UPDATE credit_operations SET status=CASE WHEN used>0 THEN 'committed' ELSE 'released' END, actual_cost=used, metadata=meta,
+        provider_job_id=COALESCE(NULLIF(p_provider_job_id,''),provider_job_id), updated_at=now() WHERE id=o.id;
+      IF used>0 THEN
+        INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+          VALUES(p_user_id,o.id,'spend',0,-used,a.available_credits,a.reserved_credits+back,meta);
+      END IF;
+      IF back>0 THEN
+        INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+          VALUES(p_user_id,o.id,'refund',back,-back,a.available_credits,a.reserved_credits,meta);
+      END IF;
+      RETURN QUERY SELECT true,'settled_actual',a.available_credits,a.reserved_credits,CASE WHEN used>0 THEN 'committed' ELSE 'released' END,used,back;
     END $$
   `);
   await sql(`
@@ -266,6 +303,41 @@ export async function settleCreditOperation(env: any, userId: string, operationI
   return rows[0] || { ok: false, reason: "settle_failed" };
 }
 
+export async function settleCreditOperationActual(env: any, userId: string, operationIdValue: string, actualCredits: number, usage: any = {}, providerJobId = ""): Promise<any> {
+  const sql = requireSql(env);
+  await ensureCreditSchema(sql);
+  const rows = await sql("SELECT * FROM nk_credit_settle_actual($1,$2,$3,$4,$5::jsonb)", [userId, operationIdValue, Math.max(0, Math.trunc(actualCredits)), providerJobId, JSON.stringify(usage || {})]);
+  return rows[0] || { ok: false, reason: "settle_failed" };
+}
+
+/**
+ * 핸들러가 공급자 응답에서 읽은 실제 원가(USD)를 크레딧 래퍼에 알려 준다(실제 사용량 정산).
+ * 래퍼는 이 헤더를 읽고 지운 뒤 예약액 안에서 실제 크레딧만 차감한다. 헤더가 없으면 예약액 그대로 확정(옛 방식).
+ */
+export const PROVIDER_COST_HEADER = "X-NK-Provider-Cost";
+export function withProviderCost(response: Response, usd: number, usage: Record<string, unknown> = {}): Response {
+  const headers = new Headers(response.headers);
+  headers.set(PROVIDER_COST_HEADER, JSON.stringify({ usd: Math.max(0, Number(usd) || 0), usage }));
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function readProviderCost(response: Response): { usd: number; usage: any } | null {
+  const raw = response.headers.get(PROVIDER_COST_HEADER);
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    const usd = Number(v && v.usd);
+    return Number.isFinite(usd) && usd >= 0 ? { usd, usage: v.usage || {} } : null;
+  } catch (_) { return null; }
+}
+
+function stripProviderCost(response: Response): Response {
+  if (!response.headers.has(PROVIDER_COST_HEADER)) return response;
+  const headers = new Headers(response.headers);
+  headers.delete(PROVIDER_COST_HEADER);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 async function attachProviderJob(env: any, userId: string, operationIdValue: string, providerJobId: string): Promise<void> {
   const sql = requireSql(env);
   await ensureCreditSchema(sql);
@@ -290,6 +362,8 @@ function withCreditHeaders(response: Response, operation: any): Response {
   headers.set("X-NK-Credit-Operation", String(operation.operation_id || operation.operationId || ""));
   headers.set("X-NK-Credits-Remaining", String(operation.available || 0));
   headers.set("X-NK-Credits-Reserved", String(operation.reserved || 0));
+  // 실제 사용량으로 정산했으면 실제 차감 크레딧(예약액과 다를 수 있다).
+  if (operation.charged !== undefined) headers.set("X-NK-Credits-Charged", String(operation.charged));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -339,7 +413,8 @@ export async function withMeasuredVideoInputs(feature: string, body: any, env: a
 
 export async function withCreditCharge(
   context: any,
-  options: { feature: string; deferAccepted?: boolean },
+  // metered: 이 기능은 공급자가 알려 준 실제 사용량으로 정산한다(usage-cost.ts 계량기). 예약액은 최대치.
+  options: { feature: string; deferAccepted?: boolean; metered?: boolean },
   handler: (context: any) => Promise<Response>,
 ): Promise<Response> {
   const { request, env } = context;
@@ -373,8 +448,10 @@ export async function withCreditCharge(
       credits: { required: quote.credits, available: asInt(reservation.available), reserved: asInt(reservation.reserved), quote },
     }, insufficient ? 429 : 409, origin);
   }
+  // 실제 사용량 계량기: 핸들러와 그 아래 공급자 호출 함수가 env 로 받아 원가를 기록한다.
+  const meter: CostMeter | null = options.metered ? createCostMeter() : null;
   try {
-    const response = await handler(context);
+    const response = await handler(meter ? { ...context, env: withCostMeter(env, meter) } : context);
     if (response.ok && options.deferAccepted) {
       let providerJobId = "";
       try {
@@ -384,10 +461,23 @@ export async function withCreditCharge(
       // 작업 번호가 없으면 공급자에 과금될 작업이 없다(접수 실패·검열 거부 포함) → 확정하지 않고 환불한다.
       if (providerJobId) await attachProviderJob(env, auth.userId, String(reservation.operation_id), providerJobId);
       else await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
+    } else if (!response.ok) {
+      await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
     } else {
-      await settleCreditOperation(env, auth.userId, String(reservation.operation_id), response.ok ? "commit" : "release");
+      // 공급자가 알려 준 실제 사용량이 있으면 그 원가로 정산(차액 환불), 없으면 예약액 그대로 확정.
+      // 계량 기능은 공급자 호출이 하나도 성공하지 않았으면 0원 → 전액 환불(200 으로 오류를 돌려주는 경로 포함).
+      // 단가를 확인하지 못한 유료 호출이 섞였으면 추측하지 않고 예약액 그대로 확정한다.
+      const cost = meter && !meter.unpriced ? { usd: meter.usd, usage: { calls: meter.items } } : (meter ? null : readProviderCost(response));
+      if (meter && meter.unpriced) console.log('[credit] metered_unpriced_commit_reserved', options.feature, JSON.stringify(meter.items).slice(0, 500));
+      if (cost) {
+        const actual = creditsForUsd(cost.usd);
+        const settled = await settleCreditOperationActual(env, auth.userId, String(reservation.operation_id), actual, { ...cost.usage, providerUsd: cost.usd });
+        reservation = { ...reservation, available: settled?.available ?? reservation.available, reserved: settled?.reserved ?? reservation.reserved, charged: actual };
+      } else {
+        await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "commit");
+      }
     }
-    return withCreditHeaders(response, reservation);
+    return withCreditHeaders(stripProviderCost(response), reservation);
   } catch (e) {
     await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release").catch(() => null);
     throw e;
