@@ -5,6 +5,7 @@
 // - GCS 업로드 + V4 서명 URL (tts.ts / sfx.ts 헬퍼 재사용)
 // - ElevenLabs TTS / SFX 호출
 // - Gemini TTS 연출 합성 (Gemini API generateContent → PCM → WAV)
+import { ensureSchemaOnce } from "../_shared/schema-marks.js";
 import { describeNeonError } from "../_shared/neon-error";
 import { geminiGenerateUrl, geminiProxyHeaders } from "../_shared/gemini-models.js";
 import { resolveCharacterVoice } from "./_character-voices";
@@ -79,10 +80,8 @@ export function getSql(env: any): SqlFn | null {
 // ─── Schema (lazy) ────────────────────────────────────────────────────────
 // brands/episodes 테이블 존재 여부를 보장할 수 없으므로 brand_id/episode_id는
 // 외래키 제약 없이 TEXT로 저장한다(스펙의 "FK만 조정" 허용 범위).
-let schemaReady = false;
-
-export async function ensureSoundSchema(sql: SqlFn): Promise<void> {
-  if (schemaReady) return;
+// 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(_shared/schema-marks.js).
+async function runSoundSchemaDdl(sql: SqlFn): Promise<void> {
   await sql(`
     CREATE TABLE IF NOT EXISTS voices (
       id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -145,7 +144,10 @@ export async function ensureSoundSchema(sql: SqlFn): Promise<void> {
   await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_owner ON sound_assets(owner_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_scope ON sound_assets(scope, brand_id, episode_id, session_id)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_sound_assets_type ON sound_assets(type, status)`);
-  schemaReady = true;
+}
+
+export async function ensureSoundSchema(sql: SqlFn): Promise<void> {
+  return ensureSchemaOnce(sql, "sound", runSoundSchemaDdl);
 }
 
 // 전역 공용 보이스 시드 — voices 테이블이 비었을 때 1회 삽입.

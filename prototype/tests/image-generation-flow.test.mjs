@@ -11,7 +11,7 @@ function evaluate(source, deps = {}) {
   const module = { exports: {} };
   const code = esbuild.transformSync(source.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];[ \t]*$/gm, ''), { loader: 'ts', format: 'cjs' }).code;
   vm.runInNewContext(code, { module, exports: module.exports, Request, Response, URL, Uint8Array,
-    TextEncoder, TextDecoder, crypto, atob, btoa, console, ...deps });
+    TextEncoder, TextDecoder, crypto, atob, btoa, console, ensureSchemaOnce: async (sql, _name, runDdl) => runDdl(sql), ...deps });
   return module.exports;
 }
 const image = n => 'data:image/png;base64,' + Buffer.from('image-' + n).toString('base64');

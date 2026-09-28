@@ -11,7 +11,9 @@ const ts = source => esbuild.transformSync(source, { loader: 'ts', format: 'cjs'
 function evaluate(source, deps = {}) {
   const module = { exports: {} };
   vm.runInNewContext(ts(source.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];[ \t]*$/gm, '')),
-    { module, exports: module.exports, console, crypto, Request, Response, URL, TextEncoder, Uint8Array, ...deps });
+    { module, exports: module.exports, console, crypto, Request, Response, URL, TextEncoder, Uint8Array,
+      // import 를 떼고 돌리므로 스키마 준비(_shared/schema-marks.js)는 DDL 을 바로 부르는 것으로 대신한다.
+      ensureSchemaOnce: async (sql, _name, runDdl) => runDdl(sql), ...deps });
   return module.exports;
 }
 function accounts() {

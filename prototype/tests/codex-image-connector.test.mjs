@@ -22,7 +22,8 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQ
 
 function evaluate(name, deps) {
   const module = { exports: {} };
-  vm.runInNewContext(compile(name), { ...deps, module, exports: module.exports, console, crypto,
+  // import 를 떼고 돌리므로 스키마 준비(_shared/schema-marks.js)는 DDL 을 바로 부르는 것으로 대신한다.
+  vm.runInNewContext(compile(name), { ensureSchemaOnce: async (sql, _name, runDdl) => runDdl(sql), ...deps, module, exports: module.exports, console, crypto,
     Request, Response, URL, File, Uint8Array, TextEncoder, TextDecoder, Date, Map, Set });
   return module.exports;
 }

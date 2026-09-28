@@ -4,6 +4,7 @@
 // raw fetch 사용 — npm 패키지 의존성 없음 (Cloudflare Pages 번들 호환).
 
 import { describeNeonError } from "../_shared/neon-error";
+import { ensureSchemaOnce } from "../_shared/schema-marks.js";
 import { primaryAdminId } from "../_shared/admin-users";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -11,8 +12,6 @@ const EMBEDDING_DIMENSIONS = 1536;
 const CHUNK_SIZE = 1400;
 const CHUNK_OVERLAP = 220;
 const MAX_CHUNKS_PER_DOC = 80;
-
-let schemaReady = false;
 
 export type SqlFn = (sql: string, params?: any[]) => Promise<any[]>;
 
@@ -127,8 +126,8 @@ function parseKeys(value: any): string[] {
     .filter(Boolean);
 }
 
-export async function ensureSchema(sql: SqlFn) {
-  if (schemaReady) return;
+// 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(_shared/schema-marks.js).
+async function runKnowledgeSchemaDdl(sql: SqlFn): Promise<void> {
   await sql("CREATE EXTENSION IF NOT EXISTS pgcrypto");
   await sql("CREATE EXTENSION IF NOT EXISTS vector");
   await sql(`
@@ -169,7 +168,10 @@ export async function ensureSchema(sql: SqlFn) {
       ON knowledge_chunks (document_id)
     `);
   } catch (_) {}
-  schemaReady = true;
+}
+
+export async function ensureSchema(sql: SqlFn) {
+  return ensureSchemaOnce(sql, "knowledge", runKnowledgeSchemaDdl);
 }
 
 export async function embedText(env: any, input: string): Promise<number[]> {

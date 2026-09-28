@@ -29,6 +29,8 @@ function loadAuthModule() {
     .replace(/^import[\s\S]*?from\s+["'][^"']+["'];$/gm, "")
     .replace(/^export /gm, "");
   const ctx = vm.createContext({
+    // import 를 떼고 돌리므로 스키마 준비(_shared/schema-marks.js)는 DDL 을 바로 부르는 것으로 대신한다.
+    ensureSchemaOnce: async (sql, _name, runDdl) => runDdl(sql),
     console: { log() {}, error() {} },
     Response,
     fetch: (...args) => hooks.fetch(...args),

@@ -1,3 +1,4 @@
+import { ensureSchemaOnce } from "./schema-marks.js";
 import { getSql, type SqlFn } from '../knowledge/_shared';
 import { checkAccountSession } from './account-deletions';
 import { hasPagePermission } from './admin-users';
@@ -9,13 +10,16 @@ import { signGcsUrl } from '../image/upload';
 export const CONNECTOR_HEADER = 'X-NK-Image-Connector';
 export const ONLINE_MS = 60000;
 export const JOB_TIMEOUT_MS = 20 * 60 * 1000;
-const schemaReady = new Map<string, Promise<void>>();
 
 export async function connectorSql(env: any): Promise<SqlFn> {
   const sql = getSql(env);
   if (!sql) throw new Error('connector_database_unavailable');
-  const key = String(env.DATABASE_URL);
-  if (!schemaReady.has(key)) schemaReady.set(key, (async () => {
+  await ensureSchemaOnce(sql, "image_connectors", runConnectorSchemaDdl);
+  return sql;
+}
+
+// 구독 이미지 연결 테이블. 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(schema-marks.js).
+async function runConnectorSchemaDdl(sql: SqlFn): Promise<void> {
     await sql(`CREATE TABLE IF NOT EXISTS nk_image_connectors (
       user_id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL,
       email TEXT NOT NULL DEFAULT '', plan TEXT NOT NULL DEFAULT '',
@@ -37,9 +41,6 @@ export async function connectorSql(env: any): Promise<SqlFn> {
     END $$`);
     await sql(`CREATE INDEX IF NOT EXISTS nk_subscription_image_owner
       ON nk_subscription_image_jobs (user_id, created_at DESC)`);
-  })().catch(error => { schemaReady.delete(key); throw error; }));
-  await schemaReady.get(key);
-  return sql;
 }
 
 export async function hashConnectorToken(raw: string): Promise<string> {

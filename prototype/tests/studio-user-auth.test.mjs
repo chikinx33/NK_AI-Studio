@@ -71,6 +71,8 @@ function loadClaudeAuth() {
   const ctx = vm.createContext({ console, fetch: async () => ({ ok: true, json: async () => ({}) }) });
   vm.runInContext(
     "const getSql = (env) => (env && env.__sql) || null;\n" +
+      // import 를 떼고 돌리므로 스키마 준비(_shared/schema-marks.js)는 DDL 을 바로 부르는 것으로 대신한다.
+      "const ensureSchemaOnce = async (sql, _name, runDdl) => runDdl(sql);\n" +
       src +
       "\n;globalThis.__m = { resolveAuth, authHeadersFor, isClaudeAuthRequired, studioAuth, buildClaudeSystem };",
     ctx

@@ -1,6 +1,7 @@
 // prototype/functions/api/_shared/claude-auth.js
 // Claude 인증 (구독 OAuth / API 키 2모드). 설정 UI에서 런타임 전환 가능하도록 DB(Neon) 우선.
 // 우선순위: app_settings(user_id별) → env 폴백. 스튜디오·AI기업 공용.
+import { ensureSchemaOnce } from "./schema-marks.js";
 import { getSql } from "../knowledge/_shared";
 import { isCreditExhausted } from "./credit-exhausted.js";
 
@@ -40,9 +41,8 @@ function looksLikeEdgeBlock(res, text) {
   return /<html|cloudflare|request not allowed/i.test(text);
 }
 
-let settingsSchemaReady = false;
-export async function ensureSettingsSchema(sql) {
-  if (settingsSchemaReady) return;
+// app_settings 테이블. 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(schema-marks.js).
+async function runSettingsSchemaDdl(sql) {
   await sql(`
     CREATE TABLE IF NOT EXISTS app_settings (
       user_id text PRIMARY KEY,
@@ -67,7 +67,10 @@ export async function ensureSettingsSchema(sql) {
   await sql(`ALTER TABLE app_settings ALTER COLUMN user_image_enabled SET DEFAULT false`);
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS image_auth_mode text NOT NULL DEFAULT 'subscription'`);
   await sql(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS image_openai_api_key text`);
-  settingsSchemaReady = true;
+}
+
+export async function ensureSettingsSchema(sql) {
+  return ensureSchemaOnce(sql, "app_settings", runSettingsSchemaDdl);
 }
 
 export async function getSettingsRow(sql, userId) {

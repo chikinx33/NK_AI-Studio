@@ -1,10 +1,9 @@
 import { authorizeRequest } from "./auth.js";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { quoteCredits } from "./credit-rates.js";
+import { ensureSchemaOnce } from "./schema-marks.js";
 import { withMeasuredMotionSeconds } from "./motion-control.js";
 
-let schemaReady = false;
-let schemaPromise: Promise<void> | null = null;
 
 export type CreditSummary = {
   userId: string;
@@ -34,162 +33,152 @@ function json(data: any, status = 200, origin?: string | null): Response {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
-// 크레딧 스키마 버전. 아래 테이블·함수 정의를 바꾸면 반드시 올린다(올리지 않으면 이미 준비된 DB 에는 반영되지 않는다).
-export const CREDIT_SCHEMA_VERSION = "credit-schema-v1";
+// 크레딧 테이블·함수. 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(schema-marks.js).
+async function runCreditSchemaDdl(sql: SqlFn): Promise<void> {
+  await sql(`
+    CREATE TABLE IF NOT EXISTS credit_accounts (
+      user_id text PRIMARY KEY,
+      available_credits bigint NOT NULL DEFAULT 0 CHECK (available_credits >= 0),
+      reserved_credits bigint NOT NULL DEFAULT 0 CHECK (reserved_credits >= 0),
+      lifetime_granted bigint NOT NULL DEFAULT 0,
+      lifetime_spent bigint NOT NULL DEFAULT 0,
+      lifetime_refunded bigint NOT NULL DEFAULT 0,
+      lifetime_revoked bigint NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await sql(`
+    CREATE TABLE IF NOT EXISTS credit_operations (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      idempotency_key text NOT NULL,
+      feature text NOT NULL,
+      provider text NOT NULL DEFAULT '',
+      model text NOT NULL DEFAULT '',
+      credit_cost bigint NOT NULL CHECK (credit_cost > 0),
+      status text NOT NULL CHECK (status IN ('reserved','committed','released')),
+      provider_job_id text NOT NULL DEFAULT '',
+      rate_card text NOT NULL DEFAULT '',
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (user_id, idempotency_key)
+    )
+  `);
+  await sql(`
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id bigserial PRIMARY KEY,
+      user_id text NOT NULL,
+      operation_id text,
+      kind text NOT NULL,
+      delta_available bigint NOT NULL DEFAULT 0,
+      delta_reserved bigint NOT NULL DEFAULT 0,
+      balance_after bigint NOT NULL DEFAULT 0,
+      reserved_after bigint NOT NULL DEFAULT 0,
+      actor_user_id text NOT NULL DEFAULT '',
+      reason text NOT NULL DEFAULT '',
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await sql("CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx ON credit_transactions (user_id, created_at DESC)");
+  await sql("CREATE INDEX IF NOT EXISTS credit_operations_user_created_idx ON credit_operations (user_id, created_at DESC)");
+  await sql("CREATE INDEX IF NOT EXISTS credit_operations_provider_job_idx ON credit_operations (user_id, provider_job_id) WHERE provider_job_id <> ''");
+
+  await sql(`
+    CREATE OR REPLACE FUNCTION nk_credit_reserve(
+      p_user_id text, p_operation_id text, p_idempotency_key text,
+      p_feature text, p_provider text, p_model text, p_cost bigint,
+      p_rate_card text, p_metadata jsonb
+    ) RETURNS TABLE(ok boolean, reason text, operation_id text, available bigint, reserved bigint, required bigint, operation_status text)
+    LANGUAGE plpgsql AS $$
+    DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE;
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
+      INSERT INTO credit_accounts(user_id) VALUES (p_user_id) ON CONFLICT (user_id) DO NOTHING;
+      SELECT * INTO o FROM credit_operations WHERE user_id=p_user_id AND idempotency_key=p_idempotency_key LIMIT 1;
+      IF FOUND THEN
+        SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+        RETURN QUERY SELECT false, CASE WHEN o.credit_cost=p_cost THEN 'duplicate_' || o.status ELSE 'idempotency_cost_mismatch' END,
+          o.id, a.available_credits, a.reserved_credits, p_cost, o.status;
+        RETURN;
+      END IF;
+      UPDATE credit_accounts SET available_credits=available_credits-p_cost,
+        reserved_credits=reserved_credits+p_cost, updated_at=now()
+        WHERE user_id=p_user_id AND available_credits >= p_cost RETURNING * INTO a;
+      IF NOT FOUND THEN
+        SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+        RETURN QUERY SELECT false, 'insufficient', p_operation_id, a.available_credits, a.reserved_credits, p_cost, 'rejected';
+        RETURN;
+      END IF;
+      INSERT INTO credit_operations(id,user_id,idempotency_key,feature,provider,model,credit_cost,status,rate_card,metadata)
+        VALUES(p_operation_id,p_user_id,p_idempotency_key,p_feature,COALESCE(p_provider,''),COALESCE(p_model,''),p_cost,'reserved',COALESCE(p_rate_card,''),COALESCE(p_metadata,'{}'::jsonb));
+      INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+        VALUES(p_user_id,p_operation_id,'reserve',-p_cost,p_cost,a.available_credits,a.reserved_credits,COALESCE(p_metadata,'{}'::jsonb));
+      RETURN QUERY SELECT true, 'reserved', p_operation_id, a.available_credits, a.reserved_credits, p_cost, 'reserved';
+    END $$
+  `);
+  await sql(`
+    CREATE OR REPLACE FUNCTION nk_credit_settle(p_user_id text, p_operation_id text, p_action text, p_provider_job_id text DEFAULT '')
+    RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint, operation_status text)
+    LANGUAGE plpgsql AS $$
+    DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE; action_name text;
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
+      SELECT * INTO o FROM credit_operations WHERE id=p_operation_id AND user_id=p_user_id LIMIT 1;
+      IF NOT FOUND THEN RETURN QUERY SELECT false,'operation_not_found',0::bigint,0::bigint,'missing'; RETURN; END IF;
+      IF o.status <> 'reserved' THEN
+        SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+        RETURN QUERY SELECT true,'already_settled',a.available_credits,a.reserved_credits,o.status; RETURN;
+      END IF;
+      action_name := CASE WHEN p_action='release' THEN 'release' ELSE 'commit' END;
+      IF action_name='release' THEN
+        UPDATE credit_accounts SET available_credits=available_credits+o.credit_cost,
+          reserved_credits=reserved_credits-o.credit_cost, lifetime_refunded=lifetime_refunded+o.credit_cost, updated_at=now()
+          WHERE user_id=p_user_id RETURNING * INTO a;
+        UPDATE credit_operations SET status='released', provider_job_id=COALESCE(NULLIF(p_provider_job_id,''),provider_job_id), updated_at=now() WHERE id=o.id;
+        INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+          VALUES(p_user_id,o.id,'refund',o.credit_cost,-o.credit_cost,a.available_credits,a.reserved_credits,o.metadata);
+        RETURN QUERY SELECT true,'released',a.available_credits,a.reserved_credits,'released';
+      ELSE
+        UPDATE credit_accounts SET reserved_credits=reserved_credits-o.credit_cost,
+          lifetime_spent=lifetime_spent+o.credit_cost, updated_at=now()
+          WHERE user_id=p_user_id RETURNING * INTO a;
+        UPDATE credit_operations SET status='committed', provider_job_id=COALESCE(NULLIF(p_provider_job_id,''),provider_job_id), updated_at=now() WHERE id=o.id;
+        INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
+          VALUES(p_user_id,o.id,'spend',0,-o.credit_cost,a.available_credits,a.reserved_credits,o.metadata);
+        RETURN QUERY SELECT true,'committed',a.available_credits,a.reserved_credits,'committed';
+      END IF;
+    END $$
+  `);
+  await sql(`
+    CREATE OR REPLACE FUNCTION nk_credit_adjust(p_user_id text, p_actor text, p_delta bigint, p_reason text, p_metadata jsonb)
+    RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint)
+    LANGUAGE plpgsql AS $$
+    DECLARE a credit_accounts%ROWTYPE; kind_name text;
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
+      INSERT INTO credit_accounts(user_id) VALUES (p_user_id) ON CONFLICT (user_id) DO NOTHING;
+      UPDATE credit_accounts SET available_credits=available_credits+p_delta,
+        lifetime_granted=lifetime_granted+CASE WHEN p_delta>0 THEN p_delta ELSE 0 END,
+        lifetime_revoked=lifetime_revoked+CASE WHEN p_delta<0 THEN -p_delta ELSE 0 END,
+        updated_at=now()
+        WHERE user_id=p_user_id AND available_credits+p_delta >= 0 RETURNING * INTO a;
+      IF NOT FOUND THEN
+        SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
+        RETURN QUERY SELECT false,'insufficient_available',a.available_credits,a.reserved_credits; RETURN;
+      END IF;
+      kind_name := CASE WHEN p_delta >= 0 THEN 'admin_grant' ELSE 'admin_revoke' END;
+      INSERT INTO credit_transactions(user_id,kind,delta_available,balance_after,reserved_after,actor_user_id,reason,metadata)
+        VALUES(p_user_id,kind_name,p_delta,a.available_credits,a.reserved_credits,COALESCE(p_actor,''),COALESCE(p_reason,''),COALESCE(p_metadata,'{}'::jsonb));
+      RETURN QUERY SELECT true,kind_name,a.available_credits,a.reserved_credits;
+    END $$
+  `);
+}
 
 export async function ensureCreditSchema(sql: SqlFn): Promise<void> {
-  if (schemaReady) return;
-  if (schemaPromise) return schemaPromise;
-  schemaPromise = (async () => {
-    // 이미 준비된 DB 면 질의 1번으로 끝낸다. 예전엔 Worker 인스턴스가 뜰 때마다 DDL 9개를 다시 보내
-    // 26초(최대 78초 뒤 Neon 522)가 걸렸고, 그동안 예약 정산이 시간 초과로 실패해 크레딧이 묶였다(2026-09-29).
-    // 마지막에 만드는 함수(nk_credit_adjust)의 주석이 현재 버전이면 앞의 DDL 도 모두 끝난 것이다.
-    const probe = await sql("SELECT obj_description(to_regprocedure('nk_credit_adjust(text,text,bigint,text,jsonb)'), 'pg_proc') AS v");
-    if (probe[0]?.v === CREDIT_SCHEMA_VERSION) { schemaReady = true; return; }
-    await sql(`
-      CREATE TABLE IF NOT EXISTS credit_accounts (
-        user_id text PRIMARY KEY,
-        available_credits bigint NOT NULL DEFAULT 0 CHECK (available_credits >= 0),
-        reserved_credits bigint NOT NULL DEFAULT 0 CHECK (reserved_credits >= 0),
-        lifetime_granted bigint NOT NULL DEFAULT 0,
-        lifetime_spent bigint NOT NULL DEFAULT 0,
-        lifetime_refunded bigint NOT NULL DEFAULT 0,
-        lifetime_revoked bigint NOT NULL DEFAULT 0,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now()
-      )
-    `);
-    await sql(`
-      CREATE TABLE IF NOT EXISTS credit_operations (
-        id text PRIMARY KEY,
-        user_id text NOT NULL,
-        idempotency_key text NOT NULL,
-        feature text NOT NULL,
-        provider text NOT NULL DEFAULT '',
-        model text NOT NULL DEFAULT '',
-        credit_cost bigint NOT NULL CHECK (credit_cost > 0),
-        status text NOT NULL CHECK (status IN ('reserved','committed','released')),
-        provider_job_id text NOT NULL DEFAULT '',
-        rate_card text NOT NULL DEFAULT '',
-        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-        UNIQUE (user_id, idempotency_key)
-      )
-    `);
-    await sql(`
-      CREATE TABLE IF NOT EXISTS credit_transactions (
-        id bigserial PRIMARY KEY,
-        user_id text NOT NULL,
-        operation_id text,
-        kind text NOT NULL,
-        delta_available bigint NOT NULL DEFAULT 0,
-        delta_reserved bigint NOT NULL DEFAULT 0,
-        balance_after bigint NOT NULL DEFAULT 0,
-        reserved_after bigint NOT NULL DEFAULT 0,
-        actor_user_id text NOT NULL DEFAULT '',
-        reason text NOT NULL DEFAULT '',
-        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )
-    `);
-    await sql("CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx ON credit_transactions (user_id, created_at DESC)");
-    await sql("CREATE INDEX IF NOT EXISTS credit_operations_user_created_idx ON credit_operations (user_id, created_at DESC)");
-    await sql("CREATE INDEX IF NOT EXISTS credit_operations_provider_job_idx ON credit_operations (user_id, provider_job_id) WHERE provider_job_id <> ''");
-
-    await sql(`
-      CREATE OR REPLACE FUNCTION nk_credit_reserve(
-        p_user_id text, p_operation_id text, p_idempotency_key text,
-        p_feature text, p_provider text, p_model text, p_cost bigint,
-        p_rate_card text, p_metadata jsonb
-      ) RETURNS TABLE(ok boolean, reason text, operation_id text, available bigint, reserved bigint, required bigint, operation_status text)
-      LANGUAGE plpgsql AS $$
-      DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE;
-      BEGIN
-        PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
-        INSERT INTO credit_accounts(user_id) VALUES (p_user_id) ON CONFLICT (user_id) DO NOTHING;
-        SELECT * INTO o FROM credit_operations WHERE user_id=p_user_id AND idempotency_key=p_idempotency_key LIMIT 1;
-        IF FOUND THEN
-          SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
-          RETURN QUERY SELECT false, CASE WHEN o.credit_cost=p_cost THEN 'duplicate_' || o.status ELSE 'idempotency_cost_mismatch' END,
-            o.id, a.available_credits, a.reserved_credits, p_cost, o.status;
-          RETURN;
-        END IF;
-        UPDATE credit_accounts SET available_credits=available_credits-p_cost,
-          reserved_credits=reserved_credits+p_cost, updated_at=now()
-          WHERE user_id=p_user_id AND available_credits >= p_cost RETURNING * INTO a;
-        IF NOT FOUND THEN
-          SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
-          RETURN QUERY SELECT false, 'insufficient', p_operation_id, a.available_credits, a.reserved_credits, p_cost, 'rejected';
-          RETURN;
-        END IF;
-        INSERT INTO credit_operations(id,user_id,idempotency_key,feature,provider,model,credit_cost,status,rate_card,metadata)
-          VALUES(p_operation_id,p_user_id,p_idempotency_key,p_feature,COALESCE(p_provider,''),COALESCE(p_model,''),p_cost,'reserved',COALESCE(p_rate_card,''),COALESCE(p_metadata,'{}'::jsonb));
-        INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
-          VALUES(p_user_id,p_operation_id,'reserve',-p_cost,p_cost,a.available_credits,a.reserved_credits,COALESCE(p_metadata,'{}'::jsonb));
-        RETURN QUERY SELECT true, 'reserved', p_operation_id, a.available_credits, a.reserved_credits, p_cost, 'reserved';
-      END $$
-    `);
-    await sql(`
-      CREATE OR REPLACE FUNCTION nk_credit_settle(p_user_id text, p_operation_id text, p_action text, p_provider_job_id text DEFAULT '')
-      RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint, operation_status text)
-      LANGUAGE plpgsql AS $$
-      DECLARE a credit_accounts%ROWTYPE; o credit_operations%ROWTYPE; action_name text;
-      BEGIN
-        PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
-        SELECT * INTO o FROM credit_operations WHERE id=p_operation_id AND user_id=p_user_id LIMIT 1;
-        IF NOT FOUND THEN RETURN QUERY SELECT false,'operation_not_found',0::bigint,0::bigint,'missing'; RETURN; END IF;
-        IF o.status <> 'reserved' THEN
-          SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
-          RETURN QUERY SELECT true,'already_settled',a.available_credits,a.reserved_credits,o.status; RETURN;
-        END IF;
-        action_name := CASE WHEN p_action='release' THEN 'release' ELSE 'commit' END;
-        IF action_name='release' THEN
-          UPDATE credit_accounts SET available_credits=available_credits+o.credit_cost,
-            reserved_credits=reserved_credits-o.credit_cost, lifetime_refunded=lifetime_refunded+o.credit_cost, updated_at=now()
-            WHERE user_id=p_user_id RETURNING * INTO a;
-          UPDATE credit_operations SET status='released', provider_job_id=COALESCE(NULLIF(p_provider_job_id,''),provider_job_id), updated_at=now() WHERE id=o.id;
-          INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
-            VALUES(p_user_id,o.id,'refund',o.credit_cost,-o.credit_cost,a.available_credits,a.reserved_credits,o.metadata);
-          RETURN QUERY SELECT true,'released',a.available_credits,a.reserved_credits,'released';
-        ELSE
-          UPDATE credit_accounts SET reserved_credits=reserved_credits-o.credit_cost,
-            lifetime_spent=lifetime_spent+o.credit_cost, updated_at=now()
-            WHERE user_id=p_user_id RETURNING * INTO a;
-          UPDATE credit_operations SET status='committed', provider_job_id=COALESCE(NULLIF(p_provider_job_id,''),provider_job_id), updated_at=now() WHERE id=o.id;
-          INSERT INTO credit_transactions(user_id,operation_id,kind,delta_available,delta_reserved,balance_after,reserved_after,metadata)
-            VALUES(p_user_id,o.id,'spend',0,-o.credit_cost,a.available_credits,a.reserved_credits,o.metadata);
-          RETURN QUERY SELECT true,'committed',a.available_credits,a.reserved_credits,'committed';
-        END IF;
-      END $$
-    `);
-    await sql(`
-      CREATE OR REPLACE FUNCTION nk_credit_adjust(p_user_id text, p_actor text, p_delta bigint, p_reason text, p_metadata jsonb)
-      RETURNS TABLE(ok boolean, reason text, available bigint, reserved bigint)
-      LANGUAGE plpgsql AS $$
-      DECLARE a credit_accounts%ROWTYPE; kind_name text;
-      BEGIN
-        PERFORM pg_advisory_xact_lock(hashtext(p_user_id));
-        INSERT INTO credit_accounts(user_id) VALUES (p_user_id) ON CONFLICT (user_id) DO NOTHING;
-        UPDATE credit_accounts SET available_credits=available_credits+p_delta,
-          lifetime_granted=lifetime_granted+CASE WHEN p_delta>0 THEN p_delta ELSE 0 END,
-          lifetime_revoked=lifetime_revoked+CASE WHEN p_delta<0 THEN -p_delta ELSE 0 END,
-          updated_at=now()
-          WHERE user_id=p_user_id AND available_credits+p_delta >= 0 RETURNING * INTO a;
-        IF NOT FOUND THEN
-          SELECT * INTO a FROM credit_accounts WHERE user_id=p_user_id;
-          RETURN QUERY SELECT false,'insufficient_available',a.available_credits,a.reserved_credits; RETURN;
-        END IF;
-        kind_name := CASE WHEN p_delta >= 0 THEN 'admin_grant' ELSE 'admin_revoke' END;
-        INSERT INTO credit_transactions(user_id,kind,delta_available,balance_after,reserved_after,actor_user_id,reason,metadata)
-          VALUES(p_user_id,kind_name,p_delta,a.available_credits,a.reserved_credits,COALESCE(p_actor,''),COALESCE(p_reason,''),COALESCE(p_metadata,'{}'::jsonb));
-        RETURN QUERY SELECT true,kind_name,a.available_credits,a.reserved_credits;
-      END $$
-    `);
-    await sql(`COMMENT ON FUNCTION nk_credit_adjust(text,text,bigint,text,jsonb) IS '${CREDIT_SCHEMA_VERSION}'`);
-    schemaReady = true;
-  })().finally(() => { schemaPromise = null; });
-  return schemaPromise;
+  return ensureSchemaOnce(sql, "credits", runCreditSchemaDdl);
 }
 
 function requireSql(env: any): SqlFn {

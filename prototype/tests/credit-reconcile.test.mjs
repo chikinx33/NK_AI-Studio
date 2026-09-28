@@ -55,15 +55,18 @@ test('입구: 회원은 자기 예약(상세), 정기 실행은 전체(건수만
   assert.doesNotMatch(statusTs, /settleDeferredCreditFromResponse\([^)]*\)\.catch\(\(\) => null\)/);
 });
 
-test('크레딧 스키마 준비는 이미 준비된 DB 면 질의 1번으로 끝난다(버전 주석)', () => {
-  const credits = read('prototype/functions/api/_shared/credits.ts');
-  const fn = credits.slice(credits.indexOf('export async function ensureCreditSchema'));
-  const probe = fn.indexOf("obj_description(to_regprocedure('nk_credit_adjust(text,text,bigint,text,jsonb)'), 'pg_proc')");
-  const firstDdl = fn.indexOf('CREATE TABLE IF NOT EXISTS credit_accounts');
-  assert.ok(probe > 0 && probe < firstDdl, '버전 확인이 DDL 보다 먼저여야 합니다');
-  assert.match(fn, /if \(probe\[0\]\?\.v === CREDIT_SCHEMA_VERSION\) \{ schemaReady = true; return; \}/);
-  // 버전 주석은 모든 DDL 이 끝난 뒤(마지막 함수 생성 다음)에 단다
-  assert.ok(fn.indexOf('COMMENT ON FUNCTION nk_credit_adjust') > fn.indexOf('CREATE OR REPLACE FUNCTION nk_credit_adjust'));
+test('스키마 준비는 코드 지문이 같으면 질의 1번으로 끝난다(크레딧·설정·사운드·지식·이미지 연결 공용)', () => {
+  const marks = read('prototype/functions/api/_shared/schema-marks.js');
+  assert.match(marks, /SELECT fingerprint FROM nk_schema_marks WHERE name = \$1/);
+  assert.ok(marks.indexOf('SELECT fingerprint FROM nk_schema_marks') < marks.indexOf('await runDdl(sql);'), '지문 확인이 DDL 보다 먼저');
+  const uses = [
+    ['prototype/functions/api/_shared/credits.ts', 'ensureSchemaOnce(sql, "credits", runCreditSchemaDdl)'],
+    ['prototype/functions/api/_shared/claude-auth.js', 'ensureSchemaOnce(sql, "app_settings", runSettingsSchemaDdl)'],
+    ['prototype/functions/api/_shared/codex-images.ts', 'ensureSchemaOnce(sql, "image_connectors", runConnectorSchemaDdl)'],
+    ['prototype/functions/api/sound/_shared.ts', 'ensureSchemaOnce(sql, "sound", runSoundSchemaDdl)'],
+    ['prototype/functions/api/knowledge/_shared.ts', 'ensureSchemaOnce(sql, "knowledge", runKnowledgeSchemaDdl)'],
+  ];
+  for (const [file, call] of uses) assert.ok(read(file).includes(call), `${file} 가 공용 스키마 준비를 써야 합니다`);
 });
 
 test('24시간이 지나도 공급자가 진행 중이면 멈춘 작업으로 보고 환불한다', () => {

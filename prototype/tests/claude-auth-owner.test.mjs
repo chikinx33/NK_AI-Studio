@@ -23,6 +23,8 @@ function harness(initial = {}) {
   };
   const ctx = vm.createContext({ console, Response, getSql: (e) => e.__sql,
     isCreditExhausted: () => false,
+    // import 를 떼고 돌리므로 스키마 준비(_shared/schema-marks.js)는 DDL 을 바로 부르는 것으로 대신한다.
+    ensureSchemaOnce: async (sql, _name, runDdl) => runDdl(sql),
     fetch: async (url, init) => {
       calls.push({ url, ...init });
       return new Response(JSON.stringify({ content: [{ text: '{"ok":true}' }], error: { message: "rejected" } }),
