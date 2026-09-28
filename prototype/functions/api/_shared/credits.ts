@@ -34,10 +34,18 @@ function json(data: any, status = 200, origin?: string | null): Response {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
+// 크레딧 스키마 버전. 아래 테이블·함수 정의를 바꾸면 반드시 올린다(올리지 않으면 이미 준비된 DB 에는 반영되지 않는다).
+export const CREDIT_SCHEMA_VERSION = "credit-schema-v1";
+
 export async function ensureCreditSchema(sql: SqlFn): Promise<void> {
   if (schemaReady) return;
   if (schemaPromise) return schemaPromise;
   schemaPromise = (async () => {
+    // 이미 준비된 DB 면 질의 1번으로 끝낸다. 예전엔 Worker 인스턴스가 뜰 때마다 DDL 9개를 다시 보내
+    // 26초(최대 78초 뒤 Neon 522)가 걸렸고, 그동안 예약 정산이 시간 초과로 실패해 크레딧이 묶였다(2026-09-29).
+    // 마지막에 만드는 함수(nk_credit_adjust)의 주석이 현재 버전이면 앞의 DDL 도 모두 끝난 것이다.
+    const probe = await sql("SELECT obj_description(to_regprocedure('nk_credit_adjust(text,text,bigint,text,jsonb)'), 'pg_proc') AS v");
+    if (probe[0]?.v === CREDIT_SCHEMA_VERSION) { schemaReady = true; return; }
     await sql(`
       CREATE TABLE IF NOT EXISTS credit_accounts (
         user_id text PRIMARY KEY,
@@ -178,6 +186,7 @@ export async function ensureCreditSchema(sql: SqlFn): Promise<void> {
         RETURN QUERY SELECT true,kind_name,a.available_credits,a.reserved_credits;
       END $$
     `);
+    await sql(`COMMENT ON FUNCTION nk_credit_adjust(text,text,bigint,text,jsonb) IS '${CREDIT_SCHEMA_VERSION}'`);
     schemaReady = true;
   })().finally(() => { schemaPromise = null; });
   return schemaPromise;
