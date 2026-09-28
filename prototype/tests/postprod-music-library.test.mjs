@@ -35,3 +35,24 @@ test("AI 생성·저장소 선택이 같은 M1 반영 경로(setProjectMusic)를
   const gen = post.slice(post.indexOf("async function generateMusicForProject("), post.indexOf("function setProjectMusic("));
   assert.match(gen, /setProjectMusic\(data\.musicUrl, musicMeta\);/);
 });
+
+// 2026-09-29: M1·A1 '+' 로 직접 올린 음원이 브라우저 임시 주소(blob:)로만 붙어 새로고침·다른 기기에서 사라졌고,
+// 미리보기에서 소리가 안 나도 이유를 알 수 없었다.
+test("직접 등록한 음원은 에피소드 저장소(music/·audio/)에 올리고 저장 경로 주소로 바꾼다", () => {
+  const api = read("api.js");
+  const upload = read("functions/api/video/upload.ts");
+  assert.match(api, /api\.videoUpload = async function \(projectId, sceneId, file, opts\)/);
+  assert.match(api, /if \(opts && opts\.kind\) fd\.append\('kind', String\(opts\.kind\)\);/);
+  assert.match(upload, /const folder = kind === "music" \? "music" : kind === "audio" \? "audio" : "videos";/);
+  const handler = post.slice(post.indexOf("// upload-audio / upload-music"), post.indexOf("// 음악 생성 버튼 (라벨 고정)"));
+  assert.match(handler, /NK\.api\.videoUpload\(state\.projectId, isMusicAction \? 'music' : 'audio', file, \{ kind: isMusicAction \? 'music' : 'audio' \}\)/);
+  assert.match(handler, /NK\.api\.mediaProxyObjectUrl\(obj\)/);
+  assert.match(handler, /setProjectMusic\(url, meta \|\| null\)/);
+});
+
+test("미리보기 음원을 못 불러오면 화면에 알린다", () => {
+  const sync = post.slice(post.indexOf("function syncAudioTrackPreview("), post.indexOf("function stopAudioTrackPreview("));
+  assert.match(sync, /el\.addEventListener\('error', function \(\) \{/);
+  assert.match(sync, /showPostprodToast\(/);
+  assert.match(sync, /logPreviewAudioPlayError\(trackKey, err\)/);
+});

@@ -41,7 +41,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const safeName = (file.name || "video.mp4").replace(/[^a-zA-Z0-9._-]+/g, "_");
     const stamp = Date.now();
-    const objectName = `${projectPrefix}/videos/${stamp}-scene-${sceneId}-${safeName}`;
+    // kind=music|audio: 후반편집 M1·A1 에 직접 올린 음원. 전엔 브라우저 임시 주소(blob:)로만 붙어 새로고침·다른 기기에서
+    // 사라졌다(2026-09-29). /api/music 결과와 같은 music/ 폴더(또는 audio/)에 둔다 — videos/ 목록과 섞이지 않게.
+    const kind = String(fd.get("kind") || "").trim();
+    const folder = kind === "music" ? "music" : kind === "audio" ? "audio" : "videos";
+    const objectName = folder === "videos"
+      ? `${projectPrefix}/videos/${stamp}-scene-${sceneId}-${safeName}`
+      : `${projectPrefix}/${folder}/${stamp}-${safeName}`;
 
     const token = await getGoogleAccessToken({
       clientEmail,

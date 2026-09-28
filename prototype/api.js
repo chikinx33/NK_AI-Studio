@@ -743,13 +743,15 @@
     return j(text);
   };
 
-  api.videoUpload = async function (projectId, sceneId, file) {
+  // opts.kind: 'music' | 'audio' 면 영상 폴더가 아닌 음원 폴더에 저장한다(후반편집 M1·A1 직접 등록).
+  api.videoUpload = async function (projectId, sceneId, file, opts) {
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
     fd.append('userId', resolveUserId());
     var videoOwner = api.getSharedOwner ? api.getSharedOwner(projectId) : '';
     if (videoOwner) fd.append('ownerId', String(videoOwner));
     fd.append('sceneId', String(sceneId || ''));
+    if (opts && opts.kind) fd.append('kind', String(opts.kind));
     fd.append('file', file);
     var res = await fetch(withBase('/api/video/upload'), {
       method: 'POST',

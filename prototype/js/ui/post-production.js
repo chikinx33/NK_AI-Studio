@@ -5110,6 +5110,12 @@
   // ── Audio 트랙 preview 재생 ─────────────────────────────────────────────
   // Audio/Music 트랙 클립을 preview 재생 중에 동기화한다.
   // 렌더링과 달리 preview는 HTMLAudioElement를 직접 사용.
+  // play() 거절은 재생 위치를 다시 맞출 때 흔한 AbortError 말고는 콘솔에 남긴다(무음 원인 추적용).
+  function logPreviewAudioPlayError(trackKey, err) {
+    if (!err || err.name === 'AbortError') return;
+    try { console.warn('[postprod] preview audio play rejected', trackKey, err.name, err.message); } catch (_) {}
+  }
+
   function syncAudioTrackPreview(sec) {
     if (!state.model) return;
     ['audio', 'music'].forEach(function (trackKey) {
@@ -5131,6 +5137,21 @@
         audioEl = new Audio();
         audioEl.preload = 'auto';
         state[elKey] = audioEl;
+        // 음원을 못 불러오면 조용히 무음이 되던 것을 화면에 알린다(주소 만료·형식 미지원 등, 같은 음원엔 한 번만).
+        (function (el, key) {
+          el.addEventListener('error', function () {
+            var src = el.getAttribute('data-clip-src') || '';
+            if (!src || el._errorNotified === src) return;
+            el._errorNotified = src;
+            var code = el.error && el.error.code ? el.error.code : 0;
+            var en = currentLang() === 'en';
+            var what = key === 'music' ? (en ? 'background music' : '배경음악') : (en ? 'audio' : '오디오');
+            var why = code === 4 ? (en ? 'unsupported file or expired link' : '지원하지 않는 형식이거나 주소가 만료됐어요')
+              : code === 2 ? (en ? 'network error' : '네트워크 오류') : (en ? 'load error' : '불러오기 오류');
+            try { console.error('[postprod] preview audio error', key, code, src.slice(0, 160)); } catch (_) {}
+            showPostprodToast((en ? 'Cannot play ' : '') + what + (en ? ': ' : '을(를) 재생할 수 없어요: ') + why, 6000);
+          });
+        })(audioEl, trackKey);
       }
       var curSrc = audioEl.getAttribute('data-clip-src') || '';
       if (curSrc !== url) {
@@ -5164,7 +5185,7 @@
             if (state.isPlaying) {
               seekEl._playPending = true;
               var sp = seekEl.play();
-              if (sp && sp.then) { sp.then(function () { seekEl._playPending = false; }).catch(function () { seekEl._playPending = false; }); }
+              if (sp && sp.then) { sp.then(function () { seekEl._playPending = false; }).catch(function (err) { seekEl._playPending = false; logPreviewAudioPlayError(trackKey, err); }); }
               else { seekEl._playPending = false; }
             }
           };
@@ -5174,7 +5195,7 @@
           var playEl = audioEl;
           playEl._playPending = true;
           var pp = playEl.play();
-          if (pp && pp.then) { pp.then(function () { playEl._playPending = false; }).catch(function () { playEl._playPending = false; }); }
+          if (pp && pp.then) { pp.then(function () { playEl._playPending = false; }).catch(function (err) { playEl._playPending = false; logPreviewAudioPlayError(trackKey, err); }); }
           else { playEl._playPending = false; }
         }
       } else {
@@ -7346,33 +7367,37 @@
         input.onchange = function (e) {
           var file = e.target.files && e.target.files[0];
           if (!file) return;
-          var url = URL.createObjectURL(file);
+          input.value = '';
           var project = getProjectByStateId();
-          if (project) {
+          if (!project) return;
+          // 바로 들을 수 있게 임시 주소로 먼저 붙이고, 에피소드 저장소에 올린 뒤 저장 경로 주소로 바꾼다.
+          // 전엔 임시 주소(blob:)만 붙여 새로고침·다른 기기·서버 쪽 처리에서 음원이 사라졌다(2026-09-29).
+          var applyUrl = function (url, meta) {
             if (isMusicAction) {
-              if (!project.payload) project.payload = {};
-              project.payload.musicUrl = url;
-              project.musicUrl = url;
-              // 이전 삭제 플래그 제거
-              if (project.postTimelineEdits && project.postTimelineEdits['music-0']) delete project.postTimelineEdits['music-0'];
-              if (project.payload.postTimelineEdits && project.payload.postTimelineEdits['music-0']) delete project.payload.postTimelineEdits['music-0'];
-              if (state.sessionEdits && state.sessionEdits['music-0']) delete state.sessionEdits['music-0'];
-              // CRITICAL: musicUrl을 storage에도 즉시 영구 반영
-              try {
-                var svcMusicUp = getPostprodStateService();
-                if (svcMusicUp && svcMusicUp.applySavedPostProductionPayload && state.projectId) {
-                  svcMusicUp.applySavedPostProductionPayload(state.projectId, { musicUrl: url });
-                }
-              } catch (_) { }
+              setProjectMusic(url, meta || null);
             } else {
               if (!project.scenes) project.scenes = [{}];
               if (project.scenes.length > 0) project.scenes[0].audioUrl = url;
+              setDirty(true);
+              post.render();
             }
-            setDirty(true);
-            post.render();
+          };
+          applyUrl(URL.createObjectURL(file), null);
+          if (!NK.api || !NK.api.videoUpload || !state.projectId) {
             showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
+            return;
           }
-          input.value = '';
+          showPostprodToast(file.name + ' ' + t('업로드 중...'));
+          NK.api.videoUpload(state.projectId, isMusicAction ? 'music' : 'audio', file, { kind: isMusicAction ? 'music' : 'audio' }).then(function (result) {
+            var obj = String((result && result.objectName) || '');
+            var stored = obj && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(obj) : String((result && result.signedUrl) || '');
+            if (!stored) throw new Error('upload_url_missing');
+            applyUrl(stored, isMusicAction ? { objectName: obj, uploadedFileName: file.name, providerUsed: 'upload', generatedAt: new Date().toISOString() } : null);
+            showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
+          }).catch(function (err) {
+            var msg = err && err.message ? err.message : '';
+            showPostprodToast(t('업로드 실패') + (msg ? ': ' + msg : '.') + (currentLang() === 'en' ? ' (kept for this session only)' : ' (이번 창에서만 유지돼요)'), 8000);
+          });
         };
         input.click();
       };
