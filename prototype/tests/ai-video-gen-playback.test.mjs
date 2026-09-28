@@ -70,7 +70,8 @@ test('서버 카드는 GCS metadata 가 있으면 로컬 카드와 같은 정보
 test('로컬·서버 결과 카드를 선택하면 해당 생성 프롬프트를 입력란 상태로 복원한다', () => {
   const source = vgen();
   // 로컬 결과와 다른 기기·새로고침 뒤 보이는 서버 결과가 같은 복원기를 사용한다.
-  assert.match(source, /if \(r\) restoreGenerationSettings\(r\);/);
+  // 입력 이미지(시작·끝·참조)도 같이 되살린다(video-input-restore.test.mjs).
+  assert.match(source, /if \(r\) \{ restoreGenerationSettings\(r\); restoreInputImages\(r\.id\); \}/);
   assert.match(source, /restoreGenerationSettings\(serverItem\.metadata \|\| \{\}\);/);
   // 서버 카드도 선택 강조가 유지되어 어떤 결과의 프롬프트인지 확인할 수 있어야 한다.
   assert.match(source, /state\.selectedId === serverSelectionId\(objectName\)/);

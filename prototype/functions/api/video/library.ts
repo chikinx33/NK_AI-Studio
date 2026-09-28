@@ -4,6 +4,7 @@
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
+import { pickGenerationInputs } from "../_shared/video-inputs";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin?: string | null) => ({
@@ -64,6 +65,36 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       "";
+
+    // ?inputsFor=<결과 ID>: 그 생성에 쓴 입력 이미지(시작·끝·참조)를 찾는다.
+    // /api/video 가 공급자에게 넘기려고 {projectPrefix}/atlas/{시각}-{start|end|ref}-{sceneId}[-i].{ext} 로 올려 둔 원본이다
+    // (AI 영상은 sceneId 가 결과 ID). 결과 카드를 다시 열 때 우측 패널에 그 이미지를 되살리는 데 쓴다.
+    const inputsFor = (url.searchParams.get("inputsFor") || "").trim();
+    if (inputsFor) {
+      if (!/^vg-\d+-[a-z0-9]+$/i.test(inputsFor)) return send({ error: "invalid_inputsFor" }, 400, origin);
+      const atlasPrefix = `${projectPrefix}/atlas/`;
+      const gcsHeaders = { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) };
+      const listBase = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(atlasPrefix)}&fields=${encodeURIComponent("items(name),nextPageToken")}${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
+      // 서버 쪽 글롭으로 이 결과의 파일만 받는다. 글롭이 거부되면 폴더를 몇 쪽만 훑어 걸러낸다(Worker 서브요청 한도).
+      const glob = `${atlasPrefix}*-{start-${inputsFor}.,end-${inputsFor}.,ref-${inputsFor}-}*`;
+      let names: string[] = [];
+      const globRes = await fetch(`${listBase}&maxResults=100&matchGlob=${encodeURIComponent(glob)}`, { headers: gcsHeaders });
+      if (globRes.ok) {
+        const gj = safeJson(await globRes.text());
+        names = (Array.isArray(gj?.items) ? gj.items : []).map((it: any) => String(it?.name || ""));
+      } else {
+        let pageToken = "";
+        for (let page = 0; page < 5; page++) {
+          const pr = await fetch(`${listBase}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`, { headers: gcsHeaders });
+          if (!pr.ok) return send({ error: "List objects failed", status: pr.status }, pr.status, origin);
+          const pj = safeJson(await pr.text());
+          for (const it of (Array.isArray(pj?.items) ? pj.items : [])) names.push(String(it?.name || ""));
+          pageToken = String(pj?.nextPageToken || "");
+          if (!pageToken) break;
+        }
+      }
+      return send({ inputsFor, inputs: pickGenerationInputs(names, inputsFor) }, 200, origin);
+    }
     const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=500${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
     const res = await fetch(listUrl, {
       headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) },

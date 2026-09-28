@@ -894,6 +894,21 @@
     return j(text);
   };
 
+  // 한 생성 결과(resultId)에 쓴 입력 이미지의 저장 경로(objectName)를 받는다: { start, end, refs[] }.
+  api.videoGenInputs = async function (projectId, resultId, ownerId) {
+    var uid = resolveUserId();
+    var token = getAuthToken();
+    var q = 'source=video-gen&userId=' + encodeURIComponent(uid) + '&inputsFor=' + encodeURIComponent(String(resultId || ''));
+    if (projectId) q += '&projectId=' + encodeURIComponent(projectId);
+    var eff = ownerId || (projectId && api.getSharedOwner ? api.getSharedOwner(projectId) : '');
+    if (eff) q += '&ownerId=' + encodeURIComponent(String(eff));
+    if (token) q += '&nk_token=' + encodeURIComponent(token);
+    var res = await fetch(withBase('/api/video/library?' + q), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(text || 'video_gen_inputs_error');
+    return j(text);
+  };
+
   api.videoDelete = async function (objectName) {
     var name = String(objectName || '').trim();
     if (!name) throw new Error('objectName is required');

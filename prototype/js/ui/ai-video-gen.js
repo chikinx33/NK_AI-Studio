@@ -1071,6 +1071,76 @@
     return 'server:' + String(objectName || '');
   }
 
+  // ─── 결과 카드의 입력 이미지 복원 ─────────────────────────
+  // 결과에는 입력 이미지를 저장하지 않는다(용량·localStorage 한도). 그래서 카드를 다시 열면 프롬프트·모델은
+  // 돌아와도 시작·끝·참조 이미지가 비어 있었다. 이번 세션의 재시도 스냅샷이 있으면 그것을 쓰고, 없으면
+  // /api/video 가 공급자에게 넘기려고 올려 둔 원본을 결과 ID 로 찾아(api.videoGenInputs) data URL 로 되살린다.
+  // data URL 로 바꿔 두어야 그대로 다시 생성해도 새로 만든 입력과 똑같은 경로(업로드·검증)를 탄다.
+  var _inputRestoreSeq = 0;
+  var IMAGE_EXT_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+
+  function storedImageToDataUrl(objectName) {
+    var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objectName) : '';
+    if (!url) return Promise.resolve('');
+    var ext = String(objectName || '').split('.').pop().toLowerCase();
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error('input_fetch_failed');
+      return res.blob();
+    }).then(function (blob) {
+      // 프록시가 octet-stream 으로 주면 서버 mime 검사(unsupported_image_mime)에 걸리므로 확장자로 바로잡는다.
+      var mime = /^image\//.test(blob.type) ? blob.type : (IMAGE_EXT_MIME[ext] || 'image/png');
+      var typed = blob.type === mime ? blob : new Blob([blob], { type: mime });
+      return new Promise(function (resolve) {
+        var fr = new FileReader();
+        fr.onload = function () { resolve(String(fr.result || '')); };
+        fr.onerror = function () { resolve(''); };
+        fr.readAsDataURL(typed);
+      });
+    }).catch(function () { return ''; });
+  }
+
+  function rerenderKeepingResultsScroll() {
+    var list = root && root.querySelector('.vgen-results-list');
+    renderPreservingResultsScroll(list ? list.scrollTop : 0);
+  }
+
+  function restoreInputImages(resultId) {
+    var seq = ++_inputRestoreSeq;
+    var id = String(resultId || '');
+    var snap = id && _retryInputs[id];
+    if (snap) {
+      state.startImageUrl = snap.startImageUrl || '';
+      state.endImageUrl = snap.endImageUrl || '';
+      state.referenceUrls = (snap.referenceUrls || []).slice();
+      state.audioUrl = snap.audioUrl || ''; state.audioFileName = snap.audioFileName || '';
+      state.videoUrl = snap.videoUrl || ''; state.videoFileName = snap.videoFileName || '';
+      return;
+    }
+    if (!/^vg-\d+-[a-z0-9]+$/i.test(id) || !NK.api || !NK.api.videoGenInputs) return;
+    NK.api.videoGenInputs(state.projectId || null, id).then(function (data) {
+      var inputs = (data && data.inputs) || {};
+      var names = [inputs.start || '', inputs.end || ''].concat(Array.isArray(inputs.refs) ? inputs.refs : []);
+      return Promise.all(names.map(function (n) { return n ? storedImageToDataUrl(n) : Promise.resolve(''); }));
+    }).then(function (urls) {
+      // 그 사이 다른 카드를 눌렀으면 늦게 온 응답으로 덮어쓰지 않는다.
+      if (!urls || seq !== _inputRestoreSeq) return;
+      state.startImageUrl = urls[0] || '';
+      state.endImageUrl = urls[1] || '';
+      state.referenceUrls = urls.slice(2).filter(Boolean);
+      rerenderKeepingResultsScroll();
+    }).catch(function (err) {
+      console.warn('[vgen] input image restore failed', err && err.message);
+    });
+  }
+
+  // 서버 결과 카드의 결과 ID: 업로드 메타의 resultId, 없으면(예전 업로드) 파일 이름의 vg-… 조각.
+  function serverResultId(item) {
+    var meta = (item && item.metadata) || {};
+    if (meta.resultId) return String(meta.resultId);
+    var m = /(vg-\d+-[a-z0-9]+)/i.exec(String((item && item.name) || '').split('/').pop());
+    return m ? m[1] : '';
+  }
+
   // 결과 카드를 다시 열 때 생성 당시의 폼 선택값을 한 곳에서 복원한다.
   // 저장된 값이 현재 지원 목록에 없으면 임의로 추측하지 않고 현재 값을 유지한다.
   function restoreGenerationSettings(snapshot) {
@@ -2205,7 +2275,7 @@
         var id = card.dataset.id;
         if (id) {
           var r = state.results.find(function (x) { return x.id === id; });
-          if (r) restoreGenerationSettings(r);
+          if (r) { restoreGenerationSettings(r); restoreInputImages(r.id); }
           state.selectedId = (state.selectedId === id) ? null : id;
           renderPreservingResultsScroll(resultsScrollTop);
           return;
@@ -2216,6 +2286,7 @@
           var serverItem = state.serverItems.find(function (s) { return s.name === serverName; });
           if (!serverItem) return;
           restoreGenerationSettings(serverItem.metadata || {});
+          restoreInputImages(serverResultId(serverItem));
           var selectionId = serverSelectionId(serverName);
           state.selectedId = (state.selectedId === selectionId) ? null : selectionId;
           renderPreservingResultsScroll(resultsScrollTop);
