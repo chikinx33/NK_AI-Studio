@@ -323,7 +323,12 @@
       brandLabel:        '현재 브랜드',
       noProject:         '에피소드 없음',
       noBrand:           '브랜드 없음',
-      noneLabel:         '없음'
+      noneLabel:         '없음',
+      creditLabel:       '크레딧',
+      creditPillValue:   '{available} C',
+      creditPillReserved:' · 예약 {reserved} C',
+      creditPillLoading: '확인 중',
+      creditPillError:   '확인 불가'
     },
     en: {
       title:             'AI Video Gen',
@@ -420,7 +425,12 @@
       brandLabel:        'Current brand',
       noProject:         'No episode',
       noBrand:           'No brand',
-      noneLabel:         'None'
+      noneLabel:         'None',
+      creditLabel:       'Credits',
+      creditPillValue:   '{available} C',
+      creditPillReserved:' · {reserved} C reserved',
+      creditPillLoading: 'Checking',
+      creditPillError:   'Unavailable'
     }
   };
 
@@ -453,6 +463,8 @@
     generating:     false,
     creditChecking: false,
     credit:         { status: 'idle', key: '', required: 0, available: 0, reserved: 0, error: '' },
+    // 헤더 크레딧 현황: 견적을 새로 받는 동안(loading)에도 마지막으로 확인한 잔액을 유지한다(깜빡임 방지).
+    creditBalance:  { known: false, available: 0, reserved: 0 },
     historyLoading: false,
     lang:           'ko',
     polls:          {},
@@ -541,8 +553,22 @@
     return t('generate_btn');
   }
 
+  function creditPillText() {
+    var b = state.creditBalance;
+    if (!b.known) return t(state.credit.status === 'error' ? 'creditPillError' : 'creditPillLoading');
+    var locale = state.lang === 'en' ? 'en-US' : 'ko-KR';
+    var text = t('creditPillValue').replace('{available}', b.available.toLocaleString(locale));
+    if (b.reserved > 0) text += t('creditPillReserved').replace('{reserved}', b.reserved.toLocaleString(locale));
+    return text;
+  }
+
   function updateCreditControls() {
     if (!root) return;
+    if (state.credit.status === 'ready') {
+      state.creditBalance = { known: true, available: state.credit.available, reserved: state.credit.reserved };
+    }
+    var creditPillEl = root.querySelector('#vgen-credit-pill-value');
+    if (creditPillEl) creditPillEl.textContent = creditPillText();
     var statusEl = root.querySelector('#vgen-credit-status');
     var insufficient = creditIsInsufficient();
     if (statusEl) {
@@ -1737,6 +1763,10 @@
     var project  = state.currentProject;
     var brand    = state.currentBrand;
     var pillsRow = el('div', 'vgen-status-pills');
+    var creditPill = makePill(t('creditLabel'), creditPillText());
+    creditPill.classList.add('vgen-credit-pill');
+    creditPill.querySelector('strong').id = 'vgen-credit-pill-value';
+    pillsRow.appendChild(creditPill);
     pillsRow.appendChild(makePill(t('sessionLabel'), detached ? t('noneLabel') : state.sessionId));
     pillsRow.appendChild(makePill(t('projectLabel'), detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'))));
     pillsRow.appendChild(makePill(t('brandLabel'),   detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'))));
