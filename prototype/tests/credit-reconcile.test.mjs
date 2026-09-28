@@ -65,3 +65,11 @@ test('크레딧 스키마 준비는 이미 준비된 DB 면 질의 1번으로 �
   // 버전 주석은 모든 DDL 이 끝난 뒤(마지막 함수 생성 다음)에 단다
   assert.ok(fn.indexOf('COMMENT ON FUNCTION nk_credit_adjust') > fn.indexOf('CREATE OR REPLACE FUNCTION nk_credit_adjust'));
 });
+
+test('24시간이 지나도 공급자가 진행 중이면 멈춘 작업으로 보고 환불한다', () => {
+  assert.match(reconcile, /const staleAgeSec = Math\.max\(3600, Math\.trunc\(Number\(opts\.staleAgeSec \?\? 86_400\)\)\);/);
+  assert.match(reconcile, /found\.action === "pending" && Number\(row\.age_sec\) >= staleAgeSec\) \{\s*item\.action = "release";/);
+  assert.match(reconcile, /item\.reason = "provider_stale_24h";/);
+  // 마스터 키 먼저(DB 조회 없이), 못 찾을 때만 회원 키
+  assert.ok(reconcile.indexOf('await tryKey(master);') < reconcile.indexOf('atlasKeyFor(env, item.userId)'));
+});

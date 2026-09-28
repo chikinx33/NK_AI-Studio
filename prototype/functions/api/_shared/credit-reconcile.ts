@@ -8,6 +8,8 @@
 //  - 공급자 완료 → 확정(공급자가 실제로 생성·과금했다)
 //  - 공급자 실패·취소 → 환불
 //  - 아직 진행 중·조회 불가 → 그대로 둔다(다음 정산에서 다시 본다)
+//  - 24시간이 지나도 공급자가 '진행 중' → 멈춘 작업으로 보고 환불(2026-09-29 실측: 24일 된 Veo 작업이 계속 processing).
+//    영상 한 편은 길어야 수십 분이다. 공급자 선례: Vidu 는 48시간 안에 끝나지 않은 작업을 자동 취소·환불한다.
 //  - 공급자 작업 번호가 끝내 붙지 않은 예약(접수 도중 끊김) → 일정 시간 뒤 환불
 
 import { getSql } from "../knowledge/_shared";
@@ -46,13 +48,15 @@ async function fetchAtlasPrediction(key: string, predictionId: string): Promise<
  * @param opts.minAgeSec 막 접수된 작업은 건너뛴다(접수 응답이 아직 작업 번호를 붙이는 중일 수 있다)
  * @param opts.orphanAgeSec 작업 번호 없이 이만큼 지난 예약은 접수가 끊긴 것으로 보고 환불한다
  */
-export async function reconcileReservedCredits(env: any, opts: { userId?: string; limit?: number; minAgeSec?: number; orphanAgeSec?: number } = {}): Promise<{ checked: number; committed: number; released: number; pending: number; items: ReconcileItem[] }> {
+export async function reconcileReservedCredits(env: any, opts: { userId?: string; limit?: number; minAgeSec?: number; orphanAgeSec?: number; staleAgeSec?: number } = {}): Promise<{ checked: number; committed: number; released: number; pending: number; items: ReconcileItem[] }> {
   const sql = getSql(env);
   if (!sql) throw new Error("credit_database_unavailable");
   // 단계별 소요 시간을 남긴다(정산이 멈춘 자리를 로그로 찾기 위해). 한 번 실행은 25초 안에서 끊는다.
   const t0 = Date.now();
   const lap = (label: string, extra?: any) => console.log('[credit-reconcile]', label, `${Date.now() - t0}ms`, extra ?? '');
-  const budgetMs = 25_000;
+  // Cloudflare 요청 제한(100초) 안에서 끊는다. Neon 이 잠에서 깨는 첫 질의가 5~12초 걸릴 수 있다.
+  const budgetMs = 60_000;
+  const staleAgeSec = Math.max(3600, Math.trunc(Number(opts.staleAgeSec ?? 86_400)));
   await ensureCreditSchema(sql);
   lap('schema_ready');
   const limit = Math.max(1, Math.min(20, Math.trunc(Number(opts.limit) || 8)));
@@ -73,8 +77,8 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
   const items: ReconcileItem[] = [];
   for (const row of rows) {
     if (Date.now() - t0 > budgetMs) { lap('budget_exhausted', items.length); break; }
-    // 한 건이 DB·공급자 응답을 무한정 기다리면 전체가 Cloudflare 100초 제한에 걸린다 → 한 건당 15초.
-    const itemDeadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("item_timeout_15s")), 15_000));
+    // 한 건이 DB·공급자 응답을 무한정 기다리면 전체가 Cloudflare 100초 제한에 걸린다 → 한 건당 20초.
+    const itemDeadline = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("item_timeout_20s")), 20_000));
     const item: ReconcileItem = {
       operationId: String(row.id),
       userId: String(row.user_id),
@@ -99,18 +103,28 @@ export async function reconcileReservedCredits(env: any, opts: { userId?: string
           if (!predictionId) {
             item.reason = "not_atlas_job";
           } else {
-            // 생성 때 쓴 키(회원 등록 키가 있으면 그것)로 먼저 묻고, 안 되면 마스터 키로.
-            if (!keyCache.has(item.userId)) keyCache.set(item.userId, (await atlasKeyFor(env, item.userId)).key || master);
-            const keys = [keyCache.get(item.userId) || "", master].filter((k, i, arr) => k && arr.indexOf(k) === i);
+            // 대부분 마스터 키로 만든 작업이다 → 마스터 키로 먼저 묻는다(DB 조회 없음).
+            // 못 찾으면 회원이 등록한 키(생성 때 쓴 키)로 한 번 더.
             let found: { action: ReconcileAction; status: string } | null = null;
             let lastHttp = 0;
-            for (const key of keys) {
+            const tryKey = async (key: string) => {
+              if (!key || found) return;
               const r = await fetchAtlasPrediction(key, predictionId);
               lastHttp = r.httpStatus;
               const c = classifyAtlasPrediction(r.body);
-              if (c.status !== "unknown") { found = c; break; }
+              if (c.status !== "unknown") found = c;
+            };
+            await tryKey(master);
+            if (!found) {
+              if (!keyCache.has(item.userId)) keyCache.set(item.userId, (await atlasKeyFor(env, item.userId)).key || "");
+              const userKey = keyCache.get(item.userId) || "";
+              if (userKey !== master) await tryKey(userKey);
             }
-            if (found) {
+            if (found && found.action === "pending" && Number(row.age_sec) >= staleAgeSec) {
+              item.action = "release";
+              item.providerStatus = found.status;
+              item.reason = "provider_stale_24h";
+            } else if (found) {
               item.action = found.action;
               item.providerStatus = found.status;
             } else {
