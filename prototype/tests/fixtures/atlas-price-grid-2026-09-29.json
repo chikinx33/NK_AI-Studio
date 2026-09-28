@@ -1,0 +1,5272 @@
+{
+"source": "POST https://api.atlascloud.ai/api/v1/model/calculate (Atlas web playground estimate), measured 2026-09-29",
+"mediaSeconds": {
+"VID_M": 6.509,
+"VID_E": 8.605
+},
+"rows": [
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.32,
+"originPrice": 0.32,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 0.384,
+"originPrice": 0.384,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.64,
+"originPrice": 0.64,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 0.768,
+"originPrice": 0.768,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.4,
+"originPrice": 0.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 0.48,
+"originPrice": 0.48,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 0.96,
+"originPrice": 0.96,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 1.0,
+"originPrice": 1.0,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 1.2,
+"originPrice": 1.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 2.0,
+"originPrice": 2.0,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 2.4,
+"originPrice": 2.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 3.2,
+"originPrice": 3.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 3.2,
+"originPrice": 3.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 4,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 4,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 2.4,
+"originPrice": 2.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 3.2,
+"originPrice": 3.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 4.8,
+"originPrice": 4.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/text-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/text-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 0.96,
+"originPrice": 0.96,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/text-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": false,
+"aspect_ratio": "16:9"
+},
+"price": 1.6,
+"originPrice": 1.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/text-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 8,
+"generate_audio": true,
+"aspect_ratio": "16:9"
+},
+"price": 3.2,
+"originPrice": 3.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "480p",
+"duration": 1,
+"aspect_ratio": "16:9"
+},
+"price": 0.05,
+"originPrice": 0.05,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "480p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.2,
+"originPrice": 0.2,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "480p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.4,
+"originPrice": 0.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "480p",
+"duration": 15,
+"aspect_ratio": "16:9"
+},
+"price": 0.75,
+"originPrice": 0.75,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "720p",
+"duration": 1,
+"aspect_ratio": "16:9"
+},
+"price": 0.07,
+"originPrice": 0.07,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "720p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.28,
+"originPrice": 0.28,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "720p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.56,
+"originPrice": 0.56,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/text-to-video",
+"params": {
+"resolution": "720p",
+"duration": 15,
+"aspect_ratio": "16:9"
+},
+"price": 1.05,
+"originPrice": 1.05,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/image-to-video",
+"params": {
+"image_url": "IMG",
+"resolution": "480p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.202,
+"originPrice": 0.202,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/image-to-video",
+"params": {
+"image_url": "IMG",
+"resolution": "480p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.402,
+"originPrice": 0.402,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/image-to-video",
+"params": {
+"image_url": "IMG",
+"resolution": "720p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.282,
+"originPrice": 0.282,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/image-to-video",
+"params": {
+"image_url": "IMG",
+"resolution": "720p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.562,
+"originPrice": 0.562,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/reference-to-video",
+"params": {
+"image_urls": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.282,
+"originPrice": 0.282,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/reference-to-video",
+"params": {
+"image_urls": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.562,
+"originPrice": 0.562,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/reference-to-video",
+"params": {
+"image_urls": [
+"IMG",
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 4,
+"aspect_ratio": "16:9"
+},
+"price": 0.286,
+"originPrice": 0.286,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/reference-to-video",
+"params": {
+"image_urls": [
+"IMG",
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.566,
+"originPrice": 0.566,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/reference-to-video",
+"params": {
+"image_urls": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 8,
+"aspect_ratio": "16:9"
+},
+"price": 0.402,
+"originPrice": 0.402,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/extend-video",
+"params": {
+"video_url": "VID_E",
+"duration": 2
+},
+"price": 0.22605,
+"originPrice": 0.22605,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/extend-video",
+"params": {
+"video_url": "VID_E",
+"duration": 6
+},
+"price": 0.50605,
+"originPrice": 0.50605,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/extend-video",
+"params": {
+"video_url": "VID_E",
+"duration": 10
+},
+"price": 0.78605,
+"originPrice": 0.78605,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v2.6-pro/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 5,
+"sound": true
+},
+"price": 0.595,
+"originPrice": 0.7,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v2.6-pro/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 5,
+"sound": false
+},
+"price": 0.2975,
+"originPrice": 0.35,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v2.6-pro/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 10,
+"sound": true
+},
+"price": 1.19,
+"originPrice": 1.4,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v2.6-pro/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 10,
+"sound": false
+},
+"price": 0.595,
+"originPrice": 0.7,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v1.6-i2v-standard",
+"params": {
+"image": "IMG",
+"duration": 5
+},
+"price": 0.238,
+"originPrice": 0.28,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v1.6-i2v-standard",
+"params": {
+"image": "IMG",
+"duration": 10
+},
+"price": 0.476,
+"originPrice": 0.56,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v1.6-multi-i2v-standard",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"duration": 5,
+"aspect_ratio": "16:9"
+},
+"price": 0.238,
+"originPrice": 0.28,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v1.6-multi-i2v-standard",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"duration": 10,
+"aspect_ratio": "16:9"
+},
+"price": 0.476,
+"originPrice": 0.56,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v3.0-pro/motion-control",
+"params": {
+"image": "IMG",
+"video": "VID_M",
+"character_orientation": "image",
+"keep_original_sound": true
+},
+"price": 0.929485,
+"originPrice": 1.093512,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v3.0-pro/motion-control",
+"params": {
+"image": "IMG",
+"video": "VID_E",
+"character_orientation": "video",
+"keep_original_sound": true
+},
+"price": 1.228794,
+"originPrice": 1.44564,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v3.0-std/motion-control",
+"params": {
+"image": "IMG",
+"video": "VID_M",
+"character_orientation": "image",
+"keep_original_sound": true
+},
+"price": 0.697114,
+"originPrice": 0.820134,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v3.0-std/motion-control",
+"params": {
+"image": "IMG",
+"video": "VID_E",
+"character_orientation": "video",
+"keep_original_sound": true
+},
+"price": 0.921596,
+"originPrice": 1.08423,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.453716,
+"originPrice": 0.567146,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.903688,
+"originPrice": 1.12961,
+"discount": "80",
+"partial": false,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.943424,
+"originPrice": 2.42928,
+"discount": "80",
+"partial": false,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.81669,
+"originPrice": 1.020862,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.626638,
+"originPrice": 2.033297,
+"discount": "80",
+"partial": false,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 2.195424,
+"originPrice": 2.74428,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 4.372704,
+"originPrice": 5.46588,
+"discount": "80",
+"partial": false,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.756339,
+"originPrice": 2.195424,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 3.498163,
+"originPrice": 4.372704,
+"discount": "80",
+"partial": false,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 3.122381,
+"originPrice": 3.902976,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 6.218957,
+"originPrice": 7.773696,
+"discount": "80",
+"partial": false,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 4.901416,
+"originPrice": 6.12677,
+"discount": "80",
+"partial": false,
+"tokens": 980100
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 9.762324,
+"originPrice": 12.202905,
+"discount": "80",
+"partial": false,
+"tokens": 1952100
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": false
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "9:16",
+"generate_audio": true
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "21:9",
+"generate_audio": true
+},
+"price": 0.980502,
+"originPrice": 1.225627,
+"discount": "80",
+"partial": false,
+"tokens": 109431
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 15,
+"ratio": "16:9"
+},
+"price": 2.911104,
+"originPrice": 3.63888,
+"discount": "80",
+"partial": false,
+"tokens": 324900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.453716,
+"originPrice": 0.567146,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.81669,
+"originPrice": 1.020862,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 2.195424,
+"originPrice": 2.74428,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.756339,
+"originPrice": 2.195424,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 3.122381,
+"originPrice": 3.902976,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "4k",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 4.901416,
+"originPrice": 6.12677,
+"discount": "80",
+"partial": false,
+"tokens": 980100
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG",
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.599386,
+"originPrice": 0.749232,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.943424,
+"originPrice": 2.42928,
+"discount": "80",
+"partial": false,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.704375,
+"originPrice": 0.880468,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p-sr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.105868,
+"originPrice": 1.382335,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p-esr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.267874,
+"originPrice": 1.584843,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 2.981463,
+"originPrice": 3.726829,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p-sr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 2.044979,
+"originPrice": 2.556223,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p-esr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 2.272198,
+"originPrice": 2.840248,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p-esr & 60fps",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 2.499418,
+"originPrice": 3.124273,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1440p-sr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 3.529162,
+"originPrice": 4.411452,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1440p-esr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 3.832441,
+"originPrice": 4.790552,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "4k-esr",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 8.573762,
+"originPrice": 10.717203,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 3.017079,
+"originPrice": 3.771349,
+"discount": "80",
+"partial": false,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 30,
+"ratio": "16:9",
+"generate_audio": true
+},
+"price": 9.026199,
+"originPrice": 11.282749,
+"discount": "80",
+"partial": false,
+"tokens": 648900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9",
+"generate_audio": false
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.906048,
+"originPrice": 1.13256,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "adaptive"
+},
+"price": 0.704375,
+"originPrice": 0.880468,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "adaptive"
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "adaptive"
+},
+"price": 2.981463,
+"originPrice": 3.726829,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k-esr",
+"duration": 5,
+"ratio": "adaptive"
+},
+"price": 8.573762,
+"originPrice": 10.717203,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720P",
+"duration": 2
+},
+"price": 0.5,
+"originPrice": 0.5,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720P",
+"duration": 5
+},
+"price": 0.5,
+"originPrice": 0.5,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720P",
+"duration": 10
+},
+"price": 1.0,
+"originPrice": 1.0,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720P",
+"duration": 15
+},
+"price": 1.5,
+"originPrice": 1.5,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080P",
+"duration": 2
+},
+"price": 0.75,
+"originPrice": 0.75,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080P",
+"duration": 5
+},
+"price": 0.75,
+"originPrice": 0.75,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080P",
+"duration": 10
+},
+"price": 1.5,
+"originPrice": 1.5,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080P",
+"duration": 15
+},
+"price": 2.25,
+"originPrice": 2.25,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/text-to-video",
+"params": {
+"resolution": "720P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.5,
+"originPrice": 0.5,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/text-to-video",
+"params": {
+"resolution": "1080P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.75,
+"originPrice": 0.75,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.53125,
+"originPrice": 0.625,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 10,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.0625,
+"originPrice": 1.25,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.6375,
+"originPrice": 0.75,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1080p",
+"duration": 10,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.275,
+"originPrice": 1.5,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1080p-sr",
+"duration": 5,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.6375,
+"originPrice": 0.75,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1080p-sr",
+"duration": 10,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.275,
+"originPrice": 1.5,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1440p-sr",
+"duration": 5,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.906652,
+"originPrice": 1.06665,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "1440p-sr",
+"duration": 10,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.813305,
+"originPrice": 2.1333,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 1,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.10625,
+"originPrice": 0.125,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 4,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 0.425,
+"originPrice": 0.5,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 16,
+"aspect_ratio": "16:9",
+"generate_audio": true
+},
+"price": 1.7,
+"originPrice": 2.0,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG",
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"aspect_ratio": "16:9",
+"generate_audio": false
+},
+"price": 0.53125,
+"originPrice": 0.625,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.19,
+"originPrice": 0.19,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.38,
+"originPrice": 0.38,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.4,
+"originPrice": 0.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.65,
+"originPrice": 0.65,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/text-to-video",
+"params": {
+"resolution": "2K",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.3,
+"originPrice": 1.3,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.19,
+"originPrice": 0.19,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.38,
+"originPrice": 0.38,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.4,
+"originPrice": 0.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.65,
+"originPrice": 0.65,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "2K",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.3,
+"originPrice": 1.3,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "1080p-esr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.525,
+"originPrice": 0.525,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "1080p-esr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.05,
+"originPrice": 1.05,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "1440p-esr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.575,
+"originPrice": 0.575,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "1440p-esr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.15,
+"originPrice": 1.15,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "4k-esr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.975,
+"originPrice": 0.975,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/image-to-video",
+"params": {
+"resolution": "4k-esr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.95,
+"originPrice": 1.95,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.19,
+"originPrice": 0.19,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.38,
+"originPrice": 0.38,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.4,
+"originPrice": 0.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.8,
+"originPrice": 0.8,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.65,
+"originPrice": 0.65,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "2K",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 1.3,
+"originPrice": 1.3,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "1080p-esr",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.525,
+"originPrice": 0.525,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "1080p-esr",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 1.05,
+"originPrice": 1.05,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "1440p-esr",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.575,
+"originPrice": 0.575,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "1440p-esr",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 1.15,
+"originPrice": 1.15,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "4k-esr",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.975,
+"originPrice": 0.975,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "4k-esr",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 1.95,
+"originPrice": 1.95,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.2375,
+"originPrice": 0.25,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.475,
+"originPrice": 0.5,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.38,
+"originPrice": 0.4,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.76,
+"originPrice": 0.8,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.7125,
+"originPrice": 0.75,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.425,
+"originPrice": 1.5,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.97375,
+"originPrice": 1.025,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/text-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.9475,
+"originPrice": 2.05,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.2375,
+"originPrice": 0.25,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.475,
+"originPrice": 0.5,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.38,
+"originPrice": 0.4,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.76,
+"originPrice": 0.8,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.7125,
+"originPrice": 0.75,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.425,
+"originPrice": 1.5,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.97375,
+"originPrice": 1.025,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max/image-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 1.9475,
+"originPrice": 2.05,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.11875,
+"originPrice": 0.125,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.2375,
+"originPrice": 0.25,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.19,
+"originPrice": 0.2,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.38,
+"originPrice": 0.4,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.11875,
+"originPrice": 0.125,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.2375,
+"originPrice": 0.25,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.19,
+"originPrice": 0.2,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-max-turbo/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.38,
+"originPrice": 0.4,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.2185,
+"originPrice": 0.23,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.437,
+"originPrice": 0.46,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.2185,
+"originPrice": 0.23,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.437,
+"originPrice": 0.46,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.2185,
+"originPrice": 0.23,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.437,
+"originPrice": 0.46,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.075,
+"originPrice": 0.25,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.15,
+"originPrice": 0.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.12,
+"originPrice": 0.4,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.24,
+"originPrice": 0.8,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.225,
+"originPrice": 0.75,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.45,
+"originPrice": 1.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.3075,
+"originPrice": 1.025,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/text-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.615,
+"originPrice": 2.05,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.075,
+"originPrice": 0.25,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.15,
+"originPrice": 0.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.12,
+"originPrice": 0.4,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.24,
+"originPrice": 0.8,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.225,
+"originPrice": 0.75,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.45,
+"originPrice": 1.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 5,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.3075,
+"originPrice": 1.025,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/image-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 10,
+"image": "IMG",
+"ratio": "adaptive"
+},
+"price": 0.615,
+"originPrice": 2.05,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.075,
+"originPrice": 0.25,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.15,
+"originPrice": 0.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.12,
+"originPrice": 0.4,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.24,
+"originPrice": 0.8,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.225,
+"originPrice": 0.75,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "1440p-sr",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.45,
+"originPrice": 1.5,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 5,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.3075,
+"originPrice": 1.025,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "4k-sr",
+"duration": 10,
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+}
+],
+"ratio": "16:9"
+},
+"price": 0.615,
+"originPrice": 2.05,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 1.0884,
+"originPrice": 1.0884,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.453716,
+"originPrice": 0.567146,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 2.195424,
+"originPrice": 2.74428,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 0.453716,
+"originPrice": 0.567146,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 2.195424,
+"originPrice": 2.74428,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 0.433664,
+"originPrice": 0.54208,
+"discount": "80",
+"partial": false,
+"tokens": 48400
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 0.975744,
+"originPrice": 1.21968,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 2.195424,
+"originPrice": 2.74428,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 0.445859,
+"originPrice": 0.557323,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 0.981891,
+"originPrice": 1.227363,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 1.646561,
+"originPrice": 2.058202,
+"discount": "80",
+"partial": false,
+"tokens": 183768
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 0.445859,
+"originPrice": 0.557323,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 0.981891,
+"originPrice": 1.227363,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 1.646561,
+"originPrice": 2.058202,
+"discount": "80",
+"partial": false,
+"tokens": 183768
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "480p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 0.453716,
+"originPrice": 0.567146,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 0.980502,
+"originPrice": 1.225627,
+"discount": "80",
+"partial": false,
+"tokens": 109431
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 2.881491,
+"originPrice": 3.601864,
+"discount": "80",
+"partial": false,
+"tokens": 321595
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "4k",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 4.901416,
+"originPrice": 6.12677,
+"discount": "80",
+"partial": false,
+"tokens": 980100
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.704375,
+"originPrice": 0.880468,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 2.981463,
+"originPrice": 3.726829,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 0.704375,
+"originPrice": 0.880468,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 2.981463,
+"originPrice": 3.726829,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 0.673244,
+"originPrice": 0.841555,
+"discount": "80",
+"partial": false,
+"tokens": 48400
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 1.514799,
+"originPrice": 1.893499,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 2.981463,
+"originPrice": 3.726829,
+"discount": "80",
+"partial": false,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 0.692176,
+"originPrice": 0.865219,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 1.524341,
+"originPrice": 1.905427,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 2.236088,
+"originPrice": 2.79511,
+"discount": "80",
+"partial": false,
+"tokens": 183768
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 0.692176,
+"originPrice": 0.865219,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 1.524341,
+"originPrice": 1.905427,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 2.236088,
+"originPrice": 2.79511,
+"discount": "80",
+"partial": false,
+"tokens": 183768
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 0.704375,
+"originPrice": 0.880468,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 1.522185,
+"originPrice": 1.902732,
+"discount": "80",
+"partial": false,
+"tokens": 109431
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 3.913166,
+"originPrice": 4.891458,
+"discount": "80",
+"partial": false,
+"tokens": 321595
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.278712,
+"originPrice": 0.348389,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.278712,
+"originPrice": 0.348389,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.278712,
+"originPrice": 0.348389,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.555122,
+"originPrice": 0.693903,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.555122,
+"originPrice": 0.693903,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.555122,
+"originPrice": 0.693903,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.599386,
+"originPrice": 0.749232,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.599386,
+"originPrice": 0.749232,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.599386,
+"originPrice": 0.749232,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.193818,
+"originPrice": 1.492272,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.193818,
+"originPrice": 1.492272,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.193818,
+"originPrice": 1.492272,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.348618,
+"originPrice": 1.685772,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.348618,
+"originPrice": 1.685772,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.348618,
+"originPrice": 1.685772,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 2.68609,
+"originPrice": 3.357612,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 2.68609,
+"originPrice": 3.357612,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 2.68609,
+"originPrice": 3.357612,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.421308,
+"originPrice": 0.526635,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.421308,
+"originPrice": 0.526635,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "480p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.421308,
+"originPrice": 0.526635,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.839139,
+"originPrice": 1.048923,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.839139,
+"originPrice": 1.048923,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "480p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 0.839139,
+"originPrice": 1.048923,
+"discount": "80",
+"partial": true,
+"tokens": 100858
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.906048,
+"originPrice": 1.13256,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.906048,
+"originPrice": 1.13256,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "720p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.906048,
+"originPrice": 1.13256,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.804608,
+"originPrice": 2.25576,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.804608,
+"originPrice": 2.25576,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "720p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 1.804608,
+"originPrice": 2.25576,
+"discount": "80",
+"partial": true,
+"tokens": 216900
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.783305,
+"originPrice": 2.229131,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.783305,
+"originPrice": 2.229131,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.783305,
+"originPrice": 2.229131,
+"discount": "80",
+"partial": true,
+"tokens": 245025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 3.551872,
+"originPrice": 4.43984,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 3.551872,
+"originPrice": 4.43984,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M",
+"VID_E"
+],
+"resolution": "1080p",
+"duration": 10,
+"ratio": "16:9"
+},
+"price": 3.551872,
+"originPrice": 4.43984,
+"discount": "80",
+"partial": true,
+"tokens": 488025
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+}
+]
+},
+"price": 0.437342,
+"originPrice": 0.437342,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 0.51699,
+"originPrice": 0.51699,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 0.764332,
+"originPrice": 0.764332,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+}
+]
+},
+"price": 0.92072,
+"originPrice": 0.92072,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 1.0884,
+"originPrice": 1.0884,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 1.60912,
+"originPrice": 1.60912,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+}
+]
+},
+"price": 1.49617,
+"originPrice": 1.49617,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 1.76865,
+"originPrice": 1.76865,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3/reference-to-video",
+"params": {
+"resolution": "2K",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+},
+{
+"url": "VID_E",
+"type": "video"
+}
+]
+},
+"price": 2.61482,
+"originPrice": 2.61482,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-developer/reference-to-video",
+"params": {
+"resolution": "768P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+}
+]
+},
+"price": 0.276216,
+"originPrice": 0.92072,
+"discount": "30",
+"partial": false,
+"tokens": null
+},
+{
+"model": "minimax/h3-fast/reference-to-video",
+"params": {
+"resolution": "480P",
+"duration": 5,
+"ratio": "16:9",
+"refers": [
+{
+"url": "IMG",
+"type": "image"
+},
+{
+"url": "VID_M",
+"type": "video"
+}
+]
+},
+"price": 0.502943,
+"originPrice": 0.529414,
+"discount": "95",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/extend-video",
+"params": {
+"video_url": "VID_M",
+"duration": 2
+},
+"price": 0.20509,
+"originPrice": 0.20509,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "xai/grok-imagine-video/extend-video",
+"params": {
+"video_url": "VID_M",
+"duration": 6
+},
+"price": 0.48509,
+"originPrice": 0.48509,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "vidu/q3-mix/reference-to-video",
+"params": {
+"images": [
+"IMG"
+],
+"duration": 5,
+"aspect_ratio": "16:9"
+},
+"price": 0.53125,
+"originPrice": 0.625,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "alibaba/wan-2.7/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 5
+},
+"price": 0.75,
+"originPrice": 0.75,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "kwaivgi/kling-v2.6-pro/image-to-video",
+"params": {
+"image": "IMG",
+"duration": 5
+},
+"price": 0.595,
+"originPrice": 0.7,
+"discount": "85",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1-fast/image-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 6,
+"aspect_ratio": "9:16"
+},
+"price": 0.6,
+"originPrice": 0.6,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "google/veo3.1/image-to-video",
+"params": {
+"resolution": "1080p",
+"duration": 6,
+"aspect_ratio": "16:9",
+"audio": "x"
+},
+"price": 2.4,
+"originPrice": 2.4,
+"discount": "100",
+"partial": false,
+"tokens": null
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.81669,
+"originPrice": 1.020862,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.756339,
+"originPrice": 2.195424,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 3.122381,
+"originPrice": 3.902976,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 0.81669,
+"originPrice": 1.020862,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 1.756339,
+"originPrice": 2.195424,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "9:16"
+},
+"price": 3.122381,
+"originPrice": 3.902976,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 0.780595,
+"originPrice": 0.975744,
+"discount": "80",
+"partial": false,
+"tokens": 48400
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 1.756339,
+"originPrice": 2.195424,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "1:1"
+},
+"price": 3.122381,
+"originPrice": 3.902976,
+"discount": "80",
+"partial": false,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 0.802545,
+"originPrice": 1.003182,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 1.767403,
+"originPrice": 2.209254,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "4:3"
+},
+"price": 3.14205,
+"originPrice": 3.927562,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 0.802545,
+"originPrice": 1.003182,
+"discount": "80",
+"partial": false,
+"tokens": 49761
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 1.767403,
+"originPrice": 2.209254,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "3:4"
+},
+"price": 3.14205,
+"originPrice": 3.927562,
+"discount": "80",
+"partial": false,
+"tokens": 109586
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 0.81669,
+"originPrice": 1.020862,
+"discount": "80",
+"partial": false,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 1.764903,
+"originPrice": 2.206129,
+"discount": "80",
+"partial": false,
+"tokens": 109431
+},
+{
+"model": "bytedance/seedance-2.0/image-to-video",
+"params": {
+"image": "IMG",
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "21:9"
+},
+"price": 3.137606,
+"originPrice": 3.922007,
+"discount": "80",
+"partial": false,
+"tokens": 109431
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "720p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 0.501681,
+"originPrice": 0.627101,
+"discount": "80",
+"partial": true,
+"tokens": 50638
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1080p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.078894,
+"originPrice": 1.348618,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "1440p-SR",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 1.918034,
+"originPrice": 2.397542,
+"discount": "80",
+"partial": true,
+"tokens": 108900
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"reference_videos": [
+"VID_M"
+],
+"resolution": "4k",
+"duration": 5,
+"ratio": "16:9"
+},
+"price": 3.01087,
+"originPrice": 3.763587,
+"discount": "80",
+"partial": true,
+"tokens": 980100
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 7,
+"ratio": "4:3"
+},
+"price": 0.622729,
+"originPrice": 0.778411,
+"discount": "80",
+"partial": false,
+"tokens": 69501
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 7,
+"ratio": "4:3"
+},
+"price": 1.3714,
+"originPrice": 1.71425,
+"discount": "80",
+"partial": false,
+"tokens": 153058
+},
+{
+"model": "bytedance/seedance-2.0/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 7,
+"ratio": "4:3"
+},
+"price": 2.299745,
+"originPrice": 2.874682,
+"discount": "80",
+"partial": false,
+"tokens": 256668
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "480p",
+"duration": 30,
+"ratio": "21:9"
+},
+"price": 4.197176,
+"originPrice": 5.246469,
+"discount": "80",
+"partial": false,
+"tokens": 301738
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "720p",
+"duration": 30,
+"ratio": "21:9"
+},
+"price": 9.070266,
+"originPrice": 11.337832,
+"discount": "80",
+"partial": false,
+"tokens": 652068
+},
+{
+"model": "bytedance/seedance-2.5/reference-to-video",
+"params": {
+"reference_images": [
+"IMG"
+],
+"resolution": "1080p",
+"duration": 30,
+"ratio": "21:9"
+},
+"price": 23.31731,
+"originPrice": 29.146637,
+"discount": "80",
+"partial": false,
+"tokens": 1916282
+}
+]
+}

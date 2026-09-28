@@ -1,43 +1,22 @@
 // NK Studio credit rate card.
-// These are internal TEST credits, not a promise of sale price or provider billing.
-// Production rates can be overridden with CREDIT_RATES_JSON and are always
-// recalculated on the server after request options have been normalized.
+// 영상·업스케일: 공급자(Atlas) 원가 × (1 + 마진 30%) ÷ 1C $0.01, 올림(video-pricing.ts). 요청 값(모델·해상도·길이·오디오·입력 영상)으로 정확히 계산한다.
+// 그 밖의 기능은 아직 원가 확인 전의 테스트 요율이다(CREDIT_RATES_JSON 으로 덮어쓸 수 있다).
+// 서버는 요청 옵션을 정규화한 뒤 항상 다시 계산한다.
+
+import { videoCost, videoCostInputFromBody, creditsForUsd, IMAGE_UPSCALE_USD, USD_PER_CREDIT, CREDIT_MARGIN, PRICE_TABLE_DATE } from "./video-pricing.ts";
 
 const DEFAULT_TEST_RATES = Object.freeze({
   image_generation: 20,
   image_describe: 2,
   ip_analyze: 5,
-  image_upscale: 10,
+  // atlascloud/image-upscaler 원가 $0.01(배율 무관) × 1.3 → 2C.
+  image_upscale: creditsForUsd(IMAGE_UPSCALE_USD),
   video_lipsync: 50,
   knowledge_index_per_2000_chars: 1,
   voice_per_100_chars: 1,
   tts_per_100_chars: 1,
   sfx_per_second: 4,
   music_per_5_seconds: 10,
-  video: Object.freeze({
-    veo: { perSecond: 8 },
-    "veo-full": { perSecond: 20 },
-    grok: { perSecond: 7, perReference: 1 },
-    "grok-r2v": { perSecond: 7, perReference: 1 },
-    "grok-extend": { perSecond: 8 },
-    "kling-final": { perRun: 6 },
-    kling: { perRun: 6 },
-    "kling-draft": { perRun: 6 },
-    seedance: { perSecond: 12 },
-    "seedance-r2v": { perSecond: 12, perReference: 1 },
-    wan: { perSecond: 10, minimumSeconds: 5 },
-    "vidu-q3": { perRun: 11 },
-    // MiniMax H3 계열: Atlas 정가(2026-09-28) $0.038·$0.048·$0.024·$0.044·$0.015/초를 올림.
-    "minimax-h3": { perSecond: 4 },
-    "minimax-h3-max": { perSecond: 5, minimumSeconds: 5 },
-    "minimax-h3-max-turbo": { perSecond: 3, minimumSeconds: 5 },
-    "minimax-h3-fast": { perSecond: 5, minimumSeconds: 5 },
-    "minimax-h3-dev": { perSecond: 2 },
-    // 모션 컨트롤(Kling 3.0): Atlas 정가(2026-09-28) Pro $0.143·Std $0.107/초를 올림.
-    // 결과 길이 = 동작 영상 길이라 durationSeconds 는 credits.ts 가 올라온 영상에서 읽은 값으로 바꿔 넣는다.
-    "kling-motion-pro": { perSecond: 15, minimumSeconds: 3 },
-    "kling-motion-std": { perSecond: 11, minimumSeconds: 3 },
-  }),
 });
 
 function positiveInt(value, fallback) {
@@ -77,20 +56,24 @@ export function quoteCredits(feature, body, env) {
   let basis = {};
 
   if (key === "video") {
-    const model = String(input.videoModel || input.model || "veo").trim().toLowerCase();
-    const videoOverrides = overrides.video && typeof overrides.video === "object" ? overrides.video : {};
-    const rule = Object.assign(
-      {},
-      DEFAULT_TEST_RATES.video[model] || { perSecond: 10 },
-      videoOverrides[model] && typeof videoOverrides[model] === "object" ? videoOverrides[model] : {},
-    );
-    const duration = Math.max(1, Number(input.durationSeconds || input.duration || 4) || 4);
-    const chargedSeconds = Math.max(duration, Number(rule.minimumSeconds || 0) || 0);
-    const refs = Array.isArray(input.referenceImages) ? input.referenceImages.length : 0;
-    credits = rule.perRun != null
-      ? positiveInt(rule.perRun, 1)
-      : Math.ceil(chargedSeconds * Math.max(0, Number(rule.perSecond || 0)) + refs * Math.max(0, Number(rule.perReference || 0)));
-    basis = { model, durationSeconds: duration, chargedSeconds, referenceCount: refs };
+    // 모르는 모델·해상도나 재지 못한 입력 영상은 0C 로 통과시키지 않는다 — error 를 돌려 과금·생성을 모두 막는다.
+    const costInput = videoCostInputFromBody(input, env);
+    try {
+      const cost = videoCost(costInput);
+      credits = cost.credits;
+      basis = {
+        model: costInput.videoModel, atlasModel: cost.atlasModel, providerUsd: cost.usd,
+        durationSeconds: cost.params.duration ?? null, resolution: cost.params.resolution ?? null,
+        inputVideoSeconds: costInput.inputVideoSeconds || 0,
+        usdPerCredit: USD_PER_CREDIT, margin: CREDIT_MARGIN, priceTable: PRICE_TABLE_DATE,
+      };
+    } catch (e) {
+      return {
+        feature: key, credits: 0, error: String(e && e.code || "pricing_failed"), message: String(e && e.message || e),
+        basis: { model: costInput.videoModel }, rateCard: "cost-plus-v1", testRate: false,
+      };
+    }
+    return { feature: key, credits, basis, rateCard: "cost-plus-v1", testRate: false };
   } else if (key === "image_generation") {
     credits = scalarRate(rates, "image_generation");
     basis = { provider: String(input.provider || "auto"), imageSize: String(input.imageSize || "") };

@@ -9,7 +9,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   KLING_MOTION_MODELS, MOTION_SPEC, checkMotionInputs, dataUrlVideoSeconds, isKlingMotionModel, mp4DurationSeconds,
-  withMeasuredMotionSeconds,
 } from '../functions/api/_shared/motion-control.js';
 import { quoteCredits } from '../functions/api/_shared/credit-rates.js';
 
@@ -75,25 +74,27 @@ test('입력 규격: 형식·용량·길이(방향별 상한)를 업로드 전�
   assert.equal(checkMotionInputs({ ...ok, orientation: 'sideways' }).orientation, 'video');
 });
 
-test('과금은 올라온 영상에서 읽은 길이로 한다(클라이언트가 적은 길이보다 우선)', () => {
+test('과금은 서버가 올라온 영상에서 잰 길이 × 초당 원가 × 1.3 이다(클라이언트가 적은 길이는 지운다)', () => {
   const video = toDataUrl(Buffer.concat([ftyp, box('moov', mvhdV0(1000, 12300)), mdat]));
-  // credits.ts withCreditCharge 가 예약 전에 이 변환을 거친다
-  const charge = (body) => quoteCredits('video', withMeasuredMotionSeconds('video', body), {});
-  const pro = charge({ videoModel: 'kling-motion-pro', durationSeconds: 3, videoDataUrl: video });
-  assert.equal(pro.basis.durationSeconds, 13);
-  assert.equal(pro.credits, 13 * 15);
-  assert.equal(charge({ videoModel: 'kling-motion-std', durationSeconds: 3, videoDataUrl: video }).credits, 13 * 11);
-  assert.match(read('prototype/functions/api/_shared/credits.ts'), /quoteCredits\(options\.feature, withMeasuredMotionSeconds\(options\.feature, body\), env\)/);
-  // 견적(영상 없음)은 브라우저가 잰 길이, 최소 3초
-  assert.equal(quoteCredits('video', { videoModel: 'kling-motion-pro', durationSeconds: 8 }, {}).credits, 8 * 15);
-  assert.equal(quoteCredits('video', { videoModel: 'kling-motion-pro', durationSeconds: 1 }, {}).credits, 3 * 15);
-  // 다른 모델은 영상이 있어도 기존대로 durationSeconds
-  assert.equal(charge({ videoModel: 'minimax-h3', durationSeconds: 6, videoDataUrl: video }).credits, 24);
+  const seconds = dataUrlVideoSeconds(video);
+  assert.equal(seconds, 12.3);
+  // 원가 $0.1428/초 × 12.3초 = $1.75644 → × 1.3 = 2.283 → 229C
+  const pro = quoteCredits('video', { videoModel: 'kling-motion-pro', videoDataUrl: video, inputVideoSeconds: seconds }, {});
+  assert.equal(pro.basis.providerUsd, 1.75644);
+  assert.equal(pro.credits, 229);
+  assert.equal(quoteCredits('video', { videoModel: 'kling-motion-std', videoDataUrl: video, inputVideoSeconds: seconds }, {}).credits, Math.ceil(0.1071 * 12.3 * 130 - 1e-9));
+  // 길이를 모르면 0C 로 통과시키지 않고 막는다
+  assert.equal(quoteCredits('video', { videoModel: 'kling-motion-pro', videoDataUrl: video }, {}).error, 'pricing_input_video_unmeasured');
+  const credits = read('prototype/functions/api/_shared/credits.ts');
+  assert.match(credits, /quoteCredits\(options\.feature, await withMeasuredVideoInputs\(options\.feature, body, env\), env\)/);
+  assert.match(credits, /const \{ inputVideoSeconds: _s, referenceVideoCount: _c, hasStartImage: _a, hasEndImage: _b, hasAudio: _d, \.\.\.clean \} = body;/);
 });
 
 test('프론트 미러(단가·규격)가 서버 SSOT 와 같다', () => {
+  // 원가는 서버 요금표(video-pricing.ts)가 단일 출처 — 화면은 안내 문구로만 보여 준다.
+  assert.match(front, /'kling-motion-pro': \{ best: [^\n]*billing: 'Atlas 원가 · 동작 영상 길이 × \$0\.1428\/초'/);
+  assert.match(front, /'kling-motion-std': \{ best: [^\n]*billing: 'Atlas 원가 · 동작 영상 길이 × \$0\.1071\/초'/);
   for (const [id, spec] of Object.entries(KLING_MOTION_MODELS)) {
-    assert.match(front, new RegExp(`'${id}': ${spec.usdPerSecond}`), `${id} 단가 미러`);
     assert.match(front, new RegExp(`id: '${id}', label: '${spec.label}', t2v: false, i2v: false, motion: true, caps: \\['start', 'video'\\]`));
     assert.ok(isKlingMotionModel(id));
   }

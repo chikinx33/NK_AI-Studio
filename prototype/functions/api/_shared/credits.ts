@@ -2,7 +2,9 @@ import { authorizeRequest } from "./auth.js";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { quoteCredits } from "./credit-rates.js";
 import { ensureSchemaOnce } from "./schema-marks.js";
-import { withMeasuredMotionSeconds } from "./motion-control.js";
+import { dataUrlVideoSeconds, mp4DurationSeconds } from "./motion-control.js";
+import { videoInputSourcesFor } from "./video-pricing.ts";
+import { getGoogleAccessToken, parseGcsUri } from "./gcs.js";
 
 
 export type CreditSummary = {
@@ -291,6 +293,50 @@ function withCreditHeaders(response: Response, operation: any): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+// 입력 영상 1개를 받아 길이를 잰다(요금이 입력 길이에 달린 모델: 모션 컨트롤·Grok 연장·Seedance/MiniMax 참조 영상).
+// 공급자에게 보낼 바로 그 파일이다. 못 재면 0 을 돌려 요금 계산이 과금·생성을 막게 한다(싸게 잡지 않는다).
+const MAX_MEASURE_BYTES = 80 * 1024 * 1024;
+async function measureVideoSeconds(src: string, env: any): Promise<number> {
+  const s = String(src || "").trim();
+  if (!s) return 0;
+  if (s.startsWith("data:")) return dataUrlVideoSeconds(s);
+  let url = s;
+  const headers: Record<string, string> = {};
+  if (s.startsWith("gs://")) {
+    const parsed = parseGcsUri(s);
+    if (!parsed) return 0;
+    const token = await getGoogleAccessToken({ clientEmail: env.GOOGLE_CLIENT_EMAIL, privateKeyPem: env.GOOGLE_PRIVATE_KEY, scope: "https://www.googleapis.com/auth/devstorage.read_only" });
+    url = `https://storage.googleapis.com/download/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o/${encodeURIComponent(parsed.object)}?alt=media`;
+    headers.Authorization = `Bearer ${token}`;
+  } else if (!/^https:\/\//i.test(s)) {
+    return 0;
+  }
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) return 0;
+  const size = Number(res.headers.get("content-length") || 0);
+  if (size > MAX_MEASURE_BYTES) return 0;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return bytes.byteLength > MAX_MEASURE_BYTES ? 0 : mp4DurationSeconds(bytes);
+}
+
+/**
+ * 과금용 본문: 견적 화면이 보낸 보조 값(개수·길이)을 지우고, video.ts 가 실제로 보낼 입력 영상의 길이를 서버가 재서 채운다.
+ * 클라이언트가 적은 길이는 믿지 않는다.
+ */
+export async function withMeasuredVideoInputs(feature: string, body: any, env: any): Promise<any> {
+  if (String(feature || "") !== "video" || !body || typeof body !== "object") return body;
+  const { inputVideoSeconds: _s, referenceVideoCount: _c, hasStartImage: _a, hasEndImage: _b, hasAudio: _d, ...clean } = body;
+  const sources = videoInputSourcesFor(clean);
+  if (!sources.length) return clean;
+  let total = 0;
+  for (const src of sources) {
+    const seconds = await measureVideoSeconds(src, env).catch(() => 0);
+    if (!(seconds > 0)) return { ...clean, inputVideoSeconds: 0 };
+    total += seconds;
+  }
+  return { ...clean, inputVideoSeconds: total };
+}
+
 export async function withCreditCharge(
   context: any,
   options: { feature: string; deferAccepted?: boolean },
@@ -302,7 +348,11 @@ export async function withCreditCharge(
   if (!auth.ok) return handler(context);
   let body: any = {};
   try { body = await request.clone().json(); } catch (_) {}
-  const quote = quoteCredits(options.feature, withMeasuredMotionSeconds(options.feature, body), env);
+  const quote: any = quoteCredits(options.feature, await withMeasuredVideoInputs(options.feature, body, env), env);
+  // 요금을 정확히 낼 수 없는 요청(모르는 모델·해상도, 재지 못한 입력 영상)은 무료로 통과시키지 않고 막는다.
+  if (quote.error) {
+    return json({ error: quote.error, message: quote.message || "요금을 계산할 수 없어 생성을 시작하지 않았습니다.", credits: { quote } }, 400, origin);
+  }
   if (!quote.credits) return handler(context);
   let reservation: any;
   try {
@@ -331,8 +381,9 @@ export async function withCreditCharge(
         const data: any = await response.clone().json();
         providerJobId = String(data?.jobId || data?.job_id || data?.id || data?.operationName || "");
       } catch (_) {}
+      // 작업 번호가 없으면 공급자에 과금될 작업이 없다(접수 실패·검열 거부 포함) → 확정하지 않고 환불한다.
       if (providerJobId) await attachProviderJob(env, auth.userId, String(reservation.operation_id), providerJobId);
-      else await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "commit");
+      else await settleCreditOperation(env, auth.userId, String(reservation.operation_id), "release");
     } else {
       await settleCreditOperation(env, auth.userId, String(reservation.operation_id), response.ok ? "commit" : "release");
     }

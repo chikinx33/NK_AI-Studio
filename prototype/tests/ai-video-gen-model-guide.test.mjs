@@ -25,17 +25,18 @@ test('가이드는 셀렉트의 10개 모델을 모두 설명한다', () => {
   assert.match(src, /MODEL_DURATION_CHOICES\[model\.id\]/);
 });
 
-test('과금 방식은 초당·회당·영상 토큰을 구분하고 현재 선택의 예상치를 계산한다', () => {
+test('과금 안내는 실측 원가를 보여 주고, 현재 선택 비용은 서버 견적을 그대로 쓴다', () => {
   const src = js();
-  assert.match(src, /영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라/);
-  assert.match(src, /1080p 약 48,600 출력 토큰\/초/);
-  assert.match(src, /영상 포함 \$6\.88\/100만 토큰\(입력 영상 토큰 추가/);
-  assert.match(src, /'1080p': \{ perSecond: 48600, multiplier: 1 \}/);
-  assert.match(src, /profile\.perSecond \* duration/);
-  assert.match(src, /Math\.max\(5, duration\) \* 0\.10/);
-  assert.match(src, /id === 'kling-final'\) return '\$0\.06'/);
-  assert.match(src, /id === 'vidu-q3'\) return '\$0\.106'/);
+  assert.match(src, /필요 크레딧 = 공급자\(Atlas Cloud\) 원가 × 1\.3 ÷ \$0\.01, 올림입니다/);
+  assert.match(src, /생성 실패와 공급자 거부\(검열 포함\)는 자동 환불됩니다/);
   assert.match(src, /이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다/);
+  // 옛 틀린 단가가 남지 않는다(Kling Final "$0.06/회", Veo Full 오디오 미반영 "$0.20/초")
+  assert.doesNotMatch(src, /\$0\.06\/회|\$0\.06\/run/);
+  assert.match(src, /'kling-final': \{ best: [^\n]*billing: 'Atlas 원가 · \$0\.119\/초\(소리 포함\)/);
+  assert.match(src, /'veo-full': \{ best: [^\n]*billing: 'Atlas 원가 · 1080p \$0\.40\/초\(공급자 기본값으로 오디오 포함\)'/);
+  // 화면은 단가를 따로 계산하지 않는다 — 서버 견적의 크레딧·원가
+  assert.match(src, /return \(en \? 'Required ' : '필요 '\) \+ state\.credit\.required \+ ' C'/);
+  assert.doesNotMatch(src, /tokenProfiles|MINIMAX_USD_PER_SEC|MOTION_USD_PER_SEC/);
 });
 
 test('가이드는 닫기 버튼·배경·Escape로 닫히고 포커스를 돌려준다', () => {

@@ -38,7 +38,6 @@
   ];
 
   // ⚠️ functions/api/_shared/motion-control.js 의 KLING_MOTION_MODELS·MOTION_SPEC 미러다(테스트가 일치 검사).
-  var MOTION_USD_PER_SEC = { 'kling-motion-pro': 0.143, 'kling-motion-std': 0.107 };
   var MOTION_SPEC = {
     maxBytes:   10 * 1024 * 1024,
     minSeconds: 3,
@@ -79,7 +78,6 @@
   // 텍스트→영상·참조→영상이 받는 화면비(video-specs.ts MINIMAX_ASPECT_RATIOS 미러). 이미지→영상은 입력 이미지를 따른다.
   var MINIMAX_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
   // Atlas 정가(2026-09-28, 초당 USD).
-  var MINIMAX_USD_PER_SEC = { 'minimax-h3': 0.038, 'minimax-h3-max': 0.048, 'minimax-h3-max-turbo': 0.024, 'minimax-h3-fast': 0.044, 'minimax-h3-dev': 0.015 };
 
   var CAMERA_MOVEMENTS = [
     { id: '',           ko: '없음',       en: 'None'       },
@@ -169,44 +167,44 @@
   // 2026-09-03 확인한 값이며 변동될 수 있다.
   var MODEL_GUIDE = {
     ko: {
-      'veo': { best: '빠른 시안 · 일반 광고 · 자연스러운 움직임', how: '텍스트만 쓰거나 시작 이미지를 넣고, 피사체 동작과 카메라 움직임을 한 문장씩 명확히 적으세요.', billing: 'Atlas Cloud · 출력 $0.08/초' },
-      'veo-full': { best: '최종 납품 · 사실감 · 품질 우선 장면', how: '속도보다 디테일이 중요한 히어로 컷에 쓰세요. 텍스트 또는 시작 이미지로 생성할 수 있습니다.', billing: 'Atlas Cloud · 출력 $0.20/초' },
-      'grok': { best: '스타일리시한 연출 · 아이디어 탐색 · 빠른 변주', how: '텍스트 또는 시작 이미지를 넣고 화면에서 일어나야 할 변화를 중심으로 적으세요. 앱은 720p로 생성합니다.', billing: '회원: Atlas Cloud · $0.05/초 · 마스터: xAI 직접 요율' },
-      'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: '회원: Atlas Cloud · $0.05/초 · 마스터: xAI 직접 요율' },
-      'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: '회원: Atlas Cloud · $0.07/초 · 마스터: xAI 직접 요율' },
-      'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas Cloud · $0.06/회' },
-      'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시한 뒤 480p~4K 해상도를 고르세요. SR은 업스케일 출력입니다.', billing: 'Atlas Cloud · 720p 기준 출력 $0.112/초 · 다른 해상도는 공급자 견적 확인' },
-      'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 1080p 약 48,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가, SR/4K 배율 적용)' },
-      'seedance-2.5': { best: '컷 간 일관성 · 4~30초 롱테이크 · 네이티브 오디오', how: '스틸을 첫 프레임으로, 세트 플레이트·캐릭터 시트·직전 컷을 참조로 자동 첨부합니다. 프롬프트에는 행동과 카메라만 적으세요.', billing: 'Atlas Cloud · $0.134/초' },
-      'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
-      'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' },
-      'minimax-h3': { best: '저렴한 고해상도(원본 2K) · 15초 이하 컷 · 오디오 포함', how: 'Image to Video 탭은 시작·끝 프레임만, Reference to Video 탭은 참조(이미지 최대 10·영상·오디오)만 받습니다. 공급자 엔드포인트가 달라 두 입력을 함께 쓸 수 없고, 참조는 오디오만으로는 만들 수 없습니다.', billing: 'Atlas Cloud · $0.038/초' },
-      'minimax-h3-max': { best: 'H3 최상위 품질 · 첫/끝 프레임 제어', how: '텍스트만 쓰거나 시작 이미지(필요하면 끝 이미지)를 넣으세요. 참조 이미지·영상·오디오는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.048/초' },
-      'minimax-h3-max-turbo': { best: 'Max 계열을 빠르고 싸게 · 시안', how: '텍스트 또는 시작(·끝) 이미지로 480P/768P 를 만듭니다. 참조는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.024/초' },
-      'minimax-h3-fast': { best: '가장 빠른 480P 시안 · 참조 일관성 테스트', how: 'H3 와 같은 세 방식(텍스트·첫/끝 프레임·참조)을 480P 로 빠르게 만듭니다. 5~15초.', billing: 'Atlas Cloud · $0.044/초' },
-      'minimax-h3-dev': { best: '최저가 대량 생성 · 참조 일관성', how: 'H3 와 같은 세 방식을 지원하고 480P/768P 원본, SR 1440p·4K 를 고를 수 있습니다. 4~15초.', billing: 'Atlas Cloud · $0.015/초' },
-      'kling-motion-pro': { best: '유행 춤·동작 영상을 내 캐릭터로 따라 하기 · 동작 재현 품질 우선', how: 'Motion Control 탭에서 캐릭터 이미지(JPG·PNG)와 동작 영상(MP4·MOV, 3~30초, 10MB 이하)을 넣으세요. 결과 길이는 동작 영상 길이를 따릅니다. "캐릭터 이미지 방향 유지"는 영상 10초까지만 됩니다. 프롬프트는 선택입니다.', billing: 'Atlas Cloud · $0.143/초(동작 영상 길이)' },
-      'kling-motion-std': { best: '모션 컨트롤을 더 저렴하게 · 시안·테스트', how: 'Pro 와 입력이 같습니다. 캐릭터 이미지와 동작 영상을 넣고 방향 기준과 원본 소리 유지를 고르세요.', billing: 'Atlas Cloud · $0.107/초(동작 영상 길이)' }
+      'veo': { best: '빠른 시안 · 일반 광고 · 자연스러운 움직임', how: '텍스트만 쓰거나 시작 이미지를 넣고, 피사체 동작과 카메라 움직임을 한 문장씩 명확히 적으세요.', billing: 'Atlas 원가 · 1080p $0.10/초(오디오 없음) · 4·6·8초' },
+      'veo-full': { best: '최종 납품 · 사실감 · 품질 우선 장면', how: '속도보다 디테일이 중요한 히어로 컷에 쓰세요. 텍스트 또는 시작 이미지로 생성할 수 있습니다.', billing: 'Atlas 원가 · 1080p $0.40/초(공급자 기본값으로 오디오 포함)' },
+      'grok': { best: '스타일리시한 연출 · 아이디어 탐색 · 빠른 변주', how: '텍스트 또는 시작 이미지를 넣고 화면에서 일어나야 할 변화를 중심으로 적으세요. 앱은 720p로 생성합니다.', billing: 'Atlas 원가 · 720p $0.07/초 + 시작 이미지 $0.002' },
+      'grok-r2v': { best: '인물·제품·스타일 레퍼런스 일관성', how: '레퍼런스 이미지를 최대 7장 넣고 프롬프트에서 각 이미지의 역할을 순서대로 설명하세요. 시작 프레임은 고정되지 않습니다.', billing: 'Atlas 원가 · 720p $0.07/초 + 참조 이미지 장당 $0.002' },
+      'grok-extend': { best: '기존 Grok 영상의 자연스러운 이어 만들기', how: '연장할 영상을 넣고, 마지막 프레임 뒤에 이어질 동작만 적으세요. 새 장면을 처음부터 만드는 용도에는 맞지 않습니다.', billing: 'Atlas 원가 · 연장 $0.07/초 + 입력 영상 $0.01/초' },
+      'kling-final': { best: 'FHD 디테일 · 제품·인물 클로즈업 · 카메라 제어', how: '시작 이미지가 필요합니다. 5초 또는 10초를 고르고 카메라 무브먼트를 선택하세요. 끝 프레임은 지원하지 않습니다.', billing: 'Atlas 원가 · $0.119/초(소리 포함) · 5초 $0.595 · 10초 $1.19' },
+      'seedance': { best: '4~15초 유연한 길이 · 부드러운 동작 · 시작 구도 유지', how: '시작 이미지를 넣고, 이미지에 없는 변화만 프롬프트로 지시한 뒤 480p~4K 해상도를 고르세요. SR은 업스케일 출력입니다.', billing: 'Atlas 원가 · 토큰 과금 · 5초 기준 480p $0.45 · 720p $0.98 · 1080p $2.20 · 4K $4.90 (SR 은 업스케일 배율)' },
+      'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas 원가 · 토큰 과금(Seedance 2.0 과 같음) · 참조 영상을 넣으면 단가가 내려가고 입력 영상 길이만큼 토큰이 더해짐' },
+      'seedance-2.5': { best: '컷 간 일관성 · 4~30초 롱테이크 · 네이티브 오디오', how: '스틸을 첫 프레임으로, 세트 플레이트·캐릭터 시트·직전 컷을 참조로 자동 첨부합니다. 프롬프트에는 행동과 카메라만 적으세요.', billing: 'Atlas 원가 · 토큰 과금 · 5초 기준 480p $0.70 · 720p $1.51 · 1080p $2.98 · 참조 영상 길이도 토큰에 포함' },
+      'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas 원가 · 1080P $0.15/초 · 최소 5초 과금' },
+      'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas 원가 · 720p $0.10625/초' },
+      'minimax-h3': { best: '저렴한 고해상도(원본 2K) · 15초 이하 컷 · 오디오 포함', how: 'Image to Video 탭은 시작·끝 프레임만, Reference to Video 탭은 참조(이미지 최대 10·영상·오디오)만 받습니다. 공급자 엔드포인트가 달라 두 입력을 함께 쓸 수 없고, 참조는 오디오만으로는 만들 수 없습니다.', billing: 'Atlas 원가 · 480P $0.038 · 768P $0.08 · 2K $0.13 · ESR $0.105~0.195 /초 · 참조 영상 길이도 같은 초당 요금' },
+      'minimax-h3-max': { best: 'H3 최상위 품질 · 첫/끝 프레임 제어', how: '텍스트만 쓰거나 시작 이미지(필요하면 끝 이미지)를 넣으세요. 참조 이미지·영상·오디오는 받지 않습니다. 5~15초.', billing: 'Atlas 원가 · 480P $0.0475 · 768P $0.076 · 1440p-SR $0.1425 · 4K-SR $0.195 /초' },
+      'minimax-h3-max-turbo': { best: 'Max 계열을 빠르고 싸게 · 시안', how: '텍스트 또는 시작(·끝) 이미지로 480P/768P 를 만듭니다. 참조는 받지 않습니다. 5~15초.', billing: 'Atlas 원가 · 480P $0.02375 · 768P $0.038 /초' },
+      'minimax-h3-fast': { best: '가장 빠른 480P 시안 · 참조 일관성 테스트', how: 'H3 와 같은 세 방식(텍스트·첫/끝 프레임·참조)을 480P 로 빠르게 만듭니다. 5~15초.', billing: 'Atlas 원가 · 480P $0.0437/초 · 참조 영상 길이도 같은 초당 요금' },
+      'minimax-h3-dev': { best: '최저가 대량 생성 · 참조 일관성', how: 'H3 와 같은 세 방식을 지원하고 480P/768P 원본, SR 1440p·4K 를 고를 수 있습니다. 4~15초.', billing: 'Atlas 원가 · 480P $0.015 · 768P $0.024 · 1440p-SR $0.045 · 4K-SR $0.0615 /초 · 참조 영상 길이 포함' },
+      'kling-motion-pro': { best: '유행 춤·동작 영상을 내 캐릭터로 따라 하기 · 동작 재현 품질 우선', how: 'Motion Control 탭에서 캐릭터 이미지(JPG·PNG)와 동작 영상(MP4·MOV, 3~30초, 10MB 이하)을 넣으세요. 결과 길이는 동작 영상 길이를 따릅니다. "캐릭터 이미지 방향 유지"는 영상 10초까지만 됩니다. 프롬프트는 선택입니다.', billing: 'Atlas 원가 · 동작 영상 길이 × $0.1428/초' },
+      'kling-motion-std': { best: '모션 컨트롤을 더 저렴하게 · 시안·테스트', how: 'Pro 와 입력이 같습니다. 캐릭터 이미지와 동작 영상을 넣고 방향 기준과 원본 소리 유지를 고르세요.', billing: 'Atlas 원가 · 동작 영상 길이 × $0.1071/초' }
     },
     en: {
-      'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas Cloud · $0.08/sec output' },
-      'veo-full': { best: 'Final delivery · realism · quality-first shots', how: 'Use for hero shots where detail matters more than speed. Generate from text or a start image.', billing: 'Atlas Cloud · $0.20/sec output' },
-      'grok': { best: 'Stylized direction · ideation · quick variations', how: 'Use text or a start image and focus the prompt on what should change on screen. The app outputs 720p.', billing: 'Members: Atlas Cloud · $0.05/sec · Master: direct xAI rate' },
-      'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'Members: Atlas Cloud · $0.05/sec · Master: direct xAI rate' },
-      'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'Members: Atlas Cloud · $0.07/sec · Master: direct xAI rate' },
-      'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas Cloud · $0.06/run' },
-      'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image, prompt only changes not already present, and choose an output from 480p to 4K. SR options are upscaled outputs.', billing: 'Atlas Cloud · $0.112/sec at 720p · check provider quote for other resolutions' },
-      'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas Cloud · ~48,600 output tokens/sec at 1080p · $11.20/1M image-only · $6.88/1M with video (input video tokens and SR/4K multipliers added)' },
-      'seedance-2.5': { best: 'Shot-to-shot consistency · 4–30 s one-take · native audio', how: 'The still is the first frame; set plate, character sheets and the previous cut are attached as references automatically. Prompt only action and camera.', billing: 'Atlas Cloud · $0.134/sec' },
-      'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
-      'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' },
-      'minimax-h3': { best: 'Affordable high resolution (native 2K) · shots up to 15 s · audio included', how: 'The Image to Video tab takes only start/end frames; the Reference to Video tab takes only references (up to 10 images, a video, audio). They are separate provider endpoints, so the two cannot be combined, and audio alone is not enough.', billing: 'Atlas Cloud · $0.038/sec' },
-      'minimax-h3-max': { best: 'Top H3 quality · first/last frame control', how: 'Use text alone or add a start image (and optionally an end image). No reference images, video, or audio. 5–15 s.', billing: 'Atlas Cloud · $0.048/sec' },
-      'minimax-h3-max-turbo': { best: 'Faster, cheaper Max · drafts', how: 'Text or a start (and end) image at 480P/768P. No references. 5–15 s.', billing: 'Atlas Cloud · $0.024/sec' },
-      'minimax-h3-fast': { best: 'Fastest 480P drafts · reference consistency tests', how: 'Same three modes as H3 (text, first/last frame, references) at 480P. 5–15 s.', billing: 'Atlas Cloud · $0.044/sec' },
-      'minimax-h3-dev': { best: 'Lowest-cost volume · reference consistency', how: 'Same three modes as H3 with native 480P/768P and SR 1440p·4K. 4–15 s.', billing: 'Atlas Cloud · $0.015/sec' },
-      'kling-motion-pro': { best: 'Your character performing a trending dance or motion clip · best motion fidelity', how: 'In the Motion Control tab, add a character image (JPG/PNG) and a motion video (MP4/MOV, 3–30 s, up to 10 MB). Output length follows the motion video. "Keep the character image" orientation only works with videos up to 10 s. The prompt is optional.', billing: 'Atlas Cloud · $0.143/sec (motion video length)' },
-      'kling-motion-std': { best: 'Cheaper motion control · drafts and tests', how: 'Same inputs as Pro. Add a character image and a motion video, then choose the orientation and whether to keep the original sound.', billing: 'Atlas Cloud · $0.107/sec (motion video length)' }
+      'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas cost · $0.10/sec at 1080p (no audio) · 4/6/8 s' },
+      'veo-full': { best: 'Final delivery · realism · quality-first shots', how: 'Use for hero shots where detail matters more than speed. Generate from text or a start image.', billing: 'Atlas cost · $0.40/sec at 1080p (audio on by provider default)' },
+      'grok': { best: 'Stylized direction · ideation · quick variations', how: 'Use text or a start image and focus the prompt on what should change on screen. The app outputs 720p.', billing: 'Atlas cost · $0.07/sec at 720p + $0.002 for a start image' },
+      'grok-r2v': { best: 'Character, product, and style consistency', how: 'Add up to 7 references and explain each image role in order. This does not lock the first frame.', billing: 'Atlas cost · $0.07/sec at 720p + $0.002 per reference image' },
+      'grok-extend': { best: 'Continue an existing Grok video', how: 'Upload the source video and describe only what should follow its last frame. It is not meant for a new scene from scratch.', billing: 'Atlas cost · $0.07/sec of extension + $0.01/sec of input video' },
+      'kling-final': { best: 'FHD detail · close-ups · camera control', how: 'A start image is required. Choose 5 or 10 seconds and a camera move. End frames are not supported.', billing: 'Atlas cost · $0.119/sec (sound on) · 5 s $0.595 · 10 s $1.19' },
+      'seedance': { best: 'Flexible 4–15s shots · smooth motion · preserve opening composition', how: 'Add a start image, prompt only changes not already present, and choose an output from 480p to 4K. SR options are upscaled outputs.', billing: 'Atlas cost · token-based · 5 s: 480p $0.45 · 720p $0.98 · 1080p $2.20 · 4K $4.90 (SR adds an upscale multiplier)' },
+      'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas cost · token-based (same as Seedance 2.0) · a reference video lowers the rate and adds its length to the tokens' },
+      'seedance-2.5': { best: 'Shot-to-shot consistency · 4–30 s one-take · native audio', how: 'The still is the first frame; set plate, character sheets and the previous cut are attached as references automatically. Prompt only action and camera.', billing: 'Atlas cost · token-based · 5 s: 480p $0.70 · 720p $1.51 · 1080p $2.98 · reference video length adds tokens' },
+      'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas cost · $0.15/sec at 1080P · 5 s billing minimum' },
+      'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas cost · $0.10625/sec at 720p' },
+      'minimax-h3': { best: 'Affordable high resolution (native 2K) · shots up to 15 s · audio included', how: 'The Image to Video tab takes only start/end frames; the Reference to Video tab takes only references (up to 10 images, a video, audio). They are separate provider endpoints, so the two cannot be combined, and audio alone is not enough.', billing: 'Atlas cost · 480P $0.038 · 768P $0.08 · 2K $0.13 · ESR $0.105–0.195 /sec · reference video length billed at the same rate' },
+      'minimax-h3-max': { best: 'Top H3 quality · first/last frame control', how: 'Use text alone or add a start image (and optionally an end image). No reference images, video, or audio. 5–15 s.', billing: 'Atlas cost · 480P $0.0475 · 768P $0.076 · 1440p-SR $0.1425 · 4K-SR $0.195 /sec' },
+      'minimax-h3-max-turbo': { best: 'Faster, cheaper Max · drafts', how: 'Text or a start (and end) image at 480P/768P. No references. 5–15 s.', billing: 'Atlas cost · 480P $0.02375 · 768P $0.038 /sec' },
+      'minimax-h3-fast': { best: 'Fastest 480P drafts · reference consistency tests', how: 'Same three modes as H3 (text, first/last frame, references) at 480P. 5–15 s.', billing: 'Atlas cost · $0.0437/sec at 480P · reference video length billed at the same rate' },
+      'minimax-h3-dev': { best: 'Lowest-cost volume · reference consistency', how: 'Same three modes as H3 with native 480P/768P and SR 1440p·4K. 4–15 s.', billing: 'Atlas cost · 480P $0.015 · 768P $0.024 · 1440p-SR $0.045 · 4K-SR $0.0615 /sec · reference video length included' },
+      'kling-motion-pro': { best: 'Your character performing a trending dance or motion clip · best motion fidelity', how: 'In the Motion Control tab, add a character image (JPG/PNG) and a motion video (MP4/MOV, 3–30 s, up to 10 MB). Output length follows the motion video. "Keep the character image" orientation only works with videos up to 10 s. The prompt is optional.', billing: 'Atlas cost · motion video length × $0.1428/sec' },
+      'kling-motion-std': { best: 'Cheaper motion control · drafts and tests', how: 'Same inputs as Pro. Add a character image and a motion video, then choose the orientation and whether to keep the original sound.', billing: 'Atlas cost · motion video length × $0.1071/sec' }
     }
   };
 
@@ -269,6 +267,9 @@
       credit_ready:      '필요 {required} C · 사용 가능 {available} C',
       credit_insufficient:'크레딧 부족 · 필요 {required} C / 사용 가능 {available} C',
       credit_unavailable:'크레딧을 확인할 수 없어 생성을 시작할 수 없습니다.',
+      credit_need_video: '입력 영상을 넣으면 필요한 크레딧이 계산됩니다(결과 길이·요금이 영상 길이에 따라 정해져요).',
+      credit_video_unreadable: '영상 길이를 읽지 못해 크레딧을 계산할 수 없습니다. MP4 로 다시 저장해 올려 주세요.',
+      credit_pricing_unknown: '이 설정 조합은 요금을 정확히 계산할 수 없어 생성할 수 없습니다. 모델·해상도·입력을 확인해 주세요.',
       credit_btn_loading:'크레딧 확인 중...',
       credit_btn_insufficient:'크레딧 부족',
       credit_notice_title:'크레딧 부족',
@@ -371,6 +372,9 @@
       credit_ready:      'Required {required} C · Available {available} C',
       credit_insufficient:'Insufficient credits · Required {required} C / Available {available} C',
       credit_unavailable:'Credits could not be checked, so generation cannot start.',
+      credit_need_video: 'Add the input video to calculate the required credits (length and cost follow the video).',
+      credit_video_unreadable: 'The video length could not be read, so credits cannot be calculated. Re-save it as MP4 and upload again.',
+      credit_pricing_unknown: 'This combination cannot be priced exactly, so it cannot be generated. Check the model, resolution and inputs.',
       credit_btn_loading:'Checking credits...',
       credit_btn_insufficient:'Insufficient credits',
       credit_notice_title:'Insufficient credits',
@@ -452,6 +456,7 @@
     videoFileName:  '',
     // 모션 컨트롤: 동작 영상 길이(초, 브라우저가 잰 값 — 서버는 파일에서 다시 읽는다)·미리보기 URL·방향·원본 소리
     motionSeconds:     0,
+    videoSeconds:      0,   // 업로드한 입력 영상 길이(서버와 같은 mp4 해석) — 요금 계산용
     motionPreviewUrl:  '',
     motionOrientation: 'video',
     motionKeepSound:   true,
@@ -511,12 +516,19 @@
     var referenceCount = hasCap('refs')
       ? (state.referenceUrls || []).filter(Boolean).length
       : 0;
+    var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
+    var videoCount = modeAllows('video') && state.videoUrl ? 1 : 0;
     return {
       videoModel: state.model,
-      // 모션 컨트롤은 길이를 고르지 않는다. 동작 영상 길이로 견적한다(영상 전이면 최소 3초).
-      durationSeconds: isMotionModel(state.model)
-        ? Math.max(MOTION_SPEC.minSeconds, Math.ceil(state.motionSeconds || 0))
-        : state.duration,
+      // 모션 컨트롤은 길이를 고르지 않는다(결과 = 동작 영상 길이 → inputVideoSeconds 로 계산).
+      durationSeconds: isMotionModel(state.model) ? 0 : state.duration,
+      // 서버 요금 계산(video-pricing.ts)이 쓰는 값. 실제 차감은 서버가 올라온 파일로 다시 잰다.
+      hasStartImage: isI2vMode && modeAllows('start') && !!state.startImageUrl,
+      hasEndImage: isI2vMode && modeAllows('end') && !!state.endImageUrl,
+      hasAudio: modeAllows('audio') && !!state.audioUrl,
+      referenceVideoCount: videoCount,
+      inputVideoSeconds: videoCount ? (Number(state.videoSeconds) || 0) : 0,
+      quality: state.model === 'kling-final' ? 'final' : '',
       // 견적 서버는 배열 길이만 사용한다. 큰 data URL을 견적 요청에 중복 전송하지 않는다.
       referenceImages: Array(referenceCount).fill('reference'),
       aspectRatio: state.aspectRatio,
@@ -526,7 +538,8 @@
 
   function creditQuoteKey() {
     var input = creditQuoteInput();
-    return [input.videoModel, input.durationSeconds, input.referenceImages.length, input.aspectRatio, input.resolution].join('|');
+    return [input.videoModel, input.durationSeconds, input.referenceImages.length, input.aspectRatio, input.resolution,
+      input.hasStartImage, input.hasEndImage, input.hasAudio, input.referenceVideoCount, input.inputVideoSeconds, input.quality].join('|');
   }
 
   function creditIsInsufficient() {
@@ -539,11 +552,19 @@
       .replace('{available}', String(state.credit.available || 0));
   }
 
+  // 요금 계산 불가 사유(서버 quote.error 코드) → 사람이 읽을 문구(한/영).
+  function creditErrorText() {
+    var code = String(state.credit.code || '');
+    if (code === 'pricing_input_video_unmeasured') return t(state.videoUrl ? 'credit_video_unreadable' : 'credit_need_video');
+    if (code.indexOf('pricing_') === 0 || code.indexOf('minimax_') === 0) return t('credit_pricing_unknown');
+    return t('credit_unavailable');
+  }
+
   function creditStatusText() {
     if (state.credit.status === 'ready') {
       return creditMessage(creditIsInsufficient() ? 'credit_insufficient' : 'credit_ready');
     }
-    return t(state.credit.status === 'error' ? 'credit_unavailable' : 'credit_loading');
+    return state.credit.status === 'error' ? creditErrorText() : t('credit_loading');
   }
 
   function creditButtonText() {
@@ -613,13 +634,21 @@
       if (seq !== _creditQuoteSeq) return false;
       var quote = data && data.quote || {};
       var summary = data && data.summary || {};
+      if (quote.error) {
+        // 요금을 정확히 낼 수 없는 설정(입력 영상 길이 미확인·요금표에 없는 조합)은 생성도 막는다.
+        state.credit = { status: 'error', key: key, required: 0, available: Math.max(0, Number(summary.available) || 0),
+          reserved: Math.max(0, Number(summary.reserved) || 0), error: String(quote.error), code: String(quote.error), providerUsd: 0 };
+        updateCreditControls();
+        return false;
+      }
       state.credit = {
         status: 'ready',
         key: key,
         required: Math.max(0, Number(quote.credits) || 0),
         available: Math.max(0, Number(summary.available) || 0),
         reserved: Math.max(0, Number(summary.reserved) || 0),
-        error: ''
+        error: '',
+        providerUsd: Number(quote.basis && quote.basis.providerUsd) || 0
       };
       updateCreditControls();
       return !creditIsInsufficient();
@@ -875,6 +904,48 @@
     return state.model === 'kling-final';
   }
 
+  // ⚠️ functions/api/_shared/motion-control.js mp4DurationSeconds 와 같은 해석(서버가 과금할 때 쓰는 길이와 같아야 한다).
+  function mp4SecondsFromBuffer(buf) {
+    var b = new Uint8Array(buf || new ArrayBuffer(0));
+    function u32(o) { return ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3]; }
+    function u64(o) { return u32(o) * 4294967296 + u32(o + 4); }
+    function find(start, end, type) {
+      var o = start;
+      while (o + 8 <= end) {
+        var size = u32(o), header = 8;
+        var name = String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+        if (size === 1) { if (o + 16 > end) return null; size = u64(o + 8); header = 16; }
+        else if (size === 0) size = end - o;
+        if (size < header || o + size > end) return null;
+        if (name === type) return { start: o + header, end: o + size };
+        o += size;
+      }
+      return null;
+    }
+    var moov = find(0, b.length, 'moov');
+    if (!moov) return 0;
+    var mvhd = find(moov.start, moov.end, 'mvhd');
+    var timescale = 0;
+    if (mvhd && mvhd.end - mvhd.start >= 20) {
+      var v = b[mvhd.start], p = mvhd.start + 4;
+      timescale = v === 1 ? u32(p + 16) : u32(p + 8);
+      var duration = v === 1 ? u64(p + 20) : u32(p + 12);
+      if (timescale > 0 && duration > 0 && duration !== 0xffffffff) return duration / timescale;
+    }
+    var mvex = find(moov.start, moov.end, 'mvex');
+    var mehd = mvex ? find(mvex.start, mvex.end, 'mehd') : null;
+    if (mehd && timescale > 0) {
+      var d = b[mehd.start] === 1 ? u64(mehd.start + 4) : u32(mehd.start + 4);
+      if (d > 0) return d / timescale;
+    }
+    return 0;
+  }
+
+  function readVideoSeconds(file) {
+    if (!file || typeof file.arrayBuffer !== 'function') return Promise.resolve(0);
+    return file.arrayBuffer().then(mp4SecondsFromBuffer).catch(function () { return 0; });
+  }
+
   function isMotionModel(modelId) {
     var m = ALL_MODELS.find(function (x) { return x.id === modelId; });
     return !!(m && m.motion);
@@ -889,6 +960,7 @@
     if (state.motionPreviewUrl) { try { URL.revokeObjectURL(state.motionPreviewUrl); } catch (_) {} }
     state.motionPreviewUrl = '';
     state.motionSeconds = 0;
+    state.videoSeconds = 0;
     state.videoUrl = ''; state.videoFileName = '';
   }
 
@@ -937,6 +1009,7 @@
           return;
         }
       }
+      readVideoSeconds(file).then(function (exactSeconds) {
       var reader = new FileReader();
       reader.onload = function (ev) {
         clearMotionVideo();
@@ -944,12 +1017,14 @@
         state.videoUrl = String(ev.target.result || '').replace(/^data:[^;,]*/, 'data:' + mime);
         state.videoFileName = file.name;
         state.motionPreviewUrl = res.url;
-        state.motionSeconds = meta ? meta.seconds : 0;
+        state.motionSeconds = exactSeconds || (meta ? meta.seconds : 0);
+        state.videoSeconds = exactSeconds;
         render();
         ensureCreditQuote(false);
       };
       reader.onerror = function () { URL.revokeObjectURL(res.url); };
       reader.readAsDataURL(file);
+      });
     });
   }
 
@@ -1057,59 +1132,15 @@
     return '$' + Number(n || 0).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
   }
 
+  // 현재 선택의 비용은 서버 견적(/api/credits/quote)을 그대로 쓴다 — 화면이 따로 단가를 계산하지 않는다.
   function currentUsageEstimate() {
-    var id = state.model;
-    var duration = guideDurationFor(id);
-    var suffix = state.lang === 'en' ? ' estimated' : ' 예상';
-    if (id === 'kling-final') return '$0.06' + suffix;
-    if (id === 'vidu-q3') return '$0.106' + suffix;
-    if (id === 'veo') return money(duration * 0.08) + suffix;
-    if (id === 'veo-full') return money(duration * 0.20) + suffix;
-    if (id === 'seedance-2.5') return money(duration * 0.134) + suffix;
-    if (MINIMAX_USD_PER_SEC[id]) return money(duration * MINIMAX_USD_PER_SEC[id]) + suffix;
-    if (MOTION_USD_PER_SEC[id]) {
-      // 결과 길이 = 동작 영상 길이. 영상을 넣기 전에는 초당 단가만 보여 준다.
-      if (state.motionSeconds > 0) return money(Math.ceil(state.motionSeconds) * MOTION_USD_PER_SEC[id]) + suffix;
-      return (state.lang === 'en' ? 'Motion video length × ' : '동작 영상 길이 × ') + money(MOTION_USD_PER_SEC[id]) + (state.lang === 'en' ? '/sec' : '/초');
+    var en = state.lang === 'en';
+    if (state.credit.status === 'ready') {
+      var usd = Number(state.credit.providerUsd) || 0;
+      return (en ? 'Required ' : '필요 ') + state.credit.required + ' C' + (usd > 0 ? (en ? ' · provider cost ' : ' · 공급자 원가 ') + money(usd) : '');
     }
-    if (id === 'seedance') {
-      if (state.resolution === '720p') return money(duration * 0.112) + suffix;
-      return (state.lang === 'en' ? 'Provider quote · ' : '공급자 견적 · ') + resolutionLabel(state.resolution);
-    }
-    if (id === 'wan') return money(Math.max(5, duration) * 0.10) + suffix;
-    if (id === 'grok' || id === 'grok-r2v' || id === 'grok-extend') {
-      var base = duration * 0.07;
-      if (id === 'grok' && state.startImageUrl) base += 0.002;
-      if (id === 'grok-r2v') base += state.referenceUrls.filter(Boolean).length * 0.002;
-      var extra = id === 'grok-extend'
-        ? (state.lang === 'en' ? ' + input video' : ' + 입력 영상')
-        : '';
-      return money(base) + extra + suffix;
-    }
-    if (id === 'seedance-r2v') {
-      var tokenProfiles = {
-        '480p': { perSecond: 9607.5, multiplier: 1 },
-        '720p': { perSecond: 21600, multiplier: 1 },
-        '720p-SR': { perSecond: 21600, multiplier: 1.8 },
-        '1080p': { perSecond: 48600, multiplier: 1 },
-        '1080p-SR': { perSecond: 48600, multiplier: 1.8 },
-        '1440p-SR': { perSecond: 86400, multiplier: 3.2 },
-        '4k': { perSecond: 194400, multiplier: 0.57 }
-      };
-      var profile = tokenProfiles[state.resolution] || tokenProfiles[DEFAULT_SEEDANCE_RESOLUTION];
-      var tokens = Math.round(profile.perSecond * duration);
-      var tokenText = tokens.toLocaleString(state.lang === 'en' ? 'en-US' : 'ko-KR');
-      if (state.videoUrl) {
-        return state.lang === 'en'
-          ? '~' + tokenText + ' output tokens + input video tokens · provider quote'
-          : '약 ' + tokenText + ' 출력 토큰 + 입력 영상 토큰 · 공급자 견적';
-      }
-      var cost = money(tokens / 1000000 * 11.20 * profile.multiplier);
-      return state.lang === 'en'
-        ? '~' + tokenText + ' video tokens · ' + cost + ' estimated'
-        : '약 ' + tokenText + ' 영상 토큰 · ' + cost + ' 예상';
-    }
-    return state.lang === 'en' ? 'See provider quote' : '공급자 견적 확인';
+    if (state.credit.status === 'error') return creditErrorText();
+    return en ? 'Checking the quote…' : '견적 확인 중…';
   }
 
   var _modelGuideOpener = null;
@@ -1122,12 +1153,12 @@
       title: 'Video model guide',
       subtitle: 'Choose by input type, desired result, and actual billing unit.',
       current: 'Current selection', best: 'Best for', how: 'How to use', usage: 'Usage / cost', close: 'Close',
-      note: 'Opening this guide does not start a generation or spend credits. Video models do not all use text tokens: most bill per second or per run, while Seedance Reference uses output video tokens. Rates were checked against official provider pricing on Sep 3, 2026 and may change. Failed Atlas Cloud tasks are not charged.'
+      note: 'Opening this guide does not start a generation or spend credits. Credits required = provider (Atlas Cloud) cost × 1.3 ÷ $0.01, rounded up. The exact credits for your current settings (model, resolution, length, audio, input video length) appear above the Generate button before you start. Costs were measured with Atlas Cloud\'s price estimate on Sep 29, 2026 and may change. Failed generations and provider rejections, including content moderation, are refunded automatically.'
     } : {
       title: '영상 생성 모델 가이드',
       subtitle: '입력 방식, 원하는 결과, 실제 과금 단위를 비교해 모델을 고르세요.',
       current: '현재 선택', best: '추천 용도', how: '사용법', usage: '사용량 / 비용', close: '닫기',
-      note: '이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다. 영상 모델은 모두 텍스트 토큰으로 차감되는 것이 아니라 대부분 초당 또는 회당 과금되며, Seedance Reference만 출력 영상 토큰을 사용합니다. 단가는 2026-09-03 공급자 공식 가격 기준이며 변동될 수 있습니다. Atlas Cloud의 실패 작업은 과금되지 않습니다.'
+      note: '이 안내를 여는 것만으로 생성이나 비용 차감은 발생하지 않습니다. 필요 크레딧 = 공급자(Atlas Cloud) 원가 × 1.3 ÷ $0.01, 올림입니다. 모델·해상도·길이·오디오·입력 영상 길이까지 반영한 정확한 크레딧이 생성 버튼 위에 먼저 표시됩니다. 원가는 2026-09-29 Atlas Cloud 견적 기준이며 바뀔 수 있습니다. 생성 실패와 공급자 거부(검열 포함)는 자동 환불됩니다.'
     };
     var modal = el('div', 'vgen-guide-modal', {
       'data-vgen-guide-modal': '1', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'vgen-guide-title'
@@ -1345,6 +1376,7 @@
       state.audioUrl = snap.audioUrl || ''; state.audioFileName = snap.audioFileName || '';
       state.videoUrl = snap.videoUrl || ''; state.videoFileName = snap.videoFileName || '';
       state.motionSeconds = snap.motionSeconds || 0;
+      state.videoSeconds = snap.videoSeconds || 0;
       state.motionPreviewUrl = '';
       return;
     }
@@ -2462,7 +2494,7 @@
         // 모델 전환 시 caps에 없는 상태 초기화
         if (!hasCap('refs')) state.referenceUrls = [];
         if (!hasCap('audio')) { state.audioUrl = ''; state.audioFileName = ''; }
-        if (!hasCap('video')) { state.videoUrl = ''; state.videoFileName = ''; }
+        if (!hasCap('video')) { state.videoUrl = ''; state.videoFileName = ''; state.videoSeconds = 0; }
         if (!hasCap('end')) state.endImageUrl = '';
         if (!isKling()) state.cameraMovement = '';
         // Refresh duration options
@@ -2755,7 +2787,7 @@
     });
     root.querySelectorAll('[data-grid-video-remove]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.videoUrl = ''; state.videoFileName = '';
+        state.videoUrl = ''; state.videoFileName = ''; state.videoSeconds = 0;
         render();
       });
     });
@@ -2787,13 +2819,17 @@
       videoFile.addEventListener('change', function () {
         var file = videoFile.files && videoFile.files[0];
         if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function (ev) {
-          state.videoUrl = ev.target.result;
-          state.videoFileName = file.name;
-          render();
-        };
-        reader.readAsDataURL(file);
+        // 참조·연장 영상 길이도 요금에 들어간다(Grok 연장·Seedance·MiniMax) → 서버와 같은 방식으로 잰다.
+        readVideoSeconds(file).then(function (seconds) {
+          var reader = new FileReader();
+          reader.onload = function (ev) {
+            state.videoUrl = ev.target.result;
+            state.videoFileName = file.name;
+            state.videoSeconds = seconds;
+            render();
+          };
+          reader.readAsDataURL(file);
+        });
       });
     }
   }
@@ -3120,7 +3156,8 @@
       audioFileName: state.audioFileName,
       videoUrl:      state.videoUrl,
       videoFileName: state.videoFileName,
-      motionSeconds: state.motionSeconds
+      motionSeconds: state.motionSeconds,
+      videoSeconds:  state.videoSeconds
     };
     saveResults();
     render();

@@ -78,6 +78,7 @@ function sceneKey(scene: any, idx: number): string {
 export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: string, scenes: any[] = [], imageProvider = "", imageSize = ""): VideoPipelinePlan["summary"] {
   let pendingStills = 0;
   let pendingVideos = 0;
+  let unpricedVideos = 0;
   let credits = 0;
   const byId = new Map<string, any>();
   scenes.forEach((s, i) => byId.set(sceneKey(s, i), s));
@@ -90,10 +91,13 @@ export function summarizePlan(steps: VideoPipelineStep[], env: any, videoModel: 
       pendingVideos += 1;
       const scene = byId.get(String(step.sceneId));
       const durationSeconds = Math.max(1, Number(scene?.estSec) || DEFAULT_CLIP_SECONDS);
-      credits += quoteCredits("video", { videoModel: videoModel || "veo", durationSeconds }, env).credits;
+      const q: any = quoteCredits("video", { videoModel: videoModel || "veo", durationSeconds }, env);
+      // 요금을 낼 수 없는 컷(입력 영상 길이가 필요한 모델 등)은 0C 로 합산하지 않고 따로 센다 — 실제 차감은 제출 때 서버가 잰다.
+      if (q.error) unpricedVideos += 1;
+      credits += q.credits;
     }
   }
-  return { scenes: steps.length, pendingStills, pendingVideos, credits, videoModel: videoModel || "",
+  return { scenes: steps.length, pendingStills, pendingVideos, credits, unpricedVideos, videoModel: videoModel || "",
     ...(env.USER_IMAGE_AUTH ? { imageBillingSource: env.USER_IMAGE_AUTH_MODE === 'api_key' ? 'user-api' : 'user-subscription' } : {}) };
 }
 

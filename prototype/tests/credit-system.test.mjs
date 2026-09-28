@@ -2,17 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const prototype = path.resolve(here, '..');
 const read = (relative) => fs.readFile(path.join(prototype, relative), 'utf8');
 
 test('credit rate card calculates deterministic server quotes', async () => {
-  const source = await read('functions/api/_shared/credit-rates.js');
-  const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-  assert.equal(module.quoteCredits('video', { videoModel: 'veo', durationSeconds: 5 }, {}).credits, 40);
-  assert.equal(module.quoteCredits('video', { videoModel: 'kling-final', durationSeconds: 10 }, {}).credits, 6);
+  const module = await import(pathToFileURL(path.join(prototype, 'functions/api/_shared/credit-rates.js')).href);
+  // 영상: 공급자 원가 × 1.3 ÷ $0.01 올림. Veo Fast 1080p 는 5초 요청이 4초로 스냅 → $0.40 → 52C
+  assert.equal(module.quoteCredits('video', { videoModel: 'veo', durationSeconds: 5 }, {}).credits, 52);
+  // Kling Final(v2.6 Pro, 소리 기본 켜짐) 10초 $1.19 → 155C
+  assert.equal(module.quoteCredits('video', { videoModel: 'kling-final', durationSeconds: 10 }, {}).credits, 155);
+  assert.equal(module.quoteCredits('image_upscale', {}, {}).credits, 2);
   assert.equal(module.quoteCredits('image_generation', {}, {}).credits, 20);
   assert.equal(module.quoteCredits('voice', { segments: [{ text: 'a'.repeat(101) }] }, {}).credits, 2);
   assert.equal(module.quoteCredits('sfx', { duration: 2 }, {}).credits, 8);

@@ -5,6 +5,7 @@
 // 결과 길이는 동작 영상 길이를 따른다(길이 파라미터가 없다). 그래서 과금도 업로드된 영상에서 직접 읽은 길이로 한다.
 // 의존성이 없어 credit-rates.js·video.ts·테스트가 함께 import 한다.
 
+// 원가(초당)는 video-pricing.ts 가 단일 출처다(실측 $0.1428·$0.1071). 여기 usdPerSecond 는 화면 안내용 표시값이다.
 export const KLING_MOTION_MODELS = Object.freeze({
   "kling-motion-pro": Object.freeze({ atlasModel: "kwaivgi/kling-v3.0-pro/motion-control", label: "Kling 3.0 Pro Motion Control", usdPerSecond: 0.143 }),
   "kling-motion-std": Object.freeze({ atlasModel: "kwaivgi/kling-v3.0-std/motion-control", label: "Kling 3.0 Std Motion Control", usdPerSecond: 0.107 }),
@@ -105,18 +106,6 @@ export function mp4DurationSeconds(bytes) {
 
 export function dataUrlVideoSeconds(dataUrl) {
   try { return mp4DurationSeconds(dataUrlBytes(dataUrl)); } catch (_) { return 0; }
-}
-
-/**
- * 과금용 본문. 모션 컨트롤은 길이를 고르지 않으므로(결과 = 동작 영상 길이) 클라이언트가 적은 durationSeconds 대신
- * 올라온 영상에서 읽은 길이를 쓴다. 영상이 없거나(견적 요청) 읽지 못하면 본문을 그대로 둔다
- * — 읽지 못한 영상은 video.ts 가 공급자 호출 전에 거부하고 예약이 풀린다.
- */
-export function withMeasuredMotionSeconds(feature, body) {
-  if (String(feature || "") !== "video" || !body || typeof body !== "object") return body;
-  if (!isKlingMotionModel(body.videoModel || body.model)) return body;
-  const seconds = dataUrlVideoSeconds(body.videoDataUrl);
-  return seconds > 0 ? { ...body, durationSeconds: Math.ceil(seconds) } : body;
 }
 
 /**

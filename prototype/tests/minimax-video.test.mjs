@@ -97,10 +97,15 @@ test('video.ts: refers 를 {url,type} 로 만들고(시작 스틸이 1번·중�
   assert.match(st, /'minimax:': 'minimax:',/);
 });
 
-test('크레딧: 초당 요율(정가 올림), 5초부터인 등급은 최소 5초', () => {
-  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3', durationSeconds: 10 }, {}).credits, 40);
-  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3-dev', durationSeconds: 10 }, {}).credits, 20);
-  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3-fast', durationSeconds: 4 }, {}).credits, 25);
+test('크레딧: 해상도별 원가 × 1.3 (해상도를 비우면 등급 기본값), 5초부터인 등급은 5초로 스냅', () => {
+  // H3 기본 768P $0.08/초 × 10초 = $0.80 → 104C
+  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3', durationSeconds: 10 }, {}).credits, 104);
+  // H3 2K $0.13/초 × 10초 = $1.30 → 169C
+  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3', durationSeconds: 10, resolution: '2K' }, {}).credits, 169);
+  // Developer 768P $0.024/초 × 10초 = $0.24 → 32C
+  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3-dev', durationSeconds: 10 }, {}).credits, 32);
+  // Fast 480P $0.0437/초, 4초 요청 → 5초 = $0.2185 → 29C
+  assert.equal(quoteCredits('video', { videoModel: 'minimax-h3-fast', durationSeconds: 4 }, {}).credits, 29);
 });
 
 test('모든 입구에 등록: AI 영상 · AI 시네마(상세·캔버스) · 에이전트 대화', () => {
