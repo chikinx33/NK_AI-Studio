@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1918" />
+  <link rel="stylesheet" href="styles.css?v=3.1919" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -298,6 +298,8 @@
     .vgen-tab:hover { color: var(--text); }
     .vgen-tab.is-active { background: var(--bg); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
     .vgen-tab.is-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+    /* 탭이 셋(Text·Image·Reference)이면 좁은 패널에서도 한 줄에 들어가도록 여백을 줄인다. */
+    .vgen-tabs--3 .vgen-tab { padding: 6px 10px; font-size: 0.78rem; }
 
     .vgen-model-guide-btn {
       width: 30px; height: 30px; flex: 0 0 30px;
@@ -569,6 +571,11 @@
 
     /* Audio + Video 한 행 (seedance-r2v 등) */
     .vgen-av-row { display: flex; gap: 6px; }
+    /* 한 행에 묶이면 섹션이 내용 폭(0)으로 쪼그라들어 슬롯이 점처럼 보였다 → 섹션이 그리드 한 칸 폭을 갖고 슬롯이 그 폭을 채운다. */
+    .vgen-av-row > .vgen-audio-solo-section,
+    .vgen-av-row > .vgen-video-solo-section { flex: 0 0 calc((100% - 24px) / 5); }
+    .vgen-av-row > .vgen-audio-solo-section > .vgen-ref-slot--audio,
+    .vgen-av-row > .vgen-video-solo-section > .vgen-ref-slot--video { flex: 1 1 100%; }
 
     /* Standalone audio/video slot (ref 그리드 외부) */
     .vgen-audio-solo-section, .vgen-video-solo-section { display: flex; }
@@ -659,18 +666,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1918" defer></script>
-  <script src="js/config.js?v=3.1918" defer></script>
-  <script src="js/utils.js?v=3.1918" defer></script>
-  <script src="store.js?v=3.1918" defer></script>
-  <script src="api.js?v=3.1918" defer></script>
-  <script src="js/state.js?v=3.1918" defer></script>
-  <script src="js/auth.js?v=3.1918" defer></script>
-  <script src="js/navigation.js?v=3.1918" defer></script>
-  <script src="js/service/project.js?v=3.1918" defer></script>
-  <script src="js/ui/common.js?v=3.1918" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1918" defer></script>
-  <script src="script.js?v=3.1918" defer></script>
+  <script src="core.js?v=3.1919" defer></script>
+  <script src="js/config.js?v=3.1919" defer></script>
+  <script src="js/utils.js?v=3.1919" defer></script>
+  <script src="store.js?v=3.1919" defer></script>
+  <script src="api.js?v=3.1919" defer></script>
+  <script src="js/state.js?v=3.1919" defer></script>
+  <script src="js/auth.js?v=3.1919" defer></script>
+  <script src="js/navigation.js?v=3.1919" defer></script>
+  <script src="js/service/project.js?v=3.1919" defer></script>
+  <script src="js/ui/common.js?v=3.1919" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1919" defer></script>
+  <script src="script.js?v=3.1919" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">

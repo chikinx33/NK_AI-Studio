@@ -21,15 +21,16 @@
     // vidu 는 images 배열 하나뿐이다. 씬 이미지도 그 배열의 한 칸으로 들어가므로
     // '시작 프레임' 이 보장되지 않는다 → start 를 빼고 refs 만 남긴다.
     { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['refs', 'audio'], maxRefs: 4 },
-    // MiniMax H3 계열(2026-09-28 Atlas 스키마). 서버가 입력으로 엔드포인트를 고른다:
-    // 참조(이미지·영상·오디오) → 참조→영상, 시작(·끝) 이미지 → 이미지→영상, 없음 → 텍스트→영상.
-    // refers 상한 12 를 시작 이미지·참조 영상·오디오와 나눠 쓰므로 이미지 슬롯은 9 칸.
+    // MiniMax H3 계열(2026-09-28 Atlas 스키마). 엔드포인트가 방식별로 따로 있고 입력이 겹치지 않는다:
+    //   image-to-video = image·end_image 만(참조 없음), reference-to-video = refers 만(시작·끝 프레임 없음).
+    // 그래서 r2v:true 모델은 탭을 셋으로 나눠 탭마다 그 엔드포인트가 받는 슬롯만 보인다(modeAllows).
+    // refers 상한 12 를 참조 영상·오디오와 나눠 쓰므로 이미지 슬롯은 10 칸.
     // Max·Max Turbo 는 참조→영상 엔드포인트가 없다 → refs/audio/video 를 빼야 죽은 옵션이 뜨지 않는다.
-    { id: 'minimax-h3',           label: 'MiniMax H3',           t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 },
+    { id: 'minimax-h3',           label: 'MiniMax H3',           t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 },
     { id: 'minimax-h3-max',       label: 'MiniMax H3 Max',       t2v: true, i2v: true, caps: ['start', 'end'] },
     { id: 'minimax-h3-max-turbo', label: 'MiniMax H3 Max Turbo', t2v: true, i2v: true, caps: ['start', 'end'] },
-    { id: 'minimax-h3-fast',      label: 'MiniMax H3 Fast',      t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 },
-    { id: 'minimax-h3-dev',       label: 'MiniMax H3 Developer', t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 }
+    { id: 'minimax-h3-fast',      label: 'MiniMax H3 Fast',      t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 },
+    { id: 'minimax-h3-dev',       label: 'MiniMax H3 Developer', t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 }
   ];
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];
@@ -124,7 +125,7 @@
       'seedance-r2v': '최대 9장 레퍼런스와 오디오·영상 입력으로 일관성, 편집, 연장을 다룹니다.',
       'seedance-2.5': '최대 30장 참조 이미지·10개 참조 영상, 4~30초 한 테이크, 네이티브 오디오. 스틸·세트 플레이트·캐릭터 시트·직전 컷이 자동으로 참조로 붙습니다.',
       'vidu-q3':      '1~4장 레퍼런스로 인물 일관성을 유지하고 영상과 음향을 함께 생성합니다.',
-      'minimax-h3':           '원본 2K(ESR 업스케일 최대 4K), 오디오 자동 생성. 텍스트·첫/끝 프레임·참조(이미지·영상·오디오) 세 방식을 입력에 따라 자동 선택합니다.',
+      'minimax-h3':           '원본 2K(ESR 업스케일 최대 4K), 오디오 자동 생성. Text / Image(첫·끝 프레임) / Reference(이미지·영상·오디오) 세 탭으로 방식을 고릅니다.',
       'minimax-h3-max':       'H3 상위 등급. 480P/768P 원본, SR 업스케일 1440p·4K. 텍스트 또는 첫/끝 프레임으로 생성하며 참조는 받지 않습니다.',
       'minimax-h3-max-turbo': 'Max 의 빠르고 저렴한 판. 480P/768P, 텍스트 또는 첫/끝 프레임. 참조는 받지 않습니다.',
       'minimax-h3-fast':      '480P 전용 가장 빠른 등급. 텍스트·첫/끝 프레임·참조(이미지·영상·오디오)를 모두 지원합니다.',
@@ -142,7 +143,7 @@
       'seedance-r2v': 'Use up to 9 references plus audio or video for consistency, editing, and extension.',
       'seedance-2.5': 'Up to 30 reference images and 10 reference videos, 4–30 s one-take, native audio. The still, set plate, character sheets and previous cut are attached automatically.',
       'vidu-q3':      'Uses 1–4 reference images for subject consistency and generates video with audio.',
-      'minimax-h3':           'Native 2K (ESR upscale up to 4K) with generated audio. Picks text, first/last-frame, or reference (image·video·audio) mode from your inputs.',
+      'minimax-h3':           'Native 2K (ESR upscale up to 4K) with generated audio. Choose Text, Image (first/last frame), or Reference (image·video·audio) with the tabs.',
       'minimax-h3-max':       'Top H3 tier. Native 480P/768P, SR upscale to 1440p·4K. Text or first/last frame; no references.',
       'minimax-h3-max-turbo': 'Faster, cheaper Max. 480P/768P, text or first/last frame; no references.',
       'minimax-h3-fast':      'Fastest 480P-only tier. Supports text, first/last frame, and references (image·video·audio).',
@@ -166,7 +167,7 @@
       'seedance-2.5': { best: '컷 간 일관성 · 4~30초 롱테이크 · 네이티브 오디오', how: '스틸을 첫 프레임으로, 세트 플레이트·캐릭터 시트·직전 컷을 참조로 자동 첨부합니다. 프롬프트에는 행동과 카메라만 적으세요.', billing: 'Atlas Cloud · $0.134/초' },
       'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
       'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' },
-      'minimax-h3': { best: '저렴한 고해상도(원본 2K) · 15초 이하 컷 · 오디오 포함', how: '참조(이미지 최대 9·영상·오디오)를 넣으면 참조→영상, 시작(·끝) 이미지만 넣으면 첫·끝 프레임 영상, 아무것도 없으면 텍스트→영상입니다. 끝 프레임은 참조와 함께 쓸 수 없고, 오디오만으로는 만들 수 없습니다.', billing: 'Atlas Cloud · $0.038/초' },
+      'minimax-h3': { best: '저렴한 고해상도(원본 2K) · 15초 이하 컷 · 오디오 포함', how: 'Image to Video 탭은 시작·끝 프레임만, Reference to Video 탭은 참조(이미지 최대 10·영상·오디오)만 받습니다. 공급자 엔드포인트가 달라 두 입력을 함께 쓸 수 없고, 참조는 오디오만으로는 만들 수 없습니다.', billing: 'Atlas Cloud · $0.038/초' },
       'minimax-h3-max': { best: 'H3 최상위 품질 · 첫/끝 프레임 제어', how: '텍스트만 쓰거나 시작 이미지(필요하면 끝 이미지)를 넣으세요. 참조 이미지·영상·오디오는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.048/초' },
       'minimax-h3-max-turbo': { best: 'Max 계열을 빠르고 싸게 · 시안', how: '텍스트 또는 시작(·끝) 이미지로 480P/768P 를 만듭니다. 참조는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.024/초' },
       'minimax-h3-fast': { best: '가장 빠른 480P 시안 · 참조 일관성 테스트', how: 'H3 와 같은 세 방식(텍스트·첫/끝 프레임·참조)을 480P 로 빠르게 만듭니다. 5~15초.', billing: 'Atlas Cloud · $0.044/초' },
@@ -184,7 +185,7 @@
       'seedance-2.5': { best: 'Shot-to-shot consistency · 4–30 s one-take · native audio', how: 'The still is the first frame; set plate, character sheets and the previous cut are attached as references automatically. Prompt only action and camera.', billing: 'Atlas Cloud · $0.134/sec' },
       'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
       'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' },
-      'minimax-h3': { best: 'Affordable high resolution (native 2K) · shots up to 15 s · audio included', how: 'References (up to 9 images, a video, audio) use reference-to-video; a start (and end) image alone uses first/last-frame video; nothing uses text-to-video. End frames cannot combine with references, and audio alone is not enough.', billing: 'Atlas Cloud · $0.038/sec' },
+      'minimax-h3': { best: 'Affordable high resolution (native 2K) · shots up to 15 s · audio included', how: 'The Image to Video tab takes only start/end frames; the Reference to Video tab takes only references (up to 10 images, a video, audio). They are separate provider endpoints, so the two cannot be combined, and audio alone is not enough.', billing: 'Atlas Cloud · $0.038/sec' },
       'minimax-h3-max': { best: 'Top H3 quality · first/last frame control', how: 'Use text alone or add a start image (and optionally an end image). No reference images, video, or audio. 5–15 s.', billing: 'Atlas Cloud · $0.048/sec' },
       'minimax-h3-max-turbo': { best: 'Faster, cheaper Max · drafts', how: 'Text or a start (and end) image at 480P/768P. No references. 5–15 s.', billing: 'Atlas Cloud · $0.024/sec' },
       'minimax-h3-fast': { best: 'Fastest 480P drafts · reference consistency tests', how: 'Same three modes as H3 (text, first/last frame, references) at 480P. 5–15 s.', billing: 'Atlas Cloud · $0.044/sec' },
@@ -213,6 +214,7 @@
       title:             'AI 영상생성',
       tab_t2v:           'Text to Video',
       tab_i2v:           'Image to Video',
+      tab_r2v:           'Reference to Video',
       model_label:       '모델',
       aspect_label:      '화면비',
       duration_label:    '길이',
@@ -255,8 +257,8 @@
       no_prompt_alert:   '프롬프트를 입력해주세요.',
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
       no_video_alert:    '이 모델은 연장할 영상을 업로드해야 합니다.',
-      minimax_end_refs_alert:   '끝 프레임은 참조(이미지·영상·오디오)와 함께 쓸 수 없습니다. 끝 프레임을 빼거나 참조를 비워 주세요.',
       minimax_audio_only_alert: '오디오만으로는 만들 수 없습니다. 이미지나 영상 참조를 하나 이상 넣어 주세요.',
+      no_ref_alert:      'Reference to Video 모드에서는 참조 이미지나 참조 영상이 하나 이상 필요합니다.',
       upload_image:      '이미지 업로드',
       drop_image:        '이미지를 여기에 놓으세요',
       remove_image:      '제거',
@@ -290,6 +292,7 @@
       title:             'AI Video Gen',
       tab_t2v:           'Text to Video',
       tab_i2v:           'Image to Video',
+      tab_r2v:           'Reference to Video',
       model_label:       'Model',
       aspect_label:      'Aspect',
       duration_label:    'Duration',
@@ -332,8 +335,8 @@
       no_prompt_alert:   'Please enter a prompt.',
       no_image_alert:    'A start frame image is required for Image to Video mode.',
       no_video_alert:    'This model requires uploading a source video to extend.',
-      minimax_end_refs_alert:   'An end frame cannot be combined with references (image, video, or audio). Remove the end frame or clear the references.',
       minimax_audio_only_alert: 'Audio alone is not enough. Add at least one image or video reference.',
+      no_ref_alert:      'Reference to Video mode needs at least one reference image or video.',
       upload_image:      'Upload Image',
       drop_image:        'Drop images here',
       remove_image:      'Remove',
@@ -727,8 +730,21 @@
 
   function availableModels() {
     return ALL_MODELS.filter(function (m) {
+      if (state.mode === 'r2v') return !!m.r2v;
       return state.mode === 't2v' ? m.t2v : m.i2v;
     });
+  }
+
+  // 지금 탭에서 이 입력 슬롯을 보이고 요청에 싣는가.
+  // r2v 탭이 있는 모델(MiniMax H3·Fast·Developer)은 공급자 엔드포인트가 방식별로 입력을 나눠 받는다:
+  //   Image to Video = 시작·끝 프레임만, Reference to Video = 참조 이미지·영상·오디오만, Text to Video = 입력 없음.
+  // 그 밖의 모델은 예전처럼 caps 만 본다.
+  function modeAllows(cap) {
+    if (!hasCap(cap)) return false;
+    if (!currentModelObj().r2v) return true;
+    if (state.mode === 'r2v') return cap === 'refs' || cap === 'audio' || cap === 'video';
+    if (state.mode === 'i2v') return cap === 'start' || cap === 'end';
+    return false;
   }
 
   function isKling() {
@@ -763,8 +779,8 @@
   function minimaxResolutionChoices(modelId) {
     var spec = MINIMAX_RESOLUTIONS[modelId];
     if (!spec) return [];
-    var i2v = state.mode === 'i2v' || !currentModelObj().t2v;
-    return i2v ? spec.i2v : spec.t2v;
+    // 이미지→영상·참조→영상은 같은 해상도 집합(spec.i2v), 텍스트→영상만 다르다.
+    return state.mode === 't2v' && currentModelObj().t2v ? spec.t2v : spec.i2v;
   }
 
   function normalizeResolutionFor(modelId, value) {
@@ -803,6 +819,7 @@
     var out = [];
     if (model.t2v) out.push('T2V');
     if (model.i2v) out.push('I2V');
+    if (model.r2v) out.push('R2V');
     return out;
   }
 
@@ -1065,7 +1082,7 @@
     var model = ALL_MODELS.find(function (m) { return m.id === requestedModel; });
     if (model) state.model = model.id;
 
-    var requestedMode = snapshot.mode === 't2v' || snapshot.mode === 'i2v' ? snapshot.mode : '';
+    var requestedMode = snapshot.mode === 't2v' || snapshot.mode === 'i2v' || snapshot.mode === 'r2v' ? snapshot.mode : '';
     var activeModel = currentModelObj();
     if (requestedMode && activeModel[requestedMode]) {
       state.mode = requestedMode;
@@ -1809,8 +1826,9 @@
 
     // Mode tabs (항상 표시; I2V 전용 모델은 T2V 탭 비활성)
     var tabsRow = el('div', 'vgen-tabs-row');
-    var tabs = el('div', 'vgen-tabs');
-    ['t2v', 'i2v'].forEach(function (mode) {
+    var tabs = el('div', 'vgen-tabs' + (mo.r2v ? ' vgen-tabs--3' : ''));
+    // r2v 탭은 참조→영상 엔드포인트가 따로 있는 모델에만 보인다.
+    (mo.r2v ? ['t2v', 'i2v', 'r2v'] : ['t2v', 'i2v']).forEach(function (mode) {
       var isActive = state.mode === mode;
       var isDisabled = mode === 't2v' && isI2vOnly;
       var cls = 'vgen-tab' + (isActive ? ' is-active' : '') + (isDisabled ? ' is-disabled' : '');
@@ -1914,23 +1932,23 @@
     }
 
     // Image slots (start/end)
-    if (isI2vMode && hasCap('start')) {
+    if (isI2vMode && modeAllows('start')) {
       var imgSection = el('div', 'vgen-image-section');
       imgSection.appendChild(renderImageSlot('start', t('start_frame'), state.startImageUrl, true));
-      if (hasCap('end')) {
+      if (modeAllows('end')) {
         imgSection.appendChild(renderImageSlot('end', t('end_frame'), state.endImageUrl, false));
       }
       panel.appendChild(imgSection);
     }
 
     // Reference images
-    if (hasCap('refs')) {
+    if (modeAllows('refs')) {
       panel.appendChild(renderRefSection());
     }
 
     // Audio + Video: 둘 다 있으면 한 행으로 묶기 (seedance-r2v 등)
-    var showAudio = hasCap('audio') && state.model !== 'vidu-q3' && state.model !== 'wan';
-    var showVideo = hasCap('video');
+    var showAudio = modeAllows('audio') && state.model !== 'vidu-q3' && state.model !== 'wan';
+    var showVideo = modeAllows('video');
     if (showAudio && showVideo) {
       var avRow = el('div', 'vgen-av-row');
       avRow.appendChild(renderStandaloneAudioSlot());
@@ -2067,6 +2085,7 @@
         // I2V only 모델로 전환 시 mode를 i2v로 고정
         var newMo = ALL_MODELS.find(function (m) { return m.id === modelSel.value; });
         if (newMo && !newMo.t2v) state.mode = 'i2v';
+        if (newMo && state.mode === 'r2v' && !newMo.r2v) state.mode = 'i2v';
         // 모델 전환 시 caps에 없는 상태 초기화
         if (!hasCap('refs')) state.referenceUrls = [];
         if (!hasCap('audio')) { state.audioUrl = ''; state.audioFileName = ''; }
@@ -2422,13 +2441,15 @@
   function requiredInputMissing() {
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
     var refCount = (state.referenceUrls || []).filter(Boolean).length;
-    // MiniMax: 서버가 입력으로 방식을 고르므로(video-specs.ts resolveMinimaxRoute) 같은 규칙으로 미리 막는다.
+    // MiniMax: 탭마다 받는 입력이 다르다(modeAllows). 참조→영상은 이미지·영상 참조가 하나는 있어야 하고
+    // 오디오만으로는 못 만든다(공급자 규칙, video-specs.ts resolveMinimaxRoute 와 같다).
     if (isMinimaxModel(state.model)) {
-      var hasVisualRef = (hasCap('refs') && refCount > 0) || (hasCap('video') && !!state.videoUrl);
-      var hasAudioRef = hasCap('audio') && !!state.audioUrl;
-      if (isI2vMode && state.endImageUrl && (hasVisualRef || hasAudioRef)) return 'minimax_end_refs_alert';
-      if (hasAudioRef && !hasVisualRef && !(isI2vMode && state.startImageUrl)) return 'minimax_audio_only_alert';
-      if (isI2vMode && !state.startImageUrl && !hasVisualRef) return 'no_image_alert';
+      if (state.mode === 'r2v') {
+        var hasVisualRef = (modeAllows('refs') && refCount > 0) || (modeAllows('video') && !!state.videoUrl);
+        if (hasVisualRef) return '';
+        return (modeAllows('audio') && state.audioUrl) ? 'minimax_audio_only_alert' : 'no_ref_alert';
+      }
+      if (isI2vMode && !state.startImageUrl) return 'no_image_alert';
       return '';
     }
     if (isI2vMode && hasCap('start') && !state.startImageUrl && refCount === 0) return 'no_image_alert';
@@ -2715,26 +2736,26 @@
       if (state.projectId) payload.projectId = state.projectId;
 
       // start image
-      if (isI2vMode && state.startImageUrl) {
+      if (isI2vMode && modeAllows('start') && state.startImageUrl) {
         payload.imageDataUrl = state.startImageUrl;
         payload.image        = state.startImageUrl;
       }
       // end image
       // 끝 프레임 슬롯은 I2V 탭에만 있다. T2V 탭으로 옮긴 뒤 남은 값을 보내면 서버가 '시작 없는 끝 프레임' 으로 거부한다.
-      if (isI2vMode && hasCap('end') && state.endImageUrl) {
+      if (isI2vMode && modeAllows('end') && state.endImageUrl) {
         payload.endImageDataUrl = state.endImageUrl;
       }
       // reference images
       var refs = (state.referenceUrls || []).filter(Boolean);
-      if (hasCap('refs') && refs.length > 0) {
+      if (modeAllows('refs') && refs.length > 0) {
         payload.referenceImages = refs;
       }
       // audio
-      if (hasCap('audio') && state.audioUrl) {
+      if (modeAllows('audio') && state.audioUrl) {
         payload.audioDataUrl = state.audioUrl;
       }
       // video (for editing)
-      if (hasCap('video') && state.videoUrl) {
+      if (modeAllows('video') && state.videoUrl) {
         payload.videoDataUrl = state.videoUrl;
       }
       // kling quality

@@ -136,3 +136,21 @@ test('모든 입구에 등록: AI 영상 · AI 시네마(상세·캔버스) · �
   assert.match(shared, /input\?\.endImageDataUrl \|\| input\?\.endImageUrl \? \{ endImageDataUrl:/);
   assert.match(shared, /input\?\.audioUrl \|\| input\?\.audioDataUrl \? \{ audioDataUrl:/);
 });
+
+test('AI 영상: 첫·끝 프레임(Image to Video)과 참조(Reference to Video)는 공급자 엔드포인트가 달라 탭을 나누고, 탭마다 받는 슬롯만 보인다', () => {
+  const gen = read('prototype/js/ui/ai-video-gen.js');
+  // 참조→영상 엔드포인트가 있는 등급만 r2v 탭
+  for (const id of ['minimax-h3', 'minimax-h3-fast', 'minimax-h3-dev']) assert.match(gen, new RegExp(`\{ id: '${id}',[^\n]*r2v: true,`), id);
+  for (const id of ['minimax-h3-max', 'minimax-h3-max-turbo']) assert.doesNotMatch(gen, new RegExp(`\{ id: '${id}',[^\n]*r2v: true`), id);
+  assert.match(gen, /\(mo\.r2v \? \['t2v', 'i2v', 'r2v'\] : \['t2v', 'i2v'\]\)\.forEach/);
+  assert.match(gen, /if \(state\.mode === 'r2v'\) return cap === 'refs' \|\| cap === 'audio' \|\| cap === 'video';\s*\n\s*if \(state\.mode === 'i2v'\) return cap === 'start' \|\| cap === 'end';/);
+  // 슬롯 표시와 요청 전송이 같은 규칙을 쓴다
+  assert.match(gen, /if \(modeAllows\('refs'\)\) \{\s*\n\s*panel\.appendChild\(renderRefSection\(\)\);/);
+  assert.match(gen, /if \(isI2vMode && modeAllows\('start'\)\) \{/);
+  assert.match(gen, /if \(modeAllows\('refs'\) && refs\.length > 0\) \{/);
+  assert.match(gen, /if \(isI2vMode && modeAllows\('end'\) && state\.endImageUrl\) \{/);
+  assert.match(gen, /tab_r2v:\s+'Reference to Video',[\s\S]*tab_r2v:\s+'Reference to Video',/, '한/영');
+  // 오디오·영상 슬롯이 한 행에 묶일 때 폭 0 으로 쪼그라들지 않는다
+  const html = read('prototype/ai-video-gen-stage.html');
+  assert.match(html, /\.vgen-av-row > \.vgen-audio-solo-section,\s*\n\s*\.vgen-av-row > \.vgen-video-solo-section \{ flex: 0 0 calc\(\(100% - 24px\) \/ 5\); \}/);
+});
