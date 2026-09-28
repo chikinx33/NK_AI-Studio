@@ -43,3 +43,21 @@ test("채팅 첨부가 도구 컨텍스트에 실리고, 직원에게 attachment
   assert.match(orch, /이미지 수정\(image_edit\)·캐릭터 등록\(brand_asset\)·업스케일\(upscale\)은 \{"jobId": "<그 jobId>"\} 또는 \{"objectName"\}/);
   assert.doesNotMatch(orch, /캐릭터 등록\(brand_asset\)·업스케일\(upscale\)은 \{"jobId"\} 또는 \{"objectName"\}, 업무 상세가/, "image_edit 예외 문구가 사라졌다");
 });
+
+// 2026-09-29: 앞 턴에 올린 첨부를 다음 턴에 attachment:1 로 가리키면 "첨부는 그 메시지를 보낸 턴에서만" 으로 실패했다.
+// → 첨부를 대화별로 GCS 에 보관하고, 그 턴에 첨부가 없으면 가장 최근 보관본으로 푼다.
+test("앞 턴 첨부도 attachment:N 으로 이어서 쓸 수 있다(대화별 보관)", async () => {
+  const [shared, chat, store] = await Promise.all([
+    read("prototype/functions/api/agent/_shared.ts"),
+    read("prototype/functions/api/agent/chat.ts"),
+    read("prototype/functions/api/agent/_chat-attachments.ts"),
+  ]);
+  const resolver = fnBody(shared, "async function resolveImageSourceRef(");
+  assert.doesNotMatch(resolver, /그 메시지를 보낸 턴에서만/);
+  assert.match(resolver, /await latestChatAttachment\(ctx\.env, ctx\.userId, ctx\.conversationId \|\| "main", idx \+ 1\)/);
+  assert.match(chat, /waitUntil\(saveChatAttachments\(env, auth\.userId, conversationId, images\)/);
+  // 역순 시각 이름 → 목록 1번이면 최신 묶음이 맨 앞. 경로는 사용자·대화로 격리.
+  assert.match(store, /agent-attachments\/\$\{safeSegment\(userId\)\}\/\$\{safeSegment\(conversationId \|\| "main"\)\}\//);
+  assert.match(store, /String\(STAMP_MAX - Date\.now\(\)\)/);
+  assert.match(store, /const batch = names\.filter\(\(name\) => stampOf\(name\) === latest\);/);
+});

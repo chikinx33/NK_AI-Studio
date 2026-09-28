@@ -13,6 +13,7 @@ import {
   resolveChatReference,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
+import { saveChatAttachments } from "./_chat-attachments";
 
 type PagesFunction = (ctx: {
   request: Request;
@@ -78,7 +79,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       + (images.length ? (message || reference ? "\n" : "") + "[이미지 첨부됨]" : "");
     // 첨부는 모델 눈에 보일 뿐 아니라 도구가 가리킬 수 있는 이름(attachment:N)으로도 알려준다.
     const attachLine = images.length
-      ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다]`
+      ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다. 다음 턴에서도 같은 이름이 이 대화의 가장 최근 첨부를 가리킨다]`
       : "";
     const modelText = [displayText, ...references.map((r) => r.line), attachLine].filter(Boolean).join("\n");
     const refFiles = references.flatMap((r) => r.files || []);
@@ -103,6 +104,11 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const authHeader = String(request.headers.get("Authorization") || "");
     // 첨부 이미지를 도구도 쓸 수 있게 컨텍스트에 싣는다("attachment:N").
     const toolCtx = { request, env, authHeader, userId: auth.userId, conversationId, attachments: images };
+    // 다음 턴에서도 "attachment:N" 으로 이 그림을 가리킬 수 있게 대화별로 보관한다(응답과 병행).
+    if (images.length) {
+      waitUntil(saveChatAttachments(env, auth.userId, conversationId, images)
+        .catch((e: any) => console.warn(`[agent/chat] 첨부 보관 실패: ${String(e?.message || e)}`)));
+    }
 
     // TransformStream: SSE 이벤트를 writer에 쓰고 readable을 Response body로 반환.
     // 에이전트가 발언을 완료할 때마다 onMessage 콜백 → SSE 즉시 전송 → 실시간 순차 대화.
