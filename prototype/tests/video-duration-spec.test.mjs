@@ -37,7 +37,7 @@ function parseModelTable(source, open, close) {
 }
 
 // 프론트가 미러링하는 것은 "UI 선택지(CHOICES)" 쪽이다.
-const MIRRORED_SETS = ['DURATIONS_VEO', 'DURATIONS_KLING', 'CHOICES_SEEDANCE', 'DURATIONS_VIDU'];
+const MIRRORED_SETS = ['DURATIONS_VEO', 'DURATIONS_KLING', 'CHOICES_SEEDANCE', 'DURATIONS_VIDU', 'CHOICES_MINIMAX', 'CHOICES_MINIMAXFIVE'];
 
 test('UI 선택지 집합이 서버 SSOT 와 프론트 미러에서 동일하다', () => {
   for (const name of MIRRORED_SETS) {
@@ -52,7 +52,7 @@ test('모델 → UI 선택지 매핑이 프론트/서버에서 동일하다', ()
   const server = parseModelTable(specSrc, 'export const MODEL_DURATION_CHOICES: Record<string, readonly number[]> = {', '};');
   const front = parseModelTable(frontSrc, 'var MODEL_DURATION_CHOICES = {', '};');
   assert.deepEqual(front, server, '모델별 UI 선택지 매핑이 어긋났습니다');
-  for (const id of ['veo', 'veo-full', 'grok', 'kling-final', 'seedance', 'seedance-r2v', 'wan', 'vidu-q3']) {
+  for (const id of ['veo', 'veo-full', 'grok', 'kling-final', 'seedance', 'seedance-r2v', 'wan', 'vidu-q3', 'minimax-h3', 'minimax-h3-max', 'minimax-h3-max-turbo', 'minimax-h3-fast', 'minimax-h3-dev']) {
     assert.ok(server[id], `${id} 의 UI 선택지가 정의되지 않았습니다`);
   }
 });

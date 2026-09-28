@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, IMAGE_SIZES, VIDEO_ASPECTS, VIDEO_MODELS,
+  COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, IMAGE_SIZES, VIDEO_ASPECTS, VIDEO_MODELS, snapResolution,
   durationChoicesFor, quoteCanvasCredits, snapDuration, type CanvasSettings, type CreditQuote,
 } from "../lib/canvasSettings";
 import { readStudioImageProvider, STUDIO_PROVIDER_LABELS } from "../lib/canvasSettings";
@@ -79,7 +79,7 @@ export default function GenerationSettingsPopover({ settings, onChange, onClose 
           <Seg value={s.video.aspect} options={VIDEO_ASPECTS} onChange={(aspect) => setVideo({ aspect })} render={(r) => <><AspectGlyph ratio={r} />{r}</>} />
           <select
             value={s.video.model}
-            onChange={(e) => { const m = e.target.value; setVideo({ model: m, durationSec: snapDuration(m, s.video.durationSec) }); }}
+            onChange={(e) => { const m = e.target.value; setVideo({ model: m, durationSec: snapDuration(m, s.video.durationSec), resolution: snapResolution(m, s.video.resolution) }); }}
             className="w-full rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200"
           >
             {VIDEO_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}{m.i2vOnly ? " · 스틸 필요" : ""}</option>)}

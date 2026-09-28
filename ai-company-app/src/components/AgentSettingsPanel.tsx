@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, VIDEO_ASPECTS, VIDEO_MODELS, snapDuration, type CanvasSettings } from "../lib/canvasSettings";
+import { COUNTS, IMAGE_ASPECTS, IMAGE_PROVIDERS, VIDEO_ASPECTS, VIDEO_MODELS, snapDuration, snapResolution, type CanvasSettings } from "../lib/canvasSettings";
 import { readStudioImageProvider, STUDIO_PROVIDER_LABELS } from "../lib/canvasSettings";
 import { getSettings } from "../lib/api";
 import { Seg } from "./GenerationSettingsPopover";
@@ -101,7 +101,7 @@ export default function AgentSettingsPanel({ settings, onChange, onBack }: { set
         <Seg value={s.video.count} options={COUNTS} onChange={(count) => setVideo({ count })} render={(n) => `x${n}`} />
         <select
           value={s.video.model}
-          onChange={(e) => { const m = e.target.value; setVideo({ model: m, durationSec: snapDuration(m, s.video.durationSec) }); }}
+          onChange={(e) => { const m = e.target.value; setVideo({ model: m, durationSec: snapDuration(m, s.video.durationSec), resolution: snapResolution(m, s.video.resolution) }); }}
           className="w-full truncate rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200"
         >
           {VIDEO_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}{m.i2vOnly ? " · 스틸 필요" : ""}</option>)}

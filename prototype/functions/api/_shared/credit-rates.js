@@ -27,6 +27,12 @@ const DEFAULT_TEST_RATES = Object.freeze({
     "seedance-r2v": { perSecond: 12, perReference: 1 },
     wan: { perSecond: 10, minimumSeconds: 5 },
     "vidu-q3": { perRun: 11 },
+    // MiniMax H3 계열: Atlas 정가(2026-09-28) $0.038·$0.048·$0.024·$0.044·$0.015/초를 올림.
+    "minimax-h3": { perSecond: 4 },
+    "minimax-h3-max": { perSecond: 5, minimumSeconds: 5 },
+    "minimax-h3-max-turbo": { perSecond: 3, minimumSeconds: 5 },
+    "minimax-h3-fast": { perSecond: 5, minimumSeconds: 5 },
+    "minimax-h3-dev": { perSecond: 2 },
   }),
 });
 

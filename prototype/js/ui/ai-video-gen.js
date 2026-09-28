@@ -20,7 +20,16 @@
     { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'audio'] },
     // vidu 는 images 배열 하나뿐이다. 씬 이미지도 그 배열의 한 칸으로 들어가므로
     // '시작 프레임' 이 보장되지 않는다 → start 를 빼고 refs 만 남긴다.
-    { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['refs', 'audio'], maxRefs: 4 }
+    { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['refs', 'audio'], maxRefs: 4 },
+    // MiniMax H3 계열(2026-09-28 Atlas 스키마). 서버가 입력으로 엔드포인트를 고른다:
+    // 참조(이미지·영상·오디오) → 참조→영상, 시작(·끝) 이미지 → 이미지→영상, 없음 → 텍스트→영상.
+    // refers 상한 12 를 시작 이미지·참조 영상·오디오와 나눠 쓰므로 이미지 슬롯은 9 칸.
+    // Max·Max Turbo 는 참조→영상 엔드포인트가 없다 → refs/audio/video 를 빼야 죽은 옵션이 뜨지 않는다.
+    { id: 'minimax-h3',           label: 'MiniMax H3',           t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 },
+    { id: 'minimax-h3-max',       label: 'MiniMax H3 Max',       t2v: true, i2v: true, caps: ['start', 'end'] },
+    { id: 'minimax-h3-max-turbo', label: 'MiniMax H3 Max Turbo', t2v: true, i2v: true, caps: ['start', 'end'] },
+    { id: 'minimax-h3-fast',      label: 'MiniMax H3 Fast',      t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 },
+    { id: 'minimax-h3-dev',       label: 'MiniMax H3 Developer', t2v: true, i2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 9 }
   ];
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];
@@ -38,6 +47,25 @@
     '1440p-SR': '1440p · QHD SR',
     '4k': '4K · UHD'
   };
+
+  // ⚠️ functions/api/_shared/video-specs.ts 의 MINIMAX_MODELS 미러다(모드별 공급자 해상도).
+  // i2v 탭 목록은 이미지→영상·참조→영상 공통(두 엔드포인트의 집합이 같다).
+  var MINIMAX_RESOLUTIONS = {
+    'minimax-h3':           { t2v: ['480P', '768P', '2K'], i2v: ['480P', '768P', '2K', '1080p-esr', '1440p-esr', '4k-esr'], def: '768P' },
+    'minimax-h3-max':       { t2v: ['480P', '768P', '1440p-sr', '4k-sr'], i2v: ['480P', '768P', '1440p-sr', '4k-sr'], def: '768P' },
+    'minimax-h3-max-turbo': { t2v: ['480P', '768P'], i2v: ['480P', '768P'], def: '768P' },
+    'minimax-h3-fast':      { t2v: ['480P'], i2v: ['480P'], def: '480P' },
+    'minimax-h3-dev':       { t2v: ['480P', '768P', '1440p-sr', '4k-sr'], i2v: ['480P', '768P', '1440p-sr', '4k-sr'], def: '768P' }
+  };
+  var MINIMAX_RESOLUTION_LABELS = {
+    '480P': '480P', '768P': '768P', '2K': '2K · 1440p',
+    '1080p-esr': '1080p · ESR', '1440p-esr': '1440p · ESR', '4k-esr': '4K · ESR',
+    '1440p-sr': '1440p · SR', '4k-sr': '4K · SR'
+  };
+  // 텍스트→영상·참조→영상이 받는 화면비(video-specs.ts MINIMAX_ASPECT_RATIOS 미러). 이미지→영상은 입력 이미지를 따른다.
+  var MINIMAX_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+  // Atlas 정가(2026-09-28, 초당 USD).
+  var MINIMAX_USD_PER_SEC = { 'minimax-h3': 0.038, 'minimax-h3-max': 0.048, 'minimax-h3-max-turbo': 0.024, 'minimax-h3-fast': 0.044, 'minimax-h3-dev': 0.015 };
 
   var CAMERA_MOVEMENTS = [
     { id: '',           ko: '없음',       en: 'None'       },
@@ -59,6 +87,8 @@
   var CHOICES_SEEDANCE   = [4, 5, 6, 8, 10, 15];  // 서버 허용은 4~15 전체, 드롭다운은 이 값만
   var CHOICES_SEEDANCE_25 = [4, 5, 6, 8, 10, 15, 20, 30];  // Seedance 2.5: 서버 허용 4~30
   var DURATIONS_VIDU     = [4, 5, 6, 8, 10];
+  var CHOICES_MINIMAX    = [4, 5, 6, 8, 10, 12, 15];  // MiniMax H3·Developer: 서버 허용 4~15
+  var CHOICES_MINIMAXFIVE = [5, 6, 8, 10, 12, 15];    // MiniMax Max·Max Turbo·Fast: 서버 허용 5~15
 
   var MODEL_DURATION_CHOICES = {
     'veo':          DURATIONS_VEO,
@@ -73,7 +103,12 @@
     'seedance-r2v': CHOICES_SEEDANCE,
     'seedance-2.5': CHOICES_SEEDANCE_25,
     'wan':          CHOICES_SEEDANCE,
-    'vidu-q3':      DURATIONS_VIDU
+    'vidu-q3':      DURATIONS_VIDU,
+    'minimax-h3':           CHOICES_MINIMAX,
+    'minimax-h3-dev':       CHOICES_MINIMAX,
+    'minimax-h3-max':       CHOICES_MINIMAXFIVE,
+    'minimax-h3-max-turbo': CHOICES_MINIMAXFIVE,
+    'minimax-h3-fast':      CHOICES_MINIMAXFIVE
   };
 
   var MODEL_DESCS = {
@@ -88,7 +123,12 @@
       'wan':          '시작+끝 프레임과 오디오 입력을 지원합니다. 레퍼런스 이미지는 이 모드에서 지원하지 않습니다.',
       'seedance-r2v': '최대 9장 레퍼런스와 오디오·영상 입력으로 일관성, 편집, 연장을 다룹니다.',
       'seedance-2.5': '최대 30장 참조 이미지·10개 참조 영상, 4~30초 한 테이크, 네이티브 오디오. 스틸·세트 플레이트·캐릭터 시트·직전 컷이 자동으로 참조로 붙습니다.',
-      'vidu-q3':      '1~4장 레퍼런스로 인물 일관성을 유지하고 영상과 음향을 함께 생성합니다.'
+      'vidu-q3':      '1~4장 레퍼런스로 인물 일관성을 유지하고 영상과 음향을 함께 생성합니다.',
+      'minimax-h3':           '원본 2K(ESR 업스케일 최대 4K), 오디오 자동 생성. 텍스트·첫/끝 프레임·참조(이미지·영상·오디오) 세 방식을 입력에 따라 자동 선택합니다.',
+      'minimax-h3-max':       'H3 상위 등급. 480P/768P 원본, SR 업스케일 1440p·4K. 텍스트 또는 첫/끝 프레임으로 생성하며 참조는 받지 않습니다.',
+      'minimax-h3-max-turbo': 'Max 의 빠르고 저렴한 판. 480P/768P, 텍스트 또는 첫/끝 프레임. 참조는 받지 않습니다.',
+      'minimax-h3-fast':      '480P 전용 가장 빠른 등급. 텍스트·첫/끝 프레임·참조(이미지·영상·오디오)를 모두 지원합니다.',
+      'minimax-h3-dev':       'H3 Developer(자체 호스팅판). 가장 저렴하며 480P/768P, SR 1440p·4K. 텍스트·첫/끝 프레임·참조를 모두 지원합니다.'
     },
     en: {
       'veo':          'Optional start frame. Google model, 1080p high-quality realistic video.',
@@ -101,7 +141,12 @@
       'wan':          'Supports start/end frames and audio. Reference images are not supported in this mode.',
       'seedance-r2v': 'Use up to 9 references plus audio or video for consistency, editing, and extension.',
       'seedance-2.5': 'Up to 30 reference images and 10 reference videos, 4–30 s one-take, native audio. The still, set plate, character sheets and previous cut are attached automatically.',
-      'vidu-q3':      'Uses 1–4 reference images for subject consistency and generates video with audio.'
+      'vidu-q3':      'Uses 1–4 reference images for subject consistency and generates video with audio.',
+      'minimax-h3':           'Native 2K (ESR upscale up to 4K) with generated audio. Picks text, first/last-frame, or reference (image·video·audio) mode from your inputs.',
+      'minimax-h3-max':       'Top H3 tier. Native 480P/768P, SR upscale to 1440p·4K. Text or first/last frame; no references.',
+      'minimax-h3-max-turbo': 'Faster, cheaper Max. 480P/768P, text or first/last frame; no references.',
+      'minimax-h3-fast':      'Fastest 480P-only tier. Supports text, first/last frame, and references (image·video·audio).',
+      'minimax-h3-dev':       'H3 Developer (self-hosted). Cheapest; 480P/768P with SR 1440p·4K. Supports text, first/last frame, and references.'
     }
   };
 
@@ -120,7 +165,12 @@
       'seedance-r2v': { best: '여러 인물·제품 참조 · 영상 편집·연장 · 오디오 참고', how: '레퍼런스를 최대 9장 넣고 image 1, image 2처럼 순서를 지칭한 뒤 출력 해상도를 고르세요. 시작 프레임을 고정하는 모델은 아닙니다.', billing: 'Atlas Cloud · 1080p 약 48,600 출력 토큰/초 · 이미지만 $11.20/100만 토큰 · 영상 포함 $6.88/100만 토큰(입력 영상 토큰 추가, SR/4K 배율 적용)' },
       'seedance-2.5': { best: '컷 간 일관성 · 4~30초 롱테이크 · 네이티브 오디오', how: '스틸을 첫 프레임으로, 세트 플레이트·캐릭터 시트·직전 컷을 참조로 자동 첨부합니다. 프롬프트에는 행동과 카메라만 적으세요.', billing: 'Atlas Cloud · $0.134/초' },
       'wan': { best: '시작→끝 프레임 전환 · 오디오 기반 움직임', how: '시작 이미지를 넣고 필요하면 끝 이미지를 추가하세요. 이 I2V 모드에서는 별도 레퍼런스 이미지를 함께 쓸 수 없습니다.', billing: 'Atlas Cloud · 720p $0.10/초 · 최소 5초 과금' },
-      'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' }
+      'vidu-q3': { best: '1~4개 참조의 인물·제품 일관성 · 오디오 포함', how: '레퍼런스 1~4장을 넣고 각 이미지의 대상과 행동을 프롬프트에 적으세요. 첫 이미지는 시작 프레임으로 고정되지 않습니다.', billing: 'Atlas Cloud · $0.106/회' },
+      'minimax-h3': { best: '저렴한 고해상도(원본 2K) · 15초 이하 컷 · 오디오 포함', how: '참조(이미지 최대 9·영상·오디오)를 넣으면 참조→영상, 시작(·끝) 이미지만 넣으면 첫·끝 프레임 영상, 아무것도 없으면 텍스트→영상입니다. 끝 프레임은 참조와 함께 쓸 수 없고, 오디오만으로는 만들 수 없습니다.', billing: 'Atlas Cloud · $0.038/초' },
+      'minimax-h3-max': { best: 'H3 최상위 품질 · 첫/끝 프레임 제어', how: '텍스트만 쓰거나 시작 이미지(필요하면 끝 이미지)를 넣으세요. 참조 이미지·영상·오디오는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.048/초' },
+      'minimax-h3-max-turbo': { best: 'Max 계열을 빠르고 싸게 · 시안', how: '텍스트 또는 시작(·끝) 이미지로 480P/768P 를 만듭니다. 참조는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.024/초' },
+      'minimax-h3-fast': { best: '가장 빠른 480P 시안 · 참조 일관성 테스트', how: 'H3 와 같은 세 방식(텍스트·첫/끝 프레임·참조)을 480P 로 빠르게 만듭니다. 5~15초.', billing: 'Atlas Cloud · $0.044/초' },
+      'minimax-h3-dev': { best: '최저가 대량 생성 · 참조 일관성', how: 'H3 와 같은 세 방식을 지원하고 480P/768P 원본, SR 1440p·4K 를 고를 수 있습니다. 4~15초.', billing: 'Atlas Cloud · $0.015/초' }
     },
     en: {
       'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas Cloud · $0.08/sec output' },
@@ -133,7 +183,12 @@
       'seedance-r2v': { best: 'Multiple subject references · edit/extend · audio guidance', how: 'Add up to 9 references, call them image 1, image 2, and so on, then choose the output resolution. It does not lock a start frame.', billing: 'Atlas Cloud · ~48,600 output tokens/sec at 1080p · $11.20/1M image-only · $6.88/1M with video (input video tokens and SR/4K multipliers added)' },
       'seedance-2.5': { best: 'Shot-to-shot consistency · 4–30 s one-take · native audio', how: 'The still is the first frame; set plate, character sheets and the previous cut are attached as references automatically. Prompt only action and camera.', billing: 'Atlas Cloud · $0.134/sec' },
       'wan': { best: 'First-to-last frame transitions · audio-driven motion', how: 'Add a start image and optionally an end image. This I2V mode cannot combine separate reference images.', billing: 'Atlas Cloud · $0.10/sec at 720p · 5s billing minimum' },
-      'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' }
+      'vidu-q3': { best: '1–4 subject references · generated audio', how: 'Add 1–4 references and name each subject and action in the prompt. The first image is not a locked start frame.', billing: 'Atlas Cloud · $0.106/run' },
+      'minimax-h3': { best: 'Affordable high resolution (native 2K) · shots up to 15 s · audio included', how: 'References (up to 9 images, a video, audio) use reference-to-video; a start (and end) image alone uses first/last-frame video; nothing uses text-to-video. End frames cannot combine with references, and audio alone is not enough.', billing: 'Atlas Cloud · $0.038/sec' },
+      'minimax-h3-max': { best: 'Top H3 quality · first/last frame control', how: 'Use text alone or add a start image (and optionally an end image). No reference images, video, or audio. 5–15 s.', billing: 'Atlas Cloud · $0.048/sec' },
+      'minimax-h3-max-turbo': { best: 'Faster, cheaper Max · drafts', how: 'Text or a start (and end) image at 480P/768P. No references. 5–15 s.', billing: 'Atlas Cloud · $0.024/sec' },
+      'minimax-h3-fast': { best: 'Fastest 480P drafts · reference consistency tests', how: 'Same three modes as H3 (text, first/last frame, references) at 480P. 5–15 s.', billing: 'Atlas Cloud · $0.044/sec' },
+      'minimax-h3-dev': { best: 'Lowest-cost volume · reference consistency', how: 'Same three modes as H3 with native 480P/768P and SR 1440p·4K. 4–15 s.', billing: 'Atlas Cloud · $0.015/sec' }
     }
   };
 
@@ -144,7 +199,8 @@
   var MAX_POLL_ATTEMPTS = 120; // ~8 min (veo/grok 기본)
   // 느린 모델은 8분 안에 끝나지 않아 성공한 생성을 timeout 으로 버리는 일이 있었다.
   var MAX_POLL_ATTEMPTS_SLOW = 300; // ~20 min
-  var SLOW_MODELS = ['seedance', 'seedance-r2v', 'seedance-2.5', 'wan', 'vidu-q3'];
+  var SLOW_MODELS = ['seedance', 'seedance-r2v', 'seedance-2.5', 'wan', 'vidu-q3',
+    'minimax-h3', 'minimax-h3-max', 'minimax-h3-max-turbo', 'minimax-h3-fast', 'minimax-h3-dev'];
 
   function maxPollAttemptsFor(model) {
     return SLOW_MODELS.indexOf(String(model || '')) !== -1
@@ -163,6 +219,7 @@
       resolution_label:  '출력 해상도',
       resolution_hint:   'Seedance 출력 품질 · SR은 업스케일',
       resolution_4k_hint:'4K는 3840×2160, 16:9로만 생성됩니다.',
+      resolution_hint_minimax: 'ESR·SR은 업스케일 · 이미지→영상은 입력 이미지 비율을 따릅니다 · 오디오 자동 생성',
       duration_unit:     '초',
       start_frame:       '시작 프레임',
       end_frame:         '끝 프레임 (선택)',
@@ -198,6 +255,8 @@
       no_prompt_alert:   '프롬프트를 입력해주세요.',
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
       no_video_alert:    '이 모델은 연장할 영상을 업로드해야 합니다.',
+      minimax_end_refs_alert:   '끝 프레임은 참조(이미지·영상·오디오)와 함께 쓸 수 없습니다. 끝 프레임을 빼거나 참조를 비워 주세요.',
+      minimax_audio_only_alert: '오디오만으로는 만들 수 없습니다. 이미지나 영상 참조를 하나 이상 넣어 주세요.',
       upload_image:      '이미지 업로드',
       drop_image:        '이미지를 여기에 놓으세요',
       remove_image:      '제거',
@@ -237,6 +296,7 @@
       resolution_label:  'Output resolution',
       resolution_hint:   'Seedance output quality · SR is upscaled',
       resolution_4k_hint:'4K outputs 3840×2160 in 16:9 only.',
+      resolution_hint_minimax: 'ESR/SR are upscaled · Image to Video follows the input image ratio · audio is generated',
       duration_unit:     's',
       start_frame:       'Start Frame',
       end_frame:         'End Frame (optional)',
@@ -272,6 +332,8 @@
       no_prompt_alert:   'Please enter a prompt.',
       no_image_alert:    'A start frame image is required for Image to Video mode.',
       no_video_alert:    'This model requires uploading a source video to extend.',
+      minimax_end_refs_alert:   'An end frame cannot be combined with references (image, video, or audio). Remove the end frame or clear the references.',
+      minimax_audio_only_alert: 'Audio alone is not enough. Add at least one image or video reference.',
       upload_image:      'Upload Image',
       drop_image:        'Drop images here',
       remove_image:      'Remove',
@@ -379,7 +441,7 @@
       // 견적 서버는 배열 길이만 사용한다. 큰 data URL을 견적 요청에 중복 전송하지 않는다.
       referenceImages: Array(referenceCount).fill('reference'),
       aspectRatio: state.aspectRatio,
-      resolution: isSeedanceModel(state.model) ? state.resolution : ''
+      resolution: hasResolutionChoice(state.model) ? state.resolution : ''
     };
   }
 
@@ -689,6 +751,35 @@
     return modelId === 'seedance' || modelId === 'seedance-r2v' || modelId === 'seedance-2.5';
   }
 
+  function isMinimaxModel(modelId) {
+    return Object.prototype.hasOwnProperty.call(MINIMAX_RESOLUTIONS, String(modelId || ''));
+  }
+
+  // 해상도 선택지가 있는 모델(요청에 resolution 을 싣는다).
+  function hasResolutionChoice(modelId) {
+    return isSeedanceModel(modelId) || isMinimaxModel(modelId);
+  }
+
+  function minimaxResolutionChoices(modelId) {
+    var spec = MINIMAX_RESOLUTIONS[modelId];
+    if (!spec) return [];
+    var i2v = state.mode === 'i2v' || !currentModelObj().t2v;
+    return i2v ? spec.i2v : spec.t2v;
+  }
+
+  function normalizeResolutionFor(modelId, value) {
+    if (isMinimaxModel(modelId)) {
+      var list = minimaxResolutionChoices(modelId);
+      var raw = String(value || '').toLowerCase();
+      return list.find(function (item) { return item.toLowerCase() === raw; }) || MINIMAX_RESOLUTIONS[modelId].def;
+    }
+    return normalizeSeedanceResolution(value);
+  }
+
+  function aspectChoices() {
+    return isMinimaxModel(state.model) ? MINIMAX_ASPECT_RATIOS : ASPECT_RATIOS;
+  }
+
   function normalizeSeedanceResolution(value) {
     var raw = String(value || '').toLowerCase();
     return SEEDANCE_RESOLUTIONS.find(function (item) { return item.toLowerCase() === raw; })
@@ -696,7 +787,7 @@
   }
 
   function resolutionLabel(value) {
-    return SEEDANCE_RESOLUTION_LABELS[value] || value || DEFAULT_SEEDANCE_RESOLUTION;
+    return SEEDANCE_RESOLUTION_LABELS[value] || MINIMAX_RESOLUTION_LABELS[value] || value || DEFAULT_SEEDANCE_RESOLUTION;
   }
 
   function maxRefs() {
@@ -737,6 +828,7 @@
     if (id === 'veo') return money(duration * 0.08) + suffix;
     if (id === 'veo-full') return money(duration * 0.20) + suffix;
     if (id === 'seedance-2.5') return money(duration * 0.134) + suffix;
+    if (MINIMAX_USD_PER_SEC[id]) return money(duration * MINIMAX_USD_PER_SEC[id]) + suffix;
     if (id === 'seedance') {
       if (state.resolution === '720p') return money(duration * 0.112) + suffix;
       return (state.lang === 'en' ? 'Provider quote · ' : '공급자 견적 · ') + resolutionLabel(state.resolution);
@@ -811,7 +903,7 @@
     var currentBar = el('div', 'vgen-guide-current');
     currentBar.appendChild(el('span', 'vgen-guide-current-label', { textContent: copy.current }));
     var currentSummary = current.label + ' · ' + guideDurationFor(current.id) + (lang === 'en' ? 's' : '초');
-    if (isSeedanceModel(current.id)) currentSummary += ' · ' + resolutionLabel(state.resolution);
+    if (hasResolutionChoice(current.id)) currentSummary += ' · ' + resolutionLabel(state.resolution);
     currentBar.appendChild(el('strong', '', { textContent: currentSummary }));
     currentBar.appendChild(el('span', 'vgen-guide-current-cost', { textContent: currentUsageEstimate() }));
     box.appendChild(currentBar);
@@ -983,10 +1075,10 @@
     }
 
     var aspectRatio = String(snapshot.aspectRatio || '');
-    if (ASPECT_RATIOS.indexOf(aspectRatio) !== -1) state.aspectRatio = aspectRatio;
+    if (aspectChoices().indexOf(aspectRatio) !== -1) state.aspectRatio = aspectRatio;
 
-    if (isSeedanceModel(state.model) && snapshot.resolution) {
-      state.resolution = normalizeSeedanceResolution(snapshot.resolution);
+    if (hasResolutionChoice(state.model) && snapshot.resolution) {
+      state.resolution = normalizeResolutionFor(state.model, snapshot.resolution);
     }
 
     var duration = Number(snapshot.duration);
@@ -1753,7 +1845,9 @@
 
     var aspectGrp = el('div', 'vgen-field');
     var aspectSel = el('select', 'vgen-select', { id: 'vgen-aspect' });
-    ASPECT_RATIOS.forEach(function (r) {
+    // 모델마다 받는 화면비가 다르다(MiniMax 는 21:9·3:4 까지). 목록에 없는 값이 남아 있으면 첫 값으로.
+    if (aspectChoices().indexOf(state.aspectRatio) === -1) state.aspectRatio = aspectChoices()[0];
+    aspectChoices().forEach(function (r) {
       var opt = el('option', '', { value: r, textContent: r });
       if (r === state.aspectRatio) opt.selected = true;
       aspectSel.appendChild(opt);
@@ -1801,6 +1895,22 @@
       });
       resolutionRow.appendChild(resolutionSel);
       panel.appendChild(resolutionRow);
+    } else if (isMinimaxModel(state.model)) {
+      // MiniMax: 탭(텍스트/이미지)마다 받는 해상도가 다르다 → 렌더마다 현재 탭 목록으로 맞춘다.
+      state.resolution = normalizeResolutionFor(state.model, state.resolution);
+      var mmRow = el('div', 'vgen-resolution-row');
+      var mmHead = el('div', 'vgen-resolution-head');
+      mmHead.appendChild(el('label', 'vgen-resolution-label', { for: 'vgen-resolution', textContent: t('resolution_label') }));
+      mmHead.appendChild(el('span', 'vgen-resolution-hint', { textContent: t('resolution_hint_minimax') }));
+      mmRow.appendChild(mmHead);
+      var mmSel = el('select', 'vgen-select vgen-resolution-select', { id: 'vgen-resolution' });
+      minimaxResolutionChoices(state.model).forEach(function (resolution) {
+        var opt = el('option', '', { value: resolution, textContent: resolutionLabel(resolution) });
+        if (resolution === state.resolution) opt.selected = true;
+        mmSel.appendChild(opt);
+      });
+      mmRow.appendChild(mmSel);
+      panel.appendChild(mmRow);
     }
 
     // Image slots (start/end)
@@ -1998,8 +2108,8 @@
     // Seedance resolution (4K는 공급자 제약에 맞춰 16:9로 전환)
     var resolutionSel = root.querySelector('#vgen-resolution');
     if (resolutionSel) resolutionSel.addEventListener('change', function () {
-      state.resolution = normalizeSeedanceResolution(resolutionSel.value);
-      if (state.resolution === '4k') state.aspectRatio = '16:9';
+      state.resolution = normalizeResolutionFor(state.model, resolutionSel.value);
+      if (isSeedanceModel(state.model) && state.resolution === '4k') state.aspectRatio = '16:9';
       render();
     });
 
@@ -2312,6 +2422,15 @@
   function requiredInputMissing() {
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
     var refCount = (state.referenceUrls || []).filter(Boolean).length;
+    // MiniMax: 서버가 입력으로 방식을 고르므로(video-specs.ts resolveMinimaxRoute) 같은 규칙으로 미리 막는다.
+    if (isMinimaxModel(state.model)) {
+      var hasVisualRef = (hasCap('refs') && refCount > 0) || (hasCap('video') && !!state.videoUrl);
+      var hasAudioRef = hasCap('audio') && !!state.audioUrl;
+      if (isI2vMode && state.endImageUrl && (hasVisualRef || hasAudioRef)) return 'minimax_end_refs_alert';
+      if (hasAudioRef && !hasVisualRef && !(isI2vMode && state.startImageUrl)) return 'minimax_audio_only_alert';
+      if (isI2vMode && !state.startImageUrl && !hasVisualRef) return 'no_image_alert';
+      return '';
+    }
     if (isI2vMode && hasCap('start') && !state.startImageUrl && refCount === 0) return 'no_image_alert';
     if (hasCap('video') && !hasCap('start') && !hasCap('refs') && !state.videoUrl) return 'no_video_alert';
     return '';
@@ -2550,7 +2669,7 @@
       model:           state.model,
       modelLabel:      modelInfo.label,
       aspectRatio:     state.aspectRatio,
-      resolution:      isSeedanceModel(state.model) ? state.resolution : '',
+      resolution:      hasResolutionChoice(state.model) ? state.resolution : '',
       duration:        state.duration,
       mode:            state.mode,
       projectId:       state.projectId || '',
@@ -2592,7 +2711,7 @@
         durationSeconds: state.duration,
         videoModel:      state.model
       };
-      if (isSeedanceModel(state.model)) payload.resolution = state.resolution;
+      if (hasResolutionChoice(state.model)) payload.resolution = state.resolution;
       if (state.projectId) payload.projectId = state.projectId;
 
       // start image
@@ -2601,7 +2720,8 @@
         payload.image        = state.startImageUrl;
       }
       // end image
-      if (hasCap('end') && state.endImageUrl) {
+      // 끝 프레임 슬롯은 I2V 탭에만 있다. T2V 탭으로 옮긴 뒤 남은 값을 보내면 서버가 '시작 없는 끝 프레임' 으로 거부한다.
+      if (isI2vMode && hasCap('end') && state.endImageUrl) {
         payload.endImageDataUrl = state.endImageUrl;
       }
       // reference images
@@ -2631,7 +2751,7 @@
         modelLabel:  modelInfo.label,
         mode:        state.mode,
         aspectRatio: state.aspectRatio,
-        resolution:  isSeedanceModel(state.model) ? state.resolution : '',
+        resolution:  hasResolutionChoice(state.model) ? state.resolution : '',
         duration:    state.duration,
         resultId:    resultId
       });

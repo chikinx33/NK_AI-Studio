@@ -8,7 +8,9 @@
     'kling-final': 'Kling Final (v2.6 Pro)',
     'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference', 'seedance-2.5': 'Seedance 2.5 Reference',
     'wan': 'Wan 2.7',
-    'vidu-q3': 'Vidu Q3-Mix'
+    'vidu-q3': 'Vidu Q3-Mix',
+    'minimax-h3': 'MiniMax H3', 'minimax-h3-max': 'MiniMax H3 Max', 'minimax-h3-max-turbo': 'MiniMax H3 Max Turbo',
+    'minimax-h3-fast': 'MiniMax H3 Fast', 'minimax-h3-dev': 'MiniMax H3 Developer'
   };
 
   // 모델별 최대 영상 길이(초). 사용자가 직접 입력한 값에만 적용되는 상한.
@@ -19,8 +21,13 @@
     'kling-final': 10,
     'seedance': 15, 'seedance-r2v': 15, 'seedance-2.5': 30,
     'wan': 5,
-    'vidu-q3': 8
+    'vidu-q3': 8,
+    'minimax-h3': 15, 'minimax-h3-max': 15, 'minimax-h3-max-turbo': 15, 'minimax-h3-fast': 15, 'minimax-h3-dev': 15
   };
+  // MiniMax 최소 길이(video-specs.ts DURATIONS_MINIMAX / DURATIONS_MINIMAXFIVE). 4~15 또는 5~15 정수 전체를 받는다.
+  var MINIMAX_MIN_DURATION = { 'minimax-h3': 4, 'minimax-h3-dev': 4, 'minimax-h3-max': 5, 'minimax-h3-max-turbo': 5, 'minimax-h3-fast': 5 };
+  // 참조→영상 엔드포인트가 있는 MiniMax 등급(video-specs.ts MINIMAX_REFS_MODELS). 스틸은 참조 1번으로 들어간다.
+  var MINIMAX_REFS_MODELS = ['minimax-h3', 'minimax-h3-fast', 'minimax-h3-dev'];
   var DEFAULT_DURATION_CAP = 6;
 
   // v3.1591: 시나리오가 @토큰 체계를 쓰는 프로젝트면 씬 표기를 그대로 믿는다.
@@ -481,9 +488,10 @@
       var cap = getEffectiveDurationCap(opts.videoModel, userOverride);
       var rawEst = Number(scene.estSec) || 5;
       var capped = Math.min(rawEst, cap);
+      var minimaxMin = MINIMAX_MIN_DURATION[opts.videoModel];
       var durationSeconds = isSeedanceFamily
         ? Math.min(cap, Math.max(4, Math.round(capped)))
-        : snapVideoDuration(capped);
+        : (minimaxMin ? Math.min(cap, Math.max(minimaxMin, Math.round(capped))) : snapVideoDuration(capped));
       var isKling = opts.videoModel === 'kling-final';
       var klingQuality = isKling ? 'final' : '';
       // 끝 프레임(image_tail) 자동 연결은 하지 않는다. 예전엔 "이전 씬의 마지막 프레임"을
@@ -492,12 +500,12 @@
       // 연속성은 위의 "직전 마지막 프레임 → 이번 시작 프레임" 정방향 체인으로만 잇는다.
       var endImageDataUrl = '';
       // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
-      // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
+      // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v, minimax-h3·fast·dev — @캐릭터명 태그로 레퍼런스 주입)
       // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
       // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
       // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
-      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'];
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'].concat(MINIMAX_REFS_MODELS);
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -747,7 +755,9 @@
       // 컷은 항상 6 초 캡 (decomposer 의 MAX_SHOT_DURATION 와 일치). 모델 max 도 함께 적용.
       var shotCap = Math.min(DEFAULT_DURATION_CAP, getModelMaxDuration(opts.videoModel));
       var shotDur = Math.max(1, Math.min(shotCap, Math.round(Number(shot.duration) || 4)));
-      var durationSeconds = isSeedanceFamily ? shotDur : snapVideoDuration(shotDur);
+      var shotMinimaxMin = MINIMAX_MIN_DURATION[opts.videoModel];
+      var durationSeconds = isSeedanceFamily ? shotDur
+        : (shotMinimaxMin ? Math.max(shotMinimaxMin, shotDur) : snapVideoDuration(shotDur));
       var isKling = opts.videoModel === 'kling-final';
       var klingQuality = isKling ? 'final' : '';
 
@@ -755,7 +765,7 @@
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
       // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
       // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
-      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'];
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2.5', 'vidu-q3'].concat(MINIMAX_REFS_MODELS);
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {

@@ -83,9 +83,10 @@ test('결과 선택은 생성 당시 모드·모델·비율·길이와 해상도
   assert.match(source, /state\.prompt = String\(snapshot\.prompt \|\| ''\);/);
   assert.match(source, /snapshot\.mode === 't2v' \|\| snapshot\.mode === 'i2v'/);
   assert.match(source, /if \(model\) state\.model = model\.id;/);
-  assert.match(source, /ASPECT_RATIOS\.indexOf\(aspectRatio\) !== -1/);
+  // 화면비 목록은 모델마다 다르다(MiniMax 는 21:9·3:4 까지) → 복원도 그 모델 목록으로 검사한다.
+  assert.match(source, /aspectChoices\(\)\.indexOf\(aspectRatio\) !== -1/);
   assert.match(source, /if \(durations\(\)\.indexOf\(duration\) !== -1\) state\.duration = duration;/);
-  assert.match(source, /state\.resolution = normalizeSeedanceResolution\(snapshot\.resolution\);/);
+  assert.match(source, /if \(hasResolutionChoice\(state\.model\) && snapshot\.resolution\) \{\s*state\.resolution = normalizeResolutionFor\(state\.model, snapshot\.resolution\);/);
 });
 
 test('서버 결과 메타데이터에 T2V\/I2V 모드를 저장한다', () => {

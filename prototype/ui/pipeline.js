@@ -1252,7 +1252,12 @@
       'seedance':     ['16:9', '9:16', '1:1'],
       'seedance-r2v': ['16:9', '9:16', '1:1'],
       'wan':          ['16:9', '9:16', '1:1'],
-      'vidu-q3':      ['16:9', '9:16', '1:1']
+      'vidu-q3':      ['16:9', '9:16', '1:1'],
+      'minimax-h3':           ['16:9', '9:16', '1:1'],
+      'minimax-h3-max':       ['16:9', '9:16', '1:1'],
+      'minimax-h3-max-turbo': ['16:9', '9:16', '1:1'],
+      'minimax-h3-fast':      ['16:9', '9:16', '1:1'],
+      'minimax-h3-dev':       ['16:9', '9:16', '1:1']
     };
     // 이미지 모델 옵션 — 목록은 pipeline-image.js 가 단일 원천이고, 라벨만 언어를 따른다.
     var __iopt = function (sel) {
@@ -1296,6 +1301,11 @@
       __mopt('seedance-r2v', 'Seedance 2.0 Reference',   videoModel, aspectRatio) +
       __mopt('wan',          'Wan 2.7',                   videoModel, aspectRatio) +
       __mopt('vidu-q3',      'Vidu Q3-Mix',               videoModel, aspectRatio) +
+      __mopt('minimax-h3',           'MiniMax H3',           videoModel, aspectRatio) +
+      __mopt('minimax-h3-max',       'MiniMax H3 Max',       videoModel, aspectRatio) +
+      __mopt('minimax-h3-max-turbo', 'MiniMax H3 Max Turbo', videoModel, aspectRatio) +
+      __mopt('minimax-h3-fast',      'MiniMax H3 Fast',      videoModel, aspectRatio) +
+      __mopt('minimax-h3-dev',       'MiniMax H3 Developer', videoModel, aspectRatio) +
       '</select>' +
       // lucide.dev/icons/circle-help — 모델별 특징·비용 비교표를 연다
       '<button type="button" class="video-model-help" id="video-model-help-btn" ' +

@@ -240,7 +240,7 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   // 길이 선택지는 서버 SSOT(video-specs.ts) 미러 — 값이 어긋나면 서버가 조용히 스냅한다.
   const serverChoices = {};
   const block = specs.slice(specs.indexOf("export const MODEL_DURATION_CHOICES"), specs.indexOf("export function allowedDurationsFor"));
-  const named = { DURATIONS_VEO: [4, 6, 8], DURATIONS_KLING: [5, 10], CHOICES_SEEDANCE: [4, 5, 6, 8, 10, 15], DURATIONS_VIDU: [4, 5, 6, 8, 10] };
+  const named = { DURATIONS_VEO: [4, 6, 8], DURATIONS_KLING: [5, 10], CHOICES_SEEDANCE: [4, 5, 6, 8, 10, 15], DURATIONS_VIDU: [4, 5, 6, 8, 10], CHOICES_MINIMAX: [4, 5, 6, 8, 10, 12, 15], CHOICES_MINIMAXFIVE: [5, 6, 8, 10, 12, 15] };
   for (const m of block.matchAll(/"([a-z0-9-]+)":\s*([A-Z_]+)/g)) serverChoices[m[1]] = named[m[2]];
   const clientBlock = settingsLib.slice(settingsLib.indexOf("export const VIDEO_DURATION_CHOICES"), settingsLib.indexOf("export function durationChoicesFor"));
   for (const m of clientBlock.matchAll(/"([a-z0-9-]+)":\s*\[([0-9, ]+)\]/g)) {

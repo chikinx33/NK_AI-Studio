@@ -32,12 +32,15 @@ test('두 Seedance 서버 분기가 검증된 resolution과 ratio를 Atlas에 �
   assert.doesNotMatch(apiSrc, /SEEDANCE_RESOLUTION\b/);
 });
 
-test('Seedance 모델에서만 해상도 UI를 표시하고 선택값을 생성 요청에 싣는다', () => {
+test('해상도 선택지가 있는 모델(Seedance·MiniMax)에서만 해상도 UI를 표시하고 선택값을 생성 요청에 싣는다', () => {
   assert.match(frontSrc, /if \(isSeedanceModel\(state\.model\)\) \{/);
+  assert.match(frontSrc, /\} else if \(isMinimaxModel\(state\.model\)\) \{/);
   assert.match(frontSrc, /id: 'vgen-resolution'/);
   assert.match(frontSrc, /SEEDANCE_RESOLUTIONS\.forEach\(function \(resolution\)/);
-  assert.match(frontSrc, /if \(isSeedanceModel\(state\.model\)\) payload\.resolution = state\.resolution/);
-  assert.match(frontSrc, /resolution:\s+isSeedanceModel\(state\.model\) \? state\.resolution : ''/);
+  assert.match(frontSrc, /minimaxResolutionChoices\(state\.model\)\.forEach\(function \(resolution\)/);
+  assert.match(frontSrc, /function hasResolutionChoice\(modelId\) \{\s*return isSeedanceModel\(modelId\) \|\| isMinimaxModel\(modelId\);/);
+  assert.match(frontSrc, /if \(hasResolutionChoice\(state\.model\)\) payload\.resolution = state\.resolution/);
+  assert.match(frontSrc, /resolution:\s+hasResolutionChoice\(state\.model\) \? state\.resolution : ''/);
   assert.match(htmlSrc, /\.vgen-resolution-row/);
 });
 

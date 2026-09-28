@@ -24,7 +24,11 @@ import { SEEDANCE_25_RESOLUTIONS,
   SEEDANCE_RESOLUTIONS,
   SUPPORTED_IMAGE_MIMES,
   allowedDurationsFor,
+  isMinimaxModel,
+  minimaxRatioFor,
   normalizeSeedanceResolution,
+  REFERENCE_IMAGE_CAPS,
+  resolveMinimaxRoute,
   snapDurationFor,
 } from "./_shared/video-specs";
 
@@ -194,10 +198,31 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       }
       return await signIfGs(src);
     };
+    // 참조 영상·오디오(MiniMax refers 등): 공급자는 공개 URL 만 받는다. data: 는 GCS 에 올려 서명 URL 로 바꾼다.
+    const MEDIA_MIMES: Record<"video" | "audio", Record<string, string>> = {
+      video: { "video/mp4": "mp4", "video/quicktime": "mov" },
+      audio: { "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav" },
+    };
+    const toAtlasMediaUrl = async (src: string, suffix: string, kind: "video" | "audio"): Promise<string> => {
+      const s = String(src || "").trim();
+      if (!s) return "";
+      if (!s.startsWith("data:")) return await signIfGs(s);
+      const mime = (/^data:([^;,]+)[;,]/.exec(s)?.[1] || "").toLowerCase();
+      const ext = MEDIA_MIMES[kind][mime];
+      if (!ext) throw new Error(`unsupported_media_mime: ${mime || "unknown"}`);
+      const outParsedMedia = parseGcsUri(baseOutput!);
+      if (!outParsedMedia) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+      const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
+      const objName = `${projectPrefix}/atlas/${stamp}-${suffix}.${ext}`;
+      const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedMedia.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+      const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": mime }, body: base64ToUint8(s.split(",")[1] || "") });
+      if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
+      return await signGcsUrl({ bucket: outParsedMedia.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedMedia.bucket}/${objName}`));
+    };
 
-    const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
+    const isKling =videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
     const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "seedance-2.5", "vidu-q3"];
-    if (!supportedModels.includes(videoModel) && !isKling) {
+    if (!supportedModels.includes(videoModel) && !isKling && !isMinimaxModel(videoModel)) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
@@ -331,6 +356,64 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
       if (!predictionId) return json({ error: "wan_no_prediction_id", raw: atlasJson }, 500);
       return json({ job_id: `wan:${predictionId}`, outputGcsUri });
+    }
+
+    // MiniMax H3 계열 (minimax/{h3,h3-max,h3-max-turbo,h3-fast,h3-developer}/{text,image,reference}-to-video via Atlas Cloud).
+    // 입력으로 엔드포인트를 고른다: 참조(이미지·영상·오디오) → 참조→영상, 시작(·끝) 이미지 → 이미지→영상, 없음 → 텍스트→영상.
+    // 참조→영상에서 시작 스틸은 refers 1번(image)으로 들어가고 호출자(scene_video)의 매니페스트가 "Image 1 = first frame" 이라고 말한다.
+    if (isMinimaxModel(videoModel)) {
+      const atlasKey = atlasUserKey;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const startRaw = String(imageDataUrl || "").trim();
+      const endRaw = endImageDataUrlRaw.trim();
+      // 시작 스틸이 참조 목록에도 들어 있으면(scene_video 가 매니페스트용으로 넣는다) 한 번만 보낸다.
+      const refImagesRaw = referenceImages.filter((r) => r !== startRaw);
+      const refVideosRaw = [...referenceVideos, ...(videoDataUrl ? [videoDataUrl] : [])];
+      const route = resolveMinimaxRoute(videoModel, {
+        hasStart: !!startRaw, hasEnd: !!endRaw,
+        refImages: refImagesRaw.length, refVideos: refVideosRaw.length, hasAudio: !!audioDataUrl,
+        resolution: (body as any)?.resolution,
+      });
+      if (!route.ok) return json({ error: route.error, detail: route.message, ...(route.allowedResolutions ? { allowedResolutions: route.allowedResolutions } : {}) }, 400);
+      const mmDuration = snapDurationFor(videoModel, durationSeconds);
+      const ratio = minimaxRatioFor(route.mode, (body as any)?.aspectRatio);
+      const atlasBody: any = { model: route.model, prompt: safePromptText, duration: mmDuration, resolution: route.resolution, ratio };
+      let refCount = 0;
+      if (route.mode === "i2v") {
+        atlasBody.image = await toAtlasImageUrl(startRaw, `start-${sceneId}`);
+        if (endRaw) atlasBody.end_image = await toAtlasImageUrl(endRaw, `end-${sceneId}`);
+      } else if (route.mode === "r2v") {
+        // refers: [{ url, type }] — type 을 명시한다(서명 URL 은 확장자 뒤에 쿼리가 붙어 추론이 흔들린다).
+        const cap = REFERENCE_IMAGE_CAPS[videoModel] || 12;
+        const refers: Array<{ url: string; type: "image" | "video" | "audio" }> = [];
+        if (startRaw) refers.push({ url: await toAtlasImageUrl(startRaw, `start-${sceneId}`), type: "image" });
+        for (let i = 0; i < refImagesRaw.length && refers.length < cap; i++) {
+          const u = await toAtlasImageUrl(refImagesRaw[i], `ref-${sceneId}-${i}`).catch(() => "");
+          if (u) refers.push({ url: u, type: "image" });
+        }
+        for (let i = 0; i < refVideosRaw.length && refers.length < cap; i++) {
+          const u = await toAtlasMediaUrl(refVideosRaw[i], `refvid-${sceneId}-${i}`, "video");
+          if (u) refers.push({ url: u, type: "video" });
+        }
+        if (audioDataUrl && refers.length < cap) {
+          const u = await toAtlasMediaUrl(audioDataUrl, `refaud-${sceneId}`, "audio");
+          if (u) refers.push({ url: u, type: "audio" });
+        }
+        if (!refers.some((r) => r.type !== "audio")) return json({ error: "minimax_audio_only", detail: "이미지나 영상 참조를 올리지 못했어요." }, 400);
+        atlasBody.refers = refers;
+        refCount = refers.length;
+      }
+      log('minimax_request', { model: route.model, mode: route.mode, duration: mmDuration, resolution: route.resolution, ratio, refers: refCount, hasEnd: !!atlasBody.end_image });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "minimax_error", status: atlasRes.status, detail: safeJson(atlasText), sent: { model: route.model, mode: route.mode, duration: mmDuration, resolution: route.resolution, ratio, refers: refCount } }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      if (!predictionId) return json({ error: "minimax_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `minimax:${predictionId}`, status: "processing", atlasModel: route.model, mode: route.mode }, 202);
     }
 
     // Seedance R2V branch (bytedance/seedance-2.0/reference-to-video via Atlas Cloud)
@@ -733,6 +816,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     // 입력 문제는 서버 장애가 아니다 → 400 으로 명확히 알려준다.
     const mimeErr = /unsupported_image_mime:\s*([^\s"']+)/.exec(msg);
     if (mimeErr) return json({ error: "unsupported_image_mime", detail: mimeErr[1] }, 400);
+    const mediaMimeErr = /unsupported_media_mime:\s*([^\s"']+)/.exec(msg);
+    if (mediaMimeErr) return json({ error: "unsupported_media_mime", detail: `${mediaMimeErr[1]} — 참조 영상은 mp4·mov, 오디오는 mp3·wav 만 받아요.` }, 400);
     const sizeErr = /image_too_large_for_model:\s*(\d+)/.exec(msg);
     if (sizeErr) {
       return json({ error: "image_too_large_for_model", bytes: Number(sizeErr[1]), maxBytes: IMAGE_SPEC.maxBytes }, 400);

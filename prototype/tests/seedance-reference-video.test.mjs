@@ -30,13 +30,14 @@ test('★video.ts: seedance-2.5 분기 — 스틸이 reference_images[0], 참조
 test('★scene_video: 참조→영상 모델이면 첫 프레임 → 플레이트 → 캐릭터 시트 → 마스터 → 직전 컷 순으로 참조를 붙이고 매니페스트·팔레트 잠금을 프롬프트에 더한다', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   const i = shared.indexOf('async function runSceneVideoTool('); const fn = shared.slice(i, shared.indexOf('\n}\n', i));
-  assert.match(fn, /const REFS_VIDEO_MODELS = \["seedance-2\.5", "seedance-r2v", "grok-r2v", "vidu-q3", "wan"\];/);
-  assert.match(fn, /const startInRefs = videoModel === "seedance-2\.5" \|\| videoModel === "seedance-r2v";/, '2.5·r2v 는 시작 스틸이 참조 1번');
+  assert.match(fn, /const REFS_VIDEO_MODELS = \["seedance-2\.5", "seedance-r2v", "grok-r2v", "vidu-q3", "wan", \.\.\.MINIMAX_REFS_MODELS\];/);
+  assert.match(fn, /const startInRefs = videoModel === "seedance-2\.5" \|\| videoModel === "seedance-r2v" \|\| MINIMAX_REFS_MODELS\.includes\(videoModel\);/, '2.5·r2v·MiniMax 참조는 시작 스틸이 참조 1번');
   assert.match(fn, /the exact FIRST FRAME of this shot/);
   assert.match(fn, /assertSetPlateReady\(loc, input\);/, '플레이트 게이트');
   assert.match(fn, /const plate = findPlate\(loc, direction, elevation\);/, '컷의 방위×높이 플레이트');
   assert.match(fn, /const chars = await collectCharacterRefs\(scene, payload0, ctx\);/, '스틸과 같은 캐릭터 묶음');
-  assert.match(fn, /if \(videoModel === "seedance-2\.5" && prevClip && \/\^\(https\?:\\\/\\\/\|gs:\\\/\\\/\)\/i\.test\(prevClip\)\) \{ referenceVideos = \[prevClip\];/, '2.5 는 직전 컷 클립을 참조 영상으로');
+  assert.match(fn, /const clipRefModel = videoModel === "seedance-2\.5" \|\| MINIMAX_REFS_MODELS\.includes\(videoModel\);/);
+  assert.match(fn, /if \(clipRefModel && prevClip && \/\^\(https\?:\\\/\\\/\|gs:\\\/\\\/\)\/i\.test\(prevClip\)\) \{ referenceVideos = \[prevClip\];/, '2.5 는 직전 컷 클립을 참조 영상으로');
   assert.match(fn, /the previous shot of this scene \(continuity\) — reuse its look, lighting and character designs only; do NOT copy its camera, framing or action/);
   assert.match(fn, /"The input images are provided in this exact order:", \.\.\.kept\.map\(\(e, i\) => `Image \$\{i \+ 1\}: \$\{e\.line\}\.`\)/, '순서 매니페스트');
   assert.match(fn, /PALETTE LOCK: use only the colors, materials and background treatment of the reference images\./);
@@ -69,6 +70,6 @@ test('★모델 목록: 캔버스·제작 화면 모두 seedance-r2v·seedance-2
   assert.match(front, /\{ id: 'seedance-2\.5', label: 'Seedance 2\.5 Reference'/);
   assert.match(front, /var CHOICES_SEEDANCE_25 = \[4, 5, 6, 8, 10, 15, 20, 30\];/);
   const pv = read('prototype/ui/pipeline-video.js');
-  assert.match(pv, /var REFS_MODELS = \['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2\.5', 'vidu-q3'\];/);
+  assert.match(pv, /var REFS_MODELS = \['grok-r2v', 'wan', 'seedance-r2v', 'seedance-2\.5', 'vidu-q3'\]\.concat\(MINIMAX_REFS_MODELS\);/);
   assert.match(pv, /'seedance-2\.5': 30,/);
 });

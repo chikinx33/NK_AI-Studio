@@ -45,6 +45,13 @@ export const VIDEO_MODELS: Array<{ id: string; label: string; i2vOnly: boolean; 
   { id: "seedance-2.5", label: "Seedance 2.5 Reference (참조·30초·오디오)", i2vOnly: true, resolutions: ["480p", "720p", "1080p"] },
   { id: "wan", label: "Wan 2.7", i2vOnly: false },
   { id: "vidu-q3", label: "Vidu Q3-Mix", i2vOnly: true },
+  // MiniMax H3 계열(서버 video-specs.ts MINIMAX_MODELS). 캔버스 컷은 스틸이 있으므로 이미지·참조→영상 해상도 집합을 쓴다.
+  // H3·Fast·Developer 는 참조→영상(스틸·플레이트·캐릭터 시트·직전 컷 클립), Max·Max Turbo 는 스틸을 첫 프레임으로 쓴다. 오디오 자동 생성.
+  { id: "minimax-h3", label: "MiniMax H3 (참조·2K·오디오)", i2vOnly: false, resolutions: ["480P", "768P", "2K", "1080p-esr", "1440p-esr", "4k-esr"] },
+  { id: "minimax-h3-max", label: "MiniMax H3 Max (첫 프레임)", i2vOnly: false, resolutions: ["480P", "768P", "1440p-sr", "4k-sr"] },
+  { id: "minimax-h3-max-turbo", label: "MiniMax H3 Max Turbo (첫 프레임)", i2vOnly: false, resolutions: ["480P", "768P"] },
+  { id: "minimax-h3-fast", label: "MiniMax H3 Fast (참조·480P)", i2vOnly: false, resolutions: ["480P"] },
+  { id: "minimax-h3-dev", label: "MiniMax H3 Developer (참조·최저가)", i2vOnly: false, resolutions: ["480P", "768P", "1440p-sr", "4k-sr"] },
 ];
 
 /** 서버 video-specs.ts MODEL_DURATION_CHOICES 미러. */
@@ -58,10 +65,22 @@ export const VIDEO_DURATION_CHOICES: Record<string, readonly number[]> = {
   "seedance-2.5": [4, 5, 6, 8, 10, 15, 20, 30],
   "wan": [4, 5, 6, 8, 10, 15],
   "vidu-q3": [4, 5, 6, 8, 10],
+  "minimax-h3": [4, 5, 6, 8, 10, 12, 15],
+  "minimax-h3-dev": [4, 5, 6, 8, 10, 12, 15],
+  "minimax-h3-max": [5, 6, 8, 10, 12, 15],
+  "minimax-h3-max-turbo": [5, 6, 8, 10, 12, 15],
+  "minimax-h3-fast": [5, 6, 8, 10, 12, 15],
 };
 
 export function durationChoicesFor(model: string): readonly number[] {
   return VIDEO_DURATION_CHOICES[model] || VIDEO_DURATION_CHOICES.veo;
+}
+
+/** 모델을 바꾸면 해상도도 그 모델이 받는 값으로 맞춘다(예: 720p → MiniMax 768P). 목록이 없는 모델은 그대로 둔다. */
+export function snapResolution(model: string, resolution: string): string {
+  const list = VIDEO_MODELS.find((m) => m.id === model)?.resolutions;
+  if (!list || list.includes(resolution)) return resolution;
+  return list.includes("768P") ? "768P" : list.includes("720p") ? "720p" : list[0];
 }
 
 export function snapDuration(model: string, sec: number): number {

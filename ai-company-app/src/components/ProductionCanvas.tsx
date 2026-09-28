@@ -22,7 +22,7 @@ import { suggestLocationMerges } from "../lib/locationNames";
 import { actionString, useUiAction } from "../lib/uiActions";
 import VideoPipelinePanel from "./VideoPipelinePanel";
 import CanvasChatDock from "./CanvasChatDock";
-import { IMAGE_PROVIDERS, VIDEO_MODELS, loadCanvasSettings, quoteCanvasCredits, saveCanvasSettings, snapDuration, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
+import { IMAGE_PROVIDERS, VIDEO_MODELS, loadCanvasSettings, quoteCanvasCredits, saveCanvasSettings, snapDuration, snapResolution, providerArg, resolveImageProvider, STUDIO_PROVIDER_LABELS, type CanvasSettings } from "../lib/canvasSettings";
 import { approveItem, saveCanvasLayout } from "../lib/api";
 import { PREVIZ_TEXT, initialPrevizLang } from "../previz/i18n.ts";
 import { isLiveActive, onLiveRevisit } from "../lib/liveSync";
@@ -1424,7 +1424,7 @@ export default function ProductionCanvas({
             <select
               aria-label="영상 모델"
               value={settings.video.model}
-              onChange={(event) => { const model = event.target.value; updateSettings({ ...settings, video: { ...settings.video, model, durationSec: snapDuration(model, settings.video.durationSec) } }); }}
+              onChange={(event) => { const model = event.target.value; updateSettings({ ...settings, video: { ...settings.video, model, durationSec: snapDuration(model, settings.video.durationSec), resolution: snapResolution(model, settings.video.resolution) } }); }}
               className="max-w-[150px] rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[10px] text-gray-300"
             >
               {VIDEO_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
