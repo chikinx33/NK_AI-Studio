@@ -52,6 +52,9 @@ test("서버: 본인 원본만, 대상은 본인 또는 편집 공유 에피소�
 test("보관 창: '+ 새 에피소드 만들기' → 이름 입력 → project.create(episode) 후 그 에피소드로 복사", () => {
   const picker = client.slice(client.indexOf("function pickKeepTarget("), client.indexOf("async function keepToBrand("));
   assert.match(picker, /epSel\.appendChild\(el\('option', '', \{ value: KEEP_NEW_EPISODE, textContent: t\('keep_new_episode'\) \}\)\);/);
+  // 새 에피소드 만들기는 첫 줄(에피소드가 많아도 찾기 쉽게), 처음 선택은 기존 최신 에피소드.
+  assert.ok(picker.indexOf("value: KEEP_NEW_EPISODE") < picker.indexOf("b.episodes.forEach(function (ep) { epSel.appendChild("), "새 에피소드 항목이 맨 위");
+  assert.match(picker, /if \(b\.episodes\.length\) epSel\.value = b\.episodes\[0\]\.id;/);
   assert.match(picker, /newLabel\.style\.display = isNew \? '' : 'none';/);
   assert.match(picker, /close\(\{ brand: b, newTitle: title \}\);/);
   const keep = client.slice(client.indexOf("async function keepToBrand("), client.indexOf("function renderServerCard("));

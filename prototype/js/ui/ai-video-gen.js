@@ -2029,8 +2029,11 @@
       function fillEpisodes() {
         var b = brands.find(function (x) { return x.id === brandSel.value; }) || brands[0];
         epSel.innerHTML = '';
-        b.episodes.forEach(function (ep) { epSel.appendChild(el('option', '', { value: ep.id, textContent: ep.title })); });
+        // 새 에피소드 만들기는 맨 위 — 에피소드가 많아져도 찾기 쉽게.
         epSel.appendChild(el('option', '', { value: KEEP_NEW_EPISODE, textContent: t('keep_new_episode') }));
+        b.episodes.forEach(function (ep) { epSel.appendChild(el('option', '', { value: ep.id, textContent: ep.title })); });
+        // 처음 선택은 기존 에피소드(최신)로 둔다 — 창을 열자마자 새 에피소드가 만들어지는 실수를 막는다.
+        if (b.episodes.length) epSel.value = b.episodes[0].id;
         newInput.value = b.title + t('keep_new_default_suffix');
         syncNewField();
       }
