@@ -2498,6 +2498,17 @@
           out.push({ id: c.id, start: Math.max(0, Number(c.start) || 0), end: Math.max(0.2, Number(c.end) || 0), url: c.url, type: t.key });
         }
       }
+      // V1 영상 클립 자체의 소리(우클릭 '오디오 ON' = soundOn !== false). 미리보기는 <video> 소리를 그대로 내지만
+      // 렌더는 A1·M1 만 섞어, 소리가 들어간 영상(모션 컨트롤 등)이 렌더하면 무음이 됐다(2026-09-29).
+      // 소스 파일의 오디오를 디코딩해 컷 시작점(videoOffset)부터 섞는다. 오디오가 없는 영상은 디코딩 실패로 조용히 빠진다.
+      if (t.key === 'visuals') {
+        for (var k = 0; k < t.clips.length; k++) {
+          var v = t.clips[k];
+          if (!v || v.empty || !v.url || !(v.end > v.start) || v.soundOn === false || !isVideoUrl(v.url)) continue;
+          out.push({ id: String(v.id) + '#sound', start: Math.max(0, Number(v.start) || 0), end: Math.max(0.2, Number(v.end) || 0),
+            url: v.url, type: 'clip', videoOffset: Math.max(0, Number(v.videoOffset) || 0) });
+        }
+      }
     }
     out.sort(function (a, b) { return a.start - b.start; });
     return out;

@@ -238,6 +238,41 @@
     ctx.drawImage(source, dx, dy, dw, dh);
   }
 
+  // drawImage(video)는 readyState < HAVE_CURRENT_DATA(2) 이거나 seek 중이면 아무것도 그리지 않는다
+  // → 배경색만 인코딩돼 렌더 결과가 늘 검은 화면으로 시작했다(2026-09-29, 인스타그램 표지도 검정).
+  function isVideoDrawable(video) {
+    return !!video && Number(video.readyState) >= 2 && !video.seeking;
+  }
+  function waitVideoDrawable(video, timeoutMs) {
+    return new Promise(function (resolve) {
+      if (isVideoDrawable(video)) { resolve(true); return; }
+      var started = Date.now();
+      var limit = Math.max(200, Number(timeoutMs) || 1500);
+      (function poll() {
+        if (isVideoDrawable(video)) { resolve(true); return; }
+        if (Date.now() - started > limit) { resolve(false); return; }
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+  // 첫 프레임을 실제로 디코딩시킨다. loadedmetadata 만으로는 프레임이 없고, 목표가 0초면 seek 도 일어나지 않았다.
+  // 음소거 재생→정지로 디코더를 깨운 뒤, 목표 위치로 '진짜' seek(살짝 옆으로 튕겼다가)해서 그릴 수 있을 때까지 기다린다.
+  async function primeVideoFirstFrame(video, offsetSec) {
+    if (!video) return false;
+    var target = Math.max(0, Number(offsetSec) || 0);
+    var wasMuted = video.muted;
+    try {
+      video.muted = true;
+      var p = video.play();
+      if (p && typeof p.then === 'function') await Promise.race([p, new Promise(function (r) { setTimeout(r, 1500); })]);
+    } catch (_) { }
+    try { video.pause(); } catch (_) { }
+    try { video.muted = wasMuted; } catch (_) { }
+    try { await waitForVideoSeek(video, target + 0.04, 2500); } catch (_) { }
+    try { await waitForVideoSeek(video, target, 2500); } catch (_) { }
+    return waitVideoDrawable(video, 3000);
+  }
+
   // 렌더링용: seek한 뒤 실제 프레임이 presented될 때까지 대기.
   // requestVideoFrameCallback이 있으면 "다음 렌더 프레임 presented"까지 기다리고,
   // 없으면 seeked 이벤트로 fallback. 모두 실패 시 timeout으로 resolve(false) — 그림은
@@ -281,9 +316,9 @@
       var cur = Number(video.currentTime) || 0;
       if (Math.abs(cur - target) < 0.005) {
         // rVFC는 프레임이 새로 그려질 때마다 발화하므로 정지 프레임엔 안 올 수 있다.
-        // timeout으로 resolve되면 drawFn이 현재 frame(=target)을 그대로 그리게 된다.
-        // 이 경우에도 정확하니 OK.
-        finish(true);
+        // 이미 목표 위치면 그릴 수 있는 상태(readyState ≥ 2, seek 아님)가 될 때까지만 기다린다.
+        // 전엔 여기서 바로 통과해, 아직 디코딩 전인 첫 프레임을 검은 배경으로 인코딩했다.
+        waitVideoDrawable(video, Math.max(200, Number(timeoutMs) || 1200)).then(finish);
         return;
       }
       try { video.currentTime = target; } catch (_) { finish(false); }
@@ -345,8 +380,8 @@
         if (isVideoUrl(clip.url)) {
           var video = await loadVideo(clip.url, 12000);
           try { video.pause(); } catch (_) { }
-          // videoOffset이 있으면 해당 구간으로 미리 seek — render 시 대기시간·오류 방지
-          try { await waitForVideoSeek(video, Number(clip.videoOffset) || 0, 2500); } catch (_) { }
+          // 시작 위치(videoOffset)의 첫 프레임을 실제로 디코딩해 둔다 — 안 하면 첫 프레임들이 검게 인코딩된다.
+          try { await primeVideoFirstFrame(video, Number(clip.videoOffset) || 0); } catch (_) { }
           // soundOn !== false 이면 오디오 트랙 사용 (기본 true). 우클릭 메뉴 'Sound Off' 토글로 false 가능.
           return [clip.id, { kind: 'video', source: video, soundOn: clip.soundOn !== false }];
         }
@@ -397,9 +432,11 @@
       var src = audioCtx.createBufferSource();
       src.buffer = buf;
       if (clip.type === 'music') src.connect(musicGain); else src.connect(voiceGain);
+      var srcOffset = Math.max(0, Number(clip.videoOffset) || 0);
+      if (srcOffset >= buf.duration) continue;
       var dur = Math.max(0.01, (clip.end - clip.start));
-      var playDur = Math.min(dur, buf.duration);
-      try { src.start(baseTime + clip.start, 0, playDur); } catch (_) { }
+      var playDur = Math.min(dur, buf.duration - srcOffset);
+      try { src.start(baseTime + clip.start, srcOffset, playDur); } catch (_) { }
       sources.push(src);
     }
     return { sources: sources, master: master, voiceGain: voiceGain, musicGain: musicGain };
@@ -444,8 +481,11 @@
       var src = offCtx.createBufferSource();
       src.buffer = buf;
       src.connect(clip.type === 'music' ? musicGain : voiceGain);
-      var clipDur = Math.min(Math.max(0.01, clip.end - clip.start), buf.duration);
-      try { src.start(clip.start, 0, clipDur); } catch (_) {}
+      // 소스 안에서의 시작점: 컷 편집·렌더 구간으로 앞이 잘린 클립은 그만큼 건너뛴다(전엔 늘 0초부터 틀어 어긋났다).
+      var srcOffset = Math.max(0, Number(clip.videoOffset) || 0);
+      if (srcOffset >= buf.duration) return;
+      var clipDur = Math.min(Math.max(0.01, clip.end - clip.start), buf.duration - srcOffset);
+      try { src.start(clip.start, srcOffset, clipDur); } catch (_) {}
     });
     var mixedBuf = await offCtx.startRendering();
 
@@ -941,6 +981,10 @@
 
   // ─── WebCodecs Renderer ────────────────────────────────────────
 
+  // 2초(30fps × 60)마다 키프레임. 전엔 첫 프레임 하나뿐이라 파일 전체가 GOP 하나였다 —
+  // 인스타그램 등은 몇 초 단위의 GOP 를 요구하고, 표지 추출·탐색도 키프레임에 의존한다(2026-09-29).
+  var KEYFRAME_EVERY_FRAMES = 60;
+
   function isWebCodecsAvailable() {
     return typeof VideoEncoder !== 'undefined' &&
            typeof VideoFrame !== 'undefined' &&
@@ -976,6 +1020,11 @@
         // 한 번 더 기회를 준다. 디코더가 키프레임을 찾는 중일 수 있다.
         try { got = await awaitVideoFrameAt(video, seekTime, 1200); } catch (_) { got = false; }
       }
+      // 프레임 콜백이 왔어도 seek 중이거나 데이터가 없으면 drawImage 가 아무것도 안 그린다 → 그릴 수 있을 때까지 기다린다.
+      if (!isVideoDrawable(video)) {
+        var drawable = await waitVideoDrawable(video, 1500);
+        if (!drawable) got = false;
+      }
       if (!got) state.staleFrames++;
       if (state.encoderError) return false;
       if (shouldCancel && shouldCancel()) return false;
@@ -986,7 +1035,7 @@
       var frame = null;
       try {
         frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
-        state.encoder.encode(frame);
+        state.encoder.encode(frame, { keyFrame: state.globalFrame % KEYFRAME_EVERY_FRAMES === 0 });
       } catch (err) {
         if (frame) { try { frame.close(); } catch (_) { } frame = null; }
         // 인코더 reclaim/closed — fallback 경로로 넘어가도록 markEncoderError + throw
@@ -1020,7 +1069,7 @@
           var frame = null;
           try {
             frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
-            state.encoder.encode(frame);
+            state.encoder.encode(frame, { keyFrame: state.globalFrame % KEYFRAME_EVERY_FRAMES === 0 });
           } catch (encErr) {
             // encoder reclaim/closed 등 — 조용히 abort + encoderError 세팅하여
             // 이후 바깥 경로에서 fallback으로 넘어가도록 한다.
