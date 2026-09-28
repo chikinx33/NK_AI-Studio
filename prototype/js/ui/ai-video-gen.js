@@ -30,8 +30,21 @@
     { id: 'minimax-h3-max',       label: 'MiniMax H3 Max',       t2v: true, i2v: true, caps: ['start', 'end'] },
     { id: 'minimax-h3-max-turbo', label: 'MiniMax H3 Max Turbo', t2v: true, i2v: true, caps: ['start', 'end'] },
     { id: 'minimax-h3-fast',      label: 'MiniMax H3 Fast',      t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 },
-    { id: 'minimax-h3-dev',       label: 'MiniMax H3 Developer', t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 }
+    { id: 'minimax-h3-dev',       label: 'MiniMax H3 Developer', t2v: true, i2v: true, r2v: true, caps: ['start', 'end', 'refs', 'audio', 'video'], maxRefs: 10 },
+    // 모션 컨트롤(Kling 3.0, 2026-09-28 Atlas 스키마): 캐릭터 이미지(start 슬롯) + 동작 영상(video 슬롯)만 받는다.
+    // 길이·화면비 파라미터가 없다 — 결과 길이는 동작 영상, 화면비는 입력을 따른다. Motion Control 탭에서만 고른다.
+    { id: 'kling-motion-pro', label: 'Kling 3.0 Pro Motion Control', t2v: false, i2v: false, motion: true, caps: ['start', 'video'] },
+    { id: 'kling-motion-std', label: 'Kling 3.0 Std Motion Control', t2v: false, i2v: false, motion: true, caps: ['start', 'video'] }
   ];
+
+  // ⚠️ functions/api/_shared/motion-control.js 의 KLING_MOTION_MODELS·MOTION_SPEC 미러다(테스트가 일치 검사).
+  var MOTION_USD_PER_SEC = { 'kling-motion-pro': 0.143, 'kling-motion-std': 0.107 };
+  var MOTION_SPEC = {
+    maxBytes:   10 * 1024 * 1024,
+    minSeconds: 3,
+    maxSeconds: { video: 30, image: 10 },
+    videoMimes: ['video/mp4', 'video/quicktime']
+  };
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];
 
@@ -171,7 +184,9 @@
       'minimax-h3-max': { best: 'H3 최상위 품질 · 첫/끝 프레임 제어', how: '텍스트만 쓰거나 시작 이미지(필요하면 끝 이미지)를 넣으세요. 참조 이미지·영상·오디오는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.048/초' },
       'minimax-h3-max-turbo': { best: 'Max 계열을 빠르고 싸게 · 시안', how: '텍스트 또는 시작(·끝) 이미지로 480P/768P 를 만듭니다. 참조는 받지 않습니다. 5~15초.', billing: 'Atlas Cloud · $0.024/초' },
       'minimax-h3-fast': { best: '가장 빠른 480P 시안 · 참조 일관성 테스트', how: 'H3 와 같은 세 방식(텍스트·첫/끝 프레임·참조)을 480P 로 빠르게 만듭니다. 5~15초.', billing: 'Atlas Cloud · $0.044/초' },
-      'minimax-h3-dev': { best: '최저가 대량 생성 · 참조 일관성', how: 'H3 와 같은 세 방식을 지원하고 480P/768P 원본, SR 1440p·4K 를 고를 수 있습니다. 4~15초.', billing: 'Atlas Cloud · $0.015/초' }
+      'minimax-h3-dev': { best: '최저가 대량 생성 · 참조 일관성', how: 'H3 와 같은 세 방식을 지원하고 480P/768P 원본, SR 1440p·4K 를 고를 수 있습니다. 4~15초.', billing: 'Atlas Cloud · $0.015/초' },
+      'kling-motion-pro': { best: '유행 춤·동작 영상을 내 캐릭터로 따라 하기 · 동작 재현 품질 우선', how: 'Motion Control 탭에서 캐릭터 이미지(JPG·PNG)와 동작 영상(MP4·MOV, 3~30초, 10MB 이하)을 넣으세요. 결과 길이는 동작 영상 길이를 따릅니다. "캐릭터 이미지 방향 유지"는 영상 10초까지만 됩니다. 프롬프트는 선택입니다.', billing: 'Atlas Cloud · $0.143/초(동작 영상 길이)' },
+      'kling-motion-std': { best: '모션 컨트롤을 더 저렴하게 · 시안·테스트', how: 'Pro 와 입력이 같습니다. 캐릭터 이미지와 동작 영상을 넣고 방향 기준과 원본 소리 유지를 고르세요.', billing: 'Atlas Cloud · $0.107/초(동작 영상 길이)' }
     },
     en: {
       'veo': { best: 'Fast drafts · general ads · natural motion', how: 'Use text alone or add a start image, then describe subject and camera motion in separate, direct sentences.', billing: 'Atlas Cloud · $0.08/sec output' },
@@ -189,7 +204,9 @@
       'minimax-h3-max': { best: 'Top H3 quality · first/last frame control', how: 'Use text alone or add a start image (and optionally an end image). No reference images, video, or audio. 5–15 s.', billing: 'Atlas Cloud · $0.048/sec' },
       'minimax-h3-max-turbo': { best: 'Faster, cheaper Max · drafts', how: 'Text or a start (and end) image at 480P/768P. No references. 5–15 s.', billing: 'Atlas Cloud · $0.024/sec' },
       'minimax-h3-fast': { best: 'Fastest 480P drafts · reference consistency tests', how: 'Same three modes as H3 (text, first/last frame, references) at 480P. 5–15 s.', billing: 'Atlas Cloud · $0.044/sec' },
-      'minimax-h3-dev': { best: 'Lowest-cost volume · reference consistency', how: 'Same three modes as H3 with native 480P/768P and SR 1440p·4K. 4–15 s.', billing: 'Atlas Cloud · $0.015/sec' }
+      'minimax-h3-dev': { best: 'Lowest-cost volume · reference consistency', how: 'Same three modes as H3 with native 480P/768P and SR 1440p·4K. 4–15 s.', billing: 'Atlas Cloud · $0.015/sec' },
+      'kling-motion-pro': { best: 'Your character performing a trending dance or motion clip · best motion fidelity', how: 'In the Motion Control tab, add a character image (JPG/PNG) and a motion video (MP4/MOV, 3–30 s, up to 10 MB). Output length follows the motion video. "Keep the character image" orientation only works with videos up to 10 s. The prompt is optional.', billing: 'Atlas Cloud · $0.143/sec (motion video length)' },
+      'kling-motion-std': { best: 'Cheaper motion control · drafts and tests', how: 'Same inputs as Pro. Add a character image and a motion video, then choose the orientation and whether to keep the original sound.', billing: 'Atlas Cloud · $0.107/sec (motion video length)' }
     }
   };
 
@@ -201,7 +218,8 @@
   // 느린 모델은 8분 안에 끝나지 않아 성공한 생성을 timeout 으로 버리는 일이 있었다.
   var MAX_POLL_ATTEMPTS_SLOW = 300; // ~20 min
   var SLOW_MODELS = ['seedance', 'seedance-r2v', 'seedance-2.5', 'wan', 'vidu-q3',
-    'minimax-h3', 'minimax-h3-max', 'minimax-h3-max-turbo', 'minimax-h3-fast', 'minimax-h3-dev'];
+    'minimax-h3', 'minimax-h3-max', 'minimax-h3-max-turbo', 'minimax-h3-fast', 'minimax-h3-dev',
+    'kling-motion-pro', 'kling-motion-std'];
 
   function maxPollAttemptsFor(model) {
     return SLOW_MODELS.indexOf(String(model || '')) !== -1
@@ -215,6 +233,24 @@
       tab_t2v:           'Text to Video',
       tab_i2v:           'Image to Video',
       tab_r2v:           'Reference to Video',
+      tab_motion:        'Motion Control',
+      motion_character:  '캐릭터 이미지',
+      motion_video:      '동작 영상',
+      motion_orient_label: '캐릭터 방향',
+      motion_orient_video: '동작 영상 방향 따라가기 (영상 최대 30초)',
+      motion_orient_image: '캐릭터 이미지 방향 유지 (영상 최대 10초)',
+      motion_keep_sound: '동작 영상의 원본 소리 유지',
+      motion_hint:       '영상 속 동작을 캐릭터가 따라 합니다. 결과 길이는 동작 영상 길이를 따릅니다. 캐릭터 이미지 JPG·PNG, 동작 영상 MP4·MOV 3~30초·10MB 이하.',
+      motion_prompt_placeholder: '(선택) 배경·분위기·표정 등 추가로 원하는 점을 적어 주세요. 동작은 영상에서 가져옵니다.',
+      motion_no_image_alert: '캐릭터 이미지를 넣어 주세요.',
+      motion_no_video_alert: '동작 영상을 넣어 주세요.',
+      motion_video_type_alert: '동작 영상은 MP4 또는 MOV 파일만 올릴 수 있습니다.',
+      motion_video_size_alert: '동작 영상은 10MB 이하여야 합니다. (현재 %sMB)',
+      motion_video_dims_alert: '동작 영상은 가로·세로 300px 이상, 비율 1:2.5~2.5:1 이어야 합니다. (현재 %s×%s)',
+      motion_video_duration_alert: '동작 영상은 3~30초여야 합니다. (현재 %s초)',
+      motion_duration_image_alert: '캐릭터 이미지 방향 유지는 동작 영상이 10초 이하일 때만 쓸 수 있습니다. (현재 %s초) 방향을 "동작 영상 방향 따라가기"로 바꾸거나 영상을 줄여 주세요.',
+      motion_seconds:    '%s초',
+      motion_length_note:'결과 길이 = 동작 영상 길이 (3~30초)',
       model_label:       '모델',
       aspect_label:      '화면비',
       duration_label:    '길이',
@@ -293,6 +329,24 @@
       tab_t2v:           'Text to Video',
       tab_i2v:           'Image to Video',
       tab_r2v:           'Reference to Video',
+      tab_motion:        'Motion Control',
+      motion_character:  'Character Image',
+      motion_video:      'Motion Video',
+      motion_orient_label: 'Character orientation',
+      motion_orient_video: 'Follow the motion video (video up to 30 s)',
+      motion_orient_image: 'Keep the character image (video up to 10 s)',
+      motion_keep_sound: 'Keep the original sound of the motion video',
+      motion_hint:       'The character performs the motion from the video. Output length follows the motion video. Character image JPG/PNG; motion video MP4/MOV, 3–30 s, up to 10 MB.',
+      motion_prompt_placeholder: '(Optional) Describe background, mood, or expression. The motion comes from the video.',
+      motion_no_image_alert: 'Please add a character image.',
+      motion_no_video_alert: 'Please add a motion video.',
+      motion_video_type_alert: 'The motion video must be an MP4 or MOV file.',
+      motion_video_size_alert: 'The motion video must be 10 MB or smaller. (Currently %s MB)',
+      motion_video_dims_alert: 'The motion video must be at least 300 px on each side with a ratio between 1:2.5 and 2.5:1. (Currently %s×%s)',
+      motion_video_duration_alert: 'The motion video must be 3–30 seconds long. (Currently %s s)',
+      motion_duration_image_alert: 'Keeping the character image orientation only works with motion videos up to 10 seconds. (Currently %s s) Switch to "Follow the motion video" or trim the video.',
+      motion_seconds:    '%s s',
+      motion_length_note:'Output length = motion video length (3–30 s)',
       model_label:       'Model',
       aspect_label:      'Aspect',
       duration_label:    'Duration',
@@ -384,6 +438,11 @@
     audioFileName:  '',
     videoUrl:       '',
     videoFileName:  '',
+    // 모션 컨트롤: 동작 영상 길이(초, 브라우저가 잰 값 — 서버는 파일에서 다시 읽는다)·미리보기 URL·방향·원본 소리
+    motionSeconds:     0,
+    motionPreviewUrl:  '',
+    motionOrientation: 'video',
+    motionKeepSound:   true,
     referenceUrls:  [],
     results:        [],
     serverItems:    [],   // GCS에서 로드된 서버 항목
@@ -440,7 +499,10 @@
       : 0;
     return {
       videoModel: state.model,
-      durationSeconds: state.duration,
+      // 모션 컨트롤은 길이를 고르지 않는다. 동작 영상 길이로 견적한다(영상 전이면 최소 3초).
+      durationSeconds: isMotionModel(state.model)
+        ? Math.max(MOTION_SPEC.minSeconds, Math.ceil(state.motionSeconds || 0))
+        : state.duration,
       // 견적 서버는 배열 길이만 사용한다. 큰 data URL을 견적 요청에 중복 전송하지 않는다.
       referenceImages: Array(referenceCount).fill('reference'),
       aspectRatio: state.aspectRatio,
@@ -730,6 +792,7 @@
 
   function availableModels() {
     return ALL_MODELS.filter(function (m) {
+      if (state.mode === 'motion') return !!m.motion;
       if (state.mode === 'r2v') return !!m.r2v;
       return state.mode === 't2v' ? m.t2v : m.i2v;
     });
@@ -749,6 +812,102 @@
 
   function isKling() {
     return state.model === 'kling-final';
+  }
+
+  function isMotionModel(modelId) {
+    var m = ALL_MODELS.find(function (x) { return x.id === modelId; });
+    return !!(m && m.motion);
+  }
+
+  function formatSeconds(sec) {
+    return (Math.round(Number(sec || 0) * 10) / 10).toString();
+  }
+
+  // 모션 영상을 바꾸거나 모델 계열을 옮길 때 이전 영상과 미리보기를 함께 비운다.
+  function clearMotionVideo() {
+    if (state.motionPreviewUrl) { try { URL.revokeObjectURL(state.motionPreviewUrl); } catch (_) {} }
+    state.motionPreviewUrl = '';
+    state.motionSeconds = 0;
+    state.videoUrl = ''; state.videoFileName = '';
+  }
+
+  // 브라우저가 못 여는 코덱이면 길이·치수를 모른 채(null) 통과시키고, 서버가 파일에서 길이를 다시 읽어 검사한다.
+  function readMotionVideoMeta(file) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(file);
+      var v = document.createElement('video');
+      var settled = false;
+      function done(meta) { if (settled) return; settled = true; resolve({ url: url, meta: meta }); }
+      v.preload = 'metadata';
+      v.muted = true;
+      v.addEventListener('loadedmetadata', function () {
+        done({ seconds: Number(v.duration) || 0, width: v.videoWidth || 0, height: v.videoHeight || 0 });
+      });
+      v.addEventListener('error', function () { done(null); });
+      setTimeout(function () { done(null); }, 15000);
+      v.src = url;
+    });
+  }
+
+  // 공급자 규격(motion-control.js MOTION_SPEC)을 업로드 시점에 확인한다.
+  function acceptMotionVideoFile(file) {
+    if (!file) return;
+    var name = String(file.name || '').toLowerCase();
+    var mime = String(file.type || '').toLowerCase();
+    if (!mime && /\.mp4$/.test(name)) mime = 'video/mp4';
+    if (!mime && /\.mov$/.test(name)) mime = 'video/quicktime';
+    if (MOTION_SPEC.videoMimes.indexOf(mime) === -1) { window.alert(t('motion_video_type_alert')); return; }
+    if (file.size > MOTION_SPEC.maxBytes) {
+      window.alert(t('motion_video_size_alert').replace('%s', (file.size / 1048576).toFixed(1)));
+      return;
+    }
+    readMotionVideoMeta(file).then(function (res) {
+      var meta = res.meta;
+      if (meta) {
+        var w = meta.width, h = meta.height, ratio = h > 0 ? w / h : 0;
+        if (w && h && (Math.min(w, h) < 300 || ratio < 0.4 || ratio > 2.5)) {
+          URL.revokeObjectURL(res.url);
+          window.alert(t('motion_video_dims_alert').replace('%s', String(w)).replace('%s', String(h)));
+          return;
+        }
+        if (meta.seconds && (meta.seconds < MOTION_SPEC.minSeconds || meta.seconds > MOTION_SPEC.maxSeconds.video + 0.05)) {
+          URL.revokeObjectURL(res.url);
+          window.alert(t('motion_video_duration_alert').replace('%s', formatSeconds(meta.seconds)));
+          return;
+        }
+      }
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        clearMotionVideo();
+        // 확장자로만 형식을 알 수 있는 파일은 data URL 의 형식을 바로잡는다(서버가 형식으로 거부한다).
+        state.videoUrl = String(ev.target.result || '').replace(/^data:[^;,]*/, 'data:' + mime);
+        state.videoFileName = file.name;
+        state.motionPreviewUrl = res.url;
+        state.motionSeconds = meta ? meta.seconds : 0;
+        render();
+        ensureCreditQuote(false);
+      };
+      reader.onerror = function () { URL.revokeObjectURL(res.url); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Kling 모션 컨트롤은 캐릭터 이미지를 JPG·PNG 로만 받는다. WebP 원본은 전송 직전에 JPEG 로 바꾼다.
+  function toJpegIfWebp(dataUrl) {
+    if (!/^data:image\/webp/i.test(String(dataUrl || ''))) return Promise.resolve(dataUrl);
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img, 0, 0);
+          resolve(c.toDataURL('image/jpeg', 0.92));
+        } catch (_) { resolve(dataUrl); }
+      };
+      img.onerror = function () { resolve(dataUrl); };
+      img.src = dataUrl;
+    });
   }
 
   function durations() {
@@ -820,6 +979,7 @@
     if (model.t2v) out.push('T2V');
     if (model.i2v) out.push('I2V');
     if (model.r2v) out.push('R2V');
+    if (model.motion) out.push('Motion');
     return out;
   }
 
@@ -846,6 +1006,11 @@
     if (id === 'veo-full') return money(duration * 0.20) + suffix;
     if (id === 'seedance-2.5') return money(duration * 0.134) + suffix;
     if (MINIMAX_USD_PER_SEC[id]) return money(duration * MINIMAX_USD_PER_SEC[id]) + suffix;
+    if (MOTION_USD_PER_SEC[id]) {
+      // 결과 길이 = 동작 영상 길이. 영상을 넣기 전에는 초당 단가만 보여 준다.
+      if (state.motionSeconds > 0) return money(Math.ceil(state.motionSeconds) * MOTION_USD_PER_SEC[id]) + suffix;
+      return (state.lang === 'en' ? 'Motion video length × ' : '동작 영상 길이 × ') + money(MOTION_USD_PER_SEC[id]) + (state.lang === 'en' ? '/sec' : '/초');
+    }
     if (id === 'seedance') {
       if (state.resolution === '720p') return money(duration * 0.112) + suffix;
       return (state.lang === 'en' ? 'Provider quote · ' : '공급자 견적 · ') + resolutionLabel(state.resolution);
@@ -919,7 +1084,9 @@
     var current = currentModelObj();
     var currentBar = el('div', 'vgen-guide-current');
     currentBar.appendChild(el('span', 'vgen-guide-current-label', { textContent: copy.current }));
-    var currentSummary = current.label + ' · ' + guideDurationFor(current.id) + (lang === 'en' ? 's' : '초');
+    var currentSummary = current.label + ' · ' + (current.motion
+      ? (state.motionSeconds > 0 ? t('motion_seconds').replace('%s', formatSeconds(state.motionSeconds)) : t('motion_length_note'))
+      : guideDurationFor(current.id) + (lang === 'en' ? 's' : '초'));
     if (hasResolutionChoice(current.id)) currentSummary += ' · ' + resolutionLabel(state.resolution);
     currentBar.appendChild(el('strong', '', { textContent: currentSummary }));
     currentBar.appendChild(el('span', 'vgen-guide-current-cost', { textContent: currentUsageEstimate() }));
@@ -940,7 +1107,9 @@
       cardHead.appendChild(badges);
       card.appendChild(cardHead);
       card.appendChild(el('p', 'vgen-guide-lengths', {
-        textContent: (lang === 'en' ? 'Lengths ' : '지원 길이 ') + (MODEL_DURATION_CHOICES[model.id] || DURATIONS_VEO).join('·') + (lang === 'en' ? 's' : '초')
+        textContent: model.motion
+          ? t('motion_length_note')
+          : (lang === 'en' ? 'Lengths ' : '지원 길이 ') + (MODEL_DURATION_CHOICES[model.id] || DURATIONS_VEO).join('·') + (lang === 'en' ? 's' : '초')
       }));
       [[copy.best, info.best], [copy.how, info.how], [copy.usage, info.billing]].forEach(function (row) {
         var section = el('div', 'vgen-guide-card-row');
@@ -1114,6 +1283,8 @@
       state.referenceUrls = (snap.referenceUrls || []).slice();
       state.audioUrl = snap.audioUrl || ''; state.audioFileName = snap.audioFileName || '';
       state.videoUrl = snap.videoUrl || ''; state.videoFileName = snap.videoFileName || '';
+      state.motionSeconds = snap.motionSeconds || 0;
+      state.motionPreviewUrl = '';
       return;
     }
     if (!/^vg-\d+-[a-z0-9]+$/i.test(id) || !NK.api || !NK.api.videoGenInputs) return;
@@ -1152,10 +1323,12 @@
     var model = ALL_MODELS.find(function (m) { return m.id === requestedModel; });
     if (model) state.model = model.id;
 
-    var requestedMode = snapshot.mode === 't2v' || snapshot.mode === 'i2v' || snapshot.mode === 'r2v' ? snapshot.mode : '';
+    var requestedMode = snapshot.mode === 't2v' || snapshot.mode === 'i2v' || snapshot.mode === 'r2v' || snapshot.mode === 'motion' ? snapshot.mode : '';
     var activeModel = currentModelObj();
     if (requestedMode && activeModel[requestedMode]) {
       state.mode = requestedMode;
+    } else if (activeModel.motion) {
+      state.mode = 'motion';
     } else if (!activeModel.t2v && activeModel.i2v) {
       // 과거 메타에 mode가 없어도 I2V 전용 모델은 선택 가능한 모드가 하나뿐이다.
       state.mode = 'i2v';
@@ -1896,11 +2069,13 @@
 
     // Mode tabs (항상 표시; I2V 전용 모델은 T2V 탭 비활성)
     var tabsRow = el('div', 'vgen-tabs-row');
-    var tabs = el('div', 'vgen-tabs' + (mo.r2v ? ' vgen-tabs--3' : ''));
-    // r2v 탭은 참조→영상 엔드포인트가 따로 있는 모델에만 보인다.
-    (mo.r2v ? ['t2v', 'i2v', 'r2v'] : ['t2v', 'i2v']).forEach(function (mode) {
+    // r2v 탭은 참조→영상 엔드포인트가 따로 있는 모델에만 보인다. Motion Control 탭은 늘 보이고,
+    // 누르면 모션 컨트롤 모델로 바뀐다(모션 모델에서 다른 탭을 누르면 그 탭의 첫 모델로 돌아간다).
+    var tabModes = (mo.r2v ? ['t2v', 'i2v', 'r2v'] : ['t2v', 'i2v']).concat(['motion']);
+    var tabs = el('div', 'vgen-tabs vgen-tabs--' + tabModes.length);
+    tabModes.forEach(function (mode) {
       var isActive = state.mode === mode;
-      var isDisabled = mode === 't2v' && isI2vOnly;
+      var isDisabled = mode === 't2v' && isI2vOnly && !mo.motion;
       var cls = 'vgen-tab' + (isActive ? ' is-active' : '') + (isDisabled ? ' is-disabled' : '');
       var tab = el('button', cls, {
         textContent: t('tab_' + mode),
@@ -1931,6 +2106,8 @@
     modelGrp.appendChild(modelSel);
     row1.appendChild(modelGrp);
 
+    // 모션 컨트롤은 화면비·길이를 받지 않는다(입력 영상·이미지를 따른다) → 셀렉트를 그리지 않는다.
+    var isMotion = !!mo.motion;
     var aspectGrp = el('div', 'vgen-field');
     var aspectSel = el('select', 'vgen-select', { id: 'vgen-aspect' });
     // 모델마다 받는 화면비가 다르다(MiniMax 는 21:9·3:4 까지). 목록에 없는 값이 남아 있으면 첫 값으로.
@@ -1941,7 +2118,7 @@
       aspectSel.appendChild(opt);
     });
     aspectGrp.appendChild(aspectSel);
-    row1.appendChild(aspectGrp);
+    if (!isMotion) row1.appendChild(aspectGrp);
 
     var durGrp = el('div', 'vgen-field');
     var durSel = el('select', 'vgen-select', { id: 'vgen-duration' });
@@ -1953,7 +2130,7 @@
       durSel.appendChild(opt);
     });
     durGrp.appendChild(durSel);
-    row1.appendChild(durGrp);
+    if (!isMotion) row1.appendChild(durGrp);
 
     panel.appendChild(row1);
 
@@ -2001,8 +2178,16 @@
       panel.appendChild(mmRow);
     }
 
+    if (isMotion) {
+      var motionSection = el('div', 'vgen-image-section');
+      motionSection.appendChild(renderImageSlot('start', t('motion_character'), state.startImageUrl, true));
+      motionSection.appendChild(renderMotionVideoSlot());
+      panel.appendChild(motionSection);
+      panel.appendChild(renderMotionOptions());
+    }
+
     // Image slots (start/end)
-    if (isI2vMode && modeAllows('start')) {
+    if (!isMotion && isI2vMode && modeAllows('start')) {
       var imgSection = el('div', 'vgen-image-section');
       imgSection.appendChild(renderImageSlot('start', t('start_frame'), state.startImageUrl, true));
       if (modeAllows('end')) {
@@ -2018,7 +2203,7 @@
 
     // Audio + Video: 둘 다 있으면 한 행으로 묶기 (seedance-r2v 등)
     var showAudio = modeAllows('audio') && state.model !== 'vidu-q3' && state.model !== 'wan';
-    var showVideo = modeAllows('video');
+    var showVideo = modeAllows('video') && !isMotion;
     if (showAudio && showVideo) {
       var avRow = el('div', 'vgen-av-row');
       avRow.appendChild(renderStandaloneAudioSlot());
@@ -2033,7 +2218,7 @@
     var promptWrap = el('div', 'vgen-prompt-wrap');
     var promptTA = el('textarea', 'vgen-prompt', {
       id: 'vgen-prompt',
-      placeholder: t('prompt_placeholder'),
+      placeholder: t(isMotion ? 'motion_prompt_placeholder' : 'prompt_placeholder'),
       rows: '5'
     });
     promptTA.value = state.prompt;
@@ -2080,6 +2265,50 @@
     return panel;
   }
 
+  // 모션 컨트롤 동작 영상 칸: 캐릭터 이미지 칸과 같은 크기로 나란히 둔다(미리보기 + 길이·용량).
+  function renderMotionVideoSlot() {
+    var slot = el('div', 'vgen-image-slot vgen-image-slot--required');
+    var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-motion' });
+    if (state.videoUrl) {
+      var vid = el('video', 'vgen-image-thumb vgen-motion-thumb', {
+        src: state.motionPreviewUrl || state.videoUrl, muted: 'muted', loop: 'loop', autoplay: 'autoplay', playsinline: 'playsinline'
+      });
+      vid.muted = true;
+      preview.appendChild(vid);
+      var info = [state.videoFileName || t('motion_video')];
+      if (state.motionSeconds > 0) info.push(t('motion_seconds').replace('%s', formatSeconds(state.motionSeconds)));
+      preview.appendChild(el('span', 'vgen-motion-meta', { textContent: info.join(' · '), title: state.videoFileName || '' }));
+      preview.appendChild(el('button', 'btn-ghost vgen-remove-img vgen-motion-remove', { type: 'button', textContent: t('remove_image') }));
+    } else {
+      preview.appendChild(el('button', 'btn-secondary vgen-upload-trigger', { type: 'button', textContent: t('motion_video'), 'data-slot': 'motion' }));
+      preview.appendChild(el('input', 'vgen-motion-file', { type: 'file', accept: 'video/mp4,video/quicktime,.mp4,.mov', id: 'vgen-file-motion' }));
+    }
+    slot.appendChild(preview);
+    return slot;
+  }
+
+  function renderMotionOptions() {
+    var row = el('div', 'vgen-resolution-row vgen-motion-options');
+    var head = el('div', 'vgen-resolution-head');
+    head.appendChild(el('label', 'vgen-resolution-label', { for: 'vgen-motion-orientation', textContent: t('motion_orient_label') }));
+    head.appendChild(el('span', 'vgen-resolution-hint', { textContent: t('motion_hint') }));
+    row.appendChild(head);
+    var sel = el('select', 'vgen-select vgen-resolution-select', { id: 'vgen-motion-orientation' });
+    [['video', 'motion_orient_video'], ['image', 'motion_orient_image']].forEach(function (o) {
+      var opt = el('option', '', { value: o[0], textContent: t(o[1]) });
+      if (o[0] === state.motionOrientation) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    row.appendChild(sel);
+    var soundLabel = el('label', 'vgen-motion-sound');
+    var cb = el('input', '', { type: 'checkbox', id: 'vgen-motion-sound' });
+    cb.checked = !!state.motionKeepSound;
+    soundLabel.appendChild(cb);
+    soundLabel.appendChild(el('span', '', { textContent: t('motion_keep_sound') }));
+    row.appendChild(soundLabel);
+    return row;
+  }
+
   function renderImageSlot(slotId, labelText, currentUrl, required) {
     var slot = el('div', 'vgen-image-slot' + (required ? ' vgen-image-slot--required' : ''));
 
@@ -2104,7 +2333,7 @@
       preview.appendChild(removeBtn);
     } else {
       var btnText = slotId === 'start'
-        ? (state.lang === 'en' ? 'Start Image' : '시작 이미지')
+        ? (isMotionModel(state.model) ? t('motion_character') : (state.lang === 'en' ? 'Start Image' : '시작 이미지'))
         : (state.lang === 'en' ? 'End Image'   : '끝 이미지');
       var uploadBtn = el('button', 'btn-secondary vgen-upload-trigger', {
         type: 'button',
@@ -2138,12 +2367,16 @@
       tab.addEventListener('click', function () {
         var mode = tab.dataset.mode;
         if (mode === state.mode) return;
+        var wasMotion = isMotionModel(state.model);
         state.mode = mode;
         var avail = availableModels();
         if (!avail.find(function (m) { return m.id === state.model; })) {
           state.model = avail[0].id;
         }
+        // 모션 영상과 다른 모델의 편집·참조 영상은 규격이 달라 서로 넘기지 않는다.
+        if (wasMotion !== isMotionModel(state.model)) clearMotionVideo();
         render();
+        ensureCreditQuote(false);
       });
     });
 
@@ -2151,11 +2384,16 @@
     var modelSel = root.querySelector('#vgen-model');
     if (modelSel) {
       modelSel.addEventListener('change', function () {
+        var wasMotion = isMotionModel(state.model);
         state.model = modelSel.value;
-        // I2V only 모델로 전환 시 mode를 i2v로 고정
         var newMo = ALL_MODELS.find(function (m) { return m.id === modelSel.value; });
-        if (newMo && !newMo.t2v) state.mode = 'i2v';
+        // 모션 모델은 Motion Control 탭, 거기서 다른 모델로 나오면 그 모델이 받는 탭으로.
+        if (newMo && newMo.motion) state.mode = 'motion';
+        else if (state.mode === 'motion') state.mode = newMo && newMo.t2v ? 't2v' : 'i2v';
+        // I2V only 모델로 전환 시 mode를 i2v로 고정
+        if (newMo && !newMo.t2v && !newMo.motion) state.mode = 'i2v';
         if (newMo && state.mode === 'r2v' && !newMo.r2v) state.mode = 'i2v';
+        if (wasMotion !== isMotionModel(state.model)) clearMotionVideo();
         // 모델 전환 시 caps에 없는 상태 초기화
         if (!hasCap('refs')) state.referenceUrls = [];
         if (!hasCap('audio')) { state.audioUrl = ''; state.audioFileName = ''; }
@@ -2254,6 +2492,7 @@
 
     // Remove image
     root.querySelectorAll('.vgen-remove-img').forEach(function (btn) {
+      if (btn.classList.contains('vgen-motion-remove')) return; // 동작 영상 제거는 아래 모션 핸들러가 맡는다
       btn.addEventListener('click', function () {
         if (btn.dataset.slot === 'start') state.startImageUrl = '';
         else state.endImageUrl = '';
@@ -2455,6 +2694,26 @@
         render();
       });
     });
+    // 모션 컨트롤: 동작 영상·방향·원본 소리
+    var motionFile = root.querySelector('#vgen-file-motion');
+    if (motionFile) motionFile.addEventListener('change', function () {
+      acceptMotionVideoFile(motionFile.files && motionFile.files[0]);
+    });
+    var motionRemove = root.querySelector('.vgen-motion-remove');
+    if (motionRemove) motionRemove.addEventListener('click', function () {
+      clearMotionVideo();
+      render();
+      ensureCreditQuote(false);
+    });
+    var motionOrient = root.querySelector('#vgen-motion-orientation');
+    if (motionOrient) motionOrient.addEventListener('change', function () {
+      state.motionOrientation = motionOrient.value === 'image' ? 'image' : 'video';
+    });
+    var motionSound = root.querySelector('#vgen-motion-sound');
+    if (motionSound) motionSound.addEventListener('change', function () {
+      state.motionKeepSound = !!motionSound.checked;
+    });
+
     var videoFile = root.querySelector('#vgen-video-file');
     if (videoFile) {
       videoFile.addEventListener('change', function () {
@@ -2512,6 +2771,12 @@
   function requiredInputMissing() {
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
     var refCount = (state.referenceUrls || []).filter(Boolean).length;
+    if (isMotionModel(state.model)) {
+      if (!state.startImageUrl) return 'motion_no_image_alert';
+      if (!state.videoUrl) return 'motion_no_video_alert';
+      if (state.motionOrientation === 'image' && state.motionSeconds > MOTION_SPEC.maxSeconds.image + 0.05) return 'motion_duration_image_alert';
+      return '';
+    }
     // MiniMax: 탭마다 받는 입력이 다르다(modeAllows). 참조→영상은 이미지·영상 참조가 하나는 있어야 하고
     // 오디오만으로는 못 만든다(공급자 규칙, video-specs.ts resolveMinimaxRoute 와 같다).
     if (isMinimaxModel(state.model)) {
@@ -2730,11 +2995,13 @@
     if (state.generating || state.creditChecking) return;
 
     var prompt = (root.querySelector('#vgen-prompt') && root.querySelector('#vgen-prompt').value || state.prompt || '').trim();
-    if (!prompt) { alert(t('no_prompt_alert')); return; }
+    var isMotion = isMotionModel(state.model);
+    // 모션 컨트롤은 동작을 영상에서 가져오므로 프롬프트가 선택이다.
+    if (!prompt && !isMotion) { alert(t('no_prompt_alert')); return; }
 
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
     var missingKey = requiredInputMissing();
-    if (missingKey) { alert(t(missingKey)); return; }
+    if (missingKey) { alert(t(missingKey).replace('%s', formatSeconds(state.motionSeconds))); return; }
 
     state.prompt = prompt;
     // 표시 중인 잔액이 다른 탭/기기에서 이미 바뀌었을 수 있으므로 접수 직전에 다시 확인한다.
@@ -2760,9 +3027,9 @@
       prompt:          prompt,
       model:           state.model,
       modelLabel:      modelInfo.label,
-      aspectRatio:     state.aspectRatio,
+      aspectRatio:     isMotion ? '' : state.aspectRatio,
       resolution:      hasResolutionChoice(state.model) ? state.resolution : '',
-      duration:        state.duration,
+      duration:        isMotion ? Math.ceil(state.motionSeconds || 0) : state.duration,
       mode:            state.mode,
       projectId:       state.projectId || '',
       status:          'processing',
@@ -2784,7 +3051,8 @@
       audioUrl:      state.audioUrl,
       audioFileName: state.audioFileName,
       videoUrl:      state.videoUrl,
-      videoFileName: state.videoFileName
+      videoFileName: state.videoFileName,
+      motionSeconds: state.motionSeconds
     };
     saveResults();
     render();
@@ -2833,6 +3101,16 @@
       if (state.model === 'kling-final') {
         payload.quality = 'final';
       }
+      // 모션 컨트롤: 캐릭터 이미지 + 동작 영상 + 방향·원본 소리. 길이는 서버가 영상에서 읽는다.
+      if (isMotion) {
+        payload.imageDataUrl = await toJpegIfWebp(state.startImageUrl);
+        payload.image = payload.imageDataUrl;
+        payload.videoDataUrl = state.videoUrl;
+        payload.characterOrientation = state.motionOrientation;
+        payload.keepOriginalSound = !!state.motionKeepSound;
+        payload.durationSeconds = Math.max(MOTION_SPEC.minSeconds, Math.ceil(state.motionSeconds || 0));
+        delete payload.aspectRatio;
+      }
 
       var startRes = await NK.api.videoStart(payload);
       updateResult(resultId, { jobId: startRes.jobId });
@@ -2842,9 +3120,9 @@
         model:       state.model,
         modelLabel:  modelInfo.label,
         mode:        state.mode,
-        aspectRatio: state.aspectRatio,
+        aspectRatio: isMotion ? '' : state.aspectRatio,
         resolution:  hasResolutionChoice(state.model) ? state.resolution : '',
-        duration:    state.duration,
+        duration:    isMotion ? Math.ceil(state.motionSeconds || 0) : state.duration,
         resultId:    resultId
       });
 

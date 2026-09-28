@@ -31,6 +31,14 @@ import { SEEDANCE_25_RESOLUTIONS,
   resolveMinimaxRoute,
   snapDurationFor,
 } from "./_shared/video-specs";
+import {
+  KLING_MOTION_MODELS,
+  checkMotionInputs,
+  dataUrlBytes,
+  dataUrlMime,
+  isKlingMotionModel,
+  mp4DurationSeconds,
+} from "./_shared/motion-control.js";
 
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -98,7 +106,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       ? (body as any).referenceImages.map((v: any) => String(v || "")).filter(Boolean)
       : [];
 
-    const isKlingModel = String(videoModel || "").startsWith("kling");
+    // 모션 컨트롤은 입력 검사를 자기 분기에서 한다(캐릭터 이미지·동작 영상을 함께 보고 이유를 알려 준다).
+    const isKlingModel = String(videoModel || "").startsWith("kling") && !isKlingMotionModel(videoModel);
     const isI2vOnlyModel = isKlingModel || videoModel === "seedance" || videoModel === "seedance-r2v" || videoModel === "seedance-2.5" || videoModel === "vidu-q3";
     // 참조 영상(직전 컷 클립 등): Seedance 2.5 omni-reference 의 reference_videos. gs:// 는 서명해서 보낸다.
     const referenceVideos: string[] = Array.isArray((body as any)?.referenceVideos)
@@ -222,8 +231,54 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     const isKling =videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
     const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "seedance-2.5", "vidu-q3"];
-    if (!supportedModels.includes(videoModel) && !isKling && !isMinimaxModel(videoModel)) {
+    if (!supportedModels.includes(videoModel) && !isKling && !isMinimaxModel(videoModel) && !isKlingMotionModel(videoModel)) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
+    }
+
+    // 모션 컨트롤 (kwaivgi/kling-v3.0-{pro,std}/motion-control via Atlas Cloud).
+    // 캐릭터 이미지 + 동작 영상 → 영상의 동작을 캐릭터에 입힌다. 길이·화면비 파라미터는 없다(결과 = 동작 영상 길이).
+    // 크레딧은 credit-rates 가 같은 영상에서 읽은 길이로 이미 예약했다. 여기서는 공급자 규격을 업로드 전에 확인한다.
+    if (isKlingMotionModel(videoModel)) {
+      const atlasKey = atlasUserKey;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const spec = KLING_MOTION_MODELS[videoModel as keyof typeof KLING_MOTION_MODELS];
+      const characterRaw = String(imageDataUrl || "").trim();
+      if (!videoDataUrl.startsWith("data:")) {
+        return json({ error: "motion_video_required", detail: "동작 영상 파일을 올려 주세요." }, 400);
+      }
+      const videoBytes = dataUrlBytes(videoDataUrl);
+      const check = checkMotionInputs({
+        imageMime: characterRaw.startsWith("data:") ? dataUrlMime(characterRaw) : "",
+        videoMime: dataUrlMime(videoDataUrl),
+        videoBytes: videoBytes.byteLength,
+        videoSeconds: mp4DurationSeconds(videoBytes),
+        orientation: (body as any)?.characterOrientation,
+      });
+      if (!check.ok) return json({ error: check.error, detail: check.message }, 400);
+      const imageUrl = await toAtlasImageUrl(characterRaw, `start-${sceneId}`);
+      const videoUrl = await toAtlasMediaUrl(videoDataUrl, `motion-${sceneId}`, "video");
+      const keepOriginalSound = toBool((body as any)?.keepOriginalSound, true);
+      // 사용자가 쓴 문장만 보낸다. 다른 모델용 '입 다물기' 지시를 붙이면 노래·립싱크 동작을 망친다.
+      const motionPrompt = String(promptText || "").trim();
+      const atlasBody: any = {
+        model: spec.atlasModel,
+        image: imageUrl,
+        video: videoUrl,
+        character_orientation: check.orientation,
+        keep_original_sound: keepOriginalSound,
+      };
+      if (motionPrompt) atlasBody.prompt = motionPrompt;
+      log('motion_request', { model: spec.atlasModel, orientation: check.orientation, seconds: check.seconds, bytes: videoBytes.byteLength, keepOriginalSound });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "motion_error", status: atlasRes.status, detail: safeJson(atlasText), sent: { model: spec.atlasModel, orientation: check.orientation, seconds: check.seconds } }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      if (!predictionId) return json({ error: "motion_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `kling-motion:${predictionId}`, status: "processing", atlasModel: spec.atlasModel, seconds: check.seconds }, 202);
     }
 
     // Kling branch (via Atlas Cloud AI)

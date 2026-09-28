@@ -91,6 +91,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     const isWan = jobId.startsWith('wan:');
     const isViduQ3 = jobId.startsWith('vidu-q3:');
     const isMinimax = jobId.startsWith('minimax:');
+    const isKlingMotion = jobId.startsWith('kling-motion:');
     const klingKind: 'image2video' | 'multi' | 'lipsync' | '' =
       jobId.startsWith('kling-lipsync:') ? 'lipsync' :
       jobId.startsWith('kling-multi:') ? 'multi' :
@@ -383,8 +384,8 @@ const handleGet: PagesFunction = async ({ request, env }) => {
       }, 200);
     }
 
-    // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3, minimax, member Grok
-    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isSeedance25 || isViduQ3 || isMinimax || isAtlasGrok;
+    // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3, minimax, kling motion control, member Grok
+    const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isSeedance25 || isViduQ3 || isMinimax || isKlingMotion || isAtlasGrok;
     if (isAtlasGeneric) {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) {
@@ -397,6 +398,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         'seedance-2.5:': 'seedance-2.5:',
         'vidu-q3:': 'vidu-q3:',
         'minimax:': 'minimax:',
+        'kling-motion:': 'kling-motion:',
         'grok-extend-atlas:': 'grok-extend-atlas:',
         'grok-atlas:': 'grok-atlas:',
       };

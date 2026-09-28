@@ -1,6 +1,7 @@
 import { authorizeRequest } from "./auth.js";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { quoteCredits } from "./credit-rates.js";
+import { withMeasuredMotionSeconds } from "./motion-control.js";
 
 let schemaReady = false;
 let schemaPromise: Promise<void> | null = null;
@@ -297,7 +298,7 @@ export async function withCreditCharge(
   if (!auth.ok) return handler(context);
   let body: any = {};
   try { body = await request.clone().json(); } catch (_) {}
-  const quote = quoteCredits(options.feature, body, env);
+  const quote = quoteCredits(options.feature, withMeasuredMotionSeconds(options.feature, body), env);
   if (!quote.credits) return handler(context);
   let reservation: any;
   try {

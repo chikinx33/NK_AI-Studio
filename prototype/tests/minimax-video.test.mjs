@@ -142,11 +142,11 @@ test('AI 영상: 첫·끝 프레임(Image to Video)과 참조(Reference to Video
   // 참조→영상 엔드포인트가 있는 등급만 r2v 탭
   for (const id of ['minimax-h3', 'minimax-h3-fast', 'minimax-h3-dev']) assert.match(gen, new RegExp(`\{ id: '${id}',[^\n]*r2v: true,`), id);
   for (const id of ['minimax-h3-max', 'minimax-h3-max-turbo']) assert.doesNotMatch(gen, new RegExp(`\{ id: '${id}',[^\n]*r2v: true`), id);
-  assert.match(gen, /\(mo\.r2v \? \['t2v', 'i2v', 'r2v'\] : \['t2v', 'i2v'\]\)\.forEach/);
+  assert.match(gen, /var tabModes = \(mo\.r2v \? \['t2v', 'i2v', 'r2v'\] : \['t2v', 'i2v'\]\)\.concat\(\['motion'\]\);/);
   assert.match(gen, /if \(state\.mode === 'r2v'\) return cap === 'refs' \|\| cap === 'audio' \|\| cap === 'video';\s*\n\s*if \(state\.mode === 'i2v'\) return cap === 'start' \|\| cap === 'end';/);
   // 슬롯 표시와 요청 전송이 같은 규칙을 쓴다
   assert.match(gen, /if \(modeAllows\('refs'\)\) \{\s*\n\s*panel\.appendChild\(renderRefSection\(\)\);/);
-  assert.match(gen, /if \(isI2vMode && modeAllows\('start'\)\) \{/);
+  assert.match(gen, /if \(!isMotion && isI2vMode && modeAllows\('start'\)\) \{/);
   assert.match(gen, /if \(modeAllows\('refs'\) && refs\.length > 0\) \{/);
   assert.match(gen, /if \(isI2vMode && modeAllows\('end'\) && state\.endImageUrl\) \{/);
   assert.match(gen, /tab_r2v:\s+'Reference to Video',[\s\S]*tab_r2v:\s+'Reference to Video',/, '한/영');

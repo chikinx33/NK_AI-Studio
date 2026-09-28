@@ -33,6 +33,10 @@ const DEFAULT_TEST_RATES = Object.freeze({
     "minimax-h3-max-turbo": { perSecond: 3, minimumSeconds: 5 },
     "minimax-h3-fast": { perSecond: 5, minimumSeconds: 5 },
     "minimax-h3-dev": { perSecond: 2 },
+    // 모션 컨트롤(Kling 3.0): Atlas 정가(2026-09-28) Pro $0.143·Std $0.107/초를 올림.
+    // 결과 길이 = 동작 영상 길이라 durationSeconds 는 credits.ts 가 올라온 영상에서 읽은 값으로 바꿔 넣는다.
+    "kling-motion-pro": { perSecond: 15, minimumSeconds: 3 },
+    "kling-motion-std": { perSecond: 11, minimumSeconds: 3 },
   }),
 });
 

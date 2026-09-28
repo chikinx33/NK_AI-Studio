@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.1920" />
+  <link rel="stylesheet" href="styles.css?v=3.1921" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -300,6 +300,9 @@
     .vgen-tab.is-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
     /* 탭이 셋(Text·Image·Reference)이면 좁은 패널에서도 한 줄에 들어가도록 여백을 줄인다. */
     .vgen-tabs--3 .vgen-tab { padding: 6px 10px; font-size: 0.78rem; }
+    /* 넷(+Motion Control)이면 한 줄에 못 들어가는 좁은 패널에서 줄을 바꾼다. */
+    .vgen-tabs--4 { flex-wrap: wrap; }
+    .vgen-tabs--4 .vgen-tab { padding: 6px 8px; font-size: 0.74rem; }
 
     .vgen-model-guide-btn {
       width: 30px; height: 30px; flex: 0 0 30px;
@@ -454,6 +457,17 @@
     .vgen-remove-img { font-size: 0.72rem; color: var(--muted); padding: 2px 8px; }
     .vgen-upload-trigger { font-size: 0.78rem; padding: 6px 14px; }
     .vgen-file-input { display: none; }
+    /* 모션 컨트롤: 동작 영상 칸(캐릭터 이미지 칸과 같은 크기)·방향·원본 소리 */
+    .vgen-motion-file { display: none; }
+    .vgen-motion-thumb { cursor: default; background: #000; object-fit: contain; }
+    .vgen-motion-meta {
+      max-width: 100%; font-size: 0.7rem; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .vgen-motion-options { grid-template-columns: minmax(0, 1fr); }
+    .vgen-motion-options .vgen-resolution-hint { white-space: normal; line-height: 1.45; }
+    .vgen-motion-sound { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); cursor: pointer; }
+    .vgen-motion-sound input { width: 16px; height: 16px; accent-color: var(--accent); }
 
     .vgen-prompt-wrap { display: flex; flex-direction: column; }
     .vgen-prompt {
@@ -666,18 +680,18 @@
     @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
-  <script src="core.js?v=3.1920" defer></script>
-  <script src="js/config.js?v=3.1920" defer></script>
-  <script src="js/utils.js?v=3.1920" defer></script>
-  <script src="store.js?v=3.1920" defer></script>
-  <script src="api.js?v=3.1920" defer></script>
-  <script src="js/state.js?v=3.1920" defer></script>
-  <script src="js/auth.js?v=3.1920" defer></script>
-  <script src="js/navigation.js?v=3.1920" defer></script>
-  <script src="js/service/project.js?v=3.1920" defer></script>
-  <script src="js/ui/common.js?v=3.1920" defer></script>
-  <script src="js/ui/ai-video-gen.js?v=3.1920" defer></script>
-  <script src="script.js?v=3.1920" defer></script>
+  <script src="core.js?v=3.1921" defer></script>
+  <script src="js/config.js?v=3.1921" defer></script>
+  <script src="js/utils.js?v=3.1921" defer></script>
+  <script src="store.js?v=3.1921" defer></script>
+  <script src="api.js?v=3.1921" defer></script>
+  <script src="js/state.js?v=3.1921" defer></script>
+  <script src="js/auth.js?v=3.1921" defer></script>
+  <script src="js/navigation.js?v=3.1921" defer></script>
+  <script src="js/service/project.js?v=3.1921" defer></script>
+  <script src="js/ui/common.js?v=3.1921" defer></script>
+  <script src="js/ui/ai-video-gen.js?v=3.1921" defer></script>
+  <script src="script.js?v=3.1921" defer></script>
 </head>
 
 <body class="layout-fixed page-videogen">
