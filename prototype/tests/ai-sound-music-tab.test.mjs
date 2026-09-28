@@ -34,7 +34,7 @@ test("MUSIC 패널: 종류·설명·장르·분위기·길이·반복·가사·�
   }
   assert.match(panel, /if \(state\.musicKind === 'song'\) \{/, "가사·보컬은 노래일 때만");
   assert.match(panel, /if \(state\.musicKind === 'bgm'\) \{/, "반복 재생은 배경음악일 때만");
-  assert.match(client, /NK\.api\.creditQuote\('music', \{ durationSec: state\.musicDuration \}\)/);
+  assert.match(client, /NK\.api\.creditQuote\('music', \{ model: state\.musicModel, durationSec: state\.musicDuration \}\)/);
 });
 
 test("MUSIC 문구는 한/영 짝으로 있다", () => {
@@ -57,8 +57,8 @@ test("생성·목록: /api/sound/music-generate 로 만들고, 음악 자산은 
 });
 
 test("서버: /api/music 과 같은 엔진, sound_assets(type='music') 기록, 크레딧은 music 사용량 정산", () => {
-  assert.match(server, /import \{ generateLyriaMusic, generateElevenLabsMusic, generateElevenSong, buildSongChunksFromSections \} from "\.\.\/music";/);
-  for (const fn of ["generateLyriaMusic", "generateElevenLabsMusic", "generateElevenSong", "buildSongChunksFromSections"]) {
+  assert.match(server, /import \{ generateLyriaMusic, generateElevenInstrumental, generateElevenSong, buildSongChunksFromSections \} from "\.\.\/music";/);
+  for (const fn of ["generateLyriaMusic", "generateElevenInstrumental", "generateElevenSong", "buildSongChunksFromSections"]) {
     assert.match(music, new RegExp(`export (async )?function ${fn}\\(`), `${fn} 를 내보낸다`);
   }
   assert.match(server, /VALUES \(\$1, 'music', /);
@@ -75,4 +75,50 @@ test("비트 BGM 도구: /api/music 에 projectId 를 보내고, 실제 엔진�
   assert.doesNotMatch(body, /model: "elevenlabs"/);
   assert.match(orch, /"type": "voice\|music\|sfx\(선택\)"/);
   assert.match(agent, /String\(input\[k\]\)\.toLowerCase\(\) === "bgm" \? "music"/);
+});
+
+// 2026-09-29: 음질이 낮았던 원인 — Lyria 를 중계 없이 직접 불러 지역 차단(HKG)으로 실패 → 22초짜리 효과음 엔진으로 몰래 폴백.
+test("모델 선택: 기본 MiniMax, Eleven Music, Lyria(연주곡만). 고른 모델이 실패해도 효과음 엔진으로 몰래 바꾸지 않는다", () => {
+  assert.match(client, /\{ id: 'minimax', label: 'MiniMax Music 2\.6', kinds: \['bgm', 'song'\], fixedLength: true \}/);
+  assert.match(client, /\{ id: 'lyria', label: 'Lyria 3', kinds: \['bgm'\] \}/);
+  assert.match(client, /musicModel: 'minimax',/);
+  assert.match(client, /model: state\.musicModel,/);
+  assert.match(client, /NK\.api\.creditQuote\('music', \{ model: state\.musicModel, durationSec: state\.musicDuration \}\)/);
+  assert.match(server, /return kind === "song" && model === "lyria" \? "minimax" : model;/);
+  assert.match(server, /model: "minimax\/music-2\.6"/);
+  assert.match(server, /https:\/\/api\.atlascloud\.ai\/api\/v1\/model\/generateAudio/);
+  assert.doesNotMatch(server, /generateElevenLabsMusic\(/, "효과음 엔진 폴백 없음");
+  for (const key of ["music_model", "music_len_auto", "music_model_minimax", "music_model_eleven", "music_model_lyria"]) {
+    assert.equal((client.match(new RegExp(`\\b${key}: '`, "g")) || []).length, 2, `${key} 한/영`);
+  }
+});
+
+test("Lyria 는 다른 Gemini 호출과 같은 중계 경로로 부르고, Eleven Music 연주곡은 force_instrumental", () => {
+  const lyria = music.slice(music.indexOf("export async function generateLyriaMusic("), music.indexOf("export async function generateElevenInstrumental("));
+  assert.match(lyria, /geminiGenerateUrl\(env, "lyria-3-pro-preview"\)/);
+  assert.match(lyria, /\.\.\.geminiProxyHeaders\(env\)/);
+  assert.doesNotMatch(lyria, /https:\/\/generativelanguage\.googleapis\.com/);
+  assert.match(music, /force_instrumental: true/);
+});
+
+test("예상 크레딧: 모델별 공식 원가(MiniMax·Lyria 곡당, Eleven 분당), 모델 없는 /api/music 은 예전 요율", () => {
+  const rates = read("functions/api/_shared/credit-rates.js");
+  assert.match(rates, /export const MUSIC_MODEL_USD = \{ minimax: 0\.15, lyria: 0\.08, elevenPerMinute: 0\.15 \};/);
+  assert.match(rates, /if \(model === "minimax"\) \{\s*credits = creditsForUsd\(MUSIC_MODEL_USD\.minimax\);/);
+  assert.match(rates, /Math\.ceil\(duration \/ 5\) \* scalarRate\(rates, "music_per_5_seconds"\)/);
+});
+
+test("브랜드 연결: 브랜드 번호는 brandId 칸에서 읽고, 단독 음악은 '브랜드에 보관'으로 에피소드에 담는다", () => {
+  assert.match(client, /return b \? String\(b\.brandId \|\| b\.id \|\| ''\) : '';/);
+  assert.match(client, /if \(a\.type === 'music' && a\.scope !== 'project' && !a\._local/);
+  assert.match(client, /await NK\.api\.soundAssetLink\(a\.id, target\.episode\.brandId \|\| '', target\.episode\.id\);/);
+  assert.match(client, /NK\.service\.project\.create\(\{\s*mode: 'episode', parentProjectId: target\.brand\.latestEpisodeId,/);
+  assert.match(api, /withToken\('\/api\/sound\/asset-link'\)/);
+  const link = read("functions/api/sound/asset-link.ts");
+  assert.match(link, /SELECT \* FROM sound_assets WHERE id = \$1 AND owner_id = \$2/, "본인 자산만");
+  assert.match(link, /SELECT owner_id, type, 'project', NULLIF\(\$3, ''\), \$4,/);
+  for (const key of ["keep_to_brand", "keep_pick_title", "keep_new_episode", "keep_done", "keep_done_new", "keep_failed"]) {
+    assert.equal((client.match(new RegExp(`\\b${key}: '`, "g")) || []).length, 2, `${key} 한/영`);
+  }
+  assert.match(page, /\.snd-pick-actions \.btn-primary \{ min-width: \d+px;/);
 });

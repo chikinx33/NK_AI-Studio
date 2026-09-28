@@ -156,6 +156,13 @@
     { v: 'male vocals', ko: '남성 보컬', en: 'Male' }, { v: 'choir', ko: '합창', en: 'Choir' }
   ];
   var MUSIC_DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
+  // 모델: 기본 MiniMax(Atlas Cloud, 노래·연주곡). Lyria 는 가사를 부르지 못해 배경음악에서만 고를 수 있다.
+  var MUSIC_MODELS = [
+    { id: 'minimax', label: 'MiniMax Music 2.6', kinds: ['bgm', 'song'], fixedLength: true },
+    { id: 'eleven', label: 'Eleven Music', kinds: ['bgm', 'song'] },
+    { id: 'lyria', label: 'Lyria 3', kinds: ['bgm'] }
+  ];
+  function musicModelInfo(id) { return MUSIC_MODELS.find(function (m) { return m.id === id; }) || MUSIC_MODELS[0]; }
   var CHAR_LIMIT = 5000;
 
   var STORAGE_SESSION_KEY = 'nk_sound_session_id';
@@ -181,6 +188,16 @@
       music_quote: '예상 {n} 크레딧', music_quote_loading: '예상 크레딧 계산 중…', generate_music: '음악 생성',
       no_music_prompt: '어떤 음악인지 적거나 장르·분위기를 골라주세요.', no_lyrics: '가사를 입력해주세요.',
       music_kind_badge_bgm: 'BGM', music_kind_badge_song: 'SONG',
+      music_model: '모델', music_len_auto: '길이는 모델이 곡에 맞춰 정해요.',
+      music_model_minimax: '노래·연주곡 모두 자연스럽고 완성도가 높아요. 가사 구조([1절]·[후렴])를 잘 따라요.',
+      music_model_eleven: '길이를 정확히 맞출 수 있어요(최대 4분). 노래는 구간별 길이까지 지정해요.',
+      music_model_lyria: 'Google 연주곡 엔진. 곡당 요금이 가장 낮아요(가사 없는 배경음악 전용).',
+      keep_to_brand: '브랜드에 보관', keep_pick_title: '브랜드에 보관', keep_pick_desc: '고른 에피소드의 오디오 자산에 담아요. 원본은 여기 그대로 남아요.',
+      keep_brand: '브랜드', keep_episode: '에피소드', keep_new_episode: '+ 새 에피소드 만들기', keep_new_title: '새 에피소드 이름',
+      keep_new_default_suffix: ' 새 에피소드', keep_confirm: '보관', keep_create_confirm: '만들고 보관', keep_cancel: '취소',
+      keep_no_brands: '보관할 브랜드가 없어요. 브랜드와 에피소드를 먼저 만들어 주세요.',
+      keep_done: '"{b}" 브랜드의 "{e}" 에피소드에 보관했어요.', keep_done_new: '"{b}" 브랜드에 "{e}" 에피소드를 만들고 보관했어요.',
+      keep_failed: '보관하지 못했어요. 잠시 후 다시 시도해 주세요.', keep_create_failed: '새 에피소드를 만들지 못했어요.',
       segments_title: '대화 세그먼트', add_segment: '＋ 세그먼트', seg_placeholder: '대사 텍스트 입력…  (감정 태그: [calm] [warmly])',
       scene_import: '씬 대사 불러오기',
       settings_title: '설정', voice_label: '보이스', voice_pick: '보이스 선택', voice_none: '보이스를 선택하세요',
@@ -222,6 +239,16 @@
       music_quote: 'Estimated {n} credits', music_quote_loading: 'Estimating credits…', generate_music: 'Generate music',
       no_music_prompt: 'Describe the music or pick a genre or mood.', no_lyrics: 'Please enter lyrics.',
       music_kind_badge_bgm: 'BGM', music_kind_badge_song: 'SONG',
+      music_model: 'Model', music_len_auto: 'The model sets the length to fit the song.',
+      music_model_minimax: 'Natural, polished songs and instrumentals. Follows lyric structure ([Verse]/[Chorus]) well.',
+      music_model_eleven: 'Exact length control (up to 4 min). Songs can set the length of each section.',
+      music_model_lyria: 'Google instrumental engine. Lowest price per track (background music only, no lyrics).',
+      keep_to_brand: 'Keep in brand', keep_pick_title: 'Keep in brand', keep_pick_desc: 'Adds this to the audio assets of the chosen episode. The original stays here.',
+      keep_brand: 'Brand', keep_episode: 'Episode', keep_new_episode: '+ Create new episode', keep_new_title: 'New episode name',
+      keep_new_default_suffix: ' new episode', keep_confirm: 'Keep', keep_create_confirm: 'Create and keep', keep_cancel: 'Cancel',
+      keep_no_brands: 'No brand to keep it in. Create a brand and an episode first.',
+      keep_done: 'Kept in episode "{e}" of brand "{b}".', keep_done_new: 'Created episode "{e}" in brand "{b}" and kept it there.',
+      keep_failed: 'Could not keep it. Please try again shortly.', keep_create_failed: 'Could not create the new episode.',
       segments_title: 'Dialogue Segments', add_segment: '+ Segment', seg_placeholder: 'Enter dialogue…  (emotion tags: [calm] [warmly])',
       scene_import: 'Import scene lines',
       settings_title: 'Settings', voice_label: 'Voice', voice_pick: 'Select voice', voice_none: 'Please select a voice',
@@ -270,6 +297,7 @@
     sfxInfluence: 0.3,
     sfxCategory: '',
     musicKind: 'bgm',      // 'bgm' | 'song'
+    musicModel: 'minimax', // 'minimax' | 'eleven' | 'lyria'
     musicPrompt: '',
     musicGenres: [],       // 영어 값
     musicMoods: [],
@@ -315,7 +343,12 @@
   function genId(p) { return (p || 'sg') + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6); }
   function initialOf(name) { return String(name || '?').trim().charAt(0) || '?'; }
   function isProjectMode() { return !!state.projectId || !!(state.currentProject && state.currentProject.id); }
-  function brandId() { return (state.currentBrand && state.currentBrand.id) ? String(state.currentBrand.id) : ''; }
+  // 브랜드 서비스(brand.js)가 주는 객체는 brandId 칸을 쓴다. 전엔 id 칸만 읽어 에피소드로 들어가도 브랜드 번호가
+  // 늘 비어 저장됐다(음성·효과음·음악 모두, 2026-09-29).
+  function brandId() {
+    var b = state.currentBrand;
+    return b ? String(b.brandId || b.id || '') : '';
+  }
   function episodeId() {
     if (state.projectId) return state.projectId;
     return (state.currentProject && state.currentProject.id) ? String(state.currentProject.id) : '';
@@ -954,6 +987,22 @@
     kf.appendChild(seg);
     panel.appendChild(kf);
 
+    // 모델: 종류에 맞는 것만. 노래에서 Lyria 를 고른 상태였다면 MiniMax 로 돌린다.
+    var models = MUSIC_MODELS.filter(function (m) { return m.kinds.indexOf(state.musicKind) !== -1; });
+    if (!models.some(function (m) { return m.id === state.musicModel; })) state.musicModel = models[0].id;
+    var mf = el('div', 'snd-field');
+    mf.appendChild(el('span', 'snd-label', { textContent: t('music_model') }));
+    var msel = el('select', 'snd-select');
+    models.forEach(function (m) {
+      var o = el('option', '', { value: m.id, textContent: m.label });
+      if (m.id === state.musicModel) o.selected = true;
+      msel.appendChild(o);
+    });
+    msel.addEventListener('change', function () { state.musicModel = msel.value; render(); });
+    mf.appendChild(msel);
+    mf.appendChild(el('div', 'snd-hint', { textContent: t('music_model_' + state.musicModel) }));
+    panel.appendChild(mf);
+
     // 어떤 음악인가요
     var pf = el('div', 'snd-field');
     pf.appendChild(el('span', 'snd-label', { textContent: t('music_prompt_label') }));
@@ -980,12 +1029,14 @@
       panel.appendChild(renderChipField(t('music_vocal'), MUSIC_VOCALS,
         function (v) { return state.musicVocal === v; }, function (v) { state.musicVocal = (state.musicVocal === v) ? '' : v; }));
     }
+    var fixedLength = !!musicModelInfo(state.musicModel).fixedLength;
 
     // 길이 + 반복 재생(배경음악만)
     var row = el('div', 'snd-row');
     var df = el('div', 'snd-field');
     df.appendChild(el('span', 'snd-label', { textContent: t('music_duration') }));
-    var dsel = el('select', 'snd-select');
+    if (fixedLength) df.appendChild(el('div', 'snd-hint', { textContent: t('music_len_auto') }));
+    var dsel = el('select', 'snd-select' + (fixedLength ? ' is-hidden' : ''));
     MUSIC_DURATIONS.forEach(function (d) {
       var o = el('option', '', { value: String(d), textContent: durationLabel(d) });
       if (d === state.musicDuration) o.selected = true;
@@ -1017,18 +1068,19 @@
     if (state.generating) gen.disabled = true;
     gen.addEventListener('click', generateMusic);
     panel.appendChild(gen);
-    if (state.musicQuoteKey !== String(state.musicDuration)) refreshMusicQuote();
+    if (state.musicQuoteKey !== musicQuoteKey()) refreshMusicQuote();
     return panel;
   }
 
   // 예상 크레딧: 서버 요금표(quoteCredits 'music')를 그대로 쓴다. 실제 차감은 사용량 정산으로 이보다 적을 수 있다.
   var _musicQuoteSeq = 0;
+  function musicQuoteKey() { return state.musicModel + ':' + state.musicDuration; }
   function refreshMusicQuote() {
-    var key = String(state.musicDuration);
-    state.musicQuoteKey = key;
+    state.musicQuoteKey = musicQuoteKey();
+    state.musicQuote = null;
     if (!NK.api || !NK.api.creditQuote) return;
     var seq = ++_musicQuoteSeq;
-    NK.api.creditQuote('music', { durationSec: state.musicDuration }).then(function (data) {
+    NK.api.creditQuote('music', { model: state.musicModel, durationSec: state.musicDuration }).then(function (data) {
       if (seq !== _musicQuoteSeq) return;
       var n = Number(data && data.quote && data.quote.credits);
       state.musicQuote = isFinite(n) ? n : null;
@@ -1128,9 +1180,122 @@
       var dl = el('a', 'snd-mini-btn', { href: playUrl, download: (a.title || 'sound') + (/^wav/i.test(String(a.outputFormat || '')) ? '.wav' : '.mp3'), target: '_blank', innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>' });
       dl.appendChild(document.createTextNode(t('download')));
       actions.appendChild(dl);
+      // 단독 모드로 만든 음악은 나중에 브랜드·에피소드에 보관할 수 있다(lucide archive).
+      if (a.type === 'music' && a.scope !== 'project' && !a._local && /^[0-9a-f-]{36}$/i.test(String(a.id || ''))) {
+        var keep = el('button', 'snd-mini-btn', { type: 'button', title: t('keep_to_brand'),
+          innerHTML: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>' });
+        keep.appendChild(document.createTextNode(t('keep_to_brand')));
+        keep.addEventListener('click', function () { keepAssetToBrand(a, keep); });
+        actions.appendChild(keep);
+      }
       card.appendChild(actions);
     }
     return card;
+  }
+
+  // ─── 브랜드에 보관 (단독 모드 자산 → 브랜드·에피소드) ─────────
+  // 브랜드 = 브랜드 허브와 같은 시리즈 묶음, 에피소드 = 그 시리즈의 프로젝트. AI 영상생성의 '브랜드에 보관'과 같은 흐름.
+  var KEEP_NEW_EPISODE = '__new__';
+  function listKeepTargets() {
+    var svc = NK.service && NK.service.project;
+    var drafts = (NK.store && NK.store.getDrafts ? NK.store.getDrafts() : []) || [];
+    var norm = drafts.map(function (d) { return svc && svc.normalizeDraft ? svc.normalizeDraft(d) : d; }).filter(Boolean);
+    var series = svc && svc.listSeries ? svc.listSeries() : [];
+    return series.map(function (sr) {
+      var episodes = norm.filter(function (d) { return String(d.seriesId) === String(sr.id); }).map(function (d) {
+        var p = d.payload || {};
+        return { id: String(d.id), title: String(d.title || p.episodeTitle || d.id), brandId: svc && svc.getBrandId ? svc.getBrandId(d) : String(p.brandId || '') };
+      });
+      return { id: String(sr.id), title: String(sr.title || sr.id), latestEpisodeId: String(sr.latestEpisodeId || ''), episodes: episodes };
+    }).filter(function (b) { return b.episodes.length; });
+  }
+
+  function pickKeepTarget() {
+    return new Promise(function (resolve) {
+      var brands = listKeepTargets();
+      if (!brands.length) { NK.ui.dialog.alert(t('keep_no_brands'), { title: t('keep_pick_title') }); resolve(null); return; }
+      var overlay = el('div', 'snd-pick-overlay');
+      var panel = el('div', 'snd-pick-panel', { role: 'dialog', 'aria-modal': 'true' });
+      panel.appendChild(el('h3', 'snd-pick-title', { textContent: t('keep_pick_title') }));
+      panel.appendChild(el('p', 'snd-pick-desc', { textContent: t('keep_pick_desc') }));
+      var brandSel = el('select', 'snd-select');
+      var epSel = el('select', 'snd-select');
+      var newInput = el('input', 'snd-select', { type: 'text', maxlength: '80' });
+      brands.forEach(function (b) { brandSel.appendChild(el('option', '', { value: b.id, textContent: b.title })); });
+      var bf = el('label', 'snd-field'); bf.appendChild(el('span', 'snd-label', { textContent: t('keep_brand') })); bf.appendChild(brandSel);
+      var ef = el('label', 'snd-field'); ef.appendChild(el('span', 'snd-label', { textContent: t('keep_episode') })); ef.appendChild(epSel);
+      var nf = el('label', 'snd-field'); nf.appendChild(el('span', 'snd-label', { textContent: t('keep_new_title') })); nf.appendChild(newInput);
+      var row = el('div', 'snd-pick-actions');
+      var cancelBtn = el('button', 'btn-secondary compact', { type: 'button', textContent: t('keep_cancel') });
+      var okBtn = el('button', 'btn-primary compact', { type: 'button', textContent: t('keep_confirm') });
+      function syncNew() {
+        var isNew = epSel.value === KEEP_NEW_EPISODE;
+        nf.style.display = isNew ? '' : 'none';
+        okBtn.textContent = isNew ? t('keep_create_confirm') : t('keep_confirm');
+      }
+      function fillEpisodes() {
+        var b = brands.find(function (x) { return x.id === brandSel.value; }) || brands[0];
+        epSel.innerHTML = '';
+        // 새 에피소드 만들기는 맨 위(에피소드가 많아도 찾기 쉽게), 처음 선택은 기존 최신 에피소드.
+        epSel.appendChild(el('option', '', { value: KEEP_NEW_EPISODE, textContent: t('keep_new_episode') }));
+        b.episodes.forEach(function (ep) { epSel.appendChild(el('option', '', { value: ep.id, textContent: ep.title })); });
+        if (b.episodes.length) epSel.value = b.episodes[0].id;
+        newInput.value = b.title + t('keep_new_default_suffix');
+        syncNew();
+      }
+      brandSel.addEventListener('change', fillEpisodes);
+      epSel.addEventListener('change', function () { syncNew(); if (epSel.value === KEEP_NEW_EPISODE) { newInput.focus(); newInput.select(); } });
+      row.appendChild(cancelBtn); row.appendChild(okBtn);
+      panel.appendChild(bf); panel.appendChild(ef); panel.appendChild(nf); panel.appendChild(row);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+      fillEpisodes();
+      function onKey(e) { if (e.key === 'Escape') close(null); }
+      function close(v) { document.removeEventListener('keydown', onKey); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(v); }
+      document.addEventListener('keydown', onKey);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(null); });
+      cancelBtn.addEventListener('click', function () { close(null); });
+      okBtn.addEventListener('click', function () {
+        var b = brands.find(function (x) { return x.id === brandSel.value; });
+        if (!b) { close(null); return; }
+        if (epSel.value === KEEP_NEW_EPISODE) { close({ brand: b, newTitle: String(newInput.value || '').trim() || (b.title + t('keep_new_default_suffix')) }); return; }
+        var ep = b.episodes.find(function (x) { return x.id === epSel.value; });
+        close(ep ? { brand: b, episode: ep } : null);
+      });
+      okBtn.focus();
+    });
+  }
+
+  async function keepAssetToBrand(a, btn) {
+    var target = await pickKeepTarget();
+    if (!target) return;
+    btn.disabled = true;
+    try {
+      var created = false;
+      if (target.newTitle) {
+        // 브랜드 허브의 '새 에피소드'와 같은 경로(최근 에피소드의 브랜드 설정을 이어받고, 같은 이름이면 id 에 -2 가 붙는다).
+        var draft;
+        try {
+          draft = await NK.service.project.create({
+            mode: 'episode', parentProjectId: target.brand.latestEpisodeId,
+            seriesId: target.brand.id, seriesTitle: target.brand.title, episodeTitle: target.newTitle
+          });
+        } catch (createErr) {
+          NK.ui.dialog.alert(t('keep_create_failed') + (createErr && createErr.message ? '\n' + createErr.message : ''), { title: t('keep_pick_title') });
+          return;
+        }
+        var svc = NK.service.project;
+        target.episode = { id: String(draft.id), title: String(draft.title || target.newTitle), brandId: svc.getBrandId ? svc.getBrandId(draft) : '' };
+        created = true;
+      }
+      await NK.api.soundAssetLink(a.id, target.episode.brandId || '', target.episode.id);
+      var msg = t(created ? 'keep_done_new' : 'keep_done').replace('{b}', target.brand.title).replace('{e}', target.episode.title);
+      if (NK.ui.toast) NK.ui.toast(msg, { tone: 'ok' }); else alert(msg);
+    } catch (err) {
+      NK.ui.dialog.alert(t('keep_failed') + (err && err.message ? '\n' + err.message : ''), { title: t('keep_pick_title') });
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // ─── Voice library modal ──────────────────────────────────
@@ -1541,6 +1706,7 @@
     var payload = {
       mode: isProjectMode() ? 'project' : 'instance',
       kind: kind,
+      model: state.musicModel,
       prompt: prompt,
       genres: state.musicGenres.slice(),
       moods: state.musicMoods.slice(),
@@ -1555,7 +1721,7 @@
     NK.api.soundMusicGenerate(payload).then(function (res) {
       state.generating = false;
       state.assets = state.assets.filter(function (a) { return a.id !== localId; });
-      state.assets.unshift({ id: res.assetId || localId, type: 'music', kind: kind, status: 'ready', title: title, model: res.provider || '',
+      state.assets.unshift({ id: res.assetId || localId, type: 'music', kind: kind, scope: isProjectMode() ? 'project' : 'instance', status: 'ready', title: title, model: res.provider || '',
         objectName: res.objectName || '', params: { kind: kind, objectName: res.objectName || '' },
         outputUrl: res.outputUrl, outputFormat: res.outputFormat || '', durationSeconds: res.durationSeconds || state.musicDuration });
       render();

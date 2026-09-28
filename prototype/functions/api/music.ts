@@ -222,10 +222,13 @@ function base64ToBytes(b64: string): Uint8Array {
 export async function generateLyriaMusic(
   apiKey: string,
   prompt: string,
-  env?: any
+  env?: any,
+  diag?: { error?: string }
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // 다른 Gemini 호출과 같은 중계 경로(GEMINI_BASE_URL)로 부른다. 직접 부르면 홍콩(HKG) 송출에서
+    // "User location is not supported" 로 막혀, 조용히 22초짜리 효과음 엔진 폴백으로 떨어졌다(2026-09-29 음질 저하 원인).
+    const url = `${geminiGenerateUrl(env, "lyria-3-pro-preview")}?key=${encodeURIComponent(apiKey)}`;
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -235,10 +238,13 @@ export async function generateLyriaMusic(
     };
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...geminiProxyHeaders(env) },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (diag) diag.error = `lyria_failed::${res.status}::${(await res.text().catch(() => "")).slice(0, 200)}`;
+      return null;
+    }
     const json: any = await res.json();
     const parts = json?.candidates?.[0]?.content?.parts || [];
     for (const p of parts) {
@@ -250,10 +256,37 @@ export async function generateLyriaMusic(
         return { bytes: base64ToBytes(String(inline.data)), mimeType: mime };
       }
     }
+    if (diag) diag.error = "lyria_returned_no_audio";
     return null;
-  } catch {
+  } catch (e: any) {
+    if (diag) diag.error = `lyria_error::${String(e?.message || e).slice(0, 200)}`;
     return null;
   }
+}
+
+/**
+ * Eleven Music 연주곡(POST /v1/music, prompt + force_instrumental). 효과음 API(/v1/sound-generation)와 달리
+ * 음악 전용 모델이라 품질이 높고 길이도 3초~10분을 지원한다. 오디오 스튜디오 MUSIC 탭에서 쓴다.
+ */
+export async function generateElevenInstrumental(
+  apiKey: string,
+  prompt: string,
+  durationSec: number,
+  env?: any
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const ms = Math.min(600000, Math.max(3000, Math.round(durationSec * 1000)));
+  const res = await fetch("https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey, "Content-Type": "application/json", Accept: "audio/mpeg" },
+    body: JSON.stringify({ prompt: prompt.slice(0, 2000), music_length_ms: ms, model_id: "music_v2", force_instrumental: true }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`eleven_music_failed::${res.status}::${errText.slice(0, 300)}`);
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  recordCost(env, "eleven_music", elevenLabsMusicUsd(ms), { model: "music_v2", milliseconds: ms });
+  return { bytes, mimeType: "audio/mpeg" };
 }
 
 export async function generateElevenLabsMusic(

@@ -6,8 +6,11 @@
  * 결과도 오디오 스튜디오 자산에 쌓이지 않았다(2026-09-29). 엔진(Lyria 3 · Eleven Music)은 /api/music 과 같은 것을 쓴다.
  *
  * Request:
- *   { mode, brandId?, episodeId?, sessionId?, kind: 'bgm'|'song', prompt?, genres?[], moods?[],
- *     durationSec?, looping?, lyrics?, vocal? }
+ *   { mode, brandId?, episodeId?, sessionId?, kind: 'bgm'|'song', model: 'minimax'|'eleven'|'lyria',
+ *     prompt?, genres?[], moods?[], durationSec?, looping?, lyrics?, vocal? }
+ *
+ * 모델(2026-09-29): 기본 MiniMax Music 2.6(Atlas Cloud, 노래·연주곡), Eleven Music(노래·연주곡), Lyria 3(연주곡).
+ * 고른 모델이 실패하면 다른 엔진으로 몰래 바꾸지 않고 실패를 알린다 — 예전엔 22초짜리 효과음 엔진으로 떨어져 음질이 크게 낮았다.
  * Response:
  *   { assetId, status, outputUrl, objectName, outputFormat, durationSeconds, provider, kind }
  */
@@ -18,7 +21,11 @@ import {
   corsHeaders, send, getSql, ensureSoundSchema,
   resolveGcsEnv, buildSoundObjectName, uploadToGcs, signGcsUrl, bytesToDataUrl,
 } from "./_shared";
-import { generateLyriaMusic, generateElevenLabsMusic, generateElevenSong, buildSongChunksFromSections } from "../music";
+import { generateLyriaMusic, generateElevenInstrumental, generateElevenSong, buildSongChunksFromSections } from "../music";
+import { atlasKeyFor } from "../_shared/generation-auth";
+import { recordCost, mp3DurationSeconds } from "../_shared/usage-cost.ts";
+import { MUSIC_MODEL_USD } from "../_shared/credit-rates.js";
+import { roleFromLabel } from "../_shared/song-sections.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -58,6 +65,62 @@ export function buildBgmPrompt(opts: { prompt: string; genres: string[]; moods: 
   return lines.join(" ");
 }
 
+export const MUSIC_MODELS = ["minimax", "eleven", "lyria"] as const;
+export type MusicModel = typeof MUSIC_MODELS[number];
+export function musicModelOf(raw: unknown, kind: "bgm" | "song"): MusicModel {
+  const v = String(raw || "").trim();
+  const model = (MUSIC_MODELS as readonly string[]).includes(v) ? v as MusicModel : "minimax";
+  // Lyria 는 가사를 부르지 못한다 → 노래는 MiniMax 로.
+  return kind === "song" && model === "lyria" ? "minimax" : model;
+}
+
+/** MiniMax 가 알아듣는 구간 태그로 가사를 적는다([1절]·[후렴] → [Verse]·[Chorus]). */
+export function lyricsForMiniMax(sections: Array<{ label: string; text: string }>): string {
+  const tagOf = (label: string) => {
+    const role = roleFromLabel(label);
+    return role === "chorus" ? "[Chorus]" : role === "bridge" ? "[Bridge]" : role === "hook" ? "[Intro]" : "[Verse]";
+  };
+  return sections.map((sct) => `${tagOf(sct.label)}\n${sct.text}`).join("\n\n").slice(0, 3500);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * MiniMax Music 2.6 (Atlas Cloud generateAudio). 결과가 바로 오지 않으면 prediction 을 조회한다.
+ * Worker 서브요청 한도(50)를 넘지 않게 조회는 8초 간격 최대 18번(약 2분 반)만 한다.
+ */
+async function generateMiniMaxMusic(atlasKey: string, opts: { prompt: string; lyrics: string; instrumental: boolean }, env: any): Promise<{ url: string }> {
+  const res = await fetch("https://api.atlascloud.ai/api/v1/model/generateAudio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+    body: JSON.stringify({
+      model: "minimax/music-2.6",
+      prompt: opts.prompt.slice(0, 2000),
+      ...(opts.instrumental ? { is_instrumental: true } : { lyrics: opts.lyrics }),
+      format: "mp3", sample_rate: 44100, bitrate: 256000,
+    }),
+  });
+  const text = await res.text();
+  let json: any = {};
+  try { json = JSON.parse(text); } catch { json = {}; }
+  if (!res.ok) throw new Error(`minimax_music_failed::${res.status}::${text.slice(0, 300)}`);
+  const firstUrl = (d: any) => String((Array.isArray(d?.outputs) && d.outputs[0]) || "");
+  let url = firstUrl(json?.data) || firstUrl(json);
+  const id = String(json?.data?.id || json?.id || "");
+  for (let i = 0; !url && id && i < 18; i++) {
+    await sleep(8000);
+    const pr = await fetch(`https://api.atlascloud.ai/api/v1/model/prediction/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${atlasKey}` } });
+    const pj: any = await pr.json().catch(() => ({}));
+    const d = pj?.data || pj;
+    const status = String(d?.status || "").toLowerCase();
+    if (status === "failed" || status === "error") throw new Error(`minimax_music_failed::${String(d?.error || "generation_failed").slice(0, 300)}`);
+    url = firstUrl(d);
+  }
+  if (!url) throw new Error(id ? "minimax_music_timeout" : "minimax_music_no_prediction");
+  recordCost(env, "minimax_music", MUSIC_MODEL_USD.minimax, { model: "minimax/music-2.6" });
+  return { url };
+}
+
 const handlePost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
@@ -78,6 +141,7 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const vocal = String(body.vocal || "").trim().slice(0, 60);
     const looping = kind === "bgm" && !!body.looping;
     const durationSec = Math.min(MAX_SEC, Math.max(MIN_SEC, Number(body.durationSec) || 30));
+    const model = musicModelOf(body.model, kind);
 
     const elevenLabsKey = String(env.ELEVENLABS_API_KEY || "").trim();
     const googleApiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
@@ -88,36 +152,55 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     let producedSec = durationSec;
     let usedPrompt = "";
 
-    if (kind === "song") {
-      const sections = lyricsToSections(String(body.lyrics || ""));
-      if (!sections.length) return send({ error: "song_requires_lyrics" }, 400, origin);
-      if (!elevenLabsKey) return send({ error: "ELEVENLABS_API_KEY not configured" }, 500, origin);
-      const chunks = buildSongChunksFromSections(sections, durationSec);
-      if (!chunks.length) return send({ error: "song_requires_lyrics" }, 400, origin);
-      const styles = [...genres, ...moods, vocal, prompt.slice(0, 120)].filter(Boolean);
-      usedPrompt = styles.join(", ");
+    // 선택한 모델로만 만든다. 실패하면 그대로 알린다(502/504 는 쓰지 않는다 — Cloudflare 가 본문을 덮어 원인이 사라진다).
+    const fail = (error: string, detail: unknown) =>
+      send({ error, model, detail: String((detail as any)?.message || detail || "").slice(0, 400) }, 500, origin);
+    const sections = kind === "song" ? lyricsToSections(String(body.lyrics || "")) : [];
+    if (kind === "song" && !sections.length) return send({ error: "song_requires_lyrics" }, 400, origin);
+    if (kind === "bgm" && !prompt && !genres.length && !moods.length) return send({ error: "prompt required" }, 400, origin);
+    const styleWords = [...genres, ...moods, kind === "song" ? vocal : "", prompt].filter(Boolean);
+
+    if (model === "minimax") {
+      const atlasKey = (await atlasKeyFor(env, auth.userId)).key;
+      if (!atlasKey) return send({ error: "ATLASCLOUD_API_KEY not configured" }, 500, origin);
+      usedPrompt = kind === "song"
+        ? styleWords.join(", ")
+        : buildBgmPrompt({ prompt, genres, moods, durationSec, looping }).replace(/^Create a \d+-second /, "Create an ");
       try {
-        const song = await generateElevenSong(elevenLabsKey, chunks, styles, env);
-        bytes = song.bytes; mimeType = song.mimeType; provider = "eleven-music-v2";
-        producedSec = Math.round(chunks.reduce((n, c) => n + Math.max(3000, c.durationMs), 0) / 1000);
-      } catch (e: any) {
-        // 502/504 는 쓰지 않는다 — Cloudflare 가 본문을 게이트웨이 오류 페이지로 덮어 실패 원인이 사라진다.
-        return send({ error: "song_generation_failed", detail: String(e?.message || e).slice(0, 400) }, 500, origin);
-      }
+        const out = await generateMiniMaxMusic(atlasKey, {
+          prompt: usedPrompt, instrumental: kind === "bgm", lyrics: kind === "song" ? lyricsForMiniMax(sections) : "",
+        }, env);
+        const dl = await fetch(out.url);
+        if (!dl.ok) throw new Error(`minimax_download_failed::${dl.status}`);
+        bytes = new Uint8Array(await dl.arrayBuffer());
+        mimeType = "audio/mpeg"; provider = "minimax-music-2.6";
+        // 길이는 모델이 정한다 → 받은 mp3 에서 실제 길이를 읽는다.
+        producedSec = Math.round(mp3DurationSeconds(bytes)) || 0;
+      } catch (e: any) { return fail("music_generation_failed", e); }
+    } else if (model === "eleven") {
+      if (!elevenLabsKey) return send({ error: "ELEVENLABS_API_KEY not configured" }, 500, origin);
+      try {
+        if (kind === "song") {
+          const chunks = buildSongChunksFromSections(sections, durationSec);
+          if (!chunks.length) return send({ error: "song_requires_lyrics" }, 400, origin);
+          usedPrompt = styleWords.join(", ");
+          const song = await generateElevenSong(elevenLabsKey, chunks, styleWords, env);
+          bytes = song.bytes; mimeType = song.mimeType;
+          producedSec = Math.round(chunks.reduce((n, c) => n + Math.max(3000, c.durationMs), 0) / 1000);
+        } else {
+          usedPrompt = buildBgmPrompt({ prompt, genres, moods, durationSec, looping });
+          const bgm = await generateElevenInstrumental(elevenLabsKey, usedPrompt, durationSec, env);
+          bytes = bgm.bytes; mimeType = bgm.mimeType;
+        }
+        provider = "eleven-music-v2";
+      } catch (e: any) { return fail(kind === "song" ? "song_generation_failed" : "music_generation_failed", e); }
     } else {
-      if (!prompt && !genres.length && !moods.length) return send({ error: "prompt required" }, 400, origin);
+      if (!googleApiKey) return send({ error: "GEMINI_API_KEY not configured" }, 500, origin);
       usedPrompt = buildBgmPrompt({ prompt, genres, moods, durationSec, looping });
-      if (googleApiKey) {
-        const lyria = await generateLyriaMusic(googleApiKey, usedPrompt, env);
-        if (lyria && lyria.bytes && lyria.bytes.length) { bytes = lyria.bytes; mimeType = lyria.mimeType || "audio/wav"; provider = "lyria-3-pro-preview"; }
-      }
-      if (!bytes) {
-        if (!elevenLabsKey) return send({ error: "music_generation_failed", detail: "lyria_unavailable_and_no_elevenlabs_key" }, 500, origin);
-        // 효과음 엔진 폴백은 22초가 한계다. 자산에는 실제 길이를 남긴다.
-        producedSec = Math.min(22, durationSec);
-        bytes = await generateElevenLabsMusic(elevenLabsKey, usedPrompt, producedSec, env);
-        mimeType = "audio/mpeg"; provider = "elevenlabs";
-      }
+      const diag: { error?: string } = {};
+      const lyria = await generateLyriaMusic(googleApiKey, usedPrompt, env, diag);
+      if (!lyria || !lyria.bytes || !lyria.bytes.length) return fail("music_generation_failed", diag.error || "lyria_failed");
+      bytes = lyria.bytes; mimeType = lyria.mimeType || "audio/wav"; provider = "lyria-3-pro-preview";
     }
     if (!bytes || !bytes.length) return send({ error: "music_generation_returned_empty", provider }, 500, origin);
 
@@ -157,16 +240,16 @@ const handlePost: PagesFunction = async ({ request, env }) => {
            RETURNING id`,
           [
             userId, mode, brandId, episodeId, sessionId, title, usedPrompt, provider,
-            JSON.stringify({ kind, genres, moods, vocal, looping, requestedSec: durationSec, objectName }),
+            JSON.stringify({ kind, model, genres, moods, vocal, looping, requestedSec: durationSec, objectName }),
             // data: URL 은 행을 무겁게 만든다 — 업로드에 실패한 경우엔 주소를 남기지 않는다.
-            objectName ? outputUrl : "", outputFormat, producedSec,
+            objectName ? outputUrl : "", outputFormat, producedSec || null,
           ]
         );
         if (rows && rows[0]) recordId = String(rows[0].id);
       } catch (_) {}
     }
 
-    return send({ assetId: recordId, status: "ready", outputUrl, objectName, outputFormat, durationSeconds: producedSec, provider, kind }, 200, origin);
+    return send({ assetId: recordId, status: "ready", outputUrl, objectName, outputFormat, durationSeconds: producedSec || null, provider, kind, model }, 200, origin);
   } catch (e: any) {
     return send({ error: String(e?.message || e || "music_generate_error") }, 500, origin);
   }

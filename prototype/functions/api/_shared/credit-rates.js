@@ -6,6 +6,9 @@
 import { videoCost, videoCostInputFromBody, creditsForUsd, IMAGE_UPSCALE_USD, USD_PER_CREDIT, CREDIT_MARGIN, PRICE_TABLE_DATE } from "./video-pricing.ts";
 import { LIPSYNC_MODELS, LIPSYNC_MAX_BILLED_SECONDS, lipsyncModelOf } from "./usage-cost.ts";
 
+// 음악 모델 공식 원가(2026-09-29 Atlas Cloud·ElevenLabs 표). minimax = Atlas minimax/music-2.6 곡당, lyria = 곡당, eleven = 분당.
+export const MUSIC_MODEL_USD = { minimax: 0.15, lyria: 0.08, elevenPerMinute: 0.15 };
+
 const DEFAULT_TEST_RATES = Object.freeze({
   image_generation: 20,
   image_describe: 2,
@@ -148,8 +151,23 @@ export function quoteCredits(feature, body, env) {
     basis = { durationSeconds: duration };
   } else if (key === "music") {
     const duration = Math.max(3, Number(input.durationSec || input.duration || 15) || 15);
-    credits = Math.max(1, Math.ceil(duration / 5) * scalarRate(rates, "music_per_5_seconds"));
-    basis = { durationSeconds: duration };
+    // 오디오 스튜디오 MUSIC 탭은 모델을 고른다 → 그 모델의 공식 원가로 예약(실제 사용량으로 다시 정산).
+    // 모델을 고르지 않는 포스트프로덕션 /api/music 은 예전 길이 요율 그대로.
+    const model = String(input.model || "").trim();
+    if (model === "minimax") {
+      credits = creditsForUsd(MUSIC_MODEL_USD.minimax);
+      basis = { model, maxUsd: MUSIC_MODEL_USD.minimax, metered: true };
+    } else if (model === "lyria") {
+      credits = creditsForUsd(MUSIC_MODEL_USD.lyria);
+      basis = { model, maxUsd: MUSIC_MODEL_USD.lyria, metered: true };
+    } else if (model === "eleven") {
+      const usd = Math.min(240, duration) / 60 * MUSIC_MODEL_USD.elevenPerMinute;
+      credits = creditsForUsd(usd);
+      basis = { model, durationSeconds: duration, maxUsd: usd, metered: true };
+    } else {
+      credits = Math.max(1, Math.ceil(duration / 5) * scalarRate(rates, "music_per_5_seconds"));
+      basis = { durationSeconds: duration };
+    }
   } else if (key === "knowledge_index") {
     // OpenAI 임베딩 $0.02/1M 토큰. 최대 80청크(약 11.2만 자) × 글자당 최대 2토큰으로 예약, 실제는 usage.total_tokens 로 정산.
     const chars = Math.min(112000, textLength(input));

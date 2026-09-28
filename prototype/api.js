@@ -1026,6 +1026,18 @@
     return j(text);
   };
 
+  // 단독 모드로 만든 사운드 자산을 브랜드·에피소드에 보관(원본 행은 그대로, 에피소드 범위 행을 하나 더).
+  api.soundAssetLink = async function (assetId, brandId, episodeId) {
+    var res = await fetch(withToken('/api/sound/asset-link'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ assetId: String(assetId || ''), brandId: String(brandId || ''), episodeId: String(episodeId || '') })
+    });
+    var text = await res.text();
+    if (!res.ok) { var err = new Error(e(text) || 'sound_asset_link_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
   api.soundAssets = async function (query) {
     var q = new URLSearchParams();
     if (query) {
