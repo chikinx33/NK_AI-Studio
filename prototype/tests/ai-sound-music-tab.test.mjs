@@ -20,7 +20,7 @@ test("MUSIC 탭이 열려 있고 사이드바·주소(?tab=music)로도 들어�
   assert.doesNotMatch(client, /makeTab\('music', t\('tab_music'\), true\)/, "준비중(비활성)으로 두지 않는다");
   assert.match(client, /state\.tab === 'music' \? renderMusicPanel\(\)/);
   assert.match(client, /function normalizeTab\(tab\) \{ return \(tab === 'sfx' \|\| tab === 'music'\) \? tab : 'voice'; \}/);
-  assert.match(client, /if \(v === 'voice' \|\| v === 'music' \|\| v === 'sfx'\) \{ openStudioInstance\(v\); return; \}/);
+  assert.match(client, /if \(v === 'voice' \|\| v === 'music' \|\| v === 'sfx'\) \{[\s\S]*?openStudioInstance\(v\);/);
   const voiceAt = page.indexOf('data-snd-view="voice"');
   const musicAt = page.indexOf('data-snd-view="music"');
   const sfxAt = page.indexOf('data-snd-view="sfx"');
@@ -121,4 +121,11 @@ test("브랜드 연결: 브랜드 번호는 brandId 칸에서 읽고, 단독 음
     assert.equal((client.match(new RegExp(`\\b${key}: '`, "g")) || []).length, 2, `${key} 한/영`);
   }
   assert.match(page, /\.snd-pick-actions \.btn-primary \{ min-width: \d+px;/);
+});
+
+// 2026-09-29: 에피소드 작업 중 사이드바 MUSIC 을 누르면 단독 모드로 새로 열려 '브랜드 없음'이 됐다.
+test("사이드바: 에피소드 작업 중엔 탭만 바꾸고, 대시보드에서 누를 때만 단독 모드", () => {
+  const setView = client.slice(client.indexOf("snd.setView = function"), client.indexOf("snd.setTab = function"));
+  assert.match(setView, /if \(state\.view === 'studio' && isProjectMode\(\)\) \{ snd\.setTab\(v\); return; \}/);
+  assert.ok(setView.indexOf("snd.setTab(v)") < setView.indexOf("openStudioInstance(v)"), "에피소드 유지가 먼저");
 });

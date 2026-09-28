@@ -603,7 +603,13 @@
   }
   snd.setView = function (v) {
     if (v === 'dashboard') { openDashboard(); return; }
-    if (v === 'voice' || v === 'music' || v === 'sfx') { openStudioInstance(v); return; }
+    if (v === 'voice' || v === 'music' || v === 'sfx') {
+      // 에피소드 작업 중이면 탭만 바꾼다. 전엔 사이드바가 늘 단독 모드로 새로 열어, 에피소드에서 MUSIC 을 누르면
+      // '브랜드 없음'으로 바뀌고 만든 음악이 브랜드에 연결되지 않았다(2026-09-29). 대시보드에서 누를 때만 단독 모드.
+      if (state.view === 'studio' && isProjectMode()) { snd.setTab(v); return; }
+      openStudioInstance(v);
+      return;
+    }
   };
   snd.setTab = function (tab) {
     if (tab !== 'voice' && tab !== 'music' && tab !== 'sfx') return;
