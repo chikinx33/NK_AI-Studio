@@ -304,6 +304,16 @@
       remove_image:      '제거',
       download:          '다운로드',
       delete_result:     '삭제',
+      keep_to_brand:     '브랜드에 보관',
+      keep_pick_title:   '브랜드에 보관',
+      keep_pick_desc:    '고른 에피소드의 자산으로 복사해요. 원본은 여기 그대로 남아요.',
+      keep_brand:        '브랜드',
+      keep_episode:      '에피소드',
+      keep_confirm:      '보관',
+      keep_cancel:       '취소',
+      keep_no_brands:    '보관할 브랜드가 없어요. 브랜드와 에피소드를 먼저 만들어 주세요.',
+      keep_done:         '"{b}" 브랜드의 "{e}" 에피소드에 보관했어요.',
+      keep_failed:       '보관하지 못했어요. 잠시 후 다시 시도해 주세요.',
       delete_all:        '전체 삭제',
       confirm_delete:    '이 영상을 서버에서 완전히 삭제합니다.\n다른 기기에서도 사라지며 되돌릴 수 없습니다. 계속할까요?',
       confirm_delete_all:'생성된 영상 전체를 서버에서 완전히 삭제합니다.\n모든 기기에서 사라지며 되돌릴 수 없습니다. 계속할까요?',
@@ -409,6 +419,16 @@
       remove_image:      'Remove',
       download:          'Download',
       delete_result:     'Delete',
+      keep_to_brand:     'Keep in brand',
+      keep_pick_title:   'Keep in brand',
+      keep_pick_desc:    'Copies this video into the assets of the chosen episode. The original stays here.',
+      keep_brand:        'Brand',
+      keep_episode:      'Episode',
+      keep_confirm:      'Keep',
+      keep_cancel:       'Cancel',
+      keep_no_brands:    'No brand to keep it in. Create a brand and an episode first.',
+      keep_done:         'Kept in episode "{e}" of brand "{b}".',
+      keep_failed:       'Could not keep the video. Please try again shortly.',
       delete_all:        'Clear All',
       confirm_delete:    'This permanently deletes the video from the server.\nIt will disappear on all your devices and cannot be undone. Continue?',
       confirm_delete_all:'This permanently deletes ALL generated videos from the server.\nThey will disappear on all your devices and cannot be undone. Continue?',
@@ -1692,8 +1712,10 @@
   var DOWNLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>';
   var TRASH_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"/><path d="M10 10v5.25M14 10v5.25"/></svg>';
   var PLAY_SVG     = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+  // lucide: archive
+  var KEEP_SVG     = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>';
   // lucide: rotate-ccw
-  var RETRY_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+  var RETRY_SVG   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
 
   function expiredMessage() {
     return state.lang === 'en'
@@ -1926,7 +1948,9 @@
       var dlAttrs = { type: 'button', title: t('download'), 'data-action': 'download-result', 'data-id': r.id, innerHTML: DOWNLOAD_SVG };
       if (rObjectName) { playAttrs['data-object'] = rObjectName; dlAttrs['data-object'] = rObjectName; }
       else { playAttrs['data-url'] = rDirectUrl; dlAttrs['data-url'] = rDirectUrl; }
+      // 2×2 배치: 재생·보관 / 다운로드·삭제
       actions.appendChild(el('button', 'vgen-action-btn vgen-action-btn--play', playAttrs));
+      if (rObjectName) actions.appendChild(keepButton(rObjectName));
       actions.appendChild(el('button', 'vgen-action-btn', dlAttrs));
     }
     if (r.status === 'error' && r.canRetry) {
@@ -1944,6 +1968,106 @@
     actions.appendChild(delBtn);
     card.appendChild(actions);
     return card;
+  }
+
+  function keepButton(objectName) {
+    return el('button', 'vgen-action-btn vgen-action-btn--keep', {
+      type: 'button', title: t('keep_to_brand'), 'aria-label': t('keep_to_brand'),
+      'data-action': 'keep-to-brand', 'data-object': objectName, innerHTML: KEEP_SVG
+    });
+  }
+
+  // 브랜드(= 브랜드 허브의 시리즈)와 그 에피소드 목록. 브랜드 허브와 같은 묶음 기준(seriesId)을 쓴다.
+  function listKeepTargets() {
+    var svc = NK.service && NK.service.project;
+    var drafts = (NK.store && NK.store.getDrafts ? NK.store.getDrafts() : []) || [];
+    var norm = drafts.map(function (d) { return svc && svc.normalizeDraft ? svc.normalizeDraft(d) : d; }).filter(Boolean);
+    var series = svc && svc.listSeries ? svc.listSeries() : [];
+    return series.map(function (s) {
+      var episodes = norm.filter(function (d) { return String(d.seriesId) === String(s.id); }).map(function (d) {
+        var p = d.payload || {};
+        return { id: String(d.id), title: String(d.title || p.episodeTitle || d.id) };
+      });
+      return { id: String(s.id), title: String(s.title || s.id), episodes: episodes };
+    }).filter(function (b) { return b.episodes.length; });
+  }
+
+  // 브랜드 → 에피소드를 고르는 작은 창. 고르면 {brand, episode}, 닫으면 null.
+  function pickKeepTarget() {
+    return new Promise(function (resolve) {
+      var brands = listKeepTargets();
+      if (!brands.length) {
+        NK.ui.dialog.alert(t('keep_no_brands'), { title: t('keep_pick_title') });
+        resolve(null);
+        return;
+      }
+      var overlay = el('div', 'vgen-pick-overlay');
+      var panel = el('div', 'vgen-pick-panel', { role: 'dialog', 'aria-modal': 'true' });
+      panel.appendChild(el('h3', 'vgen-pick-title', { textContent: t('keep_pick_title') }));
+      panel.appendChild(el('p', 'vgen-pick-desc', { textContent: t('keep_pick_desc') }));
+      var brandSel = el('select', 'vgen-pick-select');
+      var epSel = el('select', 'vgen-pick-select');
+      brands.forEach(function (b) { brandSel.appendChild(el('option', '', { value: b.id, textContent: b.title })); });
+      var current = state.currentBrand && brands.find(function (b) {
+        return b.title === state.currentBrand.brandTitle;
+      });
+      if (current) brandSel.value = current.id;
+      function fillEpisodes() {
+        var b = brands.find(function (x) { return x.id === brandSel.value; }) || brands[0];
+        epSel.innerHTML = '';
+        b.episodes.forEach(function (ep) { epSel.appendChild(el('option', '', { value: ep.id, textContent: ep.title })); });
+      }
+      fillEpisodes();
+      brandSel.addEventListener('change', fillEpisodes);
+      var brandLabel = el('label', 'vgen-pick-field');
+      brandLabel.appendChild(el('span', '', { textContent: t('keep_brand') }));
+      brandLabel.appendChild(brandSel);
+      var epLabel = el('label', 'vgen-pick-field');
+      epLabel.appendChild(el('span', '', { textContent: t('keep_episode') }));
+      epLabel.appendChild(epSel);
+      panel.appendChild(brandLabel);
+      panel.appendChild(epLabel);
+      var row = el('div', 'vgen-pick-actions');
+      var cancelBtn = el('button', 'btn-secondary compact', { type: 'button', textContent: t('keep_cancel') });
+      var okBtn = el('button', 'btn-primary compact', { type: 'button', textContent: t('keep_confirm') });
+      row.appendChild(cancelBtn);
+      row.appendChild(okBtn);
+      panel.appendChild(row);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+      function onKey(e) { if (e.key === 'Escape') close(null); }
+      function close(value) {
+        document.removeEventListener('keydown', onKey);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(value);
+      }
+      document.addEventListener('keydown', onKey);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(null); });
+      cancelBtn.addEventListener('click', function () { close(null); });
+      okBtn.addEventListener('click', function () {
+        var b = brands.find(function (x) { return x.id === brandSel.value; });
+        var ep = b && b.episodes.find(function (x) { return x.id === epSel.value; });
+        close(b && ep ? { brand: b, episode: ep } : null);
+      });
+      okBtn.focus();
+    });
+  }
+
+  async function keepToBrand(objectName, btn) {
+    var target = await pickKeepTarget();
+    if (!target) return;
+    btn.disabled = true;
+    try {
+      var owner = NK.api.getSharedOwner ? NK.api.getSharedOwner(target.episode.id) : '';
+      await NK.api.videoCopyToProject(objectName, target.episode.id, owner || '');
+      var msg = t('keep_done').replace('{b}', target.brand.title).replace('{e}', target.episode.title);
+      if (NK.ui.toast) NK.ui.toast(msg, { tone: 'ok' }); else window.alert(msg);
+    } catch (err) {
+      console.error('[vgen] keep to brand failed', err && err.message);
+      NK.ui.dialog.alert(t('keep_failed') + (err && err.message ? '\n' + err.message : ''), { title: t('keep_pick_title') });
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function renderServerCard(s) {
@@ -2004,6 +2128,7 @@
         type: 'button', title: '재생', 'data-action': 'play-result', 'data-object': objectName, innerHTML: PLAY_SVG
       });
       actions.appendChild(playBtn);
+      actions.appendChild(keepButton(objectName));
       var dlBtn = el('button', 'vgen-action-btn', {
         type: 'button', title: t('download'), 'data-action': 'download-result', 'data-object': objectName, innerHTML: DOWNLOAD_SVG
       });
@@ -2652,6 +2777,8 @@
           var r   = id && state.results.find(function (x) { return x.id === id; });
           var filename = r ? ('vg_' + (r.model || 'video') + '_' + r.id + '.mp4') : 'video.mp4';
           if (url) downloadVideo(url, filename);
+        } else if (action === 'keep-to-brand') {
+          if (btn.dataset.object) keepToBrand(btn.dataset.object, btn);
         } else if (action === 'retry-result') {
           retryResult(btn.dataset.id);
         } else if (action === 'delete-result') {

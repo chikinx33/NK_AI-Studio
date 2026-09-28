@@ -909,6 +909,18 @@
     return j(text);
   };
 
+  // 생성한 AI 영상을 고른 에피소드(프로젝트)의 AI 영상 폴더로 복사한다 → 브랜드 스튜디오 자산에 보인다.
+  api.videoCopyToProject = async function (objectName, projectId, ownerId) {
+    var res = await fetch(withBase('/api/video/copy-to-project'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ objectName: String(objectName || ''), projectId: String(projectId || ''), ownerId: String(ownerId || '') })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'video_copy_error');
+    return j(text);
+  };
+
   api.videoDelete = async function (objectName) {
     var name = String(objectName || '').trim();
     if (!name) throw new Error('objectName is required');
