@@ -9,7 +9,11 @@ const source = readFileSync(new URL("../../ai-company-app/src/lib/companyDocumen
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const compiled = { exports: {} };
 new Function("require", "module", "exports", code)(require, compiled, compiled.exports);
-const { companyDocumentExtensions, isDocumentLink } = compiled.exports;
+const { companyDocumentExtensions, isDocumentLink, normalizeCellColor } = compiled.exports;
+const { JSDOM } = require("jsdom");
+const dom = new JSDOM("<!doctype html><html><body></body></html>");
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
 const { MarkdownManager } = require("@tiptap/markdown");
 const markdown = new MarkdownManager({ extensions: companyDocumentExtensions(), markedOptions: { gfm: true, breaks: true } });
 const nodes = (node) => [node, ...(node.content || []).flatMap(nodes)];
@@ -57,4 +61,51 @@ test("이미지 파일명의 괄호·대괄호와 표 셀의 서식은 저장 �
   image.attrs.alt = "한글 [사진] (최종).png";
   image.attrs.src = "nkfile:folder%2Fphoto(final).png";
   assert.deepEqual(markdown.parse(markdown.serialize(doc)), doc);
+});
+
+test("표의 본문 셀과 머리글 색은 저장·재열기 후에도 텍스트·서식과 함께 보존된다", () => {
+  const doc = markdown.parse("앞 문단\n\n| 항목 | 내용 |\n| --- | --- |\n| **이름** | [링크](https://example.com) |\n\n뒤 문단");
+  const cells = nodes(doc).filter((n) => n.type === "tableCell" || n.type === "tableHeader");
+  cells[0].attrs = { ...cells[0].attrs, backgroundColor: "#dbeafe" };
+  cells[3].attrs = { ...cells[3].attrs, backgroundColor: "#fef3c7" };
+  const saved = markdown.serialize(doc);
+  assert.ok(saved.includes("<table"));
+  const reopened = markdown.parse(saved);
+  const restoredCells = nodes(reopened).filter((n) => n.type === "tableCell" || n.type === "tableHeader");
+  assert.deepEqual(restoredCells.map((c) => c.attrs?.backgroundColor || null), ["#dbeafe", null, null, "#fef3c7"]);
+  assert.ok(nodes(reopened).some((n) => n.text === "이름" && n.marks?.some((m) => m.type === "bold")));
+  assert.ok(nodes(reopened).some((n) => n.text === "링크" && n.marks?.some((m) => m.attrs?.href === "https://example.com")));
+  assert.equal(nodes(reopened).filter((n) => n.text === "앞 문단" || n.text === "뒤 문단").length, 2);
+  assert.deepEqual(markdown.parse(markdown.serialize(reopened)), reopened);
+  for (const cell of restoredCells) cell.attrs.backgroundColor = null;
+  const cleared = markdown.serialize(reopened);
+  assert.ok(!cleared.includes("<table"));
+  assert.ok(!cleared.includes("background-color"));
+  assert.ok(cleared.includes("**이름**"));
+});
+
+test("셀 색상은 안전한 색 값만 허용하고 브라우저 RGB 값도 복원한다", () => {
+  assert.equal(normalizeCellColor("rgb(254, 243, 199)"), "#fef3c7");
+  assert.equal(normalizeCellColor("#DBEAFE"), "#dbeafe");
+  for (const bad of ["url(https://example.com/track)", "red; background-image:url(x)", "rgb(999, 0, 0)", null]) assert.equal(normalizeCellColor(bad), null);
+  const doc = markdown.parse('<table><tr><th style="background-color:#dbeafe">제목</th></tr><tr><td data-cell-color="url(evil)">본문</td></tr></table>');
+  const cells = nodes(doc).filter((n) => n.type === "tableCell" || n.type === "tableHeader");
+  assert.equal(cells[0].attrs.backgroundColor, "#dbeafe");
+  assert.equal(cells[1].attrs.backgroundColor, null);
+});
+
+test("여러 셀의 색 적용과 해제는 셀 본문을 변경하지 않는다", () => {
+  const { getSchema } = require("@tiptap/core");
+  const { EditorState } = require("@tiptap/pm/state");
+  const { CellSelection, setCellAttr } = require("@tiptap/pm/tables");
+  const schema = getSchema(companyDocumentExtensions());
+  const doc = schema.nodeFromJSON(markdown.parse("| 첫째 | 둘째 |\n| --- | --- |\n| **본문 가** | 본문 나 |"));
+  const positions = [];
+  doc.descendants((node, pos) => { if (["tableHeader", "tableCell"].includes(node.type.name)) positions.push(pos); });
+  let state = EditorState.create({ doc, selection: CellSelection.create(doc, positions[0], positions[3]) });
+  assert.equal(setCellAttr("backgroundColor", "#fef3c7")(state, (tr) => { state = state.apply(tr); }), true);
+  assert.equal(state.doc.textContent, doc.textContent);
+  assert.deepEqual(nodes(state.doc.toJSON()).filter((n) => ["tableCell", "tableHeader"].includes(n.type)).map((n) => n.attrs.backgroundColor), Array(4).fill("#fef3c7"));
+  setCellAttr("backgroundColor", null)(state, (tr) => { state = state.apply(tr); });
+  assert.deepEqual(state.doc.toJSON(), doc.toJSON());
 });

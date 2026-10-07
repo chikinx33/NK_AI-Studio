@@ -1,7 +1,7 @@
-﻿import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+﻿import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
-import { CompanyDocumentImage, companyDocumentExtensions, isDocumentLink } from "../lib/companyDocumentExtensions";
+import { CompanyDocumentImage, companyDocumentExtensions, documentCellColors, isDocumentLink } from "../lib/companyDocumentExtensions";
 import { downloadCompanyFile } from "../lib/api";
 import { appDialog } from "../lib/appDialog";
 import "./CompanyDocumentBody.css";
@@ -62,6 +62,8 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
   const current = useRef(props); current.current = props;
   const syncedContent = useRef(props.content);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [colorsOpen, setColorsOpen] = useState(false);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
   const extensions = useMemo(() => companyDocumentExtensions(DocumentImage), []);
   const editor = useEditor({
     shouldRerenderOnTransaction: true,
@@ -120,6 +122,16 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
     editor.view.dom.setAttribute("aria-readonly", String(props.readOnly || !!props.disabled));
   }, [editor, props.readOnly, props.disabled]);
 
+  useEffect(() => {
+    if (!colorsOpen) return;
+    const dismiss = (event: PointerEvent) => { if (!colorMenuRef.current?.contains(event.target as Node)) setColorsOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { setColorsOpen(false); editor?.commands.focus(); } };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
+  }, [colorsOpen, editor]);
+  useEffect(() => { if (props.readOnly || props.disabled) setColorsOpen(false); }, [props.readOnly, props.disabled]);
+
   useImperativeHandle(ref, () => ({
     insertAttachment(url, label, image) {
       if (!editor) return;
@@ -153,6 +165,11 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
     { label: "표", active: editor.isActive("table"), run: () => editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run() },
     { label: "링크", active: editor.isActive("link"), run: () => void editLink() },
   ];
+  const cellColor = editor.getAttributes("tableCell").backgroundColor || editor.getAttributes("tableHeader").backgroundColor || null;
+  function applyCellColor(color: string | null) {
+    editor?.chain().focus().setCellAttribute("backgroundColor", color).run();
+    setColorsOpen(false);
+  }
   return <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
     {!props.readOnly && <div role="toolbar" aria-label="문서 서식" className="flex flex-wrap gap-1 border-b border-stone-200 bg-stone-50 p-2" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button")) e.preventDefault(); }}>
       {tools.map((tool) => <button key={tool.label} type="button" className={button} aria-pressed={tool.active} disabled={props.disabled} onClick={tool.run}>{tool.label}</button>)}
@@ -160,6 +177,13 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
       <button type="button" className={button} disabled={props.disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>실행 취소</button>
       <button type="button" className={button} disabled={props.disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>다시 실행</button>
       {editor.isActive("table") && <>
+        <div ref={colorMenuRef} className={colorsOpen ? "flex basis-full flex-wrap items-center gap-2" : ""}>
+          <button type="button" className={button} disabled={props.disabled} aria-expanded={colorsOpen} onClick={() => setColorsOpen((open) => !open)}>셀 색상</button>
+          {colorsOpen && <div role="group" aria-label="셀 배경색" className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2">
+            {documentCellColors.map((color) => <button key={color.value} type="button" aria-label={`셀 색상 ${color.label}`} title={color.label} aria-pressed={cellColor === color.value} className="h-7 w-7 rounded border border-stone-300 ring-emerald-600 aria-pressed:ring-2 focus-visible:outline-emerald-700" style={{ backgroundColor: color.value }} onClick={() => applyCellColor(color.value)}/>)}
+            <button type="button" className={button} onClick={() => applyCellColor(null)}>색 지우기</button>
+          </div>}
+        </div>
         <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().addRowAfter().run()}>행 추가</button>
         <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().addColumnAfter().run()}>열 추가</button>
         <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().deleteRow().run()}>행 삭제</button>
