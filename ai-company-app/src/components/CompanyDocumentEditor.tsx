@@ -89,11 +89,6 @@ export default function CompanyDocumentEditor({ initialPath, folder, onClose, on
   }
 
   useEffect(() => {
-    if (!dirty || !doc.title.trim() || loading || busy || error || attachmentBusy) return;
-    const timer = window.setTimeout(() => { void save(); }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [doc, dirty, loading, busy, error, attachmentBusy]);
-  useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => { if (dirtyRef.current || lock.current) { event.preventDefault(); event.returnValue = ""; } };
     const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void save(); } };
     window.addEventListener("beforeunload", unload); window.addEventListener("keydown", key);
@@ -131,7 +126,10 @@ export default function CompanyDocumentEditor({ initialPath, folder, onClose, on
   }
   async function operation(action: "document_comment" | "document_restore", extra: Record<string, unknown>) {
     if (lock.current || attachmentBusy) return;
-    if (dirtyRef.current && !(await save())) return;
+    if (dirtyRef.current) {
+      setError("저장하지 않은 변경 사항이 있습니다. 먼저 저장 버튼을 눌러 문서를 저장해 주세요.");
+      return;
+    }
     if (!pathRef.current) return;
     lock.current = true; setBusy(true); setError("");
     try {
@@ -160,7 +158,7 @@ export default function CompanyDocumentEditor({ initialPath, folder, onClose, on
   return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-2 backdrop-blur-sm sm:p-6">
     <section role="dialog" aria-modal="true" aria-label="업무 문서" className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-[#f3f1ed] text-stone-800 shadow-2xl [color-scheme:light] [&_input]:accent-emerald-700 [&_*::-webkit-scrollbar-thumb]:bg-stone-300">
       <header className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white p-4">
-        <span className="mr-auto text-sm font-semibold text-emerald-800">업무 문서 <span className="ml-2 text-xs font-normal text-stone-600" role="status">{loading ? "불러오는 중…" : busy ? "저장 중…" : attachmentBusy ? "첨부 중…" : error ? "작업 확인 필요" : dirty ? "저장 대기 중" : doc.revision ? `저장 완료 · ${date(doc.updatedAt)}` : "새 문서"}</span></span>
+        <span className="mr-auto text-sm font-semibold text-emerald-800">업무 문서 <span className="ml-2 text-xs font-normal text-stone-600" role="status">{loading ? "불러오는 중…" : busy ? "저장 중…" : attachmentBusy ? "첨부 중…" : error ? "작업 확인 필요" : dirty ? "저장하지 않은 변경 사항" : doc.revision ? `저장 완료 · ${date(doc.updatedAt)}` : "새 문서"}</span></span>
         <button className={button} onClick={download} disabled={loading}>본문 다운로드</button>
         <button className="rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 focus-visible:outline-emerald-700 disabled:opacity-40" disabled={loading || busy || attachmentBusy} onClick={() => void save()}>저장</button>
         <button className={button} disabled={busy || attachmentBusy} onClick={close}>닫기</button>
