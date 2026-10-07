@@ -5,15 +5,14 @@
   background: white;
   font-family: inherit;
   font-size: 16px;
-  line-height: 32px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   outline: none;
   caret-color: #047857;
 }
 @media (min-width: 640px) { .company-document-body { padding-inline: 40px; } }
-.company-document-body p { min-height: 32px; margin: 0; }
-.company-document-body > p + p { margin-top: 32px; }
+.company-document-body p { min-height: 1.5em; margin: 0; }
 .company-document-body h1 { font-size: 24px; margin: 20px 0; font-weight: 700; }
 .company-document-body h2 { font-size: 20px; margin: 16px 0; font-weight: 700; }
 .company-document-body h3 { font-size: 18px; margin: 12px 0; font-weight: 700; }
