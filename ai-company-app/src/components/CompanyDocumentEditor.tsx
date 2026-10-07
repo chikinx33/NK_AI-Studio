@@ -119,23 +119,25 @@ export default function CompanyDocumentEditor({ initialPath, folder, onClose, on
   }
   return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-2 backdrop-blur-sm sm:p-6">
     <section role="dialog" aria-modal="true" aria-label="업무 문서" className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-[#f3f1ed] text-stone-800 shadow-2xl [color-scheme:light] [&_input]:accent-emerald-700 [&_*::-webkit-scrollbar-thumb]:bg-stone-300">
-      <header className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white p-4">
+      <header className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-4 py-2">
         <span className="mr-auto text-sm font-semibold text-emerald-800">업무 문서 <span className="ml-2 text-xs font-normal text-stone-600" role="status">{loading ? "불러오는 중…" : busy ? "저장 중…" : attachmentBusy ? "첨부 중…" : error ? "작업 확인 필요" : dirty ? "저장하지 않은 변경 사항" : doc.revision ? `저장 완료 · ${date(doc.updatedAt)}` : "새 문서"}</span></span>
         <button className={button} onClick={download} disabled={loading}>본문 다운로드</button>
         <button className="rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 focus-visible:outline-emerald-700 disabled:opacity-40" disabled={loading || busy || attachmentBusy} onClick={() => void save()}>저장</button>
         <button className={button} disabled={busy || attachmentBusy} onClick={close}>닫기</button>
       </header>
       {error && <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800">{error}</div>}
-      {!loading && <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-        <fieldset disabled={busy || (!!initialPath && !doc.revision)} className="mx-auto max-w-4xl space-y-5 disabled:opacity-70">
-          <input aria-label="문서 제목" autoFocus={!initialPath} maxLength={120} placeholder="문서 제목을 입력하세요" value={doc.title} onChange={(e) => setDoc({ ...doc, title: e.target.value })} className="w-full rounded-lg border border-stone-200 bg-white px-5 py-4 text-2xl font-bold tracking-tight text-stone-900 shadow-sm placeholder:text-stone-400 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"/>
-          <div className="flex flex-wrap items-center gap-3">
+      {!loading && <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+        <fieldset disabled={busy || (!!initialPath && !doc.revision)} className="mx-auto min-w-0 max-w-4xl space-y-2 disabled:opacity-70">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2 shadow-sm">
+            <input aria-label="문서 제목" autoFocus={!initialPath} maxLength={120} placeholder="문서 제목을 입력하세요" value={doc.title} onChange={(e) => setDoc({ ...doc, title: e.target.value })} className="min-w-0 basis-full rounded-md bg-white px-2 py-1 text-xl font-bold tracking-tight text-stone-900 placeholder:text-stone-400 outline-none focus:ring-2 focus:ring-emerald-100 sm:flex-1 sm:basis-0"/>
+            <nav className="flex shrink-0 gap-1" aria-label="문서 보기">{([["edit", "편집"], ["preview", "미리보기"], ["history", "수정 이력"]] as const).map(([id, label]) => <button key={id} className={tab === id ? "rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" : button} onClick={() => setTab(id)} aria-pressed={tab === id}>{label}</button>)}</nav>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 [&_input:not([type=checkbox])]:py-1 [&_select]:py-1">
             {!initialPath && <label className="text-xs text-stone-600">양식 <select className={input} defaultValue="빈 문서" onChange={async (e) => { const name = e.target.value; if (!doc.content || await appDialog.confirm("현재 본문을 선택한 양식으로 바꿀까요?")) setDoc({ ...doc, content: templates[name], category: name === "빈 문서" ? "업무 메모" : name }); }}>{Object.keys(templates).map((name) => <option key={name}>{name}</option>)}</select></label>}
             <label className="text-xs text-stone-600">분류 <input maxLength={40} className={`${input} w-32`} value={doc.category} onChange={(e) => setDoc({ ...doc, category: e.target.value })}/></label>
             <label className="text-xs text-stone-600">상태 <select className={input} value={doc.status} onChange={(e) => setDoc({ ...doc, status: e.target.value as CompanyDocument["status"] })}>{["작성 중", "검토 중", "확정"].map((s) => <option key={s}>{s}</option>)}</select></label>
             <label className="flex items-center gap-2 text-xs text-stone-700"><input type="checkbox" checked={doc.pinned} onChange={(e) => setDoc({ ...doc, pinned: e.target.checked })}/>상단 고정</label>
           </div>
-          <nav className="flex gap-2" aria-label="문서 보기">{([["edit", "편집"], ["preview", "미리보기"], ["history", "수정 이력"]] as const).map(([id, label]) => <button key={id} className={tab === id ? "rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" : button} onClick={() => setTab(id)} aria-pressed={tab === id}>{label}</button>)}</nav>
           <div hidden={tab === "history"}>
             <CompanyDocumentBody ref={bodyRef} content={doc.content} readOnly={tab !== "edit"} disabled={busy || (!!initialPath && !doc.revision)} attachmentBusy={attachmentBusy} onChange={(content) => setDoc((current) => ({ ...current, content }))} onAttach={(files) => void attach(files)} onError={setError}/>
             {doc.content.length > 100000 && <p role="alert" className="mt-2 text-sm text-red-700">본문은 100,000자까지 저장할 수 있습니다. 내용을 줄여 주세요.</p>}

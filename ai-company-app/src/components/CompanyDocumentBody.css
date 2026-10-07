@@ -10,7 +10,15 @@
   white-space: pre-wrap;
   outline: none;
   caret-color: #047857;
+  border-radius: 12px;
 }
+.document-toolbar { border-bottom: 1px solid #e7e5e4; border-radius: 12px 12px 0 0; background: #fafaf9; }
+.document-toolbar-row { display: flex; gap: 3px; align-items: center; height: 42px; padding: 4px 8px; overflow-x: auto; scrollbar-width: thin; }
+.document-tool-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 30px; border: 1px solid transparent; border-radius: 6px; color: #44403c; }
+.document-tool-button:hover:not(:disabled) { background: #e7e5e4; }
+.document-tool-button:disabled { opacity: .3; cursor: default; }
+.document-tool-button[aria-pressed="true"], .document-tool-button[aria-expanded="true"] { border-color: #6ee7b7; background: #ecfdf5; color: #047857; }
+.document-tool-button:focus-visible { outline: 2px solid #059669; outline-offset: 1px; }
 @media (min-width: 640px) { .company-document-body { padding-inline: 40px; } }
 .company-document-body p { min-height: 1.5em; margin: 0; }
 .company-document-body h1 { font-size: 24px; margin: 20px 0; font-weight: 700; }

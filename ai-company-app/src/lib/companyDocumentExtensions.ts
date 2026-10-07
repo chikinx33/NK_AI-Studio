@@ -1,7 +1,8 @@
 ﻿import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import { Table, TableKit } from "@tiptap/extension-table";
-import { Extension, generateHTML, type Extensions } from "@tiptap/core";
+import { Extension, generateHTML, type Extensions, type JSONContent, type Node as TiptapNode } from "@tiptap/core";
+import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Image from "@tiptap/extension-image";
 
@@ -39,14 +40,29 @@ const CellBackground = Extension.create({
   },
 });
 
-const DocumentTable = Table.extend({
-  renderMarkdown(node, helpers, context): string {
-    const hasColor = node.content?.some((row) => row.content?.some((cell) => normalizeCellColor(cell.attrs?.backgroundColor)));
-    // GFM cannot encode cell colors. Use HTML only for colored tables and let
-    // the same schema restore their text, marks, links and colors on load.
-    return hasColor
-      ? generateHTML({ type: "doc", content: [node] }, companyDocumentExtensions())
-      : this.parent?.(node, helpers, context) || "";
+function needsDocumentHTML(node: JSONContent): boolean {
+  return !!normalizeCellColor(node.attrs?.backgroundColor)
+    || ["left", "center", "right"].includes(node.attrs?.textAlign)
+    || !!node.content?.some(needsDocumentHTML);
+}
+
+// Markdown has no paragraph alignment or cell colors. Serialize the enclosing
+// block as HTML so lists, tables and inline marks also survive saving/reopening.
+function preserveDocumentFormatting(extension: TiptapNode): TiptapNode {
+  return extension.extend({
+    renderMarkdown(node, helpers, context): string {
+      return needsDocumentHTML(node)
+        ? generateHTML({ type: "doc", content: [node] }, companyDocumentExtensions())
+        : this.parent?.(node, helpers, context) || "";
+    },
+  });
+}
+
+const DocumentStarterKit = StarterKit.extend({
+  addExtensions() {
+    return (this.parent?.() || []).map((extension) =>
+      ["paragraph", "heading", "bulletList", "orderedList", "blockquote"].includes(extension.name)
+        ? preserveDocumentFormatting(extension as TiptapNode) : extension);
   },
 });
 
@@ -66,7 +82,7 @@ export function isDocumentLink(url: string) {
 // Both viewing modes and Markdown round-trip tests use this same schema.
 export function companyDocumentExtensions(image = CompanyDocumentImage): Extensions {
   return [
-    StarterKit.configure({
+    DocumentStarterKit.configure({
       underline: false,
       trailingNode: false,
       link: {
@@ -77,9 +93,10 @@ export function companyDocumentExtensions(image = CompanyDocumentImage): Extensi
       },
     }),
     TableKit.configure({ table: false }),
-    DocumentTable.configure({ resizable: false }),
+    preserveDocumentFormatting(Table).configure({ resizable: false }),
     CellBackground,
-    TaskList,
+    TextAlign.configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right"] }),
+    preserveDocumentFormatting(TaskList),
     TaskItem.configure({ nested: true, a11y: { checkboxLabel: (node) => `완료: ${node.textContent || "할 일"}` } }),
     image.configure({ allowBase64: false }),
     Markdown.configure({ markedOptions: { gfm: true, breaks: true } }),

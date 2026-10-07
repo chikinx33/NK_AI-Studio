@@ -4,9 +4,10 @@ import { TextSelection } from "@tiptap/pm/state";
 import { CompanyDocumentImage, companyDocumentExtensions, documentCellColors, isDocumentLink } from "../lib/companyDocumentExtensions";
 import { downloadCompanyFile } from "../lib/api";
 import { appDialog } from "../lib/appDialog";
+import DocumentToolbarIcon, { type DocumentToolbarIconName } from "./DocumentToolbarIcon";
 import "./CompanyDocumentBody.css";
 
-const button = "rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-800 hover:bg-stone-100 disabled:opacity-40 aria-pressed:border-emerald-300 aria-pressed:bg-emerald-50 aria-pressed:text-emerald-800";
+const button = "document-tool-button";
 function attachmentPath(url: string) {
   try { return decodeURIComponent(url.slice(7)); } catch { return ""; }
 }
@@ -107,6 +108,7 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
       current.current.onChange?.(markdown);
     },
   });
+  const inTable = !!editor?.isActive("table");
 
   useEffect(() => {
     // Never feed our own keystrokes back through setContent: that resets the caret,
@@ -130,7 +132,7 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
     document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
   }, [colorsOpen, editor]);
-  useEffect(() => { if (props.readOnly || props.disabled) setColorsOpen(false); }, [props.readOnly, props.disabled]);
+  useEffect(() => { if (props.readOnly || props.disabled || !inTable) setColorsOpen(false); }, [props.readOnly, props.disabled, inTable]);
 
   useImperativeHandle(ref, () => ({
     insertAttachment(url, label, image) {
@@ -155,52 +157,60 @@ const CompanyDocumentBody = forwardRef<DocumentBodyHandle, Props>(function Compa
   }
 
   if (!editor) return null;
-  const tools = [
-    { label: "제목", active: editor.isActive("heading", { level: 2 }), run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { label: "굵게", active: editor.isActive("bold"), run: () => editor.chain().focus().toggleBold().run() },
-    { label: "기울임", active: editor.isActive("italic"), run: () => editor.chain().focus().toggleItalic().run() },
-    { label: "목록", active: editor.isActive("bulletList"), run: () => editor.chain().focus().toggleBulletList().run() },
-    { label: "번호 목록", active: editor.isActive("orderedList"), run: () => editor.chain().focus().toggleOrderedList().run() },
-    { label: "체크", active: editor.isActive("taskList"), run: () => editor.chain().focus().toggleTaskList().run() },
-    { label: "표", active: editor.isActive("table"), run: () => editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run() },
-    { label: "링크", active: editor.isActive("link"), run: () => void editLink() },
+  const tools: { label: string; icon: DocumentToolbarIconName; active?: boolean; disabled?: boolean; run: () => void }[] = [
+    { label: "제목", icon: "heading", active: editor.isActive("heading", { level: 2 }), run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+    { label: "굵게", icon: "bold", active: editor.isActive("bold"), run: () => editor.chain().focus().toggleBold().run() },
+    { label: "기울임", icon: "italic", active: editor.isActive("italic"), run: () => editor.chain().focus().toggleItalic().run() },
+    { label: "목록", icon: "list", active: editor.isActive("bulletList"), run: () => editor.chain().focus().toggleBulletList().run() },
+    { label: "번호 목록", icon: "ordered", active: editor.isActive("orderedList"), run: () => editor.chain().focus().toggleOrderedList().run() },
+    { label: "체크", icon: "check", active: editor.isActive("taskList"), run: () => editor.chain().focus().toggleTaskList().run() },
+    ...(["left", "center", "right"] as const).map((align, index) => ({ label: ["왼쪽 정렬", "가운데 정렬", "오른쪽 정렬"][index], icon: align,
+      active: editor.isActive({ textAlign: align }) || (align === "left" && editor.isActive({ textAlign: null })),
+      run: () => { editor.chain().focus().setTextAlign(align).run(); } })),
+    { label: "표", icon: "table", active: inTable, run: () => editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run() },
+    { label: "링크", icon: "link", active: editor.isActive("link"), run: () => void editLink() },
+    { label: "이미지·파일 첨부", icon: "attach", disabled: props.attachmentBusy, run: () => fileRef.current?.click() },
+    { label: "실행 취소", icon: "undo", disabled: !editor.can().undo(), run: () => editor.chain().focus().undo().run() },
+    { label: "다시 실행", icon: "redo", disabled: !editor.can().redo(), run: () => editor.chain().focus().redo().run() },
+  ];
+  const tableTools: { label: string; icon: DocumentToolbarIconName; run: () => void }[] = [
+    { label: "행 추가", icon: "rowAdd", run: () => editor.chain().focus().addRowAfter().run() },
+    { label: "열 추가", icon: "columnAdd", run: () => editor.chain().focus().addColumnAfter().run() },
+    { label: "행 삭제", icon: "rowDelete", run: () => editor.chain().focus().deleteRow().run() },
+    { label: "열 삭제", icon: "columnDelete", run: () => editor.chain().focus().deleteColumn().run() },
+    { label: "표 삭제", icon: "tableDelete", run: () => editor.chain().focus().deleteTable().run() },
+    { label: "표 아래 문단", icon: "paragraph", run: () => editor.chain().focus().command(({ tr, state }) => {
+      const { $from } = state.selection;
+      for (let depth = $from.depth; depth > 0; depth--) {
+        if ($from.node(depth).type.name !== "table") continue;
+        const after = $from.after(depth);
+        tr.insert(after, state.schema.nodes.paragraph.create());
+        tr.setSelection(TextSelection.create(tr.doc, after + 1));
+        return true;
+      }
+      return false;
+    }).run() },
   ];
   const cellColor = editor.getAttributes("tableCell").backgroundColor || editor.getAttributes("tableHeader").backgroundColor || null;
   function applyCellColor(color: string | null) {
     editor?.chain().focus().setCellAttribute("backgroundColor", color).run();
     setColorsOpen(false);
   }
-  return <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
-    {!props.readOnly && <div role="toolbar" aria-label="문서 서식" className="flex flex-wrap gap-1 border-b border-stone-200 bg-stone-50 p-2" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button")) e.preventDefault(); }}>
-      {tools.map((tool) => <button key={tool.label} type="button" className={button} aria-pressed={tool.active} disabled={props.disabled} onClick={tool.run}>{tool.label}</button>)}
-      <button type="button" className={button} disabled={props.disabled || props.attachmentBusy} onClick={() => fileRef.current?.click()}>이미지·파일 첨부</button>
-      <button type="button" className={button} disabled={props.disabled || !editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>실행 취소</button>
-      <button type="button" className={button} disabled={props.disabled || !editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>다시 실행</button>
-      {editor.isActive("table") && <>
-        <div ref={colorMenuRef} className={colorsOpen ? "flex basis-full flex-wrap items-center gap-2" : ""}>
-          <button type="button" className={button} disabled={props.disabled} aria-expanded={colorsOpen} onClick={() => setColorsOpen((open) => !open)}>셀 색상</button>
-          {colorsOpen && <div role="group" aria-label="셀 배경색" className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2">
-            {documentCellColors.map((color) => <button key={color.value} type="button" aria-label={`셀 색상 ${color.label}`} title={color.label} aria-pressed={cellColor === color.value} className="h-7 w-7 rounded border border-stone-300 ring-emerald-600 aria-pressed:ring-2 focus-visible:outline-emerald-700" style={{ backgroundColor: color.value }} onClick={() => applyCellColor(color.value)}/>)}
-            <button type="button" className={button} onClick={() => applyCellColor(null)}>색 지우기</button>
-          </div>}
+  return <div className="rounded-xl border border-stone-200 bg-white shadow-sm">
+    {!props.readOnly && <div className="document-toolbar" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button")) e.preventDefault(); }}>
+      <div role="toolbar" aria-label="문서 서식" className="document-toolbar-row">
+        {tools.map((tool) => <button key={tool.label} type="button" className={button} title={tool.label} aria-label={tool.label} aria-pressed={tool.active} disabled={props.disabled || tool.disabled} onClick={tool.run}><DocumentToolbarIcon name={tool.icon}/></button>)}
+      </div>
+      <div ref={colorMenuRef} className="relative border-t border-stone-200">
+        <div role="toolbar" aria-label="표 상세 메뉴" className="document-toolbar-row">
+          <button type="button" className={button} title="셀 색상" aria-label="셀 색상" disabled={props.disabled || !inTable} aria-expanded={colorsOpen} onClick={() => setColorsOpen((open) => !open)}><DocumentToolbarIcon name="color"/></button>
+          {tableTools.map((tool) => <button key={tool.label} type="button" className={button} title={tool.label} aria-label={tool.label} disabled={props.disabled || !inTable} onClick={tool.run}><DocumentToolbarIcon name={tool.icon}/></button>)}
         </div>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().addRowAfter().run()}>행 추가</button>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().addColumnAfter().run()}>열 추가</button>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().deleteRow().run()}>행 삭제</button>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().deleteColumn().run()}>열 삭제</button>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().deleteTable().run()}>표 삭제</button>
-        <button type="button" className={button} disabled={props.disabled} onClick={() => editor.chain().focus().command(({ tr, state }) => {
-          const { $from } = state.selection;
-          for (let depth = $from.depth; depth > 0; depth--) {
-            if ($from.node(depth).type.name !== "table") continue;
-            const after = $from.after(depth);
-            tr.insert(after, state.schema.nodes.paragraph.create());
-            tr.setSelection(TextSelection.create(tr.doc, after + 1));
-            return true;
-          }
-          return false;
-        }).run()}>표 아래 문단</button>
-      </>}
+        {colorsOpen && <div role="group" aria-label="셀 배경색" className="absolute left-2 top-full z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2 shadow-lg">
+          {documentCellColors.map((color) => <button key={color.value} type="button" aria-label={`셀 색상 ${color.label}`} title={color.label} aria-pressed={cellColor === color.value} className="h-7 w-7 rounded border border-stone-300 ring-emerald-600 aria-pressed:ring-2 focus-visible:outline-emerald-700" style={{ backgroundColor: color.value }} onClick={() => applyCellColor(color.value)}/>)}
+          <button type="button" className={button} title="색 지우기" aria-label="색 지우기" onClick={() => applyCellColor(null)}><DocumentToolbarIcon name="clear"/></button>
+        </div>}
+      </div>
       <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ""; props.onAttach?.(files); }}/>
     </div>}
     <EditorContent editor={editor}/>

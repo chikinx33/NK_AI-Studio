@@ -109,3 +109,26 @@ test("여러 셀의 색 적용과 해제는 셀 본문을 변경하지 않는다
   setCellAttr("backgroundColor", null)(state, (tr) => { state = state.apply(tr); });
   assert.deepEqual(state.doc.toJSON(), doc.toJSON());
 });
+
+test("문단·제목·목록·체크·표의 정렬은 색과 서식을 유지하며 저장 후 복원된다", () => {
+  const doc = markdown.parse("## 제목\n\n**본문**\n\n- 목록 가\n- 목록 나\n\n1. 순서\n\n- [x] 완료\n\n> 인용\n\n| 항목 | 내용 |\n| --- | --- |\n| 셀 가 | 셀 나 |\n\n마지막");
+  const blocks = nodes(doc).filter((n) => ["paragraph", "heading"].includes(n.type));
+  blocks.forEach((node, index) => { node.attrs = { ...node.attrs, textAlign: ["left", "center", "right"][index % 3] }; });
+  const cells = nodes(doc).filter((n) => n.type === "tableCell");
+  cells[0].attrs = { ...cells[0].attrs, backgroundColor: "#fef3c7" };
+  const reopened = markdown.parse(markdown.serialize(doc));
+  assert.deepEqual(nodes(reopened).filter((n) => ["paragraph", "heading"].includes(n.type)).map((n) => n.attrs?.textAlign), blocks.map((n) => n.attrs.textAlign));
+  assert.deepEqual(nodes(reopened).filter((n) => n.type === "text").map((n) => n.text), nodes(doc).filter((n) => n.type === "text").map((n) => n.text));
+  assert.ok(nodes(reopened).some((n) => n.text === "본문" && n.marks?.some((m) => m.type === "bold")));
+  assert.equal(nodes(reopened).find((n) => n.type === "taskItem").attrs.checked, true);
+  assert.equal(nodes(reopened).find((n) => n.type === "tableCell").attrs.backgroundColor, "#fef3c7");
+  assert.deepEqual(markdown.parse(markdown.serialize(reopened)), reopened);
+});
+
+test("정렬은 허용된 값만 복원하고 빈 문단과 줄바꿈도 보존한다", () => {
+  const doc = markdown.parse('<p style="text-align:center"></p>\n\n<p style="text-align:right">첫 줄<br>둘째 줄</p>\n\n<p style="text-align:justify">기본</p>');
+  assert.deepEqual(nodes(doc).filter((n) => n.type === "paragraph").map((n) => n.attrs.textAlign), ["center", "right", null]);
+  assert.ok(nodes(doc).some((n) => n.type === "hardBreak"));
+  const schema = require("@tiptap/core").getSchema(companyDocumentExtensions());
+  assert.deepEqual(schema.nodeFromJSON(markdown.parse(markdown.serialize(doc))).toJSON(), schema.nodeFromJSON(doc).toJSON());
+});
