@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   copyCompanyFile,
   createCompanyFolder,
@@ -18,7 +18,7 @@ import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFilePreview from "./CompanyFilePreview";
 import { appDialog } from "../lib/appDialog";
-import CompanyDocumentEditor from "./CompanyDocumentEditor";
+const CompanyDocumentEditor = lazy(() => import("./CompanyDocumentEditor"));
 
 type ViewMode = "cards" | "list" | "board";
 
@@ -529,7 +529,7 @@ export default function CompanyFileExplorer({
       </>}
       {viewMode === "board" && loading && <div className="p-12 text-center text-sm text-gray-500">문서를 불러오는 중…</div>}
     </main>
-    {documentEditor && <CompanyDocumentEditor key={documentEditor.path || `new:${documentEditor.folder}`} initialPath={documentEditor.path} folder={documentEditor.folder} onClose={() => setDocumentEditor(null)} onSaved={() => setRevision((value) => value + 1)}/>}
+    {documentEditor && <Suspense fallback={<div role="status" className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50"><span className="rounded-xl bg-white px-6 py-4 text-stone-800 shadow-lg">문서를 불러오는 중…</span></div>}><CompanyDocumentEditor key={documentEditor.path || `new:${documentEditor.folder}`} initialPath={documentEditor.path} folder={documentEditor.folder} onClose={() => setDocumentEditor(null)} onSaved={() => setRevision((value) => value + 1)}/></Suspense>}
     <CompanyFilePreview entry={previewEntry} onClose={() => setPreviewEntry(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />
   </div>;
 }
