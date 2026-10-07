@@ -6,6 +6,7 @@ import {
   downloadCompanyFile,
   getCompanyFilePreviewUrl,
   listCompanyFiles,
+  isCompanyDocument,
   moveCompanyFile,
   moveCompanyWorkFolder,
   uploadCompanyFile,
@@ -17,8 +18,9 @@ import { actionString, useUiAction } from "../lib/uiActions";
 import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFilePreview from "./CompanyFilePreview";
 import { appDialog } from "../lib/appDialog";
+import CompanyDocumentEditor from "./CompanyDocumentEditor";
 
-type ViewMode = "cards" | "list";
+type ViewMode = "cards" | "list" | "board";
 
 /** lucide "message-square" — 채팅에 담기(업무 폴더 항목과 같은 아이콘). */
 function MessageSquareIcon({ className }: { className?: string }) {
@@ -146,7 +148,9 @@ export default function CompanyFileExplorer({
   const [entries, setEntries] = useState<CompanyFileEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>(() => readUserStorage("company-files-view") === "list" ? "list" : "cards");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => { const saved = readUserStorage("company-files-view"); return saved === "board" || saved === "list" ? saved : "cards"; });
+  const [documentEditor, setDocumentEditor] = useState<{ path?: string; folder: string } | null>(null);
+  const [boardStatus, setBoardStatus] = useState("");
   const [loading, setLoading] = useState(true);
   // 목록이 늦게 오면 기다린 시간을 보여 주고, 끝난 뒤엔 서버가 잰 시간(저장소·DB)을 남긴다 — "굉장히 오래 뜬다" 의 원인을 화면에서 바로 본다.
   const [loadElapsedMs, setLoadElapsedMs] = useState(0);
@@ -216,7 +220,7 @@ export default function CompanyFileExplorer({
 
   const visibleEntries = useMemo(() => {
     const term = query.trim().toLocaleLowerCase("ko-KR");
-    return term ? entries.filter((entry) => entry.name.toLocaleLowerCase("ko-KR").includes(term)) : entries;
+    return term ? entries.filter((entry) => `${entry.name} ${entry.document?.title || ""} ${entry.document?.category || ""}`.toLocaleLowerCase("ko-KR").includes(term)) : entries;
   }, [entries, query]);
   const selectedEntries = entries.filter((entry) => selected.has(entry.path));
   const selectedWorkFolders = selectedEntries.filter((entry) => entry.kind === "work-folder");
@@ -453,6 +457,7 @@ export default function CompanyFileExplorer({
   function openEntry(entry: CompanyFileEntry) {
     if (entry.kind === "work-folder" && entry.dateKey) onOpenWorkFolder?.(entry.dateKey);
     else if (entry.kind === "folder") setPath(entry.path);
+    else if (isCompanyDocument(entry)) setDocumentEditor({ path: entry.path, folder: entry.parentPath || path });
     else if (entry.kind === "file") setPreviewEntry(entry);
   }
 
@@ -468,7 +473,9 @@ export default function CompanyFileExplorer({
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="현재 폴더 검색" className="h-9 w-40 rounded-lg border border-edge bg-[#090d13] px-3 text-xs text-gray-200 outline-none focus:border-emerald-800" />
         {!!selected.size && <span className="rounded-full border border-emerald-900/80 bg-emerald-950/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">{selected.size}개 선택</span>}
-        <button type="button" onClick={() => setViewMode((value) => value === "cards" ? "list" : "cards")} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300">{viewMode === "cards" ? "목록" : "카드"}</button>
+        <select aria-label="파일 보기 방식" value={viewMode} onChange={(event) => setViewMode(event.target.value as ViewMode)} className="rounded-lg border border-edge bg-[#090d13] px-3 py-2 text-xs text-gray-300"><option value="cards">카드</option><option value="list">목록</option><option value="board">게시판</option></select>
+        <button type="button" onClick={() => setDocumentEditor({ folder: path })} disabled={!!busy} className="rounded-lg border border-emerald-600 bg-emerald-950/50 px-3 py-2 text-xs font-bold text-emerald-200 disabled:opacity-40">새 문서</button>
+        <button type="button" onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300">새로고침</button>
         <button type="button" onClick={() => void createFolder()} disabled={!!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-200 disabled:opacity-40">새 폴더</button>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void uploadFiles(event.target.files)} />
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">파일 추가</button>
@@ -508,11 +515,21 @@ export default function CompanyFileExplorer({
       }}
     >
       {fileDragOver && <div className="mb-3 rounded-xl border border-emerald-700 bg-emerald-950/40 p-3 text-center text-xs text-emerald-200">여기에 놓으면 이 폴더에 업로드돼요</div>}
+      {viewMode === "board" && !loading && <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3"><h2 className="mr-auto text-sm font-semibold text-gray-200">문서 게시판 <span className="ml-2 text-xs font-normal text-gray-500">폴더의 문서를 열어 바로 편집하세요</span></h2><select aria-label="문서 상태 필터" value={boardStatus} onChange={(event) => setBoardStatus(event.target.value)} className="rounded-lg border border-edge bg-[#090d13] p-2 text-xs text-gray-300"><option value="">모든 상태</option>{["작성 중", "검토 중", "확정"].map((status) => <option key={status}>{status}</option>)}</select></div>
+        {!!visibleEntries.filter((entry) => !isCompanyDocument(entry)).length && <div className="flex flex-wrap gap-2">{visibleEntries.filter((entry) => !isCompanyDocument(entry)).map((entry) => <button key={entry.path} type="button" onClick={() => openEntry(entry)} className="flex max-w-full items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-gray-300"><EntryIcon entry={entry} className="h-5 w-5"/><span className="truncate">{entry.name}</span></button>)}</div>}
+        <div className="overflow-x-auto rounded-xl border border-edge"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">제목</th><th className="p-3">분류</th><th className="p-3">상태</th><th className="p-3">수정자</th><th className="p-3">최근 수정</th></tr></thead><tbody>{visibleEntries.filter((entry) => isCompanyDocument(entry) && (!boardStatus || entry.document?.status === boardStatus)).sort((a, b) => Number(!!b.document?.pinned) - Number(!!a.document?.pinned) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))).map((entry) => <tr key={entry.path} className={`border-t border-edge hover:bg-panel/60 ${selected.has(entry.path) ? "bg-emerald-950/20" : ""}`}><td className="p-3"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" className="text-left font-semibold text-gray-100 hover:text-emerald-300" onClick={() => openEntry(entry)}>{entry.document?.pinned ? "📌 " : ""}{entry.document?.title || entry.name}{!!entry.document?.commentCount && <span className="ml-2 text-emerald-400">[{entry.document.commentCount}]</span>}</button></td><td className="p-3 text-gray-400">{entry.document?.category || "문서"}</td><td className="p-3 text-emerald-300">{entry.document?.status || "작성 중"}</td><td className="p-3 text-gray-500">{entry.document?.editor || "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td></tr>)}</tbody></table>
+        {!visibleEntries.some((entry) => isCompanyDocument(entry) && (!boardStatus || entry.document?.status === boardStatus)) && <div className="p-12 text-center text-sm text-gray-500">{query || boardStatus ? "조건에 맞는 문서가 없습니다." : "새 문서를 만들어 첫 게시글을 작성해 보세요."}</div>}</div>
+      </div>}
+      {viewMode !== "board" && <>
       {loading ? <div className="grid min-h-64 place-items-center text-sm text-gray-500">회사 파일을 불러오는 중…{loadElapsedMs >= 2000 ? ` ${(loadElapsedMs / 1000).toFixed(0)}초` : ""}</div> : visibleEntries.length ? viewMode === "list" ?
-        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th><th className="w-24 p-3"></th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "bg-emerald-900/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.name}</span></button></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td><td className="p-3"><div className="flex items-center justify-end gap-1">{chatButton(entry)}{menuButton(entry)}</div></td></tr>)}</tbody></table></div> :
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div>{chatButton(entry, "absolute right-9 top-1.5 z-10")}{menuButton(entry, "absolute right-[4.25rem] top-1.5 z-10")}<button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
-        <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{query ? "검색 결과가 없습니다." : embedded ? "넣어 둔 파일이 없습니다. 파일을 여기에 끌어다 놓거나, 파일을 이 날짜 폴더로 끌어다 놓거나 파일 추가로 올려 주세요." : <>이 폴더가 비어 있습니다.<br/>새 폴더를 만들거나 파일을 추가해 주세요.</>}</div>}
+        <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-gray-500"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th><th className="w-24 p-3"></th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "bg-emerald-900/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-emerald-950/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryIcon entry={entry} className="h-7 w-7 shrink-0"/><span className="truncate font-medium text-gray-200">{entry.document?.title || entry.name}</span></button></td><td className="p-3 text-gray-500">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-gray-500">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-gray-500">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td><td className="p-3"><div className="flex items-center justify-end gap-1">{chatButton(entry)}{menuButton(entry)}</div></td></tr>)}</tbody></table></div> :
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-emerald-950/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-gray-600"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div>{chatButton(entry, "absolute right-9 top-1.5 z-10")}{menuButton(entry, "absolute right-[4.25rem] top-1.5 z-10")}<button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryIcon entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-gray-100" title={entry.name}>{entry.document?.title || entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-gray-500"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
+        <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-gray-500">{query ? "검색 결과가 없습니다." : embedded ? "넣어 둔 파일이 없습니다. 파일을 여기에 끌어다 놓거나, 파일을 이 날짜 폴더로 끌어다 놓거나 파일 추가로 올려 주세요." : <>이 폴더가 비어 있습니다.<br/>새 문서를 작성하거나 폴더·파일을 추가해 주세요.</>}</div>}
+      </>}
+      {viewMode === "board" && loading && <div className="p-12 text-center text-sm text-gray-500">문서를 불러오는 중…</div>}
     </main>
+    {documentEditor && <CompanyDocumentEditor key={documentEditor.path || `new:${documentEditor.folder}`} initialPath={documentEditor.path} folder={documentEditor.folder} onClose={() => setDocumentEditor(null)} onSaved={() => setRevision((value) => value + 1)}/>}
     <CompanyFilePreview entry={previewEntry} onClose={() => setPreviewEntry(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />
   </div>;
 }

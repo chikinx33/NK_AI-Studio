@@ -284,6 +284,7 @@ export async function deleteCompanyWorkFolderMeta(dateKey: string): Promise<void
 }
 
 export interface CompanyFileEntry {
+  document?: Pick<CompanyDocument, "title" | "category" | "status" | "pinned" | "editor" | "revision"> & { commentCount: number };
   kind: "folder" | "file" | "work-folder" | "work";
   name: string;
   path: string;
@@ -299,6 +300,24 @@ export interface CompanyFileEntry {
   workType?: string;
   status?: CompanyWorkItem["status"];
   summary?: string;
+}
+
+export interface DocumentSnapshot {
+  title: string; content: string; category: string; status: "작성 중" | "검토 중" | "확정";
+  pinned: boolean; revision: number; updatedAt: string; editor: string;
+}
+export interface CompanyDocument extends DocumentSnapshot {
+  kind: "nk-document"; createdAt: string; history: DocumentSnapshot[];
+  comments: Array<{ id: string; text: string; author: string; createdAt: string }>;
+}
+export function isCompanyDocument(entry: CompanyFileEntry) {
+  return entry.kind === "file" && (!!entry.document || entry.path.toLowerCase().endsWith(".nkdoc.json") || entry.contentType?.startsWith("application/vnd.nk.document+json"));
+}
+export async function companyDocumentAction(action: "document_read" | "document_save" | "document_comment" | "document_restore", path: string, input: Record<string, unknown> = {}): Promise<{ path: string; generation: string; document: CompanyDocument }> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, action, path }),
+  });
+  return readCompanyFileResponse(res, "문서 작업에 실패했습니다.");
 }
 
 async function readCompanyFileResponse(res: Response, fallback: string): Promise<any> {

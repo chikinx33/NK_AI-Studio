@@ -1027,7 +1027,7 @@ export function messageFilesFromToolOutput(tool: string, output: any, jobId = ""
     ? output.entries.filter((entry: any) => entry?.kind === "file")
     : output.entry?.kind === "file"
       ? [output.entry]
-      : output.path && (output.kind === "company_files_read" || output.kind === "company_files_write")
+      : output.path && (output.kind === "company_files_read" || output.kind === "company_files_write" || String(output.kind).startsWith("company_files_document_"))
         ? [output]
         : [];
   if (companyEntries.length) {
@@ -4064,6 +4064,18 @@ async function throwPendingImage(job: any, payload: any, ctx: ToolContext, path 
 }
 
 /** AI 회사 공용 파일 공간. 사용자와 모든 직원이 같은 상대 경로를 본다. */
+async function runCompanyDocumentTool(action: string, input: any, ctx: ToolContext): Promise<any> {
+  const path = String(input?.path || "").trim();
+  if (!path) throw new Error("업무 문서 경로(path)가 필요합니다. company_files_list로 먼저 확인해 주세요.");
+  const result = await callInternalJson(ctx, "/api/agent/company-files", {
+    body: { ...input, action, path, documentJobId: ctx.jobId || "" },
+  });
+  // 모델에는 과거 본문 20개를 반복 전달하지 않는다. 복원에는 이력의 revision을 쓴다.
+  const document = result.document;
+  const history = document?.history?.map(({ content, ...snapshot }: any) => ({ ...snapshot, characters: content.length }));
+  return { ...result, kind: `company_files_${action}`, name: document?.title, contentType: "application/vnd.nk.document+json", document: document ? { ...document, history } : undefined };
+}
+
 async function runCompanyFilesListTool(input: any, ctx: ToolContext): Promise<any> {
   const path = String(input?.path || "").trim();
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
@@ -7435,6 +7447,10 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   infographic: { agentId: "core", kind: "read", run: runInfographicTool },
   // 회사 공용 파일: 모든 직원이 같은 폴더를 인지한다. 조회는 즉시, 변경은 사람 승인 후 실행한다.
   company_knowledge_search: { agentId: "core", agentIds: ["edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach", "sync"], kind: "read", synthesize: true, run: runCompanyKnowledgeSearchTool },
+  company_files_document_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: (input, ctx) => runCompanyDocumentTool("document_read", input, ctx) },
+  company_files_document_save: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyDocumentTool("document_save", input, ctx) },
+  company_files_document_comment: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyDocumentTool("document_comment", input, ctx) },
+  company_files_document_restore: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyDocumentTool("document_restore", input, ctx) },
   company_files_list: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesListTool },
   company_files_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesReadTool },
   company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesWriteTool },

@@ -5,6 +5,7 @@ import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { ensureAgentSchema, getSql } from "./_shared";
 import { DOCUMENT_EXTENSIONS, extractDocumentText } from "./_doc-text";
+import { DOCUMENT_TYPE, DOCUMENT_SUFFIX, DocumentError, isCompanyDocument, parseCompanyDocument, updateCompanyDocument, documentSummary } from "./_company-documents";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -192,6 +193,7 @@ async function listStoredEntries(ctx: any, rootPrefix: string, path: string) {
         kind: "file", name: baseName(relative), path: relative, parentPath: path,
         contentType: String(item.contentType || "application/octet-stream"), size: Number(item.size || 0),
         createdAt: String(item.timeCreated || item.updated || ""), updatedAt: String(item.updated || ""),
+        ...(item.metadata?.nkDocument ? { document: JSON.parse(item.metadata.nkDocument) } : {}),
       };
     });
   return { folders, files, empty: !listed.items.length && !listed.prefixes.length };
@@ -209,7 +211,7 @@ async function searchFiles(ctx: any, rootPrefix: string, scope: string, query: s
   const all = listed.items
     .map((item) => ({ item, path: String(item.name || "").slice(rootPrefix.length) }))
     .filter((entry) => entry.path && baseName(entry.path) !== FOLDER_MARKER);
-  const nameMatches = all.filter((entry) => entry.path.normalize("NFC").toLocaleLowerCase("ko-KR").includes(wanted));
+  const nameMatches = all.filter((entry) => `${entry.path} ${entry.item.metadata?.nkDocument || ""}`.normalize("NFC").toLocaleLowerCase("ko-KR").includes(wanted));
   const matches = nameMatches.map((entry) => ({
     kind: "file", name: baseName(entry.path), path: entry.path, parentPath: parentPath(entry.path),
     matchedBy: "name", contentType: String(entry.item.contentType || "application/octet-stream"),
@@ -221,12 +223,19 @@ async function searchFiles(ctx: any, rootPrefix: string, scope: string, query: s
   if (withContent) {
     const found = new Set(matches.map((entry) => entry.path));
     for (const entry of all) {
-      if (found.has(entry.path) || !SEARCH_TEXT_PATTERN.test(entry.path) || Number(entry.item.size || 0) > MAX_TEXT_BYTES) continue;
+      const nativeDocument = isCompanyDocument(entry.path, entry.item.contentType);
+      if (found.has(entry.path) || (!SEARCH_TEXT_PATTERN.test(entry.path) && !nativeDocument) || Number(entry.item.size || 0) > (nativeDocument ? 4 * MAX_TEXT_BYTES : MAX_TEXT_BYTES)) continue;
       if (scanned >= SEARCH_CONTENT_FILE_LIMIT) { truncated = true; break; }
       scanned += 1;
       const media = await getObject(ctx, `${rootPrefix}${entry.path}`, true).catch(() => null);
       if (!media?.ok) continue;
-      const text = await media.text().catch(() => "");
+      let text = await media.text().catch(() => "");
+      if (nativeDocument) {
+        try {
+          const document = parseCompanyDocument(JSON.parse(text));
+          text = [document.title, document.content, ...document.comments.map((comment) => comment.text)].join("\n");
+        } catch { continue; }
+      }
       const lines = text.split(/\r?\n/);
       const hits: Array<{ line: number; text: string }> = [];
       for (let index = 0; index < lines.length && hits.length < 5; index += 1) {
@@ -309,10 +318,11 @@ async function listObjects(ctx: any, prefix: string, delimiter = "") {
   return { items, prefixes: [...prefixes] };
 }
 
-async function getObject(ctx: any, objectName: string, media = false, range = "") {
+async function getObject(ctx: any, objectName: string, media = false, range = "", generation = "") {
   return gcsFetch(ctx, (useBilling) => {
     const params = new URLSearchParams();
     if (media) params.set("alt", "media");
+    if (generation) params.set("generation", generation);
     if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
     const query = params.size ? `?${params}` : "";
     return fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}${query}`, {
@@ -334,6 +344,50 @@ async function uploadObject(ctx: any, objectName: string, bytes: ArrayBuffer, co
   const payload: any = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.error?.message || `GCS 업로드 실패 (HTTP ${response.status})`);
   return payload;
+}
+
+async function documentOperation(ctx: any, rootPrefix: string, path: string, body: any, author: string) {
+  const objectName = `${rootPrefix}${path}`;
+  const metaResponse = await getObject(ctx, objectName);
+  if (!metaResponse.ok && metaResponse.status !== 404) throw new DocumentError("문서 정보를 읽지 못했습니다.", metaResponse.status);
+  const meta: any = metaResponse.ok ? await metaResponse.json() : null;
+  if (!isCompanyDocument(path, meta?.contentType)) throw new DocumentError(`새 업무 문서 경로는 ${DOCUMENT_SUFFIX}로 끝나야 합니다.`);
+  let previous = null;
+  const generation = String(meta?.generation || "0");
+  if (meta) {
+    if (Number(meta.size) > 4 * 1024 * 1024) throw new DocumentError("문서 크기 한도를 초과했습니다.", 413);
+    const media = await getObject(ctx, objectName, true, "", generation);
+    if (!media.ok) throw new DocumentError("문서가 변경되었습니다. 다시 열어 주세요.", 409);
+    previous = parseCompanyDocument(await media.json());
+  }
+  if (body.action === "document_read") {
+    if (!previous) throw new DocumentError("문서를 찾지 못했습니다.", 404);
+    return { ok: true, path, generation, document: previous };
+  }
+  if (typeof body.generation !== "string" || body.generation !== generation) throw new DocumentError("다른 곳에서 문서가 수정되었습니다. 내 내용을 복사해 보관한 뒤 최신 문서를 다시 열어 주세요.", 409);
+  if (!previous && await resolveObjects(ctx, rootPrefix, path)) throw new DocumentError("같은 경로에 폴더가 있습니다.", 409);
+  const document = updateCompanyDocument(previous, body, author);
+  const boundary = `nk_${crypto.randomUUID()}`;
+  const metadata = { name: objectName, contentType: DOCUMENT_TYPE, metadata: { nkDocument: JSON.stringify(documentSummary(document)) } };
+  const multipart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${DOCUMENT_TYPE}\r\n\r\n${JSON.stringify(document)}\r\n--${boundary}--\r\n`;
+  const response = await gcsFetch(ctx, (useBilling) => {
+    const params = new URLSearchParams({ uploadType: "multipart", ifGenerationMatch: generation });
+    if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
+    return fetch(`https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o?${params}`, {
+      method: "POST", headers: { ...billingHeaders(ctx, useBilling), "Content-Type": `multipart/related; boundary=${boundary}` }, body: multipart,
+    });
+  });
+  if (response.status === 412) throw new DocumentError("다른 곳에서 먼저 저장했습니다. 내 내용을 복사해 보관한 뒤 최신 문서를 다시 열어 주세요.", 409);
+  const stored: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new DocumentError(stored?.error?.message || "문서 저장에 실패했습니다.", response.status);
+  return { ok: true, path, generation: String(stored.generation), document };
+}
+
+async function protectDocument(ctx: any, rootPrefix: string, path: string) {
+  if (isCompanyDocument(path)) throw new DocumentError("업무 문서는 전용 문서 편집 기능 또는 company_files_document_save 도구로 수정해 주세요.");
+  const response = await getObject(ctx, `${rootPrefix}${path}`);
+  if (!response.ok && response.status !== 404) throw new DocumentError("파일 정보를 확인하지 못했습니다.", response.status);
+  if (response.ok && isCompanyDocument(path, String((await response.json() as any).contentType || ""))) throw new DocumentError("업무 문서는 전용 문서 편집 기능으로 수정해 주세요.");
 }
 
 async function deleteObject(ctx: any, objectName: string) {
@@ -561,7 +615,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         candidates,
       }, 200, origin);
     }
-    const folders = stored.folders.filter((folder) => folder.path !== WORK_FILES_ROOT);
+    const folders = stored.folders.filter((folder) => folder.path !== WORK_FILES_ROOT).filter((folder) => folder.path !== ".document-attachments");
     const files = stored.files;
     // 이 경로에 넣어 둔 날짜 폴더(날짜 폴더 안의 날짜 폴더는 .work-files/<날짜> 경로에 놓인다).
     const workFolders = workFoldersHere;
@@ -593,6 +647,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (uploadPath !== null) {
       const path = normalizePath(uploadPath, false);
       assertMutablePath(path);
+      await protectDocument(ctx, rootPrefix, path);
       const declaredSize = Number(request.headers.get("Content-Length") || 0);
       if (declaredSize > MAX_UPLOAD_BYTES) return send({ error: "파일은 100MB 이하만 업로드할 수 있습니다." }, 413, origin);
       const bytes = await request.arrayBuffer();
@@ -604,6 +659,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const body: any = await request.json().catch(() => ({}));
     const action = String(body.action || "").trim();
+    if (["document_read", "document_save", "document_comment", "document_restore"].includes(action)) {
+      let path = normalizePath(body.path, false);
+      const work = splitWorkPath(path);
+      if (work?.inner) {
+        const { dateKey } = await resolveWorkDateKey(getSql(env), auth.userId, work.head);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new DocumentError("업무 폴더를 찾지 못했습니다.", 404);
+        path = workFilesPath(dateKey, work.inner);
+      }
+      assertMutablePath(path);
+      let author = "사용자";
+      if (body.documentJobId) {
+        const sql = getSql(env);
+        if (sql) {
+          const rows = await sql("SELECT agent_id FROM agent_jobs WHERE id = $1 AND user_id = $2", [body.documentJobId, auth.userId]);
+          if (rows[0]?.agent_id) author = `에이전트 · ${rows[0].agent_id}`;
+        }
+      }
+      return send(await documentOperation(ctx, rootPrefix, path, body, author), 200, origin);
+    }
     if (action === "move_work_folder") {
       // 날짜 폴더를 일반 폴더·다른 날짜 폴더(또는 루트) 안으로 옮긴다. 업무 기록의 날짜·경로(@work/날짜)는 바뀌지 않고 보이는 위치만 바뀐다.
       // 다른 날짜 폴더 안에 넣으면 그 날짜 폴더의 파일 영역(.work-files/<날짜>)에 놓인다.
@@ -661,6 +735,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (action === "write") {
       const path = normalizePath(body.path, false);
       assertMutablePath(path);
+      await protectDocument(ctx, rootPrefix, path);
       const content = String(body.content ?? "");
       const bytes = new TextEncoder().encode(content);
       if (bytes.byteLength > MAX_TEXT_BYTES) return send({ error: "에이전트가 작성할 수 있는 텍스트 파일은 1MB 이하입니다." }, 413, origin);
@@ -672,6 +747,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (action === "edit") {
       const path = normalizePath(body.path, false);
       assertMutablePath(path);
+      await protectDocument(ctx, rootPrefix, path);
       const find = String(body.find ?? body.old ?? "");
       const replacement = String(body.replace ?? body.new ?? "");
       const all = body.all === true;
@@ -747,7 +823,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     return send({ error: "지원하지 않는 파일 작업입니다." }, 400, origin);
   } catch (error: any) {
-    return send({ error: String(error?.message || error || "회사 파일 작업에 실패했습니다.") }, 500, origin);
+    return send({ error: String(error?.message || error || "회사 파일 작업에 실패했습니다.") }, error instanceof DocumentError ? error.status : 500, origin);
   }
 };
 

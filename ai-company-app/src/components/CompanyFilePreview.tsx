@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getCompanyFilePreviewUrl, readCompanyTextFile, type CompanyFileEntry } from "../lib/api";
+import { getCompanyFilePreviewUrl, readCompanyTextFile, isCompanyDocument, type CompanyFileEntry } from "../lib/api";
+import CompanyDocumentEditor from "./CompanyDocumentEditor";
+import { dispatchUiAction } from "../lib/uiActions";
 
 type PreviewKind = "loading" | "image" | "video" | "audio" | "pdf" | "markdown" | "text" | "unsupported" | "error";
 
@@ -90,6 +92,7 @@ export default function CompanyFilePreview({
 
   useEffect(() => {
     if (!entry) return;
+    if (isCompanyDocument(entry)) return;
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     const kind = classify(entry);
@@ -123,12 +126,14 @@ export default function CompanyFilePreview({
 
   useEffect(() => {
     if (!entry) return;
+    if (isCompanyDocument(entry)) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [entry, onClose]);
 
   if (!entry) return null;
+  if (isCompanyDocument(entry)) return <CompanyDocumentEditor key={entry.path} initialPath={entry.path} folder={entry.path.split("/").slice(0, -1).join("/")} onClose={onClose} onSaved={() => dispatchUiAction({ action: "company_files.refresh" })}/>;
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section role="dialog" aria-modal="true" aria-label={`${entry.name} 미리보기`} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-[#0d131c] shadow-2xl shadow-black/60">
       <header className="flex shrink-0 items-center gap-3 border-b border-edge px-5 py-3.5">
