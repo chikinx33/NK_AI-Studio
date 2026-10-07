@@ -348,7 +348,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
   return (
     <div className="relative flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
         {/* 중앙 아이콘 — 대시보드·그래프 뷰와 동일한 방식 */}
-        <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 text-gray-400">
+        <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 text-muted">
           <SettingsIcon className="h-10 w-10" />
         </div>
 
@@ -357,7 +357,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           <button
             onClick={() => setTab("basic")}
             className={`rounded-t-lg px-3 py-2 text-sm font-medium transition ${
-              tab === "basic" ? "border-b-2 border-emerald-500 text-emerald-300" : "text-gray-400 hover:text-white"
+              tab === "basic" ? "border-b-2 border-emerald-500 text-tone-emerald" : "text-muted hover:text-strong"
             }`}
           >
             기본
@@ -365,7 +365,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           <button
             onClick={() => setTab("agents")}
             className={`rounded-t-lg px-3 py-2 text-sm font-medium transition ${
-              tab === "agents" ? "border-b-2 border-emerald-500 text-emerald-300" : "text-gray-400 hover:text-white"
+              tab === "agents" ? "border-b-2 border-emerald-500 text-tone-emerald" : "text-muted hover:text-strong"
             }`}
           >
             에이전트
@@ -373,7 +373,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           <button
             onClick={() => setTab("logs")}
             className={`rounded-t-lg px-3 py-2 text-sm font-medium transition ${
-              tab === "logs" ? "border-b-2 border-emerald-500 text-emerald-300" : "text-gray-400 hover:text-white"
+              tab === "logs" ? "border-b-2 border-emerald-500 text-tone-emerald" : "text-muted hover:text-strong"
             }`}
           >
             대화 로그
@@ -388,14 +388,14 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           <section>
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <div className="flex min-w-0 items-baseline gap-2">
-                <h3 className="shrink-0 text-sm font-semibold text-gray-200">AI 두뇌 모드</h3>
-                <span className="text-xs text-gray-500">Ollama 감지 시 로컬, 없으면 클라우드로 자동 전환됩니다.</span>
+                <h3 className="shrink-0 text-sm font-semibold text-content">AI 두뇌 모드</h3>
+                <span className="text-xs text-faint">Ollama 감지 시 로컬, 없으면 클라우드로 자동 전환됩니다.</span>
               </div>
               <span
-                className="shrink-0 rounded-full bg-edge px-2 py-0.5 text-[11px] text-gray-300"
+                className="shrink-0 rounded-full bg-edge px-2 py-0.5 text-[11px] text-secondary"
                 title={status?.reason}
               >
-                현재 · <b className="text-emerald-300">{status?.resolvedBackend ?? "?"}</b>
+                현재 · <b className="text-tone-emerald">{status?.resolvedBackend ?? "?"}</b>
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -412,8 +412,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                   }}
                   className={`rounded-lg border py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-35 ${
                     mode === m.id
-                      ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
-                      : "border-edge text-gray-300 hover:bg-edge"
+                      ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald"
+                      : "border-edge text-secondary hover:bg-edge"
                   }`}
                 >
                   <span className="inline-flex items-center justify-center gap-1.5">
@@ -429,13 +429,13 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           <section className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-edge bg-ink p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
+                <div className="flex items-center gap-2 text-sm font-medium text-content">
                   <span className={`h-2 w-2 rounded-full ${ollamaUp ? "bg-emerald-400" : "bg-gray-600"}`} />
                   <HardDriveIcon className="h-4 w-4" /> Ollama
                 </div>
                 {ollamaUp && (
                   <span
-                    className="truncate text-[11px] text-emerald-300/90"
+                    className="truncate text-[11px] text-tone-emerald/90"
                     title="현재 선택된 로컬 모델"
                   >
                     {localModel === "auto"
@@ -451,8 +451,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                       onClick={() => chooseLocalModel("auto")}
                       className={`rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition ${
                         localModel === "auto"
-                          ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
-                          : "border-edge text-gray-300 hover:bg-edge"
+                          ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald"
+                          : "border-edge text-secondary hover:bg-edge"
                       }`}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -465,8 +465,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                         onClick={() => chooseLocalModel(m)}
                         className={`rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition ${
                           localModel === m
-                            ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
-                            : "border-edge text-gray-300 hover:bg-edge"
+                            ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald"
+                            : "border-edge text-secondary hover:bg-edge"
                         }`}
                       >
                         {modelLabel(m)}
@@ -476,7 +476,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                       <span
                         key={m}
                         title="임베딩 전용 · 채팅 모델로 선택 불가"
-                        className="cursor-not-allowed rounded-md border border-edge px-1.5 py-0.5 text-[11px] text-gray-600"
+                        className="cursor-not-allowed rounded-md border border-edge px-1.5 py-0.5 text-[11px] text-faint"
                       >
                         {modelLabel(m)}
                       </span>
@@ -484,16 +484,16 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-gray-500">미감지 — 로컬 모델 사용 불가</div>
+                <div className="text-xs text-faint">미감지 — 로컬 모델 사용 불가</div>
               )}
             </div>
 
             <div className="rounded-xl border border-edge bg-ink p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-200">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-content">
                 <span className={`h-2 w-2 rounded-full ${cloudOk ? "bg-emerald-400" : "bg-gray-600"}`} />
                 <CloudIcon className="h-4 w-4" /> Claude API
               </div>
-              <div className={`text-xs ${cloudOk ? "text-emerald-300" : "text-gray-500"}`}>
+              <div className={`text-xs ${cloudOk ? "text-tone-emerald" : "text-faint"}`}>
                 {cloudOk ? "키 설정됨 — 클라우드 사용 가능" : "키 없음 — 아래에서 등록"}
               </div>
             </div>
@@ -502,13 +502,13 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           {/* Claude 인증 (구독 OAuth / API 키) */}
           <section>
             <div className="mb-2 flex items-baseline justify-between gap-2">
-              <h3 className="shrink-0 text-sm font-semibold text-gray-200">Claude 인증</h3>
+              <h3 className="shrink-0 text-sm font-semibold text-content">Claude 인증</h3>
               {authStatus && (
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
                     authStatus.configured
-                      ? "bg-emerald-900/40 text-emerald-300"
-                      : "bg-amber-900/40 text-amber-300"
+                      ? "bg-tint-emerald/40 text-tone-emerald"
+                      : "bg-tint-amber/40 text-tone-amber"
                   }`}
                   title={authStatus.configured ? "자격증명 적용됨" : "자격증명 미설정"}
                 >
@@ -517,7 +517,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               )}
             </div>
             {/* 모드 라디오 */}
-            <p className="mb-3 text-xs text-gray-400">
+            <p className="mb-3 text-xs text-muted">
               {authStatus && (authStatus.source === "user"
                 ? (en ? "Using your credentials and subscription/API limits. No switch to master credentials." : "본인 인증 사용 중 — 본인 구독·API 한도를 사용합니다. 마스터 인증으로 전환하지 않습니다.")
                 : (en ? "Using master credentials. Register your subscription token or API key to switch to yours." : "마스터 인증 사용 중 — 본인 구독 토큰이나 API 키를 등록하면 본인 인증으로 전환됩니다."))}
@@ -532,8 +532,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                   onClick={() => chooseAuthMode(id)}
                   className={`rounded-lg border py-2 text-sm font-medium transition ${
                     authMode === id
-                      ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
-                      : "border-edge text-gray-300 hover:bg-edge"
+                      ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald"
+                      : "border-edge text-secondary hover:bg-edge"
                   }`}
                 >
                   <span className="inline-flex items-center justify-center gap-1.5">
@@ -546,10 +546,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
             {/* 선택된 모드의 자격증명 입력 */}
             {authMode === "subscription" ? (
               <div className="mt-3">
-                <p className="mb-1.5 text-xs text-gray-500">
-                  터미널에서 <code className="text-gray-400">claude setup-token</code> 으로 발급한 구독 토큰
-                  (<code className="text-gray-400">sk-ant-oat…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
-                  {authStatus?.source === "user" && authStatus.oauthSet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
+                <p className="mb-1.5 text-xs text-faint">
+                  터미널에서 <code className="text-muted">claude setup-token</code> 으로 발급한 구독 토큰
+                  (<code className="text-muted">sk-ant-oat…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
+                  {authStatus?.source === "user" && authStatus.oauthSet && <span className="ml-1 text-tone-emerald">· 저장됨</span>}
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -570,10 +570,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               </div>
             ) : (
               <div className="mt-3">
-                <p className="mb-1.5 text-xs text-gray-500">
-                  <code className="text-gray-400">console.anthropic.com</code> 발급 키
-                  (<code className="text-gray-400">sk-ant…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
-                  {authStatus?.source === "user" && authStatus.apiKeySet && <span className="ml-1 text-emerald-400">· 저장됨</span>}
+                <p className="mb-1.5 text-xs text-faint">
+                  <code className="text-muted">console.anthropic.com</code> 발급 키
+                  (<code className="text-muted">sk-ant…</code>) · {en ? "Stored on the server for your signed-in account" : "로그인 계정별로 서버에 저장"}
+                  {authStatus?.source === "user" && authStatus.apiKeySet && <span className="ml-1 text-tone-emerald">· 저장됨</span>}
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -593,38 +593,38 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                 </div>
               </div>
             )}
-            {authMsg && <StatusText msg={authMsg} className="mt-1.5 text-xs text-gray-300" />}
+            {authMsg && <StatusText msg={authMsg} className="mt-1.5 text-xs text-secondary" />}
 
             {/* 진단 — 무엇이 들어있고 라이브에서 되는지 확인 */}
             <div className="mt-3 border-t border-edge pt-3">
               <button
                 onClick={runDiag}
-                className="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-edge"
+                className="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-secondary transition hover:bg-edge"
               >
                 🔍 인증 진단 (라이브 테스트)
               </button>
-              {diagMsg && <StatusText msg={diagMsg} className="mt-1.5 text-xs text-gray-300" />}
+              {diagMsg && <StatusText msg={diagMsg} className="mt-1.5 text-xs text-secondary" />}
               {diag && (
                 <div className="mt-2 space-y-1 rounded-lg border border-edge bg-ink px-3 py-2 text-xs">
-                  <div className="text-gray-400">
-                    모드: <span className="text-gray-200">{modeLabel(diag.mode)}</span> · 출처:{" "}
-                    <span className="text-gray-200">{diag.source}</span>
+                  <div className="text-muted">
+                    모드: <span className="text-content">{modeLabel(diag.mode)}</span> · 출처:{" "}
+                    <span className="text-content">{diag.source}</span>
                   </div>
-                  <div className="text-gray-400">
-                    API 키: <span className="text-gray-200">{diag.apiKeySet ? diag.apiKeyKind : "없음"}</span> · 구독 토큰:{" "}
-                    <span className="text-gray-200">{diag.oauthSet ? diag.oauthKind : "없음"}</span>
+                  <div className="text-muted">
+                    API 키: <span className="text-content">{diag.apiKeySet ? diag.apiKeyKind : "없음"}</span> · 구독 토큰:{" "}
+                    <span className="text-content">{diag.oauthSet ? diag.oauthKind : "없음"}</span>
                   </div>
-                  <div className="text-gray-400">
+                  <div className="text-muted">
                     AI Gateway:{" "}
-                    <span className={diag.gateway ? "text-emerald-300" : "text-amber-400"}>
+                    <span className={diag.gateway ? "text-tone-emerald" : "text-tone-amber"}>
                       {diag.gateway ? "경유 중 ✅" : "미설정 (직접 호출 → 403 위험)"}
                     </span>
                   </div>
                   {diag.test && (
-                    <div className={diag.test.ok ? "text-emerald-400" : "text-red-400"}>
+                    <div className={diag.test.ok ? "text-tone-emerald" : "text-tone-red"}>
                       라이브 테스트: {diag.test.ok ? "✅ 성공 (200)" : `❌ 실패 (${diag.test.status}) — ${diag.test.detail}`}
                       {!diag.test.ok && diag.test.requestId && (
-                        <span className="ml-1 text-gray-400">(Anthropic 도달 · req {diag.test.requestId.slice(-8)})</span>
+                        <span className="ml-1 text-muted">(Anthropic 도달 · req {diag.test.requestId.slice(-8)})</span>
                       )}
                     </div>
                   )}
@@ -632,22 +632,22 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                   {Array.isArray(diag.reach) && diag.reach.length > 0 && (
                     <div className="space-y-0.5 border-t border-edge pt-1">
                       {diag.reach.map((r) => (
-                        <div key={r.label} className="text-gray-400">
+                        <div key={r.label} className="text-muted">
                           도달 검사 ({r.label === "gateway" ? "게이트웨이" : "직접"}):{" "}
-                          <span className={r.reached ? "text-emerald-300" : "text-red-400"}>
+                          <span className={r.reached ? "text-tone-emerald" : "text-tone-red"}>
                             {r.reached ? `✅ Anthropic 도달 (${r.status})` : `❌ 도달 못 함 (${r.status})`}
                           </span>
-                          {r.colo && <span className="ml-1 text-gray-500">· {r.colo}</span>}
-                          <span className="ml-1 text-gray-500">· {r.ms}ms</span>
+                          {r.colo && <span className="ml-1 text-faint">· {r.colo}</span>}
+                          <span className="ml-1 text-faint">· {r.ms}ms</span>
                         </div>
                       ))}
-                      <div className="text-[11px] text-gray-500">
+                      <div className="text-[11px] text-faint">
                         둘 다 ❌ 이면 자격증명이 아니라 경로 문제예요(키를 바꿔도 동일).
                       </div>
                     </div>
                   )}
                   {diag.apiKeyKind === "oauth-token" && diag.mode === "api_key" && (
-                    <div className="text-amber-400">
+                    <div className="text-tone-amber">
                       ⚠️ API 키 칸에 구독 토큰(sk-ant-oat)이 들어있어요. 콘솔 키(sk-ant-api)가 필요해요.
                     </div>
                   )}
@@ -659,13 +659,13 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           {/* 에이전트별 두뇌 (제공사 · 모델) */}
           <section>
             <div className="mb-2 flex items-baseline gap-2">
-              <h3 className="shrink-0 text-sm font-semibold text-gray-200">에이전트별 두뇌</h3>
-              <p className="text-xs text-gray-500">
+              <h3 className="shrink-0 text-sm font-semibold text-content">에이전트별 두뇌</h3>
+              <p className="text-xs text-faint">
                 직원마다 Claude / OpenAI 를 골라 쓸 수 있어요. 비워두면 기본값을 씁니다.
               </p>
             </div>
 
-            <p className="mb-2 text-[11px] text-gray-500">
+            <p className="mb-2 text-[11px] text-faint">
               🟢 구독 = Claude 그룹(등록한 구독 토큰으로 실행 · 추가 과금 없음) / 💳 API 과금 = 토큰당 요금이 붙는 경로(OpenAI 계열, Claude 도 API 키로 등록했을 때).
               구독을 쓰려면 위 'Claude 인증'에서 구독(OAuth) 토큰이 등록돼 있어야 해요.
             </p>
@@ -684,7 +684,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                     key={agentId}
                     className="flex flex-wrap items-center gap-2 rounded-lg border border-edge bg-ink px-2.5 py-1.5"
                   >
-                    <span className="w-24 shrink-0 text-xs font-medium text-gray-300">
+                    <span className="w-24 shrink-0 text-xs font-medium text-secondary">
                       {agent ? `${agent.emoji} ${agent.name}` : agentId}
                     </span>
 
@@ -692,21 +692,21 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                         한 드롭다운에 제공사별 그룹으로 모든 모델을 펼치고, 최상위·추천 등급을 앞에 붙인다.
                         option 은 브라우저 기본(회색 배경·흰 글씨)이라 안 보였다 → 어두운 테마 색을 직접 준다. */}
                     <select
-                      className="min-w-0 flex-1 rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[11px] text-gray-100"
+                      className="min-w-0 flex-1 rounded border border-edge bg-inset px-1.5 py-1 text-[11px] text-strong"
                       value={picked ? `${provider}::${isCustom ? "__custom__" : picked.model}` : ""}
                       onChange={(e) => pickModel(agentId, e.target.value)}
                     >
-                      <option value="" className="bg-[#111722] text-gray-100">기본 ({shortModel(def)}) · {billingOf("anthropic")}</option>
+                      <option value="" className="bg-inset text-strong">기본 ({shortModel(def)}) · {billingOf("anthropic")}</option>
                       {modelCatalog &&
                         (Object.keys(modelCatalog) as ModelProvider[]).map((p) => (
-                          <optgroup key={p} label={`${modelCatalog[p].label} · ${billingOf(p)}`} className="bg-[#111722] text-gray-400">
+                          <optgroup key={p} label={`${modelCatalog[p].label} · ${billingOf(p)}`} className="bg-inset text-muted">
                             {modelCatalog[p].models.map((m) => (
-                              <option key={m.id} value={`${p}::${m.id}`} className="bg-[#111722] text-gray-100">
+                              <option key={m.id} value={`${p}::${m.id}`} className="bg-inset text-strong">
                                 {m.tier === "top" ? "⭐ 최상위 · " : m.tier === "recommended" ? "✅ 추천 · " : ""}{m.label}
                               </option>
                             ))}
                             {modelCatalog[p].allowCustom && (
-                              <option value={`${p}::__custom__`} className="bg-[#111722] text-gray-100">직접 입력…</option>
+                              <option value={`${p}::__custom__`} className="bg-inset text-strong">직접 입력…</option>
                             )}
                           </optgroup>
                         ))}
@@ -714,7 +714,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
 
                     {picked && isCustom && (
                       <input
-                        className="w-40 rounded border border-edge bg-black/30 px-1.5 py-1 font-mono text-[11px] text-gray-200"
+                        className="w-40 rounded border border-edge bg-inset px-1.5 py-1 font-mono text-[11px] text-content"
                         placeholder="모델 ID"
                         value={picked.model === "__custom__" ? "" : picked.model}
                         onChange={(e) =>
@@ -739,20 +739,20 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                 {savingModels ? "저장 중…" : "저장"}
               </button>
               <button
-                className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 disabled:opacity-50"
+                className="rounded-lg border border-edge px-3 py-1.5 text-xs text-secondary disabled:opacity-50"
                 disabled={savingModels}
                 onClick={resetAgentModels}
               >
                 전부 기본값으로
               </button>
-              {modelMsg && <span className="text-xs text-gray-400">{modelMsg}</span>}
+              {modelMsg && <span className="text-xs text-muted">{modelMsg}</span>}
             </div>
 
-            <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
-              OpenAI 는 두 경로예요. <span className="text-gray-400">Atlas Cloud 경유</span>는 이미 쓰고 있는{" "}
-              <code className="text-gray-400">ATLASCLOUD_API_KEY</code> 로 바로 되고,{" "}
-              <span className="text-gray-400">API 키 직접</span>은{" "}
-              <code className="text-gray-400">OPENAI_API_KEY</code> 가 필요해요.
+            <p className="mt-2 text-[11px] leading-relaxed text-faint">
+              OpenAI 는 두 경로예요. <span className="text-muted">Atlas Cloud 경유</span>는 이미 쓰고 있는{" "}
+              <code className="text-muted">ATLASCLOUD_API_KEY</code> 로 바로 되고,{" "}
+              <span className="text-muted">API 키 직접</span>은{" "}
+              <code className="text-muted">OPENAI_API_KEY</code> 가 필요해요.
             </p>
           </section>
           </>
@@ -760,8 +760,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
 
           {tab === "agents" && (
             <section>
-              <h3 className="mb-1 text-sm font-semibold text-gray-200">에이전트</h3>
-              <p className="mb-3 text-xs text-gray-500">
+              <h3 className="mb-1 text-sm font-semibold text-content">에이전트</h3>
+              <p className="mb-3 text-xs text-faint">
                 직원을 누르면 연동(API) 설정이 펼쳐집니다. 우측 토글로 사이드바 표시를 켜고 끕니다. (코어는 항상 표시)
               </p>
 
@@ -776,20 +776,20 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                 return (
                   <div className="mb-3 rounded-xl border border-edge bg-ink p-3 text-xs">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-1 text-emerald-300">
+                      <span className="inline-flex items-center gap-1 text-tone-emerald">
                         <CircleCheckIcon className="h-3.5 w-3.5" /> 실행가능 {runnable}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-amber-300">
+                      <span className="inline-flex items-center gap-1 text-tone-amber">
                         <TriangleAlertIcon className="h-3.5 w-3.5" /> 연동필요 {blocked.length}
                       </span>
                       {missingKeys.length > 0 && (
-                        <span className="text-gray-500">
-                          필요한 키: <span className="text-gray-400">{missingKeys.join(", ")}</span>
+                        <span className="text-faint">
+                          필요한 키: <span className="text-muted">{missingKeys.join(", ")}</span>
                         </span>
                       )}
                     </div>
                     {blocked.length > 0 && (
-                      <div className="mt-2 border-t border-edge/60 pt-2 text-[11px] leading-relaxed text-amber-200/90">
+                      <div className="mt-2 border-t border-edge/60 pt-2 text-[11px] leading-relaxed text-tone-amber/90">
                         막힌 스킬 —{" "}
                         {blocked
                           .slice(0, SHOW)
@@ -818,7 +818,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                           onClick={() => setExpandedAgent(open ? null : a.id)}
                         >
                           <span
-                            className={`grid w-5 shrink-0 place-items-center text-gray-300 transition-transform ${
+                            className={`grid w-5 shrink-0 place-items-center text-secondary transition-transform ${
                               open ? "rotate-90" : ""
                             }`}
                           >
@@ -829,17 +829,17 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                             alt={a.name}
                             className="h-9 w-9 shrink-0 rounded-lg object-cover"
                           />
-                          <span className={`text-sm ${visible ? "text-gray-200" : "text-gray-500"}`}>
+                          <span className={`text-sm ${visible ? "text-content" : "text-faint"}`}>
                             {a.name}
                             {JOB[a.id] ? `(${JOB[a.id]})` : ""}
                           </span>
                           {tools.length > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                            <span className="inline-flex items-center gap-1 text-[11px] text-faint">
                               <LinkIcon className="h-3 w-3" /> {tools.length}
                             </span>
                           )}
                           {blockedCount > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/40 px-1.5 text-[11px] text-amber-300">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-tint-amber/40 px-1.5 text-[11px] text-tone-amber">
                               <TriangleAlertIcon className="h-3 w-3" /> {blockedCount}
                             </span>
                           )}
@@ -855,24 +855,24 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                                 {agentSkills.map((r) => {
                                   const badge =
                                     r.status === "ready"
-                                      ? { Icon: CircleCheckIcon, t: "실행가능", c: "text-emerald-300" }
+                                      ? { Icon: CircleCheckIcon, t: "실행가능", c: "text-tone-emerald" }
                                       : r.status === "needs_config"
-                                      ? { Icon: TriangleAlertIcon, t: "연동필요", c: "text-amber-300" }
-                                      : { Icon: MinusIcon, t: "도구없음", c: "text-gray-500" };
+                                      ? { Icon: TriangleAlertIcon, t: "연동필요", c: "text-tone-amber" }
+                                      : { Icon: MinusIcon, t: "도구없음", c: "text-faint" };
                                   const BadgeIcon = badge.Icon;
                                   return (
                                     <div
                                       key={r.file}
                                       className="flex items-center justify-between gap-2 rounded-md bg-ink/60 px-2 py-1 text-[11px]"
                                     >
-                                      <span className="truncate text-gray-300" title={r.skill}>
+                                      <span className="truncate text-secondary" title={r.skill}>
                                         {r.skill}
                                       </span>
                                       <span className={`inline-flex shrink-0 items-center gap-1 ${badge.c}`}>
                                         <BadgeIcon className="h-3 w-3" />
                                         {badge.t}
                                         {r.status === "needs_config" && (
-                                          <span className="ml-1 text-gray-500">
+                                          <span className="ml-1 text-faint">
                                             ({r.missing.flatMap((m) => m.keys).join(", ")})
                                           </span>
                                         )}
@@ -883,7 +883,7 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                               </div>
                             )}
                             {tools.length === 0 ? (
-                              <div className="text-xs text-gray-500">연동 가능한 항목이 없습니다.</div>
+                              <div className="text-xs text-faint">연동 가능한 항목이 없습니다.</div>
                             ) : (
                               tools.map((it) => (
                                 <ToolCard
@@ -908,14 +908,14 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
           {tab === "logs" && (
             <section className="space-y-4">
               <div>
-                <h3 className="mb-1 text-sm font-semibold text-gray-200">대화 로그 보존</h3>
-                <p className="mb-2 text-xs text-gray-500">
+                <h3 className="mb-1 text-sm font-semibold text-content">대화 로그 보존</h3>
+                <p className="mb-2 text-xs text-faint">
                   오래된 단톡방 대화 로그를 자동으로 정리합니다. 지식 그래프·학습 내용은 영향받지 않습니다.
                 </p>
                 <select
                   value={logRetention}
                   onChange={(e) => changeRetention(Number(e.target.value))}
-                  className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                  className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-content outline-none focus:border-emerald-600"
                 >
                   <option value={0}>자동 정리 안 함 (영구 보존)</option>
                   <option value={7}>7일 보존</option>
@@ -926,10 +926,10 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                 </select>
               </div>
 
-              <div className="rounded-xl border border-edge bg-ink p-3 text-xs text-gray-400">
-                저장된 로그: <b className="text-gray-200">{logStats?.dates ?? "?"}</b>일치
+              <div className="rounded-xl border border-edge bg-ink p-3 text-xs text-muted">
+                저장된 로그: <b className="text-content">{logStats?.dates ?? "?"}</b>일치
                 {logStats?.oldest && (
-                  <> · 가장 오래된 기록 <b className="text-gray-200">{logStats.oldest}</b></>
+                  <> · 가장 오래된 기록 <b className="text-content">{logStats.oldest}</b></>
                 )}
               </div>
 
@@ -937,11 +937,11 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                 <button
                   onClick={doCleanup}
                   disabled={!logRetention}
-                  className="rounded-lg border border-edge px-4 py-2 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+                  className="rounded-lg border border-edge px-4 py-2 text-sm text-content transition hover:bg-edge disabled:opacity-40"
                 >
                   지금 정리
                 </button>
-                {logMsg && <StatusText msg={logMsg} className="text-xs text-gray-300" />}
+                {logMsg && <StatusText msg={logMsg} className="text-xs text-secondary" />}
               </div>
             </section>
           )}

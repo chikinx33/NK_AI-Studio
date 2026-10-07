@@ -104,13 +104,13 @@ export function AppDialogHost() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-dialog-title"
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-[#31506a] bg-[radial-gradient(circle_at_100%_0%,rgba(16,185,129,0.12),transparent_42%),linear-gradient(180deg,#111a28_0%,#0b111b_100%)] shadow-2xl shadow-black/70"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-edge bg-panel shadow-2xl shadow-black/30"
       >
-        <div className="border-b border-[#26384b] px-5 py-4">
-          <h2 id="app-dialog-title" className="text-sm font-extrabold tracking-tight text-gray-100">{title}</h2>
+        <div className="border-b border-edge px-5 py-4">
+          <h2 id="app-dialog-title" className="text-sm font-extrabold tracking-tight text-strong">{title}</h2>
         </div>
         <div className="px-5 py-4">
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-200">{current.message}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-content">{current.message}</p>
           {current.mode === "prompt" && (
             <input
               key={current.id}
@@ -119,13 +119,13 @@ export function AppDialogHost() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") { event.preventDefault(); close(true); }
               }}
-              className="mt-4 w-full rounded-xl border border-[#3a536e] bg-[#09111d] px-3 py-2.5 text-sm text-gray-100 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              className="mt-4 w-full rounded-xl border border-edge bg-inset px-3 py-2.5 text-sm text-strong outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
             />
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#26384b] px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
           {hasCancel && (
-            <button type="button" onClick={() => close(false)} className="rounded-xl border border-[#3a4c61] bg-[#131d2a] px-4 py-2 text-sm font-bold text-gray-300 hover:border-[#58708d] hover:text-white">
+            <button type="button" onClick={() => close(false)} className="rounded-xl border border-edge bg-panel px-4 py-2 text-sm font-bold text-secondary hover:border-[#58708d] hover:text-strong">
               {current.options.cancelText || "취소"}
             </button>
           )}

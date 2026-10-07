@@ -19,12 +19,12 @@ test('★슬롯 격자 상수: 카드 간격 = 바-카드 간격, 씬 묶음 규
 });
 
 test('★세 종류의 바가 있고 색이 구분되며(씬 파랑, 캐릭터 초록, 장소 보라) 선택 카드 테두리가 바 색을 따른다', () => {
-  assert.match(src, /scene: \{ bar: "border-sky-500\/80 bg-sky-900\/60/);
-  assert.match(src, /characters: \{ bar: "border-emerald-500\/80 bg-emerald-900\/60/);
-  assert.match(src, /locations: \{ bar: "border-violet-500\/80 bg-violet-900\/60/);
+  assert.match(src, /scene: \{ bar: "border-sky-500\/80 bg-tint-sky\/60/);
+  assert.match(src, /characters: \{ bar: "border-emerald-500\/80 bg-tint-emerald\/60/);
+  assert.match(src, /locations: \{ bar: "border-violet-500\/80 bg-tint-violet\/60/);
   assert.match(src, /card: "border-sky-400 ring-2 ring-sky-500\/30"/);
   assert.match(src, /card: "border-violet-400 ring-2 ring-violet-500\/30"/);
-  assert.match(src, /\$\{isSelected \? selectedClass : "border-edge hover:border-gray-500"\}/);
+  assert.match(src, /\$\{isSelected \? selectedClass : "border-edge hover:border-edge"\}/);
   assert.match(src, /<Chip tone="violet">장소<\/Chip>/);
   assert.match(src, /<Chip tone="emerald">캐릭터<\/Chip>/);
   // 캐릭터·장소 바는 카드가 세로로 딸린다
@@ -73,7 +73,7 @@ test('★배치 저장 버튼: 로컬은 작업 사본, 프로젝트 저장은 �
   assert.match(src, /const layoutDirty = useMemo\(\(\) => JSON\.stringify\(layout\) !== JSON\.stringify\(serverLayout\)/);
   assert.match(src, /await saveCanvasLayout\(projectId, layout\);/);
   assert.match(src, /\{layoutSaving \? "저장 중…" : \(layoutDirty \? "저장" : "저장됨"\)\}/, '버튼 문구는 저장');
-  assert.match(src, /layoutDirty \? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-gray-500"/, '테마(에메랄드) 스타일');
+  assert.match(src, /layoutDirty \? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-faint"/, '테마(에메랄드) 스타일');
   assert.match(src, /const savedLayout = parsed \|\| fromServer;[\s\S]{0,400}setLayout\(reconcileLayout\(seed, g, base\)\);/, '로컬 사본 → 서버 배치 → 기본 배치 순(순서 변경 뒤엔 칸 배치만 서버 순서로)');
   const api = fs.readFileSync(path.join(process.cwd(), 'ai-company-app/src/lib/api.ts'), 'utf8').replace(/\r\n/g, '\n');
   assert.match(api, /export async function saveCanvasLayout\(projectId: string, layout: unknown\)/);
@@ -84,7 +84,7 @@ test('★배치 저장 버튼: 로컬은 작업 사본, 프로젝트 저장은 �
 
 test('★프롬프트 바(호박색) 아래 공통 카드, 캐릭터·장소 바는 같은 높이로 나란히, 씬은 오른쪽', () => {
   assert.match(src, /type LaneKind = "prompt" \| "scene" \| "characters" \| "locations";/);
-  assert.match(src, /prompt: \{ bar: "border-amber-500\/80 bg-amber-900\/50/);
+  assert.match(src, /prompt: \{ bar: "border-amber-500\/80 bg-tint-amber\/50/);
   assert.match(src, /if \(type === "common"\) return "prompt";/);
   assert.match(src, /key: "prompt", kind: "prompt", orient: "column"/);
   assert.match(src, /const promptBottom = 40 \+ BAR_H \+ CARD_GAP \+ heightOf\(heights, "common"\) \+ GROUP_GAP_Y;/);
@@ -100,12 +100,12 @@ test('★모든 바는 개별 접기·펼치기를 지원하고 펼칠 때 다�
   assert.match(src, /if \(ownerLaneKey && collapsedLanes\.has\(ownerLaneKey\)\) return null;/, '접힌 바의 카드는 렌더링하지 않음');
   assert.match(src, /aria-expanded=\{!isCollapsed\}/);
   assert.match(src, /\{isCollapsed \? "\+" : "−"\}/);
-  assert.match(src, /aria-expanded=\{!isCollapsed\}[\s\S]{0,180}\{isCollapsed \? "\+" : "−"\}[\s\S]{0,180}<span className="text-\[12px\] font-bold text-white">\{l\.label\}<\/span>/, '접기·펼치기 버튼이 바 이름 왼쪽에 위치');
+  assert.match(src, /aria-expanded=\{!isCollapsed\}[\s\S]{0,180}\{isCollapsed \? "\+" : "−"\}[\s\S]{0,180}<span className="text-\[12px\] font-bold text-strong">\{l\.label\}<\/span>/, '접기·펼치기 버튼이 바 이름 왼쪽에 위치');
   assert.match(src, /if \(expanding\) setLayout\(\(currentLayout\) => resolveLaneCollisions/, '펼친 바를 기준으로 충돌 자동 보정');
 });
 
 test('★공통 프롬프트는 카드에 전문을 표시하고 클릭해도 읽기 전용 모달을 열지 않는다', () => {
-  assert.match(src, /whitespace-pre-wrap break-words text-\[11px\] leading-relaxed text-gray-300/);
+  assert.match(src, /whitespace-pre-wrap break-words text-\[11px\] leading-relaxed text-secondary/);
   assert.doesNotMatch(src, /line-clamp-3 text-\[11px\][^\n]*n\.data\.text/);
   assert.match(src, /nodeById\.get\(d\.id\)\?\.type === "common"[\s\S]{0,260}setSelectedId\(""\);[\s\S]{0,120}return;/);
   assert.match(src, /\{selected && selected\.type !== "common" && \(/, '공통 프롬프트는 상세 모달 대상에서 제외');

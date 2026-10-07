@@ -18,14 +18,14 @@ export default function AgentActivity({ activities }: { activities: Activity[] }
             <span
               className={`ml-auto text-[11px] px-2 py-0.5 rounded-full ${
                 a.status === "running"
-                  ? "bg-amber-900/60 text-amber-300"
-                  : "bg-emerald-900/60 text-emerald-300"
+                  ? "bg-tint-amber/60 text-tone-amber"
+                  : "bg-tint-emerald/60 text-tone-emerald"
               }`}
             >
               {a.status === "running" ? "작업 중…" : "완료"}
             </span>
           </div>
-          <pre className="px-3 py-2 text-xs whitespace-pre-wrap text-gray-300 max-h-64 overflow-y-auto font-sans">
+          <pre className="px-3 py-2 text-xs whitespace-pre-wrap text-secondary max-h-64 overflow-y-auto font-sans">
             {a.text || "…"}
           </pre>
         </div>

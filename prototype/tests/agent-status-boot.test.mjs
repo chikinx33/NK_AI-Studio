@@ -38,7 +38,7 @@ test("클라이언트는 status 실패를 삼키지 않고 3회 재시도·실�
   assert.match(app, /for \(let attempt = 0; attempt < 3; attempt\+\+\)/);
   assert.match(app, /setStatusPhase\("failed"\)/);
   assert.doesNotMatch(app, /\{!status && <div[^>]*>서버 연결 대기 중…<\/div>\}/, "무엇을 기다리는지 모를 옛 문구(JSX)는 사라졌다");
-  assert.match(app, /statusPhase === "loading" && <div className="text-xs text-gray-500">서버 상태 확인 중…<\/div>/);
+  assert.match(app, /statusPhase === "loading" && <div className="text-xs text-faint">서버 상태 확인 중…<\/div>/);
   assert.match(app, /서버 상태 확인 실패/);
   assert.match(app, /statusPhase === "ready" && statusElapsedMs >= 2000 && status\?\.timing/);
   assert.match(app, /서버 응답 \{sec\(statusElapsedMs\)\} \(DB \{sec\(Math\.max\(status\.timing\.claudeMs, status\.timing\.dbMs\)\)\} · 파일 \{sec\(status\.timing\.permMs\)\}\)/);

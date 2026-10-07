@@ -36,7 +36,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 function FileIcon({ kind }: { kind: string }) {
-  const color = kind === "image" ? "text-emerald-300" : kind === "video" ? "text-violet-300" : kind === "audio" ? "text-rose-300" : kind === "pdf" ? "text-red-300" : "text-sky-300";
+  const color = kind === "image" ? "text-tone-emerald" : kind === "video" ? "text-tone-violet" : kind === "audio" ? "text-tone-rose" : kind === "pdf" ? "text-tone-red" : "text-tone-sky";
   if (kind === "image") return <svg viewBox="0 0 24 24" fill="none" className={`h-5 w-5 ${color}`} aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8"/><circle cx="9" cy="10" r="2" stroke="currentColor" strokeWidth="1.8"/><path d="m4 18 5-5 4 4 2-2 5 4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>;
   if (kind === "video") return <svg viewBox="0 0 24 24" fill="none" className={`h-5 w-5 ${color}`} aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="m10 9 5 3-5 3V9Z" fill="currentColor"/></svg>;
   if (kind === "audio") return <svg viewBox="0 0 24 24" fill="none" className={`h-5 w-5 ${color}`} aria-hidden="true"><path d="M9 18V6l10-2v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="1.8"/><circle cx="16" cy="16" r="3" stroke="currentColor" strokeWidth="1.8"/></svg>;
@@ -134,24 +134,24 @@ export function GeneratedFilePreview({ file, onClose }: { file: ChatFileReferenc
   }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-label={`${file.name} 미리보기`} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-[#0d131c] shadow-2xl">
+    <section role="dialog" aria-modal="true" aria-label={`${file.name} 미리보기`} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-inset shadow-2xl">
       <header className="flex items-center gap-3 border-b border-edge px-5 py-3.5">
         <FileIcon kind={kind} />
-        <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold text-gray-100">{file.name}</h2><p className="mt-0.5 text-[10px] text-gray-500">{downloadError ? <span className="text-red-300">{downloadError}</span> : `생성된 ${KIND_LABEL[kind] || "파일"}`}</p></div>
-        {output.kind !== "form" && <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !proxyUrl && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900/40 disabled:opacity-40">다운로드</button>}
-        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-gray-400 transition hover:bg-edge hover:text-white" aria-label="미리보기 닫기">×</button>
+        <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold text-strong">{file.name}</h2><p className="mt-0.5 text-[10px] text-faint">{downloadError ? <span className="text-tone-red">{downloadError}</span> : `생성된 ${KIND_LABEL[kind] || "파일"}`}</p></div>
+        {output.kind !== "form" && <button type="button" onClick={() => void download()} disabled={!job || (!!error) || (!url && !proxyUrl && !blocks.length)} className="rounded-lg border border-emerald-900/80 bg-tint-emerald/30 px-3 py-2 text-xs font-semibold text-tone-emerald transition hover:bg-tint-emerald/40 disabled:opacity-40">다운로드</button>}
+        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-muted transition hover:bg-edge hover:text-strong" aria-label="미리보기 닫기">×</button>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto bg-[#080c12] p-5">
-        {!job && !error && <div className="grid min-h-72 place-items-center text-sm text-emerald-400">생성 파일을 여는 중…</div>}
-        {error && <div className="grid min-h-72 place-items-center text-sm text-red-300">{error}</div>}
+      <div className="min-h-0 flex-1 overflow-auto bg-ink p-5">
+        {!job && !error && <div className="grid min-h-72 place-items-center text-sm text-tone-emerald">생성 파일을 여는 중…</div>}
+        {error && <div className="grid min-h-72 place-items-center text-sm text-tone-red">{error}</div>}
         {job && kind === "image" && (objectName || url) && <div className="grid min-h-72 place-items-center"><StoredImage objectName={objectName} fallbackUrl={url} alt={file.name} className="max-h-[76vh] max-w-full rounded-lg object-contain" /></div>}
         {job && kind === "video" && mediaSrc && <div className="grid min-h-72 place-items-center"><video src={mediaSrc} controls autoPlay playsInline className="max-h-[76vh] max-w-full rounded-xl bg-black" /></div>}
         {job && kind === "audio" && mediaSrc && <div className="grid min-h-72 place-items-center"><audio src={mediaSrc} controls autoPlay className="w-full max-w-2xl" /></div>}
         {job && kind === "pdf" && mediaSrc && <iframe src={mediaSrc} title={file.name} className="h-[76vh] w-full rounded-lg border border-edge bg-white" />}
         {/* 서식 문서(form_fill): 표·합계 미리보기 + 포맷별 내려받기. 파일은 서버가 이미 만들어 뒀다. */}
         {job && output.kind === "form" && <FormDocumentView output={output} />}
-        {job && output.kind !== "form" && (kind === "pdf" || kind === "presentation") && !url && <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-[#0d131c] p-7 text-sm leading-7 text-gray-200"><h1 className="mb-2 text-2xl font-bold">{output.title || file.name}</h1>{output.subtitle && <p className="mb-6 text-gray-400">{output.subtitle}</p>}{blocks.map((block: any, index: number) => <section key={index} className="mb-5 border-t border-edge pt-4"><h2 className="mb-2 text-lg font-semibold text-emerald-200">{block?.title || `${kind === "presentation" ? "슬라이드" : "섹션"} ${index + 1}`}</h2><div className="whitespace-pre-wrap text-gray-300">{Array.isArray(block?.bullets) ? block.bullets.map((item: any) => `• ${String(item)}`).join("\n") : String(block?.content || block?.body || block?.text || block?.description || "")}</div></section>)}</article>}
-        {job && output.kind !== "form" && !url && !blocks.length && <pre className="mx-auto max-w-4xl whitespace-pre-wrap break-words rounded-xl border border-edge bg-[#0d131c] p-6 text-xs leading-6 text-gray-300">{JSON.stringify(output, null, 2)}</pre>}
+        {job && output.kind !== "form" && (kind === "pdf" || kind === "presentation") && !url && <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-inset p-7 text-sm leading-7 text-content"><h1 className="mb-2 text-2xl font-bold">{output.title || file.name}</h1>{output.subtitle && <p className="mb-6 text-muted">{output.subtitle}</p>}{blocks.map((block: any, index: number) => <section key={index} className="mb-5 border-t border-edge pt-4"><h2 className="mb-2 text-lg font-semibold text-tone-emerald">{block?.title || `${kind === "presentation" ? "슬라이드" : "섹션"} ${index + 1}`}</h2><div className="whitespace-pre-wrap text-secondary">{Array.isArray(block?.bullets) ? block.bullets.map((item: any) => `• ${String(item)}`).join("\n") : String(block?.content || block?.body || block?.text || block?.description || "")}</div></section>)}</article>}
+        {job && output.kind !== "form" && !url && !blocks.length && <pre className="mx-auto max-w-4xl whitespace-pre-wrap break-words rounded-xl border border-edge bg-inset p-6 text-xs leading-6 text-secondary">{JSON.stringify(output, null, 2)}</pre>}
       </div>
     </section>
   </div>;
@@ -175,13 +175,13 @@ export default function ChatFileAttachments({ files, onOpenProject }: { files?: 
     <div className="mt-2 grid gap-1.5" aria-label="첨부 파일">
       {files.map((file, index) => {
         const kind = fileKind(file);
-        return <button key={`${file.source}:${file.path || file.jobId || index}`} type="button" onClick={() => { setError(""); setSelected(file); }} className="flex min-w-0 items-center gap-2 rounded-xl border border-edge bg-[#0a1018]/80 px-3 py-2 text-left transition hover:border-emerald-700/70 hover:bg-emerald-950/20" title={`${file.name} 열기`}>
+        return <button key={`${file.source}:${file.path || file.jobId || index}`} type="button" onClick={() => { setError(""); setSelected(file); }} className="flex min-w-0 items-center gap-2 rounded-xl border border-edge bg-inset/80 px-3 py-2 text-left transition hover:border-emerald-700/70 hover:bg-tint-emerald/20" title={`${file.name} 열기`}>
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-black/25"><FileIcon kind={kind} /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-gray-200">{file.name}</span><span className="mt-0.5 block text-[10px] text-gray-500">{KIND_LABEL[kind] || "파일"} · 눌러서 보기</span></span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-content">{file.name}</span><span className="mt-0.5 block text-[10px] text-faint">{KIND_LABEL[kind] || "파일"} · 눌러서 보기</span></span>
         </button>;
       })}
     </div>
-    {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
+    {error && <p className="mt-1 text-[11px] text-tone-red">{error}</p>}
     <CompanyFilePreview entry={selectedCompanyEntry} onClose={() => setSelected(null)} onOpenProject={onOpenProject} onDownload={(entry) => { void downloadCompanyEntry(entry).catch((caught) => setError(caught instanceof Error ? caught.message : "다운로드에 실패했습니다.")); }} />
     {selected?.source === "generated" && <GeneratedFilePreview file={selected} onClose={() => setSelected(null)} />}
   </>;

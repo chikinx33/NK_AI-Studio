@@ -55,9 +55,9 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const filename = `${sanitizeName(inferBaseName(lang.toLowerCase(), code))}.${ext}`;
   const [done, setDone] = useState(false);
   return (
-    <div className="my-1 overflow-hidden rounded-md bg-black/40">
+    <div className="my-1 overflow-hidden rounded-md bg-inset">
       <div className="flex items-center justify-between border-b border-edge/60 px-2 py-1 text-[10px]">
-        <span className="font-mono text-gray-500">{lang || "code"}</span>
+        <span className="font-mono text-faint">{lang || "code"}</span>
         <button
           onClick={() => {
             downloadText(filename, code);
@@ -65,7 +65,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
             setTimeout(() => setDone(false), 1600);
           }}
           title={`${filename} 파일로 저장`}
-          className="rounded px-1.5 py-0.5 font-medium text-emerald-400 transition hover:bg-edge hover:text-emerald-300"
+          className="rounded px-1.5 py-0.5 font-medium text-tone-emerald transition hover:bg-edge hover:text-tone-emerald"
         >
           {done ? "✓ 저장됨" : `⬇ ${filename} 다운로드`}
         </button>
@@ -86,7 +86,7 @@ export default function Markdown({ text }: { text: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
-          strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+          strong: ({ children }) => <strong className="font-semibold text-strong">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           a: ({ href, children }) => (
             <a
@@ -98,19 +98,19 @@ export default function Markdown({ text }: { text: string }) {
                 event.preventDefault();
                 window.dispatchEvent(new CustomEvent("raviok-open-work", { detail: { id: href.slice("#raviok-work-".length) } }));
               }}
-              className={href?.startsWith("#raviok-work-") ? "inline-flex rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white no-underline hover:bg-emerald-500" : "text-emerald-400 underline underline-offset-2"}
+              className={href?.startsWith("#raviok-work-") ? "inline-flex rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white no-underline hover:bg-emerald-500" : "text-tone-emerald underline underline-offset-2"}
             >
               {children}
             </a>
           ),
           ul: ({ children }) => <ul className="list-disc space-y-0.5 pl-5">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal space-y-0.5 pl-5">{children}</ol>,
-          li: ({ children }) => <li className="marker:text-gray-500">{children}</li>,
-          h1: ({ children }) => <div className="mt-1 text-base font-bold text-white">{children}</div>,
-          h2: ({ children }) => <div className="mt-1 text-[0.95rem] font-bold text-white">{children}</div>,
-          h3: ({ children }) => <div className="mt-1 font-semibold text-white">{children}</div>,
+          li: ({ children }) => <li className="marker:text-faint">{children}</li>,
+          h1: ({ children }) => <div className="mt-1 text-base font-bold text-strong">{children}</div>,
+          h2: ({ children }) => <div className="mt-1 text-[0.95rem] font-bold text-strong">{children}</div>,
+          h3: ({ children }) => <div className="mt-1 font-semibold text-strong">{children}</div>,
           blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-edge pl-3 text-gray-400">{children}</blockquote>
+            <blockquote className="border-l-2 border-edge pl-3 text-muted">{children}</blockquote>
           ),
           hr: () => <hr className="border-edge" />,
           // pre는 통과 — 블록 스타일/다운로드 버튼은 code(CodeBlock)에서 처리.
@@ -119,7 +119,7 @@ export default function Markdown({ text }: { text: string }) {
             const raw = extractText(children);
             const isBlock = /language-/.test(className ?? "") || raw.includes("\n");
             if (!isBlock) {
-              return <code className="rounded bg-black/30 px-1 text-[0.88em]">{children}</code>;
+              return <code className="rounded bg-inset px-1 text-[0.88em]">{children}</code>;
             }
             const lang = (className ?? "").replace(/^.*language-/, "").trim();
             return <CodeBlock lang={lang} code={raw.replace(/\n$/, "")} />;
@@ -129,9 +129,9 @@ export default function Markdown({ text }: { text: string }) {
               <table className="w-full border-collapse text-[0.9em]">{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-black/20">{children}</thead>,
+          thead: ({ children }) => <thead className="bg-inset">{children}</thead>,
           th: ({ children }) => (
-            <th className="border border-edge px-2 py-1 text-left font-semibold text-gray-200">{children}</th>
+            <th className="border border-edge px-2 py-1 text-left font-semibold text-content">{children}</th>
           ),
           td: ({ children }) => <td className="border border-edge px-2 py-1 align-top">{children}</td>,
         }}

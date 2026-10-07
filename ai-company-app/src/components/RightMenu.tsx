@@ -175,10 +175,10 @@ function IconBtn({
       onBlur={() => setFocused(false)}
       className={`grid h-9 w-9 place-items-center rounded-lg transition ${
         danger
-          ? "text-red-400 hover:bg-red-900/40 hover:text-red-300"
+          ? "text-tone-red hover:bg-tint-red/40 hover:text-tone-red"
           : active
-            ? "bg-emerald-900/50 text-emerald-300"
-            : "text-gray-400 hover:bg-edge hover:text-white"
+            ? "bg-tint-emerald/50 text-tone-emerald"
+            : "text-muted hover:bg-edge hover:text-strong"
       }`}
     >
       {children}
@@ -187,7 +187,7 @@ function IconBtn({
       <span
         id={tooltipId}
         role="tooltip"
-        className="pointer-events-none fixed z-[100] w-max max-w-[min(280px,calc(100vw-16px))] -translate-x-1/2 rounded-lg border border-edge bg-[#111820] px-3 py-2 text-center text-xs leading-relaxed text-gray-100 shadow-xl"
+        className="pointer-events-none fixed z-[100] w-max max-w-[min(280px,calc(100vw-16px))] -translate-x-1/2 rounded-lg border border-edge bg-inset px-3 py-2 text-center text-xs leading-relaxed text-strong shadow-xl"
         style={position}
       >
         {title}

@@ -17,14 +17,14 @@ const SIDEBAR_HIDDEN_KEY = "nk_project_sidebar_hidden";
 
 const NEXT: Record<StageStatus, StageStatus> = { todo: "doing", doing: "done", done: "todo" };
 const STAGE: Record<StageStatus, { icon: string; c: string; label: string }> = {
-  todo: { icon: "⬜", c: "text-gray-500", label: "예정" },
-  doing: { icon: "🔄", c: "text-amber-300", label: "진행" },
-  done: { icon: "✅", c: "text-emerald-300", label: "완료" },
+  todo: { icon: "⬜", c: "text-faint", label: "예정" },
+  doing: { icon: "🔄", c: "text-tone-amber", label: "진행" },
+  done: { icon: "✅", c: "text-tone-emerald", label: "완료" },
 };
 const PROJ_STATUS: Record<string, { t: string; c: string }> = {
-  active: { t: "진행 중", c: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
-  paused: { t: "보류", c: "bg-amber-900/40 text-amber-300 border-amber-700/50" },
-  done: { t: "완료", c: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
+  active: { t: "진행 중", c: "bg-tint-emerald/40 text-tone-emerald border-emerald-700/50" },
+  paused: { t: "보류", c: "bg-tint-amber/40 text-tone-amber border-amber-700/50" },
+  done: { t: "완료", c: "bg-tint-sky/40 text-tone-sky border-sky-700/50" },
 };
 
 function ProjectIcon({ className }: { className?: string }) {
@@ -102,13 +102,13 @@ function ConversationList({
       {/* 인라인 캘린더: 대화가 있는 날(+오늘) 클릭 → 그 날 대화 열기 */}
       <div className="rounded-lg border border-edge bg-ink/40 p-2">
         <div className="mb-1 flex items-center justify-between px-0.5">
-          <button onClick={() => shiftMonth(-1)} className="grid h-5 w-5 place-items-center rounded text-gray-400 hover:bg-edge hover:text-white">‹</button>
-          <span className="text-[11px] font-medium text-gray-200">{vy}년 {vm + 1}월</span>
-          <button onClick={() => shiftMonth(1)} className="grid h-5 w-5 place-items-center rounded text-gray-400 hover:bg-edge hover:text-white">›</button>
+          <button onClick={() => shiftMonth(-1)} className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-edge hover:text-strong">‹</button>
+          <span className="text-[11px] font-medium text-content">{vy}년 {vm + 1}월</span>
+          <button onClick={() => shiftMonth(1)} className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-edge hover:text-strong">›</button>
         </div>
-        <div className="grid grid-cols-7 text-center text-[9px] text-gray-500">
+        <div className="grid grid-cols-7 text-center text-[9px] text-faint">
           {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
-            <div key={d} className={i === 0 ? "text-rose-400/70" : ""}>{d}</div>
+            <div key={d} className={i === 0 ? "text-tone-rose/70" : ""}>{d}</div>
           ))}
         </div>
         <div className="mt-0.5 grid grid-cols-7 gap-0.5">
@@ -124,7 +124,7 @@ function ConversationList({
                 // 대화 있는 날 + 오늘만 클릭 가능. 그 외 빈 날은 비활성(새로 만들지 않음)
                 if (!hasConv && !isToday) {
                   return (
-                    <div key={i} className="grid aspect-square cursor-default place-items-center rounded text-[10px] text-gray-600">
+                    <div key={i} className="grid aspect-square cursor-default place-items-center rounded text-[10px] text-faint">
                       {c}
                     </div>
                   );
@@ -138,8 +138,8 @@ function ConversationList({
                       isActive
                         ? "bg-emerald-600 text-white"
                         : isToday
-                          ? "bg-edge text-emerald-300 ring-1 ring-emerald-600"
-                          : "text-emerald-200 hover:bg-edge"
+                          ? "bg-edge text-tone-emerald ring-1 ring-emerald-600"
+                          : "text-tone-emerald hover:bg-edge"
                     }`}
                   >
                     {c}
@@ -268,7 +268,7 @@ export default function Dashboard({
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
       {/* 아이콘 전용 행 — 콘텐츠와 분리 (지식·채팅 뷰와 동일 방식) */}
-      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-gray-400">
+      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-muted">
         <ProjectIcon className="h-10 w-10" />
       </div>
 
@@ -276,10 +276,10 @@ export default function Dashboard({
         <div className="mx-auto flex max-w-5xl flex-col gap-4 md:flex-row">
           {/* 좌: 프로젝트 */}
           <div className="min-w-0 flex-1 space-y-3">
-            {projectOpenNotice && <div className="rounded-xl border border-amber-900/70 bg-amber-950/20 px-4 py-3 text-xs text-amber-300">{projectOpenNotice}</div>}
-            {projects === null && <div className="text-xs text-gray-500">불러오는 중…</div>}
+            {projectOpenNotice && <div className="rounded-xl border border-amber-900/70 bg-tint-amber/20 px-4 py-3 text-xs text-tone-amber">{projectOpenNotice}</div>}
+            {projects === null && <div className="text-xs text-faint">불러오는 중…</div>}
             {projects?.length === 0 && (
-              <div className="rounded-xl border border-edge bg-panel p-5 text-sm text-gray-500">등록된 프로젝트가 없습니다.</div>
+              <div className="rounded-xl border border-edge bg-panel p-5 text-sm text-faint">등록된 프로젝트가 없습니다.</div>
             )}
             {projects?.map((p) => {
               const done = p.stages.filter((s) => s.status === "done").length;
@@ -324,7 +324,7 @@ export default function Dashboard({
                     <span
                       aria-label={`${p.name} 프로젝트 순서 변경`}
                       title="드래그하여 프로젝트 순서 변경"
-                      className="shrink-0 cursor-grab select-none text-sm tracking-[-3px] text-gray-600 hover:text-gray-300 active:cursor-grabbing"
+                      className="shrink-0 cursor-grab select-none text-sm tracking-[-3px] text-faint hover:text-secondary active:cursor-grabbing"
                     >
                       ⠿
                     </span>
@@ -337,15 +337,15 @@ export default function Dashboard({
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void toggleCollapse(p); }}
                       className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                     >
-                      <span className={`shrink-0 text-lg leading-none text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                      <span className={`shrink-0 text-lg leading-none text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <h3 className="truncate text-xl font-bold text-gray-50">{title}</h3>
                           <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ps.c}`}>{ps.t}</span>
                         </div>
-                        {sub && <div className="truncate text-sm text-gray-400">{sub}</div>}
+                        {sub && <div className="truncate text-sm text-muted">{sub}</div>}
                       </div>
-                      <span className="shrink-0 text-[11px] text-gray-500">{done}/{p.stages.length} · {pct}%</span>
+                      <span className="shrink-0 text-[11px] text-faint">{done}/{p.stages.length} · {pct}%</span>
                     </div>
                     {/* 사이드바 표시 토글 체크박스 */}
                     <label
@@ -363,10 +363,10 @@ export default function Dashboard({
 
                   {isOpen && (
                     <div className="border-t border-edge px-4 pb-4 pt-3">
-                      {p.summary && <div className="mb-3 text-xs text-gray-500">{p.summary}</div>}
+                      {p.summary && <div className="mb-3 text-xs text-faint">{p.summary}</div>}
                       {p.goal && (
-                        <div className="mb-3 rounded-lg border border-edge bg-ink/50 px-3 py-2 text-[13px] text-gray-300">
-                          <span className="text-gray-500">🎯 목표 · </span>
+                        <div className="mb-3 rounded-lg border border-edge bg-ink/50 px-3 py-2 text-[13px] text-secondary">
+                          <span className="text-faint">🎯 목표 · </span>
                           {p.goal}
                         </div>
                       )}
@@ -374,7 +374,7 @@ export default function Dashboard({
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-edge">
                           <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="shrink-0 text-[11px] text-gray-400">{done}/{p.stages.length} · {pct}%</span>
+                        <span className="shrink-0 text-[11px] text-muted">{done}/{p.stages.length} · {pct}%</span>
                       </div>
                       <div className="space-y-1">
                         {p.stages.map((s, i) => {
@@ -388,15 +388,15 @@ export default function Dashboard({
                               className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition hover:bg-edge/50"
                             >
                               <span className="shrink-0">{st.icon}</span>
-                              <span className={`flex-1 truncate ${s.status === "done" ? "text-gray-500 line-through" : "text-gray-200"}`}>{s.title}</span>
+                              <span className={`flex-1 truncate ${s.status === "done" ? "text-faint line-through" : "text-content"}`}>{s.title}</span>
                               <span className={`shrink-0 text-[11px] ${st.c}`}>{st.label}</span>
                             </button>
                           );
                         })}
                       </div>
                       {p.nextAction && (
-                        <div className="mt-3 flex items-start gap-1.5 border-t border-edge pt-3 text-[13px] text-gray-300">
-                          <ClapperboardIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                        <div className="mt-3 flex items-start gap-1.5 border-t border-edge pt-3 text-[13px] text-secondary">
+                          <ClapperboardIcon className="mt-0.5 h-4 w-4 shrink-0 text-tone-emerald" />
                           <span>{p.nextAction}</span>
                         </div>
                       )}

@@ -72,9 +72,9 @@ function PlayIcon({ className }: { className?: string }) {
 
 // 유형 배지 (회사 지식 패널과 동일 색)
 const TYPE_BADGE: Record<string, { t: string; c: string }> = {
-  원칙: { t: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
-  사실: { t: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
-  결정: { t: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
+  원칙: { t: "규칙", c: "bg-tint-violet/50 text-tone-violet border-violet-700/50" },
+  사실: { t: "사실", c: "bg-tint-emerald/50 text-tone-emerald border-emerald-700/50" },
+  결정: { t: "결정", c: "bg-tint-amber/50 text-tone-amber border-amber-700/50" },
 };
 
 // 직원 선택은 좌측 사이드바 아바타 클릭으로 (agentId 주입). 여기선 그 직원만 표시·관리.
@@ -260,13 +260,13 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
       {/* 상단 아이콘 행 — 다른 페이지(회사 지식 등)와 동일 스타일 */}
-      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-gray-400">
+      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-muted">
         <UsersIcon className="h-10 w-10" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-6">
         {!sel ? (
-          <div className="grid h-full place-items-center px-6 text-center text-sm text-gray-500">
+          <div className="grid h-full place-items-center px-6 text-center text-sm text-faint">
             왼쪽 사이드바에서 직원을 선택하면<br />그 직원의 페르소나·규칙·지식을 관리할 수 있어요.
           </div>
         ) : (
@@ -280,19 +280,19 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                 onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
               />
               <div>
-                <h2 className="text-lg font-bold text-gray-100">{sel.name}</h2>
-                <p className="text-xs text-gray-500">{sel.role}</p>
+                <h2 className="text-lg font-bold text-strong">{sel.name}</h2>
+                <p className="text-xs text-faint">{sel.role}</p>
               </div>
             </div>
 
             {/* 페르소나 (편집 가능) */}
             <section>
               <div className="mb-1.5 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-300">페르소나 (성격·말투·지침)</h3>
+                <h3 className="text-sm font-semibold text-secondary">페르소나 (성격·말투·지침)</h3>
                 <button
                   onClick={savePersona}
                   disabled={!personaDirty || savingPersona}
-                  className="rounded-md border border-emerald-700/50 bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-300 transition hover:bg-emerald-900/50 disabled:opacity-40"
+                  className="rounded-md border border-emerald-700/50 bg-tint-emerald/30 px-2.5 py-1 text-xs text-tone-emerald transition hover:bg-tint-emerald/50 disabled:opacity-40"
                 >
                   {savingPersona ? "저장 중…" : personaDirty ? "저장" : "저장됨"}
                 </button>
@@ -305,19 +305,19 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                 }}
                 rows={6}
                 spellCheck={false}
-                className="w-full resize-y rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                className="w-full resize-y rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-content outline-none focus:border-emerald-600"
                 placeholder="이 직원의 성격·말투·일하는 방식…"
               />
               {brain?.goal && (
-                <p className="mt-1.5 text-xs text-gray-500">미션: {brain.goal.replace(/\s+/g, " ").slice(0, 160)}</p>
+                <p className="mt-1.5 text-xs text-faint">미션: {brain.goal.replace(/\s+/g, " ").slice(0, 160)}</p>
               )}
             </section>
 
             {/* 보이스 */}
             <section>
               <div className="mb-1.5 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-300">보이스</h3>
-                <span className="text-[11px] text-gray-600">
+                <h3 className="text-sm font-semibold text-secondary">보이스</h3>
+                <span className="text-[11px] text-faint">
                   {browserMode ? "무료 읽기 (브라우저)" : serverMode ? "서버 음성 (MeloTTS)" : selectedVoice.label}
                 </span>
               </div>
@@ -326,7 +326,7 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                   <select
                     value={browserVoiceURI}
                     onChange={(e) => changeBrowserVoice(e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-content outline-none focus:border-emerald-600"
                   >
                     <option value="">자동 (한국어 기본)</option>
                     {browserVoices.map((v) => (
@@ -336,14 +336,14 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                     ))}
                   </select>
                 ) : serverMode ? (
-                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-400">
+                  <div className="flex min-w-0 flex-1 items-center rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-muted">
                     한국어 화자 (성별·톤 자동)
                   </div>
                 ) : (
                   <select
                     value={voiceKey}
                     onChange={(e) => changeVoice(e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
+                    className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-content outline-none focus:border-emerald-600"
                   >
                     {AGENT_VOICE_PRESETS.map((v) => (
                       <option key={v.key} value={v.key}>
@@ -355,7 +355,7 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                 <button
                   type="button"
                   onClick={cycleVoiceSpeed}
-                  className="inline-flex h-[38px] w-14 shrink-0 items-center justify-center rounded-lg border border-edge bg-panel text-sm font-medium text-gray-200 transition hover:border-emerald-700/60 hover:bg-edge"
+                  className="inline-flex h-[38px] w-14 shrink-0 items-center justify-center rounded-lg border border-edge bg-panel text-sm font-medium text-content transition hover:border-emerald-700/60 hover:bg-edge"
                   title="보이스 재생 속도"
                 >
                   x{voiceSpeed}
@@ -364,14 +364,14 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                   type="button"
                   onClick={previewVoice}
                   disabled={previewingVoice}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-700/50 bg-emerald-900/30 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-900/50 disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-700/50 bg-tint-emerald/30 px-3 py-2 text-sm text-tone-emerald transition hover:bg-tint-emerald/50 disabled:opacity-40"
                   title="선택한 보이스 미리듣기"
                 >
                   <PlayIcon className="h-4 w-4" />
                   {previewingVoice ? "재생 중…" : "미리듣기"}
                 </button>
               </div>
-              <p className="mt-1.5 text-xs text-gray-500">
+              <p className="mt-1.5 text-xs text-faint">
                 {browserMode
                   ? "무료 브라우저 읽기 모드입니다. 이 기기에 설치된 음성 중에서 선택돼요. (한국어 음성이 하나뿐인 브라우저가 많아 속도·톤으로 구분돼요.)"
                   : serverMode
@@ -379,12 +379,12 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
                   : "선택한 보이스는 이 직원이 채팅에서 답할 때 바로 적용됩니다."}
               </p>
               {previewLine && (
-                <p className="mt-1 rounded-lg border border-edge bg-panel/60 px-2.5 py-1.5 text-xs text-gray-500">
+                <p className="mt-1 rounded-lg border border-edge bg-panel/60 px-2.5 py-1.5 text-xs text-faint">
                   테스트 멘트: {previewLine}
                 </p>
               )}
               {previewError && (
-                <p className="mt-1 rounded-lg border border-red-800/60 bg-red-950/30 px-2.5 py-1.5 text-xs text-red-300">
+                <p className="mt-1 rounded-lg border border-red-800/60 bg-tint-red/30 px-2.5 py-1.5 text-xs text-tone-red">
                   {previewError}
                 </p>
               )}
@@ -392,20 +392,20 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
 
             {/* 운영 규칙 (원칙) */}
             <section>
-              <h3 className="mb-1.5 text-sm font-semibold text-violet-300">
+              <h3 className="mb-1.5 text-sm font-semibold text-tone-violet">
                 운영 규칙 ({rules.length}) — 이 직원이 항상 지킴
               </h3>
               <div className="space-y-1.5">
                 {rules.map((it, i) => (
                   <Row key={i} it={it} onDelete={() => setPendingDelete(it)} />
                 ))}
-                {rules.length === 0 && <p className="text-xs text-gray-600">아직 규칙이 없어요.</p>}
+                {rules.length === 0 && <p className="text-xs text-faint">아직 규칙이 없어요.</p>}
               </div>
               <div className="mt-2 flex gap-1.5">
                 <select
                   value={newType}
                   onChange={(e) => setNewType(e.target.value as KnowledgeType)}
-                  className="rounded-lg border border-edge bg-panel px-2 py-1.5 text-xs text-gray-300 outline-none"
+                  className="rounded-lg border border-edge bg-panel px-2 py-1.5 text-xs text-secondary outline-none"
                 >
                   <option value="원칙">규칙</option>
                   <option value="사실">사실</option>
@@ -425,7 +425,7 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
             {/* 개인 지식 (사실·결정) */}
             {others.length > 0 && (
               <section>
-                <h3 className="mb-1.5 text-sm font-semibold text-gray-300">개인 지식 ({others.length})</h3>
+                <h3 className="mb-1.5 text-sm font-semibold text-secondary">개인 지식 ({others.length})</h3>
                 <div className="space-y-1.5">
                   {others.map((it, i) => (
                     <Row key={i} it={it} onDelete={() => setPendingDelete(it)} />
@@ -447,14 +447,14 @@ export default function AgentManager({ agentId, agents, voiceMode = "browser" }:
             className="w-[360px] max-w-[92vw] rounded-2xl border border-edge bg-panel p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-2 text-sm font-semibold text-gray-100">이 항목을 삭제할까요?</h3>
-            <div className="mb-4 rounded-lg border border-edge bg-ink/60 px-3 py-2 text-xs text-gray-300">
+            <h3 className="mb-2 text-sm font-semibold text-strong">이 항목을 삭제할까요?</h3>
+            <div className="mb-4 rounded-lg border border-edge bg-ink/60 px-3 py-2 text-xs text-secondary">
               {pendingDelete.text}
             </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setPendingDelete(null)}
-                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge"
+                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge"
               >
                 취소
               </button>
@@ -476,11 +476,11 @@ function Row({ it, onDelete }: { it: KnowledgeItem; onDelete: () => void }) {
   const b = TYPE_BADGE[it.type ?? "사실"];
   return (
     <div className="group flex items-start gap-1.5 rounded-lg border border-edge bg-panel px-3 py-2 text-sm">
-      <span className="flex-1 text-gray-200">{it.text}</span>
+      <span className="flex-1 text-content">{it.text}</span>
       <span className={`shrink-0 rounded border px-1 text-[10px] ${b.c}`}>{b.t}</span>
       <button
         onClick={onDelete}
-        className="shrink-0 text-gray-600 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+        className="shrink-0 text-faint opacity-0 transition hover:text-tone-red group-hover:opacity-100"
         title="삭제"
       >
         ✕

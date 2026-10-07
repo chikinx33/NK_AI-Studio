@@ -142,10 +142,10 @@ function Spinner({ className }: { className?: string }) {
 }
 
 const STATUS: Record<string, { t: string; c: string; pill: string }> = {
-  pending: { t: "검토 대기", c: "text-amber-300", pill: "bg-amber-900/40 text-amber-300 border-amber-700/50" },
-  approved: { t: "사용 확정", c: "text-emerald-300", pill: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" },
-  revise: { t: "재검토 요청됨", c: "text-sky-300", pill: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
-  discarded: { t: "폐기됨", c: "text-gray-400", pill: "bg-gray-800/60 text-gray-400 border-gray-600/50" },
+  pending: { t: "검토 대기", c: "text-tone-amber", pill: "bg-tint-amber/40 text-tone-amber border-amber-700/50" },
+  approved: { t: "사용 확정", c: "text-tone-emerald", pill: "bg-tint-emerald/40 text-tone-emerald border-emerald-700/50" },
+  revise: { t: "재검토 요청됨", c: "text-tone-sky", pill: "bg-tint-sky/40 text-tone-sky border-sky-700/50" },
+  discarded: { t: "폐기됨", c: "text-muted", pill: "bg-raised/60 text-muted border-edge/50" },
 };
 
 const workerLabel = (it: ResultItem) => `${it.agentName}${JOB[it.agentId] ? `(${JOB[it.agentId]})` : ""}`;
@@ -190,13 +190,13 @@ function ImagePopup({
           <div className="flex min-w-0 items-center gap-2">
             <img src={`/avatars/${item.agentId}.png`} alt={item.agentName} className="h-8 w-8 rounded-md object-cover" />
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-200">{workerLabel(item)} · 산출물</div>
-              <div className="truncate font-mono text-[11px] text-gray-500">{item.file}</div>
+              <div className="text-sm font-semibold text-content">{workerLabel(item)} · 산출물</div>
+              <div className="truncate font-mono text-[11px] text-faint">{item.file}</div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 transition hover:bg-edge hover:text-white"
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-edge hover:text-strong"
           >
             ✕
           </button>
@@ -208,20 +208,20 @@ function ImagePopup({
               ? <audio src={item.url} controls preload="metadata" className="mx-auto w-full" />
               : item.url && !imageFailed
             ? <img src={item.url} alt={item.file} onError={() => setImageFailed(true)} className="mx-auto max-h-[56vh] rounded-lg object-contain" />
-            : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-gray-400">
+            : <p className="mx-auto max-w-md rounded-lg border border-edge bg-panel p-6 text-center text-sm text-muted">
                 {item.url
                   ? "이 그림을 불러오지 못했어요. 저장이 끝나기 전에 만료된 링크이거나 저장소에 올라가지 않은 결과일 수 있어요 — 담당 직원에게 '왜 안 나와?'라고 물으면 원인을 확인해 줘요."
                   : "미리볼 이미지가 없는 산출물이에요. 아래 '폴더 열기'나 채팅의 파일에서 확인해 주세요."}
               </p>}
           {item.prompt && (
-            <div className="mt-3 rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[12px] leading-relaxed text-gray-300">
-              <span className="text-gray-500">프롬프트 · </span>
+            <div className="mt-3 rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[12px] leading-relaxed text-secondary">
+              <span className="text-faint">프롬프트 · </span>
               {item.prompt}
             </div>
           )}
           {item.note && (
-            <div className="mt-2 rounded-lg border border-sky-800/50 bg-sky-900/20 px-3 py-2 text-[12px] leading-relaxed text-sky-200">
-              <span className="text-sky-400">마지막 재검토 요청 · </span>
+            <div className="mt-2 rounded-lg border border-sky-800/50 bg-tint-sky/20 px-3 py-2 text-[12px] leading-relaxed text-tone-sky">
+              <span className="text-tone-sky">마지막 재검토 요청 · </span>
               {item.note}
             </div>
           )}
@@ -238,28 +238,28 @@ function ImagePopup({
             }}
             disabled={!item.workDateKey}
             title={item.workDateKey ? `업무 파일 ${item.workDateKey} 폴더 열기` : "검토 승인하면 업무 파일에 정리돼요"}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge disabled:cursor-not-allowed disabled:opacity-40"
           >
             <FolderIcon className="h-4 w-4" /> 폴더 열기
           </button>
-          {folderHint && <span className="text-[11px] text-gray-500">{folderHint}</span>}
+          {folderHint && <span className="text-[11px] text-faint">{folderHint}</span>}
           <div className="ml-auto flex items-center gap-2">
             {/* 상태는 버튼과 헷갈리지 않게 알약 모양 표시로 둔다 */}
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS[item.reviewStatus]?.pill ?? "border-edge text-gray-400"}`}>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS[item.reviewStatus]?.pill ?? "border-edge text-muted"}`}>
               {STATUS[item.reviewStatus]?.t ?? item.reviewStatus}
             </span>
             {approvable && <button
               disabled={busy}
               onClick={onDiscard}
               title="이 결과를 쓰지 않고 버려요(업무 파일에 넣지 않아요)"
-              className="rounded-lg border border-rose-800/70 bg-rose-950/30 px-3 py-1.5 text-sm text-rose-300 transition hover:bg-rose-900/50 disabled:opacity-40"
+              className="rounded-lg border border-rose-800/70 bg-tint-rose/30 px-3 py-1.5 text-sm text-tone-rose transition hover:bg-tint-rose/50 disabled:opacity-40"
             >
               폐기
             </button>}
             <button
               disabled={busy}
               onClick={onRevise}
-              className="rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60 disabled:opacity-40"
+              className="rounded-lg border border-sky-700 bg-tint-sky/30 px-3 py-1.5 text-sm text-tone-sky transition hover:bg-tint-sky/60 disabled:opacity-40"
             >
               재검토
             </button>
@@ -301,7 +301,7 @@ function ReviseDialog({ item, onSubmit, onClose }: {
       <form onSubmit={(event) => { event.preventDefault(); void submit(); }} role="dialog" aria-modal="true" aria-label="재검토 요청" className="w-full max-w-md rounded-2xl border border-edge bg-panel p-5 shadow-2xl">
         <div className="flex items-center gap-2">
           <img src={`/avatars/${item.agentId}.png`} alt="" className="h-8 w-8 rounded-md object-cover" />
-          <h2 className="text-sm font-bold text-gray-100">어떤 부분을 수정할까요?</h2>
+          <h2 className="text-sm font-bold text-strong">어떤 부분을 수정할까요?</h2>
         </div>
         <textarea
           autoFocus
@@ -310,11 +310,11 @@ function ReviseDialog({ item, onSubmit, onClose }: {
           maxLength={2000}
           rows={4}
           placeholder="예: 분위기를 새벽으로 바꿔줘"
-          className="mt-4 w-full resize-none rounded-lg border border-edge bg-ink px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-sky-600"
+          className="mt-4 w-full resize-none rounded-lg border border-edge bg-ink px-3 py-2.5 text-sm text-strong outline-none focus:border-sky-600"
         />
-        {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+        {error && <p className="mt-2 text-xs text-tone-red">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 transition hover:bg-edge disabled:opacity-40">취소</button>
+          <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-secondary transition hover:bg-edge disabled:opacity-40">취소</button>
           <button type="submit" disabled={busy || (item.kind === "image" && !note.trim())} className="inline-flex min-w-16 items-center justify-center gap-1 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-600 disabled:opacity-60">
             {busy ? <><Spinner className="h-3.5 w-3.5" /> 요청 중…</> : "확인"}
           </button>
@@ -356,19 +356,19 @@ function FormCard({
   const [preview, setPreview] = useState(false);
 
   const frame =
-    state === "needs_input" ? "border-amber-600/50 bg-amber-950/20"
-    : state === "error" ? "border-rose-800/50 bg-rose-950/20"
-    : "border-emerald-800/50 bg-emerald-950/15";
+    state === "needs_input" ? "border-amber-600/50 bg-tint-amber/20"
+    : state === "error" ? "border-rose-800/50 bg-tint-rose/20"
+    : "border-emerald-800/50 bg-tint-emerald/15";
 
   return (
     <div className={`text-xs border rounded-lg p-2 ${frame}`}>
       <div className="flex items-center gap-1.5">
         <FormStatusBadge state={state} />
-        <span className="truncate text-[10px] text-gray-500">
+        <span className="truncate text-[10px] text-faint">
           {it.agentName} · {JOB[it.agentId] ?? "직원"} · {form.formName || "서식"}
         </span>
       </div>
-      <div className="mt-1 truncate font-medium text-gray-200" title={form.data?.title}>
+      <div className="mt-1 truncate font-medium text-content" title={form.data?.title}>
         {form.data?.title || it.prompt || "서식 문서"}
       </div>
 
@@ -381,16 +381,16 @@ function FormCard({
       {/* B. 완성 — 요약 → 미리보기 → 다운로드 → 저장/재작성 */}
       {state === "ready" && (
         <>
-          <div className="mt-0.5 text-gray-400">
+          <div className="mt-0.5 text-muted">
             {form.data?.client?.company || "고객사"} · 항목 {itemCount}개
           </div>
           {totals.grandTotalText && (
-            <div className="mt-0.5 text-[11px] font-semibold text-emerald-300">{totals.grandTotalText}</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-tone-emerald">{totals.grandTotalText}</div>
           )}
 
           <button
             onClick={() => setPreview(true)}
-            className="mt-2 w-full rounded border border-emerald-800/70 bg-emerald-900/25 px-2 py-1 text-[12px] font-semibold text-emerald-200 transition hover:bg-emerald-900/45"
+            className="mt-2 w-full rounded border border-emerald-800/70 bg-tint-emerald/25 px-2 py-1 text-[12px] font-semibold text-tone-emerald transition hover:bg-tint-emerald/45"
           >
             미리보기
           </button>
@@ -406,20 +406,20 @@ function FormCard({
             </button>
             <button
               onClick={() => onReview("revise")}
-              className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+              className="flex-1 inline-flex items-center justify-center rounded bg-raised px-2 py-1 transition hover:bg-gray-600"
             >
               재작성
             </button>
             <button
               onClick={onCancel}
               title="지시 취소"
-              className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
+              className="h-7 w-7 flex items-center justify-center rounded bg-tint-rose/60 border border-rose-700/50 transition hover:bg-tint-rose text-tone-rose shrink-0"
             >
               <XIcon className="h-3.5 w-3.5" />
             </button>
           </div>
           {/* 이 버튼이 무엇을 하는지 화면에 쓴다 — 예전엔 툴팁에만 있어 사람이 알 수 없었다 */}
-          <p className="mt-1 text-[10px] text-gray-500">저장하면 업무 파일 {it.workDateKey || "오늘"} 폴더에 정리돼요</p>
+          <p className="mt-1 text-[10px] text-faint">저장하면 업무 파일 {it.workDateKey || "오늘"} 폴더에 정리돼요</p>
         </>
       )}
 
@@ -457,25 +457,25 @@ function DocCard({
   }
 
   return (
-    <div className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+    <div className="text-xs border border-amber-600/40 bg-tint-amber/20 rounded-lg p-2">
       <div className="flex items-start gap-2">
-        <div className="h-11 w-11 shrink-0 rounded-lg ring-2 ring-amber-500/60 bg-amber-900/30 flex items-center justify-center">
+        <div className="h-11 w-11 shrink-0 rounded-lg ring-2 ring-amber-500/60 bg-tint-amber/30 flex items-center justify-center">
           {isPpt
-            ? <PptIcon className="h-6 w-6 text-amber-300" />
-            : <PdfIcon className="h-6 w-6 text-sky-300" />}
+            ? <PptIcon className="h-6 w-6 text-tone-amber" />
+            : <PdfIcon className="h-6 w-6 text-tone-sky" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-medium">
-            <span className="text-amber-200">{it.agentName}</span>
-            <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
-            <span className={`ml-2 text-[10px] font-semibold ${isPpt ? "text-amber-400" : "text-sky-400"}`}>
+            <span className="text-tone-amber">{it.agentName}</span>
+            <span className="ml-1 text-[10px] text-faint">{JOB[it.agentId] ?? "직원"}</span>
+            <span className={`ml-2 text-[10px] font-semibold ${isPpt ? "text-tone-amber" : "text-tone-sky"}`}>
               {isPpt ? "PPT" : "PDF"}
             </span>
           </div>
-          <div className="truncate text-gray-300 font-medium" title={d?.title}>
+          <div className="truncate text-secondary font-medium" title={d?.title}>
             {d?.title || it.prompt || "문서"}
           </div>
-          <div className="text-gray-500">{countLabel}</div>
+          <div className="text-faint">{countLabel}</div>
         </div>
       </div>
       <div className="mt-2 flex items-center gap-1.5">
@@ -498,7 +498,7 @@ function DocCard({
         </button>
         <button
           onClick={() => onReview("revise")}
-          className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+          className="flex-1 inline-flex items-center justify-center rounded bg-raised px-2 py-1 transition hover:bg-gray-600"
         >
           재검토
         </button>
@@ -506,7 +506,7 @@ function DocCard({
         <button
           onClick={onCancel}
           title="지시 취소"
-          className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
+          className="h-7 w-7 flex items-center justify-center rounded bg-tint-rose/60 border border-rose-700/50 transition hover:bg-tint-rose text-tone-rose shrink-0"
         >
           <XIcon className="h-3.5 w-3.5" />
         </button>
@@ -673,12 +673,12 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
     <>
     <CollapsibleSection
       storageKey="nk_collapse_results"
-      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})</span>}
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-tone-amber"><ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})</span>}
     >
       {pending.length === 0 && (
-        <div className="text-xs text-gray-500 mb-2">검토할 보고가 없어요.</div>
+        <div className="text-xs text-faint mb-2">검토할 보고가 없어요.</div>
       )}
-      {reviewError && <div className="mb-2 text-[11px] text-red-300">{reviewError}</div>}
+      {reviewError && <div className="mb-2 text-[11px] text-tone-red">{reviewError}</div>}
 
       <div className="space-y-2">
         {pending.map((it) => {
@@ -704,7 +704,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
             );
           }
           return (
-            <div key={it.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+            <div key={it.id} className="text-xs border border-amber-600/40 bg-tint-amber/20 rounded-lg p-2">
               <div className="flex items-start gap-2">
                 <button
                   onClick={() => setOpenId(it.id)}
@@ -713,19 +713,19 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                 >
                   {/* 이미지 주소가 없는 산출물(문서 등)에서 깨진 이미지 아이콘이 뜨던 자리. 영상·오디오 주소도 <img> 에 넣으면 깨진다 → 아이콘 */}
                   {it.kind === "video"
-                    ? <span className="grid h-full w-full place-items-center bg-amber-900/30 text-amber-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
+                    ? <span className="grid h-full w-full place-items-center bg-tint-amber/30 text-tone-amber" title="영상"><VideoIcon className="h-5 w-5" /></span>
                     : it.kind === "audio"
-                      ? <span className="grid h-full w-full place-items-center bg-amber-900/30 text-amber-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
+                      ? <span className="grid h-full w-full place-items-center bg-tint-amber/30 text-tone-amber" title="오디오"><MusicIcon className="h-5 w-5" /></span>
                       : it.url
                         ? <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
-                        : <span className="grid h-full w-full place-items-center bg-amber-900/30 text-[10px] font-semibold text-amber-200">문서</span>}
+                        : <span className="grid h-full w-full place-items-center bg-tint-amber/30 text-[10px] font-semibold text-tone-amber">문서</span>}
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">
-                    <span className="text-amber-200">{it.agentName}</span>
-                    <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
+                    <span className="text-tone-amber">{it.agentName}</span>
+                    <span className="ml-1 text-[10px] text-faint">{JOB[it.agentId] ?? "직원"}</span>
                   </div>
-                  <div className="line-clamp-2 text-gray-300" title={it.prompt}>
+                  <div className="line-clamp-2 text-secondary" title={it.prompt}>
                     {it.prompt || "이미지 생성을 완료했습니다."}
                   </div>
                 </div>
@@ -741,7 +741,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                 <button
                   disabled={busy === it.id}
                   onClick={() => reviewInline(it, "revise")}
-                  className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded bg-raised px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
                 </button>
@@ -749,7 +749,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                   disabled={busy === it.id}
                   onClick={() => reviewInline(it, "discard")}
                   title="이 결과를 쓰지 않고 버려요"
-                  className="inline-flex items-center gap-1 rounded border border-rose-800/70 bg-rose-950/40 px-2 py-1 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded border border-rose-800/70 bg-tint-rose/40 px-2 py-1 text-tone-rose transition hover:bg-tint-rose/50 disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy === it.id && busyAction === "discard" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "폐기"}
                 </button>
@@ -761,7 +761,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
 
       {recent.length > 0 && (
         <div className="mt-3 pt-2 border-t border-edge">
-          <div className="text-[11px] text-gray-500 mb-1">최근 처리</div>
+          <div className="text-[11px] text-faint mb-1">최근 처리</div>
           <div className="space-y-1">
             {recent.map((it) => {
               const st = STATUS[it.reviewStatus];
@@ -770,12 +770,12 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                   <button
                     onClick={() => setOpenId(it.id)}
                     title={it.prompt}
-                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-[11px] text-gray-400 transition hover:text-gray-200"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-[11px] text-muted transition hover:text-content"
                   >
-                    <span className={st?.c ?? "text-gray-400"}>{it.reviewStatus === "approved" ? "✅" : it.reviewStatus === "discarded" ? "🗑️" : "↻"}</span>
-                    <span className="shrink-0 text-gray-300">{it.agentName}</span>
-                    <span className="shrink-0 text-gray-600">· {st?.t ?? it.reviewStatus}</span>
-                    <span className="min-w-0 flex-1 truncate text-gray-500">{it.prompt}</span>
+                    <span className={st?.c ?? "text-muted"}>{it.reviewStatus === "approved" ? "✅" : it.reviewStatus === "discarded" ? "🗑️" : "↻"}</span>
+                    <span className="shrink-0 text-secondary">{it.agentName}</span>
+                    <span className="shrink-0 text-faint">· {st?.t ?? it.reviewStatus}</span>
+                    <span className="min-w-0 flex-1 truncate text-faint">{it.prompt}</span>
                   </button>
                   {onChatAbout && (
                     <button
@@ -783,7 +783,7 @@ export default function Results({ onAgentSay, refreshKey, onPendingRequests, onC
                       onClick={() => onChatAbout(resultReference(it))}
                       title="채팅에서 이 항목 지목하기 — 예: '이걸로 영상 만들어줘'"
                       aria-label="채팅에서 이 항목 지목하기"
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-500 transition hover:bg-edge hover:text-sky-300"
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-faint transition hover:bg-edge hover:text-tone-sky"
                     >
                       <MessageSquareIcon className="h-3.5 w-3.5" />
                     </button>

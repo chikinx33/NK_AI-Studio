@@ -18,6 +18,6 @@ test('★셸 스테이지 오버레이: 흐림(backdrop blur) + 기존 .spinner,
 
 test('★React 캔버스: 그래프를 읽는 동안 흐림 + 스피너(문구 아님)', () => {
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(src, /\{loading && !graph && <div className="absolute inset-0 z-20 grid place-items-center bg-\[#06080c\]\/55 backdrop-blur-\[4px\]" data-testid="canvas-loading"><RefreshIcon className="h-9 w-9 animate-spin text-orange-400" \/><\/div>\}/);
+  assert.match(src, /\{loading && !graph && <div className="absolute inset-0 z-20 grid place-items-center bg-ink\/55 backdrop-blur-\[4px\]" data-testid="canvas-loading"><RefreshIcon className="h-9 w-9 animate-spin text-tone-orange" \/><\/div>\}/);
   assert.doesNotMatch(src, /캔버스를 불러오는 중…/);
 });

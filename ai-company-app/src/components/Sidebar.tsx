@@ -285,7 +285,7 @@ function AgentTile({
         className={`absolute right-0.5 top-0.5 z-10 grid h-7 w-7 place-items-center rounded-full transition ${
           focused
             ? "bg-violet-600 text-white"
-            : "bg-transparent text-white drop-shadow opacity-25 hover:bg-violet-600 hover:text-white hover:opacity-100"
+            : "bg-transparent text-white drop-shadow opacity-25 hover:bg-violet-600 hover:text-strong hover:opacity-100"
         }`}
       >
         <MessageCircleIcon className="h-4 w-4" />
@@ -564,7 +564,7 @@ export default function Sidebar({
             onChange={(e) => onLogoFile(e.target.files?.[0])}
           />
         </div>
-        <div className="text-xs text-gray-400 mt-1 text-center">
+        <div className="text-xs text-muted mt-1 text-center">
           {editingTagline ? (
             <form onSubmit={(e) => { e.preventDefault(); void applyTagline(); }} className="space-y-2">
               <input
@@ -585,17 +585,17 @@ export default function Sidebar({
                 maxLength={80}
                 disabled={savingTagline}
                 aria-label={en ? "Company caption" : "회사 문구"}
-                className="w-full rounded border border-edge bg-panel px-2 py-1.5 text-center text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+                className="w-full rounded border border-edge bg-panel px-2 py-1.5 text-center text-strong focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
               />
               <div className="flex justify-center gap-2">
                 <button type="submit" disabled={savingTagline || savingLogo} className="rounded bg-emerald-700 px-3 py-1 text-white hover:bg-emerald-600 disabled:opacity-50">
                   {savingTagline ? (en ? "Saving…" : "저장 중…") : (en ? "Apply" : "적용")}
                 </button>
-                <button type="button" disabled={savingTagline} onClick={() => { setEditingTagline(false); setTaglineError(""); }} className="rounded border border-edge px-3 py-1 hover:text-white disabled:opacity-50">
+                <button type="button" disabled={savingTagline} onClick={() => { setEditingTagline(false); setTaglineError(""); }} className="rounded border border-edge px-3 py-1 hover:text-strong disabled:opacity-50">
                   {en ? "Cancel" : "취소"}
                 </button>
               </div>
-              {taglineError && <p role="alert" className="text-red-400">{taglineError}</p>}
+              {taglineError && <p role="alert" className="text-tone-red">{taglineError}</p>}
             </form>
           ) : (
             <button
@@ -604,7 +604,7 @@ export default function Sidebar({
               title={en ? "Edit company caption" : "회사 문구 수정"}
               aria-label={en ? "Edit company caption" : "회사 문구 수정"}
               onClick={() => { setTaglineDraft(displayedTagline); setTaglineError(""); setEditingTagline(true); }}
-              className="max-w-full break-words rounded px-1 py-0.5 hover:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+              className="max-w-full break-words rounded px-1 py-0.5 hover:text-strong focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
             >
               {displayedTagline}
             </button>
@@ -683,10 +683,10 @@ export default function Sidebar({
       </div>
 
       <div className="flex items-center justify-between gap-2 p-3">
-        <div className="min-w-0 space-y-0.5 text-[11px] text-gray-500">
+        <div className="min-w-0 space-y-0.5 text-[11px] text-faint">
           <div className="truncate">{`코어 모델: ${status?.ceoModel ?? "?"}`}</div>
           {status && (
-            <div className="truncate text-gray-600">
+            <div className="truncate text-faint">
               {off ? "🌙 휴식 중 (전원 퇴근)" : "☁️ 클라우드 연결됨 (직원별 모델 자동 적용)"}
             </div>
           )}

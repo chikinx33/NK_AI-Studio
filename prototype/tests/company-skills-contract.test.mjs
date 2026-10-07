@@ -19,7 +19,7 @@ test("회사 스킬은 상단 메뉴 아래에 대분류 아이콘만 표시하�
   assert.match(skillBox, /disabled=\{!available\}/);
   assert.match(skillBox, />Skill<\/h2>/);
   assert.match(skillBox, /flex items-center gap-1/);
-  assert.match(skillBox, /text-orange-400/);
+  assert.match(skillBox, /text-tone-orange/);
   assert.doesNotMatch(skillBox, /개 사용 가능|BETA|grid-cols-4/);
   assert.match(app, /<SkillBox/);
   assert.match(app, /onOpenCategory=\{openSkillCategory\}/);

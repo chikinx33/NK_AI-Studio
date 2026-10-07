@@ -1295,8 +1295,8 @@ export default function App() {
       <div className="flex h-full items-center justify-center p-8">
         <div className="max-w-md rounded-2xl border border-edge bg-panel p-8 text-center">
           <div className="mb-3 text-4xl">🔒</div>
-          <h2 className="text-lg font-bold text-gray-100">AI 회사 이용 권한이 없어요</h2>
-          <p className="mt-2 text-sm text-gray-400">
+          <h2 className="text-lg font-bold text-strong">AI 회사 이용 권한이 없어요</h2>
+          <p className="mt-2 text-sm text-muted">
             이 기능은 'AI 회사' 권한이 있는 계정만 사용할 수 있어요. 관리자에게 권한을 요청하세요.
           </p>
           <button
@@ -1324,13 +1324,13 @@ export default function App() {
     return (
       <div className="grid h-full place-items-center bg-ink p-6 text-center">
         <div className="max-w-sm rounded-2xl border border-edge bg-panel p-7">
-          <h1 className="text-sm font-bold text-gray-100">로그인이 풀렸어요</h1>
-          <p className="mt-2 text-xs leading-6 text-gray-400">
+          <h1 className="text-sm font-bold text-strong">로그인이 풀렸어요</h1>
+          <p className="mt-2 text-xs leading-6 text-muted">
             로그인 화면에서 다시 들어오시면 대화와 업무가 그대로 있어요.
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <a href="/app" className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-600">로그인 화면</a>
-            <button type="button" onClick={() => location.reload()} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 transition hover:bg-edge">다시 시도</button>
+            <button type="button" onClick={() => location.reload()} className="rounded-lg border border-edge px-3 py-2 text-xs text-secondary transition hover:bg-edge">다시 시도</button>
           </div>
         </div>
       </div>
@@ -1383,7 +1383,7 @@ export default function App() {
         <div className="lg:hidden shrink-0 flex items-center gap-2 border-b border-edge px-2 py-1.5">
           <button
             onClick={() => setNavOpen(true)}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-300 transition hover:bg-edge"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-secondary transition hover:bg-edge"
             aria-label="직원 목록 열기"
           >
             <MenuIcon className="h-5 w-5" />
@@ -1419,15 +1419,15 @@ export default function App() {
         ) : centerView === "agents" ? (
           <AgentManager agentId={agentMgrId} agents={agents} voiceMode={voiceMode} />
         ) : centerView === "works" ? (
-          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 업무 폴더를 불러오는 중…</div>}>
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-faint">회사 업무 폴더를 불러오는 중…</div>}>
             <WorkExplorer revision={workRevision} initialDate={workFolderDate} onOpenWork={(work) => void openCompanyWork(work)} onOpenProject={openCompanyProject} onChatAbout={chatAbout} onAddChatReference={(ref) => addChatReference(ref, false)} chatReferenceKeys={chatReferences.flatMap((r) => [r.workId, r.jobId, r.path].filter((v): v is string => !!v))} />
           </Suspense>
         ) : centerView === "video" ? (
-          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Agent Video 작업공간을 불러오는 중…</div>}>
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-faint">Agent Video 작업공간을 불러오는 중…</div>}>
             <AgentVideoWorkspace onClose={() => setCenterView("works")} />
           </Suspense>
         ) : centerView === "skills" ? (
-          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">회사 스킬을 불러오는 중…</div>}>
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-faint">회사 스킬을 불러오는 중…</div>}>
             <SkillWorkspace
               categoryId={skillCategoryId}
               onClose={() => setCenterView("chat")}
@@ -1543,20 +1543,20 @@ export default function App() {
               onChatAbout={chatAbout}
             />
             <Reservations reminders={reminders} onDelete={removeReminder} />
-            {statusPhase === "loading" && <div className="text-xs text-gray-500">서버 상태 확인 중…</div>}
+            {statusPhase === "loading" && <div className="text-xs text-faint">서버 상태 확인 중…</div>}
             {statusPhase === "failed" && (
-              <div className="text-xs text-amber-400">
+              <div className="text-xs text-tone-amber">
                 서버 상태 확인 실패 ({sec(statusElapsedMs)} 동안 3회) ·{" "}
                 <button type="button" className="underline" onClick={() => { void refreshStatus(); }}>다시 시도</button>
               </div>
             )}
             {statusPhase === "ready" && statusElapsedMs >= 2000 && status?.timing && (
-              <div className="text-[11px] text-gray-600" title="서버가 잰 시간. DB=Neon, 파일=권한 명부(GCS)">
+              <div className="text-[11px] text-faint" title="서버가 잰 시간. DB=Neon, 파일=권한 명부(GCS)">
                 서버 응답 {sec(statusElapsedMs)} (DB {sec(Math.max(status.timing.claudeMs, status.timing.dbMs))} · 파일 {sec(status.timing.permMs)})
               </div>
             )}
           </div>
-          <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">
+          <div className="shrink-0 pt-2 text-center text-[11px] text-faint">
             {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}
           </div>
         </div>

@@ -22,8 +22,8 @@ export default class ErrorBoundary extends Component<
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
           <div className="text-3xl">😵</div>
-          <div className="text-sm font-semibold text-gray-200">이 화면을 표시하는 중 문제가 생겼어요</div>
-          <div className="max-w-md break-all text-xs text-gray-500">{this.state.error.message}</div>
+          <div className="text-sm font-semibold text-content">이 화면을 표시하는 중 문제가 생겼어요</div>
+          <div className="max-w-md break-all text-xs text-faint">{this.state.error.message}</div>
           <button
             onClick={() => {
               this.setState({ error: null });

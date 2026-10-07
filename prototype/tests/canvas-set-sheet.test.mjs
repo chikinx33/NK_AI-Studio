@@ -47,7 +47,7 @@ test('★모든 생성 행위는 상태가 보인다: 잡 상태 띠(대기·승
   assert.match(src, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); openSetSheetModal\(\); \}\}/, '별 버튼은 모달을 연다');
   assert.match(src, /const m = await createAgentJob\("set_master", \{ projectId, locationName: name, resolution, \.\.\.providerArg\(settings\) \}\);\s*\n[\s\S]{0,300}await approveItem\(m\.jobId\)/, '모달의 생성 = 확인이므로 바로 승인');
   assert.doesNotMatch(src, /generateSetSheets|빠른 미리보기|usePlate|style-anchor-panel|clearStyleAnchor/, '2×2 미리보기·스타일 기준 패널은 모달에서 뺐다(사용자 결정 2026-09-14)');
-  assert.match(src, /<div className="text-\[15px\] font-bold text-white">세트 시트 생성<\/div>/);
+  assert.match(src, /<div className="text-\[15px\] font-bold text-strong">세트 시트 생성<\/div>/);
   assert.match(src, /<option value="2K">2K<\/option>\s*\n\s*<option value="4K">4K<\/option>/);
   assert.match(src, /setSheetModal\(\{ \.\.\.m, step: "progress" \}\); void generateMasterPlates\(m\.selected, m\.resolution\); \}\}/);
   assert.match(src, /닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요/);
@@ -84,7 +84,7 @@ test('★세트 시트 모달 재진입·복사: 진행 중이면 별 버튼이 
   assert.match(src, /별 버튼을 다시 누르면 이 진행 화면이 열려요/);
   assert.match(src, /다시 만들기/);
   assert.match(src, /className="w-\[820px\] max-w-\[92%\] select-text overflow-hidden/, '캔버스의 select-none 을 모달에서 해제');
-  assert.match(src, /<pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-\[11px\] leading-snug text-red-200">\{text\}<\/pre>/);
+  assert.match(src, /<pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-\[11px\] leading-snug text-tone-red">\{text\}<\/pre>/);
   assert.match(src, /void navigator\.clipboard\.writeText\(text\); setNotice\("오류 문구를 복사했어요\."\);/);
   assert.match(src, /flex w-\[400px\] max-w-\[calc\(100%-24px\)\] select-text flex-col items-start gap-1\.5" data-testid="job-dock"/);
   assert.match(src, /title="오류 문구 복사">복사<\/button>/);
@@ -208,7 +208,7 @@ test('★배경 카드 클릭 흐름: 이미지 영역=크게 보기, 텍스트 
   assert.match(src, /data-zone="detail" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\} onClick=\{\(e\) => \{ e\.stopPropagation\(\); setSelectedId\(n\.id\); \}\}/);
   assert.match(src, /const picked = locationNodes\.filter\(\(n\) => multi\.has\(n\.id\)\);\s*\n\s*if \(picked\.length < 2\) return null;/);
   assert.match(src, /setMergeModal\(\{ names, into \}\)/);
-  assert.match(src, /<div className="text-\[13px\] font-bold text-white">배경 합치기<\/div>/);
+  assert.match(src, /<div className="text-\[13px\] font-bold text-strong">배경 합치기<\/div>/);
   assert.match(src, /<input type="radio" name="merge-into"/);
   assert.match(src, /placeholder="예: 소녀의 방"/);
   assert.match(src, /setMergeModal\(null\); setMulti\(new Set\(\)\); void mergeLocations\(from, into\);/);
@@ -303,7 +303,7 @@ test('★"스튜디오 설정 따름"은 제작 화면의 이미지생성 모델
   assert.match(read('prototype/js/config.js'), /IMAGE_PROVIDER: 'nk_ai_image_provider',/, '스튜디오와 같은 키');
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.equal((src.match(/\.\.\.providerArg\(settings\)/g) || []).length, 3, 'set_master + scene_still 두 곳 = 3곳');
-  assert.match(src, /모델: <span className="text-gray-200">/);
+  assert.match(src, /모델: <span className="text-content">/);
 });
 
 test('★저장된 옛 공급자(gemini)는 사용자가 직접 고른 적 없으면 "스튜디오 설정 따름"으로 옮긴다 · 세트 시트 모달은 넓고(820px) 하단이 한 줄', () => {
@@ -373,9 +373,9 @@ test('★컷 스틸·영상 생성 중에는 카드와 상세의 미디어 칸�
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /const cutJobState = \(sceneId: unknown, type: "scene_still" \| "scene_video"\): \{ running: PendingJob \| null; failed: PendingJob \| null \} => \{/);
   assert.doesNotMatch(src, /생성 중…<\/span>/, '미디어 칸은 스피너만(문구 없음 — 사용자 결정)');
-  assert.equal((src.match(/<div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-[57] w-[57] animate-spin text-sky-200" \/><\/div>/g) || []).length, 4, '카드·상세 × 스틸·영상 스피너');
+  assert.equal((src.match(/<div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-[57] w-[57] animate-spin text-tone-sky" \/><\/div>/g) || []).length, 4, '카드·상세 × 스틸·영상 스피너');
   assert.match(src, /data-testid="detail-still-box"/);
-  assert.match(src, /<span className="select-text text-red-300">스틸 실패: \{String\(st\.failed\.error \|\| "오류"\)\.slice\(0, 160\)\}<\/span>/, '상세 칸 오류');
+  assert.match(src, /<span className="select-text text-tone-red">스틸 실패: \{String\(st\.failed\.error \|\| "오류"\)\.slice\(0, 160\)\}<\/span>/, '상세 칸 오류');
   assert.match(src, /disabled=\{saving \|\| !!cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \|\| !!cutPlateMissing\(selected\.id\)\}/, '진행 중 버튼 비활성');
   assert.match(src, /\{cutJobState\(selected\.data\.sceneId, "scene_still"\)\.running \? <><RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/>생성 중<\/> : <>스틸 생성/);
   // 컷 스틸 클릭 = 크게 보기(상세·카드 둘 다)

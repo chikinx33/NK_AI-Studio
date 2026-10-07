@@ -53,7 +53,7 @@ function DockAvatar({ agentId, name, emoji }: { agentId?: string; name: string; 
   const avatarId = agentId === "_tool" ? "aibot" : agentId && /^[a-z][a-z0-9_-]*$/i.test(agentId) && !agentId.startsWith("_") ? agentId : null;
   const src = avatarId ? `${import.meta.env.BASE_URL}avatars/${avatarId}.png` : null;
   return (
-    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-[#151b25] text-[13px]">
+    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-panel text-[13px]">
       {src && failedSrc !== src ? <img src={src} alt={`${name} 아바타`} className="h-7 w-7 object-contain" onError={() => setFailedSrc(src)} /> : emoji}
     </span>
   );
@@ -244,22 +244,22 @@ export default function CanvasChatDock({
   if (mode === "agent") {
     const canSend = !!projectId && !streaming && (!!draft.trim() || attachments.length > 0);
     return (
-      <aside className="absolute bottom-4 right-4 top-4 z-30 flex w-[340px] max-w-[94%] flex-col overflow-hidden rounded-3xl border border-edge bg-[#0c1119]/97 shadow-2xl backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+      <aside className="absolute bottom-4 right-4 top-4 z-30 flex w-[340px] max-w-[94%] flex-col overflow-hidden rounded-3xl border border-edge bg-inset/97 shadow-2xl backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
         <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-2">
-          <Icon d={ChatD} className="h-4 w-4 text-emerald-400" />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{projectTitle || projectId || "제목 없는 세션"}</span>
-          <button type="button" onClick={newSession} disabled={!projectId} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white disabled:opacity-40" title="새 세션" aria-label="새 세션"><Icon d={PenD} /></button>
-          <button type="button" onClick={() => switchMode("normal")} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" title="에이전트 모드 닫기" aria-label="에이전트 모드 닫기"><Icon d={XD} /></button>
+          <Icon d={ChatD} className="h-4 w-4 text-tone-emerald" />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-strong">{projectTitle || projectId || "제목 없는 세션"}</span>
+          <button type="button" onClick={newSession} disabled={!projectId} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-edge hover:text-strong disabled:opacity-40" title="새 세션" aria-label="새 세션"><Icon d={PenD} /></button>
+          <button type="button" onClick={() => switchMode("normal")} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-edge hover:text-strong" title="에이전트 모드 닫기" aria-label="에이전트 모드 닫기"><Icon d={XD} /></button>
         </div>
 
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {turns.length === 0 ? (
             <div className="flex h-full flex-col justify-center gap-4 pb-10">
-              <div className="text-center text-[22px] font-medium leading-snug text-gray-300">안녕하세요<br />무엇을 만들고 싶으신가요?</div>
+              <div className="text-center text-[22px] font-medium leading-snug text-secondary">안녕하세요<br />무엇을 만들고 싶으신가요?</div>
               <div className="space-y-2">
                 {SUGGESTIONS.map((sug) => (
-                  <button key={sug.label} type="button" disabled={!projectId || streaming} onClick={() => void sendToAgent(sug.text)} className="flex w-full items-center gap-3 rounded-2xl bg-[#151b25] px-3 py-3 text-left text-[13px] text-gray-100 transition hover:bg-[#1c2330] disabled:opacity-40">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#0b1018] text-xl">{sug.emoji}</span>
+                  <button key={sug.label} type="button" disabled={!projectId || streaming} onClick={() => void sendToAgent(sug.text)} className="flex w-full items-center gap-3 rounded-2xl bg-panel px-3 py-3 text-left text-[13px] text-strong transition hover:bg-panel disabled:opacity-40">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-inset text-xl">{sug.emoji}</span>
                     <span className="font-bold">{sug.label}</span>
                   </button>
                 ))}
@@ -274,15 +274,15 @@ export default function CanvasChatDock({
                     {t.attachments && t.attachments.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">{t.attachments.map((src, i) => <button key={i} type="button" onClick={() => setLightbox({ images: t.attachments || [], index: i })} className="cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-white/60" title="클릭하면 크게 볼 수 있어요"><img src={src} alt="" className="h-16 w-16 rounded-lg object-cover" /></button>)}</div>
                     )}
-                    <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#1f2937] px-3 py-2 text-[13px] text-gray-100">{t.text}</div>
+                    <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-raised px-3 py-2 text-[13px] text-strong">{t.text}</div>
                   </div>
                 ) : (
                   <div key={t.id} className="flex items-start gap-2">
                     <DockAvatar agentId={t.agentId} name={t.name || a?.name || "에이전트"} emoji={t.emoji || a?.emoji || "🤖"} />
                     <div className="min-w-0 max-w-[88%]">
-                      <div className="mb-0.5 text-[10px] text-gray-500">{t.name || a?.name || t.agentId || "에이전트"}</div>
-                      <div className="text-[13px] leading-relaxed text-gray-200">
-                        {t.streaming && !t.text ? <span className="text-gray-500">생각 중…</span> : <Markdown text={t.text} />}
+                      <div className="mb-0.5 text-[10px] text-faint">{t.name || a?.name || t.agentId || "에이전트"}</div>
+                      <div className="text-[13px] leading-relaxed text-content">
+                        {t.streaming && !t.text ? <span className="text-faint">생각 중…</span> : <Markdown text={t.text} />}
                       </div>
                     </div>
                   </div>
@@ -299,29 +299,29 @@ export default function CanvasChatDock({
               <AgentSettingsPanel settings={settings} onChange={onSettingsChange} onBack={() => setPopover("none")} />
             </div>
           )}
-          <div className="rounded-[22px] border border-edge bg-[#161b22] px-3 pb-2 pt-2.5">
+          <div className="rounded-[22px] border border-edge bg-inset px-3 pb-2 pt-2.5">
             {attachments.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((a) => (
                   <div key={a.id} className="relative">
                     <button type="button" onClick={() => { const imgs = attachments.map((x) => x.preview); setLightbox({ images: imgs, index: Math.max(0, imgs.indexOf(a.preview)) }); }} className="block cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400/70" title="클릭하면 크게 볼 수 있어요"><img src={a.preview} alt={a.name} className="h-12 w-12 rounded-lg object-cover" /></button>
-                    <button type="button" onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))} className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/80 text-gray-200 hover:bg-red-700" aria-label="첨부 제거"><Icon d={XD} className="h-3 w-3" /></button>
+                    <button type="button" onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))} className="company-media absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/80 text-content hover:bg-red-700" aria-label="첨부 제거"><Icon d={XD} className="h-3 w-3" /></button>
                   </div>
                 ))}
               </div>
             )}
             <textarea ref={agentInputRef} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} onKeyUp={onKeyUp((v) => void sendToAgent(v))} onPaste={onPaste} rows={1} disabled={!projectId}
               placeholder={projectId ? "무엇을 만들고 싶으신가요?" : "프로젝트를 먼저 선택하세요"}
-              className="max-h-28 min-h-[26px] w-full resize-none bg-transparent text-[13px] text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-50" />
+              className="max-h-28 min-h-[26px] w-full resize-none bg-transparent text-[13px] text-strong outline-none placeholder:text-faint disabled:opacity-50" />
             <div className="mt-1.5 flex items-center gap-1.5">
               <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
-              <button type="button" onClick={() => fileRef.current?.click()} disabled={!projectId} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#232a36] text-gray-200 hover:bg-[#2c3441] disabled:opacity-40" title="이미지 첨부" aria-label="이미지 첨부"><Icon d={PlusD} /></button>
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={!projectId} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-raised text-content hover:bg-raised disabled:opacity-40" title="이미지 첨부" aria-label="이미지 첨부"><Icon d={PlusD} /></button>
               <div className="flex-1" />
-              <button type="button" onClick={() => setPopover((p) => (p === "agent" ? "none" : "agent"))} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${popover === "agent" ? "bg-emerald-600 text-white" : "bg-[#232a36] text-gray-200 hover:bg-[#2c3441]"}`} title="에이전트 설정" aria-label="에이전트 설정"><Icon d={SlidersD} className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => setPopover((p) => (p === "agent" ? "none" : "agent"))} className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${popover === "agent" ? "bg-emerald-600 text-white" : "bg-raised text-content hover:bg-raised"}`} title="에이전트 설정" aria-label="에이전트 설정"><Icon d={SlidersD} className="h-3.5 w-3.5" /></button>
               {streaming ? (
                 <button type="button" onClick={() => { stoppedByUser.current = true; abortRef.current?.abort(); }} className="grid h-8 min-w-[44px] place-items-center rounded-full bg-red-700 px-3 text-[11px] font-bold text-white hover:bg-red-600">중지</button>
               ) : (
-                <button type="button" disabled={!canSend} onClick={() => void sendToAgent(draft)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-black transition hover:bg-white disabled:bg-[#232a36] disabled:text-gray-500" title="보내기" aria-label="보내기"><Icon d={ArrowRightD} /></button>
+                <button type="button" disabled={!canSend} onClick={() => void sendToAgent(draft)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-black transition hover:bg-white disabled:bg-raised disabled:text-faint" title="보내기" aria-label="보내기"><Icon d={ArrowRightD} /></button>
               )}
             </div>
           </div>
@@ -340,21 +340,21 @@ export default function CanvasChatDock({
             <GenerationSettingsPopover settings={settings} onChange={onSettingsChange} onClose={() => setPopover("none")} />
           </div>
         )}
-        <div className="rounded-[28px] border border-edge bg-[#161b22]/95 px-4 pb-3 pt-3 shadow-2xl backdrop-blur">
+        <div className="rounded-[28px] border border-edge bg-inset/95 px-4 pb-3 pt-3 shadow-2xl backdrop-blur">
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} onKeyUp={onKeyUp((v) => void generateNow(v))} rows={1} disabled={!projectId}
             placeholder={projectId ? (selectedSceneIds.length ? `컷 ${selectedSceneIds.join(",")}에 만들 ${settings.kind === "image" ? "스틸" : "영상"}을 설명하세요` : "무엇을 만들고 싶으신가요? (컷을 선택하면 그 컷에 바로 생성돼요)") : "프로젝트를 먼저 선택하세요"}
-            className="max-h-32 min-h-[28px] w-full resize-none bg-transparent text-[14px] text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-50" />
+            className="max-h-32 min-h-[28px] w-full resize-none bg-transparent text-[14px] text-strong outline-none placeholder:text-faint disabled:opacity-50" />
           <div className="mt-2 flex items-center gap-2">
-            <button type="button" onClick={() => switchMode("agent")} disabled={!projectId} className="flex h-9 min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-[#232a36] px-3 text-[12px] font-bold text-gray-100 transition hover:bg-[#2c3441] disabled:opacity-40" title="에이전트 모드로 전환 — 코어와 대화하며 만들기">
+            <button type="button" onClick={() => switchMode("agent")} disabled={!projectId} className="flex h-9 min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-raised px-3 text-[12px] font-bold text-strong transition hover:bg-raised disabled:opacity-40" title="에이전트 모드로 전환 — 코어와 대화하며 만들기">
               <Icon d={BotD} className="h-4 w-4" /> 에이전트
             </button>
-            {notice && <span className="min-w-0 flex-1 truncate text-[11px] text-amber-300" title={notice}>{notice}</span>}
+            {notice && <span className="min-w-0 flex-1 truncate text-[11px] text-tone-amber" title={notice}>{notice}</span>}
             {!notice && <div className="flex-1" />}
-            <button type="button" onClick={() => setPopover((p) => (p === "settings" ? "none" : "settings"))} className={`flex h-9 items-center gap-2 rounded-full px-3 text-[12px] font-bold transition ${popover === "settings" ? "bg-emerald-600 text-white" : "bg-[#232a36] text-gray-100 hover:bg-[#2c3441]"}`} title="생성 설정">
+            <button type="button" onClick={() => setPopover((p) => (p === "settings" ? "none" : "settings"))} className={`flex h-9 items-center gap-2 rounded-full px-3 text-[12px] font-bold transition ${popover === "settings" ? "bg-emerald-600 text-white" : "bg-raised text-strong hover:bg-raised"}`} title="생성 설정">
               <Icon d={SlidersD} className="h-3.5 w-3.5" /> {summarizeSettings(settings)}
             </button>
-            <button type="button" disabled={!canGenerate} onClick={() => void generateNow(draft)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100 text-black transition hover:bg-white disabled:bg-[#232a36] disabled:text-gray-500" title="바로 생성" aria-label="바로 생성">
-              {generating ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" /> : <Icon d={ArrowRightD} />}
+            <button type="button" disabled={!canGenerate} onClick={() => void generateNow(draft)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100 text-black transition hover:bg-white disabled:bg-raised disabled:text-faint" title="바로 생성" aria-label="바로 생성">
+              {generating ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-edge border-t-transparent" /> : <Icon d={ArrowRightD} />}
             </button>
           </div>
         </div>

@@ -56,7 +56,7 @@ export default function CollapsibleSection({
           title={open ? "접기" : "펼치기"}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <span className={`shrink-0 text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+          <span className={`shrink-0 text-faint transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
           {header}
         </button>
         {right}

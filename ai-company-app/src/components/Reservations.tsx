@@ -43,20 +43,20 @@ export default function Reservations({
   return (
     <CollapsibleSection
       storageKey="nk_collapse_reservations"
-      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-sky-300"><ClockIcon className="h-4 w-4" /> 예약 ({reminders.length})</span>}
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-tone-sky"><ClockIcon className="h-4 w-4" /> 예약 ({reminders.length})</span>}
     >
       {reminders.length === 0 ? (
-        <div className="text-xs text-gray-500">예정된 알람이 없어요.</div>
+        <div className="text-xs text-faint">예정된 알람이 없어요.</div>
       ) : (
         <div className="space-y-1">
           {reminders.map((r) => (
             <div key={r.id} className="group flex items-center gap-2 rounded-lg border border-edge px-2 py-1.5">
-              <span className="shrink-0 text-[11px] font-medium text-sky-300">{fmtFireAt(r.fire_at)}</span>
-              <span className="min-w-0 flex-1 truncate text-xs text-gray-300" title={r.text}>{r.text || "알람"}</span>
+              <span className="shrink-0 text-[11px] font-medium text-tone-sky">{fmtFireAt(r.fire_at)}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-secondary" title={r.text}>{r.text || "알람"}</span>
               <button
                 onClick={() => onDelete(r.id)}
                 title="예약 삭제"
-                className="shrink-0 grid h-6 w-6 place-items-center rounded text-gray-600 transition hover:bg-rose-900/40 hover:text-rose-300"
+                className="shrink-0 grid h-6 w-6 place-items-center rounded text-faint transition hover:bg-tint-rose/40 hover:text-tone-rose"
               >
                 <XIcon className="h-3.5 w-3.5" />
               </button>

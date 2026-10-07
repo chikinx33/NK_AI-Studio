@@ -31,7 +31,7 @@ export default function StoredImage({ objectName, fallbackUrl = "", alt, classNa
     })();
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [objectName, fallbackUrl, attempt]);
-  if (error) return <div className={`flex flex-col items-center justify-center gap-2 p-2 text-center text-xs text-gray-400 ${className || ""}`}><span role="status">{error}</span><button type="button" className="rounded border border-edge px-2 py-1 text-emerald-300" onClick={(event) => { event.stopPropagation(); setAttempt((value) => value + 1); }}>다시 불러오기</button></div>;
-  if (!src) return <div className={`grid place-items-center text-xs text-gray-500 ${className || ""}`} role="status">이미지 로딩 중…</div>;
+  if (error) return <div className={`flex flex-col items-center justify-center gap-2 p-2 text-center text-xs text-muted ${className || ""}`}><span role="status">{error}</span><button type="button" className="rounded border border-edge px-2 py-1 text-tone-emerald" onClick={(event) => { event.stopPropagation(); setAttempt((value) => value + 1); }}>다시 불러오기</button></div>;
+  if (!src) return <div className={`grid place-items-center text-xs text-faint ${className || ""}`} role="status">이미지 로딩 중…</div>;
   return <img src={src} alt={alt} loading={loading} className={className} onError={() => setError("이미지를 표시하지 못했습니다.")} />;
 }

@@ -88,7 +88,7 @@ export default function CharacterCard({
               <span className="text-2xl font-extrabold drop-shadow" style={{ color: accent }}>
                 {agent.name}
               </span>
-              <span className="text-sm font-semibold text-white/70">({enName(agent.id)})</span>
+              <span className="text-sm font-semibold text-secondary">({enName(agent.id)})</span>
             </div>
             <div
               className="mt-1.5 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow"
@@ -101,18 +101,18 @@ export default function CharacterCard({
 
         {/* 본문 — 1인칭 자기소개 */}
         <div className="p-5">
-          <p className="text-[13.5px] leading-relaxed text-gray-200">{persona}</p>
+          <p className="text-[13.5px] leading-relaxed text-content">{persona}</p>
 
           {keywords.length > 0 && (
             <div className="mt-4">
-              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
                 전문 분야
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {keywords.map((k) => (
                   <span
                     key={k}
-                    className="rounded-md border px-2 py-0.5 text-[11px] text-gray-200"
+                    className="rounded-md border px-2 py-0.5 text-[11px] text-content"
                     style={{ borderColor: accent + "44", backgroundColor: accent + "14" }}
                   >
                     {k}
@@ -123,7 +123,7 @@ export default function CharacterCard({
           )}
 
           {agent.hasTools && agent.tools && agent.tools.length > 0 && (
-            <div className="mt-4 flex items-center gap-1.5 text-[11px] text-gray-500">
+            <div className="mt-4 flex items-center gap-1.5 text-[11px] text-faint">
               <span>🔧 보유 도구 {agent.tools.length}개</span>
             </div>
           )}

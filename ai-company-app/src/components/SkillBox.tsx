@@ -21,7 +21,7 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
 export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeCategoryId?: string; onOpenCategory: (categoryId: string) => void }) {
   return (
     <section className="mb-3 px-1" aria-label="회사 스킬">
-      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Skill</h2>
+      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-faint">Skill</h2>
       <div className="flex items-center gap-1">
         {COMPANY_SKILL_CATEGORIES.map((category) => {
           const available = category.status === "available";
@@ -39,7 +39,7 @@ export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeC
                 // 선택된 분류: 주황 둥근 카드 배경 + 검은 아이콘 (사용자 요청)
                 ? "bg-orange-400 text-black shadow-[0_0_10px_rgba(251,146,60,0.45)]"
                 : available
-                  ? "text-orange-400 hover:text-orange-200"
+                  ? "text-tone-orange hover:text-tone-orange"
                   : "cursor-not-allowed text-orange-950"
               }`}
             >

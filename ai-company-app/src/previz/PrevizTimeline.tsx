@@ -45,12 +45,12 @@ export default function PrevizTimeline(p: Props) {
   for (let s = 0; s <= p.duration + 1e-6; s += step) ticks.push(s);
 
   return (
-    <div className="flex h-56 shrink-0 flex-col border-t border-edge bg-panel text-[11px] text-gray-300 select-none">
+    <div className="flex h-56 shrink-0 flex-col border-t border-edge bg-panel text-[11px] text-secondary select-none">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-edge px-3">
         <button type="button" onClick={p.onTogglePlay} className="min-w-[84px] rounded-lg border border-edge px-3 py-1 font-bold hover:bg-edge">{p.playing ? p.T.pause : p.T.play}</button>
-        <span className="w-28 font-mono text-gray-200">{p.time.toFixed(2)}s / {p.duration.toFixed(1)}s</span>
-        <label className="flex items-center gap-1 text-gray-500">{p.T.duration}
-          <input type="number" min={1} max={30} step={0.5} value={p.duration} onChange={(e) => p.onDuration(Number(e.target.value))} onBlur={p.onDurationCommit} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} className="w-16 rounded border border-edge bg-ink px-1.5 py-0.5 text-gray-200" />
+        <span className="w-28 font-mono text-content">{p.time.toFixed(2)}s / {p.duration.toFixed(1)}s</span>
+        <label className="flex items-center gap-1 text-faint">{p.T.duration}
+          <input type="number" min={1} max={30} step={0.5} value={p.duration} onChange={(e) => p.onDuration(Number(e.target.value))} onBlur={p.onDurationCommit} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} className="w-16 rounded border border-edge bg-ink px-1.5 py-0.5 text-content" />
         </label>
         <div className="mx-1 h-4 w-px bg-edge" />
         <button type="button" onClick={p.onAddKey} className="min-w-[84px] rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-500">{p.T.addKey}</button>
@@ -62,7 +62,7 @@ export default function PrevizTimeline(p: Props) {
           <div style={{ width: LABEL_W }} className="shrink-0" />
           <div ref={laneRef} className="relative mr-4 flex-1 cursor-pointer border-b border-edge" onPointerDown={scrub} onPointerMove={(e) => { if (e.buttons === 1) p.onSeek(timeAt(e.clientX)); }}>
             {ticks.map((s) => (
-              <span key={s} className="absolute top-0 -translate-x-1/2 font-mono text-[9px] text-gray-500" style={{ left: pct(s) }}>{s}s</span>
+              <span key={s} className="absolute top-0 -translate-x-1/2 font-mono text-[9px] text-faint" style={{ left: pct(s) }}>{s}s</span>
             ))}
             <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-emerald-400" style={{ left: pct(p.time) }} />
           </div>

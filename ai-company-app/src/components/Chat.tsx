@@ -640,20 +640,20 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
       onDrop={onDropZoneDrop}
     >
       {/* 아이콘 전용 행 — 대시보드·그래프·설정과 동일한 방식 */}
-      <div className="flex justify-center pt-3 pb-1 text-gray-400">
+      <div className="flex justify-center pt-3 pb-1 text-muted">
         <MessagesSquareIcon className="h-10 w-10" />
       </div>
       <div className="px-5 py-3 border-b border-edge flex items-center gap-2">
         <div className="ml-auto flex items-center gap-2">
           {formatConvDate(convDate) && (
-            <span className="text-xs text-gray-400 tabular-nums" title="이 대화의 생성 날짜">
+            <span className="text-xs text-muted tabular-nums" title="이 대화의 생성 날짜">
               {formatConvDate(convDate)}
             </span>
           )}
           {onToggleMode && (
             <button
               onClick={onToggleMode}
-              className="text-xs px-2.5 py-1 rounded-lg bg-violet-800/60 hover:bg-violet-700 text-violet-100"
+              className="text-xs px-2.5 py-1 rounded-lg bg-tint-violet/60 hover:bg-tint-violet text-tone-violet"
               title="VN 모드로 전환"
             >
               <span className="inline-flex items-center gap-1">
@@ -678,8 +678,8 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
       >
         {turns.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center p-5">
-            <div className="text-center text-gray-500">
-              <MessageCircleIcon className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+            <div className="text-center text-faint">
+              <MessageCircleIcon className="w-12 h-12 mx-auto mb-3 text-faint" />
               <p>직원들과 대화를 시작하세요.</p>
               <p className="text-xs mt-2 leading-relaxed">
                 "코어 거기 있나?" · "@엔지 메모장 앱 어떻게 돼가?" <br />
@@ -696,21 +696,21 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                 <button
                   onClick={() => copyText(i, t.text)}
                   title={copiedIdx === i ? "복사됨" : "복사"}
-                  className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition hover:bg-edge hover:text-white"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-edge hover:text-strong"
                 >
-                  <CopyIcon className={`h-3.5 w-3.5 ${copiedIdx === i ? "text-emerald-400" : ""}`} />
+                  <CopyIcon className={`h-3.5 w-3.5 ${copiedIdx === i ? "text-tone-emerald" : ""}`} />
                 </button>
                 <button
                   onClick={() => onSend(t.text)}
                   disabled={busy}
                   title="다시 쓰기"
-                  className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition hover:bg-edge hover:text-white disabled:opacity-30"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-edge hover:text-strong disabled:opacity-30"
                 >
                   <RepeatIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
               <div className="flex max-w-[78%] flex-col items-end">
-                {t.ts && <div className="mb-0.5 mr-1 text-[10px] text-gray-600">{formatChatTime(t.ts)}</div>}
+                {t.ts && <div className="mb-0.5 mr-1 text-[10px] text-faint">{formatChatTime(t.ts)}</div>}
                 {(() => {
                   const previews = t.imagePreviews?.length ? t.imagePreviews : (t.imagePreview ? [t.imagePreview] : []);
                   const hasAttachment = previews.length > 0;
@@ -747,13 +747,13 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
               <ChatAvatar turn={t} />
               <div className="max-w-[78%]">
                 <div className="mb-0.5 flex items-baseline gap-1.5">
-                  <span className="text-xs text-gray-400">{t.name}</span>
-                  {t.ts && <span className="text-[10px] text-gray-600">{formatChatTime(t.ts)}</span>}
+                  <span className="text-xs text-muted">{t.name}</span>
+                  {t.ts && <span className="text-[10px] text-faint">{formatChatTime(t.ts)}</span>}
                 </div>
                 <div className="group relative rounded-2xl rounded-tl-sm px-4 py-2 pb-6 bg-panel border border-edge text-sm whitespace-pre-wrap">
                   {t.agentId === "_tool" && t.text.startsWith("🔐") ? (
                     <span className="inline-flex items-baseline gap-1.5">
-                      <ListTodoIcon className="h-4 w-4 shrink-0 translate-y-0.5 text-amber-300" />
+                      <ListTodoIcon className="h-4 w-4 shrink-0 translate-y-0.5 text-tone-amber" />
                       {t.text.replace(/^🔐\s*/, "")}
                     </span>
                   ) : shownText ? (
@@ -767,11 +767,11 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                       return (
                         <>
                           <Markdown text={shown} />
-                          {isLong && !isOpen && <span className="text-gray-500">… </span>}
+                          {isLong && !isOpen && <span className="text-faint">… </span>}
                           {isLong && (
                             <button
                               onClick={() => toggleExpand(i)}
-                              className="ml-1 align-baseline text-[11px] font-medium text-emerald-400 hover:underline"
+                              className="ml-1 align-baseline text-[11px] font-medium text-tone-emerald hover:underline"
                             >
                               {isOpen ? "접기" : "더 보기"}
                             </button>
@@ -780,7 +780,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                       );
                     })()
                   ) : (
-                    <span className="text-gray-500">…</span>
+                    <span className="text-faint">…</span>
                   )}
                   {!revealing && <ChatFileAttachments files={t.files} onOpenProject={onOpenProject} />}
                   {/* 코어 제안에 등장한 담당자 → 원클릭 위임 (협업이 실제로 흐르게) */}
@@ -789,13 +789,13 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                     if (mentioned.length === 0) return null;
                     return (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-edge/60 pt-2">
-                        <span className="text-[10px] text-gray-500">위임:</span>
+                        <span className="text-[10px] text-faint">위임:</span>
                         {mentioned.map((a) => (
                           <button
                             key={a.id}
                             disabled={busy}
                             onClick={() => onSend(`${a.name}, 코어가 방금 제안한 작업을 직접 맡아 진행해줘.`)}
-                            className="rounded-lg border border-emerald-700 bg-emerald-900/30 px-2 py-0.5 text-[11px] text-emerald-200 transition hover:bg-emerald-900/60 disabled:opacity-40"
+                            className="rounded-lg border border-emerald-700 bg-tint-emerald/30 px-2 py-0.5 text-[11px] text-tone-emerald transition hover:bg-tint-emerald/60 disabled:opacity-40"
                           >
                             {a.name}에게 시키기
                           </button>
@@ -809,16 +809,16 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                       <button
                         onClick={() => injectKnowledge(i, t.text)}
                         title={injectedIdx === i ? "회사 지식에 추가됨" : "이 내용을 회사 지식에 추가"}
-                        className="grid h-6 w-6 place-items-center rounded-md bg-panel/90 text-gray-500 transition hover:bg-edge hover:text-white"
+                        className="grid h-6 w-6 place-items-center rounded-md bg-panel/90 text-faint transition hover:bg-edge hover:text-strong"
                       >
-                        <BrainIcon className={`h-3.5 w-3.5 ${injectedIdx === i ? "text-emerald-400" : ""}`} />
+                        <BrainIcon className={`h-3.5 w-3.5 ${injectedIdx === i ? "text-tone-emerald" : ""}`} />
                       </button>
                       <button
                         onClick={() => copyText(i, t.text)}
                         title={copiedIdx === i ? "복사됨" : "이 대화 복사"}
-                        className="grid h-6 w-6 place-items-center rounded-md bg-panel/90 text-gray-500 transition hover:bg-edge hover:text-white"
+                        className="grid h-6 w-6 place-items-center rounded-md bg-panel/90 text-faint transition hover:bg-edge hover:text-strong"
                       >
-                        <CopyIcon className={`h-3.5 w-3.5 ${copiedIdx === i ? "text-emerald-400" : ""}`} />
+                        <CopyIcon className={`h-3.5 w-3.5 ${copiedIdx === i ? "text-tone-emerald" : ""}`} />
                       </button>
                     </div>
                   )}
@@ -853,7 +853,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
               />
               <div className="max-w-[78%]">
-                <div className="text-xs text-gray-400 mb-0.5">{tname}</div>
+                <div className="text-xs text-muted mb-0.5">{tname}</div>
                 <div className="inline-block rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
                   <span className="flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
@@ -873,7 +873,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             onClick={() => scrollToBottom("smooth")}
             title="맨 아래(최신 대화)로"
             aria-label="맨 아래로 이동"
-            className="absolute bottom-4 right-5 z-10 grid h-9 w-9 place-items-center rounded-full border border-edge bg-panel/95 text-gray-300 shadow-lg backdrop-blur transition hover:bg-edge hover:text-white"
+            className="absolute bottom-4 right-5 z-10 grid h-9 w-9 place-items-center rounded-full border border-edge bg-panel/95 text-secondary shadow-lg backdrop-blur transition hover:bg-edge hover:text-strong"
           >
             <ArrowDownIcon className="h-4 w-4" />
           </button>
@@ -882,10 +882,10 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
 
       {isExpired ? (
         <div className="px-4 pb-4 pt-3 border-t border-edge text-center">
-          <p className="text-xs text-gray-500">🌙 본 대화창은 자정이 지나 종료되었습니다.</p>
+          <p className="text-xs text-faint">🌙 본 대화창은 자정이 지나 종료되었습니다.</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-1.5 text-xs font-medium text-emerald-400 transition hover:underline"
+            className="mt-1.5 text-xs font-medium text-tone-emerald transition hover:underline"
           >
             오늘 대화로 가기
           </button>
@@ -896,33 +896,33 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
         {!!references?.length && (
           <div className="mb-2 flex flex-wrap items-center gap-2" data-chat-reference>
             {references.map((reference, i) => (
-              <div key={`${reference.kind}-${reference.jobId || reference.workId || reference.path || i}`} className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-sky-950/30 px-2.5 py-1.5 text-xs text-sky-100">
+              <div key={`${reference.kind}-${reference.jobId || reference.workId || reference.path || i}`} className="flex h-14 items-center gap-2.5 rounded-lg border border-sky-800/70 bg-tint-sky/30 px-2.5 py-1.5 text-xs text-tone-sky">
                 {/* 영상·오디오 주소를 <img> 에 넣으면 깨진 그림이 뜬다 → 종류를 먼저 보고 아이콘 */}
                 {reference.kind === "folder"
-                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-amber-300" title="폴더"><FolderIcon className="h-5 w-5" /></span>
+                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-tint-sky/40 text-tone-amber" title="폴더"><FolderIcon className="h-5 w-5" /></span>
                   : reference.mediaKind === "video"
-                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="영상"><VideoIcon className="h-5 w-5" /></span>
+                  ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-tint-sky/40 text-tone-sky" title="영상"><VideoIcon className="h-5 w-5" /></span>
                   : reference.mediaKind === "audio"
-                    ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="오디오"><MusicIcon className="h-5 w-5" /></span>
+                    ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-tint-sky/40 text-tone-sky" title="오디오"><MusicIcon className="h-5 w-5" /></span>
                     : reference.url
                       ? <img src={reference.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />
                       : reference.kind === "file"
-                        ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-900/40 text-sky-200" title="파일"><FileIcon className="h-5 w-5" /></span>
-                        : <MessageSquareIcon className="h-5 w-5 shrink-0 text-sky-300" />}
+                        ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-tint-sky/40 text-tone-sky" title="파일"><FileIcon className="h-5 w-5" /></span>
+                        : <MessageSquareIcon className="h-5 w-5 shrink-0 text-tone-sky" />}
                 <div className="min-w-0">
-                  <div className="text-[10px] text-sky-400">{i === 0 ? `지목한 항목${references.length > 1 ? ` ${references.length}개` : ""} · "이걸로 …" 라고 말하면 직원이 알아들어요` : `지목 ${i + 1}`}</div>
+                  <div className="text-[10px] text-tone-sky">{i === 0 ? `지목한 항목${references.length > 1 ? ` ${references.length}개` : ""} · "이걸로 …" 라고 말하면 직원이 알아들어요` : `지목 ${i + 1}`}</div>
                   <div className="max-w-[240px] truncate" title={reference.title}>{reference.title}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => onRemoveReference?.(i)}
-                  className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gray-800 text-[10px] leading-none text-gray-300 ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-raised text-[10px] leading-none text-secondary ring-1 ring-edge hover:bg-raised hover:text-strong"
                   title="이 항목 지목 해제"
                 >✕</button>
               </div>
             ))}
             {references.length > 1 && (
-              <button type="button" onClick={() => onClearReferences?.()} className="text-[11px] text-gray-500 hover:text-gray-300" title="전부 해제">전부 해제</button>
+              <button type="button" onClick={() => onClearReferences?.()} className="text-[11px] text-faint hover:text-secondary" title="전부 해제">전부 해제</button>
             )}
           </div>
         )}
@@ -931,28 +931,28 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
           <div className="mb-2 flex flex-wrap items-center gap-2">
             {sheets.map((sheet, i) => (
               <div key={`sheet-${i}`} className="relative">
-                <div className="flex h-16 items-center gap-2 rounded-lg border border-emerald-800/70 bg-emerald-950/20 px-2.5 py-1.5 text-xs text-emerald-200">
-                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true">
+                <div className="flex h-16 items-center gap-2 rounded-lg border border-emerald-800/70 bg-tint-emerald/20 px-2.5 py-1.5 text-xs text-tone-emerald">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0 text-tone-emerald" aria-hidden="true">
                     <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
                     <path d="M3 10h18M9 4v16" stroke="currentColor" strokeWidth="1.8" />
                   </svg>
                   <span className="min-w-0">
                     <span className="block max-w-[150px] truncate font-semibold">{sheet.fileName}</span>
-                    <span className="block text-[10px] text-emerald-400/90">
+                    <span className="block text-[10px] text-tone-emerald/90">
                       {sheet.rowsRead}행 읽음{sheet.rowsSkipped > 0 ? ` · ${sheet.rowsSkipped}행 생략` : ""}
                     </span>
                   </span>
                 </div>
                 <button
                   onClick={() => removeSheet(i)}
-                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-gray-800 text-gray-300 text-[10px] leading-none ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-raised text-secondary text-[10px] leading-none ring-1 ring-edge hover:bg-raised hover:text-strong"
                   title="첨부 제거"
                 >✕</button>
               </div>
             ))}
           </div>
         )}
-        {attachError && <p className="mb-2 text-[11px] text-amber-300">{attachError}</p>}
+        {attachError && <p className="mb-2 text-[11px] text-tone-amber">{attachError}</p>}
         {/* 첨부 미리보기 — 여러 개를 가로로 나열 */}
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -971,18 +971,18 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
                     <img src={a.preview} alt={a.name} className="h-16 w-16 rounded-lg object-cover border border-edge" />
                   </button>
                 ) : (
-                  <div className="flex h-16 items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-gray-400">
+                  <div className="flex h-16 items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-muted">
                     📄 <span className="max-w-[120px] truncate">{a.name}</span>
                   </div>
                 )}
                 <button
                   onClick={() => removeAttachment(i)}
-                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-gray-800 text-gray-300 text-[10px] leading-none ring-1 ring-edge hover:bg-gray-700 hover:text-white"
+                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-raised text-secondary text-[10px] leading-none ring-1 ring-edge hover:bg-raised hover:text-strong"
                   title="첨부 제거"
                 >✕</button>
               </div>
             ))}
-            <span className="text-[11px] text-gray-500">{attachments.length}/{MAX_ATTACHMENTS}</span>
+            <span className="text-[11px] text-faint">{attachments.length}/{MAX_ATTACHMENTS}</span>
           </div>
         )}
         <div className="flex items-end gap-2">
@@ -1000,7 +1000,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             onClick={() => fileInputRef.current?.click()}
             disabled={busy || attachments.length >= MAX_ATTACHMENTS}
             title={attachments.length >= MAX_ATTACHMENTS ? `최대 ${MAX_ATTACHMENTS}개까지 첨부할 수 있어요` : "이미지·PDF·엑셀(csv) 첨부 (여러 개 가능)"}
-            className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${attachments.length ? "border-emerald-600 bg-emerald-900/40 text-emerald-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
+            className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${attachments.length ? "border-emerald-600 bg-tint-emerald/40 text-tone-emerald" : "border-edge bg-ink text-muted hover:bg-edge hover:text-strong"}`}
           >
             <PaperclipIcon className="h-4 w-4" />
           </button>

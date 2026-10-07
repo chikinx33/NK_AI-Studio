@@ -31,7 +31,7 @@ function SourcePreview({ item }: { item: AgentVideoStorageItem }) {
     return <img src={item.signedUrl} alt={item.fileName} loading="lazy" className="h-36 w-full bg-black object-contain" />;
   }
   const icon = item.type === "audio" ? "🎵" : item.type === "manifest" ? "🧾" : "📄";
-  return <div className="grid h-36 place-items-center bg-[#090d13] text-4xl">{icon}</div>;
+  return <div className="grid h-36 place-items-center bg-ink text-4xl">{icon}</div>;
 }
 
 export default function AgentVideoStorageModal({
@@ -156,40 +156,40 @@ export default function AgentVideoStorageModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget && !busy) onClose();
     }}>
-      <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-[#0c121b] shadow-2xl" role="dialog" aria-modal="true" aria-label="Agent Video 저장소">
+      <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-edge bg-inset shadow-2xl" role="dialog" aria-modal="true" aria-label="Agent Video 저장소">
         <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-edge px-5 py-4">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">Cloud Source Library</div>
-            <h2 className="mt-1 text-lg font-bold text-white">Agent Video 저장소</h2>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-tone-emerald">Cloud Source Library</div>
+            <h2 className="mt-1 text-lg font-bold text-strong">Agent Video 저장소</h2>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-gray-300 hover:bg-edge disabled:opacity-50">새로고침</button>
-            <button type="button" onClick={onClose} disabled={!!busy} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-lg text-gray-400 hover:bg-edge disabled:opacity-50" aria-label="저장소 닫기">×</button>
+            <button type="button" onClick={() => void refresh()} disabled={loading || !!busy} className="rounded-lg border border-edge px-3 py-2 text-xs text-secondary hover:bg-edge disabled:opacity-50">새로고침</button>
+            <button type="button" onClick={onClose} disabled={!!busy} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-lg text-muted hover:bg-edge disabled:opacity-50" aria-label="저장소 닫기">×</button>
           </div>
-          <p className="w-full break-all rounded-lg bg-[#090d13] px-3 py-2 font-mono text-[10px] text-gray-500">{storageUri || `gs://{bucket}/${prefix || "users/{계정}/ai-video/projectsai-company/work-library/"}`}</p>
+          <p className="w-full break-all rounded-lg bg-ink px-3 py-2 font-mono text-[10px] text-faint">{storageUri || `gs://{bucket}/${prefix || "users/{계정}/ai-video/projectsai-company/work-library/"}`}</p>
         </header>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0a0f17] px-5 py-3">
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-300">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-inset px-5 py-3">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-secondary">
             <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-emerald-500" />
             전체 선택
           </label>
-          <span className="text-xs text-gray-600">{selected.size}개 선택 · 전체 {items.length}개</span>
+          <span className="text-xs text-faint">{selected.size}개 선택 · 전체 {items.length}개</span>
           <div className="ml-auto flex gap-2">
             <button type="button" onClick={() => void downloadSelected()} disabled={!selected.size || !!busy} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-40">
               {busy === "download" ? "다운로드 중..." : "선택 다운로드"}
             </button>
-            <button type="button" onClick={() => void deleteSelected()} disabled={!selected.size || !!busy} className="rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-950/70 disabled:opacity-40">
+            <button type="button" onClick={() => void deleteSelected()} disabled={!selected.size || !!busy} className="rounded-lg border border-red-800 bg-tint-red/40 px-3 py-2 text-xs font-bold text-tone-red hover:bg-tint-red/70 disabled:opacity-40">
               {busy === "delete" ? "삭제 중..." : "선택 삭제"}
             </button>
           </div>
         </div>
 
-        {error && <div className="mx-5 mt-4 rounded-xl border border-red-900/70 bg-red-950/35 p-3 text-xs text-red-300">{error}</div>}
+        {error && <div className="mx-5 mt-4 rounded-xl border border-red-900/70 bg-tint-red/35 p-3 text-xs text-tone-red">{error}</div>}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {loading ? (
-            <div className="grid min-h-56 place-items-center text-sm text-gray-500">저장소를 불러오는 중...</div>
+            <div className="grid min-h-56 place-items-center text-sm text-faint">저장소를 불러오는 중...</div>
           ) : items.length ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {items.map((item) => (
@@ -199,21 +199,21 @@ export default function AgentVideoStorageModal({
                     <label className="absolute left-2 top-2 grid h-7 w-7 cursor-pointer place-items-center rounded-lg bg-black/75">
                       <input type="checkbox" checked={selected.has(item.objectName)} onChange={() => toggle(item.objectName)} className="accent-emerald-500" aria-label={`${item.fileName} 선택`} />
                     </label>
-                    <span className="absolute right-2 top-2 rounded-md bg-black/75 px-2 py-1 text-[10px] font-bold text-gray-200">{sourceLabel(item)}</span>
+                    <span className="company-media absolute right-2 top-2 rounded-md bg-black/75 px-2 py-1 text-[10px] font-bold text-content">{sourceLabel(item)}</span>
                   </div>
                   <div className="p-3">
-                    <h3 className="truncate text-xs font-bold text-gray-200" title={item.fileName}>{item.fileName}</h3>
-                    <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-500">
-                      <span className="rounded bg-[#090d13] px-1.5 py-1">{item.dateFolder}</span>
+                    <h3 className="truncate text-xs font-bold text-content" title={item.fileName}>{item.fileName}</h3>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-faint">
+                      <span className="rounded bg-ink px-1.5 py-1">{item.dateFolder}</span>
                       <span>{formatBytes(item.size)}</span>
                     </div>
-                    <p className="mt-2 truncate font-mono text-[9px] text-gray-600" title={item.objectName}>{item.objectName}</p>
+                    <p className="mt-2 truncate font-mono text-[9px] text-faint" title={item.objectName}>{item.objectName}</p>
                   </div>
                 </article>
               ))}
             </div>
           ) : (
-            <div className="grid min-h-56 place-items-center rounded-xl border border-dashed border-edge text-center text-sm leading-6 text-gray-500">
+            <div className="grid min-h-56 place-items-center rounded-xl border border-dashed border-edge text-center text-sm leading-6 text-faint">
               저장된 소스가 없습니다.<br />프리뷰가 생성되면 MP4와 제작 명세가 자동 저장됩니다.
             </div>
           )}

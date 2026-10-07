@@ -7,7 +7,9 @@ import { markActive } from "./lib/liveSync";
 import { onStorageUserChange, readStorage, readUserStorage, removeStorage, writeStorage } from "./lib/safeStorage";
 import { AppDialogHost, installAppDialogAlertBridge } from "./lib/appDialog";
 import "./index.css";
+import { installCompanyTheme } from "./lib/companyTheme";
 
+installCompanyTheme();
 installAppDialogAlertBridge();
 
 // ── NK 통합: 모든 /api 호출에 도메인(API_BASE)과 인증(Bearer) 자동 주입 ──

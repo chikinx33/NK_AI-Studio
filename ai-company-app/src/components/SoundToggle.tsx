@@ -56,8 +56,8 @@ export default function SoundToggle({ enabled, onToggle }: Props) {
       aria-pressed={enabled}
       className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-xs transition ${
         enabled
-          ? "border-emerald-600/70 bg-emerald-900/35 text-emerald-200 hover:bg-emerald-800/50"
-          : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"
+          ? "border-emerald-600/70 bg-tint-emerald/35 text-tone-emerald hover:bg-tint-emerald"
+          : "border-edge bg-ink text-muted hover:bg-edge hover:text-strong"
       }`}
     >
       {enabled ? <Volume2Icon className="h-4 w-4" /> : <VolumeXIcon className="h-4 w-4" />}

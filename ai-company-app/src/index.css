@@ -1,3 +1,4 @@
+@import "./companyTheme.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,12 +8,12 @@ html, body, #root {
   margin: 0;
 }
 body {
-  background: #0e1116;
-  color: #e6edf3;
+  background: rgb(var(--company-bg));
+  color: rgb(var(--company-text));
   font-family: ui-sans-serif, system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
 }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2b3340; border-radius: 6px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--company-edge)); border-radius: 6px; }
 
 /* 스크롤은 되지만 스크롤바 표시는 감추는 유틸 (채팅 입력칸 등) */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }

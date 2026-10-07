@@ -5,11 +5,11 @@ type DockTone = "amber" | "emerald";
 const TONE_CLASS: Record<DockTone, { border: string; hover: string }> = {
   amber: {
     border: "border-amber-700/40",
-    hover: "hover:bg-amber-950/30",
+    hover: "hover:bg-tint-amber/30",
   },
   emerald: {
     border: "border-emerald-800/60",
-    hover: "hover:bg-emerald-950/30",
+    hover: "hover:bg-tint-emerald/30",
   },
 };
 
@@ -38,7 +38,7 @@ export default function CanvasFloatingDock({
   const toggleLabel = open ? "접기" : "펼치기";
 
   return (
-    <section className={`overflow-hidden rounded-2xl border ${color.border} bg-[#0c1119]/95 shadow-2xl backdrop-blur`}>
+    <section className={`overflow-hidden rounded-2xl border ${color.border} bg-inset/95 shadow-2xl backdrop-blur`}>
       <button
         type="button"
         onClick={onToggle}
@@ -49,11 +49,11 @@ export default function CanvasFloatingDock({
         <span className="grid h-5 w-5 shrink-0 place-items-center">{icon}</span>
         {open && (
           <>
-            <span className="shrink-0 text-[12px] font-bold text-white">{title}</span>
-            {subtitle ? <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{subtitle}</span> : <span className="flex-1" />}
+            <span className="shrink-0 text-[12px] font-bold text-strong">{title}</span>
+            {subtitle ? <span className="min-w-0 flex-1 truncate text-[10px] text-faint">{subtitle}</span> : <span className="flex-1" />}
           </>
         )}
-        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md border border-edge bg-[#151b25] text-[12px] leading-none text-gray-400 transition-colors group-hover:text-white" aria-hidden="true">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md border border-edge bg-panel text-[12px] leading-none text-muted transition-colors group-hover:text-strong" aria-hidden="true">
           {open ? "−" : "+"}
         </span>
         <span className="sr-only">{toggleLabel}</span>

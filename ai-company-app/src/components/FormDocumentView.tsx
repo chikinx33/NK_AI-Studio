@@ -44,9 +44,9 @@ async function saveFile(file: FormFile) {
 
 export function FormStatusBadge({ state, className = "" }: { state: FormState; className?: string }) {
   const style =
-    state === "needs_input" ? "border-amber-700/70 bg-amber-950/40 text-amber-300"
-    : state === "error" ? "border-rose-800/70 bg-rose-950/40 text-rose-300"
-    : "border-emerald-800/70 bg-emerald-950/40 text-emerald-300";
+    state === "needs_input" ? "border-amber-700/70 bg-tint-amber/40 text-tone-amber"
+    : state === "error" ? "border-rose-800/70 bg-tint-rose/40 text-tone-rose"
+    : "border-emerald-800/70 bg-tint-emerald/40 text-tone-emerald";
   const text = state === "needs_input" ? "⏸ 정보 필요" : state === "error" ? "❌ 실패" : "✅ 작성 완료";
   return (
     <span className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${style} ${className}`}>
@@ -60,18 +60,18 @@ export function FormNeedsInput({ output, onCancel, compact }: { output: FormOutp
   const items = missingItems(output.missing);
   return (
     <div className={compact ? "" : "mt-2"}>
-      <p className="text-[11px] text-amber-200">이것만 알려주시면 이어서 만들어요:</p>
+      <p className="text-[11px] text-tone-amber">이것만 알려주시면 이어서 만들어요:</p>
       <ul className="mt-1 space-y-0.5">
         {items.map((item, index) => (
-          <li key={index} className="text-[12px] text-gray-200">· {item}</li>
+          <li key={index} className="text-[12px] text-content">· {item}</li>
         ))}
-        {items.length === 0 && <li className="text-[12px] text-gray-400">· 부족한 값</li>}
+        {items.length === 0 && <li className="text-[12px] text-muted">· 부족한 값</li>}
       </ul>
       <div className="mt-2 flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => prefillChat(continuePrompt(output))}
-          className="flex-1 rounded border border-amber-700/70 bg-amber-900/30 px-2 py-1 text-[12px] font-semibold text-amber-200 transition hover:bg-amber-900/50"
+          className="flex-1 rounded border border-amber-700/70 bg-tint-amber/30 px-2 py-1 text-[12px] font-semibold text-tone-amber transition hover:bg-tint-amber/50"
           title="채팅 입력창에 필요한 값을 묻는 문구를 채워 드려요"
         >
           이어서 만들기
@@ -81,7 +81,7 @@ export function FormNeedsInput({ output, onCancel, compact }: { output: FormOutp
             type="button"
             onClick={onCancel}
             title="지시 취소"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded border border-rose-700/50 bg-rose-900/60 text-rose-300 transition hover:bg-rose-800/80"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded border border-rose-700/50 bg-tint-rose/60 text-tone-rose transition hover:bg-tint-rose"
           >
             ✕
           </button>
@@ -96,11 +96,11 @@ export function FormError({ output, onRetry, compact }: { output: FormOutput & {
   const reason = String(output.error || "").trim();
   return (
     <div className={compact ? "" : "mt-2"}>
-      {reason && <p className="whitespace-pre-wrap break-words text-[12px] text-rose-200">{reason}</p>}
+      {reason && <p className="whitespace-pre-wrap break-words text-[12px] text-tone-rose">{reason}</p>}
       <button
         type="button"
         onClick={() => (onRetry ? onRetry() : prefillChat(`${output.promptEcho || output.formName || "서식"} 다시 만들어줘.`))}
-        className="mt-2 w-full rounded border border-rose-700/60 bg-rose-900/40 px-2 py-1 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-900/60"
+        className="mt-2 w-full rounded border border-rose-700/60 bg-tint-rose/40 px-2 py-1 text-[12px] font-semibold text-tone-rose transition hover:bg-tint-rose/60"
       >
         다시 시도
       </button>
@@ -142,8 +142,8 @@ export function FormDownloadButtons({ output, compact }: { output: FormOutput; c
               title={file ? `${FORMAT_LABEL[format] || format} 내려받기` : `${FORMAT_SHORT[format] || format} 형식도 필요하면 잉크에게 말씀해 주세요`}
               className={`min-w-[74px] rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${
                 disabled
-                  ? "border-edge bg-black/20 text-gray-600"
-                  : "border-emerald-900/80 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40"
+                  ? "border-edge bg-black/20 text-faint"
+                  : "border-emerald-900/80 bg-tint-emerald/30 text-tone-emerald hover:bg-tint-emerald/40"
               }`}
             >
               {busy === format ? "받는 중…" : FORMAT_SHORT[format] || format.toUpperCase()}
@@ -151,11 +151,11 @@ export function FormDownloadButtons({ output, compact }: { output: FormOutput; c
           );
         })}
       </div>
-      {output.notice && <p className="mt-1.5 text-[11px] text-amber-300">⚠️ {output.notice}</p>}
+      {output.notice && <p className="mt-1.5 text-[11px] text-tone-amber">⚠️ {output.notice}</p>}
       {(output.warnings || []).map((warning, index) => (
-        <p key={index} className="mt-1.5 text-[11px] text-amber-300">{warning}</p>
+        <p key={index} className="mt-1.5 text-[11px] text-tone-amber">{warning}</p>
       ))}
-      {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
+      {error && <p className="mt-1 text-[11px] text-tone-red">{error}</p>}
     </div>
   );
 }
@@ -170,10 +170,10 @@ export function FormPreview({ output }: { output: FormOutput }) {
   const termRows: any[] = Array.isArray(totals.termRows) ? totals.termRows : [];
 
   return (
-    <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-[#0d131c] p-6 text-sm text-gray-200">
+    <article className="mx-auto max-w-4xl rounded-xl border border-edge bg-inset p-6 text-sm text-content">
       <header className="border-b border-edge pb-3">
         <h1 className="text-xl font-bold">{data.title || output.formName || "서식 문서"}</h1>
-        <p className="mt-1 text-[11px] text-gray-500">
+        <p className="mt-1 text-[11px] text-faint">
           {output.docNo && <span className="mr-3">No. {output.docNo}</span>}
           {data.issuedAt && <span className="mr-3">발행일 {data.issuedAt}</span>}
           {data.validUntil && <span>유효기간 {data.validUntil}</span>}
@@ -182,21 +182,21 @@ export function FormPreview({ output }: { output: FormOutput }) {
 
       <div className="mt-3 grid gap-2 text-[12px] sm:grid-cols-2">
         <div className="rounded-lg border border-edge bg-black/20 p-3">
-          <p className="mb-1 text-[10px] font-semibold text-gray-500">공급받는자</p>
-          <p className="font-semibold text-gray-100">{data.client?.company || "—"}</p>
-          <p className="text-gray-400">{[data.client?.person, data.client?.title].filter(Boolean).join(" ")}</p>
-          <p className="text-gray-500">{data.client?.tel || data.client?.email || ""}</p>
+          <p className="mb-1 text-[10px] font-semibold text-faint">공급받는자</p>
+          <p className="font-semibold text-strong">{data.client?.company || "—"}</p>
+          <p className="text-muted">{[data.client?.person, data.client?.title].filter(Boolean).join(" ")}</p>
+          <p className="text-faint">{data.client?.tel || data.client?.email || ""}</p>
         </div>
         <div className="rounded-lg border border-edge bg-black/20 p-3">
-          <p className="mb-1 text-[10px] font-semibold text-gray-500">공급자</p>
-          <p className="font-semibold text-gray-100">{data.supplier?.name || "—"}</p>
-          <p className="text-gray-400">{data.supplier?.bizNo || ""}</p>
-          <p className="text-gray-500">{[data.supplier?.bizType, data.supplier?.bizItem].filter(Boolean).join(" / ")}</p>
+          <p className="mb-1 text-[10px] font-semibold text-faint">공급자</p>
+          <p className="font-semibold text-strong">{data.supplier?.name || "—"}</p>
+          <p className="text-muted">{data.supplier?.bizNo || ""}</p>
+          <p className="text-faint">{[data.supplier?.bizType, data.supplier?.bizItem].filter(Boolean).join(" / ")}</p>
         </div>
       </div>
 
       {totals.grandTotalText && (
-        <p className="mt-3 rounded-lg border border-emerald-900/70 bg-emerald-950/25 px-3 py-2 text-base font-bold text-emerald-200">
+        <p className="mt-3 rounded-lg border border-emerald-900/70 bg-tint-emerald/25 px-3 py-2 text-base font-bold text-tone-emerald">
           합계금액 {totals.grandTotalText}
         </p>
       )}
@@ -205,7 +205,7 @@ export function FormPreview({ output }: { output: FormOutput }) {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-y border-edge text-[11px] text-gray-500">
+              <tr className="border-y border-edge text-[11px] text-faint">
                 <th className="w-10 py-1.5 text-left">No</th>
                 <th className="py-1.5 text-left">품명</th>
                 <th className="py-1.5 text-left">규격</th>
@@ -220,15 +220,15 @@ export function FormPreview({ output }: { output: FormOutput }) {
               {rows.map((row, index) => {
                 const isItem = row.kind === "item";
                 return (
-                  <tr key={index} className={`border-b border-edge/60 ${isItem ? "" : "bg-black/20 font-semibold text-gray-300"}`}>
-                    <td className="py-1.5 text-gray-500">{row.no}</td>
+                  <tr key={index} className={`border-b border-edge/60 ${isItem ? "" : "bg-black/20 font-semibold text-secondary"}`}>
+                    <td className="py-1.5 text-faint">{row.no}</td>
                     <td className="py-1.5">{row.name}</td>
-                    <td className="py-1.5 text-gray-400">{row.spec}</td>
+                    <td className="py-1.5 text-muted">{row.spec}</td>
                     <td className="py-1.5 text-right">{row.qty}</td>
-                    <td className="py-1.5 text-gray-400">{row.unit}</td>
+                    <td className="py-1.5 text-muted">{row.unit}</td>
                     <td className="py-1.5 text-right">{row.unitPrice}</td>
                     <td className="py-1.5 text-right font-semibold">{row.amount}</td>
-                    <td className="py-1.5 text-[11px] text-gray-500">{row.note}</td>
+                    <td className="py-1.5 text-[11px] text-faint">{row.note}</td>
                   </tr>
                 );
               })}
@@ -245,7 +245,7 @@ export function FormPreview({ output }: { output: FormOutput }) {
               <div
                 key={index}
                 className={`flex items-center justify-between border-b border-edge/60 py-1.5 ${
-                  isTotal ? "border-t border-emerald-800/70 text-base font-bold text-emerald-200" : "text-gray-300"
+                  isTotal ? "border-t border-emerald-800/70 text-base font-bold text-tone-emerald" : "text-secondary"
                 }`}
               >
                 <span>{row.label}</span>
@@ -258,12 +258,12 @@ export function FormPreview({ output }: { output: FormOutput }) {
 
       {infoRows.length > 0 && (
         <section className="mt-4 border-t border-edge pt-3">
-          <h2 className="mb-1.5 text-[11px] font-semibold text-gray-500">특이사항</h2>
+          <h2 className="mb-1.5 text-[11px] font-semibold text-faint">특이사항</h2>
           <dl className="grid gap-1 text-[12px] sm:grid-cols-2">
             {infoRows.map((row, index) => (
               <div key={index} className="flex gap-2">
-                <dt className="w-16 shrink-0 text-gray-500">{row.label}</dt>
-                <dd className="text-gray-300">{row.value}</dd>
+                <dt className="w-16 shrink-0 text-faint">{row.label}</dt>
+                <dd className="text-secondary">{row.value}</dd>
               </div>
             ))}
           </dl>
@@ -272,14 +272,14 @@ export function FormPreview({ output }: { output: FormOutput }) {
 
       {termRows.length > 0 && (
         <section className="mt-3 border-t border-edge pt-3">
-          <h2 className="mb-1.5 text-[11px] font-semibold text-gray-500">거래 조건</h2>
-          <ol className="space-y-0.5 text-[12px] text-gray-300">
+          <h2 className="mb-1.5 text-[11px] font-semibold text-faint">거래 조건</h2>
+          <ol className="space-y-0.5 text-[12px] text-secondary">
             {termRows.map((row, index) => <li key={index}>{row.no}. {row.text}</li>)}
           </ol>
         </section>
       )}
 
-      {data.notes && <p className="mt-3 border-t border-edge pt-3 text-[12px] text-gray-400">비고 · {data.notes}</p>}
+      {data.notes && <p className="mt-3 border-t border-edge pt-3 text-[12px] text-muted">비고 · {data.notes}</p>}
     </article>
   );
 }
@@ -297,16 +297,16 @@ export function FormPreviewModal({ output, onClose }: { output: FormOutput; onCl
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <section role="dialog" aria-modal="true" aria-label="견적서 미리보기" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-edge bg-[#0d131c] shadow-2xl">
+      <section role="dialog" aria-modal="true" aria-label="견적서 미리보기" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-edge bg-inset shadow-2xl">
         <header className="flex items-center gap-3 border-b border-edge px-5 py-3.5">
           <FormStatusBadge state={formState(output)} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-bold text-gray-100">{output.data?.title || output.formName || "서식 문서"}</h2>
-            <p className="mt-0.5 text-[10px] text-gray-500">승인 전에 금액과 항목을 확인하세요</p>
+            <h2 className="truncate text-sm font-bold text-strong">{output.data?.title || output.formName || "서식 문서"}</h2>
+            <p className="mt-0.5 text-[10px] text-faint">승인 전에 금액과 항목을 확인하세요</p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-gray-400 transition hover:bg-edge hover:text-white" aria-label="미리보기 닫기">×</button>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-xl text-muted transition hover:bg-edge hover:text-strong" aria-label="미리보기 닫기">×</button>
         </header>
-        <div className="min-h-0 flex-1 overflow-auto bg-[#080c12] p-5">
+        <div className="min-h-0 flex-1 overflow-auto bg-ink p-5">
           <FormPreview output={output} />
           <div className="mx-auto mt-3 max-w-4xl"><FormDownloadButtons output={output} /></div>
         </div>
@@ -325,12 +325,12 @@ export default function FormDocumentView({ output }: { output: FormOutput }) {
 
   if (state === "needs_input") {
     return (
-      <article className="mx-auto max-w-3xl rounded-xl border border-amber-800/60 bg-[#0d131c] p-6 text-sm text-gray-200">
+      <article className="mx-auto max-w-3xl rounded-xl border border-amber-800/60 bg-inset p-6 text-sm text-content">
         <header className="flex items-center gap-2 border-b border-edge pb-3">
           <FormStatusBadge state={state} />
           <h1 className="truncate text-base font-bold">{output.data?.title || output.formName || "서식 문서"}</h1>
         </header>
-        <p className="mt-3 text-[12px] text-gray-400">아직 만들지 않았어요. 파일도 만들어지지 않았고요.</p>
+        <p className="mt-3 text-[12px] text-muted">아직 만들지 않았어요. 파일도 만들어지지 않았고요.</p>
         <FormNeedsInput output={output} />
       </article>
     );
@@ -338,7 +338,7 @@ export default function FormDocumentView({ output }: { output: FormOutput }) {
 
   if (state === "error") {
     return (
-      <article className="mx-auto max-w-3xl rounded-xl border border-rose-900/60 bg-[#0d131c] p-6 text-sm text-gray-200">
+      <article className="mx-auto max-w-3xl rounded-xl border border-rose-900/60 bg-inset p-6 text-sm text-content">
         <header className="flex items-center gap-2 border-b border-edge pb-3">
           <FormStatusBadge state={state} />
           <h1 className="truncate text-base font-bold">{output.formName || "서식 문서"}</h1>
@@ -352,7 +352,7 @@ export default function FormDocumentView({ output }: { output: FormOutput }) {
     <div>
       <div className="mx-auto mb-2 flex max-w-4xl items-center gap-2">
         <FormStatusBadge state={state} />
-        <span className="text-[11px] text-gray-400">
+        <span className="text-[11px] text-muted">
           {output.data?.client?.company || "고객사"} · 합계 {totals.grandTotalText || "—"}
         </span>
       </div>

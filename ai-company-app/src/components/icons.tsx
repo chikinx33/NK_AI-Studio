@@ -349,9 +349,9 @@ export function LabelText({ label, iconClassName }: { label: string; iconClassNa
 // 상태 메시지: 선행 이모지(✅⚠️❌)를 Lucide 아이콘 + 색으로 치환해 렌더.
 // (동적으로 만들어지는 문자열 메시지를 아이콘화하기 위한 공용 헬퍼)
 const STATUS_RULES: { re: RegExp; Icon: (p: IconProps) => ReactNode; color: string }[] = [
-  { re: /^✅\s*/, Icon: CircleCheckIcon, color: "text-emerald-400" },
-  { re: /^⚠️?\s*/, Icon: TriangleAlertIcon, color: "text-amber-400" },
-  { re: /^❌\s*/, Icon: CircleXIcon, color: "text-red-400" },
+  { re: /^✅\s*/, Icon: CircleCheckIcon, color: "text-tone-emerald" },
+  { re: /^⚠️?\s*/, Icon: TriangleAlertIcon, color: "text-tone-amber" },
+  { re: /^❌\s*/, Icon: CircleXIcon, color: "text-tone-red" },
 ];
 export function StatusText({ msg, className }: { msg: string; className?: string }) {
   for (const r of STATUS_RULES) {

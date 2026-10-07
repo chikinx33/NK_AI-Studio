@@ -8,10 +8,10 @@ import { Seg } from "./GenerationSettingsPopover";
 type ImageBilling = { mode: "subscription" | "api_key" | "both" | ""; enabled: boolean; connected: boolean };
 
 const BILLING_TEXT: Record<string, { label: string; desc: string; tone: string }> = {
-  subscription: { label: "구독으로 생성", desc: "내 ChatGPT 구독으로 만들어요. 크레딧이 줄지 않아요.", tone: "border-emerald-800/70 bg-emerald-950/40 text-emerald-300" },
-  api_key: { label: "내 API 키로 생성", desc: "등록한 API 키로 만들어요. 그쪽 요금이 청구돼요.", tone: "border-sky-800/70 bg-sky-950/40 text-sky-300" },
-  both: { label: "구독 + API 키", desc: "이미지는 구독, 영상·업스케일은 API 키를 써요.", tone: "border-violet-800/70 bg-violet-950/40 text-violet-300" },
-  master: { label: "스튜디오 크레딧", desc: "등록한 인증이 없어 스튜디오 크레딧을 써요.", tone: "border-edge bg-[#151b25] text-gray-300" },
+  subscription: { label: "구독으로 생성", desc: "내 ChatGPT 구독으로 만들어요. 크레딧이 줄지 않아요.", tone: "border-emerald-800/70 bg-tint-emerald/40 text-tone-emerald" },
+  api_key: { label: "내 API 키로 생성", desc: "등록한 API 키로 만들어요. 그쪽 요금이 청구돼요.", tone: "border-sky-800/70 bg-tint-sky/40 text-tone-sky" },
+  both: { label: "구독 + API 키", desc: "이미지는 구독, 영상·업스케일은 API 키를 써요.", tone: "border-violet-800/70 bg-tint-violet/40 text-tone-violet" },
+  master: { label: "스튜디오 크레딧", desc: "등록한 인증이 없어 스튜디오 크레딧을 써요.", tone: "border-edge bg-panel text-secondary" },
 };
 
 /**
@@ -52,57 +52,57 @@ export default function AgentSettingsPanel({ settings, onChange, onBack }: { set
   const setImage = (patch: Partial<CanvasSettings["image"]>) => onChange({ ...s, image: { ...s.image, ...patch } });
   const setVideo = (patch: Partial<CanvasSettings["video"]>) => onChange({ ...s, video: { ...s.video, ...patch } });
   const Radio = ({ checked, title, desc, onPick }: { checked: boolean; title: string; desc: string; onPick: () => void }) => (
-    <button type="button" onClick={onPick} className="flex w-full items-start gap-3 rounded-xl px-2 py-2 text-left hover:bg-[#151b25]">
-      <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 ${checked ? "border-sky-400" : "border-gray-600"}`}>{checked && <span className="h-2 w-2 rounded-full bg-sky-400" />}</span>
-      <span><span className="block text-[12px] font-bold text-white">{title}</span><span className="block text-[11px] text-gray-400">{desc}</span></span>
+    <button type="button" onClick={onPick} className="flex w-full items-start gap-3 rounded-xl px-2 py-2 text-left hover:bg-panel">
+      <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 ${checked ? "border-sky-400" : "border-edge"}`}>{checked && <span className="h-2 w-2 rounded-full bg-sky-400" />}</span>
+      <span><span className="block text-[12px] font-bold text-strong">{title}</span><span className="block text-[11px] text-muted">{desc}</span></span>
     </button>
   );
 
   return (
-    <div className="w-[min(92vw,360px)] rounded-2xl border border-edge bg-[#0f141c] p-3 text-[12px] text-gray-200 shadow-2xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+    <div className="w-[min(92vw,360px)] rounded-2xl border border-edge bg-inset p-3 text-[12px] text-content shadow-2xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
       <div className="mb-2 flex items-center gap-2">
-        <button type="button" onClick={onBack} className="grid h-7 w-7 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="뒤로">
+        <button type="button" onClick={onBack} className="grid h-7 w-7 place-items-center rounded-full text-muted hover:bg-edge hover:text-strong" aria-label="뒤로">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
         </button>
-        <span className="text-[13px] font-bold text-white">에이전트 설정</span>
+        <span className="text-[13px] font-bold text-strong">에이전트 설정</span>
       </div>
 
-      <div className="mb-1 text-[11px] text-gray-500">생성하기 전에 확인</div>
+      <div className="mb-1 text-[11px] text-faint">생성하기 전에 확인</div>
       <Radio checked={s.confirmBeforeGenerate} title="항상" desc="에이전트가 미디어를 생성하기 전에 확인을 요청합니다." onPick={() => onChange({ ...s, confirmBeforeGenerate: true })} />
       <Radio checked={!s.confirmBeforeGenerate} title="안 함" desc="에이전트가 미디어를 생성하고 자동으로 크레딧을 사용합니다." onPick={() => onChange({ ...s, confirmBeforeGenerate: false })} />
 
-      <div className="mb-1 mt-3 text-[11px] text-gray-500">이미지 생성 기본값</div>
+      <div className="mb-1 mt-3 text-[11px] text-faint">이미지 생성 기본값</div>
       {billingText && (
         <div className={`mb-2 rounded-xl border px-3 py-2 ${billingText.tone}`} title="런처의 'API 설정'에서 바꿔요">
           <div className="text-[12px] font-bold">{billingText.label}</div>
           <div className="mt-0.5 text-[11px] leading-snug opacity-80">{billingText.desc}</div>
           {billing?.enabled && billing.mode !== "api_key" && !billing.connected && (
-            <div className="mt-1 text-[11px] font-semibold text-amber-300">구독 연결이 끊겨 있어요 — 런처에서 다시 연결해 주세요.</div>
+            <div className="mt-1 text-[11px] font-semibold text-tone-amber">구독 연결이 끊겨 있어요 — 런처에서 다시 연결해 주세요.</div>
           )}
         </div>
       )}
       <div className="space-y-2">
         <Seg value={s.image.aspect} options={IMAGE_ASPECTS} onChange={(aspect) => setImage({ aspect })} render={(r) => <><AspectGlyph ratio={r} />{r}</>} />
         <Seg value={s.image.count} options={COUNTS} onChange={(count) => setImage({ count })} render={(n) => `x${n}`} />
-        <select value={s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"], providerExplicit: true })} className="w-full truncate rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200">
+        <select value={s.image.provider} onChange={(e) => setImage({ provider: e.target.value as CanvasSettings["image"]["provider"], providerExplicit: true })} className="w-full truncate rounded-lg border border-edge bg-panel px-3 py-2 text-[12px] text-content">
           {IMAGE_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
         {/* 고른 값이 실제로 무엇이 되는지는 선택 상자 밖에 적는다(상자 안에 넣으면 좁은 화면에서 잘린다). */}
-        <p className="px-1 text-[11px] leading-snug text-gray-500">
+        <p className="px-1 text-[11px] leading-snug text-faint">
           {s.image.provider === "studio"
             ? `제작 화면의 이미지생성 모델을 따라요 · 지금: ${STUDIO_PROVIDER_LABELS[readStudioImageProvider()] || (readStudioImageProvider() || "서버 기본")}`
             : "이 캔버스에서는 위 모델로 만들어요."}
         </p>
       </div>
 
-      <div className="mb-1 mt-3 text-[11px] text-gray-500">동영상 생성 기본값</div>
+      <div className="mb-1 mt-3 text-[11px] text-faint">동영상 생성 기본값</div>
       <div className="space-y-2">
         <Seg value={s.video.aspect} options={VIDEO_ASPECTS} onChange={(aspect) => setVideo({ aspect })} render={(r) => <><AspectGlyph ratio={r} />{r}</>} />
         <Seg value={s.video.count} options={COUNTS} onChange={(count) => setVideo({ count })} render={(n) => `x${n}`} />
         <select
           value={s.video.model}
           onChange={(e) => { const m = e.target.value; setVideo({ model: m, durationSec: snapDuration(m, s.video.durationSec), resolution: snapResolution(m, s.video.resolution) }); }}
-          className="w-full truncate rounded-lg border border-edge bg-[#151b25] px-3 py-2 text-[12px] text-gray-200"
+          className="w-full truncate rounded-lg border border-edge bg-panel px-3 py-2 text-[12px] text-content"
         >
           {VIDEO_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}{m.i2vOnly ? " · 스틸 필요" : ""}</option>)}
         </select>

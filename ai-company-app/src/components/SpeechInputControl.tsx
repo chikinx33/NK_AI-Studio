@@ -242,7 +242,7 @@ export function SpeechInputButton({
       aria-pressed={enabled}
       aria-label={enabled ? "마이크 모드 끄기" : "마이크 모드 켜기"}
       title={!supported ? "이 브라우저는 음성 입력을 지원하지 않습니다" : enabled ? "마이크 모드 켜짐 · 누르면 끄기" : "마이크 모드 켜기 · 문장마다 자동 전송"}
-      className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${enabled ? "border-red-500 bg-red-950/70 text-red-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
+      className={`relative grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${enabled ? "border-red-500 bg-tint-red/70 text-tone-red" : "border-edge bg-ink text-muted hover:bg-edge hover:text-strong"}`}
     >
       {listening && <span className="absolute inset-1 animate-ping rounded-lg border border-red-400/60" />}
       <MicrophoneIcon className="relative h-4 w-4" />
@@ -265,7 +265,7 @@ export function SpeechInputStatus({
   return (
     <div className="mt-1.5 min-h-4 px-1 text-xs" role="status" aria-live="polite">
       {enabled ? (
-        <span className="text-red-300">
+        <span className="text-tone-red">
           {listening
             ? "● 마이크 모드 켜짐 · 문장이 끝날 때마다 자동 전송하며 계속 듣습니다."
             : waiting
@@ -273,7 +273,7 @@ export function SpeechInputStatus({
               : "● 마이크 모드 켜짐 · 다음 발화를 준비하고 있습니다."}
         </span>
       ) : (
-        <span className="text-amber-300">{error}</span>
+        <span className="text-tone-amber">{error}</span>
       )}
     </div>
   );

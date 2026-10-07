@@ -1,0 +1,147 @@
+/* Studio palette from prototype/styles.css; semantic UI colors only. */
+:root, :root[data-theme="dark"], .company-media {
+  color-scheme: dark;
+  --company-bg: 15 23 42;
+  --company-inset: 11 18 36;
+  --company-raised: 30 32 48;
+  --company-panel: 13 21 42;
+  --company-edge: 27 40 69;
+  --company-text: 233 237 247;
+  --company-secondary: 180 195 220;
+  --company-muted: 138 160 195;
+  --company-tone-emerald: 110 231 183;
+  --company-tint-emerald: 6 78 59;
+  --company-tone-red: 252 165 165;
+  --company-tint-red: 127 29 29;
+  --company-tone-rose: 253 164 175;
+  --company-tint-rose: 136 19 55;
+  --company-tone-amber: 252 211 77;
+  --company-tint-amber: 120 53 15;
+  --company-tone-sky: 125 211 252;
+  --company-tint-sky: 12 74 110;
+  --company-tone-blue: 147 197 253;
+  --company-tint-blue: 30 58 138;
+  --company-tone-violet: 196 181 253;
+  --company-tint-violet: 76 29 149;
+  --company-tone-purple: 216 180 254;
+  --company-tint-purple: 88 28 135;
+  --company-tone-indigo: 165 180 252;
+  --company-tint-indigo: 49 46 129;
+  --company-tone-cyan: 103 232 249;
+  --company-tint-cyan: 22 78 99;
+  --company-tone-teal: 94 234 212;
+  --company-tint-teal: 19 78 74;
+  --company-tone-orange: 253 186 116;
+  --company-tint-orange: 124 45 18;
+  --company-tone-yellow: 253 224 71;
+  --company-tint-yellow: 113 63 18;
+  --company-tone-green: 134 239 172;
+  --company-tint-green: 20 83 45;
+  --company-tone-pink: 249 168 212;
+  --company-tint-pink: 131 24 67;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --company-bg: 247 249 253;
+  --company-inset: 238 242 251;
+  --company-raised: 220 230 245;
+  --company-panel: 255 255 255;
+  --company-edge: 203 214 234;
+  --company-text: 13 23 47;
+  --company-secondary: 58 77 110;
+  --company-muted: 81 97 127;
+  --company-tone-emerald: 4 120 87;
+  --company-tint-emerald: 209 250 229;
+  --company-tone-red: 185 28 28;
+  --company-tint-red: 254 226 226;
+  --company-tone-rose: 190 18 60;
+  --company-tint-rose: 255 228 230;
+  --company-tone-amber: 180 83 9;
+  --company-tint-amber: 254 243 199;
+  --company-tone-sky: 3 105 161;
+  --company-tint-sky: 224 242 254;
+  --company-tone-blue: 29 78 216;
+  --company-tint-blue: 219 234 254;
+  --company-tone-violet: 109 40 217;
+  --company-tint-violet: 237 233 254;
+  --company-tone-purple: 126 34 206;
+  --company-tint-purple: 243 232 255;
+  --company-tone-indigo: 67 56 202;
+  --company-tint-indigo: 224 231 255;
+  --company-tone-cyan: 14 116 144;
+  --company-tint-cyan: 207 250 254;
+  --company-tone-teal: 15 118 110;
+  --company-tint-teal: 204 251 241;
+  --company-tone-orange: 194 65 12;
+  --company-tint-orange: 255 237 213;
+  --company-tone-yellow: 161 98 7;
+  --company-tint-yellow: 254 249 195;
+  --company-tone-green: 21 128 61;
+  --company-tint-green: 220 252 231;
+  --company-tone-pink: 190 24 93;
+  --company-tint-pink: 252 231 243;
+}
+:root[data-theme="dark"][data-theme-variant="dark-midnight"] {
+  --company-bg: 5 7 20;
+  --company-inset: 7 10 25;
+  --company-panel: 10 16 34;
+  --company-edge: 47 63 122;
+  --company-text: 234 240 255;
+  --company-muted: 138 160 216;
+}
+:root[data-theme="dark"][data-theme-variant="dark-forest"] {
+  --company-bg: 6 19 15;
+  --company-inset: 7 24 17;
+  --company-panel: 10 26 21;
+  --company-edge: 32 102 73;
+  --company-text: 231 255 244;
+  --company-muted: 123 194 163;
+}
+:root[data-theme="dark"][data-theme-variant="dark-slate"] {
+  --company-bg: 5 5 5;
+  --company-inset: 11 11 11;
+  --company-panel: 14 14 14;
+  --company-edge: 58 58 58;
+  --company-text: 247 247 247;
+  --company-muted: 180 180 180;
+}
+:root[data-theme="dark"][data-theme-variant="dark-royal"] {
+  --company-bg: 19 6 31;
+  --company-inset: 26 10 42;
+  --company-panel: 28 15 49;
+  --company-edge: 93 62 154;
+  --company-text: 255 233 255;
+  --company-muted: 200 168 242;
+}
+:root[data-theme="light"][data-theme-variant="light-sky"] {
+  --company-bg: 238 245 255;
+  --company-inset: 220 236 255;
+  --company-panel: 253 254 255;
+  --company-edge: 168 199 242;
+  --company-text: 11 33 68;
+  --company-muted: 63 100 152;
+}
+:root[data-theme="light"][data-theme-variant="light-sand"] {
+  --company-bg: 255 246 234;
+  --company-inset: 255 231 205;
+  --company-panel: 255 249 240;
+  --company-edge: 232 188 134;
+  --company-text: 53 35 19;
+  --company-muted: 141 101 64;
+}
+:root[data-theme="light"][data-theme-variant="light-mint"] {
+  --company-bg: 235 255 248;
+  --company-inset: 212 249 238;
+  --company-panel: 246 255 251;
+  --company-edge: 152 226 200;
+  --company-text: 7 50 41;
+  --company-muted: 50 115 105;
+}
+:root[data-theme="light"][data-theme-variant="light-rose"] {
+  --company-bg: 255 242 247;
+  --company-inset: 255 225 238;
+  --company-panel: 255 248 251;
+  --company-edge: 239 179 208;
+  --company-text: 74 22 48;
+  --company-muted: 159 79 119;
+}

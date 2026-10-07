@@ -7,6 +7,21 @@
     <!-- PWA: 홈 화면 설치 + 전체화면(앱처럼) -->
     <link rel="manifest" href="/ai-company/manifest.webmanifest" />
     <meta name="theme-color" content="#0f1115" />
+    <script>
+      // Apply before the first paint, including the loading/error screen.
+      (function () {
+        var theme = 'dark', variant = '';
+        try { theme = localStorage.getItem('nk_theme') === 'light' ? 'light' : 'dark'; variant = localStorage.getItem('nk_theme_variant') || ''; } catch (_) {}
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.themeVariant = variant.indexOf(theme + '-') === 0 ? variant : theme + '-classic';
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+      #nk-ai-bootstrap { background: #0f172a; color: #e9edf7; }
+      [data-theme="light"] #nk-ai-bootstrap { background: #f7f9fd; color: #0d172f; }
+      #nk-ai-bootstrap-actions button, #nk-ai-bootstrap-actions a { color: inherit; background: transparent; border: 1px solid currentColor; }
+    </style>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -19,14 +34,14 @@
   </head>
   <body>
     <!-- 버전 표시용 NK 설정 로드(window.NK.config.APP_VERSION) -->
-    <script src="/js/config.js?v=3.1953"></script>
+    <script src="/js/config.js?v=3.1954"></script>
     <div id="root">
-      <div id="nk-ai-bootstrap" style="min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#d1d5db;font-family:system-ui,sans-serif">
+      <div id="nk-ai-bootstrap" style="min-height:100vh;display:grid;place-items:center;font-family:system-ui,sans-serif">
         <div style="max-width:420px;padding:32px;text-align:center">
           <div id="nk-ai-bootstrap-title" style="font-size:15px;font-weight:700">AI 기업을 불러오는 중입니다…</div>
           <div id="nk-ai-bootstrap-actions" style="display:none;margin-top:16px;gap:8px;justify-content:center">
-            <button type="button" onclick="location.reload()" style="cursor:pointer;border:1px solid #374151;border-radius:8px;background:#1f2937;color:#fff;padding:9px 14px">다시 불러오기</button>
-            <a href="/app" style="border:1px solid #374151;border-radius:8px;color:#9ca3af;padding:9px 14px;text-decoration:none">로그인 화면</a>
+            <button type="button" onclick="location.reload()" style="cursor:pointer;border-radius:8px;padding:9px 14px">다시 불러오기</button>
+            <a href="/app" style="border-radius:8px;padding:9px 14px;text-decoration:none">로그인 화면</a>
           </div>
         </div>
       </div>

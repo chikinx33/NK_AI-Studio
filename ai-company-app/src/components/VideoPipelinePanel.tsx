@@ -34,10 +34,10 @@ function stepLabel(state: string, jobStatus: string): string {
 }
 
 const STEP_BADGE: Record<string, string> = {
-  pending: "bg-gray-800 text-gray-400",
-  done: "bg-emerald-900/60 text-emerald-300",
-  failed: "bg-red-900/60 text-red-300",
-  skipped: "bg-transparent text-gray-700",
+  pending: "bg-raised text-muted",
+  done: "bg-tint-emerald/60 text-tone-emerald",
+  failed: "bg-tint-red/60 text-tone-red",
+  skipped: "bg-transparent text-faint",
 };
 
 export default function VideoPipelinePanel({
@@ -239,9 +239,9 @@ export default function VideoPipelinePanel({
   const credits = Number(job?.costEstimate?.basis?.credits ?? plan?.summary?.credits ?? 0);
 
   return (
-    <div className="flex flex-col gap-2 text-[12px] text-gray-300">
+    <div className="flex flex-col gap-2 text-[12px] text-secondary">
       {!job && (
-        <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/10 p-2" data-testid="still-video-generation-group">
+        <div className="rounded-xl border border-emerald-800/50 bg-tint-emerald/10 p-2" data-testid="still-video-generation-group">
           <button type="button" disabled={busy} onClick={() => void start()} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
             {busy ? "준비 중…" : "스틸·영상 생성"}
           </button>
@@ -260,28 +260,28 @@ export default function VideoPipelinePanel({
         <>
           <div>
             <div className="mb-1 flex items-center justify-between text-[11px]">
-              <span className="font-bold text-white">{statusLabel}</span>
-              <span className="text-gray-400">{job.progress}%</span>
+              <span className="font-bold text-strong">{statusLabel}</span>
+              <span className="text-muted">{job.progress}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded bg-gray-800"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${job.progress}%` }} /></div>
+            <div className="h-1.5 w-full overflow-hidden rounded bg-raised"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${job.progress}%` }} /></div>
           </div>
 
           {plan && !(job.status === "cancelled" && spentSteps === 0) && (
-            <div className="rounded-lg border border-edge bg-[#0b1018] p-2">
+            <div className="rounded-lg border border-edge bg-inset p-2">
               <div className="mb-1.5 flex gap-3 text-[11px] font-bold">
-                <span className="text-emerald-300">성공 {successCount}</span>
-                <span className={failureCount ? "text-red-300" : "text-gray-600"}>실패 {failureCount}</span>
+                <span className="text-tone-emerald">성공 {successCount}</span>
+                <span className={failureCount ? "text-tone-red" : "text-faint"}>실패 {failureCount}</span>
               </div>
               <ul className="max-h-40 space-y-0.5 overflow-y-auto">
                 {visibleSteps.map((s) => (
                   <li key={String(s.sceneId)} className="border-t border-edge/60 py-1 first:border-t-0">
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => onFocusScene(s.sceneId)} className="w-20 shrink-0 truncate text-left text-gray-300 hover:text-emerald-300" title={s.title}>컷 {String(s.sceneId)}</button>
+                      <button type="button" onClick={() => onFocusScene(s.sceneId)} className="w-20 shrink-0 truncate text-left text-secondary hover:text-tone-emerald" title={s.title}>컷 {String(s.sceneId)}</button>
                       <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.still] || ""}`}>{s.still === "skipped" ? "" : `스틸 ${stepLabel(s.still, job.status)}`}</span>
                       <span className={`w-16 rounded px-1 text-center text-[10px] ${STEP_BADGE[s.video] || ""}`}>{s.video === "skipped" ? "" : `영상 ${stepLabel(s.video, job.status)}`}</span>
                     </div>
-                    {s.stillError && <div className="mt-1 break-words pl-[88px] text-[10px] text-red-300">스틸: {s.stillError}</div>}
-                    {s.videoError && <div className="mt-1 break-words pl-[88px] text-[10px] text-red-300">영상: {s.videoError}</div>}
+                    {s.stillError && <div className="mt-1 break-words pl-[88px] text-[10px] text-tone-red">스틸: {s.stillError}</div>}
+                    {s.videoError && <div className="mt-1 break-words pl-[88px] text-[10px] text-tone-red">영상: {s.videoError}</div>}
                   </li>
                 ))}
               </ul>
@@ -289,16 +289,16 @@ export default function VideoPipelinePanel({
           )}
 
           {pending && (
-            <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-2">
-              <div className="mb-2 text-amber-200">예상 {credits} 크레딧</div>
+            <div className="rounded-lg border border-amber-700/60 bg-tint-amber/30 p-2">
+              <div className="mb-2 text-tone-amber">예상 {credits} 크레딧</div>
               <div className="flex gap-2">
                 <button type="button" disabled={busy} onClick={() => void decide("approved")} className="min-w-[96px] rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">생성</button>
-                <button type="button" disabled={busy} onClick={() => void decide("rejected")} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-gray-300 hover:bg-edge disabled:opacity-50">취소</button>
+                <button type="button" disabled={busy} onClick={() => void decide("rejected")} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-secondary hover:bg-edge disabled:opacity-50">취소</button>
               </div>
             </div>
           )}
 
-          {job.error && <div className="rounded border border-red-800/60 bg-red-950/30 p-2 text-red-300">실패 사유: {String((job.error as any)?.message || job.error)}</div>}
+          {job.error && <div className="rounded border border-red-800/60 bg-tint-red/30 p-2 text-tone-red">실패 사유: {String((job.error as any)?.message || job.error)}</div>}
 
           <div className="flex flex-wrap gap-2">
             {job.status === "running" && plan?.continueRunning && (
@@ -308,7 +308,7 @@ export default function VideoPipelinePanel({
               <button type="button" disabled={busy} onClick={() => void act(retryCompanySkillJob)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">다시 생성</button>
             )}
             {!finished && (
-              <button type="button" disabled={busy} onClick={() => void act(cancelCompanySkillJob)} className="min-w-[96px] rounded-lg border border-red-900/60 px-3 py-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50">취소</button>
+              <button type="button" disabled={busy} onClick={() => void act(cancelCompanySkillJob)} className="min-w-[96px] rounded-lg border border-red-900/60 px-3 py-1.5 text-tone-red hover:bg-tint-red/40 disabled:opacity-50">취소</button>
             )}
             {finished && (
               <button type="button" onClick={reset} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge">새로 생성</button>
@@ -316,7 +316,7 @@ export default function VideoPipelinePanel({
           </div>
         </>
       )}
-      {error && <div className="text-red-300">{error}</div>}
+      {error && <div className="text-tone-red">{error}</div>}
     </div>
   );
 }

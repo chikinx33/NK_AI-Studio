@@ -569,13 +569,13 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
   const addable = characters.filter((tk) => !cut.actors.some((a) => a.token === tk));
   const changed = derived ? changedFields(derived, source) : [];
   const disabled = !!busy;
-  const inputCls = "w-full rounded border border-edge bg-ink px-1.5 py-1 text-[11px] text-gray-200";
+  const inputCls = "w-full rounded border border-edge bg-ink px-1.5 py-1 text-[11px] text-content";
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-ink text-[12px] text-gray-200">
+    <div className="flex h-screen w-screen flex-col bg-ink text-[12px] text-content">
       {/* 상단 바 */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-edge bg-panel px-3">
-        <strong className="mr-2 text-sm text-white">{T.title}</strong>
+        <strong className="mr-2 text-sm text-strong">{T.title}</strong>
         <button type="button" disabled={cutIndex <= 0} onClick={() => selectCut(cuts[cutIndex - 1]?.sceneId ?? "")} className="rounded-lg border border-edge px-2 py-1 hover:bg-edge disabled:opacity-40" aria-label={T.prevCut} title={T.prevCut}>‹</button>
         <select value={sceneId} onChange={(e) => selectCut(e.target.value)} className="max-w-[260px] rounded-lg border border-edge bg-ink px-2 py-1">
           {cuts.map((c) => <option key={c.sceneId} value={c.sceneId}>{fmt(T.cut, { n: c.sceneId })} · {c.sceneLocation || T.noLocation}</option>)}
@@ -587,14 +587,14 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {progressText && <span className="text-emerald-300">{progressText}</span>}
-          <span className={`min-w-[64px] text-right ${dirty ? "text-amber-300" : "text-gray-500"}`}>{dirty ? T.unsaved : ""}</span>
+          {progressText && <span className="text-tone-emerald">{progressText}</span>}
+          <span className={`min-w-[64px] text-right ${dirty ? "text-tone-amber" : "text-faint"}`}>{dirty ? T.unsaved : ""}</span>
           <button type="button" disabled={disabled} aria-busy={stagingScope === "scene"} onClick={() => void autoStage("scene")} className={`inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-500 disabled:cursor-not-allowed ${stagingScope === "scene" ? "" : "disabled:opacity-50"}`}>{stagingScope === "scene" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoScene}</button>
-          <button type="button" disabled={disabled} aria-busy={stagingScope === "all"} onClick={() => void autoStage("all")} className={`inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-lg border border-indigo-700 px-3 py-1 font-bold text-indigo-300 hover:bg-indigo-900/40 disabled:cursor-not-allowed ${stagingScope === "all" ? "" : "disabled:opacity-50"}`}>{stagingScope === "all" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoAll}</button>
+          <button type="button" disabled={disabled} aria-busy={stagingScope === "all"} onClick={() => void autoStage("all")} className={`inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-lg border border-indigo-700 px-3 py-1 font-bold text-tone-indigo hover:bg-tint-indigo/40 disabled:cursor-not-allowed ${stagingScope === "all" ? "" : "disabled:opacity-50"}`}>{stagingScope === "all" && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}{T.autoAll}</button>
           <div className="mx-1 h-5 w-px bg-edge" />
           <button type="button" disabled={disabled} onClick={() => void save()} className="min-w-[72px] rounded-lg border border-edge px-3 py-1 font-bold hover:bg-edge disabled:opacity-50">{busy === "saving" ? T.saving : T.save}</button>
           <button type="button" disabled={disabled} onClick={() => void apply("current")} className="min-w-[104px] rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{T.applyCut}</button>
-          <button type="button" disabled={disabled} onClick={() => void apply("all")} className="min-w-[104px] rounded-lg border border-emerald-700 px-3 py-1 font-bold text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-50">{T.applyAll}</button>
+          <button type="button" disabled={disabled} onClick={() => void apply("all")} className="min-w-[104px] rounded-lg border border-emerald-700 px-3 py-1 font-bold text-tone-emerald hover:bg-tint-emerald/40 disabled:opacity-50">{T.applyAll}</button>
           <div className="mx-1 h-5 w-px bg-edge" />
           <select value={exportRange} onChange={(e) => setExportRange(e.target.value as "current" | "all")} className="rounded-lg border border-edge bg-ink px-2 py-1">
             <option value="current">{T.exportCurrent}</option>
@@ -612,19 +612,19 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
         {/* 왼쪽: 세트·소품·인물 */}
         <aside className="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-edge bg-panel p-3">
           <section>
-            <h3 className="mb-1 text-[10px] font-bold uppercase text-gray-500">{T.set}</h3>
-            <p className="mb-2 truncate font-bold text-white" title={set.name}>{set.name || T.noLocation}</p>
+            <h3 className="mb-1 text-[10px] font-bold uppercase text-faint">{T.set}</h3>
+            <p className="mb-2 truncate font-bold text-strong" title={set.name}>{set.name || T.noLocation}</p>
             <div className="grid grid-cols-2 gap-2">
-              <label className="text-[10px] text-gray-500">{T.setWidth}<input type="number" min={1} max={200} step={0.5} value={set.width} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 1) editCut((_, s) => ({ set: { ...s, width: v } })); }} className={inputCls} /></label>
-              <label className="text-[10px] text-gray-500">{T.setDepth}<input type="number" min={1} max={200} step={0.5} value={set.depth} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 1) editCut((_, s) => ({ set: { ...s, depth: v } })); }} className={inputCls} /></label>
+              <label className="text-[10px] text-faint">{T.setWidth}<input type="number" min={1} max={200} step={0.5} value={set.width} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 1) editCut((_, s) => ({ set: { ...s, width: v } })); }} className={inputCls} /></label>
+              <label className="text-[10px] text-faint">{T.setDepth}<input type="number" min={1} max={200} step={0.5} value={set.depth} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 1) editCut((_, s) => ({ set: { ...s, depth: v } })); }} className={inputCls} /></label>
             </div>
-            {locations.get(cut.setKey)?.layout?.floor && <p className="mt-2 text-[10px] leading-snug text-gray-500">{T.walls.floor} · {locations.get(cut.setKey)!.layout!.floor}</p>}
+            {locations.get(cut.setKey)?.layout?.floor && <p className="mt-2 text-[10px] leading-snug text-faint">{T.walls.floor} · {locations.get(cut.setKey)!.layout!.floor}</p>}
           </section>
           <section>
-            <h3 className="mb-1 text-[10px] font-bold uppercase text-gray-500">{T.props}</h3>
+            <h3 className="mb-1 text-[10px] font-bold uppercase text-faint">{T.props}</h3>
             <ul className="mb-2 space-y-1">
               {set.props.map((p) => (
-                <li key={p.id}><button type="button" onClick={() => setSelected(`prop:${p.id}`)} className={`w-full truncate rounded px-2 py-1 text-left ${selected === `prop:${p.id}` ? "bg-emerald-900/40 text-emerald-200" : "hover:bg-white/5"}`}>{p.label || T.propKinds[p.kind]}</button></li>
+                <li key={p.id}><button type="button" onClick={() => setSelected(`prop:${p.id}`)} className={`w-full truncate rounded px-2 py-1 text-left ${selected === `prop:${p.id}` ? "bg-tint-emerald/40 text-tone-emerald" : "hover:bg-white/5"}`}>{p.label || T.propKinds[p.kind]}</button></li>
               ))}
             </ul>
             <select value="" onChange={(e) => { if (e.target.value) addProp(e.target.value as PropKind); }} className="w-full rounded-lg border border-edge bg-ink px-2 py-1">
@@ -633,12 +633,12 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
             </select>
           </section>
           <section>
-            <h3 className="mb-1 text-[10px] font-bold uppercase text-gray-500">{T.actors}</h3>
-            {!cut.actors.length && <p className="mb-2 text-gray-500">{T.noActors}</p>}
+            <h3 className="mb-1 text-[10px] font-bold uppercase text-faint">{T.actors}</h3>
+            {!cut.actors.length && <p className="mb-2 text-faint">{T.noActors}</p>}
             <ul className="mb-2 space-y-1">
               {cut.actors.map((a, i) => (
                 <li key={a.token}>
-                  <button type="button" onClick={() => setSelected(`actor:${a.token}`)} className={`flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left ${selected === `actor:${a.token}` ? "bg-emerald-900/40 text-emerald-200" : "hover:bg-white/5"}`}>
+                  <button type="button" onClick={() => setSelected(`actor:${a.token}`)} className={`flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left ${selected === `actor:${a.token}` ? "bg-tint-emerald/40 text-tone-emerald" : "hover:bg-white/5"}`}>
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colors.get(a.token) || ACTOR_COLORS[i % ACTOR_COLORS.length] }} />
                     <span className="truncate">{a.token.replace(/^@/, "")}</span>
                   </button>
@@ -657,7 +657,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
         {/* 가운데: 3D */}
         <main className="relative flex min-w-0 flex-1 flex-col">
           <div ref={hostRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black" />
-          <p className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-gray-500">{T.hint}</p>
+          <p className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-faint">{T.hint}</p>
         </main>
 
         {/* 오른쪽: 선택·카메라·반영값 */}
@@ -666,51 +666,51 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
             const now = sampleActor(selActor.keys, time);
             return (
               <section className="space-y-2">
-                <h3 className="text-[10px] font-bold uppercase text-gray-500">{selActor.token.replace(/^@/, "")}</h3>
+                <h3 className="text-[10px] font-bold uppercase text-faint">{selActor.token.replace(/^@/, "")}</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-[10px] text-gray-500">{T.height}<input type="number" min={0.2} max={10} step={0.05} value={selActor.height} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0.2) editCut((c) => ({ cut: { ...c, actors: c.actors.map((a) => (a.token === selActor.token ? { ...a, height: v } : a)) } })); }} className={inputCls} /></label>
-                  <label className="text-[10px] text-gray-500">{T.yaw}<input type="number" step={15} value={Math.round(now.yaw)} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) moveActor(selActor.token, { yaw: wrapDeg(v) }); }} className={inputCls} /></label>
+                  <label className="text-[10px] text-faint">{T.height}<input type="number" min={0.2} max={10} step={0.05} value={selActor.height} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0.2) editCut((c) => ({ cut: { ...c, actors: c.actors.map((a) => (a.token === selActor.token ? { ...a, height: v } : a)) } })); }} className={inputCls} /></label>
+                  <label className="text-[10px] text-faint">{T.yaw}<input type="number" step={15} value={Math.round(now.yaw)} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) moveActor(selActor.token, { yaw: wrapDeg(v) }); }} className={inputCls} /></label>
                 </div>
-                <button type="button" onClick={() => removeActor(selActor.token)} className="min-w-[72px] rounded-lg border border-red-900 px-3 py-1 text-red-300 hover:bg-red-950">{T.remove}</button>
+                <button type="button" onClick={() => removeActor(selActor.token)} className="min-w-[72px] rounded-lg border border-red-900 px-3 py-1 text-tone-red hover:bg-tint-red">{T.remove}</button>
               </section>
             );
           })()}
           {selProp && (
             <section className="space-y-2">
-              <h3 className="text-[10px] font-bold uppercase text-gray-500">{T.propKinds[selProp.kind]}</h3>
-              <label className="block text-[10px] text-gray-500">{T.label}<input value={selProp.label} onChange={(e) => editProp(selProp.id, { label: e.target.value })} className={inputCls} /></label>
-              <p className="text-[10px] text-gray-500">{T.size}</p>
+              <h3 className="text-[10px] font-bold uppercase text-faint">{T.propKinds[selProp.kind]}</h3>
+              <label className="block text-[10px] text-faint">{T.label}<input value={selProp.label} onChange={(e) => editProp(selProp.id, { label: e.target.value })} className={inputCls} /></label>
+              <p className="text-[10px] text-faint">{T.size}</p>
               <div className="grid grid-cols-3 gap-1">
                 {(["w", "h", "d"] as const).map((k) => (
                   <input key={k} type="number" min={0.05} max={50} step={0.1} value={selProp[k]} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0.05) editProp(selProp.id, { [k]: v }); }} className={inputCls} />
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-[10px] text-gray-500">{T.yaw}<input type="number" step={15} value={Math.round(selProp.yaw)} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) editProp(selProp.id, { yaw: wrapDeg(v) }); }} className={inputCls} /></label>
-                <label className="text-[10px] text-gray-500">{T.color}<input type="color" value={selProp.color} onChange={(e) => editProp(selProp.id, { color: e.target.value })} className="h-[26px] w-full rounded border border-edge bg-ink" /></label>
+                <label className="text-[10px] text-faint">{T.yaw}<input type="number" step={15} value={Math.round(selProp.yaw)} onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) editProp(selProp.id, { yaw: wrapDeg(v) }); }} className={inputCls} /></label>
+                <label className="text-[10px] text-faint">{T.color}<input type="color" value={selProp.color} onChange={(e) => editProp(selProp.id, { color: e.target.value })} className="h-[26px] w-full rounded border border-edge bg-ink" /></label>
               </div>
-              <button type="button" onClick={() => removeProp(selProp.id)} className="min-w-[72px] rounded-lg border border-red-900 px-3 py-1 text-red-300 hover:bg-red-950">{T.remove}</button>
+              <button type="button" onClick={() => removeProp(selProp.id)} className="min-w-[72px] rounded-lg border border-red-900 px-3 py-1 text-tone-red hover:bg-tint-red">{T.remove}</button>
             </section>
           )}
           <section className="space-y-2">
-            <h3 className="text-[10px] font-bold uppercase text-gray-500">{T.camera}</h3>
-            <label className="block text-[10px] text-gray-500">{T.lens}
+            <h3 className="text-[10px] font-bold uppercase text-faint">{T.camera}</h3>
+            <label className="block text-[10px] text-faint">{T.lens}
               <select value={LENSES_MM.includes(Math.round(camNow.focal)) ? Math.round(camNow.focal) : ""} onChange={(e) => editCamera({ focal: Number(e.target.value) })} className={inputCls}>
                 {!LENSES_MM.includes(Math.round(camNow.focal)) && <option value="">{Math.round(camNow.focal)}mm</option>}
                 {LENSES_MM.map((mm) => <option key={mm} value={mm}>{mm}mm</option>)}
               </select>
             </label>
-            <p className="text-[10px] text-gray-500">{fmt(T.cameraHeight, { h: camNow.pos[1].toFixed(2) })} · {Math.round(cameraPitchDeg(camNow.pos, camNow.target))}°</p>
+            <p className="text-[10px] text-faint">{fmt(T.cameraHeight, { h: camNow.pos[1].toFixed(2) })} · {Math.round(cameraPitchDeg(camNow.pos, camNow.target))}°</p>
           </section>
           {derived && (
             <section className="rounded-lg border border-edge bg-ink p-2">
-              <h3 className="mb-2 text-[10px] font-bold uppercase text-gray-500">{T.derived}</h3>
+              <h3 className="mb-2 text-[10px] font-bold uppercase text-faint">{T.derived}</h3>
               <DerivedRow label={T.fieldDirection} value={(T.dirs as Record<string, string>)[derived.cameraDirection]} current={(T.dirs as Record<string, string>)[source.cameraDirection] || source.cameraDirection} changed={changed.includes("cameraDirection")} T={T} />
               <DerivedRow label={T.fieldElevation} value={(T.elevs as Record<string, string>)[derived.cameraElevation]} current={(T.elevs as Record<string, string>)[source.cameraElevation] || source.cameraElevation} changed={changed.includes("cameraElevation")} T={T} />
               <DerivedRow label={T.fieldShot} value={(T.shots as Record<string, string>)[derived.shotType] || derived.shotType} current={(T.shots as Record<string, string>)[source.shotType.toUpperCase()] || source.shotType} changed={changed.includes("shotType")} T={T} />
               <DerivedRow label={T.fieldMove} value={(T.moves as Record<string, string>)[derived.cameraMove]} current={(T.moves as Record<string, string>)[source.cameraMove] || source.cameraMove} changed={changed.includes("cameraMove")} T={T} />
               <div className="mt-1">
-                <p className={`text-[10px] font-bold ${changed.includes("blocking") ? "text-amber-300" : "text-gray-500"}`}>{T.fieldBlocking}</p>
+                <p className={`text-[10px] font-bold ${changed.includes("blocking") ? "text-tone-amber" : "text-faint"}`}>{T.fieldBlocking}</p>
                 <ul className="mt-0.5 space-y-0.5 text-[11px]">
                   {derived.blocking.map((b) => (
                     <li key={b.token} className="truncate">{b.token.replace(/^@/, "")} · {T.xs[b.x]}/{T.depths[b.depth]} · {T.facings[b.facing]}</li>
@@ -719,7 +719,7 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
               </div>
             </section>
           )}
-          {notice && <p className="text-[11px] text-amber-300">{notice}</p>}
+          {notice && <p className="text-[11px] text-tone-amber">{notice}</p>}
         </aside>
       </div>
 
@@ -754,8 +754,8 @@ export default function PrevizStudio({ projectId, focusSceneId, embedded }: Prop
 function DerivedRow({ label, value, current, changed, T }: { label: string; value: string; current: string; changed: boolean; T: PrevizDict }) {
   return (
     <div className="mb-1 flex items-baseline justify-between gap-2">
-      <span className={`text-[10px] font-bold ${changed ? "text-amber-300" : "text-gray-500"}`}>{label}</span>
-      <span className="truncate text-right text-[11px] text-gray-100">{value}{changed && <span className="ml-1 text-[10px] text-gray-500">({fmt(T.current, { v: current })})</span>}</span>
+      <span className={`text-[10px] font-bold ${changed ? "text-tone-amber" : "text-faint"}`}>{label}</span>
+      <span className="truncate text-right text-[11px] text-strong">{value}{changed && <span className="ml-1 text-[10px] text-faint">({fmt(T.current, { v: current })})</span>}</span>
     </div>
   );
 }
@@ -770,5 +770,5 @@ function SpinnerIcon({ className }: { className?: string }) {
 }
 
 function Centered({ text }: { text: string }) {
-  return <div className="flex h-screen w-screen items-center justify-center bg-ink p-6 text-center text-sm text-gray-400">{text}</div>;
+  return <div className="flex h-screen w-screen items-center justify-center bg-ink p-6 text-center text-sm text-muted">{text}</div>;
 }

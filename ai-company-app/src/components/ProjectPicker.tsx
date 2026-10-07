@@ -101,32 +101,32 @@ export default function ProjectPicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex min-w-[220px] max-w-[360px] items-center gap-2 rounded border border-edge bg-[#0b1018] px-2 py-1 text-left text-[12px] text-gray-200 hover:border-gray-500"
+        className="flex min-w-[220px] max-w-[360px] items-center gap-2 rounded border border-edge bg-inset px-2 py-1 text-left text-[12px] text-content hover:border-edge"
         title={current ? `${current.seriesTitle} / ${current.title} (${current.id})` : "프로젝트 선택"}
       >
         {current?.thumbnail
           ? <img src={withMediaToken(current.thumbnail)} alt="" className="h-5 w-8 shrink-0 rounded object-cover" />
-          : <span className="grid h-5 w-8 shrink-0 place-items-center rounded bg-[#151b25] text-gray-600"><FolderIcon /></span>}
+          : <span className="grid h-5 w-8 shrink-0 place-items-center rounded bg-panel text-faint"><FolderIcon /></span>}
         <span className="min-w-0 flex-1 truncate">{loading && !projects.length ? "프로젝트 불러오는 중…" : label}</span>
-        {current && <span className="shrink-0 text-[10px] text-gray-500">컷 {current.sceneCount}</span>}
+        {current && <span className="shrink-0 text-[10px] text-faint">컷 {current.sceneCount}</span>}
         <ChevronIcon open={open} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-[420px] max-w-[90vw] overflow-hidden rounded-xl border border-edge bg-[#0c1119] shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-edge px-2 py-1.5 text-gray-500">
+        <div className="absolute left-0 top-full z-40 mt-1 w-[420px] max-w-[90vw] overflow-hidden rounded-xl border border-edge bg-inset shadow-2xl">
+          <div className="flex items-center gap-2 border-b border-edge px-2 py-1.5 text-faint">
             <SearchIcon />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="시리즈·에피소드 검색"
-              className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-200 outline-none placeholder:text-gray-600"
+              className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-faint"
             />
             <span className="text-[10px]">{projects.length}개</span>
           </div>
           <div className="max-h-[60vh] overflow-y-auto py-1">
-            {filtered.length === 0 && <div className="px-3 py-4 text-center text-[11px] text-gray-500">{loading ? "불러오는 중…" : "일치하는 프로젝트가 없어요."}</div>}
+            {filtered.length === 0 && <div className="px-3 py-4 text-center text-[11px] text-faint">{loading ? "불러오는 중…" : "일치하는 프로젝트가 없어요."}</div>}
             {filtered.map((g) => {
               const isOpen = !!q || expanded.has(g.id);
               const hasCurrent = g.items.some((p) => p.id === value);
@@ -135,12 +135,12 @@ export default function ProjectPicker({
                   <button
                     type="button"
                     onClick={() => toggle(g.id)}
-                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-edge ${hasCurrent ? "text-emerald-300" : "text-gray-200"}`}
+                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-edge ${hasCurrent ? "text-tone-emerald" : "text-content"}`}
                   >
                     <ChevronIcon open={isOpen} />
                     <FolderIcon />
                     <span className="min-w-0 flex-1 truncate font-bold">{g.title}</span>
-                    <span className="text-[10px] text-gray-500">{g.items.length}편</span>
+                    <span className="text-[10px] text-faint">{g.items.length}편</span>
                   </button>
                   {isOpen && g.items.map((p) => {
                     const selected = p.id === value;
@@ -149,22 +149,22 @@ export default function ProjectPicker({
                         key={p.id}
                         type="button"
                         onClick={() => pick(p.id)}
-                        className={`flex w-full items-center gap-2 py-1.5 pl-8 pr-2 text-left hover:bg-edge ${selected ? "bg-emerald-900/30" : ""}`}
+                        className={`flex w-full items-center gap-2 py-1.5 pl-8 pr-2 text-left hover:bg-edge ${selected ? "bg-tint-emerald/30" : ""}`}
                         title={p.id}
                       >
                         {p.thumbnail
                           ? <img src={withMediaToken(p.thumbnail)} alt="" className="h-8 w-14 shrink-0 rounded object-cover" loading="lazy" />
-                          : <span className="grid h-8 w-14 shrink-0 place-items-center rounded bg-[#151b25] text-[9px] text-gray-600">{p.aspectRatio || "—"}</span>}
+                          : <span className="grid h-8 w-14 shrink-0 place-items-center rounded bg-panel text-[9px] text-faint">{p.aspectRatio || "—"}</span>}
                         <span className="min-w-0 flex-1">
-                          <span className={`block truncate text-[12px] ${selected ? "text-emerald-200" : "text-gray-200"}`}>{p.title}{p.shared ? <span className="ml-1 text-[9px] text-cyan-400">공유</span> : null}</span>
-                          <span className="block truncate text-[10px] text-gray-500">
+                          <span className={`block truncate text-[12px] ${selected ? "text-tone-emerald" : "text-content"}`}>{p.title}{p.shared ? <span className="ml-1 text-[9px] text-tone-cyan">공유</span> : null}</span>
+                          <span className="block truncate text-[10px] text-faint">
                             {[p.projectType, p.durationSec ? `${p.durationSec}s` : "", p.aspectRatio].filter(Boolean).join(" · ") || p.id}
                           </span>
                         </span>
-                        <span className="shrink-0 text-right text-[10px] leading-tight text-gray-500">
+                        <span className="shrink-0 text-right text-[10px] leading-tight text-faint">
                           <span className="block">컷 {p.sceneCount}</span>
-                          <span className={`block ${p.stills === p.sceneCount && p.sceneCount > 0 ? "text-emerald-400" : ""}`}>스틸 {p.stills}</span>
-                          <span className={`block ${p.clips === p.sceneCount && p.sceneCount > 0 ? "text-emerald-400" : ""}`}>영상 {p.clips}</span>
+                          <span className={`block ${p.stills === p.sceneCount && p.sceneCount > 0 ? "text-tone-emerald" : ""}`}>스틸 {p.stills}</span>
+                          <span className={`block ${p.clips === p.sceneCount && p.sceneCount > 0 ? "text-tone-emerald" : ""}`}>영상 {p.clips}</span>
                         </span>
                       </button>
                     );

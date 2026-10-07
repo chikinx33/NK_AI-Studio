@@ -48,14 +48,14 @@ export default function SkillWorkspace({
 
   const selectedSkill = category.skills.find((skill) => skill.id === selectedSkillId);
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-ink">
       {/* 집중 모드: 상단 메뉴를 전부 숨기고 복귀 버튼 하나만 띄운다(사용자 요청). */}
       {focusMode && onToggleFocus && (
         <button
           type="button"
           onClick={onToggleFocus}
           aria-pressed
-          className="absolute right-3 top-3 z-50 grid h-9 w-9 place-items-center rounded-full border border-emerald-500 bg-emerald-900/60 text-emerald-200 shadow-lg backdrop-blur hover:bg-emerald-900/80"
+          className="absolute right-3 top-3 z-50 grid h-9 w-9 place-items-center rounded-full border border-emerald-500 bg-tint-emerald/60 text-tone-emerald shadow-lg backdrop-blur hover:bg-tint-emerald/80"
           title="패널 다시 열기"
           aria-label="패널 다시 열기"
         >
@@ -63,11 +63,11 @@ export default function SkillWorkspace({
         </button>
       )}
       {!focusMode && (
-      <section className="shrink-0 border-b border-edge bg-[#0c1119] px-4 py-2.5">
+      <section className="shrink-0 border-b border-edge bg-inset px-4 py-2.5">
         <div className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
-            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-400">Company Skills</span>
-            <h1 className="mt-0.5 text-lg font-bold text-white">{category.label.replace("·", ".")}</h1>
+            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Company Skills</span>
+            <h1 className="mt-0.5 text-lg font-bold text-strong">{category.label.replace("·", ".")}</h1>
           </div>
           {onToggleFocus && (
             <button
@@ -75,8 +75,8 @@ export default function SkillWorkspace({
               onClick={onToggleFocus}
               aria-pressed={focusMode}
               className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border transition ${focusMode
-                ? "border-emerald-500 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-900/60"
-                : "border-edge bg-[#0b1018] text-gray-400 hover:border-gray-600 hover:bg-edge hover:text-white"
+                ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald hover:bg-tint-emerald/60"
+                : "border-edge bg-inset text-muted hover:border-edge hover:bg-edge hover:text-strong"
               }`}
               title={focusMode ? "패널 다시 열기" : "집중 모드 (좌우 패널 닫기)"}
               aria-label={focusMode ? "패널 다시 열기" : "집중 모드 (좌우 패널 닫기)"}
@@ -84,7 +84,7 @@ export default function SkillWorkspace({
               {focusMode ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           )}
-          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-edge bg-[#0b1018] text-gray-400 transition hover:border-gray-600 hover:bg-edge hover:text-white" title="스킬 닫기" aria-label="스킬 닫기"><CloseIcon /></button>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-edge bg-inset text-muted transition hover:border-edge hover:bg-edge hover:text-strong" title="스킬 닫기" aria-label="스킬 닫기"><CloseIcon /></button>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5" role="radiogroup" aria-label={`${category.label} 세부 스킬`}>
@@ -100,17 +100,17 @@ export default function SkillWorkspace({
                 disabled={!available}
                 onClick={() => available && setSelectedSkillId(skill.id)}
                 className={`flex items-center gap-2 py-1 text-left transition ${selected
-                  ? "text-emerald-200"
+                  ? "text-tone-emerald"
                   : available
-                    ? "text-gray-300 hover:text-emerald-300"
-                    : "cursor-not-allowed text-gray-700"
+                    ? "text-secondary hover:text-tone-emerald"
+                    : "cursor-not-allowed text-faint"
                 }`}
               >
-                <span className={`grid h-3.5 w-3.5 place-items-center rounded-full border ${selected ? "border-emerald-400" : "border-gray-700"}`}>
+                <span className={`grid h-3.5 w-3.5 place-items-center rounded-full border ${selected ? "border-emerald-400" : "border-edge"}`}>
                   {selected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
                 </span>
                 <strong className="text-[11px]">{skill.label}</strong>
-                {!available && <span className="text-[8px] font-bold text-gray-700">준비 중</span>}
+                {!available && <span className="text-[8px] font-bold text-faint">준비 중</span>}
               </button>
             );
           })}
@@ -124,7 +124,7 @@ export default function SkillWorkspace({
         <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} hideTopBar={focusMode && !embed} expanded={canvasExpanded} onToggleExpand={onToggleCanvasExpand} />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
-          <div><p className="text-sm font-bold text-gray-300">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-gray-600">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>
+          <div><p className="text-sm font-bold text-secondary">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-faint">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>
         </div>
       )}
     </div>

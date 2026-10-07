@@ -76,7 +76,7 @@ function highlightText(text: string, needle: string): ReactNode {
     }
     if (hit > cursor) parts.push(text.slice(cursor, hit));
     parts.push(
-      <mark key={key++} className="rounded bg-amber-400/25 px-0.5 text-amber-200">
+      <mark key={key++} className="rounded bg-amber-400/25 px-0.5 text-tone-amber">
         {text.slice(hit, hit + needle.length)}
       </mark>
     );
@@ -113,10 +113,10 @@ function BrainIcon({ className }: { className?: string }) {
 
 // 유형 배지: 규칙(원칙)=보라 · 사실=초록 · 결정=주황 (그래프 도트 색과 일치)
 const TYPE_BADGE: Record<string, { t: string; c: string }> = {
-  원칙: { t: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
-  사실: { t: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
-  결정: { t: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
-  스킬: { t: "스킬", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
+  원칙: { t: "규칙", c: "bg-tint-violet/50 text-tone-violet border-violet-700/50" },
+  사실: { t: "사실", c: "bg-tint-emerald/50 text-tone-emerald border-emerald-700/50" },
+  결정: { t: "결정", c: "bg-tint-amber/50 text-tone-amber border-amber-700/50" },
+  스킬: { t: "스킬", c: "bg-tint-emerald/50 text-tone-emerald border-emerald-700/50" },
 };
 /**
  * 학습 날짜. 배지 아래에 작게 붙는다.
@@ -437,18 +437,18 @@ export default function Knowledge({
         }`}
       >
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1 font-medium text-gray-200">
-            {s.pinned && <span className="text-amber-400">📌</span>}
+          <span className="flex items-center gap-1 font-medium text-content">
+            {s.pinned && <span className="text-tone-amber">📌</span>}
             <span className="truncate">{highlightText(s.name, q)}</span>
-            {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
+            {s.category && <span className="shrink-0 text-[11px] text-faint">· {s.category}</span>}
           </span>
-          <span className="mt-0.5 block text-[12px] text-gray-500">{highlightText(s.description, q)}</span>
+          <span className="mt-0.5 block text-[12px] text-faint">{highlightText(s.description, q)}</span>
         </span>
         {/* 배지와 학습 날짜를 세로로 묶는다 — 지식 항목과 같은 자리, 같은 모양. */}
         <span className="flex shrink-0 flex-col items-end gap-0.5">
-          <span className="rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+          <span className="rounded border border-emerald-700/50 bg-tint-emerald/40 px-1 text-[10px] text-tone-emerald">스킬</span>
           {learnedDate(s.createdAt) && (
-            <span className="text-[10px] text-gray-600" title={learnedFull(s.createdAt)}>
+            <span className="text-[10px] text-faint" title={learnedFull(s.createdAt)}>
               {learnedDate(s.createdAt)}
             </span>
           )}
@@ -458,13 +458,13 @@ export default function Knowledge({
             e.stopPropagation();
             copyToClipboard(`${s.name}: ${s.description}`, skillKey);
           }}
-          className={`grid h-5 w-5 shrink-0 place-items-center rounded text-gray-600 transition hover:bg-edge hover:text-gray-200 group-hover:opacity-100 ${
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded text-faint transition hover:bg-edge hover:text-content group-hover:opacity-100 ${
             copied === skillKey ? "opacity-100" : "opacity-0"
           }`}
           title={copied === skillKey ? "복사됨" : "이 스킬 복사"}
           aria-label="이 스킬 복사"
         >
-          <CopyIcon className={`h-3.5 w-3.5 ${copied === skillKey ? "text-emerald-400" : ""}`} />
+          <CopyIcon className={`h-3.5 w-3.5 ${copied === skillKey ? "text-tone-emerald" : ""}`} />
         </button>
       </div>
     );
@@ -473,7 +473,7 @@ export default function Knowledge({
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
       {/* 아이콘 전용 행 — 콘텐츠와 분리 (채팅·VN 뷰와 동일 방식) */}
-      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-gray-400">
+      <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-muted">
         <BrainIcon className="h-10 w-10" />
       </div>
 
@@ -483,20 +483,20 @@ export default function Knowledge({
           {/* 헤더 — 제목·설명 묶음(좌)과 검색(우)을 같은 행에 둔다. 행을 새로 만들지 않는다. */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-bold text-gray-100">회사 지식 ({items.length + skills.length})</h2>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <h2 className="text-lg font-bold text-strong">회사 지식 ({items.length + skills.length})</h2>
+              <p className="mt-0.5 text-xs text-faint">
                 대화로 학습한 것 {learned.length + skills.length}개 · 기반 {items.length - learned.length}개. 쓸수록 늘어납니다.
                 {q && (
-                  <span className="text-emerald-400">
+                  <span className="text-tone-emerald">
                     {" "}· ‘{query.trim()}’ 검색 결과 {matchCount}개
                   </span>
                 )}
               </p>
-              {tidyMsg && <p className="mt-1 text-xs text-amber-400">{tidyMsg}</p>}
+              {tidyMsg && <p className="mt-1 text-xs text-tone-amber">{tidyMsg}</p>}
             </div>
             {/* 검색 — 지금 고른 분류 안에서 문장·유형·출처를 훑는다. Esc 로 지운다. */}
             <div className="relative w-44 shrink-0 sm:w-56">
-              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
               <input
                 spellCheck={false}
                 value={query}
@@ -509,14 +509,14 @@ export default function Knowledge({
                 }}
                 placeholder="지식 검색…"
                 aria-label="지식 검색"
-                className="w-full rounded-lg border border-edge bg-panel py-1.5 pl-8 pr-7 text-xs text-gray-200 outline-none transition placeholder:text-gray-600 focus:border-emerald-600"
+                className="w-full rounded-lg border border-edge bg-panel py-1.5 pl-8 pr-7 text-xs text-content outline-none transition placeholder:text-faint focus:border-emerald-600"
               />
               {query && (
                 <button
                   onClick={() => setQuery("")}
                   title="검색어 지우기"
                   aria-label="검색어 지우기"
-                  className="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-gray-500 transition hover:bg-edge hover:text-gray-200"
+                  className="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-faint transition hover:bg-edge hover:text-content"
                 >
                   ✕
                 </button>
@@ -538,7 +538,7 @@ export default function Knowledge({
               const badge = t ? TYPE_BADGE[t] : null;
               // 오른쪽 사이드바 '회사 지식' 칩과 동일하게 항상 색상 표시(규칙=보라·사실=초록·결정=주황),
               // 전체는 회색. 선택된 칩은 링으로 강조, 비선택은 살짝 흐리게.
-              const base = badge?.c ?? "bg-gray-700/60 text-gray-200 border-gray-600";
+              const base = badge?.c ?? "bg-raised/60 text-content border-edge";
               return (
                 <button
                   key={t ?? "all"}
@@ -557,7 +557,7 @@ export default function Knowledge({
                 onClick={() => setTidyOpen(true)}
                 disabled={tidyOpen}
                 title={tidyText.buttonTitle}
-                className="ml-auto min-w-[88px] shrink-0 rounded-full border border-amber-700/50 bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
+                className="ml-auto min-w-[88px] shrink-0 rounded-full border border-amber-700/50 bg-tint-amber/30 px-2.5 py-1 text-xs font-medium text-tone-amber transition hover:bg-tint-amber/50 disabled:opacity-50"
               >
                 {tidyOpen ? tidyText.buttonBusy : tidyText.button}
               </button>
@@ -567,9 +567,9 @@ export default function Knowledge({
               onClick={copyVisibleList}
               title="지금 보이는 지식을 전부 복사합니다. 채팅에 붙여넣어 에이전트에게 수정을 지시할 수 있어요."
               aria-label="목록 복사"
-              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-edge transition hover:bg-edge hover:text-gray-200 ${
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border border-edge transition hover:bg-edge hover:text-content ${
                 filter === "스킬" ? "ml-auto " : ""
-              }${copied === "__list__" ? "text-emerald-400" : "text-gray-400"}`}
+              }${copied === "__list__" ? "text-tone-emerald" : "text-muted"}`}
             >
               <CopyIcon className="h-3.5 w-3.5" />
             </button>
@@ -578,7 +578,7 @@ export default function Knowledge({
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
               title={sortDir === "asc" ? "오래된 순 (오름차순) · 클릭하면 최신 순" : "최신 순 (내림차순) · 클릭하면 오래된 순"}
               aria-label={sortDir === "asc" ? "오름차순" : "내림차순"}
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-edge text-gray-400 transition hover:bg-edge hover:text-gray-200"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-edge text-muted transition hover:bg-edge hover:text-content"
             >
               {sortDir === "asc" ? <SortAscIcon className="h-4 w-4" /> : <SortDescIcon className="h-4 w-4" />}
             </button>
@@ -602,7 +602,7 @@ export default function Knowledge({
             }
             className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition ${
               filter === null || filter === "스킬"
-                ? "cursor-not-allowed border-edge bg-ink/40 text-gray-600 placeholder:text-gray-600"
+                ? "cursor-not-allowed border-edge bg-ink/40 text-faint placeholder:text-faint"
                 : "border-edge bg-panel focus:border-emerald-600"
             }`}
           />
@@ -665,10 +665,10 @@ export default function Knowledge({
                     <span
                       className={`rounded px-1 text-[10px] ${
                         it.source === "기반"
-                          ? "bg-gray-700 text-gray-400"
+                          ? "bg-raised text-muted"
                           : it.source === "수동"
-                            ? "bg-sky-900/60 text-sky-300"
-                            : "bg-emerald-900/60 text-emerald-300"
+                            ? "bg-tint-sky/60 text-tone-sky"
+                            : "bg-tint-emerald/60 text-tone-emerald"
                       }`}
                       title={it.source}
                     >
@@ -676,7 +676,7 @@ export default function Knowledge({
                     </span>
                   </span>
                   {learnedDate(it.createdAt) && (
-                    <span className="text-[10px] leading-none text-gray-500" title={learnedFull(it.createdAt)}>
+                    <span className="text-[10px] leading-none text-faint" title={learnedFull(it.createdAt)}>
                       {learnedDate(it.createdAt)}
                     </span>
                   )}
@@ -684,17 +684,17 @@ export default function Knowledge({
                 {/* 복사 — 에이전트에게 수정 지시할 때 이 문장을 그대로 붙여넣기 위함 */}
                 <button
                   onClick={() => copyToClipboard(it.text, it.text)}
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded text-gray-600 transition hover:bg-edge hover:text-gray-200 group-hover:opacity-100 ${
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded text-faint transition hover:bg-edge hover:text-content group-hover:opacity-100 ${
                     copied === it.text ? "opacity-100" : "opacity-0"
                   }`}
                   title={copied === it.text ? "복사됨" : "이 지식 복사"}
                   aria-label="이 지식 복사"
                 >
-                  <CopyIcon className={`h-3.5 w-3.5 ${copied === it.text ? "text-emerald-400" : ""}`} />
+                  <CopyIcon className={`h-3.5 w-3.5 ${copied === it.text ? "text-tone-emerald" : ""}`} />
                 </button>
                 <button
                   onClick={() => setPendingDelete(it)}
-                  className="shrink-0 text-gray-600 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                  className="shrink-0 text-faint opacity-0 transition hover:text-tone-red group-hover:opacity-100"
                   title="삭제"
                 >
                   ✕
@@ -705,7 +705,7 @@ export default function Knowledge({
             {showSkills && visibleSkills.map(renderSkillItem)}
             {/* 빈 안내 */}
             {matchCount === 0 && (
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-faint">
                 {q
                   ? `‘${query.trim()}’ 에 맞는 지식이 없어요. 다른 단어로 찾아보세요.`
                   : filter === "스킬"
@@ -732,15 +732,15 @@ export default function Knowledge({
             className="w-[360px] max-w-[92vw] rounded-2xl border border-edge bg-panel p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-2 text-sm font-semibold text-gray-100">이 지식을 삭제할까요?</h3>
-            <div className="mb-4 rounded-lg border border-edge bg-ink/60 px-3 py-2 text-xs text-gray-300">
+            <h3 className="mb-2 text-sm font-semibold text-strong">이 지식을 삭제할까요?</h3>
+            <div className="mb-4 rounded-lg border border-edge bg-ink/60 px-3 py-2 text-xs text-secondary">
               {pendingDelete.text}
             </div>
-            <p className="mb-4 text-[11px] text-gray-500">삭제하면 되돌릴 수 없습니다.</p>
+            <p className="mb-4 text-[11px] text-faint">삭제하면 되돌릴 수 없습니다.</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setPendingDelete(null)}
-                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge"
+                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge"
               >
                 취소
               </button>

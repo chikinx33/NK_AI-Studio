@@ -11,9 +11,9 @@ import { APPROVAL_DOCK_HEIGHT_VAR, observeCanvasDockHeight } from "../lib/canvas
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
-  { key: "원칙", label: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
-  { key: "사실", label: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
-  { key: "결정", label: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
+  { key: "원칙", label: "규칙", c: "bg-tint-violet/50 text-tone-violet border-violet-700/50" },
+  { key: "사실", label: "사실", c: "bg-tint-emerald/50 text-tone-emerald border-emerald-700/50" },
+  { key: "결정", label: "결정", c: "bg-tint-amber/50 text-tone-amber border-amber-700/50" },
 ] as const;
 
 type KnowKey = "원칙" | "사실" | "결정" | "스킬";
@@ -128,7 +128,7 @@ function ApprovalDock({
     return (
       <CollapsibleSection
         storageKey="nk_collapse_approvals"
-        header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({count})</span>}
+        header={<span className="flex items-center gap-1.5 text-sm font-semibold text-tone-amber"><ListTodoIcon className="h-4 w-4" /> 승인 ({count})</span>}
         right={right}
       >
         {children}
@@ -142,7 +142,7 @@ function ApprovalDock({
         <CanvasFloatingDock
           open={open}
           onToggle={onToggle}
-          icon={<ListTodoIcon className="h-4 w-4 text-amber-300" />}
+          icon={<ListTodoIcon className="h-4 w-4 text-tone-amber" />}
           title={`승인 (${count})`}
           tone="amber"
         >
@@ -372,7 +372,7 @@ export default function Approvals({
       {/* 회사 지식 요약 — 규칙·사실·결정·스킬 (한 우산 아래). 승인 대기 카드와 분리된 별도 카드 */}
       {(knowledge.length > 0 || skills.length > 0) && (
         <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-muted">
             {/* 지식 페이지·knowledge_audit total 과 같은 기준: 지식(규칙·사실·결정) + 스킬 */}
             <BrainIcon className="h-3.5 w-3.5" /> 회사 지식 ({knowledge.length + skills.length})
           </div>
@@ -395,7 +395,7 @@ export default function Approvals({
             <button
               onClick={() => pickCategory("스킬")}
               title={freshTypes.has("스킬") ? "방금 새 스킬이 추가됐어요 · 눌러서 보기" : "지식 페이지에서 스킬 목록 보기"}
-              className={`rounded-full border border-emerald-700/50 bg-emerald-900/50 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition hover:brightness-125 ${
+              className={`rounded-full border border-emerald-700/50 bg-tint-emerald/50 px-2 py-0.5 text-[11px] font-medium text-tone-emerald transition hover:brightness-125 ${
                 freshTypes.has("스킬") ? FRESH_RING : ""
               }`}
             >
@@ -412,7 +412,7 @@ export default function Approvals({
         return (
           <CollapsibleSection
             storageKey="nk_collapse_projects"
-            header={<span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><KanbanIcon className="h-4 w-4" /> 프로젝트 ({visible.length})</span>}
+            header={<span className="flex items-center gap-1.5 text-sm font-semibold text-tone-emerald"><KanbanIcon className="h-4 w-4" /> 프로젝트 ({visible.length})</span>}
           >
             <div className="space-y-1">
               {visible.map((p) => {
@@ -420,8 +420,8 @@ export default function Approvals({
                 const pct = p.stages.length ? Math.round((done / p.stages.length) * 100) : 0;
                 return (
                   <div key={p.id} className="flex items-center gap-1 min-w-0">
-                    <span className="truncate flex-1 text-[11px] text-gray-300 min-w-0" title={p.name}>{p.name}</span>
-                    <span className="shrink-0 text-[10px] text-gray-500 ml-1">{pct}%</span>
+                    <span className="truncate flex-1 text-[11px] text-secondary min-w-0" title={p.name}>{p.name}</span>
+                    <span className="shrink-0 text-[10px] text-faint ml-1">{pct}%</span>
                   </div>
                 );
               })}
@@ -448,19 +448,19 @@ export default function Approvals({
             }
           }}
           title="대기 중인 승인 전부 취소"
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-normal text-gray-500 transition hover:bg-edge hover:text-gray-200"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-normal text-faint transition hover:bg-edge hover:text-content"
         >
           전부 정리
         </button>
       ) : undefined}
     >
       {pending.length === 0 && extraPendingCount === 0 && (
-        <div className="text-xs text-gray-500 mb-2">대기 중인 승인이 없어요.</div>
+        <div className="text-xs text-faint mb-2">대기 중인 승인이 없어요.</div>
       )}
       {extraPending}
       <div className="space-y-2">
         {pending.map((a) => (
-          <div key={a.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+          <div key={a.id} className="text-xs border border-amber-600/40 bg-tint-amber/20 rounded-lg p-2">
             <div className="flex items-start gap-2">
               <img
                 src={`/avatars/${a.agentId}.png`}
@@ -471,28 +471,28 @@ export default function Approvals({
               />
               <div className="min-w-0 flex-1">
                 <div className="font-medium flex items-center gap-1">
-                  <span className="text-amber-200">{a.agentName ?? a.agentId}</span>
+                  <span className="text-tone-amber">{a.agentName ?? a.agentId}</span>
                   {a.kind && (
                     <span
                       className={`text-[10px] px-1 rounded ${
                         a.kind === "external"
-                          ? "bg-red-900/60 text-red-300"
+                          ? "bg-tint-red/60 text-tone-red"
                           : a.kind === "local"
-                            ? "bg-amber-900/60 text-amber-300"
-                            : "bg-sky-900/60 text-sky-300"
+                            ? "bg-tint-amber/60 text-tone-amber"
+                            : "bg-tint-sky/60 text-tone-sky"
                       }`}
                     >
                       {a.kind}
                     </span>
                   )}
                 </div>
-                <div className="text-gray-300">{a.title}</div>
-                <div className="text-gray-500 mt-0.5">
+                <div className="text-secondary">{a.title}</div>
+                <div className="text-faint mt-0.5">
                   <code>{a.tool ?? a.command}</code>
                 </div>
               </div>
             </div>
-            {a.reason && <div className="text-gray-400 mt-0.5">"{a.reason}"</div>}
+            {a.reason && <div className="text-muted mt-0.5">"{a.reason}"</div>}
             <div className="mt-2 flex gap-2">
               <button
                 disabled={!!acting[a.id]}
@@ -508,7 +508,7 @@ export default function Approvals({
               <button
                 disabled={!!acting[a.id]}
                 onClick={() => act(a.id, "reject")}
-                className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded bg-raised px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
               >
                 {acting[a.id] === "reject" ? (
                   <><Spinner className="h-3.5 w-3.5" /> 처리 중…</>
@@ -523,25 +523,25 @@ export default function Approvals({
 
       {history.length > 0 && (
         <div className="mt-3 pt-2 border-t border-edge">
-          <div className="text-[11px] text-gray-500 mb-1">최근 처리</div>
+          <div className="text-[11px] text-faint mb-1">최근 처리</div>
           <div className="space-y-1">
             {history.map((h) => (
-              <div key={h.id} className="text-[11px] text-gray-400 flex items-center gap-1">
+              <div key={h.id} className="text-[11px] text-muted flex items-center gap-1">
                 <span
                   className={
                     h.status === "done"
-                      ? "text-emerald-400"
+                      ? "text-tone-emerald"
                       : h.status === "error"
-                        ? "text-red-400"
+                        ? "text-tone-red"
                         : h.status === "rejected"
-                          ? "text-gray-500"
-                          : "text-amber-400"
+                          ? "text-faint"
+                          : "text-tone-amber"
                   }
                 >
                   {h.status === "done" ? "✅" : h.status === "error" ? "⚠️" : h.status === "rejected" ? "✖" : "⏰"}
                 </span>
                 <code>{h.tool ?? h.command}</code>
-                <span className="text-gray-600">· {h.status}</span>
+                <span className="text-faint">· {h.status}</span>
               </div>
             ))}
           </div>

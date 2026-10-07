@@ -6,7 +6,7 @@ import { actionString, useUiAction } from "../lib/uiActions";
 import { appDialog } from "../lib/appDialog";
 
 const inputCls =
-  "mt-0.5 w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600";
+  "mt-0.5 w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-content outline-none focus:border-emerald-600";
 
 // 도구 식별자 → 사람이 읽는 라벨 (설정 카드 제목)
 const TOOL_LABEL: Record<string, string> = {
@@ -140,8 +140,8 @@ export function ToolCard({
   return (
     <div className="rounded-xl border border-edge bg-ink p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-200">{toolLabel(it.tool)}</span>
-        <span className={`inline-flex items-center gap-1 text-[11px] ${it.configured ? "text-emerald-400" : "text-amber-400"}`}>
+        <span className="text-sm font-semibold text-content">{toolLabel(it.tool)}</span>
+        <span className={`inline-flex items-center gap-1 text-[11px] ${it.configured ? "text-tone-emerald" : "text-tone-amber"}`}>
           <CircleIcon className="h-2.5 w-2.5" filled={it.configured} />
           {it.configured ? "연결됨" : "설정 필요"}
         </span>
@@ -152,10 +152,10 @@ export function ToolCard({
         <div className="space-y-2">
           {it.fields.map((fl) => (
             <div key={fl.key}>
-              <label className="inline-flex items-center text-xs text-gray-300">
+              <label className="inline-flex items-center text-xs text-secondary">
                 <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
-                {!fl.required && <span className="ml-1 text-[10px] text-gray-500">(선택)</span>}
-                {fl.hasValue && <span className="ml-1.5 text-[10px] text-emerald-400">저장됨 ✓</span>}
+                {!fl.required && <span className="ml-1 text-[10px] text-faint">(선택)</span>}
+                {fl.hasValue && <span className="ml-1.5 text-[10px] text-tone-emerald">저장됨 ✓</span>}
               </label>
               <input
                 type={fl.secret ? "password" : "text"}
@@ -166,7 +166,7 @@ export function ToolCard({
                 spellCheck={false}
                 className={inputCls}
               />
-              {fl.hint && <p className="mt-0.5 text-[11px] leading-snug text-gray-600">{fl.hint}</p>}
+              {fl.hint && <p className="mt-0.5 text-[11px] leading-snug text-faint">{fl.hint}</p>}
             </div>
           ))}
         </div>
@@ -176,22 +176,22 @@ export function ToolCard({
           {it.fields.map((fl) => (
             <div key={fl.key} className="flex items-start gap-1.5 text-xs">
               <CircleIcon
-                className={`mt-1 h-2.5 w-2.5 shrink-0 ${fl.hasValue ? "text-emerald-400" : "text-amber-400"}`}
+                className={`mt-1 h-2.5 w-2.5 shrink-0 ${fl.hasValue ? "text-tone-emerald" : "text-tone-amber"}`}
                 filled={fl.hasValue}
               />
               <span className="min-w-0 flex-1">
-                <span className="inline-flex items-center text-gray-300">
+                <span className="inline-flex items-center text-secondary">
                   <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
-                  {!fl.required && <span className="ml-1 text-[10px] text-gray-500">(선택)</span>}
+                  {!fl.required && <span className="ml-1 text-[10px] text-faint">(선택)</span>}
                 </span>
-                {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-gray-600">{fl.hint}</span>}
+                {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-faint">{fl.hint}</span>}
               </span>
             </div>
           ))}
         </div>
       )}
       {isGoogleOAuth && (
-        <p className="mb-1 text-[11px] leading-snug text-gray-500">
+        <p className="mb-1 text-[11px] leading-snug text-faint">
           한 번 '구글 연결'하면 Gmail·캘린더가 함께 연결돼요. 본인 구글 계정의 메일 읽기·일정 보기/추가에 사용됩니다.
         </p>
       )}
@@ -199,19 +199,19 @@ export function ToolCard({
         {isGoogleOAuth ? (
           it.configured ? (
             <>
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+              <span className="inline-flex items-center gap-1 text-[11px] text-tone-emerald">
                 <CircleIcon className="h-2.5 w-2.5" filled /> 연결됨{connectedAs ? ` · ${connectedAs}` : ""}
               </span>
               <button
                 onClick={runTest}
                 disabled={testing}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge disabled:opacity-40"
               >
                 <PlugIcon className="h-4 w-4" /> 연결 테스트
               </button>
               <button
                 onClick={disconnectGoogle}
-                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-400 transition hover:bg-edge"
+                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-muted transition hover:bg-edge"
               >
                 연결 해제
               </button>
@@ -220,7 +220,7 @@ export function ToolCard({
             <button
               onClick={connectGoogle}
               disabled={connecting}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-tint-sky/30 px-3 py-1.5 text-sm text-tone-sky transition hover:bg-tint-sky/60 disabled:opacity-40"
             >
               <LogInIcon className="h-4 w-4" /> {connecting ? "연결 중…" : "구글 연결"}
             </button>
@@ -231,7 +231,7 @@ export function ToolCard({
               <button
                 onClick={save}
                 disabled={saving}
-                className="inline-flex min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-900/30 px-3 py-1.5 text-sm text-emerald-200 transition hover:bg-emerald-900/60 disabled:opacity-40"
+                className="inline-flex min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-tint-emerald/30 px-3 py-1.5 text-sm text-tone-emerald transition hover:bg-tint-emerald/60 disabled:opacity-40"
               >
                 <KeyRoundIcon className="h-4 w-4" /> {saving ? "저장 중…" : "저장"}
               </button>
@@ -246,23 +246,23 @@ export function ToolCard({
                     ? "필수 값을 저장하면 활성화돼요"
                     : "환경변수를 설정하고 재배포하면 활성화돼요"
               }
-              className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge disabled:opacity-40"
             >
               <PlugIcon className="h-4 w-4" /> 연결 테스트
             </button>
           </>
         )}
-        {msg && <StatusText msg={msg} className="text-xs text-gray-300" />}
+        {msg && <StatusText msg={msg} className="text-xs text-secondary" />}
       </div>
       {testMsg && (
-        <div className="mt-2 whitespace-pre-wrap rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[11px] leading-snug text-gray-300">
+        <div className="mt-2 whitespace-pre-wrap rounded-lg border border-edge bg-panel/60 px-3 py-2 text-[11px] leading-snug text-secondary">
           <StatusText msg={testMsg} />
         </div>
       )}
       {unlocks && unlocks.length > 0 && (
-        <div className="mt-2 inline-flex flex-wrap items-center gap-1 border-t border-edge/60 pt-2 text-[11px] leading-snug text-gray-500">
+        <div className="mt-2 inline-flex flex-wrap items-center gap-1 border-t border-edge/60 pt-2 text-[11px] leading-snug text-faint">
           <KeyRoundIcon className="h-3 w-3" /> 이 키가 켜는 스킬:{" "}
-          <span className="text-gray-400">{unlocks.join(" · ")}</span>
+          <span className="text-muted">{unlocks.join(" · ")}</span>
         </div>
       )}
     </div>
@@ -276,22 +276,22 @@ export default function Integrations() {
     load();
   }, []);
 
-  if (!items) return <div className="text-xs text-gray-500">불러오는 중…</div>;
-  if (!items.length) return <div className="text-xs text-gray-500">연동 가능한 외부 도구가 없습니다.</div>;
+  if (!items) return <div className="text-xs text-faint">불러오는 중…</div>;
+  if (!items.length) return <div className="text-xs text-faint">연동 가능한 외부 도구가 없습니다.</div>;
 
   const byAgent: Record<string, ToolIntegration[]> = {};
   for (const it of items) (byAgent[it.agentId] ??= []).push(it);
 
   return (
     <div className="space-y-5">
-      <p className="text-xs leading-relaxed text-gray-500">
+      <p className="text-xs leading-relaxed text-faint">
         각 직원이 외부 서비스를 쓰려면 여기서 API 키·토큰을 입력하세요. 값은 해당 도구 설정에 저장되며, 비밀값은 화면에 표시되지 않습니다.
       </p>
       {Object.entries(byAgent).map(([aid, tools]) => (
         <div key={aid}>
           <div className="mb-1.5 flex items-center gap-2">
             <img src={`/avatars/${aid}.png`} alt={tools[0].agentName} className="h-7 w-7 rounded-md object-cover" />
-            <span className="text-sm font-semibold text-gray-200">
+            <span className="text-sm font-semibold text-content">
               {tools[0].agentName}
               {JOB[aid] ? `(${JOB[aid]})` : ""}
             </span>

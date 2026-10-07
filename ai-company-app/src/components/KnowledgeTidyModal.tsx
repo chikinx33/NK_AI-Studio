@@ -77,9 +77,9 @@ export function useTidyText(): TidyDict {
 }
 
 const KIND_STYLE: Record<KnowledgeTidyOp["op"], string> = {
-  merge: "border-sky-700/50 bg-sky-900/40 text-sky-300",
-  delete: "border-red-700/50 bg-red-900/40 text-red-300",
-  edit: "border-amber-700/50 bg-amber-900/40 text-amber-300",
+  merge: "border-sky-700/50 bg-tint-sky/40 text-tone-sky",
+  delete: "border-red-700/50 bg-tint-red/40 text-tone-red",
+  edit: "border-amber-700/50 bg-tint-amber/40 text-tone-amber",
 };
 
 export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: () => void; onApplied: (message: string) => void }) {
@@ -133,11 +133,11 @@ export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => !applying && onClose()}>
       <div className="flex max-h-[88vh] w-[640px] max-w-[94vw] flex-col rounded-2xl border border-edge bg-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="shrink-0 border-b border-edge px-5 py-3">
-          <h3 className="text-sm font-semibold text-gray-100">{t.title}</h3>
+          <h3 className="text-sm font-semibold text-strong">{t.title}</h3>
           {ops && (
-            <p className="mt-0.5 text-[11px] text-gray-500">
+            <p className="mt-0.5 text-[11px] text-faint">
               {fmt(t.reviewed, { n: meta.itemCount, m: ops.length })}
-              {meta.truncated && <span className="text-amber-400"> · {fmt(t.truncated, { n: meta.itemCount })}</span>}
+              {meta.truncated && <span className="text-tone-amber"> · {fmt(t.truncated, { n: meta.itemCount })}</span>}
             </p>
           )}
         </div>
@@ -146,13 +146,13 @@ export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: ()
           {!ops && !error && (
             <div className="flex flex-col items-center gap-3 py-8" role="status" aria-live="polite">
               {/* Lucide loader-circle */}
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 animate-spin text-amber-300" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 animate-spin text-tone-amber" aria-hidden="true">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56" />
               </svg>
-              <p className="text-center text-xs text-gray-400">{t.loading}</p>
+              <p className="text-center text-xs text-muted">{t.loading}</p>
             </div>
           )}
-          {ops && ops.length === 0 && <p className="py-8 text-center text-xs text-gray-400">{t.empty}</p>}
+          {ops && ops.length === 0 && <p className="py-8 text-center text-xs text-muted">{t.empty}</p>}
           {ops?.map((op, index) => (
             <label key={index} className={`flex cursor-pointer gap-3 rounded-xl border px-3 py-2.5 transition ${checked.has(index) ? "border-edge bg-ink/60" : "border-edge/50 opacity-50"}`}>
               <input type="checkbox" className="mt-1 shrink-0" checked={checked.has(index)} onChange={() => toggle(index)} disabled={applying} />
@@ -160,17 +160,17 @@ export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: ()
                 <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${KIND_STYLE[op.op]}`}>{t[op.op]}</span>
                 <ul className="space-y-0.5">
                   {op.before.map((item) => (
-                    <li key={item.id} className={`text-xs text-gray-400 ${op.op === "delete" ? "line-through decoration-red-500/70" : ""}`}>
-                      <span className="mr-1 text-gray-600">#{item.n}</span>{item.text}
+                    <li key={item.id} className={`text-xs text-muted ${op.op === "delete" ? "line-through decoration-red-500/70" : ""}`}>
+                      <span className="mr-1 text-faint">#{item.n}</span>{item.text}
                     </li>
                   ))}
                 </ul>
-                {op.text && <p className="text-xs text-gray-100">→ <span className="text-gray-500">[{op.type}]</span> {op.text}</p>}
-                {op.reason && <p className="text-[11px] text-gray-500">{t.reason}: {op.reason}</p>}
+                {op.text && <p className="text-xs text-strong">→ <span className="text-faint">[{op.type}]</span> {op.text}</p>}
+                {op.reason && <p className="text-[11px] text-faint">{t.reason}: {op.reason}</p>}
               </div>
             </label>
           ))}
-          {error && <p className="py-2 text-xs text-red-400">{error}</p>}
+          {error && <p className="py-2 text-xs text-tone-red">{error}</p>}
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-edge px-5 py-3">
@@ -179,13 +179,13 @@ export default function KnowledgeTidyModal({ onClose, onApplied }: { onClose: ()
               type="button"
               disabled={applying}
               onClick={() => setChecked(checked.size === ops.length ? new Set() : new Set(ops.map((_, index) => index)))}
-              className="min-w-[84px] rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 transition hover:bg-edge disabled:opacity-50"
+              className="min-w-[84px] rounded-lg border border-edge px-3 py-1.5 text-xs text-secondary transition hover:bg-edge disabled:opacity-50"
             >
               {checked.size === ops.length ? t.selectNone : t.selectAll}
             </button>
           )}
           <div className="ml-auto flex gap-2">
-            <button type="button" onClick={onClose} disabled={applying} className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-50">
+            <button type="button" onClick={onClose} disabled={applying} className="rounded-lg border border-edge px-3 py-1.5 text-sm text-content transition hover:bg-edge disabled:opacity-50">
               {t.cancel}
             </button>
             {!!ops?.length && (

@@ -98,10 +98,10 @@ function storyboardSheetCount(lanes: Lane[]): number {
 
 // 바 색과, 그 바의 카드가 선택됐을 때의 테두리 색을 같은 계열로 맞춘다(씬 파랑 · 캐릭터 초록 · 장소 보라).
 const LANE_STYLE: Record<LaneKind, { bar: string; barSelected: string; card: string; text: string; label: string }> = {
-  prompt: { bar: "border-amber-500/80 bg-amber-900/50 hover:border-amber-300", barSelected: "border-amber-300 bg-amber-700/70 ring-2 ring-amber-400/40", card: "border-amber-400 ring-2 ring-amber-500/30", text: "text-amber-100/80", label: "프롬프트" },
-  scene: { bar: "border-sky-500/80 bg-sky-900/60 hover:border-sky-300", barSelected: "border-sky-300 bg-sky-700/70 ring-2 ring-sky-400/40", card: "border-sky-400 ring-2 ring-sky-500/30", text: "text-sky-100/80", label: "Scene" },
-  characters: { bar: "border-emerald-500/80 bg-emerald-900/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-emerald-700/70 ring-2 ring-emerald-400/40", card: "border-emerald-400 ring-2 ring-emerald-500/30", text: "text-emerald-100/80", label: "캐릭터" },
-  locations: { bar: "border-violet-500/80 bg-violet-900/60 hover:border-violet-300", barSelected: "border-violet-300 bg-violet-700/70 ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-violet-100/80", label: "배경" },
+  prompt: { bar: "border-amber-500/80 bg-tint-amber/50 hover:border-amber-300", barSelected: "border-amber-300 bg-tint-amber ring-2 ring-amber-400/40", card: "border-amber-400 ring-2 ring-amber-500/30", text: "text-tone-amber/80", label: "프롬프트" },
+  scene: { bar: "border-sky-500/80 bg-tint-sky/60 hover:border-sky-300", barSelected: "border-sky-300 bg-tint-sky ring-2 ring-sky-400/40", card: "border-sky-400 ring-2 ring-sky-500/30", text: "text-tone-sky/80", label: "Scene" },
+  characters: { bar: "border-emerald-500/80 bg-tint-emerald/60 hover:border-emerald-300", barSelected: "border-emerald-300 bg-tint-emerald ring-2 ring-emerald-400/40", card: "border-emerald-400 ring-2 ring-emerald-500/30", text: "text-tone-emerald/80", label: "캐릭터" },
+  locations: { bar: "border-violet-500/80 bg-tint-violet/60 hover:border-violet-300", barSelected: "border-violet-300 bg-tint-violet ring-2 ring-violet-400/40", card: "border-violet-400 ring-2 ring-violet-500/30", text: "text-tone-violet/80", label: "배경" },
 };
 
 function laneKindForNode(type: ProductionNode["type"]): LaneKind | null {
@@ -359,12 +359,12 @@ function anchorIn(node: ProductionNode, p: Pos): Pos { return { x: p.x, y: p.y +
 
 function Chip({ children, tone = "gray" }: { children: React.ReactNode; tone?: "gray" | "emerald" | "amber" | "cyan" | "violet" | "red" }) {
   const map = {
-    gray: "border-gray-700 text-gray-400",
-    emerald: "border-emerald-700/60 text-emerald-300",
-    amber: "border-amber-700/60 text-amber-300",
-    cyan: "border-cyan-700/60 text-cyan-300",
-    violet: "border-violet-700/60 text-violet-300",
-    red: "border-red-800/60 text-red-300",
+    gray: "border-edge text-muted",
+    emerald: "border-emerald-700/60 text-tone-emerald",
+    amber: "border-amber-700/60 text-tone-amber",
+    cyan: "border-cyan-700/60 text-tone-cyan",
+    violet: "border-violet-700/60 text-tone-violet",
+    red: "border-red-800/60 text-tone-red",
   };
   return <span className={`rounded border px-1 py-px text-[9px] font-bold uppercase tracking-wide ${map[tone]}`}>{children}</span>;
 }
@@ -1392,15 +1392,15 @@ export default function ProductionCanvas({
   }, [lanes]);
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-[#090d13] ${embedded ? "" : ""}`}>
+    <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-ink ${embedded ? "" : ""}`}>
       {/* 상단 바 */}
       {!hideTopBar && (
-      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-[#0c1119] px-3 py-2">
-        <WorkflowIcon className="h-4 w-4 text-emerald-400" />
-        <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-400">Production Canvas</span>
+      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-inset px-3 py-2">
+        <WorkflowIcon className="h-4 w-4 text-tone-emerald" />
+        <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Production Canvas</span>
         <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
         {graph && (
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+          <div className="flex items-center gap-1.5 text-[11px] text-faint">
             <Chip>컷 {graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.approvedStoryboards === graph.summary.scenes ? "emerald" : "gray"}>콘티 {graph.summary.approvedStoryboards || 0}/{graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.stills === graph.summary.scenes ? "emerald" : "gray"}>스틸 {graph.summary.stills}</Chip>
@@ -1408,24 +1408,24 @@ export default function ProductionCanvas({
           </div>
         )}
         <div className="flex items-center gap-1.5" data-testid="top-generation-models">
-          <label className="flex items-center gap-1 text-[10px] text-gray-500">
+          <label className="flex items-center gap-1 text-[10px] text-faint">
             <span>이미지</span>
             <select
               aria-label="이미지 모델"
               value={settings.image.provider}
               onChange={(event) => updateSettings({ ...settings, image: { ...settings.image, provider: event.target.value as CanvasSettings["image"]["provider"], providerExplicit: true } })}
-              className="max-w-[150px] rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[10px] text-gray-300"
+              className="max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
             >
               {IMAGE_PROVIDERS.map((item) => <option key={item.id} value={item.id}>{item.id === "studio" ? "스튜디오 설정" : item.label}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-1 text-[10px] text-gray-500">
+          <label className="flex items-center gap-1 text-[10px] text-faint">
             <span>영상</span>
             <select
               aria-label="영상 모델"
               value={settings.video.model}
               onChange={(event) => { const model = event.target.value; updateSettings({ ...settings, video: { ...settings.video, model, durationSec: snapDuration(model, settings.video.durationSec), resolution: snapResolution(model, settings.video.resolution) } }); }}
-              className="max-w-[150px] rounded border border-edge bg-[#0b1018] px-1.5 py-1 text-[10px] text-gray-300"
+              className="max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
             >
               {VIDEO_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
@@ -1433,7 +1433,7 @@ export default function ProductionCanvas({
         </div>
         <div className="ml-auto flex items-center gap-1">
           {onToggleExpand && (
-            <button type="button" onClick={onToggleExpand} aria-pressed={expanded} className={`grid h-7 w-7 place-items-center rounded border transition ${expanded ? "border-emerald-500 bg-emerald-900/40 text-emerald-200" : "border-edge text-gray-400 hover:bg-edge hover:text-white"}`} title={expanded ? "사이드바 다시 열기" : "확장 (사이드바 감추기)"} aria-label={expanded ? "사이드바 다시 열기" : "확장"}>
+            <button type="button" onClick={onToggleExpand} aria-pressed={expanded} className={`grid h-7 w-7 place-items-center rounded border transition ${expanded ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald" : "border-edge text-muted hover:bg-edge hover:text-strong"}`} title={expanded ? "사이드바 다시 열기" : "확장 (사이드바 감추기)"} aria-label={expanded ? "사이드바 다시 열기" : "확장"}>
               {expanded ? <MinimizeIcon className="h-3.5 w-3.5" /> : <MaximizeIcon className="h-3.5 w-3.5" />}
             </button>
           )}
@@ -1442,8 +1442,8 @@ export default function ProductionCanvas({
             onClick={toggleEdgesVisible}
             aria-pressed={!edgesVisible}
             className={`grid h-7 w-7 place-items-center rounded border transition ${edgesVisible
-              ? "border-edge text-gray-400 hover:bg-edge hover:text-white"
-              : "border-amber-600/70 bg-amber-900/30 text-amber-200 hover:bg-amber-900/50"
+              ? "border-edge text-muted hover:bg-edge hover:text-strong"
+              : "border-amber-600/70 bg-tint-amber/30 text-tone-amber hover:bg-tint-amber/50"
             }`}
             title={edgesVisible ? "연결선 숨기기" : "연결선 보이기"}
             aria-label={edgesVisible ? "연결선 숨기기" : "연결선 보이기"}
@@ -1453,32 +1453,32 @@ export default function ProductionCanvas({
           <button
             type="button"
             onClick={toggleEdgeStyle}
-            className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 transition hover:bg-edge hover:text-white"
+            className="grid h-7 w-7 place-items-center rounded border border-edge text-muted transition hover:bg-edge hover:text-strong"
             title={edgeStyle === "curve" ? "연결선: 곡선 (누르면 직각선)" : "연결선: 직각선 (누르면 곡선)"}
             aria-label={edgeStyle === "curve" ? "연결선을 직각선으로" : "연결선을 곡선으로"}
           >
             {edgeStyle === "curve" ? <SplineIcon className="h-3.5 w-3.5" /> : <StraightIcon className="h-3.5 w-3.5" />}
           </button>
-          <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.max(MIN_SCALE, v.scale * 0.9) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="축소">−</button>
-          <span className="w-10 text-center text-[11px] text-gray-500">{Math.round(view.scale * 100)}%</span>
-          <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="확대">+</button>
-          <button type="button" onClick={() => void addCut()} disabled={!projectId || saving} className="min-w-[72px] rounded border border-sky-700/70 bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-200 transition hover:bg-sky-900/50 disabled:opacity-40" title="빈 컷을 하나 만들어요 — 내용은 카드에서 채우거나 대화로 시키세요">컷 추가</button>
-          <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-gray-400 hover:bg-edge hover:text-white">정렬 초기화</button>
+          <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.max(MIN_SCALE, v.scale * 0.9) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="축소">−</button>
+          <span className="w-10 text-center text-[11px] text-faint">{Math.round(view.scale * 100)}%</span>
+          <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="확대">+</button>
+          <button type="button" onClick={() => void addCut()} disabled={!projectId || saving} className="min-w-[72px] rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40" title="빈 컷을 하나 만들어요 — 내용은 카드에서 채우거나 대화로 시키세요">컷 추가</button>
+          <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-muted hover:bg-edge hover:text-strong">정렬 초기화</button>
           <button
             type="button"
             onClick={() => void saveLayout()}
             disabled={!projectId || layoutSaving || !layoutDirty}
-            className={`min-w-[72px] rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${layoutDirty ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-gray-500"}`}
+            className={`min-w-[72px] rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${layoutDirty ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-faint"}`}
             title="캔버스 배치를 프로젝트에 저장해요. 컷 내용은 각 컷의 '저장 요청'으로 저장돼요."
           >
             {layoutSaving ? "저장 중…" : (layoutDirty ? "저장" : "저장됨")}
           </button>
-          <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-gray-400 hover:bg-edge hover:text-white" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
+          <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button
             type="button"
             onClick={() => setAgentOpen((v) => { if (!v) setBatchDockOpen(true); return !v; })}
             disabled={!projectId}
-            className={`ml-1 flex min-w-[112px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${agentOpen ? "bg-emerald-600 text-white" : "border border-emerald-700/60 text-emerald-300 hover:bg-emerald-900/30"}`}
+            className={`ml-1 flex min-w-[112px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${agentOpen ? "bg-emerald-600 text-white" : "border border-emerald-700/60 text-tone-emerald hover:bg-tint-emerald/30"}`}
           >
             <BotIcon className="h-4 w-4" /> 일괄 생성
           </button>
@@ -1492,7 +1492,7 @@ export default function ProductionCanvas({
             }}
             disabled={!projectId}
             aria-pressed={storyboardView}
-            className={`flex min-w-[92px] items-center justify-center rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${storyboardView ? "bg-violet-600 text-white" : "border border-violet-700/60 text-violet-300 hover:bg-violet-900/30"}`}
+            className={`flex min-w-[92px] items-center justify-center rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${storyboardView ? "bg-violet-600 text-white" : "border border-violet-700/60 text-tone-violet hover:bg-tint-violet/30"}`}
             title={storyboardView ? "전체 캔버스로 돌아가기" : "씬 바와 콘티·스틸컷만 보기"}
           >
             스토리보드
@@ -1507,7 +1507,7 @@ export default function ProductionCanvas({
         <div
           ref={containerRef}
           className="relative min-w-0 flex-1 cursor-grab select-none overflow-hidden active:cursor-grabbing"
-          style={{ backgroundImage: "radial-gradient(#1f2633 1px, transparent 1px)", backgroundSize: `${GRID * view.scale}px ${GRID * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
+          style={{ backgroundImage: "radial-gradient(rgb(var(--company-edge)) 1px, transparent 1px)", backgroundSize: `${GRID * view.scale}px ${GRID * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
           onPointerDown={(e) => onPointerDown(e)}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -1515,12 +1515,12 @@ export default function ProductionCanvas({
           onWheel={onWheel}
         >
           {!projectId && (
-            <div className="absolute inset-0 grid place-items-center text-center text-sm text-gray-500">
-              <div><p className="font-bold text-gray-300">프로젝트를 선택하면 컷·프롬프트·자산이 노드로 펼쳐져요.</p><p className="mt-1 text-xs">채팅에서 "ep1 캔버스 열어줘"라고 해도 돼요.</p></div>
+            <div className="absolute inset-0 grid place-items-center text-center text-sm text-faint">
+              <div><p className="font-bold text-secondary">프로젝트를 선택하면 컷·프롬프트·자산이 노드로 펼쳐져요.</p><p className="mt-1 text-xs">채팅에서 "ep1 캔버스 열어줘"라고 해도 돼요.</p></div>
             </div>
           )}
-          {error && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded border border-red-800/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-300">{error}</div>}
-          {loading && !graph && <div className="absolute inset-0 z-20 grid place-items-center bg-[#06080c]/55 backdrop-blur-[4px]" data-testid="canvas-loading"><RefreshIcon className="h-9 w-9 animate-spin text-orange-400" /></div>}
+          {error && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded border border-red-800/60 bg-tint-red/40 px-3 py-1.5 text-xs text-tone-red">{error}</div>}
+          {loading && !graph && <div className="absolute inset-0 z-20 grid place-items-center bg-ink/55 backdrop-blur-[4px]" data-testid="canvas-loading"><RefreshIcon className="h-9 w-9 animate-spin text-tone-orange" /></div>}
 
           <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
             <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={1} height={1}>
@@ -1559,14 +1559,14 @@ export default function ProductionCanvas({
                     type="button"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); toggleLaneCollapsed(l.key); }}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/25 bg-black/20 text-[15px] font-bold leading-none text-white transition hover:border-white/50 hover:bg-white/10"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-edge bg-panel/40 text-[15px] font-bold leading-none text-strong transition hover:bg-raised"
                     title={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
                     aria-label={isCollapsed ? `${l.label} 펼치기` : `${l.label} 접기`}
                     aria-expanded={!isCollapsed}
                   >
                     {isCollapsed ? "+" : "−"}
                   </button>
-                  <span className="text-[12px] font-bold text-white">{l.label}</span>
+                  <span className="text-[12px] font-bold text-strong">{l.label}</span>
                   {l.kind === "scene" && <span className={`min-w-0 flex-1 truncate text-[11px] ${st.text}`}>{l.location || "장소 미지정"}</span>}
                   {l.kind !== "scene" && <span className="min-w-0 flex-1" />}
                   {l.kind !== "prompt" && <Chip>{l.kind === "scene" ? `컷 ${l.memberIds.length}` : `${l.memberIds.length}`}</Chip>}
@@ -1576,7 +1576,7 @@ export default function ProductionCanvas({
                       e.stopPropagation();
                       // 빈 씬 바 = 카드를 옮긴 뒤 화면 배치에만 남은 잔상. 걷어내고 씬 바를 서버 순서로 다시 묶는다(바 위치는 유지).
                       setLayout((cur) => reconcileLayout({ ...cur, groups: undefined }, graph, defaultLayout(graph, measuredH)));
-                    }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-400/60 text-red-200 transition hover:bg-red-500/30 hover:text-white" title="빈 씬 바 지우기 (씬 바를 서버 순서로 다시 묶어요)" aria-label="빈 씬 바 지우기">−</button>
+                    }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-400/60 text-tone-red transition hover:bg-red-500/30 hover:text-strong" title="빈 씬 바 지우기 (씬 바를 서버 순서로 다시 묶어요)" aria-label="빈 씬 바 지우기">−</button>
                   )}
                   {!isCollapsed && !storyboardView && l.kind === "scene" && (() => {
                     const firstNode = l.memberIds[0] ? nodeById.get(l.memberIds[0]) : null;
@@ -1586,7 +1586,7 @@ export default function ProductionCanvas({
                     return (
                       <>
                         {canMerge && (
-                          <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void mergeSceneIntoPrev(l.key); }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-sky-100 transition hover:bg-sky-500/30 hover:text-white" title="이전 씬과 합치기 (이 씬의 첫 컷 경계를 없애요)" aria-label="이전 씬과 합치기">⇤</button>
+                          <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); void mergeSceneIntoPrev(l.key); }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-tone-sky transition hover:bg-sky-500/30 hover:text-strong" title="이전 씬과 합치기 (이 씬의 첫 컷 경계를 없애요)" aria-label="이전 씬과 합치기">⇤</button>
                         )}
                         <button type="button" disabled={!projectId || saving || l.memberIds.length < 2} onPointerDown={(e) => e.stopPropagation()} onClick={async (e) => {
                           e.stopPropagation();
@@ -1598,7 +1598,7 @@ export default function ProductionCanvas({
                           const hit = l.memberIds.find((id) => String(nodeById.get(id)?.data.sceneId ?? "") === String(ans).trim());
                           if (!hit) { setNotice("그 컷은 이 씬에 없어요."); return; }
                           void splitSceneAt(hit);
-                        }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-sky-100 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-40" title={splitTitle} aria-label="씬 나누기">+</button>
+                        }} className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-sky-300/50 text-tone-sky transition hover:bg-sky-500/30 hover:text-strong disabled:opacity-40" title={splitTitle} aria-label="씬 나누기">+</button>
                       </>
                     );
                   })()}
@@ -1610,7 +1610,7 @@ export default function ProductionCanvas({
                     const hit = mergeSuggestions.find((m) => names.some((x) => m.from.includes(x) || x === m.into));
                     const into = hit ? hit.into : names.slice().sort((a, b) => a.length - b.length)[0];
                     return (
-                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setMergeModal({ names, into }); }} className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-red-400/60 bg-red-900/30 px-2 text-[11px] font-bold text-red-100 hover:bg-red-800/50" title="선택한 배경을 한 세트로 합쳐요">
+                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setMergeModal({ names, into }); }} className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-red-400/60 bg-tint-red/30 px-2 text-[11px] font-bold text-tone-red hover:bg-tint-red" title="선택한 배경을 한 세트로 합쳐요">
                         합치기 {picked.length}
                       </button>
                     );
@@ -1621,7 +1621,7 @@ export default function ProductionCanvas({
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); openSetSheetModal(); }}
                       disabled={!projectId || saving || setSheetActive}
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition disabled:opacity-60 ${setSheetActive ? "border-amber-300/70 text-amber-200" : "border-violet-300/50 text-violet-100 hover:bg-violet-500/30 hover:text-white"}`}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border transition disabled:opacity-60 ${setSheetActive ? "border-amber-300/70 text-tone-amber" : "border-violet-300/50 text-tone-violet hover:bg-violet-500/30 hover:text-strong"}`}
                       title={setSheetActive ? "세트 시트 생성 중…" : "세트 시트 생성 — 장소마다 정면·후면·부감·로우 2×2 바이블 시트를 한 장씩 만들어요"}
                       aria-label="세트 시트 생성"
                       aria-busy={setSheetActive}
@@ -1658,7 +1658,7 @@ export default function ProductionCanvas({
               return (
                 <div
                   key={n.id}
-                  className={`absolute rounded-xl border bg-[#10151d] shadow-lg transition-colors ${isSelected ? selectedClass : "border-edge hover:border-gray-500"}`}
+                  className={`absolute rounded-xl border bg-inset shadow-lg transition-colors ${isSelected ? selectedClass : "border-edge hover:border-edge"}`}
                   data-node-type={n.type}
                   style={{ left: p.x, top: p.y, width: NODE_W[n.type], zIndex: isGhost ? 30 : undefined, opacity: isGhost ? 0.85 : 1 }}
                   onPointerDown={(e) => onPointerDown(e, n.id)}
@@ -1666,7 +1666,7 @@ export default function ProductionCanvas({
                   {n.type === "common" && (
                     <div className="p-3">
                       <div className="mb-1 flex items-center gap-1.5"><Chip tone="emerald">공통 프롬프트</Chip>{n.data.aspectRatio ? <Chip>{String(n.data.aspectRatio)}</Chip> : null}</div>
-                      <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-gray-300">{String(n.data.text || "") || <span className="text-gray-600">비어 있음 — 프리프로덕션에서 설정</span>}</p>
+                      <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">{String(n.data.text || "") || <span className="text-faint">비어 있음 — 프리프로덕션에서 설정</span>}</p>
                     </div>
                   )}
                   {n.type === "location" && (
@@ -1675,11 +1675,11 @@ export default function ProductionCanvas({
                         <div className="relative cursor-zoom-in border-b border-edge" data-zone="image" title="누르면 크게 볼 수 있어요">
                           <img src={withMediaToken(locationMediaUrl)} alt="" className="block aspect-video w-full object-cover" draggable={false} onError={() => markMediaMissing(locationMediaRef)} />
                           <span className="absolute left-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-black text-black">{n.data.topPlateUrl ? "부감 마스터" : n.data.setSheet?.url ? "바이블" : "플레이트"}</span>
-                          {n.data.topPlateUrl && Array.isArray(n.data.variants) && n.data.variants.filter((v: any) => v.id !== "angle-top").length > 0 ? <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">앵글 {n.data.variants.filter((v: any) => v.id !== "angle-top").length}</span> : null}
-                          {n.data.setSheet?.resolution ? <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-gray-200">{String(n.data.setSheet.resolution)}</span> : null}
+                          {n.data.topPlateUrl && Array.isArray(n.data.variants) && n.data.variants.filter((v: any) => v.id !== "angle-top").length > 0 ? <span className="company-media absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-content">앵글 {n.data.variants.filter((v: any) => v.id !== "angle-top").length}</span> : null}
+                          {n.data.setSheet?.resolution ? <span className="company-media absolute right-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-content">{String(n.data.setSheet.resolution)}</span> : null}
                         </div>
                       ) : locationMediaRef ? (
-                        <div className="grid aspect-video place-items-center border-b border-edge bg-black/30 px-3 text-center text-[10px] text-red-300">
+                        <div className="grid aspect-video place-items-center border-b border-edge bg-black/30 px-3 text-center text-[10px] text-tone-red">
                           저장소에서 이미지 파일을 찾을 수 없어요.
                         </div>
                       ) : null}
@@ -1687,27 +1687,27 @@ export default function ProductionCanvas({
                         <div className="flex flex-wrap items-center gap-1.5">
                           {multi.has(n.id) && <span className="grid h-4 w-4 place-items-center rounded-full bg-violet-400 text-[10px] font-black text-black">✓</span>}
                           <Chip tone="violet">장소</Chip>
-                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSelectedId(n.id); }} className="ml-auto grid h-5 w-5 place-items-center rounded-full border border-edge text-[10px] text-gray-400 hover:bg-edge hover:text-white" title="상세(플레이트·다시 만들기)" aria-label="상세">i</button>
+                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSelectedId(n.id); }} className="ml-auto grid h-5 w-5 place-items-center rounded-full border border-edge text-[10px] text-muted hover:bg-edge hover:text-strong" title="상세(플레이트·다시 만들기)" aria-label="상세">i</button>
                           {n.data.setSheet ? <Chip tone="emerald">시트</Chip> : <Chip>시트 없음</Chip>}
                           {graph?.styleAnchor && n.data.setSheet?.objectName === graph.styleAnchor.objectName && <Chip tone="amber">스타일 기준</Chip>}
                           {mergeSuggestions.some((m) => m.from.includes(String(n.data.name || n.label)) || m.into === String(n.data.name || n.label)) && <Chip tone="red">중복 의심</Chip>}
                           {locJob && !JOB_DONE.includes(locJob.status) && <Chip tone="amber">{locJob.status === "review_pending" ? "승인 대기" : "시트 생성 중"}</Chip>}
                           {locJob && locJob.status === "error" && <Chip tone="red">오류</Chip>}
                         </div>
-                        {locJob && locJob.status === "error" && locJob.error ? <p className="mt-1 line-clamp-2 text-[10px] text-red-300" title={locJob.error}>{locJob.error}</p> : null}
-                        <p className="mt-1 line-clamp-2 text-[12px] font-bold text-gray-200">{n.label}</p>
+                        {locJob && locJob.status === "error" && locJob.error ? <p className="mt-1 line-clamp-2 text-[10px] text-tone-red" title={locJob.error}>{locJob.error}</p> : null}
+                        <p className="mt-1 line-clamp-2 text-[12px] font-bold text-content">{n.label}</p>
                         {(!locationMediaUrl || locationMediaMissing) && (
-                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); openAssetPicker({ type: "location", locationName: String(n.data.name || n.label) }, `${n.label} 배경`); }} className="mt-2 w-full rounded-md border border-violet-500/50 px-2 py-1 text-[10px] font-bold text-violet-200 hover:bg-violet-500/20">이미지 등록</button>
+                          <button type="button" data-zone="detail" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); openAssetPicker({ type: "location", locationName: String(n.data.name || n.label) }, `${n.label} 배경`); }} className="mt-2 w-full rounded-md border border-violet-500/50 px-2 py-1 text-[10px] font-bold text-tone-violet hover:bg-violet-500/20">이미지 등록</button>
                         )}
                       </div>
                     </div>
                   )}
                   {n.type === "character" && (
                     <div className="flex items-center gap-2 p-3">
-                      {n.data.imageUrl ? <img src={withMediaToken(String(n.data.imageUrl))} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" draggable={false} /> : <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-violet-900/30 text-violet-300">@</div>}
+                      {n.data.imageUrl ? <img src={withMediaToken(String(n.data.imageUrl))} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" draggable={false} /> : <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-tint-violet/30 text-tone-violet">@</div>}
                       <div className="min-w-0">
                         <Chip tone="emerald">캐릭터</Chip>
-                        <p className="truncate text-[12px] font-bold text-gray-200">{n.label}</p>
+                        <p className="truncate text-[12px] font-bold text-content">{n.label}</p>
                       </div>
                     </div>
                   )}
@@ -1723,22 +1723,22 @@ export default function ProductionCanvas({
                       <div className={`relative aspect-video overflow-hidden bg-black/40 ${frameUrl ? "cursor-zoom-in" : ""}`} data-zone={frameZone} title={frameUrl ? (stillUrl ? "정식 스틸컷" : "승인용 콘티") : "스토리보드 일괄 생성에서 만들어요"}>
                         {frameUrl
                           ? <img src={withMediaToken(frameUrl)} alt="" className={`h-full w-full object-cover ${st.running ? "opacity-40" : ""}`} draggable={false} loading="lazy" onError={() => markMediaMissing(frameRef)} />
-                          : !st.running && <div className="grid h-full place-items-center px-2 text-center text-[10px] text-gray-600">{rawFrameUrl ? <span className="text-red-300">이미지 파일 없음</span> : st.failed ? <span className="px-1 text-center text-red-300">스틸 실패</span> : "콘티 없음"}</div>}
-                        {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
-                        {!storyboardView && <span className="absolute left-1.5 top-1.5 inline-flex rounded bg-black/80"><Chip tone={frameTone}>{frameLabel}</Chip></span>}
+                          : !st.running && <div className="grid h-full place-items-center px-2 text-center text-[10px] text-faint">{rawFrameUrl ? <span className="text-tone-red">이미지 파일 없음</span> : st.failed ? <span className="px-1 text-center text-tone-red">스틸 실패</span> : "콘티 없음"}</div>}
+                        {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-tone-sky" /></div>}
+                        {!storyboardView && <span className="absolute left-1.5 top-1.5 company-media inline-flex rounded bg-black/80"><Chip tone={frameTone}>{frameLabel}</Chip></span>}
                       </div>
                     );
                     if (storyboardView) return (
                       <div>
                         {frame}
-                        <p className="line-clamp-2 min-h-[42px] border-t border-edge px-3 py-2 text-[11px] leading-snug text-gray-300">{String(n.data.action || "") || <span className="text-gray-600">—</span>}</p>
+                        <p className="line-clamp-2 min-h-[42px] border-t border-edge px-3 py-2 text-[11px] leading-snug text-secondary">{String(n.data.action || "") || <span className="text-faint">—</span>}</p>
                       </div>
                     );
                     return (
                       <div>
                         <div className="flex cursor-pointer items-center gap-1.5 border-b border-edge px-3 py-2" data-zone="header" title="상단 바 클릭 = 선택/해제 (여러 컷 고르기). 아래 내용 클릭 = 상세 열기">
-                          <span className="text-[12px] font-bold text-white">{cutLabelById.get(n.id) || n.label}</span>
-                          <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">#{String(n.data.sceneId)}</span>
+                          <span className="text-[12px] font-bold text-strong">{cutLabelById.get(n.id) || n.label}</span>
+                          <span className="min-w-0 flex-1 truncate text-[10px] text-faint">#{String(n.data.sceneId)}</span>
                           <Chip>{String(n.data.shotType)}</Chip><Chip>{String(n.data.cameraMove)}</Chip>
                           {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
                           {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
@@ -1748,15 +1748,15 @@ export default function ProductionCanvas({
                           <div className="relative aspect-video overflow-hidden rounded-md bg-black/40">
                             {n.data.clip?.url
                               ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
-                              : !vd.running && <div className="grid h-full place-items-center text-[10px] text-gray-600">{vd.failed ? <span className="px-1 text-center text-red-300">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
-                            {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-sky-200" /></div>}
+                              : !vd.running && <div className="grid h-full place-items-center text-[10px] text-faint">{vd.failed ? <span className="px-1 text-center text-tone-red">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
+                            {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-tone-sky" /></div>}
                             <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                           </div>
                         </div>
                         <div className="px-3 pb-2">
-                          <p className="line-clamp-2 text-[11px] leading-snug text-gray-300"><span className="text-gray-500">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-gray-600">—</span>}</p>
-                          <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-gray-400"><span className="text-gray-500">행동 </span>{String(n.data.action || "") || <span className="text-gray-600">—</span>}</p>
-                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-gray-500">
+                          <p className="line-clamp-2 text-[11px] leading-snug text-secondary"><span className="text-faint">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-faint">—</span>}</p>
+                          <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted"><span className="text-faint">행동 </span>{String(n.data.action || "") || <span className="text-faint">—</span>}</p>
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-faint">
                             {n.data.estSec ? <span>{String(n.data.estSec)}s</span> : null}{n.data.common ? <Chip tone="emerald">공통 오버라이드</Chip> : null}{n.data.cutRefEnabled && n.data.cutRefId ? <Chip tone="amber">참조 {String(n.data.cutRefId)}</Chip> : null}{n.data.lineage?.videoAttempts ? <span title="영상 시도 횟수">v×{String(n.data.lineage.videoAttempts)}</span> : null}{jobsForNode.length > 0 && <Chip tone="amber">{jobsForNode[0].status === "review_pending" ? "승인 대기" : "진행 중"}</Chip>}
                           </div>
                         </div>
@@ -1773,9 +1773,9 @@ export default function ProductionCanvas({
           {/* 컷이 하나도 없는 프로젝트 — 여기서 바로 시작할 수 있게 길을 보여 준다(예전엔 빈 화면이었다). */}
           {!loading && graph && cutNodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">
-              <div onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} className="pointer-events-auto w-[420px] max-w-[92vw] rounded-2xl border border-edge bg-[#0c1119]/95 p-5 text-center shadow-2xl backdrop-blur">
-                <div className="text-[14px] font-bold text-gray-100">아직 컷이 없어요</div>
-                <p className="mt-1.5 text-[12px] leading-relaxed text-gray-400">
+              <div onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} className="pointer-events-auto w-[420px] max-w-[92vw] rounded-2xl border border-edge bg-inset/95 p-5 text-center shadow-2xl backdrop-blur">
+                <div className="text-[14px] font-bold text-strong">아직 컷이 없어요</div>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
                   대화로 시나리오를 만들거나, 빈 컷을 하나 만들어 직접 채워도 돼요.
                 </p>
                 <div className="mt-4 flex flex-col gap-2">
@@ -1790,7 +1790,7 @@ export default function ProductionCanvas({
                     type="button"
                     onClick={() => void addCut()}
                     disabled={!projectId || saving}
-                    className="rounded-xl border border-sky-700/70 bg-sky-950/40 px-3 py-2 text-[12px] font-semibold text-sky-200 transition hover:bg-sky-900/50 disabled:opacity-40"
+                    className="rounded-xl border border-sky-700/70 bg-tint-sky/40 px-3 py-2 text-[12px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40"
                   >
                     빈 컷 하나 만들기
                   </button>
@@ -1805,30 +1805,30 @@ export default function ProductionCanvas({
             return (
               <div className="absolute left-3 z-30 transition-[bottom] flex w-[400px] max-w-[calc(100%-24px)] select-text flex-col items-start gap-1.5" data-testid="job-dock" ref={jobDockRef} style={{ bottom: canvasDockBottom(APPROVAL_DOCK_HEIGHT_VAR) }} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
                 {jobDockOpen && (
-                  <div className="max-h-64 w-full overflow-y-auto rounded-2xl border border-edge bg-[#0c1119]/95 p-2 shadow-2xl backdrop-blur">
-                    <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-400">
-                      <span className="font-bold text-gray-200">작업</span>
-                      {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="hover:text-white">끝난 항목 지우기</button>}
+                  <div className="max-h-64 w-full overflow-y-auto rounded-2xl border border-edge bg-inset/95 p-2 shadow-2xl backdrop-blur">
+                    <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-muted">
+                      <span className="font-bold text-content">작업</span>
+                      {pending.some((j) => JOB_DONE.includes(j.status)) && <button type="button" onClick={() => setPending((prev) => prev.filter((p) => !JOB_DONE.includes(p.status)))} className="hover:text-strong">끝난 항목 지우기</button>}
                     </div>
                     <ul className="space-y-1">
                       {pending.map((j) => {
                         const done = JOB_DONE.includes(j.status);
-                        const tone = j.status === "error" ? "text-red-300" : j.status === "approved" ? "text-emerald-300" : j.status === "review_pending" ? "text-amber-300" : "text-sky-300";
+                        const tone = j.status === "error" ? "text-tone-red" : j.status === "approved" ? "text-tone-emerald" : j.status === "review_pending" ? "text-tone-amber" : "text-tone-sky";
                         return (
-                          <li key={j.jobId} className="flex items-center gap-2 rounded-lg bg-[#151b25] px-2 py-1.5 text-[11px]" title={j.error || j.label}>
-                            {!done ? <RefreshIcon className="h-3 w-3 shrink-0 animate-spin text-sky-300" /> : <span className={`h-2 w-2 shrink-0 rounded-full ${j.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />}
-                            <span className="min-w-0 flex-1 truncate text-gray-200">{j.label}</span>
+                          <li key={j.jobId} className="flex items-center gap-2 rounded-lg bg-panel px-2 py-1.5 text-[11px]" title={j.error || j.label}>
+                            {!done ? <RefreshIcon className="h-3 w-3 shrink-0 animate-spin text-tone-sky" /> : <span className={`h-2 w-2 shrink-0 rounded-full ${j.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />}
+                            <span className="min-w-0 flex-1 truncate text-content">{j.label}</span>
                             <span className={`shrink-0 truncate ${tone}`} style={{ maxWidth: 160 }}>{jobStatusText(j)}</span>
-                            {j.status === "error" && j.error && <button type="button" onClick={() => { try { void navigator.clipboard.writeText(`${j.label}: ${j.error}`); } catch { /* 클립보드 불가 */ } }} className="shrink-0 rounded border border-edge px-1 text-[10px] text-gray-400 hover:text-white" title="오류 문구 복사">복사</button>}
+                            {j.status === "error" && j.error && <button type="button" onClick={() => { try { void navigator.clipboard.writeText(`${j.label}: ${j.error}`); } catch { /* 클립보드 불가 */ } }} className="shrink-0 rounded border border-edge px-1 text-[10px] text-muted hover:text-strong" title="오류 문구 복사">복사</button>}
                             {j.status === "review_pending" && <button type="button" onClick={() => void approveNow(j.jobId)} className="shrink-0 rounded bg-amber-600 px-1.5 py-px text-[10px] font-bold text-black hover:bg-amber-500">승인</button>}
-                            {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="shrink-0 text-gray-500 hover:text-white" aria-label="닫기">×</button>}
+                            {done && <button type="button" onClick={() => dismissJob(j.jobId)} className="shrink-0 text-faint hover:text-strong" aria-label="닫기">×</button>}
                           </li>
                         );
                       })}
                     </ul>
                   </div>
                 )}
-                <button type="button" onClick={() => setJobDockOpen((v) => !v)} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold shadow-lg backdrop-blur transition ${errors.length && !active.length ? "border-red-700/60 bg-[#1a0f12]/95 text-red-200" : active.length ? "border-sky-700/60 bg-[#0c1119]/95 text-sky-200" : "border-edge bg-[#0c1119]/95 text-gray-300"}`} aria-expanded={jobDockOpen}>
+                <button type="button" onClick={() => setJobDockOpen((v) => !v)} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold shadow-lg backdrop-blur transition ${errors.length && !active.length ? "border-red-700/60 bg-inset/95 text-tone-red" : active.length ? "border-sky-700/60 bg-inset/95 text-tone-sky" : "border-edge bg-inset/95 text-secondary"}`} aria-expanded={jobDockOpen}>
                   {active.length ? <RefreshIcon className="h-3.5 w-3.5 animate-spin" /> : <span className={`h-2 w-2 rounded-full ${errors.length ? "bg-red-400" : "bg-emerald-400"}`} />}
                   {active.length ? `작업 ${active.length}개 진행 중` : errors.length ? `오류 ${errors.length}` : "작업 완료"}
                   {pending.some((j) => j.status === "review_pending") && <span className="rounded-full bg-amber-600 px-1.5 text-[10px] text-black">승인 대기</span>}
@@ -1845,7 +1845,7 @@ export default function ProductionCanvas({
                 <span className="rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">{lightbox.title}</span>
                 {graph?.styleAnchor && lightbox.objectName && graph.styleAnchor.objectName === lightbox.objectName && <span className="rounded-full bg-amber-400 px-2 py-1 text-[11px] font-black text-black">스타일 기준</span>}
                 {lightbox.objectName && !(graph?.styleAnchor && graph.styleAnchor.objectName === lightbox.objectName) && (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); void setStyleAnchor(lightbox.objectName!, lightbox.title); }} className="rounded-full border border-amber-400/70 bg-black/60 px-3 py-1 text-[11px] font-bold text-amber-200 hover:bg-amber-500/30" title="이후 세트 시트·콘티·스틸컷이 이 이미지의 그림체를 참조해요">이 이미지를 스타일 기준으로</button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); void setStyleAnchor(lightbox.objectName!, lightbox.title); }} className="company-media rounded-full border border-amber-400/70 bg-black/60 px-3 py-1 text-[11px] font-bold text-tone-amber hover:bg-amber-500/30" title="이후 세트 시트·콘티·스틸컷이 이 이미지의 그림체를 참조해요">이 이미지를 스타일 기준으로</button>
                 )}
               </div>
               <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80" aria-label="닫기">✕</button>
@@ -1855,20 +1855,20 @@ export default function ProductionCanvas({
           {/* 배경 합치기 모달 — 선택한 배경 카드들을 이름 하나로. 남길 이름은 고르거나 새로 적는다. */}
           {mergeModal && (
             <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setMergeModal(null)}>
-              <div className="w-[520px] max-w-[94%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="w-[520px] max-w-[94%] select-text overflow-hidden rounded-3xl border border-edge bg-inset shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-white">배경 합치기</div>
-                    <div className="text-[11px] text-gray-500">같은 공간이 여러 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 이름 하나로 합치면 컷은 그 이름으로 옮겨지고, 플레이트·시트는 남는 쪽에 없는 것만 물려받아요. 컷 번호는 바뀌지 않아요.</div>
+                    <div className="text-[13px] font-bold text-strong">배경 합치기</div>
+                    <div className="text-[11px] text-faint">같은 공간이 여러 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 이름 하나로 합치면 컷은 그 이름으로 옮겨지고, 플레이트·시트는 남는 쪽에 없는 것만 물려받아요. 컷 번호는 바뀌지 않아요.</div>
                   </div>
-                  <button type="button" onClick={() => setMergeModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
+                  <button type="button" onClick={() => setMergeModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-edge hover:text-strong" aria-label="닫기">×</button>
                 </div>
                 <div className="px-4 py-3">
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">남길 이름</div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-faint">남길 이름</div>
                   <ul className="space-y-1">
                     {Array.from(new Set([mergeModal.into, ...mergeModal.names])).map((nm) => (
                       <li key={nm}>
-                        <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[12px] ${mergeModal.into === nm ? "border-violet-500/60 bg-violet-900/15 text-white" : "border-edge text-gray-300"}`}>
+                        <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[12px] ${mergeModal.into === nm ? "border-violet-500/60 bg-tint-violet/15 text-strong" : "border-edge text-secondary"}`}>
                           <input type="radio" name="merge-into" checked={mergeModal.into === nm} onChange={() => setMergeModal((m) => (m ? { ...m, into: nm } : m))} className="accent-violet-500" />
                           <span className="min-w-0 flex-1 truncate">{nm}</span>
                           {!mergeModal.names.includes(nm) && <Chip tone="amber">새 이름(핵심)</Chip>}
@@ -1876,14 +1876,14 @@ export default function ProductionCanvas({
                       </li>
                     ))}
                   </ul>
-                  <label className="mt-2 block text-[11px] text-gray-400">직접 적기
-                    <input type="text" value={mergeModal.into} onChange={(e) => setMergeModal((m) => (m ? { ...m, into: e.target.value } : m))} className="mt-1 w-full rounded-lg border border-edge bg-[#151b25] px-2 py-1.5 text-[12px] text-gray-100" placeholder="예: 소녀의 방" />
+                  <label className="mt-2 block text-[11px] text-muted">직접 적기
+                    <input type="text" value={mergeModal.into} onChange={(e) => setMergeModal((m) => (m ? { ...m, into: e.target.value } : m))} className="mt-1 w-full rounded-lg border border-edge bg-panel px-2 py-1.5 text-[12px] text-strong" placeholder="예: 소녀의 방" />
                   </label>
-                  <p className="mt-2 text-[11px] text-gray-500">합쳐질 배경: {mergeModal.names.filter((x) => x !== mergeModal.into.trim()).map((x) => `"${x}"`).join(", ") || "없음"}</p>
+                  <p className="mt-2 text-[11px] text-faint">합쳐질 배경: {mergeModal.names.filter((x) => x !== mergeModal.into.trim()).map((x) => `"${x}"`).join(", ") || "없음"}</p>
                 </div>
                 <div className="flex items-center gap-2 border-t border-edge px-4 py-3">
                   <div className="flex-1" />
-                  <button type="button" onClick={() => setMergeModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
+                  <button type="button" onClick={() => setMergeModal(null)} className="min-w-[72px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-secondary hover:bg-edge hover:text-strong">취소</button>
                   <button type="button" disabled={!mergeModal.into.trim() || !mergeModal.names.some((x) => x !== mergeModal.into.trim())} onClick={() => { const m = mergeModal; const into = m.into.trim(); const from = m.names.filter((x) => x !== into); setMergeModal(null); setMulti(new Set()); void mergeLocations(from, into); }} className="min-w-[96px] rounded-lg bg-red-700 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-red-600 disabled:opacity-40">합치기</button>
                 </div>
               </div>
@@ -1893,15 +1893,15 @@ export default function ProductionCanvas({
           {/* 세트 시트 생성 모달 — 대상 장소·해상도를 고르고 "생성"이 곧 확인. 진행은 같은 모달에서 장소별로 본다. */}
           {sheetModal && (
             <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 backdrop-blur-[2px]" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()} onClick={() => setSheetModal(null)}>
-              <div className="w-[820px] max-w-[92%] select-text overflow-hidden rounded-3xl border border-edge bg-[#0c1119] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="w-[820px] max-w-[92%] select-text overflow-hidden rounded-3xl border border-edge bg-inset shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-start gap-3 border-b border-edge px-5 py-4">
-                  <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
+                  <SparkleIcon className="mt-0.5 h-5 w-5 shrink-0 text-tone-violet" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-bold text-white">세트 시트 생성</div>
-                    <div className="mt-1 text-[12px] leading-relaxed text-gray-400">필요할 때 부감 마스터만 별도로 만들어요. 일반 작업에서는 스토리보드 1번 칸에서 부감과 실제 컷을 함께 생성하므로 이 단계는 선택사항입니다.</div>
-                    {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-amber-300">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
+                    <div className="text-[15px] font-bold text-strong">세트 시트 생성</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-muted">필요할 때 부감 마스터만 별도로 만들어요. 일반 작업에서는 스토리보드 1번 칸에서 부감과 실제 컷을 함께 생성하므로 이 단계는 선택사항입니다.</div>
+                    {mergeSuggestions.length > 0 && <div className="mt-1 text-[11px] text-tone-amber">같은 세트로 보이는 장소가 있어요: {mergeSuggestions.map((m) => `${m.from.map((f) => `"${f}"`).join(", ")} → "${m.into}"`).join(" · ")} — 먼저 합치는 편이 좋아요(배경 카드 상세에서).</div>}
                   </div>
-                  <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-edge hover:text-white" aria-label="닫기">×</button>
+                  <button type="button" onClick={() => setSheetModal(null)} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-edge hover:text-strong" aria-label="닫기">×</button>
                 </div>
                 <div className="max-h-[56vh] overflow-y-auto px-5 py-4">
                   <ul className="space-y-2">
@@ -1919,20 +1919,20 @@ export default function ProductionCanvas({
                         : "아직 없음";
                       const planText = "만들 것: 부감 마스터 1장 — 스토리보드와 함께 만들지 않고 별도로 준비할 때만 사용";
                       return (
-                        <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-violet-900/15" : "border-edge bg-[#10151d]"}`}>
+                        <li key={n.id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${checked ? "border-violet-500/60 bg-tint-violet/15" : "border-edge bg-inset"}`}>
                           {sheetModal.step === "pick" ? (
                             <input type="checkbox" checked={checked} onChange={(e) => setSheetModal((m) => { if (!m) return m; const next = new Set(m.selected); e.target.checked ? next.add(n.id) : next.delete(n.id); return { ...m, selected: next }; })} className="h-4 w-4 accent-violet-500" />
                           ) : (
-                            checked ? (job && !JOB_DONE.includes(job.status) ? <RefreshIcon className="h-4 w-4 animate-spin text-sky-300" /> : <span className={`h-2.5 w-2.5 rounded-full ${job?.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />) : <span className="h-4 w-4" />
+                            checked ? (job && !JOB_DONE.includes(job.status) ? <RefreshIcon className="h-4 w-4 animate-spin text-tone-sky" /> : <span className={`h-2.5 w-2.5 rounded-full ${job?.status === "error" ? "bg-red-400" : "bg-emerald-400"}`} />) : <span className="h-4 w-4" />
                           )}
-                          {thumb ? <img src={withMediaToken(String(thumb))} alt="" className="h-16 w-[114px] shrink-0 rounded-lg object-cover" /> : <div className="grid h-16 w-[114px] shrink-0 place-items-center rounded-lg bg-[#151b25] text-[11px] text-gray-600">없음</div>}
+                          {thumb ? <img src={withMediaToken(String(thumb))} alt="" className="h-16 w-[114px] shrink-0 rounded-lg object-cover" /> : <div className="grid h-16 w-[114px] shrink-0 place-items-center rounded-lg bg-panel text-[11px] text-faint">없음</div>}
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-bold text-gray-100">{name}</div>
-                            <div className="truncate text-[11px] text-gray-500">{stateText}</div>
-                            {sheetModal.step === "pick" && <div className="truncate text-[11px] text-violet-300/80">{planText}</div>}
+                            <div className="truncate text-[13px] font-bold text-strong">{name}</div>
+                            <div className="truncate text-[11px] text-faint">{stateText}</div>
+                            {sheetModal.step === "pick" && <div className="truncate text-[11px] text-tone-violet/80">{planText}</div>}
                           </div>
                           {sheetModal.step === "progress" && checked && job && (
-                            <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-red-300" : JOB_DONE.includes(job.status) ? "text-emerald-300" : "text-sky-300"}`} title={job.error || job.label}>{JOB_DONE.includes(job.status) ? (job.status === "error" ? "오류" : `완료 ${doneHere}장`) : `${job.label.replace(` · ${n.label}`, "")} 생성 중${doneHere ? ` (${doneHere}장 완료)` : ""}`}</span>
+                            <span className={`shrink-0 text-[11px] ${job.status === "error" ? "text-tone-red" : JOB_DONE.includes(job.status) ? "text-tone-emerald" : "text-tone-sky"}`} title={job.error || job.label}>{JOB_DONE.includes(job.status) ? (job.status === "error" ? "오류" : `완료 ${doneHere}장`) : `${job.label.replace(` · ${n.label}`, "")} 생성 중${doneHere ? ` (${doneHere}장 완료)` : ""}`}</span>
                           )}
                         </li>
                       );
@@ -1941,12 +1941,12 @@ export default function ProductionCanvas({
                   {sheetModal.step === "progress" && pending.some((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error") && (() => {
                     const text = pending.filter((j) => SET_JOB_TYPES.includes(j.type) && j.status === "error").map((j) => `${j.label}: ${j.error || "오류"}`).join("\n");
                     return (
-                      <div className="mt-2 rounded-lg bg-red-900/20 px-3 py-2">
+                      <div className="mt-2 rounded-lg bg-tint-red/20 px-3 py-2">
                         <div className="mb-1 flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-red-300">오류</span>
-                          <button type="button" onClick={() => { try { void navigator.clipboard.writeText(text); setNotice("오류 문구를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-red-700/60 px-1.5 py-px text-[10px] text-red-200 hover:bg-red-900/40">복사</button>
+                          <span className="text-[10px] font-bold text-tone-red">오류</span>
+                          <button type="button" onClick={() => { try { void navigator.clipboard.writeText(text); setNotice("오류 문구를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-red-700/60 px-1.5 py-px text-[10px] text-tone-red hover:bg-tint-red/40">복사</button>
                         </div>
-                        <pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-[11px] leading-snug text-red-200">{text}</pre>
+                        <pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-words text-[11px] leading-snug text-tone-red">{text}</pre>
                       </div>
                     );
                   })()}
@@ -1954,24 +1954,24 @@ export default function ProductionCanvas({
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge px-5 py-3.5">
                   {sheetModal.step === "pick" ? (
                     <>
-                      <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[12px] text-gray-400">해상도
-                        <select value={sheetModal.resolution} onChange={(e) => setSheetModal((m) => (m ? { ...m, resolution: e.target.value === "4K" ? "4K" : "2K" } : m))} className="rounded border border-edge bg-[#151b25] px-2 py-1 text-[11px] text-gray-100">
+                      <label className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[12px] text-muted">해상도
+                        <select value={sheetModal.resolution} onChange={(e) => setSheetModal((m) => (m ? { ...m, resolution: e.target.value === "4K" ? "4K" : "2K" } : m))} className="rounded border border-edge bg-panel px-2 py-1 text-[11px] text-strong">
                           <option value="2K">2K</option>
                           <option value="4K">4K</option>
                         </select>
                       </label>
-                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">이미지 {sheetModal.selected.size}장 · 사용자 설정 적용</span>
-                      <span className="shrink-0 whitespace-nowrap text-[12px] text-gray-500">모델: <span className="text-gray-200">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-faint">이미지 {sheetModal.selected.size}장 · 사용자 설정 적용</span>
+                      <span className="shrink-0 whitespace-nowrap text-[12px] text-faint">모델: <span className="text-content">{(() => { const p = resolveImageProvider(settings); return p ? (STUDIO_PROVIDER_LABELS[p] || p) : "서버 기본"; })()}</span>{settings.image.provider === "studio" ? " (제작 화면 설정)" : " (캔버스 설정)"}</span>
                       <div className="flex-1" />
-                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-gray-300 hover:bg-edge hover:text-white">취소</button>
+                      <button type="button" onClick={() => setSheetModal(null)} className="min-w-[84px] rounded-lg border border-edge px-4 py-2 text-[13px] text-secondary hover:bg-edge hover:text-strong">취소</button>
                       <button type="button" disabled={!sheetModal.selected.size} onClick={() => { const m = sheetModal; setSheetModal({ ...m, step: "progress" }); void generateMasterPlates(m.selected, m.resolution); }} className="min-w-[112px] rounded-lg bg-violet-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-500 disabled:opacity-40">생성</button>
                     </>
                   ) : (
                     <>
-                      <span className="text-[11px] text-gray-500">{pending.some((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요. 별 버튼을 다시 누르면 이 진행 화면이 열려요." : "끝났어요. 배경 카드에서 플레이트를 확인하세요."}</span>
+                      <span className="text-[11px] text-faint">{pending.some((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status)) ? "생성 중이에요. 닫아도 작업은 계속되고 왼쪽 아래 작업 독에서 볼 수 있어요. 별 버튼을 다시 누르면 이 진행 화면이 열려요." : "끝났어요. 배경 카드에서 플레이트를 확인하세요."}</span>
                       <div className="flex-1" />
                       {!pending.some((j) => SET_JOB_TYPES.includes(j.type) && !JOB_DONE.includes(j.status)) && (
-                        <button type="button" onClick={() => setSheetModal((m) => (m ? { ...m, step: "pick" } : m))} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge hover:text-white">다시 만들기</button>
+                        <button type="button" onClick={() => setSheetModal((m) => (m ? { ...m, step: "pick" } : m))} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-secondary hover:bg-edge hover:text-strong">다시 만들기</button>
                       )}
                       <button type="button" onClick={() => setSheetModal(null)} className="min-w-[72px] rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-500">닫기</button>
                     </>
@@ -2009,12 +2009,12 @@ export default function ProductionCanvas({
               <CanvasFloatingDock
                 open={batchDockOpen}
                 onToggle={() => setBatchDockOpen((v) => !v)}
-                icon={<BotIcon className="h-4 w-4 text-emerald-400" />}
+                icon={<BotIcon className="h-4 w-4 text-tone-emerald" />}
                 title="일괄 생성"
                 tone="emerald"
               >
                 <div className="space-y-2 p-3">
-                  <section className="rounded-xl border border-violet-800/60 bg-violet-950/10 p-2" data-testid="storyboard-generation-group">
+                  <section className="rounded-xl border border-violet-800/60 bg-tint-violet/10 p-2" data-testid="storyboard-generation-group">
                     <button
                       type="button"
                       onClick={() => void startStoryboardBatch()}
@@ -2027,14 +2027,14 @@ export default function ProductionCanvas({
                     </button>
                     {storyboardRun && (
                       <div className="mt-2 text-[11px]">
-                        <div className="flex items-center justify-between text-gray-400">
+                        <div className="flex items-center justify-between text-muted">
                           <span>{storyboardRun.status === "completed" ? "완료" : storyboardRun.status === "failed" ? "실패" : "생성 중"}</span>
                           <span>{storyboardRun.done}/{storyboardRun.total}</span>
                         </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#1d2633]">
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-raised">
                           <div className={`h-full transition-all ${storyboardRun.status === "failed" ? "bg-red-500" : "bg-violet-500"}`} style={{ width: `${storyboardRun.total ? Math.round((storyboardRun.done / storyboardRun.total) * 100) : 4}%` }} />
                         </div>
-                        {storyboardRun.status === "failed" && <p className="mt-1 break-words text-red-300">실패 사유: {storyboardRun.error || "생성에 실패했어요."}</p>}
+                        {storyboardRun.status === "failed" && <p className="mt-1 break-words text-tone-red">실패 사유: {storyboardRun.error || "생성에 실패했어요."}</p>}
                       </div>
                     )}
                   </section>
@@ -2068,18 +2068,18 @@ export default function ProductionCanvas({
         {/* 노드 상세 모달 — 우측에 붙이지 않고 가운데 4:3 카드로, 뒤 캔버스는 흐리게 */}
         {selected && selected.type !== "common" && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onPointerDown={() => setSelectedId("")}>
-          <aside className="flex aspect-[4/3] max-h-full w-[min(1100px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-[#0c1119] text-[12px] text-gray-300 shadow-2xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+          <aside className="flex aspect-[4/3] max-h-full w-[min(1100px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-inset text-[12px] text-secondary shadow-2xl" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
             {selected.type === "cut" && draft && (
               <>
                 <div className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-2.5">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-400">Cut</span>
-                  <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-white">{cutLabelById.get(selected.id) || selected.label} <span className="text-[11px] font-normal text-gray-500">#{String(selected.data.sceneId)}</span></h3>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-tone-emerald">Cut</span>
+                  <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-strong">{cutLabelById.get(selected.id) || selected.label} <span className="text-[11px] font-normal text-faint">#{String(selected.data.sceneId)}</span></h3>
                   <Chip>{String(selected.data.shotType)}</Chip>
                   <Chip>{String(selected.data.cameraMove)}</Chip>
                   {selected.data.cameraDirection !== "front" && <Chip tone="amber">{String(selected.data.cameraDirection)}</Chip>}
                   {selected.data.cameraElevation && selected.data.cameraElevation !== "eye" && <Chip tone="amber">{String(selected.data.cameraElevation)}</Chip>}
-                  {selected.data.estSec ? <span className="text-[11px] text-gray-500">{String(selected.data.estSec)}s</span> : null}
-                  <button type="button" onClick={() => setSelectedId("")} className="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-edge hover:text-white" aria-label="닫기">✕</button>
+                  {selected.data.estSec ? <span className="text-[11px] text-faint">{String(selected.data.estSec)}s</span> : null}
+                  <button type="button" onClick={() => setSelectedId("")} className="grid h-8 w-8 place-items-center rounded-full text-faint hover:bg-edge hover:text-strong" aria-label="닫기">✕</button>
                 </div>
                 <div className="grid min-h-0 flex-1 grid-cols-12 gap-0 overflow-hidden">
                   {/* 왼쪽: 미디어 + 실제 전송 프롬프트 + 계보 */}
@@ -2089,60 +2089,60 @@ export default function ProductionCanvas({
                       <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-still-box">
                         {selected.data.still?.url && !stillMissing
                           ? <img src={withMediaToken(String(selected.data.still.url))} alt="" className={`h-full w-full cursor-zoom-in object-cover ${st.running ? "opacity-40" : ""}`} title="클릭하면 크게 볼 수 있어요" onError={() => markMediaMissing(stillRef)} onClick={() => setLightbox({ url: withMediaToken(String(selected.data.still.url)), title: `${cutLabelById.get(selected.id) || selected.label} 스틸`, objectName: String(selected.data.still.ref || "").replace(/^gs:\/\/[^/]+\//, "") })} />
-                          : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{stillMissing ? <span className="text-red-300">저장소에서 이미지 파일을 찾을 수 없어요.</span> : st.failed ? <span className="select-text text-red-300">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
-                        {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-sky-200" /></div>}
+                          : !st.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-faint">{stillMissing ? <span className="text-tone-red">저장소에서 이미지 파일을 찾을 수 없어요.</span> : st.failed ? <span className="select-text text-tone-red">스틸 실패: {String(st.failed.error || "오류").slice(0, 160)}</span> : "스틸 없음"}</div>}
+                        {st.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-tone-sky" /></div>}
                         <span className="absolute left-2 top-2 inline-flex rounded bg-black/80"><Chip tone={st.running ? "amber" : st.failed ? "red" : selected.data.still?.url ? "emerald" : "gray"}>스틸</Chip></span>
                       </div>
                       <div className="relative aspect-video overflow-hidden rounded-xl bg-black/40" data-testid="detail-video-box">
                         {selected.data.clip?.url
                           ? <video src={withMediaToken(String(selected.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} controls muted playsInline preload="metadata" />
-                          : !vd.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-gray-600">{vd.failed ? <span className="select-text text-red-300">영상 실패: {String(vd.failed.error || "오류").slice(0, 160)}</span> : selected.data.clip?.error ? `영상 실패: ${String(selected.data.clip.error).slice(0, 60)}` : "영상 없음"}</div>}
-                        {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-sky-200" /></div>}
+                          : !vd.running && <div className="grid h-full place-items-center px-3 text-center text-[11px] text-faint">{vd.failed ? <span className="select-text text-tone-red">영상 실패: {String(vd.failed.error || "오류").slice(0, 160)}</span> : selected.data.clip?.error ? `영상 실패: ${String(selected.data.clip.error).slice(0, 60)}` : "영상 없음"}</div>}
+                        {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-7 w-7 animate-spin text-tone-sky" /></div>}
                         <span className="absolute left-2 top-2 inline-flex rounded bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || selected.data.clip?.error) ? "red" : selected.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
                       </div>
                     </div>
                     ); })()}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`)} className="rounded-lg border border-sky-500/50 px-3 py-1.5 text-[11px] font-bold text-sky-200 hover:bg-sky-500/15">저장소에서 선택</button>
-                      <button type="button" onClick={() => { openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] text-gray-200 hover:bg-edge">파일 추가</button>
-                      <span className="text-[10px] text-gray-500">등록하면 이 컷의 현재 스틸로 바로 사용합니다.</span>
+                      <button type="button" onClick={() => openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`)} className="rounded-lg border border-sky-500/50 px-3 py-1.5 text-[11px] font-bold text-tone-sky hover:bg-sky-500/15">저장소에서 선택</button>
+                      <button type="button" onClick={() => { openAssetPicker({ type: "cut", sceneId: selected.data.sceneId }, `${cutLabelById.get(selected.id) || selected.label} 스틸`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] text-content hover:bg-edge">파일 추가</button>
+                      <span className="text-[10px] text-faint">등록하면 이 컷의 현재 스틸로 바로 사용합니다.</span>
                     </div>
-                    {cutPlateMissing(selected.id) ? <p className="mt-2 rounded-md border border-amber-700/50 bg-amber-900/15 px-2 py-1 text-[11px] text-amber-200">{cutPlateMissing(selected.id)}</p> : null}
+                    {cutPlateMissing(selected.id) ? <p className="mt-2 rounded-md border border-amber-700/50 bg-tint-amber/15 px-2 py-1 text-[11px] text-tone-amber">{cutPlateMissing(selected.id)}</p> : null}
                     {Array.isArray(selected.data.still?.history) && selected.data.still.history.length > 0 && (
                       <div className="mt-3">
-                        <p className="mb-1 text-[10px] font-bold text-gray-500">스틸 이력 ({selected.data.still.history.length})</p>
+                        <p className="mb-1 text-[10px] font-bold text-faint">스틸 이력 ({selected.data.still.history.length})</p>
                         <div className="flex flex-wrap gap-1.5">
                           {selected.data.still.history.map((u: string, i: number) => <img key={i} src={withMediaToken(u)} alt="" className="h-14 w-24 rounded-md object-cover" loading="lazy" />)}
                         </div>
                       </div>
                     )}
-                    {selected.data.narration ? <p className="mt-3 rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">{String(selected.data.narration)}</p> : null}
-                    {selected.data.lyrics ? <p className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-400">♪ {String(selected.data.lyrics)}</p> : null}
-                    <details className="mt-3 rounded-lg border border-edge bg-[#0b1018] p-2" open>
-                      <summary className="cursor-pointer text-[11px] font-bold text-gray-400">스틸 프롬프트 (서버 조립 · 실제 전송값)</summary>
-                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-gray-200">{String(selected.data.imagePrompt || "")}</pre>
+                    {selected.data.narration ? <p className="mt-3 rounded-lg border border-edge bg-inset p-2 text-[11px] text-muted">{String(selected.data.narration)}</p> : null}
+                    {selected.data.lyrics ? <p className="mt-2 rounded-lg border border-edge bg-inset p-2 text-[11px] text-muted">♪ {String(selected.data.lyrics)}</p> : null}
+                    <details className="mt-3 rounded-lg border border-edge bg-inset p-2" open>
+                      <summary className="cursor-pointer text-[11px] font-bold text-muted">스틸 프롬프트 (서버 조립 · 실제 전송값)</summary>
+                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-content">{String(selected.data.imagePrompt || "")}</pre>
                     </details>
-                    <details className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2">
-                      <summary className="cursor-pointer text-[11px] font-bold text-gray-400">영상 프롬프트 (서버 조립 · 실제 전송값)</summary>
-                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-gray-200">{String(selected.data.videoPrompt || "")}</pre>
+                    <details className="mt-2 rounded-lg border border-edge bg-inset p-2">
+                      <summary className="cursor-pointer text-[11px] font-bold text-muted">영상 프롬프트 (서버 조립 · 실제 전송값)</summary>
+                      <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap text-[12px] leading-relaxed text-content">{String(selected.data.videoPrompt || "")}</pre>
                     </details>
                     {selected.data.lineage && (
-                      <details className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2">
-                        <summary className="cursor-pointer text-[11px] font-bold text-gray-400">계보 (스틸 {String(selected.data.lineage.imageAttempts || 0)}회 · 영상 {String(selected.data.lineage.videoAttempts || 0)}회)</summary>
-                        <div className="mt-1 space-y-1 text-[10px] text-gray-400">
-                          {selected.data.lineage.videoFromImage ? <p>영상 원본 스틸: <span className="break-all text-gray-500">{String(selected.data.lineage.videoFromImage)}</span></p> : null}
-                          {selected.data.lineage.imageRefs ? <p>참조: <span className="text-gray-300">{String(selected.data.lineage.imageRefs)}</span>{selected.data.lineage.imagePlate ? <span className="text-gray-500"> · 플레이트 키 {String(selected.data.lineage.imagePlate)}</span> : null}</p> : null}
-                          {selected.data.lineage.videoRefs ? <p>영상 참조: <span className="text-gray-300">{String(selected.data.lineage.videoRefs)}</span></p> : null}
-                          {selected.data.lineage.imagePrompt ? <p>마지막 스틸 프롬프트: <span className="text-gray-500">{String(selected.data.lineage.imagePrompt).slice(0, 200)}…</span></p> : null}
+                      <details className="mt-2 rounded-lg border border-edge bg-inset p-2">
+                        <summary className="cursor-pointer text-[11px] font-bold text-muted">계보 (스틸 {String(selected.data.lineage.imageAttempts || 0)}회 · 영상 {String(selected.data.lineage.videoAttempts || 0)}회)</summary>
+                        <div className="mt-1 space-y-1 text-[10px] text-muted">
+                          {selected.data.lineage.videoFromImage ? <p>영상 원본 스틸: <span className="break-all text-faint">{String(selected.data.lineage.videoFromImage)}</span></p> : null}
+                          {selected.data.lineage.imageRefs ? <p>참조: <span className="text-secondary">{String(selected.data.lineage.imageRefs)}</span>{selected.data.lineage.imagePlate ? <span className="text-faint"> · 플레이트 키 {String(selected.data.lineage.imagePlate)}</span> : null}</p> : null}
+                          {selected.data.lineage.videoRefs ? <p>영상 참조: <span className="text-secondary">{String(selected.data.lineage.videoRefs)}</span></p> : null}
+                          {selected.data.lineage.imagePrompt ? <p>마지막 스틸 프롬프트: <span className="text-faint">{String(selected.data.lineage.imagePrompt).slice(0, 200)}…</span></p> : null}
                           {selected.data.lineage.agentJobId ? <p>에이전트 잡: {String(selected.data.lineage.agentJobId)}</p> : null}
                           {selected.data.lineage.updatedAt ? <p>갱신: {String(selected.data.lineage.updatedAt)}</p> : null}
                         </div>
                       </details>
                     )}
                     {pending.filter((j) => String(j.sceneId) === String(selected.data.sceneId)).length > 0 && (
-                      <div className="mt-2 rounded-lg border border-edge bg-[#0b1018] p-2">
-                        <p className="mb-1 text-[10px] font-bold text-gray-500">이 컷의 에이전트 작업</p>
-                        <ul className="space-y-0.5 text-[10px] text-gray-400">
+                      <div className="mt-2 rounded-lg border border-edge bg-inset p-2">
+                        <p className="mb-1 text-[10px] font-bold text-faint">이 컷의 에이전트 작업</p>
+                        <ul className="space-y-0.5 text-[10px] text-muted">
                           {pending.filter((j) => String(j.sceneId) === String(selected.data.sceneId)).map((j) => <li key={j.jobId}>{j.label} — {j.status}</li>)}
                         </ul>
                       </div>
@@ -2150,17 +2150,17 @@ export default function ProductionCanvas({
                   </div>
                   {/* 오른쪽: 편집 폼 */}
                   <div className="col-span-5 flex min-h-0 flex-col overflow-y-auto p-4">
-                    <label className="mb-1 block text-[10px] font-bold text-gray-500">공통 프롬프트 오버라이드 <span className="font-normal">(비우면 프로젝트 공통 사용)</span></label>
-                    <textarea value={draft.common} onChange={(e) => setDraft({ ...draft, common: e.target.value })} rows={2} className="mb-2 w-full rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-200" />
-                    <label className="mb-1 block text-[10px] font-bold text-gray-500">화면 (스틸용 · 정지 상태)</label>
-                    <textarea value={draft.composition} onChange={(e) => setDraft({ ...draft, composition: e.target.value })} rows={4} className="mb-2 w-full rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-200" />
-                    <label className="mb-1 block text-[10px] font-bold text-gray-500">행동 (영상용 · 움직임)</label>
-                    <textarea value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })} rows={3} className="mb-2 w-full rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-200" />
-                    <label className="mb-1 block text-[10px] font-bold text-gray-500">영상 프롬프트 직접 지정 <span className="font-normal">(비우면 자동 조립)</span></label>
-                    <textarea value={draft.promptText} onChange={(e) => setDraft({ ...draft, promptText: e.target.value })} rows={3} className="mb-2 w-full rounded-lg border border-edge bg-[#0b1018] p-2 text-[11px] text-gray-200" />
+                    <label className="mb-1 block text-[10px] font-bold text-faint">공통 프롬프트 오버라이드 <span className="font-normal">(비우면 프로젝트 공통 사용)</span></label>
+                    <textarea value={draft.common} onChange={(e) => setDraft({ ...draft, common: e.target.value })} rows={2} className="mb-2 w-full rounded-lg border border-edge bg-inset p-2 text-[11px] text-content" />
+                    <label className="mb-1 block text-[10px] font-bold text-faint">화면 (스틸용 · 정지 상태)</label>
+                    <textarea value={draft.composition} onChange={(e) => setDraft({ ...draft, composition: e.target.value })} rows={4} className="mb-2 w-full rounded-lg border border-edge bg-inset p-2 text-[11px] text-content" />
+                    <label className="mb-1 block text-[10px] font-bold text-faint">행동 (영상용 · 움직임)</label>
+                    <textarea value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })} rows={3} className="mb-2 w-full rounded-lg border border-edge bg-inset p-2 text-[11px] text-content" />
+                    <label className="mb-1 block text-[10px] font-bold text-faint">영상 프롬프트 직접 지정 <span className="font-normal">(비우면 자동 조립)</span></label>
+                    <textarea value={draft.promptText} onChange={(e) => setDraft({ ...draft, promptText: e.target.value })} rows={3} className="mb-2 w-full rounded-lg border border-edge bg-inset p-2 text-[11px] text-content" />
                     <div className="mb-3 flex items-center gap-2">
-                      <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500"><input type="checkbox" checked={draft.cutRefEnabled} onChange={(e) => setDraft({ ...draft, cutRefEnabled: e.target.checked })} /> 컷 참조</label>
-                      <select value={draft.cutRefId} onChange={(e) => setDraft({ ...draft, cutRefId: e.target.value })} className="flex-1 rounded-lg border border-edge bg-[#0b1018] px-2 py-1 text-[11px]">
+                      <label className="flex items-center gap-1 text-[10px] font-bold text-faint"><input type="checkbox" checked={draft.cutRefEnabled} onChange={(e) => setDraft({ ...draft, cutRefEnabled: e.target.checked })} /> 컷 참조</label>
+                      <select value={draft.cutRefId} onChange={(e) => setDraft({ ...draft, cutRefId: e.target.value })} className="flex-1 rounded-lg border border-edge bg-inset px-2 py-1 text-[11px]">
                         <option value="">참조 컷 없음</option>
                         {cutNodes.filter((c) => c.id !== selected.id).map((c) => <option key={c.id} value={String(c.data.sceneId)}>#{String(c.data.sceneId)} {c.label}</option>)}
                       </select>
@@ -2171,7 +2171,7 @@ export default function ProductionCanvas({
                       <button type="button" disabled={saving || !selected.data.still?.url || !!cutJobState(selected.data.sceneId, "scene_video").running || !!cutPlateMissing(selected.id)} title={cutPlateMissing(selected.id) || (selected.data.still?.url ? `${settings.video.model} · ${settings.video.aspect} · ${settings.video.durationSec}초 · x${settings.video.count}` : "스틸을 먼저 만드세요")} onClick={() => void enqueueMany("scene_video", { projectId, sceneId: selected.data.sceneId, aspectRatio: settings.video.aspect, videoModel: settings.video.model, durationSeconds: settings.video.durationSec, resolution: settings.video.resolution }, `컷 ${selected.data.sceneId} 영상 생성`, selected.data.sceneId, settings.video.count)} className="inline-flex min-w-[96px] items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 hover:bg-edge disabled:opacity-50">{cutJobState(selected.data.sceneId, "scene_video").running ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />생성 중</> : <>영상 생성{settings.video.count > 1 ? ` x${settings.video.count}` : ""}</>}</button>
                       <button type="button" onClick={() => openPreviz(selected.data.sceneId)} className="min-w-[96px] rounded-lg border border-edge px-3 py-1.5 hover:bg-edge">{PREVIZ_TEXT[initialPrevizLang()].title}</button>
                     </div>
-                    {notice && <p className="mt-2 text-[11px] text-amber-300">{notice}</p>}
+                    {notice && <p className="mt-2 text-[11px] text-tone-amber">{notice}</p>}
                   </div>
                 </div>
               </>
@@ -2193,10 +2193,10 @@ export default function ProductionCanvas({
                 <div className="flex h-full flex-col p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="min-w-0">
-                      <h3 className="truncate text-sm font-bold text-white">{selected.label}</h3>
-                      <p className="text-[11px] text-gray-400">이 장소를 쓰는 컷: {cutsHere.join(", ") || "없음"}</p>
+                      <h3 className="truncate text-sm font-bold text-strong">{selected.label}</h3>
+                      <p className="text-[11px] text-muted">이 장소를 쓰는 컷: {cutsHere.join(", ") || "없음"}</p>
                     </div>
-                    <button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button>
+                    <button type="button" onClick={() => setSelectedId("")} className="text-faint hover:text-strong" aria-label="닫기">✕</button>
                   </div>
                   {mainUrl && !mainMissing ? (
                     <div className="relative overflow-hidden rounded-xl border border-edge bg-black">
@@ -2213,45 +2213,45 @@ export default function ProductionCanvas({
                       <span className="absolute right-1.5 top-1.5 rounded-full bg-violet-400 px-1.5 py-0.5 text-[10px] font-black text-black">{topUrl ? "부감 마스터 (배치 기준)" : sheet?.url ? "바이블 · 세트 시트" : "정면 플레이트"}</span>
                     </div>
                   ) : (
-                    <div className={`grid h-40 place-items-center rounded-xl border border-dashed px-4 text-center text-[11px] ${mainMissing ? "border-red-800/70 text-red-300" : "border-edge text-gray-500"}`}>{mainMissing ? "프로젝트에는 경로가 남아 있지만 저장소에서 이미지 파일을 찾을 수 없어요. 아래에서 다시 등록해 주세요." : "아직 배경 이미지가 없어요. 저장소 이미지 또는 파일을 등록할 수 있어요."}</div>
+                    <div className={`grid h-40 place-items-center rounded-xl border border-dashed px-4 text-center text-[11px] ${mainMissing ? "border-red-800/70 text-tone-red" : "border-edge text-faint"}`}>{mainMissing ? "프로젝트에는 경로가 남아 있지만 저장소에서 이미지 파일을 찾을 수 없어요. 아래에서 다시 등록해 주세요." : "아직 배경 이미지가 없어요. 저장소 이미지 또는 파일을 등록할 수 있어요."}</div>
                   )}
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                     {sheet ? <Chip tone="emerald">시트 {String(sheet.resolution || "")}</Chip> : <Chip>시트 없음</Chip>}
                     {sheet?.createdAt ? <span>{new Date(sheet.createdAt).toLocaleString()}</span> : null}
                     <div className="flex-1" />
-                    <button type="button" onClick={() => openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`)} className="min-w-[96px] rounded-lg border border-sky-500/50 px-3 py-1 text-[11px] font-bold text-sky-200 hover:bg-sky-500/15">저장소에서 선택</button>
-                    <button type="button" onClick={() => { openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="min-w-[76px] rounded-lg border border-edge px-3 py-1 text-[11px] text-gray-200 hover:bg-edge">파일 추가</button>
-                    <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
+                    <button type="button" onClick={() => openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`)} className="min-w-[96px] rounded-lg border border-sky-500/50 px-3 py-1 text-[11px] font-bold text-tone-sky hover:bg-sky-500/15">저장소에서 선택</button>
+                    <button type="button" onClick={() => { openAssetPicker({ type: "location", locationName: String(selected.data.name || selected.label) }, `${selected.label} 배경`); window.setTimeout(() => assetFileRef.current?.click(), 0); }} className="min-w-[76px] rounded-lg border border-edge px-3 py-1 text-[11px] text-content hover:bg-edge">파일 추가</button>
+                    <button type="button" onClick={() => setSheetModal({ step: "pick", selected: new Set([selected.id]), resolution: String(settings.image.size) === "4K" ? "4K" : "2K" })} className="min-w-[96px] rounded-lg border border-violet-500/60 px-3 py-1 text-[11px] text-tone-violet hover:bg-violet-500/20">{sheet ? "세트 시트 다시 만들기" : "세트 시트 만들기"}</button>
                   </div>
                   {layoutObj && (
-                    <div className="mt-3 rounded-xl border border-edge bg-[#0b1018] p-2.5 text-[11px] text-gray-300">
-                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">평면도 (모든 앵글이 지키는 배치)</div>
+                    <div className="mt-3 rounded-xl border border-edge bg-inset p-2.5 text-[11px] text-secondary">
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-faint">평면도 (모든 앵글이 지키는 배치)</div>
                       <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                        {[["back", "뒷벽"], ["left", "왼쪽 벽"], ["right", "오른쪽 벽"], ["front", "입구 쪽 벽"], ["floor", "바닥"]].map(([k, lb]) => layoutObj[k] ? <li key={k}><span className="text-gray-500">{lb}:</span> {layoutObj[k]}</li> : null)}
+                        {[["back", "뒷벽"], ["left", "왼쪽 벽"], ["right", "오른쪽 벽"], ["front", "입구 쪽 벽"], ["floor", "바닥"]].map(([k, lb]) => layoutObj[k] ? <li key={k}><span className="text-faint">{lb}:</span> {layoutObj[k]}</li> : null)}
                       </ul>
                     </div>
                   )}
                   {diag && (
-                    <div className="mt-3 select-text rounded-xl border border-edge bg-[#0b1018] p-2.5 text-[11px] text-gray-300">
+                    <div className="mt-3 select-text rounded-xl border border-edge bg-inset p-2.5 text-[11px] text-secondary">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">이 시트는 어떻게 만들어졌나</span>
-                        {diag.promptHead ? <button type="button" onClick={() => { try { void navigator.clipboard.writeText(String(diag.promptHead || "")); setNotice("프롬프트를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-edge px-1.5 py-px text-[10px] text-gray-400 hover:text-white">프롬프트 복사</button> : null}
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-faint">이 시트는 어떻게 만들어졌나</span>
+                        {diag.promptHead ? <button type="button" onClick={() => { try { void navigator.clipboard.writeText(String(diag.promptHead || "")); setNotice("프롬프트를 복사했어요."); } catch { /* 클립보드 불가 */ } }} className="rounded border border-edge px-1.5 py-px text-[10px] text-muted hover:text-strong">프롬프트 복사</button> : null}
                       </div>
                       <ul className="space-y-0.5">
-                        <li>모델: <span className="text-gray-100">{diag.model || "?"}</span>{diag.provider ? ` (${diag.provider})` : ""}{diag.geminiEndpoint ? ` · ${diag.geminiEndpoint}` : ""}{diag.geminiLocationFallback ? ` · 지역 우회` : ""}</li>
-                        <li>참조 이미지: <span className="text-gray-100">{Number(diag.referenceCount) || 0}장</span>{diag.styleSource ? ` · 그림체 참조: ${styleSourceText[diag.styleSource] || diag.styleSource}` : " · 그림체 참조 없음"}</li>
-                        <li>허브 블록(톤&매너·세계관·규칙): <span className={diag.hubContextUsed ? "text-emerald-300" : "text-red-300"}>{diag.hubContextUsed ? "포함" : "없음 — 허브 값이 프로젝트에 없어요"}</span>{diag.fallback ? <span className="text-amber-300"> · 1차 실패 후 참조 없이 재시도</span> : null}</li>
+                        <li>모델: <span className="text-strong">{diag.model || "?"}</span>{diag.provider ? ` (${diag.provider})` : ""}{diag.geminiEndpoint ? ` · ${diag.geminiEndpoint}` : ""}{diag.geminiLocationFallback ? ` · 지역 우회` : ""}</li>
+                        <li>참조 이미지: <span className="text-strong">{Number(diag.referenceCount) || 0}장</span>{diag.styleSource ? ` · 그림체 참조: ${styleSourceText[diag.styleSource] || diag.styleSource}` : " · 그림체 참조 없음"}</li>
+                        <li>허브 블록(톤&매너·세계관·규칙): <span className={diag.hubContextUsed ? "text-tone-emerald" : "text-tone-red"}>{diag.hubContextUsed ? "포함" : "없음 — 허브 값이 프로젝트에 없어요"}</span>{diag.fallback ? <span className="text-tone-amber"> · 1차 실패 후 참조 없이 재시도</span> : null}</li>
                       </ul>
-                      {diag.promptHead ? <details className="mt-1"><summary className="cursor-pointer text-[10px] text-gray-500">프롬프트 앞부분</summary><pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-snug text-gray-400">{diag.promptHead}</pre></details> : null}
+                      {diag.promptHead ? <details className="mt-1"><summary className="cursor-pointer text-[10px] text-faint">프롬프트 앞부분</summary><pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-snug text-muted">{diag.promptHead}</pre></details> : null}
                     </div>
                   )}
                   {(plateUrl || variants.length > 0) && (
                     <div className="mt-3">
-                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">플레이트</div>
+                      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-faint">플레이트</div>
                       <div className="flex flex-wrap gap-1.5">
-                        {plateUrl && <button type="button" onClick={() => setLightbox({ url: withMediaToken(plateUrl), title: `${selected.label} · 정면 플레이트`, objectName: String(selected.data.plateRef || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(plateUrl)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">정면</span></button>}
+                        {plateUrl && <button type="button" onClick={() => setLightbox({ url: withMediaToken(plateUrl), title: `${selected.label} · 정면 플레이트`, objectName: String(selected.data.plateRef || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(plateUrl)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="company-media absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-content">정면</span></button>}
                         {variants.map((v) => (
-                          <button key={v.id} type="button" onClick={() => setLightbox({ url: withMediaToken(v.url), title: `${selected.label} · ${v.label || v.id}`, objectName: String((v as any).objectName || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(v.url)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-gray-200">{v.label || v.id}</span></button>
+                          <button key={v.id} type="button" onClick={() => setLightbox({ url: withMediaToken(v.url), title: `${selected.label} · ${v.label || v.id}`, objectName: String((v as any).objectName || "") })} className="relative overflow-hidden rounded-lg border border-edge"><img src={withMediaToken(v.url)} alt="" className="h-14 w-[100px] object-cover" draggable={false} /><span className="company-media absolute bottom-0 left-0 right-0 bg-black/60 px-1 text-[9px] text-content">{v.label || v.id}</span></button>
                         ))}
                       </div>
                     </div>
@@ -2261,31 +2261,31 @@ export default function ProductionCanvas({
                     const mine = mergeSuggestions.filter((m) => m.from.includes(me) || m.into === me);
                     if (!mine.length) return null;
                     return (
-                      <div className="mt-3 rounded-xl border border-red-700/50 bg-red-900/10 p-2.5">
-                        <div className="mb-1 text-[11px] font-bold text-red-300">같은 세트로 보이는 장소가 있어요</div>
-                        <p className="mb-1.5 text-[10px] text-gray-400">세트가 두 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 하나로 합치면 컷이 옮겨지고 플레이트·시트는 남는 쪽에 없는 것만 물려받아요.</p>
+                      <div className="mt-3 rounded-xl border border-red-700/50 bg-tint-red/10 p-2.5">
+                        <div className="mb-1 text-[11px] font-bold text-tone-red">같은 세트로 보이는 장소가 있어요</div>
+                        <p className="mb-1.5 text-[10px] text-muted">세트가 두 이름으로 갈리면 각각 따로 생성돼 배경이 달라져요. 하나로 합치면 컷이 옮겨지고 플레이트·시트는 남는 쪽에 없는 것만 물려받아요.</p>
                         <ul className="space-y-1">
                           {mine.map((m) => (
-                            <li key={`${m.from.join("|")}→${m.into}`} className="flex items-center gap-2 text-[11px] text-gray-200">
+                            <li key={`${m.from.join("|")}→${m.into}`} className="flex items-center gap-2 text-[11px] text-content">
                               <span className="min-w-0 flex-1 truncate" title={`${m.from.join(", ")} → ${m.into}`}>{m.from.map((f) => `"${f}"`).join(", ")} → "{m.into}"</span>
                               <button type="button" disabled={saving} onClick={() => setMergeModal({ names: [...m.from, m.into].filter((x) => locationNodes.some((n) => String(n.data?.name || n.label) === x)), into: m.into })} className="min-w-[72px] rounded-lg bg-red-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-600 disabled:opacity-50">합치기</button>
-                              {m.from.length === 1 && m.from[0] !== me && m.into !== me ? null : (m.from.length === 1 && m.into !== me ? <button type="button" disabled={saving} onClick={() => void mergeLocations([m.into], me)} className="min-w-[72px] rounded-lg border border-edge px-2 py-1 text-[11px] text-gray-300 hover:bg-edge disabled:opacity-50" title={`"${me}" 이름을 남기고 반대로 합쳐요`}>이 이름으로</button> : null)}
+                              {m.from.length === 1 && m.from[0] !== me && m.into !== me ? null : (m.from.length === 1 && m.into !== me ? <button type="button" disabled={saving} onClick={() => void mergeLocations([m.into], me)} className="min-w-[72px] rounded-lg border border-edge px-2 py-1 text-[11px] text-secondary hover:bg-edge disabled:opacity-50" title={`"${me}" 이름을 남기고 반대로 합쳐요`}>이 이름으로</button> : null)}
                             </li>
                           ))}
                         </ul>
                       </div>
                     );
                   })()}
-                  <p className="mt-3 text-[10px] text-gray-500">같은 장소의 컷은 이 세트 시트를 배경 기준으로 공유해요. 다음 단계에서 네 칸을 승인하면 각 앵글 플레이트로 잘려 저장돼요.</p>
+                  <p className="mt-3 text-[10px] text-faint">같은 장소의 컷은 이 세트 시트를 배경 기준으로 공유해요. 다음 단계에서 네 칸을 승인하면 각 앵글 플레이트로 잘려 저장돼요.</p>
                 </div>
               );
             })()}
             {selected.type === "character" && (
               <div className="p-4">
-                <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-white">{selected.label}</h3><button type="button" onClick={() => setSelectedId("")} className="text-gray-500 hover:text-white" aria-label="닫기">✕</button></div>
+                <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-bold text-strong">{selected.label}</h3><button type="button" onClick={() => setSelectedId("")} className="text-faint hover:text-strong" aria-label="닫기">✕</button></div>
                 {selected.data.imageUrl ? <img src={withMediaToken(String(selected.data.imageUrl))} alt="" className="mb-2 w-full rounded-lg object-cover" /> : null}
-                {selected.data.description ? <p className="text-[11px] text-gray-400">{String(selected.data.description)}</p> : null}
-                <p className="mt-2 text-[11px] text-gray-400">등장 컷: {(graph?.edges || []).filter((e) => e.from === selected.id && e.type === "character").map((e) => e.to.replace("cut:", "#")).join(", ") || "없음"}</p>
+                {selected.data.description ? <p className="text-[11px] text-muted">{String(selected.data.description)}</p> : null}
+                <p className="mt-2 text-[11px] text-muted">등장 컷: {(graph?.edges || []).filter((e) => e.from === selected.id && e.type === "character").map((e) => e.to.replace("cut:", "#")).join(", ") || "없음"}</p>
               </div>
             )}
           </aside>
@@ -2293,39 +2293,39 @@ export default function ProductionCanvas({
         )}
         {assetPicker && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onPointerDown={() => { if (!assetSaving) setAssetPicker(null); }}>
-            <section className="flex max-h-[82vh] w-[min(980px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-[#0c1119] shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+            <section className="flex max-h-[82vh] w-[min(980px,100%)] flex-col overflow-hidden rounded-2xl border border-edge bg-inset shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
               <header className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-bold text-white">이미지 등록 · {assetPicker.title}</h3>
-                  <p className="mt-0.5 text-[11px] text-gray-500">저장소에서 한 장을 고르거나 새 이미지 파일을 추가하세요.</p>
+                  <h3 className="truncate text-sm font-bold text-strong">이미지 등록 · {assetPicker.title}</h3>
+                  <p className="mt-0.5 text-[11px] text-faint">저장소에서 한 장을 고르거나 새 이미지 파일을 추가하세요.</p>
                 </div>
                 <input ref={assetFileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => void uploadAndRegisterAsset(event.target.files?.[0] || null)} />
-                <button type="button" disabled={assetSaving} onClick={() => assetFileRef.current?.click()} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] font-bold text-gray-200 hover:bg-edge disabled:opacity-50">파일 추가</button>
-                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-edge hover:text-white disabled:opacity-50" aria-label="닫기">✕</button>
+                <button type="button" disabled={assetSaving} onClick={() => assetFileRef.current?.click()} className="rounded-lg border border-edge px-3 py-1.5 text-[11px] font-bold text-content hover:bg-edge disabled:opacity-50">파일 추가</button>
+                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="grid h-8 w-8 place-items-center rounded-full text-faint hover:bg-edge hover:text-strong disabled:opacity-50" aria-label="닫기">✕</button>
               </header>
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {assetLoading ? (
-                  <div className="grid h-48 place-items-center text-sm text-gray-400"><span className="inline-flex items-center gap-2"><RefreshIcon className="h-5 w-5 animate-spin" />저장소 불러오는 중</span></div>
+                  <div className="grid h-48 place-items-center text-sm text-muted"><span className="inline-flex items-center gap-2"><RefreshIcon className="h-5 w-5 animate-spin" />저장소 불러오는 중</span></div>
                 ) : assetItems.length ? (
                   <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
                     {assetItems.map((item) => {
                       const active = assetSelected === item.name;
                       return (
-                        <button key={item.name} type="button" disabled={assetSaving} onClick={() => setAssetSelected(item.name)} className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-black/30 text-left transition ${active ? "border-sky-400 ring-2 ring-sky-400/30" : "border-edge hover:border-gray-500"}`} title={item.name}>
+                        <button key={item.name} type="button" disabled={assetSaving} onClick={() => setAssetSelected(item.name)} className={`group relative aspect-square overflow-hidden rounded-xl border-2 bg-black/30 text-left transition ${active ? "border-sky-400 ring-2 ring-sky-400/30" : "border-edge hover:border-edge"}`} title={item.name}>
                           <img src={`/api/media/proxy?objectName=${encodeURIComponent(item.name)}`} alt="" className="h-full w-full object-cover" loading="lazy" />
                           {active && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-sky-400 text-xs font-black text-black">✓</span>}
-                          <span className="absolute bottom-0 left-0 right-0 truncate bg-black/70 px-1.5 py-1 text-[9px] text-gray-300">{item.name.split("/").pop()}</span>
+                          <span className="company-media absolute bottom-0 left-0 right-0 truncate bg-black/70 px-1.5 py-1 text-[9px] text-secondary">{item.name.split("/").pop()}</span>
                         </button>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="grid h-48 place-items-center rounded-xl border border-dashed border-edge text-center text-[12px] text-gray-500">저장된 이미지가 없습니다.<br />‘파일 추가’로 먼저 올려 주세요.</div>
+                  <div className="grid h-48 place-items-center rounded-xl border border-dashed border-edge text-center text-[12px] text-faint">저장된 이미지가 없습니다.<br />‘파일 추가’로 먼저 올려 주세요.</div>
                 )}
-                {assetError && <p className="mt-3 rounded-lg border border-red-800/60 bg-red-950/30 px-3 py-2 text-[11px] text-red-300">{assetError}</p>}
+                {assetError && <p className="mt-3 rounded-lg border border-red-800/60 bg-tint-red/30 px-3 py-2 text-[11px] text-tone-red">{assetError}</p>}
               </div>
               <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-edge px-4 py-3">
-                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="min-w-[76px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-gray-300 hover:bg-edge disabled:opacity-50">취소</button>
+                <button type="button" disabled={assetSaving} onClick={() => setAssetPicker(null)} className="min-w-[76px] rounded-lg border border-edge px-3 py-1.5 text-[12px] text-secondary hover:bg-edge disabled:opacity-50">취소</button>
                 <button type="button" disabled={!assetSelected || assetSaving} onClick={() => void registerAsset(assetSelected)} className="inline-flex min-w-[112px] items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-sky-500 disabled:opacity-40">{assetSaving ? <><RefreshIcon className="h-3.5 w-3.5 animate-spin" />등록 중</> : "선택 이미지 등록"}</button>
               </footer>
             </section>

@@ -344,17 +344,17 @@ export default function VisualNovel({
   return (
     <div className="flex-1 flex flex-col h-full relative overflow-hidden">
       {/* 아이콘 전용 행 — 대시보드·그래프·설정과 동일한 방식 */}
-      <div className="flex justify-center pt-3 pb-1 text-gray-400">
+      <div className="flex justify-center pt-3 pb-1 text-muted">
         <MessagesSquareIcon className="h-10 w-10" />
       </div>
       {/* 상단 바: 포커스 칩 + 모드 토글(오른쪽) */}
       <div className="px-5 py-3 border-b border-edge flex items-center gap-2 z-10">
         {focusAgent && (
-          <span className="text-[11px] px-2 py-1 rounded-lg bg-violet-700/40 border border-violet-500 text-violet-100 inline-flex items-center gap-1 whitespace-nowrap">
+          <span className="text-[11px] px-2 py-1 rounded-lg bg-tint-violet/40 border border-violet-500 text-tone-violet inline-flex items-center gap-1 whitespace-nowrap">
             🔵 {focusAgent.name} 전용 대화
             <button
               onClick={onClearFocus}
-              className="ml-0.5 text-violet-300 hover:text-white"
+              className="ml-0.5 text-tone-violet hover:text-strong"
               title="전용 대화 종료"
             >
               ✕
@@ -363,13 +363,13 @@ export default function VisualNovel({
         )}
         <div className="ml-auto shrink-0 flex items-center gap-2">
           {formatConvDate(convDate) && (
-            <span className="text-xs text-gray-400 tabular-nums" title="이 대화의 생성 날짜">
+            <span className="text-xs text-muted tabular-nums" title="이 대화의 생성 날짜">
               {formatConvDate(convDate)}
             </span>
           )}
           <button
             onClick={() => setShowLog((v) => !v)}
-            className={`text-xs px-2.5 py-1 rounded-lg min-w-[64px] ${showLog ? "bg-violet-700 text-white" : "bg-violet-800/60 hover:bg-violet-700 text-violet-100"}`}
+            className={`text-xs px-2.5 py-1 rounded-lg min-w-[64px] ${showLog ? "bg-violet-700 text-white" : "bg-tint-violet/60 hover:bg-tint-violet text-tone-violet"}`}
             title={showLog ? "무대로 돌아가기" : "이 대화의 전체 기록 보기"}
           >
             <span className="inline-flex items-center gap-1">
@@ -378,7 +378,7 @@ export default function VisualNovel({
           </button>
           <button
             onClick={onToggleMode}
-            className="text-xs px-2.5 py-1 rounded-lg bg-violet-800/60 hover:bg-violet-700 text-violet-100"
+            className="text-xs px-2.5 py-1 rounded-lg bg-tint-violet/60 hover:bg-tint-violet text-tone-violet"
             title="일반 채팅으로 전환"
           >
             <span className="inline-flex items-center gap-1">
@@ -396,7 +396,7 @@ export default function VisualNovel({
         /* 대화 기록 오버레이 — 이 대화의 전체 주고받기(내 메시지 + 직원 메시지)를 스크롤로 표시 */
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
           {turns.length === 0 ? (
-            <div className="h-full grid place-items-center text-sm text-gray-500">아직 나눈 대화가 없어요.</div>
+            <div className="h-full grid place-items-center text-sm text-faint">아직 나눈 대화가 없어요.</div>
           ) : (
             turns.map((t, i) => (
               <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -412,7 +412,7 @@ export default function VisualNovel({
                       <div className="mb-0.5 text-[11px] font-semibold" style={{ color: accentOf(t.agentId) }}>
                         {displayName(t)}
                       </div>
-                      <div className="rounded-2xl rounded-bl-sm border border-edge bg-panel px-3 py-2 text-sm leading-relaxed text-gray-200">
+                      <div className="rounded-2xl rounded-bl-sm border border-edge bg-panel px-3 py-2 text-sm leading-relaxed text-content">
                         {(() => {
                           const shownText = visibleTurnText(t);
                           const revealing = !!(t.streaming || t.typing || t.voicePreparing);
@@ -421,11 +421,11 @@ export default function VisualNovel({
                           ) : shownText ? (
                             <Markdown text={shownText} />
                           ) : (
-                            <span className="text-gray-500">…</span>
+                            <span className="text-faint">…</span>
                           );
                         })()}
                       </div>
-                      {formatChatTime(t.ts) && <div className="mt-0.5 text-[10px] text-gray-500">{formatChatTime(t.ts)}</div>}
+                      {formatChatTime(t.ts) && <div className="mt-0.5 text-[10px] text-faint">{formatChatTime(t.ts)}</div>}
                     </div>
                   </div>
                 ) : (
@@ -434,7 +434,7 @@ export default function VisualNovel({
                       {t.imagePreview && <img src={t.imagePreview} alt="첨부" className="mb-1.5 max-h-40 rounded-lg" />}
                       <span className="whitespace-pre-wrap">{t.text}</span>
                     </div>
-                    {formatChatTime(t.ts) && <div className="mt-0.5 text-right text-[10px] text-gray-500">{formatChatTime(t.ts)}</div>}
+                    {formatChatTime(t.ts) && <div className="mt-0.5 text-right text-[10px] text-faint">{formatChatTime(t.ts)}</div>}
                   </div>
                 )}
               </div>
@@ -452,7 +452,7 @@ export default function VisualNovel({
               <button
                 onClick={copyLast}
                 title={copied ? "복사됨" : "복사"}
-                className="grid h-7 w-7 place-items-center rounded-lg bg-black/40 text-gray-200 backdrop-blur transition hover:text-white"
+                className="grid h-7 w-7 place-items-center rounded-lg bg-black/40 text-white backdrop-blur transition hover:text-white"
               >
                 <CopyIcon className={`h-3.5 w-3.5 ${copied ? "text-emerald-400" : ""}`} />
               </button>
@@ -460,7 +460,7 @@ export default function VisualNovel({
                 onClick={() => onSend(lastUserMsg)}
                 disabled={busy}
                 title="다시 쓰기"
-                className="grid h-7 w-7 place-items-center rounded-lg bg-black/40 text-gray-200 backdrop-blur transition hover:text-white disabled:opacity-30"
+                className="grid h-7 w-7 place-items-center rounded-lg bg-black/40 text-white backdrop-blur transition hover:text-white disabled:opacity-30"
               >
                 <RepeatIcon className="h-3.5 w-3.5" />
               </button>
@@ -495,8 +495,8 @@ export default function VisualNovel({
             />
           </div>
         ) : (
-          <div className="m-auto flex flex-col items-center text-center text-gray-500">
-            <Share2Icon className="mb-3 h-12 w-12 text-gray-600" />
+          <div className="m-auto flex flex-col items-center text-center text-faint">
+            <Share2Icon className="mb-3 h-12 w-12 text-faint" />
             <p>업무를 시작하세요.</p>
             <p className="text-xs mt-1">예: "코어 거기 있나?" · "@마키 런칭 캠페인 아이디어 줘"</p>
           </div>
@@ -514,9 +514,9 @@ export default function VisualNovel({
               <span className="text-base font-bold" style={{ color: accentOf(focusAgent!.id) }}>
                 {displayName({ role: "agent", agentId: focusAgent!.id, name: focusAgent!.name, text: "" })}
               </span>
-              <span className="text-[11px] text-gray-500">{roleOf(focusAgent!.id)}</span>
+              <span className="text-[11px] text-faint">{roleOf(focusAgent!.id)}</span>
             </div>
-            <div className="text-sm leading-relaxed text-gray-300 min-h-[3.2rem] max-h-[34vh] overflow-y-auto pr-1">
+            <div className="text-sm leading-relaxed text-secondary min-h-[3.2rem] max-h-[34vh] overflow-y-auto pr-1">
               {waiting ? <TypingDots /> : (GREETING[focusAgent!.id] ?? `안녕하세요, ${focusAgent!.name}예요. 무엇을 도와드릴까요?`)}
             </div>
           </div>
@@ -531,7 +531,7 @@ export default function VisualNovel({
               <span className="text-base font-bold" style={{ color: accent }}>
                 {displayName(speaker)}
               </span>
-              <span className="text-[11px] text-gray-500">{roleOf(speaker.agentId)}</span>
+              <span className="text-[11px] text-faint">{roleOf(speaker.agentId)}</span>
             </div>
             <div className="text-sm leading-relaxed min-h-[3.2rem] max-h-[34vh] overflow-y-auto pr-1">
               {speakerText ? (
@@ -547,7 +547,7 @@ export default function VisualNovel({
               ) : waiting ? (
                 <TypingDots />
               ) : (
-                <span className="text-gray-500">…</span>
+                <span className="text-faint">…</span>
               )}
             </div>
           </div>
@@ -562,7 +562,7 @@ export default function VisualNovel({
               <span className="text-base font-bold" style={{ color: accentOf(pendingId) }}>
                 {displayName({ role: "agent", agentId: pendingId, name: pendingName, text: "" })}
               </span>
-              <span className="text-[11px] text-gray-500">{roleOf(pendingId)}</span>
+              <span className="text-[11px] text-faint">{roleOf(pendingId)}</span>
             </div>
             <div className="text-sm leading-relaxed min-h-[3.2rem] pr-1">
               <TypingDots />
@@ -603,7 +603,7 @@ export default function VisualNovel({
             <button
               onClick={onStop}
               title="응답 중지하고 다시 입력"
-              className="grid h-[42px] place-items-center px-4 rounded-xl bg-red-700 hover:bg-red-600"
+              className="grid h-[42px] place-items-center px-4 rounded-xl text-white bg-red-700 hover:bg-red-600"
             >
               <PauseIcon className="h-5 w-5" />
             </button>
@@ -612,7 +612,7 @@ export default function VisualNovel({
               onClick={submit}
               disabled={busy || speechInput.enabled}
               title="전송"
-              className="grid h-[42px] place-items-center px-4 rounded-xl bg-violet-700 hover:bg-violet-600 disabled:opacity-40"
+              className="grid h-[42px] place-items-center px-4 rounded-xl text-white bg-violet-700 hover:bg-violet-600 disabled:opacity-40"
             >
               <PlayIcon className="h-5 w-5" />
             </button>

@@ -38,12 +38,12 @@ function SparklesIcon({ className }: { className?: string }) {
 const CONFIG = {
   browser: {
     label: "음성 방식: 무료 읽기 (누르면 서버 음성으로)",
-    className: "border-sky-600/70 bg-sky-900/35 text-sky-200 hover:bg-sky-800/50",
+    className: "border-sky-600/70 bg-tint-sky/35 text-tone-sky hover:bg-tint-sky",
     Icon: GlobeIcon,
   },
   server: {
     label: "음성 방식: 서버 음성 (누르면 고품질 생성으로)",
-    className: "border-teal-600/70 bg-teal-900/35 text-teal-200 hover:bg-teal-800/50",
+    className: "border-teal-600/70 bg-tint-teal/35 text-tone-teal hover:bg-tint-teal",
     Icon: ServerIcon,
   },
   cloud: {

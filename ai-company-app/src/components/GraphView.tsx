@@ -204,14 +204,14 @@ export default function GraphView({
 
   return (
     <div ref={wrapRef} className="relative h-full flex-1 overflow-hidden bg-ink">
-      <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 text-gray-400">
+      <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 text-muted">
         <ChartNetworkIcon className="h-10 w-10" />
       </div>
       {loading && (
-        <div className="absolute inset-0 grid place-items-center text-sm text-gray-500">그래프 로딩…</div>
+        <div className="absolute inset-0 grid place-items-center text-sm text-faint">그래프 로딩…</div>
       )}
       {!loading && nodes.length === 0 && (
-        <div className="absolute inset-0 grid place-items-center text-sm text-gray-500">아직 지식이 없습니다.</div>
+        <div className="absolute inset-0 grid place-items-center text-sm text-faint">아직 지식이 없습니다.</div>
       )}
       <svg className="h-full w-full">
         {edges.map((e, i) => {
@@ -225,7 +225,7 @@ export default function GraphView({
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke="#ffffff"
+              stroke="rgb(var(--company-text))"
               strokeOpacity={0.12}
               strokeWidth={1}
             />
@@ -240,7 +240,7 @@ export default function GraphView({
               cy={n.y}
               r={radiusOf(n)}
               fill={colorOf(n.type)}
-              stroke={sel ? "#ffffff" : "#0e1116"}
+              stroke={sel ? "rgb(var(--company-text))" : "rgb(var(--company-bg))"}
               strokeWidth={sel ? 3 : 1.5}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHover(n)}
@@ -251,14 +251,14 @@ export default function GraphView({
         })}
       </svg>
       {hover && (
-        <div className="absolute left-1/2 top-16 z-10 max-w-[80%] -translate-x-1/2 rounded-lg border border-edge bg-panel/95 px-3 py-2 text-center text-xs text-gray-200 backdrop-blur">
+        <div className="absolute left-1/2 top-16 z-10 max-w-[80%] -translate-x-1/2 rounded-lg border border-edge bg-panel/95 px-3 py-2 text-center text-xs text-content backdrop-blur">
           <span style={{ color: colorOf(hover.type) }}>● {hover.type === "원칙" ? "규칙" : hover.type === "사실" ? "지식" : hover.type}</span>
-          <span className="text-gray-500"> · [{hover.origin}]</span> {hover.text}
+          <span className="text-faint"> · [{hover.origin}]</span> {hover.text}
         </div>
       )}
 
       {/* 범례: 규칙 vs 지식 도트 색상 */}
-      <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-lg border border-edge bg-panel/80 px-3 py-2 text-[11px] text-gray-400 backdrop-blur">
+      <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-lg border border-edge bg-panel/80 px-3 py-2 text-[11px] text-muted backdrop-blur">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["원칙"] }} /> 규칙(원칙·지침)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["사실"] }} /> 지식(사실·데이터)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["결정"] }} /> 결정(확정)</span>
