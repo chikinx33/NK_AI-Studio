@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { documentPreviewLayout } from "../lib/documentPreviewLayout";
 import { appDialog } from "../lib/appDialog";
 import { companyDocumentAction, downloadCompanyFile, uploadCompanyFile, type CompanyDocument, type DocumentSnapshot } from "../lib/api";
 
@@ -146,14 +147,14 @@ export default function CompanyDocumentEditor({ initialPath, folder, onClose, on
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
   function markdown(content: string) {
-    return <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={(url) => url.startsWith("nkfile:") ? url : defaultUrlTransform(url)} components={{
+    return <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[documentPreviewLayout]} urlTransform={(url) => url.startsWith("nkfile:") ? url : defaultUrlTransform(url)} components={{
       img: ({ src, alt }) => src?.startsWith("nkfile:") ? (attachmentPath(src) ? <AttachmentImage path={attachmentPath(src)} alt={alt}/> : <span>잘못된 첨부 경로입니다.</span>) : <img src={src} alt={alt} className="max-w-full"/>,
       a: ({ href, children }) => href?.startsWith("nkfile:") ? <button className="text-emerald-800 underline" onClick={() => { if (!attachmentPath(href)) { setError("잘못된 첨부 경로입니다."); return; } void attachedBlob(attachmentPath(href)).then((blob) => {
         const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = attachmentPath(href).split("/").pop() || "첨부"; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 2000);
       }).catch((e) => setError(e.message)); }}>{children}</button> : <a href={href} target="_blank" rel="noreferrer">{children}</a>,
     }}>{content || "아직 내용이 없습니다."}</ReactMarkdown>;
   }
-  const prose = "break-words text-base leading-8 text-stone-800 [&_h1]:my-5 [&_h1]:text-2xl [&_h2]:my-4 [&_h2]:text-xl [&_h3]:my-3 [&_h3]:text-lg [&_p]:my-3 [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-6 [&_a]:text-emerald-800 [&_a]:underline [&_table]:w-full [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:bg-stone-50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-200 [&_blockquote]:pl-4 [&_blockquote]:text-stone-600 [&_hr]:border-stone-200 [&_code]:rounded [&_code]:bg-stone-100 [&_code]:px-1 [&_pre]:overflow-auto [&_pre]:bg-stone-100 [&_pre]:p-3";
+  const prose = "break-words text-base leading-8 text-stone-800 [&_h1]:my-5 [&_h1]:text-2xl [&_h2]:my-4 [&_h2]:text-xl [&_h3]:my-3 [&_h3]:text-lg [&_p]:whitespace-pre-wrap [&_h1]:whitespace-pre-wrap [&_h2]:whitespace-pre-wrap [&_h3]:whitespace-pre-wrap [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-6 [&_a]:text-emerald-800 [&_a]:underline [&_table]:w-full [&_td]:border [&_td]:border-stone-200 [&_td]:p-2 [&_th]:border [&_th]:border-stone-200 [&_th]:p-2 [&_th]:bg-stone-50 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-200 [&_blockquote]:pl-4 [&_blockquote]:text-stone-600 [&_hr]:border-stone-200 [&_code]:rounded [&_code]:bg-stone-100 [&_code]:px-1 [&_pre]:overflow-auto [&_pre]:bg-stone-100 [&_pre]:p-3";
 
   return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-2 backdrop-blur-sm sm:p-6">
     <section role="dialog" aria-modal="true" aria-label="업무 문서" className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-[#f3f1ed] text-stone-800 shadow-2xl [color-scheme:light] [&_input]:accent-emerald-700 [&_*::-webkit-scrollbar-thumb]:bg-stone-300">
