@@ -14,3 +14,5 @@ ai-company-app/quality-review/
 _brand_backup_20260805/
 .wrangler/
 /NK_Studio_Doc/
+/tmp/
+ai-company-app/tsconfig.tsbuildinfo
