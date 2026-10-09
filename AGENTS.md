@@ -3,7 +3,7 @@
 Before starting work in this repository, read these files first:
 
 - `.trae/rules/nk-ai-studio.md`
-- `docs/prompt-rules.md`
+- `.trae/rules/prompt-rules.md`
 
 Working rules for this repository:
 

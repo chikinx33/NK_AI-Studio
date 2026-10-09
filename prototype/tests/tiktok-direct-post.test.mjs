@@ -220,7 +220,7 @@ test("영상 업로드 가드가 TikTok 단일 청크 상한(64MB)을 넘지 않
 
 test("/tiktok 페이지의 전송 방식 서술이 제출 원문·코드와 일치한다", () => {
   const page = read("prototype/tiktok.html");
-  const submission = read("docs/tiktok_review_description_EN.txt");
+  const submission = read("prototype/tests/fixtures/tiktok_review_description_EN.txt");
   // 영상 FILE_UPLOAD / 사진만 PULL_FROM_URL — 어긋나면 그 자체가 반려 사유다.
   assert.match(page, /videos are sent with <code>FILE_UPLOAD<\/code>/);
   assert.match(page, /Photo posts must use <code>PULL_FROM_URL<\/code>/);
@@ -236,7 +236,7 @@ test("/tiktok 페이지의 전송 방식 서술이 제출 원문·코드와 일�
 test("포털 제출본(_1000.txt)이 1000자 이내이고 코드와 같은 스코프를 서술한다", () => {
   // ★ 이 파일이 포털 Review Description 에 실제로 들어가는 원문이다.
   //   코드 / prototype/tiktok.html / 이 파일 — 셋이 항상 같이 움직여야 한다.
-  const sub = read("docs/tiktok_review_description_1000.txt");
+  const sub = read("prototype/tests/fixtures/tiktok_review_description_1000.txt");
   assert.ok(sub.trimEnd().length <= 1000, `제출본이 ${sub.trimEnd().length}자 — 포털 상한 1000자 초과`);
 
   // 코드가 실제로 요청하는 스코프 조합과 같아야 한다
@@ -316,7 +316,7 @@ test("sns-settings 는 네이티브 alert/confirm 을 직접 호출하지 않는
 });
 
 test("프로덕션 키 전환 절차가 문서로 남아 있다", () => {
-  const doc = read("docs/tiktok_production_cutover.md");
+  const doc = read("prototype/tests/fixtures/tiktok_production_cutover.md");
   // 키 교체와 APP_AUDITED 는 같은 시점에 처리해야 한다
   assert.match(doc, /TIKTOK_CLIENT_KEY/);
   assert.match(doc, /TIKTOK_CLIENT_SECRET/);

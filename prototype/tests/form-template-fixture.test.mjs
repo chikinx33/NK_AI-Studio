@@ -1,4 +1,4 @@
-// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — docs/forms/견적서_표준서식_20260812_final.zip.
+// 실제 표준 서식(_서식/견적서-표준)으로 끝까지 렌더 — prototype/tests/fixtures/견적서_표준서식_20260812_final.zip.
 // 합성 템플릿은 우리가 만든 규칙만 확인한다. 이 테스트는 사람이 한글·워드로 만든 진짜 서식이
 // 우리 렌더러로 채워지는지, 그리고 DOCX·XLSX 의 금액이 같은지를 본다(설계서 §10 #2·#11).
 //
@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const agentDir = join(repoRoot, "prototype/functions/api/agent");
-const zipPath = join(repoRoot, "docs/forms/견적서_표준서식_20260812_final.zip");
+const zipPath = join(repoRoot, "prototype/tests/fixtures/견적서_표준서식_20260812_final.zip");
 
 const { unzipSync, strFromU8 } = await import(pathToFileURL(join(agentDir, "vendor/fflate.bundle.js")).href);
 const { PizZip } = await import(pathToFileURL(join(agentDir, "vendor/docxtemplater-pizzip.bundle.js")).href);
@@ -31,7 +31,7 @@ const entry = (suffix) => {
 const manifestBytes = entry("quote-standard/manifest.json");
 const docxTemplate = entry("quote-standard/template.docx");
 const skip = !manifestBytes || !docxTemplate
-  ? "표준 서식 zip(docs/forms/…)이 없어 건너뜁니다"
+  ? "표준 서식 zip(prototype/tests/fixtures/…)이 없어 건너뜁니다"
   : false;
 
 const manifest = manifestBytes ? parseManifest(strFromU8(manifestBytes), "견적서-표준") : null;

@@ -23,7 +23,7 @@ test("이미지 제작 예정 Skill은 PRD·와이어프레임·v1 입력 계약
   const [registry, schemas, prd] = await Promise.all([
     read("ai-company-app/src/lib/companySkills.ts"),
     read("ai-company-app/src/lib/companySkillSchemas.ts"),
-    read("docs/ai-company-image-skill-prd.md"),
+    read("prototype/tests/fixtures/ai-company-image-skill-prd.md"),
   ]);
   assert.match(registry, /id: "image"[\s\S]*inputSchema: "company-skill\/image\/v1"/);
   assert.match(registry, /executorId: "image-adapter-v1"/);
