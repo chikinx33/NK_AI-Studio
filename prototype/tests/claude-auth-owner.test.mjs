@@ -120,6 +120,12 @@ test("설정 API는 로그인 계정에만 저장하고 다른 계정 ID를 보�
   assert.equal(h.rows.size, 2);
 });
 
+test("터미널 줄바꿈으로 공백이 낀 토큰도 공백 없이 저장한다", async () => {
+  const h = harness();
+  await h.post("u", { kind: "claudeAuth", authMode: "subscription", oauthToken: "sk-ant-oat01-abc def\nghi " });
+  assert.equal(h.rows.get("u").claude_oauth_token, "sk-ant-oat01-abcdefghi");
+});
+
 test("값 없이 인증 모드만 저장하는 것은 본인 인증 등록으로 취급하지 않는다", async () => {
   const h = harness();
   const data = await (await h.post("u", { kind: "claudeAuth", authMode: "subscription", oauthToken: "" })).json();

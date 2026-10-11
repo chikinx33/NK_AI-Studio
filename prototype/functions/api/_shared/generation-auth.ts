@@ -58,9 +58,10 @@ export async function saveGenerationSettings(env: any, userId: string, body: any
   if (typeof body.chatEnabled !== 'boolean' || typeof body.imageEnabled !== 'boolean') throw new Error('invalid_generation_choice');
   if (!['subscription', 'api_key'].includes(body.authMode)
       || !['subscription', 'api_key', 'both', 'none'].includes(body.imageMode)) throw new Error('invalid_auth_mode');
-  const token = String(body.oauthToken || '').trim();
-  const key = String(body.apiKey || '').trim();
-  const imageKey = String(body.imageApiKey || '').trim();
+  // 키에는 공백이 없다. 터미널이 긴 토큰을 줄바꿈해 보여 줘서 복사본 중간에 공백·개행이 끼므로 전부 지운다.
+  const token = String(body.oauthToken || '').replace(/\s+/g, '');
+  const key = String(body.apiKey || '').replace(/\s+/g, '');
+  const imageKey = String(body.imageApiKey || '').replace(/\s+/g, '');
   if ((token && !/^sk-ant-oat[^\s]{10,4096}$/.test(token)) || (key && !/^sk-ant-api[^\s]{10,4096}$/.test(key))
       || (imageKey && !/^[A-Za-z0-9._\-]{20,4096}$/.test(imageKey))) throw new Error('invalid_credential_format');
   const sql = getSql(env);

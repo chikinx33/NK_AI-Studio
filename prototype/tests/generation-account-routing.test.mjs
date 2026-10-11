@@ -74,6 +74,12 @@ test('checking chat without credentials fails closed; malformed settings never o
   }
   assert.equal(h.rows.get('alice').claude_oauth_token, undefined);
 });
+test('a token copied from a wrapped terminal line is saved without the inserted spaces and line breaks', async () => {
+  const h = accounts();
+  const wrapped = ownClaude.slice(0, 20) + ' \n ' + ownClaude.slice(20) + '\n';
+  await h.generation.saveGenerationSettings(h.env, 'alice', { ...choice, oauthToken: wrapped });
+  assert.equal(h.rows.get('alice').claude_oauth_token, ownClaude);
+});
 
 test('every image request uses server account choice, including explicit Gemini/Atlas page or agent requests', async () => {
   const src = read('prototype/functions/api/imagen.ts');

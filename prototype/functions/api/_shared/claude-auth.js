@@ -85,8 +85,9 @@ export async function saveClaudeAuth(sql, userId, patch) {
   await ensureSettingsSchema(sql);
   const cur = (await getSettingsRow(sql, userId)) || {};
   const mode = patch.authMode === "api_key" ? "api_key" : "subscription";
-  const oauth = (patch.oauthToken && patch.oauthToken.trim()) || cur.claude_oauth_token || null;
-  const key = (patch.apiKey && patch.apiKey.trim()) || cur.claude_api_key || null;
+  // 터미널 줄바꿈 때문에 복사한 토큰 중간에 공백·개행이 낀다. 키에는 공백이 없으니 전부 지운다.
+  const oauth = (patch.oauthToken && patch.oauthToken.replace(/\s+/g, "")) || cur.claude_oauth_token || null;
+  const key = (patch.apiKey && patch.apiKey.replace(/\s+/g, "")) || cur.claude_api_key || null;
   await sql(
     `INSERT INTO app_settings (user_id, claude_auth_mode, claude_oauth_token, claude_api_key)
      VALUES ($1, $2, $3, $4)
