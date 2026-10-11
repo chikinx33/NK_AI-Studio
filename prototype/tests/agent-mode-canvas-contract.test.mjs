@@ -205,7 +205,8 @@ test("★작성기는 작업 공간을 잘라먹지 않는 오버레이이고, �
   assert.match(dock, /placeholder=\{projectId \? "무엇을 만들고 싶으신가요\?"/);
   assert.match(canvas, /\{\/\* 대화 — 작성기\(하단 중앙 필\) \+ 세션 패널\(오른쪽 오버레이\)/);
   // 이미지 첨부(파일·붙여넣기) → 멀티모달로 전달.
-  assert.match(dock, /reader\.readAsDataURL\(file\)/);
+  // 큰 사진은 버리지 않고 모델 한도(Claude 이미지 10MB) 안으로 줄여서 싣는다.
+  assert.match(dock, /await fitImageForModel\(file\)/);
   assert.match(dock, /onPaste=\{onPaste\}/);
   assert.match(dock, /images = attachments\.map\(\(a\) => \(\{ base64: a\.base64, mimeType: a\.mimeType \}\)\)/);
   assert.match(dock, /\{ conversationId, signal: controller\.signal, images \}/);

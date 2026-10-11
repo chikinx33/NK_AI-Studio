@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, type ReactNode } from "react"
 import { addKnowledge, type ChatFileReference, type ChatReference } from "../lib/api";
 import Markdown from "./Markdown";
 import { importSpreadsheet, isSpreadsheetFile, type SheetImportResult } from "../lib/xlsxImport";
+import { fitImageForModel } from "../lib/imageAttachment";
 import ChatFileAttachments from "./ChatFileAttachments";
 import ImageLightbox from "./ImageLightbox";
 import SoundToggle from "./SoundToggle";
@@ -421,19 +422,17 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     "text/tab-separated-values",
   ];
 
-  const readFile = useCallback((file: File): Promise<Attachment | null> => {
-    return new Promise((resolve) => {
-      if (!ALLOWED_MIME.includes(file.type)) { resolve(null); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(",")[1] || "";
-        const preview = file.type.startsWith("image/") ? dataUrl : "";
-        resolve({ base64, mimeType: file.type, name: file.name, preview });
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
+  const readFile = useCallback(async (file: File): Promise<Attachment | null> => {
+    if (!ALLOWED_MIME.includes(file.type)) return null;
+    try {
+      // 이미지는 모델 한도 안으로 줄여서 싣는다(원본 그대로면 큰 사진 하나로 응답 전체가 400).
+      const fitted = await fitImageForModel(file);
+      const preview = file.type.startsWith("image/") ? fitted.dataUrl : "";
+      return { base64: fitted.base64, mimeType: fitted.mimeType, name: file.name, preview };
+    } catch {
+      setAttachError(`'${file.name}' 이미지를 첨부할 수 없어요. 크기를 줄여서 다시 넣어 주세요.`);
+      return null;
+    }
   }, []);
 
   // 여러 파일을 한 번에 첨부(최대 MAX_ATTACHMENTS). 허용 형식만 통과.
@@ -463,7 +462,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
       const read = await Promise.all(others.map(readFile));
       const valid = read.filter((a): a is Attachment => !!a);
       if (valid.length) setAttachments((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
-      else if (!spreadsheets.length) setAttachError("이미지·PDF·엑셀(csv 포함)만 첨부할 수 있어요.");
+      else if (!spreadsheets.length && others.some((file) => !ALLOWED_MIME.includes(file.type))) setAttachError("이미지·PDF·엑셀(csv 포함)만 첨부할 수 있어요.");
     }
   }, [readFile]);
 

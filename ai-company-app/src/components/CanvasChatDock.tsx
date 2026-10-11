@@ -7,6 +7,7 @@ import GenerationSettingsPopover from "./GenerationSettingsPopover";
 import AgentSettingsPanel from "./AgentSettingsPanel";
 import Markdown from "./Markdown";
 import ImageLightbox from "./ImageLightbox";
+import { fitImageForModel } from "../lib/imageAttachment";
 
 /**
  * 캔버스 작성기 — 두 모드가 한 자리를 번갈아 쓴다(동시에 뜨지 않는다).
@@ -23,7 +24,6 @@ import ImageLightbox from "./ImageLightbox";
 
 const CONTEXT_RE = /^\[캔버스[^\]]*\]\s*\n?/;
 const MAX_ATTACH = 6;
-const MAX_ATTACH_BYTES = 6 * 1024 * 1024;
 const MODE_KEY = "canvasComposerMode";
 
 export type ComposerMode = "normal" | "agent";
@@ -138,16 +138,15 @@ export default function CanvasChatDock({
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, MAX_ATTACH);
-    const read = (file: File) => new Promise<Attachment | null>((resolve) => {
-      if (file.size > MAX_ATTACH_BYTES) { resolve(null); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = String(reader.result || "");
-        resolve({ id: `${file.name}-${file.size}-${Date.now()}`, name: file.name, mimeType: file.type, base64: dataUrl.split(",")[1] || "", preview: dataUrl });
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
+    // 큰 사진은 버리지 않고 모델 한도 안으로 줄여서 싣는다.
+    const read = async (file: File): Promise<Attachment | null> => {
+      try {
+        const fitted = await fitImageForModel(file);
+        return { id: `${file.name}-${file.size}-${Date.now()}`, name: file.name, mimeType: fitted.mimeType, base64: fitted.base64, preview: fitted.dataUrl };
+      } catch {
+        return null;
+      }
+    };
     const loaded = (await Promise.all(list.map(read))).filter(Boolean) as Attachment[];
     setAttachments((prev) => [...prev, ...loaded].slice(0, MAX_ATTACH));
   }, []);
