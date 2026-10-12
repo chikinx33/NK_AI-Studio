@@ -6,6 +6,7 @@ import { dataUrlVideoSeconds, mp4DurationSeconds } from "./motion-control.js";
 import { videoInputSourcesFor, creditsForUsd } from "./video-pricing.ts";
 import { audioDurationSeconds, createCostMeter, withCostMeter, type CostMeter } from "./usage-cost.ts";
 import { getGoogleAccessToken, parseGcsUri } from "./gcs.js";
+import { requireMaster } from "./admin-users";
 
 
 export type CreditSummary = {
@@ -485,6 +486,9 @@ export async function withCreditCharge(
     return json({ error: quote.error, message: quote.message || "요금을 계산할 수 없어 생성을 시작하지 않았습니다.", credits: { quote } }, 400, origin);
   }
   if (!quote.credits) return handler(context);
+  // 마스터(사이트 소유자)는 공급자 비용을 자기 마스터 키로 직접 낸다 — 사이트 크레딧까지 빼면 같은 비용을 두 번 센다.
+  // 견적은 그대로 계산·검증하고(요금을 못 내는 요청은 위에서 막힘), 예약·차감만 건너뛴다.
+  if (requireMaster(env, auth.userId)) return handler(context);
   let reservation: any;
   try {
     reservation = await reserveCredits(env, auth.userId, quote, body, request);

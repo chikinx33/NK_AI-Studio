@@ -9,7 +9,8 @@ import vm from "node:vm";
 const root = resolve(import.meta.dirname, "../..");
 const read = (file) => readFileSync(resolve(root, "prototype/functions/api", file), "utf8").replace(/\r\n?/g, "\n");
 const esbuild = createRequire(import.meta.url)(resolve(root, "ai-company-app/node_modules/esbuild"));
-const env = { CLAUDE_AUTH_MODE: "api_key", ANTHROPIC_API_KEY: "MASTER_KEY", CLAUDE_CODE_OAUTH_TOKEN: "MASTER_OAUTH" };
+// 구독(OAuth) 토큰은 소유자(AUTH_ID) 한 사람만 쓴다. 구독 토큰 시나리오는 소유자 u 로 확인한다.
+const env = { CLAUDE_AUTH_MODE: "api_key", ANTHROPIC_API_KEY: "MASTER_KEY", CLAUDE_CODE_OAUTH_TOKEN: "MASTER_OAUTH", AUTH_ID: "u" };
 function harness(initial = {}) {
   const rows = new Map(Object.entries(initial));
   const calls = [];
@@ -104,11 +105,11 @@ test("설정 DB 장애·DB 미설정·사용자 미확인은 마스터 호출로
 
 test("설정 API는 로그인 계정에만 저장하고 다른 계정 ID를 보낸 요청도 자기 계정에 저장한다", async () => {
   const h = harness();
-  await h.post("alice", { kind: "claudeAuth", userId: "bob", authMode: "api_key", apiKey: "ALICE_KEY" });
-  await h.post("bob", { kind: "claudeAuth", userId: "alice", authMode: "subscription", oauthToken: "BOB_OAUTH" });
+  await h.post("alice", { kind: "claudeAuth", userId: "u", authMode: "api_key", apiKey: "ALICE_KEY" });
+  await h.post("u", { kind: "claudeAuth", userId: "alice", authMode: "subscription", oauthToken: "BOB_OAUTH" });
   assert.equal(h.rows.get("alice").claude_api_key, "ALICE_KEY");
-  assert.equal(h.rows.get("bob").claude_oauth_token, "BOB_OAUTH");
-  for (const user of ["alice", "bob"]) {
+  assert.equal(h.rows.get("u").claude_oauth_token, "BOB_OAUTH");
+  for (const user of ["alice", "u"]) {
     const data = await (await h.get(user)).json();
     assert.equal(data.claudeAuth.source, "user");
     assert.equal(data.claudeAuth.configured, true);
@@ -134,15 +135,15 @@ test("값 없이 인증 모드만 저장하는 것은 본인 인증 등록으로
 });
 
 test("서로 다른 계정의 동시 요청과 진단은 각자의 헤더로 호출한다", async () => {
-  const h = harness({ alice: ownKey, bob: ownOAuth });
-  await Promise.all(["alice", "bob", "new"].map(async (user) => {
+  const h = harness({ alice: ownKey, u: ownOAuth });
+  await Promise.all(["alice", "u", "new"].map(async (user) => {
     const a = await h.auth.studioAuth(h.env, user);
     await h.auth.claudeFetch(h.env, a, () => ({ messages: [{ role: "user", content: user }] }));
   }));
   const keys = h.calls.map((c) => c.headers["x-api-key"] || c.headers.Authorization);
   assert.deepEqual(keys.sort(), ["OWN_KEY", "Bearer OWN_OAUTH", "MASTER_KEY"].sort());
   h.calls.length = 0;
-  const d = await h.auth.authDiagnose(h.sql, "bob", h.env);
+  const d = await h.auth.authDiagnose(h.sql, "u", h.env);
   assert.equal(d.source, "user");
   assert.equal(h.calls[0].headers.Authorization, "Bearer OWN_OAUTH");
   assert.equal(h.calls[0].headers["x-api-key"], undefined);
@@ -206,7 +207,8 @@ test("PPT·PDF·문서 양식의 직접 Claude 호출도 도구 실행자의 인
 });
 
 test("AI 기업 상태는 마스터 키 유무 대신 실제 선택된 계정 인증을 보고한다", async () => {
-  const h = harness({ u: ownOAuth, broken: { ...ownKey, claude_auth_mode: "subscription" } });
+  // memberOauth: 회원이 구독 토큰만 등록 → 회원은 구독을 쓸 수 없으니 미등록과 같이 마스터 API 키로 간다.
+  const h = harness({ u: ownOAuth, memberOauth: ownOAuth });
   const js = esbuild.transformSync(read("agent/status.ts").replace(/^import .*$/gm, "").replace(/^export /gm, ""), { loader: "ts" }).code;
   const deps = { getSql: () => h.sql, authStatus: h.auth.authStatus,
     authorizeRequest: async (r) => ({ ok: true, userId: r.headers.get("x-test-user") }),
@@ -214,11 +216,36 @@ test("AI 기업 상태는 마스터 키 유무 대신 실제 선택된 계정 �
     getRuntime: async () => ({ workMode: "on", autonomous: false }),
     send: (body, status) => new Response(JSON.stringify(body), { status }), corsHeaders: () => ({}), ROSTER: [], CLOUD_MODELS: {} };
   const get = new Function(...Object.keys(deps), js + "\nreturn onRequestGet;")(...Object.values(deps));
-  for (const [user, source, configured] of [["u", "user", true], ["new", "master", true], ["broken", "user", false]]) {
+  for (const [user, source, configured] of [["u", "user", true], ["new", "master", true], ["memberOauth", "master", true]]) {
     const data = await (await get({ request: new Request("https://test/status", { headers: { "x-test-user": user } }), env: h.env })).json();
     assert.deepEqual(data.cloud, { authSource: source, configured });
     assert.doesNotMatch(JSON.stringify(data), /OWN_KEY|OWN_OAUTH|MASTER_KEY|MASTER_OAUTH/);
   }
+});
+
+test("회원이 등록한 구독 토큰은 쓰지 않고 본인 API 키, 없으면 마스터 API 키로 호출한다", async () => {
+  const h = harness({ m1: ownOAuth, m2: { ...ownOAuth, claude_api_key: "M2_KEY" } });
+  const a1 = await h.auth.studioAuth(h.env, "m1");
+  assert.equal(a1.subscription, false);
+  assert.equal(a1.headers["x-api-key"], "MASTER_KEY");
+  assert.equal(a1.headers.Authorization, undefined);
+  const a2 = await h.auth.studioAuth(h.env, "m2");
+  assert.equal(a2.headers["x-api-key"], "M2_KEY");
+  assert.equal(a2.headers.Authorization, undefined);
+  const r = await h.auth.resolveAuth(h.sql, "m2", h.env);
+  assert.equal(r.oauthToken, null);
+  assert.equal(r.mode, "api_key");
+});
+
+test("마스터 인증이 구독 모드여도 미등록 회원은 마스터 구독 토큰이 아니라 마스터 API 키를 쓴다", async () => {
+  const h = harness();
+  const subEnv = { ...h.env, CLAUDE_AUTH_MODE: "subscription" };
+  const member = await h.auth.studioAuth(subEnv, "new");
+  assert.equal(member.subscription, false);
+  assert.equal(member.headers["x-api-key"], "MASTER_KEY");
+  const owner = await h.auth.studioAuth(subEnv, "u");
+  assert.equal(owner.subscription, true);
+  assert.equal(owner.headers.Authorization, "Bearer MASTER_OAUTH");
 });
 
 function launcherHarness(agentSettings) {

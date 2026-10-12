@@ -153,6 +153,11 @@ export function atlasPriceUsd(atlasModel: string, params: any, media: { inputVid
     const tokens = seedanceTokens(spec.base, String(p.ratio || "16:9"), d, hasVideo ? num(media.inputVideoSeconds) : 0);
     return tokens / 1000 * (hasVideo ? spec.perK * SEEDANCE_20_VIDEO_RATIO : spec.perK);
   }
+  // 드래프트 완성(draft-complete)은 드래프트의 길이·비율 그대로 1080p 를 다시 렌더한다 — 1080p 출력과 같은 토큰 단가(2026-10-11 실측 초당 약 $0.59).
+  if (atlasModel === "bytedance/seedance-2.5/draft-complete") {
+    const tokens = seedanceTokens("1080p", String(p.ratio || "16:9"), d, 0);
+    return tokens / 1000 * SEEDANCE_25["1080p"].perK;
+  }
   if (atlasModel === "bytedance/seedance-2.5/reference-to-video") {
     const spec = rateOf(SEEDANCE_25, String(p.resolution || "720p"), atlasModel);
     const hasVideo = Array.isArray(p.reference_videos) && p.reference_videos.length > 0;
@@ -175,6 +180,8 @@ export interface VideoCostInput {
   /** 참조·편집 영상 개수(video.ts 가 그 모델에 싣는 것만). */
   referenceVideoCount?: number;
   hasAudio?: boolean;
+  /** Seedance 2.5 드래프트(480p 미리보기, draft-complete 로 1080p 완성 가능). */
+  draft?: boolean;
   /** 입력 영상 길이 합(초, 소수). 서버가 파일에서 잰 값. */
   inputVideoSeconds?: number;
   generateAudio?: boolean;
@@ -221,8 +228,13 @@ export function atlasRequestFor(input: VideoCostInput): { atlasModel: string; pa
     if (model === "seedance-r2v" && vids > 0) params.video = "input"; // video.ts 는 videoDataUrl 하나만 싣는다
     return { atlasModel: model === "seedance-r2v" ? "bytedance/seedance-2.0/reference-to-video" : "bytedance/seedance-2.0/image-to-video", params };
   }
+  if (model === "seedance-2.5-complete") {
+    // 길이·비율은 드래프트 것을 쓴다. 호출자가 드래프트의 길이·비율을 함께 보내야 정확히 견적된다.
+    return { atlasModel: "bytedance/seedance-2.5/draft-complete", params: { duration: snapDurationFor("seedance-2.5", d), resolution: "1080p", ratio } };
+  }
   if (model === "seedance-2.5") {
-    const params: Record<string, unknown> = { duration: snapDurationFor("seedance-2.5", d), resolution: String(input.resolution || "720p"), ratio };
+    // 드래프트는 공급자가 해상도를 480p 로 덮어쓴다(일반 480p 요금).
+    const params: Record<string, unknown> = { duration: snapDurationFor("seedance-2.5", d), resolution: input.draft ? "480p" : String(input.resolution || "720p"), ratio };
     if (vids > 0) params.reference_videos = Array(vids).fill("input");
     return { atlasModel: "bytedance/seedance-2.5/reference-to-video", params };
   }
@@ -294,6 +306,7 @@ export function videoCostInputFromBody(body: any, env?: any): VideoCostInput {
     referenceImageCount: refCount,
     referenceVideoCount: sources.length || Math.max(0, Math.trunc(Number(b.referenceVideoCount) || 0)),
     hasAudio: !!String(b.audioDataUrl || "") || b.hasAudio === true,
+    draft: b.draft === true,
     inputVideoSeconds: Number(b.inputVideoSeconds) || 0,
     generateAudio: b.generateAudio,
     veoAtlasModel: env && env.VEO_ATLAS_MODEL_ID ? String(env.VEO_ATLAS_MODEL_ID) : undefined,

@@ -36,7 +36,8 @@ function accounts() {
     connectorStatus: row => ({ configured: !!row, online: !!row?.ready, email: row?.email || '' }) };
   const claude = evaluate(read('prototype/functions/api/_shared/claude-auth.js'), { ...deps, isCreditExhausted: () => false });
   const generation = evaluate(read('prototype/functions/api/_shared/generation-auth.ts'), { ...deps, ...claude });
-  const env = { ANTHROPIC_API_KEY: 'MASTER-CLAUDE', CLAUDE_AUTH_MODE: 'api_key', OPENAI_API_KEY: 'MASTER-OPENAI',
+  // 구독(OAuth) 토큰은 소유자(AUTH_ID) 한 사람만 쓴다. 본인 구독 토큰을 고르는 alice 를 소유자로 둔다.
+  const env = { AUTH_ID: 'alice', ANTHROPIC_API_KEY: 'MASTER-CLAUDE', CLAUDE_AUTH_MODE: 'api_key', OPENAI_API_KEY: 'MASTER-OPENAI',
     ATLASCLOUD_API_KEY: 'MASTER-ATLAS', GEMINI_API_KEY: 'MASTER-GEMINI' };
   return { rows, connectors, sql, claude, generation, env };
 }

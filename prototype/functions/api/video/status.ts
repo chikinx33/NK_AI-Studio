@@ -10,6 +10,7 @@ import { MAX_MIRROR_BYTES } from "../_shared/video-specs";
 const MIRROR_STEP_TIMEOUT_MS = 40_000;
 import { resolveProjectStorageOwner } from "../_shared/shares";
 import { settleDeferredCreditFromResponse } from "../_shared/credits";
+import { atlasKeyFor } from "../_shared/generation-auth";
 import {
   callKlingApi,
   isKlingDone,
@@ -42,6 +43,31 @@ function atlasPredictionStatus(body: any): string {
   return String(body?.data?.status || body?.status || '').toLowerCase();
 }
 
+// 조회에 쓸 Atlas 키 후보(중복 제거). 사용자 키가 있으면 먼저.
+async function atlasKeysFor(env: any, userId: string): Promise<string[]> {
+  const keys: string[] = [];
+  try {
+    const own = await atlasKeyFor(env, userId);
+    if (own.key) keys.push(own.key);
+  } catch (_) { /* 설정을 못 읽으면 마스터만 */ }
+  const master = String(env?.ATLASCLOUD_API_KEY || '').trim();
+  if (master && !keys.includes(master)) keys.push(master);
+  return keys;
+}
+
+// 앞 키에서 작업을 찾지 못하면(401/403/404 이고 본문에 작업 상태가 없음) 다음 키로 다시 조회한다.
+async function fetchAtlasPrediction(statusUrl: string, keys: string[]): Promise<Response> {
+  let last: Response | null = null;
+  for (const key of keys) {
+    const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${key}` } });
+    if (res.ok || ![401, 403, 404].includes(res.status)) return res;
+    const body = await res.clone().text().catch(() => '');
+    if (atlasPredictionStatus(safeJson(body))) return res;
+    last = res;
+  }
+  return last as Response;
+}
+
 const handleGet: PagesFunction = async ({ request, env }) => {
   let jobId = '';
   try {
@@ -72,6 +98,9 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         return out;
       } catch { return {}; }
     })();
+    // 제출(video.ts)과 같은 키로 조회한다. 회원이 자기 Atlas 키로 낸 작업은 마스터 키로는 찾을 수 없다.
+    // 제출 뒤 키 설정을 바꿨을 수 있으니 사용자 키 → 마스터 키 순으로 시도한다.
+    const atlasKeys = await atlasKeysFor(env, auth.userId);
     const isVideoGen = source === 'video-gen';
     const requestedOwnerId = (url.searchParams.get('ownerId') || '').trim();
     const userId = projectTag
@@ -258,13 +287,12 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     }
 
     if (isSeedance) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) {
+      if (!atlasKeys.length) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
       const predictionId = jobId.replace(/^seedance:/, '');
       const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
-      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const res = await fetchAtlasPrediction(statusUrl, atlasKeys);
       const txt = await res.text();
       const json = safeJson(txt);
       if (!res.ok && !atlasPredictionStatus(json)) {
@@ -310,13 +338,12 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     }
 
     if (isKling) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) {
+      if (!atlasKeys.length) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
       const predictionId = jobId.replace(/^kling-lipsync:/, '').replace(/^kling-multi:/, '').replace(/^kling:/, '');
       const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
-      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const res = await fetchAtlasPrediction(statusUrl, atlasKeys);
       const txt = await res.text();
       const jsonBody = safeJson(txt);
       if (!res.ok && !atlasPredictionStatus(jsonBody)) {
@@ -355,13 +382,12 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     }
 
     if (isVeo) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) {
+      if (!atlasKeys.length) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
       const predictionId = jobId.replace(/^veo:/, '');
       const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
-      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const res = await fetchAtlasPrediction(statusUrl, atlasKeys);
       const txt = await res.text();
       const jsonBody = safeJson(txt);
       if (!res.ok && !atlasPredictionStatus(jsonBody)) {
@@ -402,8 +428,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
     // Atlas Cloud generic handler — shared by veo-full, wan, seedance-r2v, vidu-q3, minimax, kling motion control, member Grok
     const isAtlasGeneric = isVeoFull || isWan || isSeedanceR2v || isSeedance25 || isViduQ3 || isMinimax || isKlingMotion || isAtlasLipsync || isAtlasGrok;
     if (isAtlasGeneric) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) {
+      if (!atlasKeys.length) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
       const prefixMap: Record<string, string> = {
@@ -423,7 +448,7 @@ const handleGet: PagesFunction = async ({ request, env }) => {
         if (jobId.startsWith(prefix)) { rawId = jobId.slice(prefix.length); break; }
       }
       const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${rawId}`;
-      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const res = await fetchAtlasPrediction(statusUrl, atlasKeys);
       const txt = await res.text();
       const jsonBody = safeJson(txt);
       if (!res.ok && !atlasPredictionStatus(jsonBody)) {

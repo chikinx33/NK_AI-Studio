@@ -178,22 +178,39 @@ export function isClaudeAuthRequired(err) {
  * 본인 자격증명이 하나라도 등록돼 있으면 본인 인증만 사용한다.
  * 미등록 계정만 기존 마스터 인증을 사용한다. DB 장애는 미등록으로 간주하지 않는다.
  * allowEnvFallback=false 는 명시적으로 본인 인증만 요구하는 호출용이다.
+ *
+ * ★ 구독(OAuth) 토큰은 사이트 소유자(마스터) 한 사람만 쓴다(2026-10-13 소유자 지시).
+ * Claude 구독은 개인 사용 약정이라 다른 회원의 요청을 소유자 구독으로 처리하지 않는다.
+ * 회원은 본인 API 키, 없으면 마스터 API 키로만 호출한다(마스터 구독 토큰으로 넘어가지 않는다).
  */
 export async function resolveAuth(sql, userId, env, opts) {
   const allowEnvFallback = !opts || opts.allowEnvFallback !== false;
   if (!userId) throw new Error("claude_auth_user_required");
   if (!sql) throw new Error("claude_auth_settings_unavailable");
+  const owner = isOwnerAccount(env, userId);
   const row = await getSettingsRow(sql, userId);
-  const oauth = String(row?.claude_oauth_token || "").trim() || null;
+  const oauth = owner ? (String(row?.claude_oauth_token || "").trim() || null) : null;
   const key = String(row?.claude_api_key || "").trim() || null;
   const userConfigured = !!(oauth || key);
   const enabled = typeof row?.user_chat_enabled === 'boolean' ? row.user_chat_enabled : userConfigured;
   if (enabled || !allowEnvFallback) {
-    const mode = row?.claude_auth_mode === "api_key" ? "api_key" : "subscription";
+    const mode = owner && row?.claude_auth_mode !== "api_key" ? "subscription" : "api_key";
     if (!(mode === "api_key" ? key : oauth) && !opts?.allowMissing) throw claudeAuthRequiredError();
     return { mode, oauthToken: oauth, apiKey: key, source: "user", userConfigured, enabled };
   }
-  return { ...resolveEnvOnly(env), source: "master", userConfigured, enabled: false };
+  const master = resolveEnvOnly(env);
+  if (owner) return { ...master, source: "master", userConfigured, enabled: false };
+  return { mode: "api_key", oauthToken: null, apiKey: master.apiKey, source: "master", userConfigured, enabled: false };
+}
+
+/**
+ * 사이트 소유자 계정인가(admin-users.ts requireMaster 와 같은 규칙: env.AUTH_ID, 없으면 레거시 ID).
+ * 이 파일은 테스트가 import 를 떼고 실행하므로 auth.js sanitizeUserId 와 같은 정규화를 여기 둔다.
+ */
+function isOwnerAccount(env, userId) {
+  const clean = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
+  const uid = clean(userId);
+  return !!uid && uid === clean((env && env.AUTH_ID) || "limfactory");
 }
 
 /**

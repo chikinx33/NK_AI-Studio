@@ -77,7 +77,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
     const voiceEnabled = !!(narrationEnabled || dubbingEnabled);
     const noSpeechDirective = "No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.";
-    const safePromptText = voiceEnabled
+    // promptVerbatim: 디렉터처럼 대사·효과음·무음악 규칙까지 직접 쓴 프롬프트는 그대로 보낸다
+    // (자동으로 붙는 "No speech" 지시가 콘티의 대사를 지워 버리지 않게).
+    const promptVerbatim = (body as any)?.promptVerbatim === true;
+    const safePromptText = voiceEnabled || promptVerbatim
       ? String(promptText || "")
       : `${String(promptText || "").trim()}\n${noSpeechDirective}`.trim();
     // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅 (Veo/Grok 공용)
@@ -231,7 +234,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
 
     const isKling =videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
     const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "seedance-2.5", "vidu-q3"];
-    if (!supportedModels.includes(videoModel) && !isKling && !isMinimaxModel(videoModel) && !isKlingMotionModel(videoModel)) {
+    // seedance-2.5-complete: 드래프트를 1080p 로 완성(아래 전용 분기). 새 생성 모델이 아니라 목록 밖에서 따로 허용한다.
+    if (!supportedModels.includes(videoModel) && videoModel !== "seedance-2.5-complete" && !isKling && !isMinimaxModel(videoModel) && !isKlingMotionModel(videoModel)) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
@@ -532,7 +536,10 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       };
       if (refResolved.length > 0) atlasBody.reference_images = refResolved;
       if (vidsResolved.length > 0) atlasBody.reference_videos = vidsResolved;
-      if (audioDataUrl) atlasBody.reference_audios = [audioDataUrl];
+      // 공급자는 data: 를 받지 않는다 — GCS 에 올려 서명 URL 로 보낸다(다른 참조 미디어와 같은 경로).
+      if (audioDataUrl) atlasBody.reference_audios = [await toAtlasMediaUrl(audioDataUrl, `audio-${sceneId}`, "audio")];
+      // 드래프트: 480p 로 렌더(일반 480p 요금)하고, 7일 안에 seedance-2.5-complete 로 같은 결과를 1080p 로 완성한다.
+      if ((body as any)?.draft === true) { atlasBody.draft = true; atlasBody.resolution = "480p"; }
       if ((body as any)?.omniTaskType) atlasBody.omni_reference_task_type = String((body as any).omniTaskType);
       log('seedance25_request', { duration: s25Duration, resolution: s25Resolution, ratio: aspectFinal, refs: refResolved.length, videos: vidsResolved.length, hasStart: !!startResolved });
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
@@ -544,6 +551,31 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       const atlasJson = safeJson(atlasText);
       const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
       return json({ job_id: predictionId ? `seedance-2.5:${predictionId}` : "", status: "processing" }, 202);
+    }
+
+    // Seedance 2.5 드래프트 완성(bytedance/seedance-2.5/draft-complete): 드래프트의 프롬프트·참조·길이·비율·시드·음향 그대로 1080p.
+    // draftJobId 는 드래프트 제출 응답의 job_id("seedance-2.5:<id>") 또는 예측 ID. 결과 조회는 seedance-2.5 와 같은 경로를 쓴다.
+    if (videoModel === "seedance-2.5-complete") {
+      const atlasKey = atlasUserKey;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const draftId = String((body as any)?.draftJobId || "").trim().replace(/^seedance-2\.5:/, "");
+      if (!/^[A-Za-z0-9_-]{8,128}$/.test(draftId)) return json({ error: "draft_job_id_required" }, 400);
+      const atlasBody: any = {
+        model: "bytedance/seedance-2.5/draft-complete",
+        draft_id: draftId,
+        output_format: "mp4",
+        watermark: false,
+      };
+      log('seedance25_complete_request', { draftId });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "seedance_25_complete_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      return json({ job_id: predictionId ? `seedance-2.5:${predictionId}` : "", status: "processing", draftId }, 202);
     }
 
     // Vidu Q3 branch (vidu/q3-mix/reference-to-video via Atlas Cloud)

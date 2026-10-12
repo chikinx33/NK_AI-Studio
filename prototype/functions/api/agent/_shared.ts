@@ -7470,7 +7470,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   work_folder_move: { agentId: "sync", agentIds: ["core"], kind: "local", run: runWorkFolderMoveTool },
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
-  video: { agentId: "pixel", kind: "external", run: runVideoTool },
+  // 영상은 크레딧이 큰 유료 작업이라 승인 패널을 거친다(이미지·사운드보다 한 건 비용이 훨씬 크다).
+  video: { agentId: "pixel", kind: "external", gate: true, run: runVideoTool },
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
   publish: { agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool },

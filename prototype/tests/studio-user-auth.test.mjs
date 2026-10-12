@@ -87,7 +87,8 @@ const fakeSql = (row) => {
   const fn = async () => (row ? [row] : []);
   return fn;
 };
-const ENV_WITH_ADMIN_KEY = { ANTHROPIC_API_KEY: "sk-ant-api-ADMIN", CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-ADMIN" };
+// 구독(OAuth) 토큰은 소유자(AUTH_ID) 한 사람만 쓴다. 구독 경로는 소유자 "someone" 으로 확인한다.
+const ENV_WITH_ADMIN_KEY = { ANTHROPIC_API_KEY: "sk-ant-api-ADMIN", CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-ADMIN", AUTH_ID: "someone" };
 
 test("본인 인증만 명시적으로 요구하면 미설정 사용자는 차단된다", async () => {
   const env = { ...ENV_WITH_ADMIN_KEY, __sql: fakeSql(null) };
@@ -130,11 +131,15 @@ test("모드는 등록됐지만 값이 비면 차단한다", async () => {
   await assert.rejects(() => M.studioAuth(env, "someone"), (err) => M.isClaudeAuthRequired(err));
 });
 
-test("본인 인증 미등록 계정은 기존 마스터 인증을 유지한다", async () => {
+test("본인 인증 미등록 계정은 마스터 인증을 쓰되, 마스터 구독 토큰은 소유자만 받는다", async () => {
   const env = { ...ENV_WITH_ADMIN_KEY, __sql: fakeSql(null) };
-  const r = await M.resolveAuth(env.__sql, "nobody", env);
-  assert.equal(r.apiKey, "sk-ant-api-ADMIN");
-  assert.equal(r.oauthToken, "sk-ant-oat-ADMIN");
+  const member = await M.resolveAuth(env.__sql, "nobody", env);
+  assert.equal(member.apiKey, "sk-ant-api-ADMIN");
+  assert.equal(member.oauthToken, null);
+  assert.equal(member.mode, "api_key");
+  const owner = await M.resolveAuth(env.__sql, "someone", env);
+  assert.equal(owner.apiKey, "sk-ant-api-ADMIN");
+  assert.equal(owner.oauthToken, "sk-ant-oat-ADMIN");
 });
 
 test("구독 모드는 system 첫 블록에 Claude Code 정체성을 넣는다", () => {
