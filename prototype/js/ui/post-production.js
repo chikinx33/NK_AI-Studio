@@ -4528,8 +4528,55 @@
     return clips;
   }
 
+  // ── 디렉터 시퀀스(payload.sequences) → 컷별 구간 클립 ──
+  // 디렉터는 8~30초 사건 하나를 한 번에 생성한다(테이크). 편집기에는 그 테이크를 컷 시간 구간으로 잘라 올린다:
+  // 클립 = 테이크 영상 + videoOffset(컷 시작). 부분 재생성(patch) 테이크가 덮는 컷은 patch 영상과 상대 오프셋을 쓴다.
+  // 사용자가 컨펌해 디렉터가 고른(selectedTakeIds) 시퀀스만 쓰고, 하나도 없으면 기존 씬 경로를 그대로 쓴다.
+  function buildSequenceTimeline(project) {
+    var payload = (project && project.payload) || {};
+    var seqs = Array.isArray(payload.sequences) ? payload.sequences.slice() : [];
+    seqs = seqs.filter(function (q) { return q && Array.isArray(q.selectedTakeIds) && q.selectedTakeIds.length && Array.isArray(q.takes); });
+    if (!seqs.length) return null;
+    seqs.sort(function (a, b) { return (toNumber(a.order, 0) - toNumber(b.order, 0)); });
+    var visuals = [];
+    var cursor = 0;
+    seqs.forEach(function (seq) {
+      var picked = seq.takes.filter(function (t) { return t && seq.selectedTakeIds.indexOf(t.id) >= 0 && (t.videoPath || t.videoUrl); });
+      var full = picked.filter(function (t) { return t.kind !== 'patch'; })[0] || null;
+      var patches = picked.filter(function (t) { return t.kind === 'patch' && t.range; });
+      var cuts = Array.isArray(seq.cuts) ? seq.cuts.slice().sort(function (a, b) { return toNumber(a.start, 0) - toNumber(b.start, 0); }) : [];
+      var title = String(seq.title || seq.id || '시퀀스');
+      if (!cuts.length && full) {
+        var d = Math.max(0.5, toNumber(full.durationSec, toNumber(seq.durationSec, 4)));
+        visuals.push({ id: 'vis-cut-' + seq.id + '-all', label: title, start: cursor, end: cursor + d, baseDuration: d,
+          url: firstFilled([full.videoPath, full.videoUrl]), videoOffset: 0, empty: false, sceneAction: '' });
+        cursor += d;
+        return;
+      }
+      cuts.forEach(function (cut) {
+        var cs = toNumber(cut.start, 0), ce = toNumber(cut.end, cs);
+        var dur = Math.max(0.2, ce - cs);
+        var src = full, offset = cs;
+        for (var k = 0; k < patches.length; k++) {
+          var pt = patches[k];
+          var covers = (Array.isArray(pt.replacesCuts) && pt.replacesCuts.indexOf(cut.id) >= 0)
+            || (cs >= toNumber(pt.range.start, 0) - 0.01 && ce <= toNumber(pt.range.end, 0) + 0.01);
+          if (covers) { src = pt; offset = Math.max(0, cs - toNumber(pt.range.start, 0)); break; }
+        }
+        var url = src ? firstFilled([src.videoPath, src.videoUrl]) : '';
+        visuals.push({ id: 'vis-cut-' + seq.id + '-' + cut.id, label: (cut.label || cut.id) + (url ? '' : ' · 미디어 없음'),
+          start: cursor, end: cursor + dur, baseDuration: dur, url: url, videoOffset: offset, empty: !url,
+          sceneAction: String(cut.action || '').trim() });
+        cursor += dur;
+      });
+    });
+    return visuals.length ? { visuals: visuals, duration: cursor } : null;
+  }
+
   function buildTimelineModel(project) {
     var scenes = Array.isArray(project && project.scenes) ? project.scenes : [];
+    // 디렉터가 고른 시퀀스 테이크가 있으면 그것이 타임라인의 비주얼이다(씬 루프는 건너뛴다).
+    var seqTimeline = buildSequenceTimeline(project);
     // 노래 모드에서는 자막이 씬이 아니라 가사 구간을 따라간다.
     var songSubtitleMode = !!((project && project.payload && project.payload.songEnabled)
       || (project && project.songEnabled))
@@ -4548,7 +4595,7 @@
     var isRenderedVersion = !!(savedEdits && savedEdits['__clear_track_visuals__']);
     var sceneGroupLabels = buildSceneGroupLabels(scenes);
 
-    for (var i = 0; i < scenes.length; i++) {
+    for (var i = 0; i < (seqTimeline ? 0 : scenes.length); i++) {
       var scene = scenes[i] || {};
       var sceneDuration = Math.max(1, Math.round(toNumber(scene.estSec, toNumber(scene.durationSec, 4))));
       var sceneStart = cursor;
@@ -4645,8 +4692,13 @@
       }
       cursor = sceneEnd;
     }
-    if (songSubtitleMode) {
+    if (songSubtitleMode && !seqTimeline) {
       subtitles = buildSongSubtitleClips(scenes);
+    }
+    if (seqTimeline) {
+      if (!isRenderedVersion) visuals = seqTimeline.visuals;
+      cursor = seqTimeline.duration;
+      firstVideoUrl = (seqTimeline.visuals.filter(function (c) { return !!c.url; })[0] || {}).url || '';
     }
 
     var totalDuration = Math.max(12, Math.ceil(cursor || 0));

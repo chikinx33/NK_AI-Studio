@@ -374,14 +374,23 @@
     var loadVideo = typeof opts.loadVideoSourceWithFallback === 'function' ? opts.loadVideoSourceWithFallback : null;
     var loadImage = typeof opts.loadImageSourceWithFallback === 'function' ? opts.loadImageSourceWithFallback : null;
     if (!loadVideo || !loadImage) throw new Error('postprod_render_loader_missing');
+    // 같은 소스 영상은 한 번만 연다: 디렉터 테이크 하나(최대 30초)를 컷 10여 개가 나눠 쓰면 클립마다 디코더를
+    // 따로 열어 메모리가 폭주한다. 비주얼 클립은 시간상 겹치지 않고, 렌더는 클립마다 videoOffset 으로 다시 찾아가므로 공유해도 된다.
+    var videoByUrl = new Map();
+    var openVideo = function (url) {
+      if (!videoByUrl.has(url)) videoByUrl.set(url, loadVideo(url, 12000));
+      return videoByUrl.get(url);
+    };
     var pairs = await Promise.all((clips || []).map(async function (clip) {
       if (!clip || !clip.id || !clip.url) return [clip && clip.id, { kind: 'error', error: new Error('clip_url_missing') }];
       try {
         if (isVideoUrl(clip.url)) {
-          var video = await loadVideo(clip.url, 12000);
+          var shared = videoByUrl.has(clip.url);
+          var video = await openVideo(clip.url);
           try { video.pause(); } catch (_) { }
           // 시작 위치(videoOffset)의 첫 프레임을 실제로 디코딩해 둔다 — 안 하면 첫 프레임들이 검게 인코딩된다.
-          try { await primeVideoFirstFrame(video, Number(clip.videoOffset) || 0); } catch (_) { }
+          // (공유 영상은 렌더가 클립마다 videoOffset 으로 다시 찾아가므로 처음 연 클립에서만 준비한다)
+          if (!shared) { try { await primeVideoFirstFrame(video, Number(clip.videoOffset) || 0); } catch (_) { } }
           // soundOn !== false 이면 오디오 트랙 사용 (기본 true). 우클릭 메뉴 'Sound Off' 토글로 false 가능.
           return [clip.id, { kind: 'video', source: video, soundOn: clip.soundOn !== false }];
         }
