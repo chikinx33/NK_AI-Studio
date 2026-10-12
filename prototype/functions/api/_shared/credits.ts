@@ -564,3 +564,37 @@ export async function settleDeferredCreditFromResponse(env: any, userId: string,
   if (failed) await settleByProviderJob(env, userId, providerJobId, "release");
   else if (done) await settleByProviderJob(env, userId, providerJobId, "commit");
 }
+
+/**
+ * 디렉터(Claude Managed Agents) 대화 사용량 정산.
+ * 디렉터 서비스는 세션의 누적 원가(list_cost, 센트)를 보낸다. 이미 차감한 누적값보다 늘어난 만큼만
+ * 원가 × 마진으로 차감하고, 같은 누적값은 멱등키(director:<세션>:<누적센트>)로 한 번만 처리한다.
+ * 사이트 소유자는 마스터 API 키 비용을 직접 내므로 차감하지 않는다(영상 크레딧과 같은 규칙).
+ */
+export async function chargeDirectorUsage(env: any, userId: string, sessionId: string, cumulativeCents: number): Promise<any> {
+  if (requireMaster(env, userId)) return { ok: true, owner: true, charged: 0, deltaCents: 0 };
+  const sid = String(sessionId || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  const cumulative = Math.max(0, Math.trunc(Number(cumulativeCents) || 0));
+  if (!sid) return { ok: false, reason: "session_required" };
+  const sql = requireSql(env);
+  await ensureCreditSchema(sql);
+  const prevRows = await sql(
+    `SELECT COALESCE(MAX((metadata->'basis'->>'cumulativeCents')::bigint),0) AS c FROM credit_operations
+      WHERE user_id=$1 AND feature='director_llm' AND idempotency_key LIKE $2 AND status IN ('reserved','committed')`,
+    [userId, `director:${sid}:%`]);
+  const delta = cumulative - asInt(prevRows[0]?.c);
+  if (delta <= 0) return { ok: true, charged: 0, deltaCents: 0 };
+  const credits = creditsForUsd(delta / 100);
+  const basis = { sessionId: sid, cumulativeCents: cumulative, deltaCents: delta, providerUsd: delta / 100 };
+  const rows = await sql("SELECT * FROM nk_credit_reserve($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)", [
+    userId, operationId(), `director:${sid}:${cumulative}`, "director_llm", "anthropic", "managed-agents", credits, "cost-plus-v1", JSON.stringify({ basis }),
+  ]);
+  const reserved: any = rows[0] || {};
+  if (!reserved.ok) {
+    // 중복(같은 누적값을 이미 처리)은 성공으로 본다.
+    if (String(reserved.reason || "").startsWith("duplicate_")) return { ok: true, charged: 0, deltaCents: 0, duplicate: true };
+    return { ok: false, reason: reserved.reason || "reserve_failed", required: credits, available: asInt(reserved.available) };
+  }
+  const settled = await settleCreditOperation(env, userId, String(reserved.operation_id), "commit", `director:${sid}`);
+  return { ok: !!settled?.ok, charged: credits, deltaCents: delta, available: asInt(settled?.available ?? reserved.available) };
+}

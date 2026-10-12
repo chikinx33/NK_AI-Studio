@@ -395,14 +395,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // - body.scenes 가 있으면 통째로 대체, 없으면 기존 scenes 보존
     // - title/header/aspectRatio 도 받은 경우에만 덮어씀
     // GET 실패(신규 프로젝트, 권한 등)는 빈 객체로 fallback → 기존 통째 저장과 동일 동작
+    // 같은 data.json 을 디렉터(/api/project/sequences)·에이전트도 쓴다. 읽은 세대(generation)가 그대로일 때만
+    // 쓰고(ifGenerationMatch), 그 사이 다른 저장이 끼었으면 다시 읽어 병합한다 — 남의 변경을 옛 사본으로 덮지 않게.
     let existing: any = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+    existing = null;
+    // 세대: 404(새 프로젝트)면 "0"(없을 때만 생성), 그 밖의 읽기 실패면 ""(조건 없이 — 예전 동작).
+    let generation = "";
     try {
       const getUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
       const getRes = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (getRes.status === 404) generation = "0";
       if (getRes.ok) {
+        generation = String(getRes.headers.get("x-goog-generation") || "");
         try { existing = await getRes.json(); } catch (_) { existing = null; }
       }
-    } catch (_) { existing = null; }
+    } catch (_) { existing = null; generation = ""; }
 
     // 빈 배열/객체는 "보내지 않은 것"으로 간주 → 기존 호출자가 `scenes || []` 패턴으로
     // 신규 프로젝트나 미초기화 상태를 보내도 기존 데이터를 덮어쓰지 않게 보호.
@@ -418,7 +426,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       : (Array.isArray(existing?.scenes) ? existing.scenes : []);
     const mergedPayload = hasPayload
       ? Object.assign({}, (existing?.payload || {}), normalizeClientPayload(body.payload))
-      : (existing?.payload || {});
+      : Object.assign({}, existing?.payload || {});
+    // 디렉터 시퀀스는 /api/project/sequences 만 쓴다. 화면이 들고 있던 옛 사본으로 덮어쓰지 않는다.
+    if (existing?.payload && Object.prototype.hasOwnProperty.call(existing.payload, "sequences")) mergedPayload.sequences = existing.payload.sequences;
+    else delete mergedPayload.sequences;
     const mergedHeader = hasHeader ? (body.header || "") : (existing?.header || "");
     const mergedAspect = hasAspect ? body.aspectRatio : (existing?.aspectRatio || "");
     const mergedTitle = hasTitle ? body.title : (existing?.title || "");
@@ -434,14 +445,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       savedAt: new Date().toISOString(),
     };
 
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+    // 세대를 못 읽었으면(읽기 실패) 예전처럼 조건 없이 쓴다 — 저장 자체를 막지 않는다.
+    const precondition = generation ? `&ifGenerationMatch=${encodeURIComponent(generation)}` : "";
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}${precondition}`;
     const res = await fetch(uploadUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    if (res.status === 412 && attempt < 3) continue;
     const text = await res.text();
     if (!res.ok) return send({ error: text || "upload_error" }, res.status, origin);
+    break;
+    }
 
     return send({ ok: true, objectName, merged: !!existing }, 200, origin);
   } catch (e: any) {

@@ -379,3 +379,42 @@ function bufferToBase64Url(buf) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
+
+/**
+ * GCS V4 서명 URL(GET 읽기 / PUT 업로드). 외부(디렉터 샌드박스·Atlas)가 키 없이 한 객체만 다루게 한다.
+ * PUT 은 contentType 을 서명에 넣어, 업로드하는 쪽이 같은 Content-Type 헤더를 보내야만 통과한다.
+ * @param {any} env
+ * @param {string} objectName 버킷 안 경로(gs://bucket/ 뒤)
+ * @param {{ method?: "GET"|"PUT", expiresInSec?: number, contentType?: string }} [opts]
+ */
+export async function signGcsObjectUrl(env, objectName, opts = {}) {
+  const ctx = resolveGcsEnv(env);
+  const method = opts.method === "PUT" ? "PUT" : "GET";
+  const expires = Math.min(7 * 24 * 3600, Math.max(60, Math.trunc(Number(opts.expiresInSec) || 3600)));
+  const now = new Date();
+  const pad = (n) => `${n}`.padStart(2, "0");
+  const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const time = `${date}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const scope = `${date}/auto/storage/goog4_request`;
+  const host = "storage.googleapis.com";
+  const canonicalUri = `/${encodeURIComponent(ctx.bucket)}/${String(objectName).split("/").map(encodeURIComponent).join("/")}`;
+  const contentType = method === "PUT" ? String(opts.contentType || "application/octet-stream") : "";
+  const headerLines = contentType ? [`content-type:${contentType}`, `host:${host}`] : [`host:${host}`];
+  const signedHeaders = contentType ? "content-type;host" : "host";
+  const query = new URLSearchParams({
+    "X-Goog-Algorithm": "GOOG4-RSA-SHA256",
+    "X-Goog-Credential": `${ctx.clientEmail}/${scope}`,
+    "X-Goog-Date": time,
+    "X-Goog-Expires": `${expires}`,
+    "X-Goog-SignedHeaders": signedHeaders,
+  });
+  const canonicalQuery = query.toString();
+  const canonicalRequest = [method, canonicalUri, canonicalQuery, ...headerLines, "", signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalRequest));
+  const hashedRequest = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const stringToSign = ["GOOG4-RSA-SHA256", time, scope, hashedRequest].join("\n");
+  const sigB64url = await signRS256(stringToSign, ctx.privateKeyRaw);
+  const bin = atob(sigB64url.replace(/-/g, "+").replace(/_/g, "/"));
+  const sigHex = Array.from(bin).map((c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+  return { url: `https://${host}${canonicalUri}?${canonicalQuery}&X-Goog-Signature=${sigHex}`, method, contentType, expiresInSec: expires };
+}
