@@ -48,15 +48,12 @@ export async function createSession(caller: Caller, projectId: string, title: st
         instructions: "이 프로젝트의 기억. 시작할 때 status.md 와 rules.md 부터 읽는다. 결정·제출·검수·피드백마다 갱신한다." },
     ],
     metadata: { userId: caller.userId, projectId, ownerId: ownerId || "", vaultId: vault.id, credentialId: cred.id,
-      tokenExpiresAt: del.expiresAt, isOwner: del.isOwner ? "1" : "0" },
+      tokenExpiresAt: del.expiresAt, isOwner: del.isOwner ? "1" : "0", contextSent: "0" },
     budget: { type: "limit", max_list_cost: { amount: String(Math.max(20, budget)), currency: "USD" } },
   });
 
-  // 세션 시작 맥락: 어느 프로젝트를 작업하는지. 사용자 메시지가 아니라 운영자 맥락으로 붙인다.
-  await anthropic.beta.sessions.events.send(session.id, { events: [{ type: "system.message", content: [{ type: "text",
-    text: `작업 프로젝트: projectId=${projectId}${ownerId ? ` (공유 프로젝트, ownerId=${ownerId})` : ""}. 사용자 ID=${caller.userId}. ` +
-      `${del.isOwner ? "사용자는 사이트 소유자다." : "사용자는 회원이다. 유료 생성은 사용자 크레딧에서 차감된다."} ` +
-      `모든 nk-studio 도구 호출에 projectId 를 넣는다. 오늘 날짜: ${new Date().toISOString().slice(0, 10)}.` }] } as any] });
+  // 작업 맥락(어느 프로젝트인지)은 system.message 로 붙인다. system.message 는 사용자 메시지 바로 뒤에만
+  // 올 수 있어(단독 전송은 400), 첫 메시지와 함께 보낸다 — sendMessage 의 contextSent 참고.
 
   const p = state.projects![projectId];
   p.sessions = [{ id: session.id, title: session.title || "", createdAt: new Date().toISOString() }, ...(p.sessions || [])].slice(0, 30);
@@ -85,7 +82,19 @@ export async function sendMessage(caller: Caller, session: any, text: string, im
   await refreshDelegationIfNeeded(caller, session);
   const content: any[] = images.slice(0, 10).map((im) => ({ type: "image", source: { type: "base64", media_type: im.mediaType, data: im.data } }));
   content.push({ type: "text", text: String(text || "").slice(0, 50_000) });
-  await anthropic.beta.sessions.events.send(session.id, { events: [{ type: "user.message", content }] });
+  const events: any[] = [{ type: "user.message", content }];
+  const firstTurn = session.metadata?.contextSent !== "1";
+  if (firstTurn) events.push({ type: "system.message", content: [{ type: "text", text: sessionContext(session) }] });
+  await anthropic.beta.sessions.events.send(session.id, { events });
+  if (firstTurn) await anthropic.beta.sessions.update(session.id, { metadata: { ...session.metadata, contextSent: "1" } } as any).catch(() => null);
+}
+
+/** 세션 작업 맥락(운영자 지시). 첫 사용자 메시지 바로 뒤에 system.message 로 붙는다. */
+export function sessionContext(session: any): string {
+  const m = session.metadata || {};
+  return `작업 프로젝트: projectId=${m.projectId}${m.ownerId ? ` (공유 프로젝트, ownerId=${m.ownerId})` : ""}. 사용자 ID=${m.userId}. ` +
+    `${m.isOwner === "1" ? "사용자는 사이트 소유자다." : "사용자는 회원이다. 유료 생성은 사용자 크레딧에서 차감된다."} ` +
+    `모든 nk-studio 도구 호출에 projectId 를 넣는다. 오늘 날짜: ${new Date().toISOString().slice(0, 10)}.`;
 }
 
 export async function confirmTool(session: any, eventId: string, allow: boolean, denyMessage?: string) {
