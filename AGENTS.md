@@ -4,6 +4,7 @@ Before starting work in this repository, read these files first:
 
 - `.trae/rules/nk-ai-studio.md`
 - `.trae/rules/prompt-rules.md`
+- `director/HANDOVER.md` — NK 디렉터(Cloud Run nk-director + Claude Managed Agents) 구조·운영·남은 작업. 디렉터·영상 생성·편집기 타임라인·Claude 인증·크레딧 관련 작업 전에 읽는다.
 
 Working rules for this repository:
 
