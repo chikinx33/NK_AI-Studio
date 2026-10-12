@@ -1,0 +1,24 @@
+{
+  "name": "nk-director",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NK 디렉터 — Claude Managed Agents 기반 대화형 CF 연출 서비스 (Cloud Run)",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "dev": "node --env-file=.env dist/src/server.js",
+    "setup": "node dist/scripts/setup.js",
+    "test": "node --test dist/test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}
