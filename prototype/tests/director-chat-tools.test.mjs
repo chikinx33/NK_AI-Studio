@@ -19,3 +19,24 @@ test("디렉터 대화: 에이전트 대화 화면과 같은 스크롤 추종·�
   assert.ok(ws.includes("onClick={() => void send(it.text)} disabled={!sessionId || running}"));
   assert.ok(ws.includes("if (!resend) { setDraft(\"\"); setAttachments([]); }"));
 });
+
+test("디렉터 대화: 연달아 실행된 도구 호출은 한 줄로 접는다(스틸 8장 = 줄 8개였다)", () => {
+  const ws = read("ai-company-app/src/components/DirectorWorkspace.tsx");
+  assert.ok(ws.includes("export function groupToolRuns(items: Item[]): DisplayItem[]"));
+  assert.ok(ws.includes("if (run.length > 1) out.push({ kind: \"toolrun\""));
+  assert.ok(ws.includes("{groupToolRuns(items).map((it) => {"));
+  assert.ok(ws.includes("`진행 중 ${pending}`"));
+});
+
+test("일괄 승인: 채팅 '승인'이면 이번 차례의 유료 호출을 카드 없이 실행하고, 차례가 끝나면 푼다", () => {
+  const stream = read("director/src/gateway/stream.ts");
+  assert.ok(stream.includes("if (isPendingApproval(ev) && !(await tryAutoApprove(ev))) write(res, await approvalEvent(caller, ev));"));
+  assert.ok(stream.includes("if (turnEnded(ev)) await anthropic.beta.sessions.update(sessionId, { metadata: { [AUTO_APPROVE_KEY]: null } }"));
+  assert.ok(stream.includes("if (!PAID_TOOLS.has(String(ev?.name || \"\")) || autoConfirmed.has(ev.id)) return false;"));
+  const sessions = read("director/src/gateway/sessions.ts");
+  // 메시지를 보내기 전에 켠다 — 디렉터가 곧바로 유료 도구를 부를 수 있다.
+  assert.ok(sessions.indexOf("await setAutoApprove(session, isApprovalText(text));") < sessions.indexOf("await anthropic.beta.sessions.events.send(session.id, { events });"));
+  assert.ok(sessions.includes("if (answersApprove(answers, cancelled)) await setAutoApprove(session, true);"));
+  const system = read("director/agent/system.md");
+  assert.ok(system.includes("일괄 승인: 사용자가 채팅으로 \"승인\"이라고 하거나"));
+});

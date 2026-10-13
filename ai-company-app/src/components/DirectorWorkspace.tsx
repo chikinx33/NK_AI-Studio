@@ -24,6 +24,26 @@ type Item =
   | { kind: "agent"; id: string; text: string; streaming?: boolean }
   | { kind: "tool"; id: string; name: string; server: string; input: any; result?: { isError: boolean; preview: string } }
   | { kind: "notice"; id: string; level: "info" | "warn" | "error"; text: string };
+type ToolItem = Extract<Item, { kind: "tool" }>;
+type DisplayItem = Item | { kind: "toolrun"; id: string; tools: ToolItem[] };
+
+/** 연달아 나온 도구 호출(2개 이상)을 한 묶음으로 접는다. 하나뿐이면 그대로 둔다. */
+export function groupToolRuns(items: Item[]): DisplayItem[] {
+  const out: DisplayItem[] = [];
+  let run: ToolItem[] = [];
+  const flush = () => {
+    if (run.length > 1) out.push({ kind: "toolrun", id: `run-${run[0].id}`, tools: run });
+    else if (run.length === 1) out.push(run[0]);
+    run = [];
+  };
+  for (const it of items) {
+    if (it.kind === "tool") { run.push(it); continue; }
+    flush();
+    out.push(it);
+  }
+  flush();
+  return out;
+}
 interface Approval { eventId: string; tool: string; input: any; quote?: any; acting?: boolean }
 interface Attachment { id: string; mimeType: string; base64: string; preview: string }
 
@@ -342,6 +362,28 @@ export default function DirectorWorkspace() {
   };
   const onKeyUp = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) void send(); };
   const running = status === "running" || thinking;
+  const toggleTool = (id: string) => setOpenTools((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const renderTool = (it: ToolItem) => {
+    const open = openTools.has(it.id);
+    const err = it.result?.isError;
+    return (
+      <div key={it.id} className="max-w-[92%] rounded-xl border border-edge bg-panel/60 text-[12px]">
+        <button type="button" onClick={() => toggleTool(it.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left">
+          <Icon d={WrenchD} className={`h-3.5 w-3.5 ${err ? "text-tone-red" : "text-muted"}`} />
+          <span className="font-bold text-secondary">{TOOL_LABELS[it.name] || it.name}</span>
+          <span className="text-faint">{it.result ? (err ? "오류" : "완료") : "진행 중…"}</span>
+          <span className="flex-1" />
+          <Icon d={ChevronD} className={`h-3.5 w-3.5 text-faint transition ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open && (
+          <div className="space-y-1 border-t border-edge px-3 py-2">
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted">{JSON.stringify(it.input, null, 1)}</pre>
+            {it.result && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] ${err ? "text-tone-red" : "text-secondary"}`}>{it.result.preview}</pre>}
+          </div>
+        )}
+      </div>
+    );
+  };
   const costText = usage ? (usage.owner ? `대화 비용 $${(usage.listCostCents / 100).toFixed(2)} (소유자 무과금)` : `대화 비용 $${(usage.listCostCents / 100).toFixed(2)}${usage.available != null ? ` · 잔액 ${Number(usage.available).toLocaleString()} 크레딧` : ""}`) : "";
 
   return (
@@ -397,7 +439,30 @@ export default function DirectorWorkspace() {
                 <button type="button" onClick={() => void newSession()} disabled={creating} className="mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{creating ? "만드는 중…" : "새 디렉터 세션 시작"}</button>
               </div>
             )}
-            {items.map((it) => {
+            {groupToolRuns(items).map((it) => {
+              if (it.kind === "toolrun") {
+                // 연달아 실행된 도구 호출은 한 줄로 접는다(스틸 8장 = 줄 8개였다). 펼치면 호출마다 다시 펼쳐 볼 수 있다.
+                const open = openTools.has(it.id);
+                const done = it.tools.filter((t) => t.result && !t.result.isError).length;
+                const failed = it.tools.filter((t) => t.result?.isError).length;
+                const pending = it.tools.length - done - failed;
+                const names = Array.from(new Set(it.tools.map((t) => t.name))).map((n) => {
+                  const c = it.tools.filter((t) => t.name === n).length;
+                  return `${TOOL_LABELS[n] || n}${c > 1 ? ` ×${c}` : ""}`;
+                }).join(" · ");
+                return (
+                  <div key={it.id} className="max-w-[92%] rounded-xl border border-edge bg-panel/60 text-[12px]">
+                    <button type="button" onClick={() => toggleTool(it.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left">
+                      <Icon d={WrenchD} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-tone-red" : "text-muted"}`} />
+                      <span className="min-w-0 truncate font-bold text-secondary">{names}</span>
+                      <span className="shrink-0 text-faint">{[done ? `완료 ${done}` : "", pending ? `진행 중 ${pending}` : "", failed ? `오류 ${failed}` : ""].filter(Boolean).join(" · ")}</span>
+                      <span className="flex-1" />
+                      <Icon d={ChevronD} className={`h-3.5 w-3.5 shrink-0 text-faint transition ${open ? "rotate-180" : ""}`} />
+                    </button>
+                    {open && <div className="space-y-1.5 border-t border-edge p-2">{it.tools.map((t) => renderTool(t))}</div>}
+                  </div>
+                );
+              }
               if (it.kind === "user") return (
                 <div key={it.id} className="group flex flex-col items-end gap-1">
                   {it.images.length > 0 && <div className="flex flex-wrap justify-end gap-1">{it.images.map((src, i) => <button key={i} type="button" onClick={() => setLightbox({ images: it.images, index: i })}><img src={src} alt="" className="h-16 w-16 rounded-lg object-cover" /></button>)}</div>}
@@ -433,27 +498,7 @@ export default function DirectorWorkspace() {
                   </div>
                 );
               }
-              if (it.kind === "tool") {
-                const open = openTools.has(it.id);
-                const err = it.result?.isError;
-                return (
-                  <div key={it.id} className="max-w-[92%] rounded-xl border border-edge bg-panel/60 text-[12px]">
-                    <button type="button" onClick={() => setOpenTools((cur) => { const n = new Set(cur); if (n.has(it.id)) n.delete(it.id); else n.add(it.id); return n; })} className="flex w-full items-center gap-2 px-3 py-1.5 text-left">
-                      <Icon d={WrenchD} className={`h-3.5 w-3.5 ${err ? "text-tone-red" : "text-muted"}`} />
-                      <span className="font-bold text-secondary">{TOOL_LABELS[it.name] || it.name}</span>
-                      <span className="text-faint">{it.result ? (err ? "오류" : "완료") : "진행 중…"}</span>
-                      <span className="flex-1" />
-                      <Icon d={ChevronD} className={`h-3.5 w-3.5 text-faint transition ${open ? "rotate-180" : ""}`} />
-                    </button>
-                    {open && (
-                      <div className="space-y-1 border-t border-edge px-3 py-2">
-                        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted">{JSON.stringify(it.input, null, 1)}</pre>
-                        {it.result && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] ${err ? "text-tone-red" : "text-secondary"}`}>{it.result.preview}</pre>}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+              if (it.kind === "tool") return renderTool(it);
               return (
                 <div key={it.id} className={`flex items-start gap-2 text-[12px] ${it.level === "error" ? "text-tone-red" : it.level === "warn" ? "text-tone-amber" : "text-faint"}`}>
                   {it.level !== "info" && <Icon d={AlertD} className="mt-0.5 h-3.5 w-3.5 shrink-0" />}<span>{it.text}</span>

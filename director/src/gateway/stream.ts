@@ -6,6 +6,7 @@ import { site } from "../site.js";
 import { mapEvent, isPendingApproval, type ClientEvent } from "./events.js";
 import { quoteInputFor, PAID_TOOLS } from "../mcp/tools.js";
 import { listCostCents, settleUsage, type Caller } from "./sessions.js";
+import { AUTO_APPROVE_KEY, autoApproveActive, turnEnded } from "./approval.js";
 
 const HEARTBEAT_MS = 15_000;
 const SETTLE_MIN_INTERVAL_MS = 20_000;
@@ -36,6 +37,28 @@ export async function relaySession(caller: Caller, session: any, res: ServerResp
   const heartbeat = setInterval(() => res.write(`: ping\n\n`), HEARTBEAT_MS);
   const seen = new Set<string>();
   let lastSettle = 0;
+  const autoConfirmed = new Set<string>();
+  let noticedArm = "";
+
+  /**
+   * 일괄 승인(approval.ts)이 살아 있으면 유료 호출을 카드 없이 바로 허용한다. 처리했으면 true.
+   * 세션 metadata 는 메시지 요청이 바꾸므로 매번 새로 읽는다. 같은 화면을 두 탭에서 열어도 한 번만 보낸다(실패는 무시).
+   */
+  const tryAutoApprove = async (ev: any): Promise<boolean> => {
+    if (!PAID_TOOLS.has(String(ev?.name || "")) || autoConfirmed.has(ev.id)) return false;
+    const fresh: any = await anthropic.beta.sessions.retrieve(sessionId).catch(() => null);
+    if (!autoApproveActive(fresh?.metadata)) return false;
+    autoConfirmed.add(ev.id);
+    const ok = await anthropic.beta.sessions.events.send(sessionId, { events: [{ type: "user.tool_confirmation", tool_use_id: ev.id, result: "allow" } as any] })
+      .then(() => true).catch(() => false);
+    if (!ok) { autoConfirmed.delete(ev.id); return false; }
+    const armedAt = String(fresh.metadata[AUTO_APPROVE_KEY]);
+    if (noticedArm !== armedAt) {
+      noticedArm = armedAt;
+      write(res, { type: "notice", level: "info", text: "승인하신 범위의 유료 생성은 하나씩 묻지 않고 이어서 진행해요." });
+    }
+    return true;
+  };
 
   const settle = async (force: boolean) => {
     if (!force && Date.now() - lastSettle < SETTLE_MIN_INTERVAL_MS) return;
@@ -56,7 +79,9 @@ export async function relaySession(caller: Caller, session: any, res: ServerResp
       seen.add(ev.id);
     }
     for (const out of mapEvent(ev)) write(res, out);
-    if (isPendingApproval(ev)) write(res, await approvalEvent(caller, ev));
+    if (isPendingApproval(ev) && !(await tryAutoApprove(ev))) write(res, await approvalEvent(caller, ev));
+    // 디렉터가 차례를 마치면 일괄 승인을 푼다(다음 유료 호출은 다시 승인이 필요하다).
+    if (turnEnded(ev)) await anthropic.beta.sessions.update(sessionId, { metadata: { [AUTO_APPROVE_KEY]: null } } as any).catch(() => null);
     if (ev?.type === "session.usage") await settle(false);
     if (ev?.type === "session.status_idle" || ev?.type === "session.status_terminated") await settle(true);
   };
@@ -75,7 +100,7 @@ export async function relaySession(caller: Caller, session: any, res: ServerResp
     }
     const fresh: any = await anthropic.beta.sessions.retrieve(sessionId);
     write(res, { type: "history_end", status: fresh.status, title: fresh.title });
-    for (const ev of history) if (isPendingApproval(ev) && !resolved.has(ev.id)) write(res, await approvalEvent(caller, ev));
+    for (const ev of history) if (isPendingApproval(ev) && !resolved.has(ev.id) && !(await tryAutoApprove(ev))) write(res, await approvalEvent(caller, ev));
     await settle(true);
     // 3) 실시간 이벤트.
     for await (const ev of stream) {

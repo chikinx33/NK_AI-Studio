@@ -4,6 +4,17 @@ import { config } from "../config.js";
 import { site, SiteError } from "../site.js";
 import { ensureMemoryStores, saveState } from "./state.js";
 import { answerText, type QuestionAnswer } from "./events.js";
+import { AUTO_APPROVE_KEY, answersApprove, isApprovalText } from "./approval.js";
+
+/**
+ * 일괄 승인 켜기/끄기(approval.ts). 메시지를 보내기 전에 바꾼다 — 디렉터가 곧바로 유료 도구를 부를 수 있어서다.
+ * metadata 패치는 키 단위 upsert(null = 삭제)라 다른 키는 건드리지 않는다.
+ */
+async function setAutoApprove(session: any, on: boolean) {
+  const cur = String(session.metadata?.[AUTO_APPROVE_KEY] || "");
+  if (!on && !cur) return;
+  await anthropic.beta.sessions.update(session.id, { metadata: { [AUTO_APPROVE_KEY]: on ? new Date().toISOString() : null } } as any).catch(() => null);
+}
 
 export interface Caller { token: string; userId: string; available: number }
 
@@ -89,10 +100,12 @@ export async function sendMessage(caller: Caller, session: any, text: string, im
     content: [{ type: "text", text: "사용자가 버튼 대신 채팅으로 답했다. 바로 다음 사용자 메시지를 이 질문의 답으로 본다." }],
   }));
   events.push({ type: "user.message", content });
+  // "승인"이면 이번 차례의 유료 호출을 카드 없이 실행하고, 다른 메시지면 이전 승인을 푼다.
+  await setAutoApprove(session, isApprovalText(text));
   const firstTurn = session.metadata?.contextSent !== "1";
   if (firstTurn) events.push({ type: "system.message", content: [{ type: "text", text: sessionContext(session) }] });
   await anthropic.beta.sessions.events.send(session.id, { events });
-  if (firstTurn) await anthropic.beta.sessions.update(session.id, { metadata: { ...session.metadata, contextSent: "1" } } as any).catch(() => null);
+  if (firstTurn) await anthropic.beta.sessions.update(session.id, { metadata: { contextSent: "1" } } as any).catch(() => null);
 }
 
 /** 세션 작업 맥락(운영자 지시). 첫 사용자 메시지 바로 뒤에 system.message 로 붙는다. */
@@ -108,6 +121,8 @@ const EVENT_ID = /^sevt_[A-Za-z0-9]+$/;
 /** 버튼 질문(ask_user)의 답을 돌려준다. */
 export async function answerQuestion(session: any, eventId: string, answers: QuestionAnswer[], cancelled: boolean) {
   if (!EVENT_ID.test(eventId)) throw new SiteError(400, { error: "invalid_event_id" });
+  // 버튼으로 "승인 …" 선택지를 고른 것도 채팅 "승인"과 같다. 다른 답은 진행 중인 승인을 풀지 않는다.
+  if (answersApprove(answers, cancelled)) await setAutoApprove(session, true);
   await anthropic.beta.sessions.events.send(session.id, { events: [{ type: "user.custom_tool_result", custom_tool_use_id: eventId,
     content: [{ type: "text", text: answerText(answers, cancelled) }] } as any] });
 }

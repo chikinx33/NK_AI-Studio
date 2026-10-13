@@ -49,7 +49,7 @@ export function answerText(answers: QuestionAnswer[], cancelled: boolean): strin
     const parts = [...picked, ...(other ? [`직접 입력: ${other}`] : [])];
     return `- ${q} → ${parts.length ? parts.join(" / ") : "답 없음"}`;
   });
-  return `사용자의 선택:\n${lines.join("\n") || "- 답 없음"}\n선택한 범위만 진행한다. 유료 생성은 평소처럼 견적을 알리고 승인 카드를 거친다.`;
+  return `사용자의 선택:\n${lines.join("\n") || "- 답 없음"}\n선택한 범위만 진행한다. 승인 선택지를 골랐다면 직전에 밝힌 범위의 유료 생성은 화면 승인 없이 바로 실행된다(범위를 넘으면 다시 묻는다).`;
 }
 
 function textOf(content: any): string {
