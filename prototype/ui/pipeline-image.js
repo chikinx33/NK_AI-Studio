@@ -198,11 +198,29 @@
     return sorted.slice(0, max);
   }
 
+  // 레퍼런스 이미지 바로 옆에 붙는 캐릭터 라벨. 예전엔 180자에서 잘라, 생김새 뒤쪽(다리 등)이
+  // 라벨에서 통째로 빠졌다 — 세모(207자)는 "…팔 2개, 몸통 아래" 에서 끊겼다. AI 자동 채우기가
+  // 600자까지 쓰므로 상한도 그만큼 두고, 넘치면 구(쉼표) 경계에서 자른다.
+  // personality 칸이 비면 description 으로 채워지므로(normalizeKnowledgeCharacters) 같은 구는 한 번만 싣는다.
+  var SUBJECT_DESCRIPTION_MAX = 600;
   function compactDescription(parts) {
-    var text = parts.map(function (item) { return normalizeText(item); }).filter(Boolean).join(', ');
+    var seen = Object.create(null);
+    var phrases = [];
+    parts.forEach(function (item) {
+      normalizeText(item).split(',').forEach(function (p) {
+        var phrase = p.trim();
+        var key = phrase.toLowerCase().replace(/\s+/g, '');
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        phrases.push(phrase);
+      });
+    });
+    var text = phrases.join(', ');
     if (!text) return 'character';
-    if (text.length <= 180) return text;
-    return text.slice(0, 179).trim() + '…';
+    if (text.length <= SUBJECT_DESCRIPTION_MAX) return text;
+    var cut = text.slice(0, SUBJECT_DESCRIPTION_MAX);
+    var lastComma = cut.lastIndexOf(',');
+    return (lastComma > 0 ? cut.slice(0, lastComma) : cut).trim();
   }
 
   function escapeRegExp(value) {

@@ -6140,7 +6140,10 @@ async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext)
     for (const tk of tokens) {
       const bc = brand ? findBrandCharacter(brand, tk) : null;
       const name = String(bc?.name || tk.replace(/^@+/, "")).trim();
-      const desc = String(bc?.description || "").replace(/\s+/g, " ").trim().slice(0, 240);
+      // 240자에서 자르면 생김새 뒤쪽(다리 등)이 참조 라벨에서 빠진다. AI 자동 채우기 상한(600자)까지 싣고, 넘치면 구 경계에서 자른다.
+      const descFull = String(bc?.description || "").replace(/\s+/g, " ").trim();
+      const descCut = descFull.length > 600 ? descFull.slice(0, 600) : descFull;
+      const desc = descFull.length > 600 && descCut.lastIndexOf(",") > 0 ? descCut.slice(0, descCut.lastIndexOf(",")).trim() : descCut;
       // 등록 시트(이미지)가 있는지 여기서 확인 — 없으면 runImagenTool 이 조용히 빼 버려 "왜 이 캐릭터가 안 나왔나"를 알 수 없었다.
       const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
       const sheetEntry = (Array.isArray(brand?.characterSheets) ? brand.characterSheets : []).find((e: any) => norm(e?.token) === norm(tk) || norm(e?.displayName) === norm(tk) || norm(e?.displayName) === norm(name));

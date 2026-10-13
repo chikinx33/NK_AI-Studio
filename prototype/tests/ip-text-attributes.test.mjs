@@ -98,8 +98,54 @@ test("신체 부위는 부위 이름으로 부르게 못박는다", () => {
   assert.match(src, /Name body parts by what they are/);
   assert.match(src, /An arm without fingers is still an arm/);
   // 이름을 바꾸지 말고 '형태' 로 표현하라는 대안까지 줘야 실제로 지켜진다.
-  assert.match(src, /손가락 구분 없는 뭉툭한 타원형 팔/);
-  assert.match(src, /rounded mitten-like arm with no separated fingers/);
+  // 단, 형태 단어는 지시문이 정해 주지 않는다 — 아래 "구체적 형태 예시를 두지 않는다" 테스트 참조.
+  assert.match(src, /'손가락 구분 없는 팔' 뒤에 눈으로 본 끝 모양과 길이를 붙이세요/);
+  assert.match(src, /'an arm with no separated fingers' followed by the end shape and length you actually see/);
+});
+
+test("지시문에 구체적 형태 예시를 두지 않는다 (예시가 그대로 생김새로 저장되던 회귀)", () => {
+  const src = analyze();
+  const instruction = src.slice(src.indexOf("function buildInstruction"));
+  // 세모의 팔은 끝이 가늘어지는 납작한 물방울형인데, 지시문 예시 "손가락 구분 없는 뭉툭한 타원형 팔" 이
+  // 그대로 옮겨져 저장됐고 이미지 모델은 끝이 잘린 원기둥을 그렸다.
+  assert.doesNotMatch(instruction, /뭉툭한 타원형 팔'\(O\)/);
+  assert.doesNotMatch(instruction, /mitten/);
+  assert.doesNotMatch(instruction, /벙어리장갑/);
+  assert.doesNotMatch(instruction, /타원 돌기/);
+  assert.doesNotMatch(instruction, /oval side nubs/);
+  // 무엇을 관찰할지만 알려 준다: 끝 모양·단면·비율·색, 그리고 옆·뒤의 입체.
+  assert.match(instruction, /이 지시문의 표현을 옮겨 적지 마세요/);
+  assert.match(instruction, /Never copy wording from this instruction/);
+  assert.match(instruction, /끝 모양\(둥글게 가늘어짐\/고르게 둥긂\/평평하게 잘림\)/);
+  assert.match(instruction, /몸통 높이·폭 대비 길이/);
+  assert.match(instruction, /the shape of its END/);
+  assert.match(instruction, /옆모습·뒷모습에서 보이는 몸통의 입체/);
+  // 길이 예산을 지시해 서버 상한(600자)에 걸리지 않게 한다.
+  assert.match(instruction, /400자 안으로/);
+  assert.match(instruction, /within 400 characters/);
+});
+
+test("자동 채우기 결과는 단어 중간이 아니라 구 경계에서 자른다", () => {
+  const src = analyze();
+  assert.doesNotMatch(src, /function oneLine/);
+  assert.match(src, /description: clipPhrases\(out\.description, 600\)/);
+  assert.match(src, /negativePrompt: clipPhrases\(out\.negativePrompt, 300\)/);
+  const body = src.slice(src.indexOf("function clipPhrases"));
+  const fnSrc = body.slice(0, body.indexOf("\n}\n") + 2).replace(/: unknown|: number/g, "");
+  const clipPhrases = new Function(fnSrc + "\nreturn clipPhrases;")();
+  assert.equal(clipPhrases("가, 나나, 다다다", 7), "가, 나나");
+  assert.equal(clipPhrases("  짧은   글 ", 600), "짧은 글");
+});
+
+test("캐릭터 생김새는 이미지 라벨에서 짧게 잘리지 않는다", () => {
+  // 180자(스틸)·240자(에이전트)·160자(스토리보드 시트)에서 잘려 생김새 뒤쪽(다리)이 빠졌다.
+  const img = read("prototype/ui/pipeline-image.js");
+  assert.doesNotMatch(img, /text\.length <= 180/);
+  assert.match(img, /var SUBJECT_DESCRIPTION_MAX = 600;/);
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.doesNotMatch(shared, /String\(bc\?\.description \|\| ""\)\.replace\(\/\s\+\/g, " "\)\.trim\(\)\.slice\(0, 240\)/);
+  const sheet = read("prototype/functions/api/_shared/storyboard-sheet.js");
+  assert.doesNotMatch(sheet, /t\(c\.description\)\.slice\(0, 160\)/);
 });
 
 test("초안을 고치면 근거를 밝히게 한다", () => {

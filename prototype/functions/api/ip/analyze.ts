@@ -309,8 +309,8 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       model: geminiModel,
       // 2칸만 돌려준다. 옛 5칸(fixedTraits·bannedTraits·styleGuide)은
       // 같은 내용을 나눠 적게 만들 뿐이라 없앴다 — character-traits.js 주석 참조.
-      description: oneLine(out.description, 600),
-      negativePrompt: oneLine(out.negativePrompt, 300),
+      description: clipPhrases(out.description, 600),
+      negativePrompt: clipPhrases(out.negativePrompt, 300),
     });
   } catch (e: any) {
     return json({ error: e?.message ?? "Unknown error" }, 500);
@@ -362,8 +362,16 @@ function extractJsonBlock(text: string) {
   return start >= 0 && end > start ? body.slice(start, end + 1) : body;
 }
 
-function oneLine(value: unknown, max: number) {
-  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+/**
+ * 한 줄로 펴고, 상한을 넘으면 마지막 쉼표(구 경계)에서 자른다.
+ * 예전엔 글자 수로 바로 잘라 "…연노란색 다" 처럼 단어 중간에서 끊긴 채 칸에 채워졌다.
+ */
+function clipPhrases(value: unknown, max: number) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastComma = cut.lastIndexOf(",");
+  return (lastComma > 0 ? cut.slice(0, lastComma) : cut).trim();
 }
 
 function toList(value: unknown, max: number) {
@@ -381,7 +389,10 @@ function normalizeLang(value: unknown) {
  * 분석 지시문. 두 가지를 특히 강조한다.
  *  ① 금지 특성은 '한 각도에서 안 보이는 것'이 아니라 '설계상 없는 것'만 적게 한다(추측 금지).
  *  ② 이미지 모델이 부정문을 약하게 처리하므로 고정 특성은 형태를 긍정문으로 서술하게 한다.
- *     "손가락 없음"보다 "둥근 벙어리장갑 형태의 손, 손가락 구분 없음"이 훨씬 잘 먹는다.
+ *  ③ 지시문에 구체적인 형태 예시('뭉툭한 타원형 팔' 등)를 두지 않는다. 예전엔 그런 예시가
+ *     있었고, 모델이 시트를 보는 대신 그 예시를 그대로 옮겨 적었다. 세모의 팔은 끝이 가늘어지는
+ *     납작한 물방울형인데 "뭉툭한 타원형 팔" 로 저장됐고, 이미지 모델은 끝이 잘린 원기둥을 그렸다.
+ *     형태 단어는 시트에서 관찰해 고르게 하고, 무엇을 관찰할지(끝 모양·단면·비율·색)만 알려 준다.
  */
 function buildInstruction(lang: "ko" | "en", characterName: string, brandContext: any) {
   const ctxLines: string[] = [];
@@ -409,19 +420,23 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
       "All images show the SAME character from different angles or expressions. Merge them into one consistent spec.",
       "Return JSON with these fields:",
       "- description: everything that must stay the same every time this character is drawn — identity, silhouette, face, body proportions, limbs, costume, and colors. Comma-separated phrases, most identity-defining first.",
-      "  Write shapes POSITIVELY, never as negations: say 'rounded mitten-like hands' rather than 'no fingers'. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
+      "  Write shapes POSITIVELY, never as negations. Image models handle negation poorly, so anything phrased as an absence is likely to be ignored or even drawn.",
+      "  Never copy wording from this instruction. Pick every shape word by looking at the sheet. A generic word ('blunt', 'oval', 'round') applied to a part that is actually tapered or flat makes every future image wrong.",
+      "  For each arm and leg state, as observed: where it attaches, which way it points, the shape of its END (tapered to a rounded point / evenly rounded / flat-cut), its cross-section (flat or round), its length as a fraction of the body height or width, and its color if it differs from the face or body.",
+      "  State the body's 3D volume as seen in the side and back views (what the back looks like), not only the front outline.",
+      "  Put the silhouette, body volume and limbs before small facial details, and keep the whole description within 400 characters.",
       "  Describe ONLY the character. Never write the art style / medium / render look, the background, lighting, camera angle, or the sheet layout.",
       "  Those belong to the shared prompt, not to this character. A backdrop copied in here ('neutral grey background') gets baked into every future image.",
       "  Count body parts on ONE figure, from the clearest front view. The sheet repeats the same character at several angles — never add counts across cells.",
       "  Count arms (on the sides of the torso) and legs (underneath) separately; state each as an explicit number.",
       "If the brand rules in [Brand IP context] contradict what you see, the rules win — they are the character's design intent.",
-      "  e.g. if the guide says 'oval side nubs, never add arms/hands', do not call them arms even if they look like arms. Instead state position, size and color precisely so they still render in the right place.",
+      "  e.g. if the guide says a side part is not an arm, do not call it an arm even if it looks like one. Instead state position, size and color precisely so they still render in the right place.",
       "  Only when the rules say nothing about a part, follow the default below.",
       "  Name body parts by what they are. An arm without fingers is still an arm; a leg without toes is still a leg.",
       "  Never rename a limb to a non-limb noun ('nub', 'bump', 'protrusion') just because detail is missing — image models place a part by its name.",
-      "  Saying 'oval protrusion' renders a lump on the torso and loses the arm, so the character can no longer be posed.",
-      "  Express missing detail as shape instead: not 'no fingers' but 'rounded mitten-like arm with no separated fingers'.",
-      "- negativePrompt: comma-separated keywords for what must NOT appear (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong.",
+      "  Renaming an arm to a protrusion renders a lump on the torso and loses the arm, so the character can no longer be posed.",
+      "  Express missing detail as the observed shape instead: not 'no fingers' but 'an arm with no separated fingers' followed by the end shape and length you actually see.",
+      "- negativePrompt: comma-separated keywords for what must NOT appear (e.g. 'fingers, human hands, extra limbs, nose'). This is the ONLY place negations belong. Keep it within 200 characters.",
       "  List only what the design clearly does NOT have. Never guess from one angle where something is merely hidden — a hand tucked behind the back is not a missing hand.",
       "Base every claim on what the images actually show. Leave a field empty rather than guessing.",
       ctx,
@@ -433,7 +448,11 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "여러 장이면 모두 같은 캐릭터의 다른 각도·표정입니다. 하나의 일관된 규격으로 통합하세요.",
     "다음 필드를 JSON으로 반환하세요.",
     "- description: 이 캐릭터를 그릴 때마다 똑같이 유지돼야 하는 모든 것 — 정체성·실루엣·얼굴·신체 비율·팔다리·의상·색상. 쉼표로 구분한 짧은 구로 쓰고, 정체성을 가장 크게 좌우하는 것부터 적으세요.",
-    "  형태는 반드시 긍정문으로. '손가락 없음'이 아니라 '둥근 벙어리장갑 형태의 손'이라고 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
+    "  형태는 반드시 긍정문으로 쓰세요. 이미지 모델은 부정문을 약하게 처리해서, 없다고 적은 것이 무시되거나 오히려 그려집니다.",
+    "★이 지시문의 표현을 옮겨 적지 마세요. 형태 단어는 전부 시트를 직접 보고 고르세요. 실제로는 끝이 가늘어지거나 납작한 부위에 '뭉툭한'·'타원형'·'둥근' 같은 흔한 말을 붙이면, 앞으로 만드는 모든 이미지가 그 말대로 틀리게 그려집니다.",
+    "  팔과 다리는 각각 보이는 그대로 적으세요: 붙은 위치, 뻗는 방향, 끝 모양(둥글게 가늘어짐/고르게 둥긂/평평하게 잘림), 단면(납작함/둥긂), 몸통 높이·폭 대비 길이(몇 분의 몇), 얼굴·몸통과 색이 다르면 그 색.",
+    "  옆모습·뒷모습에서 보이는 몸통의 입체(뒷면이 어떻게 생겼는지)도 적으세요. 정면 윤곽만 적으면 각도가 바뀔 때 몸이 납작해집니다.",
+    "  실루엣·몸통 입체·팔다리를 얼굴 세부보다 앞에 두고, 전체를 400자 안으로 쓰세요.",
     "★캐릭터 자체만 적으세요. 그림체·화풍·렌더 방식, 배경, 조명, 카메라 각도, 시트 배치는 절대 적지 마세요.",
     "  그것들은 이 캐릭터의 속성이 아니라 공통 프롬프트가 정하는 것입니다. 여기에 적으면 캐릭터마다 화풍이 달라지고 통제가 불가능해집니다.",
     "  특히 배경('중성 회색 배경' 등)을 옮겨 적으면 앞으로 만드는 모든 이미지에 그 배경이 박힙니다. 시트의 배경은 촬영용 판일 뿐입니다.",
@@ -441,13 +460,13 @@ function buildInstruction(lang: "ko" | "en", characterName: string, brandContext
     "  시트는 같은 캐릭터를 여러 각도로 늘어놓은 것입니다. 여러 칸의 개수를 합치면 팔다리가 몇 배로 불어납니다.",
     "  팔(몸통 좌우)과 다리(몸통 아래)는 나눠서 세고, 각각 몇 개인지 숫자로 명시하세요. 서로 섞어 세지 마세요.",
     "★[Brand IP context] 의 허브 규칙이 눈으로 본 것과 어긋나면 규칙이 우선입니다. 그 캐릭터의 설계 의도이기 때문입니다.",
-    "  예: 가이드에 '좌우 타원 돌기, 팔/손 추가 금지' 라고 적혀 있으면 팔처럼 보여도 팔이라고 쓰지 마세요. 대신 위치·크기·색을 정확히 적어 그 자리에 그려지게 하세요.",
+    "  예: 가이드에 좌우 부위가 팔이 아니라고 적혀 있으면 팔처럼 보여도 팔이라고 쓰지 마세요. 대신 위치·크기·색을 정확히 적어 그 자리에 그려지게 하세요.",
     "  규칙에 그런 언급이 없을 때만 아래 기본 원칙을 따르세요.",
     "  신체 부위는 부위 이름으로 부르세요. 팔은 손가락이 없어도 팔이고, 다리는 발가락이 없어도 다리입니다.",
     "  세부가 없다고 해서 '돌기'·'혹'·'덩어리' 같은 다른 이름으로 바꿔 부르지 마세요 — 이미지 모델은 이름으로 부위의 위치와 역할을 정합니다.",
-    "  '타원형 돌기'라고 쓰면 몸에 붙은 혹이 그려지고, 팔이 사라져 포즈를 잡을 수 없습니다.",
-    "  없는 세부는 형태로 표현하세요: '손가락 없음'(X) → '손가락 구분 없는 뭉툭한 타원형 팔'(O).",
-    "- negativePrompt: 화면에 나오면 안 되는 것을 쉼표로 나열(예: '손가락, 사람 손, 팔다리 추가, 코'). 부정 표현은 오직 이 칸에만 씁니다.",
+    "  팔을 '돌기'라고 쓰면 몸에 붙은 혹이 그려지고, 팔이 사라져 포즈를 잡을 수 없습니다.",
+    "  없는 세부는 형태로 표현하세요: '손가락 없음'(X) → '손가락 구분 없는 팔' 뒤에 눈으로 본 끝 모양과 길이를 붙이세요(O).",
+    "- negativePrompt: 화면에 나오면 안 되는 것을 쉼표로 나열(예: '손가락, 사람 손, 팔다리 추가, 코'). 부정 표현은 오직 이 칸에만 씁니다. 200자 안으로 쓰세요.",
     "  설계상 '분명히 없는' 것만 적으세요. 한 각도에서 단순히 안 보이는 것은 넣지 마세요 — 등 뒤로 가린 손은 없는 손이 아닙니다.",
     "모든 서술은 이미지에서 실제로 확인되는 것만 쓰세요. 확인 불가한 항목은 비워 두세요.",
     "두 필드 모두 한국어로 작성하세요. 화면 언어와 저장되는 내용이 어긋나면 사용자가 읽고 고칠 수 없습니다.",

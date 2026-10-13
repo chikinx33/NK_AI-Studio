@@ -806,3 +806,48 @@ test('pipeline image attaches references when character is registered only in th
   assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'gs://bucket/front.png');
   assert.match(String(ctx.__imagenCalls[0].prompt || ''), /네모/);
 });
+
+// 레퍼런스 이미지 옆 캐릭터 라벨이 180자에서 잘려, 생김새 뒤쪽(다리)이 빠지던 회귀.
+// 세모(207자)는 "…팔 2개, 몸통 아래" 에서 끊겨 다리 정보가 이미지 라벨에 전혀 실리지 않았다.
+test('character reference label keeps the full appearance (no 180-char cut) and does not repeat phrases', async () => {
+  const look = '모양새 친구들 브랜드의 삼각형 모양 캐릭터 세모, 둥근 모서리의 주황빛 빨간색 삼각형 테두리 몸통, 중앙의 밝은 노란색 삼각형 얼굴, 크고 반짝이는 검은색 눈 2개, 눈가의 속눈썹, 양 볼의 분홍색 동그란 볼터치, 주황색 눈썹 2개, 몸통 좌우에 달린 끝이 둥글게 가늘어지는 납작한 크림색 팔 2개, 몸통 밑면에서 살짝 보이는 아주 짧은 겨자색 다리 2개';
+  assert.ok(look.length > 180);
+  const ctx = createContext({
+    brandById() {
+      return {
+        brandId: 'shape-brand',
+        // personality 가 비면 description 으로 채워진다 — 같은 생김새가 라벨에 두 번 실리면 안 된다.
+        knowledgeCharacters: [{ characterId: 'char_001', displayName: '세모', token: '@세모', description: look }],
+        characterSheets: [{ token: '@세모', items: [{ sheetId: 'sheet_front', imageDataUrl: 'gs://bucket/semo.png', isPrimary: true }] }]
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+  let state = {
+    draftId: 'project-1',
+    header: '',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      characters: [{ characterId: 'char_001', displayName: '세모', token: '@세모', description: look }]
+    },
+    scenes: [{ id: 1, shot: '@세모가 도로 위에 선다.', narration: '', dialogue: [], estSec: 4 }]
+  };
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: { getState() { return state; }, setState(next) { state = next; } },
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+  assert.equal(ctx.__imagenCalls.length, 1);
+  const label = ctx.__imagenCalls[0].referenceImages[0].subjectDescription;
+  assert.match(label, /아주 짧은 겨자색 다리 2개/);
+  assert.doesNotMatch(label, /…/);
+  assert.equal(label.split('중앙의 밝은 노란색 삼각형 얼굴').length - 1, 1);
+});

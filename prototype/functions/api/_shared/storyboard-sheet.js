@@ -176,7 +176,7 @@ export function buildBibleCharacterSheetPrompt(input) {
   let n = 1;
   chars.forEach((c) => {
     CHARACTER_ANGLES.forEach((a) => {
-      lines.push(`Panel ${n} (${t(c.name).toUpperCase()} · ${a.id}): ${t(c.name)}${t(c.description) ? ` — ${t(c.description).slice(0, 160)}` : ""}. ${a.instruction}. Plain neutral background, no props.`);
+      lines.push(`Panel ${n} (${t(c.name).toUpperCase()} · ${a.id}): ${t(c.name)}${t(c.description) ? ` — ${t(c.description)}` : ""}. ${a.instruction}. Plain neutral background, no props.`);
       n += 1;
     });
   });
