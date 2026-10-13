@@ -92,7 +92,6 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
       { id: "presentation", label: "PPT·슬라이드", description: "발표 목적에 맞는 구성과 디자인의 슬라이드를 제작합니다.", status: "coming-soon", outputLabel: "PPTX·슬라이드" },
       { id: "card-news", label: "카드뉴스", description: "채널과 독자에 맞는 연속형 카드 콘텐츠를 제작합니다.", status: "coming-soon", outputLabel: "이미지 세트" },
       { id: "poster-banner", label: "포스터·배너", description: "캠페인, 행사, 광고용 정적 디자인을 제작합니다.", status: "coming-soon", outputLabel: "이미지" },
-      { id: "video-shortform", label: "영상·숏폼", description: "브랜드 영상과 숏폼 콘텐츠를 기획하고 제작합니다.", status: "coming-soon", outputLabel: "영상" },
       { id: "thumbnail", label: "썸네일", description: "플랫폼과 콘텐츠 목적에 맞는 썸네일을 제작합니다.", status: "coming-soon", outputLabel: "이미지" },
     ],
   }),
