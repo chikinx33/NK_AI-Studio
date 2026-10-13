@@ -11,7 +11,7 @@ import { readStorage } from "../lib/safeStorage";
 
 export const NEW_PROJECT_TEXT = {
   ko: {
-    button: "새 프로젝트",
+    button: "신규",
     title: "새 프로젝트 만들기",
     modeEpisode: "기존 시리즈에 새 에피소드",
     modeSeries: "새 시리즈",
@@ -29,7 +29,7 @@ export const NEW_PROJECT_TEXT = {
     failed: "프로젝트를 만들지 못했어요.",
   },
   en: {
-    button: "New project",
+    button: "New",
     title: "Create a project",
     modeEpisode: "New episode in a series",
     modeSeries: "New series",
