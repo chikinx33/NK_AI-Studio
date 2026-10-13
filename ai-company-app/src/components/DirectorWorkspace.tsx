@@ -230,31 +230,32 @@ export default function DirectorWorkspace() {
   const costText = usage ? (usage.owner ? `대화 비용 $${(usage.listCostCents / 100).toFixed(2)} (소유자 무과금)` : `대화 비용 $${(usage.listCostCents / 100).toFixed(2)}${usage.available != null ? ` · 잔액 ${Number(usage.available).toLocaleString()} 크레딧` : ""}`) : "";
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {/* 상단: 프로젝트·세션·상태 */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge px-3 py-2">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-ink">
+      {/* 상단 바: 스킬 화면(제작 캔버스) 상단 바와 같은 스타일 */}
+      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-inset px-3 py-2">
         <Icon d={ClapD} className="h-4 w-4 text-tone-emerald" />
-        <span className="text-[13px] font-bold text-strong">디렉터</span>
-        <div className="w-64 max-w-full"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
+        <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Director</span>
+        <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
         {projectId && (
-          <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} className="h-8 max-w-[260px] rounded-lg border border-edge bg-inset px-2 text-[12px] text-strong">
+          <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="디렉터 세션" className="max-w-[220px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary">
             {sessions.length === 0 && <option value="">세션 없음</option>}
             {sessions.map((s) => <option key={s.id} value={s.id}>{s.title || s.id}</option>)}
           </select>
         )}
         {projectId && (
-          <button type="button" onClick={() => void newSession()} disabled={creating} className="flex h-8 items-center gap-1 rounded-lg bg-raised px-2.5 text-[12px] font-bold text-strong hover:bg-edge disabled:opacity-50">
+          <button type="button" onClick={() => void newSession()} disabled={creating} className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40">
             <Icon d={PlusD} className="h-3.5 w-3.5" /> {creating ? "만드는 중…" : "새 디렉터 세션"}
           </button>
         )}
-        <div className="flex-1" />
-        {sessionId && (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] ${running ? "bg-tint-sky/50 text-tone-sky" : "bg-panel text-muted"}`}>
-            {connection === "retrying" ? "다시 연결 중…" : connection === "connecting" ? "연결 중…" : STATUS_LABEL[status] || status}
-          </span>
-        )}
-        {costText && <span className="text-[11px] text-faint">{costText}</span>}
-      </div>
+        <div className="ml-auto flex items-center gap-1.5">
+          {costText && <span className="text-[10px] text-faint">{costText}</span>}
+          {sessionId && (
+            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${running ? "border-sky-700/60 text-tone-sky" : "border-edge text-muted"}`}>
+              {connection === "retrying" ? "다시 연결 중…" : connection === "connecting" ? "연결 중…" : STATUS_LABEL[status] || status}
+            </span>
+          )}
+        </div>
+      </section>
 
       <div className="flex min-h-0 flex-1">
         {/* 대화 */}
@@ -356,13 +357,13 @@ export default function DirectorWorkspace() {
 
         {/* 시퀀스·콘티·테이크 */}
         <aside className="hidden w-[400px] shrink-0 flex-col border-l border-edge xl:flex">
-          <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-2">
-            <span className="text-[12px] font-bold text-strong">시퀀스</span>
-            <select value={activeSeq} onChange={(e) => setActiveSeq(e.target.value)} className="h-7 min-w-0 flex-1 rounded-lg border border-edge bg-inset px-2 text-[12px] text-strong">
+          <div className="flex shrink-0 items-center gap-2 border-b border-edge bg-inset px-3 py-2">
+            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Sequence</span>
+            <select value={activeSeq} onChange={(e) => setActiveSeq(e.target.value)} aria-label="시퀀스" className="min-w-0 flex-1 rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary">
               {sequences.length === 0 && <option value="">아직 없음</option>}
               {sequences.map((s) => <option key={s.id} value={s.id}>{s.title || s.id}</option>)}
             </select>
-            <button type="button" onClick={() => void loadSequences()} className="grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-edge" title="새로고침" aria-label="새로고침"><Icon d={RefreshD} className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => void loadSequences()} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="새로고침" aria-label="새로고침"><Icon d={RefreshD} className="h-3.5 w-3.5" /></button>
           </div>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
             {!seq && <div className="text-[12px] leading-relaxed text-faint">디렉터가 콘티를 저장하면 여기에 컷과 테이크가 나타납니다.</div>}

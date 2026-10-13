@@ -14,7 +14,7 @@ import KnowledgeWorkspace from "./components/KnowledgeWorkspace";
 import AgentManager from "./components/AgentManager";
 import RightMenu from "./components/RightMenu";
 import SkillBox from "./components/SkillBox";
-import { CANVAS_SKILL_CATEGORY_ID } from "./lib/companySkills";
+import { CANVAS_SKILL_CATEGORY_ID, DIRECTOR_SKILL_CATEGORY_ID } from "./lib/companySkills";
 import { appDialog } from "./lib/appDialog";
 import {
   getStatus,
@@ -75,7 +75,6 @@ const MAX_TTS_SENTENCES = 5;
 const AgentVideoWorkspace = lazy(() => import("./components/AgentVideoWorkspace"));
 const WorkExplorer = lazy(() => import("./components/WorkExplorer"));
 const SkillWorkspace = lazy(() => import("./components/SkillWorkspace"));
-const DirectorWorkspace = lazy(() => import("./components/DirectorWorkspace"));
 
 // 모바일 좌측 드로어 토글용 햄버거 아이콘
 const MenuIcon = ({ className }: { className?: string }) => (
@@ -139,7 +138,7 @@ export default function App() {
   const [presentationActive, setPresentationActive] = useState(false);
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
-  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills" | "director">(EMBED_CANVAS ? "skills" : "chat");
+  const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills">(EMBED_CANVAS ? "skills" : "chat");
   // 보고·업무 폴더에서 지목한 항목들(여러 개). 채팅 입력창 위 칩으로 보이고, 다음 메시지와 함께 서버로 간다.
   const [chatReferences, setChatReferences] = useState<ChatReference[]>([]);
   const MAX_CHAT_REFERENCES = 10;
@@ -346,11 +345,15 @@ export default function App() {
     }
     if (name === "navigate") {
       const view = String(action.view || "");
-      const allowed = new Set(["chat", "dashboard", "knowledge", "agents", "works", "skills", "canvas", "director"]);
+      const allowed = new Set(["chat", "dashboard", "knowledge", "agents", "works", "skills"]);
       if (canUseSettings) allowed.add("settings");
       if (view === "canvas") {
         // 캔버스는 스킬 화면의 한 분류 — navigate 로도 같은 곳에 닿게 한다.
         setSkillCategoryId(CANVAS_SKILL_CATEGORY_ID);
+        setCenterView("skills");
+      } else if (view === "director") {
+        // 디렉터도 스킬 화면의 한 분류(SKILL 줄).
+        setSkillCategoryId(DIRECTOR_SKILL_CATEGORY_ID);
         setCenterView("skills");
       } else if (allowed.has(view)) {
         if (view === "skills" && typeof action.categoryId === "string") setSkillCategoryId(action.categoryId);
@@ -1397,7 +1400,6 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onDirector={() => setCenterView("director")}
               onSettings={canUseSettings ? openSettings : undefined}
             />
           </div>
@@ -1443,10 +1445,6 @@ export default function App() {
               canvasExpanded={EMBED_MODE ? shellSidebarHidden : focusMode}
               onToggleCanvasExpand={toggleCanvasExpand}
             />
-          </Suspense>
-        ) : centerView === "director" ? (
-          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-faint">디렉터를 불러오는 중…</div>}>
-            <DirectorWorkspace />
           </Suspense>
         ) : centerView === "settings" && canUseSettings ? (
           <Settings
@@ -1515,7 +1513,6 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onWorks={() => setCenterView("works")}
-              onDirector={() => setCenterView("director")}
               onSettings={canUseSettings ? openSettings : undefined}
             />
             <SkillBox

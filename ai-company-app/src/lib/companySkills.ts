@@ -31,7 +31,7 @@ export interface CompanySkillCategory {
   label: string;
   shortLabel: string;
   description: string;
-  icon: "design" | "canvas" | "office" | "research" | "communication" | "marketing" | "development" | "management";
+  icon: "design" | "canvas" | "director" | "office" | "research" | "communication" | "marketing" | "development" | "management";
   status: CompanySkillStatus;
   skills: CompanySkillDefinition[];
 }
@@ -119,6 +119,32 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
         permissionPolicy: "project-write",
         costPolicy: "estimate-before-paid-provider",
         qualityGateIds: ["common-user-isolation", "video-pipeline-coverage"],
+      },
+    ],
+  }),
+  // 디렉터: 대화하며 CF 시퀀스를 연출·생성·검수(nk-director). 사용자 요청으로 상단 메뉴가 아니라 SKILL 줄에 둔다.
+  defineCompanySkillCategory({
+    id: "video-director",
+    label: "영상·디렉터",
+    shortLabel: "디렉터",
+    description: "디렉터와 대화하며 콘티를 짜고 Seedance 2.5 로 8~30초 시퀀스를 한 번에 생성·검수합니다.",
+    icon: "director",
+    status: "available",
+    skills: [
+      {
+        id: "director",
+        label: "대화형 CF 디렉터",
+        description: "콘티 → 480p 드래프트 → 자동 검수 → 1080p 완성 → 편집기 타임라인. 돈이 드는 생성은 승인 후 실행해요.",
+        status: "available",
+        outputLabel: "시퀀스 콘티·테이크(검수 결과)",
+        inputSchema: "company-skill/director/v1",
+        executorId: "nk-director-v1",
+        previewType: "video",
+        artifactTypes: ["source", "preview", "final", "report"],
+        requiredCapabilities: ["project-read", "sequence-write", "video-generation", "video-qa"],
+        permissionPolicy: "project-write",
+        costPolicy: "estimate-before-paid-provider",
+        qualityGateIds: ["common-user-isolation"],
       },
     ],
   }),
@@ -211,6 +237,9 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
 
 /** 채팅 UI 액션(canvas.*)과 navigate view "canvas" 가 여는 분류. */
 export const CANVAS_SKILL_CATEGORY_ID = "video-production";
+
+/** navigate view "director" 가 여는 분류. */
+export const DIRECTOR_SKILL_CATEGORY_ID = "video-director";
 
 export function getCompanySkillCategory(categoryId: string) {
   return COMPANY_SKILL_CATEGORIES.find((category) => category.id === categoryId) || COMPANY_SKILL_CATEGORIES[0];

@@ -9,7 +9,6 @@ export const MENU_TEXT = {
     works: "회사 업무 탐색기",
     knowledge: "회사 지식 (그래프 + 리스트)",
     agents: "직원 관리 (페르소나·규칙)",
-    director: "디렉터 (대화하며 CF 영상 연출·생성)",
     settings: "옵션",
     studio: "스튜디오로 돌아가기",
   },
@@ -19,7 +18,6 @@ export const MENU_TEXT = {
     works: "Company work explorer",
     knowledge: "Company knowledge (graph + list)",
     agents: "Employee management (personas and rules)",
-    director: "Director (conversational video production)",
     settings: "Options",
     studio: "Back to Studio",
   },
@@ -113,15 +111,6 @@ const FolderIcon = (p: IconProps) => (
     <path d="M3 10h18" />
   </SVG>
 );
-// lucide: clapperboard
-const ClapperboardIcon = (p: IconProps) => (
-  <SVG {...p}>
-    <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" />
-    <path d="m6.2 5.3 3.1 3.9" />
-    <path d="m12.4 3.4 3.1 4" />
-    <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-  </SVG>
-);
 const PowerIcon = (p: IconProps) => (
   <SVG {...p}>
     <path d="M12 2v10" />
@@ -210,14 +199,13 @@ function IconBtn({
 }
 
 interface Props {
-  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills" | "director";
+  centerView: "chat" | "dashboard" | "settings" | "knowledge" | "agents" | "works" | "video" | "skills";
   onHome: () => void;
   onChat: () => void;
   onKnowledge: () => void;
   onAgents: () => void;
   onWorks: () => void;
   /** 디렉터(대화형 영상 연출) 작업공간. */
-  onDirector?: () => void;
   /** 옵션(설정) 진입. 일반 회원에게는 넘기지 않으며, 없으면 톱니 버튼 자체를 그리지 않는다. */
   onSettings?: () => void;
 }
@@ -229,7 +217,6 @@ export default function RightMenu({
   onKnowledge,
   onAgents,
   onWorks,
-  onDirector,
   onSettings,
 }: Props) {
   const t = useMenuText();
@@ -244,11 +231,6 @@ export default function RightMenu({
       <IconBtn active={centerView === "works" || centerView === "video"} title={t.works} onClick={onWorks}>
         <FolderIcon className="h-4 w-4" />
       </IconBtn>
-      {onDirector ? (
-        <IconBtn active={centerView === "director"} title={t.director} onClick={onDirector}>
-          <ClapperboardIcon className="h-4 w-4" />
-        </IconBtn>
-      ) : null}
       <IconBtn active={centerView === "knowledge"} title={t.knowledge} onClick={onKnowledge}>
         <BrainIcon className="h-4 w-4" />
       </IconBtn>
