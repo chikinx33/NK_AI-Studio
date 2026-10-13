@@ -135,6 +135,14 @@ Anthropic Managed Agents: agent "NK Director"(claude-opus-5-5, effort high)
 - **영상 표시:** `Markdown.tsx` 가 `![…](gs://….mp4)`·인라인 `` `gs://….mp4` `` 를 그 자리에서 재생한다. 지침은 이미지 문법을 쓰게 한다.
 - **아직 안 함:** 단계 화면(B, `DirectorSteps.tsx`)에는 컷별 스틸 지정·생성 기능이 없어서 이 규칙을 강제하지 않는다.
 
+## 7-2. 일괄 승인 (2026-10-14, v3.2000 · 에이전트 v8 · Cloud Run nk-director-00010)
+
+- **사용자 결정:** 사용자가 채팅으로 "승인"이라고 하면 승인 카드를 하나씩 누르지 않고 일괄 진행한다.
+- **동작:** `src/gateway/approval.ts`. 승인 문장이나 "승인" 라벨의 버튼 답이 오면 세션 `metadata.autoApproveAt` 을 켠다. `stream.ts` 는 켜져 있는 동안 유료 도구(PAID_TOOLS) 확인 요청에 allow 를 보낸다.
+- **풀리는 때:** 디렉터가 차례를 마칠 때(status_idle · end_turn), 승인이 아닌 새 메시지가 올 때, 60분이 지났을 때.
+- **주의:** 자동 허용은 화면 스트림(SSE)이 연결돼 있을 때만 일어난다. 화면이 닫혀 있으면 승인 대기로 남는다.
+- **화면:** 연달아 실행된 도구 호출은 `groupToolRuns` 가 한 줄로 접는다.
+
 ## 8. 주의
 
 - 사이트 세션 토큰·API 키는 대화나 로그에 출력하지 않는다. 시크릿은 파이프로만 다룬다.
