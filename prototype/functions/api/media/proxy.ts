@@ -1,4 +1,5 @@
 import { authorizeRequest } from "../_shared/auth.js";
+import { checkMediaObjectAccess } from "../_shared/media-access";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -26,6 +27,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const url = new URL(request.url);
     const objectName = String(url.searchParams.get("objectName") || "").trim();
     if (!objectName) return send({ error: "missing_objectName" }, 400, origin);
+    // 서비스 계정 서명은 버킷 전체를 읽을 수 있으므로, 서명 전에 요청자 본인 루트(또는 공유받은
+    // 프로젝트의 소유자 프로젝트 폴더) 아래인지 확인한다. 로그인만으로는 남의 파일을 읽을 수 없다.
+    const access = await checkMediaObjectAccess(env, auth.userId, objectName);
+    if (!access.ok) return send({ error: access.error }, access.error === "invalid_object_name" ? 400 : 403, origin);
 
     // 오디오와 비디오/이미지는 서로 다른 버킷·서비스계정(서명자)일 수 있다. 객체 1개를
     // "오디오 버킷+TTS 서명자"로만 조회하던 탓에, 비디오/이미지 자산(ai-video/.../image/...)이

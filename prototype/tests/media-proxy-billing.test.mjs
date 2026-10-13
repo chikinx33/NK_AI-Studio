@@ -13,7 +13,9 @@ const env = { VIDEO_OUTPUT_GCS_URI: 'gs://images/root', GOOGLE_CLIENT_EMAIL: 'te
   GOOGLE_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }), GOOGLE_PROJECT_ID: 'billing-project' };
 function load(fetch) {
   const exports = {};
-  vm.runInNewContext(compiled, { exports, require: () => ({ authorizeRequest: async () => ({ ok: true, userId: 'test' }) }),
+  vm.runInNewContext(compiled, { exports, // 버킷·서명 재시도만 본다. 경로 접근 검사는 media-proxy-access.test.mjs 가 확인한다.
+    require: (name) => /media-access/.test(name) ? { checkMediaObjectAccess: async () => ({ ok: true }) }
+      : { authorizeRequest: async () => ({ ok: true, userId: 'test' }) },
     fetch, Request, Response, URL, URLSearchParams, TextEncoder, Uint8Array, Date, Set, crypto: webcrypto, atob, btoa });
   return exports.onRequestGet;
 }
