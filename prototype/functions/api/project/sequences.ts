@@ -13,6 +13,7 @@ import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
+import { cleanCutStill, cleanReferenceAsset } from "../_shared/director-media-path.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -66,10 +67,20 @@ async function gcsWriteIfUnchanged(env: any, objectName: string, data: any, gene
 function cleanSequence(seq: any): any {
   if (!seq || typeof seq !== "object" || Array.isArray(seq)) throw new Error("sequence_object_required");
   if (!ID_RE.test(String(seq.id || ""))) throw new Error("invalid_sequence_id");
+  // 스틸·참조 경로 뒤에 붙은 메모("… (v3, 사용자 확인 대기)")는 경로를 망가뜨린다 — 경로와 메모를 나눠 저장한다.
   const out = { ...seq, id: String(seq.id), takes: Array.isArray(seq.takes) ? seq.takes.slice(-MAX_TAKES) : [],
-    cuts: Array.isArray(seq.cuts) ? seq.cuts : [], updatedAt: new Date().toISOString() };
+    cuts: Array.isArray(seq.cuts) ? seq.cuts.map(cleanCutStill) : [],
+    ...(Array.isArray(seq.references) ? { references: seq.references.map(cleanReferenceAsset) } : {}),
+    updatedAt: new Date().toISOString() };
   if (JSON.stringify(out).length > MAX_SEQUENCE_BYTES) throw new Error("sequence_too_large");
   return out;
+}
+
+function readableSequence(seq: any): any {
+  if (!seq || typeof seq !== "object") return seq;
+  return { ...seq,
+    ...(Array.isArray(seq.cuts) ? { cuts: seq.cuts.map(cleanCutStill) } : {}),
+    ...(Array.isArray(seq.references) ? { references: seq.references.map(cleanReferenceAsset) } : {}) };
 }
 
 /** 프로젝트 기억: 고정 규칙·교훈(마크다운 글). 비밀값은 받지 않는다. */
@@ -129,7 +140,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const doc = await gcsRead(env, `${buildAiVideoProjectPrefix(basePrefix, owner, projectId)}/reference/data.json`);
     if (!doc) return send({ error: "project_not_found" }, 404, origin);
     const payload = doc.data?.payload || {};
-    return send({ sequences: Array.isArray(payload.sequences) ? payload.sequences : [], notes: payload.directorNotes || null }, 200, origin);
+    // 예전에 메모가 붙은 채 저장된 경로도 읽을 때 정리해 돌려준다(다음 저장 때 원본도 고쳐진다).
+    const sequences = (Array.isArray(payload.sequences) ? payload.sequences : []).map(readableSequence);
+    return send({ sequences, notes: payload.directorNotes || null }, 200, origin);
   } catch (e: any) {
     return send({ error: "sequences_read_failed", detail: String(e?.message || e) }, 503, origin);
   }

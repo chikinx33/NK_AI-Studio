@@ -15,7 +15,9 @@ function loadSequenceOps() {
   const consts = src.slice(start, src.indexOf("const headers ="));
   const fnStart = src.indexOf("function cleanSequence(");
   const fnEnd = src.indexOf("export const onRequestGet");
-  const js = esbuild.transformSync(consts + src.slice(fnStart, fnEnd), { loader: "ts" }).code;
+  // 컷 스틸·참조 경로 정리(cleanCutStill·cleanReferenceAsset)는 공용 모듈에서 가져온다 — 실구현을 인라인한다.
+  const mediaPath = read("prototype/functions/api/_shared/director-media-path.js").replace(/^export /gm, "");
+  const js = esbuild.transformSync(mediaPath + consts + src.slice(fnStart, fnEnd), { loader: "ts" }).code;
   return new Function(js + "\nreturn { applyOp, cleanSequence, cleanNotes };")();
 }
 

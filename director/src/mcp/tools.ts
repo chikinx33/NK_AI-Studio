@@ -22,6 +22,45 @@ export function gsFromSignedUrl(url: string): string {
   } catch { return ""; }
 }
 
+/** 저장소 경로 비교 키: "gs://버킷/users/…", "users/…", 서명 URL 을 모두 "users/…" 객체 경로로 맞춘다. 뒤에 붙은 메모는 버린다. */
+export function storageObjectKey(value: unknown): string {
+  const first = String(value ?? "").trim().split(/\s+/)[0] || "";
+  const gs = /^https?:\/\//i.test(first) ? gsFromSignedUrl(first) : first;
+  if (gs.startsWith("gs://")) return gs.replace(/^gs:\/\/[^/]+\//, "");
+  return gs.startsWith("users/") ? gs : "";
+}
+
+/**
+ * 영상 제출 전 스틸 검사(사용자 결정 2026-10-14: 모든 컷 스틸 필수).
+ * 제출 범위의 컷마다 ① 스틸 경로가 있고 ② 사용자가 확인했고(stillApproved) ③ 그 스틸이 referenceImages 에 실려 있어야 한다.
+ * 스틸 없이 시트만으로 만들면 컷 구도가 모델 마음대로 나오고, 사용자는 영상을 받은 뒤에야 구도를 처음 본다.
+ * 통과하면 빈 문자열, 아니면 에이전트가 할 일을 담은 안내문을 돌려준다.
+ */
+export function stillsGate(seq: any, referenceImages: string[], kind: string, replacesCuts?: string[]): string {
+  if (!seq || typeof seq !== "object") return "시퀀스를 찾지 못했다. sequence_save 로 콘티부터 저장한다.";
+  const all: any[] = Array.isArray(seq.cuts) ? seq.cuts : [];
+  if (!all.length) return "콘티(cuts)가 비어 있다. 콘티를 확정해 sequence_save 로 저장한 뒤 제출한다.";
+  const scope = kind === "patch" && Array.isArray(replacesCuts) && replacesCuts.length
+    ? all.filter((c) => replacesCuts.includes(String(c?.id || "")))
+    : all;
+  const refKeys = new Set((referenceImages || []).map(storageObjectKey).filter(Boolean));
+  const noStill: string[] = []; const notApproved: string[] = []; const notAttached: string[] = [];
+  for (const c of scope) {
+    const id = String(c?.id || c?.label || "?");
+    const key = storageObjectKey(c?.stillUrl);
+    if (!key) { noStill.push(id); continue; }
+    if (c?.stillApproved !== true) notApproved.push(id);
+    if (!refKeys.has(key)) notAttached.push(id);
+  }
+  if (!noStill.length && !notApproved.length && !notAttached.length) return "";
+  const lines = ["영상 제출 보류(아직 비용 없음): 모든 컷에 사용자가 확인한 스틸이 있어야 영상을 만든다."];
+  if (noStill.length) lines.push(`- 스틸 없음: ${noStill.join(", ")} → 컷마다 구도를 묻고 image_generate 로 스틸을 만든다.`);
+  if (notApproved.length) lines.push(`- 사용자 확인 전: ${notApproved.join(", ")} → 스틸을 보여 주고 ask_user 로 확인받은 뒤 그 컷에 stillApproved:true 를 저장한다.`);
+  if (notAttached.length) lines.push(`- 참조에 빠짐: ${notAttached.join(", ")} → 그 컷 스틸 경로를 referenceImages(자산 뒤, 컷 순서)에 넣는다.`);
+  lines.push("stillUrl 에는 경로만 쓴다(gs://… 또는 users/…). 상태 메모는 stillNote 에 쓴다. 고친 뒤 sequence_save → video_submit 을 다시 부른다.");
+  return lines.join("\n");
+}
+
 /**
  * 구독 그리기 도구(ChatGPT 연결 프로그램)가 꺼져 있거나 등록되지 않아 막힌 경우 에이전트가 할 일.
  * 오류 원문만 주면 에이전트가 멈추므로, 사용자에게 API 대체 승인을 받는 다음 단계를 함께 준다.
@@ -210,8 +249,10 @@ export function buildMcpServer(token: string): McpServer {
   });
 
   server.registerTool("sequence_save", {
-    description: "시퀀스를 통째로 저장(id 기준 추가·교체). 콘티(cuts: id·start·end·shot·action·acting·camera·sound·link·stillUrl), " +
-      "참조 배치표(references: 배열 순서 = @Image 번호, asset·role·appliesTo), prompt 를 담는다. 테이크는 take_save 로 따로 저장한다.",
+    description: "시퀀스를 통째로 저장(id 기준 추가·교체). 콘티(cuts: id·start·end·shot·action·acting·camera·sound·link·stillUrl·stillApproved·stillNote), " +
+      "참조 배치표(references: 배열 순서 = @Image 번호, asset·role·appliesTo), prompt 를 담는다. 테이크는 take_save 로 따로 저장한다. " +
+      "stillUrl 은 경로만(gs://… 또는 users/…) — 상태·버전 메모는 stillNote 에 쓴다. 사용자가 그 컷 스틸을 확인하면 stillApproved:true. " +
+      "video_submit 은 모든 컷에 확인된 스틸이 있어야 실행된다.",
     inputSchema: { ...projectArgs, sequence: z.record(z.string(), z.any()).describe("Sequence 객체(nk-cf-director 스킬 reference/schemas.md)") },
   }, async ({ projectId, ownerId, sequence }) => {
     try { return ok(await call("/api/project/sequences", { body: { projectId, ownerId, op: "upsert", sequence } })); }
@@ -276,7 +317,8 @@ export function buildMcpServer(token: string): McpServer {
   server.registerTool("video_submit", {
     description: "【유료·승인 필요】Seedance 2.5 reference-to-video 로 시퀀스(또는 부분 재생성 구간)를 제출한다. " +
       "prompt 는 영문 시퀀스 프롬프트 전문(무음악 규칙·샷 리스트 포함, 그대로 전송됨). referenceImages 순서가 @Image 번호다. " +
-      "draft=true 면 480p 드래프트(나중에 video_complete 로 1080p). 제출 즉시 jobId 를 돌려주고 take 를 running 으로 기록한다.",
+      "draft=true 면 480p 드래프트(나중에 video_complete 로 1080p). 제출 즉시 jobId 를 돌려주고 take 를 running 으로 기록한다. " +
+      "제출 범위의 모든 컷에 사용자가 확인한 스틸(stillUrl + stillApproved:true)이 있고 그 스틸이 referenceImages 에 있어야 한다 — 아니면 비용 없이 거절된다.",
     inputSchema: {
       ...projectArgs, sequenceId: ID, takeId: ID.describe("새 테이크 ID(멱등키로도 쓰인다)"),
       prompt: z.string().min(20).max(20000),
@@ -293,6 +335,12 @@ export function buildMcpServer(token: string): McpServer {
     },
   }, async (a) => {
     try {
+      // 모든 컷 스틸 필수 — 제출 전에 서버에 저장된 콘티로 검사한다(비용이 나가기 전에 멈춘다).
+      const sq = new URLSearchParams({ projectId: a.projectId, ...(a.ownerId ? { ownerId: a.ownerId } : {}) });
+      const seqs: any = await call(`/api/project/sequences?${sq}`);
+      const seq = (Array.isArray(seqs?.sequences) ? seqs.sequences : []).find((s: any) => s?.id === a.sequenceId);
+      const gate = stillsGate(seq, a.referenceImages, a.kind, a.replacesCuts);
+      if (gate) return { content: [{ type: "text", text: gate }], isError: true };
       const r: any = await call("/api/video", {
         idempotencyKey: `director-${a.projectId}-${a.takeId}`,
         body: {

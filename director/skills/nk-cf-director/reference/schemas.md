@@ -38,7 +38,9 @@ nkstudio.org 디렉터와 로컬 작업이 같은 형식을 쓴다. 사이트에
   "camera": "push-in + rack focus 부자→여성",
   "sound": "아빠 안도의 숨, 먼 차 소리",
   "link": "C04 저지 동작 이어받음 → C06 공 인서트",
-  "stillUrl": "gs://… 또는 컷/C05.png",
+  "stillUrl": "gs://… 또는 컷/C05.png (경로만 — 메모를 붙이지 않는다)",
+  "stillApproved": true,
+  "stillNote": "v3, 다리 모양 수정본",
   "transition": "cut|continuous"
 }
 ```

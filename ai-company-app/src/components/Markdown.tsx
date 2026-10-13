@@ -17,6 +17,22 @@ export function markdownImageSrc(src: string): string {
   return s;
 }
 
+// 저장소 영상(디렉터 테이크 등). 이미지 문법 ![…](gs://….mp4) 이나 인라인 코드 `gs://….mp4` 로 와도
+// 경로 글자만 보여 주지 않고 그 자리에서 재생한다. 미디어 프록시가 Range 를 넘겨 줘서 탐색도 된다.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+const STORAGE_VIDEO_RE = /^(gs:\/\/[^/\s]+\/|users\/)\S+\.(mp4|webm|mov|m4v)$/i;
+export function isStorageVideoPath(text: string): boolean {
+  return STORAGE_VIDEO_RE.test(String(text || "").trim());
+}
+
+function VideoPlayer({ src, title }: { src: string; title?: string }) {
+  return (
+    <span className="my-1 block w-full max-w-[560px]">
+      <video src={src} controls preload="metadata" playsInline title={title || ""} className="block w-full rounded-lg border border-edge bg-black" />
+    </span>
+  );
+}
+
 // 언어 → 파일 확장자
 const LANG_EXT: Record<string, string> = {
   html: "html", xml: "xml", javascript: "js", js: "js", jsx: "jsx", typescript: "ts", ts: "ts", tsx: "tsx",
@@ -131,6 +147,7 @@ export default function Markdown({ text }: { text: string }) {
           img: ({ src, alt }) => {
             const url = markdownImageSrc(String(src || ""));
             if (!url) return <span className="inline-block rounded bg-inset px-2 py-1 text-[0.85em] text-faint">🖼 {alt || "이미지"} — 화면에 올라오지 않은 작업 파일이에요</span>;
+            if (VIDEO_EXT_RE.test(String(src || ""))) return <VideoPlayer src={url} title={alt || ""} />;
             return (
               <a href={url} target="_blank" rel="noreferrer" className="my-1 block w-fit">
                 <img src={url} alt={alt || ""} loading="lazy" className="max-h-80 max-w-full rounded-lg border border-edge object-contain" />
@@ -143,6 +160,14 @@ export default function Markdown({ text }: { text: string }) {
             const raw = extractText(children);
             const isBlock = /language-/.test(className ?? "") || raw.includes("\n");
             if (!isBlock) {
+              if (isStorageVideoPath(raw)) {
+                return (
+                  <>
+                    <code className="rounded bg-inset px-1 text-[0.88em]">{children}</code>
+                    <VideoPlayer src={markdownImageSrc(raw.trim())} />
+                  </>
+                );
+              }
               return <code className="rounded bg-inset px-1 text-[0.88em]">{children}</code>;
             }
             const lang = (className ?? "").replace(/^.*language-/, "").trim();
