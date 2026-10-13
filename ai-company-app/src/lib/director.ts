@@ -150,3 +150,16 @@ export const TOOL_LABELS: Record<string, string> = {
   video_quote: "견적 계산", video_submit: "영상 생성 제출", video_complete: "1080p 완성 제출", video_status: "영상 상태 확인",
   image_generate: "이미지 생성", image_status: "이미지 상태 확인", ask_user: "질문", bash: "샌드박스 명령", read: "파일 읽기", write: "파일 쓰기", edit: "파일 고치기", glob: "파일 찾기", grep: "내용 검색",
 };
+
+/**
+ * 디렉터 답변 끝의 다음 메시지 제안(<!--next: …-->)을 떼어 낸다. 본문에는 보이지 않고, 입력창 흐린 글씨(Tab 으로 입력)로 쓴다.
+ * 스트리밍 중 아직 닫히지 않은 꼬리(<!-- …)도 본문에서 숨긴다.
+ */
+export function splitSuggestion(text: string): { body: string; suggestion: string } {
+  let suggestion = "";
+  const body = String(text || "")
+    .replace(/<!--\s*next:\s*([\s\S]*?)-->/gi, (_m, s: string) => { suggestion = s.replace(/\s+/g, " ").trim(); return ""; })
+    .replace(/<!--[\s\S]*$/, "")
+    .trimEnd();
+  return { body, suggestion: suggestion.slice(0, 200) };
+}

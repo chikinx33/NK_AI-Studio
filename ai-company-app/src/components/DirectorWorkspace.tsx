@@ -8,7 +8,7 @@ import { listProductionProjects, type ProductionProjectSummary } from "../lib/ap
 import { readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
 import { fitImageForModel } from "../lib/imageAttachment";
 import {
-  TOOL_LABELS, answerDirectorQuestion, confirmDirectorTool, questionAnswerLabel, type DirectorQuestionAnswer, createDirectorSession, getSequences, interruptDirector, listDirectorSessions,
+  TOOL_LABELS, answerDirectorQuestion, confirmDirectorTool, questionAnswerLabel, splitSuggestion, type DirectorQuestionAnswer, createDirectorSession, getSequences, interruptDirector, listDirectorSessions,
   sendDirectorMessage, signedReadUrls, subscribeDirector, type DirectorEvent, type DirectorSessionInfo,
 } from "../lib/director";
 
@@ -256,7 +256,21 @@ export default function DirectorWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq?.id, seq?.updatedAt]);
 
-  const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) e.preventDefault(); };
+  // 다음 메시지 제안: 마지막 디렉터 답변 끝의 <!--next: …-->. 대기 중이고 질문·승인 카드가 없을 때만 보인다.
+  const suggestion = useMemo(() => {
+    if (status === "running" || thinking || questions.length || approvals.length) return "";
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      if (it.kind === "user") return "";
+      if (it.kind === "agent") return splitSuggestion(it.text).suggestion;
+    }
+    return "";
+  }, [items, status, thinking, questions.length, approvals.length]);
+  const fillSuggestion = () => { if (suggestion && !draft) setDraft(suggestion); };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab" && !e.shiftKey && suggestion && !draft) { e.preventDefault(); fillSuggestion(); return; }
+    if (e.key === "Enter" && !e.shiftKey) e.preventDefault();
+  };
   const onKeyUp = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) void send(); };
   const running = status === "running" || thinking;
   const costText = usage ? (usage.owner ? `대화 비용 $${(usage.listCostCents / 100).toFixed(2)} (소유자 무과금)` : `대화 비용 $${(usage.listCostCents / 100).toFixed(2)}${usage.available != null ? ` · 잔액 ${Number(usage.available).toLocaleString()} 크레딧` : ""}`) : "";
@@ -312,7 +326,7 @@ export default function DirectorWorkspace() {
               );
               if (it.kind === "agent") return (
                 <div key={it.id} className="max-w-[92%] text-[13px] leading-relaxed text-content">
-                  {it.text ? <Markdown text={it.text} /> : <span className="text-faint">작성 중…</span>}
+                  {it.text ? <Markdown text={splitSuggestion(it.text).body} /> : <span className="text-faint">작성 중…</span>}
                 </div>
               );
               if (it.kind === "tool") {
@@ -378,11 +392,17 @@ export default function DirectorWorkspace() {
               )}
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} onKeyUp={onKeyUp} rows={2} disabled={!sessionId}
                 onPaste={(e) => { const f = Array.from(e.clipboardData?.files || []).filter((x) => x.type.startsWith("image/")); if (f.length) { e.preventDefault(); void addFiles(f); } }}
-                placeholder={sessionId ? "예: 피드백 문서 반영해서 운동장 20초 다시 가자. 컷6 공이 발 옆에 멈춘 것부터 고쳐 줘." : "세션을 먼저 시작하세요"}
+                placeholder={!sessionId ? "세션을 먼저 시작하세요" : suggestion || "예: 피드백 문서 반영해서 운동장 20초 다시 가자. 컷6 공이 발 옆에 멈춘 것부터 고쳐 줘."}
                 className="max-h-40 min-h-[40px] w-full resize-none bg-transparent text-[13px] text-strong outline-none placeholder:text-faint disabled:opacity-50" />
               <div className="mt-1 flex items-center gap-1.5">
                 <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.currentTarget.value = ""; }} />
                 <button type="button" onClick={() => fileRef.current?.click()} disabled={!sessionId} className="grid h-8 w-8 place-items-center rounded-full bg-raised text-content disabled:opacity-40" title="이미지 첨부" aria-label="이미지 첨부"><Icon d={PlusD} /></button>
+                {suggestion && !draft && (
+                  <button type="button" onClick={fillSuggestion} title="제안 문장을 입력창에 넣어요(Tab)"
+                    className="flex h-8 min-w-[76px] items-center justify-center gap-1 rounded-full border border-edge px-2.5 text-[11px] font-bold text-secondary hover:bg-edge">
+                    <kbd className="rounded border border-edge bg-inset px-1 font-mono text-[10px] text-muted">Tab</kbd> 입력
+                  </button>
+                )}
                 <div className="flex-1" />
                 {running && <button type="button" onClick={() => void interruptDirector(sessionId).catch((e) => setError((e as Error).message))} className="flex h-8 items-center gap-1 rounded-full bg-red-700 px-3 text-[11px] font-bold text-white hover:bg-red-600"><Icon d={SquareD} className="h-3 w-3" /> 멈춤</button>}
                 <button type="button" onClick={() => void send()} disabled={!sessionId || (!draft.trim() && !attachments.length)} className="grid h-8 w-8 place-items-center rounded-full bg-gray-100 text-black hover:bg-white disabled:bg-raised disabled:text-faint" title="보내기" aria-label="보내기"><Icon d={ArrowUpD} /></button>
