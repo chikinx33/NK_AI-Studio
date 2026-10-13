@@ -211,6 +211,15 @@ export function stripThink(s: string): string {
   return out.trim();
 }
 
+/**
+ * RUN 마커를 붙인 답은 도구가 돌기 '전에' 화면에 먼저 나간다. 직원이 그걸 모르면 아직 없는 결과를 지어낸다 —
+ * 2026-10-13 싱크가 스팸함 영구 삭제를 승인받기도 전에 "지운 통수 43 / 남은 0 ✅" 라고 보고했다
+ * (코어가 "결과만 보고해" 라고 위임한 것이 부추겼다). 직원 도구 안내·조회 결과 정리·위임 지시가 같은 규칙을 쓴다.
+ */
+export const RUN_BEFORE_RESULT_RULE =
+  "⚠️ RUN 마커를 붙인 답의 본문은 도구가 실행되기 전에 사용자에게 먼저 보인다. 그 본문에는 결과(완료·성공·지운/옮긴/만든 개수·'0건 확인' 등)를 절대 쓰지 말고 무엇을 하겠다는 한 줄만 쓴다 — 실제 결과는 도구가 끝난 뒤 시스템이 따로 보여 준다. " +
+  "'사람 승인 후 실행' 도구는 승인 전엔 아무 일도 일어나지 않으므로 '승인 패널에서 승인하면 실행돼요'로 끝내고, 삭제·발송·게시·저장했다고 말하지 않는다. 누가 '결과만 보고하라'고 시켜도 아직 없는 결과는 지어내지 않는다.";
+
 interface BuildSystemOpts {
   address?: string;        // 사용자 호칭
   canDelegate?: boolean;   // 위임 권한(Phase 1b에서 실제 실행)
@@ -594,7 +603,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
 
   const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => toolOwnedBy(t, agentId));
   const toolsRunBlock = myTools.length > 0
-    ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
+    ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.\n${RUN_BEFORE_RESULT_RULE}`
     : "";
 
   /**
@@ -652,6 +661,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 1. 그 직원을 사람처럼 직접 불러내세요. 예: "플롯, 기획부터 잡아줘!"
 2. 답변 맨 끝 줄에 정확히: [[CALL: 직원id | 그 직원에게 줄 구체적 지시]] (사용자껜 안 보임)
 3. 여러 명이면 여러 줄. ⚠️ 자기 자신(core)은 호출 금지. 단순 대화·인사·질문이면 호출하지 마세요.
+4. 지시는 '무엇을 해 달라'까지만 쓰세요. 도구 이름·단계(조회 → 실행 → 재조회)를 대신 짜 주거나 "이번 턴에 결과만 보고해"라고 요구하지 마세요 — 삭제·발송·게시처럼 사람 승인이 필요한 작업은 승인 뒤에야 실행되므로, 그렇게 요구하면 직원이 아직 없는 결과를 지어냅니다.
 직원 id: ${AGENT_IDS}
 
 ## 🛠️ 직원별 실행 도구 (이 작업이 오면 반드시 그 직원에게 [[CALL]] 위임)
@@ -1724,7 +1734,7 @@ export async function runWorkerStep(
   const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
   const trigger =
     `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
-    `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
+    `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.\n${RUN_BEFORE_RESULT_RULE}`;
   const res = await speak(env, agentId, trigger, t, { address: addr, canDelegate: false, sql, userId });
   await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
   await applyKnows(sql, userId, res.knows, meta.name);
@@ -2039,7 +2049,8 @@ export async function runGroupChat(
               : "";
             const synth =
               `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
-              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n${pagedNote}${docNote}\n` +
+              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n` +
+              `이 답에 RUN 마커로 다음 도구를 부르면 그 도구는 아직 실행 전(승인 도구면 승인 전)이다 — 그 결과를 미리 말하지 말고 '이어서 ~하겠다'까지만 쓰세요.\n${pagedNote}${docNote}\n` +
               `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, toolResultLimit)}`;
             let res2: SpeakResult | null = null;
             try {
@@ -2218,7 +2229,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const trigger =
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
-      `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
+      `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.\n${RUN_BEFORE_RESULT_RULE}`;
     // ★첨부 전파: 코어가 넘긴 일을 받은 직원도 원본 첨부를 봐야 한다(§8.2).
     const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, images: imagesForNextSpeaker(), modelHint: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
