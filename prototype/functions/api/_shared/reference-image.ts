@@ -6,7 +6,7 @@
 // 공유받은 프로젝트의 소유자 프로젝트 폴더인지 확인한다. 예전에는 소유자 검사 없이 토큰을 붙여서
 // 로그인한 누구나 남의 gs:// 경로를 참조로 넣어 그 이미지를 읽을 수 있었고, URL 에
 // "storage.googleapis.com" 글자만 들어 있으면 다른 호스트에도 토큰을 보냈다.
-import { authorizeGcsRead } from "./media-access";
+import { authorizeGcsRead, type MediaAccessMemo } from "./media-access";
 
 export type ReferenceImageBytes = { base64: string; mimeType: string };
 
@@ -21,6 +21,8 @@ export type ReferenceImageContext = {
   authHeader: string;
   /** 원격 fetch 시간 제한(ms). 없으면 제한하지 않는다. */
   timeoutMs?: number;
+  /** 같은 요청의 참조 여러 장이 공유 레지스트리·프로젝트 브랜드를 한 번만 읽도록 공유한다(없으면 자동 생성). */
+  accessMemo?: MediaAccessMemo;
 };
 
 export function parseImageDataUrl(dataUrl: string): ReferenceImageBytes | null {
@@ -55,7 +57,7 @@ export async function resolveReferenceImageBytes(ref: string, ctx: ReferenceImag
     let resolvedUrl = String(ref || "").trim();
     if (!resolvedUrl) return null;
     const headers: Record<string, string> = {};
-    const gcs = await authorizeGcsRead(ctx.env, ctx.requesterId, resolvedUrl);
+    const gcs = await authorizeGcsRead(ctx.env, ctx.requesterId, resolvedUrl, ctx.accessMemo || (ctx.accessMemo = {}));
     if (gcs) {
       if (!gcs.ok || !ctx.accessToken) return null;
       resolvedUrl = gcs.fetchUrl;

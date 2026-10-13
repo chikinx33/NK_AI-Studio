@@ -58,6 +58,10 @@ globalThis.fetch = async (input) => {
   if (json) {
     const object = decodeURIComponent(json[2]);
     if (object === "nk/admin/shares.json") return new Response(JSON.stringify(shares), { status: 200 });
+    // 공유한 film-a 는 소유자 브랜드 b1 을 쓴다.
+    if (object === "nk/users/owner1/ai-video/projectsfilm-a/reference/data.json") {
+      return new Response(JSON.stringify({ projectId: "film-a", payload: { brandId: "b1" } }), { status: 200 });
+    }
     return new Response("not found", { status: 404 });
   }
   if (url.hostname === "storage.googleapis.com" && url.searchParams.get("X-Goog-Signature")) {
@@ -132,14 +136,16 @@ test("'..' · '.' 세그먼트와 앞 슬래시는 400 으로 거절한다", asy
   }
 });
 
-test("공유받은 프로젝트는 소유자 프로젝트 폴더만 읽힌다(viewer 도 허용)", async () => {
+test("공유받은 프로젝트는 소유자 프로젝트 폴더와 그 프로젝트의 브랜드 폴더만 읽힌다(viewer 도 허용)", async () => {
   assert.equal((await get("nk/users/owner1/ai-video/projectsfilm-a/image/a.png")).status, 200);
   assert.equal((await get("nk/users/owner1/ai-video-gen/projectsfilm-a/videos/v.mp4")).status, 200);
   assert.equal((await get("users/owner1/ai-video/projectsfilm-a/sfx/voice-1.wav")).status, 200);
   // 같은 소유자라도 공유받지 않은 프로젝트·프로젝트 밖 경로는 거절한다.
   assert.equal((await get("nk/users/owner1/ai-video/projectsfilm-b/image/a.png")).status, 403);
   assert.equal((await get("nk/users/owner1/ai-video/projectsfilm-a-2/image/a.png")).status, 403);
-  assert.equal((await get("nk/users/owner1/ai-video/brands/b1/ip/a.png")).status, 403);
+  // 공유 프로젝트가 쓰는 브랜드의 캐릭터 시트는 보이고, 쓰지 않는 다른 브랜드는 거절한다.
+  assert.equal((await get("nk/users/owner1/ai-video/brands/b1/ip/a.png")).status, 200);
+  assert.equal((await get("nk/users/owner1/ai-video/brands/b2/ip/a.png")).status, 403);
   assert.equal((await get("nk/users/owner1/userdata/data.json")).status, 403);
   assert.equal((await get("nk/users/owner1/ai-video/projectsfilm-a")).status, 403);
 });

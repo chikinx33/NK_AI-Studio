@@ -137,13 +137,14 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     let skippedForSize = 0;
     let inlineBytes = 0;
     let skippedForTime = 0;
+    const refCtx = { env, requesterId: auth.userId, accessToken, requestUrl: request.url, authHeader, accessMemo: {} };
     for (const url of imageUrls) {
       // 시간이 없으면 남은 장은 포기한다. 1장이라도 있으면 분석은 된다 —
       // 전부 받으려다 예산을 넘겨 아무 답도 못 주는 쪽이 훨씬 나쁘다.
       if (usable > 0 && prepTimeLeft() <= 0) { skippedForTime++; continue; }
       // 원격 시트를 받아오는 길도 막히면 함수가 응답을 못 만든다(→ CF 502). 시간 제한을 건다.
       const parsed = await resolveReferenceImageBytes(url, {
-        env, requesterId: auth.userId, accessToken, requestUrl: request.url, authHeader,
+        ...refCtx,
         timeoutMs: Math.min(8000, Math.max(1000, prepTimeLeft())),
       });
       if (!parsed) continue;

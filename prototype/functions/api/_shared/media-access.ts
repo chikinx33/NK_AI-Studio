@@ -1,10 +1,12 @@
 // prototype/functions/api/_shared/media-access.ts
 // 미디어 프록시(/api/media/proxy)가 서비스 계정으로 서명해 내려 줄 수 있는 객체인지 판정한다.
 // 허용: 요청자 본인 루트(users/{요청자}/...) 아래, 또는 요청자가 공유받은(viewer/editor)
-// 프로젝트의 소유자 프로젝트 폴더(users/{소유자}/ai-video|ai-video-gen/projects{프로젝트}/...) 아래.
+// 프로젝트의 소유자 프로젝트 폴더(users/{소유자}/ai-video|ai-video-gen/projects{프로젝트}/...) 아래,
+// 그리고 그 공유 프로젝트가 쓰는 소유자 브랜드 폴더(users/{소유자}/ai-video/brands/{브랜드}/...) 아래.
 // 그 밖(다른 사용자 경로, admin/ 레지스트리, 사용자 루트 밖)은 모두 거절한다.
-import { AI_VIDEO_GEN_SERVICE, AI_VIDEO_SERVICE, buildUserRoot, sanitizeUserId } from "./storage";
-import { getGrantRole, loadShares } from "./shares";
+import { AI_VIDEO_GEN_SERVICE, AI_VIDEO_SERVICE, buildAiVideoProjectPrefix, buildUserRoot, sanitizeUserId } from "./storage";
+import { getGrantRole, loadShares, type SharesRegistry } from "./shares";
+import { readGcsJson, resolveGcsEnv } from "./gcs.js";
 
 export type MediaAccess =
   | { ok: true; ownerId: string; via: "self" | "share" }
@@ -72,22 +74,77 @@ export function projectIdFromUserPath(rest: string): string {
 }
 
 /** bucket 을 주면 그 버킷의 출력 URI prefix 기준으로만 판정한다(다른 버킷의 prefix 를 빌려 통과하지 못하게). */
-export async function checkMediaObjectAccess(env: any, requesterId: string, objectName: string, bucket?: string): Promise<MediaAccess> {
+/** 사용자 루트 아래 경로에서 브랜드 폴더 이름. ai-video/brands/{브랜드}/<파일> 형태만 인정한다. */
+export function brandFolderFromUserPath(rest: string): string {
+  const parts = String(rest || "").split("/");
+  if (parts.length < 4 || parts[0] !== AI_VIDEO_SERVICE || parts[1] !== "brands") return "";
+  return /^[a-zA-Z0-9._-]+$/.test(parts[2]) ? parts[2] : "";
+}
+
+/** buildAiVideoBrandPrefix 가 브랜드 id 를 폴더 이름으로 바꾸는 규칙과 같다. */
+const brandFolderOf = (brandId: any) => String(brandId || "").trim().replace(/[^a-zA-Z0-9._-]+/g, "_");
+
+/**
+ * 한 요청 안에서 여러 객체를 검사할 때(참조 이미지 여러 장) 공유 레지스트리·프로젝트 브랜드를
+ * 한 번만 읽도록 담아 두는 그릇. Worker 서브요청 한도(50) 때문에 장마다 다시 읽지 않는다.
+ */
+export type MediaAccessMemo = { registry?: Promise<SharesRegistry>; projectBrands?: Map<string, Promise<string>> };
+
+/** 소유자 프로젝트가 쓰는 브랜드의 폴더 이름(프로젝트 저장 데이터의 brandId). 못 읽으면 "". */
+function projectBrandFolder(env: any, ownerId: string, projectId: string, memo: MediaAccessMemo): Promise<string> {
+  const cache = memo.projectBrands || (memo.projectBrands = new Map());
+  const key = `${ownerId}/${projectId}`;
+  let pending = cache.get(key);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const objectName = `${buildAiVideoProjectPrefix(resolveGcsEnv(env).basePrefix, ownerId, projectId)}/reference/data.json`;
+        const { data } = await readGcsJson(env, objectName);
+        const payload = (data as any)?.payload || {};
+        return brandFolderOf(payload.brandId || payload.brandRef?.id);
+      } catch {
+        return "";
+      }
+    })();
+    cache.set(key, pending);
+  }
+  return pending;
+}
+
+export async function checkMediaObjectAccess(
+  env: any, requesterId: string, objectName: string, bucket?: string, memo: MediaAccessMemo = {},
+): Promise<MediaAccess> {
   if (isUnsafeObjectName(objectName)) return { ok: false, error: "invalid_object_name" };
   const requester = sanitizeUserId(requesterId);
   const located = mediaBasePrefixes(env, bucket)
-    .map((base) => splitUserObject(objectName, base))
-    .filter((v): v is { ownerId: string; rest: string } => !!v);
+    .map((base) => ({ base, at: splitUserObject(objectName, base) }))
+    .filter((v): v is { base: string; at: { ownerId: string; rest: string } } => !!v.at);
   if (!located.length) return { ok: false, error: "forbidden_object" };
-  if (located.some((l) => l.ownerId === requester)) return { ok: true, ownerId: requester, via: "self" };
+  if (located.some((l) => l.at.ownerId === requester)) return { ok: true, ownerId: requester, via: "self" };
 
   const shared = located
-    .map((l) => ({ ownerId: l.ownerId, projectId: projectIdFromUserPath(l.rest) }))
+    .map((l) => ({ ownerId: l.at.ownerId, projectId: projectIdFromUserPath(l.at.rest) }))
     .filter((l) => !!l.projectId);
-  if (!shared.length) return { ok: false, error: "forbidden_object" };
-  const registry = await loadShares(env);
+  // 브랜드 자산(캐릭터 시트·배경)은 프로젝트·브랜드를 저장하는 비디오 버킷 베이스 아래에만 있다.
+  const video = parseOutputUri(env?.VIDEO_OUTPUT_GCS_URI);
+  const brands = located
+    .filter((l) => !!video && (bucket === undefined || bucket === video.bucket) && l.base === video.basePrefix)
+    .map((l) => ({ ownerId: l.at.ownerId, brand: brandFolderFromUserPath(l.at.rest) }))
+    .filter((l) => !!l.brand);
+  if (!shared.length && !brands.length) return { ok: false, error: "forbidden_object" };
+  const registry = await (memo.registry || (memo.registry = loadShares(env)));
   for (const s of shared) {
     if (getGrantRole(registry, s.ownerId, s.projectId, requester)) return { ok: true, ownerId: s.ownerId, via: "share" };
+  }
+  // 공유받은 프로젝트가 쓰는 브랜드면 그 브랜드 폴더도 허용한다. 프로젝트에는 브랜드 시트의 주소만
+  // 복사돼 있어서, 이게 없으면 공유받은 사람은 그 프로젝트의 캐릭터 시트를 볼 수도 참조할 수도 없다.
+  for (const b of brands) {
+    const projectIds = registry.shares
+      .filter((e) => e.ownerId === b.ownerId && getGrantRole(registry, e.ownerId, e.projectId, requester))
+      .map((e) => e.projectId);
+    for (const projectId of projectIds) {
+      if (await projectBrandFolder(env, b.ownerId, projectId, memo) === b.brand) return { ok: true, ownerId: b.ownerId, via: "share" };
+    }
   }
   return { ok: false, error: "forbidden_object" };
 }
@@ -160,7 +217,7 @@ export type GcsReadAccess =
  * fetchUrl 은 판정한 객체 이름을 그대로 인코딩한 JSON API 주소다 — 원래 URL 을 쓰면 '%2e%2e' 같은
  * 경로 정규화로 판정과 다른 객체를 읽을 수 있다.
  */
-export async function authorizeGcsRead(env: any, requesterId: string, ref: string): Promise<GcsReadAccess | null> {
+export async function authorizeGcsRead(env: any, requesterId: string, ref: string, memo: MediaAccessMemo = {}): Promise<GcsReadAccess | null> {
   const parsed = parseGcsReference(ref);
   if (parsed === null) return null;
   if (parsed === "invalid") return { ok: false, error: "invalid_object_name" };
@@ -174,7 +231,7 @@ export async function authorizeGcsRead(env: any, requesterId: string, ref: strin
       && objectName.startsWith(chatAttachmentUserPrefix(video.basePrefix, requester))) {
     return { ok: true, bucket, objectName, ownerId: requester, fetchUrl };
   }
-  const access = await checkMediaObjectAccess(env, requesterId, objectName, bucket);
+  const access = await checkMediaObjectAccess(env, requesterId, objectName, bucket, memo);
   if (!access.ok) return { ok: false, error: access.error };
   return {
     ok: true, bucket, objectName, ownerId: access.ownerId, fetchUrl,

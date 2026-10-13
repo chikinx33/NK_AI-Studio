@@ -48,6 +48,13 @@ const shares = {
     grants: [{ userId: "me", role: "editor", at: "" }], updatedAt: "" }],
 };
 
+// 공유한 프로젝트 film-a 는 소유자 브랜드 b1 을 쓴다(프로젝트 저장 데이터의 brandId).
+const projectData = {
+  "nk/users/owner1/ai-video/projectsfilm-a/reference/data.json": { projectId: "film-a", payload: { brandId: "b1" }, scenes: [] },
+};
+let registryReads = 0;
+let projectReads = 0;
+
 const SA_TOKEN = "sa-token";
 const reads = [];
 globalThis.fetch = async (input, init = {}) => {
@@ -60,7 +67,8 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.hostname === "storage.googleapis.com" && json) {
     const bucket = decodeURIComponent(json[1]);
     const object = decodeURIComponent(json[2]);
-    if (object === "nk/admin/shares.json") return new Response(JSON.stringify(shares), { status: 200 });
+    if (object === "nk/admin/shares.json") { registryReads++; return new Response(JSON.stringify(shares), { status: 200 }); }
+    if (projectData[object]) { projectReads++; return new Response(JSON.stringify(projectData[object]), { status: 200 }); }
     reads.push({ host: url.hostname, bucket, object, auth });
     if (url.searchParams.get("alt") !== "media" || auth !== `Bearer ${SA_TOKEN}`) return new Response("denied", { status: 401 });
     return new Response(`img:${object}`, { status: 200, headers: { "Content-Type": "image/png" } });
@@ -117,10 +125,13 @@ test("다른 사용자의 gs:// · storage.googleapis.com 참조는 읽기 시�
   }
 });
 
-test("공유받은 프로젝트는 소유자 프로젝트 폴더만 참조할 수 있다(편집자 흐름 유지)", async () => {
+test("공유받은 프로젝트는 소유자 프로젝트 폴더와 그 프로젝트가 쓰는 브랜드 폴더만 참조할 수 있다", async () => {
   for (const object of [
     "nk/users/owner1/ai-video/projectsfilm-a/image/cut-1.png",
     "nk/users/owner1/ai-video-gen/projectsfilm-a/frames/f.png",
+    // 프로젝트에 복사된 소유자 브랜드의 캐릭터 시트·배경 자산
+    "nk/users/owner1/ai-video/brands/b1/ip/sheet.png",
+    "nk/users/owner1/ai-video/brands/b1/env/room.png",
   ]) {
     const r = await read(`gs://video-bucket/${object}`);
     assert.ok(r.out, object);
@@ -129,12 +140,34 @@ test("공유받은 프로젝트는 소유자 프로젝트 폴더만 참조할 �
   for (const object of [
     "nk/users/owner1/ai-video/projectsfilm-b/image/cut-1.png",
     "nk/users/owner1/ai-image/sessions/default/outputs/a.png",
-    "nk/users/owner1/ai-video/brands/b1/ip/a.png",
+    // 공유 프로젝트가 쓰지 않는 소유자의 다른 브랜드
+    "nk/users/owner1/ai-video/brands/b2/ip/sheet.png",
+    // 브랜드 폴더 자체의 저장 데이터·폴더 이름만 있는 경로
+    "nk/users/owner1/ai-video/brands/b1",
+    // 공유하지 않은 다른 소유자의 같은 이름 브랜드
+    "nk/users/owner2/ai-video/brands/b1/ip/sheet.png",
   ]) {
     const r = await read(`gs://video-bucket/${object}`);
     assert.equal(r.out, null, object);
     assert.equal(r.reads.length, 0, object);
   }
+});
+
+test("공유받지 않은 사용자는 소유자 브랜드 폴더를 읽지 못한다", async () => {
+  const r = await read("gs://video-bucket/nk/users/owner1/ai-video/brands/b1/ip/sheet.png", { requesterId: "stranger" });
+  assert.equal(r.out, null);
+  assert.equal(r.reads.length, 0);
+});
+
+test("한 요청의 참조 여러 장은 공유 레지스트리·프로젝트 저장 데이터를 한 번씩만 읽는다", async () => {
+  registryReads = 0;
+  projectReads = 0;
+  const shared = { ...ctx, accessMemo: undefined };
+  for (const object of ["ip/a.png", "ip/b.png", "env/c.png", "ip/d.png"]) {
+    assert.ok(await mod.resolveReferenceImageBytes(`gs://video-bucket/nk/users/owner1/ai-video/brands/b1/${object}`, shared), object);
+  }
+  assert.equal(registryReads, 1);
+  assert.equal(projectReads, 1);
 });
 
 test("에이전트 채팅 첨부(agent-attachments)는 본인 것만 읽힌다", async () => {
