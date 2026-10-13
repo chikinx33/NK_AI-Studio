@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mapEvent, isPendingApproval, errorText } from "../src/gateway/events.js";
-import { gsFromSignedUrl, compactProject, quoteInputFor, ipFromBrand, loadProjectIp } from "../src/mcp/tools.js";
+import { gsFromSignedUrl, compactProject, quoteInputFor, ipFromBrand, loadProjectIp, connectorOfflineNotice, isImageJob, waitImageJob } from "../src/mcp/tools.js";
+import { SiteError } from "../src/site.js";
 
 test("미리보기 델타와 확정 메시지를 화면 이벤트로 바꾼다", () => {
   assert.deepEqual(mapEvent({ type: "event_start", event: { type: "agent.message", id: "sevt_1" } }), [{ type: "text_start", id: "sevt_1" }]);
@@ -69,4 +70,27 @@ test("프로젝트 IP: brandId 가 없으면 시리즈 제목이 같은 브랜�
   assert.equal(ip.brandId, "shapes");
   assert.equal(ip.characters[0].name, "네모");
   assert.equal(calls[0], "/api/brand/get?brandId=moyangsae");
+});
+
+test("그리기 도구 꺼짐 오류는 API 대체 승인을 묻는 안내로 바꾼다", () => {
+  const n = connectorOfflineNotice(new SiteError(409, { error: "chatgpt_connector_offline" }));
+  assert.match(n, /useApi:true/);
+  assert.match(n, /승인 전에는 다시 부르지 않는다/);
+  assert.match(connectorOfflineNotice(new SiteError(412, { error: "chatgpt_connector_required" })), /등록되지 않아/);
+  assert.equal(connectorOfflineNotice(new SiteError(500, { error: "x" })), "");
+  assert.equal(connectorOfflineNotice(new Error("x")), "");
+});
+
+test("구독 그리기 작업 접수(202)는 끝날 때까지 기다려 결과 경로를 돌려준다", async () => {
+  assert.equal(isImageJob({ id: "j", status: "queued", result: null }), true);
+  assert.equal(isImageJob({ objectName: "users/u/x.png", signedUrl: "https://s" }), false);
+  let n = 0;
+  const done = await waitImageJob(async () => (++n < 3 ? { id: "j", status: "working" } : { id: "j", status: "done", result: { objectName: "users/u/p/image/a.png", signedUrl: "https://s/a" } }), "j", 5, 1);
+  assert.equal(done.status, "done");
+  assert.equal(done.objectName, "users/u/p/image/a.png");
+  const failed = await waitImageJob(async () => ({ id: "j", status: "error", error: "codex_process_closed" }), "j", 5, 1);
+  assert.equal(failed.status, "failed");
+  const running = await waitImageJob(async () => ({ id: "j", status: "queued" }), "j", 0, 1);
+  assert.equal(running.status, "running");
+  assert.match(running.note, /image_status/);
 });

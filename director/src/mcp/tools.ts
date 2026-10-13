@@ -22,6 +22,49 @@ export function gsFromSignedUrl(url: string): string {
   } catch { return ""; }
 }
 
+/**
+ * 구독 그리기 도구(ChatGPT 연결 프로그램)가 꺼져 있거나 등록되지 않아 막힌 경우 에이전트가 할 일.
+ * 오류 원문만 주면 에이전트가 멈추므로, 사용자에게 API 대체 승인을 받는 다음 단계를 함께 준다.
+ */
+export function connectorOfflineNotice(e: unknown): string {
+  if (!(e instanceof SiteError)) return "";
+  const code = String(e.body?.error || "");
+  if (code !== "chatgpt_connector_offline" && code !== "chatgpt_connector_required") return "";
+  const why = code === "chatgpt_connector_offline" ? "PC 의 'NKStudio 이미지 연결' 프로그램이 꺼져 있어" : "그리기 도구(ChatGPT 이미지 연결)가 등록되지 않아";
+  return `그리기 도구 꺼짐(${code}): ${why} 구독으로 이미지를 만들 수 없다. 이미지는 만들어지지 않았고 비용도 나가지 않았다. ` +
+    "사용자에게 ① 연결 프로그램을 켜고 다시 시도할지, ② Atlas Cloud API(GPT Image 2.5, 크레딧 차감)로 대신 만들지 묻는다. " +
+    "②를 승인하면 같은 입력에 useApi:true 를 넣어 image_generate 를 다시 부른다. 승인 전에는 다시 부르지 않는다.";
+}
+
+/** /api/imagen 응답이 구독 그리기 작업 접수(아직 그림 없음)인지. */
+export function isImageJob(r: any): boolean {
+  return !!(r && typeof r === "object" && r.id && typeof r.status === "string" && !r.objectName && !r.signedUrl);
+}
+
+function imageResult(r: any) {
+  return { objectName: r?.objectName || "", url: r?.signedUrl || "", model: r?.model || "", storageError: r?.storageError || undefined };
+}
+
+/** 구독 그리기 작업(/api/codex-images?jobId=)이 끝날 때까지 기다린다. 끝나지 않으면 running 과 jobId 를 돌려준다. */
+export async function waitImageJob(call: (path: string, init?: any) => Promise<any>, jobId: string, waitSeconds: number, pollMs = 5_000): Promise<any> {
+  const deadline = Date.now() + waitSeconds * 1000;
+  for (;;) {
+    const job: any = await call(`/api/codex-images?jobId=${encodeURIComponent(jobId)}`);
+    if (job?.status === "done") {
+      const out = imageResult(job.result);
+      if (!out.objectName && !out.url) return { status: "failed", jobId, error: "그리기 도구가 끝났다고 했지만 결과 파일이 없다" };
+      return { status: "done", jobId, ...out };
+    }
+    if (job?.status === "error" || job?.status === "cancelled") {
+      return { status: "failed", jobId, error: String(job?.error || job?.status), note: "이미지는 만들어지지 않았다. 사용자에게 알리고 다시 할지 묻는다." };
+    }
+    if (Date.now() + pollMs > deadline) {
+      return { status: "running", jobId, queueStatus: job?.status || "", note: "그리기 도구가 아직 그리는 중이다. image_status 로 다시 확인한다(같은 그림을 다시 요청하지 않는다)." };
+    }
+    await new Promise((res) => setTimeout(res, pollMs));
+  }
+}
+
 const ID = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/);
 const projectArgs = { projectId: ID.describe("nkstudio 프로젝트 ID"), ownerId: z.string().optional().describe("공유받은 프로젝트면 소유자 ID") };
 
@@ -328,13 +371,29 @@ export function buildMcpServer(token: string): McpServer {
       aspectRatio: z.enum(["16:9", "9:16", "1:1", "free"]).default("16:9"),
       referenceImages: z.array(z.string()).max(16).default([]),
       quality: z.enum(["gpt25-sunburst", "gpt25-flare"]).default("gpt25-sunburst"),
+      useApi: z.boolean().default(false).describe("그리기 도구(ChatGPT 구독 연결 프로그램)가 꺼져 있다는 오류를 받은 뒤, " +
+        "사용자가 Atlas Cloud API(크레딧 차감)로 만드는 것을 승인했을 때만 true"),
     },
   }, async (a) => {
     try {
       const r: any = await call("/api/imagen", { body: { prompt: a.prompt, aspectRatio: a.aspectRatio, referenceImages: a.referenceImages,
-        provider: a.quality, projTag: a.projectId, storageService: "ai-video" }, timeoutMs: 180_000 });
-      return ok({ objectName: r?.objectName || "", url: r?.signedUrl || "", model: r?.model || "", storageError: r?.storageError || undefined });
-    } catch (e) { return fail(e); }
+        provider: a.quality, projTag: a.projectId, storageService: "ai-video", ...(a.useApi ? { fallbackToApi: true } : {}) }, timeoutMs: 180_000 });
+      // 구독(그리기 도구) 경로는 그림 대신 작업 접수(202 {id,status})를 돌려준다. 연결 프로그램이 그리는 동안 기다린다.
+      if (isImageJob(r)) return ok(await waitImageJob(call, String(r.id), 100));
+      return ok({ status: "done", ...imageResult(r) });
+    } catch (e) {
+      const offline = connectorOfflineNotice(e);
+      return offline ? { content: [{ type: "text", text: offline }], isError: true } : fail(e);
+    }
+  });
+
+  server.registerTool("image_status", {
+    description: "image_generate 가 status:running(그리기 도구가 아직 그리는 중)과 jobId 를 돌려줬을 때 결과를 확인한다. " +
+      "waitSeconds(최대 100) 동안 기다린다. 같은 그림을 image_generate 로 다시 요청하지 말고 이걸 부른다.",
+    inputSchema: { jobId: z.string().regex(/^[A-Za-z0-9-]{8,80}$/), waitSeconds: z.number().int().min(0).max(100).default(60) },
+  }, async ({ jobId, waitSeconds }) => {
+    try { return ok(await waitImageJob(call, jobId, waitSeconds)); }
+    catch (e) { return fail(e); }
   });
 
   return server;

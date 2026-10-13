@@ -476,7 +476,10 @@ export const onRequestPost: PagesFunction = async (context) => {
     : (!!selected.enabled && selected.mode !== 'api_key');
   const apiOn = typeof selected.apiOn === 'boolean' ? selected.apiOn
     : (!!selected.enabled && selected.mode !== 'subscription');
-  if (subscriptionOn) {
+  // 그리기 도구(ChatGPT 연결 프로그램)가 꺼진 환경: 사용자가 API 사용을 승인한 요청(fallbackToApi)만
+  // 구독 경로를 건너뛰고 아래 API 경로(등록 Atlas 키, 없으면 마스터 키 + 크레딧 차감)로 만든다.
+  const connectorDown = !selected.connector.configured || !selected.connector.online;
+  if (subscriptionOn && !(body.fallbackToApi === true && connectorDown)) {
     if (!String(body.prompt || '').trim()) return json({ error: 'invalid_image_prompt' }, 400);
     if (!selected.connector.configured) return json({ error: 'chatgpt_connector_required' }, 412);
     if (!selected.connector.online) return json({ error: 'chatgpt_connector_offline' }, 409);
@@ -529,7 +532,7 @@ export const onRequestPost: PagesFunction = async (context) => {
       body: JSON.stringify({ operation: 'create', requestId: body.requestId, payload: body }) });
     return subscriptionImageRequest({ ...context, request });
   }
-  if (apiOn) {
+  if (apiOn && (selected.apiKey || body.fallbackToApi !== true)) {
     if (!selected.apiKey) return json({ error: 'own_image_api_key_required' }, 412);
     // 등록한 Atlas Cloud 키로만 만든다(OpenAI·Gemini 직접 호출 경로는 쓰지 않는다).
     const request = new Request(context.request.url, { method: 'POST', headers: context.request.headers,

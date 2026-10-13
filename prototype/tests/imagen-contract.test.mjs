@@ -87,3 +87,12 @@ test('imagen source strengthens image-to-image prompts for multi-reference editi
   assert.match(source, /Reference image 1 .* primary anchor for composition, structure, and subject identity\./);
   assert.match(source, /supporting reference for style, details, materials, and consistency\./);
 });
+
+test('그리기 도구가 꺼진 환경에서 승인된 fallbackToApi 요청만 구독 경로를 건너뛴다', () => {
+  const source = readImagenSource();
+  assert.match(source, /const connectorDown = !selected\.connector\.configured \|\| !selected\.connector\.online;/);
+  assert.match(source, /if \(subscriptionOn && !\(body\.fallbackToApi === true && connectorDown\)\)/);
+  // 등록 Atlas 키가 없으면 412 로 막지 않고 마스터 키 + 크레딧 차감 경로로 내려간다.
+  assert.match(source, /if \(apiOn && \(selected\.apiKey \|\| body\.fallbackToApi !== true\)\)/);
+  assert.match(source, /return withCreditCharge\(context, \{ feature: "image_generation", metered: true \}, handlePost\);/);
+});
