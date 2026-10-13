@@ -188,12 +188,12 @@ test("없는 편지함이면 아무것도 옮기지 않고 있는 편지함 이�
   const server = fakeServer(trashHandler("MOVE"));
   await assert.rejects(
     moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41], folder: "거래처" }, { connector: server.connector }),
-    /'거래처' 편지함을 찾지 못했어요\. 지금 있는 편지함: 휴지통, 스팸함, 광고/,
+    /'거래처' 편지함을 찾지 못했어요\. 지금 있는 편지함: 받은편지함, 휴지통, 스팸함, 광고/,
   );
   assert.ok(!server.sent.some((c) => /^UID (MOVE|COPY|FETCH)/.test(c)), "편지함 확인 전엔 메일을 건드리지 않는다");
   await assert.rejects(
     moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41], folder: "INBOX" }, { connector: fakeServer(trashHandler("MOVE")).connector }),
-    /받은편지함으로 옮길 수는 없어요/,
+    /이미 .받은편지함.에 있어요/,
   );
 });
 
@@ -213,7 +213,7 @@ function purgeHandler(caps = "UIDPLUS") {
         return `* ${i + 1} FETCH (UID ${u}${withHeader ? ` FLAGS () BODY[HEADER.FIELDS (SUBJECT FROM)] ${literal(h)}` : ""})\r\n`;
       }).join("") + `${tag} OK\r\n`;
     }
-    if (cmd.startsWith("UID STORE") || cmd.startsWith("UID EXPUNGE") || cmd === "EXPUNGE" || cmd === "LOGOUT") return `${tag} OK\r\n`;
+    if (cmd.startsWith("UID MOVE") || cmd.startsWith("UID STORE") || cmd.startsWith("UID EXPUNGE") || cmd === "EXPUNGE" || cmd === "LOGOUT") return `${tag} OK\r\n`;
     return `${tag} BAD unexpected ${cmd}\r\n`;
   };
 }
@@ -244,6 +244,27 @@ test("휴지통 영구 삭제: 승인 전 목록을 확정하고, 승인되면 �
   assert.ok(server.sent.includes("UID STORE 7,8 +FLAGS.SILENT (\\Deleted)"), server.sent.join(" | "));
   assert.ok(server.sent.includes("UID EXPUNGE 7,8"));
   assert.equal(out.deleted, 2);
+});
+
+test("복구: 휴지통 메일을 휴지통 uid 기준으로 받은편지함·직접 만든 편지함으로 옮긴다", async () => {
+  const { moveDaumMail } = await loadMail();
+  let server = fakeServer(purgeHandler("MOVE UIDPLUS"));
+  let out = await moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [8, 99], uidValidity: 55, from: "휴지통", folder: "받은편지함" }, { connector: server.connector });
+  assert.ok(server.sent.includes('SELECT "&1zTJwNG1-"'), "원래 편지함(휴지통)을 연다");
+  assert.ok(server.sent.includes("UID MOVE 8 INBOX"), server.sent.join(" | "));
+  assert.equal(out.source, "휴지통");
+  assert.equal(out.folder, "받은편지함");
+  assert.deepEqual(out.missing, [99]);
+  assert.equal(out.items[0].subject, "old 8");
+
+  server = fakeServer(purgeHandler("MOVE"));
+  out = await moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [7], from: "trash", folder: "광고" }, { connector: server.connector });
+  assert.ok(server.sent.includes('UID MOVE 7 "&rRGs4A-"'));
+
+  // 휴지통 uidValidity(55)가 아닌 값이면 멈춘다 — 받은편지함 uid 를 섞어 엉뚱한 메일을 옮기지 않게.
+  server = fakeServer(purgeHandler("MOVE"));
+  await assert.rejects(moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [7], uidValidity: 99, from: "휴지통", folder: "받은편지함" }, { connector: server.connector }), /uid 가 바뀌었어요/);
+  assert.ok(!server.sent.some((c) => c.startsWith("UID MOVE")));
 });
 
 test("휴지통이 다시 만들어져 uidValidity 가 다르면 아무것도 지우지 않는다", async () => {

@@ -2163,11 +2163,27 @@ export interface ProductionProjectSummary {
   thumbnail: string;
 }
 
-export async function listProductionProjects(): Promise<ProductionProjectSummary[]> {
-  const res = await fetch("/api/agent/production-projects");
+export async function listProductionProjects(opts: { fresh?: boolean } = {}): Promise<ProductionProjectSummary[]> {
+  const res = await fetch(`/api/agent/production-projects${opts.fresh ? "?fresh=1" : ""}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "프로젝트 목록을 불러오지 못했어요.");
   return Array.isArray(data?.projects) ? data.projects as ProductionProjectSummary[] : [];
+}
+
+/** 선택기에서 바로 만들기: 기존 시리즈에 새 에피소드(episode) 또는 새 시리즈 + 첫 에피소드(series). */
+export type CreateProductionProjectInput =
+  | { mode: "episode"; parentProjectId: string; episodeTitle: string }
+  | { mode: "series"; seriesTitle: string; episodeTitle?: string };
+
+export async function createProductionProject(input: CreateProductionProjectInput): Promise<{ projectId: string; title: string }> {
+  const res = await fetch("/api/agent/production-projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.projectId) throw new Error(data?.error || "프로젝트를 만들지 못했어요.");
+  return { projectId: String(data.projectId), title: String(data.title || "") };
 }
 
 /** SkillJob 목록(스킬·프로젝트 필터). 캔버스 패널이 채팅으로 만든 파이프라인을 찾아 붙는다. */

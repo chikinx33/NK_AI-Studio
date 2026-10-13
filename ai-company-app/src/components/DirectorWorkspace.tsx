@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectPicker from "./ProjectPicker";
+import NewProjectPopover from "./NewProjectPopover";
 import Markdown from "./Markdown";
 import ImageLightbox from "./ImageLightbox";
 import { listProductionProjects, type ProductionProjectSummary } from "../lib/api";
@@ -96,6 +97,13 @@ export default function DirectorWorkspace() {
 
   useEffect(() => {
     listProductionProjects().then(setProjects).catch(() => setProjects([])).finally(() => setProjectsLoading(false));
+  }, []);
+
+  // 새로 만든 프로젝트: 목록을 새로 읽어(서버 캐시 무시) 선택기에 보이게 한 뒤 그 프로젝트로 옮긴다.
+  const onProjectCreated = useCallback(async (id: string) => {
+    const list = await listProductionProjects({ fresh: true }).catch(() => null);
+    if (list) setProjects(list);
+    setProjectId(id);
   }, []);
 
   const loadSequences = useCallback(async () => {
@@ -236,6 +244,7 @@ export default function DirectorWorkspace() {
         <Icon d={ClapD} className="h-4 w-4 text-tone-emerald" />
         <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Director</span>
         <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
+        <NewProjectPopover projects={projects} currentProjectId={projectId} onCreated={onProjectCreated} />
         {projectId && (
           <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="디렉터 세션" className="max-w-[220px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary">
             {sessions.length === 0 && <option value="">세션 없음</option>}

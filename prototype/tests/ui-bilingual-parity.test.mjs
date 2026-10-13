@@ -26,6 +26,7 @@ const DICTIONARIES = [
   ["prototype/js/ui/format-media-spec.js", "var CHANNEL_LABEL = {", "\n  /** 라벨이 없으면"],
   ["ai-company-app/src/previz/i18n.ts", "export const PREVIZ_TEXT = {", "\nexport type PrevizDict"],
   ["ai-company-app/src/components/KnowledgeTidyModal.tsx", "export const TIDY_TEXT = {", "\nexport type TidyDict"],
+  ["ai-company-app/src/components/NewProjectPopover.tsx", "export const NEW_PROJECT_TEXT = {", "\nexport type NewProjectDict"],
 ];
 
 /** `{` 위치부터 짝이 맞는 `}` 까지의 본문을 돌려준다. */

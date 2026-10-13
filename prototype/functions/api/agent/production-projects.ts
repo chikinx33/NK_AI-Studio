@@ -4,6 +4,11 @@
 // 제작 캔버스의 프로젝트 선택기용 목록. /api/project/list 는 폴더 id(숫자)만 주므로 사람이 고를 수 없다.
 // 각 프로젝트의 data.json 을 읽어 시리즈(브랜드)·에피소드 제목·규격·씬/스틸/영상 수·대표 스틸을 붙여
 // 스튜디오 대시보드와 같은 "시리즈 › 에피소드" 구조로 돌려준다.
+//
+// POST /api/agent/production-projects — 선택기에서 바로 만들기(디렉터 화면).
+//   { mode: "episode", parentProjectId, episodeTitle } → 기존 시리즈에 새 에피소드(project_add_episode: 시리즈·브랜드 컨텍스트 상속)
+//   { mode: "series", seriesTitle, episodeTitle? }     → 새 시리즈 + 첫 에피소드(project_create)
+//   채팅 에이전트와 같은 도구를 쓴다 — 폴더 이름 슬러그 규칙·상속 필드가 한 곳에서 관리된다.
 import { authorizeRequest } from "../_shared/auth.js";
 import { AGENT_TOOLS, corsHeaders, send } from "./_shared";
 import { toDisplayUrl } from "./production-graph";
@@ -84,6 +89,29 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+const TITLE_MAX = 80;
+
+/** 순수 함수 — 만들기 요청을 검증해 어느 도구에 무엇을 넘길지 정한다(테스트가 직접 호출). */
+export function buildCreateRequest(body: any):
+  | { ok: true; tool: "project_add_episode" | "project_create"; input: Record<string, string> }
+  | { ok: false; error: string } {
+  const mode = text(body?.mode);
+  const episodeTitle = text(body?.episodeTitle).slice(0, TITLE_MAX);
+  if (mode === "episode") {
+    const parentProjectId = text(body?.parentProjectId);
+    if (!parentProjectId || !/^[a-zA-Z0-9._-]+$/.test(parentProjectId)) return { ok: false, error: "parent_project_required" };
+    if (!episodeTitle) return { ok: false, error: "episode_title_required" };
+    return { ok: true, tool: "project_add_episode", input: { parentProjectId, episodeTitle } };
+  }
+  if (mode === "series") {
+    const seriesTitle = text(body?.seriesTitle).slice(0, TITLE_MAX);
+    if (!seriesTitle) return { ok: false, error: "series_title_required" };
+    // 스튜디오(project.js create)와 같은 기본 첫 에피소드 이름.
+    return { ok: true, tool: "project_create", input: { seriesTitle, episodeTitle: episodeTitle || `${seriesTitle} EP1` } };
+  }
+  return { ok: false, error: "invalid_mode" };
+}
+
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 
@@ -124,5 +152,22 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     return send({ ok: true, projects }, 200, origin);
   } catch (e: any) {
     return send({ error: String(e?.message || e || "production projects failed") }, 500, origin);
+  }
+};
+
+export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
+  try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+    const plan = buildCreateRequest(await request.json().catch(() => ({})));
+    if (!plan.ok) return send({ error: plan.error }, 400, origin);
+    const ctx = { request, env, authHeader: String(request.headers.get("Authorization") || ""), userId: auth.userId };
+    const result: any = await AGENT_TOOLS[plan.tool].run(plan.input, ctx as any);
+    // 새 프로젝트가 바로 목록에 보이도록 이 사용자의 요약 캐시를 버린다.
+    summaryCache.delete(auth.userId);
+    return send({ ok: true, projectId: String(result?.projectId || ""), title: String(result?.title || ""), seriesTitle: String(result?.seriesTitle || "") }, 200, origin);
+  } catch (e: any) {
+    return send({ error: String(e?.message || e || "create project failed") }, 500, origin);
   }
 };
