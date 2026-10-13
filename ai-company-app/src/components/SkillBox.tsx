@@ -14,8 +14,6 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
   if (name === "director") return <SVG className={className}><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></SVG>;
   if (name === "office") return <SVG className={className}><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h7M9 16h7"/></SVG>;
   if (name === "research") return <SVG className={className}><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M8 12l2-2 2 1 2.5-3"/></SVG>;
-  if (name === "communication") return <SVG className={className}><path d="M4 5h16v11H8l-4 4z"/><path d="m5 6 7 6 7-6"/></SVG>;
-  if (name === "marketing") return <SVG className={className}><path d="M4 13V9l13-5v14zM17 9h2a2 2 0 0 1 0 4h-2M7 14l1.5 6h4L11 15"/></SVG>;
   if (name === "development") return <SVG className={className}><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></SVG>;
   return <SVG className={className}><path d="M4 21V9l8-6 8 6v12M8 21v-6h8v6M8 10h.01M12 10h.01M16 10h.01"/></SVG>;
 }

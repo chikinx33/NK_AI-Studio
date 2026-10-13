@@ -31,7 +31,7 @@ export interface CompanySkillCategory {
   label: string;
   shortLabel: string;
   description: string;
-  icon: "design" | "canvas" | "director" | "office" | "research" | "communication" | "marketing" | "development" | "management";
+  icon: "design" | "canvas" | "director" | "office" | "research" | "development";
   status: CompanySkillStatus;
   skills: CompanySkillDefinition[];
 }
@@ -178,34 +178,6 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
     ],
   }),
   defineCompanySkillCategory({
-    id: "communication-schedule",
-    label: "소통·일정",
-    shortLabel: "소통",
-    description: "메일, 회의, 일정과 협업 커뮤니케이션을 관리합니다.",
-    icon: "communication",
-    status: "coming-soon",
-    skills: [
-      { id: "email-triage", label: "메일 확인·분류", description: "메일을 확인하고 중요도와 조치별로 분류합니다.", status: "coming-soon", outputLabel: "메일 업무" },
-      { id: "email-draft", label: "메일 작성·회신", description: "맥락과 말투에 맞는 메일을 작성합니다.", status: "coming-soon", outputLabel: "메일 초안" },
-      { id: "calendar", label: "일정·캘린더", description: "일정을 확인하고 회의와 후속 조치를 관리합니다.", status: "coming-soon", outputLabel: "일정" },
-      { id: "meeting-prep", label: "회의 준비", description: "안건, 사전 자료, 질문 목록을 준비합니다.", status: "coming-soon", outputLabel: "회의 자료" },
-    ],
-  }),
-  defineCompanySkillCategory({
-    id: "marketing-sales",
-    label: "마케팅·영업",
-    shortLabel: "마케팅",
-    description: "고객 획득과 매출 활동을 위한 실무를 수행합니다.",
-    icon: "marketing",
-    status: "coming-soon",
-    skills: [
-      { id: "campaign", label: "캠페인 기획", description: "목표와 채널에 맞는 캠페인을 설계합니다.", status: "coming-soon", outputLabel: "캠페인 기획서" },
-      { id: "copywriting", label: "광고·세일즈 카피", description: "전환 목적의 카피와 메시지를 작성합니다.", status: "coming-soon", outputLabel: "카피 문서" },
-      { id: "proposal", label: "제안서", description: "고객 문제와 해결안을 설득력 있게 구성합니다.", status: "coming-soon", outputLabel: "제안서" },
-      { id: "customer-response", label: "고객 응대", description: "문의와 피드백에 맞는 응답을 준비합니다.", status: "coming-soon", outputLabel: "응대 문안" },
-    ],
-  }),
-  defineCompanySkillCategory({
     id: "development-automation",
     label: "개발·자동화",
     shortLabel: "개발",
@@ -217,20 +189,6 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
       { id: "feature-development", label: "기능 개발", description: "요구사항을 분석해 소프트웨어 기능을 구현합니다.", status: "coming-soon", outputLabel: "소스 코드" },
       { id: "code-review", label: "코드 검토", description: "품질, 오류, 보안, 유지보수성을 검토합니다.", status: "coming-soon", outputLabel: "검토 보고서" },
       { id: "workflow-automation", label: "업무 자동화", description: "반복 작업과 서비스 간 흐름을 자동화합니다.", status: "coming-soon", outputLabel: "자동화 워크플로" },
-    ],
-  }),
-  defineCompanySkillCategory({
-    id: "management-support",
-    label: "경영·지원",
-    shortLabel: "경영",
-    description: "조직 운영과 의사결정에 필요한 관리 업무를 지원합니다.",
-    icon: "management",
-    status: "coming-soon",
-    skills: [
-      { id: "project-management", label: "프로젝트 관리", description: "목표, 일정, 담당자, 위험 요소를 관리합니다.", status: "coming-soon", outputLabel: "프로젝트 계획" },
-      { id: "kpi-report", label: "KPI·경영 보고", description: "성과 지표와 경영 현황을 정리합니다.", status: "coming-soon", outputLabel: "경영 보고서" },
-      { id: "hr-onboarding", label: "인사·온보딩", description: "채용과 구성원 온보딩 자료를 준비합니다.", status: "coming-soon", outputLabel: "인사 문서" },
-      { id: "policy", label: "규정·정책", description: "회사 운영 원칙과 내부 정책을 정리합니다.", status: "coming-soon", outputLabel: "정책 문서" },
     ],
   }),
 ];
