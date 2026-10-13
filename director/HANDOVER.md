@@ -127,6 +127,14 @@ Anthropic Managed Agents: agent "NK Director"(claude-opus-5-5, effort high)
 5. **편집기 UI:** 시퀀스 클립임을 표시하는 것, "디렉터로 열기" 링크는 아직 없다.
 6. **ID 페더레이션:** Cloud Run 이라 가능하다. 지금은 정적 API 키(만료 안 함)를 쓰므로, 안정화 후 전환을 검토한다.
 
+## 7-1. 모든 컷 스틸 필수 (2026-10-14, v3.1996 · 에이전트 v7 · Cloud Run nk-director-00009)
+
+- **사용자 결정:** 영상은 콘티의 모든 컷에 사용자가 확인한 스틸이 채워진 뒤에만 만든다.
+- **강제 지점:** `src/mcp/tools.ts` `video_submit` → `stillsGate`. 제출 범위(full=전체, patch=replacesCuts)의 컷마다 `stillUrl` 이 있고 `stillApproved:true` 이고 그 스틸이 `referenceImages` 에 있어야 한다. 아니면 비용 없이 거절하고 할 일을 돌려준다.
+- **경로 정리:** 에이전트가 `stillUrl` 뒤에 "(v3, 사용자 확인 대기)" 같은 메모를 붙여 저장해 콘티 패널 스틸이 깨졌다. `sequences.ts` 가 저장·읽기 때 `_shared/director-media-path.js` 로 경로와 메모(`stillNote`·`note`)를 나눈다.
+- **영상 표시:** `Markdown.tsx` 가 `![…](gs://….mp4)`·인라인 `` `gs://….mp4` `` 를 그 자리에서 재생한다. 지침은 이미지 문법을 쓰게 한다.
+- **아직 안 함:** 단계 화면(B, `DirectorSteps.tsx`)에는 컷별 스틸 지정·생성 기능이 없어서 이 규칙을 강제하지 않는다.
+
 ## 8. 주의
 
 - 사이트 세션 토큰·API 키는 대화나 로그에 출력하지 않는다. 시크릿은 파이프로만 다룬다.
