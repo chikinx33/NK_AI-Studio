@@ -8,6 +8,7 @@
 //   POST /v1/sessions/:id/confirm        { eventId, allow, message? }
 //   POST /v1/sessions/:id/answer         { eventId, answers: [{question, choices[], other?, skipped?}], cancelled? }  버튼 질문(ask_user) 답
 //   POST /v1/sessions/:id/interrupt
+//   POST /v1/qa                          { videoPath, cuts?: number[] } 자동 검수(qa_video.py) — 단계 화면·대화 공용
 //   POST /mcp                            에이전트 도구(MCP Streamable HTTP, 위임 토큰)
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
@@ -18,6 +19,7 @@ import { buildMcpServer } from "./mcp/tools.js";
 import { loadState } from "./gateway/state.js";
 import { answerQuestion, confirmTool, createSession, interrupt, ownedSession, sendMessage, type Caller } from "./gateway/sessions.js";
 import { relaySession } from "./gateway/stream.js";
+import { runQa } from "./qa.js";
 
 const MAX_BODY = 48 * 1024 * 1024; // 이미지 첨부(최대 10장 × 4MB base64)
 
@@ -91,6 +93,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
   const caller = await authCaller(req);
   if (path === "/v1/me" && req.method === "GET") {
     return send(req, res, 200, { userId: caller.userId, available: caller.available });
+  }
+  if (path === "/v1/qa" && req.method === "POST") {
+    return send(req, res, 200, await runQa(caller.token, await readJson(req)));
   }
   let m = /^\/v1\/projects\/([A-Za-z0-9._-]{1,64})\/sessions$/.exec(path);
   if (m && req.method === "GET") {

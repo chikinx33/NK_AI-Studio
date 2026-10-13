@@ -427,9 +427,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const mergedPayload = hasPayload
       ? Object.assign({}, (existing?.payload || {}), normalizeClientPayload(body.payload))
       : Object.assign({}, existing?.payload || {});
-    // 디렉터 시퀀스는 /api/project/sequences 만 쓴다. 화면이 들고 있던 옛 사본으로 덮어쓰지 않는다.
-    if (existing?.payload && Object.prototype.hasOwnProperty.call(existing.payload, "sequences")) mergedPayload.sequences = existing.payload.sequences;
-    else delete mergedPayload.sequences;
+    // 디렉터 시퀀스·프로젝트 기억은 /api/project/sequences 만 쓴다. 화면이 들고 있던 옛 사본으로 덮어쓰지 않는다.
+    for (const key of ["sequences", "directorNotes"]) {
+      if (existing?.payload && Object.prototype.hasOwnProperty.call(existing.payload, key)) mergedPayload[key] = existing.payload[key];
+      else delete mergedPayload[key];
+    }
     const mergedHeader = hasHeader ? (body.header || "") : (existing?.header || "");
     const mergedAspect = hasAspect ? body.aspectRatio : (existing?.aspectRatio || "");
     const mergedTitle = hasTitle ? body.title : (existing?.title || "");

@@ -86,6 +86,8 @@ export function compactProject(data: any): any {
     styleAnchor: payload.styleAnchor ?? null,
     characters: payload.characters ?? payload.characterSheets ?? null,
     episodeLocations: payload.episodeLocations ? Object.keys(payload.episodeLocations) : null,
+    // 단계 화면(직접 진행)과 함께 쓰는 프로젝트 기억: 고정 규칙·교훈.
+    directorNotes: payload.directorNotes ? { rules: String(payload.directorNotes.rules || ""), lessons: String(payload.directorNotes.lessons || "") } : null,
     scenes, sequences,
   };
 }
@@ -179,7 +181,8 @@ export function buildMcpServer(token: string): McpServer {
   server.registerTool("project_overview", {
     description: "프로젝트 요약: 제목·화면비·스타일 앵커·캐릭터·씬 목록(경로 포함)·디렉터 시퀀스와 테이크 상태. 작업 시작 시 먼저 부른다. " +
       "ip 는 이 프로젝트가 속한 IP(브랜드 허브 IP 라이브러리)의 세계관과 등록 캐릭터(설명·시트 gs 경로)다. " +
-      "캐릭터는 ip.characters 가 기준이다 — 여기 있으면 이미 등록된 캐릭터이므로 새로 만들자고 하지 말고 그 시트를 참조로 쓴다.",
+      "캐릭터는 ip.characters 가 기준이다 — 여기 있으면 이미 등록된 캐릭터이므로 새로 만들자고 하지 말고 그 시트를 참조로 쓴다. " +
+      "directorNotes 는 사용자가 단계 화면에서 적은 이 프로젝트 고정 규칙(rules)·교훈(lessons)이다. 메모리와 함께 반드시 지킨다.",
     inputSchema: projectArgs,
   }, async ({ projectId, ownerId }) => {
     try {

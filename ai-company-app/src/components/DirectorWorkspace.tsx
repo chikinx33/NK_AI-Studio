@@ -4,8 +4,9 @@ import NewProjectPopover from "./NewProjectPopover";
 import Markdown from "./Markdown";
 import ImageLightbox from "./ImageLightbox";
 import DirectorQuestionCard, { type PendingQuestion } from "./DirectorQuestionCard";
+import DirectorSteps from "./DirectorSteps";
 import { listProductionProjects, type ProductionProjectSummary } from "../lib/api";
-import { readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
+import { readStorage, readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
 import { fitImageForModel } from "../lib/imageAttachment";
 import {
   TOOL_LABELS, answerDirectorQuestion, confirmDirectorTool, questionAnswerLabel, splitSuggestion, type DirectorQuestionAnswer, createDirectorSession, getSequences, interruptDirector, listDirectorSessions,
@@ -42,6 +43,25 @@ const XD = <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>;
 const PlayD = <polygon points="6 3 20 12 6 21 6 3" />;
 const RefreshD = <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></>;
 const ChevronD = <path d="m6 9 6 6 6-6" />;
+
+// 같은 시퀀스를 다루는 두 입구: 대화(Managed Agents 디렉터) / 단계(직접 진행, Claude 단발 호출).
+const MODE_TEXT = {
+  ko: { chat: "대화", steps: "단계", chatTitle: "디렉터와 대화하며 만들기", stepsTitle: "단계별로 직접 진행(콘티 → 참조 → 프롬프트 → 드래프트 → 검수)" },
+  en: { chat: "Chat", steps: "Steps", chatTitle: "Make it by talking with the director", stepsTitle: "Go step by step yourself (conti → refs → prompt → draft → QA)" },
+};
+type DirectorMode = "chat" | "steps";
+const modeLang = (): "ko" | "en" => String(readStorage("nk_lang")).replace(/^"|"$/g, "") === "en" ? "en" : "ko";
+function useModeText() {
+  const [lang, setLang] = useState(modeLang);
+  useEffect(() => {
+    const sync = () => setLang(modeLang());
+    const onStorage = (e: StorageEvent) => { if (e.key === "nk_lang" || e.key === null) sync(); };
+    window.addEventListener("nk:lang-changed", sync);
+    window.addEventListener("storage", onStorage);
+    return () => { window.removeEventListener("nk:lang-changed", sync); window.removeEventListener("storage", onStorage); };
+  }, []);
+  return MODE_TEXT[lang];
+}
 
 const STATUS_LABEL: Record<string, string> = { running: "작업 중", idle: "대기", rescheduling: "재시도 중", terminated: "종료됨" };
 const TAKE_BADGE: Record<string, string> = {
@@ -96,6 +116,9 @@ export default function DirectorWorkspace() {
   const fileRef = useRef<HTMLInputElement>(null);
   const seqTimer = useRef<number | null>(null);
   const isMaster = useMemo(() => isMasterUser(), []);
+  const modeText = useModeText();
+  const [mode, setMode] = useState<DirectorMode>(() => (readUserStorage("directorMode") === "steps" ? "steps" : "chat"));
+  const changeMode = (m: DirectorMode) => { setMode(m); writeUserStorage("directorMode", m); };
 
   useEffect(() => {
     listProductionProjects().then(setProjects).catch(() => setProjects([])).finally(() => setProjectsLoading(false));
@@ -282,19 +305,27 @@ export default function DirectorWorkspace() {
         <Icon d={ClapD} className="h-4 w-4 text-tone-emerald" />
         <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Director</span>
         <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
-        {projectId && (
+        <div className="flex overflow-hidden rounded border border-edge" role="tablist">
+          {(["chat", "steps"] as const).map((m) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => changeMode(m)} title={m === "chat" ? modeText.chatTitle : modeText.stepsTitle}
+              className={`min-w-[56px] px-2 py-1 text-[11px] font-semibold ${mode === m ? "bg-tint-emerald/50 text-tone-emerald" : "text-muted hover:bg-edge"}`}>
+              {m === "chat" ? modeText.chat : modeText.steps}
+            </button>
+          ))}
+        </div>
+        {projectId && mode === "chat" && (
           <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="디렉터 세션" className="max-w-[220px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary">
             {sessions.length === 0 && <option value="">세션 없음</option>}
             {sessions.map((s) => <option key={s.id} value={s.id}>{s.title || s.id}</option>)}
           </select>
         )}
         <NewProjectPopover projects={projects} currentProjectId={projectId} onCreated={onProjectCreated} />
-        {projectId && (
+        {projectId && mode === "chat" && (
           <button type="button" onClick={() => void newSession()} disabled={creating} className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40">
             <Icon d={PlusD} className="h-3.5 w-3.5" /> {creating ? "만드는 중…" : "새 디렉터 세션"}
           </button>
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className={`ml-auto flex items-center gap-1.5 ${mode === "steps" ? "hidden" : ""}`}>
           {costText && <span className="text-[10px] text-faint">{costText}</span>}
           {sessionId && (
             <span className={`rounded border px-1.5 py-0.5 text-[10px] ${running ? "border-sky-700/60 text-tone-sky" : "border-edge text-muted"}`}>
@@ -304,6 +335,7 @@ export default function DirectorWorkspace() {
         </div>
       </section>
 
+      {mode === "steps" ? <DirectorSteps projectId={projectId} onChanged={scheduleSequences} /> : (
       <div className="flex min-h-0 flex-1">
         {/* 대화 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -479,6 +511,7 @@ export default function DirectorWorkspace() {
           </div>
         </aside>
       </div>
+      )}
       {lightbox && <ImageLightbox images={lightbox.images} index={lightbox.index} onClose={() => setLightbox(null)} />}
     </div>
   );

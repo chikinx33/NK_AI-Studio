@@ -16,7 +16,7 @@ function loadSequenceOps() {
   const fnStart = src.indexOf("function cleanSequence(");
   const fnEnd = src.indexOf("export const onRequestGet");
   const js = esbuild.transformSync(consts + src.slice(fnStart, fnEnd), { loader: "ts" }).code;
-  return new Function(js + "\nreturn { applyOp, cleanSequence };")();
+  return new Function(js + "\nreturn { applyOp, cleanSequence, cleanNotes };")();
 }
 
 test("디렉터 전용 엔드포인트는 서비스 비밀을 요구하고 비밀이 없으면 닫힌다", () => {
@@ -87,8 +87,21 @@ test("시퀀스 쓰기와 편집기 저장은 GCS 세대 확인으로 서로 덮
   assert.match(save, /for \(let attempt = 0; attempt < 4; attempt\+\+\)/);
   assert.match(save, /&ifGenerationMatch=\$\{encodeURIComponent\(generation\)\}/);
   assert.match(save, /if \(res\.status === 412 && attempt < 3\) continue;/);
-  // 화면이 들고 있던 옛 sequences 사본은 버리고 서버 값을 보존한다.
-  assert.match(save, /mergedPayload\.sequences = existing\.payload\.sequences;\s*\n\s*else delete mergedPayload\.sequences;/);
+  // 화면이 들고 있던 옛 sequences·directorNotes 사본은 버리고 서버 값을 보존한다.
+  assert.match(save, /for \(const key of \["sequences", "directorNotes"\]\)/);
+  assert.match(save, /mergedPayload\[key\] = existing\.payload\[key\];\s*\n\s*else delete mergedPayload\[key\];/);
+});
+
+test("프로젝트 기억(directorNotes): 길이 제한, 비밀값 거절, 시퀀스와 같은 저장소", () => {
+  const { cleanNotes } = loadSequenceOps();
+  const n = cleanNotes({ rules: "모든 인물은 리본 울타리 안", lessons: "x".repeat(30000), extra: 1 });
+  assert.equal(n.rules, "모든 인물은 리본 울타리 안");
+  assert.equal(n.lessons.length, 20000);
+  assert.equal(n.extra, undefined);
+  assert.throws(() => cleanNotes({ rules: "key sk-ant-api03-abc" }), /invalid_notes_secret/);
+  const seq = read("prototype/functions/api/project/sequences.ts");
+  assert.match(seq, /if \(body\?\.op === "notes"\)/);
+  assert.match(seq, /notes: payload\.directorNotes \|\| null/);
 });
 
 test("Seedance 2.5 드래프트·완성: 요청과 요금이 같은 규칙을 쓴다", () => {

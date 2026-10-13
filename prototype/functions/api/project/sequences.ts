@@ -6,6 +6,7 @@
 //     op=delete      { sequenceId }
 //     op=putTake     { sequenceId, take }            테이크 하나만 넣거나 바꾼다(다른 테이크와 경합하지 않게)
 //     op=select      { sequenceId, selectedTakeIds } 편집기 타임라인에 쓸 테이크 선택
+//     op=notes       { notes: { rules, lessons } }   프로젝트 기억(payload.directorNotes) — 대화·단계 화면이 함께 쓴다
 // data.json 은 화면(save.ts)과 디렉터가 같이 쓴다. GCS 세대 번호(ifGenerationMatch)로 읽고-고치고-쓰기 사이에
 // 다른 저장이 끼면 다시 읽어 적용한다. sequences 는 이 엔드포인트만 쓴다(save.ts 는 보존만 한다).
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
@@ -19,6 +20,7 @@ const MAX_SEQUENCES = 60;
 const MAX_SEQUENCE_BYTES = 300 * 1024;
 const MAX_TAKES = 80;
 const ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const MAX_NOTE_CHARS = 20_000;
 
 const headers = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -70,6 +72,15 @@ function cleanSequence(seq: any): any {
   return out;
 }
 
+/** 프로젝트 기억: 고정 규칙·교훈(마크다운 글). 비밀값은 받지 않는다. */
+function cleanNotes(notes: any): any {
+  const n = notes && typeof notes === "object" ? notes : {};
+  const text = (v: any) => String(v ?? "").slice(0, MAX_NOTE_CHARS);
+  const out = { rules: text(n.rules), lessons: text(n.lessons), updatedAt: new Date().toISOString() };
+  if (/sk-ant-|AIza[0-9A-Za-z_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY/.test(out.rules + out.lessons)) throw new Error("invalid_notes_secret");
+  return out;
+}
+
 function applyOp(sequences: any[], body: any): any[] {
   const list = Array.isArray(sequences) ? [...sequences] : [];
   const op = String(body?.op || "");
@@ -117,7 +128,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const { basePrefix } = resolveGcsEnv(env);
     const doc = await gcsRead(env, `${buildAiVideoProjectPrefix(basePrefix, owner, projectId)}/reference/data.json`);
     if (!doc) return send({ error: "project_not_found" }, 404, origin);
-    return send({ sequences: Array.isArray(doc.data?.payload?.sequences) ? doc.data.payload.sequences : [] }, 200, origin);
+    const payload = doc.data?.payload || {};
+    return send({ sequences: Array.isArray(payload.sequences) ? payload.sequences : [], notes: payload.directorNotes || null }, 200, origin);
   } catch (e: any) {
     return send({ error: "sequences_read_failed", detail: String(e?.message || e) }, 503, origin);
   }
@@ -140,6 +152,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (!doc) return send({ error: "project_not_found" }, 404, origin);
       const data = doc.data && typeof doc.data === "object" ? doc.data : {};
       const payload = data.payload && typeof data.payload === "object" ? data.payload : {};
+      if (body?.op === "notes") {
+        const notes = cleanNotes(body.notes);
+        const next = { ...data, payload: { ...payload, directorNotes: notes }, savedAt: new Date().toISOString() };
+        if (await gcsWriteIfUnchanged(env, objectName, next, doc.generation)) return send({ ok: true, notes, attempts: attempt + 1 }, 200, origin);
+        continue;
+      }
       const sequences = applyOp(payload.sequences, body);
       const next = { ...data, payload: { ...payload, sequences }, savedAt: new Date().toISOString() };
       if (await gcsWriteIfUnchanged(env, objectName, next, doc.generation)) {

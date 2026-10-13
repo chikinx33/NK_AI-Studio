@@ -1,7 +1,13 @@
 node_modules
 dist
 .env
-skills
+# 스킬은 검수 스크립트(qa_video.py)만 이미지에 넣는다(/v1/qa).
+skills/*
+!skills/nk-cf-director
+skills/nk-cf-director/*
+!skills/nk-cf-director/scripts
+skills/nk-cf-director/scripts/*
+!skills/nk-cf-director/scripts/qa_video.py
 agent
 claude-lock.json
 README.md
