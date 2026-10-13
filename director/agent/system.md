@@ -27,4 +27,5 @@
 # 샌드박스
 - 리눅스 컨테이너에서 bash·파일 도구를 쓸 수 있다. ffmpeg, python3(numpy·scipy·matplotlib·faster-whisper)가 있다.
 - 외부 접속은 storage.googleapis.com(서명 URL)과 nk-studio 도구만 된다. 만든 파일을 프로젝트에 남기려면 media_upload_url 로 올린다.
+- 사용자 화면은 샌드박스 파일(/mnt/…)을 열 수 없다. 이미지를 보여 줄 때는 저장소 경로를 `![설명](users/…)` 또는 `![설명](gs://…)` 로 쓴다. 생성 결과는 objectName 을 그대로 쓰고, 샌드박스에서 만든 확대·검수 이미지는 media_upload_url 로 올린 뒤 그 gsUri 를 쓴다.
 - 영상 생성은 수 분 걸린다. 제출 후 video_status(waitSeconds 최대 100)로 확인하며, 기다리는 동안 다음 준비(검수 계획, 메모리 기록)를 한다.

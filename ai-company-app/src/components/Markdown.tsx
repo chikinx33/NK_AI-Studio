@@ -1,6 +1,21 @@
 import { useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { withMediaToken } from "../lib/api";
+
+/**
+ * 마크다운 이미지 주소 → 브라우저가 열 수 있는 주소.
+ * 저장소 경로(gs://버킷/users/… 또는 users/…)는 로그인 토큰을 붙인 미디어 프록시로 연다.
+ * 에이전트 샌드박스 파일(/mnt/…, /tmp/…)은 브라우저가 열 수 없으므로 빈 값.
+ */
+export function markdownImageSrc(src: string): string {
+  const s = String(src || "").trim();
+  if (!s) return "";
+  if (/^(\/mnt\/|\/tmp\/|\/home\/|\/workspace\/|file:)/i.test(s)) return "";
+  const objectName = s.startsWith("gs://") ? s.replace(/^gs:\/\/[^/]+\//, "") : s.startsWith("users/") ? s : "";
+  if (objectName) return withMediaToken(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`);
+  return s;
+}
 
 // 언어 → 파일 확장자
 const LANG_EXT: Record<string, string> = {
@@ -113,6 +128,15 @@ export default function Markdown({ text }: { text: string }) {
             <blockquote className="border-l-2 border-edge pl-3 text-muted">{children}</blockquote>
           ),
           hr: () => <hr className="border-edge" />,
+          img: ({ src, alt }) => {
+            const url = markdownImageSrc(String(src || ""));
+            if (!url) return <span className="inline-block rounded bg-inset px-2 py-1 text-[0.85em] text-faint">🖼 {alt || "이미지"} — 화면에 올라오지 않은 작업 파일이에요</span>;
+            return (
+              <a href={url} target="_blank" rel="noreferrer" className="my-1 block w-fit">
+                <img src={url} alt={alt || ""} loading="lazy" className="max-h-80 max-w-full rounded-lg border border-edge object-contain" />
+              </a>
+            );
+          },
           // pre는 통과 — 블록 스타일/다운로드 버튼은 code(CodeBlock)에서 처리.
           pre: ({ children }) => <>{children}</>,
           code: ({ className, children }) => {

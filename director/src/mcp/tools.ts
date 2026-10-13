@@ -241,7 +241,7 @@ export function buildMcpServer(token: string): McpServer {
 
   server.registerTool("media_upload_url", {
     description: "샌드박스에서 만든 파일(검수 프레임·스펙트로그램·편집 스틸)을 프로젝트에 올릴 업로드 URL. " +
-      "curl -X PUT -H 'Content-Type: <contentType>' --data-binary @file '<uploadUrl>' 로 올리고 gsUri 를 기록한다.",
+      "curl -X PUT -H 'Content-Type: <contentType>' --data-binary @file '<uploadUrl>' 로 올리고 gsUri 를 기록한다. 사용자에게 보여 줄 이미지는 이 gsUri 를 ![설명](gsUri) 로 답변에 넣는다(/mnt 경로는 화면에서 안 보인다).",
     inputSchema: { projectId: ID, filename: z.string().max(120), contentType: z.enum(["image/png", "image/jpeg", "image/webp", "video/mp4", "video/quicktime", "audio/mpeg", "audio/wav", "application/json", "text/plain", "text/markdown"]) },
   }, async ({ projectId, filename, contentType }) => {
     try { return ok(await call("/api/director/media-url", { body: { upload: { projectId, filename, contentType } } })); }
