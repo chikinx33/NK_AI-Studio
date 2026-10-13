@@ -197,6 +197,72 @@ test("없는 편지함이면 아무것도 옮기지 않고 있는 편지함 이�
   );
 });
 
+// 휴지통(&1zTJwNG1-)에는 uid 7·8·9 가 있다.
+function purgeHandler(caps = "UIDPLUS") {
+  return (tag, cmd) => {
+    if (cmd.startsWith("LOGIN")) return `${tag} OK\r\n`;
+    if (cmd === "CAPABILITY") return `* CAPABILITY IMAP4rev1 ${caps}\r\n${tag} OK\r\n`;
+    if (cmd === 'LIST "" "*"') return `${LIST_RESPONSE}${tag} OK\r\n`;
+    if (cmd === 'EXAMINE "&1zTJwNG1-"' || cmd === 'SELECT "&1zTJwNG1-"') return `* 3 EXISTS\r\n* OK [UIDVALIDITY 55] ok\r\n${tag} OK\r\n`;
+    if (cmd === "UID SEARCH ALL") return `* SEARCH 7 8 9\r\n${tag} OK\r\n`;
+    if (cmd.startsWith("UID FETCH ")) {
+      const want = cmd.split(" ")[2].split(",").map(Number).filter((u) => [7, 8, 9].includes(u));
+      const withHeader = cmd.includes("HEADER.FIELDS");
+      return want.map((u, i) => {
+        const h = `Subject: old ${u}\r\nFrom: x@y.test\r\n\r\n`;
+        return `* ${i + 1} FETCH (UID ${u}${withHeader ? ` FLAGS () BODY[HEADER.FIELDS (SUBJECT FROM)] ${literal(h)}` : ""})\r\n`;
+      }).join("") + `${tag} OK\r\n`;
+    }
+    if (cmd.startsWith("UID STORE") || cmd.startsWith("UID EXPUNGE") || cmd === "EXPUNGE" || cmd === "LOGOUT") return `${tag} OK\r\n`;
+    return `${tag} BAD unexpected ${cmd}\r\n`;
+  };
+}
+
+test("휴지통 읽기: folder 로 휴지통을 읽기 전용으로 연다", async () => {
+  const { readDaumInbox } = await loadMail();
+  const server = fakeServer((tag, cmd) => (cmd.startsWith("FETCH ") ? `${tag} OK\r\n` : purgeHandler()(tag, cmd)));
+  const out = await readDaumInbox({ email: "me@hanmail.net", password: "p" }, { folder: "휴지통" }, { connector: server.connector });
+  assert.ok(server.sent.includes('EXAMINE "&1zTJwNG1-"'), server.sent.join(" | "));
+  assert.equal(out.mailbox, "휴지통");
+  assert.equal(out.uidValidity, 55);
+});
+
+test("휴지통 영구 삭제: 승인 전 목록을 확정하고, 승인되면 그 목록 중 남아 있는 것만 지운다", async () => {
+  const { previewDaumTrashPurge, purgeDaumTrash } = await loadMail();
+  let server = fakeServer(purgeHandler());
+  const plan = await previewDaumTrashPurge({ email: "me@hanmail.net", password: "p" }, { all: true }, { connector: server.connector });
+  assert.deepEqual(plan.uids, [9, 8, 7]);
+  assert.equal(plan.folder, "휴지통");
+  assert.equal(plan.uidValidity, 55);
+  assert.deepEqual(plan.items.map((e) => e.subject), ["old 9", "old 8", "old 7"]);
+  assert.ok(!server.sent.some((c) => /STORE|EXPUNGE/.test(c)), "확정 단계에선 아무것도 지우지 않는다");
+
+  // 승인 사이에 uid 9 는 이미 사라졌고 10 은 원래 목록에 없다 → 7·8 만 지운다.
+  server = fakeServer(purgeHandler());
+  const out = await purgeDaumTrash({ email: "me@hanmail.net", password: "p" }, { uids: [7, 8, 10], uidValidity: 55 }, { connector: server.connector });
+  assert.ok(server.sent.includes('SELECT "&1zTJwNG1-"'));
+  assert.ok(server.sent.includes("UID STORE 7,8 +FLAGS.SILENT (\\Deleted)"), server.sent.join(" | "));
+  assert.ok(server.sent.includes("UID EXPUNGE 7,8"));
+  assert.equal(out.deleted, 2);
+});
+
+test("휴지통이 다시 만들어져 uidValidity 가 다르면 아무것도 지우지 않는다", async () => {
+  const { purgeDaumTrash } = await loadMail();
+  const server = fakeServer(purgeHandler());
+  await assert.rejects(purgeDaumTrash({ email: "a@daum.net", password: "p" }, { uids: [7], uidValidity: 1 }, { connector: server.connector }), /아무것도 지우지 않았어요/);
+  assert.ok(!server.sent.some((c) => /STORE|EXPUNGE/.test(c)));
+});
+
+test("휴지통 영구 삭제는 승인 게이트를 거치고 승인 카드에 지울 메일이 보인다", () => {
+  const shared = read("prototype/functions/api/agent/_shared.ts");
+  assert.match(shared, /daum_mail_purge: \{ agentId: "sync", kind: "external", gate: true, prepare: prepareDaumMailPurgeInput, run: runDaumMailPurgeTool \}/);
+  assert.match(shared, /영구 삭제\*\*해요\. 삭제하면 되살릴 수 없어요/);
+  assert.match(read("prototype/functions/api/agent/review.ts"), /if \(type === "daum_mail_purge"\) \{/);
+  const api = read("ai-company-app/src/lib/api.ts");
+  assert.match(api, /daum_mail_purge: "다음 메일 휴지통 영구 삭제"/);
+  assert.match(api, /"publish", "daum_mail_purge"\]\)/, "되돌릴 수 없는 외부 작업 배지");
+});
+
 test("메일함 이름 수정 UTF-7 디코딩", async () => {
   const { decodeMailboxName } = await loadMail();
   assert.equal(decodeMailboxName("&1zTJwNG1-"), "휴지통");

@@ -240,6 +240,11 @@ function approvalDoneText(type: string, output: any, input: any): string {
   if (type === "calendar_delete") {
     return Number(o.count) > 0 ? `✅ 승인 확인! 일정 ${o.count}건을 삭제했어요.` : `✅ 승인 확인! 그런데 삭제할 일정을 찾지 못했어요.`;
   }
+  if (type === "daum_mail_purge") {
+    return Number(o.deleted) > 0
+      ? `✅ 승인 확인! 다음 메일 ${o.folder || "휴지통"}에서 ${o.deleted}통을 영구 삭제했어요.`
+      : "✅ 승인 확인! 그런데 지울 메일이 휴지통에 이미 없었어요. 아무것도 지우지 않았어요.";
+  }
   if (type === "gmail_send") {
     const to = o.to || inp.to || "";
     return `✅ 승인 확인! ${to ? `'${to}'에게 ` : ""}메일을 발송했어요${o.subject || inp.subject ? ` — 제목: "${o.subject || inp.subject}"` : ""}.`;

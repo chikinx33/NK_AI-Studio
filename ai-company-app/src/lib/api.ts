@@ -1712,11 +1712,12 @@ function hasDeliverableOutput(j: any): boolean {
 // 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
 const APPROVAL_TOOL_LABEL: Record<string, string> = {
   gmail_send: "메일 발송", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
+  daum_mail_purge: "다음 메일 휴지통 영구 삭제",
   image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
   scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성", form_list: "서식 목록 조회", form_fill: "서식 문서 작성",
 };
 // 외부에 영향을 주는(되돌리기 어려운) 도구 — 카드에 'external' 배지로 강조.
-const APPROVAL_EXTERNAL_TOOLS = new Set(["gmail_send", "calendar_create", "calendar_delete", "gmail_trash", "publish"]);
+const APPROVAL_EXTERNAL_TOOLS = new Set(["gmail_send", "calendar_create", "calendar_delete", "gmail_trash", "publish", "daum_mail_purge"]);
 function fmtWhen(s?: string): string {
   if (!s) return "";
   const m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s));
@@ -1731,6 +1732,10 @@ function summarizeApprovalJob(j: any) {
     // 메일은 받는사람·제목을 카드에 명시(오발송 방지) + 본문 일부를 reason으로.
     title = `${label}: ${input.subject || "(제목 없음)"} → ${input.to || "?"}`;
     reason = input.body ? String(input.body).slice(0, 160) : undefined;
+  } else if (j.type === "daum_mail_purge") {
+    // 되살릴 수 없는 삭제 — 몇 통인지와 지울 메일 제목을 카드에 그대로 보인다.
+    title = `${label}: ${input.count ?? (Array.isArray(input.uids) ? input.uids.length : "?")}통${input.all ? " (휴지통 전체)" : ""}`;
+    reason = input.planSummary ? String(input.planSummary).replace(/\*\*/g, "").split("\n").slice(2).join(" · ").slice(0, 200) : undefined;
   } else {
     const detail = input.summary || input.title || input.prompt || input.topic || input.caption || input.query || "";
     const when = fmtWhen(input.start);
