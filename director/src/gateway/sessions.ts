@@ -3,6 +3,7 @@ import { anthropic } from "../anthropic.js";
 import { config } from "../config.js";
 import { site, SiteError } from "../site.js";
 import { ensureMemoryStores, saveState } from "./state.js";
+import { answerText, type QuestionAnswer } from "./events.js";
 
 export interface Caller { token: string; userId: string; available: number }
 
@@ -75,14 +76,19 @@ export async function refreshDelegationIfNeeded(caller: Caller, session: any): P
 
 export interface ImageInput { mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif"; data: string }
 
-export async function sendMessage(caller: Caller, session: any, text: string, images: ImageInput[] = []) {
+export async function sendMessage(caller: Caller, session: any, text: string, images: ImageInput[] = [], resolveQuestions: string[] = []) {
   if (session.metadata?.isOwner !== "1" && caller.available <= 0) {
     throw new SiteError(402, { error: "credit_insufficient", message: "크레딧이 부족합니다." });
   }
   await refreshDelegationIfNeeded(caller, session);
   const content: any[] = images.slice(0, 10).map((im) => ({ type: "image", source: { type: "base64", media_type: im.mediaType, data: im.data } }));
   content.push({ type: "text", text: String(text || "").slice(0, 50_000) });
-  const events: any[] = [{ type: "user.message", content }];
+  // 버튼 질문이 열린 채로 채팅을 보내면 질문부터 닫는다(세션이 그 답을 기다리고 있다).
+  const events: any[] = resolveQuestions.filter((id) => EVENT_ID.test(id)).slice(0, 4).map((id) => ({
+    type: "user.custom_tool_result", custom_tool_use_id: id,
+    content: [{ type: "text", text: "사용자가 버튼 대신 채팅으로 답했다. 바로 다음 사용자 메시지를 이 질문의 답으로 본다." }],
+  }));
+  events.push({ type: "user.message", content });
   const firstTurn = session.metadata?.contextSent !== "1";
   if (firstTurn) events.push({ type: "system.message", content: [{ type: "text", text: sessionContext(session) }] });
   await anthropic.beta.sessions.events.send(session.id, { events });
@@ -95,6 +101,15 @@ export function sessionContext(session: any): string {
   return `작업 프로젝트: projectId=${m.projectId}${m.ownerId ? ` (공유 프로젝트, ownerId=${m.ownerId})` : ""}. 사용자 ID=${m.userId}. ` +
     `${m.isOwner === "1" ? "사용자는 사이트 소유자다." : "사용자는 회원이다. 유료 생성은 사용자 크레딧에서 차감된다."} ` +
     `모든 nk-studio 도구 호출에 projectId 를 넣는다. 오늘 날짜: ${new Date().toISOString().slice(0, 10)}.`;
+}
+
+const EVENT_ID = /^sevt_[A-Za-z0-9]+$/;
+
+/** 버튼 질문(ask_user)의 답을 돌려준다. */
+export async function answerQuestion(session: any, eventId: string, answers: QuestionAnswer[], cancelled: boolean) {
+  if (!EVENT_ID.test(eventId)) throw new SiteError(400, { error: "invalid_event_id" });
+  await anthropic.beta.sessions.events.send(session.id, { events: [{ type: "user.custom_tool_result", custom_tool_use_id: eventId,
+    content: [{ type: "text", text: answerText(answers, cancelled) }] } as any] });
 }
 
 export async function confirmTool(session: any, eventId: string, allow: boolean, denyMessage?: string) {

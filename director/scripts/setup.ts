@@ -89,6 +89,44 @@ async function ensureAgent(skill: { id: string; version: string }): Promise<{ id
         // 돈이 드는 생성은 사용자가 화면에서 승인해야 실행된다.
         configs: paid.map((name) => ({ name, permission_policy: { type: "always_ask" } })),
       },
+      {
+        // 사용자 화면이 실행하는 도구: 선택지를 버튼으로 띄우고 고른 답을 돌려준다(세션은 답이 올 때까지 기다린다).
+        type: "custom",
+        name: "ask_user",
+        description: "사용자에게 결정을 받을 때 쓴다(안 고르기, 구도·스타일·길이 확인, 다음 단계 제안). 화면에 선택지 버튼으로 뜨고, " +
+          "사용자가 고른 답이 결과로 온다. 화면이 '건너뛰기'·'직접 입력'·'취소'를 자동으로 붙이므로 선택지에 넣지 않는다. " +
+          "권장안은 첫 번째에 두고 recommended:true. 질문 1~4개를 한 번에 묻는다. 비교 표·근거는 이 도구를 부르기 전 답변에 쓴다.",
+        input_schema: {
+          type: "object",
+          properties: {
+            questions: {
+              type: "array", minItems: 1, maxItems: 4,
+              items: {
+                type: "object",
+                properties: {
+                  question: { type: "string", description: "질문 문장(물음표로 끝나게)" },
+                  header: { type: "string", description: "짧은 꼬리표(12자 이내), 예: 다음 단계·구도·스타일" },
+                  multiSelect: { type: "boolean", description: "여러 개를 고를 수 있으면 true" },
+                  options: {
+                    type: "array", minItems: 2, maxItems: 4,
+                    items: {
+                      type: "object",
+                      properties: {
+                        label: { type: "string", description: "버튼 글자(짧게). 비용이 들면 예상 크레딧을 괄호로" },
+                        description: { type: "string", description: "이 선택이 무엇을 하는지·장단점 한두 문장" },
+                        recommended: { type: "boolean" },
+                      },
+                      required: ["label"],
+                    },
+                  },
+                },
+                required: ["question", "options"],
+              },
+            },
+          },
+          required: ["questions"],
+        },
+      },
     ],
     mcp_servers: [{ type: "url", name: "nk-studio", url: mcpUrl }],
     // 버전을 고정하지 않는다 → 세션은 최신 스킬을 쓴다(스킬 문서를 고치면 setup 한 번으로 반영).

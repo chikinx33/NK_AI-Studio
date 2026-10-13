@@ -27,8 +27,26 @@ export const listDirectorSessions = (projectId: string) =>
 export const createDirectorSession = (projectId: string, title: string) =>
   directorFetch<{ sessionId: string; title: string; isOwner: boolean; budgetCents: number }>("/v1/sessions", { method: "POST", body: JSON.stringify({ projectId, title }) });
 
-export const sendDirectorMessage = (sessionId: string, text: string, images: Array<{ mediaType: string; data: string }>) =>
-  directorFetch(`/v1/sessions/${sessionId}/messages`, { method: "POST", body: JSON.stringify({ text, images }) });
+/** resolveQuestions: 열려 있던 버튼 질문 — 채팅으로 답하면 서버가 그 질문부터 닫는다. */
+export const sendDirectorMessage = (sessionId: string, text: string, images: Array<{ mediaType: string; data: string }>, resolveQuestions: string[] = []) =>
+  directorFetch(`/v1/sessions/${sessionId}/messages`, { method: "POST", body: JSON.stringify({ text, images, resolveQuestions }) });
+
+/** 디렉터 버튼 질문(ask_user, nk-director src/gateway/events.ts 와 같은 모양). */
+export interface DirectorQuestionOption { label: string; description?: string; recommended?: boolean }
+export interface DirectorQuestion { question: string; header?: string; multiSelect?: boolean; options: DirectorQuestionOption[] }
+export interface DirectorQuestionAnswer { question: string; choices: string[]; other?: string; skipped?: boolean }
+
+export const answerDirectorQuestion = (sessionId: string, eventId: string, answers: DirectorQuestionAnswer[], cancelled = false) =>
+  directorFetch(`/v1/sessions/${sessionId}/answer`, { method: "POST", body: JSON.stringify({ eventId, answers, cancelled }) });
+
+/** 질문 결과 문장(서버 answerText) → 대화창에 보일 짧은 문구. 채팅으로 대신 답한 경우는 빈 값(그 메시지가 따로 보인다). */
+export function questionAnswerLabel(text: string): string {
+  const t = String(text || "");
+  if (/버튼 대신 채팅으로/.test(t)) return "";
+  if (/질문을 취소했다/.test(t)) return "질문을 취소했어요";
+  const lines = t.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).replace(/\(사용자가 답하지 않았다[^)]*\)/, "").trim());
+  return lines.length ? lines.join("\n") : t.slice(0, 300);
+}
 
 export const confirmDirectorTool = (sessionId: string, eventId: string, allow: boolean, message?: string) =>
   directorFetch(`/v1/sessions/${sessionId}/confirm`, { method: "POST", body: JSON.stringify({ eventId, allow, message }) });
@@ -48,6 +66,8 @@ export type DirectorEvent =
   | { type: "tool_use"; id: string; name: string; server: string; input: any; permission?: string; at?: string }
   | { type: "tool_result"; id: string; toolUseId: string; isError: boolean; preview: string }
   | { type: "approval_request"; eventId: string; tool: string; input: any; quote?: any }
+  | { type: "question"; eventId: string; questions: DirectorQuestion[] }
+  | { type: "question_answered"; toolUseId: string; text: string }
   | { type: "status"; status: string; stopReason?: string }
   | { type: "usage"; listCostCents: number; charged?: number; available?: number; owner?: boolean }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string };
@@ -128,5 +148,5 @@ export const TOOL_LABELS: Record<string, string> = {
   project_overview: "프로젝트 살펴보기", sequence_get: "시퀀스 읽기", sequence_save: "콘티 저장", take_save: "테이크 기록",
   timeline_apply: "편집기 타임라인 반영", media_urls: "미디어 주소 받기", media_upload_url: "파일 올리기 준비",
   video_quote: "견적 계산", video_submit: "영상 생성 제출", video_complete: "1080p 완성 제출", video_status: "영상 상태 확인",
-  image_generate: "이미지 생성", bash: "샌드박스 명령", read: "파일 읽기", write: "파일 쓰기", edit: "파일 고치기", glob: "파일 찾기", grep: "내용 검색",
+  image_generate: "이미지 생성", image_status: "이미지 상태 확인", ask_user: "질문", bash: "샌드박스 명령", read: "파일 읽기", write: "파일 쓰기", edit: "파일 고치기", glob: "파일 찾기", grep: "내용 검색",
 };

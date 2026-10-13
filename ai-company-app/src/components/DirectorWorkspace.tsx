@@ -3,11 +3,12 @@ import ProjectPicker from "./ProjectPicker";
 import NewProjectPopover from "./NewProjectPopover";
 import Markdown from "./Markdown";
 import ImageLightbox from "./ImageLightbox";
+import DirectorQuestionCard, { type PendingQuestion } from "./DirectorQuestionCard";
 import { listProductionProjects, type ProductionProjectSummary } from "../lib/api";
 import { readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
 import { fitImageForModel } from "../lib/imageAttachment";
 import {
-  TOOL_LABELS, confirmDirectorTool, createDirectorSession, getSequences, interruptDirector, listDirectorSessions,
+  TOOL_LABELS, answerDirectorQuestion, confirmDirectorTool, questionAnswerLabel, type DirectorQuestionAnswer, createDirectorSession, getSequences, interruptDirector, listDirectorSessions,
   sendDirectorMessage, signedReadUrls, subscribeDirector, type DirectorEvent, type DirectorSessionInfo,
 } from "../lib/director";
 
@@ -76,6 +77,7 @@ export default function DirectorWorkspace() {
   const [sessionId, setSessionId] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [questions, setQuestions] = useState<PendingQuestion[]>([]);
   const [status, setStatus] = useState("idle");
   const [thinking, setThinking] = useState(false);
   const [connection, setConnection] = useState<"connecting" | "open" | "retrying" | "none">("none");
@@ -122,7 +124,7 @@ export default function DirectorWorkspace() {
   // 프로젝트가 바뀌면 그 프로젝트의 세션 목록과 시퀀스를 불러오고, 마지막으로 쓰던 세션을 연다.
   useEffect(() => {
     writeUserStorage("directorProjectId", projectId);
-    setSessions([]); setSessionId(""); setItems([]); setApprovals([]); setUsage(null); setError("");
+    setSessions([]); setSessionId(""); setItems([]); setApprovals([]); setQuestions([]); setUsage(null); setError("");
     if (!projectId) return;
     void loadSequences();
     listDirectorSessions(projectId).then((list) => {
@@ -134,7 +136,7 @@ export default function DirectorWorkspace() {
 
   const onEvent = useCallback((ev: DirectorEvent) => {
     switch (ev.type) {
-      case "history_start": setItems([]); setApprovals([]); setThinking(false); break;
+      case "history_start": setItems([]); setApprovals([]); setQuestions([]); setThinking(false); break;
       case "history_end": setStatus(ev.status); break;
       case "text_start": setThinking(false); setItems((cur) => cur.some((x) => x.id === ev.id) ? cur : [...cur, { kind: "agent", id: ev.id, text: "", streaming: true }]); break;
       case "text_delta": setItems((cur) => cur.map((x) => x.kind === "agent" && x.id === ev.id ? { ...x, text: x.text + ev.text } : x)); break;
@@ -159,6 +161,13 @@ export default function DirectorWorkspace() {
         setApprovals((cur) => cur.filter((a) => a.eventId !== ev.toolUseId));
         scheduleSequences();
         break;
+      case "question": setThinking(false); setQuestions((cur) => cur.some((q) => q.eventId === ev.eventId) ? cur : [...cur, { eventId: ev.eventId, questions: ev.questions }]); break;
+      case "question_answered": {
+        setQuestions((cur) => cur.filter((q) => q.eventId !== ev.toolUseId));
+        const label = questionAnswerLabel(ev.text);
+        if (label) setItems((cur) => cur.some((x) => x.id === `answer-${ev.toolUseId}`) ? cur : [...cur, { kind: "user", id: `answer-${ev.toolUseId}`, text: label, images: [] }]);
+        break;
+      }
       case "approval_request": setApprovals((cur) => cur.some((a) => a.eventId === ev.eventId) ? cur : [...cur, { eventId: ev.eventId, tool: ev.tool, input: ev.input, quote: ev.quote }]); break;
       case "status": setStatus(ev.status); if (ev.status !== "running") setThinking(false); break;
       case "usage": setUsage({ listCostCents: ev.listCostCents, available: ev.available, owner: ev.owner }); break;
@@ -173,7 +182,7 @@ export default function DirectorWorkspace() {
     return () => { stop(); setConnection("none"); };
   }, [sessionId, projectId, onEvent]);
 
-  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [items, approvals, thinking]);
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [items, approvals, questions, thinking]);
 
   const newSession = async () => {
     if (!projectId || creating) return;
@@ -204,8 +213,23 @@ export default function DirectorWorkspace() {
     const body = text || "(첨부 이미지를 봐 주세요)";
     setItems((cur) => [...cur, { kind: "user", id: `local-${Date.now()}`, text: body, images: attachments.map((a) => a.preview) }]);
     setDraft(""); setAttachments([]); setError("");
-    try { await sendDirectorMessage(sessionId, body, images); setThinking(true); }
+    // 버튼 질문이 열려 있으면 채팅 답으로 그 질문을 닫는다.
+    const open = questions.map((q) => q.eventId);
+    setQuestions([]);
+    try { await sendDirectorMessage(sessionId, body, images, open); setThinking(true); }
     catch (e) { setError((e as Error).message); }
+  };
+
+  const answer = async (q: PendingQuestion, answers: DirectorQuestionAnswer[], cancelled = false) => {
+    setQuestions((cur) => cur.map((x) => x.eventId === q.eventId ? { ...x, acting: true } : x));
+    try {
+      await answerDirectorQuestion(sessionId, q.eventId, answers, cancelled);
+      setQuestions((cur) => cur.filter((x) => x.eventId !== q.eventId));
+      if (!cancelled) setThinking(true);
+    } catch (e) {
+      setError((e as Error).message);
+      setQuestions((cur) => cur.map((x) => x.eventId === q.eventId ? { ...x, acting: false } : x));
+    }
   };
 
   const decide = async (a: Approval, allow: boolean) => {
@@ -331,6 +355,9 @@ export default function DirectorWorkspace() {
                   <button type="button" disabled={a.acting} onClick={() => void decide(a, false)} className="flex items-center gap-1 rounded-lg bg-raised px-3 py-1.5 text-[12px] font-bold text-strong hover:bg-edge disabled:opacity-50"><Icon d={XD} className="h-3.5 w-3.5" /> 거절</button>
                 </div>
               </div>
+            ))}
+            {questions.map((q) => (
+              <DirectorQuestionCard key={q.eventId} pending={q} onAnswer={(answers) => void answer(q, answers)} onCancel={() => void answer(q, [], true)} />
             ))}
             {thinking && <div className="text-[12px] text-faint">디렉터가 생각하는 중…</div>}
           </div>

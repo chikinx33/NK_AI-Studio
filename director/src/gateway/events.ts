@@ -9,11 +9,48 @@ export type ClientEvent =
   | { type: "tool_use"; id: string; name: string; server: string; input: any; permission?: string; at?: string }
   | { type: "tool_result"; id: string; toolUseId: string; isError: boolean; preview: string }
   | { type: "approval_request"; eventId: string; tool: string; input: any; quote?: any }
+  | { type: "question"; eventId: string; questions: Question[] }
+  | { type: "question_answered"; toolUseId: string; text: string }
   | { type: "status"; status: string; stopReason?: string; eventIds?: string[] }
   | { type: "usage"; listCostCents: number; charged?: number; available?: number; owner?: boolean }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string };
 
 const TOOL_RESULT_PREVIEW = 1200;
+
+/** 디렉터가 사용자에게 버튼으로 묻는 도구(Managed Agents custom tool). 화면이 답을 user.custom_tool_result 로 돌려준다. */
+export const ASK_TOOL = "ask_user";
+export interface QuestionOption { label: string; description?: string; recommended?: boolean }
+export interface Question { question: string; header?: string; multiSelect?: boolean; options: QuestionOption[] }
+export interface QuestionAnswer { question?: string; choices?: string[]; other?: string; skipped?: boolean }
+
+const clip = (v: any, n: number) => String(v ?? "").trim().slice(0, n);
+
+/** 에이전트가 준 질문 입력을 화면에 그릴 수 있는 모양으로 다듬는다(질문 1~4개, 선택지 2~6개). */
+export function normalizeQuestions(input: any): Question[] {
+  const raw = Array.isArray(input?.questions) ? input.questions : input?.question ? [input] : [];
+  return raw.slice(0, 4).map((q: any) => ({
+    question: clip(q?.question, 500),
+    header: clip(q?.header, 24) || undefined,
+    multiSelect: q?.multiSelect === true,
+    options: (Array.isArray(q?.options) ? q.options : []).slice(0, 6)
+      .map((o: any) => typeof o === "string" ? { label: clip(o, 120) } : { label: clip(o?.label, 120), description: clip(o?.description, 400) || undefined, recommended: o?.recommended === true || undefined })
+      .filter((o: QuestionOption) => o.label),
+  })).filter((q: Question) => q.question && q.options.length >= 1);
+}
+
+/** 화면에서 고른 답 → 에이전트가 읽을 결과 문장. 취소면 제안을 멈추게 한다. */
+export function answerText(answers: QuestionAnswer[], cancelled: boolean): string {
+  if (cancelled) return "사용자가 이 질문을 취소했다. 이 제안은 진행하지 말고, 아무것도 실행하지 말고, 사용자의 다음 지시를 기다린다.";
+  const lines = (Array.isArray(answers) ? answers : []).slice(0, 4).map((a, i) => {
+    const q = clip(a?.question, 300) || `질문 ${i + 1}`;
+    if (a?.skipped) return `- ${q} → 건너뜀(사용자가 답하지 않았다. 권장안으로 정하지 말고, 필요하면 나중에 다시 묻는다)`;
+    const picked = (Array.isArray(a?.choices) ? a.choices : []).map((c) => clip(c, 120)).filter(Boolean);
+    const other = clip(a?.other, 2000);
+    const parts = [...picked, ...(other ? [`직접 입력: ${other}`] : [])];
+    return `- ${q} → ${parts.length ? parts.join(" / ") : "답 없음"}`;
+  });
+  return `사용자의 선택:\n${lines.join("\n") || "- 답 없음"}\n선택한 범위만 진행한다. 유료 생성은 평소처럼 견적을 알리고 승인 카드를 거친다.`;
+}
 
 function textOf(content: any): string {
   if (!Array.isArray(content)) return "";
@@ -59,6 +96,10 @@ export function mapEvent(ev: any): ClientEvent[] {
     case "agent.mcp_tool_result":
       return [{ type: "tool_result", id: ev.id, toolUseId: String(ev.tool_use_id || ev.mcp_tool_use_id || ""), isError: !!ev.is_error,
         preview: textOf(ev.content).slice(0, TOOL_RESULT_PREVIEW) }];
+    case "agent.custom_tool_use":
+      return ev.name === ASK_TOOL ? [{ type: "question", eventId: String(ev.id), questions: normalizeQuestions(ev.input) }] : [];
+    case "user.custom_tool_result":
+      return [{ type: "question_answered", toolUseId: String(ev.custom_tool_use_id || ""), text: textOf(ev.content) }];
     case "session.status_running":
       return [{ type: "status", status: "running" }];
     case "session.status_rescheduled":

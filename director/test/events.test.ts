@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapEvent, isPendingApproval, errorText } from "../src/gateway/events.js";
+import { mapEvent, isPendingApproval, errorText, normalizeQuestions, answerText } from "../src/gateway/events.js";
 import { gsFromSignedUrl, compactProject, quoteInputFor, ipFromBrand, loadProjectIp, connectorOfflineNotice, isImageJob, waitImageJob } from "../src/mcp/tools.js";
 import { SiteError } from "../src/site.js";
 
@@ -93,4 +93,22 @@ test("구독 그리기 작업 접수(202)는 끝날 때까지 기다려 결과 �
   const running = await waitImageJob(async () => ({ id: "j", status: "queued" }), "j", 0, 1);
   assert.equal(running.status, "running");
   assert.match(running.note, /image_status/);
+});
+
+test("버튼 질문(ask_user): 질문 이벤트로 바꾸고, 답·건너뛰기·취소를 결과 문장으로 만든다", () => {
+  const ev = mapEvent({ type: "agent.custom_tool_use", id: "sevt_q1", name: "ask_user",
+    input: { questions: [{ question: "어느 안으로 할까요?", header: "다음 단계", options: [{ label: "A 스틸 1만 다시 (20크레딧)", recommended: true }, { label: "B" }, "C"] }] } });
+  assert.equal(ev[0].type, "question");
+  const q = (ev[0] as any).questions[0];
+  assert.equal(q.options.length, 3);
+  assert.equal(q.options[0].recommended, true);
+  assert.equal(q.options[2].label, "C");
+  assert.deepEqual(mapEvent({ type: "agent.custom_tool_use", id: "x", name: "other", input: {} }), []);
+  assert.equal(mapEvent({ type: "user.custom_tool_result", custom_tool_use_id: "sevt_q1", content: [{ type: "text", text: "답" }] })[0].type, "question_answered");
+  assert.equal(normalizeQuestions({ questions: [{ question: "", options: ["a"] }] }).length, 0);
+  const t = answerText([{ question: "어느 안?", choices: ["A"] }, { question: "구도?", skipped: true }, { question: "길이?", other: "20초" }], false);
+  assert.match(t, /어느 안\? → A/);
+  assert.match(t, /구도\? → 건너뜀/);
+  assert.match(t, /길이\? → 직접 입력: 20초/);
+  assert.match(answerText([], true), /취소/);
 });

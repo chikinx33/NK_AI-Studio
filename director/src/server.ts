@@ -6,6 +6,7 @@
 //   GET  /v1/sessions/:id/stream         SSE(기록 복원 + 실시간)
 //   POST /v1/sessions/:id/messages       { text, images?: [{mediaType, data}] }
 //   POST /v1/sessions/:id/confirm        { eventId, allow, message? }
+//   POST /v1/sessions/:id/answer         { eventId, answers: [{question, choices[], other?, skipped?}], cancelled? }  버튼 질문(ask_user) 답
 //   POST /v1/sessions/:id/interrupt
 //   POST /mcp                            에이전트 도구(MCP Streamable HTTP, 위임 토큰)
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
@@ -15,7 +16,7 @@ import { config } from "./config.js";
 import { SiteError, whoAmI } from "./site.js";
 import { buildMcpServer } from "./mcp/tools.js";
 import { loadState } from "./gateway/state.js";
-import { confirmTool, createSession, interrupt, ownedSession, sendMessage, type Caller } from "./gateway/sessions.js";
+import { answerQuestion, confirmTool, createSession, interrupt, ownedSession, sendMessage, type Caller } from "./gateway/sessions.js";
 import { relaySession } from "./gateway/stream.js";
 
 const MAX_BODY = 48 * 1024 * 1024; // 이미지 첨부(최대 10장 × 4MB base64)
@@ -100,7 +101,7 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const body = await readJson(req);
     return send(req, res, 200, await createSession(caller, String(body.projectId || ""), String(body.title || ""), body.ownerId ? String(body.ownerId) : undefined));
   }
-  m = /^\/v1\/sessions\/(sesn_[A-Za-z0-9]+)\/(stream|messages|confirm|interrupt)$/.exec(path);
+  m = /^\/v1\/sessions\/(sesn_[A-Za-z0-9]+)\/(stream|messages|confirm|answer|interrupt)$/.exec(path);
   if (m) {
     const session = await ownedSession(m[1], caller.userId);
     if (!session) return send(req, res, 404, { error: "session_not_found" });
@@ -112,7 +113,15 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     }
     if (req.method !== "POST") return send(req, res, 405, { error: "method_not_allowed" });
     const body = await readJson(req);
-    if (m[2] === "messages") { await sendMessage(caller, session, String(body.text || ""), Array.isArray(body.images) ? body.images : []); return send(req, res, 202, { ok: true }); }
+    if (m[2] === "messages") {
+      await sendMessage(caller, session, String(body.text || ""), Array.isArray(body.images) ? body.images : [],
+        Array.isArray(body.resolveQuestions) ? body.resolveQuestions.map(String) : []);
+      return send(req, res, 202, { ok: true });
+    }
+    if (m[2] === "answer") {
+      await answerQuestion(session, String(body.eventId || ""), Array.isArray(body.answers) ? body.answers : [], body.cancelled === true);
+      return send(req, res, 202, { ok: true });
+    }
     if (m[2] === "confirm") { await confirmTool(session, String(body.eventId || ""), body.allow === true, body.message); return send(req, res, 202, { ok: true }); }
     if (m[2] === "interrupt") { await interrupt(session); return send(req, res, 202, { ok: true }); }
   }
