@@ -203,7 +203,8 @@ function purgeHandler(caps = "UIDPLUS") {
     if (cmd.startsWith("LOGIN")) return `${tag} OK\r\n`;
     if (cmd === "CAPABILITY") return `* CAPABILITY IMAP4rev1 ${caps}\r\n${tag} OK\r\n`;
     if (cmd === 'LIST "" "*"') return `${LIST_RESPONSE}${tag} OK\r\n`;
-    if (cmd === 'EXAMINE "&1zTJwNG1-"' || cmd === 'SELECT "&1zTJwNG1-"') return `* 3 EXISTS\r\n* OK [UIDVALIDITY 55] ok\r\n${tag} OK\r\n`;
+    // 휴지통(&1zTJwNG1-)과 스팸함(&wqTTONVo-) 모두 uid 7·8·9 가 있는 셈으로 둔다.
+    if (/^(EXAMINE|SELECT) "&(1zTJwNG1|wqTTONVo)-"$/.test(cmd)) return `* 3 EXISTS\r\n* OK [UIDVALIDITY 55] ok\r\n${tag} OK\r\n`;
     if (cmd === "UID SEARCH ALL") return `* SEARCH 7 8 9\r\n${tag} OK\r\n`;
     if (cmd.startsWith("UID FETCH ")) {
       const want = cmd.split(" ")[2].split(",").map(Number).filter((u) => [7, 8, 9].includes(u));
@@ -228,9 +229,9 @@ test("휴지통 읽기: folder 로 휴지통을 읽기 전용으로 연다", asy
 });
 
 test("휴지통 영구 삭제: 승인 전 목록을 확정하고, 승인되면 그 목록 중 남아 있는 것만 지운다", async () => {
-  const { previewDaumTrashPurge, purgeDaumTrash } = await loadMail();
+  const { previewDaumPurge, purgeDaumMailbox } = await loadMail();
   let server = fakeServer(purgeHandler());
-  const plan = await previewDaumTrashPurge({ email: "me@hanmail.net", password: "p" }, { all: true }, { connector: server.connector });
+  const plan = await previewDaumPurge({ email: "me@hanmail.net", password: "p" }, { all: true }, { connector: server.connector });
   assert.deepEqual(plan.uids, [9, 8, 7]);
   assert.equal(plan.folder, "휴지통");
   assert.equal(plan.uidValidity, 55);
@@ -239,7 +240,7 @@ test("휴지통 영구 삭제: 승인 전 목록을 확정하고, 승인되면 �
 
   // 승인 사이에 uid 9 는 이미 사라졌고 10 은 원래 목록에 없다 → 7·8 만 지운다.
   server = fakeServer(purgeHandler());
-  const out = await purgeDaumTrash({ email: "me@hanmail.net", password: "p" }, { uids: [7, 8, 10], uidValidity: 55 }, { connector: server.connector });
+  const out = await purgeDaumMailbox({ email: "me@hanmail.net", password: "p" }, { uids: [7, 8, 10], uidValidity: 55 }, { connector: server.connector });
   assert.ok(server.sent.includes('SELECT "&1zTJwNG1-"'));
   assert.ok(server.sent.includes("UID STORE 7,8 +FLAGS.SILENT (\\Deleted)"), server.sent.join(" | "));
   assert.ok(server.sent.includes("UID EXPUNGE 7,8"));
@@ -267,10 +268,35 @@ test("복구: 휴지통 메일을 휴지통 uid 기준으로 받은편지함·�
   assert.ok(!server.sent.some((c) => c.startsWith("UID MOVE")));
 });
 
-test("휴지통이 다시 만들어져 uidValidity 가 다르면 아무것도 지우지 않는다", async () => {
-  const { purgeDaumTrash } = await loadMail();
+test("스팸함 비우기는 uid 없이 all 한 번으로 — 서버가 스팸함 전체 uid 를 찾아 확정하고 그 목록만 지운다", async () => {
+  const { previewDaumPurge, purgeDaumMailbox } = await loadMail();
+  let server = fakeServer(purgeHandler());
+  const plan = await previewDaumPurge({ email: "me@hanmail.net", password: "p" }, { folder: "스팸함", all: true }, { connector: server.connector });
+  assert.ok(server.sent.includes('EXAMINE "&wqTTONVo-"'), "\\Junk 표시된 스팸함을 연다");
+  assert.ok(server.sent.includes("UID SEARCH ALL"));
+  assert.equal(plan.folder, "스팸함");
+  assert.equal(plan.target, "스팸함");
+  assert.deepEqual(plan.uids, [9, 8, 7]);
+
+  server = fakeServer(purgeHandler());
+  const out = await purgeDaumMailbox({ email: "me@hanmail.net", password: "p" }, { target: plan.target, uids: plan.uids, uidValidity: plan.uidValidity }, { connector: server.connector });
+  assert.ok(server.sent.includes('SELECT "&wqTTONVo-"'));
+  assert.ok(server.sent.includes("UID EXPUNGE 9,8,7"), server.sent.join(" | "));
+  assert.equal(out.deleted, 3);
+  assert.equal(out.folder, "스팸함");
+});
+
+test("휴지통·스팸함 밖의 편지함은 영구 삭제하지 않는다", async () => {
+  const { previewDaumPurge } = await loadMail();
   const server = fakeServer(purgeHandler());
-  await assert.rejects(purgeDaumTrash({ email: "a@daum.net", password: "p" }, { uids: [7], uidValidity: 1 }, { connector: server.connector }), /아무것도 지우지 않았어요/);
+  await assert.rejects(previewDaumPurge({ email: "me@hanmail.net", password: "p" }, { folder: "광고", all: true }, { connector: server.connector }), /휴지통·스팸편지함에서만/);
+  assert.ok(!server.sent.some((c) => c.startsWith("UID SEARCH")));
+});
+
+test("휴지통이 다시 만들어져 uidValidity 가 다르면 아무것도 지우지 않는다", async () => {
+  const { purgeDaumMailbox } = await loadMail();
+  const server = fakeServer(purgeHandler());
+  await assert.rejects(purgeDaumMailbox({ email: "a@daum.net", password: "p" }, { uids: [7], uidValidity: 1 }, { connector: server.connector }), /아무것도 지우지 않았어요/);
   assert.ok(!server.sent.some((c) => /STORE|EXPUNGE/.test(c)));
 });
 
@@ -280,7 +306,9 @@ test("휴지통 영구 삭제는 승인 게이트를 거치고 승인 카드에 
   assert.match(shared, /영구 삭제\*\*해요\. 삭제하면 되살릴 수 없어요/);
   assert.match(read("prototype/functions/api/agent/review.ts"), /if \(type === "daum_mail_purge"\) \{/);
   const api = read("ai-company-app/src/lib/api.ts");
-  assert.match(api, /daum_mail_purge: "다음 메일 휴지통 영구 삭제"/);
+  assert.match(api, /daum_mail_purge: "다음 메일 영구 삭제"/);
+  // 편지함 전체 비우기에서 uid 를 모으러 읽기를 되풀이하지 않도록 직원에게 알린다(2026-10-13 끊김 원인).
+  assert.match(read("prototype/functions/api/agent/_orchestrator.ts"), /uid 를 모으지 말고 \{"folder": …, "all": true\} 로 바로 한 번만 부른다/);
   assert.match(api, /"publish", "daum_mail_purge"\]\)/, "되돌릴 수 없는 외부 작업 배지");
 });
 

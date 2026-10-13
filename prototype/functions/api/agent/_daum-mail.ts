@@ -445,20 +445,22 @@ export async function trashDaumMail(
   return { kind: "daum_mail_trash", trashed: r.moved, folder: r.folder, items: r.items, ...(r.missing ? { missing: r.missing } : {}) };
 }
 
-// ── 휴지통 영구 삭제 ───────────────────────────────────────────────────────
-// 되살릴 수 없으므로 ①승인 전에 지울 메일을 uid 목록으로 확정해 보여 주고(previewDaumTrashPurge)
-// ②승인되면 그 목록만 지운다(purgeDaumTrash). 승인 사이에 휴지통에 새로 들어온 메일은 지우지 않는다.
-// 영구 삭제는 휴지통 안에서만 한다 — 다른 편지함 메일은 먼저 휴지통으로 옮겨야 한다.
+// ── 휴지통·스팸편지함 영구 삭제 ────────────────────────────────────────────
+// 되살릴 수 없으므로 ①승인 전에 지울 메일을 uid 목록으로 확정해 보여 주고(previewDaumPurge)
+// ②승인되면 그 목록만 지운다(purgeDaumMailbox). 승인 사이에 새로 들어온 메일은 지우지 않는다.
+// 영구 삭제는 버리는 편지함(휴지통·스팸편지함)에서만 한다 — 다른 편지함 메일은 먼저 휴지통으로 옮겨야 한다.
+// "스팸함 비워줘" 를 uid 를 모아 오는 일로 만들면 직원이 20통씩 읽기를 되풀이하다 턴이 끊긴다(2026-10-13).
+// 그래서 all 이면 서버가 편지함 전체 uid 를 직접 찾는다.
 const PURGE_LIMIT = 1000;
 
-async function openTrash(conn: ImapConnection, readOnly: boolean): Promise<{ box: Mailbox; uidValidity: number; exists: number }> {
-  const box = resolveMailbox(await listMailboxes(conn), "trash");
-  const res = await conn.ok(`${readOnly ? "EXAMINE" : "SELECT"} ${quote(box.raw)}`, "휴지통 열기");
-  return {
-    box,
-    uidValidity: Number(res.lines.map((l) => /UIDVALIDITY (\d+)/i.exec(l)?.[1]).find(Boolean) || 0),
-    exists: Number(res.lines.map((l) => /^\* (\d+) EXISTS/i.exec(l)?.[1]).find(Boolean) || 0),
-  };
+async function openPurgeBox(conn: ImapConnection, folder: string, readOnly: boolean): Promise<{ box: Mailbox; uidValidity: number }> {
+  const want = String(folder || "trash").trim();
+  const key = ["spam", "junk", "스팸", "스팸편지함", "스팸메일함", "스팸함"].includes(norm(want)) ? "spam"
+    : ["trash", "휴지통"].includes(norm(want)) ? "trash" : "";
+  if (!key) throw new ImapError(`영구 삭제는 휴지통·스팸편지함에서만 할 수 있어요. '${want}' 메일은 먼저 daum_mail_trash(또는 daum_mail_move)로 휴지통에 옮긴 뒤 지워 주세요.`);
+  const box = resolveMailbox(await listMailboxes(conn), key);
+  const res = await conn.ok(`${readOnly ? "EXAMINE" : "SELECT"} ${quote(box.raw)}`, `${box.label} 열기`);
+  return { box, uidValidity: Number(res.lines.map((l) => /UIDVALIDITY (\d+)/i.exec(l)?.[1]).find(Boolean) || 0) };
 }
 
 function headerItems(found: { uid: number; flags: string; raw: string }[]) {
@@ -468,53 +470,53 @@ function headerItems(found: { uid: number; flags: string; raw: string }[]) {
   });
 }
 
-/** 지울 대상 확정: uids 를 주면 휴지통에 실제로 있는 것만, all 이면 지금 휴지통 전체(최대 1000통). */
-export async function previewDaumTrashPurge(
+/** 지울 대상 확정: all 이면 지금 그 편지함 전체(최대 1000통), uids 를 주면 그 편지함에 실제로 있는 것만. */
+export async function previewDaumPurge(
   cred: MailCredentials,
-  input: { uids?: unknown; all?: boolean },
+  input: { folder?: string; uids?: unknown; all?: boolean },
   opts: { connector?: Connector } = {},
-): Promise<{ folder: string; uidValidity: number; uids: number[]; items: { uid: number; subject: string; from: string }[]; more: number }> {
+): Promise<{ target: string; folder: string; uidValidity: number; uids: number[]; items: { uid: number; subject: string; from: string }[]; more: number }> {
   const all = input?.all === true || String(input?.all) === "true";
   const asked = uidList(input?.uids);
-  if (!all && !asked.length) throw new ImapError("지울 메일을 정해 주세요. 휴지통 전체면 {\"all\": true}, 일부면 daum_mail_read(folder:\"휴지통\") 결과의 uid 를 넣어 주세요.");
+  if (!all && !asked.length) throw new ImapError("지울 메일을 정해 주세요. 편지함 전체면 {\"folder\": \"spam\", \"all\": true}, 일부면 그 편지함을 daum_mail_read 로 읽은 결과의 uid 를 넣어 주세요.");
+  const target = String(input?.folder || "trash");
   return withDaumImap(cred, async (conn) => {
-    const trash = await openTrash(conn, true);
+    const opened = await openPurgeBox(conn, target, true);
     let uids: number[];
     if (all) {
-      const s = await conn.ok("UID SEARCH ALL", "휴지통 메일 찾기");
+      const s = await conn.ok("UID SEARCH ALL", `${opened.box.label} 메일 찾기`);
       uids = (s.lines.find((l) => /^\* SEARCH/i.test(l)) || "").replace(/^\* SEARCH\s*/i, "").split(/\s+/).map(Number).filter((n) => n > 0);
     } else {
-      const found = parseFetch(await conn.ok(`UID FETCH ${asked.join(",")} (UID)`, "지울 메일 확인"));
-      uids = found.map((m) => m.uid);
+      uids = parseFetch(await conn.ok(`UID FETCH ${asked.join(",")} (UID)`, "지울 메일 확인")).map((m) => m.uid);
     }
     uids = uids.sort((a, b) => b - a).slice(0, PURGE_LIMIT);
-    if (!uids.length) throw new ImapError(all ? "휴지통이 이미 비어 있어요." : "지정한 메일이 휴지통에 없어요. 휴지통 메일만 영구 삭제할 수 있어요.");
+    if (!uids.length) throw new ImapError(all ? `${opened.box.label}이 이미 비어 있어요.` : `지정한 메일이 ${opened.box.label}에 없어요.`);
     const shown = uids.slice(0, 10);
     const items = headerItems(parseFetch(await conn.ok(`UID FETCH ${shown.join(",")} (UID FLAGS BODY.PEEK[HEADER.FIELDS (SUBJECT FROM)])`, "지울 메일 제목 확인")));
-    return { folder: trash.box.label, uidValidity: trash.uidValidity, uids, items, more: uids.length - items.length };
+    return { target, folder: opened.box.label, uidValidity: opened.uidValidity, uids, items, more: uids.length - items.length };
   }, opts);
 }
 
-/** 승인된 uid 목록만 휴지통에서 영구 삭제한다. */
-export async function purgeDaumTrash(
+/** 승인된 uid 목록만 그 편지함(휴지통·스팸편지함)에서 영구 삭제한다. */
+export async function purgeDaumMailbox(
   cred: MailCredentials,
-  input: { uids?: unknown; uidValidity?: number },
+  input: { target?: string; uids?: unknown; uidValidity?: number },
   opts: { connector?: Connector } = {},
 ): Promise<any> {
   const uids = uidList(input?.uids).slice(0, PURGE_LIMIT);
   if (!uids.length) throw new ImapError("영구 삭제할 메일 목록이 비어 있어요.");
   return withDaumImap(cred, async (conn) => {
-    const trash = await openTrash(conn, false);
-    if (input?.uidValidity && trash.uidValidity && Number(input.uidValidity) !== trash.uidValidity) {
-      throw new ImapError("휴지통이 그사이 다시 만들어져 승인한 목록과 맞지 않아요. 아무것도 지우지 않았어요 — 다시 요청해 주세요.");
+    const opened = await openPurgeBox(conn, String(input?.target || "trash"), false);
+    if (input?.uidValidity && opened.uidValidity && Number(input.uidValidity) !== opened.uidValidity) {
+      throw new ImapError(`${opened.box.label}이 그사이 다시 만들어져 승인한 목록과 맞지 않아요. 아무것도 지우지 않았어요 — 다시 요청해 주세요.`);
     }
     const present = parseFetch(await conn.ok(`UID FETCH ${uids.join(",")} (UID)`, "지울 메일 확인")).map((m) => m.uid);
-    if (!present.length) return { kind: "daum_mail_purge", deleted: 0, folder: trash.box.label };
+    if (!present.length) return { kind: "daum_mail_purge", deleted: 0, folder: opened.box.label };
     const set = present.join(",");
     await conn.ok(`UID STORE ${set} +FLAGS.SILENT (\\Deleted)`, "삭제 표시");
-    // UIDPLUS 가 있으면 승인한 uid 만 지운다. 없으면 휴지통에서 삭제 표시된 메일을 정리한다(휴지통 안에서만).
+    // UIDPLUS 가 있으면 승인한 uid 만 지운다. 없으면 그 편지함에서 삭제 표시된 메일을 정리한다(그 편지함 안에서만).
     await conn.ok(conn.capabilities.has("UIDPLUS") ? `UID EXPUNGE ${set}` : "EXPUNGE", "영구 삭제");
-    return { kind: "daum_mail_purge", deleted: present.length, folder: trash.box.label };
+    return { kind: "daum_mail_purge", deleted: present.length, folder: opened.box.label };
   }, opts);
 }
 

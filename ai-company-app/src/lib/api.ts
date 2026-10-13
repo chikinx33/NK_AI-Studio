@@ -1712,7 +1712,7 @@ function hasDeliverableOutput(j: any): boolean {
 // 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
 const APPROVAL_TOOL_LABEL: Record<string, string> = {
   gmail_send: "메일 발송", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
-  daum_mail_purge: "다음 메일 휴지통 영구 삭제",
+  daum_mail_purge: "다음 메일 영구 삭제",
   image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
   scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성", form_list: "서식 목록 조회", form_fill: "서식 문서 작성",
 };
@@ -1734,7 +1734,7 @@ function summarizeApprovalJob(j: any) {
     reason = input.body ? String(input.body).slice(0, 160) : undefined;
   } else if (j.type === "daum_mail_purge") {
     // 되살릴 수 없는 삭제 — 몇 통인지와 지울 메일 제목을 카드에 그대로 보인다.
-    title = `${label}: ${input.count ?? (Array.isArray(input.uids) ? input.uids.length : "?")}통${input.all ? " (휴지통 전체)" : ""}`;
+    title = `${label}: ${input.folder || "휴지통"} ${input.count ?? (Array.isArray(input.uids) ? input.uids.length : "?")}통${input.all ? " (전체)" : ""}`;
     reason = input.planSummary ? String(input.planSummary).replace(/\*\*/g, "").split("\n").slice(2).join(" · ").slice(0, 200) : undefined;
   } else {
     const detail = input.summary || input.title || input.prompt || input.topic || input.caption || input.query || "";
