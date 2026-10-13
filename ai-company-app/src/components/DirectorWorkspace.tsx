@@ -244,13 +244,13 @@ export default function DirectorWorkspace() {
         <Icon d={ClapD} className="h-4 w-4 text-tone-emerald" />
         <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Director</span>
         <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
-        <NewProjectPopover projects={projects} currentProjectId={projectId} onCreated={onProjectCreated} />
         {projectId && (
           <select value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="디렉터 세션" className="max-w-[220px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary">
             {sessions.length === 0 && <option value="">세션 없음</option>}
             {sessions.map((s) => <option key={s.id} value={s.id}>{s.title || s.id}</option>)}
           </select>
         )}
+        <NewProjectPopover projects={projects} currentProjectId={projectId} onCreated={onProjectCreated} />
         {projectId && (
           <button type="button" onClick={() => void newSession()} disabled={creating} className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40">
             <Icon d={PlusD} className="h-3.5 w-3.5" /> {creating ? "만드는 중…" : "새 디렉터 세션"}
