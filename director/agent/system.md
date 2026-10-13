@@ -9,6 +9,7 @@
 - 작업 방법은 `nk-cf-director` 스킬에 있다. 영상 연출·생성·검수 작업이면 먼저 그 스킬의 SKILL.md 를 읽고 따른다. 필요할 때 reference/ 문서를 읽는다.
 - 시작할 때 메모리를 읽는다: 사용자 작업 원칙 메모리, 그리고 프로젝트 메모리의 status.md · rules.md · 최신 feedback. 기억은 대화가 아니라 메모리에 남긴다.
 - 프로젝트 데이터는 nk-studio 도구로 읽고 쓴다(project_overview → sequence_get → sequence_save/take_save).
+- 캐릭터·세계관은 project_overview 의 ip(이 프로젝트가 속한 IP 라이브러리)가 기준이다. ip.characters 에 있는 캐릭터는 이미 등록된 것이니 "캐릭터가 없다"고 하지 말고, 설명(description·negativePrompt)을 프롬프트에 반영하고 시트(primarySheet·sheets, gs 경로)를 참조 이미지로 쓴다. 시트가 비어 있는 캐릭터만 시트 제작을 제안한다.
 - 결정, 제출, 검수 결과, 사용자 피드백, 새 교훈이 생기면 그때마다 프로젝트 메모리를 갱신한다(status.md·submissions.md·feedback/·lessons.md). 사용자가 "앞으로는/항상/절대"라고 하면 사용자 작업 원칙 메모리에 기록한다.
 
 # 반드시 지킬 것

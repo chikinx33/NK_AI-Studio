@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mapEvent, isPendingApproval, errorText } from "../src/gateway/events.js";
-import { gsFromSignedUrl, compactProject, quoteInputFor } from "../src/mcp/tools.js";
+import { gsFromSignedUrl, compactProject, quoteInputFor, ipFromBrand, loadProjectIp } from "../src/mcp/tools.js";
 
 test("미리보기 델타와 확정 메시지를 화면 이벤트로 바꾼다", () => {
   assert.deepEqual(mapEvent({ type: "event_start", event: { type: "agent.message", id: "sevt_1" } }), [{ type: "text_start", id: "sevt_1" }]);
@@ -40,4 +40,33 @@ test("승인 카드 견적 입력: 드래프트는 480p, 완성은 complete 모�
   assert.equal(quoteInputFor("video_submit", { draft: true, durationSeconds: 20 })!.input.resolution, "480p");
   assert.equal(quoteInputFor("video_complete", { durationSeconds: 20 })!.input.videoModel, "seedance-2.5-complete");
   assert.equal(quoteInputFor("project_overview", {}), null);
+});
+
+test("IP 캐릭터: 시트는 gs 경로만, 시트 없는 등록 캐릭터도 목록에 남긴다", () => {
+  const ip = ipFromBrand("shapes", {
+    brandTitle: "모양새 친구들",
+    brandCharacters: [{ trigger: "@세모", name: "세모", description: "빨간 삼각형" }, { trigger: "@동그라미", name: "동그라미" }],
+    characterSheets: [{ token: "@세모", displayName: "세모", items: [
+      { imageDataUrl: "data:image/png;base64,AAA" }, { imageDataUrl: "gs://b/users/u/brands/shapes/ip/a.png", isPrimary: true }] }],
+  });
+  assert.equal(ip.brandTitle, "모양새 친구들");
+  assert.equal(ip.characters.length, 2);
+  assert.equal(ip.characters[0].description, "빨간 삼각형");
+  assert.deepEqual(ip.characters[0].sheets, ["gs://b/users/u/brands/shapes/ip/a.png"]);
+  assert.equal(ip.characters[0].primarySheet, "gs://b/users/u/brands/shapes/ip/a.png");
+  assert.equal(ip.characters[1].name, "동그라미");
+  assert.deepEqual(ip.characters[1].sheets, []);
+});
+
+test("프로젝트 IP: brandId 가 없으면 시리즈 제목이 같은 브랜드를 찾는다", async () => {
+  const calls: string[] = [];
+  const ip = await loadProjectIp(async (p) => {
+    calls.push(p);
+    if (p.startsWith("/api/brand/list")) return { brands: [{ id: "other", brandTitle: "다른 IP" }, { id: "shapes", brandTitle: "모양새 친구들" }] };
+    if (p === "/api/brand/get?brandId=shapes") return { data: { brandTitle: "모양새 친구들", characterSheets: [{ token: "@네모", items: [{ imageDataUrl: "gs://b/n.png" }] }] } };
+    return { ok: true, data: null };
+  }, { seriesId: "moyangsae" }, ["모양새 친구들"]);
+  assert.equal(ip.brandId, "shapes");
+  assert.equal(ip.characters[0].name, "네모");
+  assert.equal(calls[0], "/api/brand/get?brandId=moyangsae");
 });

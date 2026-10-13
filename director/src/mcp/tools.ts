@@ -47,18 +47,107 @@ export function compactProject(data: any): any {
   };
 }
 
+/**
+ * 프로젝트가 속한 IP(브랜드 허브) 후보 ID. 프로젝트 생성 시 payload.brandId = seriesId 로 연결된다.
+ * 옛 프로젝트는 brandRef.id 나 seriesId 만 있을 수 있어 차례로 본다.
+ */
+export function brandIdCandidates(payload: any): string[] {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const raw = [p.brandId, p.brandRef?.id, p.seriesId].map((v) => String(v || "").trim()).filter((v) => /^[A-Za-z0-9._-]{1,80}$/.test(v));
+  return [...new Set(raw)];
+}
+
+/**
+ * 브랜드 정의 → 디렉터가 쓸 IP 캐릭터 목록. 시트 이미지는 gs:// 경로 그대로 준다
+ * (video_submit·image_generate 의 referenceImages 에 바로 넣거나 media_urls 로 받아 본다). data: URL 은 싣지 않는다.
+ */
+export function ipFromBrand(brandId: string, brand: any): any {
+  const b = brand && typeof brand === "object" ? brand : {};
+  const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
+  const srcOf = (it: any) => String(it?.imageDataUrl || it?.imageUrl || "").trim();
+  const usable = (u: string) => !!u && !u.startsWith("data:");
+  const textChars: any[] = Array.isArray(b.brandCharacters) ? b.brandCharacters : [];
+  const text = new Map<string, any>();
+  for (const c of textChars) { const k = norm(c?.trigger || c?.token || c?.name); if (k) text.set(k, c); }
+  const characters: any[] = [];
+  const seen = new Set<string>();
+  for (const e of Array.isArray(b.characterSheets) ? b.characterSheets : []) {
+    const token = String(e?.token || "").trim();
+    const key = norm(token || e?.displayName);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const items: any[] = Array.isArray(e?.items) ? e.items : [];
+    const sheets = items.map(srcOf).filter(usable);
+    const primary = srcOf(items.find((it) => it?.isPrimary) || items[0]);
+    const t = text.get(key) || {};
+    characters.push({
+      name: String(e?.displayName || t.name || token.replace(/^@+/, "")).trim(), token,
+      description: String(t.description || "").trim(), negativePrompt: String(t.negativePrompt || "").trim(),
+      primarySheet: usable(primary) ? primary : (sheets[0] || ""), sheets,
+    });
+  }
+  // 시트 없이 이름·설명만 등록된 캐릭터도 "있다"고 알려야 캐릭터를 새로 만들자는 오답이 안 난다.
+  for (const c of textChars) {
+    const key = norm(c?.trigger || c?.token || c?.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    characters.push({ name: String(c?.name || key).trim(), token: String(c?.trigger || c?.token || "").trim(),
+      description: String(c?.description || "").trim(), negativePrompt: String(c?.negativePrompt || "").trim(), primarySheet: "", sheets: [] });
+  }
+  return {
+    brandId, brandTitle: String(b.brandTitle || b.title || "").trim(),
+    worldSetting: String(b.worldSetting || "").trim(), brandStory: String(b.brandStory || "").trim().slice(0, 1500),
+    brandRules: Array.isArray(b.brandRules) ? b.brandRules : [], bannedExpressions: Array.isArray(b.bannedExpressions) ? b.bannedExpressions : [],
+    characters,
+  };
+}
+
+/** 프로젝트의 IP(브랜드 허브)를 찾아 캐릭터를 읽는다. 못 찾으면 null. */
+export async function loadProjectIp(call: (path: string) => Promise<any>, payload: any, titles: unknown[]): Promise<any> {
+  const getBrand = async (id: string) => {
+    try {
+      const r = await call(`/api/brand/get?brandId=${encodeURIComponent(id)}`);
+      const brand = r?.data?.brand ?? r?.data ?? null;
+      return brand && typeof brand === "object" ? brand : null;
+    } catch { return null; }
+  };
+  for (const id of brandIdCandidates(payload)) {
+    const brand = await getBrand(id);
+    if (brand) return ipFromBrand(id, brand);
+  }
+  // ID 가 어긋난 옛 프로젝트: 브랜드 제목이 시리즈 제목과 같은 IP 를 찾는다.
+  const wanted = new Set(titles.map((t) => String(t || "").trim()).filter(Boolean));
+  if (!wanted.size) return null;
+  try {
+    const list = await call("/api/brand/list?full=1");
+    const hit = (Array.isArray(list?.brands) ? list.brands : []).find((x: any) => wanted.has(String(x?.brandTitle || x?.title || "").trim()));
+    if (hit?.id) {
+      const brand = await getBrand(String(hit.id));
+      if (brand) return ipFromBrand(String(hit.id), brand);
+    }
+  } catch { /* 목록 실패는 IP 없음으로 본다 */ }
+  return null;
+}
+
 export function buildMcpServer(token: string): McpServer {
   const server = new McpServer({ name: "nk-studio", version: "0.1.0" });
   const call = (path: string, init: Omit<Parameters<typeof site>[1], "token"> = {}) => site(path, { ...init, token });
 
   server.registerTool("project_overview", {
-    description: "프로젝트 요약: 제목·화면비·스타일 앵커·캐릭터·씬 목록(경로 포함)·디렉터 시퀀스와 테이크 상태. 작업 시작 시 먼저 부른다.",
+    description: "프로젝트 요약: 제목·화면비·스타일 앵커·캐릭터·씬 목록(경로 포함)·디렉터 시퀀스와 테이크 상태. 작업 시작 시 먼저 부른다. " +
+      "ip 는 이 프로젝트가 속한 IP(브랜드 허브 IP 라이브러리)의 세계관과 등록 캐릭터(설명·시트 gs 경로)다. " +
+      "캐릭터는 ip.characters 가 기준이다 — 여기 있으면 이미 등록된 캐릭터이므로 새로 만들자고 하지 말고 그 시트를 참조로 쓴다.",
     inputSchema: projectArgs,
   }, async ({ projectId, ownerId }) => {
     try {
       const q = new URLSearchParams({ projectId, ...(ownerId ? { ownerId } : {}) });
       const r = await call(`/api/project/get?${q}`);
-      return ok(compactProject(r?.data || r));
+      const data = r?.data || r;
+      const out = compactProject(data);
+      // 공유받은 프로젝트의 IP 는 소유자 저장 영역이라 읽을 수 없다(media-url 과 같은 한계).
+      const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+      out.ip = ownerId ? null : await loadProjectIp((p) => call(p), payload, [payload.seriesTitle, payload.brandTitle]);
+      return ok(out);
     } catch (e) { return fail(e); }
   });
 
