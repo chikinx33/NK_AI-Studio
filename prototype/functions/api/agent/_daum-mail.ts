@@ -301,11 +301,11 @@ export function decodeMailboxName(name: string): string {
   });
 }
 
-const TRASH_NAMES = ["휴지통", "trash", "deleted messages", "deleted items", "지운편지함"];
+interface Mailbox { attrs: string; raw: string; label: string }
 
-async function findTrash(conn: ImapConnection): Promise<{ raw: string; label: string }> {
-  const res = await conn.ok('LIST "" "*"', "메일함 목록 조회");
-  const boxes = res.lines.map((line, i) => {
+async function listMailboxes(conn: ImapConnection): Promise<Mailbox[]> {
+  const res = await conn.ok('LIST "" "*"', "편지함 목록 조회");
+  return res.lines.map((line, i) => {
     const m = /^\* LIST \(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$/i.exec(line);
     if (!m) return null;
     let raw = m[2].trim();
@@ -313,11 +313,28 @@ async function findTrash(conn: ImapConnection): Promise<{ raw: string; label: st
     if (lit) raw = res.literals[i][Number(lit[1])];
     else if (raw.startsWith('"')) raw = raw.slice(1, -1).replace(/\\(.)/g, "$1");
     return { attrs: m[1], raw, label: decodeMailboxName(raw) };
-  }).filter(Boolean) as { attrs: string; raw: string; label: string }[];
-  const box = boxes.find((b) => /\\Trash/i.test(b.attrs))
-    || boxes.find((b) => TRASH_NAMES.includes(b.label.toLowerCase()));
-  if (!box) throw new ImapError(`휴지통 메일함을 찾지 못했어요. (메일함: ${boxes.map((b) => b.label).join(", ").slice(0, 200)})`);
-  return { raw: box.raw, label: box.label };
+  }).filter((b): b is Mailbox => !!b && !/\\Noselect/i.test(b.attrs));
+}
+
+// 휴지통·스팸편지함은 서버가 표시(\Trash·\Junk)를 주면 그걸, 없으면 흔한 이름으로 찾는다.
+const SPECIAL_BOXES: Record<string, { attr: RegExp; names: string[]; label: string }> = {
+  trash: { attr: /\\Trash/i, names: ["휴지통", "trash", "deleted messages", "deleted items", "지운편지함"], label: "휴지통" },
+  spam: { attr: /\\Junk/i, names: ["스팸편지함", "스팸메일함", "스팸", "spam", "junk", "junk e-mail", "bulk mail"], label: "스팸편지함" },
+};
+const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+
+/** 옮길 편지함 찾기. "trash"·"spam"(또는 휴지통·스팸) 은 특수 편지함, 그 외는 사용자가 만든 편지함 이름. */
+function resolveMailbox(boxes: Mailbox[], target: string): Mailbox {
+  const want = String(target || "").trim();
+  const key = ["trash", "휴지통"].includes(norm(want)) ? "trash" : ["spam", "junk", "스팸", "스팸편지함", "스팸메일함"].includes(norm(want)) ? "spam" : "";
+  const special = key ? SPECIAL_BOXES[key] : null;
+  const box = special
+    ? boxes.find((b) => special.attr.test(b.attrs)) || boxes.find((b) => special.names.includes(b.label.toLowerCase()))
+    : boxes.find((b) => b.label === want) || boxes.find((b) => norm(b.label) === norm(want));
+  const names = boxes.map((b) => b.label).filter((l) => l.toUpperCase() !== "INBOX").join(", ").slice(0, 300);
+  if (!box) throw new ImapError(`'${special?.label || want}' 편지함을 찾지 못했어요. 지금 있는 편지함: ${names}`);
+  if (box.label.toUpperCase() === "INBOX") throw new ImapError("받은편지함 메일을 받은편지함으로 옮길 수는 없어요. 다른 편지함 이름을 알려 주세요.");
+  return box;
 }
 
 function uidList(uids: unknown): number[] {
@@ -353,37 +370,45 @@ export async function readDaumInbox(
       fetched = parseFetch(await conn.ok(`FETCH ${from}:${exists} ${items}`, "메일 읽기"));
     }
     const emails = fetched.sort((a, b) => b.uid - a.uid).map((m) => summarizeMessage(m.uid, m.flags, m.raw));
+    // 옮길 수 있는 편지함 이름 — 싱크가 "광고 편지함으로 옮겨" 같은 요청에서 실제 이름을 고르게 한다.
+    const folders = (await listMailboxes(conn)).map((b) => b.label).filter((l) => l.toUpperCase() !== "INBOX");
     return {
-      kind: "daum_mail_list", account: cred.email, mailbox: "받은편지함", uidValidity, total: exists,
+      kind: "daum_mail_list", account: cred.email, mailbox: "받은편지함", uidValidity, total: exists, folders,
       ...(unseenTotal !== undefined ? { unreadTotal: unseenTotal } : {}),
       count: emails.length, emails,
     };
   }, opts);
 }
 
-/** uid 로 지목한 메일을 휴지통으로 옮긴다(영구 삭제 아님). 옮기기 전에 제목을 읽어 무엇을 옮겼는지 보고한다. */
-export async function trashDaumMail(
+/**
+ * uid 로 지목한 받은편지함 메일을 다른 편지함(휴지통·스팸편지함·사용자가 만든 편지함)으로 옮긴다.
+ * 옮기기 전에 제목을 읽어 무엇을 옮겼는지 보고한다. 영구 삭제는 하지 않는다.
+ */
+export async function moveDaumMail(
   cred: MailCredentials,
-  input: { uids?: unknown; uidValidity?: number },
+  input: { uids?: unknown; uidValidity?: number; folder?: string },
   opts: { connector?: Connector } = {},
-): Promise<any> {
+): Promise<{ moved: number; folder: string; items: { uid: number; subject: string; from: string }[]; missing?: number[] }> {
   const uids = uidList(input?.uids).slice(0, 30);
   if (!uids.length) throw new ImapError("옮길 메일의 uid 가 필요해요. 먼저 daum_mail_read 로 메일을 읽고 그 결과의 uid 를 그대로 넣어 주세요.");
+  if (!String(input?.folder || "").trim()) throw new ImapError("옮길 편지함 이름(folder)이 필요해요. 예: \"spam\", \"휴지통\", 또는 직접 만든 편지함 이름");
   return withDaumImap(cred, async (conn) => {
     const sel = await conn.ok("SELECT INBOX", "받은편지함 열기");
     const uidValidity = Number(sel.lines.map((l) => /UIDVALIDITY (\d+)/i.exec(l)?.[1]).find(Boolean) || 0);
     if (input?.uidValidity && uidValidity && Number(input.uidValidity) !== uidValidity) {
       throw new ImapError("받은편지함이 그사이 다시 만들어져 uid 가 바뀌었어요. daum_mail_read 로 다시 읽은 뒤 옮겨 주세요.");
     }
+    // 편지함을 먼저 확인한다 — 없는 편지함이면 아무것도 건드리지 않고 있는 편지함 이름을 알려 준다.
+    const target = resolveMailbox(await listMailboxes(conn), String(input.folder));
     const found = parseFetch(await conn.ok(`UID FETCH ${uids.join(",")} (UID FLAGS BODY.PEEK[HEADER.FIELDS (SUBJECT FROM)])`, "옮길 메일 확인"));
-    if (!found.length) return { kind: "daum_mail_trash", trashed: 0, folder: "", items: [], missing: uids };
+    const missing = uids.filter((u) => !found.some((m) => m.uid === u));
+    if (!found.length) return { moved: 0, folder: target.label, items: [], missing };
     const set = found.map((m) => m.uid).join(",");
-    const trash = await findTrash(conn);
-    const box = quote(trash.raw);
+    const box = quote(target.raw);
     if (conn.capabilities.has("MOVE")) {
-      await conn.ok(`UID MOVE ${set} ${box}`, "휴지통 이동");
+      await conn.ok(`UID MOVE ${set} ${box}`, `${target.label} 이동`);
     } else {
-      await conn.ok(`UID COPY ${set} ${box}`, "휴지통 복사");
+      await conn.ok(`UID COPY ${set} ${box}`, `${target.label} 복사`);
       await conn.ok(`UID STORE ${set} +FLAGS.SILENT (\\Deleted)`, "받은편지함에서 빼기");
       await conn.ok(conn.capabilities.has("UIDPLUS") ? `UID EXPUNGE ${set}` : "EXPUNGE", "받은편지함 정리");
     }
@@ -391,9 +416,18 @@ export async function trashDaumMail(
       const s = summarizeMessage(m.uid, m.flags, m.raw);
       return { uid: s.uid, subject: s.subject, from: s.from };
     });
-    const missing = uids.filter((u) => !found.some((m) => m.uid === u));
-    return { kind: "daum_mail_trash", trashed: items.length, folder: trash.label, items, ...(missing.length ? { missing } : {}) };
+    return { moved: items.length, folder: target.label, items, ...(missing.length ? { missing } : {}) };
   }, opts);
+}
+
+/** 휴지통 이동(영구 삭제 아님). */
+export async function trashDaumMail(
+  cred: MailCredentials,
+  input: { uids?: unknown; uidValidity?: number },
+  opts: { connector?: Connector } = {},
+): Promise<any> {
+  const r = await moveDaumMail(cred, { uids: input?.uids, uidValidity: input?.uidValidity, folder: "trash" }, opts);
+  return { kind: "daum_mail_trash", trashed: r.moved, folder: r.folder, items: r.items, ...(r.missing ? { missing: r.missing } : {}) };
 }
 
 /** 연결 테스트 — 로그인 + 받은편지함 개수(부수효과 없음). */

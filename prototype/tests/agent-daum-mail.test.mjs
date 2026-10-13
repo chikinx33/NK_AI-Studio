@@ -79,7 +79,12 @@ const MSG_RAW_EUCKR = [
   "",
 ].join("\r\n");
 
+// 편지함: 받은편지함 · 휴지통 · 스팸함(\Junk 표시) · 사용자가 만든 '광고'(&rRGs4A-)
+const LIST_RESPONSE = '* LIST (\\HasNoChildren) "/" "INBOX"\r\n* LIST (\\HasNoChildren) "/" "&1zTJwNG1-"\r\n'
+  + '* LIST (\\HasNoChildren \\Junk) "/" "&wqTTONVo-"\r\n* LIST (\\HasNoChildren) "/" "&rRGs4A-"\r\n';
+
 function readHandler(tag, cmd) {
+  if (cmd === 'LIST "" "*"') return `${LIST_RESPONSE}${tag} OK\r\n`;
   if (cmd.startsWith("LOGIN")) return cmd.includes('"me@hanmail.net"') ? `${tag} NO [AUTHENTICATIONFAILED] invalid\r\n` : `${tag} OK LOGIN completed\r\n`;
   if (cmd === "CAPABILITY") return `* CAPABILITY IMAP4rev1 UIDPLUS MOVE\r\n${tag} OK done\r\n`;
   if (cmd === "EXAMINE INBOX") return `* 2 EXISTS\r\n* OK [UIDVALIDITY 99] ok\r\n${tag} OK [READ-ONLY] done\r\n`;
@@ -100,6 +105,7 @@ test("받은편지함 읽기: 아이디로 다시 로그인하고, 인코딩 단
   assert.ok(server.sent.some((c) => c.includes("BODY.PEEK[]")));
   assert.equal(out.uidValidity, 99);
   assert.equal(out.total, 2);
+  assert.deepEqual(out.folders, ["휴지통", "스팸함", "광고"], "옮길 수 있는 편지함 이름을 함께 준다");
   assert.deepEqual(out.emails.map((e) => e.uid), [42, 41], "최신 메일이 먼저");
   const [contract, ad] = out.emails;
   assert.equal(contract.subject, "한글 계약서");
@@ -126,11 +132,13 @@ function trashHandler(caps) {
     if (cmd.startsWith("LOGIN")) return `${tag} OK\r\n`;
     if (cmd === "CAPABILITY") return `* CAPABILITY IMAP4rev1 ${caps}\r\n${tag} OK\r\n`;
     if (cmd === "SELECT INBOX") return `* 5 EXISTS\r\n* OK [UIDVALIDITY 99] ok\r\n${tag} OK [READ-WRITE]\r\n`;
-    if (cmd.startsWith("UID FETCH 41,42,77")) {
+    if (cmd.startsWith("UID FETCH ")) {
+      // 받은편지함에는 uid 41·42 만 있다.
       const h = `Subject: [AD] sale\r\nFrom: promo@shop.test\r\n\r\n`;
-      return `* 1 FETCH (UID 41 FLAGS () BODY[HEADER.FIELDS (SUBJECT FROM)] ${literal(h)})\r\n* 2 FETCH (UID 42 FLAGS () BODY[HEADER.FIELDS (SUBJECT FROM)] ${literal(h)})\r\n${tag} OK\r\n`;
+      const want = cmd.split(" ")[2].split(",").map(Number).filter((u) => u === 41 || u === 42);
+      return want.map((u, i) => `* ${i + 1} FETCH (UID ${u} FLAGS () BODY[HEADER.FIELDS (SUBJECT FROM)] ${literal(h)})\r\n`).join("") + `${tag} OK\r\n`;
     }
-    if (cmd === 'LIST "" "*"') return `* LIST (\\HasNoChildren) "/" "INBOX"\r\n* LIST (\\HasNoChildren) "/" "&1zTJwNG1-"\r\n* LIST (\\HasNoChildren) "/" "&wqTTONVo-"\r\n${tag} OK\r\n`;
+    if (cmd === 'LIST "" "*"') return `${LIST_RESPONSE}${tag} OK\r\n`;
     if (/^UID (MOVE|COPY|STORE|EXPUNGE)|^EXPUNGE/.test(cmd)) return `${tag} OK\r\n`;
     if (cmd === "LOGOUT") return `${tag} OK\r\n`;
     return `${tag} BAD unexpected ${cmd}\r\n`;
@@ -163,6 +171,32 @@ test("uidValidity 가 바뀌었으면 다른 메일을 옮기지 않도록 멈�
   assert.ok(!server.sent.some((c) => c.startsWith("UID MOVE")));
 });
 
+test("편지함 이동: 스팸은 서버 표시(\\Junk)로, 직접 만든 편지함은 한국어 이름으로 찾아 옮긴다", async () => {
+  const { moveDaumMail } = await loadMail();
+  let server = fakeServer(trashHandler("MOVE"));
+  let out = await moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41], folder: "spam" }, { connector: server.connector });
+  assert.ok(server.sent.includes('UID MOVE 41 "&wqTTONVo-"'), server.sent.join(" | "));
+  assert.equal(out.moved, 1);
+  server = fakeServer(trashHandler("MOVE"));
+  out = await moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41, 42], folder: " 광고 " }, { connector: server.connector });
+  assert.ok(server.sent.includes('UID MOVE 41,42 "&rRGs4A-"'), server.sent.join(" | "));
+  assert.equal(out.folder, "광고");
+});
+
+test("없는 편지함이면 아무것도 옮기지 않고 있는 편지함 이름을 알려 준다", async () => {
+  const { moveDaumMail } = await loadMail();
+  const server = fakeServer(trashHandler("MOVE"));
+  await assert.rejects(
+    moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41], folder: "거래처" }, { connector: server.connector }),
+    /'거래처' 편지함을 찾지 못했어요\. 지금 있는 편지함: 휴지통, 스팸함, 광고/,
+  );
+  assert.ok(!server.sent.some((c) => /^UID (MOVE|COPY|FETCH)/.test(c)), "편지함 확인 전엔 메일을 건드리지 않는다");
+  await assert.rejects(
+    moveDaumMail({ email: "me@hanmail.net", password: "p" }, { uids: [41], folder: "INBOX" }, { connector: fakeServer(trashHandler("MOVE")).connector }),
+    /받은편지함으로 옮길 수는 없어요/,
+  );
+});
+
 test("메일함 이름 수정 UTF-7 디코딩", async () => {
   const { decodeMailboxName } = await loadMail();
   assert.equal(decodeMailboxName("&1zTJwNG1-"), "휴지통");
@@ -173,6 +207,7 @@ test("싱크 도구·설정 카드·연결 테스트가 연결돼 있다", () =>
   const shared = read("prototype/functions/api/agent/_shared.ts");
   assert.match(shared, /daum_mail_read: \{ agentId: "sync", kind: "read", synthesize: true, run: runDaumMailReadTool \}/);
   assert.match(shared, /daum_mail_trash: \{ agentId: "sync", kind: "read", run: runDaumMailTrashTool \}/);
+  assert.match(shared, /daum_mail_move: \{ agentId: "sync", kind: "read", run: runDaumMailMoveTool \}/);
   const integ = read("prototype/functions/api/agent/integrations.ts");
   assert.match(integ, /daum_mail: \{\s*provider: "daum_mail", agentId: "sync"/);
   assert.match(integ, /key: "app_password", label: "앱 비밀번호", required: true, secret: true/, "앱 비밀번호는 암호화 저장(secret)");

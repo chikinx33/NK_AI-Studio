@@ -459,6 +459,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     gmail_trash: `[[RUN: gmail_trash | {"query": "from:no-reply@x.com 또는 subject:광고 등 Gmail 검색어", "max": 5}]]  → 검색어에 맞는 메일을 휴지통으로(30일 복구 가능). ⚠️ 반드시 먼저 gmail_read 등으로 어떤 메일인지 사용자에게 보여주고 명확히 동의받은 뒤에만 실행. 광범위한 검색어로 한꺼번에 지우지 말 것.`,
     daum_mail_read: `[[RUN: daum_mail_read | {"max": 10, "unreadOnly": false}]]  → 다음(한메일) 받은편지함 최근 N통(최대 20)의 uid·제목·보낸이·날짜·읽음 여부·본문 앞부분. 읽음 표시는 바꾸지 않는다. 사용자가 "안 읽은 메일"이라 하면 unreadOnly:true. 결과를 보고 ①중요 메일(사람이 보낸 업무·결제·계약·일정·보안 알림 등)은 보낸이·제목·핵심 한 줄로 먼저 보고하고 ②스팸·광고·뉴스레터는 따로 묶는다. (⚙️설정 → 에이전트 → 싱크 → '다음 한메일' 등록 필요)`,
     daum_mail_trash: `[[RUN: daum_mail_trash | {"uids": [1234, 1235], "uidValidity": 1700000000}]]  → 다음(한메일) 메일을 휴지통으로 옮긴다(영구 삭제 아님 · 다음 메일 휴지통에서 복구 가능). uids·uidValidity 는 반드시 방금 daum_mail_read 결과에서 그대로 복사한다(지어내지 말 것). ★사용자가 이번 요청에서 스팸·광고 정리를 시켰으면 스팸이 확실한 메일만 옮기고 무엇을 옮겼는지 보고한다. 애매한 메일·사람이 보낸 메일은 옮기지 말고 보고만 한다. 정리를 시키지 않았으면 먼저 목록을 보여 주고 동의를 받은 뒤 실행.`,
+    daum_mail_move: `[[RUN: daum_mail_move | {"uids": [1234], "uidValidity": 1700000000, "folder": "spam"}]]  → 다음(한메일) 받은편지함 메일을 다른 편지함으로 옮긴다. folder 는 "spam"(스팸편지함) 또는 사용자가 만든 편지함 이름 — daum_mail_read 결과의 folders 에 있는 이름을 그대로 쓴다(다음 메일은 라벨이 아니라 편지함). 없는 편지함이면 서버가 거절하고 있는 편지함 이름을 알려 주니 사용자에게 그대로 전한다(편지함을 새로 만들지는 않는다). uids·uidValidity 는 방금 daum_mail_read 결과에서 그대로 복사. 사용자가 옮기라고 한 메일만 옮기고 무엇을 어디로 옮겼는지 보고한다.`,
     calendar_list: `[[RUN: calendar_list | {"max": 10, "days": 30}]]  → 향후 N일(기본 30) 구글 캘린더 일정 조회. "이번 주"면 days:7, "오늘"이면 days:1 로 조정 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
     calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
@@ -561,7 +562,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     agent_knowledge_delete: "직원 기억 삭제", voice_update: "목소리 이름·즐겨찾기", edge_brief: "전략 브리핑",
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성", form_list: "서식 목록", form_fill: "서식 작성",
-    gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", daum_mail_read: "다음 한메일 조회", daum_mail_trash: "다음 한메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)", web_fetch: "웹페이지 열람(URL 크롤링·JS 렌더링)",
+    gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", daum_mail_read: "다음 한메일 조회", daum_mail_trash: "다음 한메일 휴지통 이동", daum_mail_move: "다음 한메일 편지함 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)", web_fetch: "웹페이지 열람(URL 크롤링·JS 렌더링)",
     sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)", drive: "Google Drive 파일 보기",
     brand_get: "브랜드 허브 조회", brand_save: "브랜드 생성/수정", brand_asset: "캐릭터/환경 자산 등록",
     imagen_describe: "이미지 역분석(프롬프트화)", upscale: "이미지 업스케일(2X)", lipsync: "립싱크 영상",
@@ -1380,6 +1381,12 @@ export function formatReadResult(toolName: string, out: any): string {
     if (!items.length) return "🗑️ 옮길 메일을 받은편지함에서 찾지 못했어요. 옮긴 메일이 없어요.";
     const lines = items.map((e, i) => `${i + 1}. ${e.subject || "(제목 없음)"} — ${e.from || ""}`);
     return `🗑️ 다음 메일 ${items.length}통을 ${out?.folder || "휴지통"}으로 옮겼어요. (영구 삭제가 아니라 휴지통에서 복구할 수 있어요)\n\n${lines.join("\n")}`;
+  }
+  if (toolName === "daum_mail_move") {
+    const items: any[] = out?.items || [];
+    if (!items.length) return "📂 옮길 메일을 받은편지함에서 찾지 못했어요. 옮긴 메일이 없어요.";
+    const lines = items.map((e, i) => `${i + 1}. ${e.subject || "(제목 없음)"} — ${e.from || ""}`);
+    return `📂 다음 메일 ${items.length}통을 '${out?.folder || "편지함"}'으로 옮겼어요.\n\n${lines.join("\n")}`;
   }
   if (toolName === "calendar_list") {
     const events: any[] = out?.events || [];
