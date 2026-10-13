@@ -8,16 +8,15 @@
 // 경로: <기준 prefix>/agent-attachments/<user>/<conversation>/<역순 시각>-<N>.<확장자>
 //  - 역순 시각(큰 수 - now)이라 목록 1번 호출(maxResults)만으로 최신 묶음이 맨 앞에 온다. DB·DDL 없음.
 import { resolveGcsEnv, getGoogleAccessToken } from "../_shared/gcs.js";
+import { chatAttachmentSegment as safeSegment, chatAttachmentUserPrefix } from "../_shared/media-access";
 
 const GCS_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const STAMP_MAX = 9_999_999_999_999;
 
-const safeSegment = (v: string) => String(v || "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120) || "_";
-
 function attachmentPrefix(env: any, userId: string, conversationId: string) {
   const g = resolveGcsEnv(env);
-  const base = g.basePrefix ? `${g.basePrefix}/` : "";
-  return { g, prefix: `${base}agent-attachments/${safeSegment(userId)}/${safeSegment(conversationId || "main")}/` };
+  // 사용자 prefix 는 참조 읽기 소유자 검사(media-access)와 같은 함수로 만든다.
+  return { g, prefix: `${chatAttachmentUserPrefix(g.basePrefix, userId)}${safeSegment(conversationId || "main")}/` };
 }
 
 const extOf = (mime: string) => (/png/i.test(mime) ? "png" : /webp/i.test(mime) ? "webp" : "jpg");

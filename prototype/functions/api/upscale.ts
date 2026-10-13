@@ -7,6 +7,7 @@ import { geminiTextModel } from "./_shared/gemini-models.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
+import { checkMediaObjectAccess } from "./_shared/media-access";
 import { atlasKeyFor } from './_shared/generation-auth';
 import { imageAuth } from './_shared/generation-auth';
 import { onRequestPost as imageRequest } from './imagen';
@@ -78,6 +79,12 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const userId = String(auth.userId || "owner").trim() || "owner";
 
     if (!imageUrl && !objectName) return json({ error: "imageUrl 또는 objectName 필요" }, 400, origin);
+    // objectName 은 서비스 계정으로 서명하거나 gs:// 로 넘기므로, 미디어 프록시와 같은 기준
+    // (요청자 본인 루트 또는 공유받은 프로젝트의 소유자 프로젝트 폴더)으로 먼저 확인한다.
+    if (objectName) {
+      const access = await checkMediaObjectAccess(env, userId, objectName.replace(/^\/+/, ""), outParsed.bucket);
+      if (!access.ok) return json({ error: access.error }, access.error === "invalid_object_name" ? 400 : 403, origin);
+    }
 
     // cloud-platform scope로 GCS + Vertex AI 모두 커버
     const accessToken = await getGoogleAccessToken({

@@ -318,7 +318,9 @@ test("모든 외부 호출에 시간 제한이 있다 (하나라도 멈추면 CF
   assert.match(src, /function withTimeout<T>/);
   assert.ok(src.includes("await withTimeout("), "토큰 발급에 시간 제한이 있어야 합니다");
   assert.ok(src.includes("\"gcs_token\""), "토큰 단계 이름이 있어야 합니다");
-  assert.match(src, /withTimeout\(fetch\(resolvedUrl, \{ headers \}\), timeoutMs, "sheet_fetch"\)/);
+  // 시트 내려받기는 공용 참조 읽기(_shared/reference-image.ts)에 timeoutMs 를 넘겨 시간 제한을 건다.
+  assert.match(src, /resolveReferenceImageBytes\(url, \{[\s\S]{0,200}timeoutMs: /);
+  assert.match(read("prototype/functions/api/_shared/reference-image.ts"), /withTimeout\(fetch\(resolvedUrl, \{ headers \}\), ctx\.timeoutMs\)/);
   assert.match(src, /signal: controller\.signal/);
 });
 
@@ -337,7 +339,7 @@ test("준비 단계도 같은 예산 안에서 끝난다", () => {
   assert.match(src, /const prepTimeLeft = \(\) => TOTAL_BUDGET_MS - GEMINI_MIN_MS - elapsed\(\);/);
   // 토큰 발급과 시트 내려받기 둘 다 남은 시간을 상한으로 쓴다.
   assert.match(src, /Math\.min\(8000, Math\.max\(1000, prepTimeLeft\(\)\)\),\s*[\r\n]+\s*"gcs_token"/);
-  assert.match(src, /Math\.min\(8000, Math\.max\(1000, prepTimeLeft\(\)\)\)\s*[\r\n]+\s*\);/);
+  assert.match(src, /timeoutMs: Math\.min\(8000, Math\.max\(1000, prepTimeLeft\(\)\)\),/);
   // 시간이 없으면 남은 장은 포기한다 — 1장이라도 있으면 분석은 된다.
   assert.match(src, /if \(usable > 0 && prepTimeLeft\(\) <= 0\) \{ skippedForTime\+\+; continue; \}/);
   // 몇 장을 포기했는지 응답에 남긴다(조용히 일부만 보고 답하면 안 된다).

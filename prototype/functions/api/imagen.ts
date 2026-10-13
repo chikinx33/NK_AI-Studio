@@ -5,6 +5,8 @@ import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
+import { parseGcsReference } from "./_shared/media-access";
+import { resolveReferenceImageBytes, type ReferenceImageContext } from "./_shared/reference-image";
 import { onRequestPost as subscriptionImageRequest } from "./codex-images";
 import { imageAuth, atlasKeyFor } from './_shared/generation-auth';
 import {
@@ -124,25 +126,21 @@ const handlePost: PagesFunction = async ({ request, env }) => {
         })
       : "";
 
-    const authHeader = String(request.headers.get("Authorization") || "").trim();
-    const referenceImages = await normalizeReferenceImages({
-      items: incomingReferenceImages,
+    const refCtx: ReferenceImageContext = {
+      env,
+      requesterId: auth.userId,
       accessToken,
       requestUrl: request.url,
-      authHeader,
-    });
-    const conversationHistory = await normalizeConversationHistory({
-      items: incomingConversationHistory,
-      accessToken,
-      requestUrl: request.url,
-      authHeader,
-    });
+      authHeader: String(request.headers.get("Authorization") || "").trim(),
+    };
+    const referenceImages = await normalizeReferenceImages({ items: incomingReferenceImages, refCtx });
+    const conversationHistory = await normalizeConversationHistory({ items: incomingConversationHistory, refCtx });
     // 인페인팅 마스크: image-to-image 일 때만 의미가 있다.
     // 프론트엔드가 흰색=수정영역(Gemini용) 또는 알파 투명=수정영역(OpenAI native mask용) PNG 를 보낸다.
     const incomingMaskDataUrl = String(body?.maskDataUrl || body?.mask || "").trim();
     let maskImage: { base64: string; mimeType: string } | null = null;
     if (incomingMaskDataUrl && generationMode === "image-to-image") {
-      const parsedMask = await resolveImageBytes(incomingMaskDataUrl, accessToken, request.url, authHeader);
+      const parsedMask = await resolveReferenceImageBytes(incomingMaskDataUrl, refCtx);
       if (parsedMask && parsedMask.base64) {
         maskImage = { base64: parsedMask.base64, mimeType: parsedMask.mimeType || "image/png" };
       }
@@ -505,11 +503,11 @@ export const onRequestPost: PagesFunction = async (context) => {
               || url.username || url.password || (url.port && url.port !== '443')) return json({ error: 'invalid_reference_image_url' }, 400);
         }
       }
-      const accessToken = allItems.some((item: any) => /^(gs:\/\/|https:\/\/storage\.googleapis\.com\/)/.test(String(item.imageUrl || item.imageDataUrl || item.url)))
+      const accessToken = allItems.some((item: any) => parseGcsReference(String(item.imageUrl || item.imageDataUrl || item.url || '')))
         ? await getGoogleAccessToken({ clientEmail: context.env.GOOGLE_CLIENT_EMAIL,
           privateKeyPem: context.env.GOOGLE_PRIVATE_KEY, scope: 'https://www.googleapis.com/auth/cloud-platform' }) : '';
-      const normalized = await normalizeReferenceImages({ items: allItems, accessToken, requestUrl: context.request.url,
-        authHeader: context.request.headers.get('Authorization') || '' });
+      const normalized = await normalizeReferenceImages({ items: allItems, refCtx: { env: context.env, requesterId: auth.userId,
+        accessToken, requestUrl: context.request.url, authHeader: context.request.headers.get('Authorization') || '' } });
       if (normalized.length !== allItems.length) return json({ error: 'source_image_reference_unavailable' }, 400);
       const refs = normalized.slice(0, items.length);
       const historyRefs = normalized.slice(items.length);
@@ -1371,9 +1369,7 @@ function extractGeminiImage(json: any): { data: string; mimeType: string } | nul
 
 async function normalizeReferenceImages(args: {
   items: any[];
-  accessToken: string;
-  requestUrl: string;
-  authHeader: string;
+  refCtx: ReferenceImageContext;
 }): Promise<NormalizedReferenceImage[]> {
   // 안전망. 정상 흐름에서는 클라이언트 예산이 이미 더 작게 잘라서 보낸다.
   const items = Array.isArray(args.items) ? args.items.slice(0, MAX_REFERENCE_IMAGES) : [];
@@ -1382,7 +1378,7 @@ async function normalizeReferenceImages(args: {
     const raw = items[i] && typeof items[i] === "object" ? items[i] : {};
     const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || "").trim();
     if (!imageDataUrl) continue;
-    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken, args.requestUrl, args.authHeader);
+    const parsed = await resolveReferenceImageBytes(imageDataUrl, args.refCtx);
     if (!parsed) continue;
     const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
     const subjectDescription = String(raw.subjectDescription || `registered character ${referenceId}`).trim() || `registered character ${referenceId}`;
@@ -1417,9 +1413,7 @@ async function normalizeReferenceImages(args: {
 
 async function normalizeConversationHistory(args: {
   items: any[];
-  accessToken: string;
-  requestUrl: string;
-  authHeader: string;
+  refCtx: ReferenceImageContext;
 }): Promise<ConversationHistoryTurn[]> {
   const items = Array.isArray(args.items) ? args.items.slice(-3) : [];
   const out: ConversationHistoryTurn[] = [];
@@ -1428,7 +1422,7 @@ async function normalizeConversationHistory(args: {
     const prompt = normalizePrompt(String(raw.prompt || "").trim());
     const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || "").trim();
     if (!prompt || !imageDataUrl) continue;
-    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken, args.requestUrl, args.authHeader);
+    const parsed = await resolveReferenceImageBytes(imageDataUrl, args.refCtx);
     if (!parsed) continue;
     out.push({
       prompt,
@@ -1449,51 +1443,6 @@ function buildConversationPrompt(turn: ConversationHistoryTurn) {
     turn.prompt
   ];
   return lines.filter(Boolean).join("\n");
-}
-
-async function resolveImageBytes(
-  imageDataUrl: string,
-  accessToken: string,
-  requestUrl: string,
-  authHeader: string
-): Promise<{ base64: string; mimeType: string } | null> {
-  const parsed = parseDataUrl(imageDataUrl);
-  if (parsed) return parsed;
-  try {
-    let resolvedUrl = imageDataUrl.startsWith("gs://")
-      ? gcsToHttps(imageDataUrl)
-      : imageDataUrl;
-    if (!resolvedUrl) return null;
-    if (/^\/(?!\/)/.test(resolvedUrl)) {
-      resolvedUrl = new URL(resolvedUrl, requestUrl).toString();
-    }
-    const headers: Record<string, string> = {};
-    if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
-    try {
-      const requestOrigin = new URL(requestUrl).origin;
-      const targetUrl = new URL(resolvedUrl);
-      if (
-        authHeader &&
-        targetUrl.origin === requestOrigin &&
-        targetUrl.pathname === "/api/media/proxy"
-      ) {
-        headers.Authorization = authHeader;
-      }
-    } catch (_) {}
-    const res = await fetch(resolvedUrl, { headers });
-    if (!res.ok) {
-      throw new Error(`reference_image_fetch_failed (${res.status})`);
-    }
-    const buf = await res.arrayBuffer();
-    return {
-      base64: arrayBufferToBase64(buf),
-      mimeType: res.headers.get("content-type") || "image/png",
-    };
-  } catch {
-    return null;
-  }
 }
 
 function normalizeSubjectType(value: unknown) {
@@ -1613,30 +1562,6 @@ function base64ToUint8(b64: string) {
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
-}
-
-function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
-  if (!dataUrl || typeof dataUrl !== "string") return null;
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return null;
-  const mimeType = String(match[1] || "image/png").trim() || "image/png";
-  const base64 = String(match[2] || "").trim();
-  if (!base64) return null;
-  return { base64, mimeType };
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer) {
-  // Cloudflare Workers V8 isolate 에서 큰 버퍼를 1바이트씩 연결하면
-  // O(n²) 문자열 연결이 되어 CPU 한도(에러 1102)를 넘기기 쉽다.
-  // 32KB 청크 단위로 String.fromCharCode.apply 를 호출해 선형 시간으로 인코딩.
-  const bytes = new Uint8Array(buf);
-  const CHUNK = 0x8000;
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
-    bin += String.fromCharCode.apply(null, slice as unknown as number[]);
-  }
-  return btoa(bin);
 }
 
 async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {

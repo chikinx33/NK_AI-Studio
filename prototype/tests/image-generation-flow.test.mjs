@@ -17,8 +17,20 @@ function evaluate(source, deps = {}) {
 const image = n => 'data:image/png;base64,' + Buffer.from('image-' + n).toString('base64');
 const history = Array.from({ length: 5 }, (_, i) => ({ prompt: 'previous outfit ' + i, imageDataUrl: image(i) }));
 const serverSource = read('prototype/functions/api/imagen.ts');
+// 참조 이미지 읽기(소유자 검사 포함)는 _shared 모듈이라 import 를 지운 imagen.ts 에 실제 구현을 묶어 넣는다.
+const referenceImageDeps = (() => {
+  const { outputFiles } = esbuild.buildSync({
+    stdin: { contents: 'export { resolveReferenceImageBytes } from "./reference-image";\nexport { parseGcsReference } from "./media-access";',
+      resolveDir: 'prototype/functions/api/_shared', loader: 'ts' },
+    bundle: true, format: 'cjs', platform: 'neutral', write: false, logLevel: 'silent',
+  });
+  const module = { exports: {} };
+  vm.runInNewContext(outputFiles[0].text, { module, exports: module.exports, URL, Headers, Response, fetch, atob, btoa, crypto,
+    TextEncoder, TextDecoder, setTimeout, clearTimeout, console });
+  return { resolveReferenceImageBytes: module.exports.resolveReferenceImageBytes, parseGcsReference: module.exports.parseGcsReference };
+})();
 function server(deps = {}) {
-  return evaluate(serverSource + '\nexport { selectConversationHistory, buildGeminiImagePrompt };', deps);
+  return evaluate(serverSource + '\nexport { selectConversationHistory, buildGeminiImagePrompt };', { ...referenceImageDeps, ...deps });
 }
 
 test('single generation excludes history on the client even with a selected prior result', () => {

@@ -57,7 +57,10 @@ test("앞 턴 첨부도 attachment:N 으로 이어서 쓸 수 있다(대화별 �
   assert.match(resolver, /await latestChatAttachment\(ctx\.env, ctx\.userId, ctx\.conversationId \|\| "main", idx \+ 1\)/);
   assert.match(chat, /waitUntil\(saveChatAttachments\(env, auth\.userId, conversationId, images\)/);
   // 역순 시각 이름 → 목록 1번이면 최신 묶음이 맨 앞. 경로는 사용자·대화로 격리.
-  assert.match(store, /agent-attachments\/\$\{safeSegment\(userId\)\}\/\$\{safeSegment\(conversationId \|\| "main"\)\}\//);
+  assert.match(store, /\$\{chatAttachmentUserPrefix\(g\.basePrefix, userId\)\}\$\{safeSegment\(conversationId \|\| "main"\)\}\//);
+  // 사용자 prefix 는 참조 읽기 소유자 검사(_shared/media-access.ts)와 같은 함수로 만든다.
+  const access = await read("prototype/functions/api/_shared/media-access.ts");
+  assert.match(access, /return `\$\{base\}agent-attachments\/\$\{chatAttachmentSegment\(userId\)\}\/`;/);
   assert.match(store, /String\(STAMP_MAX - Date\.now\(\)\)/);
   assert.match(store, /const batch = names\.filter\(\(name\) => stampOf\(name\) === latest\);/);
 });

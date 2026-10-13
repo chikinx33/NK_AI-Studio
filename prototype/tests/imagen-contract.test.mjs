@@ -8,15 +8,19 @@ function readImagenSource() {
   return fs.readFileSync(fullPath, 'utf8');
 }
 
+// 참조 이미지 읽기는 _shared/reference-image.ts 로 모였다(소유자 검사 포함, reference-image-access.test.mjs 가 실행 검증).
+const readReferenceImageSource = () => fs.readFileSync(path.join(process.cwd(), 'prototype/functions/api/_shared/reference-image.ts'), 'utf8');
+
 test('imagen source resolves relative proxy urls against the current request url', () => {
-  const source = readImagenSource();
-  assert.match(source, /new URL\(resolvedUrl, requestUrl\)/);
+  assert.match(readImagenSource(), /resolveReferenceImageBytes\(/);
+  assert.match(readReferenceImageSource(), /new URL\(resolvedUrl, ctx\.requestUrl\)/);
 });
 
 test('imagen source forwards caller auth when reading same-origin media proxy references', () => {
-  const source = readImagenSource();
+  assert.match(readImagenSource(), /authHeader: String\(request\.headers\.get\("Authorization"\) \|\| ""\)\.trim\(\)/);
+  const source = readReferenceImageSource();
   assert.match(source, /targetUrl\.pathname === "\/api\/media\/proxy"/);
-  assert.match(source, /headers\.Authorization = authHeader/);
+  assert.match(source, /headers\.Authorization = ctx\.authHeader/);
 });
 
 test('image-to-image mode fails instead of silently falling back when all source references are lost', () => {

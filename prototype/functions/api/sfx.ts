@@ -20,6 +20,7 @@ import { recordGemini, recordUnpriced } from "./_shared/usage-cost.ts";
 import { authorizeRequest } from "./_shared/auth.js";
 import { resolveProjectStorageOwner } from "./_shared/shares";
 import { withCreditCharge } from "./_shared/credits";
+import { authorizeGcsRead } from "./_shared/media-access";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -468,9 +469,18 @@ const handlePost: PagesFunction = async ({ request, env }) => {
           } catch {}
         }
 
+        // gs:// 는 서비스 계정으로 받으므로 미디어 프록시와 같은 기준(요청자 본인 루트 또는
+        // 공유받은 프로젝트의 소유자 프로젝트 폴더)을 통과한 것만 읽는다. 거절되면 프레임·텍스트 분석으로 넘어간다.
+        if (resolvedClipUrl.startsWith("gs://")) {
+          const access = await authorizeGcsRead(env, auth.userId, resolvedClipUrl);
+          if (!access?.ok) resolvedClipUrl = "";
+        }
+
         // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
-        sfxPrompt = await buildSfxPromptFromVideoUrl(env, googleApiKey, resolvedClipUrl, clipLabel, sceneAction,
-          (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
+        if (resolvedClipUrl) {
+          sfxPrompt = await buildSfxPromptFromVideoUrl(env, googleApiKey, resolvedClipUrl, clipLabel, sceneAction,
+            (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
+        }
         if (sfxPrompt) {
           analysisMode = "video_server";
         }

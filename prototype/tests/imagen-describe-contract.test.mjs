@@ -28,6 +28,10 @@ test('imagen describe endpoint analyzes one image into reusable prompt text', ()
 
 test('imagen describe endpoint supports same-origin media proxy auth forwarding', () => {
   const source = readDescribeSource();
-  assert.match(source, /targetUrl\.pathname === "\/api\/media\/proxy"/);
-  assert.match(source, /headers\.Authorization = authHeader/);
+  assert.match(source, /resolveReferenceImageBytes\(imageUrl, \{/);
+  assert.match(source, /authHeader: String\(request\.headers\.get\("Authorization"\) \|\| ""\)\.trim\(\)/);
+  // 같은 출처 미디어 프록시 인증 전달은 공용 참조 읽기(_shared/reference-image.ts)가 한다.
+  const shared = fs.readFileSync(path.join(process.cwd(), 'prototype/functions/api/_shared/reference-image.ts'), 'utf8');
+  assert.match(shared, /targetUrl\.pathname === "\/api\/media\/proxy"/);
+  assert.match(shared, /headers\.Authorization = ctx\.authHeader/);
 });

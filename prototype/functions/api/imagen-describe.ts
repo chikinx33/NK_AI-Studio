@@ -3,6 +3,7 @@ import { geminiTextModel, geminiGenerateUrl, geminiProxyHeaders } from "./_share
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission, requireMaster } from "./_shared/admin-users";
 import { withCreditCharge } from "./_shared/credits";
+import { resolveReferenceImageBytes } from "./_shared/reference-image";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -51,12 +52,13 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
-    const parsed = await resolveImageBytes(
-      imageUrl,
+    const parsed = await resolveReferenceImageBytes(imageUrl, {
+      env,
+      requesterId: auth.userId,
       accessToken,
-      request.url,
-      String(request.headers.get("Authorization") || "").trim()
-    );
+      requestUrl: request.url,
+      authHeader: String(request.headers.get("Authorization") || "").trim(),
+    });
     if (!parsed) {
       return json({ error: "image_reference_unavailable" }, 400);
     }
@@ -172,47 +174,6 @@ function safeJson(text: string) {
   }
 }
 
-async function resolveImageBytes(
-  imageDataUrl: string,
-  accessToken: string,
-  requestUrl: string,
-  authHeader: string
-): Promise<{ base64: string; mimeType: string } | null> {
-  const parsed = parseDataUrl(imageDataUrl);
-  if (parsed) return parsed;
-  try {
-    let resolvedUrl = imageDataUrl.startsWith("gs://")
-      ? gcsToHttps(imageDataUrl)
-      : imageDataUrl;
-    if (!resolvedUrl) return null;
-    if (/^\/(?!\/)/.test(resolvedUrl)) {
-      resolvedUrl = new URL(resolvedUrl, requestUrl).toString();
-    }
-    const headers: Record<string, string> = {};
-    if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
-    try {
-      const requestOrigin = new URL(requestUrl).origin;
-      const targetUrl = new URL(resolvedUrl);
-      if (authHeader && targetUrl.origin === requestOrigin && targetUrl.pathname === "/api/media/proxy") {
-        headers.Authorization = authHeader;
-      }
-    } catch (_) {}
-    const res = await fetch(resolvedUrl, { headers });
-    if (!res.ok) {
-      throw new Error(`reference_image_fetch_failed (${res.status})`);
-    }
-    const buf = await res.arrayBuffer();
-    return {
-      base64: arrayBufferToBase64(buf),
-      mimeType: res.headers.get("content-type") || "image/png",
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function getGoogleAccessToken(opts: {
   clientEmail: string;
   privateKeyPem: string;
@@ -291,39 +252,3 @@ function pemToArrayBuffer(pem: string) {
   return buf.buffer;
 }
 
-function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
-  if (!dataUrl || typeof dataUrl !== "string") return null;
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return null;
-  const mimeType = String(match[1] || "image/png").trim() || "image/png";
-  const base64 = String(match[2] || "").trim();
-  if (!base64) return null;
-  return { base64, mimeType };
-}
-
-function parseGcsUri(uri: string): { bucket: string; object: string } | null {
-  if (!uri || !uri.startsWith("gs://")) return null;
-  const rest = uri.slice(5);
-  const slash = rest.indexOf("/");
-  if (slash === -1) return null;
-  return { bucket: rest.slice(0, slash), object: rest.slice(slash + 1) };
-}
-
-function gcsToHttps(uri: string) {
-  if (!uri.startsWith("gs://")) return uri;
-  const parsed = parseGcsUri(uri);
-  if (!parsed) return uri;
-  return `https://storage.googleapis.com/${parsed.bucket}/${parsed.object}`;
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer) {
-  // 큰 버퍼를 1바이트씩 연결하면 O(n²) 가 되어 Workers CPU 한도를 넘긴다.
-  const bytes = new Uint8Array(buf);
-  const CHUNK = 0x8000;
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
-    bin += String.fromCharCode.apply(null, slice as unknown as number[]);
-  }
-  return btoa(bin);
-}
