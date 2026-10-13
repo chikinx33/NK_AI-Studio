@@ -43,6 +43,22 @@ const BYOK_TOOLS: Record<string, {
       },
     ],
   },
+  // 다음(한메일) — 웹 API 가 없어 IMAP(imap.daum.net:993)으로 접속한다. 앱 비밀번호는 암호화해 저장.
+  daum_mail: {
+    provider: "daum_mail", agentId: "sync", title: "다음 한메일",
+    fields: [
+      {
+        key: "email", label: "다음 메일 주소", required: true, secret: false,
+        placeholder: "아이디@hanmail.net",
+        hint: "@hanmail.net · @daum.net 주소를 그대로 넣으세요.",
+      },
+      {
+        key: "app_password", label: "앱 비밀번호", required: true, secret: true,
+        placeholder: "앱 비밀번호",
+        hint: "먼저 다음 메일 → 환경설정 → IMAP/POP3 에서 'IMAP 사용함'을 켜세요. 로그인 비밀번호가 아니라 카카오계정에서 발급한 앱 비밀번호를 넣어야 해요.",
+      },
+    ],
+  },
 };
 
 // NK 도구 → NK 스튜디오 env 키 매핑(이미 스튜디오에 구현된 연동 재사용).

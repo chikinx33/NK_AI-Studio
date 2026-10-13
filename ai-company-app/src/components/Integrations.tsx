@@ -15,6 +15,7 @@ const TOOL_LABEL: Record<string, string> = {
   github: "GitHub (레포·이슈)", sheets: "Google Sheets (매출·지표)",
   gmail: "Gmail", calendar: "Google 캘린더", drive: "Google Drive (내 파일)",
   polar_metrics: "Polar 수익 (매출·MRR·구독)",
+  daum_mail: "다음 한메일 (받은편지함·휴지통)",
 };
 const toolLabel = (t: string) => TOOL_LABEL[t] || t;
 

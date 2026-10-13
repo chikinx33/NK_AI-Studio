@@ -3,6 +3,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema, getGoogleOAuth, getCredentials } from "./_shared";
 import { refreshAccessToken } from "./_google";
+import { checkDaumMail } from "./_daum-mail";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -107,6 +108,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return send({ ok: true, message: `✅ Polar 연결 정상 — 상품 ${n}개 확인` }, 200, origin);
     } catch (e: any) {
       return send({ ok: false, message: String(e?.message || "확인 실패") }, 200, origin);
+    }
+  }
+
+  // 싱크 다음 한메일(BYOK): 등록한 주소·앱 비밀번호로 IMAP 로그인 + 받은편지함 개수 확인(부수효과 없음).
+  if (tool === "daum_mail") {
+    try {
+      const sql = getSql(env);
+      if (!sql) return send({ ok: false, message: "연결 상태를 확인하지 못했어요(DB)." }, 200, origin);
+      await ensureAgentSchema(sql);
+      const cred = await getCredentials(sql, auth.userId, "daum_mail", env);
+      if (!cred.email || !cred.app_password) return send({ ok: false, message: "아직 다음 메일 주소와 앱 비밀번호가 등록되지 않았어요." }, 200, origin);
+      const box = await checkDaumMail({ email: cred.email, password: cred.app_password });
+      return send({ ok: true, message: `✅ 다음 한메일 연결 정상 — ${cred.email} 받은편지함 ${box.total}통(안 읽음 ${box.unread}통)` }, 200, origin);
+    } catch (e: any) {
+      return send({ ok: false, message: `❌ ${String(e?.message || e)}` }, 200, origin);
     }
   }
 
