@@ -1507,7 +1507,7 @@ export default function ProductionCanvas({
         <div
           ref={containerRef}
           className="relative min-w-0 flex-1 cursor-grab select-none overflow-hidden active:cursor-grabbing"
-          style={{ backgroundImage: "radial-gradient(rgb(var(--company-edge)) 1px, transparent 1px)", backgroundSize: `${GRID * view.scale}px ${GRID * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
+          style={{ backgroundImage: "radial-gradient(rgb(var(--company-edge) / 0.4) 1px, transparent 1px)", backgroundSize: `${GRID * view.scale}px ${GRID * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
           onPointerDown={(e) => onPointerDown(e)}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
