@@ -59,6 +59,18 @@ test("IP 캐릭터: 시트는 gs 경로만, 시트 없는 등록 캐릭터도 �
   assert.deepEqual(ip.characters[1].sheets, []);
 });
 
+test("IP 캐릭터 보이스: gs 오디오만 voice 로 싣고, 없으면 null", () => {
+  const ip = ipFromBrand("shapes", {
+    brandCharacters: [
+      { trigger: "@세모", name: "세모", voice: { kind: "preset", name: "Puck", audioUrl: "gs://b/users/u/brands/shapes/voice/세모/1-preset.wav" } },
+      { trigger: "@네모", name: "네모", voice: { kind: "reference", audioUrl: "data:audio/wav;base64,AAA" } },
+    ],
+    characterSheets: [{ token: "@세모", displayName: "세모", items: [{ imageDataUrl: "gs://b/s.png" }] }],
+  });
+  assert.deepEqual(ip.characters[0].voice, { kind: "preset", name: "Puck", audioUrl: "gs://b/users/u/brands/shapes/voice/세모/1-preset.wav" });
+  assert.equal(ip.characters[1].voice, null);
+});
+
 test("프로젝트 IP: brandId 가 없으면 시리즈 제목이 같은 브랜드를 찾는다", async () => {
   const calls: string[] = [];
   const ip = await loadProjectIp(async (p) => {

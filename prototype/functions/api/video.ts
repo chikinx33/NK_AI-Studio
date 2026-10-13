@@ -116,6 +116,11 @@ const handlePost: PagesFunction = async ({ request, env }) => {
     const referenceVideos: string[] = Array.isArray((body as any)?.referenceVideos)
       ? (body as any).referenceVideos.map((v: any) => String(v || "")).filter(Boolean).slice(0, 10)
       : [];
+    // 참조 오디오(캐릭터 보이스 등): Seedance 2.5 omni-reference 의 reference_audios. 프롬프트가 @Audio N 으로 부른다.
+    // 공급자 한도는 클립당 2~30초·합계 30초 — IP 라이브러리 보이스는 캐릭터당 10초라 3개까지 싣는다.
+    const referenceAudios: string[] = Array.isArray((body as any)?.referenceAudios)
+      ? (body as any).referenceAudios.map((v: any) => String(v || "").trim()).filter(Boolean).slice(0, 3)
+      : [];
     if (!safePromptText) {
       return json({ error: "promptText is required" }, 400);
     }
@@ -537,11 +542,18 @@ const handlePost: PagesFunction = async ({ request, env }) => {
       if (refResolved.length > 0) atlasBody.reference_images = refResolved;
       if (vidsResolved.length > 0) atlasBody.reference_videos = vidsResolved;
       // 공급자는 data: 를 받지 않는다 — GCS 에 올려 서명 URL 로 보낸다(다른 참조 미디어와 같은 경로).
-      if (audioDataUrl) atlasBody.reference_audios = [await toAtlasMediaUrl(audioDataUrl, `audio-${sceneId}`, "audio")];
+      // audioDataUrl(직접 올린 오디오)이 @Audio1, 그 뒤로 referenceAudios 순서다.
+      const audiosResolved: string[] = [];
+      if (audioDataUrl) audiosResolved.push(await toAtlasMediaUrl(audioDataUrl, `audio-${sceneId}`, "audio"));
+      for (let i = 0; i < referenceAudios.length && audiosResolved.length < 3; i++) {
+        const u = await toAtlasMediaUrl(referenceAudios[i], `refaud-${sceneId}-${i}`, "audio").catch(() => "");
+        if (u) audiosResolved.push(u);
+      }
+      if (audiosResolved.length > 0) atlasBody.reference_audios = audiosResolved;
       // 드래프트: 480p 로 렌더(일반 480p 요금)하고, 7일 안에 seedance-2.5-complete 로 같은 결과를 1080p 로 완성한다.
       if ((body as any)?.draft === true) { atlasBody.draft = true; atlasBody.resolution = "480p"; }
       if ((body as any)?.omniTaskType) atlasBody.omni_reference_task_type = String((body as any).omniTaskType);
-      log('seedance25_request', { duration: s25Duration, resolution: s25Resolution, ratio: aspectFinal, refs: refResolved.length, videos: vidsResolved.length, hasStart: !!startResolved });
+      log('seedance25_request', { duration: s25Duration, resolution: s25Resolution, ratio: aspectFinal, refs: refResolved.length, videos: vidsResolved.length, audios: audiosResolved.length, hasStart: !!startResolved });
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
         body: JSON.stringify(atlasBody),

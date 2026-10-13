@@ -17,8 +17,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.2002" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2002" />
+  <link rel="stylesheet" href="styles.css?v=3.2003" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2003" />
 
   <style>
     /* ── Height chain ────────────────────────────────────────── */
@@ -179,57 +179,26 @@
     .snd-spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: snd-spin 0.7s linear infinite; }
     @keyframes snd-spin { to { transform: rotate(360deg); } }
 
-    /* ── Voice library modal ─────────────────────────────────── */
-    .snd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .snd-modal { width: min(880px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
-    .snd-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
-    .snd-modal-title { font-size: 0.95rem; font-weight: 700; color: var(--text); }
-    .snd-modal-count { font-size: 0.74rem; color: var(--muted); }
-    .snd-modal-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2, var(--bg)); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .snd-modal-close:hover { color: var(--text); }
-    .snd-modal-filters { display: flex; flex-direction: column; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
-    .snd-modal-search { width: 100%; background: var(--bg-2, var(--bg)); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 12px; font-size: 0.84rem; }
-    .snd-modal-search:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
-    .snd-seg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-    .snd-seg-tab { padding: 5px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; color: var(--muted); background: var(--bg-2, var(--bg)); border: 1px solid var(--border); cursor: pointer; }
-    .snd-seg-tab.is-active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-    .snd-modal-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-    .snd-voice-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: color-mix(in srgb, var(--bg-2, var(--bg)) 50%, transparent); display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
-    .snd-voice-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
-    .snd-voice-card.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
-    .snd-vc-head { display: flex; align-items: center; gap: 9px; }
-    .snd-vc-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); flex-shrink: 0; }
-    .snd-vc-name { font-size: 0.88rem; font-weight: 700; color: var(--text); }
-    .snd-vc-sub { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .snd-vc-fav { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; padding: 2px; }
-    .snd-vc-fav.is-fav { color: #fbbf24; }
-    .snd-vc-desc { font-size: 0.76rem; color: var(--text); line-height: 1.4; }
-    .snd-vc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-    .snd-vc-tag { font-size: 0.66rem; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,0.05); color: var(--muted); }
-    .snd-vc-foot { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-    .snd-vc-preview { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; padding: 4px 10px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); background: none; cursor: pointer; }
-    .snd-vc-preview:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-    .snd-vc-r2v { font-size: 0.62rem; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,0.05); color: var(--muted); margin-left: auto; }
-    .snd-modal-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 36px 12px; font-size: 0.84rem; }
   </style>
 
-  <script src="core.js?v=3.2002" defer></script>
-  <script src="js/config.js?v=3.2002" defer></script>
-  <script src="js/utils.js?v=3.2002" defer></script>
-  <script src="store.js?v=3.2002" defer></script>
-  <script src="api.js?v=3.2002" defer></script>
-  <script src="js/state.js?v=3.2002" defer></script>
-  <script src="js/auth.js?v=3.2002" defer></script>
-  <script src="js/navigation.js?v=3.2002" defer></script>
-  <script src="js/service/media.js?v=3.2002" defer></script>
-  <script src="js/service/project.js?v=3.2002" defer></script>
-  <script src="js/service/character-traits.js?v=3.2002" defer></script>
-  <script src="js/service/brand.js?v=3.2002" defer></script>
-  <script src="js/service/content-library.js?v=3.2002" defer></script>
-  <script src="js/ui/common.js?v=3.2002" defer></script>
-  <script src="js/ui/dashboard.js?v=3.2002" defer></script>
-  <script src="js/ui/ai-sound.js?v=3.2002" defer></script>
-  <script src="script.js?v=3.2002" defer></script>
+  <script src="core.js?v=3.2003" defer></script>
+  <script src="js/config.js?v=3.2003" defer></script>
+  <script src="js/utils.js?v=3.2003" defer></script>
+  <script src="store.js?v=3.2003" defer></script>
+  <script src="api.js?v=3.2003" defer></script>
+  <script src="js/state.js?v=3.2003" defer></script>
+  <script src="js/auth.js?v=3.2003" defer></script>
+  <script src="js/navigation.js?v=3.2003" defer></script>
+  <script src="js/service/media.js?v=3.2003" defer></script>
+  <script src="js/service/project.js?v=3.2003" defer></script>
+  <script src="js/service/character-traits.js?v=3.2003" defer></script>
+  <script src="js/service/brand.js?v=3.2003" defer></script>
+  <script src="js/service/content-library.js?v=3.2003" defer></script>
+  <script src="js/ui/common.js?v=3.2003" defer></script>
+  <script src="js/ui/dashboard.js?v=3.2003" defer></script>
+  <script src="js/constants/voice-catalog.js?v=3.2003" defer></script>
+  <script src="js/ui/ai-sound.js?v=3.2003" defer></script>
+  <script src="script.js?v=3.2003" defer></script>
 </head>
 
 <body class="layout-fixed page-sound page-shell-ai-sound">

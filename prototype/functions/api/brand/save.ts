@@ -123,9 +123,28 @@ async function normalizeBrandPayload(
     collectManagedSheetObjectNames(previousEnv, ctx.bucket, ctx.brandPrefix, "env"),
     collectManagedSheetObjectNames(normalized.environmentAssets, ctx.bucket, ctx.brandPrefix, "env")
   );
+  // 캐릭터 보이스(brandCharacters[].voice): 파일은 /api/brand/voice 가 이 브랜드 폴더 voice/ 아래에 올린다.
+  // 그 밖을 가리키는 값은 버린다(영상 생성이 이 경로를 서명해 공급자에게 넘기므로 남의 파일을 끼워 넣지 못하게).
+  const voicePrefix = `gs://${ctx.bucket}/${ctx.brandPrefix}/voice/`;
+  if (Array.isArray(normalized.brandCharacters)) {
+    normalized.brandCharacters = normalized.brandCharacters.map((c: any) => {
+      if (!c || typeof c !== "object" || c.voice == null) return c;
+      const audioUrl = String(c.voice?.audioUrl || "");
+      return audioUrl.startsWith(voicePrefix) ? c : { ...c, voice: null };
+    });
+  }
+  const voiceObjectsOf = (list: any) => (Array.isArray(list) ? list : [])
+    .map((c: any) => String(c?.voice?.audioUrl || ""))
+    .filter((u: string) => u.startsWith(voicePrefix))
+    .map((u: string) => u.slice(`gs://${ctx.bucket}/`.length));
+  const keptVoices = new Set(voiceObjectsOf(normalized.brandCharacters));
+  // brandCharacters 를 싣지 않은 저장은 보이스를 바꾼 것이 아니다 — 지우지 않는다.
+  const staleVoiceObjects = Array.isArray(normalized.brandCharacters)
+    ? voiceObjectsOf(ctx.existingBrand?.brandCharacters).filter((o: string) => !keptVoices.has(o))
+    : [];
   return {
     brand: normalized,
-    staleSheetObjects: staleCharacterObjects.concat(staleEnvObjects),
+    staleSheetObjects: staleCharacterObjects.concat(staleEnvObjects, staleVoiceObjects),
   };
 }
 

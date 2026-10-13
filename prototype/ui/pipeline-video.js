@@ -300,6 +300,33 @@
     }
   }
 
+  // IP 라이브러리 캐릭터 보이스 → Seedance 2.5 reference_audios 와 "@Audio N = 누구의 목소리" 줄.
+  // 컷에 실제로 나오는 캐릭터만 싣는다(강제 폴백으로 끌려온 캐릭터의 목소리는 넣지 않는다). 3개까지 — 공급자 합계 30초, 캐릭터당 10초.
+  // 문구는 에이전트 scene_video(functions/api/agent/_shared.ts characterVoiceManifest)와 같다.
+  function resolveCharacterVoiceRefs(scene, statePayload, finalPrompt) {
+    var empty = { referenceAudios: [], lines: [] };
+    try {
+      var reg = NK.service && NK.service.characterRegistry;
+      if (!reg) return empty;
+      var payload = statePayload || {};
+      var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
+      var res = reg.resolveCharactersFromPrompt(brandId, buildCharacterResolutionPrompt(scene, finalPrompt), { allowNameFallback: true, payload: payload });
+      var picked = (res.characters || []).filter(function (c) {
+        return c && c.voice && /^gs:\/\//i.test(String(c.voice.audioUrl || ''));
+      }).slice(0, 3);
+      return {
+        referenceAudios: picked.map(function (c) { return String(c.voice.audioUrl); }),
+        lines: picked.map(function (c, i) {
+          var name = String(c.name || c.trigger || '').replace(/^@/, '');
+          return 'Audio ' + (i + 1) + ': the VOICE of ' + name + ' (' + c.trigger + ') — whenever ' + name +
+            ' speaks, use exactly this voice (timbre, age, pitch, tone). Never play this audio clip itself and never give this voice to any other character.';
+        })
+      };
+    } catch (_) {
+      return empty;
+    }
+  }
+
   // beats → "0.0s-2.5s: ..." 시간표 텍스트. 비트가 없으면 빈 문자열.
   function buildBeatTimeline(scene, durationSec) {
     var raw = scene && scene.beats;
@@ -525,6 +552,16 @@
           if (finalPrompt.indexOf(SET_PLATE_PROMPT_LINE) === -1) finalPrompt = finalPrompt + '\n' + SET_PLATE_PROMPT_LINE;
         }
       }
+      // 캐릭터 보이스: 참조 오디오를 받는 건 Seedance 2.5 뿐이고(다른 모델의 audio 는 그 소리를 그대로 입힌다),
+      // 음성이 꺼져 있으면 위에서 "No speech" 를 붙였으므로 싣지 않는다.
+      var referenceAudios = [];
+      if (opts.videoModel === 'seedance-2.5' && voiceEnabled) {
+        var voiceRefs = resolveCharacterVoiceRefs(scene, statePayload, finalPrompt);
+        if (voiceRefs.referenceAudios.length) {
+          referenceAudios = voiceRefs.referenceAudios;
+          finalPrompt = finalPrompt + '\n' + voiceRefs.lines.join('\n');
+        }
+      }
 
       var videoPayload = {
         projectId: projectId,
@@ -545,6 +582,7 @@
         quality: klingQuality || undefined,
         endImageDataUrl: endImageDataUrl || undefined,
         referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined,
+        referenceAudios: referenceAudios.length ? referenceAudios : undefined,
         negativePrompt: characterNegativePrompt || undefined
       };
       console.debug('videoStart payload', {

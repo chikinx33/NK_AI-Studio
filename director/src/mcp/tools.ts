@@ -150,6 +150,12 @@ export function ipFromBrand(brandId: string, brand: any): any {
   const norm = (v: any) => String(v || "").replace(/^@+/, "").trim().toLowerCase();
   const srcOf = (it: any) => String(it?.imageDataUrl || it?.imageUrl || "").trim();
   const usable = (u: string) => !!u && !u.startsWith("data:");
+  // IP 라이브러리에서 고른 캐릭터 보이스(프리셋 샘플 또는 레퍼런스 녹음). video_submit 의 referenceAudios 에 넣는 gs:// 오디오.
+  const voiceOf = (t: any) => {
+    const v = t?.voice;
+    const audioUrl = String(v?.audioUrl || "").trim();
+    return audioUrl.startsWith("gs://") ? { kind: String(v?.kind || ""), name: String(v?.name || "").trim(), audioUrl } : null;
+  };
   const textChars: any[] = Array.isArray(b.brandCharacters) ? b.brandCharacters : [];
   const text = new Map<string, any>();
   for (const c of textChars) { const k = norm(c?.trigger || c?.token || c?.name); if (k) text.set(k, c); }
@@ -167,7 +173,7 @@ export function ipFromBrand(brandId: string, brand: any): any {
     characters.push({
       name: String(e?.displayName || t.name || token.replace(/^@+/, "")).trim(), token,
       description: String(t.description || "").trim(), negativePrompt: String(t.negativePrompt || "").trim(),
-      primarySheet: usable(primary) ? primary : (sheets[0] || ""), sheets,
+      primarySheet: usable(primary) ? primary : (sheets[0] || ""), sheets, voice: voiceOf(t),
     });
   }
   // 시트 없이 이름·설명만 등록된 캐릭터도 "있다"고 알려야 캐릭터를 새로 만들자는 오답이 안 난다.
@@ -176,7 +182,7 @@ export function ipFromBrand(brandId: string, brand: any): any {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     characters.push({ name: String(c?.name || key).trim(), token: String(c?.trigger || c?.token || "").trim(),
-      description: String(c?.description || "").trim(), negativePrompt: String(c?.negativePrompt || "").trim(), primarySheet: "", sheets: [] });
+      description: String(c?.description || "").trim(), negativePrompt: String(c?.negativePrompt || "").trim(), primarySheet: "", sheets: [], voice: voiceOf(c) });
   }
   return {
     brandId, brandTitle: String(b.brandTitle || b.title || "").trim(),
@@ -219,7 +225,8 @@ export function buildMcpServer(token: string): McpServer {
 
   server.registerTool("project_overview", {
     description: "프로젝트 요약: 제목·화면비·스타일 앵커·캐릭터·씬 목록(경로 포함)·디렉터 시퀀스와 테이크 상태. 작업 시작 시 먼저 부른다. " +
-      "ip 는 이 프로젝트가 속한 IP(브랜드 허브 IP 라이브러리)의 세계관과 등록 캐릭터(설명·시트 gs 경로)다. " +
+      "ip 는 이 프로젝트가 속한 IP(브랜드 허브 IP 라이브러리)의 세계관과 등록 캐릭터(설명·시트 gs 경로·voice)다. " +
+      "캐릭터의 voice.audioUrl 은 사용자가 정한 그 캐릭터의 목소리다 — 대사가 있으면 video_submit 의 referenceAudios 로 쓴다. " +
       "캐릭터는 ip.characters 가 기준이다 — 여기 있으면 이미 등록된 캐릭터이므로 새로 만들자고 하지 말고 그 시트를 참조로 쓴다. " +
       "directorNotes 는 사용자가 단계 화면에서 적은 이 프로젝트 고정 규칙(rules)·교훈(lessons)이다. 메모리와 함께 반드시 지킨다.",
     inputSchema: projectArgs,
@@ -318,7 +325,9 @@ export function buildMcpServer(token: string): McpServer {
     description: "【유료·승인 필요】Seedance 2.5 reference-to-video 로 시퀀스(또는 부분 재생성 구간)를 제출한다. " +
       "prompt 는 영문 시퀀스 프롬프트 전문(무음악 규칙·샷 리스트 포함, 그대로 전송됨). referenceImages 순서가 @Image 번호다. " +
       "draft=true 면 480p 드래프트(나중에 video_complete 로 1080p). 제출 즉시 jobId 를 돌려주고 take 를 running 으로 기록한다. " +
-      "제출 범위의 모든 컷에 사용자가 확인한 스틸(stillUrl + stillApproved:true)이 있고 그 스틸이 referenceImages 에 있어야 한다 — 아니면 비용 없이 거절된다.",
+      "제출 범위의 모든 컷에 사용자가 확인한 스틸(stillUrl + stillApproved:true)이 있고 그 스틸이 referenceImages 에 있어야 한다 — 아니면 비용 없이 거절된다. " +
+      "대사하는 캐릭터에 voice(project_overview 의 ip.characters[].voice.audioUrl)가 있으면 그 경로를 referenceAudios 에 넣고(순서가 @Audio 번호), " +
+      "프롬프트에 'Audio 1: the VOICE of <이름> — whenever <이름> speaks, use exactly this voice. Never play this audio clip itself.' 처럼 누구의 목소리인지 쓴다.",
     inputSchema: {
       ...projectArgs, sequenceId: ID, takeId: ID.describe("새 테이크 ID(멱등키로도 쓰인다)"),
       prompt: z.string().min(20).max(20000),
@@ -328,6 +337,7 @@ export function buildMcpServer(token: string): McpServer {
       resolution: z.enum(["480p", "720p", "1080p"]).default("1080p").describe("draft=false 일 때 해상도"),
       referenceImages: z.array(z.string()).max(30).describe("gs:// 또는 https 서명 URL"),
       referenceVideos: z.array(z.string()).max(10).default([]).describe("승인된 결과물만. 실패·반려 영상 금지"),
+      referenceAudios: z.array(z.string()).max(3).default([]).describe("캐릭터 보이스 gs:// 경로(ip.characters[].voice.audioUrl). 대사하는 캐릭터만, 순서가 @Audio 번호"),
       generateAudio: z.boolean().default(true),
       kind: z.enum(["full", "patch"]).default("full"),
       range: z.object({ start: z.number(), end: z.number() }).optional().describe("patch 일 때 대체할 원래 테이크 구간"),
@@ -348,6 +358,7 @@ export function buildMcpServer(token: string): McpServer {
           durationSeconds: a.durationSeconds, aspectRatio: a.aspectRatio,
           resolution: a.draft ? "480p" : a.resolution, draft: a.draft,
           referenceImages: a.referenceImages, referenceVideos: a.referenceVideos,
+          ...(a.referenceAudios.length ? { referenceAudios: a.referenceAudios } : {}),
           generateAudio: a.generateAudio, projTag: a.projectId, ownerId: a.ownerId, sceneId: a.takeId,
         },
         timeoutMs: 120_000,

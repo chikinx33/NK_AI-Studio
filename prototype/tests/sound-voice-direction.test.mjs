@@ -11,7 +11,7 @@ const read = (relative) => fs.readFile(path.join(prototype, relative), 'utf8');
 test('여아·남아·캐릭터 보이스: 클라이언트 id 가 서버 지시문 목록과 정확히 일치한다', async () => {
   const [server, client] = await Promise.all([
     read('functions/api/sound/_character-voices.ts'),
-    read('js/ui/ai-sound.js'),
+    read('js/constants/voice-catalog.js'),
   ]);
   const serverIds = [...server.matchAll(/^\s{2}"([a-z0-9-]+)": \{\s*$/gm)].map((m) => m[1]).sort();
   const block = client.slice(client.indexOf('var CHARACTER_VOICES = ['), client.indexOf('var VOICE_CATEGORIES'));

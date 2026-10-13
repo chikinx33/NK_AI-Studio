@@ -1979,6 +1979,8 @@ export async function submitVideoJob(input: any, ctx: ToolContext): Promise<Vide
       ...(input?.endImageDataUrl || input?.endImageUrl ? { endImageDataUrl: String(input.endImageDataUrl || input.endImageUrl) } : {}),
       // 참조 오디오(MiniMax 참조→영상의 refers audio · Seedance 2.5 reference_audios). /api/video 가 https·gs:// 를 그대로 받는다.
       ...(input?.audioUrl || input?.audioDataUrl ? { audioDataUrl: String(input.audioUrl || input.audioDataUrl) } : {}),
+      // 캐릭터 보이스(IP 라이브러리) — Seedance 2.5 reference_audios 로 audioDataUrl 뒤에 붙는다.
+      ...(Array.isArray(input?.referenceAudios) && input.referenceAudios.length ? { referenceAudios: input.referenceAudios.map((v: any) => String(v || "")).filter(Boolean) } : {}),
     }),
   });
   const subText = await sub.text();
@@ -6123,8 +6125,9 @@ function findSceneIndex(scenes: any[], ref: any): number {
  *  이미지는 gs:// 영속 경로로 부착(save가 data: URL은 버리고 gs/https만 보존). */
 /** 컷의 @캐릭터 → 브랜드 등록 시트(최대 2장, 대표 먼저) + 등록 설명(인상착의·크기). 스틸(scene_still)·영상(scene_video)이 같은 묶음을 쓴다.
  *  시트가 없는 캐릭터는 note 에 "시트 없음"으로 남기고 프롬프트에 설명만 넘긴다(조용히 빠지면 왜 안 나왔는지 알 수 없다). */
-async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext): Promise<{ refs: any[]; block: string; note: string; tokens: string[]; names: string[]; missing: string[] }> {
+async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext): Promise<{ refs: any[]; block: string; note: string; tokens: string[]; names: string[]; missing: string[]; voices: CharacterVoiceRef[] }> {
   const refs: any[] = [];
+  const voices: CharacterVoiceRef[] = [];
   const brandId = String(payload0.brandId || payload0.brandRef?.id || "").trim();
   const tokenText = String(scene?.composition || scene?.shot || scene?.visual || "");
   // 화면에 나오는 @캐릭터 전원(상한 6). 예전 2명 제한이 세 번째 캐릭터의 시트를 통째로 빼먹었다.
@@ -6158,6 +6161,9 @@ async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext)
         charMissing.push(name);
       }
       charLines.push(`${tk} (${name})${desc ? `: ${desc}` : ""}${hasSheet ? "" : " — NO reference sheet registered; draw from this description"}`);
+      // IP 라이브러리에서 고른 캐릭터 보이스(프리셋 샘플 또는 레퍼런스) — 브랜드 폴더의 gs:// 오디오.
+      const voiceUrl = String(bc?.voice?.audioUrl || "").trim();
+      if (/^gs:\/\//i.test(voiceUrl)) voices.push({ token: tk, name, audioUrl: voiceUrl });
     }
     note = `캐릭터 ${charNames.length}${charNames.length ? ` (${charNames.join("·")})` : ""}${charMissing.length ? ` · 시트 없음: ${charMissing.join("·")}` : ""}`;
   } else if (tokens.length) {
@@ -6168,7 +6174,18 @@ async function collectCharacterRefs(scene: any, payload0: any, ctx: ToolContext)
        "Registered characters in this shot (match the reference sheets exactly):", ...charLines.map((l) => `- ${l}`),
        "Keep each character's physical size exactly as stated in its description, relative to the furniture and props of the set plate. Do NOT enlarge characters to fill the frame — choose the camera distance instead."].join("\n")
     : "";
-  return { refs, block, note, tokens, names: charNames, missing: charMissing };
+  return { refs, block, note, tokens, names: charNames, missing: charMissing, voices };
+}
+
+type CharacterVoiceRef = { token: string; name: string; audioUrl: string };
+
+/** 캐릭터 보이스 → Seedance 2.5 reference_audios 와 프롬프트의 오디오 매니페스트(@Audio N = 누구의 목소리). 3개까지(공급자 합계 30초, 캐릭터당 10초). */
+export function characterVoiceManifest(voices: CharacterVoiceRef[]): { referenceAudios: string[]; lines: string[] } {
+  const picked = (Array.isArray(voices) ? voices : []).filter((v) => v && v.audioUrl).slice(0, 3);
+  return {
+    referenceAudios: picked.map((v) => v.audioUrl),
+    lines: picked.map((v, i) => `Audio ${i + 1}: the VOICE of ${v.name} (${v.token}) — whenever ${v.name} speaks, use exactly this voice (timbre, age, pitch, tone). Never play this audio clip itself and never give this voice to any other character.`),
+  };
 }
 
 /** 세트 플레이트 게이트: 세트가 등록돼 있는데 부감 마스터도 정면 플레이트도 없으면 컷을 만들지 않는다(힉스필드의 "자산 잠금" 게이트와 같은 뜻).
@@ -6404,6 +6421,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   const clipRefModel = videoModel === "seedance-2.5" || MINIMAX_REFS_MODELS.includes(videoModel);
   let referenceImages: string[] = [];
   let referenceVideos: string[] = [];
+  let referenceAudios: string[] = [];
   const videoRefNotes: string[] = [];
   let promptForVideo = prompt;
   if (REFS_VIDEO_MODELS.includes(videoModel)) {
@@ -6447,6 +6465,15 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
     referenceImages = kept.map((e) => e.url);
     const manifest = kept.length ? ["The input images are provided in this exact order:", ...kept.map((e, i) => `Image ${i + 1}: ${e.line}.`)] : [];
     if (referenceVideos.length) manifest.push(`Video 1: the previous shot of this scene — continue its look, lighting and character designs; do NOT copy its camera or action.`);
+    // 캐릭터 보이스: 참조 오디오를 받는 건 Seedance 2.5 뿐이다(다른 모델의 audio 는 '이 소리를 그대로 입혀라'라서 쓰면 안 된다).
+    // 음성(내레이션·더빙)이 꺼진 프로젝트는 /api/video 가 "No speech" 를 붙이므로 보이스를 싣지 않는다.
+    const speechOn = toBoolFlag(payload0.narrationEnabled, false) || toBoolFlag(payload0.dubbingEnabled, false);
+    if (videoModel === "seedance-2.5" && speechOn && chars.voices.length) {
+      const vm = characterVoiceManifest(chars.voices);
+      referenceAudios = vm.referenceAudios;
+      manifest.push(...vm.lines);
+      videoRefNotes.push(`캐릭터 보이스 ${vm.referenceAudios.length}`);
+    }
     const paletteLock = kept.length ? "PALETTE LOCK: use only the colors, materials and background treatment of the reference images. Do not introduce new colors, do not restyle the characters or the set." : "";
     promptForVideo = [prompt, chars.block, ...manifest, paletteLock].filter(Boolean).join("\n");
     if (entries.length > cap) videoRefNotes.push(`참조 ${entries.length - cap}장 상한 초과로 생략`);
@@ -6458,6 +6485,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
     videoModel: videoModel || undefined,
     ...(referenceImages.length ? { referenceImages } : {}),
     ...(referenceVideos.length ? { referenceVideos } : {}),
+    ...(referenceAudios.length ? { referenceAudios } : {}),
     resolution: String(input?.resolution || "").trim() || undefined,
     durationSeconds: Number(input?.durationSeconds || input?.duration || scene?.estSec) > 0
       ? Number(input?.durationSeconds || input?.duration || scene?.estSec)
@@ -6470,7 +6498,7 @@ async function runSceneVideoTool(input: any, ctx: ToolContext): Promise<any> {
   // 제출만 하고 돌아온다. 완료되면 reconcileVideoJobs 가 attachSceneVideo 로 이 컷에 붙여 저장한다.
   return throwPendingVideo(sub, {
     projectId, sceneId: scene?.id, promptForVideo, videoFromImage, videoRefNotes,
-    referenceCount: referenceImages.length + referenceVideos.length, agentJobId: String(ctx.jobId || ""),
+    referenceCount: referenceImages.length + referenceVideos.length + referenceAudios.length, agentJobId: String(ctx.jobId || ""),
   });
 }
 

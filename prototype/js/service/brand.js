@@ -50,6 +50,28 @@
         return fallbackMerge([item.negativePrompt, item.bannedTraits]);
     }
 
+    // 캐릭터 보이스(IP 라이브러리 '보이스'): 프리셋이든 레퍼런스든 영상에 쓰는 건 오디오 파일 하나다.
+    // 파일은 /api/brand/voice 가 브랜드 폴더에 올린 gs:// 만 받는다(data: 는 로컬 저장소를 키우므로 싣지 않는다).
+    function normalizeCharacterVoice(value) {
+        var v = value && typeof value === 'object' ? value : null;
+        if (!v) return null;
+        var kind = v.kind === 'reference' ? 'reference' : (v.kind === 'preset' ? 'preset' : '');
+        var audioUrl = normalizeText(v.audioUrl);
+        if (!kind || !/^gs:\/\//i.test(audioUrl)) return null;
+        var durationSec = Number(v.durationSec);
+        return {
+            kind: kind,
+            name: normalizeText(v.name),
+            provider: normalizeText(v.provider),
+            providerVoiceId: normalizeText(v.providerVoiceId),
+            voiceId: normalizeText(v.voiceId),
+            audioUrl: audioUrl,
+            fileName: normalizeText(v.fileName),
+            durationSec: isFinite(durationSec) && durationSec > 0 ? durationSec : 0,
+            updatedAt: normalizeText(v.updatedAt)
+        };
+    }
+
     function normalizeBrandCharacters(value) {
         var src = Array.isArray(value) ? value : [];
         var rows = [];
@@ -71,6 +93,7 @@
                 fixedTraits: [],
                 bannedTraits: [],
                 negativePrompt: mergeCharacterNegative(item),
+                voice: normalizeCharacterVoice(item.voice),
                 defaultPromptPrefix: normalizeText(item.defaultPromptPrefix || 'Keep character identity consistent.'),
                 styleGuide: '',
                 isActive: item.isActive === false ? false : true,
@@ -108,6 +131,7 @@
                 fixedTraits: [],
                 bannedTraits: [],
                 negativePrompt: pickText(ex.negativePrompt, c.negativePrompt, true),
+                voice: c.voice || ex.voice || null,
                 defaultPromptPrefix: pickText(ex.defaultPromptPrefix, c.defaultPromptPrefix, true) || 'Keep character identity consistent.',
                 styleGuide: '',
                 isActive: (c.isActive === false ? false : true) && (ex.isActive === false ? false : true),
@@ -868,6 +892,7 @@
     }
 
     brand.normalizeBrand = normalizeBrand;
+    brand.normalizeCharacterVoice = normalizeCharacterVoice;
     brand.list = function () {
         ensureMigrated();
         return readBrands();

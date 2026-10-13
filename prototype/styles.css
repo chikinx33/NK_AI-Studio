@@ -11022,6 +11022,105 @@ details[open] > .knowledge-hub-disclosure-body {
   cursor: pointer;
 }
 
+/* IP 라이브러리 캐릭터 보이스: [보이스 자산 선택] [레퍼런스 오디오 등록] + 지금 걸린 보이스 */
+.character-voice-row {
+  display: flex;
+  gap: 6px;
+}
+
+.character-voice-btn {
+  position: relative;
+  width: 32px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.character-voice-btn:hover:not(:disabled):not(.is-disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.character-voice-btn.is-set {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-2));
+}
+
+.character-voice-btn:disabled,
+.character-voice-btn.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.character-voice-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.character-voice-upload.is-disabled input {
+  cursor: default;
+}
+
+.character-voice-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.character-voice-current {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.character-voice-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.character-voice-play span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 64px;
+}
+
+.character-voice-remove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.character-voice-remove:hover:not(:disabled) {
+  color: var(--text);
+}
+
 .character-sheet-count {
   font-size: 12px;
   color: var(--muted);
@@ -16151,3 +16250,38 @@ body.codex-connect-open { overflow: hidden; }
 }
 .codex-connect-close:hover,
 .codex-connect-close:focus-visible { background: var(--layer-strong); color: var(--text); }
+
+/* ── 보이스 라이브러리 모달 — 사운드 스튜디오(ai-sound.js)와 IP 라이브러리 보이스 선택(voice-picker.js)이 같이 쓴다. ── */
+.snd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.snd-modal { width: min(880px, 94vw); max-height: 86vh; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+.snd-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.snd-modal-title { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+.snd-modal-count { font-size: 0.74rem; color: var(--muted); }
+.snd-modal-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2, var(--bg)); color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.snd-modal-close:hover { color: var(--text); }
+.snd-modal-filters { display: flex; flex-direction: column; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.snd-modal-search { width: 100%; background: var(--bg-2, var(--bg)); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 12px; font-size: 0.84rem; }
+.snd-modal-search:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.snd-seg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.snd-seg-tab { padding: 5px 14px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; color: var(--muted); background: var(--bg-2, var(--bg)); border: 1px solid var(--border); cursor: pointer; }
+.snd-seg-tab.is-active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.snd-modal-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.snd-voice-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: color-mix(in srgb, var(--bg-2, var(--bg)) 50%, transparent); display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+.snd-voice-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+.snd-voice-card.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+.snd-vc-head { display: flex; align-items: center; gap: 9px; }
+.snd-vc-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); flex-shrink: 0; }
+.snd-vc-name { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+.snd-vc-sub { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.snd-vc-fav { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; padding: 2px; }
+.snd-vc-fav.is-fav { color: #fbbf24; }
+.snd-vc-desc { font-size: 0.76rem; color: var(--text); line-height: 1.4; }
+.snd-vc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.snd-vc-tag { font-size: 0.66rem; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,0.05); color: var(--muted); }
+.snd-vc-foot { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.snd-vc-preview { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; padding: 4px 10px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); color: var(--accent); background: none; cursor: pointer; }
+.snd-vc-preview:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.snd-vc-r2v { font-size: 0.62rem; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,0.05); color: var(--muted); margin-left: auto; }
+.snd-modal-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 36px 12px; font-size: 0.84rem; }
+/* IP 라이브러리(.img-modal, z-index 10000) 위에서 열린다. */
+.voice-picker-overlay { z-index: 10010; }

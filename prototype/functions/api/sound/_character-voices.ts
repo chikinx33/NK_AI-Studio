@@ -5,7 +5,7 @@
 // 나이·음역·말버릇을 지시문으로 연기시킨다(애니메이션에서 남아 역을 여성 성우가 맡는 것과 같은 방식).
 //
 // 지시문은 서버에만 둔다(단일 원천). 클라이언트는 `char:<id>` 만 보내고 표시용 이름·분류만 가진다
-// (prototype/js/ui/ai-sound.js 의 CHARACTER_VOICES — id 가 여기와 일치해야 한다, 테스트가 검사).
+// (prototype/js/constants/voice-catalog.js 의 CHARACTER_VOICES — id 가 여기와 일치해야 한다, 테스트가 검사).
 
 export interface CharacterVoice { base: string; persona: string; }
 

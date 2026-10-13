@@ -1135,6 +1135,19 @@
     return j(text);
   };
 
+  // IP 라이브러리 캐릭터 보이스: 프리셋 샘플 또는 레퍼런스 오디오를 브랜드 폴더에 올리고 voice 값을 돌려받는다.
+  // body: { brandId, token, kind: 'preset', provider, voice, name, voiceId } | { brandId, token, kind: 'reference', dataUrl, fileName }
+  api.brandVoiceRegister = async function (body) {
+    var res = await fetchWithTimeout(withBase('/api/brand/voice'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {})
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
+    if (!res.ok) { var err = new Error(e(text) || 'brand_voice_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
   api.brandDelete = async function (brandId) {
     var res = await fetch(withBase('/api/brand/delete'), {
       method: 'POST',

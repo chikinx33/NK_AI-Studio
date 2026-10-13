@@ -110,7 +110,10 @@ test("Seedance 2.5 드래프트·완성: 요청과 요금이 같은 규칙을 �
   const v = read("prototype/functions/api/video.ts");
   assert.match(v, /if \(\(body as any\)\?\.draft === true\) \{ atlasBody\.draft = true; atlasBody\.resolution = "480p"; \}/);
   assert.match(v, /model: "bytedance\/seedance-2\.5\/draft-complete",\s*\n\s*draft_id: draftId,/);
-  assert.match(v, /reference_audios = \[await toAtlasMediaUrl\(audioDataUrl/);
+  // 참조 오디오는 data: 그대로가 아니라 GCS 에 올려 서명 URL 로 보낸다(직접 올린 오디오 + 캐릭터 보이스).
+  assert.match(v, /audiosResolved\.push\(await toAtlasMediaUrl\(audioDataUrl/);
+  assert.match(v, /toAtlasMediaUrl\(referenceAudios\[i\]/);
+  assert.match(v, /atlasBody\.reference_audios = audiosResolved/);
   const p = read("prototype/functions/api/_shared/video-pricing.ts");
   assert.match(p, /resolution: input\.draft \? "480p"/);
   assert.match(p, /atlasModel === "bytedance\/seedance-2\.5\/draft-complete"/);

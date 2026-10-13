@@ -222,7 +222,18 @@
         appearanceLabel: 'Character appearance',
         appearancePlaceholder: 'e.g. blue cube body, rounded corners, one-piece front face, short cuboid arms, 3D animation style',
         negativeLabel: 'Keep out of the image',
-        negativePlaceholder: 'e.g. fingers, human hands, extra limbs, nose'
+        negativePlaceholder: 'e.g. fingers, human hands, extra limbs, nose',
+        voicePick: 'Choose a voice asset',
+        voiceRefAdd: 'Register reference audio',
+        voicePlay: 'Play voice',
+        voiceRemove: 'Remove voice',
+        voiceRefPrefix: 'Ref · ',
+        voiceRegistering: 'Registering…',
+        voiceNoBrand: 'Open a brand first to register voices.',
+        voiceFail: 'Failed to register voice: ',
+        voiceDecodeFail: 'Could not read this audio file. Use a common format such as wav, mp3 or m4a.',
+        voiceTooShort: 'The reference audio must be at least 2 seconds long.',
+        voiceTrimmed: 'Only the first 10 seconds will be used as the voice reference.'
       }
       : {
         title: 'IP 라이브러리',
@@ -256,7 +267,18 @@
         appearanceLabel: '캐릭터 생김새',
         appearancePlaceholder: '예: 파란 큐브형 몸, 둥근 모서리, 전면 일체형 얼굴, 짧은 육면체 팔, 3D 애니메이션 그림체',
         negativeLabel: '안 나오게 할 것',
-        negativePlaceholder: '예: 손가락, 사람 손, 팔다리 추가, 코'
+        negativePlaceholder: '예: 손가락, 사람 손, 팔다리 추가, 코',
+        voicePick: '보이스 자산 선택',
+        voiceRefAdd: '레퍼런스 오디오 등록',
+        voicePlay: '보이스 듣기',
+        voiceRemove: '보이스 해제',
+        voiceRefPrefix: '레퍼런스 · ',
+        voiceRegistering: '등록 중…',
+        voiceNoBrand: '브랜드를 먼저 연 뒤 보이스를 등록할 수 있습니다.',
+        voiceFail: '보이스 등록 실패: ',
+        voiceDecodeFail: '이 오디오 파일을 읽지 못했습니다. wav·mp3·m4a 같은 일반 형식을 써 주세요.',
+        voiceTooShort: '레퍼런스 오디오는 2초 이상이어야 합니다.',
+        voiceTrimmed: '앞 10초만 보이스 레퍼런스로 사용합니다.'
       };
   }
 
@@ -477,6 +499,73 @@
       return NK.api.mediaProxyUrl(raw);
     }
     return raw;
+  }
+
+  // ─── 캐릭터 보이스(레퍼런스 오디오) ─────────────────────────────
+  // 영상 모델(Seedance 2.5 reference_audios)은 wav/mp3, 클립당 2초 이상, 요청 합계 30초까지 받는다.
+  // 한 컷에 캐릭터 셋이 같이 나와도 넘지 않도록 캐릭터당 앞 10초만 쓴다.
+  // 어떤 형식이 오든 브라우저가 풀어서 24kHz 모노 16bit WAV 로 다시 만든다(서버는 wav/mp3 만 받는다).
+  var VOICE_REF_MIN_SEC = 2;
+  var VOICE_REF_MAX_SEC = 10;
+  var VOICE_REF_RATE = 24000;
+
+  function encodeMonoWavDataUrl(samples, rate) {
+    var dataBytes = samples.length * 2;
+    var buf = new ArrayBuffer(44 + dataBytes);
+    var dv = new DataView(buf);
+    function str(off, text) { for (var i = 0; i < text.length; i++) dv.setUint8(off + i, text.charCodeAt(i)); }
+    str(0, 'RIFF'); dv.setUint32(4, 36 + dataBytes, true); str(8, 'WAVE');
+    str(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    str(36, 'data'); dv.setUint32(40, dataBytes, true);
+    for (var i = 0; i < samples.length; i++) {
+      var x = Math.max(-1, Math.min(1, samples[i]));
+      dv.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+    }
+    var bytes = new Uint8Array(buf);
+    var bin = '';
+    for (var k = 0; k < bytes.length; k += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(k, k + 0x8000));
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
+
+  // 반환: { dataUrl, durationSec, trimmed }. 실패는 Error.code = 'decode' | 'too_short'.
+  function prepareVoiceReferenceAudio(file) {
+    function fail(code) { var err = new Error(code); err.code = code; return err; }
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!Ctx || !Offline || !file || typeof file.arrayBuffer !== 'function') return Promise.reject(fail('decode'));
+    return file.arrayBuffer().then(function (buf) {
+      var ctx = new Ctx();
+      return new Promise(function (resolve, reject) { ctx.decodeAudioData(buf, resolve, reject); })
+        .then(function (decoded) { try { ctx.close(); } catch (_) { } return decoded; },
+          function () { try { ctx.close(); } catch (_) { } throw fail('decode'); });
+    }).then(function (decoded) {
+      var total = Number(decoded && decoded.duration) || 0;
+      if (total < VOICE_REF_MIN_SEC) throw fail('too_short');
+      var useSec = Math.min(total, VOICE_REF_MAX_SEC);
+      var offline = new Offline(1, Math.ceil(useSec * VOICE_REF_RATE), VOICE_REF_RATE);
+      var src = offline.createBufferSource();
+      src.buffer = decoded;
+      src.connect(offline.destination);
+      src.start(0);
+      return offline.startRendering().then(function (rendered) {
+        return {
+          dataUrl: encodeMonoWavDataUrl(rendered.getChannelData(0), VOICE_REF_RATE),
+          durationSec: Math.round(useSec * 100) / 100,
+          trimmed: total > VOICE_REF_MAX_SEC + 0.05
+        };
+      });
+    });
+  }
+
+  // 화면에 보일 보이스 이름: 프리셋은 카탈로그 이름(언어 반영), 레퍼런스는 파일 이름.
+  function characterVoiceLabel(voice, ipLibraryUiText) {
+    if (!voice) return '';
+    if (voice.kind === 'reference') return ipLibraryUiText.voiceRefPrefix + (voice.fileName || voice.name || '');
+    var cat = NK.constants && NK.constants.voiceCatalog;
+    var all = cat ? (cat.GEMINI_VOICES || []).concat(cat.CHARACTER_VOICES || []) : [];
+    var hit = all.find(function (v) { return v.id === voice.voiceId; });
+    return hit && NK.ui && NK.ui.voicePicker ? NK.ui.voicePicker.voiceLabel(hit) : (voice.name || voice.providerVoiceId || '');
   }
 
   // 원본이 이미 지워진 시트(옛 사본이 남아 되살아난 레코드 등)는 썸네일만 깨진 채 남는다.
@@ -1205,6 +1294,9 @@
     var aiFillBusyToken = '';
     var aiFillOpenToken = '';
     var aiFillNoticeToken = '';
+    // 캐릭터 보이스 등록 중(서버에 오디오를 올리는 동안 그 카드의 보이스 버튼을 잠근다)
+    var voiceBusyToken = '';
+    var voicePlayback = null;
     // 배경·소품 라이브러리 모달 상태 (캐릭터 IP 라이브러리와 동일한 구조).
     var modalEnvDraft = null;
     var modalEnvSaveInFlight = false;
@@ -1644,6 +1736,7 @@
       modalSaveInFlight = false;
       modalPreviewImageUrl = '';
       modalPreviewImageAlt = '';
+      stopCharacterVoicePlayback();
     }
 
     function captureCharacterPropsDisclosureState(box) {
@@ -1709,6 +1802,50 @@
       } catch (_) {}
     }
 
+    // 캐릭터 카드의 보이스 줄: [보이스 자산 선택(mic)] [레퍼런스 오디오 등록(+)] 과 지금 걸린 보이스.
+    function renderCharacterVoiceControls(token, voice, ipLibraryUiText) {
+      var t = escapeHtml(token);
+      var busy = !!voiceBusyToken;
+      var html =
+        '<div class="character-voice-row">' +
+        '<button type="button" class="character-voice-btn' + (voice ? ' is-set' : '') + '" data-action="character-voice-pick" data-character-token="' + t + '"' + (busy ? ' disabled' : '') +
+        ' title="' + escapeHtml(ipLibraryUiText.voicePick) + '" aria-label="' + escapeHtml(ipLibraryUiText.voicePick) + '">' +
+        // Lucide mic
+        '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>' +
+        '</svg>' +
+        '</button>' +
+        '<label class="character-voice-btn character-voice-upload' + (busy ? ' is-disabled' : '') + '" title="' + escapeHtml(ipLibraryUiText.voiceRefAdd) + '" aria-label="' + escapeHtml(ipLibraryUiText.voiceRefAdd) + '">' +
+        '<input type="file" accept="audio/*" data-action="character-voice-upload" data-character-token="' + t + '"' + (busy ? ' disabled' : '') + ' />' +
+        // Lucide plus
+        '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M5 12h14"/><path d="M12 5v14"/>' +
+        '</svg>' +
+        '</label>' +
+        '</div>';
+      if (voiceBusyToken === token) {
+        return html + '<span class="character-voice-status">' + escapeHtml(ipLibraryUiText.voiceRegistering) + '</span>';
+      }
+      if (!voice) return html;
+      var label = characterVoiceLabel(voice, ipLibraryUiText);
+      return html +
+        '<div class="character-voice-current">' +
+        '<button type="button" class="character-voice-play" data-action="character-voice-play" data-character-token="' + t + '" title="' + escapeHtml(ipLibraryUiText.voicePlay) + '" aria-label="' + escapeHtml(ipLibraryUiText.voicePlay + ' ' + label) + '">' +
+        // Lucide play
+        '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        '</button>' +
+        '<button type="button" class="character-voice-remove" data-action="character-voice-remove" data-character-token="' + t + '"' + (busy ? ' disabled' : '') + ' title="' + escapeHtml(ipLibraryUiText.voiceRemove) + '" aria-label="' + escapeHtml(ipLibraryUiText.voiceRemove) + '">' +
+        // Lucide x
+        '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>' +
+        '</button>' +
+        '</div>';
+    }
+
+    function stopCharacterVoicePlayback() {
+      if (voicePlayback) { try { voicePlayback.pause(); } catch (_) { } voicePlayback = null; }
+    }
+
     function renderCharacterManagerModal() {
       // 언어 전환 리스너가 부를 수 있도록 최신 렌더 함수를 등록해 둔다.
       rerenderCharacterModal = renderCharacterManagerModal;
@@ -1758,6 +1895,31 @@
         return null;
       }
 
+      // 보이스 파일은 바로 브랜드 폴더에 올리고, 값(voice)은 초안에만 넣는다 — '저장'을 눌러야 유지된다(시트와 같다).
+      function registerCharacterVoice(token, body) {
+        if (!brandId || !NK.api || !NK.api.brandVoiceRegister) {
+          alert(ipLibraryUiText.voiceNoBrand);
+          return;
+        }
+        stopCharacterVoicePlayback();
+        voiceBusyToken = token;
+        renderCharacterManagerModal();
+        NK.api.brandVoiceRegister(Object.assign({ brandId: brandId, token: token }, body))
+          .then(function (res) {
+            // 등록 중에 창을 닫았으면 초안이 없다 — 닫은 창에 값을 되살리지 않는다.
+            if (!Array.isArray(modalBrandCharsDraft)) return;
+            if (res && res.voice) syncBrandCharField(token, 'voice', res.voice);
+          })
+          .catch(function (err) {
+            alert(ipLibraryUiText.voiceFail + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            voiceBusyToken = '';
+            var modalEl = document.getElementById('character-manager-modal');
+            if (modalEl && !modalEl.classList.contains('hidden')) renderCharacterManagerModal();
+          });
+      }
+
       var cardsHtml = sheetEntries.length
         ? sheetEntries.map(function (entry) {
           var displayName = normalizeCharacterName(entry.displayName || entry.token) || String(entry.token || '').replace(/^@/, '');
@@ -1790,6 +1952,7 @@
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             escapeHtml(ipLibraryUiText.upload) +
             '</label>' +
+            renderCharacterVoiceControls(entry.token, bChar && bChar.voice, ipLibraryUiText) +
             '</div>' +
             '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '</div>' +
@@ -1889,6 +2052,37 @@
           if (!previewTarget || !previewTarget.sheet) return;
           modalPreviewImageUrl = resolveSheetPreviewUrl(previewTarget.sheet.imageDataUrl);
           modalPreviewImageAlt = (normalizeCharacterName(previewTarget.entry && (previewTarget.entry.displayName || previewTarget.entry.token) || previewToken || '') || String(previewToken || '').replace(/^@/, '')) + ' ' + ipLibraryUiText.previewAlt;
+          renderCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-voice-pick') {
+          if (voiceBusyToken || !NK.ui || !NK.ui.voicePicker) return;
+          var pickToken = String(btn.dataset.characterToken || '').trim();
+          var pickCur = (getBrandCharForToken(pickToken) || {}).voice;
+          NK.ui.voicePicker.open({
+            selectedVoiceId: pickCur && pickCur.kind === 'preset' ? pickCur.voiceId : '',
+            onSelect: function (v) {
+              registerCharacterVoice(pickToken, {
+                kind: 'preset', provider: v.provider, voice: v.providerVoiceId, name: v.name, voiceId: v.id
+              });
+            }
+          });
+          return;
+        }
+        if (action === 'character-voice-play') {
+          var playVoice = (getBrandCharForToken(btn.dataset.characterToken) || {}).voice;
+          if (!playVoice || !playVoice.audioUrl) return;
+          stopCharacterVoicePlayback();
+          try {
+            voicePlayback = new Audio(resolveSheetPreviewUrl(playVoice.audioUrl));
+            voicePlayback.play();
+          } catch (_) { }
+          return;
+        }
+        if (action === 'character-voice-remove') {
+          if (voiceBusyToken) return;
+          stopCharacterVoicePlayback();
+          syncBrandCharField(String(btn.dataset.characterToken || '').trim(), 'voice', null);
           renderCharacterManagerModal();
           return;
         }
@@ -2061,6 +2255,23 @@
 
       box.onchange = function (evt) {
         var input = evt.target;
+        if (input && input.matches && input.matches('input[type="file"][data-action="character-voice-upload"]')) {
+          var voiceToken = String(input.dataset.characterToken || '').trim();
+          var voiceFile = input.files && input.files[0];
+          input.value = '';
+          if (!voiceToken || !voiceFile || voiceBusyToken) return;
+          prepareVoiceReferenceAudio(voiceFile)
+            .then(function (prepared) {
+              if (prepared.trimmed) alert(ipLibraryUiText.voiceTrimmed);
+              registerCharacterVoice(voiceToken, {
+                kind: 'reference', dataUrl: prepared.dataUrl, fileName: String(voiceFile.name || '')
+              });
+            })
+            .catch(function (err) {
+              alert(err && err.code === 'too_short' ? ipLibraryUiText.voiceTooShort : ipLibraryUiText.voiceDecodeFail);
+            });
+          return;
+        }
         if (!input || !input.matches || !input.matches('input[type="file"][data-action="character-sheet-upload"]')) return;
         var token = String(input.dataset.characterToken || '').trim();
         var files = Array.prototype.slice.call(input.files || []);

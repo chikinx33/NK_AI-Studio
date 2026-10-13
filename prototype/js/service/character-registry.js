@@ -86,6 +86,10 @@
       fixedTraits: [],
       bannedTraits: [],
       negativePrompt: negativePrompt,
+      // IP 라이브러리에서 고른 캐릭터 보이스(영상 생성의 참조 오디오). 형식은 brand.js 한 곳에서 정한다.
+      voice: service.brand && typeof service.brand.normalizeCharacterVoice === 'function'
+        ? service.brand.normalizeCharacterVoice(src.voice)
+        : null,
       defaultPromptPrefix: defaultPromptPrefix || 'Keep character identity consistent.',
       styleGuide: '',
       // 신체 문법의 출처와 시트 존재 여부를 함께 보존한다. negativePrompt 가 빈 문자열인
