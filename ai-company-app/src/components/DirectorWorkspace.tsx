@@ -43,6 +43,11 @@ const XD = <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>;
 const PlayD = <polygon points="6 3 20 12 6 21 6 3" />;
 const RefreshD = <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></>;
 const ChevronD = <path d="m6 9 6 6 6-6" />;
+// lucide: copy / repeat / arrow-down — 에이전트 대화 화면(Chat.tsx)과 같은 아이콘
+const CopyD = <><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></>;
+const RepeatD = <><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></>;
+const ArrowDownD = <><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></>;
+const NEAR_BOTTOM_PX = 80; // 이 정도 여유는 '맨 아래'로 본다
 
 // 같은 시퀀스를 다루는 두 입구: 대화(Managed Agents 디렉터) / 단계(직접 진행, Claude 단발 호출).
 const MODE_TEXT = {
@@ -113,6 +118,12 @@ export default function DirectorWorkspace() {
   const [openTools, setOpenTools] = useState<Set<string>>(new Set());
   const [denyText, setDenyText] = useState<Record<string, string>>({});
   const listRef = useRef<HTMLDivElement>(null);
+  // 스크롤 추종: 맨 아래에 있을 때만 새 글을 따라 내려간다. 위로 올려 읽는 중이면 '맨 아래로' 버튼만 띄운다.
+  const stickRef = useRef(true);
+  const autoScrollRef = useRef(false);
+  const autoScrollTimer = useRef<number | null>(null);
+  const [showJump, setShowJump] = useState(false);
+  const [copiedId, setCopiedId] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const seqTimer = useRef<number | null>(null);
   const isMaster = useMemo(() => isMasterUser(), []);
@@ -159,7 +170,7 @@ export default function DirectorWorkspace() {
 
   const onEvent = useCallback((ev: DirectorEvent) => {
     switch (ev.type) {
-      case "history_start": setItems([]); setApprovals([]); setQuestions([]); setThinking(false); break;
+      case "history_start": stickRef.current = true; setItems([]); setApprovals([]); setQuestions([]); setThinking(false); break;
       case "history_end": setStatus(ev.status); break;
       case "text_start": setThinking(false); setItems((cur) => cur.some((x) => x.id === ev.id) ? cur : [...cur, { kind: "agent", id: ev.id, text: "", streaming: true }]); break;
       case "text_delta": setItems((cur) => cur.map((x) => x.kind === "agent" && x.id === ev.id ? { ...x, text: x.text + ev.text } : x)); break;
@@ -205,7 +216,36 @@ export default function DirectorWorkspace() {
     return () => { stop(); setConnection("none"); };
   }, [sessionId, projectId, onEvent]);
 
-  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [items, approvals, questions, thinking]);
+  // 맨 아래로 이동. 추종 중 이동은 즉시(auto) — 부드러운 애니메이션 중의 스크롤 이벤트를 사용자 조작으로 오인하지 않게.
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = listRef.current;
+    if (!el) return;
+    autoScrollRef.current = true;
+    if (autoScrollTimer.current) window.clearTimeout(autoScrollTimer.current);
+    autoScrollTimer.current = window.setTimeout(() => { autoScrollRef.current = false; }, behavior === "smooth" ? 800 : 120);
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    stickRef.current = true;
+    setShowJump(false);
+  }, []);
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX) { stickRef.current = true; setShowJump(false); }
+    else if (!autoScrollRef.current) { stickRef.current = false; setShowJump(true); }
+  };
+  // 휠로 위로 올리는 즉시 추종 해제(진행 중인 자동 스크롤보다 사용자 조작이 우선).
+  const onListWheel = (e: React.WheelEvent) => {
+    if (e.deltaY >= 0) return;
+    autoScrollRef.current = false; stickRef.current = false; setShowJump(true);
+  };
+  useEffect(() => { if (stickRef.current) scrollToBottom("auto"); }, [items, approvals, questions, thinking, scrollToBottom]);
+  useEffect(() => () => { if (autoScrollTimer.current) window.clearTimeout(autoScrollTimer.current); }, []);
+
+  const copyText = async (id: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); } catch { /* 클립보드 불가(비보안 컨텍스트 등) — 무시 */ }
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId((c) => (c === id ? "" : c)), 1200);
+  };
 
   const newSession = async () => {
     if (!projectId || creating) return;
@@ -229,13 +269,19 @@ export default function DirectorWorkspace() {
     setAttachments((cur) => [...cur, ...loaded].slice(0, MAX_ATTACH));
   }, []);
 
-  const send = async () => {
-    const text = draft.trim();
-    if ((!text && !attachments.length) || !sessionId) return;
-    const images = attachments.map((a) => ({ mediaType: a.mimeType, data: a.base64 }));
+  // resendText: 지난 메시지 '다시 보내기' — 입력창·첨부는 건드리지 않고 그 글만 다시 보낸다.
+  const send = async (resendText?: string) => {
+    const resend = typeof resendText === "string";
+    const text = resend ? resendText.trim() : draft.trim();
+    const sendAttachments = resend ? [] : attachments;
+    if ((!text && !sendAttachments.length) || !sessionId) return;
+    const images = sendAttachments.map((a) => ({ mediaType: a.mimeType, data: a.base64 }));
     const body = text || "(첨부 이미지를 봐 주세요)";
-    setItems((cur) => [...cur, { kind: "user", id: `local-${Date.now()}`, text: body, images: attachments.map((a) => a.preview) }]);
-    setDraft(""); setAttachments([]); setError("");
+    setItems((cur) => [...cur, { kind: "user", id: `local-${Date.now()}`, text: body, images: sendAttachments.map((a) => a.preview) }]);
+    if (!resend) { setDraft(""); setAttachments([]); }
+    setError("");
+    // 내가 보낸 메시지는 항상 따라간다 — 위로 올려 읽던 중이었어도 다시 붙는다.
+    stickRef.current = true;
     // 버튼 질문이 열려 있으면 채팅 답으로 그 질문을 닫는다.
     const open = questions.map((q) => q.eventId);
     setQuestions([]);
@@ -339,7 +385,9 @@ export default function DirectorWorkspace() {
       <div className="flex min-h-0 flex-1">
         {/* 대화 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          {/* 메시지 영역 — 스크롤은 안쪽 div, '맨 아래로' 버튼은 스크롤과 함께 밀리지 않게 바깥에 고정 */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div ref={listRef} onScroll={onListScroll} onWheel={onListWheel} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {!projectId && <div className="py-16 text-center text-sm text-faint">작업할 프로젝트를 먼저 선택하세요.</div>}
             {projectId && !sessionId && (
               <div className="mx-auto max-w-lg py-12 text-center">
@@ -351,16 +399,40 @@ export default function DirectorWorkspace() {
             )}
             {items.map((it) => {
               if (it.kind === "user") return (
-                <div key={it.id} className="flex flex-col items-end gap-1">
+                <div key={it.id} className="group flex flex-col items-end gap-1">
                   {it.images.length > 0 && <div className="flex flex-wrap justify-end gap-1">{it.images.map((src, i) => <button key={i} type="button" onClick={() => setLightbox({ images: it.images, index: i })}><img src={src} alt="" className="h-16 w-16 rounded-lg object-cover" /></button>)}</div>}
-                  <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-raised px-3 py-2 text-[13px] text-strong">{it.text}</div>
+                  <div className="flex max-w-[80%] items-end gap-1.5">
+                    {/* 복사 · 다시 보내기 — 에이전트 대화 화면과 같은 위치·동작 */}
+                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                      <button type="button" onClick={() => void copyText(it.id, it.text)} title={copiedId === it.id ? "복사됨" : "복사"} aria-label="복사"
+                        className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-edge hover:text-strong">
+                        <Icon d={CopyD} className={`h-3.5 w-3.5 ${copiedId === it.id ? "text-tone-emerald" : ""}`} />
+                      </button>
+                      <button type="button" onClick={() => void send(it.text)} disabled={!sessionId || running} title="다시 보내기" aria-label="다시 보내기"
+                        className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-edge hover:text-strong disabled:opacity-30">
+                        <Icon d={RepeatD} className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="min-w-0 whitespace-pre-wrap rounded-2xl rounded-br-sm bg-raised px-3 py-2 text-[13px] text-strong">{it.text}</div>
+                  </div>
                 </div>
               );
-              if (it.kind === "agent") return (
-                <div key={it.id} className="max-w-[92%] text-[13px] leading-relaxed text-content">
-                  {it.text ? <Markdown text={splitSuggestion(it.text).body} /> : <span className="text-faint">작성 중…</span>}
-                </div>
-              );
+              if (it.kind === "agent") {
+                const body = splitSuggestion(it.text).body;
+                return (
+                  <div key={it.id} className="group relative max-w-[92%] text-[13px] leading-relaxed text-content">
+                    {it.text ? <Markdown text={body} /> : <span className="text-faint">작성 중…</span>}
+                    {!it.streaming && body && (
+                      <div className="mt-0.5 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                        <button type="button" onClick={() => void copyText(it.id, body)} title={copiedId === it.id ? "복사됨" : "이 답변 복사"} aria-label="이 답변 복사"
+                          className="grid h-6 w-6 place-items-center rounded-md text-faint transition hover:bg-edge hover:text-strong">
+                          <Icon d={CopyD} className={`h-3.5 w-3.5 ${copiedId === it.id ? "text-tone-emerald" : ""}`} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               if (it.kind === "tool") {
                 const open = openTools.has(it.id);
                 const err = it.result?.isError;
@@ -406,6 +478,14 @@ export default function DirectorWorkspace() {
               <DirectorQuestionCard key={q.eventId} pending={q} onAnswer={(answers) => void answer(q, answers)} onCancel={() => void answer(q, [], true)} />
             ))}
             {thinking && <div className="text-[12px] text-faint">디렉터가 생각하는 중…</div>}
+          </div>
+            {/* 맨 아래(최신 대화)로 — 위로 올려 읽는 중에만 나타난다 */}
+            {showJump && (
+              <button type="button" onClick={() => scrollToBottom("smooth")} title="맨 아래(최신 대화)로" aria-label="맨 아래로 이동"
+                className="absolute bottom-4 right-5 z-10 grid h-9 w-9 place-items-center rounded-full border border-edge bg-panel/95 text-secondary shadow-lg backdrop-blur transition hover:bg-edge hover:text-strong">
+                <Icon d={ArrowDownD} className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {error && <div className="mx-4 mb-2 rounded-lg bg-tint-red/30 px-3 py-1.5 text-[12px] text-tone-red">{error}</div>}

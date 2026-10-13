@@ -10,7 +10,9 @@ test('디렉터 다음 메시지 제안: 답변 끝 <!--next:--> 를 본문에�
   assert.ok(lib.includes('export function splitSuggestion(text: string)'));
   assert.ok(lib.includes(String.raw`/<!--\s*next:\s*([\s\S]*?)-->/gi`));
   const ws = read('ai-company-app/src/components/DirectorWorkspace.tsx');
-  assert.ok(ws.includes('<Markdown text={splitSuggestion(it.text).body} />'));
+  // 본문은 제안 주석을 뗀 body 로 그린다(복사 버튼도 같은 body 를 쓴다).
+  assert.ok(ws.includes('const body = splitSuggestion(it.text).body;'));
+  assert.ok(ws.includes('<Markdown text={body} />'));
   assert.ok(ws.includes('e.key === "Tab" && !e.shiftKey && suggestion && !draft'));
   // 작업 중이거나 질문·승인 카드가 떠 있으면 제안하지 않는다.
   assert.ok(ws.includes('if (status === "running" || thinking || questions.length || approvals.length) return "";'));
