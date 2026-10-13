@@ -13,6 +13,7 @@ import {
   resolveChatReference,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
+import { startSubrequestBudget, signResume, verifyResume, continueInFreshRequest, MAX_HANDOFF_HOPS } from "./_turn-handoff";
 import { saveChatAttachments } from "./_chat-attachments";
 
 type PagesFunction = (ctx: {
@@ -35,6 +36,8 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 
 export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) => {
   const origin = request.headers.get("Origin");
+  // 인증·권한 확인부터 이 요청의 서브요청으로 센다(CF 무료 플랜 요청당 50번).
+  const budget = startSubrequestBudget();
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
@@ -50,6 +53,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const message = String(body?.message || "").trim();
     const conversationId = String(body?.conversationId || "main").trim() || "main";
     const focusAgent = String(body?.focusAgent || "").trim(); // 1:1 단독 대화 모드
+    // 이어하기: 앞 요청이 서브요청 여유가 없어 미룬 단계를 새 요청(새 50번)으로 받아 실행한다. 사용자 메시지는 새로 쓰지 않는다.
+    const resume = body?.resume ? await verifyResume(env, String(body.resume), auth.userId, conversationId) : null;
+    if (body?.resume && !resume) return send({ error: "invalid_resume" }, 400, origin);
     // 다중 첨부(images) 우선 파싱, 없으면 단일 레거시 필드(imageBase64)를 배열로 승격.
     const rawImages = Array.isArray(body?.images) ? body.images : [];
     let images = rawImages
@@ -63,7 +69,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       images = [{ base64: body.imageBase64, mimeType: typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg" }];
     }
     const clientNow = typeof body?.clientNow === "string" && body.clientNow ? body.clientNow : undefined; // 브라우저 로컬 현재시각(시간대 포함)
-    if (!message && !images.length) return send({ error: "message is required" }, 400, origin);
+    if (!resume && !message && !images.length) return send({ error: "message is required" }, 400, origin);
 
     // 보고·업무 폴더에서 지목한 항목들(여러 개): 말풍선엔 "📎 참조: …" + 카드들, 직원에겐 항목마다 "[참조 산출물: … jobId=…]" 한 줄.
     const rawRefs: any[] = Array.isArray(body?.references) ? body.references.slice(0, 10) : (body?.reference ? [body.reference] : []);
@@ -83,7 +89,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       : "";
     const modelText = [displayText, ...references.map((r) => r.line), attachLine].filter(Boolean).join("\n");
     const refFiles = references.flatMap((r) => r.files || []);
-    const userMsg = await addMessage(sql, {
+    const userMsg = resume ? null : await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: displayText,
       files: refFiles.length ? refFiles : undefined,
     });
@@ -118,6 +124,12 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const sse = async (data: any) => {
       try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch {}
     };
+    // 코어 이름으로 안내를 남긴다. 저장이 막혀도(서브요청 한도·DB 오류) 화면에는 반드시 보낸다 — 조용히 끝나지 않게.
+    const sayCore = async (text: string) => {
+      const saved = await addMessage(sql, { userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어", text }).catch(() => null);
+      await sse({ type: "msg", msg: saved || { id: `local-${crypto.randomUUID()}`, role: "agent", agent_id: "core", name: "코어", text, files: [], created_at: new Date().toISOString() } });
+    };
+    const doneEvent = { type: "done", conversationId, ...(userMsg ? { userMessageId: userMsg.id } : {}) };
 
     const streamWork = (async () => {
       // 긴 문서 정리(최대 3분)처럼 모델이 오래 생각하는 동안 이벤트가 없으면 중간 프록시·브라우저가 연결을 끊을 수 있다.
@@ -130,21 +142,29 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: (payload?: any) => sse({ type: "job_ready", payload }),
           onUiAction: (action: any) => sse({ type: "ui_action", action }),
+          subrequestsLeft: budget.left,
         };
-        let produced: any = await runGroupChat(env, deps);
-        // 시간 부족으로 미룬 조회가 있으면 같은 스트림 안에서 새 예산으로 이어서 실행한다(최대 2회).
-        // 전엔 "계속" 이라고 쳐 달라고 사용자에게 떠넘겼다(2026-09-24).
-        for (let round = 0; round < 2 && Array.isArray(produced?.deferred) && produced.deferred.length; round++) {
-          produced = await runGroupChat(env, deps, { resumeRuns: produced.deferred });
+        const produced: any = resume
+          ? await runGroupChat(env, deps, { resumeRuns: resume.runs })
+          : await runGroupChat(env, deps);
+        // 시간·서브요청 여유가 없어 미룬 단계는 같은 스트림 안에서 새 요청으로 넘겨 이어서 실행한다.
+        // 같은 요청 안에서 다시 돌리면 이미 바닥난 서브요청 한도를 그대로 써서 또 끊긴다(2026-10-13).
+        const deferred = Array.isArray(produced?.deferred) ? produced.deferred : [];
+        if (deferred.length) {
+          const hop = (resume?.hop || 0) + 1;
+          if (hop > MAX_HANDOFF_HOPS) {
+            await sayCore("⚠️ 이어서 처리할 단계가 많아 여기서 멈췄어요. 이어서 하려면 같은 내용으로 다시 요청해 주세요.");
+          } else {
+            const token = await signResume(env, { userId: auth.userId, conversationId, runs: deferred, hop });
+            const finished = await continueInFreshRequest(request, { conversationId, focusAgent, clientNow, resume: token }, sse)
+              .catch((e: any) => { console.warn(`[agent/chat] 이어서 실행 실패: ${String(e?.message || e)}`); return false; });
+            if (!finished) await sayCore("⚠️ 이어서 진행하던 작업이 중간에 끊겼어요. 같은 내용으로 다시 요청하시면 이어서 할게요.");
+          }
         }
-        await sse({ type: "done", conversationId, userMessageId: userMsg.id });
+        await sse(doneEvent);
       } catch (e: any) {
-        const errMsg = await addMessage(sql, {
-          userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-          text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-        }).catch(() => null);
-        if (errMsg) await sse({ type: "msg", msg: errMsg });
-        await sse({ type: "done", conversationId, userMessageId: userMsg.id });
+        await sayCore(`⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`);
+        await sse(doneEvent);
       } finally {
         clearInterval(heartbeat);
         try { writer.close(); } catch {}

@@ -64,7 +64,8 @@ test("프로젝트 요약 API 는 project_list 도구를 되부르지 않고(재
 test("조회 결과를 본 코어의 위임(CALL)도 같은 턴에 실행된다 — '리치에게 시키기' 배지만 남고 멈추지 않는다", async () => {
   const orch = await read("prototype/functions/api/agent/_orchestrator.ts");
   assert.match(orch, /if \(agentId === "core" && !soloAgent && depth < 2 && res2\.calls\.length > 0\) \{\s*const calls = res2\.calls\.slice\(0, 3\);\s*coreDelegateCount \+= calls\.length;/);
-  assert.match(orch, /try \{ await runWorker\(c\.agentId, c\.instruction\); \} catch \{ \/\* 개별 직원 실패 시 다음으로 \*\/ \}/);
+  // 서브요청 여유가 없으면 그 위임은 새 요청으로 넘겨 이어서 실행한다(runWorkerOrDefer).
+  assert.match(orch, /for \(const c of calls\) await runWorkerOrDefer\(c\.agentId, c\.instruction\);/);
 });
 
 test("시간 부족으로 미룬 조회는 사용자가 '계속' 을 치지 않아도 같은 스트림에서 서버가 이어서 실행한다", async () => {
@@ -78,5 +79,7 @@ test("시간 부족으로 미룬 조회는 사용자가 '계속' 을 치지 않�
   assert.match(orch, /if \(opts\.resumeRuns\?\.length\) \{[\s\S]*await runTools\(runs, agentId\);[\s\S]*return finish\(\);/);
   assert.match(orch, /const TURN_BUDGET_MS = 100000;/);
   assert.match(orch, /const RUN_MIN_MS = 12000;/);
-  assert.match(chat, /for \(let round = 0; round < 2 && Array\.isArray\(produced\?\.deferred\) && produced\.deferred\.length; round\+\+\) \{\s*produced = await runGroupChat\(env, deps, \{ resumeRuns: produced\.deferred \}\);/);
+  // 같은 요청 안에서 다시 돌리면 바닥난 서브요청 한도를 그대로 쓰므로 새 요청으로 넘겨 이어서 한다(2026-10-13).
+  assert.match(chat, /\? await runGroupChat\(env, deps, \{ resumeRuns: resume\.runs \}\)/);
+  assert.match(chat, /const token = await signResume\(env, \{ userId: auth\.userId, conversationId, runs: deferred, hop \}\);/);
 });

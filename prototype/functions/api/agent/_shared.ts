@@ -1152,7 +1152,8 @@ export async function fileJobAsWorkItem(
 
 /** 진행 안내 해제 — 결과(또는 실패) 메시지를 붙인 뒤 호출. */
 export async function resolvePendingMessage(sql: SqlFn, userId: string, id: string): Promise<void> {
-  if (!id || !userId) return;
+  // local- 은 저장에 실패해 화면에만 보낸 발언(DB 에 없음)이다.
+  if (!id || !userId || id.startsWith("local-")) return;
   try {
     await sql("UPDATE agent_messages SET pending = false WHERE id = $1 AND user_id = $2", [id, userId]);
   } catch (_) {}

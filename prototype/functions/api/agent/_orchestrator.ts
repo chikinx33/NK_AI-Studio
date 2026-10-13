@@ -54,6 +54,7 @@ import { toolDoneText, toolFailureText } from "./_tool-messages.ts"; // 확장�
 import { resolvedAuthHeaders, getAgentModelSelections, resolveAuth, authHeadersFor } from "../_shared/claude-auth.js";
 import { isAnthropicProvider, normalizeModelChoice, resolveAgentModel } from "../_shared/cloud-models.js";
 import { callLLM } from "../_shared/llm.js";
+import type { DeferredRun } from "./_turn-handoff";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -1722,6 +1723,8 @@ export interface OrchestratorDeps {
   onJobReady?: (payload?: any) => void; // SSE 콜백: 도구/업무 완료 즉시 갱신
   onUiAction?: (action: UiAction) => Promise<void> | void; // 검증된 화면 제어 명령을 현재 브라우저로 전달
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
+  // 이 요청이 쓸 수 있는 남은 서브요청 수(CF 무료 플랜 요청당 50번). 모자라면 단계를 미뤄 새 요청으로 넘긴다.
+  subrequestsLeft?: () => number;
 }
 
 // ── 미완 흐름 방지용 시간 상한 ─────────────────────────────────────────────
@@ -1775,6 +1778,10 @@ export async function collectPagedOutput(
 }
 const TURN_BUDGET_MS = 100000;     // 한 턴 전체 예산(스트리밍 응답이라 벽시계 제한은 없다 — UX 상한)
 const RUN_MIN_MS = 12000;          // 조회 1건을 시작할 최소 여유(부족하면 미뤄 두고 서버가 스스로 이어서 한다)
+// 서브요청 여유. 조회 1건 = 안내 저장·도구 호출(최대 2)·대화 읽기·페르소나·직원 지식·모델·결과 저장·안내 해제 ≈ 9번.
+// 직원 발언 1번 = 대화 읽기·페르소나·직원 지식·모델·저장 ≈ 5번. 넘겨주기(새 요청 1번)와 마커 반영 몫을 더해 잡는다.
+const TOOL_STEP_SUBREQUESTS = 14;
+const WORKER_STEP_SUBREQUESTS = 9;
 
 /**
  * 생성 결과에 실제 사용된 모델을 덧붙인다. 프로바이더가 자동 대체(폴백)되면 그 사실도 함께 알린다.
@@ -1806,7 +1813,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * 단톡방 한 턴 처리: 1차 응답 → 위임(CALL) → 직원 작업·보고(+RUN 도구) → 코어 통솔 마무리.
  * waitUntil 백그라운드에서 멀티 Claude 호출(30초 응답 제약 회피). 각 발언은 agent_messages 로 영속.
  */
-export type DeferredRun = { tool: string; reason: string; agentId: string };
+export type { DeferredRun };
 export async function runGroupChat(
   env: any,
   deps: OrchestratorDeps,
@@ -1818,6 +1825,7 @@ export async function runGroupChat(
   // 턴 시작 시각 — 남은 예산 계산용(부족하면 새 조회를 시작하지 않고 다음 턴으로 미룬다)
   const turnStartedAt = Date.now();
   const remainingMs = () => TURN_BUDGET_MS - (Date.now() - turnStartedAt);
+  const subrequestsLeft = () => (deps.subrequestsLeft ? deps.subrequestsLeft() : Infinity);
   // 이전 턴에서 결과가 못 붙은 진행 안내가 남아 있으면 먼저 마무리 문구로 정리한다.
   await sweepDanglingMessages(sql, userId, conversationId).catch(() => 0);
 
@@ -1865,7 +1873,15 @@ export async function runGroupChat(
   const deferredRuns: DeferredRun[] = [];
   const finish = () => { (produced as any).deferred = deferredRuns; return produced; };
   const emit = async (msg: any) => {
-    const r = await addMessage(sql, msg);
+    // 저장이 실패해도 화면에는 보낸다. 저장 실패를 그대로 던지면 결과·실패 안내가 아무 데도 안 남아
+    // 마지막 말이 "🔎 … 조회 중이에요…" 로 멈춘 채 끝난다. 저장 안 된 발언은 id 가 local- 로 시작한다.
+    let r: any;
+    try {
+      r = await addMessage(sql, msg);
+    } catch (e: any) {
+      console.warn(`[agent] 발언 저장 실패 — 화면에만 전달: ${String(e?.message || e)}`);
+      r = { ...msg, id: `local-${crypto.randomUUID()}`, agent_id: msg.agentId ?? null, files: msg.files || [], pending: false, created_at: new Date().toISOString() };
+    }
     produced.push(r);
     if (deps.onMessage) { try { await deps.onMessage(r); } catch {} }
     return r;
@@ -1956,6 +1972,12 @@ export async function runGroupChat(
       // 읽기 전용 조회: 검수 없이 즉시 실행. synthesize 도구(웹 검색 등)는 결과를 모델에 다시 먹여
       // 자연스러운 답을 만들고(툴콜→결과→재추론), 그 외엔 결과를 채팅에 요약 출력.
       if (tool.kind === "read" || tool.kind === "local") {
+        // 서브요청 여유가 없으면 이 요청에선 시작하지 않고 새 요청으로 넘긴다(chat.ts).
+        // 시작한 뒤에 한도를 넘으면 결과도 실패 안내도 저장하지 못해 "조회 중" 안내만 남는다.
+        if (subrequestsLeft() < TOOL_STEP_SUBREQUESTS) {
+          deferredRuns.push({ tool: r.tool, reason: r.reason, agentId });
+          continue;
+        }
         // 남은 예산이 부족하면 아예 시작하지 않는다 — "조회 중" 안내만 남고 끊기는 흐름을 막는다.
         if (remainingMs() < RUN_MIN_MS) {
           // 전엔 "계속" 을 쳐 달라고 사용자에게 떠넘겼다(2026-09-24). 미뤄 두면 chat.ts 가 바로 이어서 실행한다.
@@ -2029,9 +2051,7 @@ export async function runGroupChat(
             if (agentId === "core" && !soloAgent && depth < 2 && res2.calls.length > 0) {
               const calls = res2.calls.slice(0, 3);
               coreDelegateCount += calls.length;
-              for (const c of calls) {
-                try { await runWorker(c.agentId, c.instruction); } catch { /* 개별 직원 실패 시 다음으로 */ }
-              }
+              for (const c of calls) await runWorkerOrDefer(c.agentId, c.instruction);
             }
             }
           } else {
@@ -2184,17 +2204,30 @@ export async function runGroupChat(
     await _applySkills(res.skills);
     await _applyCancel(res.cancels);
   };
+  // 서브요청 여유가 없으면 위임을 새 요청으로 넘긴다. 앞서 미룬 일이 있으면 순서를 지키려고 뒤에 줄 세운다.
+  const runWorkerOrDefer = async (workerId: string, instruction: string, workerModel?: string, workerMaxTokens?: number) => {
+    if (deferredRuns.length || subrequestsLeft() < WORKER_STEP_SUBREQUESTS) {
+      if (workerId !== "core" && getAgent(workerId)) deferredRuns.push({ agentId: workerId, instruction });
+      return;
+    }
+    try {
+      await runWorker(workerId, instruction, workerModel, workerMaxTokens);
+    } catch {
+      /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
+    }
+  };
 
   // 0) 미룬 조회 이어서 실행(새 예산). 직원을 다시 말하게 하지 않고 그 도구만 돌린다 — 결과 합성(synthesize)은 도구 흐름이 알아서 한다.
+  // 미룬 순서 그대로 실행한다. 직원 위임(instruction)은 그 직원이 발언부터 다시 한다.
   if (opts.resumeRuns?.length) {
-    const byAgent = new Map<string, { tool: string; reason: string }[]>();
-    for (const r of opts.resumeRuns.slice(0, 6)) {
-      const list = byAgent.get(r.agentId) || [];
-      list.push({ tool: r.tool, reason: r.reason });
-      byAgent.set(r.agentId, list);
-    }
-    for (const [agentId, runs] of byAgent) {
+    for (const r of opts.resumeRuns.slice(0, 10)) {
+      const agentId = r.agentId;
       if (!getAgent(agentId)) continue;
+      if (r.instruction) {
+        await runWorkerOrDefer(agentId, r.instruction);
+        continue;
+      }
+      const runs = [{ tool: String(r.tool || ""), reason: String(r.reason || "") }];
       try { await runTools(runs, agentId); } catch { /* 개별 실패는 도구 흐름이 채팅에 남긴다 */ }
     }
     return finish();
@@ -2238,11 +2271,7 @@ export async function runGroupChat(
       const groupMaxTokens = groupIsLarge ? 400 : undefined;
       for (let ci = 0; ci < calls.length; ci++) {
         if (ci > 0) await new Promise((r) => setTimeout(r, 50)); // 연속 API 호출 간격(캐시 덕에 단축)
-        try {
-          await runWorker(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
-        } catch {
-          /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
-        }
+        await runWorkerOrDefer(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
       }
     }
   }
@@ -2251,7 +2280,9 @@ export async function runGroupChat(
   //    단, 대규모 그룹 활동(5명 이상 위임)은 게임·끝말잇기 등 흐름 활동이므로 wrap 불필요.
   //    wrap·회고 Claude 호출을 아끼면 CF 백그라운드 시간을 남은 직원에게 더 줄 수 있다.
   const isLargeGroup = coreDelegateCount >= 5;
-  if (!soloAgent && !isLargeGroup && primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
+  // 새 요청으로 넘긴 일이 남아 있으면 종합·회고는 하지 않는다 — 아직 안 나온 보고보다 결론이 먼저 나가게 된다.
+  const turnComplete = deferredRuns.length === 0;
+  if (turnComplete && subrequestsLeft() >= WORKER_STEP_SUBREQUESTS && !soloAgent && !isLargeGroup && primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const wrapTrigger =
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
@@ -2269,7 +2300,7 @@ export async function runGroupChat(
   //    위임이 한 번이라도 일어난 '복잡 작업'에서만 1회 회고한다. 회고 발언은 단톡방에 노출하지 않고(조용히)
   //    KNOW 마커로 회사 지식만 늘린다. 중복은 add 단계에서 자동 차단됨.
   //    대규모 그룹 활동(끝말잇기·게임 등)은 배울 게 없으므로 회고도 생략한다.
-  if (!opts.autoTrigger && !isLargeGroup && coreDelegateCount >= 1) {
+  if (turnComplete && subrequestsLeft() >= WORKER_STEP_SUBREQUESTS && !opts.autoTrigger && !isLargeGroup && coreDelegateCount >= 1) {
     try {
       const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
       const reviewTrigger =
