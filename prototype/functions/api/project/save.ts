@@ -398,6 +398,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 같은 data.json 을 디렉터(/api/project/sequences)·에이전트도 쓴다. 읽은 세대(generation)가 그대로일 때만
     // 쓰고(ifGenerationMatch), 그 사이 다른 저장이 끼었으면 다시 읽어 병합한다 — 남의 변경을 옛 사본으로 덮지 않게.
     let existing: any = null;
+    let scenesLockedFinal = false;
     for (let attempt = 0; attempt < 4; attempt++) {
     existing = null;
     // 세대: 404(새 프로젝트)면 "0"(없을 때만 생성), 그 밖의 읽기 실패면 ""(조건 없이 — 예전 동작).
@@ -421,14 +422,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const hasAspect = Object.prototype.hasOwnProperty.call(body, "aspectRatio") && body.aspectRatio;
     const hasTitle = Object.prototype.hasOwnProperty.call(body, "title") && body.title;
 
-    const mergedScenes = hasScenes
+    // 디렉터로 확정된 프로젝트의 컷은 디렉터 확정(/api/project/sequences op=confirm)만 바꾼다.
+    // 화면·에이전트가 들고 있던 옛 컷(로컬 캐시 등)으로 확정된 컷을 덮지 않는다 — 시나리오·메인 프로덕션은 '수정 불가'.
+    const scenesLocked = !!existing?.payload?.directorConfirmed;
+    const mergedScenes = hasScenes && !scenesLocked
       ? (body.scenes as any[]).map(normalizeScene)
       : (Array.isArray(existing?.scenes) ? existing.scenes : []);
     const mergedPayload = hasPayload
       ? Object.assign({}, (existing?.payload || {}), normalizeClientPayload(body.payload))
       : Object.assign({}, existing?.payload || {});
     // 디렉터 시퀀스·프로젝트 기억은 /api/project/sequences 만 쓴다. 화면이 들고 있던 옛 사본으로 덮어쓰지 않는다.
-    for (const key of ["sequences", "directorNotes"]) {
+    for (const key of ["sequences", "directorNotes", "directorConfirmed"]) {
       if (existing?.payload && Object.prototype.hasOwnProperty.call(existing.payload, key)) mergedPayload[key] = existing.payload[key];
       else delete mergedPayload[key];
     }
@@ -456,12 +460,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify(payload),
     });
     if (res.status === 412 && attempt < 3) continue;
+    scenesLockedFinal = scenesLocked && hasScenes;
     const text = await res.text();
     if (!res.ok) return send({ error: text || "upload_error" }, res.status, origin);
     break;
     }
 
-    return send({ ok: true, objectName, merged: !!existing }, 200, origin);
+    return send({ ok: true, objectName, merged: !!existing, ...(scenesLockedFinal ? { scenesLocked: true } : {}) }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }

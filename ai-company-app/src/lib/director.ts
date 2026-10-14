@@ -146,7 +146,7 @@ export async function signedReadUrls(paths: string[]): Promise<Record<string, st
 
 export const TOOL_LABELS: Record<string, string> = {
   project_overview: "프로젝트 살펴보기", sequence_get: "시퀀스 읽기", sequence_save: "콘티 저장", take_save: "테이크 기록",
-  timeline_apply: "편집기 타임라인 반영", media_urls: "미디어 주소 받기", media_upload_url: "파일 올리기 준비",
+  timeline_apply: "편집기 타임라인 반영", sequence_confirm: "확정(전체 화면 반영)", media_urls: "미디어 주소 받기", media_upload_url: "파일 올리기 준비",
   video_quote: "견적 계산", video_submit: "영상 생성 제출", video_complete: "1080p 완성 제출", video_status: "영상 상태 확인",
   image_generate: "이미지 생성", image_status: "이미지 상태 확인", ask_user: "질문", bash: "샌드박스 명령", read: "파일 읽기", write: "파일 쓰기", edit: "파일 고치기", glob: "파일 찾기", grep: "내용 검색",
 };

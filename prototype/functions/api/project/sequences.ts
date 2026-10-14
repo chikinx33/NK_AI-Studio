@@ -7,6 +7,8 @@
 //     op=putTake     { sequenceId, take }            테이크 하나만 넣거나 바꾼다(다른 테이크와 경합하지 않게)
 //     op=select      { sequenceId, selectedTakeIds } 편집기 타임라인에 쓸 테이크 선택
 //     op=notes       { notes: { rules, lessons } }   프로젝트 기억(payload.directorNotes) — 대화·단계 화면이 함께 쓴다
+//     op=confirm     { sequenceId, takeId?, replaceExisting? }  확정: 완성 테이크를 scenes·이야기·대표 영상으로 옮기고 잠근다
+//                    (_shared/director-confirm.js). 일반 컷이 있으면 replaceExisting 없이 409 scenes_exist.
 // data.json 은 화면(save.ts)과 디렉터가 같이 쓴다. GCS 세대 번호(ifGenerationMatch)로 읽고-고치고-쓰기 사이에
 // 다른 저장이 끼면 다시 읽어 적용한다. sequences 는 이 엔드포인트만 쓴다(save.ts 는 보존만 한다).
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
@@ -14,6 +16,7 @@ import { loadShares, getGrantRole } from "../_shared/shares";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { cleanCutStill, cleanReferenceAsset } from "../_shared/director-media-path.js";
+import { applyDirectorConfirm } from "../_shared/director-confirm.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -165,6 +168,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (!doc) return send({ error: "project_not_found" }, 404, origin);
       const data = doc.data && typeof doc.data === "object" ? doc.data : {};
       const payload = data.payload && typeof data.payload === "object" ? data.payload : {};
+      if (body?.op === "confirm") {
+        const sequenceId = String(body?.sequenceId || "");
+        if (!ID_RE.test(sequenceId)) return send({ error: "invalid_sequence_id" }, 400, origin);
+        const takeId = body?.takeId ? String(body.takeId) : "";
+        if (takeId && !ID_RE.test(takeId)) return send({ error: "invalid_take" }, 400, origin);
+        const { data: next, result } = applyDirectorConfirm(data, {
+          sequenceId, takeId, replaceExisting: body?.replaceExisting === true, bucket: resolveGcsEnv(env).bucket,
+        });
+        if (await gcsWriteIfUnchanged(env, objectName, next, doc.generation)) {
+          return send({ ok: true, confirm: result, sequences: next.payload.sequences, attempts: attempt + 1 }, 200, origin);
+        }
+        continue;
+      }
       if (body?.op === "notes") {
         const notes = cleanNotes(body.notes);
         const next = { ...data, payload: { ...payload, directorNotes: notes }, savedAt: new Date().toISOString() };
@@ -180,6 +196,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: "concurrent_update_retry_exhausted" }, 409, origin);
   } catch (e: any) {
     const msg = String(e?.message || e);
+    // 확정할 수 없음: 일반 컷이 있음(사용자에게 교체를 물어야 함) · 완성(드래프트 아닌) 테이크가 없음
+    if (msg === "scenes_exist") return send({ error: msg, existingScenes: Number(e?.existingScenes) || 0 }, 409, origin);
+    if (msg === "no_final_take") return send({ error: msg, detail: "완료된 1080p(드래프트 아닌) 테이크가 없어요. 드래프트를 완성(video_complete)한 뒤 확정하세요." }, 409, origin);
     const client = /^(sequence_|invalid_|too_many|unknown_op)/.test(msg);
     return send({ error: client ? msg : "sequences_write_failed", detail: client ? undefined : msg }, client ? 400 : 503, origin);
   }

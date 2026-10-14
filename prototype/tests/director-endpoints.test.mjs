@@ -89,8 +89,8 @@ test("시퀀스 쓰기와 편집기 저장은 GCS 세대 확인으로 서로 덮
   assert.match(save, /for \(let attempt = 0; attempt < 4; attempt\+\+\)/);
   assert.match(save, /&ifGenerationMatch=\$\{encodeURIComponent\(generation\)\}/);
   assert.match(save, /if \(res\.status === 412 && attempt < 3\) continue;/);
-  // 화면이 들고 있던 옛 sequences·directorNotes 사본은 버리고 서버 값을 보존한다.
-  assert.match(save, /for \(const key of \["sequences", "directorNotes"\]\)/);
+  // 화면이 들고 있던 옛 sequences·directorNotes·확정 표시 사본은 버리고 서버 값을 보존한다.
+  assert.match(save, /for \(const key of \["sequences", "directorNotes", "directorConfirmed"\]\)/);
   assert.match(save, /mergedPayload\[key\] = existing\.payload\[key\];\s*\n\s*else delete mergedPayload\[key\];/);
 });
 

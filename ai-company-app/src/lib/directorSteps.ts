@@ -51,6 +51,9 @@ export const putTake = (projectId: string, sequenceId: string, take: Partial<Tak
   api<{ sequences: Sequence[] }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "putTake", sequenceId, take }) }).then((r) => r.sequences || []);
 export const selectTakes = (projectId: string, sequenceId: string, selectedTakeIds: string[]) =>
   api<{ sequences: Sequence[] }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "select", sequenceId, selectedTakeIds }) }).then((r) => r.sequences || []);
+/** 확정: 완성 테이크를 scenes·이야기·대표 영상으로 옮기고 시나리오·메인 프로덕션을 잠근다(일반 컷이 있으면 409 scenes_exist). */
+export const confirmSequence = (projectId: string, sequenceId: string, replaceExisting: boolean) =>
+  api<{ confirm: any; sequences: Sequence[] }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "confirm", sequenceId, replaceExisting }) });
 export const saveNotes = (projectId: string, notes: DirectorNotes) =>
   api<{ notes: DirectorNotes }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "notes", notes }) }).then((r) => r.notes);
 

@@ -282,6 +282,20 @@ export function buildMcpServer(token: string): McpServer {
     catch (e) { return fail(e); }
   });
 
+  server.registerTool("sequence_confirm", {
+    description: "확정: 시퀀스의 완성 테이크(드래프트 아닌 1080p 등)를 프로젝트 전체에 반영한다 — 컷(스틸)·이야기를 시나리오·메인 프로덕션·영상 캔버스에, " +
+      "완성 영상을 대표 영상으로 브랜드 스튜디오 SNS 세팅에, 편집기 타임라인 선택까지 한 번에. 확정 뒤 시나리오(개요 제외)·메인 프로덕션은 '수정 불가'가 된다. " +
+      "사용자가 '확정해줘', 'SNS 세팅해줘', '다른 화면에 반영해줘' 라고 하면 부른다(timeline_apply 대신 이것). takeId 를 비우면 가장 최근 완성 테이크. " +
+      "사이트 오류 409 scenes_exist 면 일반 시나리오로 만든 기존 컷(existingScenes 개)이 있다는 뜻이다 — 사용자에게 '기존 컷 N개가 디렉터 컷으로 바뀐다'고 알리고 동의를 받은 뒤 replaceExisting:true 로 다시 부른다. " +
+      "409 no_final_take 면 완성본이 없으니 video_complete 를 먼저 제안한다.",
+    inputSchema: { ...projectArgs, sequenceId: ID, takeId: ID.optional(), replaceExisting: z.boolean().default(false) },
+  }, async ({ projectId, ownerId, sequenceId, takeId, replaceExisting }) => {
+    try {
+      const r: any = await call("/api/project/sequences", { body: { projectId, ownerId, op: "confirm", sequenceId, ...(takeId ? { takeId } : {}), replaceExisting } });
+      return ok({ confirm: r?.confirm, note: "시나리오·메인 프로덕션·영상 캔버스·SNS 세팅에 반영됐다. 시나리오(개요 제외)·메인 프로덕션은 이제 수정 불가다." });
+    } catch (e) { return fail(e); }
+  });
+
   server.registerTool("media_urls", {
     description: "본인 저장소 파일(gs://… 또는 users/…)의 읽기 서명 URL(6시간). 샌드박스에서 curl 로 받아 검수하거나 참조로 넘길 때 쓴다.",
     inputSchema: { paths: z.array(z.string()).min(1).max(40) },

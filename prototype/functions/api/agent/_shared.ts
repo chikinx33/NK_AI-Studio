@@ -4083,6 +4083,10 @@ async function callInternalJson(
     error.subscriptionImage = imageRequest && (data?.authSource === 'user' || /chatgpt_|subscription_|own_image_|generation_settings/.test(error.message));
     throw error;
   }
+  // 디렉터로 확정된 프로젝트는 컷이 잠겨 있다(save.ts 가 scenes 를 무시한다). 바뀐 척 보고하지 않게 알린다.
+  if (path === "/api/project/save" && Array.isArray(init.body?.scenes) && init.body.scenes.length && data?.scenesLocked) {
+    throw new Error("디렉터로 확정된 프로젝트라 컷을 바꿀 수 없어요(수정 불가). 컷은 디렉터에서 고친 뒤 다시 확정해 주세요.");
+  }
   if (imageRequest && res.status === 202 && data.id) await throwPendingImage(data, init.body, ctx, path, imageKey);
   return data;
 }

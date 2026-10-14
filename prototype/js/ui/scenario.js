@@ -2044,6 +2044,26 @@
     });
   }
 
+  // 디렉터 확정 잠금: 확정된 프로젝트는 대본(오른쪽 패널)을 고칠 수 없다. 개요(왼쪽)·초기화·저장하기는 그대로 쓴다
+  // (초기화는 개요 칸만 되돌리고, 저장하기는 개요만 저장한다 — 컷은 서버가 바꾸지 않는다).
+  function isDirectorLocked() {
+    return !!(NK.ui && NK.ui.directorLock && NK.ui.directorLock.isLocked(currentPayload));
+  }
+  function applyScenarioDirectorLock() {
+    const dl = NK.ui && NK.ui.directorLock;
+    if (!dl) return;
+    const locked = isDirectorLocked();
+    // 카드 펼치기·접기는 읽기용이라 그대로 둔다.
+    dl.applyRegions([document.getElementById('scenario-cards')], locked, { keep: '.scenario-card-toggle' });
+    dl.applyControls([
+      document.querySelector('button[type="submit"][form="scenario-form"]'),
+      document.getElementById('decompose-shots'),
+      document.getElementById('scenario-inject-btn')
+    ], locked);
+    dl.applyBadge(document.querySelector('#scenario-section .right-caption .caption-left'), locked);
+  }
+  scenario.applyDirectorLock = applyScenarioDirectorLock;
+
   scenario.renderScenes = function (scenes = []) {
     // 진입 직전 legacy shots[] 가 있으면 평탄화
     scenes = flattenLegacyShots(scenes);
@@ -2196,6 +2216,7 @@
         if (!card.classList.contains('is-collapsed')) setScenarioCardCollapsed(card, true, false);
       });
     }
+    applyScenarioDirectorLock();
   };
 
   // ---------- load draft into form ----------
@@ -3029,6 +3050,8 @@
     // 시나리오 생성
     form.onsubmit = async (e) => {
       e.preventDefault();
+      // 디렉터로 확정된 프로젝트는 시나리오를 다시 만들지 않는다(엔터 키 제출도 막는다).
+      if (isDirectorLocked()) return;
       // 이전 생성의 진단창이 열린 채 새 생성을 시작하지 않도록 닫고, 이번 진단을 새로 쌓는다.
       _lastDiagText = '';
       try { document.getElementById('scenario-diag-modal')?.classList.add('hidden'); } catch (_) {}
@@ -3343,8 +3366,9 @@
     const saveBtn = document.getElementById('save-draft');
     if (saveBtn) {
       saveBtn.onclick = async () => {
-        // 기존 프로덕션 미디어가 있으면 초기화 경고
-        const existingScenes = draft?.scenes || [];
+        const directorLocked = isDirectorLocked();
+        // 기존 프로덕션 미디어가 있으면 초기화 경고(디렉터 확정 프로젝트는 컷을 바꾸지 않으므로 묻지 않는다)
+        const existingScenes = directorLocked ? [] : (draft?.scenes || []);
         const hasProductionMedia = existingScenes.some((s) =>
           s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl ||
           s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl
@@ -3359,10 +3383,13 @@
           // collectPayload()는 폼에서 새 payload 를 만들므로, 생성 단계에서 만든 에피소드 공간
           // 레퍼런스(episodeLocations)가 떨어진다. 저장 시 보존한다.
           const _prevEpLocs = draft.payload && draft.payload.episodeLocations;
+          const _prevDirectorConfirmed = draft.payload && draft.payload.directorConfirmed;
           draft.payload = collectPayload();
           if (_prevEpLocs) draft.payload.episodeLocations = _prevEpLocs;
+          // 확정 표시는 폼에 없는 값이라 collectPayload 가 떨어뜨린다 — 잠금이 풀린 것처럼 보이지 않게 보존한다.
+          if (_prevDirectorConfirmed) draft.payload.directorConfirmed = _prevDirectorConfirmed;
           draft.title = draft.payload.topic || draft.title || '새 프로젝트';
-          draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
+          if (!directorLocked) draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
           if (NK.service?.project?.upsertLocalDraft) {
             draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
           } else {
@@ -3370,7 +3397,8 @@
             NK.store.saveDrafts([draft]);
           }
           if (NK.api?.projectSave) {
-            await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            // 확정 프로젝트는 개요(payload)만 저장한다 — 빈 scenes 는 서버가 '보내지 않음'으로 본다.
+            await NK.api.projectSave(draft.id, draft.payload, directorLocked ? [] : draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
             invalidatePipelineCache();
             // 저장 직후 사이드바/대시보드 카드에 메타(장르/타겟/길이) 반영
             try {
@@ -3402,6 +3430,7 @@
     const decomposeBtn = document.getElementById('decompose-shots');
     if (decomposeBtn) {
       decomposeBtn.onclick = async () => {
+        if (isDirectorLocked()) return;
         try {
           if (!NK.api?.scenarioShots) {
             alert('컷 분해 API 가 없습니다.');
@@ -3740,6 +3769,7 @@
     const closeInjectModal = () => { if (injectModal) injectModal.classList.add('hidden'); };
     if (injectBtn && injectModal) {
       injectBtn.addEventListener('click', () => {
+        if (isDirectorLocked()) return;
         injectModal.classList.remove('hidden');
         if (injectText) { setTimeout(() => { injectText.focus(); }, 0); }
       });

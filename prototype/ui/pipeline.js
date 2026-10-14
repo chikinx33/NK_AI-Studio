@@ -854,6 +854,26 @@
     document.head.appendChild(style);
   })();
 
+  // 디렉터 확정 잠금: 확정된 프로젝트의 컷은 디렉터만 바꾼다. 메인 프로덕션은 입력·버튼을 막고 '수정 불가'를 단다.
+  // (서버 save.ts 도 확정된 프로젝트의 scenes 는 바꾸지 않는다.) 재렌더·폴링으로 다시 그려져도 잠금이 유지된다.
+  function applyPipelineDirectorLock(state) {
+    var dl = NK.ui && NK.ui.directorLock;
+    if (!dl) return;
+    var locked = dl.isLocked(state && state.payload);
+    var section = document.getElementById('pipeline-section');
+    var meta = document.getElementById('pipeline-meta');
+    dl.applyRegions([meta, document.getElementById('pipeline-scenes')], locked);
+    var bar = document.getElementById('pipeline-director-lock');
+    if (locked && !bar && section && meta) {
+      bar = document.createElement('div');
+      bar.id = 'pipeline-director-lock';
+      bar.className = 'director-lock-bar';
+      section.insertBefore(bar, meta);
+    }
+    if (bar) dl.applyBadge(bar, locked);
+    if (bar && !locked) bar.remove();
+  }
+
   ui.render = async function () {
     if (!subscribed && NK.state && NK.state.subscribe) {
       subscribed = true;
@@ -1148,7 +1168,9 @@
             // 로컬 캐시의 미디어 URL을 항상 우선 보존. 서버 데이터의 imageDataUrl이 비어 있거나
             // gs:// raw 경로이면 로컬 프록시 URL이 더 안전하다(초기 렌더에서 정상 동작 검증됨).
             // ID 매칭 실패에 대비해 index 기반 fallback도 둔다(샷 평탄화 후 ID 재할당 케이스).
-            if (Array.isArray(freshState.scenes) && freshState.scenes.length && prevScenes.length) {
+            // 디렉터로 확정된 프로젝트는 서버 컷이 정본이다 — 이 기기의 옛 캐시 미디어로 덮지 않는다.
+            var lockedByDirector = !!(NK.ui && NK.ui.directorLock && NK.ui.directorLock.isLocked(freshState.payload));
+            if (!lockedByDirector && Array.isArray(freshState.scenes) && freshState.scenes.length && prevScenes.length) {
               var _mediaUrlFields = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
                 'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl', 'voiceUrl'];
               var _statusFields = ['videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
@@ -1189,6 +1211,8 @@
             // 로컬 캐시 우선 정책으로 URL은 사실상 변하지 않으며, 변하더라도 placeholder가 잠시
             // 보이는 회귀(이미지가 사라졌다 나타나는 깜빡임)를 만들지 않기 위함.
             if (prevScenes.length !== nextScenes.length) changed = true;
+            // 잠금 상태가 바뀌었거나 잠긴 프로젝트면 서버 컷으로 다시 그린다(캐시가 보여 준 옛 컷·미디어를 걷어낸다).
+            if (lockedByDirector || !!(prev && prev.payload && prev.payload.directorConfirmed) !== lockedByDirector) changed = true;
             if (!changed) {
               for (var i = 0; i < nextScenes.length; i++) {
                 var ps = prevScenes[i] || {};
@@ -1741,6 +1765,7 @@
       __pipelineSpinnerAt = 0;
       setTimeout(function () { setPipelinePageLoading(false); }, _spinDelay);
     }
+    applyPipelineDirectorLock(state);
     // 캔버스는 같은 제작 엔진을 숨은 프레임에서 실행한다. detail(1)은 메인 프로덕션의 설정 화면,
     // auto 는 화면 전환 없이 씬 경계별 스토리보드 시트를 즉시 일괄 생성한다.
     try {

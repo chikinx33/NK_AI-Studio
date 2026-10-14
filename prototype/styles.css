@@ -16285,3 +16285,29 @@ body.codex-connect-open { overflow: hidden; }
 .snd-modal-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 36px 12px; font-size: 0.84rem; }
 /* IP 라이브러리(.img-modal, z-index 10000) 위에서 열린다. */
 .voice-picker-overlay { z-index: 10010; }
+
+/* 디렉터 확정 잠금(js/ui/director-lock.js): 시나리오 대본·메인 프로덕션 '수정 불가' */
+.director-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.director-lock-bar {
+  margin-bottom: 8px;
+}
+.director-lock-bar .director-lock-badge {
+  margin-left: 0;
+}
+.is-director-locked [contenteditable="false"] {
+  cursor: default;
+}

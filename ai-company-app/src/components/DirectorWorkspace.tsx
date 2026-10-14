@@ -5,6 +5,8 @@ import Markdown from "./Markdown";
 import ImageLightbox from "./ImageLightbox";
 import DirectorQuestionCard, { type PendingQuestion } from "./DirectorQuestionCard";
 import DirectorSteps from "./DirectorSteps";
+import { appDialog } from "../lib/appDialog";
+import { confirmSequence } from "../lib/directorSteps";
 import { listProductionProjects, type ProductionProjectSummary } from "../lib/api";
 import { readStorage, readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
 import { fitImageForModel } from "../lib/imageAttachment";
@@ -71,8 +73,24 @@ const NEAR_BOTTOM_PX = 80; // 이 정도 여유는 '맨 아래'로 본다
 
 // 같은 시퀀스를 다루는 두 입구: 대화(Managed Agents 디렉터) / 단계(직접 진행, Claude 단발 호출).
 const MODE_TEXT = {
-  ko: { chat: "대화", steps: "단계", chatTitle: "디렉터와 대화하며 만들기", stepsTitle: "단계별로 직접 진행(콘티 → 참조 → 프롬프트 → 드래프트 → 검수)" },
-  en: { chat: "Chat", steps: "Steps", chatTitle: "Make it by talking with the director", stepsTitle: "Go step by step yourself (conti → refs → prompt → draft → QA)" },
+  ko: { chat: "대화", steps: "단계", chatTitle: "디렉터와 대화하며 만들기", stepsTitle: "단계별로 직접 진행(콘티 → 참조 → 프롬프트 → 드래프트 → 검수)",
+    confirm: "확정", confirming: "확정 중…",
+    confirmTitle: "고른 시퀀스의 완성본을 시나리오·메인 프로덕션·영상 캔버스·SNS 세팅에 반영하고 잠근다",
+    confirmAsk: (title: string) => `"${title}" 의 완성본(1080p)으로 확정할까요?\n\n컷과 스틸·이야기가 시나리오·메인 프로덕션·영상 캔버스에, 완성 영상이 브랜드 스튜디오 SNS 세팅에 반영돼요. 확정 뒤 시나리오(개요 제외)와 메인 프로덕션은 수정 불가가 돼요.`,
+    replaceAsk: (n: number) => `이 프로젝트에 일반 시나리오로 만든 컷 ${n}개가 있어요. 디렉터 컷으로 바꿀까요?`,
+    done: (r: any) => `확정했어요. 컷 ${Number(r?.scenes) || 0}개(스틸 ${Number(r?.stills) || 0}장)${r?.representativeVideo ? " · 대표 영상 등록" : " · 시퀀스가 여럿이라 대표 영상은 포스트 프로덕션 렌더로 등록돼요"}.`,
+    noFinal: "완료된 1080p 완성본이 없어요. 드래프트를 1080p 로 완성한 뒤 확정해 주세요.",
+    noSequence: "확정할 시퀀스가 없어요.",
+    fail: "확정 실패: " },
+  en: { chat: "Chat", steps: "Steps", chatTitle: "Make it by talking with the director", stepsTitle: "Go step by step yourself (conti → refs → prompt → draft → QA)",
+    confirm: "Confirm", confirming: "Confirming…",
+    confirmTitle: "Apply the selected sequence's final take to Scenario, Main Production, Video Canvas and SNS settings, and lock them",
+    confirmAsk: (title: string) => `Confirm "${title}" with its final (1080p) take?\n\nCuts, stills and the story go to Scenario, Main Production and Video Canvas; the final video goes to Brand Studio SNS settings. After confirming, Scenario (except the overview) and Main Production become read-only.`,
+    replaceAsk: (n: number) => `This project has ${n} cuts made from a regular scenario. Replace them with the director's cuts?`,
+    done: (r: any) => `Confirmed. ${Number(r?.scenes) || 0} cuts (${Number(r?.stills) || 0} stills)${r?.representativeVideo ? " · main video registered" : " · several sequences, so the main video comes from the post-production render"}.`,
+    noFinal: "There is no finished 1080p take. Complete the draft at 1080p first.",
+    noSequence: "There is no sequence to confirm.",
+    fail: "Confirm failed: " },
 };
 type DirectorMode = "chat" | "steps";
 const modeLang = (): "ko" | "en" => String(readStorage("nk_lang")).replace(/^"|"$/g, "") === "en" ? "en" : "ko";
@@ -131,6 +149,7 @@ export default function DirectorWorkspace() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [sequences, setSequences] = useState<any[]>([]);
   const [activeSeq, setActiveSeq] = useState("");
   const [media, setMedia] = useState<Record<string, string>>({});
@@ -384,6 +403,31 @@ export default function DirectorWorkspace() {
       </div>
     );
   };
+  // 확정: 고른 시퀀스의 완성 테이크를 프로젝트 전체(시나리오·메인 프로덕션·영상 캔버스·SNS 세팅)에 반영한다.
+  // 일반 시나리오로 만든 컷이 있으면 서버가 409 scenes_exist 로 멈추고, 여기서 교체를 한 번 더 묻는다.
+  const confirmActiveSequence = async () => {
+    const seq = sequences.find((s) => s.id === activeSeq);
+    if (!projectId || confirming) return;
+    if (!seq) { await appDialog.alert(modeText.noSequence, { title: modeText.confirm }); return; }
+    if (!await appDialog.confirm(modeText.confirmAsk(String(seq.title || seq.id)), { title: modeText.confirm })) return;
+    setConfirming(true);
+    try {
+      let r: any;
+      try {
+        r = await confirmSequence(projectId, seq.id, false);
+      } catch (e: any) {
+        if (e?.status !== 409 || e?.body?.error !== "scenes_exist") throw e;
+        if (!await appDialog.confirm(modeText.replaceAsk(Number(e.body.existingScenes) || 0), { title: modeText.confirm })) return;
+        r = await confirmSequence(projectId, seq.id, true);
+      }
+      await appDialog.alert(modeText.done(r?.confirm), { title: modeText.confirm });
+      void loadSequences();
+    } catch (e: any) {
+      await appDialog.alert(e?.body?.error === "no_final_take" ? modeText.noFinal : modeText.fail + String(e?.message || e), { title: modeText.confirm });
+    } finally {
+      setConfirming(false);
+    }
+  };
   const costText = usage ? (usage.owner ? `대화 비용 $${(usage.listCostCents / 100).toFixed(2)} (소유자 무과금)` : `대화 비용 $${(usage.listCostCents / 100).toFixed(2)}${usage.available != null ? ` · 잔액 ${Number(usage.available).toLocaleString()} 크레딧` : ""}`) : "";
 
   return (
@@ -411,6 +455,12 @@ export default function DirectorWorkspace() {
         {projectId && mode === "chat" && (
           <button type="button" onClick={() => void newSession()} disabled={creating} className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40">
             <Icon d={PlusD} className="h-3.5 w-3.5" /> {creating ? "만드는 중…" : "새 디렉터 세션"}
+          </button>
+        )}
+        {projectId && (
+          <button type="button" onClick={() => void confirmActiveSequence()} disabled={confirming || !activeSeq} title={modeText.confirmTitle}
+            className="flex min-w-[72px] items-center justify-center gap-1 rounded border border-violet-700/70 bg-tint-violet/40 px-2 py-1 text-[11px] font-semibold text-tone-violet transition hover:bg-tint-violet/50 disabled:opacity-40">
+            <Icon d={CheckD} className="h-3.5 w-3.5" /> {confirming ? modeText.confirming : modeText.confirm}
           </button>
         )}
         <div className={`ml-auto flex items-center gap-1.5 ${mode === "steps" ? "hidden" : ""}`}>
