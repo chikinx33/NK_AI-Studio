@@ -384,6 +384,14 @@ function SplineIcon({ className }: { className?: string }) {
 function StraightIcon({ className }: { className?: string }) {
   return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><path d="M5 17v-5h14V7" /></svg>;
 }
+function SaveIcon({ className }: { className?: string }) {
+  // lucide: save
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" /><path d="M7 3v4a1 1 0 0 0 1 1h7" /></svg>;
+}
+function LayoutGridIcon({ className }: { className?: string }) {
+  // lucide: layout-grid — 정렬 초기화
+  return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>;
+}
 function EyeIcon({ className }: { className?: string }) {
   return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></svg>;
 }
@@ -1394,44 +1402,45 @@ export default function ProductionCanvas({
   return (
     <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-ink ${embedded ? "" : ""}`}>
       {/* 상단 바 */}
+      {/* 한 줄: 줄바꿈하지 않는다. 좁아지면 왼쪽(모델 선택)이 줄어들고 오른쪽 도구 묶음은 그대로다. */}
       {!hideTopBar && (
-      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge bg-inset px-3 py-2">
-        <WorkflowIcon className="h-4 w-4 text-tone-emerald" />
-        <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Production Canvas</span>
-        <div className="ml-2"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
+      <section className="flex shrink-0 flex-nowrap items-center gap-2 border-b border-edge bg-inset px-3 py-2">
+        <WorkflowIcon className="h-4 w-4 shrink-0 text-tone-emerald" />
+        <span className="shrink-0 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.22em] text-tone-emerald">Production Canvas</span>
+        <div className="ml-2 min-w-0 shrink"><ProjectPicker projects={projects} value={projectId} onChange={setProjectId} loading={projectsLoading} /></div>
         {graph && (
-          <div className="flex items-center gap-1.5 text-[11px] text-faint">
+          <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-faint">
             <Chip>컷 {graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.approvedStoryboards === graph.summary.scenes ? "emerald" : "gray"}>콘티 {graph.summary.approvedStoryboards || 0}/{graph.summary.scenes}</Chip>
             <Chip tone={graph.summary.stills === graph.summary.scenes ? "emerald" : "gray"}>스틸 {graph.summary.stills}</Chip>
             <Chip tone={graph.summary.clips === graph.summary.scenes ? "emerald" : "gray"}>영상 {graph.summary.clips}</Chip>
           </div>
         )}
-        <div className="flex items-center gap-1.5" data-testid="top-generation-models">
-          <label className="flex items-center gap-1 text-[10px] text-faint">
-            <span>이미지</span>
+        <div className="flex min-w-0 shrink items-center gap-1.5" data-testid="top-generation-models">
+          <label className="flex min-w-0 items-center gap-1 text-[10px] text-faint">
+            <span className="shrink-0">이미지</span>
             <select
               aria-label="이미지 모델"
               value={settings.image.provider}
               onChange={(event) => updateSettings({ ...settings, image: { ...settings.image, provider: event.target.value as CanvasSettings["image"]["provider"], providerExplicit: true } })}
-              className="max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
+              className="w-full min-w-[72px] max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
             >
               {IMAGE_PROVIDERS.map((item) => <option key={item.id} value={item.id}>{item.id === "studio" ? "스튜디오 설정" : item.label}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-1 text-[10px] text-faint">
-            <span>영상</span>
+          <label className="flex min-w-0 items-center gap-1 text-[10px] text-faint">
+            <span className="shrink-0">영상</span>
             <select
               aria-label="영상 모델"
               value={settings.video.model}
               onChange={(event) => { const model = event.target.value; updateSettings({ ...settings, video: { ...settings.video, model, durationSec: snapDuration(model, settings.video.durationSec), resolution: snapResolution(model, settings.video.resolution) } }); }}
-              className="max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
+              className="w-full min-w-[72px] max-w-[150px] rounded border border-edge bg-inset px-1.5 py-1 text-[10px] text-secondary"
             >
               {VIDEO_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </label>
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
           {onToggleExpand && (
             <button type="button" onClick={onToggleExpand} aria-pressed={expanded} className={`grid h-7 w-7 place-items-center rounded border transition ${expanded ? "border-emerald-500 bg-tint-emerald/40 text-tone-emerald" : "border-edge text-muted hover:bg-edge hover:text-strong"}`} title={expanded ? "사이드바 다시 열기" : "확장 (사이드바 감추기)"} aria-label={expanded ? "사이드바 다시 열기" : "확장"}>
               {expanded ? <MinimizeIcon className="h-3.5 w-3.5" /> : <MaximizeIcon className="h-3.5 w-3.5" />}
@@ -1463,15 +1472,16 @@ export default function ProductionCanvas({
           <span className="w-10 text-center text-[11px] text-faint">{Math.round(view.scale * 100)}%</span>
           <button type="button" onClick={() => setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, v.scale * 1.1) }))} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="확대">+</button>
           <button type="button" onClick={() => void addCut()} disabled={!projectId || saving} className="min-w-[72px] rounded border border-sky-700/70 bg-tint-sky/40 px-2 py-1 text-[11px] font-semibold text-tone-sky transition hover:bg-tint-sky/50 disabled:opacity-40" title="빈 컷을 하나 만들어요 — 내용은 카드에서 채우거나 대화로 시키세요">컷 추가</button>
-          <button type="button" onClick={resetLayout} className="min-w-[72px] rounded border border-edge px-2 py-1 text-[11px] text-muted hover:bg-edge hover:text-strong">정렬 초기화</button>
+          <button type="button" onClick={resetLayout} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="정렬 초기화 — 노드를 기본 배치로 되돌려요" aria-label="정렬 초기화"><LayoutGridIcon className="h-3.5 w-3.5" /></button>
           <button
             type="button"
             onClick={() => void saveLayout()}
             disabled={!projectId || layoutSaving || !layoutDirty}
-            className={`min-w-[72px] rounded-lg px-3 py-1.5 text-[12px] font-bold transition disabled:opacity-40 ${layoutDirty ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-faint"}`}
-            title="캔버스 배치를 프로젝트에 저장해요. 컷 내용은 각 컷의 '저장 요청'으로 저장돼요."
+            className={`grid h-7 w-7 place-items-center rounded transition disabled:opacity-40 ${layoutDirty ? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-faint"}`}
+            title={`${layoutSaving ? "저장 중…" : (layoutDirty ? "저장" : "저장됨")} — 캔버스 배치를 프로젝트에 저장해요. 컷 내용은 각 컷의 '저장 요청'으로 저장돼요.`}
+            aria-label={layoutSaving ? "저장 중" : (layoutDirty ? "저장" : "저장됨")}
           >
-            {layoutSaving ? "저장 중…" : (layoutDirty ? "저장" : "저장됨")}
+            {layoutSaving ? <RefreshIcon className="h-3.5 w-3.5 animate-spin" /> : <SaveIcon className="h-3.5 w-3.5" />}
           </button>
           <button type="button" onClick={() => { void load(); reloadProjects(); }} className="grid h-7 w-7 place-items-center rounded border border-edge text-muted hover:bg-edge hover:text-strong" title="다시 읽기"><RefreshIcon className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
           <button

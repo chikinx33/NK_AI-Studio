@@ -72,7 +72,12 @@ test('★컷 카드 제목은 컷 번호만(씬 번호는 바가 보여 준다),
 test('★배치 저장 버튼: 로컬은 작업 사본, 프로젝트 저장은 버튼으로(서버 payload.canvasLayout)', () => {
   assert.match(src, /const layoutDirty = useMemo\(\(\) => JSON\.stringify\(layout\) !== JSON\.stringify\(serverLayout\)/);
   assert.match(src, /await saveCanvasLayout\(projectId, layout\);/);
-  assert.match(src, /\{layoutSaving \? "저장 중…" : \(layoutDirty \? "저장" : "저장됨"\)\}/, '버튼 문구는 저장');
+  // 2026-10-14: 상단 바를 한 줄로 — 저장은 아이콘 버튼(lucide save), 상태 문구는 툴팁·aria-label 로
+  assert.match(src, /title=\{`\$\{layoutSaving \? "저장 중…" : \(layoutDirty \? "저장" : "저장됨"\)\} — /, '상태 문구는 툴팁');
+  assert.match(src, /aria-label=\{layoutSaving \? "저장 중" : \(layoutDirty \? "저장" : "저장됨"\)\}/);
+  assert.match(src, /\{layoutSaving \? <RefreshIcon className="h-3\.5 w-3\.5 animate-spin" \/> : <SaveIcon className="h-3\.5 w-3\.5" \/>\}/, '저장 아이콘');
+  assert.match(src, /aria-label="정렬 초기화"><LayoutGridIcon/, '정렬 초기화 아이콘');
+  assert.match(src, /flex shrink-0 flex-nowrap items-center gap-2 border-b border-edge bg-inset px-3 py-2/, '한 줄');
   assert.match(src, /layoutDirty \? "bg-emerald-600 text-white hover:bg-emerald-500" : "border border-edge text-faint"/, '테마(에메랄드) 스타일');
   assert.match(src, /const savedLayout = parsed \|\| fromServer;[\s\S]{0,400}setLayout\(reconcileLayout\(seed, g, base\)\);/, '로컬 사본 → 서버 배치 → 기본 배치 순(순서 변경 뒤엔 칸 배치만 서버 순서로)');
   const api = fs.readFileSync(path.join(process.cwd(), 'ai-company-app/src/lib/api.ts'), 'utf8').replace(/\r\n/g, '\n');

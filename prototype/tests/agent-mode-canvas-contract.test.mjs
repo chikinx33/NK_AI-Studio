@@ -117,7 +117,7 @@ test("★제작 캔버스는 서버 그래프(단일 조립 프롬프트)를 그
   assert.match(workspace, /\{!focusMode && \(\s*<section className="shrink-0 border-b border-edge/);
   // 임베드(AI 시네마 셸)에서는 캔버스 상단 바(프로젝트·줌·일괄 생성)를 남긴다.
   assert.match(workspace, /hideTopBar=\{focusMode && !embed\}/);
-  assert.match(canvas, /\{!hideTopBar && \(\s*<section className="flex shrink-0 flex-wrap/);
+  assert.match(canvas, /\{!hideTopBar && \(\s*<section className="flex shrink-0 flex-nowrap/);
   // 연결선 곡선·직선 토글: 캔버스 자체 상단 바에 있어 AI 회사·AI 시네마 임베드 양쪽에서 보이고, 브라우저에 기억한다.
   assert.match(canvas, /writeUserStorage\("canvasEdgeStyle", next\)/);
   assert.match(canvas, /title=\{edgeStyle === "curve" \? "연결선: 곡선 \(누르면 직각선\)" : "연결선: 직각선 \(누르면 곡선\)"\}/);
