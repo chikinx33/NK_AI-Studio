@@ -82,12 +82,17 @@ const MODE_TEXT = {
     noFinal: "완료된 1080p 완성본이 없어요. 드래프트를 1080p 로 완성한 뒤 확정해 주세요.",
     noSequence: "확정할 시퀀스가 없어요.",
     fail: "확정 실패: ",
-    variant: (ar: string) => `${ar} 판 만들기`,
-    variantTitle: (ar: string) => `이 프로젝트는 그대로 두고, 디렉터 리소스(컷·참조·프롬프트·원본 스틸과 완성 영상)를 옮긴 ${ar} 판 프로젝트를 새로 만든다`,
-    variantAsk: (ar: string) => `${ar} 판 프로젝트를 새로 만들까요?\n\n이 프로젝트(확정본 포함)는 그대로 남아요. 새 프로젝트에 컷 타이밍·참조·프롬프트를 옮기고, 원본 스틸과 완성 영상을 참조로 넣어요. 컷 스틸은 ${ar} 구도로 새로 만들어 확인한 뒤 영상을 생성해요(생성 비용이 들어요).`,
-    variantMaking: "만드는 중…",
-    variantDone: (title: string) => `"${title}" 프로젝트를 만들었어요. 지금 그 프로젝트로 옮길까요?`,
-    variantFail: "비율 판 만들기 실패: " },
+    duplicate: "에피소드 복제",
+    duplicateTitle: "이 에피소드는 그대로 두고 디렉터 리소스(컷·참조·프롬프트·스틸·완성 영상)를 옮긴 새 에피소드를 만든다 — 비율을 고른다",
+    duplicateMenu: "복제할 비율",
+    sameAspect: "같은 비율 · 스틸까지 그대로",
+    otherAspect: "이 비율로 다시 생성 · 스틸 새로 그림",
+    duplicateAskSame: "이 에피소드를 같은 비율로 복제할까요?\n\n이 에피소드(확정본 포함)는 그대로 남아요. 컷·스틸·참조·프롬프트를 그대로 가져가고, 테이크와 확정만 비워요.",
+    duplicateAskOther: (ar: string) => `${ar} 에피소드로 복제할까요?\n\n이 에피소드(확정본 포함)는 그대로 남아요. 컷 타이밍·참조·프롬프트를 옮기고 원본 스틸과 완성 영상을 참조로 넣어요. 컷 스틸은 ${ar} 구도로 새로 만들어 확인한 뒤 영상을 생성해요(생성 비용이 들어요).`,
+    duplicating: "복제 중…",
+    duplicateDone: (title: string) => `"${title}" 에피소드를 만들었어요. 지금 그 에피소드로 옮길까요?`,
+    duplicateFail: "에피소드 복제 실패: ",
+    panelToggle: (name: string, open: boolean) => `${name} ${open ? "접기" : "펼치기"}` },
   en: { chat: "Chat", steps: "Steps", chatTitle: "Make it by talking with the director", stepsTitle: "Go step by step yourself (conti → refs → prompt → draft → QA)",
     confirm: "Confirm", confirming: "Confirming…",
     confirmTitle: "Apply the selected sequence's final take to Scenario, Main Production, Video Canvas and SNS settings, and lock them",
@@ -97,12 +102,17 @@ const MODE_TEXT = {
     noFinal: "There is no finished 1080p take. Complete the draft at 1080p first.",
     noSequence: "There is no sequence to confirm.",
     fail: "Confirm failed: ",
-    variant: (ar: string) => `Make ${ar} version`,
-    variantTitle: (ar: string) => `Keep this project and create a new ${ar} project with the director resources (cuts, references, prompt, original stills and final video)`,
-    variantAsk: (ar: string) => `Create a new ${ar} version project?\n\nThis project (and its confirmed result) stays as it is. Cut timing, references and the prompt move to the new project, with the original stills and final video as references. Cut stills are redrawn in ${ar} and checked before the video is generated (generation costs apply).`,
-    variantMaking: "Creating…",
-    variantDone: (title: string) => `Created "${title}". Switch to it now?`,
-    variantFail: "Could not create the version: " },
+    duplicate: "Duplicate episode",
+    duplicateTitle: "Keep this episode and create a new one with the director resources (cuts, references, prompt, stills, final video) — pick the aspect ratio",
+    duplicateMenu: "Aspect ratio of the copy",
+    sameAspect: "Same ratio · keeps the stills",
+    otherAspect: "Regenerate in this ratio · new stills",
+    duplicateAskSame: "Duplicate this episode in the same ratio?\n\nThis episode (and its confirmed result) stays as it is. Cuts, stills, references and the prompt are copied; only takes and the confirmation are cleared.",
+    duplicateAskOther: (ar: string) => `Duplicate as a ${ar} episode?\n\nThis episode (and its confirmed result) stays as it is. Cut timing, references and the prompt move over, with the original stills and final video as references. Cut stills are redrawn in ${ar} and checked before the video is generated (generation costs apply).`,
+    duplicating: "Duplicating…",
+    duplicateDone: (title: string) => `Created "${title}". Switch to it now?`,
+    duplicateFail: "Could not duplicate the episode: ",
+    panelToggle: (name: string, open: boolean) => `${open ? "Collapse" : "Expand"} ${name}` },
 };
 type DirectorMode = "chat" | "steps";
 const modeLang = (): "ko" | "en" => String(readStorage("nk_lang")).replace(/^"|"$/g, "") === "en" ? "en" : "ko";
@@ -163,6 +173,12 @@ export default function DirectorWorkspace() {
   const [creating, setCreating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [makingVariant, setMakingVariant] = useState(false);
+  const [dupMenuOpen, setDupMenuOpen] = useState(false);
+  // 시퀀스 패널의 콘티·테이크 접기/펼치기 — 기본은 펼침, 사용자가 마지막으로 둔 상태를 기억한다.
+  const [contiOpen, setContiOpen] = useState(() => readUserStorage("directorPanelConti") !== "0");
+  const [takesOpen, setTakesOpen] = useState(() => readUserStorage("directorPanelTakes") !== "0");
+  const toggleConti = () => setContiOpen((v) => { writeUserStorage("directorPanelConti", v ? "0" : "1"); return !v; });
+  const toggleTakes = () => setTakesOpen((v) => { writeUserStorage("directorPanelTakes", v ? "0" : "1"); return !v; });
   const [sequences, setSequences] = useState<any[]>([]);
   const [activeSeq, setActiveSeq] = useState("");
   const [media, setMedia] = useState<Record<string, string>>({});
@@ -441,18 +457,20 @@ export default function DirectorWorkspace() {
       setConfirming(false);
     }
   };
-  // 다른 비율 판: 이 프로젝트(확정본)는 두고 새 에피소드 프로젝트로 디렉터 리소스를 옮긴다. 가로면 세로판, 그 밖이면 가로판.
+  // 에피소드 복제: 이 에피소드(확정본)는 두고 디렉터 리소스를 옮긴 새 에피소드를 만든다. 같은 비율은 스틸까지 그대로,
+  // 다른 비율은 그 비율로 스틸을 다시 그리게 세팅한다(서버 _shared/director-aspect-variant.js).
   const sourceAspect = projects.find((p) => p.id === projectId)?.aspectRatio || String(sequences.find((s) => s.id === activeSeq)?.aspectRatio || "16:9");
-  const variantAspect = sourceAspect === "16:9" ? "9:16" : "16:9";
-  const makeAspectVariant = async () => {
+  const duplicateEpisode = async (aspect: string) => {
+    setDupMenuOpen(false);
     if (!projectId || makingVariant || !sequences.length) return;
-    if (!await appDialog.confirm(modeText.variantAsk(variantAspect), { title: modeText.variant(variantAspect) })) return;
+    const same = aspect === sourceAspect;
+    if (!await appDialog.confirm(same ? modeText.duplicateAskSame : modeText.duplicateAskOther(aspect), { title: modeText.duplicate })) return;
     setMakingVariant(true);
     try {
-      const r = await createAspectVariant(projectId, variantAspect);
-      if (await appDialog.confirm(modeText.variantDone(r.title), { title: modeText.variant(variantAspect) })) await onProjectCreated(r.projectId);
+      const r = await createAspectVariant(projectId, aspect);
+      if (await appDialog.confirm(modeText.duplicateDone(r.title), { title: modeText.duplicate })) await onProjectCreated(r.projectId);
     } catch (e: any) {
-      await appDialog.alert(modeText.variantFail + String(e?.message || e), { title: modeText.variant(variantAspect) });
+      await appDialog.alert(modeText.duplicateFail + String(e?.message || e), { title: modeText.duplicate });
     } finally {
       setMakingVariant(false);
     }
@@ -493,10 +511,29 @@ export default function DirectorWorkspace() {
           </button>
         )}
         {projectId && (
-          <button type="button" onClick={() => void makeAspectVariant()} disabled={makingVariant || !sequences.length} title={modeText.variantTitle(variantAspect)}
-            className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-edge bg-inset px-2 py-1 text-[11px] font-semibold text-secondary transition hover:bg-edge disabled:opacity-40">
-            <Icon d={CopyD} className="h-3.5 w-3.5" /> {makingVariant ? modeText.variantMaking : modeText.variant(variantAspect)}
-          </button>
+          <div className="relative">
+            <button type="button" onClick={() => setDupMenuOpen((v) => !v)} disabled={makingVariant || !sequences.length} title={modeText.duplicateTitle}
+              aria-haspopup="menu" aria-expanded={dupMenuOpen}
+              className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-edge bg-inset px-2 py-1 text-[11px] font-semibold text-secondary transition hover:bg-edge disabled:opacity-40">
+              <Icon d={CopyD} className="h-3.5 w-3.5" /> {makingVariant ? modeText.duplicating : modeText.duplicate}
+              <Icon d={ChevronD} className="h-3 w-3" />
+            </button>
+            {dupMenuOpen && (
+              <>
+                <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-40 cursor-default" onClick={() => setDupMenuOpen(false)} />
+                <div role="menu" aria-label={modeText.duplicateMenu} className="absolute left-0 top-full z-50 mt-1 w-[240px] overflow-hidden rounded-lg border border-edge bg-panel py-1 shadow-xl">
+                  <div className="px-3 py-1 text-[10px] font-bold text-faint">{modeText.duplicateMenu}</div>
+                  {["16:9", "9:16", "1:1"].map((ar) => (
+                    <button key={ar} type="button" role="menuitem" onClick={() => void duplicateEpisode(ar)}
+                      className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-edge">
+                      <span className="w-9 shrink-0 text-[12px] font-bold text-strong">{ar}</span>
+                      <span className="text-[10px] text-muted">{ar === sourceAspect ? modeText.sameAspect : modeText.otherAspect}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
         <div className={`ml-auto flex items-center gap-1.5 ${mode === "steps" ? "hidden" : ""}`}>
           {costText && <span className="text-[10px] text-faint">{costText}</span>}
@@ -668,8 +705,12 @@ export default function DirectorWorkspace() {
             {seq && (
               <>
                 <section>
-                  <div className="mb-1.5 text-[11px] font-bold text-muted">콘티 · {seq.durationSec ? `${seq.durationSec}초 · ` : ""}{(seq.cuts || []).length}컷</div>
-                  <div className="space-y-2">
+                  <button type="button" onClick={toggleConti} aria-expanded={contiOpen} aria-label={modeText.panelToggle("콘티", contiOpen)}
+                    className="mb-1.5 flex w-full items-center gap-1 text-left text-[11px] font-bold text-muted hover:text-strong">
+                    <Icon d={ChevronD} className={`h-3.5 w-3.5 transition-transform ${contiOpen ? "" : "-rotate-90"}`} />
+                    콘티 · {seq.durationSec ? `${seq.durationSec}초 · ` : ""}{(seq.cuts || []).length}컷
+                  </button>
+                  {contiOpen && <div className="space-y-2">
                     {(seq.cuts || []).map((c: any) => {
                       const still = media[String(c.stillUrl || "")] || (/^https?:/.test(String(c.stillUrl || "")) ? c.stillUrl : "");
                       return (
@@ -685,11 +726,15 @@ export default function DirectorWorkspace() {
                         </div>
                       );
                     })}
-                  </div>
+                  </div>}
                 </section>
                 <section>
-                  <div className="mb-1.5 text-[11px] font-bold text-muted">테이크 {(seq.takes || []).length}개 {(seq.selectedTakeIds || []).length ? `· 편집기 반영 ${(seq.selectedTakeIds || []).join(", ")}` : ""}</div>
-                  <div className="space-y-2">
+                  <button type="button" onClick={toggleTakes} aria-expanded={takesOpen} aria-label={modeText.panelToggle("테이크", takesOpen)}
+                    className="mb-1.5 flex w-full items-center gap-1 text-left text-[11px] font-bold text-muted hover:text-strong">
+                    <Icon d={ChevronD} className={`h-3.5 w-3.5 transition-transform ${takesOpen ? "" : "-rotate-90"}`} />
+                    테이크 {(seq.takes || []).length}개 {(seq.selectedTakeIds || []).length ? `· 편집기 반영 ${(seq.selectedTakeIds || []).join(", ")}` : ""}
+                  </button>
+                  {takesOpen && <div className="space-y-2">
                     {[...(seq.takes || [])].reverse().map((t: any) => {
                       const url = t.videoPath ? media[t.videoPath] : "";
                       return (
@@ -713,7 +758,7 @@ export default function DirectorWorkspace() {
                         </div>
                       );
                     })}
-                  </div>
+                  </div>}
                 </section>
                 {isMaster && <div className="text-[10px] text-faint">편집은 /app 후반 작업에서 — 디렉터가 컨펌된 테이크를 타임라인에 올립니다.</div>}
               </>

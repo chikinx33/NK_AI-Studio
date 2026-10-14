@@ -63,8 +63,30 @@ test("비율판 계획: 개요만 옮기고 확정·대표 영상·발행 기록
   assert.equal(plan.sequences[0].aspectRatio, "9:16");
 });
 
-test("비율판 계획: 같은 비율·잘못된 비율·디렉터 시퀀스 없음은 거절", () => {
-  assert.throws(() => buildAspectVariant(source, { sequences: [seq] }, { aspectRatio: "16:9", sourceProjectId: "semo" }), /same_aspect_ratio/);
+test("같은 비율 복제: 스틸·승인까지 그대로, 테이크·확정만 비운다", () => {
+  const plan = buildAspectVariant(source, { sequences: [seq], notes: { rules: "인물은 리본 안" } }, { aspectRatio: "16:9", sourceProjectId: "semo" });
+  assert.equal(plan.sameAspect, true);
+  assert.equal(plan.title, "세모의 습격 (복제)");
+  assert.equal(plan.payloadPatch.topic, "세모의 습격 (복제)");
+  const v = plan.sequences[0];
+  assert.equal(v.cuts[0].stillUrl, "gs://b/users/u/ai-video/projectsp/image/1.png");
+  assert.equal(v.cuts[0].stillApproved, true);
+  assert.deepEqual(v.takes, []);
+  assert.equal(v.confirmedTakeId, undefined);
+  // 스틸은 컷에 그대로 있으니 참조로 다시 넣지 않는다(원본 완성 영상만 참조로)
+  assert.equal(v.references.length, 2);
+  assert.match(v.references[1].role, /원본 완성 영상/);
+  assert.match(plan.notes.rules, /\[복제\] 이 프로젝트는 '세모의 습격'\(16:9/);
+});
+
+test("세로 → 가로도 같은 규칙(가로 전제 문구 없음)", () => {
+  const vertical = { ...source, aspectRatio: "9:16", payload: { ...source.payload, aspectRatio: "9:16" } };
+  const plan = buildAspectVariant(vertical, { sequences: [{ ...seq, aspectRatio: "9:16" }] }, { aspectRatio: "16:9", sourceProjectId: "semo" });
+  assert.equal(plan.title, "세모의 습격 (16:9)");
+  assert.doesNotMatch(JSON.stringify(plan), /가로 구도|가로 화면/);
+});
+
+test("비율판 계획: 잘못된 비율·디렉터 시퀀스 없음은 거절", () => {
   assert.throws(() => buildAspectVariant(source, { sequences: [seq] }, { aspectRatio: "4:3", sourceProjectId: "semo" }), /invalid_aspect_ratio/);
   assert.throws(() => buildAspectVariant(source, { sequences: [] }, { aspectRatio: "9:16", sourceProjectId: "semo" }), /no_director_sequences/);
   assert.equal(defaultVariantAspect("16:9"), "9:16");
@@ -77,8 +99,16 @@ test("엔드포인트·화면: 새 에피소드로 만들고 시퀀스·기억�
   assert.match(ep, /op: "upsert", sequence: seq/);
   assert.match(ep, /op: "notes", notes: plan\.notes/);
   const dw = read("ai-company-app/src/components/DirectorWorkspace.tsx");
-  assert.match(dw, /variant: \(ar: string\) => `\$\{ar\} 판 만들기`/);
-  assert.match(dw, /variant: \(ar: string\) => `Make \$\{ar\} version`/);
-  assert.match(dw, /const variantAspect = sourceAspect === "16:9" \? "9:16" : "16:9";/);
+  // '에피소드 복제' 하나로, 비율(16:9·9:16·1:1)을 고른다. 같은 비율은 스틸까지 그대로.
+  assert.match(dw, /duplicate: "에피소드 복제"/);
+  assert.match(dw, /duplicate: "Duplicate episode"/);
+  assert.match(dw, /\["16:9", "9:16", "1:1"\]\.map\(\(ar\) =>/);
+  assert.match(dw, /ar === sourceAspect \? modeText\.sameAspect : modeText\.otherAspect/);
+  // 콘티·테이크 접기/펼치기: 기본 펼침, 마지막 상태 기억
+  assert.match(dw, /readUserStorage\("directorPanelConti"\) !== "0"/);
+  assert.match(dw, /readUserStorage\("directorPanelTakes"\) !== "0"/);
+  assert.match(dw, /writeUserStorage\("directorPanelConti", v \? "0" : "1"\)/);
+  assert.match(dw, /\{contiOpen && <div className="space-y-2">/);
+  assert.match(dw, /\{takesOpen && <div className="space-y-2">/);
   assert.match(read("ai-company-app/src/lib/directorSteps.ts"), /"\/api\/director\/aspect-variant"/);
 });
