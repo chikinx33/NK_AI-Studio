@@ -17,6 +17,10 @@
   // 배포 진행 중 상태(formatId→true). renderProject 가 재실행돼도 스피너가 유지되도록
   // 모듈 스코프에 둔다(렌더 내부 지역변수였을 때는 재렌더 시 초기화돼 스피너가 꺼졌음).
   var _deployingFormats = {};
+  // 배포 이력(brandStudioPublishResults) 저장 줄. 기록은 '목록 전체'를 저장하므로 동시에 두 건이 저장되면
+  // 나중 것이 앞 것을 지운다. 한 번에 하나씩, 직전 저장이 끝난 뒤의 최신 목록에 덧붙인다(2026-10-14:
+  // 전체 배포에서 YouTube·X·TikTok·Facebook 기록이 사라지고 마지막 Instagram 만 남았다).
+  var _publishResultsQueue = Promise.resolve();
   // "SNS 세팅" 진입 시작 단계. 에피소드를 열 때 1회만 계산해 renderProject 재실행에도 유지된다.
   //  - 1~4 단계를 모두 마친 에피소드 → 04(배포 설정)로 바로 진입
   //  - 그 외 → 01(자산)부터 진행
@@ -1592,18 +1596,37 @@
         hashtags: rawHashtags.split(/[\s,\n]+/).map(function (tag) { return String(tag || '').trim(); }).filter(Boolean),
         metrics: { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0 }
       };
-      var brandRows = brand && Array.isArray(brand.brandStudioPublishResults)
-        ? brand.brandStudioPublishResults.slice()
-        : [];
-      var projectRows = Array.isArray(payload.brandStudioPublishResults)
-        ? payload.brandStudioPublishResults.slice()
-        : (Array.isArray(payload.publishResults) ? payload.publishResults.slice() : []);
-      var nextBrandRows = appendPublishResult(brandRows, record);
-      var nextProjectRows = appendPublishResult(projectRows, record);
-      return syncBrandAndProject(
-        { brandStudioPublishResults: nextBrandRows },
-        { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
-      );
+      return updatePublishRows(function (rows) { return appendPublishResult(rows, record); });
+    }
+
+    /**
+     * 배포 이력 목록을 고쳐 저장한다. 렌더 때 받은 payload·brand 는 배포 중 다시 그리지 않아 옛 목록이다 —
+     * 그걸 기준으로 저장하면 앞서 저장한 기록을 지운다. 저장 줄에서 차례를 기다린 뒤, 로컬 캐시(저장 때마다
+     * 즉시 갱신된다)의 최신 목록을 고친다. 렌더 스코프 사본도 같이 맞춰 둔다.
+     */
+    function updatePublishRows(edit) {
+      var run = _publishResultsQueue.then(function () {
+        var latestDraft = (NK.service && NK.service.project && NK.service.project.getDraftById) ? NK.service.project.getDraftById(projectId) : null;
+        var latestPayload = (latestDraft && latestDraft.payload) || payload;
+        var latestBrand = (brandId && NK.service && NK.service.brand && NK.service.brand.getById) ? (NK.service.brand.getById(brandId) || brand) : brand;
+        var brandRows = latestBrand && Array.isArray(latestBrand.brandStudioPublishResults)
+          ? latestBrand.brandStudioPublishResults.slice()
+          : [];
+        var projectRows = Array.isArray(latestPayload.brandStudioPublishResults)
+          ? latestPayload.brandStudioPublishResults.slice()
+          : (Array.isArray(latestPayload.publishResults) ? latestPayload.publishResults.slice() : []);
+        var nextBrandRows = edit(brandRows);
+        var nextProjectRows = edit(projectRows);
+        payload.brandStudioPublishResults = nextProjectRows;
+        payload.publishResults = nextProjectRows;
+        if (brand) brand.brandStudioPublishResults = nextBrandRows;
+        return syncBrandAndProject(
+          { brandStudioPublishResults: nextBrandRows },
+          { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
+        );
+      });
+      _publishResultsQueue = run.catch(function () { });
+      return run;
     }
 
     /**
@@ -1613,19 +1636,11 @@
     function removePublishedResult(recordId) {
       var rid = String(recordId || '').trim();
       if (!rid) return Promise.resolve();
-      function without(rows) {
+      return updatePublishRows(function (rows) {
         return (Array.isArray(rows) ? rows : []).filter(function (row) {
           return String((row && row.id) || '') !== rid;
         });
-      }
-      var nextBrandRows = without(brand && brand.brandStudioPublishResults);
-      var nextProjectRows = without(
-        Array.isArray(payload.brandStudioPublishResults) ? payload.brandStudioPublishResults : payload.publishResults
-      );
-      return syncBrandAndProject(
-        { brandStudioPublishResults: nextBrandRows },
-        { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
-      );
+      });
     }
 
     // 스토리(가상 ID)를 포함한 선택된 자산 총 수
