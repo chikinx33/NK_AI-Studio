@@ -60,6 +60,27 @@ function firstText(...values: unknown[]): string {
 }
 
 /** 순수 함수 — 테스트가 직접 호출한다. */
+/**
+ * 디렉터로 확정한 에피소드는 시퀀스마다 한 흐름으로 만든 완성 영상이 하나다(컷별 영상 없음).
+ * 확정 순서대로 컷이 이어 붙었으므로(_shared/director-confirm.js) 각 시퀀스의 첫 컷 위치를 세어 그 자리에 완성 영상을 둔다.
+ * 순수 함수 — 컷 인덱스 → 영상 경로.
+ */
+export function directorWholeVideos(payload: any): Map<number, string> {
+  const out = new Map<number, string>();
+  const confirmed: any[] = Array.isArray(payload?.directorConfirmed?.sequences) ? payload.directorConfirmed.sequences : [];
+  const sequences: any[] = Array.isArray(payload?.sequences) ? payload.sequences : [];
+  let offset = 0;
+  for (const c of confirmed) {
+    const seq = sequences.find((s) => s && s.id === c?.id);
+    if (!seq) continue;
+    const take = (Array.isArray(seq.takes) ? seq.takes : []).find((t: any) => t && t.id === c?.takeId);
+    const path = String(take?.videoPath || take?.videoUrl || "").trim();
+    if (path) out.set(offset, path);
+    offset += (Array.isArray(seq.cuts) ? seq.cuts.filter((x: any) => x && typeof x === "object").length : 0);
+  }
+  return out;
+}
+
 export function buildProductionGraph(project: { projectId: string; title?: string; header?: string; payload?: any; scenes?: any[] }) {
   const projectId = String(project.projectId || "");
   const payload = project.payload && typeof project.payload === "object" ? project.payload : {};
@@ -160,6 +181,7 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
   // 장소 노드: sceneLocation 이 같은 컷은 같은 세트를 쓴다(플레이트·방위의 단위).
   const locationNodeByKey = new Map<string, string>();
   const sceneIds: string[] = [];
+  const wholeVideos = directorWholeVideos(payload);
 
   scenes.forEach((s, idx) => {
     const sceneId = s?.id != null ? String(s.id) : String(idx + 1);
@@ -170,7 +192,10 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
     const videoPrompt = buildSceneVideoPrompt(s, header, payload, {});
     const lineage = s?.lineage && typeof s.lineage === "object" ? s.lineage : null;
     const stillUrl = toDisplayUrl(s?.imageDataUrl || s?.imagePath || "");
-    const clipUrl = toDisplayUrl(s?.videoUrl || s?.videoPath || "");
+    const ownClip = String(s?.videoUrl || s?.videoPath || "");
+    // 컷 자체 영상이 없고 이 컷이 디렉터 시퀀스의 첫 컷이면, 그 시퀀스의 완성 영상(에피소드 한 흐름)을 보여 준다.
+    const wholeVideo = !ownClip ? (wholeVideos.get(idx) || "") : "";
+    const clipUrl = toDisplayUrl(ownClip || wholeVideo);
     const storyboard = storyboardFor(s?.id ?? idx + 1);
     nodes.push({
       id: nodeId,
@@ -210,7 +235,9 @@ export function buildProductionGraph(project: { projectId: string; title?: strin
         },
         clip: {
           url: clipUrl,
-          ref: String(s?.videoUrl || s?.videoPath || ""),
+          ref: ownClip,
+          // 컷 영상이 아니라 시퀀스 완성 영상(한 흐름)이다 — 카드가 '완성본'으로 표시한다. 컷 영상 개수에는 넣지 않는다.
+          whole: !!wholeVideo,
           status: String(s?.videoStatus || ""),
           jobId: String(s?.videoJobId || ""),
           error: String(s?.videoError || ""),

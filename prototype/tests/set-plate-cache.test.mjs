@@ -104,7 +104,7 @@ test('★cameraElevation 이 씬 필드 길목에서 살아남는다: 분해 →
   assert.match(read('prototype/functions/api/agent/production-graph.ts'), /cameraElevation: String\(s\?\.cameraElevation \|\| "eye"\),/);
   assert.match(read('prototype/functions/api/agent/_shared.ts'), /"cameraDirection", "cameraElevation", "beats", "blocking"/, 'scene_upsert FIELDS');
   const canvas = read('ai-company-app/src/components/ProductionCanvas.tsx');
-  assert.match(canvas, /\{n\.data\.cameraElevation && n\.data\.cameraElevation !== "eye" && <Chip tone="amber">/);
+  assert.match(canvas, /\{n\.data\.cameraElevation && n\.data\.cameraElevation !== "eye" && <Chip tone="amber"[ >]/);
 });
 
 test('★프롬프트: 방위 다음에 높이 한 줄(서버·브라우저 이미지/영상 같은 문장), 앵글 플레이트 프롬프트는 방위×높이 시점을 문장으로', () => {
@@ -194,6 +194,7 @@ test('★scene_still 프롬프트는 캐릭터 수를 명시하고 전원 보이
   assert.match(shared, /`Exactly \$\{charLines\.length\} character\$\{charLines\.length > 1 \? "s" : ""\} appear in this shot: \$\{tokens\.join\(", "\)\}\. ALL of them must be clearly visible in the frame — never omit or merge any of them\.`/);
   const src = read('ai-company-app/src/components/ProductionCanvas.tsx');
   assert.match(src, /!storyboardView && <span className="absolute left-1\.5 top-1\.5 company-media inline-flex rounded bg-black\/80"><Chip tone=\{frameTone\}>\{frameLabel\}<\/Chip><\/span>/, '공용 콘티·스틸 슬롯 라벨은 일반 보기에서만 검은 둥근 네모');
-  assert.ok((src.match(/inline-flex rounded bg-black\/80"><Chip tone=\{vd\.running/g) || []).length >= 2, '카드·상세 영상 라벨은 검은 둥근 네모');
+  // 카드는 한 흐름 완성 영상이면 '완성본' 칩을 먼저 고른다(같은 검은 둥근 네모 안).
+  assert.ok((src.match(/inline-flex rounded bg-black\/80">(?:\{n\.data\.clip\?\.whole[\s\S]{0,220}?)?<Chip tone=\{vd\.running/g) || []).length >= 2, '카드·상세 영상 라벨은 검은 둥근 네모');
   assert.doesNotMatch(src, /inline-flex rounded-full bg-black\/80/, '미디어 라벨은 알약 모양을 쓰지 않는다');
 });

@@ -357,7 +357,7 @@ function orthogonalPath(a: Pos, b: Pos): string {
 function anchorOut(node: ProductionNode, p: Pos): Pos { return { x: p.x + NODE_W[node.type], y: p.y + Math.min(NODE_H[node.type], 140) / 2 }; }
 function anchorIn(node: ProductionNode, p: Pos): Pos { return { x: p.x, y: p.y + Math.min(NODE_H[node.type], 140) / 2 }; }
 
-function Chip({ children, tone = "gray" }: { children: React.ReactNode; tone?: "gray" | "emerald" | "amber" | "cyan" | "violet" | "red" }) {
+function Chip({ children, tone = "gray", className = "", title }: { children: React.ReactNode; tone?: "gray" | "emerald" | "amber" | "cyan" | "violet" | "red"; className?: string; title?: string }) {
   const map = {
     gray: "border-edge text-muted",
     emerald: "border-emerald-700/60 text-tone-emerald",
@@ -366,7 +366,7 @@ function Chip({ children, tone = "gray" }: { children: React.ReactNode; tone?: "
     violet: "border-violet-700/60 text-tone-violet",
     red: "border-red-800/60 text-tone-red",
   };
-  return <span className={`rounded border px-1 py-px text-[9px] font-bold uppercase tracking-wide ${map[tone]}`}>{children}</span>;
+  return <span title={title} className={`rounded border px-1 py-px text-[9px] font-bold uppercase tracking-wide ${map[tone]} ${className}`}>{children}</span>;
 }
 
 function WorkflowIcon({ className }: { className?: string }) {
@@ -1749,9 +1749,10 @@ export default function ProductionCanvas({
                         <div className="flex cursor-pointer items-center gap-1.5 border-b border-edge px-3 py-2" data-zone="header" title="상단 바 클릭 = 선택/해제 (여러 컷 고르기). 아래 내용 클릭 = 상세 열기">
                           <span className="text-[12px] font-bold text-strong">{cutLabelById.get(n.id) || n.label}</span>
                           <span className="min-w-0 flex-1 truncate text-[10px] text-faint">#{String(n.data.sceneId)}</span>
-                          <Chip>{String(n.data.shotType)}</Chip><Chip>{String(n.data.cameraMove)}</Chip>
-                          {n.data.cameraDirection !== "front" && <Chip tone="amber">{String(n.data.cameraDirection)}</Chip>}
-                          {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber">{String(n.data.cameraElevation)}</Chip>}
+                          {/* 머리글은 한 줄 — 긴 카메라 설명은 …로 줄이고 전체는 툴팁 */}
+                          <Chip className="shrink-0">{String(n.data.shotType)}</Chip><Chip className="min-w-0 max-w-[55%] truncate" title={String(n.data.cameraMove)}>{String(n.data.cameraMove)}</Chip>
+                          {n.data.cameraDirection !== "front" && <Chip tone="amber" className="shrink-0">{String(n.data.cameraDirection)}</Chip>}
+                          {n.data.cameraElevation && n.data.cameraElevation !== "eye" && <Chip tone="amber" className="shrink-0">{String(n.data.cameraElevation)}</Chip>}
                         </div>
                         <div className="grid grid-cols-2 gap-1 p-2">
                           <div className="overflow-hidden rounded-md">{frame}</div>
@@ -1760,12 +1761,15 @@ export default function ProductionCanvas({
                               ? <video src={withMediaToken(String(n.data.clip.url))} className={`h-full w-full object-cover ${vd.running ? "opacity-40" : ""}`} muted playsInline preload="metadata" />
                               : !vd.running && <div className="grid h-full place-items-center text-[10px] text-faint">{vd.failed ? <span className="px-1 text-center text-tone-red">영상 실패</span> : n.data.clip?.status === "processing" || n.data.clip?.jobId && !n.data.clip?.url ? "생성 중…" : "영상 없음"}</div>}
                             {vd.running && <div className="absolute inset-0 grid place-items-center"><RefreshIcon className="h-5 w-5 animate-spin text-tone-sky" /></div>}
-                            <span className="absolute left-1 top-1 inline-flex rounded bg-black/80"><Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip></span>
+                            <span className="absolute left-1 top-1 inline-flex rounded bg-black/80">{n.data.clip?.whole && !vd.running
+                              ? <Chip tone="violet" title="한 흐름으로 만든 에피소드 완성 영상(전체)">완성본</Chip>
+                              : <Chip tone={vd.running ? "amber" : (vd.failed || n.data.clip?.error) ? "red" : n.data.clip?.url ? "emerald" : "gray"}>영상</Chip>}</span>
                           </div>
                         </div>
                         <div className="px-3 pb-2">
-                          <p className="line-clamp-2 text-[11px] leading-snug text-secondary"><span className="text-faint">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-faint">—</span>}</p>
-                          <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted"><span className="text-faint">행동 </span>{String(n.data.action || "") || <span className="text-faint">—</span>}</p>
+                          {/* 화면·행동은 각각 한 줄 — 넘치면 …, 전체는 툴팁(상세에서 전부 보인다) */}
+                          <p className="truncate text-[11px] leading-snug text-secondary" title={String(n.data.composition || n.data.visual || "")}><span className="text-faint">화면 </span>{String(n.data.composition || n.data.visual || "") || <span className="text-faint">—</span>}</p>
+                          <p className="mt-0.5 truncate text-[11px] leading-snug text-muted" title={String(n.data.action || "")}><span className="text-faint">행동 </span>{String(n.data.action || "") || <span className="text-faint">—</span>}</p>
                           <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-faint">
                             {n.data.estSec ? <span>{String(n.data.estSec)}s</span> : null}{n.data.common ? <Chip tone="emerald">공통 오버라이드</Chip> : null}{n.data.cutRefEnabled && n.data.cutRefId ? <Chip tone="amber">참조 {String(n.data.cutRefId)}</Chip> : null}{n.data.lineage?.videoAttempts ? <span title="영상 시도 횟수">v×{String(n.data.lineage.videoAttempts)}</span> : null}{jobsForNode.length > 0 && <Chip tone="amber">{jobsForNode[0].status === "review_pending" ? "승인 대기" : "진행 중"}</Chip>}
                           </div>
