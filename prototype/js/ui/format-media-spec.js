@@ -375,7 +375,36 @@
     return deliveryText('manualScheduleBlocked', lang);
   }
 
+  /**
+   * 연결된 계정의 프로필(채널) 주소. 연결 안 됨·직접 올리는 채널·주소를 만들 정보가 없으면 ''.
+   * SNS 연결 화면의 링크 버튼과 브랜드 스튜디오 배포 카드 아이콘이 함께 쓴다.
+   * state 는 nk_sns_states 의 채널 한 줄(토큰은 들어 있지 않다).
+   */
+  function profileUrlOf(formatId, state) {
+    var s = state || {};
+    var id = String(formatId || '');
+    if (!s.connected || isManualDelivery(id)) return '';
+    var u = String(s.username || s.channelTitle || '').trim();
+    if (id === 'instagram') return u ? 'https://www.instagram.com/' + encodeURIComponent(u) + '/' : '';
+    if (id === 'youtube' || id === 'youtube-shorts') {
+      // channelHandle = snippet.customUrl(예: "@shapesU") — 실제 YouTube 핸들. 없으면 채널 id.
+      var handle = String(s.channelHandle || '').trim();
+      var base = handle
+        ? 'https://www.youtube.com/' + (handle.charAt(0) === '@' ? handle : '@' + handle)
+        : (s.channelId ? 'https://www.youtube.com/channel/' + encodeURIComponent(s.channelId) : '');
+      return base && id === 'youtube-shorts' ? base + '/shorts' : base;
+    }
+    // TikTok: username 에는 display_name 이 들어 있다(진짜 @handle 은 user.info.basic 으로 못 받는다).
+    // 그걸로 링크를 만들면 다른 계정에서 404 가 나므로 creator_info 로 확인된 handle 이 있을 때만 만든다.
+    if (id === 'tiktok') return s.handle ? 'https://www.tiktok.com/@' + encodeURIComponent(String(s.handle).replace(/^@/, '')) : '';
+    if (id === 'facebook') return s.pageId ? 'https://www.facebook.com/' + encodeURIComponent(s.pageId) : '';
+    if (id === 'threads') return u ? 'https://www.threads.net/@' + encodeURIComponent(u.replace(/^@/, '')) : '';
+    if (id === 'x') return u ? 'https://x.com/' + encodeURIComponent(u.replace(/^@/, '')) : '';
+    return '';
+  }
+
   root.NKFormatMedia = {
+    profileUrlOf: profileUrlOf,
     SPEC: SPEC,
     isCompatible: isCompatible,
     evaluate: evaluate,

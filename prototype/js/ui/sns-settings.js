@@ -583,24 +583,10 @@
 
     // 프로필 링크 버튼: 연결됐을 때만 표시
     var linkSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
-    var profileUrl = '';
-    if (connected && !manual) {
-      var _u = snsState.username || snsState.channelTitle || '';
-      var _cid = snsState.channelId || '';
-      // channelHandle = snippet.customUrl (e.g. "@shapesU") — 실제 YouTube 핸들
-      var _handle = snsState.channelHandle || '';
-      // handle이 @로 시작하면 그대로, 아니면 @ 붙이기
-      var _ytPath = _handle ? (_handle.charAt(0) === '@' ? _handle : '@' + _handle) : '';
-      if (platform.id === 'instagram')      profileUrl = _u ? 'https://www.instagram.com/' + _u + '/' : '';
-      else if (platform.id === 'youtube')   profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
-      // TikTok: username 필드에는 display_name 이 들어있다(진짜 @handle 은 user.info.basic
-      // 으로 못 받는다). 그걸로 링크를 만들면 handle 이 다른 계정에서 404 가 나므로,
-      // creator_info 로 확인된 handle 이 있을 때만 링크를 건다.
-      else if (platform.id === 'tiktok')    profileUrl = snsState.handle ? 'https://www.tiktok.com/@' + encodeURIComponent(String(snsState.handle).replace(/^@/, '')) : '';
-      else if (platform.id === 'facebook')  profileUrl = snsState.pageId ? 'https://www.facebook.com/' + snsState.pageId : '';
-      else if (platform.id === 'threads')   profileUrl = _u ? 'https://www.threads.net/@' + _u : '';
-      else if (platform.id === 'x')         profileUrl = _u ? 'https://x.com/' + _u : '';
-    }
+    // 채널별 주소 규칙은 format-media-spec.js 한 곳에 있다(브랜드 스튜디오 배포 카드 아이콘도 같은 규칙을 쓴다).
+    var profileUrl = (connected && !manual && window.NKFormatMedia && window.NKFormatMedia.profileUrlOf)
+      ? window.NKFormatMedia.profileUrlOf(platform.id, Object.assign({}, snsState, { connected: true }))
+      : '';
     var linkBtnHtml = profileUrl
       ? '<a class="sns-profile-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer" title="' + t('openProfile') + '">' + linkSvg + '</a>'
       : '';

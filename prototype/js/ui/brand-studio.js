@@ -2621,9 +2621,16 @@
             var isManual = isManualFormat(formatId);
             // manual 채널은 예약 대상이 아니다 — 시각 선택기를 아예 렌더하지 않는다.
             var perCardPicker = isManual ? '' : buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
+            // 아이콘을 누르면 연결된 계정(채널) 페이지를 새 탭으로 연다. 주소를 만들 수 없으면 그냥 아이콘.
+            var profileUrl = (isConnected && window.NKFormatMedia && window.NKFormatMedia.profileUrlOf) ? window.NKFormatMedia.profileUrlOf(formatId, snsRow) : '';
+            var iconHtml = profileUrl
+              ? '<a class="bsf-deploy-platform-icon is-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer"'
+                + ' title="' + escapeHtml(isEn ? 'Open the connected account' : '연결된 계정 열기') + '"'
+                + ' aria-label="' + escapeHtml((fmt ? fmt.title : formatId) + ' — ' + (isEn ? 'open the connected account' : '연결된 계정 열기')) + '">' + icon + '</a>'
+              : '<div class="bsf-deploy-platform-icon">' + icon + '</div>';
             return (
               '<div class="bsf-deploy-format-row' + (isManual ? ' bsf-deploy-format-row--manual' : '') + '">' +
-                '<div class="bsf-deploy-platform-icon">' + icon + '</div>' +
+                iconHtml +
                 '<div class="bsf-deploy-format-body">' +
                   '<div class="bsf-deploy-format-head">' +
                     '<strong class="bsf-deploy-fmt-title">' + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +

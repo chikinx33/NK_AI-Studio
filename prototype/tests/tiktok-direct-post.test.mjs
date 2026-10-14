@@ -284,10 +284,12 @@ test("개인정보처리방침이 TikTok 을 '연동 중'으로 표기하고 수
 });
 
 test("TikTok 프로필 링크는 확인된 handle 이 있을 때만 만든다", () => {
-  const src = read("prototype/js/ui/sns-settings.js");
+  // 주소 규칙은 format-media-spec.js 한 곳(SNS 연결 화면·배포 카드 공용).
+  const src = read("prototype/js/ui/format-media-spec.js");
   // username 필드에는 display_name 이 들어있어 그걸로 링크를 만들면 404 가 난다.
-  assert.match(src, /platform\.id === 'tiktok'\)\s*profileUrl = snsState\.handle \?/);
-  assert.doesNotMatch(src, /tiktok'\)\s*profileUrl = _u \?/);
+  assert.match(src, /if \(id === 'tiktok'\) return s\.handle \?/);
+  assert.doesNotMatch(src, /tiktok'\) return u \?/);
+  assert.match(read("prototype/js/ui/sns-settings.js"), /window\.NKFormatMedia\.profileUrlOf\(platform\.id/);
   // handle 은 creator_info 의 creator_username 으로 채운다
   const cb = read("prototype/functions/auth/tiktok/callback.ts");
   assert.match(cb, /creator_username/);
