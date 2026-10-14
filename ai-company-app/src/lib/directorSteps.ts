@@ -54,6 +54,9 @@ export const selectTakes = (projectId: string, sequenceId: string, selectedTakeI
 /** 확정: 완성 테이크를 scenes·이야기·대표 영상으로 옮기고 시나리오·메인 프로덕션을 잠근다(일반 컷이 있으면 409 scenes_exist). */
 export const confirmSequence = (projectId: string, sequenceId: string, replaceExisting: boolean) =>
   api<{ confirm: any; sequences: Sequence[] }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "confirm", sequenceId, replaceExisting }) });
+/** 다른 비율 판: 이 프로젝트는 두고 디렉터 리소스를 옮긴 새 에피소드 프로젝트를 만든다. */
+export const createAspectVariant = (projectId: string, aspectRatio: string) =>
+  api<{ ok: boolean; projectId: string; title: string }>("/api/director/aspect-variant", { method: "POST", body: JSON.stringify({ projectId, aspectRatio }) });
 export const saveNotes = (projectId: string, notes: DirectorNotes) =>
   api<{ notes: DirectorNotes }>("/api/project/sequences", { method: "POST", body: JSON.stringify({ projectId, op: "notes", notes }) }).then((r) => r.notes);
 

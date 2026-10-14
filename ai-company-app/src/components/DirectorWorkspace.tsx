@@ -6,7 +6,7 @@ import ImageLightbox from "./ImageLightbox";
 import DirectorQuestionCard, { type PendingQuestion } from "./DirectorQuestionCard";
 import DirectorSteps from "./DirectorSteps";
 import { appDialog } from "../lib/appDialog";
-import { confirmSequence } from "../lib/directorSteps";
+import { confirmSequence, createAspectVariant } from "../lib/directorSteps";
 import { listProductionProjects, type ProductionProjectSummary } from "../lib/api";
 import { readStorage, readUserStorage, writeUserStorage, isMasterUser } from "../lib/safeStorage";
 import { fitImageForModel } from "../lib/imageAttachment";
@@ -81,7 +81,13 @@ const MODE_TEXT = {
     done: (r: any) => `확정했어요. 컷 ${Number(r?.scenes) || 0}개(스틸 ${Number(r?.stills) || 0}장)${r?.representativeVideo ? " · 대표 영상 등록" : " · 시퀀스가 여럿이라 대표 영상은 포스트 프로덕션 렌더로 등록돼요"}.`,
     noFinal: "완료된 1080p 완성본이 없어요. 드래프트를 1080p 로 완성한 뒤 확정해 주세요.",
     noSequence: "확정할 시퀀스가 없어요.",
-    fail: "확정 실패: " },
+    fail: "확정 실패: ",
+    variant: (ar: string) => `${ar} 판 만들기`,
+    variantTitle: (ar: string) => `이 프로젝트는 그대로 두고, 디렉터 리소스(컷·참조·프롬프트·원본 스틸과 완성 영상)를 옮긴 ${ar} 판 프로젝트를 새로 만든다`,
+    variantAsk: (ar: string) => `${ar} 판 프로젝트를 새로 만들까요?\n\n이 프로젝트(확정본 포함)는 그대로 남아요. 새 프로젝트에 컷 타이밍·참조·프롬프트를 옮기고, 원본 스틸과 완성 영상을 참조로 넣어요. 컷 스틸은 ${ar} 구도로 새로 만들어 확인한 뒤 영상을 생성해요(생성 비용이 들어요).`,
+    variantMaking: "만드는 중…",
+    variantDone: (title: string) => `"${title}" 프로젝트를 만들었어요. 지금 그 프로젝트로 옮길까요?`,
+    variantFail: "비율 판 만들기 실패: " },
   en: { chat: "Chat", steps: "Steps", chatTitle: "Make it by talking with the director", stepsTitle: "Go step by step yourself (conti → refs → prompt → draft → QA)",
     confirm: "Confirm", confirming: "Confirming…",
     confirmTitle: "Apply the selected sequence's final take to Scenario, Main Production, Video Canvas and SNS settings, and lock them",
@@ -90,7 +96,13 @@ const MODE_TEXT = {
     done: (r: any) => `Confirmed. ${Number(r?.scenes) || 0} cuts (${Number(r?.stills) || 0} stills)${r?.representativeVideo ? " · main video registered" : " · several sequences, so the main video comes from the post-production render"}.`,
     noFinal: "There is no finished 1080p take. Complete the draft at 1080p first.",
     noSequence: "There is no sequence to confirm.",
-    fail: "Confirm failed: " },
+    fail: "Confirm failed: ",
+    variant: (ar: string) => `Make ${ar} version`,
+    variantTitle: (ar: string) => `Keep this project and create a new ${ar} project with the director resources (cuts, references, prompt, original stills and final video)`,
+    variantAsk: (ar: string) => `Create a new ${ar} version project?\n\nThis project (and its confirmed result) stays as it is. Cut timing, references and the prompt move to the new project, with the original stills and final video as references. Cut stills are redrawn in ${ar} and checked before the video is generated (generation costs apply).`,
+    variantMaking: "Creating…",
+    variantDone: (title: string) => `Created "${title}". Switch to it now?`,
+    variantFail: "Could not create the version: " },
 };
 type DirectorMode = "chat" | "steps";
 const modeLang = (): "ko" | "en" => String(readStorage("nk_lang")).replace(/^"|"$/g, "") === "en" ? "en" : "ko";
@@ -150,6 +162,7 @@ export default function DirectorWorkspace() {
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [makingVariant, setMakingVariant] = useState(false);
   const [sequences, setSequences] = useState<any[]>([]);
   const [activeSeq, setActiveSeq] = useState("");
   const [media, setMedia] = useState<Record<string, string>>({});
@@ -428,6 +441,22 @@ export default function DirectorWorkspace() {
       setConfirming(false);
     }
   };
+  // 다른 비율 판: 이 프로젝트(확정본)는 두고 새 에피소드 프로젝트로 디렉터 리소스를 옮긴다. 가로면 세로판, 그 밖이면 가로판.
+  const sourceAspect = projects.find((p) => p.id === projectId)?.aspectRatio || String(sequences.find((s) => s.id === activeSeq)?.aspectRatio || "16:9");
+  const variantAspect = sourceAspect === "16:9" ? "9:16" : "16:9";
+  const makeAspectVariant = async () => {
+    if (!projectId || makingVariant || !sequences.length) return;
+    if (!await appDialog.confirm(modeText.variantAsk(variantAspect), { title: modeText.variant(variantAspect) })) return;
+    setMakingVariant(true);
+    try {
+      const r = await createAspectVariant(projectId, variantAspect);
+      if (await appDialog.confirm(modeText.variantDone(r.title), { title: modeText.variant(variantAspect) })) await onProjectCreated(r.projectId);
+    } catch (e: any) {
+      await appDialog.alert(modeText.variantFail + String(e?.message || e), { title: modeText.variant(variantAspect) });
+    } finally {
+      setMakingVariant(false);
+    }
+  };
   const costText = usage ? (usage.owner ? `대화 비용 $${(usage.listCostCents / 100).toFixed(2)} (소유자 무과금)` : `대화 비용 $${(usage.listCostCents / 100).toFixed(2)}${usage.available != null ? ` · 잔액 ${Number(usage.available).toLocaleString()} 크레딧` : ""}`) : "";
 
   return (
@@ -461,6 +490,12 @@ export default function DirectorWorkspace() {
           <button type="button" onClick={() => void confirmActiveSequence()} disabled={confirming || !activeSeq} title={modeText.confirmTitle}
             className="flex min-w-[72px] items-center justify-center gap-1 rounded border border-violet-700/70 bg-tint-violet/40 px-2 py-1 text-[11px] font-semibold text-tone-violet transition hover:bg-tint-violet/50 disabled:opacity-40">
             <Icon d={CheckD} className="h-3.5 w-3.5" /> {confirming ? modeText.confirming : modeText.confirm}
+          </button>
+        )}
+        {projectId && (
+          <button type="button" onClick={() => void makeAspectVariant()} disabled={makingVariant || !sequences.length} title={modeText.variantTitle(variantAspect)}
+            className="flex min-w-[96px] items-center justify-center gap-1 rounded border border-edge bg-inset px-2 py-1 text-[11px] font-semibold text-secondary transition hover:bg-edge disabled:opacity-40">
+            <Icon d={CopyD} className="h-3.5 w-3.5" /> {makingVariant ? modeText.variantMaking : modeText.variant(variantAspect)}
           </button>
         )}
         <div className={`ml-auto flex items-center gap-1.5 ${mode === "steps" ? "hidden" : ""}`}>
