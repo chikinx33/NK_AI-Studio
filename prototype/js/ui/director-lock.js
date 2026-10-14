@@ -84,21 +84,28 @@
     });
   };
 
-  /** '수정 불가' 라벨을 host 안에 하나만 둔다(없으면 지운다). */
-  lock.applyBadge = function (host, locked) {
+  /**
+   * '수정 불가' 라벨 — 잠긴 모든 페이지에 같은 모양으로, 본문(.main-body) 맨 위 가운데에 둥근 라벨(자물쇠 아이콘)로 띄운다.
+   * 스크롤해도 위에 붙어 있다(sticky). 잠금이 풀리면 지운다. 언어가 바뀌면 다시 부르면 문구가 바뀐다.
+   */
+  lock.applyPageBadge = function (locked) {
+    var host = document.querySelector('.main-body') || document.body;
     if (!host) return;
-    var badge = host.querySelector('.director-lock-badge');
-    if (!locked) { if (badge) badge.remove(); return; }
+    var banner = host.querySelector(':scope > .director-lock-banner');
+    if (!locked) { if (banner) banner.remove(); return; }
     var t = lock.text();
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'director-lock-badge';
-      host.appendChild(badge);
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.className = 'director-lock-banner';
+      host.insertBefore(banner, host.firstChild);
     }
     // Lucide lock
-    badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-    badge.appendChild(document.createTextNode(t.label));
-    badge.title = t.title;
-    badge.setAttribute('aria-label', t.title);
+    banner.innerHTML = '<span class="director-lock-pill" role="status">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+      '</span>';
+    var pill = banner.firstChild;
+    pill.appendChild(document.createTextNode(t.label));
+    pill.title = t.title;
+    pill.setAttribute('aria-label', t.label + ' — ' + t.title);
   };
 })();

@@ -128,7 +128,14 @@ test("화면: 시나리오(개요 제외)·메인 프로덕션 '수정 불가', 
   assert.match(scn, /directorLocked \? \[\] : draft\.scenes/);
   assert.match(scn, /if \(_prevDirectorConfirmed\) draft\.payload\.directorConfirmed = _prevDirectorConfirmed;/);
   const pipe = read("prototype/ui/pipeline.js");
-  assert.match(pipe, /dl\.applyRegions\(\[meta, document\.getElementById\('pipeline-scenes'\)\], locked\)/);
+  // 메인 프로덕션도 내용 확인용 컨트롤(펼치기/접기·다운로드)은 잠그지 않는다.
+  assert.match(pipe, /dl\.applyRegions\(\[meta, document\.getElementById\('pipeline-scenes'\)\], locked, \{ keep: PIPELINE_VIEW_CONTROLS \}\)/);
+  assert.match(pipe, /var PIPELINE_VIEW_CONTROLS = '\.scene-row-toggle, \.scene-shot-toggle, #pipeline-expand-all, #pipeline-collapse-all, #pipeline-focus-mode, '/);
+  // '수정 불가' 라벨은 두 페이지 모두 같은 공통 라벨(본문 맨 위 가운데)
+  assert.match(pipe, /dl\.applyPageBadge\(locked\);/);
+  assert.match(scn, /dl\.applyPageBadge\(locked\);/);
+  assert.match(lock, /var host = document\.querySelector\('\.main-body'\) \|\| document\.body;/);
+  assert.match(read("prototype/styles.css"), /\.director-lock-banner \{\s*position: sticky;/);
   assert.match(pipe, /if \(!lockedByDirector && Array\.isArray\(freshState\.scenes\)/);
   for (const page of ["prototype/scenario.html", "prototype/scenes.html"]) {
     const h = read(page);

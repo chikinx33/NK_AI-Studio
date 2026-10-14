@@ -860,19 +860,13 @@
     var dl = NK.ui && NK.ui.directorLock;
     if (!dl) return;
     var locked = dl.isLocked(state && state.payload);
-    var section = document.getElementById('pipeline-section');
     var meta = document.getElementById('pipeline-meta');
-    dl.applyRegions([meta, document.getElementById('pipeline-scenes')], locked);
-    var bar = document.getElementById('pipeline-director-lock');
-    if (locked && !bar && section && meta) {
-      bar = document.createElement('div');
-      bar.id = 'pipeline-director-lock';
-      bar.className = 'director-lock-bar';
-      section.insertBefore(bar, meta);
-    }
-    if (bar) dl.applyBadge(bar, locked);
-    if (bar && !locked) bar.remove();
+    // 내용 확인용 컨트롤(씬·컷 펼치기/접기, 전체 펼침·접기·부분 펼침, 다운로드)은 잠그지 않는다 — 시나리오 화면과 같다.
+    dl.applyRegions([meta, document.getElementById('pipeline-scenes')], locked, { keep: PIPELINE_VIEW_CONTROLS });
+    dl.applyPageBadge(locked);
   }
+  var PIPELINE_VIEW_CONTROLS = '.scene-row-toggle, .scene-shot-toggle, #pipeline-expand-all, #pipeline-collapse-all, #pipeline-focus-mode, '
+    + '[data-action="download-image"], [data-action="download-video"]';
 
   ui.render = async function () {
     if (!subscribed && NK.state && NK.state.subscribe) {

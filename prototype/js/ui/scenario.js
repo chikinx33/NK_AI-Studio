@@ -2060,7 +2060,7 @@
       document.getElementById('decompose-shots'),
       document.getElementById('scenario-inject-btn')
     ], locked);
-    dl.applyBadge(document.querySelector('#scenario-section .right-caption .caption-left'), locked);
+    dl.applyPageBadge(locked);
   }
   scenario.applyDirectorLock = applyScenarioDirectorLock;
 
