@@ -98,6 +98,11 @@ test("Threads 답글 설정이 reply_control 로 최상위 컨테이너에만 �
   // '내 팔로워'를 accounts_you_follow(내가 팔로우하는 계정)로 잘못 매핑하면 의미가 뒤집힌다
   assert.doesNotMatch(server, /followers: "accounts_you_follow"/);
   assert.match(server, /reply_control: threadsReply/);
+  // 2026-10-14 실측: reply_control 은 everyone 을 포함해 답글 관리 권한(threads_manage_replies)이 없으면 code 10 으로 거부된다.
+  // everyone 은 기본값이라 보내지 않고, 제한 값이 권한으로 거부되면 답글 설정 없이 다시 올리고 note 로 알린다.
+  assert.match(server, /threadsReply && threadsReply !== "everyone" \? \{ \.\.\.p, reply_control: threadsReply \} : p/);
+  assert.match(server, /if \(e\?\.metaCode === 10 && params\.reply_control\) \{/);
+  assert.match(server, /\(err as any\)\.metaCode = metaCode;/);
 
   // 캐러셀 자식 컨테이너에는 붙이지 않는다 (게시물 단위 설정)
   const threadsBranch = sliceBetween(server, 'const THREADS_REPLY_CONTROL', 'publishThreadsContainer({');

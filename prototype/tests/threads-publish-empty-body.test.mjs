@@ -25,7 +25,8 @@ test("컨테이너 생성은 빈 응답·5xx 를 3회까지 재시도하고, 오
   const fn = src.slice(src.indexOf("async function createThreadsContainer"), src.indexOf("async function waitForThreadsContainer"));
   assert.match(fn, /for \(let attempt = 0; attempt < 3; attempt\+\+\)/);
   assert.match(fn, /if \(!isThreadsTransient\(data, res\.status\)\) break;/);
-  assert.match(fn, /const err = new Error\(`Threads 컨테이너 생성 실패: \$\{lastText\}\$\{diag \? ` \[진단\] \$\{diag\}` : ""\}`\);\s*\(err as any\)\.opaque = opaque;\s*throw err;/);
+  // 오류에는 메타 오류 코드(metaCode — 10 = 권한 없음)와 opaque 표시를 함께 싣는다.
+  assert.match(fn, /const err = new Error\(`Threads 컨테이너 생성 실패: \$\{lastText\}\$\{diag \? ` \[진단\] \$\{diag\}` : ""\}`\);\s*(?:\/\/[^\n]*\n\s*)?\(err as any\)\.metaCode = metaCode;\s*\(err as any\)\.opaque = opaque;\s*throw err;/);
   assert.match(src, /메타 서버가 HTTP \$\{status\} 로 빈 응답을 보냈어요/);
   assert.match(src, /if \(data\?\.__empty\) return true;\s*if \(status >= 500\) return true;/);
 });

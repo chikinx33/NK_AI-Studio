@@ -883,6 +883,7 @@ async function createThreadsContainer(opts: {
   // 영상 컨테이너는 메타가 일시 오류(빈 응답/5xx)를 자주 낸다 → 3회까지 재시도. 영구 오류는 즉시 실패.
   let lastText = "";
   let opaque = false;
+  let metaCode = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
     const res = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
@@ -894,11 +895,14 @@ async function createThreadsContainer(opts: {
     if (data.id) return String(data.id);
     lastText = threadsErrorText(data, res.status);
     opaque = !!data.__empty;
+    metaCode = Number(data?.error?.code) || 0;
     if (!isThreadsTransient(data, res.status)) break;
   }
   // 빈 응답이면 메타가 원인을 안 알려준 것 — 토큰/계정/미디어 중 어디가 문제인지 우리가 직접 가른다.
   const diag = opaque ? await diagnoseThreadsFailure(accessToken, params) : "";
   const err = new Error(`Threads 컨테이너 생성 실패: ${lastText}${diag ? ` [진단] ${diag}` : ""}`);
+  // 메타 오류 코드(10 = 앱 권한 없음). 상위 컨테이너 사다리가 답글 설정 권한 문제를 가른다.
+  (err as any).metaCode = metaCode;
   (err as any).opaque = opaque;
   throw err;
 }
@@ -1795,9 +1799,14 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         mentioned: "mentioned_only",
       };
       const threadsReply = THREADS_REPLY_CONTROL[String(body.replySetting || "").trim()];
-      /** 최상위 컨테이너 params 에 reply_control 을 얹는다. */
+      /**
+       * 최상위 컨테이너 params 에 reply_control 을 얹는다.
+       * 2026-10-14: reply_control 은 값이 무엇이든(everyone 포함) 답글 관리 권한(threads_manage_replies)이 없으면
+       * 메타가 "Application does not have permission for this action"(code 10)으로 거부한다 — 본문만 보내면 된다(실측).
+       * everyone 은 Threads 기본값이라 보내지 않는다. 제한(팔로워·언급)만 보내고, 거부되면 아래 사다리가 빼고 다시 올린다.
+       */
       function withReplyControl(p: Record<string, string>): Record<string, string> {
-        return threadsReply ? { ...p, reply_control: threadsReply } : p;
+        return threadsReply && threadsReply !== "everyone" ? { ...p, reply_control: threadsReply } : p;
       }
 
       // GCS 경로는 Threads 가 직접 fetch 할 수 있는 signed URL 로 변환.
@@ -1818,6 +1827,13 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         try {
           return await createThreadsContainer({ threadsUserId, accessToken, params });
         } catch (e: any) {
+          // 답글 제한이 권한 없음(code 10)으로 거부되면 답글 설정 없이 올리고 그 사실을 알린다.
+          if (e?.metaCode === 10 && params.reply_control) {
+            const { reply_control: _deniedRc, ...withoutReply } = params;
+            const id = await createThreadsContainer({ threadsUserId, accessToken, params: withoutReply });
+            fallbackNotes.push("답글 제한은 Threads 연결에 답글 관리 권한이 없어 적용되지 않았어요(모두 답글 가능으로 올렸어요).");
+            return id;
+          }
           if (!e?.opaque) throw e;
           let lastErr: any = e;
           if (params.reply_control) {
