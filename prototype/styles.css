@@ -16297,31 +16297,19 @@ body.codex-connect-open { overflow: hidden; }
 .voice-picker-overlay { z-index: 10010; }
 
 /* 디렉터 확정 잠금(js/ui/director-lock.js): 시나리오 대본·메인 프로덕션 '수정 불가' */
-/* 잠긴 모든 페이지 공통: 본문 맨 위 가운데의 둥근 '수정 불가' 라벨(스크롤해도 위에 붙어 있다). */
-.director-lock-banner {
-  position: sticky;
-  top: 8px;
-  z-index: 40;
-  display: flex;
-  justify-content: center;
-  margin: 0 0 10px;
-  pointer-events: none;
-}
+/* 잠긴 모든 페이지 공통 '수정 불가' 표시: 상단 줄 가운데(펼침/접기 묶음 앞)의 자물쇠 원형 라벨. 글자는 툴팁으로. */
 .director-lock-pill {
-  pointer-events: auto;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-  border-radius: 999px;
+  border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 16%, var(--card));
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
   cursor: default;
 }
 .is-director-locked [contenteditable="false"] {

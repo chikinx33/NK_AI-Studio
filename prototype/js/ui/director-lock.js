@@ -85,27 +85,24 @@
   };
 
   /**
-   * '수정 불가' 라벨 — 잠긴 모든 페이지에 같은 모양으로, 본문(.main-body) 맨 위 가운데에 둥근 라벨(자물쇠 아이콘)로 띄운다.
-   * 스크롤해도 위에 붙어 있다(sticky). 잠금이 풀리면 지운다. 언어가 바뀌면 다시 부르면 문구가 바뀐다.
+   * '수정 불가' 표시 — 잠긴 모든 페이지에 같은 모양: 자물쇠 아이콘만 든 동그란 라벨(글자는 툴팁·스크린리더로).
+   * 각 페이지 상단 줄 가운데의 펼침/접기 묶음(host) 맨 앞에 같은 줄로 넣는다 — 줄을 따로 차지하지 않는다.
+   * 잠금이 풀리면 지운다. 화면이 다시 그려져 사라지면 다시 부르면 된다.
    */
-  lock.applyPageBadge = function (locked) {
-    var host = document.querySelector('.main-body') || document.body;
+  lock.applyPageBadge = function (host, locked) {
     if (!host) return;
-    var banner = host.querySelector(':scope > .director-lock-banner');
-    if (!locked) { if (banner) banner.remove(); return; }
+    var pill = host.querySelector(':scope > .director-lock-pill');
+    if (!locked) { if (pill) pill.remove(); return; }
     var t = lock.text();
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.className = 'director-lock-banner';
-      host.insertBefore(banner, host.firstChild);
+    if (!pill) {
+      pill = document.createElement('span');
+      pill.className = 'director-lock-pill';
+      pill.setAttribute('role', 'img');
+      host.insertBefore(pill, host.firstChild);
     }
     // Lucide lock
-    banner.innerHTML = '<span class="director-lock-pill" role="status">' +
-      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-      '</span>';
-    var pill = banner.firstChild;
-    pill.appendChild(document.createTextNode(t.label));
-    pill.title = t.title;
+    pill.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+    pill.title = t.label + ' — ' + t.title;
     pill.setAttribute('aria-label', t.label + ' — ' + t.title);
   };
 })();

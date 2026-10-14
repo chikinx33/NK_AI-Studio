@@ -863,7 +863,7 @@
     var meta = document.getElementById('pipeline-meta');
     // 내용 확인용 컨트롤(씬·컷 펼치기/접기, 전체 펼침·접기·부분 펼침, 다운로드)은 잠그지 않는다 — 시나리오 화면과 같다.
     dl.applyRegions([meta, document.getElementById('pipeline-scenes')], locked, { keep: PIPELINE_VIEW_CONTROLS });
-    dl.applyPageBadge(locked);
+    dl.applyPageBadge(document.querySelector('#pipeline-meta .pipeline-fold-center'), locked);
   }
   var PIPELINE_VIEW_CONTROLS = '.scene-row-toggle, .scene-shot-toggle, #pipeline-expand-all, #pipeline-collapse-all, #pipeline-focus-mode, '
     + '[data-action="download-image"], [data-action="download-video"]';

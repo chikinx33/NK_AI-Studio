@@ -132,10 +132,13 @@ test("화면: 시나리오(개요 제외)·메인 프로덕션 '수정 불가', 
   assert.match(pipe, /dl\.applyRegions\(\[meta, document\.getElementById\('pipeline-scenes'\)\], locked, \{ keep: PIPELINE_VIEW_CONTROLS \}\)/);
   assert.match(pipe, /var PIPELINE_VIEW_CONTROLS = '\.scene-row-toggle, \.scene-shot-toggle, #pipeline-expand-all, #pipeline-collapse-all, #pipeline-focus-mode, '/);
   // '수정 불가' 라벨은 두 페이지 모두 같은 공통 라벨(본문 맨 위 가운데)
-  assert.match(pipe, /dl\.applyPageBadge\(locked\);/);
-  assert.match(scn, /dl\.applyPageBadge\(locked\);/);
-  assert.match(lock, /var host = document\.querySelector\('\.main-body'\) \|\| document\.body;/);
-  assert.match(read("prototype/styles.css"), /\.director-lock-banner \{\s*position: sticky;/);
+  // 줄을 따로 차지하지 않고 상단 줄 가운데(펼침/접기 묶음) 맨 앞에, 자물쇠 아이콘만(글자는 툴팁)
+  assert.match(pipe, /dl\.applyPageBadge\(document\.querySelector\('#pipeline-meta \.pipeline-fold-center'\), locked\);/);
+  assert.match(scn, /dl\.applyPageBadge\(document\.querySelector\('#scenario-section \.right-caption \.caption-fold-mode'\), locked\);/);
+  assert.match(lock, /host\.insertBefore\(pill, host\.firstChild\);/);
+  assert.doesNotMatch(lock, /pill\.appendChild\(document\.createTextNode/);
+  assert.match(read("prototype/styles.css"), /\.director-lock-pill \{[^}]*border-radius: 50%;/);
+  assert.doesNotMatch(read("prototype/styles.css"), /\.director-lock-banner/);
   assert.match(pipe, /if \(!lockedByDirector && Array\.isArray\(freshState\.scenes\)/);
   for (const page of ["prototype/scenario.html", "prototype/scenes.html"]) {
     const h = read(page);
