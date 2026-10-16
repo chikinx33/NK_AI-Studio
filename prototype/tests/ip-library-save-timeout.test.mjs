@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const esbuild = require('../../ai-company-app/node_modules/esbuild');
-const read = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+const read = (file) => fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const inline = 'data:image/png;base64,aGVsbG8=';
 const sheets = (count) => Array.from({ length: count }, (_, i) => ({
@@ -173,10 +173,14 @@ test('IP save button: failed storage keeps the unsaved image and text draft for 
 test('brand API: duplicate compatibility fields are omitted without mutating the caller', async () => {
   let sent;
   const sandbox = {
-    console, URL, URLSearchParams, AbortController, clearTimeout,
+    console, URL, URLSearchParams, AbortController, FormData, clearTimeout,
     setTimeout: (fn, ms) => setTimeout(fn, ms).unref(),
     localStorage: { getItem: () => null },
-    fetch: async (_url, opts) => { sent = JSON.parse(opts.body); return Response.json({ ok: true }); }
+    fetch: async (url, opts) => {
+      if (url.startsWith('data:')) return fetch(url);
+      if (url.endsWith('/api/brand/sheet')) return Response.json({ ok: true, imageDataUrl: 'gs://bucket/' + opts.body.get('sheetId') + '.png' });
+      sent = JSON.parse(opts.body); return Response.json({ ok: true });
+    }
   };
   sandbox.window = sandbox;
   sandbox.NK = { config: {} };
@@ -188,4 +192,129 @@ test('brand API: duplicate compatibility fields are omitted without mutating the
   assert.equal(sent.brand.knowledgeCharacterSheets, undefined);
   assert.equal(sent.brand.knowledgeEnvironmentAssets, undefined);
   assert.equal(brand.knowledgeCharacterSheets.length, 8);
+  assert.equal(brand.characterSheets[0].items[0].imageDataUrl, inline);
+  assert.ok(sent.brand.characterSheets.every((c) => c.items[0].imageDataUrl.startsWith('gs://')));
+});
+
+test('brand API: large originals use two binary uploads at a time and never enter the metadata JSON', async () => {
+  let active = 0, peak = 0, uploads = 0, metadata;
+  const sandbox = {
+    console, URL, URLSearchParams, AbortController, FormData, clearTimeout,
+    setTimeout: (fn, ms) => setTimeout(fn, ms).unref(),
+    localStorage: { getItem: () => null },
+    fetch: async (url, opts) => {
+      if (url.startsWith('data:')) return fetch(url);
+      if (url.endsWith('/api/brand/sheet')) {
+        assert.ok(opts.body instanceof FormData);
+        assert.equal(opts.headers['Content-Type'], undefined, 'The browser must generate the multipart boundary');
+        assert.equal(opts.body.get('file').size, 256 * 1024);
+        uploads++; active++; peak = Math.max(peak, active);
+        await new Promise(setImmediate); active--;
+        return Response.json({ ok: true, imageDataUrl: `gs://bucket/${opts.body.get('kind')}/${opts.body.get('sheetId')}.png` });
+      }
+      assert.equal(uploads, 13);
+      assert.equal(active, 0);
+      assert.ok(opts.body.length < 20000);
+      assert.ok(!opts.body.includes('data:'));
+      metadata = JSON.parse(opts.body);
+      return Response.json({ ok: true, brand: metadata.brand });
+    }
+  };
+  sandbox.window = sandbox; sandbox.NK = { config: {} };
+  vm.createContext(sandbox); vm.runInContext(read('prototype/api.js'), sandbox);
+  const original = 'data:image/png;base64,' + Buffer.alloc(256 * 1024, 1).toString('base64');
+  const characters = sheets(12).map((c) => ({ ...c, items: c.items.map((s) => ({ ...s, imageDataUrl: original, src: original })) }));
+  const brand = { characterSheets: characters, knowledgeCharacterSheets: characters, environmentAssets: [{ token: '@진료실', items: [{ sheetId: 'room', imageDataUrl: original }] }] };
+  await sandbox.NK.api.brandSave('b1', brand);
+  assert.equal(peak, 2);
+  assert.equal(uploads, 13);
+  assert.equal(metadata.brand.environmentAssets[0].items[0].imageDataUrl, 'gs://bucket/env/room.png');
+  assert.equal(brand.characterSheets[0].items[0].imageDataUrl, original);
+  await sandbox.NK.api.brandSave('b1', metadata.brand);
+  assert.equal(uploads, 13);
+});
+
+test('brand API: an upload failure prevents metadata save and keeps original sheets for retry', async () => {
+  let metadataSaves = 0;
+  const sandbox = {
+    console, URL, URLSearchParams, AbortController, FormData, clearTimeout,
+    setTimeout: (fn, ms) => setTimeout(fn, ms).unref(),
+    localStorage: { getItem: () => null },
+    fetch: async (url) => {
+      if (url.startsWith('data:')) return fetch(url);
+      if (url.endsWith('/api/brand/sheet')) return Response.json({ error: 'sheet_upload_timeout' }, { status: 504 });
+      metadataSaves++; return Response.json({ ok: true });
+    }
+  };
+  sandbox.window = sandbox; sandbox.NK = { config: {} };
+  vm.createContext(sandbox); vm.runInContext(read('prototype/api.js'), sandbox);
+  const brand = { characterSheets: sheets(12) };
+  await assert.rejects(sandbox.NK.api.brandSave('b1', brand), /sheet_upload_timeout/);
+  assert.equal(metadataSaves, 0);
+  assert.equal(brand.characterSheets[0].items[0].imageDataUrl, inline);
+});
+
+function sheetEndpointHarness({ authenticated = true, uploadStatus = 200 } = {}) {
+  const source = read('prototype/functions/api/brand/sheet.ts').replace(/^import .*;\n/gm, '');
+  const requests = [];
+  const sandbox = {
+    module: { exports: {} }, Request, Response, AbortSignal,
+    authorizeRequest: async () => authenticated ? { ok: true, userId: 'u1' } : { ok: false, status: 401, error: 'auth_required' },
+    buildAiVideoBrandPrefix: (_base, userId, brandId) => `root/users/${userId}/brands/${brandId}`,
+    resolveGcsEnv: () => ({ bucket: 'bucket', basePrefix: 'root', clientEmail: 'test', privateKeyRaw: 'test', userProject: '' }),
+    getGoogleAccessToken: async () => 'test',
+    fetch: async (url, opts) => {
+      requests.push({ url: new URL(url), bytes: Buffer.from(await new Response(opts.body).arrayBuffer()), mime: opts.headers['Content-Type'] });
+      return new Response('{}', { status: uploadStatus });
+    }
+  };
+  // 기존 저장 API와 동일한 경로 생성 함수를 사용한다.
+  const saveSource = read('prototype/functions/api/brand/save.ts').replace(/^import .*;\n/gm, '');
+  const saveSandbox = { module: { exports: {} } };
+  vm.createContext(saveSandbox);
+  vm.runInContext(esbuild.transformSync(saveSource, { loader: 'ts', format: 'cjs' }).code, saveSandbox);
+  sandbox.buildSheetObjectName = saveSandbox.module.exports.buildSheetObjectName;
+  vm.createContext(sandbox);
+  vm.runInContext(esbuild.transformSync(source, { loader: 'ts', format: 'cjs' }).code, sandbox);
+  return {
+    requests,
+    send: async ({ kind = 'ip', mime = 'image/png', brandId = 'b1' } = {}) => {
+      const form = new FormData();
+      form.set('brandId', brandId); form.set('token', '@원장'); form.set('sheetId', 's1'); form.set('kind', kind);
+      form.set('userId', 'someone-else');
+      form.set('file', new Blob(['original image bytes'], { type: mime }), 'sheet');
+      return sandbox.module.exports.onRequestPost({ request: new Request('https://example.test/api/brand/sheet', { method: 'POST', body: form }), env: {} });
+    }
+  };
+}
+
+test('sheet endpoint: streams original bytes into the authenticated user brand path', async () => {
+  const { requests, send } = sheetEndpointHarness();
+  const response = await send();
+  assert.equal(response.status, 200);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url.searchParams.get('name'), 'root/users/u1/brands/b1/ip/원장/s1.png');
+  assert.equal(requests[0].bytes.toString(), 'original image bytes');
+  assert.equal(requests[0].mime, 'image/png');
+  assert.equal((await response.json()).imageDataUrl, 'gs://bucket/root/users/u1/brands/b1/ip/원장/s1.png');
+});
+
+test('sheet endpoint: unauthenticated, invalid metadata and unsupported files never upload', async () => {
+  const unauth = sheetEndpointHarness({ authenticated: false });
+  assert.equal((await unauth.send()).status, 401);
+  assert.equal(unauth.requests.length, 0);
+  const invalid = sheetEndpointHarness();
+  assert.equal((await invalid.send({ brandId: '../other' })).status, 400);
+  assert.equal((await invalid.send({ mime: 'text/html' })).status, 400);
+  assert.equal(invalid.requests.length, 0);
+});
+
+test('sheet endpoint: environment uploads use env paths; storage errors return failure', async () => {
+  const good = sheetEndpointHarness();
+  assert.equal((await good.send({ kind: 'env' })).status, 200);
+  assert.match(good.requests[0].url.searchParams.get('name'), /\/env\//);
+  const bad = sheetEndpointHarness({ uploadStatus: 503 });
+  const response = await bad.send();
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).error, 'sheet_upload_failed');
 });

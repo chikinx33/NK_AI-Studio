@@ -1121,10 +1121,41 @@
   };
 
   api.brandSave = async function (brandId, brandPayload) {
-    // 서버가 호환 필드를 다시 만든다. 같은 base64 시트를 두 벌 전송하지 않는다.
     var brand = Object.assign({}, brandPayload || {});
+    // 원본은 한 장씩 바이너리로 올리고, 최종 저장에는 경로만 담는다.
+    // 텍스트·목록은 모든 업로드가 성공한 뒤 한 번에 반영한다.
+    var uploads = [];
+    [['characterSheets', 'knowledgeCharacterSheets', 'ip'], ['environmentAssets', 'knowledgeEnvironmentAssets', 'env']].forEach(function (fields) {
+      var entries = brand[fields[0]] || brand[fields[1]];
+      if (!Array.isArray(entries)) return;
+      brand[fields[0]] = entries.map(function (entry) {
+        if (!entry || typeof entry !== 'object') return entry;
+        var copy = Object.assign({}, entry);
+        copy.items = (Array.isArray(entry.items) ? entry.items : []).map(function (sheet, index) {
+          var item = Object.assign({}, sheet);
+          var source = String(item.imageDataUrl || item.imageUrl || item.url || item.src || '').trim();
+          if (source.indexOf('data:') === 0) {
+            uploads.push(async function () {
+              item.imageDataUrl = await api.brandSheetUpload(brandId, entry.token || entry.trigger || entry.displayName || entry.name, item.sheetId || item.id || ('sheet_' + String(index + 1).padStart(3, '0')), source, fields[2]);
+              // URL 호환 필드에도 원본이 남아 있으면 다시 큰 JSON이 된다.
+              ['imageUrl', 'url', 'src'].forEach(function (key) { if (String(item[key] || '').indexOf('data:') === 0) delete item[key]; });
+            });
+          }
+          return item;
+        });
+        return copy;
+      });
+    });
     if (Array.isArray(brand.characterSheets)) delete brand.knowledgeCharacterSheets;
     if (Array.isArray(brand.environmentAssets)) delete brand.knowledgeEnvironmentAssets;
+    var nextUpload = 0;
+    var uploadError = null;
+    await Promise.all(Array.from({ length: Math.min(2, uploads.length) }, async function () {
+      while (!uploadError && nextUpload < uploads.length) {
+        var upload = uploads[nextUpload++];
+        try { await upload(); } catch (err) { uploadError = err; throw err; }
+      }
+    }));
     var res = await fetchWithTimeout(withBase('/api/brand/save'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -1133,10 +1164,35 @@
         userId: resolveUserId(),
         brand: brand
       })
-    }, 120000);
+    }, 120000).catch(function (err) {
+      if (err && err.code === 'timeout') err.message = 'brand_metadata_save_timeout';
+      throw err;
+    });
     var text = await readTextWithTimeout(res, 120000);
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'brand_save_error')));
     return j(text);
+  };
+
+  api.brandSheetUpload = async function (brandId, token, sheetId, dataUrl, kind) {
+    var image = await fetch(dataUrl);
+    var blob = await image.blob();
+    var form = new FormData();
+    form.set('brandId', String(brandId || ''));
+    form.set('token', String(token || ''));
+    form.set('sheetId', String(sheetId || ''));
+    form.set('kind', kind === 'env' ? 'env' : 'ip');
+    form.set('file', blob, 'sheet');
+    var res = await fetchWithTimeout(withBase('/api/brand/sheet'), {
+      method: 'POST', headers: buildAuthHeaders(), body: form
+    }, 60000).catch(function (err) {
+      if (err && err.code === 'timeout') err.message = 'sheet_upload_timeout';
+      throw err;
+    });
+    var text = await readTextWithTimeout(res, 15000);
+    if (!res.ok) throw new Error(e(text) || 'sheet_upload_failed');
+    var result = j(text);
+    if (!result.ok || !/^gs:\/\//.test(String(result.imageDataUrl || ''))) throw new Error('sheet_upload_failed');
+    return result.imageDataUrl;
   };
 
   // IP 라이브러리 캐릭터 보이스: 프리셋 샘플 또는 레퍼런스 오디오를 브랜드 폴더에 올리고 voice 값을 돌려받는다.

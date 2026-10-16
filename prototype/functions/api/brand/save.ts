@@ -281,7 +281,7 @@ async function uploadDataUrlToGcs(args: {
   return `gs://${args.bucket}/${objectName}`;
 }
 
-function buildSheetObjectName(args: {
+export function buildSheetObjectName(args: {
   brandPrefix: string;
   token: string;
   sheetId: string;
