@@ -1030,9 +1030,9 @@
         : null;
       renderProject(root, fallbackProject, nextBrand || brand);
     }
-    function syncBrandAndProject(nextKnowledge) {
+    function syncBrandAndProject(nextKnowledge, brandCharsPatch) {
       return Promise.resolve().then(async function () {
-        var persistedBrand = brand;
+        var persistedBrand = null;
         var sharedPatch = {
           brandVoice: nextKnowledge.brandVoice,
           brandStory: nextKnowledge.brandStory,
@@ -1048,6 +1048,7 @@
           referenceContentEntries: nextKnowledge.referenceItems,
           successCases: nextKnowledge.successCases
         };
+        if (Array.isArray(brandCharsPatch)) sharedPatch.brandCharacters = brandCharsPatch;
         if (brandId && NK.service && NK.service.brand) {
           if (NK.service.brand.persistShared) {
             persistedBrand = await NK.service.brand.persistShared(brandId, sharedPatch);
@@ -1057,10 +1058,16 @@
         }
         if (persistedBrand) brand = persistedBrand;
 
-        var persistedKnowledge = mergeKnowledge(nextKnowledge, null);
+        // 서버가 업로드한 gs:// 경로를 프로젝트와 열린 모달에도 반영한다.
+        // 원본 data: 초안을 다시 쓰면 다음 저장마다 같은 시트가 재업로드된다.
+        var persistedKnowledge = persistedBrand ? readKnowledge(persistedBrand) : mergeKnowledge(nextKnowledge, null);
         persistedKnowledge.characters = normalizeCharacters(persistedKnowledge.characters, persistedKnowledge.brandCharacter);
         persistedKnowledge.characterSheets = normalizeCharacterSheets(persistedKnowledge.characterSheets, persistedKnowledge.characters);
         persistedKnowledge.environmentAssets = normalizeEnvironmentAssets(persistedKnowledge.environmentAssets);
+        characterSheetDraft = cloneCharacterSheetDraft(persistedKnowledge.characterSheets);
+        environmentAssetDraft = normalizeEnvironmentAssets(persistedKnowledge.environmentAssets);
+        if (modalCharacterSheetDraft) modalCharacterSheetDraft = cloneCharacterSheetDraft(characterSheetDraft);
+        if (modalEnvDraft) modalEnvDraft = normalizeEnvironmentAssets(environmentAssetDraft);
 
         var nextDraft = null;
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
@@ -1084,7 +1091,7 @@
           });
           if (projectResult && projectResult.draft) nextDraft = projectResult.draft;
         }
-        return { draft: nextDraft || project };
+        return { draft: nextDraft || project, brand: persistedBrand };
       });
     }
     var contentItems = (NK.service && NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
@@ -2216,23 +2223,10 @@
           }) : null;
           Promise.resolve()
             .then(function () {
-              if (brandCharsPatch && brandId && NK.service && NK.service.brand) {
-                var saveFn = NK.service.brand.persistShared || function (bId, patch) { if (NK.service.brand.update) NK.service.brand.update(bId, patch); return Promise.resolve(null); };
-                return Promise.resolve(saveFn(brandId, { brandCharacters: brandCharsPatch }));
-              }
-              return null;
-            })
-            .then(function (savedBrand) {
-              // v3.1589: 저장은 됐는데 다시 열면 옛 값이 보이던 원인.
-              // 모달은 열 때마다 `characters`(= brand.brandCharacters 스냅샷)에서 초안을 만드는데,
-              // 저장 후 그 스냅샷을 갱신하지 않아 다음 열기에서 저장 전 상태를 다시 집어왔다.
-              // 새로고침하면 멀쩡했던 것도 그때는 저장소에서 다시 읽었기 때문이다.
-              applySavedBrandCharacters(savedBrand, brandCharsPatch);
-            })
-            .then(function () {
-              return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft, environmentAssetDraft));
+              return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft, environmentAssetDraft), brandCharsPatch);
             })
             .then(function (result) {
+              applySavedBrandCharacters(result && result.brand, brandCharsPatch);
               characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
               knowledge.characterSheets = cloneCharacterSheetDraft(characterSheetDraft);
               if (result && result.draft) {

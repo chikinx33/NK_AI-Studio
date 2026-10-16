@@ -1121,13 +1121,17 @@
   };
 
   api.brandSave = async function (brandId, brandPayload) {
+    // 서버가 호환 필드를 다시 만든다. 같은 base64 시트를 두 벌 전송하지 않는다.
+    var brand = Object.assign({}, brandPayload || {});
+    if (Array.isArray(brand.characterSheets)) delete brand.knowledgeCharacterSheets;
+    if (Array.isArray(brand.environmentAssets)) delete brand.knowledgeEnvironmentAssets;
     var res = await fetchWithTimeout(withBase('/api/brand/save'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         brandId: String(brandId || ''),
         userId: resolveUserId(),
-        brand: brandPayload || {}
+        brand: brand
       })
     }, 120000);
     var text = await readTextWithTimeout(res, 120000);

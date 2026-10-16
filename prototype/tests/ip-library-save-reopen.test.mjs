@@ -98,9 +98,9 @@ test("저장 흐름이 갱신 함수를 실제로 호출한다", () => {
   const src = hub();
   const save = src.slice(src.indexOf("if (action === 'character-manager-save')"));
   const block = save.slice(0, save.indexOf(".finally("));
-  // persistShared 의 반환값(저장된 brand)을 받아서 넘겨야 한다
-  assert.match(block, /\.then\(function \(savedBrand\) \{/);
-  assert.match(block, /applySavedBrandCharacters\(savedBrand, brandCharsPatch\)/);
+  // 시트·텍스트를 함께 저장한 결과의 brand 를 넘겨야 한다.
+  assert.match(block, /\.then\(function \(result\) \{/);
+  assert.match(block, /applySavedBrandCharacters\(result && result\.brand, brandCharsPatch\)/);
   // 갱신이 knowledge 재조립(readKnowledge(brand))보다 먼저여야 한다
   const applyIdx = block.indexOf("applySavedBrandCharacters(");
   const readIdx = block.indexOf("readKnowledge(brand)");

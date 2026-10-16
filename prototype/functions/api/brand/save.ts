@@ -23,6 +23,25 @@ type SheetItem = {
   updatedAt?: string;
 };
 
+// GCS 요청은 최대 4개만 겹친다. 캐릭터가 늘어도 업로드 지연이 모두 직렬로 누적되지 않는다.
+async function mapConcurrent<T, R>(items: T[], fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  let failed = false;
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
+    while (!failed && cursor < items.length) {
+      const index = cursor++;
+      try {
+        results[index] = await fn(items[index], index);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  }));
+  return results;
+}
+
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const origin = request.headers.get("Origin");
@@ -150,32 +169,30 @@ async function normalizeBrandPayload(
 
 async function normalizeCharacterSheets(value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }) {
   const src = Array.isArray(value) ? value : [];
-  const out = [];
-  for (let i = 0; i < src.length; i++) {
-    const raw = src[i] && typeof src[i] === "object" ? src[i] : {};
+  const out = await mapConcurrent(src, async (entry, i) => {
+    const raw = entry && typeof entry === "object" ? entry : {};
     const token = normalizeToken(raw.token || raw.trigger || raw.displayName || raw.name);
-    if (!token) continue;
+    if (!token) return null;
     const items = await normalizeSheetItems(token, raw.items, ctx);
-    out.push({
+    return {
       characterId: normalizeText(raw.characterId || raw.id) || `char_${String(i + 1).padStart(3, "0")}`,
       displayName: normalizeText(raw.displayName || raw.name || token.replace(/^@/, "")) || token.replace(/^@/, ""),
       token,
       items,
-    });
-  }
-  return out;
+    };
+  });
+  return out.filter(Boolean);
 }
 
 async function normalizeEnvironmentAssets(value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }) {
   const src = Array.isArray(value) ? value : [];
-  const out = [];
-  for (let i = 0; i < src.length; i++) {
-    const raw = src[i] && typeof src[i] === "object" ? src[i] : {};
+  const out = await mapConcurrent(src, async (entry, i) => {
+    const raw = entry && typeof entry === "object" ? entry : {};
     const displayName = normalizeText(raw.displayName || raw.name || raw.token || raw.trigger).replace(/^@+/, "").replace(/\s+/g, " ").trim();
-    if (!displayName) continue;
+    if (!displayName) return null;
     const token = "@" + displayName.replace(/\s+/g, "");
     const items = await normalizeSheetItems(token, raw.items, ctx, "env");
-    out.push({
+    return {
       assetId: normalizeText(raw.assetId || raw.id) || `env_${String(i + 1).padStart(3, "0")}`,
       displayName,
       token,
@@ -183,9 +200,9 @@ async function normalizeEnvironmentAssets(value: any, ctx: { bucket: string; bra
       // 허브에서 적은 장소·소품 설명. 빠뜨리면 저장할 때마다 지워진다.
       description: normalizeText(raw.description || raw.personality || raw.note || ""),
       items,
-    });
-  }
-  return out;
+    };
+  });
+  return out.filter(Boolean);
 }
 
 async function normalizeSheetItems(token: string, value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }, kind: string = "ip"): Promise<SheetItem[]> {
@@ -410,9 +427,9 @@ async function deleteGcsObjects(args: {
   }
   const billingQuery = args.userProject ? `?userProject=${encodeURIComponent(args.userProject)}` : "";
   const billingHeader = args.userProject ? { "X-Goog-User-Project": args.userProject } : {};
-  for (let i = 0; i < names.length; i++) {
-    const name = String(names[i] || "").trim();
-    if (!name) continue;
+  await mapConcurrent(names, async (entry) => {
+    const name = String(entry || "").trim();
+    if (!name) return;
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(args.bucket)}/o/${encodeURIComponent(name)}${billingQuery}`;
     const res = await fetch(url, {
       method: "DELETE",
@@ -423,14 +440,14 @@ async function deleteGcsObjects(args: {
     });
     if (res.status === 204 || res.status === 404) {
       deletedCount += 1;
-      continue;
+      return;
     }
     failed.push({
       name,
       status: res.status,
       detail: safeJson(await res.text()),
     });
-  }
+  });
   return {
     requestedCount: names.length,
     deletedCount,
