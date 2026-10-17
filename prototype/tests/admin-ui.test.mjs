@@ -154,3 +154,24 @@ test('삭제 예정 회원은 일반 목록에서 빠지고 별도 목록에서 
     assert.ok(count >= 2, `${k} 는 ko/en 양쪽에 있어야 한다 (found ${count})`);
   }
 });
+
+test('체크박스로 여러 회원을 골라 일괄 삭제·복구·즉시 삭제하고, 즉시 삭제는 삭제 예정 목록에서만 보인다', () => {
+  const src = fs.readFileSync(path.join(process.cwd(), 'prototype/js/ui/admin-users.js'), 'utf8');
+  const core = fs.readFileSync(path.join(process.cwd(), 'prototype/core.js'), 'utf8');
+  // 행 체크·이 페이지 전체 선택, 마스터는 고를 수 없다
+  assert.match(src, /class="admin-check" data-id="/);
+  assert.match(src, /id="admin-select-all"/);
+  assert.match(src, /function isSelectable\(u\) \{\s*return !!u && !isMasterUser\(u\);/);
+  // 즉시 삭제 버튼은 삭제 예정 행에만
+  assert.match(src, /var purgeBtn = \(master \|\| !pending\) \? '' :/);
+  // 일괄 줄: 회원 목록은 삭제만, 삭제 예정 목록은 복구·즉시 삭제
+  assert.match(src, /pendingView\s*\?\s*'<button[^']*data-action="bulk-restore"[\s\S]{0,300}data-action="bulk-purge"[\s\S]{0,200}:\s*'<button[^']*data-action="bulk-delete"/);
+  // 한 명씩 차례로 부른다(즉시 삭제 1건이 서브요청 한도를 거의 다 쓴다)
+  assert.match(src, /for \(var i = 0; i < targets\.length; i\+\+\)[\s\S]{0,700}await NK\.api\.adminUserDelete\(u\.id, kind === 'purge' \? \{ immediate: true \} : undefined\)/);
+  // 목록 전환하면 선택을 비운다
+  assert.match(src, /state\.view = view;\s*state\.page = 1;\s*state\.selected = \{\};/);
+  for (const k of ['admin_select_all', 'admin_select_row', 'admin_bulk_selected', 'admin_bulk_clear', 'admin_bulk_confirm_delete', 'admin_bulk_confirm_purge', 'admin_bulk_confirm_restore', 'admin_bulk_progress', 'admin_bulk_done', 'admin_bulk_purge_pending', 'admin_bulk_restore_skipped', 'admin_bulk_failed']) {
+    const count = (core.match(new RegExp('\\b' + k + ':', 'g')) || []).length;
+    assert.ok(count >= 2, `${k} 는 ko/en 양쪽에 있어야 한다 (found ${count})`);
+  }
+});

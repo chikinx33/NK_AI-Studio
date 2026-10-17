@@ -20,6 +20,7 @@
     primaryAdminId: '',     // 최고(슈퍼) 관리자 ID — 서버 응답에서 받음
     search: '',
     view: 'members',        // members | pending — 삭제 예정 회원은 별도 목록에서만 보인다
+    selected: {},           // 일괄 제어용 체크 { id: true } — 목록 전환·새로고침 시 비운다
     filter: 'all',          // all | admin | member | active | inactive
     page: 1,                // 목록 페이지(1부터). 검색·필터가 바뀌면 1로 되돌린다.
     modalOpen: false,
@@ -96,6 +97,7 @@
         state.creditLoadError = String(credits && credits.__error || '');
         state.users = (res && Array.isArray(res.users)) ? res.users : [];
         state.primaryAdminId = (res && res.primaryAdminId) ? String(res.primaryAdminId) : '';
+        state.selected = {};
         state.creditMap = {};
         (credits && Array.isArray(credits.accounts) ? credits.accounts : []).forEach(function (item) {
           state.creditMap[String(item.userId || '')] = item;
@@ -172,6 +174,82 @@
     });
   }
 
+  // ─── 일괄 선택 ──────────────────────────────────────────────
+  // 마스터는 삭제·복구 대상이 아니므로 고를 수 없다.
+  function isSelectable(u) {
+    return !!u && !isMasterUser(u);
+  }
+
+  // 선택은 지금 목록(회원 / 삭제 예정)에 남아 있는 회원만 센다. 페이지를 넘겨도 유지된다.
+  function selectedUsers() {
+    return visibleUsers().filter(function (u) { return isSelectable(u) && state.selected[String(u.id)]; });
+  }
+
+  function pageSelectableIds() {
+    return pagedUsers(visibleUsers()).filter(isSelectable).map(function (u) { return String(u.id); });
+  }
+
+  function buildSelectAllBox() {
+    var ids = pageSelectableIds();
+    var picked = ids.filter(function (id) { return state.selected[id]; }).length;
+    return '<input type="checkbox" class="admin-check" id="admin-select-all" aria-label="' + escapeHtml(t('admin_select_all')) + '"' +
+      (ids.length && picked === ids.length ? ' checked' : '') + (ids.length ? '' : ' disabled') + ' />';
+  }
+
+  // 선택한 회원이 있을 때만 하단 줄에 일괄 버튼을 띄운다.
+  function buildBulkBar() {
+    var n = selectedUsers().length;
+    if (!n) return '';
+    var pendingView = state.view === 'pending';
+    return [
+      '<div class="admin-bulk-bar">',
+        '<span class="admin-bulk-count">' + escapeHtml(t('admin_bulk_selected').replace('{n}', n)) + '</span>',
+        // 즉시 삭제는 삭제 예정 목록에서만 — 회원 목록에서는 '삭제'(7일 예정)만 할 수 있다.
+        pendingView
+          ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="bulk-restore">' + escapeHtml(t('admin_restore')) + '</button>' +
+            '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="bulk-purge">' + escapeHtml(t('admin_purge')) + '</button>'
+          : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="bulk-delete">' + escapeHtml(t('admin_delete')) + '</button>',
+        '<button type="button" class="admin-icon-btn" data-action="bulk-clear">' + escapeHtml(t('admin_bulk_clear')) + '</button>',
+      '</div>'
+    ].join('');
+  }
+
+  // 체크 변경은 화면 전체를 다시 그리지 않는다(검색 입력 포커스 유지). 전체 선택 칸과 일괄 줄만 갱신.
+  function syncSelectionUi(root) {
+    var all = root.querySelector('#admin-select-all');
+    if (all) all.outerHTML = buildSelectAllBox();
+    var host = root.querySelector('.admin-bulk-host');
+    if (host) host.innerHTML = buildBulkBar();
+    root.querySelectorAll('.admin-bulk-host [data-action]').forEach(function (el) {
+      el.addEventListener('click', onAction);
+    });
+  }
+
+  function onSelectionChange(e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains('admin-check')) return;
+    var root = document.querySelector('.content');
+    if (!root) return;
+    if (el.id === 'admin-select-all') {
+      var on = !!el.checked;
+      pageSelectableIds().forEach(function (id) {
+        if (on) state.selected[id] = true; else delete state.selected[id];
+      });
+      root.querySelectorAll('input.admin-check[data-id]').forEach(function (box) {
+        box.checked = on;
+        var tr = box.closest('tr');
+        if (tr) tr.classList.toggle('is-selected', on);
+      });
+    } else {
+      var id = String(el.getAttribute('data-id') || '');
+      if (!id) return;
+      if (el.checked) state.selected[id] = true; else delete state.selected[id];
+      var row = el.closest('tr');
+      if (row) row.classList.toggle('is-selected', !!el.checked);
+    }
+    syncSelectionUi(root);
+  }
+
   // ─── 렌더 ──────────────────────────────────────────────────
   function render() {
     var root = document.querySelector('.content');
@@ -188,9 +266,9 @@
 
     var rows;
     if (state.loading) {
-      rows = '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_loading')) + '</div></td></tr>';
+      rows = '<tr><td colspan="7"><div class="admin-empty">' + escapeHtml(t('admin_loading')) + '</div></td></tr>';
     } else if (state.error) {
-      rows = '<tr><td colspan="6"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
+      rows = '<tr><td colspan="7"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
     } else {
       rows = buildTableRows();
     }
@@ -223,7 +301,7 @@
             state.creditLoadError ? '<div class="admin-error admin-credit-load-error">' + (curLang() === 'en' ? 'Credit service unavailable: ' : '크레딧 서비스를 확인할 수 없습니다: ') + escapeHtml(state.creditLoadError) + '</div>' : '',
             '<div class="admin-table-wrap">',
               '<table class="admin-table">',
-                '<thead><tr><th>ID</th><th>' + escapeHtml(t('admin_th_name')) + '</th><th>' + escapeHtml(t('admin_th_perm')) + '</th><th>' + escapeHtml(t('admin_th_status')) + '</th><th>' + (curLang() === 'en' ? 'Credits' : '크레딧') + '</th><th>' + escapeHtml(t('admin_th_manage')) + '</th></tr></thead>',
+                '<thead><tr><th class="admin-check-cell">' + (state.loading || state.error ? '' : buildSelectAllBox()) + '</th><th>ID</th><th>' + escapeHtml(t('admin_th_name')) + '</th><th>' + escapeHtml(t('admin_th_perm')) + '</th><th>' + escapeHtml(t('admin_th_status')) + '</th><th>' + (curLang() === 'en' ? 'Credits' : '크레딧') + '</th><th>' + escapeHtml(t('admin_th_manage')) + '</th></tr></thead>',
                 '<tbody>', rows, '</tbody>',
               '</table>',
             '</div>',
@@ -241,6 +319,7 @@
                   '<option value="active"' + (state.filter === 'active' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_active')) + '</option>',
                   '<option value="inactive"' + (state.filter === 'inactive' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_inactive')) + '</option>',
                 '</select>'].join(''),
+                '<div class="admin-bulk-host">' + (state.loading || state.error ? '' : buildBulkBar()) + '</div>',
               '</div>',
               '<div class="admin-pager-host">' + (state.loading || state.error ? '' : buildPager()) + '</div>',
             '</div>',
@@ -264,7 +343,7 @@
     var primaryRow = (!pendingView && clampPage(list.length) === 1) ? buildPrimaryAdminRowIfNeeded() : '';
     var listRows = pagedUsers(list).map(buildRow).join('');
     var rows = primaryRow + listRows;
-    return rows || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t(pendingView ? 'admin_pending_empty' : 'admin_empty')) + '</div></td></tr>';
+    return rows || '<tr><td colspan="7"><div class="admin-empty">' + escapeHtml(t(pendingView ? 'admin_pending_empty' : 'admin_empty')) + '</div></td></tr>';
   }
 
   // 회원 / 삭제 예정 목록 전환. 삭제 예정 회원은 일반 목록에 섞지 않는다.
@@ -335,6 +414,7 @@
     if (!pid || isPrimaryRegistered()) return '';
     return [
       '<tr>',
+        '<td class="admin-check-cell"></td>',
         '<td><strong>' + escapeHtml(pid) + '</strong></td>',
         '<td>' + escapeHtml(t('admin_master')) + '</td>',
         '<td><span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span> <span class="admin-perm-chip">' + escapeHtml(t('admin_full_perm')) + '</span></td>',
@@ -386,8 +466,8 @@
     var id = escapeHtml(u.id);
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
     var deleteBtn = (master || pending) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
-    // 즉시 삭제: 7일 유예 없이 지금 영구 삭제. 일반 회원과 삭제 예정 회원 모두에 둔다.
-    var purgeBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="purge-user" data-id="' + id + '">' + escapeHtml(t('admin_purge')) + '</button>';
+    // 즉시 삭제: 7일 유예 없이 지금 영구 삭제. 삭제 예정 목록에서만 보인다(일반 회원은 먼저 '삭제'로 예정에 올린다).
+    var purgeBtn = (master || !pending) ? '' :'<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="purge-user" data-id="' + id + '">' + escapeHtml(t('admin_purge')) + '</button>';
     var editBtn = pending ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
     var restoreBtn = (pending && !purging) ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="restore-user" data-id="' + id + '">' + escapeHtml(t('admin_restore')) + '</button>' : '';
     var nameCell = '<span class="admin-name-cell" title="' + escapeHtml((u.name || '-') + (u.email ? ' · ' + u.email : '')) + '">'
@@ -395,7 +475,10 @@
       + (u.email ? '<span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '')
       + '</span>';
     return [
-      '<tr data-id="' + id + '">',
+      '<tr data-id="' + id + '"' + (state.selected[String(u.id)] ? ' class="is-selected"' : '') + '>',
+        '<td class="admin-check-cell">' + (isSelectable(u)
+          ? '<input type="checkbox" class="admin-check" data-id="' + id + '" aria-label="' + escapeHtml(t('admin_select_row') + ' ' + u.id) + '"' + (state.selected[String(u.id)] ? ' checked' : '') + ' />'
+          : '') + '</td>',
         '<td><strong>' + id + '</strong></td>',
         '<td>' + nameCell + '</td>',
         '<td>' + roleBadge + ' ' + permHtml + '</td>',
@@ -553,6 +636,7 @@
     var pagerHost = root.querySelector('.admin-pager-host');
     if (pagerHost) pagerHost.innerHTML = buildPager();
     bindRowActions(root);
+    syncSelectionUi(root);
   }
 
   function onAction(e) {
@@ -575,8 +659,16 @@
       if (view === state.view) return;
       state.view = view;
       state.page = 1;
+      state.selected = {};
       render();
     }
+    else if (action === 'bulk-clear') {
+      state.selected = {};
+      render();
+    }
+    else if (action === 'bulk-delete') { runBulk('delete'); }
+    else if (action === 'bulk-purge') { runBulk('purge'); }
+    else if (action === 'bulk-restore') { runBulk('restore'); }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
     else if (action === 'purge-user') { purgeUser(el.getAttribute('data-id')); }
     else if (action === 'restore-user') { restoreUser(el.getAttribute('data-id')); }
@@ -795,6 +887,79 @@
       .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
   }
 
+  function fmtCount(key, n) {
+    return String(t(key)).replace('{n}', n);
+  }
+
+  function bulkErrorText(err, kind) {
+    var fallback = kind === 'restore' ? 'admin_err_restore_fail' : kind === 'purge' ? 'admin_err_purge_fail' : 'admin_err_del_fail';
+    var msg = (err && err.message) ? err.message : t(fallback);
+    if (/master_required|admin_required/.test(msg)) return t('admin_err_master_only');
+    if (/cannot_delete_primary_admin/.test(msg)) return t('admin_err_cannot_delete_primary');
+    if (/deletion_restore_window_expired/.test(msg)) return t('admin_err_restore_expired');
+    if (/deletion_not_pending/.test(msg)) return t('admin_err_restore_not_pending');
+    if (/immediate_delete_failed/.test(msg)) return t('admin_err_purge_fail');
+    return msg;
+  }
+
+  // 선택한 회원을 한 명씩 차례로 처리한다. 즉시 삭제는 요청 하나가 Worker 서브요청 한도(50)를
+  // 거의 다 쓰므로 서버에서 묶지 않고 화면이 순서대로 부른다. 한 명이 실패해도 나머지는 계속한다.
+  //   delete  = 회원 목록 → 7일 삭제 예정 / purge = 삭제 예정 → 즉시 영구 삭제 / restore = 삭제 예정 → 복구
+  async function runBulk(kind) {
+    var targets = selectedUsers().filter(function (u) {
+      return kind === 'delete' ? !isPendingDeletion(u) : isPendingDeletion(u);
+    });
+    var skipped = 0;
+    if (kind === 'restore') {
+      // 삭제 시각이 지나 정리 중인 계정은 서버가 복구를 거절하므로 미리 뺀다.
+      var restorable = targets.filter(function (u) { return !isDeletionDueNow(u); });
+      skipped = targets.length - restorable.length;
+      targets = restorable;
+    }
+    if (!targets.length) {
+      if (skipped) window.alert(fmtCount('admin_bulk_restore_skipped', skipped));
+      return;
+    }
+    var labelKey = kind === 'restore' ? 'admin_restore' : kind === 'purge' ? 'admin_purge' : 'admin_delete';
+    var confirmKey = kind === 'restore' ? 'admin_bulk_confirm_restore' : kind === 'purge' ? 'admin_bulk_confirm_purge' : 'admin_bulk_confirm_delete';
+    var ok = await NK.ui.dialog.confirm(fmtCount(confirmKey, targets.length), {
+      title: t(labelKey),
+      okText: t(labelKey),
+      cancelText: t('admin_cancel')
+    });
+    if (!ok) return;
+
+    var done = 0;
+    var inProgress = 0;
+    var failures = [];
+    for (var i = 0; i < targets.length; i++) {
+      var u = targets[i];
+      if (NK.core && NK.core.setLoading) {
+        NK.core.setLoading(true, String(t('admin_bulk_progress')).replace('{done}', i + 1).replace('{total}', targets.length));
+      }
+      try {
+        if (kind === 'restore') {
+          await NK.api.adminUserRestore(u.id);
+          done += 1;
+        } else {
+          var res = await NK.api.adminUserDelete(u.id, kind === 'purge' ? { immediate: true } : undefined);
+          if (kind === 'purge' && !(res && res.completed)) inProgress += 1;
+          else done += 1;
+        }
+      } catch (err) {
+        failures.push(u.id + ': ' + bulkErrorText(err, kind));
+      }
+    }
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
+
+    var lines = [fmtCount('admin_bulk_done', done)];
+    if (inProgress) lines.push(fmtCount('admin_bulk_purge_pending', inProgress));
+    if (skipped) lines.push(fmtCount('admin_bulk_restore_skipped', skipped));
+    if (failures.length) lines.push(fmtCount('admin_bulk_failed', failures.length) + '\n' + failures.join('\n'));
+    window.alert(lines.join('\n'));
+    loadUsers();
+  }
+
   async function restoreUser(id) {
     var u = state.users.find(function (x) { return String(x.id) === String(id); });
     if (!u || !u.deletionRequestedAt) return;
@@ -832,7 +997,13 @@
   }
 
   function init() {
-    if (!document.querySelector('.content')) return;
+    var content = document.querySelector('.content');
+    if (!content) return;
+    // 체크박스는 다시 그려져도 위임으로 한 번만 받는다.
+    if (!content.dataset.adminSelectBound) {
+      content.dataset.adminSelectBound = '1';
+      content.addEventListener('change', onSelectionChange);
+    }
     bindLangChange();
     updateAuthState();
     var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();

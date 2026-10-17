@@ -41,6 +41,14 @@
     .admin-view-tab b { margin-left:4px; font-weight:700; }
     .admin-view-tab:hover { color:var(--text); }
     .admin-view-tab.is-current { background:var(--accent); color:#fff; }
+    /* 일괄 선택 */
+    table.admin-table th.admin-check-cell, table.admin-table td.admin-check-cell { width:34px; padding-right:0; }
+    .admin-check { width:16px; height:16px; margin:0; vertical-align:middle; cursor:pointer; accent-color:var(--accent); }
+    .admin-check:disabled { cursor:default; opacity:.4; }
+    table.admin-table tbody tr.is-selected { background:rgba(99,102,241,.10); }
+    .admin-bulk-host:empty { display:none; }
+    .admin-bulk-bar { display:inline-flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+    .admin-bulk-count { min-width:64px; font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; }
     .admin-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
     table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
     /* 행은 항상 한 줄 — 넘치는 내용은 줄이거나(…) 접고, 전체는 title 로 확인한다. */
@@ -171,23 +179,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.2016" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2016" />
-  <script src="core.js?v=3.2016" defer></script>
-  <script src="js/config.js?v=3.2016" defer></script>
-  <script src="js/utils.js?v=3.2016" defer></script>
-  <script src="store.js?v=3.2016" defer></script>
-  <script src="api.js?v=3.2016" defer></script>
-  <script src="js/state.js?v=3.2016" defer></script>
-  <script src="js/auth.js?v=3.2016" defer></script>
-  <script src="js/navigation.js?v=3.2016" defer></script>
-  <script src="js/service/media.js?v=3.2016" defer></script>
-  <script src="js/service/project.js?v=3.2016" defer></script>
-  <script src="js/service/character-traits.js?v=3.2016" defer></script>
-  <script src="js/service/brand.js?v=3.2016" defer></script>
-  <script src="js/ui/common.js?v=3.2016" defer></script>
-  <script src="js/ui/admin-users.js?v=3.2016" defer></script>
-  <script src="script.js?v=3.2016" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.2017" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2017" />
+  <script src="core.js?v=3.2017" defer></script>
+  <script src="js/config.js?v=3.2017" defer></script>
+  <script src="js/utils.js?v=3.2017" defer></script>
+  <script src="store.js?v=3.2017" defer></script>
+  <script src="api.js?v=3.2017" defer></script>
+  <script src="js/state.js?v=3.2017" defer></script>
+  <script src="js/auth.js?v=3.2017" defer></script>
+  <script src="js/navigation.js?v=3.2017" defer></script>
+  <script src="js/service/media.js?v=3.2017" defer></script>
+  <script src="js/service/project.js?v=3.2017" defer></script>
+  <script src="js/service/character-traits.js?v=3.2017" defer></script>
+  <script src="js/service/brand.js?v=3.2017" defer></script>
+  <script src="js/ui/common.js?v=3.2017" defer></script>
+  <script src="js/ui/admin-users.js?v=3.2017" defer></script>
+  <script src="script.js?v=3.2017" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>
