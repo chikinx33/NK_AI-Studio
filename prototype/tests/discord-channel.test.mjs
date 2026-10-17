@@ -114,7 +114,7 @@ test('브라우저로 나가는 응답에는 웹훅 주소가 없다(get·save·
   const get = read('prototype/functions/api/userdata/sns/get.ts');
   const safe = get.slice(get.indexOf('const SAFE_SNS_FIELDS'), get.indexOf('function maskSnsSettings'));
   assert.ok(safe.includes('"webhookHint"'));
-  for (const secret of ['webhookUrl', 'webhookId', 'guildId']) assert.ok(!safe.includes(`"${secret}"`), `${secret} 가 화면으로 나간다`);
+  for (const secret of ['webhookUrl', 'webhookId']) assert.ok(!safe.includes(`"${secret}"`), `${secret} 가 화면으로 나간다`);
 
   const save = read('prototype/functions/api/userdata/sns/save.ts');
   // 클라이언트 저장으로는 비밀을 쓸 수 없고, 해제하면 서버의 비밀도 지운다
@@ -162,6 +162,17 @@ test('게시: 2000자 초과는 예약 전에 거절하고, 미연결은 412, 10
   assert.match(branch, /url: discordMessageUrl\(/);
   // 텍스트만으로도 게시할 수 있다
   assert.match(pub, /platform !== "x" && platform !== "discord"\)/);
+});
+
+test('연결 화면·배포 카드의 링크 버튼은 연결한 디스코드 채널로 간다', () => {
+  globalThis.window = globalThis;
+  const src = read('prototype/js/ui/format-media-spec.js');
+  vm.runInThisContext(src);
+  const M = globalThis.NKFormatMedia;
+  assert.equal(M.profileUrlOf('discord', { connected: true, guildId: '66', channelId: '55', username: 'NK_Studio' }), 'https://discord.com/channels/66/55');
+  assert.equal(M.profileUrlOf('discord', { connected: true, channelId: '55' }), '');
+  assert.equal(M.profileUrlOf('discord', { connected: false, guildId: '66', channelId: '55' }), '');
+  assert.match(read('prototype/js/ui/sns-settings.js'), /guildId: res\.guildId \|\| ''/);
 });
 
 test('예약은 대기열로 들어간다(웹훅에는 예약 기능이 없다)', () => {

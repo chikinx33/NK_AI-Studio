@@ -66,7 +66,7 @@ function send(body: unknown, status = 200) {
 // 클라이언트 저장으로는 쓸 수 없는 필드(자격증명). OAuth 콜백·연결 엔드포인트만 쓴다.
 const CLIENT_FORBIDDEN_FIELDS = ["accessToken", "refreshToken", "tokenExpiresAt", "refreshExpiresAt", "openId", "pageToken", "userToken", "webhookUrl", "webhookId", "guildId"];
 // get.ts SAFE_SNS_FIELDS 와 같은 목록(테스트가 둘을 맞춰 본다).
-const SAVE_RESPONSE_SNS_FIELDS = ["connected", "enabled", "needsReconnect", "username", "displayName", "avatarUrl", "handle", "pageName", "pageId", "channelTitle", "channelId", "channelHandle", "igUserId", "webhookHint"];
+const SAVE_RESPONSE_SNS_FIELDS = ["connected", "enabled", "needsReconnect", "username", "displayName", "avatarUrl", "handle", "pageName", "pageId", "channelTitle", "channelId", "channelHandle", "igUserId", "webhookHint", "guildId"];
 function maskSavedSettings(settings: any) {
   const sns = settings?.sns && typeof settings.sns === "object" ? settings.sns : {};
   const out: Record<string, any> = {};

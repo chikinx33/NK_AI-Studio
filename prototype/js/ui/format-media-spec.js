@@ -410,6 +410,11 @@
     if (id === 'facebook') return s.pageId ? 'https://www.facebook.com/' + encodeURIComponent(s.pageId) : '';
     if (id === 'threads') return u ? 'https://www.threads.net/@' + encodeURIComponent(u.replace(/^@/, '')) : '';
     if (id === 'x') return u ? 'https://x.com/' + encodeURIComponent(u.replace(/^@/, '')) : '';
+    // 디스코드: 웹훅 이름은 주소가 아니다. 연결한 채널로 간다(서버·채널 id 는 비밀이 아니다).
+    if (id === 'discord') {
+      var g = String(s.guildId || '').trim(), c = String(s.channelId || '').trim();
+      return (/^\d+$/.test(g) && /^\d+$/.test(c)) ? 'https://discord.com/channels/' + g + '/' + c : '';
+    }
     return '';
   }
 

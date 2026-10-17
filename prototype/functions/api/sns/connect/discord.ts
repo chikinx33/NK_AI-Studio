@@ -62,5 +62,5 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     return send({ ok: false, code: "discord_save_failed", error: "연결 정보를 저장하지 못했습니다. 잠시 뒤 다시 시도해 주세요." }, 500);
   }
 
-  return send({ ok: true, platform: "discord", username, webhookHint, channelId: info.channelId });
+  return send({ ok: true, platform: "discord", username, webhookHint, channelId: info.channelId, guildId: info.guildId });
 };

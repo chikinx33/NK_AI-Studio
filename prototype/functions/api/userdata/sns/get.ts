@@ -29,6 +29,8 @@ const SAFE_SNS_FIELDS = [
   "igUserId",
   // 디스코드: 웹훅 주소(webhookUrl)는 비밀번호와 같아 절대 내보내지 않는다. 가린 표기만.
   "webhookHint",
+  // 디스코드 서버 id — 비밀이 아니다. 채널 링크(discord.com/channels/서버/채널)를 만드는 데 쓴다.
+  "guildId",
 ];
 function maskSnsSettings(settings: any, shared: boolean) {
   const sns = settings && typeof settings === "object" ? settings.sns : null;

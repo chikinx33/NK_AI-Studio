@@ -357,6 +357,7 @@
                 username: res.username || '',
                 webhookHint: res.webhookHint || '',
                 channelId: res.channelId || '',
+                guildId: res.guildId || '',
               };
               _writeCache(_settings.sns);
               setStatus('', '');
