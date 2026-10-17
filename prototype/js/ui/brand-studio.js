@@ -1578,6 +1578,8 @@
         metricsUpdatedAt: '',
         remotePostId: remotePostId,
         remoteUrl: String(result.url || '').trim(),
+        // 예약 대기열 건(Instagram·Facebook·Threads·X). 화면을 열 때 이 id 로 게시 결과를 받아 온다.
+        scheduledJobId: String(result.scheduledJobId || '').trim(),
         sourceScope: 'studio',
         brandId: brandId,
         title: String(draft && draft.title || project.title || '게시 결과').trim() || '게시 결과',
@@ -1642,6 +1644,45 @@
         });
       });
     }
+
+    /**
+     * 예약 대기열(Instagram·Facebook·Threads·X)로 보낸 '예약됨' 기록을 서버 상태로 갱신한다.
+     * 정기 실행이 시각에 게시하면 게시됨(게시 주소 포함), 실패하면 실패로 바꿔 둔다. 화면을 열 때 한 번만 본다(폴링 없음).
+     */
+    function refreshScheduledPublishRows() {
+      var rows = Array.isArray(payload.brandStudioPublishResults) ? payload.brandStudioPublishResults : [];
+      var ids = rows.filter(function (row) {
+        return row && row.status === 'scheduled' && row.scheduledJobId;
+      }).map(function (row) { return String(row.scheduledJobId); });
+      if (!ids.length) return;
+      var authToken = '';
+      try { authToken = localStorage.getItem('nk_auth_token') || ''; } catch (_) { }
+      fetch('/api/sns/scheduled?ids=' + encodeURIComponent(ids.join(',')), { headers: { 'Authorization': 'Bearer ' + authToken } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          var posts = (data && Array.isArray(data.posts)) ? data.posts : [];
+          var byId = {};
+          posts.forEach(function (post) { if (post && post.id && post.status !== 'queued' && post.status !== 'running') byId[post.id] = post; });
+          if (!Object.keys(byId).length) return;
+          return updatePublishRows(function (list) {
+            return (Array.isArray(list) ? list : []).map(function (row) {
+              var post = row && row.scheduledJobId ? byId[String(row.scheduledJobId)] : null;
+              if (!post || row.status !== 'scheduled') return row;
+              if (post.status === 'done') {
+                return Object.assign({}, row, {
+                  status: 'published',
+                  publishedAt: post.publishedAt || row.publishedAt,
+                  remotePostId: post.postId || row.remotePostId || '',
+                  remoteUrl: post.url || row.remoteUrl || ''
+                });
+              }
+              return Object.assign({}, row, { status: post.status === 'cancelled' ? 'cancelled' : 'failed', error: post.error || '' });
+            });
+          });
+        })
+        .catch(function () { });
+    }
+    refreshScheduledPublishRows();
 
     // 스토리(가상 ID)를 포함한 선택된 자산 총 수
     var persistedSelCount = persistedSelectedAssetItems.length + (storySelected ? 1 : 0);
@@ -4044,6 +4085,15 @@
           });
       }
 
+      // 예약 선택기 값은 시간대 없는 '2026-10-20T14:00'(사용자 현지 시각)이다. 서버(UTC)는 그걸 UTC 로 읽어
+      // 한국에선 9시간 어긋나므로, 보내기 전에 브라우저 시간대로 해석한 ISO 로 바꾼다. 'now'·빈 값은 지금 게시.
+      function toScheduleIso(value) {
+        var raw = String(value || '').trim();
+        if (!raw || raw === 'now') return '';
+        var at = new Date(raw);
+        return isNaN(at.getTime()) ? raw : at.toISOString();
+      }
+
       function snsPublishFormat(formatId, drafts, scheduledAt) {
         // 자동 배포 대상은 format-media-spec.js 가 단일 원천이다.
         // manual 채널은 여기서 걸러지지만, 배포 카드가 '직접 올리기' 패널을 대신 띄운다.
@@ -4135,7 +4185,7 @@
             // privacyStatus: 'public' | 'unlisted' | 'scheduled' ('scheduled' 는 publishAt 동반)
             privacyStatus: String(draft.privacy_status || 'public'),
             categoryKey: String(draft.category || 'entertainment'),
-            publishAt: String(draft.scheduled_at || '').trim(),
+            publishAt: toScheduleIso(String(draft.scheduled_at || '').trim()),
             isShorts: (formatId === 'youtube-shorts'),
           };
         }
@@ -4156,14 +4206,14 @@
             mediaGcsPath: firstVideo.gcsPath || '',
             mediaDirectUrl: firstVideo.mediaUrl || '',
             caption: finalCaption,
-            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            scheduledAt: toScheduleIso(scheduledAt),
           }, ytExtras);
         } else if (!resolvedItems.length) {
           // 텍스트 전용 게시 (Threads) — 미디어 없이 캡션만 전송
           requestBody = {
             platform: formatId,
             caption: finalCaption,
-            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            scheduledAt: toScheduleIso(scheduledAt),
             firstComment: firstComment || '',
           };
         } else if (resolvedItems.length === 1) {
@@ -4174,7 +4224,7 @@
             mediaGcsPath: single.gcsPath || '',
             mediaDirectUrl: single.mediaUrl || '',
             caption: finalCaption,
-            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            scheduledAt: toScheduleIso(scheduledAt),
             firstComment: firstComment || '',
             linkUrl: draftLinkUrl || '',
           };
@@ -4183,7 +4233,7 @@
             platform: formatId,
             mediaItems: resolvedItems,
             caption: finalCaption,
-            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            scheduledAt: toScheduleIso(scheduledAt),
             firstComment: firstComment || '',
             linkUrl: draftLinkUrl || '',
           };

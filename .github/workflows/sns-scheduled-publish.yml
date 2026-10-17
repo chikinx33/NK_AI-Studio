@@ -1,0 +1,22 @@
+name: SNS scheduled publish
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Publish SNS posts whose scheduled time has come
+        env:
+          ACCOUNT_CLEANUP_TOKEN: ${{ secrets.ACCOUNT_CLEANUP_TOKEN }}
+        run: |
+          test -n "$ACCOUNT_CLEANUP_TOKEN"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $ACCOUNT_CLEANUP_TOKEN" \
+            --header "Content-Type: application/json" \
+            https://nkstudio.org/api/sns/scheduled-run

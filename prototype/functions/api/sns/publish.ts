@@ -5,6 +5,7 @@ import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
 import { getThreadsToken } from "../_shared/threads-token";
 import { getXToken } from "../_shared/x-token";
+import { readQueuedSchedule, enqueueScheduledPost } from "../_shared/sns-schedule";
 import {
   isTikTokAppAudited,
   isValidPrivacyLevel,
@@ -1054,6 +1055,20 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   // Threads·X 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
   if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x") {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
+  }
+
+  // 예약 시각이 미래면 지금 게시하지 않고 대기열에 넣는다(Instagram·Facebook·Threads·X).
+  // 예전엔 이 채널들의 예약 시각을 무시하고 바로 게시했다. 정기 실행이 그 시각에 이 엔드포인트로 다시 보낸다.
+  const queuedAt = readQueuedSchedule(platform, body);
+  if (typeof queuedAt === "object") return send({ error: queuedAt.error, code: queuedAt.error }, 400);
+  if (queuedAt) {
+    try {
+      const job = await enqueueScheduledPost(env, auth.userId, platform, queuedAt, body);
+      return send({ ok: true, scheduled: true, scheduledJobId: job.id,
+        result: { status: "scheduled", scheduledFor: job.runAt, scheduledJobId: job.id, postId: "", url: "" } });
+    } catch (e: any) {
+      return send({ error: "schedule_unavailable", code: "schedule_unavailable", detail: String(e?.message || e) }, 503);
+    }
   }
 
   try {

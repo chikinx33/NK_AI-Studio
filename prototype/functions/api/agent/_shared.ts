@@ -3081,7 +3081,8 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       continue;
     }
     const r: any = data?.result || {};
-    published.push({ platform, what: plan.note, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || new Date().toISOString() });
+    // 예약(Instagram·Facebook·Threads·X)은 서버 대기열에 들어가 status 'scheduled' + scheduledJobId 로 돌아온다.
+    published.push({ platform, what: plan.note, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || r.scheduledFor || new Date().toISOString(), ...(r.scheduledJobId ? { scheduledJobId: String(r.scheduledJobId) } : {}) });
     if (r.note) notices.push(`${platform}: ${String(r.note).slice(0, 200)}`); // 예: 스레드가 답글 설정·본문을 빼고 올린 경우
   }
 
