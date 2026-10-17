@@ -3,7 +3,7 @@
 //   GET    /api/admin/users            → 회원 목록(비밀번호 해시 제외)
 //   POST   /api/admin/users            → 신규 회원 생성
 //   PATCH  /api/admin/users            → 회원 정보/권한/비밀번호 수정 (body.id 대상)
-//   DELETE /api/admin/users            → 회원 삭제 (body.id 또는 ?id=, soft/hard)
+//   DELETE /api/admin/users            → 회원 삭제 (body.id 또는 ?id=, soft/hard/immediate)
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { hashPassword } from "../_shared/password.js";
 import {
@@ -28,6 +28,7 @@ import {
   cancelAccountDeletion,
   isDeletionRegistrationBlocked,
 } from "../_shared/account-deletions";
+import { purgeAccountNow } from "../_shared/user-cleanup";
 
 type PagesFunction = (ctx: { request: Request; env: any; waitUntil?: (p: Promise<any>) => void }) => Promise<Response>;
 
@@ -216,8 +217,13 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     // 하드 삭제는 즉시 파일을 지우지 않는다. 먼저 영속 삭제 대기열에 기록해 모든 기존
     // 세션을 폐기하고, 정확히 7일의 유예기간 동안 로그인·동일 ID 재등록을 막는다.
     // 실제 GCS/Neon/공유 정리는 예약 정리 엔드포인트가 만료 후 수행한다.
+    // 즉시 삭제(immediate)는 같은 대기열에 '삭제 시각=지금'으로 올린 뒤 이 요청 안에서 정리한다.
+    // 다 못 지운 파일은 대기열에 남아 정기 정리가 이어받는다(복구는 불가).
+    const immediate = body.immediate === true || String(body.mode || "").toLowerCase() === "immediate";
+    const now = new Date();
     const deletions = await loadAccountDeletionsStrict(env, true);
-    const deletion = requestAccountDeletion(deletions, id);
+    const deletion = requestAccountDeletion(deletions, id, now);
+    if (immediate && Date.parse(deletion.deleteAfter) > now.getTime()) deletion.deleteAfter = now.toISOString();
     await saveAccountDeletions(env, deletions);
 
     user.active = false;
@@ -225,6 +231,21 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     user.deleteAfter = deletion.deleteAfter;
     user.updatedAt = new Date().toISOString();
     await saveRegistry(env, reg);
+
+    if (immediate) {
+      const outcome = await purgeAccountNow(env, deletions, reg, deletion, now);
+      if (outcome.status === "failed") {
+        return send({ error: "immediate_delete_failed", detail: outcome.error, id }, 500, origin);
+      }
+      return send({
+        ok: true,
+        id,
+        immediate: true,
+        completed: outcome.status === "completed",
+        inProgress: outcome.status === "in_progress",
+        storageRemaining: outcome.storageRemaining,
+      }, 200, origin);
+    }
 
     return send({
       ok: true,

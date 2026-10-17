@@ -14,7 +14,7 @@ const gcs = read('../functions/api/_shared/gcs.js');
 
 test('회원 삭제는 7일 대기 레코드를 먼저 저장하고 즉시 자료를 지우지 않는다', () => {
   assert.match(policy, /7 \* 24 \* 60 \* 60 \* 1000/);
-  assert.match(users, /requestAccountDeletion\(deletions, id\)/);
+  assert.match(users, /requestAccountDeletion\(deletions, id, now\)/);
   assert.match(users, /deletionPending:\s*true/);
   assert.doesNotMatch(users, /deleteGcsPrefix|cleanupUserData/);
 });
@@ -43,7 +43,7 @@ test('만료 정리는 영상·오디오 GCS, Neon, 공유 권한을 끝낸 뒤 
   assert.match(cleanup, /cleanupAllStorage[\s\S]*cleanupDatabase[\s\S]*cleanupShares/);
   assert.match(cleanup, /usersRegistry\.users = usersRegistry\.users\.filter/);
   assert.match(cleanup, /record\.status = "completed"/);
-  assert.ok(cleanup.indexOf('cleanupUserData(env, record.userId)') < cleanup.indexOf('usersRegistry.users = usersRegistry.users.filter'));
+  assert.ok(cleanup.indexOf('cleanupUserData(env, record.userId, budget)') < cleanup.indexOf('usersRegistry.users = usersRegistry.users.filter'));
   assert.match(gcs, /batch_response_count_mismatch/);
   assert.match(cleanup, /listGcsObjects\(env, prefix\)/);
 });
@@ -67,4 +67,15 @@ test('만료 정리는 Worker 서브요청 50번 한도 안에서 끝나고 예�
   assert.match(cleanup, /const MAX_GCS_DELETES_PER_RUN = 1000;/);
   assert.match(cleanup, /storage_in_progress/);
   assert.match(endpoint, /cleanup_crashed/);
+});
+
+test('즉시 삭제는 같은 대기열에 삭제 시각=지금으로 올린 뒤 이 요청 안에서 정리한다', () => {
+  // 대기열을 먼저 저장해야 세션 폐기·재가입 차단이 유지되고, 다 못 지운 것은 정기 정리가 이어받는다.
+  assert.match(users, /body\.immediate === true/);
+  assert.match(users, /deletion\.deleteAfter = now\.toISOString\(\)[\s\S]*await saveAccountDeletions\(env, deletions\)[\s\S]*purgeAccountNow\(env, deletions, reg, deletion, now\)/);
+  assert.match(users, /immediate_delete_failed/);
+  // 정기 정리와 즉시 삭제가 같은 정리 경로를 쓴다.
+  assert.match(cleanup, /export async function purgeAccountNow[\s\S]*processDeletionRecord\(env, deletionRegistry, usersRegistry, record, now, MAX_GCS_DELETES_IMMEDIATE\)/);
+  assert.match(cleanup, /processDeletionRecord\(env, deletionRegistry, usersRegistry, record, now, MAX_GCS_DELETES_PER_RUN\)/);
+  assert.match(cleanup, /const MAX_GCS_DELETES_IMMEDIATE = 500;/);
 });

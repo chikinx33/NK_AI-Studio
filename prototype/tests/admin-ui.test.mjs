@@ -141,3 +141,16 @@ test("표가 가로 스크롤 없이 들어가도록 페이지 폭을 넓히고 
   assert.match(src, /if \(withTime\) \{ opts\.hour = '2-digit'; opts\.minute = '2-digit'; \}/);
   assert.match(src, /var deleteAfterFull = formatDeleteAfter\(u\.deleteAfter, true\);/);
 });
+
+test('삭제 예정 회원은 일반 목록에서 빠지고 별도 목록에서 복구·즉시 삭제할 수 있다', () => {
+  const src = fs.readFileSync(path.join(process.cwd(), 'prototype/js/ui/admin-users.js'), 'utf8');
+  const core = fs.readFileSync(path.join(process.cwd(), 'prototype/core.js'), 'utf8');
+  assert.match(src, /if \(pendingView !== isPendingDeletion\(u\)\) return false;/);
+  assert.match(src, /data-action="set-view"/);
+  assert.match(src, /data-action="purge-user"/);
+  assert.match(src, /NK\.api\.adminUserDelete\(id, \{ immediate: true \}\)/);
+  for (const k of ['admin_view_members', 'admin_view_pending', 'admin_pending_empty', 'admin_purge', 'admin_confirm_purge', 'admin_purge_done', 'admin_purge_in_progress', 'admin_err_purge_fail', 'admin_deletion_purging']) {
+    const count = (core.match(new RegExp('\\b' + k + ':', 'g')) || []).length;
+    assert.ok(count >= 2, `${k} 는 ko/en 양쪽에 있어야 한다 (found ${count})`);
+  }
+});

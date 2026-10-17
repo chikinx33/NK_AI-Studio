@@ -32,6 +32,15 @@
     }
     .admin-toolbar input::placeholder { color:var(--muted); }
     .admin-toolbar select option { color:#111; background:#fff; }
+    /* 회원 / 삭제 예정 목록 전환 */
+    .admin-view-tabs { display:inline-flex; padding:3px; gap:3px; border:1px solid var(--border); border-radius:10px; background:var(--studio-input-bg, var(--panel)); }
+    .admin-view-tab {
+      min-width:92px; padding:5px 10px; border:0; border-radius:7px; background:transparent; color:var(--muted);
+      font-size:13px; cursor:pointer; white-space:nowrap; transition:background .15s ease, color .15s ease;
+    }
+    .admin-view-tab b { margin-left:4px; font-weight:700; }
+    .admin-view-tab:hover { color:var(--text); }
+    .admin-view-tab.is-current { background:var(--accent); color:#fff; }
     .admin-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
     table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
     /* 행은 항상 한 줄 — 넘치는 내용은 줄이거나(…) 접고, 전체는 title 로 확인한다. */
@@ -162,23 +171,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.2015" />
-  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2015" />
-  <script src="core.js?v=3.2015" defer></script>
-  <script src="js/config.js?v=3.2015" defer></script>
-  <script src="js/utils.js?v=3.2015" defer></script>
-  <script src="store.js?v=3.2015" defer></script>
-  <script src="api.js?v=3.2015" defer></script>
-  <script src="js/state.js?v=3.2015" defer></script>
-  <script src="js/auth.js?v=3.2015" defer></script>
-  <script src="js/navigation.js?v=3.2015" defer></script>
-  <script src="js/service/media.js?v=3.2015" defer></script>
-  <script src="js/service/project.js?v=3.2015" defer></script>
-  <script src="js/service/character-traits.js?v=3.2015" defer></script>
-  <script src="js/service/brand.js?v=3.2015" defer></script>
-  <script src="js/ui/common.js?v=3.2015" defer></script>
-  <script src="js/ui/admin-users.js?v=3.2015" defer></script>
-  <script src="script.js?v=3.2015" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.2016" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css?v=3.2016" />
+  <script src="core.js?v=3.2016" defer></script>
+  <script src="js/config.js?v=3.2016" defer></script>
+  <script src="js/utils.js?v=3.2016" defer></script>
+  <script src="store.js?v=3.2016" defer></script>
+  <script src="api.js?v=3.2016" defer></script>
+  <script src="js/state.js?v=3.2016" defer></script>
+  <script src="js/auth.js?v=3.2016" defer></script>
+  <script src="js/navigation.js?v=3.2016" defer></script>
+  <script src="js/service/media.js?v=3.2016" defer></script>
+  <script src="js/service/project.js?v=3.2016" defer></script>
+  <script src="js/service/character-traits.js?v=3.2016" defer></script>
+  <script src="js/service/brand.js?v=3.2016" defer></script>
+  <script src="js/ui/common.js?v=3.2016" defer></script>
+  <script src="js/ui/admin-users.js?v=3.2016" defer></script>
+  <script src="script.js?v=3.2016" defer></script>
 </head>
 <body class="layout-fixed">
   <div class="grain"></div>

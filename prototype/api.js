@@ -1690,6 +1690,7 @@
     var opts = options && typeof options === 'object' ? options : {};
     var body = { id: String(id || '') };
     if (opts.soft) body.soft = true;
+    if (opts.immediate) body.immediate = true;
     var res = await fetch(withBase('/api/admin/users'), {
       method: 'DELETE',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),

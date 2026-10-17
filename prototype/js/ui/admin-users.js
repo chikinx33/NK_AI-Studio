@@ -19,6 +19,7 @@
     users: [],
     primaryAdminId: '',     // 최고(슈퍼) 관리자 ID — 서버 응답에서 받음
     search: '',
+    view: 'members',        // members | pending — 삭제 예정 회원은 별도 목록에서만 보인다
     filter: 'all',          // all | admin | member | active | inactive
     page: 1,                // 목록 페이지(1부터). 검색·필터가 바뀌면 1로 되돌린다.
     modalOpen: false,
@@ -132,13 +133,32 @@
     return list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   }
 
+  function isPendingDeletion(u) {
+    return !!(u && u.deletionRequestedAt);
+  }
+
+  // 삭제 시각이 지나 정리가 진행 중인 계정(즉시 삭제 중이거나 7일 경과). 복구할 수 없다.
+  function isDeletionDueNow(u) {
+    var at = Date.parse(String((u && u.deleteAfter) || ''));
+    return Number.isFinite(at) && at <= Date.now();
+  }
+
+  function countByView(view) {
+    return state.users.filter(function (u) {
+      return view === 'pending' ? isPendingDeletion(u) : !isPendingDeletion(u);
+    }).length;
+  }
+
   function visibleUsers() {
     var q = String(state.search || '').trim().toLowerCase();
+    var pendingView = state.view === 'pending';
     return state.users.filter(function (u) {
+      if (pendingView !== isPendingDeletion(u)) return false;
       if (q) {
         var hay = (String(u.id || '') + ' ' + String(u.name || '')).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
+      if (pendingView) return true;
       switch (state.filter) {
         case 'admin':    return isMasterUser(u);
         case 'member':   return !isMasterUser(u);
@@ -211,14 +231,16 @@
             // 위에 두면 그만큼 표가 밀려 한 화면(10행)에 안 들어가 세로 스크롤이 생겼다.
             '<div class="admin-list-foot">',
               '<div class="admin-toolbar">',
+                buildViewTabs(),
                 '<div class="admin-search"><input type="text" id="admin-search" placeholder="' + escapeHtml(t('admin_search_ph')) + '" value="' + escapeHtml(state.search) + '" /></div>',
+                state.view === 'pending' ? '' : [
                 '<select id="admin-filter">',
                   '<option value="all"' + (state.filter === 'all' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_all')) + '</option>',
                   '<option value="admin"' + (state.filter === 'admin' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_master')) + '</option>',
                   '<option value="member"' + (state.filter === 'member' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_member')) + '</option>',
                   '<option value="active"' + (state.filter === 'active' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_active')) + '</option>',
                   '<option value="inactive"' + (state.filter === 'inactive' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_inactive')) + '</option>',
-                '</select>',
+                '</select>'].join(''),
               '</div>',
               '<div class="admin-pager-host">' + (state.loading || state.error ? '' : buildPager()) + '</div>',
             '</div>',
@@ -238,10 +260,22 @@
   // 현재 페이지의 행들. 마스터 비밀번호 안내 행은 첫 페이지에만 붙인다.
   function buildTableRows() {
     var list = visibleUsers();
-    var primaryRow = (clampPage(list.length) === 1) ? buildPrimaryAdminRowIfNeeded() : '';
+    var pendingView = state.view === 'pending';
+    var primaryRow = (!pendingView && clampPage(list.length) === 1) ? buildPrimaryAdminRowIfNeeded() : '';
     var listRows = pagedUsers(list).map(buildRow).join('');
     var rows = primaryRow + listRows;
-    return rows || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
+    return rows || '<tr><td colspan="6"><div class="admin-empty">' + escapeHtml(t(pendingView ? 'admin_pending_empty' : 'admin_empty')) + '</div></td></tr>';
+  }
+
+  // 회원 / 삭제 예정 목록 전환. 삭제 예정 회원은 일반 목록에 섞지 않는다.
+  function buildViewTabs() {
+    var tab = function (view, labelKey) {
+      var current = state.view === view;
+      return '<button type="button" class="admin-view-tab' + (current ? ' is-current' : '') + '" data-action="set-view" data-view="' + view + '"' +
+        ' aria-pressed="' + (current ? 'true' : 'false') + '">' +
+        escapeHtml(t(labelKey)) + ' <b>' + countByView(view) + '</b></button>';
+    };
+    return '<div class="admin-view-tabs">' + tab('members', 'admin_view_members') + tab('pending', 'admin_view_pending') + '</div>';
   }
 
   // 하단 페이지 이동. ‹ 이전 · 번호 · 다음 › — 번호는 현재 쪽 주변 5개까지만 띄우고
@@ -339,7 +373,11 @@
       : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
     var deleteAfterLabel = formatDeleteAfter(u.deleteAfter);
     var deleteAfterFull = formatDeleteAfter(u.deleteAfter, true);
-    var stateBadge = u.deletionRequestedAt
+    var pending = isPendingDeletion(u);
+    var purging = pending && isDeletionDueNow(u);
+    var stateBadge = purging
+      ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_deletion_purging')) + '</span>'
+      : pending
       ? '<span class="admin-badge admin-badge--off" title="' + escapeHtml(deleteAfterFull ? (t('admin_delete_at') + ' ' + deleteAfterFull) : (u.deleteAfter || '')) + '">' + escapeHtml(t('admin_deletion_pending')) + '</span>'
         + (deleteAfterLabel ? '<span class="admin-row-sub" title="' + escapeHtml(deleteAfterFull) + '">' + escapeHtml(deleteAfterLabel) + '</span>' : '')
       : (u.active === false)
@@ -347,9 +385,11 @@
       : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
     var id = escapeHtml(u.id);
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
-    var deleteBtn = (master || u.deletionRequestedAt) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
-    var editBtn = u.deletionRequestedAt ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
-    var restoreBtn = u.deletionRequestedAt ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="restore-user" data-id="' + id + '">' + escapeHtml(t('admin_restore')) + '</button>' : '';
+    var deleteBtn = (master || pending) ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
+    // 즉시 삭제: 7일 유예 없이 지금 영구 삭제. 일반 회원과 삭제 예정 회원 모두에 둔다.
+    var purgeBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="purge-user" data-id="' + id + '">' + escapeHtml(t('admin_purge')) + '</button>';
+    var editBtn = pending ? '' : '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>';
+    var restoreBtn = (pending && !purging) ? '<button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="restore-user" data-id="' + id + '">' + escapeHtml(t('admin_restore')) + '</button>' : '';
     var nameCell = '<span class="admin-name-cell" title="' + escapeHtml((u.name || '-') + (u.email ? ' · ' + u.email : '')) + '">'
       + '<span class="admin-row-name">' + escapeHtml(u.name || '-') + '</span>'
       + (u.email ? '<span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '')
@@ -365,6 +405,7 @@
           editBtn,
           restoreBtn,
           deleteBtn,
+          purgeBtn,
         '</div></td>',
       '</tr>'
     ].join('');
@@ -500,7 +541,7 @@
   }
 
   function bindRowActions(root) {
-    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="restore-user"], [data-action="set-primary-pw"], [data-action^="credit-"], [data-action="go-page"]').forEach(function (el) {
+    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="purge-user"], [data-action="restore-user"], [data-action="set-primary-pw"], [data-action^="credit-"], [data-action="go-page"]').forEach(function (el) {
       el.addEventListener('click', onAction);
     });
   }
@@ -529,7 +570,15 @@
       if (host) refreshList(host);
     }
     else if (action === 'edit-user') { openModal('edit', el.getAttribute('data-id')); }
+    else if (action === 'set-view') {
+      var view = el.getAttribute('data-view') === 'pending' ? 'pending' : 'members';
+      if (view === state.view) return;
+      state.view = view;
+      state.page = 1;
+      render();
+    }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
+    else if (action === 'purge-user') { purgeUser(el.getAttribute('data-id')); }
     else if (action === 'restore-user') { restoreUser(el.getAttribute('data-id')); }
     else if (action === 'modal-cancel') { closeModal(); }
     else if (action === 'modal-backdrop') { if (e.target === el) closeModal(); }
@@ -714,6 +763,34 @@
         if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');
         else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
         window.alert(msg);
+      })
+      .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
+  }
+
+  // 즉시 삭제: 유예 없이 지금 영구 삭제(복구 불가). 자료가 많아 한 번에 못 지우면
+  // 서버가 삭제 예정 목록에 '정리 중'으로 남기고 15분 정기 정리가 이어서 끝낸다.
+  async function purgeUser(id) {
+    var u = state.users.find(function (x) { return String(x.id) === String(id); });
+    if (!u || isMasterUser(u)) return;
+    var ok = await NK.ui.dialog.confirm(t('admin_confirm_purge') + ' (' + (u.name || u.id) + ')', {
+      title: t('admin_purge'),
+      okText: t('admin_purge'),
+      cancelText: t('admin_cancel')
+    });
+    if (!ok) return;
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_purging'));
+    NK.api.adminUserDelete(id, { immediate: true })
+      .then(function (res) {
+        window.alert(res && res.completed ? t('admin_purge_done') : t('admin_purge_in_progress'));
+        return loadUsers();
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : t('admin_err_purge_fail');
+        if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');
+        else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
+        else if (/immediate_delete_failed/.test(msg)) msg = t('admin_err_purge_fail');
+        window.alert(msg);
+        return loadUsers();
       })
       .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
   }

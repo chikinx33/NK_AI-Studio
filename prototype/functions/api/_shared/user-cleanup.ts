@@ -1,9 +1,11 @@
 import { getSql, getSqlBatch } from "../knowledge/_shared";
-import { loadRegistryStrict, saveRegistry, primaryAdminId } from "./admin-users";
+import { loadRegistryStrict, saveRegistry, primaryAdminId, type UsersRegistry } from "./admin-users";
 import {
   loadAccountDeletionsStrict,
   saveAccountDeletions,
   isDeletionDue,
+  type AccountDeletionRecord,
+  type AccountDeletionsRegistry,
 } from "./account-deletions";
 import { deleteGcsObjects, listGcsObjects, resolveGcsEnv } from "./gcs.js";
 import { buildUserRoot, sanitizeUserId } from "./storage";
@@ -14,6 +16,9 @@ import { loadSharesStrict, saveShares, removeAllOwnerShares, removeAllGrantsToUs
 // 그래서 한 번 실행에서는 회원 1명, GCS 객체 1000개(배치 10건)까지만 처리하고 나머지는 다음 15분 실행이 잇는다.
 const MAX_DELETIONS_PER_RUN = 1;
 const MAX_GCS_DELETES_PER_RUN = 1000;
+// 관리자 즉시 삭제는 인증·명부 읽기/쓰기로 서브요청을 더 쓰므로 GCS 몫을 절반으로 줄인다.
+// 남은 파일은 같은 대기열(삭제 시각=지금)에 남아 15분 정리 실행이 이어서 지운다.
+const MAX_GCS_DELETES_IMMEDIATE = 500;
 
 type CleanupSummary = {
   storageRoots: number;
@@ -58,7 +63,11 @@ async function cleanupStorageRoot(
   return { key, deleted, remaining: 0 };
 }
 
-async function cleanupAllStorage(env: any, userId: string): Promise<{ roots: number; deleted: number; remaining: number }> {
+async function cleanupAllStorage(
+  env: any,
+  userId: string,
+  budget: number,
+): Promise<{ roots: number; deleted: number; remaining: number }> {
   const candidates = [env, audioStorageEnv(env)].filter(Boolean);
   const completed = new Set<string>();
   let deleted = 0;
@@ -68,7 +77,7 @@ async function cleanupAllStorage(env: any, userId: string): Promise<{ roots: num
     const prefix = `${buildUserRoot(ctx.basePrefix, userId)}/`;
     const key = `${ctx.bucket}/${prefix}`;
     if (completed.has(key)) continue;
-    const result = await cleanupStorageRoot(candidate, userId, MAX_GCS_DELETES_PER_RUN - deleted);
+    const result = await cleanupStorageRoot(candidate, userId, budget - deleted);
     completed.add(result.key);
     deleted += result.deleted;
     remaining += result.remaining;
@@ -155,9 +164,9 @@ async function cleanupShares(env: any, userId: string): Promise<void> {
   await saveShares(env, registry);
 }
 
-export async function cleanupUserData(env: any, userId: string): Promise<CleanupResult> {
+export async function cleanupUserData(env: any, userId: string, budget = MAX_GCS_DELETES_PER_RUN): Promise<CleanupResult> {
   const uid = sanitizeUserId(userId);
-  const storage = await cleanupAllStorage(env, uid);
+  const storage = await cleanupAllStorage(env, uid, budget);
   // 파일이 아직 남았으면 DB·공유는 다음 실행에서 파일을 다 지운 뒤 정리한다.
   if (storage.remaining) {
     return { storageRoots: storage.roots, storageObjects: storage.deleted, databaseRows: 0, done: false, storageRemaining: storage.remaining };
@@ -169,6 +178,70 @@ export async function cleanupUserData(env: any, userId: string): Promise<Cleanup
 
 export function conciseError(error: any): string {
   return String(error?.message || error || "cleanup_failed").slice(0, 1000);
+}
+
+type DeletionOutcome = {
+  status: "completed" | "in_progress" | "failed";
+  summary: CleanupSummary | null;
+  error: string;
+  storageRemaining: number;
+};
+
+// 대기열의 회원 1명을 정리한다. 다 지우면 명부에서 빼고 completed, 파일이 남으면 pending 그대로 두어
+// 다음 실행이 잇게 한다. 정기 정리와 관리자 즉시 삭제가 같은 길을 쓴다.
+async function processDeletionRecord(
+  env: any,
+  deletionRegistry: AccountDeletionsRegistry,
+  usersRegistry: UsersRegistry,
+  record: AccountDeletionRecord,
+  now: Date,
+  budget: number,
+): Promise<DeletionOutcome> {
+  record.attempts += 1;
+  record.lastAttemptAt = now.toISOString();
+  record.lastError = "";
+  await saveAccountDeletions(env, deletionRegistry);
+  let outcome: DeletionOutcome;
+  try {
+    const result = await cleanupUserData(env, record.userId, budget);
+    const summary = { storageRoots: result.storageRoots, storageObjects: result.storageObjects, databaseRows: result.databaseRows };
+    if (!result.done) {
+      record.lastError = `storage_in_progress:${result.storageRemaining}`;
+      outcome = { status: "in_progress", summary, error: "", storageRemaining: result.storageRemaining };
+    } else {
+      usersRegistry.users = usersRegistry.users.filter((user) => sanitizeUserId(user.id) !== record.userId);
+      await saveRegistry(env, usersRegistry);
+      record.status = "completed";
+      record.completedAt = new Date().toISOString();
+      record.lastError = "";
+      outcome = { status: "completed", summary, error: "", storageRemaining: 0 };
+    }
+  } catch (error: any) {
+    record.lastError = conciseError(error);
+    outcome = { status: "failed", summary: null, error: record.lastError, storageRemaining: 0 };
+  }
+  try {
+    await saveAccountDeletions(env, deletionRegistry);
+  } catch (error: any) {
+    // 기록 저장 실패는 다음 실행이 같은 회원을 다시 잡아 이어가므로 요청 전체를 죽이지 않는다.
+    if (!outcome.error) outcome.error = `save_deletions: ${conciseError(error)}`;
+  }
+  return outcome;
+}
+
+/**
+ * 관리자 즉시 삭제: 유예기간 없이 지금 정리한다. 호출 전에 record 는 pending 이고 deleteAfter 가
+ * 지금 이하로 저장돼 있어야 한다 — 그래야 세션 폐기·재가입 차단이 유지되고, 여기서 다 못 지운 것은
+ * 정기 정리(sweepExpiredUserDeletions)가 바로 이어받는다.
+ */
+export async function purgeAccountNow(
+  env: any,
+  deletionRegistry: AccountDeletionsRegistry,
+  usersRegistry: UsersRegistry,
+  record: AccountDeletionRecord,
+  now = new Date(),
+): Promise<DeletionOutcome> {
+  return processDeletionRecord(env, deletionRegistry, usersRegistry, record, now, MAX_GCS_DELETES_IMMEDIATE);
 }
 
 export async function sweepExpiredUserDeletions(
@@ -198,35 +271,12 @@ export async function sweepExpiredUserDeletions(
   let inProgress = 0;
 
   for (const record of batch) {
-    record.attempts += 1;
-    record.lastAttemptAt = now.toISOString();
-    record.lastError = "";
-    await saveAccountDeletions(env, deletionRegistry);
-    try {
-      const result = await cleanupUserData(env, record.userId);
-      summaries.push({ storageRoots: result.storageRoots, storageObjects: result.storageObjects, databaseRows: result.databaseRows });
-      if (!result.done) {
-        record.lastError = `storage_in_progress:${result.storageRemaining}`;
-        inProgress += 1;
-      } else {
-        usersRegistry.users = usersRegistry.users.filter((user) => sanitizeUserId(user.id) !== record.userId);
-        await saveRegistry(env, usersRegistry);
-        record.status = "completed";
-        record.completedAt = new Date().toISOString();
-        record.lastError = "";
-        completed += 1;
-      }
-    } catch (error: any) {
-      record.lastError = conciseError(error);
-      errors.push(`${record.userId}: ${record.lastError}`);
-      failed += 1;
-    }
-    try {
-      await saveAccountDeletions(env, deletionRegistry);
-    } catch (error: any) {
-      // 기록 저장 실패는 다음 실행이 같은 회원을 다시 잡아 이어가므로 요청 전체를 죽이지 않는다.
-      errors.push(`save_deletions: ${conciseError(error)}`);
-    }
+    const outcome = await processDeletionRecord(env, deletionRegistry, usersRegistry, record, now, MAX_GCS_DELETES_PER_RUN);
+    if (outcome.summary) summaries.push(outcome.summary);
+    if (outcome.status === "completed") completed += 1;
+    else if (outcome.status === "in_progress") inProgress += 1;
+    else failed += 1;
+    if (outcome.error) errors.push(outcome.status === "failed" ? `${record.userId}: ${outcome.error}` : outcome.error);
   }
 
   return { processed: batch.length, completed, failed, inProgress, waiting: due.length - batch.length, errors, summaries };
