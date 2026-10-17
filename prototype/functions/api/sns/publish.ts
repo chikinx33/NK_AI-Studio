@@ -6,6 +6,7 @@ import { getFacebookPageToken } from "../_shared/facebook-token";
 import { getThreadsToken } from "../_shared/threads-token";
 import { getXToken } from "../_shared/x-token";
 import { readQueuedSchedule, enqueueScheduledPost } from "../_shared/sns-schedule";
+import { MEDIA_PATH_FORBIDDEN, authorizePublishMediaPaths, publishMediaLocation } from "../_shared/publish-media-path";
 import {
   isTikTokAppAudited,
   isValidPrivacyLevel,
@@ -1051,6 +1052,13 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     const role = getGrantRole(sharesReg, reqOwnerId, reqProjectId, auth.userId);
     if (role !== "editor") return send({ error: "forbidden: editor role required to publish" }, 403);
     publishUserId = reqOwnerId;
+  }
+  // 서명해 넘길 GCS 경로는 요청자 본인 루트(공유 게시면 소유자 루트까지)만 허용한다.
+  // 예약 게시도 여기서 걸러 대기열에 남의 경로가 들어가지 않게 한다(실행 때 이 검사를 다시 거친다).
+  const mediaScope = { ...publishMediaLocation(env), requesterId: auth.userId, publishUserId };
+  const mediaCheck = authorizePublishMediaPaths(body, mediaScope);
+  if (!mediaCheck.ok) {
+    return send({ error: MEDIA_PATH_FORBIDDEN, code: MEDIA_PATH_FORBIDDEN, field: mediaCheck.field }, 400);
   }
   // Threads·X 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
   if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x") {

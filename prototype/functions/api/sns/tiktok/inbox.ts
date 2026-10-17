@@ -15,6 +15,7 @@
 import { authorizeRequest, readSecret, sanitizeUserId } from "../../_shared/auth.js";
 import { loadShares, getGrantRole } from "../../_shared/shares";
 import { getTikTokAccessToken, waitForTikTokStatus } from "../../_shared/tiktok-token";
+import { MEDIA_PATH_FORBIDDEN, authorizePublishMediaPaths, publishMediaLocation } from "../../_shared/publish-media-path";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -220,6 +221,14 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     const role = getGrantRole(sharesReg, reqOwnerId, reqProjectId, auth.userId);
     if (role !== "editor") return send({ error: "forbidden: editor role required to publish" }, 403);
     targetUserId = reqOwnerId;
+  }
+
+  // 서명·프록시로 넘길 GCS 경로는 요청자 본인 루트(공유 게시면 소유자 루트까지)만 허용한다(publish.ts 와 같은 검사).
+  const mediaCheck = authorizePublishMediaPaths(body, {
+    ...publishMediaLocation(env), requesterId: auth.userId, publishUserId: targetUserId,
+  });
+  if (!mediaCheck.ok) {
+    return send({ error: MEDIA_PATH_FORBIDDEN, code: MEDIA_PATH_FORBIDDEN, field: mediaCheck.field }, 400);
   }
 
   const photoGcsPaths = Array.isArray(body.photoGcsPaths)
