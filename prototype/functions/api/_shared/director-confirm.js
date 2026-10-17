@@ -136,7 +136,7 @@ export function applyDirectorConfirm(data, opts) {
       nextPayload.renderMeta = {
         outputVideoObjectName: objectName,
         outputDurationSec: SEC(confirmed[0].take.durationSec) || SEC(confirmed[0].seq.durationSec) || null,
-        source: "director", sequenceId: confirmed[0].seq.id, takeId: confirmed[0].take.id, updatedAt: now,
+        source: opts.source === "upload" ? "upload" : "director", sequenceId: confirmed[0].seq.id, takeId: confirmed[0].take.id, updatedAt: now,
       };
     }
   } else if (prevMeta && prevMeta.source === "director") {
@@ -145,6 +145,8 @@ export function applyDirectorConfirm(data, opts) {
   nextPayload.directorConfirmed = {
     confirmedAt: now,
     sequences: confirmed.map(({ seq, take: t }) => ({ id: seq.id, title: text(seq.title), takeId: t.id })),
+    // SNS 세팅 '+'로 등록한 완성 콘텐츠는 같은 잠금을 쓰되 안내 문구만 다르다(director-lock.js).
+    ...(opts.source === "upload" ? { source: "upload" } : {}),
   };
 
   return {

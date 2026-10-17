@@ -1300,6 +1300,12 @@
     var preservedFieldValues = renderOptions.preserveInputs === false ? null : captureFieldValueState(root);
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
+    // 완성 콘텐츠 등록('+', js/ui/final-upload.js)이 지금 열린 에피소드를 알 수 있게 둔다.
+    brandStudio.currentContext = {
+      projectId: projectId,
+      ownerId: (NK.api && NK.api.getSharedOwner) ? String(NK.api.getSharedOwner(projectId) || '') : '',
+      title: String(project.title || '')
+    };
     var brandView = readBrandView(brand, project);
     var brandId = String(brandView.brandId || '').trim();
     var isEn = !!(NK.state && NK.state.runtime && NK.state.runtime.lang === 'en');

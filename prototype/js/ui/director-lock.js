@@ -10,8 +10,20 @@
     ko: { label: '수정 불가', title: '디렉터에서 확정된 프로젝트예요. 컷은 디렉터에서 고친 뒤 다시 확정해 주세요.' },
     en: { label: 'Read-only', title: 'This project was confirmed in the Director. Edit the cuts in the Director and confirm again.' }
   };
+  // SNS 세팅의 '+'로 등록한 완성 콘텐츠(directorConfirmed.source === 'upload'). 같은 잠금, 다른 안내.
+  var UPLOAD_TEXT = {
+    ko: { label: '수정 불가', title: '등록한 완성 콘텐츠예요. 내용은 어디서나 볼 수 있고, 영상 수정은 포스트 프로덕션에서 해 주세요.' },
+    en: { label: 'Read-only', title: 'This is registered finished content. You can view it anywhere; edit the video in Post-production.' }
+  };
   function lang() { return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko'; }
-  lock.text = function () { return TEXT[lang()] || TEXT.ko; };
+  lock.isUpload = function (payload) {
+    var c = payload && payload.directorConfirmed;
+    return !!(c && typeof c === 'object' && c.source === 'upload');
+  };
+  lock.text = function (payload) {
+    var table = lock.isUpload(payload) ? UPLOAD_TEXT : TEXT;
+    return table[lang()] || table.ko;
+  };
 
   lock.isLocked = function (payload) {
     var c = payload && payload.directorConfirmed;
@@ -89,11 +101,11 @@
    * 각 페이지 상단 줄 가운데의 펼침/접기 묶음(host) 맨 앞에 같은 줄로 넣는다 — 줄을 따로 차지하지 않는다.
    * 잠금이 풀리면 지운다. 화면이 다시 그려져 사라지면 다시 부르면 된다.
    */
-  lock.applyPageBadge = function (host, locked) {
+  lock.applyPageBadge = function (host, locked, payload) {
     if (!host) return;
     var pill = host.querySelector(':scope > .director-lock-pill');
     if (!locked) { if (pill) pill.remove(); return; }
-    var t = lock.text();
+    var t = lock.text(payload);
     if (!pill) {
       pill = document.createElement('span');
       pill.className = 'director-lock-pill';

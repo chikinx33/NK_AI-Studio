@@ -133,8 +133,9 @@ test("화면: 시나리오(개요 제외)·메인 프로덕션 '수정 불가', 
   assert.match(pipe, /var PIPELINE_VIEW_CONTROLS = '\.scene-row-toggle, \.scene-shot-toggle, #pipeline-expand-all, #pipeline-collapse-all, #pipeline-focus-mode, '/);
   // '수정 불가' 라벨은 두 페이지 모두 같은 공통 라벨(본문 맨 위 가운데)
   // 줄을 따로 차지하지 않고 상단 줄 가운데(펼침/접기 묶음) 맨 앞에, 자물쇠 아이콘만(글자는 툴팁)
-  assert.match(pipe, /dl\.applyPageBadge\(document\.querySelector\('#pipeline-meta \.pipeline-fold-center'\), locked\);/);
-  assert.match(scn, /dl\.applyPageBadge\(document\.querySelector\('#scenario-section \.right-caption \.caption-fold-mode'\), locked\);/);
+  // 세 번째 인자(payload)로 '등록한 완성 콘텐츠' 잠금이면 안내 문구가 달라진다.
+  assert.match(pipe, /dl\.applyPageBadge\(document\.querySelector\('#pipeline-meta \.pipeline-fold-center'\), locked, state && state\.payload\);/);
+  assert.match(scn, /dl\.applyPageBadge\(document\.querySelector\('#scenario-section \.right-caption \.caption-fold-mode'\), locked, currentPayload\);/);
   assert.match(lock, /host\.insertBefore\(pill, host\.firstChild\);/);
   assert.doesNotMatch(lock, /pill\.appendChild\(document\.createTextNode/);
   assert.match(read("prototype/styles.css"), /\.director-lock-pill \{[^}]*border-radius: 50%;/);

@@ -9,14 +9,17 @@
 //     op=notes       { notes: { rules, lessons } }   프로젝트 기억(payload.directorNotes) — 대화·단계 화면이 함께 쓴다
 //     op=confirm     { sequenceId, takeId?, replaceExisting? }  확정: 완성 테이크를 scenes·이야기·대표 영상으로 옮기고 잠근다
 //                    (_shared/director-confirm.js). 일반 컷이 있으면 replaceExisting 없이 409 scenes_exist.
+//     op=finalUpload { upload: { title, story, images[], video:{object, durationSec, still, aspectRatio} } }
+//                    완성 콘텐츠 등록(_shared/final-upload.js). 빈 에피소드에만 — 컷이 있으면 409 scenes_exist.
 // data.json 은 화면(save.ts)과 디렉터가 같이 쓴다. GCS 세대 번호(ifGenerationMatch)로 읽고-고치고-쓰기 사이에
 // 다른 저장이 끼면 다시 읽어 적용한다. sequences 는 이 엔드포인트만 쓴다(save.ts 는 보존만 한다).
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { cleanCutStill, cleanReferenceAsset } from "../_shared/director-media-path.js";
 import { applyDirectorConfirm } from "../_shared/director-confirm.js";
+import { applyFinalUpload } from "../_shared/final-upload.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -181,6 +184,30 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
         continue;
       }
+      if (body?.op === "finalUpload") {
+        // 완성 콘텐츠 등록(SNS 세팅 '+'). 경로는 본인 또는 소유자 저장소 안의 것만 받는다.
+        const { bucket, basePrefix: base } = resolveGcsEnv(env);
+        const roots = Array.from(new Set([auth.userId, owner])).map((uid) => `gs://${bucket}/${buildUserRoot(base, uid)}/`);
+        const own = (value: any): string => {
+          const raw = String(value || "").trim();
+          if (!raw) return "";
+          const gs = /^gs:\/\//i.test(raw) ? raw : `gs://${bucket}/${raw.replace(/^\/+/, "")}`;
+          if (gs.includes("..") || !roots.some((r) => gs.startsWith(r))) throw new Error("final_upload_path_forbidden");
+          return gs;
+        };
+        const up = body?.upload && typeof body.upload === "object" ? body.upload : {};
+        const images = (Array.isArray(up.images) ? up.images : []).slice(0, 40).map(own).filter(Boolean);
+        const videoGs = own(up.video?.object || up.video?.gsUri);
+        const { data: next, result } = applyFinalUpload(data, {
+          bucket, title: String(up.title || "").slice(0, 120), story: String(up.story || "").slice(0, 20_000), images,
+          video: videoGs ? { gsUri: videoGs, durationSec: Number(up.video?.durationSec) || 0,
+            stillGs: own(up.video?.still), aspectRatio: String(up.video?.aspectRatio || "").slice(0, 10) } : null,
+        });
+        if (await gcsWriteIfUnchanged(env, objectName, next, doc.generation)) {
+          return send({ ok: true, finalUpload: result, attempts: attempt + 1 }, 200, origin);
+        }
+        continue;
+      }
       if (body?.op === "notes") {
         const notes = cleanNotes(body.notes);
         const next = { ...data, payload: { ...payload, directorNotes: notes }, savedAt: new Date().toISOString() };
@@ -199,7 +226,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 확정할 수 없음: 일반 컷이 있음(사용자에게 교체를 물어야 함) · 완성(드래프트 아닌) 테이크가 없음
     if (msg === "scenes_exist") return send({ error: msg, existingScenes: Number(e?.existingScenes) || 0 }, 409, origin);
     if (msg === "no_final_take") return send({ error: msg, detail: "완료된 1080p(드래프트 아닌) 테이크가 없어요. 드래프트를 완성(video_complete)한 뒤 확정하세요." }, 409, origin);
-    const client = /^(sequence_|invalid_|too_many|unknown_op)/.test(msg);
+    const client = /^(sequence_|invalid_|too_many|unknown_op|final_upload_)/.test(msg);
     return send({ error: client ? msg : "sequences_write_failed", detail: client ? undefined : msg }, client ? 400 : 503, origin);
   }
 };

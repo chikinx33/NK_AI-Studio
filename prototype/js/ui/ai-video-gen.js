@@ -1835,7 +1835,11 @@
     creditPill.classList.add('vgen-credit-pill');
     creditPill.querySelector('strong').id = 'vgen-credit-pill-value';
     pillsRow.appendChild(creditPill);
-    pillsRow.appendChild(makePill(t('sessionLabel'), detached ? t('noneLabel') : state.sessionId));
+    // 세션 칸은 내부 저장 키(vg_숫자) 대신 고른 프로젝트(시리즈) 이름을 보여 준다. 시리즈가 없으면 에피소드 제목.
+    var projectName = project
+      ? String((project.payload && project.payload.seriesTitle) || project.title || '').trim()
+      : '';
+    pillsRow.appendChild(makePill(t('sessionLabel'), detached ? t('noneLabel') : (projectName || t('noProject'))));
     pillsRow.appendChild(makePill(t('projectLabel'), detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'))));
     pillsRow.appendChild(makePill(t('brandLabel'),   detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'))));
     header.appendChild(pillsRow);
