@@ -18,9 +18,14 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return send({ error: "META_APP_ID or FACEBOOK_REDIRECT_URI not configured" }, 500);
   }
 
+  // 한 Facebook 사용자가 여러 페이지를 관리할 때 이 nkstudio 계정에 붙일 페이지(id 또는 이름).
+  // btoa 는 Latin-1 만 받으므로 한글 이름은 encodeURIComponent 로 감싼다.
+  const pageHint = String(new URL(request.url).searchParams.get("page") || "").trim().slice(0, 100);
+
   const state = btoa(JSON.stringify({
     userId: auth.userId,
     ts: Date.now(),
+    ...(pageHint ? { pageHint: encodeURIComponent(pageHint) } : {}),
   }));
 
   const params = new URLSearchParams({

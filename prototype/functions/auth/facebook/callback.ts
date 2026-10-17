@@ -1,6 +1,6 @@
 import { buildUserDataObject, gcsObjectPath } from "../../api/_shared/storage";
 import { getGoogleServiceAccountToken, resolveGcsContextForUser } from "../../api/_shared/youtube-token";
-import { writeFacebookPatch } from "../../api/_shared/facebook-token";
+import { readFacebookRecord, writeFacebookPatch } from "../../api/_shared/facebook-token";
 
 function popupHtml(result: { ok: boolean; username?: string; error?: string }) {
   const payload = JSON.stringify(result);
@@ -36,9 +36,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   if (!code) return popupHtml({ ok: false, error: "Missing code — Facebook redirect did not include authorization code" });
 
   let userId = "owner";
+  let pageHint = "";
   try {
     const decoded = JSON.parse(atob(stateRaw));
     userId = String(decoded.userId || "owner");
+    if (decoded.pageHint) pageHint = decodeURIComponent(String(decoded.pageHint)).trim();
   } catch {
     return popupHtml({ ok: false, error: "Invalid state" });
   }
@@ -223,29 +225,42 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       );
     }
 
-    // 페이지 선택: FACEBOOK_PAGE_ID env 가 있으면 매칭, 없으면 첫 번째
+    // 페이지 선택 — 같은 Facebook 사용자가 여러 nkstudio 계정에 서로 다른 페이지를 붙이는 경우가 있다.
+    //  1) 연결 요청에 실린 pageHint(id 또는 이름)
+    //  2) 이 nkstudio 계정에 이미 저장된 pageId (재연결 시 페이지가 바뀌지 않게)
+    //  3) FACEBOOK_PAGE_ID env  4) 첫 번째
+    const googleToken = await getGoogleServiceAccountToken({
+      clientEmail: env.GOOGLE_CLIENT_EMAIL,
+      privateKeyPem: env.GOOGLE_PRIVATE_KEY,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+    });
+    const gcs = resolveGcsContextForUser(env, userId);
+    const hintKey = pageHint.toLowerCase();
+    const byHint = hintKey
+      ? pages.find((p) => p.id === pageHint || String(p.name || "").trim().toLowerCase() === hintKey)
+      : undefined;
+    let savedPageId = "";
+    if (!byHint && pages.length > 1) {
+      try { savedPageId = String((await readFacebookRecord({ ...gcs, googleToken }))?.pageId || ""); } catch { /* 없으면 다음 순위 */ }
+    }
+    const bySaved = savedPageId ? pages.find((p) => p.id === savedPageId) : undefined;
     const desiredPageId = String(env.FACEBOOK_PAGE_ID || "").trim();
-    const page = desiredPageId
-      ? (pages.find((p) => p.id === desiredPageId) || pages[0])
-      : pages[0];
+    const byEnv = desiredPageId ? pages.find((p) => p.id === desiredPageId) : undefined;
+    const page = byHint || bySaved || byEnv || pages[0];
     const pageId = page.id;
     const pageName = page.name;
     // 장기 사용자 토큰에서 파생된 페이지 토큰은 만료 없음
     const pageToken = page.access_token;
     console.log(
       "[facebook callback] selected page:", pageId, pageName,
-      "from", pages.length, "candidate(s),",
-      desiredPageId ? `FACEBOOK_PAGE_ID=${desiredPageId} ${page.id === desiredPageId ? "matched" : "NOT matched, fell back to first"}` : "no FACEBOOK_PAGE_ID env"
+      "from", pages.length, "candidate(s), by",
+      byHint ? "pageHint" : bySaved ? "saved pageId" : byEnv ? "FACEBOOK_PAGE_ID" : "first"
     );
+    if (pageHint && !byHint) {
+      return popupHtml({ ok: false, error: `Facebook 페이지 '${pageHint}' 에 권한이 없습니다. 연결 화면에서 그 페이지를 선택해 주세요.` });
+    }
 
     // Step 4: GCS 저장
-    const googleToken = await getGoogleServiceAccountToken({
-      clientEmail: env.GOOGLE_CLIENT_EMAIL,
-      privateKeyPem: env.GOOGLE_PRIVATE_KEY,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    });
-
-    const gcs = resolveGcsContextForUser(env, userId);
     console.log("[facebook callback] writing GCS for userId:", userId, "bucket:", gcs.bucket, "objectName:", gcs.objectName);
     await writeFacebookPatch(
       { ...gcs, googleToken },
