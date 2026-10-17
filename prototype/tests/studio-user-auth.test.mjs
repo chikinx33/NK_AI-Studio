@@ -20,6 +20,7 @@ const CLAUDE_ENDPOINTS = [
   "prototype/functions/api/hashtags.js",
   "prototype/functions/api/story-structure.js",
   "prototype/functions/api/overview-suggest.js",
+  "prototype/functions/api/overview-defaults.js",
   "prototype/functions/api/scenario.js",
   "prototype/functions/api/scenario-shots.js",
   "prototype/functions/api/scenario/locations.js",
@@ -48,6 +49,7 @@ test("클라이언트가 AI 호출에 인증 토큰을 싣는다", () => {
     "/api/scenario-shots'",
     "/api/story-structure'",
     "/api/overview-suggest'",
+    "/api/overview-defaults'",
     "/api/hashtags'",
     "/api/draft-generate'",
   ]) {

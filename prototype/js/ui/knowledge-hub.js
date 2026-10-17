@@ -1017,6 +1017,8 @@
     var characterExtras = extractCharacterNoteRemainder(knowledge.brandCharacter);
     var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '브랜드').trim();
     var brandSummary = String(brand && brand.brandSummary || payload.brandSummary || '').trim();
+    // 브랜드 허브 '개요 생성'을 한 번이라도 했는가 → 버튼이 '개요 다시 생성'이 된다.
+    var hasOverviewDefaults = !!(brand && brand.overviewDefaults && brand.overviewDefaults.generatedAt);
     var currentEpisodeTitle = episodeLabel(project);
     var rulesCount = knowledge.brandRules.length;
     var bannedCount = knowledge.bannedExpressions.length;
@@ -1193,6 +1195,12 @@
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-apply-starter">기본값 채우기</button>' +
       '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
+      // 새 에피소드 개요 기본값. 저장과 따로 둔다 — 저장할 때마다 기본값이 바뀌면 에피소드 일관성이 무너진다.
+      (brandId
+        ? (hasOverviewDefaults
+          ? '<button class="btn-secondary" data-action="knowledge-overview-generate" title="브랜드 허브 내용을 바탕으로 개요 기본값을 다시 만듭니다. 기존 에피소드는 바뀌지 않습니다.">개요 다시 생성</button>'
+          : '<button class="btn-secondary" data-action="knowledge-overview-generate" title="브랜드 허브 내용을 바탕으로 새 에피소드의 개요 기본값을 만듭니다.">개요 생성</button>')
+        : '') +
       '</div>' +
       '</div>' +
       '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + knowledgeHeroStats + '</div></div>' +
@@ -2371,6 +2379,58 @@
           })
           .catch(function (err) {
             alert('저장 후 이동 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
+            btn.disabled = false;
+          });
+        return;
+      }
+      // 개요 생성: 허브를 저장한 뒤 그 내용으로 새 에피소드 개요 기본값을 만들어 브랜드 기록에 둔다.
+      // 이미 만든 에피소드에는 적용하지 않는다(새 에피소드를 만들 때만 project.create 가 채운다).
+      else if (action === 'knowledge-overview-generate') {
+        if (!brandId || !NK.api || !NK.api.overviewDefaults || !NK.service || !NK.service.brand || !NK.service.brand.persistShared) return;
+        var hubDraft = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft);
+        var listText = function (v) { return Array.isArray(v) ? v.join('\n') : String(v || ''); };
+        var hubBody = {
+          language: (NK.state && NK.state.runtime && NK.state.runtime.lang === 'en') ? 'en' : 'ko',
+          brand: {
+            title: brandTitle,
+            summary: brandSummary,
+            coreMessage: String(brand && brand.coreMessage || payload.coreMessage || ''),
+            targetAudience: String(brand && brand.targetAudience || payload.targetAudience || ''),
+            keywords: (brand && brand.brandKeywords) || [],
+            brandVoice: String(hubDraft.brandVoice || ''),
+            brandStory: String(hubDraft.brandStory || ''),
+            worldSetting: String(hubDraft.worldSetting || ''),
+            brandRules: listText(hubDraft.brandRules)
+          },
+          characters: (hubDraft.characters || hubDraft.knowledgeCharacters || []).map(function (c) {
+            return { token: c && c.token, displayName: c && (c.displayName || c.name), personality: c && c.personality };
+          })
+        };
+        var hb = hubBody.brand;
+        if (!(hb.summary || hb.coreMessage || hb.targetAudience || hb.brandVoice || hb.brandStory || hb.worldSetting || hb.brandRules || hubBody.characters.length)) {
+          alert('개요를 만들 브랜드 허브 내용이 없습니다. 세계관·캐릭터·톤 등을 먼저 채워 주세요.');
+          return;
+        }
+        btn.disabled = true;
+        if (NK.core && NK.core.setLoading) NK.core.setLoading(true, '개요 생성 중...');
+        var savedDraft = null;
+        syncBrandAndProject(hubDraft)
+          .then(function (result) {
+            savedDraft = result && result.draft;
+            return NK.api.overviewDefaults(hubBody);
+          })
+          .then(function (res) {
+            return NK.service.brand.persistShared(brandId, { overviewDefaults: res.defaults });
+          })
+          .then(function () {
+            renderNext(savedDraft);
+            alert('개요 기본값을 만들었습니다. 앞으로 새로 만드는 에피소드의 개요에 미리 채워집니다(기존 에피소드는 그대로).');
+          })
+          .catch(function (err) {
+            alert('개요 생성 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             if (NK.core && NK.core.setLoading) NK.core.setLoading(false);

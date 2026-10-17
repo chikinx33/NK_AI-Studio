@@ -3637,6 +3637,72 @@
       }
     });
 
+    // 개요 '이전값 불러오기' — 같은 프로젝트(시리즈)에서 가장 최근에 작업한 다른 에피소드의 개요 값을 화면에 채운다.
+    // 주제·이야기는 에피소드마다 다르니 두고, 저장은 사용자가 '저장'을 눌러야 한다(생성 결과 자동 저장 금지 규칙).
+    const loadPreviousBtn = document.getElementById('overview-load-previous');
+    if (loadPreviousBtn) {
+      loadPreviousBtn.addEventListener('click', () => {
+        const projectSvc = NK.service?.project;
+        const drafts = (NK.store?.getDrafts ? NK.store.getDrafts() : [])
+          .map((d) => (projectSvc?.normalizeDraft ? projectSvc.normalizeDraft(d) : d))
+          .filter(Boolean);
+        const me = drafts.find((d) => String(d.id) === String(pid)) || draft || {};
+        const seriesId = String(me.seriesId || me.payload?.seriesId || currentPayload?.seriesId || '').trim();
+        const ts = (d) => Math.max(...[d.modifiedAt, d.savedAt, d.payload?.savedAt, d.lastUsedAt]
+          .map((v) => Date.parse(v || '') || 0), 0);
+        const previous = seriesId ? drafts
+          .filter((d) => String(d.id) !== String(pid) && String(d.seriesId || d.payload?.seriesId || '') === seriesId)
+          .filter((d) => d.payload && (d.payload.purposeCategory || d.payload.target || firstOf(d.payload.tones) || d.payload.duration))
+          .sort((a, b) => ts(b) - ts(a))[0] : null;
+        if (!previous) {
+          notifyScenario(getScenarioText('scenario_load_previous_none', '불러올 같은 프로젝트의 다른 에피소드가 없어요.'));
+          return;
+        }
+        const src = previous.payload || {};
+        const defaults = NK.config.DEFAULTS || {};
+        const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
+        const durationValue = String(src.duration || defaults.DURATION || '15');
+        const durationPreset = hasPresetDuration(src.durationMode === 'custom' ? '' : durationValue) ? durationValue : '';
+        const durationCustom = src.durationMode === 'custom'
+          ? String(src.durationCustom || durationValue || '')
+          : (hasPresetDuration(durationValue) ? '' : durationValue);
+        syncOverviewPayload(); // 주제·이야기 등 지금 화면 값을 먼저 잡아 둔다
+        renderOverviewSelects({
+          purposeCategory: src.purposeCategory || categories[0] || '',
+          purposeTag: firstOf(src.purposeTags),
+          target: src.target || TARGET_OPTIONS[0]?.value || '',
+          need: firstOf(src.needs),
+          tone: firstOf(src.tones) || sanitizeText(src.tone || ''),
+          style: firstOf(src.styles) || sanitizeText(src.style || ''),
+          durationPreset: durationPreset || defaults.DURATION || '15',
+          durationCustom
+        });
+        const customInput = document.getElementById('duration-custom-input');
+        if (customInput) customInput.value = durationCustom;
+        setActiveButtons('.ratio-btn', src.aspectRatio || '16:9');
+        setScenarioToggleButtons(getScenarioFlags(src));
+        const lyricsCheck = document.getElementById('song-lyrics-enabled');
+        if (lyricsCheck) lyricsCheck.checked = src.songLyricsEnabled !== false;
+        const songLangSel = document.getElementById('song-language-select');
+        if (songLangSel && SONG_LANGUAGES.indexOf(String(src.songLanguage || '')) >= 0) songLangSel.value = String(src.songLanguage);
+        // 캐릭터: 이전 에피소드에서 등장시킨 캐릭터를 켜고, 브랜드 허브 캐릭터 목록은 지금 에피소드 것을 쓴다.
+        currentCharacters = mergeCharacterSources(
+          normalizeCharacters(src.characters || [], { defaultActive: true }),
+          readKnowledgeHub(currentPayload || {}).characters || [],
+          (currentPayload && currentPayload.brandCharacter) || ''
+        );
+        syncCharacterSeq(currentCharacters);
+        renderCharacterChips();
+        syncCharacterUi();
+        syncDurationInputs(durationCustom ? 'custom' : 'preset');
+        applyVoiceModeLock();
+        syncSongOptionsVisibility();
+        syncOverviewPayload();
+        const title = String(previous.title || previous.payload?.episodeTitle || previous.id || '');
+        notifyScenario(getScenarioText('scenario_load_previous_done', '"{title}"의 개요 값을 불러왔어요. 남기려면 저장을 눌러 주세요.').replace('{title}', title));
+      });
+    }
+
     // 시나리오 복사 버튼
     const scenarioCopyBtn = document.getElementById('scenario-copy-btn');
     if (scenarioCopyBtn) {

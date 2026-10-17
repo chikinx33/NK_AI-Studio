@@ -351,6 +351,24 @@
     return data;
   };
 
+  // 브랜드 허브 '개요 생성' — 새 에피소드 개요에 미리 채울 기본값(브랜드 기록 overviewDefaults 로 저장)
+  api.overviewDefaults = async function (payload) {
+    var res = await fetchWithTimeout(withBase('/api/overview-defaults'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {})
+    }, 30000);
+    var text = await readTextWithTimeout(res, 30000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'overview_defaults_api_error');
+      err.status = res.status;
+      throw err;
+    }
+    var data = j(text);
+    if (!data || typeof data.defaults !== 'object') throw new Error('overview_defaults_response_invalid');
+    return data;
+  };
+
   api.overviewSuggest = async function (payload) {
     // Phase 0 Step 10 — 주제/이야기 입력으로 개요 나머지 필드를 자동 제안
     var res = await fetchWithTimeout(withBase('/api/overview-suggest'), {

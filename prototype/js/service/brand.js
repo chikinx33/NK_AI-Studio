@@ -555,10 +555,38 @@
             analyticsSync: normalizeAnalyticsSync(raw.analyticsSync),
             seriesIds: seriesIds,
             sourceProjectIds: sourceProjectIds,
+            // 브랜드 허브 '개요 생성'이 만든 새 에피소드 개요 기본값(없으면 null). 기존 에피소드에는 적용하지 않는다.
+            overviewDefaults: normalizeOverviewDefaults(raw.overviewDefaults),
             status: normalizeText(raw.status || 'active') || 'active',
             createdAt: normalizeText(raw.createdAt) || new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
+    }
+    function normalizeOverviewDefaults(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+        var list = function (v) { return normalizeTextList(v).slice(0, 5); };
+        var out = {
+            purposeCategory: normalizeText(value.purposeCategory),
+            purposeTags: list(value.purposeTags),
+            target: normalizeText(value.target),
+            needs: list(value.needs),
+            duration: normalizeText(value.duration),
+            durationMode: value.durationMode === 'custom' ? 'custom' : 'preset',
+            durationCustom: normalizeText(value.durationCustom),
+            aspectRatio: normalizeText(value.aspectRatio),
+            tones: list(value.tones),
+            styles: list(value.styles),
+            voiceMode: normalizeText(value.voiceMode),
+            characters: normalizeTextList(value.characters).slice(0, 30),
+            generatedAt: normalizeText(value.generatedAt)
+        };
+        return out.generatedAt ? out : null;
+    }
+    /** 둘 중 나중에 만든 개요 기본값. */
+    function pickOverviewDefaults(a, b) {
+        if (!a) return b || null;
+        if (!b) return a;
+        return String(b.generatedAt || '') > String(a.generatedAt || '') ? b : a;
     }
 
     function pickText(currentValue, incomingValue, preferIncoming) {
@@ -737,6 +765,7 @@
                 : (current.analyticsSync || incoming.analyticsSync),
             seriesIds: mergeTextList(current.seriesIds, incoming.seriesIds),
             sourceProjectIds: mergeTextList(current.sourceProjectIds, incoming.sourceProjectIds),
+            overviewDefaults: pickOverviewDefaults(current.overviewDefaults, incoming.overviewDefaults),
             status: pickText(current.status, incoming.status, preferIncoming) || 'active',
             createdAt: normalizeText(current.createdAt || incoming.createdAt) || new Date().toISOString()
         });
@@ -1072,7 +1101,9 @@
                 characterSheets: keepRemoteAdditions(nextBrand.characterSheets, localBefore.characterSheets, remoteBrand.characterSheets, 'token', true),
                 environmentAssets: keepRemoteAdditions(nextBrand.environmentAssets, localBefore.environmentAssets, remoteBrand.environmentAssets, 'token', true),
                 knowledgeCharacters: keepRemoteAdditions(nextBrand.knowledgeCharacters, localBefore.knowledgeCharacters, remoteBrand.knowledgeCharacters, 'token', false),
-                brandCharacters: keepRemoteAdditions(nextBrand.brandCharacters, localBefore.brandCharacters, remoteBrand.brandCharacters, 'trigger', false)
+                brandCharacters: keepRemoteAdditions(nextBrand.brandCharacters, localBefore.brandCharacters, remoteBrand.brandCharacters, 'trigger', false),
+                // 다른 기기에서 만든 개요 기본값을 허브 저장이 지우지 않게, 더 최근 것을 남긴다.
+                overviewDefaults: pickOverviewDefaults(nextBrand.overviewDefaults, normalizeOverviewDefaults(remoteBrand.overviewDefaults))
             }));
         }
         upsertBrandLocal(nextBrand);

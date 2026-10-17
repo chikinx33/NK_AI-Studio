@@ -1035,6 +1035,63 @@
      * - string: compatibility mode (new series + first episode)
      * - object: { mode, seriesId, seriesTitle, episodeTitle }
      */
+    /** 브랜드 기록의 개요 기본값(없으면 null). 다른 기기에서 만들었을 수 있어 서버에서 한 번 맞춘다. */
+    async function readOverviewDefaults(brandId) {
+        var id = normalizeText(brandId);
+        var brandSvc = NK.service && NK.service.brand;
+        if (!id || !brandSvc || !brandSvc.getById) return null;
+        try { if (brandSvc.hydrateFromServer) await brandSvc.hydrateFromServer(id); } catch (_) { }
+        var rec = brandSvc.getById(id);
+        return rec && rec.overviewDefaults && rec.overviewDefaults.generatedAt ? rec.overviewDefaults : null;
+    }
+
+    /**
+     * 개요 기본값 → 새 에피소드 payload. 값이 있는 항목만 덮는다(주제·이야기는 기본값에 없다).
+     * 음성 모드는 화면이 플래그(narration/dubbing/songEnabled)로 읽으므로 플래그로도 적는다.
+     * 캐릭터는 토큰 목록 → 브랜드 허브 캐릭터 중 그 토큰들을 '등장'으로 표시한 목록.
+     */
+    project.applyOverviewDefaults = function (payload, defaults) {
+        var base = Object.assign({}, payload || {});
+        var d = defaults && typeof defaults === 'object' ? defaults : null;
+        if (!d) return base;
+        var list = function (v) { return Array.isArray(v) ? v.filter(Boolean) : []; };
+        if (normalizeText(d.purposeCategory)) base.purposeCategory = normalizeText(d.purposeCategory);
+        if (list(d.purposeTags).length) base.purposeTags = list(d.purposeTags).slice(0, 1);
+        if (normalizeText(d.target)) base.target = normalizeText(d.target);
+        if (list(d.needs).length) base.needs = list(d.needs).slice(0, 1);
+        if (normalizeText(d.duration) || normalizeText(d.durationCustom)) {
+            base.duration = normalizeText(d.duration);
+            base.durationMode = d.durationMode === 'custom' ? 'custom' : 'preset';
+            base.durationCustom = normalizeText(d.durationCustom);
+        }
+        if (normalizeText(d.aspectRatio)) base.aspectRatio = normalizeText(d.aspectRatio);
+        if (list(d.tones).length) { base.tones = list(d.tones).slice(0, 1); base.tone = ''; }
+        if (list(d.styles).length) { base.styles = list(d.styles).slice(0, 1); base.style = ''; }
+        var voice = normalizeText(d.voiceMode);
+        if (voice) {
+            base.voiceMode = voice;
+            base.narrationEnabled = voice === 'narration';
+            base.dubbingEnabled = voice === 'dubbing';
+            base.songEnabled = voice === 'song';
+        }
+        var tokens = list(d.characters).map(function (t) { return normalizeText(t).toLowerCase(); }).filter(Boolean);
+        if (tokens.length) {
+            var known = Array.isArray(base.knowledgeCharacters) ? base.knowledgeCharacters
+                : (base.knowledgeHub && Array.isArray(base.knowledgeHub.characters) ? base.knowledgeHub.characters : []);
+            base.characters = tokens.map(function (token) {
+                var hit = known.find(function (c) { return c && normalizeText(c.token).toLowerCase() === token; }) || {};
+                return Object.assign({}, hit, {
+                    token: hit.token || token,
+                    displayName: hit.displayName || hit.name || token.replace(/^@/, ''),
+                    isActive: true
+                });
+            });
+            base.charactersEnabled = true;
+        }
+        base.overviewDefaultsAppliedAt = normalizeText(d.generatedAt);
+        return base;
+    };
+
     project.create = async function (arg) {
         var mode = 'new-series';
         var seriesId = '';
@@ -1109,6 +1166,10 @@
             sourceProjectId: mode === 'episode' ? parentProjectId : '',
             sourceProjectTitle: mode === 'episode' ? parentProjectTitle : ''
         });
+        // 브랜드 허브 '개요 생성'으로 만든 기본값을 새 에피소드 개요에 미리 채운다(이미 있는 에피소드는 손대지 않는다).
+        if (mode === 'episode') {
+            basePayload = project.applyOverviewDefaults(basePayload, await readOverviewDefaults(basePayload.brandId));
+        }
         var newDraft = {
             id: id,
             title: episodeTitle,

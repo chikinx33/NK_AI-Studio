@@ -18,30 +18,30 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=3.2020" />
-  <script src="core.js?v=3.2020" defer></script>
-  <script src="js/config.js?v=3.2020" defer></script>
-  <script src="js/utils.js?v=3.2020" defer></script>
-  <script src="store.js?v=3.2020" defer></script>
-  <script src="api.js?v=3.2020" defer></script>
-  <script src="js/state.js?v=3.2020" defer></script>
-  <script src="js/auth.js?v=3.2020" defer></script>
-  <script src="js/navigation.js?v=3.2020" defer></script>
-  <script src="js/service/media.js?v=3.2020" defer></script>
-  <script src="js/service/project.js?v=3.2020" defer></script>
-  <script src="js/service/character-traits.js?v=3.2020" defer></script>
-  <script src="js/service/character-registry.js?v=3.2020" defer></script>
-  <script src="js/service/content-library.js?v=3.2020" defer></script>
-  <script src="js/service/scene-assets.js?v=3.2020" defer></script>
-  <script src="js/service/episode-locations.js?v=3.2020" defer></script>
-  <script src="js/service/shot-vocab.js?v=3.2020" defer></script>
-  <script src="js/ui/common.js?v=3.2020" defer></script>
-  <script src="js/ui/dashboard.js?v=3.2020" defer></script>
-  <script src="js/scenario-progress.js?v=3.2020" defer></script>
-  <script src="js/ui/director-lock.js?v=3.2020" defer></script>
-  <script src="js/ui/scenario.js?v=3.2020" defer></script>
-  <script src="js/ui/production.js?v=3.2020" defer></script>
-  <script src="script.js?v=3.2020" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.2021" />
+  <script src="core.js?v=3.2021" defer></script>
+  <script src="js/config.js?v=3.2021" defer></script>
+  <script src="js/utils.js?v=3.2021" defer></script>
+  <script src="store.js?v=3.2021" defer></script>
+  <script src="api.js?v=3.2021" defer></script>
+  <script src="js/state.js?v=3.2021" defer></script>
+  <script src="js/auth.js?v=3.2021" defer></script>
+  <script src="js/navigation.js?v=3.2021" defer></script>
+  <script src="js/service/media.js?v=3.2021" defer></script>
+  <script src="js/service/project.js?v=3.2021" defer></script>
+  <script src="js/service/character-traits.js?v=3.2021" defer></script>
+  <script src="js/service/character-registry.js?v=3.2021" defer></script>
+  <script src="js/service/content-library.js?v=3.2021" defer></script>
+  <script src="js/service/scene-assets.js?v=3.2021" defer></script>
+  <script src="js/service/episode-locations.js?v=3.2021" defer></script>
+  <script src="js/service/shot-vocab.js?v=3.2021" defer></script>
+  <script src="js/ui/common.js?v=3.2021" defer></script>
+  <script src="js/ui/dashboard.js?v=3.2021" defer></script>
+  <script src="js/scenario-progress.js?v=3.2021" defer></script>
+  <script src="js/ui/director-lock.js?v=3.2021" defer></script>
+  <script src="js/ui/scenario.js?v=3.2021" defer></script>
+  <script src="js/ui/production.js?v=3.2021" defer></script>
+  <script src="script.js?v=3.2021" defer></script>
 </head>
 
 <body class="layout-fixed">
@@ -67,7 +67,11 @@
         <section class="scenario-section" id="scenario-section">
           <div class="scenario-grid">
             <div class="section-caption left-caption caption-row">
-              <span data-i18n="scenario_overview">개요</span>
+              <div class="caption-left">
+                <span data-i18n="scenario_overview">개요</span>
+                <!-- 같은 프로젝트에서 가장 최근에 작업한 다른 에피소드의 개요 값 불러오기 (Lucide history) -->
+                <button type="button" class="btn-icon-sm" id="overview-load-previous" title="이전값 불러오기" aria-label="이전값 불러오기" data-i18n-title="scenario_load_previous" data-i18n-aria-label="scenario_load_previous"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
+              </div>
             </div>
               <form class="card scenario-form" id="scenario-form">
                 <div class="form-group">
