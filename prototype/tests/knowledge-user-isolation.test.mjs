@@ -27,7 +27,7 @@ test("knowledge search, delete and stats are scoped to the caller's documents", 
 
 test("operator GitHub token is only attached for the primary admin", () => {
   const shared = read("prototype/functions/api/agent/_shared.ts");
-  assert.match(shared, /const token = requireMaster\(ctx\.env, ctx\.userId\) \?/);
+  assert.match(shared, /const token = \(await usesMasterResources\(ctx\.env, ctx\.userId\)\) \?/);
 });
 
 test("agent prompts carry no owner brand examples", () => {

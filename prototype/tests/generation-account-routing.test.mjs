@@ -145,6 +145,7 @@ test('own image quotes bypass an empty master wallet; unchecked image quotes kee
     quoteCredits: () => ({ credits: 12, provider: 'atlas' }), publicCreditRates: () => ({}),
     imageAuth: async (_, owner) => { assert.equal(owner, 'alice'); return { enabled, mode: 'subscription' }; },
     getCreditSummary: async () => { walletReads++; return { available: 0 }; },
+    resourceOwnerId: async (_, user) => user,
   });
   const post = () => api.onRequestPost({ request: new Request('https://nkstudio.org/api/credits/quote',
     { method: 'POST', body: JSON.stringify({ feature: 'image_generation' }) }), env: {} });

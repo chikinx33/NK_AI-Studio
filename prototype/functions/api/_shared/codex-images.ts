@@ -110,11 +110,13 @@ export async function storeSubscriptionImage(env: any, job: any, file: File) {
   const ctx = resolveGcsEnv(env);
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw,
     scope: 'https://www.googleapis.com/auth/cloud-platform' });
+  // 마스터 자원 공유 계정의 잡은 소유자 대기열(job.user_id=소유자)로 돌지만 결과는 요청한 계정의 저장소에 남긴다.
+  const storageUser = String(payload.requesterId || job.user_id);
   const projectOwner = payload.projectId
-    ? await resolveProjectStorageOwner(env, job.user_id, payload.ownerId, payload.projectId) : job.user_id;
+    ? await resolveProjectStorageOwner(env, storageUser, payload.ownerId, payload.projectId) : storageUser;
   const stamp = Date.parse(job.created_at);
   const filename = `${stamp}-codex-${job.id}.${extension}`;
-  const sessionObject = `${buildAiImageSessionPrefix(ctx.basePrefix, job.user_id, payload.sessionId)}/outputs/${filename}`;
+  const sessionObject = `${buildAiImageSessionPrefix(ctx.basePrefix, storageUser, payload.sessionId)}/outputs/${filename}`;
   const projectObject = payload.projectId
     ? `${buildAiVideoProjectPrefix(ctx.basePrefix, projectOwner, payload.projectId)}/image/${filename}` : '';
   const objectName = payload.storageService === 'ai-image' ? sessionObject : projectObject;

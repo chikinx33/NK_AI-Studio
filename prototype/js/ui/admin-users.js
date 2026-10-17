@@ -450,7 +450,8 @@
           : '<span class="admin-perm-chip">' + escapeHtml(t('admin_no_perm')) + '</span>');
     var roleBadge = master
       ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
-      : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
+      : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>'
+        + (u.useMasterResources ? ' <span class="admin-badge admin-badge--admin" title="' + escapeHtml(t('admin_hint_master_resources')) + '">' + escapeHtml(t('admin_master_resources_badge')) + '</span>' : '');
     var deleteAfterLabel = formatDeleteAfter(u.deleteAfter);
     var deleteAfterFull = formatDeleteAfter(u.deleteAfter, true);
     var pending = isPendingDeletion(u);
@@ -527,6 +528,11 @@
     var activeSection = isMasterTarget
       ? ''
       : ('<div class="admin-field"><label style="display:flex;align-items:center;gap:8px;color:var(--text);"><input type="checkbox" class="admin-check-round" id="admin-f-active"' + (u.active !== false ? ' checked' : '') + ' /> ' + escapeHtml(t('admin_active_account')) + '</label></div>');
+    // 마스터 본인의 다른 계정(회사 계정 등)만 켠다 — AI 키·구독 연결·크레딧을 마스터 것으로 쓴다.
+    var resourceSection = isMasterTarget
+      ? ''
+      : ('<div class="admin-field"><label style="display:flex;align-items:center;gap:8px;color:var(--text);"><input type="checkbox" class="admin-check-round" id="admin-f-master-res"' + (u.useMasterResources ? ' checked' : '') + ' /> ' + escapeHtml(t('admin_use_master_resources')) + '</label>' +
+        '<p class="admin-hint">' + escapeHtml(t('admin_hint_master_resources')) + '</p></div>');
 
     return [
       '<div class="admin-modal-backdrop" data-action="modal-backdrop">',
@@ -552,6 +558,7 @@
           '</div>',
           permSection,
           activeSection,
+          resourceSection,
           '<div class="admin-modal-error" id="admin-modal-error">' + escapeHtml(state.modalError || '') + '</div>',
           '<div class="admin-modal-actions">',
             '<button type="button" class="admin-icon-btn" data-action="modal-cancel">' + escapeHtml(t('admin_cancel')) + '</button>',
@@ -776,6 +783,7 @@
     var emailEl = root.querySelector('#admin-f-email');
     var pwEl = root.querySelector('#admin-f-pw');
     var activeEl = root.querySelector('#admin-f-active');
+    var masterResEl = root.querySelector('#admin-f-master-res');
     var perms = [];
     root.querySelectorAll('.admin-perm-check').forEach(function (c) { if (c.checked) perms.push(c.value); });
     return {
@@ -785,7 +793,8 @@
       password: pwEl ? String(pwEl.value || '') : '',
       permissions: perms,
       // 회원은 항상 member(서버에서도 강제). 활성 토글은 마스터 모달엔 없으므로 기본 true.
-      active: activeEl ? !!activeEl.checked : true
+      active: activeEl ? !!activeEl.checked : true,
+      useMasterResources: masterResEl ? !!masterResEl.checked : false
     };
   }
 
@@ -808,12 +817,12 @@
     if (state.modalMode === 'create') {
       p = NK.api.adminUserCreate({
         id: form.id, name: form.name, email: form.email, password: form.password,
-        permissions: form.permissions, active: form.active
+        permissions: form.permissions, active: form.active, useMasterResources: form.useMasterResources
       });
     } else {
       var payload = {
         id: state.edit.id, name: form.name, email: form.email,
-        permissions: form.permissions, active: form.active,
+        permissions: form.permissions, active: form.active, useMasterResources: form.useMasterResources,
         expectedUpdatedAt: state.edit.updatedAt || ''
       };
       if (form.password) payload.password = form.password;

@@ -17,7 +17,7 @@ import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName
 import { plateVariantId, plateLabel, findPlate, masterOf, plateElevation, MASTER_VARIANT_ID } from "../_shared/set-plates.js";
 import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/shots/vocab.js";
 import { refreshAccessToken } from "./_google";
-import { requireMaster } from "../_shared/admin-users";
+import { usesMasterResources } from "../_shared/admin-users";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import { connectorSql, expireImageJobs } from '../_shared/codex-images';
 import { MINIMAX_REFS_MODELS, REFERENCE_IMAGE_CAPS, snapDurationFor } from "../_shared/video-specs";
@@ -3442,7 +3442,7 @@ async function runSheetsReadTool(input: any, ctx: ToolContext): Promise<any> {
  * GITHUB_TOKEN 은 운영자 계정 토큰이라 사설 레포까지 열리므로 1차 관리자에게만 붙인다.
  */
 async function runGithubTool(input: any, ctx: ToolContext): Promise<any> {
-  const token = requireMaster(ctx.env, ctx.userId) ? String(ctx.env?.GITHUB_TOKEN || ctx.env?.GH_TOKEN || "").trim() : "";
+  const token = (await usesMasterResources(ctx.env, ctx.userId)) ? String(ctx.env?.GITHUB_TOKEN || ctx.env?.GH_TOKEN || "").trim() : "";
   const headers: Record<string, string> = { "User-Agent": "NK-Studio", Accept: "application/vnd.github+json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const repo = String(input?.repo || "").trim();

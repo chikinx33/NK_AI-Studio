@@ -2,6 +2,7 @@ import { authorizeRequest } from './_shared/auth.js';
 import { hasPagePermission } from './_shared/admin-users';
 import { resolveProjectStorageOwner } from './_shared/shares';
 import { imageAuth, selectImageSubscription } from './_shared/generation-auth';
+import { credentialOwnerId } from './_shared/claude-auth.js';
 import { CONNECTOR_HEADER, connectorSql, authorizeConnector, connectorStatus,
   validateImagePayload, storeSubscriptionImage, expireImageJobs } from './_shared/codex-images';
 
@@ -25,11 +26,14 @@ export async function onRequestGet({ request, env }: Context) {
     const id = new URL(request.url).searchParams.get('jobId');
     if (id) {
       if (!validJob(id)) return send({ error: 'invalid_job_id' }, 400);
-      await expireImageJobs(sql, auth.userId);
-      const [job] = await sql(`SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2`, [auth.userId, id]);
+      const ownerId = await credentialOwnerId(env, auth.userId);
+      await expireImageJobs(sql, ownerId);
+      // 마스터 자원 공유 계정의 잡은 소유자 연결 대기열(user_id=소유자)에 있고 요청자는 payload.requesterId 다.
+      const [job] = await sql(`SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2
+        AND COALESCE(payload->>'requesterId', user_id)=$3`, [ownerId, id, auth.userId]);
       return job ? send(publicJob(job)) : send({ error: 'image_job_not_found' }, 404);
     }
-    const [row] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [auth.userId]);
+    const [row] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [await credentialOwnerId(env, auth.userId)]);
     return send(connectorStatus(row));
   } catch { return send({ error: 'connector_status_unavailable' }, 503); }
 }
@@ -129,21 +133,26 @@ export async function onRequestPost({ request, env }: Context) {
     if (body.operation === 'create') {
       const selected = await imageAuth(env, auth.userId);
       if (!subscriptionSelected(selected)) return send({ error: 'own_image_subscription_not_selected' }, 412);
-      const payload = validateImagePayload(body.payload);
+      const payload: any = validateImagePayload(body.payload);
       if (payload.projectId) await resolveProjectStorageOwner(env, auth.userId, payload.ownerId, payload.projectId);
-      const [connector] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [auth.userId]);
+      // 마스터 자원 공유 계정은 소유자의 ChatGPT 연결로 만든다. 잡은 소유자 대기열에 넣어 소유자 커넥터가 집어 가고,
+      // 결과는 요청자(requesterId) 저장소에 남긴다(storeSubscriptionImage).
+      const ownerId = await credentialOwnerId(env, auth.userId);
+      if (ownerId !== auth.userId) payload.requesterId = auth.userId;
+      const [connector] = await sql(`SELECT * FROM nk_image_connectors WHERE user_id=$1 AND expires_at>now()`, [ownerId]);
       if (!connector) return send({ error: 'chatgpt_connector_required' }, 412);
       if (!connectorStatus(connector).online) return send({ error: 'chatgpt_connector_offline' }, 409);
-      await expireImageJobs(sql, auth.userId);
+      await expireImageJobs(sql, ownerId);
       const id = String(body.requestId || crypto.randomUUID());
       if (!validJob(id)) return send({ error: 'invalid_job_id' }, 400);
       // Jobs queue per owner and the worker executes them serially. A repeated requestId retrieves the same
       // job; disconnects and timeouts never retry paid generation automatically.
       try {
         await sql(`INSERT INTO nk_subscription_image_jobs (id,user_id,token_hash,payload)
-          VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT (id) DO NOTHING`, [id, auth.userId, connector.token_hash, JSON.stringify(payload)]);
+          VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT (id) DO NOTHING`, [id, ownerId, connector.token_hash, JSON.stringify(payload)]);
       } catch { return send({ error: 'subscription_image_already_running' }, 409); }
-      const [job] = await sql(`SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2`, [auth.userId, id]);
+      const [job] = await sql(`SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2
+        AND COALESCE(payload->>'requesterId', user_id)=$3`, [ownerId, id, auth.userId]);
       return job ? send(publicJob(job), 202) : send({ error: 'invalid_job_id' }, 409);
     }
     return send({ error: 'invalid_operation' }, 400);

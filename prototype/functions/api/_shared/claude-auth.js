@@ -182,13 +182,17 @@ export function isClaudeAuthRequired(err) {
  * ★ 구독(OAuth) 토큰은 사이트 소유자(마스터) 한 사람만 쓴다(2026-10-13 소유자 지시).
  * Claude 구독은 개인 사용 약정이라 다른 회원의 요청을 소유자 구독으로 처리하지 않는다.
  * 회원은 본인 API 키, 없으면 마스터 API 키로만 호출한다(마스터 구독 토큰으로 넘어가지 않는다).
+ * 예외: 소유자 본인의 다른 계정(회원 관리 '마스터 자원 사용', 2026-10-17 소유자 지시)은 소유자와
+ * 같은 사람이므로 소유자 설정·구독을 그대로 쓴다(credentialOwnerId).
  */
 export async function resolveAuth(sql, userId, env, opts) {
   const allowEnvFallback = !opts || opts.allowEnvFallback !== false;
   if (!userId) throw new Error("claude_auth_user_required");
   if (!sql) throw new Error("claude_auth_settings_unavailable");
-  const owner = isOwnerAccount(env, userId);
-  const row = await getSettingsRow(sql, userId);
+  // 마스터 자원 공유 계정(소유자 본인의 다른 계정)은 소유자의 설정·구독을 그대로 쓴다.
+  const credentialUser = await credentialOwnerId(env, userId);
+  const owner = isOwnerAccount(env, credentialUser);
+  const row = await getSettingsRow(sql, credentialUser);
   const oauth = owner ? (String(row?.claude_oauth_token || "").trim() || null) : null;
   const key = String(row?.claude_api_key || "").trim() || null;
   const userConfigured = !!(oauth || key);
@@ -211,6 +215,20 @@ function isOwnerAccount(env, userId) {
   const clean = (v) => String(v || "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
   const uid = clean(userId);
   return !!uid && uid === clean((env && env.AUTH_ID) || "limfactory");
+}
+
+/**
+ * AI 자격증명(키·구독 연결)을 누구 것으로 쓸지 — admin-users.ts resourceOwnerId 와 같다.
+ * 회원 관리에서 '마스터 자원 사용'을 켠 계정만 소유자 ID 로 바뀐다(소유자 본인의 회사 계정 등).
+ * 테스트가 이 파일을 import 없이 돌리므로 동적 import 로 부르고, 못 부르면 본인 ID 로 둔다.
+ */
+export async function credentialOwnerId(env, userId) {
+  try {
+    const { resourceOwnerId } = await import("./admin-users");
+    return (await resourceOwnerId(env, userId)) || userId;
+  } catch (_) {
+    return userId;
+  }
 }
 
 /**

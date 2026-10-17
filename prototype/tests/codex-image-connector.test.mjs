@@ -39,7 +39,8 @@ async function harness() {
       return [...connectors.values()].filter(row => q.includes('WHERE token_hash') ? row.token_hash === p[0] : row.user_id === p[0]);
     }
     if (/^SELECT .* FROM nk_subscription_image_jobs/.test(q)) {
-      return [...jobs.values()].filter(row => row.user_id === p[0] && row.id === p[q.includes('token_hash=$2') ? 2 : 1] && (!q.includes('token_hash=$2') || row.token_hash === p[1]));
+      return [...jobs.values()].filter(row => row.user_id === p[0] && row.id === p[q.includes('token_hash=$2') ? 2 : 1] && (!q.includes('token_hash=$2') || row.token_hash === p[1])
+        && (!q.includes("payload->>'requesterId'") || (row.payload?.requesterId || row.user_id) === p[2]));
     }
     if (/^INSERT INTO nk_subscription_image_jobs/.test(q)) {
       if (jobs.has(p[0])) return [];
@@ -84,6 +85,8 @@ async function harness() {
   });
   const api = evaluate('prototype/functions/api/codex-images.ts', {
     imageAuth: async () => ({ enabled: true, mode: 'subscription' }),
+    // carol 은 마스터(alice) 자원 공유 계정으로 둔다.
+    credentialOwnerId: async (_, user) => (user === 'carol' ? 'alice' : user),
     ...helpers, authorizeRequest: async request => request.headers.get('x-user') ? { ok: true, userId: request.headers.get('x-user') } : { ok: false, error: 'auth_required', status: 401 },
     hasPagePermission: async () => true, resolveProjectStorageOwner: async (_, user) => user,
     storeSubscriptionImage: async (_, job) => { saves.push(job.user_id); return { signedUrl: 'https://example.test/' + job.id, objectName: 'users/' + job.user_id + '/image.png' }; },
@@ -115,6 +118,31 @@ test('subscription generation and automatic save stay with the authenticated own
   assert.deepEqual(h.saves, ['alice']);
   assert.equal((await h.complete(tokenA)).status, 200);
   assert.deepEqual(h.saves, ['alice'], 'replayed upload must not save twice');
+});
+test('마스터 자원 공유 계정은 소유자 연결 대기열을 쓰고, 잡 조회는 요청한 계정만 할 수 있다', async () => {
+  const h = await harness();
+  assert.equal((await h.create('carol')).status, 202);
+  const job = h.jobs.get(uuid);
+  assert.equal(job.user_id, 'alice', '소유자(alice) 커넥터가 집어 가도록 소유자 대기열에 넣는다');
+  assert.equal(job.payload.requesterId, 'carol', '결과는 요청자 저장소에 남기도록 요청자를 기록한다');
+  assert.equal((await h.get('carol', uuid)).status, 200);
+  assert.equal((await h.get('alice', uuid)).status, 404, '소유자라도 다른 계정이 요청한 잡은 조회하지 못한다');
+  await h.heartbeat(tokenA);
+  assert.equal(h.jobs.get(uuid).status, 'working');
+});
+test('공유 계정 잡의 결과는 요청한 계정 저장소에 저장된다', async () => {
+  const storage = evaluate('prototype/functions/api/_shared/storage.ts', {});
+  const helpers = evaluate('prototype/functions/api/_shared/codex-images.ts', {
+    ...storage, getSql: () => null, checkAccountSession: async () => ({ ok: true }), hasPagePermission: async () => true,
+    resolveProjectStorageOwner: async (_, user) => user,
+    resolveGcsEnv: () => ({ bucket: 'images', basePrefix: 'studio', clientEmail: 'storage', privateKeyRaw: 'storage-private' }),
+    getGoogleAccessToken: async () => 'storage-only', signGcsUrl: async ({ object }) => 'https://images.test/' + object,
+    fetch: async () => new Response('{}'),
+  });
+  const job = { id: uuid, user_id: 'alice', created_at: '2026-09-17T00:00:00Z',
+    payload: { storageService: 'ai-image', sessionId: 's1', requesterId: 'carol', prompt: 'blue circle', imageSize: '1K', aspectRatio: '1:1' } };
+  const result = await helpers.storeSubscriptionImage({}, job, new File([png], 'test.png'));
+  assert.ok(result.objectName.startsWith('studio/users/carol/ai-image/sessions/s1/outputs/'));
 });
 test('missing or offline personal connector rejects requests without operator fallback', async () => {
   const h = await harness();

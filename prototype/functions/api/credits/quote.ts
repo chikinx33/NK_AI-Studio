@@ -2,6 +2,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { quoteCredits, publicCreditRates } from "../_shared/credit-rates.js";
 import { getCreditSummary } from "../_shared/credits";
 import { imageAuth } from '../_shared/generation-auth';
+import { resourceOwnerId } from "../_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -26,7 +27,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         billingSource: image.subscriptionOn !== false && image.mode !== 'api_key' ? 'user-subscription' : 'user-api' }, summary: null }),
         { status: 200, headers: responseHeaders(origin) });
     }
-    const summary = await getCreditSummary(env, auth.userId);
+    // 마스터 자원 공유 계정은 마스터 잔액 기준(차감도 마스터처럼 면제된다).
+    const owner = await resourceOwnerId(env, auth.userId);
+    const summary = { ...await getCreditSummary(env, owner), userId: auth.userId };
     return new Response(JSON.stringify({ quote, summary, rateCard: publicCreditRates(env) }), { status: 200, headers: responseHeaders(origin) });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: "credit_service_unavailable", detail: String(e?.message || e) }), { status: 503, headers: responseHeaders(origin) });

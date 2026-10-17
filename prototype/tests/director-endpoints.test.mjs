@@ -35,13 +35,14 @@ test("디렉터 전용 엔드포인트는 서비스 비밀을 요구하고 비�
 test("위임 토큰은 7일, 소유자 여부를 함께 알려 준다", () => {
   const src = read("prototype/functions/api/director/delegate.ts");
   assert.match(src, /DIRECTOR_DELEGATE_TTL_SEC = 7 \* 24 \* 3600/);
-  assert.match(src, /isOwner: requireMaster\(env, auth\.userId\)/);
+  // 마스터 자원 공유 계정(소유자 본인의 다른 계정)도 소유자 예산으로 디렉터를 쓴다.
+  assert.match(src, /isOwner: await usesMasterResources\(env, auth\.userId\)/);
 });
 
 test("대화 사용량 정산: 소유자 무과금, 누적 증가분만, 같은 누적값은 한 번", () => {
   const src = read("prototype/functions/api/_shared/credits.ts");
   const fn = src.slice(src.indexOf("export async function chargeDirectorUsage"));
-  assert.match(fn, /if \(requireMaster\(env, userId\)\) return \{ ok: true, owner: true, charged: 0/);
+  assert.match(fn, /if \(await usesMasterResources\(env, userId\)\) return \{ ok: true, owner: true, charged: 0/);
   assert.match(fn, /const delta = cumulative - asInt\(prevRows\[0\]\?\.c\);/);
   assert.match(fn, /`director:\$\{sid\}:\$\{cumulative\}`/);
   assert.match(fn, /startsWith\("duplicate_"\)\) return \{ ok: true, charged: 0/);

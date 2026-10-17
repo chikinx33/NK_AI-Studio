@@ -65,7 +65,7 @@ test("회원 업스케일도 Atlas 전용 모델을 사용한다", () => {
 
 test("Atlas 경로가 없는 이미지 분석 보조 기능은 회원에게서 차단된다", () => {
   const src = read("prototype/functions/api/imagen-describe.ts");
-  assert.match(src, /if \(!requireMaster\(env, auth\.userId\)\)/);
+  assert.match(src, /if \(!\(await usesMasterResources\(env, auth\.userId\)\)\)/);
   assert.match(src, /atlas_only_feature_unavailable/);
 });
 

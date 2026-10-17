@@ -24,6 +24,9 @@ export interface AdminUser {
   updatedAt: string;
   deletionRequestedAt: string;
   deleteAfter: string;
+  // 마스터 소유자 본인의 다른 계정(예: 회사 계정)에만 켠다. 켜면 AI 키·구독 연결·크레딧을 마스터 것으로 쓴다
+  // (resourceOwnerId). 저장소·프로젝트·권한은 그대로 이 회원 것이다.
+  useMasterResources: boolean;
 }
 
 export interface UsersRegistry {
@@ -159,6 +162,28 @@ export async function getUserPermissions(env: any, userId: string): Promise<stri
   }
 }
 
+/**
+ * AI 키·구독 연결·크레딧을 누구 것으로 쓸지. 보통은 본인, useMasterResources 가 켜진 활성 회원은 마스터.
+ * 저장 경로·프로젝트·권한 판정에는 쓰지 않는다(그건 늘 로그인한 본인 ID).
+ * 명부를 못 읽으면 본인으로 둔다 — 장애 때 남의 자원으로 넘어가지 않게.
+ */
+export async function resourceOwnerId(env: any, userId: string): Promise<string> {
+  const uid = sanitizeUserId(userId);
+  const master = primaryAdminId(env);
+  if (!uid || uid === master) return uid;
+  try {
+    const user = findUser(await loadRegistryForPermission(env), uid);
+    if (user && user.useMasterResources && user.active !== false && !user.deletionRequestedAt) return master;
+  } catch (_) { /* 본인 자원으로 진행 */ }
+  return uid;
+}
+
+/** 마스터이거나 마스터 자원을 쓰는 계정인가(크레딧 차감 면제·디렉터 소유자 예산 판정용). */
+export async function usesMasterResources(env: any, userId: string): Promise<boolean> {
+  const uid = sanitizeUserId(userId);
+  return !!uid && (await resourceOwnerId(env, uid)) === primaryAdminId(env);
+}
+
 /** 특정 페이지 권한 보유 여부. true면 허용. */
 export async function hasPagePermission(env: any, userId: string, page: string): Promise<boolean> {
   const perms = await getUserPermissions(env, userId);
@@ -175,6 +200,7 @@ export async function createUserRecord(input: {
   permissions?: string[];
   role?: "admin" | "member";
   active?: boolean;
+  useMasterResources?: boolean;
 }): Promise<AdminUser> {
   const id = sanitizeUserId(input.id);
   if (!id) throw new Error("invalid_user_id");
@@ -194,6 +220,7 @@ export async function createUserRecord(input: {
     updatedAt: now,
     deletionRequestedAt: "",
     deleteAfter: "",
+    useMasterResources: input.useMasterResources === true,
   };
 }
 
@@ -229,5 +256,6 @@ function normalizeUser(raw: any): AdminUser {
     updatedAt: String(src.updatedAt || ""),
     deletionRequestedAt: String(src.deletionRequestedAt || ""),
     deleteAfter: String(src.deleteAfter || ""),
+    useMasterResources: src.useMasterResources === true,
   };
 }

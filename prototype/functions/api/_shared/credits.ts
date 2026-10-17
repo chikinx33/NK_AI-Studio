@@ -6,7 +6,7 @@ import { dataUrlVideoSeconds, mp4DurationSeconds } from "./motion-control.js";
 import { videoInputSourcesFor, creditsForUsd } from "./video-pricing.ts";
 import { audioDurationSeconds, createCostMeter, withCostMeter, type CostMeter } from "./usage-cost.ts";
 import { getGoogleAccessToken, parseGcsUri } from "./gcs.js";
-import { requireMaster } from "./admin-users";
+import { usesMasterResources } from "./admin-users";
 
 
 export type CreditSummary = {
@@ -488,7 +488,8 @@ export async function withCreditCharge(
   if (!quote.credits) return handler(context);
   // 마스터(사이트 소유자)는 공급자 비용을 자기 마스터 키로 직접 낸다 — 사이트 크레딧까지 빼면 같은 비용을 두 번 센다.
   // 견적은 그대로 계산·검증하고(요금을 못 내는 요청은 위에서 막힘), 예약·차감만 건너뛴다.
-  if (requireMaster(env, auth.userId)) return handler(context);
+  // 마스터 자원 공유 계정(소유자 본인의 다른 계정)도 같은 마스터 키를 쓰므로 똑같이 건너뛴다.
+  if (await usesMasterResources(env, auth.userId)) return handler(context);
   let reservation: any;
   try {
     reservation = await reserveCredits(env, auth.userId, quote, body, request);
@@ -572,7 +573,7 @@ export async function settleDeferredCreditFromResponse(env: any, userId: string,
  * 사이트 소유자는 마스터 API 키 비용을 직접 내므로 차감하지 않는다(영상 크레딧과 같은 규칙).
  */
 export async function chargeDirectorUsage(env: any, userId: string, sessionId: string, cumulativeCents: number): Promise<any> {
-  if (requireMaster(env, userId)) return { ok: true, owner: true, charged: 0, deltaCents: 0 };
+  if (await usesMasterResources(env, userId)) return { ok: true, owner: true, charged: 0, deltaCents: 0 };
   const sid = String(sessionId || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
   const cumulative = Math.max(0, Math.trunc(Number(cumulativeCents) || 0));
   if (!sid) return { ok: false, reason: "session_required" };

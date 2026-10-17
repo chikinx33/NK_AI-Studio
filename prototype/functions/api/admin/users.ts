@@ -109,6 +109,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       permissions: isPrimaryTarget ? [] : body.permissions,
       role: isPrimaryTarget ? "admin" : "member",
       active: isPrimaryTarget ? true : (body.active !== false),
+      // 마스터 자원 공유는 마스터 본인의 다른 계정에만(마스터 자신에겐 의미 없음).
+      useMasterResources: !isPrimaryTarget && body.useMasterResources === true,
     });
     reg.users.push(record);
     await saveRegistry(env, reg);
@@ -168,11 +170,13 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     }
     if (Array.isArray(body.permissions)) user.permissions = sanitizePermissions(body.permissions);
     if (typeof body.active === "boolean") user.active = body.active;
+    if (typeof body.useMasterResources === "boolean") user.useMasterResources = body.useMasterResources;
     if (body.password) user.pwHash = await hashPassword(String(body.password).trim());
     // 마스터는 항상 admin/active(잠금 방지). 그 외 회원은 항상 member(관리자 역할 불가).
     if (id === primaryAdminId(env)) {
       user.role = "admin";
       user.active = true;
+      user.useMasterResources = false;
     } else {
       user.role = "member";
     }

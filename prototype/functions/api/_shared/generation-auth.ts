@@ -1,16 +1,18 @@
 import { getSql } from '../knowledge/_shared';
-import { getSettingsRow } from './claude-auth.js';
+import { getSettingsRow, credentialOwnerId } from './claude-auth.js';
 import { connectorSql, connectorStatus } from './codex-images';
 
 // Billing choice belongs to the authenticated account, never to a page/provider field.
+// 마스터 자원 공유 계정은 소유자의 이미지 설정·ChatGPT 연결·Atlas 키를 쓴다(credentialOwnerId).
 export async function imageAuth(env: any, userId: string) {
   const sql = getSql(env);
   if (!sql) throw new Error('generation_settings_unavailable');
-  const row = await getSettingsRow(sql, userId);
+  const ownerId = await credentialOwnerId(env, userId);
+  const row = await getSettingsRow(sql, ownerId);
   let connector: any = null;
   if (row?.user_image_enabled !== false && row?.image_auth_mode !== 'api_key') {
     const imageSql = await connectorSql(env);
-    [connector] = await imageSql('SELECT * FROM nk_image_connectors WHERE user_id=$1', [userId]);
+    [connector] = await imageSql('SELECT * FROM nk_image_connectors WHERE user_id=$1', [ownerId]);
   }
   const apiKey = String(row?.image_openai_api_key || '').trim();
   const enabled = typeof row?.user_image_enabled === 'boolean' ? row.user_image_enabled : !!(apiKey || connector);
