@@ -2812,12 +2812,13 @@ function normalizePublishPlatform(raw: any): string {
     "인스타": "instagram", "인스타그램": "instagram", "ig": "instagram",
     "유튜브": "youtube", "유튜브-쇼츠": "youtube-shorts", "쇼츠": "youtube-shorts", "youtube-short": "youtube-shorts", "shorts": "youtube-shorts",
     "틱톡": "tiktok", "스레드": "threads", "스레즈": "threads", "엑스": "x", "트위터": "x", "twitter": "x", "페이스북": "facebook", "fb": "facebook",
+    "디스코드": "discord", "디코": "discord",
   };
   return map[v] || v;
 }
 
 /** 발행 가능한 자동 채널(직접 올리기 채널 제외). 설정 키 youtube 는 쇼츠로 올린다(세로 짧은 클립이 기본). */
-const AUTO_PUBLISH_CHANNELS: Record<string, string> = { instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook" };
+const AUTO_PUBLISH_CHANNELS: Record<string, string> = { instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook", discord: "discord" };
 
 /** 연결된 채널 상태(SNS 설정 sns-settings.json · 토큰 없이). */
 async function listConnectedPublishChannels(ctx: ToolContext): Promise<{ platform: string; settingsKey: string; connected: boolean; enabled: boolean; needsReconnect: boolean; account: string }[]> {
@@ -2926,6 +2927,11 @@ function planPublishByChannel(platforms: string[], media: PublishMediaItem[]): P
     } else if (platform === "tiktok") {
       if (videos[0]) plans.push({ platform, action: "inbox", items: [videos[0]], note: "영상 1개 → 앱 받은 알림함(초안함)" });
       else plans.push({ platform, action: "skip", items: [], note: "틱톡은 영상만 — 영상이 없어 건너뜀" });
+    } else if (platform === "discord") {
+      // 디스코드 웹훅: 한 메시지에 이미지·영상 섞어 10개까지. 10MB 넘는 파일은 서버가 링크로 바꿔 올린다.
+      if (media.length >= 2) plans.push({ platform, action: "carousel", items: media.slice(0, 10), note: `첨부 ${Math.min(media.length, 10)}개(10MB 넘는 파일은 링크)` });
+      else if (media.length === 1) plans.push({ platform, action: "single", items: [media[0]], note: `${media[0].mediaType === "video" ? "영상" : "이미지"} 1개(10MB 넘으면 링크)` });
+      else plans.push({ platform, action: "text", items: [], note: "글만" });
     } else {
       plans.push({ platform, action: "skip", items: [], note: "자동 발행이 없는 채널(직접 올리기)" });
     }
@@ -3056,6 +3062,12 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     const platform = plan.platform;
     if (plan.action === "skip") { skippedNotes.push(`${platform}(${plan.note})`); continue; }
     const { d, pCaption, pTags, captionWithTags } = captionFor(platform);
+
+    // 디스코드 본문은 2000자까지 — 잘라서 올리지 않고 이 채널만 실패로 남긴다(서버도 같은 기준으로 거절한다).
+    if (platform === "discord" && captionWithTags.length > 2000) {
+      failures.push(`discord: 본문+해시태그가 ${captionWithTags.length}자예요(최대 2000자). 줄여서 다시 요청해 주세요.`);
+      continue;
+    }
 
     if (platform === "tiktok") {
       if (publishAtIso) { notices.push("TikTok 은 초안함 전송이라 예약이 없어요 — 이번엔 보내지 않았어요."); continue; }
@@ -7649,7 +7661,7 @@ async function runCompanyKnowledgeSearchTool(input: any, ctx: ToolContext): Prom
  */
 async function runSnsChannelsStatusTool(_input: any, ctx: ToolContext): Promise<any> {
   const auto = await listConnectedPublishChannels(ctx);
-  const LABEL: Record<string, string> = { instagram: "Instagram", "youtube-shorts": "YouTube(쇼츠)", tiktok: "TikTok", threads: "Threads", x: "X", facebook: "Facebook" };
+  const LABEL: Record<string, string> = { instagram: "Instagram", "youtube-shorts": "YouTube(쇼츠)", tiktok: "TikTok", threads: "Threads", x: "X", facebook: "Facebook", discord: "Discord" };
   const channels = auto.map((c) => ({
     platform: c.platform, name: LABEL[c.platform] || c.platform, account: c.account, mode: "auto",
     connected: c.connected, enabled: c.enabled, needsReconnect: c.needsReconnect,

@@ -62,7 +62,7 @@ test("승인 전(prepare)에 연결된 채널을 스스로 고르고(all·exclud
   assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
   const channels = fnBody(shared, "async function listConnectedPublishChannels(");
   assert.match(channels, /callInternalJson\(ctx, "\/api\/userdata\/sns\/get"\)/, "토큰 없는 설정 읽기");
-  assert.match(shared, /const AUTO_PUBLISH_CHANNELS: Record<string, string> = \{ instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook" \};/);
+  assert.match(shared, /const AUTO_PUBLISH_CHANNELS: Record<string, string> = \{ instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook", discord: "discord" \};/);
   const prepare = fnBody(shared, "async function preparePublishInput(");
   assert.match(prepare, /const wantsAll = !requestedRaw\.length \|\| requestedRaw\.some/);
   assert.match(prepare, /if \(c\.needsReconnect\) \{ skipped\.push\(`\$\{c\.platform\}\(재연결 필요 — SNS 설정\)`\); continue; \}/);

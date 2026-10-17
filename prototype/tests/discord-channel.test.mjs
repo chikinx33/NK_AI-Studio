@@ -193,3 +193,18 @@ test('배포 화면: 본문+해시태그 2000자 초과는 보내기 전에 멈�
   assert.match(src, /case 'discord':\s+bodyHtml = buildDiscordPreview/);
   assert.match(src, /\{ id: 'discord', desc: '[^']+', hasTitle: false \}/);
 });
+
+test('에이전트 publish 도 디스코드에 올린다(연결 채널 자동 선택·계획·2000자 확인)', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  assert.match(shared, /const AUTO_PUBLISH_CHANNELS: Record<string, string> = \{[^}]*discord: "discord" \};/);
+  assert.match(shared, /"디스코드": "discord"/);
+  const plan = shared.slice(shared.indexOf('function planPublishByChannel('), shared.indexOf('function planSummaryText('));
+  assert.match(plan, /platform === "discord"[\s\S]*?action: "carousel", items: media\.slice\(0, 10\)[\s\S]*?action: "single"[\s\S]*?action: "text"/);
+  const run = shared.slice(shared.indexOf('async function runPublishTool('), shared.indexOf('// ── 완성 콘텐츠 등록'));
+  assert.match(run, /platform === "discord" && captionWithTags\.length > 2000/);
+  assert.match(shared, /discord: "Discord" \};/);
+  const orch = read('prototype/functions/api/agent/_orchestrator.ts');
+  const doc = orch.slice(orch.indexOf('    publish: `[[RUN: publish |'), orch.indexOf('`,', orch.indexOf('    publish: `[[RUN: publish |')));
+  assert.match(doc, /"discord": \{"caption"/);
+  assert.match(doc, /instagram·youtube-shorts·tiktok·threads·x·facebook·discord/);
+});
