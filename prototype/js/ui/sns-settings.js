@@ -663,8 +663,6 @@
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
           (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
-          // 디스코드 웹훅은 비밀이라 서버가 가린 표기(webhookHint)만 보여 준다
-          (connected && snsState.webhookHint ? '<div class="sns-manual-note sns-webhook-hint">' + escapeHtml(snsState.webhookHint) + '</div>' : ''),
         '</div>',
         // 직접 올리는 채널은 액션이 하나도 없다. 빈 껍데기를 두면 카드 간격만 먹는다.
         (linkBtnHtml || finalConnectBoxHtml || usageToggleHtml)
