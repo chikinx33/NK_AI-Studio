@@ -131,6 +131,58 @@
     return arr.length > max ? arr.slice(0, max).join('') + '...' : s;
   };
 
+  // 프로젝트(브랜드) 이미지는 카드·사이드바에서 100~200px 로만 보인다. 예전엔 고른 파일을 원본 그대로 올려
+  // 수 MB 사진이 목록을 열 때마다 내려받혔다. 올리기 전에 긴 변 512px(고해상도 화면 2배 여유)·WebP 로 줄인다.
+  // SVG(벡터)·GIF(움직임)는 줄이면 손해라 그대로 두고, 줄인 결과가 원본보다 크면 원본을 쓴다.
+  const LOGO_MAX_SIDE = 512;
+  const LOGO_QUALITY = 0.86;
+  const shrinkLogoImage = async (file) => {
+    const type = String(file && file.type || '').toLowerCase();
+    if (!file || !/^image\//.test(type) || type === 'image/svg+xml' || type === 'image/gif') return file;
+    let bitmap = null;
+    let url = '';
+    try {
+      let width = 0;
+      let height = 0;
+      let source = null;
+      if (typeof createImageBitmap === 'function') {
+        bitmap = await createImageBitmap(file);
+        source = bitmap; width = bitmap.width; height = bitmap.height;
+      } else {
+        url = URL.createObjectURL(file);
+        source = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = url;
+        });
+        width = source.naturalWidth; height = source.naturalHeight;
+      }
+      if (!width || !height) return file;
+      const scale = Math.min(1, LOGO_MAX_SIDE / Math.max(width, height));
+      if (scale === 1 && file.size <= 300 * 1024) return file; // 이미 충분히 작다
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+      const toBlob = (mime, quality) => new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+      // WebP 는 투명 배경을 지키면서 작다. 인코딩을 못 하는 브라우저는 PNG 를 돌려주므로 그대로 받는다.
+      const blob = await toBlob('image/webp', LOGO_QUALITY);
+      if (!blob || blob.size >= file.size) return file;
+      const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+      const base = String(file.name || 'logo').replace(/\.[^.]+$/, '') || 'logo';
+      return new File([blob], base + '.' + ext, { type: blob.type || 'image/png' });
+    } catch (_) {
+      return file; // 읽지 못하는 형식이면 원본으로 올린다
+    } finally {
+      try { if (bitmap && bitmap.close) bitmap.close(); } catch (_) { }
+      if (url) { try { URL.revokeObjectURL(url); } catch (_) { } }
+    }
+  };
+
   const triggerThumbnailUpload = (projectId, anchorEl) => {
     const id = String(projectId || '').trim();
     if (!id) return;
@@ -159,7 +211,7 @@
           anchorEl.classList.add('is-busy');
           if ('disabled' in anchorEl) anchorEl.disabled = true;
         }
-        const resp = await NK.api.imageUpload(id, file, { kind: 'logo' });
+        const resp = await NK.api.imageUpload(id, await shrinkLogoImage(file), { kind: 'logo' });
         const objectName = String(resp && resp.objectName || '').trim();
         if (!objectName) throw new Error('objectName_missing');
         // 로고는 IP(브랜드) 엔티티의 단일 출처에 저장한다(SSOT) — 소유자 화면은 이걸 최우선으로 쓴다.
