@@ -1498,6 +1498,7 @@ export default function App() {
             onOpenProject={openCompanyProject}
             references={chatReferences}
             onRemoveReference={(i) => setChatReferences((cur) => cur.filter((_, k) => k !== i))}
+            onAddReference={(ref) => addChatReference(ref, false)}
             onClearReferences={() => setChatReferences([])}
           />
         )}

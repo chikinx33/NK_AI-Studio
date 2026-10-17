@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
-import { addKnowledge, type ChatFileReference, type ChatReference } from "../lib/api";
+import { addKnowledge, uploadCompanyFile, type ChatFileReference, type ChatReference } from "../lib/api";
 import Markdown from "./Markdown";
 import { importSpreadsheet, isSpreadsheetFile, type SheetImportResult } from "../lib/xlsxImport";
 import { fitImageForModel } from "../lib/imageAttachment";
@@ -60,6 +60,8 @@ interface Props {
   draft: string;
   setDraft: (s: string) => void;
   onSend: (text: string, attachments?: Attachment[], references?: ChatReference[]) => void;
+  /** 영상 첨부: 업무 폴더(오늘 날짜)에 올린 뒤 지목 칩으로 붙인다(대화 본문으로는 영상을 실을 수 없다). */
+  onAddReference?: (ref: ChatReference) => void;
   /** 보고·업무 폴더에서 지목한 항목들 — 입력창 위 칩으로 보이고 다음 메시지와 함께 간다(여러 개 가능). */
   references?: ChatReference[];
   onRemoveReference?: (index: number) => void;
@@ -379,7 +381,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject, references, onRemoveReference, onClearReferences }: Props) {
+export default function Chat({ turns, busy, streaming, agentPresenting, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds, voiceEnabled, onToggleVoice, voiceMode, onToggleVoiceMode, speechInput, onOpenProject, references, onRemoveReference, onClearReferences, onAddReference }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -409,10 +411,13 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
   // 스프레드시트는 base64 첨부가 아니라 '텍스트로 읽어 본문에 붙이는' 방식이다(설계서 §8).
   const [sheets, setSheets] = useState<SheetImportResult[]>([]);
   const [attachError, setAttachError] = useState("");
+  const [videoUploading, setVideoUploading] = useState("");
   // 이미지 확대 미리보기 — 작성기 썸네일·메시지 버블 이미지 클릭 시 라이트박스로 띄운다
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const closeLightbox = useCallback(() => setLightbox(null), []);
 
+  const VIDEO_MIME = ["video/mp4", "video/quicktime"];
+  const VIDEO_MAX_BYTES = 100 * 1024 * 1024;
   const ALLOWED_MIME = [
     "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
     // 스프레드시트 — 실제 첨부는 텍스트화 경로로 가지만, MIME 목록에도 함께 둔다.
@@ -442,8 +447,30 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
     if (!list.length) return;
     setAttachError("");
 
-    const spreadsheets = list.filter((file) => isSpreadsheetFile(file));
-    const others = list.filter((file) => !isSpreadsheetFile(file));
+    // 영상은 대화 본문(base64)으로 보낼 수 없다 — 오늘 날짜 업무 폴더에 올리고 지목 칩으로 붙인다.
+    // 직원은 그 경로로 완성 콘텐츠 등록(content_register)·발행에 쓴다. 영상 속 내용은 직원이 볼 수 없다.
+    const videos = list.filter((file) => VIDEO_MIME.includes(file.type));
+    if (videos.length) {
+      if (!onAddReference) setAttachError("이 화면에서는 영상을 첨부할 수 없어요. 업무 폴더에 올린 뒤 지목해 주세요.");
+      else {
+        const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date());
+        for (const file of videos) {
+          if (file.size > VIDEO_MAX_BYTES) { setAttachError(`'${file.name}' 은(는) 100MB 를 넘어 올릴 수 없어요.`); continue; }
+          setVideoUploading(`'${file.name}' 영상을 업무 폴더에 올리는 중…`);
+          try {
+            const path = `.work-files/${today}/${file.name}`;
+            const entry = await uploadCompanyFile(path, file);
+            onAddReference({ kind: "file", path: String(entry?.path || path), title: file.name, mediaKind: "video" });
+          } catch (error) {
+            setAttachError(`'${file.name}' 영상을 올리지 못했어요: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+        setVideoUploading("");
+      }
+    }
+    const rest = list.filter((file) => !VIDEO_MIME.includes(file.type));
+    const spreadsheets = rest.filter((file) => isSpreadsheetFile(file));
+    const others = rest.filter((file) => !isSpreadsheetFile(file));
 
     if (spreadsheets.length) {
       const imported = await Promise.all(spreadsheets.map(async (file) => {
@@ -462,9 +489,9 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
       const read = await Promise.all(others.map(readFile));
       const valid = read.filter((a): a is Attachment => !!a);
       if (valid.length) setAttachments((prev) => [...prev, ...valid].slice(0, MAX_ATTACHMENTS));
-      else if (!spreadsheets.length && others.some((file) => !ALLOWED_MIME.includes(file.type))) setAttachError("이미지·PDF·엑셀(csv 포함)만 첨부할 수 있어요.");
+      else if (!spreadsheets.length && others.some((file) => !ALLOWED_MIME.includes(file.type))) setAttachError("이미지·PDF·엑셀(csv 포함)·영상(MP4·MOV)만 첨부할 수 있어요.");
     }
-  }, [readFile]);
+  }, [readFile, onAddReference]);
 
   const removeAttachment = useCallback((i: number) => {
     setAttachments((prev) => prev.filter((_, idx) => idx !== i));
@@ -951,6 +978,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             ))}
           </div>
         )}
+        {videoUploading && <p className="mb-2 text-[11px] text-tone-sky">{videoUploading}</p>}
         {attachError && <p className="mb-2 text-[11px] text-tone-amber">{attachError}</p>}
         {/* 첨부 미리보기 — 여러 개를 가로로 나열 */}
         {attachments.length > 0 && (
@@ -990,7 +1018,7 @@ export default function Chat({ turns, busy, streaming, agentPresenting, onStop, 
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,.xlsx,.xls,.csv,.tsv"
+            accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,.mp4,.mov,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,.xlsx,.xls,.csv,.tsv"
             className="hidden"
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }}
           />

@@ -5,7 +5,10 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { overviewOptions, matchOption, matchSubgenre, PURPOSE_CATEGORIES, NEEDS_LIST, TONE_LIST, STYLE_LIST, TARGET_OPTIONS, DURATION_OPTIONS, ASPECT_RATIOS } from "../_shared/overview-options.js";
 import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
-import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot } from "../_shared/storage";
+import { chatAttachmentUserPrefix } from "../_shared/media-access";
+import { copyGcsObject, readMp4Meta } from "../_shared/media-ingest";
+import { appendPublishRecords, buildPublishRow } from "../_shared/publish-records";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
 import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
@@ -2937,6 +2940,7 @@ function planSummaryText(plans: PublishPlanEntry[], media: PublishMediaItem[], s
 
 /** 승인 전 확정: 연결된 채널·지목한 산출물 전부·채널별 계획을 미리 세워 잡 입력에 박는다. 못 올릴 때는 승인 카드 전에 바로 알린다. */
 async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
+  if (input?.projectId && !input?._episode) input = await withEpisodePublishContext(input, ctx);
   const caption = String(input?.caption || input?.prompt || "").trim();
   const drafts0: Record<string, any> = input?.drafts && typeof input.drafts === "object" ? input.drafts : {};
   const requestedRaw: string[] = (Array.isArray(input?.platforms) ? input.platforms : (input?.platform ? [input.platform] : [])).map((p: any) => normalizePublishPlatform(p)).filter(Boolean);
@@ -2976,6 +2980,43 @@ async function preparePublishInput(input: any, ctx: ToolContext): Promise<any> {
     ...input, platforms, mediaList: media, plan: plans, skippedChannels: skipped, planSummary,
     ...(media[0] ? { mediaGcsPath: media[0].mediaGcsPath, mediaType: media[0].mediaType } : {}),
   };
+}
+
+/**
+ * 에피소드를 지목한 발행(content_register 다음 단계): SNS 세팅에 저장된 포맷·채널별 초안·선택 자산을 그대로 쓴다.
+ * 사용자가 따로 준 채널·초안·산출물이 있으면 그것이 먼저다. 결과는 runPublishTool 이 SNS 세팅 기록에 남긴다.
+ */
+async function withEpisodePublishContext(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input.projectId || "").trim();
+  const ep = await runProjectGetTool({ projectId }, ctx);
+  const p: any = ep?.payload || {};
+  const scenes: any[] = Array.isArray(ep?.scenes) ? ep.scenes : [];
+  // 잡 입력에 남으므로 기록 한 줄에 필요한 칸만 싣는다(에피소드 payload 전체는 크다).
+  const rowFields = ["brandStudioContentType", "seasonId", "seasonLabel", "seasonTitle", "campaignId", "campaignTitle", "campaignLabel", "purposeCategory", "purposeTags", "episodeTitle", "brandId"];
+  const slim = Object.fromEntries(rowFields.filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
+  const next: any = { ...input, _episode: { projectId, title: String(ep?.title || p.episodeTitle || ""), brandId: String(p.brandId || ""), payload: slim } };
+  const strip = (v: any) => String(v || "").trim().replace(/^gs:\/\/[^/]+\//, "");
+  const hasMedia =["jobIds", "jobId", "objectNames", "objectName", "mediaGcsPath", "mediaUrls", "mediaUrl", "videoUrl", "imageUrl"]
+    .some((k) => (Array.isArray(input[k]) ? input[k].length : !!input[k]));
+  if (!hasMedia) {
+    const ids: string[] = Array.isArray(p.brandStudioSelectedAssetIds) ? p.brandStudioSelectedAssetIds.map(String) : [];
+    const objs: string[] = [];
+    const render = strip(p.renderMeta?.outputVideoObjectName);
+    for (const id of ids) {
+      if (id.endsWith(":video:render") && render) objs.push(render);
+      const m = /:image:(.+)$/.exec(id);
+      if (m) { const sc = scenes.find((s) => String(s?.id) === m[1]); const img = strip(sc?.imagePath || sc?.imageDataUrl); if (img && !img.startsWith("data:")) objs.push(img); }
+    }
+    if (!objs.length && render) objs.push(render);
+    if (objs.length) next.objectNames = objs;
+  }
+  const saved: Record<string, any> = p.brandStudioFormatDrafts && typeof p.brandStudioFormatDrafts === "object" ? p.brandStudioFormatDrafts : {};
+  if (!input.drafts && Object.keys(saved).length) {
+    next.drafts = Object.fromEntries(Object.entries(saved).map(([k, v]) => [k, brandDraftToPublishDraft(v)]));
+  }
+  const hasPlatforms = Array.isArray(input.platforms) ? input.platforms.length > 0 : !!input.platform;
+  if (!hasPlatforms && Array.isArray(p.brandStudioSelectedFormats) && p.brandStudioSelectedFormats.length) next.platforms = p.brandStudioSelectedFormats.slice();
+  return next;
 }
 
 /** 리치 발행 도구(ALWAYS_GATE). prepare 가 세운 채널별 계획대로 올린다 — 인스타 캐러셀·페이스북 사진묶음/영상·스레드 캐러셀·X 단일·유튜브/틱톡 영상.
@@ -3059,7 +3100,8 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
       tags: (Array.isArray(d.tags) ? d.tags : pTags).map((h: any) => String(h).replace(/^#/, "")),
       categoryKey: String(d.categoryKey || prepared?.categoryKey || "entertainment"),
       privacyStatus: publishAtIso ? "scheduled" : String(d.privacyStatus || prepared?.privacyStatus || "public"),
-      isShorts: platform === "youtube-shorts" || (d.isShorts ?? prepared?.isShorts) !== false,
+      // 유튜브 일반(60초 이상)은 쇼츠가 아니다. 예전엔 'youtube' 도 쇼츠로 올라갔다.
+      isShorts: platform === "youtube-shorts" || (platform !== "youtube" && (d.isShorts ?? prepared?.isShorts) !== false),
     });
     if (publishAtIso) Object.assign(body, { publishAt: publishAtIso, ...(isYouTube ? {} : { privacyStatus: "scheduled" }) });
     if ((platform === "threads" || platform === "x") && (d.replySetting || prepared?.replySetting)) body.replySetting = String(d.replySetting || prepared.replySetting);
@@ -3087,6 +3129,25 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     if (r.note) notices.push(`${platform}: ${String(r.note).slice(0, 200)}`); // 예: 스레드가 답글 설정·본문을 빼고 올린 경우
   }
 
+  // 에피소드를 지목한 발행이면 SNS 세팅(배포 이력·배포 완료 표시)에도 남긴다 — 예전엔 에이전트 기록에만 남았다.
+  const episode: any = prepared?._episode;
+  if (episode?.projectId && published.length) {
+    try {
+      const rows = published.map((r: any) => {
+        const { pCaption, pTags } = captionFor(String(r.platform));
+        return buildPublishRow({
+          platform: String(r.platform), status: String(r.status || "published"), postId: String(r.postId || r.publishId || ""),
+          url: String(r.url || ""), publishedAt: String(r.publishedAt || ""), scheduledJobId: String(r.scheduledJobId || ""),
+          caption: pCaption, hashtags: pTags, title: String(draftFor(String(r.platform)).title || episode.title || ""),
+          projectId: episode.projectId, projectTitle: episode.title, brandId: episode.brandId, payload: episode.payload,
+        });
+      });
+      await appendPublishRecords(ctx.env, ctx.userId, episode.projectId, episode.brandId, rows);
+    } catch (e: any) {
+      notices.push(`SNS 세팅 배포 이력 기록은 실패했어요(${String(e?.message || e).slice(0, 120)}) — 게시는 위 결과대로예요.`);
+    }
+  }
+
   if (reconnect.length) notices.push(`🔌 ${Array.from(new Set(reconnect)).join(", ")} 은(는) 연결이 만료돼 다시 연결해야 해요 — 브랜드 스튜디오 → SNS 설정(/sns-settings.html)에서 '연결 해제' 후 다시 연결한 뒤 "다시 발행해줘" 라고 해 주세요.`);
   if (skippedNotes.length) notices.push(`건너뜀: ${skippedNotes.join(", ")}`);
   if (failures.length && !published.length) throw new Error(`발행 실패 — ${failures.join(" / ")}`);
@@ -3099,6 +3160,213 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     media: media.map((m) => ({ type: m.mediaType, path: m.mediaGcsPath, title: m.title })),
     ...(tiktok ? { tiktok } : {}),
     ...(notices.length ? { notice: notices.join(" ") } : {}),
+  };
+}
+
+// ── 완성 콘텐츠 등록(에이전트) — SNS 세팅 '+' 와 같은 결과(2026-10-18 엔케 지시) ──────────────
+// 대화에 붙인 이미지·업무 폴더의 이미지·영상을 프로젝트 저장소로 복사한 뒤 /api/project/final-upload 로 등록하고,
+// 이어서 SNS 세팅의 포맷·채널별 초안까지 에피소드에 저장한다. 승인 1번(등록+초안). 실제 발행은 publish(승인 2번).
+const CONTENT_IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
+const CONTENT_VIDEO_EXT = /\.(mp4|mov|m4v)$/i;
+
+/** 소스 하나 → 이 사용자의 원본 objectName. 업무 폴더 경로·본인 저장소 경로·대화 첨부(attachment:N)만 받는다. */
+async function resolveContentSource(raw: any, ctx: ToolContext): Promise<string> {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  const g = resolveCompanyGcsEnv(ctx.env);
+  const m = /^attachment:(\d+)$/i.exec(value);
+  if (m) {
+    const gs = await latestChatAttachment(ctx.env, ctx.userId, String(ctx.conversationId || "main"), Number(m[1]) || 1).catch(() => "");
+    if (!gs) throw new Error(`대화 첨부 ${value} 를 찾지 못했어요(이미지만 대화 첨부로 받을 수 있어요 — 영상은 업무 폴더에 올려 주세요).`);
+    return gs.replace(/^gs:\/\/[^/]+\//, "");
+  }
+  const stripped = value.replace(/^gs:\/\/[^/]+\//, "").replace(/^\/+/, "");
+  if (stripped.includes("..")) throw new Error(`경로가 올바르지 않아요: ${value}`);
+  const userRoot = `${buildUserRoot(g.basePrefix, ctx.userId)}/`;
+  const attachRoot = chatAttachmentUserPrefix(g.basePrefix, ctx.userId);
+  if (stripped.startsWith(userRoot) || stripped.startsWith(attachRoot)) return stripped;
+  if (/^users\//.test(stripped) || stripped.includes("agent-attachments/")) throw new Error(`본인 저장소의 파일만 등록할 수 있어요: ${value}`);
+  // 업무 폴더(회사 파일) 경로
+  return `${buildCompanyProjectPrefix(g.basePrefix, ctx.userId, "ai-company")}/company-files/${stripped}`;
+}
+
+/** 업무 폴더 하나 → 그 안의 이미지·영상 경로. */
+async function listContentFolder(folder: string, ctx: ToolContext): Promise<string[]> {
+  const path = String(folder || "").replace(/^\/+|\/+$/g, "").trim();
+  if (!path) return [];
+  const data: any = await callInternalJson(ctx, `/api/agent/company-files?path=${encodeURIComponent(path)}`).catch(() => null);
+  const entries: any[] = Array.isArray(data?.entries) ? data.entries : [];
+  return entries.filter((e) => e?.kind === "file" && (CONTENT_IMAGE_EXT.test(String(e.path || "")) || CONTENT_VIDEO_EXT.test(String(e.path || ""))))
+    .map((e) => String(e.path));
+}
+
+/** 브랜드 스튜디오 초안(snake_case·해시태그 문자열) → 발행 도구 초안(camelCase·배열). */
+function brandDraftToPublishDraft(d: any): any {
+  const src = d && typeof d === "object" ? d : {};
+  const tags = Array.isArray(src.hashtags) ? src.hashtags
+    : String(src.hashtags || "").split(/[\s,\n]+/).map((t) => t.trim()).filter(Boolean);
+  return {
+    caption: String(src.caption || ""),
+    hashtags: tags,
+    ...(src.title ? { title: String(src.title) } : {}),
+    ...(src.first_comment || src.firstComment ? { firstComment: String(src.first_comment || src.firstComment) } : {}),
+    ...(src.link_url || src.linkUrl ? { linkUrl: String(src.link_url || src.linkUrl) } : {}),
+    ...(src.reply_setting || src.replySetting ? { replySetting: String(src.reply_setting || src.replySetting) } : {}),
+    ...(src.category || src.categoryKey ? { categoryKey: String(src.category || src.categoryKey) } : {}),
+    ...(src.privacy_status && src.privacy_status !== "scheduled" ? { privacyStatus: String(src.privacy_status) } : {}),
+  };
+}
+
+/** 에이전트가 쓴 초안(camelCase) → 브랜드 스튜디오 초안 칸. */
+function publishDraftToBrandDraft(d: any): any {
+  const src = d && typeof d === "object" ? d : {};
+  const tags = Array.isArray(src.hashtags) ? src.hashtags.map((t: any) => { const s = String(t || "").trim(); return s && !s.startsWith("#") ? `#${s}` : s; }).filter(Boolean).join(" ")
+    : String(src.hashtags || "");
+  return {
+    caption: String(src.caption || ""), hashtags: tags,
+    ...(src.title ? { title: String(src.title) } : {}),
+    ...(src.firstComment ? { first_comment: String(src.firstComment) } : {}),
+    ...(src.linkUrl ? { link_url: String(src.linkUrl) } : {}),
+    ...(src.replySetting ? { reply_setting: String(src.replySetting) } : {}),
+    ...(src.categoryKey ? { category: String(src.categoryKey) } : {}),
+  };
+}
+
+function brandContextText(brand: any, payload: any): string {
+  const b = brand && typeof brand === "object" ? brand : {};
+  const p = payload && typeof payload === "object" ? payload : {};
+  const list = (v: any) => (Array.isArray(v) ? v.join(", ") : String(v || ""));
+  return [
+    (b.brandTitle || p.brandTitle) && `브랜드명: ${b.brandTitle || p.brandTitle}`,
+    (b.brandSummary || p.brandSummary) && `브랜드 요약: ${b.brandSummary || p.brandSummary}`,
+    (b.coreMessage || p.coreMessage) && `핵심 메시지: ${b.coreMessage || p.coreMessage}`,
+    (b.targetAudience || p.targetAudience || p.target) && `타깃: ${b.targetAudience || p.targetAudience || p.target}`,
+    (b.brandVoice || p.brandVoice) && `브랜드 보이스: ${b.brandVoice || p.brandVoice}`,
+    list(b.brandRules) && `규칙: ${list(b.brandRules)}`,
+    list(b.bannedExpressions) && `금칙어: ${list(b.bannedExpressions)}`,
+  ].filter(Boolean).join("\n").slice(0, 3000);
+}
+
+/** 영상 길이·비율·연결 채널로 SNS 포맷을 고른다(SNS 세팅 포맷 규칙: 유튜브 일반 60초 이상, 쇼츠·릴스·틱톡 10분 이하). */
+function defaultContentFormats(channels: { platform: string; settingsKey: string; connected: boolean; enabled: boolean; needsReconnect: boolean }[], video: { durationSec: number } | null, hasImages: boolean): string[] {
+  const out: string[] = [];
+  for (const c of channels) {
+    if (!c.connected || c.enabled === false || c.needsReconnect) continue;
+    if (c.settingsKey === "youtube") { if (video) out.push(video.durationSec >= 60 ? "youtube" : "youtube-shorts"); continue; }
+    if (c.platform === "tiktok") { if (video && video.durationSec <= 600) out.push("tiktok"); continue; }
+    if (c.platform === "instagram" && video && !hasImages && video.durationSec > 600) continue;
+    out.push(c.platform);
+  }
+  return Array.from(new Set(out));
+}
+
+async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any> {
+  const projectId = String(input?.projectId || "").trim();
+  if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("등록할 에피소드(projectId)가 필요해요. project_list 로 확인하세요.");
+  const title = String(input?.title || "").trim().slice(0, 120);
+  const story = String(input?.story || "").trim().slice(0, 20000);
+
+  // ① 소스 모으기: 업무 폴더 → 이미지·영상 경로, 그 밖엔 준 그대로
+  const rawSources: string[] = ([] as any[])
+    .concat(input?.images || [], input?.image || [], input?.video || [], input?.files || [])
+    .map((v: any) => String(v || "").trim()).filter(Boolean);
+  if (input?.folder) rawSources.push(...await listContentFolder(String(input.folder), ctx));
+  if (input?.attachments === true || rawSources.includes("attachments")) {
+    for (let n = 1; n <= 10; n += 1) {
+      const gs = await latestChatAttachment(ctx.env, ctx.userId, String(ctx.conversationId || "main"), n).catch(() => "");
+      if (!gs) break;
+      rawSources.push(gs);
+    }
+  }
+  const sources = Array.from(new Set(rawSources.filter((s) => s !== "attachments")));
+  const resolved: string[] = [];
+  for (const s of sources) { const o = await resolveContentSource(s, ctx); if (o) resolved.push(o); }
+  const videos = resolved.filter((o) => CONTENT_VIDEO_EXT.test(o));
+  const images = resolved.filter((o) => !CONTENT_VIDEO_EXT.test(o) && (CONTENT_IMAGE_EXT.test(o) || o.includes("agent-attachments/")));
+  if (videos.length > 1) throw new Error(`영상은 한 번에 하나만 등록할 수 있어요(받은 영상 ${videos.length}개).`);
+  if (images.length > 20) throw new Error("이미지는 한 번에 20장까지 등록할 수 있어요.");
+  if (!videos.length && !images.length && !story) throw new Error("등록할 이미지·영상·스토리가 없어요.");
+
+  // ② 프로젝트 저장소로 복사(원본을 지워도 에피소드가 깨지지 않게)
+  const g = resolveCompanyGcsEnv(ctx.env);
+  const dir = `${buildCompanyProjectPrefix(g.basePrefix, ctx.userId, projectId)}/director`;
+  const stamp = Date.now();
+  const copyInto = async (src: string, i: number) => {
+    const name = (src.split("/").pop() || "file").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+    const dst = `${dir}/${stamp}-${i}-${name}`;
+    await copyGcsObject(ctx.env, src, dst);
+    return dst;
+  };
+  const copiedImages: string[] = [];
+  for (let i = 0; i < images.length; i += 1) copiedImages.push(await copyInto(images[i], i + 1));
+  let video: any = null;
+  if (videos[0]) {
+    const obj = await copyInto(videos[0], 0);
+    const meta = await readMp4Meta(ctx.env, obj).catch(() => null);
+    const durationSec = Number(meta?.durationSec) || Number(input?.durationSec) || 0;
+    if (!durationSec) throw new Error("영상 길이를 읽지 못했어요(MP4·MOV 만 지원). 길이를 알려 주시면 durationSec 로 넣어 다시 등록할게요.");
+    video = { object: obj, durationSec, aspectRatio: String(meta?.aspectRatio || input?.aspectRatio || ""), still: "" };
+  }
+
+  // ③ 등록(빈 에피소드면 그대로, 컷이 있으면 새 에피소드)
+  const reg: any = await callInternalJson(ctx, "/api/project/final-upload", {
+    body: { projectId, title, story, images: copiedImages, ...(video ? { video } : {}) },
+  });
+  const targetId = String(reg?.projectId || projectId);
+
+  // ④ SNS 세팅 포맷·채널별 초안(승인 1번 안에서 같이)
+  const target = await runProjectGetTool({ projectId: targetId }, ctx);
+  const payload: any = target?.payload || {};
+  const scenes: any[] = Array.isArray(target?.scenes) ? target.scenes : [];
+  let formats: string[] = (Array.isArray(input?.formats) ? input.formats : []).map((p: any) => normalizePublishPlatform(p)).filter(Boolean);
+  if (input?.formats === undefined) {
+    formats = defaultContentFormats(await listConnectedPublishChannels(ctx), video, copiedImages.length > 0);
+  }
+  const assetIds = [
+    ...(video ? [`${targetId}:video:render`] : []),
+    ...scenes.filter((s) => copiedImages.some((o) => String(s?.imagePath || "").endsWith(o))).map((s) => `${targetId}:image:${s.id}`),
+  ];
+  const givenDrafts: Record<string, any> = input?.drafts && typeof input.drafts === "object" ? input.drafts : {};
+  const brandInfo: any = payload.brandId ? await runBrandGetTool({ brandId: payload.brandId }, ctx).catch(() => null) : null;
+  const brandCtx = brandContextText(brandInfo?.brand, payload);
+  const storyText = [String(payload.episodeTitle || reg?.title || title || ""), story || String(payload.story || "")].filter(Boolean).join("\n").slice(0, 3000);
+  const scheduledAt = String(input?.scheduledAt || "").trim();
+  const drafts: Record<string, any> = {};
+  await Promise.all(formats.map(async (fmt) => {
+    const given = givenDrafts[fmt] || givenDrafts[fmt.replace(/-shorts$/, "")];
+    let d: any = given ? publishDraftToBrandDraft(given) : null;
+    if (!d) {
+      const gen: any = await callInternalJson(ctx, "/api/draft-generate", {
+        body: { platformId: fmt === "youtube-shorts" ? "youtube" : fmt, story: storyText, brandContext: brandCtx },
+      }).catch(() => null);
+      d = gen && gen.caption ? { caption: String(gen.caption), hashtags: String(gen.hashtags || ""),
+        ...(gen.title ? { title: String(gen.title) } : {}), ...(gen.first_comment ? { first_comment: String(gen.first_comment) } : {}) }
+        : { caption: story.slice(0, 500) || title, hashtags: "" };
+    }
+    if (fmt === "youtube" || fmt === "youtube-shorts") d = { privacy_status: scheduledAt ? "scheduled" : "public", category: "entertainment", ...d };
+    if (scheduledAt) d.scheduled_at = scheduledAt;
+    drafts[fmt] = d;
+  }));
+  if (formats.length) {
+    await callInternalJson(ctx, "/api/project/save", {
+      body: { projectId: targetId, payload: {
+        brandStudioSelectedFormats: formats,
+        brandStudioFormatDrafts: drafts,
+        brandStudioSelectedAssetIds: assetIds,
+        brandStudioActiveDraftTab: formats[0],
+        brandStudioPublishPlan: { channels: formats, scheduledAt, status: "draft" },
+      } },
+    });
+  }
+  return {
+    kind: "content_register", projectId: targetId, sourceProjectId: projectId, created: !!reg?.created,
+    title: String(reg?.title || title), registered: reg?.finalUpload || null,
+    video: video ? { durationSec: video.durationSec, aspectRatio: video.aspectRatio } : null,
+    images: copiedImages.length, formats, drafts,
+    notice: [
+      reg?.created ? `컷이 있는 에피소드라 새 에피소드 '${reg?.title || ""}'(${targetId})에 등록했어요.` : `에피소드 ${targetId} 에 등록했어요.`,
+      formats.length ? `SNS 세팅에 포맷 ${formats.join(", ")} 와 채널별 초안을 저장했어요. 발행은 publish 에 projectId:"${targetId}" 로 요청하면 이 초안·자산 그대로 올라가요(승인 필요).` : "SNS 포맷은 저장하지 않았어요(연결된 채널이 없거나 formats 를 비움).",
+    ].join(" "),
   };
 }
 
@@ -7561,6 +7829,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
   publish: { agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool },
+  // 완성 콘텐츠 등록 + SNS 세팅 포맷·초안 저장(승인 1번). 실제 발행은 publish(승인 2번).
+  content_register: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki"], kind: "external", gate: true, run: runContentRegisterTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   // 서식 문서 엔진(§7). 서식은 회사 파일 `_서식/<폴더>/` 의 데이터라 코드 수정 없이 늘어난다.
