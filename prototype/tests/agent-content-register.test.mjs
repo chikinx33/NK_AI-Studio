@@ -90,7 +90,8 @@ test('에이전트 도구·발행·대화창이 연결돼 있다', () => {
   assert.match(shared, /isShorts: platform === "youtube-shorts" \|\| \(platform !== "youtube" && /);
   const orch = read('prototype/functions/api/agent/_orchestrator.ts');
   assert.match(orch, /content_register: `\[\[RUN: content_register \|/);
-  assert.match(orch, /영상 속 내용은 볼 수 없다/);
+  assert.match(orch, /먼저 video_describe 로 영상을 보고/);
+  assert.match(orch, /video_describe: `\[\[RUN: video_describe \|/);
   assert.match(orch, /content_register: "완성 콘텐츠 등록·SNS 초안"/);
   const chat = read('ai-company-app/src/components/Chat.tsx');
   assert.match(chat, /const VIDEO_MIME = \["video\/mp4", "video\/quicktime"\];/);

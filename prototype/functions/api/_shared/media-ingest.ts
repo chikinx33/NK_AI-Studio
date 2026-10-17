@@ -36,14 +36,14 @@ export async function copyGcsObject(env: any, source: string, destination: strin
 }
 
 /** 객체 크기·형식(메타데이터만). 없으면 null. */
-export async function statGcsObject(env: any, objectName: string): Promise<{ size: number; contentType: string } | null> {
+export async function statGcsObject(env: any, objectName: string): Promise<{ size: number; contentType: string; generation: string } | null> {
   const { ctx, token } = await gcsAuth(env);
   const res = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}`,
     { headers: { Authorization: `Bearer ${token}`, ...(ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}) } });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`media_stat_failed ${res.status}`);
   const data: any = await res.json().catch(() => ({}));
-  return { size: Number(data?.size) || 0, contentType: String(data?.contentType || "") };
+  return { size: Number(data?.size) || 0, contentType: String(data?.contentType || ""), generation: String(data?.generation || "") };
 }
 
 // ─── MP4 머리 읽기(순수 파서 + 범위 요청) ───────────────────────────

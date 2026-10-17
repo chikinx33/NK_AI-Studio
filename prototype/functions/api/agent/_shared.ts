@@ -9,6 +9,7 @@ import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot }
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta } from "../_shared/media-ingest";
 import { appendPublishRecords, buildPublishRow } from "../_shared/publish-records";
+import { analysisToStoryText } from "../_shared/gemini-video";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
 import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
@@ -3260,11 +3261,21 @@ function defaultContentFormats(channels: { platform: string; settingsKey: string
   return Array.from(new Set(out));
 }
 
+/** 영상 내용 분석(읽기 · 승인 없음). 업무 폴더 경로·objectName 의 영상을 Gemini 가 보고 장면·대사·화면 글자·분위기·훅을 정리한다. */
+async function runVideoDescribeTool(input: any, ctx: ToolContext): Promise<any> {
+  const src = String(input?.video || input?.path || input?.objectName || "").trim();
+  if (!src) throw new Error("분석할 영상(업무 폴더 경로 또는 objectName)이 필요해요.");
+  const objectName = await resolveContentSource(src, ctx);
+  if (!/\.(mp4|mov|m4v|webm)$/i.test(objectName)) throw new Error("MP4·MOV·WEBM 영상만 분석할 수 있어요.");
+  const data: any = await callInternalJson(ctx, "/api/video/describe", { body: { objectName, refresh: input?.refresh === true } });
+  return { kind: "video_describe", objectName, cached: !!data?.cached, analysis: data?.analysis || null };
+}
+
 async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any> {
   const projectId = String(input?.projectId || "").trim();
   if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) throw new Error("등록할 에피소드(projectId)가 필요해요. project_list 로 확인하세요.");
-  const title = String(input?.title || "").trim().slice(0, 120);
-  const story = String(input?.story || "").trim().slice(0, 20000);
+  let title = String(input?.title || "").trim().slice(0, 120);
+  let story = String(input?.story || "").trim().slice(0, 20000);
 
   // ① 소스 모으기: 업무 폴더 → 이미지·영상 경로, 그 밖엔 준 그대로
   const rawSources: string[] = ([] as any[])
@@ -3307,6 +3318,15 @@ async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any
     if (!durationSec) throw new Error("영상 길이를 읽지 못했어요(MP4·MOV 만 지원). 길이를 알려 주시면 durationSec 로 넣어 다시 등록할게요.");
     video = { object: obj, durationSec, aspectRatio: String(meta?.aspectRatio || input?.aspectRatio || ""), still: "" };
   }
+  // 영상 내용 분석(Gemini, /api/video/describe — 같은 파일은 캐시). 스토리가 비면 요약을 쓰고, SNS 초안에도 넘긴다.
+  // 분석이 안 돼도(키 없음·100MB 초과·회원 계정) 등록은 진행한다.
+  let analysis: any = null;
+  if (videos[0]) {
+    const described: any = await callInternalJson(ctx, "/api/video/describe", { body: { objectName: videos[0] } }).catch(() => null);
+    analysis = described?.analysis || null;
+    if (!story && analysis?.summary) story = String(analysis.summary).slice(0, 20000);
+    if (!title && analysis?.suggestedTitle) title = String(analysis.suggestedTitle).slice(0, 120);
+  }
 
   // ③ 등록(빈 에피소드면 그대로, 컷이 있으면 새 에피소드)
   const reg: any = await callInternalJson(ctx, "/api/project/final-upload", {
@@ -3329,7 +3349,8 @@ async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any
   const givenDrafts: Record<string, any> = input?.drafts && typeof input.drafts === "object" ? input.drafts : {};
   const brandInfo: any = payload.brandId ? await runBrandGetTool({ brandId: payload.brandId }, ctx).catch(() => null) : null;
   const brandCtx = brandContextText(brandInfo?.brand, payload);
-  const storyText = [String(payload.episodeTitle || reg?.title || title || ""), story || String(payload.story || "")].filter(Boolean).join("\n").slice(0, 3000);
+  const storyText = [String(payload.episodeTitle || reg?.title || title || ""), story || String(payload.story || ""), analysisToStoryText(analysis)]
+    .filter(Boolean).join("\n").slice(0, 3000);
   const scheduledAt = String(input?.scheduledAt || "").trim();
   const drafts: Record<string, any> = {};
   await Promise.all(formats.map(async (fmt) => {
@@ -3363,6 +3384,7 @@ async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any
     title: String(reg?.title || title), registered: reg?.finalUpload || null,
     video: video ? { durationSec: video.durationSec, aspectRatio: video.aspectRatio } : null,
     images: copiedImages.length, formats, drafts,
+    analysis: analysis ? { summary: analysis.summary, hooks: analysis.hooks, speech: String(analysis.speech || "").slice(0, 400) } : null,
     notice: [
       reg?.created ? `컷이 있는 에피소드라 새 에피소드 '${reg?.title || ""}'(${targetId})에 등록했어요.` : `에피소드 ${targetId} 에 등록했어요.`,
       formats.length ? `SNS 세팅에 포맷 ${formats.join(", ")} 와 채널별 초안을 저장했어요. 발행은 publish 에 projectId:"${targetId}" 로 요청하면 이 초안·자산 그대로 올라가요(승인 필요).` : "SNS 포맷은 저장하지 않았어요(연결된 채널이 없거나 formats 를 비움).",
@@ -7831,6 +7853,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool },
   // 완성 콘텐츠 등록 + SNS 세팅 포맷·초안 저장(승인 1번). 실제 발행은 publish(승인 2번).
   content_register: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki"], kind: "external", gate: true, run: runContentRegisterTool },
+  // 영상 내용 분석(Gemini · 읽기). 등록 전에 영상을 보고 스토리·초안을 쓰게 한다.
+  video_describe: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki", "edge"], kind: "read", synthesize: true, run: runVideoDescribeTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   // 서식 문서 엔진(§7). 서식은 회사 파일 `_서식/<폴더>/` 의 데이터라 코드 수정 없이 늘어난다.
