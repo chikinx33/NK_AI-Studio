@@ -116,6 +116,13 @@
       // 살아 있는 진입점은 홈뿐이다.
       manualUrl: 'https://post.naver.com/',
     },
+    discord: {
+      // 웹훅 주소로 연결한다(OAuth 없음). 본문 2000자, 첨부 10개(10MB 넘는 파일은 링크로 올린다).
+      accepts: { story: true, image: true, video: true },
+      image: { min: null, max: 10 },
+      video: { minSec: null, maxSec: null },
+      delivery: 'auto',
+    },
     band: {
       accepts: { story: true, image: true, video: true },
       image: { min: null, max: null },
@@ -153,6 +160,7 @@
     'naver-post': function (f) { return (f.hasImage && f.imageCount === 1) ? 'recommended' : 'available'; },
     kakao: function (f) { return (f.hasImage && f.imageCount === 1) ? 'recommended' : 'available'; },
     band: function (f) { return f.hasStory ? 'recommended' : 'available'; },
+    discord: function (f) { return (f.hasStory || f.hasImage || f.hasVideo) ? 'recommended' : 'available'; },
   };
 
   /** 선택된 자산 배열에서 판정에 필요한 사실만 뽑는다. */
@@ -299,6 +307,7 @@
       'naver-post': '네이버 포스트',
       kakao: '카카오',
       band: 'BAND',
+      discord: 'Discord',
     },
     en: {
       instagram: 'Instagram',
@@ -312,6 +321,7 @@
       'naver-post': 'Naver Post',
       kakao: 'Kakao',
       band: 'BAND',
+      discord: 'Discord',
     },
   };
 

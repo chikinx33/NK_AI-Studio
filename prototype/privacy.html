@@ -19,7 +19,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=3.2027" />
+  <link rel="stylesheet" href="styles.css?v=3.2028" />
   <style>
     /* ── Legal Page Layout ──────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -389,7 +389,7 @@
                 </tr>
                 <tr>
                   <td><strong>SNS 연동</strong></td>
-                  <td><strong>API 연동(7개):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X — 액세스·리프레시 토큰과 계정 식별 정보를 수집합니다. 플랫폼별 상세 항목은 아래 표를 참고하세요.<br><strong>직접 올리기(4개):</strong> Naver 블로그, Naver 포스트, Kakao, BAND — API 연동이 없어 <strong>수집하는 데이터가 없습니다</strong>.</td>
+                  <td><strong>API 연동(8개):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X, Discord — 액세스·리프레시 토큰(Discord 는 채널 웹훅 주소)과 계정 식별 정보를 수집합니다. 플랫폼별 상세 항목은 아래 표를 참고하세요.<br><strong>직접 올리기(4개):</strong> Naver 블로그, Naver 포스트, Kakao, BAND — API 연동이 없어 <strong>수집하는 데이터가 없습니다</strong>.</td>
                   <td>OAuth 2.0 인증을 통한 이용자 직접 연동</td>
                 </tr>
                 <tr>
@@ -535,6 +535,12 @@
                   <td><strong>X</strong></td>
                   <td>사용자 ID, 사용자명, 액세스·리프레시 토큰, 토큰 만료시각, 승인 범위(scope)</td>
                   <td>게시물 자동 게시</td>
+                </tr>
+                <tr>
+                  <td><span class="status-badge live">연동 완료</span></td>
+                  <td><strong>Discord</strong></td>
+                  <td>이용자가 입력한 채널 웹훅 주소(서버에만 저장, 화면에는 가려서 표시), 웹훅 ID·이름, 채널 ID, 서버 ID</td>
+                  <td>사용자가 승인한 콘텐츠를 지정한 디스코드 채널에 게시. 연결 해제 시 웹훅 주소를 즉시 삭제</td>
                 </tr>
                 <tr>
                   <td><span class="status-badge manual">직접 올리기</span></td>
@@ -712,7 +718,7 @@
                 </tr>
                 <tr>
                   <td><strong>SNS Integration</strong></td>
-                  <td><strong>API integrations (7):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X — access/refresh tokens and account identifiers are collected. See the table below for per-platform details.<br><strong>Post manually (4):</strong> Naver Blog, Naver Post, Kakao, BAND — no API integration, so <strong>nothing is collected</strong>.</td>
+                  <td><strong>API integrations (8):</strong> Instagram, TikTok, YouTube, YouTube Shorts, Facebook, Threads, X, Discord — access/refresh tokens (for Discord, the channel webhook URL) and account identifiers are collected. See the table below for per-platform details.<br><strong>Post manually (4):</strong> Naver Blog, Naver Post, Kakao, BAND — no API integration, so <strong>nothing is collected</strong>.</td>
                   <td>User-initiated OAuth 2.0 authorization</td>
                 </tr>
                 <tr>
@@ -858,6 +864,12 @@
                   <td><strong>X</strong></td>
                   <td>User ID, username, access/refresh tokens, token expiry, granted scopes</td>
                   <td>Post auto-publishing</td>
+                </tr>
+                <tr>
+                  <td><span class="status-badge live">Live</span></td>
+                  <td><strong>Discord</strong></td>
+                  <td>Channel webhook URL you enter (stored on our server only, masked on screen), webhook ID and name, channel ID, server ID</td>
+                  <td>Posting content you approve to the Discord channel you chose. The webhook URL is deleted immediately when you disconnect</td>
                 </tr>
                 <tr>
                   <td><span class="status-badge manual">Post manually</span></td>

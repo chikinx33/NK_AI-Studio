@@ -5,6 +5,11 @@ import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
 import { getThreadsToken } from "../_shared/threads-token";
 import { getXToken } from "../_shared/x-token";
+import {
+  DISCORD_CONTENT_LIMIT, DISCORD_FILE_LIMIT, DISCORD_MAX_ATTACHMENTS,
+  discordMessageUrl, getDiscordWebhook, postDiscordMessage, writeDiscordEntry,
+  type DiscordFile,
+} from "../_shared/discord-webhook";
 import { readQueuedSchedule, enqueueScheduledPost } from "../_shared/sns-schedule";
 import { MEDIA_PATH_FORBIDDEN, authorizePublishMediaPaths, publishMediaLocation } from "../_shared/publish-media-path";
 import {
@@ -1060,9 +1065,15 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   if (!mediaCheck.ok) {
     return send({ error: MEDIA_PATH_FORBIDDEN, code: MEDIA_PATH_FORBIDDEN, field: mediaCheck.field }, 400);
   }
-  // Threads·X 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
-  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x") {
+  // Threads·X·디스코드는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
+  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x" && platform !== "discord") {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
+  }
+
+  // 디스코드 본문은 2000자까지다. 잘라서 올리지 않고(뜻이 끊긴다) 예약 전에도 바로 알린다.
+  if (platform === "discord" && String(caption || "").length > DISCORD_CONTENT_LIMIT) {
+    return send({ ok: false, code: "discord_content_too_long", limit: DISCORD_CONTENT_LIMIT, length: String(caption || "").length,
+      error: `디스코드 본문은 ${DISCORD_CONTENT_LIMIT}자까지입니다(현재 ${String(caption || "").length}자). 줄인 뒤 다시 배포해 주세요.` }, 400);
   }
 
   // 예약 시각이 미래면 지금 게시하지 않고 대기열에 넣는다(Instagram·Facebook·Threads·X).
@@ -2122,6 +2133,124 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           username,
           status: "published",
           publishedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (platform === "discord") {
+      let hook: { webhookUrl: string; guildId: string; channelId: string; username: string };
+      try {
+        hook = await getDiscordWebhook(env, publishUserId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "discord_not_connected") {
+          return send({ error: "디스코드가 연결되지 않았습니다. SNS 설정에서 웹훅 주소를 먼저 연결해 주세요." }, 412);
+        }
+        return send({ error: msg }, 500);
+      }
+
+      // 첨부 후보: 캐러셀이면 전부, 아니면 단일 미디어. 디스코드는 이미지·영상을 섞어 올릴 수 있다.
+      const sources: Array<{ gcsPath?: string; url?: string }> = isCarousel
+        ? body.mediaItems!.map((it) => ({ gcsPath: it.gcsPath, url: it.mediaUrl }))
+        : (body.mediaGcsPath || body.mediaDirectUrl) ? [{ gcsPath: body.mediaGcsPath, url: body.mediaDirectUrl }] : [];
+
+      // 크기를 먼저 본다 — 큰 영상을 통째로 내려받으면 함수 메모리를 넘는다.
+      async function mediaSize(src: { gcsPath?: string; url?: string }): Promise<{ size: number; contentType: string }> {
+        if (src.gcsPath) {
+          const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(src.gcsPath)}`,
+            { headers: { Authorization: `Bearer ${googleToken}` } });
+          if (!r.ok) throw new Error(`미디어 확인 실패: ${r.status}`);
+          const meta: any = await r.json();
+          return { size: Number(meta.size) || 0, contentType: String(meta.contentType || "application/octet-stream") };
+        }
+        const h = await fetch(String(src.url), { method: "HEAD" }).catch(() => null);
+        const len = Number(h?.headers.get("content-length") || 0);
+        // 길이를 모르면 큰 파일로 본다(링크로 올린다).
+        return { size: len > 0 ? len : DISCORD_FILE_LIMIT + 1, contentType: h?.headers.get("content-type") || "application/octet-stream" };
+      }
+      // 첨부하지 못한 파일의 링크. GCS 객체는 우리 도메인 프록시의 장기 서명 주소로 준다
+      // (GCS 서명 URL 은 1시간이면 끊겨 채널에 죽은 링크가 남는다).
+      async function mediaLink(src: { gcsPath?: string; url?: string }): Promise<string> {
+        if (src.gcsPath) {
+          const origin = new URL(request.url).origin;
+          return await buildTikTokProxyUrl(origin, src.gcsPath, readMediaSecret(env), 5 * 365 * 24 * 3600);
+        }
+        return /^https?:\/\//i.test(String(src.url || "")) ? String(src.url) : "";
+      }
+      function fileNameOf(src: { gcsPath?: string; url?: string }, contentType: string, i: number): string {
+        const raw = String(src.gcsPath || src.url || "").split("?")[0].split("/").pop() || "";
+        const clean = raw.replace(/[^A-Za-z0-9._-]/g, "_").slice(-80);
+        if (/\.[A-Za-z0-9]{2,5}$/.test(clean)) return clean;
+        const ext = /video/.test(contentType) ? "mp4" : /png/.test(contentType) ? "png" : /webp/.test(contentType) ? "webp" : /gif/.test(contentType) ? "gif" : "jpg";
+        return `media-${i + 1}.${ext}`;
+      }
+
+      const files: DiscordFile[] = [];
+      const links: string[] = [];
+      for (let i = 0; i < sources.length; i++) {
+        const src = sources[i];
+        const { size, contentType } = await mediaSize(src);
+        if (size <= DISCORD_FILE_LIMIT && files.length < DISCORD_MAX_ATTACHMENTS) {
+          const url = src.gcsPath
+            ? await buildSignedUrl(bucket, src.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600)
+            : String(src.url);
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`미디어 다운로드 실패: ${r.status}`);
+          const bytes = await r.arrayBuffer();
+          const ct = r.headers.get("content-type") || contentType;
+          if (bytes.byteLength <= DISCORD_FILE_LIMIT) {
+            files.push({ name: fileNameOf(src, ct, i), bytes, contentType: ct });
+            continue;
+          }
+        }
+        const link = await mediaLink(src);
+        if (link) links.push(link);
+      }
+
+      const text = String(caption || "");
+      if (!text.trim() && files.length === 0 && links.length === 0) {
+        return send({ error: "디스코드 게시에는 본문 또는 미디어가 필요합니다." }, 400);
+      }
+      // 링크를 본문 뒤에 붙인다. 붙이면 2000자를 넘을 때는 링크만 다음 메시지로 보낸다(본문은 자르지 않는다).
+      const linkBlock = links.join("\n");
+      const joined = linkBlock ? (text ? `${text}\n\n${linkBlock}` : linkBlock) : text;
+      const fits = joined.length <= DISCORD_CONTENT_LIMIT;
+      const firstContent = fits ? joined : text;
+      const followLinks = fits ? "" : linkBlock;
+
+      let posted = await postDiscordMessage({ webhookUrl: hook.webhookUrl, content: firstContent, files });
+      // 413(요청이 너무 큼): 첨부 합계가 서버 한도를 넘었다 — 파일을 모두 링크로 바꿔 한 번 더 보낸다.
+      if (!posted.ok && posted.status === 413 && files.length) {
+        const allLinks = (await Promise.all(sources.map((src) => mediaLink(src)))).filter(Boolean).join("\n");
+        const retryText = allLinks ? (text ? `${text}\n\n${allLinks}` : allLinks) : text;
+        posted = await postDiscordMessage({ webhookUrl: hook.webhookUrl, content: retryText.length <= DISCORD_CONTENT_LIMIT ? retryText : text });
+      }
+      if (!posted.ok) {
+        // (502 는 Cloudflare 가 본문을 오류 페이지로 갈아치워 원인이 사라지므로 500 을 쓴다)
+        // 웹훅이 지워졌거나 무효해졌다 — 재연결이 유일한 해법이다.
+        if (posted.status === 401 || posted.status === 404) {
+          await writeDiscordEntry(env, publishUserId, { needsReconnect: true }).catch(() => {});
+          return send({ error: "디스코드 웹훅이 삭제됐거나 무효합니다. SNS 설정에서 다시 연결해 주세요." }, 500);
+        }
+        return send({ error: posted.error, ...(posted.retryAfterSec != null ? { retryAfterSec: posted.retryAfterSec } : {}) }, 500);
+      }
+      let note = "";
+      if (followLinks) {
+        const extra = await postDiscordMessage({ webhookUrl: hook.webhookUrl, content: followLinks.slice(0, DISCORD_CONTENT_LIMIT) });
+        if (!extra.ok) note = "본문은 올렸지만 큰 파일 링크 메시지는 올리지 못했습니다.";
+      }
+      const channelId = posted.channelId || hook.channelId;
+      return send({
+        ok: true,
+        result: {
+          platform: "discord",
+          postId: posted.messageId,
+          url: discordMessageUrl(hook.guildId, channelId, posted.messageId),
+          username: hook.username,
+          status: "published",
+          publishedAt: new Date().toISOString(),
+          ...(links.length ? { linkedFiles: links.length } : {}),
+          ...(note ? { note } : {}),
         },
       });
     }

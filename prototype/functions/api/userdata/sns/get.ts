@@ -27,6 +27,8 @@ const SAFE_SNS_FIELDS = [
   "channelId",
   "channelHandle",
   "igUserId",
+  // 디스코드: 웹훅 주소(webhookUrl)는 비밀번호와 같아 절대 내보내지 않는다. 가린 표기만.
+  "webhookHint",
 ];
 function maskSnsSettings(settings: any, shared: boolean) {
   const sns = settings && typeof settings === "object" ? settings.sns : null;

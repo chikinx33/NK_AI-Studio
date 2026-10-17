@@ -626,7 +626,7 @@ test("개인정보 처리방침의 채널 집합이 SPEC 과 일치한다", () =
     "Facebook": "facebook", "Threads": "threads", "X": "x",
     "Naver Blog": "naver-blog", "Naver 블로그": "naver-blog",
     "Naver Post": "naver-post", "Naver 포스트": "naver-post",
-    "Kakao": "kakao", "BAND": "band",
+    "Kakao": "kakao", "BAND": "band", "Discord": "discord",
   };
   const listed = new Set();
   for (const m of html.matchAll(/<strong>([^<]+)<\/strong>/g)) {

@@ -67,6 +67,7 @@
     'naver-post':     '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
     'kakao':          '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/></svg>',
     'band':           '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>',
+    'discord':        '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>',
   };
 
   var T = {
@@ -97,6 +98,11 @@
       loadFail:      '설정 로드 실패',
       defaultProject: '프로젝트',
       openProfile:   '프로필 열기',
+      discordPromptTitle: '디스코드 연결',
+      discordPrompt: '디스코드 채널 설정 › 연동 › 웹후크에서 복사한 웹훅 URL 을 붙여 넣어 주세요.\n(https://discord.com/api/webhooks/... 형식)',
+      discordConnecting: '디스코드 웹훅 확인 중...',
+      discordConnectOk: function (name) { return '디스코드 연결 완료! ' + name; },
+      discordConnectFail: function (e) { return '디스코드 연결 실패: ' + e; },
     },
     en: {
       eyebrow:       'SNS Settings › Connect Channels',
@@ -125,6 +131,11 @@
       loadFail:      'Failed to load settings',
       defaultProject: 'Project',
       openProfile:   'Open profile',
+      discordPromptTitle: 'Connect Discord',
+      discordPrompt: 'Paste the webhook URL copied from Discord channel settings › Integrations › Webhooks.\n(https://discord.com/api/webhooks/...)',
+      discordConnecting: 'Checking Discord webhook...',
+      discordConnectOk: function (name) { return 'Discord connected! ' + name; },
+      discordConnectFail: function (e) { return 'Discord connection failed: ' + e; },
     },
   };
 
@@ -192,7 +203,7 @@
     // cross-device 동기화를 깨뜨리는 원인이라 제거함.
     var out = {};
     var keys = ['instagram', 'youtube', 'tiktok', 'facebook', 'threads', 'x',
-                'naver-blog', 'naver-post', 'kakao', 'band'];
+                'naver-blog', 'naver-post', 'kakao', 'band', 'discord'];
     var allKeys = {};
     keys.forEach(function (k) { allKeys[k] = true; });
     Object.keys(serverSns || {}).forEach(function (k) { allKeys[k] = true; });
@@ -316,6 +327,56 @@
       .finally(function () { _saving = false; });
   }
 
+  /**
+   * 디스코드는 OAuth 가 아니라 웹훅 주소 하나로 연결한다.
+   * 주소는 비밀번호와 같다 — 서버(/api/sns/connect/discord)로 한 번 보내고 끝이다.
+   * 이 화면은 주소를 변수·캐시·콘솔에 남기지 않고, 서버가 돌려준 웹훅 이름과 가린 표기만 쓴다.
+   */
+  function connectDiscord() {
+    var pid = 'discord';
+    if (!(NK.ui && NK.ui.dialog && NK.ui.dialog.prompt)) {
+      console.error('[SNS] 공통 입력 모달을 찾지 못했습니다');
+      return;
+    }
+    Promise.resolve(NK.ui.dialog.prompt(t('discordPrompt'), { title: t('discordPromptTitle'), defaultValue: '' }))
+      .then(function (typed) {
+        var raw = String(typed == null ? '' : typed).trim();
+        if (!raw) return;
+        _togglingPlatforms[pid] = true;
+        setStatus(t('discordConnecting'), 'pending');
+        render();
+        return apiPost('/api/sns/connect/discord', { webhookUrl: raw })
+          .then(function (res) {
+            if (res && res.ok) {
+              _settings = _settings || {};
+              _settings.sns = _settings.sns || {};
+              _settings.sns[pid] = {
+                connected: true,
+                enabled: true,
+                needsReconnect: false,
+                username: res.username || '',
+                webhookHint: res.webhookHint || '',
+                channelId: res.channelId || '',
+              };
+              _writeCache(_settings.sns);
+              setStatus('', '');
+              snsAlert(T[_lang()].discordConnectOk(res.username || ''));
+            } else {
+              setStatus('', '');
+              snsAlert(T[_lang()].discordConnectFail((res && res.error) || t('unknownErr')));
+            }
+          })
+          .catch(function (err) {
+            setStatus('', '');
+            snsAlert(T[_lang()].discordConnectFail((err && err.message) || t('serverErr')));
+          });
+      })
+      .finally(function () {
+        delete _togglingPlatforms[pid];
+        render();
+      });
+  }
+
   function startOAuth(platform) {
     apiGet('/api/sns/connect/' + platform).then(function (res) {
       if (!res || !res.ok || !res.oauthUrl) {
@@ -433,6 +494,7 @@
       e.preventDefault();
       var cpid = btn.dataset.platform;
       if (_togglingPlatforms[cpid]) return;
+      if (cpid === 'discord') { connectDiscord(); return; }
       startOAuth(cpid);
       return;
     }
@@ -521,6 +583,8 @@
     if (platform.id === 'tiktok') {
       var _tth = String(snsState.handle || '').replace(/^@/, '');
       accountLabel = _tth ? '@' + _tth : username;
+    } else if (platform.id === 'discord') {
+      accountLabel = username;   // 웹훅 이름 — 계정 핸들이 아니다
     } else {
       accountLabel = username ? '@' + username : '';
     }
@@ -598,6 +662,8 @@
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
           (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
+          // 디스코드 웹훅은 비밀이라 서버가 가린 표기(webhookHint)만 보여 준다
+          (connected && snsState.webhookHint ? '<div class="sns-manual-note sns-webhook-hint">' + escapeHtml(snsState.webhookHint) + '</div>' : ''),
         '</div>',
         // 직접 올리는 채널은 액션이 하나도 없다. 빈 껍데기를 두면 카드 간격만 먹는다.
         (linkBtnHtml || finalConnectBoxHtml || usageToggleHtml)

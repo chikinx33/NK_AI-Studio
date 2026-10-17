@@ -63,6 +63,23 @@ function send(body: unknown, status = 200) {
   });
 }
 
+// 클라이언트 저장으로는 쓸 수 없는 필드(자격증명). OAuth 콜백·연결 엔드포인트만 쓴다.
+const CLIENT_FORBIDDEN_FIELDS = ["accessToken", "refreshToken", "tokenExpiresAt", "refreshExpiresAt", "openId", "pageToken", "userToken", "webhookUrl", "webhookId", "guildId"];
+// get.ts SAFE_SNS_FIELDS 와 같은 목록(테스트가 둘을 맞춰 본다).
+const SAVE_RESPONSE_SNS_FIELDS = ["connected", "enabled", "needsReconnect", "username", "displayName", "avatarUrl", "handle", "pageName", "pageId", "channelTitle", "channelId", "channelHandle", "igUserId", "webhookHint"];
+function maskSavedSettings(settings: any) {
+  const sns = settings?.sns && typeof settings.sns === "object" ? settings.sns : {};
+  const out: Record<string, any> = {};
+  for (const key of Object.keys(sns)) {
+    const entry = sns[key];
+    if (!entry || typeof entry !== "object") { out[key] = entry; continue; }
+    const safe: Record<string, any> = {};
+    for (const f of SAVE_RESPONSE_SNS_FIELDS) if (Object.prototype.hasOwnProperty.call(entry, f)) safe[f] = entry[f];
+    out[key] = safe;
+  }
+  return Object.assign({}, settings, { sns: out });
+}
+
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
@@ -112,8 +129,15 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       console.log("[sns/save] existing facebook BEFORE merge:", JSON.stringify(existing?.sns?.facebook || null));
     }
     Object.keys(incomingSns).forEach((platform) => {
-      const incoming = incomingSns[platform] || {};
+      const incoming = Object.assign({}, incomingSns[platform] || {});
+      // 자격증명은 연결 엔드포인트만 쓴다. 클라이언트 저장으로 들어오면 버린다.
+      for (const f of CLIENT_FORBIDDEN_FIELDS) delete incoming[f];
       const prev = existing.sns[platform] || {};
+      // 디스코드 해제는 웹훅 주소(=비밀)까지 지운다. 남겨 두면 해제 후에도 서버에 비밀이 남는다.
+      if (platform === "discord" && incoming.connected === false) {
+        existing.sns[platform] = { connected: false, enabled: false };
+        return;
+      }
       existing.sns[platform] = Object.assign({}, prev, incoming);
     });
     if (incomingSns.facebook) {
@@ -139,7 +163,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       throw new Error(`GCS upload error: ${upRes.status} ${errText}`);
     }
 
-    return send({ ok: true, settings: existing });
+    // 응답에는 화면 표기용 필드만 싣는다. 예전엔 병합 결과 전체(모든 채널의 토큰)를 돌려줘
+    // 에이전트 도구(sns_prefs_save)를 통해 LLM 컨텍스트까지 들어갔다.
+    return send({ ok: true, settings: maskSavedSettings(existing) });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return send({ ok: false, error: msg }, 500);

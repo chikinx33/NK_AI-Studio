@@ -21,6 +21,11 @@
   // 나중 것이 앞 것을 지운다. 한 번에 하나씩, 직전 저장이 끝난 뒤의 최신 목록에 덧붙인다(2026-10-14:
   // 전체 배포에서 YouTube·X·TikTok·Facebook 기록이 사라지고 마지막 Instagram 만 남았다).
   var _publishResultsQueue = Promise.resolve();
+  // 디스코드 메시지 본문 상한. 게시 본문은 '캡션 + 빈 줄 + 해시태그' 이므로 둘을 합쳐 센다(snsPublishFormat 과 같은 조립).
+  var DISCORD_CONTENT_LIMIT = 2000;
+  function discordContentLength(caption, hashtags) {
+    return [String(caption || '').trim(), String(hashtags || '').trim()].filter(Boolean).join('\n\n').length;
+  }
   // "SNS 세팅" 진입 시작 단계. 에피소드를 열 때 1회만 계산해 renderProject 재실행에도 유지된다.
   //  - 1~4 단계를 모두 마친 에피소드 → 04(배포 설정)로 바로 진입
   //  - 그 외 → 01(자산)부터 진행
@@ -789,6 +794,11 @@
         parts.push(compactSentence(storyText || coreMsg, 250));
         break;
 
+      case 'discord':
+        // 본문 상한 2000자(해시태그 포함). 공지 성격이라 여유를 두고 짧게 시작한다.
+        parts.push(compactSentence(storyText || coreMsg, 1200));
+        break;
+
       case 'naver-post':
         parts.push(compactSentence(storyText || coreMsg, 120));
         break;
@@ -841,6 +851,7 @@
       'naver-post':      6,
       'kakao':           4,
       'band':            4,
+      'discord':         3,
     })[fmtId] || 5;
 
     var tags = [];
@@ -966,7 +977,8 @@
         'facebook': '피드·릴스·그룹·페이지 브랜드 운영 채널',
         'youtube': '롱폼 영상·튜토리얼·리뷰 운영 채널',
         'naver-post': '모바일 카드뉴스·매거진형 콘텐츠 채널',
-        'band': '팬 커뮤니티·소모임 중심 운영 채널'
+        'band': '팬 커뮤니티·소모임 중심 운영 채널',
+        'discord': '커뮤니티 서버 공지·소식 채널 (웹훅, 최대 2000자)'
       },
       alertSaveFormatFail: function (e) { return '포맷 선택 저장 실패: ' + e; },
       savingLabel: '저장 중…',
@@ -1045,7 +1057,8 @@
         'facebook': 'Feed, Reels, Groups & Pages brand channel',
         'youtube': 'Long-form videos, tutorials & reviews channel',
         'naver-post': 'Mobile card news & magazine-style content channel',
-        'band': 'Fan community & interest group channel'
+        'band': 'Fan community & interest group channel',
+        'discord': 'Community server announcements via webhook (up to 2,000 chars)'
       },
       alertSaveFormatFail: function (e) { return 'Failed to save format: ' + e; },
       savingLabel: 'Saving…',
@@ -1161,7 +1174,8 @@
       { id: 'facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
       { id: 'youtube', desc: '롱폼 영상·튜토리얼·리뷰 운영 채널', hasTitle: true },
       { id: 'naver-post', desc: '모바일 카드뉴스·매거진형 콘텐츠 채널', hasTitle: true },
-      { id: 'band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false }
+      { id: 'band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false },
+      { id: 'discord', desc: '커뮤니티 서버 공지·소식 채널', hasTitle: false }
     ];
   }
 
@@ -1177,6 +1191,7 @@
     'naver-post':     '<path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/>',
     'kakao':          '<path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/>',
     'band':           '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/>',
+    'discord':        '<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>',
   };
   // instagram 은 stroke 기반(라인 아이콘), 나머지는 fill 기반.
   function formatBrandIcon(id, size) {
@@ -2341,6 +2356,19 @@
         { value: 'mentioned', label: isEn ? 'Mentioned only' : '언급한 사람만' },
       ], draft.reply_setting || 'public', 'auto');
     }
+    // 디스코드: 본문+해시태그가 그대로 한 메시지로 올라간다. 2000자를 넘으면 배포 전에 막는다(자르지 않는다).
+    function buildDiscordPreview(fmtId, captionVal, hashtagVal) {
+      var limit = DISCORD_CONTENT_LIMIT;
+      var total = discordContentLength(captionVal, hashtagVal);
+      var cCls = 'bsf-charcount' + (total > limit ? ' over' : total > limit - 100 ? ' warn' : '');
+      return afWrap(isEn ? 'Message' : '메시지 본문',
+          ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Message…' : '메시지를 작성하세요') +
+          '<div class="bsf-charcount-row"><span class="' + cCls + '" data-discord-count>' + total + ' / ' + limit + '</span></div>') +
+        afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 1, '#hashtag')) +
+        noteField(isEn
+          ? 'Posted to your Discord channel via webhook. Files over 10MB are posted as links. Message + hashtags must fit in 2,000 characters.'
+          : '연결한 디스코드 채널에 웹훅으로 올라갑니다. 10MB 넘는 파일은 링크로 올라가요. 본문+해시태그는 2000자 안이어야 합니다.');
+    }
     function buildNaverBlogPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var paras = splitIntoParagraphs(captionVal, 3);
       var blogInner = '';
@@ -2546,6 +2574,7 @@
         case 'youtube':        bodyHtml = buildYoutubePreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'naver-post':     bodyHtml = buildNaverPostPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'band':           bodyHtml = buildBandPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'discord':        bodyHtml = buildDiscordPreview(formatId, captionVal, hashtagVal); break;
         default:
           bodyHtml = afWrap(isEn ? 'Caption' : '캡션', ceDiv(formatId, 'caption', captionVal, 4, isEn ? 'Caption…' : '캡션을 작성하세요')) +
                      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(formatId, 'hashtags', hashtagVal, 2, '#hashtag'));
@@ -2629,7 +2658,8 @@
       'facebook':       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
       'youtube':        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
       'naver-post':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
-      'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>'
+      'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>',
+      'discord':        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>'
     };
     function _readSnsStates() {
       // 공유받은 프로젝트는 소유자의 연결 상태(마스킹된 캐시)를 우선 사용.
@@ -3599,6 +3629,19 @@
             countEl.className = 'bsf-charcount' + (cLen > xtLimit - 10 ? ' over' : cLen > xtLimit - 60 ? ' warn' : '');
           }
         }
+        // 디스코드 본문+해시태그 합계(2000자) 즉시 업데이트
+        if (fmtId === 'discord' && (fieldKey === 'caption' || fieldKey === 'hashtags')) {
+          var dcPanel = ce.closest && ce.closest('.bsf-format-draft-panel');
+          var dcCount = dcPanel && dcPanel.querySelector('[data-discord-count]');
+          if (dcCount) {
+            var dcCap = dcPanel.querySelector('[data-draft-field="caption"]');
+            var dcTag = dcPanel.querySelector('[data-draft-field="hashtags"]');
+            var dcTotal = discordContentLength(dcCap ? (dcCap.innerText || dcCap.textContent || '').trim() : '',
+                                               dcTag ? (dcTag.innerText || dcTag.textContent || '').trim() : '');
+            dcCount.textContent = dcTotal + ' / ' + DISCORD_CONTENT_LIMIT;
+            dcCount.className = 'bsf-charcount' + (dcTotal > DISCORD_CONTENT_LIMIT ? ' over' : dcTotal > DISCORD_CONTENT_LIMIT - 100 ? ' warn' : '');
+          }
+        }
         // Naver Blog SEO 설명 글자수 즉시 업데이트
         if (fieldKey === 'seo_description' && fmtId === 'naver-blog') {
           var seoFld = ce.closest && ce.closest('.bsf-field');
@@ -4107,8 +4150,8 @@
           return Promise.resolve({ skipped: true, manual: NKFormatMedia.isManualDelivery(formatId) });
         }
         var isYoutubeFamily = (formatId === 'youtube' || formatId === 'youtube-shorts');
-        // Threads·X 는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
-        var isTextCapable = (formatId === 'threads' || formatId === 'x');
+        // Threads·X·디스코드는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
+        var isTextCapable = (formatId === 'threads' || formatId === 'x' || formatId === 'discord');
 
         // 선택된 이미지+영상 자산 수집 → 영상 먼저, 이미지 나중 정렬
         var selMediaItems = assetItems.filter(function (i) {
@@ -4170,6 +4213,14 @@
         var draftHashtags = String(draft.hashtags || '').trim();
         var finalCaption = [draftCaption, draftHashtags].filter(Boolean).join('\n\n');
         if (!finalCaption) finalCaption = '';
+        // 디스코드는 2000자를 넘으면 잘라 올리지 않고 보내기 전에 멈춘다(서버도 같은 기준으로 거절한다).
+        if (formatId === 'discord' && finalCaption.length > DISCORD_CONTENT_LIMIT) {
+          var dcErr = new Error(isEn
+            ? 'Discord messages are limited to ' + DISCORD_CONTENT_LIMIT + ' characters (now ' + finalCaption.length + '). Shorten the message or hashtags and deploy again.'
+            : '디스코드 본문은 ' + DISCORD_CONTENT_LIMIT + '자까지입니다(현재 ' + finalCaption.length + '자). 본문이나 해시태그를 줄인 뒤 다시 배포해 주세요.');
+          dcErr.code = 'discord_content_too_long';
+          return Promise.reject(dcErr);
+        }
         var firstComment = String(draft.first_comment || '').trim();
         var draftLinkUrl = String(draft.link_url || '').trim();
         var token = localStorage.getItem('nk_auth_token') || '';
@@ -4255,7 +4306,7 @@
 
         // X · Threads 답글 허용 범위. 초안 카드의 값을 그대로 실어 보내고
         // 플랫폼별 어휘 매핑은 서버(publish.ts)가 한다.
-        if (isTextCapable) {
+        if (formatId === 'threads' || formatId === 'x') {
           requestBody.replySetting = String(draft.reply_setting || 'public');
         }
 
@@ -4902,6 +4953,7 @@
             items: [
               { name: _channelLabel('threads', isEn ? 'en' : 'ko'), conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
               { name: _channelLabel('x', isEn ? 'en' : 'ko'),       conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+              { name: _channelLabel('discord', isEn ? 'en' : 'ko'), conds: isEn ? ['Story, image, or video — any one', 'Up to 2,000 chars · files over 10MB as links'] : ['스토리·이미지·영상 중 하나 이상', '최대 2000자 · 10MB 넘는 파일은 링크'] },
             ]
           },
         ];

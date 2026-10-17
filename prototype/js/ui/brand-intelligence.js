@@ -52,7 +52,7 @@
     var labels = {
       youtube: 'YouTube', 'youtube-shorts': 'YouTube Shorts', instagram: 'Instagram', tiktok: 'TikTok',
       facebook: 'Facebook', threads: 'Threads', x: 'X', linkedin: 'LinkedIn',
-      'naver-blog': 'Naver Blog', 'naver-post': 'Naver Post', kakao: 'Kakao', pinterest: 'Pinterest', band: 'Band', unknown: '미분류'
+      'naver-blog': 'Naver Blog', 'naver-post': 'Naver Post', kakao: 'Kakao', pinterest: 'Pinterest', band: 'Band', discord: 'Discord', unknown: '미분류'
     };
     return labels[String(type || '').trim()] || String(type || '미분류');
   }

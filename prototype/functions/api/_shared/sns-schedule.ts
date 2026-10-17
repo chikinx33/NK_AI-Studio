@@ -9,8 +9,8 @@ import { ensureSchemaOnce } from "./schema-marks.js";
 
 type SqlFn = (query: string, params?: any[]) => Promise<any[]>;
 
-/** 대기열로 예약하는 채널. YouTube(플랫폼 예약)·TikTok(초안 전송)은 여기 없다. */
-export const QUEUED_SCHEDULE_PLATFORMS = new Set(["instagram", "facebook", "threads", "x"]);
+/** 대기열로 예약하는 채널. YouTube(플랫폼 예약)·TikTok(초안 전송)은 여기 없다. 디스코드 웹훅도 예약 기능이 없어 여기서 예약한다. */
+export const QUEUED_SCHEDULE_PLATFORMS = new Set(["instagram", "facebook", "threads", "x", "discord"]);
 /** 이보다 가까운 시각은 예약이 아니라 지금 게시로 본다(정기 실행 주기보다 짧은 예약은 의미가 없다). */
 export const MIN_SCHEDULE_LEAD_MS = 60_000;
 /** 너무 먼 예약은 받지 않는다(토큰 만료·잊힌 예약 방지). */
