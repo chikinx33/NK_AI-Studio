@@ -109,13 +109,16 @@ async function getGoogleAccessToken(opts: {
 async function serveMedia(request: Request, env: any, method: "GET" | "HEAD"): Promise<Response> {
   const url = new URL(request.url);
   const objectName = String(url.searchParams.get("o") || "");
-  const exp = parseInt(url.searchParams.get("e") || "0", 10);
+  const rawExp = String(url.searchParams.get("e") || "");
+  const exp = parseInt(rawExp || "-1", 10);
   const sig = String(url.searchParams.get("s") || "");
 
-  if (!objectName || !exp || !sig) {
+  // e=0 은 만료 없는 링크다 — 채널 게시물에 남는 큰 파일 링크(디스코드). 게시물이 있는 한 열려야 한다(2026-10-18 엔케 지적:
+  // 5년 뒤 게시물을 보는 사람이 영상을 못 보는 건 말이 안 된다). TikTok 수집용 링크는 계속 짧은 만료(1시간)를 쓴다.
+  if (!objectName || !sig || !/^\d+$/.test(rawExp) || exp < 0) {
     return new Response("bad request", { status: 400 });
   }
-  if (exp < Math.floor(Date.now() / 1000)) {
+  if (exp !== 0 && exp < Math.floor(Date.now() / 1000)) {
     return new Response("link expired", { status: 403 });
   }
 

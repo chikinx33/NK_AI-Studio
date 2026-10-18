@@ -73,7 +73,7 @@ test('에이전트 도구·발행·대화창이 연결돼 있다', () => {
   const shared = read('prototype/functions/api/agent/_shared.ts');
   // 등록+초안 = 승인 1번(gate), 발행 = 승인 2번(publish gate)
   assert.match(shared, /content_register: \{ agentId: "reach", agentIds: \[[^\]]*\], kind: "external", gate: true, run: runContentRegisterTool \}/);
-  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
+  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, clientSteps: true, prepare: preparePublishInput, run: runPublishTool \}/);
   // 원본은 프로젝트 저장소로 복사, 영상 길이는 파일 머리에서, 등록은 final-upload 로
   assert.match(shared, /await copyGcsObject\(ctx\.env, src, dst\)/);
   assert.match(shared, /await readMp4Meta\(ctx\.env, obj\)/);

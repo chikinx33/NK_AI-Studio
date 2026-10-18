@@ -78,7 +78,7 @@ test("상위 컨테이너는 빈 500 이면 답글설정 없이 → 본문 정�
   // 진단에 본문 길이·답글설정·자식 수
   assert.match(src, /shape\.push\(`본문 \$\{Array\.from\(params\.text\)\.length\}자`\)/);
   const agent = await read("prototype/functions/api/agent/_shared.ts");
-  assert.match(agent, /if \(r\.note\) notices\.push\(`\$\{platform\}: \$\{String\(r\.note\)\.slice\(0, 200\)\}`\);/);
+  assert.match(agent, /\.\.\.\(r\.note \? \{ notices: \[`\$\{platform\}: \$\{String\(r\.note\)\.slice\(0, 200\)\}`\] \} : \{\}\)/);
 });
 
 test("sanitizeThreadsText 는 코드포인트 단위로 자르고 홀로 남은 서로게이트·제어문자를 뺀다", async () => {

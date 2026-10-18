@@ -64,7 +64,8 @@ async function buildTikTokProxyUrl(
   secret: string,
   ttlSec = 3600
 ): Promise<string> {
-  const exp = Math.floor(Date.now() / 1000) + ttlSec;
+  // ttlSec 0 = 만료 없는 링크(e=0). 채널 게시물에 남는 링크용 — tiktok-media.ts 가 e=0 을 영구로 받는다.
+  const exp = ttlSec === 0 ? 0 : Math.floor(Date.now() / 1000) + ttlSec;
   const sig = await hmacSha256B64url(secret, `${objectName}|${exp}`);
   return `${origin}/api/sns/tiktok-media?o=${encodeURIComponent(objectName)}&e=${exp}&s=${encodeURIComponent(sig)}`;
 }
@@ -2168,12 +2169,13 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         // 길이를 모르면 큰 파일로 본다(링크로 올린다).
         return { size: len > 0 ? len : DISCORD_FILE_LIMIT + 1, contentType: h?.headers.get("content-type") || "application/octet-stream" };
       }
-      // 첨부하지 못한 파일의 링크. GCS 객체는 우리 도메인 프록시의 장기 서명 주소로 준다
-      // (GCS 서명 URL 은 1시간이면 끊겨 채널에 죽은 링크가 남는다).
+      // 첨부하지 못한 파일의 링크. GCS 객체는 우리 도메인 프록시의 만료 없는 서명 주소로 준다
+      // (GCS 서명 URL 은 1시간이면 끊겨 채널에 죽은 링크가 남는다. 전엔 5년 만료였는데, 게시물은 남는데
+      //  링크만 죽는 건 말이 안 된다는 엔케 지적으로 만료를 없앴다 — 2026-10-18).
       async function mediaLink(src: { gcsPath?: string; url?: string }): Promise<string> {
         if (src.gcsPath) {
           const origin = new URL(request.url).origin;
-          return await buildTikTokProxyUrl(origin, src.gcsPath, readMediaSecret(env), 5 * 365 * 24 * 3600);
+          return await buildTikTokProxyUrl(origin, src.gcsPath, readMediaSecret(env), 0);
         }
         return /^https?:\/\//i.test(String(src.url || "")) ? String(src.url) : "";
       }

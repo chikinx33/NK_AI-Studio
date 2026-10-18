@@ -155,7 +155,7 @@ test('게시: 2000자 초과는 예약 전에 거절하고, 미연결은 412, 10
   assert.match(branch, /discord_not_connected[\s\S]*?412/);
   assert.match(branch, /size <= DISCORD_FILE_LIMIT/);
   // 링크는 1시간짜리 GCS 서명 주소가 아니라 우리 도메인 프록시의 장기 주소
-  assert.match(branch, /buildTikTokProxyUrl\(origin, src\.gcsPath, readMediaSecret\(env\), 5 \* 365 \* 24 \* 3600\)/);
+  assert.match(branch, /buildTikTokProxyUrl\(origin, src\.gcsPath, readMediaSecret\(env\), 0\)/);
   // 본문은 자르지 않는다 — 링크가 넘치면 링크만 다음 메시지로
   assert.match(branch, /followLinks/);
   assert.match(branch, /postId: posted\.messageId/);
@@ -211,7 +211,7 @@ test('에이전트 publish 도 디스코드에 올린다(연결 채널 자동 �
   assert.match(shared, /"디스코드": "discord"/);
   const plan = shared.slice(shared.indexOf('function planPublishByChannel('), shared.indexOf('function planSummaryText('));
   assert.match(plan, /platform === "discord"[\s\S]*?action: "carousel", items: media\.slice\(0, 10\)[\s\S]*?action: "single"[\s\S]*?action: "text"/);
-  const run = shared.slice(shared.indexOf('async function runPublishTool('), shared.indexOf('// ── 완성 콘텐츠 등록'));
+  const run = shared.slice(shared.indexOf('function publishContext('), shared.indexOf('// ── 완성 콘텐츠 등록'));
   assert.match(run, /platform === "discord" && captionWithTags\.length > 2000/);
   assert.match(shared, /discord: "Discord" \};/);
   const orch = read('prototype/functions/api/agent/_orchestrator.ts');

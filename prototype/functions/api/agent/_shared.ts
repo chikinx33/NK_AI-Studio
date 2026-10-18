@@ -1693,6 +1693,8 @@ export interface ToolDef {
    * 던지면 승인 카드를 만들지 않고 바로 실패로 알린다(승인 후에야 실패하는 것 방지).
    */
   prepare?: (input: any, ctx: ToolContext) => Promise<any>;
+  // true면 승인 시 run 대신 채널별 단계(publishStepList)를 돌려주고, 화면이 단계마다 따로 요청한다(한 요청 100초 한계).
+  clientSteps?: boolean;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -3035,11 +3037,8 @@ async function withEpisodePublishContext(input: any, ctx: ToolContext): Promise<
 
 /** 리치 발행 도구(ALWAYS_GATE). prepare 가 세운 채널별 계획대로 올린다 — 인스타 캐러셀·페이스북 사진묶음/영상·스레드 캐러셀·X 단일·유튜브/틱톡 영상.
  *  ★TikTok 은 초안함(inbox) 전송: 앱 '받은 알림함' 탭의 알림에서 사용자가 공개 범위를 고르고 직접 게시한다. */
-async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
-  const prepared = Array.isArray(input?.plan) && Array.isArray(input?.mediaList) ? input : await preparePublishInput(input, ctx);
-  const platforms: string[] = prepared.platforms;
-  const plans: PublishPlanEntry[] = prepared.plan;
-  const media: PublishMediaItem[] = prepared.mediaList;
+/** 발행 계획(승인 전 prepare 결과)에서 채널별 본문·옵션을 꺼내는 공통 부품. 한 번에 올리기·채널별 단계 올리기가 같이 쓴다. */
+function publishContext(prepared: any) {
   const caption = String(prepared?.caption || prepared?.prompt || "").trim();
   const drafts: Record<string, any> = prepared?.drafts && typeof prepared.drafts === "object" ? prepared.drafts : {};
   const draftFor = (platform: string): any => drafts[platform] || drafts[platform.replace(/-shorts$/, "")] || {};
@@ -3051,12 +3050,6 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     if (Number.isNaN(ms)) throw new Error("scheduledAt 형식이 올바르지 않아요(ISO8601 필요).");
     publishAtIso = new Date(ms).toISOString();
   }
-  const published: any[] = [];
-  const notices: string[] = [];
-  const failures: string[] = [];
-  const reconnect: string[] = [];
-  const skippedNotes: string[] = (Array.isArray(prepared.skippedChannels) ? prepared.skippedChannels : []);
-  let tiktok: any = null;
   const captionFor = (platform: string) => {
     const d = draftFor(platform);
     const pCaption = String(d.caption || caption).trim();
@@ -3064,90 +3057,116 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
     const tagLine = pTags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
     return { d, pCaption, pTags, captionWithTags: tagLine && !pCaption.includes(tagLine) ? `${pCaption}\n\n${tagLine}` : pCaption };
   };
+  return { caption, draftFor, scheduledAt, publishAtIso, captionFor };
+}
 
-  for (const plan of plans) {
-    const platform = plan.platform;
-    if (plan.action === "skip") { skippedNotes.push(`${platform}(${plan.note})`); continue; }
-    const { d, pCaption, pTags, captionWithTags } = captionFor(platform);
+/** 채널 하나의 발행 결과. 성공(published)·실패(failure)·재연결 필요(reconnect)·건너뜀(skipped) 중 하나와 안내(notices). */
+interface PublishStepResult {
+  platform: string;
+  published?: any;
+  tiktok?: any;
+  failure?: string;
+  reconnect?: boolean;
+  skipped?: string;
+  notices?: string[];
+}
 
-    // 디스코드 본문은 2000자까지 — 잘라서 올리지 않고 이 채널만 실패로 남긴다(서버도 같은 기준으로 거절한다).
-    if (platform === "discord" && captionWithTags.length > 2000) {
-      failures.push(`discord: 본문+해시태그가 ${captionWithTags.length}자예요(최대 2000자). 줄여서 다시 요청해 주세요.`);
-      continue;
-    }
+/** 계획 한 줄(채널 하나)을 올린다. 던지지 않고 결과로 돌려준다 — 한 채널의 실패가 다른 채널을 막지 않게. */
+async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolContext): Promise<PublishStepResult> {
+  const platform = plan.platform;
+  if (plan.action === "skip") return { platform, skipped: `${platform}(${plan.note})` };
+  const { draftFor, publishAtIso, captionFor } = publishContext(prepared);
+  const { d, pCaption, pTags, captionWithTags } = captionFor(platform);
 
-    if (platform === "tiktok") {
-      if (publishAtIso) { notices.push("TikTok 은 초안함 전송이라 예약이 없어요 — 이번엔 보내지 않았어요."); continue; }
-      const item = plan.items[0];
-      const description = captionWithTags.replace(/\n\n/g, "\n");
-      const res = await fetch(internalUrl(ctx.request, "/api/sns/tiktok/inbox"), {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-        body: JSON.stringify({ mediaGcsPath: item.mediaGcsPath, caption: description }),
-      });
-      const text = await res.text();
-      let data: any = {};
-      try { data = JSON.parse(text); } catch { data = { raw: text }; }
-      if (!res.ok) {
-        if (res.status === 412 || /reconnect_required|not_connected/.test(String(data?.error || ""))) { reconnect.push("tiktok"); failures.push(`tiktok: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 200)}`); }
-        else failures.push(`tiktok: ${String(data?.error || data?.message || res.status).slice(0, 200)}`);
-        continue;
-      }
-      const r: any = data?.result || {};
-      const status = String(r.status || "processing");
-      if (status === "status_reported_failed") { failures.push(`tiktok: 초안함 전송 실패(${r.failReason || "이유 미상"})`); continue; }
-      tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
-      published.push({ platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId });
-      notices.push(status === "sent_to_inbox"
-        ? "TikTok 은 초안함(inbox)으로 보냈어요. 틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)."
-        : "TikTok 처리 상태는 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요.");
-      continue;
-    }
+  // 디스코드 본문은 2000자까지 — 잘라서 올리지 않고 이 채널만 실패로 남긴다(서버도 같은 기준으로 거절한다).
+  if (platform === "discord" && captionWithTags.length > 2000) {
+    return { platform, failure: `discord: 본문+해시태그가 ${captionWithTags.length}자예요(최대 2000자). 줄여서 다시 요청해 주세요.` };
+  }
 
-    const isYouTube = platform === "youtube" || platform === "youtube-shorts";
-    const items = plan.items;
-    const body: any = { platform, caption: captionWithTags };
-    if (plan.action === "carousel" || plan.action === "photos") {
-      body.mediaItems = items.map((m) => ({ mediaType: m.mediaType, gcsPath: m.mediaGcsPath }));
-      if (platform === "facebook") body.mediaType = "image";
-    } else if (plan.action === "video" && platform === "facebook") {
-      body.mediaItems = items.map((m) => ({ mediaType: m.mediaType, gcsPath: m.mediaGcsPath }));
-      body.mediaType = "video";
-    } else if (plan.action === "single" || plan.action === "video") {
-      body.mediaType = items[0].mediaType; body.mediaGcsPath = items[0].mediaGcsPath;
-    }
-    if (isYouTube) Object.assign(body, {
-      title: String(d.title || prepared?.title || pCaption.split("\n")[0] || "").trim().slice(0, 100),
-      tags: (Array.isArray(d.tags) ? d.tags : pTags).map((h: any) => String(h).replace(/^#/, "")),
-      categoryKey: String(d.categoryKey || prepared?.categoryKey || "entertainment"),
-      privacyStatus: publishAtIso ? "scheduled" : String(d.privacyStatus || prepared?.privacyStatus || "public"),
-      // 유튜브 일반(60초 이상)은 쇼츠가 아니다. 예전엔 'youtube' 도 쇼츠로 올라갔다.
-      isShorts: platform === "youtube-shorts" || (platform !== "youtube" && (d.isShorts ?? prepared?.isShorts) !== false),
-    });
-    if (publishAtIso) Object.assign(body, { publishAt: publishAtIso, ...(isYouTube ? {} : { privacyStatus: "scheduled" }) });
-    if ((platform === "threads" || platform === "x") && (d.replySetting || prepared?.replySetting)) body.replySetting = String(d.replySetting || prepared.replySetting);
-    if ((platform === "instagram" || platform === "facebook") && (d.firstComment || prepared?.firstComment)) body.firstComment = String(d.firstComment || prepared.firstComment);
-    if (platform === "facebook" && (d.linkUrl || prepared?.linkUrl)) body.linkUrl = String(d.linkUrl || prepared.linkUrl);
-
-    const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: ctx.authHeader }, body: JSON.stringify(body),
+  if (platform === "tiktok") {
+    if (publishAtIso) return { platform, notices: ["TikTok 은 초안함 전송이라 예약이 없어요 — 이번엔 보내지 않았어요."] };
+    const item = plan.items[0];
+    const description = captionWithTags.replace(/\n\n/g, "\n");
+    const res = await fetch(internalUrl(ctx.request, "/api/sns/tiktok/inbox"), {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+      body: JSON.stringify({ mediaGcsPath: item.mediaGcsPath, caption: description }),
     });
     const text = await res.text();
     let data: any = {};
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    if (!res.ok || data?.ok === false) {
-      if (res.status === 412 || data?.needsReconnect || /reconnect_required|not_connected/.test(String(data?.error || ""))) {
-        reconnect.push(platform);
-        failures.push(`${platform}: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 220)}`);
-        continue;
-      }
-      failures.push(`${platform}(${plan.note}): ${String(data?.message || data?.error || `HTTP ${res.status}`).slice(0, 200)}`);
-      continue;
+    if (!res.ok) {
+      if (res.status === 412 || /reconnect_required|not_connected/.test(String(data?.error || ""))) return { platform, reconnect: true, failure: `tiktok: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 200)}` };
+      return { platform, failure: `tiktok: ${String(data?.error || data?.message || res.status).slice(0, 200)}` };
     }
     const r: any = data?.result || {};
-    // 예약(Instagram·Facebook·Threads·X)은 서버 대기열에 들어가 status 'scheduled' + scheduledJobId 로 돌아온다.
-    published.push({ platform, what: plan.note, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || r.scheduledFor || new Date().toISOString(), ...(r.scheduledJobId ? { scheduledJobId: String(r.scheduledJobId) } : {}) });
-    if (r.note) notices.push(`${platform}: ${String(r.note).slice(0, 200)}`); // 예: 스레드가 답글 설정·본문을 빼고 올린 경우
+    const status = String(r.status || "processing");
+    if (status === "status_reported_failed") return { platform, failure: `tiktok: 초안함 전송 실패(${r.failReason || "이유 미상"})` };
+    const tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
+    return {
+      platform, tiktok, published: { platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId },
+      notices: [status === "sent_to_inbox"
+        ? "TikTok 은 초안함(inbox)으로 보냈어요. 틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)."
+        : "TikTok 처리 상태는 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요."],
+    };
   }
+
+  const isYouTube = platform === "youtube" || platform === "youtube-shorts";
+  const items = plan.items;
+  const body: any = { platform, caption: captionWithTags };
+  if (plan.action === "carousel" || plan.action === "photos") {
+    body.mediaItems = items.map((m) => ({ mediaType: m.mediaType, gcsPath: m.mediaGcsPath }));
+    if (platform === "facebook") body.mediaType = "image";
+  } else if (plan.action === "video" && platform === "facebook") {
+    body.mediaItems = items.map((m) => ({ mediaType: m.mediaType, gcsPath: m.mediaGcsPath }));
+    body.mediaType = "video";
+  } else if (plan.action === "single" || plan.action === "video") {
+    body.mediaType = items[0].mediaType; body.mediaGcsPath = items[0].mediaGcsPath;
+  }
+  if (isYouTube) Object.assign(body, {
+    title: String(d.title || prepared?.title || pCaption.split("\n")[0] || "").trim().slice(0, 100),
+    tags: (Array.isArray(d.tags) ? d.tags : pTags).map((h: any) => String(h).replace(/^#/, "")),
+    categoryKey: String(d.categoryKey || prepared?.categoryKey || "entertainment"),
+    privacyStatus: publishAtIso ? "scheduled" : String(d.privacyStatus || prepared?.privacyStatus || "public"),
+    // 유튜브 일반(60초 이상)은 쇼츠가 아니다. 예전엔 'youtube' 도 쇼츠로 올라갔다.
+    isShorts: platform === "youtube-shorts" || (platform !== "youtube" && (d.isShorts ?? prepared?.isShorts) !== false),
+  });
+  if (publishAtIso) Object.assign(body, { publishAt: publishAtIso, ...(isYouTube ? {} : { privacyStatus: "scheduled" }) });
+  if ((platform === "threads" || platform === "x") && (d.replySetting || prepared?.replySetting)) body.replySetting = String(d.replySetting || prepared.replySetting);
+  if ((platform === "instagram" || platform === "facebook") && (d.firstComment || prepared?.firstComment)) body.firstComment = String(d.firstComment || prepared.firstComment);
+  if (platform === "facebook" && (d.linkUrl || prepared?.linkUrl)) body.linkUrl = String(d.linkUrl || prepared.linkUrl);
+
+  const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: ctx.authHeader }, body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok || data?.ok === false) {
+    if (res.status === 412 || data?.needsReconnect || /reconnect_required|not_connected/.test(String(data?.error || ""))) {
+      return { platform, reconnect: true, failure: `${platform}: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 220)}` };
+    }
+    return { platform, failure: `${platform}(${plan.note}): ${String(data?.message || data?.error || `HTTP ${res.status}`).slice(0, 200)}` };
+  }
+  const r: any = data?.result || {};
+  // 예약(Instagram·Facebook·Threads·X)은 서버 대기열에 들어가 status 'scheduled' + scheduledJobId 로 돌아온다.
+  return {
+    platform,
+    published: { platform, what: plan.note, status: String(r.status || "published"), postId: String(r.postId || r.id || ""), url: String(r.url || r.permalink || ""), publishedAt: r.publishedAt || r.scheduledFor || new Date().toISOString(), ...(r.scheduledJobId ? { scheduledJobId: String(r.scheduledJobId) } : {}) },
+    ...(r.note ? { notices: [`${platform}: ${String(r.note).slice(0, 200)}`] } : {}), // 예: 스레드가 답글 설정·본문을 빼고 올린 경우
+  };
+}
+
+/** 채널별 결과를 모아 발행 출력으로 만든다(에피소드면 SNS 세팅 배포 이력에도 남긴다). 전부 실패면 failedText 를 채운다. */
+async function finalizePublish(prepared: any, results: PublishStepResult[], ctx: ToolContext): Promise<{ output: any; failedText: string }> {
+  const { scheduledAt, draftFor, captionFor } = publishContext(prepared);
+  const plans: PublishPlanEntry[] = prepared.plan;
+  const media: PublishMediaItem[] = prepared.mediaList;
+  const published: any[] = results.filter((r) => r.published).map((r) => r.published);
+  const notices: string[] = results.flatMap((r) => r.notices || []);
+  const failures: string[] = results.filter((r) => r.failure).map((r) => String(r.failure));
+  const reconnect: string[] = results.filter((r) => r.reconnect).map((r) => r.platform);
+  const skippedNotes: string[] = [...(Array.isArray(prepared.skippedChannels) ? prepared.skippedChannels : []), ...results.filter((r) => r.skipped).map((r) => String(r.skipped))];
+  const tiktok = results.find((r) => r.tiktok)?.tiktok || null;
 
   // 에피소드를 지목한 발행이면 SNS 세팅(배포 이력·배포 완료 표시)에도 남긴다 — 예전엔 에이전트 기록에만 남았다.
   const episode: any = prepared?._episode;
@@ -3170,17 +3189,80 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
 
   if (reconnect.length) notices.push(`🔌 ${Array.from(new Set(reconnect)).join(", ")} 은(는) 연결이 만료돼 다시 연결해야 해요 — 브랜드 스튜디오 → SNS 설정(/sns-settings.html)에서 '연결 해제' 후 다시 연결한 뒤 "다시 발행해줘" 라고 해 주세요.`);
   if (skippedNotes.length) notices.push(`건너뜀: ${skippedNotes.join(", ")}`);
-  if (failures.length && !published.length) throw new Error(`발행 실패 — ${failures.join(" / ")}`);
-  if (failures.length) notices.push(`일부 채널 실패: ${failures.join(" / ")}`);
+  const failedText = failures.length && !published.length ? `발행 실패 — ${failures.join(" / ")}` : "";
+  if (failures.length && published.length) notices.push(`일부 채널 실패: ${failures.join(" / ")}`);
 
   return {
-    published, kind: "publish", platforms, caption, scheduledAt: scheduledAt || undefined,
-    conversationId: ctx.conversationId || prepared?._conversationId || "main",
-    plan: plans.map((p) => ({ platform: p.platform, action: p.action, note: p.note, count: p.items.length })),
-    media: media.map((m) => ({ type: m.mediaType, path: m.mediaGcsPath, title: m.title })),
-    ...(tiktok ? { tiktok } : {}),
-    ...(notices.length ? { notice: notices.join(" ") } : {}),
+    failedText,
+    output: {
+      published, kind: "publish", platforms: prepared.platforms, caption: String(prepared?.caption || prepared?.prompt || "").trim(), scheduledAt: scheduledAt || undefined,
+      conversationId: ctx.conversationId || prepared?._conversationId || "main",
+      plan: plans.map((p) => ({ platform: p.platform, action: p.action, note: p.note, count: p.items.length })),
+      media: media.map((m) => ({ type: m.mediaType, path: m.mediaGcsPath, title: m.title })),
+      ...(tiktok ? { tiktok } : {}),
+      ...(failures.length ? { failures } : {}),
+      ...(notices.length ? { notice: notices.join(" ") } : {}),
+    },
   };
+}
+
+async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
+  const prepared = Array.isArray(input?.plan) && Array.isArray(input?.mediaList) ? input : await preparePublishInput(input, ctx);
+  publishContext(prepared); // 예약 시각 형식 오류는 올리기 전에 막는다
+  const results: PublishStepResult[] = [];
+  for (const plan of prepared.plan as PublishPlanEntry[]) results.push(await publishOnePlan(plan, prepared, ctx));
+  const { output, failedText } = await finalizePublish(prepared, results, ctx);
+  if (failedText) throw new Error(failedText);
+  return output;
+}
+
+// ── 채널별 단계 발행(2026-10-18) ──────────────────────────────────────────────
+// 승인 한 번에 채널 8개를 한 요청에서 차례로 올리면 인스타·스레드의 영상 처리 대기만으로 100초를 넘어
+// Cloudflare 가 524 로 끊었고, 끊긴 순간 남은 채널은 올라가지 않은 채 잡이 '진행 중'에 묶였다.
+// 이제 승인은 계획만 돌려주고, 화면이 채널마다 /api/agent/publish-step 을 따로(동시에) 부른다 — SNS 세팅 '전체 배포'와 같은 방식.
+// 결과는 잡 output.steps[채널 번호] 에 하나씩 쌓이고, 마지막 채널이 끝나면 한 번만 마무리한다.
+export function publishStepList(prepared: any): { index: number; platform: string; note: string }[] {
+  const plans: PublishPlanEntry[] = Array.isArray(prepared?.plan) ? prepared.plan : [];
+  return plans.map((p, index) => ({ index, platform: p.platform, note: p.note }));
+}
+
+/** 채널 하나를 올리고 결과를 잡에 기록한다. 모든 채널이 끝났으면 마무리 출력(final)을 함께 돌려준다. */
+export async function runPublishStep(
+  sql: SqlFn, ctx: ToolContext, jobId: string, index: number, abandonReason = ""
+): Promise<{ step: PublishStepResult; final: null | { output: any; failedText: string } }> {
+  const [job] = await sql(`SELECT input, output, status, review_status FROM agent_jobs WHERE id = $1 AND user_id = $2 AND type = 'publish'`, [jobId, ctx.userId]) as any[];
+  if (!job) throw new Error("publish_job_not_found");
+  if (job.status !== "working" || job.review_status !== "approved") throw new Error("publish_job_not_running");
+  const prepared = typeof job.input === "string" ? JSON.parse(job.input) : job.input;
+  const plan: PublishPlanEntry | undefined = prepared?.plan?.[index];
+  if (!plan) throw new Error("publish_step_not_found");
+  const existing = job.output?.steps?.[String(index)];
+  // 같은 채널을 두 번 올리지 않는다(새로고침·재시도). 이미 기록된 결과를 돌려준다.
+  const step: PublishStepResult = existing
+    || (abandonReason
+      ? { platform: plan.platform, failure: `${plan.platform}(${plan.note}): ${abandonReason.slice(0, 160)} — 채널에 실제로 올라갔는지 확인해 주세요(다시 올리면 중복될 수 있어요).` }
+      : await publishOnePlan(plan, { ...prepared, _conversationId: prepared?._conversationId }, { ...ctx, conversationId: prepared?._conversationId || ctx.conversationId }));
+  if (!existing) {
+    await sql(
+      `UPDATE agent_jobs SET output = jsonb_set(COALESCE(output, '{}'::jsonb) || jsonb_build_object('steps', COALESCE(output->'steps', '{}'::jsonb)), ARRAY['steps', $3::text], $4::jsonb), updated_at = now()
+        WHERE id = $1 AND user_id = $2 AND status = 'working' AND NOT (COALESCE(output->'steps', '{}'::jsonb) ? $3::text)`,
+      [jobId, ctx.userId, String(index), JSON.stringify(step)],
+    );
+  }
+  const [now] = await sql(`SELECT output FROM agent_jobs WHERE id = $1 AND user_id = $2`, [jobId, ctx.userId]) as any[];
+  const steps = now?.output?.steps || {};
+  const total = prepared.plan.length;
+  if (Object.keys(steps).length < total) return { step, final: null };
+  // 마지막 채널: 한 요청만 마무리하게 상태를 먼저 가져간다(동시에 끝난 두 채널이 두 번 마무리하지 않게).
+  const [claimed] = await sql(`UPDATE agent_jobs SET output = output || '{"finalizing": true}'::jsonb, updated_at = now()
+    WHERE id = $1 AND user_id = $2 AND status = 'working' AND NOT (output ? 'finalizing') RETURNING id`, [jobId, ctx.userId]) as any[];
+  if (!claimed) return { step, final: null };
+  const results: PublishStepResult[] = Array.from({ length: total }, (_, i) => steps[String(i)]).filter(Boolean);
+  const final = await finalizePublish(prepared, results, { ...ctx, conversationId: prepared?._conversationId || ctx.conversationId });
+  await setJobStatus(sql, jobId, ctx.userId, final.failedText
+    ? { status: "error", error: final.failedText, output: { ...final.output, steps } }
+    : { status: "approved", output: { ...final.output, steps }, reviewStatus: "approved" });
+  return { step, final };
 }
 
 // ── 완성 콘텐츠 등록(에이전트) — SNS 세팅 '+' 와 같은 결과(2026-10-18 엔케 지시) ──────────────
@@ -7945,7 +8027,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   video: { agentId: "pixel", kind: "external", gate: true, run: runVideoTool },
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
-  publish: { agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool },
+  publish: { agentId: "reach", kind: "external", gate: true, clientSteps: true, prepare: preparePublishInput, run: runPublishTool },
   // 완성 콘텐츠 등록 + SNS 세팅 포맷·초안 저장(승인 1번). 실제 발행은 publish(승인 2번).
   content_register: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki"], kind: "external", gate: true, run: runContentRegisterTool },
   // 영상 내용 분석(Gemini · 읽기). 등록 전에 영상을 보고 스토리·초안을 쓰게 한다.

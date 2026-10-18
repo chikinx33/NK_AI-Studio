@@ -19,6 +19,7 @@ import {
   persistPendingVideo,
   createJob,
   processJob,
+  publishStepList,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -86,6 +87,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       if (!claimed) return send({ error: 'job_already_running' }, 409, origin);
       const authHeader = String(request.headers.get("Authorization") || "");
       const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
+      // 여러 채널 발행: 이 요청에서 다 올리면 100초를 넘어 524 로 끊긴다. 계획만 돌려주고 화면이 채널마다
+      // /api/agent/publish-step 을 동시에 부른다(SNS 세팅 '전체 배포'와 같은 방식).
+      if (tool.clientSteps && Array.isArray(toolInput?.plan) && toolInput.plan.length) {
+        const steps = publishStepList(toolInput);
+        const stepMeta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+        return send({
+          ok: true, job: await getJob(sql, id, auth.userId), publishSteps: steps,
+          message: {
+            role: "agent", agentId: job.agent_id, name: stepMeta.name,
+            text: `✅ 승인 확인! ${steps.map((s) => s.platform).join(", ")} 에 채널별로 동시에 올리는 중이에요. 다 끝나면 결과를 알려드릴게요 — 끝날 때까지 이 창을 닫지 말아 주세요.`,
+          },
+        }, 200, origin);
+      }
       // 오래 걸리는 도구(예: scene_video, 수분)는 POST를 블로킹하지 않고 waitUntil 백그라운드로 실행.
       // Results 패널이 4초마다 잡 목록을 폴링하므로 완결 시 자동 반영된다(CF 응답 한계 초과 방지).
       if (tool.longRunning) {
@@ -227,8 +241,8 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
   }
 };
 
-/** 승인 완료 시 담당 직원이 채팅으로 할 말 — 작업 종류·결과 기반(자연스러운 한 줄). */
-function approvalDoneText(type: string, output: any, input: any): string {
+/** 승인 완료 시 담당 직원이 채팅으로 할 말 — 작업 종류·결과 기반(자연스러운 한 줄). 채널별 단계 발행(publish-step.ts)도 쓴다. */
+export function approvalDoneText(type: string, output: any, input: any): string {
   const o = output || {};
   const inp = (typeof input === "string" ? (() => { try { return JSON.parse(input); } catch { return {}; } })() : input) || {};
   if (type === "calendar_create") {

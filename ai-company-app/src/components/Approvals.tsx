@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
+import { getApprovals, approveItem, rejectItem, clearApprovals, runPublishSteps, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 import { createPortal } from "react-dom";
 import CollapsibleSection from "./CollapsibleSection";
 import { actionString, dispatchUiAction, useUiAction } from "../lib/uiActions";
@@ -226,8 +226,8 @@ export default function Approvals({
       await refresh();
       if (action === "approve" && target?.tool?.startsWith("company_files_")) dispatchUiAction({ action: "company_files.refresh" });
       // alert 팝업 대신 담당 직원(예: 싱크)이 채팅으로 결과를 답하게 한다.
-      const raw = r?.message;
-      if (raw && onAgentSay) {
+      const say = (raw: any) => {
+        if (!raw || !onAgentSay) return;
         onAgentSay({
           role: "agent",
           agentId: raw.agentId || raw.agent_id,
@@ -236,6 +236,13 @@ export default function Approvals({
           text: raw.text,
           files: Array.isArray(raw.files) ? raw.files : undefined,
         });
+      };
+      say(r?.message);
+      // 여러 채널 발행: 승인은 채널 목록만 돌려준다 — 채널마다 따로(동시에) 올린 뒤 마무리 결과를 알린다.
+      if (action === "approve" && Array.isArray(r?.publishSteps) && r.publishSteps.length) {
+        const final = await runPublishSteps(id, r.publishSteps);
+        say(final || { name: "시스템", emoji: "⚠️", text: "채널별 발행 결과를 받지 못했어요. 각 채널에 실제로 올라갔는지 확인해 주세요(다시 올리면 중복될 수 있어요)." });
+        await refresh();
       }
     } catch (e) {
       // 실패도 채팅으로 알린다(조용히 삼키지 않음).

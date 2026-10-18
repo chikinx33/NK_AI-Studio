@@ -1780,6 +1780,31 @@ export async function approveItem(id: string) {
   return data;
 }
 
+/**
+ * 승인한 발행을 채널마다 따로(동시에) 올린다. 한 요청에서 다 올리면 100초를 넘어 524 로 끊겼다.
+ * 응답을 못 받은 채널(시간 초과 등)은 '확인 필요' 실패로 기록해, 마지막 채널이 끝나면 서버가 한 번 마무리한다.
+ * 마무리 메시지(done)가 온 응답의 message 를 돌려준다.
+ */
+export async function runPublishSteps(jobId: string, steps: { index: number; platform: string }[]): Promise<any | null> {
+  const post = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/agent/publish-step", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId, ...body }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.error) throw new Error(data?.error || `HTTP ${res.status}`);
+    return data;
+  };
+  const results = await Promise.all(steps.map(async (step) => {
+    try {
+      return await post({ index: step.index });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return post({ index: step.index, abandon: true, reason: `응답을 받지 못했어요(${reason})` }).catch(() => null);
+    }
+  }));
+  return results.find((data) => data?.done)?.message || null;
+}
+
 // 알람(리마인더) 한 건.
 export interface DueReminder { id: string; fire_at: string; text: string }
 // 알람 폴링: due(경과/실행 → 서버가 삭제하며 반환, 울림용) + upcoming(예정 목록, 예약 패널용).

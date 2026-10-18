@@ -160,11 +160,11 @@ test("에이전트 경로의 TikTok 은 Direct Post(확인 화면 필요)가 아
   // 2026-08-31 Direct Post 포기 이후: 에이전트 발행 도구도 브랜드 스튜디오와 같은 /api/sns/tiktok/inbox 를 쓴다.
   // Direct Post 엔드포인트(/api/sns/publish 의 tiktok 분기)로는 보내지 않는다 — 확인 화면 요건은 초안 전송에 적용되지 않는다.
   const src = read("prototype/functions/api/agent/_shared.ts");
-  const start = src.indexOf("async function runPublishTool(");
+  const start = src.indexOf("async function publishOnePlan(");
   const fn = src.slice(start, src.indexOf("\n}\n", start));
   assert.match(fn, /\/api\/sns\/tiktok\/inbox/);
   // tiktok 계획은 inbox 로 보내고 continue — 그 아래의 /api/sns/publish(Direct Post 분기)에는 닿지 않는다.
-  assert.match(fn, /if \(platform === "tiktok"\) \{[\s\S]*?\/api\/sns\/tiktok\/inbox[\s\S]*?continue;\s*\}/, "Direct Post 분기(/api/sns/publish)에는 tiktok 을 넘기지 않는다");
+  assert.match(fn, /if \(platform === "tiktok"\) \{[\s\S]*?\/api\/sns\/tiktok\/inbox[\s\S]*?return \{\s*platform, tiktok,[\s\S]*?\};\s*\}/, "Direct Post 분기(/api/sns/publish)에는 tiktok 을 넘기지 않는다");
 });
 
 test("공개 페이지 2장이 존재하고 서로 링크된다", () => {

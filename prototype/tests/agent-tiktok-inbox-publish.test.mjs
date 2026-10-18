@@ -15,10 +15,16 @@ const fnBody = (src, head) => {
   assert.ok(start >= 0, `${head} 가 있어야 한다`);
   return src.slice(start, src.indexOf("\n}\n", start));
 };
+// 발행 도구는 채널 하나 올리기(publishOnePlan)·마무리(finalizePublish)·한 번에 올리기(runPublishTool)로 나뉘었다(2026-10-18, 524 대책).
+const publishSource = (src) => {
+  const start = src.indexOf("function publishContext(");
+  assert.ok(start >= 0, "publishContext 가 있어야 한다");
+  return src.slice(start, src.indexOf("// ── 채널별 단계 발행", start));
+};
 
 test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트로 보내며, 다른 채널은 /api/sns/publish 계약대로 채널 하나씩 보낸다", async () => {
   const shared = await read("prototype/functions/api/agent/_shared.ts");
-  const fn = fnBody(shared, "async function runPublishTool(");
+  const fn = publishSource(shared);
   assert.doesNotMatch(fn, /브랜드 스튜디오의 'TikTok에 게시' 버튼/, "옛 차단 문구가 남아 있다");
   assert.match(fn, /internalUrl\(ctx\.request, "\/api\/sns\/tiktok\/inbox"\)/, "브랜드 스튜디오와 같은 초안 엔드포인트");
   assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath: item\.mediaGcsPath, caption: description \}\)/);
@@ -26,10 +32,11 @@ test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트
   assert.match(fn, /TikTok 은 초안함\(inbox\)으로 보냈어요\. 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로 와요/);
   assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
   assert.doesNotMatch(fn, /platforms: others,/, "platforms 배열로 한 번에 보내던 잘못된 계약이 사라졌다");
-  assert.match(fn, /for \(const plan of plans\) \{/);
+  assert.match(fn, /for \(const plan of prepared\.plan as PublishPlanEntry\[\]\) results\.push\(await publishOnePlan\(plan, prepared, ctx\)\);/);
   assert.match(fn, /const body: any = \{ platform, caption: captionWithTags \};/);
   assert.match(fn, /fetch\(internalUrl\(ctx\.request, "\/api\/sns\/publish"\)/);
-  assert.match(fn, /if \(failures\.length && !published\.length\) throw new Error\(`발행 실패 — /);
+  assert.match(fn, /const failedText = failures\.length && !published\.length \? `발행 실패 — /);
+  assert.match(fn, /if \(failedText\) throw new Error\(failedText\);/);
   assert.match(fn, /notices\.push\(`일부 채널 실패: /);
 });
 
@@ -47,11 +54,11 @@ test("지목한 산출물을 전부 받아 채널 규격대로 자동 배분한�
   assert.match(plan, /platform === "x"[\s\S]*const pick = images\[0\] \|\| videos\[0\];/);
   assert.match(plan, /platform === "youtube-shorts"[\s\S]*유튜브는 영상만 — 영상이 없어 건너뜀/);
   assert.match(plan, /platform === "tiktok"[\s\S]*틱톡은 영상만 — 영상이 없어 건너뜀/);
-  const run = fnBody(shared, "async function runPublishTool(");
+  const run = publishSource(shared);
   assert.match(run, /if \(plan\.action === "carousel" \|\| plan\.action === "photos"\) \{\s*body\.mediaItems = items\.map/);
   assert.match(run, /if \(platform === "facebook"\) body\.mediaType = "image";/);
   assert.match(run, /plan\.action === "video" && platform === "facebook"[\s\S]*body\.mediaType = "video";/);
-  assert.match(run, /if \(plan\.action === "skip"\) \{ skippedNotes\.push/);
+  assert.match(run, /if \(plan\.action === "skip"\) return \{ platform, skipped: /);
 });
 
 test("승인 전(prepare)에 연결된 채널을 스스로 고르고(all·exclude·재연결 필요 제외) 계획을 세워 안내에 붙인다", async () => {
@@ -59,7 +66,7 @@ test("승인 전(prepare)에 연결된 채널을 스스로 고르고(all·exclud
     read("prototype/functions/api/agent/_shared.ts"),
     read("prototype/functions/api/agent/_orchestrator.ts"),
   ]);
-  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, prepare: preparePublishInput, run: runPublishTool \}/);
+  assert.match(shared, /publish: \{ agentId: "reach", kind: "external", gate: true, clientSteps: true, prepare: preparePublishInput, run: runPublishTool \}/);
   const channels = fnBody(shared, "async function listConnectedPublishChannels(");
   assert.match(channels, /callInternalJson\(ctx, "\/api\/userdata\/sns\/get"\)/, "토큰 없는 설정 읽기");
   assert.match(shared, /const AUTO_PUBLISH_CHANNELS: Record<string, string> = \{ instagram: "instagram", youtube: "youtube-shorts", tiktok: "tiktok", threads: "threads", x: "x", facebook: "facebook", discord: "discord" \};/);
@@ -85,7 +92,7 @@ test("채널별 초안(drafts)·유튜브 메타·재연결 안내·승인 문�
   ]);
   assert.match(shared, /function normalizePublishPlatform\(raw: any\): string/);
   assert.match(shared, /"쇼츠": "youtube-shorts"/);
-  const run = fnBody(shared, "async function runPublishTool(");
+  const run = publishSource(shared);
   assert.match(run, /const draftFor = \(platform: string\): any => drafts\[platform\] \|\| drafts\[platform\.replace\(\/-shorts\$\/, ""\)\] \|\| \{\};/);
   assert.match(run, /categoryKey: String\(d\.categoryKey \|\| prepared\?\.categoryKey \|\| "entertainment"\),/);
   assert.match(run, /\(platform === "threads" \|\| platform === "x"\) && \(d\.replySetting \|\| prepared\?\.replySetting\)/);
