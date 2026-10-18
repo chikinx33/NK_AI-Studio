@@ -1314,6 +1314,15 @@
     let favoriteThemePresets = readThemePresets();
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
+    // 즐겨찾기 아이콘을 자동으로 못 찾았을 때 쓰는 기본 아이콘 (lucide globe).
+    // 서버 저장 검증이 data:image/ 만 받으므로 data URL 로 둔다.
+    const DEFAULT_FAVORITE_ICON_DATA_URL = 'data:image/svg+xml;base64,' + btoa(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">'
+      + '<rect width="100" height="100" rx="22" fill="#1e293b"/>'
+      + '<g transform="translate(26 26) scale(2)" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>'
+      + '</g></svg>'
+    );
     const FAVORITE_CATEGORY_COUNT = 9;
     const FAVORITE_CATEGORIES_PER_PAGE = 3;
     const FAVORITE_PAGE_COUNT = Math.max(1, Math.ceil(FAVORITE_CATEGORY_COUNT / FAVORITE_CATEGORIES_PER_PAGE));
@@ -2994,9 +3003,19 @@
             }
           } catch (_) { }
           if (!resizedIconDataUrl) {
-            alert('아이콘을 자동으로 찾지 못했습니다. 아이콘 이미지를 등록해 주세요.');
-            favoriteIconInput && favoriteIconInput.focus();
-            return;
+            const en = currentLang === 'en';
+            const useDefault = await NK.ui.dialog.confirm(en
+              ? 'Could not find an icon automatically. Register with the default icon?'
+              : '아이콘을 자동으로 찾지 못했어요. 기본 아이콘으로 등록할까요?', {
+              title: en ? 'Icon' : '아이콘',
+              okText: en ? 'Use default icon' : '기본 아이콘으로 등록',
+              cancelText: en ? 'Choose image' : '직접 선택',
+            });
+            if (!useDefault) {
+              favoriteIconInput && favoriteIconInput.click();
+              return;
+            }
+            resizedIconDataUrl = DEFAULT_FAVORITE_ICON_DATA_URL;
           }
         }
 
