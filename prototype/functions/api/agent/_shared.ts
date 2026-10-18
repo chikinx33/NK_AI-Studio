@@ -8,7 +8,7 @@ import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta, statGcsObject } from "../_shared/media-ingest";
-import { appendPublishRecords, buildPublishRow } from "../_shared/publish-records";
+import { appendPublishRecords, buildPublishRow, setDeployingStep } from "../_shared/publish-records";
 import { analysisToStoryText } from "../_shared/gemini-video";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
@@ -3156,9 +3156,35 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
   };
 }
 
-/** 채널별 결과를 모아 발행 출력으로 만든다(에피소드면 SNS 세팅 배포 이력에도 남긴다). 전부 실패면 failedText 를 채운다. */
-async function finalizePublish(prepared: any, results: PublishStepResult[], ctx: ToolContext): Promise<{ output: any; failedText: string }> {
-  const { scheduledAt, draftFor, captionFor } = publishContext(prepared);
+/** 게시된 채널들을 SNS 세팅(배포 이력·배포 완료 표시)에 남긴다. 실패하면 안내 문장을, 성공하면 "" 를 돌려준다. */
+async function recordEpisodePublish(prepared: any, published: any[], ctx: ToolContext): Promise<string> {
+  // 에피소드를 지목한 발행이면 SNS 세팅(배포 이력·배포 완료 표시)에도 남긴다 — 예전엔 에이전트 기록에만 남았다.
+  const episode: any = prepared?._episode;
+  if (!episode?.projectId || !published.length) return "";
+  const { draftFor, captionFor } = publishContext(prepared);
+  try {
+    const rows = published.map((r: any) => {
+      const { pCaption, pTags } = captionFor(String(r.platform));
+      return buildPublishRow({
+        platform: String(r.platform), status: String(r.status || "published"), postId: String(r.postId || r.publishId || ""),
+        url: String(r.url || ""), publishedAt: String(r.publishedAt || ""), scheduledJobId: String(r.scheduledJobId || ""),
+        caption: pCaption, hashtags: pTags, title: String(draftFor(String(r.platform)).title || episode.title || ""),
+        projectId: episode.projectId, projectTitle: episode.title, brandId: episode.brandId, payload: episode.payload,
+      });
+    });
+    await appendPublishRecords(ctx.env, ctx.userId, episode.projectId, episode.brandId, rows);
+    return "";
+  } catch (e: any) {
+    return `SNS 세팅 배포 이력 기록은 실패했어요(${String(e?.message || e).slice(0, 120)}) — 게시는 위 결과대로예요.`;
+  }
+}
+
+/**
+ * 채널별 결과를 모아 발행 출력으로 만든다. 전부 실패면 failedText 를 채운다.
+ * recordEpisode: 에피소드 배포 이력에 남길지 — 채널별 단계 발행은 채널이 끝날 때마다 이미 남겼으므로 false.
+ */
+async function finalizePublish(prepared: any, results: PublishStepResult[], ctx: ToolContext, recordEpisode = true): Promise<{ output: any; failedText: string }> {
+  const { scheduledAt } = publishContext(prepared);
   const plans: PublishPlanEntry[] = prepared.plan;
   const media: PublishMediaItem[] = prepared.mediaList;
   const published: any[] = results.filter((r) => r.published).map((r) => r.published);
@@ -3168,23 +3194,9 @@ async function finalizePublish(prepared: any, results: PublishStepResult[], ctx:
   const skippedNotes: string[] = [...(Array.isArray(prepared.skippedChannels) ? prepared.skippedChannels : []), ...results.filter((r) => r.skipped).map((r) => String(r.skipped))];
   const tiktok = results.find((r) => r.tiktok)?.tiktok || null;
 
-  // 에피소드를 지목한 발행이면 SNS 세팅(배포 이력·배포 완료 표시)에도 남긴다 — 예전엔 에이전트 기록에만 남았다.
-  const episode: any = prepared?._episode;
-  if (episode?.projectId && published.length) {
-    try {
-      const rows = published.map((r: any) => {
-        const { pCaption, pTags } = captionFor(String(r.platform));
-        return buildPublishRow({
-          platform: String(r.platform), status: String(r.status || "published"), postId: String(r.postId || r.publishId || ""),
-          url: String(r.url || ""), publishedAt: String(r.publishedAt || ""), scheduledJobId: String(r.scheduledJobId || ""),
-          caption: pCaption, hashtags: pTags, title: String(draftFor(String(r.platform)).title || episode.title || ""),
-          projectId: episode.projectId, projectTitle: episode.title, brandId: episode.brandId, payload: episode.payload,
-        });
-      });
-      await appendPublishRecords(ctx.env, ctx.userId, episode.projectId, episode.brandId, rows);
-    } catch (e: any) {
-      notices.push(`SNS 세팅 배포 이력 기록은 실패했어요(${String(e?.message || e).slice(0, 120)}) — 게시는 위 결과대로예요.`);
-    }
+  if (recordEpisode) {
+    const recordNotice = await recordEpisodePublish(prepared, published, ctx);
+    if (recordNotice) notices.push(recordNotice);
   }
 
   if (reconnect.length) notices.push(`🔌 ${Array.from(new Set(reconnect)).join(", ")} 은(는) 연결이 만료돼 다시 연결해야 해요 — 브랜드 스튜디오 → SNS 설정(/sns-settings.html)에서 '연결 해제' 후 다시 연결한 뒤 "다시 발행해줘" 라고 해 주세요.`);
@@ -3237,11 +3249,26 @@ export async function runPublishStep(
   const plan: PublishPlanEntry | undefined = prepared?.plan?.[index];
   if (!plan) throw new Error("publish_step_not_found");
   const existing = job.output?.steps?.[String(index)];
+  const stepCtx = { ...ctx, conversationId: prepared?._conversationId || ctx.conversationId };
+  // 배포 화면이 이 채널 버튼에 스피너를 보이게 '올리는 중'을 표시한다(끝나면 지운다). 표시 실패는 발행을 막지 않는다.
+  const episodeId = String(prepared?._episode?.projectId || "");
+  const markKey = `${jobId}:${index}`;
+  if (!existing && !abandonReason && episodeId) {
+    await setDeployingStep(ctx.env, ctx.userId, episodeId, markKey, { format: plan.platform, startedAt: new Date().toISOString() }).catch(() => {});
+  }
   // 같은 채널을 두 번 올리지 않는다(새로고침·재시도). 이미 기록된 결과를 돌려준다.
   const step: PublishStepResult = existing
     || (abandonReason
       ? { platform: plan.platform, failure: `${plan.platform}(${plan.note}): ${abandonReason.slice(0, 160)} — 채널에 실제로 올라갔는지 확인해 주세요(다시 올리면 중복될 수 있어요).` }
-      : await publishOnePlan(plan, { ...prepared, _conversationId: prepared?._conversationId }, { ...ctx, conversationId: prepared?._conversationId || ctx.conversationId }));
+      : await publishOnePlan(plan, prepared, stepCtx));
+  if (!existing && episodeId) {
+    // 채널이 끝나는 대로 SNS 세팅 배포 이력·배포 완료 표시에 남긴다 — 마지막 채널을 기다리지 않는다.
+    if (step.published) {
+      const recordNotice = await recordEpisodePublish(prepared, [step.published], stepCtx);
+      if (recordNotice) step.notices = [...(step.notices || []), recordNotice];
+    }
+    await setDeployingStep(ctx.env, ctx.userId, episodeId, markKey, null).catch(() => {});
+  }
   if (!existing) {
     await sql(
       `UPDATE agent_jobs SET output = jsonb_set(COALESCE(output, '{}'::jsonb) || jsonb_build_object('steps', COALESCE(output->'steps', '{}'::jsonb)), ARRAY['steps', $3::text], $4::jsonb), updated_at = now()
@@ -3258,7 +3285,7 @@ export async function runPublishStep(
     WHERE id = $1 AND user_id = $2 AND status = 'working' AND NOT (output ? 'finalizing') RETURNING id`, [jobId, ctx.userId]) as any[];
   if (!claimed) return { step, final: null };
   const results: PublishStepResult[] = Array.from({ length: total }, (_, i) => steps[String(i)]).filter(Boolean);
-  const final = await finalizePublish(prepared, results, { ...ctx, conversationId: prepared?._conversationId || ctx.conversationId });
+  const final = await finalizePublish(prepared, results, stepCtx, false);
   await setJobStatus(sql, jobId, ctx.userId, final.failedText
     ? { status: "error", error: final.failedText, output: { ...final.output, steps } }
     : { status: "approved", output: { ...final.output, steps }, reviewStatus: "approved" });

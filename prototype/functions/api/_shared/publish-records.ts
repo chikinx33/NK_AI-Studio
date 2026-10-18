@@ -85,6 +85,25 @@ export function buildPublishRow(input: {
   };
 }
 
+/** 이 시간이 지난 '올리는 중' 표시는 끊긴 것으로 본다(채널 하나가 이보다 오래 걸리지 않는다). 배포 화면도 같은 값을 쓴다. */
+export const DEPLOYING_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * 에이전트가 채널 하나를 올리는 동안 배포 화면이 그 채널 버튼에 스피너를 보이게 표시한다(2026-10-18 엔케 지적:
+ * 에이전트가 '동시에 올리는 중'이라는데 배포 화면에는 아무 표시가 없었다). key 는 '잡:채널번호', value 가 null 이면 지운다.
+ */
+export async function setDeployingStep(env: any, userId: string, projectId: string, key: string, value: { format: string; startedAt: string } | null) {
+  const { basePrefix } = resolveGcsEnv(env);
+  const projectObject = `${buildAiVideoProjectPrefix(basePrefix, userId, projectId)}/reference/data.json`;
+  return updateJson(env, projectObject, (doc) => {
+    const payload = doc.payload && typeof doc.payload === "object" ? doc.payload : {};
+    const steps: Record<string, any> = { ...(payload.brandStudioDeployingSteps && typeof payload.brandStudioDeployingSteps === "object" ? payload.brandStudioDeployingSteps : {}) };
+    if (value) steps[key] = value; else delete steps[key];
+    for (const [k, v] of Object.entries(steps)) if (!(Date.now() - Date.parse(String((v as any)?.startedAt || "")) < DEPLOYING_STALE_MS)) delete steps[k];
+    return { ...doc, payload: { ...payload, brandStudioDeployingSteps: steps } };
+  });
+}
+
 /** 에피소드(payload)와 브랜드 기록 양쪽에 덧붙이고, 배포 완료 표시(brandStudioDeployedFormats)도 켠다. */
 export async function appendPublishRecords(env: any, userId: string, projectId: string, brandId: string, rows: any[]) {
   if (!rows.length) return { project: false, brand: false };

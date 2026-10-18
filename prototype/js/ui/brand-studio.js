@@ -17,6 +17,52 @@
   // 배포 진행 중 상태(formatId→true). renderProject 가 재실행돼도 스피너가 유지되도록
   // 모듈 스코프에 둔다(렌더 내부 지역변수였을 때는 재렌더 시 초기화돼 스피너가 꺼졌음).
   var _deployingFormats = {};
+  // 에이전트가 채널별로 올리는 중인 채널 — 서버가 payload.brandStudioDeployingSteps 에 '잡:채널번호' → {format, startedAt} 로 남긴다
+  // (publish-records.ts setDeployingStep). 전엔 에이전트가 '동시에 올리는 중'이라는데 이 화면엔 아무 표시가 없었다(2026-10-18).
+  // 이 시간이 지난 표시는 끊긴 것으로 본다 — publish-records.ts DEPLOYING_STALE_MS 와 같은 값.
+  var AGENT_DEPLOYING_STALE_MS = 15 * 60 * 1000;
+  var AGENT_DEPLOYING_REFRESH_MS = 8000;
+  var _agentDeployTimer = null;
+  function readAgentDeploying(payload) {
+    var src = payload && payload.brandStudioDeployingSteps && typeof payload.brandStudioDeployingSteps === 'object'
+      ? payload.brandStudioDeployingSteps : {};
+    var out = {};
+    Object.keys(src).forEach(function (key) {
+      var v = src[key] || {};
+      var started = Date.parse(String(v.startedAt || ''));
+      if (v.format && Date.now() - started < AGENT_DEPLOYING_STALE_MS) out[_migrateFormatId(String(v.format))] = true;
+    });
+    return out;
+  }
+  // 에이전트가 올리는 중인 채널이 있는 동안만 서버 기록(저장소, DB 아님)을 다시 읽어 스피너·배포 완료를 갱신한다.
+  // 다 끝나거나 표시가 오래되면 멈춘다 — 상시 폴링하지 않는다.
+  function scheduleAgentDeployRefresh(root, project, brand, agentDeploying) {
+    if (_agentDeployTimer) { clearTimeout(_agentDeployTimer); _agentDeployTimer = null; }
+    var projectId = String(project && project.id || '').trim();
+    if (!projectId || !Object.keys(agentDeploying).length || !NK.api || !NK.api.projectGet) return;
+    _agentDeployTimer = setTimeout(async function () {
+      _agentDeployTimer = null;
+      if (!root.isConnected) return;
+      try {
+        var res = await NK.api.projectGet(projectId);
+        var data = (res && res.data) ? res.data : res;
+        var srv = (data && data.payload) || null;
+        if (!srv || !root.isConnected) throw new Error('no_payload');
+        var pick = {
+          brandStudioDeployingSteps: srv.brandStudioDeployingSteps || {},
+          brandStudioDeployedFormats: srv.brandStudioDeployedFormats || {}
+        };
+        if (Array.isArray(srv.brandStudioPublishResults)) pick.brandStudioPublishResults = srv.brandStudioPublishResults;
+        if (Array.isArray(srv.publishResults)) pick.publishResults = srv.publishResults;
+        var updated = NK.service.project.updateLocal(projectId, function (cur) {
+          return Object.assign({}, cur || {}, { payload: Object.assign({}, (cur && cur.payload) || {}, pick) });
+        }, { forceCurrent: true });
+        renderProject(root, updated || Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, pick) }), brand);
+      } catch (_) {
+        scheduleAgentDeployRefresh(root, project, brand, readAgentDeploying(project && project.payload));
+      }
+    }, AGENT_DEPLOYING_REFRESH_MS);
+  }
   // 배포 이력(brandStudioPublishResults) 저장 줄. 기록은 '목록 전체'를 저장하므로 동시에 두 건이 저장되면
   // 나중 것이 앞 것을 지운다. 한 번에 하나씩, 직전 저장이 끝난 뒤의 최신 목록에 덧붙인다(2026-10-14:
   // 전체 배포에서 YouTube·X·TikTok·Facebook 기록이 사라지고 마지막 Instagram 만 남았다).
@@ -394,22 +440,23 @@
   }
 
   function readDeployedFormats(payload, projectId) {
-    // Dedicated local key takes full precedence — immune to server-merge race conditions
-    // and draft-size eviction of nk_scenario_drafts_v1. Falls back to payload when
-    // the key is absent (e.g. first load on a new device).
-    if (projectId) {
-      try {
-        var raw = localStorage.getItem('nk_bs_deployed_' + projectId);
-        if (raw !== null) {
-          var stored = JSON.parse(raw);
-          if (stored && typeof stored === 'object') return Object.assign({}, stored);
-        }
-      } catch (_) {}
-    }
+    // 서버 기록(payload)과 이 브라우저 전용 키를 합친다(둘 중 하나라도 켜져 있으면 배포 완료).
+    // 전엔 전용 키가 있으면 서버 값을 아예 보지 않아, 에이전트가 서버에 남긴 배포 완료가 이 화면을
+    // 한 번이라도 연 브라우저에선 꺼진 채로 보였다(2026-10-18). 전용 키는 서버 병합 경쟁·초안 용량 축출로
+    // 서버 값이 빠지는 경우를 막는 보조로 남긴다. 화면에서 끄면 두 곳 모두 지우므로(persistDeployedFormats) 합쳐도 된다.
     var src = payload && payload.brandStudioDeployedFormats && typeof payload.brandStudioDeployedFormats === 'object'
       ? payload.brandStudioDeployedFormats
       : {};
-    return Object.assign({}, src);
+    var out = {};
+    Object.keys(src).forEach(function (k) { if (src[k]) out[k] = true; });
+    if (projectId) {
+      try {
+        var raw = localStorage.getItem('nk_bs_deployed_' + projectId);
+        var stored = raw !== null ? JSON.parse(raw) : null;
+        if (stored && typeof stored === 'object') Object.keys(stored).forEach(function (k) { if (stored[k]) out[k] = true; });
+      } catch (_) {}
+    }
+    return out;
   }
 
   function readActiveDraftTab(payload) {
@@ -1334,6 +1381,8 @@
     var _hasUserFormatChoice = selectedFormats.length > 0;
     var formatDrafts = readFormatDrafts(payload);
     var persistedDeployedFormats = readDeployedFormats(payload, projectId);
+    var agentDeploying = readAgentDeploying(payload);
+    scheduleAgentDeployRefresh(root, project, brand, agentDeploying);
     var activeDraftTab = readActiveDraftTab(payload) || (selectedFormats.length ? selectedFormats[0] : '');
     var formatItems = channelFormats(isEn ? 'en' : 'ko');
     var channelRows = channelOptions();
@@ -2735,7 +2784,7 @@
                 (function () {
                   // manual 채널에는 자동 배포 버튼을 두지 않는다. 패널이 그 자리를 대신한다.
                   if (isManual) return '';
-                  var isDeploying = !!_deployingFormats[formatId];
+                  var isDeploying = !!_deployingFormats[formatId] || !!agentDeploying[formatId];
                   var btnCls = 'bsf-deploy-one-btn btn-primary' + (isDeploying ? ' is-deploying' : '');
                   var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
                   // 연결되어 있고 '사용 중'인 플랫폼만 배포 가능

@@ -47,3 +47,33 @@ test('디스코드 큰 파일 링크는 만료가 없다(e=0), 틱톡 수집 링
   // 틱톡 사진 수집 링크는 기본 1시간(ttlSec 기본값) 그대로.
   assert.match(publish, /buildTikTokProxyUrl\(origin, img\.gcsPath, mediaSecret\)/);
 });
+
+test('에이전트가 올리는 동안 배포 화면에 스피너, 채널이 끝나는 대로 배포 완료가 보인다', () => {
+  const shared = read('prototype/functions/api/agent/_shared.ts');
+  const records = read('prototype/functions/api/_shared/publish-records.ts');
+  const studio = read('prototype/js/ui/brand-studio.js');
+  const run = shared.slice(shared.indexOf('export async function runPublishStep('), shared.indexOf('\n}\n', shared.indexOf('export async function runPublishStep(')));
+  // 올리는 중 표시 → 올리기 → 그 채널 기록 → 표시 지움(응답 못 받은 채널의 abandon 도 지운다)
+  const mark = run.indexOf('setDeployingStep(ctx.env, ctx.userId, episodeId, markKey, { format: plan.platform');
+  const publish = run.indexOf('await publishOnePlan(plan, prepared, stepCtx)');
+  const record = run.indexOf('recordEpisodePublish(prepared, [step.published], stepCtx)');
+  const clear = run.indexOf('setDeployingStep(ctx.env, ctx.userId, episodeId, markKey, null)');
+  assert.ok(mark > 0 && mark < publish && publish < record && record < clear, '표시 → 올리기 → 기록 → 지움 순서');
+  assert.match(run, /await finalizePublish\(prepared, results, stepCtx, false\)/, '채널마다 기록했으니 마무리에서 또 기록하지 않는다');
+  assert.match(records, /export const DEPLOYING_STALE_MS = 15 \* 60 \* 1000;/);
+  assert.match(studio, /var AGENT_DEPLOYING_STALE_MS = 15 \* 60 \* 1000;/, '서버와 같은 만료');
+  assert.match(studio, /var isDeploying = !!_deployingFormats\[formatId\] \|\| !!agentDeploying\[formatId\];/);
+  // 올리는 중인 채널이 있을 때만 다시 읽는다(상시 폴링 금지)
+  assert.match(studio, /if \(!projectId \|\| !Object\.keys\(agentDeploying\)\.length \|\| !NK\.api \|\| !NK\.api\.projectGet\) return;/);
+  assert.doesNotMatch(studio.slice(studio.indexOf('function scheduleAgentDeployRefresh'), studio.indexOf('function scheduleAgentDeployRefresh') + 2000), /setInterval/);
+});
+
+test('배포 완료는 서버 기록과 이 브라우저 기록을 합쳐 읽는다(에이전트가 남긴 배포 완료가 가려지지 않게)', () => {
+  const studio = read('prototype/js/ui/brand-studio.js');
+  const fn = studio.slice(studio.indexOf('function readDeployedFormats('), studio.indexOf('function readActiveDraftTab('));
+  const readDeployedFormats = new Function('localStorage', `${fn}; return readDeployedFormats;`)({
+    getItem: () => JSON.stringify({ tiktok: true }),
+  });
+  assert.deepEqual(readDeployedFormats({ brandStudioDeployedFormats: { instagram: true, x: false } }, 'p1'), { instagram: true, tiktok: true });
+  assert.deepEqual(readDeployedFormats({}, ''), {});
+});
