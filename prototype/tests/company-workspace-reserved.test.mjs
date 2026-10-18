@@ -23,3 +23,8 @@ test('에피소드 삭제로 업무 파일 저장소를 통째로 지울 수 없
   assert.match(del, /const reservedPrefixes = deleteAll \? RESERVED_PROJECT_IDS\.map\(\(id\) => `\$\{buildAiVideoProjectPrefix\(basePrefix, userId, id\)\}\/`\) : \[\];/);
   assert.match(del, /&& !reservedPrefixes\.some\(\(p\) => name\.startsWith\(p\)\)\);/);
 });
+
+test('업무 파일 저장소 이름(ai-company)으로는 에피소드 데이터를 저장하지 않는다(제목 없는 카드의 출처)', () => {
+  const save = read('prototype/functions/api/project/save.ts');
+  assert.match(save, /if \(isReservedProjectId\(projectId\)\) return send\(\{ error: "reserved_project_id"/);
+});

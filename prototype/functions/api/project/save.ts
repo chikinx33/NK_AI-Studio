@@ -1,6 +1,6 @@
 ﻿// prototype/functions/api/project/save.ts
 // Save project payload/scenes to GCS reference folder as data.json
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, isReservedProjectId } from "../_shared/storage";
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
 
@@ -28,6 +28,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectId = String(body.projectId || "").trim();
     if (!projectId) return send({ error: "projectId is required" }, 400, origin);
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
+    // 'ai-company' 는 업무 파일 저장소다. 예전 에피소드 목록이 이걸 에피소드로 돌려줘 대시보드가 빈 프로젝트 데이터를
+    // 여기 저장했고(제목 없는 '프로젝트' 카드), 그 카드를 지우자 업무 파일이 통째로 지워졌다(2026-10-18).
+    if (isReservedProjectId(projectId)) return send({ error: "reserved_project_id", message: "업무 파일 저장소 이름이라 에피소드로 저장할 수 없어요." }, 400, origin);
     const requesterId = auth.userId;
     // 공유 프로젝트 저장: ownerId가 본인과 다르면 '에디터' 권한이 있어야 소유자 경로에 쓸 수 있다.
     const ownerParam = sanitizeUserId(body.ownerId || "");
