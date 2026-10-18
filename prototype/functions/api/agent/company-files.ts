@@ -57,6 +57,9 @@ function normalizePath(value: unknown, allowRoot = true) {
     if (!part || part === "." || part === ".." || part === FOLDER_MARKER) throw new Error("사용할 수 없는 경로입니다.");
     if (part.length > 120 || /[\u0000-\u001f]/.test(part)) throw new Error("파일 또는 폴더 이름을 확인해 주세요.");
   }
+  // .work-files/ 아래에는 날짜 폴더(YYYY-MM-DD)만 있다. 직원이 일반 폴더 앞에 이 접두어를 붙이면
+  // (".work-files/puzzle knight/promotion/001") 있을 수 없는 경로라 삭제가 '찾지 못함'으로 실패했다(2026-10-18) — 접두어를 뗀다.
+  if (parts.length > 1 && parts[0] === WORK_FILES_ROOT && !/^\d{4}-\d{2}-\d{2}$/.test(parts[1])) parts.shift();
   return parts.join("/");
 }
 

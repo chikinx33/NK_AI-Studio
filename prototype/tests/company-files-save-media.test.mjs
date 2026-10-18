@@ -42,3 +42,14 @@ test('업무 파일의 이미지·영상은 카드·목록에서 썸네일로 �
   assert.match(explorer, /className="block w-full text-left"><EntryThumb entry=\{entry\}\/>/);
   assert.match(explorer, /<EntryThumb entry=\{entry\} compact\/>/);
 });
+
+test('일반 폴더 앞에 잘못 붙인 .work-files/ 접두어는 떼고, 날짜 폴더 경로는 그대로 둔다', () => {
+  const api = read('prototype/functions/api/agent/company-files.ts');
+  const body = api.slice(api.indexOf('function normalizePath('), api.indexOf('function baseName('));
+  const normalizePath = new Function('WORK_FILES_ROOT', 'FOLDER_MARKER', `${body.replace(/\(value: unknown, allowRoot = true\)/, '(value, allowRoot = true)')}; return normalizePath;`)('.work-files', '.raviok-folder');
+  assert.equal(normalizePath('.work-files/puzzle knight/promotion/001'), 'puzzle knight/promotion/001');
+  assert.equal(normalizePath('.work-files/2026-10-18/영상.mp4'), '.work-files/2026-10-18/영상.mp4');
+  assert.equal(normalizePath('.work-files'), '.work-files');
+  const orchestrator = read('prototype/functions/api/agent/_orchestrator.ts');
+  assert.doesNotMatch(orchestrator, /업무 폴더 영상 경로\(\.work-files/, '영상 경로 예시가 모든 업무 폴더에 .work-files 를 붙이게 가르쳤다');
+});
