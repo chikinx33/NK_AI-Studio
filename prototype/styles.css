@@ -13698,6 +13698,78 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* 네이버 블로그 반자동 동선 — 버튼 폭은 고정(문구가 바뀌어도 줄이 흔들리지 않게) */
+.bsf-handoff-btn--fixed {
+  gap: 6px;
+  min-width: 132px;
+}
+.bsf-handoff-btn--fixed svg { flex: 0 0 auto; }
+.bsf-naver-handoff {
+  flex-direction: column;
+  align-items: stretch;
+}
+.bsf-naver-handoff-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bsf-naver-handoff-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-2, var(--muted));
+}
+.bsf-naver-images {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.bsf-naver-images-label {
+  flex: 0 0 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.bsf-naver-image {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 132px;
+}
+.bsf-naver-image img {
+  width: 132px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+/* 직접 올린 글 주소(배포 카드) */
+.bsf-deploy-posted-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.bsf-deploy-posted-url-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-2, var(--muted));
+  white-space: nowrap;
+}
+.bsf-deploy-posted-url-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 12px;
+}
+.bsf-deploy-posted-url-input:focus { outline: none; border-color: var(--accent); }
 .bsf-refine-bar {
   grid-column: 1;
   display: flex;

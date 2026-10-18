@@ -416,12 +416,14 @@
   };
 
   api.draftGenerate = async function (payload) {
+    // 네이버 블로그 원고는 본문이 길어 생성에 30초를 넘길 수 있다.
+    var draftTimeoutMs = (payload && payload.platformId === 'naver-blog') ? 60000 : 30000;
     var res = await fetchWithTimeout(withBase('/api/draft-generate'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload || {})
-    }, 30000);
-    var text = await readTextWithTimeout(res, 30000);
+    }, draftTimeoutMs);
+    var text = await readTextWithTimeout(res, draftTimeoutMs);
     if (!res.ok) {
       var err = new Error(e(text) || 'draft_generate_api_error');
       err.status = res.status;

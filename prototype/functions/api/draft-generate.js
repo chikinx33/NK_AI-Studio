@@ -1,6 +1,7 @@
 import { claudeFetch, buildClaudeSystem, studioAuth, isClaudeAuthRequired, CLAUDE_AUTH_REQUIRED } from "./_shared/claude-auth.js";
 import { authorizeRequest } from "./_shared/auth.js";
 import { isCreditExhausted } from "./_shared/credit-exhausted.js";
+import { finalizeNaverBlogDraft } from "./_shared/naver-blog-draft.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -234,24 +235,48 @@ first_comment 값의 줄바꿈은 반드시 \n 으로 표현.
 `.trim(),
 
   'naver-blog': `
-당신은 네이버 블로그 전문 작가입니다.
+당신은 네이버 블로그에 올릴 원고를 쓰는 작가입니다. 이 원고는 사용자가 복사해서 스마트에디터에 직접 붙여 넣습니다.
 에피소드 스토리에는 장르·시청목적·톤·씬별 나레이션과 대사가 포함됩니다.
-씬 흐름을 따라가며 독자가 영상을 직접 보는 듯한 생생한 묘사로 작성하세요.
+씬 흐름을 따라가며 그 에피소드에서 실제로 무슨 일이 있었는지 구체적으로 풀어 쓰세요.
 
-[작성 규칙]
-- 제목: 브랜드명·캐릭터명·제품명 + 감성 키워드, 검색 유입 고려, 25자 이내
-- 본문:
-  · 도입부: 공감 또는 질문으로 시작 (2~3문장)
-  · 전개: 씬 나레이션·대사를 풀어 구체적으로 묘사 (각 3~4문장)
-  · 마무리: 감성적 마무리 + 브랜드 메시지 (2~3문장)
-  · 각 단락 사이 이모지 1개씩 자연스럽게
-  · 친근한 블로그체 ("오늘은요~", "그런데 말이죠", "어떠셨나요?")
-- 해시태그: 10개, 브랜드명·캐릭터명·제품명·장르 키워드 혼합
+[화자]
+- 화자는 브랜드 컨텍스트에서 가져온다. 톤앤매너·브랜드 캐릭터가 주어져 있으면 그 화자로 쓴다.
+- 지정된 화자가 없으면 브랜드 공식 블로그 화자로 쓴다.
+- 브랜드 컨텍스트에 없는 인물·세계관·수치·출시일을 지어내지 말 것.
+
+[제목]
+- 30자 이내. 브랜드명·캐릭터명·제품명 중 실제로 있는 것 + 이 글의 구체적 내용
+- 검색하는 사람이 칠 만한 말을 쓴다. 감탄사·물음표 남발 금지
+
+[본문 형식 — 아래 표시만 쓴다. HTML·표·코드블록 금지]
+- 소제목: 줄 맨 앞에 "## " (2~4개)
+- 굵게: **강조할 말** (한 단락에 1곳 이하)
+- 목록: 줄 맨 앞에 "- " (필요할 때만, 한 목록 3~5줄)
+- 단락 사이는 빈 줄 하나. 한 단락은 2~4문장
+- 첨부 이미지 자리: "[이미지 N]" 을 단독 줄로. 작성 요청에 적힌 장수만큼만, 번호마다 한 번씩. 장수가 0이면 쓰지 않는다
+- 본문 전체 1000~1600자
+
+[본문 내용]
+- 도입: 이 글이 무엇을 다루는지 바로 말한다(2~3문장)
+- 전개: 씬 나레이션·대사·등장 인물·제품을 구체적으로 묘사한다. 추상어로 때우지 말 것
+- 마무리: 브랜드 메시지를 담백하게 1단락
+- 영상 길이(초·분)와 장면 시각("0:12" 등)은 에피소드 정보에 실제로 적혀 있을 때만 그대로 쓴다. 없으면 쓰지 않는다 — 지어내지 않는다
+
+[절대 금지]
+- 대구(對句) 슬로건: "A는 B, C는 D"처럼 짝을 맞춘 표어, "~이 아니라 ~이다"식 뒤집기 문장, 운율 맞춘 캐치프레이즈
+- 상투어: "오늘은요~", "그런데 말이죠", "어떠셨나요?", "여러분", "함께해요", "놓치지 마세요", "특별한", "소중한", "설렘 가득", "마법 같은", "힐링", "꿀팁", "강력 추천"
+- 이모지는 쓰지 않거나 글 전체 2개 이하
+- 링크: 브랜드 컨텍스트에 실제로 적힌 구글 플레이(play.google.com) 또는 elidus.org 주소만 그대로 쓴다. 없으면 링크를 넣지 않는다. pages.dev 주소와 그 밖의 링크는 절대 쓰지 않는다
 - 금칙어 절대 사용 금지
+- 구매·DM·프로필 링크 유도 등 브랜드가 설정하지 않은 외부 행동 유도 금지
+
+[태그]
+- 8~10개. 브랜드명·캐릭터명·제품명·글 주제 키워드. 띄어쓰기 없이, # 를 붙여 공백으로 구분
 
 [출력 형식]
-반드시 아래 JSON만 반환. 설명·마크다운 없이.
-{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+반드시 아래 JSON만 반환. 설명·코드블록 없이.
+caption 값이 본문이다. 줄바꿈은 반드시 \\n 으로 표현.
+{"title":"...","caption":"도입 단락\\n\\n## 소제목\\n단락\\n\\n[이미지 1]\\n\\n...","hashtags":"#태그1 #태그2 ..."}
 `.trim(),
 
   'naver-post': `
@@ -336,6 +361,8 @@ export async function onRequestPost(context) {
   const brandContext     = String(body?.brandContext || "").trim().slice(0, 3000);
   const userInstruction  = String(body?.userInstruction || "").trim().slice(0, 500);
   const currentDraft     = body?.currentDraft && typeof body.currentDraft === "object" ? body.currentDraft : null;
+  // 선택한 이미지 장수. 네이버 블로그 원고가 [이미지 N] 자리를 그 장수만큼만 만든다.
+  const imageCount       = Math.max(0, Math.min(30, parseInt(body?.imageCount, 10) || 0));
 
   const basePlatformPrompt = PLATFORM_PROMPTS[platformId];
   if (!basePlatformPrompt) {
@@ -347,6 +374,13 @@ export async function onRequestPost(context) {
   const systemPrompt = isRefineMode
     ? basePlatformPrompt + "\n\n[보완 수정 모드] 현재 초안을 사용자 지시에 따라 보완·수정합니다. 지시되지 않은 부분은 원본의 분위기와 구조를 최대한 유지하세요."
     : basePlatformPrompt;
+
+  // 네이버 블로그 원고만 첨부 이미지 장수를 쓴다 — 사진 붙일 자리를 본문에 표시하기 때문이다.
+  const imageNote = platformId === "naver-blog"
+    ? "=== 첨부 이미지 ===\n" + (imageCount
+        ? imageCount + "장. 본문에 [이미지 1]부터 [이미지 " + imageCount + "]까지 각각 한 번씩, 알맞은 자리에 단독 줄로 넣으세요."
+        : "없음. [이미지 N] 표시를 넣지 마세요.")
+    : "";
 
   function formatCurrentDraft(d) {
     const lines = [];
@@ -362,6 +396,7 @@ export async function onRequestPost(context) {
         brandContext  ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
         story         ? "=== 에피소드 정보 ===\n" + story          : "",
         currentDraft  ? "=== 현재 초안 ===\n" + formatCurrentDraft(currentDraft) : "",
+        imageNote,
         "=== 사용자 지시 ===\n" + userInstruction,
         "=== 수정 요청 ===\n현재 초안을 사용자 지시에 따라 수정하세요. " +
           "지시와 무관한 부분은 원본을 유지하고, 브랜드 톤앤매너와 금칙어를 반드시 지켜야 합니다.",
@@ -369,6 +404,7 @@ export async function onRequestPost(context) {
     : [
         brandContext ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
         story        ? "=== 에피소드 정보 ===\n" + story          : "",
+        imageNote,
         "=== 작성 요청 ===\n" +
           "위 에피소드 정보(장르·시청목적·씬 나레이션·대사)를 반드시 반영해서 작성하세요. " +
           "캡션과 해시태그는 이 에피소드의 실제 내용·감성·등장 인물·제품명을 구체적으로 담아야 합니다. " +
@@ -378,7 +414,8 @@ export async function onRequestPost(context) {
   try {
     const completion = await claudeFetch(env, auth, (sub) => ({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      // 블로그 원고는 다른 채널 캡션보다 몇 배 길다(본문 1000~1600자). 1024 면 JSON 이 중간에 잘린다.
+      max_tokens: platformId === "naver-blog" ? 3000 : 1024,
       temperature: 0.8,
       system: buildClaudeSystem(sub, systemPrompt),
       messages: [{ role: "user", content: userPrompt }],
@@ -402,6 +439,10 @@ export async function onRequestPost(context) {
     } catch (_) {
       parsed = { caption: clean, hashtags: "" };
     }
+
+    // 네이버 블로그 원고: 허용 밖 링크·넘치는 [이미지 N]·11번째 태그를 거르고, HTML 로 답했으면 원고 표시로 되돌린다.
+    // 금칙어 후처리보다 먼저 해야 본문이 caption 에 들어간 뒤 금칙어가 걸러진다.
+    if (platformId === "naver-blog") parsed = finalizeNaverBlogDraft(parsed, { imageCount });
 
     // ── 서버 사이드 금칙어 후처리 ──────────────────────────
     // brandContext에서 "금칙어 (절대 사용 금지): X, Y, Z" 패턴 추출

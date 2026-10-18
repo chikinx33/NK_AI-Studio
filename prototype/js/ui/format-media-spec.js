@@ -79,7 +79,10 @@
       //   대체 API 가 제공되지 않았으므로 자동 배포 구현 예정이 아니다.
       delivery: 'manual',
       // 비로그인 시 nid.naver.com 로그인으로 갔다가 이 URL 로 되돌아온다(정상).
+      // 2026-10-18 확인: 302 → nid.naver.com/nidlogin.login?mode=form&url=https://blog.naver.com/GoBlogWrite.naver
       manualUrl: 'https://blog.naver.com/GoBlogWrite.naver',
+      // 직접 올린 글 주소를 배포 완료 칸에 기록한다. 이 호스트의 https 주소만 받는다.
+      postedUrlHosts: ['blog.naver.com', 'm.blog.naver.com'],
     },
     kakao: {
       accepts: { story: true, image: true, video: true },
@@ -375,6 +378,26 @@
     return (spec && spec.delivery === 'manual' && spec.manualUrl) ? spec.manualUrl : '';
   }
 
+  /** 직접 올린 글 주소를 기록하는 채널인가. */
+  function acceptsPostedUrl(formatId) {
+    var spec = SPEC[formatId];
+    return !!(spec && spec.delivery === 'manual' && Array.isArray(spec.postedUrlHosts) && spec.postedUrlHosts.length);
+  }
+
+  /**
+   * 올린 글 주소를 검사해 정규화한다. 그 채널의 https 주소가 아니면 ''.
+   * 빈 값과 틀린 값을 호출부가 구분해야 하므로(빈 값은 주소 없이 완료 허용) 입력이 비었는지는 호출부가 본다.
+   */
+  function normalizePostedUrl(formatId, raw) {
+    if (!acceptsPostedUrl(formatId)) return '';
+    var u;
+    try { u = new URL(String(raw || '').trim()); } catch (_) { return ''; }
+    if (u.protocol !== 'https:') return '';
+    if (SPEC[formatId].postedUrlHosts.indexOf(u.hostname.toLowerCase()) < 0) return '';
+    if (!u.pathname || u.pathname === '/') return '';
+    return u.href;
+  }
+
   /** manual 배지 문구. auto 채널이면 빈 문자열 — 호출부에서 분기하지 않아도 되게. */
   function deliveryLabel(formatId, lang) {
     return isManualDelivery(formatId) ? deliveryText('manualBadge', lang) : '';
@@ -430,6 +453,8 @@
     connectTargets: connectTargets,
     labelOf: labelOf,
     manualUrlOf: manualUrlOf,
+    acceptsPostedUrl: acceptsPostedUrl,
+    normalizePostedUrl: normalizePostedUrl,
     deliveryLabel: deliveryLabel,
     manualScheduleReason: manualScheduleReason,
   };

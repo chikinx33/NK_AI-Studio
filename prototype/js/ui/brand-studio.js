@@ -1060,7 +1060,24 @@
       manualDownloadStarted: function (n) { return n + '개 자산을 내려받는 중이에요.'; },
       manualDownloadFail: function (e) { return '자산을 내려받지 못했어요: ' + e; },
       manualDoneRecorded: function (label) { return label + ' 게시를 완료로 기록했어요.'; },
-      manualDoneUndone: function (label) { return label + ' 게시 완료 표시를 해제했어요.'; }
+      manualDoneUndone: function (label) { return label + ' 게시 완료 표시를 해제했어요.'; },
+      // ── 네이버 블로그 원고 ──
+      naverCopyBody: '본문 복사',
+      naverCopyImage: function (n) { return '이미지 ' + n + ' 복사'; },
+      naverDownloadAll: '이미지 모두 받기',
+      naverOpenWrite: '블로그 글쓰기 열기',
+      naverAttachedImages: '첨부 이미지',
+      naverBodyHint: '네이버 글쓰기 화면에 붙여 넣으면 소제목·굵게·목록 서식이 유지돼요. 사진은 본문의 [이미지 N] 자리에 붙여 넣고 그 표시를 지워 주세요.',
+      naverBodyCopied: '본문을 서식째 복사했어요. 네이버 블로그 글쓰기에 붙여 넣으세요.',
+      naverBodyCopiedPlain: '이 브라우저는 서식 복사를 지원하지 않아 글자만 복사했어요.',
+      naverImageCopied: function (n) { return '이미지 ' + n + '을 복사했어요. 본문의 [이미지 ' + n + '] 자리에 붙여 넣으세요.'; },
+      naverCopyFail: function (e) { return '복사하지 못했어요: ' + e; },
+      naverCopyUnsupported: '이 브라우저는 이미지 복사를 지원하지 않아요. \'이미지 모두 받기\'를 써 주세요.',
+      naverBodyEmpty: '복사할 본문이 아직 없어요.',
+      postedUrlLabel: '올린 글 주소',
+      postedUrlPlaceholder: 'https://blog.naver.com/…',
+      postedUrlInvalid: '네이버 블로그에 올린 글 주소(https://blog.naver.com/…)를 넣어 주세요.',
+      postedUrlSaved: '올린 글 주소를 기록했어요.'
     };
     return {
       eyebrow: 'Brand Operations', oneClickDraft: 'One-Stop',
@@ -1140,7 +1157,24 @@
       manualDownloadStarted: function (n) { return 'Downloading ' + n + ' asset' + (n === 1 ? '' : 's') + '.'; },
       manualDownloadFail: function (e) { return 'Could not download assets: ' + e; },
       manualDoneRecorded: function (label) { return label + ' recorded as posted.'; },
-      manualDoneUndone: function (label) { return label + ' unmarked as posted.'; }
+      manualDoneUndone: function (label) { return label + ' unmarked as posted.'; },
+      // ── Naver Blog draft ──
+      naverCopyBody: 'Copy body',
+      naverCopyImage: function (n) { return 'Copy image ' + n; },
+      naverDownloadAll: 'Download all images',
+      naverOpenWrite: 'Open blog editor',
+      naverAttachedImages: 'Attached images',
+      naverBodyHint: 'Paste into the Naver editor and headings, bold and lists keep their format. Paste each image where its [Image N] marker is, then delete the marker.',
+      naverBodyCopied: 'Body copied with formatting. Paste it into the Naver blog editor.',
+      naverBodyCopiedPlain: 'This browser can only copy plain text, so the body was copied without formatting.',
+      naverImageCopied: function (n) { return 'Image ' + n + ' copied. Paste it at the [Image ' + n + '] spot.'; },
+      naverCopyFail: function (e) { return 'Could not copy: ' + e; },
+      naverCopyUnsupported: 'This browser cannot copy images. Use "Download all images" instead.',
+      naverBodyEmpty: 'There is no body to copy yet.',
+      postedUrlLabel: 'Post URL',
+      postedUrlPlaceholder: 'https://blog.naver.com/…',
+      postedUrlInvalid: 'Enter the address of the post you published on Naver Blog (https://blog.naver.com/…).',
+      postedUrlSaved: 'Post URL saved.'
     };
   }
 
@@ -2423,7 +2457,10 @@
           : '연결한 디스코드 채널에 웹훅으로 올라갑니다. 10MB 넘는 파일은 링크로 올라가요. 본문+해시태그는 2000자 안이어야 합니다.');
     }
     function buildNaverBlogPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
-      var paras = splitIntoParagraphs(captionVal, 3);
+      // 원고 표시(## · ** · [이미지 N])는 목업에서 걷어 낸다. 편집칸에는 그대로 둔다.
+      var previewText = (window.NKNaverBlogDraft ? window.NKNaverBlogDraft.toPlain(captionVal) : captionVal)
+        .replace(/^\[\s*(?:이미지|사진|image|photo)\s*\d{1,2}\s*\]$/gim, '');
+      var paras = splitIntoParagraphs(previewText, 3);
       var blogInner = '';
       if (draftFirstImgUrl) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(draftFirstImgUrl) + '" />';
       if (paras.length) blogInner += '<p class="bsf-mock-blog-para" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((paras[0] || '').slice(0, 100)) + '…</p>';
@@ -2651,6 +2688,7 @@
      */
     function buildManualHandoffHtml(formatId) {
       if (!isManualFormat(formatId)) return '';
+      if (formatId === 'naver-blog') return buildNaverBlogHandoffHtml(formatId);
       var lang = isEn ? 'en' : 'ko';
       var url = NKFormatMedia.manualUrlOf(formatId);
       var label = NKFormatMedia.labelOf(formatId, lang);
@@ -2675,6 +2713,57 @@
       }
       if (!parts.length) return '';
       return '<div class="bsf-manual-handoff">' + parts.join('') + '</div>';
+    }
+
+    /**
+     * 네이버 블로그 반자동 동선 — 글쓰기 API 가 없어서(2020 종료) 우리는 원고까지만 만든다.
+     * 본문 복사(서식 유지) → 이미지 한 장씩 복사 또는 모두 받기 → 글쓰기 열기 → 배포 카드에 올린 글 주소 기록.
+     * 아이디·비밀번호를 받아 대신 올리는 자동화는 하지 않는다.
+     */
+    function buildNaverBlogHandoffHtml(formatId) {
+      var ic = function (paths) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+      };
+      // lucide: copy / image / download / square-arrow-out-up-right
+      var icCopy = ic('<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>');
+      var icImage = ic('<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>');
+      var icDownload = ic('<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>');
+      var icOpen = ic('<path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/>');
+      var fmtAttr = ' data-manual-format="' + escapeHtml(formatId) + '"';
+      var url = NKFormatMedia.manualUrlOf(formatId);
+
+      var mainRow =
+        '<button type="button" class="bsf-handoff-btn bsf-handoff-btn--fixed" data-action="brand-naver-copy-body"' + fmtAttr + '>' +
+          icCopy + '<span>' + escapeHtml(T.naverCopyBody) + '</span></button>' +
+        // 블로그는 영상을 받지 않는다 — 모두 받기는 이미지만 받는다.
+        (draftSelImgs.length
+          ? '<button type="button" class="bsf-handoff-btn bsf-handoff-btn--fixed" data-action="brand-manual-download" data-manual-only="image"' + fmtAttr + '>' +
+              icDownload + '<span>' + escapeHtml(T.naverDownloadAll) + '</span></button>'
+          : '') +
+        (url
+          ? '<a class="bsf-handoff-btn bsf-handoff-btn--go bsf-handoff-btn--fixed" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
+              icOpen + '<span>' + escapeHtml(T.naverOpenWrite) + '</span></a>'
+          : '');
+
+      // 이미지 번호는 본문의 [이미지 N] 과 같다 — 생성 요청에 보낸 장수·순서가 이 목록이다.
+      var imageRow = draftSelImgs.length
+        ? '<div class="bsf-naver-images">' +
+            '<span class="bsf-naver-images-label">' + escapeHtml(T.naverAttachedImages) + '</span>' +
+            draftSelImgs.map(function (img, i) {
+              return '<div class="bsf-naver-image">' +
+                '<img src="' + escapeHtml(String(img.url || '')) + '" alt="" loading="lazy" />' +
+                '<button type="button" class="bsf-handoff-btn bsf-handoff-btn--fixed" data-action="brand-naver-copy-image" data-img-index="' + i + '"' + fmtAttr + '>' +
+                  icImage + '<span>' + escapeHtml(T.naverCopyImage(i + 1)) + '</span></button>' +
+              '</div>';
+            }).join('') +
+          '</div>'
+        : '';
+
+      return '<div class="bsf-manual-handoff bsf-naver-handoff">' +
+        '<div class="bsf-naver-handoff-row">' + mainRow + '</div>' +
+        '<p class="bsf-naver-handoff-hint">' + escapeHtml(T.naverBodyHint) + '</p>' +
+        imageRow +
+        '</div>';
     }
 
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
@@ -2784,6 +2873,14 @@
                     })() +
                   '</div>' +
                   '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
+                  // 직접 올린 글의 주소. 배포 완료를 누르면 배포 이력(remoteUrl)에 함께 기록된다.
+                  (NKFormatMedia.acceptsPostedUrl(formatId)
+                    ? '<label class="bsf-deploy-posted-url">' +
+                        '<span class="bsf-deploy-posted-url-label">' + escapeHtml(T.postedUrlLabel) + '</span>' +
+                        '<input type="url" inputmode="url" class="bsf-deploy-posted-url-input" data-draft-format="' + escapeHtml(formatId) + '" data-draft-field="posted_url"' +
+                        ' placeholder="' + escapeHtml(T.postedUrlPlaceholder) + '" value="' + escapeHtml(String(draft.posted_url || '')) + '">' +
+                      '</label>'
+                    : '') +
                 '</div>' +
                 (function () {
                   // manual 채널에는 자동 배포 버튼을 두지 않는다. 패널이 그 자리를 대신한다.
@@ -3754,6 +3851,15 @@
       if (NK.service && NK.service.project && NK.service.project.updatePayload) {
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextDrafts }).catch(function () {});
       }
+      // 이미 배포 완료로 표시한 뒤 글 주소를 넣거나 고치면 그 기록(같은 id)에 주소만 다시 싣는다.
+      if (fieldKey === 'posted_url' && _deployedFormats[fmtId] && NKFormatMedia.acceptsPostedUrl(fmtId)) {
+        var puRaw = String(value || '').trim();
+        var puUrl = puRaw ? NKFormatMedia.normalizePostedUrl(fmtId, puRaw) : '';
+        if (puRaw && !puUrl) { bsfToast(T.postedUrlInvalid, { tone: 'warn' }); return; }
+        persistPublishedResult(fmtId, nextDrafts[fmtId], { result: { status: 'published', url: puUrl } }, '')
+          .then(function () { bsfToast(T.postedUrlSaved, { tone: 'ok' }); })
+          .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); });
+      }
     };
 
     root.onclick = function (evt) {
@@ -3901,6 +4007,7 @@
               platformId: regenFmtId,
               story: buildEpisodeStory(payload, project.scenes || []),
               brandContext: brandCtx,
+              imageCount: draftSelImgs.length,
             })
           : Promise.reject(new Error('api_not_ready'))
         ).then(function (result) {
@@ -3952,6 +4059,7 @@
               platformId: refineFmtId,
               story: refineStory,
               brandContext: refineBrandCtx,
+              imageCount: draftSelImgs.length,
               userInstruction: instruction,
               currentDraft: {
                 caption:       String(currentDraftObj.caption       || '').trim(),
@@ -4097,7 +4205,7 @@
               });
           }
           var fid = _fmtsToGen[idx];
-          return NK.api.draftGenerate({ platformId: fid, story: genStory, brandContext: genBrandCtx })
+          return NK.api.draftGenerate({ platformId: fid, story: genStory, brandContext: genBrandCtx, imageCount: draftSelImgs.length })
             .then(function (res) {
               applyDraftToPanel(fid, res);
               var nd = Object.assign({}, formatDrafts); nd[fid] = Object.assign({}, nd[fid] || {}, res); formatDrafts = nd;
@@ -4737,13 +4845,78 @@
           });
         return;
       }
+      // 네이버 블로그 본문 복사: 편집칸의 지금 원고를 서식 있는 HTML(text/html)과 글자(text/plain)로 함께 싣는다.
+      // 스마트에디터 ONE 은 text/html 을 받아 소제목·굵게·목록을 살린다. 고친 내용이 그대로 가도록 저장값이 아니라 화면 값을 읽는다.
+      if (action === 'brand-naver-copy-body') {
+        var nbFmt = String(btn.dataset.manualFormat || 'naver-blog').trim();
+        var nbEl = root.querySelector('[data-draft-format="' + nbFmt + '"][data-draft-field="caption"]');
+        var nbText = nbEl ? readFieldValue(nbEl) : String((formatDrafts && formatDrafts[nbFmt] && formatDrafts[nbFmt].caption) || '');
+        if (!String(nbText || '').trim()) { bsfToast(T.naverBodyEmpty, { tone: 'warn' }); return; }
+        var nbConv = window.NKNaverBlogDraft;
+        var nbHtml = nbConv ? nbConv.toHtml(nbText) : '';
+        var nbPlain = nbConv ? nbConv.toPlain(nbText) : String(nbText);
+        if (nbHtml && navigator.clipboard && navigator.clipboard.write && typeof window.ClipboardItem === 'function') {
+          navigator.clipboard.write([new window.ClipboardItem({
+            'text/html': new Blob([nbHtml], { type: 'text/html' }),
+            'text/plain': new Blob([nbPlain], { type: 'text/plain' })
+          })])
+            .then(function () { bsfToast(T.naverBodyCopied, { tone: 'ok' }); })
+            .catch(function (err) { bsfToast(T.naverCopyFail(err && err.message ? err.message : err), { tone: 'warn' }); });
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(nbPlain)
+            .then(function () { bsfToast(T.naverBodyCopiedPlain, { tone: 'warn' }); })
+            .catch(function (err) { bsfToast(T.naverCopyFail(err && err.message ? err.message : err), { tone: 'warn' }); });
+        } else {
+          bsfToast(T.naverCopyFail('clipboard'), { tone: 'warn' });
+        }
+        return;
+      }
+      // 네이버 블로그 이미지 한 장 복사(image/png). 클립보드는 PNG 만 확실히 받으므로 다른 형식은 PNG 로 바꾼다.
+      // ClipboardItem 에 Promise 를 넘겨야 Safari 가 클릭 제스처 안의 쓰기로 인정한다.
+      if (action === 'brand-naver-copy-image') {
+        var niIdx = parseInt(btn.dataset.imgIndex || '-1', 10);
+        var niItem = draftSelImgs[niIdx];
+        if (!niItem || !niItem.url) return;
+        if (!navigator.clipboard || !navigator.clipboard.write || typeof window.ClipboardItem !== 'function') {
+          bsfToast(T.naverCopyUnsupported, { tone: 'warn' });
+          return;
+        }
+        var niPng = fetch(niItem.url)
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.blob();
+          })
+          .then(function (blob) {
+            if (blob.type === 'image/png') return blob;
+            // 받은 바이트로 그리므로 다른 오리진 이미지여도 캔버스가 오염되지 않는다.
+            return createImageBitmap(blob).then(function (bmp) {
+              var cv = document.createElement('canvas');
+              cv.width = bmp.width;
+              cv.height = bmp.height;
+              cv.getContext('2d').drawImage(bmp, 0, 0);
+              if (bmp.close) bmp.close();
+              return new Promise(function (resolve, reject) {
+                cv.toBlob(function (png) { png ? resolve(png) : reject(new Error('png')); }, 'image/png');
+              });
+            });
+          });
+        btn.disabled = true;
+        navigator.clipboard.write([new window.ClipboardItem({ 'image/png': niPng })])
+          .then(function () { bsfToast(T.naverImageCopied(niIdx + 1), { tone: 'ok' }); })
+          .catch(function (err) { bsfToast(T.naverCopyFail(err && err.message ? err.message : err), { tone: 'warn' }); })
+          .finally(function () { btn.disabled = false; });
+        return;
+      }
       // 직접 올리는 채널: 선택한 자산을 파일로 받는다.
       // 03 에 썸네일은 있지만 파일을 받는 경로는 없었다 — 보는 것과 받는 것은 다르다.
       if (action === 'brand-manual-download') {
         var mdFmtId = String(btn.dataset.manualFormat || '').trim();
         if (!mdFmtId) return;
         // 영상 먼저, 이미지 나중 — 자동 배포 경로(snsPublishFormat)와 같은 순서로 번호를 매긴다.
-        var mdItems = draftSelVids.concat(draftSelImgs);
+        // 네이버 블로그는 영상을 받지 않으므로 이미지만(data-manual-only="image") — 번호가 [이미지 N] 과 맞는다.
+        var mdItems = String(btn.dataset.manualOnly || '') === 'image'
+          ? draftSelImgs.slice()
+          : draftSelVids.concat(draftSelImgs);
         if (!mdItems.length) return;
         // 순번을 넣어야 카루셀 순서를 잃지 않는다. 1개뿐이면 번호를 붙이지 않는다.
         var mdMulti = mdItems.length > 1;
@@ -4787,6 +4960,16 @@
         var toggleFmtId = String(btn.dataset.deployFormat || '').trim();
         if (!toggleFmtId) return;
         var toggleWasDone = !!_deployedFormats[toggleFmtId];
+        // 올린 글 주소 칸이 있는 채널: 비어 있으면 주소 없이 완료, 틀린 주소면 완료하지 않는다.
+        var togglePostedUrl = '';
+        if (!toggleWasDone && NKFormatMedia.acceptsPostedUrl(toggleFmtId)) {
+          var tpInput = root.querySelector('[data-draft-format="' + toggleFmtId + '"][data-draft-field="posted_url"]');
+          var tpRaw = tpInput ? String(tpInput.value || '').trim() : '';
+          if (tpRaw) {
+            togglePostedUrl = NKFormatMedia.normalizePostedUrl(toggleFmtId, tpRaw);
+            if (!togglePostedUrl) { bsfToast(T.postedUrlInvalid, { tone: 'warn' }); return; }
+          }
+        }
         if (toggleWasDone) {
           delete _deployedFormats[toggleFmtId];
         } else {
@@ -4801,7 +4984,7 @@
         var toggleLabel = (toggleFmt && toggleFmt.title) ? toggleFmt.title : toggleFmtId;
         var toggleTask = toggleWasDone
           ? removePublishedResult('manual_' + projectId + '_' + toggleFmtId)
-          : persistPublishedResult(toggleFmtId, (formatDrafts && formatDrafts[toggleFmtId]) || {}, { result: { status: 'published' } }, '');
+          : persistPublishedResult(toggleFmtId, (formatDrafts && formatDrafts[toggleFmtId]) || {}, { result: { status: 'published', url: togglePostedUrl } }, '');
         toggleTask
           .then(function () {
             bsfToast(toggleWasDone ? T.manualDoneUndone(toggleLabel) : T.manualDoneRecorded(toggleLabel), { tone: 'ok' });
