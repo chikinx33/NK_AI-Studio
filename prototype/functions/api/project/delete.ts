@@ -1,7 +1,7 @@
 // prototype/functions/api/project/delete.ts
 // Delete objects under:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
-import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, buildAiVideoGenProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, buildAiVideoGenProjectPrefix, isReservedProjectId, RESERVED_PROJECT_IDS } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { loadSharesStrict, saveShares, removeProjectShares, removeAllOwnerShares } from "../_shared/shares";
 import { deleteGcsObjects, listGcsObjects, readGcsJson, resolveGcsEnv } from "../_shared/gcs.js";
@@ -106,6 +106,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     const objectName = String((body.objectName || body.object || "")).trim();
+    // 업무 파일 저장소(ai-company)는 에피소드가 아니다 — 폴더째 지우면 업무 파일·에이전트 산출물이 모두 사라진다.
+    // (파일 하나씩 지우는 objectName 삭제는 저장소 화면이 쓰므로 그대로 둔다.)
+    if (!deleteAll && isReservedProjectId(projectId) && !objectName && !(Array.isArray(body.objectNames) && body.objectNames.length)) {
+      return send({ error: "업무 파일 저장소는 에피소드가 아니라 통째로 지울 수 없어요. 업무 파일 화면에서 파일·폴더를 골라 지워 주세요." }, 400, origin);
+    }
     const objectNames = Array.isArray(body.objectNames)
       ? body.objectNames.map((value: any) => String(value || "").trim()).filter(Boolean)
       : [];
@@ -138,8 +143,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 예전 로고(브랜드 대표 이미지)는 처음 올린 에피소드 폴더의 logo/ 에 저장됐다. 에피소드 하나를 지울 때 함께 지우면
     // 같은 브랜드의 다른 에피소드·브랜드 카드 썸네일까지 사라진다(2026-10-18) — 에피소드 삭제에선 남긴다(계정 전체 삭제는 지운다).
     const keepLogos = !deleteAll ? `${projectPrefix}/logo/` : "";
+    // '전체 삭제'도 에피소드만 지운다 — 같은 prefix(projects…) 아래의 업무 파일 저장소는 남긴다.
+    const reservedPrefixes = deleteAll ? RESERVED_PROJECT_IDS.map((id) => `${buildAiVideoProjectPrefix(basePrefix, userId, id)}/`) : [];
     const names = (await listGcsObjects(env, prefix))
-      .filter((name: string) => name.startsWith(prefix) && !(keepLogos && name.startsWith(keepLogos)));
+      .filter((name: string) => name.startsWith(prefix) && !(keepLogos && name.startsWith(keepLogos))
+        && !reservedPrefixes.some((p) => name.startsWith(p)));
     const result = await deleteGcsObjects(env, names);
 
     // 프로젝트(또는 전체) 삭제 시, 해당 프로젝트의 공유 grant도 정리한다.

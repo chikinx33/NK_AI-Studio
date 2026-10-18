@@ -1,7 +1,7 @@
 // prototype/functions/api/project/list.ts
 // List project IDs under:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
-import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
+import { buildAiVideoUserRoot, isReservedProjectId, resolveUserId } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { loadShares, listSharedWith } from "../_shared/shares";
 
@@ -81,7 +81,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const prefixes: string[] = Array.isArray(json.prefixes) ? json.prefixes : [];
     const ids = prefixes
       .map((p) => p.replace(prefix, "").replace(/^\/+/, "").replace(/\/$/, ""))
-      .filter(Boolean)
+      // 업무 파일 저장소(ai-company)는 에피소드가 아니다 — 카드로 보이면 지울 수 있게 된다.
+      .filter((id) => !!id && !isReservedProjectId(id))
       .slice(0, 200);
     // 나에게 공유된 프로젝트(소유자/역할 포함)도 함께 반환 → 대시보드에서 표시·접근.
     let shared: Array<{ projectId: string; ownerId: string; role: string; title: string; seriesId: string; seriesTitle: string }> = [];

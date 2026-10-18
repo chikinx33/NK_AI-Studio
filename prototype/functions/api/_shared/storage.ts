@@ -5,6 +5,17 @@ export const DEFAULT_OWNER_USER_ID = "owner";
 export const USERDATA_FOLDER = "userdata";
 export const ADMIN_FOLDER = "admin";
 
+/**
+ * 에피소드가 아닌데 에피소드 폴더 규칙(ai-video/projects<id>)을 같이 쓰는 폴더.
+ * "ai-company" 는 AI 회사의 업무 파일(company-files)·에이전트 산출물 저장소다.
+ * 에피소드 목록이 이걸 제목 없는 '프로젝트' 카드로 보여 줬고, 그 카드를 지우자 업무 파일이 통째로 지워졌다(2026-10-18).
+ * 목록에서 빼고, 폴더째 지우지 못하게 한다.
+ */
+export const RESERVED_PROJECT_IDS = ["ai-company"];
+export function isReservedProjectId(projectId: any): boolean {
+  return RESERVED_PROJECT_IDS.includes(String(projectId || "").trim());
+}
+
 export function sanitizeUserId(raw: any): string {
   const value = String(raw || "").trim();
   if (!value) return DEFAULT_OWNER_USER_ID;

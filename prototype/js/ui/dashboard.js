@@ -765,7 +765,8 @@
 
   // 소유 드래프트 + 공유받은 의사 드래프트 합본(렌더·클릭 조회용)
   function getViewDrafts() {
-    const owned = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts().map(normalizeDraft).filter(Boolean) : [];
+    // 'ai-company' 는 업무 파일 저장소다(에피소드 아님) — 예전 목록이 카드로 만들어 둔 로컬 기록도 보이지 않게 한다.
+    const owned = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts().map(normalizeDraft).filter((d) => d && String(d.id) !== 'ai-company') : [];
     return owned.concat(_sharedDrafts);
   }
 

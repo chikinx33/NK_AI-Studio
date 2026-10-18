@@ -19,5 +19,5 @@ test('로고는 에피소드가 아니라 브랜드 폴더(ai-video/brands/<브�
 test('에피소드 하나를 지울 때 그 폴더의 예전 로고(logo/)는 남긴다, 계정 전체 삭제는 지운다', () => {
   const del = read('prototype/functions/api/project/delete.ts');
   assert.match(del, /const keepLogos = !deleteAll \? `\$\{projectPrefix\}\/logo\/` : "";/);
-  assert.match(del, /\.filter\(\(name: string\) => name\.startsWith\(prefix\) && !\(keepLogos && name\.startsWith\(keepLogos\)\)\)/);
+  assert.match(del, /\.filter\(\(name: string\) => name\.startsWith\(prefix\) && !\(keepLogos && name\.startsWith\(keepLogos\)\)/);
 });
