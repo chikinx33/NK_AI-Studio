@@ -77,3 +77,12 @@ test('배포 완료는 서버 기록과 이 브라우저 기록을 합쳐 읽는
   assert.deepEqual(readDeployedFormats({ brandStudioDeployedFormats: { instagram: true, x: false } }, 'p1'), { instagram: true, tiktok: true });
   assert.deepEqual(readDeployedFormats({}, ''), {});
 });
+
+test('배포 완료 라벨이 하나라도 있으면 04(배포) 단계를 마친 것으로 본다(바로 배포는 예약 계획이 없다)', () => {
+  const studio = read('prototype/js/ui/brand-studio.js');
+  assert.match(studio, /var publishStepDone = Object\.keys\(persistedDeployedFormats\)\.some\(function \(k\) \{ return !!persistedDeployedFormats\[k\]; \}\)\s*\|\| !!\(publishPlan\.scheduledAt && publishPlan\.channels\.length\);/);
+  assert.match(studio, /\{ id: 4, num: '04', title: T\.stepPublish, done: publishStepDone,/);
+  assert.match(studio, /&& hasDraftForAnyFormat\s*&& publishStepDone;/, '모든 단계를 마친 에피소드는 04 로 바로 들어간다');
+  const persist = studio.slice(studio.indexOf('function persistDeployedFormats()'), studio.indexOf('function persistDeployedFormats()') + 800);
+  assert.match(persist, /root\.querySelector\('\.bsf-step\[data-step="4"\]'\)/, '배포 완료를 켜고 끄면 새로고침 없이 04 체크를 맞춘다');
+});

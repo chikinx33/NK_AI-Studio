@@ -1757,11 +1757,15 @@
     // 스토리(가상 ID)를 포함한 선택된 자산 총 수
     var persistedSelCount = persistedSelectedAssetItems.length + (storySelected ? 1 : 0);
     var savedActiveStep = parseInt(String(payload.brandStudioActiveStep || '0'), 10);
-    // 이 에피소드가 01~04 를 모두 마쳤는지. 04(배포)는 '배포 계획 저장(예약 시각 + 채널)' 기준.
+    // 04(배포)는 '배포 완료' 라벨이 하나라도 있거나(바로 배포) 예약 배포 계획(예약 시각 + 채널)이 저장됐으면 마친 것이다.
+    // 전엔 예약 계획만 봐서, 바로 배포해 배포 완료가 켜진 에피소드도 04 가 끝나지 않은 것처럼 보였다(2026-10-18).
+    var publishStepDone = Object.keys(persistedDeployedFormats).some(function (k) { return !!persistedDeployedFormats[k]; })
+      || !!(publishPlan.scheduledAt && publishPlan.channels.length);
+    // 이 에피소드가 01~04 를 모두 마쳤는지.
     var allStepsDone = persistedSelCount > 0
       && selectedFormats.length > 0
       && hasDraftForAnyFormat
-      && !!(publishPlan.scheduledAt && publishPlan.channels.length);
+      && publishStepDone;
     // 에피소드를 새로 열었을 때만 진입 단계를 계산한다(재렌더 시에는 유지).
     if (_entryStep.projectId !== projectId) {
       _entryStep = { projectId: projectId, step: allStepsDone ? 4 : 1 };
@@ -1779,7 +1783,7 @@
       { id: 1, num: '01', title: T.stepAsset, done: persistedSelCount > 0, value: persistedSelCount ? T.stepValSelected(persistedSelCount) : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음')) },
       { id: 2, num: '02', title: T.stepFormat, done: selectedFormats.length > 0, value: selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone },
       { id: 3, num: '03', title: T.stepDraft, done: hasDraftForAnyFormat, value: hasDraftForAnyFormat ? T.stepValDrafted : T.stepValNeedsDraft },
-      { id: 4, num: '04', title: T.stepPublish, done: !!(publishPlan.scheduledAt && publishPlan.channels.length), value: selectedFormats.length ? T.stepValChannels(selectedFormats.length) : T.stepValNoFormat }
+      { id: 4, num: '04', title: T.stepPublish, done: publishStepDone, value: selectedFormats.length ? T.stepValChannels(selectedFormats.length) : T.stepValNoFormat }
     ];
     var timelineHtml = stepDefs.map(function (step) {
       var cls = 'bsf-step' + (step.done ? ' is-done' : '') + (step.id === activeStep ? ' is-active' : '');
@@ -3148,6 +3152,12 @@
     // ① 전용 localStorage 키 (소용량, 서버 머지 경쟁 조건에 영향 받지 않음)
     // ② payload (다기기 동기화용 서버 저장)
     function persistDeployedFormats() {
+      // 배포 완료가 켜지거나 꺼지면 04(배포) 단계 체크도 바로 맞춘다(새로고침 없이).
+      var step4 = root.querySelector('.bsf-step[data-step="4"]');
+      if (step4) {
+        step4.classList.toggle('is-done', Object.keys(_deployedFormats).some(function (k) { return !!_deployedFormats[k]; })
+          || !!(publishPlan.scheduledAt && publishPlan.channels.length));
+      }
       try {
         localStorage.setItem('nk_bs_deployed_' + projectId, JSON.stringify(Object.assign({}, _deployedFormats)));
       } catch (_) {}
