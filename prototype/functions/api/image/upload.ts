@@ -1,4 +1,5 @@
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoBrandPrefix, buildAiVideoProjectPrefix } from "../_shared/storage";
+import { readGcsJson } from "../_shared/gcs.js";
 import { authorizeRequest } from "../_shared/auth.js";
 import { resolveProjectStorageOwner } from "../_shared/shares";
 
@@ -40,7 +41,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 프로덕션 저장소 목록(/api/image/library)은 image/ 만 나열하므로 자동 분리된다.
     const kind = String(fd.get("kind") || "image").trim().toLowerCase()
     const folder = kind === "logo" ? "logo" : "image"
-    const objectName = `${projectPrefix}/${folder}/${stamp}-${safeName}`
+    // 로고는 브랜드 대표 이미지라 에피소드가 아니라 브랜드 폴더(ai-video/brands/<브랜드>/logo/)에 둔다.
+    // 전엔 업로드한 에피소드 폴더 안에 저장돼, 그 에피소드를 지우면 브랜드 카드 썸네일까지 사라졌다(2026-10-18).
+    // 브랜드는 서버에 저장된 에피소드 데이터(payload.brandId)로 정한다. 브랜드가 없는 에피소드만 예전처럼 에피소드 폴더.
+    let ownerPrefix = projectPrefix
+    if (kind === "logo") {
+      const record = await readGcsJson(env, `${projectPrefix}/reference/data.json`).catch(() => null) as any
+      const payload = record?.data?.payload || {}
+      const brandId = String(payload.brandId || payload.brandRef?.id || "").trim()
+      if (brandId) ownerPrefix = buildAiVideoBrandPrefix(basePrefix, userId, brandId)
+    }
+    const objectName = `${ownerPrefix}/${folder}/${stamp}-${safeName}`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
     const buf = await file.arrayBuffer()
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`

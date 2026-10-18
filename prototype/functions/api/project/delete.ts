@@ -135,7 +135,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     // 프로젝트 전체 삭제도 같은 배치 경로를 사용해 객체 수와 무관하게 서브요청을 제한한다.
-    const names = (await listGcsObjects(env, prefix)).filter((name: string) => name.startsWith(prefix));
+    // 예전 로고(브랜드 대표 이미지)는 처음 올린 에피소드 폴더의 logo/ 에 저장됐다. 에피소드 하나를 지울 때 함께 지우면
+    // 같은 브랜드의 다른 에피소드·브랜드 카드 썸네일까지 사라진다(2026-10-18) — 에피소드 삭제에선 남긴다(계정 전체 삭제는 지운다).
+    const keepLogos = !deleteAll ? `${projectPrefix}/logo/` : "";
+    const names = (await listGcsObjects(env, prefix))
+      .filter((name: string) => name.startsWith(prefix) && !(keepLogos && name.startsWith(keepLogos)));
     const result = await deleteGcsObjects(env, names);
 
     // 프로젝트(또는 전체) 삭제 시, 해당 프로젝트의 공유 grant도 정리한다.
