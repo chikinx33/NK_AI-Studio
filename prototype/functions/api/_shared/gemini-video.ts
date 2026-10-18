@@ -1,12 +1,30 @@
 // 영상 내용 분석(Gemini) — 에이전트가 완성 콘텐츠 등록·SNS 초안을 쓸 때 영상을 직접 '본다'(2026-10-18 엔케 지시).
 // 효과음(sfx.ts)도 Gemini 로 영상을 보지만 통째로 메모리에 올려 30MB 까지만 된다.
-// 여기선 저장소 → Gemini Files API 로 흘려 보낸다(재개 업로드 + 고정 길이 스트림) — Worker 메모리에 다 올리지 않아 100MB 까지.
+// 여기선 저장소의 영상을 Worker 메모리에 다 올리지 않고 본다 — 100MB 까지.
+//
+// 기본 경로: Vertex AI(global) 에 저장소 주소(gs://)를 그대로 넘긴다 — 업로드가 없다.
+// 전엔 AI Studio Files API(generativelanguage.googleapis.com)에 직접 올렸는데, Worker 가 홍콩(HKG)에서 송출되면
+// 구글이 "User location is not supported" 로 막아 업로드 시작부터 실패했다(video_analysis_upload_start_failed, 2026-10-18).
+// Vertex 는 서비스 계정 토큰으로 지역 제한 없이 통한다(업스케일·이미지 생성이 같은 경로로 200).
+// Vertex 가 안 되면(모델 미개방 등) AI Studio 로 돌아가되(재개 업로드 + 고정 길이 스트림), GEMINI_BASE_URL 프록시를 거친다.
 import { getGoogleAccessToken, resolveGcsEnv } from "./gcs.js";
-import { geminiGenerateUrl, geminiProxyHeaders, geminiTextModel } from "./gemini-models.js";
+import { geminiBaseUrl, geminiGenerateUrl, geminiProxyHeaders, geminiTextModel } from "./gemini-models.js";
 import { recordGemini } from "./usage-cost.ts";
 
 export const MAX_ANALYZE_BYTES = 100 * 1024 * 1024;
-const GEMINI_UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+const GEMINI_DIRECT = "https://generativelanguage.googleapis.com";
+const CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
+
+/** 구글이 돌려준 파일·업로드 주소도 프록시를 거치게 바꾼다(직접 주소면 그대로). */
+function viaGeminiBase(env: any, url: string): string {
+  const base = geminiBaseUrl(env);
+  return base === GEMINI_DIRECT ? url : url.replace(GEMINI_DIRECT, base);
+}
+
+async function googleErrorText(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  try { return String(JSON.parse(text)?.error?.message || text).slice(0, 200); } catch { return text.slice(0, 200); }
+}
 
 export const VIDEO_ANALYSIS_PROMPT = [
   "이 영상을 처음부터 끝까지 보고 들은 그대로 한국어로 정리한다. 보이지 않는 내용은 지어내지 않는다.",
@@ -73,18 +91,18 @@ function mimeOf(objectName: string, contentType: string): string {
 /** 저장소 영상 → Gemini Files API(재개 업로드). 파일 uri·이름을 돌려준다. */
 async function uploadFromGcs(env: any, apiKey: string, objectName: string, size: number, mime: string) {
   const ctx = resolveGcsEnv(env);
-  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" });
-  const start = await fetch(`${GEMINI_UPLOAD}?key=${encodeURIComponent(apiKey)}`, {
+  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: CLOUD_SCOPE });
+  const start = await fetch(`${geminiBaseUrl(env)}/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: {
       "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
       "X-Goog-Upload-Header-Content-Length": String(size), "X-Goog-Upload-Header-Content-Type": mime,
-      "Content-Type": "application/json",
+      "Content-Type": "application/json", ...geminiProxyHeaders(env),
     },
     body: JSON.stringify({ file: { display_name: `nk_video_${Date.now()}` } }),
   });
   const uploadUrl = start.headers.get("x-goog-upload-url");
-  if (!start.ok || !uploadUrl) throw new Error(`video_analysis_upload_start_failed ${start.status}`);
+  if (!start.ok || !uploadUrl) throw new Error(`video_analysis_upload_start_failed ${start.status}: ${start.ok ? "no_upload_url" : await googleErrorText(start)}`);
   const src = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`, {
     headers: { Authorization: `Bearer ${token}`, ...(ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}) },
   });
@@ -99,9 +117,9 @@ async function uploadFromGcs(env: any, apiKey: string, objectName: string, size:
   } else {
     body = new Uint8Array(await src.arrayBuffer());
   }
-  const up = await fetch(uploadUrl, {
+  const up = await fetch(viaGeminiBase(env, uploadUrl), {
     method: "POST",
-    headers: { "Content-Length": String(size), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" },
+    headers: { "Content-Length": String(size), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", ...geminiProxyHeaders(env) },
     body,
   });
   const data: any = await up.json().catch(() => ({}));
@@ -110,10 +128,10 @@ async function uploadFromGcs(env: any, apiKey: string, objectName: string, size:
   return { uri, state: String(data?.file?.state || "") };
 }
 
-async function waitActive(apiKey: string, uri: string, maxWaitMs = 60000): Promise<boolean> {
+async function waitActive(env: any, apiKey: string, uri: string, maxWaitMs = 60000): Promise<boolean> {
   const deadline = Date.now() + maxWaitMs;
   for (let i = 0; i < 20 && Date.now() < deadline; i += 1) {
-    const res = await fetch(`${uri}?key=${encodeURIComponent(apiKey)}`);
+    const res = await fetch(`${viaGeminiBase(env, uri)}?key=${encodeURIComponent(apiKey)}`, { headers: geminiProxyHeaders(env) });
     if (!res.ok) return false;
     const state = String((await res.json().catch(() => ({})))?.state || "");
     if (state === "ACTIVE") return true;
@@ -123,15 +141,34 @@ async function waitActive(apiKey: string, uri: string, maxWaitMs = 60000): Promi
   return false;
 }
 
-/** 저장소 영상 한 편을 분석한다. size·contentType 은 호출자가 이미 확인한 값. */
-export async function analyzeGcsVideo(env: any, objectName: string, size: number, contentType = ""): Promise<VideoAnalysis> {
-  const apiKey = String(env?.GEMINI_API_KEY || env?.GOOGLE_API_KEY || "").trim();
-  if (!apiKey) throw new Error("video_analysis_unconfigured");
-  if (!size || size > MAX_ANALYZE_BYTES) throw new Error("video_analysis_too_large");
-  const mime = mimeOf(objectName, contentType);
+/** Vertex AI(global) — 저장소 영상을 gs:// 주소 그대로 본다. 실패하면 이유를 담아 던진다. */
+async function analyzeViaVertex(env: any, objectName: string, mime: string): Promise<VideoAnalysis> {
+  const g = resolveGcsEnv(env);
+  const projectId = String(env?.GOOGLE_CLOUD_PROJECT || env?.GCS_PROJECT_ID || g.userProject || "").trim();
+  if (!projectId) throw new Error("video_analysis_vertex_unconfigured");
+  const token = await getGoogleAccessToken({ clientEmail: g.clientEmail, privateKeyPem: g.privateKeyRaw, scope: CLOUD_SCOPE });
+  const model = String(env?.GEMINI_VERTEX_TEXT_MODEL || "").trim() || geminiTextModel(env).replace(/-preview$/i, "");
+  const res = await fetch(`https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": projectId, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ fileData: { mimeType: mime, fileUri: `gs://${g.bucket}/${objectName}` } }, { text: VIDEO_ANALYSIS_PROMPT }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048, responseMimeType: "application/json" },
+    }),
+  });
+  if (!res.ok) throw new Error(`video_analysis_vertex_failed ${res.status}: ${await googleErrorText(res)}`);
+  const json: any = await res.json().catch(() => ({}));
+  recordGemini(env, "video_describe", model, json);
+  const text = (json?.candidates?.[0]?.content?.parts || []).map((p: any) => String(p?.text || "")).join("");
+  if (!text.trim()) throw new Error(`video_analysis_vertex_failed empty: ${String(json?.candidates?.[0]?.finishReason || json?.promptFeedback?.blockReason || "no_text")}`);
+  return normalizeVideoAnalysis(text);
+}
+
+/** AI Studio Files API — 저장소 영상을 흘려 올린 뒤 본다(GEMINI_BASE_URL 프록시를 거친다). */
+async function analyzeViaFilesApi(env: any, apiKey: string, objectName: string, size: number, mime: string): Promise<VideoAnalysis> {
   const file = await uploadFromGcs(env, apiKey, objectName, size, mime);
   try {
-    if (file.state !== "ACTIVE" && !(await waitActive(apiKey, file.uri))) throw new Error("video_analysis_processing_failed");
+    if (file.state !== "ACTIVE" && !(await waitActive(env, apiKey, file.uri))) throw new Error("video_analysis_processing_failed");
     const model = geminiTextModel(env);
     const res = await fetch(`${geminiGenerateUrl(env, model)}?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
@@ -147,6 +184,26 @@ export async function analyzeGcsVideo(env: any, objectName: string, size: number
     const text = (json?.candidates?.[0]?.content?.parts || []).map((p: any) => String(p?.text || "")).join("");
     return normalizeVideoAnalysis(text);
   } finally {
-    fetch(`${file.uri}?key=${encodeURIComponent(apiKey)}`, { method: "DELETE" }).catch(() => {});
+    fetch(`${viaGeminiBase(env, file.uri)}?key=${encodeURIComponent(apiKey)}`, { method: "DELETE", headers: geminiProxyHeaders(env) }).catch(() => {});
+  }
+}
+
+/** 저장소 영상 한 편을 분석한다. size·contentType 은 호출자가 이미 확인한 값. */
+export async function analyzeGcsVideo(env: any, objectName: string, size: number, contentType = ""): Promise<VideoAnalysis> {
+  if (!size || size > MAX_ANALYZE_BYTES) throw new Error("video_analysis_too_large");
+  const mime = mimeOf(objectName, contentType);
+  let vertexError = "";
+  try {
+    return await analyzeViaVertex(env, objectName, mime);
+  } catch (error: any) {
+    vertexError = String(error?.message || error);
+  }
+  const apiKey = String(env?.GEMINI_API_KEY || env?.GOOGLE_API_KEY || "").trim();
+  if (!apiKey) throw new Error(vertexError);
+  try {
+    return await analyzeViaFilesApi(env, apiKey, objectName, size, mime);
+  } catch (error: any) {
+    // 두 경로가 모두 막히면 둘 다 보여 준다 — 원인을 추측하지 않게.
+    throw new Error(`${String(error?.message || error)} (Vertex: ${vertexError})`);
   }
 }

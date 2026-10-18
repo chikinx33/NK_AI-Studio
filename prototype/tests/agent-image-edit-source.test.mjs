@@ -62,5 +62,6 @@ test("앞 턴 첨부도 attachment:N 으로 이어서 쓸 수 있다(대화별 �
   const access = await read("prototype/functions/api/_shared/media-access.ts");
   assert.match(access, /return `\$\{base\}agent-attachments\/\$\{chatAttachmentSegment\(userId\)\}\/`;/);
   assert.match(store, /String\(STAMP_MAX - Date\.now\(\)\)/);
-  assert.match(store, /const batch = names\.filter\(\(name\) => stampOf\(name\) === latest\);/);
+  assert.match(store, /return names\.filter\(\(name\) => stampOf\(name\) === latest\)\.map/);
+  assert.match(store, /return \(await latestChatAttachments\(env, userId, conversationId\)\)\[n - 1\] \|\| "";/);
 });

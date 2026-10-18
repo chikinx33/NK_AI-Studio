@@ -50,19 +50,22 @@ export async function saveChatAttachments(
 
 /** 이 대화에서 가장 최근에 올린 첨부 묶음의 N번째(1부터) 이미지 → gs:// 주소. 없으면 "". */
 export async function latestChatAttachment(env: any, userId: string, conversationId: string, n: number): Promise<string> {
+  return (await latestChatAttachments(env, userId, conversationId))[n - 1] || "";
+}
+
+/** 이 대화에서 가장 최근에 올린 첨부 묶음 전체(순서대로) → gs:// 주소들. 목록 조회 1번. */
+export async function latestChatAttachments(env: any, userId: string, conversationId: string): Promise<string[]> {
   const { g, prefix } = attachmentPrefix(env, userId, conversationId);
   const token = await getGoogleAccessToken({ clientEmail: g.clientEmail, privateKeyPem: g.privateKeyRaw, scope: GCS_SCOPE });
   const params = new URLSearchParams({ prefix, maxResults: "20", fields: "items(name)" });
   const res = await fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(g.bucket)}/o?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) return "";
+  if (!res.ok) return [];
   const data: any = await res.json().catch(() => ({}));
   const names: string[] = (Array.isArray(data?.items) ? data.items : []).map((it: any) => String(it?.name || "")).filter(Boolean).sort();
-  if (!names.length) return "";
+  if (!names.length) return [];
   const stampOf = (name: string) => name.slice(prefix.length).split("-")[0];
   const latest = stampOf(names[0]);
-  const batch = names.filter((name) => stampOf(name) === latest);
-  const hit = batch[n - 1];
-  return hit ? `gs://${g.bucket}/${hit}` : "";
+  return names.filter((name) => stampOf(name) === latest).map((name) => `gs://${g.bucket}/${name}`);
 }

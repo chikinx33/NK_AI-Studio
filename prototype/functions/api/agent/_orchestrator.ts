@@ -394,8 +394,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     infographic: `[[RUN: infographic | {"prompt": "사용자의 전체 제작 요청", "durationSec": 30, "aspectRatio": "16:9", "audience": "시청 대상", "tone": "톤", "style": "스타일"}]]  → 플롯·잉크·픽셀·비트가 협업해 독립 Remotion 인포그래픽 업무를 완성하고 회사 업무 폴더에 등록. 사용자가 인포그래픽·모션그래픽·Remotion 영상을 만들어 달라고 하면 설명만 하지 말고 반드시 실행.`,
     company_files_list: `[[RUN: company_files_list | {"path": "폴더/경로 또는 루트는 빈 문자열"}]]  → 통합 '업무 파일'의 생성 업무·폴더·파일 목록 조회. 파일 위치를 모르면 먼저 실행. 날짜 폴더는 이름(name)을 바꿔도 내부 path가 @work/YYYY-MM-DD 그대로이며, 이름으로 조회해도 찾아지지만 다음 호출에는 결과의 path를 쓸 것. 날짜 폴더를 조회하면 그 안의 업무 기록과 사용자가 끌어다 넣은 파일·폴더(.work-files/날짜/… 경로)가 함께 나오며, 그 폴더 안을 더 보려면 결과의 path를 그대로 넣을 것. notFound면 hint·candidates의 후보 경로를 사용자에게 알릴 것. 조회된 파일은 채팅 말풍선에 열기 아이콘으로 자동 첨부됨.`,
     company_files_read: `[[RUN: company_files_read | {"path": "폴더/파일.txt", "offset": 0, "limit": 12000}]]  → 업무 파일의 텍스트·JSON·CSV·Markdown·코드와 엑셀(.xlsx)·워드(.docx)·파워포인트(.pptx)·PDF 내용을 읽고 채팅에 파일 열기 아이콘을 첨부(텍스트 1MB·문서 20MB 이하). 내가 만든 견적서·기획서도 이걸로 다시 열어 이어서 일할 것. 사용자가 '파일 보여줘/열어줘/읽어줘'라고 하면 반드시 실행. 확장자를 모르더라도 사용자가 말한 파일명을 path에 넣으면 서버가 단일 일치 파일을 찾음. 날짜 폴더 안의 파일은 목록에 나온 path(.work-files/날짜/파일.md)나 @work/날짜/파일.md 중 어느 쪽으로도 읽을 수 있음(업무 기록 자체는 파일이 아니라 못 읽음). hasMore=true이면 nextOffset을 offset으로 다시 호출해 끝까지 읽기.`,
-    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀. 프로젝트 바로가기는 .project.json 파일에 {"kind":"project","projectId":"프로젝트 ID"} 형식으로 작성. 사람 승인 후 실행.`,
+    company_files_write: `[[RUN: company_files_write | {"path": "폴더/파일.md", "content": "완성된 파일 내용", "contentType": "text/markdown; charset=utf-8"}]]  → 업무 파일에 텍스트 파일을 생성하거나 덮어씀(이미지·영상·PDF·오피스 같은 바이너리는 불가 — 첨부·지목 파일 저장은 company_files_save_media). 프로젝트 바로가기는 .project.json 파일에 {"kind":"project","projectId":"프로젝트 ID"} 형식으로 작성. 사람 승인 후 실행.`,
     company_files_mkdir: `[[RUN: company_files_mkdir | {"path": "상위폴더/새 폴더"}]]  → 업무 파일에 폴더를 즉시 생성하고 실제 목록에서 확인. 사용자가 폴더 생성을 명령하면 말로만 완료하지 말고 반드시 실행.`,
+    company_files_save_media: `[[RUN: company_files_save_media | {"folder": "저장할 업무 폴더 경로(예: puzzle knight/promotion/001)", "attachments": true, "files": [".work-files/…/영상.mp4(지목한 파일의 path)", "attachment:2(대화 첨부 하나만 고를 때)"], "names": ["(선택) 저장 이름 — files 순서대로"]}]]  → 사용자가 대화에 첨부한 이미지와 지목한 업무 폴더 파일(영상·이미지 등)을 그 폴더에 원본 그대로 한 번에 복사해 저장한다(폴더가 없으면 만들고, 같은 이름이 있으면 번호를 붙여 덮어쓰지 않음). 대화 첨부 전부는 "attachments": true. ★이미지·영상을 "폴더에 저장/넣어/올려" 달라는 요청은 반드시 이 도구 한 번으로 이미지와 영상을 전부 함께 처리한다 — 직원끼리 영상·이미지를 나눠 맡거나 파일마다 따로 부르지 말 것. company_files_write 는 글자 파일 전용이라 이미지·영상을 만들 수 없다(시도하면 거부됨). 승인 없이 바로 실행.`,
     company_files_copy: `[[RUN: company_files_copy | {"source": "원본 경로", "destination": "복사본 전체 경로"}]]  → 파일 또는 폴더 전체 복사. 사람 승인 후 실행.`,
     company_files_move: `[[RUN: company_files_move | {"source": "원본 경로", "destination": "이동할 전체 경로"}]]  → 파일·폴더 이동 또는 이름 변경. 사람 승인 후 실행.`,
     company_files_delete: `[[RUN: company_files_delete | {"paths": ["삭제할 경로"]}]]  → 파일 또는 폴더와 내부 파일 삭제. 날짜 폴더·업무는 목록의 path(@work/YYYY-MM-DD 등)를 그대로 넣으면 안의 업무까지 삭제. 반드시 대상을 먼저 조회·확인하고 사람 승인 후 실행.`,
@@ -552,7 +553,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
     company_files_document_read: "게시판 문서 읽기", company_files_document_save: "게시판 문서 작성·수정", company_files_document_comment: "게시판 댓글 작성", company_files_document_restore: "게시판 문서 복원",
-    company_files_list: "회사 파일·폴더 목록", company_files_read: "회사 파일 읽기", company_files_write: "회사 파일 작성",
+    company_files_list: "회사 파일·폴더 목록", company_files_read: "회사 파일 읽기", company_files_write: "회사 파일 작성", company_files_save_media: "첨부·이미지·영상 폴더 저장",
     company_files_mkdir: "회사 폴더 생성", company_files_copy: "회사 파일·폴더 복사", company_files_move: "회사 파일·폴더 이동", company_files_delete: "회사 파일·폴더 삭제",
     company_files_search: "회사 파일 검색", company_files_edit: "회사 파일 부분 편집",
     work_create: "업무 열기", work_update: "업무 상태·이름 변경", work_list: "업무 목록", work_get: "업무 상세",
@@ -708,7 +709,7 @@ ${teamToolMap}
 
   return `${hardState}
 
-★사용자 메시지에 "[참조 산출물: … jobId=…]" 또는 "[참조 업무: … workId=…]" 줄이 있으면, 사용자가 보고·업무 폴더에서 그 항목을 직접 지목해 보낸 것입니다. 줄이 여러 개면 그 항목들을 함께 다루라는 뜻입니다(예: 이미지 2장과 영상 1개를 지목하고 "이걸로 인스타 캐러셀 올려줘" — 순서는 줄 순서). "이걸로"·"이 이미지로"·"이 항목"·"방금 그거" 는 그 항목을 뜻하므로 어느 것인지 되묻지 말고 그대로 쓰세요: 영상은 [[RUN: video | {"jobId": "<그 jobId>", …}]](길이·모델 규칙은 video 도구 설명대로 먼저 보고), 이미지 수정(image_edit)·캐릭터 등록(brand_asset)·업스케일(upscale)은 {"jobId": "<그 jobId>"} 또는 {"objectName"}, 업무 상세가 필요하면 work_get {"id": "<workId>"} 로 읽으세요. 사용자가 채팅에 그림을 첨부했으면 "[첨부 이미지 …: attachment:1 …]" 줄이 있고, 그 그림을 고치라는 요청은 image_edit 의 imageUrl 에 "attachment:1" 을 넣어 원본을 수정합니다(새로 그리지 않음). "[참조 파일: 이미지 · 이름 path=… type=… objectName=…]" 줄은 사용자가 업무 파일에 추가한 파일을 지목한 것입니다 — 이미지·영상은 그 objectName 을 image_edit·video·publish·brand_asset 의 objectName 으로 그대로 쓰고(다시 그리지 않음), 문서·텍스트·PDF·엑셀은 company_files_read {"path": "<path>"} 로 내용을 읽은 뒤 일합니다. "[참조 폴더: … path=… 항목 N개: …]" 줄은 사용자가 업무 파일의 폴더를 지목한 것입니다 — 그 안 항목 목록이 이미 줄에 있으니 다시 묻지 말고 그 항목들로 일하세요(업무는 work_get {"id": "<workId>"}, 파일 내용은 company_files_read {"path": "<path>"}, 하위 폴더는 company_files_list {"path": "<path>"}, 폴더에 새 파일을 만들 땐 company_files_write 의 path 를 그 폴더 아래로). 참조 줄 자체를 사용자에게 되풀이해 보여 주지는 마세요.
+★사용자 메시지에 "[참조 산출물: … jobId=…]" 또는 "[참조 업무: … workId=…]" 줄이 있으면, 사용자가 보고·업무 폴더에서 그 항목을 직접 지목해 보낸 것입니다. 줄이 여러 개면 그 항목들을 함께 다루라는 뜻입니다(예: 이미지 2장과 영상 1개를 지목하고 "이걸로 인스타 캐러셀 올려줘" — 순서는 줄 순서). "이걸로"·"이 이미지로"·"이 항목"·"방금 그거" 는 그 항목을 뜻하므로 어느 것인지 되묻지 말고 그대로 쓰세요: 영상은 [[RUN: video | {"jobId": "<그 jobId>", …}]](길이·모델 규칙은 video 도구 설명대로 먼저 보고), 이미지 수정(image_edit)·캐릭터 등록(brand_asset)·업스케일(upscale)은 {"jobId": "<그 jobId>"} 또는 {"objectName"}, 업무 상세가 필요하면 work_get {"id": "<workId>"} 로 읽으세요. 사용자가 채팅에 그림을 첨부했으면 "[첨부 이미지 …: attachment:1 …]" 줄이 있고, 그 그림을 고치라는 요청은 image_edit 의 imageUrl 에 "attachment:1" 을 넣어 원본을 수정합니다(새로 그리지 않음). "[참조 파일: 이미지 · 이름 path=… type=… objectName=…]" 줄은 사용자가 업무 파일에 추가한 파일을 지목한 것입니다 — 이미지·영상은 그 objectName 을 image_edit·video·publish·brand_asset 의 objectName 으로 그대로 쓰고(다시 그리지 않음), 문서·텍스트·PDF·엑셀은 company_files_read {"path": "<path>"} 로 내용을 읽은 뒤 일합니다. "[참조 폴더: … path=… 항목 N개: …]" 줄은 사용자가 업무 파일의 폴더를 지목한 것입니다 — 그 안 항목 목록이 이미 줄에 있으니 다시 묻지 말고 그 항목들로 일하세요(업무는 work_get {"id": "<workId>"}, 파일 내용은 company_files_read {"path": "<path>"}, 하위 폴더는 company_files_list {"path": "<path>"}, 폴더에 새 파일을 만들 땐 company_files_write 의 path 를 그 폴더 아래로). 첨부 이미지·지목한 영상을 어떤 폴더에 저장하라고 하면 company_files_save_media {"folder": "<폴더>", "attachments": true, "files": ["<지목 파일 path>"]} 한 번으로 모두 저장하세요. 참조 줄 자체를 사용자에게 되풀이해 보여 주지는 마세요.
 
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
@@ -1233,7 +1234,7 @@ export async function speak(
       [
         { role: "user", content: userContent },
         { role: "assistant", content: raw },
-        { role: "user", content: "회사 파일·폴더 변경을 완료한다고 말했지만 실제 실행 RUN 마커가 빠졌어요. 원래 지시를 실행할 company_files_write/company_files_mkdir/company_files_copy/company_files_move/company_files_delete 중 정확한 RUN 마커 한 줄만 출력하세요. 경로를 확정할 수 없으면 빈 줄로 답하세요. 설명이나 완료 보고는 쓰지 마세요." },
+        { role: "user", content: "회사 파일·폴더 변경을 완료한다고 말했지만 실제 실행 RUN 마커가 빠졌어요. 원래 지시를 실행할 company_files_write/company_files_save_media/company_files_mkdir/company_files_copy/company_files_move/company_files_delete 중 정확한 RUN 마커 한 줄만 출력하세요. 경로를 확정할 수 없으면 빈 줄로 답하세요. 설명이나 완료 보고는 쓰지 마세요." },
       ],
       { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: 300, resolvedAuth: opts.resolvedAuth }
     ).catch(() => "");

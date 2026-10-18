@@ -41,6 +41,12 @@ test('영상은 메모리에 다 올리지 않고 흘려 보내며(100MB), 같�
   assert.match(src, /new FLS\(size\)/, 'Workers FixedLengthStream 으로 길이를 정해 스트리밍');
   assert.match(src, /recordGemini\(env, "video_describe", model, json\)/);
   assert.match(src, /method: "DELETE"/, '올린 파일은 지운다');
+  // 홍콩(HKG) 송출 지역 차단: 기본은 Vertex(global)에 gs:// 주소를 그대로, 폴백도 GEMINI_BASE_URL 프록시를 거친다.
+  assert.match(src, /aiplatform\.googleapis\.com\/v1\/projects\/\$\{projectId\}\/locations\/global/);
+  assert.match(src, /fileData: \{ mimeType: mime, fileUri: `gs:\/\/\$\{g\.bucket\}\/\$\{objectName\}` \}/);
+  assert.match(src, /return await analyzeViaVertex\(env, objectName, mime\)/);
+  assert.match(src, /\$\{geminiBaseUrl\(env\)\}\/upload\/v1beta\/files/);
+  assert.doesNotMatch(src, /const GEMINI_UPLOAD = "https:\/\/generativelanguage/, '업로드 주소를 직접 박지 않는다');
   const api = read('prototype/functions/api/video/describe.ts');
   assert.match(api, /if \(!\(await usesMasterResources\(env, auth\.userId\)\)\)/);
   assert.match(api, /!objectName\.startsWith\(userRoot\)/);

@@ -85,7 +85,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       + (images.length ? (message || reference ? "\n" : "") + "[이미지 첨부됨]" : "");
     // 첨부는 모델 눈에 보일 뿐 아니라 도구가 가리킬 수 있는 이름(attachment:N)으로도 알려준다.
     const attachLine = images.length
-      ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다. 다음 턴에서도 같은 이름이 이 대화의 가장 최근 첨부를 가리킨다]`
+      ? `[첨부 이미지 ${images.length}장: ${images.map((_: any, i: number) => `attachment:${i + 1}`).join(", ")} — 이 그림을 고치거나 첫 프레임으로 쓰려면 image_edit·video 의 imageUrl 에 이 이름을 그대로 넣는다. 폴더에 저장하라면 company_files_save_media 의 attachments:true(또는 files 에 이 이름). 다음 턴에서도 같은 이름이 이 대화의 가장 최근 첨부를 가리킨다]`
       : "";
     const modelText = [displayText, ...references.map((r) => r.line), attachLine].filter(Boolean).join("\n");
     const refFiles = references.flatMap((r) => r.files || []);

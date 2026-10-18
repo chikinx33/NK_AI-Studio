@@ -43,6 +43,7 @@ export const onRequestPost = async ({ request, env }: any) => {
     return send({ ok: true, cached: false, analysis });
   } catch (e: any) {
     const msg = String(e?.message || e);
-    return send({ error: msg.split(" ")[0] || "video_analysis_failed", detail: msg.slice(0, 300) }, 500);
+    // 코드만 보내면(예: video_analysis_upload_start_failed) 상태·구글 메시지가 사라져 원인을 알 수 없었다 — 전문을 보낸다.
+    return send({ error: msg.slice(0, 400) || "video_analysis_failed", code: msg.split(" ")[0] || "video_analysis_failed" }, 500);
   }
 };

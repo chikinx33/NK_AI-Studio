@@ -12,6 +12,9 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const GCS_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_TEXT_BYTES = 1024 * 1024;
+// 텍스트 쓰기(write)로 만들면 안 되는 바이너리 파일. 직원이 "attachment:1" 글자를 image_01.jpg 에 써서
+// 열리지 않는 12바이트 이미지·영상이 생겼다(2026-10-18). 미디어 저장은 company_files_save_media(복사)로 한다.
+const BINARY_FILE_PATTERN = /\.(png|jpe?g|webp|gif|bmp|avif|heic|mp4|mov|m4v|webm|mkv|avi|mp3|wav|m4a|aac|ogg|flac|pdf|docx?|xlsx?|pptx?|hwpx?|zip)$/i;
 // .xlsx·.docx 같은 문서는 눌려 있어 원본이 크다. 편 텍스트는 아래 읽기 한도가 다시 자른다.
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const MAX_OPERATION_OBJECTS = 2000;
@@ -735,6 +738,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (action === "write") {
       const path = normalizePath(body.path, false);
       assertMutablePath(path);
+      if (BINARY_FILE_PATTERN.test(path)) {
+        return send({ error: `'${baseName(path)}' 은(는) 이미지·영상·문서 같은 바이너리 파일이라 글자로 쓸 수 없습니다. 대화 첨부나 업무 폴더 파일을 저장하려면 company_files_save_media 를 쓰세요.` }, 415, origin);
+      }
       await protectDocument(ctx, rootPrefix, path);
       const content = String(body.content ?? "");
       const bytes = new TextEncoder().encode(content);
