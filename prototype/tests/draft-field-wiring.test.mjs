@@ -47,7 +47,7 @@ test("초안 카드의 모든 필드는 발행 요청에 실리거나 사유가 
   assert.ok(rendered.size >= 10, `필드 키 수집 실패 (${rendered.size}개)`);
 
   // 발행 경로에서 실제로 읽는 draft 키 수집
-  const publishPath = sliceBetween(src, "function snsPublishFormat(", "function doYoutubeDirectPut(");
+  const publishPath = sliceBetween(src, "function snsPublishFormat(", "// TikTok 초안함(inbox) 업로드 — scope: video.upload");
   const sent = new Set();
   const re2 = /draft\.([a-z_]+)/g;
   while ((m = re2.exec(publishPath)) !== null) sent.add(m[1]);

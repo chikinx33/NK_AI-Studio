@@ -4406,13 +4406,9 @@
                 throw pubErr;
               }
 
-              // 하이브리드: 서버가 직접 PUT한 경우 result.postId 가 채워져 있음 → 그대로 반환
+              // 유튜브도 서버가 영상까지 다 올리고 result 를 돌려준다(크기 무관). 전엔 50MB 가 넘으면 브라우저가 GCS 에서
+              // 받아 직접 올렸는데, 버킷 CORS 에 막혀 유튜브엔 빈 영상만 남았다(2026-10-18) — 그 길은 없앴다.
               if (res.result) return res;
-
-              // 큰 영상 → 클라 직접 PUT (resumable session)
-              if (res.uploadUrl && res.sourceUrl) {
-                return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId, !!res.scheduledPublish, res.scheduledFor || '');
-              }
               throw new Error('Unexpected publish response');
             });
         }
@@ -4571,50 +4567,6 @@
         }
 
         return doPublish();
-      }
-
-      // YouTube resumable PUT (큰 영상 — XHR로 진행률 표시)
-      // sourceUrl 은 백엔드가 발급한 GCS signed URL (또는 mediaDirectUrl).
-      function doYoutubeDirectPut(uploadUrl, sourceUrl, contentType, formatId, scheduledPublish, scheduledFor) {
-        return fetch(sourceUrl)
-          .then(function (r) {
-            if (!r.ok) throw new Error('source fetch failed: ' + r.status);
-            return r.blob();
-          })
-          .then(function (blob) {
-            return new Promise(function (resolve, reject) {
-              var xhr = new XMLHttpRequest();
-              xhr.open('PUT', uploadUrl, true);
-              xhr.setRequestHeader('Content-Type', contentType || blob.type || 'video/mp4');
-              xhr.upload.addEventListener('progress', function (evt) {
-                if (!evt.lengthComputable) return;
-                var pct = (evt.loaded / evt.total) * 100;
-                var fmtCard = document.querySelector('[data-deploy-format-card="' + formatId + '"] .bsf-deploy-status');
-                if (fmtCard) fmtCard.textContent = (isEn ? 'Uploading… ' : '업로드 중… ') + pct.toFixed(1) + '%';
-              });
-              xhr.addEventListener('load', function () {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                  var parsed = {};
-                  try { parsed = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
-                  resolve({
-                    ok: true,
-                    result: {
-                      platform: formatId,
-                      postId: parsed.id || '',
-                      status: scheduledPublish ? 'scheduled' : 'published',
-                      publishedAt: new Date().toISOString(),
-                      scheduledFor: scheduledFor || '',
-                      url: parsed.id ? 'https://youtu.be/' + parsed.id : '',
-                    },
-                  });
-                } else {
-                  reject(new Error('YouTube PUT failed: HTTP ' + xhr.status));
-                }
-              });
-              xhr.addEventListener('error', function () { reject(new Error('YouTube PUT network error')); });
-              xhr.send(blob);
-            });
-          });
       }
 
       // TikTok 초안함(inbox) 업로드 — scope: video.upload

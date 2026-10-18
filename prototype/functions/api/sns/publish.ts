@@ -1510,8 +1510,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       }
       const tags = Array.from(tagSet);
 
-      // GCS 영상 크기 조회 → 하이브리드 분기 (50MB 임계값)
-      const SERVER_RELAY_THRESHOLD = 50 * 1024 * 1024;
+      // 영상 크기 조회. 업로드는 크기와 관계없이 서버가 흘려 보낸다(아래 PUT).
+      // 전엔 50MB 가 넘으면 유튜브 업로드 자리(resumable 세션)만 열고, 브라우저가 GCS 서명 주소로 영상을 받아 직접 올리게 했다.
+      // 버킷 CORS 가 nkstudio.org 를 허용하지 않아 브라우저가 영상을 받지 못해(status 0) 유튜브엔 '곧 처리 시작됨'에 멈춘
+      // 빈 영상만 남았고, 에이전트 발행은 그 응답(업로드 주소만 있고 결과 없음)을 성공으로 기록했다(2026-10-18).
+      // 서버 전송은 Worker 메모리에 다 올리지 않는 스트림이라 큰 영상도 된다.
       let contentLength = 0;
       let contentType = "video/mp4";
       let videoSignedUrl = "";
@@ -1529,23 +1532,22 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const meta = (await metaRes.json()) as { size?: string; contentType?: string };
         contentLength = Number(meta.size || 0);
         contentType = meta.contentType || "video/mp4";
-        if (contentLength <= SERVER_RELAY_THRESHOLD) {
-          videoSignedUrl = await buildSignedUrl(
-            bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600
-          );
-        }
+        videoSignedUrl = await buildSignedUrl(
+          bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600
+        );
       } else if (body.mediaDirectUrl) {
         // direct URL은 HEAD로 크기 확인
         try {
           const headRes = await fetch(body.mediaDirectUrl, { method: "HEAD" });
           contentLength = Number(headRes.headers.get("content-length") || 0);
           contentType = headRes.headers.get("content-type") || "video/mp4";
-        } catch { /* 크기 모르면 안전하게 클라 PUT 라우팅 */ }
+        } catch { /* 아래에서 크기 없음으로 멈춘다 */ }
         videoSignedUrl = body.mediaDirectUrl;
       }
-      if (!contentLength) {
-        // 크기를 모르면 클라이언트 PUT 강제
-        contentLength = SERVER_RELAY_THRESHOLD + 1;
+      // 크기를 꾸며 넣지 않는다 — 업로드 자리를 열 때 알린 크기(X-Upload-Content-Length)가 실제와 다르면
+      // 유튜브에 빈 영상만 남는다. 열기 전에 멈춘다.
+      if (!contentLength || !videoSignedUrl) {
+        return send({ error: "영상 파일 크기를 확인하지 못해 YouTube 에 올리지 않았어요. 영상을 다시 선택해 주세요." }, 400);
       }
 
       // ── UI 입력값 → YouTube API 매핑 ──────────────────────────
@@ -1620,60 +1622,45 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: "YouTube upload URL 누락" }, 502);
       }
 
-      // 큰 영상 분기에서도 클라가 GCS에서 직접 받아야 하므로 signed URL 보장
-      let clientSourceUrl = videoSignedUrl;
-      if (!clientSourceUrl && body.mediaGcsPath) {
-        clientSourceUrl = await buildSignedUrl(
-          bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600
-        );
-      } else if (!clientSourceUrl && body.mediaDirectUrl) {
-        clientSourceUrl = body.mediaDirectUrl;
+      // 서버 전송: GCS 에서 받아 유튜브로 그대로 흘려 보낸다. 길이를 정한 스트림이라 Worker 메모리에 다 올리지 않는다.
+      const videoRes = await fetch(videoSignedUrl);
+      if (!videoRes.ok || !videoRes.body) {
+        return send({ error: `영상 fetch 실패: ${videoRes.status}` }, 502);
       }
-
-      // 하이브리드 분기 — 작은 영상은 서버 경유, 큰 영상은 클라 직접 PUT
-      if (contentLength <= SERVER_RELAY_THRESHOLD && videoSignedUrl) {
-        // 서버 경유: GCS에서 영상 fetch → YouTube로 PUT
-        const videoRes = await fetch(videoSignedUrl);
-        if (!videoRes.ok || !videoRes.body) {
-          return send({ error: `영상 fetch 실패: ${videoRes.status}` }, 502);
-        }
-        const putRes = await fetch(uploadUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": contentType,
-            "Content-Length": String(contentLength),
-          },
-          body: videoRes.body,
-        });
-        if (!putRes.ok) {
-          const errText = await putRes.text();
-          return send({ error: `YouTube PUT 실패: ${putRes.status} ${errText}` }, 502);
-        }
-        const result = (await putRes.json()) as { id?: string };
-        return send({
-          ok: true,
-          result: {
-            platform,
-            postId: result.id || "",
-            status: publishAtIso ? "scheduled" : "published",
-            publishedAt: new Date().toISOString(),
-            scheduledFor: publishAtIso || "",
-            url: result.id ? `https://youtu.be/${result.id}` : "",
-          },
-        });
-      } else {
-        // 클라 직접 PUT: uploadUrl + sourceUrl (GCS signed) 반환
-        return send({
-          ok: true,
-          uploadUrl,
-          sourceUrl: clientSourceUrl,
-          contentType,
-          contentLength,
+      let putBody: any = videoRes.body;
+      const FLS: any = (globalThis as any).FixedLengthStream;
+      if (typeof FLS === "function") {
+        const { readable, writable } = new FLS(contentLength);
+        videoRes.body.pipeTo(writable).catch(() => {});
+        putBody = readable;
+      }
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(contentLength),
+        },
+        body: putBody,
+      });
+      if (!putRes.ok) {
+        const errText = await putRes.text();
+        return send({ error: `YouTube PUT 실패: ${putRes.status} ${errText}` }, 502);
+      }
+      const result = (await putRes.json()) as { id?: string };
+      if (!result.id) {
+        return send({ error: "YouTube 가 영상 ID 를 돌려주지 않았어요 — 업로드가 끝나지 않았을 수 있어요. 유튜브 스튜디오에서 확인해 주세요." }, 502);
+      }
+      return send({
+        ok: true,
+        result: {
           platform,
-          scheduledPublish: !!publishAtIso,
+          postId: result.id,
+          status: publishAtIso ? "scheduled" : "published",
+          publishedAt: new Date().toISOString(),
           scheduledFor: publishAtIso || "",
-        });
-      }
+          url: `https://youtu.be/${result.id}`,
+        },
+      });
     }
 
     if (platform === "facebook") {

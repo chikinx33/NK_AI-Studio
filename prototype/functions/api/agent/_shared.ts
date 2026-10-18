@@ -3147,7 +3147,10 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
     }
     return { platform, failure: `${platform}(${plan.note}): ${String(data?.message || data?.error || `HTTP ${res.status}`).slice(0, 200)}` };
   }
-  const r: any = data?.result || {};
+  // 성공 응답에는 항상 result 가 있다. 없으면(예: 예전 유튜브 50MB 초과 응답 — 업로드 주소만 있고 파일은 안 올라감)
+  // 성공으로 기록하지 않는다. 전엔 이걸 성공으로 남겨 유튜브엔 빈 영상, 화면엔 '배포 완료'가 됐다(2026-10-18).
+  if (!data?.result) return { platform, failure: `${platform}(${plan.note}): 채널이 게시 결과를 돌려주지 않았어요 — 실제로 올라갔는지 확인해 주세요.` };
+  const r: any = data.result;
   // 예약(Instagram·Facebook·Threads·X)은 서버 대기열에 들어가 status 'scheduled' + scheduledJobId 로 돌아온다.
   return {
     platform,
