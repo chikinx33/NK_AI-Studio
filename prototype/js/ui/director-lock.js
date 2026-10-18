@@ -106,8 +106,10 @@
     var pill = host.querySelector(':scope > .director-lock-pill');
     if (!locked) { if (pill) pill.remove(); return; }
     var t = lock.text(payload);
+    // span 이면 상단 줄 공통 규칙(.section-caption span { height: 40px })이 높이를 덮어 28×40 타원이 된다 — div 로 만든다.
+    if (pill && pill.tagName === 'SPAN') { pill.remove(); pill = null; }
     if (!pill) {
-      pill = document.createElement('span');
+      pill = document.createElement('div');
       pill.className = 'director-lock-pill';
       pill.setAttribute('role', 'img');
       host.insertBefore(pill, host.firstChild);

@@ -139,6 +139,9 @@ test("화면: 시나리오(개요 제외)·메인 프로덕션 '수정 불가', 
   assert.match(lock, /host\.insertBefore\(pill, host\.firstChild\);/);
   assert.doesNotMatch(lock, /pill\.appendChild\(document\.createTextNode/);
   assert.match(read("prototype/styles.css"), /\.director-lock-pill \{[^}]*border-radius: 50%;/);
+  // 정원 유지: span 이면 .section-caption span { height: 40px } 가 높이를 덮어 타원이 된다(2026-10-18).
+  assert.match(read("prototype/js/ui/director-lock.js"), /pill = document\.createElement\('div'\)/);
+  assert.match(read("prototype/styles.css"), /\.director-lock-pill \{[^}]*width: 28px;[^}]*height: 28px;/);
   assert.doesNotMatch(read("prototype/styles.css"), /\.director-lock-banner/);
   assert.match(pipe, /if \(!lockedByDirector && Array\.isArray\(freshState\.scenes\)/);
   for (const page of ["prototype/scenario.html", "prototype/scenes.html"]) {
