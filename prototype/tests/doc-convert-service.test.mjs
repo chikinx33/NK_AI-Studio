@@ -5,6 +5,7 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -12,12 +13,24 @@ import { dirname, join } from "node:path";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (rel) => readFileSync(join(repoRoot, rel), "utf8");
 
-const PORT = 8791;
 const TOKEN = "test-token";
-const base = `http://127.0.0.1:${PORT}`;
+let PORT = 0;
+let base = "";
 let child;
 
+// 고정 포트(8791)는 다른 로컬 서버가 쓰고 있으면 그 서버의 응답(501 등)을 받아 엉뚱하게 실패했다(2026-10-20).
+// 비어 있는 포트를 골라 띄운다.
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
 before(async () => {
+  PORT = await freePort();
+  base = `http://127.0.0.1:${PORT}`;
   child = spawn(process.execPath, [join(repoRoot, "doc-convert/server.js")], {
     env: { ...process.env, PORT: String(PORT), DOC_CONVERT_TOKEN: TOKEN },
     stdio: ["ignore", "pipe", "pipe"],

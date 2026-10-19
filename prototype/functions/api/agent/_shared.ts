@@ -3129,10 +3129,16 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
     privacyStatus: publishAtIso ? "scheduled" : String(d.privacyStatus || prepared?.privacyStatus || "public"),
     // 유튜브 일반(60초 이상)은 쇼츠가 아니다. 예전엔 'youtube' 도 쇼츠로 올라갔다.
     isShorts: platform === "youtube-shorts" || (platform !== "youtube" && (d.isShorts ?? prepared?.isShorts) !== false),
+    ...(String(d.titleEn || "").trim() ? { titleEn: String(d.titleEn).trim().slice(0, 100) } : {}),
+    ...(String(d.playlist || "").trim() ? { playlist: String(d.playlist).trim() } : {}),
+    ...(typeof d.alteredContent === "boolean" ? { alteredContent: d.alteredContent } : {}),
   });
   if (publishAtIso) Object.assign(body, { publishAt: publishAtIso, ...(isYouTube ? {} : { privacyStatus: "scheduled" }) });
   if ((platform === "threads" || platform === "x") && (d.replySetting || prepared?.replySetting)) body.replySetting = String(d.replySetting || prepared.replySetting);
+  // 첫 댓글(인스타·페북) · 첫 답글(스레드·X) — 같은 칸(firstComment)이다.
   if ((platform === "instagram" || platform === "facebook") && (d.firstComment || prepared?.firstComment)) body.firstComment = String(d.firstComment || prepared.firstComment);
+  // 스레드·X 첫 답글은 채널 초안에 적은 것만 — 공통 firstComment(인스타 해시태그 댓글 등)가 답글로 번지지 않게.
+  if ((platform === "threads" || platform === "x") && String(d.firstComment || "").trim()) body.firstComment = String(d.firstComment).trim();
   if (platform === "facebook" && (d.linkUrl || prepared?.linkUrl)) body.linkUrl = String(d.linkUrl || prepared.linkUrl);
 
   const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
@@ -3346,6 +3352,9 @@ function brandDraftToPublishDraft(d: any): any {
     ...(src.reply_setting || src.replySetting ? { replySetting: String(src.reply_setting || src.replySetting) } : {}),
     ...(src.category || src.categoryKey ? { categoryKey: String(src.category || src.categoryKey) } : {}),
     ...(src.privacy_status && src.privacy_status !== "scheduled" ? { privacyStatus: String(src.privacy_status) } : {}),
+    ...(src.title_en || src.titleEn ? { titleEn: String(src.title_en || src.titleEn) } : {}),
+    ...(src.playlist ? { playlist: String(src.playlist) } : {}),
+    ...(typeof (src.altered_content ?? src.alteredContent) === "boolean" ? { alteredContent: src.altered_content ?? src.alteredContent } : {}),
   };
 }
 
@@ -3361,6 +3370,9 @@ function publishDraftToBrandDraft(d: any): any {
     ...(src.linkUrl ? { link_url: String(src.linkUrl) } : {}),
     ...(src.replySetting ? { reply_setting: String(src.replySetting) } : {}),
     ...(src.categoryKey ? { category: String(src.categoryKey) } : {}),
+    ...(src.titleEn ? { title_en: String(src.titleEn) } : {}),
+    ...(src.playlist ? { playlist: String(src.playlist) } : {}),
+    ...(typeof src.alteredContent === "boolean" ? { altered_content: src.alteredContent } : {}),
   };
 }
 

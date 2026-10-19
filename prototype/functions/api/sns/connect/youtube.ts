@@ -27,7 +27,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
+    // youtube: 재생목록 만들기·넣기(playlists.insert·playlistItems.insert)는 upload 권한으로 안 된다.
+    scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube",
     access_type: "offline",
     include_granted_scopes: "true",
     prompt: "consent",

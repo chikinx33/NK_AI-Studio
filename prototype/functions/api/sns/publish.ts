@@ -794,6 +794,53 @@ async function postFacebookComment(opts: {
   }
 }
 
+/**
+ * 올린 영상을 이름이 같은 내 재생목록에 넣는다(없으면 만든다). 성공이면 "", 실패면 안내 문장.
+ * 목록 조회는 youtube.readonly 로 되지만 만들기·넣기는 youtube 권한이 있어야 한다 —
+ * 그 권한 없이 연결된 계정은 403 이 오고, 다시 연결하면 된다.
+ */
+async function addVideoToYouTubePlaylist(accessToken: string, videoId: string, title: string, privacyStatus: "public" | "private"): Promise<string> {
+  const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" };
+  const failNote = async (res: Response, step: string) => {
+    const text = await res.text().catch(() => "");
+    if (res.status === 403 && /insufficient|scope|permission/i.test(text)) {
+      return `재생목록 "${title}" 에는 넣지 못했어요 — YouTube 연결에 재생목록 권한이 없어요. SNS 설정에서 YouTube 를 다시 연결해 주세요.`;
+    }
+    return `재생목록 "${title}" ${step}에 실패했어요(${res.status} ${text.slice(0, 120)}).`;
+  };
+  try {
+    const want = title.trim().toLowerCase();
+    let playlistId = "";
+    let pageToken = "";
+    for (let page = 0; page < 4 && !playlistId; page++) {
+      const q = new URLSearchParams({ part: "snippet", mine: "true", maxResults: "50", ...(pageToken ? { pageToken } : {}) });
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/playlists?${q}`, { headers });
+      if (!res.ok) return await failNote(res, "찾기");
+      const data = (await res.json()) as { items?: Array<{ id?: string; snippet?: { title?: string } }>; nextPageToken?: string };
+      playlistId = String((data.items || []).find((p) => String(p.snippet?.title || "").trim().toLowerCase() === want)?.id || "");
+      pageToken = String(data.nextPageToken || "");
+      if (!pageToken) break;
+    }
+    if (!playlistId) {
+      const res = await fetch("https://www.googleapis.com/youtube/v3/playlists?part=snippet,status", {
+        method: "POST", headers,
+        body: JSON.stringify({ snippet: { title: title.slice(0, 150) }, status: { privacyStatus } }),
+      });
+      if (!res.ok) return await failNote(res, "만들기");
+      playlistId = String(((await res.json()) as { id?: string }).id || "");
+      if (!playlistId) return `재생목록 "${title}" 을 만들었지만 번호를 받지 못해 영상을 넣지 못했어요.`;
+    }
+    const res = await fetch("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet", {
+      method: "POST", headers,
+      body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } } }),
+    });
+    if (!res.ok) return await failNote(res, "넣기");
+    return "";
+  } catch (e) {
+    return `재생목록 "${title}" 에 넣지 못했어요(${e instanceof Error ? e.message : String(e)}).`;
+  }
+}
+
 // ── Threads(메타) 헬퍼 ─────────────────────────────────────────────────────
 
 const THREADS_API = "https://graph.threads.net/v1.0";
@@ -1012,6 +1059,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     // UI 카테고리 키 (entertainment/education/gaming/music/etc) → 백엔드가 YouTube categoryId 로 매핑.
     categoryKey?: string;
     isShorts?: boolean;
+    // 영어 제목 — 본제목(한국어)의 번역 칸(localizations.en)에 넣는다.
+    titleEn?: string;
+    // 넣을 재생목록 이름. 내 채널에 같은 이름이 없으면 만든다.
+    playlist?: string;
+    // '변경된 콘텐츠(합성 미디어)' 표시. 값을 줬을 때만 보낸다(true/false).
+    alteredContent?: boolean;
     // 공유받은 프로젝트를 소유자 자격증명으로 게시할 때 사용
     projectId?: string;
     ownerId?: string;
@@ -1502,7 +1555,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
       if (isShorts) {
         // Shorts 의도 신호: description 끝과 tags 양쪽
-        if (!/(^|\s)#Shorts(\s|$)/i.test(description)) {
+        // 제목에 이미 #shorts 가 있으면 설명엔 덧붙이지 않는다(설명의 해시태그를 사용자가 정한 대로 두기 위해).
+        if (!/(^|\s)#Shorts(\s|$)/i.test(description) && !/(^|\s)#Shorts(\s|$)/i.test(epTitleFallback)) {
           description = description ? description + "\n\n#Shorts" : "#Shorts";
         }
         const hasShortsTag = Array.from(tagSet).some((t) => t.toLowerCase() === "shorts");
@@ -1589,19 +1643,27 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         selfDeclaredMadeForKids: false,
       };
       if (publishAtIso) statusObj.publishAt = publishAtIso;
+      if (typeof body.alteredContent === "boolean") statusObj.containsSyntheticMedia = body.alteredContent;
 
-      const metadata = {
-        snippet: {
-          title: epTitleFallback.slice(0, 100),
-          description: description.slice(0, 5000),
-          tags,
-          categoryId,
-        },
-        status: statusObj,
+      const snippet: Record<string, unknown> = {
+        title: epTitleFallback.slice(0, 100),
+        description: description.slice(0, 5000),
+        tags,
+        categoryId,
       };
+      // 영어 제목 번역: 번역은 기본 언어(defaultLanguage)가 있어야 받는다. 본제목이 한국어일 때만 ko 를 기본으로 두고 en 번역을 단다.
+      // 번역의 설명을 비우면 영어 화면 시청자에겐 설명이 빈칸으로 보이므로 본 설명을 그대로 쓴다.
+      const titleEn = String(body.titleEn || "").trim().slice(0, 100);
+      const localizations = titleEn && /[가-힣]/.test(epTitleFallback)
+        ? { en: { title: titleEn, description: description.slice(0, 5000) } }
+        : null;
+      if (localizations) snippet.defaultLanguage = "ko";
+      const metadata: Record<string, unknown> = { snippet, status: statusObj, ...(localizations ? { localizations } : {}) };
+      const ytNotes: string[] = [];
+      if (titleEn && !localizations) ytNotes.push("본제목이 한국어가 아니라 영어 제목 번역은 넣지 않았어요.");
 
       const initRes = await fetch(
-        "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        `https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status${localizations ? ",localizations" : ""}`,
         {
           method: "POST",
           headers: {
@@ -1650,10 +1712,18 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       if (!result.id) {
         return send({ error: "YouTube 가 영상 ID 를 돌려주지 않았어요 — 업로드가 끝나지 않았을 수 있어요. 유튜브 스튜디오에서 확인해 주세요." }, 502);
       }
+      // 재생목록: 실패해도 업로드는 성공으로 둔다(쓰기 권한 없이 연결된 계정은 재연결 안내).
+      const playlistTitle = String(body.playlist || "").trim();
+      if (playlistTitle) {
+        const playlistNote = await addVideoToYouTubePlaylist(userAccessToken, result.id, playlistTitle, apiPrivacyStatus === "private" && !publishAtIso ? "private" : "public");
+        if (playlistNote) ytNotes.push(playlistNote);
+      }
+
       return send({
         ok: true,
         result: {
           platform,
+          ...(ytNotes.length ? { note: ytNotes.join(" ") } : {}),
           postId: result.id,
           status: publishAtIso ? "scheduled" : "published",
           publishedAt: new Date().toISOString(),
@@ -1915,6 +1985,25 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
       const { postId } = await publishThreadsContainer({ threadsUserId, accessToken, creationId });
 
+      // 첫 답글(예: 본문엔 링크를 안 넣고 답글에 스토어 링크). 실패해도 본문 게시는 성공으로 둔다.
+      // 답글(reply_to_id)도 reply_control 처럼 답글 관리 권한(threads_manage_replies)이 없으면 code 10 으로 거부될 수 있다.
+      const replyText = sanitizeThreadsText(String(firstComment || ""), 500);
+      if (replyText.trim()) {
+        if (!postId) {
+          fallbackNotes.push("본문 게시 번호를 받지 못해 첫 답글은 달지 못했어요 — 앱에서 직접 달아 주세요.");
+        } else {
+          try {
+            const replyId = await createThreadsContainer({ threadsUserId, accessToken, params: { media_type: "TEXT", text: replyText, reply_to_id: postId } });
+            await publishThreadsContainer({ threadsUserId, accessToken, creationId: replyId });
+          } catch (e: any) {
+            console.log("[threads publish] first reply failed (post still ok):", e?.message || e);
+            fallbackNotes.push(e?.metaCode === 10
+              ? "첫 답글은 Threads 연결에 답글 관리 권한(threads_manage_replies)이 없어 달지 못했어요 — 앱에서 직접 달아 주세요."
+              : `첫 답글은 달지 못했어요(${String(e?.message || e).slice(0, 120)}) — 앱에서 직접 달아 주세요.`);
+          }
+        }
+      }
+
       return send({
         ok: true,
         result: {
@@ -2113,6 +2202,26 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: `X 게시 실패: ${tweetRes.status} ${tweetJson.detail || tweetJson.title || JSON.stringify(tweetJson)}` }, 502);
       }
 
+      // 첫 답글(예: 본문엔 링크를 안 넣고 답글에 스토어 링크). 내 글에 다는 답글은 reply_settings 와 상관없이 된다.
+      // 실패해도 본문 게시는 성공으로 둔다.
+      let xNote = "";
+      const xReplyText = String(firstComment || "").trim();
+      if (xReplyText) {
+        try {
+          const replyRes = await fetch("https://api.twitter.com/2/tweets", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ text: xReplyText, reply: { in_reply_to_tweet_id: tweetJson.data.id } }),
+          });
+          const replyJson = (await replyRes.json().catch(() => ({}))) as { data?: { id?: string }; detail?: string; title?: string };
+          if (!replyRes.ok || !replyJson.data?.id) throw new Error(`${replyRes.status} ${replyJson.detail || replyJson.title || ""}`.trim());
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.log("[x publish] first reply failed (post still ok):", msg);
+          xNote = `첫 답글은 달지 못했어요(${msg.slice(0, 120)}) — X 에서 직접 달아 주세요.`;
+        }
+      }
+
       return send({
         ok: true,
         result: {
@@ -2121,6 +2230,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           username,
           status: "published",
           publishedAt: new Date().toISOString(),
+          ...(xNote ? { note: xNote } : {}),
         },
       });
     }
