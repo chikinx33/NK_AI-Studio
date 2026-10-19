@@ -511,7 +511,7 @@ export default function Sidebar({
     if (!file || savingLogo || savingTagline || brandLoading) return;
     setSavingLogo(true);
     try {
-      const dataUrl = await resizeLogoToSquare(file, 500);
+      const dataUrl = await resizeLogoToFit(file, 1000);
       const saved = await saveStudioBrandIcon(dataUrl);
       setBrandIcon(saved.iconDataUrl);
     } catch (e) {
@@ -553,7 +553,7 @@ export default function Sidebar({
             <img
               src={brandIcon || `${import.meta.env.BASE_URL}logo.png`}
               alt="NK AI Company"
-              className={brandIcon ? "h-12 w-12 rounded-lg object-cover" : "h-12 w-auto object-contain"}
+              className={brandIcon ? "h-14 w-auto max-w-full rounded-lg object-contain" : "h-12 w-auto object-contain"}
             />
           </button>
           <input
@@ -724,8 +724,9 @@ export default function Sidebar({
   );
 }
 
-// 런처 로그인 카드와 같은 규칙: 정사각형으로 꽉 채워 자른 PNG data URL.
-function resizeLogoToSquare(file: File, size: number): Promise<string> {
+// 원본 비율을 그대로 두고 긴 변만 maxSide 이하로 줄인 PNG data URL.
+// 가로로 긴 워드마크 로고를 정사각형으로 자르면 가운데 글자만 남는다.
+function resizeLogoToFit(file: File, maxSide: number): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!/^image\//.test(file.type)) { reject(new Error("image_only")); return; }
     const reader = new FileReader();
@@ -734,17 +735,15 @@ function resizeLogoToSquare(file: File, size: number): Promise<string> {
       const img = new Image();
       img.onerror = () => reject(new Error("decode_failed"));
       img.onload = () => {
+        const sw = img.naturalWidth || maxSide;
+        const sh = img.naturalHeight || maxSide;
+        const scale = Math.min(1, maxSide / Math.max(sw, sh));
         const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = Math.max(1, Math.round(sw * scale));
+        canvas.height = Math.max(1, Math.round(sh * scale));
         const ctx = canvas.getContext("2d");
         if (!ctx) { reject(new Error("canvas_unavailable")); return; }
-        const sw = img.naturalWidth || size;
-        const sh = img.naturalHeight || size;
-        const scale = Math.max(size / sw, size / sh);
-        const dw = sw * scale;
-        const dh = sh * scale;
-        ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL("image/png"));
       };
       img.src = String(reader.result || "");
