@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPublishingState, listBrandOptions, type BrandOption, type PublishingState } from "../../lib/publishing";
 import { usePublishingText, agoText, apiErrorText } from "./i18n";
 import { Icon, IconButton, type IconName } from "./ui";
-import { pcStatus, type PublishingCtx, type PublishingTab } from "./helpers";
+import { ATTENTION, pcStatus, type PublishingCtx, type PublishingTab } from "./helpers";
 import OverviewTab from "./OverviewTab";
 import CalendarTab from "./CalendarTab";
 import ItemsTab from "./ItemsTab";
@@ -10,6 +10,7 @@ import ChannelsTab from "./ChannelsTab";
 import SettingsTab from "./SettingsTab";
 import ItemEditor from "./ItemEditor";
 import CopyView from "./CopyView";
+import TestedView from "./TestedView";
 
 /**
  * 퍼블리싱 — 브랜드 글을 채널별 일정으로 올리는 작업공간(SKILL 줄 4번째).
@@ -78,7 +79,7 @@ export default function PublishingWorkspace() {
   }), [t, state, brands, now, reload, toast]);
 
   const pc = pcStatus(state, now);
-  const attention = state.items.reduce((n, item) => n + item.deliveries.filter((d) => ["needs_human", "failed", "ready_manual"].includes(d.status)).length, 0);
+  const attention = state.items.reduce((n, item) => n + item.deliveries.filter((d) => ATTENTION.includes(d.status)).length, 0);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-ink" data-company-skill="publishing">
@@ -122,7 +123,10 @@ export default function PublishingWorkspace() {
       </div>
 
       {editor && <ItemEditor ctx={ctx} itemId={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
-      {copyId && <CopyView ctx={ctx} deliveryId={copyId} onClose={() => setCopyId("")} />}
+      {/* 시험 완료 건은 복사 화면 대신 캡처·"실제로 올리기" 화면을 연다. */}
+      {copyId && (state.items.some((i) => i.deliveries.some((d) => d.id === copyId && d.status === "tested"))
+        ? <TestedView ctx={ctx} deliveryId={copyId} onClose={() => setCopyId("")} />
+        : <CopyView ctx={ctx} deliveryId={copyId} onClose={() => setCopyId("")} />)}
       {toastMsg && (
         <div key={toastMsg.key} role="status" aria-live="polite"
           className={`pointer-events-none absolute bottom-5 left-1/2 z-[70] -translate-x-1/2 rounded-full border px-4 py-2 text-xs font-semibold shadow-lg backdrop-blur ${toastMsg.tone === "ok" ? "border-emerald-500/40 bg-tint-emerald/90 text-tone-emerald" : "border-amber-500/40 bg-tint-amber/90 text-tone-amber"}`}>

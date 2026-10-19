@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { addDays, todayKst, weekStartOf } from "../../lib/publishing";
 import { Button, Icon, STATUS_DOT } from "./ui";
-import { allDeliveryRows, channelTypeLabel, kstDayOf, type PublishingCtx } from "./helpers";
+import { ATTENTION, allDeliveryRows, channelTypeLabel, kstDayOf, type PublishingCtx } from "./helpers";
 
 const MAX_PER_DAY = 4;
 
@@ -65,7 +65,7 @@ export default function CalendarTab({ ctx }: { ctx: PublishingCtx }) {
               </div>
               <div className="space-y-0.5">
                 {shown.map((r) => (
-                  <button key={r.delivery.id} type="button" onClick={() => (["needs_human", "failed", "ready_manual"].includes(r.delivery.status) ? ctx.openCopy(r.delivery.id) : ctx.openItem(r.item.id))}
+                  <button key={r.delivery.id} type="button" onClick={() => (ATTENTION.includes(r.delivery.status) ? ctx.openCopy(r.delivery.id) : ctx.openItem(r.item.id))}
                     title={`${timeOf(r.delivery.scheduledAt)} ${r.channel?.name || ""} · ${r.item.title} · ${t.deliveryStatus[r.delivery.status] || ""}`}
                     className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[10px] leading-tight text-secondary hover:bg-inset">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[r.delivery.status] || "bg-muted"}`} />

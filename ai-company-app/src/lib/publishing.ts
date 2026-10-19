@@ -4,8 +4,8 @@
  */
 
 export type ChannelMode = "pc" | "manual" | "api";
-export type DeliveryStatus = "draft" | "scheduled" | "claimed" | "publishing" | "posted" | "failed" | "needs_human" | "ready_manual" | "done_manual" | "cancelled";
-export type ItemStatus = "draft" | "approved" | "scheduled" | "posted" | "failed" | "needs_human";
+export type DeliveryStatus = "draft" | "scheduled" | "claimed" | "publishing" | "posted" | "failed" | "needs_human" | "ready_manual" | "done_manual" | "tested" | "cancelled";
+export type ItemStatus = "draft" | "approved" | "scheduled" | "posted" | "failed" | "needs_human" | "tested";
 
 export interface PublishingChannel {
   id: string; type: string; mode: ChannelMode; name: string; brandId: string; accountLabel: string;

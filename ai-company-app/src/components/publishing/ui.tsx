@@ -40,6 +40,7 @@ export const icons = {
   sliders: <><line x1="21" x2="14" y1="4" y2="4" /><line x1="10" x2="3" y1="4" y2="4" /><line x1="21" x2="12" y1="12" y2="12" /><line x1="8" x2="3" y1="12" y2="12" /><line x1="21" x2="16" y1="20" y2="20" /><line x1="12" x2="3" y1="20" y2="20" /><line x1="14" x2="14" y1="2" y2="6" /><line x1="8" x2="8" y1="10" y2="14" /><line x1="16" x2="16" y1="18" y2="22" /></>,
   shield: <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></>,
   loader: <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
+  send: <><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" /><path d="m21.854 2.147-10.94 10.939" /></>,
 };
 export type IconName = keyof typeof icons;
 export const Icon = ({ name, className }: { name: IconName; className?: string }) => <Svg className={className}>{icons[name]}</Svg>;
@@ -85,11 +86,12 @@ const STATUS_STYLE: Record<string, string> = {
   failed: "border-transparent bg-tint-red/50 text-tone-red",
   needs_human: "border-transparent bg-tint-amber/50 text-tone-amber",
   ready_manual: "border-transparent bg-tint-amber/50 text-tone-amber",
+  tested: "border-transparent bg-tint-teal/50 text-tone-teal",
   cancelled: "border-edge bg-transparent text-faint line-through",
 };
 export const STATUS_DOT: Record<string, string> = {
   draft: "bg-muted", approved: "bg-tone-sky", scheduled: "bg-tone-blue", claimed: "bg-tone-violet", publishing: "bg-tone-violet",
-  posted: "bg-tone-emerald", done_manual: "bg-tone-emerald", failed: "bg-tone-red", needs_human: "bg-tone-amber", ready_manual: "bg-tone-amber", cancelled: "bg-edge",
+  posted: "bg-tone-emerald", done_manual: "bg-tone-emerald", failed: "bg-tone-red", needs_human: "bg-tone-amber", ready_manual: "bg-tone-amber", tested: "bg-tone-teal", cancelled: "bg-edge",
 };
 
 export function StatusBadge({ status, label }: { status: string; label: string }) {

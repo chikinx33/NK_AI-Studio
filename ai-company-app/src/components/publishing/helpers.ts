@@ -40,6 +40,7 @@ export function channelById(state: PublishingState): Map<string, PublishingChann
 /** 게시 한 건이 왜 멈췄는지(규칙·오류) 사람 문구. 없으면 "". */
 export function deliveryReason(t: PublishingDict, d: PublishingDelivery): string {
   if (d.status === "draft" && d.guardReason) return t.guard[d.guardReason] || d.guardReason;
+  if (d.status === "tested") return d.errorMessage;
   if (["needs_human", "failed"].includes(d.status) || (d.status === "scheduled" && d.errorCode)) {
     const base = t.errorCode[d.errorCode] || "";
     const extra = d.errorMessage && d.errorMessage !== base ? d.errorMessage : "";
@@ -55,10 +56,13 @@ export function allDeliveryRows(state: PublishingState): DeliveryRow[] {
   return state.items.flatMap((item) => item.deliveries.map((delivery) => ({ item, delivery, channel: channels.get(delivery.channelId) })));
 }
 
-/** 사람이 손대야 하는 것: 확인 필요·실패·올릴 차례 + 규칙에 걸린 초안. */
+/** 사람이 손대야 하는 상태: 확인 필요·실패·올릴 차례·시험 완료. */
+export const ATTENTION = ["needs_human", "failed", "ready_manual", "tested"];
+
+/** 사람이 손대야 하는 것: ATTENTION 상태 + 규칙에 걸린 초안. */
 export function attentionRows(state: PublishingState): DeliveryRow[] {
   return allDeliveryRows(state)
-    .filter(({ delivery: d }) => ["needs_human", "failed", "ready_manual"].includes(d.status) || (d.status === "draft" && !!d.guardReason))
+    .filter(({ delivery: d }) => ATTENTION.includes(d.status) || (d.status === "draft" && !!d.guardReason))
     .sort((a, b) => (a.delivery.scheduledAt || "").localeCompare(b.delivery.scheduledAt || ""));
 }
 

@@ -83,6 +83,7 @@ test("claim(§5.3): pc·scheduled·시각 지난 것만, 행 잠금, 임대 15�
   assert.match(claim, /min_interval_hours \* interval '1 hour'/);
   assert.match(claim, /< c\.daily_limit/);
   assert.match(claim, /i\.approved_at IS NOT NULL/, "승인 안 된 글은 내주지 않는다");
+  assert.doesNotMatch(claim, /'tested'/, "시험 완료는 채널 간격·하루 횟수에 안 들어간다");
   assert.match(claim, /leaseExpiryQuery\(device\.userId\)/, "집기 전에 끝난 임대를 정리한다");
   // Job 모양(§5.3)
   const job = store.slice(store.indexOf("export async function buildJob"), store.indexOf("export async function reportProgress"));
@@ -101,6 +102,11 @@ test("result(§5.5): (jobId, attempt) 멱등, 다른 attempt 는 409, 재시도�
   assert.match(result, /decideResultOutcome\(\{ status, errorCode/);
   assert.match(result, /attemptsUsed: attempt - Number\(cur\[0\]\.attempt_base/);
   assert.match(result, /duplicate: true/);
+  // 시험 모드(§5.5): tested 는 캡처 필수, 글 주소 안 받음, 사람이 "실제로 올리기"로 같은 게시를 다시 예약
+  assert.match(result, /\["posted", "failed", "needs_human", "tested"\]\.includes\(status\)/);
+  assert.match(result, /status === "tested" && !screenshotObject\) throw new PublishingError\("screenshot_required", 400/);
+  assert.match(result, /const postedUrl = status === "posted" &&/);
+  assert.match(store, /const RESCHEDULABLE = \["needs_human", "failed", "tested"\]/);
   const progress = store.slice(store.indexOf("export async function reportProgress"), store.indexOf("export async function reportResult"));
   assert.match(progress, /attempt=\$3 AND status='claimed'/);
   assert.match(progress, /PublishingError\("stale_attempt", 409\)/);
@@ -167,4 +173,6 @@ test("약속 사본은 원본과 같다(두 저장소가 모두 있는 PC 에서
   assert.match(doc, /leaseUntil = now \+ 15분/);
   assert.match(doc, /최대 2번 더\(30분 간격\)/);
   assert.match(doc, /8자리 연결 코드를 만든다\(10분 유효, 한 번만 사용\)/);
+  assert.match(doc, /"status": "posted\|failed\|needs_human\|tested"/);
+  assert.match(doc, /`blogId`를 비우면 PC 앱은 로그인된 계정의 블로그에 쓴다/);
 });

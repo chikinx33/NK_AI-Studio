@@ -131,6 +131,7 @@ export function itemDisplayStatus(approved: boolean, deliveries: Array<{ status:
   const live = deliveries.filter((d) => d.status !== "cancelled");
   if (live.some((d) => d.status === "needs_human" || d.status === "ready_manual")) return "needs_human";
   if (live.some((d) => d.status === "failed")) return "failed";
+  if (live.some((d) => d.status === "tested")) return "tested";
   if (!approved) return "draft";
   if (live.length && live.every((d) => d.status === "posted" || d.status === "done_manual")) return "posted";
   if (live.some((d) => ["scheduled", "claimed", "publishing"].includes(d.status))) return "scheduled";
@@ -507,8 +508,11 @@ export async function markDoneManual(db: PublishingDb, userId: string, id: strin
 
 /**
  * 확인 필요(needs_human)·실패(failed) 건을 사람이 다시 예약한다(예: 로그인을 다시 한 뒤). 재시도 횟수는 0부터 다시 센다.
+ * 시험 완료(tested) 건의 "실제로 올리기"도 같은 길이다(같은 게시를 다시 scheduled 로, 스팸 방지 검사 포함).
  * '올라갔는지 모름(UNCERTAIN)'은 사이트에서 확인했다는 뜻으로 confirmUncertain 을 받아야만 다시 예약한다.
  */
+const RESCHEDULABLE = ["needs_human", "failed", "tested"];
+
 export async function rescheduleDelivery(db: PublishingDb, userId: string, id: string, scheduledAt: string, confirmUncertain: boolean) {
   const [rows, channels] = await db.batch([
     { query: `SELECT d.*, i.content_hash AS item_hash FROM publishing_deliveries d JOIN publishing_items i ON i.id=d.item_id WHERE d.id=$1 AND d.user_id=$2`, params: [id, userId] },
@@ -516,7 +520,7 @@ export async function rescheduleDelivery(db: PublishingDb, userId: string, id: s
   ]);
   const d: any = rows[0];
   if (!d) throw new PublishingError("delivery_not_found", 404);
-  if (!["needs_human", "failed"].includes(String(d.status))) throw new PublishingError("delivery_not_reschedulable", 409);
+  if (!RESCHEDULABLE.includes(String(d.status))) throw new PublishingError("delivery_not_reschedulable", 409);
   if (String(d.error_code) === "UNCERTAIN" && !confirmUncertain) throw new PublishingError("uncertain_confirm_required", 409);
   const ch: any = channels.find((c: any) => String(c.id) === String(d.channel_id));
   if (!ch || ch.enabled === false) throw new PublishingError("channel_disabled", 409);
@@ -530,7 +534,7 @@ export async function rescheduleDelivery(db: PublishingDb, userId: string, id: s
   if (!guard.ok) throw new PublishingError(`guard_${(guard as any).reason}`, 409);
   const next = ch.mode === "manual" && atMs <= Date.now() ? "ready_manual" : "scheduled";
   const updated = await db.sql(`UPDATE publishing_deliveries SET status=$3, scheduled_at=$4, attempt_base=attempt, error_code='', error_message='', stage='', stage_message='',
-    lease_until=NULL, guard_reason='', content_hash=$5, updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('needs_human','failed') RETURNING *`,
+    lease_until=NULL, guard_reason='', content_hash=$5, updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('needs_human','failed','tested') RETURNING *`,
     [id, userId, next, new Date(atMs).toISOString(), String(d.item_hash || "")]);
   if (!updated[0]) throw new PublishingError("delivery_not_reschedulable", 409);
   return publicDelivery(updated[0]);
@@ -785,12 +789,12 @@ export async function reportResult(env: any, db: PublishingDb, device: { deviceI
   if (!Number.isInteger(Number(input?.attempt))) throw new PublishingError("attempt_required");
   const attempt = Number(input.attempt);
   const status = String(input?.status || "");
-  if (!["posted", "failed", "needs_human"].includes(status)) throw new PublishingError("result_status_invalid");
+  if (!["posted", "failed", "needs_human", "tested"].includes(status)) throw new PublishingError("result_status_invalid");
   const cur = await db.sql(`SELECT id, attempt, attempt_base, status FROM publishing_deliveries WHERE id=$1 AND user_id=$2`, [jobId, device.userId]);
   if (!cur[0]) throw new PublishingError("job_not_found", 404);
   if (Number(cur[0].attempt) !== attempt) throw new PublishingError("stale_attempt", 409);
   const outcome = decideResultOutcome({ status, errorCode: String(input?.errorCode || ""), attemptsUsed: attempt - Number(cur[0].attempt_base || 0) });
-  const postedUrl = /^https?:\/\/\S+$/i.test(String(input?.postedUrl || "")) ? String(input.postedUrl).slice(0, 1000) : "";
+  const postedUrl = status === "posted" && /^https?:\/\/\S+$/i.test(String(input?.postedUrl || "")) ? String(input.postedUrl).slice(0, 1000) : "";
   let screenshotObject = "";
   const png = String(input?.screenshotPng || "");
   if (png && status !== "posted" && png.length <= Math.ceil((1024 * 1024 * 4) / 3) + 4) {
@@ -802,6 +806,8 @@ export async function reportResult(env: any, db: PublishingDb, device: { deviceI
       }
     } catch { screenshotObject = ""; }
   }
+  // 시험 모드(§5.5): 채운 화면 캡처가 결과 그 자체다. 없으면 받지 않는다.
+  if (status === "tested" && !screenshotObject) throw new PublishingError("screenshot_required", 400, "시험 모드 결과에는 채운 화면 캡처(screenshotPng, 1MB 이하 PNG)가 꼭 있어야 해요.");
   const message = String(input?.message || "").slice(0, 1000);
   const finishedAt = iso(input?.finishedAt) || new Date().toISOString();
   const rows = await db.sql(`WITH ev AS (

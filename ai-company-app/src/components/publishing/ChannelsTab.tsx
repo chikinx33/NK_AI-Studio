@@ -30,6 +30,7 @@ export default function ChannelsTab({ ctx }: { ctx: PublishingCtx }) {
   }
   const targetSummary = (c: PublishingChannel) => {
     const tg = c.target || {};
+    if (c.type === "naver_blog" && !tg.blogId) return t.accountBlog;
     return tg.blogId ? `blog.naver.com/${tg.blogId}` : tg.cafeUrl || tg.boardUrl || (tg.galleryId ? `${tg.galleryType || ""} · ${tg.galleryId}` : "") || tg.writeUrl || tg.note || "";
   };
 

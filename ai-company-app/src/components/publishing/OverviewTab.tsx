@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { approveWeek, rescheduleDelivery, weekStartOf, addDays, todayKst } from "../../lib/publishing";
+import { promoteTested } from "./TestedView";
 import { appDialog } from "../../lib/appDialog";
 import { apiErrorText, agoText } from "./i18n";
 import { Button, Card, Empty, Icon, StatusBadge, ChannelChip } from "./ui";
@@ -140,6 +141,10 @@ export default function OverviewTab({ ctx }: { ctx: PublishingCtx }) {
                   </div>
                   <StatusBadge status={r.delivery.status} label={t.deliveryStatus[r.delivery.status] || r.delivery.status} />
                   <div className="flex gap-1.5">
+                    {r.delivery.status === "tested" && <>
+                      <Button size="sm" icon="image" onClick={() => ctx.openCopy(r.delivery.id)}>{t.viewCapture}</Button>
+                      <Button size="sm" tone="primary" icon="send" onClick={() => void promoteTested(ctx, r.delivery.id)}>{t.promoteTested}</Button>
+                    </>}
                     {copyable && <Button size="sm" tone={r.delivery.status === "ready_manual" ? "primary" : "default"} icon="copy" onClick={() => ctx.openCopy(r.delivery.id)}>{t.openCopy}</Button>}
                     {["needs_human", "failed"].includes(r.delivery.status) && r.channel?.mode === "pc" && <Button size="sm" icon="refresh" onClick={() => void reschedule(r)}>{t.reschedule}</Button>}
                     {r.delivery.status === "draft" && <Button size="sm" icon="pencil" onClick={() => ctx.openItem(r.item.id)}>{t.openItem}</Button>}

@@ -9,6 +9,7 @@ import { apiErrorText } from "./i18n";
 import { Button, Field, Icon, IconButton, Modal, StatusBadge, inputClass, selectClass, textareaClass, type IconName } from "./ui";
 import { channelTypeLabel, deliveryReason, fmtDateTime, type PublishingCtx } from "./helpers";
 import { TAGS_MAX, TITLE_MAX } from "./constants";
+import { promoteTested } from "./TestedView";
 
 /** 사람이 고칠 수 있는 게시 상태(서버 publishing-store.ts EDITABLE_DELIVERY 와 같다). */
 const EDITABLE = new Set(["draft", "scheduled", "ready_manual"]);
@@ -216,6 +217,10 @@ export default function ItemEditor({ ctx, itemId, preset, onClose }: { ctx: Publ
                         <div className="flex flex-wrap gap-1 pt-0.5">
                           {d.postedUrl && <a className="inline-flex h-7 items-center gap-1 rounded-lg border border-edge px-2 text-[11px] font-semibold text-tone-emerald hover:bg-inset" href={d.postedUrl} target="_blank" rel="noreferrer"><Icon name="external" className="h-3.5 w-3.5" />{t.postedLink}</a>}
                           {["needs_human", "failed"].includes(d.status) && <Button size="sm" icon="copy" onClick={() => ctx.openCopy(d.id)}>{t.openCopy}</Button>}
+                          {d.status === "tested" && <>
+                            <Button size="sm" icon="image" onClick={() => ctx.openCopy(d.id)}>{t.viewCapture}</Button>
+                            <Button size="sm" tone="primary" icon="send" onClick={() => void promoteTested(ctx, d.id).then((ok) => { if (ok) onClose(); })}>{t.promoteTested}</Button>
+                          </>}
                           {!["posted", "done_manual", "cancelled"].includes(d.status) && <Button size="sm" tone="ghost" onClick={() => void cancelOne(d)}>{t.cancel}</Button>}
                         </div>
                       </div>

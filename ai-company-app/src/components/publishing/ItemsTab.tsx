@@ -5,7 +5,7 @@ import { Button, Empty, Icon, StatusBadge, inputClass, selectClass } from "./ui"
 import { brandTitle, channelById, fmtDateTime, type PublishingCtx } from "./helpers";
 import ImportDialog from "./ImportDialog";
 
-const FILTERS: Array<"all" | ItemStatus> = ["all", "draft", "approved", "scheduled", "posted", "failed", "needs_human"];
+const FILTERS: Array<"all" | ItemStatus> = ["all", "draft", "approved", "scheduled", "posted", "failed", "needs_human", "tested"];
 
 /** 글: 상태별 목록, 여러 개 골라 승인, 가져오기. */
 export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {

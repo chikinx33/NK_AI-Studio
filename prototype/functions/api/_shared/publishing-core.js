@@ -42,7 +42,9 @@ export const HUMAN_CODES = new Set(["LOGIN_REQUIRED", "CAPTCHA", "CONTENT_REJECT
 export const PROGRESS_STAGES = ["opening", "filling", "uploading_images", "submitting"];
 
 /** CONTRACT §2 delivery 상태. */
-export const DELIVERY_STATUSES = ["draft", "scheduled", "claimed", "publishing", "posted", "failed", "needs_human", "ready_manual", "done_manual", "cancelled"];
+export const DELIVERY_STATUSES = ["draft", "scheduled", "claimed", "publishing", "posted", "failed", "needs_human", "ready_manual", "done_manual", "tested", "cancelled"];
+/** CONTRACT §2: PC 앱 시험 모드 결과. 등록은 누르지 않았다(실제 게시 없음) — 재시도·한도 계산 대상이 아니다. */
+export const TESTED_STATUS = "tested";
 /** 사람이 처리해야 하는 상태(개요 '확인 필요'와 수동 복사 화면). */
 export const ATTENTION_STATUSES = new Set(["needs_human", "failed", "ready_manual"]);
 /** 이미 끝난 상태 — 글을 고쳐도 건드리지 않는다. */
@@ -105,10 +107,11 @@ export function validateChannelInput(input) {
   let target = {};
   if (type === "naver_blog") {
     const blogId = cleanText(t.blogId, 60).replace(/^https?:\/\/(m\.)?blog\.naver\.com\//i, "").replace(/[/?#].*$/, "");
-    if (!/^[A-Za-z0-9_-]{2,60}$/.test(blogId)) return { ok: false, error: "target_blog_id_required" };
+    // CONTRACT §3: blogId 는 선택. 비우면 PC 앱이 로그인된 계정의 블로그에 쓴다.
+    if (blogId && !/^[A-Za-z0-9_-]{2,60}$/.test(blogId)) return { ok: false, error: "target_blog_id_invalid" };
     const categoryNo = cleanText(t.categoryNo, 20);
     if (categoryNo && !/^\d{1,10}$/.test(categoryNo)) return { ok: false, error: "target_category_invalid" };
-    target = { blogId, visibility: t.visibility === "private" ? "private" : "public", ...(categoryNo ? { categoryNo } : {}) };
+    target = { ...(blogId ? { blogId } : {}), visibility: t.visibility === "private" ? "private" : "public", ...(categoryNo ? { categoryNo } : {}) };
   } else if (type === "naver_cafe") {
     const cafeUrl = httpsUrl(t.cafeUrl);
     const menuId = cleanText(t.menuId, 20);
@@ -149,7 +152,7 @@ export function validateChannelInput(input) {
 /** 수동 복사 화면의 "글쓰기 열기" 주소. 모르면 "". */
 export function channelWriteUrl(type, target) {
   const t = target && typeof target === "object" ? target : {};
-  if (type === "naver_blog" && t.blogId) return `https://blog.naver.com/${encodeURIComponent(t.blogId)}?Redirect=Write`;
+  if (type === "naver_blog") return t.blogId ? `https://blog.naver.com/${encodeURIComponent(t.blogId)}?Redirect=Write` : "https://blog.naver.com/GoBlogWrite.naver";
   if (type === "naver_cafe" && t.cafeUrl) return String(t.cafeUrl);
   if (type === "dcinside" && t.galleryId) {
     const base = t.galleryType === "major" ? "board" : t.galleryType === "mini" ? "mini/board" : "mgallery/board";
@@ -352,6 +355,7 @@ export function normalizeImportItem(raw) {
  */
 export function decideResultOutcome({ status, errorCode, attemptsUsed, now = Date.now() }) {
   if (status === "posted") return { status: "posted", errorCode: "" };
+  if (status === TESTED_STATUS) return { status: TESTED_STATUS, errorCode: "" };
   const code = ERROR_CODES.includes(errorCode) ? errorCode : (status === "needs_human" ? "UNCERTAIN" : "UNKNOWN");
   if (status === "needs_human" || HUMAN_CODES.has(code)) return { status: "needs_human", errorCode: code };
   if (RETRYABLE_CODES.has(code) && attemptsUsed < MAX_ATTEMPTS) {

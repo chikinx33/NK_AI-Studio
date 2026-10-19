@@ -25,6 +25,10 @@ test("재시도는 서버만: 일시 실패는 30분 뒤 최대 2번 더, 사람
   assert.deepEqual(core.decideResultOutcome({ status: "posted", attemptsUsed: 1 }), { status: "posted", errorCode: "" });
   assert.equal(core.decideResultOutcome({ status: "needs_human", errorCode: "", attemptsUsed: 1 }).errorCode, "UNCERTAIN");
   assert.equal(core.decideResultOutcome({ status: "failed", errorCode: "WHATEVER", attemptsUsed: 1 }).errorCode, "UNKNOWN");
+  // 시험 모드(§5.5 tested): 등록을 누르지 않은 결과 — 재시도도 사람 넘김도 아니다, 한도 계산에서 빠진다(§6.4)
+  assert.deepEqual(core.decideResultOutcome({ status: "tested", errorCode: "NETWORK", attemptsUsed: 1 }), { status: "tested", errorCode: "" });
+  assert.equal(core.countsTowardChannelLoad("tested", ""), false);
+  assert.ok(core.DELIVERY_STATUSES.includes("tested"));
   // 등록 단계에서 끊긴 임대는 올라갔는지 모르므로 다시 올리지 않는다(§6.1)
   assert.deepEqual(core.decideLeaseExpiry({ stage: "submitting", attemptsUsed: 1 }), { status: "needs_human", errorCode: "UNCERTAIN" });
   assert.equal(core.decideLeaseExpiry({ stage: "filling", attemptsUsed: 1 }).status, "scheduled");
@@ -50,6 +54,7 @@ test("스팸 방지: 하루 횟수·간격·30일 같은 글을 일정 잡을 �
     { id: "o3", channelId: "ch_a", atMs: at, contentHash: "h2", status: "needs_human", errorCode: "LOGIN_REQUIRED" },
   ];
   assert.deepEqual(core.checkSpamGuard({ channel, atMs: at, contentHash: "h2" }, noise), { ok: true });
+  assert.deepEqual(core.checkSpamGuard({ channel, atMs: at, contentHash: "h2" }, [{ id: "t1", channelId: "ch_a", atMs: at, contentHash: "h2", status: "tested" }]), { ok: true }, "시험 완료는 같은 글·간격 계산에 안 들어간다");
   assert.equal(core.checkSpamGuard({ channel, atMs: at, contentHash: "h3" }, [{ id: "o4", channelId: "ch_a", atMs: at, contentHash: "zz", status: "needs_human", errorCode: "UNCERTAIN" }]).reason, "min_interval");
   // 자기 자신(다시 예약)은 빼고 센다
   assert.deepEqual(core.checkSpamGuard({ deliveryId: "d1", channel, atMs: existing[0].atMs, contentHash: "h1" }, existing), { ok: true });
@@ -170,7 +175,12 @@ test("채널 검사(§3): 아는 target 필드만 받고, PC 자동은 어댑터
   assert.equal(core.validateChannelInput({ type: "dcinside", mode: "manual", name: "디시", target: { galleryId: "game", galleryType: "minor" } }).ok, true);
   assert.equal(core.validateChannelInput({ type: "x", mode: "api", name: "X" }).error, "channel_mode_unavailable");
   assert.equal(core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "", target: { blogId: "abc" } }).error, "channel_name_required");
-  assert.equal(core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "a", target: {} }).error, "target_blog_id_required");
+  // §3: blogId 는 선택 — 비우면 PC 앱이 로그인된 계정 블로그에 쓴다(글쓰기 열기도 로그인 계정 글쓰기로)
+  const noId = core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "a", target: { visibility: "private" } });
+  assert.equal(noId.ok, true);
+  assert.deepEqual(noId.channel.target, { visibility: "private" });
+  assert.equal(core.channelWriteUrl("naver_blog", {}), "https://blog.naver.com/GoBlogWrite.naver");
+  assert.equal(core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "a", target: { blogId: "a b" } }).error, "target_blog_id_invalid");
   assert.equal(core.validateChannelInput({ type: "ruliweb", mode: "manual", name: "루리", target: { boardUrl: "https://bbs.ruliweb.com/game/1" }, dailyLimit: 0 }).error, "daily_limit_invalid");
   assert.equal(core.channelWriteUrl("naver_blog", { blogId: "raviok" }), "https://blog.naver.com/raviok?Redirect=Write");
   assert.equal(core.channelWriteUrl("dcinside", { galleryId: "game", galleryType: "minor" }), "https://gall.dcinside.com/mgallery/board/write/?id=game");
