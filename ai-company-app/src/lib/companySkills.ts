@@ -31,8 +31,10 @@ export interface CompanySkillCategory {
   label: string;
   shortLabel: string;
   description: string;
-  icon: "design" | "canvas" | "director" | "office" | "research" | "development";
+  icon: "design" | "canvas" | "director" | "publishing" | "office" | "research" | "development";
   status: CompanySkillStatus;
+  /** SKILL 줄에 보이지 않는 분류(정의는 남겨 둔다). */
+  hidden?: boolean;
   skills: CompanySkillDefinition[];
 }
 
@@ -147,6 +149,34 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
       },
     ],
   }),
+  // 퍼블리싱: 브랜드 글을 채널별 일정으로 올린다. PC 브라우저가 필요한 사이트(네이버 블로그 등)는 NK Publisher(PC 앱)가
+  // /api/publisher/v1 로 일감을 받아 올린다(약속: NK_Studio_Doc/docs/publishing-contract.md). 2026-10-20 엔케 결정으로 SKILL 줄 4번째 자리.
+  defineCompanySkillCategory({
+    id: "publishing",
+    label: "퍼블리싱",
+    shortLabel: "퍼블리싱",
+    description: "브랜드 글을 채널별 일정에 맞춰 올립니다. PC가 필요한 사이트는 NK Publisher가 대신 올려요.",
+    icon: "publishing",
+    status: "available",
+    skills: [
+      {
+        id: "publishing",
+        label: "채널 게시 · 주간 승인",
+        description: "글·채널·일정을 관리하고 한 주 치를 한 번에 승인합니다. 결과와 확인이 필요한 글을 한곳에서 봐요.",
+        status: "available",
+        outputLabel: "채널별 게시 결과(글 주소)",
+        inputSchema: "company-skill/publishing/v1",
+        executorId: "nk-publisher-v1",
+        previewType: "workflow",
+        artifactTypes: ["report"],
+        requiredCapabilities: ["brand-read", "channel-write", "schedule-write", "device-pairing"],
+        permissionPolicy: "owner-approval",
+        costPolicy: "no-paid-provider",
+        qualityGateIds: ["common-user-isolation"],
+      },
+    ],
+  }),
+  // 문서·오피스: 퍼블리싱에 자리를 내주고 SKILL 줄에서 숨긴다(정의는 다음 단계를 위해 남김).
   defineCompanySkillCategory({
     id: "documents-office",
     label: "문서·오피스",
@@ -154,6 +184,7 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
     description: "회사 문서와 정형 업무 산출물을 작성합니다.",
     icon: "office",
     status: "coming-soon",
+    hidden: true,
     skills: [
       { id: "report", label: "보고서·기획서", description: "업무 목적과 독자에 맞는 문서를 작성합니다.", status: "coming-soon", outputLabel: "DOCX·PDF" },
       { id: "spreadsheet", label: "스프레드시트", description: "표, 계산, 분석이 포함된 업무 시트를 제작합니다.", status: "coming-soon", outputLabel: "XLSX" },
@@ -191,6 +222,9 @@ export const COMPANY_SKILL_CATEGORIES: CompanySkillCategory[] = [
     ],
   }),
 ];
+
+/** SKILL 줄에 보이는 분류. */
+export const VISIBLE_COMPANY_SKILL_CATEGORIES = COMPANY_SKILL_CATEGORIES.filter((category) => !category.hidden);
 
 /** 채팅 UI 액션(canvas.*)과 navigate view "canvas" 가 여는 분류. */
 export const CANVAS_SKILL_CATEGORY_ID = "video-production";

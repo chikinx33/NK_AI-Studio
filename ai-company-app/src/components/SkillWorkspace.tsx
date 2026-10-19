@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import AgentVideoWorkspace from "./AgentVideoWorkspace";
 import ProductionCanvas from "./ProductionCanvas";
 import DirectorWorkspace from "./DirectorWorkspace";
+import PublishingWorkspace from "./publishing/PublishingWorkspace";
 import { getCompanySkillCategory } from "../lib/companySkills";
 
 function CloseIcon() {
@@ -125,6 +126,8 @@ export default function SkillWorkspace({
         <ProductionCanvas embedded projectId={canvasProjectId} focusSceneId={canvasFocusSceneId} focusNonce={canvasFocusNonce} onProjectChange={onCanvasProjectChange} hideTopBar={focusMode && !embed} expanded={canvasExpanded} onToggleExpand={onToggleCanvasExpand} />
       ) : selectedSkill?.id === "director" ? (
         <DirectorWorkspace />
+      ) : selectedSkill?.id === "publishing" ? (
+        <PublishingWorkspace />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center">
           <div><p className="text-sm font-bold text-secondary">선택 가능한 스킬이 없습니다.</p><p className="mt-2 text-xs text-faint">구현이 완료된 스킬부터 순서대로 활성화됩니다.</p></div>

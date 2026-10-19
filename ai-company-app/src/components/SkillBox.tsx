@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { COMPANY_SKILL_CATEGORIES } from "../lib/companySkills";
+import { VISIBLE_COMPANY_SKILL_CATEGORIES } from "../lib/companySkills";
 
 type IconProps = { className?: string };
 const SVG = ({ className, children }: IconProps & { children: ReactNode }) => (
@@ -12,6 +12,8 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
   if (name === "canvas") return <SVG className={className}><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></SVG>;
   // lucide: clapperboard — 디렉터
   if (name === "director") return <SVG className={className}><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></SVG>;
+  // lucide: send — 퍼블리싱(채널 게시)
+  if (name === "publishing") return <SVG className={className}><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></SVG>;
   if (name === "office") return <SVG className={className}><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h7M9 16h7"/></SVG>;
   if (name === "research") return <SVG className={className}><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M8 12l2-2 2 1 2.5-3"/></SVG>;
   if (name === "development") return <SVG className={className}><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></SVG>;
@@ -23,7 +25,7 @@ export default function SkillBox({ activeCategoryId, onOpenCategory }: { activeC
     <section className="mb-3 px-1" aria-label="회사 스킬">
       <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-faint">Skill</h2>
       <div className="flex items-center gap-1">
-        {COMPANY_SKILL_CATEGORIES.map((category) => {
+        {VISIBLE_COMPANY_SKILL_CATEGORIES.map((category) => {
           const available = category.status === "available";
           const active = activeCategoryId === category.id;
           const title = available ? category.label : `${category.label} · 준비 중`;

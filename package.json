@@ -4,6 +4,7 @@
   "scripts": {
     "test": "node --test prototype/tests/*.test.mjs",
     "test:skill-db": "node prototype/tests/company-skill-jobs-db.integration.mjs",
+    "test:publishing-db": "node prototype/tests/publishing-db.integration.mjs",
     "start": "node server.js"
   }
 }

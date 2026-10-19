@@ -13,9 +13,11 @@ test("회사 스킬은 상단 메뉴 아래에 대분류 아이콘만 표시하�
 
   assert.match(registry, /id: "design-content"[\s\S]*status: "available"/);
   assert.match(registry, /id: "infographic"[\s\S]*status: "available"/);
-  assert.match(registry, /id: "documents-office"[\s\S]*status: "coming-soon"/);
+  assert.match(registry, /id: "documents-office"[\s\S]*status: "coming-soon",\s*hidden: true/);
+  assert.match(registry, /id: "publishing"[\s\S]*icon: "publishing",\s*status: "available"/);
   assert.match(registry, /id: "development-automation"/);
-  assert.match(skillBox, /COMPANY_SKILL_CATEGORIES\.map/);
+  assert.match(skillBox, /VISIBLE_COMPANY_SKILL_CATEGORIES\.map/);
+  assert.match(registry, /VISIBLE_COMPANY_SKILL_CATEGORIES = COMPANY_SKILL_CATEGORIES\.filter\(\(category\) => !category\.hidden\)/);
   assert.match(skillBox, /disabled=\{!available\}/);
   assert.match(skillBox, />Skill<\/h2>/);
   assert.match(skillBox, /flex items-center gap-1/);
