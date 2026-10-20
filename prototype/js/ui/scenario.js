@@ -3638,10 +3638,11 @@
     });
 
     // 개요 '이전값 불러오기' — 같은 프로젝트(시리즈)에서 가장 최근에 작업한 다른 에피소드의 개요 값을 화면에 채운다.
+    // 다른 에피소드가 없으면 브랜드 허브 '개요 생성'으로 저장한 기본값(brand.overviewDefaults)을 채운다.
     // 주제·이야기는 에피소드마다 다르니 두고, 저장은 사용자가 '저장'을 눌러야 한다(생성 결과 자동 저장 금지 규칙).
     const loadPreviousBtn = document.getElementById('overview-load-previous');
     if (loadPreviousBtn) {
-      loadPreviousBtn.addEventListener('click', () => {
+      loadPreviousBtn.addEventListener('click', async () => {
         const projectSvc = NK.service?.project;
         const drafts = (NK.store?.getDrafts ? NK.store.getDrafts() : [])
           .map((d) => (projectSvc?.normalizeDraft ? projectSvc.normalizeDraft(d) : d))
@@ -3654,11 +3655,25 @@
           .filter((d) => String(d.id) !== String(pid) && String(d.seriesId || d.payload?.seriesId || '') === seriesId)
           .filter((d) => d.payload && (d.payload.purposeCategory || d.payload.target || firstOf(d.payload.tones) || d.payload.duration))
           .sort((a, b) => ts(b) - ts(a))[0] : null;
-        if (!previous) {
-          notifyScenario(getScenarioText('scenario_load_previous_none', '불러올 같은 프로젝트의 다른 에피소드가 없어요.'));
-          return;
+        let src = previous ? (previous.payload || {}) : null;
+        let hubDefaults = null;
+        if (!src) {
+          const brandId = (projectSvc?.getBrandId ? projectSvc.getBrandId(me) : '') || String(currentPayload?.brandId || '').trim();
+          if (brandId && projectSvc?.readOverviewDefaults) {
+            loadPreviousBtn.disabled = true;
+            try { hubDefaults = await projectSvc.readOverviewDefaults(brandId); } catch (_) { hubDefaults = null; }
+            loadPreviousBtn.disabled = false;
+          }
+          if (!hubDefaults || !projectSvc?.applyOverviewDefaults) {
+            notifyScenario(getScenarioText('scenario_load_previous_none', '불러올 이전 에피소드도, 브랜드 허브에 저장한 개요도 없어요.'));
+            return;
+          }
+          // 허브 기본값에 없는 항목은 지금 화면 값을 그대로 둔다(새 에피소드 생성 때와 같은 규칙).
+          syncOverviewPayload();
+          src = projectSvc.applyOverviewDefaults(Object.assign({}, currentPayload || {}, {
+            knowledgeCharacters: readKnowledgeHub(currentPayload || {}).characters || []
+          }), hubDefaults);
         }
-        const src = previous.payload || {};
         const defaults = NK.config.DEFAULTS || {};
         const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
         const durationValue = String(src.duration || defaults.DURATION || '15');
@@ -3698,6 +3713,10 @@
         applyVoiceModeLock();
         syncSongOptionsVisibility();
         syncOverviewPayload();
+        if (!previous) {
+          notifyScenario(getScenarioText('scenario_load_previous_hub_done', '브랜드 허브에 저장한 개요 값을 불러왔어요. 남기려면 저장을 눌러 주세요.'));
+          return;
+        }
         const title = String(previous.title || previous.payload?.episodeTitle || previous.id || '');
         notifyScenario(getScenarioText('scenario_load_previous_done', '"{title}"의 개요 값을 불러왔어요. 남기려면 저장을 눌러 주세요.').replace('{title}', title));
       });

@@ -101,8 +101,12 @@ test('기본값은 새 에피소드 생성 두 길목에서만 쓰고, 브랜드
   const scenario = read('prototype/js/ui/scenario.js');
   assert.match(scenario, /getElementById\('overview-load-previous'\)/);
   assert.match(scenario, /String\(d\.id\) !== String\(pid\) && String\(d\.seriesId \|\| d\.payload\?\.seriesId \|\| ''\) === seriesId/);
+  // 같은 시리즈의 다른 에피소드가 없으면 브랜드 허브 기본값으로 채운다(새 에피소드 생성과 같은 규칙 함수)
+  assert.match(project, /project\.readOverviewDefaults = readOverviewDefaults;/);
+  assert.match(scenario, /hubDefaults = await projectSvc\.readOverviewDefaults\(brandId\)/);
+  assert.match(scenario, /src = projectSvc\.applyOverviewDefaults\(/);
   const coreJs = read('prototype/core.js');
-  for (const k of ['scenario_load_previous', 'scenario_load_previous_none', 'scenario_load_previous_done']) {
+  for (const k of ['scenario_load_previous', 'scenario_load_previous_none', 'scenario_load_previous_done', 'scenario_load_previous_hub_done']) {
     assert.equal((coreJs.match(new RegExp('\\b' + k + ':', 'g')) || []).length, 2, `${k} 는 ko/en 양쪽에`);
   }
 });

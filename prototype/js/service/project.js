@@ -1045,6 +1045,8 @@
         var rec = brandSvc.getById(id);
         return rec && rec.overviewDefaults && rec.overviewDefaults.generatedAt ? rec.overviewDefaults : null;
     }
+    // 개요 '이전값 불러오기'가 같은 시리즈의 다른 에피소드를 못 찾을 때 허브 기본값으로 채우는 데도 쓴다.
+    project.readOverviewDefaults = readOverviewDefaults;
 
     /**
      * 개요 기본값 → 새 에피소드 payload. 값이 있는 항목만 덮는다(주제·이야기는 기본값에 없다).
