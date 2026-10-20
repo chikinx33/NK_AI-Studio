@@ -10,6 +10,7 @@ import {
   isCompanyDocument,
   moveCompanyFile,
   moveCompanyWorkFolder,
+  saveWorkItemsToFolder,
   uploadCompanyFile,
   type ChatReference,
   type CompanyFileEntry,
@@ -62,6 +63,8 @@ function chatReferenceFor(entry: CompanyFileEntry): ChatReference {
 
 // 드래그 중인 항목(JSON 배열). 외부 파일 드롭과 구분하려고 전용 형식을 쓴다.
 const DRAG_TYPE = "application/x-nk-company-paths";
+// 위쪽 업무 카드(업무 기록)를 끌어 올 때의 형식(JSON 경로 배열 @work/날짜/업무ID). 놓으면 산출물이 그 폴더에 실제 파일로 복사된다.
+export const WORK_DRAG_TYPE = "application/x-nk-work-items";
 type DragItem = { path: string; kind: CompanyFileEntry["kind"]; name: string; parentPath: string; dateKey?: string };
 
 /** 날짜 폴더에 넣은 파일·폴더의 실제 저장 위치. 날짜 폴더를 열면 업무 기록 아래에 보인다. */
@@ -404,6 +407,15 @@ export default function CompanyFileExplorer({
   function dropZone(target: { path: string; kind: "folder" | "work-folder"; dateKey?: string }) {
     return {
       onDragOver: (event: React.DragEvent) => {
+        if (event.dataTransfer.types.includes(WORK_DRAG_TYPE)) {
+          // 폴더 카드에 놓은 업무 카드는 여기서 끝낸다(바깥 목록 영역이 현재 폴더로 한 번 더 받지 않게).
+          event.stopPropagation();
+          if (busy) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          if (dropTarget !== target.path) setDropTarget(target.path);
+          return;
+        }
         if (!event.dataTransfer.types.includes(DRAG_TYPE) || !canDropInto(target)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
@@ -415,6 +427,15 @@ export default function CompanyFileExplorer({
       },
       onDrop: (event: React.DragEvent) => {
         event.preventDefault();
+        const workData = event.dataTransfer.getData(WORK_DRAG_TYPE);
+        if (workData) {
+          event.stopPropagation();
+          let works: string[] = [];
+          try { works = JSON.parse(workData); } catch { works = []; }
+          dragEnd();
+          if (Array.isArray(works) && works.length) void saveWorkInto(target, works.map(String));
+          return;
+        }
         let items: DragItem[] = [];
         try { items = JSON.parse(event.dataTransfer.getData(DRAG_TYPE) || "[]"); } catch { items = []; }
         dragEnd();
@@ -440,6 +461,17 @@ export default function CompanyFileExplorer({
       setError(caught instanceof Error ? caught.message : "이동에 실패했습니다.");
       await refresh();
     } finally { setBusy(""); }
+  }
+
+  async function saveWorkInto(target: { path: string; kind: "folder" | "work-folder"; dateKey?: string }, works: string[]) {
+    setBusy("move"); setError("");
+    try {
+      const destinationFolder = target.kind === "work-folder" && target.dateKey ? workFilesPath(target.dateKey) : target.path;
+      const result = await saveWorkItemsToFolder(works, destinationFolder);
+      if (result.skipped.length) setError(result.skipped.map((item) => `'${item.title}': ${item.reason}`).join(" / "));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "업무 산출물을 폴더에 넣지 못했습니다.");
+    } finally { await refresh(); setBusy(""); }
   }
 
   const dropHighlight = (targetPath: string) => dropTarget === targetPath ? "ring-2 ring-emerald-400 bg-tint-emerald/40" : "";
@@ -543,6 +575,14 @@ export default function CompanyFileExplorer({
     <main
       className={`${embedded ? "p-4" : "min-h-0 flex-1 overflow-y-auto p-5"} ${fileDragOver ? "rounded-2xl ring-2 ring-emerald-500/70 bg-tint-emerald/10" : ""}`}
       onDragOver={(event) => {
+        // 업무 카드를 목록 빈 곳에 놓으면 지금 보고 있는 폴더에 파일로 넣는다.
+        if (event.dataTransfer.types.includes(WORK_DRAG_TYPE)) {
+          if (busy) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          if (!fileDragOver) setFileDragOver(true);
+          return;
+        }
         // 내부 항목 이동(DRAG_TYPE)은 각 폴더 카드의 dropZone 이 맡는다. 여기서는 운영체제 파일만.
         if (!event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(DRAG_TYPE)) return;
         event.preventDefault();
@@ -554,6 +594,15 @@ export default function CompanyFileExplorer({
         setFileDragOver(false);
       }}
       onDrop={(event) => {
+        const workData = event.dataTransfer.getData(WORK_DRAG_TYPE);
+        if (workData) {
+          event.preventDefault();
+          setFileDragOver(false);
+          let works: string[] = [];
+          try { works = JSON.parse(workData); } catch { works = []; }
+          if (!busy && Array.isArray(works) && works.length) void saveWorkInto({ path, kind: "folder" }, works.map(String));
+          return;
+        }
         if (!event.dataTransfer.types.includes("Files") || event.dataTransfer.types.includes(DRAG_TYPE)) return;
         event.preventDefault();
         setFileDragOver(false);

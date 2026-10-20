@@ -377,6 +377,15 @@ export async function moveCompanyWorkFolder(dateKey: string, parentPath: string)
   await readCompanyFileResponse(res, "날짜 폴더를 옮기지 못했어요.");
 }
 
+/** 업무 카드(@work/날짜/업무ID)의 산출물을 폴더에 실제 파일로 복사한다. 카드는 기록으로 남는다. */
+export async function saveWorkItemsToFolder(items: string[], folder: string): Promise<{ count: number; skipped: Array<{ title: string; reason: string }> }> {
+  const res = await fetch("/api/agent/company-files", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save_work_items", items, folder }),
+  });
+  const data = await readCompanyFileResponse(res, "업무 산출물을 폴더에 넣지 못했어요.");
+  return { count: Number(data.count || 0), skipped: Array.isArray(data.skipped) ? data.skipped : [] };
+}
+
 export async function moveCompanyFile(source: string, destination: string): Promise<void> {
   const res = await fetch("/api/agent/company-files", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", source, destination }),

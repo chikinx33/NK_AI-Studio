@@ -3479,6 +3479,9 @@ function uniqueSavedName(name: string, taken: Set<string>): string {
   return `${stem}-${Date.now()}${ext}`;
 }
 
+// 업무 카드 참조: 목록의 path(@work/날짜/업무ID), [참조 업무] 줄의 workId=…, 또는 업무 ID 그대로.
+const WORK_CARD_REF = /^(?:@work\/[^/]+\/|workId=)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function runCompanyFilesSaveMediaTool(input: any, ctx: ToolContext): Promise<any> {
   const folder = String(input?.folder || input?.path || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").trim();
   if (!folder) throw new Error("저장할 업무 폴더 경로(folder)가 필요해요.");
@@ -3508,14 +3511,24 @@ async function runCompanyFilesSaveMediaTool(input: any, ctx: ToolContext): Promi
   const g = resolveCompanyGcsEnv(ctx.env);
   const root = `${buildCompanyProjectPrefix(g.basePrefix, ctx.userId, "ai-company")}/company-files/`;
   await callInternalJson(ctx, "/api/agent/company-files", { body: { action: "mkdir", path: folder, existOk: true } });
+  // 업무 카드(검수 승인한 생성 이미지·영상 등)는 업무 기록이라 경로 복사가 안 된다. 서버가 산출물을 찾아 파일로 복사한다.
+  const workRefs = sources.filter((value) => WORK_CARD_REF.test(value));
+  const fileSources = sources.filter((value) => !WORK_CARD_REF.test(value));
+  const savedFiles: { name: string; path: string; contentType?: string; size?: number; workId?: string }[] = [];
+  let skipped: any[] = [];
+  if (workRefs.length) {
+    const saved: any = await callInternalJson(ctx, "/api/agent/company-files", { body: { action: "save_work_items", items: workRefs, folder } });
+    savedFiles.push(...(Array.isArray(saved?.savedFiles) ? saved.savedFiles : []));
+    skipped = Array.isArray(saved?.skipped) ? saved.skipped : [];
+    if (!fileSources.length) return { kind: "company_files_save_media", folder, parentPath: folder, count: savedFiles.length, savedFiles, ...(skipped.length ? { skipped } : {}) };
+  }
   const listed: any = await callInternalJson(ctx, `/api/agent/company-files?path=${encodeURIComponent(folder)}`).catch(() => null);
   const taken = new Set<string>((Array.isArray(listed?.entries) ? listed.entries : []).map((e: any) => String(e?.name || "")));
   const names: string[] = Array.isArray(input?.names) ? input.names.map((v: any) => String(v || "")) : [];
 
-  const savedFiles: { name: string; path: string; contentType: string; size: number }[] = [];
   let attachmentIndex = 0;
-  for (let i = 0; i < sources.length; i += 1) {
-    const objectName = await resolveContentSource(sources[i], ctx);
+  for (let i = 0; i < fileSources.length; i += 1) {
+    const objectName = await resolveContentSource(fileSources[i], ctx);
     if (objectName.includes("agent-attachments/")) attachmentIndex += 1;
     const name = uniqueSavedName(savedMediaName(objectName, objectName.includes("agent-attachments/") ? attachmentIndex : i + 1, names[i]), taken);
     taken.add(name);
@@ -3523,13 +3536,13 @@ async function runCompanyFilesSaveMediaTool(input: any, ctx: ToolContext): Promi
     try {
       await copyGcsObject(ctx.env, objectName, `${root}${relative}`);
     } catch (error: any) {
-      if (String(error?.message || "") === "media_source_not_found") throw new Error(`원본 파일을 찾지 못했어요: ${sources[i]}`);
+      if (String(error?.message || "") === "media_source_not_found") throw new Error(`원본 파일을 찾지 못했어요: ${fileSources[i]}`);
       throw error;
     }
     const stat = await statGcsObject(ctx.env, `${root}${relative}`).catch(() => null);
     savedFiles.push({ name, path: relative, contentType: stat?.contentType || "application/octet-stream", size: stat?.size || 0 });
   }
-  return { kind: "company_files_save_media", folder, parentPath: folder, count: savedFiles.length, savedFiles };
+  return { kind: "company_files_save_media", folder, parentPath: folder, count: savedFiles.length, savedFiles, ...(skipped.length ? { skipped } : {}) };
 }
 
 async function runContentRegisterTool(input: any, ctx: ToolContext): Promise<any> {

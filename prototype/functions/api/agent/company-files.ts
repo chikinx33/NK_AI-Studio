@@ -2,7 +2,7 @@
 // 실제 객체 경로와 화면 폴더를 같은 상대 경로로 관리해 사용자와 에이전트가 함께 읽고 쓴다.
 import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { ensureAgentSchema, getSql } from "./_shared";
 import { DOCUMENT_EXTENSIONS, extractDocumentText } from "./_doc-text";
 import { DOCUMENT_TYPE, DOCUMENT_SUFFIX, DocumentError, isCompanyDocument, parseCompanyDocument, updateCompanyDocument, documentSummary } from "./_company-documents";
@@ -439,6 +439,96 @@ async function resolveObjects(ctx: any, rootPrefix: string, relativePath: string
   return null;
 }
 
+const WORK_ITEM_REF = /^(?:@work\/[^/]+\/|workId=)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const SAVE_WORK_ITEMS_MAX = 20;
+
+/** 업무 카드 참조('@work/날짜/업무ID'·'workId=…'·업무ID) → 업무 ID. 업무 카드가 아니면 ''. */
+export function workItemRefId(value: unknown) {
+  return String(value || "").trim().match(WORK_ITEM_REF)?.[1]?.toLowerCase() || "";
+}
+
+/** 업무 제목 → 파일 이름(확장자 제외). 경로·예약 문자는 지운다. */
+export function workFileBaseName(title: string) {
+  const cleaned = String(title || "").normalize("NFC").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ").trim().replace(/[. ]+$/, "").slice(0, 80).trim();
+  return cleaned || "업무 산출물";
+}
+
+/**
+ * 업무 카드(업무 기록)의 산출물을 폴더에 실제 파일로 복사한다. 카드(기록)는 그대로 남는다.
+ * 생성 이미지·영상(metadata.objectName), 업무에 올린 파일(work-library/날짜/업무ID/), 업무 문서(metadata.paths)를 모은다.
+ * 카드를 폴더로 끌어 넣을 때와 직원이 "폴더에 넣어"를 처리할 때 같은 경로를 쓴다.
+ */
+async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPrefix: string, body: any) {
+  let folder = normalizePath(body.folder ?? body.destination, true);
+  const work = splitWorkPath(folder);
+  if (work) {
+    const { dateKey } = await resolveWorkDateKey(sql, userId, work.head);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error("넣을 날짜 폴더를 찾지 못했습니다.");
+    folder = workFilesPath(dateKey, work.inner);
+  }
+  assertMutablePath(folder);
+  const raw = ([] as any[]).concat(body.items || [], body.paths || [], body.workIds || []);
+  const ids = [...new Set(raw.map(workItemRefId).filter(Boolean))];
+  if (!ids.length) throw new Error("저장할 업무 카드를 골라 주세요.");
+  if (ids.length > SAVE_WORK_ITEMS_MAX) throw new Error(`업무 카드는 한 번에 ${SAVE_WORK_ITEMS_MAX}개까지 저장할 수 있습니다.`);
+  await ensureAgentSchema(sql);
+  const rows: any[] = await sql(
+    `SELECT id, title, metadata, to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key
+       FROM company_work_items WHERE user_id = $1 AND id = ANY($2::uuid[])`, [userId, ids]);
+  const found = new Map(rows.map((row) => [String(row.id).toLowerCase(), row]));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) throw new Error(`업무 카드를 찾지 못했습니다: ${missing.join(", ")}`);
+
+  if (folder && !(await resolveObjects(ctx, rootPrefix, folder))) {
+    await uploadObject(ctx, `${rootPrefix}${folder}/${FOLDER_MARKER}`, new ArrayBuffer(0), "application/x-directory");
+  }
+  const taken = new Set((await listStoredEntries(ctx, rootPrefix, folder)).files.map((file: any) => nameKey(file.name)));
+  const userRoot = `${buildUserRoot(ctx.basePrefix, userId)}/`;
+  const libraryRoot = `${buildAiVideoProjectPrefix(ctx.basePrefix, userId, "ai-company")}/work-library/`;
+  const savedFiles: Array<{ name: string; path: string; workId: string }> = [];
+  const skipped: Array<{ workId: string; title: string; reason: string }> = [];
+
+  for (const id of ids) {
+    const row = found.get(id);
+    const meta: any = typeof row.metadata === "string" ? (() => { try { return JSON.parse(row.metadata); } catch { return {}; } })() : (row.metadata || {});
+    const sources: string[] = [];
+    // 생성 결과는 요청한 계정 저장소에 있다. 본인 저장소 밖의 경로는 복사하지 않는다.
+    const objectName = String(meta.objectName || "").replace(/^gs:\/\/[^/]+\//, "").replace(/^\/+/, "");
+    if (objectName && !objectName.includes("..")) {
+      const full = objectName.startsWith(userRoot) ? objectName
+        : ctx.basePrefix && `${ctx.basePrefix}/${objectName}`.startsWith(userRoot) ? `${ctx.basePrefix}/${objectName}` : "";
+      if (full) sources.push(full);
+    }
+    const uploaded = await listObjects(ctx, `${libraryRoot}${row.date_key}/${id}/`).catch(() => ({ items: [] as any[] }));
+    for (const item of uploaded.items) if (item?.name && !sources.includes(String(item.name))) sources.push(String(item.name));
+    for (const path of Array.isArray(meta.paths) ? meta.paths.slice(0, 10) : []) {
+      const relative = normalizePath(path, true);
+      if (relative && !relative.startsWith(WORK_PATH_PREFIX)) sources.push(`${rootPrefix}${relative}`);
+    }
+    if (!sources.length) { skipped.push({ workId: id, title: String(row.title || ""), reason: "저장할 파일이 없는 업무입니다." }); continue; }
+    const base = workFileBaseName(row.title);
+    for (let index = 0; index < sources.length; index += 1) {
+      const sourceName = baseName(sources[index]);
+      const dot = sourceName.lastIndexOf(".");
+      const extension = dot > 0 ? sourceName.slice(dot).toLowerCase() : "";
+      const stem = sources.length > 1 ? `${base} ${index + 1}` : base;
+      let name = `${stem}${extension}`;
+      for (let copy = 2; taken.has(nameKey(name)); copy += 1) name = `${stem} (${copy})${extension}`;
+      try {
+        await copyObject(ctx, sources[index], `${rootPrefix}${folder ? `${folder}/` : ""}${name}`);
+      } catch (error: any) {
+        skipped.push({ workId: id, title: String(row.title || ""), reason: `원본을 복사하지 못했습니다: ${error?.message || error}` });
+        continue;
+      }
+      taken.add(nameKey(name));
+      savedFiles.push({ name, path: folder ? `${folder}/${name}` : name, workId: id });
+    }
+  }
+  if (!savedFiles.length) throw new Error(skipped.map((item) => `'${item.title || item.workId}': ${item.reason}`).join(" / ") || "저장한 파일이 없습니다.");
+  return { ok: true, action: "save_work_items", folder, count: savedFiles.length, savedFiles, skipped };
+}
+
 async function ensureDestinationAvailable(ctx: any, rootPrefix: string, relativePath: string) {
   if (await resolveObjects(ctx, rootPrefix, relativePath)) throw new Error(`'${relativePath}' 경로에 이미 파일 또는 폴더가 있습니다.`);
 }
@@ -725,6 +815,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       );
       return send({ ok: true, action, dateKey, parentPath: parent }, 200, origin);
     }
+    if (action === "save_work_items") {
+      const sql = getSql(env);
+      if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
+      return send(await saveWorkItemsAsFiles(ctx, sql, auth.userId, rootPrefix, body), 200, origin);
+    }
     if (action === "mkdir") {
       const path = normalizePath(body.path, false);
       assertMutablePath(path);
@@ -789,6 +884,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         updatedAt: stored.updated || new Date().toISOString(),
         preview: after.slice(Math.max(0, at - 120), at + replacement.length + 120),
       }, 200, origin);
+    }
+    if ((action === "copy" || action === "move") && workItemRefId(body.source)) {
+      // 업무 카드는 기록이라 옮길 수 없다. 대신 산출물을 대상 폴더에 실제 파일로 복사하고 카드는 그대로 둔다.
+      const sql = getSql(env);
+      if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
+      const destination = normalizePath(body.destination, true);
+      const folder = /\.[a-z0-9]{2,5}$/i.test(baseName(destination)) ? parentPath(destination) : destination;
+      return send(await saveWorkItemsAsFiles(ctx, sql, auth.userId, rootPrefix, { items: [body.source], folder }), 200, origin);
     }
     if (action === "copy" || action === "move") {
       const source = normalizePath(body.source, false);
