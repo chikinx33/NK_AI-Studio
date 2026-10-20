@@ -37,6 +37,9 @@ export default function OverviewTab({ ctx }: { ctx: PublishingCtx }) {
     drafts: new Set(rows.filter((r) => r.delivery.status === "draft" && !r.item.approvedAt && inWeek(r, thisWeek)).map((r) => r.item.id)).size,
   };
   const weekDraftItems = new Set(rows.filter((r) => r.delivery.status === "draft" && !r.item.approvedAt && inWeek(r, weekStart)).map((r) => r.item.id));
+  // 승인을 마친 주는 "초안 없음"이 실패처럼 보이지 않게, 이미 승인돼 나갈(또는 나간) 건수를 보여 준다.
+  const weekApprovedCount = rows.filter((r) => !!r.item.approvedAt && !["draft", "cancelled"].includes(r.delivery.status) && inWeek(r, weekStart)).length;
+  const weekDone = !weekDraftItems.size && weekApprovedCount > 0;
   const upcoming = rows
     .filter((r) => ["scheduled", "claimed", "publishing", "posted", "done_manual"].includes(r.delivery.status) && inWeek(r, thisWeek))
     .sort((a, b) => (a.delivery.scheduledAt || "").localeCompare(b.delivery.scheduledAt || ""));
@@ -85,8 +88,8 @@ export default function OverviewTab({ ctx }: { ctx: PublishingCtx }) {
               <span className="min-w-[150px] text-center text-sm font-bold tabular-nums text-strong">{t.weekRange(fmtDay(t, weekStart), fmtDay(t, weekEnd))}</span>
               <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-panel hover:text-strong" aria-label={t.nextWeek} title={t.nextWeek} onClick={() => setWeekStart(addDays(weekStart, 7))}><Icon name="chevronRight" /></button>
             </div>
-            <span className="flex-1 text-xs text-secondary">{t.weekDrafts(weekDraftItems.size)}</span>
-            <Button tone="primary" icon="checkCheck" busy={approving} disabled={!weekDraftItems.size} onClick={() => void runApproveWeek()} className="min-w-[170px]">{t.approveWeek}</Button>
+            <span className={`flex-1 text-xs ${weekDone ? "font-semibold text-tone-emerald" : "text-secondary"}`}>{weekDone ? t.weekDone(weekApprovedCount) : t.weekDrafts(weekDraftItems.size)}</span>
+            <Button tone="primary" icon={weekDone ? "check" : "checkCheck"} busy={approving} disabled={!weekDraftItems.size} onClick={() => void runApproveWeek()} className="min-w-[170px]">{weekDone ? t.weekApproved : t.approveWeek}</Button>
           </div>
           {lastResult && <p className="mt-2 text-[11px] text-secondary" role="status">{lastResult}</p>}
         </Card>
