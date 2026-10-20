@@ -24,6 +24,7 @@ function harness(responses, failSave = false) {
     callClaude: async () => { modelCalls++; return responses.shift() || ""; },
     AGENT_TOOLS: {},
     toolOwnedBy: () => true,
+    canUseRaviokHq: async () => false,
     addAgentKnowledgeRow: async (_sql, userId, agentId, text, type) => {
       // await 사이에 다른 발언이 진행되어도 마커 순회가 섞이지 않아야 한다.
       await new Promise((resolve) => setImmediate(resolve));

@@ -84,7 +84,7 @@ test("첨부가 있으면 '이미 보고 있다'를 시스템 프롬프트에 �
   const src = orch();
   // 첨부 유무를 speak() 가 계산해 buildAgentSystem 으로 넘겨야 한다.
   assert.match(src, /const hasAttachments = \(opts\.images \|\| \[\]\)\.some/);
-  assert.match(src, /companyProjects, hasAttachments \}\)/);
+  assert.match(src, /companyProjects, hasAttachments(, hiddenTools)? \}\)/);
   assert.match(src, /hasAttachments\?: boolean;/);
   // 안내 문구의 핵심 두 가지: 이미 보인다 / 조회 도구를 부르지 마라.
   assert.match(src, /지금 당신에게 그대로 보이고 있습니다/);

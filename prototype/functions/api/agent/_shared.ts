@@ -21,7 +21,8 @@ import { applyLocationMerge, suggestLocationMerges, locationKey, sanitizeSetName
 import { plateVariantId, plateLabel, findPlate, masterOf, plateElevation, MASTER_VARIANT_ID } from "../_shared/set-plates.js";
 import { normalizeCameraDirection, normalizeCameraElevation } from "../scenario/shots/vocab.js";
 import { refreshAccessToken } from "./_google";
-import { usesMasterResources } from "../_shared/admin-users";
+import { usesMasterResources, loadRegistryForPermission, findUser, requireMaster } from "../_shared/admin-users";
+import { isRaviokHqEmail, raviokHqRequest, trimRaviokHq, RAVIOK_HQ_DEFAULT_URL } from "./_raviok-hq.js";
 import { ensureCompanySkillJobSchema } from "./_skill-jobs";
 import { connectorSql, expireImageJobs } from '../_shared/codex-images';
 import { MINIMAX_REFS_MODELS, REFERENCE_IMAGE_CAPS, snapDurationFor } from "../_shared/video-specs";
@@ -5417,6 +5418,36 @@ async function runEdgeBriefTool(input: any, ctx: ToolContext): Promise<any> {
 }
 
 /**
+ * 라비오크 게임 대시보드를 볼 수 있는 계정인가 — 엔케 본인 계정 두 개(_raviok-hq.js)와 마스터 ID 로그인.
+ * 명부를 못 읽으면 닫는다(장애 때 다른 회원에게 열리지 않게).
+ */
+export async function canUseRaviokHq(env: any, userId: string): Promise<boolean> {
+  if (!userId) return false;
+  if (requireMaster(env, userId)) return true;
+  try {
+    const user = findUser(await loadRegistryForPermission(env), userId);
+    return !!user && user.active !== false && !user.deletionRequestedAt && isRaviokHqEmail(user.email);
+  } catch (_) {
+    return false;
+  }
+}
+
+/** 엣지(전략)·코어: 라비오크 게임 대시보드(hq.raviok.org) 조회. GET 만 한다(리뷰 답글·디스코드 전송은 대시보드에서 사람이). */
+async function runRaviokHqTool(input: any, ctx: ToolContext): Promise<any> {
+  if (!(await canUseRaviokHq(ctx.env, ctx.userId))) throw new Error("게임 대시보드는 이 계정에서 볼 수 없어요.");
+  const cookie = String(ctx.env?.RAVIOK_HQ_COOKIE || "").trim();
+  if (!/^[0-9a-f]{64}$/.test(cookie)) throw new Error("게임 대시보드 접속 정보(RAVIOK_HQ_COOKIE)가 서버에 없어요.");
+  const { view, game, path } = raviokHqRequest(input);
+  const base = String(ctx.env?.RAVIOK_HQ_URL || RAVIOK_HQ_DEFAULT_URL).replace(/\/+$/, "");
+  const res = await fetch(`${base}${path}`, { headers: { Cookie: `hq=${cookie}`, Accept: "application/json" } });
+  if (res.status === 401) throw new Error("게임 대시보드 로그인이 거부됐어요. 대시보드 비밀번호가 바뀌었다면 RAVIOK_HQ_COOKIE 를 새로 넣어야 해요.");
+  if (res.status === 404 && view === "game") throw new Error(`게임 '${game}' 을(를) 대시보드에서 찾지 못했어요. view:"summary" 의 games[].id 를 쓰세요.`);
+  if (!res.ok) throw new Error(`게임 대시보드 조회 실패 (${res.status})`);
+  const data: any = await res.json();
+  return { kind: "raviok_hq", view, ...(game ? { game } : {}), ...trimRaviokHq(view, data) };
+}
+
+/**
  * 지금 내 작업들이 어디서 멈춰 있는지. "왜 아직 안 나와?"에 추측 대신 사실로 답하기 위한 도구.
  * 승인 대기·진행 중·실패(사유 포함)를 한 번에 본다. read+synthesize.
  */
@@ -7855,8 +7886,9 @@ async function runKnowledgeAuditTool(input: any, ctx: ToolContext): Promise<any>
   // 페이지는 지식만 넘긴다(스킬은 항목에 없음) → 이어보기 판단도 knowledgeOnly 기준.
   const hasMore = items.length > 0 && nextOffset < counts.knowledgeOnly;
   // 현재 능력 카탈로그 — 도구명(담당 직원, 쓰기여부). 지식이 이 능력과 모순되면 낡은 것. 첫 페이지에만 싣는다.
+  const hqVisible = offset === 0 && (await canUseRaviokHq(ctx.env, ctx.userId));
   const capabilities = offset === 0
-    ? Object.entries(AGENT_TOOLS).map(([tool, def]: [string, any]) => {
+    ? Object.entries(AGENT_TOOLS).filter(([tool]) => tool !== "raviok_hq" || hqVisible).map(([tool, def]: [string, any]) => {
       const agents = [def.agentId, ...((def.agentIds as string[]) || [])].filter(Boolean);
       return `${tool} — 담당:${agents.join("/")}${def.gate ? " (쓰기·승인)" : ""}`;
     })
@@ -8344,6 +8376,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   agent_knowledge_delete: { agentId: "core", agentIds: ["sync"], kind: "local", run: runAgentKnowledgeDeleteTool },
   voice_update: { agentId: "beat", agentIds: ["core"], kind: "local", run: runVoiceUpdateTool },
   edge_brief: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runEdgeBriefTool },
+  // 라비오크 게임 대시보드(읽기 전용). 엔케 본인 계정에서만 보이고 실행된다(canUseRaviokHq · hiddenTools).
+  raviok_hq: { agentId: "edge", agentIds: ["core"], kind: "read", synthesize: true, run: runRaviokHqTool },
   // "왜 아직 안 나와?" — 막힌 지점을 사실로 답한다(추측 금지).
   jobs_status: { agentId: "core", agentIds: ["sync", "pixel", "plot", "beat", "ink", "reach"], kind: "read", synthesize: true, run: runJobsStatusTool },
   // 개요(프리프로덕션): 캔버스에서 에피소드를 시작하는 입구. 저장은 창작자 데이터라 게이트.

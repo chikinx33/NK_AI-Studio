@@ -10,6 +10,7 @@ import {
   AGENT_TOOLS,
   IMAGE_PRODUCING_TOOLS,
   toolOwnedBy,
+  canUseRaviokHq,
   parseToolInput,
   addMessage,
   resolvePendingMessage,
@@ -236,6 +237,7 @@ interface BuildSystemOpts {
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
   hasAttachments?: boolean; // 이번 턴에 사용자가 이미지·PDF를 첨부했는가(모델이 직접 보고 있음)
   companyBrands?: BrandBrief[]; // 브랜드 허브의 브랜드·IP 정의(카피·기획·이미지가 이 정의를 따른다)
+  hiddenTools?: string[]; // 이 사용자에게 보이지 않는 도구(예: raviok_hq 는 엔케 본인 계정 전용)
 }
 
 export interface RecentJobBrief { type: string; agentName: string; status: string; at: string; result: string }
@@ -572,6 +574,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     polar_orders: `[[RUN: polar_orders | {"limit": 20, "app": "my-app"}]]  → 최근 결제 건별 내역(시각·금액·상품·고객·환불 여부). "누가 결제했어?", "환불 있었어?", "결제 내역 보여줘"에 사용.`,
     polar_subscriptions: `[[RUN: polar_subscriptions | {"active": true, "app": "my-app"}]]  → 구독 목록. active:true=현재 유료 구독자, active:false=해지·만료 건. "구독자 몇 명?", "이번 주 해지한 사람?"에 사용.`,
     polar_products: `[[RUN: polar_products | {}]]  → Polar 상품·가격 구성과 상품 UUID 조회. 앱별 매핑을 설정·점검할 때 사용.`,
+    raviok_hq: `[[RUN: raviok_hq | {"view": "summary"}]]  → 라비오크 게임 대시보드(hq.raviok.org) 조회. 게임 현황·설치·활성 기기·매출(광고·인앱·웹)·출시 상태·리뷰·할 일 보고에 쓴다. 게임·앱 성과를 물으면 추측하지 말고 먼저 조회한다. view: summary(전체 요약·할 일) · game(게임 하나 상세, "game": summary 의 games[].id 예: puzzleknight) · revenue(월·일별 수익) · reviews(최근 리뷰). 읽기 전용 — 리뷰 답글·디스코드 전송은 대시보드에서 사람이 한다.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
@@ -616,10 +619,12 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     sns_prefs_get: "SNS 선호 조회", sns_prefs_save: "SNS 선호 저장", subscription_get: "구독·크레딧 조회",
     image_edit: "이미지 채팅형 수정", reminders_list: "예약(알람) 목록 조회",
     video_pipeline: "에이전트 모드(컷 스틸→영상 자동 파이프라인)",
-    polar_metrics: "Polar 수익 지표(매출·MRR·해지)", polar_orders: "Polar 결제 내역", polar_subscriptions: "Polar 구독 목록", polar_products: "Polar 상품·가격",
+    raviok_hq: "라비오크 게임 대시보드", polar_metrics: "Polar 수익 지표(매출·MRR·해지)", polar_orders: "Polar 결제 내역", polar_subscriptions: "Polar 구독 목록", polar_products: "Polar 상품·가격",
   };
   const toolsByAgent: Record<string, string[]> = {};
+  const hidden = new Set(opts.hiddenTools ?? ["raviok_hq"]); // 모르면 닫는다
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
+    if (hidden.has(tname)) continue;
     const label = TOOL_LABELS[tname] || tname;
     for (const aid of [td.agentId, ...(td.agentIds || [])]) (toolsByAgent[aid] ??= []).push(label);
   }
@@ -627,7 +632,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     .map(([aid, tools]) => `- ${getAgent(aid)?.name || aid}(${aid}): ${tools.join(", ")}`)
     .join("\n");
 
-  const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => toolOwnedBy(t, agentId));
+  const myTools = Object.entries(AGENT_TOOLS).filter(([name, t]) => !hidden.has(name) && toolOwnedBy(t, agentId));
   const toolsRunBlock = myTools.length > 0
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.\n${RUN_BEFORE_RESULT_RULE}`
     : "";
@@ -1232,7 +1237,12 @@ export async function speak(
   if (companyProjects === undefined && opts.sql && opts.userId) {
     companyProjects = await listProjects(opts.sql, opts.userId).catch(() => []);
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companyKnowledgeTotal, companyKnowledgeRetrieved, companySkills, companyProjects, hasAttachments });
+  // 게임 대시보드는 엔케 본인 계정에서만 보인다 — 다른 회원의 직원은 그런 도구가 있다는 것도 모르게 한다.
+  let hiddenTools = opts.hiddenTools;
+  if (hiddenTools === undefined) {
+    hiddenTools = opts.userId && (await canUseRaviokHq(env, opts.userId).catch(() => false)) ? [] : ["raviok_hq"];
+  }
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companyKnowledgeTotal, companyKnowledgeRetrieved, companySkills, companyProjects, hasAttachments, hiddenTools });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, modelChoice, maxTokens: opts.maxTokens, images: opts.images, resolvedAuth: opts.resolvedAuth });
   // 개인 지식도 보정 판단에 포함하고, 원본·보정 마커를 아래 한 경로에서만 반영한다.
