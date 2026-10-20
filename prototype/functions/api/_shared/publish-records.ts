@@ -104,12 +104,46 @@ export async function setDeployingStep(env: any, userId: string, projectId: stri
   });
 }
 
+/**
+ * 배포 완료 표시를 켤 상태. TikTok 초안함 전송(sent_to_inbox)도 SNS 세팅 직접 배포(ttInboxOutcome)처럼 완료로 본다.
+ * 'processing'(아직 TikTok 확인 전)·실패는 켜지 않는다 — 안 갔는데 완료 배지가 남는 버그를 막는다.
+ */
+export function isDeployedStatus(status: string): boolean {
+  return status === "published" || status === "scheduled" || status === "sent_to_inbox";
+}
+
+/**
+ * 이미 남긴 기록 한 줄의 상태만 바꾼다(캡션·시각 등은 그대로). 예: TikTok 이 나중에 알림함 전송을 확인했을 때
+ * 'processing' → 'sent_to_inbox'. 그 줄이 없으면 아무것도 덧붙이지 않는다.
+ */
+export async function updatePublishRowStatus(env: any, userId: string, projectId: string, brandId: string, rowId: string, channel: string, status: string) {
+  const { basePrefix } = resolveGcsEnv(env);
+  const setStatus = (list: any) => (Array.isArray(list) ? list.map((r: any) => (r && r.id === rowId ? { ...r, status } : r)) : list);
+  const projectObject = `${buildAiVideoProjectPrefix(basePrefix, userId, projectId)}/reference/data.json`;
+  const project = await updateJson(env, projectObject, (doc) => {
+    const payload = doc.payload && typeof doc.payload === "object" ? doc.payload : {};
+    const merged = setStatus(payload.brandStudioPublishResults || payload.publishResults);
+    const has = Array.isArray(merged) && merged.some((r: any) => r && r.id === rowId);
+    return { ...doc, payload: { ...payload, brandStudioPublishResults: merged, publishResults: merged,
+      brandStudioDeployedFormats: { ...(payload.brandStudioDeployedFormats || {}), ...(has && isDeployedStatus(status) ? { [channel]: true } : {}) } } };
+  });
+  let brand = false;
+  if (brandId) {
+    const brandObject = `${buildAiVideoBrandPrefix(basePrefix, userId, brandId)}/reference/data.json`;
+    brand = await updateJson(env, brandObject, (doc) => {
+      const b = doc.brand && typeof doc.brand === "object" ? doc.brand : {};
+      return { ...doc, brand: { ...b, brandStudioPublishResults: setStatus(b.brandStudioPublishResults) } };
+    });
+  }
+  return { project, brand };
+}
+
 /** 에피소드(payload)와 브랜드 기록 양쪽에 덧붙이고, 배포 완료 표시(brandStudioDeployedFormats)도 켠다. */
 export async function appendPublishRecords(env: any, userId: string, projectId: string, brandId: string, rows: any[]) {
   if (!rows.length) return { project: false, brand: false };
   const { basePrefix } = resolveGcsEnv(env);
   const deployed: Record<string, boolean> = {};
-  for (const r of rows) if (r.status === "published" || r.status === "scheduled") deployed[r.channelType] = true;
+  for (const r of rows) if (isDeployedStatus(String(r.status))) deployed[r.channelType] = true;
   const projectObject = `${buildAiVideoProjectPrefix(basePrefix, userId, projectId)}/reference/data.json`;
   const project = await updateJson(env, projectObject, (doc) => {
     const payload = doc.payload && typeof doc.payload === "object" ? doc.payload : {};

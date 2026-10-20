@@ -551,6 +551,24 @@ async function postInstagramComment(opts: {
   if (!data.id) throw new Error(`첫 댓글 게시 실패: ${data.error?.message}`);
 }
 
+/**
+ * 게시가 끝난 뒤의 첫 댓글. 실패해도 게시는 이미 올라갔으므로 실패로 돌려주지 않는다(페이스북과 같은 규칙).
+ * 예전엔 여기서 던져서 실제로 올라간 릴스·캐러셀이 '발행 실패'로 기록되고 '배포 완료'가 안 떴다(2026-10-20 NEKOBAN EP01).
+ * 인스타 로그인 연결에 instagram_business_manage_comments 가 없으면 댓글은 항상 실패한다.
+ */
+async function tryInstagramFirstComment(postId: string, accessToken: string, firstComment?: string): Promise<{ commentError?: string; note?: string }> {
+  const message = String(firstComment || "").trim();
+  if (!message) return {};
+  try {
+    await postInstagramComment({ postId, accessToken, message });
+    return {};
+  } catch (e) {
+    const commentError = e instanceof Error ? e.message : String(e);
+    console.log("[instagram publish] first comment failed (post still ok):", commentError);
+    return { commentError, note: `게시는 됐지만 첫 댓글은 달지 못했어요(${commentError.slice(0, 160)}).` };
+  }
+}
+
 const INSTAGRAM_THUMB_OFFSET_MS = 1000;
 
 async function publishCarouselToInstagram(opts: {
@@ -1471,12 +1489,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         }
 
         const { postId } = await publishCarouselToInstagram({ igUserId, accessToken, items: resolvedItems, caption });
+        const comment = await tryInstagramFirstComment(postId, accessToken, firstComment);
 
-        if (firstComment && firstComment.trim()) {
-          await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
-        }
-
-        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString() } });
+        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
 
       } else {
         // 단일 포스트 (기존 로직 유지)
@@ -1491,12 +1506,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         }
 
         const { postId } = await publishToInstagram({ igUserId, accessToken, mediaType, mediaUrl, caption });
+        const comment = await tryInstagramFirstComment(postId, accessToken, firstComment);
 
-        if (firstComment && firstComment.trim()) {
-          await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
-        }
-
-        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString() } });
+        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
       }
       } catch (e: any) {
         const msg = String(e?.message || e);

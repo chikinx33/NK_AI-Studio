@@ -8,7 +8,7 @@ import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta, statGcsObject } from "../_shared/media-ingest";
-import { appendPublishRecords, buildPublishRow, setDeployingStep } from "../_shared/publish-records";
+import { appendPublishRecords, buildPublishRow, setDeployingStep, updatePublishRowStatus } from "../_shared/publish-records";
 import { analysisToStoryText } from "../_shared/gemini-video";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
@@ -3090,6 +3090,19 @@ interface PublishStepResult {
 }
 
 /** 계획 한 줄(채널 하나)을 올린다. 던지지 않고 결과로 돌려준다 — 한 채널의 실패가 다른 채널을 막지 않게. */
+/**
+ * TikTok 초안함 전송 완료 안내. 우리가 아는 건 TikTok 이 SEND_TO_USER_INBOX(알림함으로 보냄)라고 답했다는 것뿐이다 —
+ * 앱에 실제로 보이는지는 확인할 수 없다. 그래서 '도착했다'고 단정하지 않고, 어느 계정으로 갔는지와 찾는 곳을 말한다
+ * (2026-10-20: 에이전트는 '도착했어요'라 했는데 엔케는 초안을 찾지 못했다).
+ */
+export function tiktokInboxSentText(account = ""): string {
+  const who = account ? `@${account.replace(/^@/, "")} 계정` : "연결된 TikTok 계정";
+  return `TikTok 이 ${who}의 받은 알림함(Inbox)으로 초안을 보냈다고 확인했어요(SEND_TO_USER_INBOX). ` +
+    `다만 앱에 실제로 보이는지는 제가 확인할 수 없어요 — 휴대폰 TikTok 앱이 ${who}으로 로그인돼 있는지 먼저 봐 주세요. ` +
+    "앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 오고, 그 알림을 누르면 편집 화면이 열려요. 공개 범위를 고른 뒤 '게시'를 눌러야 올라가요" +
+    "(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요).";
+}
+
 async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolContext): Promise<PublishStepResult> {
   const platform = plan.platform;
   if (plan.action === "skip") return { platform, skipped: `${platform}(${plan.note})` };
@@ -3119,12 +3132,11 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
     const r: any = data?.result || {};
     const status = String(r.status || "processing");
     if (status === "status_reported_failed") return { platform, failure: `tiktok: 초안함 전송 실패(${r.failReason || "이유 미상"})` };
-    const tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
+    const tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, account: String(r.account || ""), sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
     return {
       platform, tiktok, published: { platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId },
-      notices: [status === "sent_to_inbox"
-        ? "TikTok 은 초안함(inbox)으로 보냈어요. 틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)."
-        : "TikTok 처리 상태는 제가 계속 지켜보다가 초안함에 도착하면 채팅으로 알려드릴게요."],
+      notices: [status === "sent_to_inbox" ? tiktokInboxSentText(tiktok.account)
+        : "TikTok 처리 상태는 제가 계속 지켜보다가 TikTok 이 알림함 전송을 확인하면 채팅으로 알려드릴게요."],
     };
   }
 
@@ -8594,7 +8606,13 @@ export async function reconcileTikTokJobs(ctx: ToolContext, sql: SqlFn) {
     const status = String(data.status || "processing");
     if (status === "complete") {
       await finish("sent_to_inbox", { postId: data.postId || "", completedAt: new Date().toISOString() });
-      await say("✅ TikTok 초안함에 영상이 도착했어요. " + "틱톡 앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 와요 — 그 알림을 누르면 편집 화면이 열리고, 공개 범위를 고른 뒤 '게시' 를 눌러야 올라가요(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요).");
+      // SNS 세팅 배포 이력의 '처리 중' 줄도 같이 바꾼다 — 예전엔 잡만 바뀌어 화면엔 영영 '처리 중'이었다.
+      const episode: any = (typeof job.input === "object" && job.input?._episode) || null;
+      if (episode?.projectId && tk.publishId) {
+        await updatePublishRowStatus(ctx.env, ctx.userId, String(episode.projectId), String(episode.brandId || ""),
+          `tiktok_${tk.publishId}`, "tiktok", "sent_to_inbox").catch(() => {});
+      }
+      await say(`✅ ${tiktokInboxSentText(String(tk.account || ""))}`);
       continue;
     }
     if (status === "failed") {

@@ -29,7 +29,14 @@ test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트
   assert.match(fn, /internalUrl\(ctx\.request, "\/api\/sns\/tiktok\/inbox"\)/, "브랜드 스튜디오와 같은 초안 엔드포인트");
   assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath: item\.mediaGcsPath, caption: description \}\)/);
   assert.match(fn, /TikTok 은 초안함 전송이라 예약이 없어요/, "예약은 안내 후 skip");
-  assert.match(fn, /TikTok 은 초안함\(inbox\)으로 보냈어요\. 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로 와요/);
+  // 2026-10-20: '도착했다'고 단정하지 않고 TikTok 이 확인한 사실과 어느 계정으로 갔는지를 말한다(안내 문구는 한 곳).
+  assert.match(fn, /notices: \[status === "sent_to_inbox" \? tiktokInboxSentText\(tiktok\.account\)/);
+  assert.match(fn, /account: String\(r\.account \|\| ""\)/);
+  const text = fnBody(shared, "export function tiktokInboxSentText(");
+  assert.match(text, /SEND_TO_USER_INBOX/);
+  assert.match(text, /앱에 실제로 보이는지는 제가 확인할 수 없어요/);
+  assert.match(text, /'받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로/);
+  assert.doesNotMatch(text, /도착했어요/);
   assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
   assert.doesNotMatch(fn, /platforms: others,/, "platforms 배열로 한 번에 보내던 잘못된 계약이 사라졌다");
   assert.match(fn, /for \(const plan of prepared\.plan as PublishPlanEntry\[\]\) results\.push\(await publishOnePlan\(plan, prepared, ctx\)\);/);
@@ -100,7 +107,7 @@ test("채널별 초안(drafts)·유튜브 메타·재연결 안내·승인 문�
   assert.match(run, /platform === "facebook" && \(d\.linkUrl \|\| prepared\?\.linkUrl\)/);
   assert.match(run, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
   assert.match(run, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
-  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? "TikTok 은 초안함\(inbox\)으로 보냈어요 — 틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
+  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? tiktokInboxSentText\(String\(o\.tiktok\.account \|\| ""\)\)/);
   assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
   assert.match(review, /\$\{p\?\.what \? `\(\$\{p\.what\}\)` : ""\}/, "승인 문구에 채널별로 무엇을 올렸는지");
 });
@@ -116,7 +123,9 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.match(fn, /output->'tiktok'->>'status'='processing'/);
   assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
   assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
-  assert.match(fn, /TikTok 초안함에 영상이 도착했어요\. " \+ "틱톡 앱 아래 '받은 알림함\(Inbox\)' 탭에/);
+  assert.match(fn, /await say\(`✅ \$\{tiktokInboxSentText\(String\(tk\.account \|\| ""\)\)\}`\);/);
+  // SNS 세팅 배포 이력의 '처리 중' 줄도 같은 상태로 바꾼다(배포 완료 표시까지).
+  assert.match(fn, /updatePublishRowStatus\(ctx\.env, ctx\.userId, String\(episode\.projectId\), String\(episode\.brandId \|\| ""\),\s*`tiktok_\$\{tk\.publishId\}`, "tiktok", "sent_to_inbox"\)/);
   assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
   assert.match(fn, /Date\.now\(\) - started > TIKTOK_PENDING_MAX_MS/);
   assert.match(fn, /tiktok_reconnect_required/);

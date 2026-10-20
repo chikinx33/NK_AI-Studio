@@ -242,7 +242,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   }
 
   try {
-    const { accessToken } = await getTikTokAccessToken(env, targetUserId);
+    const { accessToken, record } = await getTikTokAccessToken(env, targetUserId);
+    // 어느 TikTok 계정의 알림함으로 갔는지 — 사용자가 다른 계정으로 앱에 로그인해 있으면 초안이 안 보인다.
+    const account = String(record?.username || record?.handle || record?.displayName || "");
 
     const origin = new URL(request.url).origin;
     const mediaSecret = readMediaSecret(env);
@@ -296,6 +298,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           publishId: photoPublishId,
           status: rp.status === "complete" ? "sent_to_inbox" : (rp.status === "failed" ? "status_reported_failed" : "processing"),
           failReason: rp.failReason,
+          account,
           sentAt: new Date().toISOString(),
         },
       });
@@ -424,6 +427,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         publishId,
         status: r.status === "complete" ? "sent_to_inbox" : (r.status === "failed" ? "status_reported_failed" : "processing"),
         failReason: r.failReason,
+        account,
         sentAt: new Date().toISOString(),
       },
     });
