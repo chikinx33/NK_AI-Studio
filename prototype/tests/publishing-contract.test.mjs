@@ -175,4 +175,5 @@ test("약속 사본은 원본과 같다(두 저장소가 모두 있는 PC 에서
   assert.match(doc, /8자리 연결 코드를 만든다\(10분 유효, 한 번만 사용\)/);
   assert.match(doc, /"status": "posted\|failed\|needs_human\|tested"/);
   assert.match(doc, /`blogId`를 비우면 PC 앱은 로그인된 계정의 블로그에 쓴다/);
+  assert.match(doc, /\*\*글자 안 서식 \(`runs`, `itemRuns`, 선택\)\*\*/);
 });

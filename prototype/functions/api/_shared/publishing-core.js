@@ -180,6 +180,38 @@ function stripInline(s) {
     .replace(/\*\*([^*\n]+?)\*\*/g, "$1");
 }
 
+const INLINE = /\*\*([^*\n]+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/**
+ * CONTRACT §5.3 글자 안 서식: 한 줄을 조각으로 나눈다. **굵게** → { bold:true }, [글자](https://주소) → { url }.
+ * 이웃한 같은 모양 조각은 합친다. 서식이 하나도 없으면 null(그 블록은 runs 를 생략한다).
+ * @param {string[]} lines 원문 줄들(블록 안의 줄바꿈은 "\n" 조각으로 잇는다)
+ */
+export function inlineRuns(lines) {
+  const runs = [];
+  const push = (run) => {
+    if (!run.text) return;
+    const last = runs[runs.length - 1];
+    if (last && !!last.bold === !!run.bold && (last.url || "") === (run.url || "")) last.text += run.text;
+    else runs.push(run);
+  };
+  let formatted = false;
+  (Array.isArray(lines) ? lines : [lines]).forEach((line, i) => {
+    if (i > 0) push({ text: "\n" });
+    const src = String(line == null ? "" : line);
+    let at = 0;
+    for (const m of src.matchAll(INLINE)) {
+      push({ text: src.slice(at, m.index) });
+      formatted = true;
+      if (m[1] !== undefined) push({ text: m[1], bold: true });
+      else push({ text: m[2], url: m[3] });
+      at = m.index + m[0].length;
+    }
+    push({ text: src.slice(at) });
+  });
+  return formatted ? runs : null;
+}
+
 /**
  * @param {string} body 본문 표시
  * @param {Array<{ref?:string, caption?:string}>} images 글의 이미지(순서 = [이미지 N] 번호)
@@ -192,14 +224,33 @@ export function markupToBlocks(body, images = []) {
   let para = [];
   let list = null;
   let quote = [];
+  // text/items 는 서식을 걷어 낸 글자(옛 앱·plainText 용), runs/itemRuns 는 같은 줄의 서식 조각(§5.3, 서식이 있을 때만).
   const flushPara = () => {
     if (!para.length) return;
     const whole = para.every((l) => /^\*\*[^*\n]+\*\*$/.test(l));
-    blocks.push({ type: "paragraph", text: para.map((l) => stripInline(l)).join("\n"), bold: whole });
+    const block = { type: "paragraph", text: para.map((l) => stripInline(l)).join("\n"), bold: whole };
+    // 문단 전체 굵게는 bold:true 가 맡는다 — 링크가 섞였을 때만 조각을 보낸다.
+    const runs = inlineRuns(para);
+    if (runs && (!whole || runs.some((r) => r.url))) block.runs = runs;
+    blocks.push(block);
     para = [];
   };
-  const flushList = () => { if (list) { blocks.push({ type: "list", items: list }); list = null; } };
-  const flushQuote = () => { if (quote.length) { blocks.push({ type: "quote", text: quote.join("\n") }); quote = []; } };
+  const flushList = () => {
+    if (!list) return;
+    const block = { type: "list", items: list.map((it) => stripInline(it).trim()) };
+    const itemRuns = list.map((it) => inlineRuns([it.trim()]));
+    if (itemRuns.some(Boolean)) block.itemRuns = itemRuns.map((r, i) => r || [{ text: block.items[i] }]);
+    blocks.push(block);
+    list = null;
+  };
+  const flushQuote = () => {
+    if (!quote.length) return;
+    const block = { type: "quote", text: quote.map((l) => stripInline(l)).join("\n") };
+    const runs = inlineRuns(quote);
+    if (runs) block.runs = runs;
+    blocks.push(block);
+    quote = [];
+  };
   const flushAll = () => { flushPara(); flushList(); flushQuote(); };
   for (const raw of String(body == null ? "" : body).replace(/\r\n?/g, "\n").split("\n")) {
     const t = raw.trim();
@@ -217,8 +268,8 @@ export function markupToBlocks(body, images = []) {
     if ((m = t.match(HEAD))) { flushAll(); blocks.push({ type: "heading", text: stripInline(m[1]).trim() }); continue; }
     if ((m = t.match(LINK_LINE))) { flushAll(); blocks.push({ type: "link", text: m[1].trim(), url: m[2] }); continue; }
     if (BARE_URL.test(t)) { flushAll(); blocks.push({ type: "link", text: t, url: t }); continue; }
-    if ((m = t.match(QUOTE))) { flushPara(); flushList(); quote.push(stripInline(m[1])); continue; }
-    if ((m = t.match(BULLET)) && !/^\*\*/.test(t)) { flushPara(); flushQuote(); (list ||= []).push(stripInline(m[1]).trim()); continue; }
+    if ((m = t.match(QUOTE))) { flushPara(); flushList(); quote.push(m[1]); continue; }
+    if ((m = t.match(BULLET)) && !/^\*\*/.test(t)) { flushPara(); flushQuote(); (list ||= []).push(m[1]); continue; }
     flushList(); flushQuote();
     para.push(t);
   }
@@ -249,15 +300,25 @@ function esc(s) {
  * 소제목은 <h3><strong> — 편집기가 제목 태그를 버려도 굵게는 남는다(js/ui/naver-blog-draft.js 와 같은 선택).
  * 이미지는 "[이미지 N]" 자리 글자로 둔다 — 사람이 그 자리에 사진을 붙인다.
  */
+/** 조각 → HTML. PC 앱이 같은 조각을 편집기에 넣으므로, 손으로 붙여 넣어도 같은 굵게·링크가 된다. */
+function runsToHtml(runs) {
+  return runs.map((r) => {
+    let html = String(r.text).split("\n").map(esc).join("<br>");
+    if (r.bold) html = `<strong>${html}</strong>`;
+    if (r.url && /^https?:\/\//i.test(r.url)) html = `<a href="${esc(r.url)}">${html}</a>`;
+    return html;
+  }).join("");
+}
+
 export function blocksToHtml(blocks) {
   const out = [];
   for (const b of Array.isArray(blocks) ? blocks : []) {
     if (b.type === "heading") out.push(`<h3><strong>${esc(b.text)}</strong></h3>`);
     else if (b.type === "paragraph") {
-      const inner = String(b.text).split("\n").map(esc).join("<br>");
+      const inner = Array.isArray(b.runs) ? runsToHtml(b.runs) : String(b.text).split("\n").map(esc).join("<br>");
       out.push(`<p>${b.bold ? `<strong>${inner}</strong>` : inner}</p>`);
-    } else if (b.type === "list") out.push(`<ul>${b.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ul>`);
-    else if (b.type === "quote") out.push(`<blockquote>${String(b.text).split("\n").map(esc).join("<br>")}</blockquote>`);
+    } else if (b.type === "list") out.push(`<ul>${b.items.map((it, i) => `<li>${Array.isArray(b.itemRuns?.[i]) ? runsToHtml(b.itemRuns[i]) : esc(it)}</li>`).join("")}</ul>`);
+    else if (b.type === "quote") out.push(`<blockquote>${Array.isArray(b.runs) ? runsToHtml(b.runs) : String(b.text).split("\n").map(esc).join("<br>")}</blockquote>`);
     else if (b.type === "link") out.push(`<p><a href="${esc(b.url)}">${esc(b.text)}</a></p>`);
     else if (b.type === "image") out.push(`<p>[이미지 ${esc(String(b.imageRef).replace(/^img/, ""))}]</p>`);
   }

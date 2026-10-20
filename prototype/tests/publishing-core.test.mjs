@@ -123,7 +123,10 @@ test("본문 표시 → CONTRACT 블록: 소제목(## 또는 ■)·굵게·목�
   assert.deepEqual(blocks, [
     { type: "heading", text: "고양이 마을" },
     { type: "paragraph", text: "한 줄 굵게", bold: true },
-    { type: "paragraph", text: "보통 문단 일부 굵게 와 링크 (https://example.com) 둘째 줄\n다음 줄", bold: false },
+    {
+      type: "paragraph", text: "보통 문단 일부 굵게 와 링크 (https://example.com) 둘째 줄\n다음 줄", bold: false,
+      runs: [{ text: "보통 문단 " }, { text: "일부 굵게", bold: true }, { text: " 와 " }, { text: "링크", url: "https://example.com" }, { text: " 둘째 줄\n다음 줄" }],
+    },
     { type: "list", items: ["하나", "둘"] },
     { type: "quote", text: "인용 문장" },
     { type: "image", imageRef: "img1", caption: "첫 장" },
@@ -132,6 +135,16 @@ test("본문 표시 → CONTRACT 블록: 소제목(## 또는 ■)·굵게·목�
     { type: "image", imageRef: "img2", caption: "둘째" },
   ]);
   assert.equal(core.markupToBlocks("[이미지 3]", [{}]).length, 1, "없는 번호는 버리고 첨부한 이미지는 끝에");
+  // §5.3 글자 안 서식: 목록 항목 안 굵게(itemRuns, 길이 = items), 인용 안 링크(runs), 서식 없는 블록은 생략
+  const [list, quote, plainPara] = core.markupToBlocks("- **굵은 항목** 설명\n- 보통 항목\n\n> 인용 [링크](https://a.example/x)\n\n그냥 문단", []);
+  assert.deepEqual(list, { type: "list", items: ["굵은 항목 설명", "보통 항목"], itemRuns: [[{ text: "굵은 항목", bold: true }, { text: " 설명" }], [{ text: "보통 항목" }]] });
+  assert.deepEqual(quote, { type: "quote", text: "인용 링크 (https://a.example/x)", runs: [{ text: "인용 " }, { text: "링크", url: "https://a.example/x" }] });
+  assert.deepEqual(plainPara, { type: "paragraph", text: "그냥 문단", bold: false }, "서식 없으면 runs 없음");
+  assert.equal(core.markupToBlocks("**전체 굵게**", [])[0].runs, undefined, "문단 전체 굵게는 bold:true 만");
+  assert.equal(core.markupToBlocks("- 보통\n- 목록", [])[0].itemRuns, undefined);
+  // 복사 화면도 같은 조각으로 HTML 을 만든다(손으로 올려도 같은 결과)
+  assert.equal(core.blocksToHtml([list, quote]), '<ul><li><strong>굵은 항목</strong> 설명</li><li>보통 항목</li></ul>\n<blockquote>인용 <a href="https://a.example/x">링크</a></blockquote>');
+  assert.equal(core.blocksToHtml([{ type: "paragraph", text: "x", bold: false, runs: [{ text: "<b>", bold: true }, { text: "y", url: "javascript:alert(1)" }] }]), "<p><strong>&lt;b&gt;</strong>y</p>", "글자는 이스케이프, http(s) 아닌 주소는 링크로 안 만든다");
   const plain = core.blocksToPlainText(blocks);
   assert.match(plain, /^고양이 마을\n한 줄 굵게\n/);
   assert.match(plain, /• 하나\n• 둘/);
