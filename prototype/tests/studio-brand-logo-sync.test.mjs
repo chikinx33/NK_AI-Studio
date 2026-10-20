@@ -5,7 +5,7 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-// 로그인 카드 로고·제목은 계정별로 서버에 저장되고, AI 기업 사이드바가 같은 값을 쓴다.
+// 로그인 카드 로고·제목은 계정별로 서버에 저장된다. AI 기업 사이드바 로고는 따로 저장한다.
 test("studio brand endpoint stores title/logo per account under userdata", () => {
   const src = read("prototype/functions/api/userdata/brand.ts");
   assert.match(src, /export const onRequestGet/);
@@ -26,10 +26,15 @@ test("launcher login card saves logo/title to the server and syncs on login", ()
   assert.match(script, /syncLoginBrandFromServer\(user\);/);
 });
 
-test("AI company sidebar shows the account logo and can register it", () => {
+test("AI company sidebar shows its own logo (not the login card logo) and can register it", () => {
   const sidebar = read("ai-company-app/src/components/Sidebar.tsx");
   assert.match(sidebar, /getStudioBrand\(\)/);
-  assert.match(sidebar, /saveStudioBrandIcon\(dataUrl\)/);
+  assert.match(sidebar, /setBrandIcon\(b\.companyIconDataUrl\)/);
+  assert.match(sidebar, /saveCompanyIcon\(dataUrl\)/);
+  assert.doesNotMatch(sidebar, /\.iconDataUrl/);
+  const api = read("ai-company-app/src/lib/api.ts");
+  assert.match(api, /JSON\.stringify\(\{ companyIconDataUrl \}\)/);
+  assert.doesNotMatch(api, /JSON\.stringify\(\{ iconDataUrl \}\)/);
   assert.match(sidebar, /src=\{brandIcon \|\| `\$\{import\.meta\.env\.BASE_URL\}logo\.png`\}/);
   assert.match(sidebar, /en \? "Register logo image" : "로고 이미지 등록"/);
 });

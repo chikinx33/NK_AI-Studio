@@ -172,25 +172,35 @@ export async function registerCompanySkillJobArtifacts(
   return Array.isArray(data.artifacts) ? data.artifacts as SkillArtifact[] : [];
 }
 
-// 계정별 스튜디오 브랜드와 AI 기업 문구. 로고가 없으면 기본 로고를 쓴다.
-export interface StudioBrand { title: string; iconDataUrl: string; companyTagline: string }
+// 계정별 스튜디오 브랜드와 AI 기업 로고·문구. 사이드바 로고(companyIconDataUrl)는 런처 로그인 카드 로고(iconDataUrl)와 따로 저장한다.
+// 로고가 없으면 기본 로고를 쓴다.
+export interface StudioBrand { title: string; iconDataUrl: string; companyIconDataUrl: string; companyTagline: string }
+
+function toStudioBrand(data: any): StudioBrand {
+  return {
+    title: String(data?.data?.title || ""),
+    iconDataUrl: String(data?.data?.iconDataUrl || ""),
+    companyIconDataUrl: String(data?.data?.companyIconDataUrl || ""),
+    companyTagline: String(data?.data?.companyTagline || ""),
+  };
+}
 
 export async function getStudioBrand(): Promise<StudioBrand> {
   const res = await fetch("/api/userdata/brand");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "브랜드 정보를 불러오지 못했어요.");
-  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
+  return toStudioBrand(data);
 }
 
-export async function saveStudioBrandIcon(iconDataUrl: string): Promise<StudioBrand> {
+export async function saveCompanyIcon(companyIconDataUrl: string): Promise<StudioBrand> {
   const res = await fetch("/api/userdata/brand", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ iconDataUrl }),
+    body: JSON.stringify({ companyIconDataUrl }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || data?.error || "로고를 저장하지 못했어요.");
-  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
+  return toStudioBrand(data);
 }
 
 export async function saveCompanyTagline(companyTagline: string): Promise<StudioBrand> {
@@ -201,7 +211,7 @@ export async function saveCompanyTagline(companyTagline: string): Promise<Studio
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || data?.error || "문구를 저장하지 못했어요.");
-  return { title: String(data?.data?.title || ""), iconDataUrl: String(data?.data?.iconDataUrl || ""), companyTagline: String(data?.data?.companyTagline || "") };
+  return toStudioBrand(data);
 }
 
 export async function listCompanyWorkItems(): Promise<CompanyWorkItem[]> {

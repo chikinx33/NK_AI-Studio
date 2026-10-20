@@ -34,7 +34,7 @@ test("회사 문구는 계정별로 저장되고 다시 읽어도 유지되며 �
   const h = harness({ title: "NK 스튜디오", iconDataUrl: "data:image/png;base64,AAAA" });
   const response = await h.post({ companyTagline: "  함께 만드는 AI 기업  " });
   assert.equal(response.status, 200);
-  const expected = { title: "NK 스튜디오", iconDataUrl: "data:image/png;base64,AAAA", companyTagline: "함께 만드는 AI 기업" };
+  const expected = { title: "NK 스튜디오", iconDataUrl: "data:image/png;base64,AAAA", companyIconDataUrl: "data:image/png;base64,AAAA", companyTagline: "함께 만드는 AI 기업" };
   assert.deepEqual((await response.json()).data, expected);
   assert.deepEqual((await (await h.get()).json()).data, expected);
   assert.deepEqual(h.writes, ["test/office-user/studio-brand.json"]);
@@ -45,7 +45,7 @@ test("기존 계정의 기본 문구를 지원하고 로그인 카드의 제목�
   assert.equal((await (await h.get()).json()).data.companyTagline, "");
   await h.post({ companyTagline: "새 문구" });
   await h.post({ title: "새 제목", iconDataUrl: "data:image/webp;base64,AAAA" });
-  assert.deepEqual((await (await h.get()).json()).data, { title: "새 제목", iconDataUrl: "data:image/webp;base64,AAAA", companyTagline: "새 문구" });
+  assert.deepEqual((await (await h.get()).json()).data, { title: "새 제목", iconDataUrl: "data:image/webp;base64,AAAA", companyIconDataUrl: "", companyTagline: "새 문구" });
 });
 
 test("빈 문구·80자 초과·잘못된 자료형은 저장하지 않고 기존 문구를 유지한다", async () => {
@@ -63,4 +63,21 @@ test("인증되지 않은 요청은 회사 문구를 읽거나 변경할 수 없
   assert.equal((await h.get()).status, 401);
   assert.equal((await h.post({ companyTagline: "변경" })).status, 401);
   assert.equal(h.writes.length, 0);
+});
+
+test("런처 로그인 카드 로고와 AI 기업 사이드바 로고는 따로 저장되고 서로 덮지 않는다", async () => {
+  const h = harness({ title: "제목", iconDataUrl: "data:image/png;base64,TEFVTkNI" });
+  // 나누기 전 계정: 사이드바는 기존 로그인 카드 로고를 이어받는다.
+  assert.equal((await (await h.get()).json()).data.companyIconDataUrl, "data:image/png;base64,TEFVTkNI");
+  // 로그인 카드 로고를 바꿔도 사이드바 로고는 이어받은 값 그대로다.
+  await h.post({ iconDataUrl: "data:image/png;base64,TkVXTEFVTkNI" });
+  let data = (await (await h.get()).json()).data;
+  assert.equal(data.iconDataUrl, "data:image/png;base64,TkVXTEFVTkNI");
+  assert.equal(data.companyIconDataUrl, "data:image/png;base64,TEFVTkNI");
+  // 사이드바 로고를 바꿔도 로그인 카드 로고는 그대로다.
+  await h.post({ companyIconDataUrl: "data:image/webp;base64,Q09NUEFOWQ==" });
+  data = (await (await h.get()).json()).data;
+  assert.equal(data.iconDataUrl, "data:image/png;base64,TkVXTEFVTkNI");
+  assert.equal(data.companyIconDataUrl, "data:image/webp;base64,Q09NUEFOWQ==");
+  assert.equal((await h.post({ companyIconDataUrl: "https://evil/x.png" })).status, 400);
 });

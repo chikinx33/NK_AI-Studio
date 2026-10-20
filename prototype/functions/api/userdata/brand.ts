@@ -1,7 +1,8 @@
 // prototype/functions/api/userdata/brand.ts
-// 계정별 스튜디오 브랜드(런처 로그인 카드의 제목·로고). 로그인 카드 로고를 눌러 등록한 이미지를
-// 이 계정의 다른 기기와 AI 기업 사이드바에서도 같이 쓰도록 서버에 둔다.
-// GET = { ok, data: { title, iconDataUrl, companyTagline } } / POST = 보낸 필드만 갱신
+// 계정별 스튜디오 브랜드. 런처 로그인 카드의 제목·로고(iconDataUrl)와
+// AI 기업 사이드바의 로고(companyIconDataUrl)·문구(companyTagline)를 이 계정의 다른 기기에서도 쓰도록 서버에 둔다.
+// 두 로고는 따로 저장한다. 한쪽을 바꿔도 다른 쪽은 그대로다.
+// GET = { ok, data: { title, iconDataUrl, companyIconDataUrl, companyTagline } } / POST = 보낸 필드만 갱신
 import { buildUserDataObject, sanitizeUserId } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { readGcsJson, resolveGcsEnv, writeGcsJson } from "../_shared/gcs.js";
@@ -46,7 +47,12 @@ function brandObject(env: any, userId: string): string {
 async function readBrand(env: any, userId: string) {
   const { found, data } = await readGcsJson(env, brandObject(env, userId));
   const src = found && data && typeof data === "object" ? data : {};
-  return { title: normalizeBrandTitle(src.title), iconDataUrl: normalizeBrandIcon(src.iconDataUrl), companyTagline: String(src.companyTagline ?? "").trim().slice(0, MAX_COMPANY_TAGLINE) };
+  const iconDataUrl = normalizeBrandIcon(src.iconDataUrl);
+  // 로고를 나누기 전에는 사이드바도 로그인 카드 로고를 썼다. 사이드바 값이 아직 없으면 그 로고를 이어받는다.
+  const companyIconDataUrl = Object.prototype.hasOwnProperty.call(src, "companyIconDataUrl")
+    ? normalizeBrandIcon(src.companyIconDataUrl)
+    : iconDataUrl;
+  return { title: normalizeBrandTitle(src.title), iconDataUrl, companyIconDataUrl, companyTagline: String(src.companyTagline ?? "").trim().slice(0, MAX_COMPANY_TAGLINE) };
 }
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
@@ -80,6 +86,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const icon = normalizeBrandIcon(raw);
       if (raw && !icon) return send({ error: "invalid_icon", message: "PNG·JPEG·WebP 이미지(2MB 이하)만 등록할 수 있어요." }, 400, origin);
       next.iconDataUrl = icon;
+    }
+    if (Object.prototype.hasOwnProperty.call(body || {}, "companyIconDataUrl")) {
+      const raw = String(body.companyIconDataUrl ?? "").trim();
+      const icon = normalizeBrandIcon(raw);
+      if (raw && !icon) return send({ error: "invalid_icon", message: "PNG·JPEG·WebP 이미지(2MB 이하)만 등록할 수 있어요." }, 400, origin);
+      next.companyIconDataUrl = icon;
     }
     await writeGcsJson(env, brandObject(env, auth.userId), { ...next, updatedAt: new Date().toISOString() });
     return send({ ok: true, data: next }, 200, origin);

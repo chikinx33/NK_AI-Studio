@@ -1397,7 +1397,7 @@
     };
 
     // 로그인 카드 브랜드는 계정별로 서버(api/userdata/brand)에 둔다. 로컬은 첫 화면을 바로 그리는 캐시.
-    // 서버에 아직 없고 이 브라우저에만 등록돼 있던 값은 한 번 올려서 다른 기기·AI 기업 사이드바에도 보이게 한다.
+    // 서버에 아직 없고 이 브라우저에만 등록돼 있던 값은 한 번 올려서 다른 기기에도 보이게 한다. (AI 기업 사이드바 로고는 따로 저장)
     const syncLoginBrandFromServer = async (user) => {
       if (!user || !NK.api || !NK.api.userdataBrandGet) return;
       try {

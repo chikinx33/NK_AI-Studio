@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { getStudioBrand, saveStudioBrandIcon, saveCompanyTagline, setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
+import { getStudioBrand, saveCompanyIcon, saveCompanyTagline, setWork, setAutonomous, type AgentInfo, type StatusInfo } from "../lib/api";
 import CharacterCard from "./CharacterCard";
 import { JOB } from "../lib/jobs";
 import { actionBoolean, actionString, actionStrings, useUiAction } from "../lib/uiActions";
@@ -455,7 +455,7 @@ export default function Sidebar({
   // 옵션(설정) 화면과 같은 기준으로 마스터에게만 버튼을 보인다.
   const canUseAutonomous = isMasterUser();
 
-  // 로고: 계정별 스튜디오 브랜드(런처 로그인 카드와 같은 값). 없으면 기본 로고. 누르면 이미지 등록.
+  // 로고: 계정별 AI 기업 로고(런처 로그인 카드 로고와 따로 저장). 없으면 기본 로고. 누르면 이미지 등록.
   const [brandIcon, setBrandIcon] = useState("");
   const [savingLogo, setSavingLogo] = useState(false);
   const [companyTagline, setCompanyTagline] = useState("");
@@ -472,7 +472,7 @@ export default function Sidebar({
     let alive = true;
     getStudioBrand().then((b) => {
       if (alive) {
-        setBrandIcon(b.iconDataUrl);
+        setBrandIcon(b.companyIconDataUrl);
         setCompanyTagline(b.companyTagline);
       }
     }).catch(() => { /* 기본 브랜드 유지. 저장 시 서버에서 기존 값을 다시 읽는다. */ })
@@ -512,8 +512,8 @@ export default function Sidebar({
     setSavingLogo(true);
     try {
       const dataUrl = await resizeLogoToFit(file, 1000);
-      const saved = await saveStudioBrandIcon(dataUrl);
-      setBrandIcon(saved.iconDataUrl);
+      const saved = await saveCompanyIcon(dataUrl);
+      setBrandIcon(saved.companyIconDataUrl);
     } catch (e) {
       alert((en ? "Could not register the logo: " : "로고를 등록하지 못했어요: ") + (e instanceof Error ? e.message : String(e)));
     } finally {
