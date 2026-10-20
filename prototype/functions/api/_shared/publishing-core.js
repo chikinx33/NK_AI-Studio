@@ -66,6 +66,9 @@ export const CHANNEL_TYPES = {
   instagram: { modes: ["api"], apiReady: false },
   youtube: { modes: ["api"], apiReady: false },
   discord: { modes: ["api"], apiReady: false },
+  // 직접 올리기 전용(사람이 복사 화면으로 올린다). PC 앱에 가지 않으므로 NK Publisher 약속(§3)과 무관하다.
+  reddit: { modes: ["manual"] },
+  hackernews: { modes: ["manual"] },
   custom: { modes: ["manual"] },
 };
 
@@ -128,6 +131,10 @@ export function validateChannelInput(input) {
     const boardUrl = httpsUrl(t.boardUrl);
     if (!boardUrl || !/ruliweb\.com/i.test(boardUrl)) return { ok: false, error: "target_board_url_required" };
     target = { boardUrl };
+  } else if (type === "reddit") {
+    const subreddit = normalizeSubreddit(t.subreddit);
+    if (subreddit && !/^[A-Za-z0-9_]{2,21}$/.test(subreddit)) return { ok: false, error: "target_subreddit_invalid" };
+    target = subreddit ? { subreddit } : {};
   } else if (type === "custom") {
     const writeUrl = httpsUrl(t.writeUrl);
     const note = cleanText(t.note, 300);
@@ -159,8 +166,44 @@ export function channelWriteUrl(type, target) {
     return `https://gall.dcinside.com/${base}/write/?id=${encodeURIComponent(t.galleryId)}`;
   }
   if (type === "ruliweb" && t.boardUrl) return String(t.boardUrl);
+  if (type === "reddit") return t.subreddit ? `https://www.reddit.com/r/${encodeURIComponent(t.subreddit)}/submit` : "https://www.reddit.com/submit";
+  if (type === "hackernews") return "https://news.ycombinator.com/submit";
   if (type === "custom" && t.writeUrl) return String(t.writeUrl);
   return "";
+}
+
+/** 'r/name', '/r/name/', 'https://www.reddit.com/r/name' → 'name'. */
+export function normalizeSubreddit(raw) {
+  return cleanText(raw, 200).replace(/^https?:\/\/(www\.|old\.)?reddit\.com/i, "").replace(/^\/+/, "").replace(/^r\//i, "").replace(/[/?#].*$/, "");
+}
+
+/** 채널 target 값과 비교할 모양(대소문자 무시, 서브레딧은 r/ 접두어·주소 무시, 다른 주소는 끝 / 무시). */
+function targetKey(v) {
+  const s = cleanText(v, 300);
+  if (/^https?:\/\//i.test(s) && !/reddit\.com/i.test(s)) return s.replace(/\/+$/, "").toLowerCase();
+  return normalizeSubreddit(s).toLowerCase();
+}
+
+/**
+ * 가져온 글의 채널 고르기(JSON 가져오기·패키지 가져오기 공용).
+ * channelId 가 있으면 그 채널. 없으면 같은 종류(channelType) 안에서:
+ *   target(갤러리 id·서브레딧·블로그 id·게시판 주소 또는 채널 이름)을 주면 그 값이 맞는 채널만 — 맞는 채널이 없으면 null
+ *   (엉뚱한 게시판에 올라가지 않게 '그 종류 첫 채널'로 넘기지 않는다),
+ *   target 이 없으면 같은 브랜드 채널 → 브랜드 없는 채널 → 그 종류 첫 채널.
+ * @param {Array<{id:string,type:string,name:string,brandId:string,target:object}>} channels 쓸 수 있는(켜진) 채널
+ */
+export function pickImportChannel(channels, { channelType = "", channelId = "", brandId = "", target = "" } = {}) {
+  const list = Array.isArray(channels) ? channels : [];
+  if (channelId) return list.find((c) => c.id === channelId) || null;
+  const pool = list.filter((c) => c.type === channelType);
+  const sameBrand = (c) => !!c.brandId && c.brandId === brandId;
+  const want = targetKey(target);
+  if (want) {
+    const hits = pool.filter((c) => targetKey(c.name) === want
+      || Object.values(c.target && typeof c.target === "object" ? c.target : {}).some((v) => targetKey(v) === want));
+    return hits.find(sameBrand) || hits[0] || null;
+  }
+  return pool.find(sameBrand) || pool.find((c) => !c.brandId) || pool[0] || null;
 }
 
 // ── 본문 → 블록 (CONTRACT §5.3 content.blocks) ──────────────────────────────

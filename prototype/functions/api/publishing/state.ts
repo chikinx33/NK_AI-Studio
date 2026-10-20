@@ -5,7 +5,7 @@ import { publishingDb, loadPublishingState } from "../_shared/publishing-store";
 import { send, sendError } from "../_shared/publishing-http";
 
 export const onRequestGet = async ({ request, env }: any) => {
-  const auth = await authorizeRequest(request, env);
+  const auth = await authorizeRequest(request, env, { apiKey: "publishing:read" });
   if (!auth.ok) return send({ error: auth.error }, auth.status);
   try {
     const db = await publishingDb(env);

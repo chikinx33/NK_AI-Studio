@@ -47,7 +47,7 @@ test("v1 API 는 약속 §5 경로 그대로이고 기기 토큰으로만 열린
   }
   for (const file of USER) {
     const src = read(file);
-    assert.match(src, /authorizeRequest\(request, env\)/, `${file} 는 로그인 세션`);
+    assert.match(src, /authorizeRequest\(request, env(?:, \{ apiKey: "publishing:(?:read|write)" \})?\)/, `${file} 는 로그인 세션(+ 밝힌 권한의 개인 API 키)`);
     assert.doesNotMatch(src, /authorizeDevice/, `${file} 에 기기 토큰이 통하면 안 된다`);
   }
   // 401 다시 연결 / 426 업데이트 필요(§4.4)

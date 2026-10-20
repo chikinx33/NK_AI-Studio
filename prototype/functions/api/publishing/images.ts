@@ -20,7 +20,7 @@ async function readSourceUrl(raw: string) {
 }
 
 export const onRequestPost = async ({ request, env }: any) => {
-  const auth = await authorizeRequest(request, env);
+  const auth = await authorizeRequest(request, env, { apiKey: "publishing:write" });
   if (!auth.ok) return send({ error: auth.error }, auth.status);
   try {
     let bytes: Uint8Array;

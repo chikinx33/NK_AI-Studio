@@ -20,7 +20,7 @@ test("회사 파일 미리보기(<img>/<video>/<iframe>)는 쿼리 토큰으로 
     readFile("ai-company-app/src/lib/api.ts", "utf8"),
   ]);
   const getBlock = server.slice(server.indexOf("export const onRequestGet"), server.indexOf("export const onRequestPost"));
-  assert.match(getBlock, /authorizeRequest\(request, env, \{ allowQueryToken: true \}\)/);
+  assert.match(getBlock, /authorizeRequest\(request, env, \{ allowQueryToken: true, apiKey: "files:read" \}\)/);
   assert.match(api, /url\.startsWith\("\/api\/media\/proxy"\) \|\| url\.startsWith\("\/api\/agent\/company-files"\)/);
   assert.match(api, /return withMediaToken\(`\/api\/agent\/company-files\?path=\$\{encodeURIComponent\(entry\.path\)\}&preview=1`\);/);
 });

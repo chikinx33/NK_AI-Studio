@@ -31,7 +31,7 @@ export default function ChannelsTab({ ctx }: { ctx: PublishingCtx }) {
   const targetSummary = (c: PublishingChannel) => {
     const tg = c.target || {};
     if (c.type === "naver_blog" && !tg.blogId) return t.accountBlog;
-    return tg.blogId ? `blog.naver.com/${tg.blogId}` : tg.cafeUrl || tg.boardUrl || (tg.galleryId ? `${tg.galleryType || ""} · ${tg.galleryId}` : "") || tg.writeUrl || tg.note || "";
+    return tg.blogId ? `blog.naver.com/${tg.blogId}` : tg.cafeUrl || tg.boardUrl || (tg.galleryId ? `${tg.galleryType || ""} · ${tg.galleryId}` : "") || (tg.subreddit ? `r/${tg.subreddit}` : "") || tg.writeUrl || tg.note || "";
   };
 
   return (
@@ -171,6 +171,7 @@ function ChannelEditor({ ctx, channel, onClose }: { ctx: PublishingCtx; channel:
           </div>
         )}
         {type === "ruliweb" && text("boardUrl", t.targetBoardUrl, undefined, "https://bbs.ruliweb.com/…")}
+        {type === "reddit" && text("subreddit", t.targetSubreddit, t.targetSubredditHint, "IndieGaming")}
         {type === "custom" && <div className="grid gap-3 sm:grid-cols-2">{text("writeUrl", t.targetWriteUrl, undefined, "https://")}{text("note", t.targetNote)}</div>}
         {mode === "pc" && (
           <Field label={t.accountLabel} hint={t.accountLabelHint}><input className={inputClass} value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} /></Field>

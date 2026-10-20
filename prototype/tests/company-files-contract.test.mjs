@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8
 
 test("회사 파일 API는 사용자별 GCS 경로와 안전한 상대 경로를 사용한다", async () => {
   const source = await read("prototype/functions/api/agent/company-files.ts");
-  assert.match(source, /authorizeRequest\(request, env\)/);
+  assert.match(source, /authorizeRequest\(request, env, \{ apiKey: "files:write" \}\)/, "쓰기·지우기는 로그인 세션 또는 files:write 개인 API 키");
   assert.match(source, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
   assert.match(source, /\/company-files\//);
   assert.match(source, /function normalizePath/);

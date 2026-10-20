@@ -5,7 +5,7 @@ import { publishingDb, importItems } from "../_shared/publishing-store";
 import { send, sendError, readJson } from "../_shared/publishing-http";
 
 export const onRequestPost = async ({ request, env }: any) => {
-  const auth = await authorizeRequest(request, env);
+  const auth = await authorizeRequest(request, env, { apiKey: "publishing:write" });
   if (!auth.ok) return send({ error: auth.error }, auth.status);
   try {
     const body: any = await readJson(request);

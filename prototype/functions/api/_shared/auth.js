@@ -28,6 +28,13 @@ export async function issueSessionToken(userId, env, ttlSec = DEFAULT_SESSION_TT
   };
 }
 
+/**
+ * 요청 인증. 기본은 로그인 세션 토큰만 받는다.
+ * options.apiKey: 이 경로가 개인 API 키(nkk_…)도 받겠다는 표시. 문자열이면 그 권한이 있는 키만('files:write' 등),
+ *   true 면 아무 권한의 키나 들이고 경로가 동작마다 authHasScope(auth, 권한)로 다시 묻는다.
+ *   표시하지 않은 경로(로그인·결제·키 관리·승인·게시 등)는 키를 403 으로 막는다. 키는 Authorization 헤더로만 받는다(주소에 싣지 않게).
+ * 반환 auth.via: "session" | "api_key".
+ */
 export async function authorizeRequest(request, env, options = {}) {
   try {
     const allowQuery = !!options.allowQueryToken;
@@ -41,6 +48,8 @@ export async function authorizeRequest(request, env, options = {}) {
         queryToken = String(url.searchParams.get("nk_token") || "").trim();
       } catch (_) { }
     }
+    if (headerToken.startsWith("nkk_")) return await authorizeApiKey(env, headerToken, options);
+    if (!headerToken && queryToken.startsWith("nkk_")) return { ok: false, status: 401, error: "api_key_header_required" };
     let token = headerToken || (allowQuery ? queryToken : "");
     if (!token) return { ok: false, status: 401, error: "auth_required" };
     let payload = null;
@@ -85,6 +94,7 @@ export async function authorizeRequest(request, env, options = {}) {
       userId: sanitizeUserId(payload.sub),
       payload,
       token,
+      via: "session",
     };
   } catch (err) {
     return {
@@ -93,6 +103,36 @@ export async function authorizeRequest(request, env, options = {}) {
       error: err && err.message ? err.message : "invalid_session",
     };
   }
+}
+
+/** 개인 API 키 갈래(authorizeRequest 안에서만 부른다). 키를 받지 않는 경로면 DB 를 보기 전에 막는다. */
+async function authorizeApiKey(env, token, options) {
+  if (!options.apiKey) return { ok: false, status: 403, error: "api_key_not_allowed" };
+  const { authenticateApiKey } = await import("./api-keys");
+  const { keyHasScope } = await import("./api-keys-core.js");
+  let key = null;
+  try {
+    key = await authenticateApiKey(env, token);
+  } catch (error) {
+    try { console.error("[auth] api key lookup failed", error); } catch (_) { /* noop */ }
+    return { ok: false, status: 503, error: "api_key_unavailable" };
+  }
+  if (!key) return { ok: false, status: 401, error: "api_key_invalid" };
+  if (typeof options.apiKey === "string" && !keyHasScope(key.scopes, options.apiKey)) {
+    return { ok: false, status: 403, error: "api_key_scope_missing", scope: options.apiKey };
+  }
+  const userId = sanitizeUserId(key.userId);
+  if (!options.skipAccountDeletionCheck) {
+    try {
+      const { checkAccountSession } = await import("./account-deletions.js");
+      const account = await checkAccountSession(env, userId, key.createdAtMs);
+      if (!account.ok) return { ok: false, status: 403, error: account.error, deleteAfter: account.deleteAfter || "" };
+    } catch (error) {
+      try { console.error("[auth] account deletion registry unavailable", error); } catch (_) { /* noop */ }
+      return { ok: false, status: 503, error: "account_status_unavailable" };
+    }
+  }
+  return { ok: true, status: 200, userId, payload: { sub: userId }, token, via: "api_key", apiKey: { id: key.id, name: key.name, scopes: key.scopes } };
 }
 
 export async function verifySessionToken(token, env) {

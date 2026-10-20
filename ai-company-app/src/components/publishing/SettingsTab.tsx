@@ -4,8 +4,9 @@ import { createPairingCode, revokeDevice } from "../../lib/publishing";
 import { apiErrorText, agoText } from "./i18n";
 import { Button, Card, Icon } from "./ui";
 import { channelTypeLabel, type PublishingCtx } from "./helpers";
+import ApiKeysCard from "./ApiKeysCard";
 
-/** 설정: PC 연결(8자리 코드, 10분·한 번), 연결된 PC 목록·연결 해제, 지키는 안전 규칙. */
+/** 설정: PC 연결(8자리 코드, 10분·한 번), 연결된 PC 목록·연결 해제, 개인 API 키, 지키는 안전 규칙. */
 export default function SettingsTab({ ctx }: { ctx: PublishingCtx }) {
   const { t, state, now } = ctx;
   const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
@@ -98,6 +99,8 @@ export default function SettingsTab({ ctx }: { ctx: PublishingCtx }) {
           </ul>
         )}
       </Card>
+
+      <ApiKeysCard ctx={ctx} />
 
       <Card title={t.safetyTitle} icon="shield" className="lg:col-span-2">
         <ul className="space-y-1.5">

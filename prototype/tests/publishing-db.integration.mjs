@@ -1,11 +1,13 @@
 // 퍼블리싱 저장소 ↔ 진짜 PostgreSQL 왕복 검사(npm run test:publishing-db). Docker 가 없으면 건너뛴다.
 // 연결 코드(10분·한 번), claim 임대·attempt, 결과 멱등·409, 서버 재시도, 임대 만료, 주간 승인 스팸 방지, 사용자 격리.
+// 이어서 패키지 가져오기·result.json·일정 읽기·개인 API 키(publishing-packages.scenario.mjs, 업무 파일 저장소는 가짜).
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { installFakeGcs, fakeGcsEnv, runPackagesScenario } from "./publishing-packages.scenario.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const containerName = `nk-studio-publishing-test-${process.pid}`;
@@ -78,8 +80,14 @@ async function waitForPostgres() {
 async function loadStore() {
   tempDirectory = await mkdtemp(resolve(tmpdir(), "nk-publishing-db-"));
   const out = resolve(tempDirectory, "publishing-store.mjs");
+  const entry = resolve(tempDirectory, "entry.ts");
+  const shared = (name) => JSON.stringify(resolve(repositoryRoot, "prototype/functions/api/_shared", name).replaceAll("\\", "/"));
+  await writeFile(entry, [
+    `export * from ${shared("publishing-store")};`, `export * from ${shared("publishing-packages")};`,
+    `export * from ${shared("api-keys")};`, `export { workspacePrefix } from ${shared("company-files-gcs")};`,
+  ].join("\n"));
   execFileSync(process.execPath, [resolve(repositoryRoot, "ai-company-app/node_modules/esbuild/bin/esbuild"),
-    resolve(repositoryRoot, "prototype/functions/api/_shared/publishing-store.ts"), "--bundle", "--platform=node", "--format=esm", `--outfile=${out}`], { cwd: repositoryRoot, stdio: "pipe" });
+    entry, "--bundle", "--platform=node", "--format=esm", `--outfile=${out}`], { cwd: repositoryRoot, stdio: "pipe" });
   return import(`${pathToFileURL(out).href}?run=${Date.now()}`);
 }
 
@@ -207,6 +215,14 @@ async function main() {
   // ── 연결 해제: 그 토큰은 바로 무효 ──
   await s.revokeDevice(db, "u1", device.deviceId);
   assert.equal(await s.authenticateDevice(db, paired.deviceToken), null);
+
+  // ── 패키지 가져오기·result.json·일정 읽기·개인 API 키 ──
+  const gcs = installFakeGcs();
+  try {
+    await runPackagesScenario({ s, sql, db, env: fakeGcsEnv(), gcs });
+  } finally {
+    gcs.restore();
+  }
   console.log("publishing-db.integration: 모두 통과");
 }
 

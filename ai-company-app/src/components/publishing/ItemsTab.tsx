@@ -4,10 +4,11 @@ import { apiErrorText } from "./i18n";
 import { Button, Empty, Icon, StatusBadge, inputClass, selectClass } from "./ui";
 import { brandTitle, channelById, fmtDateTime, type PublishingCtx } from "./helpers";
 import ImportDialog from "./ImportDialog";
+import PackageImportDialog from "./PackageImportDialog";
 
 const FILTERS: Array<"all" | ItemStatus> = ["all", "draft", "approved", "scheduled", "posted", "failed", "needs_human", "tested"];
 
-/** 글: 상태별 목록, 여러 개 골라 승인, 가져오기. */
+/** 글: 상태별 목록, 여러 개 골라 승인, 가져오기(JSON·업무 파일 폴더). */
 export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
   const { t, state } = ctx;
   const [filter, setFilter] = useState<"all" | ItemStatus>("all");
@@ -16,6 +17,7 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [packageOpen, setPackageOpen] = useState(false);
   const channels = useMemo(() => channelById(state), [state]);
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: state.items.length };
@@ -64,6 +66,7 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
           ))}
         </div>
         <span className="flex-1" />
+        <Button icon="fileUp" onClick={() => setPackageOpen(true)}>{t.pkgImportBtn}</Button>
         <Button icon="fileUp" onClick={() => setImportOpen(true)}>{t.importBtn}</Button>
         <Button tone="primary" icon="plus" onClick={() => ctx.openItem(null)}>{t.newItem}</Button>
       </div>
@@ -106,6 +109,8 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
                     {item.images.length > 0 && <span className="inline-flex items-center gap-0.5"><Icon name="image" className="h-3 w-3" />{item.images.length}</span>}
                     {item.missingImages > 0 && <span className="font-semibold text-tone-amber">{t.missingBadge(item.missingImages)}</span>}
                     {item.blockedCount > 0 && <span className="font-semibold text-tone-amber">{t.blockedBadge(item.blockedCount)}</span>}
+                    {item.needsReapproval && <span className="font-semibold text-tone-amber">{t.needsReapprovalBadge}</span>}
+                    {item.extras.packagePath && <span className="truncate" title={item.extras.packagePath}>{t.packageBadge}</span>}
                   </div>
                 </button>
                 <div className="hidden w-[260px] flex-wrap gap-1 md:flex">
@@ -124,6 +129,7 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
         </div>
       )}
       {importOpen && <ImportDialog ctx={ctx} onClose={() => setImportOpen(false)} />}
+      {packageOpen && <PackageImportDialog ctx={ctx} onClose={() => setPackageOpen(false)} />}
     </div>
   );
 }

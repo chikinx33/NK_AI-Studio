@@ -154,6 +154,9 @@ export default function ItemEditor({ ctx, itemId, preset, onClose }: { ctx: Publ
       {item?.approvedAt && (
         <div className="mb-3 flex items-center gap-2 rounded-xl border border-sky-500/30 bg-tint-sky/30 px-3 py-2 text-[11px] text-tone-sky"><Icon name="alert" className="h-3.5 w-3.5" />{t.approvedNotice}</div>
       )}
+      {item?.needsReapproval && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-500/40 bg-tint-amber/30 px-3 py-2 text-[11px] text-tone-amber"><Icon name="alert" className="h-3.5 w-3.5" />{t.needsReapprovalBadge}</div>
+      )}
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-3">
           <Field label={<span className="flex justify-between"><span>{t.title}</span><span className="tabular-nums text-faint">{title.length}/{TITLE_MAX}</span></span>}>

@@ -574,7 +574,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     // 미리보기·다운로드는 <img>/<video>/<iframe> 의 src 로 열리는데 그 태그들은 Authorization 헤더를 못 붙인다.
     // 앱의 fetch 는 전역 패치로 토큰을 싣지만 태그는 그 경로를 안 타서, 회사 파일 이미지 미리보기가 늘 401 로 깨졌다(2026-09-24).
     // 미디어 프록시(/api/media/proxy)와 같은 규칙으로 쿼리 토큰(nk_token)을 허용한다.
-    const auth = await authorizeRequest(request, env, { allowQueryToken: true });
+    const auth = await authorizeRequest(request, env, { allowQueryToken: true, apiKey: "files:read" });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const ctx = await accessContext(env);
     const rootPrefix = workspacePrefix(ctx.basePrefix, auth.userId);
@@ -731,7 +731,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
-    const auth = await authorizeRequest(request, env);
+    const auth = await authorizeRequest(request, env, { apiKey: "files:write" });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const ctx = await accessContext(env);
     const rootPrefix = workspacePrefix(ctx.basePrefix, auth.userId);
@@ -942,7 +942,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
-    const auth = await authorizeRequest(request, env);
+    const auth = await authorizeRequest(request, env, { apiKey: "files:write" });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body: any = await request.json().catch(() => ({}));
     const paths = (Array.isArray(body.paths) ? body.paths : [body.path]).map((value: any) => normalizePath(value, false));

@@ -20,6 +20,8 @@ export const CHANNEL_TYPES: Record<string, { modes: Array<"pc" | "manual" | "api
   instagram: { modes: ["api"], apiReady: false },
   youtube: { modes: ["api"], apiReady: false },
   discord: { modes: ["api"], apiReady: false },
+  reddit: { modes: ["manual"] },
+  hackernews: { modes: ["manual"] },
   custom: { modes: ["manual"] },
 };
 

@@ -113,6 +113,7 @@ const USER_TABLES: Array<[string, "user_id" | "owner_id"]> = [
   ["agent_credentials", "user_id"],
   ["agent_daily_brief", "user_id"],
   ["knowledge_documents", "user_id"],
+  ["nk_api_keys", "user_id"],
   ["voice_favorites", "owner_id"],
   ["voices", "owner_id"],
 ];

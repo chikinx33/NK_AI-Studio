@@ -3,6 +3,8 @@
  * PC 앱(NK Publisher)은 이 경로를 쓰지 않는다 — 기기 토큰으로 /api/publisher/v1/* 만 쓴다.
  */
 
+import { withMediaToken } from "./api";
+
 export type ChannelMode = "pc" | "manual" | "api";
 export type DeliveryStatus = "draft" | "scheduled" | "claimed" | "publishing" | "posted" | "failed" | "needs_human" | "ready_manual" | "done_manual" | "tested" | "cancelled";
 export type ItemStatus = "draft" | "approved" | "scheduled" | "posted" | "failed" | "needs_human" | "tested";
@@ -21,8 +23,14 @@ export interface PublishingImage {
   ref: string; objectName: string; sha256: string; width: number; height: number; contentType: string;
   alt: string; caption: string; sourceUrl: string; sourcePath: string; fileName: string; missing: boolean;
 }
+/** 패키지(업무 파일 폴더)에서 온 글의 덧붙임. 영상은 업무 파일 경로(복사하지 않음). */
+export interface PublishingExtras {
+  videos: Array<{ path: string; name: string; size: number; contentType: string }>;
+  translation: string; notes: string; firstComment: string; packagePath: string; lang: string;
+}
 export interface PublishingItem {
   id: string; brandId: string; externalId: string; title: string; body: string; tags: string[]; images: PublishingImage[];
+  extras: PublishingExtras; needsReapproval: boolean;
   approvedAt: string; createdAt: string; updatedAt: string; status: ItemStatus; missingImages: number; blockedCount: number;
   copyHtml: string; plainText: string; deliveries: PublishingDelivery[];
 }
@@ -84,6 +92,19 @@ export interface ImportResult {
 }
 export const importItems = (items: unknown[]) => post<ImportResult>("/api/publishing/import", { items });
 
+/** 패키지 가져오기(업무 파일 폴더). 미리보기 status: new | update | unchanged, 가져오기: created | updated | unchanged | partial. */
+export interface PackageReport {
+  path: string; status: "new" | "update" | "unchanged" | "created" | "updated" | "partial"; id?: string; externalId: string;
+  title?: string; channel?: string; channelName?: string; scheduledAt?: string; images?: number; videos?: number;
+  hasTranslation?: boolean; hasNotes?: boolean; hasFirstComment?: boolean; warnings: string[];
+}
+export interface PackageImportResult {
+  imported: number; unchanged: number; items: PackageReport[]; errors: Array<{ path: string; error: string; message?: string }>;
+  pending: string[]; more: boolean; truncated: boolean;
+}
+export const importPackages = (input: { path: string; dryRun?: boolean; only?: string[] }) =>
+  post<PackageImportResult>("/api/publishing/packages/import", input);
+
 export async function uploadImageFile(file: File, target?: { itemId: string; index: number }): Promise<PublishingImage> {
   const fd = new FormData();
   fd.append("file", file);
@@ -93,6 +114,17 @@ export async function uploadImageFile(file: File, target?: { itemId: string; ind
 export async function uploadImageUrl(sourceUrl: string, target?: { itemId: string; index: number }): Promise<PublishingImage> {
   return (await post<{ image: PublishingImage }>("/api/publishing/images", { sourceUrl, ...(target || {}) })).image;
 }
+
+/** 개인 API 키(외부 스크립트용 출입증). 원문 token 은 만들 때 한 번만 온다 — 화면은 파일로 내려받게만 한다. */
+export interface ApiKeyInfo { id: string; name: string; scopes: string[]; createdAt: string; lastUsedAt: string }
+export const listApiKeys = () => call<{ keys: ApiKeyInfo[]; scopes: string[] }>("/api/api-keys");
+export const createApiKey = (name: string, scopes: string[]) =>
+  post<{ key: ApiKeyInfo; token: string; fileName: string }>("/api/api-keys", { action: "create", name, scopes });
+export const revokeApiKey = (id: string) => post("/api/api-keys", { action: "revoke", id });
+
+/** 업무 파일 받기·미리보기 주소(<video src>·<a href> 는 헤더를 못 붙여 쿼리 토큰을 싣는다). */
+export const companyFileUrl = (path: string, mode: "preview" | "download") =>
+  withMediaToken(`/api/agent/company-files?path=${encodeURIComponent(path)}&${mode}=1`);
 
 export const createPairingCode = () => post<{ code: string; expiresAt: string }>("/api/publishing/devices", { action: "create_code" });
 export const revokeDevice = (id: string) => post("/api/publishing/devices", { action: "revoke", id });

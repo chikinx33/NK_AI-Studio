@@ -161,7 +161,7 @@ export function Empty({ icon, children, action }: { icon: IconName; children: Re
 /** 채널 종류 표시(글자 둥근 칩). 회사·사이트 로고 대신 이름 첫 글자를 쓴다. */
 const TYPE_TINT: Record<string, string> = {
   naver_blog: "bg-tint-green text-tone-green", naver_cafe: "bg-tint-green text-tone-green", dcinside: "bg-tint-blue text-tone-blue",
-  ruliweb: "bg-tint-indigo text-tone-indigo", custom: "bg-inset text-secondary",
+  ruliweb: "bg-tint-indigo text-tone-indigo", reddit: "bg-tint-orange text-tone-orange", hackernews: "bg-tint-amber text-tone-amber", custom: "bg-inset text-secondary",
 };
 export function ChannelChip({ type, label }: { type: string; label: string }) {
   return <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[11px] font-black ${TYPE_TINT[type] || "bg-inset text-secondary"}`} aria-hidden="true">{label.slice(0, 1)}</span>;

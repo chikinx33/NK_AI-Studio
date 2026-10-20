@@ -2,7 +2,7 @@
 //
 // 퍼블리싱 저장소(Neon Postgres). 모든 행은 user_id 로 사용자마다 갈린다.
 //   publishing_channels   게시할 곳(네이버 블로그 등). 방식 pc | manual (api 는 3단계)
-//   publishing_items      글(제목·본문 표시·태그·이미지·브랜드)
+//   publishing_items      글(제목·본문 표시·태그·이미지·브랜드, extras = 패키지에서 온 첨부 영상·번역·메모·첫 댓글)
 //   publishing_deliveries 글 하나가 채널 하나로 나가는 단위(CONTRACT §2)
 //   publisher_devices     연결된 PC(NK Publisher). 기기 토큰은 sha256 만 저장
 //   publisher_pairing_codes 8자리 연결 코드(10분, 한 번)
@@ -18,7 +18,8 @@ import {
   LEASE_MS, MAX_ATTEMPTS, RETRY_DELAY_MS, PAIRING_CODE_TTL_MS, TITLE_MAX, TAGS_MAX, PUBLISHING_TIME_ZONE,
   validateChannelInput, normalizeTitle, normalizeTagList, contentHashOf, planApproval, checkSpamGuard,
   normalizeImportItem, weekRange, randomId, generatePairingCode, normalizePairingCode, generateDeviceToken, sha256Hex,
-  markupToBlocks, blocksToPlainText, blocksToHtml, channelWriteUrl, decideResultOutcome, imageInfo, FINAL_STATUSES,
+  markupToBlocks, blocksToPlainText, blocksToHtml, channelWriteUrl, decideResultOutcome, imageInfo, FINAL_STATUSES, pickImportChannel,
+  PUBLISHING_TZ_OFFSET_MIN,
 } from "./publishing-core.js";
 
 type SqlFn = (query: string, params?: any[]) => Promise<any[]>;
@@ -82,6 +83,7 @@ export async function runPublishingDdl(sql: SqlFn): Promise<void> {
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, delivery_id TEXT NOT NULL DEFAULT '', device_id TEXT NOT NULL DEFAULT '', attempt INT NOT NULL DEFAULT 0,
       kind TEXT NOT NULL, data JSONB NOT NULL DEFAULT '{}'::jsonb, dedupe_key TEXT UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
     CREATE INDEX IF NOT EXISTS publishing_events_delivery ON publishing_events (delivery_id, created_at);
+    ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '{}'::jsonb;
   END $$`);
 }
 
@@ -148,13 +150,42 @@ function publicImage(img: any, i: number) {
   };
 }
 
+/**
+ * 글 extras(패키지 가져오기가 채운다). 영상은 복사하지 않고 업무 파일 경로를 가리킨다.
+ * changedAfterApproval: 승인된 글의 내용·일정이 바뀌어 승인이 풀린 시각 — 다시 승인하면 지운다.
+ */
+export function sanitizeExtras(raw: any) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const text = (v: any, max: number) => String(v ?? "").slice(0, max);
+  const out: any = {};
+  const videos = (Array.isArray(src.videos) ? src.videos : []).slice(0, 10).map((v: any) => ({
+    path: text(v?.path, 600), name: text(v?.name, 200), size: Math.max(0, Number(v?.size) || 0), contentType: text(v?.contentType, 60),
+  })).filter((v: any) => v.path && !v.path.split("/").includes(".."));
+  if (videos.length) out.videos = videos;
+  for (const key of ["translation", "notes", "firstComment"]) if (src[key]) out[key] = text(src[key], 60000);
+  if (src.packagePath) out.packagePath = text(src.packagePath, 600);
+  if (src.packageHash) out.packageHash = text(src.packageHash, 80);
+  if (src.lang) out.lang = text(src.lang, 10);
+  if (src.changedAfterApproval) out.changedAfterApproval = text(src.changedAfterApproval, 40);
+  return out;
+}
+
+/** 게시되는 내용에 드는 extras(첨부 영상·첫 댓글). 번역·메모는 올리는 사람용이라 바뀌어도 승인을 풀지 않는다. */
+const publishedExtras = (e: any) => ({ videos: (e?.videos || []).map((v: any) => `${v.path}|${v.size}`), firstComment: e?.firstComment || "" });
+
 export function publicItem(r: any, deliveries: PublicDelivery[]) {
   const images = (json(r.images, []) as any[]).map(publicImage);
   const body = String(r.body || "");
   const blocks = markupToBlocks(body, images);
+  const extras = sanitizeExtras(json(r.extras, {}));
   return {
     id: String(r.id), brandId: String(r.brand_id || ""), externalId: String(r.external_id || ""),
     title: String(r.title || ""), body, tags: json(r.tags, []) as string[], images,
+    extras: {
+      videos: extras.videos || [], translation: extras.translation || "", notes: extras.notes || "", firstComment: extras.firstComment || "",
+      packagePath: extras.packagePath || "", lang: extras.lang || "",
+    },
+    needsReapproval: !r.approved_at && !!extras.changedAfterApproval,
     approvedAt: iso(r.approved_at), createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
     status: itemDisplayStatus(!!r.approved_at, deliveries),
     missingImages: images.filter((img) => img.missing).length,
@@ -193,7 +224,7 @@ export function leaseExpiryQuery(userId?: string) {
 }
 
 /** 직접 올리기(manual) 채널은 예약 시각이 되면 '올릴 차례(ready_manual)'로 바꾼다. */
-function manualDueQuery(userId: string) {
+export function manualDueQuery(userId: string) {
   return {
     query: `UPDATE publishing_deliveries d SET status = 'ready_manual', updated_at = now()
       FROM publishing_channels c WHERE d.user_id = $1 AND d.status = 'scheduled' AND d.scheduled_at <= now()
@@ -231,6 +262,64 @@ export async function loadPublishingState(db: PublishingDb, userId: string) {
     channels: channels.map(publicChannel),
     items: items.map((r) => publicItem(r, byItem.get(String(r.id)) || [])),
     devices: devices.map(publicDevice),
+  };
+}
+
+// ── 일정 읽기(다른 도구용, publishing:read) ─────────────────────────────────
+
+export const SCHEDULE_MAX_DAYS = 120;
+
+/** 'YYYY-MM-DD'(한국 날짜) → 그날 0시(한국 시간)의 UTC ms. 형식이 아니면 NaN. */
+function kstMidnightMs(day: string) {
+  const m = String(day || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) - PUBLISHING_TZ_OFFSET_MIN * 60000 : NaN;
+}
+const kstParts = (isoText: string) => {
+  const d = new Date(Date.parse(isoText) + PUBLISHING_TZ_OFFSET_MIN * 60000).toISOString();
+  return { date: d.slice(0, 10), time: d.slice(11, 16) };
+};
+
+/**
+ * 게시 일정 목록(취소된 건·지운 글 제외). 기간은 한국 날짜 from~to(둘 다 포함), 기본 오늘-7일 ~ 오늘+30일, 최대 120일.
+ * 한 줄 = 게시 한 건(글 하나가 채널 둘로 나가면 두 줄). 상태는 게시(delivery) 상태 그대로.
+ */
+export async function loadSchedule(db: PublishingDb, userId: string, q: { from?: string; to?: string; brand?: string }) {
+  const today = kstParts(new Date().toISOString()).date;
+  const from = String(q.from || "") || new Date(kstMidnightMs(today) + PUBLISHING_TZ_OFFSET_MIN * 60000 - 7 * 86400000).toISOString().slice(0, 10);
+  const to = String(q.to || "") || new Date(kstMidnightMs(today) + PUBLISHING_TZ_OFFSET_MIN * 60000 + 30 * 86400000).toISOString().slice(0, 10);
+  const startMs = kstMidnightMs(from);
+  const endMs = kstMidnightMs(to) + 86400000;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) throw new PublishingError("schedule_range_invalid");
+  if (endMs - startMs > SCHEDULE_MAX_DAYS * 86400000) throw new PublishingError("schedule_range_too_long");
+  const brand = String(q.brand || "").slice(0, 120);
+  const [, rows] = await db.batch([
+    manualDueQuery(userId),
+    {
+      query: `SELECT d.id, d.item_id, d.status, d.scheduled_at, d.posted_url, d.posted_at, c.type AS channel_type, c.name AS channel_name,
+          i.brand_id, i.title, i.external_id, i.approved_at, i.extras
+        FROM publishing_deliveries d
+        JOIN publishing_items i ON i.id = d.item_id AND i.user_id = d.user_id AND i.deleted_at IS NULL
+        LEFT JOIN publishing_channels c ON c.id = d.channel_id
+        WHERE d.user_id = $1 AND d.status <> 'cancelled'
+          AND COALESCE(d.scheduled_at, d.posted_at) >= $2::timestamptz AND COALESCE(d.scheduled_at, d.posted_at) < $3::timestamptz
+          AND ($4::text = '' OR i.brand_id = $4::text)
+        ORDER BY COALESCE(d.scheduled_at, d.posted_at), d.id LIMIT 1000`,
+      params: [userId, new Date(startMs).toISOString(), new Date(endMs).toISOString(), brand],
+    },
+  ]);
+  return {
+    from, to, brand,
+    items: rows.map((r: any) => {
+      const at = iso(r.scheduled_at) || iso(r.posted_at);
+      const extras = sanitizeExtras(json(r.extras, {}));
+      return {
+        ...kstParts(at), scheduledAt: iso(r.scheduled_at),
+        channelType: String(r.channel_type || ""), channelName: String(r.channel_name || ""), brand: String(r.brand_id || ""),
+        title: String(r.title || ""), status: String(r.status), postedUrl: String(r.posted_url || ""), postedAt: iso(r.posted_at),
+        approved: !!r.approved_at, needsReapproval: !r.approved_at && !!extras.changedAfterApproval,
+        itemId: String(r.item_id), deliveryId: String(r.id), externalId: String(r.external_id || ""), packagePath: extras.packagePath || "",
+      };
+    }),
   };
 }
 
@@ -287,13 +376,17 @@ function sanitizeImages(env: any, userId: string, raw: any): any[] {
       alt: String(img?.alt || "").slice(0, 200), caption: String(img?.caption || "").slice(0, 200),
       sourceUrl: String(img?.sourceUrl || "").slice(0, 1000), sourcePath: String(img?.sourcePath || "").slice(0, 1000),
       fileName: String(img?.fileName || "").slice(0, 200),
+      // 패키지에서 복사한 이미지: 원본 업무 파일의 md5. 같으면 다시 가져올 때 복사하지 않는다.
+      ...(img?.sourceMd5 ? { sourceMd5: String(img.sourceMd5).slice(0, 40) } : {}),
     };
   });
 }
 
-type ItemInput = {
+export type ItemInput = {
   id?: string; externalId?: string; brandId?: string; title: string; body: string; tags: string[]; images: any[];
   deliveries: Array<{ id?: string; channelId: string; scheduledAt: string }>;
+  /** 주면 extras 를 이 값으로 바꾼다(패키지 가져오기). 안 주면 있던 extras 를 그대로 둔다(화면에서 글 고치기). */
+  extras?: any;
 };
 
 /**
@@ -359,20 +452,27 @@ export async function applyItemSaves(db: PublishingDb, env: any, userId: string,
         plan.push({ query: `DELETE FROM publishing_deliveries WHERE id=$1 AND user_id=$2`, params: [d.id, userId] });
       }
     }
+    const oldExtras = sanitizeExtras(json(existing?.extras, {}));
+    const extras = input.extras === undefined ? { ...oldExtras } : sanitizeExtras(input.extras);
     const contentChanged = !existing || String(existing.content_hash) !== hash
       || stable(json(existing.tags, [])) !== stable(tags)
-      || stable(json(existing.images, [])) !== stable(images);
+      || stable(json(existing.images, [])) !== stable(images)
+      || stable(publishedExtras(oldExtras)) !== stable(publishedExtras(extras));
     const unapprove = !!existing?.approved_at && (contentChanged || scheduleChanged);
+    // "내용이 바뀌어 다시 승인 필요" 표시: 이번에 승인이 풀리면 지금 시각, 이미 풀려 기다리는 중이면 그대로 둔다.
+    delete extras.changedAfterApproval;
+    if (unapprove) extras.changedAfterApproval = new Date().toISOString();
+    else if (existing && !existing.approved_at && oldExtras.changedAfterApproval) extras.changedAfterApproval = oldExtras.changedAfterApproval;
     if (existing) {
       writes.push({
         query: `UPDATE publishing_items SET brand_id=$3, external_id=$4, title=$5, body=$6, tags=$7::jsonb, images=$8::jsonb, content_hash=$9,
-          approved_at = CASE WHEN $10::boolean THEN NULL ELSE approved_at END, deleted_at=NULL, updated_at=now() WHERE id=$1 AND user_id=$2`,
-        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || existing.external_id || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, unapprove],
+          approved_at = CASE WHEN $10::boolean THEN NULL ELSE approved_at END, extras=$11::jsonb, deleted_at=NULL, updated_at=now() WHERE id=$1 AND user_id=$2`,
+        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || existing.external_id || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, unapprove, JSON.stringify(extras)],
       });
     } else {
       writes.push({
-        query: `INSERT INTO publishing_items (id,user_id,brand_id,external_id,title,body,tags,images,content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)`,
-        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash],
+        query: `INSERT INTO publishing_items (id,user_id,brand_id,external_id,title,body,tags,images,content_hash,extras) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb)`,
+        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, JSON.stringify(extras)],
       });
     }
     writes.push(...plan);
@@ -470,7 +570,7 @@ export async function approveItems(db: PublishingDb, userId: string, target: { i
     }
   }
   const approvedIds = items.map((r: any) => String(r.id)).filter((id) => (okByItem.get(id) || 0) > 0 || !blockedByItem.get(id));
-  if (approvedIds.length) writes.push({ query: `UPDATE publishing_items SET approved_at=now(), updated_at=now() WHERE user_id=$1 AND id = ANY($2::text[])`, params: [userId, approvedIds] });
+  if (approvedIds.length) writes.push({ query: `UPDATE publishing_items SET approved_at=now(), extras = extras - 'changedAfterApproval', updated_at=now() WHERE user_id=$1 AND id = ANY($2::text[])`, params: [userId, approvedIds] });
   if (writes.length) await db.batch(writes);
   return {
     approvedItems: approvedIds.length,
@@ -562,10 +662,7 @@ export async function importItems(db: PublishingDb, env: any, userId: string, pa
     if (!n.ok) { errors.push({ index, externalId: String(r?.externalId || ""), error: n.error }); return; }
     const deliveries: ItemInput["deliveries"] = [];
     for (const d of n.item.deliveries) {
-      const pick = d.channelId ? channels.find((c) => c.id === d.channelId)
-        : channels.find((c) => c.type === d.channelType && c.brandId && c.brandId === n.item.brandId)
-          || channels.find((c) => c.type === d.channelType && !c.brandId)
-          || channels.find((c) => c.type === d.channelType);
+      const pick = pickImportChannel(channels, { channelId: d.channelId, channelType: d.channelType, brandId: n.item.brandId });
       if (!pick) { missingChannels.add(d.channelType || d.channelId); continue; }
       deliveries.push({ channelId: pick.id, scheduledAt: d.scheduledAt });
     }
@@ -614,13 +711,21 @@ export async function storePublishingImage(env: any, userId: string, bytes: Uint
   if (bytes.byteLength > IMAGE_MAX_BYTES) throw new PublishingError("image_too_large", 413);
   const info = imageInfo(bytes);
   if (!info) throw new PublishingError("image_type_invalid", 415);
-  const ext = info.contentType.split("/")[1].replace("jpeg", "jpg");
-  const safe = String(fileName || "image").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60) || "image";
-  const objectName = `${publishingImagePrefix(env, userId)}${Date.now()}-${randomId("i").slice(2, 10)}-${safe}.${ext}`;
+  const objectName = publishingImageObjectName(env, userId, fileName, info.contentType);
   await uploadGcsBytes(env, objectName, bytes, info.contentType);
+  return { objectName, sha256: await bytesSha256(bytes), width: info.width, height: info.height, contentType: info.contentType, fileName: String(fileName || "").slice(0, 200) };
+}
+
+/** 퍼블리싱 이미지 공간 안의 새 객체 이름(sanitizeImages 가 받아 주는 곳). */
+export function publishingImageObjectName(env: any, userId: string, fileName: string, contentType: string) {
+  const ext = contentType.split("/")[1].replace("jpeg", "jpg");
+  const safe = String(fileName || "image").replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60) || "image";
+  return `${publishingImagePrefix(env, userId)}${Date.now()}-${randomId("i").slice(2, 10)}-${safe}.${ext}`;
+}
+
+export async function bytesSha256(bytes: Uint8Array) {
   const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as BufferSource);
-  const sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  return { objectName, sha256, width: info.width, height: info.height, contentType: info.contentType, fileName: String(fileName || "").slice(0, 200) };
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** 저장한 이미지를 글의 index 번째 자리에 넣는다(가져오기 뒤 빠진 이미지 채우기). 승인된 글이면 다시 초안. */
