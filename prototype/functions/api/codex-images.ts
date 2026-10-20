@@ -74,7 +74,8 @@ export async function onRequestPost({ request, env }: Context) {
       const body: any = await request.json();
       if (body.operation === 'heartbeat') {
         const ready = body.authMode === 'chatgpt' && !['free','go','unknown',''].includes(String(body.plan || ''));
-        await sql(`UPDATE nk_image_connectors SET last_seen=now(),email=$3,plan=$4,ready=$5
+        // 켜져 있는 연결 프로그램은 만료를 계속 미룬다. 연결 후 30일 고정 만료면 켜 둔 채로도 조용히 끊겼다.
+        await sql(`UPDATE nk_image_connectors SET last_seen=now(),email=$3,plan=$4,ready=$5,expires_at=now()+interval '30 days'
           WHERE user_id=$1 AND token_hash=$2`, [userId, tokenHash, String(body.email || '').slice(0,254), String(body.plan || '').slice(0,60), ready]);
         await expireImageJobs(sql, userId);
         if (body.busy === true) return send({ userId, job: null });
@@ -104,30 +105,33 @@ export async function onRequestPost({ request, env }: Context) {
     if (!await hasPagePermission(env, auth.userId, 'image')) return send({ error: 'permission_denied' }, 403);
     const sql = await connectorSql(env);
     const body: any = await request.json();
+    // 마스터 자원 공유 계정의 연결·해제는 소유자 연결에 한다. 상태 조회·생성도 소유자 연결을 쓰므로,
+    // 본인 계정으로 묶으면 연결 프로그램(소유자에 묶인 프로필)이 '계정이 다릅니다'로 멈췄다.
+    const connectorOwner = await credentialOwnerId(env, auth.userId);
     if (body.operation === 'connect') {
       const tokenHash = String(body.tokenHash || '');
       if (!/^[a-f0-9]{64}$/.test(tokenHash)) return send({ error: 'invalid_connector_pairing' }, 400);
       const [owner] = await sql(`SELECT user_id FROM nk_image_connectors WHERE token_hash=$1`, [tokenHash]);
-      if (owner && owner.user_id !== auth.userId) return send({ error: 'connector_already_owned' }, 409);
-      const [prior] = await sql(`SELECT token_hash FROM nk_image_connectors WHERE user_id=$1`, [auth.userId]);
+      if (owner && owner.user_id !== connectorOwner) return send({ error: 'connector_already_owned' }, 409);
+      const [prior] = await sql(`SELECT token_hash FROM nk_image_connectors WHERE user_id=$1`, [connectorOwner]);
       if (prior && prior.token_hash === tokenHash) {
         await sql(`UPDATE nk_image_connectors SET connected_at=now(),expires_at=now()+interval '30 days'
-          WHERE user_id=$1 AND token_hash=$2`, [auth.userId, tokenHash]);
-        await selectImageSubscription(env, auth.userId);
-        return send({ ok: true, userId: auth.userId });
+          WHERE user_id=$1 AND token_hash=$2`, [connectorOwner, tokenHash]);
+        await selectImageSubscription(env, connectorOwner);
+        return send({ ok: true, userId: connectorOwner });
       }
       await sql(`UPDATE nk_subscription_image_jobs SET status='cancelled',error='connector_replaced',updated_at=now()
-        WHERE user_id=$1 AND status IN ('queued','working','uploading')`, [auth.userId]);
+        WHERE user_id=$1 AND status IN ('queued','working','uploading')`, [connectorOwner]);
       await sql(`INSERT INTO nk_image_connectors (user_id,token_hash) VALUES ($1,$2)
         ON CONFLICT (user_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,email='',plan='',ready=false,
-        connected_at=now(),last_seen=NULL,expires_at=now()+interval '30 days'`, [auth.userId, tokenHash]);
-      await selectImageSubscription(env, auth.userId);
-      return send({ ok: true, userId: auth.userId });
+        connected_at=now(),last_seen=NULL,expires_at=now()+interval '30 days'`, [connectorOwner, tokenHash]);
+      await selectImageSubscription(env, connectorOwner);
+      return send({ ok: true, userId: connectorOwner });
     }
     if (body.operation === 'disconnect') {
-      await sql(`DELETE FROM nk_image_connectors WHERE user_id=$1`, [auth.userId]);
+      await sql(`DELETE FROM nk_image_connectors WHERE user_id=$1`, [connectorOwner]);
       await sql(`UPDATE nk_subscription_image_jobs SET status='cancelled',error='connector_disconnected',updated_at=now()
-        WHERE user_id=$1 AND status IN ('queued','working','uploading')`, [auth.userId]);
+        WHERE user_id=$1 AND status IN ('queued','working','uploading')`, [connectorOwner]);
       return send({ ok: true });
     }
     if (body.operation === 'create') {

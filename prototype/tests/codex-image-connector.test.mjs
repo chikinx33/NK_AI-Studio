@@ -31,6 +31,7 @@ async function harness() {
   const connectors = new Map();
   const jobs = new Map();
   const saves = [];
+  const selected = [];
   let revoked = false;
   const sql = async (q, p = []) => {
     q = q.replace(/\s+/g, ' ').trim();
@@ -49,9 +50,21 @@ async function harness() {
     }
     if (/^UPDATE nk_image_connectors SET last_seen/.test(q)) {
       const row = connectors.get(p[0]);
-      if (row?.token_hash === p[1]) Object.assign(row, { last_seen: new Date().toISOString(), email: p[2], plan: p[3], ready: p[4] });
+      if (row?.token_hash === p[1]) Object.assign(row, { last_seen: new Date().toISOString(), email: p[2], plan: p[3], ready: p[4],
+        ...(q.includes('expires_at=now()') ? { expires_at: new Date(Date.now() + 30 * 86400000).toISOString() } : {}) });
       return [];
     }
+    if (/^UPDATE nk_image_connectors SET connected_at/.test(q)) {
+      const row = connectors.get(p[0]);
+      if (row?.token_hash === p[1]) row.connected_at = new Date().toISOString();
+      return [];
+    }
+    if (/^INSERT INTO nk_image_connectors/.test(q)) {
+      connectors.set(p[0], { user_id: p[0], token_hash: p[1], email: '', plan: '', ready: false, connected_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), last_seen: null });
+      return [];
+    }
+    if (/^UPDATE nk_subscription_image_jobs SET status='cancelled'/.test(q)) return [];
     if (/^UPDATE nk_subscription_image_jobs SET status='working',updated_at=now\(\) WHERE id=/.test(q)) {
       if ([...jobs.values()].some(row => row.user_id === p[0] && ['working','uploading'].includes(row.status))) return [];
       const row = [...jobs.values()].find(row => row.user_id === p[0] && row.token_hash === p[1] && row.status === 'queued');
@@ -84,7 +97,7 @@ async function harness() {
     connected_at: new Date().toISOString(), expires_at: new Date(Date.now()+86400000).toISOString(), last_seen: new Date().toISOString(),
   });
   const api = evaluate('prototype/functions/api/codex-images.ts', {
-    imageAuth: async () => ({ enabled: true, mode: 'subscription' }),
+    imageAuth: async () => ({ enabled: true, mode: 'subscription' }), selectImageSubscription: async (_, user) => { selected.push(user); },
     // carol 은 마스터(alice) 자원 공유 계정으로 둔다.
     credentialOwnerId: async (_, user) => (user === 'carol' ? 'alice' : user),
     ...helpers, authorizeRequest: async request => request.headers.get('x-user') ? { ok: true, userId: request.headers.get('x-user') } : { ok: false, error: 'auth_required', status: 401 },
@@ -102,7 +115,7 @@ async function harness() {
   const create = (user, id=uuid) => post(user, { operation: 'create', requestId: id, payload: { userId: 'other_owner', prompt: 'blue circle', storageService: 'ai-image', sessionId: 'session' } });
   const heartbeat = (token, extra={}) => post(null, { operation: 'heartbeat', authMode: 'chatgpt', email: 'own@example.com', plan: 'pro', ...extra }, token);
   const complete = (token, id=uuid) => { const fd = new FormData(); fd.set('jobId', id); fd.set('userId', 'other_owner'); fd.set('file', new File([png], 'test.png')); return post(null, fd, token); };
-  return { api, helpers, post, get, create, heartbeat, complete, connectors, jobs, saves, revoke: () => { revoked = true; } };
+  return { api, helpers, post, get, create, heartbeat, complete, connectors, jobs, saves, selected, revoke: () => { revoked = true; } };
 }
 
 test('subscription generation and automatic save stay with the authenticated owner despite spoofed userId', async () => {
@@ -190,6 +203,25 @@ test('another NKStudio account cannot pair an already owned connector', async ()
   const h = await harness();
   assert.equal((await h.post('bob', { operation: 'connect', tokenHash: h.connectors.get('alice').token_hash })).status, 409);
   assert.equal(h.connectors.get('alice').user_id, 'alice');
+});
+// 증상: 연결 프로그램을 켜 둔 채로도 연결 30일 뒤 'NKStudio 계정에 연결해 주세요'로 끊겼다(만료가 연장되지 않음).
+test('켜져 있는 연결 프로그램은 하트비트마다 만료가 미뤄진다', async () => {
+  const h = await harness();
+  h.connectors.get('alice').expires_at = new Date(Date.now() + 60000).toISOString();
+  assert.equal((await h.heartbeat(tokenA)).status, 200);
+  assert.ok(Date.parse(h.connectors.get('alice').expires_at) > Date.now() + 29 * 86400000);
+});
+// 증상: 마스터 자원 공유 계정(라비오크)으로 다시 연결하면 연결이 본인 계정에 묶여, 소유자에 묶인 연결 프로그램이 멈췄다.
+test('마스터 자원 공유 계정의 연결은 소유자 연결로 묶인다', async () => {
+  const h = await harness();
+  h.connectors.delete('alice');
+  const res = await h.post('carol', { operation: 'connect', tokenHash: 'c'.repeat(64) });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).userId, 'alice');
+  assert.equal(h.connectors.get('alice').token_hash, 'c'.repeat(64));
+  assert.equal(h.connectors.has('carol'), false);
+  assert.deepEqual(h.selected, ['alice']);
+  assert.equal((await h.post('carol', { operation: 'connect', tokenHash: h.connectors.get('bob').token_hash })).status, 409);
 });
 test('revoked account and API-key mode never receive subscription jobs', async () => {
   const h = await harness();
