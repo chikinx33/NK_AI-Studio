@@ -34,7 +34,8 @@ test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트
   assert.match(fn, /account: String\(r\.account \|\| ""\)/);
   const text = fnBody(shared, "export function tiktokInboxSentText(");
   assert.match(text, /SEND_TO_USER_INBOX/);
-  assert.match(text, /앱에 실제로 보이는지는 제가 확인할 수 없어요/);
+  assert.match(text, /앱에 실제로 보이는지는 제가 확인할 수 없고/);
+  assert.match(text, /앱 알림이 뜨기까지 꽤 걸릴 수 있어요/, "SEND_TO_USER_INBOX 뒤에도 도착까지 한참 걸린다(2026-10-20 확인)");
   assert.match(text, /'받은 알림함\(Inbox\)' 탭에 '영상이 준비됐어요' 알림으로/);
   assert.doesNotMatch(text, /도착했어요/);
   assert.doesNotMatch(fn, /프로필 → 초안\(Drafts\)/);
