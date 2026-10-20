@@ -61,6 +61,7 @@ export default function PublisherDownload({ ctx }: { ctx: PublishingCtx }) {
           {ready && release!.sha256 && (
             <p className="mt-2 break-all text-[10px] leading-relaxed text-faint" title={release!.sha256}>{t.dl.sha}: {release!.sha256}</p>
           )}
+          {ready && <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-tone-amber"><Icon name="alert" className="mt-0.5 h-3.5 w-3.5 shrink-0" />{t.dl.smartscreen}</p>}
           <p className="mt-3 text-[11px] leading-relaxed text-muted">{t.dl.next}</p>
           <Button size="sm" tone="ghost" icon="sliders" className="mt-1 -ml-2" onClick={() => { setOpen(false); ctx.goTab("settings"); }}>{t.dl.goSettings}</Button>
         </div>

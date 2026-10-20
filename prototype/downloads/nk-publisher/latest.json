@@ -1,9 +1,9 @@
 {
   "product": "NK Publisher",
-  "version": "",
-  "fileName": "",
-  "url": "",
-  "size": 0,
-  "sha256": "",
-  "releasedAt": ""
+  "version": "0.2.9",
+  "fileName": "NK-Publisher-Setup-0.2.9.exe",
+  "url": "https://github.com/chikinx33/NK_AI-Studio/releases/download/nk-publisher-v0.2.9/NK-Publisher-Setup-0.2.9.exe",
+  "size": 114765729,
+  "sha256": "3537e5ad12c286565f8e94c0035fc952bf4d916b2bb94e2a98c3f5b92dcae7ef",
+  "releasedAt": "2026-10-20T05:45:01.000Z"
 }
