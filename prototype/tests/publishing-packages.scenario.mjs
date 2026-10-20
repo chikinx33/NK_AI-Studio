@@ -176,6 +176,18 @@ export async function runPackagesScenario({ s, sql, db, env, gcs }) {
   it = (await s.loadPublishingState(db, user)).items.find((i) => i.id === item.id);
   assert.equal(it.needsReapproval, false, "다시 승인하면 표시가 지워진다");
 
+  // 화면에서 그대로 저장(글 편집 창은 이미지의 원본 md5 를 모른다) → 승인·md5 유지
+  await s.saveItem(db, env, user, {
+    id: it.id, brandId: it.brandId, title: it.title, body: it.body, tags: it.tags,
+    images: it.images.map((img) => ({ objectName: img.objectName, sha256: img.sha256, width: img.width, height: img.height, contentType: img.contentType, alt: img.alt, caption: img.caption, sourceUrl: img.sourceUrl, sourcePath: img.sourcePath, fileName: img.fileName })),
+    deliveries: it.deliveries.map((d) => ({ id: d.id, channelId: d.channelId, scheduledAt: d.scheduledAt })),
+  });
+  it = (await s.loadPublishingState(db, user)).items.find((i) => i.id === item.id);
+  assert.ok(it.approvedAt, "아무것도 안 바꾼 저장은 승인을 풀지 않는다");
+  assert.deepEqual(it.extras.videos.length, 1, "화면 저장은 패키지 덧붙임을 지우지 않는다");
+  const rawImages = (await sql(`SELECT images FROM publishing_items WHERE id = $1`, [item.id]))[0].images;
+  assert.ok((typeof rawImages === "string" ? JSON.parse(rawImages) : rawImages).every((img) => img.sourceMd5), "원본 md5 유지");
+
   // 메모만 바뀌면 승인은 그대로(올리는 사람용 안내라서)
   put(`${P1}/notes.md`, "말머리는 '정보'로 고르기");
   await s.importPackages(db, env, user, { path: P1 });

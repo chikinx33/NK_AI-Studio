@@ -417,10 +417,14 @@ export async function applyItemSaves(db: PublishingDb, env: any, userId: string,
     if (!title) throw new PublishingError("title_required");
     const body = String(input.body || "").slice(0, 60000);
     const tags = normalizeTagList(input.tags);
-    const images = sanitizeImages(env, userId, input.images);
     const hash = await contentHashOf(title, body);
     const existing: any = (input.id && byId.get(String(input.id))) || (input.externalId && byExternal.get(String(input.externalId))) || null;
     if (input.id && !existing) throw new PublishingError("item_not_found", 404);
+    // 원본 md5(sourceMd5)는 서버가 패키지에서 복사할 때 남기는 값이다. 화면이 글을 고쳐 보낼 때 빠뜨려도
+    // 같은 저장본(objectName)이면 이어 붙인다 — 빠지면 '이미지 바뀜'으로 승인이 풀리고 다음 가져오기가 다시 복사한다.
+    const keptMd5 = new Map((json(existing?.images, []) as any[]).filter((img) => img?.objectName && img?.sourceMd5).map((img) => [String(img.objectName), String(img.sourceMd5)]));
+    const images = sanitizeImages(env, userId, input.images)
+      .map((img: any) => (img.objectName && !img.sourceMd5 && keptMd5.has(img.objectName) ? { ...img, sourceMd5: keptMd5.get(img.objectName) } : img));
     const itemId = existing ? String(existing.id) : randomId("itm");
     savedIds.push(itemId);
     const old = existing ? deliveries.filter((d: any) => String(d.item_id) === itemId) : [];

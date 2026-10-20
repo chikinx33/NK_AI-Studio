@@ -188,6 +188,7 @@ test("저장: extras 칸(DDL 한 번), 패키지 이미지 md5 유지, 승인된
   const store = read("prototype/functions/api/_shared/publishing-store.ts");
   assert.match(store, /ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '\{\}'::jsonb;\n {2}END \$\$/);
   assert.match(store, /sourceMd5: String\(img\.sourceMd5\)/);
+  assert.match(store, /keptMd5\.has\(img\.objectName\)/, "화면 저장이 원본 md5 를 빠뜨려도 같은 저장본이면 이어 붙인다(승인이 풀리지 않게)");
   assert.match(store, /if \(unapprove\) extras\.changedAfterApproval = new Date\(\)\.toISOString\(\)/);
   assert.match(store, /extras = extras - 'changedAfterApproval'/);
   assert.match(store, /input\.extras === undefined \? \{ \.\.\.oldExtras \}/, "화면에서 글을 고쳐도 패키지 덧붙임은 남는다");
