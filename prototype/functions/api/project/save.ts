@@ -3,6 +3,7 @@
 import { buildAiVideoProjectPrefix, isReservedProjectId } from "../_shared/storage";
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
+import { protectPayloadPublishRows, keepServerOwnedPayloadKeys, readPublishRowOps } from "../_shared/publish-rows";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -402,6 +403,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 쓰고(ifGenerationMatch), 그 사이 다른 저장이 끼었으면 다시 읽어 병합한다 — 남의 변경을 옛 사본으로 덮지 않게.
     let existing: any = null;
     let scenesLockedFinal = false;
+    let savedPublishRows: any[] | undefined;
+    const publishRowOps = readPublishRowOps(body.publishRowOps);
     for (let attempt = 0; attempt < 4; attempt++) {
     existing = null;
     // 세대: 404(새 프로젝트)면 "0"(없을 때만 생성), 그 밖의 읽기 실패면 ""(조건 없이 — 예전 동작).
@@ -439,6 +442,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if (existing?.payload && Object.prototype.hasOwnProperty.call(existing.payload, key)) mergedPayload[key] = existing.payload[key];
       else delete mergedPayload[key];
     }
+    // 배포 이력은 서버 목록이 기준 — 화면이 보낸 목록 대신 화면이 바꾼 줄(publishRowOps)만 적용한다(_shared/publish-rows.ts).
+    savedPublishRows = protectPayloadPublishRows(existing?.payload, mergedPayload, hasPayload ? body.payload : null, publishRowOps);
+    keepServerOwnedPayloadKeys(existing?.payload, mergedPayload);
     const mergedHeader = hasHeader ? (body.header || "") : (existing?.header || "");
     const mergedAspect = hasAspect ? body.aspectRatio : (existing?.aspectRatio || "");
     const mergedTitle = hasTitle ? body.title : (existing?.title || "");
@@ -469,7 +475,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     break;
     }
 
-    return send({ ok: true, objectName, merged: !!existing, ...(scenesLockedFinal ? { scenesLocked: true } : {}) }, 200, origin);
+    return send({ ok: true, objectName, merged: !!existing, ...(scenesLockedFinal ? { scenesLocked: true } : {}),
+      ...(savedPublishRows ? { publishResults: savedPublishRows } : {}) }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }

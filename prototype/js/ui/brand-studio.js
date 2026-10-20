@@ -1623,18 +1623,18 @@
       }
     }
 
-    function syncBrandAndProject(brandPatch, projectPatch) {
+    function syncBrandAndProject(brandPatch, projectPatch, rowOps) {
       return Promise.resolve().then(async function () {
         if (brandId && NK.service && NK.service.brand) {
           if (NK.service.brand.persistShared) {
-            await NK.service.brand.persistShared(brandId, brandPatch || {});
+            await NK.service.brand.persistShared(brandId, brandPatch || {}, rowOps ? { publishRowOps: rowOps.brand } : undefined);
           } else if (NK.service.brand.update) {
             NK.service.brand.update(brandId, brandPatch || {});
           }
         }
         var nextDraft = null;
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-          var projectResult = await NK.service.project.updatePayload(projectId, projectPatch || {});
+          var projectResult = await NK.service.project.updatePayload(projectId, projectPatch || {}, rowOps ? { publishRowOps: rowOps.project } : undefined);
           if (projectResult && projectResult.draft) nextDraft = projectResult.draft;
         }
         return { draft: nextDraft || project };
@@ -1726,9 +1726,13 @@
         payload.brandStudioPublishResults = nextProjectRows;
         payload.publishResults = nextProjectRows;
         if (brand) brand.brandStudioPublishResults = nextBrandRows;
+        // 서버는 이력 목록을 서버 것 기준으로 두고 '바꾼 줄'만 받는다 — 이 저장 줄의 기준 목록으로 바로 계산해 넘긴다
+        // (브랜드 저장을 기다리는 사이 로컬 사본이 서버 목록으로 갱신돼도 남의 줄을 지운 것으로 읽지 않게).
+        var diff = (NK.api && NK.api.publishRowOps) ? NK.api.publishRowOps : function () { return null; };
         return syncBrandAndProject(
           { brandStudioPublishResults: nextBrandRows },
-          { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows }
+          { brandStudioPublishResults: nextProjectRows, publishResults: nextProjectRows },
+          { brand: diff(brandRows, nextBrandRows), project: diff(projectRows, nextProjectRows) }
         );
       });
       _publishResultsQueue = run.catch(function () { });

@@ -1076,11 +1076,13 @@
         }
     }
 
-    brand.persistShared = async function (brandId, patch) {
+    brand.persistShared = async function (brandId, patch, options) {
         var targetId = normalizeText(brandId);
         if (!targetId) throw new Error('brand_id_required');
         ensureMigrated();
         var existing = brand.getById(targetId);
+        // 배포 이력 '바꾼 줄' 비교 기준은 호출 시점 목록이다(아래 원격 조회를 기다리는 사이 로컬이 바뀔 수 있다).
+        var rowsBefore = existing && existing.brandStudioPublishResults;
         var remoteBrand = await fetchRemoteBrand(targetId);
         existing = brand.getById(targetId) || existing;
         // Shared knowledge edits are authored from a single UI state, so arrays must replace, not union-merge.
@@ -1106,9 +1108,15 @@
                 overviewDefaults: pickOverviewDefaults(nextBrand.overviewDefaults, normalizeOverviewDefaults(remoteBrand.overviewDefaults))
             }));
         }
+        // 배포 이력은 서버 목록이 기준이다(서버는 보낸 목록을 버린다). patch 가 목록을 고쳤으면 고치기 전 로컬 목록과
+        // 비교한 '바꾼 줄'만 보낸다 — 에이전트가 그사이 덧붙인 줄을 옛 목록으로 지우지 않게(api.publishRowOps).
+        var publishRowOps = (options && Object.prototype.hasOwnProperty.call(options, 'publishRowOps')) ? options.publishRowOps
+            : (patch && Array.isArray(patch.brandStudioPublishResults) && NK.api && NK.api.publishRowOps)
+            ? NK.api.publishRowOps(rowsBefore, patch.brandStudioPublishResults)
+            : null;
         upsertBrandLocal(nextBrand);
         if (!NK.api || !NK.api.brandSave) return nextBrand;
-        var resp = await NK.api.brandSave(targetId, nextBrand);
+        var resp = await NK.api.brandSave(targetId, nextBrand, { publishRowOps: publishRowOps });
         var saved = resp && resp.brand ? normalizeBrand(resp.brand) : nextBrand;
         return upsertBrandLocal(saved);
     };

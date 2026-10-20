@@ -1015,16 +1015,17 @@
         return { migrated: changed, total: total };
     }
 
-    async function syncDraftToServer(draft) {
+    async function syncDraftToServer(draft, publishRowOps) {
         if (!NK.api || !NK.api.projectSave) return { ok: false, reason: 'api_missing' };
         try {
             var normalized = normalizeDraft(draft) || draft;
-            await NK.api.projectSave(String(normalized.id), normalized.payload || {}, normalized.scenes || [], {
+            var resp = await NK.api.projectSave(String(normalized.id), normalized.payload || {}, normalized.scenes || [], {
                 header: normalized.header || '',
                 aspectRatio: normalized.payload?.aspectRatio || '',
-                title: normalized.title || ''
+                title: normalized.title || '',
+                publishRowOps: publishRowOps || null
             });
-            return { ok: true };
+            return { ok: true, publishResults: resp && Array.isArray(resp.publishResults) ? resp.publishResults : null };
         } catch (err) {
             return { ok: false, reason: err?.message || String(err || 'save_failed') };
         }
@@ -1377,12 +1378,22 @@
         return updated;
     };
 
-    project.updatePayload = async function (draftOrId, patch) {
+    project.updatePayload = async function (draftOrId, patch, options) {
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         if (!draft || !draft.id) throw new Error('project_not_found');
 
         var current = getDraftById(draft.id);
         if (!current) throw new Error('project_not_found');
+        // 배포 이력은 서버 목록이 기준이다. 이 patch 가 목록을 고쳤으면 고치기 전 로컬 목록과 비교한 '바꾼 줄'만 보낸다
+        // (api.publishRowOps) — 옛 목록 통째 저장이 에이전트가 덧붙인 줄을 지우지 않게.
+        var patchRows = patch && (Array.isArray(patch.brandStudioPublishResults) ? patch.brandStudioPublishResults
+            : (Array.isArray(patch.publishResults) ? patch.publishResults : null));
+        var currentPayload = current.payload || {};
+        // 호출자가 자기 기준 목록으로 계산한 ops 를 넘기면 그대로 쓴다(그사이 로컬 사본이 서버 목록으로 갱신됐을 수 있다).
+        var publishRowOps = (options && Object.prototype.hasOwnProperty.call(options, 'publishRowOps')) ? options.publishRowOps
+            : (patchRows && NK.api && NK.api.publishRowOps)
+            ? NK.api.publishRowOps(Array.isArray(currentPayload.brandStudioPublishResults) ? currentPayload.brandStudioPublishResults : currentPayload.publishResults, patchRows)
+            : null;
         var target = Object.assign({}, current);
         target.payload = Object.assign({}, target.payload || {}, patch || {});
         target.payload = applyProjectCore(target.payload, target);
@@ -1390,7 +1401,17 @@
         if (!saved) throw new Error('project_not_found');
         if (shouldSyncBrandFromPatch(patch)) syncBrandFromDraft(saved);
 
-        var sync = await syncDraftToServer(saved);
+        var sync = await syncDraftToServer(saved, publishRowOps);
+        // 서버가 실제로 남긴 이력(에이전트가 덧붙인 줄 포함)으로 로컬 사본을 맞춘다.
+        if (sync.ok && sync.publishResults) {
+            saved = project.updateLocal(draft.id, function (cur) {
+                var nextPayload = Object.assign({}, (cur && cur.payload) || {}, {
+                    brandStudioPublishResults: sync.publishResults.slice(),
+                    publishResults: sync.publishResults.slice()
+                });
+                return Object.assign({}, cur || {}, { payload: nextPayload });
+            }, { forceCurrent: true }) || saved;
+        }
         return {
             ok: !!sync.ok,
             draft: saved,

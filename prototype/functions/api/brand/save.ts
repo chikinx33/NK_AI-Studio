@@ -1,5 +1,6 @@
 import { buildAiVideoBrandPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { readPublishRowOps, resolvePublishRows } from "../_shared/publish-rows";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -73,12 +74,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       "";
-    const existingBrand = await loadPersistedBrandRecord({
-      bucket: parsed.bucket,
-      objectName,
-      accessToken: token,
-      userProject,
-    });
+    const loadArgs = { bucket: parsed.bucket, objectName, accessToken: token, userProject };
+    let persisted = await loadPersistedBrandRecord(loadArgs);
+    const existingBrand = persisted.brand;
 
     const normalizedResult = await normalizeBrandPayload(brandId, brand, {
       bucket: parsed.bucket,
@@ -88,20 +86,32 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       existingBrand,
     });
     const normalizedBrand = normalizedResult.brand;
-    const payload = {
-      brandId,
-      brand: normalizedBrand,
-      savedAt: new Date().toISOString(),
-    };
-
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-    const res = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const text = await res.text();
-    if (!res.ok) return send({ error: text || "brand_save_error" }, res.status, origin);
+    // 배포 이력은 서버 목록이 기준 — 에이전트가 덧붙인 줄을 화면의 옛 목록으로 지우지 않게, 화면이 바꾼 줄(publishRowOps)만
+    // 적용한다(_shared/publish-rows.ts). 에이전트도 같은 기록을 세대 확인으로 쓰므로 여기서도 세대가 그대로일 때만 쓴다.
+    const publishRowOps = readPublishRowOps(body.publishRowOps);
+    const incomingPublishRows = brand.brandStudioPublishResults;
+    for (let attempt = 0; ; attempt += 1) {
+      const rows = resolvePublishRows(persisted.brand?.brandStudioPublishResults, incomingPublishRows, publishRowOps);
+      if (rows === undefined) delete normalizedBrand.brandStudioPublishResults;
+      else normalizedBrand.brandStudioPublishResults = rows;
+      const payload = {
+        brandId,
+        brand: normalizedBrand,
+        savedAt: new Date().toISOString(),
+      };
+      // 세대를 못 읽었으면(읽기 실패 외 경우는 위에서 throw) 예전처럼 조건 없이 쓴다.
+      const precondition = persisted.generation ? `&ifGenerationMatch=${encodeURIComponent(persisted.generation)}` : "";
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}${precondition}`;
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      if (res.status === 412 && attempt < 3) { persisted = await loadPersistedBrandRecord(loadArgs); continue; }
+      if (!res.ok) return send({ error: text || "brand_save_error" }, res.status, origin);
+      break;
+    }
     const cleanup = await deleteGcsObjects({
       bucket: parsed.bucket,
       objectNames: normalizedResult.staleSheetObjects,
@@ -403,14 +413,16 @@ async function loadPersistedBrandRecord(args: {
       ...billingHeader,
     },
   });
-  if (res.status === 404) return null;
+  // 세대: 404(새 브랜드)면 "0"(없을 때만 생성) — 저장이 이 세대일 때만 쓴다.
+  if (res.status === 404) return { brand: null as Record<string, any> | null, generation: "0" };
   const text = await res.text();
   if (!res.ok) throw new Error(text || "brand_load_error");
+  const generation = String(res.headers.get("x-goog-generation") || "");
   const record = safeJson(text);
   const brand = record && typeof record === "object" && record.brand && typeof record.brand === "object"
     ? record.brand
     : record;
-  return brand && typeof brand === "object" ? brand : null;
+  return { brand: (brand && typeof brand === "object" ? brand : null) as Record<string, any> | null, generation };
 }
 
 async function deleteGcsObjects(args: {

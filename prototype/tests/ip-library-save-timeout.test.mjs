@@ -18,7 +18,11 @@ const sheets = (count) => Array.from({ length: count }, (_, i) => ({
 function serverHarness({ failUpload = false, previous = null } = {}) {
   const metrics = { active: 0, peak: 0, uploads: 0, manifests: [], deletes: 0 };
   const source = read('prototype/functions/api/brand/save.ts').replace(/^import .*;\n/gm, '');
+  // 배포 이력 규칙(서버 목록 기준) 모듈은 순수 함수라 그대로 싣는다.
+  const rowsModule = { exports: {} };
+  vm.runInNewContext(esbuild.transformSync(read('prototype/functions/api/_shared/publish-rows.ts'), { loader: 'ts', format: 'cjs' }).code, { module: rowsModule, exports: rowsModule.exports });
   const sandbox = {
+    ...rowsModule.exports,
     module: { exports: {} }, Request, Response, URL, URLSearchParams, TextEncoder, Uint8Array, atob, btoa,
     authorizeRequest: async () => ({ ok: true, userId: 'u1' }),
     buildAiVideoBrandPrefix: () => 'root/users/u1/brands/b1',

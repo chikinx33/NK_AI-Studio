@@ -1140,7 +1140,43 @@
     return j(text);
   };
 
-  api.brandSave = async function (brandId, brandPayload) {
+  /**
+   * 배포 이력 목록의 '바꾼 줄'만 뽑는다(2026-10-20). 서버(project/save·brand/save)는 이력 목록을 서버 것 기준으로 두고
+   * 화면이 보낸 목록은 버린다 — 열려 있던 화면의 옛 목록이 에이전트가 덧붙인 줄을 지우던 문제. 그래서 화면이 이력을
+   * 고칠 때는 고치기 전(before)·후(after) 목록을 비교해 새 줄·바뀐 칸(upsert)과 지운 줄 id(remove)만 보낸다.
+   * 바뀌지 않은 칸은 보내지 않아, 그사이 서버가 바꾼 상태(예: TikTok processing→sent_to_inbox)를 되돌리지 않는다.
+   * 서버 쪽 짝: functions/api/_shared/publish-rows.ts applyPublishRowOps.
+   */
+  api.publishRowOps = function (before, after) {
+    var idOf = function (row) { return String((row && row.id) || '').trim(); };
+    var prev = {};
+    (Array.isArray(before) ? before : []).forEach(function (row) { var id = idOf(row); if (id) prev[id] = row; });
+    var seen = {};
+    var upsert = [];
+    (Array.isArray(after) ? after : []).forEach(function (row) {
+      var id = idOf(row);
+      if (!id || !row || typeof row !== 'object') return;
+      seen[id] = true;
+      var old = prev[id];
+      if (!old) { upsert.push(row); return; }
+      var patch = null;
+      Object.keys(row).forEach(function (key) {
+        if (JSON.stringify(row[key]) === JSON.stringify(old[key])) return;
+        if (!patch) patch = { id: id };
+        patch[key] = row[key];
+      });
+      if (patch) {
+        // 같은 게시물 찾기(채널+게시 id)에 쓰이므로 함께 싣는다.
+        if (row.channelType && !patch.channelType) patch.channelType = row.channelType;
+        if (row.remotePostId && !patch.remotePostId) patch.remotePostId = row.remotePostId;
+        upsert.push(patch);
+      }
+    });
+    var remove = Object.keys(prev).filter(function (id) { return !seen[id]; });
+    return (upsert.length || remove.length) ? { upsert: upsert, remove: remove } : null;
+  };
+
+  api.brandSave = async function (brandId, brandPayload, opts) {
     var brand = Object.assign({}, brandPayload || {});
     // 원본은 한 장씩 바이너리로 올리고, 최종 저장에는 경로만 담는다.
     // 텍스트·목록은 모든 업로드가 성공한 뒤 한 번에 반영한다.
@@ -1182,7 +1218,8 @@
       body: JSON.stringify({
         brandId: String(brandId || ''),
         userId: resolveUserId(),
-        brand: brand
+        brand: brand,
+        publishRowOps: (opts && opts.publishRowOps) || undefined
       })
     }, 120000).catch(function (err) {
       if (err && err.code === 'timeout') err.message = 'brand_metadata_save_timeout';
@@ -1451,6 +1488,8 @@
     var aspect = (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '';
     if (aspect) body.aspectRatio = aspect;
     if (opts && opts.title) body.title = opts.title;
+    // 배포 이력은 서버 목록이 기준이라 payload 의 목록은 무시된다 — 바꾼 줄만 따로 보낸다(api.publishRowOps).
+    if (opts && opts.publishRowOps) body.publishRowOps = opts.publishRowOps;
     var bodyStr = JSON.stringify(body);
     var bodyKb = Math.round(bodyStr.length / 1024);
     // 200KB 초과부터 자동 breakdown 출력 — 30초 프로젝트가 이보다 크면 비정상.
