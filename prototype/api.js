@@ -1845,4 +1845,15 @@
     if (!res.ok) throw new Error(e(text) || 'project_share_revoke_error');
     return j(text);
   };
+  // 프로젝트 이름 변경을 공유 기록에도 반영(공유받은 사람 목록의 이름). 권한은 바꾸지 않는다.
+  api.projectShareRename = async function (projectIds, seriesTitle) {
+    var res = await fetch(withBase('/api/project/share'), {
+      method: 'PATCH',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectIds: (Array.isArray(projectIds) ? projectIds : []).map(String), seriesTitle: String(seriesTitle || '') })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'project_share_rename_error');
+    return j(text);
+  };
 })();

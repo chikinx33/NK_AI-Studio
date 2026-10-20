@@ -3353,6 +3353,8 @@ ${String(r.detail)}` : '';
     let mode = 'new-series';
     let overlayPurpose = 'create';
     let editingSeriesId = '';
+    let editingSeriesTitle = '';
+    const SERIES_CREATE_PLACEHOLDER = '프로젝트 이름 · 영문 (예: Judge Bao)';
 
     const applyCurrentLocale = () => {
       if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
@@ -3449,8 +3451,10 @@ ${String(r.detail)}` : '';
     // 프로젝트 이름은 영문만. 이 이름이 GCS 폴더명(seriesId)이 되는데 경로가 ASCII만 허용해서,
     // 한글로 적으면 폴더명이 projects+타임스탬프로 떨어져 사람이 못 읽는 폴더가 만들어진다.
     // IME 조합 중에도 남지 않도록 input·compositionend 양쪽에서 걸러낸다.
+    // 단, '설정'(edit-series)에서 바꾸는 건 표시 이름뿐이고 폴더 id 는 그대로라 한글도 허용한다.
     if (seriesInput) {
       const stripNonAscii = () => {
+        if (overlayPurpose === 'edit-series') return;
         const next = String(seriesInput.value || '').replace(/[^A-Za-z0-9 ._-]/g, '');
         if (next !== seriesInput.value) {
           const atEnd = seriesInput.selectionStart === seriesInput.value.length;
@@ -3621,6 +3625,11 @@ ${String(r.detail)}` : '';
       overlay.dataset.overlayPurpose = overlayPurpose;
 
       if (nextPurpose !== 'edit-series') {
+        editingSeriesTitle = '';
+        if (seriesInput) {
+          seriesInput.placeholder = SERIES_CREATE_PLACEHOLDER;
+          seriesInput.setAttribute('lang', 'en');
+        }
         modeButtons.forEach((btn) => {
           btn.disabled = creating;
           btn.classList.remove('disabled');
@@ -3648,17 +3657,22 @@ ${String(r.detail)}` : '';
       profileLine.classList.remove('hidden');
       ensureLabel(baseRow, '에피소드');
       input.placeholder = '';
-      hintRow.textContent = '프로젝트 유형, 브랜드 요약, 핵심 메시지만 수정할 수 있습니다.';
-      if (seriesInput) seriesInput.value = profile.seriesTitle || '';
+      hintRow.textContent = '프로젝트 이름, 프로젝트 유형, 브랜드 요약, 핵심 메시지를 수정할 수 있습니다.';
+      editingSeriesTitle = profile.seriesTitle || '';
+      if (seriesInput) {
+        seriesInput.value = editingSeriesTitle;
+        seriesInput.placeholder = '프로젝트 이름';
+        seriesInput.removeAttribute('lang');
+      }
       input.value = profile.episodeTitle || '';
       if (projectTypeSelect) projectTypeSelect.value = profile.projectType || '';
       if (brandSummaryInput) brandSummaryInput.value = profile.brandSummary || '';
       if (coreMessageInput) coreMessageInput.value = profile.coreMessage || '';
       input.disabled = true;
-      if (seriesInput) seriesInput.disabled = true;
+      if (seriesInput) seriesInput.disabled = creating;
       if (seriesSelect) seriesSelect.disabled = true;
       setProfileDisabledState(false);
-      setRowDisabledState(newSeriesRow, true);
+      setRowDisabledState(newSeriesRow, false);
       setRowDisabledState(existingSeriesRow, true);
       setRowDisabledState(baseRow, true);
       syncOverlayLabels();
@@ -3749,7 +3763,7 @@ ${String(r.detail)}` : '';
       btnCancel.disabled = creating;
       if (overlayPurpose === 'edit-series') {
         input.disabled = true;
-        if (seriesInput) seriesInput.disabled = true;
+        if (seriesInput) seriesInput.disabled = creating;
         if (seriesSelect) seriesSelect.disabled = true;
         setProfileDisabledState(creating);
         modeButtons.forEach((btn) => { btn.disabled = true; });
@@ -3804,14 +3818,27 @@ ${String(r.detail)}` : '';
           alert('수정할 프로젝트를 찾을 수 없습니다.');
           return;
         }
+        const nextSeriesTitle = seriesTitleInput.replace(/\s+/g, ' ').trim();
+        if (!nextSeriesTitle) {
+          alert('프로젝트 이름을 입력해 주세요.');
+          if (seriesInput) seriesInput.focus();
+          return;
+        }
         setCreatingState(true);
         let completed = false;
         try {
+          // 이름은 폴더 id 를 건드리지 않고 표시 이름이 저장된 곳(에피소드·허브·공유 기록)을 함께 바꾼다.
+          let renameFailed = 0;
+          if (nextSeriesTitle !== String(editingSeriesTitle || '').trim()) {
+            const renamed = await NK.service.project.renameSeries(editingSeriesId, nextSeriesTitle);
+            renameFailed = Number(renamed && renamed.failed) || 0;
+          }
           const result = await NK.service.project.updateSeriesProfile(editingSeriesId, {
             projectType,
             brandSummary,
             coreMessage
           });
+          if (result && renameFailed > Number(result.failed || 0)) result.failed = renameFailed;
           completed = true;
           setCreatingState(false);
           close();

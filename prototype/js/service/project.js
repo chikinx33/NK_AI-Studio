@@ -808,6 +808,26 @@
         return nextPayload;
     }
 
+    /**
+     * 시리즈 이름이 폴더 id 를 그대로 베낀 값인지. seriesId 가 비면 'projects'+에피소드id 로 채워지는데,
+     * 이름까지 비어 있으면 그 id 가 이름 자리에 들어가 저장되고, 이후엔 진짜 이름처럼 굳어
+     * 카드·에이전트 목록에 'projectsmemoment-ep1' 같은 이름이 보였다. 이런 값은 이름이 없는 것으로 본다.
+     */
+    function isMachineSeriesTitle(value, seriesId) {
+        var v = String(value || '').trim();
+        if (!v) return true;
+        if (/^projects\d+$/i.test(v) || /^\d+$/.test(v)) return true;
+        return !!seriesId && v === String(seriesId) && /^projects/i.test(v);
+    }
+    function pickSeriesTitle(seriesId, candidates) {
+        var list = Array.isArray(candidates) ? candidates : [];
+        for (var i = 0; i < list.length; i++) {
+            if (!isMachineSeriesTitle(list[i], seriesId)) return String(list[i]).trim();
+        }
+        return String(seriesId || '');
+    }
+    project.isMachineSeriesTitle = isMachineSeriesTitle;
+
     function normalizeDraft(raw) {
         var draft = raw || {};
         var id = String(draft.id || '').trim();
@@ -815,7 +835,11 @@
         var payload = applyProjectCore(Object.assign({}, draft.payload || {}), draft);
         var scenes = normalizeSceneEntries(pickSceneArray(draft, payload));
         var seriesId = normalizeSeriesId(payload.seriesId || draft.seriesId) || ('projects' + id);
-        var seriesTitle = String(payload.seriesTitle || draft.seriesTitle || draft.title || seriesId).trim() || seriesId;
+        var seriesTitle = pickSeriesTitle(seriesId, [
+            payload.seriesTitle, draft.seriesTitle,
+            payload.brandRef && payload.brandRef.title, payload.brandTitle,
+            draft.title, payload.episodeTitle
+        ]);
         payload.seriesId = seriesId;
         payload.seriesTitle = seriesTitle;
         var title = String(draft.title || payload.episodeTitle || seriesTitle).trim() || '제목없음';
@@ -1602,11 +1626,16 @@
     };
 
     /**
-     * Rename a series title and sync all episode metadata.
+     * 프로젝트(시리즈) 표시 이름 변경. 폴더 id(seriesId·projectId)는 그대로 두고 이름만 바꾼다 —
+     * 이미지·영상의 gs:// 경로가 id 에 묶여 있어 id 를 바꾸면 자산이 깨진다.
+     * 이름은 여러 곳에 따로 저장돼 있어 한 곳만 바꾸면 화면·에이전트·공유받은 사람이 서로 다른 이름을 본다:
+     *   에피소드마다 payload.seriesTitle·brandTitle·brandRef.title(화면 브랜드 이름의 최우선 값),
+     *   브랜드 허브 정의 brandTitle(에이전트가 턴마다 받는 브랜드 요약), 공유 기록 seriesTitle(공유받은 사람 목록).
+     * 에이전트는 project_list·brand_list 가 data.json 에서 매번 새로 읽는 이름으로 id 를 찾으므로, 이 값들을 함께 바꾸면 된다.
      */
     project.renameSeries = async function (seriesId, nextTitle) {
         var sid = normalizeSeriesId(seriesId);
-        var title = String(nextTitle || '').trim();
+        var title = String(nextTitle || '').replace(/\s+/g, ' ').trim().slice(0, 80);
         if (!sid) throw new Error('series_id_required');
         if (!title) throw new Error('series_title_required');
 
@@ -1614,26 +1643,45 @@
         var targets = drafts.filter(function (d) { return String(d.seriesId) === String(sid); });
         if (!targets.length) throw new Error('series_not_found');
 
+        var brandIds = [];
+        var addBrandId = function (value) {
+            var id = normalizeText(value);
+            if (id && brandIds.indexOf(id) < 0) brandIds.push(id);
+        };
         targets.forEach(function (d) {
             d.seriesTitle = title;
-            d.payload = d.payload || {};
+            d.payload = Object.assign({}, d.payload || {});
             d.payload.seriesTitle = title;
+            d.payload.brandTitle = title;
+            var ref = d.payload.brandRef && typeof d.payload.brandRef === 'object' ? d.payload.brandRef : {};
+            d.payload.brandRef = Object.assign({}, ref, { id: normalizeText(ref.id || d.payload.brandId), title: title });
+            addBrandId(d.payload.brandId);
+            addBrandId(ref.id);
         });
 
         project.replaceLocalDrafts(drafts, { limit: drafts.length });
-        try {
-            if (NK.service && NK.service.brand && NK.service.brand.getBySeriesId && NK.service.brand.update) {
-                var matchedBrand = NK.service.brand.getBySeriesId(sid);
-                if (matchedBrand && matchedBrand.brandId) {
-                    if (NK.service.brand.persistShared) {
-                        NK.service.brand.persistShared(matchedBrand.brandId, { brandTitle: title }).catch(function () { });
-                    } else {
-                        NK.service.brand.update(matchedBrand.brandId, { brandTitle: title });
-                    }
+
+        // 브랜드 기록: 로컬은 항상 맞추고, 서버 허브는 이미 있을 때만 고친다(이름 변경이 허브를 새로 만들면 안 된다).
+        var brandSvc = NK.service && NK.service.brand;
+        if (brandSvc && brandSvc.getBySeriesId) {
+            try { var bySeries = brandSvc.getBySeriesId(sid); if (bySeries) addBrandId(bySeries.brandId); } catch (_) { }
+        }
+        for (var b = 0; b < brandIds.length; b++) {
+            var brandId = brandIds[b];
+            try {
+                var remote = null;
+                if (NK.api && NK.api.brandGet) {
+                    var resp = await NK.api.brandGet(brandId).catch(function () { return null; });
+                    remote = resp && resp.data && resp.data.brand ? resp.data.brand : (resp && resp.brand ? resp.brand : null);
                 }
+                if (remote && brandSvc && brandSvc.persistShared) {
+                    await brandSvc.persistShared(brandId, { brandTitle: title });
+                } else if (brandSvc && brandSvc.getById && brandSvc.update && brandSvc.getById(brandId)) {
+                    brandSvc.update(brandId, { brandTitle: title });
+                }
+            } catch (err) {
+                console.warn('Brand rename sync fail', err);
             }
-        } catch (err) {
-            console.warn('Brand rename sync fail', err);
         }
 
         var synced = 0;
@@ -1642,6 +1690,18 @@
             var r = await syncDraftToServer(targets[i]);
             if (r.ok) synced += 1;
             else failed += 1;
+        }
+
+        // 공유 기록의 이름(공유받은 사람의 목록에 보이는 이름). 공유한 적이 없으면 서버가 아무것도 바꾸지 않는다.
+        if (NK.api && NK.api.projectShareRename) {
+            try {
+                await NK.api.projectShareRename(targets.map(function (d) { return String(d.id); }), title);
+            } catch (err) {
+                console.warn('Share rename sync fail', err);
+            }
+        }
+        if (NK.api && NK.api.projectListInvalidate) {
+            try { NK.api.projectListInvalidate(); } catch (_) { }
         }
 
         return { ok: true, seriesId: sid, title: title, updatedCount: targets.length, synced: synced, failed: failed };

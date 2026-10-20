@@ -3,6 +3,7 @@
 //   GET    /api/project/share        → 내가 공유한 목록 + 나에게 공유된 목록 (+관리자: 전체 현황)
 //   POST   /api/project/share        → 소유자가 대상 계정에 권한 부여/갱신 {projectId, targetUserId, role, title?}
 //   DELETE /api/project/share        → 소유자가 권한 회수 {projectId, targetUserId}
+//   PATCH  /api/project/share        → 소유자가 프로젝트 이름을 바꿨을 때 공유 기록의 이름만 갱신 {projectIds[], seriesTitle}
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { requireMaster } from "../_shared/admin-users";
 import {
@@ -11,6 +12,7 @@ import {
   saveShares,
   upsertGrant,
   removeGrant,
+  renameSharedSeries,
   listSharedWith,
   listSharedByOwner,
   type ShareRole,
@@ -21,7 +23,7 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": origin || "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "86400",
   "Vary": "Origin",
@@ -71,6 +73,29 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     upsertGrant(reg, auth.userId, projectId, targetUserId, role, title, seriesId, seriesTitle);
     await saveShares(env, reg);
     return send({ ok: true, projectId, targetUserId, role }, 200, origin);
+  } catch (e: any) {
+    return send({ error: e?.message || "Unknown error" }, 500, origin);
+  }
+};
+
+export const onRequestPatch: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
+  try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+    const body = await request.json().catch(() => ({} as any));
+    const projectIds = (Array.isArray(body.projectIds) ? body.projectIds : [])
+      .map((v: unknown) => String(v || "").trim())
+      .filter((v: string) => /^[a-zA-Z0-9._-]+$/.test(v))
+      .slice(0, 500);
+    const seriesTitle = typeof body.seriesTitle === "string" ? body.seriesTitle.trim() : "";
+    if (!projectIds.length) return send({ error: "invalid_project_ids" }, 400, origin);
+    if (!seriesTitle) return send({ error: "series_title_required" }, 400, origin);
+    // 공유한 적이 없는 프로젝트가 대부분이라, 읽기만 하고 바뀐 게 없으면 저장하지 않는다.
+    const reg = await loadSharesStrict(env);
+    const updated = renameSharedSeries(reg, auth.userId, projectIds, seriesTitle);
+    if (updated) await saveShares(env, reg);
+    return send({ ok: true, updated }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

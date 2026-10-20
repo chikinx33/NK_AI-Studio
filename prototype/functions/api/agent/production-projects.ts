@@ -48,10 +48,14 @@ export function summarizeProject(id: string, project: any, extra: { shared?: boo
   const payload = project?.payload && typeof project.payload === "object" ? project.payload : {};
   const scenes: any[] = Array.isArray(project?.scenes) ? project.scenes : [];
   const seriesId = text(extra.sharedSeriesId || payload.seriesId || payload.brandId || id);
-  const seriesTitle = text(extra.sharedSeriesTitle || payload.seriesTitle || payload.brandTitle || project?.seriesTitle) || seriesId;
   const episodeTitle = text(payload.episodeTitle || project?.title || extra.sharedTitle);
   // 일련번호(projects123·숫자)뿐인 옛 프로젝트는 주제·첫 컷 제목으로라도 이름을 붙인다 — 목록에서 무엇인지 알 수 있게.
   const autoId = (v: string) => /^projects\d+$/i.test(v) || /^\d+$/.test(v);
+  // 폴더 id 를 베낀 이름('projectsmemoment-ep1')은 이름이 없는 것으로 본다 — 스튜디오 화면(project.js
+  // isMachineSeriesTitle)과 같은 규칙이라, 에이전트가 사용자가 보는 이름으로 프로젝트를 찾을 수 있다.
+  const machineTitle = (v: string) => !v || autoId(v) || (v === seriesId && /^projects/i.test(v));
+  const seriesTitle = [extra.sharedSeriesTitle, payload.seriesTitle, project?.seriesTitle, payload?.brandRef?.title, payload.brandTitle, project?.title, payload.episodeTitle]
+    .map(text).find((v) => !machineTitle(v)) || seriesId;
   const namedSeries = autoId(seriesTitle) ? "" : seriesTitle;
   const title = episodeTitle || namedSeries || text(payload.topic || payload.title) || text(scenes[0]?.title) || id;
   const firstStill = scenes.find((s) => hasMedia(s?.imageDataUrl) || hasMedia(s?.imagePath));

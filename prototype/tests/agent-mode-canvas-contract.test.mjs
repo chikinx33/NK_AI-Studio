@@ -258,7 +258,7 @@ test("★프로젝트 선택기는 숫자 id 가 아니라 시리즈 › 에피�
   const shared = read("prototype/functions/api/agent/_shared.ts");
   // 서버가 data.json 을 읽어 시리즈·에피소드 제목과 씬/스틸/영상 수를 붙인다.
   assert.match(endpoint, /export function summarizeProject\(/);
-  assert.match(endpoint, /const seriesTitle = text\(extra\.sharedSeriesTitle \|\| payload\.seriesTitle/);
+  assert.match(endpoint, /const seriesTitle = \[extra\.sharedSeriesTitle, payload\.seriesTitle/);
   assert.match(endpoint, /episodeTitle = text\(payload\.episodeTitle \|\| project\?\.title/);
   assert.match(endpoint, /projects\.sort\(\(a, b\) => \(b\.savedAt/);
   // 공유 프로젝트는 소유자 폴더에서 읽는다.

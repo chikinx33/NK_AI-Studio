@@ -134,6 +134,25 @@ export function upsertGrant(
   entry.updatedAt = now;
 }
 
+/**
+ * 소유자가 프로젝트 이름을 바꿨을 때 공유 기록의 seriesTitle 만 맞춘다(권한·대상은 그대로).
+ * 소유자 본인의 기록만 고치며, 바뀐 기록 수를 돌려준다(0 이면 저장할 필요 없음).
+ */
+export function renameSharedSeries(reg: SharesRegistry, ownerId: string, projectIds: string[], seriesTitle: string): number {
+  const oid = sanitizeUserId(ownerId);
+  const title = String(seriesTitle || "").trim().slice(0, 200);
+  if (!oid || !title) return 0;
+  const ids = new Set((Array.isArray(projectIds) ? projectIds : []).map((v) => String(v || "").trim()).filter(Boolean));
+  let changed = 0;
+  for (const entry of reg.shares) {
+    if (entry.ownerId !== oid || !ids.has(entry.projectId) || entry.seriesTitle === title) continue;
+    entry.seriesTitle = title;
+    entry.updatedAt = new Date().toISOString();
+    changed += 1;
+  }
+  return changed;
+}
+
 /** 특정 프로젝트의 모든 공유를 제거한다(프로젝트 삭제 시 정리). */
 export function removeProjectShares(reg: SharesRegistry, ownerId: string, projectId: string): void {
   const oid = sanitizeUserId(ownerId);
