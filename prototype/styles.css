@@ -10900,6 +10900,17 @@ details[open] > .knowledge-hub-disclosure-body {
 .character-manager-card-name strong {
   font-size: 18px;
   line-height: 1.2;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.environment-asset-description {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .character-sheet-slot-grid {

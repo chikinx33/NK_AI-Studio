@@ -1515,7 +1515,7 @@
             '<section class="character-manager-card" data-asset-id="' + escapeHtml(asset.assetId) + '">' +
             '<div class="character-manager-card-row">' +
             '<div class="character-manager-card-info">' +
-            '<div class="character-manager-card-name"><strong>' + escapeHtml(asset.token) + '</strong>' + (asset.description ? '<span class="character-sheet-count">' + escapeHtml(asset.description) + '</span>' : '') + '</div>' +
+            '<div class="character-manager-card-name"><strong>' + escapeHtml(asset.token) + '</strong></div>' +
             '<span class="character-sheet-count">' + escapeHtml(uiText.count) + ' ' + escapeHtml(String(sheetItems.length)) + '/4' + escapeHtml(uiText.countSuffix) + '</span>' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="environment-sheet-upload" data-asset-id="' + escapeHtml(asset.assetId) + '" />' +
@@ -1524,6 +1524,8 @@
             '</div>' +
             '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '</div>' +
+            // 설명은 이름 옆(좁은 정보 칸)이 아니라 카드 아래 전체 폭에 둔다 — 이름 옆에 두면 이름이 세로로 찌그러지고 설명이 슬롯 위로 넘친다.
+            (asset.description ? '<p class="environment-asset-description">' + escapeHtml(asset.description) + '</p>' : '') +
             '</section>'
           );
         }).join('')

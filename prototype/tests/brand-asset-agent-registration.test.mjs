@@ -137,3 +137,11 @@ test("brand save keeps environment asset descriptions", () => {
   const save = read("prototype/functions/api/brand/save.ts");
   assert.match(save, /description: normalizeText\(raw\.description \|\| raw\.personality \|\| raw\.note \|\| ""\),/);
 });
+
+test("배경·소품 라이브러리 카드: 설명은 이름 옆이 아니라 카드 아래 전체 폭(이름 세로 찌그러짐·슬롯 겹침 방지, 2026-10-20)", () => {
+  const hub = read("prototype/js/ui/knowledge-hub.js");
+  const css = read("prototype/styles.css");
+  assert.doesNotMatch(hub, /escapeHtml\(asset\.token\) \+ '<\/strong>' \+ \(asset\.description/, "이름 줄 안에 설명을 넣지 않는다");
+  assert.match(hub, /'<p class="environment-asset-description">' \+ escapeHtml\(asset\.description\) \+ '<\/p>'/);
+  assert.match(css, /\.environment-asset-description \{[^}]*overflow-wrap: anywhere;/);
+});
