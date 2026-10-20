@@ -2027,13 +2027,15 @@ export async function runGroupChat(
           continue;
         }
         // pending=true: 결과가 붙기 전까지는 '미완' 표시. 끊기면 폴링·다음 턴에서 마무리된다.
+        const waitNote = tool.runTimeoutMs ? ` (최대 ${Math.ceil(tool.runTimeoutMs / 60000)}분 걸릴 수 있어요)` : "";
         const notice = await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
-          text: tool.kind === "read" ? `🔎 ${r.tool} 조회 중이에요…` : `🛠️ ${r.tool} 실행 중이에요…`,
+          text: (tool.kind === "read" ? `🔎 ${r.tool} 조회 중이에요…` : `🛠️ ${r.tool} 실행 중이에요…`) + waitNote,
           pending: true,
         });
         try {
-          const runBudget = Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs()));
+          // 상한이 따로 정해진 도구(영상 분석 등)는 턴 예산과 상관없이 그 시간만큼 기다린다 — 스트리밍 응답이라 벽시계 제한이 없다.
+          const runBudget = tool.runTimeoutMs || Math.min(TOOL_RUN_TIMEOUT_MS, Math.max(RUN_MIN_MS, remainingMs()));
           let output = await withTimeout(tool.run(parsedInput, toolCtx), runBudget, `${r.tool} 조회`);
           const toolResultLimit = r.tool === "company_files_read" ? 20000 : PAGED_READ_TOOLS.has(r.tool) ? PAGED_RESULT_LIMIT : r.tool === "daum_mail_read" ? 12000 : 4500;
           if (PAGED_READ_TOOLS.has(r.tool)) {

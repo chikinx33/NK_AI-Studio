@@ -1667,6 +1667,9 @@ export interface ToolDef {
   // true면 실행이 오래 걸리는(수분) 도구 — 승인(review.ts) 시 응답을 블로킹하지 않고 waitUntil 백그라운드로 실행.
   // Results 패널(4초 폴링)이 완결을 반영한다. (예: scene_video)
   longRunning?: boolean;
+  // 읽기 도구 1건의 실행 상한(ms). 없으면 조회 공통 30초. 영상 분석처럼 외부 모델이 1~2분 보는 도구만 늘린다.
+  // 30초에 끊으면 "조회가 오래 걸려서 멈췄어요" 만 남고 분석이 매번 실패했다(video_describe, 2026-10-20).
+  runTimeoutMs?: number;
   /**
    * 실행 전 점검. 문자열(사유)을 돌려주면 그 실행을 '조용히' 건너뛴다.
    *
@@ -8073,7 +8076,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 완성 콘텐츠 등록 + SNS 세팅 포맷·초안 저장(승인 1번). 실제 발행은 publish(승인 2번).
   content_register: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki"], kind: "external", gate: true, run: runContentRegisterTool },
   // 영상 내용 분석(Gemini · 읽기). 등록 전에 영상을 보고 스토리·초안을 쓰게 한다.
-  video_describe: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki", "edge"], kind: "read", synthesize: true, run: runVideoDescribeTool },
+  video_describe: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki", "edge"], kind: "read", synthesize: true, runTimeoutMs: 150000, run: runVideoDescribeTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   // 서식 문서 엔진(§7). 서식은 회사 파일 `_서식/<폴더>/` 의 데이터라 코드 수정 없이 늘어난다.

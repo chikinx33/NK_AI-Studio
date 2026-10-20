@@ -38,7 +38,10 @@ export const onRequestPost = async ({ request, env }: any) => {
       const cached = await readGcsJson(env, cacheObject).catch(() => null);
       if (cached?.found && cached.data?.analysis) return send({ ok: true, cached: true, analysis: cached.data.analysis });
     }
+    const startedAt = Date.now();
     const analysis = await analyzeGcsVideo(env, objectName, stat.size, stat.contentType);
+    // 분석이 얼마나 걸리는지 남긴다 — 에이전트 도구 상한(runTimeoutMs)을 정하는 근거.
+    console.log(`video_describe_done: ${Math.round(stat.size / 1024 / 1024)}MB ${Date.now() - startedAt}ms`);
     await writeGcsJson(env, cacheObject, { objectName, generation: stat.generation, analyzedAt: new Date().toISOString(), analysis }).catch(() => {});
     return send({ ok: true, cached: false, analysis });
   } catch (e: any) {

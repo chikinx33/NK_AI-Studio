@@ -52,7 +52,10 @@ test('영상은 메모리에 다 올리지 않고 흘려 보내며(100MB), 같�
   assert.match(api, /!objectName\.startsWith\(userRoot\)/);
   assert.match(api, /\.video-analysis\/\$\{await sha256\(`\$\{objectName\}:\$\{stat\.generation\}`\)\}\.json/);
   const shared = read('prototype/functions/api/agent/_shared.ts');
-  assert.match(shared, /video_describe: \{ agentId: "reach", agentIds: \[[^\]]*\], kind: "read", synthesize: true, run: runVideoDescribeTool \}/);
+  assert.match(shared, /video_describe: \{ agentId: "reach", agentIds: \[[^\]]*\], kind: "read", synthesize: true, runTimeoutMs: 150000, run: runVideoDescribeTool \}/);
+  // 영상 분석은 1~2분 걸린다 — 조회 공통 30초 상한에 끊기지 않게 도구별 상한을 쓴다(2026-10-20).
+  const orch = read('prototype/functions/api/agent/_orchestrator.ts');
+  assert.match(orch, /const runBudget = tool\.runTimeoutMs \|\| Math\.min\(TOOL_RUN_TIMEOUT_MS/);
   // 등록: 분석해서 스토리가 비면 요약, SNS 초안 생성에도 분석을 넘긴다. 분석이 실패해도 등록은 계속.
   assert.match(shared, /callInternalJson\(ctx, "\/api\/video\/describe", \{ body: \{ objectName: videos\[0\] \} \}\)\.catch\(\(\) => null\)/);
   assert.match(shared, /if \(!story && analysis\?\.summary\) story = /);
