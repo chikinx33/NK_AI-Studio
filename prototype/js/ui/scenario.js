@@ -564,7 +564,8 @@
 
   const notifyScenario = (msg) => {
     if (!msg) return;
-    if (NK.ui?.toast?.show) NK.ui.toast.show(msg, { type: 'info', duration: 3800 });
+    // NK.ui.toast 는 함수다(core.js). 예전엔 .show 를 찾아 늘 콘솔로만 빠져서 알림이 안 보였다.
+    if (typeof NK.ui?.toast === 'function') NK.ui.toast(msg, { ms: 3800 });
     else if (NK.utils?.toast) NK.utils.toast(msg);
     else { try { console.info('[scenario]', msg); } catch (_) {} }
   };

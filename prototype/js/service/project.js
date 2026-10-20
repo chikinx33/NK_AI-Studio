@@ -1039,10 +1039,19 @@
     /** 브랜드 기록의 개요 기본값(없으면 null). 다른 기기에서 만들었을 수 있어 서버에서 한 번 맞춘다. */
     async function readOverviewDefaults(brandId) {
         var id = normalizeText(brandId);
+        if (!id) return null;
         var brandSvc = NK.service && NK.service.brand;
-        if (!id || !brandSvc || !brandSvc.getById) return null;
-        try { if (brandSvc.hydrateFromServer) await brandSvc.hydrateFromServer(id); } catch (_) { }
-        var rec = brandSvc.getById(id);
+        var rec = null;
+        if (brandSvc && brandSvc.getById) {
+            try { if (brandSvc.hydrateFromServer) await brandSvc.hydrateFromServer(id); } catch (_) { }
+            rec = brandSvc.getById(id);
+        } else if (NK.api && NK.api.brandGet) {
+            // 시나리오 화면처럼 brand.js 를 싣지 않는 화면은 서버 브랜드 기록을 직접 읽는다.
+            try {
+                var resp = await NK.api.brandGet(id);
+                rec = resp && resp.data && resp.data.brand ? resp.data.brand : (resp && resp.brand ? resp.brand : null);
+            } catch (_) { rec = null; }
+        }
         return rec && rec.overviewDefaults && rec.overviewDefaults.generatedAt ? rec.overviewDefaults : null;
     }
     // 개요 '이전값 불러오기'가 같은 시리즈의 다른 에피소드를 못 찾을 때 허브 기본값으로 채우는 데도 쓴다.

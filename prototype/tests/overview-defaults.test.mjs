@@ -105,6 +105,11 @@ test('기본값은 새 에피소드 생성 두 길목에서만 쓰고, 브랜드
   assert.match(project, /project\.readOverviewDefaults = readOverviewDefaults;/);
   assert.match(scenario, /hubDefaults = await projectSvc\.readOverviewDefaults\(brandId\)/);
   assert.match(scenario, /src = projectSvc\.applyOverviewDefaults\(/);
+  // 시나리오 화면은 brand.js 를 싣지 않는다 → 브랜드 서비스가 없으면 서버 기록을 직접 읽어야 한다
+  assert.doesNotMatch(read('prototype/scenario.html'), /service\/brand\.js/);
+  assert.match(project, /\} else if \(NK\.api && NK\.api\.brandGet\) \{[\s\S]{0,300}await NK\.api\.brandGet\(id\)/);
+  // 알림이 실제로 보여야 한다(NK.ui.toast 는 함수)
+  assert.match(scenario, /if \(typeof NK\.ui\?\.toast === 'function'\) NK\.ui\.toast\(msg/);
   const coreJs = read('prototype/core.js');
   for (const k of ['scenario_load_previous', 'scenario_load_previous_none', 'scenario_load_previous_done', 'scenario_load_previous_hub_done']) {
     assert.equal((coreJs.match(new RegExp('\\b' + k + ':', 'g')) || []).length, 2, `${k} 는 ko/en 양쪽에`);
