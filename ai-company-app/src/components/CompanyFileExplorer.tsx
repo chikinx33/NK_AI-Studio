@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   copyCompanyFile,
   createCompanyFolder,
@@ -21,6 +22,15 @@ import { appDialog } from "../lib/appDialog";
 const CompanyDocumentEditor = lazy(() => import("./CompanyDocumentEditor"));
 
 type ViewMode = "cards" | "list" | "board";
+
+/** lucide "ellipsis" — 더보기 메뉴. 글자 '•••' 는 글꼴마다 기준선이 달라 버튼 안에서 위아래로 어긋난다. */
+function EllipsisIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+    </svg>
+  );
+}
 
 /** lucide "message-square" — 채팅에 담기(업무 폴더 항목과 같은 아이콘). */
 function MessageSquareIcon({ className }: { className?: string }) {
@@ -176,6 +186,8 @@ export default function CompanyFileExplorer({
   const [loadTiming, setLoadTiming] = useState<{ totalMs: number; gcsMs: number; dbMs: number; clientMs: number } | null>(null);
   // 행·카드의 더보기(•••) 메뉴가 열린 항목 경로
   const [rowMenu, setRowMenu] = useState("");
+  // 메뉴를 띄울 ••• 버튼의 화면 좌표. 메뉴는 body 에 포털로 띄워 카드·표의 overflow 에 잘리거나 엉뚱한 기준 상자에 붙지 않는다.
+  const [rowMenuAnchor, setRowMenuAnchor] = useState<DOMRect | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -219,7 +231,10 @@ export default function CompanyFileExplorer({
     if (!rowMenu) return;
     const close = () => setRowMenu("");
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    // 고정 위치 메뉴라 스크롤·창 크기 변경 시 버튼과 어긋나므로 닫는다.
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { document.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
   }, [rowMenu]);
 
   useEffect(() => { void refresh(path); }, [path, revision]);
@@ -445,22 +460,35 @@ export default function CompanyFileExplorer({
   }
 
   /** 행·카드의 더보기(•••) 메뉴: 채팅 · 열기/다운로드 · 이름 변경 · 삭제 — 업무 폴더 항목의 메뉴와 같은 구성. */
-  function menuButton(entry: CompanyFileEntry, className = "") {
+  function menuButton(entry: CompanyFileEntry) {
     if (!referenceable(entry)) return null;
     const open = rowMenu === entry.path;
     const chat = onChatAbout || onAddChatReference;
+    // 버튼 오른쪽 끝에 맞춰 아래로 펼치고, 화면 아래가 모자라면 위로 펼친다.
+    const itemCount = (chat ? 1 : 0) + 1 + (entry.kind === "file" ? 1 : 0) + 2;
+    const menuWidth = 128;
+    const menuHeight = itemCount * 32 + 8;
+    let menuStyle: React.CSSProperties | undefined;
+    if (open && rowMenuAnchor) {
+      const below = window.innerHeight - rowMenuAnchor.bottom;
+      const top = below < menuHeight + 8 && rowMenuAnchor.top > menuHeight + 8 ? rowMenuAnchor.top - menuHeight - 4 : rowMenuAnchor.bottom + 4;
+      const left = Math.min(Math.max(8, rowMenuAnchor.right - menuWidth), window.innerWidth - menuWidth - 8);
+      menuStyle = { top, left, width: menuWidth };
+    }
     return (
-      <div className={`relative shrink-0 ${className}`}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); setRowMenu((current) => current === entry.path ? "" : entry.path); }}
-          className="grid h-8 w-8 place-items-center rounded-lg text-lg leading-none text-muted hover:bg-edge hover:text-strong" title="더보기" aria-label={`${entry.name} 더보기 메뉴`} aria-expanded={open}>•••</button>
-        {open && <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-edge bg-inset py-1 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-          {chat && <button type="button" onClick={() => { setRowMenu(""); chat(chatReferenceFor(entry)); }} className="block w-full px-3 py-2 text-left text-xs text-tone-emerald hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅</button>}
-          <button type="button" onClick={() => { setRowMenu(""); openEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-tone-sky hover:bg-edge">{entry.kind === "file" ? "열기" : "폴더 열기"}</button>
-          {entry.kind === "file" && <button type="button" onClick={() => { setRowMenu(""); void downloadEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-tone-sky hover:bg-edge">다운로드</button>}
-          <button type="button" onClick={() => { setRowMenu(""); void renameEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-content hover:bg-edge">이름 변경</button>
-          <button type="button" onClick={() => { setRowMenu(""); void removeEntries([entry]); }} className="block w-full px-3 py-2 text-left text-xs text-tone-red hover:bg-tint-red/40">삭제</button>
-        </div>}
-      </div>
+      <>
+        <button type="button" onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); setRowMenuAnchor(rect); setRowMenu((current) => current === entry.path ? "" : entry.path); }}
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition ${open ? "bg-edge text-strong" : "text-muted hover:bg-edge hover:text-strong"}`} title="더보기" aria-label={`${entry.name} 더보기 메뉴`} aria-expanded={open} aria-haspopup="menu">
+          <EllipsisIcon className="h-4 w-4" />
+        </button>
+        {open && menuStyle && createPortal(<div role="menu" style={menuStyle} className="fixed z-[70] overflow-hidden rounded-xl border border-edge bg-inset py-1 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          {chat && <button type="button" role="menuitem" onClick={() => { setRowMenu(""); chat(chatReferenceFor(entry)); }} className="block w-full px-3 py-2 text-left text-xs text-tone-emerald hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅</button>}
+          <button type="button" role="menuitem" onClick={() => { setRowMenu(""); openEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-tone-sky hover:bg-edge">{entry.kind === "file" ? "열기" : "폴더 열기"}</button>
+          {entry.kind === "file" && <button type="button" role="menuitem" onClick={() => { setRowMenu(""); void downloadEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-tone-sky hover:bg-edge">다운로드</button>}
+          <button type="button" role="menuitem" onClick={() => { setRowMenu(""); void renameEntry(entry); }} className="block w-full px-3 py-2 text-left text-xs text-content hover:bg-edge">이름 변경</button>
+          <button type="button" role="menuitem" onClick={() => { setRowMenu(""); void removeEntries([entry]); }} className="block w-full px-3 py-2 text-left text-xs text-tone-red hover:bg-tint-red/40">삭제</button>
+        </div>, document.body)}
+      </>
     );
   }
 
@@ -543,7 +571,7 @@ export default function CompanyFileExplorer({
       {viewMode !== "board" && <>
       {loading ? <div className="grid min-h-64 place-items-center text-sm text-faint">회사 파일을 불러오는 중…{loadElapsedMs >= 2000 ? ` ${(loadElapsedMs / 1000).toFixed(0)}초` : ""}</div> : visibleEntries.length ? viewMode === "list" ?
         <div className="overflow-hidden rounded-xl border border-edge"><table className="w-full text-left text-xs"><thead className="bg-panel text-faint"><tr><th className="w-12 p-3"></th><th className="p-3">이름</th><th className="p-3">유형</th><th className="p-3">크기</th><th className="p-3">수정일</th><th className="w-24 p-3"></th></tr></thead><tbody>{visibleEntries.map((entry) => <tr key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`border-t border-edge transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "bg-tint-emerald/40 outline outline-2 -outline-offset-2 outline-emerald-400" : selected.has(entry.path) ? "bg-tint-emerald/20" : "hover:bg-panel/60"}`}><td className="p-3 text-center"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></td><td className="p-3"><button type="button" onClick={() => openEntry(entry)} className="flex min-w-0 items-center gap-2 text-left"><EntryThumb entry={entry} compact/><span className="truncate font-medium text-content">{entry.document?.title || entry.name}</span></button></td><td className="p-3 text-faint">{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</td><td className="p-3 text-faint">{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : "—"}</td><td className="p-3 text-faint">{entry.updatedAt ? new Date(entry.updatedAt).toLocaleString("ko-KR") : "—"}</td><td className="p-3"><div className="flex items-center justify-end gap-1">{chatButton(entry)}{menuButton(entry)}</div></td></tr>)}</tbody></table></div> :
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-tint-emerald/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-tint-emerald/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-edge"}`}><div className="absolute right-2.5 top-2.5 z-10"><SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div>{chatButton(entry, "absolute right-9 top-1.5 z-10")}{menuButton(entry, "absolute right-[4.25rem] top-1.5 z-10")}<button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryThumb entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-strong" title={entry.name}>{entry.document?.title || entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-faint"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visibleEntries.map((entry) => <article key={entry.path} draggable={movable(entry) && !busy} onDragStart={(event) => dragStart(event, entry)} onDragEnd={dragEnd} {...entryDrop(entry)} className={`relative rounded-2xl border p-4 transition ${dragPaths.includes(entry.path) ? "opacity-40" : ""} ${dropTarget === entry.path ? "border-emerald-400 bg-tint-emerald/40 ring-2 ring-emerald-400" : selected.has(entry.path) ? "border-emerald-500/80 bg-tint-emerald/25 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]" : "border-edge bg-panel hover:border-edge"}`}><div className="absolute right-2 top-2 z-10 flex items-center gap-0.5">{chatButton(entry)}{menuButton(entry)}<SelectionCheckbox checked={selected.has(entry.path)} onChange={() => toggle(entry.path)} label={`${entry.name} 선택`}/></div><button type="button" onClick={() => openEntry(entry)} className="block w-full text-left"><EntryThumb entry={entry}/><h2 className="mt-3 truncate text-xs font-bold text-strong" title={entry.name}>{entry.document?.title || entry.name}</h2><div className="mt-2 flex justify-between text-[10px] text-faint"><span>{entry.kind === "folder" || entry.kind === "work-folder" ? "폴더" : entry.contentType || "파일"}</span><span>{entry.kind === "file" ? formatBytes(entry.size) : entry.kind === "work-folder" ? `${entry.itemCount || 0}개` : ""}</span></div></button></article>)}</div> :
         <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-edge text-center text-sm leading-7 text-faint">{query ? "검색 결과가 없습니다." : embedded ? "넣어 둔 파일이 없습니다. 파일을 여기에 끌어다 놓거나, 파일을 이 날짜 폴더로 끌어다 놓거나 파일 추가로 올려 주세요." : <>이 폴더가 비어 있습니다.<br/>새 문서를 작성하거나 폴더·파일을 추가해 주세요.</>}</div>}
       </>}
       {viewMode === "board" && loading && <div className="p-12 text-center text-sm text-faint">문서를 불러오는 중…</div>}

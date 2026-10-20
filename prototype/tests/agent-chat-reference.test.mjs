@@ -99,7 +99,7 @@ test("업무 파일의 폴더(일반·날짜)도 채팅에 담을 수 있고, �
   assert.match(explorer, /M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z/);
   assert.match(explorer, /<td className="p-3"><div className="flex items-center justify-end gap-1">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div><\/td><\/tr>\)\}<\/tbody>/, "목록 보기: 아이콘은 행 오른쪽 끝 칸(업무 폴더·보고와 같은 위치)");
   assert.match(explorer, /<th className="p-3">수정일<\/th><th className="w-24 p-3"><\/th><\/tr><\/thead>/);
-  assert.match(explorer, /\{chatButton\(entry, "absolute right-9 top-1\.5 z-10"\)\}/, "카드 보기");
+  assert.match(explorer, /<div className="absolute right-2 top-2 z-10 flex items-center gap-0\.5">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<SelectionCheckbox /, "카드 보기: 말풍선·더보기·선택을 오른쪽 위 한 줄에");
   // 업무 폴더 화면이 콜백을 탐색기(루트·날짜 폴더 안)에 넘긴다
   assert.equal((work.match(/onAddChatReference=\{onAddChatReference\} onChatAbout=\{onChatAbout\} chatReferenceKeys=\{chatReferenceKeys\}/g) || []).length, 1, "날짜 폴더 안 탐색기");
   assert.match(work, /onAddChatReference=\{onAddChatReference\}\s*onChatAbout=\{onChatAbout\}\s*chatReferenceKeys=\{chatReferenceKeys\}\s*\/>;/, "루트 탐색기");
@@ -137,15 +137,18 @@ test("업무 파일에 추가한 파일도 지목·더보기 메뉴가 붙고, �
   assert.match(explorer, /return \{ kind: "file", path: entry\.path, title: entry\.name, mediaKind, \.\.\.\(mediaKind === "image" \? \{ url: getCompanyFilePreviewUrl\(entry\) \} : \{\}\) \};/);
   assert.match(explorer, /const referenceable = \(entry: CompanyFileEntry\) => entry\.kind === "folder" \|\| entry\.kind === "work-folder" \|\| entry\.kind === "file";/);
   assert.match(explorer, /if \(!onAddChatReference \|\| !referenceable\(entry\)\) return null;/);
-  assert.match(explorer, /function menuButton\(entry: CompanyFileEntry, className = ""\)/);
-  assert.match(explorer, /aria-label=\{`\$\{entry\.name\} 더보기 메뉴`\} aria-expanded=\{open\}>•••<\/button>/);
+  assert.match(explorer, /function menuButton\(entry: CompanyFileEntry\)/);
+  assert.match(explorer, /aria-label=\{`\$\{entry\.name\} 더보기 메뉴`\} aria-expanded=\{open\} aria-haspopup="menu">\s*<EllipsisIcon /);
+  // 메뉴는 body 포털 + 버튼 좌표 고정 위치 — 카드 안 엉뚱한 기준 상자나 표 overflow 에 끌려가지 않는다(2026-10-20)
+  assert.match(explorer, /createPortal\(<div role="menu" style=\{menuStyle\} className="fixed z-\[70\]/);
+  assert.match(explorer, /const left = Math\.min\(Math\.max\(8, rowMenuAnchor\.right - menuWidth\), window\.innerWidth - menuWidth - 8\);/);
   assert.match(explorer, /hover:bg-edge" title="채팅으로 이동해 이 항목을 지목해요 — 예: '이걸로 영상 만들어줘'">채팅<\/button>/);
   assert.match(explorer, /\{entry\.kind === "file" \? "열기" : "폴더 열기"\}<\/button>/);
   assert.match(explorer, /void downloadEntry\(entry\); \}\}[^>]*>다운로드<\/button>/);
   assert.match(explorer, /void renameEntry\(entry\); \}\}[^>]*>이름 변경<\/button>/);
   assert.match(explorer, /void removeEntries\(\[entry\]\); \}\}[^>]*>삭제<\/button>/);
   assert.match(explorer, /<div className="flex items-center justify-end gap-1">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<\/div>/, "목록 보기");
-  assert.match(explorer, /\{menuButton\(entry, "absolute right-\[4\.25rem\] top-1\.5 z-10"\)\}/, "카드 보기");
+  assert.match(explorer, /<div className="absolute right-2 top-2 z-10 flex items-center gap-0\.5">\{chatButton\(entry\)\}\{menuButton\(entry\)\}<SelectionCheckbox /, "카드 보기: 말풍선·더보기·선택을 오른쪽 위 한 줄에");
   // 선택 툴바의 이름 변경·삭제는 같은 항목 함수를 쓴다(중복 없음)
   assert.match(explorer, /async function renameSelected\(\) \{[\s\S]*?await renameEntry\(entry\);/);
   assert.match(explorer, /async function removeSelected\(\) \{ await removeEntries\(selectedEntries\); \}/);
