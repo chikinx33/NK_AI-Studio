@@ -21,6 +21,7 @@ import {
   processJob,
   publishStepList,
   tiktokInboxSentText,
+  tiktokCaptionPasteText,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -272,8 +273,8 @@ export function approvalDoneText(type: string, output: any, input: any): string 
     if (others.length) parts.push(`${others.join(", ")} 발행을 진행했어요.`);
     if (o.tiktok) {
       parts.push(o.tiktok.status === "sent_to_inbox"
-        ? tiktokInboxSentText(String(o.tiktok.account || ""))
-        : `TikTok 초안함 전송이 처리 중이에요(publishId ${o.tiktok.publishId || "?"}). 제가 계속 지켜보다가 TikTok 이 알림함 전송을 확인하면 채팅으로 알려드릴게요.`);
+        ? tiktokInboxSentText(String(o.tiktok.account || ""), String(o.tiktok.caption || ""))
+        : `TikTok 초안함 전송이 처리 중이에요(publishId ${o.tiktok.publishId || "?"}). 제가 계속 지켜보다가 TikTok 이 알림함 전송을 확인하면 채팅으로 알려드릴게요.${tiktokCaptionPasteText(String(o.tiktok.caption || ""))}`);
     }
     if (o.notice) parts.push(String(o.notice));
     return `✅ 승인 확인! ${parts.join(" ") || "발행을 진행했어요."}`;

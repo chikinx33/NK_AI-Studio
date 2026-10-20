@@ -30,7 +30,9 @@ test("발행 도구는 TikTok 을 막지 않고 초안함(inbox) 엔드포인트
   assert.match(fn, /body: JSON\.stringify\(\{ mediaGcsPath: item\.mediaGcsPath, caption: description \}\)/);
   assert.match(fn, /TikTok 은 초안함 전송이라 예약이 없어요/, "예약은 안내 후 skip");
   // 2026-10-20: '도착했다'고 단정하지 않고 TikTok 이 확인한 사실과 어느 계정으로 갔는지를 말한다(안내 문구는 한 곳).
-  assert.match(fn, /notices: \[status === "sent_to_inbox" \? tiktokInboxSentText\(tiktok\.account\)/);
+  // 안내는 승인 완료 문구 한 곳에서만 — 채널 결과(notices)에도 넣으면 두 번 나온다.
+  assert.doesNotMatch(fn, /notices: \[status === "sent_to_inbox"/);
+  assert.match(fn, /caption: description\.slice\(0, 2200\)/, "영상 초안엔 글이 안 가므로 붙여 넣을 글을 남긴다");
   assert.match(fn, /account: String\(r\.account \|\| ""\)/);
   const text = fnBody(shared, "export function tiktokInboxSentText(");
   assert.match(text, /SEND_TO_USER_INBOX/);
@@ -108,7 +110,8 @@ test("채널별 초안(drafts)·유튜브 메타·재연결 안내·승인 문�
   assert.match(run, /platform === "facebook" && \(d\.linkUrl \|\| prepared\?\.linkUrl\)/);
   assert.match(run, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
   assert.match(run, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
-  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? tiktokInboxSentText\(String\(o\.tiktok\.account \|\| ""\)\)/);
+  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? tiktokInboxSentText\(String\(o\.tiktok\.account \|\| ""\), String\(o\.tiktok\.caption \|\| ""\)\)/);
+  assert.match(review, /\$\{tiktokCaptionPasteText\(String\(o\.tiktok\.caption \|\| ""\)\)\}/, "처리 중일 때도 붙여 넣을 글을 준다");
   assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
   assert.match(review, /\$\{p\?\.what \? `\(\$\{p\.what\}\)` : ""\}/, "승인 문구에 채널별로 무엇을 올렸는지");
 });
@@ -124,7 +127,7 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.match(fn, /output->'tiktok'->>'status'='processing'/);
   assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
   assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
-  assert.match(fn, /await say\(`✅ \$\{tiktokInboxSentText\(String\(tk\.account \|\| ""\)\)\}`\);/);
+  assert.match(fn, /await say\(`✅ \$\{tiktokInboxSentText\(String\(tk\.account \|\| ""\), String\(tk\.caption \|\| ""\)\)\}`\);/);
   // SNS 세팅 배포 이력의 '처리 중' 줄도 같은 상태로 바꾼다(배포 완료 표시까지).
   assert.match(fn, /updatePublishRowStatus\(ctx\.env, ctx\.userId, String\(episode\.projectId\), String\(episode\.brandId \|\| ""\),\s*`tiktok_\$\{tk\.publishId\}`, "tiktok", "sent_to_inbox"\)/);
   assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
@@ -221,4 +224,18 @@ test("직원이 도구 결과를 흉내 내어 지어낸 블록은 발언에서 
   assert.match(orch, /facts: \[[\s\S]*페이스북: 사진 여러 장은 한 게시물로 묶인다\. 영상은 사진과 같은 게시물에 넣을 수 없다/, "채널 규격은 페르소나가 아니라 회사 공통 사실");
   assert.match(orch, /\$\{DEFAULT_COMPANY\.goals\}\n\n\$\{DEFAULT_COMPANY\.facts\}/);
   assert.match(orch, /채널을 열거하지 말고 반드시 platforms:\["all"\] 로/);
+});
+
+test("TikTok 영상 초안엔 글이 같이 가지 않는다 — 안내에 그 사실과 붙여 넣을 글 전문을 준다(2026-10-20)", async () => {
+  const shared = await read("prototype/functions/api/agent/_shared.ts");
+  const src = fnBody(shared, "export function tiktokCaptionPasteText(") + "\n}\n" + fnBody(shared, "export function tiktokInboxSentText(") + "\n}\n";
+  const esbuild = (await import("node:module")).createRequire(import.meta.url)("../../ai-company-app/node_modules/esbuild");
+  const { tiktokCaptionPasteText, tiktokInboxSentText } = new Function(`${esbuild.transformSync(src.replace(/export /g, ""), { loader: "ts" }).code}\nreturn { tiktokCaptionPasteText, tiktokInboxSentText };`)();
+  assert.equal(tiktokCaptionPasteText("  "), "");
+  const caption = "집사 없는 거실, 꼬마 로봇의 비밀 임무가 시작됐다!\n#fyp #네코반";
+  const text = tiktokInboxSentText("raviok_studio", caption);
+  assert.match(text, /@raviok_studio 계정/);
+  assert.match(text, /TikTok API 제한으로 글\(캡션\)이 함께 가지 않아요/);
+  assert.ok(text.endsWith(`:\n${caption}`), "글 전문을 그대로 붙인다");
+  assert.doesNotMatch(tiktokInboxSentText("raviok_studio"), /캡션/);
 });
