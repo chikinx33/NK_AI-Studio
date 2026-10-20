@@ -25,7 +25,7 @@ import {
   listAgentKnowledge,
   addCompanyKnowledge,
   companyKnowledgeCounts,
-  listPendingReviewJobs,
+  listAgentJobsForPrompt,
   upsertProject,
   listProjects,
   deleteProjectByName,
@@ -232,9 +232,32 @@ interface BuildSystemOpts {
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
   companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[]; collapsed?: boolean; order?: number }[]; // 현재 프로젝트 목록
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
+  recentJobs?: RecentJobBrief[]; // 최근 24시간에 끝났거나 실행 중인 잡(실제 실행 기록)
   clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
   hasAttachments?: boolean; // 이번 턴에 사용자가 이미지·PDF를 첨부했는가(모델이 직접 보고 있음)
   companyBrands?: BrandBrief[]; // 브랜드 허브의 브랜드·IP 정의(카피·기획·이미지가 이 정의를 따른다)
+}
+
+export interface RecentJobBrief { type: string; agentName: string; status: string; at: string; result: string }
+
+/**
+ * 최근 끝난 작업 블록. 화면·대화 기록에서는 RUN 마커가 지워지고 승인 결과도 별도 메시지라,
+ * 직원이 자기 이전 답만 보고 "마커가 실행되지 않았다 → 등록 안 됐다" 고 잘못 답했다(2026-10-20 content_register).
+ * 실제 잡 기록을 사실의 근거로 준다.
+ */
+export function recentJobsBlock(list: RecentJobBrief[] | undefined): string {
+  if (!list || !list.length) return "";
+  const label: Record<string, string> = { approved: "완료", error: "실패", working: "실행 중" };
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+  return `\n\n## ✅ 최근 24시간 작업 실행 기록 (실제 기록 — 대화 기억보다 우선)\n` +
+    list.map((j) => `- [${label[j.status] || j.status}${j.at ? ` · ${when(j.at)}` : ""}] ${j.type} (담당: ${j.agentName})${j.result ? ` — ${j.result.replace(/\s+/g, " ")}` : ""}`).join("\n") +
+    `\n★ "됐어?"·"등록까지 한 거야?"·"배포했어?" 같은 질문에는 이 기록으로 사실대로 답한다(더 필요하면 jobs_status·publish_history 를 부른다). ` +
+    `대화 기록에는 이전 답의 RUN 마커가 지워져 보이지 않는다 — 마커가 안 보인다는 이유로 '실행되지 않았다'고 판단하지 마라. ` +
+    `'완료'로 기록된 일을 안 됐다고 하거나, 기록에 없는 일을 됐다고 하지 않는다.`;
 }
 
 /** 브랜드 허브 정의를 프롬프트용으로 추린 것. */
@@ -716,7 +739,7 @@ ${DEFAULT_COMPANY.identity}
 
 ${DEFAULT_COMPANY.goals}
 
-${DEFAULT_COMPANY.facts}${companyKnowBlock}${skillsBlock}${projectsBlock}${brandsBlock(opts.companyBrands)}${pendingBlock}
+${DEFAULT_COMPANY.facts}${companyKnowBlock}${skillsBlock}${projectsBlock}${brandsBlock(opts.companyBrands)}${pendingBlock}${recentJobsBlock(opts.recentJobs)}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -1871,14 +1894,15 @@ export async function runGroupChat(
   const turnProjectId = projectIdFromMessage(deps.firstMessage);
   // DB 선취 캐시 — company knowledge·skills·projects·auth·pendingJobs를 한 번만 읽고 전 직원이 공유.
   // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
-  const [cachedCompanyKnowledge, cachedSkills, cachedProjects, cachedPendingJobsRaw] = await Promise.all([
+  const [cachedCompanyKnowledge, cachedSkills, cachedProjects, cachedJobs] = await Promise.all([
     // 지식이 많으면 사용자 메시지와 관련된 것만(색인 검색). 이 턴의 모든 직원이 공유한다.
     selectCompanyKnowledgeForPrompt(env, sql, userId, (deps.firstMessage || opts.autoTrigger || "").replace(/^\s*\[캔버스 프로젝트[^\]]*\]\s*/, ""), { projectId: turnProjectId })
       .catch(() => ({ lines: [] as string[], total: 0, retrieved: false })),
     listSkills(sql, userId).catch(() => [] as any[]),
     listProjects(sql, userId).catch(() => [] as any[]),
-    listPendingReviewJobs(sql, userId).catch(() => [] as any[]),
+    listAgentJobsForPrompt(sql, userId).catch(() => ({ pending: [] as any[], recent: [] as any[] })),
   ]);
+  const cachedPendingJobsRaw = cachedJobs.pending;
   // 브랜드·IP 정의도 한 번 읽어 전 직원이 공유한다(리치·잉크·마키·플롯·픽셀이 같은 브랜드 세계 안에서 말하게).
   const cachedBrands = toolCtx?.request ? await loadBrandBriefs({ request: toolCtx.request, authHeader: toolCtx.authHeader }) : [];
   const cachedAuth = await resolvedAuthHeaders(sql, userId, env).catch(() => null);
@@ -1900,6 +1924,13 @@ export async function runGroupChat(
     companyProjects: cachedProjects as any[],
     companyBrands: cachedBrands,
     pendingJobs: pendingJobsCtx,
+    recentJobs: cachedJobs.recent.map((j: any) => ({
+      type: String(j.type),
+      agentName: getAgent(j.agent_id)?.name || String(j.agent_id),
+      status: String(j.status),
+      at: String(j.updated_at || ""),
+      result: String(j.status === "error" ? (j.error || "") : (j.result_text || "")).slice(0, 300),
+    })),
     resolvedAuth: cachedAuth || undefined,
     modelSelections: cachedModelSelections,
     clientNow: deps.clientNow,

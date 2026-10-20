@@ -277,6 +277,12 @@ export function approvalDoneText(type: string, output: any, input: any): string 
     if (o.notice) parts.push(String(o.notice));
     return `✅ 승인 확인! ${parts.join(" ") || "발행을 진행했어요."}`;
   }
+  if (type === "content_register") {
+    // 일반 문구("요청하신 작업을 실행했어요")만 남기면 다음 턴의 직원이 무엇이 끝났는지 몰라 '등록이 안 됐다'고 답했다.
+    const where = o.title ? `'${o.title}'(${o.projectId || "?"})` : String(o.projectId || "에피소드");
+    const formats = Array.isArray(o.formats) && o.formats.length ? ` SNS 세팅에 ${o.formats.join(", ")} 초안까지 저장했어요.` : "";
+    return `✅ 승인 확인! 완성 콘텐츠를 ${where} 에 등록했어요.${formats} 아직 SNS 발행은 하지 않았어요 — 배포는 따로 승인이 필요해요.`;
+  }
   if (type === "project_create") {
     const series = o.seriesTitle || inp.seriesTitle || inp.projectName || "";
     const ep = o.episodeTitle || inp.episodeTitle || "";

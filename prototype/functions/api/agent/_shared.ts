@@ -1600,12 +1600,27 @@ export async function clearPendingApprovals(sql: SqlFn, userId: string): Promise
 }
 
 /** 현재 review_pending 상태인 잡 목록 — 에이전트가 취소 대상으로 인식할 수 있는 목록 */
-export async function listPendingReviewJobs(sql: SqlFn, userId: string): Promise<AgentJob[]> {
-  const rows = await sql(
-    "SELECT * FROM agent_jobs WHERE user_id = $1 AND status = 'review_pending' ORDER BY created_at DESC LIMIT 20",
+/**
+ * 직원 프롬프트용 잡 목록 — 승인 대기와 최근 24시간에 끝난(또는 실행 중인) 잡을 한 번의 쿼리로 읽는다(서브요청 50번 한도).
+ * 끝난 잡은 결과 요약(notice 등)만 꺼내 큰 output 을 싣지 않는다.
+ * 대화 기록에는 RUN 마커가 지워져 남아서, 이 목록이 없으면 직원이 끝난 작업을 '실행되지 않았다'고 판단했다.
+ */
+export async function listAgentJobsForPrompt(sql: SqlFn, userId: string): Promise<{ pending: AgentJob[]; recent: any[] }> {
+  const rows: any[] = await sql(
+    `SELECT id, type, agent_id, status, review_status, error, updated_at,
+       CASE WHEN status = 'review_pending' THEN input END AS input,
+       CASE WHEN status = 'review_pending' THEN NULL
+         ELSE left(coalesce(output->>'notice', output->>'summary', output->>'message', input->>'title', input->>'prompt', ''), 300) END AS result_text
+     FROM agent_jobs
+     WHERE user_id = $1 AND (status = 'review_pending'
+       OR (status IN ('approved', 'error', 'working') AND updated_at > now() - interval '24 hours'))
+     ORDER BY updated_at DESC LIMIT 40`,
     [userId]
   );
-  return rows as AgentJob[];
+  return {
+    pending: rows.filter((r) => r.status === "review_pending").slice(0, 20) as AgentJob[],
+    recent: rows.filter((r) => r.status !== "review_pending").slice(0, 12),
+  };
 }
 
 export async function setJobStatus(
