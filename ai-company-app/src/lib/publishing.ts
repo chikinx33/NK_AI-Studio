@@ -97,6 +97,24 @@ export async function uploadImageUrl(sourceUrl: string, target?: { itemId: strin
 export const createPairingCode = () => post<{ code: string; expiresAt: string }>("/api/publishing/devices", { action: "create_code" });
 export const revokeDevice = (id: string) => post("/api/publishing/devices", { action: "revoke", id });
 
+/**
+ * NK Publisher(PC 앱) 설치 파일 정보. 원천은 저장소의 prototype/downloads/nk-publisher/latest.json 한 파일이다
+ * (새 버전이 나오면 그 파일만 고친다). url 이 비었거나 https 가 아니면 "준비 중".
+ */
+export interface PublisherRelease { version: string; fileName: string; url: string; size: number; sha256: string; releasedAt: string }
+export async function getPublisherRelease(): Promise<PublisherRelease | null> {
+  try {
+    const res = await fetch("/downloads/nk-publisher/latest.json", { cache: "no-store" });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const url = String(d?.url || "");
+    if (!/^https:\/\//i.test(url)) return null;
+    return { version: String(d.version || ""), fileName: String(d.fileName || ""), url, size: Number(d.size) || 0, sha256: String(d.sha256 || ""), releasedAt: String(d.releasedAt || "") };
+  } catch {
+    return null;
+  }
+}
+
 /** 저장된 이미지 읽기(로그인 세션으로 본인 파일만). */
 export async function fetchStoredImage(objectName: string): Promise<Blob> {
   const res = await fetch(`/api/media/proxy?objectName=${encodeURIComponent(objectName)}`);

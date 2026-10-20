@@ -48,3 +48,7 @@
   Cache-Control: public, max-age=3600
 /*.woff2
   Cache-Control: public, max-age=86400
+
+# NK Publisher 설치 파일 정보(버전·주소·sha256). 새 버전이 바로 보이게 캐시하지 않는다.
+/downloads/nk-publisher/*
+  Cache-Control: no-cache, must-revalidate

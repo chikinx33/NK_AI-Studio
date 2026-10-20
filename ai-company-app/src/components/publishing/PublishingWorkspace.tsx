@@ -10,6 +10,7 @@ import ChannelsTab from "./ChannelsTab";
 import SettingsTab from "./SettingsTab";
 import ItemEditor from "./ItemEditor";
 import CopyView from "./CopyView";
+import PublisherDownload from "./PublisherDownload";
 import TestedView from "./TestedView";
 
 /**
@@ -97,6 +98,7 @@ export default function PublishingWorkspace() {
             );
           })}
         </nav>
+        <PublisherDownload ctx={ctx} />
         <button type="button" onClick={() => setTab(pc.kind === "none" ? "settings" : "overview")}
           className={`inline-flex h-8 min-w-[150px] items-center justify-center gap-2 rounded-full border px-3 text-[11px] font-semibold transition hover:bg-panel ${pc.kind === "online" ? "border-emerald-500/40 text-tone-emerald" : pc.kind === "offline" ? "border-amber-500/40 text-tone-amber" : "border-edge text-muted"}`}>
           <span className={`h-2 w-2 rounded-full ${pc.kind === "online" ? "bg-tone-emerald" : pc.kind === "offline" ? "bg-tone-amber" : "bg-muted"}`} />

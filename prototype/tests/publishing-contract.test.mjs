@@ -177,3 +177,24 @@ test("약속 사본은 원본과 같다(두 저장소가 모두 있는 PC 에서
   assert.match(doc, /`blogId`를 비우면 PC 앱은 로그인된 계정의 블로그에 쓴다/);
   assert.match(doc, /\*\*글자 안 서식 \(`runs`, `itemRuns`, 선택\)\*\*/);
 });
+
+test("NK Publisher 내려받기: 설치 파일 정보는 downloads/nk-publisher/latest.json 한곳, 없으면 준비 중, 화면은 범용(특정 회사·게임 이름 없음)", () => {
+  const manifest = JSON.parse(read("prototype/downloads/nk-publisher/latest.json"));
+  for (const key of ["version", "fileName", "url", "size", "sha256", "releasedAt"]) assert.ok(key in manifest, `latest.json 에 ${key}`);
+  if (manifest.url) {
+    assert.match(manifest.url, /^https:\/\//, "설치 파일 주소는 https");
+    assert.match(manifest.sha256, /^[a-f0-9]{64}$/, "sha256 은 64자리");
+    assert.ok(manifest.size > 0 && manifest.version, "버전·크기");
+  }
+  assert.ok(fs.existsSync(path.join(root, "prototype/images/nk-publisher-icon.png")), "앱 아이콘 사본");
+  assert.match(read("prototype/_headers"), /\/downloads\/nk-publisher\/\*\n\s+Cache-Control: no-cache/);
+  const lib = read("ai-company-app/src/lib/publishing.ts");
+  assert.match(lib, /fetch\("\/downloads\/nk-publisher\/latest\.json", \{ cache: "no-store" \}\)/);
+  assert.ok(lib.includes("if (!/^https:\\/\\//i.test(url)) return null;"), "https 주소가 아니면 준비 중");
+  const dl = read("ai-company-app/src/components/publishing/PublisherDownload.tsx");
+  assert.match(dl, /\/images\/nk-publisher-icon\.png/);
+  assert.match(read("ai-company-app/src/components/publishing/PublishingWorkspace.tsx"), /<PublisherDownload ctx=\{ctx\} \/>/);
+  for (const f of fs.readdirSync(path.join(root, "ai-company-app/src/components/publishing"))) {
+    assert.doesNotMatch(read(`ai-company-app/src/components/publishing/${f}`), /RAVIOK|NEKOBAN|ELIDUS|PuzzleKnight|ShakeShape/i, `${f} 는 범용 문구만`);
+  }
+});
