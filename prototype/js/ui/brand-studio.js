@@ -34,12 +34,34 @@
     });
     return out;
   }
-  // 에이전트가 올리는 중인 채널이 있는 동안만 서버 기록(저장소, DB 아님)을 다시 읽어 스피너·배포 완료를 갱신한다.
-  // 다 끝나거나 표시가 오래되면 멈춘다 — 상시 폴링하지 않는다.
-  function scheduleAgentDeployRefresh(root, project, brand, agentDeploying) {
+  // 에이전트 창(ai-company-app runPublishSteps)이 같은 브라우저의 다른 창에 발행 시작·채널 완료를 알리는 채널.
+  // 전엔 배포 화면을 먼저 열어 두면 그 뒤 에이전트가 올리기 시작해도 이 화면이 알 길이 없어(갱신은 그릴 때
+  // '올리는 중'이 보일 때만 시작) 새로고침 전까지 스피너·배포 완료가 나타나지 않았다(2026-10-21).
+  var AGENT_PUBLISH_CHANNEL = 'nk-agent-publish';
+  // 시작 알림 뒤 이 시간 동안은 '올리는 중' 표시가 아직 안 보여도 계속 다시 읽는다(서버가 표시를 남기기 전 읽기 대비).
+  var AGENT_PUBLISH_EXPECT_MS = 30000;
+  var _agentDeployExpectUntil = 0;
+  var _agentDeployCtx = null;
+  (function listenAgentPublish() {
+    if (typeof BroadcastChannel !== 'function') return;
+    try {
+      new BroadcastChannel(AGENT_PUBLISH_CHANNEL).onmessage = function (ev) {
+        var msg = (ev && ev.data) || {};
+        var ctx = _agentDeployCtx;
+        if (!ctx || !ctx.root.isConnected) return;
+        if (msg.type === 'start') _agentDeployExpectUntil = Date.now() + AGENT_PUBLISH_EXPECT_MS;
+        scheduleAgentDeployRefresh(ctx.root, ctx.project, ctx.brand, readAgentDeploying(ctx.project && ctx.project.payload), msg.type === 'start' ? 1500 : 300);
+      };
+    } catch (_) { }
+  })();
+  // 에이전트가 올리는 중인 채널이 있는 동안(또는 시작 알림 직후)만 서버 기록(저장소, DB 아님)을 다시 읽어
+  // 스피너·배포 완료를 갱신한다. 다 끝나거나 표시가 오래되면 멈춘다 — 상시 폴링하지 않는다.
+  function scheduleAgentDeployRefresh(root, project, brand, agentDeploying, delayMs) {
     if (_agentDeployTimer) { clearTimeout(_agentDeployTimer); _agentDeployTimer = null; }
+    _agentDeployCtx = { root: root, project: project, brand: brand };
     var projectId = String(project && project.id || '').trim();
-    if (!projectId || !Object.keys(agentDeploying).length || !NK.api || !NK.api.projectGet) return;
+    var expecting = Date.now() < _agentDeployExpectUntil;
+    if (!projectId || (!Object.keys(agentDeploying).length && !expecting) || !NK.api || !NK.api.projectGet) return;
     _agentDeployTimer = setTimeout(async function () {
       _agentDeployTimer = null;
       if (!root.isConnected) return;
@@ -61,7 +83,7 @@
       } catch (_) {
         scheduleAgentDeployRefresh(root, project, brand, readAgentDeploying(project && project.payload));
       }
-    }, AGENT_DEPLOYING_REFRESH_MS);
+    }, delayMs || AGENT_DEPLOYING_REFRESH_MS);
   }
   // 배포 이력(brandStudioPublishResults) 저장 줄. 기록은 '목록 전체'를 저장하므로 동시에 두 건이 저장되면
   // 나중 것이 앞 것을 지운다. 한 번에 하나씩, 직전 저장이 끝난 뒤의 최신 목록에 덧붙인다(2026-10-14:

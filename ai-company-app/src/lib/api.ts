@@ -1805,6 +1805,12 @@ export async function approveItem(id: string) {
  * 마무리 메시지(done)가 온 응답의 message 를 돌려준다.
  */
 export async function runPublishSteps(jobId: string, steps: { index: number; platform: string }[]): Promise<any | null> {
+  // 같은 브라우저의 다른 창에 열린 SNS 세팅 배포 화면(brand-studio.js 'nk-agent-publish')이
+  // 새로고침 없이 스피너·배포 완료를 갱신하도록 시작·채널 완료·마무리를 알린다.
+  const announce = (msg: Record<string, unknown>) => {
+    try { const ch = new BroadcastChannel("nk-agent-publish"); ch.postMessage({ jobId, ...msg }); ch.close(); } catch { /* 미지원 브라우저 */ }
+  };
+  announce({ type: "start" });
   const post = async (body: Record<string, unknown>) => {
     const res = await fetch("/api/agent/publish-step", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId, ...body }),
@@ -1819,8 +1825,11 @@ export async function runPublishSteps(jobId: string, steps: { index: number; pla
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       return post({ index: step.index, abandon: true, reason: `응답을 받지 못했어요(${reason})` }).catch(() => null);
+    } finally {
+      announce({ type: "step", index: step.index, platform: step.platform });
     }
   }));
+  announce({ type: "done" });
   return results.find((data) => data?.done)?.message || null;
 }
 

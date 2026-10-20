@@ -63,8 +63,8 @@ test('에이전트가 올리는 동안 배포 화면에 스피너, 채널이 끝
   assert.match(records, /export const DEPLOYING_STALE_MS = 15 \* 60 \* 1000;/);
   assert.match(studio, /var AGENT_DEPLOYING_STALE_MS = 15 \* 60 \* 1000;/, '서버와 같은 만료');
   assert.match(studio, /var isDeploying = !!_deployingFormats\[formatId\] \|\| !!agentDeploying\[formatId\];/);
-  // 올리는 중인 채널이 있을 때만 다시 읽는다(상시 폴링 금지)
-  assert.match(studio, /if \(!projectId \|\| !Object\.keys\(agentDeploying\)\.length \|\| !NK\.api \|\| !NK\.api\.projectGet\) return;/);
+  // 올리는 중인 채널이 있을 때(또는 에이전트 시작 알림 직후 잠시)만 다시 읽는다(상시 폴링 금지)
+  assert.match(studio, /if \(!projectId \|\| \(!Object\.keys\(agentDeploying\)\.length && !expecting\) \|\| !NK\.api \|\| !NK\.api\.projectGet\) return;/);
   assert.doesNotMatch(studio.slice(studio.indexOf('function scheduleAgentDeployRefresh'), studio.indexOf('function scheduleAgentDeployRefresh') + 2000), /setInterval/);
 });
 
@@ -85,4 +85,21 @@ test('배포 완료 라벨이 하나라도 있으면 04(배포) 단계를 마친
   assert.match(studio, /&& hasDraftForAnyFormat\s*&& publishStepDone;/, '모든 단계를 마친 에피소드는 04 로 바로 들어간다');
   const persist = studio.slice(studio.indexOf('function persistDeployedFormats()'), studio.indexOf('function persistDeployedFormats()') + 800);
   assert.match(persist, /root\.querySelector\('\.bsf-step\[data-step="4"\]'\)/, '배포 완료를 켜고 끄면 새로고침 없이 04 체크를 맞춘다');
+});
+
+// 2026-10-21 엔케 지적: 배포 화면을 다른 창에 먼저 열어 두고 에이전트로 일괄 배포하자, 새로고침 전까지
+// 스피너·배포 완료가 하나도 나타나지 않았다. 배포 화면은 그릴 때 '올리는 중'이 보여야만 다시 읽기를 시작했다.
+test('에이전트 발행은 같은 브라우저의 배포 화면에 시작·채널 완료를 알리고, 배포 화면은 그 알림으로 다시 읽는다', () => {
+  const api = read('ai-company-app/src/lib/api.ts');
+  const studio = read('prototype/js/ui/brand-studio.js');
+  const run = api.slice(api.indexOf('export async function runPublishSteps'), api.indexOf('// 알람(리마인더) 한 건.'));
+  assert.match(run, /new BroadcastChannel\("nk-agent-publish"\)/);
+  assert.match(run, /announce\(\{ type: "start" \}\)/);
+  assert.match(run, /finally \{\s*announce\(\{ type: "step"/);
+  assert.match(run, /announce\(\{ type: "done" \}\)/);
+  assert.match(studio, /var AGENT_PUBLISH_CHANNEL = 'nk-agent-publish';/);
+  assert.match(studio, /new BroadcastChannel\(AGENT_PUBLISH_CHANNEL\)\.onmessage/);
+  // 시작 알림 직후엔 '올리는 중' 표시가 아직 없어도 다시 읽는다(한정된 시간만 — 상시 폴링 금지).
+  assert.match(studio, /if \(msg\.type === 'start'\) _agentDeployExpectUntil = Date\.now\(\) \+ AGENT_PUBLISH_EXPECT_MS;/);
+  assert.match(studio, /\(!Object\.keys\(agentDeploying\)\.length && !expecting\)/);
 });
