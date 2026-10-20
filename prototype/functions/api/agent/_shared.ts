@@ -12,7 +12,7 @@ import { appendPublishRecords, buildPublishRow, setDeployingStep, updatePublishR
 import { analysisToStoryText } from "../_shared/gemini-video";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
-import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
+import { resolvedAuthHeaders, buildClaudeSystem, claudeFetch, credentialOwnerId } from "../_shared/claude-auth.js";
 // 씬 프롬프트 조립 단일 원천 — 브라우저 pipeline-image/video 와 같은 문장을 만든다(패리티 테스트가 지킨다).
 import { buildSceneImagePrompt, buildSceneVideoPrompt } from "../_shared/prompt-assembly.js";
 import { applySceneOrder, analyzeReorder, summarizeWarnings } from "../_shared/scene-order.js";
@@ -8677,10 +8677,13 @@ export async function reconcileSubscriptionJobs(ctx: ToolContext, sql: SqlFn) {
     AND output->>'subscriptionPending'='true' ORDER BY created_at LIMIT 10`, [ctx.userId]);
   if (!pending.length) return;
   await connectorSql(ctx.env);
-  await expireImageJobs(sql, ctx.userId);
+  // 마스터 자원 공유 계정(라비오크)의 이미지 잡은 소유자 연결 대기열(user_id=소유자)에 있고 요청자는 payload.requesterId 다.
+  // 본인 id 로만 찾으면 생성 중인데도 '결과 없음'(subscription_image_result_missing)으로 바로 실패 처리했다.
+  const ownerId = await credentialOwnerId(ctx.env, ctx.userId);
+  await expireImageJobs(sql, ownerId);
   for (const job of pending) {
-    const [image] = await sql('SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2',
-      [ctx.userId, job.output.imageJobId]);
+    const [image] = await sql(`SELECT id,status,result,error FROM nk_subscription_image_jobs WHERE user_id=$1 AND id=$2
+      AND COALESCE(payload->>'requesterId', user_id)=$3`, [ownerId, job.output.imageJobId, ctx.userId]);
     if (image && !['done', 'error', 'cancelled'].includes(image.status)) continue;
     const [claimed] = await sql(`UPDATE agent_jobs SET output=jsonb_set(output,'{resuming}','true'),updated_at=now()
       WHERE user_id=$1 AND id=$2 AND status='working' AND output->>'imageJobId'=$3

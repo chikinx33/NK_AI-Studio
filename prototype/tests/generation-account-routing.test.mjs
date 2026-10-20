@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -175,6 +175,7 @@ for (const approved of [false, true]) test(`agent remains working and resumes on
     internalUrl: (request, url) => new URL(url, request.url),
     setJobStatus: async (_, id, user, patch) => { const job = records.get(id); assert.equal(job.user_id, user); Object.assign(job, patch); return job; },
     connectorSql: async () => sql, expireImageJobs: async () => {}, addMessage: async (_, m) => messages.push(m),
+    credentialOwnerId: async (_, user) => user,
     fileJobAsWorkItem: async () => ({ workId: 'work1', dateKey: '2026-09-17' }) });
   tool.run = api.runImagenTool;
   const ctx = { request: new Request('https://nkstudio.org'), env: {}, userId: 'alice', authHeader: 'Bearer alice', conversationId: 'private-chat', runApproved: approved };
@@ -191,6 +192,39 @@ for (const approved of [false, true]) test(`agent remains working and resumes on
   assert.match(messages[0].text, /본인 ChatGPT 구독/);
 });
 
+// 증상: 라비오크(마스터 자원 공유 계정)로 픽셀에게 그림을 시키면 잡은 소유자 대기열에 들어갔는데
+// 결과 확인은 본인 id 로만 찾아 생성 중에도 'subscription_image_result_missing' 으로 바로 실패했다.
+test('마스터 자원 공유 계정의 에이전트 이미지는 소유자 대기열에서 결과를 찾는다', async () => {
+  const records = new Map([['agent1', { id: 'agent1', type: 'image', input: { prompt: 'glass marble' }, user_id: 'carol', agent_id: 'pixel',
+    status: 'working', output: { subscriptionPending: true, imageJobId: 'image1', imageRequestKey: 'k', imageResults: {}, conversationId: 'main' } }]]);
+  const messages = [], expired = [];
+  let image = { id: 'image1', user_id: 'alice', requesterId: 'carol', status: 'working', result: null, error: '' };
+  const sql = async (query, args) => {
+    if (query.startsWith('SELECT * FROM agent_jobs')) return [...records.values()].filter(j => j.user_id === args[0] && j.status === 'working' && j.output.subscriptionPending).map(j => structuredClone(j));
+    if (query.startsWith('SELECT id,status')) {
+      assert.match(query, /requesterId/);
+      return image.user_id === args[0] && image.id === args[1] && image.requesterId === args[2] ? [{ ...image }] : [];
+    }
+    if (query.startsWith('UPDATE agent_jobs SET output=jsonb_set')) {
+      const job = records.get(args[1]);
+      if (job.status !== 'working' || job.output.resuming) return [];
+      job.output.resuming = true; return [structuredClone(job)];
+    }
+    throw new Error('Unexpected SQL: ' + query);
+  };
+  const api = agentFunctions({ AGENT_TOOLS: {}, AGENT_META: { pixel: { name: '픽셀' } },
+    setJobStatus: async (_, id, user, patch) => { const job = records.get(id); assert.equal(job.user_id, user); Object.assign(job, patch); return job; },
+    connectorSql: async () => sql, expireImageJobs: async (_, owner) => { expired.push(owner); },
+    addMessage: async (_, m) => messages.push(m), credentialOwnerId: async (_, user) => (user === 'carol' ? 'alice' : user) });
+  const ctx = { request: new Request('https://nkstudio.org'), env: {}, userId: 'carol', authHeader: 'Bearer carol' };
+  await api.reconcileSubscriptionJobs(ctx, sql);
+  assert.deepEqual(expired, ['alice'], '만료 정리도 소유자 대기열에 한다');
+  assert.equal(records.get('agent1').status, 'working', '생성 중이면 실패로 닫지 않는다');
+  assert.equal(messages.length, 0);
+  image = { ...image, status: 'error', error: 'chatgpt_image_usage_limit' };
+  await api.reconcileSubscriptionJobs(ctx, sql);
+  assert.equal(records.get('agent1').error, 'chatgpt_image_usage_limit', '실제 실패 사유를 그대로 알린다');
+});
 test('approval starts a subscription image once and returns a working message, never a false completion', async () => {
   const job = { id: 'agent1', status: 'review_pending', user_id: 'alice', agent_id: 'pixel', type: 'set_master',
     input: { _conversationId: 'private-chat' }, output: null };
