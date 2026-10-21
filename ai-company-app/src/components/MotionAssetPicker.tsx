@@ -44,15 +44,34 @@ export const MOTION_ASSET_TEXT = {
     confirmNoMusicOk: "음악 없이 진행",
     confirmNoMusicCancel: "음악 고르기",
     pickMusicFirst: "배경음악을 고른 뒤 다시 시작해 주세요.",
-    phaseAssets: "자산을 이 PC로 옮기는 중 {p}%",
-    phaseDirector: "감독이 장면 코드를 쓰는 중 ({n}자)",
-    phaseRender: "렌더 중 {p}%",
     subscriptionRequired: "인포그래픽 영상은 Claude 구독 연결이 필요해요(비용 0원 정책). 'API 설정'에서 구독을 연결해 주세요.",
     directorProblems: "감독이 쓴 장면 코드에 문제가 있어요: {p}",
     rendererUnreachable: "이 PC 렌더러에 연결하지 못했어요. 이 PC에서 NK Studio 렌더러(node server.js)가 켜져 있는지 확인해 주세요.",
     noWork: "렌더할 회사 업무가 없어요. 먼저 작업을 시작해 주세요.",
     finalVideo: "완성 영상",
     jobInterrupted: "이전 작업이 서버에서 중간에 끊겼어요. '작업 시작'을 다시 눌러 주세요.",
+    progressTitle: "진행 상황",
+    stagePlan: "기획",
+    stageAssets: "자산",
+    stageDirector: "감독",
+    stageRender: "렌더",
+    stageSave: "저장",
+    stagePlanDetail: "기획 회의가 구성과 문장을 정리하는 중",
+    stageAssetsDetail: "자산을 이 PC 렌더러로 옮기는 중",
+    stageDirectorDetail: "감독이 이 영상만의 장면 코드를 쓰는 중",
+    stageRenderDetail: "이 PC에서 촬영·모션블러·소리 합성 중",
+    stageSaveDetail: "완성 영상을 저장소에 올리는 중",
+    elapsed: "{t} 경과",
+    usually: "보통 {r}",
+    minutes: "{a}~{b}분",
+    seconds: "{a}~{b}초",
+    timeMinSec: "{m}분 {s}초",
+    timeSec: "{s}초",
+    thinking: "구상 중",
+    chars: "{n}자",
+    stuck: "예상보다 오래 걸리고 있어요. 계속 그대로면 새로고침한 뒤 다시 시작해 주세요.",
+    allDone: "완성됐어요",
+    failed: "이 단계에서 멈췄어요",
   },
   en: {
     title: "Video assets",
@@ -80,15 +99,34 @@ export const MOTION_ASSET_TEXT = {
     confirmNoMusicOk: "Continue without music",
     confirmNoMusicCancel: "Pick music",
     pickMusicFirst: "Pick background music, then start again.",
-    phaseAssets: "Moving assets to this PC {p}%",
-    phaseDirector: "Director is writing the scene code ({n} chars)",
-    phaseRender: "Rendering {p}%",
     subscriptionRequired: "Infographic video needs a Claude subscription connection (zero-cost policy). Connect it in 'API settings'.",
     directorProblems: "The scene code from the director has problems: {p}",
     rendererUnreachable: "Couldn't reach the renderer on this PC. Check that the NK Studio renderer (node server.js) is running here.",
     noWork: "There is no work item to render. Start a job first.",
     finalVideo: "Final video",
     jobInterrupted: "The previous job was cut off on the server. Press 'Start' again.",
+    progressTitle: "Progress",
+    stagePlan: "Plan",
+    stageAssets: "Assets",
+    stageDirector: "Director",
+    stageRender: "Render",
+    stageSave: "Save",
+    stagePlanDetail: "Planning meeting is shaping the structure and copy",
+    stageAssetsDetail: "Moving assets to the renderer on this PC",
+    stageDirectorDetail: "Director is writing this video's own scene code",
+    stageRenderDetail: "Capturing, motion blur and sound mix on this PC",
+    stageSaveDetail: "Uploading the final video to storage",
+    elapsed: "{t} elapsed",
+    usually: "usually {r}",
+    minutes: "{a}–{b} min",
+    seconds: "{a}–{b} s",
+    timeMinSec: "{m}m {s}s",
+    timeSec: "{s}s",
+    thinking: "thinking",
+    chars: "{n} chars",
+    stuck: "This is taking longer than expected. If it stays like this, refresh and start again.",
+    allDone: "Done",
+    failed: "Stopped at this step",
   },
 };
 
@@ -109,14 +147,6 @@ export function motionErrorText(caught: unknown): string {
   if (message.includes("motion_subscription_required")) return t.subscriptionRequired;
   if (caught instanceof TypeError && /fetch|network|load failed/i.test(message)) return t.rendererUnreachable;
   return message;
-}
-
-/** 렌더 진행 표시 문구 */
-export function motionPhaseText(t: MotionAssetDict, phase: string | undefined, progress: number, chars = 0): string {
-  const p = String(Math.round(progress || 0));
-  if (phase === "assets") return t.phaseAssets.replace("{p}", p);
-  if (phase === "director") return t.phaseDirector.replace("{n}", chars.toLocaleString());
-  return t.phaseRender.replace("{p}", p);
 }
 
 /** 셸의 언어 전환(lang-apply 메시지 · nk:lang-changed)을 따라가는 문구 사전. */

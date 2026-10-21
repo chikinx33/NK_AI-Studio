@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
-import MotionAssetPicker, { motionPhaseText, useMotionAssetText } from "./MotionAssetPicker";
+import MotionAssetPicker, { useMotionAssetText } from "./MotionAssetPicker";
+import MotionProgress from "./MotionProgress";
 import { localRendererUrl } from "../lib/api";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
@@ -224,6 +225,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           </div>
         ) : null,
         PreviewToolbar: (
+          <>
             <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold text-content">미리보기</h2>
               <span className="rounded-full bg-inset px-2.5 py-1 text-[10px] text-muted">{spec.scenes.length}개 씬</span>
@@ -231,6 +233,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               <span className="rounded-full bg-inset px-2.5 py-1 text-[10px] text-muted">{spec.aspectRatio}</span>
               <span className="ml-auto text-[11px] text-faint">{spec.title}</span>
             </div>
+            <MotionProgress meetingStatus={meetingStatus} render={render} archive={archive} />
+          </>
         ),
         PreviewRenderer: (
             <div className={`min-h-0 flex-1 ${isTallPreview ? "grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]" : "flex flex-col"}`}>
@@ -296,16 +300,14 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               onClick={downloadVideo}
               disabled={renderInProgress || archiveInProgress}
               aria-busy={renderInProgress || archiveInProgress}
-              title={renderInProgress ? motionPhaseText(motionText, render.phase, render.progress || 0, render.chars || 0) : archiveInProgress ? "저장 중" : "MP4 다운로드"}
+              title={renderInProgress ? `${Math.round(render.progress || 0)}%` : archiveInProgress ? "저장 중" : "MP4 다운로드"}
               className="w-full rounded-lg border border-orange-700/70 bg-tint-orange/40 px-3 py-2.5 text-xs font-bold text-tone-orange transition hover:bg-tint-orange/50 disabled:cursor-wait disabled:opacity-60"
             >
               다운로드
             </button>
-            {/* 모션 영상은 자산 옮기기·감독·렌더까지 몇 분 걸린다. 진행과 오류를 바로 보이게 한다. */}
-            {(renderInProgress || render.status === "error" || archive.status === "error") && (
-              <p className={`mt-1.5 text-[10px] leading-4 ${renderInProgress ? "text-tone-emerald" : "text-tone-red"}`} role="status">
-                {renderInProgress ? motionPhaseText(motionText, render.phase, render.progress || 0, render.chars || 0) : (render.error || archive.error)}
-              </p>
+            {/* 진행은 미리보기 위 진행 막대(MotionProgress)가 보여 준다. 여기에는 오류만 */}
+            {(render.status === "error" || archive.status === "error") && (
+              <p className="mt-1.5 text-[10px] leading-4 text-tone-red" role="alert">{render.error || archive.error}</p>
             )}
           </>
         ),

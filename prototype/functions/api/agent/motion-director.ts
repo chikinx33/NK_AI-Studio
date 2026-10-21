@@ -70,37 +70,36 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort("motion_director_timeout"), TIMEOUT_MS);
-  let res: Response;
-  try {
-    res = await claudeFetch(env, auth, (sub: boolean) => ({
-      model: MOTION_DIRECTOR_MODEL,
-      max_tokens: MOTION_DIRECTOR_MAX_TOKENS,
-      output_config: { effort: "high" },
-      system: buildClaudeSystem(sub, system),
-      messages: [{ role: "user", content }],
-      stream: true,
-    }), { signal: controller.signal });
-  } catch (e) {
-    clearTimeout(timer);
-    return send({ error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) }, 500, origin);
-  }
-  if (!res.ok || !res.body) {
-    clearTimeout(timer);
-    const raw = await res.text().catch(() => "");
-    return send({ error: `Claude ${res.status}: ${raw.slice(0, 300)}` }, 500, origin);
-  }
-
   const encoder = new TextEncoder();
-  const upstream = res.body.getReader();
+  // 응답은 Claude 를 부르기 전에 바로 시작한다. Cloudflare 는 100초 안에 첫 바이트가 없으면 524 로 끊는데,
+  // 감독은 먼저 깊게 생각하고(또는 중간 프록시가 늦게 넘겨) 첫 글자까지 오래 걸릴 수 있다(2026-10-21 운영 524).
   const stream = new ReadableStream({
     async start(out) {
-      const emit = (obj: any) => out.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      let closed = false;
+      const write = (chunk: string) => { if (!closed) { try { out.enqueue(encoder.encode(chunk)); } catch { closed = true; } } };
+      const emit = (obj: any) => write(`data: ${JSON.stringify(obj)}\n\n`);
+      const keepalive = setInterval(() => write(": keepalive\n\n"), 15_000);
+      emit({ t: "progress", chars: 0 });
       const decoder = new TextDecoder();
       let buf = "";
       let text = "";
       let stopReason = "";
       let lastReport = 0;
+      let lastEmitAt = 0;
       try {
+        const res = await claudeFetch(env, auth, (sub: boolean) => ({
+          model: MOTION_DIRECTOR_MODEL,
+          max_tokens: MOTION_DIRECTOR_MAX_TOKENS,
+          output_config: { effort: "high" },
+          system: buildClaudeSystem(sub, system),
+          messages: [{ role: "user", content }],
+          stream: true,
+        }), { signal: controller.signal });
+        if (!res.ok || !res.body) {
+          const raw = await res.text().catch(() => "");
+          throw new Error(`Claude ${res.status}: ${raw.slice(0, 300)}`);
+        }
+        const upstream = res.body.getReader();
         for (;;) {
           const { value, done } = await upstream.read();
           if (done) break;
@@ -114,10 +113,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
             if (evt?.type === "content_block_delta" && evt.delta?.type === "text_delta") {
               text += evt.delta.text || "";
-              if (text.length - lastReport >= 400) { lastReport = text.length; emit({ t: "progress", chars: text.length }); }
-            } else if (evt?.type === "content_block_delta" || evt?.type === "ping") {
-              // 생각하는 동안에도 연결이 살아 있게 알린다
-              emit({ t: "progress", chars: text.length });
+              if (text.length - lastReport >= 400) { lastReport = text.length; lastEmitAt = Date.now(); emit({ t: "progress", chars: text.length }); }
+            } else if ((evt?.type === "content_block_delta" || evt?.type === "ping") && Date.now() - lastEmitAt > 2_000) {
+              // 생각하는 동안에도 진행을 알린다(2초에 한 번)
+              lastEmitAt = Date.now();
+              emit({ t: "progress", chars: text.length, thinking: true });
             } else if (evt?.type === "message_delta" && evt.delta?.stop_reason) {
               stopReason = String(evt.delta.stop_reason);
             } else if (evt?.type === "error") {
@@ -131,8 +131,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } catch (e) {
         emit({ t: "error", error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) });
       } finally {
+        clearInterval(keepalive);
         clearTimeout(timer);
-        out.close();
+        if (!closed) { closed = true; try { out.close(); } catch { /* 이미 닫힘 */ } }
       }
     },
     cancel() { controller.abort("client_closed"); clearTimeout(timer); },

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
+import { createRequire } from "node:module";
 import {
   buildMotionDirectorRequest, buildMotionDirectorSystem, parseMotionDirectorOutput, STAGE_SIZES,
 } from "../functions/api/_shared/motion-director.js";
@@ -9,6 +11,7 @@ import { buildMotionDirectorKit, OUTPUT as KIT_OUTPUT } from "../../ai-company-a
 
 // 인포그래픽 영상 3단계(2026-10-21): 감독이 영상마다 장면 코드를 새로 쓴다. 비용 0원 — Claude 구독 전용.
 const root = path.resolve(import.meta.dirname, "../..");
+const esbuild = createRequire(import.meta.url)("../../ai-company-app/node_modules/esbuild");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/^﻿/, "").replace(/\r\n/g, "\n");
 
 const prepared = {
@@ -157,4 +160,37 @@ test("작업 시작은 서버가 끝까지 실행하게 기다리고(wait=1), �
   assert.match(context, /Date\.now\(\) - updatedAt > 5 \* 60 \* 1000/);
   assert.match(context, /await cancelCompanySkillJob\(jobId\)/);
   assert.match(context, /motionAssetText\(\)\.jobInterrupted/);
+});
+
+test("감독 API는 Claude 를 부르기 전에 응답을 시작하고 15초마다 살아 있음 신호를 보낸다(Cloudflare 524 방지)", () => {
+  const director = read("prototype/functions/api/agent/motion-director.ts");
+  const firstByte = director.indexOf('emit({ t: "progress", chars: 0 });');
+  const upstreamCall = director.indexOf("await claudeFetch(");
+  assert.ok(firstByte > 0 && upstreamCall > firstByte, "첫 바이트가 Claude 호출보다 먼저");
+  assert.ok(director.includes('setInterval(() => write(": keepalive\\n\\n"), 15_000)'), "15초 살아 있음 신호");
+  assert.match(director, /clearInterval\(keepalive\)/);
+});
+
+test("지역 우회 프록시는 응답을 모으지 않고 흘려 보낸다(스트리밍 호출이 끝까지 막히지 않게)", () => {
+  const proxy = read("openai-proxy/index.js");
+  assert.doesNotMatch(proxy, /await upstream\.arrayBuffer\(\)/);
+  assert.match(proxy, /Readable\.fromWeb\(upstream\.body\)/);
+  assert.match(proxy, /stream\.pipe\(res\)/);
+});
+
+test("진행 막대: 기획 → 자산 → 감독 → 렌더 → 저장 단계를 상태에서 읽는다", () => {
+  const source = read("ai-company-app/src/components/MotionProgress.tsx");
+  const module = { exports: {} };
+  const code = esbuild.transformSync(source.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];[ \t]*$/gm, ""), { loader: "tsx", format: "cjs" }).code;
+  vm.runInNewContext(code, { module, exports: module.exports });
+  const stage = (m, r, a) => ({ ...module.exports.currentMotionStage(m, r, a) });
+  assert.deepEqual(stage("running", { status: "idle" }, { status: "idle" }), { stage: "plan", state: "active" });
+  assert.deepEqual(stage("done", { status: "queued", phase: "assets" }, { status: "rendering" }), { stage: "assets", state: "active" });
+  assert.deepEqual(stage("done", { status: "queued", phase: "director" }, { status: "rendering" }), { stage: "director", state: "active" });
+  assert.deepEqual(stage("done", { status: "rendering" }, { status: "rendering" }), { stage: "render", state: "active" });
+  assert.deepEqual(stage("done", { status: "done" }, { status: "uploading" }), { stage: "save", state: "active" });
+  assert.deepEqual(stage("done", { status: "done" }, { status: "done" }), { stage: null, state: "done" });
+  assert.deepEqual(stage("done", { status: "error" }, { status: "error" }), { stage: null, state: "error" });
+  assert.deepEqual(stage("idle", { status: "idle" }, { status: "idle" }), { stage: null, state: "idle" });
+  assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<MotionProgress meetingStatus=\{meetingStatus\} render=\{render\} archive=\{archive\} \/>/);
 });

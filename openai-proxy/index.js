@@ -19,6 +19,7 @@
 // 검증한다(환경변수 OPENAI_PROXY_SECRET 설정 시).
 
 const http = require("http");
+const { Readable } = require("stream");
 
 const OPENAI_ORIGIN = "https://api.openai.com";
 const ANTHROPIC_ORIGIN = "https://api.anthropic.com";
@@ -90,10 +91,22 @@ const server = http.createServer(async (req, res) => {
       respHeaders[k] = v;
     });
 
-    const outBuf = Buffer.from(await upstream.arrayBuffer());
+    // 응답을 다 모으지 않고 받는 대로 흘려 보낸다. 모으면 스트리밍(SSE) 호출이 끝날 때까지 첫 바이트가 안 나가
+    // Cloudflare 가 100초에 524 로 끊는다(2026-10-21 인포그래픽 감독 호출에서 확인). 일반 응답도 내용은 같다.
     res.writeHead(upstream.status, respHeaders);
-    res.end(outBuf);
+    if (!upstream.body) {
+      res.end();
+      return;
+    }
+    const stream = Readable.fromWeb(upstream.body);
+    stream.on("error", () => res.destroy());
+    res.on("close", () => { if (!res.writableEnded) stream.destroy(); });
+    stream.pipe(res);
   } catch (e) {
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "proxy_error", detail: String((e && e.message) || e) }));
   }
