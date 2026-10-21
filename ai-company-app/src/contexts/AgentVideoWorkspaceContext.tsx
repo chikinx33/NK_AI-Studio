@@ -1,3 +1,6 @@
+import { EMPTY_MOTION_ASSETS, type MotionAssetSelection } from "../lib/motionAssets";
+import { motionAssetText } from "../components/MotionAssetPicker";
+import { appDialog } from "../lib/appDialog";
 import {
   createContext,
   useContext,
@@ -71,6 +74,8 @@ interface AgentVideoWorkspaceValue {
   setTone: Dispatch<SetStateAction<string>>;
   style: string;
   setStyle: Dispatch<SetStateAction<string>>;
+  assets: MotionAssetSelection;
+  setAssets: Dispatch<SetStateAction<MotionAssetSelection>>;
   spec: AgentVideoSpec;
   contributions: AgentVideoContribution[];
   meetingStatus: MeetingStatus;
@@ -95,6 +100,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [audience, setAudience] = useState("콘텐츠 제작자와 1인 기업");
   const [tone, setTone] = useState("신뢰감 있고 미래지향적");
   const [style, setStyle] = useState("시네마틱 테크 인포그래픽");
+  const [assets, setAssets] = useState<MotionAssetSelection>(EMPTY_MOTION_ASSETS);
   const [spec, setSpec] = useState<AgentVideoSpec>(loadSavedSpec);
   const [contributions, setContributions] = useState<AgentVideoContribution[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<MeetingStatus>("idle");
@@ -173,6 +179,19 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     }
 
     meetingLockedRef.current = true;
+    // 배경음악은 새로 생성하지 않는다(비용 0원). 고르지 않았으면 음악 없이 갈지 먼저 묻는다.
+    let selectedAssets = assets;
+    if (!assets.bgm && !assets.noMusic) {
+      const t = motionAssetText();
+      const proceed = await appDialog.confirm(t.confirmNoMusic, { okText: t.confirmNoMusicOk, cancelText: t.confirmNoMusicCancel });
+      if (!proceed) {
+        meetingLockedRef.current = false;
+        setError(t.pickMusicFirst);
+        return;
+      }
+      selectedAssets = { ...assets, noMusic: true };
+      setAssets(selectedAssets);
+    }
     setMeetingStatus("running");
     setError("");
     setContributions([]);
@@ -187,7 +206,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         invocationMode: "manual",
         request: prompt.trim(),
         idempotencyKey: `manual-${crypto.randomUUID()}`,
-        options: { durationSec, aspectRatio, audience, tone, style },
+        options: { durationSec, aspectRatio, audience, tone, style, assets: selectedAssets },
       });
       writeUserStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
       await restoreSkillJob(result.job.id, controller.signal);
@@ -392,6 +411,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       setTone,
       style,
       setStyle,
+      assets,
+      setAssets,
       spec,
       contributions,
       meetingStatus,

@@ -28,6 +28,7 @@ const DICTIONARIES = [
   ["ai-company-app/src/components/KnowledgeTidyModal.tsx", "export const TIDY_TEXT = {", "\nexport type TidyDict"],
   ["ai-company-app/src/components/NewProjectPopover.tsx", "export const NEW_PROJECT_TEXT = {", "\nexport type NewProjectDict"],
   ["ai-company-app/src/components/publishing/i18n.ts", "export const PUBLISHING_TEXT = {", "\nexport type PublishingDict"],
+  ["ai-company-app/src/components/MotionAssetPicker.tsx", "export const MOTION_ASSET_TEXT = {", "\nexport type MotionAssetDict"],
 ];
 
 /** `{` 위치부터 짝이 맞는 `}` 까지의 본문을 돌려준다. */

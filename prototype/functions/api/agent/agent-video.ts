@@ -4,6 +4,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "./_shared";
 import { callClaude, speak } from "./_orchestrator";
+import { normalizeMotionAssetSelection } from "./_motion-assets";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -296,6 +297,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       audience: cleanText(body?.audience, "일반 시청자", 100),
       tone: cleanText(body?.tone, "명료하고 신뢰감 있게", 100),
       style: cleanText(body?.style, "시네마틱 모션 그래픽", 100),
+      assets: normalizeMotionAssetSelection(body?.assets),
     };
     const skill = {
       categoryId: cleanText(body?.skillCategoryId, "design-content", 80),

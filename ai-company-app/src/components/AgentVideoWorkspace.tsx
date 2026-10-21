@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
+import MotionAssetPicker from "./MotionAssetPicker";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
   getAgentVideoDimensions,
@@ -61,6 +62,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     setTone,
     style,
     setStyle,
+    assets,
+    setAssets,
     spec,
     contributions,
     meetingStatus,
@@ -205,6 +208,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               <FieldLabel>스타일</FieldLabel>
               <input value={style} onChange={(event) => setStyle(event.target.value)} className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700" />
             </div>
+            <MotionAssetPicker value={assets} onChange={setAssets} />
 
             <button
               type="button"

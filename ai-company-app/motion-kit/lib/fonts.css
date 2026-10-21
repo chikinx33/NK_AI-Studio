@@ -1,0 +1,7 @@
+/* 모션 키트 글꼴. 페이지에서 <link rel="stylesheet" href="…/motion-kit/lib/fonts.css"> 후 font-family 이름으로 쓴다. */
+@font-face { font-family: "NK Sans"; src: url(../fonts/NotoSansKR-VF.ttf); font-weight: 100 900; }
+@font-face { font-family: "NK Serif"; src: url(../fonts/NotoSerifKR-VF.ttf); font-weight: 200 900; }
+@font-face { font-family: "Nanum Gothic ExtraBold"; src: url(../fonts/NanumGothicExtraBold.ttf); }
+@font-face { font-family: Jua; src: url(../fonts/Jua-Regular.ttf); }
+@font-face { font-family: Nalgae; src: url(../fonts/Hakgyoansim_NalgaeR.ttf); }
+@font-face { font-family: "KOTRA Hope"; src: url(../fonts/KOTRAHOPE.woff2) format("woff2"); }

@@ -108,6 +108,72 @@ function readJsonBody(req, limit = 2 * 1024 * 1024) {
   });
 }
 
+// ---------- 인포그래픽 영상(모션 키트) 자산 받기 ----------
+// 브라우저가 사이트에서 받은 자산을 여기로 넘긴다. 이 PC 에는 로그인 정보·클라우드 키를 두지 않는다.
+const MOTION_ROOT = path.join(__dirname, 'tmp', 'motion');
+const MOTION_MAX_ASSET_BYTES = 200 * 1024 * 1024;
+
+function motionJobDirectory(workId) {
+  return /^[0-9a-f-]{36}$/i.test(String(workId || '')) ? path.join(MOTION_ROOT, String(workId).toLowerCase()) : null;
+}
+
+function motionAssetName(name) {
+  const base = path.basename(String(name || ''));
+  return /^[\w가-힣.-]{1,120}$/.test(base) && !base.startsWith('.') ? base : '';
+}
+
+function readMotionManifest(directory) {
+  try { return JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8')); } catch (_) { return null; }
+}
+
+function saveMotionAsset(req, res, directory, fileName) {
+  const manifest = readMotionManifest(directory);
+  const allowed = new Set((manifest?.items || []).map((item) => motionAssetName(item.fileName)).filter(Boolean));
+  if (!manifest || !allowed.has(fileName)) return sendJson(res, { error: '자산 목록에 없는 파일입니다.' }, 400);
+  const target = path.join(directory, 'assets', 'raw', fileName);
+  const partial = `${target}.part`;
+  const out = fs.createWriteStream(partial);
+  let size = 0;
+  let failed = false;
+  const fail = (status, message) => {
+    if (failed) return;
+    failed = true;
+    out.destroy();
+    fs.rm(partial, { force: true }, () => {});
+    sendJson(res, { error: message }, status);
+  };
+  req.on('data', (chunk) => {
+    size += chunk.length;
+    if (size > MOTION_MAX_ASSET_BYTES) { fail(413, '자산 파일이 너무 큽니다(200MB 이하).'); req.destroy(); }
+  });
+  req.on('error', () => fail(400, '파일을 받지 못했습니다.'));
+  out.on('error', () => fail(500, '파일을 저장하지 못했습니다.'));
+  out.on('finish', () => {
+    if (failed) return;
+    fs.rename(partial, target, (error) => {
+      if (error) return fail(500, '파일을 저장하지 못했습니다.');
+      sendJson(res, { ok: true, fileName, size });
+    });
+  });
+  req.pipe(out);
+}
+
+function prepareMotionJob(res, directory) {
+  if (!readMotionManifest(directory)) return sendJson(res, { error: '자산 목록이 없습니다. 먼저 작업을 만드세요.' }, 404);
+  const script = path.join(__dirname, 'ai-company-app', 'scripts', 'prepare-motion-assets.mjs');
+  const child = spawn(process.execPath, [script, directory], { cwd: path.join(__dirname, 'ai-company-app'), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  try { require('os').setPriority(child.pid, require('os').constants.priority.PRIORITY_BELOW_NORMAL); } catch (_) {}
+  let log = '';
+  child.stdout.on('data', (chunk) => { log += chunk; });
+  child.stderr.on('data', (chunk) => { log += chunk; });
+  child.on('error', (error) => sendJson(res, { error: error.message }, 500));
+  child.on('exit', (code) => {
+    if (code !== 0) return sendJson(res, { error: log.trim().split(/\r?\n/).slice(-4).join('\n') || `자산 정리 실패(exit=${code})` }, 500);
+    try { sendJson(res, JSON.parse(fs.readFileSync(path.join(directory, 'assets.json'), 'utf8'))); }
+    catch (error) { sendJson(res, { error: error.message }, 500); }
+  });
+}
+
 async function postCompanySkillRenderCallback(job, status) {
   if (!job.callbackUrl || job.callbackDelivered) return;
   const token = String(process.env.COMPANY_SKILL_RENDERER_TOKEN || '').trim();
@@ -239,6 +305,38 @@ const server = http.createServer((req, res) => {
           startAgentVideoRender(jobId, body.spec, res, callbackUrl);
         })
         .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
+    }
+    // 인포그래픽 영상 자산: 작업 만들기 → 파일 하나씩 올리기 → 정리(클립 변환·박자표·크기) → assets.json
+    if (pathname === '/local-motion/jobs' && req.method === 'POST') {
+      return readJsonBody(req)
+        .then((body) => {
+          const directory = motionJobDirectory(body?.workId);
+          if (!directory) return sendJson(res, { error: '유효한 workId가 필요합니다.' }, 400);
+          const items = (Array.isArray(body?.manifest?.items) ? body.manifest.items : [])
+            .filter((item) => item?.fileName && motionAssetName(item.fileName) === item.fileName)
+            .slice(0, 60);
+          fs.rmSync(directory, { recursive: true, force: true });
+          fs.mkdirSync(path.join(directory, 'assets', 'raw'), { recursive: true });
+          const manifest = { workId: String(body.workId).toLowerCase(), brand: body.manifest?.brand || null, noMusic: body.manifest?.noMusic === true, items };
+          fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2));
+          return sendJson(res, { workId: manifest.workId, files: items.map((item) => item.fileName) });
+        })
+        .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
+    }
+    const motionMatch = pathname.match(/^\/local-motion\/jobs\/([0-9a-fA-F-]{36})(?:\/(raw|prepare)(?:\/([^/]+))?)?$/);
+    if (motionMatch) {
+      const directory = motionJobDirectory(motionMatch[1]);
+      if (motionMatch[2] === 'raw' && req.method === 'PUT') {
+        const fileName = motionAssetName(motionMatch[3]);
+        if (!fileName) return sendJson(res, { error: '파일 이름이 올바르지 않습니다.' }, 400);
+        return saveMotionAsset(req, res, directory, fileName);
+      }
+      if (motionMatch[2] === 'prepare' && req.method === 'POST') return prepareMotionJob(res, directory);
+      if (!motionMatch[2] && req.method === 'GET') {
+        const file = path.join(directory, 'assets.json');
+        return fs.existsSync(file) ? sendFile(res, file, req) : sendJson(res, { error: '아직 정리되지 않았습니다.' }, 404);
+      }
+      return sendJson(res, { error: 'not_found' }, 404);
     }
     if (pathname === '/local-agent-video/render' && req.method === 'POST') {
       return readJsonBody(req)

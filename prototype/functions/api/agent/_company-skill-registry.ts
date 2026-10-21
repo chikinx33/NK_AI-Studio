@@ -1,4 +1,5 @@
 import type { CompanySkillInvocationMode } from "./_skill-jobs";
+import { normalizeMotionAssetSelection } from "./_motion-assets";
 
 export interface ServerCompanySkillDefinition {
   id: string;
@@ -106,7 +107,9 @@ function normalizeInfographicOptions(value: unknown): { options: Record<string, 
   if (!cleanText(input.audience, 200)) warnings.push("시청 대상이 없어 일반 시청자를 적용했습니다.");
   if (!cleanText(input.tone, 200)) warnings.push("톤이 없어 명료하고 신뢰감 있는 톤을 적용했습니다.");
   if (!cleanText(input.style, 200)) warnings.push("스타일이 없어 시네마틱 모션 인포그래픽을 적용했습니다.");
-  return { options: { durationSec, aspectRatio, audience, purpose, tone, style }, warnings };
+  // 영상에 쓸 브랜드·업무 파일·배경음악(비용 0원: 이미 가진 자산만 쓴다)
+  const assets = normalizeMotionAssetSelection(input.assets);
+  return { options: { durationSec, aspectRatio, audience, purpose, tone, style, assets }, warnings };
 }
 
 export function normalizeCompanySkillJobInput(

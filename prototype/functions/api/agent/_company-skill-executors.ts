@@ -81,6 +81,7 @@ const infographicExecutor: CompanySkillExecutor = {
       audience: String(options.audience || "일반 시청자"),
       tone: String(options.tone || "명료하고 신뢰감 있게"),
       style: String(options.style || "시네마틱 모션 인포그래픽"),
+      assets: options.assets || null,
       conversationId: job.conversation_id,
       skillCategoryId: job.category_id,
       skillId: job.skill_id,

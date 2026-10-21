@@ -1,0 +1,504 @@
+[
+  {
+    "id": "whoosh",
+    "file": "synth/whoosh.wav",
+    "ko": "휙(장면 전환)",
+    "en": "whoosh (transition)",
+    "tags": [
+      "transition",
+      "move"
+    ],
+    "source": "synth",
+    "durationSec": 0.6,
+    "peakSec": 0.34
+  },
+  {
+    "id": "swish",
+    "file": "synth/swish.wav",
+    "ko": "슉(빠른 등장)",
+    "en": "swish (fast entrance)",
+    "tags": [
+      "transition",
+      "entrance"
+    ],
+    "source": "synth",
+    "durationSec": 0.32,
+    "peakSec": 0.171
+  },
+  {
+    "id": "pop",
+    "file": "synth/pop.wav",
+    "ko": "뽁(등장·스티커)",
+    "en": "pop (appear, sticker)",
+    "tags": [
+      "appear",
+      "sticker"
+    ],
+    "source": "synth",
+    "durationSec": 0.2,
+    "peakSec": 0.002
+  },
+  {
+    "id": "pop-up",
+    "file": "synth/pop-up.wav",
+    "ko": "뿅(올라오며 등장)",
+    "en": "bloop (rising appear)",
+    "tags": [
+      "appear"
+    ],
+    "source": "synth",
+    "durationSec": 0.22,
+    "peakSec": 0.002
+  },
+  {
+    "id": "ding",
+    "file": "synth/ding.wav",
+    "ko": "딩(강조·정답)",
+    "en": "ding (highlight)",
+    "tags": [
+      "highlight",
+      "success"
+    ],
+    "source": "synth",
+    "durationSec": 1.4,
+    "peakSec": 0.008
+  },
+  {
+    "id": "chime",
+    "file": "synth/chime.wav",
+    "ko": "띠리링(완료·성공)",
+    "en": "chime (complete)",
+    "tags": [
+      "success",
+      "end"
+    ],
+    "source": "synth",
+    "durationSec": 1.3,
+    "peakSec": 0.245
+  },
+  {
+    "id": "tick",
+    "file": "synth/tick.wav",
+    "ko": "똑(숫자·글자 하나)",
+    "en": "tick (counter, letter)",
+    "tags": [
+      "counter",
+      "type"
+    ],
+    "source": "synth",
+    "durationSec": 0.05,
+    "peakSec": 0
+  },
+  {
+    "id": "thump",
+    "file": "synth/thump.wav",
+    "ko": "쿵(강한 등장·충격)",
+    "en": "thump (impact)",
+    "tags": [
+      "impact",
+      "hit"
+    ],
+    "source": "synth",
+    "durationSec": 0.6,
+    "peakSec": 0.01
+  },
+  {
+    "id": "riser",
+    "file": "synth/riser.wav",
+    "ko": "상승음(긴장·기대)",
+    "en": "riser (build-up)",
+    "tags": [
+      "build",
+      "transition"
+    ],
+    "source": "synth",
+    "durationSec": 1.3,
+    "peakSec": 0.575
+  },
+  {
+    "id": "sparkle",
+    "file": "synth/sparkle.wav",
+    "ko": "반짝(빛남·보상)",
+    "en": "sparkle (shine, reward)",
+    "tags": [
+      "shine",
+      "reward"
+    ],
+    "source": "synth",
+    "durationSec": 0.9,
+    "peakSec": 0.05
+  },
+  {
+    "id": "nekoban-sfx_click",
+    "file": "game/nekoban-sfx_click.wav",
+    "ko": "딸깍(버튼)",
+    "en": "click (button)",
+    "tags": [
+      "ui",
+      "tap"
+    ],
+    "source": "nekoban",
+    "durationSec": 0.15,
+    "peakSec": 0.014
+  },
+  {
+    "id": "nekoban-sfx_move",
+    "file": "game/nekoban-sfx_move.wav",
+    "ko": "톡(이동)",
+    "en": "step (move)",
+    "tags": [
+      "move"
+    ],
+    "source": "nekoban",
+    "durationSec": 0.2,
+    "peakSec": 0.086
+  },
+  {
+    "id": "nekoban-sfx_push",
+    "file": "game/nekoban-sfx_push.wav",
+    "ko": "드르륵(밀기)",
+    "en": "slide push",
+    "tags": [
+      "move",
+      "impact"
+    ],
+    "source": "nekoban",
+    "durationSec": 0.45,
+    "peakSec": 0.012
+  },
+  {
+    "id": "nekoban-sfx_goal",
+    "file": "game/nekoban-sfx_goal.wav",
+    "ko": "쏙(목표 도달)",
+    "en": "goal reached",
+    "tags": [
+      "success",
+      "appear"
+    ],
+    "source": "nekoban",
+    "durationSec": 1,
+    "peakSec": 0.05
+  },
+  {
+    "id": "nekoban-sfx_clear",
+    "file": "game/nekoban-sfx_clear.wav",
+    "ko": "클리어 팡파레",
+    "en": "clear fanfare",
+    "tags": [
+      "success",
+      "end"
+    ],
+    "source": "nekoban",
+    "durationSec": 1.994,
+    "peakSec": 0.255
+  },
+  {
+    "id": "nekoban-sfx_hint",
+    "file": "game/nekoban-sfx_hint.wav",
+    "ko": "힌트 반짝",
+    "en": "hint",
+    "tags": [
+      "highlight",
+      "shine"
+    ],
+    "source": "nekoban",
+    "durationSec": 0.8,
+    "peakSec": 0.318
+  },
+  {
+    "id": "nekoban-sfx_error",
+    "file": "game/nekoban-sfx_error.wav",
+    "ko": "삐빅(오류)",
+    "en": "error buzz",
+    "tags": [
+      "fail"
+    ],
+    "source": "nekoban",
+    "durationSec": 0.35,
+    "peakSec": 0.018
+  },
+  {
+    "id": "puzzleknight-ui_tap",
+    "file": "game/puzzleknight-ui_tap.wav",
+    "ko": "탭",
+    "en": "tap",
+    "tags": [
+      "ui",
+      "tap"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.05,
+    "peakSec": 0.001
+  },
+  {
+    "id": "puzzleknight-ui_confirm",
+    "file": "game/puzzleknight-ui_confirm.wav",
+    "ko": "확인",
+    "en": "confirm",
+    "tags": [
+      "ui",
+      "success"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.305,
+    "peakSec": 0.003
+  },
+  {
+    "id": "puzzleknight-ui_popup_open",
+    "file": "game/puzzleknight-ui_popup_open.wav",
+    "ko": "팝업 열림",
+    "en": "popup open",
+    "tags": [
+      "appear",
+      "ui"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.34,
+    "peakSec": 0.064
+  },
+  {
+    "id": "puzzleknight-ui_tab_switch",
+    "file": "game/puzzleknight-ui_tab_switch.wav",
+    "ko": "탭 전환",
+    "en": "tab switch",
+    "tags": [
+      "transition",
+      "ui"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.07,
+    "peakSec": 0.031
+  },
+  {
+    "id": "puzzleknight-card_flip",
+    "file": "game/puzzleknight-card_flip.wav",
+    "ko": "카드 뒤집기",
+    "en": "card flip",
+    "tags": [
+      "transition",
+      "reveal"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.07,
+    "peakSec": 0.03
+  },
+  {
+    "id": "puzzleknight-level_up",
+    "file": "game/puzzleknight-level_up.wav",
+    "ko": "레벨 업",
+    "en": "level up",
+    "tags": [
+      "success",
+      "reward"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 1.32,
+    "peakSec": 0.424
+  },
+  {
+    "id": "puzzleknight-stat_up",
+    "file": "game/puzzleknight-stat_up.wav",
+    "ko": "수치 상승",
+    "en": "stat up",
+    "tags": [
+      "counter",
+      "success"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.47,
+    "peakSec": 0.173
+  },
+  {
+    "id": "puzzleknight-xp_gain",
+    "file": "game/puzzleknight-xp_gain.wav",
+    "ko": "경험치 획득",
+    "en": "xp gain",
+    "tags": [
+      "counter",
+      "reward"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.25,
+    "peakSec": 0.003
+  },
+  {
+    "id": "puzzleknight-reward_appear",
+    "file": "game/puzzleknight-reward_appear.wav",
+    "ko": "보상 등장",
+    "en": "reward appear",
+    "tags": [
+      "reward",
+      "appear"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.49,
+    "peakSec": 0.004
+  },
+  {
+    "id": "puzzleknight-reward_coin",
+    "file": "game/puzzleknight-reward_coin.wav",
+    "ko": "동전",
+    "en": "coin",
+    "tags": [
+      "reward",
+      "counter"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.13,
+    "peakSec": 0.001
+  },
+  {
+    "id": "puzzleknight-reward_complete",
+    "file": "game/puzzleknight-reward_complete.wav",
+    "ko": "보상 완료",
+    "en": "reward complete",
+    "tags": [
+      "reward",
+      "end"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.36,
+    "peakSec": 0.008
+  },
+  {
+    "id": "puzzleknight-reward_epic",
+    "file": "game/puzzleknight-reward_epic.wav",
+    "ko": "대박 보상",
+    "en": "epic reward",
+    "tags": [
+      "reward",
+      "highlight"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.6,
+    "peakSec": 0.183
+  },
+  {
+    "id": "puzzleknight-victory_sting",
+    "file": "game/puzzleknight-victory_sting.wav",
+    "ko": "승리 짧은 음악",
+    "en": "victory sting",
+    "tags": [
+      "success",
+      "end"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 1.35,
+    "peakSec": 0.458
+  },
+  {
+    "id": "puzzleknight-roulette_tick",
+    "file": "game/puzzleknight-roulette_tick.wav",
+    "ko": "룰렛 똑딱",
+    "en": "roulette tick",
+    "tags": [
+      "counter"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.018,
+    "peakSec": 0.001
+  },
+  {
+    "id": "puzzleknight-puzzle_line_clear",
+    "file": "game/puzzleknight-puzzle_line_clear.wav",
+    "ko": "줄 지우기",
+    "en": "line clear",
+    "tags": [
+      "success",
+      "impact"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.51,
+    "peakSec": 0.168
+  },
+  {
+    "id": "puzzleknight-skill_charge_full",
+    "file": "game/puzzleknight-skill_charge_full.wav",
+    "ko": "충전 완료",
+    "en": "charge full",
+    "tags": [
+      "build",
+      "highlight"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.39,
+    "peakSec": 0.096
+  },
+  {
+    "id": "puzzleknight-hit_critical",
+    "file": "game/puzzleknight-hit_critical.wav",
+    "ko": "치명타",
+    "en": "critical hit",
+    "tags": [
+      "impact",
+      "hit"
+    ],
+    "source": "puzzleknight",
+    "durationSec": 0.29,
+    "peakSec": 0.001
+  },
+  {
+    "id": "elidus-click01",
+    "file": "game/elidus-click01.mp3",
+    "ko": "딸깍(타일)",
+    "en": "tile click",
+    "tags": [
+      "ui",
+      "tap"
+    ],
+    "source": "elidus",
+    "durationSec": 1.071,
+    "peakSec": 0.064
+  },
+  {
+    "id": "elidus-score_up",
+    "file": "game/elidus-score_up.mp3",
+    "ko": "점수 상승",
+    "en": "score up",
+    "tags": [
+      "counter",
+      "success"
+    ],
+    "source": "elidus",
+    "durationSec": 1.48,
+    "peakSec": 0.01
+  },
+  {
+    "id": "elidus-flood_reveal",
+    "file": "game/elidus-flood_reveal.mp3",
+    "ko": "넓게 펼쳐짐",
+    "en": "flood reveal",
+    "tags": [
+      "reveal",
+      "transition"
+    ],
+    "source": "elidus",
+    "durationSec": 1,
+    "peakSec": 0.118
+  },
+  {
+    "id": "elidus-turn_change",
+    "file": "game/elidus-turn_change.mp3",
+    "ko": "차례 전환",
+    "en": "turn change",
+    "tags": [
+      "transition"
+    ],
+    "source": "elidus",
+    "durationSec": 1.48,
+    "peakSec": 0.379
+  },
+  {
+    "id": "elidus-game_over_victory",
+    "file": "game/elidus-game_over_victory.mp3",
+    "ko": "승리",
+    "en": "victory",
+    "tags": [
+      "success",
+      "end"
+    ],
+    "source": "elidus",
+    "durationSec": 2,
+    "peakSec": 0.253
+  }
+]

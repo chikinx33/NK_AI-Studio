@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3000",
       "/local-agent-video": "http://localhost:14000",
+      "/local-motion": "http://localhost:14000",
     },
   },
 });

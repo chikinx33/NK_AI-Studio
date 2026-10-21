@@ -29,6 +29,8 @@ function pickExecutable(candidates, label) {
   throw new Error(`${label} 실행 파일을 찾지 못했습니다. 환경 변수로 위치를 지정하세요.`);
 }
 
+export const pickFfmpeg = () => pickExecutable(FFMPEG_CANDIDATES, "ffmpeg(전체 빌드)");
+
 // 렌더는 CPU를 오래 쓴다. 사용자의 다른 앱이 끊기지 않게 낮은 우선순위로 돌린다.
 function lowPriority(pid) {
   try { os.setPriority(pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (_) { /* 권한 없으면 그대로 */ }
@@ -268,7 +270,7 @@ export async function renderMotionPage(options) {
   const roots = (options.allowRoots?.length ? options.allowRoots : [path.dirname(pagePath)]).map((root) => path.resolve(root));
   const log = options.log || ((line) => console.log(line));
   const chrome = pickExecutable(CHROME_CANDIDATES, "크롬");
-  const ffmpeg = pickExecutable(FFMPEG_CANDIDATES, "ffmpeg(전체 빌드)");
+  const ffmpeg = pickFfmpeg();
   lowPriority(process.pid);
 
   const outDirectory = path.dirname(outPath);
