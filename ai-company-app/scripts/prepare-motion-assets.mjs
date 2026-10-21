@@ -57,6 +57,22 @@ function peakSecond(samples, sampleRate, windowSec = 0.6) {
   return Math.round((at / sampleRate) * 1000) / 1000;
 }
 
+// 감독(AI)이 자산을 직접 보고 장면을 짜도록 긴 변 512px 미리보기(영상은 at초 장면)를 만든다. 투명 배경은 회색 바탕에.
+async function makeThumb(ffmpeg, source, thumbsDirectory, id, at = 0) {
+  const name = `${safeAssetName(id) || "asset"}.jpg`;
+  try {
+    const scale = "scale='if(gt(iw,ih),min(512,iw),-2)':'if(gt(iw,ih),-2,min(512,ih))'";
+    const filter = at > 0
+      ? `${scale},format=yuvj420p`
+      : `color=c=0x808080:s=8x8[bg];[0:v]${scale}[fg];[bg][fg]scale2ref[b][f];[b][f]overlay=format=auto,format=yuvj420p`;
+    await run(ffmpeg, ["-y", "-v", "error", ...(at > 0 ? ["-ss", at.toFixed(2)] : []), "-i", source, "-frames:v", 1,
+      ...(at > 0 ? ["-vf", filter] : ["-filter_complex", filter]), "-q:v", 4, path.join(thumbsDirectory, name)]);
+    return `assets/_thumbs/${name}`;
+  } catch (_) {
+    return null;
+  }
+}
+
 // 매니페스트의 파일 이름은 사이트가 만든다. 그래도 폴더를 벗어나지 못하게 이름만 받는다.
 export function safeAssetName(name) {
   const base = path.basename(String(name || ""));
@@ -68,17 +84,22 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
   const manifest = JSON.parse(await fs.readFile(path.join(jobDirectory, "manifest.json"), "utf8"));
   const rawDirectory = path.join(jobDirectory, "assets", "raw");
   const assetsDirectory = path.join(jobDirectory, "assets");
+  const thumbsDirectory = path.join(assetsDirectory, "_thumbs");
+  await fs.mkdir(thumbsDirectory, { recursive: true });
   const items = [];
   const missing = [];
   let bgm = null;
+  let beatTimes = [];
   for (const item of manifest.items || []) {
     const fileName = safeAssetName(item.fileName);
     const source = fileName ? path.join(rawDirectory, fileName) : "";
     if (!source || !existsSync(source)) { missing.push(item.id); continue; }
     if (IMAGE_ROLES.has(item.role)) {
       await fs.copyFile(source, path.join(assetsDirectory, fileName));
-      const info = /\.svg$/i.test(fileName) ? { width: null, height: null } : await mediaInfo(ffmpeg, source);
-      items.push({ id: item.id, role: item.role, name: item.name, file: `assets/${fileName}`, width: info.width, height: info.height });
+      const svg = /\.svg$/i.test(fileName);
+      const info = svg ? { width: null, height: null } : await mediaInfo(ffmpeg, source);
+      const thumb = svg ? null : await makeThumb(ffmpeg, source, thumbsDirectory, item.id);
+      items.push({ id: item.id, role: item.role, name: item.name, file: `assets/${fileName}`, width: info.width, height: info.height, ...(thumb ? { thumb } : {}) });
     } else if (item.role === "video") {
       const out = `${fileName.replace(/\.[^.]+$/, "")}.mp4`;
       log(`클립 변환: ${fileName}`);
@@ -86,7 +107,8 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
         "-vf", "scale='if(gt(iw,ih),min(1920,iw),-2)':'if(gt(iw,ih),-2,min(1920,ih))':flags=lanczos,fps=60,format=yuv420p",
         "-c:v", "libx264", "-g", 1, "-crf", 14, "-preset", "veryfast", "-movflags", "+faststart", path.join(assetsDirectory, out)]);
       const info = await mediaInfo(ffmpeg, path.join(assetsDirectory, out));
-      items.push({ id: item.id, role: "video", name: item.name, file: `assets/${out}`, ...info });
+      const thumb = await makeThumb(ffmpeg, path.join(assetsDirectory, out), thumbsDirectory, item.id, (info.durationSec || 0) * 0.4);
+      items.push({ id: item.id, role: "video", name: item.name, file: `assets/${out}`, ...info, ...(thumb ? { thumb } : {}) });
     } else if (item.role === "audio") {
       await fs.copyFile(source, path.join(assetsDirectory, fileName));
       const samples = await decodeMono(ffmpeg, source, 48000);
@@ -98,6 +120,7 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
       const result = await beatsForFile(ffmpeg, source);
       await fs.writeFile(path.join(assetsDirectory, "beats.json"), JSON.stringify(result.beats));
       await fs.writeFile(path.join(assetsDirectory, "beats.js"), `var B=${JSON.stringify(result.beats)};`);
+      beatTimes = result.beats.slice(0, 240);
       const info = await mediaInfo(ffmpeg, source);
       bgm = { name: item.name, file: `assets/${fileName}`, durationSec: info.durationSec, bpm: Math.round(result.bpm * 10) / 10,
         beatCount: result.beats.length, beats: "assets/beats.json", beatsScript: "assets/beats.js" };
@@ -110,6 +133,7 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
     brand: manifest.brand || null,
     noMusic: !bgm && manifest.noMusic === true,
     bgm,
+    beatTimes,
     items,
     missing,
     kit: {

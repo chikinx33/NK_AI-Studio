@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Player } from "@remotion/player";
 import { AgentVideo } from "../remotion/AgentVideo";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
-import MotionAssetPicker from "./MotionAssetPicker";
+import MotionAssetPicker, { motionPhaseText, useMotionAssetText } from "./MotionAssetPicker";
+import { localRendererUrl } from "../lib/api";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
   getAgentVideoDimensions,
@@ -80,7 +81,9 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   const [storageOpen, setStorageOpen] = useState(false);
   const meetingInProgress = meetingStatus === "running";
   const meetingStartDisabled = meetingInProgress || meetingStatus === "awaiting-approval";
+  const motionText = useMotionAssetText();
   const renderInProgress = render.status === "queued" || render.status === "rendering";
+  const finalVideoUrl = render.status === "done" && render.downloadUrl ? localRendererUrl(render.downloadUrl) : "";
   const archiveInProgress = archive.status === "uploading";
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
@@ -95,7 +98,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   async function downloadVideo() {
     if (render.status === "done" && render.downloadUrl) {
       const link = document.createElement("a");
-      link.href = render.downloadUrl;
+      link.href = localRendererUrl(render.downloadUrl);
       link.download = "agent-video.mp4";
       document.body.appendChild(link);
       link.click();
@@ -257,6 +260,9 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                   className="max-h-full overflow-hidden rounded-xl border border-edge bg-black shadow-2xl shadow-black/40"
                   style={{ width: previewWidth, aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
                 >
+                  {finalVideoUrl ? (
+                    <video key={finalVideoUrl} src={finalVideoUrl} aria-label={motionText.finalVideo} controls loop playsInline className="h-full w-full" />
+                  ) : (
                   <Player
                     key={`${spec.createdAt}-${spec.aspectRatio}-${spec.scenes.length}`}
                     component={AgentVideo}
@@ -269,6 +275,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                     loop
                     style={{ width: "100%", height: "100%" }}
                   />
+                  )}
                 </div>
               </div>
 
@@ -304,16 +311,24 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           </div>
         </>,
         CompletionActions: (
+          <>
             <button
               type="button"
               onClick={downloadVideo}
               disabled={renderInProgress || archiveInProgress}
               aria-busy={renderInProgress || archiveInProgress}
-              title={renderInProgress ? `영상 준비 중 ${Math.round(render.progress || 0)}%` : archiveInProgress ? "저장 중" : "MP4 다운로드"}
+              title={renderInProgress ? motionPhaseText(motionText, render.phase, render.progress || 0, render.chars || 0) : archiveInProgress ? "저장 중" : "MP4 다운로드"}
               className="w-full rounded-lg border border-orange-700/70 bg-tint-orange/40 px-3 py-2.5 text-xs font-bold text-tone-orange transition hover:bg-tint-orange/50 disabled:cursor-wait disabled:opacity-60"
             >
               다운로드
             </button>
+            {/* 모션 영상은 자산 옮기기·감독·렌더까지 몇 분 걸린다. 진행과 오류를 바로 보이게 한다. */}
+            {(renderInProgress || render.status === "error" || archive.status === "error") && (
+              <p className={`mt-1.5 text-[10px] leading-4 ${renderInProgress ? "text-tone-emerald" : "text-tone-red"}`} role="status">
+                {renderInProgress ? motionPhaseText(motionText, render.phase, render.progress || 0, render.chars || 0) : (render.error || archive.error)}
+              </p>
+            )}
+          </>
         ),
       }} />
       <AgentVideoStorageModal

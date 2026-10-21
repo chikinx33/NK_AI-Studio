@@ -1,0 +1,17 @@
+/* ELIDUS: dark war-table, gold leaf, heavy Noto Serif KR */
+@font-face { font-family: NotoSerifKR; src: url(../fonts/NotoSerifKR-VF.ttf); font-weight: 200 900; }
+:root {
+  --k-color: #F4E6C4; --k-stroke: #0B0C14; --k-hi: #FFD36E; --k-size: 112px; --k-stroke-w: 16px; --s-color: #FFD36E; --grain: .09; --vig: .4;
+  --bg: #12141F; --bg2: #F4E6C4; --ink: #F4E6C4; --accent: #FFD36E; --accent2: #FFD36E;
+  --shadow: rgba(0,0,0,.6); --frame-shadow: #000;
+  --font-head: NotoSerifKR; --font-body: NotoSerifKR; --head-size: 104px; --head-weight: 900; --head-tracking: -2px; --en-scale: 0.92;
+}
+.bgfx { background: radial-gradient(circle at 50% 42%, #2A2440 0%, #171826 55%, #0B0C14 100%); }
+.bgfx::after { content: ""; position: absolute; inset: 0; opacity: .35;
+  background-image: linear-gradient(rgba(255,211,110,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,211,110,.12) 1px, transparent 1px);
+  background-size: 90px 90px; }
+.head { text-shadow: 0 6px 0 rgba(0,0,0,.55); }
+.head.accent { color: var(--accent); }
+.pill { background: var(--accent); color: #1B1626; }
+.pill b { color: #1B1626; }
+.tag { background: var(--accent); color: #1B1626; }

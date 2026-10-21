@@ -174,6 +174,97 @@ function prepareMotionJob(res, directory) {
   });
 }
 
+// 감독이 쓴 장면 코드(index.html)와 소리 큐(episode.json)를 작업 폴더에 둔다
+function saveMotionPage(req, res, directory) {
+  if (!readMotionManifest(directory) || !fs.existsSync(path.join(directory, 'assets.json'))) {
+    return sendJson(res, { error: '자산 정리가 먼저 필요합니다.' }, 409);
+  }
+  return readJsonBody(req, 4 * 1024 * 1024)
+    .then((body) => {
+      const html = String(body?.html || '');
+      if (!/id=["']stage["']/.test(html) || !/window\.READY\s*=/.test(html)) return sendJson(res, { error: '장면 코드가 올바르지 않습니다.' }, 400);
+      const episode = body?.episode && typeof body.episode === 'object' ? body.episode : { bgm: null, cues: [] };
+      fs.writeFileSync(path.join(directory, 'index.html'), html, 'utf8');
+      fs.writeFileSync(path.join(directory, 'episode.json'), JSON.stringify(episode, null, 2), 'utf8');
+      sendJson(res, { ok: true });
+    })
+    .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
+}
+
+// 모션 키트 렌더. 상태·다운로드는 기존 /local-agent-video/status·download 를 그대로 쓴다.
+// 렌더는 CPU를 오래 써서 한 번에 하나만 돌린다(2026-10-21 렌더 3개 동시 실행으로 PC 다운).
+function startMotionRender(res, directory, lang) {
+  if (!fs.existsSync(path.join(directory, 'index.html'))) return sendJson(res, { error: '장면 코드가 없습니다.' }, 409);
+  const busy = [...agentVideoJobs.values()].some((job) => job.status === 'rendering');
+  if (busy) return sendJson(res, { error: '다른 영상을 렌더하는 중입니다. 끝난 뒤 다시 시도해 주세요.' }, 409);
+  const jobId = crypto.randomUUID();
+  const outputPath = path.join(directory, 'final', `motion_${lang}.mp4`);
+  const kitDirectory = path.join(__dirname, 'ai-company-app', 'motion-kit');
+  const job = { id: jobId, status: 'rendering', progress: 1, outputPath, error: '', log: [], callbackUrl: '', callbackDelivered: false };
+  agentVideoJobs.set(jobId, job);
+  const script = path.join(__dirname, 'ai-company-app', 'scripts', 'render-motion-page.mjs');
+  const child = spawn(process.execPath, [
+    script, path.join(directory, 'index.html'), outputPath, '--lang', lang,
+    '--episode', path.join(directory, 'episode.json'),
+    '--audio-dir', path.join(kitDirectory, 'sfx'),
+    '--allow-root', directory, '--allow-root', kitDirectory, '--workers', '3',
+  ], { cwd: path.join(__dirname, 'ai-company-app'), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  try { require('os').setPriority(child.pid, require('os').constants.priority.PRIORITY_BELOW_NORMAL); } catch (_) {}
+  const collect = (chunk) => {
+    const lines = String(chunk || '').split(/\r?\n/).filter(Boolean);
+    job.log.push(...lines);
+    if (job.log.length > 80) job.log.splice(0, job.log.length - 80);
+    for (const line of lines) {
+      const match = line.match(/Rendered\s+(\d+)\/(\d+)/i);
+      // 촬영이 시간의 대부분이다. 합성(모션블러·소리)이 남았으니 95%에서 멈춘다.
+      if (match) job.progress = Math.min(95, Math.max(job.progress, Math.round((Number(match[1]) / Number(match[2])) * 95)));
+    }
+  };
+  child.stdout.on('data', collect);
+  child.stderr.on('data', collect);
+  child.on('error', (error) => { job.status = 'error'; job.error = error.message; });
+  child.on('exit', (code) => {
+    fs.stat(outputPath, (statError, stat) => {
+      if (code === 0 && !statError && stat.isFile() && stat.size > 0) {
+        job.status = 'done';
+        job.progress = 100;
+      } else {
+        job.status = 'error';
+        job.error = job.log.slice(-6).join('\n') || `모션 렌더 실패(exit=${code})`;
+      }
+    });
+  });
+  sendJson(res, { jobId, status: 'rendering', progress: 1 });
+}
+
+// nkstudio.org 화면이 이 PC 렌더러를 부를 수 있게 허용한다. 그 밖의 사이트에서 온 요청은 막는다.
+const LOCAL_RENDERER_ORIGINS = /^(https:\/\/(www\.)?nkstudio\.org|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
+function isLocalRendererPath(pathname) {
+  return pathname.startsWith('/local-motion/') || pathname === '/local-motion/jobs' || pathname.startsWith('/local-agent-video/');
+}
+function localRendererCors(req, res) {
+  const origin = String(req.headers.origin || '');
+  if (origin && !LOCAL_RENDERER_ORIGINS.test(origin)) {
+    sendJson(res, { error: 'origin_not_allowed' }, 403);
+    return true;
+  }
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Private-Network': 'true',
+      'Access-Control-Max-Age': '600',
+    });
+    res.end();
+    return true;
+  }
+  return false;
+}
+
 async function postCompanySkillRenderCallback(job, status) {
   if (!job.callbackUrl || job.callbackDelivered) return;
   const token = String(process.env.COMPANY_SKILL_RENDERER_TOKEN || '').trim();
@@ -271,6 +362,7 @@ const server = http.createServer((req, res) => {
   try {
     const parsed = url.parse(req.url);
     let pathname = decodeURIComponent(parsed.pathname || '/');
+    if (isLocalRendererPath(pathname) && localRendererCors(req, res)) return;
     if (pathname === '/company-skill-render' && req.method === 'POST') {
       const expected = String(process.env.COMPANY_SKILL_RENDERER_TOKEN || '').trim();
       const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -323,7 +415,7 @@ const server = http.createServer((req, res) => {
         })
         .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
     }
-    const motionMatch = pathname.match(/^\/local-motion\/jobs\/([0-9a-fA-F-]{36})(?:\/(raw|prepare)(?:\/([^/]+))?)?$/);
+    const motionMatch = pathname.match(/^\/local-motion\/jobs\/([0-9a-fA-F-]{36})(?:\/(raw|prepare|page|render|thumb)(?:\/([^/]+))?)?$/);
     if (motionMatch) {
       const directory = motionJobDirectory(motionMatch[1]);
       if (motionMatch[2] === 'raw' && req.method === 'PUT') {
@@ -332,6 +424,16 @@ const server = http.createServer((req, res) => {
         return saveMotionAsset(req, res, directory, fileName);
       }
       if (motionMatch[2] === 'prepare' && req.method === 'POST') return prepareMotionJob(res, directory);
+      if (motionMatch[2] === 'page' && req.method === 'PUT') return saveMotionPage(req, res, directory);
+      if (motionMatch[2] === 'render' && req.method === 'POST') {
+        const lang = new URL(req.url, 'http://localhost').searchParams.get('lang') === 'en' ? 'en' : 'ko';
+        return startMotionRender(res, directory, lang);
+      }
+      if (motionMatch[2] === 'thumb' && req.method === 'GET') {
+        const fileName = motionAssetName(motionMatch[3]);
+        if (!fileName || !/\.jpg$/.test(fileName)) return sendJson(res, { error: 'not_found' }, 404);
+        return sendFile(res, path.join(directory, 'assets', '_thumbs', fileName), req);
+      }
       if (!motionMatch[2] && req.method === 'GET') {
         const file = path.join(directory, 'assets.json');
         return fs.existsSync(file) ? sendFile(res, file, req) : sendJson(res, { error: '아직 정리되지 않았습니다.' }, 404);

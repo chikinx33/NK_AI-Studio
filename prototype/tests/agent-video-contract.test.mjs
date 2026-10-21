@@ -26,7 +26,9 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
   assert.match(workspace, /<Player/);
   assert.match(workspaceContext, /createCompanySkillJob/);
   assert.match(workspaceContext, /waitForCompanySkillJob/);
-  assert.match(workspaceContext, /startLocalAgentVideoRender/);
+  // 2026-10-21 3단계: 렌더는 감독이 쓴 모션 키트 장면 코드를 이 PC에서 렌더한다(Player는 콘티 초안 미리보기)
+  assert.match(workspaceContext, /startMotionRender\(workId\)/);
+  assert.match(workspaceContext, /getLocalAgentVideoRenderStatus/);
   assert.match(main, /<AgentVideoWorkspaceProvider>/);
   assert.match(app, /centerView === "video"/);
   assert.match(workspace, /onClose: \(\) => void/);

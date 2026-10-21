@@ -444,8 +444,18 @@ export async function createAgentVideo(input: CreateAgentVideoInput): Promise<Cr
   return data as CreateAgentVideoResult;
 }
 
+/** 이 PC 렌더러(server.js, 14000번) 주소. localhost 화면은 개발 프록시를 타고, nkstudio.org 화면은 이 PC를 직접 부른다. */
+export function localRendererUrl(path: string): string {
+  if (!path || /^https?:/i.test(path)) return path;
+  const host = typeof location !== "undefined" ? location.hostname : "";
+  return host === "localhost" || host === "127.0.0.1" ? path : `http://localhost:14000${path}`;
+}
+
 export interface LocalAgentVideoRenderStatus {
   available?: boolean;
+  // 모션 영상 단계: 자산 옮기기 → 감독(장면 코드 작성) → 렌더
+  phase?: "assets" | "director" | "render";
+  chars?: number;
   jobId?: string;
   status: "idle" | "queued" | "rendering" | "done" | "error";
   progress?: number;
@@ -454,7 +464,7 @@ export interface LocalAgentVideoRenderStatus {
 }
 
 export async function startLocalAgentVideoRender(spec: AgentVideoSpec): Promise<LocalAgentVideoRenderStatus> {
-  const res = await fetch("/local-agent-video/render", {
+  const res = await fetch(localRendererUrl("/local-agent-video/render"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ spec }),
@@ -465,7 +475,7 @@ export async function startLocalAgentVideoRender(spec: AgentVideoSpec): Promise<
 }
 
 export async function getLocalAgentVideoRenderStatus(jobId: string): Promise<LocalAgentVideoRenderStatus> {
-  const res = await fetch(`/local-agent-video/status?jobId=${encodeURIComponent(jobId)}`);
+  const res = await fetch(localRendererUrl(`/local-agent-video/status?jobId=${encodeURIComponent(jobId)}`));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "렌더 상태를 확인하지 못했어요.");
   return data as LocalAgentVideoRenderStatus;

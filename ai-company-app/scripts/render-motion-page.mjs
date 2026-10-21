@@ -202,7 +202,15 @@ async function openPage(cdp, pageUrl, roots, report) {
   await loaded;
   const duration = Number(await evaluate(send, "window.READY"));
   if (!(duration > 0)) throw new Error("페이지가 window.READY 로 영상 길이(초)를 알려야 합니다.");
-  return { send, duration };
+  // 무대 크기(기본 1080x1920, 16:9·1:1 페이지는 <html data-size>로 바꾼다)에 맞춰 찍는다
+  const [width, height] = await evaluate(send, "(() => { const s = document.getElementById('stage'); return s ? [s.offsetWidth, s.offsetHeight] : [1080, 1920]; })()");
+  if (!(width >= 320 && height >= 320 && width <= 3840 && height <= 3840) || width % 2 || height % 2) {
+    throw new Error(`무대 크기가 올바르지 않습니다: ${width}x${height}`);
+  }
+  if (width !== WIDTH || height !== HEIGHT) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+  }
+  return { send, duration, width, height };
 }
 
 // ---------- ffmpeg ----------
@@ -293,6 +301,7 @@ export async function renderMotionPage(options) {
     const pages = [];
     for (let i = 0; i < workers; i++) pages.push(await openPage(cdp, pageUrl, roots, report));
     duration = pages[0].duration;
+    const { width, height } = pages[0];
     total = Math.floor(duration * fps * sub);
     let done = 0;
     let lastLogged = 0;
@@ -300,7 +309,7 @@ export async function renderMotionPage(options) {
       for (let k = index; k < total; k += workers) {
         await evaluate(send, `seek(${k / (fps * sub)})`);
         const { data } = await send("Page.captureScreenshot", {
-          format: "jpeg", quality: 94, clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT, scale: 1 },
+          format: "jpeg", quality: 94, clip: { x: 0, y: 0, width, height, scale: 1 },
         });
         await fs.writeFile(path.join(framesDirectory, `f_${String(k).padStart(5, "0")}.jpg`), Buffer.from(data, "base64"));
         done++;

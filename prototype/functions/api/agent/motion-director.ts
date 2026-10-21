@@ -1,0 +1,144 @@
+// POST /api/agent/motion-director — 인포그래픽 영상 감독: 이 영상만의 장면 코드(HTML 한 장)와 소리 큐를 쓴다.
+// body: { workId, prepared(이 PC 렌더러가 정리한 assets.json), thumbs?: [{ id, label, dataUrl }] }
+// 응답: text/event-stream — data: {"t":"progress","chars"} … data: {"t":"done","result":{html,episode,problems}} | {"t":"error","error"}
+//
+// 비용 0원 정책(2026-10-21 엔케): Claude 구독(OAuth)일 때만 실행한다. API 키 경로는 쓰지 않고,
+// 구독이 거부돼도 API 키로 다시 시도하지 않는다(claudeFetch 예비 자격증명 제거).
+// 긴 코드를 쓰는 동안 연결이 끊기지 않게 응답을 흘려 보낸다(director/assist.ts 와 같은 방식).
+import { authorizeRequest } from "../_shared/auth.js";
+import { buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
+import {
+  MOTION_DIRECTOR_MAX_IMAGES, MOTION_DIRECTOR_MAX_TOKENS, MOTION_DIRECTOR_MODEL,
+  buildMotionDirectorRequest, buildMotionDirectorSystem, parseMotionDirectorOutput,
+} from "../_shared/motion-director.js";
+import { corsHeaders, getSql, send } from "./_shared";
+import { MOTION_SUBSCRIPTION_REQUIRED, motionSubscriptionAuth } from "./_motion-auth";
+
+type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
+
+const MAX_BODY_CHARS = 8 * 1024 * 1024;
+// 시험(2026-10-21)에서 장면 코드가 약 2만 9천 자였다. 흘려 보내는 동안 연결은 유지되므로 넉넉히 둔다.
+const TIMEOUT_MS = 600_000;
+
+export const onRequestOptions: PagesFunction = async ({ request }) =>
+  new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
+
+function imageBlocks(thumbs: any): any[] {
+  const blocks: any[] = [];
+  for (const thumb of (Array.isArray(thumbs) ? thumbs : []).slice(0, MOTION_DIRECTOR_MAX_IMAGES)) {
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(thumb?.dataUrl || ""));
+    if (!match) continue;
+    blocks.push({ type: "text", text: `자산 미리보기: ${String(thumb?.label || thumb?.id || "").slice(0, 160)}` });
+    blocks.push({ type: "image", source: { type: "base64", media_type: match[1], data: match[2] } });
+  }
+  return blocks;
+}
+
+export const onRequestPost: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
+  const who = await authorizeRequest(request, env);
+  if (!who.ok) return send({ error: who.error }, who.status, origin);
+
+  const rawBody = await request.text();
+  if (rawBody.length > MAX_BODY_CHARS) return send({ error: "body_too_large" }, 413, origin);
+  let body: any;
+  try { body = JSON.parse(rawBody || "{}"); } catch { return send({ error: "invalid_json" }, 400, origin); }
+  const workId = String(body?.workId || "");
+  if (!/^[0-9a-f-]{36}$/i.test(workId)) return send({ error: "workId가 필요합니다." }, 400, origin);
+  const prepared = body?.prepared && typeof body.prepared === "object" ? body.prepared : null;
+  if (!prepared?.kit?.motion) return send({ error: "이 PC 렌더러가 정리한 자산 목록(prepared)이 필요합니다." }, 400, origin);
+
+  const sql = getSql(env);
+  if (!sql) return send({ error: "DB를 사용할 수 없습니다." }, 503, origin);
+  const rows = await sql("SELECT metadata FROM company_work_items WHERE id = $1 AND user_id = $2 LIMIT 1", [workId, who.userId]);
+  if (!rows[0]) return send({ error: "회사 업무를 찾지 못했습니다." }, 404, origin);
+  const metadata: any = rows[0].metadata || {};
+  const input = metadata.input || {};
+
+  // 구독 전용
+  let auth: any;
+  try {
+    auth = await motionSubscriptionAuth(sql, who.userId, env);
+    if (!auth) return send({ error: MOTION_SUBSCRIPTION_REQUIRED }, 412, origin);
+  } catch (e) {
+    return send({ error: String((e as any)?.message || e) }, 500, origin);
+  }
+
+  const system = buildMotionDirectorSystem();
+  const userText = buildMotionDirectorRequest({ input, spec: metadata.spec || null, prepared });
+  const content = [...imageBlocks(body?.thumbs), { type: "text", text: userText }];
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("motion_director_timeout"), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await claudeFetch(env, auth, (sub: boolean) => ({
+      model: MOTION_DIRECTOR_MODEL,
+      max_tokens: MOTION_DIRECTOR_MAX_TOKENS,
+      output_config: { effort: "high" },
+      system: buildClaudeSystem(sub, system),
+      messages: [{ role: "user", content }],
+      stream: true,
+    }), { signal: controller.signal });
+  } catch (e) {
+    clearTimeout(timer);
+    return send({ error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) }, 500, origin);
+  }
+  if (!res.ok || !res.body) {
+    clearTimeout(timer);
+    const raw = await res.text().catch(() => "");
+    return send({ error: `Claude ${res.status}: ${raw.slice(0, 300)}` }, 500, origin);
+  }
+
+  const encoder = new TextEncoder();
+  const upstream = res.body.getReader();
+  const stream = new ReadableStream({
+    async start(out) {
+      const emit = (obj: any) => out.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      const decoder = new TextDecoder();
+      let buf = "";
+      let text = "";
+      let stopReason = "";
+      let lastReport = 0;
+      try {
+        for (;;) {
+          const { value, done } = await upstream.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, idx).trim();
+            buf = buf.slice(idx + 1);
+            if (!line.startsWith("data:")) continue;
+            let evt: any;
+            try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
+            if (evt?.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              text += evt.delta.text || "";
+              if (text.length - lastReport >= 400) { lastReport = text.length; emit({ t: "progress", chars: text.length }); }
+            } else if (evt?.type === "content_block_delta" || evt?.type === "ping") {
+              // 생각하는 동안에도 연결이 살아 있게 알린다
+              emit({ t: "progress", chars: text.length });
+            } else if (evt?.type === "message_delta" && evt.delta?.stop_reason) {
+              stopReason = String(evt.delta.stop_reason);
+            } else if (evt?.type === "error") {
+              throw new Error(String(evt.error?.message || "claude_stream_error"));
+            }
+          }
+        }
+        if (stopReason === "refusal") throw new Error("motion_director_refused");
+        if (stopReason === "max_tokens") throw new Error("motion_director_max_tokens");
+        emit({ t: "done", stopReason, result: parseMotionDirectorOutput(text, { aspectRatio: input.aspectRatio, prepared }) });
+      } catch (e) {
+        emit({ t: "error", error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) });
+      } finally {
+        clearTimeout(timer);
+        out.close();
+      }
+    },
+    cancel() { controller.abort("client_closed"); clearTimeout(timer); },
+  });
+  const headers = new Headers(corsHeaders(origin));
+  headers.set("Content-Type", "text/event-stream; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  return new Response(stream, { status: 200, headers });
+};

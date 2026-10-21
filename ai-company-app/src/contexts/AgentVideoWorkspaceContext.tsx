@@ -1,5 +1,13 @@
-import { EMPTY_MOTION_ASSETS, type MotionAssetSelection } from "../lib/motionAssets";
-import { motionAssetText } from "../components/MotionAssetPicker";
+import {
+  EMPTY_MOTION_ASSETS,
+  fetchMotionThumbs,
+  runMotionDirector,
+  saveMotionPage,
+  stageMotionAssets,
+  startMotionRender,
+  type MotionAssetSelection,
+} from "../lib/motionAssets";
+import { motionAssetText, motionErrorText } from "../components/MotionAssetPicker";
 import { appDialog } from "../lib/appDialog";
 import {
   createContext,
@@ -17,9 +25,9 @@ import {
   getCompanySkillJob,
   getCompanyWorkItem,
   getLocalAgentVideoRenderStatus,
+  localRendererUrl,
   registerCompanySkillJobArtifacts,
   setCompanyWorkItemStatus,
-  startLocalAgentVideoRender,
   uploadAgentVideoStorageFile,
   waitForCompanySkillJob,
   type AgentVideoStorageItem,
@@ -113,6 +121,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const meetingLockedRef = useRef(false);
   const renderSpecRef = useRef<AgentVideoSpec>(spec);
   const archivingJobRef = useRef("");
+  const motionSourceRef = useRef<{ html: string; episode: unknown; prepared: unknown } | null>(null);
   const activeWorkRef = useRef<CompanyWorkItem | null>(null);
   const skillJobPollingRef = useRef<AbortController | null>(null);
 
@@ -212,7 +221,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       await restoreSkillJob(result.job.id, controller.signal);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setError(caught instanceof Error ? caught.message : "에이전트 협업 중 오류가 발생했어요.");
+      setError(caught instanceof Error ? motionErrorText(caught) : "에이전트 협업 중 오류가 발생했어요.");
       setMeetingStatus("error");
     } finally {
       skillJobPollingRef.current = null;
@@ -270,13 +279,28 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setError("");
     renderSpecRef.current = targetSpec;
     archivingJobRef.current = "";
-    setRender({ status: "queued", progress: 0 });
+    motionSourceRef.current = null;
+    setRender({ status: "queued", progress: 0, phase: "assets" });
     setArchive({ status: "rendering" });
     try {
+      // 모션 영상: 자산을 이 PC로 옮기고 → 감독(Claude 구독)이 이 영상만의 장면 코드를 쓰고 → 이 PC에서 렌더한다.
+      // 렌더가 끝나면 아래 상태 확인·archiveLocalRender 가 기존처럼 저장소에 올린다.
+      const t = motionAssetText();
+      const workId = activeWorkRef.current?.id;
+      if (!workId) throw new Error(t.noWork);
       await updateActiveWorkStatus("working");
-      setRender(await startLocalAgentVideoRender(targetSpec));
+      const prepared = await stageMotionAssets(workId, (done, total) =>
+        setRender({ status: "queued", phase: "assets", progress: total ? Math.round((done / total) * 100) : 100 }));
+      setRender({ status: "queued", phase: "director", progress: 0, chars: 0 });
+      const thumbs = await fetchMotionThumbs(workId, prepared);
+      const result = await runMotionDirector(workId, prepared, thumbs, (chars) =>
+        setRender({ status: "queued", phase: "director", progress: 0, chars }));
+      if (result.problems?.length) throw new Error(t.directorProblems.replace("{p}", result.problems.join(" · ")));
+      motionSourceRef.current = { html: result.html, episode: result.episode, prepared };
+      await saveMotionPage(workId, result.html, result.episode);
+      setRender(await startMotionRender(workId));
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "로컬 렌더 실패";
+      const message = motionErrorText(caught) || "로컬 렌더 실패";
       setRender({ status: "error", error: message });
       setArchive({ status: "error", error: message });
       await updateActiveWorkStatus("error").catch(() => undefined);
@@ -289,7 +313,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     archivingJobRef.current = jobId;
     setArchive({ status: "uploading" });
     try {
-      const localResponse = await fetch(renderResult.downloadUrl);
+      const localResponse = await fetch(localRendererUrl(renderResult.downloadUrl));
       if (!localResponse.ok) throw new Error(`로컬 MP4를 읽지 못했습니다. (HTTP ${localResponse.status})`);
       const videoBlob = await localResponse.blob();
       const workId = activeWorkRef.current?.id || "";
@@ -306,6 +330,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         jobId: skillJobId || null,
         workItemId: workId,
         spec: targetSpec,
+        // 감독이 쓴 장면 코드·소리 큐와 받은 자산 목록(다시 렌더·수정할 때 쓴다)
+        motion: motionSourceRef.current,
       }, null, 2)], { type: "application/json" });
       const sourceChecksum = await sha256Hex(sourceBlob);
       const sourceItem = await uploadAgentVideoStorageFile(sourceBlob, "source.json", workId);

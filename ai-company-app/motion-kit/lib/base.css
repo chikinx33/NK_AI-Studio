@@ -1,7 +1,7 @@
 /* RAVIOK motion kit base. Themes (themes/<game>.css) set the variables. */
 html, body { margin: 0; background: #000; }
-#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); font-family: var(--font-body), sans-serif; }
-#cam { position: absolute; inset: 0; transform-origin: 540px 1000px; }
+#stage { position: relative; width: var(--stage-w, 1080px); height: var(--stage-h, 1920px); overflow: hidden; background: var(--bg); font-family: var(--font-body), sans-serif; }
+#cam { position: absolute; inset: 0; transform-origin: var(--cam-ox, 540px) var(--cam-oy, 1000px); }
 #heads { position: absolute; left: 0; top: 0; z-index: 50; }
 .a { position: absolute; left: 0; top: 0; visibility: hidden; }
 .layer { position: absolute; inset: 0; }
@@ -33,7 +33,7 @@ html.guide #stage::after { content: ""; position: absolute; inset: 0; z-index: 9
     linear-gradient(rgba(255,0,0,.18), rgba(255,0,0,.18)) right 1000px/150px 600px no-repeat; }
 
 /* ---- 2026 kit: kinetic captions, stickers, full-bleed clips, grain ---- */
-.kline { position: absolute; left: 0; top: 0; width: 960px; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+.kline { position: absolute; left: 0; top: 0; width: calc(var(--stage-w, 1080px) - 120px); display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
          gap: 0 24px; visibility: hidden; z-index: 60; }
 .kw { display: inline-block; font-family: var(--font-head), sans-serif; font-weight: var(--head-weight, 400); font-size: var(--k-size, 124px);
       line-height: 1.16; color: var(--k-color, #fff); -webkit-text-stroke: var(--k-stroke-w, 18px) var(--k-stroke, #23264A); paint-order: stroke fill;

@@ -5,6 +5,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { corsHeaders, ensureAgentSchema, getSql, send } from "./_shared";
 import { callClaude, speak } from "./_orchestrator";
 import { normalizeMotionAssetSelection } from "./_motion-assets";
+import { MOTION_PLANNING_MODEL, MOTION_SUBSCRIPTION_REQUIRED, motionSubscriptionAuth } from "./_motion-auth";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -308,7 +309,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const sql = getSql(env);
     if (sql) await ensureAgentSchema(sql).catch(() => {});
-    const shared = { sql: sql || undefined, userId: auth.userId, maxTokens: 1500 };
+    // 비용 0원: Claude 구독일 때만, 예비 API 키 없이, 모델은 Claude로 고정(사용자 모델 설정이 유료 경로로 보내지 않게)
+    const motionAuth = sql ? await motionSubscriptionAuth(sql, auth.userId, env) : null;
+    if (!motionAuth) return send({ error: MOTION_SUBSCRIPTION_REQUIRED }, 412, origin);
+    const shared = { sql: sql || undefined, userId: auth.userId, maxTokens: 1500, resolvedAuth: motionAuth, model: MOTION_PLANNING_MODEL };
     const brief = [
       `영상 요청: ${input.prompt}`,
       `길이: ${input.durationSec}초`,
@@ -427,8 +431,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const rawSpec = await callClaude(env, synthesisSystem, [{ role: "user", content: synthesisInput }], {
       sql: sql || undefined,
       userId: auth.userId,
-      model: "claude-sonnet-4-6",
+      model: MOTION_PLANNING_MODEL,
       maxTokens: 4200,
+      resolvedAuth: motionAuth,
     });
     let spec = enforceSpecQuality(normalizeSpec(parseJsonObject(rawSpec), input), input.aspectRatio);
     if (sql) {

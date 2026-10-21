@@ -1,0 +1,77 @@
+{
+  "name": "el_s1_01",
+  "game": "elidus",
+  "bgm": {
+    "file": "Bgm_Elidus.mp3",
+    "start": 0,
+    "volume": 0.55
+  },
+  "beats": "assets/beats.json",
+  "cues": [
+    [
+      0,
+      "tile_click.mp3",
+      0.7
+    ],
+    [
+      0.5,
+      "tile_click.mp3",
+      0.5
+    ],
+    [
+      4.4,
+      "click01.mp3",
+      0.9
+    ],
+    [
+      5.5,
+      "pickaxe_swing.mp3",
+      1.0
+    ],
+    [
+      6,
+      "core_created.mp3",
+      1.0
+    ],
+    [
+      6.05,
+      "skull_hit.mp3",
+      0.6
+    ],
+    [
+      6.6,
+      "territory_steal.mp3",
+      0.8
+    ],
+    [
+      7.2,
+      "score_up.mp3",
+      0.9
+    ],
+    [
+      12,
+      "turn_change.mp3",
+      0.7
+    ],
+    [
+      "s6.497",
+      "flood_reveal.mp3",
+      0.9
+    ],
+    [
+      "s10.297",
+      "pickaxe_swing.mp3",
+      0.9
+    ],
+    [
+      "s10.497",
+      "core_created.mp3",
+      1.0
+    ],
+    [
+      "s12.947",
+      "game_over_victory.mp3",
+      1.0
+    ]
+  ]
+}

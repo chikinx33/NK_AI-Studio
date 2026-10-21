@@ -1,0 +1,12 @@
+/* NEKOBAN: cozy cream room, candy pastels, rounded Hakgyoansim Nalgae */
+@font-face { font-family: Nalgae; src: url(../fonts/Hakgyoansim_NalgaeR.ttf); }
+:root {
+  --k-color: #fff; --k-stroke: #5A4636; --k-hi: #FF8FA3; --k-size: 124px; --s-color: #F0607E; --grain: .05; --vig: .18;
+  --bg: #FFF6E8; --bg2: #3B3350; --ink: #5A4636; --accent: #F0607E; --accent2: #FFD166;
+  --shadow: rgba(60,40,30,.35); --frame-shadow: #E8CFB0;
+  --font-head: Nalgae; --font-body: Nalgae; --head-size: 108px; --head-weight: 400; --en-scale: 0.95;
+}
+.bgfx { background: radial-gradient(circle at 50% 40%, #FFFDF6 0%, #FFF3DF 65%, #FCE6C8 100%); }
+.bgfx::after { content: ""; position: absolute; inset: 0; opacity: .5;
+  background-image: radial-gradient(circle at 25% 25%, #F6D9B8 6px, transparent 7px), radial-gradient(circle at 75% 75%, #F6D9B8 6px, transparent 7px);
+  background-size: 120px 120px; }

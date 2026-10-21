@@ -1,7 +1,7 @@
 // 인포그래픽 영상(모션 키트) 자산 입력.
 // 작업을 만들 때 고른 브랜드·업무 파일·배경음악은 작업 입력(options.assets)에 실리고,
 // 렌더 직전에 브라우저가 사이트에서 파일을 받아 이 PC 렌더러(/local-motion)로 넘긴다(렌더러에는 로그인 정보가 없다).
-import { withMediaToken } from "./api";
+import { localRendererUrl, withMediaToken, type LocalAgentVideoRenderStatus } from "./api";
 
 export interface MotionAssetSelection {
   brandId: string | null;
@@ -62,7 +62,7 @@ export async function stageMotionAssets(
   onProgress?: (done: number, total: number, name: string) => void,
 ): Promise<any> {
   const manifest = await getMotionAssetManifest(workId);
-  const created = await fetch("/local-motion/jobs", {
+  const created = await fetch(localRendererUrl("/local-motion/jobs"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workId, manifest }),
@@ -73,7 +73,7 @@ export async function stageMotionAssets(
     onProgress?.(index, manifest.items.length, item.name);
     const source = await fetch(withMediaToken(item.url));
     if (!source.ok) throw new Error(`자산을 받지 못했어요: ${item.name} (HTTP ${source.status})`);
-    const upload = await fetch(`/local-motion/jobs/${encodeURIComponent(workId)}/raw/${encodeURIComponent(item.fileName)}`, {
+    const upload = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/raw/${encodeURIComponent(item.fileName)}`), {
       method: "PUT",
       body: await source.blob(),
     });
@@ -83,8 +83,92 @@ export async function stageMotionAssets(
     }
   }
   onProgress?.(manifest.items.length, manifest.items.length, "");
-  const prepared = await fetch(`/local-motion/jobs/${encodeURIComponent(workId)}/prepare`, { method: "POST" });
+  const prepared = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/prepare`), { method: "POST" });
   const preparedData = await prepared.json().catch(() => ({}));
   if (!prepared.ok) throw new Error(preparedData?.error || "자산을 정리하지 못했어요.");
   return { ...preparedData, warnings: manifest.warnings };
+}
+
+// 감독이 자산을 직접 보도록 이 PC 렌더러가 만든 미리보기(긴 변 512px)를 data URL로 모은다
+export async function fetchMotionThumbs(workId: string, prepared: any): Promise<Array<{ id: string; label: string; dataUrl: string }>> {
+  const items: any[] = (Array.isArray(prepared?.items) ? prepared.items : []).filter((item: any) => item?.thumb).slice(0, 12);
+  const thumbs: Array<{ id: string; label: string; dataUrl: string }> = [];
+  for (const item of items) {
+    const name = String(item.thumb).split("/").pop() || "";
+    const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/thumb/${encodeURIComponent(name)}`)).catch(() => null);
+    if (!res?.ok) continue;
+    const blob = await res.blob();
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+    const size = item.width ? ` ${item.width}x${item.height}` : "";
+    const length = item.durationSec ? ` ${item.durationSec}초` : "";
+    if (dataUrl) thumbs.push({ id: item.id, label: `[${item.role}] ${item.name} → ${item.file}${size}${length}`, dataUrl });
+  }
+  return thumbs;
+}
+
+export interface MotionDirectorResult {
+  html: string;
+  episode: Record<string, unknown> | null;
+  problems: string[];
+}
+
+// 감독(Claude 구독)이 이 영상만의 장면 코드를 쓴다. 응답이 흘러오는 동안 글자 수로 진행을 알린다.
+export async function runMotionDirector(
+  workId: string,
+  prepared: any,
+  thumbs: Array<{ id: string; label: string; dataUrl: string }>,
+  onProgress?: (chars: number) => void,
+): Promise<MotionDirectorResult> {
+  const res = await fetch("/api/agent/motion-director", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workId, prepared, thumbs }),
+  });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `감독 호출 실패 (HTTP ${res.status})`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let index;
+    while ((index = buffer.indexOf("\n\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 2);
+      if (!line.startsWith("data:")) continue;
+      const event = JSON.parse(line.slice(5).trim());
+      if (event.t === "progress") onProgress?.(Number(event.chars) || 0);
+      else if (event.t === "error") throw new Error(String(event.error || "motion_director_error"));
+      else if (event.t === "done") return event.result as MotionDirectorResult;
+    }
+  }
+  throw new Error("감독 응답이 끝나기 전에 연결이 끊겼어요.");
+}
+
+export async function saveMotionPage(workId: string, html: string, episode: unknown): Promise<void> {
+  const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/page`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html, episode }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "장면 코드를 이 PC 렌더러에 저장하지 못했어요.");
+  }
+}
+
+export async function startMotionRender(workId: string, lang: "ko" | "en" = "ko"): Promise<LocalAgentVideoRenderStatus> {
+  const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/render?lang=${lang}`), { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "렌더를 시작하지 못했어요.");
+  return { ...(data as LocalAgentVideoRenderStatus), phase: "render" };
 }

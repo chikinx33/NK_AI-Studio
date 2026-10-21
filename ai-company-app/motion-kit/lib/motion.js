@@ -7,6 +7,19 @@
   M.lang = M.params.get('lang') || 'ko';
   document.documentElement.lang = M.lang;
   if (M.params.get('guide') === '1') document.documentElement.classList.add('guide');
+  // NK Studio: stage size from <html data-size="1920x1080"> (default 1080x1920 = season 1, unchanged).
+  // Defaults below scale from the 1080x1920 originals so the default size renders exactly as before.
+  const size = String(document.documentElement.dataset.size || '1080x1920').match(/^(\d{3,4})x(\d{3,4})$/);
+  M.W = size ? Number(size[1]) : 1080;
+  M.H = size ? Number(size[2]) : 1920;
+  if (M.W !== 1080 || M.H !== 1920) {
+    const css = document.documentElement.style;
+    css.setProperty('--stage-w', M.W + 'px');
+    css.setProperty('--stage-h', M.H + 'px');
+    css.setProperty('--cam-ox', M.W / 2 + 'px');
+    css.setProperty('--cam-oy', Math.round(M.H * 1000 / 1920) + 'px');
+  }
+  const sy = (v) => Math.round(v * M.H / 1920);
 
   // ---------- math ----------
   M.clamp = (x, a = 0, c = 1) => Math.min(c, Math.max(a, x));
@@ -35,7 +48,7 @@
   // ---------- placing elements ----------
   // Elements use class "a" (absolute at 0,0); put() centers them at x,y.
   M.put = (el, o) => {
-    const { x = 540, y = 960, s = 1, sx = 1, sy = 1, r = 0, a = 1, show = true, w, h, f, z } = o;
+    const { x = M.W / 2, y = M.H / 2, s = 1, sx = 1, sy = 1, r = 0, a = 1, show = true, w, h, f, z } = o;
     el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%) rotate(${r}deg) scale(${s * sx},${s * sy})`;
     el.style.opacity = a;
     if (w !== undefined) el.style.width = w + 'px';
@@ -48,7 +61,7 @@
   M.$ = (id) => document.getElementById(id);
   // a circle that floods the frame from (x,y): p 0..1
   M.flood = (el, x, y, p, color) => {
-    const r = p * 2400;
+    const r = p * 2400 * Math.max(M.W, M.H) / 1920;
     if (color) el.style.background = color;
     M.put(el, { x, y, w: 2 * r + 1, h: 2 * r + 1, show: p > 0 });
   };
@@ -73,7 +86,7 @@
         if (t < h.s - 0.01 || t > t1 + 0.35) { M.hide(h.m); continue; }
         const p = M.sp(t, h.s, 2.6, 0.82), q = M.eout(t, t1, 0.24);
         h.m.style.visibility = 'visible';
-        h.m.style.transform = `translate(540px,${h.y ?? defY}px) translate(-50%,-50%)`;
+        h.m.style.transform = `translate(${M.W / 2}px,${h.y ?? defY}px) translate(-50%,-50%)`;
         h.d.style.transform = `translateY(${(1 - p) * 115 - q * 115}%)`;
       }
     };
@@ -111,7 +124,7 @@
   // ---------- kinetic captions (2026 short-form standard) ----------
   // Words pop in one chunk at a time, key chunks highlighted, the line leaves upward.
   // lines: [{ko:'블록을|*밀어라!*', en:'Slide|the *blocks!*', s, step, e, y}]  ('|' = chunk, '*x*' = highlight)
-  M.kinetic = (container, lines, defY = 1270) => {
+  M.kinetic = (container, lines, defY = sy(1270)) => {
     const items = lines.map((L) => {
       const el = document.createElement('div'); el.className = 'kline';
       const chunks = M.tx(L).split('|').map((c) => {
@@ -130,7 +143,7 @@
         if (t < L.s - 0.01 || t > e + 0.3) { L.el.style.visibility = 'hidden'; continue; }
         const q = M.ein(t, e, 0.18);
         L.el.style.visibility = 'visible';
-        L.el.style.transform = `translate(540px,${(L.y ?? defY) - q * 90}px) translate(-50%,-50%)`;
+        L.el.style.transform = `translate(${M.W / 2}px,${(L.y ?? defY) - q * 90}px) translate(-50%,-50%)`;
         L.el.style.opacity = 1 - q;
         L.chunks.forEach((w, i) => {
           const t0 = L.s + i * (L.step ?? 0.3);
@@ -144,11 +157,15 @@
   };
 
   // sticker callout (e.g. "+200", "쏙!"): pops with a tilt, wobbles, leaves
-  M.sticker = (el, t, t0, t1, { x = 540, y = 900, r = -8, s = 1 } = {}) => {
+  M.sticker = (el, t, t0, t1, { x = M.W / 2, y = sy(900), r = -8, s = 1 } = {}) => {
     if (t < t0 || t > t1 + 0.25) return M.hide(el);
     const p = M.sp(t, t0, 3.4, 0.5), q = M.ein(t, t1, 0.2);
     M.put(el, { x, y: y - q * 40, s: s * p * (1 - q * 0.4), r: r + Math.sin((t - t0) * 9) * 2 * Math.exp(-(t - t0) * 2), a: 1 - q });
   };
+
+  // NK Studio: number counting up between t0 and t0+d (ease-out), formatted for the language (1,234 / 12.5)
+  M.count = (t, t0, d, from, to, decimals = 0) => M.lerp(from, to, M.eout(t, t0, d))
+    .toLocaleString(M.lang === 'en' ? 'en-US' : 'ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
   // keyframed camera: keys = [[t, s, fx, fy], ...]; returns {s, fx, fy} eased between keys
   M.keys = (t, keys) => {
@@ -169,11 +186,11 @@
   };
   // lt = local clip time, cam = {s, fx, fy} (focus in clip px), open = 0..1 (card -> full frame)
   M.fullAt = (F, lt, cam = {}, open = 1) => {
-    const base = Math.min(1080 / F.vw, 1920 / F.vh), s = base * (cam.s ?? 1);
+    const base = Math.min(M.W / F.vw, M.H / F.vh), s = base * (cam.s ?? 1);
     const fx = cam.fx ?? F.vw / 2, fy = cam.fy ?? F.vh / 2;
     F.fg.style.transform = `translate(${-fx * s}px,${-fy * s}px) scale(${s})`;
     const c = 1 - open;
-    F.box.style.clipPath = `inset(${c * 330}px ${c * 200}px round ${c * 64}px)`;
+    F.box.style.clipPath = `inset(${c * sy(330)}px ${c * Math.round(200 * M.W / 1080)}px round ${c * 64}px)`;
     F.box.style.visibility = 'visible';
     return Promise.all([M.clipAt(F.cf, lt), M.clipAt(F.cb, lt)]);
   };

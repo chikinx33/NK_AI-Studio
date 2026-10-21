@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>elidus s1_01</title>
+<link rel="stylesheet" href="../../../_motion/lib/base.css">
+<link rel="stylesheet" href="../../../_motion/themes/elidus.css">
+<style>
+.tile { width: 176px; height: 176px; }
+.tile img { position: absolute; inset: 0; width: 176px; height: 176px; }
+.tile .my { opacity: 0; }
+#core { width: 176px; height: 176px; }
+#core .lava { position: absolute; inset: 16px; border-radius: 26px;
+  background: radial-gradient(circle at 50% 45%, #FFF3B0 0%, #FFB43A 22%, #FF5A1F 48%, #8E1C0E 78%, #3A0A06 100%);
+  box-shadow: 0 0 60px 18px rgba(255,110,40,.75), inset 0 0 26px rgba(60,0,0,.8); }
+#core .rune { position: absolute; left: -112px; top: -112px; width: 400px; height: 400px; filter: drop-shadow(0 0 18px rgba(255,211,110,.9)) sepia(1) saturate(3) hue-rotate(-10deg); }
+#boom { width: 200px; height: 200px; background: url(assets/sequense_explosion01.png) 0 0 / 1000px 800px; image-rendering: pixelated; }
+#flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 47%, rgba(255,226,160,.95), rgba(255,140,60,.35) 45%, transparent 75%); opacity: 0; z-index: 40; pointer-events: none; }
+#dig { width: 421px; height: 167px; }
+#dig img { position: absolute; inset: 0; width: 421px; height: 167px; }
+#cursor { width: 150px; height: 150px; z-index: 45; }
+#clip-full { z-index: 20; }
+#logo { width: 900px; filter: drop-shadow(0 0 40px rgba(255,211,110,.45)) drop-shadow(0 10px 0 rgba(0,0,0,.6)); }
+.st-gold { --s-color: #FFD36E; -webkit-text-stroke-color: #1B1626 !important; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div class="layer bgfx"></div>
+    <div id="grid"></div>
+    <div class="a" id="core"><img class="rune" src="assets/eff_rune01.webp"><div class="lava"></div></div>
+    <div class="a" id="boom"></div>
+    <div class="a" id="dig"><img id="dig1" src="assets/ui_dig01.webp"><img id="dig2" src="assets/ui_dig02.webp"></div>
+    <img class="a" id="cursor" src="assets/cursir.webp">
+  </div>
+  <div id="flash"></div>
+  <div class="full" id="clip-full"><video class="blurbg" data-src="assets/clip_{lang}.mp4"></video><video class="fg" data-src="assets/clip_{lang}.mp4"></video></div>
+  <div class="a flood" id="flood"></div>
+  <img class="a" id="logo" src="assets/logo.png">
+  <div class="a pill" id="pill"></div>
+  <div class="a sticker st-gold" id="st1">+200</div>
+  <div class="a sticker st-gold" id="st2">+200</div>
+  <div id="heads"></div>
+  <div class="vignette"></div><div class="grain" id="grain"></div>
+</div>
+<script src="../../../_motion/lib/motion.js"></script>
+<script src="assets/beats.js"></script>
+<script>
+const { $, put, hide, sp, pop, io, ein, eout, lerp, tx, clamp } = M;
+const b = M.beats(B);                                  // 120 bpm, one beat = 0.5 s
+
+$('pill').innerHTML = tx({ ko: '<b>elidus.org</b> 설치 없이 바로', en: 'Play free at <b>elidus.org</b>' });
+
+// 5x5 grid of hidden stone; the centre one hides a mine
+const N = 5, TS = 176, GX = 540, GY = 900;
+const tiles = [];
+for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+  const d = document.createElement('div'); d.className = 'a tile';
+  d.innerHTML = `<img src="assets/tile_off0${1 + ((r * 7 + c * 3) % 4)}.webp"><img class="my" src="assets/tile_my0${1 + ((r + c) % 2)}.webp">`;
+  $('grid').appendChild(d);
+  tiles.push({ el: d, my: d.querySelector('.my'), r, c, x: GX + (c - 2) * TS, y: GY + (r - 2) * TS, dist: Math.hypot(r - 2, c - 2) });
+}
+
+const T = { tap: 5.5, boom: 6, s2: 12, s3: 0 };
+const S2 = b(T.s2), S3 = S2 + 6.6, DUR = S3 + 3.2;
+const drawK = M.kinetic($('heads'), [
+  { s: b(0.6), e: b(4), step: 0.34, ko: '모두가|지뢰를|피해 다닐 때,', en: 'Everyone else|runs from|the mines…' },
+  { s: b(4), e: b(T.boom), step: 0.36, ko: '곡괭이를|*높이 들어라!*', en: 'Raise your|*pickaxe!*' },
+  { s: b(T.boom + 0.3), e: S2 - 0.1, step: 0.38, ko: '*쾅!*|지뢰가|*나의 성채로!*', en: '*BOOM!*|The mine becomes|*your stronghold!*' },
+  { s: S2 + 0.5, e: S2 + 3.6, step: 0.34, y: 330, ko: '칸을 열면|*내 땅!*', en: 'Open a tile,|*claim the land!*' },
+  { s: S2 + 3.9, e: S3 - 0.05, step: 0.34, y: 330, ko: '넓히고, 빼앗고,|*천하를 손에!*', en: 'Grow it, take it,|*rule the world!*' },
+  { s: S3 + 0.9, e: null, step: 0.3, y: 1230, ko: '*엘리더스!*', en: '*ELIDUS!*' },
+], 1470);
+const F = M.full($('clip-full'), 1080, 1080);
+const CAM = [[0, 1, 540, 540], [0.45, 1.3, 496, 496], [2.6, 1.12, 540, 540], [3.9, 1.75, 240, 490], [5.7, 1.75, 240, 490], [6.4, 1, 540, 540]];
+
+async function seek(t) {
+  const tb = b(T.boom);
+  // camera: slow push, punch + shake on the explosion
+  let cs = lerp(1.0, 1.1, io(t, 0, tb)) + M.hit(t, tb, 0.08, 6);
+  const sh = M.hit(t, tb, 22, 9);
+  $('cam').style.transformOrigin = `${GX}px ${GY}px`;
+  $('cam').style.transform = `translate(${Math.sin(t * 80) * sh}px,${Math.cos(t * 67) * sh * 0.7}px) scale(${cs})`;
+
+  // ---------- scene 1 ----------
+  const s1 = t < S2 + 0.8;
+  for (const T0 of tiles) {
+    if (!s1) { hide(T0.el); continue; }
+    const tin = b(0) + T0.dist * 0.09;
+    const p = sp(t, tin, 2.4, 0.7);
+    const isMine = T0.r === 2 && T0.c === 2;
+    // after the boom the 8 neighbours turn into my land, rippling outward
+    const conv = isMine ? 0 : io(t, tb + 0.25 + T0.dist * 0.12, 0.25);
+    const jiggle = isMine && t > b(T.tap) && t < tb ? Math.sin(t * 70) * 6 : 0;
+    const lift = conv > 0 && conv < 1 ? Math.sin(Math.PI * conv) * -14 : 0;
+    put(T0.el, { x: T0.x + jiggle, y: T0.y - (1 - p) * 260 + lift, s: (0.6 + 0.4 * p) * (1 + Math.sin(Math.PI * conv) * 0.08), a: clamp(p * 2), show: !(isMine && t >= tb) });
+    T0.my.style.opacity = conv;
+  }
+  // the core: lava stone + spinning rune ring
+  if (s1 && t >= tb) {
+    const p = pop(t, tb + 0.15, 2.0);
+    put($('core'), { x: GX, y: GY, s: p });
+    $('core').querySelector('.rune').style.transform = `rotate(${(t - tb) * 40}deg) scale(${0.6 + 0.4 * sp(t, tb + 0.2, 1.6, 0.8)})`;
+  } else hide($('core'));
+  // explosion sprite (5x4 sheet, 20 frames)
+  if (t >= tb && t < tb + 1.0) {
+    const f = Math.min(19, Math.floor((t - tb) / 1.0 * 20));
+    $('boom').style.backgroundPosition = `${-(f % 5) * 200}px ${-Math.floor(f / 5) * 200}px`;
+    put($('boom'), { x: GX, y: GY - 120, s: 2.4, a: 1 - ein(t, tb + 0.7, 0.3) });
+  } else hide($('boom'));
+  $('flash').style.opacity = M.hit(t, tb, 1, 5);
+  // dig button + cursor
+  if (s1 && t > b(3.4) && t < tb + 0.6) {
+    const bp = pop(t, b(3.4), 2.6) * (1 - ein(t, tb, 0.4));
+    const pressed = t > b(4.4) && t < b(5);
+    $('dig2').style.opacity = pressed ? 1 : 0;
+    put($('dig'), { x: GX, y: 380, s: bp * (pressed ? 0.94 : 1) });
+    const m1 = io(t, b(3.8), b(4.4) - b(3.8)), m2 = io(t, b(4.8), b(T.tap) - b(4.8));
+    const cx = lerp(lerp(900, GX + 40, m1), GX + 40, m2), cy = lerp(lerp(700, 400, m1), GY + 30, m2);
+    const tapS = (t > b(4.4) && t < b(4.6)) || (t > b(T.tap) && t < b(T.tap) + 0.18) ? 0.85 : 1;
+    put($('cursor'), { x: cx + 50, y: cy + 55, s: pop(t, b(3.6), 3) * tapS, r: -10, show: t < tb });
+  } else { hide($('dig')); hide($('cursor')); }
+  M.sticker($('st1'), t, tb + 0.35, S2 - 0.2, { x: 800, y: 640, r: 8, s: 1.3 });
+
+  // ---------- scene 2: real battle, camera on the cascade then the core ----------
+  let wait = null;
+  if (t >= S2 && t < S3 + 0.5) {
+    const lt = t - S2;
+    wait = M.fullAt(F, lt, M.keys(lt, CAM), sp(t, S2, 2.0, 0.85));
+  } else hide($('clip-full'));
+  M.sticker($('st2'), t, S2 + 4.5, S2 + 5.6, { x: 420, y: 760, r: -8, s: 1.1 });
+
+  // ---------- scene 3: end card ----------
+  if (t >= S3) {
+    M.flood($('flood'), 540, 1000, ein(t, S3, 0.32), 'var(--bg)');
+    put($('logo'), { y: 860 + Math.sin(t * 2.0) * 6, s: pop(t, S3 + 0.35, 1.8), r: (1 - sp(t, S3 + 0.35, 1.8, 0.7)) * -5 });
+    put($('pill'), { y: 1430, s: pop(t, S3 + 1.4, 2.6) });
+  } else { hide($('flood')); hide($('logo')); hide($('pill')); }
+
+  drawK(t);
+  M.grain($('grain'), t);
+  if (wait) await wait;
+}
+
+window.READY = M.ready().then(() => { seek(0); return DUR; });
+</script>
+</body>
+</html>
