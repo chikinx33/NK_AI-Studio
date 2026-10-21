@@ -1,6 +1,7 @@
 // POST /api/agent/motion-director — 인포그래픽 영상 감독: 이 영상만의 장면 코드(HTML 한 장)와 소리 큐를 쓴다.
 // body: { workId, prepared(이 PC 렌더러가 정리한 assets.json), thumbs?: [{ id, label, dataUrl }] }
 //   부분 수정: { …, mode: "revise", html, episode, request, frames?: [{ t, dataUrl }] }
+//   검수(확인 루프): { …, mode: "review", html, episode, frames: [{ t, dataUrl }], findings: [문장] } → 고칠 게 없으면 result.approved
 // 응답: text/event-stream — data: {"t":"progress","chars"} … data: {"t":"done","result":{html,episode,problems}} | {"t":"error","error"}
 //
 // 비용 0원 정책(2026-10-21 엔케): Claude 구독(OAuth)일 때만 실행한다. API 키 경로는 쓰지 않고,
@@ -10,7 +11,8 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 import {
   MOTION_DIRECTOR_MAX_IMAGES, MOTION_DIRECTOR_MAX_TOKENS, MOTION_DIRECTOR_MODEL,
-  buildMotionDirectorRequest, buildMotionDirectorSystem, buildMotionRevisionRequest, parseMotionDirectorOutput,
+  MOTION_REVIEW_MAX_IMAGES, buildMotionDirectorRequest, buildMotionDirectorSystem, buildMotionReviewRequest, buildMotionRevisionRequest,
+  isReviewApproved, parseMotionDirectorOutput,
 } from "../_shared/motion-director.js";
 import { motionExamplesForPrompt } from "./_motion-examples";
 import { corsHeaders, getSql, send } from "./_shared";
@@ -27,12 +29,12 @@ const TIMEOUT_MS = 1_800_000;
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 
-function imageBlocks(thumbs: any): any[] {
+function imageBlocks(thumbs: any, { max = MOTION_DIRECTOR_MAX_IMAGES, prefix = "자산 미리보기: " } = {}): any[] {
   const blocks: any[] = [];
-  for (const thumb of (Array.isArray(thumbs) ? thumbs : []).slice(0, MOTION_DIRECTOR_MAX_IMAGES)) {
+  for (const thumb of (Array.isArray(thumbs) ? thumbs : []).slice(0, max)) {
     const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(thumb?.dataUrl || ""));
     if (!match) continue;
-    blocks.push({ type: "text", text: `자산 미리보기: ${String(thumb?.label || thumb?.id || "").slice(0, 160)}` });
+    blocks.push({ type: "text", text: `${prefix}${String(thumb?.label || thumb?.id || "").slice(0, 160)}` });
     blocks.push({ type: "image", source: { type: "base64", media_type: match[1], data: match[2] } });
   }
   return blocks;
@@ -80,6 +82,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const frameBlocks = imageBlocks(frames.map((frame: any) => ({ dataUrl: frame?.dataUrl, label: `사용자가 가리킨 장면 ${Number(frame?.t) || 0}초` })));
     const userText = buildMotionRevisionRequest({
       input, prepared, html, episode: body?.episode || null, request: revisionRequest,
+      frameTimes: frames.map((frame: any) => Number(frame?.t) || 0),
+    });
+    content = [...frameBlocks, { type: "text", text: userText }];
+  } else if (body?.mode === "review") {
+    // 검수: 방금 쓴 장면 코드의 정지 화면 + 자동 검사 결과 → 점검표대로 스스로 고치거나 OK
+    const html = String(body?.html || "");
+    if (!html || html.length > 200_000) return send({ error: "검수할 장면 코드가 필요합니다." }, 400, origin);
+    const frames = (Array.isArray(body?.frames) ? body.frames : []).slice(0, MOTION_REVIEW_MAX_IMAGES);
+    const findings = (Array.isArray(body?.findings) ? body.findings : []).map((line: unknown) => String(line).slice(0, 300)).slice(0, 12);
+    const frameBlocks = imageBlocks(frames.map((frame: any) => ({ dataUrl: frame?.dataUrl, label: `${Number(frame?.t) || 0}초` })),
+      { max: MOTION_REVIEW_MAX_IMAGES, prefix: "렌더 정지 화면 " });
+    const userText = buildMotionReviewRequest({
+      input, prepared, html, episode: body?.episode || null, findings,
       frameTimes: frames.map((frame: any) => Number(frame?.t) || 0),
     });
     content = [...frameBlocks, { type: "text", text: userText }];
@@ -161,7 +176,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         if (stopReason === "refusal") throw new Error("motion_director_refused");
         const usage = { outputTokens, textChars: text.length, thinkingChars };
         if (stopReason === "max_tokens") throw new Error(`motion_director_max_tokens ${JSON.stringify(usage)}`);
-        emit({ t: "done", stopReason, usage, result: parseMotionDirectorOutput(text, { aspectRatio: input.aspectRatio, prepared }) });
+        if (body?.mode === "review" && isReviewApproved(text)) {
+          emit({ t: "done", stopReason, usage, result: { approved: true, html: null, episode: null, problems: [], fixes: [] } });
+        } else {
+          emit({ t: "done", stopReason, usage, result: parseMotionDirectorOutput(text, { aspectRatio: input.aspectRatio, prepared }) });
+        }
       } catch (e) {
         emit({ t: "error", error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) });
       } finally {

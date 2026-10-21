@@ -110,13 +110,55 @@ export function buildMotionDirectorRequest({ input = {}, spec = null, prepared =
     `motion.js: ${kit.motion} · base.css: ${kit.baseCss} · fonts.css: ${kit.fontsCss}`,
     "",
     "# 받은 자산 (assets/… 상대 경로. 아래 그림 미리보기 참고)",
-    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 3D 이모지·아이콘·도형·글자·숫자 움직임으로 만든다)",
+    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 그림 스타일(설명서 5.5절 2번) 하나를 정하고 그 스타일로 화면을 채운다: 3D 이모지 중심 또는 직접 그린 SVG·아이콘 중심)",
+    "",
+    `다 쓴 뒤 설명서 5.5절 품질 점검표(화면 채우기 · 스타일 하나 · 이어지는 전환)로 스스로 확인한다.${aspect === "9:16" ? "" : ` 이 편은 ${aspect}이라 시즌1(9:16) 실례 구도를 그대로 옮기지 말고 가로 화면을 채운다.`}`,
     "",
     "# 음악",
     musicSection(prepared, durationSec),
     "",
     "두 블록(```html, ```json)만 출력한다.",
   ].join("\n");
+}
+
+// 검수(확인 루프): 감독이 방금 쓴 장면 코드를 찍은 정지 화면 + 자동 검사 결과를 보고 점검표대로 스스로 고친다.
+// 고칠 게 없으면 "OK" 한 줄. 정지 화면은 호출부가 이미지로 붙인다(시각 순서).
+export const MOTION_REVIEW_MAX_IMAGES = 16;
+export function buildMotionReviewRequest({ input = {}, prepared = {}, html = "", episode = null, frameTimes = [], findings = [] }) {
+  const aspect = STAGE_SIZES[input.aspectRatio] ? input.aspectRatio : "16:9";
+  const durationSec = Math.min(60, Math.max(10, Number(input.durationSec) || 30));
+  return [
+    "# 검수",
+    `위 정지 화면 ${frameTimes.length}장은 네가 방금 쓴 장면 코드를 실제로 찍은 것이다(시각: ${frameTimes.map((t) => `${t}초`).join(", ")}).`,
+    "설명서 5.5절 품질 점검표와 아래 자동 검사 결과로 이 영상을 본다:",
+    "1. 화면 채우기 — 넓은 배경 가운데 작은 물건 하나만 있는 장면이 있나(주인공 크기 화면 높이 40~60%, 세 층, 16:9 삼분할).",
+    "2. 그림 스타일 하나 — 3D 이모지와 납작한 실루엣·도형이 한 영상에 섞였나.",
+    "3. 이어지는 전환 — 장면 사이에 화면이 비거나 검게 되는 순간이 있나(끝 카드 제외).",
+    "4. 자막·글자 — 글자끼리 겹치거나, 잘리거나, 다른 요소에 가려지거나, 화면 밖으로 나가나.",
+    "5. 사실 — 콘티에 없는 수치·사실을 만들지 않았나.",
+    "",
+    "# 자동 검사 결과",
+    findings.length ? findings.map((line) => `- ${line}`).join("\n") : "- 빈 화면·암전 구간 없음",
+    "",
+    "# 출력",
+    "- 고칠 것이 없으면 다른 말 없이 OK 한 줄만 쓴다.",
+    "- 고칠 것이 있으면 문제가 있는 부분만 고친다. 잘 된 장면·타이밍·문장·음악·소리 큐는 그대로 둔다(전체 길이도 그대로).",
+    "- 고쳤으면 전체 HTML 과 전체 소리 큐를 두 블록(```html, ```json)으로 다시 출력한다.",
+    "",
+    `# 이 편의 정보: 화면 ${aspect} (<html data-size="${STAGE_SIZES[aspect]}">), 약 ${durationSec}초, KIT = ${kitRoot(prepared)}`,
+    "",
+    "# 지금 장면 코드",
+    "```html", String(html).slice(0, 200_000), "```",
+    "",
+    "# 지금 소리 큐",
+    "```json", JSON.stringify(episode || {}), "```",
+  ].join("\n");
+}
+
+// 검수 응답이 "고칠 것 없음"인가(코드 블록 없이 OK)
+export function isReviewApproved(text) {
+  const body = String(text || "").trim();
+  return !/```html/i.test(body) && /^\s*(?:\*\*)?OK(?:\*\*)?\b/i.test(body);
 }
 
 // 부분 수정: 지금 장면 코드에서 요청한 부분만 고친다(가리킨 장면 정지 화면은 호출부가 이미지로 붙인다)

@@ -131,6 +131,9 @@
         const w = document.createElement('span');
         const c2 = c.trim(), hi = /^\*[^*]*\*$/.test(c2);
         w.className = 'kw' + (hi ? ' hi' : '');
+        // 튀어나올 때 살짝 커졌다 돌아온다. 가운데 기준이면 앞 단어 쪽으로 커져 띄어쓰기를 덮는다(2026-10-22 "미국이그를")
+        // → 둘째 덩어리부터는 왼쪽 기준으로 커진다(오른쪽은 아직 보이지 않는 다음 덩어리 자리).
+        if (el.childElementCount) w.style.transformOrigin = '0% 60%';
         w.innerHTML = hi ? c2.slice(1, -1) : c2.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         el.appendChild(w); return w;
       });

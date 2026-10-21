@@ -56,7 +56,7 @@
 ## 3.5 키트 자산 (경로는 받은 KIT 경로 기준)
 - **아이콘(Lucide, 선 아이콘 2,171개)**: `KIT/icons/lucide/<이름>.svg` — 이름은 lucide.dev 이름(book-open, users, heart, trending-up, shield-check, clock, smartphone, bed, moon, sun, sparkles, map-pin, calendar, gift, rocket, lightbulb, chart-column, chart-pie, circle-check, triangle-alert 등).
   색을 입히려면 `<div class="ico" style="background:#FFD166;-webkit-mask:url(KIT/icons/lucide/heart.svg) center/contain no-repeat"></div>` 처럼 마스크로 쓴다(`<img>`는 검은 선).
-- **3D 이모지(Fluent, 1,595개)**: `KIT/emoji/<영문 이름 밑줄>.png` (256px 투명 PNG). 예: open_book, rocket, light_bulb, money_bag, trophy, mobile_phone, seedling, thumbs_up, red_heart, sparkles, fire, star, check_mark_button, cross_mark, warning, alarm_clock, calendar, bar_chart, chart_increasing, chart_decreasing, gem_stone, wrapped_gift, party_popper, house, school, hospital, books, graduation_cap, man_technologist, people_hugging, smiling_face_with_smiling_eyes, thinking_face, sleeping_face, crying_face, globe_showing_asia_australia, sun, cloud, umbrella, christmas_tree, cat_face, dog_face. 쇼츠에서 아주 잘 먹히니 크게, 통통 튀게(`pop`), 살짝 흔들며 쓴다. 이름이 조금 틀리면 가장 가까운 것으로 바뀐다.
+- **3D 이모지(Fluent, 1,595개)**: `KIT/emoji/<영문 이름 밑줄>.png` (256px 투명 PNG). 예: open_book, rocket, light_bulb, money_bag, trophy, mobile_phone, seedling, thumbs_up, red_heart, sparkles, fire, star, check_mark_button, cross_mark, warning, alarm_clock, calendar, bar_chart, chart_increasing, chart_decreasing, gem_stone, wrapped_gift, party_popper, house, school, hospital, books, graduation_cap, man_technologist, people_hugging, smiling_face_with_smiling_eyes, thinking_face, sleeping_face, crying_face, globe_showing_asia_australia, sun, cloud, umbrella, christmas_tree, cat_face, dog_face. 쇼츠에서 아주 잘 먹히니 크게, 통통 튀게(`pop`), 살짝 흔들며 쓴다. 이름이 조금 틀리면 가장 가까운 것으로 바뀐다. 단, 납작한 실루엣·도형 스타일로 정한 편에는 쓰지 않는다(5.5절 2번).
 - **라이브러리** (`<script src="KIT/vendor/…">`, 필요한 것만):
   - `d3.min.js` — 도표 모양 계산만(`d3.arc`, `d3.scaleLinear`, `d3.line`, `d3.pie`). `d3.transition`·타이머는 쓰지 않는다. 진행도는 `io/sp`로.
   - `flubber.min.js` — 도형 변형: `const f = flubber.interpolate(pathA, pathB); path.setAttribute('d', f(p))`.
@@ -81,7 +81,7 @@
 - 도넛·게이지: SVG `<circle stroke-dasharray>`의 `stroke-dashoffset`을 `io(...)`로. 가운데 `M.count`.
 - 비교(전/후, A/B): 화면을 둘로 가르고 한쪽이 밀어내기, 승자 쪽 펀치.
 - 순서(1→2→3): 아이콘·카드가 레일을 따라 박자마다 하나씩 `pop`, 카메라가 따라감.
-- 사물·개념은 **3D 이모지**(주인공·스티커처럼 크게)와 **Lucide 아이콘**(정보·목록·버튼처럼 작게)으로 보여 준다. 받은 그림(브랜드·업무 파일)이 있으면 그 그림이 먼저다.
+- 사물·개념은 **3D 이모지**(주인공·스티커처럼 크게)와 **Lucide 아이콘**(정보·목록·버튼처럼 작게)으로 보여 준다. 받은 그림(브랜드·업무 파일)이 있으면 그 그림이 먼저다. 실루엣·도형 스타일 편은 3D 이모지 대신 직접 그린 SVG(5.5절 2번).
 - 도넛·원그래프는 `d3.arc`, 막대·꺾은선은 `d3.scaleLinear`+`d3.line`, 모양이 바뀌는 순간은 `flubber`.
 - **확인되지 않은 수치는 만들지 않는다.** 요청·콘티에 있는 숫자만 쓴다. 없으면 숫자 대신 행동·변화를 보여 준다.
 
@@ -91,6 +91,22 @@
 - 16:9(1920x1080): 자막 y 860~940, 좌우 여백 120px. 1:1(1080x1080): 자막 y 860~920.
 - 글자는 크게(자막 110px 안팎, 16:9는 90px 안팎). 작은 설명 글 금지. 한 화면 요소 2~4개.
 - 언어: 모든 화면 글을 `tx({ko, en})` 또는 kinetic의 `ko/en`으로 둘 다 쓴다(영어판도 렌더할 수 있게).
+
+## 5.5 품질 점검표 (다 쓴 뒤 스스로 확인한다 — 검수 단계도 이 표로 본다)
+시즌1 실례는 모두 9:16 세로다. 16:9·1:1은 아래를 특히 지킨다.
+1. **화면을 채운다.** 주인공 요소는 화면 높이의 40~60%(16:9면 높이 430~650px). 넓은 배경 가운데에 작은 물건 하나만 두는 장면은 실패다.
+   - 세 층으로 짠다: 뒤층(큰 숫자·지도·무늬·도형이 화면 끝까지), 가운데층(주인공), 앞층(화면 밖으로 살짝 잘리는 큰 사물·흐린 전경).
+   - 16:9는 삼분할: 주인공을 왼쪽이나 오른쪽 1/3 선에 두고 반대편에 숫자·사물·두 번째 인물. 가운데 한 점 구도는 끝 카드에만.
+   - 빈 배경이 화면의 절반을 넘으면 카메라를 밀어 넣거나(`M.keys` 확대) 요소를 키운다.
+2. **그림 스타일은 한 편에 하나.** 처음에 정하고 끝까지 지킨다.
+   - (가) 3D 이모지 중심 — 사람·사물 모두 이모지. 납작한 실루엣 사람을 섞지 않는다.
+   - (나) 납작한 실루엣·도형(SVG로 직접 그림) + Lucide 선 아이콘 — 3D 이모지를 쓰지 않는다(사물도 SVG·아이콘으로).
+   - (다) 받은 그림 중심 — 받은 그림의 결(실사·일러스트·픽셀)에 맞춰 이모지·아이콘을 고른다.
+   - 글자 스티커(“쏙!”, “풍자!”)는 어느 스타일에서나 쓴다.
+3. **전환은 이어 붙인다.** 장면이 바뀔 때 화면이 비거나 검게 되는 순간(0.15초 이상)을 만들지 않는다.
+   - 다음 장면이 이전 장면을 덮거나 밀어내고(`M.flood`, 밀기), 같은 모양으로 넘어가거나(모자 → 모자, 원 → 지구), 카메라가 다음 요소로 옮겨 간다. 두 장면이 0.2~0.4초 겹치게 둔다.
+   - 검게 닫는 아이리스·암전은 끝 카드에만.
+   - 자막도 다음 줄이 들어오기 직전까지 이전 줄을 남겨 둔다(자막 없는 빈 구간을 만들지 않는다. 끝 카드는 예외).
 
 ## 6. 소리 큐 (두 번째 블록, JSON)
 ```json

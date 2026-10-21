@@ -22,7 +22,7 @@ export const MOTION_CLOUD_STALE_SEC = 10 * 60;
 
 export type MotionCloudMode = "new" | "revise" | "render";
 export const MOTION_CLOUD_STATUSES = ["queued", "running", "awaiting-approval", "done", "error"] as const;
-export const MOTION_CLOUD_PHASES = ["start", "plan", "assets", "director", "render", "save"] as const;
+export const MOTION_CLOUD_PHASES = ["start", "plan", "assets", "director", "review", "render", "save"] as const;
 
 async function runMotionCloudDdl(sql: SqlFn) {
   await sql(`CREATE TABLE IF NOT EXISTS motion_cloud_runs (

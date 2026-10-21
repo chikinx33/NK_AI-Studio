@@ -50,7 +50,7 @@ test("렌더러: 장면을 디스크에 쌓지 않고 ffmpeg 표준 입력으로
   const renderer = read("ai-company-app/scripts/render-motion-page.mjs");
   assert.match(renderer, /"-f", "image2pipe", "-c:v", "mjpeg"/);
   assert.match(renderer, /tmix=frames=\$\{sub\},framestep=\$\{sub\}/, "모션블러는 그대로");
-  assert.match(renderer, /loudnorm=I=-14/);
+  assert.match(renderer, /export const LOUDNESS_TARGET = -14;/);
   assert.doesNotMatch(renderer, /f_%05d\.jpg/);
   assert.match(renderer, /MOTION_CHROME_FLAGS/);
   assert.match(renderer, /"\/usr\/bin\/google-chrome-stable"/);
@@ -135,7 +135,7 @@ test("감독 출력 한도: 모델 상한 128K·30분, 잘리면 생각/장면 �
   assert.match(api, /const TIMEOUT_MS = 1_800_000;/, "프록시(nk-openai-proxy) 3600초 안");
   assert.match(api, /throw new Error\(`motion_director_max_tokens \$\{JSON\.stringify\(usage\)\}`\)/);
   assert.match(api, /const usage = \{ outputTokens, textChars: text\.length, thinkingChars \};/);
-  assert.match(read("ai-company-app/scripts/motion-cloud-job.mjs"), /timings\.directorOutputTokens = Number\(event\.usage\.outputTokens\) \|\| 0;/);
+  assert.match(read("ai-company-app/scripts/motion-cloud-job.mjs"), /timings\[tokenKey\] = Number\(event\.usage\.outputTokens\) \|\| 0;/);
   const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
   assert.match(picker, /if \(message\.includes\("motion_director_max_tokens"\)\) return t\.directorTooLong;/);
   assert.match(picker, /if \(message\.includes\("motion_director_timeout"\)\) return t\.directorTimeout;/);

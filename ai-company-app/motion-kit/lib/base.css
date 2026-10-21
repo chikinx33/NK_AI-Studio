@@ -34,7 +34,8 @@ html.guide #stage::after { content: ""; position: absolute; inset: 0; z-index: 9
 
 /* ---- 2026 kit: kinetic captions, stickers, full-bleed clips, grain ---- */
 .kline { position: absolute; left: 0; top: 0; width: calc(var(--stage-w, 1080px) - 120px); display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
-         gap: 0 24px; visibility: hidden; z-index: 60; }
+         font-size: var(--k-size, 124px); gap: 0 .28em; visibility: hidden; z-index: 60; }
+/* 단어 덩어리 사이 간격은 글자 크기에 비례(124px → 35px). 16:9 처럼 글자가 작아도 띄어쓰기가 또렷하게 */
 .kw { display: inline-block; font-family: var(--font-head), sans-serif; font-weight: var(--head-weight, 400); font-size: var(--k-size, 124px);
       line-height: 1.16; color: var(--k-color, #fff); -webkit-text-stroke: var(--k-stroke-w, 18px) var(--k-stroke, #23264A); paint-order: stroke fill;
       letter-spacing: var(--head-tracking, -1px); white-space: nowrap; filter: drop-shadow(0 10px 0 var(--k-drop, rgba(0,0,0,.22))); }

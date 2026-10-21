@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { renderMotionPage, renderMotionStills } from "./render-motion-page.mjs";
 import { prepareMotionAssets, MOTION_KIT_DIRECTORY } from "./prepare-motion-assets.mjs";
+import { reviewMotionPage } from "./motion-review.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ORIGIN = String(process.env.NK_SITE_ORIGIN || "https://nkstudio.org").replace(/\/$/, "");
@@ -125,7 +126,7 @@ async function thumbsFor(directory, prepared) {
 
 // ---------- 감독 ----------
 
-async function runDirector(body) {
+async function runDirector(body, tokenKey = "directorOutputTokens") {
   const res = await api("/api/agent/motion-director", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -150,7 +151,7 @@ async function runDirector(body) {
       else if (event.t === "done") {
         if (event.usage) {
           console.log(`감독 출력: ${JSON.stringify(event.usage)}`);
-          timings.directorOutputTokens = Number(event.usage.outputTokens) || 0;
+          timings[tokenKey] = Number(event.usage.outputTokens) || 0;
         }
         if (event.result?.problems?.length) throw new Error(`motion_director_problems:${event.result.problems.join(" · ")}`);
         return event.result;
@@ -158,6 +159,31 @@ async function runDirector(body) {
     }
   }
   throw new Error("감독 응답이 끝나기 전에 연결이 끊겼어요.");
+}
+
+// 검수(확인 루프): 방금 쓴 장면 코드를 찍어 보고(빈 화면 자동 검사 + 정지 화면) 감독이 점검표대로 고치거나 OK.
+// 검수가 실패해도 영상은 처음 장면 코드로 계속 만든다(검수는 더 좋게 만드는 단계지 막는 단계가 아니다).
+async function reviewDirectorPage({ workId, prepared, directory, html, episode }) {
+  try {
+    await writePage(directory, html, episode);
+    const { findings, frames, spans } = await reviewMotionPage({
+      page: path.join(directory, "index.html"), directory, allowRoots: [directory, MOTION_KIT_DIRECTORY], log: (line) => console.log(line),
+    });
+    timings.reviewEmptySpans = spans.length;
+    const result = await runDirector({ workId, prepared, mode: "review", html, episode, frames, findings }, "reviewOutputTokens");
+    if (result?.approved) {
+      timings.reviewChanged = 0;
+      console.log("검수: 고칠 것 없음");
+      return { html, episode };
+    }
+    timings.reviewChanged = 1;
+    console.log(`검수: 감독이 고침 (${String(result.html).length}자)`);
+    return { html: result.html, episode: result.episode };
+  } catch (error) {
+    timings.reviewChanged = -1;
+    console.error(`검수 실패 — 처음 장면 코드로 진행: ${error?.message || error}`);
+    return { html, episode };
+  }
 }
 
 async function writePage(directory, html, episode) {
@@ -216,8 +242,7 @@ async function main() {
     episode = input.episode;
   } else if (run.mode === "new") {
     const result = await phase("director", async () => runDirector({ workId, prepared, thumbs: await thumbsFor(directory, prepared) }));
-    html = result.html;
-    episode = result.episode;
+    ({ html, episode } = await phase("review", () => reviewDirectorPage({ workId, prepared, directory, html: result.html, episode: result.episode })));
   } else if (run.mode === "revise") {
     const result = await phase("director", async () => {
       // 가리킨 장면을 지금 장면 코드로 다시 찍어 감독에게 크게 보여 준다(가로 540px)

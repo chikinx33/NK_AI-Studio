@@ -16,7 +16,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/ai-company-app/scripts"
 cp "$ROOT/cloud-motion-renderer/Dockerfile" "$STAGE/"
-for f in render-motion-page.mjs prepare-motion-assets.mjs motion-beats.mjs motion-cloud-job.mjs; do
+for f in render-motion-page.mjs prepare-motion-assets.mjs motion-beats.mjs motion-cloud-job.mjs motion-review.mjs; do
   cp "$ROOT/ai-company-app/scripts/$f" "$STAGE/ai-company-app/scripts/"
 done
 cp -r "$ROOT/ai-company-app/motion-kit" "$STAGE/ai-company-app/motion-kit"

@@ -254,7 +254,7 @@ export interface MotionCloudRun {
   skillJobId: string | null;
   mode: "new" | "revise" | "render";
   status: "queued" | "running" | "awaiting-approval" | "done" | "error";
-  phase: "start" | "plan" | "assets" | "director" | "render" | "save";
+  phase: "start" | "plan" | "assets" | "director" | "review" | "render" | "save";
   progress: number;
   chars: number;
   error: string;

@@ -65,7 +65,29 @@ export function isAllowedUrl(url, roots) {
 }
 
 // 원본 build.py 와 같은 소리 그래프. cues: [{ delayMs, gain }]
-export function audioFilterGraph({ duration, bgmVolume = 0.55, hasBgm = true, cues = [] }) {
+// 소리 크기: -14 LUFS 에 실제로 맞춘다(2026-10-22).
+// loudnorm 한 번 처리는 효과음 순간 최고치 때문에 30초 안팎 영상이 -15.5~-16.3 에 머물렀다(시즌1도 -14.5~-16.3).
+// 쇼츠 플랫폼은 작은 소리를 키워 주지 않으므로: 재고 → 차이만큼 키우며 순간 최고치만 -3dBFS 로 누르고 → 다시 재서 남은 차이를 최대 3번.
+// (-3dBFS: AAC 로 바꾸면 최고치가 약 1.5dB 오른다. 채플린 소리 실측: 섞은 소리 -20.5 → +10.4dB → AAC 뒤 -14.4 LUFS, 최고치 -1.4dBFS)
+export const LOUDNESS_TARGET = -14;
+export const LIMIT_LINEAR = 0.708; // -3 dBFS
+const LOUDNORM = `loudnorm=I=${LOUDNESS_TARGET}:TP=-1.5:LRA=11`;
+
+// 측정(loudnorm print_format=json) 출력에서 값을 읽는다. 무음이거나 못 읽으면 null
+export function parseLoudnorm(report) {
+  const json = /\{[^{}]*"input_i"[^{}]*\}/.exec(String(report || ""));
+  if (!json) return null;
+  let data;
+  try { data = JSON.parse(json[0]); } catch (_) { return null; }
+  const values = { I: Number(data.input_i), TP: Number(data.input_tp), LRA: Number(data.input_lra), thresh: Number(data.input_thresh), offset: Number(data.target_offset) };
+  return Object.values(values).every(Number.isFinite) && values.I > -70 ? values : null;
+}
+
+// 다음에 줄 키움(dB): 지금 키움 + (목표 - 지금 결과). 너무 크게는 키우지 않는다
+export const nextGain = (gainDb, measuredI) => Math.max(-20, Math.min(24, gainDb + (LOUDNESS_TARGET - measuredI)));
+
+// gainDb 없음 + measure 없음 = 예전 한 번 처리(측정 실패·무음일 때). measure = 끝에 크기 측정을 붙인다.
+export function audioFilterGraph({ duration, bgmVolume = 0.55, hasBgm = true, cues = [], gainDb = null, measure = false }) {
   const dur = duration.toFixed(3);
   const parts = [hasBgm
     ? `[0:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${dur},afade=t=out:st=${Math.max(0, duration - 0.9).toFixed(3)}:d=0.9,volume=${bgmVolume}[m]`
@@ -76,7 +98,12 @@ export function audioFilterGraph({ duration, bgmVolume = 0.55, hasBgm = true, cu
     parts.push(`[${i + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${cue.gain},adelay=${d}|${d}[s${i + 1}]`);
     labels.push(`[s${i + 1}]`);
   });
-  parts.push(`${labels.join("")}amix=inputs=${labels.length}:normalize=0,atrim=0:${dur},loudnorm=I=-14:TP=-1.5:LRA=11[out]`);
+  const steps = [];
+  // 표본 사이 최고치까지 잡으려고 4배로 늘려 누른 뒤 되돌린다(그냥 누르면 최고치가 -0.3dBFS 까지 튀었다)
+  if (gainDb != null) steps.push(`volume=${gainDb.toFixed(2)}dB`, "aresample=192000", `alimiter=limit=${LIMIT_LINEAR}:attack=2:release=80:level=0`, "aresample=48000");
+  if (measure) steps.push(`${LOUDNORM}:print_format=json`);
+  const finish = steps.length ? steps.join(",") : LOUDNORM;
+  parts.push(`${labels.join("")}amix=inputs=${labels.length}:normalize=0,atrim=0:${dur},${finish}[out]`);
   return parts.join(";");
 }
 
@@ -222,7 +249,7 @@ async function openPage(cdp, pageUrl, roots, report) {
 
 // ---------- ffmpeg ----------
 
-function runProcess(command, args, { capture = false } = {}) {
+function runProcess(command, args, { capture = false, stderr = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args.map(String), { stdio: ["ignore", capture ? "pipe" : "ignore", "pipe"], windowsHide: true });
     lowPriority(child.pid);
@@ -231,7 +258,7 @@ function runProcess(command, args, { capture = false } = {}) {
     if (capture) child.stdout.on("data", (chunk) => out.push(chunk));
     child.stderr.on("data", (chunk) => { err += chunk; });
     child.on("error", reject);
-    child.on("exit", (code) => (code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(err.trim().split(/\r?\n/).slice(-6).join("\n") || `exit=${code}`))));
+    child.on("exit", (code) => (code === 0 ? resolve(stderr ? err : Buffer.concat(out)) : reject(new Error(err.trim().split(/\r?\n/).slice(-6).join("\n") || `exit=${code}`))));
   });
 }
 
@@ -268,7 +295,7 @@ export function pickTaggedSfx(index, tag, seed) {
   return candidates[hash % candidates.length].file;
 }
 
-async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath }) {
+export async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath }) {
   const beats = episode.beats ? JSON.parse(await fs.readFile(path.resolve(episodeDirectory, episode.beats), "utf8")) : [];
   const bgm = episode.bgm || null;
   const args = ["-y", "-v", "error"];
@@ -285,8 +312,25 @@ async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, durat
     args.push("-i", file);
     cues.push({ delayMs: (cueTime(at, beats) - await peakOffset(ffmpeg, file)) * 1000, gain: gain ?? 1 });
   }
-  const graph = audioFilterGraph({ duration, bgmVolume: bgm?.volume ?? 0.55, hasBgm: !!bgm, cues });
-  await runProcess(ffmpeg, [...args, "-filter_complex", graph, "-map", "[out]", "-ar", 48000, "-c:a", "pcm_s16le", outPath]);
+  const base = { duration, bgmVolume: bgm?.volume ?? 0.55, hasBgm: !!bgm, cues };
+  const inputs = args.slice(3); // "-y -v error" 다음부터 입력들
+  const measure = async (gainDb) => parseLoudnorm(await runProcess(ffmpeg, ["-hide_banner", "-nostats", "-v", "info", ...inputs,
+    "-filter_complex", audioFilterGraph({ ...base, gainDb, measure: true }), "-map", "[out]", "-f", "null", "-"], { stderr: true }));
+  const first = await measure(null);
+  let gainDb = null;
+  let resultI = null;
+  if (first) {
+    gainDb = nextGain(0, first.I);
+    for (let round = 0; round < 3; round++) {
+      const check = await measure(gainDb);
+      if (!check) break;
+      resultI = check.I;
+      if (Math.abs(LOUDNESS_TARGET - check.I) < 0.3) break;
+      gainDb = nextGain(gainDb, check.I);
+    }
+  }
+  await runProcess(ffmpeg, [...args, "-filter_complex", audioFilterGraph({ ...base, gainDb }), "-map", "[out]", "-ar", 48000, "-c:a", "pcm_s16le", outPath]);
+  return { measuredI: first?.I ?? null, gainDb, resultI };
 }
 
 // ---------- 렌더 ----------
@@ -396,7 +440,10 @@ export async function renderMotionPage(options) {
       const episode = JSON.parse(await fs.readFile(episodePath, "utf8"));
       if (episode.bgm || episode.cues?.length) {
         const audioFolders = [episodeDirectory, path.dirname(pagePath), ...(options.audioDirs || [])];
-        await mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath: mixPath });
+        const loud = await mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath: mixPath });
+        log(loud.gainDb != null
+          ? `소리 크기: 섞은 소리 ${loud.measuredI} LUFS → ${loud.gainDb >= 0 ? "+" : ""}${loud.gainDb.toFixed(1)}dB, 최고치 -3dBFS 누름 → ${loud.resultI ?? "?"} LUFS`
+          : "소리 크기: 측정 못 함 → 한 번 처리");
         hasMix = true;
       }
     }
@@ -454,7 +501,8 @@ export async function renderMotionPage(options) {
 // 장면 정지 화면: 완성 영상에서 장면을 가리켜 고칠 수 있게 count 장을 고르게 찍는다(가로 270px 미리보기).
 // 반환 [{ t, file }]. 부분 수정 화면과 감독(그림으로 장면 확인)이 쓴다.
 // times 를 주면 그 시점들만 찍는다(클라우드 부분 수정: 사용자가 가리킨 장면을 감독에게 크게 보여 줄 때).
-export async function renderMotionStills({ page, outDir, count = 12, times = null, allowRoots, scale = 0.25, prefix = "still", log = () => {} }) {
+// every 를 주면 그 간격(초)으로 처음부터 끝까지 찍는다(검수: 빈 화면·암전 찾기). 반환 { t, file } 와 함께 영상 길이도 stills.duration 에 둔다.
+export async function renderMotionStills({ page, outDir, count = 12, times = null, every = 0, allowRoots, scale = 0.25, quality = 80, prefix = "still", log = () => {} }) {
   const pagePath = path.resolve(page);
   const roots = (allowRoots?.length ? allowRoots : [path.dirname(pagePath)]).map((root) => path.resolve(root));
   const chrome = pickExecutable(CHROME_CANDIDATES, "크롬");
@@ -470,15 +518,18 @@ export async function renderMotionStills({ page, outDir, count = 12, times = nul
     const n = Math.max(2, Math.min(24, count));
     // 처음·끝 0.3초는 비우고 고르게
     const moments = Array.isArray(times) && times.length
-      ? times.slice(0, 8).map((t) => Math.min(Math.max(0, Number(t) || 0), duration))
+      ? times.slice(0, 24).map((t) => Math.min(Math.max(0, Number(t) || 0), duration))
+      : every > 0
+      ? Array.from({ length: Math.floor(duration / every) + 1 }, (_, i) => Math.round(i * every * 100) / 100).slice(0, 480)
       : Array.from({ length: n }, (_, i) => Math.round((0.3 + (Math.max(0.1, duration - 0.6) * i) / (n - 1)) * 100) / 100);
     for (const [i, t] of moments.entries()) {
       await evaluate(send, `seek(${t})`);
-      const { data } = await send("Page.captureScreenshot", { format: "jpeg", quality: 80, clip: { x: 0, y: 0, width, height, scale } });
-      const file = `${prefix}_${String(i).padStart(2, "0")}.jpg`;
+      const { data } = await send("Page.captureScreenshot", { format: "jpeg", quality, clip: { x: 0, y: 0, width, height, scale } });
+      const file = `${prefix}_${String(i).padStart(every > 0 ? 3 : 2, "0")}.jpg`;
       await fs.writeFile(path.join(outDir, file), Buffer.from(data, "base64"));
       stills.push({ t, file });
     }
+    stills.duration = duration;
     log(`정지 화면 ${stills.length}장 (${duration.toFixed(2)}초)`);
     await cdp.send("Browser.close").catch(() => {});
   } finally {

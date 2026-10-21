@@ -134,7 +134,7 @@ test("키트: 무대 크기를 <html data-size>로 바꾸되 기본 1080x1920은
 
 test("클라우드 렌더 작업: 기획 → 자산 받기·정리 → 감독 → 장면 저장 → 렌더 → 정지 화면·저장 순서로 혼자 잇는다", () => {
   const job = read("ai-company-app/scripts/motion-cloud-job.mjs");
-  const order = ['phase("plan"', 'phase(pageReady ? "render" : "assets"', "runDirector({ workId, prepared, thumbs", 'action: "handoff"', "await writePage(directory, html, episode)", 'phase("render", () => renderMotionPage', 'phase("save"', 'status: "done"']
+  const order = ['phase("plan"', 'phase(pageReady ? "render" : "assets"', "runDirector({ workId, prepared, thumbs", 'action: "handoff"', "await writePage(directory, html, episode);\n\n  const outPath", 'phase("render", () => renderMotionPage', 'phase("save"', 'status: "done"']
     .map((needle) => job.indexOf(needle));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `순서: ${order}`);
   assert.match(job, /motion: \{ html, episode, prepared \}/);

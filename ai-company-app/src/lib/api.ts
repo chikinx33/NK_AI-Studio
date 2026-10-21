@@ -459,7 +459,7 @@ export function localRendererUrl(path: string): string {
 export interface LocalAgentVideoRenderStatus {
   available?: boolean;
   // 모션 영상 단계: 자산 옮기기 → 감독(장면 코드 작성) → 렌더
-  phase?: "assets" | "director" | "render";
+  phase?: "assets" | "director" | "review" | "render";
   chars?: number;
   jobId?: string;
   status: "idle" | "queued" | "rendering" | "done" | "error";

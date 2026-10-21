@@ -8,8 +8,9 @@ import { useMotionAssetText, type MotionAssetDict } from "./MotionAssetPicker";
  * 너무 오래 걸리면 멈춘 것 같다고, 멈추면 어느 단계인지만 알린다.
  * 문구는 MotionAssetPicker 의 MOTION_ASSET_TEXT(ko/en) 를 쓴다.
  */
-export type MotionStage = "plan" | "assets" | "director" | "render" | "save";
-export const MOTION_STAGES: MotionStage[] = ["plan", "assets", "director", "render", "save"];
+// 검수(2026-10-22 확인 루프): 감독이 자기 결과를 찍어 보고 점검표대로 고친다
+export type MotionStage = "plan" | "assets" | "director" | "review" | "render" | "save";
+export const MOTION_STAGES: MotionStage[] = ["plan", "assets", "director", "review", "render", "save"];
 
 // 보통 걸리는 시간(초). 시험(2026-10-21): 25초 영상 감독 약 3~5분, 렌더 약 3분.
 export const MOTION_STAGE_SECONDS: Record<MotionStage, [number, number]> = {
@@ -17,6 +18,7 @@ export const MOTION_STAGE_SECONDS: Record<MotionStage, [number, number]> = {
   assets: [5, 60],
   // 클라우드 첫 운영(2026-10-22, 30초 16:9 7장면): 11분 만에 64K 상한에 걸림 → 상한 128K, 길면 20분까지
   director: [300, 900],
+  review: [180, 600],
   render: [150, 420],
   save: [5, 40],
 };
@@ -28,7 +30,8 @@ export function currentMotionStage(
 ): { stage: MotionStage | null; state: "idle" | "active" | "done" | "error" } {
   if (meetingStatus === "running") return { stage: "plan", state: "active" };
   if (render.status === "queued" || render.status === "rendering") {
-    return { stage: render.phase === "assets" ? "assets" : render.phase === "director" ? "director" : "render", state: "active" };
+    const phase = render.phase;
+    return { stage: phase === "assets" || phase === "director" || phase === "review" ? phase : "render", state: "active" };
   }
   if (archive.status === "uploading") return { stage: "save", state: "active" };
   if (archive.status === "done") return { stage: null, state: "done" };
@@ -49,10 +52,10 @@ export function formatStageRange(t: MotionAssetDict, [a, b]: [number, number]) {
 }
 
 export const MOTION_STAGE_LABEL: Record<MotionStage, keyof MotionAssetDict> = {
-  plan: "stagePlan", assets: "stageAssets", director: "stageDirector", render: "stageRender", save: "stageSave",
+  plan: "stagePlan", assets: "stageAssets", director: "stageDirector", review: "stageReview", render: "stageRender", save: "stageSave",
 };
 export const MOTION_STAGE_DETAIL: Record<MotionStage, keyof MotionAssetDict> = {
-  plan: "stagePlanDetail", assets: "stageAssetsDetail", director: "stageDirectorDetail", render: "stageRenderDetail", save: "stageSaveDetail",
+  plan: "stagePlanDetail", assets: "stageAssetsDetail", director: "stageDirectorDetail", review: "stageReviewDetail", render: "stageRenderDetail", save: "stageSaveDetail",
 };
 
 export default function MotionProgress({ meetingStatus, render, archive, startedAt, finishedAt }: {
@@ -99,7 +102,7 @@ export default function MotionProgress({ meetingStatus, render, archive, started
         {state === "done" && <span className="text-tone-emerald normal-case tracking-normal">{t.allDone}</span>}
         {total != null && <span className="ml-auto normal-case tracking-normal text-muted tabular-nums">{t.totalTime.replace("{t}", formatElapsed(t, total))}</span>}
       </div>
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-6 gap-1">
         {MOTION_STAGES.map((item, index) => {
           const done = state === "done" || index < currentIndex;
           const active = index === currentIndex && state === "active";
