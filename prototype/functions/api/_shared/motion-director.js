@@ -74,7 +74,7 @@ export function buildMotionDirectorRequest({ input = {}, spec = null, prepared =
     "# 요청",
     `영상 요청: ${clip(input.prompt, 1600)}`,
     `길이: 약 ${durationSec}초 (끝 카드 포함, 박자에 맞춰 ±2초 허용) · 화면: ${aspect} → <html data-size="${STAGE_SIZES[aspect]}">`,
-    `시청 대상: ${clip(input.audience, 120)} · 톤: ${clip(input.tone, 120)} · 스타일: ${clip(input.style, 120)}`,
+    "시청 대상·톤·스타일: 따로 주지 않는다. 영상 요청 글에서 읽어 정한다(요청에 없으면 주제에 가장 잘 맞게).",
     prepared.brand ? `브랜드: ${clip(prepared.brand.title, 80)} (로고·캐릭터 그림이 자산에 있으면 주인공으로 쓴다)` : "브랜드: 없음",
     "",
     "# 콘티 초안 (기획 회의 결과 — 내용과 수치의 근거. 장면 구성·문장은 더 좋게 바꿔도 되지만 없는 사실·수치는 만들지 않는다)",

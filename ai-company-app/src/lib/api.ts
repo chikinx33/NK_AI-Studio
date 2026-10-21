@@ -74,10 +74,13 @@ async function readSkillJobResponse(res: Response, fallbackMessage: string): Pro
 export async function createCompanySkillJob(
   skillId: string,
   input: SkillJobInput,
+  // wait: 요청을 열어 둔 채 서버가 끝까지 실행한다. 응답 뒤 백그라운드(waitUntil)는 약 30초에 끊겨
+  // 1~2분 걸리는 업무(인포그래픽 기획 회의)는 '실행 중'으로 굳는다(2026-10-21 운영에서 확인).
+  options: { wait?: boolean } = {},
 ): Promise<{ job: SkillJob; created: boolean }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (input.idempotencyKey) headers["Idempotency-Key"] = input.idempotencyKey;
-  const res = await fetch(`/api/agent/skills/${encodeURIComponent(skillId)}/jobs`, {
+  const res = await fetch(`/api/agent/skills/${encodeURIComponent(skillId)}/jobs${options.wait ? "?wait=1" : ""}`, {
     method: "POST",
     headers,
     body: JSON.stringify(input),

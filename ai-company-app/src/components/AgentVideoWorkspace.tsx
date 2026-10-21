@@ -57,12 +57,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     setDurationSec,
     aspectRatio,
     setAspectRatio,
-    audience,
-    setAudience,
-    tone,
-    setTone,
-    style,
-    setStyle,
     assets,
     setAssets,
     spec,
@@ -113,9 +107,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
       if (typeof action.prompt === "string") setPrompt(action.prompt.slice(0, 2000));
       if (typeof action.durationSec === "number" && action.durationSec >= 5 && action.durationSec <= 300) setDurationSec(action.durationSec);
       if (action.aspectRatio === "16:9" || action.aspectRatio === "9:16" || action.aspectRatio === "1:1") setAspectRatio(action.aspectRatio);
-      if (typeof action.audience === "string") setAudience(action.audience.slice(0, 200));
-      if (typeof action.tone === "string") setTone(action.tone.slice(0, 200));
-      if (typeof action.style === "string") setStyle(action.style.slice(0, 200));
     } else if (action.action === "video.run") {
       if (!meetingStartDisabled) void startMeeting();
     } else if (action.action === "video.approval" && pendingApproval) {
@@ -199,18 +190,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               </div>
             </div>
 
-            <div className="mt-2">
-              <FieldLabel>시청 대상</FieldLabel>
-              <input value={audience} onChange={(event) => setAudience(event.target.value)} className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700" />
-            </div>
-            <div className="mt-2">
-              <FieldLabel>톤</FieldLabel>
-              <input value={tone} onChange={(event) => setTone(event.target.value)} className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700" />
-            </div>
-            <div className="mt-2">
-              <FieldLabel>스타일</FieldLabel>
-              <input value={style} onChange={(event) => setStyle(event.target.value)} className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700" />
-            </div>
             <MotionAssetPicker value={assets} onChange={setAssets} />
 
             <button

@@ -136,3 +136,25 @@ test("화면: 작업이 끝나면 자산 옮기기 → 감독 → 장면 저장 
   assert.match(api, /host === "localhost" \|\| host === "127\.0\.0\.1" \? path : `http:\/\/localhost:14000\$\{path\}`/);
   assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /\{finalVideoUrl \? \(/);
 });
+
+test("시청 대상·톤·스타일은 따로 받지 않고 요청 글에서 읽는다 — 기본값을 몰래 넣지 않는다(2026-10-21 엔케)", () => {
+  const workspace = read("ai-company-app/src/components/AgentVideoWorkspace.tsx");
+  assert.doesNotMatch(workspace, /시청 대상|<FieldLabel>톤|<FieldLabel>스타일/);
+  const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
+  assert.doesNotMatch(context, /setAudience|setTone|setStyle|시네마틱 테크 인포그래픽|콘텐츠 제작자와 1인 기업/);
+  for (const file of ["prototype/functions/api/agent/_company-skill-registry.ts", "prototype/functions/api/agent/_company-skill-executors.ts", "prototype/functions/api/agent/agent-video.ts", "prototype/functions/api/agent/_shared.ts"]) {
+    assert.doesNotMatch(read(file), /"일반 시청자"|"명료하고 신뢰감 있게"|"시네마틱 모션 (인포)?그래픽"/, file);
+  }
+  const request = buildMotionDirectorRequest({ input: { prompt: "학부모 대상, 따뜻한 톤", durationSec: 20, aspectRatio: "9:16" }, prepared });
+  assert.match(request, /영상 요청 글에서 읽어 정한다/);
+  assert.doesNotMatch(request, /undefined/);
+});
+
+test("작업 시작은 서버가 끝까지 실행하게 기다리고(wait=1), 서버에서 끊겨 굳은 작업은 바로 알린다", () => {
+  const api = read("ai-company-app/src/lib/api.ts");
+  assert.match(api, /\/jobs\$\{options\.wait \? "\?wait=1" : ""\}/);
+  const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
+  assert.match(context, /Date\.now\(\) - updatedAt > 5 \* 60 \* 1000/);
+  assert.match(context, /await cancelCompanySkillJob\(jobId\)/);
+  assert.match(context, /motionAssetText\(\)\.jobInterrupted/);
+});

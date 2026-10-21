@@ -98,18 +98,13 @@ function normalizeInfographicOptions(value: unknown): { options: Record<string, 
   const aspectRatio = ["16:9", "9:16", "1:1"].includes(String(input.aspectRatio))
     ? String(input.aspectRatio)
     : "16:9";
-  const audience = cleanText(input.audience, 200) || "일반 시청자";
   const purpose = cleanText(input.purpose, 200);
-  const tone = cleanText(input.tone, 200) || "명료하고 신뢰감 있게";
-  const style = cleanText(input.style, 200) || "시네마틱 모션 인포그래픽";
   if (!Number.isFinite(requestedDuration)) warnings.push("영상 길이가 없어 기본값 30초를 적용했습니다.");
   if (!["16:9", "9:16", "1:1"].includes(String(input.aspectRatio))) warnings.push("화면 비율이 없어 기본값 16:9를 적용했습니다.");
-  if (!cleanText(input.audience, 200)) warnings.push("시청 대상이 없어 일반 시청자를 적용했습니다.");
-  if (!cleanText(input.tone, 200)) warnings.push("톤이 없어 명료하고 신뢰감 있는 톤을 적용했습니다.");
-  if (!cleanText(input.style, 200)) warnings.push("스타일이 없어 시네마틱 모션 인포그래픽을 적용했습니다.");
   // 영상에 쓸 브랜드·업무 파일·배경음악(비용 0원: 이미 가진 자산만 쓴다)
   const assets = normalizeMotionAssetSelection(input.assets);
-  return { options: { durationSec, aspectRatio, audience, purpose, tone, style, assets }, warnings };
+  // 시청 대상·톤·스타일은 따로 받지 않는다(2026-10-21 엔케). 요청 글에서 읽는다 — 기본값을 몰래 넣으면 모든 주제가 한 방향으로 끌려간다.
+  return { options: { durationSec, aspectRatio, purpose, assets }, warnings };
 }
 
 export function normalizeCompanySkillJobInput(

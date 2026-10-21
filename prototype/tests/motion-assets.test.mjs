@@ -79,7 +79,7 @@ test("화면: 배경음악을 안 고르면 음악 없이 갈지 묻고, 자산 
   const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
   assert.match(context, /if \(!assets\.bgm && !assets\.noMusic\)/);
   assert.match(context, /appDialog\.confirm\(t\.confirmNoMusic/);
-  assert.match(context, /options: \{ durationSec, aspectRatio, audience, tone, style, assets: selectedAssets \}/);
+  assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets \},\n\s+\}, \{ wait: true \}\);/);
   assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<MotionAssetPicker value=\{assets\} onChange=\{setAssets\} \/>/);
   assert.match(read("ai-company-app/vite.config.ts"), /"\/local-motion": "http:\/\/localhost:14000"/);
 });

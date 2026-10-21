@@ -5656,16 +5656,15 @@ async function runInfographicTool(input: any, ctx: ToolContext): Promise<any> {
   if (!prompt) throw new Error("제작할 인포그래픽 내용(prompt)이 필요해요.");
   const created = await callInternalJson(ctx, "/api/agent/skills/infographic/jobs?wait=1", {
     body: {
-      request: prompt,
+      // 시청 대상·톤·스타일은 따로 받지 않는다. 에이전트가 넘기면 요청 글에 붙인다(기본값은 넣지 않는다).
+      request: [prompt, input?.audience && `시청 대상: ${input.audience}`, input?.tone && `톤: ${input.tone}`, input?.style && `스타일: ${input.style}`]
+        .filter(Boolean).join("\n"),
       conversationId: ctx.conversationId || "main",
       invocationMode: "agent",
       idempotencyKey: `agent-${crypto.randomUUID()}`,
       options: {
         durationSec: Math.min(60, Math.max(10, Number(input?.durationSec || input?.duration) || 30)),
         aspectRatio: ["16:9", "9:16", "1:1"].includes(String(input?.aspectRatio)) ? input.aspectRatio : "16:9",
-        audience: String(input?.audience || "일반 시청자"),
-        tone: String(input?.tone || "명료하고 신뢰감 있게"),
-        style: String(input?.style || "시네마틱 모션 인포그래픽"),
       },
     },
   });

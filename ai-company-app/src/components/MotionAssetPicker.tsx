@@ -52,6 +52,7 @@ export const MOTION_ASSET_TEXT = {
     rendererUnreachable: "이 PC 렌더러에 연결하지 못했어요. 이 PC에서 NK Studio 렌더러(node server.js)가 켜져 있는지 확인해 주세요.",
     noWork: "렌더할 회사 업무가 없어요. 먼저 작업을 시작해 주세요.",
     finalVideo: "완성 영상",
+    jobInterrupted: "이전 작업이 서버에서 중간에 끊겼어요. '작업 시작'을 다시 눌러 주세요.",
   },
   en: {
     title: "Video assets",
@@ -87,6 +88,7 @@ export const MOTION_ASSET_TEXT = {
     rendererUnreachable: "Couldn't reach the renderer on this PC. Check that the NK Studio renderer (node server.js) is running here.",
     noWork: "There is no work item to render. Start a job first.",
     finalVideo: "Final video",
+    jobInterrupted: "The previous job was cut off on the server. Press 'Start' again.",
   },
 };
 

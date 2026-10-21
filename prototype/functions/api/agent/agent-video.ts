@@ -295,9 +295,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       prompt,
       durationSec: Math.min(60, Math.max(10, Number(body?.durationSec) || 30)),
       aspectRatio,
-      audience: cleanText(body?.audience, "일반 시청자", 100),
-      tone: cleanText(body?.tone, "명료하고 신뢰감 있게", 100),
-      style: cleanText(body?.style, "시네마틱 모션 그래픽", 100),
+      // 시청 대상·톤·스타일은 따로 받지 않고 영상 요청에서 읽는다(기본값을 넣지 않는다)
+      audience: cleanText(body?.audience, "", 100),
+      tone: cleanText(body?.tone, "", 100),
+      style: cleanText(body?.style, "", 100),
       assets: normalizeMotionAssetSelection(body?.assets),
     };
     const skill = {
@@ -317,9 +318,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       `영상 요청: ${input.prompt}`,
       `길이: ${input.durationSec}초`,
       `화면비: ${input.aspectRatio}`,
-      `시청 대상: ${input.audience}`,
-      `톤: ${input.tone}`,
-      `스타일: ${input.style}`,
+      "시청 대상·톤·스타일: 영상 요청 글에서 읽어 정한다(따로 주어지지 않는다).",
       "제약: AI Cinema의 기존 프로젝트·클립은 사용하지 않는다. Remotion 네이티브 타이포그래피·의미 기반 SVG·애니메이션으로 독립 영상을 만든다.",
     ].join("\n");
 

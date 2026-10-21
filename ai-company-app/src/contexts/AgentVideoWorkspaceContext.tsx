@@ -21,6 +21,7 @@ import {
 } from "react";
 import {
   approveCompanySkillJob,
+  cancelCompanySkillJob,
   createCompanySkillJob,
   getCompanySkillJob,
   getCompanyWorkItem,
@@ -76,12 +77,6 @@ interface AgentVideoWorkspaceValue {
   setDurationSec: Dispatch<SetStateAction<number>>;
   aspectRatio: AspectRatio;
   setAspectRatio: Dispatch<SetStateAction<AspectRatio>>;
-  audience: string;
-  setAudience: Dispatch<SetStateAction<string>>;
-  tone: string;
-  setTone: Dispatch<SetStateAction<string>>;
-  style: string;
-  setStyle: Dispatch<SetStateAction<string>>;
   assets: MotionAssetSelection;
   setAssets: Dispatch<SetStateAction<MotionAssetSelection>>;
   spec: AgentVideoSpec;
@@ -105,9 +100,6 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [prompt, setPrompt] = useState("AI 에이전트들이 협업해 아이디어를 영상으로 완성하는 과정을 소개하는 30초 브랜드 영상");
   const [durationSec, setDurationSec] = useState(30);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
-  const [audience, setAudience] = useState("콘텐츠 제작자와 1인 기업");
-  const [tone, setTone] = useState("신뢰감 있고 미래지향적");
-  const [style, setStyle] = useState("시네마틱 테크 인포그래픽");
   const [assets, setAssets] = useState<MotionAssetSelection>(EMPTY_MOTION_ASSETS);
   const [spec, setSpec] = useState<AgentVideoSpec>(loadSavedSpec);
   const [contributions, setContributions] = useState<AgentVideoContribution[]>([]);
@@ -215,8 +207,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         invocationMode: "manual",
         request: prompt.trim(),
         idempotencyKey: `manual-${crypto.randomUUID()}`,
-        options: { durationSec, aspectRatio, audience, tone, style, assets: selectedAssets },
-      });
+        options: { durationSec, aspectRatio, assets: selectedAssets },
+      }, { wait: true });
       writeUserStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
       await restoreSkillJob(result.job.id, controller.signal);
     } catch (caught) {
@@ -230,6 +222,15 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   }
 
   async function restoreSkillJob(jobId: string, signal?: AbortSignal) {
+    // 서버 실행이 중간에 끊겨 '실행 중'으로 굳은 작업은 5분 넘게 갱신이 없다. 10분 기다리게 하지 않고 바로 알린다.
+    const current = await getCompanySkillJob(jobId);
+    const active = !["completed", "failed", "cancelled"].includes(current.status) && current.approvalState?.status !== "pending";
+    const updatedAt = Date.parse(String(current.updatedAt || "").replace(" ", "T").replace(/\+00$/, "Z"));
+    if (active && Number.isFinite(updatedAt) && Date.now() - updatedAt > 5 * 60 * 1000) {
+      await cancelCompanySkillJob(jobId).catch(() => undefined);
+      removeUserStorage(SKILL_JOB_STORAGE_KEY);
+      throw new Error(motionAssetText().jobInterrupted);
+    }
     const job = await waitForCompanySkillJob(jobId, { signal });
     if (job.approvalState?.status === "pending") {
       setPendingApproval(job);
@@ -411,9 +412,6 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setPrompt(String(input?.prompt || work.request_text || ""));
     setDurationSec(Number(input?.durationSec || getDuration(nextSpec)));
     setAspectRatio((input?.aspectRatio || nextSpec.aspectRatio) as AspectRatio);
-    setAudience(String(input?.audience || nextSpec.audience || "일반 시청자"));
-    setTone(String(input?.tone || nextSpec.tone || ""));
-    setStyle(String(input?.style || nextSpec.style || ""));
     setMeetingStatus("done");
     setError("");
     if (autoRender) await beginRender(nextSpec);
@@ -431,12 +429,6 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       setDurationSec,
       aspectRatio,
       setAspectRatio,
-      audience,
-      setAudience,
-      tone,
-      setTone,
-      style,
-      setStyle,
       assets,
       setAssets,
       spec,
