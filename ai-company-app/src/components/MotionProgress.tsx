@@ -14,7 +14,8 @@ export const MOTION_STAGES: MotionStage[] = ["plan", "assets", "director", "rend
 export const MOTION_STAGE_SECONDS: Record<MotionStage, [number, number]> = {
   plan: [60, 120],
   assets: [5, 60],
-  director: [240, 480],
+  // 클라우드 첫 운영(2026-10-22, 30초 16:9 7장면): 11분 만에 64K 상한에 걸림 → 상한 128K, 길면 20분까지
+  director: [300, 900],
   render: [150, 420],
   save: [5, 40],
 };

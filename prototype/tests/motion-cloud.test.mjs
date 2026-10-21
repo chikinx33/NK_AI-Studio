@@ -127,3 +127,17 @@ test("화면: 클라우드 상태는 진행 중일 때만 읽고, 완성 정지 
   assert.match(panel, /const \{ activeWork, reviseVideo, saveAsExample, stills \} = useAgentVideoWorkspace\(\);/);
   assert.doesNotMatch(panel, /makeMotionStills/);
 });
+
+test("감독 출력 한도: 모델 상한 128K·30분, 잘리면 생각/장면 코드 사용량을 남기고 화면은 읽을 수 있는 말로 알린다", () => {
+  const shared = read("prototype/functions/api/_shared/motion-director.js");
+  assert.match(shared, /export const MOTION_DIRECTOR_MAX_TOKENS = 128000;/);
+  const api = read("prototype/functions/api/agent/motion-director.ts");
+  assert.match(api, /const TIMEOUT_MS = 1_800_000;/, "프록시(nk-openai-proxy) 3600초 안");
+  assert.match(api, /throw new Error\(`motion_director_max_tokens \$\{JSON\.stringify\(usage\)\}`\)/);
+  assert.match(api, /const usage = \{ outputTokens, textChars: text\.length, thinkingChars \};/);
+  assert.match(read("ai-company-app/scripts/motion-cloud-job.mjs"), /timings\.directorOutputTokens = Number\(event\.usage\.outputTokens\) \|\| 0;/);
+  const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
+  assert.match(picker, /if \(message\.includes\("motion_director_max_tokens"\)\) return t\.directorTooLong;/);
+  assert.match(picker, /if \(message\.includes\("motion_director_timeout"\)\) return t\.directorTimeout;/);
+  assert.equal((picker.match(/directorTooLong: "/g) || []).length, 2, "한/영 둘 다");
+});

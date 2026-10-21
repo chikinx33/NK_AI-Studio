@@ -6,8 +6,9 @@ import {
 
 export const MOTION_DIRECTOR_MODEL = "claude-opus-5-5";
 // 생각(effort high) 토큰도 max_tokens 에 함께 계산된다. 32000 에서 운영 첫 시도가 잘렸다(2026-10-21).
-// Opus 5.5 출력 상한은 128K, 스트리밍 기본 권장값은 64000.
-export const MOTION_DIRECTOR_MAX_TOKENS = 64000;
+// Opus 5.5 출력 상한은 128K. 64000 에서도 클라우드 첫 운영(30초 16:9, 7장면)이 660초 만에 잘렸다(2026-10-22) → 상한까지.
+// 64K 를 660초에 썼으니 128K 는 20분 남짓: 시간 제한(motion-director.ts)과 프록시(nk-openai-proxy 3600초)도 함께 늘렸다.
+export const MOTION_DIRECTOR_MAX_TOKENS = 128000;
 export const MOTION_DIRECTOR_MAX_IMAGES = 12;
 
 export const STAGE_SIZES = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080" };

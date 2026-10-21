@@ -148,6 +148,10 @@ async function runDirector(body) {
       if (event.t === "progress") await report({ chars: Number(event.chars) || 0 });
       else if (event.t === "error") throw new Error(String(event.error || "motion_director_error"));
       else if (event.t === "done") {
+        if (event.usage) {
+          console.log(`감독 출력: ${JSON.stringify(event.usage)}`);
+          timings.directorOutputTokens = Number(event.usage.outputTokens) || 0;
+        }
         if (event.result?.problems?.length) throw new Error(`motion_director_problems:${event.result.problems.join(" · ")}`);
         return event.result;
       }

@@ -21,7 +21,8 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const MAX_BODY_CHARS = 8 * 1024 * 1024;
 // 시험(2026-10-21)에서 장면 코드가 약 2만 9천 자였고, 그 앞에 깊게 생각한다. 흘려 보내는 동안 연결은 유지되므로
 // 넉넉히 두되 지역 우회 프록시(Cloud Run, 900초)보다 짧게 둬서 우리 쪽에서 먼저 정리한다.
-const TIMEOUT_MS = 840_000;
+// 감독은 클라우드 렌더러(준비 작업)가 기다린다. 출력 128K 를 다 쓰면 20분 남짓 — 프록시 제한(3600초) 안에서 30분.
+const TIMEOUT_MS = 1_800_000;
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
@@ -109,6 +110,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       let buf = "";
       let text = "";
       let stopReason = "";
+      // 출력 토큰이 생각과 장면 코드에 어떻게 나뉘었는지(잘렸을 때 원인을 바로 보려고)
+      let outputTokens = 0;
+      let thinkingChars = 0;
       let lastReport = 0;
       let lastEmitAt = 0;
       try {
@@ -140,19 +144,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
               text += evt.delta.text || "";
               if (text.length - lastReport >= 400) { lastReport = text.length; lastEmitAt = Date.now(); emit({ t: "progress", chars: text.length }); }
             } else if ((evt?.type === "content_block_delta" || evt?.type === "ping") && Date.now() - lastEmitAt > 2_000) {
+              if (evt.delta?.type === "thinking_delta") thinkingChars += String(evt.delta.thinking || "").length;
               // 생각하는 동안에도 진행을 알린다(2초에 한 번)
               lastEmitAt = Date.now();
               emit({ t: "progress", chars: text.length, thinking: true });
-            } else if (evt?.type === "message_delta" && evt.delta?.stop_reason) {
-              stopReason = String(evt.delta.stop_reason);
+            } else if (evt?.type === "content_block_delta" && evt.delta?.type === "thinking_delta") {
+              thinkingChars += String(evt.delta.thinking || "").length;
+            } else if (evt?.type === "message_delta") {
+              if (evt.delta?.stop_reason) stopReason = String(evt.delta.stop_reason);
+              if (evt.usage?.output_tokens) outputTokens = Number(evt.usage.output_tokens) || outputTokens;
             } else if (evt?.type === "error") {
               throw new Error(String(evt.error?.message || "claude_stream_error"));
             }
           }
         }
         if (stopReason === "refusal") throw new Error("motion_director_refused");
-        if (stopReason === "max_tokens") throw new Error("motion_director_max_tokens");
-        emit({ t: "done", stopReason, result: parseMotionDirectorOutput(text, { aspectRatio: input.aspectRatio, prepared }) });
+        const usage = { outputTokens, textChars: text.length, thinkingChars };
+        if (stopReason === "max_tokens") throw new Error(`motion_director_max_tokens ${JSON.stringify(usage)}`);
+        emit({ t: "done", stopReason, usage, result: parseMotionDirectorOutput(text, { aspectRatio: input.aspectRatio, prepared }) });
       } catch (e) {
         emit({ t: "error", error: controller.signal.aborted ? "motion_director_timeout" : String((e as any)?.message || e) });
       } finally {

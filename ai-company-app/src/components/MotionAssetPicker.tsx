@@ -46,6 +46,8 @@ export const MOTION_ASSET_TEXT = {
     rendererUnreachable: "사이트에 연결하지 못했어요. 인터넷 연결을 확인해 주세요. 영상은 클라우드에서 계속 만들어지고 있어요.",
     cloudBusy: "다른 영상을 클라우드에서 만드는 중이에요. 끝난 뒤 다시 시도해 주세요.",
     cloudStale: "클라우드 렌더러가 10분 넘게 응답하지 않아 멈춘 것으로 봤어요. 다시 시도해 주세요.",
+    directorTooLong: "감독이 쓴 장면 코드가 한 번에 쓸 수 있는 최대 길이를 넘었어요. 다시 시도하거나 장면 수·길이를 줄여 주세요.",
+    directorTimeout: "감독이 30분 안에 장면 코드를 끝내지 못했어요. 다시 시도해 주세요.",
     cloudNote: "클라우드에서 만들어요. 창을 닫거나 PC를 꺼도 계속 진행되고, 다시 열면 결과가 보여요.",
     noWork: "렌더할 회사 업무가 없어요. 먼저 작업을 시작해 주세요.",
     finalVideo: "완성 영상",
@@ -122,6 +124,8 @@ export const MOTION_ASSET_TEXT = {
     rendererUnreachable: "Couldn't reach the site. Check your internet connection. The video keeps being made in the cloud.",
     cloudBusy: "Another video is being made in the cloud. Try again after it finishes.",
     cloudStale: "The cloud renderer stopped responding for over 10 minutes, so it was treated as stopped. Please try again.",
+    directorTooLong: "The director's scene code went past the longest answer it can write at once. Try again, or use fewer or shorter scenes.",
+    directorTimeout: "The director didn't finish the scene code within 30 minutes. Please try again.",
     cloudNote: "Made in the cloud. You can close this window or turn off your PC — it keeps going, and the result shows when you come back.",
     noWork: "There is no work item to render. Start a job first.",
     finalVideo: "Final video",
@@ -189,6 +193,8 @@ export function motionErrorText(caught: unknown): string {
   if (message.includes("motion_subscription_required")) return t.subscriptionRequired;
   if (message.includes("motion_cloud_busy")) return t.cloudBusy;
   if (message.includes("motion_cloud_stale")) return t.cloudStale;
+  if (message.includes("motion_director_max_tokens")) return t.directorTooLong;
+  if (message.includes("motion_director_timeout")) return t.directorTimeout;
   if (caught instanceof TypeError && /fetch|network|load failed/i.test(message)) return t.rendererUnreachable;
   return message;
 }
