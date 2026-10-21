@@ -1,0 +1,50 @@
+/* RAVIOK motion kit base. Themes (themes/<game>.css) set the variables. */
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); font-family: var(--font-body), sans-serif; }
+#cam { position: absolute; inset: 0; transform-origin: 540px 1000px; }
+#heads { position: absolute; left: 0; top: 0; z-index: 50; }
+.a { position: absolute; left: 0; top: 0; visibility: hidden; }
+.layer { position: absolute; inset: 0; }
+.flood { width: 10px; height: 10px; border-radius: 50%; }
+
+/* headlines */
+.mask { position: absolute; left: 0; top: 0; overflow: hidden; padding: 24px 60px 34px; visibility: hidden; }
+.head { font-family: var(--font-head), sans-serif; font-weight: var(--head-weight, 400); font-size: var(--head-size, 112px);
+        line-height: 1.12; letter-spacing: var(--head-tracking, -1px); text-align: center; white-space: nowrap; color: var(--ink); }
+html[lang="en"] .head { font-size: calc(var(--head-size, 112px) * var(--en-scale, 0.9)); }
+.head.accent { color: var(--accent); }
+.head.light { color: #fff; text-shadow: 0 7px 0 var(--shadow, rgba(10,12,30,.45)); }
+.head.big { font-size: calc(var(--head-size, 112px) * 1.5); }
+
+/* real gameplay clip in a phone-like frame */
+.clipbox { border-radius: 48px; overflow: hidden; background: #000; box-shadow: 0 18px 0 var(--frame-shadow, rgba(0,0,0,.25)); }
+.clipbox video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tag { font-family: var(--font-head), sans-serif; font-size: 44px; padding: 14px 34px; border-radius: 40px; background: var(--ink); color: var(--bg); white-space: nowrap; }
+
+/* end card pill */
+.pill { padding: 26px 62px; border-radius: 80px; background: var(--ink); color: #fff; font-family: var(--font-head), sans-serif; font-size: 62px; white-space: nowrap; }
+.pill b { color: var(--accent2, #FFC531); font-weight: inherit; }
+
+/* ?guide=1 : shorts UI safe zones (top bar, right buttons, bottom caption) */
+html.guide #stage::after { content: ""; position: absolute; inset: 0; z-index: 99; pointer-events: none;
+  background:
+    linear-gradient(rgba(255,0,0,.18), rgba(255,0,0,.18)) top/100% 220px no-repeat,
+    linear-gradient(rgba(255,0,0,.18), rgba(255,0,0,.18)) bottom/100% 420px no-repeat,
+    linear-gradient(rgba(255,0,0,.18), rgba(255,0,0,.18)) right 1000px/150px 600px no-repeat; }
+
+/* ---- 2026 kit: kinetic captions, stickers, full-bleed clips, grain ---- */
+.kline { position: absolute; left: 0; top: 0; width: 960px; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+         gap: 0 24px; visibility: hidden; z-index: 60; }
+.kw { display: inline-block; font-family: var(--font-head), sans-serif; font-weight: var(--head-weight, 400); font-size: var(--k-size, 124px);
+      line-height: 1.16; color: var(--k-color, #fff); -webkit-text-stroke: var(--k-stroke-w, 18px) var(--k-stroke, #23264A); paint-order: stroke fill;
+      letter-spacing: var(--head-tracking, -1px); white-space: nowrap; filter: drop-shadow(0 10px 0 var(--k-drop, rgba(0,0,0,.22))); }
+html[lang="en"] .kw { font-size: calc(var(--k-size, 124px) * var(--en-scale, 0.9)); }
+.kw.hi, .kw em { color: var(--k-hi, #FFC531); font-style: normal; }
+.sticker { font-family: var(--font-head), sans-serif; font-weight: var(--head-weight, 400); font-size: 96px; white-space: nowrap; color: var(--s-color, #FF5A3C);
+           -webkit-text-stroke: 16px #fff; paint-order: stroke fill; filter: drop-shadow(0 8px 0 rgba(0,0,0,.28)); z-index: 55; }
+.full { position: absolute; inset: 0; overflow: hidden; visibility: hidden; background: #000; }
+.full .blurbg { position: absolute; inset: -60px; width: calc(100% + 120px); height: calc(100% + 120px); object-fit: cover; filter: blur(40px) brightness(.55) saturate(1.2); }
+.full .fg { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; }
+.grain { position: absolute; inset: 0; z-index: 90; pointer-events: none; opacity: var(--grain, .07); mix-blend-mode: overlay;
+         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.4 0'/></filter><rect width='256' height='256' filter='url(%23n)'/></svg>"); }
+.vignette { position: absolute; inset: 0; z-index: 89; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,var(--vig, .28)) 100%); }
