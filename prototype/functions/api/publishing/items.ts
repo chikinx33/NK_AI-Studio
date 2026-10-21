@@ -7,10 +7,14 @@
 //   { action:'cancel_delivery', id }
 //   { action:'done_manual', id, postedUrl }      직접 올렸다고 기록(패키지에서 온 글이면 그 폴더에 result.json)
 //   { action:'reschedule', id, scheduledAt, confirmUncertain }  확인 필요·실패 건 다시 예약
+//   { action:'fill_images', campaignId? }        캠페인 글의 업무 파일 사진을 퍼블리싱 저장소로 옮긴다(남으면 more:true)
+//   { action:'delete_campaign', id }             캠페인과 안 나간 글 지우기(올라간 기록은 남는다)
+// SNS 채널(api) 게시는 승인·다시 예약 때 SNS 예약 대기열에 들어간다(영상 경로 해석에 env 가 필요하다).
 // 개인 API 키(publishing:write)는 글 저장만 할 수 있다. 승인·게시 기록·취소·삭제는 사람(로그인 세션)만 한다.
 import { authorizeRequest } from "../_shared/auth.js";
 import {
   publishingDb, saveItem, deleteItem, approveItems, unapproveItems, cancelDelivery, markDoneManual, rescheduleDelivery,
+  fillCampaignImages, deleteCampaign,
 } from "../_shared/publishing-store";
 import { writePackageResult } from "../_shared/publishing-packages";
 import { send, sendError, readJson } from "../_shared/publishing-http";
@@ -30,8 +34,8 @@ export const onRequestPost = async ({ request, env }: any) => {
     switch (body.action) {
       case "save": return send({ ok: true, ...(await saveItem(db, env, auth.userId, body.item || {})) });
       case "delete": return send({ ok: true, ...(await deleteItem(db, auth.userId, String(body.id || ""))) });
-      case "approve": return send({ ok: true, ...(await approveItems(db, auth.userId, { itemIds: ids })) });
-      case "approve_week": return send({ ok: true, ...(await approveItems(db, auth.userId, { weekStart: String(body.weekStart || "") })) });
+      case "approve": return send({ ok: true, ...(await approveItems(db, auth.userId, { itemIds: ids }, env)) });
+      case "approve_week": return send({ ok: true, ...(await approveItems(db, auth.userId, { weekStart: String(body.weekStart || "") }, env)) });
       case "unapprove": return send({ ok: true, ...(await unapproveItems(db, auth.userId, ids)) });
       case "cancel_delivery": return send({ ok: true, delivery: await cancelDelivery(db, auth.userId, String(body.id || "")) });
       case "done_manual": {
@@ -40,7 +44,9 @@ export const onRequestPost = async ({ request, env }: any) => {
           .catch((e: any) => { try { console.error("[publishing] result.json", e?.message || e); } catch { /* noop */ } return { written: false, reason: "write_failed" }; });
         return send({ ok: true, delivery, packageResult: result });
       }
-      case "reschedule": return send({ ok: true, delivery: await rescheduleDelivery(db, auth.userId, String(body.id || ""), String(body.scheduledAt || ""), body.confirmUncertain === true) });
+      case "reschedule": return send({ ok: true, delivery: await rescheduleDelivery(db, auth.userId, String(body.id || ""), String(body.scheduledAt || ""), body.confirmUncertain === true, env) });
+      case "fill_images": return send({ ok: true, ...(await fillCampaignImages(db, env, auth.userId, { campaignId: String(body.campaignId || "") })) });
+      case "delete_campaign": return send({ ok: true, ...(await deleteCampaign(db, auth.userId, String(body.id || ""))) });
       default: return send({ error: "invalid_action" }, 400);
     }
   } catch (e) {

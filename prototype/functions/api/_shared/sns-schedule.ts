@@ -27,8 +27,8 @@ export async function scheduleSql(env: any): Promise<SqlFn> {
   return sql;
 }
 
-// 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(schema-marks.js).
-async function runScheduleSchemaDdl(sql: SqlFn): Promise<void> {
+// 이 함수의 소스가 바뀐 배포에서만 한 번 돈다(schema-marks.js). 퍼블리싱 저장소도 SNS 채널 예약을 이 표에 넣으므로 같이 준비한다.
+export async function runScheduleSchemaDdl(sql: SqlFn): Promise<void> {
   await sql(`CREATE TABLE IF NOT EXISTS sns_scheduled_posts (
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, project_id TEXT NOT NULL DEFAULT '',
     run_at TIMESTAMPTZ NOT NULL, body JSONB NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
@@ -60,10 +60,22 @@ export async function enqueueScheduledPost(env: any, userId: string, platform: s
   delete stored.scheduledAt;
   delete stored.publishAt;
   if (stored.privacyStatus === "scheduled") delete stored.privacyStatus;
+  const q = scheduledPostInsert(userId, platform, runAtIso, stored);
+  await sql(q.query, q.params);
+  return { id: q.id, runAt: runAtIso };
+}
+
+/**
+ * 예약 건 한 줄 넣기 질의(id 를 미리 정한다). 퍼블리싱 승인은 이 질의를 게시(delivery) 갱신과 같은 배치에 넣어
+ * 'SNS 대기열에 들어갔는데 퍼블리싱엔 기록이 없는' 어긋남이 생기지 않게 한다.
+ */
+export function scheduledPostInsert(userId: string, platform: string, runAtIso: string, body: any) {
   const id = crypto.randomUUID();
-  await sql(`INSERT INTO sns_scheduled_posts (id,user_id,platform,project_id,run_at,body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
-    [id, userId, platform, String(body?.projectId || ""), runAtIso, JSON.stringify(stored)]);
-  return { id, runAt: runAtIso };
+  return {
+    id,
+    query: `INSERT INTO sns_scheduled_posts (id,user_id,platform,project_id,run_at,body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+    params: [id, userId, platform, String(body?.projectId || ""), runAtIso, JSON.stringify(body)],
+  };
 }
 
 export function publicScheduledPost(row: any) {

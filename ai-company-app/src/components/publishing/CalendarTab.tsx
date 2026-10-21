@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { addDays, todayKst, weekStartOf } from "../../lib/publishing";
 import { Button, Icon, STATUS_DOT } from "./ui";
-import { ATTENTION, allDeliveryRows, channelTypeLabel, kstDayOf, type PublishingCtx } from "./helpers";
+import { ATTENTION, allDeliveryRows, channelTypeLabel, inCampaign, kstDayOf, type PublishingCtx } from "./helpers";
 
 const MAX_PER_DAY = 4;
 
@@ -14,7 +14,7 @@ export default function CalendarTab({ ctx }: { ctx: PublishingCtx }) {
   const byDay = useMemo(() => {
     const map = new Map<string, ReturnType<typeof allDeliveryRows>>();
     for (const r of allDeliveryRows(state)) {
-      if (r.delivery.status === "cancelled") continue;
+      if (r.delivery.status === "cancelled" || !inCampaign(r.item, ctx.campaign)) continue;
       const day = kstDayOf(r.delivery.postedAt || r.delivery.scheduledAt);
       if (!day) continue;
       if (!map.has(day)) map.set(day, []);
@@ -22,7 +22,7 @@ export default function CalendarTab({ ctx }: { ctx: PublishingCtx }) {
     }
     for (const list of map.values()) list.sort((a, b) => (a.delivery.scheduledAt || "").localeCompare(b.delivery.scheduledAt || ""));
     return map;
-  }, [state]);
+  }, [state, ctx.campaign]);
 
   const [y, m] = month.split("-").map(Number);
   const first = `${month}-01`;

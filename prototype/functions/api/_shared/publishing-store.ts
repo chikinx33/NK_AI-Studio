@@ -7,6 +7,11 @@
 //   publisher_devices     연결된 PC(NK Publisher). 기기 토큰은 sha256 만 저장
 //   publisher_pairing_codes 8자리 연결 코드(10분, 한 번)
 //   publishing_events     작업 배정·결과 기록. 결과는 (작업, 시도) 하나만 반영(dedupe_key)
+//   publishing_campaigns  캠페인(한 브랜드의 기간 행사 홍보). 글은 campaign_id 로 묶인다(에이전트가 지침·날짜별 초안을 만든다)
+//
+// SNS 채널(api 방식): 승인하면 게시를 SNS 예약 대기열(sns_scheduled_posts)에 넣고 sns_job_id 로 잇는다.
+// 정기 실행이 SNS 세팅에 연결된 계정으로 올리고, 화면을 읽을 때 대기열 결과를 게시 상태로 옮긴다(snsSyncQuery).
+// 승인이 풀리거나 취소되면 아직 안 나간 대기열 건도 같은 배치에서 취소한다(snsCancelQuery).
 //
 // Worker 서브요청 50번 한도(Neon 질의 1번 = 1번): 화면 한 번 읽기·일괄 승인·가져오기는 getSqlBatch 로
 // 읽기 1번 + 쓰기 1번에 끝낸다. 글 수에 비례해 질의를 늘리지 않는다.
@@ -14,13 +19,17 @@ import { getSql, getSqlBatch } from "../knowledge/_shared";
 import { ensureSchemaOnce } from "./schema-marks.js";
 import { resolveGcsEnv, getGoogleAccessToken, signGcsObjectUrl } from "./gcs.js";
 import { buildUserRoot } from "./storage";
+import { runScheduleSchemaDdl } from "./sns-schedule";
+import { accessContext, copyObject, getObject, workspacePrefix } from "./company-files-gcs";
 import {
   LEASE_MS, MAX_ATTEMPTS, RETRY_DELAY_MS, PAIRING_CODE_TTL_MS, TITLE_MAX, TAGS_MAX, PUBLISHING_TIME_ZONE,
   validateChannelInput, normalizeTitle, normalizeTagList, contentHashOf, planApproval, checkSpamGuard,
   normalizeImportItem, weekRange, randomId, generatePairingCode, normalizePairingCode, generateDeviceToken, sha256Hex,
   markupToBlocks, blocksToPlainText, blocksToHtml, channelWriteUrl, decideResultOutcome, imageInfo, FINAL_STATUSES, pickImportChannel,
-  PUBLISHING_TZ_OFFSET_MIN,
+  PUBLISHING_TZ_OFFSET_MIN, CHANNEL_TYPES, isChannelModeAvailable, snsCaption, snsContentBlock, buildSnsPublishBody,
+  normalizeCampaignInput, normalizeCampaignPost, campaignIdFor, campaignExternalId, CAMPAIGN_POSTS_PER_CALL, DEFAULT_DAILY_LIMIT, DEFAULT_MIN_INTERVAL_HOURS,
 } from "./publishing-core.js";
+import { normalizePackagePath, videoContentType } from "./publishing-packages-core.js";
 
 type SqlFn = (query: string, params?: any[]) => Promise<any[]>;
 type BatchFn = (queries: Array<{ query: string; params?: any[] }>) => Promise<any[][]>;
@@ -41,6 +50,8 @@ export async function publishingDb(env: any): Promise<PublishingDb> {
   const batch = getSqlBatch(env) as BatchFn | null;
   if (!sql || !batch) throw new PublishingError("publishing_db_unavailable", 503);
   await ensureSchemaOnce(sql, "publishing_v1", runPublishingDdl);
+  // SNS 채널 예약은 SNS 대기열 표에 넣고 화면 읽기가 그 결과를 조인한다 — 표가 먼저 있어야 한다.
+  await ensureSchemaOnce(sql, "sns_scheduled_posts", runScheduleSchemaDdl);
   return { sql, batch };
 }
 
@@ -84,6 +95,15 @@ export async function runPublishingDdl(sql: SqlFn): Promise<void> {
       kind TEXT NOT NULL, data JSONB NOT NULL DEFAULT '{}'::jsonb, dedupe_key TEXT UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
     CREATE INDEX IF NOT EXISTS publishing_events_delivery ON publishing_events (delivery_id, created_at);
     ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '{}'::jsonb;
+    CREATE TABLE IF NOT EXISTS publishing_campaigns (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, key TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
+      brand_id TEXT NOT NULL DEFAULT '', brand_title TEXT NOT NULL DEFAULT '', goal TEXT NOT NULL DEFAULT '',
+      start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '', guide_path TEXT NOT NULL DEFAULT '',
+      deleted_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+    CREATE INDEX IF NOT EXISTS publishing_campaigns_user ON publishing_campaigns (user_id);
+    ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS campaign_id TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS publishing_items_campaign ON publishing_items (user_id, campaign_id);
+    ALTER TABLE publishing_deliveries ADD COLUMN IF NOT EXISTS sns_job_id TEXT NOT NULL DEFAULT '';
   END $$`);
 }
 
@@ -146,6 +166,8 @@ function publicImage(img: any, i: number) {
     width: Number(img?.width) || 0, height: Number(img?.height) || 0, contentType: String(img?.contentType || ""),
     alt: String(img?.alt || ""), caption: String(img?.caption || ""),
     sourceUrl: String(img?.sourceUrl || ""), sourcePath: String(img?.sourcePath || ""), fileName: String(img?.fileName || ""),
+    // 업무 파일에서 옮기지 못한 이유(파일이 없음 등). 있으면 자동으로 다시 옮기지 않는다 — 사람이 사진을 올려 채운다.
+    sourceError: String(img?.sourceError || ""),
     missing: !img?.objectName,
   };
 }
@@ -179,7 +201,7 @@ export function publicItem(r: any, deliveries: PublicDelivery[]) {
   const blocks = markupToBlocks(body, images);
   const extras = sanitizeExtras(json(r.extras, {}));
   return {
-    id: String(r.id), brandId: String(r.brand_id || ""), externalId: String(r.external_id || ""),
+    id: String(r.id), brandId: String(r.brand_id || ""), externalId: String(r.external_id || ""), campaignId: String(r.campaign_id || ""),
     title: String(r.title || ""), body, tags: json(r.tags, []) as string[], images,
     extras: {
       videos: extras.videos || [], translation: extras.translation || "", notes: extras.notes || "", firstComment: extras.firstComment || "",
@@ -193,6 +215,14 @@ export function publicItem(r: any, deliveries: PublicDelivery[]) {
     // 수동 복사 화면: 서식 복사(text/html)·글자 복사(text/plain). 블록은 PC 앱 Job 과 같은 변환을 거친다.
     copyHtml: blocksToHtml(blocks), plainText: blocksToPlainText(blocks),
     deliveries,
+  };
+}
+
+export function publicCampaign(r: any) {
+  return {
+    id: String(r.id), key: String(r.key || ""), title: String(r.title || ""), brandId: String(r.brand_id || ""), brandTitle: String(r.brand_title || ""),
+    goal: String(r.goal || ""), startDate: String(r.start_date || ""), endDate: String(r.end_date || ""), guidePath: String(r.guide_path || ""),
+    createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
 }
 
@@ -233,14 +263,50 @@ export function manualDueQuery(userId: string) {
   };
 }
 
+/**
+ * SNS 대기열 결과 → 게시 상태. 올라갔으면 posted(주소·시각), 실패면 failed(사람이 다시 예약), 올리는 중이면 publishing.
+ * 승인이 풀려 초안으로 돌아간 뒤에 대기열이 이미 올렸다면(취소보다 실행이 빨랐다) 그 사실이 이긴다 — 실제로 올라갔기 때문이다.
+ */
+export function snsSyncQuery(userId: string) {
+  return {
+    query: `UPDATE publishing_deliveries d SET
+      status = CASE s.status WHEN 'done' THEN 'posted' WHEN 'running' THEN 'publishing' ELSE 'failed' END,
+      posted_url = CASE WHEN s.status = 'done' THEN COALESCE(s.result->>'url', '') ELSE d.posted_url END,
+      posted_at = CASE WHEN s.status = 'done' THEN s.updated_at ELSE d.posted_at END,
+      error_code = CASE WHEN s.status = 'error' THEN 'UNKNOWN' ELSE '' END,
+      error_message = CASE WHEN s.status = 'error' THEN left(s.error, 1000) ELSE '' END,
+      updated_at = now()
+      FROM sns_scheduled_posts s
+      WHERE d.user_id = $1 AND d.sns_job_id <> '' AND s.id = d.sns_job_id AND s.user_id = d.user_id AND (
+        (s.status = 'done' AND d.status NOT IN ('posted', 'done_manual', 'cancelled'))
+        OR (s.status = 'running' AND d.status = 'scheduled')
+        OR (s.status = 'error' AND d.status IN ('scheduled', 'publishing')))`,
+    params: [userId],
+  };
+}
+
+/**
+ * 아직 안 나간 SNS 대기열 건 취소. cond 는 publishing_deliveries 조건(별칭 없이, $1 = user_id 뒤에 params 가 $2…).
+ * 게시 상태를 초안·취소로 바꾸는 질의보다 먼저(같은 배치에서) 넣는다 — 바뀐 뒤엔 'scheduled' 조건으로 못 찾는다.
+ */
+export function snsCancelQuery(userId: string, cond: string, params: any[] = []) {
+  return {
+    query: `UPDATE sns_scheduled_posts SET status = 'cancelled', updated_at = now()
+      WHERE user_id = $1 AND status = 'queued' AND id IN
+        (SELECT sns_job_id FROM publishing_deliveries WHERE user_id = $1 AND sns_job_id <> '' AND status = 'scheduled' AND ${cond})`,
+    params: [userId, ...params],
+  };
+}
+
 // ── 화면 전체 읽기 ──────────────────────────────────────────────────────────
 
 const ITEM_LIMIT = 500;
 
 export async function loadPublishingState(db: PublishingDb, userId: string) {
-  const [, , channels, items, deliveries, devices] = await db.batch([
+  const [, , , channels, items, deliveries, devices, campaigns] = await db.batch([
     manualDueQuery(userId),
     leaseExpiryQuery(userId),
+    snsSyncQuery(userId),
     { query: `SELECT * FROM publishing_channels WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at`, params: [userId] },
     { query: `SELECT * FROM publishing_items WHERE user_id = $1 AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT ${ITEM_LIMIT}`, params: [userId] },
     {
@@ -250,6 +316,7 @@ export async function loadPublishingState(db: PublishingDb, userId: string) {
       params: [userId],
     },
     { query: `SELECT * FROM publisher_devices WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at`, params: [userId] },
+    { query: `SELECT * FROM publishing_campaigns WHERE user_id = $1 AND deleted_at IS NULL ORDER BY start_date DESC, created_at DESC`, params: [userId] },
   ]);
   const byItem = new Map<string, PublicDelivery[]>();
   for (const row of deliveries) {
@@ -262,6 +329,7 @@ export async function loadPublishingState(db: PublishingDb, userId: string) {
     channels: channels.map(publicChannel),
     items: items.map((r) => publicItem(r, byItem.get(String(r.id)) || [])),
     devices: devices.map(publicDevice),
+    campaigns: campaigns.map(publicCampaign),
   };
 }
 
@@ -292,14 +360,16 @@ export async function loadSchedule(db: PublishingDb, userId: string, q: { from?:
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) throw new PublishingError("schedule_range_invalid");
   if (endMs - startMs > SCHEDULE_MAX_DAYS * 86400000) throw new PublishingError("schedule_range_too_long");
   const brand = String(q.brand || "").slice(0, 120);
-  const [, rows] = await db.batch([
+  const [, , rows] = await db.batch([
     manualDueQuery(userId),
+    snsSyncQuery(userId),
     {
       query: `SELECT d.id, d.item_id, d.status, d.scheduled_at, d.posted_url, d.posted_at, c.type AS channel_type, c.name AS channel_name,
-          i.brand_id, i.title, i.external_id, i.approved_at, i.extras
+          i.brand_id, i.title, i.external_id, i.approved_at, i.extras, i.campaign_id, g.title AS campaign_title
         FROM publishing_deliveries d
         JOIN publishing_items i ON i.id = d.item_id AND i.user_id = d.user_id AND i.deleted_at IS NULL
         LEFT JOIN publishing_channels c ON c.id = d.channel_id
+        LEFT JOIN publishing_campaigns g ON g.id = i.campaign_id AND g.user_id = i.user_id
         WHERE d.user_id = $1 AND d.status <> 'cancelled'
           AND COALESCE(d.scheduled_at, d.posted_at) >= $2::timestamptz AND COALESCE(d.scheduled_at, d.posted_at) < $3::timestamptz
           AND ($4::text = '' OR i.brand_id = $4::text)
@@ -318,6 +388,7 @@ export async function loadSchedule(db: PublishingDb, userId: string, q: { from?:
         title: String(r.title || ""), status: String(r.status), postedUrl: String(r.posted_url || ""), postedAt: iso(r.posted_at),
         approved: !!r.approved_at, needsReapproval: !r.approved_at && !!extras.changedAfterApproval,
         itemId: String(r.item_id), deliveryId: String(r.id), externalId: String(r.external_id || ""), packagePath: extras.packagePath || "",
+        campaignId: String(r.campaign_id || ""), campaignTitle: String(r.campaign_title || ""),
       };
     }),
   };
@@ -345,7 +416,8 @@ export async function saveChannel(db: PublishingDb, userId: string, input: any) 
 
 /** 채널을 지우면 아직 안 나간 게시는 취소한다(올라간 기록은 남는다). */
 export async function deleteChannel(db: PublishingDb, userId: string, id: string) {
-  const [rows] = await db.batch([
+  const [, rows] = await db.batch([
+    snsCancelQuery(userId, "channel_id = $2", [id]),
     { query: `UPDATE publishing_channels SET deleted_at=now(), enabled=FALSE, updated_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id`, params: [id, userId] },
     { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE channel_id=$1 AND user_id=$2 AND status IN ('draft','scheduled','ready_manual','failed','needs_human')`, params: [id, userId] },
   ]);
@@ -378,6 +450,7 @@ function sanitizeImages(env: any, userId: string, raw: any): any[] {
       fileName: String(img?.fileName || "").slice(0, 200),
       // 패키지에서 복사한 이미지: 원본 업무 파일의 md5. 같으면 다시 가져올 때 복사하지 않는다.
       ...(img?.sourceMd5 ? { sourceMd5: String(img.sourceMd5).slice(0, 40) } : {}),
+      ...(!owned && img?.sourceError ? { sourceError: String(img.sourceError).slice(0, 60) } : {}),
     };
   });
 }
@@ -387,6 +460,8 @@ export type ItemInput = {
   deliveries: Array<{ id?: string; channelId: string; scheduledAt: string }>;
   /** 주면 extras 를 이 값으로 바꾼다(패키지 가져오기). 안 주면 있던 extras 를 그대로 둔다(화면에서 글 고치기). */
   extras?: any;
+  /** 주면 이 캠페인으로 묶는다("" 는 캠페인에서 뺀다). 안 주면 있던 값을 그대로 둔다. */
+  campaignId?: string;
 };
 
 /**
@@ -467,16 +542,19 @@ export async function applyItemSaves(db: PublishingDb, env: any, userId: string,
     delete extras.changedAfterApproval;
     if (unapprove) extras.changedAfterApproval = new Date().toISOString();
     else if (existing && !existing.approved_at && oldExtras.changedAfterApproval) extras.changedAfterApproval = oldExtras.changedAfterApproval;
+    const campaignId = input.campaignId === undefined ? String(existing?.campaign_id || "") : String(input.campaignId || "").slice(0, 80);
+    // 승인이 풀리면 SNS 대기열에 들어간 건도 같이 취소한다(게시 상태가 초안으로 바뀌기 전에).
+    if (unapprove) writes.push(snsCancelQuery(userId, "item_id = $2", [itemId]));
     if (existing) {
       writes.push({
         query: `UPDATE publishing_items SET brand_id=$3, external_id=$4, title=$5, body=$6, tags=$7::jsonb, images=$8::jsonb, content_hash=$9,
-          approved_at = CASE WHEN $10::boolean THEN NULL ELSE approved_at END, extras=$11::jsonb, deleted_at=NULL, updated_at=now() WHERE id=$1 AND user_id=$2`,
-        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || existing.external_id || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, unapprove, JSON.stringify(extras)],
+          approved_at = CASE WHEN $10::boolean THEN NULL ELSE approved_at END, extras=$11::jsonb, campaign_id=$12, deleted_at=NULL, updated_at=now() WHERE id=$1 AND user_id=$2`,
+        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || existing.external_id || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, unapprove, JSON.stringify(extras), campaignId],
       });
     } else {
       writes.push({
-        query: `INSERT INTO publishing_items (id,user_id,brand_id,external_id,title,body,tags,images,content_hash,extras) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb)`,
-        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, JSON.stringify(extras)],
+        query: `INSERT INTO publishing_items (id,user_id,brand_id,external_id,title,body,tags,images,content_hash,extras,campaign_id) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11)`,
+        params: [itemId, userId, String(input.brandId || ""), String(input.externalId || ""), title, body, JSON.stringify(tags), JSON.stringify(images), hash, JSON.stringify(extras), campaignId],
       });
     }
     writes.push(...plan);
@@ -504,7 +582,8 @@ export async function saveItem(db: PublishingDb, env: any, userId: string, input
 export async function deleteItem(db: PublishingDb, userId: string, id: string) {
   const busy = await db.sql(`SELECT 1 FROM publishing_deliveries WHERE item_id=$1 AND user_id=$2 AND status='claimed' LIMIT 1`, [id, userId]);
   if (busy[0]) throw new PublishingError("item_busy", 409);
-  const [rows] = await db.batch([
+  const [, rows] = await db.batch([
+    snsCancelQuery(userId, "item_id = $2", [id]),
     { query: `UPDATE publishing_items SET deleted_at=now(), updated_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id`, params: [id, userId] },
     { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE item_id=$1 AND user_id=$2 AND status NOT IN ('posted','done_manual','cancelled')`, params: [id, userId] },
   ]);
@@ -516,12 +595,55 @@ export async function deleteItem(db: PublishingDb, userId: string, id: string) {
 
 const toMs = (v: any) => { const s = iso(v); return s ? Date.parse(s) : NaN; };
 
+/** SNS 게시에 붙일 사진(퍼블리싱 저장본)·영상(업무 파일 경로 → 객체 이름). */
+function snsMediaOf(env: any, userId: string, item: any) {
+  const images = (json(item?.images, []) as any[]).filter((img) => img?.objectName).map((img) => ({ mediaType: "image", gcsPath: String(img.objectName) }));
+  const videos = sanitizeExtras(json(item?.extras, {})).videos || [];
+  if (!videos.length) return images;
+  // 영상은 복사하지 않고 업무 파일을 가리킨다(화면 경로 @work/날짜/… → 저장 위치). SNS 게시가 본인 루트 안 경로만 받는다.
+  const root = workspacePrefix(resolveGcsEnv(env).basePrefix, userId);
+  const paths = videos.map((v: any) => normalizePackagePath(v.path)).filter((w: any) => w.ok && w.path);
+  return [...images, ...paths.map((w: any) => ({ mediaType: "video", gcsPath: `${root}${w.path}` }))];
+}
+
+/** SNS 채널 승인 전 내용 검사(사진 필수 채널·글자 수·장수). 반환: 막는 이유 | "". */
+function snsDeliveryCheck(type: string, item: any) {
+  const images = (json(item?.images, []) as any[]).filter((img) => img?.objectName).length;
+  const videos = (sanitizeExtras(json(item?.extras, {})).videos || []).length;
+  return snsContentBlock(type, { caption: snsCaption({ body: String(item?.body || ""), tags: json(item?.tags, []) }), mediaCount: images + videos });
+}
+
+/**
+ * SNS 채널 게시를 예약한다: 게시를 scheduled 로 바꾸면서(바뀐 경우에만) 같은 문장에서 SNS 대기열에 한 건 넣는다.
+ * 게시 상태가 그사이 바뀌었으면 대기열에도 아무것도 들어가지 않는다(올라가는데 기록이 없는 일이 없게).
+ * 예약 시각이 이미 지났으면 다음 정기 실행(5분 주기)에 올라간다 — PC·직접 올리기 채널의 '밀린 글'과 같은 규칙.
+ */
+function snsScheduleQuery(env: any, userId: string, o: { deliveryId: string; fromStatuses: string[]; type: string; item: any; atMs: number; contentHash: string; resetAttempts?: boolean }) {
+  const body = buildSnsPublishBody({
+    type: o.type,
+    caption: snsCaption({ body: String(o.item?.body || ""), tags: json(o.item?.tags, []) }),
+    firstComment: sanitizeExtras(json(o.item?.extras, {})).firstComment || "",
+    media: snsMediaOf(env, userId, o.item),
+  });
+  const jobId = crypto.randomUUID();
+  const runAt = new Date(Math.max(Number.isFinite(o.atMs) ? o.atMs : Date.now(), Date.now())).toISOString();
+  return {
+    query: `WITH up AS (
+        UPDATE publishing_deliveries SET status='scheduled', sns_job_id=$4, guard_reason='', content_hash=$5, scheduled_at=$6::timestamptz,
+          ${o.resetAttempts ? "attempt_base=attempt, error_code='', error_message='', stage='', stage_message='', lease_until=NULL," : ""} updated_at=now()
+        WHERE id=$1 AND user_id=$2 AND status = ANY($3::text[]) RETURNING id)
+      INSERT INTO sns_scheduled_posts (id,user_id,platform,project_id,run_at,body)
+        SELECT $4::text, $2::text, $7::text, '', $8::timestamptz, $9::jsonb FROM up`,
+    params: [o.deliveryId, userId, o.fromStatuses, jobId, o.contentHash, new Date(Number.isFinite(o.atMs) ? o.atMs : Date.now()).toISOString(), o.type, runAt, JSON.stringify(body)],
+  };
+}
+
 /**
  * 글을 승인한다. 초안 게시마다 스팸 방지(하루 횟수·간격·30일 중복)를 검사해 통과한 것만 예약하고,
  * 걸린 것은 초안에 이유(guard_reason)를 남긴다. 게시가 모두 걸린 글은 승인하지 않는다.
  * target: { itemIds } | { weekStart:'YYYY-MM-DD' } (그 주에 예약 시각이 있는 초안 글 전부).
  */
-export async function approveItems(db: PublishingDb, userId: string, target: { itemIds?: string[]; weekStart?: string }) {
+export async function approveItems(db: PublishingDb, userId: string, target: { itemIds?: string[]; weekStart?: string }, env?: any) {
   let itemFilter = "";
   let params: any[] = [userId];
   if (target.weekStart) {
@@ -548,14 +670,21 @@ export async function approveItems(db: PublishingDb, userId: string, target: { i
     },
   ]);
   const channelsById: Record<string, any> = {};
-  for (const c of channels) channelsById[String(c.id)] = { id: String(c.id), dailyLimit: Number(c.daily_limit) || 1, minIntervalHours: Number(c.min_interval_hours ?? 20), enabled: c.enabled !== false };
+  for (const c of channels) {
+    channelsById[String(c.id)] = {
+      id: String(c.id), dailyLimit: Number(c.daily_limit) || 1, minIntervalHours: Number(c.min_interval_hours ?? 20), enabled: c.enabled !== false,
+      type: String(c.type), mode: String(c.mode),
+    };
+  }
   const itemsById = new Map(items.map((r: any) => [String(r.id), r]));
   const candidates = drafts.map((d: any) => {
     const item: any = itemsById.get(String(d.item_id));
+    const ch = channelsById[String(d.channel_id)];
     return {
       deliveryId: String(d.id), itemId: String(d.item_id), channelId: String(d.channel_id), atMs: toMs(d.scheduled_at),
       contentHash: String(item?.content_hash || ""),
       missingImages: (json(item?.images, []) as any[]).some((img) => !img?.objectName),
+      contentBlock: ch?.mode === "api" && item ? snsDeliveryCheck(ch.type, item) : "",
     };
   });
   const pool = existing.map((e: any) => ({ id: String(e.id), channelId: String(e.channel_id), atMs: toMs(e.at), contentHash: String(e.content_hash || ""), status: String(e.status), errorCode: String(e.error_code || "") }));
@@ -567,7 +696,12 @@ export async function approveItems(db: PublishingDb, userId: string, target: { i
     const c = candidates.find((x) => x.deliveryId === p.deliveryId)!;
     if (p.ok) {
       okByItem.set(c.itemId, (okByItem.get(c.itemId) || 0) + 1);
-      writes.push({ query: `UPDATE publishing_deliveries SET status='scheduled', guard_reason='', content_hash=$3, updated_at=now() WHERE id=$1 AND user_id=$2 AND status='draft'`, params: [c.deliveryId, userId, c.contentHash] });
+      const ch = channelsById[c.channelId];
+      if (ch?.mode === "api") {
+        writes.push(snsScheduleQuery(env, userId, { deliveryId: c.deliveryId, fromStatuses: ["draft"], type: ch.type, item: itemsById.get(c.itemId), atMs: c.atMs, contentHash: c.contentHash }));
+      } else {
+        writes.push({ query: `UPDATE publishing_deliveries SET status='scheduled', guard_reason='', content_hash=$3, updated_at=now() WHERE id=$1 AND user_id=$2 AND status='draft'`, params: [c.deliveryId, userId, c.contentHash] });
+      }
     } else {
       blockedByItem.set(c.itemId, (blockedByItem.get(c.itemId) || 0) + 1);
       writes.push({ query: `UPDATE publishing_deliveries SET guard_reason=$3, updated_at=now() WHERE id=$1 AND user_id=$2`, params: [c.deliveryId, userId, p.reason] });
@@ -586,6 +720,7 @@ export async function approveItems(db: PublishingDb, userId: string, target: { i
 export async function unapproveItems(db: PublishingDb, userId: string, itemIds: string[]) {
   const ids = itemIds.map(String).filter(Boolean).slice(0, 200);
   await db.batch([
+    snsCancelQuery(userId, "item_id = ANY($2::text[])", [ids]),
     { query: `UPDATE publishing_items SET approved_at=NULL, updated_at=now() WHERE user_id=$1 AND id = ANY($2::text[])`, params: [userId, ids] },
     { query: `UPDATE publishing_deliveries SET status='draft', guard_reason='', updated_at=now() WHERE user_id=$1 AND item_id = ANY($2::text[]) AND status IN ('scheduled','ready_manual')`, params: [userId, ids] },
   ]);
@@ -595,7 +730,11 @@ export async function unapproveItems(db: PublishingDb, userId: string, itemIds: 
 // ── 게시 한 건 처리(사람) ───────────────────────────────────────────────────
 
 export async function cancelDelivery(db: PublishingDb, userId: string, id: string) {
-  const rows = await db.sql(`UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE id=$1 AND user_id=$2 AND status NOT IN ('posted','done_manual','cancelled') RETURNING *`, [id, userId]);
+  // SNS 대기열에서 이미 올리는 중(publishing)인 건은 취소할 수 없다 — 올라갈지 모르는데 취소로 보이면 안 된다.
+  const [, rows] = await db.batch([
+    snsCancelQuery(userId, "id = $2", [id]),
+    { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE id=$1 AND user_id=$2 AND status NOT IN ('posted','done_manual','cancelled','publishing') RETURNING *`, params: [id, userId] },
+  ]);
   if (!rows[0]) throw new PublishingError("delivery_not_cancellable", 409);
   return publicDelivery(rows[0]);
 }
@@ -617,9 +756,13 @@ export async function markDoneManual(db: PublishingDb, userId: string, id: strin
  */
 const RESCHEDULABLE = ["needs_human", "failed", "tested"];
 
-export async function rescheduleDelivery(db: PublishingDb, userId: string, id: string, scheduledAt: string, confirmUncertain: boolean) {
+export async function rescheduleDelivery(db: PublishingDb, userId: string, id: string, scheduledAt: string, confirmUncertain: boolean, env?: any) {
   const [rows, channels] = await db.batch([
-    { query: `SELECT d.*, i.content_hash AS item_hash FROM publishing_deliveries d JOIN publishing_items i ON i.id=d.item_id WHERE d.id=$1 AND d.user_id=$2`, params: [id, userId] },
+    {
+      query: `SELECT d.*, i.content_hash AS item_hash, i.body AS item_body, i.tags AS item_tags, i.images AS item_images, i.extras AS item_extras
+        FROM publishing_deliveries d JOIN publishing_items i ON i.id=d.item_id WHERE d.id=$1 AND d.user_id=$2`,
+      params: [id, userId],
+    },
     { query: `SELECT * FROM publishing_channels WHERE user_id=$1 AND deleted_at IS NULL`, params: [userId] },
   ]);
   const d: any = rows[0];
@@ -636,6 +779,18 @@ export async function rescheduleDelivery(db: PublishingDb, userId: string, id: s
     others.map((e: any) => ({ id: String(e.id), channelId: String(e.channel_id), atMs: toMs(e.at), contentHash: String(e.content_hash || ""), status: String(e.status), errorCode: String(e.error_code || "") })),
   );
   if (!guard.ok) throw new PublishingError(`guard_${(guard as any).reason}`, 409);
+  if (ch.mode === "api") {
+    // SNS 채널: 실패한 건을 다시 SNS 대기열에 넣는다(새 대기열 건). 내용 검사도 승인 때와 같다.
+    const item = { body: d.item_body, tags: d.item_tags, images: d.item_images, extras: d.item_extras };
+    const block = snsDeliveryCheck(String(ch.type), item);
+    if (block) throw new PublishingError(`guard_${block}`, 409);
+    const [, after] = await db.batch([
+      snsScheduleQuery(env, userId, { deliveryId: id, fromStatuses: RESCHEDULABLE, type: String(ch.type), item, atMs, contentHash: String(d.item_hash || ""), resetAttempts: true }),
+      { query: `SELECT * FROM publishing_deliveries WHERE id=$1 AND user_id=$2 AND status='scheduled'`, params: [id, userId] },
+    ]);
+    if (!after[0]) throw new PublishingError("delivery_not_reschedulable", 409);
+    return publicDelivery(after[0]);
+  }
   const next = ch.mode === "manual" && atMs <= Date.now() ? "ready_manual" : "scheduled";
   const updated = await db.sql(`UPDATE publishing_deliveries SET status=$3, scheduled_at=$4, attempt_base=attempt, error_code='', error_message='', stage='', stage_message='',
     lease_until=NULL, guard_reason='', content_hash=$5, updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('needs_human','failed','tested') RETURNING *`,
@@ -750,6 +905,260 @@ export async function attachItemImage(db: PublishingDb, env: any, userId: string
     deliveries: deliveries.filter((d: any) => EDITABLE_DELIVERY.has(String(d.status))).map((d: any) => ({ id: String(d.id), channelId: String(d.channel_id), scheduledAt: iso(d.scheduled_at) })),
   }]);
   return publicImage(images[i], i);
+}
+
+// ── 캠페인 ──────────────────────────────────────────────────────────────────
+// 에이전트가 "한 달 동안 ○○ 팝업 홍보"를 받으면 지침 문서(업무 파일)를 쓰고, 날짜별 글 초안을 여기로 보낸다.
+// 초안은 승인 전이라 아무 데도 나가지 않는다 — 사람이 퍼블리싱 '개요'에서 주 단위로 승인한다(스팸 방지 검사 포함).
+
+/** SNS 세팅에 연결된 계정으로 올리는 채널은 따로 설정할 게 없어, 캠페인이 처음 쓸 때 이 이름으로 만든다. */
+const SNS_CHANNEL_NAMES: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", threads: "Threads", x: "X", discord: "Discord" };
+/** 업무 파일 사진 옮기기 한 번에 쓰는 저장소 요청 수(사진 한 장 = 읽기 1 + 복사 1). 나머지는 다음 요청이 이어서 옮긴다. */
+export const CAMPAIGN_IMAGE_BUDGET = 24;
+
+/**
+ * 캠페인 머리와 글 초안을 저장한다(에이전트 도구 publishing_campaign).
+ * input: { campaign:{ key, title, brandId, brandTitle, goal, startDate, endDate }, guidePath?, posts:[…], removeKeys?:[글 key] }
+ * - 같은 key 의 캠페인·글은 고친다(여러 번 나눠 보내도 한 캠페인). 승인된 글은 건드리지 않고 알려 준다.
+ * - 채널은 종류·id·target 으로 고른다(가져오기와 같은 규칙). 없는 SNS 채널(api)은 만들고, 다른 종류는 '채널 없음'으로 알려 준다.
+ * - 사진은 업무 파일 경로만 적어 두고(빠진 사진), 퍼블리싱 화면이 열릴 때 fillCampaignImages 가 옮긴다 — 대화 한 턴의 요청 한도를 지키려고.
+ */
+export async function applyCampaignPlan(db: PublishingDb, env: any, userId: string, input: any) {
+  const head = normalizeCampaignInput(input?.campaign || input);
+  if (!head.ok) throw new PublishingError(head.error);
+  const c = head.campaign;
+  const campaignId = await campaignIdFor(userId, c.key);
+  const rawPosts = Array.isArray(input?.posts) ? input.posts : [];
+  if (rawPosts.length > CAMPAIGN_POSTS_PER_CALL) throw new PublishingError("campaign_too_many_posts", 400, `한 번에 ${CAMPAIGN_POSTS_PER_CALL}개까지 보낼 수 있어요. 나눠서 보내 주세요.`);
+  const errors: Array<{ index: number; key: string; error: string }> = [];
+  const posts: any[] = [];
+  const seen = new Set<string>();
+  rawPosts.forEach((r: any, index: number) => {
+    const n = normalizeCampaignPost(r, index);
+    if (!n.ok) { errors.push({ index, key: String(r?.key || ""), error: n.error }); return; }
+    if (seen.has(n.post.key)) { errors.push({ index, key: n.post.key, error: "post_key_duplicate" }); return; }
+    seen.add(n.post.key);
+    posts.push(n.post);
+  });
+  const removeIds = (Array.isArray(input?.removeKeys) ? input.removeKeys : []).slice(0, 100)
+    .map((k: any) => campaignExternalId(campaignId, String(k || ""))).filter((id: string) => !id.endsWith(":"));
+  const [channelRows, existingRows] = await db.batch([
+    { query: `SELECT * FROM publishing_channels WHERE user_id=$1 AND deleted_at IS NULL ORDER BY created_at`, params: [userId] },
+    { query: `SELECT id, external_id, approved_at, images, extras, deleted_at FROM publishing_items WHERE user_id=$1 AND external_id = ANY($2::text[])`, params: [userId, posts.map((p) => campaignExternalId(campaignId, p.key))] },
+  ]);
+  const all = channelRows.map(publicChannel);
+  const usable = all.filter((ch) => ch.enabled);
+  const createdChannels: any[] = [];
+  const missing = new Set<string>();
+  const pick = (p: any) => {
+    const isId = /^ch_/.test(p.channel);
+    const found = pickImportChannel(usable, { channelId: isId ? p.channel : "", channelType: isId ? "" : p.channel, brandId: c.brandId, target: p.target });
+    if (found) return found;
+    // 꺼 둔 같은 종류 채널이 있으면 새로 만들지 않는다(사람이 일부러 끈 것).
+    const off = !isId && all.some((ch) => ch.type === p.channel && !ch.enabled);
+    if (!isId && !p.target && !off && isChannelModeAvailable(p.channel, "api")) {
+      const ch = { id: randomId("ch"), type: p.channel, mode: "api", name: SNS_CHANNEL_NAMES[p.channel] || p.channel, brandId: "", accountLabel: "", target: {}, enabled: true };
+      usable.push(ch as any);
+      createdChannels.push(ch);
+      return ch;
+    }
+    missing.add(`${p.channel}${p.target ? ` · ${p.target}` : ""}${off ? " (꺼짐)" : ""}`);
+    if (!isId && !CHANNEL_TYPES[p.channel as keyof typeof CHANNEL_TYPES]) errors.push({ index: -1, key: p.key, error: "channel_type_invalid" });
+    return null;
+  };
+  const byExternal = new Map(existingRows.map((r: any) => [String(r.external_id), r]));
+  const inputs: ItemInput[] = [];
+  const keys: string[] = [];
+  const skippedApproved: string[] = [];
+  let pendingImages = 0;
+  for (const p of posts) {
+    const externalId = campaignExternalId(campaignId, p.key);
+    const prev: any = byExternal.get(externalId);
+    if (prev && !prev.deleted_at && prev.approved_at) { skippedApproved.push(p.key); continue; }
+    const ch = pick(p);
+    const prevImages = json(prev?.images, []) as any[];
+    const images = p.images.map((path: string) => {
+      const reuse = prevImages.find((img) => img?.objectName && img.sourcePath === path);
+      if (reuse) return reuse;
+      pendingImages += 1;
+      return { sourcePath: path, fileName: path.split("/").pop() || "" };
+    });
+    const prevExtras = sanitizeExtras(json(prev?.extras, {}));
+    inputs.push({
+      externalId, brandId: c.brandId, campaignId, title: p.title, body: p.body, tags: p.tags, images,
+      deliveries: ch ? [{ channelId: ch.id, scheduledAt: p.scheduledAt }] : [],
+      extras: {
+        ...prevExtras,
+        videos: p.videos.map((path: string) => ({ path, name: path.split("/").pop() || "", size: 0, contentType: videoContentType(path) })),
+        notes: p.notes, firstComment: p.firstComment,
+      },
+    });
+    keys.push(p.key);
+  }
+  const head1: Array<{ query: string; params: any[] }> = createdChannels.map((ch) => ({
+    query: `INSERT INTO publishing_channels (id,user_id,type,mode,name,brand_id,account_label,target,daily_limit,min_interval_hours,enabled)
+      VALUES ($1,$2,$3,'api',$4,'','','{}'::jsonb,$5,$6,TRUE)`,
+    params: [ch.id, userId, ch.type, ch.name, DEFAULT_DAILY_LIMIT, DEFAULT_MIN_INTERVAL_HOURS],
+  }));
+  const guidePath = String(input?.guidePath || "").slice(0, 600);
+  head1.push({
+    query: `INSERT INTO publishing_campaigns (id,user_id,key,title,brand_id,brand_title,goal,start_date,end_date,guide_path)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,
+        brand_id = CASE WHEN EXCLUDED.brand_id <> '' THEN EXCLUDED.brand_id ELSE publishing_campaigns.brand_id END,
+        brand_title = CASE WHEN EXCLUDED.brand_title <> '' THEN EXCLUDED.brand_title ELSE publishing_campaigns.brand_title END,
+        goal = CASE WHEN EXCLUDED.goal <> '' THEN EXCLUDED.goal ELSE publishing_campaigns.goal END,
+        start_date = CASE WHEN EXCLUDED.start_date <> '' THEN EXCLUDED.start_date ELSE publishing_campaigns.start_date END,
+        end_date = CASE WHEN EXCLUDED.end_date <> '' THEN EXCLUDED.end_date ELSE publishing_campaigns.end_date END,
+        guide_path = CASE WHEN EXCLUDED.guide_path <> '' THEN EXCLUDED.guide_path ELSE publishing_campaigns.guide_path END,
+        deleted_at = NULL, updated_at = now()
+      RETURNING *`,
+    params: [campaignId, userId, c.key, c.title, c.brandId, c.brandTitle, c.goal, c.startDate, c.endDate, guidePath],
+  });
+  const headRows = await db.batch(head1);
+  const campaignRow = headRows[headRows.length - 1][0];
+  const createdKeys = new Set(inputs.filter((i) => { const prev: any = byExternal.get(String(i.externalId)); return !prev || prev.deleted_at; }).map((i) => String(i.externalId)));
+  const ids = inputs.length ? await applyItemSaves(db, env, userId, inputs) : [];
+  let removed = 0;
+  if (removeIds.length) {
+    // 뺄 글: 승인 전 글만 지운다(승인된 글은 사람이 화면에서 승인을 풀거나 지운다).
+    const [, gone] = await db.batch([
+      {
+        query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE user_id=$1 AND status NOT IN ('posted','done_manual','cancelled','claimed','publishing')
+          AND item_id IN (SELECT id FROM publishing_items WHERE user_id=$1 AND external_id = ANY($2::text[]) AND approved_at IS NULL AND deleted_at IS NULL)`,
+        params: [userId, removeIds],
+      },
+      { query: `UPDATE publishing_items SET deleted_at=now(), updated_at=now() WHERE user_id=$1 AND external_id = ANY($2::text[]) AND approved_at IS NULL AND deleted_at IS NULL RETURNING id`, params: [userId, removeIds] },
+    ]);
+    removed = gone.length;
+  }
+  return {
+    campaign: publicCampaign(campaignRow),
+    saved: ids.length,
+    created: inputs.filter((i) => createdKeys.has(String(i.externalId))).length,
+    items: ids.map((id, i) => ({ id, key: keys[i], scheduledAt: inputs[i].deliveries[0]?.scheduledAt || "", hasChannel: inputs[i].deliveries.length > 0 })),
+    skippedApproved, removed, pendingImages,
+    createdChannels: createdChannels.map((ch) => ({ id: ch.id, type: ch.type, name: ch.name })),
+    missingChannels: [...missing],
+    errors,
+  };
+}
+
+/**
+ * 캠페인 글의 '업무 파일 사진'을 퍼블리싱 저장소로 옮긴다(승인 전 글만). 한 번에 CAMPAIGN_IMAGE_BUDGET 만큼, 남으면 more:true.
+ * 옮기지 못한 사진은 이유(sourceError)를 남겨 다시 시도하지 않는다 — 화면에서 사람이 사진을 올려 채운다.
+ */
+export async function fillCampaignImages(db: PublishingDb, env: any, userId: string, input: any = {}) {
+  const campaignId = String(input?.campaignId || "");
+  const pendingCond = `EXISTS (SELECT 1 FROM jsonb_array_elements(i.images) e
+    WHERE COALESCE(e->>'objectName','') = '' AND COALESCE(e->>'sourcePath','') <> '' AND COALESCE(e->>'sourceError','') = '')`;
+  const [items, deliveries] = await db.batch([
+    {
+      query: `SELECT i.* FROM publishing_items i WHERE i.user_id=$1 AND i.deleted_at IS NULL AND i.approved_at IS NULL AND i.campaign_id <> ''
+        AND ($2::text = '' OR i.campaign_id = $2::text) AND ${pendingCond} ORDER BY i.updated_at LIMIT 20`,
+      params: [userId, campaignId],
+    },
+    {
+      query: `SELECT d.* FROM publishing_deliveries d WHERE d.user_id=$1 AND d.item_id IN (SELECT i.id FROM publishing_items i WHERE i.user_id=$1 AND i.deleted_at IS NULL
+        AND i.approved_at IS NULL AND i.campaign_id <> '' AND ($2::text = '' OR i.campaign_id = $2::text) AND ${pendingCond} ORDER BY i.updated_at LIMIT 20)`,
+      params: [userId, campaignId],
+    },
+  ]);
+  if (!items.length) return { copied: 0, failed: 0, more: false };
+  const ctx = await accessContext(env);
+  const root = workspacePrefix(ctx.basePrefix, userId);
+  let budget = CAMPAIGN_IMAGE_BUDGET;
+  let copied = 0;
+  let failed = 0;
+  let more = false;
+  const saves: ItemInput[] = [];
+  for (const item of items) {
+    let changed = false;
+    const images = (json(item.images, []) as any[]).map((img) => ({ ...img }));
+    for (const img of images) {
+      if (img.objectName || !img.sourcePath || img.sourceError) continue;
+      if (budget < 2) { more = true; break; }
+      const where = normalizePackagePath(img.sourcePath);
+      if (!where.ok || !where.path) { img.sourceError = "path_invalid"; failed += 1; changed = true; continue; }
+      budget -= 2;
+      try {
+        const res = await getObject(ctx, `${root}${where.path}`, true);
+        if (res.status === 404) { img.sourceError = "not_found"; failed += 1; changed = true; continue; }
+        if (!res.ok) { more = true; continue; } // 잠깐 실패 — 다음에 다시
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const info = imageInfo(bytes);
+        if (!info) { img.sourceError = "type_invalid"; failed += 1; changed = true; continue; }
+        if (bytes.byteLength > IMAGE_MAX_BYTES) { img.sourceError = "too_large"; failed += 1; changed = true; continue; }
+        const objectName = publishingImageObjectName(env, userId, img.fileName || "image", info.contentType);
+        await copyObject(ctx, `${root}${where.path}`, objectName);
+        Object.assign(img, { objectName, sha256: await bytesSha256(bytes), width: info.width, height: info.height, contentType: info.contentType });
+        copied += 1;
+        changed = true;
+      } catch {
+        more = true;
+      }
+    }
+    if (changed) {
+      saves.push({
+        id: String(item.id), externalId: String(item.external_id || ""), brandId: String(item.brand_id || ""), title: String(item.title), body: String(item.body),
+        tags: json(item.tags, []), images,
+        deliveries: deliveries.filter((d: any) => String(d.item_id) === String(item.id) && EDITABLE_DELIVERY.has(String(d.status)))
+          .map((d: any) => ({ id: String(d.id), channelId: String(d.channel_id), scheduledAt: iso(d.scheduled_at) })),
+      });
+    }
+    if (budget < 2) { more = true; break; }
+  }
+  if (saves.length) await applyItemSaves(db, env, userId, saves);
+  return { copied, failed, more: more || items.length === 20 };
+}
+
+/** 캠페인 지우기: 안 나간 글은 지우고 게시는 취소한다(올라간 기록은 남는다). PC 가 지금 올리는 글은 그대로 둔다. */
+export async function deleteCampaign(db: PublishingDb, userId: string, id: string) {
+  const ofCampaign = `item_id IN (SELECT id FROM publishing_items WHERE user_id=$1 AND campaign_id=$2)`;
+  const [, , , rows] = await db.batch([
+    snsCancelQuery(userId, ofCampaign, [id]),
+    { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE user_id=$1 AND status NOT IN ('posted','done_manual','cancelled','claimed','publishing') AND ${ofCampaign}`, params: [userId, id] },
+    {
+      query: `UPDATE publishing_items i SET deleted_at=now(), updated_at=now() WHERE i.user_id=$1 AND i.campaign_id=$2 AND i.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM publishing_deliveries d WHERE d.item_id=i.id AND d.status IN ('claimed','publishing'))`,
+      params: [userId, id],
+    },
+    { query: `UPDATE publishing_campaigns SET deleted_at=now(), updated_at=now() WHERE user_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING id`, params: [userId, id] },
+  ]);
+  if (!rows[0]) throw new PublishingError("campaign_not_found", 404);
+  return { id };
+}
+
+/**
+ * 에이전트가 캠페인을 이어서 고칠 때 보는 목록(글 key·채널·시각·상태·본문 앞부분). 지운 글은 뺀다.
+ */
+export async function loadCampaignDetail(db: PublishingDb, userId: string, campaignId: string) {
+  const [campaigns, items, deliveries] = await db.batch([
+    { query: `SELECT * FROM publishing_campaigns WHERE user_id=$1 AND id=$2 AND deleted_at IS NULL`, params: [userId, campaignId] },
+    { query: `SELECT * FROM publishing_items WHERE user_id=$1 AND campaign_id=$2 AND deleted_at IS NULL ORDER BY created_at LIMIT 300`, params: [userId, campaignId] },
+    {
+      query: `SELECT d.*, c.type AS channel_type, c.name AS channel_name FROM publishing_deliveries d LEFT JOIN publishing_channels c ON c.id=d.channel_id
+        WHERE d.user_id=$1 AND d.status <> 'cancelled' AND d.item_id IN (SELECT id FROM publishing_items WHERE user_id=$1 AND campaign_id=$2 AND deleted_at IS NULL)`,
+      params: [userId, campaignId],
+    },
+  ]);
+  if (!campaigns[0]) throw new PublishingError("campaign_not_found", 404);
+  const prefix = `campaign:${campaignId}:`;
+  const posts = items.map((r: any) => {
+    const ds = deliveries.filter((d: any) => String(d.item_id) === String(r.id));
+    const d: any = ds[0];
+    const at = d ? iso(d.scheduled_at) || iso(d.posted_at) : "";
+    const images = json(r.images, []) as any[];
+    return {
+      key: String(r.external_id || "").startsWith(prefix) ? String(r.external_id).slice(prefix.length) : "",
+      itemId: String(r.id), title: String(r.title || ""), body: String(r.body || "").slice(0, 400),
+      channelType: String(d?.channel_type || ""), channelName: String(d?.channel_name || ""),
+      ...(at ? kstParts(at) : { date: "", time: "" }),
+      status: itemDisplayStatus(!!r.approved_at, ds.map((x: any) => ({ status: String(x.status) }))),
+      images: images.length, missingImages: images.filter((img) => !img?.objectName).length,
+    };
+  }).sort((a: any, b: any) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  return { campaign: publicCampaign(campaigns[0]), posts };
 }
 
 // ── PC 연결(사람 쪽) ────────────────────────────────────────────────────────

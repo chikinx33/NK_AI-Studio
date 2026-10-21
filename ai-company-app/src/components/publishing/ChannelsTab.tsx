@@ -30,6 +30,7 @@ export default function ChannelsTab({ ctx }: { ctx: PublishingCtx }) {
   }
   const targetSummary = (c: PublishingChannel) => {
     const tg = c.target || {};
+    if (c.mode === "api") return t.campaign.snsAccount;
     if (c.type === "naver_blog" && !tg.blogId) return t.accountBlog;
     return tg.blogId ? `blog.naver.com/${tg.blogId}` : tg.cafeUrl || tg.boardUrl || (tg.galleryId ? `${tg.galleryType || ""} · ${tg.galleryId}` : "") || (tg.subreddit ? `r/${tg.subreddit}` : "") || tg.writeUrl || tg.note || "";
   };
@@ -50,7 +51,7 @@ export default function ChannelsTab({ ctx }: { ctx: PublishingCtx }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-bold text-strong">{c.name}</span>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${c.mode === "pc" ? "bg-tint-violet/50 text-tone-violet" : "bg-inset text-secondary"}`}>{t.mode[c.mode]}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${c.mode === "pc" ? "bg-tint-violet/50 text-tone-violet" : c.mode === "api" ? "bg-tint-sky/50 text-tone-sky" : "bg-inset text-secondary"}`}>{t.mode[c.mode]}</span>
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-muted">{channelTypeLabel(t, c.type)} · {brandTitle(ctx, c.brandId)}{c.accountLabel ? ` · ${c.accountLabel}` : ""}</div>
                 {targetSummary(c) && <div className="mt-0.5 truncate text-[11px] text-faint">{targetSummary(c)}</div>}

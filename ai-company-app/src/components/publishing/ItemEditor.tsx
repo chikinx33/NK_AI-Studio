@@ -162,6 +162,7 @@ export default function ItemEditor({ ctx, itemId, preset, onClose }: { ctx: Publ
           <Field label={<span className="flex justify-between"><span>{t.title}</span><span className="tabular-nums text-faint">{title.length}/{TITLE_MAX}</span></span>}>
             <input className={inputClass} value={title} maxLength={TITLE_MAX} onChange={(e) => { setTitle(e.target.value); touch(); }} autoFocus={!item} />
           </Field>
+          {rows.some((r) => channelOf(r.channelId)?.mode === "api") && <p className="-mt-2 text-[10px] leading-relaxed text-faint">{t.campaign.snsTitleHint}</p>}
           <div>
             <div className="mb-1 flex items-center gap-1">
               <span className="flex-1 text-[11px] font-bold text-secondary">{t.body}</span>
@@ -176,6 +177,11 @@ export default function ItemEditor({ ctx, itemId, preset, onClose }: { ctx: Publ
         </div>
 
         <div className="space-y-4">
+          {item?.campaignId && (
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-tone-emerald">
+              <Icon name="megaphone" className="h-3.5 w-3.5" />{t.campaign.label} · {state.campaigns.find((c) => c.id === item.campaignId)?.title || item.campaignId}
+            </div>
+          )}
           <Field label={t.brand}>
             <select className={selectClass} value={brandId} onChange={(e) => { setBrandId(e.target.value); touch(); }}>
               <option value="">{t.brandNone}</option>

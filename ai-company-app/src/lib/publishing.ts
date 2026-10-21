@@ -22,6 +22,8 @@ export interface PublishingDelivery {
 export interface PublishingImage {
   ref: string; objectName: string; sha256: string; width: number; height: number; contentType: string;
   alt: string; caption: string; sourceUrl: string; sourcePath: string; fileName: string; missing: boolean;
+  /** 업무 파일에서 옮기지 못한 이유(not_found 등). 있으면 자동으로 다시 옮기지 않는다. */
+  sourceError: string;
 }
 /** 패키지(업무 파일 폴더)에서 온 글의 덧붙임. 영상은 업무 파일 경로(복사하지 않음). */
 export interface PublishingExtras {
@@ -29,7 +31,7 @@ export interface PublishingExtras {
   translation: string; notes: string; firstComment: string; packagePath: string; lang: string;
 }
 export interface PublishingItem {
-  id: string; brandId: string; externalId: string; title: string; body: string; tags: string[]; images: PublishingImage[];
+  id: string; brandId: string; externalId: string; campaignId: string; title: string; body: string; tags: string[]; images: PublishingImage[];
   extras: PublishingExtras; needsReapproval: boolean;
   approvedAt: string; createdAt: string; updatedAt: string; status: ItemStatus; missingImages: number; blockedCount: number;
   copyHtml: string; plainText: string; deliveries: PublishingDelivery[];
@@ -38,7 +40,12 @@ export interface PublisherDevice {
   id: string; name: string; os: string; appVersion: string; lastSeenAt: string; lastHeartbeatAt: string; createdAt: string;
   sessions: Array<{ channelType: string; accountLabel: string; loggedIn: boolean; checkedAt: string }>;
 }
-export interface PublishingState { serverTime: string; channels: PublishingChannel[]; items: PublishingItem[]; devices: PublisherDevice[] }
+/** 캠페인: 한 브랜드의 기간 행사 홍보. 에이전트가 지침 문서(업무 파일)와 날짜별 글 초안을 만든다. */
+export interface PublishingCampaign {
+  id: string; key: string; title: string; brandId: string; brandTitle: string; goal: string;
+  startDate: string; endDate: string; guidePath: string; createdAt: string; updatedAt: string;
+}
+export interface PublishingState { serverTime: string; channels: PublishingChannel[]; items: PublishingItem[]; devices: PublisherDevice[]; campaigns: PublishingCampaign[] }
 export interface BrandOption { id: string; title: string }
 
 export class PublishingApiError extends Error {
@@ -84,6 +91,10 @@ export const cancelDelivery = (id: string) => post("/api/publishing/items", { ac
 export const markDoneManual = (id: string, postedUrl: string) => post("/api/publishing/items", { action: "done_manual", id, postedUrl });
 export const rescheduleDelivery = (id: string, scheduledAt: string, confirmUncertain = false) =>
   post("/api/publishing/items", { action: "reschedule", id, scheduledAt, confirmUncertain });
+/** 캠페인 글의 업무 파일 사진을 퍼블리싱 저장소로 옮긴다. 한 번에 일부만 — more 면 다시 부른다. */
+export const fillCampaignImages = (campaignId = "") =>
+  post<{ copied: number; failed: number; more: boolean }>("/api/publishing/items", { action: "fill_images", campaignId });
+export const deleteCampaign = (id: string) => post("/api/publishing/items", { action: "delete_campaign", id });
 
 export interface ImportResult {
   imported: number; missingChannelTypes: string[];

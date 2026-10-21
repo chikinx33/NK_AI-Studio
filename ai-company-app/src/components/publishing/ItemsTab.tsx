@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { approveItems, unapproveItems, type ItemStatus } from "../../lib/publishing";
 import { apiErrorText } from "./i18n";
 import { Button, Empty, Icon, StatusBadge, inputClass, selectClass } from "./ui";
-import { brandTitle, channelById, fmtDateTime, type PublishingCtx } from "./helpers";
+import { brandTitle, channelById, fmtDateTime, inCampaign, type PublishingCtx } from "./helpers";
 import ImportDialog from "./ImportDialog";
 import PackageImportDialog from "./PackageImportDialog";
 
@@ -19,14 +19,17 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
   const [importOpen, setImportOpen] = useState(false);
   const [packageOpen, setPackageOpen] = useState(false);
   const channels = useMemo(() => channelById(state), [state]);
+  // 위 캠페인 고르기(CampaignBar)가 먼저 거르고, 상태·브랜드·검색은 그 안에서 거른다.
+  const scoped = useMemo(() => state.items.filter((i) => inCampaign(i, ctx.campaign)), [state.items, ctx.campaign]);
+  const campaignTitles = useMemo(() => new Map(state.campaigns.map((c) => [c.id, c.title])), [state.campaigns]);
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: state.items.length };
-    for (const item of state.items) c[item.status] = (c[item.status] || 0) + 1;
+    const c: Record<string, number> = { all: scoped.length };
+    for (const item of scoped) c[item.status] = (c[item.status] || 0) + 1;
     return c;
-  }, [state.items]);
-  const brandIds = useMemo(() => [...new Set(state.items.map((i) => i.brandId))], [state.items]);
+  }, [scoped]);
+  const brandIds = useMemo(() => [...new Set(scoped.map((i) => i.brandId))], [scoped]);
   const q = query.trim().toLowerCase();
-  const list = state.items
+  const list = scoped
     .filter((i) => (filter === "all" || i.status === filter) && (!brand || i.brandId === brand) && (!q || i.title.toLowerCase().includes(q)))
     .sort((a, b) => {
       const at = (x: typeof a) => x.deliveries.map((d) => d.scheduledAt).filter(Boolean).sort()[0] || x.updatedAt;
@@ -106,6 +109,9 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
                   <div className="truncate text-xs font-bold text-strong">{item.title}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
                     <span>{brandTitle(ctx, item.brandId)}</span>
+                    {item.campaignId && !ctx.campaign && campaignTitles.has(item.campaignId) && (
+                      <span className="inline-flex max-w-[180px] items-center gap-0.5 truncate font-semibold text-tone-emerald"><Icon name="megaphone" className="h-3 w-3 shrink-0" />{campaignTitles.get(item.campaignId)}</span>
+                    )}
                     {item.images.length > 0 && <span className="inline-flex items-center gap-0.5"><Icon name="image" className="h-3 w-3" />{item.images.length}</span>}
                     {item.missingImages > 0 && <span className="font-semibold text-tone-amber">{t.missingBadge(item.missingImages)}</span>}
                     {item.blockedCount > 0 && <span className="font-semibold text-tone-amber">{t.blockedBadge(item.blockedCount)}</span>}

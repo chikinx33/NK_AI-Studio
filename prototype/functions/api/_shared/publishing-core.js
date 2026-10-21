@@ -53,19 +53,20 @@ export const FINAL_STATUSES = new Set(["posted", "done_manual", "cancelled"]);
 /**
  * CONTRACT §3 채널 종류. mode 는 그 종류가 가질 수 있는 방식.
  * pcReady: NK Publisher 에 어댑터가 있는 종류(1단계는 네이버 블로그만). 나머지 PC 종류는 지금은 '직접 올리기(manual)'로 쓴다.
- * apiReady: 1단계는 없음(기존 SNS 예약 실행기 연결은 3단계).
+ * apiReady: 서버가 기존 SNS 예약 실행기(sns_scheduled_posts → /api/sns/publish)로 올리는 종류. 계정은 SNS 세팅에 연결된 것을 쓴다.
+ *   유튜브는 영상 전용이고 플랫폼 자체 예약(publishAt)을 써서 이 대기열에 맞지 않아 아직 준비 중이다.
  */
 export const CHANNEL_TYPES = {
   naver_blog: { modes: ["pc", "manual"], pcReady: true },
   naver_cafe: { modes: ["pc", "manual"], pcReady: false },
   dcinside: { modes: ["pc", "manual"], pcReady: false },
   ruliweb: { modes: ["pc", "manual"], pcReady: false },
-  x: { modes: ["api"], apiReady: false },
-  threads: { modes: ["api"], apiReady: false },
-  facebook: { modes: ["api"], apiReady: false },
-  instagram: { modes: ["api"], apiReady: false },
+  x: { modes: ["api"], apiReady: true },
+  threads: { modes: ["api"], apiReady: true },
+  facebook: { modes: ["api"], apiReady: true },
+  instagram: { modes: ["api"], apiReady: true },
   youtube: { modes: ["api"], apiReady: false },
-  discord: { modes: ["api"], apiReady: false },
+  discord: { modes: ["api"], apiReady: true },
   // 직접 올리기 전용(사람이 복사 화면으로 올린다). PC 앱에 가지 않으므로 NK Publisher 약속(§3)과 무관하다.
   reddit: { modes: ["manual"] },
   hackernews: { modes: ["manual"] },
@@ -527,6 +528,8 @@ export function planApproval(candidates, existing, channelsById) {
     if (!channel || channel.enabled === false || channel.deleted) { out.push({ deliveryId: c.deliveryId, ok: false, reason: "channel_disabled" }); continue; }
     if (!Number.isFinite(c.atMs)) { out.push({ deliveryId: c.deliveryId, ok: false, reason: "time_required" }); continue; }
     if (c.missingImages) { out.push({ deliveryId: c.deliveryId, ok: false, reason: "missing_images" }); continue; }
+    // SNS 채널 내용 검사(snsContentBlock): 사진·영상이 꼭 있어야 하는 채널, 글자 수 한도.
+    if (c.contentBlock) { out.push({ deliveryId: c.deliveryId, ok: false, reason: c.contentBlock }); continue; }
     const g = checkSpamGuard({ deliveryId: c.deliveryId, channel, atMs: c.atMs, contentHash: c.contentHash }, pool);
     if (!g.ok) { out.push({ deliveryId: c.deliveryId, ok: false, reason: g.reason, conflictId: g.conflictId }); continue; }
     pool.push({ id: c.deliveryId, channelId: c.channelId, atMs: c.atMs, contentHash: c.contentHash, status: "scheduled" });
@@ -620,4 +623,170 @@ export function imageInfo(b) {
     }
   }
   return null;
+}
+
+// ── SNS 채널(api 방식) ─────────────────────────────────────────────────────
+// 승인되면 서버가 기존 SNS 예약 대기열(sns_scheduled_posts)에 넣고, 정기 실행이 SNS 세팅에 연결된 계정으로 /api/sns/publish 에 보낸다.
+// 게시 로직은 SNS 세팅 '배포'와 한 벌이다 — 여기서는 글 → 게시 요청 모양과 채널별 내용 검사만 한다.
+
+/** 사진·영상 없이 올릴 수 없는 채널(/api/sns/publish 가 미디어 없는 단일 게시를 거절한다). */
+export const SNS_MEDIA_REQUIRED = new Set(["instagram", "facebook"]);
+/** 채널별 본문 글자 한도(해시태그 포함). X 는 한글·한자 등을 2자로 센다(snsTextLength). */
+export const SNS_TEXT_LIMITS = { x: 280, threads: 500, discord: 2000, instagram: 2200, facebook: 60000 };
+/** 한 게시에 붙일 수 있는 사진·영상 수. */
+export const SNS_MEDIA_MAX = { x: 4, threads: 10, discord: 10, instagram: 10, facebook: 10 };
+/** 첫 댓글(첫 답글)을 다는 채널. */
+const SNS_FIRST_COMMENT = new Set(["instagram", "threads", "x"]);
+
+/** X 글자 수(twitter-text 가중치): 라틴·기본 문장부호는 1, 그 밖(한글 등)은 2, 주소는 23. 다른 채널은 글자 수 그대로. */
+export function snsTextLength(type, text) {
+  const s = String(text == null ? "" : text);
+  if (type !== "x") return [...s].length;
+  let n = 0;
+  const withoutUrls = s.replace(/https?:\/\/\S+/g, () => { n += 23; return ""; });
+  for (const ch of withoutUrls) {
+    const cp = ch.codePointAt(0);
+    const light = cp <= 0x10ff || (cp >= 0x2000 && cp <= 0x200d) || (cp >= 0x2010 && cp <= 0x201f) || (cp >= 0x2032 && cp <= 0x2037);
+    n += light ? 1 : 2;
+  }
+  return n;
+}
+
+/** SNS 본문: 글 본문 표시를 서식 없는 글자로 바꾸고(이미지 자리는 뺀다) 태그를 #태그 한 줄로 붙인다. 제목은 SNS 에 올리지 않는다(글 목록용 이름). */
+export function snsCaption({ body, tags }) {
+  const text = blocksToPlainText(markupToBlocks(body, []).filter((b) => b.type !== "image")).trim();
+  const tagLine = (Array.isArray(tags) ? tags : []).map((t) => String(t || "").replace(/^#/, "").trim()).filter(Boolean).map((t) => `#${t}`).join(" ");
+  return [text, tagLine].filter(Boolean).join("\n\n");
+}
+
+/** 승인 때 막을 SNS 내용 문제. 반환: 막는 이유 | "". */
+export function snsContentBlock(type, { caption, mediaCount }) {
+  if (SNS_MEDIA_REQUIRED.has(type) && !mediaCount) return "media_required";
+  if (!String(caption || "").trim() && !mediaCount) return "content_required";
+  const limit = SNS_TEXT_LIMITS[type];
+  if (limit && snsTextLength(type, caption) > limit) return "text_too_long";
+  if (mediaCount > (SNS_MEDIA_MAX[type] || 10)) return "too_many_media";
+  return "";
+}
+
+/**
+ * /api/sns/publish 요청 본문(SNS 세팅 '배포'와 같은 모양). media: [{ mediaType:'image'|'video', gcsPath:객체 이름 }].
+ * 한 장이면 단일 게시, 여러 장이면 묶음(mediaItems) — 인스타 묶음은 2장부터라 한 장을 묶음으로 보내지 않는다.
+ */
+export function buildSnsPublishBody({ type, caption, firstComment, media }) {
+  const list = (Array.isArray(media) ? media : []).filter((m) => m && m.gcsPath).slice(0, SNS_MEDIA_MAX[type] || 10)
+    .map((m) => ({ mediaType: m.mediaType === "video" ? "video" : "image", gcsPath: String(m.gcsPath) }));
+  const body = { platform: type, caption: String(caption || "") };
+  const comment = cleanText(firstComment, 2000);
+  if (comment && SNS_FIRST_COMMENT.has(type)) body.firstComment = comment;
+  if (list.length === 1) { body.mediaType = list[0].mediaType; body.mediaGcsPath = list[0].gcsPath; }
+  else if (list.length > 1) body.mediaItems = list;
+  return body;
+}
+
+// ── 캠페인 ─────────────────────────────────────────────────────────────────
+// 캠페인 = 한 브랜드(프로젝트 시리즈)의 기간 행사 홍보. 에이전트가 지침 문서(업무 파일)와 날짜별 글 초안을 만들고,
+// 사람은 퍼블리싱 '개요'에서 주 단위로 승인한다. 글은 externalId `campaign:<캠페인 id>:<글 key>` 라 다시 보내도 같은 글을 고친다.
+
+/** 에이전트 도구 한 번에 받는 글 수(대화 한 턴의 출력·DB 쓰기 크기). 더 많으면 나눠 부른다. */
+export const CAMPAIGN_POSTS_PER_CALL = 20;
+export const CAMPAIGN_MAX_DAYS = 120;
+
+/** 'YYYY-MM-DD' 형식이고 실제 날짜인지. */
+export function isDateKey(v) {
+  const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+}
+
+/** 한국 날짜·시각('2026-11-03', '20:00') → UTC ISO. 형식이 틀리면 "". */
+export function kstDateTimeIso(date, time) {
+  if (!isDateKey(date)) return "";
+  const t = String(time || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!t || +t[1] > 23 || +t[2] > 59) return "";
+  const [y, m, d] = String(date).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, +t[1], +t[2]) - PUBLISHING_TZ_OFFSET_MIN * 60000).toISOString();
+}
+
+/** 캠페인·글 key → 비교용 모양(소문자, 띄어쓰기는 -, 글자·숫자·_·- 만). 같은 key 는 같은 캠페인(글)이다. */
+export function normalizeCampaignKey(raw) {
+  return cleanText(raw, 120).toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}_-]+/gu, "").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+/** 캠페인 id 는 사용자·key 로 정해진다 — 에이전트가 글을 여러 번 나눠 보내도 같은 캠페인에 쌓인다. */
+export async function campaignIdFor(userId, key) {
+  return `cmp_${(await sha256Hex(`${userId}\n${normalizeCampaignKey(key)}`)).slice(0, 20)}`;
+}
+
+export function campaignExternalId(campaignId, postKey) {
+  return `campaign:${campaignId}:${normalizeCampaignKey(postKey)}`;
+}
+
+/** 캠페인 머리(key·제목·브랜드·목적·기간). 반환: { ok, campaign } | { ok:false, error }. */
+export function normalizeCampaignInput(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const key = normalizeCampaignKey(src.key || src.campaign || src.title);
+  if (!key) return { ok: false, error: "campaign_key_required" };
+  const title = cleanText(src.title, 120) || key;
+  const startDate = String(src.startDate || "").trim();
+  const endDate = String(src.endDate || "").trim();
+  if (startDate && !isDateKey(startDate)) return { ok: false, error: "campaign_start_invalid" };
+  if (endDate && !isDateKey(endDate)) return { ok: false, error: "campaign_end_invalid" };
+  if (startDate && endDate) {
+    const span = (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000;
+    if (span < 0) return { ok: false, error: "campaign_range_invalid" };
+    if (span > CAMPAIGN_MAX_DAYS) return { ok: false, error: "campaign_range_too_long" };
+  }
+  return {
+    ok: true,
+    campaign: {
+      key, title, startDate, endDate,
+      brandId: cleanText(src.brandId, 120), brandTitle: cleanText(src.brandTitle, 120),
+      goal: cleanText(src.goal, 2000),
+    },
+  };
+}
+
+/** 업무 파일 상대 경로(앞뒤 / 없앰, '.'·'..' 금지). 틀리면 "". */
+export function cleanWorkPath(raw) {
+  const p = cleanText(raw, 600).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  if (!p || p.split("/").some((seg) => seg === ".." || seg === ".")) return "";
+  return p;
+}
+
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm)$/i;
+
+/**
+ * 캠페인 글 하나. channel 은 채널 종류(instagram·naver_blog·reddit…) 또는 채널 id(ch_…), target 은 같은 종류 채널 고르기용
+ * (서브레딧·갤러리 id·채널 이름). 시각은 scheduledAt(ISO) 또는 date + time(한국 시간, 기본 09:00).
+ * images·videos 는 업무 파일 경로(사진은 승인 전에 퍼블리싱 저장소로 복사, 영상은 경로를 가리킨다).
+ * 반환: { ok, post } | { ok:false, error }.
+ */
+export function normalizeCampaignPost(raw, index = 0) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const channel = cleanText(src.channel || src.channelType || src.channelId, 80);
+  if (!channel) return { ok: false, error: "post_channel_required" };
+  const scheduledAt = Number.isFinite(Date.parse(String(src.scheduledAt || "")))
+    ? new Date(Date.parse(String(src.scheduledAt))).toISOString()
+    : kstDateTimeIso(String(src.date || "").trim(), src.time || "09:00");
+  if (!scheduledAt) return { ok: false, error: "post_time_invalid" };
+  const body = String(src.body || src.caption || "").replace(/\r\n?/g, "\n").trim().slice(0, 60000);
+  const firstLine = body.split("\n").map((l) => l.replace(/^#+\s*|^■\s*/, "").replace(/\*\*/g, "").trim()).find(Boolean) || "";
+  const title = normalizeTitle(src.title || firstLine);
+  if (!title) return { ok: false, error: "title_required" };
+  const paths = (v) => (Array.isArray(v) ? v : v ? [v] : []).map(cleanWorkPath).filter(Boolean);
+  const media = [...paths(src.images), ...paths(src.media), ...paths(src.videos)];
+  const images = [...new Set(media.filter((p) => !VIDEO_EXT.test(p)))].slice(0, 20);
+  const videos = [...new Set(media.filter((p) => VIDEO_EXT.test(p)))].slice(0, 10);
+  if (!body && !images.length && !videos.length) return { ok: false, error: "post_body_required" };
+  const key = normalizeCampaignKey(src.key) || normalizeCampaignKey(`${scheduledAt.slice(0, 16)}-${channel}-${index + 1}`);
+  return {
+    ok: true,
+    post: {
+      key, channel, target: cleanText(src.target, 200), scheduledAt, title, body,
+      tags: normalizeTagList(src.tags || src.hashtags), images, videos,
+      firstComment: cleanText(src.firstComment, 2000), notes: String(src.notes || "").slice(0, 4000),
+    },
+  };
 }

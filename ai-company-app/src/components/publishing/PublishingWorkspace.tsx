@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getPublishingState, listBrandOptions, type BrandOption, type PublishingState } from "../../lib/publishing";
+import { fillCampaignImages, getPublishingState, listBrandOptions, type BrandOption, type PublishingState } from "../../lib/publishing";
 import { usePublishingText, agoText, apiErrorText } from "./i18n";
 import { Icon, IconButton, type IconName } from "./ui";
 import { ATTENTION, pcStatus, type PublishingCtx, type PublishingTab } from "./helpers";
@@ -12,6 +12,7 @@ import ItemEditor from "./ItemEditor";
 import CopyView from "./CopyView";
 import PublisherDownload from "./PublisherDownload";
 import TestedView from "./TestedView";
+import CampaignBar from "./CampaignBar";
 
 /**
  * 퍼블리싱 — 브랜드 글을 채널별 일정으로 올리는 작업공간(SKILL 줄 4번째).
@@ -26,7 +27,7 @@ const TABS: Array<{ id: PublishingTab; icon: IconName }> = [
   { id: "channels", icon: "rss" },
   { id: "settings", icon: "sliders" },
 ];
-const EMPTY: PublishingState = { serverTime: "", channels: [], items: [], devices: [] };
+const EMPTY: PublishingState = { serverTime: "", channels: [], items: [], devices: [], campaigns: [] };
 
 export default function PublishingWorkspace() {
   const t = usePublishingText();
@@ -38,6 +39,8 @@ export default function PublishingWorkspace() {
   const [now, setNow] = useState(Date.now());
   const [editor, setEditor] = useState<{ id: string | null; preset?: { scheduledAt?: string } } | null>(null);
   const [copyId, setCopyId] = useState("");
+  const [campaign, setCampaign] = useState("");
+  const filling = useRef(false);
   const [toastMsg, setToastMsg] = useState<{ text: string; tone: "ok" | "warn"; key: number } | null>(null);
   const toastTimer = useRef<number>(0);
 
@@ -72,12 +75,39 @@ export default function PublishingWorkspace() {
     toastTimer.current = window.setTimeout(() => setToastMsg(null), 3600);
   }, []);
 
+  // 에이전트가 만든 캠페인 글의 사진은 업무 파일 경로만 적혀 온다(대화 한 턴의 요청 한도 때문).
+  // 화면이 열리면 서버가 조금씩 퍼블리싱 저장소로 옮긴다 — 옮긴 게 있을 때만 다시 읽으므로 상시 폴링이 아니다.
+  useEffect(() => {
+    if (filling.current) return;
+    const pending = state.items.some((i) => i.campaignId && !i.approvedAt && i.images.some((img) => img.missing && img.sourcePath && !img.sourceError));
+    if (!pending) return;
+    filling.current = true;
+    void (async () => {
+      let copied = 0;
+      let failed = 0;
+      try {
+        for (let round = 0; round < 8; round += 1) {
+          const r = await fillCampaignImages();
+          copied += r.copied;
+          failed += r.failed;
+          if (!r.more || (!r.copied && !r.failed)) break;
+        }
+      } catch { /* 다음에 화면을 열 때 다시 옮긴다 */ }
+      filling.current = false;
+      if (copied || failed) {
+        toast([copied ? t.campaign.imagesFilled(copied) : "", failed ? t.campaign.imagesFailed(failed) : ""].filter(Boolean).join(" "), failed ? "warn" : "ok");
+        await reload();
+      }
+    })();
+  }, [state.items, reload, toast, t]);
+
   const ctx: PublishingCtx = useMemo(() => ({
     t, state, brands, now, reload, toast,
     openItem: (id, preset) => setEditor({ id, preset }),
     openCopy: (deliveryId) => setCopyId(deliveryId),
     goTab: setTab,
-  }), [t, state, brands, now, reload, toast]);
+    campaign, setCampaign,
+  }), [t, state, brands, now, reload, toast, campaign]);
 
   const pc = pcStatus(state, now);
   const attention = state.items.reduce((n, item) => n + item.deliveries.filter((d) => ATTENTION.includes(d.status)).length, 0);
@@ -116,11 +146,16 @@ export default function PublishingWorkspace() {
           )}
           {loading && !state.serverTime && !error ? (
             <div className="py-16 text-center text-sm text-faint">{t.loading}</div>
-          ) : tab === "overview" ? <OverviewTab ctx={ctx} />
-            : tab === "calendar" ? <CalendarTab ctx={ctx} />
-              : tab === "items" ? <ItemsTab ctx={ctx} />
-                : tab === "channels" ? <ChannelsTab ctx={ctx} />
-                  : <SettingsTab ctx={ctx} />}
+          ) : (
+            <>
+              {(tab === "items" || tab === "calendar") && <CampaignBar ctx={ctx} />}
+              {tab === "overview" ? <OverviewTab ctx={ctx} />
+                : tab === "calendar" ? <CalendarTab ctx={ctx} />
+                  : tab === "items" ? <ItemsTab ctx={ctx} />
+                    : tab === "channels" ? <ChannelsTab ctx={ctx} />
+                      : <SettingsTab ctx={ctx} />}
+            </>
+          )}
         </div>
       </div>
 

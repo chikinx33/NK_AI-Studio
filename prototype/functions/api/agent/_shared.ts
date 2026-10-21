@@ -9,6 +9,8 @@ import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot }
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta, statGcsObject } from "../_shared/media-ingest";
 import { appendPublishRecords, buildPublishRow, setDeployingStep, updatePublishRowStatus } from "../_shared/publish-records";
+import { publishingDb, loadSchedule, applyCampaignPlan, loadCampaignDetail, publicChannel, publicCampaign, PublishingError } from "../_shared/publishing-store";
+import { campaignIdFor, normalizeCampaignInput, cleanWorkPath, CAMPAIGN_POSTS_PER_CALL, CHANNEL_TYPES, SNS_MEDIA_REQUIRED, SNS_TEXT_LIMITS } from "../_shared/publishing-core.js";
 import { analysisToStoryText } from "../_shared/gemini-video";
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { KNOWLEDGE_EMBED_DIM, knowledgeTerms, searchCompanyKnowledge, shortKnowledgeId } from "./_knowledge-index";
@@ -8118,6 +8120,96 @@ async function runRemindersListTool(_input: any, ctx: ToolContext): Promise<any>
   return { kind: "reminders_list", count: upcoming.length, reminders: upcoming };
 }
 
+// ── 퍼블리싱 캠페인(브랜드 기간 행사 홍보) ────────────────────────────────────
+// "한 달 동안 ○○ 팝업 매일 홍보" → 코어가 채널·SNS 연결·이미 잡힌 일정을 보고(publishing_overview)
+// 지침 문서와 날짜별 글 초안을 만든다(publishing_campaign). 초안은 아무 데도 나가지 않는다 —
+// 사람이 퍼블리싱 '개요'에서 주 단위로 승인하면 SNS 채널은 SNS 예약 대기열로, 커뮤니티는 PC 앱·직접 올리기로 나간다.
+// 그래서 초안 만들기는 승인 카드 없이 바로 실행한다(실제 게시의 승인은 퍼블리싱 화면 한 곳).
+
+const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/** 캠페인을 key 또는 id 로 찾는다(에이전트는 사람이 읽는 key 를 쓴다). */
+async function resolveCampaignId(userId: string, raw: any): Promise<string> {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return /^cmp_[0-9a-f]{20}$/.test(s) ? s : await campaignIdFor(userId, s);
+}
+
+async function runPublishingOverviewTool(input: any, ctx: ToolContext): Promise<any> {
+  const db = await publishingDb(ctx.env);
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(String(input?.from || "")) ? String(input.from) : kstToday();
+  const days = Math.min(110, Math.max(7, Number(input?.days) || 45));
+  const campaignId = await resolveCampaignId(ctx.userId, input?.campaign || input?.campaignId);
+  const [[channels, campaigns], schedule, sns, detail] = await Promise.all([
+    db.batch([
+      { query: `SELECT * FROM publishing_channels WHERE user_id=$1 AND deleted_at IS NULL ORDER BY created_at`, params: [ctx.userId] },
+      { query: `SELECT * FROM publishing_campaigns WHERE user_id=$1 AND deleted_at IS NULL ORDER BY start_date DESC, created_at DESC LIMIT 20`, params: [ctx.userId] },
+    ]),
+    loadSchedule(db, ctx.userId, { from, to: addDays(from, days) }),
+    listConnectedPublishChannels(ctx).catch(() => []),
+    campaignId ? loadCampaignDetail(db, ctx.userId, campaignId).catch(() => null) : Promise.resolve(null),
+  ]);
+  const STATUS: Record<string, string> = { draft: "초안", scheduled: "예약", claimed: "올리는 중", publishing: "올리는 중", posted: "게시됨", failed: "실패", needs_human: "확인 필요", ready_manual: "직접 올릴 차례", done_manual: "직접 올림", tested: "시험 완료" };
+  return {
+    kind: "publishing_overview",
+    today: kstToday(),
+    channels: channels.map((r: any) => {
+      const c = publicChannel(r);
+      return `${c.id} | ${c.type} | ${c.mode === "api" ? "SNS 자동" : c.mode === "pc" ? "PC 앱 자동" : "직접 올리기"} | ${c.name}${c.target && Object.keys(c.target).length ? ` ${JSON.stringify(c.target)}` : ""} | 하루 ${c.dailyLimit}회·간격 ${c.minIntervalHours}시간${c.enabled ? "" : " | 꺼짐"}`;
+    }),
+    snsAccounts: (sns as any[]).filter((s) => s.connected).map((s) => `${s.platform}${s.account ? `(${s.account})` : ""}${s.needsReconnect ? " — 재연결 필요" : ""}${s.enabled === false ? " — 사용 중지" : ""}`),
+    campaigns: campaigns.map((r: any) => {
+      const c = publicCampaign(r);
+      return `${c.key} | ${c.title} | ${c.brandTitle || c.brandId || "브랜드 없음"} | ${c.startDate || "?"}~${c.endDate || "?"}${c.guidePath ? ` | 지침 ${c.guidePath}` : ""}`;
+    }),
+    schedule: schedule.items.slice(0, 160).map((s: any) => `${s.date} ${s.time} ${s.channelType} [${STATUS[s.status] || s.status}] ${s.title}${s.campaignTitle ? ` (${s.campaignTitle})` : ""}`),
+    scheduleTruncated: schedule.items.length > 160,
+    ...(detail ? {
+      campaign: detail.campaign,
+      campaignPosts: detail.posts.map((p: any) => `${p.key} | ${p.date} ${p.time} | ${p.channelType || "채널 없음"} | ${STATUS[p.status] || p.status} | ${p.title}${p.missingImages ? ` | 빠진 사진 ${p.missingImages}` : ""}`),
+    } : campaignId ? { campaignNotFound: String(input?.campaign || input?.campaignId) } : {}),
+    rules: {
+      postsPerCall: CAMPAIGN_POSTS_PER_CALL,
+      snsAutoChannels: Object.entries(CHANNEL_TYPES).filter(([, s]: any) => s.apiReady).map(([t]) => t),
+      snsMediaRequired: [...SNS_MEDIA_REQUIRED],
+      snsTextLimits: SNS_TEXT_LIMITS,
+      note: "채널마다 하루 횟수·간격·30일 같은 글 금지가 승인 때 검사된다. SNS 자동 채널은 SNS 세팅에 연결된 계정으로 올라간다. 커뮤니티 채널(네이버 블로그·레딧·디시 등)은 퍼블리싱 '채널'에 먼저 있어야 한다.",
+    },
+  };
+}
+
+/** 업무 파일 폴더 이름 한 칸(경로 구분자·앞뒤 점 제거). */
+const folderName = (s: string) => String(s || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+|\.+$/g, "").slice(0, 60);
+
+async function runPublishingCampaignTool(input: any, ctx: ToolContext): Promise<any> {
+  const campaignInput = input?.campaign && typeof input.campaign === "object" ? input.campaign : input;
+  const head = normalizeCampaignInput(campaignInput);
+  if (!head.ok) throw new Error(`캠페인 정보가 맞지 않아요(${head.error}). campaign.key(캠페인 이름표)·title·startDate·endDate 를 확인해 주세요.`);
+  let guidePath = "";
+  const guide = String(input?.guide || "").trim();
+  if (guide) {
+    const folder = cleanWorkPath(input?.folder) || ["캠페인", folderName(`${head.campaign.brandTitle ? `${head.campaign.brandTitle} ` : ""}${head.campaign.title}`) || head.campaign.key].join("/");
+    guidePath = `${folder}/지침.md`;
+    await callInternalJson(ctx, "/api/agent/company-files", {
+      body: { action: "write", path: guidePath, content: guide.endsWith("\n") ? guide : `${guide}\n`, contentType: "text/markdown; charset=utf-8" },
+    });
+  }
+  const db = await publishingDb(ctx.env);
+  let result: any;
+  try {
+    result = await applyCampaignPlan(db, ctx.env, ctx.userId, { campaign: campaignInput, posts: input?.posts, removeKeys: input?.removeKeys, guidePath });
+  } catch (e: any) {
+    throw new Error(e instanceof PublishingError ? `${e.code}${e.message !== e.code ? ` — ${e.message}` : ""}` : String(e?.message || e));
+  }
+  return {
+    kind: "publishing_campaign",
+    ...result,
+    guidePath: guidePath || result.campaign?.guidePath || "",
+    next: "초안은 퍼블리싱 '글'·'달력'에 들어갔고 아직 아무 데도 나가지 않았어요. 사람이 퍼블리싱 '개요'에서 주 단위로 승인해야 예약돼요.",
+  };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   // 코어가 대화만으로 에이전트 협업→Remotion 명세→업무 등록까지 완료한다.
   infographic: { agentId: "core", kind: "read", run: runInfographicTool },
@@ -8154,6 +8246,10 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", gate: true, clientSteps: true, prepare: preparePublishInput, run: runPublishTool },
   // 완성 콘텐츠 등록 + SNS 세팅 포맷·초안 저장(승인 1번). 실제 발행은 publish(승인 2번).
   content_register: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki"], kind: "external", gate: true, run: runContentRegisterTool },
+  // 퍼블리싱 캠페인: 채널·SNS 연결·잡힌 일정 보기(읽기) → 지침 문서 + 날짜별 글 초안(바로 실행 — 게시 승인은 퍼블리싱 '개요'에서 사람이 한다).
+  // 초안 만들기도 결과를 다시 읽게 해(synthesize) 남은 날짜를 이어서 보내게 한다(한 번에 CAMPAIGN_POSTS_PER_CALL 개).
+  publishing_overview: { agentId: "core", agentIds: ["reach", "maki"], kind: "read", synthesize: true, run: runPublishingOverviewTool },
+  publishing_campaign: { agentId: "core", agentIds: ["reach", "maki"], kind: "local", synthesize: true, run: runPublishingCampaignTool },
   // 영상 내용 분석(Gemini · 읽기). 등록 전에 영상을 보고 스토리·초안을 쓰게 한다.
   video_describe: { agentId: "reach", agentIds: ["core", "pixel", "plot", "maki", "edge"], kind: "read", synthesize: true, runTimeoutMs: 150000, run: runVideoDescribeTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },

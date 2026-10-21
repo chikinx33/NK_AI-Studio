@@ -178,7 +178,7 @@ test("가져오기(§7): externalId 필수, 이미지 자리는 position 'after:
   assert.equal(core.normalizeImportItem({ externalId: "a" }).error, "title_required");
 });
 
-test("채널 검사(§3): 아는 target 필드만 받고, PC 자동은 어댑터가 있는 네이버 블로그만, api 방식은 아직 준비 중", () => {
+test("채널 검사(§3): 아는 target 필드만 받고, PC 자동은 어댑터가 있는 네이버 블로그만, api 방식은 SNS 예약 실행기가 받는 채널만(유튜브는 준비 중)", () => {
   const ok = core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "RAVIOK 블로그", target: { blogId: "https://blog.naver.com/raviok", visibility: "private", categoryNo: "12", password: "x" } });
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.channel.target, { blogId: "raviok", visibility: "private", categoryNo: "12" }, "비밀번호 같은 다른 필드는 버린다");
@@ -186,7 +186,13 @@ test("채널 검사(§3): 아는 target 필드만 받고, PC 자동은 어댑터
   assert.equal(ok.channel.minIntervalHours, 20);
   assert.equal(core.validateChannelInput({ type: "dcinside", mode: "pc", name: "디시", target: { galleryId: "game" } }).error, "channel_mode_unavailable");
   assert.equal(core.validateChannelInput({ type: "dcinside", mode: "manual", name: "디시", target: { galleryId: "game", galleryType: "minor" } }).ok, true);
-  assert.equal(core.validateChannelInput({ type: "x", mode: "api", name: "X" }).error, "channel_mode_unavailable");
+  for (const type of ["x", "threads", "facebook", "instagram", "discord"]) {
+    const v = core.validateChannelInput({ type, mode: "api", name: type, target: { anything: "x" } });
+    assert.equal(v.ok, true, type);
+    assert.deepEqual(v.channel.target, {}, `${type}: SNS 채널은 사이트 정보를 받지 않는다(계정은 SNS 세팅 연결)`);
+  }
+  assert.equal(core.validateChannelInput({ type: "youtube", mode: "api", name: "YT" }).error, "channel_mode_unavailable", "유튜브는 영상 전용·플랫폼 예약이라 아직");
+  assert.equal(core.validateChannelInput({ type: "x", mode: "manual", name: "X" }).error, "channel_mode_unavailable");
   assert.equal(core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "", target: { blogId: "abc" } }).error, "channel_name_required");
   // §3: blogId 는 선택 — 비우면 PC 앱이 로그인된 계정 블로그에 쓴다(글쓰기 열기도 로그인 계정 글쓰기로)
   const noId = core.validateChannelInput({ type: "naver_blog", mode: "pc", name: "a", target: { visibility: "private" } });

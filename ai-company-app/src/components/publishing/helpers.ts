@@ -15,7 +15,14 @@ export interface PublishingCtx {
   openItem: (id: string | null, preset?: { scheduledAt?: string }) => void;
   openCopy: (deliveryId: string) => void;
   goTab: (tab: PublishingTab) => void;
+  /** 글·달력에서 볼 캠페인: "" = 전체, NO_CAMPAIGN = 캠페인 아닌 글, 그 밖 = 캠페인 id. */
+  campaign: string;
+  setCampaign: (id: string) => void;
 }
+export const NO_CAMPAIGN = "-";
+/** 글이 지금 고른 캠페인에 드는지. */
+export const inCampaign = (item: PublishingItem, campaign: string) =>
+  !campaign || (campaign === NO_CAMPAIGN ? !item.campaignId : item.campaignId === campaign);
 export type PublishingTab = "overview" | "calendar" | "items" | "channels" | "settings";
 
 /** ISO → '10/23(목) 09:00' (한국 시간). */
@@ -31,7 +38,10 @@ export function fmtDay(t: PublishingDict, day: string): string {
 }
 
 export const channelTypeLabel = (t: PublishingDict, type: string) => t.channelType[type] || type;
-export const brandTitle = (ctx: PublishingCtx, id: string) => (id ? ctx.brands.find((b) => b.id === id)?.title || id : ctx.t.brandNone);
+/** 브랜드 이름: 브랜드 허브 → (프로젝트 시리즈라 허브에 없으면) 캠페인에 적힌 브랜드 이름 → id. */
+export const brandTitle = (ctx: PublishingCtx, id: string) => (id
+  ? ctx.brands.find((b) => b.id === id)?.title || ctx.state.campaigns.find((c) => c.brandId === id && c.brandTitle)?.brandTitle || id
+  : ctx.t.brandNone);
 
 export function channelById(state: PublishingState): Map<string, PublishingChannel> {
   return new Map(state.channels.map((c) => [c.id, c]));

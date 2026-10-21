@@ -186,7 +186,8 @@ test("NK Publisher 약속은 그대로: claim 응답·Job 모양 불변, 결과 
 
 test("저장: extras 칸(DDL 한 번), 패키지 이미지 md5 유지, 승인된 글이 바뀌면 다시 승인 필요 표시·승인하면 지움", () => {
   const store = read("prototype/functions/api/_shared/publishing-store.ts");
-  assert.match(store, /ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '\{\}'::jsonb;\n {2}END \$\$/);
+  const ddl = store.slice(store.indexOf("export async function runPublishingDdl"), store.indexOf("// ── 행 → 화면"));
+  assert.match(ddl, /ALTER TABLE publishing_items ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '\{\}'::jsonb;[\s\S]*\n {2}END \$\$/, "extras 칸도 같은 DO 블록 안에서 만든다");
   assert.match(store, /sourceMd5: String\(img\.sourceMd5\)/);
   assert.match(store, /keptMd5\.has\(img\.objectName\)/, "화면 저장이 원본 md5 를 빠뜨려도 같은 저장본이면 이어 붙인다(승인이 풀리지 않게)");
   assert.match(store, /if \(unapprove\) extras\.changedAfterApproval = new Date\(\)\.toISOString\(\)/);
