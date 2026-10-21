@@ -17,8 +17,9 @@ import { MOTION_SUBSCRIPTION_REQUIRED, motionSubscriptionAuth } from "./_motion-
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const MAX_BODY_CHARS = 8 * 1024 * 1024;
-// 시험(2026-10-21)에서 장면 코드가 약 2만 9천 자였다. 흘려 보내는 동안 연결은 유지되므로 넉넉히 둔다.
-const TIMEOUT_MS = 600_000;
+// 시험(2026-10-21)에서 장면 코드가 약 2만 9천 자였고, 그 앞에 깊게 생각한다. 흘려 보내는 동안 연결은 유지되므로
+// 넉넉히 두되 지역 우회 프록시(Cloud Run, 900초)보다 짧게 둬서 우리 쪽에서 먼저 정리한다.
+const TIMEOUT_MS = 840_000;
 
 export const onRequestOptions: PagesFunction = async ({ request }) =>
   new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

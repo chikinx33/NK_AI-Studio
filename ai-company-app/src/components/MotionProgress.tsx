@@ -14,7 +14,7 @@ export const MOTION_STAGES: MotionStage[] = ["plan", "assets", "director", "rend
 export const MOTION_STAGE_SECONDS: Record<MotionStage, [number, number]> = {
   plan: [60, 120],
   assets: [5, 60],
-  director: [180, 300],
+  director: [240, 480],
   render: [150, 420],
   save: [5, 40],
 };

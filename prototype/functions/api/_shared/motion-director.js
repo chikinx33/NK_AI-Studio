@@ -3,7 +3,9 @@
 import { MOTION_KIT_EXAMPLES, MOTION_KIT_GUIDE, MOTION_KIT_SFX } from "./motion-director-kit.js";
 
 export const MOTION_DIRECTOR_MODEL = "claude-opus-5-5";
-export const MOTION_DIRECTOR_MAX_TOKENS = 32000;
+// 생각(effort high) 토큰도 max_tokens 에 함께 계산된다. 32000 에서 운영 첫 시도가 잘렸다(2026-10-21).
+// Opus 5.5 출력 상한은 128K, 스트리밍 기본 권장값은 64000.
+export const MOTION_DIRECTOR_MAX_TOKENS = 64000;
 export const MOTION_DIRECTOR_MAX_IMAGES = 12;
 
 export const STAGE_SIZES = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080" };
