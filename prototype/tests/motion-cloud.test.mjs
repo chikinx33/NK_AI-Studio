@@ -141,3 +141,19 @@ test("감독 출력 한도: 모델 상한 128K·30분, 잘리면 생각/장면 �
   assert.match(picker, /if \(message\.includes\("motion_director_timeout"\)\) return t\.directorTimeout;/);
   assert.equal((picker.match(/directorTooLong: "/g) || []).length, 2, "한/영 둘 다");
 });
+
+test("화면 단순화: 설명 문구는 개요 옆 물음표 도움말 한 곳에, 왼쪽 패널엔 입력만", () => {
+  const workspace = read("ai-company-app/src/components/AgentVideoWorkspace.tsx");
+  assert.match(workspace, /<h2 className="text-sm font-bold text-strong">개요<\/h2>\n\s+<MotionHelp \/>/);
+  assert.doesNotMatch(workspace, /제작할 결과물의 기준을 입력합니다/);
+  assert.doesNotMatch(workspace, /<FieldLabel>(길이|화면비)<\/FieldLabel>/, "고른 값이 곧 설명");
+  assert.match(workspace, /<SelectField label="길이"/, "화면 읽기용 이름은 남긴다");
+  assert.doesNotMatch(workspace, /motionText\.(planningNote|cloudNote|previewPlaceholderHint)/);
+  assert.doesNotMatch(workspace, /로컬 Remotion 렌더/);
+  const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
+  assert.doesNotMatch(picker, /\{t\.(hint|bgmHint)\}<\/p>/);
+  const help = read("ai-company-app/src/components/MotionHelp.tsx");
+  for (const key of ["promptExample", "hint", "bgmHint", "planningNote", "cloudNote"]) assert.match(help, new RegExp(`t\.${key}\}`), key);
+  assert.match(help, /M9\.09 9a3 3 0 0 1 5\.83 1c0 2-3 3-3 3/, "lucide circle-help");
+  assert.match(help, /if \(event\.key === "Escape"\) setOpen\(false\);/);
+});

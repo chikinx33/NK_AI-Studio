@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
 import MotionAssetPicker, { useMotionAssetText } from "./MotionAssetPicker";
 import MotionProgress from "./MotionProgress";
+import MotionHelp from "./MotionHelp";
 import MotionRevisionPanel from "./MotionRevisionPanel";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
@@ -17,9 +18,11 @@ function FieldLabel({ children }: { children: string }) {
   return <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-faint">{children}</label>;
 }
 
-function SelectField({ value, onChange, children }: { value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
   return (
     <select
+      aria-label={label}
+      title={label}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700"
@@ -70,15 +73,19 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     startMeeting,
     decideCostApproval,
     renderVideo,
+    runStartedAt,
+    runFinishedAt,
   } = useAgentVideoWorkspace();
   const [storageOpen, setStorageOpen] = useState(false);
   const meetingInProgress = meetingStatus === "running";
-  const meetingStartDisabled = meetingInProgress || meetingStatus === "awaiting-approval";
   const motionText = useMotionAssetText();
   const renderInProgress = render.status === "queued" || render.status === "rendering";
   // 완성 영상: 클라우드 렌더러가 저장소에 올린 파일(1시간짜리 서명 주소)
   const finalVideoUrl = render.status === "done" && render.downloadUrl ? render.downloadUrl : "";
   const archiveInProgress = archive.status === "uploading";
+  // 기획부터 저장까지 한 단계라도 진행 중이면 작업 시작을 막는다(2026-10-22 엔케)
+  const workInProgress = meetingInProgress || renderInProgress || archiveInProgress;
+  const meetingStartDisabled = workInProgress || meetingStatus === "awaiting-approval";
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
@@ -114,7 +121,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
       const label = decision === "approve" ? "비용을 승인하고 실행" : "비용 요청을 거절";
       if (await appDialog.confirm(`이 영상 작업의 ${label}할까요?`, { title: "영상 작업 승인" })) void decideCostApproval(decision === "approve" ? "approved" : "rejected");
     } else if (action.action === "video.render") {
-      if (!renderInProgress && !archiveInProgress) void renderVideo();
+      if (!workInProgress) void renderVideo();
     } else if (action.action === "video.storage") {
       const operation = actionString(action, "operation");
       if (operation === "open") setStorageOpen(true);
@@ -127,14 +134,12 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
       {!embedded ? <header className="shrink-0 border-b border-edge bg-panel/70 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-tone-emerald">NK AI Company × Remotion</div>
             <h1 className="mt-1 max-w-xl truncate text-xl font-bold text-strong" title={activeWork?.title || "Agent Video"}>{activeWork?.title || "Agent Video"}</h1>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-faint">
             <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-tint-sky/40 px-3 py-1.5 font-bold text-tone-sky transition hover:bg-tint-sky/50">
               ☁ 저장소
             </button>
-            <span className="rounded-full border border-emerald-900/70 bg-tint-emerald/40 px-3 py-1.5 text-tone-emerald">로컬 Remotion 렌더</span>
             <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full border border-edge bg-inset text-muted transition hover:border-edge hover:bg-edge hover:text-strong" title="업무 폴더로 돌아가기" aria-label="업무 폴더로 돌아가기">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m5 5 10 10M15 5 5 15" /></svg>
             </button>
@@ -145,7 +150,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
           <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-faint">인포그래픽 제작 워크스페이스</span>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => setStorageOpen(true)} className="rounded-full border border-sky-900/70 bg-tint-sky/40 px-3 py-1.5 text-[10px] font-bold text-tone-sky transition hover:bg-tint-sky/50">☁ 저장소</button>
-            <span className="rounded-full border border-emerald-900/70 bg-tint-emerald/40 px-3 py-1.5 text-[10px] text-tone-emerald">로컬 Remotion 렌더</span>
           </div>
         </div>
       )}
@@ -154,10 +158,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
         OverviewFields: <>
             <div className="mb-2.5 flex items-center gap-2">
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-tint-emerald text-sm">🧭</span>
-              <div>
-                <h2 className="text-sm font-bold text-strong">개요</h2>
-                <p className="text-[10px] text-faint">제작할 결과물의 기준을 입력합니다.</p>
-              </div>
+              <h2 className="text-sm font-bold text-strong">개요</h2>
+              <MotionHelp />
             </div>
             <FieldLabel>영상 요청</FieldLabel>
             <textarea
@@ -171,8 +173,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
 
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <div>
-                <FieldLabel>길이</FieldLabel>
-                <SelectField value={String(durationSec)} onChange={(value) => setDurationSec(Number(value))}>
+                <SelectField label="길이" value={String(durationSec)} onChange={(value) => setDurationSec(Number(value))}>
                   <option value="15">15초</option>
                   <option value="30">30초</option>
                   <option value="45">45초</option>
@@ -180,8 +181,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                 </SelectField>
               </div>
               <div>
-                <FieldLabel>화면비</FieldLabel>
-                <SelectField value={aspectRatio} onChange={(value) => setAspectRatio(value as typeof aspectRatio)}>
+                <SelectField label="화면비" value={aspectRatio} onChange={(value) => setAspectRatio(value as typeof aspectRatio)}>
                   <option value="16:9">16:9 가로</option>
                   <option value="9:16">9:16 세로</option>
                   <option value="1:1">1:1 정사각</option>
@@ -195,19 +195,11 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               type="button"
               onClick={startMeeting}
               disabled={meetingStartDisabled}
-              aria-busy={meetingInProgress}
+              aria-busy={workInProgress}
               className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
-              {meetingInProgress ? "작업 중..." : "작업 시작"}
+              {workInProgress ? "작업 중..." : "작업 시작"}
             </button>
-            {meetingInProgress && (
-              <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-tint-emerald/25 p-2 text-[10px] leading-4 text-tone-emerald">
-                {motionText.planningNote}
-              </div>
-            )}
-            {(meetingInProgress || renderInProgress || archiveInProgress) && (
-              <p className="mt-1.5 text-[10px] leading-4 text-faint">{motionText.cloudNote}</p>
-            )}
             {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-tint-red/35 p-2 text-[10px] leading-4 text-tone-red">{error}</div>}
         </>,
         ApprovalPanel: pendingApproval ? (
@@ -234,7 +226,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               <span className="rounded-full bg-inset px-2.5 py-1 text-[10px] text-muted">{spec.aspectRatio}</span>
               <span className="ml-auto text-[11px] text-faint">{spec.title}</span>
             </div>
-            <MotionProgress meetingStatus={meetingStatus} render={render} archive={archive} />
+            <MotionProgress meetingStatus={meetingStatus} render={render} archive={archive} startedAt={runStartedAt} finishedAt={runFinishedAt} />
           </>
         ),
         PreviewRenderer: (
@@ -248,10 +240,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                     <video key={finalVideoUrl} src={finalVideoUrl} aria-label={motionText.finalVideo} controls loop playsInline className="h-full w-full" />
                   ) : (
                   <div className="grid h-full w-full place-items-center p-4 text-center">
-                    <div>
-                      <p className="text-sm font-bold text-content">{motionText.previewPlaceholder}</p>
-                      <p className="mt-1 text-[10px] leading-4 text-faint">{motionText.previewPlaceholderHint}</p>
-                    </div>
+                    <p className="text-sm font-bold text-content">{motionText.previewPlaceholder}</p>
                   </div>
                   )}
                 </div>
@@ -290,8 +279,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
             <button
               type="button"
               onClick={downloadVideo}
-              disabled={renderInProgress || archiveInProgress}
-              aria-busy={renderInProgress || archiveInProgress}
+              disabled={workInProgress}
+              aria-busy={workInProgress}
               title={renderInProgress ? `${Math.round(render.progress || 0)}%` : archiveInProgress ? "저장 중" : "MP4 다운로드"}
               className="w-full rounded-lg border border-orange-700/70 bg-tint-orange/40 px-3 py-2.5 text-xs font-bold text-tone-orange transition hover:bg-tint-orange/50 disabled:cursor-wait disabled:opacity-60"
             >

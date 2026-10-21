@@ -91,6 +91,9 @@ interface AgentVideoWorkspaceValue {
   saveAsExample: () => Promise<void>;
   // 완성 영상의 장면 정지 화면(클라우드 렌더러가 12장 찍어 저장해 둔다)
   stills: MotionStill[];
+  // 총 소요시간(진행 막대): 클라우드 작업이 만들어진 시각·끝난 시각
+  runStartedAt: string | null;
+  runFinishedAt: string | null;
 }
 
 const AgentVideoWorkspaceContext = createContext<AgentVideoWorkspaceValue | null>(null);
@@ -247,6 +250,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setRender({ status: "idle" });
     setArchive({ status: "idle" });
     setPendingApproval(null);
+    setCloudRun(null);
     activeWorkRef.current = null;
     setActiveWork(null);
     try {
@@ -430,6 +434,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       reviseVideo,
       saveAsExample,
       stills: cloudRun?.status === "done" ? cloudRun.output?.stills || [] : [],
+      runStartedAt: cloudRun?.createdAt || null,
+      runFinishedAt: cloudRun?.finishedAt || null,
     }}>
       {children}
     </AgentVideoWorkspaceContext.Provider>

@@ -70,7 +70,6 @@ export const MOTION_ASSET_TEXT = {
     exampleSaved: "실례로 저장했어요. 다음 영상부터 감독이 참고해요.",
     promptExample: "예: 청소년 스마트폰 사용 시간을 알리는 20초 세로 영상. 하루 평균 4.7시간, 10명 중 4명이 과의존 위험군. 학부모 대상, 경쾌하지만 믿음 가는 톤으로.",
     previewPlaceholder: "완성 영상이 여기에 나와요",
-    previewPlaceholderHint: "작업을 시작하면 기획 → 감독 → 렌더 순서로 만들어져요. 위 진행 막대에서 단계를 확인할 수 있어요.",
     planningNote: "플롯이 이야기 흐름을 짜고 잉크가 문장을 다듬은 뒤 코어가 콘티 초안으로 정리해요. 이어서 감독이 이 영상만의 장면을 새로 짜요.",
     jobInterrupted: "이전 작업이 서버에서 중간에 끊겼어요. '작업 시작'을 다시 눌러 주세요.",
     progressTitle: "진행 상황",
@@ -79,19 +78,25 @@ export const MOTION_ASSET_TEXT = {
     stageDirector: "감독",
     stageRender: "렌더",
     stageSave: "저장",
-    stagePlanDetail: "기획 회의가 구성과 문장을 정리하는 중",
-    stageAssetsDetail: "자산을 클라우드 렌더러로 받는 중",
-    stageDirectorDetail: "감독이 이 영상만의 장면 코드를 쓰는 중",
-    stageRenderDetail: "클라우드에서 촬영·모션블러·소리 합성 중",
-    stageSaveDetail: "완성 영상을 저장소에 올리는 중",
-    elapsed: "{t} 경과",
+    stagePlanDetail: "기획 회의가 구성과 문장을 정리해요.",
+    stageAssetsDetail: "고른 자산을 클라우드 렌더러로 받아요.",
+    stageDirectorDetail: "감독이 이 영상만의 장면 코드를 써요.",
+    stageRenderDetail: "장면을 찍어 모션블러·소리를 합쳐요.",
+    stageSaveDetail: "완성 영상을 저장소에 올려요.",
     usually: "보통 {r}",
+    totalTime: "총 {t}",
+    helpOpen: "도움말",
+    helpTitle: "인포그래픽 영상 만들기",
+    helpClose: "닫기",
+    helpRequest: "요청 쓰기",
+    helpRequestBody: "무엇을, 누구에게, 어떤 느낌으로 보여 줄지 적어 주세요. 숫자·사실을 넣으면 그대로 화면에 써요.",
+    helpAssets: "영상 자산",
+    helpSteps: "만드는 순서",
+    helpCloud: "창을 닫아도 돼요",
     minutes: "{a}~{b}분",
     seconds: "{a}~{b}초",
     timeMinSec: "{m}분 {s}초",
     timeSec: "{s}초",
-    thinking: "구상 중",
-    chars: "{n}자",
     stuck: "예상보다 오래 걸리고 있어요. 계속 그대로면 새로고침한 뒤 다시 시작해 주세요.",
     allDone: "완성됐어요",
     failed: "이 단계에서 멈췄어요",
@@ -148,7 +153,6 @@ export const MOTION_ASSET_TEXT = {
     exampleSaved: "Saved as an example. The director will refer to it from the next video.",
     promptExample: "e.g. A 20-second vertical video on teens' smartphone time. 4.7 hours a day on average; 4 in 10 at risk of overuse. For parents, upbeat but trustworthy.",
     previewPlaceholder: "Your finished video will appear here",
-    previewPlaceholderHint: "After you start, it goes plan → director → render. Watch the steps in the progress bar above.",
     planningNote: "Plot shapes the story, Ink polishes the copy and Core turns it into a storyboard draft. Then the director builds this video's own scenes.",
     jobInterrupted: "The previous job was cut off on the server. Press 'Start' again.",
     progressTitle: "Progress",
@@ -157,19 +161,25 @@ export const MOTION_ASSET_TEXT = {
     stageDirector: "Director",
     stageRender: "Render",
     stageSave: "Save",
-    stagePlanDetail: "Planning meeting is shaping the structure and copy",
-    stageAssetsDetail: "Fetching assets into the cloud renderer",
-    stageDirectorDetail: "Director is writing this video's own scene code",
-    stageRenderDetail: "Capturing, motion blur and sound mix in the cloud",
-    stageSaveDetail: "Uploading the final video to storage",
-    elapsed: "{t} elapsed",
+    stagePlanDetail: "The planning meeting shapes the structure and copy.",
+    stageAssetsDetail: "Your chosen assets are fetched into the cloud renderer.",
+    stageDirectorDetail: "The director writes this video's own scene code.",
+    stageRenderDetail: "Scenes are captured, then motion blur and sound are mixed in.",
+    stageSaveDetail: "The finished video is uploaded to storage.",
     usually: "usually {r}",
+    totalTime: "Total {t}",
+    helpOpen: "Help",
+    helpTitle: "Making an infographic video",
+    helpClose: "Close",
+    helpRequest: "Writing the request",
+    helpRequestBody: "Say what to show, to whom, and in what mood. Numbers and facts you include are used on screen as written.",
+    helpAssets: "Video assets",
+    helpSteps: "How it's made",
+    helpCloud: "You can close this window",
     minutes: "{a}–{b} min",
     seconds: "{a}–{b} s",
     timeMinSec: "{m}m {s}s",
     timeSec: "{s}s",
-    thinking: "thinking",
-    chars: "{n} chars",
     stuck: "This is taking longer than expected. If it stays like this, refresh and start again.",
     allDone: "Done",
     failed: "Stopped at this step",
@@ -293,8 +303,7 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
 
   return (
     <div className="mt-2.5 rounded-lg border border-edge/70 p-2">
-      <strong className="block text-[11px] text-strong">{t.title}</strong>
-      <p className="mb-1.5 text-[10px] leading-4 text-faint">{t.hint}</p>
+      <strong className="mb-1.5 block text-[11px] text-strong">{t.title}</strong>
       <label className={fieldLabel}>{t.brand}</label>
       <select value={value.brandId || ""} onChange={(event) => onChange({ ...value, brandId: event.target.value || null })} className={selectClass}>
         <option value="">{t.noBrand}</option>
@@ -332,7 +341,6 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
           </optgroup>
         )}
       </select>
-      <p className="mt-1 text-[10px] leading-4 text-faint">{t.bgmHint}</p>
       {error && <p className="mt-1 text-[10px] text-tone-red">{error}</p>}
     </div>
   );

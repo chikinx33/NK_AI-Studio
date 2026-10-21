@@ -258,6 +258,8 @@ export interface MotionCloudRun {
   progress: number;
   chars: number;
   error: string;
+  createdAt?: string;
+  finishedAt?: string | null;
   output: {
     videoUrl?: string;
     video?: { objectName: string; fileName: string; size: number };

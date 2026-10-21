@@ -194,5 +194,8 @@ test("진행 막대: 기획 → 자산 → 감독 → 렌더 → 저장 단계�
   assert.deepEqual(stage("done", { status: "done" }, { status: "done" }), { stage: null, state: "done" });
   assert.deepEqual(stage("done", { status: "error" }, { status: "error" }), { stage: null, state: "error" });
   assert.deepEqual(stage("idle", { status: "idle" }, { status: "idle" }), { stage: null, state: "idle" });
-  assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<MotionProgress meetingStatus=\{meetingStatus\} render=\{render\} archive=\{archive\} \/>/);
+  assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<MotionProgress meetingStatus=\{meetingStatus\} render=\{render\} archive=\{archive\} startedAt=\{runStartedAt\} finishedAt=\{runFinishedAt\} \/>/);
+  // 총 소요시간: 클라우드 작업 시각(다시 열어도 그대로), 진행 중엔 지금까지
+  assert.match(source, /const runEnd = finishedAt \? Date\.parse\(finishedAt\) : state === "active" \? now : NaN;/);
+  assert.match(source, /t\.totalTime\.replace\("\{t\}", formatElapsed\(t, total\)\)/);
 });
