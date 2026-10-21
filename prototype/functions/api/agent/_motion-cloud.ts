@@ -9,7 +9,12 @@ import type { SqlFn } from "../knowledge/_shared";
 
 // 작업 위치는 고정이다(CF Pages 환경 변수 64개 한도 — 새 변수를 늘리지 않는다).
 // 저장소 버킷(nkstudio-video-out)과 같은 미국 중부: 같은 지역이라 전송료가 없고, 1등급 가격이다.
-export const MOTION_CLOUD_JOB = "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-render";
+// 두 단계로 나눈다: 기다리는 시간이 긴 기획·감독은 작은 작업(1 vCPU), 촬영·인코딩만 큰 작업(4 vCPU).
+// Cloud Run 은 작업이 떠 있는 시간 전체를 CPU 크기만큼 매기므로, 큰 작업이 감독(4~8분)을 기다리면 비용이 세 배가 된다.
+export const MOTION_CLOUD_JOBS = {
+  prep: "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-prep",
+  render: "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-render",
+} as const;
 // 작업 하나는 길어야 1시간(기획 3분 + 감독 최대 14분 + 렌더 10분 남짓). 위임 토큰은 그보다 조금 길게.
 export const MOTION_CLOUD_TOKEN_TTL_SEC = 2 * 60 * 60;
 // 진행 보고가 이만큼 끊기면 작업이 죽은 것으로 본다(작업은 15초마다 살아 있다고 알린다).
@@ -116,14 +121,14 @@ export function normalizeMotionCloudStart(body: any): { ok: true; value: { mode:
 }
 
 // Cloud Run Jobs 실행: 사이트 서비스 계정(imagen-worker)은 이 작업 하나에만 '재정의해 실행' 권한이 있다.
-export async function runMotionCloudJob(env: any, args: { runId: string; token: string; origin: string }) {
+export async function runMotionCloudJob(env: any, args: { job: keyof typeof MOTION_CLOUD_JOBS; runId: string; token: string; origin: string }) {
   const gcs = resolveGcsEnv(env);
   const accessToken = await getGoogleAccessToken({
     clientEmail: gcs.clientEmail,
     privateKeyPem: gcs.privateKeyRaw,
     scope: "https://www.googleapis.com/auth/cloud-platform",
   });
-  const response = await fetch(`https://run.googleapis.com/v2/${MOTION_CLOUD_JOB}:run`, {
+  const response = await fetch(`https://run.googleapis.com/v2/${MOTION_CLOUD_JOBS[args.job]}:run`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -169,7 +174,9 @@ export async function startMotionCloudRun(sql: SqlFn, env: any, args: {
   const row = rows[0];
   try {
     const { token } = await issueSessionToken(args.userId, env, MOTION_CLOUD_TOKEN_TTL_SEC, { persistent: false });
-    const execution = await runMotionCloudJob(env, { runId: String(row.id), token, origin: args.origin });
+    // AI 없이 바꾼 장면 코드는 바로 렌더, 나머지는 기획·감독부터
+    const job = args.value.mode === "render" ? "render" : "prep";
+    const execution = await runMotionCloudJob(env, { job, runId: String(row.id), token, origin: args.origin });
     const updated = await sql(
       "UPDATE motion_cloud_runs SET execution = $2, updated_at = now() WHERE id = $1 RETURNING *",
       [row.id, execution],
@@ -206,4 +213,33 @@ export async function reportMotionCloudRun(sql: SqlFn, userId: string, body: any
     [run.id, userId, status, phase, progress, chars, error, workId, output],
   );
   return { ok: true as const, run: rows[0] };
+}
+
+// 작은 작업(기획·감독)이 장면 코드를 넘기면 큰 작업(렌더)을 띄운다
+export async function handoffMotionCloudRun(sql: SqlFn, env: any, userId: string, body: any, origin: string) {
+  await ensureMotionCloudSchema(sql);
+  const run = await getMotionCloudRun(sql, userId, String(body?.runId || ""));
+  if (!run) return { ok: false as const, status: 404, error: "not_found" };
+  if (FINISHED.has(String(run.status))) return { ok: false as const, status: 409, error: "motion_cloud_finished" };
+  const html = String(body?.html || "");
+  if (!/id=["']stage["']/.test(html) || !/window\.READY\s*=/.test(html) || html.length > 400_000) {
+    return { ok: false as const, status: 400, error: "장면 코드가 올바르지 않습니다." };
+  }
+  const workId = isUuid(body?.workId) ? String(body.workId).toLowerCase() : run.work_id;
+  if (!isUuid(workId)) return { ok: false as const, status: 400, error: "workId가 필요합니다." };
+  const input = {
+    ...(run.input && typeof run.input === "object" ? run.input : {}),
+    html,
+    episode: body?.episode && typeof body.episode === "object" ? body.episode : { bgm: null, cues: [] },
+    prepTimings: body?.timings && typeof body.timings === "object" ? body.timings : {},
+  };
+  await sql(
+    `UPDATE motion_cloud_runs SET input = $3::jsonb, work_id = $4, phase = 'render', progress = 0, chars = 0, updated_at = now()
+     WHERE id = $1 AND user_id = $2`,
+    [run.id, userId, JSON.stringify(input), workId],
+  );
+  const { token } = await issueSessionToken(userId, env, MOTION_CLOUD_TOKEN_TTL_SEC, { persistent: false });
+  const execution = await runMotionCloudJob(env, { job: "render", runId: String(run.id), token, origin });
+  await sql("UPDATE motion_cloud_runs SET execution = $2, updated_at = now() WHERE id = $1", [run.id, execution]);
+  return { ok: true as const };
 }

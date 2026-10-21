@@ -133,7 +133,7 @@ class Cdp {
 }
 
 // 컨테이너(클라우드 렌더러)는 root 로 돌고 /dev/shm 이 작아 MOTION_CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage" 를 더한다
-const EXTRA_CHROME_FLAGS = String(process.env.MOTION_CHROME_FLAGS || "").split(/\s+/).filter((flag) => flag.startsWith("--"));
+const EXTRA_CHROME_FLAGS =String(process.env.MOTION_CHROME_FLAGS || "").split(/\s+/).filter((flag) => flag.startsWith("--"));
 
 async function launchChrome(chrome, profileDirectory) {
   const child = spawn(chrome, [
@@ -369,17 +369,22 @@ export async function renderMotionPage(options) {
 
   const pageUrl = `${pathToFileURL(pagePath).href}?lang=${encodeURIComponent(lang)}`;
   const report = { blocked: new Set(), exceptions: new Set() };
-  const { child, wsUrl } = await launchChrome(chrome, profileDirectory);
-  let cdp = null;
+  // 크롬 프로세스 수. GPU 가 없는 클라우드는 화면 합성을 한 프로세스가 CPU 로 혼자 해서, 일꾼마다 크롬을 따로 띄워야 빨라진다.
+  const browserCount = Math.max(1, Math.min(workers, Number(options.browsers ?? process.env.MOTION_BROWSERS) || 1));
+  const browsers = [];
   let duration = 0;
   let total = 0;
   let encoder = null;
   let hasMix = false;
   const started = Date.now();
   try {
-    cdp = await Cdp.connect(wsUrl);
+    for (let i = 0; i < browserCount; i++) {
+      const launched = await launchChrome(chrome, `${profileDirectory}_${i}`);
+      browsers.push(launched);
+      launched.cdp = await Cdp.connect(launched.wsUrl);
+    }
     const pages = [];
-    for (let i = 0; i < workers; i++) pages.push(await openPage(cdp, pageUrl, roots, report));
+    for (let i = 0; i < workers; i++) pages.push(await openPage(browsers[i % browserCount].cdp, pageUrl, roots, report));
     duration = pages[0].duration;
     const { width, height } = pages[0];
     total = Math.floor(duration * fps * sub);
@@ -422,15 +427,17 @@ export async function renderMotionPage(options) {
       }
     }));
     await sink.end();
-    await cdp.send("Browser.close").catch(() => {});
+    await Promise.all(browsers.map(({ cdp }) => cdp?.send("Browser.close").catch(() => {})));
   } catch (error) {
     if (encoder?.child.exitCode === null) encoder.child.kill();
     throw error;
   } finally {
-    cdp?.close();
-    if (child.exitCode === null) child.kill();
-    await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve)));
-    await fs.rm(profileDirectory, { recursive: true, force: true }).catch(() => {});
+    await Promise.all(browsers.map(async ({ child, cdp }, i) => {
+      cdp?.close();
+      if (child.exitCode === null) child.kill();
+      await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve)));
+      await fs.rm(`${profileDirectory}_${i}`, { recursive: true, force: true }).catch(() => {});
+    }));
   }
   if (report.blocked.size) log(`막은 요청 ${report.blocked.size}건: ${[...report.blocked].slice(0, 5).join(", ")}`);
   if (report.exceptions.size) log(`페이지 오류 ${report.exceptions.size}건: ${[...report.exceptions].slice(0, 5).join(" | ")}`);
@@ -493,6 +500,7 @@ function parseArgs(argv) {
     else if (arg === "--fps") options.fps = Number(next());
     else if (arg === "--sub") options.sub = Number(next());
     else if (arg === "--workers") options.workers = Number(next());
+    else if (arg === "--browsers") options.browsers = Number(next());
     else if (arg === "--episode") options.episode = next();
     else if (arg === "--audio-dir") options.audioDirs.push(next());
     else if (arg === "--allow-root") options.allowRoots.push(next());

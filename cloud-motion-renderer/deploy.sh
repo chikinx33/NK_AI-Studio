@@ -6,6 +6,7 @@ PROJECT=arboreal-lane-477616-d4
 REGION=us-central1
 REPO=nk-motion
 JOB=nk-motion-render
+PREP_JOB=nk-motion-prep
 SA="nk-motion-render@${PROJECT}.iam.gserviceaccount.com"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)-$(date +%Y%m%d%H%M%S)"
@@ -24,8 +25,16 @@ echo '{ "type": "module" }' > "$STAGE/ai-company-app/package.json"
 gcloud builds submit "$STAGE" --project "$PROJECT" --region "$REGION" --tag "$IMAGE"
 # 빌드에 올린 소스 묶음(키트 포함 약 150MB)은 남겨 두지 않는다
 gcloud storage rm "gs://${PROJECT}_cloudbuild/source/**" --quiet || true
+# 같은 이미지로 두 작업: 기다림이 긴 기획·감독은 작게(1 vCPU), 촬영·인코딩은 크게(8 vCPU: 25초 영상 160초, 4 vCPU 의 약 4배 빠름). 작업이 떠 있는 시간 전체가 크기만큼 매겨진다.
+gcloud run jobs deploy "$PREP_JOB" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
+  --cpu 1 --memory 2Gi --tasks 1 --max-retries 0 --task-timeout 3600 --service-account "$SA" --set-env-vars MOTION_STAGE=prep
 gcloud run jobs deploy "$JOB" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
-  --cpu 4 --memory 8Gi --tasks 1 --max-retries 0 --task-timeout 3600 --service-account "$SA"
+  --cpu 8 --memory 8Gi --tasks 1 --max-retries 0 --task-timeout 3600 --service-account "$SA" --set-env-vars MOTION_STAGE=render
+# 사이트 계정(imagen-worker)은 이 두 작업만 '재정의해 실행'할 수 있다
+for j in "$PREP_JOB" "$JOB"; do
+  gcloud run jobs add-iam-policy-binding "$j" --project "$PROJECT" --region "$REGION" \
+    --member="serviceAccount:imagen-worker@${PROJECT}.iam.gserviceaccount.com" --role=roles/run.jobsExecutorWithOverrides >/dev/null
+done
 # 이전 이미지는 지운다(저장 용량 무료 0.5GB 안에 두려고)
 for digest in $(gcloud artifacts docker images list "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/renderer" --project "$PROJECT" --include-tags --format="value(version)" --filter="-tags:${TAG}"); do
   gcloud artifacts docker images delete "${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/renderer@${digest}" --project "$PROJECT" --delete-tags --quiet || true

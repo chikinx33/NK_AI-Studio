@@ -1,6 +1,7 @@
 // /api/agent/motion-cloud — 인포그래픽 영상 클라우드 렌더러
 // POST { action: "start", mode, skillJobId?, workId?, html?, episode?, request?, frameTimes? } → 작업 시작
 // POST { action: "report", runId, status, phase, progress, chars, error?, workId?, output? } → 클라우드 작업의 진행 보고
+// POST { action: "handoff", runId, workId, html, episode, timings } → 기획·감독 작업이 장면 코드를 넘기고 렌더 작업을 띄운다
 // GET ?runId=… (&input=1: 작업이 자기 입력을 읽을 때) / ?workId=… (그 업무의 마지막 작업) → 상태 + 결과 파일 주소
 import { authorizeRequest } from "../_shared/auth.js";
 import { resolveGcsEnv } from "../_shared/gcs.js";
@@ -9,6 +10,7 @@ import { signGcsUrl } from "./agent-video-storage";
 import {
   ensureMotionCloudSchema,
   getMotionCloudRun,
+  handoffMotionCloudRun,
   latestMotionCloudRun,
   normalizeMotionCloudStart,
   reportMotionCloudRun,
@@ -72,6 +74,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body: any = await request.json().catch(() => ({}));
     if (body?.action === "report") {
       const result = await reportMotionCloudRun(sql, auth.userId, body);
+      if (!result.ok) return send({ error: result.error }, result.status, origin);
+      return send({ ok: true }, 200, origin);
+    }
+    if (body?.action === "handoff") {
+      const result = await handoffMotionCloudRun(sql, env, auth.userId, body, new URL(request.url).origin);
       if (!result.ok) return send({ error: result.error }, result.status, origin);
       return send({ ok: true }, 200, origin);
     }

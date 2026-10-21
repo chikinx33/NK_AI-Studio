@@ -86,8 +86,12 @@ test("클라우드 작업 상태: 10분 넘게 보고가 없으면 멈춘 것으
 
 test("사이트 → Cloud Run Jobs: 고정된 작업 하나를 위임 토큰·작업 id 로만 재정의해 실행한다", () => {
   const source = read("prototype/functions/api/agent/_motion-cloud.ts");
-  assert.equal(cloud.MOTION_CLOUD_JOB, "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-render");
-  assert.match(source, /https:\/\/run\.googleapis\.com\/v2\/\$\{MOTION_CLOUD_JOB\}:run/);
+  assert.equal(cloud.MOTION_CLOUD_JOBS.prep, "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-prep");
+  assert.equal(cloud.MOTION_CLOUD_JOBS.render, "projects/arboreal-lane-477616-d4/locations/us-central1/jobs/nk-motion-render");
+  assert.match(source, /https:\/\/run\.googleapis\.com\/v2\/\$\{MOTION_CLOUD_JOBS\[args\.job\]\}:run/);
+  // 기다림이 긴 기획·감독은 작은 작업, AI 없이 바꾼 장면 코드만 바로 렌더 작업
+  assert.match(source, /const job = args\.value\.mode === "render" \? "render" : "prep";/);
+  assert.match(source, /runMotionCloudJob\(env, \{ job: "render", runId: String\(run\.id\), token, origin \}\)/, "넘겨받으면 렌더 작업");
   assert.match(source, /issueSessionToken\(args\.userId, env, MOTION_CLOUD_TOKEN_TTL_SEC, \{ persistent: false \}\)/);
   assert.match(source, /ensureSchemaOnce\(sql, "motion_cloud_runs_v1"/);
   assert.match(source, /error: "motion_cloud_busy"/, "한 사람당 한 번에 하나");
@@ -95,10 +99,19 @@ test("사이트 → Cloud Run Jobs: 고정된 작업 하나를 위임 토큰·�
   assert.match(deploy, /PROJECT=arboreal-lane-477616-d4/);
   assert.match(deploy, /REGION=us-central1/);
   assert.match(deploy, /JOB=nk-motion-render/);
-  assert.match(deploy, /--cpu 4 --memory 8Gi --tasks 1 --max-retries 0/);
+  assert.match(deploy, /PREP_JOB=nk-motion-prep/);
+  assert.match(deploy, /--cpu 1 --memory 2Gi --tasks 1 --max-retries 0 --task-timeout 3600 --service-account "\$SA" --set-env-vars MOTION_STAGE=prep/);
+  assert.match(deploy, /--cpu 8 --memory 8Gi --tasks 1 --max-retries 0 --task-timeout 3600 --service-account "\$SA" --set-env-vars MOTION_STAGE=render/);
+  const job = read("ai-company-app/scripts/motion-cloud-job.mjs");
+  assert.match(job, /if \(!pageReady && STAGE === "prep"\) \{\n\s+clearInterval\(heartbeat\);\n\s+silenced = true;/, "넘긴 뒤엔 보고하지 않는다");
+  assert.match(job, /action: "handoff", runId: RUN_ID, workId, html, episode, timings/);
   const docker = read("cloud-motion-renderer/Dockerfile");
   assert.match(docker, /google-chrome-stable/);
-  assert.match(docker, /--no-sandbox --disable-dev-shm-usage/);
+  // GPU 없는 컨테이너: 소프트웨어 합성(SwiftShader GL 흉내보다 3.6배 빠름), WebGL 만 SwiftShader, 일꾼 6·크롬 3(8 vCPU 실측 25초 영상 160초)
+  assert.match(docker, /MOTION_CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage --disable-gpu --enable-unsafe-swiftshader"/);
+  assert.match(docker, /MOTION_WORKERS=6/);
+  assert.match(docker, /MOTION_BROWSERS=3/);
+  assert.match(read("ai-company-app/scripts/render-motion-page.mjs"), /const browserCount = Math\.max\(1, Math\.min\(workers, Number\(options\.browsers \?\? process\.env\.MOTION_BROWSERS\) \|\| 1\)\);/);
   assert.match(docker, /motion-cloud-job\.mjs/);
   // 기획 회의는 만들기만 하고(defer=1) 실행은 클라우드 작업이 맡는다
   assert.match(read("prototype/functions/api/agent/skills/[skillId]/jobs.ts"), /if \(result\.created && !defer\)/);

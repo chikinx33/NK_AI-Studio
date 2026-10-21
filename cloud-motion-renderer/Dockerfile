@@ -11,11 +11,14 @@ RUN apt-get update \
  && apt-get purge -y curl gnupg && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 
-# 컨테이너는 root 로 돌고 /dev/shm 이 작다. GPU 가 없으니 WebGL(gl-transitions)은 SwiftShader 로 그린다.
+# 컨테이너는 root 로 돌고 /dev/shm 이 작다. GPU 가 없다:
+# 화면 합성은 --disable-gpu(소프트웨어 합성)가 SwiftShader GL 흉내보다 3.6배 빠르다(2026-10-22 실측). WebGL(gl-transitions)만 SwiftShader.
+# 합성은 크롬 프로세스 하나가 혼자 해서, 일꾼마다 크롬을 따로 띄운다(MOTION_BROWSERS).
 ENV MOTION_CHROME=/usr/bin/google-chrome-stable \
     MOTION_FFMPEG=/usr/bin/ffmpeg \
-    MOTION_CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage --use-angle=swiftshader --enable-unsafe-swiftshader" \
-    MOTION_WORKERS=3
+    MOTION_CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage --disable-gpu --enable-unsafe-swiftshader" \
+    MOTION_WORKERS=6 \
+    MOTION_BROWSERS=3
 
 WORKDIR /app
 COPY ai-company-app /app/ai-company-app

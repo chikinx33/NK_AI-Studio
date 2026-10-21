@@ -3,6 +3,9 @@
 // 이 PC 렌더러(server.js /local-motion)와 브라우저가 나눠 하던 일을 혼자 한다:
 // 기획 회의 → 자산 받기·정리 → 감독(사이트의 /api/agent/motion-director, Claude 구독) → 렌더 → 정지 화면 → 저장소 저장·업무 완료.
 // 폴더 구조는 이 저장소와 같게 둔다(/app/tmp/motion/<workId>, /app/ai-company-app/motion-kit) — 감독이 쓴 상대 경로가 그대로 맞는다.
+// 두 단계: MOTION_STAGE=prep(작은 작업, 1 vCPU)은 기획·자산·감독까지 하고 장면 코드를 사이트에 넘긴다(handoff) →
+// 사이트가 렌더 작업(4 vCPU)을 띄우고, 렌더 작업은 넘겨받은 장면 코드로 자산 정리·렌더·저장만 한다.
+// (감독을 기다리는 4~8분을 큰 작업이 기다리면 그 시간도 4 vCPU 로 매겨진다.)
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -15,11 +18,15 @@ const ORIGIN = String(process.env.NK_SITE_ORIGIN || "https://nkstudio.org").repl
 const RUN_ID = String(process.env.NK_RUN_ID || "");
 const TOKEN = String(process.env.NK_SESSION_TOKEN || "");
 const HEARTBEAT_MS = 15_000;
+const STAGE = process.env.MOTION_STAGE === "prep" ? "prep" : "render";
 
 const state = { status: "running", phase: "start", progress: 0, chars: 0, workId: null };
 const timings = {};
 const started = Date.now();
 let lastReport = 0;
+// 장면 코드를 렌더 작업에 넘긴 뒤에는 이 작업이 더 보고하지 않는다(렌더 작업의 보고를 덮지 않게)
+let silenced = false;
+const heartbeat = setInterval(() => { void report({}, { force: true }); }, HEARTBEAT_MS);
 
 function api(pathname, init = {}) {
   return fetch(`${ORIGIN}${pathname}`, {
@@ -37,6 +44,7 @@ async function apiJson(pathname, init = {}, label = pathname) {
 
 async function report(patch = {}, { force = false } = {}) {
   Object.assign(state, patch);
+  if (silenced) return;
   if (!force && Date.now() - lastReport < 4_000) return;
   lastReport = Date.now();
   await api("/api/agent/motion-cloud", {
@@ -46,14 +54,14 @@ async function report(patch = {}, { force = false } = {}) {
   }).catch((error) => console.error(`보고 실패: ${error?.message || error}`));
 }
 
-async function phase(name, fn) {
+async function phase(name, fn, key = name) {
   const at = Date.now();
   await report({ phase: name, progress: 0, chars: 0 }, { force: true });
   try {
     return await fn();
   } finally {
-    timings[name] = Math.round((Date.now() - at) / 100) / 10;
-    console.log(`[${name}] ${timings[name]}초`);
+    timings[key] = Math.round((Date.now() - at) / 100) / 10;
+    console.log(`[${key}] ${timings[key]}초`);
   }
 }
 
@@ -171,8 +179,10 @@ async function main() {
   const lang = input.lang === "en" ? "en" : "ko";
   let workId = run.workId;
   let skillJob = null;
+  // 장면 코드가 이미 정해졌나: 준비 작업이 넘겨줬거나(prepTimings), AI 없이 바꾼 장면 코드(render)
+  const pageReady = run.mode === "render" || !!input.prepTimings;
 
-  if (run.mode === "new" && run.skillJobId) {
+  if (!pageReady && run.mode === "new" && run.skillJobId) {
     const planned = await phase("plan", () => runPlanning(run.skillJobId));
     skillJob = planned.job;
     if (planned.awaiting) {
@@ -192,11 +202,15 @@ async function main() {
   await apiJson("/api/agent/work-items", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: workId, status: "working" }) }, "업무 상태").catch(() => {});
 
   const directory = path.join(ROOT, "tmp", "motion", workId.toLowerCase());
-  const prepared = await phase("assets", () => stageAssets(workId, directory));
+  // 렌더 작업도 자산을 다시 받아 정리한다(몇 초, 결과는 같다). 화면에는 렌더 단계로 보인다.
+  const prepared = await phase(pageReady ? "render" : "assets", () => stageAssets(workId, directory), "assets");
 
   let html;
   let episode;
-  if (run.mode === "new") {
+  if (pageReady) {
+    html = input.html;
+    episode = input.episode;
+  } else if (run.mode === "new") {
     const result = await phase("director", async () => runDirector({ workId, prepared, thumbs: await thumbsFor(directory, prepared) }));
     html = result.html;
     episode = result.episode;
@@ -213,9 +227,18 @@ async function main() {
     });
     html = result.html;
     episode = result.episode;
-  } else {
-    html = input.html;
-    episode = input.episode;
+  }
+  if (!pageReady && STAGE === "prep") {
+    clearInterval(heartbeat);
+    silenced = true;
+    timings.prepTotal = Math.round((Date.now() - started) / 100) / 10;
+    await apiJson("/api/agent/motion-cloud", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "handoff", runId: RUN_ID, workId, html, episode, timings }),
+    }, "렌더 작업 넘기기");
+    console.log(`렌더 작업에 넘김 (${timings.prepTotal}초)`);
+    return;
   }
   await writePage(directory, html, episode);
 
@@ -306,17 +329,17 @@ async function main() {
       stills: storedStills,
     };
   });
-  timings.total = Math.round((Date.now() - started) / 100) / 10;
-  await report({ status: "done", phase: "save", progress: 100, output: { ...output, timings } }, { force: true });
+  timings.renderTotal = Math.round((Date.now() - started) / 100) / 10;
+  await report({ status: "done", phase: "save", progress: 100, output: { ...output, timings: { ...(input.prepTimings || {}), ...timings } } }, { force: true });
 }
 
-const heartbeat = setInterval(() => { void report({}, { force: true }); }, HEARTBEAT_MS);
 main()
   .then(() => { clearInterval(heartbeat); process.exit(0); })
   .catch(async (error) => {
     clearInterval(heartbeat);
     const message = String(error?.message || error || "클라우드 렌더 실패");
     console.error(message);
+    silenced = false;
     await report({ status: "error", error: message, output: { timings } }, { force: true });
     process.exit(1);
   });
