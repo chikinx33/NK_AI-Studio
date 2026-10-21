@@ -26,14 +26,24 @@ export async function buildMotionDirectorKit() {
       episode: JSON.stringify(JSON.parse(await read(`examples/${id}/episode.json`))),
     });
   }
-  const sfx = JSON.parse(await read("sfx/index.json"))
-    .map((item) => `${item.file} | ${item.ko} | ${item.tags.join(",")} | ${item.durationSec}s, 타격 ${item.peakSec}s`)
+  // 효과음은 파일이 수백 개라 용도 태그만 넘긴다(렌더러가 태그 → 실제 파일을 고른다)
+  const sfxIndex = JSON.parse(await read("sfx/index.json"));
+  const tags = JSON.parse(await read("sfx/tags.json"));
+  const sfx = Object.entries(tags)
+    .map(([tag, description]) => `tag:${tag} | ${description} | ${sfxIndex.filter((item) => item.tags.includes(tag)).length}개`)
     .join("\n");
-  const source = `// 자동 생성 파일 — 손으로 고치지 말 것. 원본: ai-company-app/motion-kit (KIT.md, examples/, sfx/index.json)
+  const music = JSON.parse(await read("music/index.json")).map((track) => ({ id: track.id, ko: track.ko, bpm: track.bpm }));
+  const icons = (await fs.readdir(path.join(kitDirectory, "icons", "lucide"))).filter((f) => f.endsWith(".svg")).map((f) => f.slice(0, -4)).sort();
+  const emoji = (await fs.readdir(path.join(kitDirectory, "emoji"))).filter((f) => f.endsWith(".png")).map((f) => f.slice(0, -4)).sort();
+  const source = `// 자동 생성 파일 — 손으로 고치지 말 것. 원본: ai-company-app/motion-kit (KIT.md, examples/, sfx/, music/, icons/, emoji/)
 // 다시 만들기: node ai-company-app/scripts/build-motion-director-kit.mjs
 export const MOTION_KIT_GUIDE = ${JSON.stringify(guide)};
 export const MOTION_KIT_EXAMPLES = ${JSON.stringify(examples)};
 export const MOTION_KIT_SFX = ${JSON.stringify(sfx)};
+export const MOTION_KIT_SFX_TAGS = ${JSON.stringify(Object.keys(tags))};
+export const MOTION_KIT_MUSIC = ${JSON.stringify(music)};
+export const MOTION_KIT_ICONS = ${JSON.stringify(icons)};
+export const MOTION_KIT_EMOJI = ${JSON.stringify(emoji)};
 `;
   return source;
 }

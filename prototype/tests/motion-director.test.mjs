@@ -37,14 +37,18 @@ test("시스템 지침에 키트 사용법·쇼츠 문법·시즌1 실례 2편·
   assert.match(system, /확인되지 않은 수치는 만들지 않는다/);
   assert.match(system, /실례 1: NEKOBAN/);
   assert.match(system, /실례 2: ELIDUS/);
-  assert.match(system, /synth\/whoosh\.wav/);
-  assert.match(system, /game\/puzzleknight-level_up\.wav/);
+  // 효과음은 파일 목록 대신 용도 태그로(렌더러가 실제 파일을 고른다), 새 키트 자산 사용법
+  assert.match(system, /tag:whoosh \|/);
+  assert.match(system, /tag:jingle \|/);
+  assert.match(system, /3D 이모지/);
+  assert.match(system, /Lucide/);
+  assert.match(system, /autoplay: false/);
 });
 
 test("요청 메시지에 화면 크기·경로·자산·박자가 들어가고 길이 밖 박자는 뺀다", () => {
   const text = buildMotionDirectorRequest({
     input: { prompt: "청소년 스마트폰", durationSec: 25, aspectRatio: "16:9", audience: "학부모", tone: "경쾌", style: "쇼츠" },
-    spec: { title: "폰 내려놓기", scenes: [{ kind: "hero", title: "하루 4.7시간", body: "평균", visualData: { dataMode: "quantitative", values: [4.7], labels: ["하루"], unit: "시간" } }] },
+    spec: { title: "폰 내려놓기", scenes: [{ kind: "hero", title: "하루 4.7시간", body: "평균", facts: [{ label: "하루 평균", value: 4.7, unit: "시간" }], idea: "폰 숫자가 올라간다", visualData: { dataMode: "quantitative", values: [66], labels: ["항목 2"], unit: "%" } }] },
     prepared,
   });
   assert.match(text, /data-size="1920x1080"/);
@@ -84,7 +88,7 @@ test("결과 검사: 타이머·무작위·외부 주소·CSS 애니메이션·�
 });
 
 test("배경음악이 없으면 소리 큐는 초 단위만 쓴다", () => {
-  const noMusic = { ...prepared, bgm: null };
+  const noMusic = { ...prepared, bgm: null, noMusic: true };
   const out = parseMotionDirectorOutput(fence("html", goodPage) + fence("json", '{"bgm":null,"cues":[[3,"synth/pop.wav",1]]}'), { prepared: noMusic });
   assert.ok(out.problems.some((p) => p.includes("초")));
   assert.equal(out.episode.bgm, null);
@@ -114,7 +118,7 @@ test("이 PC 렌더러: nkstudio.org·localhost 화면만 부를 수 있고, 렌
   assert.match(server, /if \(isLocalRendererPath\(pathname\) && localRendererCors\(req, res\)\) return;/);
   assert.match(server, /const busy = \[\.\.\.agentVideoJobs\.values\(\)\]\.some\(\(job\) => job\.status === 'rendering'\)/);
   assert.match(server, /'--allow-root', directory, '--allow-root', kitDirectory/);
-  assert.match(server, /\(raw\|prepare\|page\|render\|thumb\)/);
+  assert.match(server, /\(raw\|prepare\|page\|render\|thumb\|stills\|still\)/);
 });
 
 test("키트: 무대 크기를 <html data-size>로 바꾸되 기본 1080x1920은 시즌1과 같은 값을 쓴다", () => {

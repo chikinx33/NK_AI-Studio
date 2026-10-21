@@ -1,5 +1,6 @@
 // POST /api/agent/motion-director — 인포그래픽 영상 감독: 이 영상만의 장면 코드(HTML 한 장)와 소리 큐를 쓴다.
 // body: { workId, prepared(이 PC 렌더러가 정리한 assets.json), thumbs?: [{ id, label, dataUrl }] }
+//   부분 수정: { …, mode: "revise", html, episode, request, frames?: [{ t, dataUrl }] }
 // 응답: text/event-stream — data: {"t":"progress","chars"} … data: {"t":"done","result":{html,episode,problems}} | {"t":"error","error"}
 //
 // 비용 0원 정책(2026-10-21 엔케): Claude 구독(OAuth)일 때만 실행한다. API 키 경로는 쓰지 않고,
@@ -9,8 +10,9 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 import {
   MOTION_DIRECTOR_MAX_IMAGES, MOTION_DIRECTOR_MAX_TOKENS, MOTION_DIRECTOR_MODEL,
-  buildMotionDirectorRequest, buildMotionDirectorSystem, parseMotionDirectorOutput,
+  buildMotionDirectorRequest, buildMotionDirectorSystem, buildMotionRevisionRequest, parseMotionDirectorOutput,
 } from "../_shared/motion-director.js";
+import { motionExamplesForPrompt } from "./_motion-examples";
 import { corsHeaders, getSql, send } from "./_shared";
 import { MOTION_SUBSCRIPTION_REQUIRED, motionSubscriptionAuth } from "./_motion-auth";
 
@@ -66,8 +68,30 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   }
 
   const system = buildMotionDirectorSystem();
-  const userText = buildMotionDirectorRequest({ input, spec: metadata.spec || null, prepared });
-  const content = [...imageBlocks(body?.thumbs), { type: "text", text: userText }];
+  let content: any[];
+  if (body?.mode === "revise") {
+    // 부분 수정: 지금 장면 코드 + 수정 요청 + 사용자가 가리킨 장면 정지 화면
+    const html = String(body?.html || "");
+    const revisionRequest = String(body?.request || "").trim();
+    if (!html || html.length > 200_000) return send({ error: "고칠 장면 코드가 필요합니다." }, 400, origin);
+    if (!revisionRequest) return send({ error: "무엇을 바꿀지 적어 주세요." }, 400, origin);
+    const frames = (Array.isArray(body?.frames) ? body.frames : []).slice(0, 6);
+    const frameBlocks = imageBlocks(frames.map((frame: any) => ({ dataUrl: frame?.dataUrl, label: `사용자가 가리킨 장면 ${Number(frame?.t) || 0}초` })));
+    const userText = buildMotionRevisionRequest({
+      input, prepared, html, episode: body?.episode || null, request: revisionRequest,
+      frameTimes: frames.map((frame: any) => Number(frame?.t) || 0),
+    });
+    content = [...frameBlocks, { type: "text", text: userText }];
+  } else {
+    // 새로 쓰기: 저장해 둔 실례(엔케가 마음에 들어 한 영상)를 취향 참고로 함께 준다
+    const examples = await motionExamplesForPrompt(sql, who.userId, String(input.aspectRatio || "")).catch(() => []);
+    const examplesText = examples.length
+      ? ["# 이 사용자가 마음에 들어 저장한 실례 (취향 참고 — 그대로 베끼지 말고 수준·리듬·마감을 맞춘다)",
+        ...examples.map((ex: any, i: number) => `## 저장 실례 ${i + 1}: ${ex.title} (${ex.aspectRatio})\n\`\`\`html\n${ex.html}\n\`\`\``), ""].join("\n")
+      : "";
+    const userText = buildMotionDirectorRequest({ input, spec: metadata.spec || null, prepared });
+    content = [...imageBlocks(body?.thumbs), { type: "text", text: examplesText + userText }];
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort("motion_director_timeout"), TIMEOUT_MS);

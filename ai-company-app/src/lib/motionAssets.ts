@@ -123,11 +123,13 @@ export async function runMotionDirector(
   prepared: any,
   thumbs: Array<{ id: string; label: string; dataUrl: string }>,
   onProgress?: (chars: number) => void,
+  // 부분 수정: 지금 장면 코드·소리 큐 + 수정 요청 + 가리킨 장면 정지 화면
+  revision?: { html: string; episode: unknown; request: string; frames: Array<{ t: number; dataUrl: string }> },
 ): Promise<MotionDirectorResult> {
   const res = await fetch("/api/agent/motion-director", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workId, prepared, thumbs }),
+    body: JSON.stringify(revision ? { workId, prepared, mode: "revise", ...revision } : { workId, prepared, thumbs }),
   });
   if (!res.ok || !res.body) {
     const data = await res.json().catch(() => ({}));
@@ -171,4 +173,74 @@ export async function startMotionRender(workId: string, lang: "ko" | "en" = "ko"
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "렌더를 시작하지 못했어요.");
   return { ...(data as LocalAgentVideoRenderStatus), phase: "render" };
+}
+
+// ---------- 부분 수정 ----------
+
+export async function getMotionPage(workId: string): Promise<{ html: string; episode: unknown }> {
+  const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/page`));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "이 PC 렌더러에서 장면 코드를 읽지 못했어요.");
+  return data;
+}
+
+export async function getPreparedMotionAssets(workId: string): Promise<any> {
+  const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}`));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "이 PC 렌더러에서 자산 목록을 읽지 못했어요.");
+  return data;
+}
+
+export interface MotionStill { t: number; url: string }
+
+export async function makeMotionStills(workId: string): Promise<MotionStill[]> {
+  const res = await fetch(localRendererUrl(`/local-motion/jobs/${encodeURIComponent(workId)}/stills`), { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "장면 정지 화면을 만들지 못했어요.");
+  return (data.stills || []).map((still: MotionStill) => ({ t: still.t, url: localRendererUrl(still.url) }));
+}
+
+export async function imageUrlToDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`그림을 읽지 못했어요 (HTTP ${res.status})`);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("그림을 읽지 못했어요."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 키트 글꼴(FONTS.md) — AI 없이 바로 바꾸기에서 고른다
+export const MOTION_FONTS = [
+  "Pretendard", "SUIT", "NK Sans", "Black Han Sans", "Do Hyeon", "Nanum Gothic ExtraBold", "Jua", "Dongle",
+  "Gowun Dodum", "Gowun Batang", "NK Serif", "Nanum Pen Script", "Gaegu", "Hi Melody", "Nalgae", "KOTRA Hope",
+];
+
+// AI 없이 바로 바꾸기: 글꼴은 무대 안 모든 글자에, 색은 강조색 변수에 덮어쓴다(다시 바꾸면 이전 덮어쓰기는 지운다)
+export function applyQuickStyle(html: string, quick: { font?: string; color?: string }): string {
+  const rules: string[] = [];
+  if (quick.font && MOTION_FONTS.includes(quick.font)) {
+    rules.push(`#stage, #stage *:not(svg):not(path):not(circle):not(rect) { font-family: "${quick.font}", sans-serif !important; }`);
+  }
+  if (quick.color && /^#[0-9a-f]{6}$/i.test(quick.color)) {
+    rules.push(`:root { --k-hi: ${quick.color} !important; --accent: ${quick.color} !important; --s-color: ${quick.color} !important; }`);
+  }
+  const cleaned = html.replace(/<style id="nk-quick-style">[\s\S]*?<\/style>\s*/g, "");
+  if (!rules.length) return cleaned;
+  const block = `<style id="nk-quick-style">\n${rules.join("\n")}\n</style>\n`;
+  return /<\/head>/i.test(cleaned) ? cleaned.replace(/<\/head>/i, `${block}</head>`) : block + cleaned;
+}
+
+// ---------- 실례로 저장 ----------
+
+export async function saveMotionExample(workId: string, html: string, title = ""): Promise<void> {
+  const res = await fetch("/api/agent/motion-examples", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workId, html, title }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "실례로 저장하지 못했어요.");
 }

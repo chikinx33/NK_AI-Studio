@@ -99,24 +99,28 @@ function click(out, { start = 0, sec = 0.004, hp = 2500, amp = 0.6 } = {}) {
 const BELL = [[1, 1, 0], [2.76, 0.45, 2], [5.4, 0.22, 5], [8.93, 0.1, 9]];
 
 const SYNTH = [
-  { id: "whoosh", ko: "휙(장면 전환)", en: "whoosh (transition)", tags: ["transition", "move"], make: () => whoosh(0.6, 260, 2600, 700, 1.1) },
-  { id: "swish", ko: "슉(빠른 등장)", en: "swish (fast entrance)", tags: ["transition", "entrance"], make: () => whoosh(0.32, 700, 6500, 2000, 1.4) },
-  { id: "pop", ko: "뽁(등장·스티커)", en: "pop (appear, sticker)", tags: ["appear", "sticker"], make: () => click(tone(buffer(0.2), { freq: 950, freqEnd: 260, glide: 0.06, decay: 28 }), { sec: 0.003, amp: 0.4 }) },
-  { id: "pop-up", ko: "뿅(올라오며 등장)", en: "bloop (rising appear)", tags: ["appear"], make: () => tone(buffer(0.22), { freq: 320, freqEnd: 1250, glide: 0.08, decay: 22 }) },
-  { id: "ding", ko: "딩(강조·정답)", en: "ding (highlight)", tags: ["highlight", "success"], make: () => tone(buffer(1.4), { freq: 1320, decay: 2.6, partials: BELL }) },
-  { id: "chime", ko: "띠리링(완료·성공)", en: "chime (complete)", tags: ["success", "end"], make: () => {
+  { id: "whoosh", ko: "휙(장면 전환)", en: "whoosh (transition)", tags: ["whoosh"], make: () => whoosh(0.6, 260, 2600, 700, 1.1) },
+  { id: "whoosh-long", ko: "휘익(느린 전환)", en: "long whoosh", tags: ["whoosh"], make: () => whoosh(1.1, 180, 1800, 400, 0.9) },
+  { id: "whoosh-low", ko: "훅(묵직한 전환)", en: "low whoosh", tags: ["whoosh"], make: () => whoosh(0.7, 120, 900, 250, 1.0) },
+  { id: "whoosh-bright", ko: "쉭(밝은 전환)", en: "bright whoosh", tags: ["whoosh", "swish"], make: () => whoosh(0.5, 900, 7000, 2500, 1.3) },
+  { id: "whoosh-short", ko: "휙(짧은 전환)", en: "short whoosh", tags: ["whoosh", "swish"], make: () => whoosh(0.28, 400, 4200, 1200, 1.2) },
+  { id: "swish", ko: "슉(빠른 등장)", en: "swish (fast entrance)", tags: ["swish", "whoosh"], make: () => whoosh(0.32, 700, 6500, 2000, 1.4) },
+  { id: "pop", ko: "뽁(등장·스티커)", en: "pop (appear, sticker)", tags: ["pop"], make: () => click(tone(buffer(0.2), { freq: 950, freqEnd: 260, glide: 0.06, decay: 28 }), { sec: 0.003, amp: 0.4 }) },
+  { id: "pop-up", ko: "뿅(올라오며 등장)", en: "bloop (rising appear)", tags: ["pop"], make: () => tone(buffer(0.22), { freq: 320, freqEnd: 1250, glide: 0.08, decay: 22 }) },
+  { id: "ding", ko: "딩(강조·정답)", en: "ding (highlight)", tags: ["ding"], make: () => tone(buffer(1.4), { freq: 1320, decay: 2.6, partials: BELL }) },
+  { id: "chime", ko: "띠리링(완료·성공)", en: "chime (complete)", tags: ["chime", "success"], make: () => {
     const out = buffer(1.3);
     [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(out, { start: i * 0.075, freq: f, decay: 3.2, amp: 0.7, partials: [[1, 1, 0], [2, 0.3, 4], [3, 0.12, 8]] }));
     return out;
   } },
-  { id: "tick", ko: "똑(숫자·글자 하나)", en: "tick (counter, letter)", tags: ["counter", "type"], make: () => click(tone(buffer(0.05), { freq: 2800, decay: 140, amp: 0.6 }), { sec: 0.002, hp: 4000, amp: 0.8 }) },
-  { id: "thump", ko: "쿵(강한 등장·충격)", en: "thump (impact)", tags: ["impact", "hit"], make: () => {
+  { id: "tick", ko: "똑(숫자·글자 하나)", en: "tick (counter, letter)", tags: ["tick"], make: () => click(tone(buffer(0.05), { freq: 2800, decay: 140, amp: 0.6 }), { sec: 0.002, hp: 4000, amp: 0.8 }) },
+  { id: "thump", ko: "쿵(강한 등장·충격)", en: "thump (impact)", tags: ["thump", "impact-heavy"], make: () => {
     const out = tone(buffer(0.6), { freq: 130, freqEnd: 42, glide: 0.18, decay: 7 });
     const lp = biquad("lp");
     for (let i = 0; i < 0.05 * SR; i++) out[i] += lp(noise(), 900, 0.7) * (1 - i / (0.05 * SR)) * 0.8;
     return out.map((v) => Math.tanh(v * 1.6));
   } },
-  { id: "riser", ko: "상승음(긴장·기대)", en: "riser (build-up)", tags: ["build", "transition"], make: () => {
+  { id: "riser", ko: "상승음(긴장·기대)", en: "riser (build-up)", tags: ["rise"], make: () => {
     const sec = 1.3;
     const out = buffer(sec);
     const bp = biquad("bp");
@@ -129,7 +133,7 @@ const SYNTH = [
     }
     return out;
   } },
-  { id: "sparkle", ko: "반짝(빛남·보상)", en: "sparkle (shine, reward)", tags: ["shine", "reward"], make: () => {
+  { id: "sparkle", ko: "반짝(빛남·보상)", en: "sparkle (shine, reward)", tags: ["sparkle"], make: () => {
     const out = buffer(0.9);
     for (let k = 0; k < 14; k++) tone(out, { start: k * 0.045 + rand() * 0.02, freq: 2200 + rand() * 4200, decay: 18, amp: 0.35 * (1 - k / 16) });
     return out;
@@ -143,35 +147,73 @@ const GAMES = {
   elidus: "F:\\NKW\\App\\MinefieldMaster\\mines_craft_app\\assets\\sound",
 };
 const GAME_SFX = [
-  ["nekoban", "sfx_click.wav", "딸깍(버튼)", "click (button)", ["ui", "tap"]],
-  ["nekoban", "sfx_move.wav", "톡(이동)", "step (move)", ["move"]],
-  ["nekoban", "sfx_push.wav", "드르륵(밀기)", "slide push", ["move", "impact"]],
-  ["nekoban", "sfx_goal.wav", "쏙(목표 도달)", "goal reached", ["success", "appear"]],
-  ["nekoban", "sfx_clear.wav", "클리어 팡파레", "clear fanfare", ["success", "end"]],
-  ["nekoban", "sfx_hint.wav", "힌트 반짝", "hint", ["highlight", "shine"]],
-  ["nekoban", "sfx_error.wav", "삐빅(오류)", "error buzz", ["fail"]],
-  ["puzzleknight", "ui_tap.wav", "탭", "tap", ["ui", "tap"]],
-  ["puzzleknight", "ui_confirm.wav", "확인", "confirm", ["ui", "success"]],
-  ["puzzleknight", "ui_popup_open.wav", "팝업 열림", "popup open", ["appear", "ui"]],
-  ["puzzleknight", "ui_tab_switch.wav", "탭 전환", "tab switch", ["transition", "ui"]],
-  ["puzzleknight", "card_flip.wav", "카드 뒤집기", "card flip", ["transition", "reveal"]],
-  ["puzzleknight", "level_up.wav", "레벨 업", "level up", ["success", "reward"]],
-  ["puzzleknight", "stat_up.wav", "수치 상승", "stat up", ["counter", "success"]],
-  ["puzzleknight", "xp_gain.wav", "경험치 획득", "xp gain", ["counter", "reward"]],
-  ["puzzleknight", "reward_appear.wav", "보상 등장", "reward appear", ["reward", "appear"]],
-  ["puzzleknight", "reward_coin.wav", "동전", "coin", ["reward", "counter"]],
-  ["puzzleknight", "reward_complete.wav", "보상 완료", "reward complete", ["reward", "end"]],
-  ["puzzleknight", "reward_epic.wav", "대박 보상", "epic reward", ["reward", "highlight"]],
-  ["puzzleknight", "victory_sting.wav", "승리 짧은 음악", "victory sting", ["success", "end"]],
-  ["puzzleknight", "roulette_tick.wav", "룰렛 똑딱", "roulette tick", ["counter"]],
-  ["puzzleknight", "puzzle_line_clear.wav", "줄 지우기", "line clear", ["success", "impact"]],
-  ["puzzleknight", "skill_charge_full.wav", "충전 완료", "charge full", ["build", "highlight"]],
-  ["puzzleknight", "hit_critical.wav", "치명타", "critical hit", ["impact", "hit"]],
-  ["elidus", "click01.mp3", "딸깍(타일)", "tile click", ["ui", "tap"]],
-  ["elidus", "score_up.mp3", "점수 상승", "score up", ["counter", "success"]],
-  ["elidus", "flood_reveal.mp3", "넓게 펼쳐짐", "flood reveal", ["reveal", "transition"]],
-  ["elidus", "turn_change.mp3", "차례 전환", "turn change", ["transition"]],
-  ["elidus", "game_over_victory.mp3", "승리", "victory", ["success", "end"]],
+  ["nekoban", "sfx_click.wav", "딸깍(버튼)", "click (button)", ["click"]],
+  ["nekoban", "sfx_move.wav", "톡(이동)", "step (move)", ["tap"]],
+  ["nekoban", "sfx_push.wav", "드르륵(밀기)", "slide push", ["slide"]],
+  ["nekoban", "sfx_goal.wav", "쏙(목표 도달)", "goal reached", ["pop", "success"]],
+  ["nekoban", "sfx_clear.wav", "클리어 팡파레", "clear fanfare", ["fanfare"]],
+  ["nekoban", "sfx_hint.wav", "힌트 반짝", "hint", ["sparkle"]],
+  ["nekoban", "sfx_error.wav", "삐빅(오류)", "error buzz", ["error"]],
+  ["puzzleknight", "ui_tap.wav", "탭", "tap", ["tap"]],
+  ["puzzleknight", "ui_confirm.wav", "확인", "confirm", ["success"]],
+  ["puzzleknight", "ui_popup_open.wav", "팝업 열림", "popup open", ["open"]],
+  ["puzzleknight", "ui_tab_switch.wav", "탭 전환", "tab switch", ["switch"]],
+  ["puzzleknight", "card_flip.wav", "카드 뒤집기", "card flip", ["card"]],
+  ["puzzleknight", "level_up.wav", "레벨 업", "level up", ["power-up", "success"]],
+  ["puzzleknight", "stat_up.wav", "수치 상승", "stat up", ["power-up"]],
+  ["puzzleknight", "xp_gain.wav", "경험치 획득", "xp gain", ["coin"]],
+  ["puzzleknight", "reward_appear.wav", "보상 등장", "reward appear", ["reward"]],
+  ["puzzleknight", "reward_coin.wav", "동전", "coin", ["coin"]],
+  ["puzzleknight", "reward_complete.wav", "보상 완료", "reward complete", ["reward", "success"]],
+  ["puzzleknight", "reward_epic.wav", "대박 보상", "epic reward", ["reward"]],
+  ["puzzleknight", "victory_sting.wav", "승리 짧은 음악", "victory sting", ["fanfare"]],
+  ["puzzleknight", "roulette_tick.wav", "룰렛 똑딱", "roulette tick", ["tick"]],
+  ["puzzleknight", "puzzle_line_clear.wav", "줄 지우기", "line clear", ["success", "sparkle"]],
+  ["puzzleknight", "skill_charge_full.wav", "충전 완료", "charge full", ["rise"]],
+  ["puzzleknight", "hit_critical.wav", "치명타", "critical hit", ["impact-heavy"]],
+  ["elidus", "click01.mp3", "딸깍(타일)", "tile click", ["click"]],
+  ["elidus", "score_up.mp3", "점수 상승", "score up", ["coin", "power-up"]],
+  ["elidus", "flood_reveal.mp3", "넓게 펼쳐짐", "flood reveal", ["whoosh"]],
+  ["elidus", "turn_change.mp3", "차례 전환", "turn change", ["switch"]],
+  ["elidus", "game_over_victory.mp3", "승리", "victory", ["fanfare"]],
+];
+
+// 감독이 고르는 용도 태그(감독은 파일 이름 대신 "tag:<이름>"으로 요청하고 렌더러가 그중 하나를 고른다)
+export const SFX_TAGS = {
+  whoosh: "휙 — 장면 전환·움직임", swish: "슉 — 빠른 등장", rise: "상승음 — 긴장·기대", slide: "드르륵 — 밀기",
+  pop: "뽁·뿅 — 등장·스티커", open: "열림 — 창·카드 등장", close: "닫힘 — 퇴장", switch: "딸깍 전환 — 탭·토글",
+  click: "클릭 — 버튼·선택", tap: "톡 — 가벼운 터치", select: "선택 — 마우스 올림", tick: "똑 — 숫자·글자 하나씩",
+  ding: "딩 — 강조·정답", chime: "띠리링 — 완료", success: "성공 — 확인·달성", sparkle: "반짝 — 빛남",
+  coin: "동전·칩 — 숫자 증가·보상", reward: "보상 등장", "power-up": "상승 전자음 — 성장·업그레이드", "power-down": "하강 전자음 — 감소·실패",
+  fanfare: "짧은 팡파레 — 끝·승리", jingle: "짧은 음악 징글 — 끝 카드·전환", error: "오류 — 틀림·경고", question: "물음 — 질문",
+  glitch: "글리치 — 디지털·잡음", beep: "삐 — 기계·알림", laser: "레이저·잽 — SF·에너지", shimmer: "일렁임 — 마법·보호막",
+  "impact-light": "가벼운 충격 — 톡 놓기", impact: "중간 충격 — 착지", "impact-heavy": "강한 충격 — 쾅",
+  thump: "쿵 — 묵직한 등장", punch: "펀치 — 타격", bell: "종 — 묵직한 울림", explosion: "폭발",
+  page: "책장 넘김 — 책·문서", card: "카드 — 넘김·놓기", dice: "주사위 — 운·무작위",
+};
+
+// Kenney CC0 효과음 팩(2026-10-21 엔케: 출처 표기 불필요·상업 가능 공개 자료만). [팩, 이름 규칙, 태그]
+// 영상에 안 맞는 소리(발걸음·엔진·천·문 등)는 규칙에 없어서 빠진다.
+const KENNEY_RULES = [
+  ["interface-sounds", /^back/, ["close"]], ["interface-sounds", /^bong/, ["ding"]], ["interface-sounds", /^click/, ["click"]],
+  ["interface-sounds", /^close/, ["close"]], ["interface-sounds", /^confirmation/, ["success"]], ["interface-sounds", /^drop/, ["pop"]],
+  ["interface-sounds", /^error/, ["error"]], ["interface-sounds", /^glass/, ["sparkle", "ding"]], ["interface-sounds", /^glitch/, ["glitch"]],
+  ["interface-sounds", /^maximize/, ["open", "swish"]], ["interface-sounds", /^minimize/, ["close", "swish"]], ["interface-sounds", /^open/, ["open"]],
+  ["interface-sounds", /^pluck/, ["pop"]], ["interface-sounds", /^question/, ["question"]], ["interface-sounds", /^scratch/, ["glitch"]],
+  ["interface-sounds", /^scroll/, ["tick"]], ["interface-sounds", /^select/, ["select", "click"]], ["interface-sounds", /^switch/, ["switch"]],
+  ["interface-sounds", /^tick/, ["tick"]], ["interface-sounds", /^toggle/, ["switch"]],
+  ["ui-audio", /^(click|mouseclick|mouserelease)/, ["click"]], ["ui-audio", /^rollover/, ["select"]], ["ui-audio", /^switch/, ["switch"]],
+  ["digital-audio", /^(highUp|powerUp|phaserUp|zapThreeToneUp|threeTone|twoTone|zapTwoTone)/, ["power-up"]],
+  ["digital-audio", /^(highDown|lowDown|phaserDown|zapThreeToneDown)/, ["power-down"]],
+  ["digital-audio", /^(laser|zap)\d/, ["laser"]], ["digital-audio", /^pepSound/, ["pop"]], ["digital-audio", /^phaseJump/, ["swish"]],
+  ["digital-audio", /^(tone|lowThreeTone|lowRandom)/, ["beep"]],
+  ["impact-sounds", /^impactBell/, ["bell"]], ["impact-sounds", /^impactPunch/, ["punch"]], ["impact-sounds", /^impactMining/, ["impact"]],
+  ["impact-sounds", /^impact\w+_light/, ["impact-light"]], ["impact-sounds", /^impact\w+_medium/, ["impact"]], ["impact-sounds", /^impact\w+_heavy/, ["impact-heavy"]],
+  ["casino-audio", /^cards?-/, ["card"]], ["casino-audio", /^chips?-/, ["coin"]], ["casino-audio", /^(dice|die)-/, ["dice"]],
+  ["music-jingles", /^jingles_/, ["jingle"]],
+  ["rpg-audio", /^book/, ["page"]], ["rpg-audio", /^handleCoins/, ["coin"]], ["rpg-audio", /^metal(Click|Latch)/, ["click"]],
+  ["sci-fi-sounds", /explosion/i, ["explosion"]], ["sci-fi-sounds", /^forceField/, ["shimmer"]], ["sci-fi-sounds", /^impactMetal/, ["impact-heavy"]],
+  ["sci-fi-sounds", /^laser/, ["laser"]],
 ];
 
 function peakSecond(samples, sr, windowSec = 0.6) {
@@ -200,5 +242,49 @@ for (const [game, name, ko, en, tags] of GAME_SFX) {
   index.push({ id: `${game}-${path.parse(name).name}`, file, ko, en, tags, source: game,
     durationSec: Math.round((samples.length / SR) * 1000) / 1000, peakSec: peakSecond(samples, SR) });
 }
+// Kenney 팩: node make-motion-sfx.mjs <kenney 내려받은 폴더(팩/x/…)> — 없으면 이미 넣어 둔 kenney/ 목록을 그대로 둔다
+const kenneyDirectory = process.argv[2];
+async function listAudio(directory) {
+  const out = [];
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) out.push(...await listAudio(full));
+    else if (/\.(ogg|wav)$/i.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+if (kenneyDirectory) {
+  let kept = 0;
+  let skipped = 0;
+  for (const pack of await fs.readdir(kenneyDirectory)) {
+    const files = await listAudio(path.join(kenneyDirectory, pack, "x")).catch(() => []);
+    if (!files.length) continue;
+    await fs.mkdir(path.join(sfxDirectory, "kenney", pack), { recursive: true });
+    const license = path.join(kenneyDirectory, pack, "x", "License.txt");
+    await fs.copyFile(license, path.join(sfxDirectory, "kenney", pack, "License.txt")).catch(() => {});
+    for (const source of files) {
+      const name = path.basename(source);
+      const rule = KENNEY_RULES.find(([p, pattern]) => p === pack && pattern.test(name));
+      if (!rule) { skipped++; continue; }
+      const samples = await decodeMono(ffmpeg, source, SR);
+      const durationSec = Math.round((samples.length / SR) * 1000) / 1000;
+      let peak = 0;
+      for (const v of samples) peak = Math.max(peak, Math.abs(v));
+      // 너무 길거나 거의 안 들리는 소리는 뺀다(징글만 8초까지)
+      if (durationSec > (pack === "music-jingles" ? 8 : 6) || peak < 0.05) { skipped++; continue; }
+      const file = `kenney/${pack}/${name}`;
+      await fs.copyFile(source, path.join(sfxDirectory, file));
+      index.push({ id: `kenney-${pack}-${path.parse(name).name}`, file, ko: rule[2].map((tag) => SFX_TAGS[tag].split(" — ")[0]).join("·"),
+        en: `${pack} ${path.parse(name).name}`, tags: rule[2], source: "kenney", durationSec, peakSec: peakSecond(samples, SR) });
+      kept++;
+    }
+  }
+  console.log(`Kenney ${kept}개 넣음, ${skipped}개 뺌`);
+} else {
+  const previous = JSON.parse(await fs.readFile(path.join(sfxDirectory, "index.json"), "utf8").catch(() => "[]"));
+  index.push(...previous.filter((item) => item.source === "kenney"));
+}
+for (const item of index) for (const tag of item.tags) if (!SFX_TAGS[tag]) throw new Error(`정의되지 않은 태그: ${tag} (${item.id})`);
 await fs.writeFile(path.join(sfxDirectory, "index.json"), `${JSON.stringify(index, null, 2)}\n`);
+await fs.writeFile(path.join(sfxDirectory, "tags.json"), `${JSON.stringify(SFX_TAGS, null, 2)}\n`);
 console.log(`효과음 ${index.length}개 → ${sfxDirectory}`);

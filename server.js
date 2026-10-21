@@ -237,6 +237,32 @@ function startMotionRender(res, directory, lang) {
   sendJson(res, { jobId, status: 'rendering', progress: 1 });
 }
 
+// 장면 정지 화면(부분 수정에서 장면을 가리키는 용도)
+function makeMotionStills(res, directory, workId) {
+  if (!fs.existsSync(path.join(directory, 'index.html'))) return sendJson(res, { error: '장면 코드가 없습니다.' }, 404);
+  const kitDirectory = path.join(__dirname, 'ai-company-app', 'motion-kit');
+  const stillsDirectory = path.join(directory, 'stills');
+  fs.rmSync(stillsDirectory, { recursive: true, force: true });
+  const script = path.join(__dirname, 'ai-company-app', 'scripts', 'render-motion-page.mjs');
+  const child = spawn(process.execPath, [script, '--stills', path.join(directory, 'index.html'), stillsDirectory, '12', '--allow-root', directory, '--allow-root', kitDirectory],
+    { cwd: path.join(__dirname, 'ai-company-app'), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  try { require('os').setPriority(child.pid, require('os').constants.priority.PRIORITY_BELOW_NORMAL); } catch (_) {}
+  let out = '';
+  child.stdout.on('data', (chunk) => { out += chunk; });
+  child.stderr.on('data', (chunk) => { out += chunk; });
+  child.on('error', (error) => sendJson(res, { error: error.message }, 500));
+  child.on('exit', (code) => {
+    const last = out.trim().split(/\r?\n/).pop() || '';
+    if (code !== 0) return sendJson(res, { error: last || `정지 화면 실패(exit=${code})` }, 500);
+    try {
+      const stills = JSON.parse(last).map((item) => ({ t: item.t, url: `/local-motion/jobs/${workId}/still/${item.file}` }));
+      sendJson(res, { stills });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 500);
+    }
+  });
+}
+
 // nkstudio.org 화면이 이 PC 렌더러를 부를 수 있게 허용한다. 그 밖의 사이트에서 온 요청은 막는다.
 const LOCAL_RENDERER_ORIGINS = /^(https:\/\/(www\.)?nkstudio\.org|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
 function isLocalRendererPath(pathname) {
@@ -415,7 +441,7 @@ const server = http.createServer((req, res) => {
         })
         .catch((error) => sendJson(res, { error: error.message || '요청을 읽지 못했습니다.' }, 400));
     }
-    const motionMatch = pathname.match(/^\/local-motion\/jobs\/([0-9a-fA-F-]{36})(?:\/(raw|prepare|page|render|thumb)(?:\/([^/]+))?)?$/);
+    const motionMatch = pathname.match(/^\/local-motion\/jobs\/([0-9a-fA-F-]{36})(?:\/(raw|prepare|page|render|thumb|stills|still)(?:\/([^/]+))?)?$/);
     if (motionMatch) {
       const directory = motionJobDirectory(motionMatch[1]);
       if (motionMatch[2] === 'raw' && req.method === 'PUT') {
@@ -425,6 +451,23 @@ const server = http.createServer((req, res) => {
       }
       if (motionMatch[2] === 'prepare' && req.method === 'POST') return prepareMotionJob(res, directory);
       if (motionMatch[2] === 'page' && req.method === 'PUT') return saveMotionPage(req, res, directory);
+      // 부분 수정: 지금 장면 코드·소리 큐 읽기, 장면 정지 화면 뽑기·보기
+      if (motionMatch[2] === 'page' && req.method === 'GET') {
+        try {
+          return sendJson(res, {
+            html: fs.readFileSync(path.join(directory, 'index.html'), 'utf8'),
+            episode: JSON.parse(fs.readFileSync(path.join(directory, 'episode.json'), 'utf8')),
+          });
+        } catch (_) {
+          return sendJson(res, { error: '장면 코드가 없습니다.' }, 404);
+        }
+      }
+      if (motionMatch[2] === 'stills' && req.method === 'POST') return makeMotionStills(res, directory, motionMatch[1]);
+      if (motionMatch[2] === 'still' && req.method === 'GET') {
+        const fileName = motionAssetName(motionMatch[3]);
+        if (!fileName || !/^still_\d+\.jpg$/.test(fileName)) return sendJson(res, { error: 'not_found' }, 404);
+        return sendFile(res, path.join(directory, 'stills', fileName), req);
+      }
       if (motionMatch[2] === 'render' && req.method === 'POST') {
         const lang = new URL(req.url, 'http://localhost').searchParams.get('lang') === 'en' ? 'en' : 'ko';
         return startMotionRender(res, directory, lang);

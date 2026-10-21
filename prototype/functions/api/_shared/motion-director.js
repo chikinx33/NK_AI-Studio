@@ -1,6 +1,8 @@
 // 인포그래픽 영상 감독: 영상마다 장면 코드(HTML 한 장)와 소리 큐를 새로 쓰게 하는 프롬프트와, 그 결과의 검사·정리.
 // 시즌1 홍보 영상(promo/_review_s1)을 만든 방식 그대로 — 템플릿에 글자를 채우지 않고 이 영상만의 장면을 짠다.
-import { MOTION_KIT_EXAMPLES, MOTION_KIT_GUIDE, MOTION_KIT_SFX } from "./motion-director-kit.js";
+import {
+  MOTION_KIT_EMOJI, MOTION_KIT_EXAMPLES, MOTION_KIT_GUIDE, MOTION_KIT_ICONS, MOTION_KIT_MUSIC, MOTION_KIT_SFX, MOTION_KIT_SFX_TAGS,
+} from "./motion-director-kit.js";
 
 export const MOTION_DIRECTOR_MODEL = "claude-opus-5-5";
 // 생각(effort high) 토큰도 max_tokens 에 함께 계산된다. 32000 에서 운영 첫 시도가 잘렸다(2026-10-21).
@@ -12,14 +14,25 @@ export const STAGE_SIZES = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1
 
 const clip = (value, n) => String(value ?? "").slice(0, n);
 
+// 키트 루트(작업 폴더 기준 상대 경로): prepared.kit.motion = ".../motion-kit/lib/motion.js"
+export function kitRoot(prepared) {
+  return String(prepared?.kit?.motion || "").replace(/\/lib\/motion\.js$/, "");
+}
+
+// 배경음악 방식: 받은 곡 / 기본 음악에서 고름 / 없음
+export function musicMode(prepared) {
+  if (prepared?.bgm) return "provided";
+  return prepared?.noMusic ? "none" : "library";
+}
+
 export function buildMotionDirectorSystem() {
   const examples = MOTION_KIT_EXAMPLES.map((ex, i) => [
     `### 실례 ${i + 1}: ${ex.label}`,
     "테마(이 편에서는 :root 변수로 직접 쓴다):",
     "```css", ex.theme.trim(), "```",
-    "장면 코드(경로 ../../../_motion/… 와 게임 그림 파일은 이 실례의 폴더 기준이다. 너는 아래 '이 편의 경로'를 쓴다):",
+    "장면 코드(경로 ../../../_motion/… 와 게임 그림 파일은 이 실례의 폴더 기준이다. 너는 'KIT/…'와 받은 자산 경로를 쓴다):",
     "```html", ex.html.trim(), "```",
-    "소리 큐(효과음 이름은 그 게임 폴더 기준. 너는 효과음 라이브러리 이름을 쓴다):",
+    "소리 큐(효과음 이름은 그 게임 폴더 기준. 너는 tag:용도 를 쓴다):",
     "```json", ex.episode, "```",
   ].join("\n")).join("\n\n");
   return [
@@ -28,7 +41,7 @@ export function buildMotionDirectorSystem() {
     "",
     MOTION_KIT_GUIDE,
     "",
-    "## 효과음 라이브러리 (파일 | 느낌 | 용도 | 길이·타격 지점)",
+    "## 효과음 용도 태그 (\"tag:이름\" | 느낌·쓰임 | 소리 개수)",
     MOTION_KIT_SFX,
     "",
     "## 시즌1 실례",
@@ -36,15 +49,23 @@ export function buildMotionDirectorSystem() {
   ].join("\n");
 }
 
-function beatSummary(prepared, durationSec) {
-  const bgm = prepared?.bgm;
-  if (!bgm) return "배경음악 없음 → 박자 대신 초 단위로 시간을 정하고, 소리 큐의 bgm은 null.";
-  const beats = Array.isArray(prepared?.beatTimes) ? prepared.beatTimes : [];
-  const until = beats.filter((b) => b <= durationSec + 6);
+function musicSection(prepared, durationSec) {
+  const mode = musicMode(prepared);
+  if (mode === "none") return "배경음악 없음(사용자가 음악 없이 하기로 함) → 박자 대신 초 단위로 시간을 정하고, 소리 큐의 bgm은 null.";
+  if (mode === "provided") {
+    const bgm = prepared.bgm;
+    const beats = Array.isArray(prepared?.beatTimes) ? prepared.beatTimes : [];
+    const until = beats.filter((b) => b <= durationSec + 6);
+    return [
+      `받은 배경음악: ${bgm.name} (${bgm.durationSec ?? "?"}초, 약 ${bgm.bpm} BPM, 박자 ${bgm.beatCount}개). 박자 스크립트: ${bgm.beatsScript} (전역 B). 소리 큐의 bgm 에는 volume 만.`,
+      until.length ? `박자 시각(초, 앞부분): ${until.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
+  }
   return [
-    `배경음악: ${bgm.name} (${bgm.durationSec ?? "?"}초, 약 ${bgm.bpm} BPM, 박자 ${bgm.beatCount}개). 스크립트: ${bgm.beatsScript} (전역 B).`,
-    until.length ? `박자 시각(초, 앞부분): ${until.join(", ")}` : "",
-  ].filter(Boolean).join("\n");
+    "기본 음악에서 고른다: 아래에서 영상 분위기에 가장 맞는 곡 하나를 골라 소리 큐에 \"bgm\": {\"track\": \"<id>\", \"volume\": 0.5} 로 쓰고,",
+    "페이지에 <script src=\"KIT/music/<id>.beats.js\"></script> 를 넣어 그 곡의 박자(B)로 맞춘다. 곡은 모두 130초, BPM 은 분석값(150 이상이면 두 박마다 쓰는 게 자연스럽다).",
+    ...MOTION_KIT_MUSIC.map((track) => `- ${track.id} | ${track.ko} | ${track.bpm} BPM`),
+  ].join("\n");
 }
 
 function storyboard(spec) {
@@ -52,11 +73,12 @@ function storyboard(spec) {
   const lines = [`제목: ${clip(spec.title, 120)}`];
   if (spec.narration) lines.push(`내레이션 초안: ${clip(spec.narration, 800)}`);
   spec.scenes.slice(0, 10).forEach((scene, i) => {
-    const data = scene.visualData || {};
-    const numbers = data.dataMode === "quantitative" && Array.isArray(data.values)
-      ? ` · 수치: ${data.values.map((v, k) => `${clip(data.labels?.[k], 30)} ${v}${clip(data.unit, 8)}`).join(", ")}`
+    // 수치는 기획 회의가 확인한 facts 만(단위 그대로). 옛 템플릿용 visualData 는 채움 값이 섞여 쓰지 않는다.
+    const facts = Array.isArray(scene.facts) && scene.facts.length
+      ? ` · 수치: ${scene.facts.map((f) => `${clip(f.label, 30)} ${f.value}${clip(f.unit, 12)}`).join(", ")}`
       : "";
-    lines.push(`${i + 1}. [${scene.kind}] ${clip(scene.title, 120).replace(/\n/g, " ")} — ${clip(scene.body, 200)}${numbers}`);
+    const idea = scene.idea ? ` · 움직임 아이디어: ${clip(scene.idea, 200)}` : "";
+    lines.push(`${i + 1}. ${clip(scene.title, 120).replace(/\n/g, " ")}${scene.body ? ` — ${clip(scene.body, 200)}` : ""}${facts}${idea}`);
   });
   return lines.join("\n");
 }
@@ -82,17 +104,43 @@ export function buildMotionDirectorRequest({ input = {}, spec = null, prepared =
     "# 콘티 초안 (기획 회의 결과 — 내용과 수치의 근거. 장면 구성·문장은 더 좋게 바꿔도 되지만 없는 사실·수치는 만들지 않는다)",
     storyboard(spec),
     "",
-    "# 이 편의 경로 (그대로 쓴다)",
+    "# 이 편의 경로",
+    `KIT = ${kitRoot(prepared)} (설명서의 'KIT/…'를 이 경로로 쓴다)`,
     `motion.js: ${kit.motion} · base.css: ${kit.baseCss} · fonts.css: ${kit.fontsCss}`,
     "",
     "# 받은 자산 (assets/… 상대 경로. 아래 그림 미리보기 참고)",
-    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 도형·글자·숫자 움직임으로 만든다)",
+    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 3D 이모지·아이콘·도형·글자·숫자 움직임으로 만든다)",
     "",
     "# 음악",
-    beatSummary(prepared, durationSec),
+    musicSection(prepared, durationSec),
     "",
     "두 블록(```html, ```json)만 출력한다.",
   ].join("\n");
+}
+
+// 부분 수정: 지금 장면 코드에서 요청한 부분만 고친다(가리킨 장면 정지 화면은 호출부가 이미지로 붙인다)
+export function buildMotionRevisionRequest({ input = {}, prepared = {}, html = "", episode = null, request = "", frameTimes = [] }) {
+  const aspect = STAGE_SIZES[input.aspectRatio] ? input.aspectRatio : "16:9";
+  const durationSec = Math.min(60, Math.max(10, Number(input.durationSec) || 30));
+  return [
+    "# 수정 요청 (이 부분만 고친다)",
+    clip(request, 2000),
+    frameTimes.length ? `사용자가 가리킨 장면: ${frameTimes.map((t) => `${t}초`).join(", ")} (위 정지 화면)` : "",
+    "",
+    "# 규칙",
+    "- 요청한 부분만 바꾸고, 나머지 장면·타이밍·문장·색·움직임은 한 글자도 바꾸지 않는다.",
+    "- 요청이 장면 하나를 가리키면 그 시각 앞뒤 장면만 고친다. 전체 길이는 그대로 둔다.",
+    "- 바꾼 결과로 소리 큐가 어긋나면 그 큐만 옮긴다.",
+    "- 수정한 전체 HTML 과 전체 소리 큐를 두 블록(```html, ```json)으로 다시 출력한다.",
+    "",
+    `# 이 편의 정보: 화면 ${aspect} (<html data-size="${STAGE_SIZES[aspect]}">), 약 ${durationSec}초, KIT = ${kitRoot(prepared)}`,
+    "",
+    "# 지금 장면 코드",
+    "```html", String(html).slice(0, 200_000), "```",
+    "",
+    "# 지금 소리 큐",
+    "```json", JSON.stringify(episode || {}), "```",
+  ].filter((line) => line !== "").join("\n");
 }
 
 const FORBIDDEN = [
@@ -106,20 +154,73 @@ const FORBIDDEN = [
 const CSS_FORBIDDEN = /(?:^|[;{\s])(?:transition|animation)\s*:/i;
 
 const CUE_FILE = /^(?:(?:synth|game)\/[\w.-]+|assets\/[\w가-힣.-]+)$/;
+const SFX_TAGS = new Set(MOTION_KIT_SFX_TAGS);
+const ICONS = new Set(MOTION_KIT_ICONS);
+const EMOJI = new Set(MOTION_KIT_EMOJI);
+const MUSIC = new Set(MOTION_KIT_MUSIC.map((track) => track.id));
 
-// 모델 출력 → { html, episode, problems }. problems가 있으면 렌더하지 않고 고치게 한다.
+function editDistance(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = temp;
+    }
+  }
+  return row[b.length];
+}
+
+// 없는 아이콘·이모지 이름 → 가장 가까운 실제 이름(낱말이 많이 겹치고 글자 차이가 적은 것)
+export function closestName(name, names, separator) {
+  // 구분자만 다른 이름(light-bulb ↔ lightbulb)은 같은 것으로 본다
+  const squash = (value) => value.split(separator).join("");
+  const same = names.find((candidate) => squash(candidate) === squash(name));
+  if (same) return same;
+  const words = new Set(name.split(separator).filter(Boolean));
+  let best = null;
+  let bestScore = -Infinity;
+  for (const candidate of names) {
+    const parts = candidate.split(separator);
+    const shared = parts.filter((p) => words.has(p)).length;
+    const score = shared * 10 - editDistance(name, candidate) - Math.abs(parts.length - words.size);
+    if (score > bestScore) { bestScore = score; best = candidate; }
+  }
+  return best;
+}
+
+// 모델 출력 → { html, episode, problems, fixes }. problems가 있으면 렌더하지 않고 고치게 한다. fixes 는 자동으로 바로잡은 것.
 export function parseMotionDirectorOutput(text, { aspectRatio = "16:9", prepared = {} } = {}) {
   const problems = [];
+  const fixes = [];
   const html = (String(text || "").match(/```html\s*\n([\s\S]*?)\n```/) || [])[1] || "";
   const json = (String(text || "").match(/```json\s*\n([\s\S]*?)\n```/) || [])[1] || "";
   let page = html.trim();
   if (!page) problems.push("```html 블록이 없다");
   const size = STAGE_SIZES[aspectRatio] || STAGE_SIZES["16:9"];
+  const root = kitRoot(prepared);
   if (page) {
     // 무대 크기는 요청 화면비로 고정한다(모델이 빠뜨리거나 틀려도 렌더러가 같은 크기로 찍게)
     page = /<html\b[^>]*\bdata-size=/i.test(page)
       ? page.replace(/(<html\b[^>]*\bdata-size=)["'][^"']*["']/i, `$1"${size}"`)
       : page.replace(/<html\b/i, `<html data-size="${size}"`);
+    // 설명서의 'KIT/…' 표기를 실제 경로로
+    if (root) page = page.replace(/(["'(])KIT\//g, `$1${root}/`);
+    // 없는 아이콘·이모지 이름은 가장 가까운 실제 이름으로
+    page = page.replace(/(icons\/lucide\/)([a-z0-9-]+)(\.svg)/g, (all, a, name, c) => {
+      if (ICONS.has(name)) return all;
+      const fixed = closestName(name, MOTION_KIT_ICONS, "-");
+      fixes.push(`아이콘 ${name} → ${fixed}`);
+      return a + fixed + c;
+    });
+    page = page.replace(/(emoji\/)([a-z0-9_]+)(\.png)/g, (all, a, name, c) => {
+      if (EMOJI.has(name)) return all;
+      const fixed = closestName(name, MOTION_KIT_EMOJI, "_");
+      fixes.push(`이모지 ${name} → ${fixed}`);
+      return a + fixed + c;
+    });
     if (!/id=["']stage["']/.test(page)) problems.push('<div id="stage">가 없다');
     if (!/async\s+function\s+seek\s*\(/.test(page)) problems.push("async function seek(t)가 없다");
     if (!/window\.READY\s*=/.test(page)) problems.push("window.READY = …가 없다");
@@ -139,17 +240,39 @@ export function parseMotionDirectorOutput(text, { aspectRatio = "16:9", prepared
       if (!Array.isArray(cue)) return [];
       const [at, file, gain] = cue;
       const okAt = (typeof at === "number" && at >= 0) || (typeof at === "string" && /^s\d+(\.\d+)?$/.test(at));
-      const okFile = typeof file === "string" && CUE_FILE.test(file) && (!file.startsWith("assets/") || known.has(file));
+      const okFile = typeof file === "string" && (
+        (file.startsWith("tag:") && SFX_TAGS.has(file.slice(4)))
+        || (CUE_FILE.test(file) && (!file.startsWith("assets/") || known.has(file))));
       if (!okAt || !okFile) return [];
       return [[at, file, Math.min(1.5, Math.max(0, Number(gain) || 0.8))]];
     });
-    const bgm = prepared?.bgm
-      ? { file: prepared.bgm.file, start: 0, volume: Math.min(0.9, Math.max(0.2, Number(raw?.bgm?.volume) || 0.55)) }
-      : null;
+    const volume = Math.min(0.9, Math.max(0.2, Number(raw?.bgm?.volume) || 0.55));
+    const mode = musicMode(prepared);
+    let bgm = null;
+    let beats = null;
+    if (mode === "provided") {
+      bgm = { file: prepared.bgm.file, start: 0, volume };
+      beats = prepared.bgm.beats;
+    } else if (mode === "library" && root) {
+      let track = String(raw?.bgm?.track || "");
+      if (!MUSIC.has(track)) {
+        const fixed = closestName(track || "lofi-chill", MOTION_KIT_MUSIC.map((t) => t.id), "-");
+        fixes.push(`배경음악 ${track || "(없음)"} → ${fixed}`);
+        track = fixed;
+      }
+      bgm = { file: `${root}/music/${track}.ogg`, start: 0, volume, track };
+      beats = `${root}/music/${track}.beats.json`;
+      // 페이지가 고른 곡의 박자(B)를 쓰게: 다른 곡 박자 스크립트는 바꾸고, 없으면 head 에 넣는다
+      if (page) {
+        const script = `${root}/music/${track}.beats.js`;
+        page = page.replace(/[^"'\s]*music\/[a-z0-9-]+\.beats\.js/g, script);
+        if (!page.includes(script)) page = page.replace(/<\/head>/i, `<script src="${script}"></script>\n</head>`);
+      }
+    }
     if (!bgm && cues.some(([at]) => typeof at === "number")) problems.push("배경음악이 없으면 소리 큐 시점은 \"s초\"로 써야 한다");
-    episode = { bgm, beats: prepared?.bgm ? prepared.bgm.beats : null, cues };
+    episode = { bgm, beats, cues };
   } catch (error) {
     problems.push(String(error?.message || error));
   }
-  return { html: page, episode, problems };
+  return { html: page, episode, problems, fixes };
 }

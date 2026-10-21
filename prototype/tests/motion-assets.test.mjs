@@ -75,11 +75,14 @@ test("작업 입력·실행기·agent-video·자산 목록 API가 자산 선택�
   assert.doesNotMatch(read("prototype/functions/api/agent/_motion-assets.ts"), /music-generate|sfx-generate/);
 });
 
-test("화면: 배경음악을 안 고르면 음악 없이 갈지 묻고, 자산 선택을 작업 입력에 싣는다", () => {
+test("화면: 배경음악을 안 고르면 감독이 기본 음악에서 고르고, 자산 선택을 작업 입력에 싣는다", () => {
   const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
-  assert.match(context, /if \(!assets\.bgm && !assets\.noMusic\)/);
-  assert.match(context, /appDialog\.confirm\(t\.confirmNoMusic/);
+  assert.doesNotMatch(context, /appDialog\.confirm\(t\.confirmNoMusic/, "기본 음악이 생겨 확인 창은 없앴다");
   assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets \},\n\s+\}, \{ wait: true \}\);/);
+  const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
+  assert.match(picker, /<option value="">\{t\.bgmAuto\}<\/option>/);
+  assert.match(picker, /<option value="none">\{t\.bgmNone\}<\/option>/);
+  assert.match(picker, /noMusic: raw === "none"/);
   assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<MotionAssetPicker value=\{assets\} onChange=\{setAssets\} \/>/);
   assert.match(read("ai-company-app/vite.config.ts"), /"\/local-motion": "http:\/\/localhost:14000"/);
 });
@@ -121,8 +124,8 @@ test("박자 분석은 일정한 박자의 클릭 음에서 그 간격을 찾는
 test("기본 효과음·글꼴 라이브러리가 파일과 함께 들어 있다", () => {
   const kit = path.join(root, "ai-company-app", "motion-kit");
   const sfx = JSON.parse(read("ai-company-app/motion-kit/sfx/index.json"));
-  assert.ok(sfx.filter((item) => item.source === "synth").length >= 10);
-  assert.ok(sfx.filter((item) => item.source !== "synth").length >= 20);
+  assert.ok(sfx.filter((item) => item.source === "synth").length >= 14);
+  assert.ok(sfx.filter((item) => item.source === "kenney").length >= 400, "Kenney CC0 효과음");
   for (const item of sfx) {
     assert.ok(fs.existsSync(path.join(kit, "sfx", item.file)), item.file);
     assert.ok(item.ko && item.en && item.durationSec > 0, item.id);

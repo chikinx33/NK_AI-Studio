@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
-import { Player } from "@remotion/player";
-import { AgentVideo } from "../remotion/AgentVideo";
 import AgentVideoStorageModal from "./AgentVideoStorageModal";
 import MotionAssetPicker, { useMotionAssetText } from "./MotionAssetPicker";
 import MotionProgress from "./MotionProgress";
+import MotionRevisionPanel from "./MotionRevisionPanel";
 import { localRendererUrl } from "../lib/api";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
@@ -83,7 +82,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
   const videoDurationSec = useMemo(() => getAgentVideoDurationSec(spec), [spec]);
-  const durationInFrames = Math.max(1, Math.round(videoDurationSec * spec.fps));
   const isTallPreview = dimensions.height >= dimensions.width;
   const previewRatio = dimensions.width / dimensions.height;
   const previewWidth = isTallPreview
@@ -167,8 +165,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               onChange={(event) => setPrompt(event.target.value)}
               rows={4}
               maxLength={1600}
-              className="w-full resize-none rounded-lg border border-edge bg-inset px-3 py-2 text-xs leading-5 text-strong outline-none placeholder:text-faint focus:border-emerald-700"
-              placeholder="예: 신제품의 핵심 장점을 소개하는 20초 세로형 영상"
+              className="w-full resize-none rounded-lg border border-edge bg-inset px-3 py-2 text-xs leading-5 text-strong outline-none placeholder:text-faint focus:border-emerald-700 focus:placeholder:text-transparent"
+              placeholder={motionText.promptExample}
             />
 
             <div className="mt-2.5 grid grid-cols-2 gap-2">
@@ -204,7 +202,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
             </button>
             {meetingInProgress && (
               <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-tint-emerald/25 p-2 text-[10px] leading-4 text-tone-emerald">
-                플롯이 구성을 설계한 뒤 잉크·픽셀·비트가 대본, 비주얼, 사운드를 병렬로 제작하고 코어가 최종 명세를 통합합니다.
+                {motionText.planningNote}
               </div>
             )}
             {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-tint-red/35 p-2 text-[10px] leading-4 text-tone-red">{error}</div>}
@@ -246,21 +244,16 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                   {finalVideoUrl ? (
                     <video key={finalVideoUrl} src={finalVideoUrl} aria-label={motionText.finalVideo} controls loop playsInline className="h-full w-full" />
                   ) : (
-                  <Player
-                    key={`${spec.createdAt}-${spec.aspectRatio}-${spec.scenes.length}`}
-                    component={AgentVideo}
-                    inputProps={{ spec }}
-                    durationInFrames={durationInFrames}
-                    compositionWidth={dimensions.width}
-                    compositionHeight={dimensions.height}
-                    fps={spec.fps}
-                    controls
-                    loop
-                    style={{ width: "100%", height: "100%" }}
-                  />
+                  <div className="grid h-full w-full place-items-center p-4 text-center">
+                    <div>
+                      <p className="text-sm font-bold text-content">{motionText.previewPlaceholder}</p>
+                      <p className="mt-1 text-[10px] leading-4 text-faint">{motionText.previewPlaceholderHint}</p>
+                    </div>
+                  </div>
                   )}
                 </div>
               </div>
+              {finalVideoUrl && <MotionRevisionPanel busy={renderInProgress || archiveInProgress} />}
 
               <div
                 className={isTallPreview ? "grid h-full min-h-0 gap-2" : "mt-2 grid min-h-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"}
@@ -274,10 +267,6 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                   </div>
                   <h3 className="mt-1 line-clamp-2 whitespace-pre-line text-xs font-bold leading-4 text-strong">{scene.title}</h3>
                   {!isTallPreview && <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-faint">{scene.body}</p>}
-                  {!isTallPreview && <div className="mt-1 flex gap-1 text-[8px] text-faint">
-                    <span className="rounded bg-inset px-1.5 py-1">{scene.visual}</span>
-                    <span className="rounded bg-inset px-1.5 py-1">SFX · {scene.sfx}</span>
-                  </div>}
                 </article>
               ))}
               </div>

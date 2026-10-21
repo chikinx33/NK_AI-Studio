@@ -7,10 +7,9 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8
 test("Agent Video는 AI Cinema와 분리된 에이전트 협업 API를 제공한다", async () => {
   const source = await read("prototype/functions/api/agent/agent-video.ts");
   assert.match(source, /speak\(\s*env,\s*"plot"/);
-  assert.match(source, /Promise\.all\(\[/);
-  assert.match(source, /"ink"/);
-  assert.match(source, /"pixel"/);
-  assert.match(source, /"beat"/);
+  assert.match(source, /speak\(\s*env,\s*"ink"/);
+  // 2026-10-21: 템플릿 칸(도표·효과음)만 고르던 픽셀·비트는 뺐다. 플롯·잉크·코어가 콘티 초안을 만든다
+  assert.doesNotMatch(source, /"pixel"|"beat"/);
   assert.match(source, /callClaude\(env, synthesisSystem/);
   assert.doesNotMatch(source, /postprod\/transcode|buildTimelineModel|postTimelineEdits/);
 });
@@ -23,7 +22,9 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
     read("ai-company-app/src/main.tsx"),
     read("server.js"),
   ]);
-  assert.match(workspace, /<Player/);
+  // 옛 템플릿 미리보기(Remotion Player)는 뺐다 — 완성 영상 전에는 자리만 보여 준다
+  assert.doesNotMatch(workspace, /<Player/);
+  assert.match(workspace, /motionText\.previewPlaceholder/);
   assert.match(workspaceContext, /createCompanySkillJob/);
   assert.match(workspaceContext, /waitForCompanySkillJob/);
   // 2026-10-21 3단계: 렌더는 감독이 쓴 모션 키트 장면 코드를 이 PC에서 렌더한다(Player는 콘티 초안 미리보기)
@@ -250,8 +251,10 @@ test("Agent Video 품질 엔진은 화면비·텍스트 실측·색상 대비를
   assert.match(endpoint, /enforceSpecQuality/);
   assert.match(endpoint, /semanticLayout/);
   assert.match(endpoint, /dataMode/);
-  assert.match(endpoint, /확인되지 않은 수치를 지어내지 않습니다/);
-  assert.match(endpoint, /1:1은 상·하 정보 계층과 중앙 집중 구성/);
+  // 2026-10-21: 콘티 초안은 확인된 수치(facts, 원래 단위)만, 자리 표시 글·요청 글 반복 금지
+  assert.match(endpoint, /facts 에는 요청·자료에 실제로 있는 수치만/);
+  assert.match(endpoint, /자리 표시 글\(\[채널 로고 \/ 브랜드명\], 항목 2, OOO, TBD 등\)을 절대 쓰지 않는다/);
+  assert.match(endpoint, /body 에 요청 글을 그대로 반복하지 않는다/);
 });
 
 test("수동 제작 어린이 안전 교육 영상은 30초·9:16 전용 장면과 효과음을 제공한다", async () => {

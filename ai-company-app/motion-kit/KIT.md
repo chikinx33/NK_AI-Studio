@@ -45,8 +45,24 @@
 `--font-head` `--font-body` `--head-size`(108~124px) `--head-weight` `--en-scale`(0.9~0.95)
 키네틱 자막: `--k-color`(글자, 보통 #fff) `--k-stroke`(외곽선, 진한 색) `--k-hi`(강조색) `--k-size`(110~130px, 16:9는 90~110px) `--k-stroke-w`
 스티커: `--s-color`. 질감: `--grain`(.04~.08) `--vig`(.15~.3)
-글꼴(font-family 이름): `"NK Sans"`(깔끔한 고딕, 굵기 100~900 — 정보·수치), `"Nanum Gothic ExtraBold"`(두꺼운 제목), `"NK Serif"`(묵직한 명조, 굵기 200~900), `Jua`(둥글고 귀여운 제목), `Nalgae`(부드러운 손글씨풍), `"KOTRA Hope"`(손글씨).
+글꼴(font-family 이름 — 주제에 맞게 제목용 하나 + 본문용 하나):
+- 깔끔·정보: `Pretendard`(45~920, 요즘 가장 세련된 고딕), `SUIT`(100~900), `"NK Sans"`(100~900)
+- 강렬한 제목: `"Black Han Sans"`(아주 굵음), `"Do Hyeon"`(굵고 단단), `"Nanum Gothic ExtraBold"`
+- 귀여움·친근: `Jua`, `Dongle`(700), `"Gowun Dodum"`(부드러운 고딕)
+- 격식·감성·역사: `"NK Serif"`(200~900), `"Gowun Batang"`(400·700, 부드러운 명조)
+- 손글씨: `"Nanum Pen Script"`, `Gaegu`(700), `"Hi Melody"`, `Nalgae`, `"KOTRA Hope"`
 브랜드가 있으면 로고·캐릭터 그림의 색에서 팔레트를 뽑는다.
+
+## 3.5 키트 자산 (경로는 받은 KIT 경로 기준)
+- **아이콘(Lucide, 선 아이콘 2,171개)**: `KIT/icons/lucide/<이름>.svg` — 이름은 lucide.dev 이름(book-open, users, heart, trending-up, shield-check, clock, smartphone, bed, moon, sun, sparkles, map-pin, calendar, gift, rocket, lightbulb, chart-column, chart-pie, circle-check, triangle-alert 등).
+  색을 입히려면 `<div class="ico" style="background:#FFD166;-webkit-mask:url(KIT/icons/lucide/heart.svg) center/contain no-repeat"></div>` 처럼 마스크로 쓴다(`<img>`는 검은 선).
+- **3D 이모지(Fluent, 1,595개)**: `KIT/emoji/<영문 이름 밑줄>.png` (256px 투명 PNG). 예: open_book, rocket, light_bulb, money_bag, trophy, mobile_phone, seedling, thumbs_up, red_heart, sparkles, fire, star, check_mark_button, cross_mark, warning, alarm_clock, calendar, bar_chart, chart_increasing, chart_decreasing, gem_stone, wrapped_gift, party_popper, house, school, hospital, books, graduation_cap, man_technologist, people_hugging, smiling_face_with_smiling_eyes, thinking_face, sleeping_face, crying_face, globe_showing_asia_australia, sun, cloud, umbrella, christmas_tree, cat_face, dog_face. 쇼츠에서 아주 잘 먹히니 크게, 통통 튀게(`pop`), 살짝 흔들며 쓴다. 이름이 조금 틀리면 가장 가까운 것으로 바뀐다.
+- **라이브러리** (`<script src="KIT/vendor/…">`, 필요한 것만):
+  - `d3.min.js` — 도표 모양 계산만(`d3.arc`, `d3.scaleLinear`, `d3.line`, `d3.pie`). `d3.transition`·타이머는 쓰지 않는다. 진행도는 `io/sp`로.
+  - `flubber.min.js` — 도형 변형: `const f = flubber.interpolate(pathA, pathB); path.setAttribute('d', f(p))`.
+  - `rough.js` — 손그림 느낌: `rough.svg(svgEl).rectangle(x,y,w,h,{ seed: 7, roughness: 2, fillStyle:'hachure' })`. **seed 를 꼭 고정**(안 그러면 프레임마다 흔들림). 매 프레임 새로 만들지 말고 한 번 만들어 두고 크기·투명도만 바꾼다.
+  - `anime.umd.min.js`(v4) — 복잡한 연속 동작: `const tl = anime.createTimeline({ autoplay: false }).add(el, { translateX: [0, 300], duration: 800, ease: 'outBack' })` 를 만들고 seek(t)에서 `tl.seek(밀리초)`. **autoplay:false 필수**.
+  - `gl-transitions.js` + `KIT/lib/gl-transition.js` — 그림·영상 프레임 사이 화면 전환 123종(CrossZoom, Dreamy, GlitchMemories, Swirl, CircleCrop, Directional, ripple, cube, Pixelize 등): `const tr = M.glTransition(canvasEl, 'CrossZoom'); tr.draw(fromImg, toImg, p)`. DOM 장면끼리가 아니라 **그림/영상끼리** 전환할 때.
 
 ## 4. 2026 쇼츠 문법 (시즌1이 좋아 보인 이유)
 1. **이 영상만의 장면을 만든다.** 제목-본문-카드 반복 슬라이드 금지. 내용을 사물·인물·숫자의 **움직임**으로 보여 준다(로봇이 상자를 밀고 고양이가 쏙 들어간다, 곡괭이로 지뢰를 치자 땅이 내 색으로 번진다).
@@ -65,7 +81,8 @@
 - 도넛·게이지: SVG `<circle stroke-dasharray>`의 `stroke-dashoffset`을 `io(...)`로. 가운데 `M.count`.
 - 비교(전/후, A/B): 화면을 둘로 가르고 한쪽이 밀어내기, 승자 쪽 펀치.
 - 순서(1→2→3): 아이콘·카드가 레일을 따라 박자마다 하나씩 `pop`, 카메라가 따라감.
-- 아이콘이 필요하면 단순한 인라인 SVG(선 두께 일정)나 이모지 대신 **도형·글자**로 만든다. 받은 그림이 있으면 그 그림이 먼저다.
+- 사물·개념은 **3D 이모지**(주인공·스티커처럼 크게)와 **Lucide 아이콘**(정보·목록·버튼처럼 작게)으로 보여 준다. 받은 그림(브랜드·업무 파일)이 있으면 그 그림이 먼저다.
+- 도넛·원그래프는 `d3.arc`, 막대·꺾은선은 `d3.scaleLinear`+`d3.line`, 모양이 바뀌는 순간은 `flubber`.
 - **확인되지 않은 수치는 만들지 않는다.** 요청·콘티에 있는 숫자만 쓴다. 없으면 숫자 대신 행동·변화를 보여 준다.
 
 ## 5. 화면 배치
@@ -77,12 +94,15 @@
 
 ## 6. 소리 큐 (두 번째 블록, JSON)
 ```json
-{ "bgm": { "volume": 0.55 }, "cues": [[박자번호 또는 "s초", "파일", 음량0~1.2], …] }
+{ "bgm": { "track": "기본 음악 id(요청 메시지가 고르라고 할 때만)", "volume": 0.55 }, "cues": [[박자번호 또는 "s초", "tag:용도" 또는 "파일", 음량0~1.2], …] }
 ```
-- 배경음악은 렌더러가 넣는다(처음부터, 끝 0.9초 페이드). 음악이 없으면 `"bgm": null`이고 박자 대신 초("s1.25")를 쓴다.
-- 파일: 효과음 라이브러리(`synth/…`, `game/…` — 목록 참고)나 받은 소리 자산(`assets/…`).
-- 효과음은 타격 지점(peakSec)이 박자에 오도록 렌더러가 당겨 준다. 박자 번호를 그대로 쓰면 된다.
-- 한 편에 10~20개. 등장(pop/swish), 전환(whoosh), 충격(thump), 숫자(tick 여러 번 + ding), 끝(chime/victory).
+- 배경음악은 렌더러가 넣는다(처음부터, 끝 0.9초 페이드). 요청 메시지의 "음악" 항목을 따른다:
+  - 받은 음악이 있으면 그 곡(박자 스크립트 `assets/beats.js`).
+  - "기본 음악에서 고른다"이면 목록에서 영상 분위기에 맞는 곡 하나를 골라 `"bgm": {"track": "<id>"}`로 쓰고, 페이지에 `<script src="KIT/music/<id>.beats.js"></script>`를 넣어 그 곡의 박자(B)를 쓴다.
+  - 음악 없음이면 `"bgm": null`이고 박자 대신 초("s1.25")를 쓴다.
+- 효과음은 **용도 태그**로 고른다: `"tag:whoosh"`, `"tag:pop"`, `"tag:coin"` … (태그 목록 참고). 렌더러가 그 용도의 소리 중 하나를 골라 넣고, 영상마다 다른 소리가 나온다. 받은 소리 자산은 `"assets/…"`.
+- 효과음은 타격 지점이 박자에 오도록 렌더러가 당겨 준다. 박자 번호를 그대로 쓰면 된다.
+- 한 편에 10~20개. 등장(pop/swish/open), 전환(whoosh), 충격(impact/thump), 숫자(tick·coin 여러 번 + ding), 성장(power-up), 실수(error), 끝(jingle/fanfare).
 
 ## 7. 출력 형식
 설명 없이 아래 두 블록만:

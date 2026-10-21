@@ -5,10 +5,15 @@ import {
   saveMotionPage,
   stageMotionAssets,
   startMotionRender,
+  getMotionPage,
+  getPreparedMotionAssets,
+  imageUrlToDataUrl,
+  applyQuickStyle,
+  saveMotionExample,
   type MotionAssetSelection,
+  type MotionStill,
 } from "../lib/motionAssets";
 import { motionAssetText, motionErrorText } from "../components/MotionAssetPicker";
-import { appDialog } from "../lib/appDialog";
 import {
   createContext,
   useContext,
@@ -92,12 +97,15 @@ interface AgentVideoWorkspaceValue {
   startMeeting: () => Promise<void>;
   decideCostApproval: (decision: "approved" | "rejected") => Promise<void>;
   renderVideo: () => Promise<void>;
+  reviseVideo: (options: { request?: string; frames?: MotionStill[]; quick?: { font?: string; color?: string } }) => Promise<void>;
+  saveAsExample: () => Promise<void>;
 }
 
 const AgentVideoWorkspaceContext = createContext<AgentVideoWorkspaceValue | null>(null);
 
 export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [prompt, setPrompt] = useState("AI 에이전트들이 협업해 아이디어를 영상으로 완성하는 과정을 소개하는 30초 브랜드 영상");
+  // 예제는 입력값이 아니라 안내 글(placeholder)로만 보여 준다 — 칸을 누르면 사라진다(2026-10-21 엔케)
+  const [prompt, setPrompt] = useState("");
   const [durationSec, setDurationSec] = useState(30);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
   const [assets, setAssets] = useState<MotionAssetSelection>(EMPTY_MOTION_ASSETS);
@@ -180,19 +188,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     }
 
     meetingLockedRef.current = true;
-    // 배경음악은 새로 생성하지 않는다(비용 0원). 고르지 않았으면 음악 없이 갈지 먼저 묻는다.
-    let selectedAssets = assets;
-    if (!assets.bgm && !assets.noMusic) {
-      const t = motionAssetText();
-      const proceed = await appDialog.confirm(t.confirmNoMusic, { okText: t.confirmNoMusicOk, cancelText: t.confirmNoMusicCancel });
-      if (!proceed) {
-        meetingLockedRef.current = false;
-        setError(t.pickMusicFirst);
-        return;
-      }
-      selectedAssets = { ...assets, noMusic: true };
-      setAssets(selectedAssets);
-    }
+    // 배경음악은 새로 생성하지 않는다(비용 0원). 고르지 않으면 감독이 키트 기본 음악(CC0)에서 분위기에 맞게 고른다.
+    const selectedAssets = assets;
     setMeetingStatus("running");
     setError("");
     setContributions([]);
@@ -398,6 +395,47 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     return updated;
   }
 
+  // 부분 수정: 지금 장면 코드에서 요청한 부분만 감독이 고치거나(AI), 글꼴·색만 바로 바꾼 뒤(AI 없이) 다시 렌더한다
+  async function reviseVideo(options: { request?: string; frames?: MotionStill[]; quick?: { font?: string; color?: string } }) {
+    const t = motionAssetText();
+    const workId = activeWorkRef.current?.id;
+    if (!workId) { setError(t.noWork); return; }
+    setError("");
+    archivingJobRef.current = "";
+    setArchive({ status: "rendering" });
+    try {
+      const current = await getMotionPage(workId);
+      let html = current.html;
+      let episode = current.episode;
+      if (options.request?.trim()) {
+        setRender({ status: "queued", phase: "director", progress: 0, chars: 0 });
+        const prepared = await getPreparedMotionAssets(workId);
+        const frames = await Promise.all((options.frames || []).slice(0, 4).map(async (frame) => ({ t: frame.t, dataUrl: await imageUrlToDataUrl(frame.url) })));
+        const result = await runMotionDirector(workId, prepared, [], (chars) =>
+          setRender({ status: "queued", phase: "director", progress: 0, chars }), { html, episode, request: options.request.trim(), frames });
+        if (result.problems?.length) throw new Error(t.directorProblems.replace("{p}", result.problems.join(" · ")));
+        html = result.html;
+        episode = result.episode;
+      }
+      if (options.quick) html = applyQuickStyle(html, options.quick);
+      motionSourceRef.current = { html, episode, prepared: null };
+      await saveMotionPage(workId, html, episode);
+      setRender(await startMotionRender(workId));
+    } catch (caught) {
+      const message = motionErrorText(caught) || "수정 렌더 실패";
+      setRender({ status: "error", error: message });
+      setArchive({ status: "error", error: message });
+    }
+  }
+
+  // 실례로 저장: 지금 장면 코드를 감독의 다음 영상 참고 실례로 쌓는다
+  async function saveAsExample() {
+    const workId = activeWorkRef.current?.id;
+    if (!workId) throw new Error(motionAssetText().noWork);
+    const current = await getMotionPage(workId);
+    await saveMotionExample(workId, current.html, String(activeWorkRef.current?.metadata?.spec?.title || ""));
+  }
+
   async function renderVideo() {
     await beginRender(spec);
   }
@@ -444,6 +482,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       startMeeting,
       decideCostApproval,
       renderVideo,
+      reviseVideo,
+      saveAsExample,
     }}>
       {children}
     </AgentVideoWorkspaceContext.Provider>

@@ -1,7 +1,18 @@
-/* 모션 키트 글꼴. 페이지에서 <link rel="stylesheet" href="…/motion-kit/lib/fonts.css"> 후 font-family 이름으로 쓴다. */
+/* 모션 키트 글꼴. 페이지에서 <link rel="stylesheet" href="…/motion-kit/lib/fonts.css"> 후 font-family 이름으로 쓴다(FONTS.md). */
 @font-face { font-family: "NK Sans"; src: url(../fonts/NotoSansKR-VF.ttf); font-weight: 100 900; }
 @font-face { font-family: "NK Serif"; src: url(../fonts/NotoSerifKR-VF.ttf); font-weight: 200 900; }
+@font-face { font-family: Pretendard; src: url(../fonts/PretendardVariable.woff2) format("woff2"); font-weight: 45 920; }
+@font-face { font-family: SUIT; src: url(../fonts/SUIT-Variable.woff2) format("woff2"); font-weight: 100 900; }
 @font-face { font-family: "Nanum Gothic ExtraBold"; src: url(../fonts/NanumGothicExtraBold.ttf); }
+@font-face { font-family: "Black Han Sans"; src: url(../fonts/BlackHanSans-Regular.ttf); }
+@font-face { font-family: "Do Hyeon"; src: url(../fonts/DoHyeon-Regular.ttf); }
 @font-face { font-family: Jua; src: url(../fonts/Jua-Regular.ttf); }
+@font-face { font-family: Dongle; src: url(../fonts/Dongle-Bold.ttf); font-weight: 700; }
+@font-face { font-family: "Gowun Dodum"; src: url(../fonts/GowunDodum-Regular.ttf); }
+@font-face { font-family: "Gowun Batang"; src: url(../fonts/GowunBatang-Regular.ttf); font-weight: 400; }
+@font-face { font-family: "Gowun Batang"; src: url(../fonts/GowunBatang-Bold.ttf); font-weight: 700; }
 @font-face { font-family: Nalgae; src: url(../fonts/Hakgyoansim_NalgaeR.ttf); }
+@font-face { font-family: Gaegu; src: url(../fonts/Gaegu-Bold.ttf); font-weight: 700; }
+@font-face { font-family: "Nanum Pen Script"; src: url(../fonts/NanumPenScript-Regular.ttf); }
+@font-face { font-family: "Hi Melody"; src: url(../fonts/HiMelody-Regular.ttf); }
 @font-face { font-family: "KOTRA Hope"; src: url(../fonts/KOTRAHOPE.woff2) format("woff2"); }

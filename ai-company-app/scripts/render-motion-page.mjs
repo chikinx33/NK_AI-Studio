@@ -250,6 +250,17 @@ function resolveAudioFile(name, folders) {
   throw new Error(`소리 파일을 찾지 못했습니다: ${name}`);
 }
 
+// 효과음 용도 태그("tag:click") → 키트 효과음 중 하나. 같은 영상·같은 자리는 늘 같은 소리, 영상이 다르면 다른 소리.
+const SFX_INDEX = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "motion-kit", "sfx", "index.json");
+let sfxIndexCache = null;
+export function pickTaggedSfx(index, tag, seed) {
+  const candidates = index.filter((item) => item.tags.includes(tag));
+  if (!candidates.length) throw new Error(`효과음 태그가 없습니다: ${tag}`);
+  let hash = 2166136261;
+  for (const ch of `${seed}|${tag}`) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return candidates[hash % candidates.length].file;
+}
+
 async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath }) {
   const beats = episode.beats ? JSON.parse(await fs.readFile(path.resolve(episodeDirectory, episode.beats), "utf8")) : [];
   const bgm = episode.bgm || null;
@@ -257,8 +268,13 @@ async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, durat
   if (bgm) args.push("-ss", bgm.start || 0, "-i", resolveAudioFile(bgm.file, audioFolders));
   else args.push("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo");
   const cues = [];
-  for (const [at, name, gain] of episode.cues || []) {
-    const file = resolveAudioFile(name, audioFolders);
+  for (const [index, [at, name, gain]] of (episode.cues || []).entries()) {
+    let fileName = name;
+    if (String(name).startsWith("tag:")) {
+      sfxIndexCache = sfxIndexCache || JSON.parse(await fs.readFile(SFX_INDEX, "utf8"));
+      fileName = pickTaggedSfx(sfxIndexCache, String(name).slice(4), `${episodeDirectory}|${index}`);
+    }
+    const file = resolveAudioFile(fileName, audioFolders);
     args.push("-i", file);
     cues.push({ delayMs: (cueTime(at, beats) - await peakOffset(ffmpeg, file)) * 1000, gain: gain ?? 1 });
   }
@@ -355,6 +371,42 @@ export async function renderMotionPage(options) {
   return { outPath, duration, frames: total, blocked: [...report.blocked], exceptions: [...report.exceptions] };
 }
 
+// 장면 정지 화면: 완성 영상에서 장면을 가리켜 고칠 수 있게 count 장을 고르게 찍는다(가로 270px 미리보기).
+// 반환 [{ t, file }]. 부분 수정 화면과 감독(그림으로 장면 확인)이 쓴다.
+export async function renderMotionStills({ page, outDir, count = 12, allowRoots, scale = 0.25, log = () => {} }) {
+  const pagePath = path.resolve(page);
+  const roots = (allowRoots?.length ? allowRoots : [path.dirname(pagePath)]).map((root) => path.resolve(root));
+  const chrome = pickExecutable(CHROME_CANDIDATES, "크롬");
+  await fs.mkdir(outDir, { recursive: true });
+  const profileDirectory = path.join(outDir, `_chrome_stills_${process.pid}`);
+  const report = { blocked: new Set(), exceptions: new Set() };
+  const { child, wsUrl } = await launchChrome(chrome, profileDirectory);
+  let cdp = null;
+  const stills = [];
+  try {
+    cdp = await Cdp.connect(wsUrl);
+    const { send, duration, width, height } = await openPage(cdp, `${pathToFileURL(pagePath).href}?lang=ko`, roots, report);
+    const n = Math.max(2, Math.min(24, count));
+    for (let i = 0; i < n; i++) {
+      // 처음·끝 0.3초는 비우고 고르게
+      const t = Math.round((0.3 + (Math.max(0.1, duration - 0.6) * i) / (n - 1)) * 100) / 100;
+      await evaluate(send, `seek(${t})`);
+      const { data } = await send("Page.captureScreenshot", { format: "jpeg", quality: 80, clip: { x: 0, y: 0, width, height, scale } });
+      const file = `still_${String(i).padStart(2, "0")}.jpg`;
+      await fs.writeFile(path.join(outDir, file), Buffer.from(data, "base64"));
+      stills.push({ t, file });
+    }
+    log(`정지 화면 ${stills.length}장 (${duration.toFixed(2)}초)`);
+    await cdp.send("Browser.close").catch(() => {});
+  } finally {
+    cdp?.close();
+    if (child.exitCode === null) child.kill();
+    await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve)));
+    await fs.rm(profileDirectory, { recursive: true, force: true }).catch(() => {});
+  }
+  return stills;
+}
+
 function parseArgs(argv) {
   const options = { allowRoots: [], audioDirs: [] };
   const positional = [];
@@ -376,7 +428,16 @@ function parseArgs(argv) {
   return options;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv[2] === "--stills") {
+  // node render-motion-page.mjs --stills <page.html> <출력 폴더> [장수] [--allow-root 폴더 …]
+  const args = process.argv.slice(3);
+  const allowRoots = [];
+  const positional = [];
+  for (let i = 0; i < args.length; i++) if (args[i] === "--allow-root") allowRoots.push(args[++i]); else positional.push(args[i]);
+  renderMotionStills({ page: positional[0], outDir: positional[1], count: Number(positional[2]) || 12, allowRoots, log: (l) => console.log(l) })
+    .then((stills) => console.log(JSON.stringify(stills)))
+    .catch((error) => { console.error(error?.message || error); process.exit(1); });
+} else if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   renderMotionPage(parseArgs(process.argv.slice(2))).catch((error) => {
     console.error(error?.message || error);
     process.exit(1);

@@ -67,8 +67,14 @@ const FORMAT_LAYOUTS: Record<AspectRatio, string[]> = {
   "9:16": ["poster", "stacked", "dashboard", "editorial"],
 };
 
+// 자리 표시 글([채널 로고 / 브랜드명], 항목 2, OOO, TBD)은 콘티에 남기지 않는다 — 감독이 그대로 영상에 쓸 수 있다(2026-10-21 운영 콘티에서 확인)
+const PLACEHOLDER = /\[[^\]]*(?:로고|브랜드|채널|이름|placeholder|tbd|todo)[^\]]*\]|(?:^|\s)항목\s*\d+(?=\s|$)|\bTBD\b|O{3,}|○{3,}/gi;
+export function stripPlaceholders(text: string) {
+  return String(text || "").replace(PLACEHOLDER, " ").replace(/[ \t]{2,}/g, " ").replace(/^[\s/·|,-]+|[\s/·|,-]+$/g, "").trim();
+}
+
 function compactCopy(value: any, fallback: string, max: number) {
-  const source = cleanText(value, fallback, max * 2).replace(/[ \t]+/g, " ");
+  const source = stripPlaceholders(cleanText(value, fallback, max * 2)).replace(/[ \t]+/g, " ");
   if (source.length <= max) return source;
   const clipped = source.slice(0, max + 1);
   const boundary = Math.max(clipped.lastIndexOf(" "), clipped.lastIndexOf("\n"));
@@ -190,9 +196,19 @@ function normalizeSpec(raw: any, request: {
       id: cleanText(scene?.id, `scene-${index + 1}`, 40),
       kind: kindValue,
       durationSec,
-      eyebrow: compactCopy(scene?.eyebrow, `SCENE ${index + 1}`, 36),
-      title: compactCopy(scene?.title, `핵심 장면 ${index + 1}`, request.aspectRatio === "16:9" ? 54 : 46),
-      body: compactCopy(scene?.body, request.prompt, request.aspectRatio === "16:9" ? 150 : 120),
+      // 빈칸을 요청 글·"SCENE n" 으로 채우지 않는다(요청 글이 본문에 반복되던 원인)
+      eyebrow: compactCopy(scene?.eyebrow, "", 36),
+      title: compactCopy(scene?.title, "", request.aspectRatio === "16:9" ? 54 : 46),
+      body: (() => {
+        const body = compactCopy(scene?.body, "", request.aspectRatio === "16:9" ? 150 : 120);
+        return body && request.prompt.includes(body.replace(/…$/, "")) ? "" : body;
+      })(),
+      idea: compactCopy(scene?.idea, "", 200),
+      facts: (Array.isArray(scene?.facts) ? scene.facts : []).slice(0, 6).flatMap((fact: any) => {
+        const value = Number(fact?.value);
+        const label = stripPlaceholders(cleanText(fact?.label, "", 40));
+        return Number.isFinite(value) && label ? [{ label, value, unit: cleanText(fact?.unit, "", 12) }] : [];
+      }),
       accent: HEX.test(String(scene?.accent || "")) ? String(scene.accent) : palette[index % palette.length],
       visual: chosenVisual,
       sfx: ALLOWED_SFX.has(sfx) ? sfx : "none",
@@ -218,7 +234,7 @@ function normalizeSpec(raw: any, request: {
     background: HEX.test(String(raw?.background || "")) ? String(raw.background) : theme === "environment" ? "#071813" : theme === "education" ? "#121823" : "#061021",
     palette,
     scenes,
-    narration: cleanText(raw?.narration, "", 2000),
+    narration: stripPlaceholders(cleanText(raw?.narration, "", 2000)),
     theme,
     motif: cleanText(raw?.motif, request.prompt, 120),
     backgroundStyle: ALLOWED_BACKGROUND.has(String(raw?.backgroundStyle || ""))
@@ -231,8 +247,8 @@ function normalizeSpec(raw: any, request: {
 function enforceSpecQuality(spec: any, aspectRatio: AspectRatio) {
   const seenTitles = new Set<string>();
   spec.scenes = spec.scenes.map((scene: any, index: number) => {
+    // 같은 제목이 겹쳐도 "핵심 n" 같은 채움 글을 붙이지 않는다(감독이 장면을 새로 짜며 정리한다)
     const titleKey = String(scene.title || "").replace(/\s+/g, " ").trim().toLowerCase();
-    if (seenTitles.has(titleKey)) scene.title = `${scene.title}\n핵심 ${index + 1}`;
     seenTitles.add(titleKey);
     const semanticMode = scene.kind === "metrics" && scene.visualData.dataMode === "quantitative"
       ? "quantitative"
@@ -319,112 +335,63 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       `길이: ${input.durationSec}초`,
       `화면비: ${input.aspectRatio}`,
       "시청 대상·톤·스타일: 영상 요청 글에서 읽어 정한다(따로 주어지지 않는다).",
-      "제약: AI Cinema의 기존 프로젝트·클립은 사용하지 않는다. Remotion 네이티브 타이포그래피·의미 기반 SVG·애니메이션으로 독립 영상을 만든다.",
+      "이 결과는 감독(모션그래픽)이 영상마다 장면을 새로 짜는 콘티 초안이다. 템플릿 칸(도표 종류·레이아웃·효과음)은 정하지 않는다.",
+      "금지: 자리 표시 글([채널 로고 / 브랜드명], 항목 2, OOO 같은 빈칸), 요청 글을 본문에 그대로 반복, 확인되지 않은 수치. 숫자는 원래 단위 그대로(66권, 40명, 4.7시간).",
     ].join("\n");
 
     const plotResult = await speak(
       env,
       "plot",
-      `${brief}\n\n독립 Agent Video의 콘텐츠 디렉터로서 3~8개 씬의 서사 구조를 설계하세요. 각 씬의 역할, 제목, 핵심 메시지, 권장 길이를 명확하게 작성하고 총 길이를 맞추세요. 다른 직원이 바로 작업할 수 있는 제작 브리프로 답하세요.`,
+      `${brief}\n\n콘텐츠 디렉터로서 3~8개 장면의 이야기 흐름을 설계하세요. 첫 장면은 1~2초 안에 눈을 잡는 갈고리, 마지막은 결론·행동 유도입니다. 장면마다 역할, 핵심 메시지, 권장 길이, 그리고 화면에서 무엇이 어떻게 움직이면 좋을지(사물·숫자·인물의 움직임) 한 줄 아이디어를 쓰세요.`,
       "",
       shared,
     );
     const plotPlan = plotResult.text;
 
-    const [inkResult, pixelResult, beatResult] = await Promise.all([
-      speak(
-        env,
-        "ink",
-        `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n각 씬에 실제 화면에 표시할 짧고 강한 eyebrow, title, body 카피를 작성하세요. 제목은 최대 두 줄, 본문은 한두 문장으로 제한하고 전체 내레이션 초안도 작성하세요.`,
-        "",
-        shared,
-      ),
-      speak(
-        env,
-        "pixel",
-        `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n최상급 정보디자인 스튜디오의 아트 디렉터로서 주제 고유의 시각 언어를 설계하세요. 씬마다 network, orbit, bars, timeline, spotlight, grid, donut, gauge, comparison, flow, ecosystem, counters, area 중 의미에 맞는 구조를 고르세요. 장면을 대표하는 symbol은 spark, shield, traffic, fire, phone, people, leaf, planet, recycle, chip, chart, heart, book, check, arrow 중 고르세요. 실제 수치가 있는 장면만 quantitative로 지정하고, 행동 순서는 sequence, 메시지·개념은 qualitative로 지정하세요. 사실로 확인되지 않은 숫자는 절대 꾸며내지 마세요. 9:16에서는 모바일 화면에서 읽히는 큰 글자와 2~4개의 큰 시각 요소만 사용하고, 전체 팔레트·배경·전환을 주제에 맞게 차별화하세요.`,
-        "",
-        shared,
-      ),
-      speak(
-        env,
-        "beat",
-        `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n추가 유료 음원 생성 없이 @remotion/sfx만 활용하는 사운드 계획을 설계하세요. 씬별로 none, whoosh, ding, switch, click, whip 중 하나를 선택하고 과도한 효과음은 피하세요.`,
-        "",
-        shared,
-      ),
-    ]);
+    const inkResult = await speak(
+      env,
+      "ink",
+      `${brief}\n\n플롯의 구성안:\n${plotPlan}\n\n장면마다 화면에 크게 뜰 짧고 강한 제목(한 줄 2~4덩어리, 핵심 낱말 하나)과 한 문장 보조 문구를 쓰세요. 쇼츠 예고편처럼 리듬 있게, 요청 글을 그대로 옮기지 말고 시청자에게 말하듯 쓰세요. 전체 내레이션 초안도 쓰세요.`,
+      "",
+      shared,
+    );
 
-    const synthesisSystem = `당신은 이 회사의 총괄 오케스트레이터 코어입니다. 플롯·잉크·픽셀·비트의 결과를 충돌 없이 통합해 Remotion이 즉시 렌더할 수 있는 JSON 하나를 만드세요.
+    const synthesisSystem = `당신은 이 회사의 총괄 오케스트레이터 코어입니다. 플롯·잉크의 결과를 하나로 정리해 감독이 장면을 짤 콘티 초안 JSON 하나를 만드세요.
 
 반드시 아래 스키마의 JSON만 출력하고 마크다운·설명은 금지합니다.
 {
   "workTitle": "20자 이내 업무 이름",
   "title": "영상 제목",
-  "objective": "영상 목적",
-  "audience": "시청 대상",
-  "tone": "톤",
-  "style": "스타일",
+  "objective": "영상 목적 한 문장",
+  "audience": "요청에서 읽은 시청 대상",
+  "tone": "요청에서 읽은 톤",
   "theme": "technology|environment|business|education|health|social|abstract",
-  "motif": "이 영상만의 시각 모티프",
-  "backgroundStyle": "grid|organic|gradient|paper|dark",
-  "aspectRatio": "16:9|9:16|1:1",
-  "background": "#RRGGBB",
-  "palette": ["#RRGGBB", "#RRGGBB", "#RRGGBB", "#RRGGBB"],
   "narration": "전체 내레이션 초안",
   "scenes": [{
     "id": "scene-1",
     "kind": "hero|statement|metrics|process|quote|cta",
     "durationSec": 4,
-    "eyebrow": "짧은 영문 또는 한글 라벨",
-    "title": "최대 두 줄 제목. 줄바꿈은 \\n",
-    "body": "한두 문장 본문",
-    "accent": "#RRGGBB",
-    "visual": "network|orbit|bars|timeline|spotlight|grid|donut|gauge|comparison|flow|ecosystem|counters|area",
-    "layout": "poster|editorial|stacked|split|reverse|visual-first|dashboard",
-    "transition": "slide|rise|zoom|wipe|reveal",
-    "visualData": {
-      "values": [0부터 100 사이 숫자 2~6개],
-      "labels": ["각 값의 짧은 라벨"],
-      "unit": "%|개|단계 등",
-      "primaryValue": 72,
-      "secondaryValue": 4,
-      "icon": "주제 상징 한 글자 또는 기호",
-      "caption": "도표가 전달할 인사이트",
-      "dataMode": "qualitative|sequence|quantitative",
-      "symbol": "spark|shield|traffic|fire|phone|people|leaf|planet|recycle|chip|chart|heart|book|check|arrow"
-    },
-    "sfx": "none|whoosh|ding|switch|click|whip"
+    "title": "화면에 크게 뜰 제목. 줄바꿈은 \\n",
+    "body": "한 문장 보조 문구(필요 없으면 빈 문자열)",
+    "idea": "화면에서 무엇이 어떻게 움직이는지 한 줄",
+    "facts": [{ "label": "무엇의 수치인지", "value": 4.7, "unit": "시간" }]
   }]
 }
 
 규칙:
-- 씬은 3~8개, 순서만 읽어도 완결된 이야기여야 합니다.
-- 씬 길이 합은 요청 길이와 같아야 합니다.
-- 첫 장면은 후크, 마지막 장면은 결론 또는 CTA입니다.
-- 화면에 들어가는 문장은 짧고 즉시 이해되어야 합니다.
-- 외부 영상·이미지를 요구하지 않습니다.
-- 주제와 무관한 범용 테크 그래픽을 반복하지 않습니다. 환경은 유기적 생태 구조, AI는 연결·데이터 구조처럼 시각 문법 자체가 달라야 합니다.
-- 한 영상 안에서 같은 visual과 layout 조합을 반복하지 않습니다.
-- visualData가 실제 그래프·도표의 형태를 결정하므로 모든 씬에 의미 있는 값과 라벨을 제공합니다.
-- 확인되지 않은 수치를 지어내지 않습니다. 실제 통계가 없으면 dataMode를 qualitative 또는 sequence로 지정하고 숫자는 화면에 노출하지 않습니다.
-- symbol은 장면 내용과 직접 연결되어야 합니다. 단순 장식용 spark를 반복하지 않습니다.
-- 16:9, 1:1, 9:16은 같은 레이아웃을 크기만 바꾼 결과가 아니어야 합니다. 1:1은 상·하 정보 계층과 중앙 집중 구성을, 9:16은 세로 흐름과 짧은 카피를, 16:9는 가로 정보 흐름을 사용하세요.
-- 제목은 두 줄 안에서 읽혀야 하며 도표·라벨과 겹치지 않아야 합니다. 긴 문장을 억지로 넣지 말고 핵심어 중심으로 축약하세요.
-- 밝은 배경에는 어두운 전경색, 어두운 배경에는 밝은 전경색이 필요한 팔레트를 설계하고 장식보다 가독성을 우선하세요.
-- JSON 문자열 안의 실제 줄바꿈은 반드시 \\n으로 이스케이프합니다.`;
+- 장면은 3~8개, 길이 합은 요청 길이와 같다. 첫 장면은 갈고리, 마지막은 결론 또는 행동 유도.
+- facts 에는 요청·자료에 실제로 있는 수치만 넣고 단위는 원래 그대로(권·명·시간·분·% 등). 없으면 빈 배열.
+- 자리 표시 글([채널 로고 / 브랜드명], 항목 2, OOO, TBD 등)을 절대 쓰지 않는다. 모르는 이름은 쓰지 않는다.
+- body 에 요청 글을 그대로 반복하지 않는다.
+- JSON 문자열 안의 실제 줄바꿈은 반드시 \\n 으로 이스케이프한다.`;
 
     const synthesisInput = [
       "# 사용자 제작 계약",
       brief,
-      "# 플롯(PD)",
+      "# 플롯(이야기 흐름)",
       plotPlan,
-      "# 잉크(카피)",
+      "# 잉크(문장)",
       inkResult.text,
-      "# 픽셀(비주얼)",
-      pixelResult.text,
-      "# 비트(사운드)",
-      beatResult.text,
     ].join("\n\n");
 
     const rawSpec = await callClaude(env, synthesisSystem, [{ role: "user", content: synthesisInput }], {
@@ -444,9 +411,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const contributions = [
       { agentId: "plot", agentName: "플롯", emoji: "🎬", summary: summary(plotPlan) },
       { agentId: "ink", agentName: "잉크", emoji: "✍️", summary: summary(inkResult.text) },
-      { agentId: "pixel", agentName: "픽셀", emoji: "🎨", summary: summary(pixelResult.text) },
-      { agentId: "beat", agentName: "비트", emoji: "🎵", summary: summary(beatResult.text) },
-      { agentId: "core", agentName: "코어", emoji: "🧭", summary: `${spec.scenes.length}개 씬, ${input.durationSec}초 ${input.aspectRatio} Remotion 명세로 통합하고 렌더 계약을 검증했습니다.` },
+      { agentId: "core", agentName: "코어", emoji: "🧭", summary: `${spec.scenes.length}개 장면, ${input.durationSec}초 ${input.aspectRatio} 콘티 초안으로 정리했습니다.` },
     ];
 
     // 결과물을 영상 파일이 아닌 '회사 업무' 단위로 등록한다. 이후 파일은 이 업무 ID 아래에 귀속된다.

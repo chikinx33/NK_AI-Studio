@@ -32,23 +32,43 @@ export const MOTION_ASSET_TEXT = {
     loading: "불러오는 중…",
     remove: "빼기",
     bgm: "배경음악",
-    bgmNone: "고르지 않음",
+    bgmAuto: "기본 음악에서 자동으로 고르기",
+    bgmNone: "음악 없음",
     bgmLibrary: "사운드 라이브러리",
     bgmFiles: "첨부한 음악",
-    bgmHint: "음악 박자에 맞춰 자막·효과음이 움직여요. 새로 생성하지 않고 이미 가진 음악에서 골라요.",
+    bgmHint: "음악 박자에 맞춰 자막·효과음이 움직여요. 기본 음악은 저작권 걱정 없는 무료 곡 29곡이에요(출처 표기 불필요).",
     loadFailed: "목록을 읽지 못했어요: {e}",
     kindImage: "그림",
     kindVideo: "영상",
     kindAudio: "소리",
-    confirmNoMusic: "배경음악을 고르지 않았어요. 음악 없이 효과음만으로 만들까요?\n(음악이 있으면 박자에 맞춰 자막·효과음이 움직여 훨씬 좋아져요.)",
-    confirmNoMusicOk: "음악 없이 진행",
-    confirmNoMusicCancel: "음악 고르기",
-    pickMusicFirst: "배경음악을 고른 뒤 다시 시작해 주세요.",
     subscriptionRequired: "인포그래픽 영상은 Claude 구독 연결이 필요해요(비용 0원 정책). 'API 설정'에서 구독을 연결해 주세요.",
     directorProblems: "감독이 쓴 장면 코드에 문제가 있어요: {p}",
     rendererUnreachable: "이 PC 렌더러에 연결하지 못했어요. 이 PC에서 NK Studio 렌더러(node server.js)가 켜져 있는지 확인해 주세요.",
     noWork: "렌더할 회사 업무가 없어요. 먼저 작업을 시작해 주세요.",
     finalVideo: "완성 영상",
+    revTitle: "부분 수정",
+    revHint: "마음에 드는 부분은 그대로 두고 고칠 부분만 바꿔요.",
+    revLoadStills: "장면 보기",
+    revLoadingStills: "장면을 뽑는 중…",
+    revPickHint: "고칠 장면을 눌러 고르세요(최대 4개).",
+    revRequestPlaceholder: "예: 글씨를 둥근 글꼴로 / 12초쯤 나오는 책 그림을 더 크게, 금색으로",
+    revAiButton: "AI로 고치기",
+    revQuickTitle: "바로 바꾸기(AI 없이)",
+    revFont: "글꼴",
+    revFontKeep: "그대로",
+    revColor: "강조색",
+    revColorKeep: "강조색 그대로",
+    revApply: "바로 적용",
+    revBusy: "고치는 중…",
+    revNeedRequest: "무엇을 바꿀지 적어 주세요.",
+    revSeconds: "{t}초",
+    exampleSave: "실례로 저장",
+    exampleSaving: "저장 중…",
+    exampleSaved: "실례로 저장했어요. 다음 영상부터 감독이 참고해요.",
+    promptExample: "예: 청소년 스마트폰 사용 시간을 알리는 20초 세로 영상. 하루 평균 4.7시간, 10명 중 4명이 과의존 위험군. 학부모 대상, 경쾌하지만 믿음 가는 톤으로.",
+    previewPlaceholder: "완성 영상이 여기에 나와요",
+    previewPlaceholderHint: "작업을 시작하면 기획 → 감독 → 렌더 순서로 만들어져요. 위 진행 막대에서 단계를 확인할 수 있어요.",
+    planningNote: "플롯이 이야기 흐름을 짜고 잉크가 문장을 다듬은 뒤 코어가 콘티 초안으로 정리해요. 이어서 감독이 이 영상만의 장면을 새로 짜요.",
     jobInterrupted: "이전 작업이 서버에서 중간에 끊겼어요. '작업 시작'을 다시 눌러 주세요.",
     progressTitle: "진행 상황",
     stagePlan: "기획",
@@ -87,23 +107,43 @@ export const MOTION_ASSET_TEXT = {
     loading: "Loading…",
     remove: "Remove",
     bgm: "Background music",
-    bgmNone: "None selected",
+    bgmAuto: "Pick from the built-in music automatically",
+    bgmNone: "No music",
     bgmLibrary: "Sound library",
     bgmFiles: "Attached music",
-    bgmHint: "Captions and sound effects move on the music's beat. Pick music you already have; nothing new is generated.",
+    bgmHint: "Captions and sound effects move on the music's beat. The built-in music is 29 royalty-free tracks (no credit needed).",
     loadFailed: "Couldn't load the list: {e}",
     kindImage: "Image",
     kindVideo: "Video",
     kindAudio: "Audio",
-    confirmNoMusic: "No background music is selected. Make it with sound effects only?\n(With music, captions and effects land on the beat and it looks much better.)",
-    confirmNoMusicOk: "Continue without music",
-    confirmNoMusicCancel: "Pick music",
-    pickMusicFirst: "Pick background music, then start again.",
     subscriptionRequired: "Infographic video needs a Claude subscription connection (zero-cost policy). Connect it in 'API settings'.",
     directorProblems: "The scene code from the director has problems: {p}",
     rendererUnreachable: "Couldn't reach the renderer on this PC. Check that the NK Studio renderer (node server.js) is running here.",
     noWork: "There is no work item to render. Start a job first.",
     finalVideo: "Final video",
+    revTitle: "Partial edit",
+    revHint: "Keep what you like and change only what needs fixing.",
+    revLoadStills: "Show scenes",
+    revLoadingStills: "Capturing scenes…",
+    revPickHint: "Click the scenes to fix (up to 4).",
+    revRequestPlaceholder: "e.g. Use a rounded font / make the book around 12s bigger and gold",
+    revAiButton: "Fix with AI",
+    revQuickTitle: "Quick change (no AI)",
+    revFont: "Font",
+    revFontKeep: "Keep",
+    revColor: "Accent",
+    revColorKeep: "Keep accent",
+    revApply: "Apply now",
+    revBusy: "Fixing…",
+    revNeedRequest: "Describe what to change.",
+    revSeconds: "{t}s",
+    exampleSave: "Save as example",
+    exampleSaving: "Saving…",
+    exampleSaved: "Saved as an example. The director will refer to it from the next video.",
+    promptExample: "e.g. A 20-second vertical video on teens' smartphone time. 4.7 hours a day on average; 4 in 10 at risk of overuse. For parents, upbeat but trustworthy.",
+    previewPlaceholder: "Your finished video will appear here",
+    previewPlaceholderHint: "After you start, it goes plan → director → render. Watch the steps in the progress bar above.",
+    planningNote: "Plot shapes the story, Ink polishes the copy and Core turns it into a storyboard draft. Then the director builds this video's own scenes.",
     jobInterrupted: "The previous job was cut off on the server. Press 'Start' again.",
     progressTitle: "Progress",
     stagePlan: "Plan",
@@ -233,12 +273,12 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
     onChange({ ...value, files, bgm });
   };
   const audioFiles = value.files.filter((path) => MOTION_AUDIO_EXT.test(path));
-  const bgmValue = value.bgm ? `${value.bgm.source}:${value.bgm.value}` : "";
+  const bgmValue = value.bgm ? `${value.bgm.source}:${value.bgm.value}` : value.noMusic ? "none" : "";
   const setBgm = (raw: string) => {
     const at = raw.indexOf(":");
     const source = raw.slice(0, at);
     const bgm = at > 0 && (source === "sound" || source === "file") ? { source, value: raw.slice(at + 1) } as MotionAssetSelection["bgm"] : null;
-    onChange({ ...value, bgm, noMusic: false });
+    onChange({ ...value, bgm, noMusic: raw === "none" });
   };
 
   return (
@@ -269,7 +309,8 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
 
       <label className={`${fieldLabel} mt-2`}>{t.bgm}</label>
       <select value={bgmValue} onChange={(event) => setBgm(event.target.value)} className={selectClass}>
-        <option value="">{t.bgmNone}</option>
+        <option value="">{t.bgmAuto}</option>
+        <option value="none">{t.bgmNone}</option>
         {music.length > 0 && (
           <optgroup label={t.bgmLibrary}>
             {music.map((item) => <option key={item.id} value={`sound:${item.id}`}>{item.title}{item.durationSeconds ? ` (${Math.round(item.durationSeconds)}s)` : ""}</option>)}
