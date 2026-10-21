@@ -78,7 +78,7 @@ test("작업 입력·실행기·agent-video·자산 목록 API가 자산 선택�
 test("화면: 배경음악을 안 고르면 감독이 기본 음악에서 고르고, 자산 선택을 작업 입력에 싣는다", () => {
   const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
   assert.doesNotMatch(context, /appDialog\.confirm\(t\.confirmNoMusic/, "기본 음악이 생겨 확인 창은 없앴다");
-  assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets \},\n\s+\}, \{ wait: true \}\);/);
+  assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets \},\n\s+\}, \{ defer: true \}\);/);
   const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
   assert.match(picker, /<option value="">\{t\.bgmAuto\}<\/option>/);
   assert.match(picker, /<option value="none">\{t\.bgmNone\}<\/option>/);

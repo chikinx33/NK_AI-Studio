@@ -151,7 +151,7 @@ test("산출물 등록은 SkillJob 사용자·업무·경로에 묶이고 버전
   const [store, endpoint, workspace] = await Promise.all([
     read("prototype/functions/api/agent/_skill-jobs.ts"),
     read("prototype/functions/api/agent/skill-jobs/[jobId]/artifacts.ts"),
-    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("ai-company-app/scripts/motion-cloud-job.mjs"),
   ]);
 
   assert.match(store, /export async function registerCompanySkillArtifact/);
@@ -159,12 +159,12 @@ test("산출물 등록은 SkillJob 사용자·업무·경로에 묶이고 버전
   assert.match(store, /job\.work_item_id = \$3::uuid/);
   assert.match(store, /ON CONFLICT \(job_id, object_path\) DO UPDATE/);
   assert.match(endpoint, /buildAiVideoProjectPrefix\(storage\.basePrefix, auth\.userId, "ai-company"\)/);
-  assert.match(workspace, /sha256Hex/);
+  assert.match(workspace, /createHash\("sha256"\)/);
   assert.match(workspace, /"source\.json"/);
   assert.match(workspace, /"report\.json"/);
   assert.match(workspace, /"manifest\.json"/);
-  assert.match(workspace, /lineage: job\?\.lineage \|\| \[\]/);
-  assert.match(workspace, /registerCompanySkillJobArtifacts\(skillJobId/);
+  assert.match(workspace, /lineage: skillJob\?\.lineage \|\| \[\]/);
+  assert.match(workspace, /skill-jobs\/\$\{encodeURIComponent\(skillJobId\)\}\/artifacts/);
 });
 
 test("공통 실행기는 인포그래픽 어댑터를 통해 상태·보고·품질 결과를 완결한다", async () => {
@@ -235,7 +235,7 @@ test("공통 비용 게이트는 구독 포함·API 단가 예측·상한·승�
   assert.match(client, /approvalState\?\.status === "pending"/);
   assert.match(workspace, /pendingApproval/);
   assert.match(workspace, /decideCostApproval/);
-  assert.match(workspace, /actualCost: job\?\.actualCost/);
+  assert.match(await read("ai-company-app/scripts/motion-cloud-job.mjs"), /actualCost: skillJob\?\.actualCost/);
   assert.match(schema, /maxAmountUsd/);
 });
 

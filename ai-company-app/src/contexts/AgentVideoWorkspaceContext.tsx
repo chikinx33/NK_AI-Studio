@@ -1,16 +1,13 @@
 import {
   EMPTY_MOTION_ASSETS,
-  fetchMotionThumbs,
-  runMotionDirector,
-  saveMotionPage,
-  stageMotionAssets,
-  startMotionRender,
-  getMotionPage,
-  getPreparedMotionAssets,
-  imageUrlToDataUrl,
+  getMotionCloudRun,
+  getMotionCloudSource,
+  startMotionCloud,
   applyQuickStyle,
   saveMotionExample,
   type MotionAssetSelection,
+  type MotionCloudRun,
+  type MotionCloudStart,
   type MotionStill,
 } from "../lib/motionAssets";
 import { motionAssetText, motionErrorText } from "../components/MotionAssetPicker";
@@ -30,11 +27,6 @@ import {
   createCompanySkillJob,
   getCompanySkillJob,
   getCompanyWorkItem,
-  getLocalAgentVideoRenderStatus,
-  localRendererUrl,
-  registerCompanySkillJobArtifacts,
-  setCompanyWorkItemStatus,
-  uploadAgentVideoStorageFile,
   waitForCompanySkillJob,
   type AgentVideoStorageItem,
   type CompanyWorkItem,
@@ -51,11 +43,9 @@ import { readUserStorage, removeUserStorage, writeUserStorage } from "../lib/saf
 
 const STORAGE_KEY = "raviok_agent_video_project_v1";
 const SKILL_JOB_STORAGE_KEY = "raviok_infographic_skill_job_v1";
-
-async function sha256Hex(blob: Blob) {
-  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
+// 진행 중인 클라우드 렌더 작업 — 창을 다시 열면 이어서 상태를 읽는다
+const CLOUD_RUN_STORAGE_KEY = "raviok_infographic_cloud_run_v1";
+const CLOUD_POLL_MS = 4_000;
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 type MeetingStatus = "idle" | "running" | "awaiting-approval" | "done" | "error";
@@ -99,6 +89,8 @@ interface AgentVideoWorkspaceValue {
   renderVideo: () => Promise<void>;
   reviseVideo: (options: { request?: string; frames?: MotionStill[]; quick?: { font?: string; color?: string } }) => Promise<void>;
   saveAsExample: () => Promise<void>;
+  // 완성 영상의 장면 정지 화면(클라우드 렌더러가 12장 찍어 저장해 둔다)
+  stills: MotionStill[];
 }
 
 const AgentVideoWorkspaceContext = createContext<AgentVideoWorkspaceValue | null>(null);
@@ -119,17 +111,24 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [activeWork, setActiveWork] = useState<CompanyWorkItem | null>(null);
   const [pendingApproval, setPendingApproval] = useState<SkillJob | null>(null);
   const meetingLockedRef = useRef(false);
-  const renderSpecRef = useRef<AgentVideoSpec>(spec);
-  const archivingJobRef = useRef("");
-  const motionSourceRef = useRef<{ html: string; episode: unknown; prepared: unknown } | null>(null);
   const activeWorkRef = useRef<CompanyWorkItem | null>(null);
   const skillJobPollingRef = useRef<AbortController | null>(null);
+  const [cloudRun, setCloudRun] = useState<MotionCloudRun | null>(null);
+  const lastDoneRunRef = useRef<MotionCloudRun | null>(null);
 
   useEffect(() => {
     writeUserStorage(STORAGE_KEY, JSON.stringify(spec));
   }, [spec]);
 
+  // 창을 다시 열면: 진행 중이던 클라우드 작업을 이어서 읽는다(없으면 예전 방식의 기획 회의 작업을 복원)
   useEffect(() => {
+    const savedRunId = readUserStorage(CLOUD_RUN_STORAGE_KEY);
+    if (savedRunId) {
+      void getMotionCloudRun({ runId: savedRunId })
+        .then((run) => { if (run) applyCloudRun(run); else removeUserStorage(CLOUD_RUN_STORAGE_KEY); })
+        .catch(() => removeUserStorage(CLOUD_RUN_STORAGE_KEY));
+      return;
+    }
     const savedJobId = readUserStorage(SKILL_JOB_STORAGE_KEY);
     if (!savedJobId) return;
     meetingLockedRef.current = true;
@@ -150,34 +149,86 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     return () => controller.abort();
   }, []);
 
+  // 클라우드 작업 상태는 진행 중일 때만 몇 초마다 읽는다(DB 상시 폴링 금지 — Neon 전송 한도)
   useEffect(() => {
-    if (!render.jobId || (render.status !== "queued" && render.status !== "rendering")) return;
+    if (!cloudRun || !["queued", "running"].includes(cloudRun.status)) return;
+    let stopped = false;
     const timer = window.setInterval(async () => {
+      if (document.hidden) return;
       try {
-        const next = await getLocalAgentVideoRenderStatus(render.jobId!);
-        setRender(next);
-        if (next.status === "done") {
-          window.clearInterval(timer);
-          void archiveLocalRender(next, renderSpecRef.current);
-        } else if (next.status === "error") {
-          setArchive({ status: "error", error: next.error || "로컬 렌더링에 실패했습니다." });
-          void updateActiveWorkStatus("error");
-          window.clearInterval(timer);
-        }
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "렌더 상태 확인 실패";
-        setRender((current) => ({
-          ...current,
-          status: "error",
-          error: message,
-        }));
+        const next = await getMotionCloudRun({ runId: cloudRun.id });
+        if (!stopped && next) applyCloudRun(next);
+      } catch (_) { /* 잠깐 끊긴 연결은 다음 차례에 다시 읽는다 */ }
+    }, CLOUD_POLL_MS);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [cloudRun?.id, cloudRun?.status]);
+
+  // 클라우드 작업 한 줄 → 화면 상태(기획 회의·진행 막대·완성 영상)
+  function applyCloudRun(run: MotionCloudRun) {
+    setCloudRun(run);
+    const active = run.status === "queued" || run.status === "running";
+    if (active) writeUserStorage(CLOUD_RUN_STORAGE_KEY, run.id);
+    else removeUserStorage(CLOUD_RUN_STORAGE_KEY);
+    if (run.workId && activeWorkRef.current?.id !== run.workId) void loadWork(run.workId);
+    if (run.status === "awaiting-approval" && run.skillJobId) {
+      setRender({ status: "idle" });
+      setArchive({ status: "idle" });
+      void getCompanySkillJob(run.skillJobId).then((job) => {
+        setPendingApproval(job);
+        setMeetingStatus("awaiting-approval");
+      }).catch((caught) => setError(motionErrorText(caught)));
+      return;
+    }
+    if (run.status === "error") {
+      const message = motionErrorText(new Error(run.error || "클라우드 렌더 실패"));
+      if (run.phase === "start" || run.phase === "plan") {
+        setMeetingStatus("error");
+        setError(message);
+        setRender({ status: "idle" });
+        setArchive({ status: "idle" });
+      } else {
+        setRender({ status: "error", error: message });
         setArchive({ status: "error", error: message });
-        void updateActiveWorkStatus("error");
-        window.clearInterval(timer);
       }
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [render.jobId, render.status]);
+      return;
+    }
+    if (run.status === "done") {
+      lastDoneRunRef.current = run;
+      setMeetingStatus("done");
+      setRender({ status: "done", progress: 100, jobId: run.id, downloadUrl: run.output?.videoUrl || "" });
+      setArchive({ status: "done" });
+      setStorageRevision((revision) => revision + 1);
+      return;
+    }
+    const planning = run.mode === "new" && !!run.skillJobId && !run.workId;
+    if (run.phase === "start" || run.phase === "plan") {
+      setMeetingStatus(planning ? "running" : "done");
+      setRender(planning ? { status: "idle" } : { status: "queued", phase: "assets", progress: 0 });
+      setArchive(planning ? { status: "idle" } : { status: "rendering" });
+      return;
+    }
+    setMeetingStatus("done");
+    if (run.phase === "save") {
+      setRender({ status: "rendering", phase: "render", progress: 100 });
+      setArchive({ status: "uploading" });
+      return;
+    }
+    setRender({ status: run.phase === "render" ? "rendering" : "queued", phase: run.phase, progress: run.progress, chars: run.chars });
+    setArchive({ status: "rendering" });
+  }
+
+  async function loadWork(workId: string) {
+    try {
+      const work = await getCompanyWorkItem(workId);
+      if (activeWorkRef.current?.id === work.id) return;
+      showWork(work);
+    } catch (_) { /* 업무 내용은 다음 상태 읽기에서 다시 시도 */ }
+  }
+
+  async function launchCloud(body: MotionCloudStart) {
+    setError("");
+    applyCloudRun(await startMotionCloud(body));
+  }
 
   async function startMeeting() {
     // disabled 반영 전 연속 클릭까지 막아 동일한 회의가 중복 호출되지 않게 한다.
@@ -196,24 +247,22 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setRender({ status: "idle" });
     setArchive({ status: "idle" });
     setPendingApproval(null);
+    activeWorkRef.current = null;
+    setActiveWork(null);
     try {
       skillJobPollingRef.current?.abort();
-      const controller = new AbortController();
-      skillJobPollingRef.current = controller;
+      // 기획 회의는 만들기만 하고, 실행부터 저장까지 클라우드 렌더러가 맡는다(창을 닫아도 된다)
       const result = await createCompanySkillJob("infographic", {
         invocationMode: "manual",
         request: prompt.trim(),
         idempotencyKey: `manual-${crypto.randomUUID()}`,
         options: { durationSec, aspectRatio, assets: selectedAssets },
-      }, { wait: true });
-      writeUserStorage(SKILL_JOB_STORAGE_KEY, result.job.id);
-      await restoreSkillJob(result.job.id, controller.signal);
+      }, { defer: true });
+      await launchCloud({ mode: "new", skillJobId: result.job.id });
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? motionErrorText(caught) : "에이전트 협업 중 오류가 발생했어요.");
       setMeetingStatus("error");
     } finally {
-      skillJobPollingRef.current = null;
       meetingLockedRef.current = false;
     }
   }
@@ -261,166 +310,52 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         return;
       }
       setMeetingStatus("running");
-      const controller = new AbortController();
-      skillJobPollingRef.current = controller;
-      await restoreSkillJob(job.id, controller.signal);
+      await launchCloud({ mode: "new", skillJobId: job.id });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "비용 승인을 처리하지 못했습니다.");
+      setError(caught instanceof Error ? motionErrorText(caught) : "비용 승인을 처리하지 못했습니다.");
       setMeetingStatus("error");
     } finally {
-      skillJobPollingRef.current = null;
       meetingLockedRef.current = false;
     }
   }
 
-  async function beginRender(targetSpec: AgentVideoSpec) {
-    setError("");
-    renderSpecRef.current = targetSpec;
-    archivingJobRef.current = "";
-    motionSourceRef.current = null;
-    setRender({ status: "queued", progress: 0, phase: "assets" });
-    setArchive({ status: "rendering" });
-    try {
-      // 모션 영상: 자산을 이 PC로 옮기고 → 감독(Claude 구독)이 이 영상만의 장면 코드를 쓰고 → 이 PC에서 렌더한다.
-      // 렌더가 끝나면 아래 상태 확인·archiveLocalRender 가 기존처럼 저장소에 올린다.
-      const t = motionAssetText();
-      const workId = activeWorkRef.current?.id;
-      if (!workId) throw new Error(t.noWork);
-      await updateActiveWorkStatus("working");
-      const prepared = await stageMotionAssets(workId, (done, total) =>
-        setRender({ status: "queued", phase: "assets", progress: total ? Math.round((done / total) * 100) : 100 }));
-      setRender({ status: "queued", phase: "director", progress: 0, chars: 0 });
-      const thumbs = await fetchMotionThumbs(workId, prepared);
-      const result = await runMotionDirector(workId, prepared, thumbs, (chars) =>
-        setRender({ status: "queued", phase: "director", progress: 0, chars }));
-      if (result.problems?.length) throw new Error(t.directorProblems.replace("{p}", result.problems.join(" · ")));
-      motionSourceRef.current = { html: result.html, episode: result.episode, prepared };
-      await saveMotionPage(workId, result.html, result.episode);
-      setRender(await startMotionRender(workId));
-    } catch (caught) {
-      const message = motionErrorText(caught) || "로컬 렌더 실패";
-      setRender({ status: "error", error: message });
-      setArchive({ status: "error", error: message });
-      await updateActiveWorkStatus("error").catch(() => undefined);
-    }
-  }
-
-  async function archiveLocalRender(renderResult: LocalAgentVideoRenderStatus, targetSpec: AgentVideoSpec) {
-    const jobId = String(renderResult.jobId || "");
-    if (!jobId || !renderResult.downloadUrl || archivingJobRef.current === jobId) return;
-    archivingJobRef.current = jobId;
-    setArchive({ status: "uploading" });
-    try {
-      const localResponse = await fetch(localRendererUrl(renderResult.downloadUrl));
-      if (!localResponse.ok) throw new Error(`로컬 MP4를 읽지 못했습니다. (HTTP ${localResponse.status})`);
-      const videoBlob = await localResponse.blob();
-      const workId = activeWorkRef.current?.id || "";
-      const skillJobId = String(activeWorkRef.current?.metadata?.skill?.skillJobId || "");
-      const job = skillJobId ? await getCompanySkillJob(skillJobId) : null;
-      const videoChecksum = await sha256Hex(videoBlob);
-      const videoItem = await uploadAgentVideoStorageFile(
-        new Blob([videoBlob], { type: videoBlob.type || "video/mp4" }),
-        "agent-video.mp4",
-        workId,
-      );
-      const sourceBlob = new Blob([JSON.stringify({
-        schema: "company-skill/infographic-source/v1",
-        jobId: skillJobId || null,
-        workItemId: workId,
-        spec: targetSpec,
-        // 감독이 쓴 장면 코드·소리 큐와 받은 자산 목록(다시 렌더·수정할 때 쓴다)
-        motion: motionSourceRef.current,
-      }, null, 2)], { type: "application/json" });
-      const sourceChecksum = await sha256Hex(sourceBlob);
-      const sourceItem = await uploadAgentVideoStorageFile(sourceBlob, "source.json", workId);
-      const reportBlob = new Blob([JSON.stringify({
-        schema: "company-skill/report/v1",
-        jobId: skillJobId || null,
-        workItemId: workId,
-        agentReports: job?.agentReports || [],
-        qualityResults: job?.qualityResults || [],
-        warnings: job?.warnings || [],
-        costEstimate: job?.costEstimate || null,
-        actualCost: job?.actualCost || null,
-        providerUsage: job?.providerUsage || {},
-        completedAt: job?.completedAt || null,
-      }, null, 2)], { type: "application/json" });
-      const reportChecksum = await sha256Hex(reportBlob);
-      const reportItem = await uploadAgentVideoStorageFile(reportBlob, "report.json", workId);
-      const manifest = {
-        schema: "company-skill/manifest/v1",
-        version: job?.version || 1,
-        lineage: job?.lineage || [],
-        jobId: skillJobId || null,
-        workItemId: workId,
-        archivedAt: new Date().toISOString(),
-        cost: { estimate: job?.costEstimate || null, actual: job?.actualCost || null },
-        artifacts: [
-          { kind: "final", objectPath: videoItem.objectName, checksum: videoChecksum },
-          { kind: "source", objectPath: sourceItem.objectName, checksum: sourceChecksum },
-          { kind: "report", objectPath: reportItem.objectName, checksum: reportChecksum },
-        ],
-      };
-      const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
-      const manifestChecksum = await sha256Hex(manifestBlob);
-      const manifestItem = await uploadAgentVideoStorageFile(
-        manifestBlob,
-        "manifest.json",
-        workId,
-      );
-      if (skillJobId) {
-        const version = job?.version || 1;
-        await registerCompanySkillJobArtifacts(skillJobId, [
-          { kind: "final", fileName: videoItem.fileName, objectPath: videoItem.objectName, mimeType: videoItem.contentType, sizeBytes: videoItem.size, checksum: videoChecksum, version },
-          { kind: "source", fileName: sourceItem.fileName, objectPath: sourceItem.objectName, mimeType: sourceItem.contentType, sizeBytes: sourceItem.size, checksum: sourceChecksum, version },
-          { kind: "report", fileName: reportItem.fileName, objectPath: reportItem.objectName, mimeType: reportItem.contentType, sizeBytes: reportItem.size, checksum: reportChecksum, version },
-          { kind: "manifest", fileName: manifestItem.fileName, objectPath: manifestItem.objectName, mimeType: manifestItem.contentType, sizeBytes: manifestItem.size, checksum: manifestChecksum, version, metadata: { lineage: job?.lineage || [] } },
-        ]);
-      }
-      await updateActiveWorkStatus("completed");
-      setArchive({ status: "done", items: [videoItem, sourceItem, reportItem, manifestItem] });
-      setStorageRevision((revision) => revision + 1);
-    } catch (caught) {
-      setArchive({ status: "error", error: caught instanceof Error ? caught.message : "클라우드 저장에 실패했습니다." });
-      await updateActiveWorkStatus("error").catch(() => undefined);
-    }
-  }
-
-  async function updateActiveWorkStatus(status: CompanyWorkItem["status"]) {
-    const work = activeWorkRef.current;
-    if (!work?.id || work.status === status) return work;
-    const updated = await setCompanyWorkItemStatus(work.id, status);
-    activeWorkRef.current = updated;
-    setActiveWork(updated);
-    return updated;
-  }
-
-  // 부분 수정: 지금 장면 코드에서 요청한 부분만 감독이 고치거나(AI), 글꼴·색만 바로 바꾼 뒤(AI 없이) 다시 렌더한다
-  async function reviseVideo(options: { request?: string; frames?: MotionStill[]; quick?: { font?: string; color?: string } }) {
+  // 기획 결과(업무)로 다시 만들기: 자산·감독부터 저장까지 클라우드에서
+  async function beginRender() {
     const t = motionAssetText();
     const workId = activeWorkRef.current?.id;
-    if (!workId) { setError(t.noWork); return; }
-    setError("");
-    archivingJobRef.current = "";
-    setArchive({ status: "rendering" });
     try {
-      const current = await getMotionPage(workId);
-      let html = current.html;
-      let episode = current.episode;
-      if (options.request?.trim()) {
-        setRender({ status: "queued", phase: "director", progress: 0, chars: 0 });
-        const prepared = await getPreparedMotionAssets(workId);
-        const frames = await Promise.all((options.frames || []).slice(0, 4).map(async (frame) => ({ t: frame.t, dataUrl: await imageUrlToDataUrl(frame.url) })));
-        const result = await runMotionDirector(workId, prepared, [], (chars) =>
-          setRender({ status: "queued", phase: "director", progress: 0, chars }), { html, episode, request: options.request.trim(), frames });
-        if (result.problems?.length) throw new Error(t.directorProblems.replace("{p}", result.problems.join(" · ")));
-        html = result.html;
-        episode = result.episode;
-      }
-      if (options.quick) html = applyQuickStyle(html, options.quick);
-      motionSourceRef.current = { html, episode, prepared: null };
-      await saveMotionPage(workId, html, episode);
-      setRender(await startMotionRender(workId));
+      if (!workId) throw new Error(t.noWork);
+      setRender({ status: "queued", progress: 0, phase: "assets" });
+      setArchive({ status: "rendering" });
+      await launchCloud({ mode: "new", workId });
+    } catch (caught) {
+      const message = motionErrorText(caught) || "클라우드 렌더 실패";
+      setRender({ status: "error", error: message });
+      setArchive({ status: "error", error: message });
+    }
+  }
+
+  // 지금 완성본의 장면 코드(저장소의 source.json)
+  async function currentSource() {
+    const workId = activeWorkRef.current?.id;
+    if (!workId) throw new Error(motionAssetText().noWork);
+    const run = lastDoneRunRef.current?.workId === workId ? lastDoneRunRef.current : await getMotionCloudRun({ workId });
+    if (!run || run.status !== "done") throw new Error("완성된 영상이 아직 없어요.");
+    return { workId, ...(await getMotionCloudSource(run)) };
+  }
+
+  // 부분 수정: 지금 장면 코드에서 요청한 부분만 감독이 고치거나(AI), 글꼴·색만 바로 바꾼 뒤(AI 없이) 클라우드에서 다시 렌더한다
+  async function reviseVideo(options: { request?: string; frames?: MotionStill[]; quick?: { font?: string; color?: string } }) {
+    setError("");
+    try {
+      const source = await currentSource();
+      const html = options.quick ? applyQuickStyle(source.html, options.quick) : source.html;
+      const request = options.request?.trim() || "";
+      setRender({ status: "queued", phase: request ? "director" : "render", progress: 0, chars: 0 });
+      setArchive({ status: "rendering" });
+      await launchCloud(request
+        ? { mode: "revise", workId: source.workId, html, episode: source.episode, request, frameTimes: (options.frames || []).slice(0, 4).map((frame) => frame.t) }
+        : { mode: "render", workId: source.workId, html, episode: source.episode });
     } catch (caught) {
       const message = motionErrorText(caught) || "수정 렌더 실패";
       setRender({ status: "error", error: message });
@@ -430,17 +365,15 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
 
   // 실례로 저장: 지금 장면 코드를 감독의 다음 영상 참고 실례로 쌓는다
   async function saveAsExample() {
-    const workId = activeWorkRef.current?.id;
-    if (!workId) throw new Error(motionAssetText().noWork);
-    const current = await getMotionPage(workId);
-    await saveMotionExample(workId, current.html, String(activeWorkRef.current?.metadata?.spec?.title || ""));
+    const source = await currentSource();
+    await saveMotionExample(source.workId, source.html, String(activeWorkRef.current?.metadata?.spec?.title || ""));
   }
 
   async function renderVideo() {
-    await beginRender(spec);
+    await beginRender();
   }
 
-  async function openWork(work: CompanyWorkItem, autoRender = false) {
+  function showWork(work: CompanyWorkItem) {
     const nextSpec = normalizeAgentVideoSpec(work?.metadata?.spec || defaultAgentVideoSpec);
     const input = work?.metadata?.input;
     activeWorkRef.current = work;
@@ -450,9 +383,21 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setPrompt(String(input?.prompt || work.request_text || ""));
     setDurationSec(Number(input?.durationSec || getDuration(nextSpec)));
     setAspectRatio((input?.aspectRatio || nextSpec.aspectRatio) as AspectRatio);
+  }
+
+  async function openWork(work: CompanyWorkItem, autoRender = false) {
+    showWork(work);
     setMeetingStatus("done");
     setError("");
-    if (autoRender) await beginRender(nextSpec);
+    setRender({ status: "idle" });
+    setArchive({ status: "idle" });
+    if (autoRender) {
+      await beginRender();
+      return;
+    }
+    // 이 업무를 클라우드에서 만든 적이 있으면 마지막 결과(또는 진행 상황)를 보여 준다
+    const run = await getMotionCloudRun({ workId: work.id }).catch(() => null);
+    if (run && activeWorkRef.current?.id === work.id) applyCloudRun(run);
   }
 
   function getDuration(target: AgentVideoSpec) {
@@ -484,6 +429,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       renderVideo,
       reviseVideo,
       saveAsExample,
+      stills: cloudRun?.status === "done" ? cloudRun.output?.stills || [] : [],
     }}>
       {children}
     </AgentVideoWorkspaceContext.Provider>

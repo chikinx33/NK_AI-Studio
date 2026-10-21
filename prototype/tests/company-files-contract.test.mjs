@@ -192,13 +192,14 @@ test("채팅 말풍선은 문서·이미지·영상·음악·PDF 파일 카드�
 test("업무 상태는 명세 생성부터 렌더·보관 완료까지 분리된다", async () => {
   const [create, browserArchive, serverArchive, explorer] = await Promise.all([
     read("prototype/functions/api/agent/agent-video.ts"),
-    read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
+    read("ai-company-app/scripts/motion-cloud-job.mjs"),
     read("prototype/functions/api/agent/skill-jobs/[jobId]/render-output.ts"),
     read("ai-company-app/src/components/WorkExplorer.tsx"),
   ]);
   assert.match(create, /'infographic', 'working'/);
-  assert.match(browserArchive, /updateActiveWorkStatus\("completed"\)/);
-  assert.match(browserArchive, /updateActiveWorkStatus\("error"\)/);
+  // 인포그래픽 영상은 클라우드 렌더 작업이 업무 상태를 진행 중 → 완료로 바꾼다(실패는 렌더 작업 상태로 보인다)
+  assert.match(browserArchive, /status: "working"/);
+  assert.match(browserArchive, /status: "completed"/);
   assert.match(serverArchive, /company_work_items SET status = 'completed'/);
   assert.match(serverArchive, /company_work_items SET status = 'error'/);
   assert.match(explorer, /전체 상태/);

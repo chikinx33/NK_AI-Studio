@@ -132,15 +132,13 @@ test("키트: 무대 크기를 <html data-size>로 바꾸되 기본 1080x1920은
   assert.match(read("ai-company-app/scripts/render-motion-page.mjs"), /document\.getElementById\('stage'\); return s \? \[s\.offsetWidth, s\.offsetHeight\]/);
 });
 
-test("화면: 작업이 끝나면 자산 옮기기 → 감독 → 장면 저장 → 렌더 순서로 잇고, nkstudio.org 에서는 이 PC를 직접 부른다", () => {
-  const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
-  const order = ["stageMotionAssets(workId", "fetchMotionThumbs(workId", "runMotionDirector(workId", "saveMotionPage(workId", "startMotionRender(workId)"]
-    .map((needle) => context.indexOf(needle));
+test("클라우드 렌더 작업: 기획 → 자산 받기·정리 → 감독 → 장면 저장 → 렌더 → 정지 화면·저장 순서로 혼자 잇는다", () => {
+  const job = read("ai-company-app/scripts/motion-cloud-job.mjs");
+  const order = ['phase("plan"', 'phase("assets"', "runDirector({ workId, prepared, thumbs", "await writePage(directory, html, episode)", 'phase("render"', 'phase("save"', 'status: "done"']
+    .map((needle) => job.indexOf(needle));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `순서: ${order}`);
-  assert.match(context, /motion: motionSourceRef\.current/);
-  assert.match(context, /fetch\(localRendererUrl\(renderResult\.downloadUrl\)\)/);
-  const api = read("ai-company-app/src/lib/api.ts");
-  assert.match(api, /host === "localhost" \|\| host === "127\.0\.0\.1" \? path : `http:\/\/localhost:14000\$\{path\}`/);
+  assert.match(job, /motion: \{ html, episode, prepared \}/);
+  assert.match(job, /continue\?wait=1/, "기획 회의는 요청을 연 채로 끝까지");
   assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /\{finalVideoUrl \? \(/);
 });
 
@@ -159,7 +157,7 @@ test("시청 대상·톤·스타일은 따로 받지 않고 요청 글에서 읽
 
 test("작업 시작은 서버가 끝까지 실행하게 기다리고(wait=1), 서버에서 끊겨 굳은 작업은 바로 알린다", () => {
   const api = read("ai-company-app/src/lib/api.ts");
-  assert.match(api, /\/jobs\$\{options\.wait \? "\?wait=1" : ""\}/);
+  assert.match(api, /const query = options\.defer \? "\?defer=1" : options\.wait \? "\?wait=1" : "";/);
   const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
   assert.match(context, /Date\.now\(\) - updatedAt > 5 \* 60 \* 1000/);
   assert.match(context, /await cancelCompanySkillJob\(jobId\)/);

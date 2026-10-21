@@ -47,7 +47,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, params, waitU
       idempotencyKey: normalized.input.idempotencyKey,
     });
     let responseJob = result.job;
-    if (result.created) {
+    // defer=1: 만들기만 하고 실행은 클라우드 렌더러가 /continue?wait=1 로 맡는다(브라우저를 닫아도 기획 회의가 끊기지 않게)
+    const defer = new URL(request.url).searchParams.get("defer") === "1";
+    if (result.created && !defer) {
       const execution = runCompanySkillJob({
         request,
         env,

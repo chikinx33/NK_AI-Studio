@@ -3,7 +3,6 @@ import AgentVideoStorageModal from "./AgentVideoStorageModal";
 import MotionAssetPicker, { useMotionAssetText } from "./MotionAssetPicker";
 import MotionProgress from "./MotionProgress";
 import MotionRevisionPanel from "./MotionRevisionPanel";
-import { localRendererUrl } from "../lib/api";
 import CompanySkillThreeColumnLayout from "./CompanySkillThreeColumnLayout";
 import {
   getAgentVideoDimensions,
@@ -77,7 +76,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   const meetingStartDisabled = meetingInProgress || meetingStatus === "awaiting-approval";
   const motionText = useMotionAssetText();
   const renderInProgress = render.status === "queued" || render.status === "rendering";
-  const finalVideoUrl = render.status === "done" && render.downloadUrl ? localRendererUrl(render.downloadUrl) : "";
+  // 완성 영상: 클라우드 렌더러가 저장소에 올린 파일(1시간짜리 서명 주소)
+  const finalVideoUrl = render.status === "done" && render.downloadUrl ? render.downloadUrl : "";
   const archiveInProgress = archive.status === "uploading";
 
   const dimensions = useMemo(() => getAgentVideoDimensions(spec.aspectRatio), [spec.aspectRatio]);
@@ -91,7 +91,7 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
   async function downloadVideo() {
     if (render.status === "done" && render.downloadUrl) {
       const link = document.createElement("a");
-      link.href = localRendererUrl(render.downloadUrl);
+      link.href = render.downloadUrl;
       link.download = "agent-video.mp4";
       document.body.appendChild(link);
       link.click();
@@ -204,6 +204,9 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
               <div className="mt-2 line-clamp-2 rounded-lg border border-emerald-950 bg-tint-emerald/25 p-2 text-[10px] leading-4 text-tone-emerald">
                 {motionText.planningNote}
               </div>
+            )}
+            {(meetingInProgress || renderInProgress || archiveInProgress) && (
+              <p className="mt-1.5 text-[10px] leading-4 text-faint">{motionText.cloudNote}</p>
             )}
             {error && <div className="mt-2 line-clamp-2 rounded-lg border border-red-900/70 bg-tint-red/35 p-2 text-[10px] leading-4 text-tone-red">{error}</div>}
         </>,

@@ -27,9 +27,9 @@ test("Agent Video 화면은 Remotion Player와 로컬 MP4 렌더를 연결한다
   assert.match(workspace, /motionText\.previewPlaceholder/);
   assert.match(workspaceContext, /createCompanySkillJob/);
   assert.match(workspaceContext, /waitForCompanySkillJob/);
-  // 2026-10-21 3단계: 렌더는 감독이 쓴 모션 키트 장면 코드를 이 PC에서 렌더한다(Player는 콘티 초안 미리보기)
-  assert.match(workspaceContext, /startMotionRender\(workId\)/);
-  assert.match(workspaceContext, /getLocalAgentVideoRenderStatus/);
+  // 2026-10-22: 렌더는 클라우드 렌더러(Cloud Run Jobs)가 한다 — 화면은 시작하고 상태만 읽는다(PC를 꺼도 된다)
+  assert.match(workspaceContext, /startMotionCloud\(body\)/);
+  assert.match(workspaceContext, /getMotionCloudRun\(\{ runId: cloudRun\.id \}\)/);
   assert.match(main, /<AgentVideoWorkspaceProvider>/);
   assert.match(app, /centerView === "video"/);
   assert.match(workspace, /onClose: \(\) => void/);
@@ -71,7 +71,9 @@ test("Agent Video 회의는 탭 전환 상태를 유지하고 중복 시작을 �
   assert.match(workspaceContext, /setMeetingStatus\("running"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("done"\)/);
   assert.match(workspaceContext, /setMeetingStatus\("error"\)/);
-  assert.match(workspaceContext, /writeUserStorage\(SKILL_JOB_STORAGE_KEY, result\.job\.id\)/);
+  // 창을 다시 열면 진행 중인 클라우드 작업을 이어 읽는다(예전 기획 회의 작업 복원도 남겨 둔다)
+  assert.match(workspaceContext, /writeUserStorage\(CLOUD_RUN_STORAGE_KEY, run\.id\)/);
+  assert.match(workspaceContext, /readUserStorage\(CLOUD_RUN_STORAGE_KEY\)/);
   assert.match(workspaceContext, /readUserStorage\(SKILL_JOB_STORAGE_KEY\)/);
   assert.match(workspaceContext, /restoreSkillJob/);
 });
@@ -88,17 +90,19 @@ test("Agent Video 업무 화면은 간결한 미리보기·업무 보고·다운
 });
 
 test("Agent Video 프리뷰는 자동 렌더 후 사용자별 날짜·업무 폴더에 보관된다", async () => {
-  const [workspaceContext, storageApi] = await Promise.all([
+  // 보관은 클라우드 렌더 작업이 사이트 저장 API로 한다(브라우저를 닫아도 된다)
+  const [workspaceContext, storageApi, cloudJob] = await Promise.all([
     read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx"),
     read("prototype/functions/api/agent/agent-video-storage.ts"),
+    read("ai-company-app/scripts/motion-cloud-job.mjs"),
   ]);
-  assert.match(workspaceContext, /await beginRender\(nextSpec\)/);
-  assert.match(workspaceContext, /uploadAgentVideoStorageFile/);
-  assert.match(workspaceContext, /"agent-video\.mp4"/);
-  assert.match(workspaceContext, /"source\.json"/);
-  assert.match(workspaceContext, /"report\.json"/);
-  assert.match(workspaceContext, /"manifest\.json"/);
-  assert.match(workspaceContext, /registerCompanySkillJobArtifacts/);
+  assert.match(workspaceContext, /if \(autoRender\) \{\n\s+await beginRender\(\);/);
+  assert.match(cloudJob, /\/api\/agent\/agent-video-storage\?filename=/);
+  assert.match(cloudJob, /"agent-video\.mp4"/);
+  assert.match(cloudJob, /"source\.json"/);
+  assert.match(cloudJob, /"report\.json"/);
+  assert.match(cloudJob, /"manifest\.json"/);
+  assert.match(cloudJob, /\/api\/agent\/skill-jobs\/\$\{encodeURIComponent\(skillJobId\)\}\/artifacts/);
   assert.match(storageApi, /authorizeRequest\(request, env\)/);
   assert.match(storageApi, /buildAiVideoProjectPrefix\(basePrefix, userId, "ai-company"\)/);
   assert.match(storageApi, /\/work-library\//);

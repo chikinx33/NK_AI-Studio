@@ -267,7 +267,7 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
   }
 };
 
-async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number }) {
+export async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number }) {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
   const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;

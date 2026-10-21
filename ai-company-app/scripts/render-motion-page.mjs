@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const WIDTH = 1080;
@@ -17,11 +18,13 @@ const CHROME_CANDIDATES = [
   process.env.MOTION_CHROME,
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  "/usr/bin/google-chrome-stable",
 ];
 // tmix·framestep·afade·loudnorm 이 있는 전체 빌드가 필요하다(Remotion 동봉 ffmpeg에는 tmix가 없다).
 const FFMPEG_CANDIDATES = [
   process.env.MOTION_FFMPEG,
   "D:\\Programs\\REAL-Video-Enhancer\\bin\\ffmpeg.exe",
+  "/usr/bin/ffmpeg",
 ];
 
 function pickExecutable(candidates, label) {
@@ -129,8 +132,12 @@ class Cdp {
   close() { try { this.ws.close(); } catch (_) { /* 이미 닫힘 */ } }
 }
 
+// 컨테이너(클라우드 렌더러)는 root 로 돌고 /dev/shm 이 작아 MOTION_CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage" 를 더한다
+const EXTRA_CHROME_FLAGS = String(process.env.MOTION_CHROME_FLAGS || "").split(/\s+/).filter((flag) => flag.startsWith("--"));
+
 async function launchChrome(chrome, profileDirectory) {
   const child = spawn(chrome, [
+    ...EXTRA_CHROME_FLAGS,
     "--headless=new",
     `--user-data-dir=${profileDirectory}`,
     "--remote-debugging-port=0",
@@ -284,6 +291,58 @@ async function mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, durat
 
 // ---------- 렌더 ----------
 
+// 촬영한 장면을 번호 순서대로 영상 인코더(ffmpeg 표준 입력)에 흘려보낸다. 일꾼 탭들이 번갈아 찍어 순서가 섞여 들어오므로
+// 앞 번호가 올 때까지 잠시 들고 있다가 이어서 쓴다. 장면을 디스크에 쌓지 않아 60초 영상(장면 1만 4천 장)도
+// 메모리가 곧 디스크인 클라우드 렌더러에서 돈다(2026-10-22).
+export function orderedFrameSink(stream, { limit = 48 } = {}) {
+  const pending = new Map();
+  const waiters = [];
+  let next = 0;
+  let flushing = false;
+  let failed = null;
+  const wake = () => { while (waiters.length) waiters.shift()(); };
+  stream.on("error", (error) => { failed = failed || error; wake(); });
+  return {
+    get written() { return next; },
+    async put(index, buffer) {
+      while (!failed && index - next >= limit) await new Promise((resolve) => waiters.push(resolve));
+      if (failed) throw failed;
+      pending.set(index, buffer);
+      if (flushing) return;
+      flushing = true;
+      try {
+        while (pending.has(next)) {
+          const chunk = pending.get(next);
+          pending.delete(next);
+          next++;
+          wake();
+          if (!stream.write(chunk)) await once(stream, "drain");
+        }
+      } finally {
+        flushing = false;
+      }
+    },
+    async end() {
+      if (failed) throw failed;
+      if (pending.size) throw new Error(`빠진 장면이 있습니다(${next}번).`);
+      await new Promise((resolve, reject) => stream.end((error) => (error ? reject(error) : resolve())));
+    },
+  };
+}
+
+function startEncoder(ffmpeg, args) {
+  const child = spawn(ffmpeg, args.map(String), { stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
+  lowPriority(child.pid);
+  let err = "";
+  child.stderr.on("data", (chunk) => { err += chunk; });
+  const done = new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(err.trim().split(/\r?\n/).slice(-6).join("\n") || `ffmpeg exit=${code}`))));
+  });
+  done.catch(() => {});
+  return { child, stdin: child.stdin, done };
+}
+
 export async function renderMotionPage(options) {
   const pagePath = path.resolve(options.page);
   const outPath = path.resolve(options.out);
@@ -301,9 +360,12 @@ export async function renderMotionPage(options) {
   const stem = path.basename(outPath, path.extname(outPath));
   const framesDirectory = path.join(outDirectory, `_frames_${stem}`);
   const profileDirectory = path.join(outDirectory, `_chrome_${stem}_${process.pid}`);
+  const mixPath = path.join(outDirectory, `_mix_${stem}.wav`);
   await fs.mkdir(outDirectory, { recursive: true });
-  await fs.rm(framesDirectory, { recursive: true, force: true });
-  await fs.mkdir(framesDirectory, { recursive: true });
+  if (options.keepFrames) {
+    await fs.rm(framesDirectory, { recursive: true, force: true });
+    await fs.mkdir(framesDirectory, { recursive: true });
+  }
 
   const pageUrl = `${pathToFileURL(pagePath).href}?lang=${encodeURIComponent(lang)}`;
   const report = { blocked: new Set(), exceptions: new Set() };
@@ -311,6 +373,8 @@ export async function renderMotionPage(options) {
   let cdp = null;
   let duration = 0;
   let total = 0;
+  let encoder = null;
+  let hasMix = false;
   const started = Date.now();
   try {
     cdp = await Cdp.connect(wsUrl);
@@ -319,6 +383,29 @@ export async function renderMotionPage(options) {
     duration = pages[0].duration;
     const { width, height } = pages[0];
     total = Math.floor(duration * fps * sub);
+
+    // 소리: 길이를 알았으니 먼저 섞어 두고, 영상은 촬영과 동시에 인코딩한다
+    if (options.episode) {
+      const episodePath = path.resolve(options.episode);
+      const episodeDirectory = path.dirname(episodePath);
+      const episode = JSON.parse(await fs.readFile(episodePath, "utf8"));
+      if (episode.bgm || episode.cues?.length) {
+        const audioFolders = [episodeDirectory, path.dirname(pagePath), ...(options.audioDirs || [])];
+        await mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath: mixPath });
+        hasMix = true;
+      }
+    }
+
+    // 영상: sub 장씩 섞어 모션블러, tv 범위
+    encoder = startEncoder(ffmpeg, [
+      "-y", "-v", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", fps * sub, "-thread_queue_size", 512, "-i", "-",
+      ...(hasMix ? ["-i", mixPath] : []),
+      "-vf", `tmix=frames=${sub},framestep=${sub},scale=in_range=full:out_range=tv,format=yuv420p`, "-r", fps,
+      "-c:v", "libx264", "-preset", "slow", "-crf", 17,
+      ...(hasMix ? ["-c:a", "aac", "-b:a", "192k", "-shortest"] : []),
+      "-movflags", "+faststart", outPath,
+    ]);
+    const sink = orderedFrameSink(encoder.stdin);
     let done = 0;
     let lastLogged = 0;
     await Promise.all(pages.map(async ({ send }, index) => {
@@ -327,12 +414,18 @@ export async function renderMotionPage(options) {
         const { data } = await send("Page.captureScreenshot", {
           format: "jpeg", quality: 94, clip: { x: 0, y: 0, width, height, scale: 1 },
         });
-        await fs.writeFile(path.join(framesDirectory, `f_${String(k).padStart(5, "0")}.jpg`), Buffer.from(data, "base64"));
+        const frame = Buffer.from(data, "base64");
+        if (options.keepFrames) await fs.writeFile(path.join(framesDirectory, `f_${String(k).padStart(5, "0")}.jpg`), frame);
+        await sink.put(k, frame);
         done++;
         if (done - lastLogged >= 120 || done === total) { lastLogged = done; log(`Rendered ${done}/${total}`); }
       }
     }));
+    await sink.end();
     await cdp.send("Browser.close").catch(() => {});
+  } catch (error) {
+    if (encoder?.child.exitCode === null) encoder.child.kill();
+    throw error;
   } finally {
     cdp?.close();
     if (child.exitCode === null) child.kill();
@@ -342,38 +435,19 @@ export async function renderMotionPage(options) {
   if (report.blocked.size) log(`막은 요청 ${report.blocked.size}건: ${[...report.blocked].slice(0, 5).join(", ")}`);
   if (report.exceptions.size) log(`페이지 오류 ${report.exceptions.size}건: ${[...report.exceptions].slice(0, 5).join(" | ")}`);
   log(`촬영 ${total}장 (${duration.toFixed(2)}초) ${Math.round((Date.now() - started) / 1000)}초 걸림`);
-
-  // 소리
-  let mixPath = null;
-  if (options.episode) {
-    const episodePath = path.resolve(options.episode);
-    const episodeDirectory = path.dirname(episodePath);
-    const episode = JSON.parse(await fs.readFile(episodePath, "utf8"));
-    if (episode.bgm || episode.cues?.length) {
-      mixPath = path.join(outDirectory, `_mix_${stem}.wav`);
-      const audioFolders = [episodeDirectory, path.dirname(pagePath), ...(options.audioDirs || [])];
-      await mixAudio({ ffmpeg, episode, episodeDirectory, audioFolders, duration, outPath: mixPath });
-    }
+  try {
+    await encoder.done;
+  } finally {
+    await fs.rm(mixPath, { force: true });
   }
-
-  // 영상: sub 장씩 섞어 모션블러, tv 범위
-  await runProcess(ffmpeg, [
-    "-y", "-v", "error", "-framerate", fps * sub, "-i", path.join(framesDirectory, "f_%05d.jpg"),
-    ...(mixPath ? ["-i", mixPath] : []),
-    "-vf", `tmix=frames=${sub},framestep=${sub},scale=in_range=full:out_range=tv,format=yuv420p`, "-r", fps,
-    "-c:v", "libx264", "-preset", "slow", "-crf", 17,
-    ...(mixPath ? ["-c:a", "aac", "-b:a", "192k", "-shortest"] : []),
-    "-movflags", "+faststart", outPath,
-  ]);
-  if (mixPath) await fs.rm(mixPath, { force: true });
-  if (!options.keepFrames) await fs.rm(framesDirectory, { recursive: true, force: true });
   log(`완성 → ${outPath}`);
   return { outPath, duration, frames: total, blocked: [...report.blocked], exceptions: [...report.exceptions] };
 }
 
 // 장면 정지 화면: 완성 영상에서 장면을 가리켜 고칠 수 있게 count 장을 고르게 찍는다(가로 270px 미리보기).
 // 반환 [{ t, file }]. 부분 수정 화면과 감독(그림으로 장면 확인)이 쓴다.
-export async function renderMotionStills({ page, outDir, count = 12, allowRoots, scale = 0.25, log = () => {} }) {
+// times 를 주면 그 시점들만 찍는다(클라우드 부분 수정: 사용자가 가리킨 장면을 감독에게 크게 보여 줄 때).
+export async function renderMotionStills({ page, outDir, count = 12, times = null, allowRoots, scale = 0.25, prefix = "still", log = () => {} }) {
   const pagePath = path.resolve(page);
   const roots = (allowRoots?.length ? allowRoots : [path.dirname(pagePath)]).map((root) => path.resolve(root));
   const chrome = pickExecutable(CHROME_CANDIDATES, "크롬");
@@ -387,12 +461,14 @@ export async function renderMotionStills({ page, outDir, count = 12, allowRoots,
     cdp = await Cdp.connect(wsUrl);
     const { send, duration, width, height } = await openPage(cdp, `${pathToFileURL(pagePath).href}?lang=ko`, roots, report);
     const n = Math.max(2, Math.min(24, count));
-    for (let i = 0; i < n; i++) {
-      // 처음·끝 0.3초는 비우고 고르게
-      const t = Math.round((0.3 + (Math.max(0.1, duration - 0.6) * i) / (n - 1)) * 100) / 100;
+    // 처음·끝 0.3초는 비우고 고르게
+    const moments = Array.isArray(times) && times.length
+      ? times.slice(0, 8).map((t) => Math.min(Math.max(0, Number(t) || 0), duration))
+      : Array.from({ length: n }, (_, i) => Math.round((0.3 + (Math.max(0.1, duration - 0.6) * i) / (n - 1)) * 100) / 100);
+    for (const [i, t] of moments.entries()) {
       await evaluate(send, `seek(${t})`);
       const { data } = await send("Page.captureScreenshot", { format: "jpeg", quality: 80, clip: { x: 0, y: 0, width, height, scale } });
-      const file = `still_${String(i).padStart(2, "0")}.jpg`;
+      const file = `${prefix}_${String(i).padStart(2, "0")}.jpg`;
       await fs.writeFile(path.join(outDir, file), Buffer.from(data, "base64"));
       stills.push({ t, file });
     }

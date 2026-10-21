@@ -244,3 +244,59 @@ export async function saveMotionExample(workId: string, html: string, title = ""
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || "실례로 저장하지 못했어요.");
 }
+
+// ---------- 클라우드 렌더러(2026-10-22) ----------
+// 기획 회의부터 저장까지 Cloud Run 작업이 혼자 한다. 화면은 상태만 몇 초마다 읽는다(창을 닫아도 된다).
+
+export interface MotionCloudRun {
+  id: string;
+  workId: string | null;
+  skillJobId: string | null;
+  mode: "new" | "revise" | "render";
+  status: "queued" | "running" | "awaiting-approval" | "done" | "error";
+  phase: "start" | "plan" | "assets" | "director" | "render" | "save";
+  progress: number;
+  chars: number;
+  error: string;
+  output: {
+    videoUrl?: string;
+    video?: { objectName: string; fileName: string; size: number };
+    source?: { objectName: string };
+    stills?: MotionStill[];
+    timings?: Record<string, number>;
+  };
+}
+
+export type MotionCloudStart =
+  | { mode: "new"; skillJobId?: string; workId?: string }
+  | { mode: "render"; workId: string; html: string; episode: unknown }
+  | { mode: "revise"; workId: string; html: string; episode: unknown; request: string; frameTimes: number[] };
+
+export async function startMotionCloud(body: MotionCloudStart, lang: "ko" | "en" = "ko"): Promise<MotionCloudRun> {
+  const res = await fetch("/api/agent/motion-cloud", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "start", lang, ...body }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "클라우드 렌더를 시작하지 못했어요.");
+  return data.run as MotionCloudRun;
+}
+
+export async function getMotionCloudRun(query: { runId: string } | { workId: string }): Promise<MotionCloudRun | null> {
+  const params = "runId" in query ? `runId=${encodeURIComponent(query.runId)}` : `workId=${encodeURIComponent(query.workId)}`;
+  const res = await fetch(`/api/agent/motion-cloud?${params}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || "클라우드 렌더 상태를 읽지 못했어요.");
+  return (data.run as MotionCloudRun) || null;
+}
+
+// 저장해 둔 장면 코드·소리 큐(source.json) — 부분 수정·실례 저장에 쓴다
+export async function getMotionCloudSource(run: MotionCloudRun): Promise<{ html: string; episode: unknown }> {
+  const objectName = run.output?.source?.objectName;
+  if (!objectName) throw new Error("저장된 장면 코드가 없어요.");
+  const res = await fetch(`/api/agent/agent-video-storage?objectName=${encodeURIComponent(objectName)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.motion?.html) throw new Error(data?.error || "저장된 장면 코드를 읽지 못했어요.");
+  return { html: String(data.motion.html), episode: data.motion.episode ?? null };
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MOTION_FONTS, makeMotionStills, type MotionStill } from "../lib/motionAssets";
+import { MOTION_FONTS } from "../lib/motionAssets";
 import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
 import { useMotionAssetText } from "./MotionAssetPicker";
 
@@ -10,9 +10,8 @@ import { useMotionAssetText } from "./MotionAssetPicker";
  */
 export default function MotionRevisionPanel({ busy }: { busy: boolean }) {
   const t = useMotionAssetText();
-  const { activeWork, reviseVideo, saveAsExample } = useAgentVideoWorkspace();
-  const [stills, setStills] = useState<MotionStill[]>([]);
-  const [loadingStills, setLoadingStills] = useState(false);
+  // 장면 정지 화면은 클라우드 렌더러가 완성과 함께 12장 찍어 저장해 둔다
+  const { activeWork, reviseVideo, saveAsExample, stills } = useAgentVideoWorkspace();
   const [picked, setPicked] = useState<number[]>([]);
   const [request, setRequest] = useState("");
   const [font, setFont] = useState("");
@@ -23,14 +22,6 @@ export default function MotionRevisionPanel({ busy }: { busy: boolean }) {
   if (!workId) return null;
 
   const fail = (caught: unknown) => setMessage(caught instanceof Error ? caught.message : String(caught));
-  const loadStills = async () => {
-    setLoadingStills(true);
-    setMessage("");
-    try {
-      setStills(await makeMotionStills(workId));
-      setPicked([]);
-    } catch (caught) { fail(caught); } finally { setLoadingStills(false); }
-  };
   const toggle = (index: number) => setPicked((current) =>
     current.includes(index) ? current.filter((i) => i !== index) : [...current, index].slice(-4));
   const fixWithAi = () => {
@@ -62,12 +53,7 @@ export default function MotionRevisionPanel({ busy }: { busy: boolean }) {
       </div>
 
       <div className="mt-2">
-        {stills.length === 0 ? (
-          <button type="button" onClick={() => void loadStills()} disabled={busy || loadingStills}
-            className={`${button} border border-dashed border-edge text-secondary hover:bg-raised`}>
-            {loadingStills ? t.revLoadingStills : t.revLoadStills}
-          </button>
-        ) : (
+        {stills.length > 0 && (
           <>
             <p className="mb-1 text-[10px] text-faint">{t.revPickHint}</p>
             <div className="flex gap-1.5 overflow-x-auto pb-1">

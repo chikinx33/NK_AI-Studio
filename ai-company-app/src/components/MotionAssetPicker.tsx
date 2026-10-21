@@ -43,13 +43,14 @@ export const MOTION_ASSET_TEXT = {
     kindAudio: "소리",
     subscriptionRequired: "인포그래픽 영상은 Claude 구독 연결이 필요해요(비용 0원 정책). 'API 설정'에서 구독을 연결해 주세요.",
     directorProblems: "감독이 쓴 장면 코드에 문제가 있어요: {p}",
-    rendererUnreachable: "이 PC 렌더러에 연결하지 못했어요. 이 PC에서 NK Studio 렌더러(node server.js)가 켜져 있는지 확인해 주세요.",
+    rendererUnreachable: "사이트에 연결하지 못했어요. 인터넷 연결을 확인해 주세요. 영상은 클라우드에서 계속 만들어지고 있어요.",
+    cloudBusy: "다른 영상을 클라우드에서 만드는 중이에요. 끝난 뒤 다시 시도해 주세요.",
+    cloudStale: "클라우드 렌더러가 10분 넘게 응답하지 않아 멈춘 것으로 봤어요. 다시 시도해 주세요.",
+    cloudNote: "클라우드에서 만들어요. 창을 닫거나 PC를 꺼도 계속 진행되고, 다시 열면 결과가 보여요.",
     noWork: "렌더할 회사 업무가 없어요. 먼저 작업을 시작해 주세요.",
     finalVideo: "완성 영상",
     revTitle: "부분 수정",
     revHint: "마음에 드는 부분은 그대로 두고 고칠 부분만 바꿔요.",
-    revLoadStills: "장면 보기",
-    revLoadingStills: "장면을 뽑는 중…",
     revPickHint: "고칠 장면을 눌러 고르세요(최대 4개).",
     revRequestPlaceholder: "예: 글씨를 둥근 글꼴로 / 12초쯤 나오는 책 그림을 더 크게, 금색으로",
     revAiButton: "AI로 고치기",
@@ -77,9 +78,9 @@ export const MOTION_ASSET_TEXT = {
     stageRender: "렌더",
     stageSave: "저장",
     stagePlanDetail: "기획 회의가 구성과 문장을 정리하는 중",
-    stageAssetsDetail: "자산을 이 PC 렌더러로 옮기는 중",
+    stageAssetsDetail: "자산을 클라우드 렌더러로 받는 중",
     stageDirectorDetail: "감독이 이 영상만의 장면 코드를 쓰는 중",
-    stageRenderDetail: "이 PC에서 촬영·모션블러·소리 합성 중",
+    stageRenderDetail: "클라우드에서 촬영·모션블러·소리 합성 중",
     stageSaveDetail: "완성 영상을 저장소에 올리는 중",
     elapsed: "{t} 경과",
     usually: "보통 {r}",
@@ -118,13 +119,14 @@ export const MOTION_ASSET_TEXT = {
     kindAudio: "Audio",
     subscriptionRequired: "Infographic video needs a Claude subscription connection (zero-cost policy). Connect it in 'API settings'.",
     directorProblems: "The scene code from the director has problems: {p}",
-    rendererUnreachable: "Couldn't reach the renderer on this PC. Check that the NK Studio renderer (node server.js) is running here.",
+    rendererUnreachable: "Couldn't reach the site. Check your internet connection. The video keeps being made in the cloud.",
+    cloudBusy: "Another video is being made in the cloud. Try again after it finishes.",
+    cloudStale: "The cloud renderer stopped responding for over 10 minutes, so it was treated as stopped. Please try again.",
+    cloudNote: "Made in the cloud. You can close this window or turn off your PC — it keeps going, and the result shows when you come back.",
     noWork: "There is no work item to render. Start a job first.",
     finalVideo: "Final video",
     revTitle: "Partial edit",
     revHint: "Keep what you like and change only what needs fixing.",
-    revLoadStills: "Show scenes",
-    revLoadingStills: "Capturing scenes…",
     revPickHint: "Click the scenes to fix (up to 4).",
     revRequestPlaceholder: "e.g. Use a rounded font / make the book around 12s bigger and gold",
     revAiButton: "Fix with AI",
@@ -152,9 +154,9 @@ export const MOTION_ASSET_TEXT = {
     stageRender: "Render",
     stageSave: "Save",
     stagePlanDetail: "Planning meeting is shaping the structure and copy",
-    stageAssetsDetail: "Moving assets to the renderer on this PC",
+    stageAssetsDetail: "Fetching assets into the cloud renderer",
     stageDirectorDetail: "Director is writing this video's own scene code",
-    stageRenderDetail: "Capturing, motion blur and sound mix on this PC",
+    stageRenderDetail: "Capturing, motion blur and sound mix in the cloud",
     stageSaveDetail: "Uploading the final video to storage",
     elapsed: "{t} elapsed",
     usually: "usually {r}",
@@ -185,6 +187,8 @@ export function motionErrorText(caught: unknown): string {
   const t = motionAssetText();
   const message = caught instanceof Error ? caught.message : String(caught || "");
   if (message.includes("motion_subscription_required")) return t.subscriptionRequired;
+  if (message.includes("motion_cloud_busy")) return t.cloudBusy;
+  if (message.includes("motion_cloud_stale")) return t.cloudStale;
   if (caught instanceof TypeError && /fetch|network|load failed/i.test(message)) return t.rendererUnreachable;
   return message;
 }
