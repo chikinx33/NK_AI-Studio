@@ -36,8 +36,14 @@ function harness() {
     { id: EMPTY_WORK, title: '회의 메모', metadata: {}, date_key: '2026-10-20' },
     { id: FOREIGN_WORK, title: '남의 그림', metadata: { objectName: 'users/bob/ai-video/projectsai-company/image/secret.png' }, date_key: '2026-10-20' },
   ];
+  const updates = [];
   const sql = async (query, params = []) => {
     if (/FROM company_work_items WHERE user_id = \$1 AND id = ANY/.test(query)) return works.filter(w => params[1].includes(w.id));
+    if (/^\s*UPDATE company_work_items item\s+SET metadata = /.test(query)) {
+      updates.push(params);
+      for (const placement of JSON.parse(params[1])) Object.assign(works.find(w => w.id === placement.id).metadata, { movedTo: placement.movedTo, movedFiles: placement.movedFiles });
+      return [];
+    }
     throw new Error('Unexpected SQL: ' + query);
   };
   const decode = value => decodeURIComponent(value);
@@ -79,7 +85,7 @@ function harness() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
     return { status: response.status, data: await response.json() };
   };
-  return { api, post, objects };
+  return { api, post, objects, works, updates };
 }
 
 const promotion = 'users/alice/ai-video/projectsai-company/company-files/.work-files/2026-10-20/Promotion/';
@@ -101,11 +107,16 @@ test('직원 도구가 쓰는 workId=… 참조·날짜 폴더 경로(@work/날�
   assert.equal(data.savedFiles[0].path, '.work-files/2026-10-20/Promotion/A lone hooded figure (2).png');
 });
 
-test('copy·move 도구에 업무 카드를 주면 카드를 옮기지 않고 산출물을 그 폴더에 파일로 복사한다', async () => {
+test('copy 도구에 업무 카드를 주면 산출물을 파일로 복사하고 카드는 그대로, move 면 카드를 위쪽 목록에서 뺀다', async () => {
   const h = harness();
-  const { status, data } = await h.post({ action: 'move', source: `@work/2026-10-20/${ALICE_WORK}`, destination: 'Elidus/Promotion' });
-  assert.equal(status, 200, JSON.stringify(data));
+  const copied = await h.post({ action: 'copy', source: `@work/2026-10-20/${ALICE_WORK}`, destination: 'Elidus/Promotion' });
+  assert.equal(copied.status, 200, JSON.stringify(copied.data));
   assert.equal(h.objects.get('users/alice/ai-video/projectsai-company/company-files/Elidus/Promotion/A lone hooded figure.png'), 'png-bytes');
+  assert.equal(h.updates.length, 0, '복사는 카드를 건드리지 않는다');
+  const moved = await h.post({ action: 'move', source: `@work/2026-10-20/${ALICE_WORK}`, destination: 'Elidus/Promotion' });
+  assert.equal(moved.status, 200, JSON.stringify(moved.data));
+  assert.deepEqual(moved.data.movedWorkIds, [ALICE_WORK]);
+  assert.equal(h.works[0].metadata.movedTo, 'Elidus/Promotion');
 });
 
 test('파일이 없는 업무·다른 계정 저장소의 파일은 복사하지 않는다', async () => {
@@ -120,6 +131,60 @@ test('파일이 없는 업무·다른 계정 저장소의 파일은 복사하지
   assert.equal(mixed.status, 200);
   assert.equal(mixed.data.count, 1);
   assert.equal(mixed.data.skipped[0].workId, EMPTY_WORK);
+  assert.equal(h.updates.length, 0, '저장(복사)은 카드를 위쪽 목록에 그대로 둔다');
+});
+
+// 2026-10-22 엔케: 위쪽 이미지 카드를 아래 Promotion 폴더로 끌어 놓았더니 복사본만 생기고 위쪽에도 그대로 남았다.
+// 끌어 놓기는 이동이어야 한다 — 놓은 폴더에 파일이 생기고 위쪽 카드 목록에서는 사라진다.
+test('끌어 놓기(mode: move)는 산출물을 폴더로 옮기고 카드에 movedTo 를 남겨 위쪽 목록에서 뺀다', async () => {
+  const h = harness();
+  const { status, data } = await h.post({ action: 'save_work_items', mode: 'move', items: [`@work/2026-10-20/${ALICE_WORK}`], folder: '.work-files/2026-10-20/Promotion' });
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.equal(data.mode, 'move');
+  assert.deepEqual(data.movedWorkIds, [ALICE_WORK]);
+  assert.equal(h.objects.get(`${promotion}A lone hooded figure (2).png`), 'png-bytes', '놓은 폴더에 파일이 생긴다');
+  assert.equal(h.objects.get(`${promotion}A lone hooded figure.png`), 'old', '같은 이름은 덮어쓰지 않고 번호를 붙인다');
+  assert.equal(h.updates.length, 1, '카드 표시 변경은 쿼리 한 번');
+  assert.equal(h.works[0].metadata.movedTo, '.work-files/2026-10-20/Promotion');
+  assert.deepEqual(h.works[0].metadata.movedFiles, ['.work-files/2026-10-20/Promotion/A lone hooded figure (2).png']);
+  assert.ok(h.objects.has('users/alice/ai-video/projectsai-company/image/1792-codex.png'), '채팅·검수 기록이 가리키는 생성 원본은 지우지 않는다');
+});
+
+test('카드가 있는 날짜 폴더 자리에 그대로 놓으면 아무것도 하지 않는다', async () => {
+  const h = harness();
+  const before = h.objects.size;
+  const { status, data } = await h.post({ action: 'save_work_items', mode: 'move', items: [`@work/2026-10-20/${ALICE_WORK}`], folder: '.work-files/2026-10-20' });
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.equal(data.count, 0);
+  assert.deepEqual(data.unchanged, [ALICE_WORK]);
+  assert.deepEqual(data.movedWorkIds, []);
+  assert.equal(h.objects.size, before, '파일을 만들지 않는다');
+  assert.equal(h.updates.length, 0);
+});
+
+test('못 옮긴 산출물이 있는 카드는 위쪽에 남긴다', async () => {
+  const h = harness();
+  h.objects.delete('users/alice/ai-video/projectsai-company/image/1792-codex.png');
+  h.works[0].metadata.paths = ['Docs/brief.txt'];
+  h.objects.set('users/alice/ai-video/projectsai-company/company-files/Docs/brief.txt', 'brief');
+  const { status, data } = await h.post({ action: 'save_work_items', mode: 'move', items: [ALICE_WORK], folder: 'Promotion' });
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.equal(data.count, 1);
+  assert.equal(data.skipped[0].workId, ALICE_WORK);
+  assert.deepEqual(data.movedWorkIds, []);
+  assert.equal(h.updates.length, 0);
+});
+
+test('날짜 폴더의 업무 수는 옮긴 카드를 세지 않고, 카드를 다 옮겨도 날짜 폴더는 남는다', () => {
+  const server = read('prototype/functions/api/agent/company-files.ts');
+  assert.match(server, /COALESCE\(metadata \? 'movedTo', false\) AS moved/);
+  assert.match(server, /\(COUNT\(\*\) FILTER \(WHERE NOT item\.moved\)\)::int AS item_count/);
+  const work = read('ai-company-app/src/components/WorkExplorer.tsx');
+  assert.match(work, /export function isMovedWork\(work: CompanyWorkItem\) \{\s+return typeof work\.metadata\?\.movedTo === "string";/);
+  assert.match(work, /koreaDate\(item\.created_at\) === date && !isMovedWork\(item\)/, '위쪽 카드 목록에서 뺀다');
+  assert.match(work, /const works = allWorks\.filter\(\(work\) => !isMovedWork\(work\)\);/, '업무 수에서만 빼고 날짜 폴더는 남긴다');
+  assert.match(work, /onWorkItemsMoved=\{markWorkMoved\}/);
+  assert.match(work, /function markWorkMoved\(workIds: string\[\], folder: string\) \{\s+setItems\(/, '전체 새로고침 없이 바로 뺀다');
 });
 
 test('직원은 company_files_save_media 의 files 에 업무 카드를 넣어 폴더에 저장한다', () => {
@@ -137,9 +202,39 @@ test('직원은 company_files_save_media 의 files 에 업무 카드를 넣어 �
 test('날짜 폴더 위쪽 업무 카드를 아래 폴더·목록으로 끌어 놓을 수 있다', () => {
   const work = read('ai-company-app/src/components/WorkExplorer.tsx');
   const explorer = read('ai-company-app/src/components/CompanyFileExplorer.tsx');
-  assert.match(work, /draggable\s+onDragStart=\{\(event\) => \{ event\.dataTransfer\.setData\(WORK_DRAG_TYPE, JSON\.stringify\(\[`@work\/\$\{date\}\/\$\{work\.id\}`\]\)\)/);
+  assert.match(work, /draggable\s+onDragStart=\{\(event\) => \{ event\.dataTransfer\.setData\(WORK_DRAG_TYPE, JSON\.stringify\(\[`@work\/\$\{date\}\/\$\{work\.id\}`\]\)\); event\.dataTransfer\.effectAllowed = "move"; \}\}/);
   assert.match(explorer, /export const WORK_DRAG_TYPE = "application\/x-nk-work-items";/);
-  assert.match(explorer, /const result = await saveWorkItemsToFolder\(works, destinationFolder\);/);
+  assert.match(explorer, /const toMove = workRefsOutsideFolder\(works, destinationFolder\);\s+if \(!toMove\.length\) return;/, '제자리에 놓으면 아무것도 하지 않는다');
+  assert.match(explorer, /const result = await saveWorkItemsToFolder\(toMove, destinationFolder, "move"\);/);
+  assert.match(explorer, /if \(result\.movedWorkIds\.length\) onWorkItemsMoved\?\.\(result\.movedWorkIds, destinationFolder\);/);
+  const workDropEffects = [...explorer.matchAll(/types\.includes\(WORK_DRAG_TYPE\)\) \{[^}]*?dropEffect = "(\w+)"/g)].map(m => m[1]);
+  assert.deepEqual(workDropEffects, ['move', 'move'], '업무 카드 끌기는 폴더 카드·목록 빈 곳 모두 이동 표시');
+  assert.match(read('ai-company-app/src/lib/api.ts'), /body: JSON\.stringify\(\{ action: "save_work_items", items, folder, mode \}\)/);
   assert.match(explorer, /void saveWorkInto\(\{ path, kind: "folder" \}, works\.map\(String\)\)/, '목록 빈 곳에 놓으면 지금 폴더에');
   assert.match(explorer, /event\.stopPropagation\(\);\s+let works/, '폴더 카드에 놓으면 바깥 목록이 한 번 더 받지 않는다');
+});
+
+test('업무 카드 이동 문구는 한/영 짝이고 언어 전환을 따른다', () => {
+  const explorer = read('ai-company-app/src/components/CompanyFileExplorer.tsx');
+  const block = explorer.slice(explorer.indexOf('const WORK_MOVE_TEXT = {'), explorer.indexOf('function currentLang'));
+  const keys = lang => [...block.slice(block.indexOf(`${lang}: {`)).split('},')[0].matchAll(/^\s+(\w+): "/gm)].map(m => m[1]).sort();
+  assert.deepEqual(keys('ko'), ['dropHint', 'failed', 'moving']);
+  assert.deepEqual(keys('en'), keys('ko'));
+  assert.match(explorer, /window\.addEventListener\("nk:lang-changed", onChanged\);/);
+  assert.match(explorer, /\{workDragOver \? workMoveText\.dropHint : "여기에 놓으면 이 폴더에 업로드돼요"\}/);
+});
+
+test('제자리 판정: 카드가 있는 날짜 폴더 맨 위만 제자리이고, 그 안 폴더·다른 날짜·일반 폴더는 옮긴다', () => {
+  const explorer = read('ai-company-app/src/components/CompanyFileExplorer.tsx');
+  const fnStart = explorer.indexOf('export function workRefsOutsideFolder');
+  const fn = explorer.slice(fnStart, explorer.indexOf('\n}\n', fnStart) + 3);
+  const helper = explorer.slice(explorer.indexOf('export function workFilesPath'), explorer.indexOf('function joinPath'));
+  const m = { exports: {} };
+  vm.runInNewContext(esbuild.transformSync(`${helper}\n${fn}`, { loader: 'ts', format: 'cjs' }).code, { module: m, exports: m.exports });
+  const { workRefsOutsideFolder } = m.exports;
+  const ref = `@work/2026-10-20/${ALICE_WORK}`;
+  assert.deepEqual(workRefsOutsideFolder([ref], '.work-files/2026-10-20'), []);
+  assert.deepEqual(workRefsOutsideFolder([ref], '.work-files/2026-10-20/Promotion'), [ref]);
+  assert.deepEqual(workRefsOutsideFolder([ref], '.work-files/2026-10-21'), [ref]);
+  assert.deepEqual(workRefsOutsideFolder([ref], 'Elidus/Promotion'), [ref]);
 });

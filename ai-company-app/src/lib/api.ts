@@ -382,13 +382,20 @@ export async function moveCompanyWorkFolder(dateKey: string, parentPath: string)
   await readCompanyFileResponse(res, "날짜 폴더를 옮기지 못했어요.");
 }
 
-/** 업무 카드(@work/날짜/업무ID)의 산출물을 폴더에 실제 파일로 복사한다. 카드는 기록으로 남는다. */
-export async function saveWorkItemsToFolder(items: string[], folder: string): Promise<{ count: number; skipped: Array<{ title: string; reason: string }> }> {
+/**
+ * 업무 카드(@work/날짜/업무ID)의 산출물을 폴더에 실제 파일로 넣는다.
+ * "copy" 는 카드를 그대로 두고, "move"(끌어 놓기)는 다 옮긴 카드를 날짜 폴더 위쪽 목록에서 뺀다(movedWorkIds).
+ */
+export async function saveWorkItemsToFolder(items: string[], folder: string, mode: "copy" | "move" = "copy"): Promise<{ count: number; skipped: Array<{ title: string; reason: string }>; movedWorkIds: string[] }> {
   const res = await fetch("/api/agent/company-files", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save_work_items", items, folder }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save_work_items", items, folder, mode }),
   });
   const data = await readCompanyFileResponse(res, "업무 산출물을 폴더에 넣지 못했어요.");
-  return { count: Number(data.count || 0), skipped: Array.isArray(data.skipped) ? data.skipped : [] };
+  return {
+    count: Number(data.count || 0),
+    skipped: Array.isArray(data.skipped) ? data.skipped : [],
+    movedWorkIds: Array.isArray(data.movedWorkIds) ? data.movedWorkIds.map(String) : [],
+  };
 }
 
 export async function moveCompanyFile(source: string, destination: string): Promise<void> {

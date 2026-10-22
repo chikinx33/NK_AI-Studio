@@ -30,6 +30,11 @@ type SearchScope = "title" | "content" | "all";
 type SortMode = "newest" | "oldest" | "name-asc" | "name-desc";
 type StatusFilter = "all" | CompanyWorkItem["status"];
 
+/** 산출물을 폴더로 끌어 옮긴 카드(metadata.movedTo). 기록은 남지만 날짜 폴더 위쪽 목록·업무 수에서는 뺀다. */
+export function isMovedWork(work: CompanyWorkItem) {
+  return typeof work.metadata?.movedTo === "string";
+}
+
 /** GCS 서명/공개 URL 에서 저장 경로(버킷 제외)를 되찾는다. 예전에 등록된 영상 업무는 objectName 없이 서명 URL 만 남아 있다. */
 function objectNameFromStorageUrl(raw: string): string {
   try {
@@ -335,7 +340,9 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       grouped.set(dateKey, [...(grouped.get(dateKey) || []), item]);
     }
     const rows: Array<[string, number]> = [];
-    for (const [dateKey, works] of grouped) {
+    for (const [dateKey, allWorks] of grouped) {
+      // 카드를 전부 폴더로 옮긴 날짜도 폴더는 남긴다(그 안 파일 영역에 옮겨 둔 파일이 있다). 업무 수에서만 뺀다.
+      const works = allWorks.filter((work) => !isMovedWork(work));
       const folderTitleMatches = searchScope !== "content" && normalized(`${folderTitles.get(dateKey) || dateKey} ${dateKey}`).includes(searchTerm);
       const matchingWorks = searchTerm ? works.filter((work) => workMatches(work, searchTerm, searchScope)) : works;
       if (!searchTerm || folderTitleMatches || matchingWorks.length) rows.push([dateKey, folderTitleMatches ? works.length : matchingWorks.length]);
@@ -348,7 +355,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       return sortMode === "name-asc" ? titleA.localeCompare(titleB, "ko") : titleB.localeCompare(titleA, "ko");
     });
   }, [filteredItems, folderTitles, searchScope, searchTerm, sortMode]);
-  const datedItems = useMemo(() => filteredItems.filter((item) => koreaDate(item.created_at) === date), [date, filteredItems]);
+  const datedItems = useMemo(() => filteredItems.filter((item) => koreaDate(item.created_at) === date && !isMovedWork(item)), [date, filteredItems]);
   const currentFolderMatches = searchScope !== "content" && normalized(`${folderTitles.get(date) || date} ${date}`).includes(searchTerm);
   const visibleDatedItems = useMemo(() => (currentFolderMatches ? datedItems : datedItems.filter((work) => workMatches(work, searchTerm, searchScope))).sort((a, b) => {
     if (sortMode === "newest") return b.created_at.localeCompare(a.created_at);
@@ -443,6 +450,11 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
       setDocumentMenu(""); await refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "업무 삭제에 실패했습니다."); }
     finally { setBusy(""); }
+  }
+
+  // 아래 폴더로 끌어 옮긴 카드는 위쪽 목록에서 바로 뺀다. 전체 새로고침은 아래 파일 패널을 다시 그려 보고 있던 폴더 위치를 잃는다.
+  function markWorkMoved(workIds: string[], folder: string) {
+    setItems((current) => current.map((item) => workIds.includes(item.id) ? { ...item, metadata: { ...item.metadata, movedTo: folder } } : item));
   }
 
   async function downloadSources() {
@@ -622,7 +634,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
           </>
         ) : date ? (<>
           {visibleDatedItems.length ? <div className={folderGridClass}>{visibleDatedItems.map((work) => <div key={work.id} role="button" tabIndex={0} draggable
-            onDragStart={(event) => { event.dataTransfer.setData(WORK_DRAG_TYPE, JSON.stringify([`@work/${date}/${work.id}`])); event.dataTransfer.effectAllowed = "copy"; }}
+            onDragStart={(event) => { event.dataTransfer.setData(WORK_DRAG_TYPE, JSON.stringify([`@work/${date}/${work.id}`])); event.dataTransfer.effectAllowed = "move"; }}
             onClick={() => openWorkItem(work)} onKeyDown={(event) => { if (event.key === "Enter") openWorkItem(work); }} className={`relative cursor-pointer rounded-2xl border border-edge bg-panel text-left transition hover:border-emerald-800 hover:bg-tint-emerald/10 ${viewMode === "cards" ? "p-4" : "flex items-center gap-4 px-4 py-3"}`}>
             {work.work_type === "infographic" ? <VideoWorkIcon className={viewMode === "cards" ? "h-10 w-10" : "h-9 w-9 shrink-0"} />
               : imageWorkObject(work) ? <StoredImage objectName={imageWorkObject(work)} alt="" loading="lazy" className={`rounded-lg bg-black/30 object-cover ${viewMode === "cards" ? "h-24 w-full" : "h-9 w-9 shrink-0"}`} />
@@ -641,6 +653,7 @@ export default function WorkExplorer({ revision = 0, initialDate = "", onOpenWor
             </div>
           </div>)}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-edge text-sm text-faint">{searchTerm ? "검색 결과가 없습니다." : "이 날짜에 등록된 업무가 없습니다."}</div>}
           <div className="mt-6"><CompanyFileExplorer key={date} embedded basePath={workFilesPath(date)} onOpenProject={onOpenProject} onAddChatReference={onAddChatReference} onChatAbout={onChatAbout} chatReferenceKeys={chatReferenceKeys}
+            onWorkItemsMoved={markWorkMoved}
             onOpenWorkFolder={openDateFolder}
             onRenameWorkFolder={async (dateKey, title) => { const renamed = await renameCompanyWorkFolder(dateKey, title); setFolderTitles((current) => new Map(current).set(dateKey, renamed.title)); return renamed; }}
             onDeleteWorkFolder={(dateKey) => removeDateFolder(dateKey, true)} /></div>

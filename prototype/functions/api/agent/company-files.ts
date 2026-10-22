@@ -90,14 +90,14 @@ async function listVirtualWorkFolders(sql: any, userId: string, parent: string |
   const rows = await sql(`
     WITH normalized_items AS (
       SELECT to_char((created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS date_key,
-             updated_at
+             updated_at, COALESCE(metadata ? 'movedTo', false) AS moved
         FROM company_work_items
        WHERE user_id = $1
     )
     SELECT item.date_key,
            COALESCE(MAX(folder.title), item.date_key) AS title,
            COALESCE(MAX(folder.parent_path), '') AS parent_path,
-           COUNT(*)::int AS item_count,
+           (COUNT(*) FILTER (WHERE NOT item.moved))::int AS item_count,
            MAX(item.updated_at) AS updated_at
       FROM normalized_items item
       LEFT JOIN company_work_folders folder
@@ -455,11 +455,15 @@ export function workFileBaseName(title: string) {
 }
 
 /**
- * 업무 카드(업무 기록)의 산출물을 폴더에 실제 파일로 복사한다. 카드(기록)는 그대로 남는다.
+ * 업무 카드(업무 기록)의 산출물을 폴더에 실제 파일로 복사한다.
  * 생성 이미지·영상(metadata.objectName), 업무에 올린 파일(work-library/날짜/업무ID/), 업무 문서(metadata.paths)를 모은다.
- * 카드를 폴더로 끌어 넣을 때와 직원이 "폴더에 넣어"를 처리할 때 같은 경로를 쓴다.
+ * 직원이 "폴더에 넣어/저장해"를 처리할 때는 복사(카드는 그대로)다.
+ * mode "move"(카드를 폴더로 끌어 놓기·직원의 move)는 산출물이 전부 들어간 카드에 metadata.movedTo 를 남겨 날짜 폴더 위쪽 목록에서 뺀다.
+ * 기록 자체는 지우지 않는다(날짜 폴더 이동과 같은 규칙: 보이는 위치만 바뀐다). 기록을 지우면 그 날짜의 마지막 카드일 때
+ * 날짜 폴더가 사라져 그 안(.work-files/날짜)에 옮겨 둔 파일까지 보이지 않게 되고, 채팅·검수 기록이 가리키는 원본도 끊긴다.
  */
 async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPrefix: string, body: any) {
+  const move = body.mode === "move";
   let folder = normalizePath(body.folder ?? body.destination, true);
   const work = splitWorkPath(folder);
   if (work) {
@@ -488,9 +492,13 @@ async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPref
   const libraryRoot = `${buildAiVideoProjectPrefix(ctx.basePrefix, userId, "ai-company")}/work-library/`;
   const savedFiles: Array<{ name: string; path: string; workId: string }> = [];
   const skipped: Array<{ workId: string; title: string; reason: string }> = [];
+  const unchanged: string[] = [];
+  const movedWorkIds: string[] = [];
 
   for (const id of ids) {
     const row = found.get(id);
+    // 카드가 있는 날짜 폴더 자리(그 날짜의 파일 영역 맨 위)에 다시 놓으면 제자리 — 아무것도 하지 않는다.
+    if (move && folder === workFilesPath(row.date_key)) { unchanged.push(id); continue; }
     const meta: any = typeof row.metadata === "string" ? (() => { try { return JSON.parse(row.metadata); } catch { return {}; } })() : (row.metadata || {});
     const sources: string[] = [];
     // 생성 결과는 요청한 계정 저장소에 있다. 본인 저장소 밖의 경로는 복사하지 않는다.
@@ -508,6 +516,8 @@ async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPref
     }
     if (!sources.length) { skipped.push({ workId: id, title: String(row.title || ""), reason: "저장할 파일이 없는 업무입니다." }); continue; }
     const base = workFileBaseName(row.title);
+    const before = savedFiles.length;
+    let failed = false;
     for (let index = 0; index < sources.length; index += 1) {
       const sourceName = baseName(sources[index]);
       const dot = sourceName.lastIndexOf(".");
@@ -519,14 +529,32 @@ async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPref
         await copyObject(ctx, sources[index], `${rootPrefix}${folder ? `${folder}/` : ""}${name}`);
       } catch (error: any) {
         skipped.push({ workId: id, title: String(row.title || ""), reason: `원본을 복사하지 못했습니다: ${error?.message || error}` });
+        failed = true;
         continue;
       }
       taken.add(nameKey(name));
       savedFiles.push({ name, path: folder ? `${folder}/${name}` : name, workId: id });
     }
+    // 하나라도 못 옮겼으면 카드를 남겨 둔다(위쪽에서 사라졌는데 파일이 빠져 있으면 잃어버린 것처럼 보인다).
+    if (move && !failed && savedFiles.length > before) movedWorkIds.push(id);
+  }
+  if (!savedFiles.length && unchanged.length && !skipped.length) {
+    return { ok: true, action: "save_work_items", mode: move ? "move" : "copy", folder, count: 0, savedFiles, skipped, unchanged, movedWorkIds };
   }
   if (!savedFiles.length) throw new Error(skipped.map((item) => `'${item.title || item.workId}': ${item.reason}`).join(" / ") || "저장한 파일이 없습니다.");
-  return { ok: true, action: "save_work_items", folder, count: savedFiles.length, savedFiles, skipped };
+  if (movedWorkIds.length) {
+    // 한 번의 쿼리로 표시만 바꾼다(서브요청 한도). 옮긴 위치·파일은 기록에 남겨 직원이 "어디로 갔어?"에 답할 수 있게 한다.
+    const movedAt = new Date().toISOString();
+    const placements = movedWorkIds.map((workId) => ({ id: workId, movedTo: folder, movedAt, movedFiles: savedFiles.filter((file) => file.workId === workId).map((file) => file.path) }));
+    await sql(
+      `UPDATE company_work_items item
+          SET metadata = COALESCE(item.metadata, '{}'::jsonb) || jsonb_build_object('movedTo', moved.value->>'movedTo', 'movedAt', moved.value->>'movedAt', 'movedFiles', moved.value->'movedFiles'),
+              updated_at = now()
+         FROM jsonb_array_elements($2::jsonb) AS moved(value)
+        WHERE item.user_id = $1 AND item.id = (moved.value->>'id')::uuid`,
+      [userId, JSON.stringify(placements)]);
+  }
+  return { ok: true, action: "save_work_items", mode: move ? "move" : "copy", folder, count: savedFiles.length, savedFiles, skipped, unchanged, movedWorkIds };
 }
 
 async function ensureDestinationAvailable(ctx: any, rootPrefix: string, relativePath: string) {
@@ -886,12 +914,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }, 200, origin);
     }
     if ((action === "copy" || action === "move") && workItemRefId(body.source)) {
-      // 업무 카드는 기록이라 옮길 수 없다. 대신 산출물을 대상 폴더에 실제 파일로 복사하고 카드는 그대로 둔다.
+      // 업무 카드는 기록이라 그 자체를 옮기지 않는다. 산출물을 대상 폴더에 실제 파일로 넣고, move 면 카드를 날짜 폴더 위쪽 목록에서 뺀다.
       const sql = getSql(env);
       if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
       const destination = normalizePath(body.destination, true);
       const folder = /\.[a-z0-9]{2,5}$/i.test(baseName(destination)) ? parentPath(destination) : destination;
-      return send(await saveWorkItemsAsFiles(ctx, sql, auth.userId, rootPrefix, { items: [body.source], folder }), 200, origin);
+      return send(await saveWorkItemsAsFiles(ctx, sql, auth.userId, rootPrefix, { items: [body.source], folder, mode: action }), 200, origin);
     }
     if (action === "copy" || action === "move") {
       const source = normalizePath(body.source, false);

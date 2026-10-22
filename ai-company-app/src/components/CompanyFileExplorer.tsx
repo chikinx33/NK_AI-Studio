@@ -17,7 +17,7 @@ import {
   type CompanyWorkFolder,
 } from "../lib/api";
 import { actionString, useUiAction } from "../lib/uiActions";
-import { readUserStorage, writeUserStorage } from "../lib/safeStorage";
+import { readStorage, readUserStorage, writeUserStorage } from "../lib/safeStorage";
 import CompanyFilePreview from "./CompanyFilePreview";
 import { appDialog } from "../lib/appDialog";
 const CompanyDocumentEditor = lazy(() => import("./CompanyDocumentEditor"));
@@ -63,8 +63,47 @@ function chatReferenceFor(entry: CompanyFileEntry): ChatReference {
 
 // 드래그 중인 항목(JSON 배열). 외부 파일 드롭과 구분하려고 전용 형식을 쓴다.
 const DRAG_TYPE = "application/x-nk-company-paths";
-// 위쪽 업무 카드(업무 기록)를 끌어 올 때의 형식(JSON 경로 배열 @work/날짜/업무ID). 놓으면 산출물이 그 폴더에 실제 파일로 복사된다.
+// 위쪽 업무 카드(업무 기록)를 끌어 올 때의 형식(JSON 경로 배열 @work/날짜/업무ID).
+// 놓으면 산출물이 그 폴더로 옮겨지고(실제 파일), 카드는 날짜 폴더 위쪽 목록에서 빠진다.
 export const WORK_DRAG_TYPE = "application/x-nk-work-items";
+
+/** 업무 카드 끌어 놓기(이동) 문구. 셸의 언어 전환(lang-apply 메시지 · nk:lang-changed)을 따른다. */
+const WORK_MOVE_TEXT = {
+  ko: {
+    dropHint: "여기에 놓으면 이 폴더로 옮겨져요",
+    moving: "업무 산출물을 옮기는 중…",
+    failed: "업무 산출물을 폴더로 옮기지 못했습니다.",
+  },
+  en: {
+    dropHint: "Drop here to move it into this folder",
+    moving: "Moving work output…",
+    failed: "Couldn't move the work output into the folder.",
+  },
+};
+
+function currentLang(): "ko" | "en" {
+  return String(readStorage("nk_lang") || "").replace(/^"|"$/g, "") === "en" ? "en" : "ko";
+}
+
+function useWorkMoveText() {
+  const [lang, setLang] = useState(currentLang);
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => { if (ev.data?.type === "lang-apply") setLang(ev.data.lang === "en" ? "en" : "ko"); };
+    const onChanged = () => setLang(currentLang());
+    window.addEventListener("message", onMessage);
+    window.addEventListener("nk:lang-changed", onChanged);
+    return () => { window.removeEventListener("message", onMessage); window.removeEventListener("nk:lang-changed", onChanged); };
+  }, []);
+  return WORK_MOVE_TEXT[lang];
+}
+
+/** '@work/날짜/업무ID' 를 이미 그 날짜 폴더 파일 영역 맨 위(카드가 있는 자리)에 놓았는지. 제자리면 아무것도 하지 않는다. */
+export function workRefsOutsideFolder(works: string[], destinationFolder: string) {
+  return works.filter((ref) => {
+    const dateKey = ref.match(/^@work\/(\d{4}-\d{2}-\d{2})\//)?.[1];
+    return !dateKey || workFilesPath(dateKey) !== destinationFolder;
+  });
+}
 type DragItem = { path: string; kind: CompanyFileEntry["kind"]; name: string; parentPath: string; dateKey?: string };
 
 /** 날짜 폴더에 넣은 파일·폴더의 실제 저장 위치. 날짜 폴더를 열면 업무 기록 아래에 보인다. */
@@ -159,7 +198,10 @@ export default function CompanyFileExplorer({
   onAddChatReference,
   onChatAbout,
   chatReferenceKeys = [],
+  onWorkItemsMoved,
 }: {
+  /** 업무 카드를 끌어 놓아 옮긴 뒤: 옮긴 카드 ID 와 들어간 폴더. 날짜 폴더 화면이 위쪽 카드 목록에서 뺀다. */
+  onWorkItemsMoved?: (workIds: string[], folder: string) => void;
   /** 폴더·파일을 채팅에 담는다(화면 이동 없음). 담긴 항목은 아이콘이 켜진다. */
   onAddChatReference?: (ref: ChatReference) => void;
   /** 더보기 메뉴의 '채팅': 담고 채팅 화면으로 이동. */
@@ -202,6 +244,9 @@ export default function CompanyFileExplorer({
   const [dragItems, setDragItems] = useState<DragItem[]>([]);
   const dragPaths = dragItems.map((item) => item.path);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // 지금 끌고 있는 것이 업무 카드인지(올려 둔 안내 문구를 '업로드' 대신 '옮겨져요'로)
+  const [workDragOver, setWorkDragOver] = useState(false);
+  const workMoveText = useWorkMoveText();
   // 운영체제 파일을 폴더 위로 끌고 온 상태(내부 항목 이동 DRAG_TYPE 과 구분). 놓으면 '파일 추가' 와 같은 업로드.
   const [fileDragOver, setFileDragOver] = useState(false);
 
@@ -412,7 +457,7 @@ export default function CompanyFileExplorer({
           event.stopPropagation();
           if (busy) return;
           event.preventDefault();
-          event.dataTransfer.dropEffect = "copy";
+          event.dataTransfer.dropEffect = "move";
           if (dropTarget !== target.path) setDropTarget(target.path);
           return;
         }
@@ -463,14 +508,19 @@ export default function CompanyFileExplorer({
     } finally { setBusy(""); }
   }
 
+  // 업무 카드를 폴더에 놓으면 이동: 산출물이 그 폴더의 실제 파일이 되고, 다 옮긴 카드는 날짜 폴더 위쪽 목록에서 빠진다.
   async function saveWorkInto(target: { path: string; kind: "folder" | "work-folder"; dateKey?: string }, works: string[]) {
-    setBusy("move"); setError("");
+    const destinationFolder = target.kind === "work-folder" && target.dateKey ? workFilesPath(target.dateKey) : target.path;
+    // 카드가 있는 날짜 폴더 자리 그대로에 놓으면 제자리 — 아무것도 하지 않는다.
+    const toMove = workRefsOutsideFolder(works, destinationFolder);
+    if (!toMove.length) return;
+    setBusy("work-move"); setError("");
     try {
-      const destinationFolder = target.kind === "work-folder" && target.dateKey ? workFilesPath(target.dateKey) : target.path;
-      const result = await saveWorkItemsToFolder(works, destinationFolder);
+      const result = await saveWorkItemsToFolder(toMove, destinationFolder, "move");
+      if (result.movedWorkIds.length) onWorkItemsMoved?.(result.movedWorkIds, destinationFolder);
       if (result.skipped.length) setError(result.skipped.map((item) => `'${item.title}': ${item.reason}`).join(" / "));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "업무 산출물을 폴더에 넣지 못했습니다.");
+      setError(caught instanceof Error ? caught.message : workMoveText.failed);
     } finally { await refresh(); setBusy(""); }
   }
 
@@ -571,16 +621,17 @@ export default function CompanyFileExplorer({
         목록 불러오기 {(loadTiming.clientMs / 1000).toFixed(1)}초 (저장소 {(loadTiming.gcsMs / 1000).toFixed(1)}초 · DB {(loadTiming.dbMs / 1000).toFixed(1)}초)
       </div>
     )}
-    {busy && <div className="mx-5 mt-3 text-[11px] text-tone-emerald">{busy === "upload" ? "파일을 업로드하는 중…" : "파일 작업을 처리하는 중…"}</div>}
+    {busy && <div className="mx-5 mt-3 text-[11px] text-tone-emerald">{busy === "upload" ? "파일을 업로드하는 중…" : busy === "work-move" ? workMoveText.moving : "파일 작업을 처리하는 중…"}</div>}
     <main
       className={`${embedded ? "p-4" : "min-h-0 flex-1 overflow-y-auto p-5"} ${fileDragOver ? "rounded-2xl ring-2 ring-emerald-500/70 bg-tint-emerald/10" : ""}`}
       onDragOver={(event) => {
-        // 업무 카드를 목록 빈 곳에 놓으면 지금 보고 있는 폴더에 파일로 넣는다.
+        // 업무 카드를 목록 빈 곳에 놓으면 지금 보고 있는 폴더로 옮긴다.
         if (event.dataTransfer.types.includes(WORK_DRAG_TYPE)) {
           if (busy) return;
           event.preventDefault();
-          event.dataTransfer.dropEffect = "copy";
+          event.dataTransfer.dropEffect = "move";
           if (!fileDragOver) setFileDragOver(true);
+          if (!workDragOver) setWorkDragOver(true);
           return;
         }
         // 내부 항목 이동(DRAG_TYPE)은 각 폴더 카드의 dropZone 이 맡는다. 여기서는 운영체제 파일만.
@@ -592,8 +643,10 @@ export default function CompanyFileExplorer({
       onDragLeave={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
         setFileDragOver(false);
+        setWorkDragOver(false);
       }}
       onDrop={(event) => {
+        setWorkDragOver(false);
         const workData = event.dataTransfer.getData(WORK_DRAG_TYPE);
         if (workData) {
           event.preventDefault();
@@ -610,7 +663,7 @@ export default function CompanyFileExplorer({
         void uploadFiles(event.dataTransfer.files);
       }}
     >
-      {fileDragOver && <div className="mb-3 rounded-xl border border-emerald-700 bg-tint-emerald/40 p-3 text-center text-xs text-tone-emerald">여기에 놓으면 이 폴더에 업로드돼요</div>}
+      {fileDragOver && <div className="mb-3 rounded-xl border border-emerald-700 bg-tint-emerald/40 p-3 text-center text-xs text-tone-emerald">{workDragOver ? workMoveText.dropHint : "여기에 놓으면 이 폴더에 업로드돼요"}</div>}
       {viewMode === "board" && !loading && <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3"><h2 className="mr-auto text-sm font-semibold text-content">문서 게시판 <span className="ml-2 text-xs font-normal text-faint">폴더의 문서를 열어 바로 편집하세요</span></h2><select aria-label="문서 상태 필터" value={boardStatus} onChange={(event) => setBoardStatus(event.target.value)} className="rounded-lg border border-edge bg-ink p-2 text-xs text-secondary"><option value="">모든 상태</option>{["작성 중", "검토 중", "확정"].map((status) => <option key={status}>{status}</option>)}</select></div>
         {!!visibleEntries.filter((entry) => !isCompanyDocument(entry)).length && <div className="flex flex-wrap gap-2">{visibleEntries.filter((entry) => !isCompanyDocument(entry)).map((entry) => <button key={entry.path} type="button" onClick={() => openEntry(entry)} className="flex max-w-full items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-secondary"><EntryIcon entry={entry} className="h-5 w-5"/><span className="truncate">{entry.name}</span></button>)}</div>}
