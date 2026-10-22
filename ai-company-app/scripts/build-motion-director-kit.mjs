@@ -15,8 +15,9 @@ export async function buildMotionDirectorKit() {
   const guide = await read("KIT.md");
   const examples = [];
   for (const [id, label] of [
-    ["nb_s1_01", "NEKOBAN 1편 — 실제 캐릭터 스프라이트로 만든 이야기 장면 → 실제 플레이 화면 꽉 채우기 → 끝 카드 (빠른 음악이라 h(i)=b(2i))"],
-    ["el_s1_01", "ELIDUS 1편 — DOM으로 판을 직접 짜서 폭발·번짐·카메라 펀치 → 실제 화면 → 끝 카드"],
+    ["nb_s1_01", "트랙 A 쇼츠 팝 · NEKOBAN 1편 — 실제 캐릭터 스프라이트로 만든 이야기 장면 → 실제 플레이 화면 꽉 채우기 → 끝 카드 (빠른 음악이라 h(i)=b(2i))"],
+    ["el_s1_01", "트랙 A 쇼츠 팝 · ELIDUS 1편 — DOM으로 판을 직접 짜서 폭발·번짐·카메라 펀치 → 실제 화면 → 끝 카드"],
+    ["ed_s1_01", "트랙 B 에디토리얼 모션 · ORBIT 20초 16:9 — 점 모티프 하나가 파문 → 입자 궤도 → 하프톤 행성 → 달력 빈 칸 → 로고 마침표로 이어지고, 글자 단위 등장·외곽선 잔상·고정폭 HUD (경로 ../../ = KIT, 기본 음악 house-progress)"],
   ]) {
     examples.push({
       id,

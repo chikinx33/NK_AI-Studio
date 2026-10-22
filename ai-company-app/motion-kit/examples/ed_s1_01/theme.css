@@ -1,0 +1,6 @@
+/* ORBIT (에디토리얼 트랙 실례): 먹색 바탕 · 종이색 잉크 · 형광 연두 강조 하나. 이모지·스티커·외곽선 자막 없음 */
+:root {
+  --bg: #0E0F12; --paper: #ECE8DF; --ink: #ECE8DF; --ink-dark: #131417; --accent: #C8FF3D; --accent2: #C8FF3D;
+  --font-head: Pretendard; --font-body: Pretendard; --head-weight: 860; --mono-size: 19px;
+  --grain: .035;
+}

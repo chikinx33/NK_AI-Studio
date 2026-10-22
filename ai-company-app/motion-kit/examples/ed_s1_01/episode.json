@@ -1,0 +1,17 @@
+{
+  "bgm": { "track": "house-progress", "volume": 0.5 },
+  "cues": [
+    [2, "tag:impact-light", 0.8],
+    [2.5, "tag:swish", 0.45],
+    [8, "tag:whoosh", 0.7],
+    [12, "tag:rise", 0.55],
+    [15.5, "tag:shimmer", 0.55],
+    [24, "tag:glitch", 0.45],
+    [26, "tag:tick", 0.5],
+    [27, "tag:tick", 0.5],
+    [28, "tag:ding", 0.8],
+    [32, "tag:whoosh", 0.8],
+    [33, "tag:thump", 0.7],
+    [35, "tag:click", 0.6]
+  ]
+}

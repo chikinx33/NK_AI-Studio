@@ -11,6 +11,7 @@ import {
   type AgentVideoContribution,
 } from "../remotion/spec";
 import { useAgentVideoWorkspace } from "../contexts/AgentVideoWorkspaceContext";
+import type { MotionStyle } from "../lib/motionAssets";
 import { actionString, useUiAction } from "../lib/uiActions";
 import { appDialog } from "../lib/appDialog";
 
@@ -61,6 +62,8 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
     setAspectRatio,
     assets,
     setAssets,
+    motionStyle,
+    setMotionStyle,
     spec,
     contributions,
     meetingStatus,
@@ -187,6 +190,13 @@ export default function AgentVideoWorkspace({ onClose, embedded = false }: { onC
                   <option value="1:1">1:1 정사각</option>
                 </SelectField>
               </div>
+            </div>
+            <div className="mt-2">
+              <SelectField label={motionText.styleLabel} value={motionStyle} onChange={(value) => setMotionStyle(value as MotionStyle)}>
+                <option value="auto">{motionText.styleAuto}</option>
+                <option value="pop">{motionText.stylePop}</option>
+                <option value="editorial">{motionText.styleEditorial}</option>
+              </SelectField>
             </div>
 
             <MotionAssetPicker value={assets} onChange={setAssets} />

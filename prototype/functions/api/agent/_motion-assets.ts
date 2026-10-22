@@ -13,9 +13,11 @@ export interface MotionAssetSelection {
   bgm: { source: "sound" | "file"; value: string } | null;
   // 배경음악 없이 진행하겠다고 사용자가 확인했다(음악을 새로 생성하면 비용이 들어 기본 제공하지 않는다)
   noMusic: boolean;
+  // 연출 참고 영상(업무 파일 경로). 화면에 쓰지 않고 감독이 움직임·전환·리듬을 읽는다
+  reference: string | null;
 }
 
-export type MotionAssetRole = "logo" | "character" | "environment" | "image" | "video" | "audio" | "bgm";
+export type MotionAssetRole = "logo" | "character" | "environment" | "image" | "video" | "audio" | "bgm" | "reference";
 
 export interface MotionAssetItem {
   id: string;
@@ -46,11 +48,13 @@ export function normalizeMotionAssetSelection(raw: unknown): MotionAssetSelectio
   const bgmSource = input.bgm?.source === "sound" || input.bgm?.source === "file" ? input.bgm.source : null;
   const bgmValue = bgmSource === "file" ? cleanFilePath(input.bgm?.value) : clean(input.bgm?.value, 120);
   const bgm = bgmSource && bgmValue ? { source: bgmSource, value: bgmValue } as MotionAssetSelection["bgm"] : null;
+  const reference = cleanFilePath(input.reference);
   return {
     brandId: /^[a-zA-Z0-9._-]+$/.test(brandId) ? brandId : null,
     files,
     bgm,
     noMusic: !bgm && input.noMusic === true,
+    reference: reference && VIDEO_EXT.test(reference) ? reference : null,
   };
 }
 
@@ -179,6 +183,10 @@ export async function buildMotionAssetManifest(args: {
     const objectName = objectNameFromSignedUrl(rows[0]?.output_url);
     if (objectName) items.push({ id: "bgm", role: "bgm", name: clean(rows[0]?.title, 80) || "bgm", fileName: `bgm${extensionOf(objectName, ".mp3")}`, url: mediaProxyUrl(objectName) });
     else warnings.push("사운드 라이브러리에서 고른 배경음악을 찾지 못했습니다.");
+  }
+  if (selection.reference) {
+    const base = selection.reference.split("/").pop() || "reference";
+    items.push({ id: "reference", role: "reference", name: base, fileName: `reference${extensionOf(base, ".mp4")}`, url: companyFileDownloadUrl(selection.reference) });
   }
   return { brand: brandInfo, items, noMusic: selection.noMusic, warnings };
 }

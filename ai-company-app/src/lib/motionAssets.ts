@@ -8,9 +8,15 @@ export interface MotionAssetSelection {
   files: string[];
   bgm: { source: "sound" | "file"; value: string } | null;
   noMusic: boolean;
+  // 연출 참고 영상(업무 파일 경로) — 화면에 쓰지 않고 감독이 움직임·전환·리듬을 읽는다
+  reference: string | null;
 }
 
-export const EMPTY_MOTION_ASSETS: MotionAssetSelection = { brandId: null, files: [], bgm: null, noMusic: false };
+export const EMPTY_MOTION_ASSETS: MotionAssetSelection = { brandId: null, files: [], bgm: null, noMusic: false, reference: null };
+
+// 연출 트랙(motion-kit/KIT.md 4절): 자동 · 쇼츠 팝 · 에디토리얼 모션
+export type MotionStyle = "auto" | "pop" | "editorial";
+export const MOTION_STYLES: MotionStyle[] = ["auto", "pop", "editorial"];
 
 export const MOTION_IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 export const MOTION_VIDEO_EXT = /\.(mp4|mov|webm|m4v)$/i;

@@ -37,6 +37,13 @@ export const MOTION_ASSET_TEXT = {
     bgmLibrary: "사운드 라이브러리",
     bgmFiles: "첨부한 음악",
     bgmHint: "음악 박자에 맞춰 자막·효과음이 움직여요. 기본 음악은 저작권 걱정 없는 무료 곡 29곡이에요(출처 표기 불필요).",
+    reference: "레퍼런스 영상(연출 참고)",
+    referenceAdd: "+ 업무 파일에서 영상 고르기",
+    referenceHint: "마음에 드는 모션 영상을 고르면 감독이 움직임·전환·리듬을 분석해 이 영상에 옮겨요. 화면에는 나오지 않아요(앞 60초까지 봐요).",
+    styleLabel: "연출 스타일",
+    styleAuto: "연출 자동(요청에 맞게)",
+    stylePop: "쇼츠 팝 — 키네틱 자막·스티커",
+    styleEditorial: "에디토리얼 모션 — 타이포·생성형 그래픽",
     loadFailed: "목록을 읽지 못했어요: {e}",
     kindImage: "그림",
     kindVideo: "영상",
@@ -122,6 +129,13 @@ export const MOTION_ASSET_TEXT = {
     bgmLibrary: "Sound library",
     bgmFiles: "Attached music",
     bgmHint: "Captions and sound effects move on the music's beat. The built-in music is 29 royalty-free tracks (no credit needed).",
+    reference: "Reference video (for direction)",
+    referenceAdd: "+ Pick a video from work files",
+    referenceHint: "Pick a motion video you like and the director studies its movement, transitions and rhythm for this video. It isn't shown on screen (looks at the first 60 s).",
+    styleLabel: "Motion style",
+    styleAuto: "Style: auto (fits the request)",
+    stylePop: "Shorts pop — kinetic captions, stickers",
+    styleEditorial: "Editorial motion — type, generative graphics",
     loadFailed: "Couldn't load the list: {e}",
     kindImage: "Image",
     kindVideo: "Video",
@@ -237,7 +251,9 @@ function kindLabel(name: string, t: MotionAssetDict) {
 const fieldLabel = "mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-faint";
 const selectClass = "w-full rounded-lg border border-edge bg-inset px-3 py-2 text-xs text-content outline-none focus:border-emerald-700";
 
-function FileBrowser({ selected, onToggle, onClose, t }: { selected: string[]; onToggle: (path: string) => void; onClose: () => void; t: MotionAssetDict }) {
+function FileBrowser({ selected, onToggle, onClose, t, accept = isMotionMediaFile }: {
+  selected: string[]; onToggle: (path: string) => void; onClose: () => void; t: MotionAssetDict; accept?: (name: string) => boolean;
+}) {
   const [path, setPath] = useState("");
   const [parentPath, setParentPath] = useState("");
   const [entries, setEntries] = useState<CompanyFileEntry[] | null>(null);
@@ -252,7 +268,7 @@ function FileBrowser({ selected, onToggle, onClose, t }: { selected: string[]; o
     return () => { alive = false; };
   }, [path, t]);
   const folders = (entries || []).filter((entry) => entry.kind === "folder" || entry.kind === "work-folder");
-  const files = (entries || []).filter((entry) => entry.kind === "file" && isMotionMediaFile(entry.name));
+  const files = (entries || []).filter((entry) => entry.kind === "file" && accept(entry.name));
   return (
     <div className="mt-1.5 rounded-lg border border-edge bg-inset p-2">
       <div className="mb-1.5 flex items-center gap-1.5 text-[10px] text-faint">
@@ -284,6 +300,7 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
   const [brands, setBrands] = useState<MotionBrandOption[]>([]);
   const [music, setMusic] = useState<MotionMusicOption[]>([]);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [referenceOpen, setReferenceOpen] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     const fail = (caught: unknown) => setError(t.loadFailed.replace("{e}", caught instanceof Error ? caught.message : String(caught)));
@@ -297,6 +314,11 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
     onChange({ ...value, files, bgm });
   };
   const audioFiles = value.files.filter((path) => MOTION_AUDIO_EXT.test(path));
+  const reference = value.reference || null;
+  const pickReference = (path: string) => {
+    onChange({ ...value, reference: reference === path ? null : path });
+    setReferenceOpen(false);
+  };
   const bgmValue = value.bgm ? `${value.bgm.source}:${value.bgm.value}` : value.noMusic ? "none" : "";
   const setBgm = (raw: string) => {
     const at = raw.indexOf(":");
@@ -329,6 +351,19 @@ export default function MotionAssetPicker({ value, onChange }: { value: MotionAs
       {browserOpen
         ? <FileBrowser selected={value.files} onToggle={toggleFile} onClose={() => setBrowserOpen(false)} t={t} />
         : <button type="button" onClick={() => setBrowserOpen(true)} className="w-full rounded-lg border border-dashed border-edge px-3 py-1.5 text-[11px] text-secondary hover:bg-raised">{t.addFiles}</button>}
+
+      <label className={`${fieldLabel} mt-2`}>{t.reference}</label>
+      {reference && (
+        <div className="mb-1 flex items-center gap-1.5 rounded bg-inset px-1.5 py-1 text-[11px] text-content">
+          <span className="shrink-0 text-[9px] text-faint">{t.kindVideo}</span>
+          <span className="truncate" title={reference}>{fileName(reference)}</span>
+          <button type="button" onClick={() => onChange({ ...value, reference: null })} className="ml-auto shrink-0 text-[10px] text-faint hover:text-tone-red">{t.remove}</button>
+        </div>
+      )}
+      {referenceOpen
+        ? <FileBrowser selected={reference ? [reference] : []} onToggle={pickReference} onClose={() => setReferenceOpen(false)} t={t} accept={(name) => MOTION_VIDEO_EXT.test(name)} />
+        : <button type="button" onClick={() => setReferenceOpen(true)} className="w-full rounded-lg border border-dashed border-edge px-3 py-1.5 text-[11px] text-secondary hover:bg-raised">{t.referenceAdd}</button>}
+      <p className="mt-1 text-[10px] leading-4 text-faint">{t.referenceHint}</p>
 
       <label className={`${fieldLabel} mt-2`}>{t.bgm}</label>
       <select value={bgmValue} onChange={(event) => setBgm(event.target.value)} className={selectClass}>

@@ -9,6 +9,7 @@ import {
   type MotionCloudRun,
   type MotionCloudStart,
   type MotionStill,
+  type MotionStyle,
 } from "../lib/motionAssets";
 import { motionAssetText, motionErrorText } from "../components/MotionAssetPicker";
 import {
@@ -74,6 +75,8 @@ interface AgentVideoWorkspaceValue {
   setAspectRatio: Dispatch<SetStateAction<AspectRatio>>;
   assets: MotionAssetSelection;
   setAssets: Dispatch<SetStateAction<MotionAssetSelection>>;
+  motionStyle: MotionStyle;
+  setMotionStyle: Dispatch<SetStateAction<MotionStyle>>;
   spec: AgentVideoSpec;
   contributions: AgentVideoContribution[];
   meetingStatus: MeetingStatus;
@@ -104,6 +107,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
   const [durationSec, setDurationSec] = useState(30);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
   const [assets, setAssets] = useState<MotionAssetSelection>(EMPTY_MOTION_ASSETS);
+  const [motionStyle, setMotionStyle] = useState<MotionStyle>("auto");
   const [spec, setSpec] = useState<AgentVideoSpec>(loadSavedSpec);
   const [contributions, setContributions] = useState<AgentVideoContribution[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<MeetingStatus>("idle");
@@ -260,7 +264,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
         invocationMode: "manual",
         request: prompt.trim(),
         idempotencyKey: `manual-${crypto.randomUUID()}`,
-        options: { durationSec, aspectRatio, assets: selectedAssets },
+        options: { durationSec, aspectRatio, assets: selectedAssets, motionStyle },
       }, { defer: true });
       await launchCloud({ mode: "new", skillJobId: result.job.id });
     } catch (caught) {
@@ -387,6 +391,7 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
     setPrompt(String(input?.prompt || work.request_text || ""));
     setDurationSec(Number(input?.durationSec || getDuration(nextSpec)));
     setAspectRatio((input?.aspectRatio || nextSpec.aspectRatio) as AspectRatio);
+    setMotionStyle(input?.motionStyle === "pop" || input?.motionStyle === "editorial" ? input.motionStyle : "auto");
   }
 
   async function openWork(work: CompanyWorkItem, autoRender = false) {
@@ -418,6 +423,8 @@ export function AgentVideoWorkspaceProvider({ children }: { children: ReactNode 
       setAspectRatio,
       assets,
       setAssets,
+      motionStyle,
+      setMotionStyle,
       spec,
       contributions,
       meetingStatus,

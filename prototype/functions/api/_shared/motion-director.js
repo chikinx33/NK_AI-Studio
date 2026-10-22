@@ -10,6 +10,8 @@ export const MOTION_DIRECTOR_MODEL = "claude-opus-5-5";
 // 64K 를 660초에 썼으니 128K 는 20분 남짓: 시간 제한(motion-director.ts)과 프록시(nk-openai-proxy 3600초)도 함께 늘렸다.
 export const MOTION_DIRECTOR_MAX_TOKENS = 128000;
 export const MOTION_DIRECTOR_MAX_IMAGES = 12;
+// 레퍼런스 영상 접촉 시트(4×4) 최대 장수 — prepare-motion-assets.mjs 의 MAX_SHEETS 와 같다
+export const MOTION_REFERENCE_MAX_SHEETS = 12;
 
 export const STAGE_SIZES = { "9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080" };
 
@@ -69,6 +71,38 @@ function musicSection(prepared, durationSec) {
   ].join("\n");
 }
 
+// 연출 트랙(motion-kit/KIT.md 4절): 사용자가 고른 값, 없으면 감독이 요청에서 고른다
+export function motionStyleOf(input) {
+  return input?.motionStyle === "pop" || input?.motionStyle === "editorial" ? input.motionStyle : "auto";
+}
+
+function trackSection(input, prepared) {
+  const style = motionStyleOf(input);
+  if (style === "pop") return "연출 트랙: 트랙 A 쇼츠 팝(사용자 지정). 설명서 4절 트랙 A를 따르고 <!-- track: pop --> 로 적는다.";
+  if (style === "editorial") return "연출 트랙: 트랙 B 에디토리얼 모션(사용자 지정). 설명서 4절 트랙 B와 실례 3을 따르고 <!-- track: editorial --> 로 적는다. 3D 이모지·스티커·통통 튀는 움직임은 하나도 쓰지 않는다.";
+  return `연출 트랙: 자동 — 설명서 4절 기준으로 요청·자산${prepared?.reference ? "·레퍼런스 영상" : ""}에 맞는 트랙 하나를 골라 <!-- track: … --> 로 적는다.`;
+}
+
+// 레퍼런스 영상(접촉 시트는 호출부가 이미지로 붙인다): 시트별 시간 범위·컷 시각·박자
+export function referenceSection(reference) {
+  if (!reference || !Array.isArray(reference.sheets) || !reference.sheets.length) return "";
+  const sheets = reference.sheets.slice(0, MOTION_REFERENCE_MAX_SHEETS);
+  const cuts = Array.isArray(reference.cuts) ? reference.cuts : [];
+  const starts = [0, ...cuts];
+  const shots = [...cuts, reference.span].map((at, i) => Math.round((at - starts[i]) * 100) / 100);
+  return [
+    "# 레퍼런스 영상 (연출 참고 — 설명서 5.6절)",
+    `위 접촉 시트 ${sheets.length}장은 사용자가 고른 레퍼런스 영상 "${clip(reference.name, 80)}"(${reference.width || "?"}x${reference.height || "?"}, 앞 ${reference.span}초)을 ${reference.step}초 간격으로 찍어 4×4로 모은 것이다(각 장 왼쪽 위 → 오른쪽 아래).`,
+    ...sheets.map((sheet, i) => `- 시트 ${i + 1}: ${sheet.from}~${sheet.to}초`),
+    cuts.length
+      ? `컷이 바뀌는 시각(초): ${cuts.join(", ")} → 컷 길이(초): ${shots.join(", ")}`
+      : "컷 감지: 없음(한 컷 안에서 변신·카메라 이동으로 이어지는 영상일 수 있다 — 시트로 확인)",
+    reference.bpm ? `레퍼런스 음악: 약 ${reference.bpm} BPM, 박자 시각(초, 앞부분): ${(reference.beats || []).slice(0, 48).join(", ")} — 컷·등장이 박자에 어떻게 맞는지 본다` : "",
+    "먼저 ①색 ②글꼴·그리드 ③전환 방식 ④움직임 곡선 ⑤컷 리듬·박자 ⑥밀도·질감을 분석하고, 그 결을 이 영상의 내용·자산으로 옮긴다. 레퍼런스의 글자·로고·인물·고유 그림·문구는 베끼지 않는다.",
+    "분석은 <head> 맨 위 트랙 주석 다음에 <!-- reference: ① … ⑥ … --> 로 적는다.",
+  ].filter(Boolean).join("\n");
+}
+
 function storyboard(spec) {
   if (!spec || !Array.isArray(spec.scenes)) return "(콘티 초안 없음)";
   const lines = [`제목: ${clip(spec.title, 120)}`];
@@ -101,6 +135,7 @@ export function buildMotionDirectorRequest({ input = {}, spec = null, prepared =
     `길이: 약 ${durationSec}초 (끝 카드 포함, 박자에 맞춰 ±2초 허용) · 화면: ${aspect} → <html data-size="${STAGE_SIZES[aspect]}">`,
     "시청 대상·톤·스타일: 따로 주지 않는다. 영상 요청 글에서 읽어 정한다(요청에 없으면 주제에 가장 잘 맞게).",
     prepared.brand ? `브랜드: ${clip(prepared.brand.title, 80)} (로고·캐릭터 그림이 자산에 있으면 주인공으로 쓴다)` : "브랜드: 없음",
+    trackSection(input, prepared),
     "",
     "# 콘티 초안 (기획 회의 결과 — 내용과 수치의 근거. 장면 구성·문장은 더 좋게 바꿔도 되지만 없는 사실·수치는 만들지 않는다)",
     storyboard(spec),
@@ -110,8 +145,9 @@ export function buildMotionDirectorRequest({ input = {}, spec = null, prepared =
     `motion.js: ${kit.motion} · base.css: ${kit.baseCss} · fonts.css: ${kit.fontsCss}`,
     "",
     "# 받은 자산 (assets/… 상대 경로. 아래 그림 미리보기 참고)",
-    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 그림 스타일(설명서 5.5절 2번) 하나를 정하고 그 스타일로 화면을 채운다: 3D 이모지 중심 또는 직접 그린 SVG·아이콘 중심)",
+    items.length ? "```json\n" + JSON.stringify(items, null, 1) + "\n```" : "(받은 그림·클립·소리 없음 → 그림 스타일(설명서 5.5절 2번) 하나를 정하고 그 스타일로 화면을 채운다: 트랙 A는 3D 이모지 중심 또는 직접 그린 SVG·아이콘 중심, 트랙 B는 생성형 그래픽·도형·타이포)",
     "",
+    ...(prepared.reference ? [referenceSection(prepared.reference), ""] : []),
     `다 쓴 뒤 설명서 5.5절 품질 점검표(화면 채우기 · 스타일 하나 · 이어지는 전환)로 스스로 확인한다.${aspect === "9:16" ? "" : ` 이 편은 ${aspect}이라 시즌1(9:16) 실례 구도를 그대로 옮기지 말고 가로 화면을 채운다.`}`,
     "",
     "# 음악",
@@ -132,10 +168,11 @@ export function buildMotionReviewRequest({ input = {}, prepared = {}, html = "",
     `위 정지 화면 ${frameTimes.length}장은 네가 방금 쓴 장면 코드를 실제로 찍은 것이다(시각: ${frameTimes.map((t) => `${t}초`).join(", ")}).`,
     "설명서 5.5절 품질 점검표와 아래 자동 검사 결과로 이 영상을 본다:",
     "1. 화면 채우기 — 넓은 배경 가운데 작은 물건 하나만 있는 장면이 있나(주인공 크기 화면 높이 40~60%, 세 층, 16:9 삼분할).",
-    "2. 그림 스타일 하나 — 3D 이모지와 납작한 실루엣·도형이 한 영상에 섞였나.",
+    "2. 그림 스타일·트랙 하나 — 3D 이모지와 납작한 실루엣·도형이 한 영상에 섞였나. 장면 코드 맨 위 <!-- track: … --> 가 editorial 인데 이모지·스티커·통통 튀는 움직임이 있나(또는 pop 인데 트랙 B 문법이 섞였나).",
     "3. 이어지는 전환 — 장면 사이에 화면이 비거나 검게 되는 순간이 있나(끝 카드 제외).",
     "4. 자막·글자 — 글자끼리 겹치거나, 잘리거나, 다른 요소에 가려지거나, 화면 밖으로 나가나.",
     "5. 사실 — 콘티에 없는 수치·사실을 만들지 않았나.",
+    ...(prepared?.reference ? ["6. 레퍼런스 — 장면 코드 맨 위 <!-- reference: … --> 분석(전환·움직임 곡선·컷 리듬·색·질감)이 실제 장면에 구현됐나. 레퍼런스의 글자·로고를 베끼지 않았나."] : []),
     "",
     "# 자동 검사 결과",
     findings.length ? findings.map((line) => `- ${line}`).join("\n") : "- 빈 화면·암전 구간 없음",

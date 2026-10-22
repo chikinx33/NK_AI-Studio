@@ -5,7 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import {
-  buildMotionDirectorRequest, buildMotionDirectorSystem, parseMotionDirectorOutput, STAGE_SIZES,
+  buildMotionDirectorRequest, buildMotionDirectorSystem, buildMotionReviewRequest, parseMotionDirectorOutput, STAGE_SIZES,
 } from "../functions/api/_shared/motion-director.js";
 import { buildMotionDirectorKit, OUTPUT as KIT_OUTPUT } from "../../ai-company-app/scripts/build-motion-director-kit.mjs";
 
@@ -30,13 +30,19 @@ test("감독 지침 모듈은 키트 원본(KIT.md·실례·효과음 목록)과
   assert.equal(fs.readFileSync(KIT_OUTPUT, "utf8"), await buildMotionDirectorKit());
 });
 
-test("시스템 지침에 키트 사용법·쇼츠 문법·시즌1 실례 2편·효과음 목록이 들어간다", () => {
+test("시스템 지침에 키트 사용법·연출 트랙 두 가지·실례 3편(트랙 A 2편, 트랙 B 1편)·효과음 목록이 들어간다", () => {
   const system = buildMotionDirectorSystem();
   assert.match(system, /async function seek\(t\)/);
-  assert.match(system, /2026 쇼츠 문법/);
+  assert.match(system, /## 4\. 연출 트랙 — 한 편에 하나만/);
+  assert.match(system, /### 트랙 A — 쇼츠 팝/);
+  assert.match(system, /### 트랙 B — 에디토리얼 모션/);
+  assert.match(system, /## 2\.5 생성형 그래픽 도구/);
+  assert.match(system, /## 5\.6 레퍼런스 영상/);
+  assert.match(system, /실례 3: 트랙 B 에디토리얼 모션 · ORBIT/);
+  assert.match(system, /M\.halftone\(ctx/);
   assert.match(system, /확인되지 않은 수치는 만들지 않는다/);
-  assert.match(system, /실례 1: NEKOBAN/);
-  assert.match(system, /실례 2: ELIDUS/);
+  assert.match(system, /실례 1: 트랙 A 쇼츠 팝 · NEKOBAN/);
+  assert.match(system, /실례 2: 트랙 A 쇼츠 팝 · ELIDUS/);
   // 효과음은 파일 목록 대신 용도 태그로(렌더러가 실제 파일을 고른다), 새 키트 자산 사용법
   assert.match(system, /tag:whoosh \|/);
   assert.match(system, /tag:jingle \|/);
@@ -134,7 +140,7 @@ test("키트: 무대 크기를 <html data-size>로 바꾸되 기본 1080x1920은
 
 test("클라우드 렌더 작업: 기획 → 자산 받기·정리 → 감독 → 장면 저장 → 렌더 → 정지 화면·저장 순서로 혼자 잇는다", () => {
   const job = read("ai-company-app/scripts/motion-cloud-job.mjs");
-  const order = ['phase("plan"', 'phase(pageReady ? "render" : "assets"', "runDirector({ workId, prepared, thumbs", 'action: "handoff"', "await writePage(directory, html, episode);\n\n  const outPath", 'phase("render", () => renderMotionPage', 'phase("save"', 'status: "done"']
+  const order = ['phase("plan"', 'phase(pageReady ? "render" : "assets"', "workId, prepared, thumbs: await thumbsFor(directory, prepared), reference", 'action: "handoff"', "await writePage(directory, html, episode);\n\n  const outPath", 'phase("render", () => renderMotionPage', 'phase("save"', 'status: "done"']
     .map((needle) => job.indexOf(needle));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `순서: ${order}`);
   assert.match(job, /motion: \{ html, episode, prepared \}/);
@@ -198,4 +204,73 @@ test("진행 막대: 기획 → 자산 → 감독 → 렌더 → 저장 단계�
   // 총 소요시간: 클라우드 작업 시각(다시 열어도 그대로), 진행 중엔 지금까지
   assert.match(source, /const runEnd = finishedAt \? Date\.parse\(finishedAt\) : state === "active" \? now : NaN;/);
   assert.match(source, /t\.totalTime\.replace\("\{t\}", formatElapsed\(t, total\)\)/);
+});
+
+// 2026-10-23: 연출 트랙(쇼츠 팝·에디토리얼 모션)과 레퍼런스 영상
+test("요청 메시지: 사용자가 고른 연출 트랙을 강제하고, 자동이면 감독이 고르게 한다", () => {
+  const ask = (motionStyle, extra = {}) => buildMotionDirectorRequest({ input: { prompt: "p", aspectRatio: "16:9", motionStyle }, spec: null, prepared: { ...prepared, ...extra } });
+  assert.match(ask("editorial"), /트랙 B 에디토리얼 모션\(사용자 지정\)[^\n]*<!-- track: editorial -->[^\n]*3D 이모지·스티커·통통 튀는 움직임은 하나도 쓰지 않는다/);
+  assert.match(ask("pop"), /트랙 A 쇼츠 팝\(사용자 지정\)/);
+  assert.match(ask(undefined), /연출 트랙: 자동 — /);
+  assert.match(ask("이상한 값"), /연출 트랙: 자동 — /);
+  assert.doesNotMatch(ask("editorial"), /# 레퍼런스 영상/, "레퍼런스가 없으면 구역도 없다");
+});
+
+test("요청 메시지: 레퍼런스 영상 시트별 시간·컷 길이·박자를 적고 결만 옮기게 한다", () => {
+  const reference = { name: "ref.mp4", width: 1280, height: 720, span: 12, step: 0.167, sheets: [{ from: 0, to: 2.51 }, { from: 2.67, to: 5.18 }], cuts: [4, 8], bpm: 120.2, beats: [0, 0.5, 1] };
+  const text = buildMotionDirectorRequest({ input: { prompt: "p", aspectRatio: "16:9" }, spec: null, prepared: { ...prepared, reference } });
+  assert.match(text, /# 레퍼런스 영상 \(연출 참고 — 설명서 5\.6절\)/);
+  assert.match(text, /접촉 시트 2장[^\n]*0\.167초 간격/);
+  assert.match(text, /- 시트 2: 2\.67~5\.18초/);
+  assert.match(text, /컷 길이\(초\): 4, 4, 4/);
+  assert.match(text, /약 120\.2 BPM/);
+  assert.match(text, /글자·로고·인물·고유 그림·문구는 베끼지 않는다/);
+  assert.match(text, /<!-- reference: ① … ⑥ … -->/);
+  assert.match(text, /요청·자산·레퍼런스 영상에 맞는 트랙/);
+  const review = buildMotionReviewRequest({ input: {}, prepared: { ...prepared, reference }, html: "x", frameTimes: [1] });
+  assert.match(review, /6\. 레퍼런스 — /);
+  assert.doesNotMatch(buildMotionReviewRequest({ input: {}, prepared, html: "x", frameTimes: [1] }), /6\. 레퍼런스/);
+});
+
+test("연출 트랙은 화면 → 스킬 작업 → 영상 입력 → 기획 지시까지 이어진다", () => {
+  assert.match(read("ai-company-app/src/components/AgentVideoWorkspace.tsx"), /<option value="editorial">\{motionText\.styleEditorial\}<\/option>/);
+  assert.match(read("prototype/functions/api/agent/_company-skill-executors.ts"), /motionStyle: String\(options\.motionStyle \|\| "auto"\)/);
+  const video = read("prototype/functions/api/agent/agent-video.ts");
+  assert.match(video, /motionStyle: body\?\.motionStyle === "pop" \|\| body\?\.motionStyle === "editorial" \? body\.motionStyle : "auto"/);
+  assert.match(video, /연출: 에디토리얼 모션/);
+});
+
+test("키트 생성형 도구: 시드가 같으면 같은 값, 노이즈는 부드럽고, 미리 계산은 시각으로 읽는다", () => {
+  const ctx = { URLSearchParams, document: { documentElement: { dataset: { size: "1920x1080" }, style: { setProperty() {} }, classList: { add() {} } } }, location: { search: "" }, window: {} };
+  vm.runInNewContext(read("ai-company-app/motion-kit/lib/motion.js"), ctx);
+  const M = ctx.window.M;
+  const a = M.rng(7), b = M.rng(7), c = M.rng(8);
+  const first = [a(), a(), a()];
+  assert.deepEqual(first, [b(), b(), b()]);
+  assert.notEqual(first[0], c());
+  assert.ok(first.every((v) => v >= 0 && v < 1));
+  assert.equal(M.hash(3, 4), M.hash(3, 4));
+  assert.notEqual(M.hash(3, 4), M.hash(4, 3));
+  let max = 0;
+  for (let i = 0; i < 400; i++) {
+    const x = i * 0.037, n = M.noise(x, 1.3, 0.7);
+    assert.ok(n > -1.01 && n < 1.01);
+    max = Math.max(max, Math.abs(n - M.noise(x + 0.001, 1.3, 0.7)));
+  }
+  assert.ok(max < 0.01, "가까운 점은 거의 같은 값");
+  assert.equal(M.tw(0, 1, 1), 0);
+  assert.equal(M.tw(5, 1, 1, "inOutExpo"), 1);
+  assert.ok(M.tw(1.2, 1, 1) > 0.7, "outExpo 는 빨리 출발한다");
+  const sim = M.bake({ dur: 1, fps: 10, sub: 1, init: () => ({ y: 0 }), step: (s, dt) => { s.y += dt; }, snap: (s) => [s.y] });
+  assert.ok(Math.abs(sim(0.5)[0] - 0.5) < 1e-6);
+  assert.ok(Math.abs(sim(0.55)[0] - 0.55) < 1e-6, "두 저장 사이는 보간");
+  assert.ok(Math.abs(sim(9)[0] - 1) < 1e-6, "끝 뒤는 마지막 값");
+});
+
+test("트랙 B 실례(ORBIT)는 금지 문법 없이 키트 계약을 지킨다", () => {
+  const page = read("ai-company-app/motion-kit/examples/ed_s1_01/index.html");
+  const out = parseMotionDirectorOutput(fence("html", page) + fence("json", read("ai-company-app/motion-kit/examples/ed_s1_01/episode.json")), { aspectRatio: "16:9", prepared: { kit: { motion: "../../lib/motion.js" }, items: [] } });
+  assert.deepEqual(out.problems, []);
+  assert.match(page, /<!-- track: editorial -->/);
+  assert.doesNotMatch(page, /emoji\/|M\.sticker|M\.pop\(|M\.hit\(/, "트랙 B 실례에 쇼츠 팝 문법이 섞이지 않는다");
 });

@@ -1,5 +1,5 @@
 // POST /api/agent/motion-director — 인포그래픽 영상 감독: 이 영상만의 장면 코드(HTML 한 장)와 소리 큐를 쓴다.
-// body: { workId, prepared(이 PC 렌더러가 정리한 assets.json), thumbs?: [{ id, label, dataUrl }] }
+// body: { workId, prepared(이 PC 렌더러가 정리한 assets.json), thumbs?: [{ id, label, dataUrl }], reference?: [{ label, dataUrl }](레퍼런스 영상 접촉 시트) }
 //   부분 수정: { …, mode: "revise", html, episode, request, frames?: [{ t, dataUrl }] }
 //   검수(확인 루프): { …, mode: "review", html, episode, frames: [{ t, dataUrl }], findings: [문장] } → 고칠 게 없으면 result.approved
 // 응답: text/event-stream — data: {"t":"progress","chars"} … data: {"t":"done","result":{html,episode,problems}} | {"t":"error","error"}
@@ -10,7 +10,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { buildClaudeSystem, claudeFetch } from "../_shared/claude-auth.js";
 import {
-  MOTION_DIRECTOR_MAX_IMAGES, MOTION_DIRECTOR_MAX_TOKENS, MOTION_DIRECTOR_MODEL,
+  MOTION_DIRECTOR_MAX_IMAGES, MOTION_DIRECTOR_MAX_TOKENS, MOTION_DIRECTOR_MODEL, MOTION_REFERENCE_MAX_SHEETS,
   MOTION_REVIEW_MAX_IMAGES, buildMotionDirectorRequest, buildMotionDirectorSystem, buildMotionReviewRequest, buildMotionRevisionRequest,
   isReviewApproved, parseMotionDirectorOutput,
 } from "../_shared/motion-director.js";
@@ -20,7 +20,8 @@ import { MOTION_SUBSCRIPTION_REQUIRED, motionSubscriptionAuth } from "./_motion-
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-const MAX_BODY_CHARS = 8 * 1024 * 1024;
+// 레퍼런스 접촉 시트 12장(장당 수백 KB)까지 담는다. Claude 요청 한도(32MB)보다 작게.
+const MAX_BODY_CHARS = 16 * 1024 * 1024;
 // 시험(2026-10-21)에서 장면 코드가 약 2만 9천 자였고, 그 앞에 깊게 생각한다. 흘려 보내는 동안 연결은 유지되므로
 // 넉넉히 두되 지역 우회 프록시(Cloud Run, 900초)보다 짧게 둬서 우리 쪽에서 먼저 정리한다.
 // 감독은 클라우드 렌더러(준비 작업)가 기다린다. 출력 128K 를 다 쓰면 20분 남짓 — 프록시 제한(3600초) 안에서 30분.
@@ -106,7 +107,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         ...examples.map((ex: any, i: number) => `## 저장 실례 ${i + 1}: ${ex.title} (${ex.aspectRatio})\n\`\`\`html\n${ex.html}\n\`\`\``), ""].join("\n")
       : "";
     const userText = buildMotionDirectorRequest({ input, spec: metadata.spec || null, prepared });
-    content = [...imageBlocks(body?.thumbs), { type: "text", text: examplesText + userText }];
+    // 레퍼런스 영상 접촉 시트(4×4) — 자산 미리보기와 따로 센다
+    const referenceBlocks = imageBlocks(body?.reference, { max: MOTION_REFERENCE_MAX_SHEETS, prefix: "레퍼런스 영상 접촉 시트 " });
+    content = [...imageBlocks(body?.thumbs), ...referenceBlocks, { type: "text", text: examplesText + userText }];
   }
 
   const controller = new AbortController();

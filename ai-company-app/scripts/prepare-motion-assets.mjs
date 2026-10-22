@@ -73,6 +73,79 @@ async function makeThumb(ffmpeg, source, thumbsDirectory, id, at = 0) {
   }
 }
 
+// ---------- 레퍼런스 영상(연출 참고) ----------
+// 화면에 쓰는 자산이 아니다. 감독이 움직임·전환·리듬을 읽도록 일정 간격으로 찍어 4×4 접촉 시트로 모으고,
+// 컷이 바뀌는 시각과 (소리가 있으면) 박자를 뽑는다.
+const MAX_REFERENCE_SEC = 60;
+const SHEET_TILES = 16;
+const MAX_SHEETS = 12;
+const round2 = (value) => Math.round(value * 100) / 100;
+
+// 길이에 맞춘 촬영 간격: 짧으면 1초에 최대 6장(움직임 곡선이 보이게), 길면 시트 12장 안에 들어가게 성기게
+export function referenceSheetPlan(durationSec) {
+  const span = Math.min(MAX_REFERENCE_SEC, Math.max(0, Number(durationSec) || 0));
+  if (span < 0.5) return null;
+  const step = Math.max(1 / 6, span / (SHEET_TILES * MAX_SHEETS));
+  const stepMs = Math.ceil(step * 1000);
+  const frames = Math.max(1, Math.floor((span * 1000) / stepMs) + 1);
+  const sheets = Math.min(MAX_SHEETS, Math.ceil(frames / SHEET_TILES));
+  return {
+    span: round2(span),
+    step: stepMs / 1000,
+    // ffmpeg fps 필터는 분수로 받는다(1000/167 = 약 5.99장/초)
+    fps: `1000/${stepMs}`,
+    sheets,
+    ranges: Array.from({ length: sheets }, (_, k) => ({
+      from: round2((k * SHEET_TILES * stepMs) / 1000),
+      to: round2(Math.min(span, (((k + 1) * SHEET_TILES - 1) * stepMs) / 1000)),
+    })),
+  };
+}
+
+// ffmpeg select+showinfo 출력 → 컷 시각(초). 0.15초 안에 겹친 감지는 하나로
+export function parseSceneCuts(text, limit = 80) {
+  const cuts = [];
+  for (const match of String(text || "").matchAll(/pts_time:\s*([\d.]+)/g)) {
+    const at = round2(Number(match[1]));
+    if (!Number.isFinite(at) || at < 0.05) continue;
+    if (cuts.length && at - cuts[cuts.length - 1] < 0.15) continue;
+    cuts.push(at);
+  }
+  return cuts.slice(0, limit);
+}
+
+async function analyzeReference(ffmpeg, source, thumbsDirectory, item) {
+  const info = await mediaInfo(ffmpeg, source);
+  const plan = referenceSheetPlan(info.durationSec);
+  if (!plan) return null;
+  const tile = "scale='if(gt(iw,ih),384,-2)':'if(gt(iw,ih),-2,384)':flags=lanczos";
+  await run(ffmpeg, ["-y", "-v", "error", "-t", plan.span, "-i", source, "-an",
+    "-vf", `fps=${plan.fps},${tile},tile=4x4:padding=4:color=0x808080`,
+    "-frames:v", plan.sheets, "-q:v", 4, path.join(thumbsDirectory, "reference_%02d.jpg")]);
+  const sheets = [];
+  for (const [index, range] of plan.ranges.entries()) {
+    const name = `reference_${String(index + 1).padStart(2, "0")}.jpg`;
+    if (existsSync(path.join(thumbsDirectory, name))) sheets.push({ thumb: `assets/_thumbs/${name}`, ...range });
+  }
+  const cutLog = await run(ffmpeg, ["-hide_banner", "-t", plan.span, "-i", source, "-an",
+    "-vf", "scale=480:-2,select='gt(scene,0.3)',showinfo", "-f", "null", "-"]).catch(() => "");
+  // 소리가 없는 영상이면 박자 분석은 실패한다 → 박자 없이
+  const beat = await beatsForFile(ffmpeg, source).catch(() => null);
+  const beats = beat ? beat.beats.filter((at) => at <= plan.span).slice(0, 160) : [];
+  return {
+    name: item.name,
+    durationSec: info.durationSec,
+    width: info.width,
+    height: info.height,
+    span: plan.span,
+    step: plan.step,
+    sheets,
+    cuts: parseSceneCuts(cutLog),
+    bpm: beat && beats.length >= 8 ? Math.round(beat.bpm * 10) / 10 : null,
+    beats: beats.length >= 8 ? beats : [],
+  };
+}
+
 // 매니페스트의 파일 이름은 사이트가 만든다. 그래도 폴더를 벗어나지 못하게 이름만 받는다.
 export function safeAssetName(name) {
   const base = path.basename(String(name || ""));
@@ -90,6 +163,7 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
   const missing = [];
   let bgm = null;
   let beatTimes = [];
+  let reference = null;
   for (const item of manifest.items || []) {
     const fileName = safeAssetName(item.fileName);
     const source = fileName ? path.join(rawDirectory, fileName) : "";
@@ -124,6 +198,13 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
       const info = await mediaInfo(ffmpeg, source);
       bgm = { name: item.name, file: `assets/${fileName}`, durationSec: info.durationSec, bpm: Math.round(result.bpm * 10) / 10,
         beatCount: result.beats.length, beats: "assets/beats.json", beatsScript: "assets/beats.js" };
+    } else if (item.role === "reference") {
+      // 레퍼런스는 페이지가 쓰지 않으므로 assets/ 로 복사하지 않는다(접촉 시트·컷·박자만)
+      log(`레퍼런스 분석: ${fileName}`);
+      reference = await analyzeReference(ffmpeg, source, thumbsDirectory, item).catch((error) => {
+        log(`레퍼런스 분석 실패: ${error?.message || error}`);
+        return null;
+      });
     }
   }
   const kit = path.relative(jobDirectory, MOTION_KIT_DIRECTORY).split(path.sep).join("/");
@@ -135,6 +216,7 @@ export async function prepareMotionAssets(jobDirectory, { log = () => {} } = {})
     bgm,
     beatTimes,
     items,
+    reference,
     missing,
     kit: {
       motion: `${kit}/lib/motion.js`,

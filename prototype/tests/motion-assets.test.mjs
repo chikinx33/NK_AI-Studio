@@ -5,7 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { detectBeats } from "../../ai-company-app/scripts/motion-beats.mjs";
-import { parseMediaInfo, safeAssetName } from "../../ai-company-app/scripts/prepare-motion-assets.mjs";
+import { parseMediaInfo, parseSceneCuts, referenceSheetPlan, safeAssetName } from "../../ai-company-app/scripts/prepare-motion-assets.mjs";
 
 // 인포그래픽 영상 2단계(2026-10-21): 자산 입력. 비용 0원 — 이미 가진 브랜드·업무 파일·사운드 라이브러리만 쓴다.
 const root = path.resolve(import.meta.dirname, "../..");
@@ -78,7 +78,7 @@ test("작업 입력·실행기·agent-video·자산 목록 API가 자산 선택�
 test("화면: 배경음악을 안 고르면 감독이 기본 음악에서 고르고, 자산 선택을 작업 입력에 싣는다", () => {
   const context = read("ai-company-app/src/contexts/AgentVideoWorkspaceContext.tsx");
   assert.doesNotMatch(context, /appDialog\.confirm\(t\.confirmNoMusic/, "기본 음악이 생겨 확인 창은 없앴다");
-  assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets \},\n\s+\}, \{ defer: true \}\);/);
+  assert.match(context, /options: \{ durationSec, aspectRatio, assets: selectedAssets, motionStyle \},\n\s+\}, \{ defer: true \}\);/);
   const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
   assert.match(picker, /<option value="">\{t\.bgmAuto\}<\/option>/);
   assert.match(picker, /<option value="none">\{t\.bgmNone\}<\/option>/);
@@ -133,4 +133,50 @@ test("기본 효과음·글꼴 라이브러리가 파일과 함께 들어 있다
   const fonts = read("ai-company-app/motion-kit/lib/fonts.css");
   for (const [, file] of fonts.matchAll(/url\(\.\.\/fonts\/([^)]+)\)/g)) assert.ok(fs.existsSync(path.join(kit, "fonts", file)), file);
   assert.match(fonts, /"NK Sans"/);
+});
+
+// 2026-10-23 엔케: 레퍼런스 영상을 보여 주면 품질이 오른다 → 업무 파일 영상 하나를 연출 참고로 받는다
+test("레퍼런스 영상: 업무 파일의 영상 하나만 받고, 자산 목록에 화면에 안 쓰는 reference 로 싣는다", () => {
+  assert.equal(assets.normalizeMotionAssetSelection({ reference: "ref/좋은영상.mp4" }).reference, "ref/좋은영상.mp4");
+  assert.equal(assets.normalizeMotionAssetSelection({ reference: "ref/그림.png" }).reference, null, "영상만");
+  assert.equal(assets.normalizeMotionAssetSelection({ reference: "../x.mp4" }).reference, null, "위험한 경로는 버린다");
+  assert.equal(assets.normalizeMotionAssetSelection({}).reference, null);
+  const source = read("prototype/functions/api/agent/_motion-assets.ts");
+  assert.match(source, /items\.push\(\{ id: "reference", role: "reference", name: base, fileName: \`reference\$\{extensionOf\(base, "\.mp4"\)\}\`, url: companyFileDownloadUrl\(selection\.reference\) \}\);/);
+  const picker = read("ai-company-app/src/components/MotionAssetPicker.tsx");
+  assert.match(picker, /accept=\{\(name\) => MOTION_VIDEO_EXT\.test\(name\)\}/);
+  assert.match(picker, /reference: "레퍼런스 영상\(연출 참고\)"/);
+  assert.match(picker, /reference: "Reference video \(for direction\)"/);
+});
+
+test("레퍼런스 접촉 시트: 짧은 영상은 촘촘히(1초 6장), 긴 영상은 앞 60초를 시트 12장 안에 담는다", () => {
+  const short = referenceSheetPlan(12);
+  assert.equal(short.step, 0.167);
+  assert.equal(short.fps, "1000/167");
+  assert.equal(short.sheets, 5);
+  assert.deepEqual(short.ranges[1], { from: 2.67, to: 5.18 });
+  const long = referenceSheetPlan(300);
+  assert.equal(long.span, 60);
+  assert.equal(long.sheets, 12);
+  assert.ok(long.ranges[11].to <= 60);
+  assert.equal(referenceSheetPlan(0.2), null);
+  assert.equal(referenceSheetPlan(null), null);
+});
+
+test("레퍼런스 컷 시각: showinfo 출력에서 읽고 0.15초 안에 겹친 감지는 하나로", () => {
+  const log = "[Parsed_showinfo_2 @ 0] n:   0 pts:  48000 pts_time:4       duration:512\n[Parsed_showinfo_2 @ 0] n:   1 pts:  49000 pts_time:4.08 \n[Parsed_showinfo_2 @ 0] n:   2 pts:  96000 pts_time:8.0004";
+  assert.deepEqual(parseSceneCuts(log), [4, 8]);
+  assert.deepEqual(parseSceneCuts(""), []);
+});
+
+test("클라우드 렌더 작업: 레퍼런스는 새로 쓸 때만 받아 감독에게 접촉 시트로 넘기고, 렌더 작업은 받지 않는다", () => {
+  const job = read("ai-company-app/scripts/motion-cloud-job.mjs");
+  assert.match(job, /withReference \|\| item\.role !== "reference"/);
+  assert.match(job, /stageAssets\(workId, directory, \{ withReference: run\.mode === "new" && !pageReady \}\)/);
+  assert.match(job, /reference: await referenceSheetsFor\(directory, prepared\)/);
+  const director = read("prototype/functions/api/agent/motion-director.ts");
+  assert.match(director, /imageBlocks\(body\?\.reference, \{ max: MOTION_REFERENCE_MAX_SHEETS, prefix: "레퍼런스 영상 접촉 시트 " \}\)/);
+  const prepare = read("ai-company-app/scripts/prepare-motion-assets.mjs");
+  assert.match(prepare, /item\.role === "reference"/);
+  assert.match(prepare, /tile=4x4/);
 });

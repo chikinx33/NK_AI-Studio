@@ -316,6 +316,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       tone: cleanText(body?.tone, "", 100),
       style: cleanText(body?.style, "", 100),
       assets: normalizeMotionAssetSelection(body?.assets),
+      // 연출 트랙: auto(감독이 요청에서 고름) | pop(쇼츠 팝) | editorial(에디토리얼 모션) — motion-kit/KIT.md 4절
+      motionStyle: body?.motionStyle === "pop" || body?.motionStyle === "editorial" ? body.motionStyle : "auto",
     };
     const skill = {
       categoryId: cleanText(body?.skillCategoryId, "design-content", 80),
@@ -334,10 +336,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       `영상 요청: ${input.prompt}`,
       `길이: ${input.durationSec}초`,
       `화면비: ${input.aspectRatio}`,
+      input.motionStyle === "editorial"
+        ? "연출: 에디토리얼 모션(큰 낱말 하나·짧은 라벨 중심). 장면 제목은 2~8자 낱말로, 본문은 한 줄 이하로 짧게."
+        : input.motionStyle === "pop" ? "연출: 쇼츠 팝(키네틱 자막·스티커 중심)." : "",
       "시청 대상·톤·스타일: 영상 요청 글에서 읽어 정한다(따로 주어지지 않는다).",
       "이 결과는 감독(모션그래픽)이 영상마다 장면을 새로 짜는 콘티 초안이다. 템플릿 칸(도표 종류·레이아웃·효과음)은 정하지 않는다.",
       "금지: 자리 표시 글([채널 로고 / 브랜드명], 항목 2, OOO 같은 빈칸), 요청 글을 본문에 그대로 반복, 확인되지 않은 수치. 숫자는 원래 단위 그대로(66권, 40명, 4.7시간).",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     const plotResult = await speak(
       env,

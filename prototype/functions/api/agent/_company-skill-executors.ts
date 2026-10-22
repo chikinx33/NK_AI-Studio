@@ -79,6 +79,7 @@ const infographicExecutor: CompanySkillExecutor = {
       durationSec: Number(options.durationSec) || 30,
       aspectRatio: String(options.aspectRatio || "16:9"),
       assets: options.assets || null,
+      motionStyle: String(options.motionStyle || "auto"),
       conversationId: job.conversation_id,
       skillCategoryId: job.category_id,
       skillId: job.skill_id,

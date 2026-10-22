@@ -96,9 +96,12 @@ async function runPlanning(skillJobId) {
 
 // ---------- 자산 ----------
 
-async function stageAssets(workId, directory) {
+// withReference: 레퍼런스 영상(연출 참고)은 감독에게만 필요하다 — 장면 코드가 정해진 렌더 작업은 받지도 분석하지도 않는다
+async function stageAssets(workId, directory, { withReference = true } = {}) {
   const manifest = await apiJson(`/api/agent/motion-assets?workId=${encodeURIComponent(workId)}`, {}, "자산 목록");
-  const items = (Array.isArray(manifest.items) ? manifest.items : []).filter((item) => safeName(item.fileName) === item.fileName).slice(0, 60);
+  const items = (Array.isArray(manifest.items) ? manifest.items : [])
+    .filter((item) => safeName(item.fileName) === item.fileName && (withReference || item.role !== "reference"))
+    .slice(0, 60);
   await fs.rm(directory, { recursive: true, force: true });
   await fs.mkdir(path.join(directory, "assets", "raw"), { recursive: true });
   await fs.writeFile(path.join(directory, "manifest.json"), JSON.stringify({ workId, brand: manifest.brand || null, noMusic: manifest.noMusic === true, items }, null, 2));
@@ -122,6 +125,16 @@ async function thumbsFor(directory, prepared) {
     thumbs.push({ id: item.id, label: `[${item.role}] ${item.name} → ${item.file}${size}${length}`, dataUrl: `data:image/jpeg;base64,${bytes.toString("base64")}` });
   }
   return thumbs;
+}
+
+// 레퍼런스 영상 접촉 시트(시간 범위는 감독 요청문에도 적힌다)
+async function referenceSheetsFor(directory, prepared) {
+  const sheets = [];
+  for (const [index, sheet] of (Array.isArray(prepared?.reference?.sheets) ? prepared.reference.sheets : []).entries()) {
+    const bytes = await fs.readFile(path.join(directory, sheet.thumb)).catch(() => null);
+    if (bytes) sheets.push({ label: `${index + 1} (${sheet.from}~${sheet.to}초)`, dataUrl: `data:image/jpeg;base64,${bytes.toString("base64")}` });
+  }
+  return sheets;
 }
 
 // ---------- 감독 ----------
@@ -233,7 +246,7 @@ async function main() {
 
   const directory = path.join(ROOT, "tmp", "motion", workId.toLowerCase());
   // 렌더 작업도 자산을 다시 받아 정리한다(몇 초, 결과는 같다). 화면에는 렌더 단계로 보인다.
-  const prepared = await phase(pageReady ? "render" : "assets", () => stageAssets(workId, directory), "assets");
+  const prepared = await phase(pageReady ? "render" : "assets", () => stageAssets(workId, directory, { withReference: run.mode === "new" && !pageReady }), "assets");
 
   let html;
   let episode;
@@ -241,7 +254,9 @@ async function main() {
     html = input.html;
     episode = input.episode;
   } else if (run.mode === "new") {
-    const result = await phase("director", async () => runDirector({ workId, prepared, thumbs: await thumbsFor(directory, prepared) }));
+    const result = await phase("director", async () => runDirector({
+      workId, prepared, thumbs: await thumbsFor(directory, prepared), reference: await referenceSheetsFor(directory, prepared),
+    }));
     ({ html, episode } = await phase("review", () => reviewDirectorPage({ workId, prepared, directory, html: result.html, episode: result.episode })));
   } else if (run.mode === "revise") {
     const result = await phase("director", async () => {

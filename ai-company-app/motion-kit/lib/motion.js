@@ -204,5 +204,126 @@
     el.style.backgroundPosition = `${(n * 73) % 256}px ${(n * 151) % 256}px`;
   };
 
+  // ---------- NK Studio: generative graphics (2026-10-23) ----------
+  // Everything is seeded: the same t and seed draw the same frame on every render worker.
+
+  // seeded random stream: const R = M.rng(7); R() -> 0..1
+  M.rng = (seed = 1) => {
+    let a = (seed >>> 0) || 1;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let x = Math.imul(a ^ (a >>> 15), 1 | a);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  // stable 0..1 value for integer indices (particle i, tile (col,row), ...)
+  M.hash = (a, b = 0, c = 0) => {
+    let h = Math.imul((a | 0) ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul((b | 0) + 0x632BE5AB, 0xC2B2AE35) ^ Math.imul((c | 0) + 0x165667B1, 0x27D4EB2F);
+    h = Math.imul(h ^ (h >>> 15), 0x2C1B3C6D);
+    h = Math.imul(h ^ (h >>> 12), 0x297A2D39);
+    return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+  };
+
+  // smooth 3D Perlin noise -> about -1..1 (use z = t * speed to animate)
+  const perm = new Uint8Array(512);
+  {
+    const r = M.rng(1337), p = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  }
+  const fade = (x) => x * x * x * (x * (x * 6 - 15) + 10);
+  const grad = (h, x, y, z) => {
+    const u = h < 8 ? x : y, v = h < 4 ? y : (h === 12 || h === 14 ? x : z);
+    return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+  };
+  M.noise = (x, y = 0, z = 0) => {
+    const fx = Math.floor(x), fy = Math.floor(y), fz = Math.floor(z);
+    const X = fx & 255, Y = fy & 255, Z = fz & 255;
+    x -= fx; y -= fy; z -= fz;
+    const u = fade(x), v = fade(y), w = fade(z), L = M.lerp;
+    const A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A + 1] + Z, B = perm[X + 1] + Y, BA = perm[B] + Z, BB = perm[B + 1] + Z;
+    return L(
+      L(L(grad(perm[AA] & 15, x, y, z), grad(perm[BA] & 15, x - 1, y, z), u),
+        L(grad(perm[AB] & 15, x, y - 1, z), grad(perm[BB] & 15, x - 1, y - 1, z), u), v),
+      L(L(grad(perm[AA + 1] & 15, x, y, z - 1), grad(perm[BA + 1] & 15, x - 1, y, z - 1), u),
+        L(grad(perm[AB + 1] & 15, x, y - 1, z - 1), grad(perm[BB + 1] & 15, x - 1, y - 1, z - 1), u), v), w);
+  };
+  // layered noise (rougher, more natural)
+  M.fbm = (x, y = 0, z = 0, octaves = 4) => {
+    let sum = 0, amp = 0.5, freq = 1, norm = 0;
+    for (let i = 0; i < octaves; i++) { sum += amp * M.noise(x * freq, y * freq, z * freq); norm += amp; amp *= 0.5; freq *= 2; }
+    return sum / norm;
+  };
+
+  // precise easing for the editorial track (fast start, long settle, no bounce)
+  M.ease = {
+    linear: (x) => x,
+    outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
+    inExpo: (x) => (x <= 0 ? 0 : Math.pow(2, 10 * x - 10)),
+    inOutExpo: (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2),
+    outQuint: (x) => 1 - Math.pow(1 - x, 5),
+    inOutQuint: (x) => (x < 0.5 ? 16 * Math.pow(x, 5) : 1 - Math.pow(-2 * x + 2, 5) / 2),
+    inOutSine: (x) => -(Math.cos(Math.PI * x) - 1) / 2,
+  };
+  // 0..1 progress from t0 over d seconds with a named (or custom) ease
+  M.tw = (t, t0, d, ease = 'outExpo') => (typeof ease === 'function' ? ease : (M.ease[ease] || M.ease.outExpo))(M.clamp((t - t0) / d));
+
+  // <canvas class="layer"> -> 2D context sized to the stage (or w x h). Redraw everything inside seek(t).
+  M.canvas = (el, { w = M.W, h = M.H } = {}) => {
+    if (el.width !== w) el.width = w;
+    if (el.height !== h) el.height = h;
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    return el.getContext('2d');
+  };
+  // halftone dots: each cell gets fn(x, y) -> 0..1 as its dot radius. One fill call, so ~15k dots stay fast.
+  M.halftone = (ctx, fn, { cell = 14, color = '#fff', x0 = 0, y0 = 0, w = ctx.canvas.width, h = ctx.canvas.height, square = false, max = 0.5 } = {}) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let y = y0 + cell / 2; y < y0 + h; y += cell) {
+      for (let x = x0 + cell / 2; x < x0 + w; x += cell) {
+        const v = fn(x, y);
+        if (!(v > 0.02)) continue;
+        const r = Math.min(1, v) * cell * max;
+        if (square) ctx.rect(x - r, y - r, 2 * r, 2 * r);
+        else { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
+      }
+    }
+    ctx.fill();
+  };
+  // motion that needs the previous state (physics, flow trails): simulate once at a fixed step before READY,
+  // then seek(t) only reads it. snap(state) returns numbers (positions...); sim(t) interpolates two saved steps.
+  // const sim = M.bake({ dur: DUR, init: () => ({...}), step: (s, dt, t) => {...}, snap: (s) => s.xy }); const xy = sim(t);
+  M.bake = ({ dur, fps = 60, sub = 2, init, step, snap }) => {
+    const n = Math.ceil(dur * fps) + 1, dt = 1 / (fps * sub), frames = new Array(n);
+    const state = init();
+    for (let i = 0; i < n; i++) {
+      frames[i] = Float32Array.from(snap(state, i / fps));
+      for (let k = 0; k < sub; k++) step(state, dt, (i * sub + k) * dt);
+    }
+    let out = null;
+    return (t) => {
+      const f = M.clamp(t * fps, 0, n - 1), i = Math.floor(f), p = f - i;
+      const a = frames[i], b = frames[Math.min(n - 1, i + 1)];
+      if (b.length !== a.length) return a;
+      if (!out || out.length !== a.length) out = new Float32Array(a.length);
+      for (let j = 0; j < a.length; j++) out[j] = a[j] + (b[j] - a[j]) * p;
+      return out;
+    };
+  };
+  // split text into <span class="ch"> per character (staggered letters, echoes). Spaces are kept.
+  M.chars = (el, text) => {
+    const value = text == null ? el.textContent : M.tx(text);
+    el.textContent = '';
+    return [...value].map((c) => {
+      const span = document.createElement('span');
+      span.className = 'ch';
+      span.textContent = c === ' ' ? ' ' : c;
+      el.appendChild(span);
+      return span;
+    });
+  };
+
   window.M = M;
 })();

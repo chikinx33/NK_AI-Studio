@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ko" data-size="1920x1080">
+<head>
+<meta charset="utf-8">
+<title>orbit ed_s1_01</title>
+<!-- track: editorial -->
+<!-- 콘티: 팀 일정 앱 ORBIT 20초 소개. 흩어진 일정 → 한 궤도로 → 모두 비는 시간을 3초 만에 → 로고. 수치는 콘티의 "3초"만 쓴다. -->
+<!-- 모티프: 연두 점 하나. 떨어져 파문 → 입자 궤도의 중심 → 하프톤 행성 → 빈 칸에 들어감 → 로고의 마침표 -->
+<link rel="stylesheet" href="../../lib/fonts.css">
+<link rel="stylesheet" href="../../lib/base.css">
+<link rel="stylesheet" href="theme.css">
+<script src="../../music/house-progress.beats.js"></script>
+<style>
+#fx { z-index: 2; }
+.hud { position: absolute; z-index: 40; opacity: .72; }
+.big { font-family: var(--font-head), sans-serif; font-weight: var(--head-weight); color: var(--ink); white-space: nowrap; line-height: 1; z-index: 20; }
+#word, .echo { font-size: 196px; letter-spacing: -7px; }
+.echo { color: transparent; -webkit-text-stroke: 2px var(--ink); z-index: 19; }
+#rule { height: 2px; background: var(--ink); z-index: 10; }
+#numRule { height: 2px; background: var(--ink); z-index: 10; }
+#dot { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); z-index: 30; }
+#side { font-size: 112px; letter-spacing: -4px; }
+#num { font-size: 300px; letter-spacing: -12px; font-variant-numeric: tabular-nums; }
+#num small { font-size: 112px; letter-spacing: -3px; margin-left: 10px; font-weight: 700; }
+#flood { z-index: 25; }
+#logo { font-size: 260px; letter-spacing: -12px; color: var(--ink-dark); z-index: 35; }
+#cta { z-index: 36; color: var(--ink-dark); border: 2px solid var(--ink-dark); border-radius: 60px; padding: 18px 34px; }
+#ruler { position: absolute; right: 64px; top: 220px; width: 16px; height: 640px; z-index: 40; opacity: .5;
+         background: repeating-linear-gradient(var(--ink) 0 2px, transparent 2px 32px); }
+#marker { position: absolute; right: 52px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); z-index: 41; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <canvas class="layer" id="fx"></canvas>
+    <div class="a" id="rule"></div>
+    <div class="a big echo" id="e3"></div>
+    <div class="a big echo" id="e2"></div>
+    <div class="a big echo" id="e1"></div>
+    <div class="a big" id="word"></div>
+    <div class="a big" id="side"></div>
+    <div class="a mono" id="sideLabel"></div>
+    <div class="a big" id="num"><span id="numV">3</span><small id="numU"></small></div>
+    <div class="a" id="numRule"></div>
+    <div class="a mono" id="numLabel"></div>
+    <div class="a" id="dot"></div>
+  </div>
+  <div class="a flood" id="flood"></div>
+  <div class="a big" id="logo"></div>
+  <div class="a mono" id="cta"></div>
+  <div class="mono hud" id="hudTL" style="left:96px;top:72px"></div>
+  <div class="mono hud" id="hudTR" style="right:96px;top:72px;text-align:right"></div>
+  <div class="mono hud" id="hudBL" style="left:96px;bottom:64px"></div>
+  <div class="mono hud" id="hudBR" style="right:96px;bottom:64px;text-align:right"></div>
+  <div id="ruler"></div>
+  <div id="marker"></div>
+  <div class="grain" id="grain"></div>
+</div>
+<script src="../../lib/motion.js"></script>
+<script>
+const { $, put, hide, lerp, clamp, tw, tx } = M;
+const b = M.beats(B);
+const W = M.W, H = M.H;
+const DUR = Math.round(b(40) * 100) / 100;
+const ctx = M.canvas($('fx'));
+const INK = '#ECE8DF', DARK = '#131417', ACC = '#C8FF3D';
+const CX = W / 2, LINE_Y = 640;
+const OX = 1240, OY = 560;            // 궤도·행성·달력 칸이 모두 같은 중심(오른쪽 1/3)
+const LX = 520;                       // 글자는 왼쪽 1/3
+
+// 글자는 한 번만 만든다(언어별)
+const WORD = { ko: '흩어진 일정', en: 'Scattered plans' };
+const word = M.chars($('word'), WORD);
+const echoes = ['e1', 'e2', 'e3'].map((id) => M.chars($(id), WORD));
+const side = M.chars($('side'), { ko: '한 궤도로', en: 'One orbit' });
+$('sideLabel').textContent = tx({ ko: 'FIG. 01 — 팀 캘린더 하나로', en: 'FIG. 01 — ONE TEAM CALENDAR' });
+const numChars = M.chars($('numV'), '3');
+$('numU').textContent = tx({ ko: '초', en: 's' });
+$('numLabel').textContent = tx({ ko: 'FIG. 02 — 모두 비는 시간 찾기', en: 'FIG. 02 — A SLOT THAT FITS EVERYONE' });
+const logo = M.chars($('logo'), 'ORBIT');
+$('cta').textContent = tx({ ko: '지금 무료로 시작하기 →', en: 'START FREE →' });
+$('hudTL').innerHTML = 'ORBIT<br>STUDIO REEL 2026';
+$('hudBR').innerHTML = 'N 2200 · NOISE FIELD<br>SEED 07';
+const SCENES = [[0, '00 / SOURCE'], [8, '01 / SCATTER'], [16, '02 / ORBIT'], [24, '03 / SLOT'], [32, '04 / IDENTITY']];
+
+// 입자 씨앗(위치·궤도 반지름·크기)은 시드로 한 번만
+const N = 2200, R = M.rng(7);
+const P = Array.from({ length: N }, () => ({ x: R(), y: R(), a: R() * Math.PI * 2, r: 0.7 + R() * 0.6, s: 1.2 + R() * 2.2, k: R() }));
+const COLS = 7, ROWS = 5, CELL = 92, GAP = 14, GW = COLS * CELL + (COLS - 1) * GAP, GH = ROWS * CELL + (ROWS - 1) * GAP;
+const TARGET = [3, 2];
+const cellCenter = (c, r) => [OX - GW / 2 + c * (CELL + GAP) + CELL / 2, OY - GH / 2 + r * (CELL + GAP) + CELL / 2];
+
+const tc = (t) => { const f = Math.floor(t * 30); return `00:00:${String(Math.floor(f / 30)).padStart(2, '0')}:${String(f % 30).padStart(2, '0')}`; };
+
+function rise(chars, t, t0, { stagger = 0.045, d = 0.9, dist = 160 } = {}) {
+  chars.forEach((c, i) => {
+    const p = tw(t, t0 + i * stagger, d, 'outExpo');
+    c.style.transform = `translateY(${(1 - p) * dist}px)`;
+    c.style.opacity = p;
+  });
+}
+
+function particles(t, pin, gather, pout, color, pick) {
+  ctx.fillStyle = color;
+  const z = t * 0.25;
+  for (let i = 0; i < N; i++) {
+    if (!pick(i)) continue;
+    const p = P[i];
+    // 흩어진 상태: 화면 전체에서 노이즈 흐름을 따라 떠돈다
+    const sx = p.x * W + M.noise(p.x * 3, p.y * 3, z) * 170;
+    const sy = p.y * H + M.noise(p.x * 3 + 17, p.y * 3, z) * 170;
+    // 궤도: 기울어진 타원 위를 돈다(입자마다 반지름·속도 다름)
+    const ang = p.a + t * 0.35 * p.r;
+    const ox = OX + Math.cos(ang) * 330 * p.r * 1.3, oy = OY + Math.sin(ang) * 330 * p.r * 0.36;
+    const g = clamp(gather * 1.15 - p.k * 0.15);
+    const sz = p.s * pin * (1 - pout);
+    ctx.fillRect(lerp(sx, ox, g) - sz / 2, lerp(sy, oy, g) - sz / 2, sz, sz);
+  }
+}
+
+function ring(SR, t, front) {
+  ctx.save();
+  ctx.translate(OX, OY);
+  ctx.rotate(-0.28);
+  ctx.setLineDash([2, 12]);
+  ctx.lineDashOffset = -t * 40;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = ACC;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, SR * 1.6, SR * 0.36, 0, front ? 0 : Math.PI, front ? Math.PI : Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+async function seek(t) {
+  ctx.clearRect(0, 0, W, H);
+  M.grain($('grain'), t);
+
+  // ① 점이 떨어져 선에 닿는다(0~2박) → 파문·물방울(2~5박)
+  let dotX = CX, dotY = lerp(-60, LINE_Y - 22, tw(t, b(0), b(2) - b(0), 'inExpo')), dotS = 1;
+  const ruleW = 1400 * tw(t, b(0.5), 0.9) * (1 - tw(t, b(7.5), 0.6, 'inExpo'));
+  if (ruleW > 1) put($('rule'), { x: CX, y: LINE_Y, w: ruleW }); else hide($('rule'));
+  for (let k = 0; k < 3; k++) {
+    const p = tw(t, b(2) + k * 0.16, 1.6, 'outQuint');
+    if (p <= 0 || p >= 1) continue;
+    ctx.strokeStyle = `rgba(200,255,61,${(1 - p) * 0.9})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.ellipse(CX, LINE_Y, 40 + p * 520, 8 + p * 90, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const ts = t - b(2);
+  if (ts > 0 && ts < 1.4) {
+    ctx.fillStyle = ACC;
+    for (let i = 0; i < 16; i++) {
+      const x = CX + (M.hash(i) - 0.5) * 760 * ts;
+      const y = LINE_Y - (240 + M.hash(i, 1) * 440) * ts + 980 * ts * ts;
+      if (y > LINE_Y) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + M.hash(i, 2) * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // 낱말이 글자 단위로 솟고, 외곽선 잔상 세 겹이 한 박자씩 늦게 따라온다
+  const wordOut = tw(t, b(7.5), 0.7, 'inExpo');
+  if (t < b(2.5) - 0.01 || wordOut >= 1) {
+    ['word', 'e1', 'e2', 'e3'].forEach((id) => hide($(id)));
+  } else {
+    put($('word'), { x: CX, y: 430 - wordOut * 140 });
+    rise(word, t, b(2.5));
+    echoes.forEach((chars, k) => {
+      put($(`e${k + 1}`), { x: CX, y: 430 + (k + 1) * 36 - wordOut * 140, a: (0.55 - k * 0.15) * (1 - wordOut) });
+      rise(chars, t, b(2.5) + (k + 1) * 0.09);
+    });
+  }
+
+  // ② 흩어진 입자가 노이즈를 타고 떠돌다(8박~) 점을 중심으로 한 궤도에 모인다(12~15박)
+  const move = tw(t, b(8), b(9.5) - b(8), 'inOutExpo');
+  dotX = lerp(dotX, OX, move); dotY = lerp(dotY, OY, move);
+  const pin = tw(t, b(8), 1.2, 'outQuint');
+  const gather = tw(t, b(12), b(15) - b(12), 'inOutExpo');
+  const pout = tw(t, b(16), 0.6, 'inExpo');
+  if (pin > 0 && pout < 1) {
+    particles(t, pin, gather, pout, INK, (i) => i % 12 !== 0);
+    particles(t, pin, gather, pout, ACC, (i) => i % 12 === 0);
+  }
+  const sideOut = tw(t, b(23), 0.6, 'inExpo');
+  if (t < b(12.5) - 0.01 || sideOut >= 1) { hide($('side')); hide($('sideLabel')); }
+  else {
+    put($('side'), { x: LX, y: 500 - sideOut * 120, a: 1 - sideOut });
+    rise(side, t, b(12.5), { dist: 120 });
+    put($('sideLabel'), { x: LX, y: 600 - sideOut * 120, a: tw(t, b(13.5), 0.6) * (1 - sideOut) });
+  }
+
+  // ③ 궤도 가운데 점이 하프톤 행성으로 자란다(15.5박~), 점선 고리가 돈다
+  const SR = 300 * tw(t, b(15.5), 1.4) * (1 - tw(t, b(23), 0.9, 'inExpo'));
+  if (SR > 2) {
+    const lx = Math.cos(t * 0.6) * 0.6 - 0.3, ly = -0.55, lz = 0.75, ln = Math.hypot(lx, ly, lz);
+    ring(SR, t, false);
+    M.halftone(ctx, (x, y) => {
+      const dx = (x - OX) / SR, dy = (y - OY) / SR, d2 = dx * dx + dy * dy;
+      if (d2 > 1) return 0;
+      const light = (dx * lx + dy * ly + Math.sqrt(1 - d2) * lz) / ln;
+      return 0.14 + 0.86 * clamp(light);
+    }, { cell: 13, color: ACC, x0: OX - 420, y0: OY - 420, w: 840, h: 840, max: 0.54 });
+    ring(SR, t, true);
+    dotS = 1 - tw(t, b(15.5), 0.4);
+  } else if (t > b(23)) {
+    dotS = 1;
+  }
+
+  // ④ 달력 칸이 대각선 물결로 깔리고(24박~) 두 번 뒤집히며 찾다가 28박에 모두 비는 칸 하나에 점이 들어간다
+  const gridOut = tw(t, b(31.5), 0.5, 'inExpo');
+  if (t > b(24) && gridOut < 1) {
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) {
+      const [x, y] = cellCenter(c, r);
+      const appear = tw(t, b(24) + (c + r) * 0.04, 0.7);
+      const flip = tw(t, b(26) + (c + r) * 0.03, 0.5, 'inOutSine') + tw(t, b(27) + (c + r) * 0.03, 0.5, 'inOutSine');
+      const sy = Math.abs(Math.cos(Math.PI * flip)) * appear * (1 - gridOut);
+      if (sy < 0.01) continue;
+      const target = c === TARGET[0] && r === TARGET[1];
+      const busy = !target && M.hash(c, r, Math.round(flip)) > 0.42;
+      const found = target && t > b(28);
+      const hw = CELL / 2, hh = (CELL / 2) * sy;
+      ctx.beginPath();
+      ctx.roundRect(x - hw, y - hh, CELL, 2 * hh, 10);
+      if (found) { ctx.fillStyle = ACC; ctx.fill(); }
+      else if (busy) { ctx.fillStyle = 'rgba(236,232,223,.16)'; ctx.fill(); }
+      else { ctx.setLineDash([]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(236,232,223,.5)'; ctx.stroke(); }
+    }
+  }
+  if (t > b(24)) {
+    const [tx0, ty0] = cellCenter(TARGET[0], TARGET[1]);
+    const land = tw(t, b(26), b(28) - b(26), 'inOutExpo');
+    dotX = lerp(OX, tx0, land); dotY = lerp(OY, ty0, land);
+    dotS = t > b(28) ? 0.6 : 1;
+  }
+  const numOut = tw(t, b(31.5), 0.5, 'inExpo');
+  if (t < b(28) - 0.01 || numOut >= 1) { hide($('num')); hide($('numRule')); hide($('numLabel')); }
+  else {
+    put($('num'), { x: LX, y: 470 - numOut * 100, a: 1 - numOut });
+    rise(numChars, t, b(28), { dist: 220 });
+    put($('numRule'), { x: LX, y: 650, w: 560 * tw(t, b(28.5), 0.8), a: 1 - numOut });
+    put($('numLabel'), { x: LX, y: 700, a: tw(t, b(29), 0.6) * (1 - numOut) });
+  }
+
+  // ⑤ 점에서 종이색이 번져 덮고(32박) 로고가 솟는다. 점은 로고의 마침표가 된다
+  const [fx0, fy0] = cellCenter(TARGET[0], TARGET[1]);
+  const flood = tw(t, b(32), 1.0, 'inOutExpo');
+  M.flood($('flood'), fx0, fy0, flood, 'var(--paper)');
+  if (t < b(33) - 0.01) hide($('logo'));
+  else {
+    put($('logo'), { x: CX - 30, y: 500 });
+    rise(logo, t, b(33), { stagger: 0.05, dist: 200 });
+    const end = tw(t, b(33.5), 0.9, 'inOutExpo');
+    dotX = lerp(dotX, CX - 30 + $('logo').offsetWidth / 2 + 34, end);
+    dotY = lerp(dotY, 560, end);
+    dotS = lerp(dotS, 1, end);
+  }
+  if (t < b(35) - 0.01) hide($('cta'));
+  else put($('cta'), { x: CX, y: 760 + (1 - tw(t, b(35), 0.7)) * 40, a: tw(t, b(35), 0.5) });
+  put($('dot'), { x: dotX, y: dotY, s: dotS, show: dotS > 0.01 });
+
+  // HUD: 장면 번호·타임코드·눈금 위치. 종이가 덮인 뒤에는 글자를 어둡게
+  const scene = SCENES.filter(([beat]) => t >= b(beat) - 0.01).pop();
+  $('hudBL').textContent = scene[1];
+  $('hudTR').innerHTML = `${tc(t)}<br>120 BPM · 60 FPS`;
+  const hudColor = flood > 0.5 ? DARK : INK;
+  for (const id of ['hudTL', 'hudTR', 'hudBL', 'hudBR']) $(id).style.color = hudColor;
+  $('ruler').style.filter = flood > 0.5 ? 'invert(1)' : '';
+  $('marker').style.top = `${220 + 640 * clamp(t / DUR) - 5}px`;
+}
+
+window.READY = M.ready({}).then(() => { seek(0); return DUR; });
+</script>
+</body>
+</html>

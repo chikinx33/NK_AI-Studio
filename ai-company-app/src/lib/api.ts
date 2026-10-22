@@ -33,6 +33,8 @@ export interface CreateAgentVideoInput {
   audience: string;
   tone: string;
   style: string;
+  // 연출 트랙(motion-kit/KIT.md 4절) — 서버 agent-video.ts 가 auto|pop|editorial 로 정리해 저장
+  motionStyle?: "auto" | "pop" | "editorial";
   skillCategoryId?: string;
   skillId?: string;
   invocationMode?: "agent" | "manual";
