@@ -4862,8 +4862,9 @@ async function runWorkGetTool(input: any, ctx: ToolContext): Promise<any> {
   if (!item) throw new Error("그 업무를 찾지 못했어요.");
   const dateKey = String(item.created_at || "").slice(0, 10);
   let files: any[] = [];
-  if (input?.files !== false && dateKey) {
-    const stored = await callInternalJson(ctx, `/api/agent/agent-video-storage?date=${encodeURIComponent(dateKey)}&workId=${encodeURIComponent(id)}&sign=0`).catch(() => ({}));
+  if (input?.files !== false) {
+    // 보관함은 올린 날 폴더라 생성일과 다를 수 있다 — 업무 ID 로만 찾는다(저장소가 모든 날짜 폴더를 본다).
+    const stored = await callInternalJson(ctx, `/api/agent/agent-video-storage?workId=${encodeURIComponent(id)}&sign=0`).catch(() => ({}));
     files = (Array.isArray(stored?.items) ? stored.items : []).map((file: any) => ({
       name: String(file?.name || file?.objectName || "").split("/").pop(),
       objectName: String(file?.objectName || ""), size: Number(file?.size || 0), contentType: String(file?.contentType || ""),

@@ -3,6 +3,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { isInternalWorkArtifact, workLibraryGlob } from "./_work-library";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -120,12 +121,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return new Response(response.body, { status: 200, headers });
     }
 
-    const listPrefix = `${allowedPrefix}${filterDate ? `${filterDate}/` : ""}${filterDate && filterWorkId ? `${filterWorkId}/` : ""}`;
+    // 업무 ID 가 있으면 날짜와 상관없이 찾는다 — 저장 날짜는 업무 생성일이 아니라 올린 날이라 어긋날 수 있다.
+    const listPrefix = filterWorkId ? allowedPrefix : `${allowedPrefix}${filterDate ? `${filterDate}/` : ""}`;
+    // 렌더 중간 산출물(장면 캡처·source/report/manifest)은 회원 목록에 내놓지 않는다. 업무 삭제처럼 전부 필요할 때만 all=1.
+    const includeInternal = url.searchParams.get("all") === "1";
     const items: any[] = [];
     let pageToken = "";
     do {
       const response = await gcsFetchWithBilling(ctx, (useBilling) => {
         const params = new URLSearchParams({ prefix: listPrefix, maxResults: "500" });
+        if (filterWorkId) params.set("matchGlob", workLibraryGlob(allowedPrefix, filterWorkId));
         if (pageToken) params.set("pageToken", pageToken);
         if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
         return fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o?${params.toString()}`, {
@@ -137,6 +142,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       for (const item of Array.isArray(payload.items) ? payload.items : []) {
         const name = String(item?.name || "");
         if (!name.startsWith(allowedPrefix)) continue;
+        if (!includeInternal && isInternalWorkArtifact(name)) continue;
         const relative = name.slice(allowedPrefix.length);
         const [dateFolder = "", workId = ""] = relative.split("/");
         const contentType = String(item?.contentType || "application/octet-stream");

@@ -113,7 +113,8 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     const cookie = String(request.headers.get("Cookie") || "");
     const headers: Record<string, string> = { ...(authHeader ? { Authorization: authHeader } : {}), ...(cookie ? { Cookie: cookie } : {}) };
     for (const target of targets) {
-      const query = new URLSearchParams({ date: String(target.date_key || ""), workId: String(target.id), sign: "0" });
+      // 렌더 중간 산출물까지 전부(all=1). 날짜는 넘기지 않는다 — 저장소가 업무 ID 로 모든 날짜 폴더를 찾는다.
+      const query = new URLSearchParams({ workId: String(target.id), sign: "0", all: "1" });
       const listResponse = await fetch(new URL(`/api/agent/agent-video-storage?${query}`, request.url), { headers });
       const listData: any = await listResponse.json().catch(() => ({}));
       if (!listResponse.ok) throw new Error(listData?.error || "업무 저장 파일을 조회하지 못했습니다.");

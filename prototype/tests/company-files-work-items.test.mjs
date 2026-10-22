@@ -37,8 +37,16 @@ function harness() {
     { id: FOREIGN_WORK, title: '남의 그림', metadata: { objectName: 'users/bob/ai-video/projectsai-company/image/secret.png' }, date_key: '2026-10-20' },
   ];
   const updates = [];
+  const deletedWorkIds = [];
   const sql = async (query, params = []) => {
+    if (/^DELETE FROM company_skill_jobs /.test(query)) return [];
+    if (/^DELETE FROM company_work_items /.test(query)) {
+      for (const id of params[1]) { deletedWorkIds.push(id); works.splice(works.findIndex(w => w.id === id), 1); }
+      return [];
+    }
     if (/FROM company_work_items WHERE user_id = \$1 AND id = ANY/.test(query)) return works.filter(w => params[1].includes(w.id));
+    if (/FROM company_work_items WHERE user_id = \$1 AND metadata \? 'movedTo'/.test(query)) return works.filter(w => typeof w.metadata.movedTo === 'string');
+    if (/^\s*(DELETE FROM|UPDATE) company_work_folders/.test(query)) return [];
     if (/^\s*UPDATE company_work_items item\s+SET metadata = /.test(query)) {
       updates.push(params);
       for (const placement of JSON.parse(params[1])) Object.assign(works.find(w => w.id === placement.id).metadata, { movedTo: placement.movedTo, movedFiles: placement.movedFiles });
@@ -58,12 +66,16 @@ function harness() {
     }
     if (u.pathname.startsWith('/upload/')) { objects.set(u.searchParams.get('name'), ''); return Response.json({}); }
     const single = u.pathname.match(/\/o\/([^/]+)$/);
+    if (single && init.method === 'DELETE') return objects.delete(decode(single[1])) ? new Response(null, { status: 204 }) : Response.json({}, { status: 404 });
     if (single) return objects.has(decode(single[1])) ? Response.json({ name: decode(single[1]) }) : Response.json({}, { status: 404 });
     const prefix = u.searchParams.get('prefix') || '';
     const delimiter = u.searchParams.get('delimiter');
+    const glob = u.searchParams.get('matchGlob');
+    const globRe = glob && new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*')}$`);
     const items = [], prefixes = new Set();
     for (const name of objects.keys()) {
       if (!name.startsWith(prefix)) continue;
+      if (globRe && !globRe.test(name)) continue;
       const rest = name.slice(prefix.length);
       if (delimiter && rest.includes('/')) prefixes.add(prefix + rest.split('/')[0] + '/');
       else items.push({ name });
@@ -71,8 +83,9 @@ function harness() {
     return Response.json({ items, prefixes: [...prefixes] });
   };
   const storage = evaluate('prototype/functions/api/_shared/storage.ts', {});
+  const library = evaluate('prototype/functions/api/agent/_work-library.ts', {});
   const api = evaluate('prototype/functions/api/agent/company-files.ts', {
-    ...storage, fetch,
+    ...storage, ...library, fetch,
     authorizeRequest: async () => ({ ok: true, userId: 'alice' }),
     resolveGcsEnv: () => ({ bucket: 'b', basePrefix: '', clientEmail: 'c', privateKeyRaw: 'k' }),
     getGoogleAccessToken: async () => 'token', getSql: () => sql, ensureAgentSchema: async () => {},
@@ -85,7 +98,12 @@ function harness() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
     return { status: response.status, data: await response.json() };
   };
-  return { api, post, objects, works, updates };
+  const remove = async paths => {
+    const response = await api.onRequestDelete({ env: {}, request: new Request('https://nkstudio.org/api/agent/company-files', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths }) }) });
+    return { status: response.status, data: await response.json() };
+  };
+  return { api, post, remove, objects, works, updates, deletedWorkIds };
 }
 
 const promotion = 'users/alice/ai-video/projectsai-company/company-files/.work-files/2026-10-20/Promotion/';
@@ -237,4 +255,66 @@ test('제자리 판정: 카드가 있는 날짜 폴더 맨 위만 제자리이�
   assert.deepEqual(workRefsOutsideFolder([ref], '.work-files/2026-10-20/Promotion'), [ref]);
   assert.deepEqual(workRefsOutsideFolder([ref], '.work-files/2026-10-21'), [ref]);
   assert.deepEqual(workRefsOutsideFolder([ref], 'Elidus/Promotion'), [ref]);
+});
+
+// 2026-10-22 엔케: 인포그래픽 영상 카드를 폴더로 옮긴 뒤 그 폴더를 지웠는데, 'Agent Video 저장소'에 장면 캡처 12장·json 3개·MP4가 그대로 남았다.
+// 렌더 중간 산출물은 회원 파일이 아니고(옮기지도 보여 주지도 않는다), 옮긴 폴더를 지우면 카드와 보관함 원본까지 함께 지워야 한다.
+const VIDEO_WORK = '44444444-4444-4444-8444-444444444444';
+const library = 'users/alice/ai-video/projectsai-company/work-library/';
+function videoHarness() {
+  const h = harness();
+  h.works.push({ id: VIDEO_WORK, title: '인포그래픽', metadata: {}, date_key: '2026-10-21' });
+  // 자정을 넘겨 렌더해 보관함은 생성일(10-21)이 아닌 10-22 폴더에 있다
+  const dir = `${library}2026-10-22/${VIDEO_WORK}/`;
+  const names = ['20261022-071847-a96e6db8-agent-video.mp4', '20261022-071848-51379240-motion-still_00.jpg', '20261022-071851-54b4e553-motion-still_10.jpg',
+    '20261022-071851-33c1510e-source.json', '20261022-071851-e6736f23-report.json', '20261022-071851-5c284de2-manifest.json'];
+  for (const name of names) h.objects.set(dir + name, name.endsWith('.mp4') ? 'mp4-bytes' : 'internal');
+  return { ...h, dir, names };
+}
+
+test('렌더 중간 산출물(장면 캡처·source/report/manifest)만 내부 자료로 본다', () => {
+  const { isInternalWorkArtifact } = evaluate('prototype/functions/api/agent/_work-library.ts', {});
+  for (const name of ['20261022-071848-51379240-motion-still_00.jpg', '20261022-071851-33c1510e-source.json', '20261022-071851-e6736f23-report.json', '20261022-071851-5c284de2-manifest.json'])
+    assert.ok(isInternalWorkArtifact(`${library}2026-10-22/${VIDEO_WORK}/${name}`), name);
+  for (const name of ['20261022-071847-a96e6db8-agent-video.mp4', '20261022-071847-a96e6db8-logo.png', 'motion-still_00.jpg'])
+    assert.ok(!isInternalWorkArtifact(`${library}2026-10-22/${VIDEO_WORK}/${name}`), name);
+});
+
+test('영상 카드를 폴더로 옮기면 MP4 하나만 옮기고, 보관함은 생성일이 아니라 업무 ID 로 찾는다', async () => {
+  const h = videoHarness();
+  const { status, data } = await h.post({ action: 'save_work_items', mode: 'move', items: [VIDEO_WORK], folder: 'Promotion' });
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.deepEqual(data.savedFiles.map(file => file.path), ['Promotion/인포그래픽.mp4']);
+  assert.equal(h.objects.get('users/alice/ai-video/projectsai-company/company-files/Promotion/인포그래픽.mp4'), 'mp4-bytes');
+  assert.deepEqual(data.movedWorkIds, [VIDEO_WORK]);
+});
+
+test('옮겨 넣은 폴더를 지우면 그 카드와 보관함 원본(중간 산출물 포함)까지 지운다', async () => {
+  const h = videoHarness();
+  await h.post({ action: 'save_work_items', mode: 'move', items: [VIDEO_WORK, ALICE_WORK], folder: 'Promotion' });
+  const { status, data } = await h.remove(['Promotion']);
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.equal(data.deletedWorkCount, 2);
+  assert.deepEqual(h.deletedWorkIds.sort(), [ALICE_WORK, VIDEO_WORK].sort());
+  assert.ok(![...h.objects.keys()].some(name => name.startsWith(h.dir)), '보관함 원본이 남지 않는다');
+  assert.ok(h.works.some(w => w.id === EMPTY_WORK), '옮기지 않은 카드는 그대로');
+});
+
+test('옮긴 파일 중 일부만 지우면 카드는 남긴다', async () => {
+  const h = videoHarness();
+  h.objects.set('users/alice/ai-video/projectsai-company/company-files/Promotion/keep.txt', 'x');
+  await h.post({ action: 'save_work_items', mode: 'move', items: [ALICE_WORK, VIDEO_WORK], folder: 'Promotion' });
+  const { data } = await h.remove(['Promotion/인포그래픽.mp4']);
+  assert.equal(data.deletedWorkCount, 1);
+  assert.deepEqual(h.deletedWorkIds, [VIDEO_WORK]);
+  assert.ok(h.works.some(w => w.id === ALICE_WORK));
+});
+
+test('보관함 목록은 업무 ID 로 모든 날짜를 찾고 중간 산출물은 all=1 일 때만 준다', () => {
+  const storage = read('prototype/functions/api/agent/agent-video-storage.ts');
+  assert.match(storage, /if \(filterWorkId\) params\.set\("matchGlob", workLibraryGlob\(allowedPrefix, filterWorkId\)\);/);
+  assert.match(storage, /if \(!includeInternal && isInternalWorkArtifact\(name\)\) continue;/);
+  const items = read('prototype/functions/api/agent/work-items.ts');
+  assert.match(items, /new URLSearchParams\(\{ workId: String\(target\.id\), sign: "0", all: "1" \}\)/, '업무 삭제는 중간 산출물까지 전부, 날짜 없이');
+  assert.match(read('prototype/functions/api/agent/_shared.ts'), /agent-video-storage\?workId=\$\{encodeURIComponent\(id\)\}&sign=0/);
 });

@@ -4,6 +4,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { getGoogleAccessToken, resolveGcsEnv } from "../_shared/gcs.js";
 import { buildAiVideoProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { ensureAgentSchema, getSql } from "./_shared";
+import { isInternalWorkArtifact, movedCardsInDeletedPaths, workLibraryGlob } from "./_work-library";
 import { DOCUMENT_EXTENSIONS, extractDocumentText } from "./_doc-text";
 import { DOCUMENT_TYPE, DOCUMENT_SUFFIX, DocumentError, isCompanyDocument, parseCompanyDocument, updateCompanyDocument, documentSummary } from "./_company-documents";
 
@@ -121,6 +122,28 @@ async function releaseWorkFolders(env: any, userId: string, paths: string[]) {
   await sql(`UPDATE company_work_folders SET parent_path = '', updated_at = now()
               WHERE user_id = $1 AND (parent_path = ANY($2::text[]) OR parent_path LIKE ANY($3::text[]))`,
     [userId, paths, paths.map((path) => `${path.replace(/[\\%_]/g, "\\$&")}/%`)]);
+}
+
+// 지운 폴더·파일에 산출물을 옮겨 넣었던 업무 카드는 함께 지운다(보관함 원본·렌더 기록까지, 업무 삭제와 같은 범위).
+// 옮긴 카드는 날짜 폴더 목록에서 빠져 있어서, 남겨 두면 회원이 지울 길이 없는 기록과 보관함 원본만 남는다(2026-10-22).
+async function deleteMovedWorkCards(env: any, ctx: any, userId: string, paths: string[]) {
+  const sql = getSql(env);
+  if (!sql || !paths.length) return 0;
+  await ensureAgentSchema(sql);
+  const rows = await sql("SELECT id, metadata FROM company_work_items WHERE user_id = $1 AND metadata ? 'movedTo'", [userId]);
+  const ids = movedCardsInDeletedPaths(rows, paths);
+  if (!ids.length) return 0;
+  const libraryRoot = `${buildAiVideoProjectPrefix(ctx.basePrefix, userId, "ai-company")}/work-library/`;
+  for (const id of ids) {
+    const listed = await listObjects(ctx, libraryRoot, "", workLibraryGlob(libraryRoot, id));
+    for (const item of listed.items) if (item?.name) await deleteObject(ctx, String(item.name));
+  }
+  await sql("DELETE FROM company_skill_jobs WHERE user_id = $1 AND work_item_id = ANY($2::uuid[])", [userId, ids]);
+  await sql("DELETE FROM company_work_items WHERE user_id = $1 AND id = ANY($2::uuid[])", [userId, ids]);
+  await sql(`DELETE FROM company_work_folders folder WHERE folder.user_id = $1 AND NOT EXISTS (
+    SELECT 1 FROM company_work_items item WHERE item.user_id = folder.user_id AND (item.created_at AT TIME ZONE 'Asia/Seoul')::date = folder.date_key::date
+  )`, [userId]);
+  return ids.length;
 }
 
 // 일반 폴더를 옮기거나 지우면 그 안에 넣어 둔 날짜 폴더의 위치도 따라간다(지우면 루트로 되돌린다 — 업무 기록은 지우지 않는다).
@@ -300,7 +323,7 @@ function billingHeaders(ctx: any, useBilling: boolean) {
   };
 }
 
-async function listObjects(ctx: any, prefix: string, delimiter = "") {
+async function listObjects(ctx: any, prefix: string, delimiter = "", matchGlob = "") {
   const items: any[] = [];
   const prefixes = new Set<string>();
   let pageToken = "";
@@ -308,6 +331,7 @@ async function listObjects(ctx: any, prefix: string, delimiter = "") {
     const response = await gcsFetch(ctx, (useBilling) => {
       const params = new URLSearchParams({ prefix, maxResults: "500" });
       if (delimiter) params.set("delimiter", delimiter);
+      if (matchGlob) params.set("matchGlob", matchGlob);
       if (pageToken) params.set("pageToken", pageToken);
       if (useBilling && ctx.userProject) params.set("userProject", ctx.userProject);
       return fetch(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o?${params}`, {
@@ -508,8 +532,12 @@ async function saveWorkItemsAsFiles(ctx: any, sql: any, userId: string, rootPref
         : ctx.basePrefix && `${ctx.basePrefix}/${objectName}`.startsWith(userRoot) ? `${ctx.basePrefix}/${objectName}` : "";
       if (full) sources.push(full);
     }
-    const uploaded = await listObjects(ctx, `${libraryRoot}${row.date_key}/${id}/`).catch(() => ({ items: [] as any[] }));
-    for (const item of uploaded.items) if (item?.name && !sources.includes(String(item.name))) sources.push(String(item.name));
+    // 보관함은 올린 날 폴더에 있어 생성일과 다를 수 있다 — 업무 ID 로 찾는다. 렌더 중간 산출물(장면 캡처·json)은 회원 파일이 아니라 옮기지 않는다.
+    const uploaded = await listObjects(ctx, libraryRoot, "", workLibraryGlob(libraryRoot, id)).catch(() => ({ items: [] as any[] }));
+    for (const item of uploaded.items) {
+      const name = String(item?.name || "");
+      if (name && !isInternalWorkArtifact(name) && !sources.includes(name)) sources.push(name);
+    }
     for (const path of Array.isArray(meta.paths) ? meta.paths.slice(0, 10) : []) {
       const relative = normalizePath(path, true);
       if (relative && !relative.startsWith(WORK_PATH_PREFIX)) sources.push(`${rootPrefix}${relative}`);
@@ -990,7 +1018,8 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     if (!names.size) return send({ error: `삭제할 파일 또는 폴더를 찾지 못했습니다: ${missing.join(", ")}`, missing }, 404, origin);
     if (names.size > MAX_OPERATION_OBJECTS) return send({ error: `한 번에 삭제할 수 있는 파일은 ${MAX_OPERATION_OBJECTS}개까지입니다.` }, 400, origin);
     for (const objectName of names) await deleteObject(ctx, objectName);
-    return send({ ok: true, deletedCount: names.size, paths, missing }, 200, origin);
+    const deletedWorkCount = await deleteMovedWorkCards(env, ctx, auth.userId, paths);
+    return send({ ok: true, deletedCount: names.size, deletedWorkCount, paths, missing }, 200, origin);
   } catch (error: any) {
     return send({ error: String(error?.message || error || "회사 파일 삭제에 실패했습니다.") }, 500, origin);
   }

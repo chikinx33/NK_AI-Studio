@@ -77,8 +77,8 @@ test("P0 · 직원이 업무(일감)를 열고 고치고 들여다본다", async
     assert.match(orchestrator, new RegExp(`\\[\\[RUN: ${tool}`), `${tool} 설명이 프롬프트에 없다`);
   }
   assert.match(shared, /work_get:[^\n]+kind: "read"/);
-  // 업무 상세는 그 업무가 만든 파일까지 함께 돌려준다
-  assert.match(shared, /agent-video-storage\?date=/);
+  // 업무 상세는 그 업무가 만든 파일까지 함께 돌려준다(보관함은 올린 날 폴더라 업무 ID 로 찾는다)
+  assert.match(shared, /agent-video-storage\?workId=/);
 });
 
 test("P1 · 직원이 멈춘 파이프라인을 살리고 비용을 말한다", async () => {

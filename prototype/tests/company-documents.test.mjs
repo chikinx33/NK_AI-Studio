@@ -82,6 +82,7 @@ function harness() {
     "./_shared": { getSql: () => null, ensureAgentSchema: async () => {} },
     "./_doc-text": { DOCUMENT_EXTENSIONS: /\.(docx|xlsx)$/, extractDocumentText: async () => null },
     "./_company-documents": documents,
+    "./_work-library": compile("prototype/functions/api/agent/_work-library.ts"),
   }, fetcher);
   const post = async (body, user = "alice") => {
     const headers = { "Content-Type": "application/json", ...(user ? { Authorization: user } : {}) };
