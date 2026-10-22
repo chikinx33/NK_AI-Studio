@@ -578,17 +578,32 @@ export async function saveItem(db: PublishingDb, env: any, userId: string, input
   return { id };
 }
 
-/** 글 삭제. PC 가 지금 올리는 중(claimed)이면 막는다. 안 나간 게시는 취소, 올라간 기록은 남긴다. */
+/** 글 삭제(한 건). 지금 올리는 중이면 막고(409), 없는 글이면 404. 규칙은 deleteItems 와 같다. */
 export async function deleteItem(db: PublishingDb, userId: string, id: string) {
-  const busy = await db.sql(`SELECT 1 FROM publishing_deliveries WHERE item_id=$1 AND user_id=$2 AND status='claimed' LIMIT 1`, [id, userId]);
-  if (busy[0]) throw new PublishingError("item_busy", 409);
-  const [, rows] = await db.batch([
-    snsCancelQuery(userId, "item_id = $2", [id]),
-    { query: `UPDATE publishing_items SET deleted_at=now(), updated_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id`, params: [id, userId] },
-    { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE item_id=$1 AND user_id=$2 AND status NOT IN ('posted','done_manual','cancelled')`, params: [id, userId] },
-  ]);
-  if (!rows[0]) throw new PublishingError("item_not_found", 404);
+  const r = await deleteItems(db, userId, [id]);
+  if (r.busy.length) throw new PublishingError("item_busy", 409);
+  if (!r.deleted) throw new PublishingError("item_not_found", 404);
   return { id };
+}
+
+/**
+ * 고른 글 한꺼번에 삭제(글 탭 '삭제'). 안 나간 게시는 취소(SNS 대기열 건 포함), 올라간 기록은 남긴다.
+ * 지금 올리는 중인 글(PC claimed · SNS publishing)은 지우지 않고 busy 로 돌려준다 — 올라갈지 모르는 글이 사라지면 안 된다.
+ * 질의는 읽기 1번 + 쓰기 1번(글 수와 상관없이).
+ */
+export async function deleteItems(db: PublishingDb, userId: string, itemIds: string[]) {
+  const ids = [...new Set(itemIds.map(String).filter(Boolean))].slice(0, 200);
+  if (!ids.length) throw new PublishingError("items_required");
+  const busyRows = await db.sql(`SELECT DISTINCT item_id FROM publishing_deliveries WHERE user_id=$1 AND item_id = ANY($2::text[]) AND status IN ('claimed','publishing')`, [userId, ids]);
+  const busy = new Set(busyRows.map((r: any) => String(r.item_id)));
+  const free = ids.filter((id) => !busy.has(id));
+  if (!free.length) return { deleted: 0, busy: [...busy] };
+  const [, rows] = await db.batch([
+    snsCancelQuery(userId, "item_id = ANY($2::text[])", [free]),
+    { query: `UPDATE publishing_items SET deleted_at=now(), updated_at=now() WHERE user_id=$1 AND id = ANY($2::text[]) AND deleted_at IS NULL RETURNING id`, params: [userId, free] },
+    { query: `UPDATE publishing_deliveries SET status='cancelled', updated_at=now() WHERE user_id=$1 AND item_id = ANY($2::text[]) AND status NOT IN ('posted','done_manual','cancelled')`, params: [userId, free] },
+  ]);
+  return { deleted: rows.length, busy: [...busy] };
 }
 
 // ── 승인 (한 건·주간 일괄) ──────────────────────────────────────────────────

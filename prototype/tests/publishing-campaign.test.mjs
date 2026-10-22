@@ -193,7 +193,7 @@ test("SNS 결과 동기화·취소: 화면 읽기가 대기열 결과를 옮기�
   assert.deepEqual(cancel.params, ["u1", "i1"]);
   const fn = (name) => src.slice(src.indexOf(`export async function ${name}`), src.indexOf("\n}\n", src.indexOf(`export async function ${name}`)));
   for (const name of ["loadPublishingState", "loadSchedule"]) assert.match(fn(name), /snsSyncQuery\(userId\)/, name);
-  for (const name of ["unapproveItems", "deleteItem", "deleteChannel", "cancelDelivery", "deleteCampaign"]) {
+  for (const name of ["unapproveItems", "deleteItems", "deleteChannel", "cancelDelivery", "deleteCampaign"]) {
     const body = fn(name);
     assert.ok(body.indexOf("snsCancelQuery(") >= 0 && body.indexOf("snsCancelQuery(") < body.indexOf("UPDATE publishing_"), `${name}: 상태를 바꾸기 전에 취소`);
   }
@@ -234,4 +234,23 @@ test("화면: 글·달력에서 캠페인을 고르고, 캠페인 글의 업무 
   assert.match(read("ai-company-app/src/components/publishing/CalendarTab.tsx"), /!inCampaign\(r\.item, ctx\.campaign\)/);
   assert.match(read("ai-company-app/src/lib/publishing.ts"), /action: "fill_images"/);
   assert.match(read("prototype/functions/api/publishing/items.ts"), /case "fill_images": return send\(\{ ok: true, \.\.\.\(await fillCampaignImages\(db, env, auth\.userId/);
+});
+
+test("글 탭 선택 삭제: 고른 글을 질의 2번에 지우고, 지금 올리는 중인 글은 남겨 알린다(한 건 삭제도 같은 규칙)", async () => {
+  const { db, writes } = fakeDb((q, params) => {
+    if (q.startsWith("SELECT DISTINCT item_id FROM publishing_deliveries")) return [{ item_id: "i_busy" }];
+    if (q.startsWith("UPDATE publishing_items SET deleted_at")) return params[1].map((id) => ({ id }));
+    return undefined;
+  });
+  const r = await store.deleteItems(db, "u1", ["i1", "i2", "i_busy", "i1"]);
+  assert.deepEqual(r, { deleted: 2, busy: ["i_busy"] });
+  assert.match(writes[0].query, /UPDATE sns_scheduled_posts SET status = 'cancelled'/, "안 나간 SNS 대기열 건부터 취소");
+  assert.deepEqual(writes[0].params, ["u1", ["i1", "i2"]]);
+  assert.match(writes[1].query, /status NOT IN \('posted','done_manual','cancelled'\)/, "올라간 기록은 남긴다");
+  await assert.rejects(store.deleteItem(db, "u1", "i_busy"), (e) => e.code === "item_busy" && e.status === 409);
+  const tab = read("ai-company-app/src/components/publishing/ItemsTab.tsx");
+  assert.match(tab, /appDialog\.confirm\(t\.deleteSelectedAsk\(ids\.length\)/, "지우기 전에 확인");
+  assert.match(tab, /await deleteItems\(ids\)/);
+  assert.match(read("prototype/functions/api/publishing/items.ts"), /case "delete_many": return send\(\{ ok: true, \.\.\.\(await deleteItems\(db, auth\.userId, ids\)\) \}\)/);
+  assert.match(read("prototype/functions/api/publishing/items.ts"), /const API_KEY_ACTIONS = new Set\(\["save"\]\)/, "개인 API 키로는 지울 수 없다");
 });

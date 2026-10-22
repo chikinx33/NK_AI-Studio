@@ -1,6 +1,7 @@
 // POST /api/publishing/items
 //   { action:'save', item }                      글 저장(승인된 글을 고치면 다시 초안)
 //   { action:'delete', id }
+//   { action:'delete_many', ids }                고른 글 한꺼번에 삭제(지금 올리는 중인 글은 남기고 busy 로 알림)
 //   { action:'approve', ids }                    고른 글 승인(스팸 방지 검사 후 예약)
 //   { action:'approve_week', weekStart }         그 주(월~일, 한국 시간)에 예약 시각이 있는 초안 전부 승인
 //   { action:'unapprove', ids }
@@ -13,7 +14,7 @@
 // 개인 API 키(publishing:write)는 글 저장만 할 수 있다. 승인·게시 기록·취소·삭제는 사람(로그인 세션)만 한다.
 import { authorizeRequest } from "../_shared/auth.js";
 import {
-  publishingDb, saveItem, deleteItem, approveItems, unapproveItems, cancelDelivery, markDoneManual, rescheduleDelivery,
+  publishingDb, saveItem, deleteItem, deleteItems, approveItems, unapproveItems, cancelDelivery, markDoneManual, rescheduleDelivery,
   fillCampaignImages, deleteCampaign,
 } from "../_shared/publishing-store";
 import { writePackageResult } from "../_shared/publishing-packages";
@@ -34,6 +35,7 @@ export const onRequestPost = async ({ request, env }: any) => {
     switch (body.action) {
       case "save": return send({ ok: true, ...(await saveItem(db, env, auth.userId, body.item || {})) });
       case "delete": return send({ ok: true, ...(await deleteItem(db, auth.userId, String(body.id || ""))) });
+      case "delete_many": return send({ ok: true, ...(await deleteItems(db, auth.userId, ids)) });
       case "approve": return send({ ok: true, ...(await approveItems(db, auth.userId, { itemIds: ids }, env)) });
       case "approve_week": return send({ ok: true, ...(await approveItems(db, auth.userId, { weekStart: String(body.weekStart || "") }, env)) });
       case "unapprove": return send({ ok: true, ...(await unapproveItems(db, auth.userId, ids)) });

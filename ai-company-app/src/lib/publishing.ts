@@ -82,6 +82,8 @@ export interface ItemDraft {
 }
 export const saveItem = (item: ItemDraft) => post<{ id: string }>("/api/publishing/items", { action: "save", item });
 export const deleteItem = (id: string) => post("/api/publishing/items", { action: "delete", id });
+/** 고른 글 한꺼번에 삭제. 지금 올리는 중인 글은 지우지 않고 busy 로 돌아온다. */
+export const deleteItems = (ids: string[]) => post<{ deleted: number; busy: string[] }>("/api/publishing/items", { action: "delete_many", ids });
 
 export interface ApproveResult { approvedItems: number; scheduled: number; blocked: Array<{ deliveryId: string; itemId: string; reason: string }> }
 export const approveItems = (ids: string[]) => post<ApproveResult>("/api/publishing/items", { action: "approve", ids });

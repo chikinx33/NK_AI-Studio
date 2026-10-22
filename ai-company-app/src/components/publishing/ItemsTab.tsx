@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { approveItems, unapproveItems, type ItemStatus } from "../../lib/publishing";
+import { appDialog } from "../../lib/appDialog";
+import { approveItems, deleteItems, unapproveItems, type ItemStatus } from "../../lib/publishing";
 import { apiErrorText } from "./i18n";
 import { Button, Empty, Icon, StatusBadge, inputClass, selectClass } from "./ui";
 import { brandTitle, channelById, fmtDateTime, inCampaign, type PublishingCtx } from "./helpers";
@@ -38,13 +39,17 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
   const pickedList = list.filter((i) => picked.has(i.id));
   const allPicked = list.length > 0 && pickedList.length === list.length;
 
-  async function bulk(kind: "approve" | "unapprove") {
+  async function bulk(kind: "approve" | "unapprove" | "delete") {
+    const ids = pickedList.map((i) => i.id);
+    if (kind === "delete" && !(await appDialog.confirm(t.deleteSelectedAsk(ids.length), { title: t.deleteSelected }))) return;
     setBusy(true);
     try {
-      const ids = pickedList.map((i) => i.id);
       if (kind === "approve") {
         const r = await approveItems(ids);
         ctx.toast(t.approveResult(r.scheduled, r.blocked.length), r.blocked.length ? "warn" : "ok");
+      } else if (kind === "delete") {
+        const r = await deleteItems(ids);
+        ctx.toast(t.deletedResult(r.deleted, r.busy.length), r.busy.length ? "warn" : "ok");
       } else {
         await unapproveItems(ids);
       }
@@ -86,6 +91,7 @@ export default function ItemsTab({ ctx }: { ctx: PublishingCtx }) {
             <span className="text-[11px] font-semibold text-secondary">{t.selected(pickedList.length)}</span>
             <Button size="sm" tone="primary" icon="check" busy={busy} onClick={() => void bulk("approve")}>{t.approveSelected}</Button>
             <Button size="sm" busy={busy} onClick={() => void bulk("unapprove")}>{t.unapproveSelected}</Button>
+            <Button size="sm" tone="danger" icon="trash" busy={busy} onClick={() => void bulk("delete")}>{t.deleteSelected}</Button>
           </div>
         )}
       </div>
