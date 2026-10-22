@@ -15096,6 +15096,65 @@ a.bsf-deploy-platform-icon.is-link:focus-visible {
   border: 1px solid #22c55e;
   border-radius: 50px;
 }
+/* TikTok 영상 초안의 글을 휴대폰으로 넘기는 QR 창(brand-studio.js showTiktokCaptionHandoff) */
+.bsf-tt-handoff-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 10, 20, 0.64);
+  z-index: 10001;
+}
+.bsf-tt-handoff-panel {
+  width: min(420px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  text-align: center;
+}
+.bsf-tt-handoff-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.bsf-tt-handoff-body {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-line;
+  text-align: left;
+}
+.bsf-tt-handoff-qr {
+  display: inline-flex;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 14px;
+}
+.bsf-tt-handoff-qr img,
+.bsf-tt-handoff-qr canvas {
+  display: block;
+}
+.bsf-tt-handoff-qr.is-failed {
+  display: block;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  word-break: break-all;
+}
+.bsf-tt-handoff-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.bsf-tt-handoff-actions button {
+  min-width: 96px;
+}
 .bsf-deploy-done-badge svg {
   display: block;
   width: 13px;

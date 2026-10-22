@@ -51,7 +51,9 @@ test("폴링이 실패를 버리지 않는다", () => {
 test("시간 안에 결론이 안 나면 성공으로 넘기지 않는다", () => {
   const body = functionBody(studio, "watchTikTokPublish");
   assert.match(body, /alertPublishPending/, "시간 초과를 미확인으로 알리지 않는다");
-  assert.match(body, /tries < MAX/);
+  // 횟수가 아니라 시간으로 끊는다 — 초안 확인이 수 분 넘게 늦는 일이 있어 30분까지 기다린다(2026-10-22).
+  assert.match(body, /elapsed >= TT_WATCH_MS\) return finish\('giveUp'\)/);
+  assert.match(studio, /var TT_WATCH_MS = 30 \* 60 \* 1000;/);
 });
 
 test("성공 알림은 스스로 사라지고, 원인을 읽어야 하는 알림은 남는다", () => {
@@ -179,7 +181,7 @@ test("초안 문구가 실제 표시 지점에 연결돼 있다", () => {
   // 접수(pending): mode==='inbox' 일 때만 초안 문구, 아니면 기존 문구 유지
   assert.match(studio, /pendingInbox\s*\r?\n?\s*\? T\.alertTiktokInboxSending\(failLabel\)\s*\r?\n?\s*: T\.alertPublishProcessing\(failLabel\)/, "pending 분기가 초안 문구로 연결되지 않았다");
   // 추적기에 초안 여부가 전달된다
-  assert.match(studio, /function watchTikTokPublish\(fmtId, label, publishId, handle, inboxMode\)/);
+  assert.match(studio, /function watchTikTokPublish\(fmtId, label, publishId, handle, inboxMode, opts\)/);
 
   const watch = functionBody(studio, "watchTikTokPublish");
   // complete: 초안이면 전송 완료 문구, '게시물 보기' 링크 없음

@@ -137,8 +137,8 @@ test("게시 요청은 수락 즉시 반환하고 완료는 따로 확인한다"
   const studio = read("prototype/js/ui/brand-studio.js");
   // 폴링은 배포 화면에 있다 — 화면을 떠나지 않는 한 결과를 끝까지 본다.
   assert.match(studio, /function watchTikTokPublish\(/);
-  // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸린다
-  assert.match(studio, /deadline = Date\.now\(\) \+ 10 \* 60 \* 1000/);
+  // 사진 카루셀은 TikTok 이 프록시에서 한 장씩 받아가 몇 분이 걸리고, 초안 확인도 늦게 온다 — 30분까지 본다.
+  assert.match(studio, /var TT_WATCH_MS = 30 \* 60 \* 1000;/);
 });
 
 test("일괄 배포 경로에서 TikTok 은 곧장 초안 전송으로 간다", () => {

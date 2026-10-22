@@ -3098,22 +3098,25 @@ interface PublishStepResult {
  * 앱에 실제로 보이는지는 확인할 수 없다. 그래서 '도착했다'고 단정하지 않고, 어느 계정으로 갔는지와 찾는 곳을 말한다
  * (2026-10-20: 에이전트는 '도착했어요'라 했는데 엔케는 초안을 찾지 못했다 — 실제로는 SEND_TO_USER_INBOX 뒤 한참 지나 앱에 도착했다).
  */
-export function tiktokInboxSentText(account = "", caption = ""): string {
+export function tiktokInboxSentText(account = "", caption = "", captionUrl = ""): string {
   const who = account ? `@${account.replace(/^@/, "")} 계정` : "연결된 TikTok 계정";
   return `TikTok 이 ${who}의 받은 알림함(Inbox)으로 초안을 보냈다고 확인했어요(SEND_TO_USER_INBOX). ` +
     `다만 앱에 실제로 보이는지는 제가 확인할 수 없고, 이 확인 뒤에도 앱 알림이 뜨기까지 꽤 걸릴 수 있어요 — 바로 안 보이면 잠시 뒤 다시 봐 주시고, 휴대폰 TikTok 앱이 ${who}으로 로그인돼 있는지도 봐 주세요. ` +
     "앱 아래 '받은 알림함(Inbox)' 탭에 '영상이 준비됐어요' 알림으로 오고, 그 알림을 누르면 편집 화면이 열려요. 공개 범위를 고른 뒤 '게시'를 눌러야 올라가요" +
-    "(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)." + tiktokCaptionPasteText(caption);
+    "(프로필의 자물쇠 탭은 비공개 영상, 초안 카드는 앱에서 직접 저장한 초안이라 거기엔 없어요)." + tiktokCaptionPasteText(caption, captionUrl);
 }
 
 /**
  * TikTok 영상 초안(inbox/video/init)은 영상 파일만 받는다 — 캡션을 실을 칸이 API 에 없다(사진 초안은 description 이 실린다).
  * 예전엔 이 사실을 말하지 않아 엔케가 "영상만 오고 글이 없다"고 했다(2026-10-20). 붙여 넣을 글을 그대로 준다.
  */
-export function tiktokCaptionPasteText(caption = ""): string {
+export function tiktokCaptionPasteText(caption = "", captionUrl = ""): string {
   const text = String(caption || "").trim();
   if (!text) return "";
-  return `\n\n📋 영상 초안에는 TikTok API 제한으로 글(캡션)이 함께 가지 않아요. 게시 화면 설명 칸에 아래 글을 붙여 넣어 주세요:\n${text.slice(0, 2200)}`;
+  // 휴대폰에서 열면 글을 한 번에 복사하는 화면(tiktok-caption.html) — 게시는 휴대폰에서 하므로 거기로 글을 넘긴다.
+  const url = String(captionUrl || "").trim();
+  const link = url ? `\n📱 휴대폰에서 이 주소를 열면 글을 바로 복사할 수 있어요: ${url}` : "";
+  return `\n\n📋 영상 초안에는 TikTok API 제한으로 글(캡션)이 함께 가지 않아요. 게시 화면 설명 칸에 아래 글을 붙여 넣어 주세요:${link}\n${text.slice(0, 2200)}`;
 }
 
 async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolContext): Promise<PublishStepResult> {
@@ -3147,7 +3150,7 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
     if (status === "status_reported_failed") return { platform, failure: `tiktok: 초안함 전송 실패(${r.failReason || "이유 미상"})` };
     // 안내 문구는 승인 완료 문구(approvalDoneText)가 tiktok 칸으로 한 번만 만든다 — 예전엔 notices 에도 넣어 두 번 나왔다.
     const tiktok = { mode: "inbox", publishId: String(r.publishId || ""), status, account: String(r.account || ""),
-      caption: description.slice(0, 2200), sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
+      caption: description.slice(0, 2200), captionUrl: String(r.captionUrl || ""), sentAt: r.sentAt || new Date().toISOString(), mediaGcsPath: item.mediaGcsPath };
     return { platform, tiktok, published: { platform: "tiktok", mode: "inbox", status, publishId: tiktok.publishId } };
   }
 
@@ -8763,7 +8766,7 @@ export async function reconcileTikTokJobs(ctx: ToolContext, sql: SqlFn) {
         await updatePublishRowStatus(ctx.env, ctx.userId, String(episode.projectId), String(episode.brandId || ""),
           `tiktok_${tk.publishId}`, "tiktok", "sent_to_inbox").catch(() => {});
       }
-      await say(`✅ ${tiktokInboxSentText(String(tk.account || ""), String(tk.caption || ""))}`);
+      await say(`✅ ${tiktokInboxSentText(String(tk.account || ""), String(tk.caption || ""), String(tk.captionUrl || ""))}`);
       continue;
     }
     if (status === "failed") {

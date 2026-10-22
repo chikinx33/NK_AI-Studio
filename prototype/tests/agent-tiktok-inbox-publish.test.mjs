@@ -110,8 +110,8 @@ test("채널별 초안(drafts)·유튜브 메타·재연결 안내·승인 문�
   assert.match(run, /platform === "facebook" && \(d\.linkUrl \|\| prepared\?\.linkUrl\)/);
   assert.match(run, /if \(res\.status === 412 \|\| data\?\.needsReconnect \|\| \/reconnect_required\|not_connected\/\.test\(String\(data\?\.error \|\| ""\)\)\) \{/);
   assert.match(run, /브랜드 스튜디오 → SNS 설정\(\/sns-settings\.html\)에서 '연결 해제' 후 다시 연결/);
-  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? tiktokInboxSentText\(String\(o\.tiktok\.account \|\| ""\), String\(o\.tiktok\.caption \|\| ""\)\)/);
-  assert.match(review, /\$\{tiktokCaptionPasteText\(String\(o\.tiktok\.caption \|\| ""\)\)\}/, "처리 중일 때도 붙여 넣을 글을 준다");
+  assert.match(review, /o\.tiktok\.status === "sent_to_inbox"\s*\? tiktokInboxSentText\(String\(o\.tiktok\.account \|\| ""\), String\(o\.tiktok\.caption \|\| ""\), String\(o\.tiktok\.captionUrl \|\| ""\)\)/);
+  assert.match(review, /\$\{tiktokCaptionPasteText\(String\(o\.tiktok\.caption \|\| ""\), String\(o\.tiktok\.captionUrl \|\| ""\)\)\}/, "처리 중일 때도 붙여 넣을 글을 준다");
   assert.match(review, /if \(o\.notice\) parts\.push\(String\(o\.notice\)\);/);
   assert.match(review, /\$\{p\?\.what \? `\(\$\{p\.what\}\)` : ""\}/, "승인 문구에 채널별로 무엇을 올렸는지");
 });
@@ -127,7 +127,7 @@ test("TikTok 초안함 전송이 '처리 중' 으로 끝나면 서버가 뒤를 
   assert.match(fn, /output->'tiktok'->>'status'='processing'/);
   assert.match(fn, /\/api\/sns\/tiktok\/publish-status\?publishId=/);
   assert.match(fn, /await finish\("sent_to_inbox", \{ postId: data\.postId \|\| "", completedAt: new Date\(\)\.toISOString\(\) \}\);/);
-  assert.match(fn, /await say\(`✅ \$\{tiktokInboxSentText\(String\(tk\.account \|\| ""\), String\(tk\.caption \|\| ""\)\)\}`\);/);
+  assert.match(fn, /await say\(`✅ \$\{tiktokInboxSentText\(String\(tk\.account \|\| ""\), String\(tk\.caption \|\| ""\), String\(tk\.captionUrl \|\| ""\)\)\}`\);/);
   // SNS 세팅 배포 이력의 '처리 중' 줄도 같은 상태로 바꾼다(배포 완료 표시까지).
   assert.match(fn, /updatePublishRowStatus\(ctx\.env, ctx\.userId, String\(episode\.projectId\), String\(episode\.brandId \|\| ""\),\s*`tiktok_\$\{tk\.publishId\}`, "tiktok", "sent_to_inbox"\)/);
   assert.match(fn, /await finish\("status_reported_failed", \{ failReason: String\(data\.failReason \|\| ""\) \}\);/);
@@ -238,4 +238,10 @@ test("TikTok 영상 초안엔 글이 같이 가지 않는다 — 안내에 그 �
   assert.match(text, /TikTok API 제한으로 글\(캡션\)이 함께 가지 않아요/);
   assert.ok(text.endsWith(`:\n${caption}`), "글 전문을 그대로 붙인다");
   assert.doesNotMatch(tiktokInboxSentText("raviok_studio"), /캡션/);
+  // 휴대폰 글 복사 링크가 있으면 안내에 함께 준다(2026-10-22) — 글 전문은 그대로 끝에 붙는다.
+  const url = "https://nkstudio.org/tiktok-caption.html?u=a&p=b&e=1&s=c";
+  const withLink = tiktokInboxSentText("raviok_studio", caption, url);
+  assert.match(withLink, /휴대폰에서 이 주소를 열면 글을 바로 복사할 수 있어요: https:\/\/nkstudio\.org\/tiktok-caption\.html/);
+  assert.ok(withLink.endsWith(`\n${caption}`));
+  assert.doesNotMatch(text, /휴대폰에서 이 주소/, "링크가 없으면 말하지 않는다");
 });

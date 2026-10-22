@@ -17,6 +17,91 @@
   // 배포 진행 중 상태(formatId→true). renderProject 가 재실행돼도 스피너가 유지되도록
   // 모듈 스코프에 둔다(렌더 내부 지역변수였을 때는 재렌더 시 초기화돼 스피너가 꺼졌음).
   var _deployingFormats = {};
+  // TikTok 초안 전송 확인 대기: publishId → { handlers }. 폴링은 publishId 하나에 하나만 돈다.
+  // 화면이 다시 그려지면 새 화면의 처리기로 갈아 끼운다 — 옛 화면 처리기로 끝내면 배지가 떨어져 나간 옛 DOM 에
+  // 켜지고, 옛 배포 상태 사본으로 그사이 켜진 다른 채널의 배포 완료를 덮는다.
+  var _ttWatchers = {};
+  // 초안 확인을 기다리는 시간. 확인(SEND_TO_USER_INBOX)이 수 분 넘게 늦는 경우가 있다(2026-10-20).
+  var TT_WATCH_MS = 30 * 60 * 1000;
+  // 이보다 오래된 '처리 중' 기록은 화면을 열어도 다시 확인하지 않는다.
+  var TT_RESUME_MAX_AGE_MS = 2 * 24 * 3600 * 1000;
+  var QR_LIB_URL = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  var _qrLibPromise = null;
+  function loadQrLib() {
+    if (window.QRCode) return Promise.resolve(window.QRCode);
+    if (_qrLibPromise) return _qrLibPromise;
+    _qrLibPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = QR_LIB_URL;
+      s.async = true;
+      s.onload = function () { window.QRCode ? resolve(window.QRCode) : reject(new Error('qr_lib')); };
+      s.onerror = function () { _qrLibPromise = null; reject(new Error('qr_lib')); };
+      document.head.appendChild(s);
+    });
+    return _qrLibPromise;
+  }
+  /**
+   * TikTok 영상 초안은 API 에 글을 실을 칸이 없다(사진 초안만 description 이 실린다). 게시는 휴대폰에서 하므로
+   * 서버가 저장한 글 복사 화면(tiktok-caption.html)을 QR 로 띄운다. 휴대폰 카메라로 찍으면 바로 복사할 수 있다.
+   */
+  function showTiktokCaptionHandoff(captionUrl, T) {
+    if (!captionUrl || typeof document === 'undefined') return;
+    var old = document.querySelector('.bsf-tt-handoff-root');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var rootEl = document.createElement('div');
+    rootEl.className = 'bsf-tt-handoff-root';
+    rootEl.setAttribute('data-i18n-skip', '');
+    var panel = document.createElement('div');
+    panel.className = 'bsf-tt-handoff-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    var title = document.createElement('h3');
+    title.className = 'bsf-tt-handoff-title';
+    title.textContent = T.ttHandoffTitle;
+    var body = document.createElement('p');
+    body.className = 'bsf-tt-handoff-body';
+    body.textContent = T.ttHandoffBody;
+    var qr = document.createElement('div');
+    qr.className = 'bsf-tt-handoff-qr';
+    var actions = document.createElement('div');
+    actions.className = 'bsf-tt-handoff-actions';
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-secondary compact';
+    copyBtn.textContent = T.ttHandoffCopyLink;
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn-primary compact';
+    closeBtn.textContent = T.ttHandoffClose;
+    actions.appendChild(copyBtn);
+    actions.appendChild(closeBtn);
+    panel.appendChild(title);
+    panel.appendChild(body);
+    panel.appendChild(qr);
+    panel.appendChild(actions);
+    rootEl.appendChild(panel);
+    document.body.appendChild(rootEl);
+
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      if (rootEl.parentNode) rootEl.parentNode.removeChild(rootEl);
+    }
+    function onKey(ev) { if (ev.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    closeBtn.addEventListener('click', close);
+    rootEl.addEventListener('click', function (ev) { if (ev.target === rootEl) close(); });
+    copyBtn.addEventListener('click', function () {
+      var done = function () { copyBtn.textContent = T.ttHandoffLinkCopied; };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(captionUrl).then(done).catch(function () {});
+    });
+    loadQrLib().then(function (QR) {
+      new QR(qr, { text: captionUrl, width: 220, height: 220, correctLevel: QR.CorrectLevel.M });
+    }).catch(function () {
+      // QR 을 못 그리면 주소라도 보인다 — 복사해서 휴대폰으로 보내면 된다.
+      qr.classList.add('is-failed');
+      qr.textContent = T.ttHandoffQrFail + '\n' + captionUrl;
+    });
+  }
   // 에이전트가 채널별로 올리는 중인 채널 — 서버가 payload.brandStudioDeployingSteps 에 '잡:채널번호' → {format, startedAt} 로 남긴다
   // (publish-records.ts setDeployingStep). 전엔 에이전트가 '동시에 올리는 중'이라는데 이 화면엔 아무 표시가 없었다(2026-10-18).
   // 이 시간이 지난 표시는 끊긴 것으로 본다 — publish-records.ts DEPLOYING_STALE_MS 와 같은 값.
@@ -1067,6 +1152,12 @@
       alertTiktokInboxSending: function (label) { return label + ' 초안을 전송하는 중입니다. 완료되면 알려드릴게요.\n\n실패가 아니에요 — 배포를 다시 누르지 않아도 됩니다. 전송이 끝나면 게시물 목록이 아니라 TikTok 앱 알림함(Inbox)에 업로드 알림이 도착합니다.'; },
       alertTiktokInboxSent: function (label) { return label + ' 초안 전송 완료 — 아직 게시된 것은 아니에요.\n\nTikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.'; },
       alertTiktokInboxUnconfirmed: function (label) { return label + ' 초안 전송 결과를 여기서 확인하지 못했습니다.\n\n전송이 늦어지는 것일 수 있어요. 잠시 후 TikTok 앱 알림함(Inbox)에 업로드 알림이 왔는지 확인해 주세요. 알림이 끝내 없을 때만 다시 시도해 주세요.'; },
+      ttHandoffTitle: 'TikTok 글을 휴대폰으로',
+      ttHandoffBody: '영상 초안에는 TikTok 정책상 글(캡션)이 함께 실리지 않아요.\n휴대폰 카메라로 아래 QR 을 찍으면 글 복사 화면이 열려요. 복사한 뒤 TikTok 알림함의 업로드 알림을 눌러 설명 칸에 붙여 넣고 게시해 주세요.',
+      ttHandoffCopyLink: '링크 복사',
+      ttHandoffLinkCopied: '복사됨',
+      ttHandoffClose: '닫기',
+      ttHandoffQrFail: 'QR 을 그리지 못했어요. 아래 주소를 휴대폰에서 열어 주세요.',
       alertNotPublished: function (label, reason) { return label + ' 게시되지 않았습니다.' + (reason ? '\n\n' + reason : '') + '\n\n배포 완료로 표시하지 않았습니다. 원인을 확인한 뒤 다시 시도해 주세요.'; },
       reasonNoPublishId: 'TikTok이 발행 ID를 돌려주지 않아 아무것도 전송되지 않았습니다.',
       alertPublishPending: function (label) { return label + ' 결과를 확인하지 못했습니다.\n\n채널이 아직 처리 중일 수 있습니다. 계정에서 직접 확인해 주세요. 배포 완료로는 표시하지 않았습니다.'; },
@@ -1164,6 +1255,12 @@
       alertTiktokInboxSending: function (label) { return 'Sending the ' + label + ' draft. We\'ll let you know when it\'s done.\n\nThis is not a failure — no need to deploy again. Nothing will appear in your posts; when the transfer finishes, an upload notification arrives in the TikTok app Inbox.'; },
       alertTiktokInboxSent: function (label) { return label + ' draft sent — it is not published yet.\n\nOpen the TikTok app Inbox, tap the upload notification, then add a caption and post it.'; },
       alertTiktokInboxUnconfirmed: function (label) { return 'Could not confirm the ' + label + ' draft transfer from here.\n\nIt may just be slow. Check the TikTok app Inbox for an upload notification in a little while, and retry only if none arrives.'; },
+      ttHandoffTitle: 'Send the TikTok caption to your phone',
+      ttHandoffBody: 'TikTok does not carry text (caption) with video drafts.\nScan the QR code below with your phone camera to open a copy screen. Copy the caption, tap the upload notification in the TikTok Inbox, paste it in the description field and post.',
+      ttHandoffCopyLink: 'Copy link',
+      ttHandoffLinkCopied: 'Copied',
+      ttHandoffClose: 'Close',
+      ttHandoffQrFail: 'Could not draw the QR code. Open this address on your phone:',
       alertNotPublished: function (label, reason) { return label + ' was not published.' + (reason ? '\n\n' + reason : '') + '\n\nIt has not been marked as published. Check the cause and try again.'; },
       reasonNoPublishId: 'TikTok returned no publish id, so nothing was submitted.',
       alertPublishPending: function (label) { return label + ' result could not be confirmed.\n\nThe channel may still be processing it. Check your account directly. It has not been marked as published.'; },
@@ -2935,6 +3032,7 @@
     }
     var _deployedFormats = persistedDeployedFormats;
     var deployFormatSummary = buildDeploySummaryHtml();
+    resumeTikTokInboxWatch();
     function makeCtrlBarHtml(step) {
       if (step === 1) {
         return '';
@@ -3079,55 +3177,115 @@
      * 걸린다. 확인 창 안에서만 기다리면 사용자가 창을 닫는 순간 결과를 영영 모르고,
      * 화면에는 "확인하지 못했습니다"만 남는다.
      */
-    function watchTikTokPublish(fmtId, label, publishId, handle, inboxMode) {
+    function watchTikTokPublish(fmtId, label, publishId, handle, inboxMode, opts) {
+      var o = opts || {};
+      // 초안(inbox) 전송 기록 한 줄의 상태를 바꾼다. 같은 id(tiktok_<publishId>)라 '처리 중' 줄을 덮는다.
+      function persistInboxStatus(status) {
+        if (!inboxMode) return Promise.resolve();
+        return persistPublishedResult(fmtId, (formatDrafts && formatDrafts[fmtId]) || {},
+          { result: { postId: publishId, status: status, mode: 'inbox' } }, 'now').catch(function () {});
+      }
+      var handlers = {
+        complete: function (st) {
+          _deployedFormats[fmtId] = true;
+          persistDeployedFormats();
+          refreshDeploySummary();
+          // 초안(inbox) 전송의 complete 는 "게시 완료"가 아니라 "전송 완료"다.
+          // 게시물이 없으니 '게시물 보기' 링크도 달지 않는다.
+          if (inboxMode) {
+            persistInboxStatus('sent_to_inbox');
+            bsfToast(T.alertTiktokInboxSent(label), { tone: 'ok' });
+            return;
+          }
+          var h = String(handle || '').replace(/^@/, '');
+          var url = (h && st.postId)
+            ? 'https://www.tiktok.com/@' + encodeURIComponent(h) + '/video/' + encodeURIComponent(st.postId)
+            : '';
+          bsfToast(T.alertPublishSuccess(label), {
+            tone: 'ok',
+            href: url || undefined,
+            linkLabel: (isEn ? 'View post' : '게시물 보기'),
+          });
+        },
+        failed: function (st) {
+          persistInboxStatus('status_reported_failed');
+          bsfNotify(T.alertNotPublished(label, String(st.failReason || st.rawStatus || '')));
+        },
+        giveUp: function () {
+          // 화면을 다시 열어 이어 확인하던 건이면 조용히 둔다 — 다음에 열 때 또 확인한다.
+          if (o.quiet) return;
+          // 초안 전송은 "계정에서 확인하세요"가 오답이다 — 확인처는 앱 알림함이고,
+          // 성급한 재시도는 24시간 5개 한도를 태운다.
+          bsfNotify(inboxMode ? T.alertTiktokInboxUnconfirmed(label) : T.alertPublishPending(label));
+        },
+      };
+      var existing = _ttWatchers[publishId];
+      if (existing) { existing.handlers = handlers; return; }
+      var watcher = _ttWatchers[publishId] = { handlers: handlers };
+
       var token = '';
       try { token = localStorage.getItem('nk_auth_token') || ''; } catch (_) {}
-      var tries = 0;
-      var MAX = 60;                                  // 최대 약 10분
-      var deadline = Date.now() + 10 * 60 * 1000;
+      // 공유받은 에피소드는 소유자 토큰으로 보냈으므로 상태도 소유자 토큰으로 묻는다.
+      var statusUrl = '/api/sns/tiktok/publish-status?publishId=' + encodeURIComponent(publishId);
+      try {
+        var owner = (NK.api && NK.api.getSharedOwner) ? String(NK.api.getSharedOwner(projectId) || '') : '';
+        if (owner) statusUrl += '&ownerId=' + encodeURIComponent(owner) + '&projectId=' + encodeURIComponent(String(projectId || ''));
+      } catch (_) {}
+      var startedAt = Date.now();
+      function finish(kind, st) {
+        delete _ttWatchers[publishId];
+        try { watcher.handlers[kind](st || {}); } catch (_) {}
+      }
       function tick() {
-        tries++;
-        fetch('/api/sns/tiktok/publish-status?publishId=' + encodeURIComponent(publishId), {
-          headers: { Authorization: 'Bearer ' + token },
-        })
+        fetch(statusUrl, { headers: { Authorization: 'Bearer ' + token } })
           .then(function (r) { return r.json(); })
           .then(function (st) {
-            if (st && st.ok && st.status === 'complete') {
-              _deployedFormats[fmtId] = true;
-              persistDeployedFormats();
-              refreshDeploySummary();
-              // 초안(inbox) 전송의 complete 는 "게시 완료"가 아니라 "전송 완료"다.
-              // 게시물이 없으니 '게시물 보기' 링크도 달지 않는다.
-              if (inboxMode) {
-                bsfToast(T.alertTiktokInboxSent(label), { tone: 'ok' });
-                return;
-              }
-              var h = String(handle || '').replace(/^@/, '');
-              var url = (h && st.postId)
-                ? 'https://www.tiktok.com/@' + encodeURIComponent(h) + '/video/' + encodeURIComponent(st.postId)
-                : '';
-              bsfToast(T.alertPublishSuccess(label), {
-                tone: 'ok',
-                href: url || undefined,
-                linkLabel: (isEn ? 'View post' : '게시물 보기'),
-              });
-              return;
-            }
-            if (st && st.ok && st.status === 'failed') {
-              bsfNotify(T.alertNotPublished(label, String(st.failReason || st.rawStatus || '')));
-              return;
-            }
+            if (st && st.ok && st.status === 'complete') return finish('complete', st);
+            if (st && st.ok && st.status === 'failed') return finish('failed', st);
             again();
           })
           .catch(again);
       }
       function again() {
-        if (tries < MAX && Date.now() < deadline) { setTimeout(tick, 10000); return; }
-        // 초안 전송은 "계정에서 확인하세요"가 오답이다 — 확인처는 앱 알림함이고,
-        // 성급한 재시도는 24시간 5개 한도를 태운다.
-        bsfNotify(inboxMode ? T.alertTiktokInboxUnconfirmed(label) : T.alertPublishPending(label));
+        var elapsed = Date.now() - startedAt;
+        if (elapsed >= TT_WATCH_MS) return finish('giveUp');
+        // 처음 3분은 촘촘히, 그 뒤는 느슨히 — 늦게 오는 확인까지 기다리되 요청을 아낀다.
+        setTimeout(tick, elapsed < 3 * 60 * 1000 ? 10000 : 30000);
       }
-      setTimeout(tick, 10000);
+      setTimeout(tick, o.immediate ? 0 : 10000);
+    }
+
+    /** TikTok 이 아직 처리 중일 때: '처리 중' 기록을 남기고(화면을 닫았다 열어도 이어 확인한다) 끝까지 지켜본다. */
+    function trackTikTokInboxPending(fmtId, label, pubRes) {
+      var r = (pubRes && pubRes.result) || {};
+      var inbox = r.mode === 'inbox';
+      if (inbox) {
+        persistPublishedResult(fmtId, (formatDrafts && formatDrafts[fmtId]) || {},
+          { result: { postId: pubRes.tiktokPublishId, status: 'processing', mode: 'inbox' } }, 'now').catch(function () {});
+      }
+      watchTikTokPublish(fmtId, label, pubRes.tiktokPublishId, r.handle || '', inbox);
+    }
+
+    /**
+     * 배포 이력에 '처리 중'으로 남은 TikTok 초안을 이 화면에서 다시 확인한다. 예전엔 확인을 기다리는 동안
+     * 화면을 닫거나 다시 그리면 그걸로 끝이라, 초안이 나중에 알림함에 들어가도 배포 완료가 켜지지 않았다.
+     */
+    function resumeTikTokInboxWatch() {
+      var projectRows = Array.isArray(payload.brandStudioPublishResults) ? payload.brandStudioPublishResults
+        : (Array.isArray(payload.publishResults) ? payload.publishResults : []);
+      var brandRows = (brand && Array.isArray(brand.brandStudioPublishResults)) ? brand.brandStudioPublishResults : [];
+      var seen = {};
+      var ttFmt = formatItems.find(function (f) { return f.id === 'tiktok'; });
+      var ttLabel = (ttFmt && ttFmt.title) ? ttFmt.title : 'TikTok';
+      projectRows.concat(brandRows).forEach(function (row) {
+        if (!row || row.channelType !== 'tiktok' || row.status !== 'processing') return;
+        if (String(row.projectId || '') !== String(projectId || '')) return;
+        var pid = String(row.remotePostId || '').trim();
+        if (!pid || seen[pid]) return;
+        if (!(Date.now() - Date.parse(String(row.publishedAt || '')) < TT_RESUME_MAX_AGE_MS)) return;
+        seen[pid] = true;
+        watchTikTokPublish('tiktok', ttLabel, pid, '', true, { quiet: true, immediate: true });
+      });
     }
 
     /** 입력 요소 하나에서 현재 값을 읽는다. 타입마다 값이 있는 곳이 다르다. */
@@ -4635,11 +4793,17 @@
            */
           function ttInboxOutcome(r) {
             var st = String((r && r.status) || '');
+            // 기록 id 를 tiktok_<publishId> 로 고정한다 — '처리 중' 줄을 나중에 확인되면 같은 줄로 바꾸기 위해(에이전트 기록과 같은 규칙).
+            var rec = Object.assign({}, r || {}, { postId: String((r && r.publishId) || '') });
+            // 영상 초안엔 글이 실리지 않는다 — 휴대폰에서 복사할 화면을 QR 로 띄운다(처리 중이어도 글은 이미 저장돼 있다).
+            if (r && r.captionUrl && st !== 'status_reported_failed') showTiktokCaptionHandoff(String(r.captionUrl), T);
             if (st === 'sent_to_inbox') {
-              bsfNotify(isEn
-                ? 'Sent to TikTok drafts. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
-                : 'TikTok 초안함으로 보냈습니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.');
-              return { ok: true, mode: 'inbox', result: r };
+              if (!(r && r.captionUrl)) {
+                bsfNotify(isEn
+                  ? 'Sent to TikTok drafts. Open the TikTok app and tap the upload notification in your Inbox to add a caption and post it.'
+                  : 'TikTok 초안함으로 보냈습니다. TikTok 앱 알림함(Inbox)에서 업로드 알림을 눌러 캡션을 넣고 게시해 주세요.');
+              }
+              return { ok: true, mode: 'inbox', result: rec };
             }
             if (st === 'status_reported_failed') {
               return {
@@ -4654,7 +4818,7 @@
               notPublished: true,
               pending: true,
               tiktokPublishId: String((r && r.publishId) || ''),
-              result: r,
+              result: rec,
             };
           }
 
@@ -4699,6 +4863,8 @@
           }
 
           if (ttInboxMedia) {
+            // 영상 초안 API 는 글을 받지 않는다. 서버가 글을 저장해 휴대폰 복사 링크(captionUrl)로 돌려준다.
+            ttInboxMedia.caption = finalCaption;
             return tiktokInboxSend(ttInboxMedia, requestBody).then(ttInboxOutcome);
           }
 
@@ -4775,11 +4941,7 @@
                 bsfToast(pendingInbox
                   ? T.alertTiktokInboxSending(failLabel)
                   : T.alertPublishProcessing(failLabel));
-                watchTikTokPublish(
-                  oneFmtId, failLabel, publishResult.tiktokPublishId,
-                  (publishResult.result && publishResult.result.handle) || '',
-                  pendingInbox
-                );
+                trackTikTokInboxPending(oneFmtId, failLabel, publishResult);
                 return;
               }
               // 원인을 읽어야 하는 알림은 스스로 사라지면 안 된다.
@@ -4831,6 +4993,16 @@
                   .then(function (pubRes) {
                     if (pubRes && pubRes.skipped) { delete _deployingFormats[fmtId]; refreshDeploySummary(); return; }
                     if (!pubRes || !pubRes.ok) {
+                      // TikTok 초안이 아직 처리 중이면 실패로 모으지 않고 끝까지 지켜본다 — 예전엔 여기서
+                      // '결과를 확인하지 못했습니다'로 끝나, 나중에 초안함에 들어가도 배포 완료가 켜지지 않았다.
+                      if (pubRes && pubRes.pending && pubRes.tiktokPublishId) {
+                        var tpFmt = formatItems.find(function (f) { return f.id === fmtId; });
+                        var tpLabel = (tpFmt && tpFmt.title) ? tpFmt.title : fmtId;
+                        _notPublished.push({ label: tpLabel, inboxSending: true });
+                        trackTikTokInboxPending(fmtId, tpLabel, pubRes);
+                        delete _deployingFormats[fmtId]; refreshDeploySummary();
+                        return;
+                      }
                       // 실패를 모아 두었다가 끝에 함께 알린다(루프 중간에 모달을 띄우지 않는다)
                       if (pubRes && pubRes.notPublished) {
                         var nfFmt = formatItems.find(function (f) { return f.id === fmtId; });
@@ -4857,6 +5029,7 @@
             var lines = [];
             if (_allDeployedCount > 0) lines.push(T.alertPublishAllDone(_allDeployedCount));
             _notPublished.forEach(function (nf) {
+              if (nf.inboxSending) { lines.push(T.alertTiktokInboxSending(nf.label)); return; }
               lines.push(nf.pending ? T.alertPublishPending(nf.label) : T.alertNotPublished(nf.label, nf.reason));
             });
             if (lines.length) bsfNotify(lines.join('\n\n'));

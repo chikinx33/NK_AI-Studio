@@ -7,6 +7,7 @@
  * 실리는 description 만 싣는다(공개범위·브랜드 고지는 Direct Post 전용이라 넣지 않는다).
  * 어느 쪽도 확인 모달을 거치지 않는다
  * (게시가 아니므로 Direct Post UX 가이드라인의 확인 화면 요구 대상이 아니다).
+ * 영상 초안에 못 싣는 글은 저장해 두고 휴대폰에서 열 링크(captionUrl)로 돌려준다(_shared/tiktok-caption.ts).
  *
  * ⚠️ video.upload 스코프를 요청하는 근거가 바로 이 엔드포인트다. 심사는 "요청한 모든
  * 스코프를 데모로 증명"을 요구하므로, 이 흐름을 지우려면 connect/tiktok.ts 의 scope
@@ -16,6 +17,7 @@ import { authorizeRequest, readSecret, sanitizeUserId } from "../../_shared/auth
 import { loadShares, getGrantRole } from "../../_shared/shares";
 import { getTikTokAccessToken, waitForTikTokStatus } from "../../_shared/tiktok-token";
 import { MEDIA_PATH_FORBIDDEN, authorizePublishMediaPaths, publishMediaLocation } from "../../_shared/publish-media-path";
+import { saveTikTokCaptionLink } from "../../_shared/tiktok-caption";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -415,6 +417,16 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       }
     }
 
+    // 영상 초안엔 글이 실리지 않는다 — 휴대폰에서 복사할 링크를 만든다. 실패해도 전송 결과는 그대로 돌려준다.
+    let captionUrl = "";
+    try {
+      captionUrl = await saveTikTokCaptionLink(env, origin, mediaSecret, {
+        userId: targetUserId, publishId, caption: String(body.caption || ""), account,
+      });
+    } catch (e) {
+      console.log("[tiktok] 글 복사 링크 저장 실패:", e instanceof Error ? e.message : String(e));
+    }
+
     // Step 3: 상태 폴링 (SEND_TO_USER_INBOX 가 완료)
     const r = await waitForTikTokStatus(accessToken, publishId);
     console.log(`[tiktok] 초안함 업로드 status=${r.status}: ${publishId}`);
@@ -428,6 +440,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         status: r.status === "complete" ? "sent_to_inbox" : (r.status === "failed" ? "status_reported_failed" : "processing"),
         failReason: r.failReason,
         account,
+        captionUrl: captionUrl || undefined,
         sentAt: new Date().toISOString(),
       },
     });
