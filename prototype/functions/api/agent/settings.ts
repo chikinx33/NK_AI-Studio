@@ -7,7 +7,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema } from "./_shared";
 import { authStatus, authDiagnose, testClaudeCredential, getSettingsRow, saveAgentModelSettings, saveAgentVoiceSettings, saveClaudeAuth, saveLlmMode, saveLogRetention } from "../_shared/claude-auth.js";
-import { CLOUD_MODELS, MODEL_CATALOG, sanitizeModelSelections } from "../_shared/cloud-models.js";
+import { CLOUD_MODELS, MODEL_CATALOG, normalizeModelSelections, sanitizeModelSelections } from "../_shared/cloud-models.js";
 import { generationStatus, imageAuth, saveGenerationSettings } from '../_shared/generation-auth';
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -46,7 +46,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       // 에이전트별 두뇌 선택 화면용: 고를 수 있는 제공사·모델 목록과 현재 선택.
       modelCatalog: MODEL_CATALOG,
       agentModels: {
-        selections: (row && row.agent_model_selections) || {},
+        // 목록에서 내린 옛 모델(예: Opus 4.8)은 실제로 쓰이는 후속 모델로 보여 준다.
+        selections: normalizeModelSelections(row && row.agent_model_selections),
         defaults: CLOUD_MODELS,
       },
       claudeAuth,

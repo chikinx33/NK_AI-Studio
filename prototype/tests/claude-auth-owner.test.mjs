@@ -40,7 +40,7 @@ function harness(initial = {}) {
     const userId = request.headers.get("x-test-user");
     return userId ? { ok: true, userId } : { ok: false, error: "unauthorized", status: 401 };
   }, getSql: () => sql, send: (body, status) => new Response(JSON.stringify(body), { status }),
-    corsHeaders: () => ({}), CLOUD_MODELS: {}, MODEL_CATALOG: {},
+    corsHeaders: () => ({}), CLOUD_MODELS: {}, MODEL_CATALOG: {}, normalizeModelSelections: (v) => v || {},
     generationStatus: async () => ({}), saveGenerationSettings: async () => {} };
   const settings = new Function(...Object.keys(deps), esbuild.transformSync(settingsSrc, { loader: "ts" }).code +
     "\nreturn {onRequestGet, onRequestPost};")(...Object.values(deps));

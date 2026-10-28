@@ -867,7 +867,7 @@ export async function callClaude(
   messages: ClaudeMsg[],
   opts: {
     model?: string;
-    modelChoice?: { provider: string; model: string };
+    modelChoice?: { provider: string; model: string; effort?: string };
     maxTokens?: number;
     sql?: SqlFn;
     userId?: string;
@@ -878,14 +878,14 @@ export async function callClaude(
   let choice =
     opts.modelChoice ||
     normalizeModelChoice(opts.model) ||
-    { provider: "anthropic", model: "claude-sonnet-4-6" };
+    { provider: "anthropic", model: "claude-sonnet-5-5" };
 
   // A user's own Claude choice must cover GPT/Atlas model overrides too.
   // Fail closed on settings errors rather than consuming a master credential.
   if (!opts.userId) throw new Error('claude_auth_user_required');
   const resolved = opts.resolvedAuth ? null : await resolveAuth(opts.sql || getSql(env), opts.userId, env, { allowMissing: true });
   if ((opts.resolvedAuth?.source || resolved?.source) === 'user' && !isAnthropicProvider(choice.provider)) {
-    choice = { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+    choice = { provider: 'anthropic', model: 'claude-sonnet-5-5' };
   }
 
   let auth: any = null;
@@ -901,6 +901,7 @@ export async function callClaude(
     system,
     messages,
     maxTokens: opts.maxTokens,
+    effort: (choice as { effort?: string }).effort,
     images: opts.images,
     auth,
   });
@@ -2345,7 +2346,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 첨부는 이 발언자에게 먼저 주고, 이어서 발언하는 직원들에게도 같은 첨부를 준다(§8.2).
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), modelHint: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, images: imagesForNextSpeaker(), modelHint: canDelegate ? "claude-sonnet-5-5" : undefined, ...sharedOpts });
     const knowNote = await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);

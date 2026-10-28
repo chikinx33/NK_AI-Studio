@@ -9,8 +9,8 @@ const read = (path) => readFile(path, "utf8");
 
 test("카탈로그가 제공사마다 최상위·추천 등급을 표시한다", async () => {
   const src = await read("prototype/functions/api/_shared/cloud-models.js");
-  assert.match(src, /\{ id: "claude-opus-4-8", label: "[^"]+", tier: "top" \}/);
-  assert.match(src, /\{ id: "claude-sonnet-4-6", label: "[^"]+", tier: "recommended" \}/);
+  assert.match(src, /\{ id: "claude-opus-5-5", label: "[^"]+", tier: "top" \}/);
+  assert.match(src, /\{ id: "claude-sonnet-5-5", label: "[^"]+", tier: "recommended" \}/);
   assert.match(src, /\{ id: "openai\/gpt-5\.6-sol", label: "[^"]+", tier: "top" \}/);
   assert.match(src, /\{ id: "openai\/gpt-5\.6-luna", label: "[^"]+", tier: "recommended" \}/);
   assert.match(src, /\{ id: "gpt-5\.6-sol", label: "[^"]+", tier: "top" \}/);

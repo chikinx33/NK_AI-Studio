@@ -6,7 +6,7 @@
 // 규격 차이(시스템 프롬프트 위치·이미지 블록 형태·토큰 파라미터 이름)를 전부 여기서 흡수하고,
 // 호출부에는 "system + messages + 모델" 하나만 남긴다.
 import { buildClaudeSystem, claudeFetch, describeAuthTrace } from "./claude-auth.js";
-import { isAnthropicProvider, normalizeProvider } from "./cloud-models.js";
+import { isAnthropicProvider, normalizeProvider, supportsEffort, thinksByDefault } from "./cloud-models.js";
 import { isCreditExhausted } from "./credit-exhausted.js";
 
 const ATLAS_BASE = "https://api.atlascloud.ai";
@@ -24,6 +24,7 @@ const RATE_LIMIT_RETRIES = 2;
  * @param opts.system    시스템 프롬프트(문자열)
  * @param opts.messages  [{role:"user"|"assistant", content:string}]
  * @param opts.maxTokens
+ * @param opts.effort    Anthropic 전용. "low"|"medium"|"high"|"xhigh"|"max" (받는 모델에만 보낸다)
  * @param opts.images    [{base64, mimeType}] — 마지막 user 메시지에 첨부
  * @param opts.auth      Anthropic 전용. resolvedAuthHeaders() 결과.
  * @returns 모델이 낸 텍스트
@@ -39,11 +40,19 @@ export async function callLLM(env, opts) {
 // 상한은 "최대" 일 뿐 짧은 답의 비용·속도는 그대로다. 긴 문서 작업은 호출자가 더 크게 준다.
 const DEFAULT_MAX_TOKENS = 6000;
 
+// 생각을 끌 수 없는 모델(Opus 5.5 등)은 생각 토큰도 max_tokens 에 든다.
+// 마커 한 줄만 받는 보조 호출(300~400)이 생각만 하다 빈 답으로 끝나지 않게 바닥을 둔다.
+// 상한일 뿐이라 짧은 답의 비용은 그대로다.
+const THINKING_MIN_MAX_TOKENS = 4000;
+
 // ── Anthropic Messages ─────────────────────────────────────────────────────
 async function callAnthropic(env, opts) {
   const auth = opts.auth;
   if (!auth || !auth.headers) throw new Error("Anthropic 인증이 없습니다.");
   const messages = attachImagesAnthropic(opts.messages || [], opts.images || []);
+  let maxTokens = opts.maxTokens || DEFAULT_MAX_TOKENS;
+  if (thinksByDefault(opts.model)) maxTokens = Math.max(maxTokens, THINKING_MIN_MAX_TOKENS);
+  const effort = opts.effort && supportsEffort(opts.model) ? opts.effort : null;
 
   for (let attempt = 0; attempt <= RATE_LIMIT_RETRIES; attempt++) {
     // trace 를 넘겨 '무엇으로 어디까지 갔는지' 를 받아 온다. 예전엔 오류 라벨이 늘 첫 시도
@@ -51,7 +60,8 @@ async function callAnthropic(env, opts) {
     const trace = {};
     const res = await claudeFetch(env, auth, (sub) => ({
       model: opts.model,
-      max_tokens: opts.maxTokens || DEFAULT_MAX_TOKENS,
+      max_tokens: maxTokens,
+      ...(effort ? { output_config: { effort } } : {}),
       system: buildClaudeSystem(sub, opts.system),
       messages,
     }), {}, trace);

@@ -33,16 +33,46 @@ const models = evalModule(
   readSrc("_shared/cloud-models.js"),
   {},
   `globalThis.__api = { resolveAgentModel, sanitizeModelSelections, normalizeModelChoice,
-     normalizeProvider, isAnthropicProvider, MODEL_CATALOG, CLOUD_MODELS };`
+     normalizeModelSelections, normalizeProvider, isAnthropicProvider, supportsEffort, thinksByDefault,
+     MODEL_CATALOG, CLOUD_MODELS };`
 ).__api;
 
 // ── 해석 우선순위 ───────────────────────────────────────────────────────────
 test("설정이 없으면 기존 CLOUD_MODELS 기본값을 그대로 쓴다", () => {
   assert.equal(
     JSON.stringify(models.resolveAgentModel("core", {})),
-    '{"provider":"anthropic","model":"claude-opus-4-8"}'
+    '{"provider":"anthropic","model":"claude-opus-5-5","effort":"high"}'
   );
-  assert.equal(models.resolveAgentModel("sync", {}).model, "claude-haiku-4-5");
+  assert.equal(models.resolveAgentModel("sync", {}).model, "claude-haiku-5-5");
+});
+
+test("판단이 무거운 직원은 Opus, 실행 위주 직원은 Sonnet 이 기본이다 (2026-10-28)", () => {
+  for (const id of ["core", "edge", "plot", "ink", "pixel"]) {
+    assert.equal(models.CLOUD_MODELS[id], "claude-opus-5-5", id);
+  }
+  for (const id of ["radar", "maki", "beat", "engi", "reach"]) {
+    assert.equal(models.CLOUD_MODELS[id], "claude-sonnet-5-5", id);
+  }
+});
+
+test("생각 깊이는 코어·플롯만 high, 받지 않는 모델·제공사에는 붙이지 않는다", () => {
+  assert.equal(models.resolveAgentModel("plot", {}).effort, "high");
+  assert.equal(models.resolveAgentModel("ink", {}).effort, undefined);
+  assert.equal(models.resolveAgentModel("core", { core: { provider: "atlas", model: "openai/gpt-5.5" } }).effort, undefined);
+  assert.equal(models.resolveAgentModel("core", {}, "claude-haiku-4-5-20251001").effort, undefined);
+});
+
+test("목록에서 내린 옛 모델을 고른 저장값은 후속 모델로 읽힌다", () => {
+  const saved = { core: { provider: "anthropic", model: "claude-opus-4-8" }, beat: "claude-sonnet-4-6" };
+  assert.equal(models.resolveAgentModel("core", saved).model, "claude-opus-5-5");
+  assert.equal(
+    JSON.stringify(models.normalizeModelSelections(saved)),
+    '{"core":{"provider":"anthropic","model":"claude-opus-5-5"},"beat":{"provider":"anthropic","model":"claude-sonnet-5-5"}}'
+  );
+  // 대규모 그룹 속도 대책(날짜 붙은 Haiku 4.5)은 올리지 않는다.
+  assert.equal(models.normalizeModelChoice("claude-haiku-4-5-20251001").model, "claude-haiku-4-5-20251001");
+  // OpenAI 쪽 ID 는 건드리지 않는다.
+  assert.equal(models.normalizeModelChoice({ provider: "openai", model: "claude-opus-4-8" }).model, "claude-opus-4-8");
 });
 
 test("사용자가 고른 두뇌가 성능 힌트를 이긴다 (하드코딩이 선택을 덮지 않는다)", () => {
@@ -61,15 +91,15 @@ test("고르지 않은 직원에게는 성능 힌트가 그대로 적용된다",
 
 test("코드가 강제한 모델(override)은 사용자 선택보다도 우선한다", () => {
   const selections = { ink: { provider: "atlas", model: "openai/gpt-5.6-luna" } };
-  assert.equal(models.resolveAgentModel("ink", selections, "claude-opus-4-8").model, "claude-opus-4-8");
+  assert.equal(models.resolveAgentModel("ink", selections, "claude-opus-5-5").model, "claude-opus-5-5");
 });
 
 test("옛 저장 형식(모델 이름 문자열)은 anthropic 으로 읽힌다", () => {
   assert.equal(
-    JSON.stringify(models.normalizeModelChoice("claude-sonnet-4-6")),
-    '{"provider":"anthropic","model":"claude-sonnet-4-6"}'
+    JSON.stringify(models.normalizeModelChoice("claude-sonnet-5-5")),
+    '{"provider":"anthropic","model":"claude-sonnet-5-5"}'
   );
-  assert.equal(models.resolveAgentModel("ink", { ink: "claude-opus-4-8" }).provider, "anthropic");
+  assert.equal(models.resolveAgentModel("ink", { ink: "claude-opus-5-5" }).provider, "anthropic");
 });
 
 // ── 저장 전 검증 ────────────────────────────────────────────────────────────
@@ -102,6 +132,8 @@ function loadLlm(stubs) {
       claudeFetch: stubs.claudeFetch || (async () => new Response("{}", { status: 200 })),
       isAnthropicProvider: models.isAnthropicProvider,
       normalizeProvider: models.normalizeProvider,
+      supportsEffort: models.supportsEffort,
+      thinksByDefault: models.thinksByDefault,
       isCreditExhausted: (t, s) => s === 402 || /credit balance/i.test(String(t)),
       fetch: stubs.fetch,
     },
@@ -110,6 +142,26 @@ function loadLlm(stubs) {
 }
 
 const OK_CHAT = JSON.stringify({ choices: [{ message: { content: "안녕하세요" } }] });
+
+test("Claude 호출: effort 는 받는 모델에만, 생각하는 모델은 짧은 상한에 바닥을 둔다", async () => {
+  const bodies = [];
+  const callLLM = loadLlm({
+    claudeFetch: async (_env, _auth, build) => {
+      bodies.push(build(false));
+      return new Response(JSON.stringify({ content: [{ type: "thinking", thinking: "" }, { type: "text", text: "ok" }] }), { status: 200 });
+    },
+  });
+  const auth = { headers: {}, subscription: false };
+  const out = await callLLM({}, { provider: "anthropic", model: "claude-opus-5-5", messages: [], maxTokens: 300, effort: "high", auth });
+  assert.equal(out, "ok");
+  assert.equal(bodies[0].max_tokens, 4000);
+  assert.equal(bodies[0].output_config.effort, "high");
+
+  // Haiku 4.5 는 effort 를 400 으로 거부하고, 생각도 기본으로 켜지 않는다.
+  await callLLM({}, { provider: "anthropic", model: "claude-haiku-4-5-20251001", messages: [], maxTokens: 300, effort: "high", auth });
+  assert.equal(bodies[1].max_tokens, 300);
+  assert.equal(bodies[1].output_config, undefined);
+});
 
 test("Atlas 경유 GPT 는 OpenAI 규격으로 api.atlascloud.ai 에 간다", async () => {
   const seen = [];
@@ -214,7 +266,7 @@ test("OpenAI 쪽 잔액 부족도 CREDIT_EXHAUSTED 로 통일된다", async () =
 // ── 배선 계약 (소스 수준) ───────────────────────────────────────────────────
 test("오케스트레이터의 지연시간 대책은 강제(model)가 아니라 힌트(modelHint)로 넘어간다", () => {
   const src = readSrc("agent/_orchestrator.ts");
-  assert.match(src, /modelHint: canDelegate \? "claude-sonnet-4-6" : undefined/);
+  assert.match(src, /modelHint: canDelegate \? "claude-sonnet-5-5" : undefined/);
   assert.match(src, /modelHint: workerModel/);
   // 사용자 선택을 무시하고 모델을 박아 넣는 경로가 남아 있으면 안 된다.
   assert.doesNotMatch(src, /model: opts\.model \|\| modelFor\(/);

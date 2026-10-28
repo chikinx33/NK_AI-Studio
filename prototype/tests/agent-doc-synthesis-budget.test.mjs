@@ -12,7 +12,8 @@ const read = (p) => readFile(new URL(`../../${p}`, import.meta.url), "utf8");
 test("출력 토큰 기본 상한은 6000 이고 Anthropic·OpenAI 호환 경로 모두 같은 값을 쓴다", async () => {
   const llm = await read("prototype/functions/api/_shared/llm.js");
   assert.match(llm, /const DEFAULT_MAX_TOKENS = 6000;/);
-  assert.match(llm, /max_tokens: opts\.maxTokens \|\| DEFAULT_MAX_TOKENS,/);
+  assert.match(llm, /let maxTokens = opts\.maxTokens \|\| DEFAULT_MAX_TOKENS;/);
+  assert.match(llm, /max_tokens: maxTokens,/);
   assert.match(llm, /body\[tokenField\] = opts\.maxTokens \|\| DEFAULT_MAX_TOKENS;/);
   assert.doesNotMatch(llm, /\|\| 1500/);
 });
