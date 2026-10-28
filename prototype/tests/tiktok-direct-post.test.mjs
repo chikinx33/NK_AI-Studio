@@ -13,16 +13,16 @@ const SCREENSHOTS = ["01-connect", "02-confirm-dialog", "03-disclosure", "04-dra
 // 여기 깨지면 제출한 Review Description 과 실제 동작이 어긋나 즉시 반려된다.
 
 test("OAuth 요청 스코프는 3개이고 video.list 는 요청하지 않는다", () => {
-  const src = read("prototype/functions/api/sns/connect/tiktok.ts");
+  const src = read("prototype/functions/api/_shared/meta-oauth.js");
   // 이 앱에 Display API 제품이 없어 video.list 는 토큰에 실리지 않는다 → 요청하지 않는다.
-  assert.match(src, /scope: "user\.info\.basic,video\.publish,video\.upload"/);
-  assert.doesNotMatch(src, /scope: "[^"]*video\.list/);
+  assert.match(src, /tiktok: \['user\.info\.basic', 'video\.publish', 'video\.upload'\]/);
+  assert.doesNotMatch(src, /tiktok: \[[^\]]*video\.list/);
 });
 
 test("video.upload 를 요청하는 한 초안함(inbox) 흐름이 존재해야 한다", () => {
   // 시연 못 하는 스코프는 그 자체가 반려 사유다.
-  const scope = read("prototype/functions/api/sns/connect/tiktok.ts");
-  if (!/scope: "[^"]*video\.upload/.test(scope)) return;
+  const scope = read("prototype/functions/api/_shared/meta-oauth.js");
+  if (!/tiktok: \[[^\]]*video\.upload/.test(scope)) return;
   const inbox = read("prototype/functions/api/sns/tiktok/inbox.ts");
   assert.match(inbox, /export const onRequestPost/);
   assert.match(inbox, /post\/publish\/inbox\/video\/init/);
@@ -42,9 +42,10 @@ test("video.upload 를 요청하는 한 초안함(inbox) 흐름이 존재해야 
 });
 
 test("user.info.basic 은 username 을 요청하지 않는다 (profile 스코프 소관)", () => {
-  const src = read("prototype/functions/auth/tiktok/callback.ts");
+  const all = read("prototype/functions/api/_shared/meta-oauth.js");
+  const src = all.slice(all.indexOf("async tiktok("), all.indexOf("async x("));
   assert.match(src, /fields=open_id,display_name,avatar_url/);
-  assert.doesNotMatch(src, /fields=[^"]*username/);
+  assert.doesNotMatch(src, /fields=[^'"]*username/);
 });
 
 test("publish 는 tiktok 설정 오브젝트를 요청 바디에서 받는다", () => {
@@ -240,7 +241,7 @@ test("포털 제출본(_1000.txt)이 1000자 이내이고 코드와 같은 스�
   assert.ok(sub.trimEnd().length <= 1000, `제출본이 ${sub.trimEnd().length}자 — 포털 상한 1000자 초과`);
 
   // 코드가 실제로 요청하는 스코프 조합과 같아야 한다
-  const scope = read("prototype/functions/api/sns/connect/tiktok.ts");
+  const scope = read("prototype/functions/api/_shared/meta-oauth.js");
   for (const s of ["user.info.basic", "video.publish", "video.upload"]) {
     assert.ok(scope.includes(s), `scope 문자열에 ${s} 가 있어야 한다`);
     assert.ok(sub.includes(s), `제출본에 ${s} 설명이 있어야 한다`);
@@ -291,7 +292,7 @@ test("TikTok 프로필 링크는 확인된 handle 이 있을 때만 만든다", 
   assert.doesNotMatch(src, /tiktok'\) return u \?/);
   assert.match(read("prototype/js/ui/sns-settings.js"), /window\.NKFormatMedia\.profileUrlOf\(platform\.id/);
   // handle 은 creator_info 의 creator_username 으로 채운다
-  const cb = read("prototype/functions/auth/tiktok/callback.ts");
+  const cb = read("prototype/functions/api/_shared/meta-oauth.js");
   assert.match(cb, /creator_username/);
   assert.match(cb, /handle,/);
   // 클라이언트가 읽을 수 있어야 링크가 생긴다

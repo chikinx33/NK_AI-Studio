@@ -104,7 +104,8 @@
     ];
 
     // 프로젝트 id 등이 붙는 가변 키는 접두사로 제거 (2단계)
-    config.ACCOUNT_SCOPED_PREFIXES = ['nk_bs_deployed_'];
+    // nk_meta_oauth_<플랫폼>: 진행 중인 SNS 연결의 브라우저 proof(모든 OAuth 플랫폼 공용 이름).
+    config.ACCOUNT_SCOPED_PREFIXES = ['nk_bs_deployed_', 'nk_meta_oauth_'];
 
     function removeKeys(list) {
         (list || []).forEach(function (k) {

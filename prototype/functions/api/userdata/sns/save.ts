@@ -47,12 +47,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const raw = incomingSns[platform];
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
         const prev = existing.sns[platform] || {};
-        // Meta disconnect requires its explicit endpoint; stale preference
-        // saves must not disconnect a newly connected account.
-        if (raw.connected === false && !["instagram", "threads"].includes(platform)) {
-          existing.sns[platform] = { connected: false, enabled: false };
-          continue;
-        }
+        // 연결 해제는 /api/sns/disconnect 로만 한다. 오래된 화면·에이전트 선호 저장이
+        // connected:false 를 실어 보내도 새로 연결된 계정을 끊지 않는다.
         // Account IDs, credentials and connected state are server-owned.
         const incoming = typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {};
         existing.sns[platform] = Object.assign({}, prev, incoming);

@@ -57,8 +57,8 @@ test("유튜브: 재생목록은 업로드 성공 뒤 넣고, 실패는 note 로
   assert.match(helper, /mine: "true"/, "같은 이름의 내 재생목록을 먼저 찾는다");
   assert.match(helper, /youtube\/v3\/playlistItems\?part=snippet/);
   assert.match(helper, /다시 연결해 주세요/, "권한 부족(403)은 재연결 안내");
-  const connect = read("prototype/functions/api/sns/connect/youtube.ts");
-  assert.match(connect, /https:\/\/www\.googleapis\.com\/auth\/youtube"/, "재생목록 쓰기 권한(youtube)을 요청해야 한다");
+  const connect = read("prototype/functions/api/_shared/meta-oauth.js");
+  assert.match(connect, /https:\/\/www\.googleapis\.com\/auth\/youtube'/, "재생목록 쓰기 권한(youtube)을 요청해야 한다");
 });
 
 test("제목에 #shorts 가 있으면 설명에 #Shorts 를 덧붙이지 않는다", () => {

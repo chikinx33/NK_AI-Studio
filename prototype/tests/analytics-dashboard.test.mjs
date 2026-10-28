@@ -259,9 +259,9 @@ test('analytics OAuth requests include the read scopes required by platform insi
   assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /instagram_business_manage_insights/);
   // read_insights 는 이 앱(이용 사례 기반)에서 Invalid Scope 로 거부되어 앱 관리자 OAuth 가 중단된다.
   // 페이지 인사이트는 pages_read_engagement 로 읽는다.
-  assert.match(read('prototype/functions/api/sns/connect/facebook.ts'), /pages_read_engagement/);
-  assert.doesNotMatch(read('prototype/functions/api/sns/connect/facebook.ts'), /read_insights/);
-  assert.match(read('prototype/functions/api/sns/connect/tiktok.ts'), /video\.list/);
+  assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /facebook: \[[^\]]*'pages_read_engagement'/);
+  assert.doesNotMatch(read('prototype/functions/api/_shared/meta-oauth.js'), /read_insights/);
+  assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /video\.list/);
   assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /threads_manage_insights/);
 });
 

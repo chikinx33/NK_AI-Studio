@@ -117,9 +117,12 @@ test('브라우저로 나가는 응답에는 웹훅 주소가 없다(get·save·
   for (const secret of ['webhookUrl', 'webhookId']) assert.ok(!safe.includes(`"${secret}"`), `${secret} 가 화면으로 나간다`);
 
   const save = read('prototype/functions/api/userdata/sns/save.ts');
-  // 클라이언트 저장으로는 비밀을 쓸 수 없고, 해제하면 서버의 비밀도 지운다
+  // 클라이언트 저장으로는 비밀을 쓸 수 없고, 해제(전용 API)하면 서버의 비밀도 지운다
   assert.match(save, /const incoming = typeof raw.enabled === "boolean" \? \{ enabled: raw.enabled \} : \{\}/);
-  assert.match(save, /raw\.connected === false[\s\S]*?\{ connected: false, enabled: false \}/);
+  assert.doesNotMatch(save, /raw\.connected === false/);
+  const disconnect = read('prototype/functions/api/sns/disconnect.ts');
+  assert.match(disconnect, /\[\.\.\.SNS_OAUTH_PLATFORMS, 'discord'\]/);
+  assert.match(disconnect, /next\.sns\[platform\] = \{ connected: false, enabled: false, disconnectedAt/);
   // 저장 응답도 마스킹한다(예전엔 병합 결과 전체를 돌려줬다)
   assert.match(save, /settings: maskSavedSettings\(settings\)/);
   assert.doesNotMatch(save, /send\(\{ ok: true, settings: existing \}\)/);

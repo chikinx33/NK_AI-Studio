@@ -12,6 +12,10 @@
   var _oauthAttempts = {};
   var _oauthWindows = {};
   var _oauthOrigins = {};
+  // 서명 state·일회성 티켓으로 연결하는 플랫폼(서버 SNS_OAUTH_PLATFORMS 와 같다).
+  // 팝업 메시지만으로 '연결됨'을 만들지 않고 /api/sns/complete 의 서버 저장 확인을 거친다.
+  var OAUTH_PLATFORMS = ['instagram', 'threads', 'facebook', 'youtube', 'tiktok', 'x'];
+  function isOAuthPlatform(pid) { return OAUTH_PLATFORMS.indexOf(pid) >= 0; }
   // 현재 프로젝트가 공유받은 것이면 소유자 id (그 경우 화면은 읽기 전용으로 소유자 연결 표시)
   var _sharedOwnerId = '';
 
@@ -310,14 +314,13 @@
     if (!_settingsVerified) return Promise.resolve({ ok: false, error: oauthError('server_verification_failed') });
     _saving = true;
     setStatus(t('saving'), 'pending');
-    // 모든 알려진 플랫폼의 connected/enabled/igUserId/username만 전송.
-    // accessToken 등 민감 필드는 서버측 read-modify-write 머지로 보존됨.
+    // 사용 토글(enabled)만 서버가 반영한다. 연결 상태·토큰·계정 정보는 서버 소유이고,
+    // 연결 해제는 /api/sns/disconnect 로만 한다(이 저장으로는 끊기지 않는다).
     var snsOut = {};
     var allSns = (_settings && _settings.sns) || {};
     Object.keys(allSns).forEach(function (pid) {
       var s = allSns[pid] || {};
       snsOut[pid] = {
-        ...((pid === 'instagram' || pid === 'threads') ? {} : { connected: !!s.connected }),
         enabled: !!s.enabled,
         igUserId: s.igUserId || '',
         username: s.username || '',
@@ -398,7 +401,10 @@
   function oauthError(category) {
     var messages = {
       login_required: ['NK Studio 로그인이 만료됐습니다. 다시 로그인한 뒤 연결해 주세요.', 'Sign in to NK Studio again, then reconnect.'],
-      service_access_restricted: ['서비스 측 Meta 앱의 공개 상태 또는 권한 승인이 필요합니다. NK Studio 운영자가 해결해야 하는 문제입니다. 고객님의 개발자 등록이나 운영자 계정 로그인은 필요하지 않습니다.', 'NK Studio must complete Meta app publication or permission review. Customers do not need a developer role or an operator login.'],
+      service_access_restricted: ['서비스 측 SNS 앱의 공개 상태 또는 권한 승인이 필요합니다. NK Studio 운영자가 해결해야 하는 문제입니다. 고객님의 개발자 등록이나 운영자 계정 로그인은 필요하지 않습니다.', 'NK Studio must complete the SNS app publication or permission review. Customers do not need a developer role or an operator login.'],
+      facebook_page_required: ['관리 권한이 있는 Facebook 페이지를 찾지 못했습니다. 동의 화면에서 연결할 페이지를 선택했는지 확인해 주세요.', 'No Facebook Page you manage was shared. Select the Page to connect on the consent screen.'],
+      facebook_page_not_granted: ['지정한 Facebook 페이지에 대한 권한이 동의되지 않았습니다. 동의 화면에서 그 페이지를 선택해 주세요.', 'Access to the requested Facebook Page was not granted. Select that Page on the consent screen.'],
+      youtube_channel_required: ['이 Google 계정에 YouTube 채널이 없습니다. 채널을 만든 뒤 다시 연결해 주세요.', 'This Google account has no YouTube channel. Create a channel, then connect again.'],
       service_configuration: ['서비스의 SNS 인증 설정을 확인해야 합니다. NK Studio 운영자에게 문의해 주세요.', 'NK Studio needs to correct its SNS authentication configuration. Contact support.'],
       permission_required: ['게시 권한이 허용되지 않았습니다. 동의 화면에서 요청 권한을 확인해 주세요. 앱 심사 제한이면 운영자가 해결해야 합니다.', 'Publishing permission was not granted. Check the consent screen; app review restrictions must be resolved by NK Studio.'],
       consent_denied: ['SNS 권한 동의를 취소하셨습니다. 기존 연결은 유지됩니다.', 'SNS consent was cancelled. Your existing connection is preserved.'],
@@ -460,12 +466,12 @@
         return;
       }
       _oauthOrigins[platform] = res.callbackOrigin || new URL(new URL(res.oauthUrl).searchParams.get('redirect_uri')).origin;
-      if (platform === 'instagram' || platform === 'threads') {
+      if (isOAuthPlatform(platform)) {
         var attempt = { attemptId: res.attemptId, proof: res.proof, expiresAt: res.expiresAt, user: localStorage.getItem('nk_login_user') || '' };
         _oauthAttempts[platform] = attempt;
-        // Proof is scoped to this browser and login, and is never sent to Meta.
+        // Proof is scoped to this browser and login, and is never sent to the SNS provider.
         localStorage.setItem('nk_meta_oauth_' + platform, JSON.stringify(attempt));
-        setStatus(_lang() === 'en' ? 'Waiting for SNS consent. Meta app access errors must be resolved by NK Studio.' : 'SNS 동의를 기다리고 있습니다. 개발자 역할·앱 공개 오류는 NK Studio 운영자가 해결해야 합니다.', 'pending');
+        setStatus(_lang() === 'en' ? 'Waiting for SNS consent. App access errors must be resolved by NK Studio.' : 'SNS 동의를 기다리고 있습니다. 개발자 역할·앱 공개 오류는 NK Studio 운영자가 해결해야 합니다.', 'pending');
         setTimeout(function () { finishMetaAttempt(platform); }, 3000);
       }
       popup.location.href = res.oauthUrl;
@@ -476,19 +482,10 @@
     if (!evt.data || evt.data.type !== 'sns_oauth_result') return;
     var platform = evt.data.platform;
     if (!_oauthWindows[platform] || evt.source !== _oauthWindows[platform] || evt.origin !== _oauthOrigins[platform]) return;
-    if (platform === 'instagram' || platform === 'threads') {
-      var attempt = _oauthAttempts[platform];
-      if (attempt && evt.data.result && evt.data.result.attemptId === attempt.attemptId) attempt.code = evt.data.result.code || '';
-      finishMetaAttempt(platform); return;
-    }
-    var result = evt.data.result;
-    if (!result || !result.ok) { snsAlert(T[_lang()].connectFail(platform, oauthError('connection_failed'))); return; }
-    loadSettings().then(function () {
-      render();
-      var saved = _settings && _settings.sns && _settings.sns[platform];
-      if (_settingsVerified && saved && saved.connected) setStatus(T[_lang()].connectOk(platform, saved.username || ''), 'success');
-      else setStatus(oauthError('server_verification_failed'), 'error');
-    });
+    if (!isOAuthPlatform(platform)) return;
+    var attempt = _oauthAttempts[platform];
+    if (attempt && evt.data.result && evt.data.result.attemptId === attempt.attemptId) attempt.code = evt.data.result.code || '';
+    finishMetaAttempt(platform);
   }
 
   function setStatus(msg, type) {
@@ -577,9 +574,13 @@
         _writeCache(_settings.sns);
         render();   // 잠긴 상태로 즉시 반영
         console.log('[SNS] 연결 해제 저장 요청:', pid);
-        var disconnectRequest = (pid === 'instagram' || pid === 'threads')
-          ? apiPost('/api/sns/disconnect', { platform: pid }).catch(function () { return { ok: false }; }) : saveSettings();
+        var disconnectRequest = apiPost('/api/sns/disconnect', { platform: pid }).catch(function () { return { ok: false }; });
         return disconnectRequest.then(function (res) {
+          if (res && res.ok && res.settings && res.settings.sns) {
+            // 유튜브 해제는 서버가 쇼츠 미러도 함께 끈다 — 서버 응답으로 화면을 맞춘다.
+            Object.keys(res.settings.sns).forEach(function (k) { _settings.sns[k] = res.settings.sns[k]; });
+            _writeCache(_settings.sns);
+          }
           if (res && res.ok && res.warning) snsAlert(_lang() === 'en'
             ? 'The stored NK Studio connection has been deleted. To also revoke the app grant, remove NK Studio in your SNS app settings. That grant may be shared by another NK Studio login using the same SNS account.'
             : 'NK Studio의 저장된 연결 정보는 삭제했습니다. 앱 권한까지 철회하려면 SNS 앱 설정에서 NK Studio 접근 권한을 제거해 주세요. 같은 SNS 계정을 연결한 다른 NK Studio 로그인에도 권한 철회가 적용될 수 있습니다.');
@@ -844,7 +845,7 @@
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     } catch (_) {}
-    ['instagram', 'threads'].forEach(function (platform) {
+    OAUTH_PLATFORMS.forEach(function (platform) {
       try {
         var attempt = JSON.parse(localStorage.getItem('nk_meta_oauth_' + platform) || 'null');
         if (attempt) {
