@@ -717,7 +717,6 @@
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', escapeHtml(statusText), '</div>',
           (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
-          ((platform.id === 'instagram' || platform.id === 'threads') ? '<div class="sns-manual-note">' + escapeHtml(_lang() === 'en' ? 'Connect your own account. Instagram requires a professional account. If Meta reports a developer role or app access error, NK Studio must resolve the app review; contact support.' : '본인의 SNS 계정으로 연결하세요. Instagram은 프로페셔널 계정이 필요합니다. 개발자 역할·앱 접근 오류는 서비스 운영자의 Meta 공개 심사 문제이므로 지원 페이지로 문의해 주세요.') + ' <a href="/support">' + (_lang() === 'en' ? 'Support' : '지원') + '</a></div>' : ''),
         '</div>',
         // 직접 올리는 채널은 액션이 하나도 없다. 빈 껍데기를 두면 카드 간격만 먹는다.
         (linkBtnHtml || finalConnectBoxHtml || usageToggleHtml)
@@ -784,6 +783,7 @@
         // ── 플랫폼 그리드 카드
         '<div class="bsf-detail-card sns-settings-card">',
           '<div class="sns-settings-inner">',
+            '<p class="bsf-desc">' + escapeHtml(_lang() === 'en' ? 'Connect your own SNS account. Instagram requires a professional account. Meta developer-role or app-access errors must be resolved by NK Studio through app publication and permission review.' : '본인의 SNS 계정으로 연결하세요. Instagram은 프로페셔널 계정이 필요합니다. 개발자 역할·앱 접근 오류는 NK Studio 운영자가 앱 공개와 권한 심사를 통해 해결해야 합니다.') + '</p>',
             '<p><a href="/meta-integration">' + (_lang() === 'en' ? 'Instagram / Threads connection guide' : 'Instagram·Threads 연결 안내') + '</a> · <a href="/data-deletion">' + (_lang() === 'en' ? 'Data deletion' : '데이터 삭제') + '</a></p>',
             '<div class="sns-platform-grid">', cards, '</div>',
           '</div>',

@@ -1433,6 +1433,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         try {
           accessToken = await ensureInstagramPublishToken(igEntry, igStore);
         } catch (e: any) {
+          if (!/reconnect_required/.test(String(e?.message || ""))) return send({ error: "sns_connection_unavailable", category: "service_unavailable", needsReconnect: false }, 503);
           return send({ error: "instagram_reconnect_required", needsReconnect: true,
             message: "인스타그램 연결을 확인할 수 없습니다. SNS 설정에서 본인 계정으로 다시 연결해 주세요." }, 412);
         }
@@ -1860,8 +1861,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         if (msg === "threads_not_connected") {
           return send({ error: "Threads 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
         }
+        if (msg === "threads_paused") return send({ error: "threads_paused", category: "channel_paused" }, 412);
         const needsReconnect = msg === "threads_reconnect_required";
-        return send({ error: needsReconnect ? msg : "threads_connection_unavailable", needsReconnect }, msg === "threads_paused" || needsReconnect ? 412 : 503);
+        return send({ error: needsReconnect ? msg : "threads_connection_unavailable", category: needsReconnect ? "reconnect_required" : "service_unavailable", needsReconnect }, needsReconnect ? 412 : 503);
       }
       const { accessToken, threadsUserId, username } = th;
       usedMetaToken = accessToken;

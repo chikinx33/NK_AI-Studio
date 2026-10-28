@@ -31,9 +31,10 @@ export async function readThreadsRecord(ctx: GcsContext): Promise<ThreadsTokenDa
     `https://storage.googleapis.com/storage/v1/b/${ctx.bucket}/o/${readName}?alt=media`,
     { headers: { Authorization: `Bearer ${ctx.googleToken}` } }
   );
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("sns_storage_unavailable");
   let settings: any;
-  try { settings = await res.json(); } catch { return null; }
+  try { settings = await res.json(); } catch { throw new Error("sns_storage_invalid"); }
   const th = settings?.sns?.threads;
   if (!th || !th.connected) return null;
   return th as ThreadsTokenData;

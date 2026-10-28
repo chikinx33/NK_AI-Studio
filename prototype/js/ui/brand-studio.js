@@ -4695,7 +4695,9 @@
               var res = wrap.body;
               if (res && !res.ok && (formatId === 'instagram' || formatId === 'threads')) {
                 var cat = res.category || (res.needsReconnect ? 'reconnect_required' : '');
-                if (cat === 'permission_required') res.error = isEn ? 'SNS publishing permission is unavailable. Check consent; app review restrictions must be resolved by NK Studio.' : 'SNS 게시 권한이 없습니다. 동의 범위를 확인해 주세요. 앱 심사 제한은 NK Studio 운영자가 해결해야 합니다.';
+                if (cat === 'service_unavailable') res.error = isEn ? 'NK Studio could not verify the saved SNS connection. Try again shortly; contact support if this continues.' : 'NK Studio 서버에서 SNS 연결 상태를 확인하지 못했습니다. 잠시 후 다시 시도하고, 계속되면 지원팀에 문의해 주세요.';
+                else if (cat === 'channel_paused' || /_paused$/.test(res.error || '')) res.error = isEn ? 'This channel is paused. Enable it in SNS Settings.' : '사용 중지된 채널입니다. SNS 설정에서 사용을 켜 주세요.';
+                else if (cat === 'permission_required') res.error = isEn ? 'SNS publishing permission is unavailable. Check consent; app review restrictions must be resolved by NK Studio.' : 'SNS 게시 권한이 없습니다. 동의 범위를 확인해 주세요. 앱 심사 제한은 NK Studio 운영자가 해결해야 합니다.';
                 else if (cat === 'reconnect_required') res.error = isEn ? 'SNS permission expired or was revoked. Reconnect your own account in SNS Settings.' : 'SNS 권한이 만료되거나 철회됐습니다. SNS 설정에서 본인 계정으로 다시 연결해 주세요.';
                 else if (res.error === 'sns_publish_failed') res.error = isEn ? 'SNS publishing failed. Check the connection and try again.' : 'SNS 게시에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
               }
