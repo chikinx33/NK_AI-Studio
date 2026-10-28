@@ -62,7 +62,8 @@ export async function authorizeConnector(request: Request, env: any, sql: SqlFn)
 export function connectorStatus(row: any) {
   return { configured: !!row, online: !!row?.ready && Date.parse(row.expires_at || '') > Date.now()
       && Date.parse(row.last_seen || '') > Date.now() - ONLINE_MS,
-    email: row?.email || '', plan: row?.plan || '', expiresAt: row?.expires_at || '', source: row ? 'user-subscription' : 'unregistered' };
+    email: row?.email || '', plan: row?.plan || '', expiresAt: row?.expires_at || '', lastSeen: row?.last_seen || '',
+    source: row ? 'user-subscription' : 'unregistered' };
 }
 
 export function validateImagePayload(raw: any) {

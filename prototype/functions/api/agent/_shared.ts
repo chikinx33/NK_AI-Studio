@@ -5,6 +5,7 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { overviewOptions, matchOption, matchSubgenre, PURPOSE_CATEGORIES, NEEDS_LIST, TONE_LIST, STYLE_LIST, TARGET_OPTIONS, DURATION_OPTIONS, ASPECT_RATIOS } from "../_shared/overview-options.js";
 import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
+import { describeSettingsForAgent } from "../_shared/agent-settings-view.js";
 import { requireWritePath, prefixWithCreatedFolder } from "../_shared/company-file-path.js";
 import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
@@ -5046,8 +5047,9 @@ async function runAgentsListTool(_input: any, ctx: ToolContext): Promise<any> {
 
 /** 회사 운영 설정 조회(모델 모드·생성 설정). 민감한 키 값은 서버가 가려서 준다. read. */
 async function runAgentSettingsGetTool(_input: any, ctx: ToolContext): Promise<any> {
-  return { kind: "agent_settings_get", ...(await callInternalJson(ctx, "/api/agent/settings")) };
+  return { kind: "agent_settings_get", ...describeSettingsForAgent(await callInternalJson(ctx, "/api/agent/settings")) };
 }
+
 
 /** 회사 운영 설정 변경. 모델·생성 설정만 — 인증 키는 사람이 직접. 쓰기 → 승인 게이트. */
 async function runAgentSettingsSaveTool(input: any, ctx: ToolContext): Promise<any> {
