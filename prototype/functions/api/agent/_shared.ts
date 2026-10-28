@@ -5,6 +5,7 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { overviewOptions, matchOption, matchSubgenre, PURPOSE_CATEGORIES, NEEDS_LIST, TONE_LIST, STYLE_LIST, TARGET_OPTIONS, DURATION_OPTIONS, ASPECT_RATIOS } from "../_shared/overview-options.js";
 import { resolveGcsEnv as resolveCompanyGcsEnv } from "../_shared/gcs.js";
+import { requireWritePath, prefixWithCreatedFolder } from "../_shared/company-file-path.js";
 import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot } from "../_shared/storage";
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta, statGcsObject } from "../_shared/media-ingest";
@@ -1671,6 +1672,9 @@ export interface ToolContext {
   // 그 턴에 사용자가 채팅에 붙인 이미지(base64). 도구 입력의 "attachment:N" 이 이걸 가리킨다.
   // 전엔 첨부가 모델 눈에만 보이고 도구엔 닿지 않아 "이 그림 고쳐줘" 가 새 그림 생성으로 흘렀다.
   attachments?: { base64: string; mimeType: string }[];
+  // 같은 턴에서 company_files_mkdir 가 실제로 만든(또는 확인한) 폴더 경로. 이어지는 company_files_write 가
+  // 파일 이름만 넘겨도 이 폴더 안에 쓰이도록 경로 앞에 강제로 붙인다(맨 위에 파일이 생기던 문제).
+  lastCreatedFolder?: string;
 }
 
 export interface ToolDef {
@@ -4703,9 +4707,19 @@ async function runCompanyFilesReadTool(input: any, ctx: ToolContext): Promise<an
   return { kind: "company_files_read", ...(await callInternalJson(ctx, `/api/agent/company-files?path=${encodeURIComponent(path)}&read=1&offset=${offset}&limit=${limit}`)) };
 }
 
+/** 쓰기 경로 확정: 비었으면 막고, 같은 턴에 만든 폴더가 있으면 그 경로를 앞에 붙인다. 승인 카드에도 이 경로가 보인다. */
+function companyWritePath(input: any, ctx: ToolContext): string {
+  return prefixWithCreatedFolder(requireWritePath(input), ctx.lastCreatedFolder);
+}
+
+async function prepareCompanyFilesWriteInput(input: any, ctx: ToolContext): Promise<any> {
+  const path = companyWritePath(input, ctx);
+  const { file: _file, ...rest } = input || {};
+  return { ...rest, path };
+}
+
 async function runCompanyFilesWriteTool(input: any, ctx: ToolContext): Promise<any> {
-  const path = String(input?.path || input?.file || "").trim();
-  if (!path) throw new Error("작성할 회사 파일 경로(path)가 필요해요.");
+  const path = companyWritePath(input, ctx);
   if (input?.content === undefined || input?.content === null) throw new Error("파일에 작성할 내용(content)이 필요해요.");
   return { kind: "company_files_write", ...(await callInternalJson(ctx, "/api/agent/company-files", {
     body: { action: "write", path, content: String(input.content), contentType: String(input?.contentType || "text/plain; charset=utf-8") },
@@ -4720,6 +4734,7 @@ async function runCompanyFilesMkdirTool(input: any, ctx: ToolContext): Promise<a
   const listed = await callInternalJson(ctx, `/api/agent/company-files${parent ? `?path=${encodeURIComponent(parent)}` : ""}`);
   const verified = Array.isArray(listed?.entries) && listed.entries.some((entry: any) => entry?.kind === "folder" && entry?.path === created?.entry?.path);
   if (!verified) throw new Error(`'${path}' 폴더를 생성했지만 목록에서 확인하지 못했습니다.`);
+  ctx.lastCreatedFolder = String(created?.entry?.path || path);
   return { kind: "company_files_mkdir", ...created, verified: true, parentPath: parent };
 }
 
@@ -8225,7 +8240,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   company_files_document_restore: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyDocumentTool("document_restore", input, ctx) },
   company_files_list: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesListTool },
   company_files_read: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "read", synthesize: true, run: runCompanyFilesReadTool },
-  company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: runCompanyFilesWriteTool },
+  company_files_write: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, prepare: prepareCompanyFilesWriteInput, run: runCompanyFilesWriteTool },
   company_files_mkdir: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "local", run: runCompanyFilesMkdirTool },
   company_files_save_media: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "local", run: runCompanyFilesSaveMediaTool },
   company_files_copy: { agentId: "sync", agentIds: ["core", "edge", "radar", "maki", "plot", "ink", "pixel", "beat", "engi", "reach"], kind: "external", gate: true, run: (input, ctx) => runCompanyFilesTransferTool("copy", input, ctx) },

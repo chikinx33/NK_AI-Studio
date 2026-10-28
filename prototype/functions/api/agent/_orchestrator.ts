@@ -2039,6 +2039,12 @@ export async function runGroupChat(
           continue;
         }
       }
+      // 앞선 폴더 생성이 다음 요청으로 미뤄졌으면 파일 쓰기도 같이 미룬다 — 먼저 실행되면
+      // 만든 폴더 경로(toolCtx.lastCreatedFolder)를 못 받아 파일이 회사 파일 맨 위에 생긴다.
+      if (r.tool === "company_files_write" && deferredRuns.some((d: any) => d.tool === "company_files_mkdir")) {
+        deferredRuns.push({ tool: r.tool, reason: r.reason, agentId });
+        continue;
+      }
       const runKey = `${r.tool}\n${r.reason}`;
       if (seenRuns.has(runKey)) continue;
       seenRuns.add(runKey);
