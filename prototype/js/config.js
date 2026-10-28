@@ -1,8 +1,15 @@
 ; (function () {
+    // 정식 주소는 nkstudio.org. 예전 nk-ai-studio.pages.dev 로 들어온 화면은 같은 경로로 넘긴다.
+    // 구글 OAuth(로그인·YouTube)는 nkstudio.org 만 등록해 두므로 pages.dev 화면에서는 로그인할 수 없다.
+    // 서버 경로(/api·/auth)는 Meta·X 콜백이 아직 pages.dev 를 쓰므로 그대로 둔다(이 파일은 화면에서만 실행).
+    // 미리보기 배포(<해시>.nk-ai-studio.pages.dev)는 넘기지 않는다.
+    if (window.location && window.location.hostname === 'nk-ai-studio.pages.dev') {
+        window.location.replace('https://nkstudio.org' + window.location.pathname + window.location.search + window.location.hash);
+    }
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '3.2094';
+    config.APP_VERSION = '3.2095';
 
     // Storage Keys
     config.KEYS = {

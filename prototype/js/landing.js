@@ -6,6 +6,12 @@
 (function () {
   'use strict';
 
+  // 정식 주소로 넘기기 — js/config.js 머리말과 같은 규칙(랜딩은 config.js 를 불러오지 않는다).
+  if (window.location.hostname === 'nk-ai-studio.pages.dev') {
+    window.location.replace('https://nkstudio.org' + window.location.pathname + window.location.search + window.location.hash);
+    return;
+  }
+
   var LANG_KEY = 'nk_lang';
 
   /* ===== 한/영 사전 =====
