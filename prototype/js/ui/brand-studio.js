@@ -2932,7 +2932,10 @@
         var _so = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
         if (_so && _sharedSnsStatesCache[projectId]) return _sharedSnsStatesCache[projectId];
       } catch (_) {}
-      try { return JSON.parse(localStorage.getItem('nk_sns_states') || '{}'); } catch (e) { return {}; }
+      try {
+        if (localStorage.getItem('nk_sns_states_user') !== (localStorage.getItem('nk_login_user') || '')) return {};
+        return JSON.parse(localStorage.getItem('nk_sns_states') || '{}');
+      } catch (e) { return {}; }
     }
     function buildDeploySummaryHtml() {
       var snsStates = _readSnsStates();
@@ -4682,7 +4685,7 @@
                 var j = null;
                 try { j = raw ? JSON.parse(raw) : null; } catch (_) { j = null; }
                 if (!j) {
-                  console.warn('[publish] JSON 이 아닌 응답:', r.status, String(raw).slice(0, 300));
+                  console.warn('[publish] JSON 이 아닌 응답:', r.status);
                   j = { ok: false, error: '', code: 'non_json_response', httpStatus: r.status };
                 }
                 return { httpStatus: r.status, body: j };
@@ -4690,6 +4693,12 @@
             })
             .then(function (wrap) {
               var res = wrap.body;
+              if (res && !res.ok && (formatId === 'instagram' || formatId === 'threads')) {
+                var cat = res.category || (res.needsReconnect ? 'reconnect_required' : '');
+                if (cat === 'permission_required') res.error = isEn ? 'SNS publishing permission is unavailable. Check consent; app review restrictions must be resolved by NK Studio.' : 'SNS 게시 권한이 없습니다. 동의 범위를 확인해 주세요. 앱 심사 제한은 NK Studio 운영자가 해결해야 합니다.';
+                else if (cat === 'reconnect_required') res.error = isEn ? 'SNS permission expired or was revoked. Reconnect your own account in SNS Settings.' : 'SNS 권한이 만료되거나 철회됐습니다. SNS 설정에서 본인 계정으로 다시 연결해 주세요.';
+                else if (res.error === 'sns_publish_failed') res.error = isEn ? 'SNS publishing failed. Check the connection and try again.' : 'SNS 게시에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+              }
               // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)
               if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않|만료|expired|revoked/i.test(res.error))) {
                 bsfNotify((res && res.error)
@@ -5628,11 +5637,15 @@
               _sharedSnsStatesCache[initProjectId] = res.settings.sns;
             } else {
               localStorage.setItem('nk_sns_states', JSON.stringify(res.settings.sns));
+              localStorage.setItem('nk_sns_states_user', localStorage.getItem('nk_login_user') || '');
             }
             if (initDone && root.isConnected) forceRerender();
           } catch (_) {}
         }
-        // res.missing 인 경우 캐시 보존(덮어쓰지 않음). 서버 오류도 마찬가지.
+        if (!res || !res.ok || !res.settings) {
+          if (_snsOwner) _sharedSnsStatesCache[initProjectId] = {};
+          else localStorage.removeItem('nk_sns_states');
+        }
       } catch (_) {}
     }));
 

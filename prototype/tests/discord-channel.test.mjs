@@ -118,10 +118,10 @@ test('브라우저로 나가는 응답에는 웹훅 주소가 없다(get·save·
 
   const save = read('prototype/functions/api/userdata/sns/save.ts');
   // 클라이언트 저장으로는 비밀을 쓸 수 없고, 해제하면 서버의 비밀도 지운다
-  assert.match(save, /CLIENT_FORBIDDEN_FIELDS = \[[^\]]*"webhookUrl"/);
-  assert.match(save, /platform === "discord" && incoming\.connected === false[\s\S]*?\{ connected: false, enabled: false \}/);
+  assert.match(save, /const incoming = typeof raw.enabled === "boolean" \? \{ enabled: raw.enabled \} : \{\}/);
+  assert.match(save, /raw\.connected === false[\s\S]*?\{ connected: false, enabled: false \}/);
   // 저장 응답도 마스킹한다(예전엔 병합 결과 전체를 돌려줬다)
-  assert.match(save, /settings: maskSavedSettings\(existing\)/);
+  assert.match(save, /settings: maskSavedSettings\(settings\)/);
   assert.doesNotMatch(save, /send\(\{ ok: true, settings: existing \}\)/);
   // 두 허용 목록이 같아야 화면이 똑같이 그려진다
   const list = src => [...src.matchAll(/"([A-Za-z]+)"/g)].map(m => m[1]);

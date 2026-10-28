@@ -8,6 +8,10 @@
   // 연결/해제 처리 중인 플랫폼. 완료 전 재클릭을 막고, 렌더도 버튼을 잠근다.
   var _togglingPlatforms = {};
   var _CACHE_KEY = 'nk_sns_states';
+  var _settingsVerified = false;
+  var _oauthAttempts = {};
+  var _oauthWindows = {};
+  var _oauthOrigins = {};
   // 현재 프로젝트가 공유받은 것이면 소유자 id (그 경우 화면은 읽기 전용으로 소유자 연결 표시)
   var _sharedOwnerId = '';
 
@@ -26,10 +30,14 @@
   }
 
   function _readCache() {
-    try { return JSON.parse(localStorage.getItem(_CACHE_KEY) || '{}'); } catch (e) { return {}; }
+    try { return JSON.parse(localStorage.getItem(_CACHE_KEY + '::' + (localStorage.getItem('nk_login_user') || '')) || '{}'); } catch (e) { return {}; }
   }
   function _writeCache(sns) {
-    try { localStorage.setItem(_CACHE_KEY, JSON.stringify(sns || {})); } catch (e) {}
+    try {
+      localStorage.setItem(_CACHE_KEY + '::' + (localStorage.getItem('nk_login_user') || ''), JSON.stringify(sns || {}));
+      localStorage.setItem(_CACHE_KEY, JSON.stringify(sns || {}));
+      localStorage.setItem('nk_sns_states_user', localStorage.getItem('nk_login_user') || '');
+    } catch (e) {}
   }
 
   /**
@@ -175,7 +183,10 @@
   function apiGet(path) {
     var token = localStorage.getItem('nk_auth_token') || '';
     return fetch(path, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
-      .then(function (r) { return r.json(); });
+      .then(function (r) { return r.json(); }).then(function (res) {
+        if (token !== (localStorage.getItem('nk_auth_token') || '')) throw new Error('login_required');
+        return res;
+      });
   }
 
   function apiPost(path, body) {
@@ -184,7 +195,10 @@
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (token !== (localStorage.getItem('nk_auth_token') || '')) throw new Error('login_required');
+      return res;
+    });
   }
 
   function _defaultSettings(override) {
@@ -198,7 +212,7 @@
 
   function _mergeSnsState(serverSns, cachedSns) {
     // 원칙: 동일 계정이면 어디서 로그인하든 동일한 환경. → 서버가 응답한 값이 source of truth.
-    // 캐시는 서버 fetch 자체가 실패한 경우(loadSettings catch 분기)에만 폴백으로 사용된다.
+    // 캐시를 연결 성공의 근거로 사용하지 않는다.
     // 과거 'cache가 connected인데 server가 disconnected면 cache 우선' 룰은
     // cross-device 동기화를 깨뜨리는 원인이라 제거함.
     var out = {};
@@ -223,6 +237,7 @@
 
   function loadSettings() {
     var cached = _readCache();
+    _settingsVerified = false;
     // 공유받은 프로젝트면 소유자 연결 상태를 조회(서버가 토큰 마스킹). 이 경우 본인 캐시와
     // 머지하거나 캐시에 쓰지 않는다(소유자 상태가 본인 SNS 설정을 오염시키지 않도록).
     _sharedOwnerId = _resolveSharedOwner();
@@ -249,6 +264,7 @@
       });
     }
     return attempt(1).then(function (res) {
+      _settingsVerified = !!(res && res.ok);
       if (_sharedOwnerId) {
         // 공유(소유자) 설정: 본인 캐시와 머지/저장하지 않고 그대로 사용(읽기 전용 표시)
         if (res && res.ok && res.settings) _settings = res.settings;
@@ -262,19 +278,19 @@
         _settings.sns = _mergeSnsState(_settings.sns, cached);
         _writeCache(_settings.sns); // 머지 결과로 캐시 갱신
       } else if (res && res.ok && res.missing) {
-        // 서버 파일 없음(신규 사용자 또는 일시적 GCS 누락) — 캐시 보존
+        // 서버 파일 없음 — 연결을 추정하지 않는다
         // 가짜 disconnected 기본값으로 캐시를 덮어쓰지 않음(연결 상태 유실 방지)
-        console.warn('[SNS] Server file missing — preserving local cache');
-        _settings = _defaultSettings(cached);
+        console.warn('[SNS] Server connection file missing');
+        _settings = _defaultSettings();
         // _writeCache 호출하지 않음
       } else {
-        // 재시도까지 실패한 서버 오류 → 캐시 폴백
+        // 재시도까지 실패한 서버 오류 → 미검증 상태
         console.warn('[SNS] loadSettings server error:', res && res.error);
         _settings = _defaultSettings(cached);
       }
       return _settings;
     }).catch(function (err) {
-      // 재시도까지 실패한 네트워크/502 오류 → 캐시 폴백
+      // 재시도까지 실패한 네트워크/502 오류 → 미검증 상태
       console.warn('[SNS] loadSettings fetch error:', err && err.message || err);
       _settings = _defaultSettings(cached);
       return _settings;
@@ -291,6 +307,7 @@
 
   /** 실제 저장. 성공 여부를 { ok, error } 로 돌려준다(호출부가 롤백 판단에 쓴다). */
   function _doSave() {
+    if (!_settingsVerified) return Promise.resolve({ ok: false, error: oauthError('server_verification_failed') });
     _saving = true;
     setStatus(t('saving'), 'pending');
     // 모든 알려진 플랫폼의 connected/enabled/igUserId/username만 전송.
@@ -300,7 +317,7 @@
     Object.keys(allSns).forEach(function (pid) {
       var s = allSns[pid] || {};
       snsOut[pid] = {
-        connected: !!s.connected,
+        ...((pid === 'instagram' || pid === 'threads') ? {} : { connected: !!s.connected }),
         enabled: !!s.enabled,
         igUserId: s.igUserId || '',
         username: s.username || '',
@@ -378,68 +395,100 @@
       });
   }
 
-  function startOAuth(platform) {
-    apiGet('/api/sns/connect/' + platform).then(function (res) {
-      if (!res || !res.ok || !res.oauthUrl) {
-        snsAlert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
-        return;
+  function oauthError(category) {
+    var messages = {
+      login_required: ['NK Studio 로그인이 만료됐습니다. 다시 로그인한 뒤 연결해 주세요.', 'Sign in to NK Studio again, then reconnect.'],
+      service_access_restricted: ['서비스 측 Meta 앱의 공개 상태 또는 권한 승인이 필요합니다. NK Studio 운영자가 해결해야 하는 문제입니다. 고객님의 개발자 등록이나 운영자 계정 로그인은 필요하지 않습니다.', 'NK Studio must complete Meta app publication or permission review. Customers do not need a developer role or an operator login.'],
+      service_configuration: ['서비스의 SNS 인증 설정을 확인해야 합니다. NK Studio 운영자에게 문의해 주세요.', 'NK Studio needs to correct its SNS authentication configuration. Contact support.'],
+      permission_required: ['게시 권한이 허용되지 않았습니다. 동의 화면에서 요청 권한을 확인해 주세요. 앱 심사 제한이면 운영자가 해결해야 합니다.', 'Publishing permission was not granted. Check the consent screen; app review restrictions must be resolved by NK Studio.'],
+      consent_denied: ['SNS 권한 동의를 취소하셨습니다. 기존 연결은 유지됩니다.', 'SNS consent was cancelled. Your existing connection is preserved.'],
+      reconnect_required: ['SNS 권한이 만료되거나 철회됐습니다. 본인 SNS 계정으로 다시 연결해 주세요.', 'SNS access expired or was revoked. Reconnect your own SNS account.'],
+      oauth_session_mismatch: ['연결을 시작한 NK Studio 로그인과 일치하지 않거나 인증 시간이 지났습니다. 현재 계정에서 다시 연결해 주세요.', 'The initiating NK Studio session does not match or the attempt expired. Start again in the current account.'],
+      server_verification_failed: ['서버에 저장된 연결을 확인하지 못했습니다. 연결 완료로 처리하지 않았습니다. 새로고침 후 다시 확인해 주세요.', 'The saved server connection could not be verified. Refresh to check before using the channel.'],
+      popup_blocked: ['팝업이 차단됐습니다. 이 사이트의 팝업을 허용한 뒤 다시 연결해 주세요.', 'Allow popups for this site, then connect again.'],
+      connection_failed: ['SNS 연결을 완료하지 못했습니다. 잠시 후 다시 시도하거나 지원 페이지를 확인해 주세요.', 'Could not complete SNS connection. Retry or see the support page.']
+    };
+    return (messages[category] || messages.connection_failed)[_lang() === 'en' ? 1 : 0];
+  }
+
+  function finishMetaAttempt(platform) {
+    var attempt = _oauthAttempts[platform];
+    if (!attempt || attempt.busy) return;
+    if (attempt.user !== (localStorage.getItem('nk_login_user') || '') || Date.now() >= attempt.expiresAt) {
+      delete _oauthAttempts[platform];
+      localStorage.removeItem('nk_meta_oauth_' + platform);
+      setStatus(oauthError('oauth_session_mismatch'), 'error');
+      return;
+    }
+    attempt.busy = true;
+    apiPost('/api/sns/complete', { attemptId: attempt.attemptId, proof: attempt.proof, code: attempt.code || '' }).then(function (res) {
+      if (res && res.pending) return;
+      if (res && res.ok) {
+        delete _oauthAttempts[platform];
+        localStorage.removeItem('nk_meta_oauth_' + platform);
+        return loadSettings().then(function () {
+          var saved = _settings && _settings.sns && _settings.sns[platform];
+          render();
+          if (_settingsVerified && saved && saved.connected && saved.connectionId === res.connectionId) {
+            setStatus(T[_lang()].connectOk(platform, saved.username || ''), 'success');
+          } else setStatus(oauthError('server_verification_failed'), 'error');
+        });
       }
-      var w = 600, h = 700;
-      var left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-      var top = Math.round(window.screenY + (window.outerHeight - h) / 2);
-      window.open(res.oauthUrl, 'sns_oauth_' + platform,
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+      delete _oauthAttempts[platform];
+      localStorage.removeItem('nk_meta_oauth_' + platform);
+      setStatus(oauthError(res && (res.category || res.error)), 'error');
+    }).catch(function () {
+      // Retry only the same pending attempt; never infer success from a popup.
+      setStatus(oauthError('server_verification_failed'), 'error');
+    }).finally(function () {
+      attempt.busy = false;
+      if (_oauthAttempts[platform] === attempt) {
+        attempt.pollDelay = attempt.code ? 1500 : Math.min(15000, (attempt.pollDelay || 1500) * 2);
+        setTimeout(function () { finishMetaAttempt(platform); }, attempt.pollDelay);
+      }
     });
   }
 
-  var _oauthInflight = {};  // 동일 OAuth 결과 메시지 중복 처리 방지
+  function startOAuth(platform) {
+    var popup = window.open('about:blank', 'sns_oauth_' + platform, 'width=600,height=700');
+    if (!popup) { snsAlert(oauthError('popup_blocked')); return; }
+    _oauthWindows[platform] = popup;
+    apiGet('/api/sns/connect/' + platform).then(function (res) {
+      if (!res || !res.ok || !res.oauthUrl) {
+        popup.close();
+        snsAlert(oauthError(res && (res.category || res.error)));
+        return;
+      }
+      _oauthOrigins[platform] = res.callbackOrigin || new URL(new URL(res.oauthUrl).searchParams.get('redirect_uri')).origin;
+      if (platform === 'instagram' || platform === 'threads') {
+        var attempt = { attemptId: res.attemptId, proof: res.proof, expiresAt: res.expiresAt, user: localStorage.getItem('nk_login_user') || '' };
+        _oauthAttempts[platform] = attempt;
+        // Proof is scoped to this browser and login, and is never sent to Meta.
+        localStorage.setItem('nk_meta_oauth_' + platform, JSON.stringify(attempt));
+        setStatus(_lang() === 'en' ? 'Waiting for SNS consent. Meta app access errors must be resolved by NK Studio.' : 'SNS 동의를 기다리고 있습니다. 개발자 역할·앱 공개 오류는 NK Studio 운영자가 해결해야 합니다.', 'pending');
+        setTimeout(function () { finishMetaAttempt(platform); }, 3000);
+      }
+      popup.location.href = res.oauthUrl;
+    }).catch(function () { popup.close(); snsAlert(oauthError('connection_failed')); });
+  }
+
   function onOAuthMessage(evt) {
     if (!evt.data || evt.data.type !== 'sns_oauth_result') return;
-    var result = evt.data.result;
     var platform = evt.data.platform;
-    // 중복 방지: 같은 platform OAuth 결과가 짧은 시간 내 또 들어오면 무시
-    var dedupKey = platform + ':' + (result && result.ok ? 'ok' : 'err');
-    if (_oauthInflight[dedupKey]) {
-      console.warn('[SNS] duplicate OAuth message ignored:', dedupKey);
-      return;
+    if (!_oauthWindows[platform] || evt.source !== _oauthWindows[platform] || evt.origin !== _oauthOrigins[platform]) return;
+    if (platform === 'instagram' || platform === 'threads') {
+      var attempt = _oauthAttempts[platform];
+      if (attempt && evt.data.result && evt.data.result.attemptId === attempt.attemptId) attempt.code = evt.data.result.code || '';
+      finishMetaAttempt(platform); return;
     }
-    _oauthInflight[dedupKey] = true;
-    setTimeout(function () { delete _oauthInflight[dedupKey]; }, 3000);
-
-    if (result && result.ok) {
-      // 즉시 로컬 상태 업데이트 → UI 바로 반영
-      _settings = _settings || {};
-      _settings.sns = _settings.sns || {};
-      _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
-        connected: true,
-        enabled: true,
-        username: result.username || '',
-        needsReconnect: false,
-      });
-      _writeCache(_settings.sns);
+    var result = evt.data.result;
+    if (!result || !result.ok) { snsAlert(T[_lang()].connectFail(platform, oauthError('connection_failed'))); return; }
+    loadSettings().then(function () {
       render();
-      console.log('[SNS] OAuth local merge:', platform, {
-        connected: true,
-        username: result.username || '',
-      });
-      snsAlert(T[_lang()].connectOk(platform, result.username || ''));
-      loadSettings().then(function (s) {
-        var serverState = (s && s.sns && s.sns[platform]) || {};
-        // 상태 객체를 통째로 찍지 않는다. 예전에는 여기서 access/refresh 토큰까지
-        // 콘솔에 남았다(서버는 이제 토큰을 내려주지 않지만, 로그도 최소로 유지한다).
-        console.log('[SNS] server state for', platform, ':', {
-          connected: !!serverState.connected,
-          enabled: !!serverState.enabled,
-          needsReconnect: !!serverState.needsReconnect,
-          username: serverState.username || '',
-          handle: serverState.handle || '',
-        });
-        console.log('[SNS] all sns keys from server:', s && s.sns ? Object.keys(s.sns).join(',') : '(none)');
-        render();
-      }).catch(function (err) { console.warn('[SNS] loadSettings after OAuth failed:', err); });
-    } else {
-      snsAlert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
-    }
+      var saved = _settings && _settings.sns && _settings.sns[platform];
+      if (_settingsVerified && saved && saved.connected) setStatus(T[_lang()].connectOk(platform, saved.username || ''), 'success');
+      else setStatus(oauthError('server_verification_failed'), 'error');
+    });
   }
 
   function setStatus(msg, type) {
@@ -528,7 +577,12 @@
         _writeCache(_settings.sns);
         render();   // 잠긴 상태로 즉시 반영
         console.log('[SNS] 연결 해제 저장 요청:', pid);
-        return saveSettings().then(function (res) {
+        var disconnectRequest = (pid === 'instagram' || pid === 'threads')
+          ? apiPost('/api/sns/disconnect', { platform: pid }).catch(function () { return { ok: false }; }) : saveSettings();
+        return disconnectRequest.then(function (res) {
+          if (res && res.ok && res.warning) snsAlert(_lang() === 'en'
+            ? 'The stored NK Studio connection has been deleted. To also revoke the app grant, remove NK Studio in your SNS app settings. That grant may be shared by another NK Studio login using the same SNS account.'
+            : 'NK Studio의 저장된 연결 정보는 삭제했습니다. 앱 권한까지 철회하려면 SNS 앱 설정에서 NK Studio 접근 권한을 제거해 주세요. 같은 SNS 계정을 연결한 다른 NK Studio 로그인에도 권한 철회가 적용될 수 있습니다.');
           console.log('[SNS] 연결 해제 저장 결과:', pid, res);
           if (!res || !res.ok) {
             _settings.sns[pid] = prev;
@@ -661,8 +715,9 @@
         '<div class="sns-pcard-icon">', icon, '</div>',
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
-          '<div class="sns-pcard-status">', statusText, '</div>',
+          '<div class="sns-pcard-status">', escapeHtml(statusText), '</div>',
           (manual ? '<div class="sns-manual-note">' + escapeHtml(t('manualNote')) + '</div>' : ''),
+          ((platform.id === 'instagram' || platform.id === 'threads') ? '<div class="sns-manual-note">' + escapeHtml(_lang() === 'en' ? 'Connect your own account. Instagram requires a professional account. If Meta reports a developer role or app access error, NK Studio must resolve the app review; contact support.' : '본인의 SNS 계정으로 연결하세요. Instagram은 프로페셔널 계정이 필요합니다. 개발자 역할·앱 접근 오류는 서비스 운영자의 Meta 공개 심사 문제이므로 지원 페이지로 문의해 주세요.') + ' <a href="/support">' + (_lang() === 'en' ? 'Support' : '지원') + '</a></div>' : ''),
         '</div>',
         // 직접 올리는 채널은 액션이 하나도 없다. 빈 껍데기를 두면 카드 간격만 먹는다.
         (linkBtnHtml || finalConnectBoxHtml || usageToggleHtml)
@@ -729,6 +784,7 @@
         // ── 플랫폼 그리드 카드
         '<div class="bsf-detail-card sns-settings-card">',
           '<div class="sns-settings-inner">',
+            '<p><a href="/meta-integration">' + (_lang() === 'en' ? 'Instagram / Threads connection guide' : 'Instagram·Threads 연결 안내') + '</a> · <a href="/data-deletion">' + (_lang() === 'en' ? 'Data deletion' : '데이터 삭제') + '</a></p>',
             '<div class="sns-platform-grid">', cards, '</div>',
           '</div>',
         '</div>',
@@ -739,6 +795,7 @@
     // 방어: 그려진 버튼(aria-pressed)과 실제 상태(_settings)가 갈라지면 경고를 남긴다.
     // 이 둘이 어긋나면 "화면은 미연결인데 해제 확인창이 뜨는" 종류의 버그가 된다.
     warnIfConnectStateDrifted(root);
+    if (!_settingsVerified) setStatus(oauthError('server_verification_failed'), 'error');
 
     // 클릭 리스너는 한 번만 등록 (중복 방지)
     if (!root._snsListenerAttached) {
@@ -780,6 +837,22 @@
   function init() {
     if (!document.querySelector('.content')) return;
     window.addEventListener('message', onOAuthMessage);
+    var returnedOAuth = null;
+    try {
+      if (window.location.hash.indexOf('#sns_oauth=') === 0) {
+        returnedOAuth = JSON.parse(decodeURIComponent(window.location.hash.slice(11)));
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    } catch (_) {}
+    ['instagram', 'threads'].forEach(function (platform) {
+      try {
+        var attempt = JSON.parse(localStorage.getItem('nk_meta_oauth_' + platform) || 'null');
+        if (attempt) {
+          if (returnedOAuth && returnedOAuth.platform === platform && returnedOAuth.result && returnedOAuth.result.attemptId === attempt.attemptId) attempt.code = returnedOAuth.result.code || '';
+          _oauthAttempts[platform] = attempt; finishMetaAttempt(platform);
+        }
+      } catch (_) {}
+    });
 
     // 언어 전환 시 이 화면의 사전(T[lang])으로 다시 그린다.
     // 구독하지 않으면 common.js 의 범용 ko→en 치환 사전이 남긴 옛 문구가 그대로
@@ -797,11 +870,20 @@
     }
     loadSettings()
       .then(function () { render(); })
+      .then(function () {
+        if (_sharedOwnerId || !_settingsVerified) return;
+        return Promise.all(['instagram', 'threads'].map(function (platform) {
+          if (!_settings.sns[platform] || !_settings.sns[platform].connected) return;
+          return apiPost('/api/sns/status', { platform: platform }).then(function (res) {
+            if (res && res.needsReconnect) _settings.sns[platform].needsReconnect = true;
+          }).catch(function () {});
+        }));
+      })
       .then(function () { return maybeRefreshYoutubeInfo(); })
       .then(function () { render(); })
       .catch(function (err) {
         var root = document.querySelector('.content');
-        if (root) root.innerHTML = '<div class="brand-asset-empty">' + t('loadFail') + ': ' + (err && err.message ? err.message : err) + '</div>';
+        if (root) root.innerHTML = '<div class="brand-asset-empty">' + t('loadFail') + ': ' + escapeHtml(err && err.message ? err.message : err) + '</div>';
       });
   }
 

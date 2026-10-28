@@ -1,3 +1,5 @@
+import { ensureMetaToken } from "../_shared/meta-token.js";
+import { patchSnsPlatform } from "../_shared/sns-store.js";
 import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
 import { authorizeRequest, readSecret, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
@@ -246,18 +248,7 @@ async function refreshTikTokToken(opts: {
 
 /** sns-settings.json 의 한 플랫폼 항목을 병합 저장(needsReconnect·갱신 토큰). */
 async function saveSnsPlatformPatch(opts: { bucket: string; objectName: string; googleToken: string; platform: string; patch: Record<string, unknown> }): Promise<void> {
-  const readName = gcsObjectPath(opts.objectName);
-  const writeName = opts.objectName.split("/").map(encodeURIComponent).join("/");
-  const readRes = await fetch(`https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${readName}?alt=media`, { headers: { Authorization: `Bearer ${opts.googleToken}` } });
-  let existing: any = { sns: {}, deployDefaults: {} };
-  if (readRes.ok) { try { existing = await readRes.json(); } catch { /* keep default */ } }
-  existing.sns = existing.sns || {};
-  existing.sns[opts.platform] = Object.assign({}, existing.sns[opts.platform], opts.patch);
-  existing.updatedAt = new Date().toISOString();
-  const upRes = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${writeName}`, {
-    method: "POST", headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" }, body: JSON.stringify(existing),
-  });
-  if (!upRes.ok) throw new Error(`GCS save error: ${upRes.status}`);
+  await patchSnsPlatform(opts, opts.platform, opts.patch);
 }
 
 /** 인스타그램 만료 토큰 오류인가(Graph API code 190 계열). */
@@ -270,21 +261,7 @@ function isInstagramTokenError(message: string): boolean {
  * 이미 만료됐거나 갱신이 거절되면 needsReconnect 를 기록하고 던진다 — 재연결이 유일한 해법이다.
  */
 async function ensureInstagramPublishToken(entry: any, store: { bucket: string; objectName: string; googleToken: string }): Promise<string> {
-  const current = String(entry?.accessToken || "").trim();
-  if (!current) throw new Error("instagram_reconnect_required");
-  const expiresAt = Date.parse(String(entry?.tokenExpiresAt || ""));
-  if (Number.isFinite(expiresAt) && expiresAt - Date.now() > 7 * 24 * 3600 * 1000) return current;
-  const url = new URL("https://graph.instagram.com/refresh_access_token");
-  url.search = new URLSearchParams({ grant_type: "ig_refresh_token", access_token: current }).toString();
-  const res = await fetch(url.toString());
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok || !data?.access_token) {
-    await saveSnsPlatformPatch({ ...store, platform: "instagram", patch: { needsReconnect: true } }).catch(() => {});
-    throw new Error(`instagram_reconnect_required: ${String(data?.error?.message || res.status)}`);
-  }
-  const tokenExpiresAt = new Date(Date.now() + (Number(data.expires_in) > 0 ? Number(data.expires_in) : 60 * 24 * 3600) * 1000).toISOString();
-  await saveSnsPlatformPatch({ ...store, platform: "instagram", patch: { accessToken: data.access_token, tokenExpiresAt, needsReconnect: false } }).catch(() => {});
-  return String(data.access_token);
+  return ensureMetaToken(store, "instagram", entry);
 }
 
 async function saveTikTokTokenPatch(opts: {
@@ -563,8 +540,8 @@ async function tryInstagramFirstComment(postId: string, accessToken: string, fir
     await postInstagramComment({ postId, accessToken, message });
     return {};
   } catch (e) {
-    const commentError = e instanceof Error ? e.message : String(e);
-    console.log("[instagram publish] first comment failed (post still ok):", commentError);
+    const commentError = /permission|scope|\(#10\)/i.test(String(e instanceof Error ? e.message : e)) ? "instagram_comment_permission_required" : "instagram_first_comment_failed";
+    console.log("[instagram publish] first comment failed (post still ok)");
     return { commentError, note: `게시는 됐지만 첫 댓글은 달지 못했어요(${commentError.slice(0, 160)}).` };
   }
 }
@@ -861,7 +838,7 @@ async function addVideoToYouTubePlaylist(accessToken: string, videoId: string, t
 
 // ── Threads(메타) 헬퍼 ─────────────────────────────────────────────────────
 
-const THREADS_API = "https://graph.threads.net/v1.0";
+const THREADS_API = "https://graph.threads.com/v1.0";
 
 /**
  * Threads API 응답을 안전하게 읽는다. 메타는 일시 오류(5xx) 때 본문을 아예 비워서 보내는 일이 있어
@@ -874,7 +851,7 @@ async function readThreadsJson(res: Response, what: string): Promise<any> {
     const parsed = text ? JSON.parse(text) : null;
     if (parsed && typeof parsed === "object") return parsed;
   } catch { /* 아래에서 처리 */ }
-  console.log(`[threads] ${what}: HTTP ${res.status} 응답 본문이 JSON 이 아님:`, text.slice(0, 300));
+  console.log(`[threads] ${what}: HTTP ${res.status} non-JSON response`);
   return { __empty: true, __status: res.status, __raw: text.slice(0, 200) };
 }
 /** 메타 일시 오류(빈 응답·5xx·"please retry") 인지 — 재시도 대상 */
@@ -1112,6 +1089,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   }
 
   const { platform, caption, firstComment } = body;
+  let usedMetaToken = "";
   const isCarousel = Array.isArray(body.mediaItems) && body.mediaItems.length > 0;
 
   if (!platform || caption === undefined) {
@@ -1442,9 +1420,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     }
 
     if (platform === "instagram") {
-      // ★연결된 계정(SNS 설정의 @계정)으로 게시한다. 전엔 환경변수의 마스터 토큰(IG_ACCESS_TOKEN)만 써서, 화면엔
-      //   "연결됨 @shapes.ko" 인데 게시는 만료된 마스터 토큰으로 나가 "Session has expired" 가 났다(2026-09-24).
-      //   연결된 계정이 없을 때만 환경변수로 폴백한다.
+      // Only the authorized publishing user's stored connection may publish.
       const igBasePrefix = outParsed.object.replace(/\/$/, "");
       const igSettingsName = buildUserDataObject(igBasePrefix, publishUserId, "sns-settings.json");
       const igSettings = await loadSnsSettings(bucket, igSettingsName, googleToken).catch(() => null);
@@ -1458,12 +1434,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           accessToken = await ensureInstagramPublishToken(igEntry, igStore);
         } catch (e: any) {
           return send({ error: "instagram_reconnect_required", needsReconnect: true,
-            message: `인스타그램 연결이 만료됐어요(@${String(igEntry.username || "")}). SNS 설정에서 '연결 해제' 후 다시 연결한 뒤 재시도해 주세요. (${String(e?.message || "").slice(0, 120)})` }, 412);
+            message: "인스타그램 연결을 확인할 수 없습니다. SNS 설정에서 본인 계정으로 다시 연결해 주세요." }, 412);
         }
-        igUserId = String(igEntry.igUserId || igEntry.userId || "");
+        igUserId = String(igEntry.igUserId || "");
+        usedMetaToken = accessToken;
       } else {
-        accessToken = String(env.IG_ACCESS_TOKEN || "");
-        igUserId = String(env.IG_USER_ID || "");
+        return send({ error: "instagram_not_connected", needsReconnect: true, message: "SNS 설정에서 본인의 인스타그램 계정을 연결해 주세요." }, 412);
       }
       if (!accessToken || !igUserId) {
         return send({ error: "instagram_not_connected", needsReconnect: true, message: "인스타그램이 연결돼 있지 않아요. SNS 설정에서 인스타그램을 연결해 주세요." }, 412);
@@ -1491,7 +1467,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const { postId } = await publishCarouselToInstagram({ igUserId, accessToken, items: resolvedItems, caption });
         const comment = await tryInstagramFirstComment(postId, accessToken, firstComment);
 
-        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
+        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
 
       } else {
         // 단일 포스트 (기존 로직 유지)
@@ -1513,9 +1489,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       } catch (e: any) {
         const msg = String(e?.message || e);
         if (isInstagramTokenError(msg)) {
-          if (igEntry?.connected) await saveSnsPlatformPatch({ ...igStore, platform: "instagram", patch: { needsReconnect: true } }).catch(() => {});
+          if (igEntry?.connected) await patchSnsPlatform(igStore, "instagram", { needsReconnect: true }, accessToken).catch(() => {});
           return send({ error: "instagram_reconnect_required", needsReconnect: true,
-            message: `인스타그램 토큰이 만료됐어요. SNS 설정에서 인스타그램을 '연결 해제' 후 다시 연결한 뒤 재시도해 주세요. (${msg.slice(0, 160)})` }, 412);
+            message: "인스타그램 권한이 만료되거나 철회됐습니다. SNS 설정에서 다시 연결해 주세요." }, 412);
         }
         throw e;
       }
@@ -1884,9 +1860,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         if (msg === "threads_not_connected") {
           return send({ error: "Threads 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
         }
-        return send({ error: msg }, 500);
+        const needsReconnect = msg === "threads_reconnect_required";
+        return send({ error: needsReconnect ? msg : "threads_connection_unavailable", needsReconnect }, msg === "threads_paused" || needsReconnect ? 412 : 503);
       }
       const { accessToken, threadsUserId, username } = th;
+      usedMetaToken = accessToken;
       // 500자 제한은 코드포인트 단위로 자른다. caption.slice(0, 500) 은 이모지(서로게이트 쌍)를 반쪽으로 잘라
       // 깨진 문자를 만들 수 있고, 메타는 그런 본문에 이유 없는 빈 500 을 낸다(2026-09-25 의심 원인).
       const text = sanitizeThreadsText(caption, 500);
@@ -2008,10 +1986,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             const replyId = await createThreadsContainer({ threadsUserId, accessToken, params: { media_type: "TEXT", text: replyText, reply_to_id: postId } });
             await publishThreadsContainer({ threadsUserId, accessToken, creationId: replyId });
           } catch (e: any) {
-            console.log("[threads publish] first reply failed (post still ok):", e?.message || e);
+            console.log("[threads publish] first reply failed (post still ok)");
             fallbackNotes.push(e?.metaCode === 10
               ? "첫 답글은 Threads 연결에 답글 관리 권한(threads_manage_replies)이 없어 달지 못했어요 — 앱에서 직접 달아 주세요."
-              : `첫 답글은 달지 못했어요(${String(e?.message || e).slice(0, 120)}) — 앱에서 직접 달아 주세요.`);
+              : "첫 답글은 달지 못했어요 — 앱에서 직접 달아 주세요.");
           }
         }
       }
@@ -2376,6 +2354,15 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       // 클라이언트가 code 로 한/영 안내 문구를 고른다. 원문 detail 도 함께 주되
       // 화면에는 code 기반 문구를 우선 쓴다.
       return send({ ok: false, error: msg, code, detail }, 502);
+    }
+    if (platform === "instagram" || platform === "threads") {
+      const needsReconnect = isInstagramTokenError(msg) || Number((err as any)?.metaCode) === 190;
+      if (needsReconnect && usedMetaToken) {
+        const { snsContext } = await import("../_shared/sns-store.js");
+        await patchSnsPlatform(await snsContext(env, publishUserId), platform, { needsReconnect: true }, usedMetaToken).catch(() => {});
+      }
+      return send({ ok: false, error: needsReconnect ? platform + "_reconnect_required" : "sns_publish_failed", needsReconnect,
+        category: needsReconnect ? "reconnect_required" : /permission|scope|code.?10/i.test(msg) || Number((err as any)?.metaCode) === 10 ? "permission_required" : "connection_failed" }, needsReconnect ? 412 : 502);
     }
     return send({ ok: false, error: msg }, 500);
   }

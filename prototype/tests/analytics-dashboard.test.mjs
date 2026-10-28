@@ -241,7 +241,7 @@ test('analytics sync endpoint collects supported platform posts and metrics from
   assert.match(source, /graph\.instagram\.com/);
   assert.match(source, /graph\.facebook\.com/);
   assert.match(source, /open\.tiktokapis\.com\/v2\/video\/list/);
-  assert.match(source, /graph\.threads\.net/);
+  assert.match(source, /graph\.threads\.com/);
   assert.match(source, /token\.threadsUserId\)\}\/threads/);
   assert.match(source, /for \(const edge of \["published_posts", "feed"\]\)/);
   assert.match(source, /fields: "id,message,created_time,permalink_url,full_picture",\s+limit: "5"/);
@@ -256,13 +256,13 @@ test('analytics sync endpoint collects supported platform posts and metrics from
 });
 
 test('analytics OAuth requests include the read scopes required by platform insights APIs', () => {
-  assert.match(read('prototype/functions/api/sns/connect/instagram.ts'), /instagram_business_manage_insights/);
+  assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /instagram_business_manage_insights/);
   // read_insights 는 이 앱(이용 사례 기반)에서 Invalid Scope 로 거부되어 앱 관리자 OAuth 가 중단된다.
   // 페이지 인사이트는 pages_read_engagement 로 읽는다.
   assert.match(read('prototype/functions/api/sns/connect/facebook.ts'), /pages_read_engagement/);
   assert.doesNotMatch(read('prototype/functions/api/sns/connect/facebook.ts'), /read_insights/);
   assert.match(read('prototype/functions/api/sns/connect/tiktok.ts'), /video\.list/);
-  assert.match(read('prototype/functions/api/sns/connect/threads.ts'), /threads_manage_insights/);
+  assert.match(read('prototype/functions/api/_shared/meta-oauth.js'), /threads_manage_insights/);
 });
 
 test('brand analytics persistence keeps synchronized account metadata and collection status', () => {

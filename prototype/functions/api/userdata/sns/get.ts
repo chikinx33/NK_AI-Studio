@@ -1,3 +1,5 @@
+import { registerMetaConnections } from "../../_shared/meta-events.js";
+import { publicDeployDefaults } from "../../_shared/sns-store.js";
 import { buildUserDataObject, gcsObjectPath } from "../../_shared/storage";
 import { authorizeRequest, sanitizeUserId } from "../../_shared/auth.js";
 import { loadShares, getGrantRole } from "../../_shared/shares";
@@ -27,6 +29,9 @@ const SAFE_SNS_FIELDS = [
   "channelId",
   "channelHandle",
   "igUserId",
+  "connectionId",
+  "connectedAt",
+  "grantedScopes",
   // 디스코드: 웹훅 주소(webhookUrl)는 비밀번호와 같아 절대 내보내지 않는다. 가린 표기만.
   "webhookHint",
   // 디스코드 서버 id — 비밀이 아니다. 채널 링크(discord.com/channels/서버/채널)를 만드는 데 쓴다.
@@ -34,11 +39,11 @@ const SAFE_SNS_FIELDS = [
 ];
 function maskSnsSettings(settings: any, shared: boolean) {
   const sns = settings && typeof settings === "object" ? settings.sns : null;
-  if (!sns || typeof sns !== "object") return settings;
+  if (!sns || typeof sns !== "object") return { sns: {}, deployDefaults: {} };
   const maskedSns: Record<string, any> = {};
   for (const key of Object.keys(sns)) {
     const entry = sns[key];
-    if (!entry || typeof entry !== "object") { maskedSns[key] = entry; continue; }
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const safe: Record<string, any> = {};
     for (const f of SAFE_SNS_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(entry, f)) safe[f] = entry[f];
@@ -46,7 +51,7 @@ function maskSnsSettings(settings: any, shared: boolean) {
     maskedSns[key] = safe;
   }
   // deployDefaults 등 비자격증명 메타는 유지, sns만 마스킹
-  return Object.assign({}, settings, { sns: maskedSns }, shared ? { shared: true } : {});
+  return { sns: maskedSns, deployDefaults: publicDeployDefaults(settings?.deployDefaults), updatedAt: settings?.updatedAt || "", ...(shared ? { shared: true } : {}) };
 }
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
@@ -142,7 +147,6 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
   // 읽기는 GCS JSON API 규칙상 객체 이름 전체를 percent-encoding 해야 함(슬래시 포함)
   const encodedName = gcsObjectPath(objectName);
-  console.log("[sns/get] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {
     const token = await getGoogleAccessToken({
@@ -155,24 +159,21 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    console.log("[sns/get] GCS read status:", gcsRes.status);
 
     if (gcsRes.status === 404) {
-      // 파일 없음(신규 사용자 또는 일시적 GCS 누락) — 가짜 'disconnected' 기본값을
-      // 권위 있는 값처럼 돌려주면 클라이언트가 로컬 캐시를 disconnected 로 덮어쓰는
-      // 부작용이 있음. 명시적으로 missing 플래그만 반환하여 클라이언트가 캐시를
-      // 보존하도록 한다.
+      // Missing is authoritative: the UI must not infer a saved connection from cache.
       return send({ ok: true, settings: null, missing: true });
     }
 
     if (!gcsRes.ok) throw new Error(`GCS read error: ${gcsRes.status}`);
     const settings = await gcsRes.json();
+    if (!masked) await registerMetaConnections(env, userId, (settings as any)?.sns).catch(() => {});
     // 소유자·공유 협업자 모두 자격증명을 제거해서 반환한다.
     // (masked 는 이제 "공유받은 사용자인가" 표시 용도로만 쓴다)
     const outSettings = maskSnsSettings(settings, masked);
     return send({ ok: true, settings: outSettings });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return send({ ok: false, error: msg }, 500);
+    return send({ ok: false, error: "sns_settings_unavailable" }, 503);
   }
 };

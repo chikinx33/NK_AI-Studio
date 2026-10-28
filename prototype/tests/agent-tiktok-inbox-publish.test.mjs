@@ -158,9 +158,9 @@ test("'올라갔어?' 는 publish_history(읽기·합성) 로 답한다 — 채�
 test("인스타그램 발행은 연결된 계정 토큰(만료 전 갱신)으로 나가고, 만료면 412 + needsReconnect 로 재연결을 안내한다", async () => {
   const src = await read("prototype/functions/api/sns/publish.ts");
   assert.match(src, /async function ensureInstagramPublishToken\(entry: any, store:/);
-  assert.match(src, /grant_type: "ig_refresh_token"/);
+  assert.match(await read("prototype/functions/api/_shared/meta-token.js"), /ig_refresh_token/);
   assert.match(src, /const igEntry = igSettings\?\.sns\?\.instagram;/);
-  assert.match(src, /accessToken = String\(env\.IG_ACCESS_TOKEN \|\| ""\);/, "연결된 계정이 없을 때만 환경변수 폴백");
+  assert.doesNotMatch(src, /accessToken = String\(env\.IG_ACCESS_TOKEN/, "일반 사용자에게 운영자 토큰으로 폴백하지 않는다");
   assert.match(src, /function isInstagramTokenError\(message: string\): boolean/);
   assert.match(src, /error: "instagram_reconnect_required", needsReconnect: true,/);
 });

@@ -1,3 +1,5 @@
+import { ensureMetaToken } from "../../_shared/meta-token.js";
+import { patchSnsPlatform } from "../../_shared/sns-store.js";
 import { authorizeRequest, sanitizeUserId } from "../../_shared/auth.js";
 import { loadShares, getGrantRole } from "../../_shared/shares";
 import {
@@ -116,7 +118,8 @@ async function readJson(response: Response): Promise<any> {
 }
 
 function apiError(platform: string, response: Response, data: any): Error {
-  const detail = text(data?.error?.message || data?.error_description || data?.message || data?.raw);
+  const raw = text(data?.error?.message || data?.error_description || data?.message || data?.raw);
+  const detail = /expired|revoked|invalid.*token|validating access token/i.test(raw) ? "reconnect_required" : /permission|scope/i.test(raw) ? "permission_required" : "";
   const error = new Error(`${platform}_api_${response.status}${detail ? `: ${detail}` : ""}`);
   (error as any).status = response.status;
   (error as any).detail = detail;
@@ -141,32 +144,11 @@ function graphVersion(env: any): string {
 }
 
 async function writePlatformPatch(ctx: StorageContext, platform: string, patch: Record<string, unknown>): Promise<void> {
-  const existing = await readSnsSettings(ctx);
-  existing.sns = existing.sns || {};
-  existing.sns[platform] = Object.assign({}, existing.sns[platform] || {}, patch);
-  existing.updatedAt = new Date().toISOString();
-  const writeName = ctx.objectName.split("/").map(encodeURIComponent).join("/");
-  const response = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${ctx.bucket}/o?uploadType=media&name=${writeName}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${ctx.googleToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(existing),
-  });
-  if (!response.ok) throw new Error(`sns_settings_write_${response.status}`);
+  await patchSnsPlatform(ctx, platform, patch);
 }
 
 async function ensureInstagramToken(entry: any, ctx: StorageContext): Promise<string> {
-  const current = text(entry?.accessToken);
-  if (!current) throw new Error("instagram_reconnect_required");
-  const expiresAt = Date.parse(text(entry?.tokenExpiresAt));
-  if (Number.isFinite(expiresAt) && expiresAt - Date.now() > 7 * 24 * 3600 * 1000) return current;
-  const url = new URL("https://graph.instagram.com/refresh_access_token");
-  url.search = new URLSearchParams({ grant_type: "ig_refresh_token", access_token: current }).toString();
-  const response = await fetch(url.toString());
-  const data = await readJson(response);
-  if (!response.ok || !data?.access_token) throw apiError("instagram", response, data);
-  const tokenExpiresAt = new Date(Date.now() + positive(data.expires_in || 60 * 24 * 3600) * 1000).toISOString();
-  await writePlatformPatch(ctx, "instagram", { accessToken: data.access_token, tokenExpiresAt, needsReconnect: false });
-  return text(data.access_token);
+  return ensureMetaToken(ctx, "instagram", entry);
 }
 
 async function ensureTikTokToken(env: any, entry: any, ctx: StorageContext): Promise<string> {
@@ -444,7 +426,7 @@ async function collectTikTok(env: any, entry: any, syncedAt: string, ctx: Storag
 
 async function collectThreads(env: any, userId: string, entry: any, syncedAt: string): Promise<CollectionResult> {
   const token = await getThreadsToken(env, userId);
-  const url = new URL(`https://graph.threads.net/v1.0/${encodeURIComponent(token.threadsUserId)}/threads`);
+  const url = new URL(`https://graph.threads.com/v1.0/${encodeURIComponent(token.threadsUserId)}/threads`);
   url.search = new URLSearchParams({ fields: "id,media_type,media_url,permalink,text,timestamp,shortcode,thumbnail_url", limit: "5", access_token: token.accessToken }).toString();
   const response = await fetch(url.toString());
   const data = await readJson(response);
@@ -455,7 +437,7 @@ async function collectThreads(env: any, userId: string, entry: any, syncedAt: st
   const posts = await Promise.all(rows.map(async (item: any): Promise<AnalyticsPost> => {
     const id = text(item?.id);
     const metrics = emptyMetrics();
-    const insightsUrl = new URL(`https://graph.threads.net/v1.0/${encodeURIComponent(id)}/insights`);
+    const insightsUrl = new URL(`https://graph.threads.com/v1.0/${encodeURIComponent(id)}/insights`);
     insightsUrl.search = new URLSearchParams({ metric: "views,likes,replies,reposts,quotes", access_token: token.accessToken }).toString();
     try {
       const insightsRes = await fetch(insightsUrl.toString());
