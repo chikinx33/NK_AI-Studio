@@ -27,7 +27,7 @@ test("project/list returns projects shared with the requester", () => {
   const src = read("prototype/functions/api/project/list.ts");
   assert.match(src, /import \{ loadShares, listSharedWith \} from "\.\.\/_shared\/shares"/);
   assert.match(src, /listSharedWith\(sharesReg, auth\.userId\)/);
-  assert.match(src, /return send\(\{ ok: true, ids, shared \}/);
+  assert.match(src, /return send\(\{ ok: true, ids, shared(, createdAt)? \}/);
 });
 
 test("client projectGet/projectSave forward ownerId", () => {

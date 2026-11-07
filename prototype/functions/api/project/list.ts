@@ -84,6 +84,33 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       // 업무 파일 저장소(ai-company)는 에피소드가 아니다 — 카드로 보이면 지울 수 있게 된다.
       .filter((id) => !!id && !isReservedProjectId(id))
       .slice(0, 200);
+    // 만든 날짜: 프로젝트에는 생성 시각 필드가 따로 없다. project/init 이 만드는
+    // image/.keep 은 이후 다시 쓰지 않으므로 그 timeCreated 를 '만든 날짜'로 쓴다.
+    // 실패해도 목록 자체는 그대로 돌려준다(날짜만 빠짐).
+    const createdAt: Record<string, string> = {};
+    try {
+      const idSet = new Set(ids);
+      const escapedPrefix = prefix.replace(/[.*+?^$|()[\]{}\\]/g, "\\$&");
+      const keepRe = new RegExp("^" + escapedPrefix + "([^/]+)/image/\\.keep$");
+      let pageToken = "";
+      for (let page = 0; page < 3; page++) {
+        const keepUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&matchGlob=${encodeURIComponent("**/image/.keep")}&fields=${encodeURIComponent("items(name,timeCreated),nextPageToken")}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+        let keepRes = await fetch(keepUrl + (userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""), {
+          headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) },
+        });
+        if (!keepRes.ok && userProject && keepRes.status === 403) {
+          keepRes = await fetch(keepUrl, { headers: { Authorization: `Bearer ${token}` } });
+        }
+        if (!keepRes.ok) break;
+        const keepJson: any = safeJson(await keepRes.text());
+        for (const it of (Array.isArray(keepJson?.items) ? keepJson.items : [])) {
+          const m = keepRe.exec(String(it?.name || ""));
+          if (m && idSet.has(m[1]) && it.timeCreated) createdAt[m[1]] = String(it.timeCreated);
+        }
+        pageToken = String(keepJson?.nextPageToken || "");
+        if (!pageToken) break;
+      }
+    } catch (_) { /* 날짜 없이 진행 */ }
     // 나에게 공유된 프로젝트(소유자/역할 포함)도 함께 반환 → 대시보드에서 표시·접근.
     let shared: Array<{ projectId: string; ownerId: string; role: string; title: string; seriesId: string; seriesTitle: string }> = [];
     try {
@@ -92,7 +119,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         projectId: s.projectId, ownerId: s.ownerId, role: s.role, title: s.title, seriesId: s.seriesId, seriesTitle: s.seriesTitle,
       }));
     } catch (_) { shared = []; }
-    return send({ ok: true, ids, shared }, 200, origin);
+    return send({ ok: true, ids, shared, createdAt }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

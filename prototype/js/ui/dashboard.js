@@ -649,6 +649,21 @@
   var _sharedMeta = new Map();            // seriesId -> { role, ownerId }
   var _sharedFetchedKey = '';
   var _logoPayloadBackfilled = new Set(); // 브랜드 로고를 payload 로 백필한 프로젝트(세션당 1회)
+  // 에피소드 '만든 날짜'(project/list 의 createdAt: projectId -> ISO). 로컬에 저장하지 않고
+  // 목록을 받을 때마다 채운다(계정 전환 시 다른 계정 값이 남지 않게).
+  var _createdAtById = new Map();
+  const episodeCreatedLabel = (draft) => {
+    let ts = Date.parse(String(_createdAtById.get(String(draft && draft.id)) || ''));
+    if (!Number.isFinite(ts)) {
+      // 옛 프로젝트 id 는 생성 시각(ms) 숫자였다(v3.1890 이전).
+      const idNum = /^\d{13}$/.test(String(draft && draft.id)) ? Number(draft.id) : NaN;
+      ts = Number.isFinite(idNum) ? idNum : NaN;
+    }
+    if (!Number.isFinite(ts)) return '';
+    const dt0 = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${dt0.getFullYear()}.${pad(dt0.getMonth() + 1)}.${pad(dt0.getDate())}`;
+  };
 
   // 공유 상태 아이콘 (lucide share-2) — 뷰어/에디터 구분 없이 '공유받음' 표시만.
   var ICON_SHARE = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
@@ -868,6 +883,7 @@
         if (prefetchedList) { try { window.parent.__nk_projects_list_prefetch = null; } catch (_) {} }
         const list = await (prefetchedList || NK.api.projectList());
         const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
+        _createdAtById = new Map(Object.entries((list && list.createdAt && typeof list.createdAt === 'object') ? list.createdAt : {}));
         if (!ids.length) {
           drafts = [];
           if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
@@ -1075,14 +1091,14 @@
         brandManagement: 'Brand Management', brandPortfolio: 'Brand portfolio', brandPortfolioDesc: 'Choose a brand to open its workspace and episodes.',
         allBrands: 'All brands', brandWorkspace: 'Brand workspace', episodes: 'Episodes', recentEpisode: 'Latest episode',
         openBrand: 'Open brand', newBrand: 'New brand', addEpisode: 'Add episode', settings: 'Settings', share: 'Share', remove: 'Delete',
-        episodeListDesc: 'Choose an episode to open its SNS setup.', hub: 'Hub Center', analytics: 'Analytics', assets: 'Content Library', sns: 'SNS Connect'
+        createdDate: 'Created', episodeListDesc: 'Choose an episode to open its SNS setup.', hub: 'Hub Center', analytics: 'Analytics', assets: 'Content Library', sns: 'SNS Connect'
       }
       : {
         project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율',
         brandManagement: '브랜드 관리', brandPortfolio: '브랜드 포트폴리오', brandPortfolioDesc: '브랜드를 선택하면 브랜드 작업공간과 에피소드 목록이 열립니다.',
         allBrands: '전체 브랜드', brandWorkspace: '브랜드 작업공간', episodes: '에피소드', recentEpisode: '최근 에피소드',
         openBrand: '브랜드 열기', newBrand: '새 브랜드', addEpisode: '에피소드 추가', settings: '설정', share: '공유', remove: '삭제',
-        episodeListDesc: '에피소드를 선택하면 해당 에피소드의 SNS 세팅 화면이 열립니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 연결'
+        createdDate: '만든 날짜', episodeListDesc: '에피소드를 선택하면 해당 에피소드의 SNS 세팅 화면이 열립니다.', hub: '허브 센터', analytics: '성과 분석', assets: '콘텐츠 저장소', sns: 'SNS 연결'
       };
     const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
     // 시리즈 관리(프로젝트 수정·시리즈 삭제)는 별도 바가 아니라 신규 버튼 왼쪽에 같은 크기로 둔다(사용자 요청).
@@ -1266,6 +1282,11 @@
       const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
+      // 브랜드 스튜디오 리스트 보기: 줄 오른쪽 끝에 만든 날짜.
+      const createdLabel = (host === 'brand' && listPaged) ? episodeCreatedLabel(d) : '';
+      const createdHtml = createdLabel
+        ? `<div class="draft-created" title="${escapeHtml(labels.createdDate)}">${escapeHtml(labels.createdDate)} : ${escapeHtml(createdLabel)}</div>`
+        : '';
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''} ${isPending ? 'is-pending' : ''}" data-draft-id="${escapeHtml(d.id)}">
           <div class="draft-top">
@@ -1286,6 +1307,7 @@
               </div>
             </div>
           </div>
+          ${createdHtml}
           ${showStageButtons ? `
             <div class="draft-actions${host === 'video' ? ' has-canvas' : ''}">
               ${host === 'video' ? `<button type="button" class="canvas-btn" data-action="draft-canvas" data-id="${escapeHtml(d.id)}" title="${escapeHtml(dt('sidebar_canvas_fixed'))}" aria-label="${escapeHtml(dt('sidebar_canvas_fixed'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></button>` : ''}

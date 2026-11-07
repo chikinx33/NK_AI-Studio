@@ -1288,6 +1288,16 @@ body.page-shell-video .draft-card .draft-actions.has-canvas {
   text-overflow: ellipsis;
 }
 
+/* 브랜드 스튜디오 리스트: 줄 오른쪽 끝의 만든 날짜 */
+.draft-card-grid.view-list .draft-created {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .draft-card-grid.view-list .draft-actions,
 html.page-shell-video .draft-card-grid.view-list .draft-card .draft-actions,
 body.page-shell-video .draft-card-grid.view-list .draft-card .draft-actions {
