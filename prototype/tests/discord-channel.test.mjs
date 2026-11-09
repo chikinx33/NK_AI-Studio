@@ -153,7 +153,7 @@ test('디스코드 코드는 웹훅 주소를 로그에 남기지 않는다', ()
 test('게시: 2000자 초과는 예약 전에 거절하고, 미연결은 412, 10MB 넘는 파일은 링크로 올린다', () => {
   const pub = read('prototype/functions/api/sns/publish.ts');
   const tooLong = pub.indexOf('platform === "discord" && String(caption || "").length > DISCORD_CONTENT_LIMIT');
-  assert.ok(tooLong > 0 && tooLong < pub.indexOf('const queuedAt = readQueuedSchedule'), '예약 대기열에 넣기 전에 막아야 한다');
+  assert.ok(tooLong > 0 && tooLong < pub.indexOf('const queuedAt = '), '예약 대기열에 넣기 전에 막아야 한다');
   const branch = pub.slice(pub.indexOf('if (platform === "discord") {'), pub.indexOf("플랫폼은 아직 지원되지 않습니다"));
   assert.match(branch, /discord_not_connected[\s\S]*?412/);
   assert.match(branch, /size <= DISCORD_FILE_LIMIT/);

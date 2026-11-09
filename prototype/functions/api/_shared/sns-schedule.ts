@@ -19,6 +19,18 @@ export const MAX_SCHEDULE_LEAD_MS = 90 * 24 * 60 * 60 * 1000;
 export const MAX_SCHEDULED_PER_RUN = 5;
 /** 이 시간 넘게 running 이면 실행이 끊긴 것으로 보고 실패 처리한다(같은 글이 두 번 올라가지 않게 재시도는 하지 않는다). */
 export const STALE_RUNNING_MS = 15 * 60 * 1000;
+/** 인스타가 영상 처리 중이라 다음 실행으로 넘긴 건을 몇 번까지 이어 볼지(5분 주기 × 24 ≈ 2시간). 넘으면 실패로 남긴다. */
+export const MAX_PENDING_ATTEMPTS = 24;
+
+/**
+ * 게시 API 가 "아직 처리 중"(인스타 컨테이너 대기)으로 답했는가. 그 답에는 result 가 없고 resume 이 있다.
+ * 다음 실행에서 resume 을 얹은 본문으로 다시 보내면 같은 컨테이너를 이어서 게시한다(글이 둘이 되지 않는다).
+ */
+export function pendingResume(res: { ok: boolean; data: any }): Record<string, unknown> | null {
+  const d = res?.data;
+  if (!res?.ok || !d?.pending || !d?.resume || typeof d.resume !== "object") return null;
+  return d.resume;
+}
 
 export async function scheduleSql(env: any): Promise<SqlFn> {
   const sql = getSql(env) as SqlFn | null;
@@ -130,7 +142,17 @@ export async function runDueScheduledPosts(
     let result: any = null;
     try {
       const res = await publish(String(row.user_id), row.body || {});
-      if (res.ok && res.data?.ok !== false) {
+      const resume = pendingResume(res);
+      if (resume) {
+        // 인스타가 아직 영상을 처리 중이다. 이어서 끝낼 값을 본문에 얹어 다음 실행으로 넘긴다.
+        if (Number(row.attempts || 0) < MAX_PENDING_ATTEMPTS) {
+          await sql(`UPDATE sns_scheduled_posts SET status='queued', body=$2::jsonb, error='', updated_at=now() WHERE id=$1`,
+            [row.id, JSON.stringify({ ...(row.body || {}), ...resume })]);
+          outcomes.push({ id: String(row.id), status: "processing" });
+          continue;
+        }
+        error = "instagram_processing_timeout";
+      } else if (res.ok && res.data?.ok !== false) {
         status = "done";
         result = res.data?.result && typeof res.data.result === "object" ? res.data.result : {};
         if (!result.publishedAt) result.publishedAt = new Date().toISOString();

@@ -13,6 +13,7 @@ import {
   type DiscordFile,
 } from "../_shared/discord-webhook";
 import { readQueuedSchedule, enqueueScheduledPost } from "../_shared/sns-schedule";
+import { readIgResume, startInstagramPublish, resumeInstagramPublish, type IgItem } from "../_shared/instagram-publish";
 import { MEDIA_PATH_FORBIDDEN, authorizePublishMediaPaths, publishMediaLocation } from "../_shared/publish-media-path";
 import {
   isTikTokAppAudited,
@@ -489,27 +490,6 @@ async function publishTikTokPhoto(opts: {
 
 // ── Instagram 헬퍼 ─────────────────────────────────────────────────────────
 
-async function waitForIgMedia(
-  accessToken: string,
-  mediaId: string,
-  maxMs = 180000
-): Promise<void> {
-  const start = Date.now();
-  // 첫 폴은 1초 후(이미지는 보통 즉시 FINISHED), 이후엔 5초 간격.
-  let nextDelay = 1000;
-  while (Date.now() - start < maxMs) {
-    const r = await fetch(
-      `https://graph.instagram.com/v21.0/${mediaId}?fields=status_code&access_token=${accessToken}`
-    );
-    const d = (await r.json()) as { status_code?: string };
-    if (d.status_code === "FINISHED") return;
-    if (d.status_code === "ERROR") throw new Error("Instagram 미디어 처리 실패");
-    await new Promise((res) => setTimeout(res, nextDelay));
-    nextDelay = 5000;
-  }
-  throw new Error("Instagram 미디어 처리 시간 초과");
-}
-
 async function postInstagramComment(opts: {
   postId: string;
   accessToken: string;
@@ -544,140 +524,6 @@ async function tryInstagramFirstComment(postId: string, accessToken: string, fir
     console.log("[instagram publish] first comment failed (post still ok)");
     return { commentError, note: `게시는 됐지만 첫 댓글은 달지 못했어요(${commentError.slice(0, 160)}).` };
   }
-}
-
-const INSTAGRAM_THUMB_OFFSET_MS = 1000;
-
-async function publishCarouselToInstagram(opts: {
-  igUserId: string;
-  accessToken: string;
-  items: Array<{ mediaType: "image" | "video"; mediaUrl: string }>;
-  caption: string;
-}): Promise<{ postId: string }> {
-  const { igUserId, accessToken, items, caption } = opts;
-
-  // Step 1: 각 미디어를 개별 Container로 생성 (영상 → VIDEO, 이미지 → IMAGE)
-  const containerIds: string[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    console.log(`[carousel] Step 1/${items.length}: ${item.mediaType} 컨테이너 생성 중 (index ${i})`);
-
-    const containerBody: Record<string, unknown> =
-      item.mediaType === "video"
-        ? { media_type: "VIDEO", video_url: item.mediaUrl, is_carousel_item: true, thumb_offset: INSTAGRAM_THUMB_OFFSET_MS, access_token: accessToken }
-        : { image_url: item.mediaUrl, is_carousel_item: true, access_token: accessToken };
-
-    const cRes = await fetch(
-      `https://graph.instagram.com/v21.0/${igUserId}/media`,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(containerBody) }
-    );
-    const cData = (await cRes.json()) as { id?: string; error?: { message: string } };
-    if (!cData.id) {
-      throw new Error(`[carousel] 컨테이너 생성 실패 (아이템 ${i + 1}/${items.length}, ${item.mediaType}): ${cData.error?.message}`);
-    }
-
-    // 카루셀의 모든 자식 컨테이너(영상/이미지)는 CAROUSEL 컨테이너에 묶기 전에
-    // 반드시 FINISHED 상태여야 한다. 이미지도 즉시 FINISHED 가 아닐 수 있으므로
-    // 명시적으로 대기한다 ("Media ID is not available" 오류 방지).
-    console.log(`[carousel] 자식 컨테이너 처리 대기: ${cData.id} (${item.mediaType})`);
-    await waitForIgMedia(accessToken, cData.id);
-    console.log(`[carousel] 자식 컨테이너 완료: ${cData.id}`);
-
-    containerIds.push(cData.id);
-  }
-
-  // Step 2: 생성된 Container ID 배열을 묶어 캐러셀 Container 생성
-  console.log(`[carousel] Step 2: 캐러셀 컨테이너 생성 (children: ${containerIds.join(",")})`);
-  const carouselRes = await fetch(
-    `https://graph.instagram.com/v21.0/${igUserId}/media`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        media_type: "CAROUSEL",
-        children: containerIds.join(","),
-        caption,
-        access_token: accessToken,
-      }),
-    }
-  );
-  const carouselData = (await carouselRes.json()) as { id?: string; error?: { message: string } };
-  if (!carouselData.id) {
-    throw new Error(`[carousel] 캐러셀 컨테이너 생성 실패: ${carouselData.error?.message}`);
-  }
-
-  // CAROUSEL 컨테이너 자체도 비동기 처리됨 — FINISHED 가 되기 전에 publish 하면
-  // "Media ID is not available" 오류가 발생한다. 단일 REELS 와 동일하게 대기.
-  console.log(`[carousel] 캐러셀 컨테이너 처리 대기: ${carouselData.id}`);
-  await waitForIgMedia(accessToken, carouselData.id);
-  console.log(`[carousel] 캐러셀 컨테이너 완료: ${carouselData.id}`);
-
-  // Step 3: 캐러셀 게시
-  console.log(`[carousel] Step 3: 캐러셀 게시 (creation_id: ${carouselData.id})`);
-  const pRes = await fetch(
-    `https://graph.instagram.com/v21.0/${igUserId}/media_publish`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creation_id: carouselData.id, access_token: accessToken }),
-    }
-  );
-  const pData = (await pRes.json()) as { id?: string; error?: { message: string } };
-  if (!pData.id) throw new Error(`[carousel] 캐러셀 게시 실패: ${pData.error?.message}`);
-
-  return { postId: pData.id };
-}
-
-async function publishToInstagram(opts: {
-  igUserId: string;
-  accessToken: string;
-  mediaType: "image" | "video";
-  mediaUrl: string;
-  caption: string;
-}): Promise<{ postId: string }> {
-  const { igUserId, accessToken, mediaType, mediaUrl, caption } = opts;
-
-  const containerBody: Record<string, unknown> =
-    mediaType === "video"
-      ? {
-          media_type: "REELS",
-          video_url: mediaUrl,
-          caption,
-          share_to_feed: true,
-          thumb_offset: INSTAGRAM_THUMB_OFFSET_MS,
-          access_token: accessToken,
-        }
-      : {
-          image_url: mediaUrl,
-          caption,
-          access_token: accessToken,
-        };
-
-  const cRes = await fetch(
-    `https://graph.instagram.com/v21.0/${igUserId}/media`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(containerBody),
-    }
-  );
-  const cData = (await cRes.json()) as { id?: string; error?: { message: string } };
-  if (!cData.id) throw new Error(`컨테이너 생성 실패: ${cData.error?.message}`);
-
-  if (mediaType === "video") await waitForIgMedia(accessToken, cData.id);
-
-  const pRes = await fetch(
-    `https://graph.instagram.com/v21.0/${igUserId}/media_publish`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creation_id: cData.id, access_token: accessToken }),
-    }
-  );
-  const pData = (await pRes.json()) as { id?: string; error?: { message: string } };
-  if (!pData.id) throw new Error(`게시 실패: ${pData.error?.message}`);
-
-  return { postId: pData.id };
 }
 
 // ── Facebook 헬퍼 ───────────────────────────────────────────────────────────
@@ -1060,6 +906,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     playlist?: string;
     // '변경된 콘텐츠(합성 미디어)' 표시. 값을 줬을 때만 보낸다(true/false).
     alteredContent?: boolean;
+    // 인스타 이어서 끝내기 — 앞 요청이 { pending, resume } 으로 돌려준 값을 원래 본문에 얹어 다시 보낸다.
+    instagramContainerId?: string;
+    instagramChildIds?: string[];
     // 공유받은 프로젝트를 소유자 자격증명으로 게시할 때 사용
     projectId?: string;
     ownerId?: string;
@@ -1095,6 +944,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   if (!platform || caption === undefined) {
     return send({ error: "필수 필드 누락: platform, caption" }, 400);
   }
+  // 인스타 이어서 끝내기 요청인가. 미디어는 이미 인스타 컨테이너에 올라가 있고, 예약 판정도 끝난 뒤다.
+  const igResume = platform === "instagram" ? readIgResume(body) : undefined;
+  if (igResume === null) return send({ ok: false, error: "instagram_resume_invalid", code: "instagram_resume_invalid" }, 400);
 
   // 게시에 사용할 자격증명 소유자 결정. 기본은 요청자 본인.
   // 공유받은 프로젝트(ownerId≠본인)면 editor 권한이 있어야 소유자 자격증명으로 게시한다.
@@ -1116,7 +968,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     return send({ error: MEDIA_PATH_FORBIDDEN, code: MEDIA_PATH_FORBIDDEN, field: mediaCheck.field }, 400);
   }
   // Threads·X·디스코드는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
-  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x" && platform !== "discord") {
+  if (!igResume && !isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x" && platform !== "discord") {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
   }
 
@@ -1128,7 +980,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
   // 예약 시각이 미래면 지금 게시하지 않고 대기열에 넣는다(Instagram·Facebook·Threads·X).
   // 예전엔 이 채널들의 예약 시각을 무시하고 바로 게시했다. 정기 실행이 그 시각에 이 엔드포인트로 다시 보낸다.
-  const queuedAt = readQueuedSchedule(platform, body);
+  const queuedAt = igResume ? "" : readQueuedSchedule(platform, body);
   if (typeof queuedAt === "object") return send({ error: queuedAt.error, code: queuedAt.error }, 400);
   if (queuedAt) {
     try {
@@ -1446,47 +1298,36 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: "instagram_not_connected", needsReconnect: true, message: "인스타그램이 연결돼 있지 않아요. SNS 설정에서 인스타그램을 연결해 주세요." }, 412);
       }
       try {
-
-      if (isCarousel) {
-        // 캐러셀 포스트: 각 아이템에 대해 서명 URL 생성 후 업로드
-        const rawItems = body.mediaItems!;
-        const resolvedItems: Array<{ mediaType: "image" | "video"; mediaUrl: string }> = [];
-        for (let i = 0; i < rawItems.length; i++) {
-          const item = rawItems[i];
-          let mediaUrl: string;
-          if (item.gcsPath) {
-            console.log(`[carousel] 서명 URL 생성 중 (${item.mediaType}, gcsPath: ${item.gcsPath})`);
-            mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
-          } else if (item.mediaUrl) {
-            mediaUrl = item.mediaUrl;
-          } else {
-            return send({ error: `캐러셀 아이템 ${i + 1}에 gcsPath 또는 mediaUrl이 없습니다.` }, 400);
-          }
-          resolvedItems.push({ mediaType: item.mediaType, mediaUrl });
-        }
-
-        const { postId } = await publishCarouselToInstagram({ igUserId, accessToken, items: resolvedItems, caption });
-        const comment = await tryInstagramFirstComment(postId, accessToken, firstComment);
-
-        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
-
-      } else {
-        // 단일 포스트 (기존 로직 유지)
-        const mediaType = body.mediaType!;
-        let mediaUrl: string;
-        if (body.mediaGcsPath) {
-          mediaUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
-        } else if (body.mediaDirectUrl) {
-          mediaUrl = body.mediaDirectUrl;
+        // 한 요청은 짧게(처리 대기는 최대 약 25초), 아직이면 컨테이너 id 를 돌려주고 호출한 쪽이 다시 불러 끝낸다.
+        // 예전엔 여기서 최대 180초를 기다려 nkstudio.org 의 100초 제한(524)에 걸렸고, media_publish 응답만 보고
+        // 실패로 판정해 실제로 올라간 글이 '배포 실패'로 떴다(2026-10-31~11-09). 자세한 원인은 instagram-publish.ts 머리말.
+        const igDeps = { fetch: (u: string, i?: any) => fetch(u, i), log: (m: string) => console.log(m) };
+        let step;
+        if (igResume) {
+          step = await resumeInstagramPublish(igDeps, { igUserId, token: accessToken, caption, resume: igResume });
         } else {
-          return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+          const rawItems: Array<{ mediaType: "image" | "video"; gcsPath?: string; mediaUrl?: string }> = isCarousel
+            ? body.mediaItems!
+            : [{ mediaType: body.mediaType!, gcsPath: body.mediaGcsPath, mediaUrl: body.mediaDirectUrl }];
+          const items: IgItem[] = [];
+          for (let i = 0; i < rawItems.length; i++) {
+            const item = rawItems[i];
+            let mediaUrl: string;
+            if (item.gcsPath) mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+            else if (item.mediaUrl) mediaUrl = item.mediaUrl;
+            else return send({ error: isCarousel ? `캐러셀 아이템 ${i + 1}에 gcsPath 또는 mediaUrl이 없습니다.` : "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+            items.push({ mediaType: item.mediaType === "video" ? "video" : "image", mediaUrl });
+          }
+          step = await startInstagramPublish(igDeps, { igUserId, token: accessToken, caption, items });
         }
 
-        const { postId } = await publishToInstagram({ igUserId, accessToken, mediaType, mediaUrl, caption });
-        const comment = await tryInstagramFirstComment(postId, accessToken, firstComment);
-
-        return send({ ok: true, result: { platform: "instagram", postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
-      }
+        if (!step.done) {
+          // result 를 싣지 않는다 — 이 응답을 모르는 옛 화면·호출부가 '게시 완료'로 오인하지 않게(그들에겐 실패로 보인다).
+          return send({ ok: true, pending: true, platform: "instagram", status: "processing", resume: step.resume }, 202);
+        }
+        // 앞선 요청이 이미 게시한 컨테이너면(그 응답을 못 받은 경우) 첫 댓글을 또 달지 않는다.
+        const comment = step.alreadyPublished ? {} : await tryInstagramFirstComment(step.postId, accessToken, firstComment);
+        return send({ ok: true, result: { platform: "instagram", postId: step.postId, username: igEntry?.username || igUserId, status: "published", publishedAt: new Date().toISOString(), ...comment } });
       } catch (e: any) {
         const msg = String(e?.message || e);
         if (isInstagramTokenError(msg)) {
@@ -2363,7 +2204,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         const { snsContext } = await import("../_shared/sns-store.js");
         await patchSnsPlatform(await snsContext(env, publishUserId), platform, { needsReconnect: true }, usedMetaToken).catch(() => {});
       }
-      return send({ ok: false, error: needsReconnect ? platform + "_reconnect_required" : "sns_publish_failed", needsReconnect,
+      // 원문은 서버 로그와 detail 로 남긴다 — 예전엔 분류만 돌려줘 실패 원인을 다시 찾을 수 없었다(2026-11-09).
+      console.log(`[sns/publish] ${platform} 실패: ${msg.slice(0, 500)}`);
+      return send({ ok: false, error: needsReconnect ? platform + "_reconnect_required" : "sns_publish_failed", needsReconnect, detail: msg.slice(0, 300),
         category: needsReconnect ? "reconnect_required" : /permission|scope|code.?10/i.test(msg) || Number((err as any)?.metaCode) === 10 ? "permission_required" : "connection_failed" }, needsReconnect ? 412 : 502);
     }
     return send({ ok: false, error: msg }, 500);

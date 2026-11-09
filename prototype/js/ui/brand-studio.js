@@ -4671,11 +4671,22 @@
           if (_snsOwner) requestBody.ownerId = String(_snsOwner);
         } catch (_) {}
 
-        function doPublish() {
+        /* 인스타는 영상 처리가 끝나야 게시된다. 서버는 한 요청을 짧게 끊고(100초가 넘으면 nkstudio.org 가 524 로 끊는다)
+         * 아직이면 { ok, pending, resume:{컨테이너 id} } 로 답한다. resume 을 얹어 같은 요청을 다시 보내면 같은 컨테이너를
+         * 이어서 게시한다(컨테이너 하나는 한 번만 게시돼 글이 둘이 되지 않는다). 예약 시각은 첫 요청에서 이미 판정됐으므로 뺀다.
+         * 예전엔 한 요청에서 3분까지 기다려 실제로 올라간 글이 '배포 실패'로 떴다(2026-10-31~11-09). */
+        var IG_RESUME_DEADLINE_MS = 15 * 60 * 1000;
+        var igResumeStartedAt = 0;
+        function doPublish(resume) {
+          var bodyToSend = requestBody;
+          if (resume) {
+            bodyToSend = Object.assign({}, requestBody, resume);
+            delete bodyToSend.scheduledAt;
+          }
           return fetch('/api/sns/publish', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
+            body: JSON.stringify(bodyToSend),
           })
             .then(function (r) {
               // 응답이 JSON 이 아닐 수 있다. 요청이 플랫폼 실행 제한을 넘기면
@@ -4693,6 +4704,17 @@
             })
             .then(function (wrap) {
               var res = wrap.body;
+              if (res && res.ok && res.pending && res.resume && typeof res.resume === 'object') {
+                if (!igResumeStartedAt) igResumeStartedAt = Date.now();
+                if (Date.now() - igResumeStartedAt > IG_RESUME_DEADLINE_MS) {
+                  throw new Error(isEn
+                    ? 'Instagram is still processing the video, so it has not been posted yet. Check your Instagram profile in a while and deploy again only if the post is missing.'
+                    : '인스타그램이 아직 영상을 처리 중이라 게시하지 못했어요. 잠시 뒤 인스타 프로필을 확인하고, 글이 없을 때만 다시 배포해 주세요.');
+                }
+                var nextResume = res.resume;
+                return new Promise(function (r) { setTimeout(r, 3000); }).then(function () { return doPublish(nextResume); });
+              }
+              if (res && !res.ok && res.detail) console.warn('[publish] 서버 상세:', String(res.detail).slice(0, 300));
               if (res && !res.ok && (formatId === 'instagram' || formatId === 'threads')) {
                 var cat = res.category || (res.needsReconnect ? 'reconnect_required' : '');
                 if (cat === 'service_unavailable') res.error = isEn ? 'NK Studio could not verify the saved SNS connection. Try again shortly; contact support if this continues.' : 'NK Studio 서버에서 SNS 연결 상태를 확인하지 못했습니다. 잠시 후 다시 시도하고, 계속되면 지원팀에 문의해 주세요.';

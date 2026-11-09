@@ -102,7 +102,8 @@ test('게시가 실패하면 그 건을 실패로 남기고, 취소는 시작 �
 
 test('게시 API·화면·정기 실행이 대기열에 연결돼 있다', () => {
   const publish = read('prototype/functions/api/sns/publish.ts');
-  assert.match(publish, /const queuedAt = readQueuedSchedule\(platform, body\);[\s\S]{0,400}enqueueScheduledPost\(env, auth\.userId, platform, queuedAt, body\)/);
+  // 인스타 이어서 끝내기(resume) 요청은 첫 요청에서 이미 예약 판정을 마쳤으므로 다시 대기열로 보내지 않는다(2026-11-09).
+  assert.match(publish, /const queuedAt = igResume \? "" : readQueuedSchedule\(platform, body\);[\s\S]{0,400}enqueueScheduledPost\(env, auth\.userId, platform, queuedAt, body\)/);
   // 대기열 판단은 실제 게시(토큰 조회) 전에 한다
   assert.ok(publish.indexOf('readQueuedSchedule(platform, body)') < publish.indexOf('const googleToken = await getGoogleAccessToken'));
   const runner = read('prototype/functions/api/sns/scheduled-run.ts');

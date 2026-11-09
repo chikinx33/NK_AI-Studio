@@ -40,7 +40,8 @@ export const onRequest = async ({ request, env }: any) => {
 
   try {
     const result = await runDueScheduledPosts(env, publish);
-    const failed = result.outcomes.filter((o) => o.status !== "done").length;
+    // processing = 인스타가 영상 처리 중이라 다음 실행이 이어서 끝낼 건(실패 아님).
+    const failed = result.outcomes.filter((o) => o.status !== "done" && o.status !== "processing").length;
     // 게시 실패는 그 건의 기록(status=error)으로 사용자에게 보인다. 실행 자체는 성공으로 돌려 다음 주기를 막지 않는다.
     return json({ ...result, failed });
   } catch (error: any) {

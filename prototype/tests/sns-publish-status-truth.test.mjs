@@ -35,9 +35,10 @@ test("인스타 첫 댓글이 실패해도 이미 올라간 게시물은 성공(
   assert.equal(calls, 1);
   assert.deepEqual(await run(async () => {})("p1", "tok", "hi"), {});
 
-  // 단일·캐러셀 두 경로 모두 이 함수를 쓰고, 게시 뒤에 댓글 실패로 던지는 옛 코드는 없다.
-  assert.equal((src.match(/const comment = await tryInstagramFirstComment\(postId, accessToken, firstComment\);/g) || []).length, 2);
-  assert.equal((src.match(/status: "published", publishedAt: new Date\(\)\.toISOString\(\), \.\.\.comment \}/g) || []).length, 2);
+  // 단일·캐러셀은 한 경로(instagram-publish.ts 의 게시 단계)로 합쳤고 이 함수를 쓴다. 게시 뒤에 댓글 실패로 던지는 옛 코드는 없다.
+  // 앞선 요청이 이미 게시한 컨테이너(응답 유실)면 첫 댓글을 또 달지 않는다(2026-11-09).
+  assert.equal((src.match(/const comment = step\.alreadyPublished \? \{\} : await tryInstagramFirstComment\(step\.postId, accessToken, firstComment\);/g) || []).length, 1);
+  assert.equal((src.match(/status: "published", publishedAt: new Date\(\)\.toISOString\(\), \.\.\.comment \}/g) || []).length, 1);
   assert.doesNotMatch(src, /\n\s*await postInstagramComment\(\{ postId, accessToken, message: firstComment\.trim\(\) \}\);/);
 });
 

@@ -11,6 +11,7 @@ import { buildAiVideoProjectPrefix as buildCompanyProjectPrefix, buildUserRoot }
 import { chatAttachmentUserPrefix } from "../_shared/media-access";
 import { copyGcsObject, readMp4Meta, statGcsObject } from "../_shared/media-ingest";
 import { appendPublishRecords, buildPublishRow, setDeployingStep, updatePublishRowStatus } from "../_shared/publish-records";
+import { enqueueScheduledPost } from "../_shared/sns-schedule";
 import { publishingDb, loadSchedule, applyCampaignPlan, loadCampaignDetail, publicChannel, publicCampaign, PublishingError } from "../_shared/publishing-store";
 import { campaignIdFor, normalizeCampaignInput, cleanWorkPath, CAMPAIGN_POSTS_PER_CALL, CHANNEL_TYPES, SNS_MEDIA_REQUIRED, SNS_TEXT_LIMITS } from "../_shared/publishing-core.js";
 import { analysisToStoryText } from "../_shared/gemini-video";
@@ -3196,6 +3197,21 @@ async function publishOnePlan(plan: PublishPlanEntry, prepared: any, ctx: ToolCo
   const text = await res.text();
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  // 인스타가 영상을 아직 처리 중이면 게시 API 가 result 없이 { pending, resume } 으로 답한다(한 요청을 100초 아래로 끊으려고).
+  // 여기서 기다리지 않고 SNS 예약 대기열(5분 주기)에 resume 을 얹어 넘긴다 — 같은 컨테이너를 이어서 게시하므로 글이 둘이 되지 않는다.
+  // 기록은 '예약됨'으로 남고, 대기열이 게시하면 SNS 세팅이 게시됨으로 바꾼다(refreshScheduledPublishRows).
+  if (res.ok && data?.pending && data?.resume && typeof data.resume === "object") {
+    try {
+      const job = await enqueueScheduledPost(ctx.env, ctx.userId, platform, new Date().toISOString(), { ...body, ...data.resume });
+      return {
+        platform,
+        published: { platform, what: plan.note, status: "scheduled", postId: "", url: "", publishedAt: new Date().toISOString(), scheduledJobId: String(job.id) },
+        notices: [`${platform}: 인스타가 영상을 처리 중이라 서버 대기열이 이어서 게시해요(보통 5~10분 안).`],
+      };
+    } catch (e: any) {
+      return { platform, failure: `${platform}(${plan.note}): 인스타가 영상을 처리 중인데 이어서 게시할 대기열에 넣지 못했어요(${String(e?.message || e).slice(0, 120)}) — 인스타 프로필을 확인해 주세요.` };
+    }
+  }
   if (!res.ok || data?.ok === false) {
     if (res.status === 412 || data?.needsReconnect || /reconnect_required|not_connected/.test(String(data?.error || ""))) {
       return { platform, reconnect: true, failure: `${platform}: ${String(data?.message || data?.error || "연결이 만료됐어요").slice(0, 220)}` };
